@@ -471,6 +471,7 @@ function App() {
           mostrarCotasDoTerreno={comMedidas}
           mostrarComprimentos={comMedidas}
           mostrarRegua={comMedidas}
+          medindo={busca.get('medir') === '1'}
         />
       </div>
     );

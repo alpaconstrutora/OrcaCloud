@@ -10,7 +10,7 @@
  * este arquivo só transforma mundo→tela e pinta.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as EventoDePonteiro } from 'react';
 import type { BlueprintModel, Corte } from '../../utils/blueprintKernel';
 import {
   type DirecaoElevacao,
@@ -19,7 +19,7 @@ import {
 } from '../../utils/blueprintElevation';
 import { simboloDaElevacao } from '../../utils/blueprintFolhas';
 import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../../utils/blueprintCorte';
-import { escalaGrafica, marcasDaRegua, medidasDoCorte } from '../../utils/blueprintCorteMedidas';
+import { encaixarNaVista, escalaGrafica, marcasDaRegua, medicaoNaVista, medidasDoCorte, type PontoDaVista } from '../../utils/blueprintCorteMedidas';
 import { useCanvasVista, type BBoxMundo } from '../../hooks/useCanvasVista';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { COR_DA_DISCIPLINA } from '../../utils/blueprintRede';
@@ -62,6 +62,13 @@ interface Props {
    * com terreno, em cota absoluta; na elevação, relativa ao zero do desenho.
    */
   mostrarRegua?: boolean;
+  /**
+   * MEDIR NA VISTA (13/10/2026): clique em dois pontos → horizontal, vertical, inclinada e
+   * a inclinação (e as cotas, no corte com terreno). Arrastar continua movendo a vista.
+   */
+  medindo?: boolean;
+  /** Esc sem medida em curso: quem ligou o modo o desliga. */
+  onSairDoMedir?: () => void;
   /** Muda de valor → reenquadra. O botão "Enquadrar" da barra bumpa isto. */
   enquadrarToken?: number;
   /**
@@ -177,6 +184,8 @@ export default function ElevationCanvas({
   mostrarCotasDoTerreno = false,
   mostrarComprimentos = false,
   mostrarRegua = false,
+  medindo = false,
+  onSairDoMedir,
   enquadrarToken = 0,
   terreno = null,
   terrenoChave = '',
@@ -184,6 +193,12 @@ export default function ElevationCanvas({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  /** A camada da MEDIDA: por cima, redesenhada a cada movimento sem repintar o corte inteiro. */
+  const canvasDaMedidaRef = useRef<HTMLCanvasElement>(null);
+  const [medA, setMedA] = useState<PontoDaVista | null>(null);
+  const [medB, setMedB] = useState<PontoDaVista | null>(null);
+  const [mira, setMira] = useState<ReturnType<typeof encaixarNaVista> | null>(null);
+  const apertoRef = useRef<{ x: number; y: number } | null>(null);
   const [tamanho, setTamanho] = useState({ w: 0, h: 0 });
 
   const chaveNiveis = levelIds ? levelIds.join(',') : 'todos';
@@ -198,6 +213,53 @@ export default function ElevationCanvas({
 
   // As medidas do terreno (níveis, corte/aterro, comprimentos) — puras, só no corte.
   const medidas = useMemo(() => (ehCorte(projecao) ? medidasDoCorte(projecao) : null), [projecao]);
+
+  // Onde o clique de medir encaixa: cantos de parede, vão e estrutura; o que o plano corta;
+  // as pontas do perfil e de cada trecho do platô/talude; as marcas de nível. E SOBRE as
+  // linhas do terreno, do platô e do piso.
+  const encaixes = useMemo(() => {
+    const vertices: PontoDaVista[] = [];
+    const cantos = (r: { uMin: number; uMax: number; vMin: number; vMax: number }) =>
+      vertices.push({ u: r.uMin, v: r.vMin }, { u: r.uMax, v: r.vMin }, { u: r.uMin, v: r.vMax }, { u: r.uMax, v: r.vMax });
+    for (const p of projecao.paredes) if (!p.degenerada) cantos(p);
+    for (const o of projecao.aberturas) cantos(o);
+    for (const e of projecao.estruturas) if (!e.degenerada) cantos(e);
+    const linhas: PontoDaVista[][] = [];
+    if (ehCorte(projecao)) {
+      for (const c of projecao.cortados) vertices.push(...c.pontos);
+      for (const pedaco of projecao.perfilDoTerreno ?? []) if (pedaco.length > 0) vertices.push(pedaco[0], pedaco[pedaco.length - 1]);
+      for (const pedaco of projecao.platoNoCorte ?? [])
+        pedaco.forEach((q, i) => {
+          if (i === 0 || i === pedaco.length - 1 || pedaco[i - 1].trecho !== q.trecho || pedaco[i + 1].trecho !== q.trecho) vertices.push(q);
+        });
+      linhas.push(...(projecao.perfilDoTerreno ?? []), ...(projecao.platoNoCorte ?? []));
+    }
+    for (const n of medidas?.niveis ?? []) vertices.push(n);
+    const { uMin, uMax } = projecao.bbox;
+    linhas.push([{ u: uMin - 1e6, v: projecao.linhaDoSolo.v }, { u: uMax + 1e6, v: projecao.linhaDoSolo.v }]);
+    return { vertices, linhas };
+  }, [projecao, medidas]);
+
+  // Sair do modo limpa a medida; trocar de vista também (a medida era daquele desenho).
+  useEffect(() => {
+    setMedA(null);
+    setMedB(null);
+    setMira(null);
+  }, [medindo, projecao]);
+
+  // Esc: limpa a medida em curso; sem medida, sai do modo.
+  useEffect(() => {
+    if (!medindo) return;
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (medA) {
+        setMedA(null);
+        setMedB(null);
+      } else onSairDoMedir?.();
+    };
+    window.addEventListener('keydown', tecla);
+    return () => window.removeEventListener('keydown', tecla);
+  }, [medindo, medA, onSairDoMedir]);
 
   const { vista, paraTela, paraMundo, enquadrar, registrarTamanho, aoRolar, aoApontarBaixo, aoApontarMover, aoApontarCima } =
     useCanvasVista({ margemPx: 56 });
@@ -813,6 +875,100 @@ export default function ElevationCanvas({
     paraMundo,
   ]);
 
+  // ── A camada da medida ────────────────────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasDaMedidaRef.current;
+    if (!canvas || tamanho.w === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = tamanho.w * dpr;
+    canvas.height = tamanho.h * dpr;
+    canvas.style.width = `${tamanho.w}px`;
+    canvas.style.height = `${tamanho.h}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, tamanho.w, tamanho.h);
+    if (!medindo) return;
+    const COR = '#7c3aed';
+    const texto = (t: string, x: number, y: number, alinhar: CanvasTextAlign, base: CanvasTextBaseline, peso = '') => {
+      ctx.save();
+      ctx.font = `${peso}12px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = alinhar;
+      ctx.textBaseline = base;
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 4;
+      ctx.strokeText(t, x, y);
+      ctx.fillStyle = COR;
+      ctx.fillText(t, x, y);
+      ctx.restore();
+    };
+    const ponto = (p: PontoDaVista) => {
+      const t = paraTela({ x: p.u, y: p.v });
+      ctx.fillStyle = COR;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      return t;
+    };
+    // O encaixe sob o mouse: quadrado no vértice, losango sobre a linha.
+    if (mira && mira.tipo !== 'LIVRE') {
+      const t = paraTela({ x: mira.ponto.u, y: mira.ponto.v });
+      ctx.strokeStyle = COR;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if (mira.tipo === 'VERTICE') ctx.rect(t.x - 5, t.y - 5, 10, 10);
+      else {
+        ctx.moveTo(t.x, t.y - 6);
+        ctx.lineTo(t.x + 6, t.y);
+        ctx.lineTo(t.x, t.y + 6);
+        ctx.lineTo(t.x - 6, t.y);
+        ctx.closePath();
+      }
+      ctx.stroke();
+    }
+    if (!medA) return;
+    const b = medB ?? mira?.ponto;
+    const ta = ponto(medA);
+    if (!b) return;
+    const tb = ponto(b);
+    const cotaZero = ehCorte(projecao) ? projecao.cotaZeroM : undefined;
+    const m = medicaoNaVista(medA, b, cotaZero);
+    // Os catetos tracejados (o triângulo da medida) e a inclinada cheia.
+    ctx.save();
+    ctx.strokeStyle = COR;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(ta.x, ta.y);
+    ctx.lineTo(tb.x, ta.y);
+    ctx.lineTo(tb.x, tb.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ta.x, ta.y);
+    ctx.lineTo(tb.x, tb.y);
+    ctx.stroke();
+    ctx.restore();
+    if (m.horizontalMm > 0 && m.verticalMm > 0) {
+      texto(m.rotuloHorizontal, (ta.x + tb.x) / 2, ta.y + (tb.y < ta.y ? 4 : -4), 'center', tb.y < ta.y ? 'top' : 'bottom');
+      texto(m.rotuloVertical, tb.x + (tb.x >= ta.x ? 6 : -6), (ta.y + tb.y) / 2, tb.x >= ta.x ? 'left' : 'right', 'middle');
+    }
+    // A inclinada, do lado de fora do triângulo.
+    const mx = (ta.x + tb.x) / 2;
+    const my = (ta.y + tb.y) / 2;
+    texto(m.rotuloDistancia, mx + (tb.x >= ta.x ? -8 : 8), my + (tb.y < ta.y ? -8 : 8), tb.x >= ta.x ? 'right' : 'left', tb.y < ta.y ? 'bottom' : 'top', '600 ');
+    if (m.rotuloCotaA) texto(m.rotuloCotaA, ta.x, ta.y - 8, 'center', 'bottom');
+    if (m.rotuloCotaB) texto(m.rotuloCotaB, tb.x, tb.y - 8, 'center', 'bottom');
+  }, [medindo, medA, medB, mira, vista, tamanho, paraTela, projecao]);
+
+  const pontoDoEvento = (e: EventoDePonteiro<HTMLCanvasElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const w = paraMundo(e.clientX - r.left, e.clientY - r.top);
+    return encaixarNaVista({ u: w.x, v: w.y }, encaixes.vertices, encaixes.linhas, 10 / vista.escala);
+  };
+
   // "Vazio" tem de contar a estrutura também: uma planta de fôrmas — só pilares
   // e vigas, sem parede nenhuma — mostrava o aviso "desenhe paredes" com o
   // esqueleto inteiro desenhado atrás dele.
@@ -832,12 +988,38 @@ export default function ElevationCanvas({
     <div ref={containerRef} className={`relative h-full w-full bg-white ${className ?? ''}`}>
       <canvas
         ref={canvasRef}
-        className="block h-full w-full cursor-grab touch-none active:cursor-grabbing"
-        onPointerDown={aoApontarBaixo}
-        onPointerMove={aoApontarMover}
-        onPointerUp={aoApontarCima}
-        onPointerLeave={aoApontarCima}
+        className={`block h-full w-full touch-none ${medindo ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+        onPointerDown={(e) => {
+          apertoRef.current = { x: e.clientX, y: e.clientY };
+          aoApontarBaixo(e);
+        }}
+        onPointerMove={(e) => {
+          aoApontarMover(e);
+          if (medindo) setMira(pontoDoEvento(e));
+        }}
+        onPointerUp={(e) => {
+          aoApontarCima(e);
+          const a = apertoRef.current;
+          apertoRef.current = null;
+          // Medir é CLIQUE (o ponteiro quase não andou); arrastar continua sendo mover a vista.
+          if (!medindo || e.button !== 0 || !a || Math.hypot(e.clientX - a.x, e.clientY - a.y) >= 4) return;
+          const p = pontoDoEvento(e).ponto;
+          if (!medA || medB) {
+            setMedA(p);
+            setMedB(null);
+          } else setMedB(p);
+        }}
+        onPointerLeave={(e) => {
+          aoApontarCima(e);
+          setMira(null);
+        }}
       />
+      <canvas ref={canvasDaMedidaRef} className="pointer-events-none absolute inset-0" aria-hidden />
+      {medindo && (
+        <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs text-slate-600 shadow-sm">
+          {medA && !medB ? 'Clique o segundo ponto' : 'Clique dois pontos para medir'} — encaixa em cantos, no platô e no terreno · arraste move a vista · Esc {medA ? 'limpa' : 'sai'}
+        </div>
+      )}
       {vazio && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">

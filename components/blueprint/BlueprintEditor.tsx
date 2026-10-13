@@ -1727,6 +1727,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [mostrarCotasDoTerrenoNoCorte, setMostrarCotasDoTerrenoNoCorte] = usePersistedState('blueprint:corteCotasDoTerreno', true);
   const [mostrarComprimentosNoCorte, setMostrarComprimentosNoCorte] = usePersistedState('blueprint:corteComprimentos', true);
   const [mostrarReguaNaVista, setMostrarReguaNaVista] = usePersistedState('blueprint:vistaRegua', true);
+  /** MEDIR NA VISTA (13/10/2026): o modo de medir do corte/elevação — não persiste, é um gesto. */
+  const [medindoNaVista, setMedindoNaVista] = useState(false);
   const [mostrarRotulosEsquadria, setMostrarRotulosEsquadria] = usePersistedState(
     'blueprint:vistaRotulosEsquadria',
     true,
@@ -3877,6 +3879,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     recarregarTemplates();
   }, [recarregarTemplates]);
   const templatesDeVista = useMemo(() => [...TEMPLATES_DE_FABRICA, ...templatesDaOrg], [templatesDaOrg]);
+  /** Medir no corte/elevação (13/10/2026) — o mesmo botão na aba Vista e em Analisar. */
+  const botaoMedirNaVista = (
+    <BotaoDoRibbon
+      icone={Ruler}
+      rotulo="Distância"
+      ativo={medindoNaVista}
+      onClick={() => setMedindoNaVista((v) => !v)}
+      ajuda="Clique dois pontos do desenho: a distância horizontal, a vertical, a inclinada e a inclinação (%) — e as cotas, no corte com terreno. Encaixa em cantos, no platô e no terreno. Esc limpa; Esc de novo sai."
+    />
+  );
   const menuVista = (
     <MenuVista
       em3d={em3d}
@@ -13280,6 +13292,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 />
               </GrupoDoRibbon>
             )}
+            {/* Na vista (corte/elevação), medir é a DISTÂNCIA entre dois pontos do desenho (13/10/2026). */}
+            {emVista && vistaEhProjecao && <GrupoDoRibbon rotulo="Medir">{botaoMedirNaVista}</GrupoDoRibbon>}
             {/* RELATÓRIOS — o que o desenho DIZ: pendências da geometria,
                 formas medidas, quantidades, custo. Abrem no dock. */}
             <GrupoDoRibbon rotulo="Relatórios">
@@ -13778,6 +13792,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
 
         {aba === 'vista' && emVista && (
           <>
+            {vistaEhProjecao && <GrupoDoRibbon rotulo="Medir">{botaoMedirNaVista}</GrupoDoRibbon>}
             <GrupoDoRibbon rotulo="Exibir">
               {menuVista}
               <MenuExibir
@@ -15215,6 +15230,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               mostrarCotasDoTerreno={mostrarCotasDoTerrenoNoCorte}
               mostrarComprimentos={mostrarComprimentosNoCorte}
               mostrarRegua={mostrarReguaNaVista}
+              medindo={medindoNaVista}
+              onSairDoMedir={() => setMedindoNaVista(false)}
               enquadrarToken={enquadrarVistaToken}
               // O mesmo toggle "Curvas de nível" da planta governa o perfil no
               // corte: é uma camada só, vista de dois jeitos.

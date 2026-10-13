@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type Command, type Point } from '../utils/blueprintKernel';
 import { baseDoCorte, bordasDoAnelNoCorte, projetarCorte, type TerrenoParaCorte } from '../utils/blueprintCorte';
-import { escalaGrafica, formatarCota, marcasDaRegua, medidasDoCorte } from '../utils/blueprintCorteMedidas';
+import { encaixarNaVista, escalaGrafica, formatarCota, marcasDaRegua, medicaoNaVista, medidasDoCorte } from '../utils/blueprintCorteMedidas';
 import { PARAMETROS_PADRAO } from '../utils/blueprintTopografiaAnalises';
 
 function soCorte() {
@@ -163,5 +163,28 @@ describe('régua vertical e escala gráfica', () => {
   it('escala gráfica: o comprimento redondo mais perto de 120 px', () => {
     expect(escalaGrafica(0.02)).toMatchObject({ comprimentoM: 5, px: 100, rotulo: '5 m' });
     expect(escalaGrafica(0.0005).rotulo).toBe('200 m');
+  });
+});
+
+describe('medir na vista', () => {
+  it('a medida: horizontal, vertical, inclinada e a inclinação; cotas com o zero absoluto', () => {
+    const m = medicaoNaVista({ u: 1000, v: -500 }, { u: 5000, v: 2500 }, 880);
+    expect([m.rotuloHorizontal, m.rotuloVertical, m.rotuloDistancia]).toEqual(['4,00 m', '3,00 m', '5,00 m · 75,0%']);
+    expect([m.rotuloCotaA, m.rotuloCotaB]).toEqual(['879,50', '882,50']);
+    // Vertical pura: sem inclinação; horizontal pura: só a distância.
+    expect(medicaoNaVista({ u: 0, v: 0 }, { u: 0, v: 2800 }).inclinacaoPct).toBeNull();
+    expect(medicaoNaVista({ u: 0, v: 0 }, { u: 3000, v: 0 }).rotuloDistancia).toBe('3,00 m');
+    expect(medicaoNaVista({ u: 0, v: 0 }, { u: 3000, v: 0 }).rotuloCotaA).toBeUndefined();
+  });
+
+  it('o encaixe: vértice primeiro, depois a linha, senão livre', () => {
+    const vertices = [{ u: 1000, v: 0 }];
+    const terreno = [[{ u: 0, v: 1000 }, { u: 4000, v: 3000 }]];
+    expect(encaixarNaVista({ u: 1100, v: 80 }, vertices, terreno, 200)).toEqual({ ponto: { u: 1000, v: 0 }, tipo: 'VERTICE' });
+    // Perto da linha do terreno (y = 1000 + u/2): pousa sobre ela, no pé da perpendicular.
+    const r = encaixarNaVista({ u: 2000, v: 2100 }, vertices, terreno, 200);
+    expect(r.tipo).toBe('LINHA');
+    expect(r.ponto.v).toBe(Math.round(1000 + r.ponto.u / 2));
+    expect(encaixarNaVista({ u: 3000, v: 0 }, vertices, terreno, 200).tipo).toBe('LIVRE');
   });
 });

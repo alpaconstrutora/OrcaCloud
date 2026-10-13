@@ -300,3 +300,88 @@ export function escalaGrafica(pxPorMm: number, alvoPx = 120): { comprimentoM: nu
   for (const m of opcoes) if (Math.abs(m * 1000 * pxPorMm - alvoPx) < Math.abs(melhor * 1000 * pxPorMm - alvoPx)) melhor = m;
   return { comprimentoM: melhor, px: melhor * 1000 * pxPorMm, rotulo: `${numeroCurto(melhor, melhor < 1 ? 1 : 0)} m` };
 }
+
+// ── 5 · MEDIR NA VISTA (13/10/2026) ───────────────────────────────────────────
+
+export interface PontoDaVista {
+  u: number;
+  v: number;
+}
+
+/**
+ * Onde o clique de medir POUSA: no vértice mais perto (canto de parede, ponta de
+ * platô/talude, marca de nível) dentro de `tolMm`; senão no ponto mais perto de
+ * uma das linhas (o terreno, o platô); senão onde o mouse está.
+ */
+export function encaixarNaVista(
+  p: PontoDaVista,
+  vertices: readonly PontoDaVista[],
+  linhas: readonly (readonly PontoDaVista[])[],
+  tolMm: number,
+): { ponto: PontoDaVista; tipo: 'VERTICE' | 'LINHA' | 'LIVRE' } {
+  let melhor: PontoDaVista | null = null;
+  let dist = tolMm;
+  for (const q of vertices) {
+    const d = Math.hypot(q.u - p.u, q.v - p.v);
+    if (d <= dist) {
+      melhor = q;
+      dist = d;
+    }
+  }
+  if (melhor) return { ponto: { u: melhor.u, v: melhor.v }, tipo: 'VERTICE' };
+  dist = tolMm;
+  for (const linha of linhas) {
+    for (let i = 1; i < linha.length; i++) {
+      const a = linha[i - 1];
+      const b = linha[i];
+      const du = b.u - a.u;
+      const dv = b.v - a.v;
+      const l2 = du * du + dv * dv;
+      const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.u - a.u) * du + (p.v - a.v) * dv) / l2));
+      const q = { u: a.u + t * du, v: a.v + t * dv };
+      const d = Math.hypot(q.u - p.u, q.v - p.v);
+      if (d <= dist) {
+        melhor = q;
+        dist = d;
+      }
+    }
+  }
+  return melhor ? { ponto: { u: Math.round(melhor.u), v: Math.round(melhor.v) }, tipo: 'LINHA' } : { ponto: p, tipo: 'LIVRE' };
+}
+
+export interface MedicaoNaVista {
+  horizontalMm: number;
+  verticalMm: number;
+  distanciaMm: number;
+  /** Desnível ÷ distância horizontal, em %; `null` na vertical pura. */
+  inclinacaoPct: number | null;
+  rotuloHorizontal: string;
+  rotuloVertical: string;
+  rotuloDistancia: string;
+  /** As cotas absolutas dos dois pontos (só com `cotaZeroM`). */
+  rotuloCotaA?: string;
+  rotuloCotaB?: string;
+}
+
+/** A medida entre dois pontos da vista: horizontal, vertical, inclinada e a inclinação. */
+export function medicaoNaVista(a: PontoDaVista, b: PontoDaVista, cotaZeroM?: number): MedicaoNaVista {
+  const horizontalMm = Math.abs(b.u - a.u);
+  const verticalMm = Math.abs(b.v - a.v);
+  const distanciaMm = Math.hypot(horizontalMm, verticalMm);
+  const inclinacaoPct = horizontalMm > 0 ? (verticalMm / horizontalMm) * 100 : null;
+  return {
+    horizontalMm,
+    verticalMm,
+    distanciaMm,
+    inclinacaoPct,
+    rotuloHorizontal: formatarMetros(horizontalMm),
+    rotuloVertical: formatarMetros(verticalMm),
+    rotuloDistancia:
+      inclinacaoPct === null || verticalMm === 0
+        ? formatarMetros(distanciaMm)
+        : `${formatarMetros(distanciaMm)} · ${numeroCurto(inclinacaoPct, 1)}%`,
+    ...(cotaZeroM !== undefined
+      ? { rotuloCotaA: formatarCota(cotaZeroM + a.v / 1000), rotuloCotaB: formatarCota(cotaZeroM + b.v / 1000) }
+      : {}),
+  };
+}

@@ -49,7 +49,7 @@ proposta de cinco itens: 1. cotas de nível no perfil; 2. corte e aterro (e a al
 | 3 | `components/blueprint/ElevationCanvas.tsx` | Pinta níveis, cotas verticais e a cadeia horizontal | Harness/foto do corte com terreno e platô: cotas legíveis, sem sobreposição |
 | 4 | `components/blueprint/BlueprintEditor.tsx` | Os dois itens no Exibir (persistidos) | typecheck; item desabilitado diz o motivo |
 | 5 | (etapa 4) `marcasDaRegua`, `escalaGrafica` + canvas + "Régua e escala" no Exibir | Régua à esquerda (cota absoluta no corte com terreno; altura ±0 na elevação), linhas de nível ao fundo, escala gráfica no canto; o passo é o primeiro redondo com 36 px | Testes de passo/rótulo/escala; foto do corte e da elevação |
-| 6 | (etapa 5 do pedido) Medir no corte | — | a planejar ao fechar a régua |
+| 6 | (etapa 5) `encaixarNaVista`, `medicaoNaVista` + camada de medida no canvas + "Medir › Distância" na aba Vista e em Analisar | Dois cliques: horizontal, vertical, inclinada, % e as cotas (corte com terreno); encaixe em vértice (cantos, pontas de platô/talude, níveis) e sobre a linha (terreno, platô, piso); clique ≠ arraste (4 px); Esc limpa, Esc de novo sai | Testes de medida e encaixe; harness clicando dois pontos |
 
 ## Estado
 
@@ -61,4 +61,6 @@ proposta de cinco itens: 1. cotas de nível no perfil; 2. corte e aterro (e a al
 - [x] 1–3 publicados em `795aef8b` (13/10/2026): domínio carimbado `795aef8` com "Cotas do terreno", Vercel success, check-run `ci` success.
 - Fora desta etapa: as medidas ainda não saem na prancha/PDF do corte (a função é pura, para reusar lá).
 - [x] 5 (régua) — 3 testes (passo 2 m a 0,02 px/mm em cotas absolutas 878…886; relativas ±0/+/−; escala 5 m = 100 px). Fotos: corte `topografia/?vista=corte&plato=1&medidas=1` (piso 101,50 na marca 101,5) e elevação `blueprint-elevation/?regua=1&cotas=1` (5,60 m chega a +5,6). typecheck 0; suíte 8830 = 8796 + 34 + 0 (a 1ª rodada perdeu 4 testes num "Fatal error" do V8 — repetida até a conta fechar); build, ui-standard, xss, origem limpos.
-- [ ] 5 publicado · [ ] 6 (Medir)
+- [x] 5 publicado em `3d8d2554`: domínio carimbado `3d8d255` com "Régua e escala", Vercel success, check-run `ci` success.
+- [x] 6 (Medir) — 2 testes (4,00/3,00/5,00 m · 75,0% com cotas 879,50→882,50; vertical pura sem %; encaixe vértice > linha > livre). Harness `topografia/?vista=corte&plato=1&medidas=1&medir=1`: cliques perto das pontas do terreno encaixaram em 100,83 e 101,50 → 11,75 m (= o perfil) · 0,67 m · 11,77 m · 5,7%; arrastar moveu a vista sem marcar ponto. typecheck 0; suíte 8832 = 8798 + 34 + 0; build ok (a 1ª rodada, colada na suíte, caiu no plugin PWA/web-ifc e passou sozinha); ui-standard, xss, origem limpos.
+- [ ] 6 publicado

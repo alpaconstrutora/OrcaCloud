@@ -150,12 +150,7 @@ function renderBoletoCell(
                 ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
                 : (b.beneficiario_nome ?? b.documento_nome);
             return (
-                <div className="text-sm font-normal text-gray-700">
-                    <p className="break-words">{nome}</p>
-                    {b.beneficiario_cnpj && !b.supplier_id && (
-                        <p className="text-xs text-gray-400 font-normal break-words">{b.beneficiario_cnpj}</p>
-                    )}
-                </div>
+                <p className="break-words text-sm font-normal text-gray-700">{nome}</p>
             );
         }
         case 'descricao':
@@ -188,24 +183,31 @@ function renderBoletoCell(
             );
         case 'vencimento':
             return (
-                <div className={`text-sm font-normal whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-600'}`}>
+                <span
+                    title={atrasado ? 'Atrasado' : undefined}
+                    className={`text-sm font-normal whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-600'}`}
+                >
                     {formatDateBR(b.vencimento)}
-                    {atrasado && <div className="text-xs text-red-400 font-normal">Atrasado</div>}
-                </div>
+                </span>
             );
-        case 'status':
+        case 'status': {
+            // Leitura manual não passou por extração: 0% não é "baixa confiança", é "sem leitura".
+            const baixaConfianca = b.metodo_extracao !== 'manual'
+                && b.confidence_score !== undefined && b.confidence_score < 80;
             return (
-                <>
-                    <span className={`text-sm font-normal ${STATUS_TEXT_COLORS[b.status]}`}>
-                        {STATUS_LABELS[b.status]}
-                    </span>
-                    {b.confidence_score !== undefined && b.confidence_score < 80 && (
-                        <div className="mt-0.5 flex items-center gap-0.5 text-[9px] font-normal text-amber-600">
-                            <AlertTriangle className="w-2.5 h-2.5" /> {b.confidence_score}%
-                        </div>
+                <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-normal ${STATUS_TEXT_COLORS[b.status]}`}>
+                    {STATUS_LABELS[b.status]}
+                    {baixaConfianca && (
+                        <span
+                            title={`Baixa confiança na leitura automática (${b.confidence_score}%) — confira valor e vencimento`}
+                            className="inline-flex items-center gap-0.5 text-xs text-amber-600"
+                        >
+                            <AlertTriangle className="w-3 h-3" /> {b.confidence_score}%
+                        </span>
                     )}
-                </>
+                </span>
             );
+        }
         case 'capturado_em':
             return (
                 <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
@@ -326,7 +328,7 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
                     </div>
                 </div>
 
-                {b.confidence_score !== undefined && b.confidence_score < 80 && (
+                {b.metodo_extracao !== 'manual' && b.confidence_score !== undefined && b.confidence_score < 80 && (
                     <div className="mt-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700">
                         <AlertTriangle className="w-3 h-3" />
                         Baixa confiança ({b.confidence_score}%)

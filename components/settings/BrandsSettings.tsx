@@ -18,7 +18,8 @@
 // Excluir só sem uso: marca com modelo ou com ativo/item vinculado se INATIVA
 // (UI_PATTERNS §6.3) — some dos campos de escolha e mantém os vínculos.
 import React from 'react';
-import { AlertCircle, ArrowLeft, Boxes, Plus, Tags } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Boxes, Download, Plus, Tags, Upload } from 'lucide-react';
+import { saveAs } from 'file-saver';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
@@ -30,6 +31,9 @@ import type { CatalogUsage, ProductBrand, ProductModel } from '../../types/brand
 import { ITEM_TYPE_LABELS } from '../../types/brandModel';
 import { normalizarNome } from '../../utils/catalogoNome';
 import { ProductModelForm } from './ProductModelForm';
+import { BrandModelImportSheet } from './BrandModelImportSheet';
+import { linhasParaExportar } from '../../utils/catalogoPlanilha';
+import { gerarPlanilhaCatalogo } from '../../utils/catalogoPlanilhaExcel';
 
 const COLUMNS: StandardTableColumn[] = [
     { key: 'name', label: 'Marca', sortable: true, width: 260 },
@@ -95,6 +99,8 @@ const BrandsSettings: React.FC = () => {
     // Dentro do painel: a marca, ou o formulário de UM modelo dela (null = novo).
     const [modeloAberto, setModeloAberto] = React.useState<{ model: ProductModel | null } | null>(null);
     const [modeloDirty, setModeloDirty] = React.useState(false);
+    const [importando, setImportando] = React.useState(false);
+    const [exportando, setExportando] = React.useState(false);
 
     // Um temporizador por vez: sem isso o aviso anterior ("Marca criada") apagava o
     // seguinte ("Modelo criado") antes da hora — visto na tela em 13/10.
@@ -128,7 +134,23 @@ const BrandsSettings: React.FC = () => {
 
     React.useEffect(() => { void load(); }, [load]);
 
-    const orgName = (id: string) => organizations.find(o => o.id === id)?.name ?? '—';
+    const orgName = React.useCallback((id: string) => organizations.find(o => o.id === id)?.name ?? '—', [organizations]);
+
+    // Exporta o que a tela mostra: a org do topo, ou todas (com a coluna Organização).
+    const exportar = async () => {
+        setExportando(true);
+        try {
+            const blob = await gerarPlanilhaCatalogo(
+                linhasParaExportar(brands, models, orgId ? undefined : orgName),
+                { comOrganizacao: !orgId },
+            );
+            saveAs(blob, `marcas-e-modelos-${new Date().toISOString().slice(0, 10)}.xlsx`);
+        } catch (e) {
+            notify(errorMessage(e, 'Não foi possível gerar a planilha.'), 'error');
+        } finally {
+            setExportando(false);
+        }
+    };
     const usoDaMarca = (id: string) => usoMarcas.get(id) ?? USO_VAZIO;
     const usoDoModelo = (id: string) => usoModelos.get(id) ?? USO_VAZIO;
     // Contagem pelo estado local (§22): cadastrar um modelo no painel já muda a coluna.
@@ -283,13 +305,31 @@ const BrandsSettings: React.FC = () => {
                         </p>
                     </div>
                 </div>
-                <button
-                    onClick={abrirNova}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Nova marca
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                    <button
+                        onClick={() => setImportando(true)}
+                        disabled={loading}
+                        title={loading ? 'Aguarde o catálogo carregar' : 'Importar marcas e modelos de uma planilha Excel'}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Upload className="w-[15px] h-[15px]" /> Importar
+                    </button>
+                    <button
+                        onClick={() => void exportar()}
+                        disabled={loading || exportando}
+                        title={loading ? 'Aguarde o catálogo carregar' : orgId ? 'Exportar para Excel' : 'Exportar para Excel (todas as organizações, com a coluna Organização)'}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Download className="w-[15px] h-[15px]" /> {exportando ? 'Gerando...' : 'Exportar'}
+                    </button>
+                    <button
+                        onClick={abrirNova}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                    >
+                        <Plus className="w-[15px] h-[15px]" />
+                        Nova marca
+                    </button>
+                </div>
             </div>
 
             <div className="mt-6 border-t border-gray-100 pt-6 space-y-3">
@@ -517,6 +557,16 @@ const BrandsSettings: React.FC = () => {
                     {toast.message}
                 </div>
             )}
+
+            <BrandModelImportSheet
+                open={importando}
+                onClose={() => setImportando(false)}
+                brands={brands}
+                models={models}
+                orgName={orgName}
+                // Lote: recarrega o catálogo inteiro (§22 permite — a importação não devolve as linhas).
+                onImported={() => void load()}
+            />
 
             {orgTargetModal}
         </div>

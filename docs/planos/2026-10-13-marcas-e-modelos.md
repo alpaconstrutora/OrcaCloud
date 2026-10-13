@@ -18,6 +18,11 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
 um ali mesmo (o painel troca de conteúdo — sem drawer dentro de drawer, UI_PATTERNS
 §4.4). Itens na seção "Fase 2 — fundir" abaixo.
 
+### Pedido posterior — 13/10/2026 (mesma sessão)
+> Configurações do Sistema > Marcas e Modelos: implementar importacao e exportação via planilha excel
+
+Itens na seção "Fase 3 — importar/exportar planilha" abaixo.
+
 ## Contexto
 - Marca e modelo do ativo são **texto livre** em `opura_assets.brand/model` (VARCHAR 100). As duas telas pedidas gravam nessa mesma tabela.
 - Existe um catálogo só de marcas, `opura_asset_brands`. Ele tem `organization_id` sem FK, RLS por subselect `user_id` e só a Gestão de Ativos o usa. Mesmo assim o ativo grava o **nome** da marca, não o id.
@@ -295,6 +300,24 @@ e conferido no banco (0 restantes, 88 ativos, catálogo = DeWalt/Elevacon/Menego
 - [x] Verificação na tela (:3118, Alpa, dados ZZTeste apagados e conferidos): criar marca → painel vira edição → "Novo modelo" → criar → volta à marca com "Modelos (1)" → lista mostra 1. Zero erro de JS/console/HTTP. **Achados e corrigidos na tela:** (1) tabela de modelos cortava "Tipo" e encostava "Ações" → colunas ~580px, "Em uso"/vida útil ocultas por padrão; (2) o toast do canto cobria "Fechar/Salvar" do painel → com o painel aberto o aviso vai no rodapé (`role=status`); (3) o temporizador do aviso anterior apagava o seguinte → um temporizador por vez.
 - [x] Suíte: tsc 0 erros; Vitest 875 arquivos / 8.849 testes verdes.
 - [x] Publicado em 13/10: `fe0e1ecf`. `conferir-producao.sh "Voltar para a marca"`: o domínio serve exatamente `fe0e1ec`; check-run `ci`: success. Frente `marcas-modelos-fundir` fechada.
+
+## Fase 3 — importar/exportar planilha (pedido posterior de 13/10)
+
+Decisões de desenho: uma linha por MODELO (marca sem modelo = Modelo em branco);
+colunas achadas pelo CABEÇALHO (ordem livre, sem caixa/acento/asterisco);
+marca/modelo existentes reconhecidos ignorando caixa e acento → ATUALIZA, não
+duplica; célula vazia não apaga; prévia por linha antes de gravar; destino =
+`resolveWriteOrg('all-allowed')` (em "Todas" aplica em cada org, prévia contra o
+catálogo de CADA uma, "Varia" quando muda); exportação em "Todas" leva a coluna
+Organização (só informativa na reimportação).
+
+- [x] `utils/catalogoPlanilha.ts` (puro): colunas, `mapearCabecalho`, `lerLinha` (tipo/categoria por rótulo ou chave, vida 1–1200, link http(s), Situação Ativo/Inativo, erro para dado de modelo sem modelo), `planejarImportacao` (nova marca / novo modelo / nova marca e modelo / atualiza só o que mudou / sem mudança / erro; repetida na planilha = erro apontando a 1ª), `linhasParaExportar`. **Pronto:** `__tests__/catalogoPlanilha.test.ts` (18) verde, incluindo ida e volta exportar→reimportar = "sem mudança".
+- [x] `utils/catalogoPlanilhaExcel.ts`: gerar (.xlsx com listas de escolha em Tipo/Categoria/Situação, cabeçalho congelado, aba "Instruções") e ler (fórmula, rich text, hyperlink, várias linhas). ExcelJS por import dinâmico. **Pronto:** `__tests__/catalogoPlanilhaExcel.test.ts` (5) com o ExcelJS real.
+- [x] `services/brandModelService.ts` › `aplicarImportacao`: linha a linha, marca nova criada uma vez e reaproveitada, linha recusada não derruba as outras e volta com o número. **Pronto:** 3 casos novos em `__tests__/brandModelService.test.ts`.
+- [x] `components/settings/BrandModelImportSheet.tsx` (novo): painel arquivo → prévia (StandardTable dense, filtro "Mostrar", resumo) → resultado; "Baixar modelo"; botão desligado diz o motivo. **Pronto:** `__tests__/components/BrandModelImportSheet.test.tsx` (5) verde.
+- [x] `components/settings/BrandsSettings.tsx`: botões "Importar" e "Exportar" no cabeçalho; importação recarrega o catálogo (lote). **Pronto:** `BrandsModelsSettings.test.tsx` segue verde.
+- [x] Verificação na tela (:3119, Alpa; dados ZZTeste apagados e conferidos — catálogo voltou a DeWalt/Elevacon/EvoLed/Menegotti, 0 modelos): Exportar baixou `marcas-e-modelos-2026-10-13.xlsx` com as 4 marcas + aba Instruções; reimportar o próprio arquivo → "Importar 0 linhas" desligado ("Nenhuma linha grava algo"); planilha de teste com colunas fora de ordem e cabeçalho sem acento → prévia "Nova marca e modelo / Novo modelo / Nova marca / Erro (tipo foguete)" → 3 linhas gravadas, banco igual à prévia (tipo, código, categoria, vida 48); 2ª importação → tudo "Sem mudança", o erro continua erro. Zero erro de JS/console/HTTP. Ajuste: coluna "Ação" da prévia cortava → 150px.
+- [ ] Publicar e fechar a frente `marcas-modelos-planilha`.
 
 ## Riscos
 - Lock da FK em `opura_assets` com o módulo aberto: `lock_timeout` e repetir se der 40P01.

@@ -14,7 +14,8 @@ import { supabase } from '../lib/supabase';
 import type {
     BrandModelValue, CatalogUsage, ProductBrand, ProductItemType, ProductModel, ProductModelInput,
 } from '../types/brandModel';
-import { acharPorNome, normalizarNome } from '../utils/catalogoNome';
+import { acharPorNome, chaveBusca, normalizarNome } from '../utils/catalogoNome';
+import { linhasQueGravam, type LinhaPlanejada } from '../utils/catalogoPlanilha';
 
 const BRAND_COLS = 'id, organization_id, name, is_active, created_at, updated_at';
 const MODEL_COLS =
@@ -233,5 +234,54 @@ export const brandModelService = {
             ? { id: valor.modelId, name: nomeModelo }
             : await brandModelService.findOrCreateModel(organizationId, marca.id, nomeModelo, defaultItemType);
         return { brand_id: marca.id, model_id: modelo.id, brand: marca.name, model: modelo.name };
+    },
+
+    // ── Importação por planilha (Configurações › Marcas e Modelos) ─────────
+    /**
+     * Grava o plano (utils/catalogoPlanilha.planejarImportacao) na org dada.
+     * Linha a linha, tolerando falha: uma linha recusada pelo banco não derruba
+     * as outras e volta com o número dela. Marca nova criada por uma linha é
+     * reaproveitada pelas seguintes (cache pela chave sem caixa/acento).
+     */
+    async aplicarImportacao(
+        organizationId: string,
+        plano: LinhaPlanejada[],
+    ): Promise<{ gravadas: number; erros: { numero: number; mensagem: string }[] }> {
+        const criadas = new Map<string, string>();   // chaveBusca(marca) → id
+        const erros: { numero: number; mensagem: string }[] = [];
+        let gravadas = 0;
+        for (const p of linhasQueGravam(plano)) {
+            const l = p.linha;
+            try {
+                let marcaId = p.marcaId ?? criadas.get(chaveBusca(l.marca));
+                if (!marcaId) {
+                    const b = await brandModelService.findOrCreateBrand(organizationId, l.marca);
+                    marcaId = b.id;
+                    criadas.set(chaveBusca(l.marca), b.id);
+                    // linha só da marca, marcada Inativo
+                    if (!l.modelo && l.ativo === false) await brandModelService.updateBrand(b.id, { is_active: false });
+                }
+                if (p.marcaAtiva !== undefined) await brandModelService.updateBrand(marcaId, { is_active: p.marcaAtiva });
+                if (p.modeloId && p.patchModelo) {
+                    await brandModelService.updateModel(p.modeloId, p.patchModelo);
+                } else if (l.modelo && !p.modeloId) {
+                    await brandModelService.createModel(organizationId, {
+                        brand_id: marcaId,
+                        name: l.modelo,
+                        item_type: l.tipo ?? 'equipamento',
+                        manufacturer_code: l.codigo ?? null,
+                        default_asset_category: l.categoria ?? null,
+                        default_useful_life_months: l.vida ?? null,
+                        datasheet_url: l.ficha ?? null,
+                        technical_spec: l.especificacao ?? null,
+                        is_active: l.ativo ?? true,
+                    });
+                }
+                gravadas++;
+            } catch (e) {
+                erros.push({ numero: l.numero, mensagem: e instanceof Error ? e.message : String(e) });
+            }
+        }
+        return { gravadas, erros };
     },
 };

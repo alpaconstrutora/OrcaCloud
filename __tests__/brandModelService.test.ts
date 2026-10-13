@@ -113,3 +113,49 @@ describe('brandModelService · mensagens de erro', () => {
         expect(mensagemDeErroCatalogo({ code: 'XX', message: 'boom' }, 'marca')).toBe('boom');
     });
 });
+
+describe('brandModelService · aplicarImportacao (planilha)', () => {
+    const linha = (numero: number, marca: string, modelo?: string) => ({ numero, marca, modelo, erros: [] as string[] });
+
+    it('marca nova é criada UMA vez e reaproveitada pelas linhas seguintes', async () => {
+        responder = c => {
+            if (c.tabela === 'product_brands' && temOp(c, 'insert')) return { data: { id: 'b-nova', name: 'Daikin' } };
+            if (c.tabela === 'product_models' && temOp(c, 'insert')) return { data: { id: 'm', name: 'x' } };
+            return { data: [] };
+        };
+        const r = await brandModelService.aplicarImportacao('org-1', [
+            { linha: linha(2, 'Daikin', 'A'), acao: 'nova-marca-e-modelo', detalhe: '' },
+            { linha: linha(3, 'DAIKIN', 'B'), acao: 'novo-modelo', detalhe: '' },
+        ]);
+        expect(r).toEqual({ gravadas: 2, erros: [] });
+        expect(chamadas.filter(c => c.tabela === 'product_brands' && temOp(c, 'insert'))).toHaveLength(1);
+        const modelos = chamadas.filter(c => c.tabela === 'product_models' && temOp(c, 'insert'));
+        expect(modelos.map(c => (argsDe(c, 'insert')[0][0] as { brand_id: string }).brand_id)).toEqual(['b-nova', 'b-nova']);
+    });
+
+    it('linha recusada pelo banco não derruba as outras e volta com o número dela', async () => {
+        let n = 0;
+        responder = c => {
+            if (c.tabela === 'product_models' && temOp(c, 'insert')) {
+                n++;
+                return n === 1 ? { error: { code: '23514', message: 'check' } } : { data: { id: 'm2', name: 'B' } };
+            }
+            return { data: [] };
+        };
+        const r = await brandModelService.aplicarImportacao('org-1', [
+            { linha: linha(2, 'WEG', 'A'), acao: 'novo-modelo', marcaId: 'b1', detalhe: '' },
+            { linha: linha(3, 'WEG', 'B'), acao: 'novo-modelo', marcaId: 'b1', detalhe: '' },
+        ]);
+        expect(r.gravadas).toBe(1);
+        expect(r.erros).toEqual([{ numero: 2, mensagem: expect.stringMatching(/Valor fora do permitido/) }]);
+    });
+
+    it('linhas "sem mudança" e "erro" não vão ao banco', async () => {
+        const r = await brandModelService.aplicarImportacao('org-1', [
+            { linha: linha(2, 'WEG'), acao: 'sem-mudanca', marcaId: 'b1', detalhe: '' },
+            { linha: { ...linha(3, ''), erros: ['x'] }, acao: 'erro', detalhe: '' },
+        ]);
+        expect(r).toEqual({ gravadas: 0, erros: [] });
+        expect(chamadas).toHaveLength(0);
+    });
+});

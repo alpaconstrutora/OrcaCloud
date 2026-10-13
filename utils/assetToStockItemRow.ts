@@ -9,7 +9,8 @@
 import type { AssetCategory, OpuraAsset } from '../types/assets';
 import type { StockItemImportRow } from '../types/inventory';
 
-// Mesmos rótulos das <option> de categoria em OpuraAssetsModule.tsx.
+// Fonte única dos rótulos de categoria: as <option> de OpuraAssetsModule.tsx
+// (filtro e formulário) e a célula da tabela são geradas a partir daqui.
 export const ASSET_CATEGORY_LABELS: Record<AssetCategory, string> = {
     equipamento: 'Equipamento',
     ferramenta: 'Ferramenta',
@@ -17,7 +18,10 @@ export const ASSET_CATEGORY_LABELS: Record<AssetCategory, string> = {
     tecnologia: 'Tecnologia',
     imovel: 'Imóvel',
     mobiliario: 'Mobiliário',
+    sistema_predial: 'Sistema Predial',
 };
+
+export const ASSET_CATEGORIES = Object.keys(ASSET_CATEGORY_LABELS) as AssetCategory[];
 
 export const ASSET_UNIT = 'UN';
 

@@ -59,13 +59,17 @@ describe('assetToStockItemRow — Gestão de Ativos → catálogo do Almoxarifad
     });
 
     it('categoria fora do mapa cai no valor cru (não perde o dado)', () => {
-        const row = assetToStockItemRow({ ...base, category: 'sistema_predial' as OpuraAsset['category'] });
-        expect(row.category).toBe('sistema_predial');
+        const row = assetToStockItemRow({ ...base, category: 'categoria_legada' as OpuraAsset['category'] });
+        expect(row.category).toBe('categoria_legada');
     });
 
-    it('as seis categorias do módulo têm rótulo', () => {
+    it('sistema predial (ativo do Condomínio) tem rótulo legível, não a chave crua', () => {
+        expect(assetToStockItemRow({ ...base, category: 'sistema_predial' }).category).toBe('Sistema Predial');
+    });
+
+    it('as sete categorias do módulo têm rótulo', () => {
         expect(Object.keys(ASSET_CATEGORY_LABELS).sort()).toEqual(
-            ['equipamento', 'ferramenta', 'imovel', 'mobiliario', 'tecnologia', 'veiculo'],
+            ['equipamento', 'ferramenta', 'imovel', 'mobiliario', 'sistema_predial', 'tecnologia', 'veiculo'],
         );
     });
 });

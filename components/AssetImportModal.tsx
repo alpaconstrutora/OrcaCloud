@@ -44,7 +44,8 @@ const CATEGORIES_ALLOWED: AssetCategory[] = [
   'veiculo',
   'tecnologia',
   'imovel',
-  'mobiliario'
+  'mobiliario',
+  'sistema_predial'
 ];
 
 const getCellValueAsString = (cell: ExcelJS.Cell): string => {
@@ -228,7 +229,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
       (worksheet as any).dataValidations.add('C2:C1000', {
         type: 'list',
         allowBlank: false,
-        formulae: ['"equipamento,ferramenta,veiculo,tecnologia,imovel,mobiliario"'],
+        formulae: ['"equipamento,ferramenta,veiculo,tecnologia,imovel,mobiliario,sistema_predial"'],
         showErrorMessage: true,
         errorTitle: 'Categoria Inválida',
         error: 'Escolha uma categoria válida da lista.'

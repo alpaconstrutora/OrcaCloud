@@ -62,6 +62,7 @@ import { BrandModelPicker } from './catalog/BrandModelPicker';
 import { brandModelService } from '../services/brandModelService';
 import { itemTypeDaCategoria, type BrandModelValue, type ProductItemType, type ProductModel } from '../types/brandModel';
 import { aplicarPadroesDoModelo, origemInicial, type OrigemCampo } from '../utils/catalogoAutopreencher';
+import { ASSET_CATEGORIES, ASSET_CATEGORY_LABELS } from '../utils/assetToStockItemRow';
 
 interface OpuraAssetsModuleProps {
   activeOrganizationId: string | null;
@@ -73,7 +74,7 @@ interface OpuraAssetsModuleProps {
 const ASSET_TABS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
   { key: 'bens', label: 'Ativos Patrimoniais', icon: Package },
-  { key: 'reservas', label: 'Reservas & Locação', icon: Calendar },
+  { key: 'reservas', label: 'Retirada', icon: Calendar },
   { key: 'manutencoes', label: 'Manutenções', icon: Wrench },
   { key: 'custos_rateio', label: 'Custos & Rateio', icon: TrendingDown },
 ] as const;
@@ -115,7 +116,7 @@ const ASSET_COL_WIDTHS: Record<string, number> = {
   purchase_value: 115, useful_life: 100, last_movement: 140, documents: 120, value: 110, actions: 250,
 };
 
-// Tabela "Reservas & Locação" — guia §1/§2
+// Tabela da aba "Retirada" (antes "Reservas & Locação") — guia §1/§2
 const RESERVATION_COLUMNS: ColumnConfig[] = [
   { key: 'asset', label: 'Ativo', sortable: true },
   { key: 'project', label: 'Obra Solicitante', sortable: true },
@@ -200,7 +201,7 @@ function resumirDocumentos(docs: OpuraAssetDocument[] | undefined): { total: num
 }
 
 // Conteúdo de cada célula da tabela "Ativos Patrimoniais", extraído do <td> original.
-// Header (label/sortable/className) da tabela "Reservas & Locação".
+// Header (label/sortable/className) da tabela da aba "Retirada".
 const RESERVATION_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
   asset: { label: 'Ativo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   project: { label: 'Obra Solicitante', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -211,7 +212,7 @@ const RESERVATION_COLUMN_HEADERS: Record<string, { label: string; sortable?: boo
   status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
-// Conteúdo de cada célula da tabela "Reservas & Locação", extraído do <td> original.
+// Conteúdo de cada célula da tabela da aba "Retirada", extraído do <td> original.
 function renderReservationCell(
   key: string,
   res: OpuraAssetReservation,
@@ -362,7 +363,7 @@ function renderAssetCell(
       );
     }
     case 'category':
-      return <span className="text-sm font-normal text-gray-600 capitalize">{asset.category}</span>;
+      return <span className="text-sm font-normal text-gray-600">{ASSET_CATEGORY_LABELS[asset.category] ?? asset.category}</span>;
     case 'status': {
       const statusColor = asset.status === 'disponivel' ? 'text-emerald-700' : asset.status === 'em_uso' ? 'text-blue-700' : asset.status === 'manutencao' ? 'text-amber-700' : asset.status === 'baixado' ? 'text-gray-400' : 'text-gray-600';
       return <span className={`text-sm font-normal ${statusColor}`}>{asset.status === 'em_uso' ? 'Em Obra' : asset.status}</span>;
@@ -1419,7 +1420,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     veiculo: Truck,
     tecnologia: Package,
     imovel: Building2,
-    mobiliario: Package
+    mobiliario: Package,
+    sistema_predial: Building2,
   };
 
   return (
@@ -1428,7 +1430,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Ativos</h1>
-          <p className="text-gray-400 text-sm mt-1.5 font-medium">Patrimônio, reservas, manutenções e rateio de custos dos bens da empresa.</p>
+          <p className="text-gray-400 text-sm mt-1.5 font-medium">Patrimônio, retiradas, manutenções e rateio de custos dos bens da empresa.</p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -1600,12 +1602,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shrink-0"
                   >
                     <option value="todos">Todas Categorias</option>
-                    <option value="equipamento">Equipamento</option>
-                    <option value="ferramenta">Ferramenta</option>
-                    <option value="veiculo">Veículo</option>
-                    <option value="tecnologia">Tecnologia</option>
-                    <option value="imovel">Imóvel</option>
-                    <option value="mobiliario">Mobiliário</option>
+                    {ASSET_CATEGORIES.map(c => <option key={c} value={c}>{ASSET_CATEGORY_LABELS[c]}</option>)}
                   </select>
 
                   <select
@@ -2437,12 +2434,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     }}
                     className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   >
-                    <option value="equipamento">Equipamento</option>
-                    <option value="ferramenta">Ferramenta</option>
-                    <option value="veiculo">Veículo</option>
-                    <option value="tecnologia">Tecnologia</option>
-                    <option value="imovel">Imóvel</option>
-                    <option value="mobiliario">Mobiliário</option>
+                    {ASSET_CATEGORIES.map(c => <option key={c} value={c}>{ASSET_CATEGORY_LABELS[c]}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">

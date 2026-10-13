@@ -6,7 +6,10 @@ export type AssetCategory =
   | 'veiculo'
   | 'tecnologia'
   | 'imovel'
-  | 'mobiliario';
+  | 'mobiliario'
+  // Ativo INSTALADO no edifício (elevador, bomba, gerador) — nasce no módulo de
+  // Condomínio (services/buildingAssetService.ts → CATEGORIA_PREDIAL).
+  | 'sistema_predial';
 
 export type AssetStatus =
   | 'disponivel'

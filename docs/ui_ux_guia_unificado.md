@@ -2987,6 +2987,11 @@ moldura.
 > ℹ️ Medido com Playwright em `ContractModal.tsx` (modo `inline`, 2026-09-19):
 > título→rótulo 34px, rótulo→campo 3–6px, último campo→próximo título 32px; o
 > formulário (3 seções + rodapé) passou de ~2 telas para 1 em 1600×1000.
+> ℹ️ **Exceção pedida pelo usuário (13/10/2026):** `BoletoFormModal.tsx` mostra
+> Cobrança, Quem recebe, Classificação e Observações cada uma em seu próprio
+> card (`Secao` renderiza um `Painel`, `space-y-6` entre eles). A regra geral
+> acima continua valendo para as demais telas; só vira card por seção quando o
+> usuário pedir.
 > ⚠️ **Pendência de propagação:** aplicado em `ContractModal.tsx` (drawer e
 > embutido) e, em 2026-10-11, nas abas Cliente/Unidade/Financeiro/Partes do
 > `DealModal.tsx` (Gerenciar Negociação) — junto com a largura toda em duas

@@ -61,22 +61,22 @@ const Painel: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ cla
 );
 
 /**
- * Seção dentro de um painel — §30: título + ícone + `border-b pb-3`, campos em
- * `space-y-4`, e 32px (`space-y-8`) entre seções irmãs.
+ * Seção = um CARD próprio (`Painel`): título + ícone + `border-b pb-3`, campos em
+ * `space-y-4`, 24px (`space-y-6`) entre cards.
  *
- * Seção NÃO vira card próprio: campos que o usuário preenche em sequência são
- * um formulário só. Três cards empilhados fariam o olho entrar e sair três
- * vezes e gastariam 3× moldura.
+ * Exceção deliberada ao §30 ("seção não vira card"): nesta tela o usuário pediu
+ * Cobrança, Quem recebe, Classificação e Observações em cards separados
+ * (13/10/2026).
  */
 const Secao: React.FC<React.PropsWithChildren<{ titulo: string; icone: React.ComponentType<{ className?: string }>; acao?: React.ReactNode }>> = ({ titulo, icone: Icone, acao, children }) => (
-    <div className="space-y-4">
+    <Painel className="p-6 space-y-4">
         <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
             <Icone className="w-4 h-4 text-blue-600" />
             <h3 className="text-sm font-semibold text-gray-900">{titulo}</h3>
             {acao && <div className="ml-auto">{acao}</div>}
         </div>
         {children}
-    </div>
+    </Painel>
 );
 
 /* Barreira de navegador para a data do vencimento — a mesma janela que
@@ -647,7 +647,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                             </div>
 
                             {/* Dados extraídos + formulário — mesmas seções da edição */}
-                            <Painel className="p-6 space-y-8">
+                            <div className="space-y-6">
                                 <Secao titulo="Cobrança" icone={Receipt}>
                                     {pendingExtraction && (
                                         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
@@ -777,7 +777,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </FormField>
                                 </Secao>
 
-                                <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+                                <div className="flex justify-end gap-2">
                                     <button onClick={() => { setPendingFile(null); setPendingExtraction(null); setDocumentoBlobUrl(null); }}
                                         className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-[6px] text-sm font-medium">
                                         Trocar arquivo
@@ -801,7 +801,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         Salvar e fechar
                                     </button>
                                 </div>
-                            </Painel>
+                            </div>
                         </div>
                     )}
 
@@ -861,11 +861,11 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 )}
                             </div>
 
-                            {/* Coluna direita: UM painel, quatro seções (§30). O que o
+                            {/* Coluna direita: um CARD por seção (13/10/2026). O que o
                                 sistema LEU do boleto (banco, linha, beneficiário) fica em
                                 "Cobrança"; o que o usuário DECIDE fica em "Classificação"
                                 — é essa a fronteira que a tela não mostrava. */}
-                            <Painel className="p-6 space-y-8">
+                            <div className="space-y-6">
                                 <Secao titulo="Cobrança" icone={Receipt}>
                                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                                         <ReadOnlyField icon={Building2} label="Banco" value={boleto.banco_nome ?? boleto.banco_codigo ?? '—'} />
@@ -1223,7 +1223,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         </div>
                                     )}
                                 </Secao>
-                            </Painel>
+                            </div>
                         </div>
                     )}
                 </div>

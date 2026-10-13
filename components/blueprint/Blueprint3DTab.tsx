@@ -88,6 +88,10 @@ interface Props {
   onElevar?: (dzMm: number) => void;
   /** A trava de 90° do 2D (botão "Trava 90°"/F8) — vale no arraste da peça no 3D. */
   ortogonal?: boolean;
+  /** VER O CORTE NO 3D (13/10/2026): o plano do corte, o nome e o "Ver tudo". Ver `corteNo3d`. */
+  planoDeCorte?: { normal: [number, number, number]; constante: number } | null;
+  rotuloDoCorte?: string;
+  onSairDoCorte?: () => void;
   /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
   caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
   /**

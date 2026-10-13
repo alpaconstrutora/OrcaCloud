@@ -206,6 +206,14 @@ interface Props {
   /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
   caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
   /**
+   * VER O CORTE NO 3D (13/10/2026): o plano de um corte do desenho (espaço do DESENHO,
+   * mantém `normal·p + constante ≥ 0` — `corteNo3d`). Recorta junto com a caixa de corte;
+   * um selo "Corte A no 3D · Ver tudo" chama `onSairDoCorte`.
+   */
+  planoDeCorte?: { normal: [number, number, number]; constante: number } | null;
+  rotuloDoCorte?: string;
+  onSairDoCorte?: () => void;
+  /**
    * E10.4b: modelos IFC EXTERNOS desenhados como referência — só para olhar. Não são
    * peça do modelo: não se clicam, não entram no enquadramento nem no hash; a caixa
    * de corte os recorta junto. `matriz` vem de `matrizDaReferencia`.
@@ -2436,21 +2444,29 @@ function Fantasma({ children }: { children: React.ReactNode }) {
  * material é conferido a cada quadro (o R3F e o meio-tom trocam material), e a
  * lista de planos é UMA só, mutada no lugar — a identidade é o que diz "já pus".
  */
-function Recortado({ caixa, children }: { caixa: CaixaDeCorte | null; children: React.ReactNode }) {
+function Recortado({
+  caixa,
+  plano = null,
+  children,
+}: {
+  caixa: CaixaDeCorte | null;
+  /** O plano de um CORTE do desenho (13/10/2026), somado aos seis da caixa. */
+  plano?: { normal: [number, number, number]; constante: number } | null;
+  children: React.ReactNode;
+}) {
   const ref = useRef<THREE.Group>(null);
-  const planos = useMemo(() => Array.from({ length: 6 }, () => new THREE.Plane()), []);
-  const vazio = useMemo<THREE.Plane[]>(() => [], []);
-  useEffect(() => {
-    if (!caixa) return;
-    // A caixa é do espaço do desenho; o three aplica `clippingPlanes` no MUNDO, e
+  // A lista de planos é recriada quando a caixa ou o plano mudam: o material compara por
+  // identidade (`clippingPlanes === alvo`) e só então se recompila.
+  const alvo = useMemo<THREE.Plane[]>(() => {
+    // A caixa e o plano são do espaço do desenho; o three aplica `clippingPlanes` no MUNDO, e
     // este grupo vive dentro do espelho (ver `blueprint3dEspelho`) — a normal troca o z.
-    planosDaCaixaDeCorte(caixa).forEach((pl, i) => {
+    const doDesenho = [...(caixa ? planosDaCaixaDeCorte(caixa) : []), ...(plano ? [plano] : [])];
+    return doDesenho.map((pl) => {
       const w = planoNoMundo(pl);
-      planos[i].set(new THREE.Vector3(...w.normal), w.constante);
+      return new THREE.Plane(new THREE.Vector3(...w.normal), w.constante);
     });
-  }, [caixa, planos]);
+  }, [caixa, plano?.normal[0], plano?.normal[2], plano?.constante]);
   useFrame(() => {
-    const alvo = caixa ? planos : vazio;
     ref.current?.traverse((o) => {
       const atual = o.material;
       if (!atual) return;
@@ -2699,6 +2715,18 @@ export default function Blueprint3DViewer(props: Props) {
         </div>
       </div>
 
+      {props.planoDeCorte && (
+        <div className="absolute left-4 top-4 z-10 inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white/95 px-3 py-1.5 text-xs text-slate-700 shadow-sm" data-testid="corte-no-3d">
+          <span className="font-semibold text-blue-700">{props.rotuloDoCorte ?? 'Corte'} no 3D</span>
+          <span className="text-slate-400">— só o que fica atrás da linha</span>
+          {props.onSairDoCorte && (
+            <button type="button" onClick={props.onSairDoCorte} className="rounded border border-slate-300 px-2 py-0.5 text-slate-600 transition-colors hover:bg-slate-50">
+              Ver tudo
+            </button>
+          )}
+        </div>
+      )}
+
       {caixa && (
         <div className="absolute right-4 top-16 z-10 w-56 rounded-lg border border-slate-200 bg-white p-2 text-[11px] text-slate-600 shadow-sm" data-testid="caixa-de-corte">
           <p className="mb-1 font-semibold text-slate-700">Caixa de corte</p>
@@ -2796,7 +2824,7 @@ export default function Blueprint3DViewer(props: Props) {
             que leva ao mundo (norte em −Z). Ver `utils/blueprint3dEspelho.ts`. A alça dentro dele
             continua devolvendo deslocamento do desenho. */}
         <group scale={ESCALA_DO_DESENHO_NO_MUNDO}>
-        <Recortado caixa={caixa}>
+        <Recortado caixa={caixa} plano={props.planoDeCorte ?? null}>
         {(() => {
           // CAMADAS EM MEIO-TOM: a principal esconde os atenuados; o fantasma mostra só eles.
           const { atenuados, terrenoEmMeioTom, ocultos } = props;

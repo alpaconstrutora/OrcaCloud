@@ -630,6 +630,7 @@ import {
   type DimensionamentoHidraulico,
 } from '../../utils/blueprintTopografiaDimensionamento';
 import type { TerrenoParaCorte } from '../../utils/blueprintCorte';
+import { corteNo3d } from '../../utils/blueprintCorteNo3d';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import { pixelParaModelo, type PontoPx } from '../../utils/blueprintUnderlay';
 import type { ParedeGerada, PortaGerada } from '../../utils/blueprintVetor';
@@ -4549,6 +4550,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   /** F12: a câmera selecionada e a câmera que o 3D está usando como ponto de vista (`null` = órbita livre). */
   const cameraSel = (editor.model.cameras ?? []).find((c) => c.id === editor.selectedId) ?? null;
   const [cameraDo3d, setCameraDo3d] = useState<string | null>(null);
+  /** VER O CORTE NO 3D (13/10/2026): o corte que recorta o 3D (`null` = o 3D inteiro). */
+  const [corteNo3dId, setCorteNo3dId] = useState<string | null>(null);
+  /** Abre o 3D recortado pelo corte e com a câmera de frente para ele. */
+  const verCorteNo3d = (corteId: string) => {
+    setCameraDo3d(null);
+    setCorteNo3dId(corteId);
+    setVista('3d');
+  };
   const pontoDeVista3d = useMemo(() => {
     const c = (editor.model.cameras ?? []).find((x) => x.id === cameraDo3d);
     if (!c) return null;
@@ -10932,17 +10941,31 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     },
   ];
 
+  // O corte no 3D: o plano e a câmera saem da MESMA linha que o corte 2D usa; o terreno entra
+  // no enquadramento como na vista do corte. Corte apagado = o 3D volta inteiro sozinho.
+  const corteNo3dAtual = useMemo(() => {
+    const c = (editor.model.sections ?? []).find((x) => x.id === corteNo3dId);
+    return c ? corteNo3d(editor.model, c, { terreno: mostrarCurvasDeNivel ? terrenoParaCorteComPlato : null, levelIds: levelIdsDaVista }) : null;
+  }, [editor.model, corteNo3dId, mostrarCurvasDeNivel, terrenoParaCorteComPlato, levelIdsDaVista]);
+
   /** A cena 3D: a aba 3D e o painel do lado a lado são a MESMA (E10.3). */
   const renderCena3d = () => (
     <Blueprint3DTab
       model={editor.model}
       levelIds={levelIdsDaVista}
       // F12: as VISTAS SALVAS — as câmeras dos pavimentos à vista — e a que está em uso.
-      pontoDeVista={pontoDeVista3d}
+      // O corte no 3D manda na câmera enquanto está ligado; escolher uma vista salva o desliga.
+      pontoDeVista={corteNo3dAtual?.pontoDeVista ?? pontoDeVista3d}
+      planoDeCorte={corteNo3dAtual?.plano ?? null}
+      rotuloDoCorte={corteNo3dAtual?.rotulo}
+      onSairDoCorte={() => setCorteNo3dId(null)}
       nomeDoEstudo={study.name}
       pontosDeVista={(editor.model.cameras ?? []).filter((c) => !levelIdsDaVista || levelIdsDaVista.includes(c.levelId)).map((c) => ({ id: c.id, nome: c.nome }))}
       pontoDeVistaId={cameraDo3d}
-      onPontoDeVista={setCameraDo3d}
+      onPontoDeVista={(id) => {
+        setCorteNo3dId(null);
+        setCameraDo3d(id);
+      }}
       mostrarLaje={mostrarLaje3d}
       mostrarArestas={mostrarArestas3d || estilo3d === 'LINHA_OCULTA'}
       mostrarRotulosDeRede={mostrarRotulosDeRede3d}
@@ -13638,6 +13661,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   ajuda="Abre a vista deste corte"
                 />
                 <BotaoDoRibbon
+                  icone={Box}
+                  rotulo="Ver no 3D"
+                  onClick={() => verCorteNo3d(corteSel.id)}
+                  ajuda="Abre o 3D recortado por esta linha — só o que fica atrás dela, como no corte — com a câmera de frente para a face cortada. 'Ver tudo' volta ao 3D inteiro."
+                />
+                <BotaoDoRibbon
                   icone={ArrowLeftRight}
                   rotulo="Inverter o lado"
                   onClick={() =>
@@ -14023,6 +14052,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   errado só se percebe OLHANDO o corte; obrigar a voltar para a
                   planta e caçar a linha é pedir que se saia de onde está a
                   evidência (06/09/2026). */}
+              {corteAtual && (
+                <button
+                  type="button"
+                  onClick={() => verCorteNo3d(corteAtual.id)}
+                  title="Abre o 3D recortado por esta linha — só o que fica atrás dela — com a câmera de frente para a face cortada"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  <Box className="h-3.5 w-3.5" />
+                  Ver no 3D
+                </button>
+              )}
               {corteAtual && (
                 <button
                   type="button"

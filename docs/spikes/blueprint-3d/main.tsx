@@ -12,6 +12,15 @@
 import './harness.css';
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { _roots } from '@react-three/fiber';
+// O passeio lê a câmera real (13/10/2026, ver o corte no 3D): posição, alvo da órbita e fov.
+(window as unknown as { camera3d: () => unknown }).camera3d = () => {
+  for (const raiz of _roots.values()) {
+    const st = raiz.store.getState() as unknown as { camera: { position: { x: number; y: number; z: number }; fov: number }; controls?: { target: { x: number; y: number; z: number } } };
+    return { pos: st.camera.position, fov: st.camera.fov, alvo: st.controls?.target ?? null };
+  }
+  return null;
+};
 import Blueprint3DTab from '../../../components/blueprint/Blueprint3DTab';
 import {
   applyBatch,
@@ -26,6 +35,7 @@ import {
 import { comandoDeMover, comandosDeElevar } from '../../../utils/blueprintSelecao';
 import { gerarIfc } from '../../../utils/blueprintIfc';
 import { matrizDaReferencia } from '../../../utils/blueprintReferenciaExterna';
+import { corteNo3d } from '../../../utils/blueprintCorteNo3d';
 
 const T = 150;
 const H = 2800;
@@ -660,9 +670,28 @@ const ocultos = idsOcultos(model, params.get('ocultar'));
  *
  * O id sai na barra para o passeio poder afirmá-lo sem inspecionar a cena.
  */
+/**
+ * `?corte=reto|inclinado|reto-direita` (13/10/2026): VER O CORTE NO 3D — uma linha pelo meio da
+ * casa (leste–oeste, ou na diagonal), o 3D recortado por ela e a câmera de frente.
+ */
+const corteDoHarness = (() => {
+  const tipo = params.get('corte');
+  if (!tipo) return null;
+  const xs = model.walls.flatMap((w) => [w.a.x, w.b.x]);
+  const ys = model.walls.flatMap((w) => [w.a.y, w.b.y]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const ym = (y0 + y1) / 2;
+  const a = tipo === 'inclinado' ? point(x0 - 1000, y0 - 1000) : point(x0 - 1000, ym);
+  const b = tipo === 'inclinado' ? point(x1 + 1000, y1 + 1000) : point(x1 + 1000, ym);
+  const m = applyCommand(model, { type: 'AddCorte', a, b } as Command).model;
+  const c = m.sections[m.sections.length - 1];
+  return corteNo3d(m, tipo === 'reto-direita' ? { ...c, olharPara: 'DIREITA' } : c);
+})();
+
 function App() {
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const clicavel = params.get('clicar') === '1';
+  const [corte, setCorte] = useState(corteDoHarness);
 
   return (
     <>
@@ -671,6 +700,7 @@ function App() {
         {stress > 0 && ' · STRESS'}
         {ocultos && ` · OCULTOS: ${ocultos.size}`}
         {clicavel && ` · SELECIONADO: ${selecionados.join(',') || '(nenhum)'}`}
+        {corte && ` · ${corte.rotulo}: olho ${corte.pontoDeVista.posicao.map((n) => n.toFixed(2)).join(',')} → alvo ${corte.pontoDeVista.alvo.map((n) => n.toFixed(2)).join(',')}`}
       </div>
       <div id="tela">
         <Blueprint3DTab
@@ -683,6 +713,10 @@ function App() {
           selecionados={clicavel ? new Set(selecionados) : undefined}
           onSelecionar={clicavel ? setSelecionados : undefined}
           referencias={referencias}
+          pontoDeVista={corte?.pontoDeVista ?? null}
+          planoDeCorte={corte?.plano ?? null}
+          rotuloDoCorte={corte?.rotulo}
+          onSairDoCorte={() => setCorte(null)}
         />
       </div>
     </>

@@ -188,5 +188,5 @@ decisão do usuário, numa frente própria.
       zoom pela resolução)
 - [x] Viewer + editor; harness `docs/spikes/terreno-grande-3d/?mapa=RUAS|RELEVO|AMBOS` (`&meio=1`)
 - [x] Suíte 8.807 = 8.773 + 34 pendentes + 0 falhos (a 1ª rodada saiu com "still running" no editor — a conhecida; a 2ª fechou); `tsc` exit 0 (a 1ª acusou a prop nova faltando no `Blueprint3DTab`, corrigido); checks limpos; build ✓
-- [ ] Publicação e CI
+- [x] Publicado `7a17807f`; `ci` = success; o domínio serve `7a17807`
 - [ ] Decisão do usuário: corrigir o espelhamento do 3D

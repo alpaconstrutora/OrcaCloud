@@ -19,6 +19,9 @@ export interface MenuItemProps {
   label: string;
   onClick?: () => void;
   className?: string;
+  /** Item visível mas inerte. Sempre com `title` dizendo o porquê. */
+  disabled?: boolean;
+  title?: string;
 }
 
 export interface InlineDisclosureMenuProps {
@@ -52,10 +55,12 @@ const confirmVariants: Variants = {
   exit: (confirm: boolean) => ({ y: confirm ? -60 : 60, transition: spring }),
 };
 
-const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onClick, className = "" }) => (
+const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onClick, className = "", disabled = false, title }) => (
   <button
     onClick={onClick}
-    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-[#363538] transition-colors hover:bg-[#F6F5FA] ${className}`}
+    disabled={disabled}
+    title={title}
+    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-[#363538] transition-colors hover:bg-[#F6F5FA] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent ${className}`}
   >
     <span className="text-gray-500">{icon}</span>
     <span className="text-sm font-medium tracking-tight">{label}</span>
@@ -117,6 +122,7 @@ export function InlineDisclosureMenu({
                       key={i}
                       {...item}
                       onClick={() => {
+                        if (item.disabled) return;
                         item.onClick?.();
                         setOpen(false);
                       }}

@@ -20,6 +20,8 @@ import {
   OpuraAssetDepreciationRateio
 } from '../types';
 import { buildMaintenanceTitle, maintenanceTitleReference } from '../utils/assetMaintenanceFinance';
+import { assetToStockItemRow } from '../utils/assetToStockItemRow';
+import { inventoryService } from './inventoryService';
 
 /**
  * Ponte Manutenção → Financeiro. Um título por manutenção (upsert pela chave
@@ -145,6 +147,47 @@ export const assetService = {
       throw new Error(`Falha ao atualizar ativo: ${error.message}`);
     }
     return data;
+  },
+
+  /**
+   * Vincula o ativo ao catálogo do Almoxarifado e (com `warehouseId`) diz onde ele
+   * mora. Cria o item se ainda não existir (código patrimonial = código do item).
+   * NÃO lança movimento: o gatilho do banco reconcilia o saldo (1 UN no
+   * almoxarifado enquanto o bem não estiver numa obra nem baixado) e chamar de
+   * novo não lança nada — ver aplicar_20271013160000_ativos_almoxarifado_vinculo.sql.
+   * `warehouseId` null mantém o almoxarifado atual (só vincula o item).
+   */
+  async guardarNoAlmoxarifado(asset: OpuraAsset, warehouseId: string | null): Promise<OpuraAsset> {
+    let stockItemId = asset.stock_item_id ?? null;
+    if (!stockItemId) {
+      const row = assetToStockItemRow(asset);
+      const item = await inventoryService.upsertStockItem(asset.organization_id, {
+        inputCode: row.inputCode,
+        inputDescription: row.inputDescription,
+        inputUnit: row.inputUnit,
+        category: row.category,
+        unitCostHint: row.unitCostHint,
+        source: 'ativos',
+        ...(row.brandId !== undefined || row.brand !== undefined
+          ? { brandId: row.brandId, modelId: row.modelId, brand: row.brand, model: row.model }
+          : {}),
+      });
+      stockItemId = item.id;
+    }
+    return this.update(asset.id, {
+      stock_item_id: stockItemId,
+      warehouse_id: warehouseId ?? asset.warehouse_id ?? null,
+    });
+  },
+
+  /** Baixa o bem (não existe mais fisicamente). Guardado no almoxarifado, o banco tira a unidade. */
+  async baixar(id: string): Promise<OpuraAsset> {
+    return this.update(id, { status: 'baixado' });
+  },
+
+  /** Desfaz a baixa. Guardado no almoxarifado, o banco devolve a unidade. */
+  async reativar(id: string): Promise<OpuraAsset> {
+    return this.update(id, { status: 'disponivel' });
   },
 
   async delete(id: string): Promise<void> {

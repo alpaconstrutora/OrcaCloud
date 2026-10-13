@@ -4,7 +4,7 @@
 // item existir de verdade — antes, o item nascia digitado em texto livre em
 // cada movimento. Ver docs/planos/2026-08-21-almoxarifado-cadastro-de-itens.md.
 import React from 'react';
-import { Package, Plus, Upload } from 'lucide-react';
+import { Landmark, Package, Plus, Upload } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import { useTableColumns, SortableHeader, ColumnConfig } from '../ui/TableUtils';
@@ -43,9 +43,13 @@ interface Props {
     onNew: () => void;
     onImport: () => void;
     onChanged: () => void;
+    /** Itens que SÃO um ativo patrimonial (stock_item_id → ativo). */
+    assetLinks?: Map<string, { assetId: string; code: string; name: string }>;
+    /** Transformar unidades do item em ativos patrimoniais (PatrimoniarItemSheet). */
+    onPatrimoniar?: (item: StockItem) => void;
 }
 
-const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onImport, onChanged }) => {
+const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onImport, onChanged, assetLinks, onPatrimoniar }) => {
     const confirm = useConfirm();
 
     const sorted = React.useMemo(() => {
@@ -135,11 +139,28 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
                             {sorted.map(item => (
                                 <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
                                     {tableItems.orderedVisibleColumns.map(key => {
+                                        const ativo = assetLinks?.get(item.id);
                                         if (key === 'actions') {
+                                            // O botão desligado tem `pointer-events-none`: o motivo
+                                            // fica no <span> em volta, que recebe o hover.
+                                            const motivoPatrimoniar = ativo
+                                                ? `Este item já é o ativo patrimonial ${ativo.code}`
+                                                : !item.isActive ? 'Item inativo — reative antes' : '';
                                             return (
                                                 <td key={key} className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
                                                         <ActionIconButton kind="edit" onClick={() => onEdit(item)} />
+                                                        {onPatrimoniar && (
+                                                            <span title={motivoPatrimoniar || undefined}>
+                                                                <ActionIconButton
+                                                                    kind="move"
+                                                                    title="Transformar em ativo patrimonial"
+                                                                    icon={<Landmark className="w-4 h-4" />}
+                                                                    disabled={!!motivoPatrimoniar}
+                                                                    onClick={() => onPatrimoniar(item)}
+                                                                />
+                                                            </span>
+                                                        )}
                                                         <ActionIconButton
                                                             kind={item.isActive ? 'lock' : 'unlock'}
                                                             title={item.isActive ? 'Desativar' : 'Reativar'}
@@ -169,6 +190,13 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
                                             return <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.defaultSupplierName || '—'}</td>;
                                         }
                                         if (key === 'source') {
+                                            if (ativo) {
+                                                return (
+                                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600" title={`Ativo ${ativo.code} — ${ativo.name}. O saldo acompanha o ativo (Gestão de Ativos).`}>
+                                                        Ativo patrimonial
+                                                    </td>
+                                                );
+                                            }
                                             return <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.source ? SOURCE_LABELS[item.source] : '—'}</td>;
                                         }
                                         if (key === 'isActive') {

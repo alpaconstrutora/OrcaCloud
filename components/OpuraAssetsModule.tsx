@@ -31,9 +31,14 @@ import {
   TrendingDown,
   LayoutGrid,
   List,
-  MoveHorizontal
+  MoveHorizontal,
+  Warehouse as WarehouseIcon,
+  Archive,
+  RotateCcw
 } from 'lucide-react';
 import { assetService } from '../services/assetService';
+import { inventoryService } from '../services/inventoryService';
+import type { Warehouse } from '../types/inventory';
 import { laborService } from '../services/laborService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import CostCenterSelect from './CostCenterSelect';
@@ -91,6 +96,9 @@ const ASSET_COLUMNS: ColumnConfig[] = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'brand_model', label: 'Marca / Modelo', sortable: true },
   { key: 'allocation', label: 'Alocação atual', sortable: true },
+  // Onde o bem mora quando não está numa obra (vínculo com o Almoxarifado,
+  // 13/10/2026 — docs/planos/2026-10-13-ativos-almoxarifado-vinculo.md).
+  { key: 'warehouse', label: 'Almoxarifado', sortable: true },
   { key: 'purchase_value', label: 'Valor aquisição', sortable: true },
   { key: 'useful_life', label: 'Vida útil', sortable: true },
   // Resumos do que era timeline/lista no painel: ordenam pela data e pela contagem.
@@ -112,7 +120,7 @@ const ASSET_COL_WIDTHS: Record<string, number> = {
   // 80 = miniatura de 40px + o `px-6` do §6.6 (24+24) e nada mais: a coluna não
   // tem texto para acomodar.
   image: 80,
-  code: 160, name: 165, category: 100, status: 85, brand_model: 125, allocation: 135,
+  code: 160, name: 165, category: 100, status: 85, brand_model: 125, allocation: 135, warehouse: 135,
   purchase_value: 115, useful_life: 100, last_movement: 140, documents: 120, value: 110, actions: 250,
 };
 
@@ -164,6 +172,7 @@ const ASSET_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; 
   status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   brand_model: { label: 'Marca / Modelo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   allocation: { label: 'Alocação atual', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  warehouse: { label: 'Almoxarifado', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   purchase_value: { label: 'Valor aquisição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   useful_life: { label: 'Vida útil', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   last_movement: { label: 'Última movimentação', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -332,6 +341,7 @@ function renderAssetCell(
     projects: { id?: string; name?: string }[];
     lastMovements: Record<string, OpuraAssetMovement>;
     docsByAsset: Record<string, OpuraAssetDocument[]>;
+    warehouseName: (id?: string | null) => string | undefined;
   },
 ): React.ReactNode {
   switch (key) {
@@ -377,6 +387,12 @@ function renderAssetCell(
     case 'allocation': {
       const obra = ctx.projects.find(p => p.id === asset.current_project_id)?.name || 'Sede / Central';
       return <span className="block truncate text-sm font-normal text-gray-700" title={obra}>{obra}</span>;
+    }
+    case 'warehouse': {
+      const nome = asset.warehouse_id ? (ctx.warehouseName(asset.warehouse_id) ?? 'Outro almoxarifado') : null;
+      return nome
+        ? <span className="block truncate text-sm font-normal text-gray-700" title={nome}>{nome}</span>
+        : <span className="text-sm font-normal text-gray-400" title="Não guardado em almoxarifado">—</span>;
     }
     case 'purchase_value':
       return <span className="text-sm font-medium text-gray-800">R$ {asset.purchase_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>;
@@ -465,6 +481,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Resumos por ativo que alimentam as colunas "Última movimentação" e "Documentos".
   const [lastMovements, setLastMovements] = React.useState<Record<string, OpuraAssetMovement>>({});
   const [docsByAsset, setDocsByAsset] = React.useState<Record<string, OpuraAssetDocument[]>>({});
+  // Almoxarifados (Suprimentos) — onde o bem pode morar. O saldo de 1 UN é do
+  // banco: acompanha o ativo (sai na entrega à obra, volta na devolução).
+  const [warehouses, setWarehouses] = React.useState<Warehouse[]>([]);
+  const [guardarAtivo, setGuardarAtivo] = React.useState<OpuraAsset | null>(null);
+  const [guardarWarehouseId, setGuardarWarehouseId] = React.useState('');
+  const [guardando, setGuardando] = React.useState(false);
+  const [guardarErro, setGuardarErro] = React.useState('');
   const [isNewAssetModalOpen, setIsNewAssetModalOpen] = React.useState(false);
   const [isMoveAssetModalOpen, setIsMoveAssetModalOpen] = React.useState(false);
   const [isReserveModalOpen, setIsReserveModalOpen] = React.useState(false);
@@ -629,6 +652,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       ]);
       setLastMovements(loadedMovs);
       setDocsByAsset(loadedDocs);
+
+      // Almoxarifados: falha aqui não derruba a tela (a coluna fica "—").
+      try {
+        setWarehouses(await inventoryService.listWarehouses(orgIdParam ?? null));
+      } catch (err) {
+        console.error('[OpuraAssetsModule] Erro ao carregar almoxarifados:', err);
+      }
     } catch (err) {
       console.error('[OpuraAssetsModule] Erro ao carregar dados:', err);
     } finally {
@@ -1373,11 +1403,88 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Menu ⋮ da linha (§9/§9.2): o que sobra depois do CRUD e da movimentação. São
   // ações de OPERAÇÃO do bem (agenda, oficina, papelada, etiqueta) — não CRUD do
   // cadastro, que ficou visível na coluna a pedido do usuário em 2026-09-09.
-  const acoesSecundariasDoAtivo = (asset: OpuraAsset) => [
-    { icon: <Wrench className="w-[18px] h-[18px]" />, label: 'Manutenção', onClick: () => abrirManutencaoAtivo(asset) },
-    { icon: <Shield className="w-[18px] h-[18px]" />, label: 'Anexar documento', onClick: () => abrirDocumentoAtivo(asset) },
-    { icon: <QrCode className="w-[18px] h-[18px]" />, label: 'QR Code', onClick: () => abrirQrCodeAtivo(asset) },
-  ];
+  const acoesSecundariasDoAtivo = (asset: OpuraAsset) => {
+    const baixado = asset.status === 'baixado';
+    const emObra = !!asset.current_project_id;
+    return [
+      { icon: <Wrench className="w-[18px] h-[18px]" />, label: 'Manutenção', onClick: () => abrirManutencaoAtivo(asset) },
+      { icon: <Shield className="w-[18px] h-[18px]" />, label: 'Anexar documento', onClick: () => abrirDocumentoAtivo(asset) },
+      { icon: <QrCode className="w-[18px] h-[18px]" />, label: 'QR Code', onClick: () => abrirQrCodeAtivo(asset) },
+      {
+        icon: <WarehouseIcon className="w-[18px] h-[18px]" />,
+        label: asset.warehouse_id ? 'Trocar almoxarifado' : 'Guardar no almoxarifado',
+        onClick: () => abrirGuardarAtivo(asset),
+        disabled: baixado,
+        title: baixado ? 'Ativo baixado — reative antes de guardar no almoxarifado' : undefined,
+      },
+      baixado
+        ? { icon: <RotateCcw className="w-[18px] h-[18px]" />, label: 'Reativar ativo', onClick: () => reativarAtivo(asset) }
+        : {
+            icon: <Archive className="w-[18px] h-[18px]" />,
+            label: 'Baixar ativo',
+            onClick: () => baixarAtivo(asset),
+            disabled: emObra,
+            title: emObra ? 'O ativo está numa obra — registre a devolução antes de baixar' : undefined,
+          },
+    ];
+  };
+
+  const warehouseName = (id?: string | null) => (id ? warehouses.find(w => w.id === id)?.name : undefined);
+  const codigoTravadoPeloAlmoxarifado = !!editingAssetId && !isDuplicate
+    && !!assets.find(a => a.id === editingAssetId)?.stock_item_id;
+  // Só almoxarifados ativos da organização DONA do ativo: a lista vem do contexto
+  // do topo (em "Todas", de todas as orgs) e o banco recusa almoxarifado de outra.
+  const almoxarifadosDoAtivo = guardarAtivo
+    ? warehouses.filter(w => w.organizationId === guardarAtivo.organization_id && w.isActive !== false)
+    : [];
+
+  const substituirAtivoLocal = (atualizado: OpuraAsset) =>
+    setAssets(prev => prev.map(a => (a.id === atualizado.id ? atualizado : a)));
+
+  const abrirGuardarAtivo = (asset: OpuraAsset) => {
+    setGuardarAtivo(asset);
+    setGuardarWarehouseId(asset.warehouse_id ?? '');
+    setGuardarErro('');
+  };
+
+  const salvarGuardarAtivo = async () => {
+    if (!guardarAtivo || !guardarWarehouseId) return;
+    setGuardando(true);
+    setGuardarErro('');
+    try {
+      substituirAtivoLocal(await assetService.guardarNoAlmoxarifado(guardarAtivo, guardarWarehouseId));
+      setGuardarAtivo(null);
+    } catch (err: unknown) {
+      setGuardarErro((err as Error).message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const baixarAtivo = async (asset: OpuraAsset) => {
+    const ok = await confirm({
+      title: 'Baixar ativo?',
+      message: asset.warehouse_id
+        ? `"${asset.name}" (${asset.code}) deixa de existir fisicamente e sai do almoxarifado ${warehouseName(asset.warehouse_id) ?? ''}. O cadastro e o histórico ficam; dá para reativar depois.`
+        : `"${asset.name}" (${asset.code}) deixa de existir fisicamente. O cadastro e o histórico ficam; dá para reativar depois.`,
+      variant: 'warning',
+      confirmLabel: 'Baixar ativo',
+    });
+    if (!ok) return;
+    try {
+      substituirAtivoLocal(await assetService.baixar(asset.id));
+    } catch (err: unknown) {
+      alert(`Erro ao baixar ativo: ${(err as Error).message}`);
+    }
+  };
+
+  const reativarAtivo = async (asset: OpuraAsset) => {
+    try {
+      substituirAtivoLocal(await assetService.reativar(asset.id));
+    } catch (err: unknown) {
+      alert(`Erro ao reativar ativo: ${(err as Error).message}`);
+    }
+  };
 
   // Filtros de busca no cliente
   const filteredAssets = assets.filter(asset => {
@@ -1397,6 +1504,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     if (key === 'value') return calculateDepreciation(a).current;
     if (key === 'brand_model') return [a.brand, a.model].filter(Boolean).join(' ');
     if (key === 'allocation') return projects.find(p => p.id === a.current_project_id)?.name || 'Sede / Central';
+    if (key === 'warehouse') return warehouseName(a.warehouse_id) ?? '';
     if (key === 'useful_life') return a.useful_life_months || 60;
     // Ordena pela data real (não pelo texto formatado); sem movimentação vai para o fim do "asc".
     if (key === 'last_movement') {
@@ -1769,7 +1877,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                   >
                                     {orderedVisibleKeys.map(key => (
                                       <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                        {renderAssetCell(key, asset, { categoryIcons, calculateDepreciation, projects, lastMovements, docsByAsset })}
+                                        {renderAssetCell(key, asset, { categoryIcons, calculateDepreciation, projects, lastMovements, docsByAsset, warehouseName })}
                                       </td>
                                     ))}
                                     <td aria-hidden="true"></td>
@@ -2353,6 +2461,68 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         </div>
       )}
 
+      {/* DRAWER: GUARDAR NO ALMOXARIFADO (vínculo Ativo ↔ Almoxarifado, 13/10/2026).
+          Formulário de um campo sobre um item da lista → painel lateral (UI_PATTERNS §3). */}
+      <Sheet open={!!guardarAtivo} onClose={() => setGuardarAtivo(null)} size="md">
+        <SheetHeader onClose={() => setGuardarAtivo(null)}>
+          <SheetTitle>{guardarAtivo?.warehouse_id ? 'Trocar almoxarifado' : 'Guardar no almoxarifado'}</SheetTitle>
+          <SheetDescription>{guardarAtivo ? `${guardarAtivo.name} · ${guardarAtivo.code}` : ''}</SheetDescription>
+        </SheetHeader>
+        <SheetPanel className="px-6 py-5 space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="guardar-almoxarifado" className="text-xs font-semibold text-slate-500">Almoxarifado</label>
+            <select
+              id="guardar-almoxarifado"
+              value={guardarWarehouseId}
+              onChange={(e) => setGuardarWarehouseId(e.target.value)}
+              disabled={almoxarifadosDoAtivo.length === 0}
+              title={almoxarifadosDoAtivo.length === 0 ? 'Nenhum almoxarifado ativo na organização deste ativo — cadastre em Suprimentos › Almoxarifado' : undefined}
+              className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50"
+            >
+              <option value="">Escolha o almoxarifado…</option>
+              {almoxarifadosDoAtivo.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </div>
+          <div className="text-sm text-gray-600 space-y-2">
+            <p>
+              O ativo vira um item do catálogo do Almoxarifado com o mesmo código ({guardarAtivo?.code}) e
+              1 UN de saldo neste almoxarifado.
+            </p>
+            <p className="text-gray-500">
+              O saldo acompanha o ativo: sai quando ele é entregue a uma obra (Retirada ou Movimentar),
+              volta na devolução e sai de vez na baixa. Editar o ativo atualiza o item.
+            </p>
+            {guardarAtivo?.current_project_id && (
+              <p className="text-amber-700">
+                Agora o ativo está numa obra: ele fica vinculado e a unidade entra no almoxarifado quando for devolvido.
+              </p>
+            )}
+          </div>
+          {guardarErro && <p className="text-sm text-red-600">{guardarErro}</p>}
+        </SheetPanel>
+        <SheetFooter>
+          <button
+            type="button"
+            onClick={() => setGuardarAtivo(null)}
+            className="h-9 px-3.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-[6px] transition-all"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={salvarGuardarAtivo}
+            disabled={!guardarWarehouseId || guardando || guardarWarehouseId === (guardarAtivo?.warehouse_id ?? '')}
+            title={!guardarWarehouseId
+              ? 'Escolha o almoxarifado'
+              : guardarWarehouseId === (guardarAtivo?.warehouse_id ?? '') ? 'O ativo já está neste almoxarifado' : undefined}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {guardando && <Loader2 className="w-[15px] h-[15px] animate-spin" />}
+            {guardarAtivo?.warehouse_id ? 'Trocar almoxarifado' : 'Guardar no almoxarifado'}
+          </button>
+        </SheetFooter>
+      </Sheet>
+
       {/* 4. DRAWER: VER / CADASTRAR / EDITAR / DUPLICAR ATIVO
           Era modal central até 2026-09-09. Editar item de lista é caso de painel
           lateral (UI_PATTERNS §3): mantém a tabela à vista atrás do formulário.
@@ -2417,7 +2587,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <input
                     value={assetForm.code}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, code: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    disabled={codigoTravadoPeloAlmoxarifado}
+                    title={codigoTravadoPeloAlmoxarifado ? 'O ativo está vinculado ao Almoxarifado: o código patrimonial é o código do item e não muda' : undefined}
+                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="Auto-gerado se vazio"
                   />
                 </div>
@@ -2608,8 +2780,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
             <form onSubmit={handleMoveAsset} className="space-y-4 text-xs font-semibold">
               <div className="space-y-1">
                 <label className="text-gray-400 uppercase tracking-widest text-[9px]">Projeto de Destino</label>
+                {/* Sem `required`: a opção "Sede" tem valor "" e o navegador
+                    recusava o envio — não dava para devolver o bem à central. */}
                 <select
-                  required
                   value={moveForm.destination_project_id}
                   onChange={(e) => setMoveForm(prev => ({ ...prev, destination_project_id: e.target.value }))}
                   className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"

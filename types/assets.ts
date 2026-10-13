@@ -51,6 +51,13 @@ export interface OpuraAsset {
   tracking_code?: string;
   /** Caminho da foto no bucket `organization-assets` — não é URL (ver assetService.imagePublicUrl). */
   image_url?: string | null;
+  /** Onde o equipamento está instalado (texto livre, usado pelo Condomínio). */
+  location?: string | null;
+  /** Item do catálogo do Almoxarifado que É este ativo (input_code = code). O banco
+   *  sincroniza descrição e saldo — migration aplicar_20271013160000. */
+  stock_item_id?: string | null;
+  /** Almoxarifado onde o bem mora quando não está numa obra. null = não guardado. */
+  warehouse_id?: string | null;
   notes?: string;
   created_at: string;
   updated_at: string;

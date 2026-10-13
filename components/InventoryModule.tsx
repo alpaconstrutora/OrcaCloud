@@ -38,6 +38,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import StockItemsTab, { STOCK_ITEMS_COLUMNS, marcaModelo } from './inventory/StockItemsTab';
 import StockItemSheet from './inventory/StockItemSheet';
 import StockItemImportModal from './inventory/StockItemImportModal';
+import PatrimoniarItemSheet from './inventory/PatrimoniarItemSheet';
 import StockItemSelect from './inventory/StockItemSelect';
 import type {
     Warehouse as WarehouseType,
@@ -491,6 +492,10 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const [netPositions, setNetPositions] = React.useState<StockNetPosition[]>([]);
     const [summary, setSummary] = React.useState<StockSummary[]>([]);
     const [stockItems, setStockItems] = React.useState<StockItem[]>([]);
+    // Itens que SÃO um ativo patrimonial e o painel "Transformar em ativo"
+    // (vínculo Ativo ↔ Almoxarifado, 13/10/2026).
+    const [assetLinks, setAssetLinks] = React.useState<Map<string, { assetId: string; code: string; name: string }>>(new Map());
+    const [patrimoniarItem, setPatrimoniarItem] = React.useState<StockItem | null>(null);
 
     const [selectedWarehouseId, setSelectedWarehouseId] = usePersistedState<string>('inventory-warehouse-filter', '');
     const [searchTerm, setSearchTerm] = usePersistedState('inventory-search', '');
@@ -545,6 +550,11 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
             setNetPositions(net);
             setSummary(smry);
             setStockItems(items);
+            try {
+                setAssetLinks(await inventoryService.listAssetLinks(activeOrganizationId));
+            } catch (e) {
+                console.error(e);
+            }
         } catch (e) {
             console.error(e);
         } finally {
@@ -711,6 +721,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             onNew={handleNewStockItem}
                             onImport={handleOpenImport}
                             onChanged={refreshStockItems}
+                            assetLinks={assetLinks}
+                            onPatrimoniar={item => setPatrimoniarItem(item)}
                         />
                     )}
 
@@ -1250,6 +1262,12 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     onSaved={() => { setStockItemSheet(null); setCreateItemOrgId(undefined); refreshStockItems(); }}
                 />
             )}
+            <PatrimoniarItemSheet
+                item={patrimoniarItem}
+                warehouses={warehouses}
+                onClose={() => setPatrimoniarItem(null)}
+                onDone={() => { setPatrimoniarItem(null); load(); }}
+            />
             {importOrgId && (
                 <StockItemImportModal
                     isOpen

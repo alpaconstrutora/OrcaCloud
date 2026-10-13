@@ -280,7 +280,6 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
         parseSheet(f);
     };
 
-    const rowsWithQuantity = pendingRows.filter(r => r.initialQuantity && r.initialQuantity > 0).length;
     // Só almoxarifados da organização em que o lote vai ser gravado. A lista que
     // chega do módulo é a do contexto do topo — em "Todas as organizações" traz
     // as de todas — enquanto `organizationId` é a escolhida no modal de
@@ -288,6 +287,36 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
     // organização" no createMovement (reportado em 2026-09-20).
     const orgWarehouses = warehouses.filter(w => w.organizationId === organizationId);
     const destinationWarehouse = orgWarehouses.find(w => w.id === destinationWarehouseId);
+    const warehouseName = (id?: string | null) => (id ? warehouses.find(w => w.id === id)?.name : undefined);
+
+    // Linha que veio da aba Gestão de Ativos: o ativo É o item (mesmo código). Ele
+    // não leva "saldo inicial" — é vinculado, e o banco mantém 1 UN no almoxarifado
+    // enquanto o bem não estiver numa obra (aplicar_20271013160000).
+    const assetByCode = new Map((assets ?? []).map(a => [a.code, a] as const));
+    const assetOfRow = (r: StockItemImportRow) => (r.source === 'ativos' && r.inputCode ? assetByCode.get(r.inputCode) : undefined);
+
+    // Por que a linha entra (ou não) com saldo no almoxarifado de destino.
+    // Saldo inicial só para item NOVO: reimportar um item que já existe atualiza
+    // o cadastro e não lança a quantidade de novo (antes lançava: 2, 3 UN de um
+    // bem unitário — pedido de 13/10/2026).
+    const saldoDaLinha = (r: StockItemImportRow): { entra: boolean; motivo?: string } => {
+        if (!destinationWarehouse) return { entra: false };
+        const asset = assetOfRow(r);
+        if (asset) {
+            if (asset.current_project_id) return { entra: false, motivo: 'O ativo está numa obra: entra no almoxarifado quando for devolvido' };
+            if (asset.stock_item_id && asset.warehouse_id === destinationWarehouse.id) return { entra: false, motivo: `Já está em ${destinationWarehouse.name}` };
+            return {
+                entra: true,
+                motivo: asset.warehouse_id
+                    ? `Sai de ${warehouseName(asset.warehouse_id) ?? 'outro almoxarifado'} e passa para ${destinationWarehouse.name}`
+                    : `Entra em ${destinationWarehouse.name}`,
+            };
+        }
+        if (!r.initialQuantity || r.initialQuantity <= 0) return { entra: false };
+        if (r.inputCode && existingCodes.has(r.inputCode)) return { entra: false, motivo: 'Já existe no catálogo: reimportar não lança saldo de novo' };
+        return { entra: true, motivo: `Entra em ${destinationWarehouse.name}` };
+    };
+    const rowsWithQuantity = pendingRows.filter(r => saldoDaLinha(r).entra).length;
 
     // ── confirmação ───────────────────────────────────────────────────────────
     const handleImport = async () => {
@@ -297,10 +326,23 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
         try {
             const result = await inventoryService.importStockItems(organizationId, pendingRows);
             let stockLaunched = false;
-            if (destinationWarehouse) {
-                for (const r of result.results) {
+            for (const r of result.results) {
+                if (r.status === 'error' || !r.item) continue;
+                const asset = assetOfRow(r.row);
+                if (asset) {
+                    // Ativo: vincula o item e diz onde o bem mora. O saldo é do banco
+                    // (idempotente) — importar de novo não soma nada.
+                    await assetService.update(asset.id, {
+                        stock_item_id: r.item.id,
+                        warehouse_id: destinationWarehouse?.id ?? asset.warehouse_id ?? null,
+                    });
+                    if (destinationWarehouse) stockLaunched = true;
+                    continue;
+                }
+                if (destinationWarehouse) {
                     const qty = r.row.initialQuantity;
-                    if (r.status !== 'error' && r.item && qty && qty > 0) {
+                    // Saldo inicial só para item recém-criado.
+                    if (r.status === 'created' && qty && qty > 0) {
                         await inventoryService.createMovement(organizationId, {
                             warehouseId: destinationWarehouse.id,
                             inputCode: r.item.inputCode,
@@ -513,6 +555,7 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                                                         <th className="px-4 py-2 border-r border-gray-100">Ativo</th>
                                                         <th className="px-4 py-2 border-r border-gray-100">Categoria</th>
                                                         <th className="px-4 py-2 border-r border-gray-100">Status</th>
+                                                        <th className="px-4 py-2 border-r border-gray-100">Almoxarifado</th>
                                                         <th className="px-4 py-2 text-right">Valor de aquisição</th>
                                                     </tr>
                                                 </thead>
@@ -533,6 +576,11 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                                                                 </td>
                                                                 <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{ASSET_CATEGORY_LABELS[a.category] ?? a.category}</td>
                                                                 <td className="px-4 py-2.5 border-r border-gray-100"><span className={`text-sm font-normal ${status.className}`}>{status.label}</span></td>
+                                                                <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                                    {a.warehouse_id
+                                                                        ? <span className="block truncate" title="Já guardado: importar de novo não lança saldo">{warehouseName(a.warehouse_id) ?? 'Outro almoxarifado'}</span>
+                                                                        : '—'}
+                                                                </td>
                                                                 <td className="px-4 py-2.5 text-right text-sm font-medium text-gray-800">{a.purchase_value > 0 ? formatBRL(a.purchase_value) : '—'}</td>
                                                             </tr>
                                                         );
@@ -564,7 +612,7 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                             {orgWarehouses.length === 0
                                 ? 'Nenhum almoxarifado ativo nesta organização — os itens entram só no catálogo. Cadastre um na aba Almoxarifados para dar entrada em saldo.'
                                 : destinationWarehouse
-                                    ? `Itens com quantidade entram em "${destinationWarehouse.name}" como saldo inicial (planilha: coluna 6 · Gestão de Ativos: 1 UN por ativo)${pendingRows.length > 0 ? ` — ${rowsWithQuantity} de ${pendingRows.length}` : ''}. Sem quantidade, só cadastro.`
+                                    ? `Itens novos com quantidade entram em "${destinationWarehouse.name}" como saldo inicial (planilha: coluna 6)${pendingRows.length > 0 ? ` — ${rowsWithQuantity} de ${pendingRows.length}` : ''}. Item que já existe no catálogo não ganha saldo de novo. Ativo patrimonial fica vinculado: 1 UN enquanto não estiver numa obra.`
                                     : 'Sem almoxarifado de destino (rodapé), os itens entram só no catálogo; escolha um para dar entrada nas quantidades.'}
                         </p>
                         {pendingRows.length === 0 ? (
@@ -588,13 +636,15 @@ const StockItemImportModal: React.FC<Props> = ({ isOpen, onClose, organizationId
                                     <tbody className="divide-y divide-gray-100">
                                         {pendingRows.map((r, idx) => {
                                             const exists = r.inputCode ? existingCodes.has(r.inputCode) : false;
+                                            const saldo = saldoDaLinha(r);
+                                            const qtd = assetOfRow(r) ? 1 : r.initialQuantity;
                                             return (
                                                 <tr key={idx} className="hover:bg-gray-50/50">
                                                     <td className="px-4 py-2 border-r border-gray-100 text-gray-600">{r.inputCode || '—'}</td>
                                                     <td className="px-4 py-2 border-r border-gray-100 text-gray-700">{r.inputDescription}</td>
                                                     <td className="px-4 py-2 border-r border-gray-100 text-gray-600">{r.inputUnit}</td>
-                                                    <td className="px-4 py-2 border-r border-gray-100 text-right text-gray-600" title={destinationWarehouse && r.initialQuantity ? `Entra em ${destinationWarehouse.name}` : undefined}>
-                                                        {r.initialQuantity ? r.initialQuantity.toLocaleString('pt-BR') : '—'}
+                                                    <td className="px-4 py-2 border-r border-gray-100 text-right text-gray-600" title={saldo.motivo}>
+                                                        {saldo.entra && qtd ? qtd.toLocaleString('pt-BR') : '—'}
                                                     </td>
                                                     <td className="px-4 py-2 border-r border-gray-100">
                                                         <span className={exists ? 'text-amber-700' : 'text-green-700'}>{exists ? 'Já existe' : 'Novo'}</span>

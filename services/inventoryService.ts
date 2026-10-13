@@ -318,6 +318,50 @@ export const inventoryService = {
         return result;
     },
 
+    // ─── ITEM ↔ ATIVO PATRIMONIAL ──────────────────────────────────────────────
+    // Vínculo e sincronia moram no banco: aplicar_20271013160000_ativos_almoxarifado_vinculo.sql.
+
+    /** Itens do catálogo que SÃO um ativo patrimonial: stock_item_id → ativo. */
+    async listAssetLinks(organizationId: string | null): Promise<Map<string, { assetId: string; code: string; name: string }>> {
+        let query = supabase.from('opura_assets').select('id, code, name, stock_item_id').not('stock_item_id', 'is', null);
+        if (organizationId) query = query.eq('organization_id', organizationId);
+        const { data, error } = await query;
+        if (error) throw error;
+        const map = new Map<string, { assetId: string; code: string; name: string }>();
+        for (const r of (data ?? []) as Array<{ id: string; code: string; name: string; stock_item_id: string }>) {
+            map.set(r.stock_item_id, { assetId: r.id, code: r.code, name: r.name });
+        }
+        return map;
+    },
+
+    /**
+     * Transforma `quantidade` unidades do item (num almoxarifado) em ativos
+     * patrimoniais: tudo ou nada, no banco. Sai a quantidade do item original;
+     * cada ativo nasce com código próprio, item próprio e 1 UN no mesmo almoxarifado.
+     * Devolve os ids dos ativos criados.
+     */
+    async patrimoniarItem(input: {
+        itemId: string;
+        warehouseId: string;
+        quantidade: number;
+        categoria: string;
+        vidaUtilMeses: number;
+        valorUnitario: number;
+        nome?: string;
+    }): Promise<string[]> {
+        const { data, error } = await supabase.rpc('fn_patrimoniar_item_de_estoque', {
+            p_item_id: input.itemId,
+            p_warehouse_id: input.warehouseId,
+            p_quantidade: input.quantidade,
+            p_categoria: input.categoria,
+            p_vida_util_meses: input.vidaUtilMeses,
+            p_valor_unitario: input.valorUnitario,
+            p_nome: input.nome?.trim() || null,
+        });
+        if (error) throw error;
+        return ((data ?? []) as unknown[]).map(v => (typeof v === 'string' ? v : (v as Record<string, string>).fn_patrimoniar_item_de_estoque));
+    },
+
     // ─── MOVIMENTOS ────────────────────────────────────────────────────────────
 
     async listMovements(
@@ -375,7 +419,7 @@ export const inventoryService = {
 
     async listBalances(
         organizationId: string | null,
-        opts?: { warehouseId?: string; positiveOnly?: boolean }
+        opts?: { warehouseId?: string; positiveOnly?: boolean; inputCode?: string }
     ): Promise<StockBalance[]> {
         let query = supabase
             .from('stock_balances')
@@ -384,6 +428,7 @@ export const inventoryService = {
         if (organizationId) query = query.eq('organization_id', organizationId);
         if (opts?.warehouseId) query = query.eq('warehouse_id', opts.warehouseId);
         if (opts?.positiveOnly) query = query.gt('quantity', 0);
+        if (opts?.inputCode) query = query.eq('input_code', opts.inputCode);
         const { data, error } = await query;
         if (error) throw error;
         return (data ?? []).map(r => mapBalance(r as Record<string, unknown>));

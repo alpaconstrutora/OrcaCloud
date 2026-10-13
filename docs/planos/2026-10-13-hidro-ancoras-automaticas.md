@@ -317,7 +317,11 @@ tipos por arquivo sem erro, `check-ui-standard` nos painéis, `check-xss-sinks`,
 CI do `e2ff3807`: verde. `conferir-producao.sh "Lançar hidrômetro e alimentador"`: o domínio serve
 `996baff` (main, que contém este trabalho) com o texto no bundle.
 
-Falta: 5.3 (botão único de água e de pluvial), aguardando decisão do usuário.
+Item 5.3: `b55d4d65` empurrado em 13/10/2026. Antes: suíte 9043/9043 (0 falha), tipos por arquivo
+sem erro, `check-ui-standard` e `check-xss-sinks` limpos, `vite build`. CI verde.
+`conferir-producao.sh "Calhas, bocais, condutores e a saída pluvial."`: o domínio serve `b55d4d6`.
+
+**Plano concluído: todos os itens feitos, publicados e conferidos.**
 
 ## Verificação
 

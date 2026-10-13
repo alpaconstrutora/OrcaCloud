@@ -126,6 +126,12 @@ function getAdvancedFilterValue(b: Boleto, key: string, supplierMap: Record<stri
 // Conteúdo de cada célula (td) por coluna — extraído para função pura para que
 // o tbody possa mapear `orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna (padrão renderClientCell em ClientList.tsx).
+/** Quem capturou: o nome do cadastro; sem nome, o próprio e-mail. */
+function nomeCapturador(b: Boleto, userNameMap: Record<string, string>): string {
+    const email = b.created_by_email ?? '';
+    return userNameMap[email.trim().toLowerCase()] ?? (email || '—');
+}
+
 function renderBoletoCell(
     key: string,
     b: Boleto,
@@ -134,10 +140,11 @@ function renderBoletoCell(
         supplierMap: Record<string, string>;
         projectMap: Record<string, string>;
         ccMap: Record<string, string>;
+        userNameMap: Record<string, string>;
         onDelete: (b: Boleto) => void;
     },
 ): React.ReactNode {
-    const { atrasado, supplierMap, projectMap, ccMap, onDelete } = ctx;
+    const { atrasado, supplierMap, projectMap, ccMap, userNameMap, onDelete } = ctx;
     switch (key) {
         case 'numero':
             return (
@@ -216,8 +223,11 @@ function renderBoletoCell(
             );
         case 'capturado_por':
             return (
-                <p className="truncate text-sm font-normal text-gray-600 max-w-[160px]">
-                    {b.created_by_email ?? '—'}
+                <p
+                    className="truncate text-sm font-normal text-gray-600"
+                    title={b.created_by_email ?? undefined}
+                >
+                    {nomeCapturador(b, userNameMap)}
                 </p>
             );
         case 'actions':
@@ -344,10 +354,11 @@ interface BoletoRowItemProps extends BoletoItemBaseProps {
     orderedVisibleColumns: string[];
     projectMap: Record<string, string>;
     ccMap: Record<string, string>;
+    userNameMap: Record<string, string>;
 }
 
 const BoletoRowItem = React.memo(function BoletoRowItem({
-    boleto: b, idx, selected, isHighlighted, atrasado, supplierMap, orderedVisibleColumns, projectMap, ccMap,
+    boleto: b, idx, selected, isHighlighted, atrasado, supplierMap, orderedVisibleColumns, projectMap, ccMap, userNameMap,
     onOpen, onCheckboxMouseDown, onCheckboxChange, onDelete,
 }: BoletoRowItemProps) {
     return (
@@ -373,7 +384,7 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                     className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"
                     onClick={key === 'actions' ? (e) => e.stopPropagation() : undefined}
                 >
-                    {renderBoletoCell(key, b, { atrasado, supplierMap, projectMap, ccMap, onDelete })}
+                    {renderBoletoCell(key, b, { atrasado, supplierMap, projectMap, ccMap, userNameMap, onDelete })}
                 </td>
             ))}
             {/* espaçador — casa com o <col /> sem largura, no final (ver colgroup) */}
@@ -466,6 +477,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [ccMap, setCcMap] = useState<Record<string, string>>({});
     const [projectMap, setProjectMap] = useState<Record<string, string>>({});
     const [supplierMap, setSupplierMap] = useState<Record<string, string>>({});
+    const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
     // Campos do filtro avançado dependem das linhas e do supplierMap carregados (§5.5).
     const advancedFields = useMemo(() => buildAdvancedFilterFields(boletos, supplierMap), [boletos, supplierMap]);
     const advancedFilters = useAdvancedFilters(advancedFields, 'boletoManagerFilters:advanced');
@@ -633,6 +645,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             ]);
 
             setBoletos(list);
+            boletoService.nomesPorEmail(list.map(b => b.created_by_email ?? ''))
+                .then(setUserNameMap)
+                .catch(() => { /* sem nome, a coluna mostra o e-mail */ });
             setStats(agregados);
             // `listProjects` devolve OBRA/ORCAMENTO/PLANEJAMENTO/DIARIO — o service só
             // tira projeto de sistema. Sem `onlyObras`, a coluna "Obra" do boleto
@@ -724,7 +739,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 case 'descricao':     va = (a.descricao ?? '').toLowerCase();         vb = (b.descricao ?? '').toLowerCase();         break;
                 case 'status':        va = a.status;                            vb = b.status;                            break;
                 case 'capturado_em':  va = a.created_at;                        vb = b.created_at;                       break;
-                case 'capturado_por': va = (a.created_by_email ?? '').toLowerCase(); vb = (b.created_by_email ?? '').toLowerCase(); break;
+                case 'capturado_por': va = nomeCapturador(a, userNameMap).toLowerCase(); vb = nomeCapturador(b, userNameMap).toLowerCase(); break;
                 default:              va = a.created_at;                        vb = b.created_at;
             }
             if (va < vb) return sortDir === 'asc' ? -1 : 1;
@@ -733,7 +748,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         });
 
         return list;
-    }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, advancedFilters.rules, advancedFields, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, advancedFilters.rules, advancedFields, supplierMap, userNameMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // Mantido estável enquanto `filtered` não muda, para que as linhas memoizadas
     // (BoletoCardItem/BoletoRowItem) não re-renderizem a cada seleção.
@@ -1276,6 +1291,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         supplierMap={supplierMap}
                                         projectMap={projectMap}
                                         ccMap={ccMap}
+                                        userNameMap={userNameMap}
                                         orderedVisibleColumns={tableColumns.orderedVisibleColumns}
                                         onOpen={abrirEdicao}
                                         onCheckboxMouseDown={handleCheckboxMouseDown}

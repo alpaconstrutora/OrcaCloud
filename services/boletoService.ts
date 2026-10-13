@@ -1086,6 +1086,32 @@ export const boletoService = {
     },
 
     /**
+     * Nome de exibição por e-mail (organization_members.name) — a coluna "Capturado por"
+     * mostra pessoa, não endereço. A RLS recorta o que o usuário pode ver; e-mail sem
+     * nome cadastrado simplesmente não entra no mapa e a tela cai no próprio e-mail.
+     * Chave em minúsculas.
+     */
+    async nomesPorEmail(emails: string[]): Promise<Record<string, string>> {
+        const unicos = [...new Set(emails.map(e => e.trim().toLowerCase()).filter(Boolean))];
+        if (unicos.length === 0) return {};
+        const { data, error } = await supabase
+            .from('organization_members')
+            .select('email, name')
+            .in('email', unicos);
+        if (error) {
+            console.warn('[boletoService] nomes por e-mail indisponíveis', error);
+            return {};
+        }
+        const mapa: Record<string, string> = {};
+        for (const m of (data ?? []) as { email: string | null; name: string | null }[]) {
+            const email = m.email?.trim().toLowerCase();
+            const nome = m.name?.trim();
+            if (email && nome && !mapa[email]) mapa[email] = nome;
+        }
+        return mapa;
+    },
+
+    /**
      * Status em que o boleto pode ser excluído.
      *
      * `rascunho` nunca teve reflexo financeiro — sai limpo. `aprovado` e `pago`

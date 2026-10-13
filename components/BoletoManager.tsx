@@ -88,7 +88,7 @@ const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     numero: 118, beneficiario: 220, descricao: 220, obra: 160, centro_custo: 179, valor: 130,
-    vencimento: 150, status: 130, capturado_em: 165, capturado_por: 167, actions: 70,
+    vencimento: 150, status: 130, capturado_em: 165, capturado_por: 167, actions: 100,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
@@ -141,10 +141,11 @@ function renderBoletoCell(
         projectMap: Record<string, string>;
         ccMap: Record<string, string>;
         userNameMap: Record<string, string>;
+        onOpen: (b: Boleto) => void;
         onDelete: (b: Boleto) => void;
     },
 ): React.ReactNode {
-    const { atrasado, supplierMap, projectMap, ccMap, userNameMap, onDelete } = ctx;
+    const { atrasado, supplierMap, projectMap, ccMap, userNameMap, onOpen, onDelete } = ctx;
     switch (key) {
         case 'numero':
             return (
@@ -232,7 +233,8 @@ function renderBoletoCell(
             );
         case 'actions':
             return (
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-end gap-1.5">
+                    <ActionIconButton kind="edit" title="Editar" onClick={() => onOpen(b)} />
                     <ActionIconButton
                         kind="delete"
                         disabled={!boletoService.podeExcluir(b.status)}
@@ -384,7 +386,7 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                     className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"
                     onClick={key === 'actions' ? (e) => e.stopPropagation() : undefined}
                 >
-                    {renderBoletoCell(key, b, { atrasado, supplierMap, projectMap, ccMap, userNameMap, onDelete })}
+                    {renderBoletoCell(key, b, { atrasado, supplierMap, projectMap, ccMap, userNameMap, onOpen, onDelete })}
                 </td>
             ))}
             {/* espaçador — casa com o <col /> sem largura, no final (ver colgroup) */}

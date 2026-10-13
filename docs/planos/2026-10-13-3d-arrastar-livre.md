@@ -45,5 +45,5 @@ quarto com a cama selecionada e a alça de setas):
 - [x] 2 — harness `docs/spikes/blueprint-3d/?editar=1&peca=movel` (móvel no piso, câmera orbitada para cima): arraste diagonal com `orto=0` → 2000,2000 → 2640,3940 (os dois eixos); com `orto=1` → 2000,3940 (só um). A prévia translúcida segue o cursor, a câmera não gira no gesto e a alça some. A seta vermelha da alça continua: 2000 → 3650 só em x.
 - [x] 3 — typecheck 0 erros.
 - [x] Suíte 8816 = 8782 + 34 pendentes + 0 falhas; `vite build` ok; ui-standard, xss e origem-do-deploy limpos.
-- [ ] Publicação, Vercel, CI
+- [x] Publicado em `28c2627f` (13/10/2026): domínio carimbado `28c2627` com o texto da dica, Vercel success, check-run `ci` success.
 - Não provado no harness: parede DIANTE da peça selecionada (o aperto deve orbitar, não arrastar a escondida) e o primeiro aperto numa peça não selecionada (seleciona e arrasta).

@@ -18,6 +18,7 @@ import { onlyDigits } from '../utils/febrabanRules';
 import { formatMoney } from './ui/Format';
 import { useConfirm } from './ui/confirm';
 import { useWritableOrganizations } from '../hooks/useOrgContext';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import type { Boleto, BoletoExtractionResult, Supplier, CostCenter, ChartOfAccount } from '../types';
 
 interface BoletoFormModalProps {
@@ -689,9 +690,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
                                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                                         <FormField label="Valor (R$)" icon={DollarSign}>
-                                            <input type="number" step="0.01" min="0" value={valor}
-                                                onChange={e => setValor(e.target.value)}
-                                                className={CAMPO} />
+                                            <MoneyCentsInput value={valor} onChange={setValor} className={CAMPO} />
                                         </FormField>
                                         <FormField label="Vencimento" icon={Calendar}>
                                             <input type="date" value={vencimento}
@@ -875,13 +874,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
                                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                                         <FormField label="Valor (R$)" icon={DollarSign}>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                value={valor}
-                                                onChange={(e) => setValor(e.target.value)}
-                                                className={CAMPO}
-                                            />
+                                            <MoneyCentsInput value={valor} onChange={setValor} className={CAMPO} />
                                         </FormField>
                                         <FormField label="Vencimento" icon={Calendar}>
                                             <input

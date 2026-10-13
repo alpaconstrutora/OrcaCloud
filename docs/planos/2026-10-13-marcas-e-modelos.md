@@ -80,7 +80,7 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
   - texto alterado no lote revincula;
   - excluir modelo mantém o texto;
   - trocar a marca do modelo leva os ativos junto.
-- [ ] `aplicar_20271013000200_congelar_opura_asset_brands.sql` (COMMENT DEPRECADA + REVOKE de escrita). Aplicado **depois** do deploy. **Pronto:** INSERT como authenticated falha com 42501.
+- [x] `aplicar_20271013000200_congelar_opura_asset_brands.sql` (COMMENT DEPRECADA + REVOKE de escrita). Aplicado **depois** do deploy. **Pronto:** INSERT como authenticated falha com 42501.
 
 ### 2. Tipos, utilitários puros e service
 - [x] `types/brandModel.ts`: `ProductBrand`, `ProductModel`, `ProductItemType`, `ITEM_TYPE_LABELS`. **Pronto:** tsc.
@@ -182,7 +182,7 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
   10. Apagar os dados de teste gravados.
 
   **Pronto:** zero erro de JS/console e nenhum 4xx/5xx do PostgREST. O checklist de aplicação do guia vai item a item no relatório (dizendo o que não se aplica).
-- [ ] Publicar:
+- [x] Publicar:
   - `git rebase origin/main`, suíte de novo, `git push origin HEAD:main`;
   - ler o check-run `ci`;
   - `bash scripts/publicar-producao.sh` e `bash scripts/conferir-producao.sh "Marcas e Modelos"`;
@@ -193,13 +193,21 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
 
 ## Estado — 13/10/2026
 
-**Itens: 27 de 30.** Em aberto: a importação de ativos por planilha não foi
-exercitada na tela (só tsc + o caminho é o mesmo `resolverMarcaModelo` provado nas
-outras telas); o congelamento de `opura_asset_brands` (só depois do deploy); a
-publicação.
+**Itens: 29 de 30.** Em aberto: a importação de ativos POR PLANILHA não foi
+exercitada na tela (tsc ok; o caminho é o mesmo `resolverMarcaModelo` provado nas
+outras três telas, mas sem prova própria).
 
-Commits na frente `feat/marcas-modelos`: `e5bb5f4c` (banco + catálogo + Configurações
-+ Gestão de Ativos) e o seguinte (Condomínio, Almoxarifado, guia, correções da tela).
+Publicado em 13/10/2026: `913a0f6f` (banco + catálogo + Configurações + Gestão de
+Ativos) e `90fb8e8b` (Condomínio, Almoxarifado, guia, correções da tela).
+`conferir-producao.sh "Marcas e Modelos"`: o domínio serve exatamente `90fb8e8` e o
+texto está no bundle. Check-run `ci` do commit: **success**.
+
+Depois do deploy: `aplicar_20271013000200` aplicada — INSERT em `opura_asset_brands`
+como `authenticated` recusado com **42501** (provado em transação), SELECT continua.
+`check-rls-postura.sh`: limpa nas 9 verificações.
+
+Pendência de acompanhamento (não é item desta entrega): DROP de `opura_asset_brands`
+a partir de 20/10/2026, se nada reclamar do congelamento.
 
 ### Diagnóstico do banco (item 0.2, só leitura)
 - PostgreSQL **17.6** → `ON DELETE SET NULL (coluna)` disponível, FK composta mantida.

@@ -150,6 +150,23 @@ export const buildingAssetService = {
         return data as unknown as BuildingAsset;
     },
 
+    /**
+     * Edição em lote: o MESMO patch em vários equipamentos, numa só requisição.
+     * Devolve SÓ as linhas gravadas. Se a RLS barrar parte delas o UPDATE não dá
+     * erro — apenas devolve menos linhas. Quem chama compara com `ids.length`
+     * para não anunciar "atualizado" o que não foi (e atualiza na tela só o que foi).
+     */
+    async updateMany(ids: string[], patch: Partial<BuildingAsset>): Promise<BuildingAsset[]> {
+        if (ids.length === 0) return [];
+        const { data, error } = await supabase
+            .from('opura_assets')
+            .update(patch)
+            .in('id', ids)
+            .select(ASSET_COLS);
+        if (error) throw new Error(`Falha ao atualizar os ativos: ${error.message}`);
+        return (data || []) as unknown as BuildingAsset[];
+    },
+
     async remove(id: string): Promise<void> {
         const { error } = await supabase.from('opura_assets').delete().eq('id', id);
         if (error) throw new Error(`Falha ao excluir o ativo: ${error.message}`);

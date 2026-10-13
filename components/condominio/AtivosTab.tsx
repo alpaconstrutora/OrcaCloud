@@ -8,7 +8,7 @@
 // faz o condomínio cobrar da parte errada e descobrir tarde que o prazo da
 // certa já venceu — por isso a coluna de garantia mostra os dias, não só a data.
 import React from 'react';
-import { Package, ShieldCheck, ShieldAlert, Search, RefreshCw, Plus, AlertCircle, MoveHorizontal } from 'lucide-react';
+import { Package, ShieldCheck, ShieldAlert, Search, RefreshCw, Plus, AlertCircle, MoveHorizontal, Pencil, X } from 'lucide-react';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns,
 } from '../ui/TableUtils';
@@ -16,6 +16,7 @@ import { larguraTabela } from './larguraTabela';
 import { KpiCard } from '../ui/KpiCard';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import ActionIconButton from '../ui/ActionIconButton';
+import AtivosEdicaoEmLoteSheet, { type AtivoLotePatch } from './AtivosEdicaoEmLoteSheet';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
 import {
@@ -46,6 +47,9 @@ function hojeISO(): string {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/** Coluna do checkbox de seleção — estrutural, sem `data-col-key` (o autoFit a desconta). */
+const LARGURA_CHECKBOX = 40;
 
 /** A garantia é o dado que a tela existe para vigiar — a cor carrega o sentido. */
 function textoGarantia(dias: number | null, ate?: string | null): { texto: string; cor: string } {
@@ -86,10 +90,11 @@ function formDoAtivo(a: BuildingAsset): FormAtivo {
     };
 }
 
-// §6.1 — larguras iniciais por coluna (soma 1285 ≈ contêiner de 1600px com a barra
-// lateral aberta, para "Ações" nascer visível); "Ajustar largura" mede o dado real.
+// §6.1 — larguras iniciais por coluna. Soma 1245 + 40 do checkbox = 1285 ≈ contêiner
+// de 1600px com a barra lateral aberta, para "Ações" nascer visível; "Ajustar
+// largura" mede o dado real.
 const LARGURAS_ATIVOS: Record<string, number> = {
-    codigo: 115, nome: 180, sistema: 140, localizacao: 160, marca: 130,
+    codigo: 115, nome: 160, sistema: 140, localizacao: 140, marca: 130,
     serie: 110, instalacao: 110, garantia: 180, actions: 160,
 };
 
@@ -112,6 +117,11 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
     const [erro, setErro] = React.useState<string | null>(null);
     const [sheetAberto, setSheetAberto] = React.useState(false);
     const [salvando, setSalvando] = React.useState(false);
+    // Seleção para a edição em lote (§10). Ids, não linhas: a linha muda a cada
+    // gravação e a seleção tem de sobreviver a isso.
+    const [selecionados, setSelecionados] = React.useState<Set<string>>(new Set());
+    const [ancora, setAncora] = React.useState<number | null>(null);
+    const [loteAberto, setLoteAberto] = React.useState(false);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
@@ -200,6 +210,8 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
             const sys = await maintenanceService.listSystems(orgId);
             setSistemas(sys);
             setAtivos(await buildingAssetService.listByEmpreendimento(empreendimento.id, sys));
+            setSelecionados(new Set());
+            setAncora(null);
         } catch (e: any) {
             setErro(e?.message || 'Erro ao carregar os ativos.');
         } finally {
@@ -312,10 +324,68 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
         try {
             await buildingAssetService.remove(a.id);
             setAtivos(prev => prev.filter(x => x.id !== a.id));
+            setSelecionados(prev => { const n = new Set(prev); n.delete(a.id); return n; });
             notify('Equipamento excluído.');
         } catch (e: any) {
             notify(e?.message || 'Erro ao excluir.', 'error');
         }
+    };
+
+    // ── Seleção (§10 / §10.1) ─────────────────────────────────────────────
+    const todosVisiveisMarcados = filtrados.length > 0 && filtrados.every(a => selecionados.has(a.id));
+    const algumVisivelMarcado = filtrados.some(a => selecionados.has(a.id));
+
+    /** Clique define a âncora; Shift+clique marca o intervalo até ela (§10.1). */
+    const marcarLinha = (id: string, indice: number, shift: boolean) => {
+        if (shift && ancora !== null) {
+            const [ini, fim] = ancora < indice ? [ancora, indice] : [indice, ancora];
+            const faixa = filtrados.slice(ini, fim + 1).map(a => a.id);
+            setSelecionados(prev => new Set([...prev, ...faixa]));
+            return;
+        }
+        setSelecionados(prev => {
+            const n = new Set(prev);
+            if (n.has(id)) n.delete(id); else n.add(id);
+            return n;
+        });
+        setAncora(indice);
+    };
+
+    /** Cabeçalho marca/desmarca só o que está VISÍVEL — a busca recorta o lote. */
+    const marcarVisiveis = () => {
+        setSelecionados(prev => {
+            const n = new Set(prev);
+            if (todosVisiveisMarcados) filtrados.forEach(a => n.delete(a.id));
+            else filtrados.forEach(a => n.add(a.id));
+            return n;
+        });
+        setAncora(null);
+    };
+
+    const desmarcar = () => { setSelecionados(new Set()); setAncora(null); };
+
+    const ativosDoLote = React.useMemo(
+        () => ativos.filter(a => selecionados.has(a.id)),
+        [ativos, selecionados],
+    );
+
+    const aplicarLote = async (patch: AtivoLotePatch) => {
+        const ids = ativosDoLote.map(a => a.id);
+        const gravados = await buildingAssetService.updateMany(ids, patch);
+        // §22 — troca só as linhas gravadas, sem recarregar a aba.
+        const porId = new Map(gravados.map(g => [g.id, comoLinha(g)]));
+        setAtivos(prev => prev.map(a => porId.get(a.id) ?? a));
+        if (gravados.length < ids.length) {
+            // RLS barrou parte: o UPDATE não dá erro, só devolve menos linhas.
+            // Ficam selecionados os que faltaram, para o usuário ver quais.
+            setSelecionados(new Set(ids.filter(id => !porId.has(id))));
+            throw new Error(
+                `Só ${gravados.length} de ${ids.length} equipamentos foram atualizados — `
+                + 'os demais não puderam ser alterados com a sua permissão.',
+            );
+        }
+        desmarcar();
+        notify(`${gravados.length} equipamento${gravados.length !== 1 ? 's' : ''} atualizado${gravados.length !== 1 ? 's' : ''}.`);
     };
 
     const v = tableColumns.visibleColumns;
@@ -418,9 +488,10 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
                         <table
                                 ref={cols.tableRef}
                                 className="text-left border-collapse"
-                                style={{ tableLayout: 'fixed', width: larguraTabela(cols, ['codigo', 'nome', 'sistema', 'localizacao', 'marca', 'serie', 'instalacao', 'garantia', 'actions'], v), minWidth: '100%' }}
+                                style={{ tableLayout: 'fixed', width: LARGURA_CHECKBOX + larguraTabela(cols, ['codigo', 'nome', 'sistema', 'localizacao', 'marca', 'serie', 'instalacao', 'garantia', 'actions'], v), minWidth: '100%' }}
                             >
                             <colgroup>
+                                    <col style={{ width: `${LARGURA_CHECKBOX}px` }} />
                                     {v.includes('codigo') && <col data-col-key="codigo" style={{ width: `${cols.getWidth('codigo')}px` }} />}
                                     {v.includes('nome') && <col data-col-key="nome" style={{ width: `${cols.getWidth('nome')}px` }} />}
                                     {v.includes('sistema') && <col data-col-key="sistema" style={{ width: `${cols.getWidth('sistema')}px` }} />}
@@ -435,6 +506,17 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
                                 </colgroup>
                                 <thead>
                                 <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                        <input
+                                            type="checkbox"
+                                            aria-label="Marcar todos os equipamentos visíveis"
+                                            title={todosVisiveisMarcados ? 'Desmarcar os visíveis' : 'Marcar todos os visíveis'}
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                            checked={todosVisiveisMarcados}
+                                            ref={el => { if (el) el.indeterminate = algumVisivelMarcado && !todosVisiveisMarcados; }}
+                                            onChange={marcarVisiveis}
+                                        />
+                                    </th>
                                     {v.includes('codigo') && <SortableHeader colKey="codigo" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="codigo" /></SortableHeader>}
                                     {v.includes('nome') && <SortableHeader colKey="nome" label="Equipamento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="nome" /></SortableHeader>}
                                     {v.includes('sistema') && <SortableHeader colKey="sistema" label="Sistema" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="sistema" /></SortableHeader>}
@@ -448,10 +530,21 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filtrados.map(a => {
+                                {filtrados.map((a, indice) => {
                                     const g = textoGarantia(a._dias_garantia, a.supplier_warranty_until);
+                                    const marcado = selecionados.has(a.id);
                                     return (
-                                        <tr key={a.id} className="hover:bg-blue-50/50 transition-colors group">
+                                        <tr key={a.id} className={`hover:bg-blue-50/50 transition-colors group ${marcado ? 'bg-blue-50/60' : ''}`}>
+                                            <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label={`Selecionar ${a.name}`}
+                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    checked={marcado}
+                                                    onChange={e => marcarLinha(a.id, indice, (e.nativeEvent as MouseEvent).shiftKey)}
+                                                />
+                                            </td>
                                             {v.includes('codigo') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{a.code}</td>}
                                             {v.includes('nome') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{a.name}</td>}
                                             {v.includes('sistema') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{a._system_name}</td>}
@@ -598,6 +691,35 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
                     </button>
                 </SheetFooter>
             </Sheet>
+
+            {/* §10 — barra de lote fixa no rodapé, fora do fluxo da lista. */}
+            {selecionados.size > 0 && !loteAberto && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="text-sm font-bold whitespace-nowrap">
+                        {selecionados.size} selecionado{selecionados.size !== 1 ? 's' : ''}
+                    </span>
+                    <button
+                        onClick={() => setLoteAberto(true)}
+                        className="flex items-center gap-1.5 h-9 px-3 bg-white text-blue-700 rounded-[6px] text-sm font-medium hover:bg-blue-50 transition-all"
+                    >
+                        <Pencil className="w-3.5 h-3.5" /> Editar em lote
+                    </button>
+                    <button
+                        onClick={desmarcar}
+                        className="flex items-center gap-1.5 h-9 px-3 bg-blue-500 rounded-[6px] text-sm font-medium hover:bg-blue-400 transition-all"
+                    >
+                        <X className="w-3.5 h-3.5" /> Desmarcar
+                    </button>
+                </div>
+            )}
+
+            <AtivosEdicaoEmLoteSheet
+                open={loteAberto}
+                ativos={ativosDoLote}
+                sistemas={sistemas}
+                onClose={() => setLoteAberto(false)}
+                onApply={aplicarLote}
+            />
 
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${

@@ -8,10 +8,11 @@
 // faz o condomínio cobrar da parte errada e descobrir tarde que o prazo da
 // certa já venceu — por isso a coluna de garantia mostra os dias, não só a data.
 import React from 'react';
-import { Package, ShieldCheck, ShieldAlert, Search, RefreshCw, Plus, AlertCircle } from 'lucide-react';
+import { Package, ShieldCheck, ShieldAlert, Search, RefreshCw, Plus, AlertCircle, MoveHorizontal } from 'lucide-react';
 import {
-    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns,
 } from '../ui/TableUtils';
+import { larguraTabela } from './larguraTabela';
 import { KpiCard } from '../ui/KpiCard';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -85,6 +86,13 @@ function formDoAtivo(a: BuildingAsset): FormAtivo {
     };
 }
 
+// §6.1 — larguras iniciais por coluna (soma 1285 ≈ contêiner de 1600px com a barra
+// lateral aberta, para "Ações" nascer visível); "Ajustar largura" mede o dado real.
+const LARGURAS_ATIVOS: Record<string, number> = {
+    codigo: 115, nome: 180, sistema: 140, localizacao: 160, marca: 130,
+    serie: 110, instalacao: 110, garantia: 180, actions: 160,
+};
+
 const CAMPO = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none';
 const ROTULO = 'text-xs font-semibold text-slate-500';
 
@@ -96,6 +104,7 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('condominio:ativos:search', '');
     const tableColumns = useTableColumns(COLUMNS, 'ativosPrediaisColumns');
+    const cols = useResizableColumns(LARGURAS_ATIVOS, 'condominio:ativos:larguras');
 
     const [ativos, setAtivos] = React.useState<BuildingAssetRow[]>([]);
     const [sistemas, setSistemas] = React.useState<BuildingSystem[]>([]);
@@ -111,6 +120,9 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
 
     // O mesmo drawer cria e edita. `editando` nulo = cadastro novo.
     const [editando, setEditando] = React.useState<BuildingAssetRow | null>(null);
+    // Equipamento de que o cadastro novo está sendo copiado (botão Duplicar).
+    // Só rotula o drawer: salvar é um `create` comum.
+    const [duplicandoDe, setDuplicandoDe] = React.useState<BuildingAssetRow | null>(null);
     const [form, setForm] = React.useState<FormAtivo>(formVazio);
     // Retrato do form ao abrir a edição: é contra ele que se sabe se há pendência.
     const [formInicial, setFormInicial] = React.useState<FormAtivo>(formVazio);
@@ -126,12 +138,24 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
 
     const abrirNovo = () => {
         setEditando(null);
+        setDuplicandoDe(null);
         setForm(rascunhoNovo.current);
+        setSheetAberto(true);
+    };
+
+    /** Duplicar = "Novo equipamento" já preenchido com os dados deste. O nº de
+     *  série fica de fora de propósito: é único por aparelho, copiá-lo cadastraria
+     *  dois equipamentos com a mesma identidade. O resto o usuário ajusta. */
+    const abrirDuplicacao = (a: BuildingAssetRow) => {
+        setEditando(null);
+        setDuplicandoDe(a);
+        setForm({ ...formDoAtivo(a), serial_number: '' });
         setSheetAberto(true);
     };
 
     const abrirEdicao = (a: BuildingAssetRow) => {
         const f = formDoAtivo(a);
+        setDuplicandoDe(null);
         setEditando(a);
         setForm(f);
         setFormInicial(f);
@@ -140,9 +164,12 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
 
     /** Fecha sem perguntar — o Sheet já confirma sozinho no ESC/backdrop quando `dirty`. */
     const fecharSheet = () => {
-        if (!editando) rascunhoNovo.current = form;
+        // Cópia não vira rascunho: senão o próximo "Novo equipamento" abriria
+        // com os dados do equipamento que foi duplicado.
+        if (!editando && !duplicandoDe) rascunhoNovo.current = form;
         setSheetAberto(false);
         setEditando(null);
+        setDuplicandoDe(null);
     };
 
     /** X e Cancelar não passam pelo `requestClose` do Sheet — guarda própria (§25). */
@@ -260,8 +287,11 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
                 // compara data pura; o `Date.parse` que estava aqui lia a data
                 // como UTC e, conforme a hora, errava a garantia em 1 dia (fuso).
                 setAtivos(prev => [comoLinha(criado), ...prev]);
-                rascunhoNovo.current = { ...form, name: '', location: '', serial_number: '', supplier_warranty_until: '' };
+                if (!duplicandoDe) {
+                    rascunhoNovo.current = { ...form, name: '', location: '', serial_number: '', supplier_warranty_until: '' };
+                }
                 setSheetAberto(false);
+                setDuplicandoDe(null);
                 notify(`${criado.name} cadastrado como ${criado.code}.`);
             }
         } catch (e: any) {
@@ -346,6 +376,16 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* §6.1.2 — sob comando explícito, nunca automático. */}
+                            <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                            <button
+                                type="button"
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                         <button
                             onClick={abrirNovo}
@@ -375,17 +415,35 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
+                        <table
+                                ref={cols.tableRef}
+                                className="text-left border-collapse"
+                                style={{ tableLayout: 'fixed', width: larguraTabela(cols, ['codigo', 'nome', 'sistema', 'localizacao', 'marca', 'serie', 'instalacao', 'garantia', 'actions'], v), minWidth: '100%' }}
+                            >
+                            <colgroup>
+                                    {v.includes('codigo') && <col data-col-key="codigo" style={{ width: `${cols.getWidth('codigo')}px` }} />}
+                                    {v.includes('nome') && <col data-col-key="nome" style={{ width: `${cols.getWidth('nome')}px` }} />}
+                                    {v.includes('sistema') && <col data-col-key="sistema" style={{ width: `${cols.getWidth('sistema')}px` }} />}
+                                    {v.includes('localizacao') && <col data-col-key="localizacao" style={{ width: `${cols.getWidth('localizacao')}px` }} />}
+                                    {v.includes('marca') && <col data-col-key="marca" style={{ width: `${cols.getWidth('marca')}px` }} />}
+                                    {v.includes('serie') && <col data-col-key="serie" style={{ width: `${cols.getWidth('serie')}px` }} />}
+                                    {v.includes('instalacao') && <col data-col-key="instalacao" style={{ width: `${cols.getWidth('instalacao')}px` }} />}
+                                    {v.includes('garantia') && <col data-col-key="garantia" style={{ width: `${cols.getWidth('garantia')}px` }} />}
+                                    {/* §6.1.1 — espaçador ANTES de "Ações": absorve a folga */}
+                                    <col />
+                                    {v.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+                                </colgroup>
+                                <thead>
                                 <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                    {v.includes('codigo') && <SortableHeader colKey="codigo" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('nome') && <SortableHeader colKey="nome" label="Equipamento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('sistema') && <SortableHeader colKey="sistema" label="Sistema" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('localizacao') && <SortableHeader colKey="localizacao" label="Localização" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('marca') && <SortableHeader colKey="marca" label="Marca / modelo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('serie') && <SortableHeader colKey="serie" label="Nº de série" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('instalacao') && <SortableHeader colKey="instalacao" label="Instalação" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('garantia') && <SortableHeader colKey="garantia" label="Garantia do fornecedor" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('codigo') && <SortableHeader colKey="codigo" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="codigo" /></SortableHeader>}
+                                    {v.includes('nome') && <SortableHeader colKey="nome" label="Equipamento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="nome" /></SortableHeader>}
+                                    {v.includes('sistema') && <SortableHeader colKey="sistema" label="Sistema" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="sistema" /></SortableHeader>}
+                                    {v.includes('localizacao') && <SortableHeader colKey="localizacao" label="Localização" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="localizacao" /></SortableHeader>}
+                                    {v.includes('marca') && <SortableHeader colKey="marca" label="Marca / modelo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="marca" /></SortableHeader>}
+                                    {v.includes('serie') && <SortableHeader colKey="serie" label="Nº de série" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="serie" /></SortableHeader>}
+                                    {v.includes('instalacao') && <SortableHeader colKey="instalacao" label="Instalação" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="instalacao" /></SortableHeader>}
+                                    {v.includes('garantia') && <SortableHeader colKey="garantia" label="Garantia do fornecedor" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="garantia" /></SortableHeader>}
+                                    <th aria-hidden="true" className="border-r border-gray-100"></th>
                                     {v.includes('actions') && <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>}
                                 </tr>
                             </thead>
@@ -406,10 +464,12 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
                                                     <span className={`text-sm font-normal ${g.cor}`}>{g.texto}</span>
                                                 </td>
                                             )}
+                                            <td aria-hidden="true"></td>
                                             {v.includes('actions') && (
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-1.5">
                                                         <ActionIconButton kind="edit" title="Editar equipamento" onClick={() => abrirEdicao(a)} />
+                                                        <ActionIconButton kind="duplicate" title="Duplicar equipamento" onClick={() => abrirDuplicacao(a)} />
                                                         <InlineDisclosureMenu showDelete onDelete={() => excluir(a)} />
                                                     </div>
                                                 </td>
@@ -425,9 +485,13 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
 
             <Sheet open={sheetAberto} onClose={fecharSheet} size="lg" dirty={alterado}>
                 <SheetHeader onClose={fecharComGuarda}>
-                    <SheetTitle>{editando ? 'Editar equipamento' : 'Novo equipamento'}</SheetTitle>
+                    <SheetTitle>{editando ? 'Editar equipamento' : duplicandoDe ? 'Duplicar equipamento' : 'Novo equipamento'}</SheetTitle>
                     <SheetDescription>
-                        {editando ? `${editando.code} · ${empreendimento.name}` : empreendimento.name}
+                        {editando
+                            ? `${editando.code} · ${empreendimento.name}`
+                            : duplicandoDe
+                                ? `Cópia de ${duplicandoDe.code} · ${empreendimento.name}`
+                                : empreendimento.name}
                     </SheetDescription>
                 </SheetHeader>
                 <SheetPanel className="p-6">

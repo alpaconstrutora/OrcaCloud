@@ -8,10 +8,11 @@
 // forma mais eficiente de um plano de manutenção morrer sem ninguém notar.
 import React from 'react';
 import {
-    AlertTriangle, CalendarClock, ClipboardList, Wrench, Search, RefreshCw, Plus, CheckCircle2, AlertCircle, MessageSquare } from 'lucide-react';
+    AlertTriangle, CalendarClock, ClipboardList, Wrench, Search, RefreshCw, Plus, CheckCircle2, AlertCircle, MessageSquare, MoveHorizontal } from 'lucide-react';
 import {
-    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns,
 } from '../ui/TableUtils';
+import { larguraTabela } from './larguraTabela';
 import { KpiCard } from '../ui/KpiCard';
 import { clientRequestsService, type ClientRequest } from '../../services/clientRequestsService';
 import { empreendimentoService } from '../../services/empreendimentoService';
@@ -30,6 +31,17 @@ import type {
     MaintenancePlanItemRow, MaintenanceResponsibleType, PeriodicityUnit,
 } from '../../types/condominio';
 import type { Empreendimento } from '../../types/empreendimento';
+
+// §6.1 — larguras iniciais das três tabelas; "Ajustar largura" mede o dado real.
+const LARGURAS_ITENS: Record<string, number> = {
+    sistema: 170, servico: 300, periodicidade: 150, responsavel: 160, ultima: 150, proxima: 180, actions: 110,
+};
+const LARGURAS_ORDENS: Record<string, number> = {
+    sistema: 170, descricao: 300, tipo: 130, prioridade: 120, agendada: 130, executada: 130, situacao: 130, actions: 110,
+};
+const LARGURAS_CHAMADOS: Record<string, number> = {
+    unidade: 130, pessoa: 200, titulo: 300, categoria: 150, prioridade: 120, aberto: 130, situacao: 130,
+};
 
 const ITEM_COLUMNS: ColumnConfig[] = [
     { key: 'sistema', label: 'Sistema', sortable: true },
@@ -144,6 +156,9 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
     const itemColumns = useTableColumns(ITEM_COLUMNS, 'manutencaoItemColumns');
     const orderColumns = useTableColumns(ORDER_COLUMNS, 'manutencaoOrderColumns');
     const chamadoColumns = useTableColumns(CHAMADO_COLUMNS, 'manutencaoChamadoColumns');
+    const colsChamados = useResizableColumns(LARGURAS_CHAMADOS, 'condominio:manutencao:chamados:larguras');
+    const colsItens = useResizableColumns(LARGURAS_ITENS, 'condominio:manutencao:itens:larguras');
+    const colsOrdens = useResizableColumns(LARGURAS_ORDENS, 'condominio:manutencao:ordens:larguras');
 
     const [sistemas, setSistemas] = React.useState<BuildingSystem[]>([]);
     const [plano, setPlano] = React.useState<MaintenancePlan | null>(null);
@@ -590,6 +605,15 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                                     onReset={orderColumns.resetColumns}
                                 />
                             )}
+                            <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                            <button
+                                type="button"
+                                onClick={() => (aba === 'plano' ? colsItens : aba === 'chamados' ? colsChamados : colsOrdens).autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                         {/* Chamados não tem ação primária: quem abre chamado é o
                             morador, pelo portal. Botão "novo chamado" aqui seria o
@@ -637,7 +661,22 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                         </div>
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
-                            <table className="w-full text-left border-collapse">
+                            <table
+                                ref={colsChamados.tableRef}
+                                className="text-left border-collapse"
+                                style={{ tableLayout: 'fixed', width: larguraTabela(colsChamados, ['unidade', 'pessoa', 'titulo', 'categoria', 'prioridade', 'aberto', 'situacao'], cv), minWidth: '100%' }}
+                            >
+                                <colgroup>
+                                    {cv.includes('unidade') && <col data-col-key="unidade" style={{ width: `${colsChamados.getWidth('unidade')}px` }} />}
+                                    {cv.includes('pessoa') && <col data-col-key="pessoa" style={{ width: `${colsChamados.getWidth('pessoa')}px` }} />}
+                                    {cv.includes('titulo') && <col data-col-key="titulo" style={{ width: `${colsChamados.getWidth('titulo')}px` }} />}
+                                    {cv.includes('categoria') && <col data-col-key="categoria" style={{ width: `${colsChamados.getWidth('categoria')}px` }} />}
+                                    {cv.includes('prioridade') && <col data-col-key="prioridade" style={{ width: `${colsChamados.getWidth('prioridade')}px` }} />}
+                                    {cv.includes('aberto') && <col data-col-key="aberto" style={{ width: `${colsChamados.getWidth('aberto')}px` }} />}
+                                    {cv.includes('situacao') && <col data-col-key="situacao" style={{ width: `${colsChamados.getWidth('situacao')}px` }} />}
+                                    {/* §6.1.1 — espaçador ANTES de "Ações": absorve a folga */}
+                                    <col />
+                                </colgroup>
                                 <thead>
                                     <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         {CHAMADO_COLUMNS.filter(c => cv.includes(c.key)).map(c => (
@@ -645,9 +684,12 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                                                 key={c.key} colKey={c.key} label={c.label} uppercase={false}
                                                 sortColumn={chamadoColumns.sortColumn} sortDirection={chamadoColumns.sortDirection}
                                                 onSort={chamadoColumns.handleColumnSort}
-                                                className="px-6 py-2 border-r border-gray-100"
-                                            />
+                                                className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                            >
+                                                <colsChamados.ResizeHandle colKey={c.key} />
+                                            </SortableHeader>
                                         ))}
+                                        <th aria-hidden="true" className="border-r border-gray-100"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
@@ -686,6 +728,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                                                     <span className={`text-sm font-normal ${CHAMADO_STATUS_COLOR[c.status] || 'text-gray-600'}`}>{c.status}</span>
                                                 </td>
                                             )}
+                                            <td aria-hidden="true"></td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -717,16 +760,32 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                         </div>
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
-                            <table className="w-full text-left border-collapse">
+                            <table
+                                ref={colsItens.tableRef}
+                                className="text-left border-collapse"
+                                style={{ tableLayout: 'fixed', width: larguraTabela(colsItens, ['sistema', 'servico', 'periodicidade', 'responsavel', 'ultima', 'proxima', 'actions'], iv), minWidth: '100%' }}
+                            >
+                                <colgroup>
+                                    {iv.includes('sistema') && <col data-col-key="sistema" style={{ width: `${colsItens.getWidth('sistema')}px` }} />}
+                                    {iv.includes('servico') && <col data-col-key="servico" style={{ width: `${colsItens.getWidth('servico')}px` }} />}
+                                    {iv.includes('periodicidade') && <col data-col-key="periodicidade" style={{ width: `${colsItens.getWidth('periodicidade')}px` }} />}
+                                    {iv.includes('responsavel') && <col data-col-key="responsavel" style={{ width: `${colsItens.getWidth('responsavel')}px` }} />}
+                                    {iv.includes('ultima') && <col data-col-key="ultima" style={{ width: `${colsItens.getWidth('ultima')}px` }} />}
+                                    {iv.includes('proxima') && <col data-col-key="proxima" style={{ width: `${colsItens.getWidth('proxima')}px` }} />}
+                                    {/* §6.1.1 — espaçador ANTES de "Ações": absorve a folga */}
+                                    <col />
+                                    {iv.includes('actions') && <col data-col-key="actions" style={{ width: `${colsItens.getWidth('actions')}px` }} />}
+                                </colgroup>
                                 <thead>
                                     <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                        {iv.includes('sistema') && <SortableHeader colKey="sistema" label="Sistema" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                        {iv.includes('servico') && <SortableHeader colKey="servico" label="Serviço" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                        {iv.includes('periodicidade') && <SortableHeader colKey="periodicidade" label="Periodicidade" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                        {iv.includes('responsavel') && <SortableHeader colKey="responsavel" label="Responsável" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                        {iv.includes('ultima') && <SortableHeader colKey="ultima" label="Última execução" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                        {iv.includes('proxima') && <SortableHeader colKey="proxima" label="Próximo vencimento" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                        {iv.includes('actions') && <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>}
+                                        {iv.includes('sistema') && <SortableHeader colKey="sistema" label="Sistema" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsItens.ResizeHandle colKey="sistema" /></SortableHeader>}
+                                        {iv.includes('servico') && <SortableHeader colKey="servico" label="Serviço" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsItens.ResizeHandle colKey="servico" /></SortableHeader>}
+                                        {iv.includes('periodicidade') && <SortableHeader colKey="periodicidade" label="Periodicidade" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsItens.ResizeHandle colKey="periodicidade" /></SortableHeader>}
+                                        {iv.includes('responsavel') && <SortableHeader colKey="responsavel" label="Responsável" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsItens.ResizeHandle colKey="responsavel" /></SortableHeader>}
+                                        {iv.includes('ultima') && <SortableHeader colKey="ultima" label="Última execução" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsItens.ResizeHandle colKey="ultima" /></SortableHeader>}
+                                        {iv.includes('proxima') && <SortableHeader colKey="proxima" label="Próximo vencimento" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsItens.ResizeHandle colKey="proxima" /></SortableHeader>}
+                                        <th aria-hidden="true" className="border-r border-gray-100"></th>
+                                    {iv.includes('actions') && <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
@@ -744,7 +803,8 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                                                         <span className={`text-sm font-normal ${venc.cor}`}>{venc.texto}</span>
                                                     </td>
                                                 )}
-                                                {iv.includes('actions') && (
+                                                <td aria-hidden="true"></td>
+                                            {iv.includes('actions') && (
                                                     <td className="px-6 py-2.5 text-right">
                                                         <div className="flex items-center justify-end gap-1.5">
                                                             <ActionIconButton
@@ -782,16 +842,33 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
+                        <table
+                                ref={colsOrdens.tableRef}
+                                className="text-left border-collapse"
+                                style={{ tableLayout: 'fixed', width: larguraTabela(colsOrdens, ['sistema', 'descricao', 'tipo', 'prioridade', 'agendada', 'executada', 'situacao', 'actions'], ov), minWidth: '100%' }}
+                            >
+                            <colgroup>
+                                    {ov.includes('sistema') && <col data-col-key="sistema" style={{ width: `${colsOrdens.getWidth('sistema')}px` }} />}
+                                    {ov.includes('descricao') && <col data-col-key="descricao" style={{ width: `${colsOrdens.getWidth('descricao')}px` }} />}
+                                    {ov.includes('tipo') && <col data-col-key="tipo" style={{ width: `${colsOrdens.getWidth('tipo')}px` }} />}
+                                    {ov.includes('prioridade') && <col data-col-key="prioridade" style={{ width: `${colsOrdens.getWidth('prioridade')}px` }} />}
+                                    {ov.includes('agendada') && <col data-col-key="agendada" style={{ width: `${colsOrdens.getWidth('agendada')}px` }} />}
+                                    {ov.includes('executada') && <col data-col-key="executada" style={{ width: `${colsOrdens.getWidth('executada')}px` }} />}
+                                    {ov.includes('situacao') && <col data-col-key="situacao" style={{ width: `${colsOrdens.getWidth('situacao')}px` }} />}
+                                    {/* §6.1.1 — espaçador ANTES de "Ações": absorve a folga */}
+                                    <col />
+                                    {ov.includes('actions') && <col data-col-key="actions" style={{ width: `${colsOrdens.getWidth('actions')}px` }} />}
+                                </colgroup>
+                                <thead>
                                 <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                    {ov.includes('sistema') && <SortableHeader colKey="sistema" label="Sistema" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {ov.includes('descricao') && <SortableHeader colKey="descricao" label="Descrição" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {ov.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {ov.includes('prioridade') && <SortableHeader colKey="prioridade" label="Prioridade" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {ov.includes('agendada') && <SortableHeader colKey="agendada" label="Agendada" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {ov.includes('executada') && <SortableHeader colKey="executada" label="Executada" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {ov.includes('situacao') && <SortableHeader colKey="situacao" label="Situação" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {ov.includes('sistema') && <SortableHeader colKey="sistema" label="Sistema" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsOrdens.ResizeHandle colKey="sistema" /></SortableHeader>}
+                                    {ov.includes('descricao') && <SortableHeader colKey="descricao" label="Descrição" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsOrdens.ResizeHandle colKey="descricao" /></SortableHeader>}
+                                    {ov.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsOrdens.ResizeHandle colKey="tipo" /></SortableHeader>}
+                                    {ov.includes('prioridade') && <SortableHeader colKey="prioridade" label="Prioridade" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsOrdens.ResizeHandle colKey="prioridade" /></SortableHeader>}
+                                    {ov.includes('agendada') && <SortableHeader colKey="agendada" label="Agendada" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsOrdens.ResizeHandle colKey="agendada" /></SortableHeader>}
+                                    {ov.includes('executada') && <SortableHeader colKey="executada" label="Executada" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsOrdens.ResizeHandle colKey="executada" /></SortableHeader>}
+                                    {ov.includes('situacao') && <SortableHeader colKey="situacao" label="Situação" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsOrdens.ResizeHandle colKey="situacao" /></SortableHeader>}
+                                    <th aria-hidden="true" className="border-r border-gray-100"></th>
                                     {ov.includes('actions') && <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>}
                                 </tr>
                             </thead>
@@ -813,7 +890,8 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                                                 <span className={`text-sm font-normal ${SITUACAO_COLOR[o.status]}`}>{SITUACAO_LABELS[o.status]}</span>
                                             </td>
                                         )}
-                                        {ov.includes('actions') && (
+                                        <td aria-hidden="true"></td>
+                                            {ov.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     {o.status !== 'CONCLUIDA' && o.status !== 'CANCELADA' && (

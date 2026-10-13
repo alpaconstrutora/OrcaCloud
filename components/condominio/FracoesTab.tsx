@@ -12,14 +12,20 @@
 // 200 unidades é trabalho em etapas, e travar obrigaria a inventar número para
 // poder salvar.
 import React from 'react';
-import { Scale, Search, RefreshCw, Save, AlertTriangle, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Scale, Search, RefreshCw, Save, AlertTriangle, CheckCircle2, AlertCircle, MoveHorizontal } from 'lucide-react';
 import {
-    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns,
 } from '../ui/TableUtils';
+import { larguraTabela } from './larguraTabela';
 import { KpiCard } from '../ui/KpiCard';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { fracaoIdealService, conferirSoma, type TranscricaoItem } from '../../services/fracaoIdealService';
 import type { Empreendimento, EmpreendimentoUnit } from '../../types/empreendimento';
+
+// §6.1 — larguras iniciais; "Ajustar largura" (toolbar) mede o dado real.
+const LARGURAS_FRACOES: Record<string, number> = {
+    torre: 170, unidade: 170, area: 160, origem: 180, fracao: 210,
+};
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'torre', label: 'Torre', sortable: true },
@@ -35,6 +41,7 @@ interface Props { empreendimento: Empreendimento }
 
 const FracoesTab: React.FC<Props> = ({ empreendimento }) => {
     const [searchTerm, setSearchTerm] = usePersistedState<string>('condominio:fracoes:search', '');
+    const cols = useResizableColumns(LARGURAS_FRACOES, 'condominio:fracoes:larguras');
     const tableColumns = useTableColumns(COLUMNS, 'fracoesColumns');
 
     const [unidades, setUnidades] = React.useState<UnidadeLinha[]>([]);
@@ -232,6 +239,15 @@ const FracoesTab: React.FC<Props> = ({ empreendimento }) => {
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                            <button
+                                type="button"
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                         <button
                             onClick={salvar}
@@ -263,14 +279,28 @@ const FracoesTab: React.FC<Props> = ({ empreendimento }) => {
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
+                        <table
+                                ref={cols.tableRef}
+                                className="text-left border-collapse"
+                                style={{ tableLayout: 'fixed', width: larguraTabela(cols, ['torre', 'unidade', 'area', 'origem', 'fracao'], v), minWidth: '100%' }}
+                            >
+                            <colgroup>
+                                    {v.includes('torre') && <col data-col-key="torre" style={{ width: `${cols.getWidth('torre')}px` }} />}
+                                    {v.includes('unidade') && <col data-col-key="unidade" style={{ width: `${cols.getWidth('unidade')}px` }} />}
+                                    {v.includes('area') && <col data-col-key="area" style={{ width: `${cols.getWidth('area')}px` }} />}
+                                    {v.includes('origem') && <col data-col-key="origem" style={{ width: `${cols.getWidth('origem')}px` }} />}
+                                    {v.includes('fracao') && <col data-col-key="fracao" style={{ width: `${cols.getWidth('fracao')}px` }} />}
+                                    {/* §6.1.1 — espaçador ANTES de "Ações": absorve a folga */}
+                                    <col />
+                                </colgroup>
+                                <thead>
                                 <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                    {v.includes('torre') && <SortableHeader colKey="torre" label="Torre" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('unidade') && <SortableHeader colKey="unidade" label="Unidade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('area') && <SortableHeader colKey="area" label="Área privativa" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('origem') && <SortableHeader colKey="origem" label="Origem" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('fracao') && <SortableHeader colKey="fracao" label="Fração ideal (%)" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('torre') && <SortableHeader colKey="torre" label="Torre" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="torre" /></SortableHeader>}
+                                    {v.includes('unidade') && <SortableHeader colKey="unidade" label="Unidade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="unidade" /></SortableHeader>}
+                                    {v.includes('area') && <SortableHeader colKey="area" label="Área privativa" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="area" /></SortableHeader>}
+                                    {v.includes('origem') && <SortableHeader colKey="origem" label="Origem" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="origem" /></SortableHeader>}
+                                    {v.includes('fracao') && <SortableHeader colKey="fracao" label="Fração ideal (%)" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="fracao" /></SortableHeader>}
+                                <th aria-hidden="true" className="border-r border-gray-100"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -326,6 +356,7 @@ const FracoesTab: React.FC<Props> = ({ empreendimento }) => {
                                                     />
                                                 </td>
                                             )}
+                                        <td aria-hidden="true"></td>
                                         </tr>
                                     );
                                 })}

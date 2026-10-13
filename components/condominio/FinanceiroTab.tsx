@@ -25,6 +25,7 @@ import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import ActionIconButton from '../ui/ActionIconButton';
 import CostCenterSelect from '../CostCenterSelect';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
+import { larguraTabela } from './larguraTabela';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { useConfirm } from '../ui/confirm';
 import { storageService } from '../../services/storageService';
@@ -59,6 +60,13 @@ const STATUS_LABEL: Record<string, string> = {
 // `diferenca` é coluna própria, não nota de rodapé dentro de "Rateado": ela é o
 // sinal de que a soma das cotas não fechou com a despesa, e enterrada na outra
 // célula só era vista por quem já estava olhando aquela linha.
+// §6.1 — larguras iniciais da tabela de Rateios (soma 1260 ≈ contêiner de 1600px com a
+// barra lateral aberta, para "Ações" nascer visível); "Ajustar largura" mede o dado real.
+const LARGURAS_RATEIOS: Record<string, number> = {
+    number: 100, competencia: 130, tipo: 130, criterio: 160, status: 100,
+    despesas: 115, rateado: 115, diferenca: 105, cobranca: 125, actions: 180,
+};
+
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
     { key: 'competencia', label: 'Competência', sortable: true },
@@ -1059,9 +1067,10 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
     // ── Aba Despesas ──────────────────────────────────────────────────────
     // §6.1 — a aba Despesas tem TRÊS colunas de texto livre (descrição,
     // fornecedor, centro de custo): é exatamente o caso em que redimensionar
-    // paga o próprio custo. A tabela de Rateios segue sem, pela decisão já
-    // registrada lá (oito colunas curtas, nenhuma de texto livre).
+    // paga o próprio custo. A de Rateios também redimensiona (pedido de
+    // 13/10/2026: botão de ajuste de largura em todas as tabelas do condomínio).
     const colsDespesas = useResizableColumns(LARGURAS_DESPESAS, `condominio:${empreendimento.id}:despesas:larguras`);
+    const colsRateios = useResizableColumns(LARGURAS_RATEIOS, `condominio:${empreendimento.id}:rateios:larguras`);
 
     const [lancamentos, setLancamentos] = React.useState<LancamentoDoCondominio[]>([]);
     const [carregandoLanc, setCarregandoLanc] = React.useState(false);
@@ -1379,6 +1388,15 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                         onToggleColumn={tableColumns.toggleColumn}
                                         onReset={tableColumns.resetColumns}
                                     />
+                                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                                    <button
+                                        type="button"
+                                        onClick={() => colsRateios.autoFit()}
+                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                        title="Ajustar largura das colunas ao conteúdo"
+                                    >
+                                        <MoveHorizontal className="w-4 h-4" />
+                                    </button>
                                 </div>
                                 <button
                                     onClick={() => { setPrevia(null); setSheetNovo(true); }}
@@ -1423,23 +1441,40 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                         </p>
                     </div>
                 ) : (
-                    /* Sem `useResizableColumns` (§6.1): as oito colunas são
-                       número, mês, dois rótulos curtos e três valores — nenhuma
-                       de texto livre que estoure a largura, que é o caso em que
-                       redimensionar paga o próprio custo. */
+                    /* §6.1 — redimensionável; o botão "Ajustar largura" está na
+                       toolbar (§6.1.2). */
                     <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
+                        <table
+                                ref={colsRateios.tableRef}
+                                className="text-left border-collapse"
+                                style={{ tableLayout: 'fixed', width: larguraTabela(colsRateios, ['number', 'competencia', 'tipo', 'criterio', 'status', 'despesas', 'rateado', 'diferenca', 'cobranca', 'actions'], v), minWidth: '100%' }}
+                            >
+                            <colgroup>
+                                    {v.includes('number') && <col data-col-key="number" style={{ width: `${colsRateios.getWidth('number')}px` }} />}
+                                    {v.includes('competencia') && <col data-col-key="competencia" style={{ width: `${colsRateios.getWidth('competencia')}px` }} />}
+                                    {v.includes('tipo') && <col data-col-key="tipo" style={{ width: `${colsRateios.getWidth('tipo')}px` }} />}
+                                    {v.includes('criterio') && <col data-col-key="criterio" style={{ width: `${colsRateios.getWidth('criterio')}px` }} />}
+                                    {v.includes('status') && <col data-col-key="status" style={{ width: `${colsRateios.getWidth('status')}px` }} />}
+                                    {v.includes('despesas') && <col data-col-key="despesas" style={{ width: `${colsRateios.getWidth('despesas')}px` }} />}
+                                    {v.includes('rateado') && <col data-col-key="rateado" style={{ width: `${colsRateios.getWidth('rateado')}px` }} />}
+                                    {v.includes('diferenca') && <col data-col-key="diferenca" style={{ width: `${colsRateios.getWidth('diferenca')}px` }} />}
+                                    {v.includes('cobranca') && <col data-col-key="cobranca" style={{ width: `${colsRateios.getWidth('cobranca')}px` }} />}
+                                    {/* §6.1.1 — espaçador ANTES de "Ações": absorve a folga */}
+                                    <col />
+                                    {v.includes('actions') && <col data-col-key="actions" style={{ width: `${colsRateios.getWidth('actions')}px` }} />}
+                                </colgroup>
+                                <thead>
                                 <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                    {v.includes('number') && <SortableHeader colKey="number" label="Número" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('competencia') && <SortableHeader colKey="competencia" label="Competência" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('criterio') && <SortableHeader colKey="criterio" label="Critério" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('status') && <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('despesas') && <SortableHeader colKey="despesas" label="Despesas" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('rateado') && <SortableHeader colKey="rateado" label="Rateado" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('diferenca') && <SortableHeader colKey="diferenca" label="Diferença" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {v.includes('cobranca') && <SortableHeader colKey="cobranca" label="Cobrança" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('number') && <SortableHeader colKey="number" label="Número" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="number" /></SortableHeader>}
+                                    {v.includes('competencia') && <SortableHeader colKey="competencia" label="Competência" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="competencia" /></SortableHeader>}
+                                    {v.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="tipo" /></SortableHeader>}
+                                    {v.includes('criterio') && <SortableHeader colKey="criterio" label="Critério" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="criterio" /></SortableHeader>}
+                                    {v.includes('status') && <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="status" /></SortableHeader>}
+                                    {v.includes('despesas') && <SortableHeader colKey="despesas" label="Despesas" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="despesas" /></SortableHeader>}
+                                    {v.includes('rateado') && <SortableHeader colKey="rateado" label="Rateado" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="rateado" /></SortableHeader>}
+                                    {v.includes('diferenca') && <SortableHeader colKey="diferenca" label="Diferença" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="diferenca" /></SortableHeader>}
+                                    {v.includes('cobranca') && <SortableHeader colKey="cobranca" label="Cobrança" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="cobranca" /></SortableHeader>}
+                                    <th aria-hidden="true" className="border-r border-gray-100"></th>
                                     {v.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                     )}
@@ -1535,6 +1570,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                                     })()}
                                                 </td>
                                             )}
+                                            <td aria-hidden="true"></td>
                                             {v.includes('actions') && (
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>

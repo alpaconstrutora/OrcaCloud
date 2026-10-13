@@ -204,7 +204,7 @@ const DOCUMENTS_TABLE_COLUMN_HEADERS: Record<string, { label: string; sortable?:
   // Aba Normas do GED — nas demais abas a tela as passa em `hiddenColumns`.
   norma_orgao: { label: 'Órgão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   norma_codigo: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
-  norma_edicao: { label: 'Edição', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  norma_edicao: { label: 'Edição / ano', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   norma_situacao: { label: 'Situação', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   norma_substituida_por: { label: 'Substituída por', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
 };

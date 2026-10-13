@@ -93,7 +93,7 @@ const COLUMNS: ColumnConfig[] = [
   // ordem. Fora da aba ficam ocultas (hiddenColumnsForTab).
   { key: 'norma_codigo', label: 'Código', sortable: true },
   { key: 'norma_orgao', label: 'Órgão', sortable: true },
-  { key: 'norma_edicao', label: 'Edição', sortable: true },
+  { key: 'norma_edicao', label: 'Edição / ano', sortable: true },
   { key: 'norma_situacao', label: 'Situação', sortable: true },
   { key: 'norma_substituida_por', label: 'Substituída por', sortable: true },
   { key: 'extensao', label: 'Extensão', sortable: true },
@@ -1861,7 +1861,15 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     // propósito" — e readicioná-la faria a coluna escondida voltar a cada carregamento,
     // quebrando o esconder+salvar. Coluna nova aparece sozinha só para quem não tem
     // preferência salva; os demais a ligam na engrenagem.
-    tableColumns.setVisibleColumns(pref.visibleColumns.filter(k => staticKeys.has(k)));
+    // Exceção para as colunas de NORMA (13/10/2026): a preferência salva ANTES da aba
+    // Normas existir não conhece nenhuma delas, e aqui elas só aparecem na aba Normas
+    // (nas outras `hiddenColumnsForTab` as oculta). Sem nenhuma norma_* na preferência,
+    // entram visíveis — senão quem salvou colunas nunca veria Código/Órgão/Edição/Situação.
+    // Quem esconde UMA delas e salva continua com a escolha respeitada (as outras ficam
+    // na lista); só "esconder as cinco" não persiste, o que é um custo aceitável.
+    const semNenhumaNorma = !NORMA_COLUMN_KEYS.some(k => pref.visibleColumns.includes(k));
+    const visiveis = pref.visibleColumns.filter(k => staticKeys.has(k));
+    tableColumns.setVisibleColumns(semNenhumaNorma ? [...visiveis, ...NORMA_COLUMN_KEYS] : visiveis);
     if (pref.sortColumn) tableColumns.setSortColumn(pref.sortColumn);
     tableColumns.setSortDirection(pref.sortDirection);
     setHiddenDynamicColumns(new Set(dynamicColumns.filter(col => !pref.visibleColumns.includes(col))));

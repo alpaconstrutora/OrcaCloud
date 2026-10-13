@@ -175,3 +175,15 @@ Frente `ged-normas-lote`.
   - Nome do documento e situação NÃO foram alterados: o arquivo não informa a situação.
   - Reverter = voltar os três campos para NULL nesses ids.
   - NÃO feito: excluir a NBR 6492 duplicada (`4c1a3e63…`, "(1)"). É irreversível e depende de pedido explícito.
+
+---
+
+## Pedido 3 (13/10/2026, mesma sessão c4864451)
+> Faltou coluna Edição / ano
+
+**Causa** (confirmada no banco): `user_table_column_preferences` de `altair.rosa@…` guarda `["nome","descricao","autor","status","actions","extensao"]`, de antes da aba Normas. `applyColumnPreference` aplica a lista salva e não conhece colunas novas. Resultado: nenhuma coluna de norma aparecia para quem usou "Salvar como padrão". Defeito meu: o comentário do código já descrevia o problema, e eu não tratei. Na prova original eu partia de navegador limpo e, por isso, não vi.
+
+**Correção** (`OpuraDocsModule.tsx`): preferência salva sem NENHUMA `norma_*` recebe as 5 como visíveis. Elas só aparecem na aba Normas (`hiddenColumnsForTab`). Quem esconde uma e salva mantém a escolha. Custo aceito: esconder as cinco de uma vez não persiste. Também: cabeçalho "Edição" virou "Edição / ano", como no formulário.
+
+**Prova** (Playwright, leitura da preferência interceptada no navegador, sem gravar nada): Normas mostra Documento | Código | Órgão | Edição / ano | Situação | Substituída por…; NBR 6122 mostra ABNT e 2010; Projetos continua sem colunas de norma. Suíte 8973 = 8939 + 34, rc=0; tsc rc=0.
+

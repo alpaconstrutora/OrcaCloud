@@ -1,4 +1,8 @@
-export type OpuraDocumentCategoria = 'juridico' | 'engenharia' | 'compliance' | 'financeiro' | 'comercial';
+export type OpuraDocumentCategoria = 'juridico' | 'engenharia' | 'compliance' | 'financeiro' | 'comercial' | 'normas';
+
+/** Situação de uma norma técnica (aba Normas do GED). Norma não vence por data:
+ * é cancelada ou substituída por outra edição. */
+export type OpuraNormaSituacao = 'em_vigor' | 'cancelada' | 'substituida';
 
 export type OpuraDocumentStatus = 'ativo' | 'vencido' | 'alerta' | 'arquivado' | 'pendente_aprovacao';
 
@@ -46,6 +50,14 @@ export interface OpuraDocument {
   locked_by_name?: string | null;
   locked_at?: string | null;
   locked_version?: number | null;
+
+  // Metadados de norma técnica — só a categoria 'normas' preenche (colunas próprias,
+  // não `metadados`: a situação tem CHECK no banco e as colunas são ordenáveis na tabela).
+  norma_orgao?: string | null;
+  norma_codigo?: string | null;
+  norma_edicao?: string | null;
+  norma_situacao?: OpuraNormaSituacao | null;
+  norma_substituida_por?: string | null;
 
   /** Metadados do produtor (ofício: número, assunto, destinatário…). Ofícios, 08/10/2026. */
   metadados?: Record<string, unknown> | null;

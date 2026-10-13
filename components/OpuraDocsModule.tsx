@@ -44,6 +44,8 @@ import {
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { DocumentsTable, sortDocumentsForTable } from './documents/DocumentsTable';
+import { FilterPopover } from './ui/FilterPopover';
+import { NORMA_ORGAOS_SUGERIDOS, NORMA_SITUACOES, NORMA_SITUACAO_PADRAO, formatarReferenciaNorma } from '../utils/gedNormas';
 import { DocumentQrLabelModal } from './documents/DocumentQrLabelModal';
 import { BatchUploadSheet } from './documents/BatchUploadSheet';
 import { DocumentBatchEditModal } from './documents/DocumentBatchEditModal';
@@ -68,6 +70,7 @@ import {
   OpuraDocument,
   OpuraDocumentVersion,
   OpuraDocumentCategoria,
+  OpuraNormaSituacao,
   OpuraDocumentStatus,
   OpuraFolder,
   OpuraFolderInsert,
@@ -96,8 +99,22 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'data_emissao', label: 'Emissão', sortable: true },
   { key: 'data_validade', label: 'Validade', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
+  // Aba Normas — fora dela ficam ocultas (hiddenColumnsForTab).
+  { key: 'norma_codigo', label: 'Código', sortable: true },
+  { key: 'norma_orgao', label: 'Órgão', sortable: true },
+  { key: 'norma_edicao', label: 'Edição', sortable: true },
+  { key: 'norma_situacao', label: 'Situação', sortable: true },
+  { key: 'norma_substituida_por', label: 'Substituída por', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// Colunas que pertencem a uma aba só. Norma não vence por data — é cancelada ou
+// substituída —, então na aba Normas a Situação toma o lugar de Validade/Status, e a
+// Edição o de Revisão/Nº do fornecedor. Nas demais abas as colunas de norma somem.
+const NORMA_COLUMN_KEYS = ['norma_codigo', 'norma_orgao', 'norma_edicao', 'norma_situacao', 'norma_substituida_por'];
+const COLUNAS_OCULTAS_EM_NORMAS = ['data_validade', 'status', 'numero_documento_fornecedor', 'revisao'];
+const hiddenColumnsForTab = (tab: OpuraDocumentCategoria): string[] =>
+  tab === 'normas' ? COLUNAS_OCULTAS_EM_NORMAS : NORMA_COLUMN_KEYS;
 
 // As extensões aceitas não são mais uma lista fechada no código: vêm do catálogo
 // `opura_dms_file_extensions` (aba "Extensões" nos Ajustes do GED), carregado em
@@ -174,6 +191,7 @@ const GED_DOC_COL_WIDTHS: Record<string, number> = {
   nome: 260, extensao: 100, descricao: 220, autor: 150, numero_documento_fornecedor: 160,
   tipo_documento: 160, disciplina: 150, revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120,
   status: 110, actions: 140,
+  norma_codigo: 150, norma_orgao: 120, norma_edicao: 110, norma_situacao: 120, norma_substituida_por: 180,
 };
 
 interface OpuraDocsModuleProps {
@@ -193,6 +211,9 @@ const CATEGORIES: { id: OpuraDocumentCategoria; label: string; roles: string[]; 
   { id: 'compliance', label: 'Licenças \u0026 Alvarás', roles: ['admin', 'owner', 'engenheiro'], placeholder: 'ex: AVCB, Licença Ambiental, Seguro, Alvará de Construção' },
   { id: 'financeiro', label: 'Financeiro', roles: ['admin', 'owner', 'financeiro'], placeholder: 'ex: Notas Fiscais, Boletos, Comprovantes de Medição' },
   { id: 'comercial', label: 'Comercial', roles: ['admin', 'owner', 'engenheiro', 'financeiro'], placeholder: 'ex: Propostas Comerciais, Apresentações de Vendas' },
+  // Biblioteca de normas técnicas da organização (ABNT, ISO, NR, IT…). Não é
+  // recortada pela obra do topo — ver `selectedProjectId` abaixo.
+  { id: 'normas', label: 'Normas', roles: ['admin', 'owner', 'engenheiro'], placeholder: 'ex: ABNT NBR 6118, NBR 15575, NR-18, IT 22' },
 ];
 
 export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
@@ -213,8 +234,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // seletor — mesmo princípio da REGRA OBRIGATÓRIA #5 aplicado à obra: o topo é a
   // autoridade, e um seletor local pode discordar dele em silêncio.
   // `null` no store = nenhuma obra escolhida, que aqui é o escopo 'all'.
-  const selectedProjectId = useStore(s => s.projectId) ?? 'all';
+  const topProjectId = useStore(s => s.projectId) ?? 'all';
   const [activeTab, setActiveTab] = React.useState<OpuraDocumentCategoria>('engenharia');
+  // Normas são a biblioteca da ORGANIZAÇÃO, valem para todas as obras (decisão do
+  // usuário, 13/10/2026): a aba ignora a obra do topo — listagem, pastas e upload
+  // se comportam como em "todas as obras", e o vínculo com obra fica opcional no
+  // formulário. Derivar aqui, num lugar só, cobre todo uso de `selectedProjectId`.
+  const selectedProjectId = activeTab === 'normas' ? 'all' : topProjectId;
   const [hashCopiado, setHashCopiado] = React.useState<string | null>(null);
   const [documents, setDocuments] = React.useState<OpuraDocument[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -239,6 +265,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocAutor, setEditDocAutor] = React.useState('');
   const [editDocNumeroFornecedor, setEditDocNumeroFornecedor] = React.useState('');
   const [editDocRevisao, setEditDocRevisao] = React.useState('');
+  const [editDocNormaOrgao, setEditDocNormaOrgao] = React.useState('');
+  const [editDocNormaCodigo, setEditDocNormaCodigo] = React.useState('');
+  const [editDocNormaEdicao, setEditDocNormaEdicao] = React.useState('');
+  const [editDocNormaSituacao, setEditDocNormaSituacao] = React.useState<OpuraNormaSituacao>(NORMA_SITUACAO_PADRAO);
+  const [editDocNormaSubstituidaPor, setEditDocNormaSubstituidaPor] = React.useState('');
   const [editDocSupplierId, setEditDocSupplierId] = React.useState('');
   const [editDocAutorOutro, setEditDocAutorOutro] = React.useState(false);
   const [editDocEmissao, setEditDocEmissao] = React.useState('');
@@ -262,6 +293,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [selectedMaskPreset, setSelectedMaskPreset] = React.useState('none');
   const [showAdvancedFilters, setShowAdvancedFilters] = React.useState(false);
   const [filterStatus, setFilterStatus] = React.useState<string>('all');
+  // Aba Normas — filtros rápidos de escolha única (§5.4 do guia). '' = sem recorte.
+  const [filterNormaSituacao, setFilterNormaSituacao] = usePersistedState<string>('opuraDocs:normaSituacao', '');
+  const [filterNormaOrgao, setFilterNormaOrgao] = usePersistedState<string>('opuraDocs:normaOrgao', '');
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [disciplines, setDisciplines] = React.useState<OpuraDmsDiscipline[]>([]);
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
@@ -381,6 +415,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Form State para Upload
   const [newDocName, setNewDocName] = React.useState('');
+  // Aba Normas — campos próprios. `newDocNameManual`: enquanto o usuário não digitar
+  // o nome, ele acompanha a referência montada (ex.: "ABNT NBR 15575-1:2024").
+  const [newDocNameManual, setNewDocNameManual] = React.useState(false);
+  const [newDocNormaOrgao, setNewDocNormaOrgao] = React.useState('');
+  const [newDocNormaCodigo, setNewDocNormaCodigo] = React.useState('');
+  const [newDocNormaEdicao, setNewDocNormaEdicao] = React.useState('');
+  const [newDocNormaSituacao, setNewDocNormaSituacao] = React.useState<OpuraNormaSituacao>(NORMA_SITUACAO_PADRAO);
+  const [newDocNormaSubstituidaPor, setNewDocNormaSubstituidaPor] = React.useState('');
   const [newDocDesc, setNewDocDesc] = React.useState('');
   const [newDocAutor, setNewDocAutor] = React.useState('');
   const [newDocNumeroFornecedor, setNewDocNumeroFornecedor] = React.useState('');
@@ -1594,8 +1636,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     let result = documents;
 
     // 1. Filtrar por status de validade
-    if (filterStatus !== 'all') {
+    //    (não vale na aba Normas, onde o controle nem aparece — senão um recorte
+    //    deixado em outra aba esvaziaria a lista sem nada na tela que o explicasse)
+    if (filterStatus !== 'all' && activeTab !== 'normas') {
       result = result.filter(doc => doc.status === filterStatus);
+    }
+
+    // 1b. Aba Normas: situação e órgão (os outros documentos não têm esses campos)
+    if (activeTab === 'normas') {
+      if (filterNormaSituacao) result = result.filter(doc => doc.norma_situacao === filterNormaSituacao);
+      if (filterNormaOrgao) result = result.filter(doc => (doc.norma_orgao || '').trim() === filterNormaOrgao);
     }
 
     // 2. Filtrar por tags selecionadas
@@ -1644,13 +1694,24 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           (doc.nome?.toLowerCase() || '').includes(query) ||
           (doc.descricao?.toLowerCase() || '').includes(query) ||
           (doc.tipo_documento?.toLowerCase() || '').includes(query) ||
+          (doc.norma_codigo?.toLowerCase() || '').includes(query) ||
+          (doc.norma_substituida_por?.toLowerCase() || '').includes(query) ||
           (doc.tags && Array.isArray(doc.tags) && doc.tags.some(tag => tag?.toLowerCase().includes(query)))
         )
       );
     }
 
     return result;
-  }, [documents, searchQuery, filterStatus, selectedTags, selectedDisciplineCode, folders]);
+  }, [documents, searchQuery, filterStatus, selectedTags, selectedDisciplineCode, folders, activeTab, filterNormaSituacao, filterNormaOrgao]);
+
+  // Opções do filtro "Órgão" — os valores que as normas carregadas de fato têm
+  // (o campo é texto livre; a lista sugerida no formulário não é fechada).
+  const normaOrgaoFilterOptions = React.useMemo(() => {
+    const orgaos = Array.from(new Set(
+      documents.map(d => (d.norma_orgao || '').trim()).filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    return [{ value: '', label: 'Todos' }, ...orgaos.map(o => ({ value: o, label: o }))];
+  }, [documents]);
 
   const activeFolder = React.useMemo(() => folders.find(f => f.id === currentFolderId), [folders, currentFolderId]);
   
@@ -1745,10 +1806,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   const allColumnConfigsForConfig: ColumnConfig[] = React.useMemo(
     () => [
-      ...COLUMNS.filter(c => c.key !== 'actions'),
+      // Sem as colunas que a aba ativa não mostra: marcá-las no seletor não teria efeito.
+      ...COLUMNS.filter(c => c.key !== 'actions' && !hiddenColumnsForTab(activeTab).includes(c.key)),
       ...dynamicColumns.map(col => ({ key: col, label: getDynamicColumnLabel(col), sortable: false })),
     ],
-    [dynamicColumns]
+    [dynamicColumns, activeTab]
   );
 
   const mergedVisibleColumnsForConfig = React.useMemo(
@@ -1883,6 +1945,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  // Aba Normas: o nome acompanha a referência da norma (órgão + código + edição)
+  // enquanto o usuário não digitar um nome próprio — o app já tem a informação.
+  React.useEffect(() => {
+    if (newDocCategory !== 'normas' || newDocNameManual) return;
+    const referencia = formatarReferenciaNorma(newDocNormaOrgao, newDocNormaCodigo, newDocNormaEdicao);
+    if (referencia) setNewDocName(referencia);
+  }, [newDocCategory, newDocNameManual, newDocNormaOrgao, newDocNormaCodigo, newDocNormaEdicao]);
+
   const executeUpload = async (docTitle: string, fileToUpload: File) => {
     const targetOrgId = activeOrganizationId || newDocOrgId;
     if (!targetOrgId) {
@@ -1923,6 +1993,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           numero_documento_fornecedor: newDocNumeroFornecedor || undefined,
           revisao: newDocRevisao || undefined,
           categoria: newDocCategory,
+          ...(newDocCategory === 'normas' ? {
+            norma_orgao: newDocNormaOrgao.trim() || undefined,
+            norma_codigo: newDocNormaCodigo.trim() || undefined,
+            norma_edicao: newDocNormaEdicao.trim() || undefined,
+            norma_situacao: newDocNormaSituacao,
+            norma_substituida_por: newDocNormaSituacao === 'substituida' ? (newDocNormaSubstituidaPor.trim() || undefined) : undefined,
+          } : {}),
           tipo_documento: newDocType,
           discipline_code: newDocDiscipline || undefined,
           status: 'ativo',
@@ -1944,6 +2021,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
       // Reset form
       setNewDocName('');
+      setNewDocNameManual(false);
+      setNewDocNormaOrgao('');
+      setNewDocNormaCodigo('');
+      setNewDocNormaEdicao('');
+      setNewDocNormaSituacao(NORMA_SITUACAO_PADRAO);
+      setNewDocNormaSubstituidaPor('');
       setNewDocDesc('');
       setNewDocAutor('');
       setNewDocNumeroFornecedor('');
@@ -2210,6 +2293,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setEditDocAutor(doc.autor || '');
     setEditDocNumeroFornecedor(doc.numero_documento_fornecedor || '');
     setEditDocRevisao(doc.revisao || '');
+    setEditDocNormaOrgao(doc.norma_orgao || '');
+    setEditDocNormaCodigo(doc.norma_codigo || '');
+    setEditDocNormaEdicao(doc.norma_edicao || '');
+    setEditDocNormaSituacao(doc.norma_situacao || NORMA_SITUACAO_PADRAO);
+    setEditDocNormaSubstituidaPor(doc.norma_substituida_por || '');
     // supplier_id vinculado → seletor mostra o fornecedor. Sem supplier_id mas com texto
     // livre em autor (documentos criados antes deste campo existir) → cai em "Outro",
     // preservando o texto já digitado.
@@ -2278,6 +2366,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         autor: editDocAutor || null,
         numero_documento_fornecedor: editDocNumeroFornecedor || null,
         revisao: editDocRevisao || null,
+        ...(editingDoc.categoria === 'normas' ? {
+          norma_orgao: editDocNormaOrgao.trim() || null,
+          norma_codigo: editDocNormaCodigo.trim() || null,
+          norma_edicao: editDocNormaEdicao.trim() || null,
+          norma_situacao: editDocNormaSituacao,
+          norma_substituida_por: editDocNormaSituacao === 'substituida' ? (editDocNormaSubstituidaPor.trim() || null) : null,
+        } : {}),
         supplier_id: editDocSupplierId || null,
         data_emissao: editDocEmissao || null,
         data_validade: editDocValidade || null,
@@ -2356,6 +2451,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Sugestões do campo "Órgão" (aba Normas) — um só datalist para criação e edição. */}
+      <datalist id="ged-normas-orgaos">
+        {NORMA_ORGAOS_SUGERIDOS.map(o => <option key={o.value} value={o.value} />)}
+      </datalist>
       {/* A lista de documentos e todos os seus modais dão lugar à tela de Ajustes —
           troca de conteúdo no mesmo espaço, sem overlay. */}
       {!showSettings && (
@@ -2667,6 +2766,27 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </div>
             )}
 
+            {/* Aba Normas — situação e órgão são escolha única (§5.4 do guia). */}
+            {activeTab === 'normas' && (
+              <>
+                <FilterPopover<string>
+                  label="Situação"
+                  value={filterNormaSituacao}
+                  onChange={setFilterNormaSituacao}
+                  options={[
+                    { value: '', label: 'Todas' },
+                    ...Object.entries(NORMA_SITUACOES).map(([value, s]) => ({ value, label: s.label })),
+                  ]}
+                />
+                <FilterPopover<string>
+                  label="Órgão"
+                  value={filterNormaOrgao}
+                  onChange={setFilterNormaOrgao}
+                  options={normaOrgaoFilterOptions}
+                />
+              </>
+            )}
+
             <button
               onClick={() => { fetchDocs(); fetchFolders(); }}
               disabled={loading}
@@ -2686,7 +2806,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             >
               <Filter className="w-4 h-4" />
               <span>Filtros</span>
-              {(filterStatus !== 'all' || selectedTags.length > 0) && (
+              {((filterStatus !== 'all' && activeTab !== 'normas') || selectedTags.length > 0) && (
                 <span className="w-2 h-2 bg-red-500 rounded-full animate-ping" />
               )}
             </button>
@@ -2719,7 +2839,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           {showAdvancedFilters && (
             <div className="p-5 bg-white border border-slate-200/80 rounded-[10px] space-y-4 animate-in slide-in-from-top duration-200">
               
-              {/* Filtro por Status da Validade */}
+              {/* Filtro por Status da Validade — não na aba Normas: norma não vence por
+                  data, o recorte dela é a Situação (filtro rápido na barra acima). */}
+              {activeTab !== 'normas' && (
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-500">Status de validade</label>
                 <div className="flex flex-wrap gap-2">
@@ -2749,6 +2871,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   ))}
                 </div>
               </div>
+              )}
+
+              {activeTab === 'normas' && allUniqueTags.length === 0 && (
+                <p className="text-sm text-slate-500">Nenhuma tag nas normas desta lista. Situação e órgão ficam na barra acima.</p>
+              )}
 
               {/* Filtro por Tags Rápidas */}
               {allUniqueTags.length > 0 && (
@@ -2944,6 +3071,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               allSelectableSelected={allDocsSelected}
               onToggleAll={handleToggleAllDocs}
               showValidade={activeTab !== 'engenharia'}
+              hiddenColumns={hiddenColumnsForTab(activeTab)}
               extensionIcons={extensionIcons}
               resolveProjectName={resolveGedProjectName}
               resolveDisciplineLabel={resolveDisciplineLabel}
@@ -3105,6 +3233,68 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 </div>
               </div>
 
+              {/* Dados da norma (aba Normas) — o Nome abaixo acompanha a referência montada */}
+              {newDocCategory === 'normas' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Órgão</label>
+                    <input
+                      type="text"
+                      list="ged-normas-orgaos"
+                      placeholder="ABNT, ISO, MTE (NR)..."
+                      value={newDocNormaOrgao}
+                      onChange={(e) => setNewDocNormaOrgao(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Código</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: NBR 15575-1"
+                      value={newDocNormaCodigo}
+                      onChange={(e) => setNewDocNormaCodigo(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Edição / ano</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 2024"
+                      value={newDocNormaEdicao}
+                      onChange={(e) => setNewDocNormaEdicao(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Situação</label>
+                    <select
+                      value={newDocNormaSituacao}
+                      onChange={(e) => setNewDocNormaSituacao(e.target.value as OpuraNormaSituacao)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    >
+                      {Object.entries(NORMA_SITUACOES).map(([value, s]) => (
+                        <option key={value} value={value}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {newDocNormaSituacao === 'substituida' && (
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-xs font-semibold text-slate-500">Substituída por</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: ABNT NBR 15575-1:2024"
+                        value={newDocNormaSubstituidaPor}
+                        onChange={(e) => setNewDocNormaSubstituidaPor(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Linha 1: Nome, Tipo de Doc e Disciplina */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
@@ -3114,7 +3304,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     required
                     placeholder="Nome simplificado"
                     value={newDocName}
-                    onChange={(e) => setNewDocName(e.target.value)}
+                    onChange={(e) => { setNewDocName(e.target.value); setNewDocNameManual(e.target.value !== ''); }}
                     className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                 </div>
@@ -3167,6 +3357,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 />
               </div>
                 
+                {/* Autor do projeto, Nº do fornecedor, Revisão e vencimento não se aplicam
+                    a norma: quem a emite é o Órgão, a versão é a Edição e ela não vence por data. */}
+                {newDocCategory !== 'normas' && (
                 <div className="space-y-1.5 mt-4">
                   <label className="text-xs font-semibold text-slate-500">Autor do Projeto</label>
                   <select
@@ -3205,8 +3398,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     />
                   )}
                 </div>
+                )}
 
               {/* Nº do Documento (Fornecedor) e Revisão — texto livre, controle manual */}
+              {newDocCategory !== 'normas' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">Nº do Documento (Fornecedor)</label>
@@ -3229,11 +3424,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   />
                 </div>
               </div>
+              )}
 
               {/* Emissão, Validade e Dias Alerta */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">Data de Emissão</label>
+                  <label className="text-xs font-semibold text-slate-500">{newDocCategory === 'normas' ? 'Data de Publicação' : 'Data de Emissão'}</label>
                   <input
                     type="date"
                     value={newDocEmissao}
@@ -3241,6 +3437,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                 </div>
+                {newDocCategory !== 'normas' && (<>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">Data de Vencimento</label>
                   <input
@@ -3264,6 +3461,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <option value={7}>7 dias antes</option>
                   </select>
                 </div>
+                </>)}
               </div>
 
               {/* Tags e Vínculos adicionais */}
@@ -4397,6 +4595,71 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 );
               })()}
 
+              {/* Dados da norma (aba Normas). O nome do documento não muda sozinho na
+                  edição — ele já existe e pode ter sido escolhido à mão. */}
+              {editingDoc.categoria === 'normas' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Órgão</label>
+                    <input
+                      type="text"
+                      list="ged-normas-orgaos"
+                      placeholder="ABNT, ISO, MTE (NR)..."
+                      value={editDocNormaOrgao}
+                      onChange={(e) => setEditDocNormaOrgao(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Código</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: NBR 15575-1"
+                      value={editDocNormaCodigo}
+                      onChange={(e) => setEditDocNormaCodigo(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Edição / ano</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 2024"
+                      value={editDocNormaEdicao}
+                      onChange={(e) => setEditDocNormaEdicao(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Situação</label>
+                    <select
+                      value={editDocNormaSituacao}
+                      onChange={(e) => setEditDocNormaSituacao(e.target.value as OpuraNormaSituacao)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    >
+                      {Object.entries(NORMA_SITUACOES).map(([value, s]) => (
+                        <option key={value} value={value}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {editDocNormaSituacao === 'substituida' && (
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-xs font-semibold text-slate-500">Substituída por</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: ABNT NBR 15575-1:2024"
+                        value={editDocNormaSubstituidaPor}
+                        onChange={(e) => setEditDocNormaSubstituidaPor(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Autor do projeto, Nº do fornecedor e Revisão não se aplicam a norma
+                  (quem a emite é o Órgão; a versão é a Edição). */}
+              {editingDoc.categoria !== 'normas' && (<>
                 <div className="space-y-1.5 mt-4">
                   <label className="text-xs font-semibold text-slate-500">Autor do Projeto</label>
                   <select
@@ -4459,11 +4722,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   />
                 </div>
               </div>
+              </>)}
 
-              {/* Datas e Alertas em Grid */}
-                <div className={`grid ${editingDoc.categoria === 'engenharia' ? 'grid-cols-1 sm:grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'} gap-4`}>
+              {/* Datas e Alertas em Grid — Projetos e Normas não vencem por data */}
+                <div className={`grid ${editingDoc.categoria === 'engenharia' || editingDoc.categoria === 'normas' ? 'grid-cols-1 sm:grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'} gap-4`}>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500">Data de Emissão</label>
+                    <label className="text-xs font-semibold text-slate-500">{editingDoc.categoria === 'normas' ? 'Data de Publicação' : 'Data de Emissão'}</label>
                     <input
                       type="date"
                       value={editDocEmissao}
@@ -4472,7 +4736,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     />
                   </div>
 
-                  {editingDoc.categoria !== 'engenharia' && (
+                  {editingDoc.categoria !== 'engenharia' && editingDoc.categoria !== 'normas' && (
                     <>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-slate-500">Data de Vencimento</label>

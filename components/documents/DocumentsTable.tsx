@@ -2,6 +2,7 @@ import React from 'react';
 import { FileText, FileSpreadsheet, Image as ImageIcon, Briefcase, Lock } from 'lucide-react';
 import { SortableHeader, useTableColumns, useResizableColumns } from '../ui/TableUtils';
 import { OpuraDocument } from '../../types';
+import { NORMA_SITUACOES } from '../../utils/gedNormas';
 
 /** Subconjunto do retorno de `useTableColumns` que a tabela precisa — cada tela
  * cria seu próprio hook (chave de persistência própria) e repassa aqui.
@@ -97,6 +98,11 @@ export function sortDocumentsForTable(
       case 'data_emissao': return instante(doc.data_emissao);
       case 'data_validade': return instante(doc.data_validade);
       case 'status': return texto(ctx.resolveStatus ? ctx.resolveStatus(doc).label : getDocumentStatusPresentation(doc.status).statusLabel);
+      case 'norma_orgao': return texto(doc.norma_orgao);
+      case 'norma_codigo': return texto(doc.norma_codigo);
+      case 'norma_edicao': return texto(doc.norma_edicao);
+      case 'norma_situacao': return texto(doc.norma_situacao ? NORMA_SITUACOES[doc.norma_situacao]?.label : null);
+      case 'norma_substituida_por': return texto(doc.norma_substituida_por);
       default: {
         const v = (doc as unknown as Record<string, unknown>)[sortColumn];
         return v == null ? null : texto(String(v));
@@ -125,6 +131,9 @@ export interface DocumentsTableProps {
   tableColumns: TableColumnsState;
   /** GED oculta "Validade" na aba Engenharia; o Portal do Parceiro pode sempre exibir. */
   showValidade?: boolean;
+  /** Colunas que esta visão não mostra, mesmo marcadas no seletor de colunas — o GED
+   * esconde as colunas de norma fora da aba Normas, e Validade/Revisão dentro dela. */
+  hiddenColumns?: string[];
   /** Resolve o texto da coluna "Obra Vinculada". Sem obras (ex: portal do parceiro) → retorna '-'. */
   resolveProjectName?: (doc: OpuraDocument) => string;
   /** Resolve o texto da coluna "Disciplina". O GED traduz `discipline_code` pelo
@@ -192,6 +201,12 @@ const DOCUMENTS_TABLE_COLUMN_HEADERS: Record<string, { label: string; sortable?:
   data_emissao: { label: 'Emissão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   data_validade: { label: 'Validade', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  // Aba Normas do GED — nas demais abas a tela as passa em `hiddenColumns`.
+  norma_orgao: { label: 'Órgão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  norma_codigo: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  norma_edicao: { label: 'Edição', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  norma_situacao: { label: 'Situação', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  norma_substituida_por: { label: 'Substituída por', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
 };
 
 /** className completo do `<td>` por coluna fixa — mantém as variações originais
@@ -209,6 +224,11 @@ const DOCUMENTS_TABLE_CELL_CLASS: Record<string, string> = {
   data_emissao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
   data_validade: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
   status: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal',
+  norma_orgao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
+  norma_codigo: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 whitespace-nowrap',
+  norma_edicao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
+  norma_situacao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal',
+  norma_substituida_por: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap truncate',
 };
 
 /** Conteúdo de cada <td> de coluna fixa — extraído para função pura para que o
@@ -272,6 +292,18 @@ function renderDocumentCell(
       const { statusColor, statusLabel } = getDocumentStatusPresentation(doc.status);
       return <span className={statusColor}>{statusLabel}</span>;
     }
+    case 'norma_orgao':
+      return doc.norma_orgao || '-';
+    case 'norma_codigo':
+      return doc.norma_codigo || '-';
+    case 'norma_edicao':
+      return doc.norma_edicao || '-';
+    case 'norma_situacao': {
+      const situacao = doc.norma_situacao ? NORMA_SITUACOES[doc.norma_situacao] : undefined;
+      return situacao ? <span className={situacao.className}>{situacao.label}</span> : '-';
+    }
+    case 'norma_substituida_por':
+      return doc.norma_substituida_por || '-';
     default:
       return null;
   }
@@ -287,6 +319,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   documents,
   tableColumns,
   showValidade = true,
+  hiddenColumns,
   resolveProjectName,
   resolveDisciplineLabel,
   extensionIcons,
@@ -311,7 +344,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   // Colunas "fixas" (declaradas no ColumnConfig de cada tela) na ordem escolhida pelo
   // usuário (drag-and-drop) — exclui 'actions' (sempre fixa ao final) e 'data_validade'
   // quando a tela pediu para escondê-la (GED oculta na aba Engenharia).
-  const coreOrderedKeys = orderedVisibleColumns.filter(k => k !== 'actions' && (k !== 'data_validade' || showValidade));
+  const coreOrderedKeys = orderedVisibleColumns.filter(k => k !== 'actions' && (k !== 'data_validade' || showValidade) && !hiddenColumns?.includes(k));
   // As colunas dinâmicas (máscara de pasta) não fazem parte de `columnOrder` — mudam por
   // pasta, não são um ColumnConfig fixo, então não podem ser arrastadas. Ficam ancoradas
   // logo após 'nome'/'descricao', na mesma posição visual que já tinham antes do drag.
@@ -396,7 +429,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                 const rowSelectable = !selectable || !isRowSelectable || isRowSelectable(doc);
                 const renderCoreTd = (key: string) => (
                   <td key={key} className={DOCUMENTS_TABLE_CELL_CLASS[key] ?? 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600'}
-                    title={key === 'descricao' ? (doc.descricao || undefined) : undefined}>
+                    title={key === 'descricao' ? (doc.descricao || undefined) : key === 'norma_substituida_por' ? (doc.norma_substituida_por || undefined) : undefined}>
                     {renderDocumentCell(key, doc, { resolveProjectName, resolveDisciplineLabel, extensionIcons, resolveStatus, renderNameDetail })}
                   </td>
                 );

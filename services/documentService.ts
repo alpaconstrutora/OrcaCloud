@@ -723,6 +723,12 @@ export const documentService = {
         numero_documento_fornecedor: docData.numero_documento_fornecedor || null,
         revisao: docData.revisao || null,
         discipline_code: docData.discipline_code || null,
+        // Aba Normas: o insert lista as colunas uma a uma, então campo não listado aqui se perde.
+        norma_orgao: docData.norma_orgao || null,
+        norma_codigo: docData.norma_codigo || null,
+        norma_edicao: docData.norma_edicao || null,
+        norma_situacao: docData.norma_situacao || null,
+        norma_substituida_por: docData.norma_substituida_por || null,
         status: docData.status || 'ativo',
         data_emissao: docData.data_emissao || null,
         data_validade: docData.data_validade || null,

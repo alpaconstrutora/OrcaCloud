@@ -261,8 +261,9 @@ const CATEGORIA_LABELS: Record<string, string> = {
   compliance: 'Licenças & Alvarás',
   financeiro: 'Financeiro',
   comercial: 'Comercial',
+  normas: 'Normas',
 };
-const CATEGORIA_ORDER = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial'];
+const CATEGORIA_ORDER = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial', 'normas'];
 
 // "AbortError: signal is aborted without reason" é o timeout de 20 s de
 // lib/supabase.ts estourando — quer dizer "nada respondeu a tempo", não "a

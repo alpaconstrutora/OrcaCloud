@@ -8,8 +8,11 @@ export const CATEGORIA_GED_LABEL: Record<OpuraDocumentCategoria, string> = {
     compliance: 'Licenças & Alvarás',
     financeiro: 'Financeiro',
     comercial: 'Comercial',
+    normas: 'Normas',
 };
 
+// Onde um ofício pode ser arquivado. Sem 'normas': a aba Normas é a biblioteca de
+// normas técnicas (ABNT e similares), não lugar de correspondência.
 export const CATEGORIAS_GED: OpuraDocumentCategoria[] = ['juridico', 'engenharia', 'compliance', 'financeiro', 'comercial'];
 
 /** §8 — texto colorido simples, sem pílula. */

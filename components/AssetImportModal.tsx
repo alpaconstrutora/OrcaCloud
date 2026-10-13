@@ -5,6 +5,9 @@ import { X, Upload, FileSpreadsheet, Loader2, AlertCircle, CheckCircle, Download
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { assetService } from '../services/assetService';
+import { brandModelService } from '../services/brandModelService';
+import { itemTypeDaCategoria } from '../types/brandModel';
+import { chaveBusca } from '../utils/catalogoNome';
 import { useStore } from '../store/useStore';
 import { OpuraAsset, OpuraAssetInsert, AssetCategory } from '../types';
 import Button from './ui/Button';
@@ -424,6 +427,25 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
     setError(null);
 
     try {
+      // Marca/modelo da planilha entram no catálogo (Configurações › Marcas e
+      // Modelos) da org de destino: uma resolução por PAR distinto, reaproveitando
+      // o que já existe (ignorando caixa e acento). Falha num par não derruba a
+      // importação — o ativo vai com o texto e o banco vincula se a marca existir.
+      const vinculos = new Map<string, Awaited<ReturnType<typeof brandModelService.resolverMarcaModelo>>>();
+      for (const r of validRows) {
+        const chave = `${chaveBusca(r.brand)}|${chaveBusca(r.model)}`;
+        if (!chaveBusca(r.brand) || vinculos.has(chave)) continue;
+        try {
+          vinculos.set(chave, await brandModelService.resolverMarcaModelo(
+            targetOrgId,
+            { brandId: null, brandName: r.brand ?? '', modelId: null, modelName: r.model ?? '' },
+            itemTypeDaCategoria(r.category),
+          ));
+        } catch (errBrand) {
+          console.error(`[AssetImportModal] Erro ao cadastrar marca/modelo "${r.brand} ${r.model ?? ''}":`, errBrand);
+        }
+      }
+
       const inserts: OpuraAssetInsert[] = validRows.map((r) => ({
         organization_id: targetOrgId,
         code: r.code,
@@ -432,6 +454,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
         subcategory: r.subcategory || undefined,
         brand: r.brand || undefined,
         model: r.model || undefined,
+        ...(vinculos.get(`${chaveBusca(r.brand)}|${chaveBusca(r.model)}`) ?? {}),
         serial_number: r.serial_number || undefined,
         purchase_date: r.purchase_date || undefined,
         purchase_value: r.purchase_value,
@@ -441,16 +464,6 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
         tracking_code: r.code,
         notes: r.notes || undefined
       }));
-
-      // Cadastra novas marcas de forma automática para os ativos importados
-      const uniqueBrands = Array.from(new Set(validRows.map((r) => r.brand?.trim()).filter(Boolean)));
-      for (const brandName of uniqueBrands) {
-        try {
-          await assetService.createBrand(targetOrgId, brandName!);
-        } catch (errBrand) {
-          console.error(`[AssetImportModal] Erro ao cadastrar marca autodetectada "${brandName}":`, errBrand);
-        }
-      }
 
       await assetService.createMany(inserts);
 

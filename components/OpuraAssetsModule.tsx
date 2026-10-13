@@ -28,7 +28,6 @@ import {
   FileSpreadsheet,
   Copy,
   Shield,
-  PenTool,
   TrendingDown,
   LayoutGrid,
   List,
@@ -57,9 +56,12 @@ import {
   AssetDocumentType,
   AssetDocumentStatus,
   OpuraAssetDocument,
-  OpuraAssetDepreciationRateio,
-  OpuraAssetBrand
+  OpuraAssetDepreciationRateio
 } from '../types';
+import { BrandModelPicker } from './catalog/BrandModelPicker';
+import { brandModelService } from '../services/brandModelService';
+import { itemTypeDaCategoria, type BrandModelValue, type ProductItemType, type ProductModel } from '../types/brandModel';
+import { aplicarPadroesDoModelo, origemInicial, type OrigemCampo } from '../utils/catalogoAutopreencher';
 
 interface OpuraAssetsModuleProps {
   activeOrganizationId: string | null;
@@ -412,6 +414,10 @@ function formularioAtivoVazio() {
     subcategory: '',
     brand: '',
     model: '',
+    // Vínculo com Configurações › Marcas e Modelos. O texto acima é o espelho
+    // (o banco reescreve a partir do id); id null = digitado, cadastra ao salvar.
+    brand_id: null as string | null,
+    model_id: null as string | null,
     serial_number: '',
     purchase_date: new Date().toISOString().split('T')[0],
     purchase_value: 0,
@@ -487,12 +493,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const [assetImageUploading, setAssetImageUploading] = React.useState(false);
   const imagensOrfas = React.useRef<string[]>([]);
 
-  // Estados adicionais de marcas e colaboradores (Fase 7)
-  const [brands, setBrands] = React.useState<OpuraAssetBrand[]>([]);
-  const [isBrandManagerOpen, setIsBrandManagerOpen] = React.useState(false);
-  const [newBrandName, setNewBrandName] = React.useState('');
-  const [editingBrandId, setEditingBrandId] = React.useState<string | null>(null);
-  const [editingBrandName, setEditingBrandName] = React.useState('');
+  // Colaboradores (Fase 7). As marcas saíram daqui em 13/10/2026: o catálogo é
+  // Configurações › Marcas e Modelos, e o campo do formulário (BrandModelPicker)
+  // lê e cadastra nele direto.
   const [employees, setEmployees] = React.useState<any[]>([]);
 
   // Filtros de Rateio Contábil
@@ -507,10 +510,22 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // vez de instrumentar cada `onChange`.
   const [assetFormSnapshot, setAssetFormSnapshot] = React.useState('');
   const assetFormDirty = isNewAssetModalOpen && JSON.stringify(assetForm) !== assetFormSnapshot;
+  // Marca/modelo moram no catálogo da organização DO ATIVO (REGRA #5): na
+  // edição, a do próprio ativo; no cadastro, a do topo ou a escolhida no campo
+  // "Organização Proprietária". null = ainda não escolhida (campo desligado).
+  const orgDoFormularioAtivo: string | null = assetForm.organization_id
+    || (isWriteDisabled ? null : activeOrganizationId);
   // Modo "Ver" (o R do CRUD): o MESMO drawer, com os campos travados e sem salvar.
   // Não é uma segunda tela — duas telas quase iguais divergem na primeira mudança
   // de campo, e aí uma delas passa a mentir sobre o cadastro.
   const [assetFormReadOnly, setAssetFormReadOnly] = React.useState(false);
+  // Quem pôs o valor em Categoria e Vida útil (utils/catalogoAutopreencher): o
+  // modelo escolhido preenche esses dois campos, sem nunca trocar o que a
+  // pessoa digitou — "60 meses" de fábrica e "60 meses" digitado são diferentes.
+  // Fora do `assetForm` de propósito: origem não é dado do ativo, não deixa o
+  // formulário "sujo".
+  const [origemCampos, setOrigemCampos] = React.useState<{ category: OrigemCampo; useful_life_months: OrigemCampo }>({ category: 'padrao', useful_life_months: 'padrao' });
+  const [preenchidoPeloModelo, setPreenchidoPeloModelo] = React.useState<string | null>(null);
 
   const [moveForm, setMoveForm] = React.useState({
     destination_project_id: '',
@@ -577,19 +592,6 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const rateioTableColumns = useTableColumns(RATEIO_COLUMNS, 'opuraRateioColumns');
   const rateioCols = useResizableColumns(RATEIO_COL_WIDTHS, 'opuraRateioColWidths');
 
-  // Carregar marcas de forma memorizada
-  const loadBrands = React.useCallback(async () => {
-    try {
-      const orgIdParam = (!activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS')
-        ? undefined
-        : activeOrganizationId;
-      const loadedBrands = await assetService.listBrands(orgIdParam);
-      setBrands(loadedBrands);
-    } catch (err) {
-      console.error('[OpuraAssetsModule] Erro ao carregar marcas:', err);
-    }
-  }, [activeOrganizationId]);
-
   // Carregar dados
   const loadData = React.useCallback(async () => {
     setLoading(true);
@@ -615,10 +617,6 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         console.error('[OpuraAssetsModule] Erro ao carregar centros de custo:', err);
       }
 
-      // Carregar marcas
-      const loadedBrands = await assetService.listBrands(orgIdParam);
-      setBrands(loadedBrands);
-
       // Carregar colaboradores ativos do RH
       const loadedEmps = await laborService.listEmployees(orgIdParam);
       setEmployees(loadedEmps.filter((e: any) => e.status === 'ATIVO'));
@@ -640,54 +638,6 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   React.useEffect(() => {
     loadData();
   }, [loadData]);
-
-  // Handlers para Gestão de Marcas (Fase 7)
-  const handleCreateBrand = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeOrganizationId || !newBrandName.trim()) return;
-    setActionLoading(true);
-    try {
-      const created = await assetService.createBrand(activeOrganizationId, newBrandName);
-      setNewBrandName('');
-      await loadBrands();
-      setAssetForm(prev => ({ ...prev, brand: created.name }));
-    } catch (err: any) {
-      alert(err.message || 'Erro ao cadastrar marca');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleUpdateBrand = async (brandId: string) => {
-    if (!editingBrandName.trim()) return;
-    setActionLoading(true);
-    try {
-      const updated = await assetService.updateBrand(brandId, editingBrandName);
-      setEditingBrandId(null);
-      setEditingBrandName('');
-      await loadBrands();
-      if (assetForm.brand === brands.find(b => b.id === brandId)?.name) {
-        setAssetForm(prev => ({ ...prev, brand: updated.name }));
-      }
-    } catch (err: any) {
-      alert(err.message || 'Erro ao atualizar marca');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleDeleteBrand = async (brandId: string) => {
-    if (!await confirm({ title: 'Excluir marca?', message: 'Os ativos associados continuarão com o nome salvo, mas a marca não constará mais na lista.', variant: 'danger', confirmLabel: 'Excluir' })) return;
-    setActionLoading(true);
-    try {
-      await assetService.deleteBrand(brandId);
-      await loadBrands();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao excluir marca');
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   // Recarregar só os documentos (coluna "Documentos") — depois de anexar um documento
   // não há motivo para refazer as 6 consultas do loadData (§22 do guia de UI).
@@ -740,14 +690,21 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     }
     setActionLoading(true);
     try {
+      // Marca/modelo digitados e não cadastrados viram cadastro aqui, na org DO
+      // ATIVO (nunca bloqueia o salvar). O banco espelha o texto a partir do id.
+      const marcaModelo = await brandModelService.resolverMarcaModelo(
+        orgDoFormularioAtivo ?? targetOrgId,
+        { brandId: assetForm.brand_id, brandName: assetForm.brand, modelId: assetForm.model_id, modelName: assetForm.model },
+        itemTypeDaCategoria(assetForm.category),
+      );
       if (editingAssetId) {
         const updated = await assetService.update(editingAssetId, {
           name: assetForm.name,
           code: assetForm.code || undefined,
           category: assetForm.category,
           subcategory: assetForm.subcategory || undefined,
-          brand: assetForm.brand || undefined,
-          model: assetForm.model || undefined,
+          // null (e não undefined) para LIMPAR: undefined é campo ausente no PATCH.
+          ...marcaModelo,
           serial_number: assetForm.serial_number || undefined,
           purchase_date: assetForm.purchase_date || undefined,
           purchase_value: Number(assetForm.purchase_value) || 0,
@@ -770,8 +727,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           name: assetForm.name,
           category: assetForm.category,
           subcategory: assetForm.subcategory || undefined,
-          brand: assetForm.brand || undefined,
-          model: assetForm.model || undefined,
+          ...marcaModelo,
           serial_number: assetForm.serial_number || undefined,
           purchase_date: assetForm.purchase_date || undefined,
           purchase_value: Number(assetForm.purchase_value) || 0,
@@ -1273,9 +1229,15 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // e o formulário veio com o ativo anterior — e salvou por cima dele".
   const abrirFormularioAtivo = (
     form: ReturnType<typeof formularioAtivoVazio>,
-    modo: { editandoId?: string | null; duplicando?: boolean; somenteLeitura?: boolean } = {},
+    modo: { editandoId?: string | null; duplicando?: boolean; somenteLeitura?: boolean; ativo?: OpuraAsset } = {},
   ) => {
     imagensOrfas.current = [];
+    // Ativo novo: Categoria/Vida útil são valores de fábrica (o modelo pode trocar).
+    // Editar/duplicar: o que veio do banco é da pessoa — só vida útil NULA aceita o modelo.
+    setOrigemCampos(modo.ativo
+      ? { category: 'manual', useful_life_months: origemInicial(modo.ativo.useful_life_months, false) }
+      : { category: 'padrao', useful_life_months: 'padrao' });
+    setPreenchidoPeloModelo(null);
     setAssetForm(form);
     setAssetFormSnapshot(JSON.stringify(form));
     setEditingAssetId(modo.editandoId ?? null);
@@ -1310,6 +1272,31 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   const abrirCadastroAtivo = () => abrirFormularioAtivo(formularioAtivoVazio());
 
+  // Tipos de item que fazem sentido para um bem patrimonial (material é estoque).
+  const TIPOS_DE_ITEM_DO_ATIVO: ProductItemType[] = ['equipamento', 'componente', 'ferramenta', 'veiculo', 'tecnologia', 'mobiliario', 'outro'];
+
+  const alterarMarcaModeloDoAtivo = (v: BrandModelValue, modelo?: ProductModel | null) => {
+    if (!modelo) {
+      setAssetForm(prev => ({ ...prev, brand: v.brandName, model: v.modelName, brand_id: v.brandId, model_id: v.modelId }));
+      return;
+    }
+    const r = aplicarPadroesDoModelo({
+      category: { valor: assetForm.category, origem: origemCampos.category },
+      useful_life_months: { valor: assetForm.useful_life_months, origem: origemCampos.useful_life_months },
+    }, modelo);
+    setAssetForm(prev => ({
+      ...prev, brand: v.brandName, model: v.modelName, brand_id: v.brandId, model_id: v.modelId,
+      category: r.category.valor as AssetCategory,
+      useful_life_months: r.useful_life_months.valor ?? prev.useful_life_months,
+    }));
+    setOrigemCampos({ category: r.category.origem, useful_life_months: r.useful_life_months.origem });
+    const preenchidos = [
+      r.category.origem === 'auto' && modelo.default_asset_category ? 'categoria' : null,
+      r.useful_life_months.origem === 'auto' && modelo.default_useful_life_months != null ? 'vida útil' : null,
+    ].filter(Boolean);
+    setPreenchidoPeloModelo(preenchidos.length ? `${preenchidos.join(' e ')} preenchida${preenchidos.length > 1 ? 's' : ''} pelo modelo ${modelo.name}` : null);
+  };
+
   // Ver, Editar e Duplicar leem os MESMOS campos do ativo — só o modo muda. Com o
   // mapeamento repetido, um campo novo entraria em um dos três e faltaria nos outros.
   const formularioDoAtivo = (asset: OpuraAsset) => ({
@@ -1320,6 +1307,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     subcategory: asset.subcategory || '',
     brand: asset.brand || '',
     model: asset.model || '',
+    brand_id: asset.brand_id ?? null,
+    model_id: asset.model_id ?? null,
     serial_number: asset.serial_number || '',
     purchase_date: asset.purchase_date ? asset.purchase_date.split('T')[0] : new Date().toISOString().split('T')[0],
     purchase_value: asset.purchase_value || 0,
@@ -1333,14 +1322,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Ação dominante: clicar na linha abre o cadastro preenchido para edição.
   const abrirEdicaoAtivo = (asset: OpuraAsset) => {
     setSelectedAsset(asset);
-    abrirFormularioAtivo(formularioDoAtivo(asset), { editandoId: asset.id });
+    abrirFormularioAtivo(formularioDoAtivo(asset), { editandoId: asset.id, ativo: asset });
   };
 
   // "Ver" = o mesmo drawer travado. Guarda `editandoId` também: é dele que sai o
   // título certo e é o que o botão "Editar" do rodapé precisa para destravar.
   const abrirVisualizacaoAtivo = (asset: OpuraAsset) => {
     setSelectedAsset(asset);
-    abrirFormularioAtivo(formularioDoAtivo(asset), { editandoId: asset.id, somenteLeitura: true });
+    abrirFormularioAtivo(formularioDoAtivo(asset), { editandoId: asset.id, somenteLeitura: true, ativo: asset });
   };
 
   const abrirDuplicacaoAtivo = (asset: OpuraAsset) => {
@@ -1350,7 +1339,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       name: `${asset.name} (Cópia)`,
       code: '',            // Limpar para gerar novo
       serial_number: '',   // Limpar serial
-    }, { duplicando: true });
+    }, { duplicando: true, ativo: asset });
   };
 
   const abrirMovimentacaoAtivo = (asset: OpuraAsset) => {
@@ -2402,7 +2391,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <select
                     required
                     value={assetForm.organization_id}
-                    onChange={(e) => setAssetForm(prev => ({ ...prev, organization_id: e.target.value }))}
+                    // Catálogo de marcas é por organização: trocar a org desvincula
+                    // (o texto fica e será cadastrado na org nova ao salvar).
+                    onChange={(e) => setAssetForm(prev => ({ ...prev, organization_id: e.target.value, brand_id: null, model_id: null }))}
                     className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   >
                     <option value="">Selecione a Organização...</option>
@@ -2440,7 +2431,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <label className="text-xs font-semibold text-slate-500">Categoria</label>
                   <select
                     value={assetForm.category}
-                    onChange={(e) => setAssetForm(prev => ({ ...prev, category: e.target.value as AssetCategory }))}
+                    onChange={(e) => {
+                      setAssetForm(prev => ({ ...prev, category: e.target.value as AssetCategory }));
+                      setOrigemCampos(o => ({ ...o, category: 'manual' }));
+                    }}
                     className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   >
                     <option value="equipamento">Equipamento</option>
@@ -2463,38 +2457,20 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               </div>
 
               <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-slate-500">Marca</label>
-                    <button
-                      type="button"
-                      onClick={() => setIsBrandManagerOpen(true)}
-                      className="text-[9px] text-blue-500 hover:text-blue-700 font-bold uppercase tracking-wider transition-colors flex items-center gap-0.5"
-                      title="Gerenciar Marcas"
-                    >
-                      <PenTool className="w-3 h-3" />
-                      Gerenciar
-                    </button>
-                  </div>
-                  <select
-                    value={assetForm.brand}
-                    onChange={(e) => setAssetForm(prev => ({ ...prev, brand: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
-                  >
-                    <option value="">Selecione a Marca...</option>
-                    {brands.map(b => (
-                      <option key={b.id} value={b.name}>{b.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">Modelo</label>
-                  <input
-                    value={assetForm.model}
-                    onChange={(e) => setAssetForm(prev => ({ ...prev, model: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
-                  />
-                </div>
+                {/* Configurações › Marcas e Modelos: busca no catálogo da org do
+                    ativo, "Cadastrar" na hora; o modelo preenche categoria e vida
+                    útil sem trocar o que foi digitado. */}
+                <BrandModelPicker
+                  organizationId={orgDoFormularioAtivo}
+                  value={{ brandId: assetForm.brand_id, brandName: assetForm.brand, modelId: assetForm.model_id, modelName: assetForm.model }}
+                  onChange={alterarMarcaModeloDoAtivo}
+                  itemTypes={TIPOS_DE_ITEM_DO_ATIVO}
+                  defaultItemType={itemTypeDaCategoria(assetForm.category)}
+                  disabled={assetFormReadOnly}
+                  fieldClassName="space-y-1"
+                  inputClassName="w-full pl-4 pr-8 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold disabled:opacity-60"
+                  idPrefix="ativo"
+                />
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-500">Nº de Série</label>
                   <input
@@ -2504,6 +2480,11 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   />
                 </div>
               </div>
+              {preenchidoPeloModelo && (
+                <p className="text-xs text-blue-600">
+                  {preenchidoPeloModelo[0].toUpperCase() + preenchidoPeloModelo.slice(1)} — ajuste à mão se precisar.
+                </p>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -2532,7 +2513,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <input
                     type="number"
                     value={assetForm.useful_life_months || ''}
-                    onChange={(e) => setAssetForm(prev => ({ ...prev, useful_life_months: parseInt(e.target.value, 10) || 60 }))}
+                    onChange={(e) => {
+                      setAssetForm(prev => ({ ...prev, useful_life_months: parseInt(e.target.value, 10) || 60 }));
+                      setOrigemCampos(o => ({ ...o, useful_life_months: 'manual' }));
+                    }}
                     className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
@@ -2867,105 +2851,6 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         activeOrganizationId={activeOrganizationId}
         existingAssets={assets}
       />
-
-      {/* MODAL: GERENCIAR MARCAS (Fase 7) */}
-      {isBrandManagerOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xl w-full max-w-md relative animate-in zoom-in-95 duration-200 space-y-6">
-            <button
-              onClick={() => {
-                setIsBrandManagerOpen(false);
-                setEditingBrandId(null);
-              }}
-              className="absolute right-4 top-4 p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div>
-              <h3 className="font-bold text-gray-800 text-lg">Gerenciar Marcas</h3>
-              <p className="text-gray-400 text-xs">Crie, edite ou remova marcas de fabricantes de equipamentos.</p>
-            </div>
-
-            <form onSubmit={handleCreateBrand} className="flex gap-2 text-xs">
-              <input
-                required
-                value={newBrandName}
-                onChange={(e) => setNewBrandName(e.target.value)}
-                placeholder="Ex: Makita, Bosch, Caterpillar..."
-                className="flex-1 px-4 py-2 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors font-semibold"
-              />
-              <Button
-                type="submit"
-                size="sm"
-                disabled={actionLoading}
-              >
-                Adicionar
-              </Button>
-            </form>
-
-            <div className="max-h-60 overflow-y-auto space-y-2 pr-1 text-xs">
-              {brands.length === 0 ? (
-                <div className="text-center py-6 text-gray-400 font-medium">
-                  Nenhuma marca cadastrada ainda.
-                </div>
-              ) : (
-                brands.map(b => (
-                  <div key={b.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-gray-100/50 transition-colors">
-                    {editingBrandId === b.id ? (
-                      <div className="flex-1 flex gap-2">
-                        <input
-                          required
-                          value={editingBrandName}
-                          onChange={(e) => setEditingBrandName(e.target.value)}
-                          className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-600 font-semibold"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateBrand(b.id)}
-                          className="text-emerald-600 font-bold hover:text-emerald-700 uppercase text-xs"
-                        >
-                          Salvar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingBrandId(null)}
-                          className="text-gray-400 font-bold hover:text-gray-600 uppercase text-xs"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <span className="font-bold text-gray-700">{b.name}</span>
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingBrandId(b.id);
-                              setEditingBrandName(b.name);
-                            }}
-                            className="text-blue-500 hover:text-blue-700 font-semibold transition-colors uppercase text-xs"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteBrand(b.id)}
-                            className="text-red-500 hover:text-red-700 font-semibold transition-colors uppercase text-xs"
-                          >
-                            Excluir
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 9. DRAWER: AGENDAR / EDITAR / VER ORDEM DE MANUTENÇÃO
           Era modal central até 2026-09-13. Mesmo desenho do drawer de ativo (4):

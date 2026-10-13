@@ -31,8 +31,12 @@ export interface OpuraAsset {
   name: string;
   category: AssetCategory;
   subcategory?: string;
-  brand?: string;
-  model?: string;
+  /** Texto espelhado pelo banco a partir de brand_id/model_id (gatilho fn_catalogo_espelho). */
+  brand?: string | null;
+  model?: string | null;
+  /** Configurações › Marcas e Modelos (product_brands / product_models). */
+  brand_id?: string | null;
+  model_id?: string | null;
   serial_number?: string;
   purchase_date?: string;
   purchase_value: number;
@@ -153,14 +157,5 @@ export interface OpuraAssetDepreciationRateio {
   percentage: number;
 }
 
-// Interfaces para gestão de marcas
-export interface OpuraAssetBrand {
-  id: string;
-  organization_id: string;
-  name: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export type OpuraAssetBrandInsert = Omit<OpuraAssetBrand, 'id' | 'created_at' | 'updated_at'>;
-export type OpuraAssetBrandUpdate = Partial<OpuraAssetBrandInsert>;
+// Marcas: o catálogo é Configurações › Marcas e Modelos — types/brandModel.ts
+// (opura_asset_brands foi deprecada em 13/10/2026).

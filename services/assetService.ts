@@ -75,6 +75,17 @@ function erroPonteFinanceira(err: unknown): Error {
 /** Bucket público já usado por foto/documento de colaborador. */
 const ASSET_IMAGE_BUCKET = 'organization-assets';
 
+/**
+ * Código patrimonial repetido (índice uq_opura_assets_codigo_org, que ignora
+ * caixa e espaço) vira frase legível; o resto segue a mensagem do banco.
+ */
+function erroDeCodigo(error: { code?: string; message: string; details?: string | null }, code?: string | null): string | null {
+  if (error.code !== '23505' || !/uq_opura_assets_codigo_org|uq_asset_code_org/.test(`${error.message} ${error.details ?? ''}`)) return null;
+  return code?.trim()
+    ? `Já existe um ativo com o código ${code.trim().toUpperCase()} nesta organização.`
+    : 'Já existe um ativo com este código nesta organização.';
+}
+
 export const assetService = {
   // ATIVOS
   async list(organizationId?: string): Promise<OpuraAsset[]> {
@@ -116,7 +127,7 @@ export const assetService = {
 
     if (error) {
       console.error('[AssetService] Error creating asset:', error);
-      throw new Error(`Falha ao cadastrar ativo: ${error.message}`);
+      throw new Error(erroDeCodigo(error, asset.code) ?? `Falha ao cadastrar ativo: ${error.message}`);
     }
     return data;
   },
@@ -129,7 +140,7 @@ export const assetService = {
 
     if (error) {
       console.error('[AssetService] Error creating multiple assets:', error);
-      throw new Error(`Falha ao cadastrar ativos em lote: ${error.message}`);
+      throw new Error(erroDeCodigo(error) ?? `Falha ao cadastrar ativos em lote: ${error.message}`);
     }
     return data || [];
   },
@@ -144,7 +155,7 @@ export const assetService = {
 
     if (error) {
       console.error(`[AssetService] Error updating asset ${id}:`, error);
-      throw new Error(`Falha ao atualizar ativo: ${error.message}`);
+      throw new Error(erroDeCodigo(error, updates.code) ?? `Falha ao atualizar ativo: ${error.message}`);
     }
     return data;
   },

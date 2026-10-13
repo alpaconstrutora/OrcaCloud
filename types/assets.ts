@@ -58,15 +58,19 @@ export interface OpuraAsset {
   stock_item_id?: string | null;
   /** Almoxarifado onde o bem mora quando não está numa obra. null = não guardado. */
   warehouse_id?: string | null;
+  /** Código antes da renumeração de 13/10/2026 (etiqueta antiga). Só leitura/busca. */
+  codigo_anterior?: string | null;
   notes?: string;
   created_at: string;
   updated_at: string;
 }
 
+// `code` é opcional no INSERT: vazio, o banco numera na série da organização
+// (OPR-PAT-000001… / OPR-PRE-0001… — aplicar_20271013170000).
 export type OpuraAssetInsert = Omit<
   OpuraAsset,
-  'id' | 'created_at' | 'updated_at'
->;
+  'id' | 'created_at' | 'updated_at' | 'code'
+> & { code?: string | null };
 
 export type OpuraAssetUpdate = Partial<OpuraAssetInsert>;
 

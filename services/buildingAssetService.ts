@@ -67,27 +67,10 @@ export function diasAte(iso?: string | null): number | null {
     return Math.round((alvo - hoje) / 86400000);
 }
 
-/**
- * Próximo código patrimonial predial, derivado do MAIOR sufixo existente.
- *
- * O módulo de Bens gera `OPR-PAT-{6 dígitos aleatórios}`. Com
- * `UNIQUE (organization_id, code)`, aleatório é colisão esperando acontecer — e
- * quando acontece, o cadastro falha sem o usuário entender por quê. Derivar do
- * máximo (e não de COUNT) é o mesmo raciocínio de `nextRentalNumber`: com
- * contagem, excluir um ativo faz o próximo número repetir um já usado.
- */
-async function proximoCodigo(organizationId: string): Promise<string> {
-    const { data } = await supabase
-        .from('opura_assets')
-        .select('code')
-        .eq('organization_id', organizationId)
-        .like('code', 'OPR-PRE-%')
-        .order('code', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-    const ultimo = parseInt((data?.code || '').split('-').pop() || '0', 10) || 0;
-    return `OPR-PRE-${String(ultimo + 1).padStart(4, '0')}`;
-}
+// Código patrimonial: o insert vai SEM código e o banco numera na série
+// OPR-PRE-0001… da organização, pela categoria `sistema_predial`, sob trava
+// (aplicar_20271013170000). Antes era MAIOR+1 calculado aqui, sem trava: dois
+// cadastros simultâneos pegavam o mesmo número.
 
 export const buildingAssetService = {
     async listByEmpreendimento(
@@ -128,10 +111,9 @@ export const buildingAssetService = {
         supplier_warranty_until?: string | null;
         notes?: string | null;
     }): Promise<BuildingAsset> {
-        const code = await proximoCodigo(payload.organization_id);
         const { data, error } = await supabase
             .from('opura_assets')
-            .insert({ ...payload, code, category: CATEGORIA_PREDIAL, status: 'em_uso' })
+            .insert({ ...payload, category: CATEGORIA_PREDIAL, status: 'em_uso' })
             .select(ASSET_COLS)
             .single();
         if (error) throw new Error(`Falha ao cadastrar o ativo: ${error.message}`);

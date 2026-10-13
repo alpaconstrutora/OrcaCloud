@@ -359,7 +359,11 @@ function renderAssetCell(
         );
     }
     case 'code':
-      return <span className="text-sm font-normal text-gray-600">{asset.code}</span>;
+      return (
+        <span className="text-sm font-normal text-gray-600" title={asset.codigo_anterior ? `Código anterior: ${asset.codigo_anterior}` : undefined}>
+          {asset.code}
+        </span>
+      );
     case 'name': {
       const Icon = ctx.categoryIcons[asset.category] || Package;
       return (
@@ -751,10 +755,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           setSelectedAsset(updated);
         }
       } else {
-        const generatedCode = assetForm.code || `OPR-PAT-${Math.floor(100000 + Math.random() * 900000)}`;
+        // Código em branco: o banco numera na série da organização (OPR-PAT-000001…).
         await assetService.create({
           organization_id: targetOrgId,
-          code: generatedCode,
+          code: assetForm.code.trim() || null,
           name: assetForm.name,
           category: assetForm.category,
           subcategory: assetForm.subcategory || undefined,
@@ -765,7 +769,6 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           useful_life_months: Number(assetForm.useful_life_months) || undefined,
           residual_value: Number(assetForm.residual_value) || 0,
           status: 'disponivel',
-          tracking_code: generatedCode,
           image_url: assetForm.image_url || undefined,
           notes: assetForm.notes || undefined
         });
@@ -1490,6 +1493,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const filteredAssets = assets.filter(asset => {
     const matchesSearch = asset.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           asset.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          // codigo_anterior: a etiqueta antiga (antes da renumeração de 13/10/2026) ainda acha o bem.
+                          (asset.codigo_anterior ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (asset.brand && asset.brand.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const matchesCategory = filterCategory === 'todos' || asset.category === filterCategory;
@@ -2590,7 +2595,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     disabled={codigoTravadoPeloAlmoxarifado}
                     title={codigoTravadoPeloAlmoxarifado ? 'O ativo está vinculado ao Almoxarifado: o código patrimonial é o código do item e não muda' : undefined}
                     className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
-                    placeholder="Auto-gerado se vazio"
+                    placeholder="Gerado ao salvar (próximo número da série)"
                   />
                 </div>
               </div>

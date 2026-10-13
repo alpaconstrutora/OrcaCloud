@@ -289,25 +289,21 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
         const rowErrors: string[] = [];
 
-        // Validação do Código Patrimonial (Opcional - gera se vazio)
-        let rowCode = codeRaw;
-        if (!rowCode) {
-          rowCode = `OPR-PAT-${Math.floor(100000 + Math.random() * 900000)}`;
-          while (codeSet.has(rowCode.toLowerCase()) || existingAssets.some(a => a.code.toLowerCase() === rowCode.toLowerCase())) {
-            rowCode = `OPR-PAT-${Math.floor(100000 + Math.random() * 900000)}`;
-          }
-          codeSet.add(rowCode.toLowerCase());
-        } else {
+        // Código Patrimonial (opcional): em branco, o BANCO numera na série da
+        // organização ao gravar (aplicar_20271013170000) — nada é sorteado aqui.
+        // Comparação ignora caixa e espaço, como o índice único do banco.
+        const rowCode = codeRaw.trim().toUpperCase();
+        if (rowCode) {
           // Checa duplicidade interna no Excel
-          if (codeSet.has(rowCode.toLowerCase())) {
+          if (codeSet.has(rowCode)) {
             rowErrors.push(`Código "${rowCode}" está repetido na planilha.`);
           } else {
-            codeSet.add(rowCode.toLowerCase());
+            codeSet.add(rowCode);
           }
 
           // Checa duplicidade contra banco de dados
           const codeExistsInDb = existingAssets.some(
-            (a) => a.code.toLowerCase() === rowCode.toLowerCase()
+            (a) => a.code.trim().toUpperCase() === rowCode
           );
           if (codeExistsInDb) {
             rowErrors.push(`Código "${rowCode}" já está cadastrado no sistema.`);
@@ -449,7 +445,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
       const inserts: OpuraAssetInsert[] = validRows.map((r) => ({
         organization_id: targetOrgId,
-        code: r.code,
+        code: r.code || null,
         name: r.name,
         category: r.category as AssetCategory,
         subcategory: r.subcategory || undefined,
@@ -462,7 +458,6 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
         useful_life_months: r.useful_life_months,
         residual_value: r.residual_value,
         status: 'disponivel',
-        tracking_code: r.code,
         notes: r.notes || undefined
       }));
 
@@ -653,7 +648,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                         <React.Fragment key={row.index}>
                           <tr className={row.isValid ? 'hover:bg-blue-50/50' : 'bg-rose-50/30'}>
                             <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-500">#{row.index}</td>
-                            <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{row.code || 'Vazio'}</td>
+                            <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{row.code || <span className="text-gray-400">Gerado ao importar</span>}</td>
                             <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{row.name || 'Vazio'}</td>
                             <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{row.category || 'Vazio'}</td>
                             <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">

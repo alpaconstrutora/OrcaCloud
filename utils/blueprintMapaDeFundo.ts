@@ -177,6 +177,71 @@ export function estiloDaGrade(sobreMapa: boolean, passoTelaPx: number): { cor: s
   return { cor: 'rgba(15, 23, 42, 0.07)', corForte: 'rgba(15, 23, 42, 0.16)', soFortes: passoTelaPx < 12 };
 }
 
+// ── O mapa sobre o relevo no 3D (12/10/2026) ────────────────────────────────
+
+/** Uma camada (ruas ou relevo) da textura: os ladrilhos e onde cada um vai no canvas. */
+export interface CamadaDaTexturaDoMapa {
+  fonte: FonteDoMapa;
+  opacidade: number;
+  /** `matriz` = setTransform(a, b, c, d, e, f) do canvas: pixel do ladrilho (0..256) → pixel da textura. */
+  ladrilhos: { url: string; matriz: [number, number, number, number, number, number] }[];
+}
+
+export interface PlanoDaTexturaDoMapa {
+  larguraPx: number;
+  alturaPx: number;
+  /** O retângulo do DESENHO que a textura cobre, em mm (a caixa do relevo). */
+  caixa: { minX: number; minY: number; maxX: number; maxY: number };
+  camadas: CamadaDaTexturaDoMapa[];
+}
+
+/**
+ * A TEXTURA DO MAPA SOBRE O RELEVO (pedido: *"Implemente o mapa sobre o relevo
+ * no 3D"*): uma imagem que cobre a caixa do relevo, montada com os mesmos
+ * ladrilhos da planta. O canvas da textura tem o NORTE do desenho (maior y)
+ * em cima: com o `flipY` padrão do three, a coordenada de textura
+ * `v = (y − minY) / altura` cai no lugar certo. O nível de zoom é o que dá ~1
+ * pixel de ladrilho por pixel de textura, com o teto de ladrilhos da planta.
+ */
+export function planoDaTexturaDoMapa(
+  caixa: { minX: number; minY: number; maxX: number; maxY: number },
+  geo: Georreferencia,
+  fontes: readonly { fonte: FonteDoMapa; opacidade: number }[],
+  maxPx = 2048,
+): PlanoDaTexturaDoMapa | null {
+  const w = caixa.maxX - caixa.minX;
+  const h = caixa.maxY - caixa.minY;
+  if (!(w > 0) || !(h > 0) || fontes.length === 0) return null;
+  const larguraPx = w >= h ? maxPx : Math.max(1, Math.round((maxPx * w) / h));
+  const alturaPx = h >= w ? maxPx : Math.max(1, Math.round((maxPx * h) / w));
+  const sx = larguraPx / w;
+  const sy = alturaPx / h;
+  const naTextura = (p: Point) => ({ x: (p.x - caixa.minX) * sx, y: (caixa.maxY - p.y) * sy });
+  const cantos = [
+    { x: caixa.minX, y: caixa.minY },
+    { x: caixa.maxX, y: caixa.minY },
+    { x: caixa.maxX, y: caixa.maxY },
+    { x: caixa.minX, y: caixa.maxY },
+  ];
+  const camadas = fontes.map(({ fonte, opacidade }) => {
+    const z = zoomDoLadrilho(Math.min(sx, sy), geo.latitude, FONTE_DO_MAPA[fonte].maxNativeZoom);
+    const ladrilhos = ladrilhosDaArea(cantos, geo, z).map((t) => {
+      const a = afimDoLadrilho(t, geo);
+      const o = naTextura(a.origem);
+      const ex = naTextura({ x: a.origem.x + a.porPxX.x, y: a.origem.y + a.porPxX.y });
+      const ey = naTextura({ x: a.origem.x + a.porPxY.x, y: a.origem.y + a.porPxY.y });
+      return { url: urlDoLadrilho(fonte, t), matriz: [ex.x - o.x, ex.y - o.y, ey.x - o.x, ey.y - o.y, o.x, o.y] as [number, number, number, number, number, number] };
+    });
+    return { fonte, opacidade, ladrilhos };
+  });
+  return { larguraPx, alturaPx, caixa, camadas };
+}
+
+/** A coordenada de textura (u, v) de um ponto do desenho, para a malha do relevo. */
+export function uvNaCaixa(caixa: PlanoDaTexturaDoMapa['caixa'], xMm: number, yMm: number): [number, number] {
+  return [(xMm - caixa.minX) / (caixa.maxX - caixa.minX), (yMm - caixa.minY) / (caixa.maxY - caixa.minY)];
+}
+
 export function urlDoLadrilho(f: FonteDoMapa, t: Ladrilho): string {
   const d = FONTE_DO_MAPA[f];
   const s = d.subdominios[(t.x + t.y) % d.subdominios.length];

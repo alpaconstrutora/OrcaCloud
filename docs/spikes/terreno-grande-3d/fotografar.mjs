@@ -34,7 +34,7 @@ page.on('pageerror', (e) => erros.push('PAGEERROR ' + e));
 page.on('console', (m) => m.type() === 'error' && erros.push('CONSOLE ' + m.text()));
 await page.goto(`${urlBase}/docs/spikes/terreno-grande-3d/index.html${query}`);
 await page.waitForSelector('canvas');
-await page.waitForTimeout(4000);
+await page.waitForTimeout(Number(process.env.ESPERA ?? 4000));
 const nome = `terreno-3d${query.replace(/[?=&.]/g, '_')}.png`;
 await page.screenshot({ path: `${saida}/${nome}` });
 const info = await page.evaluate(() => window.__terreno);

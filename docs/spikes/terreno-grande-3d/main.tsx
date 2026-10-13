@@ -14,6 +14,7 @@ import { applyBatch, applyCommand, emptyModel, point, type Command } from '../..
 import { amostradorDaMalha, gerarCurvas, malhaDaGrade, planejarGrade } from '../../../utils/blueprintTopografia';
 import { corArcoIrisDaCota } from '../../../utils/blueprintTopografiaAnalises';
 import { curvasDeNivel3d } from '../../../utils/blueprintTopografia3dExtras';
+import { planoDaTexturaDoMapa } from '../../../utils/blueprintMapaDeFundo';
 
 const q = new URLSearchParams(location.search);
 const COTA_ZERO = Number(q.get('cotaZero') ?? 887.94);
@@ -39,6 +40,17 @@ const cotasM = grade.cotasM.map((_, k) => {
 });
 const relevo = malhaDaGrade({ ...grade, cotasM }, COTA_ZERO);
 // `?curvas=1`: as linhas das curvas de 1 m sobre o relevo; `&arcoiris=1` pinta pela cota (860 → 900).
+// `?mapa=RUAS` | `?mapa=RELEVO` | `?mapa=AMBOS` (`&meio=1`): o mapa colado no relevo, com "Onde fica"
+// no centro do terreno do pedido (o relevo aqui é sintético — o que se confere é o mapa no lugar).
+const GEO = { latitude: -22.6163977, longitude: -46.0412014 };
+const fontesDoMapa = ({ RUAS: ['RUAS'], RELEVO: ['RELEVO'], AMBOS: ['RUAS', 'RELEVO'] } as Record<string, ('RUAS' | 'RELEVO')[]>)[q.get('mapa') ?? ''] ?? [];
+const planoDoMapa = fontesDoMapa.length
+  ? planoDaTexturaDoMapa(
+      { minX: grade.origem.x, minY: grade.origem.y, maxX: grade.origem.x + (grade.colunas - 1) * grade.espacamentoMm, maxY: grade.origem.y + (grade.linhas - 1) * grade.espacamentoMm },
+      GEO,
+      fontesDoMapa.map((fonte) => ({ fonte, opacidade: q.get('meio') ? 0.45 : 1 })),
+    )
+  : null;
 // `&semAssentar=1`: a linha na cota da curva, sem assentar na malha (como era — fica tracejada).
 const curvas = q.get('curvas')
   ? curvasDeNivel3d(
@@ -69,6 +81,7 @@ createRoot(document.getElementById('raiz')!).render(
       envelope={q.get('envelope') ? [{ levelId, nome: 'Térreo', anel: CANTOS, baseMm: 0, topoMm: 2800, acimaDoGabarito: false }] : undefined}
       extrasDoRelevo={curvas.length ? { drenagem: [], muros: [], curvas } : null}
       extrasChave={`curvas:${q.get('curvas') ?? ''}:${q.get('arcoiris') ?? ''}:${q.get('semAssentar') ?? ''}`}
+      mapaNoRelevo={planoDoMapa ? { plano: planoDoMapa, chave: `${q.get('mapa')}:${q.get('meio') ?? ''}` } : null}
     />
   </div>,
 );

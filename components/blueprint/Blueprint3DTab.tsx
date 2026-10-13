@@ -13,6 +13,7 @@ import type { BlueprintModel } from '../../utils/blueprintKernel';
 import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
+import type { PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
 
 const Blueprint3DViewer = React.lazy(() => import('./Blueprint3DViewer'));
 
@@ -61,6 +62,8 @@ interface Props {
   /** Drenagem traçada e muros de arrimo sobre o relevo (fase 8). `extrasChave` é a dependência dos memos. */
   extrasDoRelevo?: ExtrasDoRelevo3d | null;
   extrasChave?: string;
+  /** 12/10/2026: o mapa (ruas/relevo das camadas) colado na malha do relevo — ver `Blueprint3DViewer`. */
+  mapaNoRelevo?: { plano: PlanoDaTexturaDoMapa; chave: string } | null;
   /** Ids de peça que a lista de Componentes mandou esconder. Não muda o modelo. */
   ocultos?: Set<string>;
   /** CAMADAS EM MEIO-TOM (04/10/2026): peças translúcidas e sem clique — ver `Fantasma` no `Blueprint3DViewer`. */

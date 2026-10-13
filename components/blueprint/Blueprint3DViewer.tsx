@@ -68,6 +68,7 @@ import {
 } from '../../utils/blueprint3dEnquadramento';
 import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
+import { uvNaCaixa, type PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 import { ehTransversal, segmentosDaArmaduraDoModelo } from '../../utils/blueprintArmaduraGeometria';
 import { paineisDaPolilinha, pecaNoMundo } from '../../utils/blueprint3dPecas';
@@ -132,6 +133,13 @@ interface Props {
   alturaDoChao?: (x: number, z: number) => number | null;
   /** Drenagem traçada e muros de arrimo sobre o relevo (fase 8), em números crus. */
   extrasDoRelevo?: ExtrasDoRelevo3d | null;
+  /**
+   * 12/10/2026: o MAPA (ruas/relevo das camadas do Terreno) colado sobre a malha
+   * do relevo — o plano da textura vem pronto de `planoDaTexturaDoMapa` (puro e
+   * testado); aqui só se baixam os ladrilhos e se monta o canvas. `chave`
+   * muda quando o plano muda (outra versão, outra fonte, outra opacidade).
+   */
+  mapaNoRelevo?: { plano: PlanoDaTexturaDoMapa; chave: string } | null;
   extrasChave?: string;
   /**
    * Ids de peça escondidos pela lista de Componentes (pedido de 01/09/2026).
@@ -1012,6 +1020,86 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void, selecionados?:
  * texto sem o tubo que ele descreve. Para ler a rede, esconde-se a parede ou usa
  * o estilo transparente, como no print de referência.
  */
+/** A cor do chão do relevo — também o fundo da textura do mapa (onde nenhum ladrilho chegou ainda). */
+const COR_DO_CHAO = '#d9cfbd';
+
+/**
+ * A TEXTURA DO MAPA SOBRE O RELEVO (12/10/2026): um canvas do tamanho do plano,
+ * pintado com a cor do chão e, por cima, cada ladrilho na matriz que o plano
+ * calculou (ruas embaixo, relevo em cima, cada camada na sua opacidade). Os
+ * ladrilhos chegam aos poucos: cada um agenda UM redesenho no próximo quadro
+ * (dezenas chegam juntos — redesenhar a cada um repintaria o canvas 2048 px
+ * dezenas de vezes). `crossOrigin` anônimo: OSM e OpenTopoMap mandam CORS `*`.
+ */
+function useTexturaDoMapa(m: { plano: PlanoDaTexturaDoMapa; chave: string } | null | undefined): THREE.CanvasTexture | null {
+  const [textura, setTextura] = useState<THREE.CanvasTexture | null>(null);
+  useEffect(() => {
+    if (!m) {
+      setTextura(null);
+      return;
+    }
+    const { plano } = m;
+    const canvas = document.createElement('canvas');
+    canvas.width = plano.larguraPx;
+    canvas.height = plano.alturaPx;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      setTextura(null);
+      return;
+    }
+    const t = new THREE.CanvasTexture(canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    const imagens = new Map<string, HTMLImageElement>();
+    let vivo = true;
+    let agendado = 0;
+    const redesenhar = () => {
+      agendado = 0;
+      if (!vivo) return;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = COR_DO_CHAO;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (const c of plano.camadas) {
+        ctx.globalAlpha = c.opacidade;
+        for (const l of c.ladrilhos) {
+          const img = imagens.get(l.url);
+          if (!img || !img.complete || !img.naturalWidth) continue;
+          ctx.setTransform(...l.matriz);
+          // Meio pixel a mais de cada lado: sem ele a junta entre ladrilhos vira fio claro.
+          ctx.drawImage(img, 0, 0, 256, 256, -0.25, -0.25, 256.5, 256.5);
+        }
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      t.needsUpdate = true;
+    };
+    const agendar = () => {
+      if (!agendado) agendado = requestAnimationFrame(redesenhar);
+    };
+    for (const c of plano.camadas) {
+      for (const l of c.ladrilhos) {
+        if (imagens.has(l.url)) continue;
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = agendar;
+        img.src = l.url;
+        imagens.set(l.url, img);
+      }
+    }
+    redesenhar();
+    setTextura(t);
+    return () => {
+      vivo = false;
+      if (agendado) cancelAnimationFrame(agendado);
+      t.dispose();
+    };
+    // A chave resume o plano: outra versão, outra fonte ou outra opacidade.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [m?.chave]);
+  return textura;
+}
+
 function RotuloDeRede({ texto, cor, posicao }: { texto: string; cor: string; posicao: [number, number, number] }) {
   const textura = useMemo(() => {
     if (typeof document === 'undefined') return null;
@@ -1045,7 +1133,7 @@ function RotuloDeRede({ texto, cor, posicao }: { texto: string; cor: string; pos
   );
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura, estilo = 'SOMBREADO' }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, armadura, estilo = 'SOMBREADO' }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1390,6 +1478,27 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
   }, [model, mostrarTerreno, relevoChave]);
 
   /**
+   * O MAPA SOBRE O RELEVO (12/10/2026): a coordenada de textura de cada vértice
+   * da malha é a posição dele na caixa do plano (`uvNaCaixa`, testada contra a
+   * matriz dos ladrilhos). No memo, e não num efeito, para o primeiro quadro já
+   * sair com a UV — a geometria é deste componente.
+   */
+  const comMapa = useMemo(() => {
+    if (!usaRelevo || !terreno || !mapaNoRelevo) return false;
+    const pos = terreno.getAttribute('position');
+    const uv = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) {
+      const [u, v] = uvNaCaixa(mapaNoRelevo.plano.caixa, pos.getX(i) / S, pos.getZ(i) / S);
+      uv[i * 2] = u;
+      uv[i * 2 + 1] = v;
+    }
+    terreno.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terreno, usaRelevo, mapaNoRelevo?.chave]);
+  const texturaDoMapa = useTexturaDoMapa(comMapa ? mapaNoRelevo : null);
+
+  /**
    * Drenagem e muros sobre o relevo (fase 8): as linhas viram `Line` (uma cor
    * para o que escoa, vermelho para o que não escoa); a face do muro vira uma
    * tira de triângulos. Tudo já em metros de mundo, vindo de
@@ -1660,7 +1769,12 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         // Com RELEVO a malha já carrega a cota em Y: nada de deslocar.
         <mesh geometry={terreno} position={[0, usaRelevo ? 0 : COTA_TERRENO_Y, 0]} receiveShadow castShadow={usaRelevo}>
           <meshStandardMaterial
-            color="#d9cfbd"
+            // Com o mapa, a textura dá a cor (branco não tinge); o `key` recria o
+            // material ao ligar/desligar o mapa — trocar `map` de nulo para
+            // textura num material já compilado não refaz o shader.
+            key={texturaDoMapa ? 'com-mapa' : 'sem-mapa'}
+            color={texturaDoMapa ? '#ffffff' : COR_DO_CHAO}
+            map={texturaDoMapa ?? null}
             roughness={1}
             side={THREE.DoubleSide}
             // Empurra o polígono para trás na resolução de profundidade sem

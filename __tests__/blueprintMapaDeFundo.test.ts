@@ -5,6 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   afimDoLadrilho,
+  planoDaTexturaDoMapa,
+  uvNaCaixa,
+  type CamadaDaTexturaDoMapa,
   estiloDaGrade,
   algumMapaAVista,
   alternarMeioTomDoMapa,
@@ -133,5 +136,56 @@ describe('estiloDaGrade (12/10/2026: a grade lavava o mapa)', () => {
     expect(g.corForte).toMatch(/^rgba\(15, 23, 42, 0\.\d+\)$/);
     expect(g.soFortes).toBe(true);
     expect(estiloDaGrade(true, 12).soFortes).toBe(false);
+  });
+});
+
+describe('planoDaTexturaDoMapa (o mapa sobre o relevo no 3D, 12/10/2026)', () => {
+  // A caixa do relevo do pedido: ~346 × 344 m em volta da origem.
+  const caixa = { minX: -173_000, minY: -172_000, maxX: 173_000, maxY: 172_000 };
+
+  it('proporção da caixa, com o lado maior no teto', () => {
+    const p = planoDaTexturaDoMapa(caixa, GEO, [{ fonte: 'RUAS', opacidade: 1 }], 2048)!;
+    expect(p.larguraPx).toBe(2048);
+    expect(p.alturaPx).toBe(Math.round((2048 * 344) / 346));
+    const alta = planoDaTexturaDoMapa({ minX: 0, minY: 0, maxX: 100_000, maxY: 200_000 }, GEO, [{ fonte: 'RUAS', opacidade: 1 }], 1000)!;
+    expect([alta.larguraPx, alta.alturaPx]).toEqual([500, 1000]);
+  });
+
+  it('sem fonte, ou caixa degenerada: null', () => {
+    expect(planoDaTexturaDoMapa(caixa, GEO, [])).toBeNull();
+    expect(planoDaTexturaDoMapa({ ...caixa, maxX: caixa.minX }, GEO, [{ fonte: 'RUAS', opacidade: 1 }])).toBeNull();
+  });
+
+  it('um ponto do mundo cai no mesmo pixel pela matriz do ladrilho e pela conta direta (< 0,5 px); a UV da malha aponta para lá', () => {
+    const p = planoDaTexturaDoMapa(caixa, GEO, [{ fonte: 'RELEVO', opacidade: 0.45 }], 2048)!;
+    const camada = p.camadas[0];
+    expect(camada.opacidade).toBe(0.45);
+    for (const ponto of [{ lat: -22.6153, lon: -46.0426 }, { lat: -22.6175, lon: -46.0398 }, { lat: GEO.latitude, lon: GEO.longitude }]) {
+      // Direto: lat/lon → mm → pixel da textura (norte em cima).
+      const mm = geoParaLocal(ponto, GEO);
+      const direto = { x: ((mm.x - caixa.minX) / (caixa.maxX - caixa.minX)) * p.larguraPx, y: ((caixa.maxY - mm.y) / (caixa.maxY - caixa.minY)) * p.alturaPx };
+      // Pela matriz: o ladrilho que contém o ponto, no zoom que o plano escolheu.
+      const z = Number(camada.ladrilhos[0].url.split('/')[3]);
+      const f = ladrilhoFracionario(ponto, z);
+      const t = camada.ladrilhos.find((l) => l.url.endsWith(`/${z}/${Math.floor(f.x)}/${Math.floor(f.y)}.png`))!;
+      expect(t).toBeTruthy();
+      const [a, b, c, d, e, g] = t.matriz;
+      const px = (f.x - Math.floor(f.x)) * 256;
+      const py = (f.y - Math.floor(f.y)) * 256;
+      const pelaMatriz = { x: a * px + c * py + e, y: b * px + d * py + g };
+      expect(Math.hypot(pelaMatriz.x - direto.x, pelaMatriz.y - direto.y)).toBeLessThan(0.5);
+      // A UV da malha (v com o flipY do three: v = 0 embaixo) aponta para o mesmo pixel.
+      const [u, v] = uvNaCaixa(p.caixa, mm.x, mm.y);
+      expect(u * p.larguraPx).toBeCloseTo(direto.x, 6);
+      expect((1 - v) * p.alturaPx).toBeCloseTo(direto.y, 6);
+    }
+  });
+
+  it('o zoom acompanha a resolução da textura (346 m em 2048 px ≈ 0,17 m/px → o nativo do servidor)', () => {
+    const p = planoDaTexturaDoMapa(caixa, GEO, [{ fonte: 'RUAS', opacidade: 1 }, { fonte: 'RELEVO', opacidade: 1 }], 2048)!;
+    const zDe = (c: CamadaDaTexturaDoMapa) => Number(c.ladrilhos[0].url.split('/')[3]);
+    expect(zDe(p.camadas[1])).toBe(17); // relevo: teto 17
+    expect(zDe(p.camadas[0])).toBeGreaterThanOrEqual(17);
+    expect(p.camadas.every((c) => c.ladrilhos.length > 0 && c.ladrilhos.length <= 64)).toBe(true);
   });
 });

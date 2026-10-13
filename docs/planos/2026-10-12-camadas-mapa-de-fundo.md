@@ -145,3 +145,48 @@ continua aparecendo.
       o lote ao lado de Cambuí (MG), Lagoa do Mato e a AMG-1950, grade de 50 m discreta.
 - [x] Suíte 8.758 = 8.724 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` limpo; build ✓
 - [x] Publicado `441f0e84` (o push foi recusado uma vez: o `main` tinha andado com um commit do menu lateral, sem relação; rebase e push); `ci` = success; o Vercel levou mais que o normal ("pending" por ~15 min), depois `conferir-producao.sh` → o domínio serve `441f0e8`
+
+---
+
+# Pedido posterior — 12/10/2026: o mapa sobre o relevo no 3D
+
+Depois do print do 3D com relevo e curvas (*"excelente"*), a pergunta *"ruas e relevo nao
+aparece no 3d?"* e a resposta de que só a planta 2D os desenha:
+
+> Implemente o mapa sobre o relevo no 3D.
+
+## Decisão
+
+- `planoDaTexturaDoMapa(caixa, geo, fontes)` (puro, `utils/blueprintMapaDeFundo.ts`): uma
+  textura que cobre a caixa da GRADE da versão (a malha cobre exatamente ela), norte do desenho
+  em cima (com o `flipY` do three, `v = (y − minY)/altura`), lado maior 2048 px, zoom do
+  ladrilho pela resolução da textura, os mesmos ladrilhos e o teto de 64 por fonte da planta;
+  cada ladrilho com a matriz do canvas da textura. `uvNaCaixa` dá a UV de cada vértice.
+- Viewer: `useTexturaDoMapa` (canvas pintado com a cor do chão + ladrilhos por camada e
+  opacidade; um redesenho por quadro conforme chegam), UV na malha do relevo, material branco
+  com `map` (recriado ao ligar/desligar). As mesmas camadas do painel (Mapa: ruas / relevo,
+  meio-tom = 45 %). Só sobre o RELEVO (o plano chato do lote sem curvas fica como está).
+
+## Achado — o 3D inteiro é ESPELHADO em relação à planta (anterior a hoje)
+
+O texto do mapa ("Rio Itaim") aparece espelhado no 3D. A textura está coerente com a malha e o
+lote (represa ao SO, rio ao NE, rodovia a oeste, conferido contra a direção da câmera), então o
+espelho é do MUNDO 3D: ele usa `Z = +y` do desenho (paredes com `wall.a.y` direto como z;
+`shapeDoAnel` nega e gira para dar o mesmo), e no three (mão direita, Y para cima) isso é a
+planta vista pelo avesso — da câmera no NE olhando para SO, a direita aponta para SE em vez de
+NO. É o mesmo defeito que o canvas 2D teve até 09/08/2026 (memória
+`project_blueprint_canvas_y_espelhado`): prédio e lote espelhados parecem certos; só conteúdo
+assimétrico legível o denuncia. Um comentário do sol diz "y → −z", o oposto do código — o sol e
+as sombras podem estar trocados também. Corrigir é mudança transversal (geometria, câmera,
+enquadramento, seleção/arraste, percorrer, caixa de corte, pontos de vista, sol): fica para
+decisão do usuário, numa frente própria.
+
+## Estado
+
+- [x] `planoDaTexturaDoMapa` + `uvNaCaixa` + 4 testes (proporção; nulos; o ponto do mundo cai no
+      mesmo pixel pela matriz do ladrilho e pela conta direta, < 0,5 px, e a UV aponta para lá;
+      zoom pela resolução)
+- [x] Viewer + editor; harness `docs/spikes/terreno-grande-3d/?mapa=RUAS|RELEVO|AMBOS` (`&meio=1`)
+- [x] Suíte 8.807 = 8.773 + 34 pendentes + 0 falhos (a 1ª rodada saiu com "still running" no editor — a conhecida; a 2ª fechou); `tsc` exit 0 (a 1ª acusou a prop nova faltando no `Blueprint3DTab`, corrigido); checks limpos; build ✓
+- [ ] Publicação e CI
+- [ ] Decisão do usuário: corrigir o espelhamento do 3D

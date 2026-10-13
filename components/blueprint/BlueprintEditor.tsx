@@ -545,7 +545,7 @@ import { blueprintTravaService } from '../../services/blueprintTravaService';
 import { bloqueioDasTravas, idsTravados, type TravaExplicita } from '../../utils/blueprintColaboracao';
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
-import { FONTES_DO_MAPA, MAPA_OCULTO, OPACIDADE_DO_MAPA, sanearEstadosDoMapa, type EstadosDoMapa } from '../../utils/blueprintMapaDeFundo';
+import { FONTES_DO_MAPA, MAPA_OCULTO, OPACIDADE_DO_MAPA, planoDaTexturaDoMapa, sanearEstadosDoMapa, type EstadosDoMapa } from '../../utils/blueprintMapaDeFundo';
 import { ESTADOS_PADRAO as CAMADAS_TODAS_VISIVEIS, classificarPecas, conflitoVisivel, contagemPorCamada, estadoDoOverlay, estadosDasChavesAntigas, estadosIguais, idsPorEstado, isolar, sanearEstados, type AlvoDeCamada, type EstadosDasCamadas } from '../../utils/blueprintCamadasPorDisciplina';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
 import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
@@ -5020,6 +5020,25 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     return v ? malhaDaGrade(v.grade, cotaZeroDoTerrenoM) : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chaveDaTopografia, cotaZeroDoTerrenoM]);
+  /**
+   * O MAPA SOBRE O RELEVO NO 3D (12/10/2026, *"Implemente o mapa sobre o relevo
+   * no 3D"*): as mesmas camadas Mapa: ruas / Mapa: relevo do painel, coladas
+   * na malha. A caixa é a da GRADE da versão (a malha cobre exatamente ela).
+   */
+  const mapaNoRelevo3d = useMemo(() => {
+    const v = topografia.selecionada;
+    if (!v || !mapaDeFundo) return null;
+    const { origem, espacamentoMm: esp, colunas, linhas } = v.grade;
+    const caixa = { minX: origem.x, minY: origem.y, maxX: origem.x + (colunas - 1) * esp, maxY: origem.y + (linhas - 1) * esp };
+    const plano = planoDaTexturaDoMapa(caixa, mapaDeFundo.georreferencia, mapaDeFundo.fontes);
+    if (!plano) return null;
+    const g = mapaDeFundo.georreferencia;
+    return {
+      plano,
+      chave: `${chaveDaTopografia}|${g.latitude},${g.longitude},${g.rotacaoNorteDeg ?? 0}|${mapaDeFundo.fontes.map((f) => `${f.fonte}:${f.opacidade}`).join(',')}`,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia, mapaDeFundo]);
 
   /**
    * O chão sob a pessoa no modo de percorrer, em metros de mundo: o 3D usa
@@ -10926,6 +10945,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       relevoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
       alturaDoChao={mostrarTerreno3d && terrenoAVista ? alturaDoChao3d : undefined}
       extrasDoRelevo={mostrarTerreno3d && terrenoAVista ? extrasDoRelevoNo3d : null}
+      mapaNoRelevo={mostrarTerreno3d && terrenoAVista ? mapaNoRelevo3d : null}
       extrasChave={extrasDoRelevoNo3dChave}
       ocultos={ocultosNo3d}
       atenuados={idsDasCamadas.atenuados}

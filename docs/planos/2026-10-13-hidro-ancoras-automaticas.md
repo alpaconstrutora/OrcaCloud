@@ -270,9 +270,24 @@ for tocado, regerar o bundle **depois da última edição** e rodar
   coletor, a ligação proposta e a caixa "Cota da rede estimada … Confirmar cota" (SetParametros).
   `check-ui-standard.sh` exit 0 em `PainelColetorPredial.tsx` e `BlueprintEditor.tsx`; o teste
   de componente acha os dois campos (1500 / 1000) e clica no botão.
-- [ ] 5.1 hidrômetro automático (13/10: o usuário escolheu publicar o esgoto ANTES da Fase 5)
-- [ ] 5.2 saída pluvial automática
-- [ ] 5.3 um botão só (água e pluvial)
+- [x] 5.1 hidrômetro automático (13/10: o usuário escolheu publicar o esgoto ANTES da Fase 5).
+  Sem hidrômetro, `planejarAlimentador` propõe um em `pontoNaFrente(caixa d'água)`, no pavimento
+  mais baixo, na altura de cavalete da ficha (0,60 m) acima do terreno; `hidrometroProposto` no
+  plano; executivo diz "hidrômetro não lançado" e NÃO mostra a pressão na boia calculada a partir
+  da peça proposta; memorial idem. Painel: linha explicando e botão "Lançar hidrômetro e
+  alimentador". `__tests__/blueprintHidroAncorasAguaPluvial.test.ts`.
+- [x] 5.2 saída pluvial automática. Sem caixa de areia NEM saída, `planejarCondutores` propõe a
+  saída (sarjeta) no ponto da frente mais perto de um bocal. ⚠️ Decisão: a cota da ficha (−0,30)
+  é a MESMA do condutor enterrado (−0,30), e a saída nasceria com declividade zero ("alta demais");
+  a cota proposta é a menor entre a ficha (relativa ao terreno) e a cota em que o condutor MAIS
+  LONGO chega com a declividade da premissa (1 %). O aviso manda conferir o nível da sarjeta.
+  Com caixa de areia e sem saída, nada muda (o aviso de sempre). Botão "Lançar saída e condutores".
+  Os testes antigos que exigiam "Coloque o hidrômetro…" / "Coloque a caixa de areia…" (sem divisas)
+  passaram a exigir o pedido de frente. 24/24 nos três arquivos.
+- [ ] 5.3 um botão só (água e pluvial) — NÃO feito, de propósito, até o usuário decidir: o passo
+  manual que o pedido reclama já sumiu com 5.1/5.2 (cada botão de seção põe a peça que falta).
+  Encadear rede de água + alimentador + recalque, ou calhas + condutores, num botão único é
+  conveniência à parte, com risco próprio (pressão/ajuste de DN da água entre etapas).
 - [x] 6.1 bundle da planta-api: regerado DEPOIS do rebase sobre origin/main (`aea200e4`) —
   conteúdo IDÊNTICO ao versionado (só a quebra de linha mudava; descartado). O bundle só exporta
   leitura/quantitativo/IFC/planilha; os comandos alterados (`AddTerminal`, `SetTerminalProps`)

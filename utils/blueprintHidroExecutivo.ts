@@ -140,10 +140,11 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
       item: 'Entrada de água e alimentador predial',
       norma: 'NBR 5626',
       exigido: 'hidrômetro e alimentador até o reservatório',
-      obtido: alim.motivo ?? (lancado ? `DN ${alim.dnMm}, ${nBr(alim.comprimentoM)} m` : 'alimentador não lançado'),
-      atende: !alim.motivo && lancado,
+      // 13/10/2026: o hidrômetro só PROPOSTO (o lançamento o põe) não existe — nem a pressão calculada a partir dele.
+      obtido: alim.motivo ?? (alim.hidrometroProposto ? 'hidrômetro não lançado' : lancado ? `DN ${alim.dnMm}, ${nBr(alim.comprimentoM)} m` : 'alimentador não lançado'),
+      atende: !alim.motivo && !alim.hidrometroProposto && lancado,
     });
-    if (!alim.motivo) {
+    if (!alim.motivo && !alim.hidrometroProposto) {
       v.push({
         grupo: 'NBR5626',
         item: 'Pressão na torneira de boia',

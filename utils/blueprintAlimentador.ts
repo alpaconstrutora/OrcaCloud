@@ -17,12 +17,21 @@
  *
  * Os trechos nascem SUGERIDOS com o rótulo "Alimentador"; relançar apaga os
  * sugeridos e refaz — o confirmado fica.
+ *
+ * SEM HIDRÔMETRO NO DESENHO (13/10/2026, docs/planos/2026-10-13-hidro-ancoras-automaticas.md,
+ * item 5.1): antes o plano parava em "Coloque o hidrômetro…". Agora ele é
+ * PROPOSTO na frente do lote (`pontoNaFrente`, a partir da caixa d'água), no
+ * pavimento mais baixo, `sugerido`, na altura de cavalete da ficha acima do
+ * terreno ali; o `AddTerminal` vai à frente do lote de comandos. Sem frente
+ * conhecida, o motivo pede a frente.
  */
 import type { BlueprintModel, Command, ObjectId, Terminal, Trecho, Wall } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { FICHA_DO_MATERIAL, KPA_POR_MCA, comprimentoEquivalenteM, perdaDistribuida, perdaNoHidrometroKpa } from './blueprintHidraulicaPressao';
 import { arvorePelasParedes, encaixarNaParede } from './blueprintRotaPelasParedes';
 import { dimensionarReservacao, type HipotesesDeReservatorio } from './blueprintReservacao';
+import { applyBatch } from './blueprintKernel';
+import { cotaDoTerrenoEm, pontoNaFrente, type LeitorDoTerreno, type OrigemDaFrente } from './blueprintAncorasHidro';
 
 export const ROTULO_DO_ALIMENTADOR = 'Alimentador';
 
@@ -68,7 +77,11 @@ export interface PlanoDoAlimentador {
   atende: boolean;
   avisos: string[];
   motivo: string | null;
+  /** Sem hidrômetro no desenho, o que o lançamento põe; o `AddTerminal` é o primeiro dos `comandos`. */
+  hidrometroProposto?: { levelId: ObjectId; at: P; cotaMm: number; origem: OrigemDaFrente } | null;
 }
+
+export const MOTIVO_SEM_FRENTE_PARA_O_HIDROMETRO = 'Marque a divisa da frente do lote (a que dá para a rua): o hidrômetro vai nela, no cavalete.';
 
 type P = { x: number; y: number };
 const vazio = (motivo: string): PlanoDoAlimentador => ({
@@ -131,18 +144,43 @@ export function rotaPelasParedesAte(
   return pontas;
 }
 
+/** Sem hidrômetro: o PROPOSTO na frente do lote, e o alimentador traçado num rascunho que já o tem. */
+function comHidrometroProposto(
+  model: BlueprintModel,
+  hip: HipotesesDeAlimentacao,
+  reservatorio: HipotesesDeReservatorio,
+  qMaxDoHidrometroM3h: number,
+  terreno: LeitorDoTerreno | null,
+  destino: Terminal,
+): PlanoDoAlimentador {
+  const frente = pontoNaFrente(model, destino.at);
+  if (!frente) return vazio(MOTIVO_SEM_FRENTE_PARA_O_HIDROMETRO);
+  // O cavalete fica no pavimento mais baixo (é a rua), na altura da ficha acima do terreno.
+  const terreo = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0];
+  const cotaMm = cotaDoTerrenoEm(frente.ponto, terreno) - terreo.elevationMm + (FICHA_DO_PONTO_HIDRAULICO.HIDROMETRO.cotaMm.AGUA_FRIA ?? 600);
+  const hidrometro: Command = {
+    type: 'AddTerminal', levelId: terreo.id, disciplina: 'AGUA_FRIA', tipo: FICHA_DO_PONTO_HIDRAULICO.HIDROMETRO.rotulo,
+    at: { ...frente.ponto }, cotaMm, tipoHidraulico: 'HIDROMETRO', sugerida: true,
+  };
+  const plano = planejarAlimentador(applyBatch(model, [hidrometro]).model, hip, reservatorio, qMaxDoHidrometroM3h, terreno);
+  if (plano.motivo) return { ...plano, entradaId: null };
+  return { ...plano, entradaId: null, comandos: [hidrometro, ...plano.comandos], hidrometroProposto: { levelId: terreo.id, at: { ...frente.ponto }, cotaMm, origem: frente.origem } };
+}
+
+/** `terreno`: a topografia exibida, quando há — a cota do terreno na frente para o hidrômetro PROPOSTO. */
 export function planejarAlimentador(
   model: BlueprintModel,
   hip: HipotesesDeAlimentacao,
   reservatorio: HipotesesDeReservatorio,
   qMaxDoHidrometroM3h: number,
+  terreno: LeitorDoTerreno | null = null,
 ): PlanoDoAlimentador {
   const terminais = model.terminais ?? [];
   const entrada = [...terminais].filter((t) => t.tipoHidraulico === 'HIDROMETRO' && t.disciplina === 'AGUA_FRIA').sort((a, b) => a.id.localeCompare(b.id))[0];
-  if (!entrada) return vazio('Coloque o hidrômetro (a entrada de água) no desenho — no cavalete, no limite do lote.');
   const caixas = terminais.filter((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA');
   const destino = caixas.find((c) => c.papelReservatorio === 'INFERIOR') ?? caixas.find((c) => c.papelReservatorio !== 'INFERIOR');
   if (!destino) return vazio("Não há caixa d'água no desenho para o alimentador chegar.");
+  if (!entrada) return comHidrometroProposto(model, hip, reservatorio, qMaxDoHidrometroM3h, terreno, destino);
 
   const nivelPorId = new Map(model.levels.map((l) => [l.id, l]));
   const n0 = nivelPorId.get(entrada.levelId)!;

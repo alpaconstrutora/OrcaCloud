@@ -16,9 +16,10 @@ const planejar = (m: BlueprintModel, hip = HIPOTESES_ALIMENTACAO_PADRAO) => plan
 const chave = (levelId: string, p: { x: number; y: number }, c: number) => `${levelId}|${p.x},${p.y}|${c}`;
 
 describe('E4.3 — sem o que ligar', () => {
-  it('sem hidrômetro: diz onde pôr; sem caixa: diz que falta', () => {
+  it('sem hidrômetro e sem frente do lote: pede a frente; sem caixa: diz que falta', () => {
     const m = sobrado(true, { cotaDaCaixaMm: 4500 });
-    expect(planejar(m).motivo).toMatch(/^Coloque o hidrômetro/);
+    // Desde 13/10/2026 o hidrômetro nasce na frente (blueprintHidroAncorasAguaPluvial.test.ts); o sobrado não tem divisas.
+    expect(planejar(m).motivo).toMatch(/^Marque a divisa da frente do lote/);
     const semCaixa = applyCommand({ ...m, terminais: m.terminais!.filter((t) => t.tipoHidraulico !== 'RESERVATORIO') }, { type: 'AddTerminal', levelId: m.levels[0].id, disciplina: 'AGUA_FRIA', tipo: 'H', at: point(6000, 1500), cotaMm: 600, tipoHidraulico: 'HIDROMETRO' }).model;
     expect(planejar(semCaixa).motivo).toMatch(/Não há caixa d'água/);
   });

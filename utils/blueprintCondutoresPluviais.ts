@@ -27,9 +27,18 @@
  * zero — a área de piso descoberto ainda não entra na contribuição. A
  * VERIFICAÇÃO acumula a vazão pela rede inteira (a lançada e a desenhada à
  * mão), por gravidade: cada trecho leva o que vem de cima.
+ *
+ * SEM CAIXA DE AREIA NEM SAÍDA (13/10/2026, docs/planos/2026-10-13-hidro-ancoras-automaticas.md,
+ * item 5.2): antes o plano parava em "Coloque a caixa de areia ou a saída
+ * pluvial…". Agora a SAÍDA (sarjeta) é PROPOSTA na frente do lote, no ponto
+ * mais perto dos bocais, `sugerida`, na cota em que o condutor mais longo
+ * chega com a declividade da premissa — o nível real da sarjeta é do mundo,
+ * e o aviso manda conferir. A caixa de areia continua opcional.
  */
 import type { BlueprintModel, Command, ObjectId, Terminal, Trecho } from './blueprintKernel';
-import { extensaoVerticalDaCaixa } from './blueprintKernel';
+import { applyBatch, extensaoVerticalDaCaixa } from './blueprintKernel';
+import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
+import { cotaDoTerrenoEm, pontoNaFrente, type LeitorDoTerreno, type OrigemDaFrente } from './blueprintAncorasHidro';
 import { fazerChave, type No } from './blueprintGrafoDeRede';
 import { RUGOSIDADE_DA_CALHA, ehCalha, verificarCalhas } from './blueprintCalhas';
 import type { HipotesesPluviais } from './blueprintPluvial';
@@ -164,16 +173,54 @@ export interface PlanoDeCondutores {
   apagados: number;
   avisos: string[];
   comandos: Command[];
+  /** Sem caixa de areia nem saída, a saída que o lançamento põe; o `AddTerminal` é o primeiro dos `comandos`. */
+  saidaProposta?: { levelId: ObjectId; at: { x: number; y: number }; cotaMm: number; origem: OrigemDaFrente } | null;
 }
 
-export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais): PlanoDeCondutores {
+export const MOTIVO_SEM_FRENTE_PARA_A_SAIDA_PLUVIAL = 'Marque a divisa da frente do lote (a que dá para a rua): a saída pluvial vai nela.';
+
+/** Sem caixa de areia nem saída: a saída PROPOSTA na frente, e os condutores traçados num rascunho que já a tem. */
+function comSaidaProposta(model: BlueprintModel, hip: HipotesesPluviais, fontes: Terminal[], terreno: LeitorDoTerreno | null): PlanoDeCondutores {
+  const vazio = (motivo: string): PlanoDeCondutores => ({ motivo, fontes: 0, verticais: 0, horizontais: 0, apagados: 0, avisos: [], comandos: [] });
+  // O ponto da frente mais perto de algum bocal: o condutor sai do lote pelo caminho mais curto.
+  const candidatos = fontes.flatMap((f) => {
+    const p = pontoNaFrente(model, f.at);
+    return p ? [{ p, d: Math.hypot(p.ponto.x - f.at.x, p.ponto.y - f.at.y) }] : [];
+  });
+  if (candidatos.length === 0) return vazio(MOTIVO_SEM_FRENTE_PARA_A_SAIDA_PLUVIAL);
+  const frente = candidatos.sort((a, b) => a.d - b.d)[0].p;
+  const terreo = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0];
+  // A cota: o condutor MAIS LONGO chega com a declividade da premissa (todos os outros, com mais).
+  const i = Math.max(DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT, hip.declividadeDoCondutorPct);
+  const L = Math.max(...fontes.map((f) => Math.hypot(frente.ponto.x - f.at.x, frente.ponto.y - f.at.y)));
+  const cotaMm = Math.min(
+    cotaDoTerrenoEm(frente.ponto, terreno) - terreo.elevationMm + (FICHA_DO_PONTO_HIDRAULICO.LIGACAO_PLUVIAL.cotaMm.PLUVIAL ?? -300),
+    -Math.abs(hip.profundidadeDoCondutorMm) - Math.ceil((L * i) / 100),
+  );
+  const saida: Command = {
+    type: 'AddTerminal', levelId: terreo.id, disciplina: 'PLUVIAL', tipo: FICHA_DO_PONTO_HIDRAULICO.LIGACAO_PLUVIAL.rotulo,
+    at: { ...frente.ponto }, cotaMm, tipoHidraulico: 'LIGACAO_PLUVIAL', sugerida: true,
+  };
+  const plano = planejarCondutores(applyBatch(model, [saida]).model, hip, terreno);
+  if (plano.motivo || plano.comandos.length === 0) return plano;
+  const m = (mm: number) => (Math.abs(mm) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return {
+    ...plano,
+    comandos: [saida, ...plano.comandos],
+    avisos: [`saída pluvial posta na frente do lote, a −${m(cotaMm)} m (o condutor chega a ${i.toLocaleString('pt-BR')} %) — confira o nível da sarjeta ou da galeria`, ...plano.avisos],
+    saidaProposta: { levelId: terreo.id, at: { ...frente.ponto }, cotaMm, origem: frente.origem },
+  };
+}
+
+/** `terreno`: a topografia exibida, quando há — a cota do terreno na frente para a saída PROPOSTA. */
+export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais, terreno: LeitorDoTerreno | null = null): PlanoDeCondutores {
   const vazio = (motivo: string): PlanoDeCondutores => ({ motivo, fontes: 0, verticais: 0, horizontais: 0, apagados: 0, avisos: [], comandos: [] });
   const terminais = model.terminais ?? [];
   const fontes = terminais.filter((t) => t.tipoHidraulico === 'RALO_PLUVIAL').sort((a, b) => a.id.localeCompare(b.id));
   if (fontes.length === 0) return vazio('Lance as calhas (o condutor desce do bocal) ou ponha um ralo pluvial.');
   const caixasDeAreia = terminais.filter((t) => t.tipoHidraulico === 'CAIXA_AREIA').sort((a, b) => a.id.localeCompare(b.id));
   const saidas = terminais.filter((t) => t.tipoHidraulico === 'LIGACAO_PLUVIAL').sort((a, b) => a.id.localeCompare(b.id));
-  if (caixasDeAreia.length === 0 && saidas.length === 0) return vazio('Coloque a caixa de areia ou a saída pluvial (sarjeta ou galeria) — é para lá que os condutores correm.');
+  if (caixasDeAreia.length === 0 && saidas.length === 0) return comSaidaProposta(model, hip, fontes, terreno);
 
   const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
   const indice = new Map(niveis.map((l, i) => [l.id, i]));

@@ -36,6 +36,11 @@ export default function PainelAlimentador({ plano, hip, onHip, onLancar }: Props
           >
             Chega à boia do reservatório {plano.destinoInferior ? 'inferior' : 'superior'} com {n(plano.pressaoNaBoiaKpa)} kPa (mín. {n(hip.pressaoMinimaNaBoiaKpa, 0)}).
           </p>
+          {plano.hidrometroProposto && (
+            <p className="text-xs text-slate-600" data-testid="alimentador-hidrometro-proposto">
+              Sem hidrômetro no desenho: ao lançar, ele vai na frente do lote, no cavalete. Arraste-o para onde a concessionária vai ligar.
+            </p>
+          )}
           <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-slate-600">
             <dt>DN · comprimento</dt>
             <dd className="tabular-nums">
@@ -75,7 +80,7 @@ export default function PainelAlimentador({ plano, hip, onHip, onLancar }: Props
           title={motivoDoBotao}
           className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {plano.apagados > 0 ? 'Relançar alimentador' : 'Lançar alimentador'}
+          {plano.hidrometroProposto ? 'Lançar hidrômetro e alimentador' : plano.apagados > 0 ? 'Relançar alimentador' : 'Lançar alimentador'}
         </button>
       </div>
     </div>

@@ -58,7 +58,7 @@ export default function PainelCondutores({ plano, condutores, hip, onHip, onLanc
         className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
         data-testid="condutores-lancar"
       >
-        {plano.apagados > 0 ? 'Relançar condutores' : 'Lançar condutores'}
+        {plano.saidaProposta ? 'Lançar saída e condutores' : plano.apagados > 0 ? 'Relançar condutores' : 'Lançar condutores'}
       </button>
       {condutores.length > 0 && (
         <p className={`text-xs ${ruins.length ? 'text-red-700' : 'text-slate-600'}`} data-testid="condutores-verificacao">

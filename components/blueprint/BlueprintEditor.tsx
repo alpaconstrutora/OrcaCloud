@@ -8918,9 +8918,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const planoDoAlimentador = useMemo(
     () =>
       tarefaAberta === 'agua'
-        ? planejarAlimentador(editor.model, hidroDoEstudo.hipoteses.alimentacao, hidroDoEstudo.hipoteses.reservatorio, hidroDoEstudo.hipoteses.pressao.qMaxDoHidrometroM3h)
+        ? planejarAlimentador(editor.model, hidroDoEstudo.hipoteses.alimentacao, hidroDoEstudo.hipoteses.reservatorio, hidroDoEstudo.hipoteses.pressao.qMaxDoHidrometroM3h, terrenoParaCorte)
         : null,
-    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses],
+    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses, terrenoParaCorte],
   );
   /** RECALQUE (29/09/2026, E4.4): só com reservatório INFERIOR. */
   const planoDoRecalque = useMemo(
@@ -9050,8 +9050,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   // CONDUTORES (29/09/2026, E6.3): do bocal à caixa de areia e à saída pluvial.
   const planoDeCondutores = useMemo(
-    () => (tarefaAberta === 'pluvial' ? planejarCondutores(editor.model, hipotesesHidro.pluvial) : null),
-    [tarefaAberta, editor.model, hipotesesHidro.pluvial],
+    () => (tarefaAberta === 'pluvial' ? planejarCondutores(editor.model, hipotesesHidro.pluvial, terrenoParaCorte) : null),
+    [tarefaAberta, editor.model, hipotesesHidro.pluvial, terrenoParaCorte],
   );
   const condutoresDoDesenho = useMemo(
     () => (tarefaAberta === 'pluvial' ? verificarCondutores(editor.model, hipotesesHidro.pluvial) : []),

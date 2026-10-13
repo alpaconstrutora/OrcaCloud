@@ -89,7 +89,8 @@ describe('E6.3 — o lançamento', () => {
   it('os motivos: sem bocal, e sem destino', () => {
     const vazio = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
     expect(planejarCondutores(vazio, hip).motivo).toMatch(/^Lance as calhas/);
-    expect(planejarCondutores(casa({ caixa: false, saida: false }), hip).motivo).toMatch(/^Coloque a caixa de areia/);
+    // Desde 13/10/2026 a saída nasce na frente (blueprintHidroAncorasAguaPluvial.test.ts); esta casa não tem divisas.
+    expect(planejarCondutores(casa({ caixa: false, saida: false }), hip).motivo).toMatch(/^Marque a divisa da frente do lote/);
   });
 
   it('relançar troca os sugeridos; o bocal com condutor confirmado fica de fora', () => {

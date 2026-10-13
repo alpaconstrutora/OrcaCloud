@@ -294,6 +294,9 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
     B.push({ tipo: 'secao', texto: 'Alimentação predial' });
     if (a.motivo) {
       B.push({ tipo: 'paragrafo', texto: a.motivo });
+    } else if (a.hidrometroProposto) {
+      // 13/10/2026: o hidrômetro só proposto não existe no desenho — não há o que tabelar.
+      B.push({ tipo: 'paragrafo', texto: 'Sem hidrômetro no desenho: o lançamento do alimentador o põe na frente do lote.' });
     } else {
       B.push({
         tipo: 'tabela',

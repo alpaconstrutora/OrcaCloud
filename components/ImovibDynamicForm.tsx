@@ -73,9 +73,9 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
     };
 
     return (
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm mb-6">
-            <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
-                <h3 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+        <div className="bg-white rounded-[10px] p-6 border border-gray-100 shadow-sm mb-6">
+            <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-3">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-blue-600" />
                     Premissas Dinâmicas (Macroeconomia e Tempo)
                 </h3>
@@ -92,48 +92,48 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Time Parameters */}
                 <div className="space-y-4">
-                    <h4 className="flex items-center gap-2 text-sm font-black text-gray-500 uppercase tracking-widest">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3">
                         <Calendar className="w-4 h-4" /> Cronograma (Meses)
                     </h4>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         <div>
-                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Duração Obras (Meses)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Duração Obras (Meses)</label>
                             <input
                                 type="number"
                                 value={constructionDurationMonths}
                                 onChange={(e) => setConstructionDurationMonths(e.target.value)}
                                 onBlur={handleSave}
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm font-medium transition-colors"
+                                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Mês Início Obras</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Mês Início Obras</label>
                             <input
                                 type="number"
                                 value={constructionStartMonth}
                                 onChange={(e) => setConstructionStartMonth(e.target.value)}
                                 onBlur={handleSave}
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm font-medium transition-colors"
+                                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Duração Vendas (Meses)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Duração Vendas (Meses)</label>
                             <input
                                 type="number"
                                 value={salesDurationMonths}
                                 onChange={(e) => setSalesDurationMonths(e.target.value)}
                                 onBlur={handleSave}
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm font-medium transition-colors"
+                                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Mês Início Vendas</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Mês Início Vendas</label>
                             <input
                                 type="number"
                                 value={salesStartMonth}
                                 onChange={(e) => setSalesStartMonth(e.target.value)}
                                 onBlur={handleSave}
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm font-medium transition-colors"
+                                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
                     </div>
@@ -141,33 +141,33 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
 
                 {/* Macro Parameters */}
                 <div className="space-y-4">
-                    <h4 className="flex items-center gap-2 text-sm font-black text-gray-500 uppercase tracking-widest">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3">
                         <Percent className="w-4 h-4" /> Variáveis Macro (%)
                     </h4>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         <div>
-                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Inflação (Mês)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Inflação (Mês)</label>
                             <input
                                 type="number"
                                 step="0.01"
                                 value={inflationRate}
                                 onChange={(e) => setInflationRate(e.target.value)}
                                 onBlur={handleSave}
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm font-medium transition-colors"
+                                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-semibold text-gray-600 mb-1">TMA / Desconto (Ano)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">TMA / Desconto (Ano)</label>
                             <input
                                 type="number"
                                 step="0.1"
                                 value={discountRate}
                                 onChange={(e) => setDiscountRate(e.target.value)}
                                 onBlur={handleSave}
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm font-medium transition-colors"
+                                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
-                        <div className="col-span-2 text-xs text-gray-500 font-medium px-1 mt-1">
+                        <div className="col-span-2 text-xs text-gray-500">
                             A velocidade de vendas agota é calculada automaticamente diluindo o VGV linearmente pela Duração das Vendas.
                         </div>
                     </div>
@@ -177,12 +177,12 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
             {/* Advanced Finance */}
             <div className="mt-8 pt-8 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">
-                    <h4 className="flex items-center gap-2 text-sm font-black text-gray-500 uppercase tracking-widest">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3">
                         Deduções Diretas (%)
                     </h4>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         <div>
-                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Impostos (Ex: RET)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Impostos (Ex: RET)</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -191,11 +191,11 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                                 onBlur={handleSave}
                                 disabled={capexRubricasAtivas}
                                 title={capexRubricasAtivas ? motivoDeducoesForaDoCalculo : undefined}
-                                className="disabled:opacity-50 disabled:cursor-not-allowed w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm font-medium transition-colors text-red-700"
+                                className="disabled:opacity-50 disabled:cursor-not-allowed w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm transition-colors text-red-700"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Comissão / Marketing</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Comissão / Marketing</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -204,10 +204,10 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                                 onBlur={handleSave}
                                 disabled={capexRubricasAtivas}
                                 title={capexRubricasAtivas ? motivoDeducoesForaDoCalculo : undefined}
-                                className="disabled:opacity-50 disabled:cursor-not-allowed w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm font-medium transition-colors text-red-700"
+                                className="disabled:opacity-50 disabled:cursor-not-allowed w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm transition-colors text-red-700"
                             />
                         </div>
-                        <div className={`col-span-2 text-xs font-medium px-1 mt-1 ${capexRubricasAtivas ? 'text-amber-700' : 'text-gray-500'}`}>
+                        <div className={`col-span-2 text-xs ${capexRubricasAtivas ? 'text-amber-700' : 'text-gray-500'}`}>
                             {capexRubricasAtivas
                                 ? motivoDeducoesForaDoCalculo
                                 : 'Calculadas como % direto sobre o VGV da receita bruta mensal de vendas.'}
@@ -216,32 +216,32 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                 </div>
 
                 <div className="space-y-4">
-                    <h4 className="flex items-center gap-2 text-sm font-black text-gray-500 uppercase tracking-widest">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3">
                         Financiamento Obra (Plano Empresarial)
                     </h4>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         <div>
-                            <span className="block text-form-label font-semibold text-gray-600 mb-1">% Financiado</span>
+                            <span className="block text-xs font-semibold text-slate-500 mb-1.5">% Financiado</span>
                             <div
                                 title={`Valor usado no cálculo — ${financiadoOrigem}.`}
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium text-gray-700"
+                                className="w-full h-9 px-3 flex items-center bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-700"
                             >
                                 {financiadoEfetivo.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%
                             </div>
-                            <span className="block text-xs text-gray-500 mt-1">{financiadoOrigem}</span>
+                            <span className="block text-xs text-gray-500 mt-1.5">{financiadoOrigem}</span>
                         </div>
                         <div>
-                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Juros (a.a %)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Juros (a.a %)</label>
                             <input
                                 type="number"
                                 step="0.1"
                                 value={financingRateAnnual}
                                 onChange={(e) => setFinancingRateAnnual(e.target.value)}
                                 onBlur={handleSave}
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm font-medium transition-colors"
+                                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm transition-colors"
                             />
                         </div>
-                        <div className="col-span-2 text-xs text-gray-500 font-medium px-1 mt-1">
+                        <div className="col-span-2 text-xs text-gray-500">
                             O banco assume essa % do custo de obra mensal. Receitas futuras pagam a dívida e juros.
                         </div>
                     </div>

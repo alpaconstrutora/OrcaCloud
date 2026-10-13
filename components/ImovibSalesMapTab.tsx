@@ -9,17 +9,19 @@ import { useConfirm } from './ui/confirm';
 import { planejarRegeneracao } from '../utils/imovibEspelho';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
+import { KpiCard } from './ui/KpiCard';
 
 interface ImovibSalesMapTabProps {
     study: ImovibStudy;
     onDataChanged: () => void;
 }
 
+// §8 do guia: status é texto colorido — sem pílula/fundo.
 const STATUS_COLORS: Record<string, string> = {
-    'DISPONÍVEL': 'bg-emerald-100 text-emerald-700',
-    'RESERVADO': 'bg-amber-100 text-amber-700',
-    'VENDIDO': 'bg-blue-100 text-blue-700',
-    'PERMUTADO': 'bg-purple-100 text-purple-700',
+    'DISPONÍVEL': 'text-emerald-700',
+    'RESERVADO': 'text-amber-700',
+    'VENDIDO': 'text-blue-700',
+    'PERMUTADO': 'text-purple-700',
 };
 
 const POSITION_OPTIONS = ['FRENTE', 'LATERAL', 'FUNDOS'] as const;
@@ -212,23 +214,23 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
 
     if (loading) {
         return (
-            <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm flex items-center justify-center h-40">
+            <div className="bg-white rounded-[10px] p-6 border border-gray-200 flex items-center justify-center h-40">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-[10px] border border-gray-200 overflow-hidden">
             {/* Header */}
             <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-                        <Home className="w-6 h-6" />
+                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-[6px]">
+                        <Home className="w-5 h-5" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black text-slate-900 tracking-tight">Vendas de Ativos</h2>
-                        <p className="text-slate-500 text-sm font-medium mt-0.5">Unidades individualizadas do empreendimento</p>
+                        <h2 className="text-lg font-semibold text-gray-900">Vendas de Ativos</h2>
+                        <p className="text-slate-500 text-sm mt-0.5">Unidades individualizadas do empreendimento</p>
                     </div>
                 </div>
                 {/* Regenerar e Precificação gravam no espelho. */}
@@ -239,15 +241,15 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                 onClick={handleRegenerate}
                                 disabled={generating}
                                 title={!pode ? motivo : 'Regenerar espelho'}
-                                className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50"
+                                className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-slate-600 rounded-[6px] hover:bg-slate-50 transition-colors disabled:opacity-50"
                             >
-                                <RefreshCw className={`w-5 h-5 ${generating ? 'animate-spin' : ''}`} />
+                                <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
                             </button>
                             <button
                                 onClick={() => setPricingModalOpen(true)}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                             >
-                                <BrainCircuit className="w-4 h-4" />
+                                <BrainCircuit className="w-[15px] h-[15px]" />
                                 Inteligência de Precificação
                             </button>
                         </>
@@ -255,54 +257,43 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                 </fieldset>
             </div>
 
-            {/* KPIs */}
+            {/* KPIs — §4: KpiCard */}
             {!loadError && instances.length > 0 && (
-                <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
-                    <div className="p-5 flex items-center gap-3">
-                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                            <BarChart3 className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">VGV Total</p>
-                            <p className="font-black text-slate-900 text-lg leading-tight">
-                                {vgvTotal > 0 ? formatBRL(vgvTotal) : '—'}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="p-5 flex items-center gap-3">
-                        <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
-                            <Home className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Unidades</p>
-                            <p className="font-black text-slate-900 text-lg leading-tight">{totalUnits}</p>
-                        </div>
-                    </div>
-                    <div className="p-5 flex items-center gap-3">
-                        <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
-                            <TrendingUp className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Vendidas</p>
-                            <p className="font-black text-slate-900 text-lg leading-tight">{soldUnits}</p>
-                        </div>
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 border-b border-gray-100">
+                    <KpiCard
+                        label="VGV Total"
+                        value={vgvTotal > 0 ? formatBRL(vgvTotal) : '—'}
+                        icon={<BarChart3 className="w-4 h-4" />}
+                        color="blue"
+                    />
+                    <KpiCard
+                        label="Total Unidades"
+                        value={totalUnits}
+                        icon={<Home className="w-4 h-4" />}
+                        color="emerald"
+                    />
+                    <KpiCard
+                        label="Vendidas"
+                        value={soldUnits}
+                        icon={<TrendingUp className="w-4 h-4" />}
+                        color="amber"
+                    />
                 </div>
             )}
 
             {/* Body */}
             {loadError ? (
                 <div className="p-12 flex flex-col items-center justify-center gap-4 text-center">
-                    <div className="p-4 bg-red-50 rounded-2xl">
+                    <div className="p-4 bg-red-50 rounded-[10px]">
                         <AlertCircle className="w-10 h-10 text-red-500" />
                     </div>
                     <div>
-                        <p className="font-black text-slate-800 text-lg">Erro ao carregar as unidades do espelho de vendas</p>
+                        <p className="text-lg font-semibold text-gray-900">Erro ao carregar as unidades do espelho de vendas</p>
                         <p className="text-slate-500 text-sm mt-1">{loadError}</p>
                     </div>
                     <button
                         onClick={loadInstances}
-                        className="flex items-center gap-2 h-9 px-4 bg-white border border-slate-200 text-slate-700 rounded-[6px] text-sm font-medium hover:bg-slate-50 transition-colors"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-slate-700 rounded-[6px] font-medium text-[13px] hover:bg-slate-50 transition-colors"
                     >
                         <RefreshCw className="w-4 h-4" />
                         Tentar de novo
@@ -310,17 +301,17 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                 </div>
             ) : instances.length === 0 ? (
                 <div className="p-12 flex flex-col items-center justify-center gap-4 text-center">
-                    <div className="p-4 bg-slate-100 rounded-2xl">
+                    <div className="p-4 bg-slate-100 rounded-[10px]">
                         <Home className="w-10 h-10 text-slate-400" />
                     </div>
                     <div>
-                        <p className="font-black text-slate-800 text-lg">Vendas de Ativos não gerado</p>
+                        <p className="text-lg font-semibold text-gray-900">Vendas de Ativos não gerado</p>
                         <p className="text-slate-500 text-sm mt-1">
                             Clique no botão abaixo para expandir as tipologias e gerar as unidades individuais.
                         </p>
                     </div>
                     {blocks.length === 0 ? (
-                        <p className="text-amber-600 text-sm font-bold">
+                        <p className="text-amber-600 text-sm font-medium">
                             Adicione blocos e tipologias primeiro na aba de Tipologias.
                         </p>
                     ) : (
@@ -328,7 +319,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                             onClick={generateInstances}
                             disabled={generating || !pode}
                             title={!pode ? motivo : undefined}
-                            className="flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {generating ? (
                                 <>
@@ -350,22 +341,22 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                   <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="border-b border-slate-100 bg-slate-50">
-                                <th className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Unidade</th>
-                                <th className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Bloco</th>
-                                <th className="text-center px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Andar</th>
-                                <th className="text-right px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Á. Priv.</th>
-                                <th className="text-right px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Preço</th>
-                                <th className="text-right px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Vlr/m²</th>
-                                <th className="text-center px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Peso Pos.</th>
-                                <th className="text-center px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Peso Sol</th>
-                                <th className="text-center px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Posição</th>
-                                <th className="text-center px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Sol</th>
-                                <th className="text-center px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">Status</th>
+                            <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                                <th className="text-left px-6 py-2 border-r border-gray-100 last:border-r-0">Unidade</th>
+                                <th className="text-left px-6 py-2 border-r border-gray-100 last:border-r-0">Bloco</th>
+                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Andar</th>
+                                <th className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Á. Priv.</th>
+                                <th className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Preço</th>
+                                <th className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Vlr/m²</th>
+                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Peso Pos.</th>
+                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Peso Sol</th>
+                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Posição</th>
+                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Sol</th>
+                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Status</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {instances.map((inst, idx) => {
+                        <tbody className="divide-y divide-gray-200">
+                            {instances.map((inst) => {
                                 const pricePerSqm =
                                     inst.price > 0 && inst.private_area > 0
                                         ? Math.round(inst.price / inst.private_area)
@@ -373,66 +364,66 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                 return (
                                     <tr
                                         key={inst.id}
-                                        className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
+                                        className="hover:bg-blue-50/50 transition-colors"
                                     >
                                         {/* Unidade */}
-                                        <td className="px-4 py-2.5 text-slate-800">{inst.name}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{inst.name}</td>
 
                                         {/* Bloco */}
-                                        <td className="px-4 py-2.5 text-slate-600 font-medium">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                             {blockMap[inst.block_id] || '—'}
                                         </td>
 
                                         {/* Andar */}
-                                        <td className="px-4 py-2.5 text-center text-slate-600 font-medium">{inst.floor}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal text-gray-600">{inst.floor}</td>
 
                                         {/* Área Privativa */}
-                                        <td className="px-4 py-2.5 text-right text-slate-600 font-medium">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
                                             {inst.private_area > 0 ? `${inst.private_area} m²` : '—'}
                                         </td>
 
                                         {/* Preço */}
-                                        <td className="px-4 py-2.5 text-right font-medium text-slate-800">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
                                             {inst.price > 0 ? formatBRL(inst.price) : '—'}
                                         </td>
 
                                         {/* VLR/m² */}
-                                        <td className="px-4 py-2.5 text-right text-slate-600 font-medium">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
                                             {pricePerSqm ? formatBRL(pricePerSqm) : '—'}
                                         </td>
 
                                         {/* Peso Pos. */}
-                                        <td className="px-4 py-2.5 text-center text-sm">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal">
                                             <div className="flex flex-col items-center">
-                                                <span className="text-slate-900 leading-none mb-0.5">
+                                                <span className="text-gray-700 leading-none mb-0.5">
                                                     {inst.position_type === 'FRENTE' ? '1.03x' : inst.position_type === 'FUNDOS' ? '0.97x' : '1.00x'}
                                                 </span>
-                                                <span className="text-slate-500 text-xs">
+                                                <span className="text-gray-500 text-xs">
                                                     {inst.position_type === 'FRENTE' ? 'Frente' : inst.position_type === 'FUNDOS' ? 'Fundos' : 'Lateral / Base'}
                                                 </span>
                                             </div>
                                         </td>
 
                                         {/* Peso Sol */}
-                                        <td className="px-4 py-2.5 text-center text-sm">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal">
                                             <div className="flex flex-col items-center">
-                                                <span className="text-slate-900 leading-none mb-0.5">
+                                                <span className="text-gray-700 leading-none mb-0.5">
                                                     {inst.sun_orientation === 'NORTE' ? '1.02x' : inst.sun_orientation === 'LESTE' ? '1.01x' : inst.sun_orientation === 'OESTE' ? '0.99x' : '0.98x'}
                                                 </span>
-                                                <span className="text-slate-500 text-xs">
+                                                <span className="text-gray-500 text-xs">
                                                     {inst.sun_orientation === 'NORTE' ? 'Norte' : inst.sun_orientation === 'LESTE' ? 'Leste' : inst.sun_orientation === 'OESTE' ? 'Oeste' : 'Sul'}
                                                 </span>
                                             </div>
                                         </td>
 
                                         {/* Posição */}
-                                        <td className="px-4 py-2.5 text-center">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
                                             <select
                                                 value={inst.position_type}
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'position_type', e.target.value)
                                                 }
-                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed"
+                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded-[6px] px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed"
                                             >
                                                 {POSITION_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>
@@ -441,13 +432,13 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                         </td>
 
                                         {/* Sol */}
-                                        <td className="px-4 py-2.5 text-center">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
                                             <select
                                                 value={inst.sun_orientation}
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'sun_orientation', e.target.value)
                                                 }
-                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed"
+                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded-[6px] px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed"
                                             >
                                                 {SUN_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>
@@ -456,13 +447,13 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                         </td>
 
                                         {/* Status */}
-                                        <td className="px-4 py-2.5 text-center">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
                                             <select
                                                 value={inst.status}
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'status', e.target.value)
                                                 }
-                                                className={`text-sm font-normal border rounded px-2 py-1 focus:outline-none cursor-pointer disabled:cursor-not-allowed ${STATUS_COLORS[inst.status] || 'bg-slate-100 text-slate-700'} border-transparent`}
+                                                className={`text-sm font-normal bg-gray-50 border border-gray-100 rounded-[6px] px-2 py-1 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed ${STATUS_COLORS[inst.status] || 'text-gray-700'}`}
                                             >
                                                 {STATUS_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>

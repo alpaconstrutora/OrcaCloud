@@ -5,6 +5,7 @@ import { imovibService } from '../services/imovibService';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
+import { KpiCard, kpiColorFromClass } from './ui/KpiCard';
 import { Leaf, Users, Shield, Award, CheckCircle2, ChevronDown, Gavel, DollarSign, TrendingUp, Percent } from 'lucide-react';
 
 interface ImovibEsgReportFormProps {
@@ -124,7 +125,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
     const tma = study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate;
     // Penalidade qualitativa: média ESG baixa rebaixa o rating.
     const avgEsg = (envScore + socScore + govScore) / 3;
-    const { rating, cor: ratingColor, fundo: ratingBg } = calcularRatingOpura(math.annualIrr, tma, avgEsg);
+    const { rating, cor: ratingColor } = calcularRatingOpura(math.annualIrr, tma, avgEsg);
 
     const handleUpdate = async (field: keyof ImovibStudy, value: any) => {
         try {
@@ -190,30 +191,27 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
     return (
         <div className="space-y-6 pb-20 max-w-6xl mx-auto">
 
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between gap-6 mb-4">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <Award className="w-7 h-7 text-emerald-500" />
+                    <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <Award className="w-5 h-5 text-emerald-500" />
                         Parecer do Comitê & ESG
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1 font-medium max-w-2xl">
+                    <p className="text-slate-500 text-sm mt-1 max-w-2xl">
                         Avaliação qualitativa institucional do projeto. O rating abaixo é gerado dinamicamente mesclando o prêmio de risco (TIR projetada) e as conformidades de impacto socioambiental (ESG).
                     </p>
                 </div>
 
-                {/* Dynamic Rating Card */}
-                <div className={`px-8 py-4 rounded-2xl border ${ratingBg} flex items-center gap-6 shadow-sm`}>
-                    <div>
-                        <span className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-1">Rating Opura</span>
-                        <span className={`block text-4xl font-black tracking-tighter ${ratingColor}`}>{rating}</span>
-                        <span
-                            className="block text-xs text-slate-500 mt-1"
-                            title="A TMA vem da aba Dinâmica. Faixas: TIR acima de TMA + 8 p.p. = AA/AAA; acima de TMA + 4 p.p. = A/AA; a partir da TMA = BB/BBB; abaixo = C."
-                        >
-                            TIR ≥ TMA do estudo ({fmtPct(tma)}% a.a.)
-                        </span>
-                    </div>
-                </div>
+                {/* Rating dinâmico — §4: KpiCard; a cor do rating vem de calcularRatingOpura (texto colorido, sem fundo — §8) */}
+                <KpiCard
+                    label="Rating Opura"
+                    value={rating}
+                    sub={`TIR ≥ TMA do estudo (${fmtPct(tma)}% a.a.)`}
+                    title="A TMA vem da aba Dinâmica. Faixas: TIR acima de TMA + 8 p.p. = AA/AAA; acima de TMA + 4 p.p. = A/AA; a partir da TMA = BB/BBB; abaixo = C."
+                    icon={<Award className="w-4 h-4" />}
+                    color={kpiColorFromClass(ratingColor)}
+                    className="shrink-0"
+                />
             </div>
 
             {/* Tudo aqui grava: notas E/S/G, certificações, memorando, iniciativas e ata do comitê. */}
@@ -221,57 +219,57 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
 
                 <div className="space-y-6">
                     {/* ESG SCORING */}
-                    <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
-                        <h3 className="text-lg font-black text-slate-800 mb-6">Pilha ESG (Matriz Material)</h3>
+                    <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Pilha ESG (Matriz Material)</h3>
 
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between p-4 bg-emerald-50/50 rounded-[10px] border border-emerald-100">
                                 <div>
-                                    <span className="font-bold text-emerald-900 block flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-emerald-900 flex items-center gap-2">
                                         <Leaf className="w-4 h-4 text-emerald-600" />
                                         E - Environmental (Ambiental)
                                     </span>
-                                    <span className="text-xs text-emerald-600/70 font-medium">Impacto no terreno, resíduos, carbono.</span>
+                                    <span className="text-xs text-emerald-600/70">Impacto no terreno, resíduos, carbono.</span>
                                 </div>
                                 <NotaEsg rotulo="Ambiental (E)" valor={envScore} onChange={(n) => { setEnvScore(n); handleUpdate('esg_environmental_score', n); }} icone={Leaf} corAtiva="text-emerald-500" />
                             </div>
 
-                            <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
+                            <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-[10px] border border-blue-100">
                                 <div>
-                                    <span className="font-bold text-blue-900 block flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-blue-900 flex items-center gap-2">
                                         <Users className="w-4 h-4 text-blue-600" />
                                         S - Social (Social)
                                     </span>
-                                    <span className="text-xs text-blue-600/70 font-medium">Comunidade entorno, acessibilidade urbana.</span>
+                                    <span className="text-xs text-blue-600/70">Comunidade entorno, acessibilidade urbana.</span>
                                 </div>
                                 <NotaEsg rotulo="Social (S)" valor={socScore} onChange={(n) => { setSocScore(n); handleUpdate('esg_social_score', n); }} icone={Users} corAtiva="text-blue-500" />
                             </div>
 
-                            <div className="flex items-center justify-between p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+                            <div className="flex items-center justify-between p-4 bg-indigo-50/50 rounded-[10px] border border-indigo-100">
                                 <div>
-                                    <span className="font-bold text-indigo-900 block flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
                                         <Shield className="w-4 h-4 text-indigo-600" />
                                         G - Governance (Governança)
                                     </span>
-                                    <span className="text-xs text-indigo-600/70 font-medium">Transparência da SPE, compliance legal.</span>
+                                    <span className="text-xs text-indigo-600/70">Transparência da SPE, compliance legal.</span>
                                 </div>
                                 <NotaEsg rotulo="Governança (G)" valor={govScore} onChange={(n) => { setGovScore(n); handleUpdate('esg_governance_score', n); }} icone={Shield} corAtiva="text-indigo-500" />
                             </div>
                         </div>
 
-                        <div className="mt-8">
-                            <h4 className="text-sm font-bold text-slate-700 mb-3 block">Certificações Pleiteadas</h4>
+                        <div className="mt-6">
+                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Certificações Pleiteadas</h4>
                             <div className="flex flex-wrap gap-2">
                                 {AVAILABLE_CERTIFICATIONS.map(cert => (
                                     <button
                                         key={cert}
                                         onClick={() => toggleCert(cert)}
-                                        className={`px-4 py-2 rounded-xl text-button font-bold border transition-all ${certs.includes(cert)
-                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm'
+                                        className={`inline-flex items-center gap-1 h-9 px-3 rounded-[6px] text-[13px] font-medium border transition-all ${certs.includes(cert)
+                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                                             : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
                                             }`}
                                     >
-                                        {certs.includes(cert) && <CheckCircle2 className="w-3 h-3 inline mr-1" />}
+                                        {certs.includes(cert) && <CheckCircle2 className="w-3.5 h-3.5" />}
                                         {cert}
                                     </button>
                                 ))}
@@ -279,17 +277,17 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm relative">
-                        <h3 className="text-sm font-bold text-slate-800 mb-3">Memorando Executivo ESG</h3>
+                    <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm relative">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-3">Memorando Executivo ESG</h3>
                         <textarea
                             value={esgNotes}
                             onChange={(e) => setEsgNotes(e.target.value)}
                             onBlur={() => handleUpdate('esg_notes', esgNotes)}
                             placeholder="Descreva as mitigações ambientais, doações ao município (praças), ou estrutura do consórcio..."
-                            className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 outline-none text-slate-700 font-medium resize-none transition-all text-sm"
+                            className="w-full h-32 px-3 py-2 bg-slate-50 border border-slate-200 rounded-[6px] focus:bg-white focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700 resize-none transition-all text-sm"
                         />
                         {isSaving && (
-                            <div className="absolute top-8 right-8">
+                            <div className="absolute top-6 right-6">
                                 <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping"></div>
                             </div>
                         )}
@@ -298,14 +296,14 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
 
                 <div className="space-y-6">
                     {/* INITIATIVES CALCULATOR */}
-                    <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
-                        <div className="flex items-center justify-between mb-6">
+                    <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
                             <div>
-                                <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                                     <TrendingUp className="w-5 h-5 text-indigo-500" />
                                     Motor de Iniciativas ESG
                                 </h3>
-                                <p className="text-xs text-slate-500 font-medium mt-1">
+                                <p className="text-xs text-slate-500 mt-0.5">
                                     Simule o impacto financeiro direto de melhorias no projeto.
                                 </p>
                             </div>
@@ -316,7 +314,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                                 <div
                                     key={ini.id}
                                     // <div> clicável: o fieldset desabilitado não o alcança — a trava é aqui.
-                                    className={`relative overflow-hidden p-4 rounded-2xl border transition-all ${pode ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'} group ${ini.active ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50'}`}
+                                    className={`relative overflow-hidden p-4 rounded-[10px] border transition-all ${pode ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'} group ${ini.active ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50'}`}
                                     aria-disabled={!pode || undefined}
                                     onClick={() => { if (pode) toggleInitiative(ini.id); }}
                                 >
@@ -326,22 +324,22 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                                                 {ini.active && <CheckCircle2 className="w-3.5 h-3.5" />}
                                             </div>
                                             <div>
-                                                <div className={`font-bold text-sm ${ini.active ? 'text-indigo-900' : 'text-slate-700'}`}>
+                                                <div className={`font-semibold text-sm ${ini.active ? 'text-indigo-900' : 'text-slate-700'}`}>
                                                     {ini.name}
                                                 </div>
                                                 <div className="flex items-center gap-4 mt-1.5">
-                                                    <span className="flex items-center gap-1 text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">
+                                                    <span className="flex items-center gap-1 text-sm font-normal text-rose-600">
                                                         <DollarSign className="w-3 h-3" />
                                                         +{(ini.cost / 1000).toFixed(0)}k (CAPEX)
                                                     </span>
                                                     {ini.vgv_premium > 0 && (
-                                                        <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                                                        <span className="flex items-center gap-1 text-sm font-normal text-emerald-600">
                                                             <TrendingUp className="w-3 h-3" />
                                                             +{ini.vgv_premium}% (VGV)
                                                         </span>
                                                     )}
                                                     {ini.funding_discount > 0 && (
-                                                        <span className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                                                        <span className="flex items-center gap-1 text-sm font-normal text-blue-600">
                                                             <Percent className="w-3 h-3" />
                                                             -{ini.funding_discount}% a.a. (Funding)
                                                         </span>
@@ -353,9 +351,9 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
 
                                     {/* Small label for ESG category */}
                                     <div className="absolute top-4 right-4">
-                                        <span className={`text-xs font-black px-1.5 py-0.5 rounded ${ini.category === 'E' ? 'text-emerald-700 bg-emerald-100' :
-                                            ini.category === 'S' ? 'text-blue-700 bg-blue-100' :
-                                                'text-indigo-700 bg-indigo-100'
+                                        <span className={`text-sm font-normal ${ini.category === 'E' ? 'text-emerald-700' :
+                                            ini.category === 'S' ? 'text-blue-700' :
+                                                'text-indigo-700'
                                             }`}>
                                             {ini.category}
                                         </span>
@@ -365,29 +363,27 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                         </div>
                     </div>
 
-                    {/* COMMITTEE DECISION */}
-                    <div className="bg-slate-900 rounded-3xl p-8 shadow-xl border border-slate-800 relative overflow-hidden">
+                    {/* COMMITTEE DECISION — card branco do §16 (era cartão escuro com brilho decorativo) */}
+                    <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm">
 
-                        {/* Decorative background flair */}
-                        <div className="absolute -right-20 -top-20 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                        <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2">
-                            <Gavel className="w-6 h-6 text-indigo-400" />
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                            <Gavel className="w-5 h-5 text-indigo-600" />
                             Ata do Comitê de Investimento
                         </h3>
-                        <p className="text-slate-400 text-sm font-medium mb-8">
+                        <p className="text-slate-500 text-sm mt-0.5 mb-6">
                             Apenas o Sponsor/Diretor deve preencher esta seção para fechar a tese de investimento.
                         </p>
 
-                        <div className="space-y-6 relative z-10">
+                        <div className="space-y-6">
                             <div>
-                                <label className="block text-form-label font-black tracking-widest uppercase text-slate-500 mb-3">Veredito Final</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Veredito Final</label>
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                                     {[
-                                        { id: 'draft', label: 'Rascunho', color: 'bg-slate-800 text-slate-300' },
-                                        { id: 'in_review', label: 'Em Análise', color: 'bg-blue-500/20 text-blue-300 border border-blue-500/30' },
-                                        { id: 'approved', label: 'Aprovado (GO)', color: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' },
-                                        { id: 'rejected', label: 'Rejeitado / NOGO', color: 'bg-rose-500/20 text-rose-300 border border-rose-500/30' },
+                                        // Selecionado = mesmo vocabulário dos chips de certificação (fundo claro + borda + texto da cor).
+                                        { id: 'draft', label: 'Rascunho', color: 'bg-slate-100 border-slate-300 text-slate-700' },
+                                        { id: 'in_review', label: 'Em Análise', color: 'bg-blue-50 border-blue-200 text-blue-700' },
+                                        { id: 'approved', label: 'Aprovado (GO)', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
+                                        { id: 'rejected', label: 'Rejeitado / NOGO', color: 'bg-rose-50 border-rose-200 text-rose-700' },
                                     ].map(opt => (
                                         <button
                                             key={opt.id}
@@ -395,9 +391,9 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                                                 setDecision(opt.id);
                                                 handleUpdate('committee_decision', opt.id);
                                             }}
-                                            className={`py-3 px-2 rounded-xl text-xs font-bold text-center transition-all ${decision === opt.id
-                                                ? `${opt.color} shadow-inner ring-2 ring-white/10`
-                                                : 'bg-slate-800/50 text-slate-500 hover:bg-slate-800'
+                                            className={`min-h-9 py-1.5 px-2 rounded-[6px] border text-[13px] font-medium text-center transition-all ${decision === opt.id
+                                                ? opt.color
+                                                : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
                                                 }`}
                                         >
                                             {opt.label}
@@ -407,13 +403,13 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                             </div>
 
                             <div>
-                                <label className="block text-button font-black tracking-widest uppercase text-slate-500 mb-3">Justificativa / Condicionantes</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Justificativa / Condicionantes</label>
                                 <textarea
                                     value={committeeNotes}
                                     onChange={(e) => setCommitteeNotes(e.target.value)}
                                     onBlur={() => handleUpdate('committee_notes', committeeNotes)}
                                     placeholder="Ex: Aprovado sob a condição de renegociar a permuta para max 12% ou buscar Funding de SFH taxa 9% a.a."
-                                    className="w-full h-48 p-4 bg-slate-950/50 border border-slate-700/50 rounded-2xl focus:bg-slate-900 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 outline-none text-slate-300 font-medium resize-none transition-all text-sm placeholder:text-slate-600"
+                                    className="w-full h-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-[6px] focus:bg-white focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none text-slate-700 resize-none transition-all text-sm"
                                 />
                             </div>
                         </div>

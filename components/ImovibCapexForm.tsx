@@ -4,6 +4,7 @@ import { imovibService } from '../services/imovibService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { Calculator, ChevronRight, Activity, Leaf, Plus, LayoutList, Zap } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { KpiCard } from './ui/KpiCard';
 import { useImovibMath, baseDaRubrica } from '../hooks/useImovibMath';
 import type { ImovibCapexBase } from '../types';
 import { useConfirm } from './ui/confirm';
@@ -325,10 +326,10 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
     if (initializing) {
         return (
-            <div className="flex items-center justify-center p-12 bg-white rounded-3xl border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-center p-12 bg-white rounded-[10px] border border-gray-200">
                 <div className="flex flex-col items-center">
                     <Activity className="w-8 h-8 text-indigo-500 animate-pulse mb-4" />
-                    <p className="text-slate-500 font-bold">Gerando template de orçamento mestre...</p>
+                    <p className="text-slate-500 text-sm font-medium">Gerando template de orçamento mestre...</p>
                 </div>
             </div>
         );
@@ -336,27 +337,27 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
     return (
         <div className="space-y-6 pb-10">
-            <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-[10px] p-6 border border-gray-200">
                 {/* Header + mode toggle */}
-                <div className="flex items-start justify-between mb-8 gap-4">
+                <div className="flex items-start justify-between mb-6 gap-4">
                     <div>
-                        <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                            <Calculator className="w-6 h-6 text-indigo-500" />
+                        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                            <Calculator className="w-5 h-5 text-indigo-500" />
                             Orçamento Mestre (CAPEX)
                         </h2>
-                        <p className="text-slate-500 text-sm mt-1 font-medium max-w-xl">
+                        <p className="text-slate-500 text-sm mt-1 max-w-xl">
                             {capexMode === 'simplified'
                                 ? 'Modo simplificado: custo total calculado por área × preço/m².'
                                 : 'Gerencie as premissas de custos indiretos, marketing, comissões, legais e financeiras.'}
                         </p>
                     </div>
                     {/* Mode toggle */}
-                    <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center bg-slate-100 rounded-xl p-1 gap-1 shrink-0">
+                    <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center h-9 bg-slate-100 rounded-[6px] p-0.5 gap-0.5 shrink-0">
                         <button
                             onClick={() => saveMode('simplified')}
-                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                            className={`flex items-center gap-1.5 h-8 px-3 rounded-[6px] font-medium text-[13px] transition-all ${
                                 capexMode === 'simplified'
-                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    ? 'bg-indigo-600 text-white'
                                     : 'text-slate-500 hover:text-slate-700'
                             }`}
                         >
@@ -365,9 +366,9 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         </button>
                         <button
                             onClick={() => saveMode('detailed')}
-                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                            className={`flex items-center gap-1.5 h-8 px-3 rounded-[6px] font-medium text-[13px] transition-all ${
                                 capexMode === 'detailed'
-                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    ? 'bg-indigo-600 text-white'
                                     : 'text-slate-500 hover:text-slate-700'
                             }`}
                         >
@@ -378,44 +379,44 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 </div>
 
                 {/* ── ÁREA TOTAL ── */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-4">
-                    <label className="block text-form-label font-black uppercase tracking-wider text-slate-500 mb-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-[10px] p-4 mb-4">
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                         Área Total (m²)
                     </label>
-                    <div className="text-2xl font-black text-indigo-700">
+                    <div className="text-2xl font-semibold text-indigo-700">
                         {totalAreaM2 != null
                             ? totalAreaM2.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' m²'
-                            : <span className="text-slate-300 text-base font-bold">— preencha T.O. e Área do Terreno nas Premissas</span>
+                            : <span className="text-slate-400 text-sm font-normal">— preencha T.O. e Área do Terreno nas Premissas</span>
                         }
                     </div>
-                    <p className="text-xs text-slate-400 font-medium mt-1">
+                    <p className="text-xs text-slate-400 mt-1">
                         Σ (T.O. × Área do Terreno × Pavimentos) por tipologia
                     </p>
                 </div>
 
                 {/* ── CUSTO OBRA POR BLOCO ── */}
                 {study.blocks && study.blocks.length > 0 && (
-                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-4">
-                        <label className="block text-form-label font-black uppercase tracking-wider text-slate-500 mb-4">
+                    <div className="bg-slate-50 border border-slate-200 rounded-[10px] p-4 mb-4">
+                        <label className="block text-xs font-semibold text-slate-500 mb-3">
                             Custo de Obra (R$/m²) por Bloco
                         </label>
                         <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 space-y-3">
                             {study.blocks.map(block => (
                                 <div key={block.id} className="flex items-center gap-4">
-                                    <span className="text-sm font-bold text-slate-700 min-w-[120px]">{block.name}</span>
+                                    <span className="text-sm font-medium text-slate-700 min-w-[120px]">{block.name}</span>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-slate-500 font-bold text-sm">R$</span>
+                                        <span className="text-slate-500 font-medium text-sm">R$</span>
                                         <input
                                             type="number"
                                             value={blockCosts[block.id] ?? block.construction_cost_sqm ?? 0}
                                             onChange={(e) => setBlockCosts(prev => ({ ...prev, [block.id]: parseFloat(e.target.value) || 0 }))}
                                             onBlur={() => saveBlockCost(block.id, blockCosts[block.id] ?? 0)}
-                                            className="w-32 px-3 py-2 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none font-bold text-slate-800 text-right"
+                                            className="w-32 h-9 px-3 bg-white border border-slate-200 rounded-[6px] focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-sm font-medium text-slate-800 text-right"
                                         />
-                                        <span className="text-slate-400 text-sm font-medium">/m²</span>
+                                        <span className="text-slate-400 text-sm">/m²</span>
                                     </div>
                                     {totalAreaM2 != null && (
-                                        <span className="text-sm text-slate-500 font-medium">
+                                        <span className="text-sm text-slate-500">
                                             = {((blockCosts[block.id] ?? block.construction_cost_sqm ?? 0) * totalAreaM2)
                                                 .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
                                         </span>
@@ -427,12 +428,12 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 )}
 
                 {/* ── CUSTO DE AQUISIÇÃO DO TERRENO ── */}
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-6">
-                    <label className="block text-form-label font-black uppercase tracking-wider text-amber-700 mb-3">
+                <div className="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-6">
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                         Custo de Aquisição do Terreno (R$)
                     </label>
                     <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-3 max-w-xs">
-                        <span className="text-slate-500 font-bold text-sm">R$</span>
+                        <span className="text-slate-500 font-medium text-sm">R$</span>
                         <input
                             type={landCostFocused ? 'number' : 'text'}
                             value={landCostFocused ? (landCost || '') : fmtBRL(landCost)}
@@ -440,10 +441,10 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                             onFocus={() => setLandCostFocused(true)}
                             onChange={(e) => setLandCost(parseFloat(e.target.value) || 0)}
                             onBlur={() => { setLandCostFocused(false); saveLandCost(landCost); }}
-                            className="flex-1 px-4 py-3 bg-white border border-amber-300 rounded-xl focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none font-bold text-slate-800 text-lg"
+                            className="flex-1 h-9 px-3 bg-white border border-amber-300 rounded-[6px] focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none text-sm font-medium text-slate-800"
                         />
                     </fieldset>
-                    <p className="text-xs text-amber-600 font-medium mt-2">
+                    <p className="text-xs text-amber-600 mt-2">
                         Valor usado em: Estática → Aquisição do Terreno
                     </p>
                 </div>
@@ -453,12 +454,12 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                     <div className="space-y-6">
                         <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Área */}
-                            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
-                                <label className="block text-form-label font-black uppercase tracking-wider text-slate-400 mb-2">
+                            <div className="bg-slate-50 rounded-[10px] p-4 border border-slate-200">
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                                     Área Total (m²)
                                 </label>
                                 {totalBlockArea > 0 && simplifiedAreaSqm === 0 && (
-                                    <p className="text-xs text-indigo-500 font-medium mb-2">
+                                    <p className="text-xs text-indigo-500 mb-2">
                                         Calculado dos blocos: {totalBlockArea.toLocaleString('pt-BR')} m²
                                     </p>
                                 )}
@@ -469,9 +470,9 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                         value={simplifiedAreaSqm || ''}
                                         onChange={(e) => setSimplifiedAreaSqm(parseFloat(e.target.value) || 0)}
                                         onBlur={() => saveSimplifiedFields(simplifiedCostSqm, simplifiedAreaSqm)}
-                                        className="w-full bg-white border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-xl py-3 px-4 font-bold text-slate-800 transition-all text-lg pr-14"
+                                        className="w-full h-9 bg-white border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-[6px] px-3 text-sm font-medium text-slate-800 transition-all pr-14"
                                     />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">m²</span>
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">m²</span>
                                 </div>
                                 {totalBlockArea > 0 && (
                                     <button
@@ -487,41 +488,38 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                             </div>
 
                             {/* Custo por m² */}
-                            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
-                                <label className="block text-form-label font-black uppercase tracking-wider text-slate-400 mb-2">
+                            <div className="bg-slate-50 rounded-[10px] p-4 border border-slate-200">
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                                     Custo Total por m²
                                 </label>
-                                <p className="text-xs text-slate-400 font-medium mb-2">
+                                <p className="text-xs text-slate-400 mb-2">
                                     All-in: construção + soft costs + overhead
                                 </p>
                                 <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">R$</span>
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">R$</span>
                                     <input
                                         type="number"
                                         placeholder="0"
                                         value={simplifiedCostSqm || ''}
                                         onChange={(e) => setSimplifiedCostSqm(parseFloat(e.target.value) || 0)}
                                         onBlur={() => saveSimplifiedFields(simplifiedCostSqm, simplifiedAreaSqm)}
-                                        className="w-full bg-white border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-xl py-3 pl-10 pr-4 font-bold text-slate-800 transition-all text-lg"
+                                        className="w-full h-9 bg-white border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-[6px] pl-9 pr-3 text-sm font-medium text-slate-800 transition-all"
                                     />
                                 </div>
                             </div>
                         </fieldset>
 
-                        {/* Total result */}
-                        <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100 flex items-center justify-between">
-                            <div>
-                                <p className="text-xs font-black uppercase tracking-wider text-indigo-400 mb-1">Custo Total (CAPEX)</p>
-                                <p className="text-sm text-indigo-600 font-medium">
-                                    {effectiveArea > 0
-                                        ? `${Math.round(effectiveArea).toLocaleString('pt-BR')} m² × ${fmt(simplifiedCostSqm)}/m²`
-                                        : 'Informe a área e o custo/m²'}
-                                </p>
-                            </div>
-                            <div className="text-right">
-                                <span className="text-3xl font-black text-indigo-700">{fmt(simplifiedTotal)}</span>
-                            </div>
-                        </div>
+                        {/* Total result — §4: KpiCard */}
+                        <KpiCard
+                            label="Custo Total (CAPEX)"
+                            value={fmt(simplifiedTotal)}
+                            sub={effectiveArea > 0
+                                ? `${Math.round(effectiveArea).toLocaleString('pt-BR')} m² × ${fmt(simplifiedCostSqm)}/m²`
+                                : 'Informe a área e o custo/m²'}
+                            icon={<Calculator className="w-4 h-4" />}
+                            color="indigo"
+                            size="lg"
+                        />
                     </div>
                 )}
 
@@ -529,17 +527,17 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 {capexMode === 'detailed' && (
                     <>
                         {math.esgCostTotal > 0 && (
-                            <div className="mb-6 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
+                            <div className="mb-6 p-4 bg-emerald-50 rounded-[10px] border border-emerald-100 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
+                                    <div className="p-2 bg-emerald-100 text-emerald-600 rounded-[6px]">
                                         <Leaf className="w-5 h-5" />
                                     </div>
                                     <div>
-                                        <h4 className="text-sm font-bold text-emerald-900 tracking-tight">Custo Provisionado: Medidas ESG</h4>
-                                        <p className="text-xs text-emerald-700 font-medium">Calculado automaticamente com base nas Iniciativas Sustentáveis (Aba Parecer).</p>
+                                        <h4 className="text-sm font-semibold text-emerald-900">Custo Provisionado: Medidas ESG</h4>
+                                        <p className="text-xs text-emerald-700">Calculado automaticamente com base nas Iniciativas Sustentáveis (Aba Parecer).</p>
                                     </div>
                                 </div>
-                                <span className="text-lg font-black text-emerald-700">
+                                <span className="text-lg font-semibold text-emerald-700">
                                     + {fmt(math.esgCostTotal)}
                                 </span>
                             </div>
@@ -572,13 +570,13 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         )}
 
                         <div className="flex justify-end gap-2 mb-4">
-                            <button onClick={expandAll} className="px-3 py-1.5 text-button font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Expandir Tudo</button>
-                            <button onClick={collapseAll} className="px-3 py-1.5 text-button font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Recolher Tudo</button>
+                            <button onClick={expandAll} className="h-9 px-3.5 bg-white border border-gray-200 hover:bg-slate-50 text-slate-600 rounded-[6px] font-medium text-[13px] transition-colors">Expandir Tudo</button>
+                            <button onClick={collapseAll} className="h-9 px-3.5 bg-white border border-gray-200 hover:bg-slate-50 text-slate-600 rounded-[6px] font-medium text-[13px] transition-colors">Recolher Tudo</button>
                         </div>
 
                         <div className="space-y-4">
                             {categories.map(category => (
-                                <div key={category} className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm transition-all">
+                                <div key={category} className="border border-gray-200 rounded-[10px] overflow-hidden bg-white transition-all">
                                     {/* Cabeçalho: o "Novo" fica FORA do botão de expandir (antes era
                                         <button> dentro de <button>, HTML inválido). */}
                                     <div className="w-full flex items-center bg-slate-50 hover:bg-slate-100 transition-colors">
@@ -586,30 +584,30 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                             type="button"
                                             onClick={() => toggleCategory(category)}
                                             aria-expanded={expandedCategories.includes(category)}
-                                            className="flex-1 min-w-0 pl-6 pr-3 py-4 flex items-center justify-between gap-3 text-left"
+                                            className="flex-1 min-w-0 pl-4 pr-3 py-3 flex items-center justify-between gap-3 text-left"
                                         >
                                             <div className="flex items-center gap-3">
-                                                <div className={`p-1 rounded-md transition-transform ${expandedCategories.includes(category) ? 'rotate-90 bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
+                                                <div className={`p-1 rounded-[6px] transition-transform ${expandedCategories.includes(category) ? 'rotate-90 bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
                                                     <ChevronRight className="w-4 h-4" />
                                                 </div>
-                                                <h3 className="font-bold text-slate-800 tracking-tight">{category}</h3>
+                                                <h3 className="text-sm font-semibold text-gray-900">{category}</h3>
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <span className="text-sm font-medium text-slate-700">{fmt(totalDaCategoria(category))}</span>
-                                                <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-200">
+                                                <span className="text-xs font-normal text-slate-500 bg-white px-2 py-1 rounded-[6px] border border-slate-200">
                                                     {groupedItems[category].length} itens
                                                 </span>
                                             </div>
                                         </button>
-                                        <div className="pr-6 py-4 shrink-0">
+                                        <div className="pr-4 py-3 shrink-0">
                                             <button
                                                 type="button"
                                                 onClick={() => abrirInclusao(category)}
                                                 disabled={!pode}
                                                 title={!pode ? motivo : `Incluir uma rubrica em ${category}`}
-                                                className="p-1 px-2 flex items-center gap-1.5 text-xs font-medium bg-white hover:bg-slate-200 text-indigo-600 border border-slate-200 rounded-[6px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                                                className="h-9 px-3.5 flex items-center gap-1.5 font-medium text-[13px] bg-white hover:bg-slate-100 text-indigo-600 border border-gray-200 rounded-[6px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                                             >
-                                                <Plus className="w-3 h-3" />
+                                                <Plus className="w-[15px] h-[15px]" />
                                                 Novo
                                             </button>
                                         </div>
@@ -620,19 +618,19 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                           <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
                                             <table className="w-full text-left bg-white">
                                                 <thead>
-                                                    <tr className="bg-white text-xs font-black tracking-widest uppercase text-gray-700 border-b border-slate-100">
-                                                        <th className="px-6 py-3">Rubrica / Linha de Custo</th>
-                                                        <th className="px-6 py-3">Tipo</th>
-                                                        <th className="px-6 py-3">Base</th>
-                                                        <th className="px-6 py-3">Valor</th>
-                                                        <th className="px-6 py-3 text-right">No cálculo</th>
-                                                        <th className="px-6 py-3 w-12"></th>
+                                                    <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                                                        <th className="px-6 py-2 border-r border-gray-100">Rubrica / Linha de Custo</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100">Tipo</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100">Base</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100">Valor</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">No cálculo</th>
+                                                        <th className="px-6 py-2 w-12"></th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="divide-y divide-slate-50">
+                                                <tbody className="divide-y divide-gray-200">
                                                     {groupedItems[category].map(item => (
-                                                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
-                                                            <td className="px-6 py-3">
+                                                        <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
                                                                 <input
                                                                     type="text"
                                                                     defaultValue={item.name}
@@ -641,27 +639,27 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                             handleUpdateItem(item.id, { name: e.target.value });
                                                                         }
                                                                     }}
-                                                                    className="bg-transparent border-none focus:ring-0 font-normal text-sm text-slate-700 w-full p-0 py-0.5 hover:bg-slate-100/50 rounded transition-colors focus:bg-white focus:px-2"
+                                                                    className="bg-transparent border-none focus:ring-0 font-normal text-sm text-slate-700 w-full p-0 py-0.5 hover:bg-slate-100/50 rounded-[6px] transition-colors focus:bg-white focus:px-2"
                                                                 />
                                                             </td>
-                                                            <td className="px-6 py-3">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
                                                                 <span className={`text-sm font-normal ${item.value_type === 'percent' ? 'text-amber-700' : 'text-emerald-700'}`}>
                                                                     {item.value_type === 'percent' ? 'Percentual (%)' : 'Moeda (R$)'}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-6 py-3">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
                                                                 <select
                                                                     value={baseDaRubrica(item)}
                                                                     onChange={(e) => handleUpdateItem(item.id, { base: e.target.value as ImovibCapexBase })}
                                                                     title={item.value_type === 'percent' ? 'Sobre o que o % incide' : 'Quando o valor sai do caixa'}
-                                                                    className="text-sm font-normal px-2 py-1 rounded border border-gray-100 bg-gray-50 text-gray-900 cursor-pointer"
+                                                                    className="text-sm font-normal px-2 py-1 rounded-[6px] border border-gray-100 bg-gray-50 text-gray-900 cursor-pointer"
                                                                 >
                                                                     {(Object.keys(BASE_LABEL) as ImovibCapexBase[]).map(b => (
                                                                         <option key={b} value={b}>{BASE_LABEL[b]}</option>
                                                                     ))}
                                                                 </select>
                                                             </td>
-                                                            <td className="px-6 py-3">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
                                                                 <div className="relative flex items-center">
                                                                     {item.value_type === 'currency' && (
                                                                         <span className="absolute left-3 text-slate-400 font-normal text-sm">R$</span>
@@ -676,7 +674,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                                 handleUpdateItem(item.id, { value: val });
                                                                             }
                                                                         }}
-                                                                        className={`w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-xl py-2 px-3 font-normal text-slate-800 transition-all ${item.value_type === 'currency' ? 'pl-9' : 'pr-8 text-right'}`}
+                                                                        className={`w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-[6px] h-8 px-3 text-sm font-normal text-slate-800 transition-all ${item.value_type === 'currency' ? 'pl-9' : 'pr-8 text-right'}`}
                                                                     />
                                                                     {item.value_type === 'percent' && (
                                                                         <span className="absolute right-3 text-slate-400 font-normal text-sm">%</span>
@@ -688,10 +686,10 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                     )}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-3 text-right text-sm font-medium text-slate-800 whitespace-nowrap">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
                                                                 {fmt(valorNoCalculo[item.id] || 0)}
                                                             </td>
-                                                            <td className="px-6 py-3 text-right">
+                                                            <td className="px-6 py-2.5 text-right">
                                                                 <ActionIconButton kind="delete" className="opacity-0 group-hover:opacity-100" title="Excluir item" onClick={() => handleDeleteItem(item.id)} />
                                                             </td>
                                                         </tr>

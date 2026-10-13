@@ -221,7 +221,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
             {/* Dados do terreno + potencial construtivo */}
             <div className="bg-white rounded-[10px] p-6 border border-gray-100 shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                    <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+                    <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                         <MapPin className="w-5 h-5 text-indigo-500" /> Dados do terreno
                     </h2>
                     <button onClick={handleSaveLand} disabled={savingLand || !pode}
@@ -251,7 +251,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                     </div>
                 ) : (
                     <div className="mt-6 pt-6 border-t border-gray-100">
-                        <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 mb-4">
+                        <h3 className="text-sm font-semibold text-gray-900 mb-4">
                             Potencial construtivo — {firstZone.zona || 'Zona'}{regulatoryZones.length > 1 ? ` (+${regulatoryZones.length - 1})` : ''}
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -260,8 +260,8 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                 const isNA = display === 'N.A.' || display.startsWith('-');
                                 return (
                                     <div key={label} className={`rounded-[10px] p-3 border ${isNA ? 'bg-gray-50 border-gray-200' : 'bg-indigo-50 border-indigo-100'}`}>
-                                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">{label}{suffix}</p>
-                                        <p className={`text-base font-black ${isNA ? 'text-gray-400' : 'text-indigo-700'}`}>{display}</p>
+                                        <p className="text-xs font-semibold text-slate-500 mb-1">{label}{suffix}</p>
+                                        <p className={`text-base font-semibold ${isNA ? 'text-gray-400' : 'text-indigo-700'}`}>{display}</p>
                                     </div>
                                 );
                             })}
@@ -272,7 +272,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
 
             {/* Blocos e tipologias — mesma casca do Empreendimento */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                     <Building className="w-5 h-5 text-indigo-500" /> Blocos e tipologias
                 </h2>
                 <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-2">
@@ -441,7 +441,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                             {toBase != null && block.units && block.units.length > 0 && (
                                                 <tr className="bg-indigo-50/60 border-t-2 border-indigo-100">
                                                     <td colSpan={8} className="px-4 py-2.5 text-right">
-                                                        <span className="text-xs font-black tracking-widest uppercase text-indigo-400">Total área</span>
+                                                        <span className="text-sm font-medium text-indigo-700">Total área</span>
                                                     </td>
                                                     <td className="px-4 py-2.5 text-right">
                                                         <span className="text-sm font-medium text-indigo-700">
@@ -470,7 +470,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
             </div>
 
             {notice && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-4 py-3 rounded-[10px] shadow-lg text-sm font-medium ${
                     notice.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
                     <AlertCircle className="w-4 h-4 shrink-0" /> {notice.msg}

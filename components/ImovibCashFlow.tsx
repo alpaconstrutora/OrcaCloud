@@ -12,6 +12,12 @@ interface ImovibCashFlowProps {
 import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
+import { KpiCard } from './ui/KpiCard';
+import { CABECALHO_TABELA } from './ui/cabecalhoDeTabela';
+
+// §6.6/§6.11 — cabeçalho e células da tabela mensal.
+const TH = `px-6 py-2 border-r ${CABECALHO_TABELA.divisoria} last:border-r-0 text-table-header font-semibold`;
+const TD = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm';
 
 const fmtTaxa = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
@@ -29,52 +35,39 @@ const ImovibCashFlow: React.FC<ImovibCashFlowProps> = ({ study, onIrPara }) => {
         <div className="space-y-6">
             <ImovibAvisosBanner avisos={cashFlowData.avisos} onIrPara={onIrPara} />
 
-            {/* Top Main KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 text-emerald-600 text-sm font-black tracking-widest uppercase">
-                            <TrendingUp className="w-4 h-4" /> VPL (Valor Presente)
-                        </div>
-                    </div>
-                    <div className="text-3xl font-black text-gray-900 tracking-tight">
-                        {formatCurrency(cashFlowData.vpl)}
-                    </div>
-                    <div className="text-sm mt-2 text-gray-500 font-medium">Descontado a {fmtTaxa(discountRate)}% a.a.</div>
-                </div>
-
-                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 text-blue-600 text-sm font-black tracking-widest uppercase">
-                            <Activity className="w-4 h-4" /> TIR (Taxa Int. Retorno)
-                        </div>
-                    </div>
-                    <div className="text-3xl font-black text-gray-900 tracking-tight flex items-baseline gap-1">
-                        {isNaN(cashFlowData.annualIrr) || !isFinite(cashFlowData.annualIrr) ? (
-                            'N/A'
-                        ) : cashFlowData.annualIrr > 999 ? (
-                            '> 999'
-                        ) : (
-                            cashFlowData.annualIrr.toFixed(2)
-                        )}
-                        <span className="text-lg text-gray-400">% a.a.</span>
-                    </div>
-                    <div className="text-sm mt-2 text-gray-500 font-medium">Rentabilidade do projeto</div>
-                </div>
-
-                <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-6 text-white shadow-lg shadow-red-900/20">
-                    <div className="flex items-center gap-2 text-red-100 mb-2 font-black tracking-widest uppercase text-sm">
-                        <AlertCircle className="w-4 h-4" /> Exposição Máxima
-                    </div>
-                    <div className="text-3xl font-black tracking-tight">{formatCurrency(cashFlowData.maxExposure)}</div>
-                    <div className="text-sm mt-2 text-red-100 font-medium">Fundo de caixa (Mínimo Acumulado)</div>
-                </div>
+            {/* KPIs principais — §4: componente canônico KpiCard */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <KpiCard
+                    label="VPL (Valor Presente)"
+                    value={formatCurrency(cashFlowData.vpl)}
+                    sub={`Descontado a ${fmtTaxa(discountRate)}% a.a.`}
+                    icon={<TrendingUp className="w-4 h-4" />}
+                    color="emerald"
+                />
+                <KpiCard
+                    label="TIR (Taxa Int. Retorno)"
+                    value={`${isNaN(cashFlowData.annualIrr) || !isFinite(cashFlowData.annualIrr)
+                        ? 'N/A'
+                        : cashFlowData.annualIrr > 999
+                            ? '> 999'
+                            : cashFlowData.annualIrr.toFixed(2)}% a.a.`}
+                    sub="Rentabilidade do projeto"
+                    icon={<Activity className="w-4 h-4" />}
+                    color="blue"
+                />
+                <KpiCard
+                    label="Exposição Máxima"
+                    value={formatCurrency(cashFlowData.maxExposure)}
+                    sub="Fundo de caixa (Mínimo Acumulado)"
+                    icon={<AlertCircle className="w-4 h-4" />}
+                    color="red"
+                />
             </div>
 
             {/* Recharts Visualization */}
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+            <div className="bg-white rounded-[10px] p-6 border border-gray-100 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-3">
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                         <LineChart className="w-5 h-5 text-blue-600" />
                         Curva S e Fluxo Mensal
                     </h3>
@@ -122,38 +115,37 @@ const ImovibCashFlow: React.FC<ImovibCashFlowProps> = ({ study, onIrPara }) => {
             </div>
 
             {/* Monthly Table */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                            <BarChart3 className="w-5 h-5" />
-                        </div>
-                        <h3 className="text-xl font-black text-gray-900 tracking-tight">Fluxo de Caixa Mensal</h3>
-                    </div>
-                    <span className="text-sm text-gray-400 font-medium">Base: Inflacionada {fmtTaxa(inflationRate)}% a.m.</span>
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-blue-600" />
+                        Fluxo de Caixa Mensal
+                    </h3>
+                    <span className="text-sm text-gray-500">Base: Inflacionada {fmtTaxa(inflationRate)}% a.m.</span>
                 </div>
 
                 <div className="w-full overflow-x-auto">
-                    <table className="w-full text-left text-sm">
+                    <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-white border-b border-gray-100 uppercase tracking-widest text-xs font-black text-gray-700">
-                                <th className="px-6 py-4">Mês</th>
-                                <th className="px-6 py-4 text-right">Receitas (R$)</th>
-                                <th className="px-6 py-4 text-right">Custos (R$)</th>
-                                <th className="px-6 py-4 text-right">Saldo Líquido</th>
-                                <th className="px-6 py-4 text-right">Acumulado</th>
+                            {/* §6.2/§6.11: sentence case, fundo branco, texto na cor das células (CABECALHO_TABELA) */}
+                            <tr className={`${CABECALHO_TABELA.fundo} ${CABECALHO_TABELA.texto} font-semibold text-xs border-b ${CABECALHO_TABELA.linhaDeBaixo}`}>
+                                <th className={TH}>Mês</th>
+                                <th className={`${TH} text-right`}>Receitas (R$)</th>
+                                <th className={`${TH} text-right`}>Custos (R$)</th>
+                                <th className={`${TH} text-right`}>Saldo Líquido</th>
+                                <th className={`${TH} text-right`}>Acumulado</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-gray-200">
                             {cashFlowData.monthlyFlows.map((row) => (
-                                <tr key={row.month} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-3 text-gray-600">Mês {row.month}</td>
-                                    <td className="px-6 py-3 text-right text-emerald-600 font-medium">{formatCurrency(row.rev)}</td>
-                                    <td className="px-6 py-3 text-right text-red-600 font-medium">{formatCurrency(row.cost)}</td>
-                                    <td className={`px-6 py-3 text-right font-medium ${row.net >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                <tr key={row.month} className="hover:bg-blue-50/50 transition-colors">
+                                    <td className={`${TD} font-normal text-gray-600`}>Mês {row.month}</td>
+                                    <td className={`${TD} text-right font-medium text-emerald-600`}>{formatCurrency(row.rev)}</td>
+                                    <td className={`${TD} text-right font-medium text-red-600`}>{formatCurrency(row.cost)}</td>
+                                    <td className={`${TD} text-right font-medium ${row.net >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                                         {formatCurrency(row.net)}
                                     </td>
-                                    <td className={`px-6 py-3 text-right font-medium ${row.acc >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                    <td className={`${TD} text-right font-medium ${row.acc >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
                                         {formatCurrency(row.acc)}
                                     </td>
                                 </tr>

@@ -5,7 +5,9 @@ import type { ImovibMathResult } from '../hooks/useImovibMath';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import type { ImovibCapexBase } from '../types';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
-import { Activity, TrendingUp, AlertCircle, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Leaf, Banknote } from 'lucide-react';
+import { Activity, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Leaf, Banknote } from 'lucide-react';
+import { KpiCard } from './ui/KpiCard';
+import { CABECALHO_TABELA } from './ui/cabecalhoDeTabela';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Legend } from 'recharts';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -198,25 +200,26 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white px-6 py-4 rounded-[10px] border border-gray-100 shadow-sm">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Painel de Viabilidade</h2>
-                    <p className="text-slate-500 mt-1 font-medium text-sm">Os principais indicadores financeiros consolidados.</p>
+                    <h2 className="text-lg font-semibold text-gray-900">Painel de Viabilidade</h2>
+                    <p className="text-gray-500 mt-1 text-sm">Os principais indicadores financeiros consolidados.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                {/* Botões compactos (guia §17): h-9, rounded-[6px], font-medium 13px, sentence case. */}
+                <div className="flex items-center gap-2">
                     <button
                         onClick={exportToExcel}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl font-bold text-sm transition-colors"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
                     >
-                        <FileText className="w-4 h-4" />
+                        <FileText className="w-[15px] h-[15px]" />
                         Baixar Excel
                     </button>
                     <button
                         onClick={exportToPDF}
                         disabled={isExporting}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-bold text-sm transition-colors disabled:opacity-70"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-slate-900 text-white hover:bg-slate-800 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-70"
                     >
-                        {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        {isExporting ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Download className="w-[15px] h-[15px]" />}
                         {isExporting ? 'Gerando...' : 'Exportar PDF'}
                     </button>
                 </div>
@@ -224,15 +227,16 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
 
             <ImovibAvisosBanner avisos={cashFlowData.avisos} onIrPara={onIrPara} />
 
-            {/* Printable Container */}
-            <div ref={printRef} className="bg-slate-50 p-6 rounded-3xl space-y-8 max-w-5xl mx-auto">
+            {/* Printable Container — capturado pelo html2canvas no PDF: nada de backdrop-filter aqui. */}
+            <div ref={printRef} className="bg-slate-50 p-6 rounded-[10px] space-y-6 max-w-5xl mx-auto">
                 {/* Visual Header for PDF */}
                 {isExporting && (
-                    <div className="mb-8 pb-6 border-b border-slate-200">
+                    <div className="pb-6 border-b border-gray-200">
                         <div className="flex justify-between items-start">
                             <div>
-                                <h1 className="text-3xl font-black text-slate-900 tracking-tight">{study.name}</h1>
-                                <p className="text-slate-500 font-medium text-lg">Relatório Executivo de Viabilidade Financeira</p>
+                                {/* Título do relatório = h1 do guia §20. */}
+                                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{study.name}</h1>
+                                <p className="text-gray-500 text-sm mt-1.5">Relatório Executivo de Viabilidade Financeira</p>
                             </div>
                             <div className="text-right">
                                 {/* §8: status é texto colorido simples — sem pílula, fundo ou caixa alta. */}
@@ -250,132 +254,88 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                     </div>
                 )}
 
-                {/* Top Tier KPIs - The "Big Three" */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm relative overflow-hidden group hover:border-emerald-200 transition-colors">
-                        <div className="absolute top-0 right-0 p-8 opacity-5">
-                            <TrendingUp className="w-32 h-32" />
-                        </div>
-                        <div className="flex items-center gap-3 text-emerald-600 mb-4 font-black tracking-widest uppercase text-sm">
-                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                                <Coins className="w-4 h-4 text-emerald-700" />
-                            </div>
-                            Lucro Líquido (VPL)
-                        </div>
-                        <div className="text-4xl font-black text-slate-900 tracking-tighter">
-                            {formatCurrency(cashFlowData.vpl)}
-                        </div>
-                        <div className="text-sm mt-3 text-slate-500 font-medium">Margem Líquida Bruta: {formatPercent(netMargin)}</div>
-                    </div>
-
-                    <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
-                        <div className="absolute top-0 right-0 p-8 opacity-5">
-                            <Activity className="w-32 h-32" />
-                        </div>
-                        <div className="flex items-center gap-3 text-blue-600 mb-4 font-black tracking-widest uppercase text-sm">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                <Activity className="w-4 h-4 text-blue-700" />
-                            </div>
-                            TIR (Taxa Int. Retorno)
-                        </div>
-                        <div className="text-4xl font-black text-slate-900 tracking-tighter flex items-baseline gap-1">
-                            {isNaN(cashFlowData.annualIrr) || !isFinite(cashFlowData.annualIrr) ? (
-                                'N/A'
-                            ) : cashFlowData.annualIrr > 999 ? (
-                                '> 999'
-                            ) : (
-                                cashFlowData.annualIrr.toFixed(2)
-                            )}
-                            <span className="text-xl text-slate-400">% a.a.</span>
-                        </div>
-                        <div className="text-sm mt-3 text-slate-500 font-medium">Rentabilidade % Anualzada do projeto</div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-3xl p-8 text-white shadow-xl shadow-red-900/20 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-8 opacity-10">
-                            <AlertCircle className="w-32 h-32" />
-                        </div>
-                        <div className="flex items-center gap-3 text-red-100 mb-4 font-black tracking-widest uppercase text-sm">
-                            <div className="w-8 h-8 rounded-full bg-red-400/30 flex items-center justify-center text-white backdrop-blur-sm">
-                                <Wallet className="w-4 h-4" />
-                            </div>
-                            Exposição Máxima de Caixa
-                        </div>
-                        <div className="text-4xl font-black tracking-tighter text-white">
-                            {formatCurrency(cashFlowData.maxExposure)}
-                        </div>
-                        <div className="text-sm mt-3 text-red-100 font-medium">Fundo de caixa ou cheque máximo necessário</div>
-                    </div>
+                {/* KPIs principais — componente canônico (guia §4) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <KpiCard
+                        label="Lucro Líquido (VPL)"
+                        value={formatCurrency(cashFlowData.vpl)}
+                        sub={`Margem Líquida Bruta: ${formatPercent(netMargin)}`}
+                        icon={<Coins className="w-4 h-4" />}
+                        color="emerald"
+                    />
+                    <KpiCard
+                        label="TIR (Taxa Int. Retorno)"
+                        value={`${isNaN(cashFlowData.annualIrr) || !isFinite(cashFlowData.annualIrr)
+                            ? 'N/A'
+                            : cashFlowData.annualIrr > 999
+                                ? '> 999'
+                                : cashFlowData.annualIrr.toFixed(2)}% a.a.`}
+                        sub="Rentabilidade % Anualzada do projeto"
+                        icon={<Activity className="w-4 h-4" />}
+                        color="blue"
+                    />
+                    <KpiCard
+                        label="Exposição Máxima de Caixa"
+                        value={formatCurrency(cashFlowData.maxExposure)}
+                        sub="Fundo de caixa ou cheque máximo necessário"
+                        icon={<Wallet className="w-4 h-4" />}
+                        color="red"
+                    />
                 </div>
 
-                {/* Secondary KPIs */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                            <Building2 className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">VGV Total</div>
-                            <div className="text-lg font-black text-slate-800">{formatCurrency(cashFlowData.vgvTotal)}</div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
-                            <PieChart className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Custo de Construção</div>
-                            <div className="text-lg font-black text-slate-800">{formatCurrency(cashFlowData.constCostTotal)}</div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                            <Activity className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Prazo Total (Meses)</div>
-                            <div className="text-lg font-black text-slate-800">{cashFlowData.duration} meses</div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 shrink-0">
-                            <Wallet className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Custo do Terreno</div>
-                            <div className="text-lg font-black text-slate-800">{formatCurrency(cashFlowData.landCost)}</div>
-                        </div>
-                    </div>
+                {/* KPIs secundários */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <KpiCard
+                        label="VGV Total"
+                        value={formatCurrency(cashFlowData.vgvTotal)}
+                        icon={<Building2 className="w-4 h-4" />}
+                        color="indigo"
+                    />
+                    <KpiCard
+                        label="Custo de Construção"
+                        value={formatCurrency(cashFlowData.constCostTotal)}
+                        icon={<PieChart className="w-4 h-4" />}
+                        color="amber"
+                    />
+                    <KpiCard
+                        label="Prazo Total (Meses)"
+                        value={`${cashFlowData.duration} meses`}
+                        icon={<Activity className="w-4 h-4" />}
+                        color="emerald"
+                    />
+                    <KpiCard
+                        label="Custo do Terreno"
+                        value={formatCurrency(cashFlowData.landCost)}
+                        icon={<Wallet className="w-4 h-4" />}
+                        color="orange"
+                    />
                 </div>
 
                 {/* Impacto ESG */}
                 {(cashFlowData.esgVgvPremiumValue > 0 || cashFlowData.esgCostTotal > 0) && (
-                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-[10px] p-6 flex flex-col md:flex-row items-center justify-between gap-6">
                         <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-emerald-100 flex items-center justify-center text-emerald-500 shrink-0">
-                                <Leaf className="w-8 h-8" />
+                            <div className="w-12 h-12 bg-white rounded-[10px] border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                                <Leaf className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-black text-emerald-900 tracking-tight">Impacto Financeiro ESG (Premium Verde)</h3>
-                                <p className="text-sm font-medium text-emerald-700 mt-1 max-w-lg">
+                                <h3 className="text-lg font-semibold text-gray-900">Impacto Financeiro ESG (Premium Verde)</h3>
+                                <p className="text-sm text-emerald-700 mt-1 max-w-lg">
                                     Métricas exclusivas geradas pelas iniciativas viáveis aprovadas no Parecer Técnico do Comitê.
                                 </p>
                             </div>
                         </div>
                         <div className="flex items-center gap-6 md:gap-8 shrink-0">
                             <div className="text-right">
-                                <div className="text-xs font-black uppercase tracking-widest text-emerald-600 mb-1">Custo Provisionado (CAPEX)</div>
-                                <div className="text-2xl font-black text-slate-800">
+                                <div className="text-xs font-semibold text-slate-500 mb-1">Custo Provisionado (CAPEX)</div>
+                                <div className="text-lg font-semibold text-gray-900">
                                     {formatCurrency(cashFlowData.esgCostTotal)}
                                 </div>
                             </div>
                             <div className="w-px h-12 bg-emerald-200 hidden md:block"></div>
                             <div className="text-right">
-                                <div className="text-xs font-black uppercase tracking-widest text-emerald-600 mb-1">Valorização do Produto (VGV)</div>
-                                <div className="text-2xl font-black text-emerald-700">
+                                <div className="text-xs font-semibold text-slate-500 mb-1">Valorização do Produto (VGV)</div>
+                                <div className="text-lg font-semibold text-emerald-700">
                                     +{formatCurrency(cashFlowData.esgVgvPremiumValue)}
                                 </div>
                             </div>
@@ -383,21 +343,21 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                     </div>
                 )}
 
-                <div className="bg-slate-50 border border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center">
-                    <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center mb-4 text-slate-400">
-                        <PieChart className="w-8 h-8" />
+                <div className="bg-white border border-gray-100 rounded-[10px] p-6 flex flex-col items-center justify-center text-center">
+                    <div className="w-12 h-12 bg-slate-50 rounded-[10px] border border-gray-100 flex items-center justify-center mb-3 text-slate-400">
+                        <PieChart className="w-6 h-6" />
                     </div>
-                    <h3 className="text-lg font-bold text-slate-700 mb-2">Simulação Completa</h3>
-                    <p className="text-slate-500 max-w-md">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Simulação Completa</h3>
+                    <p className="text-sm text-gray-500 max-w-md">
                         Os indicadores acima vêm do mesmo cálculo da Estática, do Espelho de vendas e da listagem: blocos e espelho (VGV), Orçamento (CAPEX), Receitas &amp; Capital e Premissas Dinâmicas.
                         Utilize este resumo para validação de comitê de investimento.
                     </p>
                 </div>
 
                 {/* Recharts Visualization (S-Curve inside summary) */}
-                <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm mt-4">
-                    <div className="flex items-center justify-between mb-8">
-                        <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                <div className="bg-white rounded-[10px] p-6 border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                             <LineChartIcon className="w-5 h-5 text-indigo-600" />
                             Curva S e Linha de Exposição
                         </h3>
@@ -445,97 +405,98 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
 
                 {/* Extended Sections for PDF Export */}
                 {isExporting && (
-                    <div className="mt-12 space-y-12 pb-10">
+                    <div className="mt-6 space-y-8 pb-10">
                         {/* Section: ESG & Committee Notes */}
                         <div className="page-break-inside-avoid">
-                            <h2 className="text-2xl font-black text-slate-900 border-b-2 border-slate-200 pb-2 mb-6">Parecer Institucional & ESG</h2>
-                            <div className="grid grid-cols-2 gap-8">
-                                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                                    <h3 className="font-bold text-slate-800 mb-4 tracking-widest text-xs uppercase">Diretrizes ESG</h3>
+                            <h2 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-4">Parecer Institucional & ESG</h2>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="bg-white p-6 rounded-[10px] border border-gray-100">
+                                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Diretrizes ESG</h3>
                                     <div className="space-y-4">
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-slate-600">Environmental Score:</span>
-                                            <span className="font-black text-emerald-600">{study.esg_environmental_score || 3}/5</span>
+                                            <span className="text-gray-600">Environmental Score:</span>
+                                            <span className="font-medium text-emerald-700">{study.esg_environmental_score || 3}/5</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-slate-600">Social Score:</span>
-                                            <span className="font-black text-blue-600">{study.esg_social_score || 3}/5</span>
+                                            <span className="text-gray-600">Social Score:</span>
+                                            <span className="font-medium text-blue-700">{study.esg_social_score || 3}/5</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-slate-600">Governance Score:</span>
-                                            <span className="font-black text-indigo-600">{study.esg_governance_score || 3}/5</span>
+                                            <span className="text-gray-600">Governance Score:</span>
+                                            <span className="font-medium text-indigo-700">{study.esg_governance_score || 3}/5</span>
                                         </div>
                                         {study.esg_certifications && study.esg_certifications.length > 0 && (
-                                            <div className="mt-4 pt-4 border-t border-slate-200 text-sm">
-                                                <span className="block text-slate-600 font-bold mb-2">Selos Meta:</span>
+                                            <div className="mt-4 pt-4 border-t border-gray-100 text-sm">
+                                                <span className="block text-xs font-semibold text-slate-500 mb-2">Selos Meta:</span>
                                                 <div className="flex gap-2 flex-wrap">
                                                     {study.esg_certifications.map(c => (
-                                                        <span key={c} className="bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-bold">{c}</span>
+                                                        <span key={c} className="bg-emerald-50 text-emerald-800 px-2 py-1 rounded-[6px] text-xs font-medium">{c}</span>
                                                     ))}
                                                 </div>
                                             </div>
                                         )}
                                         {study.esg_notes && (
-                                            <div className="mt-4 pt-4 border-t border-slate-200 text-sm italic text-slate-600">
+                                            <div className="mt-4 pt-4 border-t border-gray-100 text-sm italic text-gray-600">
                                                 "{study.esg_notes}"
                                             </div>
                                         )}
                                     </div>
                                 </div>
 
-                                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                                    <h3 className="font-bold text-slate-800 mb-4 tracking-widest text-xs uppercase">Considerações do Comitê</h3>
-                                    <div className="text-sm text-slate-700 whitespace-pre-wrap">
+                                <div className="bg-white p-6 rounded-[10px] border border-gray-100">
+                                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Considerações do Comitê</h3>
+                                    <div className="text-sm text-gray-700 whitespace-pre-wrap">
                                         {study.committee_notes || "Sem notas adicionais cadastradas para o comitê."}
                                     </div>
-                                    <div className="mt-8 pt-4 border-t border-slate-200 flex justify-end gap-12">
+                                    <div className="mt-8 pt-4 border-t border-gray-100 flex justify-end gap-12">
                                         <div className="text-center">
                                             <div className="w-40 h-px bg-slate-400 mb-2"></div>
-                                            <span className="text-xs text-slate-500 font-bold">Ass. Diretor / Sponsor</span>
+                                            <span className="text-xs font-semibold text-slate-500">Ass. Diretor / Sponsor</span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Section: CAPEX Master */}
+                        {/* Section: CAPEX Master — tabela no padrão do guia §6/§6.11/§7 (só aparece no PDF:
+                            sem SortableHeader, porque não há interação na captura). */}
                         <div className="page-break-inside-avoid">
-                            <h2 className="text-2xl font-black text-slate-900 border-b-2 border-slate-200 pb-2 mb-6">Master Budget (CAPEX)</h2>
-                            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-white border-b border-slate-200">
-                                        <tr>
-                                            <th className="p-4 font-bold text-slate-600">Categoria</th>
-                                            <th className="p-4 font-bold text-slate-600">Descrição</th>
-                                            <th className="p-4 font-bold text-slate-600">Premissa</th>
-                                            <th className="p-4 font-bold text-slate-600 text-right">No cálculo</th>
+                            <h2 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-4">Master Budget (CAPEX)</h2>
+                            <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className={`${CABECALHO_TABELA.fundo} ${CABECALHO_TABELA.texto} font-semibold text-table-header border-b ${CABECALHO_TABELA.linhaDeBaixo}`}>
+                                            <th className={`px-6 py-2 border-r ${CABECALHO_TABELA.divisoria}`}>Categoria</th>
+                                            <th className={`px-6 py-2 border-r ${CABECALHO_TABELA.divisoria}`}>Descrição</th>
+                                            <th className={`px-6 py-2 border-r ${CABECALHO_TABELA.divisoria}`}>Premissa</th>
+                                            <th className="px-6 py-2 text-right">No cálculo</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-100">
+                                    <tbody className="divide-y divide-gray-200">
                                         {cashFlowData.capexRubricasAtivas ? (
                                             <>
                                                 {(study.capex_items || []).map(item => (
                                                     <tr key={item.id}>
-                                                        <td className="p-4 text-slate-700 font-medium">{item.category}</td>
-                                                        <td className="p-4 text-slate-600">{item.name}</td>
-                                                        <td className="p-4 text-slate-600">
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{item.category}</td>
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{item.name}</td>
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                             {item.value_type === 'percent'
                                                                 ? `${Number(item.value).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% ${BASE_PDF[baseDaRubrica(item)]}`
                                                                 : formatCurrency(item.value || 0)}
                                                         </td>
-                                                        <td className="p-4 text-slate-900 font-medium text-right">
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
                                                             {formatCurrency(cashFlowData.capexValorPorRubrica[item.id] || 0)}
                                                         </td>
                                                     </tr>
                                                 ))}
-                                                <tr className="bg-slate-50">
-                                                    <td colSpan={3} className="p-4 text-slate-700 font-medium">Total das rubricas no cálculo</td>
-                                                    <td className="p-4 text-slate-900 font-medium text-right">{formatCurrency(cashFlowData.capexRubricas.total)}</td>
+                                                <tr className="bg-gray-50">
+                                                    <td colSpan={3} className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">Total das rubricas no cálculo</td>
+                                                    <td className="px-6 py-2.5 text-sm font-medium text-gray-800 text-right">{formatCurrency(cashFlowData.capexRubricas.total)}</td>
                                                 </tr>
                                             </>
                                         ) : (
                                             <tr>
-                                                <td colSpan={4} className="p-4 text-center text-slate-500">
+                                                <td colSpan={4} className="px-6 py-2.5 text-center text-sm font-normal text-gray-500">
                                                     {study.capex_mode === 'simplified'
                                                         ? 'CAPEX no modo simplificado: custo total por área × custo/m², sem rubricas.'
                                                         : 'Nenhuma rubrica de CAPEX detalhado. Referenciando custo paramétrico dos blocos.'}

@@ -1,8 +1,9 @@
 import React from 'react';
 import { ImovibStudy } from '../types';
-import { Calculator, TrendingUp, DollarSign, PieChart, Activity } from 'lucide-react';
+import { Calculator, TrendingUp, DollarSign, Activity } from 'lucide-react';
 import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
+import { KpiCard } from './ui/KpiCard';
 
 interface ImovibStaticViabilityProps {
     study: ImovibStudy;
@@ -64,89 +65,76 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, on
         <div className="space-y-6 pb-10">
             <ImovibAvisosBanner avisos={math.avisos} onIrPara={onIrPara} />
 
-            {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-900/20">
-                    <div className="flex items-center gap-2 text-blue-100 mb-2 font-medium tracking-tight">
-                        <TrendingUp className="w-5 h-5" />
-                        VGV Potencial (Receita)
-                    </div>
-                    <div className="text-3xl font-black tracking-tight">{formatCurrency(vgv)}</div>
-                    <div className="text-sm mt-3 text-blue-100 font-medium">{origemVgvCompleta}</div>
-                </div>
-
-                <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-6 text-white shadow-lg shadow-red-900/20">
-                    <div className="flex items-center gap-2 text-red-100 mb-2 font-medium tracking-tight">
-                        <DollarSign className="w-5 h-5" />
-                        Custo Total Estimado
-                    </div>
-                    <div className="text-3xl font-black tracking-tight">{formatCurrency(totalCost)}</div>
-                    <div className="text-sm mt-3 text-red-100 font-medium">
-                        Terreno + Construção{math.capexRubricasAtivas ? ' + Rubricas do CAPEX' : ''}
-                    </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-900/20 relative overflow-hidden">
-                    <div className="absolute right-[-2rem] top-[50%] translate-y-[-50%] opacity-10">
-                        <PieChart className="w-40 h-40" />
-                    </div>
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-2 text-emerald-100 mb-2 font-medium tracking-tight">
-                            <Activity className="w-5 h-5" />
-                            Lucro Bruto (Margem)
-                        </div>
-                        <div className="text-3xl font-black tracking-tight">{formatCurrency(grossProfit)}</div>
-                        <div className="text-sm mt-3 text-emerald-100 font-medium">
-                            {vgv > 0 ? `${margin.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% de margem bruta` : 'Sem VGV para calcular a margem'}
-                        </div>
-                    </div>
-                </div>
+            {/* KPIs — componente canônico (guia §4) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <KpiCard
+                    label="VGV Potencial (Receita)"
+                    value={formatCurrency(vgv)}
+                    sub={origemVgvCompleta}
+                    title={origemVgvCompleta}
+                    icon={<TrendingUp className="w-4 h-4" />}
+                    color="blue"
+                />
+                <KpiCard
+                    label="Custo Total Estimado"
+                    value={formatCurrency(totalCost)}
+                    sub={`Terreno + Construção${math.capexRubricasAtivas ? ' + Rubricas do CAPEX' : ''}`}
+                    icon={<DollarSign className="w-4 h-4" />}
+                    color="red"
+                />
+                <KpiCard
+                    label="Lucro Bruto (Margem)"
+                    value={formatCurrency(grossProfit)}
+                    sub={vgv > 0 ? `${margin.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% de margem bruta` : 'Sem VGV para calcular a margem'}
+                    icon={<Activity className="w-4 h-4" />}
+                    color="emerald"
+                />
             </div>
 
-            {/* DRE simplificada */}
+            {/* DRE simplificada — células no padrão do guia §7/§7.2 */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                        <Calculator className="w-5 h-5" />
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+                    <div className="p-2 bg-blue-50 text-blue-600 rounded-[6px]">
+                        <Calculator className="w-4 h-4" />
                     </div>
                     <h3 className="text-lg font-semibold text-gray-900">Viabilidade Estática (Simplificada)</h3>
                 </div>
-                <table className="w-full text-left">
-                    <tbody className="divide-y divide-gray-100">
+                <table className="w-full text-left border-collapse">
+                    <tbody className="divide-y divide-gray-200">
                         <tr>
-                            <td className="px-6 py-3 text-sm text-gray-900">
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                 Valor Geral de Vendas (VGV)
                                 <span className="block text-xs text-gray-500">{origemVgvCompleta}</span>
                             </td>
-                            <td className="px-6 py-3 text-right text-sm font-medium text-gray-900">{formatCurrency(vgv)}</td>
-                            <td className="px-6 py-3 text-right text-sm text-gray-500 w-32">{vgv > 0 ? '100,00%' : '—'}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">{formatCurrency(vgv)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600 w-32">{vgv > 0 ? '100,00%' : '—'}</td>
                         </tr>
                         {linhas.map(l => (
                             <tr key={l.rotulo}>
-                                <td className="px-6 py-3 pl-12 text-sm text-gray-600">
+                                <td className="px-6 py-2.5 pl-12 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                     {l.rotulo}
                                     {l.detalhe && <span className="block text-xs text-gray-500">{l.detalhe}</span>}
                                 </td>
-                                <td className="px-6 py-3 text-right text-sm font-medium text-red-600">{formatCurrency(l.valor)}</td>
-                                <td className="px-6 py-3 text-right text-sm text-gray-500">{pctDoVgv(l.valor, vgv)}</td>
+                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-red-600">{formatCurrency(l.valor)}</td>
+                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">{pctDoVgv(l.valor, vgv)}</td>
                             </tr>
                         ))}
                         <tr className="bg-gray-50">
-                            <td className="px-6 py-3 text-sm text-gray-700">Total de custos</td>
-                            <td className="px-6 py-3 text-right text-sm font-medium text-gray-900">{formatCurrency(-totalCost)}</td>
-                            <td className="px-6 py-3 text-right text-sm text-gray-500">{pctDoVgv(-totalCost, vgv)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">Total de custos</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">{formatCurrency(-totalCost)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">{pctDoVgv(-totalCost, vgv)}</td>
                         </tr>
                         <tr className="bg-emerald-50/30">
-                            <td className="px-6 py-4 text-base text-emerald-900">Lucro Bruto</td>
-                            <td className="px-6 py-4 text-right text-base font-medium text-emerald-700">{formatCurrency(grossProfit)}</td>
-                            <td className="px-6 py-4 text-right text-sm text-emerald-700">{vgv > 0 ? pctDoVgv(grossProfit, vgv) : '—'}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-emerald-900">Lucro Bruto</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-emerald-700">{formatCurrency(grossProfit)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-emerald-700">{vgv > 0 ? pctDoVgv(grossProfit, vgv) : '—'}</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
             {/* Áreas — as mesmas que o motor usa */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div className="bg-white rounded-[10px] p-5 border border-gray-100 shadow-sm">
                     <span className="text-xs font-semibold text-gray-500">Área privativa</span>
                     <div className="text-xl font-semibold text-gray-900 mt-1">{formatArea(math.totalPrivateArea)}</div>

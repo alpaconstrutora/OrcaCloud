@@ -452,7 +452,21 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
         - h1 fora de card; botão Planta AI sem caixa alta; CAPEX abre pela aba.
         - O `rolagem_da_pagina: false` do roteiro era erro de medição: o Layout é `h-screen overflow-hidden` e quem rola é o `<main>` (`Layout.tsx:1597`), nunca o documento. O print confirma o conteúdo fluindo sem caixa interna.
     - **Publicação de (d):** `main` = `b537bba9`; o domínio serve `b537bba` (conferido por ancestralidade). Check-run `ci`: **completed / success**.
-    - **Próxima pendência (fora do pedido):** o CONTEÚDO das abas ainda está na escala antiga (§16/§21). Visto no print do CAPEX: cartões `rounded-2xl`/`3xl` e rótulos `font-black uppercase` ("ÁREA TOTAL (M²)"); vale também para Receitas, Sensibilidade, ESG, Estática, Dinâmica e Resumo.
+    - [ ] **(e) Conteúdo das abas no padrão do guia** (pedido: *"corrigir: … o conteúdo das abas … ainda está no estilo antigo"*). Feito por 3 subagentes em paralelo, com arquivos separados, e conferido por mim:
+      - **A:** CAPEX, Receitas, Espelho de vendas.
+      - **B:** Sensibilidade, ESG, Dinâmica, Fluxo de caixa.
+      - **C:** Resumo, Estática.
+      - Mais `ImovibBlocksTypologyTab`, que eu migrei (sobras achadas pela varredura).
+      - **O que mudou:** cartões `rounded-[10px]`; inputs e botões `h-9 rounded-[6px]` (§16/§17); rótulos `text-xs font-semibold text-slate-500` (§21); KPIs em `KpiCard` (§4); badges em texto simples (§8); cabeçalhos de tabela pela `CABECALHO_TABELA`.
+      - **Verificado:** tsc rc 0; `check-ui-standard` rc 0 nos 15 `Imovib*.tsx`; 92 testes em 13 arquivos; nenhuma sobra de `rounded-2xl/3xl`, `uppercase`, `tracking-wider/widest` ou `font-black` fora do `<h1>` (§20).
+      - **Decisões e limites registrados pelos subagentes:**
+        - O rótulo do `KpiCard` continua em CAIXA ALTA, que é o padrão da §4 ("Label sempre UPPERCASE"). A §4.3 diz que `sm`/`lg` tirariam a caixa alta, e o componente não faz isso: é contradição do guia com o componente.
+        - A "Ata do Comitê" (ESG) era um cartão escuro com sombra e mancha decorativa e virou o cartão branco do §16.
+        - O miolo dos gráficos Recharts (§28) não mudou.
+        - "Gerar Vendas de Ativos" e "Exportar PDF" mantêm as cores originais (verde e slate) no formato compacto.
+        - A tabela do espelho ficou mais larga (`px-6` em 11 colunas, com rolagem lateral).
+      - Falta a prova no navegador (`c:/tmp/pwtest/imovib_abas_visual.js`, que também regera PDF e Excel).
+    - **Registro anterior:** o CONTEÚDO das abas ainda estava na escala antiga (§16/§21). Visto no print do CAPEX: cartões `rounded-2xl`/`3xl` e rótulos `font-black uppercase` ("ÁREA TOTAL (M²)"); vale também para Receitas, Sensibilidade, ESG, Estática, Dinâmica e Resumo.
   - **Pendências registradas pelos subagentes:**
     - inputs de Premissas ainda na escala antiga de raio (§16);
     - `StarRating` do ESG declarado dentro do render (botões; efeito menor);

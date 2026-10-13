@@ -7,6 +7,7 @@ import { Activity, TrendingDown, TrendingUp, AlertOctagon, ShieldAlert } from 'l
 import { imovibService } from '../services/imovibService';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
+import { KpiCard } from './ui/KpiCard';
 
 interface ImovibSensitivityFormProps {
     study: ImovibStudy;
@@ -98,39 +99,41 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
         <div className="space-y-6 pb-10 max-w-7xl mx-auto">
             <ImovibAvisosBanner avisos={baseMath.avisos} onIrPara={onIrPara} />
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-6">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <Activity className="w-7 h-7 text-rose-500" />
+                    <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-rose-500" />
                         Engenharia Financeira e Risco
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1 font-medium max-w-2xl">
+                    <p className="text-slate-500 text-sm mt-1 max-w-2xl">
                         Avalie a resiliência do projeto. O Gráfico Tornado mostra quais variáveis mais afetam o retorno. Explore cenários estressados para encontrar o ponto de quebra.
                     </p>
                 </div>
-                <div className="flex gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 items-center">
-                    <div>
-                        <span className="block text-xs font-black tracking-widest uppercase text-indigo-400">TIR Base (Ao Ano)</span>
-                        <span className="block text-2xl font-black text-indigo-700">{formatPct(baseIrr)}</span>
-                    </div>
-                </div>
+                {/* §4: KPI isolado → componente canônico */}
+                <KpiCard
+                    label="TIR Base (Ao Ano)"
+                    value={formatPct(baseIrr)}
+                    icon={<TrendingUp className="w-4 h-4" />}
+                    color="indigo"
+                    className="shrink-0"
+                />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                 {/* TORNADO CHART */}
-                <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex flex-col h-[500px]">
+                <div className="lg:col-span-2 bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm flex flex-col h-[500px]">
                     <div className="mb-4">
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                             <TrendingUp className="w-5 h-5 text-indigo-500" />
                             Gráfico Tornado (Sensibilidade ±10%)
                         </h3>
-                        <p className="text-xs text-slate-500 font-medium">Impacto na TIR Anual partindo do Cenário Base.</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Impacto na TIR Anual partindo do Cenário Base.</p>
                     </div>
 
                     <div className="flex-1 w-full min-h-0">
                         {isNaN(baseIrr) ? (
-                            <div className="h-full flex items-center justify-center text-slate-400 font-bold">
+                            <div className="h-full flex items-center justify-center text-sm text-slate-400">
                                 Parâmetros base insuficientes para calcular TIR.
                             </div>
                         ) : (
@@ -163,20 +166,20 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                 </div>
 
                 {/* SCENARIO BUILDER (STRESS TEST) */}
-                <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex flex-col">
+                <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm flex flex-col">
                     <div className="mb-6">
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                             <AlertOctagon className="w-5 h-5 text-rose-500" />
                             Stress Test Personalizado
                         </h3>
-                        <p className="text-xs text-slate-500 font-medium">Deslize para simular choques macroeconômicos.</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Deslize para simular choques macroeconômicos.</p>
                     </div>
 
                     <div className="space-y-6 flex-1">
                         <div>
-                            <div className="flex justify-between mb-2">
-                                <label className="text-sm font-bold text-slate-700">Choque de Receita (VGV)</label>
-                                <span className={`text-sm font-black ${scenarioVgvDelta < 0 ? 'text-rose-600' : scenarioVgvDelta > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            <div className="flex justify-between mb-1.5">
+                                <label className="text-xs font-semibold text-slate-500">Choque de Receita (VGV)</label>
+                                <span className={`text-sm font-medium ${scenarioVgvDelta < 0 ? 'text-rose-600' : scenarioVgvDelta > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
                                     {scenarioVgvDelta > 0 ? '+' : ''}{scenarioVgvDelta}%
                                 </span>
                             </div>
@@ -187,7 +190,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                                 onChange={(e) => setScenarioVgvDelta(Number(e.target.value))}
                                 className="w-full accent-indigo-600"
                             />
-                            <div className="flex justify-between text-xs font-bold text-slate-400 mt-1">
+                            <div className="flex justify-between text-xs text-slate-400 mt-1">
                                 <span>-30%</span>
                                 <span>0</span>
                                 <span>+30%</span>
@@ -195,9 +198,9 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                         </div>
 
                         <div>
-                            <div className="flex justify-between mb-2">
-                                <label className="text-sm font-bold text-slate-700">Choque de Custos (Obra/Terreno)</label>
-                                <span className={`text-sm font-black ${scenarioCostDelta > 0 ? 'text-rose-600' : scenarioCostDelta < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            <div className="flex justify-between mb-1.5">
+                                <label className="text-xs font-semibold text-slate-500">Choque de Custos (Obra/Terreno)</label>
+                                <span className={`text-sm font-medium ${scenarioCostDelta > 0 ? 'text-rose-600' : scenarioCostDelta < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
                                     {scenarioCostDelta > 0 ? '+' : ''}{scenarioCostDelta}%
                                 </span>
                             </div>
@@ -208,40 +211,32 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                                 onChange={(e) => setScenarioCostDelta(Number(e.target.value))}
                                 className="w-full accent-rose-500"
                             />
-                            <div className="flex justify-between text-xs font-bold text-slate-400 mt-1">
+                            <div className="flex justify-between text-xs text-slate-400 mt-1">
                                 <span>-30%</span>
                                 <span>0</span>
                                 <span>+30%</span>
                             </div>
                         </div>
 
-                        {/* Results Box */}
-                        <div className={`mt-6 p-4 rounded-2xl border transition-colors ${isNaN(scenarioIrr) ? 'bg-slate-50 border-slate-200' :
-                            scenarioIrr < baseIrr ? 'bg-rose-50 border-rose-200' :
-                                scenarioIrr > baseIrr ? 'bg-emerald-50 border-emerald-200' : 'bg-indigo-50 border-indigo-200'
-                            }`}>
-                            <span className="block text-center text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">TIR no Cenário de Stress</span>
-                            <span className={`block text-center text-4xl font-black ${isNaN(scenarioIrr) ? 'text-slate-400' :
-                                scenarioIrr < baseIrr ? 'text-rose-600' :
-                                    scenarioIrr > baseIrr ? 'text-emerald-600' : 'text-indigo-600'
-                                }`}>
-                                {formatPct(scenarioIrr)}
-                            </span>
-
-                            {!isNaN(scenarioIrr) && scenarioVgvDelta === 0 && scenarioCostDelta === 0 && (
-                                <p className="text-center text-xs font-bold text-indigo-400 mt-2">Mesmo que o Cenário Base</p>
-                            )}
-                            {!isNaN(scenarioIrr) && (scenarioVgvDelta !== 0 || scenarioCostDelta !== 0) && (
-                                <p className={`text-center text-xs font-bold mt-2 ${scenarioIrr < baseIrr ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                    {scenarioIrr < baseIrr ? '' : '+'}{(scenarioIrr - baseIrr).toFixed(2)}% vs Base
-                                </p>
-                            )}
-                        </div>
+                        {/* Resultado do cenário — §4: KpiCard; a cor do valor diz se piorou/melhorou */}
+                        <KpiCard
+                            label="TIR no Cenário de Stress"
+                            value={formatPct(scenarioIrr)}
+                            sub={isNaN(scenarioIrr)
+                                ? undefined
+                                : scenarioVgvDelta === 0 && scenarioCostDelta === 0
+                                    ? 'Mesmo que o Cenário Base'
+                                    : `${scenarioIrr < baseIrr ? '' : '+'}${(scenarioIrr - baseIrr).toFixed(2)}% vs Base`}
+                            icon={<Activity className="w-4 h-4" />}
+                            color={isNaN(scenarioIrr) ? 'gray'
+                                : scenarioIrr < baseIrr ? 'rose'
+                                    : scenarioIrr > baseIrr ? 'emerald' : 'indigo'}
+                        />
 
                         <div className="flex justify-center">
                             <button
                                 onClick={() => { setScenarioVgvDelta(0); setScenarioCostDelta(0); }}
-                                className="text-button font-bold text-slate-400 hover:text-slate-600 transition-colors underline"
+                                className="h-9 px-3.5 rounded-[6px] font-medium text-[13px] text-slate-600 hover:bg-slate-100 transition-colors"
                             >
                                 Restaurar Base
                             </button>
@@ -251,13 +246,13 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
             </div>
 
             {/* QUALITATIVE RISK MATRIX / SWATCH */}
-            <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm mt-6">
+            <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm">
                 <div className="mb-6">
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <ShieldAlert className="w-6 h-6 text-amber-500" />
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <ShieldAlert className="w-5 h-5 text-amber-500" />
                         Mapa de Riscos Qualitativos
                     </h3>
-                    <p className="text-slate-500 text-sm font-medium">
+                    <p className="text-slate-500 text-sm mt-0.5">
                         Registre impedimentos regulatórios, ambientais ou contenciosos que a matemática pura não captura.
                     </p>
                 </div>
@@ -268,10 +263,10 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                         onChange={(e) => setRiskNotes(e.target.value)}
                         onBlur={handleSaveRisks}
                         placeholder="Ex: Terreno com passivo ambiental leve, aguardando laudo da CETESB. Risco de 3 meses de atraso no Alvará de Aprovação..."
-                        className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-50 outline-none text-slate-700 font-medium resize-none transition-all"
+                        className="w-full h-32 px-3 py-2 bg-slate-50 border border-slate-200 rounded-[6px] focus:bg-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none text-sm text-slate-700 resize-none transition-all"
                     />
                     {isSaving && (
-                        <div className="absolute top-4 right-4">
+                        <div className="absolute top-3 right-3">
                             <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></div>
                         </div>
                     )}

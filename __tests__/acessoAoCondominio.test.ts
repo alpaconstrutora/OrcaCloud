@@ -13,7 +13,7 @@
 // `AGUARDA_ABA`.
 import { describe, it, expect } from 'vitest';
 import {
-    estadoDeAcesso, resumirAcessos, type EstadoDeAcesso,
+    estadoDeAcesso, resumirAcessos, agruparPapeisPorPessoa, type EstadoDeAcesso,
 } from '../utils/acessoAoCondominio';
 
 const emDias = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
@@ -98,5 +98,68 @@ describe('resumirAcessos — o KPI para de ser resíduo aritmético', () => {
 
     it('lista vazia não vira NaN', () => {
         expect(resumirAcessos([])).toEqual({ total: 0, ve: 0, aguardaAba: 0, sem: 0 });
+    });
+});
+
+describe('agruparPapeisPorPessoa — uma linha por pessoa × unidade', () => {
+    // 13/10/2026: proprietário que também é responsável financeiro aparecia
+    // duas vezes, idêntico, em Portais › Portal do Condômino.
+    const oc = (unit_id: string, client_id: string, role: string, id = `${unit_id}-${client_id}-${role}`) =>
+        ({ id, unit_id, client_id, role });
+
+    it('mesma pessoa com dois papéis na mesma unidade vira UMA linha com os dois', () => {
+        const r = agruparPapeisPorPessoa([
+            oc('u11', 'marcos', 'RESPONSAVEL_FINANCEIRO'),
+            oc('u11', 'marcos', 'PROPRIETARIO'),
+        ]);
+        expect(r).toHaveLength(1);
+        expect(r[0].key).toBe('u11:marcos');
+        expect(r[0].papeis).toEqual(['PROPRIETARIO', 'RESPONSAVEL_FINANCEIRO']);
+    });
+
+    it('mesma pessoa em duas unidades continua em duas linhas', () => {
+        const r = agruparPapeisPorPessoa([
+            oc('u11', 'marcos', 'PROPRIETARIO'),
+            oc('u12', 'marcos', 'PROPRIETARIO'),
+        ]);
+        expect(r.map(g => g.key)).toEqual(['u11:marcos', 'u12:marcos']);
+    });
+
+    it('duas pessoas na mesma unidade continuam em duas linhas', () => {
+        const r = agruparPapeisPorPessoa([
+            oc('u32', 'sonia', 'RESPONSAVEL_FINANCEIRO'),
+            oc('u32', 'outro', 'PROPRIETARIO'),
+        ]);
+        expect(r).toHaveLength(2);
+    });
+
+    it('papel repetido aparece uma vez só', () => {
+        const r = agruparPapeisPorPessoa([
+            oc('u21', 'francisco', 'PROPRIETARIO', 'a'),
+            oc('u21', 'francisco', 'PROPRIETARIO', 'b'),
+        ]);
+        expect(r[0].papeis).toEqual(['PROPRIETARIO']);
+    });
+
+    it('ordem fixa dos papéis; desconhecido vai para o fim', () => {
+        const r = agruparPapeisPorPessoa([
+            oc('u1', 'p', 'XPTO'),
+            oc('u1', 'p', 'RESPONSAVEL_FINANCEIRO'),
+            oc('u1', 'p', 'MORADOR'),
+            oc('u1', 'p', 'INQUILINO'),
+            oc('u1', 'p', 'PROPRIETARIO'),
+        ]);
+        expect(r[0].papeis).toEqual(['PROPRIETARIO', 'INQUILINO', 'MORADOR', 'RESPONSAVEL_FINANCEIRO', 'XPTO']);
+    });
+
+    it('a linha carrega a primeira ocupação do grupo e preserva a ordem de entrada', () => {
+        const primeira = oc('u22', 'joao', 'RESPONSAVEL_FINANCEIRO');
+        const r = agruparPapeisPorPessoa([primeira, oc('u31', 'ricardo', 'PROPRIETARIO'), oc('u22', 'joao', 'PROPRIETARIO')]);
+        expect(r.map(g => g.key)).toEqual(['u22:joao', 'u31:ricardo']);
+        expect(r[0].ocupacao).toBe(primeira);
+    });
+
+    it('lista vazia devolve vazio', () => {
+        expect(agruparPapeisPorPessoa([])).toEqual([]);
     });
 });

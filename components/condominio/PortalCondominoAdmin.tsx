@@ -43,7 +43,7 @@ import { clientPortalService, CONDOMINIO_VAZIO, type PortalCondominio } from '..
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
 import { useOrgContext } from '../../hooks/useOrgContext';
-import { estadoDeAcesso, resumirAcessos, type AcessoClienteLite, type ViaDeAcesso } from '../../utils/acessoAoCondominio';
+import { estadoDeAcesso, resumirAcessos, agruparPapeisPorPessoa, type AcessoClienteLite, type ViaDeAcesso } from '../../utils/acessoAoCondominio';
 import { condominioAcessoService } from '../../services/condominioAcessoService';
 import { useStore } from '../../store/useStore';
 import { useScrollAoTopo } from '../../hooks/useScrollAoTopo';
@@ -322,11 +322,14 @@ const AcessosDoCondominio: React.FC<{
             }]));
             const ocupacoes = await unitOccupancyService.listByEmpreendimento(
                 units.map(u => u.id), labels, { incluirEncerradas: false });
-            setLinhas(ocupacoes.map(o => ({
-                key: o.id,
+            // Uma linha por pessoa × unidade: proprietário que também é o
+            // responsável financeiro aparecia duas vezes, idêntico, e contava
+            // dobrado nos KPIs. Ver `agruparPapeisPorPessoa`.
+            setLinhas(agruparPapeisPorPessoa(ocupacoes).map(({ key, ocupacao: o, papeis }) => ({
+                key,
                 unidade: `${o._tower_name} · ${o._unit_name}`,
                 pessoa: o._client_name,
-                papel: ROLE_LABEL[o.role] || o.role,
+                papel: papeis.map(r => ROLE_LABEL[r] || r).join(' · '),
                 clientId: o.client_id,
             })));
             // O outro caminho de acesso. Falhar aqui degrada a coluna para o
@@ -334,7 +337,7 @@ const AcessosDoCondominio: React.FC<{
             // informação errada.
             try {
                 setAcessoCliente(Object.fromEntries(
-                    await condominioAcessoService.mapearPorCliente(ocupacoes.map(o => o.client_id))));
+                    await condominioAcessoService.mapearPorCliente([...new Set(ocupacoes.map(o => o.client_id))])));
             } catch { setAcessoCliente({}); }
         } catch (e: any) {
             setErro(e?.message || 'Erro ao carregar os acessos.');
@@ -408,7 +411,9 @@ const AcessosDoCondominio: React.FC<{
                 com `sem = total - ativos` — o que jogava revogado, expirado e
                 "já entra pelo Portal do Cliente" no mesmo lugar. */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                <KpiCard label="OCUPAÇÕES VIGENTES" value={kpis.total} icon={<Building2 className="w-5 h-5" />} color="blue" />
+                {/* Conta pessoa × unidade, não ocupação: dois papéis da mesma
+                    pessoa na mesma unidade são uma linha só (13/10/2026). */}
+                <KpiCard label="PESSOAS VINCULADAS" value={kpis.total} icon={<Building2 className="w-5 h-5" />} color="blue" />
                 <KpiCard
                     label="VÊ O CONDOMÍNIO" value={kpis.ve}
                     icon={<Eye className="w-5 h-5" />} color={kpis.ve > 0 ? 'emerald' : 'gray'}

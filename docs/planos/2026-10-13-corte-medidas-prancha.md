@@ -48,4 +48,4 @@ reaproveitada lá, se você quiser"*. Resposta:
 - [x] 3 — DXF do mesmo estudo: 49 referências a `CORTE-COTAS`.
 - [x] 4 — typecheck 0 erros (heap 6144; 8192/12288/16384 caíram com segfault do Node 24 nesta rodada).
 - [x] Suíte em 4 partes (o Node 24 caiu com V8 "Fatal error"/travou na rodada inteira): 2211 + 1994 + 2046 + 2587 = 8838 = 8804 + 34 pendentes + 0 falhas; build ok; ui-standard (PainelVersoes, BlueprintEditor), xss, origem limpos.
-- [ ] Publicação, Vercel, CI
+- [x] Publicado em `6b50f2f1` (13/10/2026): check-run `ci` success, Vercel success; o domínio (já em `ba40a13`, que o contém) serve "CORTE-TERRENO" — a 1ª conferência pegou um chunk faltando e foi repetida.

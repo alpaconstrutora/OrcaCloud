@@ -105,7 +105,7 @@ const TaskCard = React.memo<{
   return (
     <div
       onClick={() => onPress(task)}
-      className={`bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3.5 flex items-center gap-3 transition-opacity active:bg-slate-50 cursor-pointer ${isDone ? 'opacity-40' : ''}`}
+      className={`bg-white rounded-[10px] border border-slate-100 shadow-sm px-4 py-3.5 flex items-center gap-3 transition-opacity active:bg-slate-50 cursor-pointer ${isDone ? 'opacity-40' : ''}`}
     >
       {/* Priority dot */}
       <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
@@ -114,11 +114,11 @@ const TaskCard = React.memo<{
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
           {showNew && (
-            <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[8px] font-black uppercase tracking-wide rounded-md flex-shrink-0">
-              NEW
+            <span className="text-xs font-medium text-blue-600 flex-shrink-0">
+              Nova
             </span>
           )}
-          <p className={`text-sm font-bold leading-snug ${isDone ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+          <p className={`text-sm font-medium leading-snug ${isDone ? 'line-through text-slate-400' : 'text-slate-800'}`}>
             {task.title}
           </p>
         </div>
@@ -158,19 +158,19 @@ const EspacosScreen = React.memo<{
     ) : spaces.length === 0 ? (
       <div className="flex flex-col items-center py-16 gap-3">
         <LayoutGrid className="w-10 h-10 text-slate-200" />
-        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Nenhum espaço</p>
+        <p className="text-sm text-slate-400">Nenhum espaço</p>
       </div>
     ) : spaces.map(space => (
       <button
         key={space.id}
         onClick={() => onSelect(space)}
-        className="w-full bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-3 active:scale-[0.98] transition-all text-left"
+        className="w-full bg-white rounded-[10px] p-4 shadow-sm border border-slate-100 flex items-center gap-3 active:scale-[0.98] transition-all text-left"
       >
-        <span className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: space.color + '22' }}>
+        <span className="w-9 h-9 rounded-[6px] flex items-center justify-center" style={{ backgroundColor: space.color + '22' }}>
           <span className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: space.color }} />
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-slate-800">{space.name}</p>
+          <p className="text-sm font-medium text-slate-800">{space.name}</p>
           <p className="text-xs text-slate-400 font-medium">{space.task_count ?? 0} tarefa{space.task_count !== 1 ? 's' : ''}</p>
         </div>
         <ChevronRight className="w-4 h-4 text-slate-200" />
@@ -191,21 +191,21 @@ const FoldersScreen = React.memo<{
     ) : folders.length === 0 ? (
       <div className="flex flex-col items-center py-16 gap-3">
         <FolderOpen className="w-10 h-10 text-slate-200" />
-        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Nenhuma pasta</p>
+        <p className="text-sm text-slate-400">Nenhuma pasta</p>
       </div>
     ) : folders.map(folder => (
       <button
         key={folder.id}
         onClick={() => onSelect(folder)}
-        className="w-full bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-3 active:scale-[0.98] transition-all text-left"
+        className="w-full bg-white rounded-[10px] p-4 shadow-sm border border-slate-100 flex items-center gap-3 active:scale-[0.98] transition-all text-left"
       >
         <span
-          className="w-9 h-9 rounded-xl flex items-center justify-center"
+          className="w-9 h-9 rounded-[6px] flex items-center justify-center"
           style={{ backgroundColor: (folder.color ?? '#6366f1') + '22' }}
         >
           <Folder className="w-4 h-4" style={{ color: folder.color ?? '#6366f1' }} />
         </span>
-        <p className="flex-1 text-sm font-bold text-slate-800 truncate">{folder.name}</p>
+        <p className="flex-1 text-sm font-medium text-slate-800 truncate">{folder.name}</p>
         <ChevronRight className="w-4 h-4 text-slate-200" />
       </button>
     ))}
@@ -778,7 +778,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
 
       {/* Status bar */}
       <div className="flex items-center justify-between px-5 pt-3 pb-1 bg-white flex-shrink-0">
-        <span className="text-xs font-black text-slate-700">{timeStr}</span>
+        <span className="text-xs font-semibold text-slate-700">{timeStr}</span>
         <div className="flex items-center gap-1.5">
           <div className="flex gap-0.5 items-end h-3">
             {[3, 5, 7, 9].map((h, i) => (
@@ -799,13 +799,13 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
           <div className="flex items-center gap-2 pb-3">
             <button
               onClick={selectedFolder ? goBackFromFolder : goBackFromSpace}
-              className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600"
+              className="w-8 h-8 rounded-[6px] bg-slate-100 flex items-center justify-center text-slate-600"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             {selectedSpace && (
               <span
-                className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
+                className="w-7 h-7 rounded-[6px] flex items-center justify-center flex-shrink-0"
                 style={{ backgroundColor: selectedSpace.color + '22' }}
               >
                 {selectedFolder
@@ -816,7 +816,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
             )}
             <div className="flex-1 min-w-0">
               {selectedFolder && (
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5 truncate">
+                <p className="text-xs font-medium text-slate-400 leading-none mb-0.5 truncate">
                   {selectedSpace?.name}
                 </p>
               )}
@@ -829,8 +829,8 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
             <div className="flex items-center justify-between mb-3">
               <button className="p-1 text-slate-500"><Menu className="w-5 h-5" /></button>
               <span className="text-sm font-black text-slate-800">Tarefas</span>
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shadow-md shadow-blue-200">
-                <span className="text-[9px] font-black text-white tracking-tight">EU</span>
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
+                <span className="text-xs font-semibold text-white">EU</span>
               </div>
             </div>
 
@@ -851,15 +851,15 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
                     key={i}
                     data-today={isToday_ ? 'true' : undefined}
                     onClick={() => setSelectedDate(iso)}
-                    className={`flex flex-col items-center gap-1 px-2.5 py-2 rounded-2xl flex-shrink-0 min-w-[44px] transition-all
+                    className={`flex flex-col items-center gap-1 px-2.5 py-2 rounded-[10px] flex-shrink-0 min-w-[44px] transition-all
                       ${isSelected
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                        ? 'bg-blue-600 text-white'
                         : isToday_
                           ? 'bg-blue-50 text-blue-600'
                           : 'text-slate-400 hover:bg-slate-50'}`}
                   >
-                    <span className="text-[9px] font-black uppercase">{DAY_LETTER[d.getDay()]}</span>
-                    <span className="text-[15px] font-black leading-none">{d.getDate()}</span>
+                    <span className="text-xs font-medium">{DAY_LETTER[d.getDay()]}</span>
+                    <span className="text-[15px] font-semibold leading-none">{d.getDate()}</span>
                   </button>
                 )
               })}
@@ -868,17 +868,17 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
             {/* Tabs */}
             <div className="flex">
               {([
-                { key: 'todas',     label: 'All tasks', count: allCount     },
+                { key: 'todas',     label: 'Todas'    , count: allCount     },
                 { key: 'atrasadas', label: 'Atrasadas', count: overdueCount },
               ] as const).map(({ key, label, count }) => (
                 <button
                   key={key}
                   onClick={() => setFilterTab(key)}
-                  className={`flex items-center gap-1.5 px-1 py-2.5 mr-5 text-button font-black border-b-2 -mb-px transition-colors
+                  className={`flex items-center gap-1.5 px-1 py-2.5 mr-5 text-sm font-medium border-b-2 -mb-px transition-colors
                     ${filterTab === key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}
                 >
                   {label}
-                  <span className={`text-xs font-black px-1.5 py-0.5 rounded-md
+                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded-[6px]
                     ${filterTab === key ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
                     {count}
                   </span>
@@ -910,12 +910,12 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
             </div>
           ) : visible.length === 0 ? (
             <div className="flex flex-col items-center py-16 gap-3">
-              <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-sm">
+              <div className="w-16 h-16 bg-white rounded-[10px] flex items-center justify-center shadow-sm">
                 {selectedFolder
                   ? <FolderOpen className="w-8 h-8 text-slate-300" />
                   : <CheckCircle2 className="w-8 h-8 text-blue-200" />}
               </div>
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest text-center">
+              <p className="text-sm text-slate-400 text-center">
                 {selectedFolder
                   ? 'Nenhuma tarefa nesta pasta'
                   : filterTab === 'atrasadas'
@@ -945,7 +945,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
         <Button
           onClick={() => setShowAddTask(true)}
           size="icon"
-          className="w-14 h-14 rounded-full shadow-xl shadow-blue-300 active:scale-95"
+          className="w-14 h-14 rounded-full shadow-lg active:scale-95"
         >
           <Plus className="w-6 h-6 text-white" />
         </Button>
@@ -966,7 +966,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
             className={`flex flex-col items-center gap-1 transition-colors ${nav === key ? 'text-blue-600' : 'text-slate-300'}`}
           >
             <Icon className="w-5 h-5" />
-            <span className="text-[9px] font-black uppercase tracking-widest">{label}</span>
+            <span className="text-xs font-medium">{label}</span>
           </button>
         ))}
       </div>

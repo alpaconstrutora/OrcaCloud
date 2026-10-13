@@ -56,7 +56,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, A
 import { buildPlanningView, type PlanningView, type PlanningScale } from '../utils/portalPlanningUtils';
 import type { PortalPlanning, PortalCondominio, PortalUnidades } from '../services/clientPortalService';
 import { CONDOMINIO_VAZIO, UNIDADES_VAZIO } from '../services/clientPortalService';
-import CondominioTab from './client/CondominioTab';
+import CondominioTab, { ABAS_CONDOMINIO, type AbaCondominio } from './client/CondominioTab';
 import UnidadeTab from './client/UnidadeTab';
 import ClientPortalMyData from './client/portal/ClientPortalMyData';
 import ClientPortalLinkModal from './client/ClientPortalLinkModal';
@@ -188,6 +188,15 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [gedDocsLoading, setGedDocsLoading] = React.useState(false);
     const [condominio, setCondominio] = React.useState<PortalCondominio>(CONDOMINIO_VAZIO);
     const [condominioLoading, setCondominioLoading] = React.useState(false);
+    // A seção do Condomínio sobe para cá porque, no link público, quem a escolhe
+    // é o MENU LATERAL (subitens do grupo "Condomínio"), não a barra de abas
+    // dentro da tela. Mesma chave que o `CondominioTab` usa sozinho na prévia do
+    // síndico — a pessoa volta na seção em que estava.
+    const [abaCondominio, setAbaCondominio] = usePersistedState<AbaCondominio>('clientArea:condominioSubtab', 'dados');
+    const [condominioAberto, setCondominioAberto] = React.useState(false);
+    // Grupo aberto sempre que a tela é do Condomínio — inclusive quando se chega
+    // nela sem clicar no menu (deep-link de Ocupações, botão de outra tela).
+    React.useEffect(() => { if (activeTab === 'condominio') setCondominioAberto(true); }, [activeTab]);
     // Aba "Dados da Unidade" — o imóvel COMPRADO/ALUGADO (vem de commercial_deals).
     // Não confundir com `condominio.unidades`, que é onde a pessoa OCUPA hoje
     // (unit_occupancies): um cliente pode ter as duas, e elas não coincidem.
@@ -4007,6 +4016,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         </div>
     );
 
+    // O selo de Avisos mora no MENU, visível de qualquer tela do portal — por
+    // isso os dados do Condomínio carregam na abertura do link, e não só ao
+    // entrar na aba (o efeito de cima continua recarregando ao entrar). Só no
+    // link público: é o único modo com menu lateral.
+    const condominioNoMenu = isStandalone && enabledTabIds.includes('condominio');
+    React.useEffect(() => {
+        if (!condominioNoMenu || !portalToken) return;
+        clientPortalService.getCondominioByToken(portalToken).then(setCondominio).catch(console.error);
+    }, [condominioNoMenu, portalToken]);
+    const avisosNaoLidos = condominio.avisos.filter(a => !a.lido).length;
+
     const toggleTabVisibility = async (tabId: string) => {
         const current = enabledTabIds;
         const next = current.includes(tabId)
@@ -4144,7 +4164,64 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             <div className={isStandalone ? 'md:flex md:flex-1 md:overflow-hidden md:min-h-0' : ''}>
                 {isStandalone && (
                     <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex-col gap-1 shrink-0 overflow-y-auto hidden md:flex">
-                        {desktopNavTabs.map(tab => (
+                        {desktopNavTabs.map(tab => tab.id === 'condominio' ? (
+                            /* Condomínio é GRUPO: avisos, rateio, manutenção e
+                               equipamentos são assuntos diferentes, e cada um é
+                               subitem — não aba dentro da tela (guia §19/§19.2,
+                               13/10/2026). O nó de grupo só abre e fecha; nunca
+                               navega sozinho, e nunca ganha o fundo de "ativo" —
+                               só o texto, quando um filho está ativo. */
+                            <div key={tab.id} className="flex flex-col gap-0.5">
+                                <button
+                                    type="button"
+                                    onClick={() => setCondominioAberto(v => !v)}
+                                    aria-expanded={condominioAberto}
+                                    className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                                        activeTab === 'condominio'
+                                            ? 'text-[#C24428] font-semibold'
+                                            : 'text-gray-500 hover:text-gray-900 hover:bg-white'
+                                    }`}
+                                >
+                                    {tab.icon}
+                                    <span className="flex-1 text-left">{tab.label}</span>
+                                    {/* Fechado, o selo de Avisos sobe para o grupo —
+                                        senão a pendência some junto com o subitem. */}
+                                    {!condominioAberto && avisosNaoLidos > 0 && (
+                                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#E1553C] text-white text-[11px] font-semibold flex items-center justify-center">
+                                            {avisosNaoLidos}
+                                        </span>
+                                    )}
+                                    <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${condominioAberto ? 'rotate-90' : ''}`} />
+                                </button>
+                                {condominioAberto && (
+                                    <div className="ml-6 pl-3 border-l border-gray-200 flex flex-col gap-0.5 mb-1">
+                                        {ABAS_CONDOMINIO.map(sub => {
+                                            const ativo = activeTab === 'condominio' && abaCondominio === sub.id;
+                                            return (
+                                                <button
+                                                    key={sub.id}
+                                                    type="button"
+                                                    onClick={() => { setActiveTab('condominio'); setAbaCondominio(sub.id); }}
+                                                    aria-current={ativo ? 'page' : undefined}
+                                                    className={`flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm text-left transition-all duration-150 ${
+                                                        ativo
+                                                            ? 'bg-[#FDEDE8] border border-[#F3D9D1] text-[#C24428] font-semibold'
+                                                            : 'text-gray-500 font-medium hover:text-gray-900 hover:bg-white'
+                                                    }`}
+                                                >
+                                                    <span className="flex-1">{sub.curto}</span>
+                                                    {sub.id === 'avisos' && avisosNaoLidos > 0 && (
+                                                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#E1553C] text-white text-[11px] font-semibold flex items-center justify-center">
+                                                            {avisosNaoLidos}
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
@@ -4498,6 +4575,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         dados={condominio}
                         loading={condominioLoading}
                         desktopTabsBar={desktopTabsBar}
+                        aba={abaCondominio}
+                        onAbaChange={setAbaCondominio}
+                        abasNoMenuLateral={isStandalone}
                         // Só pelo token: marcar lido é ato do morador. O admin
                         // espiando o portal não pode confirmar leitura em nome
                         // dele — era o número que o síndico usa para saber se a

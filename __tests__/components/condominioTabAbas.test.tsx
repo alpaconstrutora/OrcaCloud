@@ -169,3 +169,40 @@ describe('CondominioTab — ficha do equipamento', () => {
         expect(screen.queryByText('Observações')).toBeNull();
     });
 });
+
+// 13/10/2026 — no link público as seções viraram subitens do MENU LATERAL
+// (grupo "Condomínio"). A tela dona passa a mandar na seção ativa; o que erra
+// em silêncio é o componente ignorar a prop e seguir o próprio estado salvo —
+// o menu marcaria "Financeiro" com o painel de Dados Gerais na tela.
+describe('CondominioTab — seção controlada pelo menu lateral', () => {
+    it('mostra a seção que a tela dona manda, e devolve o clique para ela', () => {
+        const onAbaChange = vi.fn();
+        const { rerender } = montar(
+            <CondominioTab dados={dados} loading={false} aba="financeiro" onAbaChange={onAbaChange} abasNoMenuLateral />,
+        );
+        expect(screen.getByText(MARCA['Financeiro do condomínio'])).toBeInTheDocument();
+        expect(screen.queryByText(MARCA['Dados Gerais'])).toBeNull();
+
+        // o clique na barra (celular) não troca sozinho: pede à tela dona
+        abrir('Avisos');
+        expect(onAbaChange).toHaveBeenCalledWith('avisos');
+        expect(screen.getByText(MARCA['Financeiro do condomínio'])).toBeInTheDocument();
+
+        rerender(
+            <ConfirmProvider>
+                <CondominioTab dados={dados} loading={false} aba="avisos" onAbaChange={onAbaChange} abasNoMenuLateral />
+            </ConfirmProvider>,
+        );
+        expect(screen.getByText(MARCA['Avisos'])).toBeInTheDocument();
+    });
+
+    it('sem a barra no desktop, o card diz em que seção a pessoa está', () => {
+        montar(<CondominioTab dados={dados} loading={false} aba="manutencao" onAbaChange={vi.fn()} abasNoMenuLateral />);
+        expect(screen.getByText(/Manutenção do prédio ·/)).toBeInTheDocument();
+    });
+
+    it('seção salva que não existe mais cai em Dados Gerais, não em tela branca', () => {
+        montar(<CondominioTab dados={dados} loading={false} aba={'aposentada' as never} onAbaChange={vi.fn()} abasNoMenuLateral />);
+        expect(screen.getByText(MARCA['Dados Gerais'])).toBeInTheDocument();
+    });
+});

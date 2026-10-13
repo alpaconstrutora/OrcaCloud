@@ -154,15 +154,21 @@ export function fracaoParaPercentual(v: number | null | undefined): string {
 
 /** As seis seções da aba, na ordem pedida pelo usuário em 24/09/2026
  *  ("transforme cada painel em uma aba"). Os rótulos são os que ele escreveu —
- *  não encurtar: o `PortalTabs` rola na horizontal quando não cabe. */
-const ABAS = [
-    { id: 'dados', label: 'Dados Gerais' },
-    { id: 'avisos', label: 'Avisos' },
-    { id: 'documentos', label: 'Documentos do condomínio' },
-    { id: 'financeiro', label: 'Financeiro do condomínio' },
-    { id: 'manutencao', label: 'Manutenção do prédio' },
-    { id: 'equipamentos', label: 'Equipamentos do prédio' },
+ *  não encurtar: o `PortalTabs` rola na horizontal quando não cabe.
+ *
+ *  `curto` é o rótulo no MENU LATERAL do link público (13/10/2026: assuntos
+ *  diferentes viram subitens do grupo "Condomínio", não abas — guia §19). Lá o
+ *  cabeçalho do grupo já diz "do condomínio"; repetir o sufixo em cada subitem
+ *  seria o sintoma que a mudança veio tirar. */
+export const ABAS_CONDOMINIO = [
+    { id: 'dados', label: 'Dados Gerais', curto: 'Dados gerais' },
+    { id: 'avisos', label: 'Avisos', curto: 'Avisos' },
+    { id: 'documentos', label: 'Documentos do condomínio', curto: 'Documentos' },
+    { id: 'financeiro', label: 'Financeiro do condomínio', curto: 'Financeiro' },
+    { id: 'manutencao', label: 'Manutenção do prédio', curto: 'Manutenção' },
+    { id: 'equipamentos', label: 'Equipamentos do prédio', curto: 'Equipamentos' },
 ] as const;
+const ABAS = ABAS_CONDOMINIO;
 
 export type AbaCondominio = typeof ABAS[number]['id'];
 
@@ -943,9 +949,18 @@ interface Props {
      *  identidade de `onResolverDocumento`. Sem ele, o PDF sai sem a caixa de
      *  anexar (é o caso da prévia do síndico). */
     onResolverComprovantes?: ResolverComprovantes;
+    /** Aba ativa controlada pela tela dona — quando ela navega pelo menu lateral
+     *  (link público, desktop). Sem estes dois, a aba guarda o próprio estado:
+     *  é o caso da prévia do síndico, que não tem menu. */
+    aba?: AbaCondominio;
+    onAbaChange?: (aba: AbaCondominio) => void;
+    /** O menu lateral já lista as seções: no desktop a barra de abas some e o
+     *  card ganha o nome da seção. No celular ela continua — lá não há menu
+     *  lateral, só a barra inferior com um botão "Condomínio". */
+    abasNoMenuLateral?: boolean;
 }
 
-const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopTabsBar, onResolverDocumento, onResolverComprovantes }) => {
+const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopTabsBar, onResolverDocumento, onResolverComprovantes, aba, onAbaChange, abasNoMenuLateral = false }) => {
     const porCondominio = React.useMemo(
         () => agruparPorCondominio(dados.unidades), [dados.unidades]);
 
@@ -955,8 +970,9 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
     // `clientArea:viewMode`. A prévia do síndico divide a chave com o portal do
     // próprio gestor, de propósito: ele volta na aba em que estava, e é
     // localStorage do navegador dele.
-    const [abaSalva, setAba] = usePersistedState<AbaCondominio>('clientArea:condominioSubtab', 'dados');
-    const abaAtiva = resolverAba(abaSalva);
+    const [abaSalva, setAbaSalva] = usePersistedState<AbaCondominio>('clientArea:condominioSubtab', 'dados');
+    const abaAtiva = resolverAba(aba ?? abaSalva);
+    const setAba = onAbaChange ?? setAbaSalva;
 
     if (loading) {
         return (
@@ -1018,8 +1034,15 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                     "Dados Gerais": o banner coral que dizia isso lá dentro saiu a
                     pedido do usuário (24/09/2026), então esta linha é a única
                     identificação do condomínio na tela. */}
-                <div className="flex items-center gap-1.5 px-4 pt-3 text-sm text-gray-500">
+                <div className={`flex items-center gap-1.5 px-4 pt-3 text-sm text-gray-500 ${abasNoMenuLateral ? 'md:pb-3 md:border-b md:border-[#ECECEF]' : ''}`}>
                     <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                    {/* Sem a barra de abas, é esta linha que diz em que seção a
+                        pessoa está — o rótulo longo, o que ela escreveu. */}
+                    {abasNoMenuLateral && (
+                        <span className="hidden md:inline text-gray-900 font-semibold">
+                            {ABAS.find(a => a.id === abaAtiva)?.label} ·
+                        </span>
+                    )}
                     {multi
                         ? `${porCondominio.length} condomínios`
                         : [porCondominio[0].nome,
@@ -1028,7 +1051,9 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                           ].filter(Boolean).join(' · ')}
                 </div>
 
-                <PortalTabs tabs={abas} active={abaAtiva} onChange={(id) => setAba(id as AbaCondominio)} />
+                <div className={abasNoMenuLateral ? 'md:hidden' : undefined}>
+                    <PortalTabs tabs={abas} active={abaAtiva} onChange={(id) => setAba(id as AbaCondominio)} />
+                </div>
 
                 <div className="p-4 md:p-6">
                     {abaAtiva === 'dados' && <PainelDadosGerais grupos={porCondominio} />}

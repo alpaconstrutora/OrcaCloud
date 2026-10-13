@@ -270,10 +270,13 @@ for tocado, regerar o bundle **depois da última edição** e rodar
   coletor, a ligação proposta e a caixa "Cota da rede estimada … Confirmar cota" (SetParametros).
   `check-ui-standard.sh` exit 0 em `PainelColetorPredial.tsx` e `BlueprintEditor.tsx`; o teste
   de componente acha os dois campos (1500 / 1000) e clica no botão.
-- [ ] 5.1 hidrômetro automático
+- [ ] 5.1 hidrômetro automático (13/10: o usuário escolheu publicar o esgoto ANTES da Fase 5)
 - [ ] 5.2 saída pluvial automática
 - [ ] 5.3 um botão só (água e pluvial)
-- [ ] 6.1 bundle da planta-api
+- [x] 6.1 bundle da planta-api: regerado DEPOIS do rebase sobre origin/main (`aea200e4`) —
+  conteúdo IDÊNTICO ao versionado (só a quebra de linha mudava; descartado). O bundle só exporta
+  leitura/quantitativo/IFC/planilha; os comandos alterados (`AddTerminal`, `SetTerminalProps`)
+  e o esgoto não entram nele. `plantaApi.test` + os 6 arquivos da hidráulica: 68/68.
 
 ## Verificação
 

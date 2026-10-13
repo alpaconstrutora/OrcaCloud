@@ -278,6 +278,18 @@ for tocado, regerar o bundle **depois da última edição** e rodar
   leitura/quantitativo/IFC/planilha; os comandos alterados (`AddTerminal`, `SetTerminalProps`)
   e o esgoto não entram nele. `plantaApi.test` + os 6 arquivos da hidráulica: 68/68.
 
+## Publicação (fases 1–4 + 6)
+
+13/10/2026: `dfd02844` (código) + `84ee24e5` (plano) empurrados para `main`. Antes do push: suíte
+9019 = 8985 + 34 pendentes, 0 falha (editor 250/250 numa rodada só); tipos por arquivo 1760/1760
+sem erro; `check-xss-sinks` e `check-origem-do-deploy` ok; `vite build` "built in" + PWA.
+CI do `84ee24e5`: a 1ª rodada falhou por **timeout de 5 s** em `blueprintVistasDePlanta.test.ts`
+(o teste leva 3 ms local, não toca nada desta frente — runner sobrecarregado); a re-rodada passou.
+`conferir-producao.sh "Lançar ligação e coletor"`: o domínio serve `b38bc6a` (main, que contém
+este trabalho) e o texto está no bundle servido. CI do `b38bc6a`: verde.
+
+Falta: Fase 5 (hidrômetro e saída pluvial). A frente continua aberta para ela.
+
 ## Verificação
 
 1. `npx vitest run __tests__/blueprintAncorasHidro.test.ts __tests__/blueprintColetorPredial.test.ts`

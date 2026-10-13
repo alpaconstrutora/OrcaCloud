@@ -33,13 +33,13 @@ Pedido anterior na mesma sessão, que originou a avaliação citada acima:
 - [x] 5. Baixar/Reativar ativo — ⋮ com `useConfirm`; desligado com motivo quando está numa obra
 - [x] 6. Retirada/Movimentar mexem no estoque — gatilho; `required` removido do destino do Movimentar (Sede voltou a ser escolhível)
 - [x] 7. Item → ativo — RPC `fn_patrimoniar_item_de_estoque` + `PatrimoniarItemSheet` + botão no catálogo de itens
-- [ ] 8. Plano e memória — plano atualizado; memória ao publicar
-- [ ] 9. Verificação — 4 de 5 frentes:
+- [x] 8. Plano e memória
+- [x] 9. Verificação (publicação conferida no fechamento):
   - [x] banco: `scripts/teste-ativos-almoxarifado-vinculo.sql` (25 asserções, BEGIN…ROLLBACK) passou com a migration dentro da transação, ANTES de aplicar. A re-rodada contra o schema já aplicado foi bloqueada pelo classificador de permissões da sessão
   - [x] Vitest: `ativosAlmoxarifadoVinculo.test.ts` novo + guardas; suíte inteira 8918 ✓ + 34 pulados + 2 timeouts em `PainelVersoes` (26/26 isolado) = 8954
   - [x] `tsc` 0 erros; `verificar:build` ok; `check-ui-standard` limpo nos arquivos tocados (o aviso §3 do importador é a exceção §3.1 já documentada)
-  - [ ] tela de verdade (Playwright) — depende da senha da conta de teste e de autorização para gravar e apagar dado de teste
-  - [ ] publicação
+  - [x] tela de verdade (Playwright, `c:/tmp/pwtest/ativos-almox-vinculo.mjs`, org Alpa, escrita autorizada em 13/10/2026): guardar → 1 UN e coluna "Almoxarifado Central"; reabrir com o mesmo almoxarifado deixa o botão desligado; Movimentar para obra → 0, de volta à Sede → 1; baixar → 0, reativar → 1; 5 movimentos `in · out · in · adjust_out · adjust_in`; catálogo mostra "Ativo patrimonial"; transformar 1 de 2 UN → item fica com 1 e o ativo novo nasce com 1 UN no Almoxarifado Central. Zero erro de página. Limpeza conferida no banco: 0 ativos, itens, movimentos e saldos de teste
+  - [x] publicação
 
 ## Contexto
 

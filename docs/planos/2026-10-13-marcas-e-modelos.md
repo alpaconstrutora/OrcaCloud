@@ -317,7 +317,7 @@ Organização (só informativa na reimportação).
 - [x] `components/settings/BrandModelImportSheet.tsx` (novo): painel arquivo → prévia (StandardTable dense, filtro "Mostrar", resumo) → resultado; "Baixar modelo"; botão desligado diz o motivo. **Pronto:** `__tests__/components/BrandModelImportSheet.test.tsx` (5) verde.
 - [x] `components/settings/BrandsSettings.tsx`: botões "Importar" e "Exportar" no cabeçalho; importação recarrega o catálogo (lote). **Pronto:** `BrandsModelsSettings.test.tsx` segue verde.
 - [x] Verificação na tela (:3119, Alpa; dados ZZTeste apagados e conferidos — catálogo voltou a DeWalt/Elevacon/EvoLed/Menegotti, 0 modelos): Exportar baixou `marcas-e-modelos-2026-10-13.xlsx` com as 4 marcas + aba Instruções; reimportar o próprio arquivo → "Importar 0 linhas" desligado ("Nenhuma linha grava algo"); planilha de teste com colunas fora de ordem e cabeçalho sem acento → prévia "Nova marca e modelo / Novo modelo / Nova marca / Erro (tipo foguete)" → 3 linhas gravadas, banco igual à prévia (tipo, código, categoria, vida 48); 2ª importação → tudo "Sem mudança", o erro continua erro. Zero erro de JS/console/HTTP. Ajuste: coluna "Ação" da prévia cortava → 150px.
-- [ ] Publicar e fechar a frente `marcas-modelos-planilha`.
+- [x] Publicado em 13/10: `d9a9f82a` — o domínio carimba `d9a9f82` (conferir-producao); check-run `ci`: success. Frente `marcas-modelos-planilha` fechada.
 
 ## Riscos
 - Lock da FK em `opura_assets` com o módulo aberto: `lock_timeout` e repetir se der 40P01.

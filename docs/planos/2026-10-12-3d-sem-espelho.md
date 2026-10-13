@@ -46,5 +46,5 @@ correção?"*. Resposta:
 - [x] 1 — 4 testes em `__tests__/blueprint3dEspelho.test.ts` (leste × cima = sul; norte em −Z; plano corta o mesmo ponto).
 - [x] 2 — harness `docs/spikes/terreno-grande-3d/`: `?mapa=RELEVO` com o texto do mapa lendo certo; `?mapa=RUAS&curvas=1&envelope=1` com lago (SO) à esquerda e rio (NE) à direita da câmera a SE; caixa de corte ligada recorta e desenha o contorno no lugar.
 - [x] Suíte 8811 = 8777 + 34 pendentes + 0 falhas; typecheck 0 erros; `vite build` ok; ui-standard, xss e origem-do-deploy limpos.
-- [ ] Publicação, Vercel, CI
+- [x] Publicado em `18e1230d` (12/10/2026): domínio carimbado `18e1230`, Vercel success, check-run `ci` success.
 - Não provado interativamente: arrastar peça pela alça no 3D, pontos de vista gravados antes da correção (posição salva no espaço do desenho é convertida — devem cair no mesmo lugar) e Percorrer.

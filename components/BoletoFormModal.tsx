@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     Upload, Loader2, ArrowLeft, FileText, AlertCircle, CheckCircle2,
     Building2, Calendar, DollarSign, Hash, Eye, Save,
-    ThumbsUp, Ban, Trash2, UserPlus, Undo2, Receipt, Tag, StickyNote,
+    ThumbsUp, Ban, Trash2, UserPlus, Undo2, Receipt, Tag, StickyNote, Pencil,
 } from 'lucide-react';
 import PlanoContasSelect from './PlanoContasSelect';
 import HierarchicalSelect from './HierarchicalSelect';
@@ -851,6 +851,17 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     <div className="px-6 py-3.5 border-b border-gray-100 flex items-center gap-2">
                                         <FileText className="w-4 h-4 text-blue-600" />
                                         <h3 className="text-sm font-semibold text-gray-900">Documento original</h3>
+                                        {/* No cabeçalho (sempre visível): no rodapé do card ele ficava abaixo do
+                                            PDF de 3:4, fora da tela, e o usuário não o encontrava. */}
+                                        <button
+                                            type="button"
+                                            onClick={handleRenomearDocumento}
+                                            disabled={busy}
+                                            title="Troca o nome do documento pelo próximo da Nomenclatura de Boletos"
+                                            className="ml-auto flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium text-blue-600 bg-white border border-gray-200 rounded-[6px] hover:bg-blue-50 transition-all active:scale-95 disabled:opacity-50"
+                                        >
+                                            <Pencil className="w-3.5 h-3.5" /> Renomear
+                                        </button>
                                     </div>
                                     <div className="aspect-[3/4] bg-gray-50">
                                         {boleto.documento_mime === 'application/pdf' ? (
@@ -863,15 +874,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </div>
                                     <div className="px-6 py-3 flex items-center justify-between gap-3 text-xs text-gray-500 border-t border-gray-100">
                                         <span className="truncate" title={boleto.documento_nome}>{boleto.documento_nome}</span>
-                                        <button
-                                            type="button"
-                                            onClick={handleRenomearDocumento}
-                                            disabled={busy}
-                                            title="Troca o nome do documento pelo próximo da Nomenclatura de Boletos"
-                                            className="shrink-0 text-blue-600 hover:underline disabled:opacity-50 disabled:no-underline"
-                                        >
-                                            Renomear
-                                        </button>
                                         {documentoUrl && (
                                             <a href={documentoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-blue-600 hover:underline flex items-center gap-1">
                                                 <Eye className="w-3 h-3" /> Abrir

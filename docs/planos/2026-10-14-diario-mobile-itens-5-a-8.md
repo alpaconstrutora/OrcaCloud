@@ -94,6 +94,11 @@ o fora-da-lista avisa e grava como digitado.
 (o banco passa a recusar). Com a ordem inversa, o front antigo deixaria member
 tentar aprovar e receber erro genérico.
 
+**Aplicada em 14/10/2026**, depois do front no ar (`4ed0cf4`, CI e Vercel
+success, `conferir-producao.sh` ok): as duas RPCs chamam `fn_pode_aprovar_diario`
+(`prosrc`), ACL sem anon/PUBLIC, 3 diários/3 registros intactos; roteiros
+repetidos contra os objetos em produção (ROLLBACK): aprovação 12/12, item 1 7/7.
+
 **Pronto quando:** roteiro SQL com ROLLBACK como owner e member reais (RLS
 valendo) + harness: member não aprova, owner aprova, recusa do banco aparece.
 

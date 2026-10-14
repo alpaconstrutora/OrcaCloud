@@ -15,8 +15,12 @@ import { generateDocumentNumber, hasSavedNumberingConfig } from './documentNumbe
  * - Uma vez só: a 1ª renomeação guarda o nome de upload em `documento_nome_original`
  *   (que é também a reversão) e a condição `documento_nome_original IS NULL` do
  *   UPDATE impede gastar outro sequencial em salvamentos seguintes.
- * - Só com fornecedor definido (o nome é montado quando o boleto recebe fornecedor)
- *   e só se a organização SALVOU a máscara de Boletos — sem configuração, nada muda.
+ * - Só com fornecedor definido (o nome é montado quando o boleto recebe fornecedor).
+ * - AUTOMÁTICO (ao salvar o boleto): só se a organização SALVOU a máscara de Boletos — sem
+ *   configuração, nada muda sozinho. AÇÕES MANUAIS (botão Renomear do boleto e "Renomear
+ *   boletos existentes"): usam a máscara que a tela de Nomenclatura mostra, SALVA ou PADRÃO
+ *   — quem clicou pediu; exigir "salvar antes" confundia (a linha aparece preenchida mesmo
+ *   sem nunca ter sido gravada). 14/10/2026.
  * - NUNCA bloqueia: qualquer falha mantém o nome atual e o salvamento segue
  *   (feedback_nomenclatura_nunca_bloqueia).
  */
@@ -96,12 +100,12 @@ export async function renomearDocumentoDoBoleto(boletoId: string): Promise<boole
 
 export type ResultadoRenomearNovamente =
     | { ok: true; nome: string }
-    | { ok: false; motivo: 'nao_encontrado' | 'sem_fornecedor' | 'sem_mascara' | 'sem_mudanca' | 'erro'; detalhe?: string };
+    | { ok: false; motivo: 'nao_encontrado' | 'sem_fornecedor' | 'sem_mudanca' | 'erro'; detalhe?: string };
 
 /**
  * Ação manual "Renomear pela Nomenclatura" do formulário do boleto: renomeia de novo,
- * mesmo que já tenha sido renomeado (ex.: a máscara mudou). Usa o fornecedor/obra JÁ
- * SALVOS do boleto. Ao contrário do automático, devolve o motivo de não ter renomeado
+ * mesmo que já tenha sido renomeado (ex.: a máscara mudou), com a máscara salva ou, se
+ * não houver, a padrão. Usa o fornecedor/obra JÁ SALVOS do boleto. Ao contrário do automático, devolve o motivo de não ter renomeado
  * para a tela explicar; ainda assim nunca lança.
  */
 export async function renomearDocumentoDeNovo(boletoId: string): Promise<ResultadoRenomearNovamente> {
@@ -111,7 +115,6 @@ export async function renomearDocumentoDeNovo(boletoId: string): Promise<Resulta
         if (!data) return { ok: false, motivo: 'nao_encontrado' };
         const b = data as LinhaBoleto;
         if (!b.supplier_id) return { ok: false, motivo: 'sem_fornecedor' };
-        if (!(await hasSavedNumberingConfig(b.organization_id, 'BOLETO'))) return { ok: false, motivo: 'sem_mascara' };
 
         const renomeou = await renomearLinha(b, true, true);
         if (!renomeou) return { ok: false, motivo: 'sem_mudanca' };
@@ -159,10 +162,6 @@ export async function renomearBoletosExistentes(
     organizationId: string,
     onProgress?: (feitos: number, total: number) => void,
 ): Promise<ResultadoRenomeacao> {
-    if (!(await hasSavedNumberingConfig(organizationId, 'BOLETO'))) {
-        throw new Error('Salve a Nomenclatura de Boletos antes de renomear os existentes.');
-    }
-
     const linhas: LinhaBoleto[] = [];
     for (let de = 0; ; de += PAGINA) {
         const { data, error } = await supabase

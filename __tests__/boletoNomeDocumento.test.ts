@@ -108,7 +108,7 @@ describe('renomearDocumentoDoBoleto', () => {
         expect(await renomearDocumentoDoBoleto('b1')).toBe(false);
         expect(h.gerar).not.toHaveBeenCalled();
     });
-    it('sem a máscara de Boletos salva não renomeia', async () => {
+    it('AUTOMÁTICO: sem a máscara de Boletos salva não renomeia', async () => {
         h.temMascara = false;
         expect(await renomearDocumentoDoBoleto('b1')).toBe(false);
         expect(h.gerar).not.toHaveBeenCalled();
@@ -126,9 +126,12 @@ describe('renomearDocumentoDoBoleto', () => {
 });
 
 describe('botão "renomear existentes"', () => {
-    it('exige a máscara salva', async () => {
+    it('funciona SEM a máscara salva: usa a que a tela mostra (padrão) — foi o erro "Salve a Nomenclatura"', async () => {
         h.temMascara = false;
-        await expect(renomearBoletosExistentes('org1')).rejects.toThrow(/Salve a Nomenclatura/);
+        h.lista = [boleto({ id: 'b1' })];
+        const r = await renomearBoletosExistentes('org1');
+        expect(r).toEqual({ renomeados: 1, falhas: 0, total: 1 });
+        expect(h.gerar).toHaveBeenCalledTimes(1);
     });
     it('renomeia todos e informa o progresso', async () => {
         h.lista = [boleto({ id: 'b1' }), boleto({ id: 'b2' }), boleto({ id: 'b3' })];
@@ -182,10 +185,12 @@ describe('renomearDocumentoDeNovo (ação manual do formulário)', () => {
         expect(await renomearDocumentoDeNovo('b1')).toEqual({ ok: false, motivo: 'sem_fornecedor' });
         expect(h.gerar).not.toHaveBeenCalled();
     });
-    it('explica o motivo: sem máscara salva', async () => {
+    it('funciona SEM a máscara salva (ação manual usa a padrão da tela)', async () => {
         h.temMascara = false;
-        expect(await renomearDocumentoDeNovo('b1')).toEqual({ ok: false, motivo: 'sem_mascara' });
-        expect(h.gerar).not.toHaveBeenCalled();
+        h.row = jaRenomeado();
+        const r = await renomearDocumentoDeNovo('b1');
+        expect(r.ok).toBe(true);
+        expect(h.gerar).toHaveBeenCalledTimes(1);
     });
     it('explica o motivo: boleto inexistente', async () => {
         h.row = null;

@@ -379,7 +379,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const MOTIVO_RENOMEAR: Record<string, string> = {
         nao_encontrado: 'Boleto não encontrado.',
         sem_fornecedor: 'Escolha o fornecedor e salve o boleto antes: o nome da Nomenclatura usa o fornecedor.',
-        sem_mascara: 'Salve a Nomenclatura de Boletos em Configurações do Sistema antes de renomear.',
         sem_mudanca: 'O documento mudou enquanto você renomeava. Recarregue o boleto e tente de novo.',
         erro: 'Não foi possível renomear o documento.',
     };

@@ -243,7 +243,7 @@ const NomenclaturaTable: React.FC = () => {
             }
             const ok = await confirm({
                 title: `Renomear ${total} documento${total > 1 ? 's' : ''} de boleto?`,
-                message: 'O nome de cada documento passa a seguir a Nomenclatura de Boletos já salva. O nome original de cada um fica guardado. Pode levar alguns minutos — mantenha esta tela aberta.',
+                message: 'O nome de cada documento passa a seguir a Nomenclatura de Boletos mostrada na tabela (a salva ou, se você ainda não salvou, a padrão). Cada número é gasto da sequência. O nome original de cada um fica guardado. Pode levar alguns minutos — mantenha esta tela aberta.',
                 variant: 'warning',
                 confirmLabel: 'Renomear',
             });
@@ -408,7 +408,7 @@ const NomenclaturaTable: React.FC = () => {
                         </div>
                         <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
                             <p className="text-xs text-gray-500">
-                                Boletos: o documento ganha esse nome quando o boleto recebe fornecedor, depois de salvar a Nomenclatura.
+                                Boletos: ao SALVAR esta tela, o documento passa a ser renomeado sozinho quando o boleto recebe fornecedor. O botão ao lado e o "Renomear" do boleto funcionam mesmo sem salvar.
                             </p>
                             <button
                                 type="button"

@@ -31,6 +31,7 @@ vi.mock('../lib/supabase', () => {
                 eq: () => q, is: () => q, not: () => q, order: () => q,
                 maybeSingle: () => Promise.resolve({ data: h.row, error: null }),
                 range: (de: number) => Promise.resolve({ data: de === 0 ? h.lista : [], error: null }),
+                in: () => Promise.resolve({ data: h.lista, error: null }),
             };
             return q;
         },
@@ -55,7 +56,7 @@ vi.mock('../services/documentNumbering', () => ({
 
 import {
     montarNomeDocumento, extensaoDoNome, renomearDocumentoDoBoleto,
-    renomearBoletosExistentes, contarBoletosParaRenomear, renomearDocumentoDeNovo,
+    renomearDocumentoDeNovo, renomearSelecionados,
 } from '../services/boletoNomeDocumentoService';
 
 const boleto = (extra: Record<string, unknown> = {}) => ({
@@ -125,33 +126,47 @@ describe('renomearDocumentoDoBoleto', () => {
     });
 });
 
-describe('botão "renomear existentes"', () => {
-    it('funciona SEM a máscara salva: usa a que a tela mostra (padrão) — foi o erro "Salve a Nomenclatura"', async () => {
+describe('renomearSelecionados (barra de seleção de Boletos a Pagar)', () => {
+    const comData = (id: string, created_at: string, extra: Record<string, unknown> = {}) =>
+        ({ ...boleto({ id, ...extra }), created_at });
+
+    it('renomeia só os selecionados, em ordem de criação, e devolve id → nome novo', async () => {
+        h.lista = [comData('b2', '2026-10-02'), comData('b1', '2026-10-01')];
+        h.gerar.mockResolvedValueOnce('BOL-A-0001').mockResolvedValueOnce('BOL-A-0002');
+        const progresso: Array<[number, number]> = [];
+        const r = await renomearSelecionados(['b2', 'b1'], (f, t) => progresso.push([f, t]));
+        expect(r.renomeados).toEqual({ b1: 'BOL-A-0001.pdf', b2: 'BOL-A-0002.pdf' });
+        expect(h.updates.map(u => u.id)).toEqual(['b1', 'b2']);
+        expect(progresso.at(-1)).toEqual([2, 2]);
+    });
+    it('renomeia também os JÁ renomeados (quem marcou pediu), mantendo o nome de upload', async () => {
+        h.lista = [comData('b1', '2026-10-01', { documento_nome: 'BOL-X-0001.pdf', documento_nome_original: 'download (98).pdf' })];
+        const r = await renomearSelecionados(['b1']);
+        expect(Object.keys(r.renomeados)).toEqual(['b1']);
+        expect(h.updates[0].patch.documento_nome_original).toBe('download (98).pdf');
+    });
+    it('funciona sem a máscara salva (usa a padrão)', async () => {
         h.temMascara = false;
-        h.lista = [boleto({ id: 'b1' })];
-        const r = await renomearBoletosExistentes('org1');
-        expect(r).toEqual({ renomeados: 1, falhas: 0, total: 1 });
+        h.lista = [comData('b1', '2026-10-01')];
+        const r = await renomearSelecionados(['b1']);
+        expect(Object.keys(r.renomeados)).toEqual(['b1']);
+    });
+    it('sem fornecedor é ignorado e contado; não gasta número', async () => {
+        h.lista = [comData('b1', '2026-10-01', { supplier_id: null }), comData('b2', '2026-10-02')];
+        const r = await renomearSelecionados(['b1', 'b2']);
+        expect(r.semFornecedor).toBe(1);
+        expect(Object.keys(r.renomeados)).toEqual(['b2']);
         expect(h.gerar).toHaveBeenCalledTimes(1);
     });
-    it('renomeia todos e informa o progresso', async () => {
-        h.lista = [boleto({ id: 'b1' }), boleto({ id: 'b2' }), boleto({ id: 'b3' })];
-        const progresso: Array<[number, number]> = [];
-        const r = await renomearBoletosExistentes('org1', (f, t) => progresso.push([f, t]));
-        expect(r).toEqual({ renomeados: 3, falhas: 0, total: 3 });
-        expect(progresso.at(-1)).toEqual([3, 3]);
-        expect(h.updates).toHaveLength(3);
-    });
-    it('uma falha não derruba as outras e é contada', async () => {
-        h.lista = [boleto({ id: 'b1' }), boleto({ id: 'b2' })];
-        h.gerar.mockResolvedValueOnce('BOL-1').mockRejectedValueOnce(new Error('x'));
-        const r = await renomearBoletosExistentes('org1');
-        expect(r.total).toBe(2);
-        expect(r.renomeados).toBe(1);
+    it('falha num boleto não para os outros e é contada', async () => {
+        h.lista = [comData('b1', '2026-10-01'), comData('b2', '2026-10-02')];
+        h.gerar.mockRejectedValueOnce(new Error('x')).mockResolvedValueOnce('BOL-A-0002');
+        const r = await renomearSelecionados(['b1', 'b2']);
         expect(r.falhas).toBe(1);
+        expect(r.renomeados).toEqual({ b2: 'BOL-A-0002.pdf' });
     });
-    it('contarBoletosParaRenomear devolve a contagem do banco', async () => {
-        h.lista = [boleto({ id: 'b1' }), boleto({ id: 'b2' })];
-        expect(await contarBoletosParaRenomear('org1')).toBe(2);
+    it('lista vazia não consulta nada', async () => {
+        expect(await renomearSelecionados([])).toEqual({ renomeados: {}, semFornecedor: 0, falhas: 0 });
     });
 });
 

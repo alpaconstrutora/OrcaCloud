@@ -17,8 +17,8 @@ import { generateDocumentNumber, hasSavedNumberingConfig } from './documentNumbe
  *   UPDATE impede gastar outro sequencial em salvamentos seguintes.
  * - Só com fornecedor definido (o nome é montado quando o boleto recebe fornecedor).
  * - AUTOMÁTICO (ao salvar o boleto): só se a organização SALVOU a máscara de Boletos — sem
- *   configuração, nada muda sozinho. AÇÕES MANUAIS (botão Renomear do boleto e "Renomear
- *   boletos existentes"): usam a máscara que a tela de Nomenclatura mostra, SALVA ou PADRÃO
+ *   configuração, nada muda sozinho. AÇÕES MANUAIS (botão Renomear do boleto e "Renomear"
+ *   da barra de seleção em Boletos a Pagar): usam a máscara que a tela de Nomenclatura mostra, SALVA ou PADRÃO
  *   — quem clicou pediu; exigir "salvar antes" confundia (a linha aparece preenchida mesmo
  *   sem nunca ter sido gravada). 14/10/2026.
  * - NUNCA bloqueia: qualquer falha mantém o nome atual e o salvamento segue
@@ -57,12 +57,12 @@ const COLUNAS = 'id, organization_id, documento_nome, documento_nome_original, s
  * de upload (nunca o sobrescreve) e protege contra edição concorrente comparando o
  * nome atual no UPDATE.
  */
-async function renomearLinha(b: LinhaBoleto, jaTemMascara?: boolean, forcar = false): Promise<boolean> {
-    if (!b.supplier_id) return false;
-    if (!forcar && b.documento_nome_original != null) return false;
+async function renomearLinha(b: LinhaBoleto, jaTemMascara?: boolean, forcar = false): Promise<string | null> {
+    if (!b.supplier_id) return null;
+    if (!forcar && b.documento_nome_original != null) return null;
 
     const temMascara = jaTemMascara ?? await hasSavedNumberingConfig(b.organization_id, 'BOLETO');
-    if (!temMascara) return false;
+    if (!temMascara) return null;
 
     const numero = await generateDocumentNumber('BOLETO', b.organization_id, {
         supplierId: b.supplier_id,
@@ -71,7 +71,7 @@ async function renomearLinha(b: LinhaBoleto, jaTemMascara?: boolean, forcar = fa
     });
     const nomeAtual = b.documento_nome ?? '';
     const novo = montarNomeDocumento(numero, nomeAtual);
-    if (!novo || novo === nomeAtual) return false;
+    if (!novo || novo === nomeAtual) return null;
 
     // A 1ª renomeação guarda o nome de upload; as seguintes mantêm esse mesmo original.
     const patch = { documento_nome: novo, documento_nome_original: b.documento_nome_original ?? nomeAtual };
@@ -79,7 +79,7 @@ async function renomearLinha(b: LinhaBoleto, jaTemMascara?: boolean, forcar = fa
     q = forcar ? q.eq('documento_nome', nomeAtual) : q.is('documento_nome_original', null);
     const { data, error } = await q.select('id');
     if (error) throw error;
-    return (data?.length ?? 0) > 0;
+    return (data?.length ?? 0) > 0 ? novo : null;
 }
 
 /** Renomeia um boleto pelo id. Devolve `true` se renomeou; nunca lança. */
@@ -91,7 +91,7 @@ export async function renomearDocumentoDoBoleto(boletoId: string): Promise<boole
             .eq('id', boletoId)
             .maybeSingle();
         if (error || !data) return false;
-        return await renomearLinha(data as LinhaBoleto);
+        return (await renomearLinha(data as LinhaBoleto)) != null;
     } catch (e) {
         console.warn('[boletoNomeDocumento] não renomeou o documento', boletoId, e);
         return false;
@@ -116,11 +116,9 @@ export async function renomearDocumentoDeNovo(boletoId: string): Promise<Resulta
         const b = data as LinhaBoleto;
         if (!b.supplier_id) return { ok: false, motivo: 'sem_fornecedor' };
 
-        const renomeou = await renomearLinha(b, true, true);
-        if (!renomeou) return { ok: false, motivo: 'sem_mudanca' };
-
-        const { data: depois } = await supabase.from(TABLE).select('documento_nome').eq('id', boletoId).maybeSingle();
-        return { ok: true, nome: (depois as { documento_nome?: string } | null)?.documento_nome ?? '' };
+        const novo = await renomearLinha(b, true, true);
+        if (!novo) return { ok: false, motivo: 'sem_mudanca' };
+        return { ok: true, nome: novo };
     } catch (e) {
         console.warn('[boletoNomeDocumento] não renomeou de novo', boletoId, e);
         return { ok: false, motivo: 'erro', detalhe: e instanceof Error ? e.message : String(e) };
@@ -136,61 +134,57 @@ export async function renomearDocumentosDosBoletos(ids: string[]): Promise<numbe
     return n;
 }
 
-const PAGINA = 1000;
-
-/** Quantos boletos da organização o botão "Renomear existentes" vai renomear. */
-export async function contarBoletosParaRenomear(organizationId: string): Promise<number> {
-    const { count, error } = await supabase
-        .from(TABLE)
-        .select('id', { count: 'exact', head: true })
-        .eq('organization_id', organizationId)
-        .is('documento_nome_original', null)
-        .not('supplier_id', 'is', null);
-    if (error) throw error;
-    return count ?? 0;
+export interface ResultadoRenomearSelecionados {
+    /** id → nome novo, para a lista atualizar só essas linhas (§22). */
+    renomeados: Record<string, string>;
+    /** Selecionados sem fornecedor: o nome da máscara usa o fornecedor. */
+    semFornecedor: number;
+    falhas: number;
 }
-
-export interface ResultadoRenomeacao { renomeados: number; falhas: number; total: number }
 
 /**
- * Renomeia os boletos já cadastrados da organização (com fornecedor e ainda não
- * renomeados), do mais antigo ao mais novo. Em pequenos grupos paralelos: o
- * sequencial é atômico no banco (nunca repete); só a ordem DENTRO do grupo pode
- * variar, o que não afeta a unicidade.
+ * "Renomear" da barra de seleção de Boletos a Pagar (14/10/2026 — substitui o botão
+ * "Renomear boletos existentes" da Nomenclatura). Renomeia SÓ os boletos marcados,
+ * mesmo os já renomeados (quem marcou pediu), com a máscara salva ou a padrão.
+ * Em ordem de criação, um por vez: a ordem do sequencial acompanha a dos boletos.
+ * Falha num boleto não para os outros e é contada.
  */
-export async function renomearBoletosExistentes(
-    organizationId: string,
+export async function renomearSelecionados(
+    ids: string[],
     onProgress?: (feitos: number, total: number) => void,
-): Promise<ResultadoRenomeacao> {
+): Promise<ResultadoRenomearSelecionados> {
+    const out: ResultadoRenomearSelecionados = { renomeados: {}, semFornecedor: 0, falhas: 0 };
+    if (!ids.length) return out;
+
     const linhas: LinhaBoleto[] = [];
-    for (let de = 0; ; de += PAGINA) {
+    for (let i = 0; i < ids.length; i += LOTE_IDS) {
         const { data, error } = await supabase
             .from(TABLE)
-            .select(COLUNAS)
-            .eq('organization_id', organizationId)
-            .is('documento_nome_original', null)
-            .not('supplier_id', 'is', null)
-            .order('created_at', { ascending: true })
-            .order('id', { ascending: true })
-            .range(de, de + PAGINA - 1);
+            .select(COLUNAS + ', created_at')
+            .in('id', ids.slice(i, i + LOTE_IDS));
         if (error) throw error;
-        linhas.push(...((data ?? []) as LinhaBoleto[]));
-        if (!data || data.length < PAGINA) break;
+        linhas.push(...((data ?? []) as unknown as Array<LinhaBoleto & { created_at: string }>));
     }
+    (linhas as Array<LinhaBoleto & { created_at?: string }>).sort((a, b) =>
+        (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id));
 
-    const total = linhas.length;
-    let renomeados = 0;
-    let falhas = 0;
     let feitos = 0;
-    const GRUPO = 5;
-    for (let i = 0; i < linhas.length; i += GRUPO) {
-        const grupo = linhas.slice(i, i + GRUPO);
-        const res = await Promise.allSettled(grupo.map(b => renomearLinha(b, true)));
-        for (const r of res) {
-            if (r.status === 'fulfilled') { if (r.value) renomeados++; } else { falhas++; }
+    for (const b of linhas) {
+        if (!b.supplier_id) {
+            out.semFornecedor++;
+        } else {
+            try {
+                const novo = await renomearLinha(b, true, true);
+                if (novo) out.renomeados[b.id] = novo; else out.falhas++;
+            } catch (e) {
+                console.warn('[boletoNomeDocumento] não renomeou', b.id, e);
+                out.falhas++;
+            }
         }
-        feitos += grupo.length;
-        onProgress?.(feitos, total);
+        onProgress?.(++feitos, linhas.length);
     }
-    return { renomeados, falhas, total };
+    return out;
 }
+
+/** `.in('id', …)` em pedaços: URL do PostgREST tem limite de tamanho. */
+const LOTE_IDS = 200;

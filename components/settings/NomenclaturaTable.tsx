@@ -1,8 +1,7 @@
 import React from 'react';
-import { Hash, RotateCcw, CheckCircle, AlertCircle, Loader2, FileText } from 'lucide-react';
+import { Hash, RotateCcw, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, targetOrgIds, errorMessage, partialFailureNote } from '../../hooks/useOrgContext';
-import { contarBoletosParaRenomear, renomearBoletosExistentes } from '../../services/boletoNomeDocumentoService';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, partialFailureNote } from '../../hooks/useOrgContext';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
 import {
@@ -111,7 +110,6 @@ const NomenclaturaTable: React.FC = () => {
     const [shared, setShared] = React.useState<{ separator: '-' | '.'; seqPadding: number }>({ separator: '-', seqPadding: 4 });
     const [loading, setLoading] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
-    const [renomeando, setRenomeando] = React.useState<{ feitos: number; total: number } | null>(null);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -220,53 +218,6 @@ const NomenclaturaTable: React.FC = () => {
             showToast('Restaurado ao padrão.', 'success');
         } catch (e) {
             showToast(errorMessage(e, 'Erro ao restaurar'), 'error');
-        }
-    };
-
-    /**
-     * Boletos já cadastrados: renomeia os documentos (com fornecedor, ainda não
-     * renomeados) conforme a máscara SALVA de Boletos. O nome de upload fica em
-     * `documento_nome_original`. A organização é escolhida por `resolveWriteOrg('single')`
-     * (REGRA #5) — numeração é por organização, então nunca "todas de uma vez".
-     */
-    const handleRenomearBoletos = async () => {
-        const target = await resolveWriteOrg('single');
-        if (!target) return;
-        const orgIds = targetOrgIds(target);
-        setRenomeando({ feitos: 0, total: 0 });
-        try {
-            const totais = await Promise.all(orgIds.map(contarBoletosParaRenomear));
-            const total = totais.reduce((a, b) => a + b, 0);
-            if (total === 0) {
-                showToast('Nenhum boleto com fornecedor para renomear.', 'success');
-                return;
-            }
-            const ok = await confirm({
-                title: `Renomear ${total} documento${total > 1 ? 's' : ''} de boleto?`,
-                message: 'O nome de cada documento passa a seguir a Nomenclatura de Boletos mostrada na tabela (a salva ou, se você ainda não salvou, a padrão). Cada número é gasto da sequência. O nome original de cada um fica guardado. Pode levar alguns minutos — mantenha esta tela aberta.',
-                variant: 'warning',
-                confirmLabel: 'Renomear',
-            });
-            if (!ok) return;
-
-            let renomeados = 0;
-            let falhas = 0;
-            let jaFeitos = 0;
-            for (const id of orgIds) {
-                const base = jaFeitos;
-                const r = await renomearBoletosExistentes(id, (feitos, tot) => setRenomeando({ feitos: base + feitos, total: Math.max(total, base + tot) }));
-                renomeados += r.renomeados;
-                falhas += r.falhas;
-                jaFeitos += r.total;
-            }
-            showToast(
-                falhas ? `${renomeados} renomeado${renomeados === 1 ? '' : 's'}; ${falhas} falharam.` : `${renomeados} documento${renomeados === 1 ? '' : 's'} renomeado${renomeados === 1 ? '' : 's'}.`,
-                falhas ? 'error' : 'success',
-            );
-        } catch (e) {
-            showToast(errorMessage(e, 'Erro ao renomear os boletos'), 'error');
-        } finally {
-            setRenomeando(null);
         }
     };
 
@@ -406,22 +357,11 @@ const NomenclaturaTable: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
-                        <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
-                            <p className="text-xs text-gray-500">
-                                Boletos: ao SALVAR esta tela, o documento passa a ser renomeado sozinho quando o boleto recebe fornecedor. O botão ao lado e o "Renomear" do boleto funcionam mesmo sem salvar.
-                            </p>
-                            <button
-                                type="button"
-                                onClick={handleRenomearBoletos}
-                                disabled={!!renomeando || saving || loading}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-                            >
-                                {renomeando ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FileText className="w-[15px] h-[15px]" />}
-                                {renomeando
-                                    ? (renomeando.total > 0 ? `Renomeando ${renomeando.feitos}/${renomeando.total}...` : 'Verificando...')
-                                    : 'Renomear boletos existentes'}
-                            </button>
-                        </div>
+                        <p className="text-xs text-gray-500 mt-3">
+                            Boletos: ao SALVAR esta tela, o documento passa a ser renomeado sozinho quando o boleto recebe
+                            fornecedor. Para renomear boletos já cadastrados, selecione-os em Financeiro › Boletos a Pagar
+                            e use "Renomear" na barra de seleção — funciona mesmo sem salvar.
+                        </p>
                     </div>
 
                     <div>

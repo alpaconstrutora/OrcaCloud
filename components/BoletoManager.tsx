@@ -7,6 +7,7 @@ import {
     Download, LayoutGrid, List, Upload, Pencil, AlertCircle, Trash2, MoveHorizontal, ChevronDown,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
+import { renomearSelecionados } from '../services/boletoNomeDocumentoService';
 import { useConfirm } from './ui/confirm';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
@@ -435,6 +436,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
     const [excluindoLote, setExcluindoLote] = useState(false);
+    // Progresso do "Renomear" da barra de seleção (null = parado).
+    const [renomeandoLote, setRenomeandoLote] = useState<{ feitos: number; total: number } | null>(null);
     const confirm = useConfirm();
     const tableColumns = useTableColumns(BOLETO_COLUMNS, 'boletoManagerColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'boletoManagerColWidths');
@@ -548,6 +551,47 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
     function clearSelection() {
         setSelectedIds(new Set());
+    }
+
+    /**
+     * "Renomear" da barra de seleção: o documento de cada boleto marcado ganha o nome da
+     * Nomenclatura de Boletos (salva ou padrão), mesmo os já renomeados. Sem fornecedor,
+     * fica como está. Atualiza só essas linhas (§22), sem recarregar a lista.
+     */
+    async function handleRenomearLote() {
+        const selecionados = filtered.filter(b => selectedIds.has(b.id));
+        if (!selecionados.length) return;
+        const semFornecedor = selecionados.filter(b => !b.supplier_id).length;
+        const comFornecedor = selecionados.length - semFornecedor;
+        if (comFornecedor === 0) {
+            notify('Nenhum dos boletos selecionados tem fornecedor — o nome da Nomenclatura usa o fornecedor.', 'error');
+            return;
+        }
+        const ok = await confirm({
+            title: `Renomear ${comFornecedor} documento${comFornecedor !== 1 ? 's' : ''}?`,
+            message: `Cada documento passa a seguir a Nomenclatura de Boletos (a salva ou, se ainda não foi salva, a padrão), com o fornecedor e a obra salvos no boleto. Os já renomeados ganham um nome novo. Cada um gasta um número da sequência; o nome do arquivo enviado continua guardado.${semFornecedor ? ` ${semFornecedor} sem fornecedor ${semFornecedor !== 1 ? 'serão ignorados' : 'será ignorado'}.` : ''}`,
+            variant: 'warning',
+            confirmLabel: 'Renomear',
+        });
+        if (!ok) return;
+        setRenomeandoLote({ feitos: 0, total: selecionados.length });
+        try {
+            const r = await renomearSelecionados(
+                selecionados.map(b => b.id),
+                (feitos, total) => setRenomeandoLote({ feitos, total }),
+            );
+            const n = Object.keys(r.renomeados).length;
+            if (n) setBoletos(prev => prev.map(b => (r.renomeados[b.id] ? { ...b, documento_nome: r.renomeados[b.id] } : b)));
+            notify(
+                `${n} documento${n !== 1 ? 's renomeados' : ' renomeado'}${r.falhas ? `; ${r.falhas} falharam` : ''}${r.semFornecedor ? `; ${r.semFornecedor} sem fornecedor` : ''}.`,
+                r.falhas ? 'error' : 'success',
+            );
+            if (!r.falhas) clearSelection();
+        } catch (e: unknown) {
+            notify(e instanceof Error ? e.message : 'Falha ao renomear os boletos.', 'error');
+        } finally {
+            setRenomeandoLote(null);
+        }
     }
 
     async function handleExcluirLote() {
@@ -1203,6 +1247,17 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     >
                         <Pencil className="w-3.5 h-3.5" />
                         Editar em Lote
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleRenomearLote}
+                        disabled={!!renomeandoLote}
+                        title="Renomeia o documento dos boletos selecionados pela Nomenclatura de Boletos"
+                        className="text-blue-700 border-none hover:bg-blue-50"
+                    >
+                        {renomeandoLote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                        {renomeandoLote ? `Renomeando ${renomeandoLote.feitos}/${renomeandoLote.total}...` : 'Renomear'}
                     </Button>
                     <Button
                         variant="secondary"

@@ -14,6 +14,7 @@ import { listStudies as listBlueprintStudies } from '../../services/blueprintSer
 import { useStore } from '../../store/useStore';
 import { useConfirm } from '../ui/confirm';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import { useToast } from '../../hooks/useToast';
 import SaveStatus from '../ui/SaveStatus';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 import {
@@ -82,11 +83,9 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
   const [orgId, setOrgId] = React.useState<string>(base?.organization_id || organizationId || '');
   const [organizations, setOrganizations] = React.useState<Organization[]>([]);
   const [companies, setCompanies] = React.useState<{ id: string; razao_social: string; nome_fantasia?: string | null; regime_tributario?: string | null }[]>([]);
-  const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const notify = (message: string, type: 'success' | 'error' = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 4500);
-  };
+  // Aviso pelo ToastProvider da raiz: dentro do Sheet (painel com translate) um
+  // `fixed` local ficaria preso ao canto do painel, por cima do rodapé.
+  const { localToast, showToast: notify } = useToast();
   const [form, setForm] = React.useState({
     // Duplicando: nome ganha sufixo, e código/matrícula/CNPJ ficam vazios — são
     // identificadores únicos do registro de origem, não características dele.
@@ -327,6 +326,9 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
       // editar permanece aberto, criar/duplicar fecha. Aqui só sinaliza a gravação.
       markSaved();
       setSavedAt(Date.now());
+      notify(editing
+        ? 'Empreendimento atualizado com sucesso.'
+        : duplicateFrom ? 'Empreendimento duplicado com sucesso.' : 'Empreendimento criado com sucesso.');
     } catch (err: any) {
       notify(`Erro ao salvar empreendimento: ${err.message}`, 'error');
     } finally {
@@ -657,12 +659,12 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
         </SheetFooter>
       </form>
 
-      {notification && (
+      {localToast && (
         <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-          notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+          localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
         }`}>
           <AlertCircle className="w-4 h-4 shrink-0" />
-          {notification.message}
+          {localToast.message}
         </div>
       )}
     </Sheet>

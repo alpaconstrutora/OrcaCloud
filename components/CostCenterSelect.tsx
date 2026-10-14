@@ -50,6 +50,9 @@ interface Props {
     compact?: boolean;
     fallbackLabel?: string;
     hoverCls?: string;
+    /** Linha de "limpar" com rótulo/valor próprios — ver HierarchicalSelect. */
+    clearLabel?: string;
+    clearValue?: string;
 }
 
 /** Itens do drawer a partir da lista crua. Exportado para quem precisa da
@@ -82,6 +85,7 @@ const CostCenterSelect: React.FC<Props> = ({
     costCenters, value, onChange, placeholder = '—', valueField = 'id', size, disabled,
     triggerClassName, compact, fallbackLabel,
     hoverCls = 'hover:bg-gray-50',
+    clearLabel, clearValue,
 }) => {
     const organizations = useStore(s => s.organizations);
     const orgNames = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
@@ -103,6 +107,8 @@ const CostCenterSelect: React.FC<Props> = ({
             triggerClassName={triggerClassName}
             compact={compact}
             fallbackLabel={fallbackLabel}
+            clearLabel={clearLabel}
+            clearValue={clearValue}
         />
     );
 };

@@ -111,6 +111,14 @@ interface Props {
     /** Texto do gatilho quando `value` não resolve para nenhum item (ex.: centro de
      *  custo de organização que a conta não atende). */
     fallbackLabel?: string;
+    /** Rótulo da linha de "limpar" quando é diferente de `placeholder` — ex.: edição em
+     *  lote, onde `placeholder` já significa "— Não alterar —" e a linha de limpar
+     *  precisa dizer "— Sem vínculo —". Sem isto, usa `placeholder` (comportamento de
+     *  sempre). 14/10/2026 — a confusão das duas leituras de "— Não alterar —" fez o
+     *  usuário achar que "Sem vínculo" não estava implementado no lote de Boletos. */
+    clearLabel?: string;
+    /** Valor gravado ao clicar na linha de "limpar" (padrão `''`). */
+    clearValue?: string;
 }
 
 const HierarchicalSelect: React.FC<Props> = ({
@@ -130,6 +138,8 @@ const HierarchicalSelect: React.FC<Props> = ({
     triggerClassName,
     compact = false,
     fallbackLabel,
+    clearLabel,
+    clearValue = '',
 }) => {
     const [open, setOpen] = useState(false);
     // Busca transitória de propósito (exceção ao §3 do guia, que é para filtro
@@ -300,10 +310,10 @@ const HierarchicalSelect: React.FC<Props> = ({
         <>
             <button
                 type="button"
-                onMouseDown={() => { onChange(''); closeAndClear(); }}
+                onMouseDown={() => { onChange(clearValue); closeAndClear(); }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-form-input font-medium text-slate-400 transition-colors ${hoverCls}`}
             >
-                {placeholder}
+                {clearLabel ?? placeholder}
             </button>
             {hierarquiaExplicita && listaHierarquica}
             {filtered.map(({ item, level }) => {

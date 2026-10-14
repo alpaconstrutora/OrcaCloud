@@ -41,6 +41,12 @@ interface Props {
     /** Título do drawer — "Selecionar Fornecedor" por padrão; o Extrato usa
      *  "Selecionar Credor" (fornecedores + colaboradores). */
     title?: string;
+    /** Linha de "limpar" com rótulo/valor próprios (edição em lote de Boletos —
+     *  "Sem vínculo" precisa aparecer SEMPRE, mesmo sem nada selecionado ainda;
+     *  por padrão a linha só aparece com `value` preenchido). Sem isto, comportamento
+     *  inalterado — só aparece quando há seleção, gravando ''. */
+    clearLabel?: string;
+    clearValue?: string;
 }
 
 type ColKey = 'name' | 'document' | 'category';
@@ -48,6 +54,7 @@ const SEM_CATEGORIA = '—';
 
 const SupplierSelect: React.FC<Props> = ({
     suppliers, value, onChange, placeholder = 'Selecione um fornecedor', disabled = false, size = 'md',
+    clearLabel, clearValue,
     triggerClassName, compact = false, fallbackLabel, title = 'Selecionar Fornecedor',
 }) => {
     const [open, setOpen] = useState(false);
@@ -213,9 +220,9 @@ const SupplierSelect: React.FC<Props> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {value && (
-                                <tr onClick={() => escolher('')} className="cursor-pointer hover:bg-gray-50 transition-colors">
-                                    <td colSpan={3} className="px-4 py-2 text-form-input font-medium text-slate-400">{placeholder}</td>
+                            {(clearLabel || value) && (
+                                <tr onClick={() => escolher(clearLabel ? (clearValue ?? '') : '')} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                                    <td colSpan={3} className="px-4 py-2 text-form-input font-medium text-slate-400">{clearLabel ?? placeholder}</td>
                                 </tr>
                             )}
                             {visiveis.length === 0 ? (

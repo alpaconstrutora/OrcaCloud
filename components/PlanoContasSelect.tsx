@@ -37,6 +37,9 @@ interface Props {
     compact?: boolean;
     fallbackLabel?: string;
     hoverCls?: string;
+    /** Linha de "limpar" com rótulo/valor próprios — ver HierarchicalSelect. */
+    clearLabel?: string;
+    clearValue?: string;
 }
 
 /** Itens do drawer a partir da lista crua: pai = a conta cujo código é o
@@ -88,6 +91,7 @@ const PlanoContasSelect: React.FC<Props> = ({
     planoContas, value, onChange, placeholder = '—', size, disabled,
     triggerClassName, compact, fallbackLabel,
     hoverCls = 'hover:bg-gray-50',
+    clearLabel, clearValue,
 }) => {
     const organizations = useStore(s => s.organizations);
     const orgNames = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
@@ -110,6 +114,8 @@ const PlanoContasSelect: React.FC<Props> = ({
             triggerClassName={triggerClassName}
             compact={compact}
             fallbackLabel={fallbackLabel}
+            clearLabel={clearLabel}
+            clearValue={clearValue}
         />
     );
 };

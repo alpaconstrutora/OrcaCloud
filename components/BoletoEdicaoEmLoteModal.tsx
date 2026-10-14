@@ -195,30 +195,19 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Fornecedor</label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSupplierId(v => (v === SEM_VINCULO ? '' : SEM_VINCULO))}
-                                        disabled={saving}
-                                        className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-50"
-                                    >
-                                        {supplierId === SEM_VINCULO ? 'Cancelar' : 'Sem vínculo'}
-                                    </button>
-                                </div>
-                                {supplierId === SEM_VINCULO ? (
-                                    <div className="w-full px-3 py-2.5 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-sm text-gray-500">
-                                        Será desvinculado
-                                    </div>
-                                ) : (
-                                    <SupplierSelect
-                                        suppliers={suppliers}
-                                        value={supplierId}
-                                        onChange={setSupplierId}
-                                        placeholder="— Não alterar —"
-                                        disabled={saving}
-                                    />
-                                )}
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Fornecedor</label>
+                                {/* "— Sem vínculo —" é uma linha DENTRO do drawer (não um link à parte — era onde
+                                    o usuário procurava e não achava; print de 14/10/2026). */}
+                                <SupplierSelect
+                                    suppliers={suppliers}
+                                    value={supplierId}
+                                    onChange={setSupplierId}
+                                    placeholder="— Não alterar —"
+                                    fallbackLabel={supplierId === SEM_VINCULO ? '— Sem vínculo —' : undefined}
+                                    clearLabel="— Sem vínculo —"
+                                    clearValue={SEM_VINCULO}
+                                    disabled={saving}
+                                />
                             </div>
 
                             <div>
@@ -236,58 +225,32 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Centro de Custo</label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setCostCenterId(v => (v === SEM_VINCULO ? '' : SEM_VINCULO))}
-                                        disabled={saving}
-                                        className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-50"
-                                    >
-                                        {costCenterId === SEM_VINCULO ? 'Cancelar' : 'Sem vínculo'}
-                                    </button>
-                                </div>
-                                {costCenterId === SEM_VINCULO ? (
-                                    <div className="w-full px-3 py-2.5 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-sm text-gray-500">
-                                        Será desvinculado
-                                    </div>
-                                ) : (
-                                    <CostCenterSelect
-                                        costCenters={costCenters}
-                                        value={costCenterId}
-                                        onChange={setCostCenterId}
-                                        placeholder="— Não alterar —"
-                                        disabled={saving}
-                                        hoverCls="hover:bg-blue-50"
-                                    />
-                                )}
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Centro de Custo</label>
+                                <CostCenterSelect
+                                    costCenters={costCenters}
+                                    value={costCenterId}
+                                    onChange={setCostCenterId}
+                                    placeholder="— Não alterar —"
+                                    fallbackLabel={costCenterId === SEM_VINCULO ? '— Sem vínculo —' : undefined}
+                                    clearLabel="— Sem vínculo —"
+                                    clearValue={SEM_VINCULO}
+                                    disabled={saving}
+                                    hoverCls="hover:bg-blue-50"
+                                />
                             </div>
 
                             <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Plano de Contas</label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setPlanoDeContasId(v => (v === SEM_VINCULO ? '' : SEM_VINCULO))}
-                                        disabled={saving}
-                                        className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-50"
-                                    >
-                                        {planoDeContasId === SEM_VINCULO ? 'Cancelar' : 'Sem vínculo'}
-                                    </button>
-                                </div>
-                                {planoDeContasId === SEM_VINCULO ? (
-                                    <div className="w-full px-3 py-2.5 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-sm text-gray-500">
-                                        Será desvinculado
-                                    </div>
-                                ) : (
-                                    <PlanoContasSelect
-                                        planoContas={planoContas}
-                                        value={planoDeContasId}
-                                        onChange={setPlanoDeContasId}
-                                        placeholder="— Não alterar —"
-                                        disabled={saving}
-                                    />
-                                )}
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Plano de Contas</label>
+                                <PlanoContasSelect
+                                    planoContas={planoContas}
+                                    value={planoDeContasId}
+                                    onChange={setPlanoDeContasId}
+                                    placeholder="— Não alterar —"
+                                    fallbackLabel={planoDeContasId === SEM_VINCULO ? '— Sem vínculo —' : undefined}
+                                    clearLabel="— Sem vínculo —"
+                                    clearValue={SEM_VINCULO}
+                                    disabled={saving}
+                                />
                             </div>
 
                             <div>

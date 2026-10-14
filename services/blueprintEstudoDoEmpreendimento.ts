@@ -9,11 +9,14 @@
 //      o envio da massa/loteamento daquele estudo, sem ninguém ver;
 //   3. cria o estudo na organização DO EMPREENDIMENTO (REGRA #5: o registro
 //      tem dono; o seletor do topo não decide para onde vai);
-//   4. grava o rascunho e vincula `empreendimentos.blueprint_study_id`.
+//   4. grava o rascunho e vincula `empreendimentos.blueprint_study_id`;
+//   5. (Fase 9) grava em cada unidade a chave da unidade da Planta que nasceu
+//      dela — a devolução da fração já começa ligada.
 //
 // Se o passo 4 falhar, o estudo recém-criado é arquivado — não fica um estudo
 // vazio e solto na lista.
 
+import { supabase } from '../lib/supabase';
 import { archiveStudy, createStudy, saveDraft } from './blueprintService';
 import { empreendimentoService } from './empreendimentoService';
 import { montarEstudoDoEmpreendimento, type EstudoDoEmpreendimento } from '../utils/blueprintEstudoDoEmpreendimento';
@@ -49,6 +52,14 @@ export const blueprintEstudoDoEmpreendimento = {
       await archiveStudy(study.id).catch(() => undefined);
       throw e;
     }
-    return { studyId: study.id, avisos: montado.avisos, contagem: montado.contagem };
+    // O estudo já existe e está ligado: falhar aqui não o desfaz — a devolução propõe pelo número e a pessoa confirma.
+    const avisos = [...montado.avisos];
+    const gravacoes = await Promise.all(
+      montado.chaves.map((c) => supabase.from('empreendimento_units').update({ blueprint_unidade_chave: c.chave }).eq('id', c.unitId)),
+    ).catch((e: unknown) => [{ error: { message: e instanceof Error ? e.message : String(e) } }]);
+    if (gravacoes.some((r) => r.error)) {
+      avisos.push('Não foi possível gravar a ligação de todas as unidades com a Planta — ao levar as frações ao Empreendimento, confira os pares propostos.');
+    }
+    return { studyId: study.id, avisos, contagem: montado.contagem };
   },
 };

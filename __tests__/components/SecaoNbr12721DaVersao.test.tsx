@@ -9,7 +9,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const estado: { quadro: unknown; aprovacoes: unknown[]; nomes: Map<string, string> | null } = { quadro: null, aprovacoes: [], nomes: null };
+const estado: { quadro: unknown; aprovacoes: unknown[]; nomes: Map<string, string> | null; emp: unknown } = { quadro: null, aprovacoes: [], nomes: null, emp: null };
 const aprovar = vi.fn(async () => 'apr_1');
 vi.mock('../../services/blueprintSnapshotNbr12721Service', () => ({
   blueprintSnapshotNbr12721Service: {
@@ -17,6 +17,7 @@ vi.mock('../../services/blueprintSnapshotNbr12721Service', () => ({
     aprovacoes: vi.fn(async () => estado.aprovacoes),
     aprovar: (...args: unknown[]) => aprovar(...(args as [])),
     // `null` = o serviço não tem a função (como antes da Fase 8): o nome falha e a seção tem de seguir.
+    empreendimentoDoEstudo: vi.fn(async () => estado.emp),
     get nomesDeQuemAprovou() {
       return estado.nomes ? vi.fn(async () => estado.nomes) : undefined;
     },
@@ -36,13 +37,18 @@ vi.mock('../../lib/supabase', () => ({ supabase: { auth: { getUser: async () => 
 
 import SecaoNbr12721DaVersao from '../../components/blueprint/SecaoNbr12721DaVersao';
 
-const quadroOk = { snapshotId: 's1', hash: 'abcdef0123456789'.repeat(4), status: 'success', versaoMotor: 'nbr12721-ts-1.0.0', congeladoEm: '2026-10-14T10:00:00Z' };
+vi.mock('../../components/blueprint/DevolucaoNbr12721', () => ({
+  default: ({ aberto }: { aberto: boolean }) => (aberto ? <div data-testid="drawer-devolucao" /> : null),
+}));
+
+const quadroOk = { snapshotId: 's1', studyId: 'st1', hash: 'abcdef0123456789'.repeat(4), status: 'success', versaoMotor: 'nbr12721-ts-1.0.0', congeladoEm: '2026-10-14T10:00:00Z' };
 
 describe('SecaoNbr12721DaVersao', () => {
   beforeEach(() => {
     estado.quadro = null;
     estado.aprovacoes = [];
     estado.nomes = null;
+    estado.emp = null;
     aprovar.mockClear();
     documentoDaVersao.mockClear();
     exportarPdf.mockClear();
@@ -109,6 +115,27 @@ describe('SecaoNbr12721DaVersao', () => {
     render(<SecaoNbr12721DaVersao snapshotId="s1" />);
     await userEvent.click(await screen.findByRole('button', { name: 'Baixar PDF' }));
     expect((await screen.findByRole('alert')).textContent).toBe('esta versão não tem os Quadros NBR 12721 congelados');
+  });
+
+  it('Fase 9: "Levar ao Empreendimento" só com estudo ligado e as duas aprovações; abre o drawer', async () => {
+    estado.quadro = quadroOk;
+    const { unmount } = render(<SecaoNbr12721DaVersao snapshotId="s1" />);
+    const semEmp = await screen.findByRole('button', { name: 'Levar ao Empreendimento' });
+    await vi.waitFor(() => expect(semEmp.getAttribute('title')).toBe('Este estudo não está ligado a um Empreendimento'));
+    unmount();
+    estado.emp = { id: 'e1', name: 'Residencial', organizationId: 'org1' };
+    estado.aprovacoes = [{ id: 'a1', tipo: 'TECNICA', hash: quadroOk.hash, observacao: null, aprovadoPor: 'eu-uuid', aprovadoEm: '2026-10-14T11:00:00Z' }];
+    const r2 = render(<SecaoNbr12721DaVersao snapshotId="s1" />);
+    const soTecnica = await screen.findByRole('button', { name: 'Levar ao Empreendimento' });
+    await vi.waitFor(() => expect(soTecnica.getAttribute('title')).toMatch(/aprovada na técnica e na jurídica/));
+    r2.unmount();
+    estado.aprovacoes = [...estado.aprovacoes, { id: 'a2', tipo: 'JURIDICA', hash: quadroOk.hash, observacao: null, aprovadoPor: 'eu-uuid', aprovadoEm: '2026-10-14T12:00:00Z' }];
+    render(<SecaoNbr12721DaVersao snapshotId="s1" />);
+    const ok = await screen.findByRole('button', { name: 'Levar ao Empreendimento' });
+    await vi.waitFor(() => expect((ok as HTMLButtonElement).disabled).toBe(false));
+    expect(ok.getAttribute('title')).toMatch(/Residencial/);
+    await userEvent.click(ok);
+    expect(screen.getByTestId('drawer-devolucao')).toBeTruthy();
   });
 
   it('erro do banco aparece com o motivo (a RPC é quem decide)', async () => {

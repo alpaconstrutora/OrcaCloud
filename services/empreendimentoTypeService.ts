@@ -31,8 +31,10 @@ export const MOTOR_CATEGORY_OPTIONS: { value: EmpreendimentoMotorCategory; label
   { value: 'commercial', label: 'Comercial' },
 ];
 
-// Fallback de segurança: mesma regra que existia hardcoded em areaEngineService antes
-// deste catálogo. Só é usado se o slug não for encontrado na tabela (ex: RLS bloqueou,
+// Fallback de segurança: a regra fixa (slug → categoria) anterior a este catálogo.
+// ⚠️ A categoria só é lida pelo Motor de Áreas antigo (`getMotorCategory`), que sai na
+// Fase 10 do plano docs/planos/2026-10-13-areas-nbr12721-na-planta.md — ela vai junto.
+// Este fallback só é usado se o slug não for encontrado na tabela (ex: RLS bloqueou,
 // tipo foi excluído, ou é um valor legado fora dos 5 originais).
 function legacyMotorCategory(slug?: string | null): EmpreendimentoMotorCategory {
   switch (slug) {

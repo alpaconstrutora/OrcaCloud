@@ -10,6 +10,7 @@ import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type 
 import { areaConstruidaMm2 } from '../utils/blueprintKernel/quantities';
 import { classificacaoSugerida, entradaDoEstudo, hipotesesNbr12721DaColuna, HIPOTESES_NBR12721_PADRAO } from '../utils/blueprintNbr12721';
 import { quadroDeUnidades } from '../utils/blueprintUnidades';
+import { unidadesDoPredio } from '../utils/blueprintUnidadesDoPredio';
 import { calcularNbr12721 } from '../utils/nbr12721/quadros';
 
 /** Pavimento "1º" (cota 3000) sobre o Térreo: 2 apartamentos de 6 × 6 m sobre um hall de 12 × 2 m. */
@@ -258,5 +259,20 @@ describe('congelamento na versão publicada (Fase 7)', () => {
     const hall = m.labels.find((l) => l.name === 'Hall')!;
     const outro = applyCommand(m, { type: 'SetNbr12721DoAmbiente', labelIds: [hall.id], nbr12721: { cobertura: 'DESCOBERTA', coeficiente: 0.5, divisao: 'PROPORCIONAL' } }).model;
     expect(congelamentoNbr12721(outro, HIPOTESES_NBR12721_PADRAO)!.hash).not.toBe(a.hash);
+  });
+
+  it('Fase 9: congela código ↔ chave ↔ número de cada unidade, inclusive as dos andares copiados', async () => {
+    const { congelamentoNbr12721 } = await import('../utils/blueprintNbr12721');
+    const { m: base, t } = predio();
+    const m = applyBatch(base, [2, 3].map((i) => ({ type: 'AddLevel', name: `${i}º`, elevationMm: 3000 * i, defaultHeightMm: 3000, tipoDeId: t }) as Command)).model;
+    const q = congelamentoNbr12721(m, HIPOTESES_NBR12721_PADRAO)!;
+    expect(q.unidades.map((u) => u.numero).sort()).toEqual(['101', '102', '201', '202', '301', '302']);
+    const predioDoModelo = unidadesDoPredio(m).unidades;
+    for (const u of q.unidades) {
+      expect(predioDoModelo.find((x) => x.chave === u.chave)?.numero).toBe(u.numero);
+      expect(q.saida.fracoes.some((f) => f.unidade === u.codigo)).toBe(true);
+    }
+    expect(q.unidades.find((u) => u.numero === '201')!.chave).toMatch(/:/);
+    expect(q.unidades.find((u) => u.numero === '101')!.chave).not.toMatch(/:/);
   });
 });

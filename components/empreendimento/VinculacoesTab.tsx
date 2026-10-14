@@ -343,31 +343,6 @@ export const VinculacoesTab: React.FC<Props> = ({
     }
   };
 
-  const handleUnlinkArea = async (areaProjectId: string) => {
-    const ok = await confirm({
-      title: 'Desvincular os quadros NBR 12721?',
-      message: 'O projeto de áreas continua existindo — só deixa de estar associado a este empreendimento.',
-      variant: 'warning',
-      confirmLabel: 'Desvincular',
-    });
-    if (!ok) return;
-
-    setBusyId(areaProjectId);
-    try {
-      await empreendimentoLinksService.linkAreaProject(areaProjectId, null, {
-        empreendimentoId: emp.id,
-        organizationId: effectiveOrgId,
-      });
-      notify('Vínculo removido.');
-      await load();
-      onLinksChanged?.();
-    } catch (err: any) {
-      notify(`Erro ao desvincular: ${err.message}`, 'error');
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   // ── Centro de custo ────────────────────────────────────────────────────────
   // N:1 desde 20270919000030: um empreendimento pode ter vários centros de custo,
   // então Criar/Vincular ficam disponíveis mesmo com a seção preenchida.
@@ -643,16 +618,15 @@ export const VinculacoesTab: React.FC<Props> = ({
         icon={<Ruler className="w-4 h-4" />}
         count={snapshot.areas.length}
         emptyIcon={<Ruler className="w-12 h-12" />}
-        emptyTitle="Nenhum projeto de áreas"
-        emptyHint="Crie os quadros NBR 12721 pelo módulo de Áreas para vê-los aqui."
+        emptyTitle="Nenhum estudo de áreas"
+        emptyHint="Use “Criar estudo de áreas” no cabeçalho do empreendimento — os quadros saem da Planta Inteligente."
       >
         {snapshot.areas.map(a => (
           <LinkRow
             key={a.id}
             link={a}
-            busy={busyId === a.id}
-            onOpen={onChangeView ? () => onChangeView('area-engine') : undefined}
-            onUnlink={() => handleUnlinkArea(a.id)}
+            // Os quadros moram no estudo da Planta: o vínculo é o da seção "Planta Inteligente" — aqui só abre.
+            onOpen={() => { window.location.hash = `#/blueprint?studyId=${String(a.meta?.studyId ?? '')}&tela=areas-nbr12721`; }}
           />
         ))}
       </LinkSection>

@@ -33,6 +33,12 @@ export const PE_DIREITO_DO_ESTUDO_DECLARADO_MM = 3000;
 
 export interface EstudoDoEmpreendimento {
   model: BlueprintModel;
+  /**
+   * Unidade do Empreendimento → chave da unidade do prédio da Planta (Fase 9):
+   * o estudo nasce daqui, então a ligação é FATO, não proposta — o serviço a
+   * grava em `empreendimento_units.blueprint_unidade_chave`.
+   */
+  chaves: { unitId: string; chave: string }[];
   avisos: string[];
   contagem: { pavimentos: number; unidades: number; ambientes: number; privativaM2: number };
 }
@@ -57,6 +63,7 @@ export function montarEstudoDoEmpreendimento(
     const model = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: PE_DIREITO_DO_ESTUDO_DECLARADO_MM }]).model;
     return {
       model,
+      chaves: [],
       avisos: ['O Empreendimento não tem torres nem unidades cadastradas: o estudo nasceu com um pavimento vazio — crie as unidades e declare as áreas na tabela.'],
       contagem: { pavimentos: 1, unidades: 0, ambientes: 0, privativaM2: 0 },
     };
@@ -102,7 +109,7 @@ export function montarEstudoDoEmpreendimento(
 
   // ── unidades: número único de até 16 caracteres; tipologia até 40.
   const usados = new Set<string>();
-  const unidades: { numero: string; nivel: string | null; privativa: number; tipologia: string | null }[] = [];
+  const unidades: { unitId: string; numero: string; nivel: string | null; privativa: number; tipologia: string | null }[] = [];
   let semNome = 0;
   for (const t of torres) {
     for (const u of t.units ?? []) {
@@ -112,7 +119,7 @@ export function montarEstudoDoEmpreendimento(
       if (numero !== original) avisos.push(`Unidade "${original}" entrou como "${numero}" (o número tem até ${MAX_NUMERO_DE_UNIDADE} caracteres e é único).`);
       usados.add(numero);
       const nivel = u.floor !== undefined && u.floor !== null ? levelIdDe.get(chave(t.id, u.floor)) ?? null : null;
-      unidades.push({ numero, nivel, privativa: Number(u.private_area ?? 0), tipologia: u.typology ? cortar(u.typology.trim(), MAX_TIPOLOGIA_DE_UNIDADE) : null });
+      unidades.push({ unitId: u.id, numero, nivel, privativa: Number(u.private_area ?? 0), tipologia: u.typology ? cortar(u.typology.trim(), MAX_TIPOLOGIA_DE_UNIDADE) : null });
     }
   }
   // Um lote só: o kernel roda a cauda inteira por comando, não por chamada.
@@ -164,8 +171,12 @@ export function montarEstudoDoEmpreendimento(
   avisos.push('Coberturas e coeficientes entraram como "coberta de padrão": revise varandas, terraços e garagem na tabela.');
 
   if (comandos.length) model = applyBatch(model, comandos).model;
+  // Sem andar copiado no estudo declarado: a chave da unidade do prédio é o próprio uid da Unidade.
+  const uidPorNumero = new Map(model.unidades.map((x) => [x.numero, x.uid] as const));
+  const chaves = unidades.flatMap((u) => (uidPorNumero.has(u.numero) ? [{ unitId: u.unitId, chave: uidPorNumero.get(u.numero)! }] : []));
   return {
     model,
+    chaves,
     avisos,
     contagem: { pavimentos: model.levels.length, unidades: model.unidades.length, ambientes: (model.ambientesDeclarados ?? []).length, privativaM2 },
   };

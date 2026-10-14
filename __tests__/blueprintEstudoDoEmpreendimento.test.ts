@@ -49,6 +49,24 @@ describe('montar o estudo a partir do Empreendimento', () => {
     expect(s.quadroII.find((l) => l.unit_label === '101')!.qii_32_common_prop_covered_standard_raw).toBeCloseTo(12, 6);
   });
 
+  it('Fase 9: cada unidade do Empreendimento sai ligada à sua Unidade da Planta — a mesma chave que o congelamento usa', async () => {
+    const { congelamentoNbr12721, HIPOTESES_NBR12721_PADRAO } = await import('../utils/blueprintNbr12721');
+    // Dois "101" (torres diferentes): o segundo entra como "101-2" e continua ligado à SUA unidade.
+    const e = emp([torre('t1', 'Torre A', [unidade('101', 1, 60), unidade('102', 1, 40)]), torre('t2', 'Torre B', [{ ...unidade('101', 1, 50), id: 'u-101-B', tower_id: 't2' } as EmpreendimentoUnit], 2)], [
+      { id: 'c1', empreendimento_id: 'e1', name: 'Hall', area: 20 } as never,
+    ]);
+    const r = montarEstudoDoEmpreendimento(e);
+    expect(r.chaves).toHaveLength(3);
+    const numeroDaChave = new Map(r.model.unidades.map((u) => [u.uid, u.numero] as const));
+    expect(Object.fromEntries(r.chaves.map((c) => [c.unitId, numeroDaChave.get(c.chave)]))).toEqual({ 'u-101': '101', 'u-102': '102', 'u-101-B': '101-2' });
+    const q = congelamentoNbr12721(r.model, HIPOTESES_NBR12721_PADRAO)!;
+    for (const c of r.chaves) {
+      const codigo = q.unidades.find((u) => u.chave === c.chave)!.codigo;
+      expect(q.saida.fracoes.some((f) => f.unidade === codigo)).toBe(true);
+    }
+    expect(montarEstudoDoEmpreendimento(emp([])).chaves).toEqual([]);
+  });
+
   it('template de pavimentos expande repeat_count e inclui andar sem unidade (garagem)', () => {
     const pav = (name: string, floor_number: number, repeat_count = 1): EmpreendimentoFloor =>
       ({ id: name, tower_id: 't1', name, tipo: 'TIPO', floor_number, repeat_count, sort_order: floor_number, created_at: '', updated_at: '' }) as EmpreendimentoFloor;

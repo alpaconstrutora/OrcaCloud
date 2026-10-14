@@ -9,12 +9,15 @@
 // `blueprintSnapshotProdutoService`.
 
 import { supabase } from '../lib/supabase';
-import type { QuadroCongelado } from '../utils/blueprintNbr12721';
+import type { QuadroCongelado, UnidadeCongelada } from '../utils/blueprintNbr12721';
+import type { UnidadeDoEmpreendimentoParaVincular } from '../utils/nbr12721/vinculos';
+import { empreendimentoAuditService } from './empreendimentoAuditService';
 
 export type TipoDeAprovacaoNbr12721 = 'TECNICA' | 'JURIDICA';
 
 export interface QuadroDaVersao {
   snapshotId: string;
+  studyId: string;
   hash: string;
   status: 'success' | 'failed';
   versaoMotor: string;
@@ -47,6 +50,7 @@ export const blueprintSnapshotNbr12721Service = {
         saida: q.saida,
         hash: q.hash,
         versao_motor: q.versaoMotor,
+        unidades: q.unidades,
         created_by: user?.user?.id ?? null,
       },
       { onConflict: 'snapshot_id', ignoreDuplicates: true },
@@ -58,13 +62,13 @@ export const blueprintSnapshotNbr12721Service = {
   async daVersao(snapshotId: string): Promise<QuadroDaVersao | null> {
     const { data, error } = await supabase
       .from('blueprint_snapshot_nbr12721')
-      .select('snapshot_id, hash, versao_motor, created_at, status:saida->>status')
+      .select('snapshot_id, study_id, hash, versao_motor, created_at, status:saida->>status')
       .eq('snapshot_id', snapshotId)
       .maybeSingle();
     if (error) fail('daVersao', error);
     if (!data) return null;
-    const d = data as unknown as { snapshot_id: string; hash: string; versao_motor: string; created_at: string; status: string };
-    return { snapshotId: d.snapshot_id, hash: d.hash, status: d.status === 'success' ? 'success' : 'failed', versaoMotor: d.versao_motor, congeladoEm: d.created_at };
+    const d = data as unknown as { snapshot_id: string; study_id: string; hash: string; versao_motor: string; created_at: string; status: string };
+    return { snapshotId: d.snapshot_id, studyId: d.study_id, hash: d.hash, status: d.status === 'success' ? 'success' : 'failed', versaoMotor: d.versao_motor, congeladoEm: d.created_at };
   },
 
   /** A saída inteira congelada (para exportar o documento da versão). */
@@ -109,6 +113,70 @@ export const blueprintSnapshotNbr12721Service = {
     return nomes;
   },
 
+  // ── Fase 9: a fração da versão aprovada de volta ao Empreendimento ──────────
+
+  /** Código ↔ chave ↔ número congelados na versão (vazio = versão anterior à Fase 9: publique de novo). */
+  async unidadesDaVersao(snapshotId: string): Promise<UnidadeCongelada[]> {
+    const { data, error } = await supabase.from('blueprint_snapshot_nbr12721').select('unidades').eq('snapshot_id', snapshotId).maybeSingle();
+    if (error) fail('unidadesDaVersao', error);
+    return ((data as { unidades?: UnidadeCongelada[] } | null)?.unidades ?? []) as UnidadeCongelada[];
+  },
+
+  /** O Empreendimento ligado ao estudo (`empreendimentos.blueprint_study_id`); `null` = estudo solto. */
+  async empreendimentoDoEstudo(studyId: string): Promise<{ id: string; name: string; organizationId: string } | null> {
+    const { data, error } = await supabase.from('empreendimentos').select('id, name, organization_id').eq('blueprint_study_id', studyId).limit(1).maybeSingle();
+    if (error) fail('empreendimentoDoEstudo', error);
+    const e = data as { id: string; name: string; organization_id: string } | null;
+    return e ? { id: e.id, name: e.name, organizationId: e.organization_id } : null;
+  },
+
+  /** As unidades do Empreendimento (todas as torres), com a chave e a origem da fração. */
+  async unidadesDoEmpreendimento(empreendimentoId: string): Promise<(UnidadeDoEmpreendimentoParaVincular & { torre: string; milesimos: number | null })[]> {
+    const { data, error } = await supabase
+      .from('empreendimento_units')
+      .select('id, name, blueprint_unidade_chave, fracao_ideal_origem, fracao_ideal_thousandths, empreendimento_towers!inner(empreendimento_id, name, sort_order)')
+      .eq('empreendimento_towers.empreendimento_id', empreendimentoId);
+    if (error) fail('unidadesDoEmpreendimento', error);
+    type Linha = { id: string; name: string; blueprint_unidade_chave: string | null; fracao_ideal_origem: 'MOTOR' | 'CONVENCAO' | null; fracao_ideal_thousandths: number | null; empreendimento_towers: { name: string; sort_order: number | null } };
+    return ((data ?? []) as unknown as Linha[])
+      .map((u) => ({
+        id: u.id,
+        nome: u.name,
+        chave: u.blueprint_unidade_chave,
+        origem: u.fracao_ideal_origem,
+        torre: u.empreendimento_towers?.name ?? '',
+        ordemDaTorre: u.empreendimento_towers?.sort_order ?? 0,
+        milesimos: u.fracao_ideal_thousandths == null ? null : Number(u.fracao_ideal_thousandths),
+      }))
+      .sort((a, b) => a.ordemDaTorre - b.ordemDaTorre || a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true }))
+      .map(({ ordemDaTorre: _o, ...u }) => u);
+  },
+
+  /**
+   * Devolve a fração pela RPC `devolver_nbr12721_ao_empreendimento` — é ela que
+   * confere membro, estudo ligado, aprovação técnica E jurídica e cada par, e
+   * grava tudo numa transação. Registra o evento no histórico do Empreendimento.
+   */
+  async devolverAoEmpreendimento(
+    snapshotId: string,
+    empreendimento: { id: string; organizationId: string },
+    pares: { unit_id: string; chave: string | null }[],
+  ): Promise<RelatorioDaDevolucao> {
+    const { data, error } = await supabase.rpc('devolver_nbr12721_ao_empreendimento', { p_snapshot_id: snapshotId, p_empreendimento_id: empreendimento.id, p_pares: pares });
+    if (error) fail('devolverAoEmpreendimento', error);
+    const r = data as RelatorioDaDevolucao;
+    await empreendimentoAuditService.record({
+      empreendimentoId: empreendimento.id,
+      organizationId: empreendimento.organizationId,
+      entityType: 'unit',
+      entityLabel: `Frações NBR 12721 da versão ${r.revisao} da Planta`,
+      action: 'sync',
+      metadata: { snapshotId, ...r },
+      source: 'sync_blueprint',
+    });
+    return r;
+  },
+
   /** Aprova pela RPC — é ela que confere organização, pendência e ordem; o erro do banco sobe com o motivo. */
   async aprovar(snapshotId: string, tipo: TipoDeAprovacaoNbr12721, observacao: string | null): Promise<string> {
     const { data, error } = await supabase.rpc('aprovar_nbr12721_da_versao', { p_snapshot_id: snapshotId, p_tipo: tipo, p_observacao: observacao });
@@ -116,3 +184,15 @@ export const blueprintSnapshotNbr12721Service = {
     return data as string;
   },
 };
+
+export interface RelatorioDaDevolucao {
+  revisao: number;
+  /** Unidades ligadas a uma unidade da Planta depois da devolução. */
+  vinculos: number;
+  /** Frações gravadas (origem MOTOR). */
+  gravadas: number;
+  /** Ligadas, mas com fração de CONVENÇÃO — a fração não foi tocada. */
+  convencao: string[];
+  /** Ligadas a uma unidade sem fração (não autônoma). */
+  semFracao: string[];
+}

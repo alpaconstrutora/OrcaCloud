@@ -184,7 +184,7 @@ const FracoesTab: React.FC<Props> = ({ empreendimento }) => {
                 <KpiCard
                     label="TRANSCRITAS DA CONVENÇÃO"
                     value={unidades.filter(u => u.fracao_ideal_origem === 'CONVENCAO').length}
-                    sub="O motor de áreas não sobrescreve estas"
+                    sub="A fração da Planta não sobrescreve estas"
                     icon={<Scale className="w-5 h-5" />}
                     color="teal"
                 />
@@ -205,7 +205,7 @@ const FracoesTab: React.FC<Props> = ({ empreendimento }) => {
                 />
                 <p className="text-xs text-gray-400 mt-1">
                     Esta tela transcreve a convenção registrada — não calcula fração. Uma vez
-                    transcrita, a fração só muda por averbação, e o motor de áreas deixa de sobrescrevê-la.
+                    transcrita, a fração só muda por averbação, e a fração calculada na Planta (Áreas NBR 12721) deixa de sobrescrevê-la.
                 </p>
             </div>
 
@@ -325,7 +325,7 @@ const FracoesTab: React.FC<Props> = ({ empreendimento }) => {
                                                     {u.fracao_ideal_origem === 'CONVENCAO'
                                                         ? <span className="text-sm font-normal text-teal-600">Convenção</span>
                                                         : u.fracao_ideal_origem === 'MOTOR'
-                                                            ? <span className="text-sm font-normal text-blue-600">Motor de áreas</span>
+                                                            ? <span className="text-sm font-normal text-blue-600">Planta (NBR 12721)</span>
                                                             : <span className="text-sm font-normal text-gray-400">Não informada</span>}
                                                 </td>
                                             )}

@@ -220,6 +220,10 @@ export interface EmpreendimentoUnit {
     area_real_total_m2?: number | null;
     area_engine_version_id?: string | null;
     area_engine_synced_at?: string | null;
+    /** Versão publicada da Planta de onde vieram fracao_ideal_* e area_real_total_m2 (Fase 9 das Áreas NBR). */
+    nbr12721_snapshot_id?: string | null;
+    /** Unidade do prédio da Planta correspondente (`UnidadeDoPredio.chave`) — ligada na devolução das frações. */
+    blueprint_unidade_chave?: string | null;
     created_at: string;
     updated_at: string;
 }

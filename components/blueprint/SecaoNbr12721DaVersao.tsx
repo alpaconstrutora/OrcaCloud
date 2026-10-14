@@ -10,7 +10,10 @@
  * técnica, já aprovada) para o botão desligado dizer por quê.
  */
 import React, { useCallback, useEffect, useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import ActionIconButton from '../ui/ActionIconButton';
+import DevolucaoNbr12721 from './DevolucaoNbr12721';
 import {
   blueprintSnapshotNbr12721Service,
   type AprovacaoNbr12721,
@@ -36,6 +39,10 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
   const [erro, setErro] = useState<string | null>(null);
   const [nomes, setNomes] = useState<Map<string, string>>(new Map());
   const [baixando, setBaixando] = useState<'pdf' | 'xlsx' | null>(null);
+  const [copiado, setCopiado] = useState(false);
+  /** O Empreendimento ligado ao estudo (Fase 9); `null` = estudo solto, `undefined` = ainda lendo. */
+  const [empreendimento, setEmpreendimento] = useState<{ id: string; name: string; organizationId: string } | null | undefined>(undefined);
+  const [devolvendo, setDevolvendo] = useState(false);
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -69,6 +76,27 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
   useEffect(() => {
     void carregar();
   }, [carregar]);
+  // Qual Empreendimento recebe a fração: o ligado ao estudo. Falhar aqui só desliga o botão (com o motivo).
+  useEffect(() => {
+    if (!quadro?.studyId) return;
+    let vivo = true;
+    void (async () => {
+      try {
+        const e = await blueprintSnapshotNbr12721Service.empreendimentoDoEstudo(quadro.studyId);
+        if (vivo) setEmpreendimento(e);
+      } catch {
+        if (vivo) setEmpreendimento(null);
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [quadro?.studyId]);
+  useEffect(() => {
+    if (!copiado) return;
+    const t = setTimeout(() => setCopiado(false), 2000);
+    return () => clearTimeout(t);
+  }, [copiado]);
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => setEu(data?.user?.id ?? null));
   }, []);
@@ -99,6 +127,24 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
     }
   };
 
+  const motivoDaDevolucao = (): string | null => {
+    if (!quadro) return 'Esta versão não tem os quadros congelados';
+    if (empreendimento === undefined) return 'Procurando o Empreendimento ligado ao estudo';
+    if (!empreendimento) return 'Este estudo não está ligado a um Empreendimento';
+    if (quadro.status !== 'success') return 'Os quadros desta versão têm pendência bloqueante';
+    if (!(tem('TECNICA') && tem('JURIDICA'))) return 'Só a versão aprovada na técnica e na jurídica leva a fração ao Empreendimento';
+    return null;
+  };
+
+  const copiarHash = async () => {
+    try {
+      await navigator.clipboard?.writeText(quadro?.hash ?? '');
+      setCopiado(true);
+    } catch {
+      // Sem clipboard: o `title` continua com o hash inteiro para seleção manual.
+    }
+  };
+
   const baixar = async (formato: 'pdf' | 'xlsx') => {
     setBaixando(formato);
     setErro(null);
@@ -124,10 +170,19 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
         <>
           <p className="mt-1 text-xs text-slate-700">
             {quadro.status === 'success' ? 'Quadros I, II e IV-B congelados' : 'Quadros congelados COM pendência bloqueante'}
-            <span className="ml-1 font-mono text-[10px] text-slate-400" title={quadro.hash}>
+          </p>
+          <div className="mt-0.5 flex items-center gap-2">
+            <span className="font-mono text-[10px] text-slate-400" title={quadro.hash}>
               {quadro.hash.slice(0, 12)}
             </span>
-          </p>
+            <ActionIconButton
+              kind="duplicate"
+              size="sm"
+              title="Copiar o hash completo dos quadros"
+              icon={copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              onClick={() => void copiarHash()}
+            />
+          </div>
           <ul className="mt-1 space-y-0.5">
             {(['TECNICA', 'JURIDICA'] as TipoDeAprovacaoNbr12721[]).map((t) => {
               const a = aprovacoes.find((x) => x.tipo === t);
@@ -159,6 +214,15 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
                 {baixando === f ? 'Gerando…' : `Baixar ${f.toUpperCase()}`}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setDevolvendo(true)}
+              disabled={motivoDaDevolucao() !== null}
+              title={motivoDaDevolucao() ?? `Liga as unidades e leva a fração desta versão a ${empreendimento?.name ?? 'o Empreendimento'}`}
+              className="h-8 rounded-[6px] border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Levar ao Empreendimento
+            </button>
           </div>
           {!(tem('TECNICA') && tem('JURIDICA')) && (
             <div className="mt-2 space-y-1.5">
@@ -191,6 +255,9 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
         <p className="mt-1 text-[11px] text-red-700" role="alert">
           {erro}
         </p>
+      )}
+      {empreendimento && (
+        <DevolucaoNbr12721 aberto={devolvendo} onFechar={() => setDevolvendo(false)} snapshotId={snapshotId} empreendimento={empreendimento} />
       )}
     </div>
   );

@@ -436,7 +436,57 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
     - `nbr12721Documento.test.ts`, 13 casos: colunas da norma, totais, grupos, cabeçalho, formatação, XLSX lido de volta, PDF monta, escolha da versão do memorial e texto das seções "e"/"i";
     - `SecaoNbr12721DaVersao`, 3 casos novos: nome, falha do nome, baixar e erro ao baixar.
   - **Suíte:** 9.177 = 9.143 + 34 pulados, 0 falhas, em 908 arquivos (relatório no scratchpad, raiz conferida); tsc 0; `verificar:build` limpo; `check-ui-standard` limpo em `SecaoNbr12721DaVersao` e `EmpreendimentoDetail`.
-- [ ] Fase 9: Empreendimento (0 de 3)
+- [x] **Fase 9: Empreendimento (3 de 3)**
+  - **Decisões tomadas na implementação, com o padrão mais seguro:**
+    - **Só versão aprovada na técnica E na jurídica devolve.** Essa fração vai para o Condomínio e para o Comercial.
+    - **A ligação unidade do Empreendimento ↔ unidade da Planta é PROPOSTA e confirmada na tela, nunca gravada em silêncio:**
+      - a que já existe fica;
+      - a sem ligação ganha a da Planta de MESMO número (sem acento, caixa nem espaço) só quando o número é único dos dois lados;
+      - o resto fica sem par.
+    - **O estudo criado pelo Empreendimento (Fase 5) já nasce ligado:** a unidade da Planta nasce da unidade do Empreendimento, então ali a ligação é fato, não proposta.
+  - **9.1 Migration `aplicar_20271014200000_empreendimento_unit_nbr12721.sql`** (aplicada com `db query -f`):
+    - `empreendimento_units.blueprint_unidade_chave`, no molde do `blueprint_massa_chave`;
+    - `empreendimento_units.nbr12721_snapshot_id`, FK para `blueprint_snapshots` com `ON DELETE SET NULL`. A `area_engine_version_id` fica até a Fase 10, porque tem FK para `area_versions`;
+    - `blueprint_snapshot_nbr12721.unidades`: código ↔ chave ↔ número, congelado na publicação. Sem isso a fração ("101 [2]") não volta à unidade certa. A tabela tinha 0 linhas, então não houve linha antiga a tratar;
+    - **RPC `devolver_nbr12721_ao_empreendimento(versão, empreendimento, pares)`:** SECURITY DEFINER, autorização dentro, uma transação. Grava a fração (milésimos FECHADOS em 1000), a área real total (IV-B f), a versão e a data, sempre com origem MOTOR, e nunca toca fração de CONVENÇÃO. REVOKE de PUBLIC e anon; ACL conferida (só authenticated, postgres e service_role).
+    - **Provado num bloco que sempre aborta:**
+      - caminho feliz: 101/102 gravadas (0,6 / 600 / 72 m², MOTOR, versão e data); 103 de convenção intacta; Zeladoria (sem fração) reportada;
+      - sem aprovação: 22023; só técnica: 22023;
+      - chave repetida, chave inexistente, unidade de outro empreendimento e versão de outro estudo: 22023;
+      - chave que ficaria em duas unidades: 23505;
+      - não-membro: 42501; sem login: 42501;
+      - nada sobrou no banco.
+  - **Código:**
+    - `congelamentoNbr12721` passa a congelar as `unidades`;
+    - `utils/nbr12721/vinculos.ts` (puro): `propostaDeVinculos` e `paresParaDevolver`;
+    - o serviço da versão ganha `unidadesDaVersao`, `empreendimentoDoEstudo`, `unidadesDoEmpreendimento` e `devolverAoEmpreendimento`, que registra o evento no histórico do Empreendimento (`unit` / `sync` / `sync_blueprint`);
+    - `DevolucaoNbr12721.tsx`, drawer `Sheet` 2xl com `StandardTable` denso: o par vai num select na célula (§7.1), cada linha mostra a situação, o botão desligado diz o motivo e, no fim, aparece o relatório;
+    - na seção da versão entra "Levar ao Empreendimento", desligado com o motivo (sem Empreendimento ligado, com pendência, sem as duas aprovações), e o hash ganha o botão de copiar (§27);
+    - `blueprintEstudoDoEmpreendimento.criar` grava as chaves;
+    - `blueprint_unidade_chave` e `nbr12721_snapshot_id` entram no `UNIT_COLS`, conferido pelo teste de travas.
+  - **9.2:** nas Vinculações, a seção "Áreas NBR 12721" mostra a versão que o memorial cita, com a situação das aprovações, e "Abrir" leva a `#/blueprint?studyId=…&tela=areas-nbr12721`. Sem desvincular, porque o vínculo é o do estudo da Planta. Estudo sem versão congelada aparece dizendo o que falta. Na tela de Frações do Condomínio, a origem MOTOR passa a ser "Planta (NBR 12721)".
+  - **9.3:** o `empreendimentoLinksService` não lê mais `area_projects` (sai `loadAreaProject`/`linkAreaProject`, entra `loadAreasNbr`). A busca por `areaEngine` em `empreendimentoAuditService`, `empreendimentoLinksService` e `empreendimentoTypeService` dá vazio.
+    - **⚠️ Para a Fase 10:** `empreendimento_types.motor_category`, `getMotorCategory` e o campo "categoria do motor" da tela de Tipos de Empreendimento só servem ao Motor antigo e saem junto com ele.
+    - Os rótulos `area_project`/`area_engine` da aba Histórico ficam, porque leem eventos antigos.
+  - **Prova no app real (14/10, agente-leitura, roteiros `c:/tmp/pwtest/areas-nbr-fase9*.cjs`):**
+    - **preparo:** Empreendimento com 6 unidades em 2 andares e hall; criar o estudo **já ligou as 6**;
+    - **o que foi mexido de propósito:** a 102 virou convenção; a 201 perdeu a ligação; a 999 foi criada depois, sem par;
+    - **antes das aprovações,** "Levar" fica desligado com o motivo;
+    - **no drawer:** 101 "Já ligada"; 102 "Já ligada · convenção (fração mantida)"; 201 "Proposta pelo número"; 999 "Sem par"; o botão diz "Gravar e levar 5 fração(ões)";
+    - **relatório:** "5 gravadas; 6 ligadas; convenção mantida: 102; sem par: 999";
+    - **no banco,** as 5 frações e áreas batem com a versão congelada, a 102 ficou com 50 milésimos e a fonte dela, a 999 não foi tocada, e o evento entrou no histórico;
+    - **Vinculações** mostra "Quadros NBR 12721 — versão 1 · Técnica e jurídica aprovadas", sem desvincular, e "Abrir" abre a tela Áreas NBR 12721 (o módulo limpa o hash depois de ler o link, então o portão confere a TELA, não a URL);
+    - nenhum erro de página nem de HTTP.
+  - **Defeito achado pela prova e corrigido:** no drawer, a coluna "Milésimos atuais" sumia à direita (larguras somando 760 px num Sheet de ~670). Agora somam 620, e a medida no app deu tabela de 624 px num container de 624, sem rolagem.
+  - **Limpeza:** bloco que exige 1 empreendimento e 1 estudo. Antes e depois: 18 empreendimentos, 9 torres, 85 unidades, 0 áreas comuns, 77 estudos, 9 versões, 0 quadros, 0 aprovações, 0 unidades ligadas. A trilha de auditoria do Empreendimento apagado fica (sem FK, imutável), como nas provas anteriores.
+  - **Testes:**
+    - congelamento com andares copiados;
+    - `nbr12721Vinculos.test.ts`, 4 casos;
+    - criação já ligada (Fase 5);
+    - `DevolucaoNbr12721.test.tsx`, 3 casos;
+    - seção: "Levar" com os 3 motivos e a abertura;
+    - trava do `UNIT_COLS`.
+  - **Suíte:** 9.187 = 9.153 + 34 pulados, 0 falhas, em 910 arquivos; tsc 0; `verificar:build` limpo; `check-ui-standard` limpo em `DevolucaoNbr12721`, `SecaoNbr12721DaVersao`, `VinculacoesTab` e `FracoesTab`. O `verificar-views-anon.sh` não se aplica: nenhuma view criada.
 - [ ] Fase 10: remoção (0 de 5)
 
 Ordem de publicação: cada fase publica sozinha (push em `main`). Até a fase 9 o Motor antigo continua no ar e intocado. A fase 10 só começa com as fases 0 a 9 provadas em produção.

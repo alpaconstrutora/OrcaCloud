@@ -395,6 +395,19 @@ export interface QuadroCongelado {
   /** sha256 da saída em JSON estável — é o que a aprovação cita. */
   hash: string;
   versaoMotor: string;
+  /**
+   * Código da unidade no motor ↔ chave da unidade do prédio ↔ número (Fase 9):
+   * é por aqui que a fração ("101 [2]") volta à unidade certa do Empreendimento.
+   * Fora do hash — o hash é dos quadros, e é ele que as aprovações citam.
+   */
+  unidades: UnidadeCongelada[];
+}
+
+export interface UnidadeCongelada {
+  codigo: string;
+  /** `UnidadeDoPredio.chave` — "<uid>" ou "<uid>:<levelUid>" do andar copiado. */
+  chave: string;
+  numero: string;
 }
 
 /**
@@ -404,9 +417,11 @@ export interface QuadroCongelado {
  */
 export function congelamentoNbr12721(model: BlueprintModel, hip: HipotesesNbr12721): QuadroCongelado | null {
   if (!(model.unidades ?? []).length && !(model.ambientesDeclarados ?? []).length) return null;
-  const { entrada } = entradaDoEstudo(model, hip);
+  const { entrada, chavePorCodigo } = entradaDoEstudo(model, hip);
   const saida = calcularNbr12721(entrada);
-  return { entrada, saida, hash: sha256(stableStringify(saida)), versaoMotor: VERSAO_DO_MOTOR_NBR12721 };
+  const numeroPorChave = new Map(unidadesDoPredio(model, hip.numeracao).unidades.map((u) => [u.chave, u.numero] as const));
+  const unidades = [...chavePorCodigo].map(([codigo, chave]) => ({ codigo, chave, numero: numeroPorChave.get(chave) ?? codigo }));
+  return { entrada, saida, hash: sha256(stableStringify(saida)), versaoMotor: VERSAO_DO_MOTOR_NBR12721, unidades };
 }
 
 // ── a entrada do motor ───────────────────────────────────────────────────────

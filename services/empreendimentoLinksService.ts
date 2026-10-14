@@ -5,6 +5,7 @@ import { empreendimentoService } from './empreendimentoService';
 import { empreendimentoAuditService } from './empreendimentoAuditService';
 import { costCenterService } from './costCenterService';
 import { isSystemProject } from '../utils/systemProjects';
+import { situacaoDasAprovacoes, versaoDoMemorial } from '../utils/nbr12721/documento';
 
 /**
  * Vínculos de um Empreendimento — o que alimenta a aba "Vinculações".
@@ -12,7 +13,9 @@ import { isSystemProject } from '../utils/systemProjects';
  * Os vínculos vivem espalhados e em direções diferentes:
  *   - Obra:          `empreendimentos.project_id` (principal) e `empreendimento_towers.project_id`
  *   - Orçamento/Plan: pendurados na OBRA por `projects.settings.linkedProjectId` (filho → pai)
- *   - Áreas NBR:     `area_projects.empreendimento_id`
+ *   - Áreas NBR:     a versão publicada do estudo da Planta (`empreendimentos.blueprint_study_id`
+ *                    → `blueprint_snapshot_nbr12721`) — desde 14/10/2026 (Fase 9 do plano
+ *                    docs/planos/2026-10-13-areas-nbr12721-na-planta.md); antes, o Motor de Áreas
  *   - Planta IA:     `empreendimentos.planta_ai_study_id`
  *   - Viabilidade:   `empreendimentos.imovib_study_id`
  *   - Centro custo:  `cost_centers_v2.empreendimento_id` (N:1 desde 20270919000030;
@@ -181,7 +184,7 @@ export const empreendimentoLinksService = {
 
         const [children, areaProject, contratos, financeiro, centrosCusto] = await Promise.all([
             this.loadBudgetsAndPlans(validObras),
-            this.loadAreaProject(emp.id, orgId),
+            emp.blueprint_study_id ? this.loadAreasNbr(emp.blueprint_study_id) : Promise.resolve([] as EmpreendimentoLink[]),
             this.loadContracts(obraIds, validObras, emp.id),
             this.loadFinance(obraIds, validObras),
             this.loadCostCenters(emp.id),
@@ -252,32 +255,39 @@ export const empreendimentoLinksService = {
         return { orcamentos, planejamentos };
     },
 
-    /** Projeto do motor de Áreas NBR 12721 (`area_projects.empreendimento_id`). */
-    async loadAreaProject(empreendimentoId: string, organizationId: string | null): Promise<EmpreendimentoLink[]> {
+    /**
+     * Áreas NBR 12721 do empreendimento: a versão publicada do estudo da Planta
+     * ligado que o memorial cita (`versaoDoMemorial`: técnica+jurídica > técnica
+     * > a mais recente), com a situação das aprovações. Estudo ligado sem versão
+     * congelada aparece também — para dizer o que falta, não sumir.
+     */
+    async loadAreasNbr(studyId: string): Promise<EmpreendimentoLink[]> {
         try {
-            // Org ausente ("Todas as organizações") NÃO bloqueia a leitura: o filtro
-            // só é aplicado quando existe, e a RLS recorta pelas orgs do usuário
-            // (CLAUDE.md regra #5). `getProjectByEmpreendimento` exige org, por isso
-            // a query é feita aqui em vez de reusá-lo.
-            let query = supabase
-                .from('area_projects')
-                .select('id, name, status')
-                .eq('empreendimento_id', empreendimentoId);
-            if (organizationId) query = query.eq('organization_id', organizationId);
-
-            const { data } = await query
-                .order('created_at', { ascending: true })
-                .limit(1)
-                .maybeSingle();
-            if (!data) return [];
+            const { data: quadros } = await supabase.from('blueprint_snapshot_nbr12721').select('snapshot_id').eq('study_id', studyId);
+            const ids = ((quadros ?? []) as { snapshot_id: string }[]).map(q => q.snapshot_id);
+            if (!ids.length) {
+                return [{ kind: 'AREAS_NBR', id: studyId, label: 'Quadros NBR 12721', sublabel: 'Nenhuma versão publicada com os quadros — publique na Planta', meta: { studyId } }];
+            }
+            const [{ data: snaps }, { data: aprov }] = await Promise.all([
+                supabase.from('blueprint_snapshots').select('id, revision').in('id', ids),
+                supabase.from('blueprint_snapshot_nbr12721_aprovacoes').select('snapshot_id, tipo').in('snapshot_id', ids),
+            ]);
+            const aprovacoes = (aprov ?? []) as { snapshot_id: string; tipo: 'TECNICA' | 'JURIDICA' }[];
+            const v = versaoDoMemorial(((snaps ?? []) as { id: string; revision: number }[]).map(x => ({
+                snapshotId: x.id,
+                revisao: x.revision,
+                aprovacoes: aprovacoes.filter(a => a.snapshot_id === x.id),
+            })));
+            if (!v) return [];
             return [{
                 kind: 'AREAS_NBR',
-                id: (data as any).id,
-                label: (data as any).name || 'Quadros NBR 12721',
-                sublabel: (data as any).status ? `Situação: ${(data as any).status}` : undefined,
+                id: v.snapshotId,
+                label: `Quadros NBR 12721 — versão ${v.revisao}`,
+                sublabel: situacaoDasAprovacoes(v.aprovacoes),
+                meta: { studyId },
             }];
         } catch {
-            return []; // motor de áreas indisponível não pode derrubar a aba
+            return []; // as áreas indisponíveis não podem derrubar a aba
         }
     },
 
@@ -640,25 +650,6 @@ export const empreendimentoLinksService = {
     /** Obra de uma torre. `projectId` nulo desfaz o vínculo. */
     async linkTowerObra(towerId: string, projectId: string | null): Promise<void> {
         await empreendimentoService.linkTowerToObra(towerId, projectId);
-    },
-
-    /** Vincula/desvincula o projeto do motor de Áreas NBR 12721. */
-    async linkAreaProject(areaProjectId: string, empreendimentoId: string | null, ctx: LinkContext): Promise<void> {
-        const { error } = await supabase
-            .from('area_projects')
-            .update({ empreendimento_id: empreendimentoId })
-            .eq('id', areaProjectId);
-        if (error) throw new Error(`Falha ao vincular o projeto de áreas: ${error.message}`);
-
-        await empreendimentoAuditService.record({
-            empreendimentoId: ctx.empreendimentoId,
-            organizationId: ctx.organizationId,
-            entityType: 'area_project',
-            entityId: areaProjectId,
-            entityLabel: 'Quadros NBR 12721',
-            action: empreendimentoId ? 'link' : 'unlink',
-            source: 'area_engine',
-        });
     },
 
     /** Vincula/desvincula o estudo da Planta IA. */

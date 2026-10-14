@@ -2,6 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X, Download, Share2, ChevronDown, Bell, HelpCircle } from 'lucide-react';
 import { PortalHelp } from './portal/PortalHelp';
+import BrokerMyData from './broker/BrokerMyData';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { avisarAcaoDoPortal } from '../utils/portalEventos';
 import { BROKER_PORTAL_TAB_IDS } from '../utils/brokerPortalTabs';
 import { downloadProposalPdf } from '../services/proposalPdfService';
@@ -111,6 +113,10 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
     // Menu de conta do portal público (link do corretor) — espelha o dropdown de perfil do sistema
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
     const [showMyAccount, setShowMyAccount] = useState(false);
+    // "Meus dados": o cadastro que a incorporadora tem deste corretor — o mesmo de
+    // Portais › Meus Corretores. Já está em mãos (`initialBroker` vem inteiro da RPC
+    // do token), então o painel não carrega nada — ao contrário do Parceiro.
+    const [showMyData, setShowMyData] = useState(false);
     // Central de ajuda (F2, 04/10/2026) — mesmo painel do Portal do Parceiro.
     const [isHelpOpen, setIsHelpOpen] = useState(false);
     // Encaixe do cartão "Primeiros passos" (F8); não aparece para o gestor personificando.
@@ -453,7 +459,9 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 <header className="h-16 border-b border-gray-100 bg-white flex items-center justify-between px-6 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-wider">Broker Portal</div>
-                        <h1 className="text-md font-bold text-gray-900 tracking-tight">Portal do Corretor</h1>
+                        {/* Saudação: o nome do corretor, como o Portal do Parceiro mostra o
+                            nome do parceiro ao lado do badge (14/10/2026). */}
+                        <h1 className="text-base font-bold text-gray-900 tracking-tight">{brokerDisplayName}</h1>
                     </div>
                     <div className="flex items-center gap-2">
                     <button
@@ -496,6 +504,18 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                                     </div>
                                 </div>
                                 <div className="p-2">
+                                    {/* "Meus dados" vem ANTES de "Minha conta", como no Parceiro:
+                                        é o cadastro que a incorporadora tem do corretor (CRECI,
+                                        imobiliária, comissão); "Minha conta" é o resumo curto. */}
+                                    <button
+                                        type="button"
+                                        onClick={() => { setIsAccountMenuOpen(false); setShowMyData(true); }}
+                                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                        role="menuitem"
+                                    >
+                                        <Briefcase className="h-4 w-4 text-gray-400" />
+                                        <span className="flex-1">Meus dados</span>
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={() => { setIsAccountMenuOpen(false); setShowMyAccount(true); }}
@@ -560,6 +580,21 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 tourKey={portalToken || effectiveBrokerEmail || null}
                 autoTour={isStandalone}
             />
+
+            {/* Meus dados — painel lateral (UI_PATTERNS / §26), igual ao Portal do
+                Parceiro. NUNCA tela cheia: é consulta a um cadastro. O corpo é o
+                BrokerMyData, alimentado pelo corretor que a casca já tem — sem RPC nova. */}
+            <Sheet open={showMyData} onClose={() => setShowMyData(false)} size="xl">
+                <SheetHeader onClose={() => setShowMyData(false)}>
+                    <SheetTitle>Meus dados</SheetTitle>
+                    <SheetDescription>
+                        O cadastro que a incorporadora tem de você. Para alterar, fale com ela.
+                    </SheetDescription>
+                </SheetHeader>
+                <SheetPanel className="px-4 py-5 md:px-6">
+                    <BrokerMyData broker={effectiveBroker} />
+                </SheetPanel>
+            </Sheet>
 
             {showMyAccount && (
                 <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowMyAccount(false)}>

@@ -810,7 +810,8 @@ import {
 } from '../../utils/blueprintPontosHidraulicos';
 import { ehEvaporadoraDeParede, encostoNaParede } from '../../utils/blueprintEncostoNaParede';
 import { comandosAoMoverClimatizacao, moveuClimatizacao } from '../../utils/blueprintMoverClimatizacao';
-import { luminariasDoAmbienteW } from '../../utils/blueprintClimatizacaoAmbientes';
+import { luminariasDoAmbienteW, premissasDoAmbiente, rotuloDoUso } from '../../utils/blueprintClimatizacaoAmbientes';
+import { situacaoClimatizacao, situacaoEletrica, situacaoHidraulica, type DisciplinaDoAmbiente, type SituacaoDaDisciplina } from '../../utils/blueprintSituacaoDoAmbiente';
 import { marcasDaClimatizacao } from '../../utils/blueprintMarcasClimatizacao';
 import {
   planejarAguaDoModelo,
@@ -841,6 +842,7 @@ import {
   type LadoDoAmbiente,
 } from '../../utils/blueprintDistribuicao';
 import DistribuirTomadas, { ConferenciaDoAmbiente, TomadasNaParede } from './DistribuirTomadas';
+import { SituacaoDoAmbiente } from './SituacaoDoAmbiente';
 import PainelConferenciaNbr from './PainelConferenciaNbr';
 import { conferirNbr5410 } from '../../utils/blueprintNbr5410';
 import { useBlueprintEletrica } from '../../hooks/useBlueprintEletrica';
@@ -9836,12 +9838,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   ).length;
 
   /**
-   * Os controles de TOMADAS de um ambiente — tipo do cômodo, conferência 9.5.2
-   * e distribuição automática. Uma função porque aparecem em DOIS lugares: no
-   * cartão do ambiente (navegador) e na tarefa "Tomadas pela NBR 5410"
-   * (ribbon › Instalações). Duas cópias divergiriam na primeira correção.
+   * O seletor do TIPO do ambiente. Uma função porque aparece em DOIS lugares: no
+   * cartão do ambiente (navegador) e na tarefa "Tomadas pela NBR 5410" — a
+   * gaveta precisa dele para conferir, e duas cópias divergiriam na primeira
+   * correção.
    */
-  const controlesDeTomadas = (a: (typeof ambientes)[number]) => (
+  const seletorDoTipo = (a: (typeof ambientes)[number]) => (
     <>
       {/* O TIPO do ambiente é o que a NBR 5410 usa para contar tomadas
           (9.5.2.2.1) — banheiro, cozinha, varanda, sala/dormitório. Sem
@@ -9871,6 +9873,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           ))}
         </select>
       </label>
+    </>
+  );
+
+  /**
+   * Os controles de TOMADAS de um ambiente — tipo do cômodo, conferência 9.5.2
+   * e distribuição automática. Só na tarefa "Tomadas pela NBR 5410" (ribbon ›
+   * Instalações). Até 14/10/2026 apareciam também no cartão do ambiente, e o
+   * cartão parecia ser da elétrica (*"Ambiente nao esta vinculado a apenas
+   * eletrica, mas tambem hidraulica, climatizazacao etc."*) — lá agora fica uma
+   * linha por disciplina (`situacoesDoAmbiente`), que abre a gaveta.
+   */
+  const controlesDeTomadas = (a: (typeof ambientes)[number]) => (
+    <>
+      {seletorDoTipo(a)}
       <ConferenciaDoAmbiente
         conferencia={a.conferencia}
         luz={a.luz}
@@ -9887,6 +9903,48 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       />
     </>
   );
+
+  /**
+   * Uma linha por DISCIPLINA no cartão do ambiente (14/10/2026). Só resume o que
+   * as gavetas já calculam — a conferência da NBR 5410 (`ambientes`), o plano de
+   * pontos hidráulicos (`planosDePontos`, com o kit trocado na gaveta) e as
+   * premissas da climatização — e o clique abre a gaveta da disciplina.
+   */
+  const situacoesDoAmbiente = (a: (typeof ambientes)[number]): SituacaoDaDisciplina[] => {
+    const space = editor.model.spaces.find((s) => s.id === a.id);
+    const etiqueta = a.etiquetaId ? editor.model.labels.find((l) => l.id === a.etiquetaId) : undefined;
+    const premissas = premissasDoAmbiente(etiqueta ? climatizacaoDoEstudo.hipoteses.ambientes[etiqueta.uid] : undefined, {
+      nome: a.rotulo,
+      areaPisoM2: a.areaM2,
+      peDireitoMm: editor.model.levels.find((l) => l.id === space?.levelId)?.defaultHeightMm ?? 2800,
+      temperaturaDoEstudoC: climatizacaoDoEstudo.hipoteses.conforto.temperaturaInternaC,
+      tipoDeAmbiente: a.tipoDeAmbiente,
+    });
+    const evaporadoras = space
+      ? (editor.model.terminais ?? []).filter(
+          (t) =>
+            t.levelId === space.levelId &&
+            !!t.tipoHidraulico &&
+            (TIPOS_DE_EVAPORADORA as readonly string[]).includes(t.tipoHidraulico) &&
+            pointInPolygon(space.ring, t.at) &&
+            !space.holes.some((h) => pointInPolygon(h, t.at)),
+        ).length
+      : 0;
+    return [
+      situacaoEletrica(a.conferencia, a.luz),
+      situacaoHidraulica(
+        planosDePontos.find((p) => p.spaceId === a.id),
+        a.tipoDeAmbiente != null,
+      ),
+      situacaoClimatizacao({ uso: rotuloDoUso(premissas.uso), climatizado: premissas.climatizado.valor, evaporadoras }),
+    ];
+  };
+  /** A gaveta de cada disciplina — a mesma que o ribbon abre. */
+  const TAREFA_DA_DISCIPLINA: Record<DisciplinaDoAmbiente, TarefaDoPainel> = {
+    ELETRICA: 'tomadas',
+    HIDRAULICA: 'pontosHidraulicos',
+    CLIMATIZACAO: 'climatizacao',
+  };
 
   /** Espessura e alinhamento só fazem sentido para o que nasce parede. */
   const ehFerramentaDeParede =
@@ -16448,7 +16506,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       </>
                     )}
                   </div>
-                  {controlesDeTomadas(a)}
+                  {/* O cartão diz o que o ambiente É; o que cada disciplina faz nele
+                      fica nas linhas de disciplina, no fim do cartão, e nas gavetas. */}
+                  {seletorDoTipo(a)}
                   {/* UNIDADE (E2.2): a que este ambiente pertence. "Nova…" cria pelo
                       número e já põe o ambiente nela — um gesto, um Ctrl+Z por passo. */}
                   <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
@@ -16528,6 +16588,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       </p>
                     );
                   })()}
+                  {/* DISCIPLINAS (14/10/2026): uma linha por disciplina; o clique abre a gaveta dela. */}
+                  <SituacaoDoAmbiente
+                    nomeDoAmbiente={a.rotulo}
+                    situacoes={situacoesDoAmbiente(a)}
+                    onAbrir={(d) => {
+                      setDrawerRecolhido(false);
+                      setTarefa(TAREFA_DA_DISCIPLINA[d]);
+                    }}
+                  />
                 </div>
               </li>
             ))}

@@ -3875,6 +3875,47 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botaoDistribuir()).not.toHaveTextContent('1');
   });
 
+  it('Cartão do ambiente (14/10/2026): sem os controles de tomadas; uma linha por disciplina, e cada uma abre a sua gaveta', async () => {
+    // "parece que o ambiente ficou misturado com eletrica. Ambiente nao esta
+    // vinculado a apenas eletrica, mas tambem hidraulica, climatizazacao etc."
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    m = k.applyBatch(m, [w(0, 0, 2000, 0), w(2000, 0, 2000, 3000), w(2000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'AddOpening', wallId: m.walls[0].id, kind: 'door', offsetMm: 600, widthMm: 700, heightMm: 2100, sillMm: 0 }).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Banho', tipoDeAmbiente: 'BANHEIRO' }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+
+    const disciplinas = await screen.findByRole('list', { name: 'Disciplinas de Banho' });
+    const cartao = disciplinas.closest('li') as HTMLElement;
+    // O tipo continua no cartão; a tarefa de tomadas não.
+    expect(within(cartao).getByLabelText('Tipo do ambiente Banho')).toHaveValue('BANHEIRO');
+    expect(within(cartao).queryByRole('button', { name: /completar pela norma/i })).not.toBeInTheDocument();
+    expect(within(cartao).queryByLabelText(/quantidade de tomadas/i)).not.toBeInTheDocument();
+    expect(cartao).not.toHaveTextContent(/Iluminação: mín\./);
+    // As três disciplinas, cada uma com a sua situação.
+    expect(within(disciplinas).getByTestId('situacao-eletrica')).toHaveTextContent(/Elétrica/);
+    expect(within(disciplinas).getByTestId('situacao-hidraulica')).toHaveTextContent(/kit banheiro: 0 de 8 pontos · faltam 8/);
+    expect(within(disciplinas).getByTestId('situacao-hidraulica')).toHaveAttribute('data-estado', 'falta');
+    expect(within(disciplinas).getByTestId('situacao-climatizacao')).toHaveTextContent(/Banheiro/);
+
+    // Hidráulica abre a gaveta de pontos hidráulicos.
+    await user.click(within(disciplinas).getByTestId('situacao-hidraulica'));
+    expect(await screen.findByTestId('tarefa-pontos-hidraulicos')).toBeInTheDocument();
+    // Elétrica abre a gaveta de tomadas — e é lá que mora o "Completar pela norma".
+    await user.click(within(disciplinas).getByTestId('situacao-eletrica'));
+    const gaveta = await screen.findByRole('dialog');
+    expect(gaveta).toHaveTextContent(/tomadas pela nbr 5410/i);
+    expect(within(gaveta).getByLabelText('Quantidade de tomadas neste ambiente')).toBeInTheDocument();
+    // Climatização abre as premissas de climatização.
+    await user.click(within(disciplinas).getByTestId('situacao-climatizacao'));
+    expect(await screen.findByTestId('tarefa-climatizacao')).toBeInTheDocument();
+  });
+
   it("Hidráulica › Água automática (18/09/2026): a gaveta lista a caixa d'água, lança a rede sugerida e o botão zera", async () => {
     const k = await import('../../utils/blueprintKernel');
     let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;

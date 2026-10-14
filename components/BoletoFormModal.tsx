@@ -274,7 +274,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 cost_center_id:       costCenterId || undefined,
                 plano_de_contas_id:   planoDeContasId || undefined,
                 category_id:          categoryId || null,
-                project_id:           selectedProjectId || projectId || undefined,
+                project_id:           selectedProjectId || null, // '' = "Sem vínculo" (estado já nasce com a obra de contexto)
                 descricao:            descricao.trim() || undefined,
                 observacoes:          observacoes || undefined,
                 valor:                valor ? Number(valor) : undefined,
@@ -421,7 +421,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 cost_center_id: costCenterId || undefined,
                 plano_de_contas_id: planoDeContasId || undefined,
                 category_id: categoryId || null,
-                project_id: selectedProjectId || projectId || boleto.project_id,
+                // '' = "— Sem vínculo —": grava null. O antigo `|| projectId || boleto.project_id`
+                // fazia o vazio voltar para a obra anterior (o estado já nasce com ela).
+                project_id: selectedProjectId || null,
                 descricao: descricao.trim() || undefined,
                 observacoes: observacoes || undefined,
                 valor: valor ? Number(valor) : undefined,

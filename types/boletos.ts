@@ -95,7 +95,7 @@ export interface Boleto {
     duplicado_de?: string;
     erros_validacao?: string[];
 
-    project_id?: string;
+    project_id?: string | null;
     cost_center_id?: string;
     /** Plano de Contas (`plano_de_contas`) — dimensão distinta de cost_center_id. */
     plano_de_contas_id?: string;

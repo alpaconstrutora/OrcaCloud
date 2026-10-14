@@ -5,6 +5,7 @@ import {
     Building2, Calendar, AlertTriangle,
     Wallet, Clock, CheckCircle2, SlidersHorizontal, X,
     Download, LayoutGrid, List, Upload, Pencil, AlertCircle, Trash2, MoveHorizontal, ChevronDown,
+    ChevronRight, ChevronsDownUp, ChevronsUpDown, Layers,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
 import { renomearSelecionados } from '../services/boletoNomeDocumentoService';
@@ -16,6 +17,7 @@ import { appSettingsService } from '../services/appSettingsService';
 import type { Boleto, BoletoStatus, BoletoFilters, BoletoStats, Organization, CostCenter } from '../types';
 import type { SupplierOption } from './SupplierSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
+import { agruparBoletos, OPCOES_AGRUPAR, type CampoAgrupar } from '../utils/boletoGrupos';
 import { onlyObras } from '../utils/projectClassification';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
@@ -538,6 +540,18 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     // leitura não bloqueia — o service não filtra e a RLS recorta).
     const effectiveOrgId = organizationId || undefined;
 
+    // "Agrupar" — o mesmo recurso de Minhas Tarefas (TasksModule/TasksList). Persistido;
+    // os grupos recolhidos ficam só em memória, como lá.
+    const [groupBy, setGroupBy] = usePersistedState<CampoAgrupar>('boletoManagerFilters:groupBy', 'none');
+    const [gruposRecolhidos, setGruposRecolhidos] = useState<Set<string>>(new Set());
+    const toggleGrupo = useCallback((key: string) => {
+        setGruposRecolhidos(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key); else next.add(key);
+            return next;
+        });
+    }, []);
+
     const lastSelectedIndexRef = useRef<number | null>(null);
     const shiftHeldRef = useRef(false);
 
@@ -546,7 +560,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     }, []);
 
     function selectAllFiltered() {
-        setSelectedIds(new Set(filtered.map(b => b.id)));
+        setSelectedIds(new Set(renderedList.map(b => b.id)));
     }
 
     function clearSelection() {
@@ -825,13 +839,31 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         return list;
     }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, advancedFilters.rules, advancedFields, supplierMap, userNameMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
-    // Mantido estável enquanto `filtered` não muda, para que as linhas memoizadas
+    // Agrupamento só no modo lista (a grade não tem linha de grupo).
+    const agrupando = viewMode === 'list' && groupBy !== 'none';
+    const grupos = useMemo(() => agruparBoletos(filtered, agrupando ? groupBy : 'none', {
+        fornecedor: b => (b.supplier_id ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome) : (b.beneficiario_nome ?? b.documento_nome)),
+        obra: b => (b.project_id ? projectMap[b.project_id] : null),
+        centroCusto: b => (b.cost_center_id ? ccMap[b.cost_center_id] : null),
+        capturadoPor: b => (b.created_by_email ? nomeCapturador(b, userNameMap) : null),
+    }), [filtered, agrupando, groupBy, supplierMap, projectMap, ccMap, userNameMap]);
+
+    // As linhas NA ORDEM DA TELA (grupos recolhidos ficam de fora). É sobre esta lista que
+    // o índice da linha e o Shift+clique trabalham — com `filtered`, agrupado, o intervalo
+    // marcaria boletos que não estão entre as duas linhas clicadas (mesma solução de TasksList).
+    const renderedList = useMemo(
+        () => (agrupando ? grupos.flatMap(g => (gruposRecolhidos.has(g.key) ? [] : g.itens)) : filtered),
+        [agrupando, grupos, gruposRecolhidos, filtered],
+    );
+    const indiceNaTela = useMemo(() => new Map(renderedList.map((b, i) => [b.id, i])), [renderedList]);
+
+    // Mantido estável enquanto a lista da tela não muda, para que as linhas memoizadas
     // (BoletoCardItem/BoletoRowItem) não re-renderizem a cada seleção.
     const handleCheckboxChange = useCallback((checked: boolean, id: string, index: number) => {
         if (shiftHeldRef.current && lastSelectedIndexRef.current !== null) {
             const start = Math.min(lastSelectedIndexRef.current, index);
             const end = Math.max(lastSelectedIndexRef.current, index);
-            const rangeIds = filtered.slice(start, end + 1).map(b => b.id);
+            const rangeIds = renderedList.slice(start, end + 1).map(b => b.id);
             setSelectedIds(prev => {
                 const next = new Set(prev);
                 rangeIds.forEach(rid => checked ? next.add(rid) : next.delete(rid));
@@ -845,7 +877,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             });
         }
         lastSelectedIndexRef.current = index;
-    }, [filtered]);
+    }, [renderedList]);
 
     // KPIs e contadores vêm de `boletoService.stats` (agregado sobre a base inteira).
     // Não recalcular a partir de `boletos`: essa lista é o recorte já filtrado por
@@ -1127,6 +1159,36 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
 
+                {/* Agrupar — mesmo controle de Minhas Tarefas (TasksModule). Só no modo lista. */}
+                {viewMode === 'list' && (
+                    <div className="relative shrink-0">
+                        <Layers className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${groupBy !== 'none' ? 'text-white' : 'text-gray-500'}`} />
+                        <select
+                            value={groupBy}
+                            onChange={e => { setGroupBy(e.target.value as CampoAgrupar); setGruposRecolhidos(new Set()); lastSelectedIndexRef.current = null; }}
+                            title="Agrupar os boletos"
+                            className={`h-9 pl-8 pr-3 rounded-[6px] text-[13px] font-medium border appearance-none cursor-pointer transition-all ${
+                                groupBy !== 'none'
+                                    ? 'bg-blue-600 text-white border-blue-600 [&>option]:bg-white [&>option]:text-gray-900'
+                                    : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-50'
+                            }`}
+                        >
+                            <option value="none">Agrupar</option>
+                            {OPCOES_AGRUPAR.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                    </div>
+                )}
+                {agrupando && (
+                    <button
+                        type="button"
+                        onClick={() => setGruposRecolhidos(prev => (prev.size ? new Set() : new Set(grupos.map(g => g.key))))}
+                        title={gruposRecolhidos.size ? 'Expandir todos os grupos' : 'Recolher todos os grupos'}
+                        className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 shrink-0"
+                    >
+                        {gruposRecolhidos.size ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
+                    </button>
+                )}
+
                 {/* Separador entre grupo "filtrar" e grupo "visualizar" — só na variante desaninhada (§5.1) */}
                 <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
@@ -1346,8 +1408,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                     <input
                                         type="checkbox"
-                                        checked={filtered.length > 0 && filtered.every(b => selectedIds.has(b.id))}
-                                        onChange={() => filtered.every(b => selectedIds.has(b.id)) ? clearSelection() : selectAllFiltered()}
+                                        checked={renderedList.length > 0 && renderedList.every(b => selectedIds.has(b.id))}
+                                        onChange={() => renderedList.every(b => selectedIds.has(b.id)) ? clearSelection() : selectAllFiltered()}
                                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
                                         title="Selecionar todos"
                                     />
@@ -1371,29 +1433,56 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {filtered.map((b, idx) => {
-                                const atrasado = !!(b.vencimento && !['pago','cancelado'].includes(b.status)
-                                    && new Date(b.vencimento + 'T00:00:00') < new Date());
+                            {grupos.map(grupo => {
+                                const recolhido = gruposRecolhidos.has(grupo.key);
+                                const renderLinha = (b: Boleto) => {
+                                    const atrasado = !!(b.vencimento && !['pago','cancelado'].includes(b.status)
+                                        && new Date(b.vencimento + 'T00:00:00') < new Date());
+                                    return (
+                                        <BoletoRowItem
+                                            key={b.id}
+                                            boleto={b}
+                                            idx={indiceNaTela.get(b.id) ?? 0}
+                                            selected={selectedIds.has(b.id)}
+                                            isHighlighted={highlightId === b.id}
+                                            atrasado={atrasado}
+                                            supplierMap={supplierMap}
+                                            projectMap={projectMap}
+                                            ccMap={ccMap}
+                                            userNameMap={userNameMap}
+                                            abrindoDocumento={abrindoDocumento === b.documento_path}
+                                            onAbrirDocumento={abrirDocumento}
+                                            orderedVisibleColumns={tableColumns.orderedVisibleColumns}
+                                            onOpen={abrirEdicao}
+                                            onCheckboxMouseDown={handleCheckboxMouseDown}
+                                            onCheckboxChange={handleCheckboxChange}
+                                            onDelete={handleExcluirBoleto}
+                                        />
+                                    );
+                                };
+                                if (!agrupando) return <React.Fragment key="todos">{grupo.itens.map(renderLinha)}</React.Fragment>;
                                 return (
-                                    <BoletoRowItem
-                                        key={b.id}
-                                        boleto={b}
-                                        idx={idx}
-                                        selected={selectedIds.has(b.id)}
-                                        isHighlighted={highlightId === b.id}
-                                        atrasado={atrasado}
-                                        supplierMap={supplierMap}
-                                        projectMap={projectMap}
-                                        ccMap={ccMap}
-                                        userNameMap={userNameMap}
-                                        abrindoDocumento={abrindoDocumento === b.documento_path}
-                                        onAbrirDocumento={abrirDocumento}
-                                        orderedVisibleColumns={tableColumns.orderedVisibleColumns}
-                                        onOpen={abrirEdicao}
-                                        onCheckboxMouseDown={handleCheckboxMouseDown}
-                                        onCheckboxChange={handleCheckboxChange}
-                                        onDelete={handleExcluirBoleto}
-                                    />
+                                    <React.Fragment key={grupo.key}>
+                                        {/* Cabeçalho do grupo — mesmo desenho de TasksList (Minhas Tarefas), com o total do grupo. */}
+                                        <tr>
+                                            <td colSpan={tableColumns.orderedVisibleColumns.length + 2} className="p-0">
+                                                <div
+                                                    onClick={() => toggleGrupo(grupo.key)}
+                                                    className="flex items-center gap-2.5 px-6 py-2 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none border-b border-slate-200 transition-colors"
+                                                >
+                                                    <span className="text-slate-400 flex-shrink-0">
+                                                        {recolhido ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                                    </span>
+                                                    <span className="font-semibold text-sm text-slate-800">{grupo.label}</span>
+                                                    <span className="text-xs font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">{grupo.itens.length}</span>
+                                                    {/* Total logo após a contagem: no fim da linha ele caía fora da tela (tabela larga). */}
+                                                    <span className="text-sm font-medium text-gray-800 whitespace-nowrap">{formatBRL(grupo.total)}</span>
+                                                    <div className="flex-1 h-px bg-slate-200" />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {!recolhido && grupo.itens.map(renderLinha)}
+                                    </React.Fragment>
                                 );
                             })}
                         </tbody>

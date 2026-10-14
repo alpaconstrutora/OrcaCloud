@@ -16,8 +16,8 @@ interface Props {
   titulo?: string;
   /** Os valores em vigor, numa linha. */
   resumo: string;
-  /** As regras de cálculo, em itens. */
-  regras: React.ReactNode;
+  /** As regras de cálculo, em itens (`<li>`); sem regras, só os campos. */
+  regras?: React.ReactNode;
   /** Os campos editáveis. */
   children: React.ReactNode;
 }
@@ -40,7 +40,7 @@ export default function BlocoDeHipoteses({ id, titulo = 'Hipóteses do lançamen
       </button>
       {aberto && (
         <div className="space-y-2 border-t border-slate-200 px-3 pb-3 pt-2">
-          <ul className="list-disc space-y-0.5 pl-4">{regras}</ul>
+          {regras && <ul className="list-disc space-y-0.5 pl-4">{regras}</ul>}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{children}</div>
         </div>
       )}

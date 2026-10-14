@@ -16593,7 +16593,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               <>
                 Para cada <strong>caixa d'água</strong> (água fria) e cada <strong>aquecedor</strong> (água quente), o
                 sistema propõe a rede: barrilete no forro do pavimento da origem, uma coluna por grupo de
-                pontos próximos, ramais a 2,20 m e a prumada até cada ponto. O DN de cada trecho sai do peso
+                pontos próximos, ramais a {(hipotesesDeAgua.cotaRamalMm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m e a prumada até cada ponto. O DN de cada trecho sai do peso
                 acumulado (NBR 5626, Q = 0,3·√ΣP) pela velocidade máxima. Os trechos nascem <em>sugeridos</em>.
               </>
             )}
@@ -19498,27 +19498,43 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               </button>
             </>
           )}
-          {tarefaAberta === 'agua' && (
-            <>
-              <span className="mr-auto text-xs text-slate-500">
-                {planosDeAgua.length === 0 ? 'Sem origem de água no desenho.' : `${pontosDeAguaALigar} ponto(s) a ligar.`}
-              </span>
-              <button
-                type="button"
-                onClick={() => lancarTudo('agua', planoDaAguaCompleta)}
-                disabled={!planoDaAguaCompleta || planoDaAguaCompleta.comandos.length === 0}
-                title={
-                  planoDaAguaCompleta && planoDaAguaCompleta.comandos.length > 0
-                    ? "Peças da caixa, rede de todas as origens, hidrômetro e alimentador, e o recalque — num passo só (Ctrl+Z desfaz tudo)"
-                    : (planoDaAguaCompleta?.pendencias[0] ?? 'Nada a lançar: a água já está completa')
-                }
-                className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                <Droplets className="h-4 w-4" />
-                Lançar tudo
-              </button>
-            </>
-          )}
+          {tarefaAberta === 'agua' && (() => {
+            // 14/10/2026: o rodapé diz TUDO o que o botão lança (antes contava só os pontos da rede) e,
+            // sem ponto a ligar, que ele RELANÇA os trechos ainda sugeridos.
+            const sugeridosDaRede = planosDeAgua.filter((p) => p.comandos.length === 0).reduce((n, p) => n + p.sugeridos, 0);
+            const soRelanca = pontosDeAguaALigar === 0 && sugeridosDaRede > 0;
+            const partes = [
+              pontosDeAguaALigar > 0 ? `${pontosDeAguaALigar} ponto(s) a ligar` : soRelanca ? `${sugeridosDaRede} trecho(s) ainda sugerido(s)` : null,
+              planoDoAlimentador && !planoDoAlimentador.motivo && planoDoAlimentador.comandos.length > 0
+                ? (planoDoAlimentador.hidrometroProposto ? 'hidrômetro e alimentador' : 'alimentador')
+                : null,
+              planoDoRecalque && planoDoRecalque.inferiorId && !planoDoRecalque.motivo && planoDoRecalque.comandos.length > 0 ? 'recalque' : null,
+            ].filter(Boolean);
+            const temLancamento = !!planoDaAguaCompleta && planoDaAguaCompleta.comandos.length > 0;
+            return (
+              <>
+                <span className="mr-auto text-xs text-slate-500" data-testid="agua-rodape">
+                  {planosDeAgua.length === 0 ? 'Sem origem de água no desenho.' : partes.length > 0 ? `${partes.join(' · ')}.` : 'Nada a lançar.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => lancarTudo('agua', planoDaAguaCompleta)}
+                  disabled={!temLancamento}
+                  title={
+                    !temLancamento
+                      ? (planoDaAguaCompleta?.pendencias[0] ?? 'Nada a lançar: a água já está completa')
+                      : soRelanca
+                        ? `Apaga os ${sugeridosDaRede} trecho(s) ainda sugerido(s) e lança de novo com as hipóteses atuais (o que você confirmou fica), junto com o que faltar de caixa, alimentador e recalque. Ctrl+Z desfaz tudo.`
+                        : 'Peças da caixa, rede de todas as origens, hidrômetro e alimentador, e o recalque — num passo só (Ctrl+Z desfaz tudo)'
+                  }
+                  className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  <Droplets className="h-4 w-4" />
+                  {soRelanca ? 'Relançar tudo' : 'Lançar tudo'}
+                </button>
+              </>
+            );
+          })()}
           {tarefaAberta === 'pluvial' && (
             <>
               <span className="mr-auto text-xs text-slate-500">Calhas, bocais, condutores e a saída pluvial.</span>

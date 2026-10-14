@@ -3,9 +3,15 @@
  * INFERIOR. Vazão, Forchheimer, DN de sucção e recalque, altura manométrica e
  * a potência com o motor comercial; e o botão que lança bomba, sucção e
  * recalque (sugeridos, um lote).
+ *
+ * 14/10/2026: o botão antes das premissas, que ficam recolhidas; a cota do
+ * percurso virou campo (era constante escondida); campo numérico que só grava
+ * ao sair — no rendimento, o primeiro "0" de 0,65 virava 0,20 na hora.
  */
 import React from 'react';
 import type { HipotesesDeRecalque, PlanoDoRecalque } from '../../utils/blueprintRecalque';
+import BlocoDeHipoteses from './BlocoDeHipoteses';
+import CampoNumericoDeHipotese from './CampoNumericoDeHipotese';
 
 interface Props {
   plano: PlanoDoRecalque;
@@ -15,14 +21,9 @@ interface Props {
 }
 
 const n = (v: number, casas = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
-const campo = 'w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums';
 
 export default function PainelRecalque({ plano, hip, onHip, onLancar }: Props) {
   const motivoDoBotao = plano.motivo ?? (plano.comandos.length === 0 ? 'Bomba, sucção e recalque confirmados já estão no desenho' : undefined);
-  const numero = (v: string, padrao: number) => {
-    const x = Number(v.replace(',', '.'));
-    return Number.isFinite(x) ? x : padrao;
-  };
   return (
     <div className="space-y-2" data-testid="recalque">
       <p className="text-xs font-semibold text-slate-700">Recalque (inferior → superior)</p>
@@ -56,25 +57,41 @@ export default function PainelRecalque({ plano, hip, onHip, onLancar }: Props) {
           ))}
         </>
       )}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-600">
+      <button
+        type="button"
+        onClick={onLancar}
+        disabled={!!motivoDoBotao}
+        title={motivoDoBotao}
+        className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {plano.apagados > 0 ? 'Relançar recalque' : 'Lançar bomba e recalque'}
+      </button>
+      <BlocoDeHipoteses
+        id="recalque"
+        titulo="Hipóteses do recalque"
+        resumo={[`${n(hip.horasDeFuncionamento, 0)} h/dia`, `rendimento ${n(hip.rendimento, 2)}`, `percurso a ${hip.cotaDoPercursoMm} mm`].join(' · ')}
+        regras={
+          <>
+            <li>Vazão = o consumo diário em {n(hip.horasDeFuncionamento, 0)} h de bomba por dia; DN do recalque por Forchheimer, o da sucção um acima.</li>
+            <li>Potência = vazão × altura manométrica ÷ rendimento ({n(hip.rendimento, 2)}), arredondada para o motor comercial acima.</li>
+            <li>O recalque corre pelas paredes a {hip.cotaDoPercursoMm} mm do piso até subir na caixa superior.</li>
+          </>
+        }
+      >
         <label className="flex items-center gap-1.5">
           Horas por dia
-          <input type="number" min={1} max={24} step={1} value={hip.horasDeFuncionamento} onChange={(e) => onHip({ ...hip, horasDeFuncionamento: Math.min(24, Math.max(1, numero(e.target.value, 6))) })} aria-label="Horas de funcionamento da bomba por dia" className={campo} />
+          <CampoNumericoDeHipotese value={hip.horasDeFuncionamento} onCommit={(v) => onHip({ ...hip, horasDeFuncionamento: v })} min={1} max={24} step={1} aria-label="Horas de funcionamento da bomba por dia" />
         </label>
         <label className="flex items-center gap-1.5">
           Rendimento
-          <input type="number" min={0.2} max={0.9} step={0.05} value={hip.rendimento} onChange={(e) => onHip({ ...hip, rendimento: Math.min(0.9, Math.max(0.2, numero(e.target.value, 0.5))) })} aria-label="Rendimento do conjunto motor-bomba" className={campo} />
+          <CampoNumericoDeHipotese value={hip.rendimento} onCommit={(v) => onHip({ ...hip, rendimento: v })} min={0.2} max={0.9} step={0.05} casas={2} aria-label="Rendimento do conjunto motor-bomba" />
         </label>
-        <button
-          type="button"
-          onClick={onLancar}
-          disabled={!!motivoDoBotao}
-          title={motivoDoBotao}
-          className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {plano.apagados > 0 ? 'Relançar recalque' : 'Lançar bomba e recalque'}
-        </button>
-      </div>
+        <label className="flex items-center gap-1.5">
+          Percurso a
+          <CampoNumericoDeHipotese value={hip.cotaDoPercursoMm} onCommit={(v) => onHip({ ...hip, cotaDoPercursoMm: v })} min={0} max={6000} step={100} aria-label="Cota do percurso do recalque em mm" />
+          mm
+        </label>
+      </BlocoDeHipoteses>
     </div>
   );
 }

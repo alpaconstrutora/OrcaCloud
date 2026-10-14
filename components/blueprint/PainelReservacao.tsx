@@ -3,9 +3,15 @@
  * (os ambientes pelo nome, ou a declarada), o consumo diário, o volume a
  * reservar e a comparação com a(s) caixa(s) do desenho — e as premissas, que
  * são do estudo.
+ *
+ * 14/10/2026: as premissas recolhidas abaixo do resultado; todas editáveis
+ * (pessoas por dependência e a fração do inferior eram constantes escondidas);
+ * campo numérico que só grava ao sair (apagar "Per capita" gravava 1 L/dia).
  */
 import React from 'react';
 import type { DimensionamentoDaReservacao, HipotesesDeReservatorio } from '../../utils/blueprintReservacao';
+import BlocoDeHipoteses from './BlocoDeHipoteses';
+import CampoNumericoDeHipotese from './CampoNumericoDeHipotese';
 
 interface Props {
   r: DimensionamentoDaReservacao;
@@ -14,7 +20,7 @@ interface Props {
 }
 
 const litros = (v: number) => `${Math.round(v).toLocaleString('pt-BR')} L`;
-const campo = 'w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums';
+const num = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
 export default function PainelReservacao({ r, hip, onHip }: Props) {
   const cor =
@@ -23,10 +29,7 @@ export default function PainelReservacao({ r, hip, onHip }: Props) {
       : r.situacao === 'INSUFICIENTE' || r.situacao === 'SEM_VOLUME'
         ? 'border-red-200 bg-red-50 text-red-800'
         : 'border-amber-200 bg-amber-50 text-amber-800';
-  const numero = (v: string, padrao: number, min: number) => {
-    const n = Number(v.replace(',', '.'));
-    return Number.isFinite(n) ? Math.max(min, n) : padrao;
-  };
+  const fracaoPct = Math.round(hip.fracaoInferior * 100);
   return (
     <div className="space-y-2" data-testid="reservacao">
       <p className="text-xs font-semibold text-slate-700">Reservação</p>
@@ -48,27 +51,60 @@ export default function PainelReservacao({ r, hip, onHip }: Props) {
         <dt>Volume no desenho</dt>
         <dd className="tabular-nums">{litros(r.declaradoL)}</dd>
       </dl>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-600">
+      <BlocoDeHipoteses
+        id="reservacao"
+        titulo="Hipóteses da reservação"
+        resumo={[
+          hip.populacaoDeclarada > 0 ? `${hip.populacaoDeclarada} pessoa(s) declaradas` : `${num(hip.pessoasPorDormitorio)} por dormitório`,
+          `${num(hip.perCapitaLDia)} L/dia`,
+          `${num(hip.diasDeReserva)} dia(s)`,
+          `inferior ${fracaoPct} %`,
+        ].join(' · ')}
+        regras={
+          <>
+            <li data-testid="reservacao-regra-populacao">
+              População: {num(hip.pessoasPorDormitorio)} por dormitório ou suíte e {num(hip.pessoasPorDependencia)} por dependência, pelo
+              nome do ambiente; com a declarada acima de 0, vale ela.
+            </li>
+            <li>Reserva mínima da NBR 5626: o consumo de 24 h — vezes os dias de reserva.</li>
+            <li>Com reservatório inferior, ele guarda {fracaoPct} % do volume e o superior o resto.</li>
+          </>
+        }
+      >
         <label className="flex items-center gap-1.5">
           Pessoas por dormitório
-          <input type="number" min={1} step={1} value={hip.pessoasPorDormitorio} onChange={(e) => onHip({ ...hip, pessoasPorDormitorio: numero(e.target.value, 2, 1) })} aria-label="Pessoas por dormitório" className={campo} />
+          <CampoNumericoDeHipotese value={hip.pessoasPorDormitorio} onCommit={(v) => onHip({ ...hip, pessoasPorDormitorio: v })} min={1} max={10} step={1} casas={1} aria-label="Pessoas por dormitório" />
+        </label>
+        <label className="flex items-center gap-1.5">
+          Por dependência
+          <CampoNumericoDeHipotese value={hip.pessoasPorDependencia} onCommit={(v) => onHip({ ...hip, pessoasPorDependencia: v })} min={0} max={10} step={1} casas={1} aria-label="Pessoas por dependência" />
         </label>
         <label className="flex items-center gap-1.5">
           Per capita (L/dia)
-          <input type="number" min={50} step={10} value={hip.perCapitaLDia} onChange={(e) => onHip({ ...hip, perCapitaLDia: numero(e.target.value, 200, 1) })} aria-label="Consumo per capita em litros por dia" className={campo} />
+          <CampoNumericoDeHipotese value={hip.perCapitaLDia} onCommit={(v) => onHip({ ...hip, perCapitaLDia: v })} min={50} max={1000} step={10} aria-label="Consumo per capita em litros por dia" />
         </label>
         <label className="flex items-center gap-1.5">
           Dias de reserva
-          <input type="number" min={1} step={0.5} value={hip.diasDeReserva} onChange={(e) => onHip({ ...hip, diasDeReserva: numero(e.target.value, 1, 1) })} aria-label="Dias de reserva" className={campo} />
+          <CampoNumericoDeHipotese value={hip.diasDeReserva} onCommit={(v) => onHip({ ...hip, diasDeReserva: v })} min={1} max={5} step={0.5} casas={1} aria-label="Dias de reserva" />
         </label>
         <label className="flex items-center gap-1.5">
           População declarada
-          <input type="number" min={0} step={1} value={hip.populacaoDeclarada} onChange={(e) => onHip({ ...hip, populacaoDeclarada: Math.round(numero(e.target.value, 0, 0)) })} aria-label="População declarada (0 = contar pelos dormitórios)" className={campo} />
+          <CampoNumericoDeHipotese value={hip.populacaoDeclarada} onCommit={(v) => onHip({ ...hip, populacaoDeclarada: v })} min={0} max={100000} step={1} aria-label="População declarada (0 = contar pelos dormitórios)" />
         </label>
-      </div>
-      <p className="text-xs text-slate-500">
-        População: 2 por dormitório ou suíte e 1 por dependência, pelo nome do ambiente; com a declarada acima de 0, vale ela. Reserva mínima da NBR 5626: o consumo de 24 h.
-      </p>
+        <label className="flex items-center gap-1.5">
+          No inferior
+          <CampoNumericoDeHipotese
+            value={fracaoPct}
+            onCommit={(v) => onHip({ ...hip, fracaoInferior: v / 100 })}
+            min={0}
+            max={100}
+            step={5}
+            aria-label="Fração do volume no reservatório inferior em por cento"
+            title="Só vale com reservatório inferior no desenho: a parte do volume que fica embaixo (padrão do sistema: 60 % embaixo, 40 % em cima)"
+          />
+          %
+        </label>
+      </BlocoDeHipoteses>
     </div>
   );
 }

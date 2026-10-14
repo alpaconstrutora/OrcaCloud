@@ -3912,6 +3912,18 @@ describe('BlueprintEditor · ribbon', () => {
     expect(within(gaveta).getByLabelText('Rota máxima do ramal de água em vezes a linha reta')).toHaveValue('1.5');
     await user.click(within(gaveta).getByLabelText('Ramais de água pelas paredes'));
     expect(bloco).toHaveTextContent(/traçado reto/);
+
+    // 14/10/2026 (painéis): o rodapé diz que, sem ponto a ligar, o botão RELANÇA os sugeridos.
+    const dialog = gaveta.closest('[role="dialog"]') as HTMLElement;
+    expect(within(dialog).getByTestId('agua-rodape')).toHaveTextContent(/trecho\(s\) ainda sugerido\(s\)/);
+    expect(within(dialog).getByRole('button', { name: /^relançar tudo$/i })).toHaveAttribute('title', expect.stringMatching(/o que você confirmou fica/));
+    // O cabeçalho lê a cota do ramal (antes dizia "2,20 m" fixo).
+    expect(dialog).toHaveTextContent(/ramais a 2,20 m/);
+    const ramal = within(gaveta).getByLabelText('Cota do ramal em mm');
+    await user.clear(ramal);
+    await user.type(ramal, '1800');
+    await user.tab();
+    await waitFor(() => expect(dialog).toHaveTextContent(/ramais a 1,80 m/));
   });
 
   it('Hidráulica › Esgoto automático (18/09/2026): a gaveta mostra o pavimento, lança a rede sugerida até a caixa de inspeção e o botão zera', async () => {

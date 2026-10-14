@@ -39,6 +39,8 @@ import { uploadDiaryMedia, removeDiaryMedia, diaryEntryMediaRefs } from '../serv
 import { salvarRegistroDiario, excluirRegistroDiario, carregarRegistrosDiario, sincronizarEvolucaoNoPlanejamento } from '../services/diaryEntryService';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { useStore } from '../store/useStore';
+// `toISOString()` é UTC: depois das 21h em Brasília o registro novo nascia com a data de amanhã.
+import { hojeLocal } from '../utils/baixaRecebivel';
 import Button from './ui/Button';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import DiaryMobileApp from './DiaryMobileApp';
@@ -158,7 +160,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         setIsAdding(false);
         setEditingId(null);
         setFormData({
-            date: new Date().toISOString().split('T')[0],
+            date: hojeLocal(),
             weather: 'Ensolarado',
             description: '',
             temperature: '28°/18°',
@@ -186,7 +188,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
     const [formData, setFormData] = useState<Partial<DiaryEntry>>({
-        date: new Date().toISOString().split('T')[0],
+        date: hojeLocal(),
         weather: 'Ensolarado',
         description: '',
         temperature: '28°/18°',
@@ -365,7 +367,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
     const resetForm = () => {
         setFormData({
-            date: new Date().toISOString().split('T')[0],
+            date: hojeLocal(),
             weather: 'Ensolarado',
             description: '',
             temperature: '28°/18°',

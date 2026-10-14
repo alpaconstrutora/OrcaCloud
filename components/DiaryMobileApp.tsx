@@ -10,6 +10,8 @@ import { uploadDiaryMedia, removeDiaryMedia, diaryEntryMediaRefs } from '../serv
 import { salvarRegistroDiario, excluirRegistroDiario, sincronizarEvolucaoNoPlanejamento, DiaryWriteResult } from '../services/diaryEntryService';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { onlyDiarios, isObra } from '../utils/projectClassification';
+import { hojeLocal } from '../utils/baixaRecebivel';
+import { salvarRascunho, lerRascunho, apagarRascunho, listarRascunhos, rascunhoDifere, quandoFoiGuardado, RascunhoDiario } from '../utils/diaryDraft';
 import { isUnplannedActivity, setUnplanned } from '../utils/diaryActivities';
 import { vincularAtividade, temAtividadeVinculada, ItemVinculavel } from '../utils/diaryPlanningLink';
 import { useDiaryLinkedPlanning } from '../hooks/useDiaryLinkedPlanning';
@@ -74,12 +76,6 @@ function parseISODate(iso?: string): Date | null {
     return new Date(y, m - 1, d);
 }
 
-function toISODate(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-const TODAY_ISO = toISODate(new Date());
-
 const WEEKDAY = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 const MONTH_SHORT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -127,7 +123,9 @@ const STATUSES: NonNullable<DiaryEntry['status']>[] = ['Rascunho', 'Em Análise'
 function emptyEntry(): DiaryEntry {
     return {
         id: crypto.randomUUID(),
-        date: TODAY_ISO,
+        // Na hora de abrir, não ao carregar o módulo: app instalado aberto desde ontem
+        // fazia o registro novo nascer com a data de ontem.
+        date: hojeLocal(),
         weather: 'Ensolarado',
         temperature: '',
         description: '',
@@ -199,7 +197,7 @@ const INPUT = 'w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl t
 
 // ── Cartão de registro ───────────────────────────────────────────────────────
 
-const EntryCard = React.memo<{ entry: DiaryEntry; onPress: (e: DiaryEntry) => void }>(({ entry, onPress }) => {
+const EntryCard = React.memo<{ entry: DiaryEntry; naoSalvo?: boolean; onPress: (e: DiaryEntry) => void }>(({ entry, naoSalvo, onPress }) => {
     const shifts = entry.weatherShifts || [];
     const impraticavel = shifts.some(s => s.condition === 'Impraticável');
     const fotos = entry.images?.length || 0;
@@ -241,6 +239,11 @@ const EntryCard = React.memo<{ entry: DiaryEntry; onPress: (e: DiaryEntry) => vo
                         {atividades > 0 && <span className="flex items-center gap-1"><ClipboardList className="w-3 h-3" />{atividades}</span>}
                         {efetivo > 0 && <span className="flex items-center gap-1"><Users className="w-3 h-3" />{efetivo}</span>}
                         {fotos > 0 && <span className="flex items-center gap-1"><ImageIcon className="w-3 h-3" />{fotos}</span>}
+                        {naoSalvo && (
+                            <span className="flex items-center gap-1 text-orange-600" title="Há alterações deste registro guardadas só neste aparelho">
+                                <AlertTriangle className="w-3 h-3" />Não salvo
+                            </span>
+                        )}
                         {hasImpediment(entry) && (
                             <span className="flex items-center gap-1 text-amber-600"><AlertTriangle className="w-3 h-3" />Impedimento</span>
                         )}
@@ -418,8 +421,50 @@ const EntrySheet: React.FC<{
     onClose: () => void;
     onSave: (e: DiaryEntry) => void;
     onDelete: (id: string) => void;
-}> = ({ previa, entry, isNew, saving, upload, itens, onClose, onSave, onDelete }) => {
+    /** Falha ao salvar/excluir: a folha continua aberta, então o aviso mora NELA — o toast fica atrás (z-20 < z-30). */
+    erroSalvar: string | null;
+}> = ({ previa, entry, isNew, saving, upload, itens, onClose, onSave, onDelete, erroSalvar }) => {
     const [form, setForm] = useState<DiaryEntry>(entry);
+    // Rascunho no aparelho (sinal caiu / aba descarregada ao abrir a câmera). Registro novo usa a chave "novo".
+    const chaveId = isNew ? null : entry.id;
+    const [pendente, setPendente] = useState<RascunhoDiario | null>(() => {
+        const r = lerRascunho(upload.projectId, chaveId);
+        return r && rascunhoDifere(r.entry, entry) ? r : null;
+    });
+    const formRef = useRef(form);
+    formRef.current = form;
+    const inicialRef = useRef(entry);
+    const guardar = useCallback(() => {
+        const f = formRef.current;
+        if (rascunhoDifere(f, inicialRef.current)) salvarRascunho(upload.projectId, chaveId, f);
+    }, [upload.projectId, chaveId]);
+    useEffect(() => {
+        if (!rascunhoDifere(form, inicialRef.current)) return;
+        // Editou sem escolher: o rascunho antigo é substituído pelo que está na tela.
+        setPendente(null);
+        const t = window.setTimeout(guardar, 400);
+        return () => window.clearTimeout(t);
+    }, [form, guardar]);
+    useEffect(() => {
+        // Abrir a câmera põe a página em segundo plano — é quando o celular descarrega a aba.
+        const aoEsconder = () => { if (document.visibilityState === 'hidden') guardar(); };
+        document.addEventListener('visibilitychange', aoEsconder);
+        window.addEventListener('pagehide', guardar);
+        return () => {
+            document.removeEventListener('visibilitychange', aoEsconder);
+            window.removeEventListener('pagehide', guardar);
+        };
+    }, [guardar]);
+    const recuperar = () => {
+        if (!pendente) return;
+        const r = pendente;
+        setPendente(null);
+        setForm(r.entry);
+    };
+    const descartar = () => {
+        apagarRascunho(upload.projectId, chaveId);
+        setPendente(null);
+    };
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
     /** Falha de envio de foto: aparece NO cartão de Fotos — quem enviou está rolado ali, não no topo. */
@@ -433,6 +478,8 @@ const EntrySheet: React.FC<{
     const cancelar = () => {
         const originais = new Set(diaryEntryMediaRefs(entry));
         void removeDiaryMedia((form.images || []).filter(r => !originais.has(r)));
+        // Cancelar é descartar de propósito — o rascunho do aparelho vai junto.
+        apagarRascunho(upload.projectId, chaveId);
         onClose();
     };
 
@@ -538,6 +585,25 @@ const EntrySheet: React.FC<{
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                {pendente && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 space-y-2.5">
+                        <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs font-bold text-orange-700">
+                                Há alterações não salvas deste registro guardadas neste aparelho ({quandoFoiGuardado(pendente.salvoEm)}).
+                                Se você continuar editando, elas são substituídas.
+                            </p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={recuperar} className="flex-1 h-10 rounded-xl bg-orange-600 text-white text-xs font-black">
+                                Recuperar
+                            </button>
+                            <button onClick={descartar} className="flex-1 h-10 rounded-xl bg-white border border-orange-200 text-orange-700 text-xs font-bold">
+                                Descartar
+                            </button>
+                        </div>
+                    </div>
+                )}
                 {erro && (
                     <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 flex items-start gap-2">
                         <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
@@ -838,6 +904,12 @@ const EntrySheet: React.FC<{
             </div>
 
             {/* Rodapé de ação */}
+            {erroSalvar && (
+                <div role="alert" className="bg-red-50 border-t border-red-100 px-4 py-2.5 flex items-start gap-2 flex-shrink-0">
+                    <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs font-bold text-red-600">{erroSalvar}</p>
+                </div>
+            )}
             <div className="bg-white border-t border-slate-100 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-2 flex-shrink-0">
                 <button
                     onClick={cancelar}
@@ -901,6 +973,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     const [editing, setEditing] = useState<DiaryEntry | null>(null);
     const [isNew, setIsNew] = useState(false);
     const [toast, setToast] = useState<string | null>(null);
+    const [erroSalvar, setErroSalvar] = useState<string | null>(null);
 
     const notify = useCallback((msg: string) => {
         setToast(msg);
@@ -968,6 +1041,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     ) => {
         if (!project) return;
         setSaving(true);
+        setErroSalvar(null);
         try {
             const { entries: gravadas, anterior } = await gravar(project.id);
             // §22 — estado local com a lista devolvida, sem recarregar o projeto.
@@ -991,7 +1065,10 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
             if (orfaos.length > 0) void removeDiaryMedia(orfaos);
         } catch (err) {
             console.error('Erro ao salvar registro do diário:', err);
-            notify('Falha ao salvar. Tente novamente.');
+            // A folha continua aberta e o rascunho segue guardado no aparelho.
+            setErroSalvar(typeof navigator !== 'undefined' && navigator.onLine === false
+                ? 'Sem conexão. O registro ficou guardado neste aparelho — salve de novo quando o sinal voltar.'
+                : 'Falha ao salvar. O registro ficou guardado neste aparelho — tente de novo.');
         } finally {
             setSaving(false);
         }
@@ -1000,16 +1077,34 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     const handleSaveEntry = useCallback((entry: DiaryEntry) => {
         const existe = entries.some(e => e.id === entry.id);
         persist(
-            id => salvarRegistroDiario(id, entry),
+            async id => {
+                const r = await salvarRegistroDiario(id, entry);
+                // Gravou no banco: o rascunho do aparelho deixa de ser necessário.
+                apagarRascunho(id, isNew ? null : entry.id);
+                apagarRascunho(id, entry.id);
+                return r;
+            },
             existe ? 'Registro atualizado.' : 'Registro salvo.',
             diaryEntryMediaRefs(entry),
             temAtividadeVinculada(entry.activities),
         );
-    }, [entries, persist]);
+    }, [entries, persist, isNew]);
 
     const handleDeleteEntry = useCallback((id: string) => {
-        persist(projectId => excluirRegistroDiario(projectId, id), 'Registro excluído.');
+        persist(async projectId => {
+            const r = await excluirRegistroDiario(projectId, id);
+            apagarRascunho(projectId, id);
+            return r;
+        }, 'Registro excluído.');
     }, [persist]);
+
+    // Rascunhos deste diário guardados no aparelho — relidos sempre que a folha fecha.
+    const rascunhos = useMemo(
+        () => (project && !editing ? listarRascunhos(project.id) : []),
+        [project, editing],
+    );
+    const idsNaoSalvos = useMemo(() => new Set(rascunhos.map(r => r.entryId).filter(Boolean)), [rascunhos]);
+    const novoNaoSalvo = rascunhos.find(r => r.entryId === null)?.rascunho || null;
 
     const diarioAtual = diarios.find(d => d.id === selectedId);
     const podeVoltar = !initialProjectId && !!selectedId;
@@ -1080,6 +1175,21 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
                         <ResumoScreen entries={entries} />
                     ) : (
                         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                            {novoNaoSalvo && (
+                                <button
+                                    onClick={() => { setToast(null); setErroSalvar(null); setIsNew(true); setEditing(novoNaoSalvo.entry); }}
+                                    className="w-full text-left bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 flex items-center gap-3 active:bg-orange-100"
+                                >
+                                    <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-black text-orange-700">Registro novo não salvo</p>
+                                        <p className="text-[11px] font-medium text-orange-600 truncate">
+                                            Guardado neste aparelho {quandoFoiGuardado(novoNaoSalvo.salvoEm)} · {fmtLong(novoNaoSalvo.entry.date)}
+                                        </p>
+                                    </div>
+                                    <span className="text-xs font-black text-orange-700">Continuar</span>
+                                </button>
+                            )}
                             {visible.length === 0 ? (
                                 <div className="flex flex-col items-center py-16 gap-3">
                                     <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-sm">
@@ -1097,7 +1207,8 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
                                 <EntryCard
                                     key={e.id}
                                     entry={e}
-                                    onPress={entry => { setToast(null); setIsNew(false); setEditing(entry); }}
+                                    naoSalvo={idsNaoSalvos.has(e.id)}
+                                    onPress={entry => { setToast(null); setErroSalvar(null); setIsNew(false); setEditing(entry); }}
                                 />
                             ))}
                             <div className="h-24" />
@@ -1108,7 +1219,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
                     {nav === 'registros' && !loading && (
                         <div className="absolute bottom-[calc(72px+env(safe-area-inset-bottom))] right-5 z-10">
                             <button
-                                onClick={() => { setToast(null); setIsNew(true); setEditing(emptyEntry()); }}
+                                onClick={() => { setToast(null); setErroSalvar(null); setIsNew(true); setEditing(emptyEntry()); }}
                                 className="w-14 h-14 rounded-full bg-blue-600 text-white shadow-xl shadow-blue-300 flex items-center justify-center active:scale-95 transition-all"
                             >
                                 <Plus className="w-6 h-6" />
@@ -1143,9 +1254,10 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
                     saving={saving}
                     itens={planejamento.itens}
                     upload={{ orgId: project?.organization_id ?? project?.settings?.organizationId ?? null, projectId: project?.id ?? '' }}
-                    onClose={() => setEditing(null)}
+                    onClose={() => { setEditing(null); setErroSalvar(null); }}
                     onSave={handleSaveEntry}
                     onDelete={handleDeleteEntry}
+                    erroSalvar={erroSalvar}
                 />
             )}
 

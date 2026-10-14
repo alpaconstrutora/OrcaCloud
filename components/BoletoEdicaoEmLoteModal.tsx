@@ -4,6 +4,7 @@ import { boletoService } from '../services/boletoService';
 import type { Boleto } from '../types';
 import { formatBRL } from './BoletoFormModal';
 import CostCenterSelect, { CostCenterOption } from './CostCenterSelect';
+import PlanoContasSelect, { PlanoContasOption } from './PlanoContasSelect';
 import SupplierSelect, { SupplierOption } from './SupplierSelect';
 import HierarchicalSelect, { HierarchicalSelectItem } from './HierarchicalSelect';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -35,15 +36,20 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     const [supplierId, setSupplierId] = useState('');
     const [projectId, setProjectId] = useState('');
     const [costCenterId, setCostCenterId] = useState('');
+    const [planoDeContasId, setPlanoDeContasId] = useState('');
     const [categoryId, setCategoryId] = useState('');
     const [descricao, setDescricao] = useState('');
-    // Conta Financeira (financial_categories) — carregada aqui mesmo: é a única
-    // dimensão do lote que o BoletoManager não tem em mãos.
+    // Conta Financeira e Plano de Contas — carregados aqui mesmo: o BoletoManager
+    // não os tem em mãos (só busca Fornecedor/Obra/Centro de Custo para a tabela).
     const [contasFinanceiras, setContasFinanceiras] = useState<HierarchicalSelectItem[]>([]);
+    const [planoContas, setPlanoContas] = useState<PlanoContasOption[]>([]);
     useEffect(() => {
         financialRegistryService.listChartOfAccounts(organizationId)
             .then(rows => setContasFinanceiras(rows.map(c => ({ id: c.id, name: c.name, parentId: c.parent_id ?? null }))))
             .catch(() => setContasFinanceiras([]));
+        financialRegistryService.listPlanoContas(organizationId)
+            .then(setPlanoContas)
+            .catch(() => setPlanoContas([]));
     }, [organizationId]);
     const [saving, setSaving] = useState(false);
     const [result, setResult] = useState<ActionResult>(null);
@@ -54,12 +60,13 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     const mixedBeneficiario = beneficiarios.length > 1;
 
     function buildFields() {
-        const fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'category_id' | 'project_id' | 'descricao'>> = {};
+        const fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'plano_de_contas_id' | 'category_id' | 'project_id' | 'descricao'>> = {};
         // "— Sem vínculo —" (SEM_VINCULO) desvincula (grava null); "— Não alterar —" ('') não
         // manda o campo — mesmo defeito do formulário de 1 boleto corrigido em 14/10/2026.
-        if (supplierId)        fields.supplier_id    = supplierId === SEM_VINCULO ? null : supplierId;
-        if (projectId)         fields.project_id     = projectId === SEM_VINCULO ? null : projectId;
-        if (costCenterId)      fields.cost_center_id = costCenterId === SEM_VINCULO ? null : costCenterId;
+        if (supplierId)        fields.supplier_id        = supplierId === SEM_VINCULO ? null : supplierId;
+        if (projectId)         fields.project_id         = projectId === SEM_VINCULO ? null : projectId;
+        if (costCenterId)      fields.cost_center_id     = costCenterId === SEM_VINCULO ? null : costCenterId;
+        if (planoDeContasId)   fields.plano_de_contas_id = planoDeContasId === SEM_VINCULO ? null : planoDeContasId;
         if (categoryId)        fields.category_id    = categoryId;
         if (descricao.trim())  fields.descricao      = descricao.trim();
         return fields;
@@ -113,7 +120,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     }
 
     const allDone = result !== null && result.errors.length === 0;
-    const noneChanged = !supplierId && !projectId && !costCenterId && !categoryId && !descricao.trim();
+    const noneChanged = !supplierId && !projectId && !costCenterId && !planoDeContasId && !categoryId && !descricao.trim();
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -252,6 +259,33 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                         placeholder="— Não alterar —"
                                         disabled={saving}
                                         hoverCls="hover:bg-blue-50"
+                                    />
+                                )}
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Plano de Contas</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPlanoDeContasId(v => (v === SEM_VINCULO ? '' : SEM_VINCULO))}
+                                        disabled={saving}
+                                        className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-50"
+                                    >
+                                        {planoDeContasId === SEM_VINCULO ? 'Cancelar' : 'Sem vínculo'}
+                                    </button>
+                                </div>
+                                {planoDeContasId === SEM_VINCULO ? (
+                                    <div className="w-full px-3 py-2.5 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-sm text-gray-500">
+                                        Será desvinculado
+                                    </div>
+                                ) : (
+                                    <PlanoContasSelect
+                                        planoContas={planoContas}
+                                        value={planoDeContasId}
+                                        onChange={setPlanoDeContasId}
+                                        placeholder="— Não alterar —"
+                                        disabled={saving}
                                     />
                                 )}
                             </div>

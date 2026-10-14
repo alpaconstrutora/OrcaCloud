@@ -996,7 +996,7 @@ export const boletoService = {
     async associarEmLote(
         ids: string[],
         organizationId: string,
-        fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'category_id' | 'project_id' | 'descricao'>>,
+        fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'plano_de_contas_id' | 'category_id' | 'project_id' | 'descricao'>>,
         userEmail?: string,
     ): Promise<void> {
         if (!ids.length || !Object.keys(fields).length) return;

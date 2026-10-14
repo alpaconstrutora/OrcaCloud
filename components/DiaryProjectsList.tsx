@@ -319,7 +319,7 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
         <div className="space-y-6">
             {showMobilePreview && (
                 <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Diário de Obras">
-                    <DiaryMobileApp projects={projects} />
+                    <DiaryMobileApp projects={projects} previa />
                 </MobilePreviewFrame>
             )}
             {/* §20 — h1 solto + subtítulo mt-1.5; ações na mesma linha, à direita (mesmo arranjo de ProjectList) */}

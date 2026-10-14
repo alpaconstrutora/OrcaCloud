@@ -790,7 +790,9 @@ const Layout: React.FC<LayoutProps> = ({
 
   return (
     <NavContext.Provider value={{ activeView, isCollapsed, t, onChangeView, setIsMobileMenuOpen }}>
-    <div className={`flex h-screen overflow-hidden font-sans relative ${w.shell}`}>
+    {/* `h-dvh` onde houver: no Safari/Chrome do celular `100vh` é a altura com a barra do navegador
+        RECOLHIDA — com ela à vista, o rodapé das telas mobile (Diário, Tarefas) ficava escondido atrás dela. */}
+    <div className={`flex h-screen supports-[height:100dvh]:h-dvh overflow-hidden font-sans relative ${w.shell}`}>
       {/* Sidebar - Desktop */}
       <aside className={`hidden md:flex flex-col border-r shadow-2xl relative z-20 transition-all duration-300 ease-in-out ${t.shell} ${isCollapsed ? 'w-[68px]' : 'w-[260px]'}`}>
         {/* Header Logo + Collapse Toggle */}

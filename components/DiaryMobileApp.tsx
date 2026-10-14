@@ -24,8 +24,16 @@ import { useDiaryLinkedPlanning } from '../hooks/useDiaryLinkedPlanning';
  *
  * É usado em dois lugares (o mesmo arranjo de `TasksMobileApp`):
  *  - celular de verdade  → `DiaryProjectsList` / `ProjectDiaryManager` devolvem
- *    este componente no lugar da tela;
- *  - desktop             → dentro de `MobilePreviewFrame` (botão "Mobile").
+ *    este componente no lugar da tela. Ele fica DENTRO do Layout (o cabeçalho
+ *    com menu e seletor de organização continua valendo) e ocupa a área de
+ *    conteúdo inteira — anula o gutter do `<main>` e não desenha barra de status
+ *    (o telefone já tem a dele);
+ *  - desktop             → dentro de `MobilePreviewFrame` (botão "Mobile"), com
+ *    `previa`: aí o iframe é o "telefone" e a barra de status falsa fica, porque
+ *    a moldura desenha o notch por cima dos 24px do topo.
+ *
+ * O rodapé soma `env(safe-area-inset-bottom)` (barra de gestos do iPhone); no
+ * iframe da prévia isso vale 0.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,6 +60,8 @@ interface DiaryMobileAppProps {
     projects: ProjectSummary[];
     /** Diário já aberto no desktop: entra direto na lista de registros dele. */
     initialProjectId?: string | null;
+    /** Dentro da moldura de prévia do desktop (barra de status falsa, altura do iframe). */
+    previa?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -398,6 +408,7 @@ const ResumoScreen: React.FC<{ entries: DiaryEntry[] }> = ({ entries }) => {
 // ── Folha: criar/editar registro ─────────────────────────────────────────────
 
 const EntrySheet: React.FC<{
+    previa: boolean;
     entry: DiaryEntry;
     isNew: boolean;
     saving: boolean;
@@ -407,7 +418,7 @@ const EntrySheet: React.FC<{
     onClose: () => void;
     onSave: (e: DiaryEntry) => void;
     onDelete: (id: string) => void;
-}> = ({ entry, isNew, saving, upload, itens, onClose, onSave, onDelete }) => {
+}> = ({ previa, entry, isNew, saving, upload, itens, onClose, onSave, onDelete }) => {
     const [form, setForm] = useState<DiaryEntry>(entry);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
@@ -492,7 +503,7 @@ const EntrySheet: React.FC<{
 
     return (
         <div className="absolute inset-0 z-30 bg-[#eef2ff] flex flex-col">
-            <StatusBar />
+            {previa && <StatusBar />}
             {/* Cabeçalho */}
             <div className="bg-white px-4 py-3 flex items-center gap-3 border-b border-slate-100 flex-shrink-0">
                 <button onClick={cancelar} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
@@ -808,7 +819,7 @@ const EntrySheet: React.FC<{
             </div>
 
             {/* Rodapé de ação */}
-            <div className="bg-white border-t border-slate-100 px-4 py-3 flex items-center gap-2 flex-shrink-0">
+            <div className="bg-white border-t border-slate-100 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-2 flex-shrink-0">
                 <button
                     onClick={cancelar}
                     className="h-12 px-5 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold active:scale-95 transition-all"
@@ -829,7 +840,7 @@ const EntrySheet: React.FC<{
                 não apareceria dentro do iframe da prévia. */}
             {confirmDelete && (
                 <div className="absolute inset-0 z-40 bg-black/50 flex items-end">
-                    <div className="w-full bg-white rounded-t-3xl p-5 space-y-3">
+                    <div className="w-full bg-white rounded-t-3xl p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-3">
                         <h3 className="text-base font-black text-slate-900">Excluir registro?</h3>
                         <p className="text-sm font-medium text-slate-500">
                             O registro de {fmtLong(form.date)} será removido do diário. Não dá para desfazer.
@@ -860,7 +871,7 @@ const EntrySheet: React.FC<{
 type NavTab = 'registros' | 'resumo';
 type FilterTab = 'todos' | 'rascunho' | 'impedimentos';
 
-const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjectId }) => {
+const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjectId, previa = false }) => {
     const [selectedId, setSelectedId] = useState<string | null>(initialProjectId || null);
     const [project, setProject] = useState<LoadedProject | null>(null);
     const [loading, setLoading] = useState(false);
@@ -984,8 +995,12 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     const podeVoltar = !initialProjectId && !!selectedId;
 
     return (
-        <div className="flex flex-col h-screen bg-[#eef2ff] font-sans overflow-hidden relative">
-            <StatusBar />
+        <div className={`flex flex-col bg-[#eef2ff] font-sans overflow-hidden relative ${previa
+            ? 'h-screen'
+            // Celular: ocupa o <main> inteiro — anula o gutter §20.2 (16px; 24px a partir de md, no telefone deitado).
+            : '-m-4 md:-m-6 h-[calc(100%+2rem)] md:h-[calc(100%+3rem)]'}`}
+        >
+            {previa && <StatusBar />}
 
             {!selectedId ? (
                 <PickerScreen diarios={diarios} onSelect={setSelectedId} />
@@ -1071,7 +1086,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
 
                     {/* FAB */}
                     {nav === 'registros' && !loading && (
-                        <div className="absolute bottom-[72px] right-5 z-10">
+                        <div className="absolute bottom-[calc(72px+env(safe-area-inset-bottom))] right-5 z-10">
                             <button
                                 onClick={() => { setToast(null); setIsNew(true); setEditing(emptyEntry()); }}
                                 className="w-14 h-14 rounded-full bg-blue-600 text-white shadow-xl shadow-blue-300 flex items-center justify-center active:scale-95 transition-all"
@@ -1082,7 +1097,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
                     )}
 
                     {/* Navegação inferior */}
-                    <div className="bg-white border-t border-slate-100 px-8 py-3 flex items-center justify-around flex-shrink-0">
+                    <div className="bg-white border-t border-slate-100 px-8 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center justify-around flex-shrink-0">
                         {([
                             { key: 'registros', icon: BookOpen, label: 'Registros' },
                             { key: 'resumo', icon: BarChart3, label: 'Resumo' },
@@ -1102,6 +1117,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
 
             {editing && (
                 <EntrySheet
+                    previa={previa}
                     entry={editing}
                     isNew={isNew}
                     saving={saving}
@@ -1114,7 +1130,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
             )}
 
             {toast && (
-                <div className="absolute bottom-[78px] left-4 right-24 z-20 bg-slate-900 text-white rounded-2xl px-4 py-3 shadow-xl">
+                <div className="absolute bottom-[calc(78px+env(safe-area-inset-bottom))] left-4 right-24 z-20 bg-slate-900 text-white rounded-2xl px-4 py-3 shadow-xl">
                     <p className="text-sm font-bold">{toast}</p>
                 </div>
             )}

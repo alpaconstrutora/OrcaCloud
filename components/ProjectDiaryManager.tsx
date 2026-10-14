@@ -563,7 +563,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         <div className="space-y-6 pb-20">
             {showMobilePreview && (
                 <MobilePreviewFrame onClose={fecharPreviaMobile} title="Prévia — Diário de Obras">
-                    <DiaryMobileApp projects={projects} initialProjectId={settings.id} />
+                    <DiaryMobileApp projects={projects} initialProjectId={settings.id} previa />
                 </MobilePreviewFrame>
             )}
             {/* §20 — h1 solto + subtítulo mt-1.5 (o subtítulo carrega o seletor de obra);

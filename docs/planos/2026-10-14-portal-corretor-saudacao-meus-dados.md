@@ -48,7 +48,7 @@ Prints anexados ao pedido (Portal do Parceiro, link público):
       `C:/tmp/pwtest/corretor-meus-dados.js`): cabeçalho com o nome, menu com "Meus dados"
       em 1º, painel lateral solto (§26) com Identificação / Contato / Comissão, Escape fecha,
       zero erros de console
-- [ ] push em `main` + `conferir-producao`
+- [x] push em `main` (commit `fbe8613f`, CI verde) + `conferir-producao` ✅ — o domínio carimbou `fbe8613` e, após o commit seguinte de outra frente (`e2a219c`), continua servindo "Meus dados" no bundle
 
 ## Verificação
 

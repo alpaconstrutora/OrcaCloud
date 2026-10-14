@@ -3924,6 +3924,33 @@ describe('BlueprintEditor · ribbon', () => {
     await user.type(ramal, '1800');
     await user.tab();
     await waitFor(() => expect(dialog).toHaveTextContent(/ramais a 1,80 m/));
+
+    // 14/10/2026 (tela): reservação, alimentador, recalque, aquecedor e pressões saíram da gaveta.
+    expect(within(gaveta).queryByTestId('reservacao')).toBeNull();
+    expect(within(gaveta).queryByTestId('pressoes-da-agua')).toBeNull();
+    const resumo = within(gaveta).getByTestId('resumo-dimensionamento-agua');
+    expect(resumo).toHaveTextContent(/Pressões/);
+    // O cartão abre a TELA e fecha a gaveta; o editor fica montado e escondido.
+    await user.click(within(resumo).getByRole('button', { name: /abrir dimensionamento/i }));
+    const tela = await waitFor(() => {
+      const t = document.querySelector('[data-tela="dimensionamento-agua"]');
+      expect(t).not.toBeNull();
+      return t as HTMLElement;
+    });
+    expect(screen.queryByTestId('tarefa-agua')).toBeNull();
+    expect(tela.closest('[role="dialog"]')).toBeNull();
+    expect(within(tela).getByRole('heading', { name: /dimensionamento da água/i })).toBeInTheDocument();
+    expect(within(tela).getByTestId('reservacao')).toBeInTheDocument();
+    expect(within(tela).getByTestId('pressoes-da-agua')).toBeInTheDocument();
+    expect(within(tela).queryByRole('button', { name: /lançar/i })).toBeNull();
+    // "Selecionar" um ponto volta ao desenho com ele marcado.
+    await user.click(within(tela).getByRole('button', { name: /chuveiro/i }));
+    await waitFor(() => expect(document.querySelector('[data-tela="dimensionamento-agua"]')).toBeNull());
+    // O ribbon abre a mesma tela; "Voltar ao editor" volta.
+    await user.click(botao(/^dimensionamento da água/i));
+    await waitFor(() => expect(document.querySelector('[data-tela="dimensionamento-agua"]')).not.toBeNull());
+    await user.click(screen.getByRole('button', { name: /voltar ao editor/i }));
+    await waitFor(() => expect(document.querySelector('[data-tela="dimensionamento-agua"]')).toBeNull());
   });
 
   it('Hidráulica › Esgoto automático (18/09/2026): a gaveta mostra o pavimento, lança a rede sugerida até a caixa de inspeção e o botão zera', async () => {

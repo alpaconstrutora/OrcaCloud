@@ -1,10 +1,11 @@
 /**
- * O RECALQUE na gaveta de água (29/09/2026, E4.4): só aparece com reservatório
- * INFERIOR. Vazão, Forchheimer, DN de sucção e recalque, altura manométrica e
- * a potência com o motor comercial; e o botão que lança bomba, sucção e
- * recalque (sugeridos, um lote).
+ * O RECALQUE (29/09/2026, E4.4): só aparece com reservatório INFERIOR. Vazão,
+ * Forchheimer, DN de sucção e recalque, altura manométrica e a potência com o
+ * motor comercial.
  *
- * 14/10/2026: o botão antes das premissas, que ficam recolhidas; a cota do
+ * 14/10/2026: mora na tela "Dimensionamento da água" e não tem botão próprio —
+ * o "Lançar tudo" da gaveta já lança bomba, sucção e recalque. As premissas
+ * ficam recolhidas; a cota do
  * percurso virou campo (era constante escondida); campo numérico que só grava
  * ao sair — no rendimento, o primeiro "0" de 0,65 virava 0,20 na hora.
  */
@@ -17,13 +18,11 @@ interface Props {
   plano: PlanoDoRecalque;
   hip: HipotesesDeRecalque;
   onHip: (h: HipotesesDeRecalque) => void;
-  onLancar: () => void;
 }
 
 const n = (v: number, casas = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 
-export default function PainelRecalque({ plano, hip, onHip, onLancar }: Props) {
-  const motivoDoBotao = plano.motivo ?? (plano.comandos.length === 0 ? 'Bomba, sucção e recalque confirmados já estão no desenho' : undefined);
+export default function PainelRecalque({ plano, hip, onHip }: Props) {
   return (
     <div className="space-y-2" data-testid="recalque">
       <p className="text-xs font-semibold text-slate-700">Recalque (inferior → superior)</p>
@@ -57,15 +56,6 @@ export default function PainelRecalque({ plano, hip, onHip, onLancar }: Props) {
           ))}
         </>
       )}
-      <button
-        type="button"
-        onClick={onLancar}
-        disabled={!!motivoDoBotao}
-        title={motivoDoBotao}
-        className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {plano.apagados > 0 ? 'Relançar recalque' : 'Lançar bomba e recalque'}
-      </button>
       <BlocoDeHipoteses
         id="recalque"
         titulo="Hipóteses do recalque"

@@ -317,6 +317,7 @@ import PainelColetorPredial from './PainelColetorPredial';
 import AvisoDoLancamento from './AvisoDoLancamento';
 import BlocoDeHipoteses from './BlocoDeHipoteses';
 import CampoNumericoDeHipotese from './CampoNumericoDeHipotese';
+import ResumoDoDimensionamentoDaAgua from './ResumoDoDimensionamentoDaAgua';
 import { planejarAguaCompleta } from '../../utils/blueprintAguaCompleta';
 import { planejarPluvialCompleta } from '../../utils/blueprintPluvialCompleto';
 import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
@@ -2036,6 +2037,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     if (marcaDoCentro && !centroNaPlanta) setMarcaDoCentro(null);
   }, [marcaDoCentro, centroNaPlanta]);
   const alternarTela = (id: TelaDaEletrica) => setTelaAberta((t) => (t === id ? null : id));
+  /** Da gaveta de água para a tela do dimensionamento: a gaveta fecha (o Sheet sai por portal e ficaria por cima da tela). */
+  const abrirDimensionamentoDaAgua = () => {
+    setTarefa(null);
+    setTelaAberta('dimensionamento-agua');
+  };
   const tarefaAberta = emVista ? null : tarefa;
   /**
    * MODO TELA CHEIA (14/09/2026, pedido: *"Modo tela cheia"*). O editor sai do
@@ -2117,7 +2123,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721' | 'dimensionamento-agua';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -8968,23 +8974,29 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const setHipDeAguaSalvas = (agua: HipotesesDeAgua) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, agua });
   /** PRESSÃO NOS PONTOS (28/09/2026, E1.3): hipóteses do usuário, cálculo derivado do modelo. */
   const hipPressao = hidroDoEstudo.hipoteses.pressao;
+  /**
+   * O DIMENSIONAMENTO DA ÁGUA (reservação, alimentador, recalque, aquecedor) é calculado com a
+   * gaveta aberta (o rodapé e o cartão de situação leem dele) OU com a tela "Dimensionamento da
+   * água" aberta (14/10/2026: os painéis saíram da gaveta para a tela).
+   */
+  const dimensionandoAgua = tarefaAberta === 'agua' || telaAberta === 'dimensionamento-agua';
   /** RESERVAÇÃO (29/09/2026, E4.1): população → consumo → volume, contra a(s) caixa(s). */
   /** ALIMENTADOR PREDIAL (29/09/2026, E4.3): do hidrômetro à boia, com a pressão que chega. */
   const planoDoAlimentador = useMemo(
     () =>
-      tarefaAberta === 'agua'
+      dimensionandoAgua
         ? planejarAlimentador(editor.model, hidroDoEstudo.hipoteses.alimentacao, hidroDoEstudo.hipoteses.reservatorio, hidroDoEstudo.hipoteses.pressao.qMaxDoHidrometroM3h, terrenoParaCorte)
         : null,
-    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses, terrenoParaCorte],
+    [dimensionandoAgua, editor.model, hidroDoEstudo.hipoteses, terrenoParaCorte],
   );
   /** RECALQUE (29/09/2026, E4.4): só com reservatório INFERIOR. */
   const planoDoRecalque = useMemo(
-    () => (tarefaAberta === 'agua' ? planejarRecalque(editor.model, hidroDoEstudo.hipoteses.recalque, hidroDoEstudo.hipoteses.reservatorio) : null),
-    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses],
+    () => (dimensionandoAgua ? planejarRecalque(editor.model, hidroDoEstudo.hipoteses.recalque, hidroDoEstudo.hipoteses.reservatorio) : null),
+    [dimensionandoAgua, editor.model, hidroDoEstudo.hipoteses],
   );
   const dimensionamentoDaReservacao = useMemo(
-    () => (tarefaAberta === 'agua' ? dimensionarReservacao(editor.model, hidroDoEstudo.hipoteses.reservatorio) : null),
-    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses.reservatorio],
+    () => (dimensionandoAgua ? dimensionarReservacao(editor.model, hidroDoEstudo.hipoteses.reservatorio) : null),
+    [dimensionandoAgua, editor.model, hidroDoEstudo.hipoteses.reservatorio],
   );
   const setHipPressao = (pressao: HipotesesDePressao) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pressao });
   // E1.4: cada plano sai já com o DN ajustado para a pressão mínima (NBR 5626).
@@ -9087,8 +9099,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   /** AQUECEDOR DE PASSAGEM (29/09/2026, E8.1): vazão simultânea da rede quente, capacidade e pressão na entrada. */
   const hipDoAquecedor = hidroDoEstudo.hipoteses.aquecedor;
   const aquecedoresDimensionados = useMemo(
-    () => (tarefaAberta === 'agua' ? dimensionarAquecedores(editor.model, hipDoAquecedor, pressoesDaAgua) : []),
-    [tarefaAberta, editor.model, hipDoAquecedor, pressoesDaAgua],
+    () => (dimensionandoAgua ? dimensionarAquecedores(editor.model, hipDoAquecedor, pressoesDaAgua) : []),
+    [dimensionandoAgua, editor.model, hipDoAquecedor, pressoesDaAgua],
   );
   // MEMORIAIS HIDROSSANITÁRIOS (28/09/2026, E3.1/E3.2): com as MESMAS premissas das
   // gavetas de água, de pressão e de esgoto. A prévia (o sumário das seções) só é
@@ -11974,6 +11986,93 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           </div>
         </div>
       )}
+      {/* DIMENSIONAMENTO DA ÁGUA (14/10/2026, pedido: *"o drawer Água fria e quente automáticas nao esta muito
+          grande a ponto de ser necessario ser uma tela?"*). Reservação, alimentador, recalque, aquecedor e
+          pressões são memória de cálculo e simulação de premissas — leitura longa e a tabela de pressões, que
+          cresce com os pontos, não cabiam nos ~528 px da gaveta. Lançar continua na gaveta, com o desenho à
+          vista; aqui não há botão de lançar (o "Lançar tudo" da gaveta lança alimentador e recalque).
+          `drawer-legivel`: os painéis foram escritos em text-xs para a gaveta, e lá essa classe os sobe para
+          14 px; sem ela, leriam menores aqui do que lá. */}
+      {telaAberta === 'dimensionamento-agua' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="dimensionamento-agua">
+          {cabecalhoDaTela(
+            'Dimensionamento da água',
+            'Reservação, alimentador predial, recalque, aquecedor de passagem e a pressão em cada ponto, calculados ao vivo a partir do desenho e das premissas do estudo (NBR 5626). Mudar uma premissa refaz a conta na hora; lançar as peças é na gaveta Água automática.',
+            Gauge,
+            'Hidráulica',
+          )}
+          <div className="drawer-legivel space-y-6">
+            {planosDeAgua.length === 0 && !dimensionamentoDaReservacao ? (
+              <p className="rounded-[10px] border border-gray-100 bg-white px-4 py-8 text-center text-sm text-gray-500">
+                Sem caixa d'água nem aquecedor no desenho: insira uma caixa d'água (Hidráulica › reservação) para dimensionar.
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                  {dimensionamentoDaReservacao && (
+                    <div className="rounded-[10px] border border-gray-100 bg-white p-4 shadow-sm">
+                      <PainelReservacao
+                        r={dimensionamentoDaReservacao}
+                        hip={hidroDoEstudo.hipoteses.reservatorio}
+                        onHip={(reservatorio) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, reservatorio })}
+                      />
+                    </div>
+                  )}
+                  {planoDoAlimentador && (
+                    <div className="rounded-[10px] border border-gray-100 bg-white p-4 shadow-sm">
+                      <PainelAlimentador
+                        plano={planoDoAlimentador}
+                        hip={hidroDoEstudo.hipoteses.alimentacao}
+                        onHip={(alimentacao) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, alimentacao })}
+                      />
+                    </div>
+                  )}
+                  {planoDoRecalque && (planoDoRecalque.inferiorId || planoDoRecalque.motivo) && (
+                    <div className="rounded-[10px] border border-gray-100 bg-white p-4 shadow-sm">
+                      <PainelRecalque
+                        plano={planoDoRecalque}
+                        hip={hidroDoEstudo.hipoteses.recalque}
+                        onHip={(recalque) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, recalque })}
+                      />
+                    </div>
+                  )}
+                  {aquecedoresDimensionados.length > 0 && (
+                    <div className="rounded-[10px] border border-gray-100 bg-white p-4 shadow-sm">
+                      <PainelAquecedor
+                        aquecedores={aquecedoresDimensionados}
+                        hip={hipDoAquecedor}
+                        onHip={(aquecedor) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, aquecedor })}
+                        onSelecionar={(ids) => {
+                          selecionar(ids);
+                          setTelaAberta(null);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+                {pressoesDaAgua.length > 0 && (
+                  <div className="rounded-[10px] border border-gray-100 bg-white p-4 shadow-sm">
+                    <PainelPressoesDaAgua
+                      pressoes={pressoesDaAgua}
+                      nomeDaOrigem={(id) => {
+                        const o = editor.model.terminais?.find((x) => x.id === id);
+                        return o?.rotulo || (o?.tipoHidraulico === 'AQUECEDOR' ? 'Aquecedor' : "Caixa d'água");
+                      }}
+                      hip={hipPressao}
+                      onHip={setHipPressao}
+                      // Selecionar um ponto volta ao desenho com ele marcado (como o quadro de cargas).
+                      onSelecionar={(ids) => {
+                        selecionar(ids);
+                        setTelaAberta(null);
+                      }}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {telaAberta === 'areas-nbr12721' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="areas-nbr12721">
           {cabecalhoDaTela(
@@ -12882,7 +12981,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 contagem={pontosDeAguaALigar || undefined}
                 ativo={tarefaAberta === 'agua'}
                 onClick={() => alternarTarefa('agua')}
-                ajuda="Da caixa d'água aos pontos de água fria e do aquecedor aos de água quente: barrilete no forro, colunas, ramais a 2,20 m e o DN pelos pesos da NBR 5626 — sugerido; mover ou aceitar confirma"
+                ajuda={`Da caixa d'água aos pontos de água fria e do aquecedor aos de água quente: barrilete no forro, colunas, ramais a ${(hipotesesDeAgua.cotaRamalMm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m e o DN pelos pesos da NBR 5626 — sugerido; mover ou aceitar confirma`}
               />
               <BotaoDoRibbon
                 icone={Waves}
@@ -12899,6 +12998,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 disabled={sugeridasNoNivel === 0}
                 onClick={aceitarSugeridas}
                 ajuda="Confirma todas as peças sugeridas do pavimento (tomadas e pontos hidráulicos) de uma vez."
+              />
+            </GrupoDoRibbon>
+            {/* DIMENSIONAR (14/10/2026): a tela da reservação, do alimentador, do recalque, do aquecedor e das
+                pressões — saiu da gaveta de água, que ficou só com o lançamento. A contagem são os pontos
+                com pressão insuficiente (o que pede atenção). */}
+            <GrupoDoRibbon rotulo="Dimensionar">
+              <BotaoDoRibbon
+                icone={Gauge}
+                rotulo="Dimensionamento da água"
+                contagem={pressoesDaAgua.flatMap((r) => r.pontos).filter((x) => x.estado === 'INSUFICIENTE').length || undefined}
+                ativo={telaAberta === 'dimensionamento-agua'}
+                onClick={() => alternarTela('dimensionamento-agua')}
+                ajuda="Reservação, alimentador predial, recalque, aquecedor de passagem e a pressão em cada ponto (NBR 5626), com as premissas do estudo"
               />
             </GrupoDoRibbon>
             {/* ÁGUAS PLUVIAIS (29/09/2026, roadmap hidrossanitário E6): rede independente do esgoto. */}
@@ -17836,10 +17948,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   <table className="w-full table-fixed border-collapse text-left" aria-label="Rede de água por origem">
                     <thead>
                       <tr className="border-b border-gray-200 bg-white text-xs font-semibold text-gray-700">
-                        <th className="w-36 border-r border-gray-100 px-3 py-2">Origem</th>
-                        <th className="w-32 border-r border-gray-100 px-3 py-2">Pontos</th>
+                        <th className="w-32 border-r border-gray-100 px-3 py-2">Origem</th>
+                        <th className="w-28 border-r border-gray-100 px-3 py-2">Pontos</th>
                         <th className="border-r border-gray-100 px-3 py-2">Previsto</th>
-                        <th className="w-36 px-3 py-2 text-right">Lançar</th>
+                        <th className="w-28 px-3 py-2 text-right">Lançar</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -17901,6 +18013,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 </div>
               )}
 
+              {/* 14/10/2026: reservação, alimentador, recalque, aquecedor e pressões moram na tela
+                  "Dimensionamento da água"; aqui, a situação em uma linha por assunto. */}
+              <ResumoDoDimensionamentoDaAgua
+                reservacao={dimensionamentoDaReservacao}
+                alimentador={planoDoAlimentador}
+                recalque={planoDoRecalque}
+                aquecedores={aquecedoresDimensionados}
+                pressoes={pressoesDaAgua}
+                onAbrir={abrirDimensionamentoDaAgua}
+              />
+
               <BlocoDeHipoteses
                 id="agua"
                 resumo={[
@@ -17934,7 +18057,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       {hipotesesDeAgua.rotaMaximaVezes == null ? <strong>sem limite</strong> : <strong>{String(hipotesesDeAgua.rotaMaximaVezes).replace('.', ',')}×</strong>}{' '}
                       a linha reta até a coluna.
                     </li>
-                    <li><strong>Pré-dimensionamento</strong> por velocidade: sem perda de carga nem pressão disponível; não desvia de viga ou laje.</li>
+                    <li>
+                      Depois da velocidade, o DN dos trechos sugeridos sobe, um a um, até cada ponto ter a pressão mínima de{' '}
+                      <strong>{hipPressao.pressaoMinimaKpa.toLocaleString('pt-BR')} kPa</strong> (se o desnível da caixa não chega a ela, nenhum DN resolve, e o
+                      aviso diz). As hipóteses da pressão (lâmina, perdas, VRP) ficam na tela{' '}
+                      <button type="button" onClick={abrirDimensionamentoDaAgua} className="font-medium text-blue-600 hover:underline">
+                        Dimensionamento da água
+                      </button>
+                      .
+                    </li>
+                    <li><strong>Pré-dimensionamento</strong>: não desvia de viga ou laje.</li>
                   </>
                 }
               >
@@ -18014,51 +18146,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   mm
                 </label>
               </BlocoDeHipoteses>
-              {dimensionamentoDaReservacao && (
-                <PainelReservacao
-                  r={dimensionamentoDaReservacao}
-                  hip={hidroDoEstudo.hipoteses.reservatorio}
-                  onHip={(reservatorio) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, reservatorio })}
-                />
-              )}
-              {planoDoAlimentador && (
-                <PainelAlimentador
-                  plano={planoDoAlimentador}
-                  hip={hidroDoEstudo.hipoteses.alimentacao}
-                  onHip={(alimentacao) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, alimentacao })}
-                  onLancar={() => {
-                    if (planoDoAlimentador.comandos.length) editor.runBatch(planoDoAlimentador.comandos);
-                  }}
-                />
-              )}
-              {planoDoRecalque && (planoDoRecalque.inferiorId || planoDoRecalque.motivo) && (
-                <PainelRecalque
-                  plano={planoDoRecalque}
-                  hip={hidroDoEstudo.hipoteses.recalque}
-                  onHip={(recalque) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, recalque })}
-                  onLancar={() => {
-                    if (planoDoRecalque.comandos.length) editor.runBatch(planoDoRecalque.comandos);
-                  }}
-                />
-              )}
-              {aquecedoresDimensionados.length > 0 && (
-                <PainelAquecedor
-                  aquecedores={aquecedoresDimensionados}
-                  hip={hipDoAquecedor}
-                  onHip={(aquecedor) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, aquecedor })}
-                  onSelecionar={selecionar}
-                />
-              )}
-              <PainelPressoesDaAgua
-                pressoes={pressoesDaAgua}
-                nomeDaOrigem={(id) => {
-                  const o = editor.model.terminais?.find((x) => x.id === id);
-                  return o?.rotulo || (o?.tipoHidraulico === 'AQUECEDOR' ? 'Aquecedor' : "Caixa d'água");
-                }}
-                hip={hipPressao}
-                onHip={setHipPressao}
-                onSelecionar={selecionar}
-              />
               <PainelVerificacaoDaRede marcas={marcasDaRede} disciplinas={['AGUA_FRIA', 'AGUA_QUENTE']} onSelecionar={selecionar} />
             </div>
           )}

@@ -1,10 +1,11 @@
 /**
- * O ALIMENTADOR PREDIAL na gaveta de água (29/09/2026, E4.3): do hidrômetro à
- * torneira de boia, com o DN, a vazão, a velocidade, as perdas e a pressão que
- * chega à boia; e o botão que lança (sugerido, um lote). Sem entrada ou sem
- * caixa, o botão fica desligado dizendo por quê.
+ * O ALIMENTADOR PREDIAL (29/09/2026, E4.3): do hidrômetro à torneira de boia,
+ * com o DN, a vazão, a velocidade, as perdas e a pressão que chega à boia.
  *
- * 14/10/2026: o botão vem antes das premissas, que ficam recolhidas; velocidade
+ * 14/10/2026: mora na tela "Dimensionamento da água" (não mais na gaveta) e
+ * não tem botão próprio — o "Lançar tudo" da gaveta já lança hidrômetro e
+ * alimentador, e lançar com o desenho escondido seria lançar sem ver. As
+ * premissas ficam recolhidas; velocidade
  * máxima, DN mínimo e pressão mínima na boia viraram campos (eram constantes
  * escondidas); campo numérico que só grava ao sair (apagar a pressão da rede
  * gravava 0 kPa).
@@ -18,15 +19,13 @@ interface Props {
   plano: PlanoDoAlimentador;
   hip: HipotesesDeAlimentacao;
   onHip: (h: HipotesesDeAlimentacao) => void;
-  onLancar: () => void;
 }
 
 const n = (v: number, casas = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 /** A série do PVC soldável (`FICHA_DO_MATERIAL.PVC_SOLDAVEL`) até onde um alimentador predial chega. */
 const DN_MINIMOS = [20, 25, 32, 40, 50] as const;
 
-export default function PainelAlimentador({ plano, hip, onHip, onLancar }: Props) {
-  const motivoDoBotao = plano.motivo ?? (plano.comandos.length === 0 ? 'O alimentador confirmado já está no desenho' : undefined);
+export default function PainelAlimentador({ plano, hip, onHip }: Props) {
   return (
     <div className="space-y-2" data-testid="alimentador">
       <p className="text-xs font-semibold text-slate-700">Alimentador predial</p>
@@ -42,7 +41,7 @@ export default function PainelAlimentador({ plano, hip, onHip, onLancar }: Props
           </p>
           {plano.hidrometroProposto && (
             <p className="text-xs text-slate-600" data-testid="alimentador-hidrometro-proposto">
-              Sem hidrômetro no desenho: ao lançar, ele vai na frente do lote, no cavalete. Arraste-o para onde a concessionária vai ligar.
+              Sem hidrômetro no desenho: o "Lançar tudo" da gaveta Água automática o põe na frente do lote, no cavalete. Arraste-o para onde a concessionária vai ligar.
             </p>
           )}
           <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-slate-600">
@@ -68,15 +67,6 @@ export default function PainelAlimentador({ plano, hip, onHip, onLancar }: Props
           ))}
         </>
       )}
-      <button
-        type="button"
-        onClick={onLancar}
-        disabled={!!motivoDoBotao}
-        title={motivoDoBotao}
-        className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {plano.hidrometroProposto ? 'Lançar hidrômetro e alimentador' : plano.apagados > 0 ? 'Relançar alimentador' : 'Lançar alimentador'}
-      </button>
       <BlocoDeHipoteses
         id="alimentador"
         titulo="Hipóteses do alimentador"

@@ -26,26 +26,23 @@ const digitar = (rotulo: string, valor: string) => {
 describe('PainelAlimentador', () => {
   beforeEach(() => localStorage.clear());
 
-  it('a situação na boia, o botão de lançar e as premissas recolhidas com o resumo', () => {
-    const onLancar = vi.fn();
-    render(<PainelAlimentador plano={plano} hip={HIPOTESES_ALIMENTACAO_PADRAO} onHip={vi.fn()} onLancar={onLancar} />);
+  it('a situação na boia e as premissas recolhidas com o resumo — sem botão de lançar (14/10/2026: é do "Lançar tudo" da gaveta)', () => {
+    render(<PainelAlimentador plano={plano} hip={HIPOTESES_ALIMENTACAO_PADRAO} onHip={vi.fn()} />);
     expect(screen.getByTestId('alimentador-situacao')).toHaveTextContent('Chega à boia do reservatório superior com 44,5 kPa (mín. 10).');
     expect(screen.getByTestId('hipoteses-alimentador')).toHaveTextContent('rede 100 kPa · ≤ 1,0 m/s · DN ≥ 25 · boia ≥ 10 kPa');
     expect(screen.queryByLabelText('Pressão da rede pública em kPa')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Lançar alimentador' }));
-    expect(onLancar).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /lançar/i })).toBeNull();
   });
 
-  it('sem comandos: o botão desliga e diz por quê', () => {
-    render(<PainelAlimentador plano={{ ...plano, comandos: [] }} hip={HIPOTESES_ALIMENTACAO_PADRAO} onHip={vi.fn()} onLancar={vi.fn()} />);
-    const b = screen.getByRole('button', { name: 'Lançar alimentador' });
-    expect(b).toBeDisabled();
-    expect(b).toHaveAttribute('title', 'O alimentador confirmado já está no desenho');
+  it('sem hidrômetro: diz que o "Lançar tudo" da gaveta o põe na frente do lote', () => {
+    const hidrometroProposto = { levelId: 't', at: { x: 0, y: 0 }, cotaMm: -300, origem: 'FRENTE' } as unknown as PlanoDoAlimentador['hidrometroProposto'];
+    render(<PainelAlimentador plano={{ ...plano, hidrometroProposto }} hip={HIPOTESES_ALIMENTACAO_PADRAO} onHip={vi.fn()} />);
+    expect(screen.getByTestId('alimentador-hidrometro-proposto')).toHaveTextContent('"Lançar tudo" da gaveta Água automática');
   });
 
   it('apagar a pressão da rede pública NÃO grava 0 (antes gravava)', () => {
     const onHip = vi.fn();
-    render(<PainelAlimentador plano={plano} hip={HIPOTESES_ALIMENTACAO_PADRAO} onHip={onHip} onLancar={vi.fn()} />);
+    render(<PainelAlimentador plano={plano} hip={HIPOTESES_ALIMENTACAO_PADRAO} onHip={onHip} />);
     abrirHipoteses();
     digitar('Pressão da rede pública em kPa', '');
     expect(onHip).not.toHaveBeenCalled();
@@ -54,7 +51,7 @@ describe('PainelAlimentador', () => {
 
   it('velocidade máxima, DN mínimo e pressão mínima na boia viraram campos (eram constantes escondidas)', () => {
     const onHip = vi.fn();
-    render(<PainelAlimentador plano={plano} hip={HIPOTESES_ALIMENTACAO_PADRAO} onHip={onHip} onLancar={vi.fn()} />);
+    render(<PainelAlimentador plano={plano} hip={HIPOTESES_ALIMENTACAO_PADRAO} onHip={onHip} />);
     abrirHipoteses();
     digitar('Velocidade máxima no alimentador em metros por segundo', '1.5');
     expect(onHip).toHaveBeenLastCalledWith({ ...HIPOTESES_ALIMENTACAO_PADRAO, velocidadeMaxMs: 1.5 });

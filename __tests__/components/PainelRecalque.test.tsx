@@ -21,18 +21,16 @@ const abrirHipoteses = () => fireEvent.click(screen.getByRole('button', { name: 
 describe('PainelRecalque', () => {
   beforeEach(() => localStorage.clear());
 
-  it('a bomba, o botão e as premissas recolhidas com o resumo', () => {
-    const onLancar = vi.fn();
-    render(<PainelRecalque plano={plano} hip={HIPOTESES_RECALQUE_PADRAO} onHip={vi.fn()} onLancar={onLancar} />);
+  it('a bomba e as premissas recolhidas com o resumo — sem botão de lançar (14/10/2026: é do "Lançar tudo" da gaveta)', () => {
+    render(<PainelRecalque plano={plano} hip={HIPOTESES_RECALQUE_PADRAO} onHip={vi.fn()} />);
     expect(screen.getByTestId('recalque-bomba')).toHaveTextContent('Bomba de 0,25 cv');
     expect(screen.getByTestId('hipoteses-recalque')).toHaveTextContent('6 h/dia · rendimento 0,50 · percurso a 2200 mm');
-    fireEvent.click(screen.getByRole('button', { name: 'Lançar bomba e recalque' }));
-    expect(onLancar).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /lançar/i })).toBeNull();
   });
 
   it('digitar 0,65 no rendimento grava 0,65 (antes o primeiro "0" virava 0,20 na hora)', () => {
     const onHip = vi.fn();
-    render(<PainelRecalque plano={plano} hip={HIPOTESES_RECALQUE_PADRAO} onHip={onHip} onLancar={vi.fn()} />);
+    render(<PainelRecalque plano={plano} hip={HIPOTESES_RECALQUE_PADRAO} onHip={onHip} />);
     abrirHipoteses();
     const rendimento = screen.getByLabelText('Rendimento do conjunto motor-bomba');
     fireEvent.change(rendimento, { target: { value: '0' } });
@@ -46,7 +44,7 @@ describe('PainelRecalque', () => {
 
   it('a cota do percurso virou campo (era constante escondida)', () => {
     const onHip = vi.fn();
-    render(<PainelRecalque plano={plano} hip={HIPOTESES_RECALQUE_PADRAO} onHip={onHip} onLancar={vi.fn()} />);
+    render(<PainelRecalque plano={plano} hip={HIPOTESES_RECALQUE_PADRAO} onHip={onHip} />);
     abrirHipoteses();
     const cota = screen.getByLabelText('Cota do percurso do recalque em mm');
     fireEvent.change(cota, { target: { value: '2600' } });
@@ -54,12 +52,10 @@ describe('PainelRecalque', () => {
     expect(onHip).toHaveBeenCalledWith({ ...HIPOTESES_RECALQUE_PADRAO, cotaDoPercursoMm: 2600 });
   });
 
-  it('com motivo: o aviso no lugar da bomba e o botão desligado dizendo o motivo', () => {
+  it('com motivo: o aviso no lugar da bomba', () => {
     const motivo = 'Há reservatório inferior mas não há o superior para onde recalcar.';
-    render(<PainelRecalque plano={{ ...plano, motivo, comandos: [] }} hip={HIPOTESES_RECALQUE_PADRAO} onHip={vi.fn()} onLancar={vi.fn()} />);
+    render(<PainelRecalque plano={{ ...plano, motivo, comandos: [] }} hip={HIPOTESES_RECALQUE_PADRAO} onHip={vi.fn()} />);
     expect(screen.queryByTestId('recalque-bomba')).toBeNull();
-    const b = screen.getByRole('button', { name: 'Lançar bomba e recalque' });
-    expect(b).toBeDisabled();
-    expect(b).toHaveAttribute('title', motivo);
+    expect(screen.getByText(motivo)).toBeInTheDocument();
   });
 });

@@ -9,46 +9,19 @@ interface BrokerHealthPanelProps {
     organizationId: string;
 }
 
-const generateDemoHealth = (): BrokerHealthKPI => ({
-    id: 'health-1',
-    project_name: 'Residencial Parque Verde',
-    total_units: 120,
-    sold_units: 42,
-    available_units: 65,
-    reserved_units: 13,
-    vgv_total: 52000000,
-    vgv_sold: 18200000,
-    ivv: 4.2,
-    months_to_sell: 18,
-    absorption_curve: [
-        { month: 'Jan', sold_cumulative: 28, projected: 28 },
-        { month: 'Fev', sold_cumulative: 33, projected: 33 },
-        { month: 'Mar', sold_cumulative: 42, projected: 38 },
-        { month: 'Abr', sold_cumulative: 0, projected: 47 },
-        { month: 'Mai', sold_cumulative: 0, projected: 55 },
-        { month: 'Jun', sold_cumulative: 0, projected: 63 },
-        { month: 'Jul', sold_cumulative: 0, projected: 70 },
-        { month: 'Ago', sold_cumulative: 0, projected: 78 },
-        { month: 'Set', sold_cumulative: 0, projected: 85 },
-        { month: 'Out', sold_cumulative: 0, projected: 92 },
-        { month: 'Nov', sold_cumulative: 0, projected: 100 },
-        { month: 'Dez', sold_cumulative: 0, projected: 108 },
-    ],
-    mix_sales: [
-        { typology: '2Q', sold: 12, total: 30, pct: 40 },
-        { typology: '2Q Suite', sold: 10, total: 30, pct: 33 },
-        { typology: '3Q', sold: 8, total: 24, pct: 33 },
-        { typology: '3Q Suite', sold: 9, total: 24, pct: 38 },
-        { typology: 'Cobertura', sold: 3, total: 12, pct: 25 },
-    ],
-    top_channel: 'Plantão',
-    avg_ticket: 433333,
-});
-
 const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId }) => {
+    const [projectId, setProjectId] = React.useState<string | null>(null);
+
+    const { data: projectOptions = [] } = useQuery({
+        queryKey: ['broker-health-projects', organizationId],
+        queryFn: () => brokerHealthService.listProjectsWithSales(organizationId),
+        staleTime: STALE.normal,
+        enabled: !!organizationId && organizationId !== 'demo',
+    });
+
     const { data: health, isLoading, error } = useQuery<BrokerHealthKPI | null>({
-        queryKey: ['broker-health', organizationId],
-        queryFn: () => brokerHealthService.getHealthData(organizationId),
+        queryKey: ['broker-health', organizationId, projectId],
+        queryFn: () => brokerHealthService.getHealthData(organizationId, projectId),
         staleTime: STALE.normal,
         enabled: !!organizationId && organizationId !== 'demo',
     });
@@ -85,7 +58,24 @@ const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId })
                         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Saúde do Empreendimento</p>
                         <h2 className="text-2xl font-black mt-1">{health.project_name}</h2>
                     </div>
-                    <Activity className="w-10 h-10 text-slate-500" />
+                    <div className="flex items-center gap-3">
+                        {/* Só com mais de 1 empreendimento a escolha faz sentido — com 0 ou 1,
+                            "Todos" e o próprio projeto são o mesmo número. */}
+                        {projectOptions.length > 1 && (
+                            <select
+                                value={projectId ?? ''}
+                                onChange={e => setProjectId(e.target.value || null)}
+                                title="Filtrar por empreendimento"
+                                className="h-9 pl-3 pr-8 bg-white/10 border border-white/20 text-white text-xs font-bold rounded-lg outline-none focus:ring-2 focus:ring-white/30 cursor-pointer"
+                            >
+                                <option value="" className="text-gray-900">Todos os empreendimentos</option>
+                                {projectOptions.map(p => (
+                                    <option key={p.id} value={p.id} className="text-gray-900">{p.name}</option>
+                                ))}
+                            </select>
+                        )}
+                        <Activity className="w-10 h-10 text-slate-500" />
+                    </div>
                 </div>
 
                 {/* Stock Donut (CSS) */}
@@ -235,8 +225,16 @@ const BrokerHealthPanel: React.FC<BrokerHealthPanelProps> = ({ organizationId })
                             const projH = (point.projected / maxVal) * 100;
                             const soldH = point.sold_cumulative > 0 ? (point.sold_cumulative / maxVal) * 100 : 0;
                             return (
-                                <div key={point.month} className="flex-1 flex flex-col items-center gap-1">
-                                    <div className="w-full h-full relative flex items-end">
+                                /* `h-full` sozinho (sem altura explícita aqui) nunca resolvia: o pai
+                                   usa `items-end`, que sombreia o item a ALTURA DE CONTEÚDO (não o
+                                   estica para os 192px do h-48) — então o `h-full` de baixo virava
+                                   `auto` e toda barra, real ou projetada, media 0px. Precisa da
+                                   altura explícita aqui (resolve contra o h-48 do pai, que é fixo). */
+                                <div key={point.month} className="flex-1 h-full flex flex-col items-center gap-1">
+                                    {/* `flex-1` (não `h-full`): este é item de um flex-col com o rótulo
+                                        do mês ao lado — `h-full` tentaria ocupar os 192px inteiros e
+                                        empurraria o rótulo pra fora; `flex-1` divide o espaço certo. */}
+                                    <div className="w-full flex-1 relative flex items-end">
                                         {/* Projected */}
                                         <div className="absolute bottom-0 w-full bg-indigo-100 rounded-t-md transition-all"
                                             style={{ height: `${projH}%` }} />

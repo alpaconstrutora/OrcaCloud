@@ -1,6 +1,6 @@
 # Esgoto — "Destino do esgoto" (rede pública × tratamento individual) como hipótese do estudo
 
-> **Estado: EM IMPLEMENTAÇÃO (14/10/2026)** — frente `esgoto-destino`.
+> **Estado: PUBLICADO (14/10/2026, `dee77095`).**
 > ~~**Estado: PLANO — nada implementado.**~~ Separado a pedido do usuário; os itens 2 e 3 da mesma avaliação
 > estão em `2026-10-14-esgoto-tratamento-e-botoes.md`.
 
@@ -119,3 +119,9 @@ ocorrências em `kernel.bundle.mjs`) — conferir de novo antes de publicar.
   (`c:/tmp/pwtest/conferencia-destino-esgoto.cjs`, plantas descartáveis arquivadas): 12 portões ok — rede
   pública mostra o coletor; tratamento troca o painel, lança tanque/filtro/sumidouro e NENHUMA ligação; botões
   do rodapé numa linha (achado da 1ª rodada: "Refazer tudo" quebrava — corrigido).
+
+## Publicação
+
+14/10/2026: `dee77095` empurrado para `main` (`db39abc3..dee77095`). Check-run `ci` = success.
+`conferir-producao.sh "Destino do esgoto" "Apagar a ligação à rede pública?"`: os dois textos no bundle
+servido; domínio = `origin/main` (`dee7709`).

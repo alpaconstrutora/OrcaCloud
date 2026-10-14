@@ -303,7 +303,19 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
     - `verificar-views-anon.sh` não rodou: pede a senha do agente-leitura, e a migration não cria view.
     - **Falta:** gravar e ler pelo serviço no app real, que vem com a tela da Fase 6.
   - Suíte: 9.130 = 9.096 + 34 pulados, 0 falhas; tsc 0 erros; `check-org-selector-guard` ok.
-- [ ] Fase 5: estudo sem desenho (0 de 2)
+- [x] Fase 4 publicada: `56803298`, check-run `ci` = success
+- [ ] Fase 5: estudo sem desenho (1 de 2)
+  - [x] 5.1 `utils/blueprintEstudoDoEmpreendimento.ts` (puro) + `services/blueprintEstudoDoEmpreendimento.ts`.
+    - Porta o F1/F2 do Motor antigo: o template de pavimentos expandindo `repeat_count`, senão os andares das unidades; nome com o prefixo da torre quando há mais de uma.
+    - Cada unidade vira uma `Unidade` (número cortado em 16 caracteres e único, com aviso) com **um ambiente declarado de `private_area` só** (a comum quem rateia é o motor). As áreas comuns viram declarados comuns proporcionais.
+    - O serviço cria o estudo na **organização do Empreendimento**, grava o rascunho e vincula `blueprint_study_id`. Ele **recusa se já houver estudo vinculado**, porque sobrescrever quebraria o envio da massa ou do loteamento, e arquiva o estudo criado se o vínculo falhar.
+    - **Dados reais (só leitura, em memória, 13/10):** dos 18 empreendimentos, 8 têm torre; os 8 montam e calculam com `success` (o maior é o Garden Cambuhy: 12 pavimentos, 41 unidades, 3 sem privativa avisadas). Os **10 sem torre** faziam a montagem recusar, e recusar deixaria a maioria sem caminho. **Mudança:** sem torre, o estudo nasce com um "Térreo" vazio e um aviso para declarar na tabela.
+    - `__tests__/blueprintEstudoDoEmpreendimento.test.ts`: 8 testes.
+      - Pavimentos, unidades e ambientes; privativa total = Σ `private_area`; o estudo montado calcula sem nada a classificar.
+      - Template com `repeat_count` e garagem; número longo e unidade sem área; duas torres; sem torre.
+      - Serviço: organização do Empreendimento, recusa com vínculo e arquiva em falha.
+    - Suíte: 9.138 = 9.104 + 34 pulados, 0 falhas. A conta fechou com o `blueprintCasaDeBombas.test.ts` rodado à parte (11 de 11) depois do "pending" do Node 24.
+  - [ ] 5.2 **Mudança de sequência (13/10):** o botão "Criar estudo de áreas (sem desenho)" e a edição em tabela dos declarados vão **junto com a tela da Fase 6** (aba "Ambientes declarados"). O estudo sem desenho abre na Planta com o canvas vazio; publicar o botão antes da tabela poria no ar um caminho que cria um estudo que ninguém consegue editar.
 - [ ] Fase 6: tela na Planta (0 de 2)
 - [ ] Fase 7: congelar e aprovar (0 de 2)
 - [ ] Fase 8: saídas (0 de 2)

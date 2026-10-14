@@ -58,3 +58,9 @@ fechando; nenhum `utils/` tocado.
 
 O item 1 da avaliação (destino do esgoto) ficou em `2026-10-14-esgoto-destino-rede-ou-tratamento.md`
 — só o plano, aguardando decisão.
+
+## Publicação
+
+14/10/2026: `10499842` empurrado para `main` (`82a2029b..10499842`). Check-run `ci` = success. Domínio
+servindo `756c06c` (contém o commit), conferido por `conferir-producao.sh`. Conferência VISUAL ainda não
+feita.

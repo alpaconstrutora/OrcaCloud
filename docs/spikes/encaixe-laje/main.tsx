@@ -44,6 +44,9 @@ const inicial = [
 const busca = new URLSearchParams(location.search);
 const ativos = new Set((busca.get('ativos') ?? '').split(',').filter(Boolean));
 const alinhamento = (busca.get('alinhamento') ?? 'DIREITA') as 'EIXO' | 'DIREITA' | 'ESQUERDA';
+// `contar` grava o ponto num clique pelo MESMO caminho de Medir linha/área —
+// é como se prova que a medição prende nas peças sem cair na grade.
+const ferramenta = busca.get('ferramenta') === 'contar' ? 'contar' : 'estrutural';
 
 function App() {
   const [model] = useState<BlueprintModel>(inicial);
@@ -55,12 +58,13 @@ function App() {
   return (
     <BlueprintCanvas
       model={model}
-      tool="estrutural"
+      tool={ferramenta}
       estruturalKind="PILAR"
       levelId={levelId}
       selectedIds={[]}
       onSelecionar={() => {}}
       onAddEstrutural={(_k: unknown, ps: Point[]) => setPontos((v) => [...v, ps[0]])}
+      onMedicaoPronta={(_t: unknown, ps: Point[]) => setPontos((v) => [...v, ps[0]])}
       encaixesAtivos={ativos}
       alinhamento={alinhamento}
       onInverterLado={() => {}}

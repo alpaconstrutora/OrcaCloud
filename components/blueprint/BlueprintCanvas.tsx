@@ -199,6 +199,7 @@ import {
   ROTULO_DO_ENCAIXE,
   TIPOS_DE_ENCAIXE,
   encaixeGeometrico,
+  cantosDaJuncao,
   type TipoDeEncaixe,
   type SegmentoParaEncaixe,
 } from '../../utils/blueprintEncaixe';
@@ -2728,8 +2729,13 @@ export default function BlueprintCanvas({
        * passa `passoDeMover` e quem desenha não passa nada. Fosse dependência do
        * `useCallback`, mudar a precisão do mover recriaria a função e o traçado
        * herdaria um passo que não é o dele.
+       *
+       * `null` = SEM GRADE: prende nas peças, e fora delas devolve o ponto cru.
+       * É o caso de Medir e Contar (14/10/2026) — a grade deslocaria o vértice
+       * apontado no desenho de fundo, mas o canto de uma parede é exatamente o
+       * que se quer medir, e ali o ímã acerta o milímetro que o olho não acerta.
        */
-      passoDoEncaixe = passoEfetivo,
+      passoDoEncaixe: number | null = passoEfetivo,
     ): Point => {
       const limite = SNAP_PX / vista.escala;
       let melhorEixo: Point | null = null;
@@ -2753,18 +2759,43 @@ export default function BlueprintCanvas({
           // uma espessura dela, então nada além disso pode ganhar.
           if (d > limite + w.thicknessMm) continue;
 
-          // A MESMA medida que o desenho usa. `extensaoDeCanto` já devolve 0 na
-          // ponta livre, então não há mais o que perguntar sobre junção aqui —
-          // e o canto oferecido ao clique é, por construção, o canto que está
-          // na tela.
-          const cantos = cantosDaParede(
-            w.a,
-            w.b,
-            w.thicknessMm,
-            extensaoDeCanto(paredesDoNivel, w, 'a'),
-            extensaoDeCanto(paredesDoNivel, w, 'b'),
+          // ⚠️ PONTA UNIDA A UMA VIZINHA: os cantos saem do CRUZAMENTO DAS
+          // FACES, não do retângulo esticado. O avanço da junção estica as duas
+          // faces: a externa acerta o canto de fora, mas a interna passa do
+          // canto de dentro e termina dentro da vizinha — e o canto INTERNO do
+          // cômodo não existia para o ímã (print do usuário, 14/10/2026: a laje
+          // prendia 150 mm ao lado dele). Ver `cantosDaJuncao`.
+          const vizinhas = paredesDoNivel.filter(
+            (o) =>
+              o.id !== w.id &&
+              ((o.a.x === extremo.x && o.a.y === extremo.y) || (o.b.x === extremo.x && o.b.y === extremo.y)),
           );
+          const daJuncao =
+            vizinhas.length === 1
+              ? cantosDaJuncao(
+                  extremo,
+                  end === 'a' ? w.b : w.a,
+                  w.thicknessMm,
+                  vizinhas[0].a.x === extremo.x && vizinhas[0].a.y === extremo.y ? vizinhas[0].b : vizinhas[0].a,
+                  vizinhas[0].thicknessMm,
+                ).map((c) => point(c.x, c.y))
+              : [];
+          // Fora disso (ponta livre, ou três paredes no mesmo vértice), o
+          // retângulo — `extensaoDeCanto` devolve 0 na ponta livre. Só os dois
+          // cantos DESTA ponta: os da outra entram quando o laço chegar nela.
+          let cantos: Point[] = daJuncao;
+          if (cantos.length === 0) {
+            const r = cantosDaParede(
+              w.a,
+              w.b,
+              w.thicknessMm,
+              extensaoDeCanto(paredesDoNivel, w, 'a'),
+              extensaoDeCanto(paredesDoNivel, w, 'b'),
+            );
+            cantos = end === 'a' ? [r[0], r[3]] : [r[1], r[2]];
+          }
           for (const c of cantos) {
+            if (!c) continue;
             const dc = Math.hypot(c.x - mundo.x, c.y - mundo.y);
             if (dc < limite && dc < distCanto) {
               melhorCanto = c;
@@ -2849,6 +2880,8 @@ export default function BlueprintCanvas({
       // mouse — sem o limite, afastar a vista e mover o cursor levantaria uma
       // exceção não tratada dentro do handler de ponteiro e derrubaria a aba.
       const limitar = (v: number) => Math.max(-LIMITE_MM, Math.min(LIMITE_MM, v));
+
+      if (passoDoEncaixe === null) return { x: limitar(mundo.x), y: limitar(mundo.y) } as Point;
 
       return point(
         limitar(Math.round(mundo.x / passoDoEncaixe) * passoDoEncaixe),
@@ -10140,13 +10173,16 @@ export default function BlueprintCanvas({
 
     if (
       tool === 'calibrar' ||
-      tool === 'medir-area' ||
-      tool === 'medir-linha' ||
-      tool === 'contar' ||
       // F2: sem encaixe — o cursor só aponta o ambiente, não constrói nada.
       tool === 'ambiente'
     ) {
       setCursor(paraMundo(px, py) as Point);
+      return;
+    }
+
+    if (tool === 'medir-area' || tool === 'medir-linha' || tool === 'contar') {
+      // A prévia usa a MESMA captura do clique: ímã nas peças, sem grade.
+      setCursor(capturar(paraMundo(px, py), false, null));
       return;
     }
 
@@ -10364,10 +10400,14 @@ export default function BlueprintCanvas({
     }
 
     if (tool === 'medir-area' || tool === 'medir-linha' || tool === 'contar') {
-      // SEM encaixe na grade: a pessoa está apontando um canto no DESENHO de
+      // SEM encaixe na GRADE: a pessoa está apontando um canto no DESENHO de
       // fundo, não construindo geometria. Encaixar deslocaria o vértice para o
       // ponto mais próximo da grade e a área medida sairia errada.
-      const p = { x: mundo.x, y: mundo.y } as Point;
+      //
+      // COM o ímã das PEÇAS (14/10/2026, decisão do usuário): a regra acima
+      // tirava também o encaixe no canto e na face da parede, e medir de canto a
+      // canto dependia de acertar o pixel. Fora das peças, o ponto é o cru.
+      const p = capturar(mundo, false, null);
 
       if (tool === 'contar') {
         // Contagem fecha a cada clique: cada ponto é uma unidade.

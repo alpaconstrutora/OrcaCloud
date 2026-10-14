@@ -254,3 +254,41 @@ seguem SEM ímã. O código justifica pela GRADE ("encaixar deslocaria o vértic
 a grade"), mas a regra acabou tirando também o ímã de OBJETO — medir de canto a
 canto de parede depende de acertar o pixel. Ligar só o ímã de objeto (sem grade)
 nessas ferramentas é decisão de produto, não correção.
+
+### Item 4 — o canto INTERNO da junção existe para o ímã
+
+> *"1. veja que continua nao consiguindo encaixar a laje no canto interno da
+> parece."* (14/10/2026, com print: laje encostada 150 mm ao lado do canto)
+
+**O defeito:** o canto vinha de `cantosDaParede` com a ponta esticada pelo avanço
+da junção — e o avanço estica as DUAS faces. A externa acerta o canto de fora; a
+interna passa do canto de dentro e termina dentro da parede vizinha. O ímã
+prendia em (6085, 1105), um ponto na face de fora da vizinha, e não em
+(5935, 1105), o canto que se vê.
+
+**O que muda:** `cantosDaJuncao` (puro, em `blueprintEncaixe.ts`) cruza as faces
+— interna com interna, externa com externa —, o que vale para qualquer ângulo e
+espessuras diferentes. Em `capturar`, ponta com UMA vizinha usa esses dois
+cantos; ponta livre e nó de três paredes seguem no retângulo.
+
+**Como sei que terminou:** ✅ 5 testes de unidade (90°, ordem, espessuras
+diferentes, 60°, colinear) e ✅ harness `passeio.mjs`: canto interno do L →
+(5935, 1105), externo → (6085, 955).
+
+⚠️ **Não coberto:** nó de TRÊS ou mais paredes (T, cruz) continua no retângulo —
+lá os cantos internos também podem cair dentro da vizinha. Fica para quando
+aparecer no uso, com print.
+
+### Item 5 — Medir linha/área e Contar ganham o ímã das PEÇAS, sem a grade
+
+> *"Posso ligar nelas só o encaixe em peças, mantendo a grade de fora. Quer? sim"*
+> (14/10/2026)
+
+**O que muda:** `capturar(mundo, preferirCanto, null)` — passo `null` = sem grade:
+prende nas peças e, fora delas, devolve o ponto cru. Prévia e clique usam a
+mesma chamada. Calibrar e Ambiente seguem sem ímã nenhum (apontam pixel da
+imagem e ambiente, não geometria).
+
+**Como sei que terminou:** ✅ harness `passeio.mjs` com `?ferramenta=contar`
+(mesmo caminho de Medir): canto interno e ponta prendem; longe das peças o
+ponto sai exato, sem cair em múltiplo de 100.

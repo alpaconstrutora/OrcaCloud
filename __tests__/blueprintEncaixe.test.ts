@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  cantosDaJuncao,
   TIPOS_GEOMETRICOS,
   encaixeGeometrico,
   type SegmentoParaEncaixe,
@@ -174,5 +175,47 @@ describe('encaixe · casos degenerados', () => {
     });
     expect(r?.tipo).toBe('MEIO');
     expect(r?.id).toBe('w150');
+  });
+});
+
+// ─── Cantos da junção (14/10/2026) ──────────────────────────────────────────
+//
+// Print do usuário: a laje não encaixava no canto INTERNO do cômodo. O canto
+// saía do retângulo esticado pela junção, e o lado interno do retângulo passa
+// do canto e termina dentro da parede vizinha.
+describe('cantosDaJuncao', () => {
+  const P = { x: 0, y: 0 };
+
+  it('L a 90°: externo e interno no cruzamento das faces', () => {
+    // A vem da esquerda, B sobe: o interno fica em cima à esquerda.
+    const [externo, interno] = cantosDaJuncao(P, { x: -5000, y: 0 }, 150, { x: 0, y: 3000 }, 150);
+    expect(externo).toEqual({ x: 75, y: -75 });
+    expect(interno).toEqual({ x: -75, y: 75 });
+  });
+
+  it('a ordem das paredes não muda a resposta', () => {
+    const [e1, i1] = cantosDaJuncao(P, { x: -5000, y: 0 }, 150, { x: 0, y: 3000 }, 150);
+    const [e2, i2] = cantosDaJuncao(P, { x: 0, y: 3000 }, 150, { x: -5000, y: 0 }, 150);
+    expect(e2).toEqual(e1);
+    expect(i2).toEqual(i1);
+  });
+
+  it('espessuras diferentes: cada face sai da SUA meia espessura', () => {
+    // A de 200 (faces em y = ±100), B de 120 (faces em x = ±60).
+    const [externo, interno] = cantosDaJuncao(P, { x: -5000, y: 0 }, 200, { x: 0, y: 3000 }, 120);
+    expect(externo).toEqual({ x: 60, y: -100 });
+    expect(interno).toEqual({ x: -60, y: 100 });
+  });
+
+  it('ângulo oblíquo: o interno fica na bissetriz, do lado de dentro', () => {
+    // 60° entre as duas: o interno está a meia/sen(30°) = 2·meia do vértice.
+    const [, interno] = cantosDaJuncao(P, { x: 5000, y: 0 }, 100, { x: 2500, y: 4330 }, 100);
+    expect(Math.round(Math.hypot(interno.x, interno.y))).toBe(100);
+    // Do lado de dentro: entre as duas paredes (ângulo de 30°, a bissetriz).
+    expect(Math.round((Math.atan2(interno.y, interno.x) * 180) / Math.PI)).toBe(30);
+  });
+
+  it('colineares não têm canto', () => {
+    expect(cantosDaJuncao(P, { x: -5000, y: 0 }, 150, { x: 5000, y: 0 }, 150)).toEqual([]);
   });
 });

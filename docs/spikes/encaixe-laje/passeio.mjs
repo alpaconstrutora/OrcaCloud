@@ -47,6 +47,17 @@ const casos = [
   { ativos: 'CANTO', alinhamento: 'EIXO', mira: MIRA, espera: CANTO, nome: 'só Canto, eixo' },
   { ativos: 'EXTREMIDADE,CANTO', alinhamento: 'DIREITA', mira: MIRA, espera: CANTO, nome: 'os dois, face' },
   { ativos: 'EXTREMIDADE,CANTO', alinhamento: 'EIXO', mira: MIRA, espera: PONTA, nome: 'os dois, eixo' },
+  // CANTO INTERNO do L (14/10/2026, print do usuário: a laje não encaixava no
+  // canto de dentro). Parede de baixo vai até (6010, 1030), a de cima sobe dali:
+  // o canto que se VÊ por dentro é (5935, 1105); o externo, (6085, 955).
+  { ativos: 'CANTO', alinhamento: 'DIREITA', mira: { x: 5960, y: 1130 }, espera: { x: 5935, y: 1105 }, nome: 'canto INTERNO do L' },
+  { ativos: 'CANTO', alinhamento: 'DIREITA', mira: { x: 6060, y: 980 }, espera: { x: 6085, y: 955 }, nome: 'canto EXTERNO do L' },
+  { ativos: 'EXTREMIDADE,CANTO', alinhamento: 'DIREITA', mira: { x: 5960, y: 1130 }, espera: { x: 5935, y: 1105 }, nome: 'interno, os dois ligados' },
+  // MEDIR / CONTAR (14/10/2026): ímã nas peças, SEM grade. Fora das peças o
+  // ponto é o cru — `espera: null` aceita qualquer ponto que NÃO seja de grade.
+  { ferramenta: 'contar', ativos: 'CANTO', alinhamento: 'DIREITA', mira: { x: 5960, y: 1130 }, espera: { x: 5935, y: 1105 }, nome: 'contar · canto interno' },
+  { ferramenta: 'contar', ativos: 'EXTREMIDADE', alinhamento: 'DIREITA', mira: MIRA, espera: PONTA, nome: 'contar · ponta' },
+  { ferramenta: 'contar', ativos: 'CANTO', alinhamento: 'DIREITA', mira: { x: 3030, y: 2530 }, espera: null, nome: 'contar · longe: sem grade' },
 ];
 
 let falhou = false;
@@ -54,7 +65,7 @@ for (const c of casos) {
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   const erros = [];
   page.on('pageerror', (e) => erros.push(String(e)));
-  const q = `?ativos=${c.ativos}&alinhamento=${c.alinhamento}`;
+  const q = `?ativos=${c.ativos}&alinhamento=${c.alinhamento}${c.ferramenta ? `&ferramenta=${c.ferramenta}` : ''}`;
   await page.goto(`${urlBase}/docs/spikes/encaixe-laje/index.html${q}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(400);
 
@@ -70,7 +81,10 @@ for (const c of casos) {
   await page.waitForTimeout(200);
   const dump = JSON.parse(await page.locator('#dump').textContent());
   const p = dump.pontos[dump.pontos.length - 1];
-  const ok = p && p.x === c.espera.x && p.y === c.espera.y;
+  const ok =
+    c.espera === null
+      ? !!p && Math.hypot(p.x - c.mira.x, p.y - c.mira.y) < 30 && (p.x % 100 !== 0 || p.y % 100 !== 0)
+      : p && p.x === c.espera.x && p.y === c.espera.y;
   if (!ok) falhou = true;
   console.log(
     `${ok ? '✅' : '❌'} ${c.nome.padEnd(24)} [${c.ativos || '—'} / ${c.alinhamento}] → ${JSON.stringify(p)}  esperado ${JSON.stringify(c.espera)}${erros.length ? '  ERROS: ' + erros.join(' | ') : ''}`,

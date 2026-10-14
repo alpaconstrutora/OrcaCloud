@@ -154,6 +154,62 @@ function cruzamento(
   return { ponto: { x: a1.x + ta * dax, y: a1.y + ta * day }, ta, tb };
 }
 
+/**
+ * Os dois cantos VISÍVEIS onde duas paredes se encontram pela ponta: o externo
+ * e o interno, nesta ordem. Vazio quando as duas são colineares (não há canto).
+ *
+ * ─── ⚠️ POR QUE NÃO O RETÂNGULO ESTICADO (14/10/2026) ───────────────────────
+ *
+ * O canto vinha de `cantosDaParede` com a ponta ESTICADA pelo avanço da junção —
+ * e o avanço estica as DUAS faces. A externa chega ao canto de fora; a interna
+ * passa do canto de dentro e termina dentro da OUTRA parede, num ponto que não
+ * é canto de nada. Print do usuário: a laje não encaixava no canto interno do
+ * cômodo, e o ímã a prendia 150 mm ao lado, na face de fora da parede vizinha.
+ *
+ * Cruzar as faces resolve qualquer ângulo e espessuras diferentes: o canto
+ * interno é o cruzamento das duas faces internas; o externo, das externas. A
+ * face "interna" de cada parede é a do lado em que a OUTRA segue.
+ *
+ * @param p      o vértice comum (ponta do eixo das duas)
+ * @param longeA a outra ponta do eixo da parede A
+ * @param longeB a outra ponta do eixo da parede B
+ */
+export function cantosDaJuncao(
+  p: Ponto2D,
+  longeA: Ponto2D,
+  espessuraA: number,
+  longeB: Ponto2D,
+  espessuraB: number,
+): Ponto2D[] {
+  const versor = (q: Ponto2D) => {
+    const c = Math.hypot(q.x - p.x, q.y - p.y);
+    return c === 0 ? null : { x: (q.x - p.x) / c, y: (q.y - p.y) / c };
+  };
+  const uA = versor(longeA);
+  const uB = versor(longeB);
+  if (!uA || !uB) return [];
+  const nA = { x: -uA.y, y: uA.x };
+  const nB = { x: -uB.y, y: uB.x };
+  // Lado em que a vizinha segue — zero é colinear, e aí não há canto.
+  const ladoA = Math.sign(nA.x * uB.x + nA.y * uB.y);
+  const ladoB = Math.sign(nB.x * uA.x + nB.y * uA.y);
+  if (ladoA === 0 || ladoB === 0) return [];
+
+  const face = (u: Ponto2D, n: Ponto2D, desloc: number): [Ponto2D, Ponto2D] => {
+    const o = { x: p.x + n.x * desloc, y: p.y + n.y * desloc };
+    return [o, { x: o.x + u.x, y: o.y + u.y }];
+  };
+  const canto = (sinal: number) => {
+    const [a1, a2] = face(uA, nA, sinal * ladoA * (espessuraA / 2));
+    const [b1, b2] = face(uB, nB, sinal * ladoB * (espessuraB / 2));
+    const x = cruzamento(a1, a2, b1, b2);
+    return x ? { x: Math.round(x.ponto.x), y: Math.round(x.ponto.y) } : null;
+  };
+  const externo = canto(-1);
+  const interno = canto(1);
+  return externo && interno ? [externo, interno] : [];
+}
+
 export interface OpcoesDeEncaixe {
   /** Alcance em unidades do MODELO — quem chama converte de pixels. */
   limite: number;

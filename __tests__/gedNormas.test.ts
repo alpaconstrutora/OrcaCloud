@@ -1,5 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { formatarReferenciaNorma, NORMA_SITUACOES, extrairNormaDoNomeDoArquivo } from '../utils/gedNormas';
+import { formatarReferenciaNorma, NORMA_SITUACOES, extrairNormaDoNomeDoArquivo, opcoesEdicaoNorma } from '../utils/gedNormas';
+
+describe('opcoesEdicaoNorma', () => {
+  it('lista do ano seguinte ao atual até 1970, do mais recente ao mais antigo', () => {
+    const o = opcoesEdicaoNorma('', 2026);
+    expect(o[0]).toBe('2027');
+    expect(o[1]).toBe('2026');
+    expect(o[o.length - 1]).toBe('1970');
+  });
+
+  it('valor que já é um ano da lista não duplica', () => {
+    const o = opcoesEdicaoNorma('2015', 2026);
+    expect(o.filter(x => x === '2015')).toHaveLength(1);
+  });
+
+  it('valor antigo fora da lista entra no topo, para não ser apagado em silêncio', () => {
+    const o = opcoesEdicaoNorma('Portaria 3.733/2020', 2026);
+    expect(o[0]).toBe('Portaria 3.733/2020');
+    expect(o[1]).toBe('2027');
+  });
+});
 
 describe('formatarReferenciaNorma', () => {
   it('ABNT leva a sigla antes do código e a edição com dois-pontos', () => {

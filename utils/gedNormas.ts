@@ -28,6 +28,23 @@ export const NORMA_SITUACOES: Record<OpuraNormaSituacao, { label: string; classN
 
 export const NORMA_SITUACAO_PADRAO: OpuraNormaSituacao = 'em_vigor';
 
+/** Ano mais antigo oferecido no seletor de "Edição / ano". */
+export const NORMA_EDICAO_ANO_MIN = 1970;
+
+/**
+ * Opções do seletor "Edição / ano": do ano seguinte ao atual (norma publicada no
+ * fim do ano já circula com o ano novo) até 1970, do mais recente ao mais antigo.
+ * Se `valorAtual` não for um ano da lista — dado antigo digitado à mão, como
+ * "Portaria 3.733/2020" ou "2015 Emenda 1" — ele entra no topo, para o seletor
+ * nunca apagar em silêncio o que já está gravado.
+ */
+export function opcoesEdicaoNorma(valorAtual: string | null | undefined, anoAtual: number = new Date().getFullYear()): string[] {
+  const anos: string[] = [];
+  for (let a = anoAtual + 1; a >= NORMA_EDICAO_ANO_MIN; a--) anos.push(String(a));
+  const atual = limpar(valorAtual);
+  return atual && !anos.includes(atual) ? [atual, ...anos] : anos;
+}
+
 const limpar = (v: string | null | undefined) => (v ?? '').replace(/\s+/g, ' ').trim();
 
 /** Famílias reconhecidas no nome do arquivo, na ordem de teste: a mais específica

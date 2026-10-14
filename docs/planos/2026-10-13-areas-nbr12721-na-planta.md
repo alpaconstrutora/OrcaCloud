@@ -487,7 +487,7 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
     - seção: "Levar" com os 3 motivos e a abertura;
     - trava do `UNIT_COLS`.
   - **Suíte:** 9.187 = 9.153 + 34 pulados, 0 falhas, em 910 arquivos; tsc 0; `verificar:build` limpo; `check-ui-standard` limpo em `DevolucaoNbr12721`, `SecaoNbr12721DaVersao`, `VinculacoesTab` e `FracoesTab`. O `verificar-views-anon.sh` não se aplica: nenhuma view criada.
-- [ ] **Fase 10: remoção (4 de 5; o DROP da 10.5 roda depois que a produção estiver no código sem o Motor)**
+- [x] **Fase 10: remoção (5 de 5)** — código em 848d288a (check-run `ci` = success; `conferir-producao` = o domínio serve 848d288)
   - **Inventário do banco antes de qualquer remoção (14/10):**
     - 18 tabelas `area_*`, com 2 projetos e 3 versões, os mesmos da análise;
     - nenhuma view dependente, nenhum gatilho de fora, nenhum `cron`, nenhum enum `area_*` usado fora;
@@ -533,7 +533,14 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
       - o script da testemunha ganha o aviso "não roda mais; a testemunha está congelada nos JSON".
     - **Busca do critério:** sobram só as chaves de permissão `canView/canEditAreaEngine`, de propósito (dado gravado), e o redirecionamento de `area-engine`. Fora disso, `areaEngine|area-engine|AreaEngine` só aparece em migrations antigas e em documentos.
   - **Suíte:** 9.171 = 9.137 + 34 pulados, 0 falhas, em 911 arquivos. A conta fecha com 9.187 − 21 (areaEngineFixtures) + 5 novos e 910 − 1 + 2 arquivos. tsc 0; `verificar:build` limpo; `check-ui-standard` limpo nos `.tsx` tocados.
-  - **10.5 DROP:** pendente. Roda depois do push, com a produção conferida no código novo.
+  - **10.5 DROP — `aplicar_20271014400000_drop_area_engine.sql`** (aplicada depois de a produção estar no 848d288):
+    - **backup antes, fora do git:** `C:\D\ORÇACLOUD\backups\area_engine_2026-10-14\` com as 18 tabelas em JSON (contagens iguais ao inventário: 2 projetos, 3 versões, 85 unidades, 76 frações…) e as 9 funções como estavam no banco;
+    - **guarda no início:** exige exatamente 2 projetos e 3 versões, e nenhuma unidade apontando para versão antiga;
+    - **sem CASCADE:** uma dependência não vista teria falhado o DROP e desfeito tudo;
+    - **conferência no fim, dentro da transação:** sem tabela, função ou enum `area_*`;
+    - **ensaio antes:** o mesmo arquivo com ROLLBACK no lugar do COMMIT correu inteiro e foi desfeito (tabelas, projetos e coluna conferidos ainda lá);
+    - **resultado:** saíram 18 tabelas, 9 funções, 22 enums, `empreendimento_units.area_engine_version_id` e `empreendimento_types.motor_category`; as 85 unidades e os 24 tipos estão intactos;
+    - **produção depois do DROP, só lendo (roteiro `c:/tmp/pwtest/areas-nbr-pos-drop.cjs`):** lista de Empreendimentos (14), um Empreendimento com Torres & Unidades, Vinculações com a seção Áreas NBR e `#/area-engine` caindo na Planta; nenhum erro de página nem de HTTP.
 
 Ordem de publicação: cada fase publica sozinha (push em `main`). Até a fase 9 o Motor antigo continua no ar e intocado. A fase 10 só começa com as fases 0 a 9 provadas em produção.
 

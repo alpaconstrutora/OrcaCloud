@@ -32,6 +32,16 @@ interface Props {
   icone?: React.ComponentType<{ className?: string }>;
   /** Vai para o `title` do botão e para o `aria-label` do menu. */
   ajuda?: string;
+  /**
+   * Botão só com o ícone, do tamanho dos botões de ícone do ribbon — para o
+   * menu morar num grupo de botões sem destoar dele. O rótulo vira `aria-label`.
+   */
+  compacto?: boolean;
+  /**
+   * O número da etiqueta, quando não é "quantos itens estão ligados" — o menu
+   * de Encaixe tem um item mestre que não pode contar como um encaixe a mais.
+   */
+  contagem?: number;
 }
 
 /**
@@ -55,6 +65,8 @@ export default function MenuExibir({
   rotulo = 'Exibir',
   icone: IconeDoBotao = Eye,
   ajuda = 'Escolher o que aparece no desenho',
+  compacto = false,
+  contagem,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const caixaRef = useRef<HTMLDivElement>(null);
@@ -77,10 +89,34 @@ export default function MenuExibir({
     };
   }, [aberto]);
 
-  const ligados = grupos.flat().filter((i) => i.ligado).length;
+  const ligados = contagem ?? grupos.flat().filter((i) => i.ligado).length;
 
   return (
     <div className="relative" ref={caixaRef}>
+      {compacto ? (
+        <button
+          type="button"
+          onClick={() => setAberto((v) => !v)}
+          aria-expanded={aberto}
+          aria-haspopup="menu"
+          aria-label={`${rotulo} — ${ajuda}`}
+          title={`${rotulo} — ${ajuda}`}
+          className={`relative rounded-md border p-1.5 shadow-sm transition-colors ${
+            aberto || ligados > 0
+              ? 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <IconeDoBotao className="h-4 w-4" />
+          {/* A contagem fica no canto: o botão é do tamanho dos de ícone e
+              não tem onde escrever ao lado. */}
+          {ligados > 0 ? (
+            <span className="absolute -right-1 -top-1 rounded bg-blue-600 px-0.5 text-[9px] font-semibold leading-3 text-white">
+              {ligados}
+            </span>
+          ) : null}
+        </button>
+      ) : (
       <button
         type="button"
         onClick={() => setAberto((v) => !v)}
@@ -104,6 +140,7 @@ export default function MenuExibir({
         ) : null}
         <ChevronDown className="h-3 w-3" />
       </button>
+      )}
 
       {aberto ? (
         <div

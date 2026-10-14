@@ -91,7 +91,6 @@ import {
   Wind,
   BookMarked,
   Sigma,
-  Magnet,
   Blocks,
   Loader2,
   Maximize2,
@@ -10841,19 +10840,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             botoes: (
               <>
                 {/* MODOS globais: a trava ortogonal (F8; o mesmo estado do Orto da barra
-                    de opções) e o ímã dos encaixes (liga/desliga TODOS; a escolha fina
-                    continua no menu Encaixe). */}
+                    de opções) e o ímã dos encaixes — o MENU inteiro, com o liga/desliga
+                    geral como primeiro item. Era um botão de liga/desliga com o mesmo
+                    ícone do menu, e o usuário clicou nele esperando a lista. */}
                 <BotaoBarra
                   icone={Grid3x3}
                   rotulo={ortogonal ? 'Trava 90° ligada — Shift libera (F8 alterna)' : 'Trava 90° desligada — Shift trava (F8 alterna)'}
                   onClick={() => setOrtogonal((v) => !v)}
                   ativo={ortogonal}
                 />
-                <BotaoBarra
-                  icone={Magnet}
-                  rotulo={encaixesAtivos.size > 0 ? 'Encaixe ligado — desliga todos os ímãs' : 'Encaixe desligado — liga todos os ímãs'}
-                  onClick={() => setEncaixesLigados(encaixesAtivos.size > 0 ? [] : [...TIPOS_DE_ENCAIXE])}
-                  ativo={encaixesAtivos.size > 0}
+                <MenuEncaixe
+                  compacto
+                  ativos={encaixesAtivos}
+                  onAlternar={alternarEncaixe}
+                  onDefinirTodos={(ligar) => setEncaixesLigados(ligar ? [...TIPOS_DE_ENCAIXE] : [])}
                 />
               </>
             ),
@@ -14455,7 +14455,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             </GrupoDoRibbon>
 
             <GrupoDoRibbon rotulo="Encaixe">
-              <MenuEncaixe ativos={encaixesAtivos} onAlternar={alternarEncaixe} />
+              <MenuEncaixe
+                ativos={encaixesAtivos}
+                onAlternar={alternarEncaixe}
+                onDefinirTodos={(ligar) => setEncaixesLigados(ligar ? [...TIPOS_DE_ENCAIXE] : [])}
+              />
               <label className="flex items-center gap-2 text-xs text-slate-600">
                 Grade
                 <select

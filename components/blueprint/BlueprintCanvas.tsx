@@ -2754,16 +2754,22 @@ export default function BlueprintCanvas({
         }
       }
 
-      const primeiro = preferirCanto ? melhorCanto : melhorEixo;
-      const segundo = preferirCanto ? melhorEixo : melhorCanto;
-      const achado = primeiro ?? segundo;
-      if (achado) {
-        // ⚠️ A EXTREMIDADE e o CANTO continuam sendo resolvidos aqui, e não no
-        // motor geométrico: este laço carrega o portão de distância que evita a
-        // varredura quadrática de `isFreeWallEnd` com 20 mil paredes. Mudar isso
-        // de lugar seria trocar uma otimização medida por elegância.
-        const tipoAntigo = achado === melhorCanto ? 'CANTO' : 'EXTREMIDADE';
-        if (encaixesAtivos.has(tipoAntigo)) {
+      // ⚠️ A EXTREMIDADE e o CANTO continuam sendo resolvidos aqui, e não no
+      // motor geométrico: este laço carrega o portão de distância que evita a
+      // varredura quadrática de `isFreeWallEnd` com 20 mil paredes. Mudar isso
+      // de lugar seria trocar uma otimização medida por elegância.
+      //
+      // ⚠️ O tipo DESLIGADO sai da disputa ANTES dela, e não depois. Escolhia-se
+      // um vencedor pela preferência e só então se perguntava se ele estava
+      // ligado — desligado, o ponto ia direto para a grade e o OUTRO candidato,
+      // ligado e no alcance, nunca era tentado. Relato de 14/10/2026: só
+      // "Extremidade" ligada, desenhando pela face (o padrão), e a laje não
+      // achava ponta de parede nenhuma — o canto ganhava, era recusado, e pronto.
+      const candidatos: Array<[Point | null, 'CANTO' | 'EXTREMIDADE']> = preferirCanto
+        ? [[melhorCanto, 'CANTO'], [melhorEixo, 'EXTREMIDADE']]
+        : [[melhorEixo, 'EXTREMIDADE'], [melhorCanto, 'CANTO']];
+      for (const [achado, tipoAntigo] of candidatos) {
+        if (achado && encaixesAtivos.has(tipoAntigo)) {
           ultimoEncaixe.current = { ponto: point(achado.x, achado.y), tipo: tipoAntigo };
           return ultimoEncaixe.current.ponto;
         }

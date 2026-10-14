@@ -5123,12 +5123,18 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
     expect(orto()).toHaveAttribute('aria-pressed', 'true');
     await user.click(orto());
     expect(orto()).toHaveAttribute('aria-pressed', 'false');
+    // O ímã do grupo Modos ABRE o menu de Encaixe (14/10/2026: era um
+    // liga/desliga com o mesmo ícone do menu, e o clique não mostrava a lista).
+    // O liga/desliga geral é o primeiro item.
     const encaixe = () => barra().getByRole('button', { name: /^encaixe/i });
-    expect(encaixe()).toHaveAttribute('aria-pressed', 'true');
     await user.click(encaixe());
-    expect(encaixe()).toHaveAttribute('aria-pressed', 'false');
-    await user.click(encaixe());
-    expect(encaixe()).toHaveAttribute('aria-pressed', 'true');
+    const mestre = () => screen.getByRole('menuitemcheckbox', { name: /^ímã/i });
+    expect(mestre()).toHaveAttribute('aria-checked', 'true');
+    await user.click(mestre());
+    expect(mestre()).toHaveAttribute('aria-checked', 'false');
+    await user.click(mestre());
+    expect(mestre()).toHaveAttribute('aria-checked', 'true');
+    await user.keyboard('{Escape}');
 
     // Sem seleção: duplicar, espelhar e isolar desligados
     const duplicar = () => barra().getByRole('button', { name: /^duplicar seleção/i });

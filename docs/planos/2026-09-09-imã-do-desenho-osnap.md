@@ -180,3 +180,44 @@ textos legíveis sozinhos e ilegíveis juntos, exatamente no instante em que os
 dois importam. O rótulo passou para BAIXO da marca.
 
 É a diferença entre medir e olhar: a contagem de pixels aprovou as duas versões.
+
+## ⚠️ 14/10/2026 — o ímã do ribbon não abria o menu, e um tipo só não prendia
+
+### Pedidos (sessão de 14/10/2026, Claude Code)
+
+> *"ao clicar no botão nao abriu o menu com checkboxes"*
+
+> *"2. Transformar o ímã do "Modos" no próprio menu, com o mesmo MenuEncaixe e o
+> liga/desliga geral como primeiro item. outro problema, veja print. deixei
+> selecionado estremidade e depois cantos. Tentei desenhar uma laje e nao
+> encontrou nem o canto e nem a extremidades das paredes para encaixar a laje"*
+
+### Item 1 — o ímã do grupo Modos É o menu
+
+**O que muda:** o ímã ao lado da Trava 90° era um liga/desliga com o MESMO ícone
+do menu Encaixe (Vista → Encaixe). O usuário clicou esperando a lista. Agora ele
+abre o `MenuEncaixe` (modo `compacto` do `MenuExibir`: botão só de ícone, contagem
+no canto), e o liga/desliga geral é o primeiro item. O menu da aba Vista ganhou o
+mesmo item.
+
+**Como sei que terminou:** ✅ `__tests__/components/MenuEncaixe.test.tsx` — o
+clique abre 1 + 8 itens, o mestre desliga e religa tudo, a etiqueta conta só
+encaixes. O caso "acesso rápido" do `BlueprintEditor.test.tsx`, que fixava o
+liga/desliga antigo, passou a abrir o menu.
+
+### Item 2 — o tipo DESLIGADO sai da disputa antes dela
+
+**O defeito:** em `capturar`, extremidade e canto disputavam pela preferência
+(`preferirCanto`, verdadeiro no alinhamento padrão `DIREITA`) e só DEPOIS se
+perguntava se o vencedor estava ligado. Desligado → grade, e o outro candidato,
+ligado e no alcance, nunca era tentado. Com só "Extremidade" ligada (o print
+mostrava a etiqueta "1"), desenhando pela face, nenhuma ponta de parede prendia.
+
+**Como sei que terminou:** ✅ medido em navegador — `docs/spikes/encaixe-laje/`,
+pilar (mesmo `capturarTracado` da laje, mas grava num clique):
+
+| ligados | alinhamento | antes | depois |
+|---|---|---|---|
+| só Extremidade | face | ❌ grade (1100, 1100) | ✅ (1010, 1030) |
+| só Canto | eixo | ❌ grade | ✅ (1010, 1105) |
+| as outras 6 combinações | | ✅ | ✅ |

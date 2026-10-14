@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   CircleDot,
+  CircleOff,
   CornerUpLeft,
   Magnet,
   MoveHorizontal,
@@ -33,9 +34,21 @@ import { ROTULO_DO_ENCAIXE, TIPOS_DE_ENCAIXE } from '../../utils/blueprintEncaix
 export default function MenuEncaixe({
   ativos,
   onAlternar,
+  onDefinirTodos,
+  compacto = false,
 }: {
   ativos: ReadonlySet<string>;
   onAlternar: (chave: string) => void;
+  /**
+   * O liga/desliga GERAL, como primeiro item. Era um botão de ímã à parte no
+   * grupo Modos, com o MESMO ícone deste menu — e o usuário, 14/10/2026,
+   * clicou nele esperando a lista: *"ao clicar no botão nao abriu o menu com
+   * checkboxes"*. Dois controles iguais com comportamentos diferentes; agora é
+   * um só.
+   */
+  onDefinirTodos?: (ligar: boolean) => void;
+  /** Botão só com o ícone, para morar no grupo Modos do ribbon. */
+  compacto?: boolean;
 }) {
   const ICONE: Record<string, React.ComponentType<{ className?: string }>> = {
     EXTREMIDADE: Square,
@@ -71,15 +84,36 @@ export default function MenuEncaixe({
     ajuda: AJUDA[t] ?? '',
   }));
 
+  // "Algum ligado" e não "todos ligados": é o estado que o usuário sente no
+  // desenho (o ímã age ou não age), e é o que o clique inverte — com qualquer
+  // um ligado, desliga tudo; com tudo desligado, liga tudo.
+  const algumLigado = ativos.size > 0;
+  const mestre: ItemDeExibicao[] = onDefinirTodos
+    ? [
+        {
+          chave: 'TODOS',
+          rotulo: algumLigado ? 'Ímã ligado — desligar todos' : 'Ímã desligado — ligar todos',
+          icone: algumLigado ? Magnet : CircleOff,
+          ligado: algumLigado,
+          alternar: () => onDefinirTodos(!algumLigado),
+          ajuda:
+            'Liga ou desliga todos os encaixes de uma vez. A escolha fina é nos itens abaixo. Não mexe na GRADE: desligado, o ponto continua caindo no passo dela.',
+        },
+      ]
+    : [];
+
   return (
     <MenuExibir
       rotulo="Encaixe"
       icone={Magnet}
       ajuda="Em que pontos notáveis o cursor prende"
+      compacto={compacto}
+      // A etiqueta conta ENCAIXES ligados; o item mestre não é um deles.
+      contagem={itens.filter((i) => i.ligado).length}
       // Dois grupos: os que existem em qualquer peça e os que dependem do
       // contexto do traço. A divisória é informação — ela agrupa o que se
       // costuma ligar e desligar junto.
-      grupos={[itens.slice(0, 5), itens.slice(5)]}
+      grupos={[...(mestre.length ? [mestre] : []), itens.slice(0, 5), itens.slice(5)]}
     />
   );
 }

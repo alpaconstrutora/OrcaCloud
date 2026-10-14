@@ -78,3 +78,9 @@ fechando; nenhum `utils/` tocado.
 - [x] 5 Verificação (14/10/2026): `check-ui-standard.sh` 0 alertas nos 4 arquivos de tela; `tsc` exit 0,
   0 erros; editor sozinho 252/252; 36 arquivos (painéis + resumo + hidráulica + memoriais + Saídas
   de Incêndio + guarda de cabeçalho) 292/292. Nenhum arquivo de `utils/` tocado.
+
+## Publicação
+
+14/10/2026: `d73f51b7` empurrado para `main` (`f28fe96a..d73f51b7`). Check-run `ci` = success.
+`conferir-producao.sh "Dimensionamento da água" "Abrir dimensionamento"`: os dois textos no bundle
+servido (domínio em `82a2029`, que contém o commit). Conferência VISUAL na tela ainda não feita.

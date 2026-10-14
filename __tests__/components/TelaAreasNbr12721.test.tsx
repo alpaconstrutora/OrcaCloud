@@ -162,3 +162,23 @@ describe('TelaAreasNbr12721 — Acessórios e Ambientes declarados (Fase 6b)', (
     expect(onRunBatch.mock.calls.at(-1)![0]).toEqual([expect.objectContaining({ type: 'DeleteAmbienteDeclarado' })]);
   });
 });
+
+describe('Hipóteses — salvar com o estado de verdade (achado da prova no app real, 14/10)', () => {
+  it('as hipóteses que voltam do salvar NÃO apagam o "Hipóteses salvas."; o campo mostra o valor gravado', async () => {
+    function ComEstado() {
+      const [h, setH] = React.useState(HIPOTESES_NBR12721_PADRAO);
+      return (
+        <ConfirmProvider>
+          <TelaAreasNbr12721 model={predio()} hipoteses={h} onSalvarHipoteses={async (n) => setH({ ...n })} onRunBatch={vi.fn()} erro={null} />
+        </ConfirmProvider>
+      );
+    }
+    render(<ComEstado />);
+    await userEvent.click(screen.getByRole('tab', { name: (n) => n.replace(/\s*\d+$/, '') === 'Hipóteses' }));
+    await userEvent.type(screen.getByLabelText('Coberta de padrão diferente'), '0,75');
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar hipóteses' }));
+    expect(await screen.findByText('Hipóteses salvas.')).toBeTruthy();
+    expect((screen.getByLabelText('Coberta de padrão diferente') as HTMLInputElement).value).toBe('0,75');
+    expect(screen.getByRole('button', { name: 'Salvar hipóteses' }).getAttribute('title')).toBe('Nada mudou');
+  });
+});

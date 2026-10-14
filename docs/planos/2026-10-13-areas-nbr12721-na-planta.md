@@ -286,7 +286,7 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
   - `__tests__/blueprintUnidadesDoPredio.test.ts`: 6 testes. 4 unidades × (1 tipo + 10 cópias) = 44, com números únicos e a área igual à da origem; geminada na cópia; renomear a origem propaga; apagar a cópia some com as unidades dela; numeração fora do padrão; duplex. Mutação provada: medir a cópia sem as vizinhas derruba o teste da geminada.
   - Suíte: 9.119 = 9.085 + 34 pulados, 0 falhas; tsc 0 erros.
 - [x] Fase 3 publicada: `b4f93bd5`
-- [ ] Fase 4: adaptador e hipóteses (1 de 2 completos; 4.2 falta a prova no app real, que depende da tela da Fase 6)
+- [x] Fase 4: adaptador e hipóteses (2 de 2; a 4.2 fechou em 14/10 com a prova no app real da 6b)
   - [x] 4.1 `utils/blueprintNbr12721.ts`
     - `entradaDoEstudo(model, hip)` usa as unidades do prédio (Fase 3), os ambientes desenhados (eixo), a **metade das paredes externas de cada unidade** como espaço privativo próprio e o **resto da área construída** como "Paredes e circulação — <pavimento>" (comum proporcional padrão). Assim o Quadro I fecha com `areaConstruidaMm2`.
     - Vaga vinculada **sai do ambiente que a contém** e entra como acessório, com a cobertura e o coeficiente daquele ambiente.
@@ -297,14 +297,14 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
     - **Limite conhecido:** a unidade DERIVADA (andar copiado) ainda não recebe acessório próprio; o vínculo de vaga só existe na unidade de origem. Isso fica para a Fase 6, com a tela de acessórios (campo opcional de pavimento no acessório).
     - `__tests__/blueprintNbr12721.test.ts`: 8 testes. A privativa do IV-B é igual à da Planta; o Quadro I do pavimento é igual à área construída; classificação gravada × hipótese × MOTOR_007; andares copiados; vaga sai da garagem; rateio por hipótese e órfão; sugestão (varanda/descoberta/comum); o **estudo só com declarados reproduz o caso 02 da testemunha** (Quadros I, II e IV-B, 1e-9); sanitização das hipóteses.
     - Mutações provadas: tirar a metade externa derruba 1 teste; não descontar a vaga derruba 1.
-  - [ ] 4.2 `aplicar_20271013200000_blueprint_study_nbr12721.sql` **aplicada no remoto em 13/10** (tabela nova, uma policy de uma perna `is_org_member`, REVOKE de anon/PUBLIC, GRANT só a authenticated), `services/blueprintNbr12721Service.ts` (get com o padrão quando não há linha; save sanitizado, organização DO ESTUDO) e `types/blueprint.ts` (`BlueprintNbr12721Row`).
+  - [x] 4.2 `aplicar_20271013200000_blueprint_study_nbr12721.sql` **aplicada no remoto em 13/10** (tabela nova, uma policy de uma perna `is_org_member`, REVOKE de anon/PUBLIC, GRANT só a authenticated), `services/blueprintNbr12721Service.ts` (get com o padrão quando não há linha; save sanitizado, organização DO ESTUDO) e `types/blueprint.ts` (`BlueprintNbr12721Row`).
     - Prova de RLS num bloco que sempre aborta (a tabela continuou com 0 linhas): um autenticado membro de nada vê 0 e o UPDATE dele afeta 0; o membro da organização do estudo vê 1. Não havia, no banco, usuário que estivesse em alguma organização e fora da do estudo, por isso foi usado um uid novo.
     - `__tests__/blueprintNbr12721Service.test.ts`: 3 testes.
     - `verificar-views-anon.sh` não rodou: pede a senha do agente-leitura, e a migration não cria view.
     - **Falta:** gravar e ler pelo serviço no app real, que vem com a tela da Fase 6.
   - Suíte: 9.130 = 9.096 + 34 pulados, 0 falhas; tsc 0 erros; `check-org-selector-guard` ok.
 - [x] Fase 4 publicada: `56803298`, check-run `ci` = success
-- [ ] Fase 5: estudo sem desenho (1 de 2)
+- [x] Fase 5: estudo sem desenho (2 de 2; o 5.2 entrou com a 6b)
   - [x] 5.1 `utils/blueprintEstudoDoEmpreendimento.ts` (puro) + `services/blueprintEstudoDoEmpreendimento.ts`.
     - Porta o F1/F2 do Motor antigo: o template de pavimentos expandindo `repeat_count`, senão os andares das unidades; nome com o prefixo da torre quando há mais de uma.
     - Cada unidade vira uma `Unidade` (número cortado em 16 caracteres e único, com aviso) com **um ambiente declarado de `private_area` só** (a comum quem rateia é o motor). As áreas comuns viram declarados comuns proporcionais.
@@ -315,9 +315,9 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
       - Template com `repeat_count` e garagem; número longo e unidade sem área; duas torres; sem torre.
       - Serviço: organização do Empreendimento, recusa com vínculo e arquiva em falha.
     - Suíte: 9.138 = 9.104 + 34 pulados, 0 falhas. A conta fechou com o `blueprintCasaDeBombas.test.ts` rodado à parte (11 de 11) depois do "pending" do Node 24.
-  - [ ] 5.2 **Mudança de sequência (13/10):** o botão "Criar estudo de áreas (sem desenho)" e a edição em tabela dos declarados vão **junto com a tela da Fase 6** (aba "Ambientes declarados"). O estudo sem desenho abre na Planta com o canvas vazio; publicar o botão antes da tabela poria no ar um caminho que cria um estudo que ninguém consegue editar.
+  - [x] 5.2 (publicado na 6b, `7e2c6152`) **Mudança de sequência (13/10):** o botão "Criar estudo de áreas (sem desenho)" e a edição em tabela dos declarados vão **junto com a tela da Fase 6** (aba "Ambientes declarados"). O estudo sem desenho abre na Planta com o canvas vazio; publicar o botão antes da tabela poria no ar um caminho que cria um estudo que ninguém consegue editar.
 - [x] Fase 5.1 publicada: `eea4d7f4`, check-run `ci` = success
-- [ ] Fase 6: tela na Planta (2 de 2 itens do plano + 6b pendente). **Divisão (14/10):** 6a = a tela com classificação, quadros, frações, pendências e hipóteses + a coluna de fração; 6b = acessórios (inclusive na unidade de andar copiado, com campo de pavimento no acessório e bump do kernel), aba de ambientes declarados (tabela + importar XLSX), botão "Criar estudo de áreas" no Empreendimento (o 5.2) e a prova de gravar e ler as hipóteses no app real (fecha a 4.2).
+- [x] Fase 6: tela na Planta (2 de 2 itens do plano + 6a + 6b). **Divisão (14/10):** 6a = a tela com classificação, quadros, frações, pendências e hipóteses + a coluna de fração; 6b = acessórios (inclusive na unidade de andar copiado, com campo de pavimento no acessório e bump do kernel), aba de ambientes declarados (tabela + importar XLSX), botão "Criar estudo de áreas" no Empreendimento (o 5.2) e a prova de gravar e ler as hipóteses no app real (fecha a 4.2).
   - [x] 6.1 `components/blueprint/TelaAreasNbr12721.tsx`, ligada no editor (`telaAberta === 'areas-nbr12721'`, botão "Áreas NBR 12721" em Analisar ao lado de Unidades). As hipóteses são lidas ao abrir e gravadas na organização DO ESTUDO.
     - Abas (`TabsBar`): Classificação, Quadro I, Quadro II, Quadro IV-B, Frações, Pendências, Hipóteses. Os KPIs (`KpiCard`) são área real, área equivalente, unidades e pendências; quando o cálculo está bloqueado, o último card vira "Cálculo bloqueado".
     - Classificação: `ambientesParaClassificar` (as etiquetas dos andares COPIADOS ficam de fora: a sincronização do tipo as reescreve; a coluna "Cópias" diz quantas seguem cada uma), "Aplicar sugestões" num lote só, seleção em lote (§10) e drawer (`Sheet`, §26, malha §30). "Voltar a 'a classificar'" limpa.
@@ -344,7 +344,7 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
   - **Não conferido no app real com login:** o harness monta a tela de verdade, mas sem o editor em volta nem o banco. A prova logada (abrir num estudo real e gravar as hipóteses) depende da senha do agente-leitura e entra na 6b.
   - Suíte: 9.146 = 9.112 + 34 pulados, 0 falhas. A conta fechou com o `BlueprintEditor.test.tsx` rodado à parte (251 de 251) depois da interrupção do Node 24. tsc 0 erros.
   - [x] 6a publicada: `1582c2fd`, check-run `ci` = success
-  - [ ] **6b** (código pronto; falta a prova no app logado)
+  - [x] **6b** — código em `7e2c6152` (check-run `ci` = success) + correção da prova abaixo
     - **Kernel 0.100.0 → 0.101.0:** `AcessorioDaUnidade.levelUid?` liga o acessório à unidade DERIVADA de um andar copiado (a "201" da "101"); o vínculo mora na origem.
       - Comando e invariante recusam pavimento que não é cópia. O comando recusa explicitamente porque, de novo, a limpeza da cauda descartaria calado.
       - A cauda tira o acessório quando o andar some. No canônico vira `pavimento` (índice), só quando há.
@@ -361,7 +361,15 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
       - link direto: 2 casos (`tela` válida e desconhecida).
     - **Harness:** 9 abas, zero rolagem horizontal, prints conferidos.
     - Suíte: 9.153 = 9.119 + 34, 0 falhas; tsc 0; `check-ui-standard` limpo em `TelaAreasNbr12721`, `EmpreendimentoDetail` e `BlueprintModule`.
-    - **Falta (fecha a 6b e a 4.2):** no app logado (agente-leitura) e num estudo DESCARTÁVEL, criar o estudo de áreas pelo botão do Empreendimento, classificar, gravar e reler as hipóteses, e depois apagar e conferir no banco.
+    - **Prova no app real (14/10, escrita autorizada pelo usuário, agente-leitura, servidor local desta frente, roteiro `c:/tmp/pwtest/areas-nbr-app-real.cjs`, senha só por variável de ambiente):**
+      - Empreendimento descartável "ZZ TESTE Áreas NBR" (1 torre, 2 unidades de 60 e 40 m²) → "Criar estudo de áreas" → aviso "1 pavimento(s), 2 unidade(s), 2 ambiente(s)" → "Abrir na Planta" **abriu direto na tela Áreas NBR 12721** (KPI de unidades = 2).
+      - Hall de 20 m² declarado pela aba, sugestões aplicadas. Quadro II: 101 = 0,600000 com 12,00 m² do hall, 102 = 0,400000 com 8,00, Σ coeficientes 1,000000.
+      - Hipótese gravada **na organização do estudo (Alpa) com o topo em "Todas as organizações"** — conferido no banco (REGRA #5).
+      - Na 2ª rodada, o botão do Empreendimento já era "Áreas NBR 12721" e o Hall da 1ª rodada estava lá: o rascunho foi gravado.
+      - Depois de **recarregar a página**, a hipótese voltou do banco e o Hall continuou. Zero erro de página ou HTTP.
+      - **Defeito achado pela prova e corrigido:** "Hipóteses salvas." sumia na hora. O formulário tinha `key={JSON.stringify(hipoteses)}`, e as hipóteses que voltam do salvar o remontavam. O teste de componente não via porque o salvar simulado não devolvia hipóteses. Agora os campos acompanham por efeito, sem remontar. Teste novo com estado real; com a `key` de volta, ele reprova.
+      - **Limpeza conferida no banco:** estudo e Empreendimento de teste apagados num bloco que exige exatamente 1 de cada (cascata: ramos, hipóteses, torres, unidades). Antes = depois: 18 empreendimentos, 77 estudos, 0 hipóteses, 0 ramos e 0 torres sobrando. A trilha de auditoria do Empreendimento (sem FK, imutável) fica, como nas provas anteriores.
+    - Suíte: 9.154 = 9.120 + 34, 0 falhas; o `blueprintPlantaDaUnidade.test.ts` foi rodado à parte (22 de 22) depois do "pending" do Node 24.
 - [ ] Fase 7: congelar e aprovar (0 de 2)
 - [ ] Fase 8: saídas (0 de 2)
 - [ ] Fase 9: Empreendimento (0 de 3)

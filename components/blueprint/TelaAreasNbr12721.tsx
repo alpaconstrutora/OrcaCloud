@@ -311,6 +311,16 @@ function FormDeHipoteses({ hipoteses, onSalvar }: { hipoteses: HipotesesNbr12721
   const [regra, setRegra] = useState(hipoteses.numeracao.regra);
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
+  // As hipóteses chegam do banco (ao abrir) e voltam do salvar: os campos acompanham SEM remontar o
+  // formulário — remontar apagava o "Hipóteses salvas." logo depois de salvar (achado na prova no app
+  // real, 14/10/2026; o teste com o salvar simulado não devolvia hipóteses novas e não via).
+  useEffect(() => {
+    setDiferente(paraTexto(hipoteses.coeficientesPadrao.DIFERENTE));
+    setDescoberta(paraTexto(hipoteses.coeficientesPadrao.DESCOBERTA));
+    setEscopo(hipoteses.escopoPadrao);
+    setVaga(hipoteses.areaDaVagaMm2 == null ? '' : paraTexto(hipoteses.areaDaVagaMm2 / 1e6));
+    setRegra(hipoteses.numeracao.regra);
+  }, [hipoteses]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const num = (t: string) => (t.trim() ? Number(t.replace(',', '.')) : null);
   const proposta = hipotesesNbr12721DaColuna({
@@ -953,7 +963,7 @@ export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses,
         />
       )}
 
-      {aba === 'hipoteses' && <FormDeHipoteses key={JSON.stringify(hipoteses)} hipoteses={hipoteses} onSalvar={onSalvarHipoteses} />}
+      {aba === 'hipoteses' && <FormDeHipoteses hipoteses={hipoteses} onSalvar={onSalvarHipoteses} />}
     </div>
   );
 }

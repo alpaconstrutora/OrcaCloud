@@ -512,6 +512,35 @@ const CLIENTE: DefaultHelpItem[] = [
     ),
   },
   {
+    key: 'cliente.condominio.avisos', kind: 'artigo', section: 'condominio',
+    title: 'Condomínio: avisos da administração',
+    body_html: p(
+      'Em <strong>Avisos</strong> ficam os comunicados publicados pela administração do condomínio. Os que você ainda não leu aparecem como <strong>Não lido</strong>, e o número no menu mostra quantos são.',
+      'Clique num aviso para marcá-lo como lido. A administração acompanha quem já leu cada comunicado.',
+    ),
+  },
+  {
+    key: 'cliente.condominio.documentos', kind: 'artigo', section: 'condominio',
+    title: 'Condomínio: documentos do prédio',
+    body_html: p('Atas de assembleia, convenção, regimento interno e demais arquivos publicados pela administração. Clique num documento para abri-lo.'),
+  },
+  {
+    key: 'cliente.condominio.rateio', kind: 'artigo', section: 'condominio',
+    title: 'Condomínio: o rateio das despesas',
+    body_html: p(
+      'Em <strong>Financeiro</strong> você vê, mês a mês, as despesas do prédio e quanto coube à sua unidade. Escolha a competência no seletor ou ande pelas setas.',
+      'Cada rateio diz o tipo da taxa (ordinária ou extraordinária) e o critério da divisão. <strong>Baixar PDF</strong> gera o documento do rateio e, se você quiser, junta os comprovantes das despesas.',
+    ),
+  },
+  {
+    key: 'cliente.condominio.manutencao', kind: 'artigo', section: 'condominio',
+    title: 'Condomínio: manutenção e equipamentos do prédio',
+    body_html: p(
+      '<strong>Manutenção</strong> mostra o plano de manutenção do prédio (NBR 5674), com a periodicidade de cada item, e as ordens de serviço da administração.',
+      '<strong>Equipamentos</strong> lista os equipamentos do condomínio (elevadores, bombas, portões…) com a ficha de cada um. Para um reparo na SUA unidade, use a seção <strong>Manutenção</strong> do menu principal.',
+    ),
+  },
+  {
     key: 'cliente.geral.meus-dados', kind: 'artigo', section: null,
     title: 'Meus dados',
     body_html: p('Em <strong>Meus dados</strong> (no menu da conta, no canto superior direito) você vê o cadastro que a construtora tem de você. Para alterar qualquer informação, fale com a construtora.'),
@@ -543,6 +572,26 @@ const CLIENTE: DefaultHelpItem[] = [
     key: 'cliente.faq.recibo', kind: 'faq', section: 'financeiro',
     title: 'Onde encontro o recibo de uma parcela paga?',
     body_html: p('Em <strong>Financeiro</strong>, na linha da parcela paga. Se o recibo ainda não aparece, peça à construtora para emiti-lo.'),
+  },
+  {
+    key: 'cliente.faq.condominio-sem-unidade', kind: 'faq', section: 'condominio',
+    title: 'O Condomínio diz "Nenhuma unidade de condomínio".',
+    body_html: p('O seu cadastro ainda não consta como proprietário, inquilino ou responsável financeiro de nenhuma unidade. Peça à administração para registrar a sua ocupação.'),
+  },
+  {
+    key: 'cliente.faq.condominio-rateio-mes', kind: 'faq', section: 'condominio',
+    title: 'O rateio deste mês ainda não aparece.',
+    body_html: p('O rateio só é publicado depois que a administração fecha a competência. Até lá, o Financeiro do condomínio mostra só os meses já fechados.'),
+  },
+  {
+    key: 'cliente.faq.condominio-aviso-lido', kind: 'faq', section: 'condominio',
+    title: 'Como marco um aviso como lido?',
+    body_html: p('Em Condomínio › Avisos, clique no aviso. Ele deixa de aparecer como <strong>Não lido</strong> e sai da contagem do menu.'),
+  },
+  {
+    key: 'cliente.faq.condominio-reparo', kind: 'faq', section: 'condominio',
+    title: 'Onde peço um reparo: no Condomínio ou em Manutenção?',
+    body_html: p('Reparo na sua unidade vai em <strong>Manutenção</strong> do menu principal, como chamado. A Manutenção dentro do Condomínio mostra o que a administração cuida nas áreas comuns do prédio.'),
   },
   {
     key: 'cliente.faq.chamado-andamento', kind: 'faq', section: 'manutencao',
@@ -712,6 +761,8 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
       { key: 'cliente.tour.geral.financeiro', anchor: 'aba-financeiro', section: 'financeiro', title: 'Financeiro', body: 'Suas parcelas, o que já foi pago e os recibos.' },
       { key: 'cliente.tour.geral.financeiro-resumo', anchor: 'financeiro-resumo', section: 'financeiro', title: 'Resumo financeiro', body: 'Total do contrato, valor pago e saldo. As parcelas e os recibos vêm logo abaixo.' },
       { key: 'cliente.tour.geral.manutencao', anchor: 'aba-manutencao', section: 'manutencao', title: 'Manutenção', body: 'Precisa de um reparo? Abra o chamado por aqui e acompanhe o atendimento.' },
+      { key: 'cliente.tour.geral.condominio', anchor: 'aba-condominio', section: 'condominio', title: 'Condomínio', body: 'Tudo o que é do prédio: avisos da administração, documentos, rateio das despesas, manutenção e equipamentos. O número vermelho mostra os avisos que você ainda não leu.' },
+      { key: 'cliente.tour.geral.condominio-secoes', anchor: 'condominio-secoes', section: 'condominio', title: 'Seções do condomínio', body: 'Cada assunto do prédio tem a sua seção. Escolha aqui o que quer ver.' },
       { key: 'cliente.tour.geral.mais', anchor: 'mobile-mais', section: null, title: 'Mais seções', body: 'No celular, as outras seções e a Ajuda ficam aqui.' },
       { key: 'cliente.tour.geral.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da construtora.' },
       { key: 'cliente.tour.geral.conta', anchor: 'conta', section: null, title: 'Sua conta', body: 'No menu da conta você vê o cadastro que a construtora tem de você.' },
@@ -732,6 +783,11 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
       manutencao: tourDe('manutencao', [
         { key: 'cliente.tour.manutencao.abrir', anchor: 'manutencao-abrir', section: 'manutencao', title: 'Abrir Chamado', body: 'Descreva o problema, escolha a categoria e a prioridade. A construtora recebe na hora.' },
         { key: 'cliente.tour.manutencao.lista', anchor: 'manutencao-lista', section: 'manutencao', title: 'Seus chamados', body: 'Cada chamado mostra a prioridade e o status, que muda conforme o atendimento avança.' },
+      ]),
+      condominio: tourDe('condominio', [
+        { key: 'cliente.tour.condominio.predio', anchor: 'condominio-predio', section: 'condominio', title: 'Seu condomínio', body: 'O prédio que você está vendo, quantas unidades suas há nele e o CNPJ do condomínio.', quando: 'quando você tiver uma unidade num condomínio' },
+        { key: 'cliente.tour.condominio.secoes', anchor: 'condominio-secoes', section: 'condominio', title: 'As seções', body: 'Dados gerais (o prédio e as suas unidades), Avisos, Documentos, Financeiro (o rateio de cada mês), Manutenção e Equipamentos do prédio.' },
+        { key: 'cliente.tour.condominio.conteudo', anchor: 'condominio-conteudo', section: 'condominio', title: 'O conteúdo da seção', body: 'Em Avisos, clique num aviso para marcá-lo como lido. Em Financeiro, escolha a competência e baixe o PDF do rateio, com os comprovantes das despesas.' },
       ]),
     },
   },
@@ -780,6 +836,7 @@ export const CHECKLIST_ITEMS: Record<Portal, ChecklistItem[]> = {
     { key: 'cliente.checklist.baixar-documento', title: 'Baixe um documento', section: 'documentos', evento: 'acao:baixou-documento' },
     { key: 'cliente.checklist.financeiro', title: 'Confira o Financeiro', section: 'financeiro', evento: 'aba:financeiro' },
     { key: 'cliente.checklist.chamado', title: 'Abra um chamado de manutenção', section: 'manutencao', evento: 'acao:abriu-chamado' },
+    { key: 'cliente.checklist.condominio', title: 'Conheça o seu condomínio', section: 'condominio', evento: 'aba:condominio' },
   ],
 };
 

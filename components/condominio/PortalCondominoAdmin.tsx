@@ -31,8 +31,9 @@
 // quebrar deep-link nem preferência salva.
 import React from 'react';
 import {
-    Building2, Search, RefreshCw, Eye, Link as LinkIcon, AlertCircle, ArrowLeft,
+    Building2, Search, RefreshCw, Eye, Link as LinkIcon, AlertCircle, ArrowLeft, HelpCircle, PlayCircle,
 } from 'lucide-react';
+import { PortalHelp } from '../portal/PortalHelp';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from '../ui/TableUtils';
@@ -580,6 +581,11 @@ const PreviaDoPortal: React.FC<{
     // morador"; sem isto a prévia abre no meio do portal, com o "Voltar" fora
     // de vista.
     useScrollAoTopo(raiz);
+    // Ajuda e tour do Condomínio — os MESMOS do Portal do Cliente (a aba que
+    // esta tela espelha), em modo prévia: nada é gravado em nome do morador.
+    // `tourPedido` remonta o PortalHelp para o "Ver tour" poder repetir.
+    const [ajudaAberta, setAjudaAberta] = React.useState(false);
+    const [tourPedido, setTourPedido] = React.useState(0);
 
     return (
         <div ref={raiz} className="space-y-6 pb-20">
@@ -592,15 +598,50 @@ const PreviaDoPortal: React.FC<{
                 >
                     <ArrowLeft className="w-4 h-4" /> Voltar
                 </button>
-                {/* 2xl: 3xl é o topo de uma lista-raiz (§20); esta é o segundo
-                    salto (condomínio → acessos → prévia). */}
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-                    Como {previa.pessoa} vê o portal
-                </h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    {condominio.name} · {previa.unidade}
-                </p>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        {/* 2xl: 3xl é o topo de uma lista-raiz (§20); esta é o segundo
+                            salto (condomínio → acessos → prévia). */}
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                            Como {previa.pessoa} vê o portal
+                        </h1>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                            {condominio.name} · {previa.unidade}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setTourPedido(n => n + 1)}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
+                        >
+                            <PlayCircle className="w-[15px] h-[15px]" /> Ver tour
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setAjudaAberta(true)}
+                            title="Ajuda"
+                            aria-label="Abrir a ajuda do portal"
+                            data-tour="ajuda"
+                            className="p-2.5 bg-white border border-gray-100 rounded-[10px] text-gray-400 hover:text-gray-900 hover:bg-gray-50 transition-all shadow-sm"
+                        >
+                            <HelpCircle className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
             </div>
+            <PortalHelp
+                key={tourPedido}
+                open={ajudaAberta}
+                onClose={() => setAjudaAberta(false)}
+                portal="cliente"
+                orgId={condominio.organization_id}
+                visibleSections={['condominio']}
+                currentSection="condominio"
+                modoPrevia
+                forcarTour={tourPedido > 0 ? 'condominio' : null}
+                accent="coral"
+            />
 
             {/* Reusa o COMPONENTE da aba real (`client/CondominioTab`), não uma
                 cópia: uma segunda implementação divergiria no primeiro ajuste.

@@ -4239,7 +4239,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${condominioAberto ? 'rotate-90' : ''}`} />
                                 </button>
                                 {condominioAberto && (
-                                    <div className="ml-6 pl-3 border-l border-gray-200 flex flex-col gap-0.5 mb-1">
+                                    <div data-tour="condominio-secoes" className="ml-6 pl-3 border-l border-gray-200 flex flex-col gap-0.5 mb-1">
                                         {ABAS_CONDOMINIO.map(sub => {
                                             const ativo = activeTab === 'condominio' && abaCondominio === sub.id;
                                             return (

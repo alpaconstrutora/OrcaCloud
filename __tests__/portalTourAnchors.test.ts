@@ -30,7 +30,7 @@ const ARQUIVOS: Record<Portal, string[]> = {
     'components/BrokerPortal.tsx',
     ...['LeadManager', 'Commissions', 'Chat'].map(x => `components/broker/Broker${x}.tsx`),
   ],
-  cliente: ['components/ClientArea.tsx'],
+  cliente: ['components/ClientArea.tsx', 'components/client/CondominioTab.tsx'],
 };
 const fonteDe = (portal: Portal) =>
   ARQUIVOS[portal].map(f => readFileSync(resolve(__dirname, '..', f), 'utf-8')).join('\n');

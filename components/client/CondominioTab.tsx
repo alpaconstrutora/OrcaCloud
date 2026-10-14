@@ -1100,7 +1100,8 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                     "Dados Gerais": o banner coral que dizia isso lá dentro saiu a
                     pedido do usuário (24/09/2026), então esta linha é a única
                     identificação do condomínio na tela. */}
-                <div className={`flex items-center gap-1.5 px-4 pt-3 text-sm text-gray-500 ${abasNoMenuLateral ? 'md:pb-3 md:border-b md:border-[#ECECEF]' : ''}`}>
+                {/* data-tour: tour do Portal do Cliente (utils/portalHelpDefaults.ts) */}
+                <div data-tour="condominio-predio" className={`flex items-center gap-1.5 px-4 pt-3 text-sm text-gray-500 ${abasNoMenuLateral ? 'md:pb-3 md:border-b md:border-[#ECECEF]' : ''}`}>
                     <Building2 className="w-3.5 h-3.5 text-gray-400" />
                     {/* Sem a barra de abas, é esta linha que diz em que seção a
                         pessoa está — o rótulo longo, o que ela escreveu. */}
@@ -1117,11 +1118,13 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                           ].filter(Boolean).join(' · ')}
                 </div>
 
-                <div className={abasNoMenuLateral ? 'md:hidden' : undefined}>
+                {/* No link, no computador, as seções são subitens do menu lateral
+                    (ClientArea) — a mesma âncora está lá. */}
+                <div data-tour="condominio-secoes" className={abasNoMenuLateral ? 'md:hidden' : undefined}>
                     <PortalTabs tabs={abas} active={abaAtiva} onChange={(id) => setAba(id as AbaCondominio)} />
                 </div>
 
-                <div className="p-4 md:p-6">
+                <div data-tour="condominio-conteudo" className="p-4 md:p-6">
                     {abaAtiva === 'dados' && <PainelDadosGerais grupos={porCondominio} />}
                     {abaAtiva === 'avisos' && (
                         <PainelAvisos avisos={dados.avisos} multi={multi} naoLidos={naoLidos} onMarcarLido={onMarcarLido} />

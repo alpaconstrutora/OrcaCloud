@@ -120,3 +120,38 @@ Pronto quando:
 ## Fora do escopo
 
 - O Portal do Investidor e o do Colaborador não foram pedidos.
+
+## Pedido de 14/10/2026 (mesma sessão, depois da publicação)
+
+> no tour guiado faltou todo o condominio?
+
+> nao so o tour mais ajuda do condomínio tambem nao foi implementado
+
+Verdade: a 1ª entrega deixou o Condomínio só com um artigo genérico, sem passo de tour,
+sem "como usar esta tela" e sem perguntas. Além disso, **Portais › Portal do Condômino**
+(o espelho interno do que o morador vê) ficou sem ajuda e sem tour.
+
+### 5. Condomínio no tour e na ajuda
+
+O que muda:
+- **Tour do portal:** passos `aba-condominio` e `condominio-secoes`.
+- **"Como usar" do Condomínio:**
+  - `condominio-predio`, com `quando`;
+  - `condominio-secoes`;
+  - `condominio-conteudo`.
+  - As âncoras ficam em `client/CondominioTab.tsx` e nos subitens do menu lateral do link.
+- **Central:**
+  - 4 artigos novos: avisos, documentos, rateio, manutenção e equipamentos;
+  - 4 perguntas novas: sem unidade, rateio do mês, aviso lido, reparo no Condomínio ou em Manutenção.
+- **Checklist:** "Conheça o seu condomínio".
+- **`PortalCondominoAdmin`:** "Ver tour" e `?` na prévia do morador, com `PortalHelp` `portal="cliente"` em modo prévia, só a seção Condomínio, sem gravar nada.
+
+Pronto quando:
+- [x] `__tests__/portalHelpClienteCondominio.test.ts` (5) passa, e a âncora `CondominioTab` entra em `portalTourAnchors`.
+- [x] Na tela (`c:/tmp/pwtest/teste-ajuda-condominio.js`, dados simulados, escritas interceptadas):
+  - o tour do portal passa por "Condomínio" e "Seções do condomínio" no desktop e no celular;
+  - o mini-tour tem 3 passos;
+  - a central mostra os 5 artigos;
+  - o checklist marca o item do condomínio;
+  - sem erro de console.
+- [ ] Portal do Condômino conferido na tela pelo gestor. Pendente: exige login de gestor.

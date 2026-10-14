@@ -85,3 +85,9 @@ bundle da `planta-api`).
 - [x] 8 Verificação (14/10/2026): `check-ui-standard.sh` 0 alertas nos 7 arquivos de tela; `tsc` exit 0,
   0 erros; editor sozinho 252/252; 35 arquivos (painéis + hidráulica + memoriais + Saídas de Incêndio
   + guarda de cabeçalho) 289/289, conta fechando. Nenhum arquivo de `utils/` tocado.
+
+## Publicação
+
+14/10/2026: `fbc373dd` empurrado para `main` (`9277bc52..fbc373dd`). Check-run `ci` = success.
+`conferir-producao.sh "Hipóteses do alimentador" "Relançar tudo"`: os dois textos no bundle servido;
+domínio = `origin/main` (`4ed0cf4`, que já contém o commit). Conferência VISUAL na tela ainda não feita.

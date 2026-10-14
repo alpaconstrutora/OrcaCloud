@@ -26,9 +26,9 @@ regravava o `settings` INTEIRO a partir da cópia que a tela tinha em memória:
 - "Editar projeto" e qualquer outro save do projeto também regravam
   `diaryEntries` com o que estava em memória.
 
-## Itens — 4 de 5 concluídos (item 1: funções no ar, gatilho entra depois do push)
+## Itens — 5 de 5 concluídos em 14/10/2026
 
-### 1. 🟡 Banco: gravar um registro por vez, com a linha travada
+### 1. ✅ Banco: gravar um registro por vez, com a linha travada
 `aplicar_20271014500000_diario_gravacao_por_registro.sql`:
 - `diary_upsert_entry(p_project_id, p_entry)` e `diary_delete_entry(p_project_id,
   p_entry_id)` — `SECURITY INVOKER` (a RLS de `projects` decide quem grava),
@@ -75,8 +75,11 @@ gravação do diário descartada em silêncio. Então:
 
 1. ✅ 14/10 — só as funções (seções 2 e 3 do arquivo) aplicadas; ACL
    `{postgres, authenticated, service_role}`, `prosecdef = false`.
-2. push do front → conferir produção (`conferir-producao.sh`).
-3. arquivo inteiro (idempotente) → liga o gatilho.
+2. ✅ 14/10 — push `a47d499`; CI e Vercel `success`; `conferir-producao.sh`:
+   o domínio serve `a47d499`.
+3. ✅ 14/10 — arquivo inteiro aplicado; gatilho ativo (`tgenabled = O`);
+   3 diários / 3 registros intactos; roteiro 7/7 repetido contra os objetos em
+   produção (ROLLBACK, projeto de teste não ficou).
 
 Aba antiga aberta (PWA não recarregado) depois do passo 3: o save do registro
 "passa" e o registro não fica — cai com o primeiro reload. Uso hoje: 3 diários,

@@ -47,10 +47,24 @@ await p.locator('button', { hasText: 'Entrar Agora' }).click();
 await p.waitForTimeout(7000);      // o boot do app é lento
 ```
 
-**Credencial**: usuário de leitura dedicado, perfil Membro, não-admin — o RLS se
-aplica igual a qualquer usuário logado. **A senha não fica gravada em lugar
-nenhum**: peça ao usuário a cada sessão e passe por variável de ambiente
-(`PW_SENHA=... node script.js`), nunca escrita dentro do arquivo.
+**Credencial**: `agente-leitura@alpaconstrutora.com.br` — o RLS se aplica igual a
+qualquer usuário logado. ⚠️ **Não é só leitura**: conferido no banco em 14/10/2026,
+ela é `member` na *Alpa Construtora e Incorporadora* e **`admin` na *Construção do
+Edifício Garden Cambuhy SPE*** (topo da tela: "Admin da organização"). Nessa org ela
+**grava de verdade** — salvou a Nomenclatura e um boleto em produção no teste de
+Boletos (docs/planos/2026-10-13-boletos-nomenclatura.md). Antes de clicar em
+Salvar/Renomear/Excluir, confirme a organização do topo e combine o efeito com o
+usuário; para só olhar, fique na Alpa Construtora (membro) ou não clique em salvar.
+Reconfira o papel com
+`select m.role, o.name from organization_members m join organizations o on o.id=m.organization_id where lower(m.email)='agente-leitura@alpaconstrutora.com.br'`
+— o papel pode mudar. **A senha não fica gravada em lugar nenhum**: peça ao usuário
+a cada sessão e passe por variável de ambiente (`PW_SENHA=... node script.js`),
+nunca escrita dentro do arquivo.
+
+**Contra produção, sem servidor local:** dá para dirigir o site publicado
+(`BASE=https://orcacloud.vercel.app`) — é o que prova o que está no ar. O login é
+o mesmo; as rotas são `#/settings`, `#/boletos-pagar` etc. Cuidado: o site publicado
+fala com o MESMO Supabase de produção, então qualquer Salvar é escrita real.
 
 ## 4. Navegar
 
@@ -70,8 +84,10 @@ await p.waitForTimeout(3000);
 ## 5. Trocar o contexto de organização (o pulo do gato)
 
 O seletor do topo só oferece **"Todas as organizações"** para quem é membro de
-mais de uma org. A conta de leitura é membro de UMA — pelo menu você nunca
-alcança o estado `null`. Escreva direto a chave que o store lê no boot
+mais de uma org. Este parágrafo foi escrito quando a conta `agente-leitura` era
+membro de UMA; hoje ela pertence a DUAS (member numa, admin noutra — ver §3), então
+o seletor pode oferecer "Todas" — não verificado, confira antes de contar com isso.
+Se não oferecer, pelo menu você não alcança o estado `null`. Escreva direto a chave que o store lê no boot
 (`store/useStore.ts`, sentinela literal `'TODAS'`) e recarregue:
 
 ```js

@@ -524,18 +524,24 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
             return;
         }
         setUploadingKind(type);
-        try {
-            for (const file of files) {
+        // Arquivo a arquivo: uma falha no meio não descarta os que ainda faltam.
+        let falhas = 0;
+        for (const file of files) {
+            try {
                 const path = await uploadDiaryMedia({ orgId, projectId: settings.id, file });
                 if (type === 'image') setFormData(prev => ({ ...prev, images: [...(prev.images || []), path] }));
                 else if (type === 'video') setFormData(prev => ({ ...prev, videos: [...(prev.videos || []), path] }));
                 else setFormData(prev => ({ ...prev, documents: [...(prev.documents || []), { name: file.name, url: path, type: file.type }] }));
+            } catch (err) {
+                falhas++;
+                console.error('Erro ao enviar arquivo do diário:', err);
             }
-        } catch (err) {
-            console.error('Erro ao enviar arquivo do diário:', err);
-            notify('Falha ao enviar o arquivo. Tente novamente.');
-        } finally {
-            setUploadingKind(null);
+        }
+        setUploadingKind(null);
+        if (falhas > 0) {
+            notify(falhas === files.length
+                ? 'Falha ao enviar o arquivo. Tente novamente.'
+                : `${falhas} de ${files.length} arquivos não subiram — os outros já estão no registro.`);
         }
     };
 

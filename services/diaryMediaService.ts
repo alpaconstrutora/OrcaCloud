@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { comprimirFoto } from '../utils/comprimirFoto';
 
 /**
  * Mídia do Diário de Obras (fotos, vídeos, documentos) no bucket privado
@@ -72,14 +73,19 @@ export interface UploadDiaryMediaArgs {
     file: File;
 }
 
-/** Envia o arquivo e devolve o PATH (o que se grava no registro). */
+/**
+ * Envia o arquivo e devolve o PATH (o que se grava no registro). Foto passa
+ * antes por `comprimirFoto` (lado maior 2048 px, JPEG) — vídeo e documento sobem
+ * como estão.
+ */
 export async function uploadDiaryMedia({ orgId, projectId, file }: UploadDiaryMediaArgs): Promise<string> {
     if (!orgId) throw new Error('Diário sem organização: não há onde guardar o arquivo.');
     if (!projectId) throw new Error('Diário sem projeto: não há onde guardar o arquivo.');
-    const path = buildDiaryMediaPath(orgId, projectId, diaryMediaExtension(file));
+    const enviar = await comprimirFoto(file);
+    const path = buildDiaryMediaPath(orgId, projectId, diaryMediaExtension(enviar));
     const { error } = await supabase.storage
         .from(DIARY_MEDIA_BUCKET)
-        .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+        .upload(path, enviar, { cacheControl: '3600', upsert: false, contentType: enviar.type || undefined });
     if (error) throw error;
     return path;
 }

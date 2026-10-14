@@ -422,7 +422,10 @@ const EntrySheet: React.FC<{
     const [form, setForm] = useState<DiaryEntry>(entry);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
-    const [enviando, setEnviando] = useState(false);
+    /** Falha de envio de foto: aparece NO cartão de Fotos — quem enviou está rolado ali, não no topo. */
+    const [erroFoto, setErroFoto] = useState<string | null>(null);
+    /** Fotos subindo: quantas já foram de quantas (null = nada subindo). */
+    const [enviando, setEnviando] = useState<{ feitas: number; total: number } | null>(null);
     const fotoRef = useRef<HTMLInputElement>(null);
     const fotoUrls = useDiaryMediaUrls(form.images);
 
@@ -472,20 +475,28 @@ const EntrySheet: React.FC<{
 
     const addFotos = async (files: FileList | null) => {
         if (!files?.length) return;
-        if (!upload.orgId) { setErro('Diário sem organização: não há onde guardar a foto.'); return; }
-        setEnviando(true);
-        try {
-            const paths: string[] = [];
-            for (const file of Array.from(files)) {
-                paths.push(await uploadDiaryMedia({ orgId: upload.orgId, projectId: upload.projectId, file }));
+        if (!upload.orgId) { setErroFoto('Diário sem organização: não há onde guardar a foto.'); return; }
+        const lista = Array.from(files);
+        let falhas = 0;
+        setErroFoto(null);
+        setEnviando({ feitas: 0, total: lista.length });
+        // Uma por vez (4G do canteiro) e cada uma entra no registro assim que sobe:
+        // uma falha no meio não perde as que já foram.
+        for (let k = 0; k < lista.length; k++) {
+            try {
+                const path = await uploadDiaryMedia({ orgId: upload.orgId, projectId: upload.projectId, file: lista[k] });
+                setForm(p => ({ ...p, images: [...(p.images || []), path] }));
+            } catch (err) {
+                falhas++;
+                console.error('Erro ao enviar foto do diário:', err);
             }
-            setForm(p => ({ ...p, images: [...(p.images || []), ...paths] }));
-            setErro(null);
-        } catch (err) {
-            console.error('Erro ao enviar foto do diário:', err);
-            setErro('Falha ao enviar a foto. Tente novamente.');
-        } finally {
-            setEnviando(false);
+            setEnviando({ feitas: k + 1, total: lista.length });
+        }
+        setEnviando(null);
+        if (falhas > 0) {
+            setErroFoto(falhas === lista.length
+                ? (lista.length === 1 ? 'A foto não subiu. Tente novamente.' : 'Nenhuma das fotos subiu. Tente novamente.')
+                : `${falhas} de ${lista.length} fotos não subiram — as outras já estão no registro. Envie de novo as que faltaram.`);
         }
     };
 
@@ -756,6 +767,12 @@ const EntrySheet: React.FC<{
                 {/* Fotos */}
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3 space-y-3">
                     <SectionTitle icon={Camera} label="Fotos" />
+                    {erroFoto && (
+                        <div className="bg-red-50 border border-red-100 rounded-xl px-3 py-2.5 flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs font-bold text-red-600">{erroFoto}</p>
+                        </div>
+                    )}
                     <input
                         ref={fotoRef}
                         type="file"
@@ -767,11 +784,13 @@ const EntrySheet: React.FC<{
                     />
                     <button
                         onClick={() => fotoRef.current?.click()}
-                        disabled={enviando}
+                        disabled={!!enviando}
                         className="w-full h-12 rounded-xl border-2 border-dashed border-slate-200 text-slate-500 text-sm font-bold flex items-center justify-center gap-2 active:bg-slate-50 disabled:opacity-60"
                     >
                         {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                        {enviando ? 'Enviando…' : 'Tirar foto ou escolher'}
+                        {enviando
+                            ? (enviando.total > 1 ? `Enviando ${Math.min(enviando.feitas + 1, enviando.total)} de ${enviando.total}…` : 'Enviando…')
+                            : 'Tirar foto ou escolher'}
                     </button>
                     {(form.images || []).length > 0 && (
                         <div className="grid grid-cols-3 gap-1.5">
@@ -828,11 +847,12 @@ const EntrySheet: React.FC<{
                 </button>
                 <button
                     onClick={submit}
-                    disabled={saving}
+                    disabled={saving || !!enviando}
+                    title={enviando ? 'Aguarde as fotos terminarem de subir' : undefined}
                     className="flex-1 h-12 rounded-xl bg-blue-600 text-white text-sm font-black flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-60"
                 >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    {saving ? 'Salvando…' : 'Salvar registro'}
+                    {saving ? 'Salvando…' : enviando ? 'Aguardando fotos…' : 'Salvar registro'}
                 </button>
             </div>
 

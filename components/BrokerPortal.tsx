@@ -20,7 +20,6 @@ import BrokerEvents from './broker/BrokerEvents';
 import BrokerChat from './broker/BrokerChat';
 import BrokerAnalytics from './broker/BrokerAnalytics';
 import BrokerHealthPanel from './broker/BrokerHealthPanel';
-import BrokerIntegrations from './broker/BrokerIntegrations';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
@@ -65,7 +64,6 @@ const ALL_TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
     { id: 'agenda', label: 'Agenda', icon: Calendar },
     { id: 'chat', label: 'Chat', icon: MessageSquare },
     { id: 'saude', label: 'Saúde', icon: Activity },
-    { id: 'integracoes', label: 'Integrações', icon: Link2 },
 ];
 
 // Agrupamento das abas para a navegação em sidebar do portal público (Fase 1+2 do redesign UI/UX).
@@ -75,7 +73,7 @@ const NAV_GROUPS: { label: string; tabs: PortalTab[] }[] = [
     { label: 'Financeiro', tabs: ['comissoes'] },
     { label: 'Conteúdo', tabs: ['materiais', 'treinamento'] },
     { label: 'Engajamento', tabs: ['ranking', 'agenda', 'chat'] },
-    { label: 'Gestão', tabs: ['saude', 'integracoes'] },
+    { label: 'Gestão', tabs: ['saude'] },
 ];
 const TAB_BY_ID: Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }> =
     Object.fromEntries(ALL_TABS.map(t => [t.id, t])) as Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }>;
@@ -1097,10 +1095,6 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
 
             {currentTab === 'saude' && (
                 <BrokerHealthPanel organizationId={initialOrgId || selectedOrgId || 'demo'} />
-            )}
-
-            {currentTab === 'integracoes' && (
-                <BrokerIntegrations organizationId={initialOrgId || selectedOrgId || 'demo'} />
             )}
                     </div>
                 </div>

@@ -24,7 +24,6 @@ const BROKER_INTERNAL_TAB: Record<string, string> = {
   'broker-ranking': 'ranking', 'broker-training': 'treinamento',
   'broker-events': 'agenda', 'broker-chat': 'chat',
   'broker-analytics': 'analytics', 'broker-health': 'saude',
-  'broker-integrations': 'integracoes',
 }
 
 interface Props {
@@ -78,7 +77,7 @@ const SalesManagementModule: React.FC<Props> = ({
           <BrokerPortal
             profile={profile}
             organizationId={organizationId}
-            activeTab={brokerInternalTab as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'}
+            activeTab={brokerInternalTab as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude'}
             initialBroker={selectedBroker}
             onBack={() => setSelectedBroker(null)}
           />

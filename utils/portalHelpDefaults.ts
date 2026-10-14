@@ -60,7 +60,6 @@ export const PORTAL_SECTIONS: Record<Portal, PortalSection[]> = {
     { id: 'agenda', label: 'Agenda' },
     { id: 'chat', label: 'Chat' },
     { id: 'saude', label: 'Saúde' },
-    { id: 'integracoes', label: 'Integrações' },
   ],
   // Rótulos de components/ClientArea.tsx › ALL_TABS. "Obra" vira "Andamento do
   // Serviço" para cliente de Serviços — a ajuda usa o nome genérico.
@@ -402,11 +401,6 @@ const CORRETOR: DefaultHelpItem[] = [
     key: 'corretor.saude.entender', kind: 'artigo', section: 'saude',
     title: 'Saúde: como a incorporadora vê a sua carteira',
     body_html: p('Indicadores de qualidade do seu atendimento: tempo de resposta a leads, propostas convertidas, visitas realizadas. Ajudam a entender onde a carteira está travando.'),
-  },
-  {
-    key: 'corretor.integracoes.conectar', kind: 'artigo', section: 'integracoes',
-    title: 'Integrações: conectar seus canais',
-    body_html: p('Conecte CRM, WhatsApp ou portais imobiliários para receber leads direto aqui. Cada integração explica o que é compartilhado antes de ativar.'),
   },
   ...FAQ_ACESSO('corretor', '/portal-corretor'),
   {

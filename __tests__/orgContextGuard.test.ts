@@ -142,8 +142,6 @@ const RULES: Rule[] = [
             // seletor de organização do topo (que nem existe nesse portal).
             'components/broker/BrokerHealthPanel.tsx':
                 'Portal do corretor: organizationId nunca é vazio (cai em "demo"); o enabled controla o modo demo.',
-            'components/broker/BrokerIntegrations.tsx':
-                'Portal do corretor: organizationId nunca é vazio (cai em "demo"); o enabled controla o modo demo.',
         },
         baseline: {},
     },

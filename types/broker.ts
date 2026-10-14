@@ -266,14 +266,3 @@ export interface BrokerHealthKPI {
     avg_ticket: number;
 }
 
-export interface BrokerIntegration {
-    id: string;
-    name: string;
-    type: 'CRM' | 'ERP' | 'ASSINATURA' | 'PAGAMENTO' | 'OUTRO';
-    provider: string;
-    status: 'ATIVO' | 'INATIVO' | 'CONFIGURANDO' | 'ERRO';
-    last_sync?: string;
-    events_count?: number;
-    description: string;
-    icon?: string;
-}

@@ -407,9 +407,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       'broker-proposals': 'propostas', 'broker-leads': 'leads', 'broker-commissions': 'comissoes',
       'broker-materials': 'materiais', 'broker-ranking': 'ranking', 'broker-training': 'treinamento',
       'broker-events': 'agenda', 'broker-chat': 'chat', 'broker-analytics': 'analytics',
-      'broker-health': 'saude', 'broker-integrations': 'integracoes'
+      'broker-health': 'saude'
     };
-    return <BrokerPortal profile={currentProfile} organizationId={activeOrganizationId || undefined} activeTab={(tabMap[activeView] || 'analytics') as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'} />;
+    return <BrokerPortal profile={currentProfile} organizationId={activeOrganizationId || undefined} activeTab={(tabMap[activeView] || 'analytics') as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude'} />;
   }
   if (currentProfile.group === ProfileGroup.PARTNER) {
     return (
@@ -1098,8 +1098,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'broker-events':
     case 'broker-chat':
     case 'broker-analytics':
-    case 'broker-health':
-    case 'broker-integrations': {
+    case 'broker-health': {
       const salesTab = VIEW_TO_SALES_TAB[activeView] ?? 'espelho';
       return (
         <SalesManagementModule

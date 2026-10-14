@@ -6,6 +6,6 @@
  */
 export const BROKER_PORTAL_TAB_IDS = [
   'analytics', 'estoque', 'empreendimentos', 'propostas', 'leads', 'comissoes',
-  'materiais', 'ranking', 'treinamento', 'agenda', 'chat', 'saude', 'integracoes',
+  'materiais', 'ranking', 'treinamento', 'agenda', 'chat', 'saude',
 ] as const;
 export type BrokerPortalTabId = typeof BROKER_PORTAL_TAB_IDS[number];

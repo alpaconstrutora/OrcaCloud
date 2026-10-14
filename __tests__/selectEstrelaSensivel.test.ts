@@ -38,7 +38,6 @@ const TABELAS_SENSIVEIS: Record<string, string> = {
     broker_portal_proposals:       'buyer_cpf, share_token',
     broker_portal_tokens:          'token',
     broker_profiles:               'cpf',
-    broker_webhook_configs:        'secret_hint',
     candidates:                    'cpf',
     client_charges:                'pix_payload',
     client_portal_tokens:          'token',

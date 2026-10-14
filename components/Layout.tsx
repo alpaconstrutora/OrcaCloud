@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -1133,7 +1133,7 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={TrendingUp}
                     isOpen={isVendasOpen}
                     onToggle={() => setIsVendasOpen(o => !o)}
-                    hasActiveChild={['gestao-vendas','sales','rentals','condominios','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations'].includes(activeView)}
+                    hasActiveChild={['gestao-vendas','sales','rentals','condominios','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health'].includes(activeView)}
                   >
                     {(mod.crm || isDev) && <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />}
                     {(((mod as any).rentals ?? mod.crm) || isDev) && <DropdownItem id="rentals" label="Locações" icon={Building2} />}
@@ -1242,7 +1242,6 @@ const Layout: React.FC<LayoutProps> = ({
               <NavGroup label="Inteligência" />
               <NavItem id="broker-analytics" icon={BarChart3} label="Analytics" />
               <NavItem id="broker-health" icon={Activity} label="Saúde" />
-              <NavItem id="broker-integrations" icon={Link2} label="Integrações" />
             </>
           )}
 

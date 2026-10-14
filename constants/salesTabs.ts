@@ -14,7 +14,6 @@ export const VIEW_TO_SALES_TAB: Record<string, SalesTab> = {
     'broker-chat':         'corretores',
     'broker-analytics':    'corretores',
     'broker-health':       'corretores',
-    'broker-integrations': 'corretores',
     'services-commercial': 'crm',
     'service-contracts':   'contratos',
     'imovib':              'viabilidade',

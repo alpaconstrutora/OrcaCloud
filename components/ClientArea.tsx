@@ -95,14 +95,16 @@ import { usePersistedState } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import { isObra } from '../utils/projectClassification';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
+import { PortalHelp } from './portal/PortalHelp';
+import { avisarAcaoDoPortal } from '../utils/portalEventos';
+import { CLIENT_PORTAL_TAB_IDS, type ClientPortalTabId } from '../utils/clientPortalTabs';
 
 /** As abas do portal. Era uma união literal repetida em dois lugares (prop e
  *  `useState`) — aba nova exigia editar as duas, e esquecer uma só aparece como
- *  erro de tipo no `setActiveTab`, longe da causa. */
-export type ClientAreaTabId =
-    | 'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual'
-    | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro'
-    | 'suporte' | 'manutencao' | 'condominio' | 'unidade';
+ *  erro de tipo no `setActiveTab`, longe da causa. Os ids moram em
+ *  utils/clientPortalTabs.ts (a ajuda do portal usa a mesma lista); 'clientes'
+ *  é id legado, sem aba. */
+export type ClientAreaTabId = ClientPortalTabId | 'clientes';
 
 interface ClientAreaProps {
     settings: ProjectSettings;
@@ -117,6 +119,8 @@ interface ClientAreaProps {
     onClientSelect?: (client: Client) => void;
     /** Renderiza a área como o cliente a vê (sem chrome de admin), usado na prévia mobile. */
     isPreview?: boolean;
+    /** Prévia do gestor (Configurações › Ajuda dos Portais): abre este tour ao montar. */
+    forcarTour?: string | null;
 }
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
@@ -132,7 +136,7 @@ const contractDashBadge = (status?: string): { label: string; cls: string; textC
 // §8 — Status Badge de chamados (Últimos Chamados) em texto simples, sem pílula.
 const STATUS_TEXT_COLOR: Record<string, string> = { Aberto: 'text-amber-700', 'Em Andamento': 'text-blue-700', Aguardando: 'text-purple-700', Resolvido: 'text-emerald-700', Cancelado: 'text-gray-400' };
 
-export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
+export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false, forcarTour = null }) => {
     const confirm = useConfirm();
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = React.useState<ClientAreaTabId>(initialTab || 'dashboard');
@@ -247,6 +251,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [clientPortalTabs, setClientPortalTabs] = React.useState<string[] | undefined>(clientProfile?.portalTabs);
     const [isAccountMenuOpen, setIsAccountMenuOpen] = React.useState(false);
     const accountMenuRef = React.useRef<HTMLDivElement>(null);
+    // Central de ajuda + tour + "Primeiros passos" (components/portal/PortalHelp),
+    // as mesmas peças dos portais do Parceiro, Fornecedor e Corretor.
+    const [isHelpOpen, setIsHelpOpen] = React.useState(false);
+    const [slotChecklist, setSlotChecklist] = React.useState<HTMLDivElement | null>(null);
     React.useEffect(() => {
         if (!isAccountMenuOpen) return;
         const onDocClick = (e: MouseEvent) => {
@@ -585,6 +593,22 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         )}
                     </div>
                 )}
+                {/* Ajuda — cliente logado (no link ela mora no header da casca). O
+                    gestor espiando não ganha o botão: igual ao Fornecedor. */}
+                {clientProfile && !isAdmin && !isStandalone && (
+                    <button
+                        type="button"
+                        onClick={() => setIsHelpOpen(true)}
+                        title="Ajuda"
+                        aria-label="Abrir a ajuda do portal"
+                        data-tour="ajuda"
+                        className={escuro
+                            ? 'p-2.5 bg-white/15 border border-white/25 rounded-[10px] text-white hover:bg-white/25 transition-all'
+                            : 'p-2.5 bg-white border border-gray-100 rounded-[10px] text-gray-400 hover:text-gray-900 hover:bg-gray-50 transition-all shadow-sm'}
+                    >
+                        <HelpCircle className="w-4 h-4" />
+                    </button>
+                )}
                 {/* Gestor não tem "Meus dados" aqui (edita o cadastro em Meus Clientes) —
                     igual ao Portal do Fornecedor, onde o topo do gestor tem só prévia + abas. */}
                 {clientProfile && !isAdmin && !isStandalone && (
@@ -651,7 +675,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden space-y-0">
                     {/* Hero */}
-                    <div className="-mx-4 bg-[#E1553C] px-5 pt-4 pb-10">
+                    <div data-tour="dashboard-resumo" className="-mx-4 bg-[#E1553C] px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5">
                                 <span className="text-xs font-black text-white uppercase tracking-widest">Locação</span>
@@ -733,7 +757,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {/* KPIs §4 (KpiCard canônico) — a faixa colorida de boas-vindas saiu no
                         desktop: o título §20 (h1 "Olá, Nome" + categoria) já cumpre o papel,
                         igual ao Portal do Fornecedor. A faixa continua no mobile. */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                    <div data-tour="dashboard-resumo" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                         <KpiCard
                             label="Próximo Vencimento"
                             value={nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : 'Em dia'}
@@ -778,7 +802,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden space-y-0">
                     {/* Hero */}
-                    <div className="-mx-4 bg-[#E1553C] px-5 pt-4 pb-10">
+                    <div data-tour="dashboard-resumo" className="-mx-4 bg-[#E1553C] px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2"><span className="text-sm font-medium text-white">Serviços</span></div>
                             <div className="flex items-center gap-2">
@@ -848,7 +872,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* ══ DESKTOP ══ */}
                 <div className="hidden md:block space-y-6">
                     {/* KPIs §4 — ver nota no dashboard de Locação */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                    <div data-tour="dashboard-resumo" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                         <KpiCard
                             label="Total Contratado"
                             value={`R$ ${totalContratado.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
@@ -899,7 +923,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         if (!settings.id || budget.length === 0) {
             // Estado vazio §12 dentro do card §16
             return (
-                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12 px-6 animate-in fade-in duration-500">
+                <div data-tour="dashboard-resumo" className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12 px-6 animate-in fade-in duration-500">
                     <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Acompanhamento de Obra</h3>
                     <p className="text-sm text-gray-500 max-w-xl mx-auto">
@@ -910,7 +934,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         }
 
         return (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div data-tour="dashboard-resumo" className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Main Metrics (2/3) */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1533,7 +1557,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* §4 — KpiCard canônico; §20.1 mb-3 (KPIs e cromo são um bloco só) */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                <div data-tour="financeiro-resumo" className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                     <div className="relative">
                         <KpiCard
                             label="Valor total do contrato"
@@ -2095,7 +2119,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
-                    <div className="bg-[#E1553C] px-5 pt-4 pb-8">
+                    <div data-tour="financeiro-resumo" className="bg-[#E1553C] px-5 pt-4 pb-8">
                         <h2 className="text-2xl font-black text-white leading-tight">Financeiro</h2>
                         <p className="text-white/80 text-sm font-medium mt-1">Cobranças e pagamentos do imóvel</p>
                     </div>
@@ -2144,7 +2168,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ DESKTOP ══ */}
                 <div className="hidden md:block space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div data-tour="financeiro-resumo" className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[
                         { label: 'Próximo Vencimento', value: nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—', sub: nextDue ? new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Em dia', color: 'text-amber-600', icon: <Bell className="w-5 h-5 text-amber-500" /> },
                         { label: 'Total Pago', value: `R$ ${totalPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: `${charges.filter(i => i.status === 'PAID').length} cobranças`, color: 'text-emerald-600', icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" /> },
@@ -2285,7 +2309,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
-                    <div className="bg-[#E1553C] px-5 pt-4 pb-8">
+                    <div data-tour="financeiro-resumo" className="bg-[#E1553C] px-5 pt-4 pb-8">
                         <h2 className="text-2xl font-black text-white leading-tight">Financeiro</h2>
                         <p className="text-white/80 text-sm font-medium mt-1">Medições e faturamento</p>
                     </div>
@@ -2343,7 +2367,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {/* ══ DESKTOP ══ */}
                 <div className="hidden md:block space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div data-tour="financeiro-resumo" className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[
                         { label: 'Total Contratado', value: totalContrato, sub: finInfo.paymentMethod || '—', color: 'text-gray-900', icon: <DollarSign className="w-5 h-5 text-indigo-500" /> },
                         { label: 'Medido / Faturado', value: totalMedido, sub: `${pctMedido.toFixed(1)}% do contrato`, color: 'text-emerald-600', icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />, progress: pctMedido },
@@ -2517,7 +2541,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Cabeçalho + progresso geral */}
-                <div className="bg-[#E1553C] rounded-[10px] p-6 text-white">
+                <div data-tour="obra-progresso" className="bg-[#E1553C] rounded-[10px] p-6 text-white">
                     <div className="flex items-start justify-between flex-wrap gap-4">
                         <div>
                             <h3 className="text-sm font-bold tracking-tight">Acompanhe sua Obra</h3>
@@ -3238,6 +3262,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     ? await clientPortalService.getGedDownloadUrl(portalToken, doc.storage_path)
                     : await documentService.generateDownloadUrl(doc.storage_path);
                 window.open(url, '_blank');
+                avisarAcaoDoPortal('baixou-documento');
             } catch (err: any) {
                 console.error('[ClientArea] Erro ao gerar link de download:', err);
                 alert(err.message || 'Erro ao baixar o documento.');
@@ -3267,7 +3292,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <p className="text-white/80 text-sm font-medium mt-1">Arquivos compartilhados pelo gestor</p>
                     </div>
                     {/* Lista */}
-                    <div className="px-4 -mt-3 pb-6 space-y-2">
+                    <div data-tour="documentos-lista" className="px-4 -mt-3 pb-6 space-y-2">
                         {gedDocsLoading ? (
                             <div className="text-center py-10">
                                 <p className="text-sm text-gray-400">Carregando...</p>
@@ -3299,7 +3324,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {desktopTabsBar}
 
                 {/* ══ DESKTOP ══ */}
-                <div className="hidden md:block bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
+                <div data-tour="documentos-lista" className="hidden md:block bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-4">
@@ -3475,7 +3500,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         return (
             <div className="space-y-0 -mx-4">
                 {/* ── Gradient Hero ── */}
-                <div className="bg-gradient-to-br from-indigo-600 via-indigo-500 to-blue-400 px-5 pt-3 pb-10">
+                <div data-tour="dashboard-resumo" className="bg-gradient-to-br from-indigo-600 via-indigo-500 to-blue-400 px-5 pt-3 pb-10">
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5 max-w-[180px]">
                             <span className="text-xs font-black text-white uppercase tracking-widest truncate">{settings.name}</span>
@@ -3702,7 +3727,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         return (
             <div className="-mx-4 space-y-0">
                 {/* ── Header com donut grande ── */}
-                <div className="bg-gradient-to-br from-indigo-600 to-blue-500 px-5 pt-4 pb-8">
+                <div data-tour="financeiro-resumo" className="bg-gradient-to-br from-indigo-600 to-blue-500 px-5 pt-4 pb-8">
                     <div className="flex items-center gap-3 mb-5">
                         <button onClick={() => setActiveTab('dashboard')} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white">
                             <ChevronRight className="w-4 h-4 rotate-180" />
@@ -3882,28 +3907,31 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         );
     };
 
-    const ALL_TABS = [
-        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-        { id: 'jornada', label: 'Minha Jornada', icon: <Calendar className="w-4 h-4" /> },
+    // Ids e ordem: CLIENT_PORTAL_TAB_IDS (fonte única, a ajuda do portal usa a
+    // mesma lista). O `Record` obriga a aba nova a ter rótulo e ícone aqui.
+    const TAB_UI: Record<ClientPortalTabId, { label: string; icon: React.ReactNode }> = {
+        dashboard: { label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+        jornada: { label: 'Minha Jornada', icon: <Calendar className="w-4 h-4" /> },
         // A ficha do imóvel comprado/alugado. Nos presets de Vendas e Locação
         // (`utils/clientCategory.ts`): todo cliente dessas categorias tem, por
         // definição, um imóvel negociado — ao contrário de "Condomínio" abaixo.
-        { id: 'unidade', label: 'Dados da Unidade', icon: <Home className="w-4 h-4" /> },
-        { id: 'obra', label: ehServicos(clientProfile?.category) ? 'Andamento do Serviço' : 'Obra', icon: <HardHat className="w-4 h-4" /> },
-        { id: 'cronograma-ff', label: 'Cronograma Físico-Financeiro', icon: <TrendingUp className="w-4 h-4" /> },
-        { id: 'visual', label: 'Visual', icon: <Camera className="w-4 h-4" /> },
-        { id: 'personalizacao', label: 'Personalização', icon: <Palette className="w-4 h-4" /> },
-        { id: 'diario', label: 'Diário de Obra', icon: <BookOpen className="w-4 h-4" /> },
-        { id: 'documentos', label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
-        { id: 'contratos', label: 'Contratos', icon: <FileText className="w-4 h-4" /> },
-        { id: 'financeiro', label: 'Financeiro', icon: <DollarSign className="w-4 h-4" /> },
-        { id: 'suporte', label: 'Suporte', icon: <ShieldCheck className="w-4 h-4" /> },
-        { id: 'manutencao', label: 'Manutenção', icon: <Wrench className="w-4 h-4" /> },
+        unidade: { label: 'Dados da Unidade', icon: <Home className="w-4 h-4" /> },
+        obra: { label: ehServicos(clientProfile?.category) ? 'Andamento do Serviço' : 'Obra', icon: <HardHat className="w-4 h-4" /> },
+        'cronograma-ff': { label: 'Cronograma Físico-Financeiro', icon: <TrendingUp className="w-4 h-4" /> },
+        visual: { label: 'Visual', icon: <Camera className="w-4 h-4" /> },
+        personalizacao: { label: 'Personalização', icon: <Palette className="w-4 h-4" /> },
+        diario: { label: 'Diário de Obra', icon: <BookOpen className="w-4 h-4" /> },
+        documentos: { label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
+        contratos: { label: 'Contratos', icon: <FileText className="w-4 h-4" /> },
+        financeiro: { label: 'Financeiro', icon: <DollarSign className="w-4 h-4" /> },
+        suporte: { label: 'Suporte', icon: <ShieldCheck className="w-4 h-4" /> },
+        manutencao: { label: 'Manutenção', icon: <Wrench className="w-4 h-4" /> },
         // Fora de CATEGORY_TAB_PRESETS de propósito: a decisão (01/09) foi
         // habilitar à mão, cliente a cliente. Pôr no preset de Locação seria
         // torná-la automática pela porta dos fundos.
-        { id: 'condominio', label: 'Condomínio', icon: <Building2 className="w-4 h-4" /> },
-    ];
+        condominio: { label: 'Condomínio', icon: <Building2 className="w-4 h-4" /> },
+    };
+    const ALL_TABS = CLIENT_PORTAL_TAB_IDS.map(id => ({ id, ...TAB_UI[id] }));
 
     const clientCategory = clientProfile?.category ?? '';
     // Locação e Serviços têm faixa de boas-vindas própria no dashboard, que já
@@ -3961,7 +3989,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
     const enabledTabIds = (clientPortalTabs && clientPortalTabs.length > 0)
         ? clientPortalTabs
-        : (legacyTabs ?? categoryPreset ?? ALL_TABS.map(t => t.id));
+        : (legacyTabs ?? categoryPreset ?? ALL_TABS.map((t): string => t.id));
 
     // tabs visíveis para o cliente (mobile + client desktop)
     const tabs = ALL_TABS.filter(t => enabledTabIds.includes(t.id));
@@ -3985,12 +4013,15 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // Só desktop: no mobile a navegação é a barra inferior fixa.
     const desktopTabsBar = (
         <div className={`${isStandalone ? 'hidden' : 'hidden md:flex'} flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3`}>
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+            {/* `menu` do tour no app logado (sem a casca do link, o menu do
+                portal é esta barra) */}
+            <div data-tour="menu" className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                 {desktopNavTabs.map(tab => {
                     const isVisible = enabledTabIds.includes(tab.id);
                     return (
                         <button
                             key={tab.id}
+                            data-tour={`aba-${tab.id}`}
                             onClick={() => setActiveTab(tab.id as typeof activeTab)}
                             title={isAdmin && !isVisible ? 'Oculta para o cliente' : undefined}
                             className={`
@@ -4091,11 +4122,23 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         standalone): mesmas classes, mesma cor, mesmos 4 itens e mesmas ações.
                         Pedido de 22/09/2026: "quero igual, mesmo UI e UX ... para o Menu de conta".
                         Só a entidade muda (cliente em vez de fornecedor). */}
+                    <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setIsHelpOpen(true)}
+                        title="Ajuda"
+                        aria-label="Abrir a ajuda do portal"
+                        data-tour="ajuda"
+                        className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                    >
+                        <HelpCircle className="w-5 h-5" />
+                    </button>
                     <div className="relative" ref={accountMenuRef}>
                         <button
                             type="button"
                             onClick={() => setIsAccountMenuOpen(o => !o)}
                             className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
+                            data-tour="conta"
                             aria-haspopup="menu"
                             aria-expanded={isAccountMenuOpen}
                         >
@@ -4151,23 +4194,24 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <div className="border-t border-gray-100 p-2">
                                     <button
                                         type="button"
-                                        onClick={() => { setIsAccountMenuOpen(false); showToast('Dúvidas? Fale com a construtora responsável por esta obra.'); }}
+                                        onClick={() => { setIsAccountMenuOpen(false); setIsHelpOpen(true); }}
                                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                                         role="menuitem"
                                     >
                                         <HelpCircle className="h-4 w-4 text-gray-400" />
-                                        <span className="flex-1">Ajuda e comandos</span>
+                                        <span className="flex-1">Ajuda</span>
                                     </button>
                                 </div>
                             </div>
                         )}
+                    </div>
                     </div>
                 </header>
             )}
 
             <div className={isStandalone ? 'md:flex md:flex-1 md:overflow-hidden md:min-h-0' : ''}>
                 {isStandalone && (
-                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex-col gap-1 shrink-0 overflow-y-auto hidden md:flex">
+                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex-col gap-1 shrink-0 overflow-y-auto hidden md:flex" data-tour="menu">
                         {desktopNavTabs.map(tab => tab.id === 'condominio' ? (
                             /* Condomínio é GRUPO: avisos, rateio, manutenção e
                                equipamentos são assuntos diferentes, e cada um é
@@ -4178,6 +4222,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <div key={tab.id} className="flex flex-col gap-0.5">
                                 <button
                                     type="button"
+                                    data-tour={`aba-${tab.id}`}
                                     onClick={() => setCondominioAberto(v => !v)}
                                     aria-expanded={condominioAberto}
                                     className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
@@ -4220,6 +4265,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         ) : (
                             <button
                                 key={tab.id}
+                                data-tour={`aba-${tab.id}`}
                                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                                 className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                                     activeTab === tab.id
@@ -4314,15 +4360,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </SheetPanel>
             </Sheet>
 
-            {/* Mobile Bottom Navigation — máx. 5 slots; excedente vai pro sheet "Mais" */}
+            {/* Mobile Bottom Navigation — máx. 5 slots; excedente vai pro sheet "Mais".
+                "Mais" é permanente (14/10/2026, como no Portal do Fornecedor): no
+                celular não há header com menu da conta, e é pelo "Mais" que se
+                chega à Ajuda. 4 abas + Mais. */}
             {(() => {
                 const MAX_BAR = 5;
-                const hasMore = tabs.length > MAX_BAR;
-                const barTabs = hasMore ? tabs.slice(0, MAX_BAR - 1) : tabs;
-                const moreTabs = hasMore ? tabs.slice(MAX_BAR - 1) : [];
+                const hasMore = true;
+                const barTabs = tabs.slice(0, MAX_BAR - 1);
+                const moreTabs = tabs.slice(MAX_BAR - 1);
                 const moreActive = moreTabs.some(t => t.id === activeTab);
                 return (
-                    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]" data-tour="menu">
                         <div className="flex">
                             {barTabs.map(tab => {
                                 const isActive = activeTab === tab.id;
@@ -4330,6 +4379,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 return (
                                     <button
                                         key={tab.id}
+                                        data-tour={`aba-${tab.id}`}
                                         onClick={() => setActiveTab(tab.id as typeof activeTab)}
                                         className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
                                             ${isActive ? 'text-blue-600' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
@@ -4351,6 +4401,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             })}
                             {hasMore && (
                                 <button
+                                    data-tour="mobile-mais"
                                     onClick={() => setShowMoreSheet(true)}
                                     className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
                                         ${moreActive ? 'text-blue-600' : 'text-gray-400'}
@@ -4379,7 +4430,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             {/* Bottom-sheet "Mais" — abas excedentes (somente mobile) */}
             {showMoreSheet && (() => {
                 const MAX_BAR = 5;
-                const moreTabs = tabs.length > MAX_BAR ? tabs.slice(MAX_BAR - 1) : [];
+                const moreTabs = tabs.slice(MAX_BAR - 1);
                 return (
                     <div className="md:hidden fixed inset-0 z-[200]" onClick={() => setShowMoreSheet(false)}>
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" />
@@ -4410,6 +4461,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </button>
                                     );
                                 })}
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowMoreSheet(false); setIsHelpOpen(true); }}
+                                    className="w-full flex items-center gap-3 p-4 rounded-2xl border bg-gray-50 border-gray-100 text-gray-600 transition-all"
+                                >
+                                    <HelpCircle className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm font-black uppercase tracking-tight">Ajuda</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -4487,6 +4546,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
             {/* Tab Content */}
             <div className="min-h-[500px] px-4 md:px-0">
+                {/* Encaixe do cartão "Primeiros passos" (PortalHelp desenha dentro):
+                    topo da primeira aba liberada; o gestor espiando não vê. */}
+                {!isAdmin && activeTab === tabs[0]?.id && <div ref={setSlotChecklist} className="empty:hidden mb-6" />}
                 {activeTab === 'dashboard' && ehLocacao(clientCategory) && renderDashboardLocacao()}
                 {activeTab === 'dashboard' && ehServicos(clientCategory) && renderDashboardServicos()}
                 {activeTab === 'dashboard' && !ehLocacao(clientCategory) && !ehServicos(clientCategory) && (
@@ -4675,6 +4737,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                                 <span className="text-xs text-gray-400 px-2">Chamados de assistência técnica deste cliente.</span>
                                 <button
+                                    data-tour="manutencao-abrir"
                                     onClick={() => setShowNewRequestForm(true)}
                                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                                 >
@@ -4685,13 +4748,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             {requestsLoading ? (
                                 <div className="flex justify-center py-12"><div className="w-6 h-6 border border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
                             ) : clientRequests.length === 0 ? (
-                                <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm text-center py-12">
+                                <div data-tour="manutencao-lista" className="bg-white border border-gray-100 rounded-[10px] shadow-sm text-center py-12">
                                     <Wrench className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum chamado aberto</h3>
                                     <p className="text-sm text-gray-500">Clique em "Abrir Chamado" para solicitar manutenção.</p>
                                 </div>
                             ) : (
-                                <div className="space-y-3">
+                                <div data-tour="manutencao-lista" className="space-y-3">
                                     {clientRequests.map(req => (
                                         <div key={req.id} className="bg-white border border-gray-100 rounded-[10px] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-amber-200 transition-all">
                                             <div className="flex flex-col gap-1.5 min-w-0">
@@ -4795,6 +4858,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         const created = await clientRequestsService.createRequest(orgId, clientProfile.id, { title: newRequestForm.title, description: newRequestForm.description, category: newRequestForm.category, priority: newRequestForm.priority as ClientRequest['priority'], status: 'Aberto', opened_at: new Date().toISOString().split('T')[0], unit_id: newRequestForm.unitId || null });
                                                         setClientRequests(prev => [created, ...prev]);
                                                     }
+                                                    if (portalToken || (clientProfile && orgId)) avisarAcaoDoPortal('abriu-chamado');
                                                     setShowNewRequestForm(false);
                                                     setNewRequestForm({ title: '', description: '', category: 'Geral', priority: 'Média', unitId: '' });
                                                 }}
@@ -4817,6 +4881,32 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 <p className="text-xs text-gray-400">Poderoso e intuitivo • Opura Platinum © 2026</p>
             </div>
             )}
+
+            <PortalHelp
+                open={isHelpOpen}
+                onClose={() => setIsHelpOpen(false)}
+                portal="cliente"
+                token={portalToken}
+                orgId={settings.organizationId || organizationId || null}
+                visibleSections={enabledTabIds}
+                currentSection={activeTab}
+                onNavigate={(s) => {
+                    setViewingContract(null);
+                    setSelectedEntry(null);
+                    setShowNewRequestForm(false);
+                    setShowMoreSheet(false);
+                    setActiveTab(s as ClientAreaTabId);
+                }}
+                // a rota pública do link TAMBÉM passa isPreview (só para esconder o
+                // cromo de admin): prévia do gestor é isPreview SEM token
+                modoPrevia={isPreview && !portalToken}
+                forcarTour={forcarTour}
+                checklistSlot={isAdmin ? null : slotChecklist}
+                accent="coral"
+                tourKey={portalToken || clientProfile?.email || null}
+                // link público e cliente logado; nunca a prévia nem o gestor espiando
+                autoTour={isStandalone || (!isPreview && !isAdmin)}
+            />
                 </div>{/* /content column */}
             </div>{/* /body wrapper */}
         </div>

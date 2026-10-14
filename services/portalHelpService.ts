@@ -59,6 +59,7 @@ const RPC_POR_PORTAL: Record<Portal, string> = {
   parceiro: 'partner_portal_help_get',
   fornecedor: 'supplier_portal_help_get',
   corretor: 'broker_portal_help_get',
+  cliente: 'client_portal_help_get',
 };
 
 const COLS = 'id, organization_id, portal, kind, default_key, section, title, body_html, sort_order, is_published, default_hash, created_by, created_at, updated_at, anchor, tour_id';

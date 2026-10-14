@@ -21,9 +21,10 @@ describe('modoPrevia exclui o acesso pelo link', () => {
     const app = ler('App.tsx');
     expect(app).toMatch(/<SupplierDashboardPublic[^>]*portalToken=\{token\}[^>]*isPreview/);
     expect(app).toMatch(/<BrokerPortal[\s\S]{0,400}?portalToken=\{token\}[\s\S]{0,200}?isPreview/);
+    expect(app).toMatch(/<ClientArea[\s\S]{0,400}?portalToken=\{token\}[\s\S]{0,200}?isPreview/);
   });
 
-  it.each(['components/SupplierDashboard.tsx', 'components/BrokerPortal.tsx'])('%s: modoPrevia = isPreview && !portalToken', (f) => {
+  it.each(['components/SupplierDashboard.tsx', 'components/BrokerPortal.tsx', 'components/ClientArea.tsx'])('%s: modoPrevia = isPreview && !portalToken', (f) => {
     const fonte = ler(f);
     expect(fonte).toContain('modoPrevia={isPreview && !portalToken}');
     expect(fonte).not.toMatch(/modoPrevia=\{isPreview\}/);

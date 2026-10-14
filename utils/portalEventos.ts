@@ -10,7 +10,8 @@
 export type PortalAcao =
   | 'abriu-contrato' | 'enviou-documento' | 'abriu-solicitacao'
   | 'respondeu-cotacao' | 'atualizou-logistica' | 'enviou-nf'
-  | 'enviou-proposta' | 'criou-lead' | 'baixou-material';
+  | 'enviou-proposta' | 'criou-lead' | 'baixou-material'
+  | 'baixou-documento' | 'abriu-chamado';
 
 type Ouvinte = (acao: PortalAcao) => void;
 const ouvintes = new Set<Ouvinte>();

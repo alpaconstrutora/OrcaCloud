@@ -46,6 +46,15 @@ const portalDaPrevia = vi.fn();
 vi.mock('../../components/partner/PartnerPortal', () => ({
   PartnerPortal: (props: Record<string, unknown>) => { portalDaPrevia(props); return <div>portal do parceiro em prévia</div>; },
 }));
+// Portal do Cliente (14/10/2026): a prévia lista os clientes da org e abre o ClientArea
+const CLIENTE_PREVIA = { id: 'cli1', name: 'Maria Souza', email: 'maria@x.com' };
+const listClients = vi.fn(async () => [CLIENTE_PREVIA]);
+vi.mock('../../services/clientService', () => ({ clientService: { listClients: (...a: unknown[]) => listClients(...a) } }));
+const clienteDaPrevia = vi.fn();
+vi.mock('../../components/ClientArea', () => ({
+  ClientArea: (props: Record<string, unknown>) => { clienteDaPrevia(props); return <div>portal do cliente em prévia</div>; },
+}));
+vi.mock('../../components/MobilePreviewFrame', () => ({ default: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
 vi.mock('../../services/portalHelpService', () => ({
   portalHelpService: {
@@ -273,6 +282,26 @@ describe('PortalHelpSettings', () => {
     await user.click(screen.getByRole('button', { name: /Abrir/ }));
     expect(await screen.findByText('portal do parceiro em prévia')).toBeInTheDocument();
     expect(portalDaPrevia).toHaveBeenLastCalledWith(expect.objectContaining({ previewWorkspaceId: 'ws1', forcarTour: 'documentos', userEmail: '' }));
+  });
+
+  it('Portal do Cliente: pré-visualizar lista os clientes da org e abre o portal em prévia (sem token) com o tour forçado', async () => {
+    const user = userEvent.setup();
+    orgIdDoTopo = 'org-b';
+    list.mockResolvedValue([]);
+    montar();
+    await user.click(await screen.findByRole('button', { name: 'Portal do Cliente' }));
+    await screen.findByText(DEFAULT_ITEMS.cliente.find(d => d.kind === 'artigo')!.title);
+    await user.click(screen.getByRole('button', { name: 'Tour guiado' }));
+    await user.click(screen.getByRole('button', { name: /Pré-visualizar tour/ }));
+    await waitFor(() => expect(listClients).toHaveBeenCalledWith('org-b'));
+    await waitFor(() => expect((screen.getByLabelText('Cliente') as HTMLSelectElement).value).toBe('cli1'));
+    await user.selectOptions(screen.getByLabelText('Tour', { selector: '#ajuda-previa-tour' }), 'financeiro');
+    await user.click(screen.getByRole('button', { name: /Abrir/ }));
+    expect(await screen.findByText('portal do cliente em prévia')).toBeInTheDocument();
+    expect(clienteDaPrevia).toHaveBeenLastCalledWith(expect.objectContaining({
+      clientProfile: CLIENTE_PREVIA, organizationId: 'org-b', isPreview: true, forcarTour: 'financeiro',
+    }));
+    expect(clienteDaPrevia.mock.lastCall?.[0]).not.toHaveProperty('portalToken');
   });
 });
 

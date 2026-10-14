@@ -4,7 +4,8 @@
  *
  * Pedido de 03/10/2026 ("sistema de ajuda ao parceiro no uso do portal"):
  * central de ajuda + tour guiado + perguntas frequentes + contato, editável pela
- * construtora, nos portais do Parceiro, do Fornecedor e do Corretor.
+ * construtora, nos portais do Parceiro, do Fornecedor e do Corretor. Desde
+ * 14/10/2026 também no do Cliente (docs/planos/2026-10-14-ajuda-tour-portal-cliente.md).
  *
  * Fonte única: seções (= abas de cada portal), artigos e perguntas padrão com
  * chave estável, passos do tour com âncora fixa. A tabela `portal_help_items`
@@ -16,13 +17,14 @@
  * `sanitizeHtml` na mesma linha do sink (scripts/check-xss-sinks.sh).
  */
 
-export type Portal = 'parceiro' | 'fornecedor' | 'corretor';
+export type Portal = 'parceiro' | 'fornecedor' | 'corretor' | 'cliente';
 export type HelpKind = 'artigo' | 'faq' | 'tour' | 'checklist';
 
 export const PORTAL_LABELS: Record<Portal, string> = {
   parceiro: 'Portal do Parceiro',
   fornecedor: 'Portal do Fornecedor',
   corretor: 'Portal do Corretor',
+  cliente: 'Portal do Cliente',
 };
 
 export interface PortalSection { id: string; label: string }
@@ -59,6 +61,24 @@ export const PORTAL_SECTIONS: Record<Portal, PortalSection[]> = {
     { id: 'chat', label: 'Chat' },
     { id: 'saude', label: 'Saúde' },
     { id: 'integracoes', label: 'Integrações' },
+  ],
+  // Rótulos de components/ClientArea.tsx › ALL_TABS. "Obra" vira "Andamento do
+  // Serviço" para cliente de Serviços — a ajuda usa o nome genérico.
+  cliente: [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'jornada', label: 'Minha Jornada' },
+    { id: 'unidade', label: 'Dados da Unidade' },
+    { id: 'obra', label: 'Obra' },
+    { id: 'cronograma-ff', label: 'Cronograma Físico-Financeiro' },
+    { id: 'visual', label: 'Visual' },
+    { id: 'personalizacao', label: 'Personalização' },
+    { id: 'diario', label: 'Diário de Obra' },
+    { id: 'documentos', label: 'Documentos' },
+    { id: 'contratos', label: 'Contratos' },
+    { id: 'financeiro', label: 'Financeiro' },
+    { id: 'suporte', label: 'Suporte' },
+    { id: 'manutencao', label: 'Manutenção' },
+    { id: 'condominio', label: 'Condomínio' },
   ],
 };
 
@@ -388,10 +408,154 @@ const CORRETOR: DefaultHelpItem[] = [
   },
 ];
 
+// ── Portal do Cliente ────────────────────────────────────────────────────────
+// Pessoa física, não empresa: as perguntas de acesso são próprias (FAQ_ACESSO
+// fala de "sua empresa" e de convite por e-mail, que o cliente não recebe).
+const CLIENTE: DefaultHelpItem[] = [
+  {
+    key: 'cliente.geral.o-que-e', kind: 'artigo', section: null,
+    title: 'O que é o Portal do Cliente',
+    body_html: p(
+      'Este portal é a sua área exclusiva com a construtora: acompanhe a obra ou o serviço contratado, os seus contratos, parcelas e recibos, os documentos do seu imóvel e os chamados de manutenção.',
+      'As seções do menu são as que a construtora liberou para você. Se uma seção não aparece, é porque não está liberada.',
+    ),
+  },
+  {
+    key: 'cliente.dashboard.visao', kind: 'artigo', section: 'dashboard',
+    title: 'Dashboard: o resumo do seu imóvel',
+    body_html: p(
+      'A primeira tela reúne, de relance, o que mais importa para você: andamento da obra, situação dos pagamentos, contratos e chamados abertos.',
+      'Os atalhos levam direto à seção de cada assunto.',
+    ),
+  },
+  {
+    key: 'cliente.jornada.etapas', kind: 'artigo', section: 'jornada',
+    title: 'Minha Jornada: as etapas da sua compra',
+    body_html: p('A linha do tempo mostra cada etapa, do contrato à entrega das chaves: o que já foi concluído, o que está em andamento e o que vem a seguir.'),
+  },
+  {
+    key: 'cliente.unidade.ficha', kind: 'artigo', section: 'unidade',
+    title: 'Dados da Unidade: a ficha do seu imóvel',
+    body_html: p('Aqui fica a ficha do imóvel comprado ou alugado: empreendimento, unidade, áreas e demais características registradas pela construtora.'),
+  },
+  {
+    key: 'cliente.obra.acompanhar', kind: 'artigo', section: 'obra',
+    title: 'Obra: acompanhe o avanço',
+    body_html: p(
+      'A seção mostra o avanço físico geral, o prazo restante e as etapas do cronograma, com o que está concluído, em andamento e a iniciar.',
+      'Os números vêm do planejamento publicado pela construtora. Enquanto ele não é publicado, a tela avisa que o cronograma ainda não está disponível.',
+    ),
+  },
+  {
+    key: 'cliente.cronograma-ff.ler', kind: 'artigo', section: 'cronograma-ff',
+    title: 'Cronograma Físico-Financeiro: como ler',
+    body_html: p('O gráfico compara, período a período, o avanço físico da obra com o desembolso previsto. Troque a escala no seletor para ver mais ou menos detalhe.'),
+  },
+  {
+    key: 'cliente.visual.fotos', kind: 'artigo', section: 'visual',
+    title: 'Visual: fotos da obra',
+    body_html: p('Fotos do canteiro publicadas pela construtora. Clique numa foto para ampliar.'),
+  },
+  {
+    key: 'cliente.personalizacao.escolher', kind: 'artigo', section: 'personalizacao',
+    title: 'Personalização: escolha dos acabamentos',
+    body_html: p('Quando a construtora abre a personalização, você escolhe aqui os acabamentos da sua unidade entre as opções oferecidas. Confira prazos e valores antes de confirmar.'),
+  },
+  {
+    key: 'cliente.diario.registros', kind: 'artigo', section: 'diario',
+    title: 'Diário de Obra: o dia a dia do canteiro',
+    body_html: p('Os registros diários da obra: clima, atividades realizadas, fotos e vídeos. Clique num registro para ver o detalhe.'),
+  },
+  {
+    key: 'cliente.documentos.baixar', kind: 'artigo', section: 'documentos',
+    title: 'Documentos: consultar e baixar',
+    body_html: p(
+      'A lista traz os arquivos que a construtora compartilhou com você: contratos, plantas, manuais, memoriais.',
+      'Clique na seta de cada documento para baixar. No computador, você pode trocar entre lista e grade.',
+    ),
+  },
+  {
+    key: 'cliente.contratos.consultar', kind: 'artigo', section: 'contratos',
+    title: 'Contratos: seus contratos e a assinatura',
+    body_html: p('Veja os contratos firmados com a construtora, o valor e o status de assinatura de cada um. Contrato "Em elaboração" ainda é minuta: a versão final aparece aqui quando for emitida.'),
+  },
+  {
+    key: 'cliente.financeiro.parcelas', kind: 'artigo', section: 'financeiro',
+    title: 'Financeiro: parcelas, pagamentos e recibos',
+    body_html: p(
+      'A seção mostra o total do contrato, o que já foi pago e o saldo, além da lista de parcelas com vencimento, valor e situação.',
+      'Quando uma parcela é paga, o recibo fica disponível para baixar na própria linha da parcela.',
+    ),
+  },
+  {
+    key: 'cliente.suporte.posobra', kind: 'artigo', section: 'suporte',
+    title: 'Suporte: assistência e pós-obra',
+    body_html: p('Depois da entrega das chaves, é por aqui que você acompanha a assistência técnica e a garantia do imóvel. Para defeitos e reparos, use a seção <strong>Manutenção</strong>.'),
+  },
+  {
+    key: 'cliente.manutencao.chamado', kind: 'artigo', section: 'manutencao',
+    title: 'Manutenção: como abrir um chamado',
+    body_html: p(
+      'Clique em <strong>Abrir Chamado</strong>, dê um título, escolha a categoria e a prioridade, a unidade (se você tiver mais de uma) e descreva o problema com detalhes.',
+      'O chamado aparece na lista com o status <strong>Aberto</strong> e muda conforme a construtora atende: Em Andamento, Aguardando, Resolvido.',
+    ),
+  },
+  {
+    key: 'cliente.condominio.secoes', kind: 'artigo', section: 'condominio',
+    title: 'Condomínio: o que há em cada seção',
+    body_html: p('O Condomínio reúne o que é do prédio, separado em seções no menu:') + ul(
+      '<strong>Dados gerais</strong>: o condomínio e as unidades que você ocupa.',
+      '<strong>Avisos</strong>: comunicados da administração. O número no menu mostra os que você ainda não leu.',
+      '<strong>Documentos</strong>: atas, regimento e demais arquivos do condomínio.',
+      '<strong>Financeiro</strong>: rateios e comprovantes.',
+      '<strong>Manutenção</strong> e <strong>Equipamentos</strong>: o que está sendo cuidado no prédio.',
+    ),
+  },
+  {
+    key: 'cliente.geral.meus-dados', kind: 'artigo', section: null,
+    title: 'Meus dados',
+    body_html: p('Em <strong>Meus dados</strong> (no menu da conta, no canto superior direito) você vê o cadastro que a construtora tem de você. Para alterar qualquer informação, fale com a construtora.'),
+  },
+  {
+    key: 'cliente.faq.link-vencido', kind: 'faq', section: null,
+    title: 'Meu link de acesso parou de funcionar. O que faço?',
+    body_html: p(
+      'O link de acesso vale por 90 dias e pode ser revogado pela construtora. Quando vence, a tela diz "Link inválido ou expirado".',
+      'Peça à construtora um novo link.',
+    ),
+  },
+  {
+    key: 'cliente.faq.dados-cadastrais', kind: 'faq', section: null,
+    title: 'Como altero meus dados cadastrais ou meu e-mail?',
+    body_html: p('O seu cadastro é mantido pela construtora. Peça a alteração a ela.'),
+  },
+  {
+    key: 'cliente.faq.secao-sumiu', kind: 'faq', section: null,
+    title: 'Uma seção que eu usava sumiu do menu.',
+    body_html: p('A construtora escolhe quais seções ficam visíveis para cada cliente. Se precisa de uma que não aparece, peça a ela para liberar.'),
+  },
+  {
+    key: 'cliente.faq.pagamento-pendente', kind: 'faq', section: 'financeiro',
+    title: 'Paguei uma parcela e ela ainda aparece como pendente.',
+    body_html: p('A baixa depende da confirmação do pagamento pelo banco, o que pode levar alguns dias úteis. Se passar disso, fale com a construtora com o comprovante em mãos.'),
+  },
+  {
+    key: 'cliente.faq.recibo', kind: 'faq', section: 'financeiro',
+    title: 'Onde encontro o recibo de uma parcela paga?',
+    body_html: p('Em <strong>Financeiro</strong>, na linha da parcela paga. Se o recibo ainda não aparece, peça à construtora para emiti-lo.'),
+  },
+  {
+    key: 'cliente.faq.chamado-andamento', kind: 'faq', section: 'manutencao',
+    title: 'Abri um chamado. Como acompanho?',
+    body_html: p('O chamado fica na lista de <strong>Manutenção</strong> com o status atualizado pela construtora. Chamados das unidades que você ocupa também aparecem ali.'),
+  },
+];
+
 export const DEFAULT_ITEMS: Record<Portal, DefaultHelpItem[]> = {
   parceiro: PARCEIRO,
   fornecedor: FORNECEDOR,
   corretor: CORRETOR,
+  cliente: CLIENTE,
 };
 
 type PassoSemTour = Omit<TourStep, 'tour'>;
@@ -538,6 +702,39 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
       ]),
     },
   },
+  // Passos de aba oculta saem sozinhos (visibleSections): o tour de um
+  // locatário não fala de Obra.
+  cliente: {
+    geral: tourDe('geral', [
+      { key: 'cliente.tour.geral.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Cliente', body: 'Este menu leva às seções liberadas para você: obra, documentos, financeiro, manutenção e mais.' },
+      { key: 'cliente.tour.geral.obra', anchor: 'aba-obra', section: 'obra', title: 'Obra', body: 'Acompanhe o avanço físico, o prazo e as etapas do cronograma.' },
+      { key: 'cliente.tour.geral.documentos', anchor: 'aba-documentos', section: 'documentos', title: 'Documentos', body: 'Contratos, plantas e manuais que a construtora compartilhou com você, prontos para baixar.' },
+      { key: 'cliente.tour.geral.financeiro', anchor: 'aba-financeiro', section: 'financeiro', title: 'Financeiro', body: 'Suas parcelas, o que já foi pago e os recibos.' },
+      { key: 'cliente.tour.geral.financeiro-resumo', anchor: 'financeiro-resumo', section: 'financeiro', title: 'Resumo financeiro', body: 'Total do contrato, valor pago e saldo. As parcelas e os recibos vêm logo abaixo.' },
+      { key: 'cliente.tour.geral.manutencao', anchor: 'aba-manutencao', section: 'manutencao', title: 'Manutenção', body: 'Precisa de um reparo? Abra o chamado por aqui e acompanhe o atendimento.' },
+      { key: 'cliente.tour.geral.mais', anchor: 'mobile-mais', section: null, title: 'Mais seções', body: 'No celular, as outras seções e a Ajuda ficam aqui.' },
+      { key: 'cliente.tour.geral.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da construtora.' },
+      { key: 'cliente.tour.geral.conta', anchor: 'conta', section: null, title: 'Sua conta', body: 'No menu da conta você vê o cadastro que a construtora tem de você.' },
+    ]),
+    porAba: {
+      dashboard: tourDe('dashboard', [
+        { key: 'cliente.tour.dashboard.resumo', anchor: 'dashboard-resumo', section: 'dashboard', title: 'Seu resumo', body: 'Andamento, pagamentos, contratos e chamados de relance. Os atalhos levam à seção de cada assunto.' },
+      ]),
+      obra: tourDe('obra', [
+        { key: 'cliente.tour.obra.progresso', anchor: 'obra-progresso', section: 'obra', title: 'Avanço da obra', body: 'Avanço geral, prazo restante e ritmo. Abaixo, as etapas do cronograma.', quando: 'quando a construtora publicar o cronograma' },
+      ]),
+      documentos: tourDe('documentos', [
+        { key: 'cliente.tour.documentos.lista', anchor: 'documentos-lista', section: 'documentos', title: 'Seus documentos', body: 'Os arquivos compartilhados com você. Clique na seta para baixar.' },
+      ]),
+      financeiro: tourDe('financeiro', [
+        { key: 'cliente.tour.financeiro.resumo', anchor: 'financeiro-resumo', section: 'financeiro', title: 'Resumo financeiro', body: 'Total, pago e saldo. Logo abaixo, cada parcela com vencimento, situação e o recibo das que já foram pagas.' },
+      ]),
+      manutencao: tourDe('manutencao', [
+        { key: 'cliente.tour.manutencao.abrir', anchor: 'manutencao-abrir', section: 'manutencao', title: 'Abrir Chamado', body: 'Descreva o problema, escolha a categoria e a prioridade. A construtora recebe na hora.' },
+        { key: 'cliente.tour.manutencao.lista', anchor: 'manutencao-lista', section: 'manutencao', title: 'Seus chamados', body: 'Cada chamado mostra a prioridade e o status, que muda conforme o atendimento avança.' },
+      ]),
+    },
+  },
 };
 
 /**
@@ -577,6 +774,13 @@ export const CHECKLIST_ITEMS: Record<Portal, ChecklistItem[]> = {
     { key: 'corretor.checklist.lead', title: 'Cadastre um lead', section: 'leads', evento: 'acao:criou-lead' },
     { key: 'corretor.checklist.material', title: 'Baixe um material', section: 'materiais', evento: 'acao:baixou-material' },
   ],
+  cliente: [
+    { key: 'cliente.checklist.obra', title: 'Acompanhe a obra', section: 'obra', evento: 'aba:obra' },
+    { key: 'cliente.checklist.documentos', title: 'Veja seus documentos', section: 'documentos', evento: 'aba:documentos' },
+    { key: 'cliente.checklist.baixar-documento', title: 'Baixe um documento', section: 'documentos', evento: 'acao:baixou-documento' },
+    { key: 'cliente.checklist.financeiro', title: 'Confira o Financeiro', section: 'financeiro', evento: 'aba:financeiro' },
+    { key: 'cliente.checklist.chamado', title: 'Abra um chamado de manutenção', section: 'manutencao', evento: 'acao:abriu-chamado' },
+  ],
 };
 
 /** Compat: o tour do portal (geral). */
@@ -584,6 +788,7 @@ export const TOUR_STEPS: Record<Portal, TourStep[]> = {
   parceiro: TOURS.parceiro.geral,
   fornecedor: TOURS.fornecedor.geral,
   corretor: TOURS.corretor.geral,
+  cliente: TOURS.cliente.geral,
 };
 
 /** Todos os passos padrão de um portal (geral + por aba), na ordem de declaração. */

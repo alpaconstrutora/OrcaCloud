@@ -16,6 +16,7 @@ import { TOURS, TOUR_STEPS, DEFAULT_ITEMS, PORTAL_SECTIONS, CHECKLIST_ITEMS, tod
 import { PARTNER_PORTAL_TAB_IDS } from '../utils/partnerPortalTabs';
 import { SUPPLIER_PORTAL_TAB_IDS } from '../utils/supplierPortalTabs';
 import { BROKER_PORTAL_TAB_IDS } from '../utils/brokerPortalTabs';
+import { CLIENT_PORTAL_TAB_IDS } from '../utils/clientPortalTabs';
 
 // Arquivos onde as âncoras de cada portal podem estar: a casca + os filhos que
 // desenham o conteúdo das abas. O primeiro é o arquivo do portal.
@@ -29,6 +30,7 @@ const ARQUIVOS: Record<Portal, string[]> = {
     'components/BrokerPortal.tsx',
     ...['LeadManager', 'Commissions', 'Chat'].map(x => `components/broker/Broker${x}.tsx`),
   ],
+  cliente: ['components/ClientArea.tsx'],
 };
 const fonteDe = (portal: Portal) =>
   ARQUIVOS[portal].map(f => readFileSync(resolve(__dirname, '..', f), 'utf-8')).join('\n');
@@ -36,8 +38,9 @@ const ABAS: Record<Portal, readonly string[]> = {
   parceiro: PARTNER_PORTAL_TAB_IDS,
   fornecedor: SUPPLIER_PORTAL_TAB_IDS,
   corretor: BROKER_PORTAL_TAB_IDS,
+  cliente: CLIENT_PORTAL_TAB_IDS,
 };
-const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor'];
+const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor', 'cliente'];
 
 describe('âncoras do tour existem nos portais', () => {
   it.each(PORTAIS)('%s', (portal) => {
@@ -91,6 +94,7 @@ describe('Primeiros passos: toda ação do checklist é avisada pelo portal (F8)
     parceiro: ['components/partner/PartnerPortal.tsx'],
     fornecedor: ['components/SupplierDashboard.tsx', 'components/supplier/portal/PortalInvoices.tsx', 'components/QuotationResponseForm.tsx'],
     corretor: ['components/BrokerPortal.tsx', 'components/broker/BrokerLeadManager.tsx', 'components/broker/BrokerMaterials.tsx'],
+    cliente: ['components/ClientArea.tsx'],
   };
   it.each(PORTAIS)('%s', (portal) => {
     const fonte = ONDE_AVISA[portal].map(f => readFileSync(resolve(__dirname, '..', f), 'utf-8')).join('\n');

@@ -13,21 +13,23 @@ import { portalHelpService, type PortalHelpRecord, type PortalTourStat } from '.
 import { partnerService } from '../services/partnerService';
 import { supplierService } from '../services/supplierService';
 import { brokerService } from '../services/brokerService';
+import { clientService } from '../services/clientService';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import {
   PORTAL_LABELS, PORTAL_SECTIONS, DEFAULT_ITEMS, mergePortalHelp, sectionLabel, hashText, todosOsPassos, tourLabel, ancorasDoTour,
   type Portal, type HelpKind, type HelpItem, type MergedTourStep, type MergedChecklistItem, type TourId, CHECKLIST_ITEMS,
 } from '../utils/portalHelpDefaults';
-import type { Supplier, BrokerProfile } from '../types';
+import type { Supplier, BrokerProfile, Client } from '../types';
 
 // Os portais só carregam quando o gestor pede a pré-visualização.
 const PartnerPortalPrevia = React.lazy(() => import('./partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 const SupplierDashboardPrevia = React.lazy(() => import('./SupplierDashboard'));
 const BrokerPortalPrevia = React.lazy(() => import('./BrokerPortal'));
+const ClientAreaPrevia = React.lazy(() => import('./ClientArea').then(m => ({ default: m.ClientArea })));
 
 /**
  * Configurações › Ajuda dos Portais — a construtora edita o que o parceiro, o
- * fornecedor e o corretor leem na central de ajuda dos portais.
+ * fornecedor, o corretor e o cliente leem na central de ajuda dos portais.
  *
  * O padrão vive no código; aqui a organização sobrescreve (título/corpo/seção,
  * ou oculta) e acrescenta itens próprios. "Restaurar padrão" apaga a sobrescrita.
@@ -45,7 +47,7 @@ const BrokerPortalPrevia = React.lazy(() => import('./BrokerPortal'));
  * link. Em "Todas", junta as organizações em que o usuário é gestor.
  */
 
-const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor'];
+const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor', 'cliente'];
 const KINDS: { id: HelpKind; label: string }[] = [
   { id: 'artigo', label: 'Artigos' },
   { id: 'faq', label: 'Perguntas frequentes' },
@@ -421,9 +423,12 @@ const PortalHelpSettings: React.FC = () => {
         lista = (await partnerService.listWorkspaces(orgId)).map(w => ({ id: w.id, nome: w.supplier_name || w.id, dado: w }));
       } else if (portal === 'fornecedor') {
         lista = (await supplierService.listSuppliers(orgId)).map(s => ({ id: s.id, nome: s.name, dado: s }));
-      } else {
+      } else if (portal === 'corretor') {
         const perfis = (await brokerService.listProfiles(orgId)) as BrokerProfile[];
         lista = perfis.map(b => ({ id: b.id, nome: b.name || b.email || b.id, dado: b }));
+      } else {
+        const clientes = (await clientService.listClients(orgId)) as Client[];
+        lista = clientes.map(c => ({ id: c.id, nome: c.name || c.email || c.id, dado: c }));
       }
       setPessoas(lista);
       if (lista.length === 1) setPreviaForm(f => f && { ...f, pessoaId: lista[0].id });
@@ -441,7 +446,8 @@ const PortalHelpSettings: React.FC = () => {
     setPreviaForm(null);
   };
 
-  const rotuloPessoa = portal === 'parceiro' ? 'Parceiro' : portal === 'fornecedor' ? 'Fornecedor' : 'Corretor';
+  const ROTULO_PESSOA: Record<Portal, string> = { parceiro: 'Parceiro', fornecedor: 'Fornecedor', corretor: 'Corretor', cliente: 'Cliente' };
+  const rotuloPessoa = ROTULO_PESSOA[portal];
 
   const origemTexto = (l: Linha) => {
     const o = (l.item as HelpItem | MergedTourStep).origin;
@@ -457,7 +463,7 @@ const PortalHelpSettings: React.FC = () => {
         <div>
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><HelpCircle className="w-5 h-5 text-blue-600" /> Ajuda dos Portais</h2>
           <p className="text-sm text-gray-500 mt-1">
-            O que o parceiro, o fornecedor e o corretor leem na central de ajuda do portal. O texto padrão vem do sistema; edite, oculte ou acrescente itens para a sua organização.
+            O que o parceiro, o fornecedor, o corretor e o cliente leem na central de ajuda do portal. O texto padrão vem do sistema; edite, oculte ou acrescente itens para a sua organização.
           </p>
         </div>
         {!acompanhamento && (
@@ -861,6 +867,21 @@ const PortalHelpSettings: React.FC = () => {
               profile={{ group: 'CORRETOR', role: '', email: (previa.pessoa.dado as BrokerProfile).email }}
               organizationId={previa.orgId}
               initialBroker={previa.pessoa.dado as BrokerProfile}
+              isPreview
+              forcarTour={previa.tourId}
+            />
+          </React.Suspense>
+        </MobilePreviewFrame>
+      )}
+      {previa && previa.portal === 'cliente' && (
+        <MobilePreviewFrame onClose={() => setPrevia(null)} title="Prévia do tour — Portal do Cliente">
+          <React.Suspense fallback={<div className="p-6 text-sm text-gray-500">Carregando...</div>}>
+            <ClientAreaPrevia
+              settings={{ name: '', location: '', standard: '', cubRate: 0, area: 0, bdi: 0, ls: 0, database: '', referenceMonth: '', socialChargesMode: '', wbs: [] }}
+              budget={[]}
+              profile={{ group: 'CLIENTE', role: '' }}
+              clientProfile={previa.pessoa.dado as Client}
+              organizationId={previa.orgId}
               isPreview
               forcarTour={previa.tourId}
             />

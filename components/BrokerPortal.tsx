@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useMemo } from 'react';
-import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X, Download, Share2, ChevronDown, Bell, HelpCircle } from 'lucide-react';
+import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X, Download, Share2, ChevronDown, ArrowLeft, Bell, HelpCircle } from 'lucide-react';
 import { PortalHelp } from './portal/PortalHelp';
 import BrokerMyData from './broker/BrokerMyData';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
@@ -679,27 +679,63 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 </MobilePreviewFrame>
             )}
 
-            {/* Header — só no app autenticado; no portal público a casca acima já tem header próprio */}
+            {/* Header — só no app autenticado; no portal público a casca acima já tem header próprio.
+                "Voltar" acima do h1 (guia §23): só 1 salto (Meus Corretores → Portal do Corretor),
+                abaixo do mínimo de 2 saltos que a migalha de pão exige — convenção de ~43 arquivos. */}
             {!isStandalone && (
-            <div className="flex items-start justify-between gap-4">
             <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                    Portal do Corretor
-                </h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    {effectiveBrokerEmail ? `Olá, ${effectiveBrokerEmail.split('@')[0]}` : 'Bem-vindo'} • Estoque, propostas, leads e comissões em tempo real.
-                </p>
-            </div>
-                <button
-                    type="button"
-                    onClick={() => setIsHelpOpen(true)}
-                    title="Ajuda"
-                    aria-label="Abrir a ajuda do portal"
-                    data-tour="ajuda"
-                    className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 shrink-0"
-                >
-                    <HelpCircle className="w-5 h-5" />
-                </button>
+                {onBack && (
+                    <button
+                        onClick={onBack}
+                        className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
+                    >
+                        <ArrowLeft className="w-4 h-4" /> Voltar
+                    </button>
+                )}
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                            Portal do Corretor
+                        </h1>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                            {effectiveBrokerEmail ? `Olá, ${effectiveBrokerEmail.split('@')[0]}` : 'Bem-vindo'} • Estoque, propostas, leads e comissões em tempo real.
+                        </p>
+                    </div>
+                    {/* Ações do admin (prévia mobile + configurar abas) na linha do título,
+                        junto da Ajuda — eram uma toolbar própria abaixo dos KPIs (§5.3);
+                        sem o seletor de organização (duplicava o do topo, guia REGRA #5)
+                        e sem "Voltar" (subiu para cima do h1), a toolbar ficava vazia. */}
+                    <div className="flex items-center gap-2 shrink-0">
+                        {isAdmin && (
+                            <button
+                                onClick={() => setShowMobilePreview(true)}
+                                title="Visualizar como o corretor vê no celular"
+                                className="hidden md:flex items-center justify-center h-9 w-9 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95"
+                            >
+                                <Smartphone className="w-4 h-4" />
+                            </button>
+                        )}
+                        {isAdmin && effectiveBroker && (
+                            <button
+                                onClick={() => setShowTabConfig(true)}
+                                title="Configurar abas visíveis do corretor"
+                                className="hidden md:flex items-center justify-center h-9 w-9 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95"
+                            >
+                                <Settings2 className="w-4 h-4" />
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => setIsHelpOpen(true)}
+                            title="Ajuda"
+                            aria-label="Abrir a ajuda do portal"
+                            data-tour="ajuda"
+                            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 shrink-0"
+                        >
+                            <HelpCircle className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
             </div>
             )}
 
@@ -714,61 +750,6 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 <KpiCard label="Propostas Enviadas" value={loading ? '…' : stats.sent} sub="Aguardando análise" icon={<Send className="w-5 h-5" />} color="amber" pulse={!loading && stats.sent > 0} />
                 <KpiCard label="Propostas Aprovadas" value={loading ? '…' : stats.approved} sub="Vendas confirmadas" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
                 <KpiCard label="Comissão Acumulada" value={loading ? '…' : formatCurrency(stats.totalCommission)} sub="5% sobre aprovadas" icon={<DollarSign className="w-5 h-5" />} color="violet" />
-            </div>
-            )}
-
-            {/* Toolbar de botões (§5.3) — controles de escopo do portal (voltar + org)
-                à esquerda, ações do admin (prévia mobile + configurar abas) à direita.
-                Fica no app autenticado; a casca pública tem navegação própria. */}
-            {!isStandalone && (onBack || (isAdmin && (organizations.length > 1 || effectiveBroker))) && (
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                    {onBack && (
-                        <button
-                            onClick={onBack}
-                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all"
-                        >
-                            <ChevronDown className="w-4 h-4 rotate-90" />
-                            Meus Corretores
-                        </button>
-                    )}
-                    {/* Seletor de organização — somente admin com múltiplas orgs */}
-                    {isAdmin && organizations.length > 1 && (
-                        <select
-                            value={selectedOrgId}
-                            onChange={(e) => setSelectedOrgId(e.target.value)}
-                            title="Selecione a organização"
-                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium rounded-[6px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
-                        >
-                            {organizations.map(org => (
-                                <option key={org.id} value={org.id}>{org.name}</option>
-                            ))}
-                        </select>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                    {/* Prévia Mobile — somente admin */}
-                    {isAdmin && (
-                        <button
-                            onClick={() => setShowMobilePreview(true)}
-                            title="Visualizar como o corretor vê no celular"
-                            className="hidden md:flex items-center justify-center h-9 w-9 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95"
-                        >
-                            <Smartphone className="w-4 h-4" />
-                        </button>
-                    )}
-                    {/* Configurar Abas — somente admin, com um corretor selecionado */}
-                    {isAdmin && effectiveBroker && (
-                        <button
-                            onClick={() => setShowTabConfig(true)}
-                            title="Configurar abas visíveis do corretor"
-                            className="hidden md:flex items-center justify-center h-9 w-9 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95"
-                        >
-                            <Settings2 className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
             </div>
             )}
 

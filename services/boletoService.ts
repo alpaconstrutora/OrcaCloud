@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { resolverCategoriaPorId } from './financialCategoryResolver';
 import { sanitizeFileName } from '../utils/storageUtils';
+import { renomearDocumentoDoBoleto, renomearDocumentosDosBoletos } from './boletoNomeDocumentoService';
 import { sha256File, extractFromPdfFile, buildExtractionFromLinhaDigitavel } from '../utils/boletoParser';
 import { parseLinhaDigitavel, onlyDigits, nomeBanco, vencimentoPlausivel } from '../utils/febrabanRules';
 import { financialApprovalService } from './financialApprovalService';
@@ -451,6 +452,13 @@ export const boletoService = {
             usuario_email: userEmail,
             valor_depois: fields,
         });
+
+        // Nomenclatura › Boletos: com fornecedor definido, o documento ganha o nome da
+        // máscara. Nunca bloqueia — se falhar, o nome de upload fica como está.
+        if (await renomearDocumentoDoBoleto(boletoId)) {
+            const { data: atualizado } = await supabase.from(TABLE).select().eq('id', boletoId).single();
+            if (atualizado) return mapRowToBoleto(atualizado);
+        }
 
         return mapRowToBoleto(data);
     },
@@ -1026,6 +1034,9 @@ export const boletoService = {
                 valor_depois: fields,
             })),
         );
+
+        // Nomenclatura › Boletos (mesma regra do `associar`): em ordem, sem bloquear.
+        await renomearDocumentosDosBoletos(ids);
     },
 
     /**
@@ -1051,6 +1062,8 @@ export const boletoService = {
         const errors: Array<{ id: string; error: string }> = [];
         for (const id of ids) {
             try {
+                // Antes de aprovar: a invoice copia `documento_nome` na aprovação.
+                await renomearDocumentoDoBoleto(id);
                 await this.aprovarECriarInvoice(id, organizationId, userEmail);
                 ok.push(id);
             } catch (err: unknown) {

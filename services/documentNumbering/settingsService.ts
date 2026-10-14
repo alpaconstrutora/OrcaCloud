@@ -48,6 +48,22 @@ export async function listNumberingConfigs(organizationId: string): Promise<Part
     return result;
 }
 
+/**
+ * A organização SALVOU a máscara deste doc_type? (`getNumberingConfig` devolve o
+ * default do catálogo mesmo sem linha — aqui a pergunta é só "existe linha?".)
+ * Usado por quem só deve agir depois da configuração explícita (Boletos).
+ */
+export async function hasSavedNumberingConfig(organizationId: string, docType: DocType): Promise<boolean> {
+    const { data, error } = await supabase
+        .from('document_numbering_settings')
+        .select('doc_type')
+        .eq('organization_id', organizationId)
+        .eq('doc_type', docType)
+        .maybeSingle();
+    if (error) throw error;
+    return !!data;
+}
+
 export async function saveNumberingConfig(
     organizationId: string,
     docType: DocType,

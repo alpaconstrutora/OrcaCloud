@@ -68,7 +68,8 @@ export type DocType =
     | 'RENTAL_DEAL'          // Comercial › Locações (código da negociação)
     | 'CONDO_RATEIO'         // Comercial › Condomínios (rateio fechado)
     | 'PURCHASE_REQUEST'     // Suprimentos › Solicitações de Compra (2026-09-26)
-    | 'OFICIO';              // Documentos › Ofícios (2026-10-08) — número só na emissão
+    | 'OFICIO'               // Documentos › Ofícios (2026-10-08) — número só na emissão
+    | 'BOLETO';              // Financeiro › Boletos a Pagar (2026-10-13) — nome do documento
 
 export interface NumberingConfig {
     slots: SlotToken[];

@@ -71,6 +71,14 @@ export const DOC_TYPE_CATALOG: Record<DocType, DocTypeCatalogEntry> = {
         default: { slots: ['PREFIX', 'DEPARTAMENTO'], prefix: 'OF', separator: '-', seqPadding: 3, yearSuffix: true },
         extraVariables: ['DEPARTAMENTO'],
     },
+    BOLETO: {
+        label: 'Boletos',
+        // Nome do DOCUMENTO do boleto (documento_nome), não um número exibido: o
+        // arquivo vira p.ex. BOL-FORN003-TR1-0001.pdf quando o boleto recebe
+        // fornecedor. Só vale depois que a organização salva a máscara — ver
+        // services/boletoNomeDocumentoService.ts. 13/10/2026.
+        default: { slots: ['PREFIX', 'FORNECEDOR', 'OBRA'], prefix: 'BOL', separator: '-', seqPadding: 4 },
+    },
     SERVICE_CONTRACT: {
         label: 'Contratos de Serviço',
         // Legado era 3 dígitos sem prefixo (MAX+1 no navegador); ganha prefixo
@@ -111,7 +119,7 @@ export const DOC_TYPE_CATALOG: Record<DocType, DocTypeCatalogEntry> = {
 /** Ordem de exibição das duas tabelas — DOC_TYPE_CATALOG é um Record, sem ordem própria garantida. */
 export const MAIN_DOC_TYPES: DocType[] = [
     'PURCHASE_REQUEST', 'PURCHASE_ORDER', 'QUOTATION', 'SUPPLY_CONTRACT',
-    'UNIT_SALE_CONTRACT', 'RENTAL_CONTRACT', 'CONDO_RATEIO', 'SERVICE_CONTRACT', 'OFICIO',
+    'UNIT_SALE_CONTRACT', 'RENTAL_CONTRACT', 'CONDO_RATEIO', 'SERVICE_CONTRACT', 'OFICIO', 'BOLETO',
 ];
 
 export const ADVANCED_DOC_TYPES: DocType[] = [

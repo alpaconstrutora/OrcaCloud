@@ -7,7 +7,7 @@ import { DocType, NumberingContext } from './types';
 export { MissingCodeError } from './types';
 export { formatDocumentNumber } from './format';
 export { DOC_TYPE_CATALOG, getDocTypeDefault, MAIN_DOC_TYPES, ADVANCED_DOC_TYPES } from './catalog';
-export { getNumberingConfig, listNumberingConfigs, saveNumberingConfig, resetNumberingConfig } from './settingsService';
+export { getNumberingConfig, listNumberingConfigs, saveNumberingConfig, resetNumberingConfig, hasSavedNumberingConfig } from './settingsService';
 export type { DocType, NumberingConfig, NumberingContext, SlotToken, VariableToken } from './types';
 export { ALL_VARIABLE_TOKENS } from './types';
 

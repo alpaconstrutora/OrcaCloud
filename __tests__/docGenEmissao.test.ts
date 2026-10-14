@@ -32,9 +32,9 @@ describe('Nomenclatura · sufixo de ano (Ofícios)', () => {
         expect(buildScopeKey(slots, { DEPARTAMENTO: 'ENG' })).toBe('ENG');
     });
 
-    it('os 12 tipos anteriores continuam sem ano no número nem no escopo', () => {
+    it('os 13 tipos sem ano (os 12 anteriores + Boletos) continuam sem ano no número nem no escopo', () => {
         const anteriores = [...MAIN_DOC_TYPES, ...ADVANCED_DOC_TYPES].filter(t => t !== 'OFICIO');
-        expect(anteriores).toHaveLength(12);
+        expect(anteriores).toHaveLength(13);
         for (const t of anteriores) {
             const cfg = getDocTypeDefault(t);
             expect(cfg.yearSuffix, t).toBeFalsy();

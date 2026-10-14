@@ -25,7 +25,7 @@
  *   - `NON_OBRA = new Set([...])` + `!has(...)` (frouxo — deixava passar
  *     projeto SEM classificação como se fosse obra)
  *   - dezenas de telas não filtravam nada e listavam os quatro tipos juntos
- *     (`CentralObra`, `BoletoFormModal`, `AreaEngineModule`, e a tela de
+ *     (`CentralObra`, `BoletoFormModal`, o Motor de Áreas — removido em 14/10/2026 —, e a tela de
  *     seleção do ÒPURA CNO, que foi onde o usuário viu o problema)
  *
  * Agora `useStore().projects` já contém **apenas obras**. Quem precisa dos

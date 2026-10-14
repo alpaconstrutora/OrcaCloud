@@ -2,7 +2,7 @@
 //
 // PDF e XLSX dos Quadros NBR 12721 de uma VERSÃO PUBLICADA (Fase 8 do plano
 // docs/planos/2026-10-13-areas-nbr12721-na-planta.md) — substitui o
-// `areaEngineExportService` do Motor de Áreas antigo.
+// serviço de exportação do Motor de Áreas antigo (removido na Fase 10).
 //
 // Lê só o que foi congelado na publicação (`blueprint_snapshot_nbr12721`):
 // o documento é o que o hash cobre, nunca um recálculo do rascunho. As tabelas

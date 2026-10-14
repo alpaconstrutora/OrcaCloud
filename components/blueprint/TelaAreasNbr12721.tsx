@@ -57,6 +57,11 @@ interface Props {
   onRunBatch: (cs: Command[]) => void;
   /** A última recusa do kernel — a faixa do editor fica escondida enquanto a tela está aberta. */
   erro: string | null;
+  /**
+   * SÓ LEITURA (Fase 10, permissão `canEditAreaEngine`): o motivo. Com ele, tudo o
+   * que grava fica desligado dizendo por quê; ler, buscar e exportar continuam.
+   */
+  somenteLeitura?: string | null;
 }
 
 export const ROTULO_DA_COBERTURA: Record<CoberturaNbr12721, string> = {
@@ -302,7 +307,7 @@ function DrawerDeClassificacao({
 
 // ── formulário de hipóteses ─────────────────────────────────────────────────
 
-function FormDeHipoteses({ hipoteses, onSalvar }: { hipoteses: HipotesesNbr12721; onSalvar: Props['onSalvarHipoteses'] }) {
+function FormDeHipoteses({ hipoteses, onSalvar, somenteLeitura }: { hipoteses: HipotesesNbr12721; onSalvar: Props['onSalvarHipoteses']; somenteLeitura?: string | null }) {
   const paraTexto = (v: number | null) => (v == null ? '' : String(v).replace('.', ','));
   const [diferente, setDiferente] = useState(paraTexto(hipoteses.coeficientesPadrao.DIFERENTE));
   const [descoberta, setDescoberta] = useState(paraTexto(hipoteses.coeficientesPadrao.DESCOBERTA));
@@ -334,7 +339,7 @@ function FormDeHipoteses({ hipoteses, onSalvar }: { hipoteses: HipotesesNbr12721
   const invalido =
     [diferente, descoberta].some((t) => t.trim() && !(Number(t.replace(',', '.')) > 0 && Number(t.replace(',', '.')) <= 10)) ||
     (vaga.trim() !== '' && !(Number(vaga.replace(',', '.')) > 0));
-  const motivo = !onSalvar ? 'Sem permissão para editar as hipóteses deste estudo' : invalido ? 'Coeficiente entre 0 e 10; área da vaga positiva' : !sujo ? 'Nada mudou' : null;
+  const motivo = somenteLeitura ? somenteLeitura : !onSalvar ? 'Sem permissão para editar as hipóteses deste estudo' : invalido ? 'Coeficiente entre 0 e 10; área da vaga positiva' : !sujo ? 'Nada mudou' : null;
 
   const salvar = async () => {
     if (motivo || !onSalvar) return;
@@ -428,7 +433,7 @@ const ROTULO_DO_TIPO_DE_ACESSORIO: Record<AcessorioParaVincular['tipo'], string>
 /** §7.1: campo editável na célula com a MESMA tipografia do texto da célula. */
 const SELECT_NA_CELULA = 'w-full text-sm font-normal px-2 py-1 rounded border appearance-none cursor-pointer';
 
-function AbaAcessorios({ model, hipoteses, onRunBatch }: { model: BlueprintModel; hipoteses: HipotesesNbr12721; onRunBatch: (cs: Command[]) => void }) {
+function AbaAcessorios({ model, hipoteses, onRunBatch, somenteLeitura }: { model: BlueprintModel; hipoteses: HipotesesNbr12721; onRunBatch: (cs: Command[]) => void; somenteLeitura?: string | null }) {
   const { linhas, unidades } = useMemo(() => acessoriosParaVincular(model, hipoteses), [model, hipoteses]);
   const mudar = (l: AcessorioParaVincular, donaChave: string | null, flags = { afetaPrivativa: l.afetaPrivativa, afetaCoeficiente: l.afetaCoeficiente }) => {
     const cs = comandosDoAcessorio(model, l.uid, donaChave, flags);
@@ -461,7 +466,9 @@ function AbaAcessorios({ model, hipoteses, onRunBatch }: { model: BlueprintModel
                 aria-label={`Unidade dona de ${l.nome}`}
                 value={l.donaChave ?? ''}
                 onChange={(e) => mudar(l, e.target.value || null)}
-                className={`${SELECT_NA_CELULA} ${l.donaChave ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                disabled={!!somenteLeitura}
+                title={somenteLeitura ?? undefined}
+                className={`${SELECT_NA_CELULA} disabled:cursor-not-allowed ${l.donaChave ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
               >
                 <option value="">— sem dona</option>
                 {unidades.map((u) => (
@@ -480,8 +487,8 @@ function AbaAcessorios({ model, hipoteses, onRunBatch }: { model: BlueprintModel
                 aria-label={`${l.nome}: ${key === 'privativa' ? 'entra na privativa' : 'entra no coeficiente'}`}
                 // Sem dona, nada a marcar: caixa marcada e desligada sugeriria um vínculo que não existe.
                 checked={l.donaChave ? l[campo] : false}
-                disabled={!l.donaChave}
-                title={l.donaChave ? undefined : 'Escolha a unidade dona primeiro'}
+                disabled={!!somenteLeitura || !l.donaChave}
+                title={somenteLeitura ?? (l.donaChave ? undefined : 'Escolha a unidade dona primeiro')}
                 onChange={(e) => mudar(l, l.donaChave, { afetaPrivativa: l.afetaPrivativa, afetaCoeficiente: l.afetaCoeficiente, [campo]: e.target.checked })}
                 className="h-4 w-4 rounded border-slate-300 disabled:opacity-40"
               />
@@ -509,7 +516,8 @@ const CAMPO_NA_CELULA = 'w-full rounded-[6px] border border-transparent bg-trans
 /** "1.234,5" e "12.5" → número (ponto de milhar só some quando há vírgula). */
 const lerM2 = (t: string) => Number((t.includes(',') ? t.replace(/\./g, '') : t).replace(',', '.'));
 
-function AbaDeclarados({ model, onRunBatch }: { model: BlueprintModel; onRunBatch: (cs: Command[]) => void }) {
+function AbaDeclarados({ model, onRunBatch, somenteLeitura }: { model: BlueprintModel; onRunBatch: (cs: Command[]) => void; somenteLeitura?: string | null }) {
+  const ro = somenteLeitura ?? null;
   const confirmar = useConfirm();
   const [nome, setNome] = useState('');
   const [area, setArea] = useState('');
@@ -519,7 +527,7 @@ function AbaDeclarados({ model, onRunBatch }: { model: BlueprintModel; onRunBatc
   const nomeDoNivel = (id: string) => model.levels.find((l) => l.id === id)?.name ?? '?';
   const numeroDe = (uid: string | null | undefined) => (uid ? ((model.unidades ?? []).find((u) => u.uid === uid)?.numero ?? '?') : null);
   const areaNum = lerM2(area);
-  const motivo = !nome.trim() ? 'Dê um nome ao ambiente' : !(areaNum > 0) ? 'Informe a área em m²' : !nivel ? 'O estudo não tem pavimento' : null;
+  const motivo = ro ? ro : !nome.trim() ? 'Dê um nome ao ambiente' : !(areaNum > 0) ? 'Informe a área em m²' : !nivel ? 'O estudo não tem pavimento' : null;
 
   const criar = () => {
     if (motivo) return;
@@ -573,12 +581,14 @@ function AbaDeclarados({ model, onRunBatch }: { model: BlueprintModel; onRunBatc
                 aria-label={`Nome do ambiente declarado ${a.nome}`}
                 onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== a.nome && onRunBatch([{ type: 'SetAmbienteDeclaradoProps', declaradoId: a.id, nome: e.target.value }])}
                 onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                disabled={!!ro}
+                title={ro ?? undefined}
                 className={CAMPO_NA_CELULA}
               />
             );
           case 'pavimento':
             return (
-              <select aria-label={`Pavimento de ${a.nome}`} value={a.levelId} onChange={(e) => onRunBatch([{ type: 'SetAmbienteDeclaradoProps', declaradoId: a.id, levelId: e.target.value }])} className={`${SELECT_NA_CELULA} text-gray-900 bg-gray-50 border-gray-100`}>
+              <select aria-label={`Pavimento de ${a.nome}`} value={a.levelId} onChange={(e) => onRunBatch([{ type: 'SetAmbienteDeclaradoProps', declaradoId: a.id, levelId: e.target.value }])} disabled={!!ro} title={ro ?? undefined} className={`${SELECT_NA_CELULA} text-gray-900 bg-gray-50 border-gray-100 disabled:cursor-not-allowed`}>
                 {model.levels.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.name}
@@ -598,6 +608,8 @@ function AbaDeclarados({ model, onRunBatch }: { model: BlueprintModel; onRunBatc
                   if (v > 0 && Math.round(v * 1e6) !== a.areaMm2) onRunBatch([{ type: 'SetAmbienteDeclaradoProps', declaradoId: a.id, areaMm2: Math.round(v * 1e6) }]);
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                disabled={!!ro}
+                title={ro ?? undefined}
                 className={`${CAMPO_NA_CELULA} text-right tabular-nums`}
               />
             );
@@ -607,7 +619,9 @@ function AbaDeclarados({ model, onRunBatch }: { model: BlueprintModel; onRunBatc
                 aria-label={`Unidade de ${a.nome}`}
                 value={(model.unidades ?? []).find((u) => u.uid === a.unidadeUid)?.id ?? ''}
                 onChange={(e) => onRunBatch([{ type: 'SetAmbienteDeclaradoProps', declaradoId: a.id, unidadeId: e.target.value || null }])}
-                className={`${SELECT_NA_CELULA} ${a.unidadeUid ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                disabled={!!ro}
+                title={ro ?? undefined}
+                className={`${SELECT_NA_CELULA} disabled:cursor-not-allowed ${a.unidadeUid ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
               >
                 <option value="">— comum</option>
                 {(model.unidades ?? []).map((u) => (
@@ -629,26 +643,38 @@ function AbaDeclarados({ model, onRunBatch }: { model: BlueprintModel; onRunBatc
             return null;
         }
       }}
-      actions={{ width: 80, render: (a) => <ActionIconButton kind="delete" title={`Excluir ${a.nome}`} onClick={() => void excluir(a)} /> }}
+      actions={{
+        width: 80,
+        // O botão desligado não recebe hover (pointer-events-none): o motivo fica no invólucro.
+        render: (a) => (
+          <span title={ro ?? undefined}>
+            <ActionIconButton kind="delete" title={ro ?? `Excluir ${a.nome}`} disabled={!!ro} onClick={() => void excluir(a)} />
+          </span>
+        ),
+      }}
       toolbarRight={
         <div className="flex items-center gap-2">
-          <select aria-label="Pavimento do novo ambiente" value={nivel} onChange={(e) => setNivel(e.target.value)} className="h-9 w-36 rounded-[6px] border border-slate-300 px-2 text-sm">
+          <select aria-label="Pavimento do novo ambiente" value={nivel} onChange={(e) => setNivel(e.target.value)} disabled={!!ro} title={ro ?? undefined} className="h-9 w-36 rounded-[6px] border border-slate-300 px-2 text-sm">
             {model.levels.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
               </option>
             ))}
           </select>
-          <input value={nome} onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && criar()} placeholder="Ambiente" aria-label="Nome do novo ambiente" className="h-9 w-36 rounded-[6px] border border-slate-300 px-2 text-sm" />
-          <input value={area} onChange={(e) => setArea(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && criar()} placeholder="m²" inputMode="decimal" aria-label="Área do novo ambiente (m²)" className="h-9 w-20 rounded-[6px] border border-slate-300 px-2 text-sm" />
+          <input value={nome} onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && criar()} placeholder="Ambiente" aria-label="Nome do novo ambiente" disabled={!!ro} title={ro ?? undefined} className="h-9 w-36 rounded-[6px] border border-slate-300 px-2 text-sm" />
+          <input value={area} onChange={(e) => setArea(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && criar()} placeholder="m²" inputMode="decimal" aria-label="Área do novo ambiente (m²)" disabled={!!ro} title={ro ?? undefined} className="h-9 w-20 rounded-[6px] border border-slate-300 px-2 text-sm" />
           <button type="button" onClick={criar} disabled={motivo !== null} title={motivo ?? undefined} className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3 text-sm font-medium text-white disabled:bg-slate-300">
             <Plus className="h-4 w-4" /> Adicionar
           </button>
-          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <label
+            title={ro ?? undefined}
+            className={`inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 ${ro ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-slate-50'}`}
+          >
             <FileSpreadsheet className="h-4 w-4" /> Importar planilha
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
+              disabled={!!ro}
               className="hidden"
               aria-label="Importar planilha de ambientes"
               onChange={(e) => {
@@ -671,7 +697,7 @@ function AbaDeclarados({ model, onRunBatch }: { model: BlueprintModel; onRunBatc
 
 // ── a tela ──────────────────────────────────────────────────────────────────
 
-export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses, onRunBatch, erro }: Props) {
+export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses, onRunBatch, erro, somenteLeitura = null }: Props) {
   const [aba, setAba] = useState<Aba>('classificacao');
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [drawerAberto, setDrawerAberto] = useState(false);
@@ -770,6 +796,11 @@ export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses,
           {erro}
         </p>
       )}
+      {somenteLeitura && (
+        <p className="text-sm text-amber-700" role="status" data-testid="areas-somente-leitura">
+          Só leitura: {somenteLeitura}
+        </p>
+      )}
 
       {aba === 'classificacao' && (
         <>
@@ -780,7 +811,7 @@ export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses,
             rowKey={(l) => l.chave}
             searchText={(l) => `${l.nome} ${l.pavimento} ${l.unidade ?? ''}`}
             searchPlaceholder="Buscar ambiente, pavimento ou unidade…"
-            selection={{ selected: selecionados, onChange: setSelecionados }}
+            selection={somenteLeitura ? undefined : { selected: selecionados, onChange: setSelecionados }}
             sortValue={(key, l) =>
               key === 'area' ? l.areaMm2 : key === 'dono' ? (l.unidade ?? l.acessorioDe ?? '') : key === 'classificacao' ? resumoDaClassificacao(l.classificacao ?? l.sugerida, !!(l.unidade || l.acessorioDe)) : key === 'origem' ? l.tipo : key === 'copias' ? l.copias : key === 'pavimento' ? l.pavimento : l.nome
             }
@@ -826,7 +857,9 @@ export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses,
                     setSelecionados(new Set([l.chave]));
                     setDrawerAberto(true);
                   }}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                  disabled={!!somenteLeitura}
+                  title={somenteLeitura ?? undefined}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all disabled:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                 >
                   Classificar
                 </button>
@@ -836,8 +869,8 @@ export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses,
               <button
                 type="button"
                 onClick={aplicarSugestoes}
-                disabled={naoClassificados.length === 0}
-                title={naoClassificados.length === 0 ? 'Todos os ambientes já têm classificação' : 'Grava a sugestão da Planta em cada ambiente ainda não classificado — confira depois'}
+                disabled={!!somenteLeitura || naoClassificados.length === 0}
+                title={somenteLeitura ? somenteLeitura : naoClassificados.length === 0 ? 'Todos os ambientes já têm classificação' : 'Grava a sugestão da Planta em cada ambiente ainda não classificado — confira depois'}
                 className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 <Sparkles className="h-4 w-4" /> Aplicar sugestões ({naoClassificados.length})
@@ -869,8 +902,8 @@ export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses,
         </>
       )}
 
-      {aba === 'acessorios' && <AbaAcessorios model={model} hipoteses={hipoteses} onRunBatch={onRunBatch} />}
-      {aba === 'declarados' && <AbaDeclarados model={model} onRunBatch={onRunBatch} />}
+      {aba === 'acessorios' && <AbaAcessorios model={model} hipoteses={hipoteses} onRunBatch={onRunBatch} somenteLeitura={somenteLeitura} />}
+      {aba === 'declarados' && <AbaDeclarados model={model} onRunBatch={onRunBatch} somenteLeitura={somenteLeitura} />}
 
       {/* Quadro I sem busca: uma linha por pavimento, poucas, todas lidas juntas. */}
       {aba === 'quadro-i' && (
@@ -963,7 +996,7 @@ export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses,
         />
       )}
 
-      {aba === 'hipoteses' && <FormDeHipoteses hipoteses={hipoteses} onSalvar={onSalvarHipoteses} />}
+      {aba === 'hipoteses' && <FormDeHipoteses hipoteses={hipoteses} onSalvar={onSalvarHipoteses} somenteLeitura={somenteLeitura} />}
     </div>
   );
 }

@@ -7,7 +7,7 @@
  * DECLARADOS (área digitada, kernel 0.100.0): o mesmo adaptador e o mesmo
  * motor dos estudos desenhados.
  *
- * Porta o mapeamento do Motor antigo (`areaEngineService.importFromEmpreendimento`,
+ * Porta o mapeamento do Motor de Áreas antigo (`importFromEmpreendimento`, removido na Fase 10;
  * F1/F2): torre → pavimentos (template de `empreendimento_floors` expandindo
  * `repeat_count`, senão os andares das unidades), unidade → `Unidade` com um
  * ambiente privativo declarado de `private_area` — SÓ a privativa: a comum

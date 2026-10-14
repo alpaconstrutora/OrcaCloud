@@ -470,7 +470,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState('');
   const commandInputRef = React.useRef<HTMLInputElement>(null);
-  const engViews = ['dashboard','eng-obras','eng-orcamentos','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates','area-engine'];
+  const engViews = ['dashboard','eng-obras','eng-orcamentos','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
   const [isOrganizacaoOpen, setIsOrganizacaoOpen] = React.useState(() => activeView === 'organization');
@@ -955,7 +955,6 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="estrutural" label="Ferragem & Aço" icon={Layers} />
                     <DropdownItem id="project-settings" label="Dados Técnicos" icon={Calculator} />
                     <DropdownItem id="eng-obra-types" label="Tipos de Obra" icon={Layers} />
-                    <DropdownItem id="area-engine" label="Áreas NBR 12721" icon={FileSpreadsheet} />
                   </NavDropdown>
 
                   <NavDropdown
@@ -1152,7 +1151,7 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={Building2}
                     isOpen={isDesenvolvimentoImobOpen}
                     onToggle={() => setIsDesenvolvimentoImobOpen(o => !o)}
-                    hasActiveChild={['opportunities','opura-market','planta-ai','blueprint','bim-viewer','imovib','empreendimentos','area-engine','laudo-avaliacao'].includes(activeView)}
+                    hasActiveChild={['opportunities','opura-market','planta-ai','blueprint','bim-viewer','imovib','empreendimentos','laudo-avaliacao'].includes(activeView)}
                   >
                     <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
                     <DropdownItem id="blueprint" label="Planta Inteligente" icon={PencilRuler} />
@@ -1165,7 +1164,8 @@ const Layout: React.FC<LayoutProps> = ({
                         viva para os links internos do Empreendimento — só o item de menu saiu. */}
                     <DropdownItem id="bim-viewer" label="Modelo 3D (IFC)" icon={Boxes} />
                     <DropdownItem id="laudo-avaliacao" label="Laudo de Avaliação" icon={FileSpreadsheet} />
-                    <DropdownItem id="area-engine" label="Áreas NBR 12721" icon={FileSpreadsheet} />
+                    {/* ÁREAS NBR 12721 (14/10/2026): o Motor de Áreas saiu do menu — os quadros moram na
+                        Planta Inteligente (Analisar › Áreas NBR 12721) e no botão do Empreendimento. */}
                   </NavDropdown>
                 </>
               )}

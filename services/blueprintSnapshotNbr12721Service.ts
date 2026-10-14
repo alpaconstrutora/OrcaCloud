@@ -18,6 +18,8 @@ export type TipoDeAprovacaoNbr12721 = 'TECNICA' | 'JURIDICA';
 export interface QuadroDaVersao {
   snapshotId: string;
   studyId: string;
+  /** A organização da versão — é por ela que a permissão `canEditAreaEngine` vale. */
+  organizationId: string;
   hash: string;
   status: 'success' | 'failed';
   versaoMotor: string;
@@ -62,13 +64,13 @@ export const blueprintSnapshotNbr12721Service = {
   async daVersao(snapshotId: string): Promise<QuadroDaVersao | null> {
     const { data, error } = await supabase
       .from('blueprint_snapshot_nbr12721')
-      .select('snapshot_id, study_id, hash, versao_motor, created_at, status:saida->>status')
+      .select('snapshot_id, study_id, organization_id, hash, versao_motor, created_at, status:saida->>status')
       .eq('snapshot_id', snapshotId)
       .maybeSingle();
     if (error) fail('daVersao', error);
     if (!data) return null;
-    const d = data as unknown as { snapshot_id: string; study_id: string; hash: string; versao_motor: string; created_at: string; status: string };
-    return { snapshotId: d.snapshot_id, studyId: d.study_id, hash: d.hash, status: d.status === 'success' ? 'success' : 'failed', versaoMotor: d.versao_motor, congeladoEm: d.created_at };
+    const d = data as unknown as { snapshot_id: string; study_id: string; organization_id: string; hash: string; versao_motor: string; created_at: string; status: string };
+    return { snapshotId: d.snapshot_id, studyId: d.study_id, organizationId: d.organization_id, hash: d.hash, status: d.status === 'success' ? 'success' : 'failed', versaoMotor: d.versao_motor, congeladoEm: d.created_at };
   },
 
   /** A saída inteira congelada (para exportar o documento da versão). */

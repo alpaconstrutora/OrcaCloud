@@ -1,6 +1,12 @@
 // Testemunha do Motor de Áreas NBR 12721 (13/10/2026, Fase 0 do plano
 // docs/planos/2026-10-13-areas-nbr12721-na-planta.md).
 //
+// ⚠️ NÃO RODA MAIS desde a Fase 10 (14/10/2026): as funções e tabelas do Motor
+// (`calculate_area_version`, `area_*`) foram apagadas do banco. A testemunha
+// ficou CONGELADA nos 16 JSON de `__tests__/fixtures/nbr12721/` (bloco
+// `testemunha`), que é o que `nbr12721Quadros.test.ts` confere. Este arquivo
+// fica como registro de COMO elas foram capturadas.
+//
 // O cálculo dos Quadros I, II e IV-B vai sair do SQL (`calculate_area_version`)
 // e virar motor puro em TS dentro da Planta. Antes de qualquer remoção, este
 // script registra o que o SQL VIGENTE NO BANCO calcula para cada caso de

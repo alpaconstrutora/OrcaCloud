@@ -175,6 +175,7 @@ import PainelSigef from './PainelSigef';
 import PainelCar from './PainelCar';
 import PainelReurb from './PainelReurb';
 import { useBlueprintReurb } from '../../hooks/useBlueprintReurb';
+import { useAreasNbr12721PodeEditar } from '../../hooks/useAreasNbr12721Edicao';
 import { useBlueprintRegularizacao } from '../../hooks/useBlueprintRegularizacao';
 import { zipDeTextos } from '../../services/blueprintReurbService';
 import { carDoImovel, camadasDoCar, kmlDoCar, csvDeCoordenadasDoCar } from '../../utils/blueprintCar';
@@ -3281,6 +3282,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // ÁREAS NBR 12721 (Fase 6): as hipóteses do estudo, lidas quando a tela abre. A linha
   // grava na organização DO ESTUDO — o registro tem dono (REGRA #5).
   const [hipotesesNbr12721, setHipotesesNbr12721] = useState<HipotesesNbr12721>(HIPOTESES_NBR12721_PADRAO);
+  // Fase 10: `canEditAreaEngine` vale de fato — sem ela a tela Áreas NBR 12721 abre só para leitura (o banco confere também).
+  const edicaoAreasNbr = useAreasNbr12721PodeEditar(study.organization_id);
   useEffect(() => {
     if (telaAberta !== 'areas-nbr12721' && telaAberta !== 'unidades') return;
     let vivo = true;
@@ -11980,11 +11983,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           <TelaAreasNbr12721
             model={editor.model}
             hipoteses={hipotesesNbr12721}
-            onSalvarHipoteses={async (h) => {
-              setHipotesesNbr12721(await blueprintNbr12721Service.save(study.id, study.organization_id, h));
+            onSalvarHipoteses={
+              edicaoAreasNbr.pode
+                ? async (h) => {
+                    setHipotesesNbr12721(await blueprintNbr12721Service.save(study.id, study.organization_id, h));
+                  }
+                : null
+            }
+            onRunBatch={(cs) => {
+              if (edicaoAreasNbr.pode) editor.runBatch(cs);
             }}
-            onRunBatch={(cs) => editor.runBatch(cs)}
             erro={editor.lastError}
+            somenteLeitura={edicaoAreasNbr.pode ? null : (edicaoAreasNbr.motivo ?? null)}
           />
         </div>
       )}

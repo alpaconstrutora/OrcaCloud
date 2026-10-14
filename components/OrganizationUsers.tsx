@@ -347,7 +347,6 @@ const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?:
     { group: 'Engenharia', title: 'Relatórios de Engenharia', view: 'canViewReports', edit: 'canEditReports' },
     { group: 'Engenharia', title: 'Dados Técnicos', view: 'canViewTechnicalData', edit: 'canEditTechnicalData' },
     { group: 'Engenharia', title: 'Ferragem & Aço (Estrutural)', view: 'canViewStructural', edit: 'canEditStructural' },
-    { group: 'Engenharia', title: 'Áreas NBR 12721', view: 'canViewAreaEngine', edit: 'canEditAreaEngine' },
     { group: 'Engenharia', title: 'Tipos e Templates de Obra', view: 'canViewProjectTemplates', edit: 'canEditProjectTemplates' },
 
     // --- Operação de Obra ---
@@ -403,6 +402,10 @@ const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?:
 
     // --- Incorporação ---
     { group: 'Incorporação', title: 'Empreendimentos', view: 'canViewDevelopments', edit: 'canEditDevelopments' },
+    // Desde 14/10/2026 a EDIÇÃO vale de fato: classificar/hipóteses na tela Áreas NBR 12721 da Planta,
+    // aprovar a versão e levar a fração ao Empreendimento (conferida também no banco, nas RPCs).
+    // As chaves mantêm o nome do Motor antigo para não perder o que já está gravado nos membros.
+    { group: 'Incorporação', title: 'Áreas NBR 12721 (Planta)', view: 'canViewAreaEngine', edit: 'canEditAreaEngine' },
     { group: 'Incorporação', title: 'Mapa Regulatório', view: 'canViewRegulatoryMap', edit: 'canEditRegulatoryMap' },
     { group: 'Incorporação', title: 'Oportunidades', view: 'canViewOpportunities', edit: 'canEditOpportunities' },
     { group: 'Incorporação', title: 'Planta AI v1 (legado, fora do menu)', view: 'canViewPlantaAi', edit: 'canEditPlantaAi' },

@@ -1,14 +1,16 @@
 import { supabase } from '../lib/supabase';
 import { COLOR_OPTIONS, colorClasses } from './obraTypeService';
 
-export type EmpreendimentoMotorCategory = 'vertical' | 'horizontal' | 'mixed' | 'commercial';
+// A "categoria do motor" (vertical/horizontal/misto/comercial) saiu em 14/10/2026: só o Motor de
+// Áreas NBR 12721 antigo a lia, e ele foi removido (Fase 10 do plano
+// docs/planos/2026-10-13-areas-nbr12721-na-planta.md). A coluna `motor_category` cai na migration
+// de DROP; até lá tem DEFAULT 'vertical' e ninguém a grava.
 
 export interface EmpreendimentoTypeRecord {
   id: string;
   organization_id: string | null;
   name: string;
   slug: string;
-  motor_category: EmpreendimentoMotorCategory;
   color: string;
   description: string | null;
   is_system: boolean;
@@ -17,35 +19,12 @@ export interface EmpreendimentoTypeRecord {
   created_at: string;
 }
 
-export type EmpreendimentoTypeInsert = Pick<EmpreendimentoTypeRecord, 'name' | 'motor_category' | 'color' | 'description'> & {
+export type EmpreendimentoTypeInsert = Pick<EmpreendimentoTypeRecord, 'name' | 'color' | 'description'> & {
   organization_id: string;
   slug?: string;
 };
 
 export { COLOR_OPTIONS, colorClasses };
-
-export const MOTOR_CATEGORY_OPTIONS: { value: EmpreendimentoMotorCategory; label: string }[] = [
-  { value: 'vertical', label: 'Vertical' },
-  { value: 'horizontal', label: 'Horizontal' },
-  { value: 'mixed', label: 'Misto' },
-  { value: 'commercial', label: 'Comercial' },
-];
-
-// Fallback de segurança: a regra fixa (slug → categoria) anterior a este catálogo.
-// ⚠️ A categoria só é lida pelo Motor de Áreas antigo (`getMotorCategory`), que sai na
-// Fase 10 do plano docs/planos/2026-10-13-areas-nbr12721-na-planta.md — ela vai junto.
-// Este fallback só é usado se o slug não for encontrado na tabela (ex: RLS bloqueou,
-// tipo foi excluído, ou é um valor legado fora dos 5 originais).
-function legacyMotorCategory(slug?: string | null): EmpreendimentoMotorCategory {
-  switch (slug) {
-    case 'HORIZONTAL': return 'horizontal';
-    case 'MISTO': return 'mixed';
-    case 'COND_LOGISTICO':
-    case 'COND_INDUSTRIAL': return 'commercial';
-    case 'VERTICAL':
-    default: return 'vertical';
-  }
-}
 
 function slugify(text: string): string {
   return text
@@ -65,7 +44,7 @@ export const empreendimentoTypeService = {
   async list(organizationId?: string): Promise<EmpreendimentoTypeRecord[]> {
     let query = supabase
       .from('empreendimento_types')
-      .select('id, organization_id, name, slug, motor_category, color, description, is_system, active, sort_order, created_at')
+      .select('id, organization_id, name, slug, color, description, is_system, active, sort_order, created_at')
       .eq('active', true);
 
     query = organizationId
@@ -89,7 +68,7 @@ export const empreendimentoTypeService = {
     return data;
   },
 
-  async update(id: string, updates: Partial<Pick<EmpreendimentoTypeRecord, 'name' | 'motor_category' | 'color' | 'description' | 'active'>>): Promise<EmpreendimentoTypeRecord> {
+  async update(id: string, updates: Partial<Pick<EmpreendimentoTypeRecord, 'name' | 'color' | 'description' | 'active'>>): Promise<EmpreendimentoTypeRecord> {
     const { data, error } = await supabase
       .from('empreendimento_types')
       .update(updates)
@@ -103,7 +82,6 @@ export const empreendimentoTypeService = {
   async duplicate(type: EmpreendimentoTypeRecord, organizationId: string): Promise<EmpreendimentoTypeRecord> {
     return this.create({
       name: `${type.name} (Cópia)`,
-      motor_category: type.motor_category,
       color: type.color,
       description: type.description,
       organization_id: organizationId,
@@ -116,17 +94,5 @@ export const empreendimentoTypeService = {
       .delete()
       .eq('id', id);
     if (error) throw error;
-  },
-
-  /** Categoria do motor de Áreas NBR 12721 para um slug de tipo — com fallback legado. */
-  async getMotorCategory(slug: string | null | undefined, organizationId?: string): Promise<EmpreendimentoMotorCategory> {
-    if (!slug) return 'vertical';
-    try {
-      const types = await this.list(organizationId);
-      const found = types.find(t => t.slug === slug);
-      return found?.motor_category ?? legacyMotorCategory(slug);
-    } catch {
-      return legacyMotorCategory(slug);
-    }
   },
 };

@@ -14,6 +14,7 @@ import { Check, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import ActionIconButton from '../ui/ActionIconButton';
 import DevolucaoNbr12721 from './DevolucaoNbr12721';
+import { useAreasNbr12721PodeEditar } from '../../hooks/useAreasNbr12721Edicao';
 import {
   blueprintSnapshotNbr12721Service,
   type AprovacaoNbr12721,
@@ -26,7 +27,7 @@ const ROTULO: Record<TipoDeAprovacaoNbr12721, string> = { TECNICA: 'Técnica', J
 
 interface Props {
   snapshotId: string;
-  /** `false` = sem permissão de aprovar (o botão diz por quê). */
+  /** `false` = sem permissão de aprovar (o botão diz por quê). Além dela, vale `canEditAreaEngine` na org da versão. */
   podeAprovar?: boolean;
 }
 
@@ -43,6 +44,8 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
   /** O Empreendimento ligado ao estudo (Fase 9); `null` = estudo solto, `undefined` = ainda lendo. */
   const [empreendimento, setEmpreendimento] = useState<{ id: string; name: string; organizationId: string } | null | undefined>(undefined);
   const [devolvendo, setDevolvendo] = useState(false);
+  // Fase 10: a permissão `canEditAreaEngine` na organização DA VERSÃO (o banco confere a mesma regra nas RPCs).
+  const edicao = useAreasNbr12721PodeEditar(quadro?.organizationId);
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -106,6 +109,7 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
   const tem = (t: TipoDeAprovacaoNbr12721) => aprovacoes.some((a) => a.tipo === t);
   const motivo = (t: TipoDeAprovacaoNbr12721): string | null => {
     if (!podeAprovar) return 'Sem permissão para aprovar as Áreas NBR 12721';
+    if (!edicao.pode) return edicao.motivo ?? 'Sem permissão para aprovar as Áreas NBR 12721';
     if (!quadro) return 'Esta versão não tem os quadros congelados';
     if (quadro.status !== 'success') return 'Os quadros desta versão têm pendência bloqueante';
     if (tem(t)) return `Esta versão já tem a aprovação ${ROTULO[t].toLowerCase()}`;
@@ -129,6 +133,7 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
 
   const motivoDaDevolucao = (): string | null => {
     if (!quadro) return 'Esta versão não tem os quadros congelados';
+    if (!edicao.pode) return edicao.motivo ?? 'Sem permissão para editar as Áreas NBR 12721';
     if (empreendimento === undefined) return 'Procurando o Empreendimento ligado ao estudo';
     if (!empreendimento) return 'Este estudo não está ligado a um Empreendimento';
     if (quadro.status !== 'success') return 'Os quadros desta versão têm pendência bloqueante';

@@ -376,7 +376,9 @@ export interface UserPermissions {
      */
     canViewElectrical?: boolean;
     canEditElectrical?: boolean;
+    /** Áreas NBR 12721 na Planta. O nome é do Motor antigo (removido em 14/10/2026) — mantido pelo que já está gravado. */
     canViewAreaEngine?: boolean;
+    /** Classificar, hipóteses, aprovar a versão e levar a fração ao Empreendimento — conferida no banco também. */
     canEditAreaEngine?: boolean;
     canViewProjectTemplates?: boolean;
     canEditProjectTemplates?: boolean;

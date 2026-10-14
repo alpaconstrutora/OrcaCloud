@@ -74,7 +74,6 @@ import type { SupplierPortalTab } from './SupplierDashboard';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
-const AreaEngineModule = React.lazy(() => import('./AreaEngineModule'));
 const AppraisalModule = React.lazy(() => import('./AppraisalModule'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
@@ -301,6 +300,14 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     if (activeView === 'regulatory-maps') navigateToFocus('blueprint', 'mapa-regulatorio', 'PLANTA_ABA');
   }, [activeView, navigateToFocus]);
 
+  // O Motor de Áreas NBR 12721 saiu (14/10/2026, Fase 10 do plano
+  // docs/planos/2026-10-13-areas-nbr12721-na-planta.md): os quadros moram na Planta
+  // Inteligente. O endereço antigo `area-engine` (URL, view salva, busca) cai nela.
+  const setActiveViewDoStore = useStore(s => s.setActiveView);
+  React.useEffect(() => {
+    if (activeView === 'area-engine') setActiveViewDoStore('blueprint');
+  }, [activeView, setActiveViewDoStore]);
+
   React.useEffect(() => {
     // ÒPURA Market: só administrador e usuário interno (decisão D5 do plano
     // docs/planos/2026-10-07-opura-market-intelligence.md). Fica ANTES do retorno
@@ -337,7 +344,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewFiscal', 'fiscal');
     } else if (['quality', 'pos-obra'].includes(activeView)) {
       allowed = isModuleAllowed('canViewQuality', 'quality');
-    } else if (['eng-obras', 'eng-orcamentos', 'analytic', 'parametric', 'explorer', 'area-engine'].includes(activeView)) {
+    } else if (['eng-obras', 'eng-orcamentos', 'analytic', 'parametric', 'explorer'].includes(activeView)) {
       allowed = isModuleAllowed('canViewBudget', 'obras');
     } else if (activeView.startsWith('supplies-')) {
       allowed = isModuleAllowed('canViewOrders', 'compras');
@@ -1193,12 +1200,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         </React.Suspense>
       );
 
-    case 'area-engine':
-      return (
-        <React.Suspense fallback={<Spinner />}>
-          <AreaEngineModule organizationId={activeOrganizationId || undefined} />
-        </React.Suspense>
-      );
     case 'laudo-avaliacao':
       return (
         <React.Suspense fallback={<Spinner />}>

@@ -125,7 +125,7 @@ const RULES: Rule[] = [
             'components/BoletoLoteModal.tsx':
                 'O modal tem seletor de organização próprio; o guard só impede processar o lote antes de o usuário escolher — não esconde leitura.',
         },
-        // 2026-08-03: AreaEngineModule, OpuraGovernanceModule e
+        // 2026-08-03: o Motor de Áreas (removido em 14/10/2026), OpuraGovernanceModule e
         // ServiceContractsModule eram CRIAÇÃO travada (botão mudo em "Todas") e
         // passaram a usar resolveWriteOrg.
         baseline: {},

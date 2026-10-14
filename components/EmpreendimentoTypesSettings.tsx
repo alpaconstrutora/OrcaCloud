@@ -2,8 +2,6 @@ import React from 'react';
 import {
     empreendimentoTypeService,
     EmpreendimentoTypeRecord,
-    EmpreendimentoMotorCategory,
-    MOTOR_CATEGORY_OPTIONS,
     COLOR_OPTIONS,
     colorClasses,
 } from '../services/empreendimentoTypeService';
@@ -16,7 +14,9 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 
 const TYPE_COLUMNS: ColumnConfig[] = [
     { key: 'name',     label: 'Nome',      sortable: true },
-    { key: 'category', label: 'Categoria', sortable: true },
+    // A "Categoria" (vertical/horizontal/…) saiu em 14/10/2026: só o Motor de Áreas antigo a lia,
+    // e ele foi removido (Fase 10 do plano docs/planos/2026-10-13-areas-nbr12721-na-planta.md).
+    { key: 'cor',      label: 'Cor',       sortable: true },
     { key: 'actions',  label: 'Ações',     sortable: false },
 ];
 
@@ -24,7 +24,7 @@ const TYPE_COLUMNS: ColumnConfig[] = [
 // estavam hardcoded no <SortableHeader> original de cada coluna.
 const TYPE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     name: { label: 'Nome', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
-    category: { label: 'Categoria', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+    cor: { label: 'Cor', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
 };
 
 interface RenderTypeCellCtx {
@@ -32,13 +32,12 @@ interface RenderTypeCellCtx {
     editName: string;
     setEditName: (v: string) => void;
     handleUpdate: (id: string) => void;
-    editCategory: EmpreendimentoMotorCategory;
-    setEditCategory: (v: EmpreendimentoMotorCategory) => void;
     editColor: string;
     setEditColor: (v: string) => void;
     selectCls: string;
-    categoryLabel: (c: EmpreendimentoMotorCategory) => string;
 }
+
+const rotuloDaCor = (cor: string) => COLOR_OPTIONS.find(c => c.key === cor)?.label ?? cor;
 
 function renderEmpreendimentoTypeCell(key: string, type: EmpreendimentoTypeRecord, ctx: RenderTypeCellCtx): React.ReactNode {
     switch (key) {
@@ -64,19 +63,14 @@ function renderEmpreendimentoTypeCell(key: string, type: EmpreendimentoTypeRecor
                     )}
                 </div>
             );
-        case 'category':
+        case 'cor':
             return (
                 <div className="text-sm font-normal text-gray-600">
                     {ctx.editingId === type.id ? (
-                        <div className="flex items-center gap-2">
-                            <select value={ctx.editCategory} onChange={e => ctx.setEditCategory(e.target.value as EmpreendimentoMotorCategory)} className={ctx.selectCls}>
-                                {MOTOR_CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                            <select value={ctx.editColor} onChange={e => ctx.setEditColor(e.target.value)} className={ctx.selectCls}>
-                                {COLOR_OPTIONS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-                            </select>
-                        </div>
-                    ) : ctx.categoryLabel(type.motor_category)}
+                        <select value={ctx.editColor} onChange={e => ctx.setEditColor(e.target.value)} className={ctx.selectCls}>
+                            {COLOR_OPTIONS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                        </select>
+                    ) : <span className={colorTextClass(type.color)}>{rotuloDaCor(type.color)}</span>}
                 </div>
             );
         default:
@@ -104,7 +98,6 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     const [createTarget, setCreateTarget] = React.useState<WriteTarget | null>(null);
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [editName, setEditName] = React.useState('');
-    const [editCategory, setEditCategory] = React.useState<EmpreendimentoMotorCategory>('vertical');
     const [editColor, setEditColor] = React.useState('gray');
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('empreendimentoTypes:search', '');
@@ -131,7 +124,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
         if (!createTarget) { showToast('Selecione uma organização para criar um tipo de empreendimento.', 'error'); return; }
         const nome = editName.trim();
         const { ok, failed } = await forEachTargetOrg(createTarget, orgId =>
-            empreendimentoTypeService.create({ name: nome, motor_category: editCategory, color: editColor, description: null, organization_id: orgId }));
+            empreendimentoTypeService.create({ name: nome, color: editColor, description: null, organization_id: orgId }));
         if (ok === 0) {
             showToast(errorMessage(failed[0]?.error, 'Erro ao criar'), 'error');
             return;
@@ -145,7 +138,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     const handleUpdate = async (id: string) => {
         if (!editName.trim()) return;
         try {
-            await empreendimentoTypeService.update(id, { name: editName.trim(), motor_category: editCategory, color: editColor });
+            await empreendimentoTypeService.update(id, { name: editName.trim(), color: editColor });
             showToast('Tipo de empreendimento atualizado com sucesso', 'success');
             cancelEdit();
             loadTypes();
@@ -181,7 +174,6 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     const startEdit = (type: EmpreendimentoTypeRecord) => {
         setEditingId(type.id);
         setEditName(type.name);
-        setEditCategory(type.motor_category);
         setEditColor(type.color);
         setIsAdding(false);
     };
@@ -193,7 +185,6 @@ const EmpreendimentoTypesSettings: React.FC = () => {
         setIsAdding(true);
         setEditingId(null);
         setEditName('');
-        setEditCategory('vertical');
         setEditColor('gray');
     };
 
@@ -202,21 +193,18 @@ const EmpreendimentoTypesSettings: React.FC = () => {
         setCreateTarget(null);
         setEditingId(null);
         setEditName('');
-        setEditCategory('vertical');
         setEditColor('gray');
     };
-
-    const categoryLabel = (c: EmpreendimentoMotorCategory) => MOTOR_CATEGORY_OPTIONS.find(o => o.value === c)?.label ?? c;
 
     const selectCls = 'h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all';
 
     const filteredTypes = types
         .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
         .sort((a, b) => {
-            if (tableColumns.sortColumn === 'category') {
+            if (tableColumns.sortColumn === 'cor') {
                 return tableColumns.sortDirection === 'asc'
-                    ? categoryLabel(a.motor_category).localeCompare(categoryLabel(b.motor_category))
-                    : categoryLabel(b.motor_category).localeCompare(categoryLabel(a.motor_category));
+                    ? rotuloDaCor(a.color).localeCompare(rotuloDaCor(b.color))
+                    : rotuloDaCor(b.color).localeCompare(rotuloDaCor(a.color));
             }
             if (tableColumns.sortColumn === 'name') {
                 return tableColumns.sortDirection === 'asc'
@@ -235,7 +223,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                     </div>
                     <div>
                         <h2 className="text-lg font-semibold text-gray-800">Tipos de Empreendimento</h2>
-                        <p className="text-sm text-gray-500 mt-1">Gerencie os tipos disponíveis no cadastro de Empreendimentos (Incorporação). A categoria define como o empreendimento é classificado no motor de Áreas NBR 12721.</p>
+                        <p className="text-sm text-gray-500 mt-1">Gerencie os tipos disponíveis no cadastro de Empreendimentos (Incorporação). A cor identifica o tipo nas listas.</p>
                     </div>
                 </div>
                 {!isAdding && !editingId && (
@@ -261,9 +249,6 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                             className="flex-1 min-w-[10rem] h-9 px-3 rounded-[6px] border border-gray-200 text-sm font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                             onKeyDown={e => e.key === 'Enter' && handleAdd()}
                         />
-                        <select value={editCategory} onChange={e => setEditCategory(e.target.value as EmpreendimentoMotorCategory)} className={selectCls}>
-                            {MOTOR_CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
                         <select value={editColor} onChange={e => setEditColor(e.target.value)} className={selectCls}>
                             {COLOR_OPTIONS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                         </select>
@@ -344,8 +329,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                                             <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 {renderEmpreendimentoTypeCell(key, type, {
                                                     editingId, editName, setEditName, handleUpdate,
-                                                    editCategory, setEditCategory, editColor, setEditColor,
-                                                    selectCls, categoryLabel,
+                                                    editColor, setEditColor, selectCls,
                                                 })}
                                             </td>
                                         ))}

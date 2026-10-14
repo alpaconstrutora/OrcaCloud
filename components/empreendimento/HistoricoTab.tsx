@@ -41,7 +41,8 @@ const ENTITY_LABELS: Record<EmpreendimentoAuditEntity, string> = {
   common_area: 'Área comum',
   regulatory_zone: 'Zona regulatória',
   obra_link: 'Vínculo com obra',
-  area_project: 'Áreas NBR 12721',
+  // Eventos do Motor de Áreas antigo (removido em 14/10/2026) — os de hoje vêm da Planta (`sync_blueprint`).
+  area_project: 'Áreas NBR 12721 (Motor antigo)',
   study_link: 'Estudo vinculado',
   commercial: 'Espelho de Vendas',
   rental: 'Espelho de Locações',
@@ -87,7 +88,7 @@ const SOURCE_LABELS: Record<EmpreendimentoAuditSource, string> = {
   curadoria: 'Curadoria',
   comercial: 'Vendas',
   locacao: 'Locações',
-  area_engine: 'Áreas NBR',
+  area_engine: 'Áreas NBR (Motor antigo)',
 };
 
 // Nomes técnicos de coluna não dizem nada para quem lê o histórico.

@@ -487,7 +487,53 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
     - seção: "Levar" com os 3 motivos e a abertura;
     - trava do `UNIT_COLS`.
   - **Suíte:** 9.187 = 9.153 + 34 pulados, 0 falhas, em 910 arquivos; tsc 0; `verificar:build` limpo; `check-ui-standard` limpo em `DevolucaoNbr12721`, `SecaoNbr12721DaVersao`, `VinculacoesTab` e `FracoesTab`. O `verificar-views-anon.sh` não se aplica: nenhuma view criada.
-- [ ] Fase 10: remoção (0 de 5)
+- [ ] **Fase 10: remoção (4 de 5; o DROP da 10.5 roda depois que a produção estiver no código sem o Motor)**
+  - **Inventário do banco antes de qualquer remoção (14/10):**
+    - 18 tabelas `area_*`, com 2 projetos e 3 versões, os mesmos da análise;
+    - nenhuma view dependente, nenhum gatilho de fora, nenhum `cron`, nenhum enum `area_*` usado fora;
+    - uma única FK de fora: `empreendimento_units.area_engine_version_id`, com 0 linhas preenchidas;
+    - `empreendimento_types.motor_category` NOT NULL sem padrão: só o Motor a lia.
+  - **Ordem segura:** migration preparatória (inofensiva ao código em produção), depois o push, depois o DROP.
+  - **Migration `aplicar_20271014300000_areas_nbr12721_permissao.sql`** (aplicada com `db query -f`):
+    - `fn_pode_editar_areas_nbr12721(org)`: não-membro não; admin/owner sim; chave `canEditAreaEngine` definida vale ela; sem chave, viewer não e os demais sim;
+    - as RPCs `aprovar_nbr12721_da_versao` e `devolver_nbr12721_ao_empreendimento` passam a exigir a permissão. O corpo foi copiado dos ARQUIVOS das migrations, mais a checagem;
+    - `motor_category` ganha DEFAULT 'vertical';
+    - ACL conferida (só authenticated, postgres e service_role);
+    - **provado num bloco que aborta:**
+      - member+false: não; member+true: sim; member sem chave: sim; viewer sem chave: não; admin+false: sim; outra org: não;
+      - aprovar e devolver negados dão 42501; liberados, passam;
+      - o membro do agente-leitura ficou intacto.
+    - Em 14/10 nenhum membro tinha a chave negada nem papel viewer: ninguém perdeu acesso.
+  - **10.1 Menu:**
+    - saem os dois "Áreas NBR 12721" (Engenharia e Incorporação), o `engViews` e o `hasActiveChild`;
+    - teste `LayoutMenuSemMotorDeAreas.test.tsx` (abre os dois grupos e confere os vizinhos);
+    - **portão que mentia, achado e corrigido no teste:**
+      - os itens só entram no DOM com o grupo aberto, então "0 itens" sem abrir era falso;
+      - `dashboard` já abre Engenharia, e o clique a fechava; por isso a view usada no teste é neutra;
+    - o teste reprova com o Layout antigo (2 itens).
+  - **10.2 Roteador:** saem o `case 'area-engine'`, o lazy import e a entrada da lista de permissão. O endereço antigo `area-engine` cai em `blueprint`. Provado no app: `#/area-engine` abre a Planta, sem tela branca.
+  - **10.3 Permissões:**
+    - "Áreas NBR 12721 (Planta)" vai para o grupo Incorporação. As chaves mantêm o nome antigo, pelo que já está gravado nos membros;
+    - `hooks/useAreasNbr12721Edicao.ts` tem a mesma regra do banco, testada;
+    - sem a permissão, a tela Áreas NBR 12721 abre SÓ PARA LEITURA:
+      - aviso no topo;
+      - classificação sem lote; "Classificar" e "Aplicar sugestões", acessórios, declarados (campos, Adicionar, Importar, excluir) e o salvar das hipóteses ficam desligados com o motivo;
+      - ler, buscar e exportar continuam;
+    - na seção da versão, "Aprovar" e "Levar ao Empreendimento" ficam desligados com o motivo, e baixar continua;
+    - o banco confere a mesma regra nas RPCs.
+  - **10.4 Código apagado:**
+    - `AreaEngineModule.tsx`, `components/area-engine/`, `areaEngineService.ts`, `areaEngineExportService.ts` e `types/areaEngine.ts`;
+    - `__tests__/areaEngineFixtures.test.ts` (21 testes), substituído pelas 16 fixtures da Fase 0;
+    - os 12 `supabase/seed/area_engine_*.sql`;
+    - `QA_MOTOR_AREAS_NBR12721.md` foi para `docs/historico/`.
+    - **Tipos de Empreendimento:** a coluna "Categoria" vira "Cor", porque a edição da cor morava na célula da categoria. Saem `motor_category`, `getMotorCategory` e `MOTOR_CATEGORY_OPTIONS`. Provado no app: criar um tipo sem `motor_category` passa (DEFAULT) e o tipo de teste foi apagado (0 no banco).
+    - **Também:**
+      - `area_engine_version_id` sai dos tipos e do `UNIT_COLS`;
+      - o Histórico rotula os eventos antigos como "(Motor antigo)";
+      - o script da testemunha ganha o aviso "não roda mais; a testemunha está congelada nos JSON".
+    - **Busca do critério:** sobram só as chaves de permissão `canView/canEditAreaEngine`, de propósito (dado gravado), e o redirecionamento de `area-engine`. Fora disso, `areaEngine|area-engine|AreaEngine` só aparece em migrations antigas e em documentos.
+  - **Suíte:** 9.171 = 9.137 + 34 pulados, 0 falhas, em 911 arquivos. A conta fecha com 9.187 − 21 (areaEngineFixtures) + 5 novos e 910 − 1 + 2 arquivos. tsc 0; `verificar:build` limpo; `check-ui-standard` limpo nos `.tsx` tocados.
+  - **10.5 DROP:** pendente. Roda depois do push, com a produção conferida no código novo.
 
 Ordem de publicação: cada fase publica sozinha (push em `main`). Até a fase 9 o Motor antigo continua no ar e intocado. A fase 10 só começa com as fases 0 a 9 provadas em produção.
 

@@ -164,6 +164,43 @@ describe('TelaAreasNbr12721 — Acessórios e Ambientes declarados (Fase 6b)', (
 });
 
 describe('Hipóteses — salvar com o estado de verdade (achado da prova no app real, 14/10)', () => {
+  it('Fase 10: só leitura (sem canEditAreaEngine) — aviso, nada grava, cada controle diz o motivo; ler e buscar seguem', async () => {
+    const motivo = 'Seu usuário não tem permissão para editar as Áreas NBR 12721 nesta organização.';
+    const onRunBatch = vi.fn();
+    let m = predio();
+    m = applyCommand(m, { type: 'AddAmbienteDeclarado', levelId: m.levels[0].id, nome: 'Depósito', areaMm2: 4_000_000 }).model;
+    render(
+      <ConfirmProvider>
+        <TelaAreasNbr12721 model={m} hipoteses={HIPOTESES_NBR12721_PADRAO} onSalvarHipoteses={null} onRunBatch={onRunBatch} erro={null} somenteLeitura={motivo} />
+      </ConfirmProvider>,
+    );
+    expect(screen.getByTestId('areas-somente-leitura').textContent).toContain(motivo);
+    // Classificação: sem seleção em lote; "Classificar" e "Aplicar sugestões" desligados com o motivo.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    const aplicar = screen.getByRole('button', { name: /Aplicar sugestões/ });
+    expect((aplicar as HTMLButtonElement).disabled).toBe(true);
+    expect(aplicar.getAttribute('title')).toBe(motivo);
+    for (const b of screen.getAllByRole('button', { name: 'Classificar' })) expect(b.getAttribute('title')).toBe(motivo);
+    // Ambientes declarados: campos e "Adicionar" desligados com o motivo; a busca continua.
+    await userEvent.click(screen.getByRole('tab', { name: /Ambientes declarados/ }));
+    const nome = screen.getByLabelText('Nome do ambiente declarado Depósito') as HTMLInputElement;
+    expect(nome.disabled).toBe(true);
+    expect(nome.getAttribute('title')).toBe(motivo);
+    const adicionar = screen.getByRole('button', { name: /Adicionar/ });
+    expect((adicionar as HTMLButtonElement).disabled).toBe(true);
+    expect(adicionar.getAttribute('title')).toBe(motivo);
+    expect((screen.getByPlaceholderText(/Buscar ambiente/) as HTMLInputElement).disabled).toBe(false);
+    // Acessórios: a dona desligada com o motivo.
+    await userEvent.click(screen.getByRole('tab', { name: /Acessórios/ }));
+    const dona = screen.getByLabelText('Unidade dona de Depósito') as HTMLSelectElement;
+    expect(dona.disabled).toBe(true);
+    expect(dona.getAttribute('title')).toBe(motivo);
+    // Hipóteses: salvar diz o motivo de verdade, não o genérico.
+    await userEvent.click(screen.getByRole('tab', { name: /Hipóteses/ }));
+    expect(screen.getByRole('button', { name: /Salvar hipóteses/ }).getAttribute('title')).toBe(motivo);
+    expect(onRunBatch).not.toHaveBeenCalled();
+  });
+
   it('as hipóteses que voltam do salvar NÃO apagam o "Hipóteses salvas."; o campo mostra o valor gravado', async () => {
     function ComEstado() {
       const [h, setH] = React.useState(HIPOTESES_NBR12721_PADRAO);

@@ -37,6 +37,8 @@ vi.mock('../../lib/supabase', () => ({ supabase: { auth: { getUser: async () => 
 
 import SecaoNbr12721DaVersao from '../../components/blueprint/SecaoNbr12721DaVersao';
 
+const edicao: { pode: boolean; motivo?: string } = { pode: true };
+vi.mock('../../hooks/useAreasNbr12721Edicao', () => ({ useAreasNbr12721PodeEditar: () => edicao }));
 vi.mock('../../components/blueprint/DevolucaoNbr12721', () => ({
   default: ({ aberto }: { aberto: boolean }) => (aberto ? <div data-testid="drawer-devolucao" /> : null),
 }));
@@ -49,6 +51,8 @@ describe('SecaoNbr12721DaVersao', () => {
     estado.aprovacoes = [];
     estado.nomes = null;
     estado.emp = null;
+    edicao.pode = true;
+    delete edicao.motivo;
     aprovar.mockClear();
     documentoDaVersao.mockClear();
     exportarPdf.mockClear();
@@ -136,6 +140,21 @@ describe('SecaoNbr12721DaVersao', () => {
     expect(ok.getAttribute('title')).toMatch(/Residencial/);
     await userEvent.click(ok);
     expect(screen.getByTestId('drawer-devolucao')).toBeTruthy();
+  });
+
+  it('Fase 10: sem canEditAreaEngine na org da versão, aprovar e levar ao Empreendimento dizem o motivo', async () => {
+    estado.quadro = quadroOk;
+    estado.emp = { id: 'e1', name: 'Residencial', organizationId: 'org1' };
+    edicao.pode = false;
+    edicao.motivo = 'Seu usuário não tem permissão para editar as Áreas NBR 12721 nesta organização.';
+    render(<SecaoNbr12721DaVersao snapshotId="s1" />);
+    const tecnica = await screen.findByRole('button', { name: 'Aprovar técnica' });
+    expect((tecnica as HTMLButtonElement).disabled).toBe(true);
+    expect(tecnica.getAttribute('title')).toBe(edicao.motivo);
+    const levar = screen.getByRole('button', { name: 'Levar ao Empreendimento' });
+    await vi.waitFor(() => expect(levar.getAttribute('title')).toBe(edicao.motivo));
+    // Baixar continua: ler não é editar.
+    expect((screen.getByRole('button', { name: 'Baixar PDF' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('erro do banco aparece com o motivo (a RPC é quem decide)', async () => {

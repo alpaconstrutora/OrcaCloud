@@ -23,6 +23,13 @@ describe('ResumoDoDimensionamentoDaAgua', () => {
     ]);
   });
 
+  it('ponto sem rede (não avaliado) NÃO conta como "atende" — achado da conferência visual de 14/10/2026', () => {
+    const semRede = [{ origemId: 'cx', pontos: [ponto('NAO_AVALIADO'), ponto('NAO_AVALIADO'), ponto('OK')] }] as unknown as PressoesDaRede[];
+    expect(linhasDoDimensionamento({ reservacao: null, alimentador: null, recalque: null, aquecedores: [], pressoes: semRede })).toEqual([
+      { assunto: 'Pressões', texto: '2 ponto(s) sem rede — lance para avaliar', tom: 'neutro' },
+    ]);
+  });
+
   it('recalque só entra com reservatório inferior', () => {
     const recalque = { inferiorId: null, motivo: null, motorCv: 0.5 } as never;
     expect(linhasDoDimensionamento({ reservacao: null, alimentador: null, recalque, aquecedores: [], pressoes: [] })).toEqual([]);

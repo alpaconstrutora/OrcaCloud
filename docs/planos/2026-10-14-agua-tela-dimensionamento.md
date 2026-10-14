@@ -84,3 +84,24 @@ fechando; nenhum `utils/` tocado.
 14/10/2026: `d73f51b7` empurrado para `main` (`f28fe96a..d73f51b7`). Check-run `ci` = success.
 `conferir-producao.sh "Dimensionamento da água" "Abrir dimensionamento"`: os dois textos no bundle
 servido (domínio em `82a2029`, que contém o commit). Conferência VISUAL na tela ainda não feita.
+
+## Conferência visual (14/10/2026, a pedido do usuário)
+
+> 1. Conferência visual. Não abri nenhuma das telas no navegador. Voce nao consegue testar com email e senha?
+
+App real (dev server de uma frente no `main`), conta `agente-leitura`, planta DESCARTÁVEL criada pelo
+serviço com o desenho pronto e arquivada no fim (autorizado pelo usuário). Roteiro:
+`c:/tmp/pwtest/conferencia-hidro.cjs` — 20 portões, todos ok na 2ª rodada; sem erro de JS/console/HTTP;
+plantas `b3fee1b8…` e `33c107bd…` com `status = ARQUIVADO`.
+
+Achados da 1ª rodada, corrigidos nesta frente:
+- **Meu (de `d73f51b7`):** antes do lançamento, o cartão "Dimensionamento" dizia "Pressões: os 3 ponto(s)
+  atendem" — ponto sem rede é `NAO_AVALIADO` e era contado como atende. Agora: "N ponto(s) sem rede —
+  lance para avaliar". Teste unitário novo.
+- **Anterior a hoje:** a Ventilação dizia "Todo desconector ventilado…" logo acima de "VS sem
+  ventilação… ventile à mão" (sem comando ≠ tudo ventilado). Agora, com avisos: "Nada que o lançamento
+  automático consiga ventilar — veja abaixo o que fica à mão."
+- **Anterior a hoje:** o botão "Lançar (3)" do rodapé do esgoto quebrava em duas linhas; `whitespace-nowrap`
+  + `shrink-0` (portão: altura 36 px).
+
+Verificação: `check-ui-standard.sh` 0 alertas; `tsc` 0 erros; editor 252/252; 32 arquivos 255/255.

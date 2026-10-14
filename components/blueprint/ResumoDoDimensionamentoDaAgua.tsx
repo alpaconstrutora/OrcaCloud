@@ -60,12 +60,17 @@ export function linhasDoDimensionamento({ reservacao, alimentador, recalque, aqu
   if (pontos.length > 0) {
     const insuficientes = pontos.filter((p) => p.estado === 'INSUFICIENTE').length;
     const excessivas = pontos.filter((p) => p.estado === 'EXCESSIVA').length;
+    // Ponto ainda sem rede não foi avaliado — NÃO é "atende" (a conferência visual de 14/10/2026 pegou o
+    // cartão dizendo "os 3 ponto(s) atendem" antes do lançamento, com o chuveiro abaixo da mínima).
+    const naoAvaliados = pontos.filter((p) => p.estado === 'NAO_AVALIADO').length;
     linhas.push(
       insuficientes > 0
         ? { assunto: 'Pressões', texto: `${insuficientes} ponto(s) com pressão insuficiente`, tom: 'erro' }
         : excessivas > 0
           ? { assunto: 'Pressões', texto: `${excessivas} ponto(s) com estática acima da máxima`, tom: 'aviso' }
-          : { assunto: 'Pressões', texto: `os ${pontos.length} ponto(s) atendem`, tom: 'ok' },
+          : naoAvaliados > 0
+            ? { assunto: 'Pressões', texto: `${naoAvaliados} ponto(s) sem rede — lance para avaliar`, tom: 'neutro' }
+            : { assunto: 'Pressões', texto: `os ${pontos.length} ponto(s) atendem`, tom: 'ok' },
     );
   }
   return linhas;

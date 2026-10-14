@@ -17882,7 +17882,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   <p className="text-xs font-semibold text-slate-700">Ventilação (NBR 8160)</p>
                   <p className="text-xs text-slate-600">
                     {planoDaVentilacao.comandos.length === 0
-                      ? 'Todo desconector ventilado ao alcance da tabela e as colunas 30 cm acima da cobertura.'
+                      ? planoDaVentilacao.avisos.length > 0
+                        ? 'Nada que o lançamento automático consiga ventilar — veja abaixo o que fica à mão.'
+                        : 'Todo desconector ventilado ao alcance da tabela e as colunas 30 cm acima da cobertura.'
                       : `O "Lançar" do rodapé lança: ${planoDaVentilacao.resumo.join(', ')}.`}
                   </p>
                   {planoDaVentilacao.avisos.map((a) => (
@@ -19570,7 +19572,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       ? `Apaga os ${planoDeEsgoto.sugeridos} trecho(s) ainda sugerido(s) e lança de novo com as hipóteses atuais; o que você confirmou fica. Ctrl+Z desfaz.`
                       : 'Caixa, ramais, ligação à rede, coletor e ventilação, num passo só (Ctrl+Z desfaz tudo)'
                 }
-                className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 <Waves className="h-4 w-4" />
                 {planoDeEsgoto.comandos.length > 0 ? `Lançar (${planoDeEsgoto.aLigar})` : planoDeEsgoto.sugeridos > 0 ? 'Relançar sugeridos' : 'Lançar'}

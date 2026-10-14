@@ -34,7 +34,7 @@ function casa() {
 
 describe('anotações (E8.1)', () => {
   it('comandos: texto padrão, altura 250, hachura DIAGONAL, giro normalizado; mover desloca; apagar; invariantes recusam pontos de menos, texto vazio, hachura fora da hachura, vista inexistente', () => {
-    expect(KERNEL_VERSION).toMatch(/^blueprint-kernel-ts-0\.(4[5-9]|[5-9][0-9])\.\d+$/);
+    expect(Number(/^blueprint-kernel-ts-0\.(\d+)\.\d+$/.exec(KERNEL_VERSION)?.[1])).toBeGreaterThanOrEqual(45); // número, não texto: '0.100' < '0.46' como string
     const { m, t, corteId } = casa();
     let r = applyCommand(m, { type: 'AddAnotacao', vista: { tipo: 'PLANTA', levelId: t }, tipo: 'TEXTO', pontos: [point(1000, 1000)], rotacaoGraus: 450 });
     const a = r.model.anotacoes[0];

@@ -50,7 +50,7 @@ const ACAB: AcabamentosDoAmbiente = {
 
 describe('acabamentos do ambiente (E7.2)', () => {
   it('NameSpace cria a etiqueta já com acabamentos; SetSpaceLabelProps substitui o conjunto e `null` limpa; `{}` vira ausente; invariantes recusam vazio, função inválida, rebaixo e altura fora da faixa', () => {
-    expect(KERNEL_VERSION).toMatch(/^blueprint-kernel-ts-0\.(4[3-9]|[5-9][0-9])\.\d+$/); // ≥ 0.43.0 — os acabamentos entraram nela; bumps posteriores não a invalidam
+    expect(Number(/^blueprint-kernel-ts-0\.(\d+)\.\d+$/.exec(KERNEL_VERSION)?.[1])).toBeGreaterThanOrEqual(43); // número, não texto: '0.100' < '0.46' como string // ≥ 0.43.0 — os acabamentos entraram nela; bumps posteriores não a invalidam
     const { m, spaceId } = sala();
     let r = applyCommand(m, { type: 'NameSpace', spaceId, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO', acabamentos: ACAB });
     const lbl = r.model.labels[0];

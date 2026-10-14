@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.99.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.100.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -888,6 +888,7 @@ function emptyModel() {
     anotacoes: [],
     vistasDependentes: [],
     subRegioes: [],
+    ambientesDeclarados: [],
     rodapes: [],
     etapas: [],
     verticesDoTerreno: [],
@@ -1784,6 +1785,17 @@ function aplicarEtiquetas(model) {
 }
 
 // utils/blueprintKernel/canonical.ts
+function nbr12721Canonica(c) {
+  if (!c) return void 0;
+  return {
+    cobertura: c.cobertura,
+    ...c.coeficiente != null ? { coeficiente: c.coeficiente } : {},
+    ...c.natureza ? { natureza: c.natureza } : {},
+    ...c.divisao ? { divisao: c.divisao } : {},
+    ...c.escopo ? { escopo: c.escopo } : {}
+  };
+}
+var nbr12721DoCanonico = (c) => c ? nbr12721Canonica(c) : void 0;
 function camadaCanonica(c) {
   return {
     espessuraMm: c.espessuraMm,
@@ -2154,6 +2166,17 @@ function projetar(model) {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.material, y.material)
   );
+  const numeroDaUnidadePorUid = new Map((model.unidades ?? []).map((u) => [u.uid, u.numero]));
+  const ambientesDeclarados = ordenar(
+    model.ambientesDeclarados ?? [],
+    (a) => ({
+      level: nivel(a.levelId),
+      nome: a.nome,
+      areaMm2: a.areaMm2,
+      nbr12721: nbr12721Canonica(a.nbr12721)
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || cmpStr(x.nome, y.nome) || x.areaMm2 - y.areaMm2 || cmpStr(numeroDaUnidadePorUid.get(x.unidadeUid ?? "") ?? "", numeroDaUnidadePorUid.get(y.unidadeUid ?? "") ?? "") || cmpStr(JSON.stringify(x.nbr12721 ?? null), JSON.stringify(y.nbr12721 ?? null))
+  );
   const verticesDoTerreno = ordenar(
     model.verticesDoTerreno ?? [],
     (v) => ({
@@ -2468,6 +2491,8 @@ function projetar(model) {
       tipoDeAmbiente: l.tipoDeAmbiente ?? void 0,
       // DEPARTAMENTO (0.56.0, P2.22): só quando declarado.
       departamento: l.departamento ?? void 0,
+      // NBR 12721 (0.100.0): só quando classificada.
+      nbr12721: nbr12721Canonica(l.nbr12721),
       // ACABAMENTOS (0.43.0): só quando declarados, campo a campo na ordem
       // fixa — o `stableStringify` ordena chaves, mas a forma tem de ser a
       // mesma na ida e na volta.
@@ -2506,16 +2531,32 @@ function projetar(model) {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.itemCode, y.itemCode)
   );
   const indiceDaEtiqueta = new Map(labels.map((l, i) => [l.item.uid, i]));
+  const indiceDaVaga = new Map(vagas.map((v, i) => [v.item.uid, i]));
+  const indiceDoDeclarado = new Map(ambientesDeclarados.map((a, i) => [a.item.uid, i]));
+  const acessoriosCanonicos = (lista) => {
+    const out = (lista ?? []).map((a) => {
+      const alvo = indiceDaVaga.has(a.uid) ? { vaga: indiceDaVaga.get(a.uid) } : indiceDaEtiqueta.has(a.uid) ? { etiqueta: indiceDaEtiqueta.get(a.uid) } : indiceDoDeclarado.has(a.uid) ? { declarado: indiceDoDeclarado.get(a.uid) } : null;
+      return alvo ? { ...alvo, privativa: a.afetaPrivativa, coeficiente: a.afetaCoeficiente } : null;
+    }).filter((x) => x !== null);
+    const chave = (x) => ("vaga" in x ? 0 : "etiqueta" in x ? 1 : 2) * 1e9 + (x.vaga ?? x.etiqueta ?? x.declarado ?? 0);
+    out.sort((x, y) => chave(x) - chave(y));
+    return out.length ? out : void 0;
+  };
   const unidades = ordenar(
     model.unidades ?? [],
     (u) => ({
       numero: u.numero,
       tipologia: u.tipologia ?? void 0,
       pcd: u.pcd,
-      etiquetas: u.etiquetaUids.map((uid) => indiceDaEtiqueta.get(uid)).filter((i) => i !== void 0).sort((x, y) => x - y)
+      etiquetas: u.etiquetaUids.map((uid) => indiceDaEtiqueta.get(uid)).filter((i) => i !== void 0).sort((x, y) => x - y),
+      acessorios: acessoriosCanonicos(u.acessorios)
     }),
     (x, y) => cmpStr(x.numero, y.numero)
   );
+  const indiceDaUnidadePorUid = new Map(unidades.map((u, i) => [u.item.uid, i]));
+  for (const a of ambientesDeclarados) {
+    if (a.item.unidadeUid != null && indiceDaUnidadePorUid.has(a.item.unidadeUid)) a.geom.unidade = indiceDaUnidadePorUid.get(a.item.unidadeUid);
+  }
   const indiceDaUnidade = new Map(unidades.map((u, i) => [u.item.id, i]));
   for (const q of quadros) {
     if (q.item.unidadeId != null && indiceDaUnidade.has(q.item.unidadeId)) q.geom.unidade = indiceDaUnidade.get(q.item.unidadeId);
@@ -2599,6 +2640,7 @@ function projetar(model) {
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : void 0,
     vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : void 0,
     subRegioes: subRegioes.length ? subRegioes.map((s2) => s2.geom) : void 0,
+    ambientesDeclarados: ambientesDeclarados.length ? ambientesDeclarados.map((a) => a.geom) : void 0,
     verticesDoTerreno: verticesDoTerreno.length ? verticesDoTerreno.map((v) => v.geom) : void 0,
     quadras: quadras.length ? quadras.map((q) => q.geom) : void 0,
     lotes: lotes.length ? lotes.map((l) => l.geom) : void 0,
@@ -2638,6 +2680,7 @@ function projetar(model) {
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
     subRegioes: subRegioes.map((s2) => s2.item.uid ?? null),
+    ...ambientesDeclarados.length ? { ambientesDeclarados: ambientesDeclarados.map((a) => a.item.uid ?? null) } : {},
     verticesDoTerreno: verticesDoTerreno.map((v) => v.item.uid ?? null),
     quadras: quadras.map((q) => q.item.uid ?? null),
     lotes: lotes.map((l) => l.item.uid ?? null),
@@ -3291,6 +3334,7 @@ function modelFromCanonicalPayload(payload) {
       name: l.name,
       tipoDeAmbiente: l.tipoDeAmbiente ?? null,
       ...l.departamento ? { departamento: l.departamento } : {},
+      ...l.nbr12721 ? { nbr12721: nbr12721DoCanonico(l.nbr12721) } : {},
       ...l.acabamentos ? {
         acabamentos: {
           ...l.acabamentos.piso ? { piso: l.acabamentos.piso.map(camadaDoCanonico) } : {},
@@ -3317,16 +3361,43 @@ function modelFromCanonicalPayload(payload) {
       ...r.parametros && Object.keys(r.parametros).length > 0 ? { parametros: { ...r.parametros } } : {}
     });
   });
+  const declaradosLidos = payload.ambientesDeclarados ?? [];
+  const idsDeDeclarado = declaradosLidos.map((a, i) => {
+    if (!levelIds[a.level]) return null;
+    const id = nextId(model, "dcl");
+    const c = nbr12721DoCanonico(a.nbr12721);
+    model.ambientesDeclarados.push({
+      id,
+      uid: uidDe("ambientesDeclarados", i, declaradosLidos.length),
+      levelId: levelIds[a.level],
+      nome: a.nome,
+      areaMm2: a.areaMm2,
+      ...c ? { nbr12721: c } : {}
+    });
+    return id;
+  });
   const unidadesLidas = payload.unidades ?? [];
   unidadesLidas.forEach((u, i) => {
+    const acessorios = (u.acessorios ?? []).map((a) => {
+      const r = a;
+      const uid = r.vaga !== void 0 ? model.vagas[r.vaga]?.uid : r.etiqueta !== void 0 ? model.labels[r.etiqueta]?.uid : r.declarado !== void 0 ? model.ambientesDeclarados.find((x) => x.id === idsDeDeclarado[r.declarado])?.uid : void 0;
+      return uid ? { uid, afetaPrivativa: r.privativa !== false, afetaCoeficiente: r.coeficiente !== false } : null;
+    }).filter((x) => x !== null);
     model.unidades.push({
       id: nextId(model, "und"),
       uid: uidDe("unidades", i, unidadesLidas.length),
       numero: u.numero,
       tipologia: u.tipologia ?? null,
       pcd: u.pcd,
-      etiquetaUids: u.etiquetas.map((k2) => model.labels[k2]?.uid).filter((x) => typeof x === "string")
+      etiquetaUids: u.etiquetas.map((k2) => model.labels[k2]?.uid).filter((x) => typeof x === "string"),
+      ...acessorios.length ? { acessorios } : {}
     });
+  });
+  declaradosLidos.forEach((a, i) => {
+    if (a.unidade == null || !idsDeDeclarado[i]) return;
+    const alvo = model.ambientesDeclarados.find((x) => x.id === idsDeDeclarado[i]);
+    const u = model.unidades[a.unidade];
+    if (alvo && u) alvo.unidadeUid = u.uid;
   });
   quadros.forEach((q, i) => {
     if (q.unidade == null) return;

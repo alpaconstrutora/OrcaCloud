@@ -268,7 +268,14 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
   - `__tests__/nbr12721Quadros.test.ts`: 34 testes. Os 16 casos batem campo a campo com a testemunha (tolerância 1e-9) nos Quadros I, II e IV-B e nas frações. Os milésimos fecham exatamente 1000. Os avisos FECH_001/002/003 aparecem nos casos 12, 14 e 15 e somem nos que fecham. O motor é puro, e referência inexistente gera erro.
   - Mutação provada: trocar q22 por q21 no q30 derruba 6 testes; zerar o q25 derruba 3.
   - Suíte completa: 9.103 testes, 0 falhas. A conta fecha com o `BlueprintEditor.test.tsx` rodado à parte (251 de 251) depois do "still running" do Node 24.
-- [ ] Fase 2: kernel (0 de 3)
+- [x] Fase 1 publicada: `05545205`, check-run `ci` = success
+- [x] Fase 2: kernel (3 de 3), **kernel 0.99.0 → 0.100.0**
+  - 2.1 `model.ts`: `ClassificacaoNbr12721` em `SpaceLabel.nbr12721?` (cobertura, coeficiente, natureza ACESSORIA, divisão, escopo); `Unidade.acessorios?` (`AcessorioDaUnidade`: uid de vaga, etiqueta ou declarado, com `afetaPrivativa`/`afetaCoeficiente`); família `ambientesDeclarados` (`AmbienteDeclarado`: pavimento, nome, mm² inteiro, `unidadeUid?`, classificação). Invariante: acessório de uma unidade só e **nunca privativo de ninguém** (seria o ACC_VAL_003, agora recusado na origem). No canônico, a classificação e os acessórios saem por família e índice, e o declarado leva a unidade por índice num 2º passo. Tudo é omitido quando ausente.
+  - 2.2 `commands.ts`: `SetNbr12721DoAmbiente` (lote de etiquetas e declarados, um objeto novo por alvo), `SetAcessoriosDaUnidade` (tira o acessório da unidade anterior e recusa uid que nunca existiu), `Add/SetAmbienteDeclaradoProps/DeleteAmbienteDeclarado`. `RemoveLevel` leva os declarados. A cauda `limparReferenciasNbr12721` tira o acessório morto e deixa sem dona o declarado cuja unidade sumiu. A cópia de grupo leva a classificação; o pavimento tipo já levava (cópia por espalhamento). `__tests__/blueprintNbr12721Kernel.test.ts`: 10 testes.
+  - 2.3 Bundle da `planta-api` regenerado depois da última edição; `plantaApi.test.ts` passa.
+  - Prova antes do bump: com a string em 0.99.0, 4.191 testes de blueprint/planta/sync passaram (4.216 = 4.191 + 25 pulados). Depois do bump houve 12 falhas, todas previstas: 6 hashes de golden (cada um uma vez, contagens idênticas) e **6 testes que comparavam a versão como TEXTO**. Como 0.100 é a primeira versão de 3 dígitos, `'0.100' < '0.46'` como string; os testes passaram a comparar número. Antes disso conferi que **nem o app nem o banco** comparam ordem de `kernel_version`: o banco só grava e repassa.
+  - Suíte completa: 9.113 = 9.079 + 34 pulados, 0 falhas; tsc 0 erros.
+  - Portão `blueprintCamadasPorDisciplina`: `ambientesDeclarados` declarado referência, porque não tem geometria nem camada.
 - [ ] Fase 3: unidades do prédio (0 de 1)
 - [ ] Fase 4: adaptador e hipóteses (0 de 2)
 - [ ] Fase 5: estudo sem desenho (0 de 2)

@@ -673,8 +673,23 @@
  * Omitida do canônico (geometria e identidade) quando não há: desenho antigo só muda pela
  * string da versão. Provado antes do bump: com a string em 0.98.0 e tudo no lugar, 339 testes
  * de kernel/goldens/identidade/comentários/comandos/câmera/folhas/BCF passaram.
+ *
+ * ─── 0.99.0 → 0.100.0 (13/10/2026) — ÁREAS NBR 12721 NA PLANTA ─────────────
+ *
+ * Fase 2 do plano `2026-10-13-areas-nbr12721-na-planta.md` (o Motor de Áreas deixa de ser
+ * módulo separado): `SpaceLabel.nbr12721?` (cobertura, coeficiente, natureza, divisão,
+ * escopo), `Unidade.acessorios?` (vaga/etiqueta/declarado vinculado, com "afeta privativa"
+ * e "afeta coeficiente") e a família nova `ambientesDeclarados?` (área digitada sem
+ * geometria, para o estudo sem desenho). Comandos `SetNbr12721DoAmbiente` (lote),
+ * `SetAcessoriosDaUnidade`, `Add/SetAmbienteDeclaradoProps/DeleteAmbienteDeclarado`;
+ * `RemoveLevel` leva os declarados; a cauda `limparReferenciasNbr12721` tira o acessório
+ * que morreu e deixa sem dona o declarado cuja unidade sumiu. Invariante: acessório de uma
+ * unidade só e nunca privativo de alguém (contaria duas vezes). Tudo omitido do canônico
+ * quando ausente: desenho antigo só muda pela string da versão. Provado antes do bump: com
+ * a string em 0.99.0 e tudo no lugar, 4.191 testes de blueprint/planta/sync passaram
+ * (4.216 = 4.191 + 25 pulados).
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.99.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.100.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -1105,6 +1105,97 @@ export function acabamentosDoAmbiente(model: BlueprintModel, space: Space): Acab
   return (model.labels ?? []).find((l) => l.uid === space.labelUid)?.acabamentos;
 }
 
+/**
+ * CLASSIFICAÇÃO NBR 12721 DO AMBIENTE (0.100.0, 13/10/2026 — Fase 2 do plano
+ * `docs/planos/2026-10-13-areas-nbr12721-na-planta.md`).
+ *
+ * É o que o desenho NÃO sabe dizer sozinho e os Quadros I, II e IV-B precisam:
+ * se a área é coberta de padrão, coberta de padrão diferente ou descoberta, com
+ * que coeficiente de equivalência, e — se for comum — como se divide.
+ *
+ * ─── O QUE NÃO MORA AQUI ───────────────────────────────────────────────────
+ *
+ * Privativo × comum não é campo: é ser ou não etiqueta de uma `Unidade`. A
+ * área também não: é a do ambiente (desenhado) ou a do `AmbienteDeclarado`.
+ * Guardar qualquer um dos dois aqui criaria um segundo dono do mesmo fato.
+ *
+ * Ausente = a classificar — estado legítimo e visível (a tela sugere a partir
+ * do que a Planta já sabe: varanda, laje acima, unidade).
+ */
+export const COBERTURAS_NBR12721 = ['PADRAO', 'DIFERENTE', 'DESCOBERTA'] as const;
+export type CoberturaNbr12721 = (typeof COBERTURAS_NBR12721)[number];
+export const DIVISOES_NBR12721 = ['PROPORCIONAL', 'NAO_PROPORCIONAL'] as const;
+export type DivisaoNbr12721 = (typeof DIVISOES_NBR12721)[number];
+export const ESCOPOS_NBR12721 = ['GLOBAL', 'BLOCO'] as const;
+export type EscopoNbr12721 = (typeof ESCOPOS_NBR12721)[number];
+
+/** Coeficiente de equivalência: positivo e até este teto (folga de digitação, não regra da norma). */
+export const MAX_COEFICIENTE_NBR12721 = 10;
+
+export interface ClassificacaoNbr12721 {
+  cobertura: CoberturaNbr12721;
+  /** Obrigatório fora do padrão para calcular (pendência MOTOR_007); ausente = 1. */
+  coeficiente?: number | null;
+  /** Ambiente privativo: `ACESSORIA` = depósito/vaga DENTRO da unidade (Quadro IV-B, coluna c). Ausente = principal. */
+  natureza?: 'ACESSORIA' | null;
+  /** Só comum. Ausente num comum = pendência MOTOR_012. */
+  divisao?: DivisaoNbr12721 | null;
+  /** Só comum proporcional. Ausente = o padrão do estudo. */
+  escopo?: EscopoNbr12721 | null;
+}
+
+/** A classificação válida e sem chaves vazias, ou `null` (= a classificar). Lança se inválida. */
+export function classificacaoNbr12721Valida(c: ClassificacaoNbr12721 | null | undefined, onde: string): ClassificacaoNbr12721 | null {
+  if (c == null) return null;
+  if (!(COBERTURAS_NBR12721 as readonly string[]).includes(c.cobertura)) {
+    throw new KernelError('BAD_NBR12721', `${onde}: cobertura desconhecida ${JSON.stringify(c.cobertura)}`);
+  }
+  if (c.coeficiente != null && !(Number.isFinite(c.coeficiente) && c.coeficiente > 0 && c.coeficiente <= MAX_COEFICIENTE_NBR12721)) {
+    throw new KernelError('BAD_NBR12721', `${onde}: coeficiente fora de (0, ${MAX_COEFICIENTE_NBR12721}]: ${c.coeficiente}`);
+  }
+  if (c.natureza != null && c.natureza !== 'ACESSORIA') throw new KernelError('BAD_NBR12721', `${onde}: natureza desconhecida ${JSON.stringify(c.natureza)}`);
+  if (c.divisao != null && !(DIVISOES_NBR12721 as readonly string[]).includes(c.divisao)) {
+    throw new KernelError('BAD_NBR12721', `${onde}: divisão desconhecida ${JSON.stringify(c.divisao)}`);
+  }
+  if (c.escopo != null && !(ESCOPOS_NBR12721 as readonly string[]).includes(c.escopo)) {
+    throw new KernelError('BAD_NBR12721', `${onde}: escopo desconhecido ${JSON.stringify(c.escopo)}`);
+  }
+  return {
+    cobertura: c.cobertura,
+    ...(c.coeficiente != null ? { coeficiente: c.coeficiente } : {}),
+    ...(c.natureza ? { natureza: c.natureza } : {}),
+    ...(c.divisao ? { divisao: c.divisao } : {}),
+    ...(c.escopo ? { escopo: c.escopo } : {}),
+  };
+}
+
+/** Nome do ambiente declarado: aparado, não vazio. */
+export const MAX_NOME_DE_AMBIENTE_DECLARADO = 60;
+
+/**
+ * AMBIENTE DECLARADO (0.100.0) — área DIGITADA, sem geometria.
+ *
+ * Serve ao estudo sem desenho (projeto que veio de fora em DWG/PDF: o
+ * Empreendimento vira estudo com áreas declaradas) e ao pavimento que ninguém
+ * desenhou (o subsolo de um prédio cujo tipo foi desenhado). Entra nos Quadros
+ * NBR 12721 como qualquer ambiente; não entra em quantitativo, IFC nem canvas —
+ * não há contorno para isso.
+ *
+ * A unidade dona é dita AQUI (`unidadeUid`), não em `Unidade.etiquetaUids`:
+ * aquela lista é de etiquetas, e a medição da unidade lê o desenho por ela.
+ */
+export interface AmbienteDeclarado {
+  id: ObjectId;
+  uid: ElementUid;
+  levelId: ObjectId;
+  nome: string;
+  /** Área real em mm², inteiro positivo (1 m² = 1.000.000). */
+  areaMm2: number;
+  /** Unidade dona; ausente/`null` = comum (ou acessório, se uma unidade o vincular). */
+  unidadeUid?: ElementUid | null;
+  nbr12721?: ClassificacaoNbr12721;
+}
+
 export interface SpaceLabel {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -1124,6 +1215,8 @@ export interface SpaceLabel {
    * Ausente/`null` = sem departamento. Omitido no canônico quando ausente.
    */
   departamento?: string | null;
+  /** Classificação NBR 12721 (0.100.0). Ver `ClassificacaoNbr12721`. Omitida no canônico quando ausente. */
+  nbr12721?: ClassificacaoNbr12721;
 }
 
 /**
@@ -1612,6 +1705,21 @@ export interface Unidade {
   pcd: boolean;
   /** uids das etiquetas dos ambientes que a compõem. */
   etiquetaUids: ElementUid[];
+  /**
+   * ACESSÓRIOS VINCULADOS (0.100.0): vaga, depósito ou área que pertence à
+   * unidade sem estar dentro dela — o "linked_accessory" da NBR 12721. O `uid`
+   * é de uma `Vaga`, de uma etiqueta (`SpaceLabel`) ou de um
+   * `AmbienteDeclarado`. Ausente = nenhum. Ver `AcessorioDaUnidade`.
+   */
+  acessorios?: AcessorioDaUnidade[];
+}
+
+export interface AcessorioDaUnidade {
+  uid: ElementUid;
+  /** Soma na área privativa acessória do Quadro IV-B (coluna c). */
+  afetaPrivativa: boolean;
+  /** Entra no Quadro II e no coeficiente de proporcionalidade. */
+  afetaCoeficiente: boolean;
 }
 
 /**
@@ -3999,6 +4107,8 @@ export interface BlueprintModel {
   vistasDependentes: VistaDependente[];
   /** Sub-regiões do terreno (0.53.0). Ver `SubRegiao`. */
   subRegioes: SubRegiao[];
+  /** Ambientes de área declarada, sem geometria (0.100.0). Ver `AmbienteDeclarado`. */
+  ambientesDeclarados: AmbienteDeclarado[];
   /** Trechos de rodapé (0.55.0). Ver `TrechoDeRodape`. */
   rodapes: TrechoDeRodape[];
   /** ETAPAS DE OBRA (0.57.0). */
@@ -4138,6 +4248,7 @@ export function emptyModel(): BlueprintModel {
     anotacoes: [],
     vistasDependentes: [],
     subRegioes: [],
+    ambientesDeclarados: [],
     rodapes: [],
     etapas: [],
     verticesDoTerreno: [],
@@ -4214,7 +4325,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     sections: (model.sections ?? []).map((c) => ({ ...c, a: { ...c.a }, b: { ...c.b } })),
     eixos: (model.eixos ?? []).map((e) => ({ ...e, a: { ...e.a }, b: { ...e.b } })),
     restricoes: (model.restricoes ?? []).map((r) => ({ ...r, alvo: { ...r.alvo }, ...(r.referencia ? { referencia: { ...r.referencia } } : {}) })),
-    unidades: (model.unidades ?? []).map((u) => ({ ...u, etiquetaUids: [...u.etiquetaUids] })),
+    unidades: (model.unidades ?? []).map((u) => ({ ...u, etiquetaUids: [...u.etiquetaUids], ...(u.acessorios ? { acessorios: u.acessorios.map((a) => ({ ...a })) } : {}) })),
     nucleos: (model.nucleos ?? []).map((n) => ({ ...n, ring: n.ring.map((p) => ({ ...p })), ...(n.parametros ? { parametros: { ...n.parametros } } : {}) })),
     vagas: (model.vagas ?? []).map((v) => ({ ...v, at: { ...v.at }, ...(v.parametros ? { parametros: { ...v.parametros } } : {}) })),
     componentes: (model.componentes ?? []).map((c) => ({ ...c, at: { ...c.at }, ...(c.parametros ? { parametros: { ...c.parametros } } : {}) })),
@@ -4222,6 +4333,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     anotacoes: (model.anotacoes ?? []).map((a) => ({ ...a, vista: { ...a.vista }, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}), ...(a.revisao ? { revisao: { ...a.revisao } } : {}) })),
     vistasDependentes: (model.vistasDependentes ?? []).map((v) => ({ ...v, recorte: { ...v.recorte } })),
     subRegioes: (model.subRegioes ?? []).map((s) => ({ ...s, pontos: s.pontos.map((p) => ({ ...p })), ...(s.parametros ? { parametros: { ...s.parametros } } : {}) })),
+    ambientesDeclarados: (model.ambientesDeclarados ?? []).map((a) => ({ ...a, ...(a.nbr12721 ? { nbr12721: { ...a.nbr12721 } } : {}) })),
     rodapes: (model.rodapes ?? []).map((r) => ({ ...r, pontos: r.pontos.map((p) => ({ ...p })), ...(r.parametros ? { parametros: { ...r.parametros } } : {}) })),
     etapas: (model.etapas ?? []).map((e) => ({ ...e })),
     verticesDoTerreno: (model.verticesDoTerreno ?? []).map((v) => ({ ...v, ponto: { ...v.ponto } })),
@@ -4250,7 +4362,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     terminais: (model.terminais ?? []).map((t) => ({ ...t, at: { ...t.at } })),
     quadros: (model.quadros ?? []).map((q) => ({ ...q, at: { ...q.at } })),
     circuitos: (model.circuitos ?? []).map((c) => ({ ...c })),
-    labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at }, ...(l.acabamentos ? { acabamentos: clonarAcabamentos(l.acabamentos)! } : {}) })),
+    labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at }, ...(l.acabamentos ? { acabamentos: clonarAcabamentos(l.acabamentos)! } : {}), ...(l.nbr12721 ? { nbr12721: { ...l.nbr12721 } } : {}) })),
     spaces: model.spaces.map((s) => ({
       ...s,
       ring: s.ring.map((p) => ({ ...p })),
@@ -4446,6 +4558,44 @@ export function limparEtiquetasOrfasDasUnidades(model: BlueprintModel): ObjectId
     }
   }
   return tocadas;
+}
+
+/**
+ * NBR 12721 (0.100.0): o acessório cuja vaga/etiqueta/declarado sumiu sai da
+ * unidade, e o declarado cuja unidade sumiu fica sem dona (vira comum — e a
+ * tela de Áreas mostra). Roda na cauda de TODO comando, como a limpeza das
+ * etiquetas: apagar a vaga não precisa lembrar das unidades.
+ */
+export function limparReferenciasNbr12721(model: BlueprintModel): ObjectId[] {
+  const tocadas: ObjectId[] = [];
+  const acessiveis = new Set<ElementUid>([
+    ...(model.vagas ?? []).map((v) => v.uid),
+    ...(model.labels ?? []).map((l) => l.uid),
+    ...(model.ambientesDeclarados ?? []).map((a) => a.uid),
+  ]);
+  for (const u of model.unidades ?? []) {
+    if (!u.acessorios) continue;
+    const vivos = u.acessorios.filter((a) => acessiveis.has(a.uid));
+    if (vivos.length !== u.acessorios.length) {
+      if (vivos.length) u.acessorios = vivos;
+      else delete u.acessorios;
+      tocadas.push(u.id);
+    }
+  }
+  const unidades = new Set((model.unidades ?? []).map((u) => u.uid));
+  for (const a of model.ambientesDeclarados ?? []) {
+    if (a.unidadeUid != null && !unidades.has(a.unidadeUid)) {
+      a.unidadeUid = null;
+      tocadas.push(a.id);
+    }
+  }
+  return tocadas;
+}
+
+export function findAmbienteDeclarado(model: BlueprintModel, id: ObjectId): AmbienteDeclarado {
+  const a = (model.ambientesDeclarados ?? []).find((x) => x.id === id);
+  if (!a) throw new KernelError('DECLARED_SPACE_NOT_FOUND', `Ambiente declarado inexistente: ${id}`);
+  return a;
 }
 
 export function findVaga(model: BlueprintModel, id: ObjectId): Vaga {
@@ -5484,6 +5634,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Anotação', model.anotacoes ?? []],
     ['Vista dependente', model.vistasDependentes ?? []],
     ['Sub-região', model.subRegioes ?? []],
+    ['Ambiente declarado', model.ambientesDeclarados ?? []],
     ['Trecho de rodapé', model.rodapes ?? []],
     ['Etapa', model.etapas ?? []],
     ['Quadra', model.quadras ?? []],
@@ -6050,6 +6201,44 @@ export function assertModelInvariants(model: BlueprintModel): void {
         if (!vivas.has(uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: etiqueta inexistente ${uid}`);
         if (etiquetas.has(uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: a etiqueta ${uid} já pertence a outra unidade`);
         etiquetas.add(uid);
+      }
+    }
+
+    // NBR 12721 (0.100.0): classificação válida; ambiente declarado com área
+    // inteira positiva, pavimento e dona existentes; acessório que aponta para
+    // vaga/etiqueta/declarado vivo, de UMA unidade só e que não é privativo de
+    // ninguém — senão a área entraria duas vezes (o ACC_VAL_003 do motor
+    // antigo, aqui recusado na origem).
+    const unidadesVivas = new Set((model.unidades ?? []).map((u) => u.uid));
+    for (const l of model.labels ?? []) {
+      if (l.nbr12721 !== undefined) classificacaoNbr12721Valida(l.nbr12721, `Etiqueta ${l.id}`);
+    }
+    const declaradosComDona = new Set<ElementUid>();
+    for (const a of model.ambientesDeclarados ?? []) {
+      if (!model.levels.some((l) => l.id === a.levelId)) throw new KernelError('BAD_DECLARED_SPACE', `Ambiente declarado ${a.id}: pavimento inexistente`);
+      if (typeof a.nome !== 'string' || !a.nome || a.nome !== a.nome.trim() || a.nome.length > MAX_NOME_DE_AMBIENTE_DECLARADO) {
+        throw new KernelError('BAD_DECLARED_SPACE', `Ambiente declarado ${a.id}: nome vazio, com espaços nas pontas ou maior que ${MAX_NOME_DE_AMBIENTE_DECLARADO} caracteres`);
+      }
+      if (!Number.isInteger(a.areaMm2) || a.areaMm2 <= 0) throw new KernelError('BAD_DECLARED_SPACE', `Ambiente declarado ${a.id}: área tem de ser mm² inteiro positivo (${a.areaMm2})`);
+      if (a.unidadeUid != null) {
+        if (!unidadesVivas.has(a.unidadeUid)) throw new KernelError('BAD_DECLARED_SPACE', `Ambiente declarado ${a.id}: unidade inexistente ${a.unidadeUid}`);
+        declaradosComDona.add(a.uid);
+      }
+      if (a.nbr12721 !== undefined) classificacaoNbr12721Valida(a.nbr12721, `Ambiente declarado ${a.id}`);
+    }
+    const acessiveis = new Set<ElementUid>([
+      ...(model.vagas ?? []).map((v) => v.uid),
+      ...(model.labels ?? []).map((l) => l.uid),
+      ...(model.ambientesDeclarados ?? []).map((a) => a.uid),
+    ]);
+    const jaVinculados = new Set<ElementUid>();
+    for (const u of model.unidades ?? []) {
+      for (const ac of u.acessorios ?? []) {
+        if (!acessiveis.has(ac.uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: acessório inexistente ${ac.uid}`);
+        if (typeof ac.afetaPrivativa !== 'boolean' || typeof ac.afetaCoeficiente !== 'boolean') throw new KernelError('BAD_UNIT', `Unidade ${u.id}: acessório ${ac.uid} sem os dois indicadores booleanos`);
+        if (jaVinculados.has(ac.uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: o acessório ${ac.uid} já está vinculado (a esta ou a outra unidade)`);
+        if (etiquetas.has(ac.uid) || declaradosComDona.has(ac.uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: o acessório ${ac.uid} já é privativo de uma unidade — contaria duas vezes`);
+        jaVinculados.add(ac.uid);
       }
     }
   }

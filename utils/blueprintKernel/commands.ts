@@ -100,6 +100,12 @@ import {
   MAX_NOME_DE_VISTA_DEPENDENTE,
   acabamentosOuAusente,
   departamentoNormalizado,
+  classificacaoNbr12721Valida,
+  findAmbienteDeclarado,
+  limparReferenciasNbr12721,
+  MAX_NOME_DE_AMBIENTE_DECLARADO,
+  type AcessorioDaUnidade,
+  type ClassificacaoNbr12721,
   findEtapa,
   MAX_NOME_DE_ETAPA,
   type AcabamentosDoAmbiente,
@@ -622,6 +628,18 @@ export type Command =
   | { type: 'SetSubRegiaoProps'; subRegiaoId: ObjectId; material?: MaterialDeSubRegiao; nome?: string | null; pontos?: Point[] }
   | { type: 'MoveSubRegiaoVertex'; subRegiaoId: ObjectId; index: number; to: Point }
   | { type: 'DeleteSubRegiao'; subRegiaoId: ObjectId }
+  /**
+   * NBR 12721 (0.100.0). Classificação em LOTE: etiquetas e ambientes
+   * declarados de uma vez (a tela classifica dezenas de ambientes por clique).
+   * `null` = volta a "a classificar".
+   */
+  | { type: 'SetNbr12721DoAmbiente'; labelIds?: ObjectId[]; declaradoIds?: ObjectId[]; nbr12721: ClassificacaoNbr12721 | null }
+  /** Substitui a lista de acessórios vinculados da unidade (vaga/etiqueta/declarado por uid). */
+  | { type: 'SetAcessoriosDaUnidade'; unidadeId: ObjectId; acessorios: AcessorioDaUnidade[] }
+  /** Ambiente de área DECLARADA, sem geometria (estudo sem desenho, pavimento não desenhado). */
+  | { type: 'AddAmbienteDeclarado'; levelId: ObjectId; nome: string; areaMm2: number; unidadeId?: ObjectId | null; nbr12721?: ClassificacaoNbr12721 | null }
+  | { type: 'SetAmbienteDeclaradoProps'; declaradoId: ObjectId; nome?: string; areaMm2?: number; unidadeId?: ObjectId | null; levelId?: ObjectId }
+  | { type: 'DeleteAmbienteDeclarado'; declaradoId: ObjectId }
   // VÉRTICES DO TERRENO (0.59.0)
   | {
       type: 'SetVerticeDoTerreno';
@@ -2883,6 +2901,105 @@ function aplicarSemHash(
       const s = findSubRegiao(next, command.subRegiaoId);
       next.subRegioes = (next.subRegioes ?? []).filter((x) => x.id !== s.id);
       diff.deleted.push(s.id);
+      break;
+    }
+
+    // ── NBR 12721 (0.100.0) ─────────────────────────────────────────────────
+
+    case 'SetNbr12721DoAmbiente': {
+      const labelIds = command.labelIds ?? [];
+      const declaradoIds = command.declaradoIds ?? [];
+      if (labelIds.length === 0 && declaradoIds.length === 0) throw new KernelError('BAD_NBR12721', 'Nenhum ambiente para classificar');
+      const c = classificacaoNbr12721Valida(command.nbr12721, 'Classificação NBR 12721');
+      // Objeto NOVO por alvo: as cópias do pavimento tipo compartilham a
+      // referência da origem até a próxima sincronização — mutar no lugar
+      // mudaria a cópia sem passar pela sincronização.
+      for (const id of labelIds) {
+        const label = next.labels.find((l) => l.id === id);
+        if (!label) throw new KernelError('LABEL_NOT_FOUND', `Etiqueta inexistente: ${id}`);
+        if (c) label.nbr12721 = { ...c };
+        else delete label.nbr12721;
+        diff.updated.push(label.id);
+      }
+      for (const id of declaradoIds) {
+        const a = findAmbienteDeclarado(next, id);
+        if (c) a.nbr12721 = { ...c };
+        else delete a.nbr12721;
+        diff.updated.push(a.id);
+      }
+      break;
+    }
+
+    case 'SetAcessoriosDaUnidade': {
+      const u = findUnidade(next, command.unidadeId);
+      const lista = command.acessorios.map((a) => ({ uid: a.uid, afetaPrivativa: a.afetaPrivativa, afetaCoeficiente: a.afetaCoeficiente }));
+      // uid que NUNCA existiu é erro de quem chamou — recusado aqui, porque a
+      // limpeza da cauda (que é para referência que MORREU) o descartaria calada.
+      const existentes = new Set<ElementUid>([
+        ...(next.vagas ?? []).map((v) => v.uid),
+        ...next.labels.map((l) => l.uid),
+        ...(next.ambientesDeclarados ?? []).map((a) => a.uid),
+      ]);
+      const desconhecido = lista.find((a) => !existentes.has(a.uid));
+      if (desconhecido) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: acessório inexistente ${desconhecido.uid}`);
+      // Tirar de outra unidade é o gesto ("esta vaga agora é do 102"), como as etiquetas.
+      const novos = new Set(lista.map((a) => a.uid));
+      for (const outra of next.unidades ?? []) {
+        if (outra.id === u.id || !outra.acessorios) continue;
+        const resto = outra.acessorios.filter((a) => !novos.has(a.uid));
+        if (resto.length !== outra.acessorios.length) {
+          if (resto.length) outra.acessorios = resto;
+          else delete outra.acessorios;
+          diff.updated.push(outra.id);
+        }
+      }
+      if (lista.length) u.acessorios = lista;
+      else delete u.acessorios;
+      diff.updated.push(u.id);
+      break;
+    }
+
+    case 'AddAmbienteDeclarado': {
+      findLevel(next, command.levelId);
+      const nome = nomeDeAmbienteDeclarado(command.nome);
+      const id = nextId(next, 'dcl');
+      const c = classificacaoNbr12721Valida(command.nbr12721, 'Classificação NBR 12721');
+      next.ambientesDeclarados = [
+        ...(next.ambientesDeclarados ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          nome,
+          areaMm2: areaDeclaradaMm2(command.areaMm2),
+          ...(command.unidadeId ? { unidadeUid: findUnidade(next, command.unidadeId).uid } : {}),
+          ...(c ? { nbr12721: c } : {}),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetAmbienteDeclaradoProps': {
+      const a = findAmbienteDeclarado(next, command.declaradoId);
+      if (command.nome !== undefined) a.nome = nomeDeAmbienteDeclarado(command.nome);
+      if (command.areaMm2 !== undefined) a.areaMm2 = areaDeclaradaMm2(command.areaMm2);
+      if (command.levelId !== undefined) {
+        findLevel(next, command.levelId);
+        a.levelId = command.levelId;
+      }
+      if (command.unidadeId !== undefined) {
+        if (command.unidadeId === null) delete a.unidadeUid;
+        else a.unidadeUid = findUnidade(next, command.unidadeId).uid;
+      }
+      diff.updated.push(a.id);
+      break;
+    }
+
+    case 'DeleteAmbienteDeclarado': {
+      const a = findAmbienteDeclarado(next, command.declaradoId);
+      next.ambientesDeclarados = (next.ambientesDeclarados ?? []).filter((x) => x.id !== a.id);
+      diff.deleted.push(a.id);
       break;
     }
 
@@ -5291,6 +5408,7 @@ function aplicarSemHash(
       const anotacoesDoNivel = (next.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA' && a.vista.levelId === level.id);
       const vistasDoNivel = (next.vistasDependentes ?? []).filter((v) => v.levelId === level.id);
       const subRegioesDoNivel = (next.subRegioes ?? []).filter((s) => s.levelId === level.id);
+      const declaradosDoNivel = (next.ambientesDeclarados ?? []).filter((a) => a.levelId === level.id);
       const rodapesDoNivel = (next.rodapes ?? []).filter((r) => r.levelId === level.id);
 
       next.walls = next.walls.filter((w) => w.levelId !== level.id);
@@ -5309,6 +5427,7 @@ function aplicarSemHash(
       next.anotacoes = (next.anotacoes ?? []).filter((a) => !(a.vista.tipo === 'PLANTA' && a.vista.levelId === level.id));
       next.vistasDependentes = (next.vistasDependentes ?? []).filter((v) => v.levelId !== level.id);
       next.subRegioes = (next.subRegioes ?? []).filter((s) => s.levelId !== level.id);
+      next.ambientesDeclarados = (next.ambientesDeclarados ?? []).filter((a) => a.levelId !== level.id);
       next.rodapes = (next.rodapes ?? []).filter((r) => r.levelId !== level.id);
       const operacaoDoNivel = (next.areasDeOperacao ?? []).filter((a) => a.levelId === level.id);
       next.areasDeOperacao = (next.areasDeOperacao ?? []).filter((a) => a.levelId !== level.id);
@@ -5383,6 +5502,7 @@ function aplicarSemHash(
         ...anotacoesDoNivel.map((a) => a.id),
         ...vistasDoNivel.map((v) => v.id),
         ...subRegioesDoNivel.map((s) => s.id),
+        ...declaradosDoNivel.map((a) => a.id),
         ...rodapesDoNivel.map((r) => r.id),
         ...operacaoDoNivel.map((a) => a.id),
         ...blocosDoNivel.map((b) => b.id),
@@ -5758,6 +5878,7 @@ function aplicarSemHash(
   diff.deleted.push(...limparRestricoesOrfas(next));
   // Etiqueta apagada sai da unidade; a unidade fica (E2.2).
   diff.updated.push(...limparEtiquetasOrfasDasUnidades(next));
+  diff.updated.push(...limparReferenciasNbr12721(next));
   diff.updated.push(...limparBombasOrfas(next));
   diff.updated.push(...limparPlacasOrfas(next));
   diff.updated.push(...limparLacosOrfos(next));
@@ -5853,6 +5974,19 @@ function findLabel(model: BlueprintModel, id: ObjectId): SpaceLabel {
   const l = model.labels.find((x) => x.id === id);
   if (!l) throw new KernelError('LABEL_NOT_FOUND', `Etiqueta inexistente: ${id}`);
   return l;
+}
+
+/** Nome do ambiente declarado: aparado, não vazio, até o limite. */
+function nomeDeAmbienteDeclarado(n: string): string {
+  const v = (n ?? '').trim();
+  if (!v || v.length > MAX_NOME_DE_AMBIENTE_DECLARADO) throw new KernelError('BAD_DECLARED_SPACE', `Nome do ambiente declarado vazio ou maior que ${MAX_NOME_DE_AMBIENTE_DECLARADO} caracteres`);
+  return v;
+}
+
+/** Área declarada: mm² inteiro positivo (a tela converte m² → mm² arredondando). */
+function areaDeclaradaMm2(a: number): number {
+  if (!Number.isFinite(a) || Math.round(a) <= 0) throw new KernelError('BAD_DECLARED_SPACE', `Área declarada tem de ser positiva (${a})`);
+  return Math.round(a);
 }
 
 /** Tipologia aparada; vazia vira `null`. */
@@ -6482,7 +6616,7 @@ export function sincronizarGrupos(next: BlueprintModel, diff: Diff, copiasAntes:
       for (const l of etiquetasDaOrigem) {
         const uid = uidDaCopia(i.uid, l.uid);
         esperadas.add(uid);
-        const campos = { levelId: i.levelId, at: T(l.at), name: l.name, tipoDeAmbiente: l.tipoDeAmbiente ?? null, departamento: l.departamento ?? null };
+        const campos = { levelId: i.levelId, at: T(l.at), name: l.name, tipoDeAmbiente: l.tipoDeAmbiente ?? null, departamento: l.departamento ?? null, nbr12721: l.nbr12721 ? { ...l.nbr12721 } : undefined };
         const existente = etiquetaPorUid.get(uid);
         if (existente) {
           Object.assign(existente, campos);

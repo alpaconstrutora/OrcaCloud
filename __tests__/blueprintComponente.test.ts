@@ -66,7 +66,7 @@ describe('componente (E7.1)', () => {
   });
 
   it('canônico: a chave só existe com componente; ida e volta preserva tudo e a identidade; a versão é ≥ 0.42.0', () => {
-    expect(KERNEL_VERSION).toMatch(/^blueprint-kernel-ts-0\.(4[2-9]|[5-9][0-9])\.\d+$/); // ≥ 0.42.0 — o componente entrou nela; bumps posteriores não a invalidam
+    expect(Number(/^blueprint-kernel-ts-0\.(\d+)\.\d+$/.exec(KERNEL_VERSION)?.[1])).toBeGreaterThanOrEqual(42); // número, não texto: '0.100' < '0.46' como string // ≥ 0.42.0 — o componente entrou nela; bumps posteriores não a invalidam
     const { m, t } = nivel();
     const sem = JSON.parse(canonicalPayload(m));
     expect(sem.componentes).toBeUndefined();

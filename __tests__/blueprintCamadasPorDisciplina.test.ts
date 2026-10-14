@@ -123,7 +123,8 @@ describe('classificação peça → camada', () => {
     // `classificarPecas` ou, se for referência, inclua-a aqui com o porquê.
     // `verticesDoTerreno` não tem id (nome de um ponto da divisa — some com ela).
     // `cameras` (F12): ponto de vista salvo, referência como o corte — não é peça de disciplina.
-    const REFERENCIAS = new Set(['levels', 'sections', 'eixos', 'restricoes', 'unidades', 'grupos', 'anotacoes', 'vistasDependentes', 'etapas', 'verticesDoTerreno', 'cameras']);
+    // `ambientesDeclarados` (NBR 12721, 0.100.0): área digitada SEM geometria — não é desenhada, não tem camada.
+    const REFERENCIAS = new Set(['levels', 'sections', 'eixos', 'restricoes', 'unidades', 'grupos', 'anotacoes', 'vistasDependentes', 'etapas', 'verticesDoTerreno', 'cameras', 'ambientesDeclarados']);
     const vazio = emptyModel() as unknown as Record<string, unknown>;
     const colecoes = Object.keys(vazio).filter((k) => Array.isArray(vazio[k]) && !REFERENCIAS.has(k));
     for (const k of colecoes) {

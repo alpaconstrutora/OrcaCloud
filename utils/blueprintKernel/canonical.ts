@@ -98,11 +98,30 @@ import {
   type ProtecaoSolar,
   type MecanismoDeFolha,
   type BandeiraDaEsquadria,
+  type AcessorioDaUnidade,
+  type ClassificacaoNbr12721,
 } from './model';
 import { recomputeSpaces } from './arrangement';
 import { type AlinhamentoParede } from './geom';
 import { KERNEL_VERSION, DEFAULT_TOLERANCE_MM } from './units';
 import { sha256, stableStringify } from './hash';
+
+/** NBR 12721 (0.100.0) no canônico: só as chaves declaradas, em forma fixa. Ausente = `undefined` (chave some). */
+type Nbr12721Canonica = { cobertura: string; coeficiente?: number; natureza?: string; divisao?: string; escopo?: string };
+function nbr12721Canonica(c: ClassificacaoNbr12721 | undefined): Nbr12721Canonica | undefined {
+  if (!c) return undefined;
+  return {
+    cobertura: c.cobertura,
+    ...(c.coeficiente != null ? { coeficiente: c.coeficiente } : {}),
+    ...(c.natureza ? { natureza: c.natureza } : {}),
+    ...(c.divisao ? { divisao: c.divisao } : {}),
+    ...(c.escopo ? { escopo: c.escopo } : {}),
+  };
+}
+/** Acessório da unidade no canônico: a família diz em qual lista está o índice. */
+type AcessorioCanonico = ({ vaga: number } | { etiqueta: number } | { declarado: number }) & { privativa: boolean; coeficiente: boolean };
+const nbr12721DoCanonico = (c: Nbr12721Canonica | undefined): ClassificacaoNbr12721 | undefined =>
+  c ? (nbr12721Canonica(c as ClassificacaoNbr12721) as ClassificacaoNbr12721) : undefined;
 
 /**
  * A CAMADA no payload canônico — uma forma só para parede, laje, cobertura, piso e forro.
@@ -635,6 +654,26 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.material, y.material),
   );
 
+  // AMBIENTES DECLARADOS (0.100.0): pavimento por índice, nome, área em mm²;
+  // classificação só quando declarada; a unidade dona entra num 2º passo, por
+  // índice, depois de as unidades estarem ordenadas. Omitidos quando não há.
+  const numeroDaUnidadePorUid = new Map((model.unidades ?? []).map((u) => [u.uid, u.numero]));
+  const ambientesDeclarados = ordenar(
+    model.ambientesDeclarados ?? [],
+    (a) => ({
+      level: nivel(a.levelId),
+      nome: a.nome,
+      areaMm2: a.areaMm2,
+      nbr12721: nbr12721Canonica(a.nbr12721),
+    }),
+    (x, y) =>
+      nivel(x.levelId) - nivel(y.levelId) ||
+      cmpStr(x.nome, y.nome) ||
+      x.areaMm2 - y.areaMm2 ||
+      cmpStr(numeroDaUnidadePorUid.get(x.unidadeUid ?? '') ?? '', numeroDaUnidadePorUid.get(y.unidadeUid ?? '') ?? '') ||
+      cmpStr(JSON.stringify(x.nbr12721 ?? null), JSON.stringify(y.nbr12721 ?? null)),
+  );
+
   // VÉRTICES NOMEADOS DO TERRENO (0.59.0): por ponto, depois nome. Omitidos quando não há.
   // Só os campos declarados entram (tipo/sigma/método como `undefined` somem do
   // JSON) — vértice só com nome não ganha chave nova.
@@ -1026,6 +1065,8 @@ function projetar(model: BlueprintModel): {
       tipoDeAmbiente: l.tipoDeAmbiente ?? undefined,
       // DEPARTAMENTO (0.56.0, P2.22): só quando declarado.
       departamento: l.departamento ?? undefined,
+      // NBR 12721 (0.100.0): só quando classificada.
+      nbr12721: nbr12721Canonica(l.nbr12721),
       // ACABAMENTOS (0.43.0): só quando declarados, campo a campo na ordem
       // fixa — o `stableStringify` ordena chaves, mas a forma tem de ser a
       // mesma na ida e na volta.
@@ -1087,6 +1128,25 @@ function projetar(model: BlueprintModel): {
   );
 
   const indiceDaEtiqueta = new Map(labels.map((l, i) => [l.item.uid, i]));
+  // NBR 12721 (0.100.0): acessório por FAMÍLIA + índice (vaga, etiqueta ou
+  // declarado), em ordem fixa; omitido sem acessório.
+  const indiceDaVaga = new Map(vagas.map((v, i) => [v.item.uid, i]));
+  const indiceDoDeclarado = new Map(ambientesDeclarados.map((a, i) => [a.item.uid, i]));
+  const acessoriosCanonicos = (lista: AcessorioDaUnidade[] | undefined) => {
+    const out = (lista ?? [])
+      .map((a) => {
+        const alvo =
+          indiceDaVaga.has(a.uid) ? { vaga: indiceDaVaga.get(a.uid)! }
+          : indiceDaEtiqueta.has(a.uid) ? { etiqueta: indiceDaEtiqueta.get(a.uid)! }
+          : indiceDoDeclarado.has(a.uid) ? { declarado: indiceDoDeclarado.get(a.uid)! }
+          : null;
+        return alvo ? { ...alvo, privativa: a.afetaPrivativa, coeficiente: a.afetaCoeficiente } : null;
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    const chave = (x: (typeof out)[number]) => ('vaga' in x ? 0 : 'etiqueta' in x ? 1 : 2) * 1e9 + ((x as { vaga?: number; etiqueta?: number; declarado?: number }).vaga ?? (x as { etiqueta?: number }).etiqueta ?? (x as { declarado?: number }).declarado ?? 0);
+    out.sort((x, y) => chave(x) - chave(y));
+    return out.length ? out : undefined;
+  };
   const unidades = ordenar(
     model.unidades ?? [],
     (u) => ({
@@ -1097,9 +1157,15 @@ function projetar(model: BlueprintModel): {
         .map((uid) => indiceDaEtiqueta.get(uid))
         .filter((i): i is number => i !== undefined)
         .sort((x, y) => x - y),
+      acessorios: acessoriosCanonicos(u.acessorios),
     }),
     (x, y) => cmpStr(x.numero, y.numero),
   );
+  // NBR 12721 (0.100.0): a unidade dona do ambiente declarado, por índice — 2º passo.
+  const indiceDaUnidadePorUid = new Map(unidades.map((u, i) => [u.item.uid, i]));
+  for (const a of ambientesDeclarados) {
+    if (a.item.unidadeUid != null && indiceDaUnidadePorUid.has(a.item.unidadeUid)) (a.geom as { unidade?: number }).unidade = indiceDaUnidadePorUid.get(a.item.unidadeUid);
+  }
   // E4.4: `unidade` (índice canônico) no QUADRO e no MEDIDOR — segundo passo,
   // como o `pai`: a ordem das unidades não depende disso. Omitido sem vínculo.
   const indiceDaUnidade = new Map(unidades.map((u, i) => [u.item.id, i]));
@@ -1209,6 +1275,7 @@ function projetar(model: BlueprintModel): {
     anotacoes: anotacoes.length ? anotacoes.map((a) => a.geom) : undefined,
     vistasDependentes: vistasDependentes.length ? vistasDependentes.map((v) => v.geom) : undefined,
     subRegioes: subRegioes.length ? subRegioes.map((s) => s.geom) : undefined,
+    ambientesDeclarados: ambientesDeclarados.length ? ambientesDeclarados.map((a) => a.geom) : undefined,
     verticesDoTerreno: verticesDoTerreno.length ? verticesDoTerreno.map((v) => v.geom) : undefined,
     quadras: quadras.length ? quadras.map((q) => q.geom) : undefined,
     lotes: lotes.length ? lotes.map((l) => l.geom) : undefined,
@@ -1253,6 +1320,7 @@ function projetar(model: BlueprintModel): {
     anotacoes: anotacoes.map((a) => a.item.uid ?? null),
     vistasDependentes: vistasDependentes.map((v) => v.item.uid ?? null),
     subRegioes: subRegioes.map((s) => s.item.uid ?? null),
+    ...(ambientesDeclarados.length ? { ambientesDeclarados: ambientesDeclarados.map((a) => a.item.uid ?? null) } : {}),
     verticesDoTerreno: verticesDoTerreno.map((v) => v.item.uid ?? null),
     quadras: quadras.map((q) => q.item.uid ?? null),
     lotes: lotes.map((l) => l.item.uid ?? null),
@@ -1348,6 +1416,7 @@ export interface IdentidadeCanonica {
   anotacoes?: (ElementUid | null)[];
   vistasDependentes?: (ElementUid | null)[];
   subRegioes?: (ElementUid | null)[];
+  ambientesDeclarados?: (ElementUid | null)[];
   /** Ausente em payload gravado sob kernel anterior a 0.59.0. */
   verticesDoTerreno?: (ElementUid | null)[];
   /** Ausentes em payload gravado sob kernel anterior a 0.58.0. */
@@ -1610,6 +1679,8 @@ export interface CanonicalPayload {
   rodapes?: { level: number; pontos: { x: number; y: number }[]; alturaMm: number; itemCode: string; descricao: string; sugerido?: boolean; etiqueta?: number; parametros?: Parametros }[];
   /** Sub-regiões do terreno. Ausente sob kernel < 0.53.0 e em desenho sem nenhuma. */
   subRegioes?: { level: number; material: MaterialDeSubRegiao; pontos: { x: number; y: number }[]; nome: string | null; parametros?: Parametros }[];
+  /** Ambientes de área declarada. Ausente sob kernel < 0.100.0 e quando não há. Unidade por índice em `unidades`. */
+  ambientesDeclarados?: { level: number; nome: string; areaMm2: number; unidade?: number; nbr12721?: Nbr12721Canonica }[];
   /** VÉRTICES NOMEADOS do terreno. Ausente sob kernel < 0.59.0 e em desenho sem nenhum. */
   verticesDoTerreno?: { ponto: { x: number; y: number }; nome: string; tipo?: 'M' | 'P' | 'V'; sigmaMm?: number; metodo?: string; sigmaEMm?: number; sigmaNMm?: number; sigmaHMm?: number; altitudeM?: number }[];
   /** LOTEAMENTO. Ausentes sob kernel < 0.58.0 e em desenho sem nenhum. A quadra do lote vai por ÍNDICE. */
@@ -1841,6 +1912,8 @@ export interface CanonicalPayload {
     tipoDeAmbiente?: string;
     /** Departamento (setor) do ambiente. Ausente sob kernel < 0.56.0 e quando não declarado. */
     departamento?: string;
+    /** Classificação NBR 12721. Ausente sob kernel < 0.100.0 e quando não classificada. */
+    nbr12721?: Nbr12721Canonica;
     /** Piso, forro e rodapé (E7.2). Ausente sob kernel < 0.43.0 e quando nada foi declarado. */
     acabamentos?: {
       piso?: CamadaCanonica[];
@@ -1854,6 +1927,8 @@ export interface CanonicalPayload {
     tipologia?: string;
     pcd: boolean;
     etiquetas: number[];
+    /** Acessórios vinculados (0.100.0): família + índice. Ausente sem acessório. */
+    acessorios?: AcessorioCanonico[];
   }[];
   /** Grupos com origem. Ausente sob kernel < 0.38.0 e em desenho sem nenhum. Origem por índice. */
   grupos?: {
@@ -2609,6 +2684,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       name: l.name,
       tipoDeAmbiente: (l.tipoDeAmbiente as TipoDeAmbiente) ?? null,
       ...(l.departamento ? { departamento: l.departamento } : {}),
+      ...(l.nbr12721 ? { nbr12721: nbr12721DoCanonico(l.nbr12721) } : {}),
       ...(l.acabamentos
         ? {
             acabamentos: {
@@ -2642,8 +2718,36 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
 
   // Unidades: DEPOIS das etiquetas, que referenciam por índice. Índice fora da
   // lista é descartado, não erro.
+  // AMBIENTES DECLARADOS (0.100.0): antes das unidades (o acessório os cita por
+  // índice); a unidade dona é ligada depois de as unidades existirem.
+  const declaradosLidos = payload.ambientesDeclarados ?? [];
+  const idsDeDeclarado: (ObjectId | null)[] = declaradosLidos.map((a, i) => {
+    if (!levelIds[a.level]) return null;
+    const id = nextId(model, 'dcl');
+    const c = nbr12721DoCanonico(a.nbr12721);
+    model.ambientesDeclarados.push({
+      id,
+      uid: uidDe('ambientesDeclarados', i, declaradosLidos.length),
+      levelId: levelIds[a.level],
+      nome: a.nome,
+      areaMm2: a.areaMm2,
+      ...(c ? { nbr12721: c } : {}),
+    });
+    return id;
+  });
   const unidadesLidas = payload.unidades ?? [];
   unidadesLidas.forEach((u, i) => {
+    const acessorios = (u.acessorios ?? [])
+      .map((a) => {
+        const r = a as Partial<Record<'vaga' | 'etiqueta' | 'declarado', number>> & { privativa?: boolean; coeficiente?: boolean };
+        const uid =
+          r.vaga !== undefined ? model.vagas[r.vaga]?.uid
+          : r.etiqueta !== undefined ? model.labels[r.etiqueta]?.uid
+          : r.declarado !== undefined ? model.ambientesDeclarados.find((x) => x.id === idsDeDeclarado[r.declarado!])?.uid
+          : undefined;
+        return uid ? { uid, afetaPrivativa: r.privativa !== false, afetaCoeficiente: r.coeficiente !== false } : null;
+      })
+      .filter((x): x is AcessorioDaUnidade => x !== null);
     model.unidades.push({
       id: nextId(model, 'und'),
       uid: uidDe('unidades', i, unidadesLidas.length),
@@ -2651,7 +2755,14 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       tipologia: u.tipologia ?? null,
       pcd: u.pcd,
       etiquetaUids: u.etiquetas.map((k) => model.labels[k]?.uid).filter((x): x is string => typeof x === 'string'),
+      ...(acessorios.length ? { acessorios } : {}),
     });
+  });
+  declaradosLidos.forEach((a, i) => {
+    if (a.unidade == null || !idsDeDeclarado[i]) return;
+    const alvo = model.ambientesDeclarados.find((x) => x.id === idsDeDeclarado[i]);
+    const u = model.unidades[a.unidade];
+    if (alvo && u) alvo.unidadeUid = u.uid;
   });
 
   // E4.4: unidade do quadro e do medidor — depois de existirem as unidades.

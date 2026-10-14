@@ -35,7 +35,7 @@ function doisPavimentos() {
 
 describe('guarda-corpo e corrimão (E7.3)', () => {
   it('comandos: altura padrão por tipo, trocar o tipo puxa a altura padrão nova, mover desloca e confirma, apagar; invariantes recusam < 2 vértices, trecho nulo, material inválido, altura ≤ 0', () => {
-    expect(KERNEL_VERSION).toMatch(/^blueprint-kernel-ts-0\.(4[4-9]|[5-9][0-9])\.\d+$/);
+    expect(Number(/^blueprint-kernel-ts-0\.(\d+)\.\d+$/.exec(KERNEL_VERSION)?.[1])).toBeGreaterThanOrEqual(44); // número, não texto: '0.100' < '0.46' como string
     const { m, t } = doisPavimentos();
     let r = applyCommand(m, { type: 'AddGuardaCorpo', levelId: t, tipo: 'GUARDA_CORPO', pontos: [point(0, 0), point(3000, 0), point(3000, 2000)], sugerido: true });
     const g = r.model.guardaCorpos[0];

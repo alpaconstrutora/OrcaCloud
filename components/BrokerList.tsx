@@ -1,12 +1,12 @@
 import React from 'react';
-import { User, Mail, Phone, Search, Loader2, LayoutDashboard, Link2, Copy, Check, RefreshCw, X, UserCheck, UserX } from 'lucide-react';
+import { User, Mail, Phone, Search, Loader2, LayoutDashboard, Link2, Copy, Check, RefreshCw, X, UserCheck, UserX, MoveHorizontal } from 'lucide-react';
 import { BrokerProfile } from '../types';
 import { brokerService } from '../services/brokerService';
 import { brokerPortalService, BrokerPortalToken } from '../services/brokerPortalService';
 import BrokerModal from './BrokerModal';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
@@ -34,6 +34,10 @@ const BROKER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
     creci: { label: 'CRECI', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
     agency: { label: 'Imobiliária', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
     organization: { label: 'Organização', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
+};
+
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    name: 220, status: 100, contact: 240, creci: 120, agency: 200, organization: 200, actions: 160,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -252,6 +256,12 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
     };
 
     const tableColumns = useTableColumns(BROKER_COLUMNS, 'brokerListColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'brokerListColWidths');
+    // Largura = soma exata das colunas visíveis + "Ações". NUNCA w-full com
+    // table-layout:fixed (§6.1).
+    const tableTotalWidth = BROKER_COLUMNS
+        .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
+        + cols.getWidth('actions');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'brokerListFilters:advanced');
 
     // ── Filtragem / ordenação ────────────────────────────────────────────────────
@@ -372,6 +382,14 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -391,7 +409,16 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                    <table className="w-full text-left border-collapse">
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                        <colgroup>
+                            {tableColumns.orderedVisibleColumns.map(key => (
+                                <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                            ))}
+                            {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio,
+                                para a borda de "Ações" não andar a cada redimensionamento. */}
+                            <col />
+                            <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                        </colgroup>
                         {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader força uppercase internamente por padrão. */}
                         <thead>
                             <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
@@ -403,10 +430,18 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort}
                                             onMoveColumn={tableColumns.moveColumn}
-                                            className={def.className} />
+                                            className={def.className}
+                                        >
+                                            <cols.ResizeHandle colKey={key} />
+                                        </SortableHeader>
                                     );
                                 })}
-                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                <th aria-hidden="true" className="border-r border-gray-100" />
+                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500 relative overflow-hidden">
+                                    Ações
+                                    <cols.ResizeHandle colKey="actions" />
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
@@ -417,6 +452,8 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                             {renderBrokerCell(key, broker, orgNameById)}
                                         </td>
                                     ))}
+                                    {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
                                     <td className="px-6 py-2.5 text-right">
                                         <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
                                             <ActionBar broker={broker} />

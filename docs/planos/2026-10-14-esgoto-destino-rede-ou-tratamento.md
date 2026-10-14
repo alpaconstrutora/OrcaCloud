@@ -1,6 +1,7 @@
 # Esgoto — "Destino do esgoto" (rede pública × tratamento individual) como hipótese do estudo
 
-> **Estado: PLANO — nada implementado.** Separado a pedido do usuário; os itens 2 e 3 da mesma avaliação
+> **Estado: EM IMPLEMENTAÇÃO (14/10/2026)** — frente `esgoto-destino`.
+> ~~**Estado: PLANO — nada implementado.**~~ Separado a pedido do usuário; os itens 2 e 3 da mesma avaliação
 > estão em `2026-10-14-esgoto-tratamento-e-botoes.md`.
 
 ## Pedido original
@@ -25,7 +26,23 @@ Sessão Claude Code (VS Code) · 14/10/2026.
    ligação + coletor (dois destinos no desenho — **deduzido, não reproduzido**).
 3. O "Lançar" do rodapé não lança tratamento.
 
-## Decisão a tomar com o usuário antes de implementar
+## Decisões tomadas com o usuário
+
+| Data | Pergunta | Resposta |
+|---|---|---|
+| 14/10 | Com ligação confirmada no desenho e o destino tratamento: avisa e pede para apagar à mão, ou apaga sozinho? | **"o sistema avisa e pede autorizacao para apagar sozinho"** |
+| 14/10 | Começar? | o usuário respondeu à decisão e aprovou a publicação anterior com "Depois disso, sigo com o item 1" no texto |
+
+Decisões minhas (registradas para conferir):
+- **Simetria:** a regra vale nos DOIS sentidos. Destino rede pública com unidades de tratamento no
+  desenho também são dois destinos: o sugerido do outro destino sai no lançamento; o CONFIRMADO só sai
+  com a autorização (`useConfirm`, variante `warning`, Ctrl+Z desfaz).
+- **"Rede pública" grava o campo AUSENTE** (não `'REDE_PUBLICA'`): assim, voltar para rede pública
+  devolve o hash da ART que o estudo tinha.
+- O memorial e o executivo passam a olhar a hipótese também: destino tratamento ainda não lançado não
+  cobra "coletor até a rede pública" — cobra o tratamento.
+
+## Decisão a tomar com o usuário antes de implementar (proposta original)
 
 | Pergunta | Proposta |
 |---|---|
@@ -81,4 +98,24 @@ ocorrências em `kernel.bundle.mjs`) — conferir de novo antes de publicar.
 
 ## Estado
 
-- [ ] aguardando o usuário decidir a tabela "Decisão a tomar" e mandar implementar.
+- [x] 0 Reprodução ANTES: `__tests__/blueprintEsgotoDestino.test.ts` no código antigo — 7 de 10 falharam
+  (com destino tratamento o lançamento punha a ligação; o estudo relido descartava o campo). Os prints
+  da conferência visual (gaveta com coletor e tratamento juntos) mostravam a mistura.
+- [x] 1 `HipotesesDeEsgoto.destino?` / `distanciaAteALigacaoMm?` / `distanciaEntreCaixasMm?` fora do padrão;
+  `destinoDoEsgoto()`. Teste: hash de estudo sem o campo IGUAL; tratamento muda; voltar a rede pública devolve.
+- [x] 2 `useBlueprintHidro` → `esgotoDaColuna` (só valores válidos; inválido cai para ausente). Teste de ida e volta.
+- [x] 3 `planejarEsgotoCompleto(model, hip, terreno, { tratamento, apagarConfirmadosDoOutroDestino })`: etapa 0
+  tira o SUGERIDO do outro destino; o CONFIRMADO vira `confirmadosDoOutroDestino` e bloqueia o destino novo
+  até a autorização. Simetria nos dois sentidos. Os 6 testes antigos de `blueprintEsgotoCompleto` passam sem mudança.
+- [x] 4 `blueprintColetorPredial` usa as distâncias (ausente = 15/25 m). Teste.
+- [x] 5 Gaveta: "Destino do esgoto" (1º campo das hipóteses, no resumo); coletor só com rede pública, tratamento
+  só com tratamento (sem botão próprio — o rodapé lança); rodapé diz o destino; com peça confirmada do outro
+  destino o botão pede autorização (`useConfirm` "Apagar e lançar"); distâncias editáveis; o painel do coletor
+  lê as distâncias. Teste do editor: ligação CONFIRMADA → trocar para tratamento → aviso → apagar e lançar.
+- [x] 6 Executivo e memorial: `comTratamentoIndividual(model, hip)` — desenho OU hipótese. Teste do executivo.
+- [x] 7 Verificação (14/10/2026): `check-ui-standard.sh` 0 alertas; `tsc` 0 erros; editor sozinho 253/253;
+  suíte inteira (sem o editor) 9084 = 9050 + 34 pendentes, 0 falha, 926 arquivos. Bundle da `planta-api`:
+  nenhum dos arquivos tocados é empacotado (lista de módulos conferida). Conferência VISUAL no app real
+  (`c:/tmp/pwtest/conferencia-destino-esgoto.cjs`, plantas descartáveis arquivadas): 12 portões ok — rede
+  pública mostra o coletor; tratamento troca o painel, lança tanque/filtro/sumidouro e NENHUMA ligação; botões
+  do rodapé numa linha (achado da 1ª rodada: "Refazer tudo" quebrava — corrigido).

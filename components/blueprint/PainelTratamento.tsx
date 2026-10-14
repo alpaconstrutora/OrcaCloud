@@ -8,9 +8,11 @@
  * 14/10/2026: o resultado vem antes das premissas, que ficam recolhidas (como
  * nas outras gavetas); campo numérico que só grava ao sair — apagar a
  * infiltração gravava 1 L/m²·dia (sumidouro gigante), o mês mais frio 0 °C e o
- * diâmetro do sumidouro 800 mm. O "Lançar tratamento" continua aqui: o
- * "Lançar" do rodapé da gaveta ainda não lança tratamento (plano do destino
- * do esgoto).
+ * diâmetro do sumidouro 800 mm.
+ *
+ * 14/10/2026 (destino do esgoto): só aparece com o destino "tratamento
+ * individual", e sem botão próprio — o "Lançar" do rodapé passou a lançar o
+ * tratamento (caixa → tanque → filtro → sumidouro, num lote).
  */
 import React from 'react';
 import { FICHA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
@@ -31,7 +33,6 @@ interface Props {
   unidades: readonly UnidadeVerificada[];
   hip: HipotesesDeTratamento;
   onHip: (h: HipotesesDeTratamento) => void;
-  onLancar: () => void;
   onSelecionar: (ids: string[]) => void;
 }
 
@@ -39,8 +40,7 @@ const m = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { minimumFractionD
 const n = (v: number, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 const ROTULO_DO_PADRAO: Record<PadraoDeResidencia, string> = { ALTO: 'Alto (160 L/dia)', MEDIO: 'Médio (130 L/dia)', BAIXO: 'Baixo (100 L/dia)' };
 
-export default function PainelTratamento({ plano, dim, unidades, hip, onHip, onLancar, onSelecionar }: Props) {
-  const podeLancar = plano.comandos.length > 0;
+export default function PainelTratamento({ plano, dim, unidades, hip, onHip, onSelecionar }: Props) {
   return (
     <div className="space-y-2" data-testid="tratamento">
       <p className="text-xs font-semibold text-slate-700">Tratamento individual (sem rede pública)</p>
@@ -75,17 +75,6 @@ export default function PainelTratamento({ plano, dim, unidades, hip, onHip, onL
           ))}
         </ul>
       )}
-      <button
-        type="button"
-        onClick={onLancar}
-        disabled={!podeLancar}
-        title={podeLancar ? undefined : (plano.motivo ?? 'Nada a lançar')}
-        className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-        data-testid="tratamento-lancar"
-      >
-        {plano.apagados > 0 ? 'Relançar tratamento' : 'Lançar tratamento'}
-      </button>
-
       {unidades.length > 0 && (
         <ul className="space-y-0.5 text-xs" data-testid="tratamento-verificacao">
           {unidades.map((u) => (

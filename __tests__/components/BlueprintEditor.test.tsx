@@ -4085,6 +4085,57 @@ describe('BlueprintEditor · ribbon', () => {
     await waitFor(() => expect(screen.queryByTestId('coletor-cota-estimada')).not.toBeInTheDocument());
   });
 
+  it('Esgoto — destino (14/10/2026): rede pública mostra o coletor; trocar para tratamento, com a ligação CONFIRMADA, pede autorização, apaga e lança o tratamento', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const divisa = (ax: number, ay: number, bx: number, by: number, frente = false) =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', ...(frente ? { papel: 'FRENTE' as const } : {}) }) as const;
+    m = k.applyBatch(m, [
+      w(0, 0, 2000, 0), w(2000, 0, 2000, 3000), w(2000, 3000, 0, 3000), w(0, 3000, 0, 0),
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Lavatório', at: k.point(600, 2500), cotaMm: 500, tipoHidraulico: 'LAVATORIO' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Caixa sifonada', at: k.point(1200, 2100), cotaMm: 0, tipoHidraulico: 'CAIXA_SIFONADA' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Vaso', at: k.point(600, 800), cotaMm: 0, tipoHidraulico: 'VASO_SANITARIO' },
+      divisa(-3000, -8000, 7500, -8000, true), divisa(7500, -8000, 7500, 6000), divisa(7500, 6000, -3000, 6000), divisa(-3000, 6000, -3000, -8000),
+    ]).model;
+    // O desenho de partida: a rede pública JÁ lançada (o mesmo planejador do botão) e a ligação CONFIRMADA.
+    const { planejarEsgotoCompleto } = await import('../../utils/blueprintEsgotoCompleto');
+    m = k.applyBatch(m, planejarEsgotoCompleto(m).comandos).model;
+    const ligacao = (m.terminais ?? []).find((x) => x.tipoHidraulico === 'LIGACAO_ESGOTO')!;
+    m = k.applyBatch(m, [{ type: 'SetTerminalProps', terminalId: ligacao.id, sugerida: false }]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^hidráulica$/i);
+    await user.click(botao(/^esgoto automático/i));
+    const gaveta = await screen.findByTestId('tarefa-esgoto');
+    const dialog = gaveta.closest('[role="dialog"]') as HTMLElement;
+
+    // Rede pública (o padrão): o coletor aparece; o tratamento, não.
+    expect(within(gaveta).getByTestId('coletor-predial')).toBeInTheDocument();
+    expect(within(gaveta).queryByTestId('tratamento')).toBeNull();
+
+    // Troca o destino: o coletor sai, o tratamento entra.
+    await user.click(within(gaveta).getByRole('button', { name: /hipóteses do lançamento/i }));
+    await user.selectOptions(within(gaveta).getByLabelText('Destino do esgoto'), 'TRATAMENTO');
+    await waitFor(() => expect(within(screen.getByTestId('tarefa-esgoto')).queryByTestId('coletor-predial')).toBeNull());
+    expect(within(screen.getByTestId('tarefa-esgoto')).getByTestId('tratamento')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(/o esgoto vai para o tratamento individual/);
+    expect(dialog).toHaveTextContent(/há peças confirmadas do outro destino/);
+
+    // Lançar com a ligação CONFIRMADA: avisa e pede autorização; "Apagar e lançar" apaga e lança o tratamento.
+    const lancar = within(dialog).getAllByRole('button').find((b) => /^(lançar|relançar sugeridos)/i.test(b.textContent ?? ''))!;
+    expect(lancar).toBeEnabled();
+    await user.click(lancar);
+    expect(await screen.findByText(/Apagar a ligação à rede pública\?/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^apagar e lançar$/i }));
+    expect(await screen.findByTestId('esgoto-presumido')).toHaveTextContent(/Tratamento individual \(tanque séptico, filtro anaeróbio e sumidouro\)/);
+    await waitFor(() => expect(screen.getByTestId('tratamento-verificacao')).toHaveTextContent(/Sumidouro/));
+    expect(screen.getByTestId('tratamento-verificacao')).toHaveTextContent(/Tanque séptico/);
+  });
+
   it('Água e Pluvial — "Lançar tudo" (13/10/2026): o hidrômetro e a saída pluvial nascem na frente do lote e a gaveta diz o que presumiu', async () => {
     const k = await import('../../utils/blueprintKernel');
     let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;

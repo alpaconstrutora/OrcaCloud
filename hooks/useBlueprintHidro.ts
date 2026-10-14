@@ -5,6 +5,7 @@ import { PERIODOS_DE_RETORNO, type HipotesesPluviais } from '../utils/blueprintP
 import { RUGOSIDADE_DA_CALHA } from '../utils/blueprintCalhas';
 import { PADROES_DE_RESIDENCIA, type HipotesesDeTratamento } from '../utils/blueprintTratamento';
 import { SECOES_DE_CALHA } from '../utils/blueprintKernel';
+import type { HipotesesDeEsgoto } from '../utils/blueprintEsgotoAutomatico';
 
 /**
  * As PREMISSAS hidrossanitárias do ESTUDO (E3.3, 29/09/2026) — água, pressão e
@@ -75,12 +76,31 @@ function tratamentoDaColuna(raw: unknown): HipotesesDeTratamento {
   return (PADROES_DE_RESIDENCIA as readonly string[]).includes(t.padrao) ? t : { ...t, padrao: padrao.padrao };
 }
 
+/**
+ * As premissas do esgoto (14/10/2026). `destino` e as duas distâncias da NBR 8160 são OPCIONAIS e
+ * ficam fora do padrão (o hash da ART cobre as hipóteses: campo novo com padrão mudaria o hash de
+ * todo estudo emitido) — então o `completar` os descartaria. Aqui eles entram só válidos; "rede
+ * pública" fica AUSENTE (é o que o estudo tinha antes do campo existir).
+ */
+function esgotoDaColuna(raw: unknown): HipotesesDeEsgoto {
+  const e = completar(raw, HIPOTESES_HIDRO_PADRAO.esgoto);
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const positivo = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : undefined);
+  const saida: HipotesesDeEsgoto = { ...e };
+  if (r.destino === 'TRATAMENTO') saida.destino = 'TRATAMENTO';
+  const ateALigacao = positivo(r.distanciaAteALigacaoMm);
+  if (ateALigacao !== undefined) saida.distanciaAteALigacaoMm = ateALigacao;
+  const entreCaixas = positivo(r.distanciaEntreCaixasMm);
+  if (entreCaixas !== undefined) saida.distanciaEntreCaixasMm = entreCaixas;
+  return saida;
+}
+
 export function hipotesesHidroDaColuna(raw: unknown): HipotesesHidro {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   return {
     agua: completar(r.agua, HIPOTESES_HIDRO_PADRAO.agua),
     pressao: completar(r.pressao, HIPOTESES_HIDRO_PADRAO.pressao),
-    esgoto: completar(r.esgoto, HIPOTESES_HIDRO_PADRAO.esgoto),
+    esgoto: esgotoDaColuna(r.esgoto),
     reservatorio: completar(r.reservatorio, HIPOTESES_HIDRO_PADRAO.reservatorio),
     alimentacao: completar(r.alimentacao, HIPOTESES_HIDRO_PADRAO.alimentacao),
     recalque: completar(r.recalque, HIPOTESES_HIDRO_PADRAO.recalque),

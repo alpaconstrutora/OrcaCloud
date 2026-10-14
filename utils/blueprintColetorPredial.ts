@@ -162,12 +162,15 @@ export function planejarColetorPredial(model: BlueprintModel, hip: HipotesesDeEs
   }
   if (declividadePct > DECLIVIDADE_MAXIMA_PCT) avisos.push(`Declividade de ${declividadePct.toFixed(1).replace('.', ',')} % acima de 5 %: considere um degrau (queda) numa caixa.`);
 
-  // As caixas intermediárias: de trás para a frente, a primeira a 15 m da ligação e depois a cada 25 m.
+  // As caixas intermediárias: de trás para a frente, a primeira a 15 m da ligação e depois a cada 25 m
+  // (NBR 8160 — hipóteses do estudo desde 14/10/2026; ausentes = os da norma).
+  const ateALigacao = hip.distanciaAteALigacaoMm && hip.distanciaAteALigacaoMm > 0 ? hip.distanciaAteALigacaoMm : DISTANCIA_MAXIMA_ATE_A_LIGACAO_MM;
+  const entreCaixas = hip.distanciaEntreCaixasMm && hip.distanciaEntreCaixasMm > 0 ? hip.distanciaEntreCaixasMm : DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM;
   const distancias: number[] = [];
-  let d = L - DISTANCIA_MAXIMA_ATE_A_LIGACAO_MM;
+  let d = L - ateALigacao;
   while (d > 1) {
     distancias.unshift(d);
-    d -= DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM;
+    d -= entreCaixas;
   }
   const u = { x: (ligacao.at.x - ci.at.x) / L, y: (ligacao.at.y - ci.at.y) / L };
   const noPercurso = (s: number) => ({ at: { x: Math.round(ci.at.x + u.x * s), y: Math.round(ci.at.y + u.y * s) }, cota: Math.round(fundoCi - (fundoCi - ligacao.cotaMm) * (s / L)) });

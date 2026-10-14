@@ -76,7 +76,24 @@ export interface HipotesesDeEsgoto {
    * automático, até alguém confirmar com a concessionária. Ausente = 1500.
    */
   profundidadeDaRedeMm?: number;
+  /**
+   * Para onde o esgoto vai (14/10/2026, `docs/planos/2026-10-14-esgoto-destino-rede-ou-tratamento.md`):
+   * ausente = REDE PÚBLICA (ligação + coletor); `'TRATAMENTO'` = tanque séptico → (filtro) → sumidouro.
+   * Fica FORA de `HIPOTESES_ESGOTO_PADRAO` e "rede pública" grava o campo AUSENTE de propósito: o hash
+   * da ART (`hashDaBaseHidro`) cobre todas as hipóteses, e `stableStringify` ignora `undefined` — um
+   * campo novo com padrão mudaria o hash de todo estudo já emitido.
+   */
+  destino?: DestinoDoEsgoto;
+  /** NBR 8160: a 1ª caixa intermediária a no máximo esta distância da ligação, mm. Ausente = 15 000. */
+  distanciaAteALigacaoMm?: number;
+  /** NBR 8160: distância máxima entre caixas no coletor, mm. Ausente = 25 000. */
+  distanciaEntreCaixasMm?: number;
 }
+
+export type DestinoDoEsgoto = 'REDE_PUBLICA' | 'TRATAMENTO';
+export const DESTINOS_DO_ESGOTO: readonly DestinoDoEsgoto[] = ['REDE_PUBLICA', 'TRATAMENTO'];
+/** O destino em vigor (ausente = rede pública). */
+export const destinoDoEsgoto = (hip: Pick<HipotesesDeEsgoto, 'destino'>): DestinoDoEsgoto => (hip.destino === 'TRATAMENTO' ? 'TRATAMENTO' : 'REDE_PUBLICA');
 
 export const HIPOTESES_ESGOTO_PADRAO: HipotesesDeEsgoto = {
   caimentoPctAte75: 2,

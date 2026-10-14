@@ -320,7 +320,7 @@ import CampoNumericoDeHipotese from './CampoNumericoDeHipotese';
 import ResumoDoDimensionamentoDaAgua from './ResumoDoDimensionamentoDaAgua';
 import { planejarAguaCompleta } from '../../utils/blueprintAguaCompleta';
 import { planejarPluvialCompleta } from '../../utils/blueprintPluvialCompleto';
-import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
+import { DISTANCIA_MAXIMA_ATE_A_LIGACAO_MM, DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM, planejarColetorPredial } from '../../utils/blueprintColetorPredial';
 import { planejarEsgotoCompleto } from '../../utils/blueprintEsgotoCompleto';
 import PainelTratamento from './PainelTratamento';
 import PainelAquecedor from './PainelAquecedor';
@@ -820,6 +820,7 @@ import {
   type PlanoDeAgua,
 } from '../../utils/blueprintAguaAutomatica';
 import {
+  destinoDoEsgoto,
   planejarEsgoto,
   refazerEsgoto,
   type HipotesesDeEsgoto,
@@ -9057,9 +9058,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * `runBatch` só — um Ctrl+Z desfaz tudo. Os botões de cada seção continuam, para
    * relançar só uma parte.
    */
+  /**
+   * DESTINO DO ESGOTO (14/10/2026): com tratamento individual, o "Lançar" põe tanque/(filtro)/sumidouro
+   * já nas medidas dimensionadas pelas premissas do estudo. `apagar` = o usuário autorizou apagar o que
+   * está CONFIRMADO do outro destino (pedido: "o sistema avisa e pede autorizacao para apagar sozinho").
+   */
+  const opcoesDoEsgotoCompleto = (apagar = false) => {
+    const trat = hidroDoEstudo.hipoteses.tratamento;
+    const medidas = destinoDoEsgoto(hipotesesDeEsgoto) === 'TRATAMENTO' ? medidasDimensionadas(dimensionarTratamento(editor.model, trat, hidroDoEstudo.hipoteses.reservatorio)) : undefined;
+    return { tratamento: { comFiltro: trat.comFiltro, medidas }, apagarConfirmadosDoOutroDestino: apagar };
+  };
   const planoDoEsgotoCompleto = useMemo(
-    () => (tarefaAberta === 'esgoto' ? planejarEsgotoCompleto(editor.model, hipotesesDeEsgoto, terrenoParaCorte) : null),
-    [tarefaAberta, editor.model, hipotesesDeEsgoto, terrenoParaCorte],
+    () => (tarefaAberta === 'esgoto' ? planejarEsgotoCompleto(editor.model, hipotesesDeEsgoto, terrenoParaCorte, opcoesDoEsgotoCompleto()) : null),
+    [tarefaAberta, editor.model, hipotesesDeEsgoto, terrenoParaCorte, hidroDoEstudo.hipoteses.tratamento, hidroDoEstudo.hipoteses.reservatorio],
   );
   /** A ÁGUA e a CHUVA inteiras num clique (13/10/2026, item 5.3): o irmão do esgoto. */
   const planoDaAguaCompleta = useMemo(
@@ -9332,7 +9343,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     },
     [analisesDoMemorialDeIncendio, editor.model, hipotesesDeIncendioDoEstudo, study.name],
   );
-  const lancarEsgoto = () => lancarTudo('esgoto', planoDoEsgotoCompleto);
+  const lancarEsgoto = async () => {
+    if (!planoDoEsgotoCompleto) return;
+    const confirmados = planoDoEsgotoCompleto.confirmadosDoOutroDestino.length;
+    if (confirmados === 0) return lancarTudo('esgoto', planoDoEsgotoCompleto);
+    const paraTratamento = planoDoEsgotoCompleto.destino === 'TRATAMENTO';
+    const ok = await confirmar({
+      title: paraTratamento ? 'Apagar a ligação à rede pública?' : 'Apagar o tratamento individual?',
+      message: paraTratamento
+        ? `O destino do esgoto agora é tratamento individual, e o desenho tem ${confirmados} peça(s) CONFIRMADA(S) da rede pública (ligação, coletor). Apagar e lançar o tanque, o filtro e o sumidouro? Ctrl+Z desfaz.`
+        : `O destino do esgoto agora é a rede pública, e o desenho tem ${confirmados} peça(s) CONFIRMADA(S) do tratamento individual. Apagar e lançar a ligação e o coletor? Ctrl+Z desfaz.`,
+      confirmLabel: 'Apagar e lançar',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    lancarTudo('esgoto', planejarEsgotoCompleto(editor.model, hipotesesDeEsgoto, terrenoParaCorte, opcoesDoEsgotoCompleto(true)));
+  };
   const refazerRedeDeEsgoto = async () => {
     const ok = await confirmar({
       title: 'Refazer a rede de esgoto?',
@@ -17781,12 +17807,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               <BlocoDeHipoteses
                 id="esgoto"
                 resumo={[
+                  destinoDoEsgoto(hipotesesDeEsgoto) === 'TRATAMENTO' ? 'tratamento individual' : 'rede pública',
                   `caimento ${String(hipotesesDeEsgoto.caimentoPctAte75).replace('.', ',')} % / ${String(hipotesesDeEsgoto.caimentoPctDe100).replace('.', ',')} %`,
                   `ramal ${hipotesesDeEsgoto.cotaMinimaSobPisoMm} mm`,
                   `TQ DN ${hipotesesDeEsgoto.dnTuboQuedaMm}`,
                   `vent. DN ${hipotesesDeEsgoto.dnVentilacaoMm}`,
-                  `rede a ${hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} mm`,
-                ].join(' · ')}
+                  destinoDoEsgoto(hipotesesDeEsgoto) === 'REDE_PUBLICA' ? `rede a ${hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} mm` : null,
+                ].filter(Boolean).join(' · ')}
                 regras={
                   <>
                     <li>
@@ -17808,15 +17835,41 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       ventilação DN {hipotesesDeEsgoto.dnVentilacaoMm} até o teto. <strong>Pré-dimensionamento</strong>: não desvia de
                       fundação, viga ou laje.
                     </li>
-                    <li>
-                      Sem caixa de inspeção ou sem ligação à rede pública, o lançamento as <strong>põe</strong>: a caixa{' '}
-                      {hipotesesDeEsgoto.afastamentoDaCiMm ?? 1000} mm além da fachada, no rumo da frente do lote; a ligação na
-                      frente, com a rede <strong>estimada</strong> a {hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} mm do
-                      terreno. Arraste as peças para onde estão de verdade; o plano recalcula.
-                    </li>
+                    {destinoDoEsgoto(hipotesesDeEsgoto) === 'TRATAMENTO' ? (
+                      <li>
+                        <strong>Tratamento individual</strong> (sem rede pública): sem caixa de inspeção, o lançamento a <strong>põe</strong>{' '}
+                        {hipotesesDeEsgoto.afastamentoDaCiMm ?? 1000} mm além da fachada; dela saem em fila o tanque séptico, o filtro
+                        anaeróbio (se ligado) e o sumidouro, nas medidas dimensionadas pela NBR 7229/13969. Ligação e coletor da rede
+                        pública sugeridos saem; os confirmados, só com a sua autorização.
+                      </li>
+                    ) : (
+                      <li>
+                        Sem caixa de inspeção ou sem ligação à rede pública, o lançamento as <strong>põe</strong>: a caixa{' '}
+                        {hipotesesDeEsgoto.afastamentoDaCiMm ?? 1000} mm além da fachada, no rumo da frente do lote; a ligação na
+                        frente, com a rede <strong>estimada</strong> a {hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} mm do
+                        terreno. Arraste as peças para onde estão de verdade; o plano recalcula.
+                      </li>
+                    )}
                   </>
                 }
               >
+                <label className="flex items-center gap-2">
+                  Destino do esgoto
+                  <select
+                    value={destinoDoEsgoto(hipotesesDeEsgoto)}
+                    onChange={(e) => {
+                      // "Rede pública" = campo AUSENTE: o hash da ART do estudo volta a ser o de antes do campo existir.
+                      const { destino: _destino, ...semDestino } = hipotesesDeEsgoto;
+                      setHipDeEsgotoSalvas(e.target.value === 'TRATAMENTO' ? { ...semDestino, destino: 'TRATAMENTO' } : semDestino);
+                    }}
+                    aria-label="Destino do esgoto"
+                    title="Rede pública: ligação na frente do lote e coletor. Tratamento individual (sem rede): tanque séptico, filtro anaeróbio e sumidouro (NBR 7229/13969)."
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    <option value="REDE_PUBLICA">Rede pública</option>
+                    <option value="TRATAMENTO">Tratamento individual</option>
+                  </select>
+                </label>
                 <label className="flex items-center gap-2">
                   Caimento até DN 75
                   <select value={String(hipotesesDeEsgoto.caimentoPctAte75)} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, caimentoPctAte75: Number(e.target.value) })} aria-label="Caimento até DN 75" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
@@ -17864,16 +17917,32 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   <CampoNumericoDeHipotese value={hipotesesDeEsgoto.raioDoShaftMm ?? 3000} onCommit={(v) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, raioDoShaftMm: v })} min={0} max={20000} step={500} aria-label="Raio em que um shaft atrai o tubo de queda em mm" title="Um shaft a até esta distância do ponto de maior UHC recebe o tubo de queda; 0 = ignora os shafts" />
                   mm
                 </label>
+                {destinoDoEsgoto(hipotesesDeEsgoto) === 'REDE_PUBLICA' && (
                 <label className="flex items-center gap-2">
                   Rede pública a
                   <CampoNumericoDeHipotese value={hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} onCommit={(v) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, profundidadeDaRedeMm: v })} min={300} max={6000} step={100} aria-label="Profundidade presumida da rede pública em mm" />
                   mm de profundidade
                 </label>
+                )}
                 <label className="flex items-center gap-2">
                   Caixa a
                   <CampoNumericoDeHipotese value={hipotesesDeEsgoto.afastamentoDaCiMm ?? 1000} onCommit={(v) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, afastamentoDaCiMm: v })} min={300} max={10000} step={100} aria-label="Afastamento da caixa de inspeção automática em mm" />
                   mm da fachada
                 </label>
+                {destinoDoEsgoto(hipotesesDeEsgoto) === 'REDE_PUBLICA' && (
+                  <>
+                    <label className="flex items-center gap-2">
+                      1ª caixa do coletor a até
+                      <CampoNumericoDeHipotese value={hipotesesDeEsgoto.distanciaAteALigacaoMm ?? DISTANCIA_MAXIMA_ATE_A_LIGACAO_MM} onCommit={(v) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, distanciaAteALigacaoMm: v })} min={1000} max={50000} step={1000} aria-label="Distância máxima da ligação à primeira caixa do coletor em mm" title="NBR 8160: 15 m entre a ligação à rede e a primeira caixa de inspeção do coletor" />
+                      mm da ligação
+                    </label>
+                    <label className="flex items-center gap-2">
+                      Entre caixas até
+                      <CampoNumericoDeHipotese value={hipotesesDeEsgoto.distanciaEntreCaixasMm ?? DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM} onCommit={(v) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, distanciaEntreCaixasMm: v })} min={1000} max={50000} step={1000} aria-label="Distância máxima entre caixas do coletor em mm" title="NBR 8160: 25 m entre caixas de inspeção no coletor" />
+                      mm
+                    </label>
+                  </>
+                )}
               </BlocoDeHipoteses>
               {/* 14/10/2026: sem "Lançar ventilação" nem "Lançar coletor" — o "Lançar" do rodapé (planejarEsgotoCompleto)
                   já lança ventilação, ligação e coletor; dois botões para a mesma coisa confundiam. */}
@@ -17894,10 +17963,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   ))}
                 </div>
               )}
-              {planoDoColetor && (
+              {planoDoColetor && destinoDoEsgoto(hipotesesDeEsgoto) === 'REDE_PUBLICA' && (
                 <PainelColetorPredial
                   plano={planoDoColetor}
                   profundidadeDaRedeMm={hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500}
+                  distanciaAteALigacaoMm={hipotesesDeEsgoto.distanciaAteALigacaoMm ?? DISTANCIA_MAXIMA_ATE_A_LIGACAO_MM}
+                  distanciaEntreCaixasMm={hipotesesDeEsgoto.distanciaEntreCaixasMm ?? DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM}
                   onConfirmarCota={() => {
                     if (planoDoColetor.ligacaoId) {
                       editor.runBatch([{ type: 'SetParametros', familia: 'terminal', id: planoDoColetor.ligacaoId, valores: { [PARAMETRO_COTA_DA_REDE]: 'confirmada' } }]);
@@ -17905,7 +17976,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   }}
                 />
               )}
-              {planoDoTratamento && dimDoTratamento && (
+              {planoDoTratamento && dimDoTratamento && destinoDoEsgoto(hipotesesDeEsgoto) === 'TRATAMENTO' && (
                 <PainelTratamento
                   plano={planoDoTratamento}
                   dim={dimDoTratamento}
@@ -17913,9 +17984,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   onSelecionar={selecionar}
                   hip={hipDeTratamento}
                   onHip={(tratamento) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, tratamento })}
-                  onLancar={() => {
-                    if (planoDoTratamento.comandos.length) editor.runBatch(planoDoTratamento.comandos);
-                  }}
                 />
               )}
               <PainelVerificacaoDaRede marcas={marcasDaRede} disciplinas={['ESGOTO']} onSelecionar={selecionar} />
@@ -19549,6 +19617,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                         ? `${planoDeEsgoto.sugeridos} trecho(s) ainda sugerido(s)`
                         : `${planoDeEsgoto.aLigar} ponto(s) a ligar`,
                   planoDoEsgotoCompleto?.lancaColetor && planoDoEsgotoCompleto.coletor?.ligacaoProposta ? 'a ligação à rede vai na frente do lote' : null,
+                  planoDoEsgotoCompleto?.destino === 'TRATAMENTO' ? 'o esgoto vai para o tratamento individual' : null,
+                  planoDoEsgotoCompleto && planoDoEsgotoCompleto.confirmadosDoOutroDestino.length > 0 ? 'há peças confirmadas do outro destino' : null,
                 ].filter(Boolean).join(' · ')}.
               </span>
               {planoDeEsgoto.trechosDaRede > 0 && (
@@ -19556,21 +19626,25 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   type="button"
                   onClick={() => void refazerRedeDeEsgoto()}
                   title={`Apaga os ${planoDeEsgoto.trechosDaRede} trecho(s) da rede — inclusive os que você já confirmou — e lança de novo com as hipóteses atuais`}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                  className="inline-flex h-9 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   Refazer tudo
                 </button>
               )}
               <button
                 type="button"
-                onClick={lancarEsgoto}
-                disabled={!planoDoEsgotoCompleto || planoDoEsgotoCompleto.comandos.length === 0}
+                onClick={() => void lancarEsgoto()}
+                disabled={!planoDoEsgotoCompleto || (planoDoEsgotoCompleto.comandos.length === 0 && planoDoEsgotoCompleto.confirmadosDoOutroDestino.length === 0)}
                 title={
-                  !planoDoEsgotoCompleto || planoDoEsgotoCompleto.comandos.length === 0
+                  planoDoEsgotoCompleto && planoDoEsgotoCompleto.confirmadosDoOutroDestino.length > 0
+                    ? `${planoDoEsgotoCompleto.pendencias[0] ?? 'Há peças confirmadas do outro destino'} — pede a sua autorização antes de apagar.`
+                    : !planoDoEsgotoCompleto || planoDoEsgotoCompleto.comandos.length === 0
                     ? (planoDoEsgotoCompleto?.pendencias[0] ?? 'Nada a lançar: a rede de esgoto já está completa')
                     : planoDeEsgoto.comandos.length === 0 && planoDeEsgoto.sugeridos > 0
                       ? `Apaga os ${planoDeEsgoto.sugeridos} trecho(s) ainda sugerido(s) e lança de novo com as hipóteses atuais; o que você confirmou fica. Ctrl+Z desfaz.`
-                      : 'Caixa, ramais, ligação à rede, coletor e ventilação, num passo só (Ctrl+Z desfaz tudo)'
+                      : planoDoEsgotoCompleto.destino === 'TRATAMENTO'
+                        ? 'Caixa, ramais, tanque séptico, filtro, sumidouro e ventilação, num passo só (Ctrl+Z desfaz tudo)'
+                        : 'Caixa, ramais, ligação à rede, coletor e ventilação, num passo só (Ctrl+Z desfaz tudo)'
                 }
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >

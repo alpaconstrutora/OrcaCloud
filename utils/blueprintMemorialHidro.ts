@@ -26,7 +26,7 @@ import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import { HIPOTESES_AGUA_PADRAO, origensDeAgua, type HipotesesDeAgua } from './blueprintAguaAutomatica';
 import { HIPOTESES_PRESSAO_PADRAO, pressoesDoModelo, type EstadoDaPressao, type HipotesesDePressao } from './blueprintPressaoDaRede';
-import { HIPOTESES_ESGOTO_PADRAO, caixasDeInspecao, esgotoTrechoATrecho, fontesDeEsgoto, type HipotesesDeEsgoto } from './blueprintEsgotoAutomatico';
+import { HIPOTESES_ESGOTO_PADRAO, caixasDeInspecao, destinoDoEsgoto, esgotoTrechoATrecho, fontesDeEsgoto, type HipotesesDeEsgoto } from './blueprintEsgotoAutomatico';
 import { colunasDoModelo, linhasDaLegendaDeColunas } from './blueprintEsquemaVertical';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
 import { ROTULO_DO_PAPEL } from './blueprintNbr8160';
@@ -423,7 +423,8 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
     }
     // E5.3: o coletor predial até a rede pública — sem rede, o tratamento individual (E7) toma o lugar.
     const col = planejarColetorPredial(model, hip.esgoto);
-    const semRedePublica = temTratamentoIndividual(model);
+    // 14/10/2026: o destino também vem da hipótese (tratamento ainda não lançado).
+    const semRedePublica = temTratamentoIndividual(model) || destinoDoEsgoto(hip.esgoto) === 'TRATAMENTO';
     if (!semRedePublica) B.push({ tipo: 'subsecao', texto: 'Coletor predial e ligação à rede pública' });
     if (semRedePublica) {
       // E7.2: sem rede pública, o tratamento individual no lugar do coletor.
@@ -588,7 +589,7 @@ export function memorialDescritivoHidro(model: BlueprintModel, hip: HipotesesHid
   if (temFria || temQuente) normas.push(['ABNT NBR 5626:2020', 'Sistemas prediais de água fria e água quente — projeto, execução, operação e manutenção']);
   if (temEsgoto) normas.push(['ABNT NBR 8160:1999', 'Sistemas prediais de esgoto sanitário — projeto e execução']);
   if (temPluvial) normas.push(['ABNT NBR 10844:1989', 'Instalações prediais de águas pluviais']);
-  const comTratamento = temEsgoto && temTratamentoIndividual(model);
+  const comTratamento = temEsgoto && (temTratamentoIndividual(model) || destinoDoEsgoto(hip.esgoto) === 'TRATAMENTO');
   if (comTratamento) {
     normas.push(['ABNT NBR 7229:1993', 'Projeto, construção e operação de sistemas de tanques sépticos']);
     normas.push(['ABNT NBR 13969:1997', 'Tanques sépticos — unidades de tratamento complementar e disposição final dos efluentes líquidos']);

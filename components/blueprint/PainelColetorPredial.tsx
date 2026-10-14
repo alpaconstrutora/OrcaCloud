@@ -19,12 +19,16 @@ interface Props {
   plano: PlanoDoColetor;
   /** A premissa de profundidade da rede — o que a cota estimada presume. */
   profundidadeDaRedeMm: number;
+  /** NBR 8160 — hipóteses do estudo desde 14/10/2026 (ausentes = 15 m / 25 m). */
+  distanciaAteALigacaoMm?: number;
+  distanciaEntreCaixasMm?: number;
   onConfirmarCota: () => void;
 }
 
 const n = (v: number, casas = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 
-export default function PainelColetorPredial({ plano, profundidadeDaRedeMm, onConfirmarCota }: Props) {
+export default function PainelColetorPredial({ plano, profundidadeDaRedeMm, distanciaAteALigacaoMm = 15000, distanciaEntreCaixasMm = 25000, onConfirmarCota }: Props) {
+  const m = (mm: number) => `${n(mm / 1000, 0)} m`;
   return (
     <div className="space-y-2" data-testid="coletor-predial">
       <p className="text-xs font-semibold text-slate-700">Coletor predial e ligação à rede pública</p>
@@ -49,7 +53,7 @@ export default function PainelColetorPredial({ plano, profundidadeDaRedeMm, onCo
             <dt>UHC que chega à caixa</dt>
             <dd className="tabular-nums">{plano.uhc}</dd>
             <dt>Caixas intermediárias</dt>
-            <dd className="tabular-nums">{plano.caixasIntermediarias === 0 ? 'nenhuma (até 15 m)' : `${plano.caixasIntermediarias} (15 m da ligação, 25 m entre caixas)`}</dd>
+            <dd className="tabular-nums">{plano.caixasIntermediarias === 0 ? `nenhuma (até ${m(distanciaAteALigacaoMm)})` : `${plano.caixasIntermediarias} (${m(distanciaAteALigacaoMm)} da ligação, ${m(distanciaEntreCaixasMm)} entre caixas)`}</dd>
           </dl>
           {plano.avisos.map((a) => (
             <p key={a} className="text-xs text-amber-700">

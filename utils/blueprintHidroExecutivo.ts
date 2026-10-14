@@ -23,7 +23,7 @@ import { KERNEL_VERSION, sha256, snapshotHash, stableStringify } from './bluepri
 import type { ResponsavelTecnico } from './blueprintTopografiaExecutivo';
 import { planejarAguaDoModelo } from './blueprintAguaAutomatica';
 import { pressoesDoModelo } from './blueprintPressaoDaRede';
-import { esgotoTrechoATrecho, planejarEsgoto, trechosDeEsgotoSemDestino } from './blueprintEsgotoAutomatico';
+import { destinoDoEsgoto, esgotoTrechoATrecho, planejarEsgoto, trechosDeEsgotoSemDestino } from './blueprintEsgotoAutomatico';
 import { ROTULO_DO_COLETOR, planejarColetorPredial } from './blueprintColetorPredial';
 import { verificarVentilacao } from './blueprintVentilacao';
 import { marcasDeVerificacao } from './blueprintVerificacaoRede';
@@ -56,6 +56,9 @@ export interface ResultadoHidroExecutivo {
 /** Velocidade máxima da NBR 5626 (a premissa de projeto costuma ser menor). */
 const VELOCIDADE_MAXIMA_DA_NORMA_MS = 3;
 const HIDRAULICAS = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'] as const;
+
+/** O destino do esgoto é o tratamento individual: pelo desenho (sumidouro sem ligação) OU pela hipótese (14/10/2026). */
+export const comTratamentoIndividual = (model: BlueprintModel, hip: HipotesesHidro) => temTratamentoIndividual(model) || destinoDoEsgoto(hip.esgoto) === 'TRATAMENTO';
 
 export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, responsavel: ResponsavelTecnico): ResultadoHidroExecutivo {
   const v: VerificacaoHidro[] = [];
@@ -219,7 +222,8 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
     const col = planejarColetorPredial(model, hip.esgoto);
     const coletorLancado = (model.trechos ?? []).some((t) => t.rotulo === ROTULO_DO_COLETOR);
     // E7: sem rede pública, o destino é o tratamento individual — o coletor até a rede não se aplica.
-    if (!temTratamentoIndividual(model)) v.push({
+    // 14/10/2026: o destino também vem da hipótese — tratamento ainda não lançado não cobra o coletor.
+    if (!comTratamentoIndividual(model, hip)) v.push({
       grupo: 'NBR8160',
       item: 'Coletor predial até a rede pública',
       norma: 'NBR 8160',
@@ -251,7 +255,7 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
   }
 
   // ── NBR 7229 / 13969 (E7.2): sem rede pública, o tratamento individual ──────
-  if (temEsgoto && temTratamentoIndividual(model)) {
+  if (temEsgoto && comTratamentoIndividual(model, hip)) {
     const d = dimensionarTratamento(model, hip.tratamento, hip.reservatorio);
     const unidades = verificarTratamento(model, d);
     v.push({ grupo: 'NBR7229', item: 'População de projeto', norma: 'NBR 7229', exigido: 'N > 0', obtido: `${d.pessoas} pessoa(s)`, atende: d.pessoas > 0 });

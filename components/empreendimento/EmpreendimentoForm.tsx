@@ -5,6 +5,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import CityStateSelect from '../CityStateSelect';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService, EmpreendimentoTypeRecord } from '../../services/empreendimentoTypeService';
+import { tiposUnicosPorSlug } from '../../utils/empreendimentoTipos';
 import { imovibService } from '../../services/imovibService';
 import { organizationService } from '../../services/organizationService';
 import { companyService } from '../../services/companyService';
@@ -179,7 +180,11 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
   }, [editing]);
 
   React.useEffect(() => {
-    empreendimentoTypeService.list(orgId || undefined).then(setEmpreendimentoTypes).catch(() => setEmpreendimentoTypes([]));
+    let vigente = true;
+    empreendimentoTypeService.list(orgId || undefined)
+      .then(tipos => { if (vigente) setEmpreendimentoTypes(tiposUnicosPorSlug(tipos, orgId)); })
+      .catch(() => { if (vigente) setEmpreendimentoTypes([]); });
+    return () => { vigente = false; };
   }, [orgId]);
 
   // Obras da org escolhida. Sem org (ainda escolhendo), não há o que oferecer.

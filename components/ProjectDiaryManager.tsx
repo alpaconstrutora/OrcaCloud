@@ -48,6 +48,8 @@ import DiaryMobileApp from './DiaryMobileApp';
 import { isUnplannedActivity, setUnplanned, countUnplanned } from '../utils/diaryActivities';
 import { vincularAtividade, temAtividadeVinculada } from '../utils/diaryPlanningLink';
 import { useDiaryLinkedPlanning } from '../hooks/useDiaryLinkedPlanning';
+import { useDiaryAprovacao } from '../hooks/useDiaryAprovacao';
+import { podeEscolherStatus, registroTravado } from '../utils/diaryAprovacao';
 
 
 type DiaryEditorTab = 'clima' | 'atividades' | 'comentarios' | 'arquivos';
@@ -248,6 +250,15 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         };
     }, [settings.schedule]);
 
+    // Aprovar/recusar: admin/owner ou a chave canApproveDiary (o banco confere — fn_pode_aprovar_diario).
+    const aprovacao = useDiaryAprovacao(settings.organizationId || organizationId || null);
+    const statusNoBanco = (id: string | null) => {
+        if (!id) return null;
+        const e = (settings.diaryEntries || []).find(x => x.id === id);
+        return e ? (e.status || 'Rascunho') : null;
+    };
+    const travaEdicao = registroTravado(statusNoBanco(editingId), aprovacao);
+
     // Cronograma do Planejamento ligado ao diário — mesma peça do app mobile.
     const {
         planejamentoId: autoLinkedProjectId,
@@ -295,7 +306,8 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
             ({ entries: gravadas, anterior } = await salvarRegistroDiario(settings.id, currentEntry));
         } catch (error) {
             console.error('Erro ao salvar registro do diário:', error);
-            notify('Falha ao salvar o registro. Tente novamente.');
+            const pg = error as { code?: string; message?: string };
+            notify(pg?.code === '42501' && pg.message ? pg.message : 'Falha ao salvar o registro. Tente novamente.');
             return;
         }
         onUpdateSettings({ ...settings, diaryEntries: gravadas });
@@ -376,7 +388,8 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
             notify('Registro excluído.');
         } catch (error) {
             console.error('Erro ao excluir registro do diário:', error);
-            notify('Falha ao excluir o registro. Tente novamente.');
+            const pg = error as { code?: string; message?: string };
+            notify(pg?.code === '42501' && pg.message ? pg.message : 'Falha ao excluir o registro. Tente novamente.');
         }
     };
 
@@ -697,7 +710,9 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             <button
                                 type="button"
                                 onClick={handleSave}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                                disabled={!travaEdicao.pode}
+                                title={travaEdicao.motivo}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <Save className="w-[15px] h-[15px]" />
                                 Salvar registro
@@ -1166,18 +1181,25 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             <div>
                                 <h3 className="text-sm font-semibold text-gray-900">Status do relatório</h3>
                                 <p className="text-xs text-gray-400 mt-0.5">Situação deste registro do diário.</p>
+                                {(!travaEdicao.pode || !aprovacao.pode) && (
+                                    <p className="text-xs text-amber-700 mt-1.5">{travaEdicao.motivo || aprovacao.motivo}</p>
+                                )}
                             </div>
                             <div className="space-y-2" role="radiogroup" aria-label="Status do relatório">
                                 {REPORT_STATUS_OPTIONS.map(opt => {
                                     const ativo = (formData.status || 'Rascunho') === opt.val;
+                                    const escolha = podeEscolherStatus(opt.val, statusNoBanco(editingId), aprovacao);
+                                    const livre = escolha.pode && travaEdicao.pode;
                                     return (
                                         <button
                                             key={opt.val}
                                             type="button"
                                             role="radio"
                                             aria-checked={ativo}
+                                            disabled={!livre}
+                                            title={!livre ? (travaEdicao.motivo || escolha.motivo) : undefined}
                                             onClick={() => setFormData({ ...formData, status: opt.val })}
-                                            className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[6px] border text-left transition-all ${ativo ? opt.active : 'bg-white text-gray-700 border-gray-100 hover:bg-gray-50'}`}
+                                            className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-[6px] border text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed ${ativo ? opt.active : 'bg-white text-gray-700 border-gray-100 hover:bg-gray-50'}`}
                                         >
                                             <span className="min-w-0">
                                                 <span className="block text-sm font-medium">{opt.val}</span>
@@ -1286,7 +1308,10 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     render: e => (
                         <div className="flex items-center justify-end gap-1" onClick={ev => ev.stopPropagation()}>
                             <ActionIconButton kind="edit" onClick={() => handleEdit(e)} />
-                            <ActionIconButton kind="delete" onClick={() => handleDelete(e.id)} />
+                            {/* Desligado não mostra `title` (pointer-events-none): o motivo vai no span. */}
+                            <span title={registroTravado(e.status || 'Rascunho', aprovacao).motivo}>
+                                <ActionIconButton kind="delete" onClick={() => handleDelete(e.id)} disabled={!registroTravado(e.status || 'Rascunho', aprovacao).pode} />
+                            </span>
                         </div>
                     ),
                 }}

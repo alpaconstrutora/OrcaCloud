@@ -277,6 +277,8 @@ export interface UserPermissions {
     canEditPlanning: boolean;
     canViewDiary: boolean;
     canEditDiary: boolean;
+    /** Aprovar/recusar registro do diário e alterar/excluir o já aprovado — conferida no banco (fn_pode_aprovar_diario). */
+    canApproveDiary?: boolean;
     canViewReports: boolean;
     canEditReports: boolean;
     canViewTechnicalData: boolean;

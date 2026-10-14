@@ -15,6 +15,8 @@ import { sugestoesDosRecursos, comColaboradoresDoRh, nomeEstaNaLista, aplicarNom
 import { laborService } from '../services/laborService';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
+import { useDiaryAprovacao } from '../hooks/useDiaryAprovacao';
+import { podeEscolherStatus, registroTravado, AprovacaoDiario } from '../utils/diaryAprovacao';
 import { salvarRascunho, lerRascunho, apagarRascunho, listarRascunhos, rascunhoDifere, quandoFoiGuardado, RascunhoDiario } from '../utils/diaryDraft';
 import { isUnplannedActivity, setUnplanned } from '../utils/diaryActivities';
 import { vincularAtividade, temAtividadeVinculada, ItemVinculavel } from '../utils/diaryPlanningLink';
@@ -429,7 +431,12 @@ const EntrySheet: React.FC<{
     erroSalvar: string | null;
     /** Nomes do RH e dos recursos da organização — mesma lista do desktop. */
     sugestoesEfetivo: SugestaoEfetivo[];
-}> = ({ previa, entry, isNew, saving, upload, itens, onClose, onSave, onDelete, erroSalvar, sugestoesEfetivo }) => {
+    /** Pode aprovar/recusar neste diário? (o banco decide; aqui o botão diz por quê) */
+    aprovacao: AprovacaoDiario;
+}> = ({ previa, entry, isNew, saving, upload, itens, onClose, onSave, onDelete, erroSalvar, sugestoesEfetivo, aprovacao }) => {
+    // Status como está NO BANCO (o rascunho do aparelho não muda isso): é o que a regra de aprovação lê.
+    const statusNoBanco = isNew ? null : (entry.status || 'Rascunho');
+    const trava = registroTravado(statusNoBanco, aprovacao);
     const [form, setForm] = useState<DiaryEntry>(entry);
     // Rascunho no aparelho (sinal caiu / aba descarregada ao abrir a câmera). Registro novo usa a chave "novo".
     const chaveId = isNew ? null : entry.id;
@@ -582,8 +589,9 @@ const EntrySheet: React.FC<{
                 {!isNew && (
                     <button
                         onClick={() => setConfirmDelete(true)}
-                        className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center text-red-500"
-                        title="Excluir registro"
+                        disabled={!trava.pode}
+                        className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center text-red-500 disabled:opacity-40"
+                        title={trava.pode ? 'Excluir registro' : trava.motivo}
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
@@ -591,6 +599,12 @@ const EntrySheet: React.FC<{
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                {!trava.pode && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs font-bold text-emerald-700">{trava.motivo}</p>
+                    </div>
+                )}
                 {pendente && (
                     <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 space-y-2.5">
                         <div className="flex items-start gap-2">
@@ -625,18 +639,27 @@ const EntrySheet: React.FC<{
                     </Field>
                     <Field label="Situação">
                         <div className="flex flex-wrap gap-1.5">
-                            {STATUSES.map(s => (
+                            {STATUSES.map(s => {
+                                const escolha = podeEscolherStatus(s, statusNoBanco, aprovacao);
+                                const livre = escolha.pode && trava.pode;
+                                return (
                                 <button
                                     key={s}
                                     onClick={() => set('status', s)}
-                                    className={`h-9 px-3 rounded-xl text-xs font-bold transition-all ${(form.status || 'Rascunho') === s
+                                    disabled={!livre}
+                                    title={!livre ? (trava.motivo || escolha.motivo) : undefined}
+                                    className={`h-9 px-3 rounded-xl text-xs font-bold transition-all disabled:opacity-40 ${(form.status || 'Rascunho') === s
                                         ? 'bg-blue-600 text-white'
                                         : 'bg-slate-50 text-slate-500 border border-slate-200'}`}
                                 >
                                     {s}
                                 </button>
-                            ))}
+                                );
+                            })}
                         </div>
+                        {!aprovacao.pode && trava.pode && (
+                            <p className="text-[11px] font-medium text-slate-400 mt-1.5">{aprovacao.motivo}</p>
+                        )}
                     </Field>
                     <Field label="Temperatura" hint="Ex.: 28°/18°">
                         <input
@@ -950,12 +973,12 @@ const EntrySheet: React.FC<{
                 </button>
                 <button
                     onClick={submit}
-                    disabled={saving || !!enviando}
-                    title={enviando ? 'Aguarde as fotos terminarem de subir' : undefined}
+                    disabled={saving || !!enviando || !trava.pode}
+                    title={!trava.pode ? trava.motivo : enviando ? 'Aguarde as fotos terminarem de subir' : undefined}
                     className="flex-1 h-12 rounded-xl bg-blue-600 text-white text-sm font-black flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-60"
                 >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    {saving ? 'Salvando…' : enviando ? 'Aguardando fotos…' : 'Salvar registro'}
+                    {saving ? 'Salvando…' : enviando ? 'Aguardando fotos…' : !trava.pode ? 'Registro aprovado' : 'Salvar registro'}
                 </button>
             </div>
 
@@ -1005,6 +1028,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     const [isNew, setIsNew] = useState(false);
     const [toast, setToast] = useState<string | null>(null);
     const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+    const aprovacao = useDiaryAprovacao(project?.organization_id ?? project?.settings?.organizationId ?? null);
 
     // Efetivo: recursos das organizações + colaboradores ATIVOS do RH da org do topo (REGRA #5).
     const organizations = useStore(st => st.organizations);
@@ -1113,7 +1137,11 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
         } catch (err) {
             console.error('Erro ao salvar registro do diário:', err);
             // A folha continua aberta e o rascunho segue guardado no aparelho.
-            setErroSalvar(typeof navigator !== 'undefined' && navigator.onLine === false
+            const pg = err as { code?: string; message?: string };
+            setErroSalvar(pg?.code === '42501' && pg.message
+                // Recusa do banco (permissão de aprovação): a frase do banco diz o motivo e onde pedir.
+                ? pg.message
+                : typeof navigator !== 'undefined' && navigator.onLine === false
                 ? 'Sem conexão. O registro ficou guardado neste aparelho — salve de novo quando o sinal voltar.'
                 : 'Falha ao salvar. O registro ficou guardado neste aparelho — tente de novo.');
         } finally {
@@ -1306,6 +1334,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
                     onDelete={handleDeleteEntry}
                     erroSalvar={erroSalvar}
                     sugestoesEfetivo={sugestoesEfetivo}
+                    aprovacao={aprovacao}
                 />
             )}
 

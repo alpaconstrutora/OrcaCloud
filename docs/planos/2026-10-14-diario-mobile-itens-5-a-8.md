@@ -25,7 +25,7 @@ Os quatro itens, como estavam na avaliação:
 - **8.** A data de "hoje" é fixada quando o app carrega (`TODAY_ISO`). Com o app
   instalado aberto desde ontem, o registro novo nasce com a data de ontem.
 
-## Itens — 3 de 4 concluídos
+## Itens — 4 de 4 concluídos em 14/10/2026
 
 ### 8. ✅ Data de hoje calculada na hora, no dia LOCAL
 - mobile: `emptyEntry()` usa `hojeLocal()` na hora de abrir (saiu o `TODAY_ISO`
@@ -72,6 +72,31 @@ grava sem esperar o debounce; sem sinal mostra o aviso à vista (elementFromPoin
 função e não traz o desligado; "maria   souza" vira "Maria Souza" com "Servente";
 o fora-da-lista avisa e grava como digitado.
 
+### 7. ✅ Aprovar/recusar exige permissão — conferida no BANCO
+- `aplicar_20271014600000_diario_aprovacao_permissao.sql`:
+  `fn_pode_aprovar_diario(org)` (DEFINER, REVOKE PUBLIC/anon) — admin/owner da
+  org do diário, ou membro com `canApproveDiary = true`; sem a chave, member e
+  viewer NÃO aprovam. `diary_upsert_entry` passa a recusar (42501) quando o
+  registro vira Aprovado/Recusado ou já estava Aprovado; `diary_delete_entry`,
+  ao excluir Aprovado. Recusado segue editável (corrigir e reenviar). Corpo
+  copiado do ARQUIVO da 20271014500000.
+- chave nova `canApproveDiary` (`types/users.ts`, padrão false; admin = true)
+  e linha "Diário de Obra — aprovar e recusar registros" em Permissões
+  Detalhadas › Operação de Obra.
+- `utils/diaryAprovacao.ts` (a mesma regra, pura) + `hooks/useDiaryAprovacao.ts`
+  (org DO DIÁRIO, não o topo). Mobile e desktop: Aprovado/Recusado desligados com
+  o motivo; registro aprovado trava salvar/excluir/status com aviso; recusa do
+  banco mostra a frase do banco (não "sem conexão").
+- Em 14/10: nenhum registro Aprovado/Recusado em produção (3 Rascunho), nenhum
+  membro com a chave; 9 member, 2 admin, 3 owner.
+
+**Ordem de aplicação:** front primeiro (só desliga botão), depois a migration
+(o banco passa a recusar). Com a ordem inversa, o front antigo deixaria member
+tentar aprovar e receber erro genérico.
+
+**Pronto quando:** roteiro SQL com ROLLBACK como owner e member reais (RLS
+valendo) + harness: member não aprova, owner aprova, recusa do banco aparece.
+
 ## Como foi verificado
 
 ### Itens 5 e 8 (14/10/2026)
@@ -97,3 +122,22 @@ o fora-da-lista avisa e grava como digitado.
   da lista; RPC recebeu `{category:'Maria Souza', observations:'Servente'}` e o
   avulso como digitado; sem scroll horizontal. Primeira rodada caiu no MEU
   seletor ("Servente" também está na `<option>`), não no app.
+
+### Item 7 (14/10/2026)
+- Banco, migration INTEIRA + roteiro em `BEGIN … ROLLBACK`, como `authenticated`
+  com JWT de um owner e de um member reais da mesma org: **12/12** — member sem
+  chave: `fn` = false, edita e envia para Em Análise, corrige Recusado mantendo o
+  status, NÃO aprova, NÃO cria já Recusado; owner aprova; member NÃO altera, NÃO
+  desaprova e NÃO exclui o aprovado, exclui o não aprovado; member COM a chave
+  (concedida na transação) recusa o aprovado; ACL das 3 funções sem anon/PUBLIC.
+  Roteiro do item 1 repetido com as funções novas: 7/7.
+- `diaryAprovacao.test.ts` (novo) + `segurancaMigrations` + `orgContextGuard`:
+  25/25; `tsc` 0 erros; `check-ui-standard.sh` 0 violação nos 3 componentes;
+  `check-org-selector-guard.sh` ok.
+- Harness + Playwright a 390px, papel pela URL, servidor novo: **16/16** —
+  member: Aprovado/Recusado desligados com `title` e aviso à vista, Em Análise
+  livre; no aprovado, trava à vista, "Registro aprovado" no lugar de Salvar,
+  excluir e status desligados; owner aprova e edita o aprovado; recusa 42501 do
+  banco aparece na folha com a frase do banco. Primeira rodada caiu no MEU
+  seletor (o `title` do excluir também começa com "Registro aprovado").
+- **Desktop não exercitado no navegador**: mesma regra pura, conferida por tipos.

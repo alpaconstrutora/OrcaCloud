@@ -111,6 +111,8 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         canViewCompositions: true, canEditCompositions: false,
         canViewPlanning: true, canEditPlanning: false,
         canViewDiary: true, canEditDiary: false,
+        // Aprovar é de admin/owner; member só com a chave (o banco confere: fn_pode_aprovar_diario).
+        canApproveDiary: false,
         canViewReports: true, canEditReports: false,
         canViewTechnicalData: true, canEditTechnicalData: false,
         canViewOrders: true, canEditOrders: false,
@@ -352,6 +354,7 @@ const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?:
     // --- Operação de Obra ---
     { group: 'Operação de Obra', title: 'Controle Operacional', view: 'canViewOperational', edit: 'canEditOperational' },
     { group: 'Operação de Obra', title: 'Diário de Obra', view: 'canViewDiary', edit: 'canEditDiary' },
+    { group: 'Operação de Obra', title: 'Diário de Obra — aprovar e recusar registros', view: 'canApproveDiary' },
     // "Qualidade e Entrega" foi consolidado em Pós-Obra & Garantia em 2026-08-26
     // (docs/planos/2026-08-26-consolidar-qualidade-em-garantia.md). Eram DUAS
     // linhas aqui, mas o roteador só consulta `canViewQuality`

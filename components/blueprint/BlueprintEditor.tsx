@@ -1465,6 +1465,13 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'pluvial',
   'memoriaisHidro',
   'matriz',
+  // Mecânica (13/10/2026): os seis painéis da climatização ficaram encostados nas bordas por não estarem aqui.
+  'climatizacao',
+  'cargaTermica',
+  'selecaoSplit',
+  'linhaFrigorigena',
+  'vrf',
+  'redeDeAr',
   'memoriaisClimatizacao',
   'geradorClimatizacao',
 ]);

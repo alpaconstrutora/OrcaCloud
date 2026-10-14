@@ -5,6 +5,7 @@ import { brokerService } from '../services/brokerService';
 import { brokerPortalService, BrokerPortalToken } from '../services/brokerPortalService';
 import BrokerModal from './BrokerModal';
 import { useOrgContext } from '../hooks/useOrgContext';
+import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { KpiCard } from './ui/KpiCard';
@@ -20,6 +21,7 @@ const BROKER_COLUMNS: ColumnConfig[] = [
     { key: 'contact', label: 'Contato', sortable: false },
     { key: 'creci', label: 'CRECI', sortable: true },
     { key: 'agency', label: 'Imobiliária', sortable: true },
+    { key: 'organization', label: 'Organização', sortable: true },
 ];
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -31,6 +33,7 @@ const BROKER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
     contact: { label: 'Contato', sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
     creci: { label: 'CRECI', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
     agency: { label: 'Imobiliária', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
+    organization: { label: 'Organização', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -40,6 +43,7 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'email', label: 'E-mail', type: 'text' },
     { key: 'creci', label: 'CRECI', type: 'text' },
     { key: 'agency', label: 'Imobiliária', type: 'text' },
+    { key: 'organization', label: 'Organização', type: 'text' },
     { key: 'status', label: 'Status', type: 'select', options: [
         { value: 'active', label: 'Ativo' }, { value: 'inactive', label: 'Inativo' },
     ] },
@@ -55,7 +59,7 @@ const StatusLabel: React.FC<{ active: boolean }> = ({ active }) => (
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
-function renderBrokerCell(key: string, broker: BrokerProfile): React.ReactNode {
+function renderBrokerCell(key: string, broker: BrokerProfile, orgNameById: Map<string, string>): React.ReactNode {
     switch (key) {
         case 'name':
             return (
@@ -89,18 +93,21 @@ function renderBrokerCell(key: string, broker: BrokerProfile): React.ReactNode {
             return <span className="text-sm font-normal text-gray-600">{broker.creci || '-'}</span>;
         case 'agency':
             return <span className="text-sm font-normal text-gray-700">{broker.agency_name || '-'}</span>;
+        case 'organization':
+            return <span className="text-sm font-normal text-gray-700">{orgNameById.get(broker.organization_id) || '-'}</span>;
         default:
             return null;
     }
 }
 
-function getAdvancedFilterValue(b: BrokerProfile, key: string): unknown {
+function getAdvancedFilterValue(b: BrokerProfile, key: string, orgNameById: Map<string, string>): unknown {
     switch (key) {
         case 'name': return b.name ?? '';
         case 'email': return b.email ?? '';
         case 'creci': return b.creci ?? '';
         case 'agency': return b.agency_name ?? '';
         case 'status': return b.is_active ? 'active' : 'inactive';
+        case 'organization': return orgNameById.get(b.organization_id) ?? '';
         default: return null;
     }
 }
@@ -115,6 +122,11 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
     // `organizations[0]` — ver hooks/useOrgContext.tsx.
     const { orgId: contextOrgId } = useOrgContext();
     const orgId = organizationId || contextOrgId || undefined;
+    const organizations = useStore(s => s.organizations);
+    const orgNameById = React.useMemo(
+        () => new Map(organizations.map(o => [o.id, o.name])),
+        [organizations]
+    );
 
     const [brokers, setBrokers] = React.useState<BrokerProfile[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -252,7 +264,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
             )
             .filter(b => statusFilter === 'all' || (statusFilter === 'active' ? b.is_active : !b.is_active));
 
-        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, (b, key) => getAdvancedFilterValue(b, key, orgNameById));
 
         return result.sort((a, b) => {
                 if (tableColumns.sortColumn) {
@@ -262,11 +274,12 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                     if (col === 'status') return (a.is_active === b.is_active ? 0 : a.is_active ? -1 : 1) * dir;
                     if (col === 'creci') return (a.creci || '').localeCompare(b.creci || '') * dir;
                     if (col === 'agency') return (a.agency_name || '').localeCompare(b.agency_name || '') * dir;
+                    if (col === 'organization') return (orgNameById.get(a.organization_id) || '').localeCompare(orgNameById.get(b.organization_id) || '') * dir;
                 }
                 // Sem coluna clicada, ordenação default é nome A-Z (guide §6.4).
                 return a.name.localeCompare(b.name);
             });
-    }, [brokers, searchTerm, statusFilter, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [brokers, searchTerm, statusFilter, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection, orgNameById]);
 
     const kpis = React.useMemo(() => ({
         total: brokers.length,
@@ -401,7 +414,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                 <tr key={broker.id} className="hover:bg-blue-50/50 transition-colors group">
                                     {tableColumns.orderedVisibleColumns.map(key => (
                                         <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            {renderBrokerCell(key, broker)}
+                                            {renderBrokerCell(key, broker, orgNameById)}
                                         </td>
                                     ))}
                                     <td className="px-6 py-2.5 text-right">

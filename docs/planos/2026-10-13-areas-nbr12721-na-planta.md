@@ -262,7 +262,12 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
 
 - [x] Análise e decisões (13/10/2026)
 - [x] Fase 0: testemunha (1 de 1) — `scripts/nbr12721-testemunha.mjs` e 16 casos em `__tests__/fixtures/nbr12721/` (9 transcritos das fixtures `supabase/seed/area_engine_case*`; o caso 7 tem os mesmos dados do 1 e o 8 virou caso de cálculo; 7 novos com ≥ 3 unidades, acessório fora do coeficiente, escopos mistos, rateio por percentual, cinco pavimentos com duplex, unidade inativa e não autônoma, dois erros ao mesmo tempo e unidade sem área). Banco antes e depois: `{"auditoria":8,"espacos":85,"projetos":2,"quadro_ii":76,"versoes":3}`, idêntico.
-- [ ] Fase 1: motor puro (0 de 2)
+- [x] Fase 0 publicada: `0ad5c162`, check-run `ci` = success
+- [x] Fase 1: motor puro (2 de 2)
+  - `utils/nbr12721/tipos.ts` e `utils/nbr12721/quadros.ts`, com `calcularNbr12721`, `validarNbr12721` e `milesimosPeloMaiorResto`.
+  - `__tests__/nbr12721Quadros.test.ts`: 34 testes. Os 16 casos batem campo a campo com a testemunha (tolerância 1e-9) nos Quadros I, II e IV-B e nas frações. Os milésimos fecham exatamente 1000. Os avisos FECH_001/002/003 aparecem nos casos 12, 14 e 15 e somem nos que fecham. O motor é puro, e referência inexistente gera erro.
+  - Mutação provada: trocar q22 por q21 no q30 derruba 6 testes; zerar o q25 derruba 3.
+  - Suíte completa: 9.103 testes, 0 falhas. A conta fecha com o `BlueprintEditor.test.tsx` rodado à parte (251 de 251) depois do "still running" do Node 24.
 - [ ] Fase 2: kernel (0 de 3)
 - [ ] Fase 3: unidades do prédio (0 de 1)
 - [ ] Fase 4: adaptador e hipóteses (0 de 2)

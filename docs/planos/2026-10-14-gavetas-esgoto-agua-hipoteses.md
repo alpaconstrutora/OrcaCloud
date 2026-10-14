@@ -119,6 +119,13 @@ passam ao `CampoNumericoDeHipotese`; tabela no padrão §6.9/§6.11.
     are still running" — sintoma conhecido; por isso o editor foi rodado sozinho.)
   - Bundle da `planta-api`: nenhum arquivo de `utils/` tocado → não se aplica.
 
+## Publicação
+
+14/10/2026: `f57e2a8f` empurrado para `main` (rebaseado sobre `5b7ee9d8`). Check-run `ci` = success.
+`conferir-producao.sh "Relançar sugeridos" "Rota máxima do ramal de esgoto"`: os dois textos no bundle
+servido; domínio = `origin/main` (`ca5397a`, que já contém o commit). Conferência VISUAL na tela ainda
+não feita (só testes de componente com jsdom).
+
 ## Verificação
 
 Abrir Incorporação › Planta Inteligente › aba Hidráulica › Esgoto automático num estudo com

@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const h = vi.hoisted(() => ({
     row: null as Record<string, unknown> | null,
     lista: [] as Record<string, unknown>[],
-    updates: [] as Array<{ patch: Record<string, unknown>; id: unknown }>,
+    updates: [] as Array<{ patch: Record<string, unknown>; id: unknown; filtros: string[] }>,
     updateRows: [{ id: 'b1' }] as Array<{ id: string }>,
     temMascara: true,
     gerar: vi.fn(),
@@ -35,11 +35,11 @@ vi.mock('../lib/supabase', () => {
             return q;
         },
         update: (patch: Record<string, unknown>) => {
-            const reg = { patch, id: undefined as unknown };
+            const reg = { patch, id: undefined as unknown, filtros: [] as string[] };
             h.updates.push(reg);
             const q: any = {
-                eq: (_c: string, v: unknown) => { reg.id = v; return q; },
-                is: () => q,
+                eq: (c: string, v: unknown) => { if (c === 'id') reg.id = v; else reg.filtros.push(`eq:${c}=${String(v)}`); return q; },
+                is: (c: string) => { reg.filtros.push(`is:${c}`); return q; },
                 select: () => Promise.resolve({ data: h.updateRows, error: null }),
             };
             return q;
@@ -55,7 +55,7 @@ vi.mock('../services/documentNumbering', () => ({
 
 import {
     montarNomeDocumento, extensaoDoNome, renomearDocumentoDoBoleto,
-    renomearBoletosExistentes, contarBoletosParaRenomear,
+    renomearBoletosExistentes, contarBoletosParaRenomear, renomearDocumentoDeNovo,
 } from '../services/boletoNomeDocumentoService';
 
 const boleto = (extra: Record<string, unknown> = {}) => ({
@@ -149,5 +149,58 @@ describe('botão "renomear existentes"', () => {
     it('contarBoletosParaRenomear devolve a contagem do banco', async () => {
         h.lista = [boleto({ id: 'b1' }), boleto({ id: 'b2' })];
         expect(await contarBoletosParaRenomear('org1')).toBe(2);
+    });
+});
+
+describe('renomearDocumentoDeNovo (ação manual do formulário)', () => {
+    const jaRenomeado = () => boleto({ documento_nome: 'BOL-202-0001.pdf', documento_nome_original: 'download (98).pdf' });
+
+    it('renomeia mesmo já renomeado e MANTÉM o nome de upload original', async () => {
+        h.row = jaRenomeado();
+        h.gerar.mockResolvedValue('BOL-202-0002');
+        const r = await renomearDocumentoDeNovo('b1');
+        expect(r.ok).toBe(true);
+        expect(h.updates).toHaveLength(1);
+        expect(h.updates[0].patch).toEqual({
+            documento_nome: 'BOL-202-0002.pdf',
+            documento_nome_original: 'download (98).pdf',
+        });
+    });
+    it('protege contra edição concorrente: o UPDATE compara o nome atual, não exige original nulo', async () => {
+        h.row = jaRenomeado();
+        await renomearDocumentoDeNovo('b1');
+        expect(h.updates[0].filtros).toContain('eq:documento_nome=BOL-202-0001.pdf');
+        expect(h.updates[0].filtros).not.toContain('is:documento_nome_original');
+    });
+    it('boleto ainda não renomeado: guarda o nome de upload como original', async () => {
+        const r = await renomearDocumentoDeNovo('b1');
+        expect(r.ok).toBe(true);
+        expect(h.updates[0].patch.documento_nome_original).toBe('download (98).pdf');
+    });
+    it('explica o motivo: sem fornecedor', async () => {
+        h.row = boleto({ supplier_id: null });
+        expect(await renomearDocumentoDeNovo('b1')).toEqual({ ok: false, motivo: 'sem_fornecedor' });
+        expect(h.gerar).not.toHaveBeenCalled();
+    });
+    it('explica o motivo: sem máscara salva', async () => {
+        h.temMascara = false;
+        expect(await renomearDocumentoDeNovo('b1')).toEqual({ ok: false, motivo: 'sem_mascara' });
+        expect(h.gerar).not.toHaveBeenCalled();
+    });
+    it('explica o motivo: boleto inexistente', async () => {
+        h.row = null;
+        expect(await renomearDocumentoDeNovo('b1')).toEqual({ ok: false, motivo: 'nao_encontrado' });
+    });
+    it('perdeu a corrida (nome mudou no meio) → sem_mudanca', async () => {
+        h.row = jaRenomeado();
+        h.updateRows = [];
+        expect(await renomearDocumentoDeNovo('b1')).toEqual({ ok: false, motivo: 'sem_mudanca' });
+    });
+    it('falha do motor: devolve erro e NÃO lança', async () => {
+        h.row = jaRenomeado();
+        h.gerar.mockRejectedValue(new Error('rpc caiu'));
+        const r = await renomearDocumentoDeNovo('b1');
+        expect(r).toMatchObject({ ok: false, motivo: 'erro' });
+        expect(h.updates).toHaveLength(0);
     });
 });

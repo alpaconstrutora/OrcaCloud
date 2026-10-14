@@ -47,8 +47,15 @@ interface LinhaBoleto {
 
 const COLUNAS = 'id, organization_id, documento_nome, documento_nome_original, supplier_id, project_id, cost_center_id';
 
-async function renomearLinha(b: LinhaBoleto, jaTemMascara?: boolean): Promise<boolean> {
-    if (b.documento_nome_original != null || !b.supplier_id) return false;
+/**
+ * `forcar` = renomear DE NOVO um boleto que já foi renomeado (ação manual do
+ * formulário). Gasta outro número da sequência, mantém o `documento_nome_original`
+ * de upload (nunca o sobrescreve) e protege contra edição concorrente comparando o
+ * nome atual no UPDATE.
+ */
+async function renomearLinha(b: LinhaBoleto, jaTemMascara?: boolean, forcar = false): Promise<boolean> {
+    if (!b.supplier_id) return false;
+    if (!forcar && b.documento_nome_original != null) return false;
 
     const temMascara = jaTemMascara ?? await hasSavedNumberingConfig(b.organization_id, 'BOLETO');
     if (!temMascara) return false;
@@ -62,12 +69,11 @@ async function renomearLinha(b: LinhaBoleto, jaTemMascara?: boolean): Promise<bo
     const novo = montarNomeDocumento(numero, nomeAtual);
     if (!novo || novo === nomeAtual) return false;
 
-    const { data, error } = await supabase
-        .from(TABLE)
-        .update({ documento_nome: novo, documento_nome_original: nomeAtual })
-        .eq('id', b.id)
-        .is('documento_nome_original', null)
-        .select('id');
+    // A 1ª renomeação guarda o nome de upload; as seguintes mantêm esse mesmo original.
+    const patch = { documento_nome: novo, documento_nome_original: b.documento_nome_original ?? nomeAtual };
+    let q = supabase.from(TABLE).update(patch).eq('id', b.id);
+    q = forcar ? q.eq('documento_nome', nomeAtual) : q.is('documento_nome_original', null);
+    const { data, error } = await q.select('id');
     if (error) throw error;
     return (data?.length ?? 0) > 0;
 }
@@ -85,6 +91,36 @@ export async function renomearDocumentoDoBoleto(boletoId: string): Promise<boole
     } catch (e) {
         console.warn('[boletoNomeDocumento] não renomeou o documento', boletoId, e);
         return false;
+    }
+}
+
+export type ResultadoRenomearNovamente =
+    | { ok: true; nome: string }
+    | { ok: false; motivo: 'nao_encontrado' | 'sem_fornecedor' | 'sem_mascara' | 'sem_mudanca' | 'erro'; detalhe?: string };
+
+/**
+ * Ação manual "Renomear pela Nomenclatura" do formulário do boleto: renomeia de novo,
+ * mesmo que já tenha sido renomeado (ex.: a máscara mudou). Usa o fornecedor/obra JÁ
+ * SALVOS do boleto. Ao contrário do automático, devolve o motivo de não ter renomeado
+ * para a tela explicar; ainda assim nunca lança.
+ */
+export async function renomearDocumentoDeNovo(boletoId: string): Promise<ResultadoRenomearNovamente> {
+    try {
+        const { data, error } = await supabase.from(TABLE).select(COLUNAS).eq('id', boletoId).maybeSingle();
+        if (error) return { ok: false, motivo: 'erro', detalhe: error.message };
+        if (!data) return { ok: false, motivo: 'nao_encontrado' };
+        const b = data as LinhaBoleto;
+        if (!b.supplier_id) return { ok: false, motivo: 'sem_fornecedor' };
+        if (!(await hasSavedNumberingConfig(b.organization_id, 'BOLETO'))) return { ok: false, motivo: 'sem_mascara' };
+
+        const renomeou = await renomearLinha(b, true, true);
+        if (!renomeou) return { ok: false, motivo: 'sem_mudanca' };
+
+        const { data: depois } = await supabase.from(TABLE).select('documento_nome').eq('id', boletoId).maybeSingle();
+        return { ok: true, nome: (depois as { documento_nome?: string } | null)?.documento_nome ?? '' };
+    } catch (e) {
+        console.warn('[boletoNomeDocumento] não renomeou de novo', boletoId, e);
+        return { ok: false, motivo: 'erro', detalhe: e instanceof Error ? e.message : String(e) };
     }
 }
 

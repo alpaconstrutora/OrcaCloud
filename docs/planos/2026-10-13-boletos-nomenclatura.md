@@ -18,6 +18,10 @@
 4. (print da tela Nomenclatura, tabela Módulo · Prefixo · Livre…) 
    > veja print
 
+5. Pedido posterior (14/10/2026), depois de eu explicar que um boleto já renomeado não muda de novo:
+   > Se quiser renomear de novo na tela, posso criar uma ação "Renomear de novo" no formulário do boleto. Quer? → **sim**
+   (escopo da sessão: exclusivamente Financeiro › Boletos a Pagar)
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -51,6 +55,13 @@ Variável sem valor some do nome ("nunca bloqueia").
 5. **Botão** — "Renomear boletos existentes" em `NomenclaturaTable.tsx` (organização via
    `resolveWriteOrg('single')`, contagem em `useConfirm()`, progresso, resumo).
    *Pronto quando:* conta, confirma, renomeia e informa "N renomeados".
+
+6. **Renomear de novo (14/10/2026)** — botão "Renomear" no rodapé do preview do documento em
+   `BoletoFormModal.tsx` (confirma com `useConfirm`; usa fornecedor/obra já salvos; gasta um número) +
+   `renomearDocumentoDeNovo` em `services/boletoNomeDocumentoService.ts` (mantém o `documento_nome_original`
+   de upload; UPDATE compara o nome atual contra edição concorrente; devolve o motivo quando não renomeia).
+   *Pronto quando:* testes `renomearDocumentoDeNovo` passam e, na tela, o botão troca o nome e a coluna
+   Documento mostra o novo.
 
 Fora do escopo: `invoices.file_name` de boleto já aprovado não é sincronizado; `documento_path`
 (storage) nunca muda.

@@ -17,6 +17,7 @@ import { extractFromPdfFile } from '../utils/boletoParser';
 import { onlyDigits } from '../utils/febrabanRules';
 import { formatMoney } from './ui/Format';
 import { useConfirm } from './ui/confirm';
+import { renomearDocumentoDeNovo } from '../services/boletoNomeDocumentoService';
 import { useWritableOrganizations } from '../hooks/useOrgContext';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import type { Boleto, BoletoExtractionResult, Supplier, CostCenter, ChartOfAccount } from '../types';
@@ -372,6 +373,42 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setError(e instanceof Error ? e.message : 'Falha ao mover o boleto de organização');
         } finally {
             setTrocandoOrg(false);
+        }
+    }
+
+    const MOTIVO_RENOMEAR: Record<string, string> = {
+        nao_encontrado: 'Boleto não encontrado.',
+        sem_fornecedor: 'Escolha o fornecedor e salve o boleto antes: o nome da Nomenclatura usa o fornecedor.',
+        sem_mascara: 'Salve a Nomenclatura de Boletos em Configurações do Sistema antes de renomear.',
+        sem_mudanca: 'O documento mudou enquanto você renomeava. Recarregue o boleto e tente de novo.',
+        erro: 'Não foi possível renomear o documento.',
+    };
+
+    /** Renomeia de novo o documento pela máscara atual (usa fornecedor/obra já salvos). */
+    async function handleRenomearDocumento() {
+        if (!boleto) return;
+        const ok = await confirm({
+            title: 'Renomear o documento pela Nomenclatura?',
+            message: `"${boleto.documento_nome}" será trocado pelo próximo nome da Nomenclatura de Boletos (usa o fornecedor e a obra já salvos — salve o boleto antes se mudou algum). Gasta um número da sequência. O nome do arquivo enviado continua guardado.`,
+            variant: 'warning',
+            confirmLabel: 'Renomear',
+        });
+        if (!ok) return;
+        setBusy(true);
+        setError(null);
+        try {
+            const r = await renomearDocumentoDeNovo(boleto.id);
+            if (!r.ok) {
+                setError(MOTIVO_RENOMEAR[r.motivo] + (r.detalhe ? ` (${r.detalhe})` : ''));
+                return;
+            }
+            const atualizado = await boletoService.getById(boleto.id);
+            const novo = atualizado ?? { ...boleto, documento_nome: r.nome };
+            setBoleto(novo);
+            setInfo(`Documento renomeado para ${r.nome}.`);
+            onSaved(novo);
+        } finally {
+            setBusy(false);
         }
     }
 
@@ -826,6 +863,15 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </div>
                                     <div className="px-6 py-3 flex items-center justify-between gap-3 text-xs text-gray-500 border-t border-gray-100">
                                         <span className="truncate" title={boleto.documento_nome}>{boleto.documento_nome}</span>
+                                        <button
+                                            type="button"
+                                            onClick={handleRenomearDocumento}
+                                            disabled={busy}
+                                            title="Troca o nome do documento pelo próximo da Nomenclatura de Boletos"
+                                            className="shrink-0 text-blue-600 hover:underline disabled:opacity-50 disabled:no-underline"
+                                        >
+                                            Renomear
+                                        </button>
                                         {documentoUrl && (
                                             <a href={documentoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-blue-600 hover:underline flex items-center gap-1">
                                                 <Eye className="w-3 h-3" /> Abrir

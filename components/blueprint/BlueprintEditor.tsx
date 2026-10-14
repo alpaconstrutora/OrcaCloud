@@ -845,6 +845,10 @@ import { armaduraDoModelo, armaduraManualDe } from '../../utils/blueprintArmadur
 import TelaArmadura from './TelaArmadura';
 import TelaQuantitativos from './TelaQuantitativos';
 import TelaUnidades from './TelaUnidades';
+import TelaAreasNbr12721 from './TelaAreasNbr12721';
+import { blueprintNbr12721Service } from '../../services/blueprintNbr12721Service';
+import { entradaDoEstudo, HIPOTESES_NBR12721_PADRAO, type HipotesesNbr12721 } from '../../utils/blueprintNbr12721';
+import { calcularNbr12721 } from '../../utils/nbr12721/quadros';
 import TelaLegislacao from './TelaLegislacao';
 import TelaPrograma from './TelaPrograma';
 import PainelGrafoEspacial from './PainelGrafoEspacial';
@@ -2107,7 +2111,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -3270,6 +3274,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
 
   /** UNIDADES (E2.2): medidas, fração ideal e paredes geminadas — derivadas do desenho. */
   const quadroDeUnidadesDoModelo = useMemo(() => quadroDeUnidades(editor.model), [editor.model]);
+  // ÁREAS NBR 12721 (Fase 6): as hipóteses do estudo, lidas quando a tela abre. A linha
+  // grava na organização DO ESTUDO — o registro tem dono (REGRA #5).
+  const [hipotesesNbr12721, setHipotesesNbr12721] = useState<HipotesesNbr12721>(HIPOTESES_NBR12721_PADRAO);
+  useEffect(() => {
+    if (telaAberta !== 'areas-nbr12721' && telaAberta !== 'unidades') return;
+    let vivo = true;
+    blueprintNbr12721Service
+      .get(study.id)
+      .then((h) => vivo && setHipotesesNbr12721(h))
+      .catch(() => undefined); // sem linha/sem rede: as padrão, e a tela diz o que falta
+    return () => {
+      vivo = false;
+    };
+  }, [telaAberta, study.id]);
+  /** A fração do Quadro IV-B para a coluna da tela Unidades — só calculada com a tela aberta. */
+  const fracoesNbr12721 = useMemo(() => {
+    if (telaAberta !== 'unidades') return null;
+    const saida = calcularNbr12721(entradaDoEstudo(editor.model, hipotesesNbr12721).entrada);
+    if (saida.status !== 'success') {
+      const p = saida.pendencias.find((x) => x.bloqueante);
+      return { porNumero: null, motivo: `O quadro NBR 12721 está bloqueado (${p?.codigo ?? 'pendência'}: ${p?.mensagem ?? ''}) — veja Analisar › Áreas NBR 12721.` };
+    }
+    return { porNumero: new Map(saida.fracoes.map((f) => [f.unidade, { decimal: f.fraction_decimal_raw, milesimos: f.milesimos }] as const)), motivo: null };
+  }, [telaAberta, editor.model, hipotesesNbr12721]);
   /**
    * GRAFO ESPACIAL (E4.2) do pavimento ativo: adjacência, portas, saídas,
    * fachadas com orientação, circulação %. Derivado; alimenta o cartão do
@@ -11907,7 +11935,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="unidades">
           {cabecalhoDaTela(
             'Unidades',
-            'A unidade autônoma como objeto: número, tipologia e PCD; os ambientes que a compõem (escolhidos no cartão de cada ambiente); área privativa pela NBR 12721, área comum por pavimento e fração ideal — derivadas do desenho, sempre atuais. A parede geminada aparece tracejada na planta.',
+            'A unidade autônoma como objeto: número, tipologia e PCD; os ambientes que a compõem (escolhidos no cartão de cada ambiente); área privativa pela NBR 12721, área comum por pavimento e a fração ideal do Quadro IV-B (Analisar › Áreas NBR 12721) — derivadas do desenho, sempre atuais. A parede geminada aparece tracejada na planta.',
             Building2,
             'Analisar',
           )}
@@ -11918,6 +11946,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               onRun={(c) => editor.run(c)}
               onRunBatch={(cs) => editor.runBatch(cs)}
               erro={editor.lastError}
+              fracoesNbr12721={fracoesNbr12721}
               carregarDoPlantaAi={
                 zona.empreendimentoId || empreendimentoSugerido
                   ? () => blueprintUnidadesPlantaAiService.listar((zona.empreendimentoId || empreendimentoSugerido)!)
@@ -11925,6 +11954,25 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               }
             />
           </div>
+        </div>
+      )}
+      {telaAberta === 'areas-nbr12721' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="areas-nbr12721">
+          {cabecalhoDaTela(
+            'Áreas NBR 12721',
+            'Os Quadros I, II e IV-B da incorporação e as frações ideais, calculados ao vivo a partir do desenho: classifique cada ambiente (cobertura, coeficiente, divisão do comum) e os quadros mudam na hora. Os andares copiados do pavimento tipo entram com as unidades deles.',
+            Scale,
+            'Analisar',
+          )}
+          <TelaAreasNbr12721
+            model={editor.model}
+            hipoteses={hipotesesNbr12721}
+            onSalvarHipoteses={async (h) => {
+              setHipotesesNbr12721(await blueprintNbr12721Service.save(study.id, study.organization_id, h));
+            }}
+            onRunBatch={(cs) => editor.runBatch(cs)}
+            erro={editor.lastError}
+          />
         </div>
       )}
       {telaAberta === 'armadura' && (
@@ -13496,6 +13544,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     ativo={telaAberta === 'unidades'}
                     onClick={() => alternarTela('unidades')}
                     ajuda="Unidades autônomas: composição por ambiente, área privativa NBR 12721, área comum e fração ideal"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Scale}
+                    rotulo="Áreas NBR 12721"
+                    ativo={telaAberta === 'areas-nbr12721'}
+                    onClick={() => alternarTela('areas-nbr12721')}
+                    ajuda="Quadros I, II e IV-B da incorporação e frações ideais, ao vivo: classificação dos ambientes, pendências e hipóteses do estudo"
                   />
                 )}
                 {(!emVista || em3d) && (

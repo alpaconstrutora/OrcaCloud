@@ -138,6 +138,90 @@ export function classificacaoSugerida(model: BlueprintModel): Map<ElementUid, Cl
   return out;
 }
 
+// ── a lista de classificação (tela) ─────────────────────────────────────────
+
+/** Um ambiente que a tela de Áreas classifica: etiqueta desenhada ou ambiente declarado. */
+export interface AmbienteParaClassificar {
+  /** `etq:<id>` ou `dcl:<id>` — chave da linha e da seleção. */
+  chave: string;
+  tipo: 'ETIQUETA' | 'DECLARADO';
+  /** id do kernel (labelId ou declaradoId). */
+  id: ObjectId;
+  uid: ElementUid;
+  nome: string;
+  levelId: ObjectId;
+  pavimento: string;
+  areaMm2: number;
+  /** Número da unidade dona; `null` = comum (ou acessório). */
+  unidade: string | null;
+  /** Acessório vinculado de alguma unidade. */
+  acessorioDe: string | null;
+  classificacao: ClassificacaoNbr12721 | null;
+  sugerida: ClassificacaoNbr12721;
+  /** Quantos andares copiados repetem este ambiente (as cópias seguem a classificação daqui). */
+  copias: number;
+}
+
+/**
+ * As linhas da classificação. As etiquetas dos ANDARES COPIADOS ficam de fora:
+ * a sincronização do pavimento tipo as reescreve a partir da origem, então
+ * classificá-las direto seria desfeito na próxima edição — a classificação do
+ * tipo vale para todas as cópias (e a coluna "Cópias" diz quantas).
+ */
+export function ambientesParaClassificar(model: BlueprintModel): AmbienteParaClassificar[] {
+  const sugestoes = classificacaoSugerida(model);
+  const nivel = new Map(model.levels.map((l) => [l.id, l] as const));
+  const copias = new Map<ObjectId, number>();
+  for (const l of model.levels) if (l.tipoDeId !== undefined) copias.set(l.tipoDeId, (copias.get(l.tipoDeId) ?? 0) + 1);
+  const dona = new Map<ElementUid, string>();
+  for (const u of model.unidades ?? []) for (const uid of u.etiquetaUids) dona.set(uid, u.numero);
+  const acessorio = new Map<ElementUid, string>();
+  for (const u of model.unidades ?? []) for (const a of u.acessorios ?? []) acessorio.set(a.uid, u.numero);
+  const numeroPorUid = new Map((model.unidades ?? []).map((u) => [u.uid, u.numero] as const));
+
+  const linhas: AmbienteParaClassificar[] = [];
+  for (const l of model.labels ?? []) {
+    const n = nivel.get(l.levelId);
+    if (!n || n.tipoDeId !== undefined) continue;
+    const espaco = model.spaces.find((s) => s.labelUid === l.uid);
+    linhas.push({
+      chave: `etq:${l.id}`,
+      tipo: 'ETIQUETA',
+      id: l.id,
+      uid: l.uid,
+      nome: l.name,
+      levelId: l.levelId,
+      pavimento: n.name,
+      areaMm2: espaco?.areaMm2 ?? 0,
+      unidade: dona.get(l.uid) ?? null,
+      acessorioDe: acessorio.get(l.uid) ?? null,
+      classificacao: l.nbr12721 ?? null,
+      sugerida: sugestoes.get(l.uid) ?? { cobertura: 'PADRAO' },
+      copias: copias.get(l.levelId) ?? 0,
+    });
+  }
+  for (const a of model.ambientesDeclarados ?? []) {
+    const n = nivel.get(a.levelId);
+    const unidade = a.unidadeUid ? (numeroPorUid.get(a.unidadeUid) ?? null) : null;
+    linhas.push({
+      chave: `dcl:${a.id}`,
+      tipo: 'DECLARADO',
+      id: a.id,
+      uid: a.uid,
+      nome: a.nome,
+      levelId: a.levelId,
+      pavimento: n?.name ?? '?',
+      areaMm2: a.areaMm2,
+      unidade,
+      acessorioDe: acessorio.get(a.uid) ?? null,
+      classificacao: a.nbr12721 ?? null,
+      sugerida: unidade || acessorio.has(a.uid) ? { cobertura: 'PADRAO' } : { cobertura: 'PADRAO', divisao: 'PROPORCIONAL' },
+      copias: n ? (copias.get(n.id) ?? 0) : 0,
+    });
+  }
+  return linhas;
+}
+
 // ── a entrada do motor ───────────────────────────────────────────────────────
 
 export interface EntradaDoEstudo {
@@ -197,9 +281,11 @@ export function entradaDoEstudo(model: BlueprintModel, hip: HipotesesNbr12721 = 
 
   const sugestoes = classificacaoSugerida(model);
   const espacos: EspacoNbr[] = [];
-  const efetiva = (nome: string, propria: ClassificacaoNbr12721 | undefined, sugerida: ClassificacaoNbr12721 | undefined, privativo: boolean): ClassificacaoNbr12721 => {
+  const copia = new Set(model.levels.filter((l) => l.tipoDeId !== undefined).map((l) => l.id));
+  const efetiva = (nome: string, propria: ClassificacaoNbr12721 | undefined, sugerida: ClassificacaoNbr12721 | undefined, privativo: boolean, levelId?: ObjectId): ClassificacaoNbr12721 => {
     if (propria) return propria;
-    aClassificar.push(nome);
+    // A etiqueta do andar COPIADO segue a do tipo: listá-la contaria o mesmo ambiente N vezes.
+    if (!(levelId && copia.has(levelId))) aClassificar.push(nome);
     return sugerida ?? (privativo ? { cobertura: 'PADRAO' } : { cobertura: 'PADRAO', divisao: 'PROPORCIONAL' });
   };
   const coeficiente = (c: ClassificacaoNbr12721) => c.coeficiente ?? (c.cobertura === 'PADRAO' ? null : hip.coeficientesPadrao[c.cobertura]);
@@ -263,7 +349,7 @@ export function entradaDoEstudo(model: BlueprintModel, hip: HipotesesNbr12721 = 
     const nome = label?.name ?? 'Ambiente sem nome';
     const dona = s.labelUid ? donaDaEtiqueta.get(s.labelUid) : undefined;
     const vinculo = s.labelUid ? acessorioDe.get(s.labelUid) : undefined;
-    const c = efetiva(`${nome} (${model.levels.find((l) => l.id === s.levelId)?.name ?? ''})`, label?.nbr12721, label ? sugestoes.get(label.uid) : undefined, !!dona || !!vinculo);
+    const c = efetiva(`${nome} (${model.levels.find((l) => l.id === s.levelId)?.name ?? ''})`, label?.nbr12721, label ? sugestoes.get(label.uid) : undefined, !!dona || !!vinculo, s.levelId);
     const desconto = descontoDoAmbiente.get(s.id) ?? 0;
     somar(s.levelId, s.areaMm2);
     const area = s.areaMm2 - desconto;

@@ -1135,14 +1135,16 @@ describe('BlueprintEditor · quantitativos', () => {
     await user.selectOptions(selB, within(selB).getByRole('option', { name: 'Un. 102' }));
     expect((screen.getByLabelText('Unidade do ambiente Sala A') as HTMLSelectElement).value).not.toBe('');
     // Tabela: privativa = 12 m² de eixo + externas (4 + 3 + 4 m) × 0,1 = 13,10; fração 500 ‰ cada; geminadas entre si.
+    // Desde a Fase 6 (Áreas NBR 12721) a coluna mostra a fração do Quadro IV-B quando o quadro calcula — milésimos
+    // fechados em 1000, 4 casas ("500,0000 ‰"); a estimada (3 casas) só aparece com o quadro bloqueado.
     await abrirAba(/^analisar$/i);
     // O botão do ribbon conta as unidades.
     expect(botao(/^unidades/i)).toHaveTextContent('2');
     await user.click(botao(/^unidades/i));
     const tela2 = (await screen.findByRole('heading', { level: 1, name: /^unidades$/i })).closest('[data-tela="unidades"]') as HTMLElement;
     const linhas = within(tela2).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
-    expect(linhas.some((l) => /Sala A.*13,10.*500,000 ‰.*102/.test(l))).toBe(true);
-    expect(linhas.some((l) => /Sala B.*13,10.*500,000 ‰.*101/.test(l))).toBe(true);
+    expect(linhas.some((l) => /Sala A.*13,10.*500,0000 ‰.*102/.test(l))).toBe(true);
+    expect(linhas.some((l) => /Sala B.*13,10.*500,0000 ‰.*101/.test(l))).toBe(true);
     expect(linhas.some((l) => /Térreo.*2.*26,20/.test(l))).toBe(true);
   });
 
@@ -1172,8 +1174,8 @@ describe('BlueprintEditor · quantitativos', () => {
     // A 102 existe, com a Sala copiada, mesma privativa e geminada com a 101.
     const linhas = () => within(tela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
     expect(within(tela).getByLabelText('Número da unidade 102')).toBeInTheDocument();
-    expect(linhas().filter((l) => /Sala.*25,20.*500,000 ‰/.test(l))).toHaveLength(2); // as duas, geminadas entre si
-    expect(linhas().some((l) => /Sala.*500,000 ‰.*—101/.test(l))).toBe(true);
+    expect(linhas().filter((l) => /Sala.*25,20.*500,0000 ‰/.test(l))).toHaveLength(2); // as duas, geminadas entre si (fração do Quadro IV-B)
+    expect(linhas().some((l) => /Sala.*500,0000 ‰.*—101/.test(l))).toBe(true);
     expect(linhas().some((l) => /Térreo.*2/.test(l))).toBe(true);
     // Gaveta Grupo: selecionar a origem lista o grupo "Unidade 101" com 1 instância; remover a instância tira a cópia; desagrupar.
     await user.click(within(tela).getByRole('button', { name: /^voltar ao editor$/i }));

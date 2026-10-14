@@ -3,7 +3,7 @@
  *
  * Duas tabelas em fluxo (molde `TelaQuantitativos`): **Unidades** — número,
  * tipologia e PCD editáveis na linha, ambientes que a compõem, área privativa
- * NBR 12721, fração ideal e com quem divide parede — e **Por pavimento** —
+ * NBR 12721, fração (a do Quadro IV-B quando calculável; senão a estimada) e com quem divide parede — e **Por pavimento** —
  * construída, privativa e comum. A COMPOSIÇÃO (que ambiente é de qual
  * unidade) se faz no cartão do ambiente, no Navegador: é lá que o ambiente
  * está; a tela só diz o que falta compor.
@@ -36,6 +36,12 @@ interface Props {
   onRunBatch: (cs: Command[]) => void;
   /** A última recusa do kernel (`editor.lastError`) — a faixa do editor fica escondida enquanto a tela está aberta. */
   erro: string | null;
+  /**
+   * A fração do Quadro IV-B (Áreas NBR 12721): com `porNumero`, é ela que a coluna mostra; sem
+   * (`motivo` preenchido), a coluna cai na ESTIMADA — privativa ÷ Σ privativas, sem coeficiente
+   * — e diz por quê. `null`/ausente = não calculada (mesma queda, sem motivo).
+   */
+  fracoesNbr12721?: { porNumero: Map<string, { decimal: number; milesimos: number }> | null; motivo: string | null } | null;
   /** `null` = o estudo não está ligado a um empreendimento — o botão explica. */
   carregarDoPlantaAi: (() => Promise<{ unidades: UnidadeExterna[]; cenarios: number }>) | null;
 }
@@ -64,7 +70,13 @@ const COLUNAS_PAVIMENTO: StandardTableColumn[] = [
 
 const fmt = (m2: number) => m2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carregarDoPlantaAi, erro }: Props) {
+export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carregarDoPlantaAi, erro, fracoesNbr12721 }: Props) {
+  const fracaoNbr = fracoesNbr12721?.porNumero ?? null;
+  // O rótulo diz QUAL fração: a do Quadro IV-B (com coeficiente) ou a estimada — nunca "Fração ideal" sem qualificação.
+  const colunas = useMemo(
+    () => COLUNAS.map((c) => (c.key === 'fracaoIdeal' ? { ...c, label: fracaoNbr ? 'Fração ideal (NBR 12721)' : 'Fração estimada (sem coeficiente)', width: 190 } : c)),
+    [fracaoNbr],
+  );
   const [novoNumero, setNovoNumero] = useState('');
   const [externas, setExternas] = useState<UnidadeExterna[] | null>(null);
   const [importando, setImportando] = useState(false);
@@ -185,9 +197,17 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
           </span>
         );
       case 'fracaoIdeal': {
+        if (fracaoNbr) {
+          const n = fracaoNbr.get(u.numero);
+          return (
+            <span className="block text-right text-sm tabular-nums text-gray-700" title={n ? `${n.decimal.toFixed(10)} — Quadro IV-B` : 'Fora do Quadro IV-B'}>
+              {n ? `${n.milesimos.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ‰` : '—'}
+            </span>
+          );
+        }
         const f = formatarFracao(u.fracaoIdeal);
         return (
-          <span className="block text-right text-sm tabular-nums text-gray-700" title={f.decimal}>
+          <span className="block text-right text-sm tabular-nums text-gray-500" title={`${f.decimal} — estimada: privativa ÷ Σ privativas, sem coeficiente de equivalência`}>
             {u.ambientes.length ? f.milesimos : '—'}
           </span>
         );
@@ -213,8 +233,12 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
         {semUnidade > 0 && <span className="text-slate-500"> · {semUnidade} ambiente(s) fora de unidade (áreas comuns ou por compor)</span>}
         <p className="mt-1 text-xs text-slate-500">
           Área privativa pelo critério da NBR 12721: ambientes medidos pelo eixo das paredes (a geminada e a divisa com área comum entram pela metade) mais a metade
-          externa das paredes externas. Área comum do pavimento = construída − privativas. Fração ideal = privativa ÷ Σ privativas do estudo.
+          externa das paredes externas. Área comum do pavimento = construída − privativas.{' '}
+          {fracaoNbr
+            ? 'Fração ideal = a do Quadro IV-B da NBR 12721 (Analisar › Áreas NBR 12721), com os coeficientes de equivalência e o rateio das áreas comuns.'
+            : 'Fração estimada = privativa ÷ Σ privativas, sem coeficiente de equivalência — a fração ideal da incorporação sai em Analisar › Áreas NBR 12721.'}
         </p>
+        {fracoesNbr12721?.motivo && <p className="mt-1 text-xs text-amber-700">{fracoesNbr12721.motivo}</p>}
       </div>
 
       {repetindo && (
@@ -270,14 +294,14 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
       )}
 
       <StandardTable<Linha>
-        columns={COLUNAS}
+        columns={colunas}
         storageKey="blueprint:unidades"
         rows={quadro.unidades}
         rowKey={(u) => u.id}
         renderCell={celula}
         sortValue={(key, u) => {
           if (key === 'areaPrivativaM2') return u.areaPrivativaMm2;
-          if (key === 'fracaoIdeal') return u.fracaoIdeal;
+          if (key === 'fracaoIdeal') return fracaoNbr ? (fracaoNbr.get(u.numero)?.decimal ?? -1) : u.fracaoIdeal;
           if (key === 'pavimentos') return u.levelIds.map(nomeDoNivel).join(' + ');
           if (key === 'plantaAi') return externaPorNumero.get(u.numero)?.areaPrivativaM2 ?? -1;
           return (u as unknown as Record<string, string | number | boolean | null>)[key];

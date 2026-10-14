@@ -316,7 +316,33 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
       - Serviço: organização do Empreendimento, recusa com vínculo e arquiva em falha.
     - Suíte: 9.138 = 9.104 + 34 pulados, 0 falhas. A conta fechou com o `blueprintCasaDeBombas.test.ts` rodado à parte (11 de 11) depois do "pending" do Node 24.
   - [ ] 5.2 **Mudança de sequência (13/10):** o botão "Criar estudo de áreas (sem desenho)" e a edição em tabela dos declarados vão **junto com a tela da Fase 6** (aba "Ambientes declarados"). O estudo sem desenho abre na Planta com o canvas vazio; publicar o botão antes da tabela poria no ar um caminho que cria um estudo que ninguém consegue editar.
-- [ ] Fase 6: tela na Planta (0 de 2)
+- [x] Fase 5.1 publicada: `eea4d7f4`, check-run `ci` = success
+- [ ] Fase 6: tela na Planta (2 de 2 itens do plano + 6b pendente). **Divisão (14/10):** 6a = a tela com classificação, quadros, frações, pendências e hipóteses + a coluna de fração; 6b = acessórios (inclusive na unidade de andar copiado, com campo de pavimento no acessório e bump do kernel), aba de ambientes declarados (tabela + importar XLSX), botão "Criar estudo de áreas" no Empreendimento (o 5.2) e a prova de gravar e ler as hipóteses no app real (fecha a 4.2).
+  - [x] 6.1 `components/blueprint/TelaAreasNbr12721.tsx`, ligada no editor (`telaAberta === 'areas-nbr12721'`, botão "Áreas NBR 12721" em Analisar ao lado de Unidades). As hipóteses são lidas ao abrir e gravadas na organização DO ESTUDO.
+    - Abas (`TabsBar`): Classificação, Quadro I, Quadro II, Quadro IV-B, Frações, Pendências, Hipóteses. Os KPIs (`KpiCard`) são área real, área equivalente, unidades e pendências; quando o cálculo está bloqueado, o último card vira "Cálculo bloqueado".
+    - Classificação: `ambientesParaClassificar` (as etiquetas dos andares COPIADOS ficam de fora: a sincronização do tipo as reescreve; a coluna "Cópias" diz quantas seguem cada uma), "Aplicar sugestões" num lote só, seleção em lote (§10) e drawer (`Sheet`, §26, malha §30). "Voltar a 'a classificar'" limpa.
+    - Quadros e frações calculados ao vivo, com a linha de total numa célula (`colSpan`, molde `PainelEletrica`: o StandardTable não expõe as colunas visíveis).
+    - Hipóteses (§30): coeficientes padrão, rateio, área da vaga e numeração. O botão de salvar desligado diz o motivo.
+    - Adaptador: "a classificar" passou a contar só as etiquetas que se classificam (antes contava também as cópias: "12" na pendência contra "4" na aba).
+    - `__tests__/components/TelaAreasNbr12721.test.tsx`: 8 testes (abas, sugestões em lote, drawer, quadros/frações, pendências, hipóteses, sem permissão, e a coluna de fração nos dois estados).
+    - **Harness `docs/spikes/areas-nbr12721/`** (Chrome real, CSS do app, 1.340 px úteis, sem banco). Ele confere:
+      - zero rolagem horizontal nas 7 abas e zero erro de página;
+      - "Aplicar sugestões" zera a contagem, e a pendência conta o mesmo que a aba;
+      - classificar o Hall como "descoberta 0,6" pelo drawer muda a comum equivalente do 101 no Quadro II na hora (24,22 → 19,06);
+      - as frações fecham 1.000,0000.
+    - **Prints conferidos.** Ajustados por eles: largura de "Pavimento" (cortava), rótulos curtos nos Quadros I/II (cabeçalho em 4 linhas) e a foto do drawer, que saía na animação.
+  - [x] 6.2 `TelaUnidades.tsx`: a coluna diz QUAL fração. "Fração ideal (NBR 12721)" é a do IV-B, milésimos fechados com 4 casas, quando o quadro calcula; "Fração estimada (sem coeficiente)" aparece com o motivo quando está bloqueado. O texto da tela e o cabeçalho no editor também mudaram. 2 testes do `BlueprintEditor.test.tsx` esperavam o formato antigo "500,000 ‰" e foram atualizados para "500,0000 ‰" (a mesma fração 0,5, agora do Quadro IV-B), com comentário.
+  - REGRA #1, checklist de aplicação:
+    - **Aplicado:**
+      - imports e colunas via `StandardTable` (§6.10, que embute §1–3, §6.1, §6.2, §6.5, §6.6, §7.2 e §11/§12);
+      - `KpiCard` (§4); abas `TabsBar` (§19.1); ordem abas → KPIs → tabela (§20.1);
+      - `<td>` em `text-sm font-normal`, com `font-medium` só no total (§7); status em texto colorido sem pílula (§8);
+      - ação "Classificar" como texto azul (§9); barra de lote fixa azul (§10); drawer `Sheet` (§26); malha do formulário (§30);
+      - botão primário compacto (§17); escala compacta (§16).
+    - **Não se aplica:** toggle grade/lista (as tabelas são de quadro); `useConfirm` (nada destrutivo: "voltar a 'a classificar'" é desfazível por Ctrl+Z, porque o kernel é imutável); breadcrumb (o "voltar ao editor" do cabeçalho da Planta faz o papel); gráficos (§28).
+    - `check-ui-standard.sh`: 0 violações em `TelaAreasNbr12721.tsx`, `TelaUnidades.tsx` e `BlueprintEditor.tsx` (igual à versão publicada).
+  - **Não conferido no app real com login:** o harness monta a tela de verdade, mas sem o editor em volta nem o banco. A prova logada (abrir num estudo real e gravar as hipóteses) depende da senha do agente-leitura e entra na 6b.
+  - Suíte: 9.146 = 9.112 + 34 pulados, 0 falhas. A conta fechou com o `BlueprintEditor.test.tsx` rodado à parte (251 de 251) depois da interrupção do Node 24. tsc 0 erros.
 - [ ] Fase 7: congelar e aprovar (0 de 2)
 - [ ] Fase 8: saídas (0 de 2)
 - [ ] Fase 9: Empreendimento (0 de 3)

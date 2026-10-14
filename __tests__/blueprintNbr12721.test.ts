@@ -242,3 +242,21 @@ describe('planilha de ambientes declarados (Fase 6b)', () => {
     expect(x.ambientesDeclarados).toHaveLength(3);
   });
 });
+
+describe('congelamento na versão publicada (Fase 7)', () => {
+  it('sem unidade nem declarado não congela nada; com unidades, hash estável que muda quando o quadro muda', async () => {
+    const { congelamentoNbr12721 } = await import('../utils/blueprintNbr12721');
+    const { VERSAO_DO_MOTOR_NBR12721 } = await import('../utils/nbr12721/quadros');
+    const vazio = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }).model;
+    expect(congelamentoNbr12721(vazio, HIPOTESES_NBR12721_PADRAO)).toBeNull();
+    const { m } = predio();
+    const a = congelamentoNbr12721(m, HIPOTESES_NBR12721_PADRAO)!;
+    expect(a.saida.status).toBe('success');
+    expect(a.versaoMotor).toBe(VERSAO_DO_MOTOR_NBR12721);
+    expect(a.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(congelamentoNbr12721(m, HIPOTESES_NBR12721_PADRAO)!.hash).toBe(a.hash);
+    const hall = m.labels.find((l) => l.name === 'Hall')!;
+    const outro = applyCommand(m, { type: 'SetNbr12721DoAmbiente', labelIds: [hall.id], nbr12721: { cobertura: 'DESCOBERTA', coeficiente: 0.5, divisao: 'PROPORCIONAL' } }).model;
+    expect(congelamentoNbr12721(outro, HIPOTESES_NBR12721_PADRAO)!.hash).not.toBe(a.hash);
+  });
+});

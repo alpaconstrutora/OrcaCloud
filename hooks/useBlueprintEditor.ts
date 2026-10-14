@@ -533,7 +533,11 @@ export function useBlueprintEditor(branchId: string | null, ganchos?: GanchosDeC
     [branchId, baseRevision, model],
   );
 
-  const hashAtual = model.walls.length || model.boundaries.length ? snapshotHash(model) : null;
+  // "Há o que publicar": desenho (paredes, divisas) OU o que o estudo SEM desenho tem — unidades e
+  // ambientes declarados (Áreas NBR 12721, 14/10/2026). Sem isso, o estudo criado a partir do
+  // Empreendimento nunca liberava "Publicar versão" e, portanto, nunca chegava à aprovação.
+  const temConteudo = model.walls.length || model.boundaries.length || (model.unidades ?? []).length || (model.ambientesDeclarados ?? []).length;
+  const hashAtual = temConteudo ? snapshotHash(model) : null;
 
   return {
     model,

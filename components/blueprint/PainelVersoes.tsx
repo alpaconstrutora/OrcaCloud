@@ -13,6 +13,7 @@ import {
 } from '../../services/blueprintApprovalService';
 import { getSnapshot, listSnapshots } from '../../services/blueprintService';
 import { blueprintSnapshotTopografiaService } from '../../services/blueprintSnapshotTopografiaService';
+import SecaoNbr12721DaVersao from './SecaoNbr12721DaVersao';
 import type { BlueprintSnapshotTopografiaRow } from '../../types/blueprint';
 import {
   exportarDxf,
@@ -655,6 +656,9 @@ export default function PainelVersoes({
               )}
             </div>
           )}
+
+          {/* ── Áreas NBR 12721 (Fase 7): quadros congelados + aprovações técnica e jurídica ── */}
+          {snapshot && <SecaoNbr12721DaVersao key={snapshot.id} snapshotId={snapshot.id} />}
 
           {/* ── Exportação ─────────────────────────────────────────────────── */}
           <div className="border-b border-slate-200 px-4 py-3">

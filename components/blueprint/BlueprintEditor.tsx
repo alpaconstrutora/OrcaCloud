@@ -848,7 +848,8 @@ import TelaUnidades from './TelaUnidades';
 import TelaAreasNbr12721 from './TelaAreasNbr12721';
 import type { TelaDoLinkDireto } from './telasDoLinkDireto';
 import { blueprintNbr12721Service } from '../../services/blueprintNbr12721Service';
-import { entradaDoEstudo, HIPOTESES_NBR12721_PADRAO, type HipotesesNbr12721 } from '../../utils/blueprintNbr12721';
+import { congelamentoNbr12721, entradaDoEstudo, HIPOTESES_NBR12721_PADRAO, type HipotesesNbr12721 } from '../../utils/blueprintNbr12721';
+import { blueprintSnapshotNbr12721Service } from '../../services/blueprintSnapshotNbr12721Service';
 import { calcularNbr12721 } from '../../utils/nbr12721/quadros';
 import TelaLegislacao from './TelaLegislacao';
 import TelaPrograma from './TelaPrograma';
@@ -5656,6 +5657,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       } catch (e) {
         console.warn('[produto] versão publicada sem o produto congelado:', e);
       }
+    }
+    // ÁREAS NBR 12721 (Fase 7): os quadros desta versão são congelados junto dela — é
+    // sobre ESTE hash que as aprovações técnica e jurídica são registradas. As hipóteses
+    // são lidas do banco agora (a tela pode nunca ter sido aberta nesta sessão).
+    try {
+      const congelado = congelamentoNbr12721(editor.model, await blueprintNbr12721Service.get(study.id));
+      if (congelado) await blueprintSnapshotNbr12721Service.congelar(snapshotId, study.id, study.organization_id, congelado);
+    } catch (e) {
+      console.warn('[nbr12721] versão publicada sem os quadros congelados:', e);
     }
     if (!topografia.selecionada) return;
     try {

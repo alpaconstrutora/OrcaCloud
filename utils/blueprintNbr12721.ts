@@ -48,7 +48,9 @@ import { areaConstruidaMm2 } from './blueprintKernel/quantities';
 import { exposicaoDoNivel } from './blueprintExposicaoTermica';
 import { uidDoPavimentoTipo } from './blueprintPavimentoTipoDaMassa';
 import { HIPOTESES_DE_NUMERACAO_PADRAO, unidadesDoPredio, type HipotesesDeNumeracao, type UnidadeDoPredio } from './blueprintUnidadesDoPredio';
-import type { EntradaNbr12721, EspacoNbr } from './nbr12721/tipos';
+import type { EntradaNbr12721, EspacoNbr, SaidaNbr12721 } from './nbr12721/tipos';
+import { calcularNbr12721, VERSAO_DO_MOTOR_NBR12721 } from './nbr12721/quadros';
+import { sha256, stableStringify } from './blueprintKernel/hash';
 
 // ── hipóteses do estudo (tabela `blueprint_study_nbr12721`) ──────────────────
 
@@ -383,6 +385,28 @@ export function comandosDaPlanilhaDeDeclarados(model: BlueprintModel, linhas: Re
     });
   });
   return { comandos, erros };
+}
+
+// ── congelamento na versão publicada (Fase 7) ───────────────────────────────
+
+export interface QuadroCongelado {
+  entrada: EntradaNbr12721;
+  saida: SaidaNbr12721;
+  /** sha256 da saída em JSON estável — é o que a aprovação cita. */
+  hash: string;
+  versaoMotor: string;
+}
+
+/**
+ * O que vai para `blueprint_snapshot_nbr12721` ao publicar. `null` quando o
+ * estudo não tem unidade nem ambiente declarado: não há quadro de incorporação
+ * a congelar (uma casa térrea sem unidades não ganha linha vazia).
+ */
+export function congelamentoNbr12721(model: BlueprintModel, hip: HipotesesNbr12721): QuadroCongelado | null {
+  if (!(model.unidades ?? []).length && !(model.ambientesDeclarados ?? []).length) return null;
+  const { entrada } = entradaDoEstudo(model, hip);
+  const saida = calcularNbr12721(entrada);
+  return { entrada, saida, hash: sha256(stableStringify(saida)), versaoMotor: VERSAO_DO_MOTOR_NBR12721 };
 }
 
 // ── a entrada do motor ───────────────────────────────────────────────────────

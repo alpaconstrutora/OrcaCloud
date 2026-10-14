@@ -34,6 +34,14 @@ import type {
   UnidadeNbr,
 } from './tipos';
 
+/**
+ * A versão do motor — vai junto do quadro congelado na versão publicada
+ * (`blueprint_snapshot_nbr12721.versao_motor`). Subir quando uma regra de
+ * cálculo mudar: quadro aprovado com uma versão não pode ser recalculado por
+ * outra sem dizer.
+ */
+export const VERSAO_DO_MOTOR_NBR12721 = 'nbr12721-ts-1.0.0';
+
 /** Casas dos milésimos fechados (0,0001 ‰). */
 export const CASAS_DOS_MILESIMOS = 4;
 

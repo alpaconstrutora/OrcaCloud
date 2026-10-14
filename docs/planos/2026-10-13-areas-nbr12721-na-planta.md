@@ -370,7 +370,32 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
       - **Defeito achado pela prova e corrigido:** "Hipóteses salvas." sumia na hora. O formulário tinha `key={JSON.stringify(hipoteses)}`, e as hipóteses que voltam do salvar o remontavam. O teste de componente não via porque o salvar simulado não devolvia hipóteses. Agora os campos acompanham por efeito, sem remontar. Teste novo com estado real; com a `key` de volta, ele reprova.
       - **Limpeza conferida no banco:** estudo e Empreendimento de teste apagados num bloco que exige exatamente 1 de cada (cascata: ramos, hipóteses, torres, unidades). Antes = depois: 18 empreendimentos, 77 estudos, 0 hipóteses, 0 ramos e 0 torres sobrando. A trilha de auditoria do Empreendimento (sem FK, imutável) fica, como nas provas anteriores.
     - Suíte: 9.154 = 9.120 + 34, 0 falhas; o `blueprintPlantaDaUnidade.test.ts` foi rodado à parte (22 de 22) depois do "pending" do Node 24.
-- [ ] Fase 7: congelar e aprovar (0 de 2)
+- [x] **Fase 7: congelar e aprovar (2 de 2)**
+  - **7.1 Migration** `aplicar_20271014100000_blueprint_snapshot_nbr12721.sql`, aplicada com `db query -f`:
+    - `blueprint_snapshot_nbr12721`: entrada, saída, hash sha256 da saída canônica e `versao_motor` (`nbr12721-ts-1.0.0`). FK composta `(snapshot_id, organization_id)` com CASCADE. UPDATE bloqueado pelo gatilho; grant só de SELECT e INSERT.
+    - `…_aprovacoes`: TÉCNICA e JURÍDICA, uma de cada, com o hash aprovado. Só SELECT para `authenticated`; quem grava é a RPC `aprovar_nbr12721_da_versao` (SECURITY DEFINER, autorização dentro, REVOKE de PUBLIC e anon).
+    - **Provado num bloco que sempre aborta:**
+      - UPDATE do quadro dá 23001; jurídica antes da técnica dá 22023;
+      - técnica e depois jurídica passam; repetir dá 23505;
+      - quadro com pendência dá 22023; não-membro dá 42501 e lê 0 linhas;
+      - UPDATE de aprovação dá 23001.
+  - **7.2 Congelar ao publicar e aprovar nas Versões:**
+    - `congelamentoNbr12721(model, hipóteses)` em `utils/blueprintNbr12721.ts`;
+    - `publicarComTopografia` congela logo depois do produto. Uma falha NÃO desfaz a publicação: fica o aviso no console, e a seção diz "publique de novo";
+    - `SecaoNbr12721DaVersao` no painel Versões mostra o hash, as aprovações e os botões, que quando desligados dizem o motivo.
+  - **Defeito achado pela prova e corrigido:** "Publicar versão" ficava desligado em estudo SEM desenho. O `hashAtual` do `useBlueprintEditor` exigia parede ou divisa, e agora conta também unidades e ambientes declarados. O teste novo `blueprintPublicarSemDesenho.test.ts` reprova com a regra antiga.
+  - **Prova no app real (14/10, agente-leitura, Vite local desta frente, roteiro `c:/tmp/pwtest/areas-nbr-fase7.cjs`):**
+    - estudo descartável "ZZ TESTE Áreas NBR v7" com 101 de 60 m², 102 de 40 m² e um hall de 20 m², publicado pela TELA;
+    - versão 1 com o quadro congelado: status success, hash `c73e050a…`, frações 101 = 600 e 102 = 400;
+    - adulterar pelo cliente devolveu 42501 e o quadro ficou intacto;
+    - em Versões, a seção diz "congelados" e a jurídica fica desligada com "A aprovação jurídica vem depois da técnica";
+    - a técnica foi aprovada "por você" com observação, depois a jurídica, e os botões somem; nenhum erro de página nem de HTTP;
+    - **no banco:** 2 aprovações, as duas com o hash igual ao do quadro e a organização igual à da versão.
+  - **Limpeza conferida no banco:** o estudo foi apagado num bloco que exige exatamente 1 linha (a cascata leva ramo, versão, quadro e aprovações). Antes e depois: 77 estudos, 9 versões, 0 quadros, 0 aprovações.
+  - **Testes:** congelamento no `blueprintNbr12721.test.ts`, 4 casos em `SecaoNbr12721DaVersao.test.tsx` e 2 em `blueprintPublicarSemDesenho.test.ts`.
+  - **Suíte:** 9.161 = 9.127 + 34 pulados, 0 falhas, em 907 arquivos; tsc 0; `verificar:build` limpo; `check-ui-standard` limpo em `SecaoNbr12721DaVersao` e `PainelVersoes`.
+  - **⚠️ Lição de processo:** o relatório JSON da suíte em `/tmp` foi sobrescrito por OUTRA frente (`/tmp` é compartilhado entre as sessões). A primeira leitura mostrou 610 arquivos de outra pasta. O relatório agora vai para o scratchpad da sessão, e a raiz dos caminhos é conferida.
+  - **Pendente para depois:** mostrar o NOME de quem aprovou (hoje é "por você" ou o id curto).
 - [ ] Fase 8: saídas (0 de 2)
 - [ ] Fase 9: Empreendimento (0 de 3)
 - [ ] Fase 10: remoção (0 de 5)

@@ -11,6 +11,10 @@ import { salvarRegistroDiario, excluirRegistroDiario, sincronizarEvolucaoNoPlane
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { onlyDiarios, isObra } from '../utils/projectClassification';
 import { hojeLocal } from '../utils/baixaRecebivel';
+import { sugestoesDosRecursos, comColaboradoresDoRh, nomeEstaNaLista, aplicarNomeNoEfetivo, SugestaoEfetivo } from '../utils/diaryLabor';
+import { laborService } from '../services/laborService';
+import { useOrgContext } from '../hooks/useOrgContext';
+import { useStore } from '../store/useStore';
 import { salvarRascunho, lerRascunho, apagarRascunho, listarRascunhos, rascunhoDifere, quandoFoiGuardado, RascunhoDiario } from '../utils/diaryDraft';
 import { isUnplannedActivity, setUnplanned } from '../utils/diaryActivities';
 import { vincularAtividade, temAtividadeVinculada, ItemVinculavel } from '../utils/diaryPlanningLink';
@@ -423,7 +427,9 @@ const EntrySheet: React.FC<{
     onDelete: (id: string) => void;
     /** Falha ao salvar/excluir: a folha continua aberta, então o aviso mora NELA — o toast fica atrás (z-20 < z-30). */
     erroSalvar: string | null;
-}> = ({ previa, entry, isNew, saving, upload, itens, onClose, onSave, onDelete, erroSalvar }) => {
+    /** Nomes do RH e dos recursos da organização — mesma lista do desktop. */
+    sugestoesEfetivo: SugestaoEfetivo[];
+}> = ({ previa, entry, isNew, saving, upload, itens, onClose, onSave, onDelete, erroSalvar, sugestoesEfetivo }) => {
     const [form, setForm] = useState<DiaryEntry>(entry);
     // Rascunho no aparelho (sinal caiu / aba descarregada ao abrir a câmera). Registro novo usa a chave "novo".
     const chaveId = isNew ? null : entry.id;
@@ -806,13 +812,31 @@ const EntrySheet: React.FC<{
                     {(form.labor || []).length === 0 && (
                         <p className="text-xs font-medium text-slate-400 py-2">Nenhum efetivo lançado.</p>
                     )}
+                    {/* Lista nativa do celular: escolher daqui mantém o nome igual ao do RH —
+                        nome digitado de qualquer jeito vira equipe nova na "Análise de equipes". */}
+                    <datalist id="diario-mobile-efetivo">
+                        {sugestoesEfetivo.map(s => (
+                            <option key={`${s.type}-${s.id}`} value={s.name}>{s.subLabel}</option>
+                        ))}
+                    </datalist>
+                    {sugestoesEfetivo.length > 0 && (form.labor || []).length > 0 && (
+                        <p className="text-[11px] font-medium text-slate-400">Escolha da lista para o nome sair igual ao do RH.</p>
+                    )}
                     {(form.labor || []).map((l, i) => (
-                        <div key={i} className="flex items-center gap-2">
+                        <div key={i} className="space-y-1">
+                        <div className="flex items-center gap-2">
                             <input
+                                list="diario-mobile-efetivo"
                                 value={l.category}
-                                onChange={e => setLabor(i, 'category', e.target.value)}
-                                placeholder="Função / equipe"
-                                className="flex-1 h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                onChange={e => {
+                                    const nome = e.target.value;
+                                    setForm(p => ({
+                                        ...p,
+                                        labor: (p.labor || []).map((x, k) => (k === i ? aplicarNomeNoEfetivo(x, nome, sugestoesEfetivo) : x)),
+                                    }));
+                                }}
+                                placeholder="Colaborador, equipe ou função"
+                                className="flex-1 min-w-0 h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                             />
                             <input
                                 type="number" inputMode="numeric" min={0}
@@ -826,6 +850,13 @@ const EntrySheet: React.FC<{
                             >
                                 <X className="w-4 h-4" />
                             </button>
+                        </div>
+                        {l.observations && (
+                            <p className="text-[11px] font-medium text-slate-400 pl-1">{l.observations}</p>
+                        )}
+                        {sugestoesEfetivo.length > 0 && l.category.trim() !== '' && !nomeEstaNaLista(l.category, sugestoesEfetivo) && (
+                            <p className="text-[11px] font-medium text-amber-600 pl-1">Fora da lista do RH e dos recursos — confira a grafia.</p>
+                        )}
                         </div>
                     ))}
                 </div>
@@ -974,6 +1005,22 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     const [isNew, setIsNew] = useState(false);
     const [toast, setToast] = useState<string | null>(null);
     const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+
+    // Efetivo: recursos das organizações + colaboradores ATIVOS do RH da org do topo (REGRA #5).
+    const organizations = useStore(st => st.organizations);
+    const { orgId } = useOrgContext();
+    const [colaboradores, setColaboradores] = useState<{ id: string; name: string; role?: string | null; status?: string | null }[]>([]);
+    useEffect(() => {
+        let ativo = true;
+        laborService.listEmployees(orgId)
+            .then(l => { if (ativo) setColaboradores(l); })
+            .catch(err => console.warn('[diário] colaboradores do RH indisponíveis para sugestão:', err));
+        return () => { ativo = false; };
+    }, [orgId]);
+    const sugestoesEfetivo = useMemo(
+        () => comColaboradoresDoRh(sugestoesDosRecursos(organizations || []), colaboradores),
+        [organizations, colaboradores],
+    );
 
     const notify = useCallback((msg: string) => {
         setToast(msg);
@@ -1258,6 +1305,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
                     onSave={handleSaveEntry}
                     onDelete={handleDeleteEntry}
                     erroSalvar={erroSalvar}
+                    sugestoesEfetivo={sugestoesEfetivo}
                 />
             )}
 

@@ -25,7 +25,7 @@ Os quatro itens, como estavam na avaliação:
 - **8.** A data de "hoje" é fixada quando o app carrega (`TODAY_ISO`). Com o app
   instalado aberto desde ontem, o registro novo nasce com a data de ontem.
 
-## Itens — 2 de 4 concluídos
+## Itens — 3 de 4 concluídos
 
 ### 8. ✅ Data de hoje calculada na hora, no dia LOCAL
 - mobile: `emptyEntry()` usa `hojeLocal()` na hora de abrir (saiu o `TODAY_ISO`
@@ -57,6 +57,21 @@ Os quatro itens, como estavam na avaliação:
 **Pronto quando:** harness: digitar → recarregar → recuperar; segundo plano
 grava sem esperar o debounce; sem sinal mostra o aviso à vista (elementFromPoint).
 
+### 6. ✅ Efetivo com os nomes do RH e dos recursos
+- `utils/diaryLabor.ts` (novo): a regra das sugestões que morava no desktop
+  (`laborSuggestions`: trabalhadores com a função, equipes, funções com gente) +
+  colaboradores ATIVOS do RH; `aplicarNomeNoEfetivo` grava a grafia da lista e
+  leva a função/cargo para observações; `nomeEstaNaLista`.
+- mobile: `<datalist>` nativa no campo (recursos das organizações do store +
+  `laborService.listEmployees` da org do topo — REGRA #5, como a folha de RH do
+  desktop); o cargo aparece sob a linha; nome fora da lista ganha aviso
+  "Fora da lista do RH e dos recursos — confira a grafia." (não bloqueia).
+- desktop: `laborSuggestions` e o `onChange` do campo passam a usar as mesmas peças.
+
+**Pronto quando:** harness: a lista traz RH ativo + trabalhador + equipe +
+função e não traz o desligado; "maria   souza" vira "Maria Souza" com "Servente";
+o fora-da-lista avisa e grava como digitado.
+
 ## Como foi verificado
 
 ### Itens 5 e 8 (14/10/2026)
@@ -73,3 +88,12 @@ grava sem esperar o debounce; sem sinal mostra o aviso à vista (elementFromPoin
 - Tropeço registrado: olhei PNGs que a rodada "antes" tinha sobrescrito (mesma
   pasta) e achei que havia defeito de data; a depuração passo a passo mostrou 15/10
   em todos os passos. O PNG certo foi regerado.
+
+### Item 6 (14/10/2026)
+- `diaryLabor.test.ts` (novo) + `orgContextGuard`: 21/21; `tsc` 0 erros.
+- Harness + Playwright a 390px, RH e recursos stub, servidor novo: **11/11** —
+  lista nativa ligada ao campo; RH ativo, trabalhador, equipe e função na lista,
+  desligado fora; grafia padronizada e cargo em observações; aviso para nome fora
+  da lista; RPC recebeu `{category:'Maria Souza', observations:'Servente'}` e o
+  avulso como digitado; sem scroll horizontal. Primeira rodada caiu no MEU
+  seletor ("Servente" também está na `<option>`), não no app.

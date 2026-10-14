@@ -41,6 +41,7 @@ import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { useStore } from '../store/useStore';
 // `toISOString()` é UTC: depois das 21h em Brasília o registro novo nascia com a data de amanhã.
 import { hojeLocal } from '../utils/baixaRecebivel';
+import { sugestoesDosRecursos, aplicarNomeNoEfetivo } from '../utils/diaryLabor';
 import Button from './ui/Button';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import DiaryMobileApp from './DiaryMobileApp';
@@ -221,50 +222,8 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         }
     }, [organizations.length, fetchOrganizations]);
 
-    const laborSuggestions = useMemo(() => {
-        const suggestions: { id: string; name: string; type: 'role' | 'worker' | 'team'; subLabel?: string }[] = [];
-        
-        organizations.forEach(org => {
-            const res = org.resources || { roles: [], workers: [], teams: [] };
-            
-            // 1. Trabalhadores (Alta prioridade)
-            (res.workers || []).forEach(w => {
-                if (!suggestions.find(s => s.type === 'worker' && s.id === w.id)) {
-                    const role = res.roles?.find(r => r.id === w.roleId);
-                    suggestions.push({ 
-                        id: w.id, 
-                        name: w.name, 
-                        type: 'worker', 
-                        subLabel: role?.name 
-                    });
-                }
-            });
-
-            // 2. Equipes
-            (res.teams || []).forEach(t => {
-                if (!suggestions.find(s => s.type === 'team' && s.id === t.id)) {
-                    suggestions.push({ 
-                        id: t.id, 
-                        name: t.name, 
-                        type: 'team',
-                        subLabel: `${t.memberIds?.length || 0} integrantes`
-                    });
-                }
-            });
-
-            // 3. Funções que REALMENTE possuem trabalhadores vinculados
-            const activeRoleIds = new Set((res.workers || []).map(w => w.roleId).filter(Boolean));
-            (res.roles || []).forEach(r => {
-                if (activeRoleIds.has(r.id)) {
-                    if (!suggestions.find(s => s.type === 'role' && s.name === r.name)) {
-                        suggestions.push({ id: r.id, name: r.name, type: 'role' });
-                    }
-                }
-            });
-        });
-
-        return suggestions;
-    }, [organizations]);
+    // Mesma regra do app mobile (utils/diaryLabor.ts).
+    const laborSuggestions = useMemo(() => sugestoesDosRecursos(organizations), [organizations]);
 
     // A busca (data, relato, atividades) é da StandardTable — array estável para o recorte.
     const entries = useMemo(() => settings.diaryEntries || [], [settings.diaryEntries]);
@@ -890,11 +849,12 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                 placeholder="Trabalhador, equipe ou função"
                                                                 value={r.category}
                                                                 onChange={(e) => {
+                                                                    // Escolheu da lista: grafia da lista e a função vai para observações (utils/diaryLabor.ts)
                                                                     const nome = e.target.value;
-                                                                    handleLaborChange(r.idx, 'category', nome);
-                                                                    // Escolheu um trabalhador da lista: a função vai para observações (como o dropdown antigo fazia)
-                                                                    const w = laborSuggestions.find(sug => sug.type === 'worker' && sug.name === nome);
-                                                                    if (w?.subLabel && !r.observations) handleLaborChange(r.idx, 'observations', w.subLabel);
+                                                                    setFormData((prev: Partial<DiaryEntry>) => ({
+                                                                        ...prev,
+                                                                        labor: (prev.labor || []).map((l, i) => (i === r.idx ? aplicarNomeNoEfetivo(l, nome, laborSuggestions) : l)),
+                                                                    }));
                                                                 }}
                                                                 className={`${campo} ${estado(r.category)}`}
                                                             />

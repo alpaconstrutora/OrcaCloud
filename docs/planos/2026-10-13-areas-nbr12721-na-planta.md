@@ -285,7 +285,24 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
   - Exports NBR 12721 da Fase 2 que faltavam no `index.ts` do kernel foram adicionados; o bundle não mudou.
   - `__tests__/blueprintUnidadesDoPredio.test.ts`: 6 testes. 4 unidades × (1 tipo + 10 cópias) = 44, com números únicos e a área igual à da origem; geminada na cópia; renomear a origem propaga; apagar a cópia some com as unidades dela; numeração fora do padrão; duplex. Mutação provada: medir a cópia sem as vizinhas derruba o teste da geminada.
   - Suíte: 9.119 = 9.085 + 34 pulados, 0 falhas; tsc 0 erros.
-- [ ] Fase 4: adaptador e hipóteses (0 de 2)
+- [x] Fase 3 publicada: `b4f93bd5`
+- [ ] Fase 4: adaptador e hipóteses (1 de 2 completos; 4.2 falta a prova no app real, que depende da tela da Fase 6)
+  - [x] 4.1 `utils/blueprintNbr12721.ts`
+    - `entradaDoEstudo(model, hip)` usa as unidades do prédio (Fase 3), os ambientes desenhados (eixo), a **metade das paredes externas de cada unidade** como espaço privativo próprio e o **resto da área construída** como "Paredes e circulação — <pavimento>" (comum proporcional padrão). Assim o Quadro I fecha com `areaConstruidaMm2`.
+    - Vaga vinculada **sai do ambiente que a contém** e entra como acessório, com a cobertura e o coeficiente daquele ambiente.
+    - Ambientes declarados entram, e o do tipo é replicado nas cópias com a dona derivada; o acessório vinculado não se replica.
+    - Os escopos vêm da classificação ou do padrão do estudo.
+    - Rateios não proporcionais vêm das hipóteses; o órfão é avisado e ignorado, e o comum não proporcional sem rateio é avisado.
+    - `classificacaoSugerida`: varanda → DIFERENTE; nada acima com pavimento acima (`exposicaoDoNivel` → EXTERIOR) → DESCOBERTA; fora de unidade → comum proporcional. A sugestão entra quando falta classificação, e o ambiente volta em `aClassificar`.
+    - **Limite conhecido:** a unidade DERIVADA (andar copiado) ainda não recebe acessório próprio; o vínculo de vaga só existe na unidade de origem. Isso fica para a Fase 6, com a tela de acessórios (campo opcional de pavimento no acessório).
+    - `__tests__/blueprintNbr12721.test.ts`: 8 testes. A privativa do IV-B é igual à da Planta; o Quadro I do pavimento é igual à área construída; classificação gravada × hipótese × MOTOR_007; andares copiados; vaga sai da garagem; rateio por hipótese e órfão; sugestão (varanda/descoberta/comum); o **estudo só com declarados reproduz o caso 02 da testemunha** (Quadros I, II e IV-B, 1e-9); sanitização das hipóteses.
+    - Mutações provadas: tirar a metade externa derruba 1 teste; não descontar a vaga derruba 1.
+  - [ ] 4.2 `aplicar_20271013200000_blueprint_study_nbr12721.sql` **aplicada no remoto em 13/10** (tabela nova, uma policy de uma perna `is_org_member`, REVOKE de anon/PUBLIC, GRANT só a authenticated), `services/blueprintNbr12721Service.ts` (get com o padrão quando não há linha; save sanitizado, organização DO ESTUDO) e `types/blueprint.ts` (`BlueprintNbr12721Row`).
+    - Prova de RLS num bloco que sempre aborta (a tabela continuou com 0 linhas): um autenticado membro de nada vê 0 e o UPDATE dele afeta 0; o membro da organização do estudo vê 1. Não havia, no banco, usuário que estivesse em alguma organização e fora da do estudo, por isso foi usado um uid novo.
+    - `__tests__/blueprintNbr12721Service.test.ts`: 3 testes.
+    - `verificar-views-anon.sh` não rodou: pede a senha do agente-leitura, e a migration não cria view.
+    - **Falta:** gravar e ler pelo serviço no app real, que vem com a tela da Fase 6.
+  - Suíte: 9.130 = 9.096 + 34 pulados, 0 falhas; tsc 0 erros; `check-org-selector-guard` ok.
 - [ ] Fase 5: estudo sem desenho (0 de 2)
 - [ ] Fase 6: tela na Planta (0 de 2)
 - [ ] Fase 7: congelar e aprovar (0 de 2)

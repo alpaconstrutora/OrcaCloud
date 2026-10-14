@@ -247,6 +247,16 @@ export interface BlueprintProdutoRow {
   updated_at: string;
 }
 
+/** Hipóteses NBR 12721 do estudo (`blueprint_study_nbr12721`, 13/10/2026). */
+export interface BlueprintNbr12721Row {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  hipoteses: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Biblioteca de materiais da organização (E7.4) — `blueprint_materials`. */
 export interface BlueprintMaterialRow {
   id: string;

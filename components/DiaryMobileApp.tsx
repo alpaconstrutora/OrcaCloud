@@ -4,9 +4,10 @@ import {
     Users, ClipboardList, CheckCircle2, Trash2, ChevronRight, Sun, Cloud,
     CloudRain, BarChart3, Image as ImageIcon, CalendarDays, Ban,
 } from 'lucide-react';
-import { DiaryEntry, DiaryActivity, LaborEntry, WeatherShift, ProjectSettings, BudgetEntry } from '../types';
+import { DiaryEntry, DiaryActivity, LaborEntry, WeatherShift, ProjectSettings } from '../types';
 import { projectService } from '../services/projectService';
 import { uploadDiaryMedia, removeDiaryMedia, diaryEntryMediaRefs } from '../services/diaryMediaService';
+import { salvarRegistroDiario, excluirRegistroDiario, DiaryWriteResult } from '../services/diaryEntryService';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { onlyDiarios, isObra } from '../utils/projectClassification';
 import { isUnplannedActivity, setUnplanned } from '../utils/diaryActivities';
@@ -15,9 +16,9 @@ import { isUnplannedActivity, setUnplanned } from '../utils/diaryActivities';
  * Diário de Obras — aplicativo mobile.
  *
  * Mesma fonte de dados da tela desktop (`ProjectDiaryManager`): os registros
- * moram em `projects.settings.diaryEntries` (JSONB), lidos e gravados pelo
- * `projectService`. Não há tabela própria — por isso aqui também se salva o
- * projeto inteiro, não um registro isolado.
+ * moram em `projects.settings.diaryEntries` (JSONB). Lê-se o projeto pelo
+ * `projectService`; grava-se UM registro por vez (`diaryEntryService`) — salvar
+ * o projeto inteiro apagava o registro que outra pessoa lançou no meio tempo.
  *
  * É usado em dois lugares (o mesmo arranjo de `TasksMobileApp`):
  *  - celular de verdade  → `DiaryProjectsList` / `ProjectDiaryManager` devolvem
@@ -41,8 +42,6 @@ interface LoadedProject {
     id: string;
     name: string;
     settings: ProjectSettings;
-    budget?: BudgetEntry[];
-    empresa_id?: string;
     organization_id?: string;
 }
 
@@ -868,7 +867,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     }, [projects]);
 
     // Carrega o diário escolhido — o `settings` que vem da lista pode estar
-    // parcial, e o save precisa do projeto inteiro (budget, empresa, org).
+    // parcial (e a org do bucket de fotos mora no projeto).
     useEffect(() => {
         let cancelled = false;
         if (!selectedId) { setProject(null); return; }
@@ -894,25 +893,23 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
         return true;
     }), [entries, filter]);
 
-    /** Grava a lista inteira — os registros são JSONB do projeto, não linha de tabela. */
-    const persist = useCallback(async (next: DiaryEntry[], msg: string, orfaos: string[] = []) => {
+    /** Grava um registro por vez; a lista que volta é a do BANCO (traz o que outra pessoa lançou). */
+    const persist = useCallback(async (
+        gravar: (projectId: string) => Promise<DiaryWriteResult>,
+        msg: string,
+        refsQueFicam: string[] = [],
+    ) => {
         if (!project) return;
         setSaving(true);
         try {
-            const settings = { ...project.settings, diaryEntries: next };
-            await projectService.saveProject({
-                id: project.id,
-                name: project.name,
-                settings,
-                budget: project.budget || [],
-                ...(project.empresa_id ? { empresa_id: project.empresa_id } : {}),
-                ...(project.organization_id ? { organization_id: project.organization_id } : {}),
-            });
-            // §22 — estado local, sem recarregar a lista inteira.
-            setProject(p => (p ? { ...p, settings } : p));
+            const { entries: gravadas, anterior } = await gravar(project.id);
+            // §22 — estado local com a lista devolvida, sem recarregar o projeto.
+            setProject(p => (p ? { ...p, settings: { ...p.settings, diaryEntries: gravadas } } : p));
             setEditing(null);
             notify(msg);
-            // Objetos que o registro deixou de referenciar saem do bucket DEPOIS do save.
+            // Órfãos contra a versão anterior SEGUNDO O BANCO, DEPOIS do save.
+            const ficam = new Set(refsQueFicam);
+            const orfaos = diaryEntryMediaRefs(anterior).filter(r => !ficam.has(r));
             if (orfaos.length > 0) void removeDiaryMedia(orfaos);
         } catch (err) {
             console.error('Erro ao salvar registro do diário:', err);
@@ -923,19 +920,13 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     }, [project, notify]);
 
     const handleSaveEntry = useCallback((entry: DiaryEntry) => {
-        const list = (project?.settings?.diaryEntries || []) as DiaryEntry[];
-        const anterior = list.find(e => e.id === entry.id);
-        const next = anterior ? list.map(e => (e.id === entry.id ? entry : e)) : [entry, ...list];
-        next.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-        const refsAgora = new Set(diaryEntryMediaRefs(entry));
-        const orfaos = diaryEntryMediaRefs(anterior).filter(r => !refsAgora.has(r));
-        persist(next, anterior ? 'Registro atualizado.' : 'Registro salvo.', orfaos);
-    }, [project, persist]);
+        const existe = entries.some(e => e.id === entry.id);
+        persist(id => salvarRegistroDiario(id, entry), existe ? 'Registro atualizado.' : 'Registro salvo.', diaryEntryMediaRefs(entry));
+    }, [entries, persist]);
 
     const handleDeleteEntry = useCallback((id: string) => {
-        const list = (project?.settings?.diaryEntries || []) as DiaryEntry[];
-        persist(list.filter(e => e.id !== id), 'Registro excluído.', diaryEntryMediaRefs(list.find(e => e.id === id)));
-    }, [project, persist]);
+        persist(projectId => excluirRegistroDiario(projectId, id), 'Registro excluído.');
+    }, [persist]);
 
     const diarioAtual = diarios.find(d => d.id === selectedId);
     const podeVoltar = !initialProjectId && !!selectedId;

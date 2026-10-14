@@ -36,6 +36,7 @@ import type { Employee } from '../services/laborService';
 import { ProjectSettings, DiaryEntry, BudgetEntry, WeatherShift, DiaryActivity, LaborEntry, ProjectSchedule } from '../types';
 import { projectService } from '../services/projectService';
 import { uploadDiaryMedia, removeDiaryMedia, diaryEntryMediaRefs } from '../services/diaryMediaService';
+import { salvarRegistroDiario, excluirRegistroDiario, carregarRegistrosDiario } from '../services/diaryEntryService';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
@@ -394,9 +395,13 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
             return;
         }
 
-        let newEntries = [...(settings.diaryEntries || [])];
+        if (!settings.id) {
+            notify('Salve o diário antes de lançar registros.');
+            return;
+        }
+
         const currentEntry: DiaryEntry = editingId
-            ? { ...(newEntries.find(e => e.id === editingId) || {}), ...formData } as DiaryEntry
+            ? { ...((settings.diaryEntries || []).find(e => e.id === editingId) || {}), ...formData } as DiaryEntry
             : {
                 id: crypto.randomUUID(),
                 date: formData.date!,
@@ -413,16 +418,22 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                 impediments: formData.impediments
             };
 
-        // Objetos que o registro deixou de referenciar saem do bucket DEPOIS do save.
-        const anterior = editingId ? (settings.diaryEntries || []).find(e => e.id === editingId) : undefined;
+        // Um registro por vez: salvar o projeto inteiro apagava o registro que outra
+        // pessoa (ou a prévia mobile) lançou no meio tempo. A lista que volta é a do BANCO.
+        let gravadas: DiaryEntry[];
+        let anterior: DiaryEntry | null;
+        try {
+            ({ entries: gravadas, anterior } = await salvarRegistroDiario(settings.id, currentEntry));
+        } catch (error) {
+            console.error('Erro ao salvar registro do diário:', error);
+            notify('Falha ao salvar o registro. Tente novamente.');
+            return;
+        }
+        onUpdateSettings({ ...settings, diaryEntries: gravadas });
+
+        // Objetos que o registro deixou de referenciar (segundo o banco) saem do bucket DEPOIS do save.
         const refsAgora = new Set(diaryEntryMediaRefs(currentEntry));
         const orfaos = diaryEntryMediaRefs(anterior).filter(r => !refsAgora.has(r));
-
-        if (editingId) {
-            newEntries = newEntries.map(e => e.id === editingId ? currentEntry : e);
-        } else {
-            newEntries.unshift(currentEntry);
-        }
 
         // Sincronização com o projeto de planejamento vinculado
         const targetSyncProjectId = autoLinkedProjectId;
@@ -437,7 +448,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
                     // Pegar todos os diários para encontrar a evolução MÁXIMA de cada item
                     // Isso evita que um diário antigo com evolução menor sobrescreva o valor atual
-                    const allEntries = [currentEntry, ...(settings.diaryEntries || []).filter(e => e.id !== currentEntry.id)];
+                    const allEntries = gravadas;
 
                     const maxEvolutionByItem = new Map<string, number>();
                     allEntries.forEach(entry => {
@@ -481,19 +492,12 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                 }
             } catch (error) {
                 console.error("Erro ao sincronizar com planejamento:", error);
-                notify('Falha ao sincronizar com o projeto de planejamento. O diário foi salvo localmente.'); // Bug 5
+                notify('Registro salvo, mas a evolução não chegou ao planejamento vinculado.'); // Bug 5
             }
         }
 
-
-        newEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        onUpdateSettings({ ...settings, diaryEntries: newEntries });
-
-        // Salvar projeto principal
-        if (onSave) {
-            await onSave();
-        }
         if (orfaos.length > 0) void removeDiaryMedia(orfaos);
+        notify(editingId ? 'Registro atualizado.' : 'Registro salvo.');
 
         setIsAdding(false);
 
@@ -543,13 +547,18 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     };
 
     const confirmDelete = async () => {
-        if (!confirmDeleteId) return;
-        const apagado = (settings.diaryEntries || []).find(e => e.id === confirmDeleteId);
-        const newEntries = (settings.diaryEntries || []).filter(e => e.id !== confirmDeleteId);
-        onUpdateSettings({ ...settings, diaryEntries: newEntries });
+        if (!confirmDeleteId || !settings.id) return;
+        const id = confirmDeleteId;
         setConfirmDeleteId(null);
-        if (onSave) await onSave();
-        if (apagado) void removeDiaryMedia(diaryEntryMediaRefs(apagado));
+        try {
+            const { entries: gravadas, anterior: apagado } = await excluirRegistroDiario(settings.id, id);
+            onUpdateSettings({ ...settings, diaryEntries: gravadas });
+            if (apagado) void removeDiaryMedia(diaryEntryMediaRefs(apagado));
+            notify('Registro excluído.');
+        } catch (error) {
+            console.error('Erro ao excluir registro do diário:', error);
+            notify('Falha ao excluir o registro. Tente novamente.');
+        }
     };
 
     const handleWeatherShiftChange = (index: number, field: keyof WeatherShift, value: string) => {
@@ -692,12 +701,24 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         else setFormData(prev => ({ ...prev, documents: (prev.documents || []).filter((_, i) => i !== index) }));
     };
 
+    /** A prévia grava direto no banco — ao fechar, a tela relê os registros (senão mostra a cópia velha). */
+    const fecharPreviaMobile = async () => {
+        setShowMobilePreview(false);
+        if (!settings.id) return;
+        try {
+            const atuais = await carregarRegistrosDiario(settings.id);
+            onUpdateSettings({ ...settings, diaryEntries: atuais });
+        } catch (error) {
+            console.error('Erro ao recarregar registros do diário:', error);
+        }
+    };
+
     if (isMobile) return <DiaryMobileApp projects={projects} initialProjectId={settings.id} />;
 
     return (
         <div className="space-y-6 pb-20">
             {showMobilePreview && (
-                <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Diário de Obras">
+                <MobilePreviewFrame onClose={fecharPreviaMobile} title="Prévia — Diário de Obras">
                     <DiaryMobileApp projects={projects} initialProjectId={settings.id} />
                 </MobilePreviewFrame>
             )}

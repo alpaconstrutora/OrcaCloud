@@ -1016,6 +1016,94 @@ export const TIPOS_DE_AMBIENTE = [
 export type TipoDeAmbiente = (typeof TIPOS_DE_AMBIENTE)[number];
 
 /**
+ * O USO do ambiente (14/10/2026, kernel 0.102.0) — o que o cômodo É: sala,
+ * dormitório, lavabo, área de serviço…
+ *
+ * ─── POR QUE ALÉM DO TIPO ───────────────────────────────────────────────────
+ *
+ * `TipoDeAmbiente` é a divisão da NBR 5410 — 5 baldes, grossos de propósito. Só
+ * que ~20 módulos liam esse campo, e os que precisam de mais do que 5 baldes
+ * adivinhavam pelo NOME, que é exatamente o que a nota acima proíbe: a
+ * hidráulica separava cozinha de área de serviço por `/serv|lavand/`, o lavabo
+ * (só podia ser BANHEIRO) recebia chuveiro, a climatização tirava sala ×
+ * dormitório do nome. O pedido: *"Ambiente nao esta vinculado a apenas
+ * eletrica, mas tambem hidraulica, climatizazacao etc."*
+ *
+ * O USO é a fonte; o tipo NBR 5410 é DERIVADO dele (`TIPO_NBR5410_DO_USO`) e
+ * continua gravado — invariante: com uso, `tipoDeAmbiente` é sempre o do uso.
+ * Assim quem só precisa dos 5 baldes da norma não muda, e o desenho antigo (tipo
+ * sem uso) segue válido. Este vocabulário era o do Programa de Necessidades
+ * (`blueprintPrograma.ts`), que agora o reexporta daqui.
+ *
+ * Plano: `docs/planos/2026-10-14-ambiente-uso-disciplinas.md`.
+ */
+export const USOS_DO_AMBIENTE = [
+  'SALA',
+  'COZINHA',
+  'DORMITORIO',
+  'SUITE',
+  'BANHEIRO',
+  'LAVABO',
+  'AREA_DE_SERVICO',
+  'VARANDA',
+  'CIRCULACAO',
+  'GARAGEM',
+  'ESCRITORIO',
+  'DEPOSITO',
+  'OUTRO',
+] as const;
+export type UsoDoAmbiente = (typeof USOS_DO_AMBIENTE)[number];
+
+/** O tipo que a NBR 5410 conta, por uso. FONTE ÚNICA da ponte uso → tipo. */
+export const TIPO_NBR5410_DO_USO: Record<UsoDoAmbiente, TipoDeAmbiente> = {
+  SALA: 'SALA_DORMITORIO',
+  COZINHA: 'COZINHA_SERVICO',
+  DORMITORIO: 'SALA_DORMITORIO',
+  SUITE: 'SALA_DORMITORIO',
+  BANHEIRO: 'BANHEIRO',
+  LAVABO: 'BANHEIRO',
+  AREA_DE_SERVICO: 'COZINHA_SERVICO',
+  VARANDA: 'VARANDA',
+  CIRCULACAO: 'OUTRO',
+  GARAGEM: 'OUTRO',
+  ESCRITORIO: 'SALA_DORMITORIO',
+  DEPOSITO: 'OUTRO',
+  OUTRO: 'OUTRO',
+};
+
+/**
+ * A classificação que a etiqueta fica tendo depois de um pedido — a regra ÚNICA
+ * dos comandos que classificam (`NameSpace`, `PlaceSpaceLabel(s)`,
+ * `SetSpaceLabelProps`):
+ *
+ *   - uso pedido → o tipo é o do uso; tipo explícito que o contradiga é erro;
+ *   - uso `null` → a classificar (o tipo cai junto, salvo se vier explícito);
+ *   - só tipo → o uso fica se ainda bater com ele; senão cai (volta a ser só tipo);
+ *   - nada pedido → nada muda (renomear não é reclassificar).
+ */
+export function classificacaoDoAmbiente(
+  atual: { tipoDeAmbiente?: TipoDeAmbiente | null; uso?: UsoDoAmbiente | null },
+  pedido: { tipoDeAmbiente?: TipoDeAmbiente | null; uso?: UsoDoAmbiente | null },
+): { tipoDeAmbiente: TipoDeAmbiente | null; uso: UsoDoAmbiente | null } {
+  if (pedido.uso !== undefined) {
+    if (pedido.uso === null) return { tipoDeAmbiente: pedido.tipoDeAmbiente !== undefined ? pedido.tipoDeAmbiente : null, uso: null };
+    if (!(USOS_DO_AMBIENTE as readonly string[]).includes(pedido.uso)) {
+      throw new KernelError('BAD_SPACE_KIND', `Uso de ambiente inválido: ${pedido.uso}`);
+    }
+    const tipo = TIPO_NBR5410_DO_USO[pedido.uso];
+    if (pedido.tipoDeAmbiente !== undefined && pedido.tipoDeAmbiente !== tipo) {
+      throw new KernelError('BAD_SPACE_KIND', `O uso ${pedido.uso} conta como ${tipo} na NBR 5410, não ${pedido.tipoDeAmbiente ?? 'sem tipo'}`);
+    }
+    return { tipoDeAmbiente: tipo, uso: pedido.uso };
+  }
+  if (pedido.tipoDeAmbiente !== undefined) {
+    const uso = atual.uso && TIPO_NBR5410_DO_USO[atual.uso] === pedido.tipoDeAmbiente ? atual.uso : null;
+    return { tipoDeAmbiente: pedido.tipoDeAmbiente, uso };
+  }
+  return { tipoDeAmbiente: atual.tipoDeAmbiente ?? null, uso: atual.uso ?? null };
+}
+
+/**
  * ACABAMENTOS DO AMBIENTE (19/09/2026, E7.2) — piso, forro e rodapé.
  *
  * ─── POR QUE MORAM NA ETIQUETA ──────────────────────────────────────────────
@@ -1203,8 +1291,13 @@ export interface SpaceLabel {
   levelId: ObjectId;
   at: Point;
   name: string;
-  /** Ver `TIPOS_DE_AMBIENTE`. Omitido no canônico quando ausente. */
+  /**
+   * Ver `TIPOS_DE_AMBIENTE`. Omitido no canônico quando ausente. Com `uso`, é
+   * SEMPRE `TIPO_NBR5410_DO_USO[uso]` (invariante) — derivado, não escolhido.
+   */
   tipoDeAmbiente?: TipoDeAmbiente | null;
+  /** O uso do cômodo (0.102.0) — ver `USOS_DO_AMBIENTE`. Ausente = só o tipo (desenho antigo) ou a classificar. */
+  uso?: UsoDoAmbiente | null;
   /** Piso, forro e rodapé (E7.2). Omitido no canônico quando ausente. */
   acabamentos?: AcabamentosDoAmbiente;
   /**
@@ -5664,6 +5757,15 @@ export function assertModelInvariants(model: BlueprintModel): void {
   for (const l of model.labels ?? []) {
     if (l.tipoDeAmbiente != null && !(TIPOS_DE_AMBIENTE as readonly string[]).includes(l.tipoDeAmbiente)) {
       throw new KernelError('BAD_SPACE_KIND', `Tipo de ambiente inválido em ${l.id}: ${l.tipoDeAmbiente}`);
+    }
+    // USO (0.102.0): da lista, e o tipo da norma é o DELE — nunca dois valores que se contradizem.
+    if (l.uso != null) {
+      if (!(USOS_DO_AMBIENTE as readonly string[]).includes(l.uso)) {
+        throw new KernelError('BAD_SPACE_KIND', `Uso de ambiente inválido em ${l.id}: ${l.uso}`);
+      }
+      if (l.tipoDeAmbiente !== TIPO_NBR5410_DO_USO[l.uso]) {
+        throw new KernelError('BAD_SPACE_KIND', `Etiqueta ${l.id}: o uso ${l.uso} conta como ${TIPO_NBR5410_DO_USO[l.uso]} na NBR 5410, não ${l.tipoDeAmbiente ?? 'sem tipo'}`);
+      }
     }
     // DEPARTAMENTO (P2.22): quando declarado, texto aparado, não vazio, até o limite.
     if (l.departamento != null) {

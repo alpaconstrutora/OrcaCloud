@@ -20,7 +20,7 @@
  * modelo, mesmas cores, em qualquer máquina. Os sugeridos têm cor fixa (o
  * social é sempre o amarelo) para a prancha ficar reconhecível entre estudos.
  */
-import type { BlueprintModel, Command, ObjectId, Space, SpaceLabel, TipoDeAmbiente } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Space, SpaceLabel, TipoDeAmbiente, UsoDoAmbiente } from './blueprintKernel';
 import { areaRecuada, departamentoNormalizado } from './blueprintKernel';
 import { etiquetaDoAmbiente } from './blueprintDistribuicao';
 
@@ -67,12 +67,36 @@ export function corDoDepartamento(nome: string, todos: readonly string[]): strin
   return PALETA[i % PALETA.length];
 }
 
+/** O departamento de cada USO declarado (14/10/2026); OUTRO não diz nada. */
+const DEPARTAMENTO_DO_USO: Record<UsoDoAmbiente, string | null> = {
+  SALA: 'Social',
+  COZINHA: 'Serviço',
+  DORMITORIO: 'Íntimo',
+  SUITE: 'Íntimo',
+  BANHEIRO: 'Íntimo',
+  LAVABO: 'Íntimo',
+  AREA_DE_SERVICO: 'Serviço',
+  VARANDA: 'Social',
+  CIRCULACAO: 'Circulação',
+  GARAGEM: 'Serviço',
+  ESCRITORIO: 'Social',
+  DEPOSITO: 'Serviço',
+  OUTRO: null,
+};
+
 /**
- * Sugestão pelo TIPO e pelo NOME. Ordem: nome específico primeiro (um
- * "Dormitório" é íntimo mesmo que o tipo diga só SALA_DORMITORIO), depois o
- * tipo. `null` = não arrisca.
+ * Sugestão pelo USO, pelo NOME e pelo TIPO. Ordem: o uso declarado na etiqueta
+ * (14/10/2026 — é o que o ambiente É, e não adivinhação); depois o nome
+ * específico (um "Dormitório" é íntimo mesmo que o tipo diga só
+ * SALA_DORMITORIO), depois o tipo. `null` = não arrisca.
  */
-export function sugerirDepartamento(nome: string | null | undefined, tipo: TipoDeAmbiente | null | undefined): string | null {
+export function sugerirDepartamento(
+  nome: string | null | undefined,
+  tipo: TipoDeAmbiente | null | undefined,
+  uso?: UsoDoAmbiente | null,
+): string | null {
+  const peloUso = uso ? DEPARTAMENTO_DO_USO[uso] : null;
+  if (peloUso) return peloUso;
   const n = (nome ?? '').toLowerCase();
   if (/dorm|quarto|su[ií]te|closet|banh|lavabo|wc|sanit/.test(n)) return 'Íntimo';
   if (/sala|estar|jantar|varanda|sacada|terra[çc]o|gourmet|churrasq|piscina|home|escrit[óo]rio|biblioteca/.test(n)) return 'Social';
@@ -153,7 +177,7 @@ export function sugestoesDeDepartamento(model: BlueprintModel, levelId?: ObjectI
     const et = etiquetaDoAmbiente(s, model.labels);
     if (et?.departamento) return;
     const nome = s.name?.trim() || `Ambiente ${i + 1}`;
-    const d = departamentoNormalizado(sugerirDepartamento(s.name, et?.tipoDeAmbiente));
+    const d = departamentoNormalizado(sugerirDepartamento(s.name, et?.tipoDeAmbiente, et?.uso));
     if (!d) return;
     saida.push({
       spaceId: s.id,

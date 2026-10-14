@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '2f212fc5f8712ab6db76629dbd7c7b01d81319e8665af84d0ef381777a873877',
+    hash: 'c88ddc0057d0d7938b426fab8fbd335a45a06e22a55bce49ca8a460bb8a0b48f',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'ac39a0e8ccc44fbf8f1571f119957d0b0241636494c82281ee30451d19c8ee68',
+    hash: '55890d469ab244c50402d7790d08a9096ef08d5b656aa2ca536ce33246c3a6e7',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'df326bdf66363715f5306afebeca8196ea6a45b4d40650acf0e81ff59c820c95',
+    hash: '63067ba10b5bc12d3a133236d4011bf7ac5e08110aa11d58ba736488c0649a87',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '09437ba2a71e045c6af8cd89afec32fe95f38524cba635e5eaaa60ddf06573f9',
+    hash: '597f653d631cf8798c7d2bfe5e63f4936fb04f9c6f4e038158d40bfa08905027',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '7850d29cf1a8211ce0f518541ec8f966805146adf76df994a121e88317988325',
+    hash: '878a9044831f106f97d45803497d791b05d7a98ee6a93d9daf19a2623226021a',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,7 +895,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'bdb9ae19f9ae9279615f33d71f0cde0b780591fbc3e1921b58c3844fd04a7576',
+    hash: 'a06cce54585a67ef33c5bdbe8f14f9519d63c9ba5b20ed5efda27486990f567a',
   },
 };
 
@@ -975,6 +975,11 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
  *   copiado), omitido quando ausente — nenhum dos seis casos tem unidade. Mesma prova, ANTES de
  *   tocar num hash: com a string em 0.100.0, 4.252 testes passaram; depois do bump as seis falhas
  *   foram todas de hash (cada uma UMA vez), contagens idênticas.
+ *
+ *   0.101.0 → 0.102.0 (14/10/2026): `SpaceLabel.uso?` (o uso do ambiente; o tipo NBR 5410 sai
+ *   dele), omitido quando ausente — nenhum dos seis casos tem etiqueta. Mesma prova, ANTES de
+ *   tocar num hash: com a string em 0.101.0, 4.563 testes de blueprint/planta passaram; depois do
+ *   bump as seis falhas foram todas de hash (cada uma UMA vez), contagens idênticas.
  */
 describe('kernel geométrico · golden files', () => {
   it.each(Object.entries(CASES))('%s mantém o payload canônico', (_name, expected) => {

@@ -52,7 +52,7 @@ export function situacaoEletrica(
     const faltam = Math.max(conferencia.deficit, conferencia.deficitMedias);
     if (faltam > 0) {
       falta = true;
-      partes.push(`faltam ${plural(faltam, 'tomada', 'tomadas')}`);
+      partes.push(faltam === 1 ? 'falta 1 tomada' : `faltam ${faltam} tomadas`);
     } else {
       partes.push(`tomadas ✓ (${conferencia.existentes}/${conferencia.minimo})`);
     }

@@ -23,7 +23,7 @@
 import { applyBatch, novoUid, point, wallLength, type BlueprintModel, type Command, type ObjectId, type Point } from './blueprintKernel';
 import { modeloParaPixel, pixelParaModelo, type Underlay } from './blueprintUnderlay';
 import { ESBELTEZ_MINIMA, espessuraDeConstrucao, type ParedeGerada } from './blueprintVetor';
-import { FICHA_DO_USO, usoDoNome } from './blueprintPrograma';
+import { usoDoNome } from './blueprintPrograma';
 
 /** Lado maior da imagem enviada à IA: acima disso o modelo reduz por conta própria e a conta de volta desanda. */
 export const MAX_LADO_PARA_IA = 1568;
@@ -598,14 +598,14 @@ export function comandoDasParedes(paredes: ParedeGerada[], levelId: ObjectId, al
   };
 }
 
-/** Os nomes como `PlaceSpaceLabels`, com o tipo de ambiente sugerido pelo nome (como no clique da F2). */
+/** Os nomes como `PlaceSpaceLabels`, com o USO sugerido pelo nome (como no clique da F2); o tipo NBR 5410 sai dele. */
 export function comandoDosNomes(ambientes: ResultadoDoRastreio['ambientes'], levelId: ObjectId): Extract<Command, { type: 'PlaceSpaceLabels' }> | null {
   if (!ambientes.length) return null;
   return {
     type: 'PlaceSpaceLabels',
     labels: ambientes.map((m) => {
       const uso = usoDoNome(m.nome);
-      return { levelId, at: m.at, name: m.nome, ...(uso ? { tipoDeAmbiente: FICHA_DO_USO[uso].tipoNbr5410 } : {}) };
+      return { levelId, at: m.at, name: m.nome, ...(uso ? { uso } : {}) };
     }),
   };
 }

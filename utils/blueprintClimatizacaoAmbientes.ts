@@ -161,6 +161,8 @@ export interface ContextoDoAmbiente {
   luminariasW?: number | null;
   /** 11/10/2026: o tipo de ambiente da etiqueta — vale como uso quando o nome não diz. */
   tipoDeAmbiente?: TipoDeAmbiente | null;
+  /** 14/10/2026: o USO declarado na etiqueta (`SpaceLabel.uso`) — vence o nome e o tipo. */
+  uso?: UsoDoAmbiente | null;
 }
 
 /**
@@ -211,8 +213,9 @@ export function peDireitoLivreMm(peDireitoMm: number, acabamentos: AcabamentosDo
 
 export function premissasDoAmbiente(declarado: HipotesesDoAmbiente | undefined, ctx: ContextoDoAmbiente): PremissasDoAmbiente {
   const h = declarado ?? HIPOTESES_DO_AMBIENTE_VAZIAS;
-  // 11/10/2026: o nome primeiro; sem uso no nome ("Ambiente 1"), o tipo de ambiente da etiqueta.
-  const uso = usoDoAmbiente(ctx.nome, ctx.tipoDeAmbiente);
+  // 14/10/2026: o uso DECLARADO na etiqueta primeiro; sem ele, o nome; sem uso no nome
+  // ("Ambiente 1"), o tipo de ambiente da etiqueta (11/10/2026).
+  const uso = usoDoAmbiente(ctx.nome, ctx.tipoDeAmbiente, ctx.uso);
   const padrao = uso ? PADRAO_POR_USO[uso] : PADRAO_POR_USO.OUTRO;
   const origemPadrao: OrigemDoDado = uso ? 'USO' : 'SEM';
   const escolher = <T,>(decl: T | null, doUso: T): DadoComOrigem<T> => (decl != null ? { valor: decl, origem: 'DECLARADA' } : { valor: doUso, origem: origemPadrao });

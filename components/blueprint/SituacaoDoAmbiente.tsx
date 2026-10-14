@@ -48,15 +48,14 @@ export function SituacaoDoAmbiente({
               aria-label={`${rotulo} de ${nomeDoAmbiente}: ${s.texto}`}
               data-testid={`situacao-${s.disciplina.toLowerCase()}`}
               data-estado={s.estado}
-              className="group flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11px] hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="group flex w-full items-start gap-1.5 rounded px-1 py-0.5 text-left text-[11px] hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              <Icone className="h-3 w-3 shrink-0 text-slate-400" />
+              <Icone className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" />
               <span className="w-[72px] shrink-0 font-medium text-slate-600">{rotulo}</span>
-              {/* Truncado no painel estreito; o texto inteiro fica no title. */}
-              <span className={`min-w-0 flex-1 truncate ${COR_DO_TEXTO[s.estado]}`} title={s.texto}>
-                {s.texto}
-              </span>
-              <ChevronRight className="h-3 w-3 shrink-0 text-slate-300 group-hover:text-slate-500" />
+              {/* Quebra em vez de cortar: o painel é estreito e o que falta é a informação útil
+                  (o print de 14/10 mostrou "kit banheiro: 0 de 8 pontos · f…"). */}
+              <span className={`min-w-0 flex-1 ${COR_DO_TEXTO[s.estado]}`}>{s.texto}</span>
+              <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-slate-300 group-hover:text-slate-500" />
             </button>
           </li>
         );

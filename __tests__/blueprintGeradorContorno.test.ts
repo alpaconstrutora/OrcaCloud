@@ -4,7 +4,7 @@
  * todo ambiente tem porta, e a aplicação é um lote de 3 comandos (um Ctrl+Z).
  */
 import { describe, expect, it } from 'vitest';
-import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, type Point } from '../utils/blueprintKernel';
+import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, TIPO_NBR5410_DO_USO, type Point } from '../utils/blueprintKernel';
 import { comandosDeAplicacao, gerar } from '../utils/blueprintGerador';
 import { programaSemente } from '../utils/blueprintPrograma';
 import { subtrairBorda } from '../utils/blueprintContorno';
@@ -47,6 +47,13 @@ describe('gerador dentro do contorno (F11)', () => {
     expect(alvo.walls.length).toBe(r.model.walls.length);
     expect(alvo.openings.length).toBe(r.model.openings.length);
     expect(alvo.spaces.map((s) => s.name).filter(Boolean).sort()).toEqual(r.model.spaces.map((s) => s.name).filter(Boolean).sort());
+    // 14/10/2026: a etiqueta nasce com o USO do item do programa (o tipo NBR 5410 sai dele) —
+    // antes só o tipo era gravado, e o lavabo virava "banheiro".
+    for (const a of r.ambientes) {
+      const et = alvo.labels.find((l) => l.name === a.nome)!;
+      expect(et.uso, a.nome).toBe(a.item.uso);
+      expect(et.tipoDeAmbiente, a.nome).toBe(TIPO_NBR5410_DO_USO[a.item.uso]);
+    }
   });
 
   it('contorno oblíquo: segue no maior retângulo e AVISA o percentual que ficou de fora', () => {

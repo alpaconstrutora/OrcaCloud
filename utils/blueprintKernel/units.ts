@@ -696,8 +696,20 @@
  * comando recusam pavimento que não é cópia; a cauda tira o acessório quando o andar some. No
  * canônico, `pavimento` (índice) só quando há. Provado antes do bump: com a string em 0.100.0,
  * 4.252 testes de blueprint/planta/sync/nbr12721 passaram (4.277 = 4.252 + 25 pulados).
+ *
+ * ─── 0.101.0 → 0.102.0 (14/10/2026) — O USO DO AMBIENTE ────────────────────
+ *
+ * Plano `2026-10-14-ambiente-uso-disciplinas.md` (F2): `SpaceLabel.uso?` — o que o cômodo É
+ * (13 usos: sala, dormitório, suíte, banheiro, lavabo, área de serviço…), vocabulário que era
+ * do Programa e agora mora no kernel (`USOS_DO_AMBIENTE`). O tipo NBR 5410 passa a ser
+ * DERIVADO dele (`TIPO_NBR5410_DO_USO`), e a invariante recusa tipo que não é o do uso.
+ * `NameSpace`, `PlaceSpaceLabel(s)` e `SetSpaceLabelProps` aceitam `uso`, numa regra só
+ * (`classificacaoDoAmbiente`): uso manda; só tipo derruba o uso que não bate; nada pedido não
+ * reclassifica. A cópia de grupo leva o uso. Omitido do canônico quando ausente: desenho antigo
+ * só muda pela string da versão. Provado antes do bump: com a string em 0.101.0 e tudo no
+ * lugar, 4.563 testes de blueprint/planta passaram (4.588 = 4.563 + 25 pulados).
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.101.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.102.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

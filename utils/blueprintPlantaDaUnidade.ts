@@ -645,7 +645,7 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
       const l = plano({ x: (amb.ret.x0 + amb.ret.x1) / 2, y: (amb.ret.y0 + amb.ret.y1) / 2 });
       const c = noMundo(a.q, l.x, l.y);
       if (!m.spaces.some((x) => x.levelId === tipo.id && pointInPolygon(x.ring, c))) continue;
-      etiquetas.push({ levelId: tipo.id, at: c, name: amb.nome, tipoDeAmbiente: FICHA_DO_USO[amb.item.uso].tipoNbr5410 });
+      etiquetas.push({ levelId: tipo.id, at: c, name: amb.nome, uso: amb.item.uso });
     }
   }
   if (etiquetas.length) aplicar([{ type: 'PlaceSpaceLabels', labels: etiquetas }]);

@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.101.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.102.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2489,6 +2489,8 @@ function projetar(model) {
       // `undefined` quando ausente: a chave some, e o hash dos desenhos que
       // nunca souberam de tipo de ambiente não muda.
       tipoDeAmbiente: l.tipoDeAmbiente ?? void 0,
+      // USO (0.102.0): só quando declarado — o desenho que só tem tipo não muda de hash.
+      uso: l.uso ?? void 0,
       // DEPARTAMENTO (0.56.0, P2.22): só quando declarado.
       departamento: l.departamento ?? void 0,
       // NBR 12721 (0.100.0): só quando classificada.
@@ -3334,6 +3336,7 @@ function modelFromCanonicalPayload(payload) {
       at: { x: l.at.x, y: l.at.y },
       name: l.name,
       tipoDeAmbiente: l.tipoDeAmbiente ?? null,
+      ...l.uso ? { uso: l.uso } : {},
       ...l.departamento ? { departamento: l.departamento } : {},
       ...l.nbr12721 ? { nbr12721: nbr12721DoCanonico(l.nbr12721) } : {},
       ...l.acabamentos ? {

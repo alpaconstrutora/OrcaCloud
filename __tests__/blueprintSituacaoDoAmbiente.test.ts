@@ -36,6 +36,8 @@ describe('situacaoEletrica', () => {
     const s = situacaoEletrica(tomadas({ deficit: 1, deficitMedias: 2 }), luz({ faltaComando: true }));
     expect(s.estado).toBe('falta');
     expect(s.texto).toBe('faltam 2 tomadas · falta comando');
+    // Concordância: uma só é "falta" (o print de 14/10 mostrou "faltam 1 tomada").
+    expect(situacaoEletrica(tomadas({ deficit: 1 }), luz({})).texto).toBe('falta 1 tomada · iluminação ✓');
   });
 });
 

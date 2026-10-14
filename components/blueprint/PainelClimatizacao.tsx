@@ -11,7 +11,7 @@
  * orienta, não aprova.
  */
 import React from 'react';
-import type { AcabamentosDoAmbiente, ObjectId, TipoDeAmbiente } from '../../utils/blueprintKernel';
+import type { AcabamentosDoAmbiente, ObjectId, TipoDeAmbiente, UsoDoAmbiente } from '../../utils/blueprintKernel';
 import { ROTULO_DA_EXPOSICAO, type ExposicaoDoAmbiente } from '../../utils/blueprintExposicaoTermica';
 import {
   CLIMA_POR_CIDADE,
@@ -52,6 +52,8 @@ export interface AmbienteParaClima {
   luminariasW?: number | null;
   /** 11/10/2026: o tipo de ambiente da etiqueta (vale como uso quando o nome não diz). */
   tipoDeAmbiente?: TipoDeAmbiente | null;
+  /** 14/10/2026: o uso declarado na etiqueta — vence o nome e o tipo. */
+  uso?: UsoDoAmbiente | null;
 }
 
 interface Props {
@@ -165,7 +167,7 @@ function CampoDerivavel({ valor, onValor, rotulo, faixa, passo, unidade, emUso, 
 
 /** E0.3: o editor de UM ambiente — cada campo vazio = derivar; o placeholder mostra o que vale. */
 function EditorDoAmbiente({ a, declarado, onDeclarar, temperaturaDoEstudoC }: { a: AmbienteParaClima; declarado: HipotesesDoAmbiente; onDeclarar: (h: HipotesesDoAmbiente) => void; temperaturaDoEstudoC: number }) {
-  const p = premissasDoAmbiente(declarado, { nome: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, temperaturaDoEstudoC, luminariasW: a.luminariasW, tipoDeAmbiente: a.tipoDeAmbiente });
+  const p = premissasDoAmbiente(declarado, { nome: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, temperaturaDoEstudoC, luminariasW: a.luminariasW, tipoDeAmbiente: a.tipoDeAmbiente, uso: a.uso });
   const set = (parte: Partial<HipotesesDoAmbiente>) => onDeclarar({ ...declarado, ...parte });
   const uso = rotuloDoUso(p.uso);
   return (
@@ -222,7 +224,7 @@ export default function PainelClimatizacao({ hip, onHip, condicoes: c, ambientes
   };
   const semEtiqueta = ambientes.filter((a) => !a.uid).length;
   const declarados = ambientes.filter((a) => a.uid && hip.ambientes[a.uid]).length;
-  const algumDoUso = ambientes.some((a) => premissasDoAmbiente(a.uid ? hip.ambientes[a.uid] : undefined, { nome: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, temperaturaDoEstudoC: conf.temperaturaInternaC, luminariasW: a.luminariasW, tipoDeAmbiente: a.tipoDeAmbiente }).conferir);
+  const algumDoUso = ambientes.some((a) => premissasDoAmbiente(a.uid ? hip.ambientes[a.uid] : undefined, { nome: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, temperaturaDoEstudoC: conf.temperaturaInternaC, luminariasW: a.luminariasW, tipoDeAmbiente: a.tipoDeAmbiente, uso: a.uso }).conferir);
 
   return (
     <div className="space-y-4" data-testid="climatizacao">
@@ -344,7 +346,7 @@ export default function PainelClimatizacao({ hip, onHip, condicoes: c, ambientes
               <tbody>
                 {ambientes.map((a) => {
                   const declarado = (a.uid && hip.ambientes[a.uid]) || HIPOTESES_DO_AMBIENTE_VAZIAS;
-                  const p = premissasDoAmbiente(a.uid ? hip.ambientes[a.uid] : undefined, { nome: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, temperaturaDoEstudoC: conf.temperaturaInternaC, luminariasW: a.luminariasW, tipoDeAmbiente: a.tipoDeAmbiente });
+                  const p = premissasDoAmbiente(a.uid ? hip.ambientes[a.uid] : undefined, { nome: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, temperaturaDoEstudoC: conf.temperaturaInternaC, luminariasW: a.luminariasW, tipoDeAmbiente: a.tipoDeAmbiente, uso: a.uso });
                   const marca = (origem: OrigemDoDado) => (origem === 'DECLARADA' ? '' : ' *');
                   return (
                     <React.Fragment key={a.spaceId}>

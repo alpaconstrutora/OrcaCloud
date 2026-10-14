@@ -16,9 +16,14 @@
  *                   ambiente e é do usuário (o esgoto automático avisa se faltar).
  *   AREA_SERVICO  — tanque (AF + esgoto), máquina de lavar (AF + esgoto), ralo seco
  *
- * `TIPOS_DE_AMBIENTE` só tem COZINHA_SERVICO para os dois últimos: a heurística
- * é o NOME do ambiente ("serviço", "lavanderia" → área de serviço; senão
- * cozinha), e a gaveta deixa trocar — sem valor novo no kernel.
+ *   LAVABO        — vaso sanitário e lavatório; sem chuveiro e sem coletor
+ *                   (14/10/2026 — antes o lavabo só podia ser BANHEIRO e ganhava box)
+ *
+ * O kit vem do USO declarado na etiqueta (`SpaceLabel.uso`, kernel 0.102.0):
+ * banheiro, lavabo, cozinha, área de serviço. Sem uso (desenho antigo), do
+ * tipo NBR 5410 — que só tem COZINHA_SERVICO para cozinha e serviço, e aí a
+ * heurística é o NOME ("serviço", "lavanderia" → área de serviço; senão
+ * cozinha). A gaveta deixa trocar o kit em qualquer caso.
  *
  * POSIÇÕES (todas dentro do anel recuado do ambiente, a `recuoDaParedeMm` da
  * face): vaso no maior lado sem porta; lavatório junto à porta; chuveiro no
@@ -31,7 +36,7 @@
  * duplica; uma disciplina que faltava (a água quente ligada depois) nasce na
  * posição do ponto irmão que já existe.
  */
-import type { BlueprintModel, Command, Componente, DisciplinaDeRede, FichaDoComponente, ObjectId, Opening, Space, SpaceLabel, Terminal, TipoDePontoHidraulico, Wall } from './blueprintKernel';
+import type { BlueprintModel, Command, Componente, UsoDoAmbiente, DisciplinaDeRede, FichaDoComponente, ObjectId, Opening, Space, SpaceLabel, Terminal, TipoDePontoHidraulico, Wall } from './blueprintKernel';
 import { CATALOGO_DE_COMPONENTES, DISCIPLINAS_DO_PONTO_HIDRAULICO, TIPOS_DE_EVAPORADORA, pointInPolygon, signedArea } from './blueprintKernel';
 import type { Point } from './blueprintKernel';
 import { etiquetaDoAmbiente, ladosDePiso, pontoJuntoAPorta, type LadoDoAmbiente } from './blueprintDistribuicao';
@@ -42,10 +47,11 @@ import { potenciaPadraoVA } from './blueprintPotenciaPadrao';
 import { potenciaEletricaVA } from './blueprintSelecaoClimatizacao';
 import { ehEvaporadoraDeParede, encostoNaParede, estaEncostada, lugaresDoPontoDeForca } from './blueprintEncostoNaParede';
 
-export type KitHidraulico = 'BANHEIRO' | 'COZINHA' | 'AREA_SERVICO';
+export type KitHidraulico = 'BANHEIRO' | 'LAVABO' | 'COZINHA' | 'AREA_SERVICO';
 
 export const ROTULO_DO_KIT: Record<KitHidraulico, string> = {
   BANHEIRO: 'Banheiro',
+  LAVABO: 'Lavabo',
   COZINHA: 'Cozinha',
   AREA_SERVICO: 'Área de serviço',
 };
@@ -91,9 +97,11 @@ export interface PlanoDePontosDoAmbiente {
   motivo: string | null;
 }
 
-/** O kit que o tipo de ambiente sugere, com a heurística do nome para cozinha × serviço. */
+/** O kit que o USO declarado pede; sem uso, o tipo de ambiente, com a heurística do nome para cozinha × serviço. */
 export function kitDoAmbiente(space: Space, labels: readonly SpaceLabel[]): KitHidraulico | null {
-  const tipo = etiquetaDoAmbiente(space, labels)?.tipoDeAmbiente ?? null;
+  const etiqueta = etiquetaDoAmbiente(space, labels);
+  if (etiqueta?.uso) return KIT_DO_USO[etiqueta.uso] ?? null;
+  const tipo = etiqueta?.tipoDeAmbiente ?? null;
   if (tipo === 'BANHEIRO') return 'BANHEIRO';
   if (tipo === 'COZINHA_SERVICO') {
     const nome = (space.name ?? '').toLowerCase();
@@ -101,6 +109,14 @@ export function kitDoAmbiente(space: Space, labels: readonly SpaceLabel[]): KitH
   }
   return null;
 }
+
+/** O kit de cada uso que tem ponto de água; os demais (sala, dormitório…) não pedem. */
+const KIT_DO_USO: Partial<Record<UsoDoAmbiente, KitHidraulico>> = {
+  BANHEIRO: 'BANHEIRO',
+  LAVABO: 'LAVABO',
+  COZINHA: 'COZINHA',
+  AREA_DE_SERVICO: 'AREA_SERVICO',
+};
 
 /** Os terminais hidráulicos dentro do ambiente (qualquer disciplina de água/esgoto). */
 export function terminaisHidraulicosDoAmbiente(space: Space, terminais: readonly Terminal[]): Terminal[] {
@@ -185,7 +201,7 @@ function posicionarKit(
   const distancia = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
   const recuo = hip.recuoDaParedeMm;
 
-  if (kit === 'BANHEIRO') {
+  if (kit === 'BANHEIRO' || kit === 'LAVABO') {
     const vaso = pontoNoLado(maiorSemPorta, 0.3, recuo + 200, anel);
     const lavatorio = referenciaDaPorta
       ? rumoA(referenciaDaPorta, centro, recuo + 100)
@@ -195,6 +211,13 @@ function posicionarKit(
     const canto = [...anel].sort((a, b) => distancia(b, longe) - distancia(a, longe))[0];
     const chuveiro = rumoA(canto, centro, 450);
     const coletor = rumoA(chuveiro, centro, 300);
+    // O lavabo é o banheiro sem o box: vaso e lavatório, nas mesmas posições.
+    if (kit === 'LAVABO') {
+      return [
+        { papel: 'vaso', tipo: 'VASO_SANITARIO', ponto: vaso },
+        { papel: 'lavatorio', tipo: 'LAVATORIO', ponto: lavatorio },
+      ];
+    }
     return [
       { papel: 'vaso', tipo: 'VASO_SANITARIO', ponto: vaso },
       { papel: 'lavatorio', tipo: 'LAVATORIO', ponto: lavatorio },
@@ -249,7 +272,7 @@ export function planejarPontosDoAmbiente(
   const vazio = (motivo: string | null): PlanoDePontosDoAmbiente => ({
     spaceId: space.id, levelId: space.levelId, nome, kit, pecas: [], comandos: [], aCriar: 0, jaExistentes: 0, motivo,
   });
-  if (!kit) return vazio('ambiente sem tipo hidráulico — classifique como banheiro ou cozinha/serviço');
+  if (!kit) return vazio('ambiente sem uso hidráulico — classifique como banheiro, lavabo, cozinha ou área de serviço');
   const walls = model.walls.filter((w) => w.levelId === space.levelId);
   const posicionadas = posicionarKit(kit, space, walls, model.openings, hip);
   if (!posicionadas) return vazio('ambiente sem parede suficiente para posicionar o kit');

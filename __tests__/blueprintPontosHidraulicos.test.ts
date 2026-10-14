@@ -62,6 +62,24 @@ describe('kit por ambiente', () => {
     expect(kitDoAmbiente(espaco(m, 'Cozinha'), m.labels)).toBe('COZINHA');
     expect(kitDoAmbiente(espaco(m, 'Área de serviço'), m.labels)).toBe('AREA_SERVICO');
   });
+
+  it('14/10/2026: o USO declarado decide — lavabo sem chuveiro, serviço sem depender do nome, sala sem kit', () => {
+    const { m } = casa();
+    const comUso = applyBatch(m, [
+      { type: 'NameSpace', spaceId: espaco(m, 'Banho').id, name: 'Lavabo social', uso: 'LAVABO' },
+      { type: 'NameSpace', spaceId: espaco(m, 'Área de serviço').id, name: 'Ambiente 3', uso: 'AREA_DE_SERVICO' },
+      { type: 'NameSpace', spaceId: espaco(m, 'Cozinha').id, name: 'Cozinha', uso: 'SALA' },
+    ]).model;
+    expect(kitDoAmbiente(espaco(comUso, 'Lavabo social'), comUso.labels)).toBe('LAVABO');
+    expect(kitDoAmbiente(espaco(comUso, 'Ambiente 3'), comUso.labels)).toBe('AREA_SERVICO');
+    // O nome diz "Cozinha", mas o uso declarado é sala: o declarado vence.
+    expect(kitDoAmbiente(espaco(comUso, 'Cozinha'), comUso.labels)).toBeNull();
+    const lavabo = planejarPontosDoAmbiente(comUso, espaco(comUso, 'Lavabo social'));
+    expect(lavabo.pecas.map((p) => p.tipo)).toEqual(['VASO_SANITARIO', 'LAVATORIO']);
+    expect(lavabo.pecas.some((p) => p.tipo === 'CHUVEIRO')).toBe(false);
+    // O lote é válido no kernel.
+    expect(() => applyBatch(comUso, lavabo.comandos)).not.toThrow();
+  });
 });
 
 describe('planejarPontosDoAmbiente', () => {
@@ -140,7 +158,7 @@ describe('planejarPontosDoAmbiente', () => {
     const { m } = casa();
     const semTipo = applyCommand(m, { type: 'NameSpace', spaceId: espaco(m, 'Cozinha').id, name: 'Copa', tipoDeAmbiente: null }).model;
     const copa = semTipo.spaces.find((s) => s.name === 'Copa')!;
-    expect(planejarPontosDoAmbiente(semTipo, copa).motivo).toMatch(/sem tipo hidráulico/);
+    expect(planejarPontosDoAmbiente(semTipo, copa).motivo).toMatch(/sem uso hidráulico/);
     expect(planejarPontosDoAmbiente(semTipo, copa, HIPOTESES_PONTOS_PADRAO, 'COZINHA').aCriar).toBe(3);
   });
 

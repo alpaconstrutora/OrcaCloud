@@ -74,6 +74,7 @@ import {
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   type TipoDeAmbiente,
+  type UsoDoAmbiente,
   type FuncaoCamada,
   type StructuralKind,
   type Parametros,
@@ -1063,6 +1064,8 @@ function projetar(model: BlueprintModel): {
       // `undefined` quando ausente: a chave some, e o hash dos desenhos que
       // nunca souberam de tipo de ambiente não muda.
       tipoDeAmbiente: l.tipoDeAmbiente ?? undefined,
+      // USO (0.102.0): só quando declarado — o desenho que só tem tipo não muda de hash.
+      uso: l.uso ?? undefined,
       // DEPARTAMENTO (0.56.0, P2.22): só quando declarado.
       departamento: l.departamento ?? undefined,
       // NBR 12721 (0.100.0): só quando classificada.
@@ -1912,6 +1915,8 @@ export interface CanonicalPayload {
     name: string;
     /** Tipo do ambiente (NBR 5410). Ausente sob kernel < 0.24.0 e quando não classificado. */
     tipoDeAmbiente?: string;
+    /** Uso do ambiente (sala, lavabo…). Ausente sob kernel < 0.102.0 e quando não declarado; com ele, o tipo é o do uso. */
+    uso?: string;
     /** Departamento (setor) do ambiente. Ausente sob kernel < 0.56.0 e quando não declarado. */
     departamento?: string;
     /** Classificação NBR 12721. Ausente sob kernel < 0.100.0 e quando não classificada. */
@@ -2685,6 +2690,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       at: { x: l.at.x, y: l.at.y },
       name: l.name,
       tipoDeAmbiente: (l.tipoDeAmbiente as TipoDeAmbiente) ?? null,
+      ...(l.uso ? { uso: l.uso as UsoDoAmbiente } : {}),
       ...(l.departamento ? { departamento: l.departamento } : {}),
       ...(l.nbr12721 ? { nbr12721: nbr12721DoCanonico(l.nbr12721) } : {}),
       ...(l.acabamentos

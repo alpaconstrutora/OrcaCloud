@@ -191,13 +191,15 @@ export function cargaTermicaDoNivel(model: BlueprintModel, hip: HipotesesClimati
   const premissasPorSpace = new Map<ObjectId, PremissasDoAmbiente>();
   // 11/10/2026: o tipo de ambiente da etiqueta vale como uso quando o nome não diz ("Ambiente 1").
   const tipoDaEtiqueta = new Map(model.labels.map((l) => [l.uid, l.tipoDeAmbiente ?? null]));
+  // 14/10/2026: o uso DECLARADO vence o nome e o tipo.
+  const usoDaEtiqueta = new Map(model.labels.map((l) => [l.uid, l.uso ?? null]));
   for (const e of exposicao) {
     const s = model.spaces.find((x) => x.id === e.spaceId)!;
-    premissasPorSpace.set(e.spaceId, premissasDoAmbiente(e.labelUid ? hip.ambientes[e.labelUid] : undefined, { nome: e.nome, areaPisoM2: e.areaPisoM2, peDireitoMm: e.peDireitoMm, acabamentos: acabamentosDoAmbiente(model, s), temperaturaDoEstudoC: tInt, luminariasW: luminariasDoAmbienteW(model, e.spaceId), tipoDeAmbiente: e.labelUid ? tipoDaEtiqueta.get(e.labelUid) : null }));
+    premissasPorSpace.set(e.spaceId, premissasDoAmbiente(e.labelUid ? hip.ambientes[e.labelUid] : undefined, { nome: e.nome, areaPisoM2: e.areaPisoM2, peDireitoMm: e.peDireitoMm, acabamentos: acabamentosDoAmbiente(model, s), temperaturaDoEstudoC: tInt, luminariasW: luminariasDoAmbienteW(model, e.spaceId), tipoDeAmbiente: e.labelUid ? tipoDaEtiqueta.get(e.labelUid) : null, uso: e.labelUid ? usoDaEtiqueta.get(e.labelUid) : null }));
   }
   const climatizadoPorUid = (uid: string | null, nome: string): boolean | null => {
     if (!uid) return null;
-    const p = premissasDoAmbiente(hip.ambientes[uid], { nome, areaPisoM2: 1, peDireitoMm: 2800, temperaturaDoEstudoC: tInt, tipoDeAmbiente: tipoDaEtiqueta.get(uid) ?? null });
+    const p = premissasDoAmbiente(hip.ambientes[uid], { nome, areaPisoM2: 1, peDireitoMm: 2800, temperaturaDoEstudoC: tInt, tipoDeAmbiente: tipoDaEtiqueta.get(uid) ?? null, uso: usoDaEtiqueta.get(uid) ?? null });
     return p.climatizado.valor;
   };
 

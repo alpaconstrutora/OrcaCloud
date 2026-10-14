@@ -3892,8 +3892,8 @@ describe('BlueprintEditor · ribbon', () => {
 
     const disciplinas = await screen.findByRole('list', { name: 'Disciplinas de Banho' });
     const cartao = disciplinas.closest('li') as HTMLElement;
-    // O tipo continua no cartão; a tarefa de tomadas não.
-    expect(within(cartao).getByLabelText('Tipo do ambiente Banho')).toHaveValue('BANHEIRO');
+    // O USO fica no cartão (desenho antigo: o tipo aparece como "(antigo)"); a tarefa de tomadas não.
+    expect(within(cartao).getByLabelText('Uso do ambiente Banho')).toHaveValue('tipo:BANHEIRO');
     expect(within(cartao).queryByRole('button', { name: /completar pela norma/i })).not.toBeInTheDocument();
     expect(within(cartao).queryByLabelText(/quantidade de tomadas/i)).not.toBeInTheDocument();
     expect(cartao).not.toHaveTextContent(/Iluminação: mín\./);
@@ -3914,6 +3914,13 @@ describe('BlueprintEditor · ribbon', () => {
     // Climatização abre as premissas de climatização.
     await user.click(within(disciplinas).getByTestId('situacao-climatizacao'));
     expect(await screen.findByTestId('tarefa-climatizacao')).toBeInTheDocument();
+
+    // F2: o uso declarado LAVABO — a hidráulica passa ao kit sem chuveiro (vaso + lavatório = 5 pontos)
+    // e a norma segue contando como banheiro.
+    await user.selectOptions(within(cartao).getByLabelText('Uso do ambiente Banho'), 'LAVABO');
+    expect(within(cartao).getByLabelText('Uso do ambiente Banho')).toHaveValue('LAVABO');
+    expect(within(disciplinas).getByTestId('situacao-hidraulica')).toHaveTextContent(/kit lavabo: 0 de 5 pontos · faltam 5/);
+    expect(within(cartao).queryByRole('option', { name: /antigo/ })).not.toBeInTheDocument();
   });
 
   it("Hidráulica › Água automática (18/09/2026): a gaveta lista a caixa d'água, lança a rede sugerida e o botão zera", async () => {

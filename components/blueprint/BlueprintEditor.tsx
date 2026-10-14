@@ -761,11 +761,11 @@ import {
   TIPOS_DE_RESTRICAO_DO_LOTE,
   ROTULO_DA_RESTRICAO_DO_LOTE,
   FAIXA_PADRAO_DA_RESTRICAO,
-  type TipoDeAmbiente,
+  type UsoDoAmbiente,
   type TipoDeInterruptor,
   type Wall,
   type TipoDePontoHidraulico,
-  TIPOS_DE_AMBIENTE,
+  USOS_DO_AMBIENTE,
   DISCIPLINAS_DO_PONTO_HIDRAULICO,
   rotuloCurto,
   polygonArea,
@@ -811,6 +811,7 @@ import {
 import { ehEvaporadoraDeParede, encostoNaParede } from '../../utils/blueprintEncostoNaParede';
 import { comandosAoMoverClimatizacao, moveuClimatizacao } from '../../utils/blueprintMoverClimatizacao';
 import { luminariasDoAmbienteW, premissasDoAmbiente, rotuloDoUso } from '../../utils/blueprintClimatizacaoAmbientes';
+import { FICHA_DO_USO } from '../../utils/blueprintPrograma';
 import { situacaoClimatizacao, situacaoEletrica, situacaoHidraulica, type DisciplinaDoAmbiente, type SituacaoDaDisciplina } from '../../utils/blueprintSituacaoDoAmbiente';
 import { marcasDaClimatizacao } from '../../utils/blueprintMarcasClimatizacao';
 import {
@@ -3561,6 +3562,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           // O TIPO mora na etiqueta (o ambiente é derivado) — ver `TIPOS_DE_AMBIENTE`.
           etiquetaId: etiquetaDoAmbiente(s, editor.model.labels)?.id ?? null,
           tipoDeAmbiente: etiquetaDoAmbiente(s, editor.model.labels)?.tipoDeAmbiente ?? null,
+          // O USO (14/10/2026, kernel 0.102.0): o que o cômodo é; com ele, o tipo acima é derivado.
+          uso: etiquetaDoAmbiente(s, editor.model.labels)?.uso ?? null,
           // DEPARTAMENTO (P2.22): também na etiqueta.
           departamento: etiquetaDoAmbiente(s, editor.model.labels)?.departamento ?? null,
           // A iluminação (9.5.2.1) vale para todo cômodo, com ou sem tipo.
@@ -9838,43 +9841,52 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   ).length;
 
   /**
-   * O seletor do TIPO do ambiente. Uma função porque aparece em DOIS lugares: no
-   * cartão do ambiente (navegador) e na tarefa "Tomadas pela NBR 5410" — a
-   * gaveta precisa dele para conferir, e duas cópias divergiriam na primeira
-   * correção.
+   * O seletor do USO do ambiente (14/10/2026, kernel 0.102.0) — o que o cômodo
+   * É: sala, dormitório, lavabo, área de serviço… O tipo da NBR 5410 sai dele
+   * (`TIPO_NBR5410_DO_USO`), e cada disciplina lê o que precisa: a elétrica o
+   * tipo da norma, a hidráulica o kit (lavabo sem chuveiro), a climatização o
+   * padrão do uso. Uma função porque aparece em DOIS lugares: no cartão do
+   * ambiente e na tarefa "Tomadas pela NBR 5410" — duas cópias divergiriam.
+   *
+   * Desenho antigo (tipo sem uso): o tipo aparece como opção "(antigo)" até
+   * alguém escolher o uso. Nada é convertido em silêncio — "Sala / dormitório"
+   * não diz qual dos dois.
    */
-  const seletorDoTipo = (a: (typeof ambientes)[number]) => (
-    <>
-      {/* O TIPO do ambiente é o que a NBR 5410 usa para contar tomadas
-          (9.5.2.2.1) — banheiro, cozinha, varanda, sala/dormitório. Sem
-          tipo, o ambiente fica "a classificar": estado legítimo, visível. */}
+  const seletorDoUso = (a: (typeof ambientes)[number]) => {
+    const antigo = !a.uso && a.tipoDeAmbiente ? a.tipoDeAmbiente : null;
+    return (
       <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
-        Tipo
+        Uso
         <select
-          value={a.tipoDeAmbiente ?? ''}
+          value={a.uso ?? (antigo ? `tipo:${antigo}` : '')}
           onChange={(e) => {
-            const tipoDeAmbiente = (e.target.value || null) as TipoDeAmbiente | null;
+            const uso = (e.target.value || null) as UsoDoAmbiente | null;
             if (a.etiquetaId) {
-              editor.run({ type: 'SetSpaceLabelProps', labelId: a.etiquetaId, tipoDeAmbiente });
+              editor.run({ type: 'SetSpaceLabelProps', labelId: a.etiquetaId, uso });
             } else {
               // Sem etiqueta ainda: classificar cria uma, com o nome que a
-              // lista já mostra — o tipo mora na etiqueta.
-              editor.run({ type: 'NameSpace', spaceId: a.id, name: a.rotulo, tipoDeAmbiente });
+              // lista já mostra — o uso mora na etiqueta.
+              editor.run({ type: 'NameSpace', spaceId: a.id, name: a.rotulo, uso });
             }
           }}
-          aria-label={`Tipo do ambiente ${a.rotulo}`}
+          aria-label={`Uso do ambiente ${a.rotulo}`}
           className="rounded-md border border-slate-300 px-2 py-1 text-xs"
         >
           <option value="">A classificar</option>
-          {TIPOS_DE_AMBIENTE.map((t) => (
-            <option key={t} value={t}>
-              {ROTULO_DO_TIPO_DE_AMBIENTE[t]}
+          {antigo && (
+            <option value={`tipo:${antigo}`} disabled>
+              {ROTULO_DO_TIPO_DE_AMBIENTE[antigo]} (antigo — escolha o uso)
+            </option>
+          )}
+          {USOS_DO_AMBIENTE.map((u) => (
+            <option key={u} value={u}>
+              {FICHA_DO_USO[u].rotulo}
             </option>
           ))}
         </select>
       </label>
-    </>
-  );
+    );
+  };
 
   /**
    * Os controles de TOMADAS de um ambiente — tipo do cômodo, conferência 9.5.2
@@ -9886,7 +9898,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   const controlesDeTomadas = (a: (typeof ambientes)[number]) => (
     <>
-      {seletorDoTipo(a)}
+      {seletorDoUso(a)}
+      {/* O tipo que a NBR 5410 conta (9.5.2.2.1), derivado do uso — é ele que a conferência abaixo usa. */}
+      {a.tipoDeAmbiente && (
+        <p className="mt-0.5 text-[11px] text-slate-500" data-testid={`tipo-nbr5410-${a.id}`}>
+          Na NBR 5410 conta como: {ROTULO_DO_TIPO_DE_AMBIENTE[a.tipoDeAmbiente].toLowerCase()}
+        </p>
+      )}
       <ConferenciaDoAmbiente
         conferencia={a.conferencia}
         luz={a.luz}
@@ -9919,6 +9937,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       peDireitoMm: editor.model.levels.find((l) => l.id === space?.levelId)?.defaultHeightMm ?? 2800,
       temperaturaDoEstudoC: climatizacaoDoEstudo.hipoteses.conforto.temperaturaInternaC,
       tipoDeAmbiente: a.tipoDeAmbiente,
+      uso: a.uso,
     });
     const evaporadoras = space
       ? (editor.model.terminais ?? []).filter(
@@ -16508,7 +16527,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   </div>
                   {/* O cartão diz o que o ambiente É; o que cada disciplina faz nele
                       fica nas linhas de disciplina, no fim do cartão, e nas gavetas. */}
-                  {seletorDoTipo(a)}
+                  {seletorDoUso(a)}
                   {/* UNIDADE (E2.2): a que este ambiente pertence. "Nova…" cria pelo
                       número e já põe o ambiente nela — um gesto, um Ctrl+Z por passo. */}
                   <label className="mt-1 flex items-center gap-2 text-xs text-slate-600">
@@ -17422,7 +17441,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 // E0.3: a mesma lista do painel de acabamentos, mais o uid da ETIQUETA (a chave do declarado).
                 ambientes={ambientesParaAcabamento.map((a) => {
                   const etiquetaId = ambientes.find((x) => x.id === a.spaceId)?.etiquetaId ?? null;
-                  return { spaceId: a.spaceId, uid: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.uid) || null, rotulo: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, luminariasW: luminariasDoAmbienteW(editor.model, a.spaceId), tipoDeAmbiente: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.tipoDeAmbiente) || null };
+                  return { spaceId: a.spaceId, uid: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.uid) || null, rotulo: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, luminariasW: luminariasDoAmbienteW(editor.model, a.spaceId), tipoDeAmbiente: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.tipoDeAmbiente) || null, uso: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.uso) || null };
                 })}
                 nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
                 // E1.3: derivado do desenho, só com a gaveta aberta (é por ambiente do pavimento ativo).

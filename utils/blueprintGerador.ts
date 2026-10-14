@@ -51,7 +51,7 @@ import {
   type Wall,
 } from './blueprintKernel';
 import { areaRecuada, uidDeterministico, wallLength } from './blueprintKernel';
-import { FICHA_DO_USO, type ItemDoPrograma, type Programa, type RelacaoDoPrograma } from './blueprintPrograma';
+import { type ItemDoPrograma, type Programa, type RelacaoDoPrograma } from './blueprintPrograma';
 import { avaliar, type Avaliacao, type HipotesesDaAvaliacao, HIPOTESES_DA_AVALIACAO_PADRAO } from './blueprintAvaliacao';
 import { conferirPrograma } from './blueprintConferenciaDoPrograma';
 import { avaliarRegras, REGRAS_SEMENTE } from './blueprintRegras';
@@ -738,7 +738,7 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   const nomes: Command[] = [];
   for (const a of ambientes) {
     const s = model.spaces.find((x) => x.levelId === levelId && pointInPolygon(x.ring, centro(a.ret)));
-    if (s) nomes.push({ type: 'NameSpace', spaceId: s.id, name: a.nome, tipoDeAmbiente: FICHA_DO_USO[a.item.uso].tipoNbr5410 });
+    if (s) nomes.push({ type: 'NameSpace', spaceId: s.id, name: a.nome, uso: a.item.uso });
     else avisos.push(`${a.nome}: o arranjo não fechou o ambiente (retângulo ${f2((a.ret.x1 - a.ret.x0) / 1000)} × ${f2((a.ret.y1 - a.ret.y0) / 1000)} m).`);
   }
   aplicar(nomes);
@@ -995,7 +995,7 @@ export function comandosDeGeometria(r: ResultadoDoGerador, levelId: ObjectId): C
 export function comandosDeAplicacao(r: ResultadoDoGerador, levelId: ObjectId): Command[] {
   const walls = r.comandos.flatMap((c) => (c.type === 'AddWall' ? [(({ type: _t, ...resto }) => ({ ...resto, levelId }))(c)] : []));
   const openings = r.comandos.flatMap((c) => (c.type === 'AddOpening' ? [(({ type: _t, ...resto }) => ({ ...resto, wallId: '' }))(c)] : []));
-  const labels = r.ambientes.map((a) => ({ levelId, at: point(snap((a.ret.x0 + a.ret.x1) / 2, 10), snap((a.ret.y0 + a.ret.y1) / 2, 10)), name: a.nome, tipoDeAmbiente: FICHA_DO_USO[a.item.uso].tipoNbr5410 }));
+  const labels = r.ambientes.map((a) => ({ levelId, at: point(snap((a.ret.x0 + a.ret.x1) / 2, 10), snap((a.ret.y0 + a.ret.y1) / 2, 10)), name: a.nome, uso: a.item.uso }));
   const out: Command[] = [];
   if (walls.length) out.push({ type: 'AddWalls', walls });
   if (openings.length) out.push({ type: 'AddOpenings', openings });
@@ -1008,7 +1008,7 @@ export function nomesParaOModelo(r: ResultadoDoGerador, model: BlueprintModel, l
   for (const a of r.ambientes) {
     const c = point((a.ret.x0 + a.ret.x1) / 2, (a.ret.y0 + a.ret.y1) / 2);
     const s = model.spaces.find((x) => x.levelId === levelId && pointInPolygon(x.ring, c));
-    if (s) out.push({ type: 'NameSpace', spaceId: s.id, name: a.nome, tipoDeAmbiente: FICHA_DO_USO[a.item.uso].tipoNbr5410 });
+    if (s) out.push({ type: 'NameSpace', spaceId: s.id, name: a.nome, uso: a.item.uso });
   }
   return out;
 }

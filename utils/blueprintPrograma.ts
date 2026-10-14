@@ -21,24 +21,12 @@
  * municipais típicos e a prática de incorporação), não norma: a organização
  * ajusta item a item. As sementes por tipologia partem deles.
  */
-import type { TipoDeAmbiente } from './blueprintKernel';
+import { TIPO_NBR5410_DO_USO, USOS_DO_AMBIENTE, type TipoDeAmbiente, type UsoDoAmbiente } from './blueprintKernel';
 
-export const USOS_DO_AMBIENTE = [
-  'SALA',
-  'COZINHA',
-  'DORMITORIO',
-  'SUITE',
-  'BANHEIRO',
-  'LAVABO',
-  'AREA_DE_SERVICO',
-  'VARANDA',
-  'CIRCULACAO',
-  'GARAGEM',
-  'ESCRITORIO',
-  'DEPOSITO',
-  'OUTRO',
-] as const;
-export type UsoDoAmbiente = (typeof USOS_DO_AMBIENTE)[number];
+// 14/10/2026: o vocabulário de USO mora no kernel — a etiqueta do ambiente o
+// grava (`SpaceLabel.uso`), e o tipo NBR 5410 é derivado dele. Reexportado aqui
+// porque o Programa nasceu dono dele e os importadores o procuram aqui.
+export { USOS_DO_AMBIENTE, type UsoDoAmbiente };
 
 export const PRIVACIDADES = ['SOCIAL', 'SERVICO', 'INTIMO'] as const;
 export type Privacidade = (typeof PRIVACIDADES)[number];
@@ -65,21 +53,26 @@ export interface FichaDoUso {
   nomes: RegExp;
 }
 
-export const FICHA_DO_USO: Record<UsoDoAmbiente, FichaDoUso> = {
-  SALA: { rotulo: 'Sala', tipoNbr5410: 'SALA_DORMITORIO', privacidade: 'SOCIAL', areaMinM2: 12, areaIdealM2: 18, areaMaxM2: 35, larguraMinMm: 2700, peDireitoMinMm: 2500, exigeIluminacao: true, exigeVentilacao: true, exigeFachada: true, nomes: /\b(sala|estar|jantar|living|home)\b/i },
-  COZINHA: { rotulo: 'Cozinha', tipoNbr5410: 'COZINHA_SERVICO', privacidade: 'SERVICO', areaMinM2: 6, areaIdealM2: 9, areaMaxM2: 16, larguraMinMm: 1800, peDireitoMinMm: 2500, exigeIluminacao: true, exigeVentilacao: true, exigeFachada: false, nomes: /\b(coz(inha)?|copa|gourmet)\b/i },
-  DORMITORIO: { rotulo: 'Dormitório', tipoNbr5410: 'SALA_DORMITORIO', privacidade: 'INTIMO', areaMinM2: 9, areaIdealM2: 11, areaMaxM2: 16, larguraMinMm: 2500, peDireitoMinMm: 2500, exigeIluminacao: true, exigeVentilacao: true, exigeFachada: true, nomes: /\b(dorm(it[oó]rio)?|quarto|q\d)\b/i },
-  SUITE: { rotulo: 'Suíte', tipoNbr5410: 'SALA_DORMITORIO', privacidade: 'INTIMO', areaMinM2: 12, areaIdealM2: 15, areaMaxM2: 24, larguraMinMm: 2800, peDireitoMinMm: 2500, exigeIluminacao: true, exigeVentilacao: true, exigeFachada: true, nomes: /\bsu[ií]te\b/i },
-  BANHEIRO: { rotulo: 'Banheiro', tipoNbr5410: 'BANHEIRO', privacidade: 'INTIMO', areaMinM2: 3, areaIdealM2: 4, areaMaxM2: 8, larguraMinMm: 1200, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: true, exigeFachada: false, nomes: /\b(banh(o|eiro)?|wc|bwc|sanit[aá]rio)\b/i },
-  LAVABO: { rotulo: 'Lavabo', tipoNbr5410: 'BANHEIRO', privacidade: 'SOCIAL', areaMinM2: 1.5, areaIdealM2: 2.2, areaMaxM2: 4, larguraMinMm: 900, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: true, exigeFachada: false, nomes: /\blavabo\b/i },
-  AREA_DE_SERVICO: { rotulo: 'Área de serviço', tipoNbr5410: 'COZINHA_SERVICO', privacidade: 'SERVICO', areaMinM2: 3, areaIdealM2: 4.5, areaMaxM2: 8, larguraMinMm: 1200, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: true, exigeFachada: false, nomes: /\b(serv(i[cç]o)?|lavand(eria)?|a\.?\s*s\.?)\b/i },
-  VARANDA: { rotulo: 'Varanda', tipoNbr5410: 'VARANDA', privacidade: 'SOCIAL', areaMinM2: 3, areaIdealM2: 6, areaMaxM2: 15, larguraMinMm: 1200, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: false, exigeFachada: true, nomes: /\b(varanda|sacada|terra[cç]o)\b/i },
-  CIRCULACAO: { rotulo: 'Circulação', tipoNbr5410: 'OUTRO', privacidade: 'INTIMO', areaMinM2: 0, areaIdealM2: 2, areaMaxM2: null, larguraMinMm: 900, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: false, exigeFachada: false, nomes: /\b(circ(ula[cç][aã]o)?|corredor|hall)\b/i },
-  GARAGEM: { rotulo: 'Garagem', tipoNbr5410: 'OUTRO', privacidade: 'SERVICO', areaMinM2: 12.5, areaIdealM2: 15, areaMaxM2: null, larguraMinMm: 2500, peDireitoMinMm: 2200, exigeIluminacao: false, exigeVentilacao: true, exigeFachada: false, nomes: /\b(garag(em)?|vaga|abrigo)\b/i },
-  ESCRITORIO: { rotulo: 'Escritório', tipoNbr5410: 'SALA_DORMITORIO', privacidade: 'SOCIAL', areaMinM2: 6, areaIdealM2: 8, areaMaxM2: 14, larguraMinMm: 2200, peDireitoMinMm: 2500, exigeIluminacao: true, exigeVentilacao: true, exigeFachada: true, nomes: /\b(escrit[oó]rio|office|estudo)\b/i },
-  DEPOSITO: { rotulo: 'Depósito', tipoNbr5410: 'OUTRO', privacidade: 'SERVICO', areaMinM2: 1.5, areaIdealM2: 2.5, areaMaxM2: 6, larguraMinMm: 900, peDireitoMinMm: 2200, exigeIluminacao: false, exigeVentilacao: false, exigeFachada: false, nomes: /\b(dep[oó]sito|despensa|closet|rouparia)\b/i },
-  OUTRO: { rotulo: 'Outro', tipoNbr5410: 'OUTRO', privacidade: 'SOCIAL', areaMinM2: 0, areaIdealM2: 6, areaMaxM2: null, larguraMinMm: 900, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: false, exigeFachada: false, nomes: /$^/ },
+const FICHA_SEM_TIPO: Record<UsoDoAmbiente, Omit<FichaDoUso, 'tipoNbr5410'>> = {
+  SALA: { rotulo: 'Sala', privacidade: 'SOCIAL', areaMinM2: 12, areaIdealM2: 18, areaMaxM2: 35, larguraMinMm: 2700, peDireitoMinMm: 2500, exigeIluminacao: true, exigeVentilacao: true, exigeFachada: true, nomes: /\b(sala|estar|jantar|living|home)\b/i },
+  COZINHA: { rotulo: 'Cozinha', privacidade: 'SERVICO', areaMinM2: 6, areaIdealM2: 9, areaMaxM2: 16, larguraMinMm: 1800, peDireitoMinMm: 2500, exigeIluminacao: true, exigeVentilacao: true, exigeFachada: false, nomes: /\b(coz(inha)?|copa|gourmet)\b/i },
+  DORMITORIO: { rotulo: 'Dormitório', privacidade: 'INTIMO', areaMinM2: 9, areaIdealM2: 11, areaMaxM2: 16, larguraMinMm: 2500, peDireitoMinMm: 2500, exigeIluminacao: true, exigeVentilacao: true, exigeFachada: true, nomes: /\b(dorm(it[oó]rio)?|quarto|q\d)\b/i },
+  SUITE: { rotulo: 'Suíte', privacidade: 'INTIMO', areaMinM2: 12, areaIdealM2: 15, areaMaxM2: 24, larguraMinMm: 2800, peDireitoMinMm: 2500, exigeIluminacao: true, exigeVentilacao: true, exigeFachada: true, nomes: /\bsu[ií]te\b/i },
+  BANHEIRO: { rotulo: 'Banheiro', privacidade: 'INTIMO', areaMinM2: 3, areaIdealM2: 4, areaMaxM2: 8, larguraMinMm: 1200, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: true, exigeFachada: false, nomes: /\b(banh(o|eiro)?|wc|bwc|sanit[aá]rio)\b/i },
+  LAVABO: { rotulo: 'Lavabo', privacidade: 'SOCIAL', areaMinM2: 1.5, areaIdealM2: 2.2, areaMaxM2: 4, larguraMinMm: 900, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: true, exigeFachada: false, nomes: /\blavabo\b/i },
+  AREA_DE_SERVICO: { rotulo: 'Área de serviço', privacidade: 'SERVICO', areaMinM2: 3, areaIdealM2: 4.5, areaMaxM2: 8, larguraMinMm: 1200, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: true, exigeFachada: false, nomes: /\b(serv(i[cç]o)?|lavand(eria)?|a\.?\s*s\.?)\b/i },
+  VARANDA: { rotulo: 'Varanda', privacidade: 'SOCIAL', areaMinM2: 3, areaIdealM2: 6, areaMaxM2: 15, larguraMinMm: 1200, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: false, exigeFachada: true, nomes: /\b(varanda|sacada|terra[cç]o)\b/i },
+  CIRCULACAO: { rotulo: 'Circulação', privacidade: 'INTIMO', areaMinM2: 0, areaIdealM2: 2, areaMaxM2: null, larguraMinMm: 900, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: false, exigeFachada: false, nomes: /\b(circ(ula[cç][aã]o)?|corredor|hall)\b/i },
+  GARAGEM: { rotulo: 'Garagem', privacidade: 'SERVICO', areaMinM2: 12.5, areaIdealM2: 15, areaMaxM2: null, larguraMinMm: 2500, peDireitoMinMm: 2200, exigeIluminacao: false, exigeVentilacao: true, exigeFachada: false, nomes: /\b(garag(em)?|vaga|abrigo)\b/i },
+  ESCRITORIO: { rotulo: 'Escritório', privacidade: 'SOCIAL', areaMinM2: 6, areaIdealM2: 8, areaMaxM2: 14, larguraMinMm: 2200, peDireitoMinMm: 2500, exigeIluminacao: true, exigeVentilacao: true, exigeFachada: true, nomes: /\b(escrit[oó]rio|office|estudo)\b/i },
+  DEPOSITO: { rotulo: 'Depósito', privacidade: 'SERVICO', areaMinM2: 1.5, areaIdealM2: 2.5, areaMaxM2: 6, larguraMinMm: 900, peDireitoMinMm: 2200, exigeIluminacao: false, exigeVentilacao: false, exigeFachada: false, nomes: /\b(dep[oó]sito|despensa|closet|rouparia)\b/i },
+  OUTRO: { rotulo: 'Outro', privacidade: 'SOCIAL', areaMinM2: 0, areaIdealM2: 6, areaMaxM2: null, larguraMinMm: 900, peDireitoMinMm: 2300, exigeIluminacao: false, exigeVentilacao: false, exigeFachada: false, nomes: /$^/ },
 };
+
+/** A ficha por uso; o `tipoNbr5410` vem da ponte do kernel (`TIPO_NBR5410_DO_USO`), fonte única. */
+export const FICHA_DO_USO: Record<UsoDoAmbiente, FichaDoUso> = Object.fromEntries(
+  USOS_DO_AMBIENTE.map((u) => [u, { ...FICHA_SEM_TIPO[u], tipoNbr5410: TIPO_NBR5410_DO_USO[u] }]),
+) as Record<UsoDoAmbiente, FichaDoUso>;
 
 export interface ItemDoPrograma {
   id: string;
@@ -338,9 +331,16 @@ export const USO_DO_TIPO_DE_AMBIENTE: Record<TipoDeAmbiente, UsoDoAmbiente | nul
   OUTRO: null,
 };
 
-/** O uso do ambiente: pelo NOME, e — quando o nome não diz — pelo tipo de ambiente da etiqueta. */
-export function usoDoAmbiente(nome: string | null | undefined, tipoDeAmbiente: TipoDeAmbiente | null | undefined): UsoDoAmbiente | null {
-  return usoDoNome(nome) ?? (tipoDeAmbiente ? USO_DO_TIPO_DE_AMBIENTE[tipoDeAmbiente] : null);
+/**
+ * O uso do ambiente: o DECLARADO na etiqueta (`SpaceLabel.uso`, 14/10/2026) vence
+ * tudo; sem ele, pelo NOME, e — quando o nome não diz — pelo tipo de ambiente.
+ */
+export function usoDoAmbiente(
+  nome: string | null | undefined,
+  tipoDeAmbiente: TipoDeAmbiente | null | undefined,
+  declarado?: UsoDoAmbiente | null,
+): UsoDoAmbiente | null {
+  return declarado ?? usoDoNome(nome) ?? (tipoDeAmbiente ? USO_DO_TIPO_DE_AMBIENTE[tipoDeAmbiente] : null);
 }
 
 export function usoDoNome(nome: string | null | undefined): UsoDoAmbiente | null {

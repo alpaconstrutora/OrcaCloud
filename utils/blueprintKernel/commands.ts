@@ -100,6 +100,8 @@ import {
   MAX_NOME_DE_VISTA_DEPENDENTE,
   acabamentosOuAusente,
   departamentoNormalizado,
+  classificacaoDoAmbiente,
+  type UsoDoAmbiente,
   classificacaoNbr12721Valida,
   findAmbienteDeclarado,
   limparReferenciasNbr12721,
@@ -1421,7 +1423,7 @@ export type Command =
   /** ESQUADRIA CONFIGURÁVEL (0.98.0): as folhas e a bandeira. Só porta e janela. `null` volta ao desenho de sempre. */
   | { type: 'SetOpeningConfiguracao'; openingId: ObjectId; configuracao: ConfiguracaoDaEsquadria | null }
   /** Nome vazio remove a etiqueta. */
-  | { type: 'NameSpace'; spaceId: ObjectId; name: string; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null; departamento?: string | null }
+  | { type: 'NameSpace'; spaceId: ObjectId; name: string; tipoDeAmbiente?: TipoDeAmbiente | null; uso?: UsoDoAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null; departamento?: string | null }
   /**
    * NOME DE AMBIENTE POR PONTO (P2.35, Padrão ÒPURA): a etiqueta nasce em `at`,
    * no pavimento dado, no MESMO lote que cria as paredes — o ambiente ainda não
@@ -1430,13 +1432,13 @@ export type Command =
    * ambiente (as paredes não fecharam), a etiqueta fica no ponto e passa a
    * nomear o ambiente assim que ele fechar — é o que `recomputeSpaces` faz.
    */
-  | { type: 'PlaceSpaceLabel'; levelId: ObjectId; at: Point; name: string; tipoDeAmbiente?: TipoDeAmbiente | null }
+  | { type: 'PlaceSpaceLabel'; levelId: ObjectId; at: Point; name: string; tipoDeAmbiente?: TipoDeAmbiente | null; uso?: UsoDoAmbiente | null }
   /**
    * Classifica a ETIQUETA de um ambiente. `null` volta a "a classificar".
    * `acabamentos` (E7.2) SUBSTITUI o conjunto inteiro (piso, forro e rodapé);
    * `null` limpa. Ausente não mexe.
    */
-  | { type: 'SetSpaceLabelProps'; labelId: ObjectId; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null; departamento?: string | null }
+  | { type: 'SetSpaceLabelProps'; labelId: ObjectId; tipoDeAmbiente?: TipoDeAmbiente | null; uso?: UsoDoAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null; departamento?: string | null }
   /**
    * Renomeia e reposiciona um pavimento. Campo omitido fica como está — o painel
    * edita uma propriedade de cada vez.
@@ -5299,31 +5301,33 @@ function aplicarSemHash(
       }
 
       if (existente) {
-        next.labels = next.labels.map((l) =>
-          l.id === existente.id
-            ? {
-                ...l,
-                name: nome,
-                // Ausente não mexe no tipo: renomear não é reclassificar.
-                ...(command.tipoDeAmbiente !== undefined ? { tipoDeAmbiente: command.tipoDeAmbiente } : {}),
-                ...(command.acabamentos !== undefined ? { acabamentos: acabamentosOuAusente(command.acabamentos) } : {}),
-                ...(command.departamento !== undefined ? { departamento: departamentoNormalizado(command.departamento) } : {}),
-              }
-            : l,
-        );
+        next.labels = next.labels.map((l) => {
+          if (l.id !== existente.id) return l;
+          const atualizada: SpaceLabel = {
+            ...l,
+            name: nome,
+            ...(command.acabamentos !== undefined ? { acabamentos: acabamentosOuAusente(command.acabamentos) } : {}),
+            ...(command.departamento !== undefined ? { departamento: departamentoNormalizado(command.departamento) } : {}),
+          };
+          // Ausente não mexe no tipo nem no uso: renomear não é reclassificar.
+          aplicarClassificacao(atualizada, command);
+          return atualizada;
+        });
         diff.updated.push(existente.id);
       } else {
         const id = nextId(next, 'lbl');
-        next.labels.push({
+        const nova: SpaceLabel = {
           id,
           uid: novoUid(),
           levelId: space.levelId,
           at: ancora,
           name: nome,
-          tipoDeAmbiente: command.tipoDeAmbiente ?? null,
+          tipoDeAmbiente: null,
           ...(command.acabamentos ? { acabamentos: acabamentosOuAusente(command.acabamentos) } : {}),
           ...(departamentoNormalizado(command.departamento) ? { departamento: departamentoNormalizado(command.departamento) } : {}),
-        });
+        };
+        aplicarClassificacao(nova, command);
+        next.labels.push(nova);
         diff.created.push(id);
       }
       break;
@@ -5336,7 +5340,7 @@ function aplicarSemHash(
     case 'SetSpaceLabelProps': {
       const label = next.labels.find((l) => l.id === command.labelId);
       if (!label) throw new KernelError('LABEL_NOT_FOUND', `Etiqueta inexistente: ${command.labelId}`);
-      if (command.tipoDeAmbiente !== undefined) label.tipoDeAmbiente = command.tipoDeAmbiente;
+      aplicarClassificacao(label, command);
       if (command.departamento !== undefined) {
         const d = departamentoNormalizado(command.departamento);
         if (d) label.departamento = d;
@@ -6101,13 +6105,33 @@ function colocarEtiqueta(next: BlueprintModel, diff: Diff, command: ComandoPlace
     ? next.labels.find((l) => l.levelId === espaco.levelId && pointInPolygon(espaco.ring, l.at) && !espaco.holes.some((h) => pointInPolygon(h, l.at)))
     : undefined;
   if (existente) {
-    next.labels = next.labels.map((l) => (l.id === existente.id ? { ...l, name: nome, ...(command.tipoDeAmbiente !== undefined ? { tipoDeAmbiente: command.tipoDeAmbiente } : {}) } : l));
+    next.labels = next.labels.map((l) => {
+      if (l.id !== existente.id) return l;
+      const atualizada: SpaceLabel = { ...l, name: nome };
+      aplicarClassificacao(atualizada, command);
+      return atualizada;
+    });
     diff.updated.push(existente.id);
     return;
   }
   const id = nextId(next, 'lbl');
-  next.labels.push({ id, uid: novoUid(), levelId: command.levelId, at: { x: Math.round(command.at.x), y: Math.round(command.at.y) }, name: nome, tipoDeAmbiente: command.tipoDeAmbiente ?? null });
+  const nova: SpaceLabel = { id, uid: novoUid(), levelId: command.levelId, at: { x: Math.round(command.at.x), y: Math.round(command.at.y) }, name: nome, tipoDeAmbiente: null };
+  aplicarClassificacao(nova, command);
+  next.labels.push(nova);
   diff.created.push(id);
+}
+
+/**
+ * Aplica à etiqueta o tipo/uso pedido pelo comando — a regra é a de
+ * `classificacaoDoAmbiente` (uso manda; tipo é derivado). Nada pedido, nada muda.
+ * O uso ausente não vira chave `uso: null` na etiqueta.
+ */
+function aplicarClassificacao(label: SpaceLabel, pedido: { tipoDeAmbiente?: TipoDeAmbiente | null; uso?: UsoDoAmbiente | null }): void {
+  if (pedido.tipoDeAmbiente === undefined && pedido.uso === undefined) return;
+  const c = classificacaoDoAmbiente(label, pedido);
+  label.tipoDeAmbiente = c.tipoDeAmbiente;
+  if (c.uso) label.uso = c.uso;
+  else delete label.uso;
 }
 
 /** Aplica UM comando. O hash sai daqui porque quem pede um comando só o usa. */
@@ -6620,7 +6644,7 @@ export function sincronizarGrupos(next: BlueprintModel, diff: Diff, copiasAntes:
       for (const l of etiquetasDaOrigem) {
         const uid = uidDaCopia(i.uid, l.uid);
         esperadas.add(uid);
-        const campos = { levelId: i.levelId, at: T(l.at), name: l.name, tipoDeAmbiente: l.tipoDeAmbiente ?? null, departamento: l.departamento ?? null, nbr12721: l.nbr12721 ? { ...l.nbr12721 } : undefined };
+        const campos = { levelId: i.levelId, at: T(l.at), name: l.name, tipoDeAmbiente: l.tipoDeAmbiente ?? null, uso: l.uso ?? null, departamento: l.departamento ?? null, nbr12721: l.nbr12721 ? { ...l.nbr12721 } : undefined };
         const existente = etiquetaPorUid.get(uid);
         if (existente) {
           Object.assign(existente, campos);

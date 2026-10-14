@@ -92,8 +92,27 @@ Pedido seguinte, no mesmo dia, depois da avaliação (F1 = tela, F2 = modelo):
 - [x] F1.1 — cartão sem `controlesDeTomadas`; `seletorDoTipo` separado (cartão + gaveta Tomadas)
 - [x] F1.2 — `utils/blueprintSituacaoDoAmbiente.ts` (11 testes) + `SituacaoDoAmbiente.tsx` (1 teste)
 - [x] F1.3 — teste novo no editor ("Cartão do ambiente (14/10/2026)…"); `BlueprintEditor.test.tsx` + `DistribuirTomadas.test.tsx` 269/269; `tsc` rc=0; `check-ui-standard.sh` sem violação nos dois `.tsx`
-- [ ] F1.4 — prova no app (fica para o fim da F2, numa rodada só, com planta descartável — pede autorização)
-- [ ] F2.1 · [ ] F2.2 · [ ] F2.3 · [ ] F2.4 · [ ] F2.5 · [ ] F2.6 · [ ] F2.7 · [ ] F2.8 · [ ] F2.9 · [ ] F2.10 · [ ] F2.11
+- [x] F1.4 — prova no app (autorizada 14/10): `c:/tmp/pwtest/conferencia-ambiente-uso.cjs`, dev server
+  da frente, planta descartável criada pelo serviço e ARQUIVADA no fim (status conferido). 18/18 portões:
+  cartões sem Completar/Distribuir/VA; três disciplinas; desenho antigo mostra "(antigo)"; "Ambiente 2"
+  declarado dormitório = climatizado pelo uso; troca para Lavabo → "kit lavabo: 0 de 5 pontos" e gaveta sem
+  chuveiro; cada linha abre a sua gaveta; a de Tomadas diz "Na NBR 5410 conta como: banheiro"; sem erro de
+  página/console/HTTP. O print achou dois defeitos que os testes não pegavam — "faltam 1 tomada" e o texto
+  cortado com reticências no painel estreito — corrigidos (concordância + quebra de linha) e a prova repetida.
+- [x] F2.1 — `USOS_DO_AMBIENTE`, `TIPO_NBR5410_DO_USO`, `SpaceLabel.uso?`, invariante, `classificacaoDoAmbiente` (regra única)
+- [x] F2.2 — `uso` em `NameSpace`/`PlaceSpaceLabel(s)`/`SetSpaceLabelProps` via `aplicarClassificacao`; cópia de grupo leva o uso
+- [x] F2.3 — canônico: `uso` só quando há; ida e volta testada
+- [x] F2.4 — 0.102.0. Antes do bump, string em 0.101.0: 4.563 testes de blueprint/planta passaram (4.588 = 4.563 + 25 pulados). Depois: as 6 falhas dos goldens foram só de hash, uma vez cada; hashes e nota atualizados; 23 testes com a string da versão atualizados
+- [x] F2.5 — Programa reexporta o vocabulário do kernel; `FICHA_DO_USO[u].tipoNbr5410` montado de `TIPO_NBR5410_DO_USO`; `usoDoAmbiente(nome, tipo, declarado)`
+- [x] F2.6 — kit pelo uso; kit novo LAVABO (vaso + lavatório); teste "o USO declarado decide"
+- [x] F2.7 — `ContextoDoAmbiente.uso` em `premissasDoAmbiente`, carga térmica e `PainelClimatizacao`
+- [x] F2.8 — `sugerirDepartamento(nome, tipo, uso)` — o uso vence o nome
+- [x] F2.9 — gerador (3 pontos), planta da unidade e rastreio gravam `uso`; teste no `blueprintGeradorContorno`
+- [x] F2.10 — seletor "Uso" (13 opções) no cartão e na gaveta Tomadas; desenho antigo mostra "(antigo — escolha o uso)"; a gaveta diz "Na NBR 5410 conta como…"; teste do editor troca para lavabo e vê "kit lavabo: 0 de 5 pontos"
+- [x] F2.11 — bundle regerado depois da última edição de kernel (`node scripts/build-planta-api-kernel.mjs`)
+
+Fora do escopo (registrado, não feito): o IFC exporta só o tipo NBR 5410 (`SpaceKind`), não o uso;
+`PainelAcabamentos` agrupa "do mesmo tipo" pelo tipo NBR 5410.
 
 ## Verificação
 

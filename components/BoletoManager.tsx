@@ -40,6 +40,7 @@ interface BoletoManagerProps {
 
 const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'numero', label: 'Código', sortable: true },
+    { key: 'documento', label: 'Documento', sortable: true },
     { key: 'beneficiario', label: 'Beneficiário', sortable: true },
     { key: 'descricao', label: 'Descrição', sortable: true },
     { key: 'obra', label: 'Obra', sortable: true },
@@ -74,6 +75,7 @@ function mensagemDeExclusao(status: Boleto['status']): string {
 
 const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; uppercase?: boolean; className: string }> = {
     numero: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    documento: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     beneficiario: { label: 'Beneficiário', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     descricao: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     obra: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -88,7 +90,7 @@ const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    numero: 118, beneficiario: 220, descricao: 220, obra: 160, centro_custo: 179, valor: 130,
+    numero: 118, documento: 260, beneficiario: 220, descricao: 220, obra: 160, centro_custo: 179, valor: 130,
     vencimento: 150, status: 130, capturado_em: 165, capturado_por: 167, actions: 100,
 };
 
@@ -144,15 +146,34 @@ function renderBoletoCell(
         userNameMap: Record<string, string>;
         onOpen: (b: Boleto) => void;
         onDelete: (b: Boleto) => void;
+        abrindoDocumento: boolean;
+        onAbrirDocumento: (b: Boleto) => void;
     },
 ): React.ReactNode {
-    const { atrasado, supplierMap, projectMap, ccMap, userNameMap, onOpen, onDelete } = ctx;
+    const { atrasado, supplierMap, projectMap, ccMap, userNameMap, onOpen, onDelete, abrindoDocumento, onAbrirDocumento } = ctx;
     switch (key) {
         case 'numero':
             return (
                 <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
                     {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
                 </span>
+            );
+        case 'documento':
+            // Bucket privado: a URL é assinada no CLIQUE (15 min), não no carregamento.
+            // Mesmo desenho da coluna Documento do Financeiro do condomínio (§7 — link azul).
+            return !b.documento_path ? (
+                <span className="text-sm font-normal text-gray-400">—</span>
+            ) : abrindoDocumento ? (
+                <span className="text-sm font-normal text-gray-500">Abrindo...</span>
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => onAbrirDocumento(b)}
+                    className="block w-full text-left truncate text-sm font-normal text-blue-600 hover:text-blue-800 transition-colors"
+                    title={`Abrir ${b.documento_nome}`}
+                >
+                    {b.documento_nome}
+                </button>
             );
         case 'beneficiario': {
             const nome = b.supplier_id
@@ -358,10 +379,13 @@ interface BoletoRowItemProps extends BoletoItemBaseProps {
     projectMap: Record<string, string>;
     ccMap: Record<string, string>;
     userNameMap: Record<string, string>;
+    abrindoDocumento: boolean;
+    onAbrirDocumento: (b: Boleto) => void;
 }
 
 const BoletoRowItem = React.memo(function BoletoRowItem({
     boleto: b, idx, selected, isHighlighted, atrasado, supplierMap, orderedVisibleColumns, projectMap, ccMap, userNameMap,
+    abrindoDocumento, onAbrirDocumento,
     onOpen, onCheckboxMouseDown, onCheckboxChange, onDelete,
 }: BoletoRowItemProps) {
     return (
@@ -385,9 +409,9 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                 <td
                     key={key}
                     className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"
-                    onClick={key === 'actions' ? (e) => e.stopPropagation() : undefined}
+                    onClick={key === 'actions' || key === 'documento' ? (e) => e.stopPropagation() : undefined}
                 >
-                    {renderBoletoCell(key, b, { atrasado, supplierMap, projectMap, ccMap, userNameMap, onOpen, onDelete })}
+                    {renderBoletoCell(key, b, { atrasado, supplierMap, projectMap, ccMap, userNameMap, onOpen, onDelete, abrindoDocumento, onAbrirDocumento })}
                 </td>
             ))}
             {/* espaçador — casa com o <col /> sem largura, no final (ver colgroup) */}
@@ -418,8 +442,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     // w-full/100% junto com table-layout:fixed (§6.1). Sem coluna "Ações" (§9.1) —
     // o espaçador vai no FINAL, não antes de nada (não há coluna fixa pra ancorar).
     const tableTotalWidth = 40
-        + (['numero', 'beneficiario', 'descricao', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por', 'actions'] as const)
+        + (['numero', 'documento', 'beneficiario', 'descricao', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por', 'actions'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0);
+
+    // Documento em abertura (path) — a célula mostra "Abrindo..." enquanto a URL assinada sai.
+    const [abrindoDocumento, setAbrindoDocumento] = useState<string | null>(null);
 
     // Toast de Notificação — Seção 13 do guia
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -733,6 +760,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             const sortDir = tableColumns.sortColumn ? tableColumns.sortDirection : 'desc';
 
             switch (sortCol) {
+                case 'documento':     va = (a.documento_nome ?? '').toLowerCase(); vb = (b.documento_nome ?? '').toLowerCase(); break;
                 case 'numero':        va = a.numero ?? 0;                       vb = b.numero ?? 0;                       break;
                 case 'vencimento':    va = a.vencimento ?? '';                  vb = b.vencimento ?? '';                  break;
                 case 'valor':         va = a.valor ?? 0;                        vb = b.valor ?? 0;                        break;
@@ -795,6 +823,20 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         setEditing(undefined);
         setIsModalOpen(true);
     }
+
+    const abrirDocumento = useCallback(async (b: Boleto) => {
+        if (!b.documento_path) return;
+        setAbrindoDocumento(b.documento_path);
+        try {
+            const url = await boletoService.getDocumentoUrl(b.documento_path);
+            window.open(url, '_blank', 'noopener');
+        } catch (e: unknown) {
+            notify(e instanceof Error ? e.message : 'Não foi possível abrir o documento.', 'error');
+        } finally {
+            setAbrindoDocumento(null);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const abrirEdicao = useCallback((b: Boleto) => {
         savedScrollTopRef.current = scrollContainerRef.current?.scrollTop ?? 0;
@@ -1289,6 +1331,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         projectMap={projectMap}
                                         ccMap={ccMap}
                                         userNameMap={userNameMap}
+                                        abrindoDocumento={abrindoDocumento === b.documento_path}
+                                        onAbrirDocumento={abrirDocumento}
                                         orderedVisibleColumns={tableColumns.orderedVisibleColumns}
                                         onOpen={abrirEdicao}
                                         onCheckboxMouseDown={handleCheckboxMouseDown}
@@ -1300,7 +1344,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </tbody>
                         <tfoot>
                             <tr className="bg-gray-50 border-t border-gray-100">
-                                <td colSpan={5} className="px-4 py-2 text-table-body text-gray-400">{filtered.length} boleto{filtered.length !== 1 ? 's' : ''}</td>
+                                <td colSpan={6} className="px-4 py-2 text-table-body text-gray-400">{filtered.length} boleto{filtered.length !== 1 ? 's' : ''}</td>
                                 <td className="px-4 py-2 text-right text-sm font-medium text-gray-900">
                                     {formatBRL(filtered.filter(b => !['pago','cancelado'].includes(b.status)).reduce((s, b) => s + (b.valor ?? 0), 0))}
                                 </td>

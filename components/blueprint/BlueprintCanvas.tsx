@@ -2626,8 +2626,57 @@ export default function BlueprintCanvas({
     // EIXOS: linha sem corpo — o ímã puxa para a linha (SOBRE/PERPENDICULAR) e
     // para os cruzamentos (INTERSECAO), que é para isso que a malha existe.
     for (const e of eixos) saida.push({ id: e.id, a: e.a, b: e.b });
+
+    // ─── ⚠️ ESTRUTURA, TERRENO E TELHADO (14/10/2026) ────────────────────────
+    //
+    // Usuário: *"verifique se alguma outro componentes nao esta funcionando com
+    // o imã"*. Medido em navegador (docs/spikes/encaixe-laje/passeio-alvos.mjs):
+    // viga e laje prendiam só pela ponta e pelo canto — a FACE da viga e a
+    // BORDA da laje não existiam para Sobre, Meio, Interseção nem Perpendicular;
+    // e divisa de terreno e água de telhado não existiam para o ímã nenhum. Uma
+    // parede encostada na face de uma viga, ou um beiral alinhado à divisa,
+    // caía na grade a centímetros dela.
+    //
+    // O `id` é o da PEÇA: é por ele que o arraste tira a selecionada dos alvos.
+    for (const s of estruturasDoNivel) {
+      // A peça em arraste não é alvo de si mesma — a mesma regra dos pontos.
+      if (movendoEstrutura?.structuralId === s.id) continue;
+      const forma = FORMA_ESTRUTURAL[s.kind];
+      if (forma === 'LINHA') {
+        // A viga pelo EIXO com corpo: dá o eixo, as duas faces e o meio.
+        for (let i = 1; i < s.pontos.length; i++) {
+          saida.push({ id: s.id, a: s.pontos[i - 1], b: s.pontos[i], espessuraMm: s.larguraMm });
+        }
+      } else {
+        // Laje pelo contorno; pilar pelas faces do corpo (o circular fica com o
+        // CENTRO, abaixo). Sem espessura: a borda JÁ é a face.
+        const anel = forma === 'AREA' ? s.pontos : s.circular ? [] : pontosDeConexaoEstrutural(s).cantos;
+        for (let i = 0; i < anel.length && anel.length >= 2; i++) {
+          saida.push({ id: s.id, a: anel[i], b: anel[(i + 1) % anel.length] });
+        }
+      }
+    }
+    for (const b of limitesDoNivel) saida.push({ id: b.id, a: b.a, b: b.b });
+    for (const r of aguasDoNivel) {
+      for (let i = 0; i < r.pontos.length && r.pontos.length >= 2; i++) {
+        saida.push({ id: r.id, a: r.pontos[i], b: r.pontos[(i + 1) % r.pontos.length] });
+      }
+    }
     return saida;
-  }, [paredesDoNivel, trechosReais, eixos, guardaCorpos]);
+  }, [paredesDoNivel, trechosReais, eixos, guardaCorpos, estruturasDoNivel, movendoEstrutura, limitesDoNivel, aguasDoNivel]);
+
+  /**
+   * Os VÉRTICES de divisa e de água — entram na urna da EXTREMIDADE em
+   * `capturar`, ao lado das pontas de parede. Sem eles, fechar uma divisa no
+   * canto do terreno ou começar a segunda água na cumeeira da primeira dependia
+   * de acertar o mesmo milímetro (medido em 14/10/2026: caía na grade).
+   */
+  const verticesDeContorno = useMemo(() => {
+    const p: Point[] = [];
+    for (const b of limitesDoNivel) p.push(b.a, b.b);
+    for (const r of aguasDoNivel) p.push(...r.pontos);
+    return p;
+  }, [limitesDoNivel, aguasDoNivel]);
 
   /** As peças circulares, para o encaixe no CENTRO. */
   const circulosParaEncaixe = useMemo(
@@ -2753,6 +2802,13 @@ export default function BlueprintCanvas({
           }
         }
       }
+      for (const q of verticesDeContorno) {
+        const d = Math.hypot(q.x - mundo.x, q.y - mundo.y);
+        if (d < limite && d < distEixo) {
+          melhorEixo = q;
+          distEixo = d;
+        }
+      }
 
       // ⚠️ A EXTREMIDADE e o CANTO continuam sendo resolvidos aqui, e não no
       // motor geométrico: este laço carrega o portão de distância que evita a
@@ -2803,6 +2859,7 @@ export default function BlueprintCanvas({
       paredesDoNivel,
       encaixesDeEstrutura,
       guardaCorpos,
+      verticesDeContorno,
       vista.escala,
       passoEfetivo,
       encaixesAtivos,

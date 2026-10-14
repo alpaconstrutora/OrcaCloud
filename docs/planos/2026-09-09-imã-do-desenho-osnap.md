@@ -221,3 +221,36 @@ pilar (mesmo `capturarTracado` da laje, mas grava num clique):
 | só Extremidade | face | ❌ grade (1100, 1100) | ✅ (1010, 1030) |
 | só Canto | eixo | ❌ grade | ✅ (1010, 1105) |
 | as outras 6 combinações | | ✅ | ✅ |
+
+### Item 3 — viga, laje, pilar, divisa e água viram ALVO do ímã
+
+> *"sim publique. depois verifique se alguma outro componentes nao esta esta
+> funckonando com o imã,"* (14/10/2026)
+
+**A varredura:** as 41 ferramentas usam a MESMA captura no movimento e no clique
+(prévia = gravado). O buraco não estava nas ferramentas, e sim nos ALVOS:
+`segmentosParaEncaixe` só tinha parede, trecho de rede, guarda-corpo e eixo.
+
+**O que muda:** entram como segmento a viga (eixo com corpo: eixo, faces, meio),
+o contorno da laje, as faces do pilar retangular, a divisa e as bordas da água; e
+os vértices de divisa e água entram na urna da extremidade. O `id` é o da peça,
+para o arraste continuar tirando a selecionada dos alvos.
+
+**Como sei que terminou:** ✅ `docs/spikes/encaixe-laje/passeio-alvos.mjs`, em
+navegador:
+
+| peça · encaixe | antes | depois |
+|---|---|---|
+| parede (controle) · Sobre | ✅ | ✅ |
+| viga · Extremidade / Canto | ✅ | ✅ |
+| viga · Sobre (face) / Meio | ❌ grade | ✅ |
+| laje · vértice | ✅ | ✅ |
+| laje · Sobre / Meio (borda) | ❌ grade | ✅ |
+| divisa · Extremidade / Sobre | ❌ grade | ✅ |
+| água · vértice / Sobre | ❌ grade | ✅ |
+
+**Fica de fora, de propósito, até o usuário decidir:** Medir linha/área e Contar
+seguem SEM ímã. O código justifica pela GRADE ("encaixar deslocaria o vértice para
+a grade"), mas a regra acabou tirando também o ímã de OBJETO — medir de canto a
+canto de parede depende de acertar o pixel. Ligar só o ímã de objeto (sem grade)
+nessas ferramentas é decisão de produto, não correção.

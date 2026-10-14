@@ -8,6 +8,9 @@ import SupplierSelect, { SupplierOption } from './SupplierSelect';
 import HierarchicalSelect, { HierarchicalSelectItem } from './HierarchicalSelect';
 import { financialRegistryService } from '../services/financialRegistryService';
 
+/** Valor da opção "— Sem vínculo —" da Obra: tira a obra dos boletos (grava null). */
+const SEM_VINCULO = '__sem_vinculo__';
+
 interface ItemOption {
     id: string;
     name: string;
@@ -53,7 +56,8 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     function buildFields() {
         const fields: Partial<Pick<Boleto, 'supplier_id' | 'cost_center_id' | 'category_id' | 'project_id' | 'descricao'>> = {};
         if (supplierId)        fields.supplier_id    = supplierId;
-        if (projectId)         fields.project_id     = projectId;
+        // "— Sem vínculo —" desvincula (grava null); "— Não alterar —" ('') não manda o campo.
+        if (projectId)         fields.project_id     = projectId === SEM_VINCULO ? null : projectId;
         if (costCenterId)      fields.cost_center_id = costCenterId;
         if (categoryId)        fields.category_id    = categoryId;
         if (descricao.trim())  fields.descricao      = descricao.trim();
@@ -202,6 +206,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                     className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
                                 >
                                     <option value="">— Não alterar —</option>
+                                    <option value={SEM_VINCULO}>— Sem vínculo —</option>
                                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
                             </div>

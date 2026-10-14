@@ -96,13 +96,13 @@ export interface Boleto {
     erros_validacao?: string[];
 
     project_id?: string | null;
-    cost_center_id?: string;
+    cost_center_id?: string | null;
     /** Plano de Contas (`plano_de_contas`) — dimensão distinta de cost_center_id. */
-    plano_de_contas_id?: string;
+    plano_de_contas_id?: string | null;
     /** Conta Financeira (`financial_categories`) — a única das três dimensões que
      *  a DRE lê. Espelhada em `internal_transactions.category_id` na aprovação. */
     category_id?: string | null;
-    supplier_id?: string;
+    supplier_id?: string | null;
     chart_of_accounts_id?: string;
     invoice_id?: string;
 

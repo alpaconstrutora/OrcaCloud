@@ -270,9 +270,11 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             });
             // Aplica associações do formulário
             const updated = await boletoService.associar(result.boleto.id, organizationId, {
-                supplier_id:          supplierId || undefined,
-                cost_center_id:       costCenterId || undefined,
-                plano_de_contas_id:   planoDeContasId || undefined,
+                // Vazio grava null (limpar o campo SALVA) — `|| undefined` não mandava a coluna
+                // e o valor antigo ficava, como o "Sem vínculo" da Obra (14/10/2026).
+                supplier_id:          supplierId || null,
+                cost_center_id:       costCenterId || null,
+                plano_de_contas_id:   planoDeContasId || null,
                 category_id:          categoryId || null,
                 project_id:           selectedProjectId || null, // '' = "Sem vínculo" (estado já nasce com a obra de contexto)
                 descricao:            descricao.trim() || undefined,
@@ -417,9 +419,11 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         setError(null);
         try {
             const updated = await boletoService.associar(boleto.id, organizationId, {
-                supplier_id: supplierId || undefined,
-                cost_center_id: costCenterId || undefined,
-                plano_de_contas_id: planoDeContasId || undefined,
+                // Vazio grava null: limpar Fornecedor/CC/Plano de Contas SALVA (antes `|| undefined`
+                // não mandava a coluna e o valor antigo ficava — mesmo defeito da Obra).
+                supplier_id: supplierId || null,
+                cost_center_id: costCenterId || null,
+                plano_de_contas_id: planoDeContasId || null,
                 category_id: categoryId || null,
                 // '' = "— Sem vínculo —": grava null. O antigo `|| projectId || boleto.project_id`
                 // fazia o vazio voltar para a obra anterior (o estado já nasce com ela).

@@ -105,3 +105,5 @@ Achados da 1ª rodada, corrigidos nesta frente:
   + `shrink-0` (portão: altura 36 px).
 
 Verificação: `check-ui-standard.sh` 0 alertas; `tsc` 0 erros; editor 252/252; 32 arquivos 255/255.
+
+Publicação dos achados: `5dfdfbcc` empurrado (`b12e517b..5dfdfbcc`), check-run `ci` = success; `conferir-producao.sh` achou "sem rede — lance para avaliar" e "Nada que o lançamento automático consiga ventilar" no bundle servido (domínio em `5dfdfbc`).

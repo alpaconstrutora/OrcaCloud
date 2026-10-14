@@ -1,0 +1,115 @@
+{
+  "descricao": "Vaga com unit_id preenchido E vínculo de acessório → bloqueio ACC_VAL_003 (contaria duas vezes).",
+  "origem": "supabase/seed/area_engine_case10_error_double_count_parking_fixture.sql",
+  "entrada": {
+    "blocks": [
+      {
+        "code": "T1",
+        "name": "Torre Unica",
+        "sort_order": 1
+      }
+    ],
+    "floors": [
+      {
+        "code": "TER",
+        "block": "T1",
+        "name": "Terreo",
+        "floor_type": "ground",
+        "sort_order": 1
+      },
+      {
+        "code": "SUB",
+        "block": "T1",
+        "name": "Subsolo",
+        "floor_type": "basement",
+        "sort_order": 0
+      }
+    ],
+    "units": [
+      {
+        "code": "Apto 101",
+        "block": "T1",
+        "floor": "TER",
+        "unit_type": "apartment",
+        "typology_code": "Tipo A"
+      }
+    ],
+    "spaces": [
+      {
+        "code": "U101-PRIV",
+        "name": "Area privativa Apto 101",
+        "block": "T1",
+        "floor": "TER",
+        "unit": "Apto 101",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 80,
+        "coefficient_value": 1
+      },
+      {
+        "code": "VAGA-12",
+        "name": "Vaga 12 cadastrada na unidade e vinculada",
+        "block": "T1",
+        "floor": "SUB",
+        "unit": "Apto 101",
+        "use_class": "private",
+        "private_nature": "accessory",
+        "coverage_class": "covered_different",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 12,
+        "coefficient_value": 0.5
+      }
+    ],
+    "accessory_links": [
+      {
+        "parent_unit": "Apto 101",
+        "accessory_space": "VAGA-12",
+        "accessory_unit": null,
+        "link_type": "parking",
+        "affects_private_area": true,
+        "affects_coefficient": true
+      }
+    ]
+  },
+  "esperado": {
+    "status": "failed",
+    "codigos": [
+      "ACC_VAL_003"
+    ]
+  },
+  "testemunha": {
+    "capturada_em": "2026-10-14",
+    "funcoes_md5": {
+      "calculate_area_version": "1c4b650bd2e5f70af340cd1475dccd4e",
+      "validate_area_version": "91c1d4979bcff9abbb7ab633ff0e3aed"
+    },
+    "validacao_antes": {
+      "status": "failed",
+      "warnings": [],
+      "blocking_errors": [
+        {
+          "code": "ACC_VAL_003",
+          "count": 1,
+          "message": "Espaco acessorio contado por unit_id e por vinculo"
+        }
+      ]
+    },
+    "calculo": {
+      "status": "failed",
+      "warnings": [],
+      "blocking_errors": [
+        {
+          "code": "ACC_VAL_003",
+          "count": 1,
+          "message": "Espaco acessorio contado por unit_id e por vinculo"
+        }
+      ]
+    },
+    "fechamentos": null,
+    "payload": null
+  }
+}

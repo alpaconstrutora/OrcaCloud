@@ -1,0 +1,401 @@
+{
+  "descricao": "Duas lojas; depósito comum de 20 m² atribuído inteiro à Loja 01 (não proporcional, área fixa) e hall proporcional de 40 m².",
+  "origem": "supabase/seed/area_engine_case4_common_nonprop_fixture.sql",
+  "entrada": {
+    "project_type": "commercial",
+    "blocks": [
+      {
+        "code": "B1",
+        "name": "Bloco Comercial",
+        "sort_order": 1
+      }
+    ],
+    "floors": [
+      {
+        "code": "TER",
+        "block": "B1",
+        "name": "Terreo",
+        "floor_type": "ground",
+        "sort_order": 1
+      }
+    ],
+    "units": [
+      {
+        "code": "Loja 01",
+        "block": "B1",
+        "floor": "TER",
+        "unit_type": "store",
+        "typology_code": "Loja"
+      },
+      {
+        "code": "Loja 02",
+        "block": "B1",
+        "floor": "TER",
+        "unit_type": "store",
+        "typology_code": "Loja"
+      }
+    ],
+    "spaces": [
+      {
+        "code": "L01-PRIV",
+        "name": "Area privativa Loja 01",
+        "block": "B1",
+        "floor": "TER",
+        "unit": "Loja 01",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 100,
+        "coefficient_value": 1
+      },
+      {
+        "code": "L02-PRIV",
+        "name": "Area privativa Loja 02",
+        "block": "B1",
+        "floor": "TER",
+        "unit": "Loja 02",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 100,
+        "coefficient_value": 1
+      },
+      {
+        "code": "DEP-L01",
+        "name": "Deposito comum de uso exclusivo Loja 01",
+        "block": "B1",
+        "floor": "TER",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_standard",
+        "common_division_class": "non_proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 20,
+        "coefficient_value": 1
+      },
+      {
+        "code": "HALL-COMUM",
+        "name": "Hall comum proporcional",
+        "block": "B1",
+        "floor": "TER",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_standard",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 40,
+        "coefficient_value": 1
+      }
+    ],
+    "common_allocations": [
+      {
+        "common_space": "DEP-L01",
+        "target_unit": "Loja 01",
+        "allocation_method": "fixed_area",
+        "allocated_real_area_m2_raw": 20
+      }
+    ],
+    "distribution_scopes": [
+      {
+        "common_space": "HALL-COMUM",
+        "distribution_scope": "global",
+        "block": null
+      }
+    ]
+  },
+  "esperado": {
+    "status": "success",
+    "linhas": [
+      {
+        "quadro": "quadro_ii",
+        "chave": "Loja 01",
+        "campos": {
+          "qii_20_private_covered_standard_raw": 100,
+          "qii_25_common_nonprop_covered_standard_raw": 20,
+          "qii_28_common_nonprop_real_total_raw": 20,
+          "qii_29_common_nonprop_equivalent_total_raw": 20,
+          "qii_30_nonprop_equivalent_total_raw": 120,
+          "qii_31_proportionality_coefficient_raw": 0.545454545455,
+          "qii_32_common_prop_covered_standard_raw": 21.818182,
+          "qii_37_unit_real_total_raw": 141.818182
+        }
+      },
+      {
+        "quadro": "quadro_ii",
+        "chave": "Loja 02",
+        "campos": {
+          "qii_20_private_covered_standard_raw": 100,
+          "qii_25_common_nonprop_covered_standard_raw": 0,
+          "qii_28_common_nonprop_real_total_raw": 0,
+          "qii_29_common_nonprop_equivalent_total_raw": 0,
+          "qii_30_nonprop_equivalent_total_raw": 100,
+          "qii_31_proportionality_coefficient_raw": 0.454545454545,
+          "qii_32_common_prop_covered_standard_raw": 18.181818,
+          "qii_37_unit_real_total_raw": 118.181818
+        }
+      }
+    ]
+  },
+  "testemunha": {
+    "capturada_em": "2026-10-14",
+    "funcoes_md5": {
+      "calculate_area_version": "1c4b650bd2e5f70af340cd1475dccd4e",
+      "validate_area_version": "91c1d4979bcff9abbb7ab633ff0e3aed"
+    },
+    "validacao_antes": {
+      "status": "success",
+      "warnings": [],
+      "blocking_errors": []
+    },
+    "calculo": {
+      "status": "success",
+      "warnings": [],
+      "blocking_errors": []
+    },
+    "fechamentos": {
+      "soma_qii_31": 1,
+      "soma_fracoes": 1,
+      "soma_milesimos": 1000.0000000099999,
+      "qi_17_real": 260,
+      "qi_18_equivalente": 260,
+      "qii_37_real": 260,
+      "qii_38_equivalente": 260,
+      "qivb_f_real": 260
+    },
+    "payload": {
+      "units": [
+        {
+          "code": "Loja 01",
+          "type": "store",
+          "typology": "Loja",
+          "block_code": "B1",
+          "block_name": "Bloco Comercial"
+        },
+        {
+          "code": "Loja 02",
+          "type": "store",
+          "typology": "Loja",
+          "block_code": "B1",
+          "block_name": "Bloco Comercial"
+        }
+      ],
+      "blocks": [
+        {
+          "code": "B1",
+          "name": "Bloco Comercial",
+          "sort_order": 1
+        }
+      ],
+      "floors": [
+        {
+          "code": "TER",
+          "name": "Terreo",
+          "label": "Terreo",
+          "block_code": "B1",
+          "block_name": "Bloco Comercial",
+          "sort_order": 1
+        }
+      ],
+      "spaces": [
+        {
+          "eq": 20,
+          "use": "common",
+          "area": 20,
+          "code": "DEP-L01",
+          "coef": 1,
+          "name": "Deposito comum de uso exclusivo Loja 01",
+          "nature": "not_applicable",
+          "coverage": "covered_standard",
+          "division": "non_proportional"
+        },
+        {
+          "eq": 40,
+          "use": "common",
+          "area": 40,
+          "code": "HALL-COMUM",
+          "coef": 1,
+          "name": "Hall comum proporcional",
+          "nature": "not_applicable",
+          "coverage": "covered_standard",
+          "division": "proportional"
+        },
+        {
+          "eq": 100,
+          "use": "private",
+          "area": 100,
+          "code": "L01-PRIV",
+          "coef": 1,
+          "name": "Area privativa Loja 01",
+          "nature": "main",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 100,
+          "use": "private",
+          "area": 100,
+          "code": "L02-PRIV",
+          "coef": 1,
+          "name": "Area privativa Loja 02",
+          "nature": "main",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        }
+      ],
+      "quadro_i": [
+        {
+          "row_hash": null,
+          "row_order": 1,
+          "floor_label": "Terreo",
+          "display_adjustment_json": {},
+          "qi_17_floor_real_total_raw": 260,
+          "qi_04_private_equivalent_raw": 0,
+          "qi_05_private_real_total_raw": 200,
+          "qi_14_common_prop_equivalent_raw": 0,
+          "qi_15_common_prop_real_total_raw": 40,
+          "qi_18_floor_equivalent_total_raw": 260,
+          "qi_02_private_covered_standard_raw": 200,
+          "qi_06_private_equivalent_total_raw": 200,
+          "qi_09_common_nonprop_equivalent_raw": 0,
+          "qi_10_common_nonprop_real_total_raw": 20,
+          "qi_12_common_prop_covered_standard_raw": 40,
+          "qi_16_common_prop_equivalent_total_raw": 40,
+          "qi_07_common_nonprop_covered_standard_raw": 20,
+          "qi_11_common_nonprop_equivalent_total_raw": 20,
+          "qi_03_private_nonstandard_or_uncovered_raw": 0,
+          "qi_13_common_prop_nonstandard_or_uncovered_raw": 0,
+          "qi_08_common_nonprop_nonstandard_or_uncovered_raw": 0
+        }
+      ],
+      "fractions": [
+        {
+          "unit_code": "Loja 01",
+          "legal_note": null,
+          "technical_note": null,
+          "derivation_method": "derived_from_coefficient",
+          "legal_approved_at": null,
+          "legal_approved_by": null,
+          "source_coefficient": 0.545454545455,
+          "fraction_decimal_raw": 0.545454545455,
+          "fraction_percent_raw": 54.5454545455,
+          "fraction_thousandths_raw": 545.45454546
+        },
+        {
+          "unit_code": "Loja 02",
+          "legal_note": null,
+          "technical_note": null,
+          "derivation_method": "derived_from_coefficient",
+          "legal_approved_at": null,
+          "legal_approved_by": null,
+          "source_coefficient": 0.454545454545,
+          "fraction_decimal_raw": 0.454545454545,
+          "fraction_percent_raw": 45.4545454545,
+          "fraction_thousandths_raw": 454.54545455
+        }
+      ],
+      "quadro_ii": [
+        {
+          "row_hash": null,
+          "row_order": 1,
+          "unit_label": "Loja 01",
+          "display_adjustment_json": {},
+          "qii_37_unit_real_total_raw": 141.818182,
+          "qii_22_private_equivalent_raw": 0,
+          "qii_23_private_real_total_raw": 100,
+          "qii_38_unit_equivalent_total_raw": 141.818182,
+          "qii_34_common_prop_equivalent_raw": 0,
+          "qii_35_common_prop_real_total_raw": 21.818182,
+          "qii_20_private_covered_standard_raw": 100,
+          "qii_24_private_equivalent_total_raw": 100,
+          "qii_30_nonprop_equivalent_total_raw": 120,
+          "qii_27_common_nonprop_equivalent_raw": 0,
+          "qii_28_common_nonprop_real_total_raw": 20,
+          "qii_31_proportionality_coefficient_raw": 0.545454545455,
+          "qii_32_common_prop_covered_standard_raw": 21.818182,
+          "qii_36_common_prop_equivalent_total_raw": 21.818182,
+          "qii_25_common_nonprop_covered_standard_raw": 20,
+          "qii_29_common_nonprop_equivalent_total_raw": 20,
+          "qii_21_private_nonstandard_or_uncovered_raw": 0,
+          "qii_33_common_prop_nonstandard_or_uncovered_raw": 0,
+          "qii_26_common_nonprop_nonstandard_or_uncovered_raw": 0
+        },
+        {
+          "row_hash": null,
+          "row_order": 2,
+          "unit_label": "Loja 02",
+          "display_adjustment_json": {},
+          "qii_37_unit_real_total_raw": 118.181818,
+          "qii_22_private_equivalent_raw": 0,
+          "qii_23_private_real_total_raw": 100,
+          "qii_38_unit_equivalent_total_raw": 118.181818,
+          "qii_34_common_prop_equivalent_raw": 0,
+          "qii_35_common_prop_real_total_raw": 18.181818,
+          "qii_20_private_covered_standard_raw": 100,
+          "qii_24_private_equivalent_total_raw": 100,
+          "qii_30_nonprop_equivalent_total_raw": 100,
+          "qii_27_common_nonprop_equivalent_raw": 0,
+          "qii_28_common_nonprop_real_total_raw": 0,
+          "qii_31_proportionality_coefficient_raw": 0.454545454545,
+          "qii_32_common_prop_covered_standard_raw": 18.181818,
+          "qii_36_common_prop_equivalent_total_raw": 18.181818,
+          "qii_25_common_nonprop_covered_standard_raw": 0,
+          "qii_29_common_nonprop_equivalent_total_raw": 0,
+          "qii_21_private_nonstandard_or_uncovered_raw": 0,
+          "qii_33_common_prop_nonstandard_or_uncovered_raw": 0,
+          "qii_26_common_nonprop_nonstandard_or_uncovered_raw": 0
+        }
+      ],
+      "quadro_ivb": [
+        {
+          "row_hash": null,
+          "row_order": 1,
+          "unit_label": "Loja 01",
+          "fraction_decimal_raw": 0.545454545455,
+          "fraction_percent_raw": 54.5454545455,
+          "qivb_e_common_area_raw": 41.818182,
+          "display_adjustment_json": {},
+          "fraction_thousandths_raw": 545.45454546,
+          "qivb_f_real_total_area_raw": 141.818182,
+          "qivb_b_private_main_area_raw": 100,
+          "qivb_d_private_total_area_raw": 100,
+          "qivb_c_private_accessory_area_raw": 0,
+          "qivb_g_proportionality_coefficient_raw": 0.545454545455
+        },
+        {
+          "row_hash": null,
+          "row_order": 2,
+          "unit_label": "Loja 02",
+          "fraction_decimal_raw": 0.454545454545,
+          "fraction_percent_raw": 45.4545454545,
+          "qivb_e_common_area_raw": 18.181818,
+          "display_adjustment_json": {},
+          "fraction_thousandths_raw": 454.54545455,
+          "qivb_f_real_total_area_raw": 118.181818,
+          "qivb_b_private_main_area_raw": 100,
+          "qivb_d_private_total_area_raw": 100,
+          "qivb_c_private_accessory_area_raw": 0,
+          "qivb_g_proportionality_coefficient_raw": 0.454545454545
+        }
+      ],
+      "rounding_profile": {
+        "rounding_mode": "half_up",
+        "area_display_scale": 2,
+        "area_internal_scale": 6,
+        "percent_display_scale": 6,
+        "equivalence_coefficient_display_scale": 6,
+        "equivalence_coefficient_internal_scale": 8,
+        "proportionality_coefficient_display_scale": 8,
+        "proportionality_coefficient_internal_scale": 12
+      },
+      "normative_reference": "ABNT NBR 12721:2006",
+      "normative_valid_from": "2007-01-21",
+      "calculation_engine_version": "testemunha-fase0"
+    }
+  }
+}

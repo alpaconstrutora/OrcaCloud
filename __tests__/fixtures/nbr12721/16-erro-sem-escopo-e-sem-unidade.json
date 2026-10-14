@@ -1,0 +1,123 @@
+{
+  "descricao": "Comum proporcional SEM escopo (COM_PROP_VAL_001) e privativa direta SEM unidade (MOTOR_011) ao mesmo tempo.",
+  "origem": "novo (13/10/2026)",
+  "entrada": {
+    "blocks": [
+      {
+        "code": "T1",
+        "name": "Torre Unica",
+        "sort_order": 1
+      }
+    ],
+    "floors": [
+      {
+        "code": "TER",
+        "block": "T1",
+        "name": "Terreo",
+        "floor_type": "ground",
+        "sort_order": 1
+      }
+    ],
+    "units": [
+      {
+        "code": "101",
+        "block": "T1",
+        "floor": "TER",
+        "unit_type": "apartment",
+        "typology_code": null
+      }
+    ],
+    "spaces": [
+      {
+        "code": "101",
+        "name": "Privativa 101",
+        "block": "T1",
+        "floor": "TER",
+        "unit": "101",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 60,
+        "coefficient_value": 1
+      },
+      {
+        "code": "ORFA",
+        "name": "Privativa sem unidade",
+        "block": "T1",
+        "floor": "TER",
+        "unit": null,
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 15,
+        "coefficient_value": 1
+      },
+      {
+        "code": "HALL",
+        "name": "Hall sem escopo",
+        "block": "T1",
+        "floor": "TER",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_standard",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 10,
+        "coefficient_value": 1
+      }
+    ]
+  },
+  "esperado": {
+    "status": "failed",
+    "codigos": [
+      "MOTOR_011",
+      "COM_PROP_VAL_001"
+    ]
+  },
+  "testemunha": {
+    "capturada_em": "2026-10-14",
+    "funcoes_md5": {
+      "calculate_area_version": "1c4b650bd2e5f70af340cd1475dccd4e",
+      "validate_area_version": "91c1d4979bcff9abbb7ab633ff0e3aed"
+    },
+    "validacao_antes": {
+      "status": "failed",
+      "warnings": [],
+      "blocking_errors": [
+        {
+          "code": "MOTOR_011",
+          "count": 1,
+          "message": "Area privativa sem unidade"
+        },
+        {
+          "code": "COM_PROP_VAL_001",
+          "count": 1,
+          "message": "Area comum proporcional sem escopo de distribuicao"
+        }
+      ]
+    },
+    "calculo": {
+      "status": "failed",
+      "warnings": [],
+      "blocking_errors": [
+        {
+          "code": "MOTOR_011",
+          "count": 1,
+          "message": "Area privativa sem unidade"
+        },
+        {
+          "code": "COM_PROP_VAL_001",
+          "count": 1,
+          "message": "Area comum proporcional sem escopo de distribuicao"
+        }
+      ]
+    },
+    "fechamentos": null,
+    "payload": null
+  }
+}

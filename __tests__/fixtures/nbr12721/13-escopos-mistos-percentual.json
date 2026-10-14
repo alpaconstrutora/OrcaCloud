@@ -1,0 +1,669 @@
+{
+  "descricao": "Dois blocos com subsolo: portaria e circulação da garagem proporcionais GLOBAIS, halls POR BLOCO, piscina descoberta não proporcional rateada por PERCENTUAL (25/25/50).",
+  "origem": "novo (13/10/2026)",
+  "entrada": {
+    "blocks": [
+      {
+        "code": "A",
+        "name": "Bloco A",
+        "sort_order": 1
+      },
+      {
+        "code": "B",
+        "name": "Bloco B",
+        "sort_order": 2
+      }
+    ],
+    "floors": [
+      {
+        "code": "SUB",
+        "block": "A",
+        "name": "Subsolo",
+        "floor_type": "basement",
+        "sort_order": 0
+      },
+      {
+        "code": "TER-A",
+        "block": "A",
+        "name": "Terreo A",
+        "floor_type": "ground",
+        "sort_order": 1
+      },
+      {
+        "code": "TER-B",
+        "block": "B",
+        "name": "Terreo B",
+        "floor_type": "ground",
+        "sort_order": 1
+      }
+    ],
+    "units": [
+      {
+        "code": "A-101",
+        "block": "A",
+        "floor": "TER-A",
+        "unit_type": "apartment",
+        "typology_code": null
+      },
+      {
+        "code": "A-102",
+        "block": "A",
+        "floor": "TER-A",
+        "unit_type": "apartment",
+        "typology_code": null
+      },
+      {
+        "code": "B-101",
+        "block": "B",
+        "floor": "TER-B",
+        "unit_type": "apartment",
+        "typology_code": null
+      }
+    ],
+    "spaces": [
+      {
+        "code": "A101",
+        "name": "Privativa A-101",
+        "block": "A",
+        "floor": "TER-A",
+        "unit": "A-101",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 80,
+        "coefficient_value": 1
+      },
+      {
+        "code": "A102",
+        "name": "Privativa A-102",
+        "block": "A",
+        "floor": "TER-A",
+        "unit": "A-102",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 65,
+        "coefficient_value": 1
+      },
+      {
+        "code": "B101",
+        "name": "Privativa B-101",
+        "block": "B",
+        "floor": "TER-B",
+        "unit": "B-101",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 120,
+        "coefficient_value": 1
+      },
+      {
+        "code": "PORTARIA",
+        "name": "Portaria",
+        "block": "A",
+        "floor": "TER-A",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_standard",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 30,
+        "coefficient_value": 1
+      },
+      {
+        "code": "HALL-A",
+        "name": "Hall A",
+        "block": "A",
+        "floor": "TER-A",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_standard",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 15,
+        "coefficient_value": 1
+      },
+      {
+        "code": "HALL-B",
+        "name": "Hall B",
+        "block": "B",
+        "floor": "TER-B",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_standard",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 22,
+        "coefficient_value": 1
+      },
+      {
+        "code": "PISCINA",
+        "name": "Piscina",
+        "block": "A",
+        "floor": "TER-A",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "uncovered",
+        "common_division_class": "non_proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 40,
+        "coefficient_value": 0.5
+      },
+      {
+        "code": "CIRC-GAR",
+        "name": "Circulacao da garagem",
+        "block": "A",
+        "floor": "SUB",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_different",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 90,
+        "coefficient_value": 0.5
+      }
+    ],
+    "common_allocations": [
+      {
+        "common_space": "PISCINA",
+        "target_unit": "A-101",
+        "allocation_method": "percentage",
+        "percentage": 0.25
+      },
+      {
+        "common_space": "PISCINA",
+        "target_unit": "A-102",
+        "allocation_method": "percentage",
+        "percentage": 0.25
+      },
+      {
+        "common_space": "PISCINA",
+        "target_unit": "B-101",
+        "allocation_method": "percentage",
+        "percentage": 0.5
+      }
+    ],
+    "distribution_scopes": [
+      {
+        "common_space": "PORTARIA",
+        "distribution_scope": "global",
+        "block": null
+      },
+      {
+        "common_space": "HALL-A",
+        "distribution_scope": "block",
+        "block": "A"
+      },
+      {
+        "common_space": "HALL-B",
+        "distribution_scope": "block",
+        "block": "B"
+      },
+      {
+        "common_space": "CIRC-GAR",
+        "distribution_scope": "global",
+        "block": null
+      }
+    ]
+  },
+  "esperado": {
+    "status": "success",
+    "linhas": [
+      {
+        "quadro": "quadro_ii",
+        "chave": "A-101",
+        "campos": {
+          "qii_26_common_nonprop_nonstandard_or_uncovered_raw": 10,
+          "qii_27_common_nonprop_equivalent_raw": 5,
+          "qii_30_nonprop_equivalent_total_raw": 85
+        }
+      },
+      {
+        "quadro": "quadro_ii",
+        "chave": "B-101",
+        "campos": {
+          "qii_26_common_nonprop_nonstandard_or_uncovered_raw": 20,
+          "qii_27_common_nonprop_equivalent_raw": 10,
+          "qii_30_nonprop_equivalent_total_raw": 130
+        }
+      }
+    ]
+  },
+  "testemunha": {
+    "capturada_em": "2026-10-14",
+    "funcoes_md5": {
+      "calculate_area_version": "1c4b650bd2e5f70af340cd1475dccd4e",
+      "validate_area_version": "91c1d4979bcff9abbb7ab633ff0e3aed"
+    },
+    "validacao_antes": {
+      "status": "success",
+      "warnings": [],
+      "blocking_errors": []
+    },
+    "calculo": {
+      "status": "success",
+      "warnings": [],
+      "blocking_errors": []
+    },
+    "fechamentos": {
+      "soma_qii_31": 1,
+      "soma_fracoes": 1,
+      "soma_milesimos": 1000.00000001,
+      "qi_17_real": 462,
+      "qi_18_equivalente": 397,
+      "qii_37_real": 462,
+      "qii_38_equivalente": 397,
+      "qivb_f_real": 462
+    },
+    "payload": {
+      "units": [
+        {
+          "code": "A-101",
+          "type": "apartment",
+          "typology": null,
+          "block_code": "A",
+          "block_name": "Bloco A"
+        },
+        {
+          "code": "A-102",
+          "type": "apartment",
+          "typology": null,
+          "block_code": "A",
+          "block_name": "Bloco A"
+        },
+        {
+          "code": "B-101",
+          "type": "apartment",
+          "typology": null,
+          "block_code": "B",
+          "block_name": "Bloco B"
+        }
+      ],
+      "blocks": [
+        {
+          "code": "A",
+          "name": "Bloco A",
+          "sort_order": 1
+        },
+        {
+          "code": "B",
+          "name": "Bloco B",
+          "sort_order": 2
+        }
+      ],
+      "floors": [
+        {
+          "code": "SUB",
+          "name": "Subsolo",
+          "label": "Subsolo",
+          "block_code": "A",
+          "block_name": "Bloco A",
+          "sort_order": 0
+        },
+        {
+          "code": "TER-A",
+          "name": "Terreo A",
+          "label": "Terreo A",
+          "block_code": "A",
+          "block_name": "Bloco A",
+          "sort_order": 1
+        },
+        {
+          "code": "TER-B",
+          "name": "Terreo B",
+          "label": "Terreo B",
+          "block_code": "B",
+          "block_name": "Bloco B",
+          "sort_order": 1
+        }
+      ],
+      "spaces": [
+        {
+          "eq": 80,
+          "use": "private",
+          "area": 80,
+          "code": "A101",
+          "coef": 1,
+          "name": "Privativa A-101",
+          "nature": "main",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 65,
+          "use": "private",
+          "area": 65,
+          "code": "A102",
+          "coef": 1,
+          "name": "Privativa A-102",
+          "nature": "main",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 120,
+          "use": "private",
+          "area": 120,
+          "code": "B101",
+          "coef": 1,
+          "name": "Privativa B-101",
+          "nature": "main",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 45,
+          "use": "common",
+          "area": 90,
+          "code": "CIRC-GAR",
+          "coef": 0.5,
+          "name": "Circulacao da garagem",
+          "nature": "not_applicable",
+          "coverage": "covered_different",
+          "division": "proportional"
+        },
+        {
+          "eq": 15,
+          "use": "common",
+          "area": 15,
+          "code": "HALL-A",
+          "coef": 1,
+          "name": "Hall A",
+          "nature": "not_applicable",
+          "coverage": "covered_standard",
+          "division": "proportional"
+        },
+        {
+          "eq": 22,
+          "use": "common",
+          "area": 22,
+          "code": "HALL-B",
+          "coef": 1,
+          "name": "Hall B",
+          "nature": "not_applicable",
+          "coverage": "covered_standard",
+          "division": "proportional"
+        },
+        {
+          "eq": 20,
+          "use": "common",
+          "area": 40,
+          "code": "PISCINA",
+          "coef": 0.5,
+          "name": "Piscina",
+          "nature": "not_applicable",
+          "coverage": "uncovered",
+          "division": "non_proportional"
+        },
+        {
+          "eq": 30,
+          "use": "common",
+          "area": 30,
+          "code": "PORTARIA",
+          "coef": 1,
+          "name": "Portaria",
+          "nature": "not_applicable",
+          "coverage": "covered_standard",
+          "division": "proportional"
+        }
+      ],
+      "quadro_i": [
+        {
+          "row_hash": null,
+          "row_order": 0,
+          "floor_label": "Subsolo",
+          "display_adjustment_json": {},
+          "qi_17_floor_real_total_raw": 90,
+          "qi_04_private_equivalent_raw": 0,
+          "qi_05_private_real_total_raw": 0,
+          "qi_14_common_prop_equivalent_raw": 45,
+          "qi_15_common_prop_real_total_raw": 90,
+          "qi_18_floor_equivalent_total_raw": 45,
+          "qi_02_private_covered_standard_raw": 0,
+          "qi_06_private_equivalent_total_raw": 0,
+          "qi_09_common_nonprop_equivalent_raw": 0,
+          "qi_10_common_nonprop_real_total_raw": 0,
+          "qi_12_common_prop_covered_standard_raw": 0,
+          "qi_16_common_prop_equivalent_total_raw": 45,
+          "qi_07_common_nonprop_covered_standard_raw": 0,
+          "qi_11_common_nonprop_equivalent_total_raw": 0,
+          "qi_03_private_nonstandard_or_uncovered_raw": 0,
+          "qi_13_common_prop_nonstandard_or_uncovered_raw": 90,
+          "qi_08_common_nonprop_nonstandard_or_uncovered_raw": 0
+        },
+        {
+          "row_hash": null,
+          "row_order": 1,
+          "floor_label": "Terreo B",
+          "display_adjustment_json": {},
+          "qi_17_floor_real_total_raw": 142,
+          "qi_04_private_equivalent_raw": 0,
+          "qi_05_private_real_total_raw": 120,
+          "qi_14_common_prop_equivalent_raw": 0,
+          "qi_15_common_prop_real_total_raw": 22,
+          "qi_18_floor_equivalent_total_raw": 142,
+          "qi_02_private_covered_standard_raw": 120,
+          "qi_06_private_equivalent_total_raw": 120,
+          "qi_09_common_nonprop_equivalent_raw": 0,
+          "qi_10_common_nonprop_real_total_raw": 0,
+          "qi_12_common_prop_covered_standard_raw": 22,
+          "qi_16_common_prop_equivalent_total_raw": 22,
+          "qi_07_common_nonprop_covered_standard_raw": 0,
+          "qi_11_common_nonprop_equivalent_total_raw": 0,
+          "qi_03_private_nonstandard_or_uncovered_raw": 0,
+          "qi_13_common_prop_nonstandard_or_uncovered_raw": 0,
+          "qi_08_common_nonprop_nonstandard_or_uncovered_raw": 0
+        },
+        {
+          "row_hash": null,
+          "row_order": 1,
+          "floor_label": "Terreo A",
+          "display_adjustment_json": {},
+          "qi_17_floor_real_total_raw": 230,
+          "qi_04_private_equivalent_raw": 0,
+          "qi_05_private_real_total_raw": 145,
+          "qi_14_common_prop_equivalent_raw": 0,
+          "qi_15_common_prop_real_total_raw": 45,
+          "qi_18_floor_equivalent_total_raw": 210,
+          "qi_02_private_covered_standard_raw": 145,
+          "qi_06_private_equivalent_total_raw": 145,
+          "qi_09_common_nonprop_equivalent_raw": 20,
+          "qi_10_common_nonprop_real_total_raw": 40,
+          "qi_12_common_prop_covered_standard_raw": 45,
+          "qi_16_common_prop_equivalent_total_raw": 45,
+          "qi_07_common_nonprop_covered_standard_raw": 0,
+          "qi_11_common_nonprop_equivalent_total_raw": 20,
+          "qi_03_private_nonstandard_or_uncovered_raw": 0,
+          "qi_13_common_prop_nonstandard_or_uncovered_raw": 0,
+          "qi_08_common_nonprop_nonstandard_or_uncovered_raw": 40
+        }
+      ],
+      "fractions": [
+        {
+          "unit_code": "A-101",
+          "legal_note": null,
+          "technical_note": null,
+          "derivation_method": "derived_from_coefficient",
+          "legal_approved_at": null,
+          "legal_approved_by": null,
+          "source_coefficient": 0.298245614035,
+          "fraction_decimal_raw": 0.298245614035,
+          "fraction_percent_raw": 29.8245614035,
+          "fraction_thousandths_raw": 298.24561404
+        },
+        {
+          "unit_code": "A-102",
+          "legal_note": null,
+          "technical_note": null,
+          "derivation_method": "derived_from_coefficient",
+          "legal_approved_at": null,
+          "legal_approved_by": null,
+          "source_coefficient": 0.245614035088,
+          "fraction_decimal_raw": 0.245614035088,
+          "fraction_percent_raw": 24.5614035088,
+          "fraction_thousandths_raw": 245.61403509
+        },
+        {
+          "unit_code": "B-101",
+          "legal_note": null,
+          "technical_note": null,
+          "derivation_method": "derived_from_coefficient",
+          "legal_approved_at": null,
+          "legal_approved_by": null,
+          "source_coefficient": 0.456140350877,
+          "fraction_decimal_raw": 0.456140350877,
+          "fraction_percent_raw": 45.6140350877,
+          "fraction_thousandths_raw": 456.14035088
+        }
+      ],
+      "quadro_ii": [
+        {
+          "row_hash": null,
+          "row_order": 1,
+          "unit_label": "A-101",
+          "display_adjustment_json": {},
+          "qii_37_unit_real_total_raw": 134.01528,
+          "qii_22_private_equivalent_raw": 0,
+          "qii_23_private_real_total_raw": 80,
+          "qii_38_unit_equivalent_total_raw": 115.594228,
+          "qii_34_common_prop_equivalent_raw": 13.421053,
+          "qii_35_common_prop_real_total_raw": 44.01528,
+          "qii_20_private_covered_standard_raw": 80,
+          "qii_24_private_equivalent_total_raw": 80,
+          "qii_30_nonprop_equivalent_total_raw": 85,
+          "qii_27_common_nonprop_equivalent_raw": 5,
+          "qii_28_common_nonprop_real_total_raw": 10,
+          "qii_31_proportionality_coefficient_raw": 0.298245614035,
+          "qii_32_common_prop_covered_standard_raw": 17.173175,
+          "qii_36_common_prop_equivalent_total_raw": 30.594228,
+          "qii_25_common_nonprop_covered_standard_raw": 0,
+          "qii_29_common_nonprop_equivalent_total_raw": 5,
+          "qii_21_private_nonstandard_or_uncovered_raw": 0,
+          "qii_33_common_prop_nonstandard_or_uncovered_raw": 26.842105,
+          "qii_26_common_nonprop_nonstandard_or_uncovered_raw": 10
+        },
+        {
+          "row_hash": null,
+          "row_order": 2,
+          "unit_label": "A-102",
+          "display_adjustment_json": {},
+          "qii_37_unit_real_total_raw": 111.247878,
+          "qii_22_private_equivalent_raw": 0,
+          "qii_23_private_real_total_raw": 65,
+          "qii_38_unit_equivalent_total_raw": 95.195246,
+          "qii_34_common_prop_equivalent_raw": 11.052632,
+          "qii_35_common_prop_real_total_raw": 36.247878,
+          "qii_20_private_covered_standard_raw": 65,
+          "qii_24_private_equivalent_total_raw": 65,
+          "qii_30_nonprop_equivalent_total_raw": 70,
+          "qii_27_common_nonprop_equivalent_raw": 5,
+          "qii_28_common_nonprop_real_total_raw": 10,
+          "qii_31_proportionality_coefficient_raw": 0.245614035088,
+          "qii_32_common_prop_covered_standard_raw": 14.142615,
+          "qii_36_common_prop_equivalent_total_raw": 25.195246,
+          "qii_25_common_nonprop_covered_standard_raw": 0,
+          "qii_29_common_nonprop_equivalent_total_raw": 5,
+          "qii_21_private_nonstandard_or_uncovered_raw": 0,
+          "qii_33_common_prop_nonstandard_or_uncovered_raw": 22.105263,
+          "qii_26_common_nonprop_nonstandard_or_uncovered_raw": 10
+        },
+        {
+          "row_hash": null,
+          "row_order": 3,
+          "unit_label": "B-101",
+          "display_adjustment_json": {},
+          "qii_37_unit_real_total_raw": 216.736842,
+          "qii_22_private_equivalent_raw": 0,
+          "qii_23_private_real_total_raw": 120,
+          "qii_38_unit_equivalent_total_raw": 186.210526,
+          "qii_34_common_prop_equivalent_raw": 20.526316,
+          "qii_35_common_prop_real_total_raw": 76.736842,
+          "qii_20_private_covered_standard_raw": 120,
+          "qii_24_private_equivalent_total_raw": 120,
+          "qii_30_nonprop_equivalent_total_raw": 130,
+          "qii_27_common_nonprop_equivalent_raw": 10,
+          "qii_28_common_nonprop_real_total_raw": 20,
+          "qii_31_proportionality_coefficient_raw": 0.456140350877,
+          "qii_32_common_prop_covered_standard_raw": 35.684211,
+          "qii_36_common_prop_equivalent_total_raw": 56.210526,
+          "qii_25_common_nonprop_covered_standard_raw": 0,
+          "qii_29_common_nonprop_equivalent_total_raw": 10,
+          "qii_21_private_nonstandard_or_uncovered_raw": 0,
+          "qii_33_common_prop_nonstandard_or_uncovered_raw": 41.052632,
+          "qii_26_common_nonprop_nonstandard_or_uncovered_raw": 20
+        }
+      ],
+      "quadro_ivb": [
+        {
+          "row_hash": null,
+          "row_order": 1,
+          "unit_label": "A-101",
+          "fraction_decimal_raw": 0.298245614035,
+          "fraction_percent_raw": 29.8245614035,
+          "qivb_e_common_area_raw": 54.01528,
+          "display_adjustment_json": {},
+          "fraction_thousandths_raw": 298.24561404,
+          "qivb_f_real_total_area_raw": 134.01528,
+          "qivb_b_private_main_area_raw": 80,
+          "qivb_d_private_total_area_raw": 80,
+          "qivb_c_private_accessory_area_raw": 0,
+          "qivb_g_proportionality_coefficient_raw": 0.298245614035
+        },
+        {
+          "row_hash": null,
+          "row_order": 2,
+          "unit_label": "A-102",
+          "fraction_decimal_raw": 0.245614035088,
+          "fraction_percent_raw": 24.5614035088,
+          "qivb_e_common_area_raw": 46.247878,
+          "display_adjustment_json": {},
+          "fraction_thousandths_raw": 245.61403509,
+          "qivb_f_real_total_area_raw": 111.247878,
+          "qivb_b_private_main_area_raw": 65,
+          "qivb_d_private_total_area_raw": 65,
+          "qivb_c_private_accessory_area_raw": 0,
+          "qivb_g_proportionality_coefficient_raw": 0.245614035088
+        },
+        {
+          "row_hash": null,
+          "row_order": 3,
+          "unit_label": "B-101",
+          "fraction_decimal_raw": 0.456140350877,
+          "fraction_percent_raw": 45.6140350877,
+          "qivb_e_common_area_raw": 96.736842,
+          "display_adjustment_json": {},
+          "fraction_thousandths_raw": 456.14035088,
+          "qivb_f_real_total_area_raw": 216.736842,
+          "qivb_b_private_main_area_raw": 120,
+          "qivb_d_private_total_area_raw": 120,
+          "qivb_c_private_accessory_area_raw": 0,
+          "qivb_g_proportionality_coefficient_raw": 0.456140350877
+        }
+      ],
+      "rounding_profile": {
+        "rounding_mode": "half_up",
+        "area_display_scale": 2,
+        "area_internal_scale": 6,
+        "percent_display_scale": 6,
+        "equivalence_coefficient_display_scale": 6,
+        "equivalence_coefficient_internal_scale": 8,
+        "proportionality_coefficient_display_scale": 8,
+        "proportionality_coefficient_internal_scale": 12
+      },
+      "normative_reference": "ABNT NBR 12721:2006",
+      "normative_valid_from": "2007-01-21",
+      "calculation_engine_version": "testemunha-fase0"
+    }
+  }
+}

@@ -1,0 +1,901 @@
+{
+  "descricao": "Cinco pavimentos (subsolo, térreo, 2 tipos, cobertura), loja com vaga vinculada, depósito privativo direto, DUPLEX com terraço e uma zeladoria NÃO autônoma (entra no Quadro I, fica fora do II).",
+  "origem": "novo (13/10/2026)",
+  "entrada": {
+    "blocks": [
+      {
+        "code": "T1",
+        "name": "Torre Unica",
+        "sort_order": 1
+      }
+    ],
+    "floors": [
+      {
+        "code": "SUB",
+        "block": "T1",
+        "name": "Subsolo",
+        "floor_type": "basement",
+        "sort_order": 0
+      },
+      {
+        "code": "TER",
+        "block": "T1",
+        "name": "Terreo",
+        "floor_type": "ground",
+        "sort_order": 1
+      },
+      {
+        "code": "P1",
+        "block": "T1",
+        "name": "1o pavimento",
+        "floor_type": "type",
+        "sort_order": 2
+      },
+      {
+        "code": "P2",
+        "block": "T1",
+        "name": "2o pavimento",
+        "floor_type": "type",
+        "sort_order": 3
+      },
+      {
+        "code": "COB",
+        "block": "T1",
+        "name": "Cobertura",
+        "floor_type": "roof",
+        "sort_order": 4
+      }
+    ],
+    "units": [
+      {
+        "code": "Loja 01",
+        "block": "T1",
+        "floor": "TER",
+        "unit_type": "store",
+        "typology_code": null
+      },
+      {
+        "code": "101",
+        "block": "T1",
+        "floor": "P1",
+        "unit_type": "apartment",
+        "typology_code": null
+      },
+      {
+        "code": "201",
+        "block": "T1",
+        "floor": "P2",
+        "unit_type": "apartment",
+        "typology_code": null
+      },
+      {
+        "code": "Zeladoria",
+        "block": "T1",
+        "floor": "TER",
+        "unit_type": "other",
+        "typology_code": null,
+        "is_autonomous": false
+      }
+    ],
+    "spaces": [
+      {
+        "code": "L01",
+        "name": "Loja 01",
+        "block": "T1",
+        "floor": "TER",
+        "unit": "Loja 01",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 140,
+        "coefficient_value": 1
+      },
+      {
+        "code": "101-PRIV",
+        "name": "Privativa 101",
+        "block": "T1",
+        "floor": "P1",
+        "unit": "101",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 72,
+        "coefficient_value": 1
+      },
+      {
+        "code": "101-VAR",
+        "name": "Varanda 101",
+        "block": "T1",
+        "floor": "P1",
+        "unit": "101",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "uncovered",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 9,
+        "coefficient_value": 0.75
+      },
+      {
+        "code": "101-DEP",
+        "name": "Deposito 101",
+        "block": "T1",
+        "floor": "SUB",
+        "unit": "101",
+        "use_class": "private",
+        "private_nature": "accessory",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 4.5,
+        "coefficient_value": 1
+      },
+      {
+        "code": "201-P2",
+        "name": "Duplex 201 inferior",
+        "block": "T1",
+        "floor": "P2",
+        "unit": "201",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 68,
+        "coefficient_value": 1
+      },
+      {
+        "code": "201-COB",
+        "name": "Duplex 201 superior",
+        "block": "T1",
+        "floor": "COB",
+        "unit": "201",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 35,
+        "coefficient_value": 1
+      },
+      {
+        "code": "201-TER",
+        "name": "Terraco 201",
+        "block": "T1",
+        "floor": "COB",
+        "unit": "201",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "uncovered",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 20,
+        "coefficient_value": 0.6
+      },
+      {
+        "code": "ZEL",
+        "name": "Zeladoria",
+        "block": "T1",
+        "floor": "TER",
+        "unit": "Zeladoria",
+        "use_class": "private",
+        "private_nature": "main",
+        "coverage_class": "covered_standard",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "direct_unit",
+        "real_area_m2_raw": 25,
+        "coefficient_value": 1
+      },
+      {
+        "code": "VAGA-L01",
+        "name": "Vaga da loja",
+        "block": "T1",
+        "floor": "SUB",
+        "unit": null,
+        "use_class": "private",
+        "private_nature": "accessory",
+        "coverage_class": "covered_different",
+        "common_division_class": "not_applicable",
+        "ownership_accounting_mode": "linked_accessory",
+        "real_area_m2_raw": 12,
+        "coefficient_value": 0.5
+      },
+      {
+        "code": "HALL-TER",
+        "name": "Hall terreo",
+        "block": "T1",
+        "floor": "TER",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_standard",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 30,
+        "coefficient_value": 1
+      },
+      {
+        "code": "CIRC-P1",
+        "name": "Circulacao P1",
+        "block": "T1",
+        "floor": "P1",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_standard",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 12,
+        "coefficient_value": 1
+      },
+      {
+        "code": "CIRC-P2",
+        "name": "Circulacao P2",
+        "block": "T1",
+        "floor": "P2",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_standard",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 12,
+        "coefficient_value": 1
+      },
+      {
+        "code": "CMAQ",
+        "name": "Casa de maquinas",
+        "block": "T1",
+        "floor": "COB",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_standard",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 8,
+        "coefficient_value": 1
+      },
+      {
+        "code": "CIRC-GAR",
+        "name": "Circulacao garagem",
+        "block": "T1",
+        "floor": "SUB",
+        "unit": null,
+        "use_class": "common",
+        "private_nature": "not_applicable",
+        "coverage_class": "covered_different",
+        "common_division_class": "proportional",
+        "ownership_accounting_mode": "common_area",
+        "real_area_m2_raw": 60,
+        "coefficient_value": 0.5
+      }
+    ],
+    "accessory_links": [
+      {
+        "parent_unit": "Loja 01",
+        "accessory_space": "VAGA-L01",
+        "accessory_unit": null,
+        "link_type": "parking",
+        "affects_private_area": true,
+        "affects_coefficient": true
+      }
+    ],
+    "distribution_scopes": [
+      {
+        "common_space": "HALL-TER",
+        "distribution_scope": "global",
+        "block": null
+      },
+      {
+        "common_space": "CIRC-P1",
+        "distribution_scope": "global",
+        "block": null
+      },
+      {
+        "common_space": "CIRC-P2",
+        "distribution_scope": "global",
+        "block": null
+      },
+      {
+        "common_space": "CMAQ",
+        "distribution_scope": "global",
+        "block": null
+      },
+      {
+        "common_space": "CIRC-GAR",
+        "distribution_scope": "global",
+        "block": null
+      }
+    ]
+  },
+  "esperado": {
+    "status": "success",
+    "linhas": [
+      {
+        "quadro": "quadro_ii",
+        "chave": "201",
+        "campos": {
+          "qii_20_private_covered_standard_raw": 103,
+          "qii_21_private_nonstandard_or_uncovered_raw": 20,
+          "qii_22_private_equivalent_raw": 12
+        }
+      },
+      {
+        "quadro": "quadro_ivb",
+        "chave": "101",
+        "campos": {
+          "qivb_b_private_main_area_raw": 81,
+          "qivb_c_private_accessory_area_raw": 4.5
+        }
+      },
+      {
+        "quadro": "quadro_i",
+        "chave": "Subsolo",
+        "campos": {
+          "qi_17_floor_real_total_raw": 76.5
+        }
+      }
+    ]
+  },
+  "testemunha": {
+    "capturada_em": "2026-10-14",
+    "funcoes_md5": {
+      "calculate_area_version": "1c4b650bd2e5f70af340cd1475dccd4e",
+      "validate_area_version": "91c1d4979bcff9abbb7ab633ff0e3aed"
+    },
+    "validacao_antes": {
+      "status": "success",
+      "warnings": [],
+      "blocking_errors": []
+    },
+    "calculo": {
+      "status": "success",
+      "warnings": [],
+      "blocking_errors": []
+    },
+    "fechamentos": {
+      "soma_qii_31": 1,
+      "soma_fracoes": 1,
+      "soma_milesimos": 1000.00000001,
+      "qi_17_real": 507.5,
+      "qi_18_equivalente": 461.25,
+      "qii_37_real": 482.5,
+      "qii_38_equivalente": 436.25,
+      "qivb_f_real": 482.5
+    },
+    "payload": {
+      "units": [
+        {
+          "code": "101",
+          "type": "apartment",
+          "typology": null,
+          "block_code": "T1",
+          "block_name": "Torre Unica"
+        },
+        {
+          "code": "201",
+          "type": "apartment",
+          "typology": null,
+          "block_code": "T1",
+          "block_name": "Torre Unica"
+        },
+        {
+          "code": "Loja 01",
+          "type": "store",
+          "typology": null,
+          "block_code": "T1",
+          "block_name": "Torre Unica"
+        },
+        {
+          "code": "Zeladoria",
+          "type": "other",
+          "typology": null,
+          "block_code": "T1",
+          "block_name": "Torre Unica"
+        }
+      ],
+      "blocks": [
+        {
+          "code": "T1",
+          "name": "Torre Unica",
+          "sort_order": 1
+        }
+      ],
+      "floors": [
+        {
+          "code": "SUB",
+          "name": "Subsolo",
+          "label": "Subsolo",
+          "block_code": "T1",
+          "block_name": "Torre Unica",
+          "sort_order": 0
+        },
+        {
+          "code": "TER",
+          "name": "Terreo",
+          "label": "Terreo",
+          "block_code": "T1",
+          "block_name": "Torre Unica",
+          "sort_order": 1
+        },
+        {
+          "code": "P1",
+          "name": "1o pavimento",
+          "label": "1o pavimento",
+          "block_code": "T1",
+          "block_name": "Torre Unica",
+          "sort_order": 2
+        },
+        {
+          "code": "P2",
+          "name": "2o pavimento",
+          "label": "2o pavimento",
+          "block_code": "T1",
+          "block_name": "Torre Unica",
+          "sort_order": 3
+        },
+        {
+          "code": "COB",
+          "name": "Cobertura",
+          "label": "Cobertura",
+          "block_code": "T1",
+          "block_name": "Torre Unica",
+          "sort_order": 4
+        }
+      ],
+      "spaces": [
+        {
+          "eq": 4.5,
+          "use": "private",
+          "area": 4.5,
+          "code": "101-DEP",
+          "coef": 1,
+          "name": "Deposito 101",
+          "nature": "accessory",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 72,
+          "use": "private",
+          "area": 72,
+          "code": "101-PRIV",
+          "coef": 1,
+          "name": "Privativa 101",
+          "nature": "main",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 6.75,
+          "use": "private",
+          "area": 9,
+          "code": "101-VAR",
+          "coef": 0.75,
+          "name": "Varanda 101",
+          "nature": "main",
+          "coverage": "uncovered",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 35,
+          "use": "private",
+          "area": 35,
+          "code": "201-COB",
+          "coef": 1,
+          "name": "Duplex 201 superior",
+          "nature": "main",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 68,
+          "use": "private",
+          "area": 68,
+          "code": "201-P2",
+          "coef": 1,
+          "name": "Duplex 201 inferior",
+          "nature": "main",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 12,
+          "use": "private",
+          "area": 20,
+          "code": "201-TER",
+          "coef": 0.6,
+          "name": "Terraco 201",
+          "nature": "main",
+          "coverage": "uncovered",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 30,
+          "use": "common",
+          "area": 60,
+          "code": "CIRC-GAR",
+          "coef": 0.5,
+          "name": "Circulacao garagem",
+          "nature": "not_applicable",
+          "coverage": "covered_different",
+          "division": "proportional"
+        },
+        {
+          "eq": 12,
+          "use": "common",
+          "area": 12,
+          "code": "CIRC-P1",
+          "coef": 1,
+          "name": "Circulacao P1",
+          "nature": "not_applicable",
+          "coverage": "covered_standard",
+          "division": "proportional"
+        },
+        {
+          "eq": 12,
+          "use": "common",
+          "area": 12,
+          "code": "CIRC-P2",
+          "coef": 1,
+          "name": "Circulacao P2",
+          "nature": "not_applicable",
+          "coverage": "covered_standard",
+          "division": "proportional"
+        },
+        {
+          "eq": 8,
+          "use": "common",
+          "area": 8,
+          "code": "CMAQ",
+          "coef": 1,
+          "name": "Casa de maquinas",
+          "nature": "not_applicable",
+          "coverage": "covered_standard",
+          "division": "proportional"
+        },
+        {
+          "eq": 30,
+          "use": "common",
+          "area": 30,
+          "code": "HALL-TER",
+          "coef": 1,
+          "name": "Hall terreo",
+          "nature": "not_applicable",
+          "coverage": "covered_standard",
+          "division": "proportional"
+        },
+        {
+          "eq": 140,
+          "use": "private",
+          "area": 140,
+          "code": "L01",
+          "coef": 1,
+          "name": "Loja 01",
+          "nature": "main",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 6,
+          "use": "private",
+          "area": 12,
+          "code": "VAGA-L01",
+          "coef": 0.5,
+          "name": "Vaga da loja",
+          "nature": "accessory",
+          "coverage": "covered_different",
+          "division": "not_applicable"
+        },
+        {
+          "eq": 25,
+          "use": "private",
+          "area": 25,
+          "code": "ZEL",
+          "coef": 1,
+          "name": "Zeladoria",
+          "nature": "main",
+          "coverage": "covered_standard",
+          "division": "not_applicable"
+        }
+      ],
+      "quadro_i": [
+        {
+          "row_hash": null,
+          "row_order": 0,
+          "floor_label": "Subsolo",
+          "display_adjustment_json": {},
+          "qi_17_floor_real_total_raw": 76.5,
+          "qi_04_private_equivalent_raw": 6,
+          "qi_05_private_real_total_raw": 16.5,
+          "qi_14_common_prop_equivalent_raw": 30,
+          "qi_15_common_prop_real_total_raw": 60,
+          "qi_18_floor_equivalent_total_raw": 40.5,
+          "qi_02_private_covered_standard_raw": 4.5,
+          "qi_06_private_equivalent_total_raw": 10.5,
+          "qi_09_common_nonprop_equivalent_raw": 0,
+          "qi_10_common_nonprop_real_total_raw": 0,
+          "qi_12_common_prop_covered_standard_raw": 0,
+          "qi_16_common_prop_equivalent_total_raw": 30,
+          "qi_07_common_nonprop_covered_standard_raw": 0,
+          "qi_11_common_nonprop_equivalent_total_raw": 0,
+          "qi_03_private_nonstandard_or_uncovered_raw": 12,
+          "qi_13_common_prop_nonstandard_or_uncovered_raw": 60,
+          "qi_08_common_nonprop_nonstandard_or_uncovered_raw": 0
+        },
+        {
+          "row_hash": null,
+          "row_order": 1,
+          "floor_label": "Terreo",
+          "display_adjustment_json": {},
+          "qi_17_floor_real_total_raw": 195,
+          "qi_04_private_equivalent_raw": 0,
+          "qi_05_private_real_total_raw": 165,
+          "qi_14_common_prop_equivalent_raw": 0,
+          "qi_15_common_prop_real_total_raw": 30,
+          "qi_18_floor_equivalent_total_raw": 195,
+          "qi_02_private_covered_standard_raw": 165,
+          "qi_06_private_equivalent_total_raw": 165,
+          "qi_09_common_nonprop_equivalent_raw": 0,
+          "qi_10_common_nonprop_real_total_raw": 0,
+          "qi_12_common_prop_covered_standard_raw": 30,
+          "qi_16_common_prop_equivalent_total_raw": 30,
+          "qi_07_common_nonprop_covered_standard_raw": 0,
+          "qi_11_common_nonprop_equivalent_total_raw": 0,
+          "qi_03_private_nonstandard_or_uncovered_raw": 0,
+          "qi_13_common_prop_nonstandard_or_uncovered_raw": 0,
+          "qi_08_common_nonprop_nonstandard_or_uncovered_raw": 0
+        },
+        {
+          "row_hash": null,
+          "row_order": 2,
+          "floor_label": "1o pavimento",
+          "display_adjustment_json": {},
+          "qi_17_floor_real_total_raw": 93,
+          "qi_04_private_equivalent_raw": 6.75,
+          "qi_05_private_real_total_raw": 81,
+          "qi_14_common_prop_equivalent_raw": 0,
+          "qi_15_common_prop_real_total_raw": 12,
+          "qi_18_floor_equivalent_total_raw": 90.75,
+          "qi_02_private_covered_standard_raw": 72,
+          "qi_06_private_equivalent_total_raw": 78.75,
+          "qi_09_common_nonprop_equivalent_raw": 0,
+          "qi_10_common_nonprop_real_total_raw": 0,
+          "qi_12_common_prop_covered_standard_raw": 12,
+          "qi_16_common_prop_equivalent_total_raw": 12,
+          "qi_07_common_nonprop_covered_standard_raw": 0,
+          "qi_11_common_nonprop_equivalent_total_raw": 0,
+          "qi_03_private_nonstandard_or_uncovered_raw": 9,
+          "qi_13_common_prop_nonstandard_or_uncovered_raw": 0,
+          "qi_08_common_nonprop_nonstandard_or_uncovered_raw": 0
+        },
+        {
+          "row_hash": null,
+          "row_order": 3,
+          "floor_label": "2o pavimento",
+          "display_adjustment_json": {},
+          "qi_17_floor_real_total_raw": 80,
+          "qi_04_private_equivalent_raw": 0,
+          "qi_05_private_real_total_raw": 68,
+          "qi_14_common_prop_equivalent_raw": 0,
+          "qi_15_common_prop_real_total_raw": 12,
+          "qi_18_floor_equivalent_total_raw": 80,
+          "qi_02_private_covered_standard_raw": 68,
+          "qi_06_private_equivalent_total_raw": 68,
+          "qi_09_common_nonprop_equivalent_raw": 0,
+          "qi_10_common_nonprop_real_total_raw": 0,
+          "qi_12_common_prop_covered_standard_raw": 12,
+          "qi_16_common_prop_equivalent_total_raw": 12,
+          "qi_07_common_nonprop_covered_standard_raw": 0,
+          "qi_11_common_nonprop_equivalent_total_raw": 0,
+          "qi_03_private_nonstandard_or_uncovered_raw": 0,
+          "qi_13_common_prop_nonstandard_or_uncovered_raw": 0,
+          "qi_08_common_nonprop_nonstandard_or_uncovered_raw": 0
+        },
+        {
+          "row_hash": null,
+          "row_order": 4,
+          "floor_label": "Cobertura",
+          "display_adjustment_json": {},
+          "qi_17_floor_real_total_raw": 63,
+          "qi_04_private_equivalent_raw": 12,
+          "qi_05_private_real_total_raw": 55,
+          "qi_14_common_prop_equivalent_raw": 0,
+          "qi_15_common_prop_real_total_raw": 8,
+          "qi_18_floor_equivalent_total_raw": 55,
+          "qi_02_private_covered_standard_raw": 35,
+          "qi_06_private_equivalent_total_raw": 47,
+          "qi_09_common_nonprop_equivalent_raw": 0,
+          "qi_10_common_nonprop_real_total_raw": 0,
+          "qi_12_common_prop_covered_standard_raw": 8,
+          "qi_16_common_prop_equivalent_total_raw": 8,
+          "qi_07_common_nonprop_covered_standard_raw": 0,
+          "qi_11_common_nonprop_equivalent_total_raw": 0,
+          "qi_03_private_nonstandard_or_uncovered_raw": 20,
+          "qi_13_common_prop_nonstandard_or_uncovered_raw": 0,
+          "qi_08_common_nonprop_nonstandard_or_uncovered_raw": 0
+        }
+      ],
+      "fractions": [
+        {
+          "unit_code": "101",
+          "legal_note": null,
+          "technical_note": null,
+          "derivation_method": "derived_from_coefficient",
+          "legal_approved_at": null,
+          "legal_approved_by": null,
+          "source_coefficient": 0.241830065359,
+          "fraction_decimal_raw": 0.241830065359,
+          "fraction_percent_raw": 24.1830065359,
+          "fraction_thousandths_raw": 241.83006536
+        },
+        {
+          "unit_code": "201",
+          "legal_note": null,
+          "technical_note": null,
+          "derivation_method": "derived_from_coefficient",
+          "legal_approved_at": null,
+          "legal_approved_by": null,
+          "source_coefficient": 0.334059549746,
+          "fraction_decimal_raw": 0.334059549746,
+          "fraction_percent_raw": 33.4059549746,
+          "fraction_thousandths_raw": 334.05954975
+        },
+        {
+          "unit_code": "Loja 01",
+          "legal_note": null,
+          "technical_note": null,
+          "derivation_method": "derived_from_coefficient",
+          "legal_approved_at": null,
+          "legal_approved_by": null,
+          "source_coefficient": 0.424110384895,
+          "fraction_decimal_raw": 0.424110384895,
+          "fraction_percent_raw": 42.4110384895,
+          "fraction_thousandths_raw": 424.1103849
+        }
+      ],
+      "quadro_ii": [
+        {
+          "row_hash": null,
+          "row_order": 1,
+          "unit_label": "101",
+          "display_adjustment_json": {},
+          "qii_37_unit_real_total_raw": 115.003268,
+          "qii_22_private_equivalent_raw": 6.75,
+          "qii_23_private_real_total_raw": 85.5,
+          "qii_38_unit_equivalent_total_raw": 105.498366,
+          "qii_34_common_prop_equivalent_raw": 7.254902,
+          "qii_35_common_prop_real_total_raw": 29.503268,
+          "qii_20_private_covered_standard_raw": 76.5,
+          "qii_24_private_equivalent_total_raw": 83.25,
+          "qii_30_nonprop_equivalent_total_raw": 83.25,
+          "qii_27_common_nonprop_equivalent_raw": 0,
+          "qii_28_common_nonprop_real_total_raw": 0,
+          "qii_31_proportionality_coefficient_raw": 0.241830065359,
+          "qii_32_common_prop_covered_standard_raw": 14.993464,
+          "qii_36_common_prop_equivalent_total_raw": 22.248366,
+          "qii_25_common_nonprop_covered_standard_raw": 0,
+          "qii_29_common_nonprop_equivalent_total_raw": 0,
+          "qii_21_private_nonstandard_or_uncovered_raw": 9,
+          "qii_33_common_prop_nonstandard_or_uncovered_raw": 14.509804,
+          "qii_26_common_nonprop_nonstandard_or_uncovered_raw": 0
+        },
+        {
+          "row_hash": null,
+          "row_order": 2,
+          "unit_label": "201",
+          "display_adjustment_json": {},
+          "qii_37_unit_real_total_raw": 163.755265,
+          "qii_22_private_equivalent_raw": 12,
+          "qii_23_private_real_total_raw": 123,
+          "qii_38_unit_equivalent_total_raw": 145.733479,
+          "qii_34_common_prop_equivalent_raw": 10.021786,
+          "qii_35_common_prop_real_total_raw": 40.755265,
+          "qii_20_private_covered_standard_raw": 103,
+          "qii_24_private_equivalent_total_raw": 115,
+          "qii_30_nonprop_equivalent_total_raw": 115,
+          "qii_27_common_nonprop_equivalent_raw": 0,
+          "qii_28_common_nonprop_real_total_raw": 0,
+          "qii_31_proportionality_coefficient_raw": 0.334059549746,
+          "qii_32_common_prop_covered_standard_raw": 20.711692,
+          "qii_36_common_prop_equivalent_total_raw": 30.733479,
+          "qii_25_common_nonprop_covered_standard_raw": 0,
+          "qii_29_common_nonprop_equivalent_total_raw": 0,
+          "qii_21_private_nonstandard_or_uncovered_raw": 20,
+          "qii_33_common_prop_nonstandard_or_uncovered_raw": 20.043573,
+          "qii_26_common_nonprop_nonstandard_or_uncovered_raw": 0
+        },
+        {
+          "row_hash": null,
+          "row_order": 3,
+          "unit_label": "Loja 01",
+          "display_adjustment_json": {},
+          "qii_37_unit_real_total_raw": 203.741467,
+          "qii_22_private_equivalent_raw": 6,
+          "qii_23_private_real_total_raw": 152,
+          "qii_38_unit_equivalent_total_raw": 185.018155,
+          "qii_34_common_prop_equivalent_raw": 12.723312,
+          "qii_35_common_prop_real_total_raw": 51.741467,
+          "qii_20_private_covered_standard_raw": 140,
+          "qii_24_private_equivalent_total_raw": 146,
+          "qii_30_nonprop_equivalent_total_raw": 146,
+          "qii_27_common_nonprop_equivalent_raw": 0,
+          "qii_28_common_nonprop_real_total_raw": 0,
+          "qii_31_proportionality_coefficient_raw": 0.424110384895,
+          "qii_32_common_prop_covered_standard_raw": 26.294844,
+          "qii_36_common_prop_equivalent_total_raw": 39.018155,
+          "qii_25_common_nonprop_covered_standard_raw": 0,
+          "qii_29_common_nonprop_equivalent_total_raw": 0,
+          "qii_21_private_nonstandard_or_uncovered_raw": 12,
+          "qii_33_common_prop_nonstandard_or_uncovered_raw": 25.446623,
+          "qii_26_common_nonprop_nonstandard_or_uncovered_raw": 0
+        }
+      ],
+      "quadro_ivb": [
+        {
+          "row_hash": null,
+          "row_order": 1,
+          "unit_label": "101",
+          "fraction_decimal_raw": 0.241830065359,
+          "fraction_percent_raw": 24.1830065359,
+          "qivb_e_common_area_raw": 29.503268,
+          "display_adjustment_json": {},
+          "fraction_thousandths_raw": 241.83006536,
+          "qivb_f_real_total_area_raw": 115.003268,
+          "qivb_b_private_main_area_raw": 81,
+          "qivb_d_private_total_area_raw": 85.5,
+          "qivb_c_private_accessory_area_raw": 4.5,
+          "qivb_g_proportionality_coefficient_raw": 0.241830065359
+        },
+        {
+          "row_hash": null,
+          "row_order": 2,
+          "unit_label": "201",
+          "fraction_decimal_raw": 0.334059549746,
+          "fraction_percent_raw": 33.4059549746,
+          "qivb_e_common_area_raw": 40.755265,
+          "display_adjustment_json": {},
+          "fraction_thousandths_raw": 334.05954975,
+          "qivb_f_real_total_area_raw": 163.755265,
+          "qivb_b_private_main_area_raw": 123,
+          "qivb_d_private_total_area_raw": 123,
+          "qivb_c_private_accessory_area_raw": 0,
+          "qivb_g_proportionality_coefficient_raw": 0.334059549746
+        },
+        {
+          "row_hash": null,
+          "row_order": 3,
+          "unit_label": "Loja 01",
+          "fraction_decimal_raw": 0.424110384895,
+          "fraction_percent_raw": 42.4110384895,
+          "qivb_e_common_area_raw": 51.741467,
+          "display_adjustment_json": {},
+          "fraction_thousandths_raw": 424.1103849,
+          "qivb_f_real_total_area_raw": 203.741467,
+          "qivb_b_private_main_area_raw": 140,
+          "qivb_d_private_total_area_raw": 152,
+          "qivb_c_private_accessory_area_raw": 12,
+          "qivb_g_proportionality_coefficient_raw": 0.424110384895
+        }
+      ],
+      "rounding_profile": {
+        "rounding_mode": "half_up",
+        "area_display_scale": 2,
+        "area_internal_scale": 6,
+        "percent_display_scale": 6,
+        "equivalence_coefficient_display_scale": 6,
+        "equivalence_coefficient_internal_scale": 8,
+        "proportionality_coefficient_display_scale": 8,
+        "proportionality_coefficient_internal_scale": 12
+      },
+      "normative_reference": "ABNT NBR 12721:2006",
+      "normative_valid_from": "2007-01-21",
+      "calculation_engine_version": "testemunha-fase0"
+    }
+  }
+}

@@ -851,17 +851,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     <div className="px-6 py-3.5 border-b border-gray-100 flex items-center gap-2">
                                         <FileText className="w-4 h-4 text-blue-600" />
                                         <h3 className="text-sm font-semibold text-gray-900">Documento original</h3>
-                                        {/* No cabeçalho (sempre visível): no rodapé do card ele ficava abaixo do
-                                            PDF de 3:4, fora da tela, e o usuário não o encontrava. */}
-                                        <button
-                                            type="button"
-                                            onClick={handleRenomearDocumento}
-                                            disabled={busy}
-                                            title="Troca o nome do documento pelo próximo da Nomenclatura de Boletos"
-                                            className="ml-auto flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium text-blue-600 bg-white border border-gray-200 rounded-[6px] hover:bg-blue-50 transition-all active:scale-95 disabled:opacity-50"
-                                        >
-                                            <Pencil className="w-3.5 h-3.5" /> Renomear
-                                        </button>
                                     </div>
                                     <div className="aspect-[3/4] bg-gray-50">
                                         {boleto.documento_mime === 'application/pdf' ? (
@@ -914,6 +903,24 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 "Cobrança"; o que o usuário DECIDE fica em "Classificação"
                                 — é essa a fronteira que a tela não mostrava. */}
                             <div className="space-y-6">
+                                {/* Nome do documento conforme a Nomenclatura de Boletos (13-14/10/2026). */}
+                                <Secao titulo="Documento" icone={FileText}>
+                                    <ReadOnlyField icon={FileText} label="Nome atual" value={boleto.documento_nome || '—'} />
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleRenomearDocumento}
+                                            disabled={busy}
+                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                        >
+                                            <Pencil className="w-[15px] h-[15px]" /> Renomear
+                                        </button>
+                                        <p className="text-xs text-gray-500">
+                                            Segue a Nomenclatura de Boletos, com o fornecedor e a obra já salvos.
+                                        </p>
+                                    </div>
+                                </Secao>
+
                                 <Secao titulo="Cobrança" icone={Receipt}>
                                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                                         <ReadOnlyField icon={Building2} label="Banco" value={boleto.banco_nome ?? boleto.banco_codigo ?? '—'} />

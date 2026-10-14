@@ -316,6 +316,8 @@ import PainelAlimentador from './PainelAlimentador';
 import PainelRecalque from './PainelRecalque';
 import PainelColetorPredial from './PainelColetorPredial';
 import AvisoDoLancamento from './AvisoDoLancamento';
+import BlocoDeHipoteses from './BlocoDeHipoteses';
+import CampoNumericoDeHipotese from './CampoNumericoDeHipotese';
 import { planejarAguaCompleta } from '../../utils/blueprintAguaCompleta';
 import { planejarPluvialCompleta } from '../../utils/blueprintPluvialCompleto';
 import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
@@ -16492,7 +16494,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               {tarefaAberta === 'fundacoes' && <SquareStack className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pontosHidraulicos' && <ShowerHead className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'agua' && <Droplets className="h-5 w-5 text-blue-700" />}
-              {tarefaAberta === 'esgoto' && <Waves className="h-5 w-5 text-slate-700" />}
+              {tarefaAberta === 'esgoto' && <Waves className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'memoriaisHidro' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pluvial' && <CloudRain className="h-5 w-5 text-lime-700" />}
               {tarefaAberta === 'incendio' && <Flame className="h-5 w-5 text-red-700" />}
@@ -17615,92 +17617,40 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               {resumoDoLancamento?.tarefa === 'esgoto' && (
                 <AvisoDoLancamento presumido={resumoDoLancamento.presumido} pendencias={resumoDoLancamento.pendencias} testId="esgoto-presumido" />
               )}
-              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                  <li>
-                    DN pelas <strong>UHC</strong> da NBR 8160 acumuladas (lavatório 1 · chuveiro 2 · pia/tanque/máquina 3 ·
-                    vaso 6): ≤3 → 40 · ≤6 → 50 · ≤20 → 75 · acima → 100 — nunca abaixo do ramal de descarga do aparelho
-                    (vaso 100, pia 50).
-                  </li>
-                  <li>
-                    Ramais sob o piso, a partir de {hipotesesDeEsgoto.cotaMinimaSobPisoMm} mm, descendo{' '}
-                    <strong>{hipotesesDeEsgoto.caimentoPctAte75} %</strong> até DN 75 e{' '}
-                    <strong>{hipotesesDeEsgoto.caimentoPctDe100} %</strong> em DN 100; a cota de um nó é a menor das
-                    chegadas.
-                  </li>
-                  <li>
-                    Sobrado: tubo de queda DN {hipotesesDeEsgoto.dnTuboQuedaMm} na posição do ponto de maior UHC do andar,
-                    ventilação DN {hipotesesDeEsgoto.dnVentilacaoMm} até o teto. <strong>Pré-dimensionamento</strong>: não
-                    desvia de fundação, viga ou laje.
-                  </li>
-                  <li>
-                    Sem caixa de inspeção ou sem ligação à rede pública, o lançamento as <strong>põe</strong>: a caixa{' '}
-                    {hipotesesDeEsgoto.afastamentoDaCiMm ?? 1000} mm além da fachada, no rumo da frente do lote; a ligação na
-                    frente, com a rede <strong>estimada</strong> a {hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} mm do
-                    terreno. Arraste as peças para onde estão de verdade; o plano recalcula.
-                  </li>
-                </ul>
-                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <label className="flex items-center gap-2">
-                    Caimento até DN 75
-                    <select value={String(hipotesesDeEsgoto.caimentoPctAte75)} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, caimentoPctAte75: Number(e.target.value) })} aria-label="Caimento até DN 75" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
-                      {[1, 1.5, 2, 3].map((v) => <option key={v} value={v}>{String(v).replace('.', ',')} %</option>)}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    Caimento DN 100
-                    <select value={String(hipotesesDeEsgoto.caimentoPctDe100)} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, caimentoPctDe100: Number(e.target.value) })} aria-label="Caimento DN 100" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
-                      {[1, 1.5, 2].map((v) => <option key={v} value={v}>{String(v).replace('.', ',')} %</option>)}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    Sob o piso
-                    <input type="number" max={0} step={50} value={hipotesesDeEsgoto.cotaMinimaSobPisoMm} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, cotaMinimaSobPisoMm: Math.min(0, Math.round(Number(e.target.value) || -150)) })} aria-label="Cota do ramal sob o piso em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
-                    mm
-                  </label>
-                  <label className="flex items-center gap-2">
-                    Rede pública a
-                    <input type="number" min={300} step={100} value={hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, profundidadeDaRedeMm: Math.max(300, Math.round(Number(e.target.value) || 1500)) })} aria-label="Profundidade presumida da rede pública em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
-                    mm de profundidade
-                  </label>
-                  <label className="flex items-center gap-2">
-                    Caixa a
-                    <input type="number" min={300} step={100} value={hipotesesDeEsgoto.afastamentoDaCiMm ?? 1000} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, afastamentoDaCiMm: Math.max(300, Math.round(Number(e.target.value) || 1000)) })} aria-label="Afastamento da caixa de inspeção automática em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
-                    mm da fachada
-                  </label>
-                </div>
-              </div>
 
+              {/* 14/10/2026: o RESULTADO vem primeiro (o que vai ser lançado); as hipóteses ficam recolhidas abaixo,
+                  com os valores em vigor na linha do título. */}
               {planoDeEsgoto.motivo && planoDeEsgoto.pavimentos.length === 0 ? (
-                <p className="text-sm text-slate-500">{planoDeEsgoto.motivo}</p>
+                <p className="text-sm text-slate-500">{planoDeEsgoto.motivo.charAt(0).toUpperCase() + planoDeEsgoto.motivo.slice(1)}.</p>
               ) : (
                 <>
-                  <table className="w-full table-fixed text-xs" aria-label="Esgoto por pavimento">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
-                        <th className="py-1.5 pr-2 font-medium">Pavimento</th>
-                        <th className="w-24 py-1.5 pr-2 font-medium">Fontes</th>
-                        <th className="w-24 py-1.5 pr-2 font-medium">Ligadas</th>
-                        <th className="w-24 py-1.5 pr-2 font-medium">A ligar</th>
-                        <th className="w-28 py-1.5 font-medium">Tubo de queda</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {planoDeEsgoto.pavimentos.map((p) => (
-                        <tr key={p.levelId}>
-                          <td className="py-1.5 pr-2 font-medium text-slate-700">{p.nome}</td>
-                          <td className="py-1.5 pr-2 text-slate-600">{p.fontes}</td>
-                          <td className="py-1.5 pr-2 text-slate-600">{p.ligadas}</td>
-                          <td className="py-1.5 pr-2 text-slate-600">{p.aLigar}</td>
-                          <td className="py-1.5 text-slate-600">{p.tuboDeQueda ? 'sim' : '—'}</td>
+                  <div className="overflow-x-auto rounded-[10px] border border-gray-100">
+                    <table className="w-full table-fixed border-collapse text-left" aria-label="Esgoto por pavimento">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-white text-xs font-semibold text-gray-700">
+                          <th className="border-r border-gray-100 px-3 py-2">Pavimento</th>
+                          <th className="w-20 border-r border-gray-100 px-3 py-2 text-right">Pontos</th>
+                          <th className="w-20 border-r border-gray-100 px-3 py-2 text-right">Ligados</th>
+                          <th className="w-20 border-r border-gray-100 px-3 py-2 text-right">A ligar</th>
+                          <th className="w-28 px-3 py-2">Tubo de queda</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {planoDeEsgoto.pavimentos.map((p) => (
+                          <tr key={p.levelId}>
+                            <td className="truncate border-r border-gray-100 px-3 py-2.5 text-sm font-normal text-gray-700" title={p.nome}>{p.nome}</td>
+                            <td className="border-r border-gray-100 px-3 py-2.5 text-right text-sm font-normal tabular-nums text-gray-600">{p.fontes}</td>
+                            <td className="border-r border-gray-100 px-3 py-2.5 text-right text-sm font-normal tabular-nums text-gray-600">{p.ligadas}</td>
+                            <td className="border-r border-gray-100 px-3 py-2.5 text-right text-sm font-normal tabular-nums text-gray-600">{p.aLigar}</td>
+                            <td className="px-3 py-2.5 text-sm font-normal text-gray-600">{p.tuboDeQueda ? 'Sim' : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                   <p className="text-xs text-slate-600">
                     {planoDeEsgoto.motivo
-                      ? planoDeEsgoto.motivo
+                      ? `${planoDeEsgoto.motivo.charAt(0).toUpperCase() + planoDeEsgoto.motivo.slice(1)}.`
                       : <>
                           {planoDeEsgoto.metrosPrevistos.toLocaleString('pt-BR')} m · {planoDeEsgoto.uhcTotal} UHC · DN máx. {planoDeEsgoto.dnMaximoMm}
                           {planoDeEsgoto.cotaDeChegadaMm != null ? ` · chega à caixa de inspeção a ${planoDeEsgoto.cotaDeChegadaMm} mm` : ''}
@@ -17711,6 +17661,104 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   ))}
                 </>
               )}
+
+              <BlocoDeHipoteses
+                id="esgoto"
+                resumo={[
+                  `caimento ${String(hipotesesDeEsgoto.caimentoPctAte75).replace('.', ',')} % / ${String(hipotesesDeEsgoto.caimentoPctDe100).replace('.', ',')} %`,
+                  `ramal ${hipotesesDeEsgoto.cotaMinimaSobPisoMm} mm`,
+                  `TQ DN ${hipotesesDeEsgoto.dnTuboQuedaMm}`,
+                  `vent. DN ${hipotesesDeEsgoto.dnVentilacaoMm}`,
+                  `rede a ${hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} mm`,
+                ].join(' · ')}
+                regras={
+                  <>
+                    <li>
+                      DN pelas <strong>UHC</strong> da NBR 8160 acumuladas (lavatório 1 · chuveiro 2 · pia/tanque/máquina 3 ·
+                      vaso 6): ≤3 → 40 · ≤6 → 50 · ≤20 → 75 · acima → 100 — nunca abaixo do ramal de descarga do aparelho
+                      (vaso 100, pia 50).
+                    </li>
+                    <li>
+                      Ramais sob o piso, a partir de {hipotesesDeEsgoto.cotaMinimaSobPisoMm} mm, descendo{' '}
+                      <strong>{String(hipotesesDeEsgoto.caimentoPctAte75).replace('.', ',')} %</strong> até DN 75 e{' '}
+                      <strong>{String(hipotesesDeEsgoto.caimentoPctDe100).replace('.', ',')} %</strong> em DN 100; a cota de um nó é a menor das
+                      chegadas. Um ramal pode andar até{' '}
+                      {hipotesesDeEsgoto.rotaMaximaVezes == null ? <strong>sem limite</strong> : <strong>{String(hipotesesDeEsgoto.rotaMaximaVezes).replace('.', ',')}×</strong>}{' '}
+                      a linha reta até a caixa.
+                    </li>
+                    <li>
+                      Sobrado: tubo de queda de no mínimo DN {hipotesesDeEsgoto.dnTuboQuedaMm} (nunca abaixo da louça que ele leva) na
+                      posição do ponto de maior UHC do andar — ou num shaft a até {hipotesesDeEsgoto.raioDoShaftMm ?? 3000} mm dele —,
+                      ventilação DN {hipotesesDeEsgoto.dnVentilacaoMm} até o teto. <strong>Pré-dimensionamento</strong>: não desvia de
+                      fundação, viga ou laje.
+                    </li>
+                    <li>
+                      Sem caixa de inspeção ou sem ligação à rede pública, o lançamento as <strong>põe</strong>: a caixa{' '}
+                      {hipotesesDeEsgoto.afastamentoDaCiMm ?? 1000} mm além da fachada, no rumo da frente do lote; a ligação na
+                      frente, com a rede <strong>estimada</strong> a {hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} mm do
+                      terreno. Arraste as peças para onde estão de verdade; o plano recalcula.
+                    </li>
+                  </>
+                }
+              >
+                <label className="flex items-center gap-2">
+                  Caimento até DN 75
+                  <select value={String(hipotesesDeEsgoto.caimentoPctAte75)} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, caimentoPctAte75: Number(e.target.value) })} aria-label="Caimento até DN 75" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+                    {[1, 1.5, 2, 3].map((v) => <option key={v} value={v}>{String(v).replace('.', ',')} %</option>)}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  Caimento DN 100
+                  <select value={String(hipotesesDeEsgoto.caimentoPctDe100)} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, caimentoPctDe100: Number(e.target.value) })} aria-label="Caimento DN 100" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+                    {[1, 1.5, 2].map((v) => <option key={v} value={v}>{String(v).replace('.', ',')} %</option>)}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  Sob o piso
+                  <CampoNumericoDeHipotese value={hipotesesDeEsgoto.cotaMinimaSobPisoMm} onCommit={(v) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, cotaMinimaSobPisoMm: v })} max={0} min={-2000} step={50} aria-label="Cota do ramal sob o piso em mm" />
+                  mm
+                </label>
+                <label className="flex items-center gap-2">
+                  Rota máx.
+                  <select
+                    value={hipotesesDeEsgoto.rotaMaximaVezes == null ? '' : String(hipotesesDeEsgoto.rotaMaximaVezes)}
+                    onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, rotaMaximaVezes: e.target.value === '' ? null : Number(e.target.value) })}
+                    aria-label="Rota máxima do ramal de esgoto em vezes a linha reta"
+                    title="Quanto um ramal pode se desviar: o caminho pela rede até a caixa, dividido pela linha reta"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    {[1.2, 1.5, 2, 3].map((v) => <option key={v} value={v}>{String(v).replace('.', ',')}×</option>)}
+                    <option value="">sem limite</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  Tubo de queda
+                  <select value={String(hipotesesDeEsgoto.dnTuboQuedaMm)} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, dnTuboQuedaMm: Number(e.target.value) })} aria-label="DN mínimo do tubo de queda" title="Piso do DN do tubo de queda; a louça que ele leva pode pedir mais (vaso: 100)" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+                    {[75, 100, 150].map((v) => <option key={v} value={v}>DN {v}</option>)}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  Ventilação
+                  <select value={String(hipotesesDeEsgoto.dnVentilacaoMm)} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, dnVentilacaoMm: Number(e.target.value) })} aria-label="DN da coluna de ventilação" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+                    {[40, 50, 75, 100].map((v) => <option key={v} value={v}>DN {v}</option>)}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  Shaft a até
+                  <CampoNumericoDeHipotese value={hipotesesDeEsgoto.raioDoShaftMm ?? 3000} onCommit={(v) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, raioDoShaftMm: v })} min={0} max={20000} step={500} aria-label="Raio em que um shaft atrai o tubo de queda em mm" title="Um shaft a até esta distância do ponto de maior UHC recebe o tubo de queda; 0 = ignora os shafts" />
+                  mm
+                </label>
+                <label className="flex items-center gap-2">
+                  Rede pública a
+                  <CampoNumericoDeHipotese value={hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} onCommit={(v) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, profundidadeDaRedeMm: v })} min={300} max={6000} step={100} aria-label="Profundidade presumida da rede pública em mm" />
+                  mm de profundidade
+                </label>
+                <label className="flex items-center gap-2">
+                  Caixa a
+                  <CampoNumericoDeHipotese value={hipotesesDeEsgoto.afastamentoDaCiMm ?? 1000} onCommit={(v) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, afastamentoDaCiMm: v })} min={300} max={10000} step={100} aria-label="Afastamento da caixa de inspeção automática em mm" />
+                  mm da fachada
+                </label>
+              </BlocoDeHipoteses>
               {planoDaVentilacao && (
                 <div className="space-y-1.5" data-testid="ventilacao">
                   <p className="text-xs font-semibold text-slate-700">Ventilação (NBR 8160)</p>
@@ -17773,121 +17821,195 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               {resumoDoLancamento?.tarefa === 'agua' && (
                 <AvisoDoLancamento presumido={resumoDoLancamento.presumido} pendencias={resumoDoLancamento.pendencias} testId="agua-presumido" />
               )}
-              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                  <li>
-                    Pesos da NBR 5626 pela ficha de cada ponto (chuveiro 0,4 · lavatório 0,3 · pia 0,7 · máquina 1,0…);
-                    vazão <strong>Q = 0,3·√ΣP</strong> L/s; DN = o menor comercial com velocidade ≤ limite, nunca abaixo
-                    do mínimo. Água fria em PVC soldável; água quente em CPVC.
-                  </li>
-                  <li>Barrilete no forro do pavimento da origem; colunas por grupo de pontos; ramais na cota abaixo; o aquecedor é ponto da água fria com o peso dos pontos quentes.</li>
-                  <li><strong>Pré-dimensionamento</strong> por velocidade: sem perda de carga nem pressão disponível; não desvia de viga ou laje.</li>
-                </ul>
-                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <label className="flex items-center gap-2">
-                    Velocidade máx.
-                    <select
-                      value={String(hipotesesDeAgua.velocidadeMaxMs)}
-                      onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, velocidadeMaxMs: Number(e.target.value) })}
-                      aria-label="Velocidade máxima na tubulação"
-                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
-                    >
-                      {[1.5, 2, 2.5, 3].map((v) => (
-                        <option key={v} value={v}>{String(v).replace('.', ',')} m/s</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    DN mín. AF
-                    <select value={hipotesesDeAgua.dnMinimoAguaFriaMm} onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, dnMinimoAguaFriaMm: Number(e.target.value) })} aria-label="DN mínimo da água fria" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
-                      {[20, 25, 32].map((v) => <option key={v} value={v}>{v} mm</option>)}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    DN mín. AQ
-                    <select value={hipotesesDeAgua.dnMinimoAguaQuenteMm} onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, dnMinimoAguaQuenteMm: Number(e.target.value) })} aria-label="DN mínimo da água quente" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
-                      {[15, 22, 28].map((v) => <option key={v} value={v}>{v} mm</option>)}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    Ramal a
-                    <input type="number" min={1500} step={100} value={hipotesesDeAgua.cotaRamalMm} onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, cotaRamalMm: Math.max(500, Math.round(Number(e.target.value) || 2200)) })} aria-label="Cota do ramal em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
-                    mm
-                  </label>
-                  <label className="flex items-center gap-2">
-                    Raio da coluna
-                    <input type="number" min={500} step={250} value={hipotesesDeAgua.raioDaColunaMm} onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, raioDaColunaMm: Math.max(250, Math.round(Number(e.target.value) || 1500)) })} aria-label="Raio da coluna em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
-                    mm
-                  </label>
-                </div>
-              </div>
-
+              {/* 14/10/2026: o RESULTADO vem primeiro; as hipóteses ficam recolhidas abaixo (como no esgoto). */}
               {planosDeAgua.length === 0 ? (
                 <p className="text-sm text-slate-500">
                   Insira uma <strong>caixa d'água</strong> (Hidráulica › reservação) — é de onde a água fria parte. Para a
                   água quente, um <strong>aquecedor</strong> com ponto de água quente.
                 </p>
               ) : (
-                <table className="w-full table-fixed text-xs" aria-label="Rede de água por origem">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
-                      <th className="py-1.5 pr-2 font-medium">Origem</th>
-                      <th className="w-28 py-1.5 pr-2 font-medium">Pontos</th>
-                      <th className="py-1.5 pr-2 font-medium">Previsto</th>
-                      <th className="w-36 py-1.5 text-right font-medium">Lançar</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {planosDeAgua.map((p) => (
-                      <tr key={p.origemId}>
-                        <td className="py-1.5 pr-2">
-                          <span className="font-medium text-slate-700">{p.origemNome}</span>
-                          <span className="block text-slate-500">{ROTULO_DA_DISCIPLINA[p.disciplina]}</span>
-                        </td>
-                        <td className="py-1.5 pr-2 text-slate-600">
-                          {p.pontos} ponto(s) · {p.ligados} ligado(s)
-                          {p.pavimentos.length > 1 ? <span className="block text-slate-400">{p.pavimentos.length} pavimentos</span> : null}
-                        </td>
-                        <td className="py-1.5 pr-2 text-slate-600">
-                          {p.motivo ? (
-                            <span className="text-slate-500">{p.motivo}</span>
-                          ) : (
-                            <>
-                              {p.metrosPrevistos.toLocaleString('pt-BR')} m · {p.colunas} coluna(s) · ΣP {p.somaDePesos.toLocaleString('pt-BR')} · DN máx. {p.dnMaximoMm}
-                            </>
-                          )}
-                          {p.avisos.map((a, i) => (
-                            <span key={i} className="block text-amber-700">{a}</span>
-                          ))}
-                        </td>
-                        <td className="py-1.5 text-right">
-                          <span className="inline-flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => lancarAgua([p])}
-                              disabled={p.comandos.length === 0 && p.sugeridos === 0}
-                              className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              {p.comandos.length > 0 ? `Lançar ${p.aLigar || ''}`.trim() : p.sugeridos > 0 ? 'Relançar' : 'Ligado'}
-                            </button>
-                            {p.trechosDaRede > 0 && (
+                <div className="overflow-x-auto rounded-[10px] border border-gray-100">
+                  <table className="w-full table-fixed border-collapse text-left" aria-label="Rede de água por origem">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-white text-xs font-semibold text-gray-700">
+                        <th className="w-36 border-r border-gray-100 px-3 py-2">Origem</th>
+                        <th className="w-32 border-r border-gray-100 px-3 py-2">Pontos</th>
+                        <th className="border-r border-gray-100 px-3 py-2">Previsto</th>
+                        <th className="w-36 px-3 py-2 text-right">Lançar</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {planosDeAgua.map((p) => (
+                        <tr key={p.origemId}>
+                          <td className="border-r border-gray-100 px-3 py-2.5 text-sm font-normal text-gray-700">
+                            <span className="block truncate" title={p.origemNome}>{p.origemNome}</span>
+                            <span className="block text-xs text-gray-500">{ROTULO_DA_DISCIPLINA[p.disciplina]}</span>
+                          </td>
+                          <td className="border-r border-gray-100 px-3 py-2.5 text-sm font-normal tabular-nums text-gray-600">
+                            {p.pontos} ponto(s) · {p.ligados} ligado(s)
+                            {p.pavimentos.length > 1 ? <span className="block text-xs text-gray-500">{p.pavimentos.length} pavimentos</span> : null}
+                          </td>
+                          <td className="border-r border-gray-100 px-3 py-2.5 text-sm font-normal text-gray-600">
+                            {p.motivo ? (
+                              <span className="text-gray-500">{p.motivo.charAt(0).toUpperCase() + p.motivo.slice(1)}.</span>
+                            ) : (
+                              <>
+                                {p.metrosPrevistos.toLocaleString('pt-BR')} m · {p.colunas} coluna(s) · ΣP {p.somaDePesos.toLocaleString('pt-BR')} · DN máx. {p.dnMaximoMm}
+                              </>
+                            )}
+                            {p.avisos.map((a, i) => (
+                              <span key={i} className="block text-xs text-amber-700">{a}</span>
+                            ))}
+                          </td>
+                          <td className="px-3 py-2.5 text-right">
+                            <span className="inline-flex flex-wrap justify-end gap-1">
                               <button
                                 type="button"
-                                onClick={() => void refazerRedeDeAgua(p)}
-                                title="Apaga a rede desta origem, inclusive o confirmado, e lança de novo"
-                                className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 font-medium text-slate-700 hover:bg-slate-50"
+                                onClick={() => lancarAgua([p])}
+                                disabled={p.comandos.length === 0 && p.sugeridos === 0}
+                                title={
+                                  p.comandos.length > 0
+                                    ? `Lança a rede até os ${p.aLigar} ponto(s) desta origem que faltam`
+                                    : p.sugeridos > 0
+                                      ? `Apaga os ${p.sugeridos} trecho(s) ainda sugerido(s) desta origem e lança de novo com as hipóteses atuais; o que você confirmou fica`
+                                      : 'Nada a lançar: todos os pontos desta origem já estão ligados'
+                                }
+                                className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                               >
-                                Refazer
+                                {p.comandos.length > 0 ? `Lançar ${p.aLigar || ''}`.trim() : p.sugeridos > 0 ? 'Relançar' : 'Ligado'}
                               </button>
-                            )}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                              {p.trechosDaRede > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => void refazerRedeDeAgua(p)}
+                                  title="Apaga a rede desta origem, inclusive o confirmado, e lança de novo"
+                                  className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                  Refazer
+                                </button>
+                              )}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
+
+              <BlocoDeHipoteses
+                id="agua"
+                resumo={[
+                  `${String(hipotesesDeAgua.velocidadeMaxMs).replace('.', ',')} m/s`,
+                  `DN mín. ${hipotesesDeAgua.dnMinimoAguaFriaMm}/${hipotesesDeAgua.dnMinimoAguaQuenteMm}`,
+                  `ramal a ${hipotesesDeAgua.cotaRamalMm} mm`,
+                  hipotesesDeAgua.pelasParedes === false ? 'traçado reto' : 'pelas paredes',
+                ].join(' · ')}
+                regras={
+                  <>
+                    <li>
+                      Pesos da NBR 5626 pela ficha de cada ponto (chuveiro 0,4 · lavatório 0,3 · pia 0,7 · máquina 1,0…);
+                      vazão <strong>Q = 0,3·√ΣP</strong> L/s; DN = o menor comercial com velocidade ≤ limite, nunca abaixo
+                      do mínimo. Água fria em PVC soldável; água quente em CPVC.
+                    </li>
+                    <li>
+                      Barrilete no forro do pavimento da origem; uma coluna por grupo de pontos a até{' '}
+                      {hipotesesDeAgua.raioDaColunaMm} mm entre si — num shaft a até {hipotesesDeAgua.raioDoShaftMm ?? 3000} mm, se houver;
+                      ramais na cota abaixo; o aquecedor é ponto da água fria com o peso dos pontos quentes.
+                    </li>
+                    <li>
+                      {hipotesesDeAgua.pelasParedes === false ? (
+                        <>Ramais em <strong>linha reta</strong> do ponto à coluna.</>
+                      ) : (
+                        <>
+                          Ramais <strong>pelas paredes</strong>: o ponto a até {hipotesesDeAgua.raioDeEncaixeMm ?? 700} mm de uma parede corre
+                          por ela; o que fica mais longe (a ilha) sai em linha reta, com aviso.
+                        </>
+                      )}{' '}
+                      Um ramal pode andar até{' '}
+                      {hipotesesDeAgua.rotaMaximaVezes == null ? <strong>sem limite</strong> : <strong>{String(hipotesesDeAgua.rotaMaximaVezes).replace('.', ',')}×</strong>}{' '}
+                      a linha reta até a coluna.
+                    </li>
+                    <li><strong>Pré-dimensionamento</strong> por velocidade: sem perda de carga nem pressão disponível; não desvia de viga ou laje.</li>
+                  </>
+                }
+              >
+                <label className="flex items-center gap-2">
+                  Velocidade máx.
+                  <select
+                    value={String(hipotesesDeAgua.velocidadeMaxMs)}
+                    onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, velocidadeMaxMs: Number(e.target.value) })}
+                    aria-label="Velocidade máxima na tubulação"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    {[1.5, 2, 2.5, 3].map((v) => (
+                      <option key={v} value={v}>{String(v).replace('.', ',')} m/s</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  DN mín. AF
+                  <select value={hipotesesDeAgua.dnMinimoAguaFriaMm} onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, dnMinimoAguaFriaMm: Number(e.target.value) })} aria-label="DN mínimo da água fria" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+                    {[20, 25, 32].map((v) => <option key={v} value={v}>{v} mm</option>)}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  DN mín. AQ
+                  <select value={hipotesesDeAgua.dnMinimoAguaQuenteMm} onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, dnMinimoAguaQuenteMm: Number(e.target.value) })} aria-label="DN mínimo da água quente" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+                    {[15, 22, 28].map((v) => <option key={v} value={v}>{v} mm</option>)}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  Ramal a
+                  <CampoNumericoDeHipotese value={hipotesesDeAgua.cotaRamalMm} onCommit={(v) => setHipDeAguaSalvas({ ...hipotesesDeAgua, cotaRamalMm: v })} min={500} max={4000} step={100} aria-label="Cota do ramal em mm" />
+                  mm
+                </label>
+                <label className="flex items-center gap-2">
+                  Raio da coluna
+                  <CampoNumericoDeHipotese value={hipotesesDeAgua.raioDaColunaMm} onCommit={(v) => setHipDeAguaSalvas({ ...hipotesesDeAgua, raioDaColunaMm: v })} min={250} max={10000} step={250} aria-label="Raio da coluna em mm" />
+                  mm
+                </label>
+                <label className="flex items-center gap-2">
+                  Rota máx.
+                  <select
+                    value={hipotesesDeAgua.rotaMaximaVezes == null ? '' : String(hipotesesDeAgua.rotaMaximaVezes)}
+                    onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, rotaMaximaVezes: e.target.value === '' ? null : Number(e.target.value) })}
+                    aria-label="Rota máxima do ramal de água em vezes a linha reta"
+                    title="Quanto um ramal pode se desviar: o caminho pela rede até a coluna, dividido pela linha reta"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    {[1.2, 1.5, 2, 3].map((v) => <option key={v} value={v}>{String(v).replace('.', ',')}×</option>)}
+                    <option value="">sem limite</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  Shaft a até
+                  <CampoNumericoDeHipotese value={hipotesesDeAgua.raioDoShaftMm ?? 3000} onCommit={(v) => setHipDeAguaSalvas({ ...hipotesesDeAgua, raioDoShaftMm: v })} min={0} max={20000} step={500} aria-label="Raio em que um shaft atrai a coluna de água em mm" title="Um shaft a até esta distância do grupo de pontos recebe a coluna; 0 = ignora os shafts" />
+                  mm
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={hipotesesDeAgua.pelasParedes !== false}
+                    onChange={(e) => setHipDeAguaSalvas({ ...hipotesesDeAgua, pelasParedes: e.target.checked })}
+                    aria-label="Ramais de água pelas paredes"
+                  />
+                  Ramais pelas paredes
+                </label>
+                <label className="flex items-center gap-2">
+                  Encaixe na parede até
+                  <CampoNumericoDeHipotese
+                    value={hipotesesDeAgua.raioDeEncaixeMm ?? 700}
+                    onCommit={(v) => setHipDeAguaSalvas({ ...hipotesesDeAgua, raioDeEncaixeMm: v })}
+                    min={100}
+                    max={3000}
+                    step={50}
+                    aria-label="Distância máxima do ponto à parede para o ramal correr por ela em mm"
+                    title="O ponto (ou a coluna) a até esta distância do eixo de uma parede corre por ela; mais longe, sai em linha reta"
+                  />
+                  mm
+                </label>
+              </BlocoDeHipoteses>
               {dimensionamentoDaReservacao && (
                 <PainelReservacao
                   r={dimensionamentoDaReservacao}
@@ -19339,8 +19461,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               <span className="mr-auto text-xs text-slate-500">
                 {[
                   planoDeEsgoto.caixaProposta
-                    ? `${planoDeEsgoto.aLigar} fonte(s) a ligar · a caixa de inspeção vai ${planoDeEsgoto.caixaProposta.rumo === 'FACHADA' ? 'junto à fachada mais próxima' : 'entre a fachada e a frente do lote'}`
-                    : planoDeEsgoto.destinoId == null ? 'Sem caixa de inspeção no desenho' : `${planoDeEsgoto.aLigar} fonte(s) a ligar`,
+                    ? `${planoDeEsgoto.aLigar} ponto(s) a ligar · a caixa de inspeção vai ${planoDeEsgoto.caixaProposta.rumo === 'FACHADA' ? 'junto à fachada mais próxima' : 'entre a fachada e a frente do lote'}`
+                    : planoDeEsgoto.destinoId == null
+                      ? 'Sem caixa de inspeção no desenho'
+                      : planoDeEsgoto.comandos.length === 0 && planoDeEsgoto.sugeridos > 0
+                        ? `${planoDeEsgoto.sugeridos} trecho(s) ainda sugerido(s)`
+                        : `${planoDeEsgoto.aLigar} ponto(s) a ligar`,
                   planoDoEsgotoCompleto?.lancaColetor && planoDoEsgotoCompleto.coletor?.ligacaoProposta ? 'a ligação à rede vai na frente do lote' : null,
                 ].filter(Boolean).join(' · ')}.
               </span>
@@ -19348,9 +19474,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 <button
                   type="button"
                   onClick={() => void refazerRedeDeEsgoto()}
+                  title={`Apaga os ${planoDeEsgoto.trechosDaRede} trecho(s) da rede — inclusive os que você já confirmou — e lança de novo com as hipóteses atuais`}
                   className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                 >
-                  Refazer
+                  Refazer tudo
                 </button>
               )}
               <button
@@ -19358,14 +19485,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 onClick={lancarEsgoto}
                 disabled={!planoDoEsgotoCompleto || planoDoEsgotoCompleto.comandos.length === 0}
                 title={
-                  planoDoEsgotoCompleto && planoDoEsgotoCompleto.comandos.length > 0
-                    ? 'Caixa, ramais, ligação à rede, coletor e ventilação, num passo só (Ctrl+Z desfaz tudo)'
-                    : (planoDoEsgotoCompleto?.pendencias[0] ?? 'Nada a lançar: a rede de esgoto já está completa')
+                  !planoDoEsgotoCompleto || planoDoEsgotoCompleto.comandos.length === 0
+                    ? (planoDoEsgotoCompleto?.pendencias[0] ?? 'Nada a lançar: a rede de esgoto já está completa')
+                    : planoDeEsgoto.comandos.length === 0 && planoDeEsgoto.sugeridos > 0
+                      ? `Apaga os ${planoDeEsgoto.sugeridos} trecho(s) ainda sugerido(s) e lança de novo com as hipóteses atuais; o que você confirmou fica. Ctrl+Z desfaz.`
+                      : 'Caixa, ramais, ligação à rede, coletor e ventilação, num passo só (Ctrl+Z desfaz tudo)'
                 }
                 className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 <Waves className="h-4 w-4" />
-                {planoDeEsgoto.comandos.length > 0 ? `Lançar (${planoDeEsgoto.aLigar})` : planoDeEsgoto.sugeridos > 0 ? 'Relançar' : 'Lançar'}
+                {planoDeEsgoto.comandos.length > 0 ? `Lançar (${planoDeEsgoto.aLigar})` : planoDeEsgoto.sugeridos > 0 ? 'Relançar sugeridos' : 'Lançar'}
               </button>
             </>
           )}

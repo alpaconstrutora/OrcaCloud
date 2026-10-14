@@ -3902,6 +3902,16 @@ describe('BlueprintEditor · ribbon', () => {
     // Refazer existe (há rede); o botão do ribbon não conta mais nada a ligar.
     expect(within(gaveta).getByRole('button', { name: /^refazer$/i })).toBeInTheDocument();
     expect(botaoAgua()).not.toHaveTextContent('2');
+
+    // 14/10/2026: hipóteses recolhidas abaixo do resultado; as folgas escondidas viraram campos.
+    const bloco = within(gaveta).getByTestId('hipoteses-agua');
+    expect(bloco).toHaveTextContent(/2 m\/s · DN mín\. 20\/22 · ramal a 2200 mm · pelas paredes/);
+    await user.click(within(bloco).getByRole('button', { name: /hipóteses do lançamento/i }));
+    expect(within(gaveta).getByLabelText('Raio em que um shaft atrai a coluna de água em mm')).toHaveValue(3000);
+    expect(within(gaveta).getByLabelText('Distância máxima do ponto à parede para o ramal correr por ela em mm')).toHaveValue(700);
+    expect(within(gaveta).getByLabelText('Rota máxima do ramal de água em vezes a linha reta')).toHaveValue('1.5');
+    await user.click(within(gaveta).getByLabelText('Ramais de água pelas paredes'));
+    expect(bloco).toHaveTextContent(/traçado reto/);
   });
 
   it('Hidráulica › Esgoto automático (18/09/2026): a gaveta mostra o pavimento, lança a rede sugerida até a caixa de inspeção e o botão zera', async () => {
@@ -3932,8 +3942,60 @@ describe('BlueprintEditor · ribbon', () => {
     const dialog = gaveta.closest('[role="dialog"]') as HTMLElement;
     await user.click(within(dialog).getByRole('button', { name: /^lançar \(3\)$/i }));
     await waitFor(() => expect(screen.getByTestId('tarefa-esgoto')).toHaveTextContent(/já estão ligados/));
-    expect(within(dialog).getByRole('button', { name: /^refazer$/i })).toBeInTheDocument();
+    // 14/10/2026: o rodapé diz o que o botão faz — com trechos sugeridos, "Relançar sugeridos"; "Refazer tudo" leva os confirmados.
+    expect(within(dialog).getByRole('button', { name: /^refazer tudo$/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /^relançar sugeridos$/i })).toHaveAttribute('title', expect.stringMatching(/o que você confirmou fica/));
+    expect(dialog).toHaveTextContent(/trecho\(s\) ainda sugerido\(s\)/);
+    expect(dialog).not.toHaveTextContent(/fonte\(s\)/);
     expect(botaoEsgoto()).not.toHaveTextContent('3');
+  });
+
+  it('Esgoto automático — gaveta (14/10/2026): resultado primeiro, hipóteses recolhidas com o resumo, as folgas editáveis e digitar 0 grava 0', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    m = k.applyBatch(m, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Vaso', at: k.point(600, 800), cotaMm: 0, tipoHidraulico: 'VASO_SANITARIO' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'CI', at: k.point(4000, -1000), cotaMm: -700, tipoHidraulico: 'CAIXA_INSPECAO' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^hidráulica$/i);
+    await user.click(botao(/^esgoto automático/i));
+    const gaveta = await screen.findByTestId('tarefa-esgoto');
+
+    // O resultado vem ANTES das hipóteses; elas abrem recolhidas, com os valores na linha do título.
+    const tabela = within(gaveta).getByRole('table', { name: /esgoto por pavimento/i });
+    const bloco = within(gaveta).getByTestId('hipoteses-esgoto');
+    expect(tabela.compareDocumentPosition(bloco) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const cabecalho = within(bloco).getByRole('button', { name: /hipóteses do lançamento/i });
+    expect(cabecalho).toHaveAttribute('aria-expanded', 'false');
+    expect(bloco).toHaveTextContent(/caimento 2 % \/ 1 % · ramal -150 mm · TQ DN 100 · vent\. DN 50/);
+    expect(within(gaveta).queryByLabelText('Cota do ramal sob o piso em mm')).toBeNull();
+    // A tabela fala em PONTOS, não em "fontes".
+    expect(within(tabela).getByRole('columnheader', { name: 'Pontos' })).toBeInTheDocument();
+
+    await user.click(cabecalho);
+    expect(cabecalho).toHaveAttribute('aria-expanded', 'true');
+    // O bug do `|| -150`: digitar 0 numa cota que aceita 0 gravava −150.
+    const sobOPiso = within(gaveta).getByLabelText('Cota do ramal sob o piso em mm');
+    await user.clear(sobOPiso);
+    await user.type(sobOPiso, '0');
+    await user.tab();
+    await waitFor(() => expect(within(gaveta).getByLabelText('Cota do ramal sob o piso em mm')).toHaveValue(0));
+    expect(bloco).toHaveTextContent(/ramal 0 mm/);
+    // Apagar e sair do campo não grava nada: volta ao último valor.
+    await user.clear(within(gaveta).getByLabelText('Cota do ramal sob o piso em mm'));
+    await user.tab();
+    expect(within(gaveta).getByLabelText('Cota do ramal sob o piso em mm')).toHaveValue(0);
+    // As folgas que eram constantes escondidas agora são campos.
+    await user.selectOptions(within(gaveta).getByLabelText('DN mínimo do tubo de queda'), '150');
+    await user.selectOptions(within(gaveta).getByLabelText('DN da coluna de ventilação'), '75');
+    await user.selectOptions(within(gaveta).getByLabelText('Rota máxima do ramal de esgoto em vezes a linha reta'), '');
+    expect(bloco).toHaveTextContent(/TQ DN 150 · vent\. DN 75/);
+    expect(bloco).toHaveTextContent(/sem limite/);
+    expect(within(gaveta).getByLabelText('Raio em que um shaft atrai o tubo de queda em mm')).toHaveValue(3000);
   });
 
   it('Esgoto automático SEM caixa nem ligação (13/10/2026): um clique lança tudo, diz o que presumiu, e "Confirmar cota" tira o aviso', async () => {
@@ -3961,7 +4023,8 @@ describe('BlueprintEditor · ribbon', () => {
     await user.click(botao(/^esgoto automático/i));
     const gaveta = await screen.findByTestId('tarefa-esgoto');
     const dialog = gaveta.closest('[role="dialog"]') as HTMLElement;
-    // As duas premissas novas, editáveis na gaveta (com os padrões).
+    // As duas premissas novas, editáveis na gaveta (com os padrões) — dentro das hipóteses, que abrem recolhidas (14/10/2026).
+    await user.click(within(gaveta).getByRole('button', { name: /hipóteses do lançamento/i }));
     expect(within(gaveta).getByLabelText('Profundidade presumida da rede pública em mm')).toHaveValue(1500);
     expect(within(gaveta).getByLabelText('Afastamento da caixa de inspeção automática em mm')).toHaveValue(1000);
     // Antes: o painel do coletor já não manda pôr a ligação à mão.

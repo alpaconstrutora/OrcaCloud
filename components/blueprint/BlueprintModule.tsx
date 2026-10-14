@@ -5,6 +5,7 @@ import { useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
 import { archiveStudy, createStudy, duplicateStudy, listBranches, listStudies, ramoPrincipal } from '../../services/blueprintService';
 import type { BlueprintStudy } from '../../types/blueprint';
 import BlueprintEditor from './BlueprintEditor';
+import { TELAS_DO_LINK_DIRETO, type TelaDoLinkDireto } from './telasDoLinkDireto';
 import ActionIconButton from '../ui/ActionIconButton';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import { TabsBar } from '../ui/TabsBar';
@@ -103,6 +104,13 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
     const h = typeof window !== 'undefined' ? window.location.hash : '';
     return h.includes('?') ? new URLSearchParams(h.split('?')[1]).get('studyId') : null;
   });
+  // `&tela=areas-nbr12721` (14/10/2026): o Empreendimento abre o estudo já na tela de
+  // Áreas NBR 12721. Só valores conhecidos — o resto é ignorado (abre o editor).
+  const telaDoHash = (h: string): TelaDoLinkDireto | null => {
+    const t = h.includes('?') ? new URLSearchParams(h.split('?')[1]).get('tela') : null;
+    return (TELAS_DO_LINK_DIRETO as readonly string[]).includes(t ?? '') ? (t as TelaDoLinkDireto) : null;
+  };
+  const [telaPedida, setTelaPedida] = useState<TelaDoLinkDireto | null>(() => (typeof window !== 'undefined' ? telaDoHash(window.location.hash) : null));
   // D4 (10/10/2026): o link que chega com o módulo JÁ montado (a lista de plantas na
   // tela). A vista continua "blueprint" — o roteador não remonta nada —, então o
   // pedido só era lido na montagem e ficava sem efeito. Agora a troca de endereço
@@ -112,7 +120,10 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
       const h = window.location.hash;
       if (!h.startsWith('#/blueprint?')) return;
       const id = new URLSearchParams(h.split('?')[1]).get('studyId');
-      if (id) setEstudoPedido(id);
+      if (id) {
+        setTelaPedida(telaDoHash(h));
+        setEstudoPedido(id);
+      }
     };
     window.addEventListener('hashchange', aoMudar);
     return () => window.removeEventListener('hashchange', aoMudar);
@@ -242,6 +253,7 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
         key={aberto.branchId}
         study={aberto.study}
         branchId={aberto.branchId}
+        telaInicial={telaPedida}
         onTrocarRamo={(branchId) => setAberto((a) => (a ? { ...a, branchId } : a))}
         onAbrirMapaRegulatorio={
           podeVerMapaRegulatorio
@@ -255,6 +267,8 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
         }
         onBack={() => {
           setAberto(null);
+          // A tela pedida pelo link vale só para aquele estudo: o próximo abre no editor.
+          setTelaPedida(null);
           carregar();
         }}
       />

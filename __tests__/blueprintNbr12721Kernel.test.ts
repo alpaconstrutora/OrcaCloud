@@ -229,3 +229,34 @@ describe('cópias levam a classificação', () => {
     expect(hallDaCopia().nbr12721).toEqual({ cobertura: 'DIFERENTE', coeficiente: 0.5, divisao: 'PROPORCIONAL' });
   });
 });
+
+describe('acessório da unidade de andar COPIADO (0.101.0)', () => {
+  function comCopia() {
+    const { m, t } = predio();
+    let x = applyBatch(m, [
+      { type: 'AddLevel', name: '2º', elevationMm: 3000, defaultHeightMm: 2800, tipoDeId: t },
+      { type: 'AddLevel', name: 'Garagem', elevationMm: -3000, defaultHeightMm: 2800 },
+    ]).model;
+    const garagem = x.levels.find((l) => l.name === 'Garagem')!.id;
+    x = applyCommand(x, { type: 'AddVaga', levelId: garagem, at: point(3000, 3000) }).model;
+    return { m: x, copia: x.levels.find((l) => l.name === '2º')!, garagem };
+  }
+
+  it('aceita o pavimento copiado; recusa pavimento que não é cópia; ida e volta no canônico; apagar o andar tira o vínculo', () => {
+    const { m, copia, garagem } = comCopia();
+    const u101 = unidade(m, '101');
+    const x = applyCommand(m, { type: 'SetAcessoriosDaUnidade', unidadeId: u101.id, acessorios: [{ uid: m.vagas[0].uid, afetaPrivativa: true, afetaCoeficiente: true, levelUid: copia.uid }] }).model;
+    expect(unidade(x, '101').acessorios).toEqual([{ uid: m.vagas[0].uid, afetaPrivativa: true, afetaCoeficiente: true, levelUid: copia.uid }]);
+    const naoCopia = m.levels.find((l) => l.id === garagem)!.uid;
+    expect(() => applyCommand(m, { type: 'SetAcessoriosDaUnidade', unidadeId: u101.id, acessorios: [{ uid: m.vagas[0].uid, afetaPrivativa: true, afetaCoeficiente: true, levelUid: naoCopia }] })).toThrow(/não é cópia/);
+
+    const json = canonicalPayload(x);
+    const volta = modelFromCanonicalPayload(parseCanonicalPayload(json));
+    expect(canonicalPayload(volta)).toBe(json);
+    expect(unidade(volta, '101').acessorios![0].levelUid).toBe(volta.levels.find((l) => l.name === '2º')!.uid);
+    expect(snapshotHash(x)).not.toBe(snapshotHash(m));
+
+    const semAndar = applyCommand(x, { type: 'RemoveLevel', levelId: copia.id }).model;
+    expect('acessorios' in unidade(semAndar, '101')).toBe(false);
+  });
+});

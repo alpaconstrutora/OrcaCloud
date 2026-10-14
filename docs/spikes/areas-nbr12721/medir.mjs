@@ -4,7 +4,7 @@
  *   PLAYWRIGHT_CORE=c:/tmp/pwtest/node_modules/playwright-core \
  *     node docs/spikes/areas-nbr12721/medir.mjs [urlBase] [pastaDeSaida]
  *
- * O que ele afirma, em cada uma das sete abas:
+ * O que ele afirma, em cada uma das nove abas:
  *  1. nenhuma rolagem horizontal da página nem de tabela na largura útil do app (1.340 px);
  *  2. nenhum erro de página;
  * e no fluxo:
@@ -73,7 +73,7 @@ const coefDo101 = async () => {
 };
 
 // 1-2: cada aba, fotografada e medida.
-for (const nome of ['Classificação', 'Quadro I', 'Quadro II', 'Quadro IV-B', 'Frações', 'Pendências', 'Hipóteses']) {
+for (const nome of ['Classificação', 'Acessórios', 'Ambientes declarados', 'Quadro I', 'Quadro II', 'Quadro IV-B', 'Frações', 'Pendências', 'Hipóteses']) {
   await aba(nome).click();
   await page.waitForTimeout(250);
   const t = await transbordo();

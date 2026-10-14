@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.100.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.101.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2536,10 +2536,11 @@ function projetar(model) {
   const acessoriosCanonicos = (lista) => {
     const out = (lista ?? []).map((a) => {
       const alvo = indiceDaVaga.has(a.uid) ? { vaga: indiceDaVaga.get(a.uid) } : indiceDaEtiqueta.has(a.uid) ? { etiqueta: indiceDaEtiqueta.get(a.uid) } : indiceDoDeclarado.has(a.uid) ? { declarado: indiceDoDeclarado.get(a.uid) } : null;
-      return alvo ? { ...alvo, privativa: a.afetaPrivativa, coeficiente: a.afetaCoeficiente } : null;
+      const andar = a.levelUid !== void 0 ? model.levels.find((l) => l.uid === a.levelUid) : void 0;
+      return alvo ? { ...alvo, privativa: a.afetaPrivativa, coeficiente: a.afetaCoeficiente, ...andar ? { pavimento: nivel(andar.id) } : {} } : null;
     }).filter((x) => x !== null);
     const chave = (x) => ("vaga" in x ? 0 : "etiqueta" in x ? 1 : 2) * 1e9 + (x.vaga ?? x.etiqueta ?? x.declarado ?? 0);
-    out.sort((x, y) => chave(x) - chave(y));
+    out.sort((x, y) => chave(x) - chave(y) || (x.pavimento ?? -1) - (y.pavimento ?? -1));
     return out.length ? out : void 0;
   };
   const unidades = ordenar(
@@ -3381,7 +3382,8 @@ function modelFromCanonicalPayload(payload) {
     const acessorios = (u.acessorios ?? []).map((a) => {
       const r = a;
       const uid = r.vaga !== void 0 ? model.vagas[r.vaga]?.uid : r.etiqueta !== void 0 ? model.labels[r.etiqueta]?.uid : r.declarado !== void 0 ? model.ambientesDeclarados.find((x) => x.id === idsDeDeclarado[r.declarado])?.uid : void 0;
-      return uid ? { uid, afetaPrivativa: r.privativa !== false, afetaCoeficiente: r.coeficiente !== false } : null;
+      const andar = r.pavimento !== void 0 ? model.levels.find((l) => l.id === levelIds[r.pavimento]) : void 0;
+      return uid ? { uid, afetaPrivativa: r.privativa !== false, afetaCoeficiente: r.coeficiente !== false, ...andar ? { levelUid: andar.uid } : {} } : null;
     }).filter((x) => x !== null);
     model.unidades.push({
       id: nextId(model, "und"),

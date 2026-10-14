@@ -33,8 +33,10 @@
 import {
   pointInPolygon,
   uidDaCopia,
+  type AcessorioDaUnidade,
   type BlueprintModel,
   type ClassificacaoNbr12721,
+  type Command,
   type CoberturaNbr12721,
   type ElementUid,
   type EscopoNbr12721,
@@ -175,8 +177,12 @@ export function ambientesParaClassificar(model: BlueprintModel): AmbienteParaCla
   for (const l of model.levels) if (l.tipoDeId !== undefined) copias.set(l.tipoDeId, (copias.get(l.tipoDeId) ?? 0) + 1);
   const dona = new Map<ElementUid, string>();
   for (const u of model.unidades ?? []) for (const uid of u.etiquetaUids) dona.set(uid, u.numero);
+  // Acessório de unidade de andar copiado (0.101.0): o número é o da DERIVADA ("201"), não o da origem.
+  const numeroPorChave = new Map(unidadesDoPredio(model).unidades.map((u) => [u.chave, u.numero] as const));
   const acessorio = new Map<ElementUid, string>();
-  for (const u of model.unidades ?? []) for (const a of u.acessorios ?? []) acessorio.set(a.uid, u.numero);
+  for (const u of model.unidades ?? []) {
+    for (const a of u.acessorios ?? []) acessorio.set(a.uid, (a.levelUid ? numeroPorChave.get(`${u.uid}:${a.levelUid}`) : undefined) ?? u.numero);
+  }
   const numeroPorUid = new Map((model.unidades ?? []).map((u) => [u.uid, u.numero] as const));
 
   const linhas: AmbienteParaClassificar[] = [];
@@ -220,6 +226,163 @@ export function ambientesParaClassificar(model: BlueprintModel): AmbienteParaCla
     });
   }
   return linhas;
+}
+
+// ── acessórios (tela) ───────────────────────────────────────────────────────
+
+/** Uma vaga, depósito ou área que pode ser acessório vinculado de uma unidade do prédio. */
+export interface AcessorioParaVincular {
+  /** uid da vaga, da etiqueta ou do ambiente declarado. */
+  uid: ElementUid;
+  tipo: 'VAGA' | 'AMBIENTE' | 'DECLARADO';
+  nome: string;
+  pavimento: string;
+  areaMm2: number;
+  /** `UnidadeDoPredio.chave` da dona; `null` = sem dona (fica dentro do ambiente que o contém / comum). */
+  donaChave: string | null;
+  donaNumero: string | null;
+  afetaPrivativa: boolean;
+  afetaCoeficiente: boolean;
+}
+
+/**
+ * Os candidatos a acessório: toda vaga, todo ambiente declarado sem dona e
+ * toda etiqueta que não é privativa de unidade (fora dos andares copiados —
+ * a cópia segue o tipo). A dona pode ser qualquer unidade do PRÉDIO, inclusive
+ * a de andar copiado (0.101.0).
+ */
+export function acessoriosParaVincular(model: BlueprintModel, hip: HipotesesNbr12721 = HIPOTESES_NBR12721_PADRAO): { linhas: AcessorioParaVincular[]; unidades: UnidadeDoPredio[] } {
+  const { unidades } = unidadesDoPredio(model, hip.numeracao);
+  const numeroPorChave = new Map(unidades.map((u) => [u.chave, u.numero] as const));
+  const dona = new Map<ElementUid, { chave: string; afetaPrivativa: boolean; afetaCoeficiente: boolean }>();
+  for (const u of model.unidades ?? []) {
+    for (const a of u.acessorios ?? []) dona.set(a.uid, { chave: a.levelUid ? `${u.uid}:${a.levelUid}` : u.uid, afetaPrivativa: a.afetaPrivativa, afetaCoeficiente: a.afetaCoeficiente });
+  }
+  const privativa = new Set<ElementUid>();
+  for (const u of unidades) for (const uid of u.etiquetaUids) privativa.add(uid);
+  const nivel = new Map(model.levels.map((l) => [l.id, l] as const));
+  const linha = (uid: ElementUid, tipo: AcessorioParaVincular['tipo'], nome: string, levelId: ObjectId, areaMm2: number): AcessorioParaVincular => {
+    const d = dona.get(uid);
+    return {
+      uid,
+      tipo,
+      nome,
+      pavimento: nivel.get(levelId)?.name ?? '?',
+      areaMm2,
+      donaChave: d?.chave ?? null,
+      donaNumero: d ? (numeroPorChave.get(d.chave) ?? null) : null,
+      afetaPrivativa: d?.afetaPrivativa ?? true,
+      afetaCoeficiente: d?.afetaCoeficiente ?? true,
+    };
+  };
+  const linhas: AcessorioParaVincular[] = [];
+  for (const v of model.vagas ?? []) linhas.push(linha(v.uid, 'VAGA', `Vaga ${v.numero ?? ''}`.trim(), v.levelId, hip.areaDaVagaMm2 ?? v.larguraMm * v.comprimentoMm));
+  for (const a of model.ambientesDeclarados ?? []) if (!a.unidadeUid) linhas.push(linha(a.uid, 'DECLARADO', a.nome, a.levelId, a.areaMm2));
+  for (const l of model.labels ?? []) {
+    if (privativa.has(l.uid) || nivel.get(l.levelId)?.tipoDeId !== undefined) continue;
+    const espaco = model.spaces.find((s) => s.labelUid === l.uid);
+    linhas.push(linha(l.uid, 'AMBIENTE', l.name, l.levelId, espaco?.areaMm2 ?? 0));
+  }
+  return { linhas, unidades };
+}
+
+/**
+ * Os comandos que fazem `acessorioUid` passar a ser da unidade `donaChave`
+ * (`null` = de ninguém): tira da dona anterior e põe na nova — que, se for de
+ * andar copiado, é a ORIGEM com o `levelUid` daquele andar. Um lote só.
+ */
+export function comandosDoAcessorio(
+  model: BlueprintModel,
+  acessorioUid: ElementUid,
+  donaChave: string | null,
+  flags: { afetaPrivativa: boolean; afetaCoeficiente: boolean },
+): Command[] {
+  const separar = (chave: string) => {
+    const [origemUid, levelUid] = chave.split(':');
+    return { origem: (model.unidades ?? []).find((u) => u.uid === origemUid), levelUid: levelUid || undefined };
+  };
+  const novas = new Map<ObjectId, AcessorioDaUnidade[]>();
+  const listaDe = (u: { id: ObjectId; acessorios?: AcessorioDaUnidade[] }) => novas.get(u.id) ?? (u.acessorios ?? []).map((a) => ({ ...a }));
+  for (const u of model.unidades ?? []) {
+    if ((u.acessorios ?? []).some((a) => a.uid === acessorioUid)) novas.set(u.id, listaDe(u).filter((a) => a.uid !== acessorioUid));
+  }
+  if (donaChave) {
+    const { origem, levelUid } = separar(donaChave);
+    if (!origem) throw new Error(`Unidade inexistente: ${donaChave}`);
+    novas.set(origem.id, [...listaDe(origem), { uid: acessorioUid, ...flags, ...(levelUid ? { levelUid } : {}) }]);
+  }
+  return [...novas].map(([unidadeId, acessorios]) => ({ type: 'SetAcessoriosDaUnidade', unidadeId, acessorios }) as Command);
+}
+
+// ── planilha de ambientes declarados ────────────────────────────────────────
+
+/** As colunas que a importação lê — e que o modelo de planilha da tela traz no cabeçalho. */
+export const COLUNAS_DA_PLANILHA_DE_DECLARADOS = ['Pavimento', 'Ambiente', 'Área (m²)', 'Unidade', 'Cobertura', 'Coeficiente', 'Divisão'] as const;
+
+const semAcento = (t: unknown) =>
+  String(t ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+    .toLowerCase();
+
+/**
+ * Linhas da planilha → comandos `AddAmbienteDeclarado`. Pavimento casa pelo NOME
+ * e unidade pelo NÚMERO (sem caixa nem acento); o que não casa vira erro DA
+ * LINHA, nunca palpite. Área em m² com vírgula ou ponto. Cobertura: "padrão",
+ * "diferente" ou "descoberta" (vazio = padrão); divisão (só sem unidade):
+ * "proporcional" ou "não proporcional".
+ */
+export function comandosDaPlanilhaDeDeclarados(model: BlueprintModel, linhas: Record<string, unknown>[]): { comandos: Command[]; erros: string[] } {
+  const comandos: Command[] = [];
+  const erros: string[] = [];
+  const nivelPorNome = new Map(model.levels.map((l) => [semAcento(l.name), l.id] as const));
+  const unidadePorNumero = new Map((model.unidades ?? []).map((u) => [semAcento(u.numero), u.id] as const));
+  const campo = (l: Record<string, unknown>, nome: string) => {
+    const chave = Object.keys(l).find((k) => semAcento(k) === semAcento(nome));
+    return chave === undefined ? undefined : l[chave];
+  };
+  linhas.forEach((l, i) => {
+    const n = i + 2; // linha 1 é o cabeçalho
+    const nome = String(campo(l, 'Ambiente') ?? '').trim();
+    if (!nome && !campo(l, 'Área (m²)') && !campo(l, 'Pavimento')) return; // linha em branco
+    const nivel = nivelPorNome.get(semAcento(campo(l, 'Pavimento')));
+    const areaTexto = String(campo(l, 'Área (m²)') ?? '').replace(/\./g, (m, off, s: string) => (s.includes(',') ? '' : m)).replace(',', '.');
+    const area = Number(areaTexto);
+    const unidadeTexto = String(campo(l, 'Unidade') ?? '').trim();
+    const unidadeId = unidadeTexto ? unidadePorNumero.get(semAcento(unidadeTexto)) : null;
+    const cob = semAcento(campo(l, 'Cobertura'));
+    const cobertura: CoberturaNbr12721 | null = !cob || cob.startsWith('padr') ? 'PADRAO' : cob.startsWith('dif') ? 'DIFERENTE' : cob.startsWith('desc') ? 'DESCOBERTA' : null;
+    const coefTexto = String(campo(l, 'Coeficiente') ?? '').trim();
+    const coeficiente = coefTexto ? Number(coefTexto.replace(',', '.')) : null;
+    const div = semAcento(campo(l, 'Divisão'));
+    const divisao = !div || div.startsWith('prop') ? 'PROPORCIONAL' : div.startsWith('nao') || div.startsWith('não') ? 'NAO_PROPORCIONAL' : null;
+    const problemas: string[] = [];
+    if (!nome) problemas.push('sem nome do ambiente');
+    if (!nivel) problemas.push(`pavimento "${String(campo(l, 'Pavimento') ?? '')}" não existe no estudo`);
+    if (!(Number.isFinite(area) && area > 0)) problemas.push(`área "${String(campo(l, 'Área (m²)') ?? '')}" inválida`);
+    if (unidadeTexto && !unidadeId) problemas.push(`unidade "${unidadeTexto}" não existe no estudo`);
+    if (!cobertura) problemas.push(`cobertura "${String(campo(l, 'Cobertura'))}" desconhecida (padrão, diferente ou descoberta)`);
+    if (coeficiente !== null && !(Number.isFinite(coeficiente) && coeficiente > 0 && coeficiente <= 10)) problemas.push(`coeficiente "${coefTexto}" fora de (0, 10]`);
+    if (!unidadeId && !divisao) problemas.push(`divisão "${String(campo(l, 'Divisão'))}" desconhecida (proporcional ou não proporcional)`);
+    if (problemas.length) {
+      erros.push(`Linha ${n}: ${problemas.join('; ')}.`);
+      return;
+    }
+    comandos.push({
+      type: 'AddAmbienteDeclarado',
+      levelId: nivel!,
+      nome,
+      areaMm2: Math.round(area * 1_000_000),
+      ...(unidadeId ? { unidadeId } : {}),
+      nbr12721: {
+        cobertura: cobertura!,
+        ...(coeficiente !== null ? { coeficiente } : {}),
+        ...(unidadeId ? {} : { divisao: divisao! }),
+      },
+    });
+  });
+  return { comandos, erros };
 }
 
 // ── a entrada do motor ───────────────────────────────────────────────────────
@@ -273,10 +436,17 @@ export function entradaDoEstudo(model: BlueprintModel, hip: HipotesesNbr12721 = 
   const donaDaEtiqueta = new Map<ElementUid, UnidadeDoPredio>();
   for (const u of predio.unidades) for (const uid of u.etiquetaUids) donaDaEtiqueta.set(uid, u);
 
-  // Acessórios vinculados (só na unidade de ORIGEM — a derivada ainda não recebe vínculo próprio).
+  // Acessórios vinculados: da unidade de origem, ou (0.101.0, `levelUid`) da derivada do andar copiado.
   const acessorioDe = new Map<ElementUid, { unidade: string; afetaPrivativa: boolean; afetaCoeficiente: boolean }>();
   for (const u of model.unidades ?? []) {
-    for (const a of u.acessorios ?? []) acessorioDe.set(a.uid, { unidade: codigoPorChave.get(u.uid)!, afetaPrivativa: a.afetaPrivativa, afetaCoeficiente: a.afetaCoeficiente });
+    for (const a of u.acessorios ?? []) {
+      const unidade = codigoPorChave.get(a.levelUid ? `${u.uid}:${a.levelUid}` : u.uid);
+      if (!unidade) {
+        avisos.push(`Acessório da unidade ${u.numero} num andar copiado em que ela não existe — ignorado.`);
+        continue;
+      }
+      acessorioDe.set(a.uid, { unidade, afetaPrivativa: a.afetaPrivativa, afetaCoeficiente: a.afetaCoeficiente });
+    }
   }
 
   const sugestoes = classificacaoSugerida(model);

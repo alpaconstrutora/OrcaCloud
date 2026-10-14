@@ -119,7 +119,7 @@ function nbr12721Canonica(c: ClassificacaoNbr12721 | undefined): Nbr12721Canonic
   };
 }
 /** Acessório da unidade no canônico: a família diz em qual lista está o índice. */
-type AcessorioCanonico = ({ vaga: number } | { etiqueta: number } | { declarado: number }) & { privativa: boolean; coeficiente: boolean };
+type AcessorioCanonico = ({ vaga: number } | { etiqueta: number } | { declarado: number }) & { privativa: boolean; coeficiente: boolean; pavimento?: number };
 const nbr12721DoCanonico = (c: Nbr12721Canonica | undefined): ClassificacaoNbr12721 | undefined =>
   c ? (nbr12721Canonica(c as ClassificacaoNbr12721) as ClassificacaoNbr12721) : undefined;
 
@@ -1140,11 +1140,13 @@ function projetar(model: BlueprintModel): {
           : indiceDaEtiqueta.has(a.uid) ? { etiqueta: indiceDaEtiqueta.get(a.uid)! }
           : indiceDoDeclarado.has(a.uid) ? { declarado: indiceDoDeclarado.get(a.uid)! }
           : null;
-        return alvo ? { ...alvo, privativa: a.afetaPrivativa, coeficiente: a.afetaCoeficiente } : null;
+        // 0.101.0: o andar copiado dono do acessório, por índice — só quando há.
+        const andar = a.levelUid !== undefined ? model.levels.find((l) => l.uid === a.levelUid) : undefined;
+        return alvo ? { ...alvo, privativa: a.afetaPrivativa, coeficiente: a.afetaCoeficiente, ...(andar ? { pavimento: nivel(andar.id) } : {}) } : null;
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
     const chave = (x: (typeof out)[number]) => ('vaga' in x ? 0 : 'etiqueta' in x ? 1 : 2) * 1e9 + ((x as { vaga?: number; etiqueta?: number; declarado?: number }).vaga ?? (x as { etiqueta?: number }).etiqueta ?? (x as { declarado?: number }).declarado ?? 0);
-    out.sort((x, y) => chave(x) - chave(y));
+    out.sort((x, y) => chave(x) - chave(y) || ((x as { pavimento?: number }).pavimento ?? -1) - ((y as { pavimento?: number }).pavimento ?? -1));
     return out.length ? out : undefined;
   };
   const unidades = ordenar(
@@ -2739,13 +2741,14 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
   unidadesLidas.forEach((u, i) => {
     const acessorios = (u.acessorios ?? [])
       .map((a) => {
-        const r = a as Partial<Record<'vaga' | 'etiqueta' | 'declarado', number>> & { privativa?: boolean; coeficiente?: boolean };
+        const r = a as Partial<Record<'vaga' | 'etiqueta' | 'declarado' | 'pavimento', number>> & { privativa?: boolean; coeficiente?: boolean };
         const uid =
           r.vaga !== undefined ? model.vagas[r.vaga]?.uid
           : r.etiqueta !== undefined ? model.labels[r.etiqueta]?.uid
           : r.declarado !== undefined ? model.ambientesDeclarados.find((x) => x.id === idsDeDeclarado[r.declarado!])?.uid
           : undefined;
-        return uid ? { uid, afetaPrivativa: r.privativa !== false, afetaCoeficiente: r.coeficiente !== false } : null;
+        const andar = r.pavimento !== undefined ? model.levels.find((l) => l.id === levelIds[r.pavimento!]) : undefined;
+        return uid ? { uid, afetaPrivativa: r.privativa !== false, afetaCoeficiente: r.coeficiente !== false, ...(andar ? { levelUid: andar.uid } : {}) } : null;
       })
       .filter((x): x is AcessorioDaUnidade => x !== null);
     model.unidades.push({

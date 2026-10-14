@@ -1720,6 +1720,14 @@ export interface AcessorioDaUnidade {
   afetaPrivativa: boolean;
   /** Entra no Quadro II e no coeficiente de proporcionalidade. */
   afetaCoeficiente: boolean;
+  /**
+   * (0.101.0) uid do pavimento COPIADO: o acessório é da unidade DERIVADA
+   * daquele andar (a "501" da "101"), não da origem. A unidade do andar copiado
+   * não existe no kernel — é derivada (`utils/blueprintUnidadesDoPredio.ts`) —,
+   * então o vínculo mora na origem com o andar dito aqui. Ausente = da própria
+   * unidade.
+   */
+  levelUid?: ElementUid;
 }
 
 /**
@@ -4575,7 +4583,9 @@ export function limparReferenciasNbr12721(model: BlueprintModel): ObjectId[] {
   ]);
   for (const u of model.unidades ?? []) {
     if (!u.acessorios) continue;
-    const vivos = u.acessorios.filter((a) => acessiveis.has(a.uid));
+    // O acessório da unidade de um andar COPIADO sai junto com o andar.
+    const copias = new Set(model.levels.filter((l) => l.tipoDeId !== undefined).map((l) => l.uid));
+    const vivos = u.acessorios.filter((a) => acessiveis.has(a.uid) && (a.levelUid === undefined || copias.has(a.levelUid)));
     if (vivos.length !== u.acessorios.length) {
       if (vivos.length) u.acessorios = vivos;
       else delete u.acessorios;
@@ -6235,6 +6245,9 @@ export function assertModelInvariants(model: BlueprintModel): void {
     for (const u of model.unidades ?? []) {
       for (const ac of u.acessorios ?? []) {
         if (!acessiveis.has(ac.uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: acessório inexistente ${ac.uid}`);
+        if (ac.levelUid !== undefined && !model.levels.some((l) => l.uid === ac.levelUid && l.tipoDeId !== undefined)) {
+          throw new KernelError('BAD_UNIT', `Unidade ${u.id}: o acessório ${ac.uid} aponta para um pavimento que não existe ou não é cópia do tipo`);
+        }
         if (typeof ac.afetaPrivativa !== 'boolean' || typeof ac.afetaCoeficiente !== 'boolean') throw new KernelError('BAD_UNIT', `Unidade ${u.id}: acessório ${ac.uid} sem os dois indicadores booleanos`);
         if (jaVinculados.has(ac.uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: o acessório ${ac.uid} já está vinculado (a esta ou a outra unidade)`);
         if (etiquetas.has(ac.uid) || declaradosComDona.has(ac.uid)) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: o acessório ${ac.uid} já é privativo de uma unidade — contaria duas vezes`);

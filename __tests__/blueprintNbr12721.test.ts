@@ -186,3 +186,59 @@ describe('hipóteses do estudo (coluna JSONB)', () => {
     });
   });
 });
+
+describe('acessório de unidade de andar copiado (Fase 6b)', () => {
+  it('a vaga vinculada ao 201 (derivada) entra no IV-B do 201, não do 101; comandosDoAcessorio troca a dona num lote', async () => {
+    const { acessoriosParaVincular, comandosDoAcessorio } = await import('../utils/blueprintNbr12721');
+    const { m, t } = predio();
+    let x = applyBatch(m, [
+      { type: 'AddLevel', name: '2º', elevationMm: 6000, defaultHeightMm: 3000, tipoDeId: t },
+      { type: 'AddVaga', levelId: m.levels.find((l) => l.name === 'Térreo')!.id, at: point(3000, 3000) },
+    ]).model;
+    const { linhas, unidades } = acessoriosParaVincular(x);
+    const vaga = linhas.find((l) => l.tipo === 'VAGA')!;
+    expect(vaga.donaChave).toBeNull();
+    const u201 = unidades.find((u) => u.numero === '201')!;
+    x = applyBatch(x, comandosDoAcessorio(x, vaga.uid, u201.chave, { afetaPrivativa: true, afetaCoeficiente: true })).model;
+    expect(acessoriosParaVincular(x).linhas.find((l) => l.uid === vaga.uid)).toMatchObject({ donaChave: u201.chave, donaNumero: '201' });
+    // A vaga fica fora de qualquer ambiente (o Térreo não tem paredes): entra como padrão diferente — com a hipótese do coeficiente.
+    const s = calcularNbr12721(entradaDoEstudo(x, { ...HIPOTESES_NBR12721_PADRAO, coeficientesPadrao: { DIFERENTE: 0.5, DESCOBERTA: null } }).entrada);
+    expect(s.status).toBe('success');
+    const area = x.vagas[0].larguraMm * x.vagas[0].comprimentoMm / 1e6;
+    expect(s.quadroIVB.find((l) => l.unit_label === '201')!.qivb_c_private_accessory_area_raw).toBeCloseTo(area, 6);
+    expect(s.quadroIVB.find((l) => l.unit_label === '101')!.qivb_c_private_accessory_area_raw).toBe(0);
+    // Passa para o 102 (origem): sai do 101/201 e entra no 102, num lote só.
+    const u102 = acessoriosParaVincular(x).unidades.find((u) => u.numero === '102')!;
+    const lote = comandosDoAcessorio(x, vaga.uid, u102.chave, { afetaPrivativa: true, afetaCoeficiente: false });
+    x = applyBatch(x, lote).model;
+    expect(x.unidades.find((u) => u.numero === '101')!.acessorios ?? []).toEqual([]);
+    expect(x.unidades.find((u) => u.numero === '102')!.acessorios).toEqual([{ uid: vaga.uid, afetaPrivativa: true, afetaCoeficiente: false }]);
+    // E sem dona.
+    x = applyBatch(x, comandosDoAcessorio(x, vaga.uid, null, { afetaPrivativa: true, afetaCoeficiente: true })).model;
+    expect(acessoriosParaVincular(x).linhas.find((l) => l.uid === vaga.uid)!.donaChave).toBeNull();
+  });
+});
+
+describe('planilha de ambientes declarados (Fase 6b)', () => {
+  it('casa pavimento por nome e unidade por número (sem caixa nem acento); área com vírgula; o que não casa é erro da LINHA', async () => {
+    const { comandosDaPlanilhaDeDeclarados, COLUNAS_DA_PLANILHA_DE_DECLARADOS } = await import('../utils/blueprintNbr12721');
+    expect(COLUNAS_DA_PLANILHA_DE_DECLARADOS[0]).toBe('Pavimento');
+    const { m } = predio();
+    const { comandos, erros } = comandosDaPlanilhaDeDeclarados(m, [
+      { Pavimento: 'TERREO', Ambiente: 'Depósito 101', 'Área (m²)': '4,5', Unidade: '101', Cobertura: '', Coeficiente: '', Divisão: '' },
+      { Pavimento: 'Térreo', Ambiente: 'Piscina', 'Área (m²)': 40, Unidade: '', Cobertura: 'descoberta', Coeficiente: '0,5', Divisão: 'não proporcional' },
+      { Pavimento: '', Ambiente: '', 'Área (m²)': '', Unidade: '', Cobertura: '', Coeficiente: '', Divisão: '' },
+      { Pavimento: 'Cobertura', Ambiente: 'X', 'Área (m²)': 'abc', Unidade: '999', Cobertura: 'telhado', Coeficiente: '20', Divisão: '' },
+      { Pavimento: '1º', Ambiente: 'Grande', 'Área (m²)': '1.234,5', Unidade: '', Cobertura: 'padrão', Coeficiente: '', Divisão: '' },
+    ]);
+    expect(comandos).toHaveLength(3);
+    expect(comandos[0]).toMatchObject({ type: 'AddAmbienteDeclarado', nome: 'Depósito 101', areaMm2: 4_500_000, unidadeId: m.unidades.find((u) => u.numero === '101')!.id, nbr12721: { cobertura: 'PADRAO' } });
+    expect(comandos[1]).toMatchObject({ nome: 'Piscina', areaMm2: 40_000_000, nbr12721: { cobertura: 'DESCOBERTA', coeficiente: 0.5, divisao: 'NAO_PROPORCIONAL' } });
+    expect(comandos[2]).toMatchObject({ nome: 'Grande', areaMm2: 1_234_500_000, nbr12721: { cobertura: 'PADRAO', divisao: 'PROPORCIONAL' } });
+    expect(erros).toHaveLength(1);
+    expect(erros[0]).toMatch(/^Linha 5: pavimento "Cobertura" não existe.*área "abc" inválida.*unidade "999" não existe.*cobertura "telhado" desconhecida.*coeficiente "20" fora/);
+    // E aplicar: entra no modelo e o declarado com dona é privativo dela.
+    const x = applyBatch(m, comandos).model;
+    expect(x.ambientesDeclarados).toHaveLength(3);
+  });
+});

@@ -128,3 +128,37 @@ describe('TelaUnidades — a coluna de fração diz QUAL fração', () => {
     expect(screen.queryByText('Fração ideal (NBR 12721)')).toBeNull();
   });
 });
+
+describe('TelaAreasNbr12721 — Acessórios e Ambientes declarados (Fase 6b)', () => {
+  function comVagaEDeclarado() {
+    let m = predio();
+    m = applyCommand(m, { type: 'AddVaga', levelId: m.levels[0].id, at: point(3000, 7000) }).model;
+    return applyCommand(m, { type: 'AddAmbienteDeclarado', levelId: m.levels[0].id, nome: 'Depósito 7', areaMm2: 3_000_000 }).model;
+  }
+
+  it('Acessórios: escolher a unidade dona manda um lote SetAcessoriosDaUnidade; marcar "no coeficiente" exige dona', async () => {
+    const { onRunBatch } = montar(comVagaEDeclarado());
+    await userEvent.click(screen.getByRole('tab', { name: (n) => n.replace(/\s*\d+$/, '') === 'Acessórios' }));
+    const deposito = screen.getByLabelText('Unidade dona de Depósito 7');
+    expect((screen.getByLabelText('Depósito 7: entra no coeficiente') as HTMLInputElement).disabled).toBe(true);
+    await userEvent.selectOptions(deposito, '102');
+    const lote = onRunBatch.mock.calls[0][0] as Command[];
+    expect(lote).toEqual([expect.objectContaining({ type: 'SetAcessoriosDaUnidade', acessorios: [expect.objectContaining({ afetaPrivativa: true, afetaCoeficiente: true })] })]);
+  });
+
+  it('Ambientes declarados: lista, adiciona pela barra (motivo quando falta área) e excluir pede confirmação', async () => {
+    const { onRunBatch } = montar(comVagaEDeclarado());
+    await userEvent.click(screen.getByRole('tab', { name: (n) => n.replace(/\s*\d+$/, '') === 'Ambientes declarados' }));
+    expect((screen.getByLabelText('Nome do ambiente declarado Depósito 7') as HTMLInputElement).value).toBe('Depósito 7');
+    const adicionar = screen.getByRole('button', { name: /Adicionar/ });
+    await userEvent.type(screen.getByLabelText('Nome do novo ambiente'), 'Guarita');
+    expect(adicionar.getAttribute('title')).toBe('Informe a área em m²');
+    await userEvent.type(screen.getByLabelText('Área do novo ambiente (m²)'), '6,5');
+    await userEvent.click(adicionar);
+    expect(onRunBatch.mock.calls.at(-1)![0]).toEqual([expect.objectContaining({ type: 'AddAmbienteDeclarado', nome: 'Guarita', areaMm2: 6_500_000 })]);
+    await userEvent.click(screen.getByRole('button', { name: 'Excluir Depósito 7' }));
+    expect(await screen.findByText('Excluir "Depósito 7"?')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(onRunBatch.mock.calls.at(-1)![0]).toEqual([expect.objectContaining({ type: 'DeleteAmbienteDeclarado' })]);
+  });
+});

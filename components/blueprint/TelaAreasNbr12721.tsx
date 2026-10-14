@@ -12,6 +12,10 @@
  *   - Classificação — cada ambiente (desenhado ou declarado) com cobertura,
  *     coeficiente, divisão e escopo; seleção em lote (§10) + drawer (§26);
  *     "Aplicar sugestões" para os que ainda não foram classificados;
+ *   - Acessórios — vaga, depósito ou área → a unidade dona (inclusive a de um
+ *     andar copiado), se entra na privativa e no coeficiente;
+ *   - Ambientes declarados — área digitada, sem desenho (estudo sem desenho,
+ *     pavimento não desenhado): editar na linha, criar e importar planilha;
  *   - Quadro I · Quadro II · Quadro IV-B — as linhas da norma, com totais;
  *   - Frações — decimal, percentual e milésimos fechados em 1000;
  *   - Pendências — o que impede o cálculo e o que faz o prédio não fechar;
@@ -19,15 +23,23 @@
  *     escopo, área da vaga, numeração dos andares copiados).
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Calculator, CheckCircle2, Layers, Ruler, Sparkles, Tags } from 'lucide-react';
+import { AlertTriangle, Calculator, Car, CheckCircle2, FileSpreadsheet, Layers, Plus, Ruler, Sparkles, Tags } from 'lucide-react';
 import type { BlueprintModel, ClassificacaoNbr12721, CoberturaNbr12721, Command } from '../../utils/blueprintKernel';
 import {
+  acessoriosParaVincular,
   ambientesParaClassificar,
+  comandosDaPlanilhaDeDeclarados,
+  comandosDoAcessorio,
+  COLUNAS_DA_PLANILHA_DE_DECLARADOS,
   entradaDoEstudo,
   hipotesesNbr12721DaColuna,
+  type AcessorioParaVincular,
   type AmbienteParaClassificar,
   type HipotesesNbr12721,
 } from '../../utils/blueprintNbr12721';
+import type { AmbienteDeclarado } from '../../utils/blueprintKernel';
+import ActionIconButton from '../ui/ActionIconButton';
+import { useConfirm } from '../ui/confirm';
 import { calcularNbr12721 } from '../../utils/nbr12721/quadros';
 import type { FracaoIdeal, LinhaQuadroI, LinhaQuadroII, LinhaQuadroIVB, Pendencia } from '../../utils/nbr12721/tipos';
 import { KpiCard } from '../ui/KpiCard';
@@ -35,7 +47,7 @@ import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 import { TabsBar } from '../ui/TabsBar';
 import { Sheet, SheetFooter, SheetHeader, SheetPanel, SheetTitle, SheetDescription } from '../ui/sheet';
 
-type Aba = 'classificacao' | 'quadro-i' | 'quadro-ii' | 'quadro-ivb' | 'fracoes' | 'pendencias' | 'hipoteses';
+type Aba = 'classificacao' | 'acessorios' | 'declarados' | 'quadro-i' | 'quadro-ii' | 'quadro-ivb' | 'fracoes' | 'pendencias' | 'hipoteses';
 
 interface Props {
   model: BlueprintModel;
@@ -391,6 +403,262 @@ function FormDeHipoteses({ hipoteses, onSalvar }: { hipoteses: HipotesesNbr12721
   );
 }
 
+// ── acessórios ──────────────────────────────────────────────────────────────
+
+const COLUNAS_ACESSORIOS: StandardTableColumn[] = [
+  { key: 'nome', label: 'Item', width: 220 },
+  { key: 'tipo', label: 'Tipo', width: 120 },
+  { key: 'pavimento', label: 'Pavimento', width: 160 },
+  { key: 'area', label: 'Área (m²)', width: 110, align: 'right' },
+  { key: 'dona', label: 'Unidade dona', width: 200 },
+  { key: 'privativa', label: 'Na privativa', width: 130, align: 'center' },
+  { key: 'coeficiente', label: 'No coeficiente', width: 140, align: 'center' },
+];
+const ROTULO_DO_TIPO_DE_ACESSORIO: Record<AcessorioParaVincular['tipo'], string> = { VAGA: 'Vaga', AMBIENTE: 'Ambiente', DECLARADO: 'Declarado' };
+/** §7.1: campo editável na célula com a MESMA tipografia do texto da célula. */
+const SELECT_NA_CELULA = 'w-full text-sm font-normal px-2 py-1 rounded border appearance-none cursor-pointer';
+
+function AbaAcessorios({ model, hipoteses, onRunBatch }: { model: BlueprintModel; hipoteses: HipotesesNbr12721; onRunBatch: (cs: Command[]) => void }) {
+  const { linhas, unidades } = useMemo(() => acessoriosParaVincular(model, hipoteses), [model, hipoteses]);
+  const mudar = (l: AcessorioParaVincular, donaChave: string | null, flags = { afetaPrivativa: l.afetaPrivativa, afetaCoeficiente: l.afetaCoeficiente }) => {
+    const cs = comandosDoAcessorio(model, l.uid, donaChave, flags);
+    if (cs.length) onRunBatch(cs);
+  };
+  return (
+    <StandardTable<AcessorioParaVincular>
+      columns={COLUNAS_ACESSORIOS}
+      storageKey="blueprint:nbr12721:acessorios"
+      rows={linhas}
+      rowKey={(l) => l.uid}
+      searchText={(l) => `${l.nome} ${l.pavimento} ${l.donaNumero ?? ''}`}
+      searchPlaceholder="Buscar vaga, ambiente ou unidade…"
+      sortValue={(key, l) =>
+        key === 'area' ? l.areaMm2 : key === 'dona' ? (l.donaNumero ?? '') : key === 'privativa' ? l.afetaPrivativa : key === 'coeficiente' ? l.afetaCoeficiente : key === 'tipo' ? l.tipo : key === 'pavimento' ? l.pavimento : l.nome
+      }
+      renderCell={(key, l) => {
+        switch (key) {
+          case 'nome':
+            return <span className="block truncate text-sm font-normal text-gray-700" title={l.nome}>{l.nome || '—'}</span>;
+          case 'tipo':
+            return <span className="text-sm font-normal text-gray-600">{ROTULO_DO_TIPO_DE_ACESSORIO[l.tipo]}</span>;
+          case 'pavimento':
+            return <span className="block truncate text-sm font-normal text-gray-600" title={l.pavimento}>{l.pavimento}</span>;
+          case 'area':
+            return numero(m2(l.areaMm2 / 1e6));
+          case 'dona':
+            return (
+              <select
+                aria-label={`Unidade dona de ${l.nome}`}
+                value={l.donaChave ?? ''}
+                onChange={(e) => mudar(l, e.target.value || null)}
+                className={`${SELECT_NA_CELULA} ${l.donaChave ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+              >
+                <option value="">— sem dona</option>
+                {unidades.map((u) => (
+                  <option key={u.chave} value={u.chave}>
+                    {u.numero}
+                  </option>
+                ))}
+              </select>
+            );
+          case 'privativa':
+          case 'coeficiente': {
+            const campo = key === 'privativa' ? 'afetaPrivativa' : 'afetaCoeficiente';
+            return (
+              <input
+                type="checkbox"
+                aria-label={`${l.nome}: ${key === 'privativa' ? 'entra na privativa' : 'entra no coeficiente'}`}
+                // Sem dona, nada a marcar: caixa marcada e desligada sugeriria um vínculo que não existe.
+                checked={l.donaChave ? l[campo] : false}
+                disabled={!l.donaChave}
+                title={l.donaChave ? undefined : 'Escolha a unidade dona primeiro'}
+                onChange={(e) => mudar(l, l.donaChave, { afetaPrivativa: l.afetaPrivativa, afetaCoeficiente: l.afetaCoeficiente, [campo]: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300 disabled:opacity-40"
+              />
+            );
+          }
+          default:
+            return null;
+        }
+      }}
+      empty={{ icon: <Car className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhuma vaga ou área disponível', subtitle: 'Desenhe vagas, ou declare depósitos, para vinculá-los a uma unidade.' }}
+    />
+  );
+}
+
+// ── ambientes declarados ────────────────────────────────────────────────────
+
+const COLUNAS_DECLARADOS: StandardTableColumn[] = [
+  { key: 'nome', label: 'Ambiente', width: 260 },
+  { key: 'pavimento', label: 'Pavimento', width: 190 },
+  { key: 'area', label: 'Área (m²)', width: 130, align: 'right' },
+  { key: 'unidade', label: 'Unidade', width: 170 },
+  { key: 'classificacao', label: 'Classificação', width: 330 },
+];
+const CAMPO_NA_CELULA = 'w-full rounded-[6px] border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-normal text-gray-700 hover:border-slate-200 focus:border-blue-400 focus:bg-white';
+/** "1.234,5" e "12.5" → número (ponto de milhar só some quando há vírgula). */
+const lerM2 = (t: string) => Number((t.includes(',') ? t.replace(/\./g, '') : t).replace(',', '.'));
+
+function AbaDeclarados({ model, onRunBatch }: { model: BlueprintModel; onRunBatch: (cs: Command[]) => void }) {
+  const confirmar = useConfirm();
+  const [nome, setNome] = useState('');
+  const [area, setArea] = useState('');
+  const [nivel, setNivel] = useState(model.levels[0]?.id ?? '');
+  const [aviso, setAviso] = useState<string | null>(null);
+  const declarados = model.ambientesDeclarados ?? [];
+  const nomeDoNivel = (id: string) => model.levels.find((l) => l.id === id)?.name ?? '?';
+  const numeroDe = (uid: string | null | undefined) => (uid ? ((model.unidades ?? []).find((u) => u.uid === uid)?.numero ?? '?') : null);
+  const areaNum = lerM2(area);
+  const motivo = !nome.trim() ? 'Dê um nome ao ambiente' : !(areaNum > 0) ? 'Informe a área em m²' : !nivel ? 'O estudo não tem pavimento' : null;
+
+  const criar = () => {
+    if (motivo) return;
+    onRunBatch([{ type: 'AddAmbienteDeclarado', levelId: nivel, nome, areaMm2: Math.round(areaNum * 1e6) }]);
+    setNome('');
+    setArea('');
+  };
+  const importar = async (arquivo: File) => {
+    setAviso(null);
+    try {
+      const XLSX = await import('xlsx');
+      const livro = XLSX.read(await arquivo.arrayBuffer(), { type: 'array' });
+      const linhas = XLSX.utils.sheet_to_json<Record<string, unknown>>(livro.Sheets[livro.SheetNames[0]], { defval: '' });
+      const { comandos, erros } = comandosDaPlanilhaDeDeclarados(model, linhas);
+      if (comandos.length) onRunBatch(comandos);
+      setAviso(`${comandos.length} ambiente(s) importado(s)${erros.length ? `; ${erros.length} linha(s) recusada(s): ${erros.slice(0, 5).join(' ')}${erros.length > 5 ? '…' : ''}` : '.'}`);
+    } catch (e) {
+      setAviso(`Não foi possível ler a planilha: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+  const baixarModelo = async () => {
+    const XLSX = await import('xlsx');
+    const folha = XLSX.utils.aoa_to_sheet([[...COLUNAS_DA_PLANILHA_DE_DECLARADOS], [model.levels[0]?.name ?? 'Térreo', 'Hall', '24,5', '', 'padrão', '', 'proporcional']]);
+    const livro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(livro, folha, 'Ambientes');
+    XLSX.writeFile(livro, 'ambientes-declarados.xlsx');
+  };
+  const excluir = async (a: AmbienteDeclarado) => {
+    const ok = await confirmar({ title: `Excluir "${a.nome}"?`, message: 'O ambiente sai dos quadros. Ctrl+Z no editor desfaz.', variant: 'danger', confirmLabel: 'Excluir' });
+    if (ok) onRunBatch([{ type: 'DeleteAmbienteDeclarado', declaradoId: a.id }]);
+  };
+
+  return (
+    <StandardTable<AmbienteDeclarado>
+      columns={COLUNAS_DECLARADOS}
+      storageKey="blueprint:nbr12721:declarados"
+      rows={declarados}
+      rowKey={(a) => a.id}
+      searchText={(a) => `${a.nome} ${nomeDoNivel(a.levelId)} ${numeroDe(a.unidadeUid) ?? ''}`}
+      searchPlaceholder="Buscar ambiente, pavimento ou unidade…"
+      sortValue={(key, a) =>
+        key === 'area' ? a.areaMm2 : key === 'pavimento' ? nomeDoNivel(a.levelId) : key === 'unidade' ? (numeroDe(a.unidadeUid) ?? '') : key === 'classificacao' ? (a.nbr12721 ? resumoDaClassificacao(a.nbr12721, !!a.unidadeUid) : '') : a.nome
+      }
+      renderCell={(key, a) => {
+        switch (key) {
+          case 'nome':
+            return (
+              <input
+                key={`${a.id}-${a.nome}`}
+                defaultValue={a.nome}
+                aria-label={`Nome do ambiente declarado ${a.nome}`}
+                onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== a.nome && onRunBatch([{ type: 'SetAmbienteDeclaradoProps', declaradoId: a.id, nome: e.target.value }])}
+                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                className={CAMPO_NA_CELULA}
+              />
+            );
+          case 'pavimento':
+            return (
+              <select aria-label={`Pavimento de ${a.nome}`} value={a.levelId} onChange={(e) => onRunBatch([{ type: 'SetAmbienteDeclaradoProps', declaradoId: a.id, levelId: e.target.value }])} className={`${SELECT_NA_CELULA} text-gray-900 bg-gray-50 border-gray-100`}>
+                {model.levels.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            );
+          case 'area':
+            return (
+              <input
+                key={`${a.id}-${a.areaMm2}`}
+                defaultValue={(a.areaMm2 / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
+                inputMode="decimal"
+                aria-label={`Área (m²) de ${a.nome}`}
+                onBlur={(e) => {
+                  const v = lerM2(e.target.value);
+                  if (v > 0 && Math.round(v * 1e6) !== a.areaMm2) onRunBatch([{ type: 'SetAmbienteDeclaradoProps', declaradoId: a.id, areaMm2: Math.round(v * 1e6) }]);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                className={`${CAMPO_NA_CELULA} text-right tabular-nums`}
+              />
+            );
+          case 'unidade':
+            return (
+              <select
+                aria-label={`Unidade de ${a.nome}`}
+                value={(model.unidades ?? []).find((u) => u.uid === a.unidadeUid)?.id ?? ''}
+                onChange={(e) => onRunBatch([{ type: 'SetAmbienteDeclaradoProps', declaradoId: a.id, unidadeId: e.target.value || null }])}
+                className={`${SELECT_NA_CELULA} ${a.unidadeUid ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+              >
+                <option value="">— comum</option>
+                {(model.unidades ?? []).map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.numero}
+                  </option>
+                ))}
+              </select>
+            );
+          case 'classificacao':
+            return a.nbr12721 ? (
+              <span className="block truncate text-sm font-normal text-gray-700" title={resumoDaClassificacao(a.nbr12721, !!a.unidadeUid)}>
+                {resumoDaClassificacao(a.nbr12721, !!a.unidadeUid)}
+              </span>
+            ) : (
+              <span className="text-sm font-normal text-amber-700">a classificar (aba Classificação)</span>
+            );
+          default:
+            return null;
+        }
+      }}
+      actions={{ width: 80, render: (a) => <ActionIconButton kind="delete" title={`Excluir ${a.nome}`} onClick={() => void excluir(a)} /> }}
+      toolbarRight={
+        <div className="flex items-center gap-2">
+          <select aria-label="Pavimento do novo ambiente" value={nivel} onChange={(e) => setNivel(e.target.value)} className="h-9 w-36 rounded-[6px] border border-slate-300 px-2 text-sm">
+            {model.levels.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+          <input value={nome} onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && criar()} placeholder="Ambiente" aria-label="Nome do novo ambiente" className="h-9 w-36 rounded-[6px] border border-slate-300 px-2 text-sm" />
+          <input value={area} onChange={(e) => setArea(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && criar()} placeholder="m²" inputMode="decimal" aria-label="Área do novo ambiente (m²)" className="h-9 w-20 rounded-[6px] border border-slate-300 px-2 text-sm" />
+          <button type="button" onClick={criar} disabled={motivo !== null} title={motivo ?? undefined} className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3 text-sm font-medium text-white disabled:bg-slate-300">
+            <Plus className="h-4 w-4" /> Adicionar
+          </button>
+          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <FileSpreadsheet className="h-4 w-4" /> Importar planilha
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              aria-label="Importar planilha de ambientes"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void importar(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <button type="button" onClick={() => void baixarModelo()} title="Baixa a planilha com as colunas que a importação lê" className="inline-flex h-9 items-center rounded-[6px] px-2 text-sm font-medium text-blue-600 hover:bg-blue-50">
+            Modelo
+          </button>
+        </div>
+      }
+      empty={{ icon: <FileSpreadsheet className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum ambiente declarado', subtitle: 'Para projeto que veio de fora (DWG/PDF) ou pavimento não desenhado: digite a área ou importe a planilha.' }}
+      footer={aviso ? <div className="px-5 py-2 text-xs text-slate-600" role="status">{aviso}</div> : undefined}
+    />
+  );
+}
+
 // ── a tela ──────────────────────────────────────────────────────────────────
 
 export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses, onRunBatch, erro }: Props) {
@@ -460,6 +728,8 @@ export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses,
       <TabsBar<Aba>
         tabs={[
           { id: 'classificacao', label: 'Classificação', badge: naoClassificados.length || undefined },
+          { id: 'acessorios', label: 'Acessórios' },
+          { id: 'declarados', label: 'Ambientes declarados', badge: (model.ambientesDeclarados ?? []).length || undefined },
           { id: 'quadro-i', label: 'Quadro I' },
           { id: 'quadro-ii', label: 'Quadro II' },
           { id: 'quadro-ivb', label: 'Quadro IV-B' },
@@ -588,6 +858,9 @@ export default function TelaAreasNbr12721({ model, hipoteses, onSalvarHipoteses,
           />
         </>
       )}
+
+      {aba === 'acessorios' && <AbaAcessorios model={model} hipoteses={hipoteses} onRunBatch={onRunBatch} />}
+      {aba === 'declarados' && <AbaDeclarados model={model} onRunBatch={onRunBatch} />}
 
       {/* Quadro I sem busca: uma linha por pavimento, poucas, todas lidas juntas. */}
       {aba === 'quadro-i' && (

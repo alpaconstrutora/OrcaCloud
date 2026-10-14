@@ -23,7 +23,11 @@ vi.mock('../../services/blueprintService', () => ({
 vi.mock('../../services/regulatoryMapService', () => ({ regulatoryMapService: { list: vi.fn(async () => []), getById: vi.fn(), remove: vi.fn() } }));
 // O editor é pesado: no lugar dele, uma marca que diz QUAL estudo abriu.
 vi.mock('../../components/blueprint/BlueprintEditor', () => ({
-  default: ({ study }: { study: { name: string } }) => <div data-testid="editor-aberto">{study.name}</div>,
+  default: ({ study, telaInicial }: { study: { name: string }; telaInicial?: string | null }) => (
+    <div data-testid="editor-aberto" data-tela={telaInicial ?? ''}>
+      {study.name}
+    </div>
+  ),
 }));
 vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => vi.fn(async () => true) }));
 
@@ -65,5 +69,20 @@ describe('Planta Inteligente — link direto para o estudo', () => {
     await irPara('#/blueprint?studyId=nao-existe');
     expect(await screen.findByText(/não está na lista desta organização/)).toBeTruthy();
     expect(screen.queryByTestId('editor-aberto')).toBeNull();
+  });
+
+  it('`&tela=areas-nbr12721` abre o estudo já na tela de Áreas NBR 12721; tela desconhecida é ignorada', async () => {
+    window.location.hash = '#/blueprint?studyId=s2&tela=areas-nbr12721';
+    render(<BlueprintModule podeVerMapaRegulatorio />);
+    const ed = await screen.findByTestId('editor-aberto');
+    expect(ed.textContent).toBe('Planta Torre B');
+    expect(ed.getAttribute('data-tela')).toBe('areas-nbr12721');
+    expect(window.location.hash).toBe('#/blueprint');
+  });
+
+  it('tela que não está na lista do link direto abre o editor (sem tela)', async () => {
+    window.location.hash = '#/blueprint?studyId=s1&tela=apagar-tudo';
+    render(<BlueprintModule podeVerMapaRegulatorio />);
+    expect((await screen.findByTestId('editor-aberto')).getAttribute('data-tela')).toBe('');
   });
 });

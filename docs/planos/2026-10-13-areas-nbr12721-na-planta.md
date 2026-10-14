@@ -343,6 +343,25 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
     - `check-ui-standard.sh`: 0 violações em `TelaAreasNbr12721.tsx`, `TelaUnidades.tsx` e `BlueprintEditor.tsx` (igual à versão publicada).
   - **Não conferido no app real com login:** o harness monta a tela de verdade, mas sem o editor em volta nem o banco. A prova logada (abrir num estudo real e gravar as hipóteses) depende da senha do agente-leitura e entra na 6b.
   - Suíte: 9.146 = 9.112 + 34 pulados, 0 falhas. A conta fechou com o `BlueprintEditor.test.tsx` rodado à parte (251 de 251) depois da interrupção do Node 24. tsc 0 erros.
+  - [x] 6a publicada: `1582c2fd`, check-run `ci` = success
+  - [ ] **6b** (código pronto; falta a prova no app logado)
+    - **Kernel 0.100.0 → 0.101.0:** `AcessorioDaUnidade.levelUid?` liga o acessório à unidade DERIVADA de um andar copiado (a "201" da "101"); o vínculo mora na origem.
+      - Comando e invariante recusam pavimento que não é cópia. O comando recusa explicitamente porque, de novo, a limpeza da cauda descartaria calado.
+      - A cauda tira o acessório quando o andar some. No canônico vira `pavimento` (índice), só quando há.
+      - Prova antes do bump: 4.252 testes (4.277 = 4.252 + 25). Depois do bump, 6 hashes de golden, cada um uma vez. Bundle regenerado.
+    - **Adaptador:** o acessório com `levelUid` vai para a unidade derivada. `acessoriosParaVincular` lista os candidatos (vagas, declarados sem dona, etiquetas comuns fora das cópias) com a dona; `comandosDoAcessorio` troca a dona num lote. `comandosDaPlanilhaDeDeclarados` casa pavimento por nome e unidade por número (sem caixa nem acento), aceita área "1.234,5" ou "12.5" e devolve erro por LINHA, nunca palpite. A Classificação mostra o número da derivada ("acessório de 201").
+    - **Tela, aba Acessórios:** "Unidade dona" em select na célula (§7.1), com todas as unidades do prédio, inclusive as derivadas. "Na privativa" e "No coeficiente" ficam desmarcadas e desligadas, com o motivo, sem dona.
+    - **Tela, aba Ambientes declarados:** nome, pavimento, área e unidade editáveis na linha; "Adicionar" na barra, desligado com o motivo; excluir com `useConfirm` (§14); "Importar planilha" (xlsx) e "Modelo", que baixa a planilha com as colunas da importação.
+    - **5.2:** botão no cabeçalho do `EmpreendimentoDetail`. Sem estudo vinculado é "Criar estudo de áreas": confirma, cria pelo serviço da Fase 5.1, mostra contagem e avisos e só navega com "Abrir na Planta". Com estudo vinculado é "Áreas NBR 12721" e abre direto.
+    - **Link direto `#/blueprint?studyId=…&tela=areas-nbr12721`:** a lista de telas permitidas fica em `components/blueprint/telasDoLinkDireto.ts` (só `areas-nbr12721` e `unidades`; o resto é ignorado). A tela pedida vale só para aquele estudo.
+    - **Testes:**
+      - kernel: 1 caso (andar copiado aceito e não-cópia recusado, ida e volta, apagar o andar);
+      - adaptador: vaga do 201 no IV-B do 201 e troca de dona; planilha com 5 linhas, inclusive a recusada com os 5 motivos;
+      - componente: 2 casos (Acessórios, Ambientes declarados);
+      - link direto: 2 casos (`tela` válida e desconhecida).
+    - **Harness:** 9 abas, zero rolagem horizontal, prints conferidos.
+    - Suíte: 9.153 = 9.119 + 34, 0 falhas; tsc 0; `check-ui-standard` limpo em `TelaAreasNbr12721`, `EmpreendimentoDetail` e `BlueprintModule`.
+    - **Falta (fecha a 6b e a 4.2):** no app logado (agente-leitura) e num estudo DESCARTÁVEL, criar o estudo de áreas pelo botão do Empreendimento, classificar, gravar e reler as hipóteses, e depois apagar e conferir no banco.
 - [ ] Fase 7: congelar e aprovar (0 de 2)
 - [ ] Fase 8: saídas (0 de 2)
 - [ ] Fase 9: Empreendimento (0 de 3)

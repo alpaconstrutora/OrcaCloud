@@ -2932,7 +2932,7 @@ function aplicarSemHash(
 
     case 'SetAcessoriosDaUnidade': {
       const u = findUnidade(next, command.unidadeId);
-      const lista = command.acessorios.map((a) => ({ uid: a.uid, afetaPrivativa: a.afetaPrivativa, afetaCoeficiente: a.afetaCoeficiente }));
+      const lista = command.acessorios.map((a) => ({ uid: a.uid, afetaPrivativa: a.afetaPrivativa, afetaCoeficiente: a.afetaCoeficiente, ...(a.levelUid ? { levelUid: a.levelUid } : {}) }));
       // uid que NUNCA existiu é erro de quem chamou — recusado aqui, porque a
       // limpeza da cauda (que é para referência que MORREU) o descartaria calada.
       const existentes = new Set<ElementUid>([
@@ -2942,6 +2942,10 @@ function aplicarSemHash(
       ]);
       const desconhecido = lista.find((a) => !existentes.has(a.uid));
       if (desconhecido) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: acessório inexistente ${desconhecido.uid}`);
+      // Idem para o andar (0.101.0): pavimento que não é cópia seria descartado calado pela cauda.
+      const copias = new Set(next.levels.filter((l) => l.tipoDeId !== undefined).map((l) => l.uid));
+      const foraDeCopia = lista.find((a) => a.levelUid !== undefined && !copias.has(a.levelUid));
+      if (foraDeCopia) throw new KernelError('BAD_UNIT', `Unidade ${u.id}: o acessório ${foraDeCopia.uid} aponta para um pavimento que não existe ou não é cópia do tipo`);
       // Tirar de outra unidade é o gesto ("esta vaga agora é do 102"), como as etiquetas.
       const novos = new Set(lista.map((a) => a.uid));
       for (const outra of next.unidades ?? []) {

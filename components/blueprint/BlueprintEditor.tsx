@@ -846,6 +846,7 @@ import TelaArmadura from './TelaArmadura';
 import TelaQuantitativos from './TelaQuantitativos';
 import TelaUnidades from './TelaUnidades';
 import TelaAreasNbr12721 from './TelaAreasNbr12721';
+import type { TelaDoLinkDireto } from './telasDoLinkDireto';
 import { blueprintNbr12721Service } from '../../services/blueprintNbr12721Service';
 import { entradaDoEstudo, HIPOTESES_NBR12721_PADRAO, type HipotesesNbr12721 } from '../../utils/blueprintNbr12721';
 import { calcularNbr12721 } from '../../utils/nbr12721/quadros';
@@ -1416,6 +1417,8 @@ interface Props {
   study: BlueprintStudy;
   branchId: string;
   onBack: () => void;
+  /** Tela a abrir ao montar (link direto vindo do Empreendimento); ausente = o editor. */
+  telaInicial?: TelaDoLinkDireto | null;
   /** DESIGN OPTIONS (E6.1): abrir outra alternativa (ramo) do estudo — quem monta o editor troca o `branchId`. */
   onTrocarRamo?: (branchId: string) => void;
   /**
@@ -1480,7 +1483,7 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'geradorClimatizacao',
 ]);
 
-export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo, onAbrirMapaRegulatorio }: Props) {
+export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo, onAbrirMapaRegulatorio, telaInicial }: Props) {
   // MULTIUSUÁRIO (E10.1): o editor pergunta aos ganchos ANTES de aplicar (trava de
   // outra pessoa, somente leitura) e difunde DEPOIS. Os ganchos leem refs porque o
   // canal e as permissões nascem mais abaixo, depois do próprio editor.
@@ -2016,7 +2019,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * Projeto executivo elétrico (ART) também em tela"): a lista de verificações
    * e as emissões anteriores são leitura longa, não um formulário curto.
    */
-  const [telaAberta, setTelaAberta] = useState<TelaDaEletrica | null>(null);
+  const [telaAberta, setTelaAberta] = useState<TelaDaEletrica | null>(telaInicial ?? null);
   /**
    * E6.2 — o CENTRO DE CARGAS marcado na planta: de qual quadro ('TODOS' sem
    * quadro) e onde o quadro estava ao marcar. É marca de VISTA (não vai para o

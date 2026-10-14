@@ -688,8 +688,16 @@
  * quando ausente: desenho antigo só muda pela string da versão. Provado antes do bump: com
  * a string em 0.99.0 e tudo no lugar, 4.191 testes de blueprint/planta/sync passaram
  * (4.216 = 4.191 + 25 pulados).
+ *
+ * ─── 0.100.0 → 0.101.0 (14/10/2026) — ACESSÓRIO DA UNIDADE DE ANDAR COPIADO ─
+ *
+ * Fase 6b do mesmo plano: `AcessorioDaUnidade.levelUid?` — o acessório (a vaga) é da unidade
+ * DERIVADA daquele andar copiado (a "501" da "101"), que não existe no kernel. Invariante e
+ * comando recusam pavimento que não é cópia; a cauda tira o acessório quando o andar some. No
+ * canônico, `pavimento` (índice) só quando há. Provado antes do bump: com a string em 0.100.0,
+ * 4.252 testes de blueprint/planta/sync/nbr12721 passaram (4.277 = 4.252 + 25 pulados).
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.100.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.101.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -56,6 +56,8 @@ function predio(): BlueprintModel {
     { type: 'SetAcessoriosDaUnidade', unidadeId: m.unidades.find((u) => u.numero === '101')!.id, acessorios: [{ uid: m.vagas[0].uid, afetaPrivativa: true, afetaCoeficiente: true }] },
     { type: 'AddLevel', name: '2º pavimento', elevationMm: 6000, defaultHeightMm: 3000, tipoDeId: tipo },
     { type: 'AddLevel', name: '3º pavimento', elevationMm: 9000, defaultHeightMm: 3000, tipoDeId: tipo },
+    // Ambiente DECLARADO (sem desenho): a guarita, comum, no térreo.
+    { type: 'AddAmbienteDeclarado', levelId: terreo, nome: 'Guarita', areaMm2: 6_500_000, nbr12721: { cobertura: 'PADRAO', divisao: 'PROPORCIONAL' } },
   ]).model;
   return m;
 }

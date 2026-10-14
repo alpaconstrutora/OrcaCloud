@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '15f5693b4745fb7237c452ecb844c3761b80932c14bb618eafca5f1a3908ae9e',
+    hash: '2f212fc5f8712ab6db76629dbd7c7b01d81319e8665af84d0ef381777a873877',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'e9920400998e686be7ea2ae05c7224dfd9c7a48b203bf559a073092cf6a73301',
+    hash: 'ac39a0e8ccc44fbf8f1571f119957d0b0241636494c82281ee30451d19c8ee68',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'f7272e5383065a910f9693acec9195d470f6981bf2f8523f2e3fd195dc25cdd0',
+    hash: 'df326bdf66363715f5306afebeca8196ea6a45b4d40650acf0e81ff59c820c95',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '1d2077a6a8d017f6658ee779ed9d545962de60d8cb4b87131b2cac37bb759fc1',
+    hash: '09437ba2a71e045c6af8cd89afec32fe95f38524cba635e5eaaa60ddf06573f9',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '5a7f5ced95c7f10ab66767b204bec1f1a81e4327f693aa88cf60beee7ad3614a',
+    hash: '7850d29cf1a8211ce0f518541ec8f966805146adf76df994a121e88317988325',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,7 +895,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '633a81647120922e077748994652f8d8c0f505f66b858869900fc3b24e872a57',
+    hash: 'bdb9ae19f9ae9279615f33d71f0cde0b780591fbc3e1921b58c3844fd04a7576',
   },
 };
 
@@ -970,6 +970,11 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
  *   blueprint/planta/sync passaram; depois do bump as seis falhas foram todas de hash (cada uma UMA
  *   vez), contagens idênticas. (Primeira versão de 3 dígitos: 6 testes comparavam a versão como
  *   TEXTO — '0.100' < '0.46' — e passaram a comparar número.)
+ *
+ *   0.100.0 → 0.101.0 (14/10/2026): `AcessorioDaUnidade.levelUid?` (acessório da unidade de andar
+ *   copiado), omitido quando ausente — nenhum dos seis casos tem unidade. Mesma prova, ANTES de
+ *   tocar num hash: com a string em 0.100.0, 4.252 testes passaram; depois do bump as seis falhas
+ *   foram todas de hash (cada uma UMA vez), contagens idênticas.
  */
 describe('kernel geométrico · golden files', () => {
   it.each(Object.entries(CASES))('%s mantém o payload canônico', (_name, expected) => {

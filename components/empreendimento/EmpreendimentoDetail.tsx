@@ -1,6 +1,6 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks, Scale } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, EmpreendimentoUnitCharacteristic } from '../../types';
 import TowerEditor from './TowerEditor';
 import SyncFromStudyModal from './SyncFromStudyModal';
@@ -17,6 +17,8 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
 import { empreendimentoUnitCharacteristicService } from '../../services/empreendimentoUnitCharacteristicService';
 import { areaEngineService } from '../../services/areaEngineService';
+import { blueprintEstudoDoEmpreendimento } from '../../services/blueprintEstudoDoEmpreendimento';
+import { useConfirm } from '../ui/confirm';
 import { generateIncorporationMemorialDraftPdf } from '../../services/incorporationMemorialService';
 import { organizationService } from '../../services/organizationService';
 import { companyService } from '../../services/companyService';
@@ -73,6 +75,13 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   const [syncOpen, setSyncOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [generatingMemorial, setGeneratingMemorial] = React.useState(false);
+  // ÁREAS NBR 12721 NA PLANTA (14/10/2026, Fase 6b): o quadro de áreas mora no estudo da
+  // Planta vinculado; sem estudo, cria um "sem desenho" a partir deste empreendimento.
+  const confirmar = useConfirm();
+  const [criandoAreas, setCriandoAreas] = React.useState(false);
+  const abrirAreasNaPlanta = (studyId: string) => {
+    window.location.hash = `#/blueprint?studyId=${studyId}&tela=areas-nbr12721`;
+  };
   const [pendingCuradoria, setPendingCuradoria] = React.useState(0);
   const [tipoNameMap, setTipoNameMap] = React.useState<Record<string, string>>({});
   const [orgName, setOrgName] = React.useState<string | undefined>(undefined);
@@ -173,6 +182,34 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   const enderecoCidade = [e.endereco_city, e.endereco_state].filter(Boolean).join(' - ');
   const enderecoLinha = [e.endereco_street, e.endereco_number].filter(Boolean).join(', ');
 
+  const criarEstudoDeAreas = async () => {
+    const ok = await confirmar({
+      title: 'Criar estudo de áreas?',
+      message:
+        'Cria um estudo da Planta Inteligente com os pavimentos, as unidades e as áreas privativas deste empreendimento como ambientes declarados (sem desenho), e o vincula a ele. Os Quadros NBR 12721 e as frações saem de lá.',
+      confirmLabel: 'Criar estudo',
+      variant: 'default',
+    });
+    if (!ok) return;
+    setCriandoAreas(true);
+    try {
+      const r = await blueprintEstudoDoEmpreendimento.criar(e.id);
+      onSynced?.();
+      const abrir = await confirmar({
+        title: 'Estudo de áreas criado',
+        message: `${r.contagem.pavimentos} pavimento(s), ${r.contagem.unidades} unidade(s), ${r.contagem.ambientes} ambiente(s) declarado(s).\n\n${r.avisos.join('\n')}`,
+        confirmLabel: 'Abrir na Planta',
+        cancelLabel: 'Ficar aqui',
+        variant: 'default',
+      });
+      if (abrir) abrirAreasNaPlanta(r.studyId);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Não foi possível criar o estudo de áreas.', 'error');
+    } finally {
+      setCriandoAreas(false);
+    }
+  };
+
   const handleGenerateMemorial = async () => {
     setGeneratingMemorial(true);
     try {
@@ -271,6 +308,24 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
                 className="flex items-center gap-1.5 h-9 px-3.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
               >
                 <BarChart3 className="w-[15px] h-[15px]" /> Ver Estudo
+              </button>
+            )}
+            {e.blueprint_study_id ? (
+              <button
+                onClick={() => abrirAreasNaPlanta(e.blueprint_study_id!)}
+                title="Abre o estudo vinculado da Planta na tela Áreas NBR 12721 (Quadros I, II e IV-B e frações)"
+                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
+              >
+                <Scale className="w-4 h-4" /> Áreas NBR 12721
+              </button>
+            ) : (
+              <button
+                onClick={() => void criarEstudoDeAreas()}
+                disabled={criandoAreas}
+                title="Sem estudo da Planta vinculado: cria um estudo de áreas (sem desenho) a partir deste empreendimento"
+                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Scale className="w-4 h-4" /> {criandoAreas ? 'Criando…' : 'Criar estudo de áreas'}
               </button>
             )}
             <button

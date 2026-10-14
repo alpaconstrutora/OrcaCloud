@@ -1,7 +1,11 @@
 /**
  * O COLETOR PREDIAL na gaveta de esgoto (29/09/2026, E5.3): da caixa de
  * inspeção à ligação na rede pública — DN (tabela 7), declividade, as caixas
- * intermediárias e se chega por gravidade; e o botão que lança.
+ * intermediárias e se chega por gravidade.
+ *
+ * 14/10/2026: sem botão de lançar — o "Lançar" do rodapé da gaveta já lança ligação
+ * e coletor (dois botões para a mesma coisa). "Confirmar cota" fica: é decisão
+ * sobre uma peça, não lançamento.
  *
  * 13/10/2026 (docs/planos/2026-10-13-hidro-ancoras-automaticas.md, item 4.2):
  * sem ligação no desenho, o painel diz que ela vai na frente do lote ao lançar;
@@ -15,14 +19,12 @@ interface Props {
   plano: PlanoDoColetor;
   /** A premissa de profundidade da rede — o que a cota estimada presume. */
   profundidadeDaRedeMm: number;
-  onLancar: () => void;
   onConfirmarCota: () => void;
 }
 
 const n = (v: number, casas = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 
-export default function PainelColetorPredial({ plano, profundidadeDaRedeMm, onLancar, onConfirmarCota }: Props) {
-  const motivoDoBotao = plano.motivo ?? undefined;
+export default function PainelColetorPredial({ plano, profundidadeDaRedeMm, onConfirmarCota }: Props) {
   return (
     <div className="space-y-2" data-testid="coletor-predial">
       <p className="text-xs font-semibold text-slate-700">Coletor predial e ligação à rede pública</p>
@@ -38,7 +40,7 @@ export default function PainelColetorPredial({ plano, profundidadeDaRedeMm, onLa
           </p>
           {plano.ligacaoProposta && (
             <p className="text-xs text-slate-600" data-testid="coletor-ligacao-proposta">
-              Sem ligação no desenho: ao lançar, ela vai na frente do lote, com a rede estimada a −{n(Math.abs(plano.ligacaoProposta.cotaMm) / 1000, 2)} m.
+              Sem ligação no desenho: o "Lançar" do rodapé a põe na frente do lote, com a rede estimada a −{n(Math.abs(plano.ligacaoProposta.cotaMm) / 1000, 2)} m.
             </p>
           )}
           <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-slate-600">
@@ -72,15 +74,6 @@ export default function PainelColetorPredial({ plano, profundidadeDaRedeMm, onLa
           )}
         </>
       )}
-      <button
-        type="button"
-        onClick={onLancar}
-        disabled={!!motivoDoBotao}
-        title={motivoDoBotao}
-        className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {plano.ligacaoProposta ? 'Lançar ligação e coletor' : plano.apagados > 0 ? 'Relançar coletor' : 'Lançar coletor'}
-      </button>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Tratamento individual (E7.1/E7.2): o dimensionamento, as unidades do plano, o filtro opcional, a conferência e o botão com o motivo. */
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import PainelTratamento from '../../components/blueprint/PainelTratamento';
 import { HIPOTESES_TRATAMENTO_PADRAO, type DimensionamentoDoTratamento, type PlanoDeTratamento } from '../../utils/blueprintTratamento';
@@ -26,7 +26,12 @@ const plano: PlanoDeTratamento = {
   comandos: [{ type: 'DeleteTrecho', trechoId: 'x' }],
 };
 
+/** As premissas abrem recolhidas (14/10/2026). */
+const abrirHipoteses = () => fireEvent.click(screen.getByRole('button', { name: /hipóteses do tratamento/i }));
+
 describe('PainelTratamento (E7.1)', () => {
+  beforeEach(() => localStorage.clear());
+
   it('as unidades com as medidas e a cota do tubo; lançar', () => {
     const onLancar = vi.fn();
     render(<PainelTratamento plano={plano} dim={dim} unidades={[]} hip={hip} onHip={vi.fn()} onLancar={onLancar} onSelecionar={vi.fn()} />);
@@ -37,12 +42,37 @@ describe('PainelTratamento (E7.1)', () => {
     expect(onLancar).toHaveBeenCalled();
   });
 
+  it('o resultado vem ANTES das premissas, que abrem recolhidas com o resumo (14/10/2026)', () => {
+    render(<PainelTratamento plano={plano} dim={dim} unidades={[]} hip={hip} onHip={vi.fn()} onLancar={vi.fn()} onSelecionar={vi.fn()} />);
+    const resultado = screen.getByTestId('tratamento-dimensionamento');
+    const bloco = screen.getByTestId('hipoteses-tratamento');
+    expect(resultado.compareDocumentPosition(bloco) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bloco).toHaveTextContent(/padrão médio · com filtro/);
+    expect(screen.queryByLabelText('Taxa de infiltração do solo em litros por metro quadrado por dia')).toBeNull();
+  });
+
   it('o filtro opcional devolve a premissa; sem o que lançar, o motivo', () => {
     const onHip = vi.fn();
     render(<PainelTratamento plano={{ ...plano, motivo: 'O lote tem ligação à rede pública — o esgoto vai para ela; o tratamento individual não se aplica.', unidades: [], comandos: [] }} dim={dim} unidades={[{ terminalId: 'ts', tipo: 'TANQUE_SEPTICO', tem: 1080, precisa: 1780, unidade: 'L', atende: false }]} hip={hip} onHip={onHip} onLancar={vi.fn()} onSelecionar={vi.fn()} />);
     expect(screen.getByTestId('tratamento-verificacao').textContent).toBe('Tanque séptico: tem 1.080 L, precisa 1.780 L — insuficiente');
+    abrirHipoteses();
     fireEvent.click(screen.getByLabelText('Com filtro anaeróbio entre o tanque e o sumidouro'));
     expect(onHip).toHaveBeenCalledWith({ ...hip, comFiltro: false });
     expect((screen.getByTestId('tratamento-lancar') as HTMLButtonElement).title).toMatch(/rede pública/);
+  });
+
+  it('apagar a infiltração e sair NÃO grava (antes gravava 1 L/m²·dia e o sumidouro saía gigante)', () => {
+    const onHip = vi.fn();
+    render(<PainelTratamento plano={plano} dim={dim} unidades={[]} hip={hip} onHip={onHip} onLancar={vi.fn()} onSelecionar={vi.fn()} />);
+    abrirHipoteses();
+    const infiltracao = screen.getByLabelText('Taxa de infiltração do solo em litros por metro quadrado por dia');
+    fireEvent.change(infiltracao, { target: { value: '' } });
+    fireEvent.blur(infiltracao);
+    expect(onHip).not.toHaveBeenCalled();
+    expect(infiltracao).toHaveValue(hip.taxaDeInfiltracaoLM2Dia);
+    const frio = screen.getByLabelText('Temperatura média do mês mais frio em graus');
+    fireEvent.change(frio, { target: { value: '12' } });
+    fireEvent.blur(frio);
+    expect(onHip).toHaveBeenCalledWith({ ...hip, temperaturaC: 12 });
   });
 });

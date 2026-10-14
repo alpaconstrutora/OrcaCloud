@@ -17875,39 +17875,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   mm da fachada
                 </label>
               </BlocoDeHipoteses>
+              {/* 14/10/2026: sem "Lançar ventilação" nem "Lançar coletor" — o "Lançar" do rodapé (planejarEsgotoCompleto)
+                  já lança ventilação, ligação e coletor; dois botões para a mesma coisa confundiam. */}
               {planoDaVentilacao && (
                 <div className="space-y-1.5" data-testid="ventilacao">
                   <p className="text-xs font-semibold text-slate-700">Ventilação (NBR 8160)</p>
                   <p className="text-xs text-slate-600">
                     {planoDaVentilacao.comandos.length === 0
                       ? 'Todo desconector ventilado ao alcance da tabela e as colunas 30 cm acima da cobertura.'
-                      : `A lançar: ${planoDaVentilacao.resumo.join(', ')}.`}
+                      : `O "Lançar" do rodapé lança: ${planoDaVentilacao.resumo.join(', ')}.`}
                   </p>
                   {planoDaVentilacao.avisos.map((a) => (
                     <p key={a} className="text-xs text-amber-700">
                       {a}
                     </p>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (planoDaVentilacao.comandos.length) editor.runBatch(planoDaVentilacao.comandos);
-                    }}
-                    disabled={planoDaVentilacao.comandos.length === 0}
-                    title={planoDaVentilacao.comandos.length === 0 ? 'Nada a lançar: a ventilação já atende' : undefined}
-                    className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Lançar ventilação
-                  </button>
                 </div>
               )}
               {planoDoColetor && (
                 <PainelColetorPredial
                   plano={planoDoColetor}
                   profundidadeDaRedeMm={hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500}
-                  onLancar={() => {
-                    if (planoDoColetor.comandos.length) editor.runBatch(planoDoColetor.comandos);
-                  }}
                   onConfirmarCota={() => {
                     if (planoDoColetor.ligacaoId) {
                       editor.runBatch([{ type: 'SetParametros', familia: 'terminal', id: planoDoColetor.ligacaoId, valores: { [PARAMETRO_COTA_DA_REDE]: 'confirmada' } }]);

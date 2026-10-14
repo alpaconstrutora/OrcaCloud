@@ -3986,6 +3986,9 @@ describe('BlueprintEditor · ribbon', () => {
     expect(within(dialog).getByRole('button', { name: /^relançar sugeridos$/i })).toHaveAttribute('title', expect.stringMatching(/o que você confirmou fica/));
     expect(dialog).toHaveTextContent(/trecho\(s\) ainda sugerido\(s\)/);
     expect(dialog).not.toHaveTextContent(/fonte\(s\)/);
+    // 14/10/2026: o "Lançar" do rodapé lança ventilação, ligação e coletor — sem botões repetidos nos painéis.
+    expect(within(dialog).queryByRole('button', { name: /lançar ventilação/i })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: /lançar (ligação e )?coletor|relançar coletor/i })).toBeNull();
     expect(botaoEsgoto()).not.toHaveTextContent('3');
   });
 

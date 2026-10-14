@@ -586,8 +586,8 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         <div className="flex flex-col">
             <div className="w-full">
                 {/* Header */}
-                <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between z-10">
-                    <div className="flex items-center gap-3">
+                <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between gap-4 z-10">
+                    <div className="flex items-center gap-3 min-w-0">
                         <button
                             onClick={onClose}
                             className="p-2 rounded-[6px] hover:bg-gray-100 text-gray-500"
@@ -616,6 +616,67 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                         )}
                         </div>
                     </div>
+                    {boleto && (
+                        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+                        {boleto.status === 'pago' && (
+                            <button
+                                onClick={handleReverterParaRascunho}
+                                disabled={busy}
+                                className="px-4 py-2 text-amber-700 hover:bg-amber-50 rounded-[6px] text-sm font-medium flex items-center gap-2"
+                            >
+                                <Undo2 className="w-3.5 h-3.5" /> Reverter para rascunho
+                            </button>
+                        )}
+
+                        {boletoService.podeExcluir(boleto.status) && (
+                            <button
+                                onClick={handleExcluir}
+                                disabled={busy}
+                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-[6px] text-sm font-medium flex items-center gap-2"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" /> Excluir
+                            </button>
+                        )}
+
+                        {boleto.status !== 'pago' && boleto.status !== 'cancelado' && (
+                            <button
+                                onClick={handleCancelar}
+                                disabled={busy}
+                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-[6px] text-sm font-medium flex items-center gap-2"
+                            >
+                                <Ban className="w-3.5 h-3.5" /> Cancelar
+                            </button>
+                        )}
+
+                        <button
+                            onClick={handleSalvar}
+                            disabled={busy}
+                            className="px-5 py-2 bg-gray-100 text-gray-900 rounded-[6px] text-sm font-medium hover:bg-gray-200 flex items-center gap-2"
+                        >
+                            <Save className="w-3.5 h-3.5" /> Salvar Rascunho
+                        </button>
+
+                        {(boleto.status === 'rascunho' || boleto.status === 'revisao') && (
+                            <button
+                                onClick={handleAprovar}
+                                disabled={busy || !supplierId}
+                                className="px-5 py-2 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                            >
+                                <ThumbsUp className="w-3.5 h-3.5" /> Aprovar e Lançar
+                            </button>
+                        )}
+
+                        {boleto.status === 'aprovado' && (
+                            <button
+                                onClick={handleMarcarPago}
+                                disabled={busy}
+                                className="px-5 py-2 bg-emerald-600 text-white rounded-[6px] text-sm font-medium hover:bg-emerald-700 flex items-center gap-2"
+                            >
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Marcar como Pago
+                            </button>
+                        )}
+                        </div>
+                    )}
                 </div>
 
                 {/* `bg-gray-50` de propósito: o shell (`Layout`) já e cinza, mas esta
@@ -1288,68 +1349,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                     )}
                 </div>
 
-                {/* Footer com ações */}
-                {boleto && (
-                    <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex flex-wrap items-center justify-end gap-2">
-                        {boleto.status === 'pago' && (
-                            <button
-                                onClick={handleReverterParaRascunho}
-                                disabled={busy}
-                                className="px-4 py-2 text-amber-700 hover:bg-amber-50 rounded-[6px] text-sm font-medium flex items-center gap-2"
-                            >
-                                <Undo2 className="w-3.5 h-3.5" /> Reverter para rascunho
-                            </button>
-                        )}
-
-                        {boletoService.podeExcluir(boleto.status) && (
-                            <button
-                                onClick={handleExcluir}
-                                disabled={busy}
-                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-[6px] text-sm font-medium flex items-center gap-2"
-                            >
-                                <Trash2 className="w-3.5 h-3.5" /> Excluir
-                            </button>
-                        )}
-
-                        {boleto.status !== 'pago' && boleto.status !== 'cancelado' && (
-                            <button
-                                onClick={handleCancelar}
-                                disabled={busy}
-                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-[6px] text-sm font-medium flex items-center gap-2"
-                            >
-                                <Ban className="w-3.5 h-3.5" /> Cancelar
-                            </button>
-                        )}
-
-                        <button
-                            onClick={handleSalvar}
-                            disabled={busy}
-                            className="px-5 py-2 bg-gray-100 text-gray-900 rounded-[6px] text-sm font-medium hover:bg-gray-200 flex items-center gap-2"
-                        >
-                            <Save className="w-3.5 h-3.5" /> Salvar Rascunho
-                        </button>
-
-                        {(boleto.status === 'rascunho' || boleto.status === 'revisao') && (
-                            <button
-                                onClick={handleAprovar}
-                                disabled={busy || !supplierId}
-                                className="px-5 py-2 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                            >
-                                <ThumbsUp className="w-3.5 h-3.5" /> Aprovar e Lançar
-                            </button>
-                        )}
-
-                        {boleto.status === 'aprovado' && (
-                            <button
-                                onClick={handleMarcarPago}
-                                disabled={busy}
-                                className="px-5 py-2 bg-emerald-600 text-white rounded-[6px] text-sm font-medium hover:bg-emerald-700 flex items-center gap-2"
-                            >
-                                <CheckCircle2 className="w-3.5 h-3.5" /> Marcar como Pago
-                            </button>
-                        )}
-                    </div>
-                )}
             </div>
         </div>
     );

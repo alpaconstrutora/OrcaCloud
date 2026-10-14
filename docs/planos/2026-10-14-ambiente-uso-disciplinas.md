@@ -114,6 +114,16 @@ Pedido seguinte, no mesmo dia, depois da avaliação (F1 = tela, F2 = modelo):
 Fora do escopo (registrado, não feito): o IFC exporta só o tipo NBR 5410 (`SpaceKind`), não o uso;
 `PainelAcabamentos` agrupa "do mesmo tipo" pelo tipo NBR 5410.
 
+## Publicação (14/10/2026)
+
+- `4a8a3c92` (F1) e `dc4eb3a2` (F2) em `main`. Antes do push: suíte inteira 9.332 + 34 pulados
+  (uma 1ª rodada com vite/tsc/Playwright concorrentes estourou os 30 s na montagem do editor; sozinho,
+  5,5 s; repetida sem concorrência, verde), `verificar:build` rc=0, `vite build` rc=0, `check-xss-sinks` limpo.
+- `conferir-producao.sh` com textos literais da versão ("Na NBR 5410 conta como", "antigo — escolha o uso",
+  "sem pontos de água previstos para este uso", "blueprint-kernel-ts-0.102.0"): ✅, domínio servindo
+  `e7f2dee` (descendente de `dc4eb3a2`).
+- Check-run `ci` de `dc4eb3a2`: completed success.
+
 ## Verificação
 
 - `npx tsc --noEmit` (exit lido por grep) e a suíte de blueprint/planta.

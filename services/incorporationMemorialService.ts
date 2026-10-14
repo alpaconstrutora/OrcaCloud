@@ -1,14 +1,55 @@
 import { jsPDF } from 'jspdf';
 import type { Empreendimento, EmpreendimentoTower } from '../types/empreendimento';
-import type { AreaVersion, AreaQuadroIRow, AreaQuadroIIRow, AreaQuadroIVBRow, AreaFractionIdeal } from '../types/areaEngine';
+import { cabecalhoDoDocumentoNbr12721, celulaFormatada, situacaoDasAprovacoes, type DocumentoNbr12721 } from '../utils/nbr12721/documento';
 
 export interface IncorporationMemorialData {
     empreendimento: Empreendimento;
     towers: EmpreendimentoTower[];
-    version: AreaVersion | null;
-    quadroI: AreaQuadroIRow[];
-    quadroII: AreaQuadroIIRow[];
-    fractions: AreaFractionIdeal[];
+    /**
+     * Áreas NBR 12721 da versão publicada do estudo da Planta ligado ao
+     * empreendimento (Fase 8 do plano docs/planos/2026-10-13-areas-nbr12721-na-planta.md —
+     * antes vinha do Motor de Áreas). `null` = sem estudo ou sem versão congelada.
+     */
+    areas: DocumentoNbr12721 | null;
+    /** Por que `areas` está vazio — vai no aviso da seção. */
+    motivoSemAreas?: string;
+}
+
+/** O texto das seções "e" e "i" do memorial, sem jsPDF — é o que os testes conferem. */
+export interface AreasNoMemorial {
+    campos: [string, string][];
+    avisos: string[];
+    quadroI: string[];
+    quadroII: string[];
+    fracoes: string[];
+}
+
+export function areasNoMemorial(areas: DocumentoNbr12721 | null, motivoSemAreas?: string): AreasNoMemorial {
+    if (!areas) {
+        return {
+            campos: [],
+            avisos: [motivoSemAreas ?? 'Nenhuma versão publicada com os Quadros NBR 12721. Abra "Áreas NBR 12721" na Planta, publique a versão e aprove antes de emitir o memorial final.'],
+            quadroI: [],
+            quadroII: [],
+            fracoes: [],
+        };
+    }
+    const m2 = (v: number) => celulaFormatada(v, 'm2');
+    const avisos: string[] = [];
+    const situacao = situacaoDasAprovacoes(areas.aprovacoes);
+    if (situacao !== 'Técnica e jurídica aprovadas') avisos.push(`A versão citada ainda não tem as aprovações técnica e jurídica (${situacao.toLowerCase()}). Aprove-a no painel Versões da Planta antes do memorial final.`);
+    if (areas.saida.status !== 'success') avisos.push('Os quadros desta versão têm pendência bloqueante — corrija na Planta e publique de novo.');
+    // O hash vai num campo só dele: inteiro, numa linha (64 caracteres cabem na coluna do valor).
+    const campos = cabecalhoDoDocumentoNbr12721(areas)
+        .filter(([r]) => r !== 'Empresa' && r !== 'Motor')
+        .flatMap(([r, v]): [string, string][] => (r === 'Versão' ? [['Versão publicada', String(areas.revisao)], ['Hash dos quadros', areas.hash]] : [[r, v]]));
+    return {
+        campos,
+        avisos,
+        quadroI: areas.saida.quadroI.map((l) => `${l.floor_label}: real ${m2(l.qi_17_floor_real_total_raw)} m² / equivalente ${m2(l.qi_18_floor_equivalent_total_raw)} m²`),
+        quadroII: areas.saida.quadroII.map((l) => `${l.unit_label}: coef. ${celulaFormatada(l.qii_31_proportionality_coefficient_raw, 'coef')} — real ${m2(l.qii_37_unit_real_total_raw)} m² / equivalente ${m2(l.qii_38_unit_equivalent_total_raw)} m²`),
+        fracoes: areas.saida.fracoes.map((f) => `Unidade ${f.unidade}: fração ${celulaFormatada(f.fraction_decimal_raw, 'decimal')} (${celulaFormatada(f.fraction_percent_raw, 'pct')} %) — ${celulaFormatada(f.milesimos, 'mil')} milésimos`),
+    };
 }
 
 const PRIMARY: [number, number, number] = [15, 23, 42];
@@ -20,12 +61,14 @@ const DISCLAIMER = 'MINUTA — Documento gerado automaticamente, sujeito a revis
 
 /**
  * Gera uma MINUTA do memorial de incorporação (art. 32 da Lei 4.591/64), consolidando
- * automaticamente os dados já cadastrados no Empreendimento e no motor de Áreas NBR 12721.
+ * automaticamente os dados já cadastrados no Empreendimento e as Áreas NBR 12721 da versão
+ * publicada do estudo da Planta.
  * O texto legal/cartorial (certidões, avaliação de custo, convenção de condomínio) fica
  * marcado como pendente — não é gerado por IA, exige validação do jurídico do incorporador.
  */
 export function generateIncorporationMemorialDraftPdf(data: IncorporationMemorialData): void {
-    const { empreendimento: emp, towers, version, quadroI, quadroII, fractions } = data;
+    const { empreendimento: emp, towers } = data;
+    const areas = areasNoMemorial(data.areas, data.motivoSemAreas);
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageHeight = doc.internal.pageSize.getHeight();
     let currentY = 25;
@@ -74,15 +117,19 @@ export function generateIncorporationMemorialDraftPdf(data: IncorporationMemoria
         currentY += 6;
     };
 
+    // Sem "⚠": a Helvetica do jsPDF não tem o caractere, e um só fora da tabela WinAnsi faz a linha
+    // INTEIRA sair letra a letra espaçada e passar da margem. A caixa cresce com as linhas da nota.
     const pendingNote = (text: string) => {
-        checkPageBreak(10);
-        doc.setFillColor(255, 247, 237);
-        doc.rect(MARGIN_X, currentY, 170, 8, 'F');
         doc.setFont('Helvetica', 'italic');
         doc.setFontSize(8);
+        const linhas = doc.splitTextToSize(`Pendente: ${text}`, 164) as string[];
+        const altura = 4 + linhas.length * 3.6;
+        checkPageBreak(altura + 3);
+        doc.setFillColor(255, 247, 237);
+        doc.rect(MARGIN_X, currentY, 170, altura, 'F');
         doc.setTextColor(...WARNING);
-        doc.text(`⚠ ${text}`, MARGIN_X + 3, currentY + 5, { maxWidth: 164 });
-        currentY += 11;
+        doc.text(linhas, MARGIN_X + 3, currentY + 4.6);
+        currentY += altura + 3;
     };
 
     drawFooter();
@@ -132,43 +179,28 @@ export function generateIncorporationMemorialDraftPdf(data: IncorporationMemoria
     // ─── e) Cálculo das áreas (Quadros NBR 12721) ───
     checkPageBreak(20);
     sectionTitle('e', 'Cálculo das áreas — Quadros NBR 12721');
-    if (!version) {
-        pendingNote('Nenhuma versão do motor de Áreas NBR 12721 vinculada a este empreendimento. Gere e trave uma versão em "Áreas NBR 12721" antes de emitir o memorial final.');
-    } else {
-        field('Versão', `v${version.version_number} — ${version.version_label}`);
-        field('Status', version.status);
-        field('Hash de identidade', version.version_identity_hash ?? undefined);
+    const linhasDeTexto = (titulo: string, linhas: string[]) => {
+        if (!linhas.length) return;
         currentY += 2;
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(...PRIMARY);
-        checkPageBreak(6);
-        doc.text('Quadro I — Áreas por pavimento', MARGIN_X, currentY);
-        currentY += 5;
-        quadroI.forEach(row => {
-            checkPageBreak(5);
-            doc.setFont('Helvetica', 'normal');
-            doc.setFontSize(8);
-            doc.setTextColor(50, 50, 50);
-            doc.text(`${row.floor_label}: real ${row.qi_17_floor_real_total_raw} m² / equivalente ${row.qi_18_floor_equivalent_total_raw} m²`, MARGIN_X, currentY);
-            currentY += 4.5;
-        });
-        currentY += 3;
         checkPageBreak(6);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(...PRIMARY);
-        doc.text('Quadro II — Áreas por unidade', MARGIN_X, currentY);
+        doc.text(titulo, MARGIN_X, currentY);
         currentY += 5;
-        quadroII.forEach(row => {
+        linhas.forEach(t => {
             checkPageBreak(5);
             doc.setFont('Helvetica', 'normal');
             doc.setFontSize(8);
             doc.setTextColor(50, 50, 50);
-            doc.text(`${row.unit_label}: coef. ${row.qii_31_proportionality_coefficient_raw} — real ${row.qii_37_unit_real_total_raw} m² / equivalente ${row.qii_38_unit_equivalent_total_raw} m²`, MARGIN_X, currentY);
+            doc.text(t, MARGIN_X, currentY, { maxWidth: 170 });
             currentY += 4.5;
         });
-    }
+    };
+    areas.campos.forEach(([rotulo, valor]) => field(rotulo, valor));
+    areas.avisos.forEach(pendingNote);
+    linhasDeTexto('Quadro I — Áreas por pavimento', areas.quadroI);
+    linhasDeTexto('Quadro II — Áreas por unidade', areas.quadroII);
     currentY += 4;
 
     // ─── f) Certidão negativa de tributos federais ───
@@ -195,15 +227,15 @@ export function generateIncorporationMemorialDraftPdf(data: IncorporationMemoria
     // ─── i) Discriminação das frações ideais ───
     checkPageBreak(20);
     sectionTitle('i', 'Discriminação das frações ideais');
-    if (fractions.length === 0) {
-        pendingNote('Nenhuma fração ideal calculada/aprovada no motor de Áreas NBR 12721 até o momento.');
+    if (areas.fracoes.length === 0) {
+        pendingNote('Nenhuma fração ideal em versão publicada da Planta até o momento.');
     } else {
-        fractions.forEach(f => {
+        areas.fracoes.forEach(t => {
             checkPageBreak(5);
             doc.setFont('Helvetica', 'normal');
             doc.setFontSize(8);
             doc.setTextColor(50, 50, 50);
-            doc.text(`Unidade ${f.unit_id}: fração decimal ${f.fraction_decimal_raw} (${f.fraction_percent_raw}%) — ${f.derivation_method}`, MARGIN_X, currentY);
+            doc.text(t, MARGIN_X, currentY);
             currentY += 4.5;
         });
     }
@@ -227,6 +259,7 @@ export function generateIncorporationMemorialDraftPdf(data: IncorporationMemoria
     sectionTitle('j', 'Convenção de condomínio');
     pendingNote('A minuta da convenção de condomínio é um instrumento jurídico próprio e não é gerada por este assistente — deve ser redigida/revisada pelo jurídico do incorporador.');
 
-    const safeTitle = emp.name.replace(/[^\w\-]+/g, '_').slice(0, 60);
+    // NFD antes de filtrar: "Áreas" vira "Areas", e não "reas".
+    const safeTitle = emp.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
     doc.save(`Minuta_Memorial_Incorporacao_${safeTitle}.pdf`);
 }

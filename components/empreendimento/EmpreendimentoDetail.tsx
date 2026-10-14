@@ -16,10 +16,10 @@ import HistoricoTab from './HistoricoTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
 import { empreendimentoUnitCharacteristicService } from '../../services/empreendimentoUnitCharacteristicService';
-import { areaEngineService } from '../../services/areaEngineService';
 import { blueprintEstudoDoEmpreendimento } from '../../services/blueprintEstudoDoEmpreendimento';
 import { useConfirm } from '../ui/confirm';
 import { generateIncorporationMemorialDraftPdf } from '../../services/incorporationMemorialService';
+import { nbr12721ExportService } from '../../services/nbr12721ExportService';
 import { organizationService } from '../../services/organizationService';
 import { companyService } from '../../services/companyService';
 import { imovibService } from '../../services/imovibService';
@@ -213,27 +213,15 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   const handleGenerateMemorial = async () => {
     setGeneratingMemorial(true);
     try {
-      const [towers, project] = await Promise.all([
+      // Áreas NBR 12721: a versão publicada do estudo da Planta ligado ao empreendimento (Fase 8).
+      const [towers, areas] = await Promise.all([
         empreendimentoService.listTowers(e.id),
-        areaEngineService.getProjectByEmpreendimento(e.id, organizationId),
+        e.blueprint_study_id ? nbr12721ExportService.documentoDoMemorial(e.blueprint_study_id) : Promise.resolve(null),
       ]);
-      let version = null as Awaited<ReturnType<typeof areaEngineService.getVersion>>;
-      let quadroI: Awaited<ReturnType<typeof areaEngineService.listQuadroI>> = [];
-      let quadroII: Awaited<ReturnType<typeof areaEngineService.listQuadroII>> = [];
-      let fractions: Awaited<ReturnType<typeof areaEngineService.listFractions>> = [];
-      if (project) {
-        const versions = await areaEngineService.listVersions(project.id);
-        const latest = versions.find(v => v.status === 'locked') ?? versions[0] ?? null;
-        if (latest) {
-          version = latest;
-          [quadroI, quadroII, fractions] = await Promise.all([
-            areaEngineService.listQuadroI(latest.id),
-            areaEngineService.listQuadroII(latest.id),
-            areaEngineService.listFractions(latest.id),
-          ]);
-        }
-      }
-      generateIncorporationMemorialDraftPdf({ empreendimento: e, towers, version, quadroI, quadroII, fractions });
+      const motivoSemAreas = e.blueprint_study_id
+        ? undefined
+        : 'Este empreendimento ainda não tem estudo de áreas. Use "Criar estudo de áreas", publique a versão na Planta e aprove antes de emitir o memorial final.';
+      generateIncorporationMemorialDraftPdf({ empreendimento: e, towers, areas, motivoSemAreas });
     } catch (err) {
       console.error('[EmpreendimentoDetail] erro ao gerar minuta do memorial:', err);
       notify('Erro ao gerar a minuta do memorial. Tente novamente.', 'error');

@@ -395,8 +395,47 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
   - **Testes:** congelamento no `blueprintNbr12721.test.ts`, 4 casos em `SecaoNbr12721DaVersao.test.tsx` e 2 em `blueprintPublicarSemDesenho.test.ts`.
   - **Suíte:** 9.161 = 9.127 + 34 pulados, 0 falhas, em 907 arquivos; tsc 0; `verificar:build` limpo; `check-ui-standard` limpo em `SecaoNbr12721DaVersao` e `PainelVersoes`.
   - **⚠️ Lição de processo:** o relatório JSON da suíte em `/tmp` foi sobrescrito por OUTRA frente (`/tmp` é compartilhado entre as sessões). A primeira leitura mostrou 610 arquivos de outra pasta. O relatório agora vai para o scratchpad da sessão, e a raiz dos caminhos é conferida.
-  - **Pendente para depois:** mostrar o NOME de quem aprovou (hoje é "por você" ou o id curto).
-- [ ] Fase 8: saídas (0 de 2)
+  - ~~Pendente: mostrar o NOME de quem aprovou~~ — feito na Fase 8.
+- [x] **Fase 8: saídas (2 de 2)**
+  - **8.1 PDF e XLSX da versão:**
+    - `utils/nbr12721/documento.ts` (puro) monta as tabelas a partir da SAÍDA CONGELADA, nunca de um recálculo:
+      - Quadro I com as colunas 2 a 18 e Quadro II com as 20 a 38, com cabeçalho de grupo como na norma (Privativa / Comum não proporcional / Comum proporcional / Total);
+      - Quadro IV-B, frações com os milésimos fechados em 1000, pendências e aprovações;
+      - linha de total em cada quadro.
+    - `services/nbr12721ExportService.ts`:
+      - `documentoDaVersao` reúne estudo, empresa (carimbo do template de pranchas da organização, ou o nome da organização), versão, hash, motor e aprovações com o NOME de quem aprovou;
+      - `pdfDoDocumento`: A4 paisagem, cada quadro inteiro na largura da folha, rodapé "empresa · estudo · Versão N · hash" em toda página;
+      - `pastaXlsx`: aba Resumo + uma aba por tabela, com números como número.
+    - Na seção da versão (painel Versões), botões "Baixar PDF" e "Baixar XLSX".
+    - **Pendência da Fase 7 fechada:** a seção mostra o nome de quem aprovou, lido de `organization_members`. Uma falha nessa busca deixa o id curto e NÃO derruba a seção. O teste pegou que, do primeiro jeito, ela derrubava; agora há caso para isso.
+  - **8.2 Memorial de incorporação:**
+    - `incorporationMemorialService` passa a ler as Áreas NBR da versão publicada do estudo ligado ao Empreendimento (`documentoDoMemorial`), e não mais do Motor de Áreas.
+    - A versão citada é escolhida por `versaoDoMemorial`: a de revisão mais alta com técnica E jurídica; senão a com técnica; senão a mais recente congelada.
+    - A seção "e" traz versão, hash inteiro, situação e aprovações, e AVISA enquanto falta aprovação. A "i" traz os milésimos fechados.
+    - O `EmpreendimentoDetail` não importa mais o `areaEngineService`.
+  - **2 defeitos ANTIGOS do memorial, achados ao olhar o PDF renderizado:**
+    - as notas "⚠ …" saíam letra a letra espaçadas e passavam da margem: a Helvetica do jsPDF não tem o "⚠". Agora é "Pendente: …", com a caixa crescendo conforme as linhas;
+    - o nome do arquivo perdia as letras acentuadas ("reas", "descart_vel"). Agora tira o acento antes de filtrar.
+  - **Ajustes no PDF achados na imagem (não nos números):**
+    - sem `horizontalPageBreak`: com ele ligado, o autoTable partia o Quadro I em duas páginas meio vazias em vez de encolher as colunas;
+    - totais alinhados à direita;
+    - título da tabela como texto acima dela;
+    - nenhuma tabela começa no pé da folha com uma linha só.
+  - **Prova no app real (14/10, agente-leitura, Vite local, roteiro `c:/tmp/pwtest/areas-nbr-fase8.cjs`):**
+    - Empreendimento descartável com 12 unidades em 3 andares (áreas quebradas) e hall de 33,30 m²; estudo criado e publicado pela tela, técnica e jurídica aprovadas;
+    - "Baixar PDF", "Baixar XLSX" e, no Empreendimento, "Minuta do Memorial" baixaram, sem erro de página nem de HTTP;
+    - **conferido contra o banco:**
+      - as frações do XLSX batem unidade a unidade com a saída gravada, com Σ milésimos = 1000;
+      - o total do Quadro I (698,16) bate;
+      - o hash nas aprovações é o do quadro, e o nome de quem aprovou veio resolvido;
+      - o PDF tem 3 páginas e traz o hash inteiro e os totais;
+      - o memorial cita a versão aprovada, sem aviso, e as notas saem legíveis;
+    - duas rodadas, a segunda já com o código final. O hash saiu idêntico nas duas: mesma entrada, mesmo hash.
+  - **Limpeza:** cada rodada foi apagada num bloco que exige 1 empreendimento e 1 estudo. Antes e depois: 18 empreendimentos, 9 torres, 85 unidades, 0 áreas comuns, 77 estudos, 9 versões, 0 quadros, 0 aprovações.
+  - **Testes:**
+    - `nbr12721Documento.test.ts`, 13 casos: colunas da norma, totais, grupos, cabeçalho, formatação, XLSX lido de volta, PDF monta, escolha da versão do memorial e texto das seções "e"/"i";
+    - `SecaoNbr12721DaVersao`, 3 casos novos: nome, falha do nome, baixar e erro ao baixar.
+  - **Suíte:** 9.177 = 9.143 + 34 pulados, 0 falhas, em 908 arquivos (relatório no scratchpad, raiz conferida); tsc 0; `verificar:build` limpo; `check-ui-standard` limpo em `SecaoNbr12721DaVersao` e `EmpreendimentoDetail`.
 - [ ] Fase 9: Empreendimento (0 de 3)
 - [ ] Fase 10: remoção (0 de 5)
 

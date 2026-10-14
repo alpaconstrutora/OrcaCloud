@@ -17,6 +17,7 @@ import {
   type QuadroDaVersao,
   type TipoDeAprovacaoNbr12721,
 } from '../../services/blueprintSnapshotNbr12721Service';
+import { nbr12721ExportService } from '../../services/nbr12721ExportService';
 
 const ROTULO: Record<TipoDeAprovacaoNbr12721, string> = { TECNICA: 'Técnica', JURIDICA: 'Jurídica' };
 
@@ -33,6 +34,8 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
   const [observacao, setObservacao] = useState('');
   const [enviando, setEnviando] = useState<TipoDeAprovacaoNbr12721 | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [nomes, setNomes] = useState<Map<string, string>>(new Map());
+  const [baixando, setBaixando] = useState<'pdf' | 'xlsx' | null>(null);
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -45,6 +48,23 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
       setErro(e instanceof Error ? e.message : String(e));
     }
   }, [snapshotId]);
+
+  // O nome de quem aprovou é enfeite: falhar aqui não pode derrubar a seção — a linha mostra o id curto.
+  useEffect(() => {
+    if (!aprovacoes.length) return;
+    let vivo = true;
+    void (async () => {
+      try {
+        const n = await blueprintSnapshotNbr12721Service.nomesDeQuemAprovou(aprovacoes.map((x) => x.aprovadoPor));
+        if (vivo) setNomes(n);
+      } catch {
+        /* fica o id curto */
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [aprovacoes]);
 
   useEffect(() => {
     void carregar();
@@ -79,6 +99,20 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
     }
   };
 
+  const baixar = async (formato: 'pdf' | 'xlsx') => {
+    setBaixando(formato);
+    setErro(null);
+    try {
+      const doc = await nbr12721ExportService.documentoDaVersao(snapshotId);
+      if (formato === 'pdf') await nbr12721ExportService.exportarPdf(doc);
+      else nbr12721ExportService.exportarXlsx(doc);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message.replace(/^nbr12721Export\/\w+: /, '') : String(e));
+    } finally {
+      setBaixando(null);
+    }
+  };
+
   return (
     <div className="border-b border-slate-200 px-4 py-3" data-testid="versao-nbr12721">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Áreas NBR 12721</h3>
@@ -102,7 +136,7 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
                   {ROTULO[t]}:{' '}
                   {a ? (
                     <span className="text-emerald-700">
-                      aprovada {new Date(a.aprovadoEm).toLocaleString('pt-BR')} · {a.aprovadoPor === eu ? 'por você' : <span title={a.aprovadoPor}>por {a.aprovadoPor.slice(0, 8)}</span>}
+                      aprovada {new Date(a.aprovadoEm).toLocaleString('pt-BR')} · {a.aprovadoPor === eu ? 'por você' : <span title={a.aprovadoPor}>por {nomes.get(a.aprovadoPor) ?? a.aprovadoPor.slice(0, 8)}</span>}
                       {a.observacao && <span className="block text-slate-500">“{a.observacao}”</span>}
                     </span>
                   ) : (
@@ -112,6 +146,20 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
               );
             })}
           </ul>
+          <div className="mt-2 flex gap-2">
+            {(['pdf', 'xlsx'] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => void baixar(f)}
+                disabled={baixando !== null}
+                title={baixando ? 'Aguarde o arquivo em preparo' : `Baixa os Quadros I, II e IV-B, as frações e as aprovações desta versão em ${f.toUpperCase()}`}
+                className="h-8 rounded-[6px] border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {baixando === f ? 'Gerando…' : `Baixar ${f.toUpperCase()}`}
+              </button>
+            ))}
+          </div>
           {!(tem('TECNICA') && tem('JURIDICA')) && (
             <div className="mt-2 space-y-1.5">
               <input

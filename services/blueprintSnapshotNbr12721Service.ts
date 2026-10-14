@@ -91,6 +91,24 @@ export const blueprintSnapshotNbr12721Service = {
     }));
   },
 
+  /**
+   * Nome de quem aprovou, lido de `organization_members` (a RLS já limita aos
+   * colegas das organizações de quem lê). Sem nome cadastrado vale o e-mail;
+   * quem não aparece fica fora do mapa e a tela mostra o id curto.
+   */
+  async nomesDeQuemAprovou(userIds: string[]): Promise<Map<string, string>> {
+    const ids = [...new Set(userIds)];
+    const nomes = new Map<string, string>();
+    if (!ids.length) return nomes;
+    const { data, error } = await supabase.from('organization_members').select('user_id, name, email').in('user_id', ids);
+    if (error) fail('nomesDeQuemAprovou', error);
+    for (const m of (data ?? []) as { user_id: string; name: string | null; email: string | null }[]) {
+      const nome = m.name?.trim() || m.email?.trim();
+      if (nome && !nomes.has(m.user_id)) nomes.set(m.user_id, nome);
+    }
+    return nomes;
+  },
+
   /** Aprova pela RPC — é ela que confere organização, pendência e ordem; o erro do banco sobe com o motivo. */
   async aprovar(snapshotId: string, tipo: TipoDeAprovacaoNbr12721, observacao: string | null): Promise<string> {
     const { data, error } = await supabase.rpc('aprovar_nbr12721_da_versao', { p_snapshot_id: snapshotId, p_tipo: tipo, p_observacao: observacao });

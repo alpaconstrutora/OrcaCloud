@@ -9,13 +9,27 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const estado: { quadro: unknown; aprovacoes: unknown[] } = { quadro: null, aprovacoes: [] };
+const estado: { quadro: unknown; aprovacoes: unknown[]; nomes: Map<string, string> | null } = { quadro: null, aprovacoes: [], nomes: null };
 const aprovar = vi.fn(async () => 'apr_1');
 vi.mock('../../services/blueprintSnapshotNbr12721Service', () => ({
   blueprintSnapshotNbr12721Service: {
     daVersao: vi.fn(async () => estado.quadro),
     aprovacoes: vi.fn(async () => estado.aprovacoes),
     aprovar: (...args: unknown[]) => aprovar(...(args as [])),
+    // `null` = o serviço não tem a função (como antes da Fase 8): o nome falha e a seção tem de seguir.
+    get nomesDeQuemAprovou() {
+      return estado.nomes ? vi.fn(async () => estado.nomes) : undefined;
+    },
+  },
+}));
+const documentoDaVersao = vi.fn(async () => ({ estudo: 'E', revisao: 1 }));
+const exportarPdf = vi.fn(async () => undefined);
+const exportarXlsx = vi.fn();
+vi.mock('../../services/nbr12721ExportService', () => ({
+  nbr12721ExportService: {
+    documentoDaVersao: (...a: unknown[]) => documentoDaVersao(...(a as [])),
+    exportarPdf: (...a: unknown[]) => exportarPdf(...(a as [])),
+    exportarXlsx: (...a: unknown[]) => exportarXlsx(...(a as [])),
   },
 }));
 vi.mock('../../lib/supabase', () => ({ supabase: { auth: { getUser: async () => ({ data: { user: { id: 'eu-uuid' } } }) } } }));
@@ -28,7 +42,11 @@ describe('SecaoNbr12721DaVersao', () => {
   beforeEach(() => {
     estado.quadro = null;
     estado.aprovacoes = [];
+    estado.nomes = null;
     aprovar.mockClear();
+    documentoDaVersao.mockClear();
+    exportarPdf.mockClear();
+    exportarXlsx.mockClear();
   });
 
   it('versão sem quadro: diz por quê e não oferece aprovar', async () => {
@@ -62,6 +80,35 @@ describe('SecaoNbr12721DaVersao', () => {
     estado.quadro = quadroOk;
     render(<SecaoNbr12721DaVersao snapshotId="s1" podeAprovar={false} />);
     expect((await screen.findByRole('button', { name: 'Aprovar técnica' })).getAttribute('title')).toBe('Sem permissão para aprovar as Áreas NBR 12721');
+  });
+
+  it('Fase 8: aprovação de outra pessoa mostra o NOME; baixar PDF e XLSX lê o documento da versão', async () => {
+    estado.quadro = quadroOk;
+    estado.nomes = new Map([['outra-uuid', 'Fulana Arquiteta']]);
+    estado.aprovacoes = [{ id: 'a1', tipo: 'TECNICA', hash: quadroOk.hash, observacao: null, aprovadoPor: 'outra-uuid', aprovadoEm: '2026-10-14T11:00:00Z' }];
+    render(<SecaoNbr12721DaVersao snapshotId="s1" />);
+    expect(await screen.findByText(/por Fulana Arquiteta/)).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Baixar PDF' }));
+    expect(documentoDaVersao).toHaveBeenCalledWith('s1');
+    expect(exportarPdf).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('button', { name: 'Baixar XLSX' }));
+    expect(exportarXlsx).toHaveBeenCalledTimes(1);
+  });
+
+  it('sem o nome (serviço falha), a linha mostra o id curto e a seção segue', async () => {
+    estado.quadro = quadroOk;
+    estado.aprovacoes = [{ id: 'a1', tipo: 'TECNICA', hash: quadroOk.hash, observacao: null, aprovadoPor: 'outra-uuid-123', aprovadoEm: '2026-10-14T11:00:00Z' }];
+    render(<SecaoNbr12721DaVersao snapshotId="s1" />);
+    expect(await screen.findByText(/por outra-uu/)).toBeTruthy();
+    expect(screen.getByText('Quadros I, II e IV-B congelados')).toBeTruthy();
+  });
+
+  it('erro ao gerar o arquivo aparece com o motivo', async () => {
+    estado.quadro = quadroOk;
+    documentoDaVersao.mockRejectedValueOnce(new Error('nbr12721Export/versao: esta versão não tem os Quadros NBR 12721 congelados'));
+    render(<SecaoNbr12721DaVersao snapshotId="s1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Baixar PDF' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('esta versão não tem os Quadros NBR 12721 congelados');
   });
 
   it('erro do banco aparece com o motivo (a RPC é quem decide)', async () => {

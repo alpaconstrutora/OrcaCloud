@@ -11,7 +11,7 @@ import { PORTAL_SECTIONS } from '../utils/portalHelpDefaults';
 import { PARTNER_PORTAL_TAB_IDS } from '../utils/partnerPortalTabs';
 import { SUPPLIER_PORTAL_TAB_IDS } from '../utils/supplierPortalTabs';
 import { BROKER_PORTAL_TAB_IDS } from '../utils/brokerPortalTabs';
-import { CLIENT_PORTAL_TAB_IDS } from '../utils/clientPortalTabs';
+import { CLIENT_PORTAL_SECTION_IDS } from '../utils/clientPortalTabs';
 
 describe('PORTAL_SECTIONS ≡ ids das abas dos portais', () => {
   it('parceiro', () => {
@@ -24,6 +24,7 @@ describe('PORTAL_SECTIONS ≡ ids das abas dos portais', () => {
     expect(PORTAL_SECTIONS.corretor.map(s => s.id)).toEqual([...BROKER_PORTAL_TAB_IDS]);
   });
   it('cliente', () => {
-    expect(PORTAL_SECTIONS.cliente.map(s => s.id)).toEqual([...CLIENT_PORTAL_TAB_IDS]);
+    // abas + as subseções do Condomínio (`condominio.avisos`…), seções próprias da ajuda
+    expect(PORTAL_SECTIONS.cliente.map(s => s.id)).toEqual(CLIENT_PORTAL_SECTION_IDS);
   });
 });

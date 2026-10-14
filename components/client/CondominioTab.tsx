@@ -228,7 +228,7 @@ const PainelDadosGerais: React.FC<{ grupos: Grupo[] }> = ({ grupos }) => (
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {cond.unidades.map((u: PortalUnidadeCondominio) => (
-                        <div key={u.unitId} className="rounded-[10px] border border-gray-100 bg-gray-50/40 p-5">
+                        <div key={u.unitId} data-tour="condominio-dados-unidade" className="rounded-[10px] border border-gray-100 bg-gray-50/40 p-5">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <h3 className="text-base font-bold text-gray-900">{u.unidade}</h3>
@@ -308,7 +308,7 @@ const PainelAvisos: React.FC<{
     texto="Quando a administração publicar um comunicado, ele aparece aqui."
 />
         ) : (
-            <div className="space-y-3">
+            <div data-tour="condominio-avisos-lista" className="space-y-3">
                 {avisos.map((a: PortalAvisoCondominio) => (
                     <div
                         key={a.id}
@@ -391,7 +391,7 @@ const PainelDocumentos: React.FC<{
     texto="Convenção, regulamento e atas aparecem aqui quando a administração os publicar."
 />
             ) : (
-                <div className="space-y-2">
+                <div data-tour="condominio-documentos-lista" className="space-y-2">
                     {documentos.map(d => (
                         /* Botão, e não <a href>: arquivo enviado tem `url`
                            nula, e o React OMITE o atributo — a âncora fica
@@ -527,7 +527,7 @@ const BotaoPdfDoRateio: React.FC<{ rateio: PortalRateioCondominio; onResolverCom
     };
 
     return (
-        <div className="flex flex-col items-end gap-1">
+        <div data-tour="condominio-rateio-pdf" className="flex flex-col items-end gap-1">
             <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
                 {/* Na MESMA linha do botão que ela governa — opção de download
                     longe do download não é lida. */}
@@ -599,7 +599,7 @@ const PainelFinanceiro: React.FC<{
             Despesas do prédio e o rateio entre as unidades
         </Descricao>
         {competencias.length > 0 && (
-            <div className="flex items-center gap-2 mb-4">
+            <div data-tour="condominio-competencia" className="flex items-center gap-2 mb-4">
                 <label htmlFor="portal-competencia" className="text-xs font-semibold text-slate-500 whitespace-nowrap">
                     Competência
                 </label>
@@ -679,7 +679,7 @@ const PainelFinanceiro: React.FC<{
                         </div>
 
                         <div className="p-5 space-y-5">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div data-tour="condominio-rateio-cota" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-xs text-gray-400">Despesas do mês</p>
                                     <p className="text-lg font-bold text-gray-900">{dinheiro(r.totalDespesas)}</p>
@@ -762,7 +762,7 @@ const PainelManutencao: React.FC<{
         ) : (
             <div className="space-y-6">
                 {manutencao.length > 0 && (
-                    <div>
+                    <div data-tour="condominio-manutencao-plano">
                         <p className="text-xs font-semibold text-slate-500 mb-2">O que é mantido</p>
                         <div className="space-y-2">
                             {manutencao.map(m => (
@@ -788,7 +788,7 @@ const PainelManutencao: React.FC<{
                 )}
 
                 {ordens.length > 0 && (
-                    <div>
+                    <div data-tour="condominio-manutencao-ordens">
                         <p className="text-xs font-semibold text-slate-500 mb-2">Ordens de serviço</p>
                         <div className="space-y-2">
                             {ordens.map(o => (
@@ -966,7 +966,7 @@ const PainelEquipamentos: React.FC<{ ativos: PortalCondominio['ativos']; multi: 
                     texto="Elevadores, bombas e demais ativos do prédio aparecem aqui."
                 />
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                <div data-tour="condominio-equipamentos-lista" className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                     {ativos.map(a => (
                         /* Botão, e não <div onClick>: a ficha tem de abrir pelo teclado
                            também, e leitor de tela precisa saber que a linha age. */
@@ -1121,7 +1121,7 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                 {/* No link, no computador, as seções são subitens do menu lateral
                     (ClientArea) — a mesma âncora está lá. */}
                 <div data-tour="condominio-secoes" className={abasNoMenuLateral ? 'md:hidden' : undefined}>
-                    <PortalTabs tabs={abas} active={abaAtiva} onChange={(id) => setAba(id as AbaCondominio)} />
+                    <PortalTabs tabs={abas} active={abaAtiva} onChange={(id) => setAba(id as AbaCondominio)} dataTourPrefix="aba-condominio." />
                 </div>
 
                 <div data-tour="condominio-conteudo" className="p-4 md:p-6">

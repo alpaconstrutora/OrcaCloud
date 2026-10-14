@@ -258,7 +258,8 @@ describe('Primeiros passos (F8, 04/10/2026)', () => {
     for (const i of itens) {
       expect(i.key.startsWith(`${portal}.checklist.`)).toBe(true);
       expect(abas.has(i.section), `${i.key}: aba ${i.section}`).toBe(true);
-      expect(i.evento).toMatch(/^(aba|acao):[a-z-]+$/);
+      // `.` separa a subseção (aba:condominio.avisos); o banco aceita (portal_tour_mark: ^[a-z0-9:._-]{1,96}$)
+      expect(i.evento).toMatch(/^(aba|acao):[a-z-]+(\.[a-z-]+)?$/);
       if (i.evento.startsWith('aba:')) expect(abas.has(i.evento.slice(4))).toBe(true);
     }
     // um evento marca um item só (senão o "x de n" pula de dois em dois)

@@ -155,3 +155,45 @@ Pronto quando:
   - o checklist marca o item do condomínio;
   - sem erro de console.
 - [ ] Portal do Condômino conferido na tela pelo gestor. Pendente: exige login de gestor.
+
+## Pedido de 14/10/2026 (3º, com print do menu do Condomínio)
+
+> por que voce nao esta conseguindo criar tour e ajuda do condominio completo?
+
+O print mostrava o menu do grupo Condomínio: Dados gerais, Avisos, Documentos, Financeiro,
+Manutenção, Equipamentos.
+
+**Causa:** o mecanismo da ajuda e do tour só conhecia o 1º nível (a aba). O Condomínio
+inteiro era UMA seção, com um tour genérico e os artigos amontoados. As subseções não tinham
+tour próprio, a central não abria na subseção atual, e o tour não conseguia levar a pessoa
+até "Avisos" ou "Equipamentos". Nas duas entregas anteriores eu remendei o conteúdo sem
+olhar o modelo.
+
+### 6. Subseções do Condomínio como seções próprias da ajuda
+
+O que muda:
+- **`utils/clientPortalTabs.ts`:** `CONDOMINIO_SECOES` e `CLIENT_PORTAL_SECTION_IDS`, com ids `condominio.<sub>`; mais `secoesLiberadas`, `secaoAtual` e `destinoDaSecao`.
+- **Conteúdo:**
+  - 1 artigo de visão geral mais 1 artigo e pelo menos 1 pergunta por subseção (12 itens);
+  - um "como usar" por subseção:
+    - dados: prédio, seções e unidade;
+    - avisos e documentos: a lista;
+    - financeiro: competência, cota e Baixar PDF;
+    - manutenção: o plano e as ordens;
+    - equipamentos: a lista.
+  - Checklist: "Leia os avisos" e "Confira o rateio".
+  - Corrigida a pergunta do rateio: "Prévia — pode mudar" aparece antes de fechar.
+- **Âncoras:**
+  - em cada painel do `CondominioTab`;
+  - `aba-condominio.<sub>` nos subitens do menu lateral;
+  - nas abas internas (`PortalTabs` ganhou `dataTourPrefix`).
+- **`ClientArea`:** a ajuda recebe a seção atual `condominio.<sub>`, as seções liberadas e a navegação para aba + subseção.
+- **`PortalCondominoAdmin`:** a subseção sobe para a tela. A ajuda abre nela e "Ver tour" mostra o tour DAQUELA subseção.
+
+Pronto quando:
+- [x] `portalHelpClienteCondominio.test.ts` exige artigo, pergunta e tour em CADA subseção, e a lista igual à `ABAS_CONDOMINIO`.
+- [x] Na tela (`c:/tmp/pwtest/teste-condominio-subsecoes.js`, dados simulados, nada gravado):
+  - as 6 subseções abrem o tour certo no computador (menu lateral) e no celular (abas);
+  - a central lista as 6 e abre na subseção atual;
+  - sem erro de console.
+- [ ] Portal do Condômino conferido na tela pelo gestor. Pendente: exige login de gestor.

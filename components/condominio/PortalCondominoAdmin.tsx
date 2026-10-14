@@ -39,7 +39,8 @@ import {
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
-import CondominioTab from '../client/CondominioTab';
+import CondominioTab, { type AbaCondominio } from '../client/CondominioTab';
+import { CONDOMINIO_SECOES, secaoDoCondominio, destinoDaSecao } from '../../utils/clientPortalTabs';
 import { clientPortalService, CONDOMINIO_VAZIO, type PortalCondominio } from '../../services/clientPortalService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
@@ -571,6 +572,9 @@ const AcessosDoCondominio: React.FC<{
 // largura cheia lê como tela cheia (o usuário proibiu tela cheia sem pedido
 // expresso, 05/09/2026).
 // ═══════════════════════════════════════════════════════════════════════════
+/** Seções da ajuda nesta prévia: o Condomínio e as subseções dele. */
+const SECOES_DO_CONDOMINIO = ['condominio', ...CONDOMINIO_SECOES.map(secaoDoCondominio)];
+
 const PreviaDoPortal: React.FC<{
     previa: Linha;
     condominio: Empreendimento;
@@ -583,9 +587,13 @@ const PreviaDoPortal: React.FC<{
     useScrollAoTopo(raiz);
     // Ajuda e tour do Condomínio — os MESMOS do Portal do Cliente (a aba que
     // esta tela espelha), em modo prévia: nada é gravado em nome do morador.
-    // `tourPedido` remonta o PortalHelp para o "Ver tour" poder repetir.
+    // `tourPedido` remonta o PortalHelp para o "Ver tour" poder repetir. A
+    // subseção sobe para cá: é por ela que a ajuda abre no assunto certo e o
+    // "Ver tour" mostra o "como usar" DAQUELA subseção.
     const [ajudaAberta, setAjudaAberta] = React.useState(false);
     const [tourPedido, setTourPedido] = React.useState(0);
+    const [aba, setAba] = usePersistedState<AbaCondominio>('clientArea:condominioSubtab', 'dados');
+    const secao = secaoDoCondominio(aba);
 
     return (
         <div ref={raiz} className="space-y-6 pb-20">
@@ -636,10 +644,11 @@ const PreviaDoPortal: React.FC<{
                 onClose={() => setAjudaAberta(false)}
                 portal="cliente"
                 orgId={condominio.organization_id}
-                visibleSections={['condominio']}
-                currentSection="condominio"
+                visibleSections={SECOES_DO_CONDOMINIO}
+                currentSection={secao}
+                onNavigate={(s) => { const { sub } = destinoDaSecao(s); if (sub) setAba(sub); }}
                 modoPrevia
-                forcarTour={tourPedido > 0 ? 'condominio' : null}
+                forcarTour={tourPedido > 0 ? secao : null}
                 accent="coral"
             />
 
@@ -648,7 +657,7 @@ const PreviaDoPortal: React.FC<{
                 SEM `onMarcarLido` — só de abrir a prévia, os avisos daquele
                 morador seriam marcados como lidos, e o número que diz ao síndico
                 se a comunicação chegou viraria ficção. */}
-            <PreviaDoPortalDoCliente clientId={previa.clientId} />
+            <PreviaDoPortalDoCliente clientId={previa.clientId} aba={aba} onAbaChange={setAba} />
         </div>
     );
 };
@@ -661,7 +670,7 @@ const PreviaDoPortal: React.FC<{
  * olhando aqui. Nada de token: o link é da pessoa e não precisa ser tocado para
  * mostrar a tela.
  */
-const PreviaDoPortalDoCliente: React.FC<{ clientId: string }> = ({ clientId }) => {
+const PreviaDoPortalDoCliente: React.FC<{ clientId: string; aba: AbaCondominio; onAbaChange: (a: AbaCondominio) => void }> = ({ clientId, aba, onAbaChange }) => {
     const [dados, setDados] = React.useState<PortalCondominio>(CONDOMINIO_VAZIO);
     const [carregando, setCarregando] = React.useState(true);
 
@@ -678,7 +687,7 @@ const PreviaDoPortalDoCliente: React.FC<{ clientId: string }> = ({ clientId }) =
         <div className="rounded-[10px] border border-gray-100 overflow-hidden shadow-sm bg-white p-4 md:p-6">
             {/* Sem `onMarcarLido` e sem `onResolverDocumento`: a prévia não grava
                 leitura nem emite URL assinada em nome de ninguém. */}
-            <CondominioTab dados={dados} loading={carregando} />
+            <CondominioTab dados={dados} loading={carregando} aba={aba} onAbaChange={onAbaChange} />
         </div>
     );
 };

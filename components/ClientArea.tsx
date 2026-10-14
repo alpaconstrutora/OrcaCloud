@@ -97,7 +97,7 @@ import { isObra } from '../utils/projectClassification';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { PortalHelp } from './portal/PortalHelp';
 import { avisarAcaoDoPortal } from '../utils/portalEventos';
-import { CLIENT_PORTAL_TAB_IDS, type ClientPortalTabId } from '../utils/clientPortalTabs';
+import { CLIENT_PORTAL_TAB_IDS, type ClientPortalTabId, secoesLiberadas, secaoAtual, destinoDaSecao } from '../utils/clientPortalTabs';
 
 /** As abas do portal. Era uma união literal repetida em dois lugares (prop e
  *  `useState`) — aba nova exigia editar as duas, e esquecer uma só aparece como
@@ -3991,6 +3991,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         ? clientPortalTabs
         : (legacyTabs ?? categoryPreset ?? ALL_TABS.map((t): string => t.id));
 
+    // Ajuda/tour: as subseções do Condomínio são seções próprias.
+    const chaveAbas = enabledTabIds.join(',');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const secoesDaAjuda = React.useMemo(() => secoesLiberadas(enabledTabIds), [chaveAbas]);
+
     // tabs visíveis para o cliente (mobile + client desktop)
     const tabs = ALL_TABS.filter(t => enabledTabIds.includes(t.id));
     // admin vê todas no desktop para poder configurar; cliente vê só as habilitadas
@@ -4246,6 +4251,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <button
                                                     key={sub.id}
                                                     type="button"
+                                                    data-tour={`aba-condominio.${sub.id}`}
                                                     onClick={() => { setActiveTab('condominio'); setAbaCondominio(sub.id); }}
                                                     aria-current={ativo ? 'page' : undefined}
                                                     className={`flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm text-left transition-all duration-150 ${
@@ -4888,14 +4894,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 portal="cliente"
                 token={portalToken}
                 orgId={settings.organizationId || organizationId || null}
-                visibleSections={enabledTabIds}
-                currentSection={activeTab}
+                // Seções da ajuda = abas + as subseções do Condomínio
+                // (`condominio.avisos`…), cada uma com artigos e tour próprios.
+                visibleSections={secoesDaAjuda}
+                currentSection={secaoAtual(activeTab, abaCondominio)}
                 onNavigate={(s) => {
                     setViewingContract(null);
                     setSelectedEntry(null);
                     setShowNewRequestForm(false);
                     setShowMoreSheet(false);
-                    setActiveTab(s as ClientAreaTabId);
+                    const { aba, sub } = destinoDaSecao(s);
+                    if (sub) setAbaCondominio(sub);
+                    setActiveTab(aba as ClientAreaTabId);
                 }}
                 // a rota pública do link TAMBÉM passa isPreview (só para esconder o
                 // cromo de admin): prévia do gestor é isPreview SEM token

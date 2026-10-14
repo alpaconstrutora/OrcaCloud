@@ -159,7 +159,9 @@ export const PortalTabs: React.FC<{
     tabs: PortalTabItem[];
     active: string;
     onChange: (id: string) => void;
-}> = ({ tabs, active, onChange }) => (
+    /** `data-tour="<prefixo><id>"` em cada aba — âncora do tour guiado dos portais */
+    dataTourPrefix?: string;
+}> = ({ tabs, active, onChange, dataTourPrefix }) => (
     <div className="flex items-end gap-1 px-2 pt-2 overflow-x-auto scrollbar-hide border-b border-[#ECECEF]">
         {tabs.map(t => {
             const isActive = t.id === active;
@@ -167,6 +169,7 @@ export const PortalTabs: React.FC<{
                 <button
                     key={t.id}
                     type="button"
+                    data-tour={dataTourPrefix ? `${dataTourPrefix}${t.id}` : undefined}
                     onClick={() => onChange(t.id)}
                     className={`relative px-3.5 py-2 text-[13px] whitespace-nowrap rounded-t-lg transition-colors ${
                         isActive

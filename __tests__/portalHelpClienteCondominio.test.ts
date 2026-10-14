@@ -1,47 +1,84 @@
 /**
- * Portal do Cliente — o Condomínio no tour e na ajuda.
+ * Portal do Cliente — o Condomínio COMPLETO no tour e na ajuda.
  * 14/10/2026, docs/planos/2026-10-14-ajuda-tour-portal-cliente.md
  *
- * A 1ª entrega deixou o Condomínio só com um artigo genérico: nenhum passo no
- * tour do portal, nenhum "como usar esta tela", nenhuma pergunta. O usuário
- * apontou ("no tour guiado faltou todo o condominio?"; "nao so o tour mais
- * ajuda do condomínio tambem nao foi implementado").
+ * Duas entregas incompletas no mesmo dia: a 1ª deixou o Condomínio com um
+ * artigo genérico; a 2ª tratou o Condomínio como UMA seção. O usuário mandou o
+ * print do menu (Dados gerais, Avisos, Documentos, Financeiro, Manutenção,
+ * Equipamentos) e perguntou por que não saía completo. Causa: a ajuda só
+ * conhecia o 1º nível (aba). Agora cada subseção é `condominio.<id>` — e este
+ * teste exige que TODA subseção tenha artigo, pergunta e "como usar".
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { TOURS, DEFAULT_ITEMS, CHECKLIST_ITEMS, mergePortalHelp } from '../utils/portalHelpDefaults';
+import { TOURS, DEFAULT_ITEMS, CHECKLIST_ITEMS, PORTAL_SECTIONS, mergePortalHelp } from '../utils/portalHelpDefaults';
+import { CONDOMINIO_SECOES, secaoDoCondominio, secoesLiberadas, secaoAtual, destinoDaSecao } from '../utils/clientPortalTabs';
 
-describe('Portal do Cliente › Condomínio', () => {
+const SUBS = CONDOMINIO_SECOES.map(secaoDoCondominio);
+
+describe('Portal do Cliente › Condomínio por subseção', () => {
+  it('as subseções da ajuda são as mesmas do CondominioTab, na mesma ordem', () => {
+    const fonte = readFileSync(resolve(__dirname, '..', 'components/client/CondominioTab.tsx'), 'utf-8');
+    const bloco = fonte.slice(fonte.indexOf('export const ABAS_CONDOMINIO'), fonte.indexOf('] as const', fonte.indexOf('export const ABAS_CONDOMINIO')));
+    const ids = [...bloco.matchAll(/id: '([a-z]+)'/g)].map(m => m[1]);
+    expect(ids).toEqual([...CONDOMINIO_SECOES]);
+    for (const s of SUBS) expect(PORTAL_SECTIONS.cliente.some(x => x.id === s)).toBe(true);
+  });
+
+  it.each(SUBS)('%s tem artigo, pergunta frequente e "como usar esta tela"', (secao) => {
+    expect(DEFAULT_ITEMS.cliente.some(d => d.kind === 'artigo' && d.section === secao)).toBe(true);
+    expect(DEFAULT_ITEMS.cliente.some(d => d.kind === 'faq' && d.section === secao)).toBe(true);
+    expect(TOURS.cliente.porAba[secao]?.length ?? 0).toBeGreaterThan(0);
+  });
+
   it('o tour do portal passa pelo Condomínio e pelas seções dele', () => {
     const ancoras = TOURS.cliente.geral.map(p => p.anchor);
     expect(ancoras).toContain('aba-condominio');
     expect(ancoras).toContain('condominio-secoes');
   });
 
-  it('o Condomínio tem o seu "como usar esta tela"', () => {
-    expect(TOURS.cliente.porAba.condominio?.map(p => p.anchor)).toEqual(['condominio-predio', 'condominio-secoes', 'condominio-conteudo']);
+  it('o Condomínio liberado libera as subseções; sem ele, nada de condomínio aparece', () => {
+    const com = mergePortalHelp('cliente', [], { visibleSections: secoesLiberadas(['dashboard', 'condominio']) });
+    for (const s of SUBS) {
+      expect(com.tours[s]?.length ?? 0).toBeGreaterThan(0);
+      expect(com.articles.some(a => a.section === s)).toBe(true);
+    }
+    const sem = mergePortalHelp('cliente', [], { visibleSections: secoesLiberadas(['dashboard', 'financeiro']) });
+    expect(sem.articles.some(a => a.section?.startsWith('condominio'))).toBe(false);
+    expect(Object.keys(sem.tours).some(t => t.startsWith('condominio'))).toBe(false);
+    expect(sem.checklist.some(c => c.section.startsWith('condominio'))).toBe(false);
   });
 
-  it('a central tem artigos das seções do Condomínio e perguntas dele', () => {
-    const artigos = DEFAULT_ITEMS.cliente.filter(d => d.kind === 'artigo' && d.section === 'condominio');
-    expect(artigos.length).toBeGreaterThanOrEqual(4);
-    expect(DEFAULT_ITEMS.cliente.filter(d => d.kind === 'faq' && d.section === 'condominio').length).toBeGreaterThanOrEqual(3);
-    // e só para quem tem o Condomínio liberado
-    const semCondominio = mergePortalHelp('cliente', [], { visibleSections: ['dashboard', 'financeiro'] });
-    expect(semCondominio.articles.some(a => a.section === 'condominio')).toBe(false);
-    expect(semCondominio.tours.condominio).toBeUndefined();
+  it('seção atual e navegação: aba + subseção ida e volta', () => {
+    expect(secaoAtual('condominio', 'avisos')).toBe('condominio.avisos');
+    expect(secaoAtual('condominio', 'lixo-antigo')).toBe('condominio.dados');
+    expect(secaoAtual('financeiro', 'avisos')).toBe('financeiro');
+    expect(destinoDaSecao('condominio.equipamentos')).toEqual({ aba: 'condominio', sub: 'equipamentos' });
+    expect(destinoDaSecao('condominio')).toEqual({ aba: 'condominio', sub: null });
+    expect(destinoDaSecao('documentos')).toEqual({ aba: 'documentos', sub: null });
   });
 
-  it('"Primeiros passos" tem um item do Condomínio', () => {
-    expect(CHECKLIST_ITEMS.cliente.some(i => i.section === 'condominio')).toBe(true);
+  it('"Primeiros passos" tem itens do Condomínio, ligados a subseções', () => {
+    const itens = CHECKLIST_ITEMS.cliente.filter(i => i.section.startsWith('condominio.'));
+    expect(itens.length).toBeGreaterThan(0);
+    for (const i of itens) expect(i.evento).toBe(`aba:${i.section}`);
   });
 
-  it('Portais › Portal do Condômino (espelho do morador) tem ajuda e tour, em modo prévia', () => {
+  it('ClientArea fala em subseções com a ajuda (seção atual, liberadas e navegação)', () => {
+    const fonte = readFileSync(resolve(__dirname, '..', 'components/ClientArea.tsx'), 'utf-8');
+    expect(fonte).toContain('currentSection={secaoAtual(activeTab, abaCondominio)}');
+    expect(fonte).toContain('visibleSections={secoesDaAjuda}');
+    expect(fonte).toContain('destinoDaSecao(s)');
+    expect(fonte).toContain('data-tour={`aba-condominio.${sub.id}`}');
+  });
+
+  it('Portais › Portal do Condômino: ajuda e tour da SUBSEÇÃO aberta, em modo prévia', () => {
     const fonte = readFileSync(resolve(__dirname, '..', 'components/condominio/PortalCondominoAdmin.tsx'), 'utf-8');
     expect(fonte).toContain('<PortalHelp');
     expect(fonte).toContain('portal="cliente"');
     expect(fonte).toMatch(/modoPrevia\b/);
-    expect(fonte).toContain("forcarTour={tourPedido > 0 ? 'condominio' : null}");
+    expect(fonte).toContain('forcarTour={tourPedido > 0 ? secao : null}');
+    expect(fonte).toContain('currentSection={secao}');
   });
 });

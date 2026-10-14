@@ -18,7 +18,7 @@ import { validateFileNameAgainstMask, extractTokenFromFileName, planBatchFileNam
 import { OpuraDocumentCategoria, OpuraDocumentInsert, OpuraFolder, OpuraNormaSituacao } from '../../types';
 import {
   NORMA_ORGAOS_SUGERIDOS, NORMA_SITUACOES, NORMA_SITUACAO_PADRAO,
-  formatarReferenciaNorma, extrairNormaDoNomeDoArquivo,
+  formatarReferenciaNorma, extrairNormaDoNomeDoArquivo, opcoesEdicaoNorma,
 } from '../../utils/gedNormas';
 
 // As extensões aceitas vêm do catálogo da organização (prop `allowedExtensions`,
@@ -535,13 +535,16 @@ export function BatchUploadSheet({
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">Edição / ano</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: 2024"
+                  <select
                     value={defaultNormaEdicao}
                     onChange={(e) => setDefaultNormaEdicao(e.target.value)}
                     className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-                  />
+                  >
+                    <option value="">Sem edição / ano</option>
+                    {opcoesEdicaoNorma(defaultNormaEdicao).map((ed) => (
+                      <option key={ed} value={ed}>{ed}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">Situação</label>
@@ -693,14 +696,17 @@ export function BatchUploadSheet({
                           </div>
                           <div className="space-y-1">
                             <label className="text-[11px] font-semibold text-slate-500">Edição / ano</label>
-                            <input
-                              type="text"
-                              placeholder="Ex: 2024"
+                            <select
                               value={norma.edicao}
                               disabled={!editavel}
                               onChange={(e) => updateOverride(item.key, { norma_edicao: e.target.value })}
                               className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-[6px] text-xs font-medium disabled:opacity-70"
-                            />
+                            >
+                              <option value="">Sem edição / ano</option>
+                              {opcoesEdicaoNorma(norma.edicao).map((ed) => (
+                                <option key={ed} value={ed}>{ed}</option>
+                              ))}
+                            </select>
                           </div>
                           {norma.referencia && (
                             <p className="col-span-2 text-xs text-slate-500">

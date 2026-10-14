@@ -3,7 +3,7 @@ import { Settings, X, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { useConfirm } from '../ui/confirm';
 import { documentService, OpuraDmsDocumentType, OpuraDmsDiscipline } from '../../services/documentService';
 import { OpuraDocument, OpuraDocumentStatus, OpuraDocumentUpdate, OpuraNormaSituacao } from '../../types';
-import { NORMA_ORGAOS_SUGERIDOS, NORMA_SITUACOES } from '../../utils/gedNormas';
+import { NORMA_ORGAOS_SUGERIDOS, NORMA_SITUACOES, opcoesEdicaoNorma } from '../../utils/gedNormas';
 import { renderFileIcon } from './DocumentsTable';
 
 interface CompanyOption {
@@ -342,14 +342,17 @@ export function DocumentBatchEditModal({
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">Edição / ano</label>
-                  <input
-                    type="text"
-                    placeholder="Deixe vazio para não alterar"
+                  <select
                     value={normaEdicao}
                     onChange={(e) => setNormaEdicao(e.target.value)}
                     disabled={saving}
                     className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
-                  />
+                  >
+                    <option value="">Não alterar</option>
+                    {opcoesEdicaoNorma(normaEdicao).map((ed) => (
+                      <option key={ed} value={ed}>{ed}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">Situação</label>

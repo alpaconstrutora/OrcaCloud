@@ -1,5 +1,8 @@
 import { supabase } from '../lib/supabase';
 import type { DiaryEntry } from '../types';
+import type { ProjectSchedule } from '../types/project';
+import { projectService } from './projectService';
+import { aplicarEvolucaoNoCronograma } from '../utils/diaryPlanningLink';
 
 /**
  * Registros do Diário de Obras — gravação UM POR VEZ.
@@ -53,4 +56,22 @@ export async function carregarRegistrosDiario(projectId: string): Promise<DiaryE
         .maybeSingle();
     if (error) throw error;
     return ((data as { diary?: DiaryEntry[] | null } | null)?.diary) || [];
+}
+
+/**
+ * Empurra a evolução das atividades vinculadas para o cronograma do Planejamento
+ * (`manualRealPct`, a maior entre os registros não recusados). Relê o
+ * planejamento na hora — não usa cópia da tela. Devolve o cronograma gravado, ou
+ * `null` se nada mudou.
+ */
+export async function sincronizarEvolucaoNoPlanejamento(planejamentoId: string, entries: DiaryEntry[]): Promise<ProjectSchedule | null> {
+    const planejamento = await projectService.loadProject(planejamentoId);
+    if (!planejamento?.settings?.schedule) return null;
+    const { schedule, mudou } = aplicarEvolucaoNoCronograma(planejamento.settings.schedule, entries);
+    if (!mudou) return null;
+    await projectService.saveProject({
+        ...planejamento,
+        settings: { ...planejamento.settings, schedule },
+    });
+    return schedule;
 }

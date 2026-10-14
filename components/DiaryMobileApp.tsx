@@ -7,10 +7,12 @@ import {
 import { DiaryEntry, DiaryActivity, LaborEntry, WeatherShift, ProjectSettings } from '../types';
 import { projectService } from '../services/projectService';
 import { uploadDiaryMedia, removeDiaryMedia, diaryEntryMediaRefs } from '../services/diaryMediaService';
-import { salvarRegistroDiario, excluirRegistroDiario, DiaryWriteResult } from '../services/diaryEntryService';
+import { salvarRegistroDiario, excluirRegistroDiario, sincronizarEvolucaoNoPlanejamento, DiaryWriteResult } from '../services/diaryEntryService';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { onlyDiarios, isObra } from '../utils/projectClassification';
 import { isUnplannedActivity, setUnplanned } from '../utils/diaryActivities';
+import { vincularAtividade, temAtividadeVinculada, ItemVinculavel } from '../utils/diaryPlanningLink';
+import { useDiaryLinkedPlanning } from '../hooks/useDiaryLinkedPlanning';
 
 /**
  * Diário de Obras — aplicativo mobile.
@@ -400,10 +402,12 @@ const EntrySheet: React.FC<{
     isNew: boolean;
     saving: boolean;
     upload: UploadTarget;
+    /** Itens do cronograma do Planejamento ligado ao diário (vazio = diário sem cronograma). */
+    itens: ItemVinculavel[];
     onClose: () => void;
     onSave: (e: DiaryEntry) => void;
     onDelete: (id: string) => void;
-}> = ({ entry, isNew, saving, upload, onClose, onSave, onDelete }) => {
+}> = ({ entry, isNew, saving, upload, itens, onClose, onSave, onDelete }) => {
     const [form, setForm] = useState<DiaryEntry>(entry);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
@@ -616,6 +620,29 @@ const EntrySheet: React.FC<{
                     )}
                     {(form.activities || []).map((a, i) => (
                         <div key={i} className="bg-slate-50 rounded-xl p-3 space-y-2.5 border border-slate-100">
+                            {/* Mesmo vínculo do desktop: a evolução do item vai para o cronograma ao salvar.
+                                Não prevista não tem vínculo — o seletor some (setUnplanned limpa o itemId). */}
+                            {itens.length > 0 && !isUnplannedActivity(a) && (
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Item do cronograma</span>
+                                    <select
+                                        value={a.itemId || ''}
+                                        onChange={e => {
+                                            const vinculo = itens.find(x => x.schedule.id === e.target.value);
+                                            setForm(p => ({
+                                                ...p,
+                                                activities: (p.activities || []).map((x, k) => (k === i ? vincularAtividade(x, vinculo) : x)),
+                                            }));
+                                        }}
+                                        className={`w-full h-11 px-3 bg-white border rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${a.itemId ? 'border-blue-200 text-blue-700' : 'border-slate-200 text-slate-500'}`}
+                                    >
+                                        <option value="">Sem vínculo — escolha o item</option>
+                                        {itens.map(({ schedule: it, budget: b }) => (
+                                            <option key={it.id} value={it.id}>{b.sinapiItem?.description}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="flex items-start gap-2">
                                 <input
                                     value={a.description}
@@ -665,6 +692,11 @@ const EntrySheet: React.FC<{
                                 />
                                 Não prevista no cronograma
                             </label>
+                            {itens.length > 0 && !isUnplannedActivity(a) && !a.itemId && (
+                                <p className="text-[11px] font-medium text-amber-600">
+                                    Sem item vinculado, a evolução não chega ao cronograma.
+                                </p>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -882,6 +914,9 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
         return () => { cancelled = true; };
     }, [selectedId, notify]);
 
+    // Cronograma do Planejamento ligado ao diário — mesma peça da tela desktop.
+    const planejamento = useDiaryLinkedPlanning(project?.settings?.linkedProjectId, projects);
+
     const entries = useMemo<DiaryEntry[]>(() => {
         const list = (project?.settings?.diaryEntries || []) as DiaryEntry[];
         return [...list].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -898,6 +933,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
         gravar: (projectId: string) => Promise<DiaryWriteResult>,
         msg: string,
         refsQueFicam: string[] = [],
+        sincronizarCronograma = false,
     ) => {
         if (!project) return;
         setSaving(true);
@@ -906,7 +942,18 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
             // §22 — estado local com a lista devolvida, sem recarregar o projeto.
             setProject(p => (p ? { ...p, settings: { ...p.settings, diaryEntries: gravadas } } : p));
             setEditing(null);
-            notify(msg);
+            // Evolução das atividades vinculadas → cronograma (lista do BANCO), igual ao desktop.
+            let aviso = msg;
+            if (sincronizarCronograma && planejamento.planejamentoId && planejamento.schedule) {
+                try {
+                    const gravado = await sincronizarEvolucaoNoPlanejamento(planejamento.planejamentoId, gravadas);
+                    if (gravado) planejamento.setSchedule(gravado);
+                } catch (err) {
+                    console.error('Erro ao sincronizar diário com o planejamento:', err);
+                    aviso = 'Registro salvo, mas a evolução não chegou ao cronograma.';
+                }
+            }
+            notify(aviso);
             // Órfãos contra a versão anterior SEGUNDO O BANCO, DEPOIS do save.
             const ficam = new Set(refsQueFicam);
             const orfaos = diaryEntryMediaRefs(anterior).filter(r => !ficam.has(r));
@@ -917,11 +964,16 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
         } finally {
             setSaving(false);
         }
-    }, [project, notify]);
+    }, [project, notify, planejamento]);
 
     const handleSaveEntry = useCallback((entry: DiaryEntry) => {
         const existe = entries.some(e => e.id === entry.id);
-        persist(id => salvarRegistroDiario(id, entry), existe ? 'Registro atualizado.' : 'Registro salvo.', diaryEntryMediaRefs(entry));
+        persist(
+            id => salvarRegistroDiario(id, entry),
+            existe ? 'Registro atualizado.' : 'Registro salvo.',
+            diaryEntryMediaRefs(entry),
+            temAtividadeVinculada(entry.activities),
+        );
     }, [entries, persist]);
 
     const handleDeleteEntry = useCallback((id: string) => {
@@ -1053,6 +1105,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
                     entry={editing}
                     isNew={isNew}
                     saving={saving}
+                    itens={planejamento.itens}
                     upload={{ orgId: project?.organization_id ?? project?.settings?.organizationId ?? null, projectId: project?.id ?? '' }}
                     onClose={() => setEditing(null)}
                     onSave={handleSaveEntry}

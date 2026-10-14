@@ -33,16 +33,18 @@ import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import TabsBar from './ui/TabsBar';
 import DiaryLaborFromRhSheet from './DiaryLaborFromRhSheet';
 import type { Employee } from '../services/laborService';
-import { ProjectSettings, DiaryEntry, BudgetEntry, WeatherShift, DiaryActivity, LaborEntry, ProjectSchedule } from '../types';
+import { ProjectSettings, DiaryEntry, WeatherShift, DiaryActivity, LaborEntry } from '../types';
 import { projectService } from '../services/projectService';
 import { uploadDiaryMedia, removeDiaryMedia, diaryEntryMediaRefs } from '../services/diaryMediaService';
-import { salvarRegistroDiario, excluirRegistroDiario, carregarRegistrosDiario } from '../services/diaryEntryService';
+import { salvarRegistroDiario, excluirRegistroDiario, carregarRegistrosDiario, sincronizarEvolucaoNoPlanejamento } from '../services/diaryEntryService';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import DiaryMobileApp from './DiaryMobileApp';
 import { isUnplannedActivity, setUnplanned, countUnplanned } from '../utils/diaryActivities';
+import { vincularAtividade, temAtividadeVinculada } from '../utils/diaryPlanningLink';
+import { useDiaryLinkedPlanning } from '../hooks/useDiaryLinkedPlanning';
 
 
 type DiaryEditorTab = 'clima' | 'atividades' | 'comentarios' | 'arquivos';
@@ -144,9 +146,6 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     // (já com este diário aberto); no desktop o botão "Mobile" abre a prévia.
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [isMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
-    const [linkedSchedule, setLinkedSchedule] = useState<ProjectSchedule | null>(null);
-    const [linkedBudget, setLinkedBudget] = useState<BudgetEntry[]>([]);
-    const [isLoadingLinked, setIsLoadingLinked] = useState(false);
 
     React.useEffect(() => {
         if (activeTab) localStorage.setItem('diary_active_tab', activeTab);
@@ -288,105 +287,14 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         };
     }, [settings.schedule]);
 
-    // Lógica de Autodescoberta de Projeto Vinculado
-    const autoLinkedProjectId = useMemo(() => {
-        // Se houver vínculo manual de Obra/Orçamento nas configurações do Diário
-        const baseId = settings.linkedProjectId;
-        if (!baseId) return null;
-
-        const linkedProject = projects.find(p => p.id === baseId);
-        if (!linkedProject) return baseId;
-
-        // Se o projeto já for um Planejamento, retornar ele mesmo
-        if (linkedProject.settings?.classification === 'PLANEJAMENTO') return baseId;
-
-        // Se for uma Obra ou Orçamento, procurar o Planejamento vinculado a ela
-        // 1. Busca direta: Planejamento que aponta para o baseId
-        const directLink = projects.find(p =>
-            p.settings?.classification === 'PLANEJAMENTO' &&
-            p.settings?.linkedProjectId === baseId
-        );
-        if (directLink) return directLink.id;
-
-        // 2. Busca indireta: Se baseId for Obra, procurar Planejamento que aponta para um Orçamento daquela Obra
-        if (linkedProject.settings?.classification === 'OBRA') {
-            const linkedBudgets = projects.filter(p =>
-                p.settings?.classification === 'ORCAMENTO' &&
-                p.settings?.linkedProjectId === baseId
-            ).map(p => p.id);
-
-            if (linkedBudgets.length > 0) {
-                const indirectLink = projects.find(p =>
-                    p.settings?.classification === 'PLANEJAMENTO' &&
-                    linkedBudgets.includes(p.settings?.linkedProjectId ?? '')
-                );
-                if (indirectLink) return indirectLink.id;
-            }
-        }
-
-        // 3. Busca inversa: Orçamento que aponta para a Obra baseId, mas queremos o Planejamento
-        // Caso o usuário tenha vinculado o diário ao Orçamento e o Planejamento esteja na Obra
-        if (linkedProject.settings?.classification === 'ORCAMENTO' && linkedProject.settings?.linkedProjectId) {
-            const obraId = linkedProject.settings.linkedProjectId;
-            const linkThroughObra = projects.find(p =>
-                p.settings?.classification === 'PLANEJAMENTO' &&
-                p.settings?.linkedProjectId === obraId
-            );
-            if (linkThroughObra) return linkThroughObra.id;
-        }
-
-        return baseId; // Fallback
-    }, [settings.linkedProjectId, projects]);
-
-    // Carregar dados do projeto de planejamento vinculado (manual ou automático)
-    React.useEffect(() => {
-        let cancelled = false; // Bug 4: prevent stale async updates
-        const loadLinkedProject = async () => {
-            const idToLoad = autoLinkedProjectId;
-
-            if (idToLoad) {
-                setIsLoadingLinked(true);
-                try {
-                    const projectData = await projectService.loadProject(idToLoad);
-                    if (cancelled) return;
-                    if (projectData) {
-                        // Priority 1: Schedule from the linked project itself
-                        if (projectData.settings?.schedule) {
-                            setLinkedSchedule(projectData.settings.schedule);
-                        } else {
-                            setLinkedSchedule(null);
-                        }
-
-                        // Priority 2: Budget from the linked project itself
-                        if (projectData.budget && projectData.budget.length > 0) {
-                            setLinkedBudget(projectData.budget);
-                        }
-                        // Priority 3: If planning has no budget, try to load from ITS OWN linked project (The Budget)
-                        else if (projectData.settings?.linkedProjectId) {
-                            const parentProject = await projectService.loadProject(projectData.settings.linkedProjectId);
-                            if (parentProject?.budget) {
-                                setLinkedBudget(parentProject.budget);
-                            } else {
-                                setLinkedBudget([]);
-                            }
-                        } else {
-                            setLinkedBudget([]);
-                        }
-                    }
-                } catch (error) {
-                    console.error("Erro ao carregar projeto vinculado:", error);
-                } finally {
-                    if (!cancelled) setIsLoadingLinked(false);
-                }
-            } else {
-                setLinkedSchedule(null);
-                setLinkedBudget([]);
-            }
-        };
-
-        loadLinkedProject();
-        return () => { cancelled = true; };
-    }, [autoLinkedProjectId]);
+    // Cronograma do Planejamento ligado ao diário — mesma peça do app mobile.
+    const {
+        planejamentoId: autoLinkedProjectId,
+        schedule: linkedSchedule,
+        budget: linkedBudget,
+        itens: itensCronogramaVinculaveis,
+        setSchedule: setLinkedSchedule,
+    } = useDiaryLinkedPlanning(settings.linkedProjectId, projects);
 
 
     const handleSave = async () => {
@@ -435,61 +343,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         const refsAgora = new Set(diaryEntryMediaRefs(currentEntry));
         const orfaos = diaryEntryMediaRefs(anterior).filter(r => !refsAgora.has(r));
 
-        // Sincronização com o projeto de planejamento vinculado
-        const targetSyncProjectId = autoLinkedProjectId;
-        if (targetSyncProjectId && linkedSchedule && currentEntry.activities?.length) {
+        // Evolução das atividades vinculadas → cronograma do Planejamento (lista do BANCO).
+        if (autoLinkedProjectId && linkedSchedule && temAtividadeVinculada(currentEntry.activities)) {
             try {
-                console.log(`[ProjectDiaryManager] Synchronizing with project: ${targetSyncProjectId}`);
-                const linkedProject = await projectService.loadProject(targetSyncProjectId);
-                if (linkedProject && linkedProject.settings?.schedule) {
-                    const updatedSchedule = { ...linkedProject.settings.schedule };
-                    const itemSchedules = [...(updatedSchedule.itemSchedules || [])];
-                    let hasChanges = false;
-
-                    // Pegar todos os diários para encontrar a evolução MÁXIMA de cada item
-                    // Isso evita que um diário antigo com evolução menor sobrescreva o valor atual
-                    const allEntries = gravadas;
-
-                    const maxEvolutionByItem = new Map<string, number>();
-                    allEntries.forEach(entry => {
-                        if (entry.status !== 'Recusado') {
-                            entry.activities?.forEach(act => {
-                                if (act.itemId && !isUnplannedActivity(act)) {
-                                    const currentMax = maxEvolutionByItem.get(act.itemId) || 0;
-                                    maxEvolutionByItem.set(act.itemId, Math.max(currentMax, act.evolution || 0));
-                                }
-                            });
-                        }
-                    });
-
-                    maxEvolutionByItem.forEach((maxEvolution, itemId) => {
-                        const itemIdx = itemSchedules.findIndex(is => is.id === itemId);
-                        if (itemIdx >= 0) {
-                            if (itemSchedules[itemIdx].manualRealPct !== maxEvolution) {
-                                itemSchedules[itemIdx] = {
-                                    ...itemSchedules[itemIdx],
-                                    manualRealPct: maxEvolution
-                                };
-                                hasChanges = true;
-                            }
-                        } else {
-                            // Se o item não existir no cronograma, adicionamos (fallback de segurança)
-                            itemSchedules.push({ id: itemId, manualRealPct: maxEvolution });
-                            hasChanges = true;
-                        }
-                    });
-
-                    if (hasChanges) {
-                        updatedSchedule.itemSchedules = itemSchedules;
-                        await projectService.saveProject({
-                            ...linkedProject,
-                            settings: {
-                                ...linkedProject.settings,
-                                schedule: updatedSchedule
-                            }
-                        });
-                    }
-                }
+                const gravado = await sincronizarEvolucaoNoPlanejamento(autoLinkedProjectId, gravadas);
+                if (gravado) setLinkedSchedule(gravado);
             } catch (error) {
                 console.error("Erro ao sincronizar com planejamento:", error);
                 notify('Registro salvo, mas a evolução não chegou ao planejamento vinculado.'); // Bug 5
@@ -626,20 +484,6 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         });
     };
 
-    /**
-     * Itens do cronograma que podem ser vinculados a uma atividade: só os que
-     * ainda existem no orçamento do planejamento. `itemSchedules` guarda linhas
-     * órfãs de versões anteriores do orçamento (Divino Espírito Santo: 132 no
-     * cronograma, 37 no orçamento) — sem nome, elas apareciam como dezenas de
-     * "Item sem nome" no select. Mesmo critério de OperacionalForm.
-     */
-    const itensCronogramaVinculaveis = useMemo(() => {
-        const its = linkedSchedule?.itemSchedules || [];
-        const porId = new Map(linkedBudget.map(b => [b.id, b]));
-        return its
-            .map(is => ({ schedule: is, budget: porId.get(is.id) }))
-            .filter((x): x is { schedule: typeof x.schedule; budget: BudgetEntry } => !!x.budget && !!x.budget.sinapiItem?.description);
-    }, [linkedSchedule, linkedBudget]);
 
     const laborRows = useMemo<LaborRow[]>(
         () => (formData.labor || []).map((lab, idx) => ({ ...lab, idx })),
@@ -1162,24 +1006,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                     <select
                                                                         value={act.itemId || ''}
                                                                         onChange={(e) => {
-                                                                            const itemId = e.target.value;
-                                                                            const vinculo = itensCronogramaVinculaveis.find(x => x.schedule.id === itemId);
-                                                                            const scheduleItem = vinculo?.schedule;
-                                                                            const budgetItem = vinculo?.budget;
-
-                                                                            if (itemId) {
-                                                                                const newActs = [...(formData.activities || [])];
-                                                                                newActs[idx] = {
-                                                                                    ...newActs[idx],
-                                                                                    itemId: itemId,
-                                                                                    description: budgetItem?.sinapiItem?.description || act.description,
-                                                                                    plannedQty: budgetItem?.quantity || 0,
-                                                                                    evolution: scheduleItem?.manualRealPct || 0
-                                                                                };
-                                                                                setFormData({ ...formData, activities: newActs });
-                                                                            } else {
-                                                                                handleActivityChange(idx, 'itemId', '');
-                                                                            }
+                                                                            const vinculo = itensCronogramaVinculaveis.find(x => x.schedule.id === e.target.value);
+                                                                            setFormData((prev: Partial<DiaryEntry>) => ({
+                                                                                ...prev,
+                                                                                activities: (prev.activities || []).map((a, i) => (i === idx ? vincularAtividade(a, vinculo) : a)),
+                                                                            }));
                                                                         }}
                                                                         className="w-full bg-indigo-50/50 border border-indigo-100 outline-none focus:bg-white focus:ring-1 focus:ring-indigo-100 p-2.5 rounded-xl text-form-input font-semibold text-indigo-700 transition-all"
                                                                     >

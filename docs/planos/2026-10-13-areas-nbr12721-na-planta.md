@@ -276,7 +276,15 @@ Em todos os demais casos os três quadros fecham. As decisões abaixo são da Fa
   - Prova antes do bump: com a string em 0.99.0, 4.191 testes de blueprint/planta/sync passaram (4.216 = 4.191 + 25 pulados). Depois do bump houve 12 falhas, todas previstas: 6 hashes de golden (cada um uma vez, contagens idênticas) e **6 testes que comparavam a versão como TEXTO**. Como 0.100 é a primeira versão de 3 dígitos, `'0.100' < '0.46'` como string; os testes passaram a comparar número. Antes disso conferi que **nem o app nem o banco** comparam ordem de `kernel_version`: o banco só grava e repassa.
   - Suíte completa: 9.113 = 9.079 + 34 pulados, 0 falhas; tsc 0 erros.
   - Portão `blueprintCamadasPorDisciplina`: `ambientesDeclarados` declarado referência, porque não tem geometria nem camada.
-- [ ] Fase 3: unidades do prédio (0 de 1)
+- [x] Fase 2 publicada: `ff968972`, check-run `ci` = success
+- [x] Fase 3: unidades do prédio (1 de 1)
+  - `utils/blueprintUnidadesDoPredio.ts`: `unidadesDoPredio(model, hipoteses)`. As unidades do tipo são **derivadas**, nunca gravadas, uma por cópia viva, com a chave `"<uid da Unidade>:<uid do pavimento>"`.
+  - Cada derivada é **medida no próprio andar**, com as derivadas vizinhas presentes, para a geminada sair geminada.
+  - Numeração pela hipótese `ANDAR_E_POSICAO` (101 → 501; T01 no térreo). Um número fora desse padrão cai em `PAVIMENTO_E_NUMERO` ("2º · Apto A"), com aviso.
+  - Também geram aviso: unidade que atravessa pavimentos num tipo com cópia (não é replicada), cópia fora de sincronia e número repetido.
+  - Exports NBR 12721 da Fase 2 que faltavam no `index.ts` do kernel foram adicionados; o bundle não mudou.
+  - `__tests__/blueprintUnidadesDoPredio.test.ts`: 6 testes. 4 unidades × (1 tipo + 10 cópias) = 44, com números únicos e a área igual à da origem; geminada na cópia; renomear a origem propaga; apagar a cópia some com as unidades dela; numeração fora do padrão; duplex. Mutação provada: medir a cópia sem as vizinhas derruba o teste da geminada.
+  - Suíte: 9.119 = 9.085 + 34 pulados, 0 falhas; tsc 0 erros.
 - [ ] Fase 4: adaptador e hipóteses (0 de 2)
 - [ ] Fase 5: estudo sem desenho (0 de 2)
 - [ ] Fase 6: tela na Planta (0 de 2)

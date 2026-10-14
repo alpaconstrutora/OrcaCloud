@@ -62,7 +62,7 @@ Fora do escopo: `invoices.file_name` de boleto já aprovado não é sincronizado
 - [x] 3. Serviço + 13 testes
 - [x] 4. Ganchos
 - [x] 5. Botão
-- [ ] Publicado e conferido em produção
+- [x] Publicado e conferido em produção (3bd1bf7, domínio serve origin/main)
 - [ ] Conferido na interface (Nomenclatura › Boletos → salvar → boleto com fornecedor → coluna Documento)
 
 ## Verificação

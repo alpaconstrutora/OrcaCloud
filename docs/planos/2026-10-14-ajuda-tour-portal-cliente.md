@@ -197,3 +197,38 @@ Pronto quando:
   - a central lista as 6 e abre na subseção atual;
   - sem erro de console.
 - [ ] Portal do Condômino conferido na tela pelo gestor. Pendente: exige login de gestor.
+
+## Pedido de 14/10/2026 (4º)
+
+> Esta ficando muito mal feito seu trabalho. passe item por item. voce esta sistematicamente deixando itens de fora. Me diga por que? apenas responda
+
+> Faça certo desta vez e pare de desperdicar tokens. Pois ja vamos pera a terceira tentativa!
+
+**Causa** (respondida na sessão): não havia inventário da tela; os critérios de pronto mediam
+existência ("≥ 1 passo"), não completude; e a conclusão foi declarada sem conferir item a
+item.
+
+### 7. Inventário completo de cada subseção do Condomínio
+
+O teste trava o inventário em `__tests__/portalHelpClienteCondominio.test.ts › INVENTARIO`.
+Cada elemento listado precisa de âncora na tela, de passo no tour (na ordem da tela) e de
+explicação no artigo.
+
+| Subseção | Elementos (= passos do tour) |
+|---|---|
+| Dados gerais | prédio/CNPJ, seções, grupo por condomínio, unidade, fração ideal, área + papel, quem consta |
+| Avisos | contador de não lidos, lista, lido × não lido (clique marca), categoria + data |
+| Documentos | lista, documento (categoria, aba nova, erro) |
+| Financeiro | competência, cabeçalho (nº, tipo, critério), prévia × fechado, incluir comprovantes, Baixar PDF, despesas + sua cota, o que entrou, rateio por unidade |
+| Manutenção | plano, item (sistema, periodicidade), próxima data, ordens, ordem (código, tipo, data), situação |
+| Equipamentos | lista, equipamento + ficha (identificação, aquisição e garantia, observações), garantia |
+
+O tour do portal apresenta o grupo e cada um dos 6 subitens.
+
+Pronto quando:
+- [x] O teste do inventário passa: 26 casos.
+  - Mutação conferida: tirar o passo "Rateio por unidade" derruba o teste.
+- [x] Na tela (`c:/tmp/pwtest/teste-condominio-subsecoes.js` e `teste-condominio-geral.js`, dados simulados, nada gravado):
+  - os 30 passos aparecem, no computador e no celular;
+  - o tour do portal passa pelos 6 subitens;
+  - sem erro de console.

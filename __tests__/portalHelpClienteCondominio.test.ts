@@ -26,16 +26,62 @@ describe('Portal do Cliente › Condomínio por subseção', () => {
     for (const s of SUBS) expect(PORTAL_SECTIONS.cliente.some(x => x.id === s)).toBe(true);
   });
 
-  it.each(SUBS)('%s tem artigo, pergunta frequente e "como usar esta tela"', (secao) => {
-    expect(DEFAULT_ITEMS.cliente.some(d => d.kind === 'artigo' && d.section === secao)).toBe(true);
-    expect(DEFAULT_ITEMS.cliente.some(d => d.kind === 'faq' && d.section === secao)).toBe(true);
-    expect(TOURS.cliente.porAba[secao]?.length ?? 0).toBeGreaterThan(0);
-  });
-
-  it('o tour do portal passa pelo Condomínio e pelas seções dele', () => {
+  it('o tour do portal apresenta o grupo e CADA subitem do Condomínio', () => {
     const ancoras = TOURS.cliente.geral.map(p => p.anchor);
     expect(ancoras).toContain('aba-condominio');
-    expect(ancoras).toContain('condominio-secoes');
+    for (const sub of CONDOMINIO_SECOES) expect(ancoras).toContain(`aba-condominio.${sub}`);
+  });
+
+  /**
+   * INVENTÁRIO de cada subseção: todo elemento que a tela mostra (âncora no
+   * `CondominioTab`) e o termo que o artigo precisa explicar. Elemento novo na
+   * tela entra AQUI — e o teste exige passo de tour e texto para ele.
+   */
+  const INVENTARIO: Record<string, { ancoras: string[]; termos: string[] }> = {
+    'condominio.dados': {
+      ancoras: ['condominio-predio', 'condominio-secoes', 'condominio-dados-grupo', 'condominio-dados-unidade', 'condominio-dados-fracao', 'condominio-dados-papel', 'condominio-dados-ocupantes'],
+      termos: ['CNPJ', 'agrupadas por prédio', 'torre', 'pavimento', 'tipologia', 'Fração ideal', 'Área privativa', 'seu papel', 'Quem consta na unidade', 'Nenhuma unidade de condomínio'],
+    },
+    'condominio.avisos': {
+      ancoras: ['condominio-avisos-contador', 'condominio-avisos-lista', 'condominio-aviso', 'condominio-aviso-categoria'],
+      termos: ['número vermelho do menu', 'mais novo', 'Não lido', 'Lido', 'categoria', 'data', 'Nenhum aviso publicado'],
+    },
+    'condominio.documentos': {
+      ancoras: ['condominio-documentos-lista', 'condominio-documento'],
+      termos: ['convenção', 'regulamento interno', 'atas', 'categoria', 'aba nova', 'mensagem aparece abaixo da lista'],
+    },
+    'condominio.financeiro': {
+      ancoras: ['condominio-competencia', 'condominio-rateio-cabecalho', 'condominio-rateio-status', 'condominio-rateio-comprovantes', 'condominio-rateio-pdf', 'condominio-rateio-cota', 'condominio-rateio-despesas', 'condominio-rateio-unidades'],
+      termos: ['Competência', 'setas', 'tipo da taxa', 'critério', 'Prévia — pode mudar', 'Fechado em', 'Incluir os comprovantes', 'Baixar PDF', 'Despesas do mês', 'Sua cota', 'O que entrou no rateio', 'Rateio por unidade', 'sua unidade'],
+    },
+    'condominio.manutencao': {
+      ancoras: ['condominio-manutencao-plano', 'condominio-manutencao-item', 'condominio-manutencao-proxima', 'condominio-manutencao-ordens', 'condominio-ordem', 'condominio-ordem-situacao'],
+      termos: ['O que é mantido', 'NBR 5674', 'sistema', 'periodicidade', 'próxima data', 'Ordens de serviço', 'código', 'tipo', 'agendada ou executada', 'situação'],
+    },
+    'condominio.equipamentos': {
+      ancoras: ['condominio-equipamentos-lista', 'condominio-equipamento', 'condominio-equipamento-garantia'],
+      termos: ['elevadores', 'marca', 'modelo', 'garantia até', 'ficha', 'código patrimonial', 'número de série', 'localização', 'vida útil', 'observações'],
+    },
+  };
+
+  it('o inventário cobre as seis subseções', () => {
+    expect(Object.keys(INVENTARIO)).toEqual(SUBS);
+  });
+
+  it.each(SUBS)('%s: o tour passa por TODO elemento do inventário, na ordem da tela', (secao) => {
+    expect(TOURS.cliente.porAba[secao]?.map(p => p.anchor)).toEqual(INVENTARIO[secao].ancoras);
+  });
+
+  it.each(SUBS)('%s: todo elemento do inventário existe na tela', (secao) => {
+    const fonte = ['components/client/CondominioTab.tsx', 'components/ClientArea.tsx']
+      .map(f => readFileSync(resolve(__dirname, '..', f), 'utf-8')).join(' ');
+    for (const a of INVENTARIO[secao].ancoras) expect(fonte, a).toContain(`data-tour="${a}"`);
+  });
+
+  it.each(SUBS)('%s: o artigo explica todo item do inventário e há pergunta frequente', (secao) => {
+    const texto = DEFAULT_ITEMS.cliente.filter(d => d.kind === 'artigo' && d.section === secao).map(d => d.body_html).join(' ');
+    for (const t of INVENTARIO[secao].termos) expect(texto, `${secao}: "${t}"`).toContain(t);
+    expect(DEFAULT_ITEMS.cliente.some(d => d.kind === 'faq' && d.section === secao)).toBe(true);
   });
 
   it('o Condomínio liberado libera as subseções; sem ele, nada de condomínio aparece', () => {

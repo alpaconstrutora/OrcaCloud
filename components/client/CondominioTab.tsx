@@ -216,7 +216,7 @@ const PainelDadosGerais: React.FC<{ grupos: Grupo[] }> = ({ grupos }) => (
                     abas já diz. Fica a identificação em texto — e, com um único
                     condomínio, nem ela: aí a linha de cima basta (§18). */}
                 {grupos.length > 1 && (
-                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
+                    <div data-tour="condominio-dados-grupo" className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
                         <Building2 className="w-4 h-4 text-gray-400" />
                         <h2 className="text-sm font-semibold text-gray-900">{cond.nome}</h2>
                         <span className="text-xs text-gray-400">
@@ -237,7 +237,7 @@ const PainelDadosGerais: React.FC<{ grupos: Grupo[] }> = ({ grupos }) => (
                                             .filter(Boolean).join(' · ') || '—'}
                                     </p>
                                 </div>
-                                <div className="text-right shrink-0">
+                                <div data-tour="condominio-dados-fracao" className="text-right shrink-0">
                                     <p className="text-xs text-gray-400">Fração ideal</p>
                                     <p className="text-sm font-semibold text-gray-900 flex items-center gap-1 justify-end">
                                         <Scale className="w-3.5 h-3.5 text-gray-400" />
@@ -246,7 +246,7 @@ const PainelDadosGerais: React.FC<{ grupos: Grupo[] }> = ({ grupos }) => (
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-100">
+                            <div data-tour="condominio-dados-papel" className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-100">
                                 <div>
                                     <p className="text-xs text-gray-400">Área privativa</p>
                                     <p className="text-sm font-medium text-gray-700">{numero(u.areaPrivativa, ' m²')}</p>
@@ -264,7 +264,7 @@ const PainelDadosGerais: React.FC<{ grupos: Grupo[] }> = ({ grupos }) => (
                             {/* Quem mais consta. Só papel e nome — o portal não expõe
                                 documento nem contato de terceiro. */}
                             {u.ocupacoes.length > 0 && (
-                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                <div data-tour="condominio-dados-ocupantes" className="mt-4 pt-4 border-t border-gray-100">
                                     <p className="text-xs text-gray-400 flex items-center gap-1.5 mb-2">
                                         <Users className="w-3.5 h-3.5" /> Quem consta na unidade
                                     </p>
@@ -293,6 +293,7 @@ const PainelAvisos: React.FC<{
     onMarcarLido?: (avisoId: string) => void;
 }> = ({ avisos, multi, naoLidos, onMarcarLido }) => (
     <div>
+        <div data-tour="condominio-avisos-contador">
         <Descricao icone={<Megaphone className="w-4 h-4" />}>
             Comunicados da administração do condomínio
             {naoLidos > 0 && (
@@ -301,6 +302,7 @@ const PainelAvisos: React.FC<{
                 </span>
             )}
         </Descricao>
+        </div>
         {avisos.length === 0 ? (
 <Vazio
     icone={<Megaphone className="w-12 h-12" />}
@@ -312,6 +314,7 @@ const PainelAvisos: React.FC<{
                 {avisos.map((a: PortalAvisoCondominio) => (
                     <div
                         key={a.id}
+                        data-tour="condominio-aviso"
                         onClick={() => { if (!a.lido) onMarcarLido?.(a.id); }}
                         /* Sem `onMarcarLido` (prévia do síndico) o card não é clicável:
                            cursor de mão que não faz nada é promessa falsa. */
@@ -332,7 +335,7 @@ const PainelAvisos: React.FC<{
                             )}
                         </div>
                         <p className="text-sm text-gray-600 mt-2 whitespace-pre-line">{a.corpo}</p>
-                        <p className="text-xs text-gray-400 mt-3">
+                        <p data-tour="condominio-aviso-categoria" className="text-xs text-gray-400 mt-3">
                             <span className={COR_CATEGORIA[a.categoria] ?? 'text-gray-500'}>
                                 {CATEGORIA_LABEL[a.categoria] ?? a.categoria}
                             </span>
@@ -400,6 +403,7 @@ const PainelDocumentos: React.FC<{
                         <button
                             key={d.id}
                             type="button"
+                            data-tour="condominio-documento"
                             onClick={() => abrirDocumento(d)}
                             className="w-full text-left flex items-center justify-between gap-3 rounded-[1rem] border border-gray-100 p-4 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all"
                         >
@@ -527,12 +531,12 @@ const BotaoPdfDoRateio: React.FC<{ rateio: PortalRateioCondominio; onResolverCom
     };
 
     return (
-        <div data-tour="condominio-rateio-pdf" className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-1">
             <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
                 {/* Na MESMA linha do botão que ela governa — opção de download
                     longe do download não é lida. */}
                 {podeAnexar && (
-                    <label className="flex items-center gap-2 cursor-pointer select-none whitespace-nowrap">
+                    <label data-tour="condominio-rateio-comprovantes" className="flex items-center gap-2 cursor-pointer select-none whitespace-nowrap">
                         <input
                             type="checkbox"
                             checked={comComprovantes}
@@ -545,6 +549,7 @@ const BotaoPdfDoRateio: React.FC<{ rateio: PortalRateioCondominio; onResolverCom
                 )}
                 <button
                     type="button"
+                    data-tour="condominio-rateio-pdf"
                     onClick={baixar}
                     disabled={gerando}
                     className="flex items-center gap-1.5 h-8 px-3 shrink-0 whitespace-nowrap rounded-[6px] border border-gray-200 bg-white text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
@@ -646,7 +651,7 @@ const PainelFinanceiro: React.FC<{
                 {doMes.map((r: PortalRateioCondominio) => (
                     <div key={r.id} className="rounded-[10px] border border-gray-100 overflow-hidden">
                         <div className="bg-gray-50/60 px-5 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100">
-                            <div>
+                            <div data-tour="condominio-rateio-cabecalho">
                                 <p className="text-base font-bold text-gray-900">
                                     Competência {competencia(r.competencia)}
                                     {r.numero ? <span className="text-sm font-normal text-gray-400"> · {r.numero}</span> : null}
@@ -668,9 +673,9 @@ const PainelFinanceiro: React.FC<{
                                 {/* §8 — texto colorido, sem pílula. Rascunho é PRÉVIA: o número
                                     ainda pode mudar, e omitir isso seria pior que não mostrar. */}
                                 {r.status === 'RASCUNHO' ? (
-                                    <span className="text-sm font-normal text-amber-600 whitespace-nowrap">Prévia — pode mudar</span>
+                                    <span data-tour="condominio-rateio-status" className="text-sm font-normal text-amber-600 whitespace-nowrap">Prévia — pode mudar</span>
                                 ) : (
-                                    <span className="text-sm font-normal text-emerald-600 whitespace-nowrap">
+                                    <span data-tour="condominio-rateio-status" className="text-sm font-normal text-emerald-600 whitespace-nowrap">
                                         Fechado{r.fechadoEm ? ` em ${data(r.fechadoEm.slice(0, 10))}` : ''}
                                     </span>
                                 )}
@@ -693,7 +698,7 @@ const PainelFinanceiro: React.FC<{
                             </div>
 
                             {r.despesas.length > 0 && (
-                                <div>
+                                <div data-tour="condominio-rateio-despesas">
                                     <p className="text-xs font-semibold text-slate-500 mb-2">O que entrou no rateio</p>
                                     <div className="space-y-1.5">
                                         {r.despesas.map(d => (
@@ -709,7 +714,7 @@ const PainelFinanceiro: React.FC<{
                             )}
 
                             {r.cotas.length > 0 && (
-                                <div>
+                                <div data-tour="condominio-rateio-unidades">
                                     <p className="text-xs font-semibold text-slate-500 mb-2">Rateio por unidade</p>
                                     <div className="space-y-1">
                                         {r.cotas.map(c => (
@@ -766,7 +771,7 @@ const PainelManutencao: React.FC<{
                         <p className="text-xs font-semibold text-slate-500 mb-2">O que é mantido</p>
                         <div className="space-y-2">
                             {manutencao.map(m => (
-                                <div key={m.id} className="rounded-[10px] border border-gray-100 p-4 flex items-start justify-between gap-3">
+                                <div key={m.id} data-tour="condominio-manutencao-item" className="rounded-[10px] border border-gray-100 p-4 flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                         <p className="text-sm font-semibold text-gray-900">{m.descricao}</p>
                                         <p className="text-xs text-gray-400 mt-0.5">
@@ -776,7 +781,7 @@ const PainelManutencao: React.FC<{
                                         </p>
                                     </div>
                                     {m.proximoVencimento && (
-                                        <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
+                                        <span data-tour="condominio-manutencao-proxima" className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
                                             <CalendarClock className="w-3.5 h-3.5" />
                                             {data(m.proximoVencimento)}
                                         </span>
@@ -792,7 +797,7 @@ const PainelManutencao: React.FC<{
                         <p className="text-xs font-semibold text-slate-500 mb-2">Ordens de serviço</p>
                         <div className="space-y-2">
                             {ordens.map(o => (
-                                <div key={o.id} className="rounded-[10px] border border-gray-100 p-4 flex items-start justify-between gap-3">
+                                <div key={o.id} data-tour="condominio-ordem" className="rounded-[10px] border border-gray-100 p-4 flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                         <p className="text-sm font-semibold text-gray-900">{o.descricao}</p>
                                         <p className="text-xs text-gray-400 mt-0.5">
@@ -804,7 +809,7 @@ const PainelManutencao: React.FC<{
                                                 : o.agendadaPara ? ` · agendada para ${data(o.agendadaPara)}` : ''}
                                         </p>
                                     </div>
-                                    <span className={`text-sm font-normal shrink-0 ${COR_SITUACAO_ORDEM[o.situacao] ?? 'text-gray-600'}`}>
+                                    <span data-tour="condominio-ordem-situacao" className={`text-sm font-normal shrink-0 ${COR_SITUACAO_ORDEM[o.situacao] ?? 'text-gray-600'}`}>
                                         {LABEL_SITUACAO_ORDEM[o.situacao] ?? o.situacao}
                                     </span>
                                 </div>
@@ -973,6 +978,7 @@ const PainelEquipamentos: React.FC<{ ativos: PortalCondominio['ativos']; multi: 
                         <button
                             key={a.id}
                             type="button"
+                            data-tour="condominio-equipamento"
                             onClick={() => setAberto(a)}
                             className="w-full text-left rounded-[10px] border border-gray-100 p-4 flex items-start justify-between gap-3 hover:border-[#F3D9D1] hover:bg-[#FDEDE8]/40 transition-all"
                         >
@@ -984,7 +990,7 @@ const PainelEquipamentos: React.FC<{ ativos: PortalCondominio['ativos']; multi: 
                                 </p>
                             </div>
                             {a.garantiaAte && (
-                                <span className="text-xs text-gray-500 shrink-0">
+                                <span data-tour="condominio-equipamento-garantia" className="text-xs text-gray-500 shrink-0">
                                     garantia até {data(a.garantiaAte)}
                                 </span>
                             )}

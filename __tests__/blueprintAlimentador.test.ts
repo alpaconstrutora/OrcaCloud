@@ -4,8 +4,9 @@
  * diário em 24 h; a pressão que chega à boia; e fora da rede de distribuição.
  */
 import { describe, expect, it } from 'vitest';
-import { applyBatch, applyCommand, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { HIPOTESES_ALIMENTACAO_PADRAO, ROTULO_DO_ALIMENTADOR, planejarAlimentador, trechosDoAlimentador } from '../utils/blueprintAlimentador';
+import { applyBatch, applyCommand, emptyModel, pegadaEmPlanta, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import { HIPOTESES_ALIMENTACAO_PADRAO, ROTULO_DO_ALIMENTADOR, planejarAlimentador, rotaPelasParedesAte, trechosDoAlimentador } from '../utils/blueprintAlimentador';
+import { fracaoDentro } from '../utils/blueprintObstaculosEstruturais';
 import { HIPOTESES_RESERVATORIO_PADRAO } from '../utils/blueprintReservacao';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
 import { marcasDeVerificacao } from '../utils/blueprintVerificacaoRede';
@@ -94,3 +95,39 @@ describe('E4.3 — premissas do estudo', () => {
     expect(hipotesesHidroDaColuna({ alimentacao: { pressaoDaRedePublicaKpa: 150 } }).alimentacao.pressaoDaRedePublicaKpa).toBe(150);
   });
 });
+
+describe('F8c — o alimentador enterrado fora do baldrame (15/10/2026)', () => {
+  // Sala 4 × 3 m com o baldrame (−0,50 a 0) sob cada parede; o hidrômetro fora, na frente; a chegada perto da
+  // parede do fundo.
+  const sala = (comBaldrame: boolean) => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m.levels[0].id;
+    const lados = [[0, 0, 4000, 0], [4000, 0, 4000, 3000], [4000, 3000, 0, 3000], [0, 3000, 0, 0]];
+    m = applyBatch(m, lados.map(([ax, ay, bx, by]): Command => ({ type: 'AddWall', levelId: l, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }))).model;
+    if (comBaldrame) m = applyBatch(m, lados.map(([ax, ay, bx, by]) => ({ type: 'AddStructural', levelId: l, kind: 'VIGA_FUNDACAO', pontos: [{ x: ax, y: ay }, { x: bx, y: by }], larguraMm: 150, alturaMm: 500, baseMm: -500 }) as Command)).model;
+    return m;
+  };
+  const rota = (m: BlueprintModel) => rotaPelasParedesAte(m, { levelId: m.levels[0].id, at: { x: 1000, y: -2000 }, cotaMm: 600 }, -300, { levelId: m.levels[0].id, at: { x: 3000, y: 2700 }, cotaMm: 2500 })!;
+  const baldrames = (m: BlueprintModel) => m.structures.filter((x) => x.kind === 'VIGA_FUNDACAO').map((x) => pegadaEmPlanta(x));
+
+  it('sem baldrame, segue pelas paredes como antes; com baldrame, nenhum pedaço enterrado corre dentro dele (só o atravessa)', () => {
+    const pelasParedes = rota(sala(false)).filter((t) => t.ca === -300 && t.cb === -300);
+    expect(pelasParedes.some((t) => t.a.y === 0 && t.b.y === 0)).toBe(true);
+    const m = sala(true);
+    const enterrados = rota(m).filter((t) => t.ca === -300 && t.cb === -300 && (t.a.x !== t.b.x || t.a.y !== t.b.y));
+    expect(enterrados.length).toBeGreaterThan(0);
+    for (const t of enterrados) expect(fracaoDentro(t.a, t.b, baldrames(m)) * Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y)).toBeLessThanOrEqual(200);
+  });
+
+  it('o pé da subida fica ao lado do baldrame: sobe até 10 cm acima dele e entra na parede; a rota é um caminho só', () => {
+    const r = rota(sala(true));
+    const sobe = r.find((t) => t.a.x === t.b.x && t.a.y === t.b.y && t.ca === -300 && t.cb === 100);
+    expect(sobe).toBeDefined();
+    expect(baldrames(sala(true)).some((g) => fracaoDentro(sobe!.a, { x: sobe!.a.x + 1, y: sobe!.a.y }, [g]) > 0)).toBe(false);
+    const entra = r.find((t) => t.ca === 100 && t.cb === 100);
+    expect(entra?.b).toEqual({ x: 3000, y: 3000 });
+    // Cada pedaço começa onde o anterior termina.
+    for (let i = 1; i < r.length; i++) expect([r[i].a, r[i].ca]).toEqual([r[i - 1].b, r[i - 1].cb]);
+  });
+});
+

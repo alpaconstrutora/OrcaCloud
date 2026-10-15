@@ -13,7 +13,8 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
-import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, type BlueprintModel, type Command, type Point } from '../../../utils/blueprintKernel';
+import { conflitosDoModelo, applyBatch, applyCommand, emptyModel, point, pointInPolygon, type BlueprintModel, type Command, type Point } from '../../../utils/blueprintKernel';
+import { ROTULO_DO_ALIMENTADOR } from '../../../utils/blueprintAlimentador';
 import { medirTerreno } from '../../../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA } from '../../../utils/blueprintMassa';
 import { conferirPlanoDaCasa, planejarCasa } from '../../../utils/blueprintCasaAutomatica';
@@ -49,6 +50,7 @@ declare global {
         kits: { ambiente: string; faltam: string[]; duplicados: number }[];
         pecasDeMobiliario: number;
         hidraulica: { agua: number; esgoto: number; pluvial: number; porTipo: Record<string, number> };
+        alimentadorNoBaldrame: { maiorMm: number; larguraMm: number; travessias: number };
       } | null;
     };
   }
@@ -91,6 +93,18 @@ const plano = planejarCasa(lote, {
   hidro: { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } },
 });
 const model = plano.resultado;
+
+/** F8c: os encontros do alimentador com o baldrame — o maior pedaço dentro dele e a largura do baldrame. */
+function alimentadorNoBaldrame(m: BlueprintModel) {
+  const peca = new Map(m.structures.map((x) => [x.id, x]));
+  const enc = conflitosDoModelo({ ...m, trechos: (m.trechos ?? []).filter((t) => t.rotulo === ROTULO_DO_ALIMENTADOR) })
+    .filter((c) => c.classe === 'ESTRUTURA' && c.comprimentoDentroMm > 0 && peca.get(c.outroId)?.kind === 'VIGA_FUNDACAO');
+  return {
+    maiorMm: Math.round(Math.max(0, ...enc.map((c) => c.comprimentoDentroMm))),
+    larguraMm: Math.max(0, ...enc.map((c) => peca.get(c.outroId)!.larguraMm)),
+    travessias: enc.length,
+  };
+}
 
 /** F7: em cada ambiente molhado, o que falta do kit hidráulico e quantos (tipo, disciplina) aparecem duas vezes. */
 function kitsDoModelo(m: BlueprintModel) {
@@ -176,6 +190,7 @@ window.__estado = {
       pluvial: plano.resumo.hidraulica.pluvial.tubos,
       porTipo: plano.resumo.hidraulica.verificacao.porTipo,
     },
+    alimentadorNoBaldrame: alimentadorNoBaldrame(model),
   },
 };
 document.getElementById('dump')!.textContent = [

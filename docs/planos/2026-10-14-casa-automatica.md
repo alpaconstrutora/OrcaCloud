@@ -135,6 +135,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F7 — mobiliário + louças com pontos (ver "Registro da F7")
 - [x] F8 — hidro encadeada (ver "Registro da F8")
 - [x] F8b — compatibilização hidráulica × estrutura (ver "F8b — plano" e "Registro da F8b")
+- [x] F8c — alimentador enterrado fora do baldrame (ver "F8c — plano" e "Registro da F8c")
 - [ ] F9 — elétrica + climatização
 - [ ] F10 — UI
 - [ ] F11 — saídas (prova)
@@ -765,4 +766,59 @@ Provas:
 - Efeito: o teste mais pesado da casa caiu de 1,37 s para 0,75 s, abaixo do que era antes da F8b.
   Além disso, o arquivo de testes da casa ganhou limite explícito de 30 s: cada teste gera a casa
   inteira.
+
+## F8c — plano (15/10/2026)
+
+Pedido do usuário, depois do relatório da F8b ("sigo para a F9 ou corrijo antes o alimentador, se
+preferir"):
+
+> Corrigir antes alimentador
+
+O problema, achado na F8b: o percurso "pelas paredes" do alimentador a −0,30 m fica no eixo da parede,
+e o baldrame (−0,50 a 0, largura da parede) está ali. O tubo corre DENTRO da viga baldrame por metros
+(na casa de prova, ~14 a 20 pedaços, alguns de 2 a 3 m).
+
+O que muda (`rotaPelasParedesAte`, só quando a cota do percurso cai na faixa de um baldrame do
+pavimento; o recalque a 2,20 m fica como está):
+1. **No solo, em reta.** Da descida da entrada até o pé da subida, sem seguir as paredes. Entre a reta
+   e as duas em "L" (no rumo da parede do pé da subida), vale a que corre MENOS dentro de baldrame; o
+   baldrame só é cruzado na transversal (passagem prevista). O pilar é contornado pelo canto
+   (`desvioDoPilar`).
+2. **O pé da subida fica ao lado do baldrame**, do lado de onde o tubo chega. O tubo sobe até logo
+   acima do topo do baldrame, entra na parede e segue a subida da F8b (na parede até abaixo da viga,
+   depois rente a ela).
+3. As folgas são hipóteses editáveis do alimentador.
+
+Pronto quando, na casa de prova a 0° e a 30°:
+- nenhum pedaço do alimentador corre dentro de baldrame mais que uma travessia (≈ a largura dele);
+- a verificação de rede segue sem marca;
+- a rede fica ligada e a trava aprova.
+
+## Registro da F8c (15/10/2026)
+
+O que mudou (`utils/blueprintAlimentador.ts`, `rotaPelasParedesAte`):
+- Só quando a cota do percurso cai na faixa de um baldrame do pavimento, o percurso vai pelo SOLO. Entre
+  a reta e as duas em "L" no rumo da parede da subida, vale a que corre menos dentro de baldrame;
+  empatando, a mais curta. O pilar é contornado pelo canto (`desvioDoPilar`).
+- O pé da subida fica ao lado do baldrame, do lado de onde o tubo chega (`foraDaViga`, a mesma da F8b,
+  serve à viga de fundação). O tubo sobe até 10 cm acima do topo do baldrame, entra na parede e segue a
+  subida da F8b.
+- O recalque usa a mesma rota a 2,20 m e fica como estava. Sem baldrame, a rota pelas paredes também.
+- Hipóteses novas do alimentador: `folgaDoBaldrameMm` (50) e `entradaNaParedeMm` (100).
+
+Medido na casa de prova (harness):
+- Antes, o alimentador corria DENTRO do baldrame em ~14 a 20 pedaços, alguns de 2 a 3 m.
+- Agora só o atravessa: 2 travessias no lote reto (200 e 150 mm, a largura do baldrame) e 3 a 30°.
+- Nenhum pilar tocado; a verificação de rede segue sem marca; a trava aprova.
+
+Provas:
+- `blueprintAlimentador.test.ts`, +2 testes:
+  - sem baldrame, a rota segue pelas paredes como antes; com baldrame, nenhum pedaço enterrado fica
+    dentro dele além de uma travessia;
+  - o pé da subida fica ao lado do baldrame, sobe a +0,10 m e entra no eixo da parede; a rota é um
+    caminho contínuo.
+- `blueprintCasaAutomatica.test.ts`: a 0° e a 30°, todo encontro do alimentador com baldrame tem no
+  máximo a largura dele (com 20 % de folga para o ângulo); nenhum com pilar; verificação sem marca;
+  trava ok.
+- Harness: o portão confere a maior travessia contra a largura do baldrame.
 

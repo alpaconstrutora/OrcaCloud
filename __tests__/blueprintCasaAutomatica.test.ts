@@ -4,7 +4,8 @@
  * Plano: `docs/planos/2026-10-14-casa-automatica.md`.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
+import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, point, pointInPolygon, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
+import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
 import { conferirPlanoDaCasa, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
@@ -432,3 +433,23 @@ describe('planejarCasa — F8: água, esgoto e pluvial encadeados', () => {
     expect(p.resultado.trechos ?? []).toEqual([]);
   });
 });
+
+describe('planejarCasa — F8c: o alimentador enterrado fora do baldrame', () => {
+  it.each([0, 30])('lote a %i°: o alimentador só ATRAVESSA baldrame (nenhum pedaço correndo dentro dele) e não toca pilar', (graus) => {
+    const m = lote(graus);
+    const p = planejarCasa(m, entrada(m, { hidro: { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } } }));
+    const r = p.resultado;
+    const alimentador = (r.trechos ?? []).filter((t) => t.rotulo === ROTULO_DO_ALIMENTADOR);
+    expect(alimentador.length).toBeGreaterThan(0);
+    const peca = new Map(r.structures.map((x) => [x.id, x]));
+    const encontros = conflitosDoModelo({ ...r, trechos: alimentador }).filter((c) => c.classe === 'ESTRUTURA' && c.comprimentoDentroMm > 0);
+    expect(encontros.filter((c) => peca.get(c.outroId)!.kind === 'PILAR')).toEqual([]);
+    const noBaldrame = encontros.filter((c) => peca.get(c.outroId)!.kind === 'VIGA_FUNDACAO');
+    expect(noBaldrame.length).toBeGreaterThan(0); // a casa fica entre a rua e a caixa: o tubo atravessa
+    // Uma travessia: no máximo a largura do baldrame, com folga para o ângulo.
+    for (const c of noBaldrame) expect(c.comprimentoDentroMm).toBeLessThanOrEqual(peca.get(c.outroId)!.larguraMm * 1.2);
+    expect(p.resumo.hidraulica.verificacao).toEqual({ erros: 0, avisos: 0, porTipo: {} });
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+});
+

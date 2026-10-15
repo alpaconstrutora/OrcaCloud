@@ -29,7 +29,7 @@ import type { BlueprintModel, Command, ObjectId, Terminal, Trecho, Wall } from '
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { FICHA_DO_MATERIAL, KPA_POR_MCA, comprimentoEquivalenteM, perdaDistribuida, perdaNoHidrometroKpa } from './blueprintHidraulicaPressao';
 import { arvorePelasParedes, encaixarNaParede } from './blueprintRotaPelasParedes';
-import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, foraDaViga, foraDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, foraDaViga, foraDoPilar, fracaoDentro, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { pegadaEmPlanta, pointInPolygon } from './blueprintKernel';
 import { dimensionarReservacao, type HipotesesDeReservatorio } from './blueprintReservacao';
 import { applyBatch } from './blueprintKernel';
@@ -48,7 +48,19 @@ export interface HipotesesDeAlimentacao {
   dnMinimoMm: number;
   /** Pressão mínima na torneira de boia, kPa. */
   pressaoMinimaNaBoiaKpa: number;
+  /**
+   * F8c (15/10/2026): o pé da subida fica AO LADO do baldrame, com o eixo a isto da face dele. Ausente =
+   * `FOLGA_DO_BALDRAME_MM` (50).
+   */
+  folgaDoBaldrameMm?: number;
+  /** F8c: a subida entra na parede a isto acima do topo do baldrame. Ausente = `ENTRADA_NA_PAREDE_MM` (100). */
+  entradaNaParedeMm?: number;
 }
+
+/** F8c: o eixo do tubo que sobe ao lado do baldrame fica a isto da face dele. */
+export const FOLGA_DO_BALDRAME_MM = 50;
+/** F8c: a subida entra na parede a isto acima do topo do baldrame. */
+export const ENTRADA_NA_PAREDE_MM = 100;
 
 export const HIPOTESES_ALIMENTACAO_PADRAO: HipotesesDeAlimentacao = {
   pressaoDaRedePublicaKpa: 100,
@@ -105,12 +117,18 @@ export interface PontaDeRota {
  * próxima, corre pelas paredes até a parede sob o `alvo`, sobe atravessando os
  * pavimentos até a cota do alvo e vai até ele. `null` se o alvo está num
  * pavimento abaixo do da origem.
+ *
+ * F8c (15/10/2026): com o percurso ENTERRADO na faixa do baldrame (a viga de fundação sob as paredes), "pelas
+ * paredes" punha o tubo DENTRO dele por metros. Aí o percurso vai pelo SOLO: em reta ou em "L" (no rumo da
+ * parede da subida) — a que corre menos dentro de baldrame, que fica só atravessado —, contornando pilar pelo
+ * canto; o pé da subida fica ao lado do baldrame, sobe até logo acima dele e entra na parede.
  */
 export function rotaPelasParedesAte(
   model: BlueprintModel,
   origem: { levelId: ObjectId; at: P; cotaMm: number },
   cotaDoPercurso: number,
   alvo: { levelId: ObjectId; at: P; cotaMm: number },
+  opcoes: Pick<HipotesesDeAlimentacao, 'folgaDoBaldrameMm' | 'entradaNaParedeMm'> = {},
 ): PontaDeRota[] | null {
   const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
   const i0 = niveis.findIndex((l) => l.id === origem.levelId);
@@ -134,8 +152,42 @@ export function rotaPelasParedesAte(
     return e ? foraDoPilar(e.q, e.parede, aneis0) : null;
   };
   const sobAChegada = naParedeDe(alvo.at, 3000) ?? { ...alvo.at };
-  const naParede = naParedeDe(origem.at, 1e9);
-  if (naParede) {
+  let zPe = cotaDoPercurso;
+  const baldrames = (model.structures ?? []).filter((s) => s.kind === 'VIGA_FUNDACAO' && s.levelId === n0.id && s.baseMm < cotaDoPercurso && s.baseMm + s.alturaMm > cotaDoPercurso);
+  const naParede = baldrames.length > 0 ? null : naParedeDe(origem.at, 1e9);
+  if (baldrames.length > 0) {
+    // ── F8c: pelo SOLO, fora do baldrame ──────────────────────────────────
+    const pegadasB = baldrames.map((b) => pegadaEmPlanta(b));
+    const doPe = baldrames.find((b) => pointInPolygon(pegadaEmPlanta(b), sobAChegada));
+    const peNoSolo = doPe ? foraDaViga(sobAChegada, baldrames, origem.at, pilares0, opcoes.folgaDoBaldrameMm ?? FOLGA_DO_BALDRAME_MM) : sobAChegada;
+    const a = origem.at;
+    const b = peNoSolo;
+    const parede = encaixarNaParede(sobAChegada, paredes0, 3000)?.parede;
+    const L = parede ? Math.hypot(parede.b.x - parede.a.x, parede.b.y - parede.a.y) || 1 : 1;
+    const u = parede ? { x: (parede.b.x - parede.a.x) / L, y: (parede.b.y - parede.a.y) / L } : { x: 1, y: 0 };
+    const v = { x: -u.y, y: u.x };
+    const quina = (w: P) => {
+      const k = (b.x - a.x) * w.x + (b.y - a.y) * w.y;
+      return { x: Math.round(a.x + w.x * k), y: Math.round(a.y + w.y * k) };
+    };
+    const dentroMm = (pts: P[]) => pts.slice(1).reduce((s, q, i) => s + fracaoDentro(pts[i], q, pegadasB) * Math.hypot(q.x - pts[i].x, q.y - pts[i].y), 0);
+    const compMm = (pts: P[]) => pts.slice(1).reduce((s, q, i) => s + Math.hypot(q.x - pts[i].x, q.y - pts[i].y), 0);
+    const opcoesDeRota = [[a, b], [a, quina(u), b], [a, quina(v), b]].map((pts) => pts.filter((q, i) => i === 0 || q.x !== pts[i - 1].x || q.y !== pts[i - 1].y));
+    const melhor = opcoesDeRota
+      .map((pts) => ({ pts, dentro: dentroMm(pts), mm: compMm(pts) }))
+      .sort((x, y) => x.dentro - y.dentro || x.mm - y.mm)[0].pts;
+    for (let i = 1; i < melhor.length; i++) {
+      const desvio = desvioDoPilar(melhor[i - 1], melhor[i], pilares0) ?? [];
+      const passos = [melhor[i - 1], ...desvio, melhor[i]];
+      for (let k = 1; k < passos.length; k++) add(n0.id, passos[k - 1], cotaDoPercurso, passos[k], cotaDoPercurso);
+    }
+    if (doPe && (peNoSolo.x !== sobAChegada.x || peNoSolo.y !== sobAChegada.y)) {
+      // Ao lado do baldrame até logo acima dele, e para dentro da parede.
+      zPe = doPe.baseMm + doPe.alturaMm + (opcoes.entradaNaParedeMm ?? ENTRADA_NA_PAREDE_MM);
+      add(n0.id, peNoSolo, cotaDoPercurso, peNoSolo, zPe);
+      add(n0.id, peNoSolo, zPe, sobAChegada, zPe);
+    }
+  } else if (naParede) {
     add(n0.id, origem.at, cotaDoPercurso, naParede, cotaDoPercurso);
     const arvore = arvorePelasParedes({ paredes: paredes0, raiz: naParede, pendentes: [sobAChegada], raioDeEncaixeMm: 50, obstaculos: pilares0, contornoDoPilarMm: CONTORNO_DO_PILAR_MM });
     for (const a of arvore.arestas) add(n0.id, a.de, cotaDoPercurso, a.para, cotaDoPercurso);
@@ -146,20 +198,20 @@ export function rotaPelasParedesAte(
   if (id === i0) {
     // F8b: a subida corre DENTRO da parede até logo abaixo da viga que está sobre ela, sai para a face da
     // viga e sobe rente a ela (a caixa d'água sobre a laje) — sem furo na viga.
-    const vigas = (model.structures ?? []).filter((s) => s.kind === 'VIGA' && s.levelId === n0.id && s.baseMm < alvo.cotaMm && s.baseMm + s.alturaMm > cotaDoPercurso);
+    const vigas = (model.structures ?? []).filter((s) => s.kind === 'VIGA' && s.levelId === n0.id && s.baseMm < alvo.cotaMm && s.baseMm + s.alturaMm > zPe);
     const viga = vigas.find((v) => pointInPolygon(pegadaEmPlanta(v), pe));
     const rente = viga ? foraDaViga(pe, vigas, alvo.at, pilares0) : pe;
     if (viga && (rente.x !== pe.x || rente.y !== pe.y)) {
-      const z = Math.max(cotaDoPercurso, Math.min(alvo.cotaMm, viga.baseMm - ABAIXO_DA_VIGA_MM));
-      add(n0.id, pe, cotaDoPercurso, pe, z);
+      const z = Math.max(zPe, Math.min(alvo.cotaMm, viga.baseMm - ABAIXO_DA_VIGA_MM));
+      add(n0.id, pe, zPe, pe, z);
       add(n0.id, pe, z, rente, z);
       add(n0.id, rente, z, rente, alvo.cotaMm);
       pe = rente;
     } else {
-      add(n0.id, pe, cotaDoPercurso, pe, alvo.cotaMm);
+      add(n0.id, pe, zPe, pe, alvo.cotaMm);
     }
   } else {
-    add(n0.id, pe, cotaDoPercurso, pe, n0.defaultHeightMm);
+    add(n0.id, pe, zPe, pe, n0.defaultHeightMm);
     for (let k = i0 + 1; k < id; k++) add(niveis[k].id, pe, 0, pe, niveis[k].defaultHeightMm);
     add(nd.id, pe, 0, pe, alvo.cotaMm);
   }
@@ -222,7 +274,7 @@ export function planejarAlimentador(
   if (!boia) avisos.push("A caixa não tem torneira de boia: o alimentador chega ao alto dela (lance as peças da caixa).");
 
   // ── A ROTA ────────────────────────────────────────────────────────────────
-  const rota = rotaPelasParedesAte(model, { levelId: n0.id, at: entrada.at, cotaMm: entrada.cotaMm }, hip.cotaEnterradaMm, { levelId: nd.id, at: alvo.at, cotaMm: alvo.cotaMm });
+  const rota = rotaPelasParedesAte(model, { levelId: n0.id, at: entrada.at, cotaMm: entrada.cotaMm }, hip.cotaEnterradaMm, { levelId: nd.id, at: alvo.at, cotaMm: alvo.cotaMm }, hip);
   if (!rota) return vazio('A caixa está abaixo do pavimento do hidrômetro: o alimentador não é lançado automaticamente.');
   const pontas = rota;
 

@@ -67,6 +67,9 @@ for (const graus of [0, 30]) {
   const h = p.hidraulica;
   conferir(h.agua > 0 && h.esgoto > 0 && h.pluvial > 0, `${t} redes lançadas: água ${h.agua}, esgoto ${h.esgoto}, pluvial ${h.pluvial} tubo(s)`);
   // F8b: e COMPATÍVEIS com a estrutura — nenhuma marca: nem pilar, nem viga, nem desconector sem ventilação.
+  // F8c: o alimentador enterrado só ATRAVESSA o baldrame — nenhum pedaço correndo dentro dele.
+  const ab = p.alimentadorNoBaldrame;
+  conferir(ab.maiorMm <= ab.larguraMm * 1.2, `${t} alimentador: ${ab.travessias} travessia(s) de baldrame, a maior com ${ab.maiorMm} mm (baldrame de ${ab.larguraMm} mm)`);
   conferir(Object.keys(h.porTipo).length === 0, `${t} a verificação de rede sem marca (ponta aberta, sem destino, pilar, viga, ventilação)${Object.keys(h.porTipo).length ? ` — ${JSON.stringify(h.porTipo)}` : ''}`);
   conferir(p.ambientesAtendidos === p.ambientesPedidos, `${t} ambientes do programa atendidos: ${p.ambientesAtendidos} de ${p.ambientesPedidos}`);
   conferir(p.ambientesNomeados >= p.ambientesPedidos, `${t} ambientes nomeados no desenho: ${p.ambientesNomeados} (nenhum fundido)`);

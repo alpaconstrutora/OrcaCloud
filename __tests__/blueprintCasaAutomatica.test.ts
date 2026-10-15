@@ -320,3 +320,16 @@ describe('planejarCasa — F6: as peças-âncora', () => {
   });
 });
 
+describe('planejarCasa — F6b: cozinha com janela na casa estreita', () => {
+  // Antes (F6): no lote de 12 m, com a garagem em fila tomando a lateral, a cozinha ia para o miolo — sem janela,
+  // e sem parede externa para o aquecedor. Frente em colunas (o recozimento escolhe) e o peso da falta de luz
+  // natural acima da preferência de a sala dar para a rua.
+  it.each([0, 30])('lote a %i°: a cozinha tem parede externa e o aquecedor foi lançado', (graus) => {
+    const m = lote(graus);
+    const p = planejarCasa(m, entrada(m));
+    expect(p.pendencias.filter((x) => /Cozinha exige/.test(x.texto))).toEqual([]);
+    expect(p.resumo.ancoras?.aquecedor).toBe(true);
+    expect(p.resumo.regrasVioladas).toBe(0);
+  });
+});
+

@@ -166,3 +166,24 @@ describe('F3b — mínimos dos ambientes', () => {
     expect(rs.some((r) => daSala(r).estado === 'CONFORME')).toBe(true);
   });
 });
+
+/**
+ * F6b (casa automática, 15/10/2026): janela em mais de um lado quando falta área, a porta de entrada na ponta da
+ * fachada (no meio, partia a fachada da sala e a janela não cabia) e o peso da falta de luz natural. O apartamento
+ * de 3 quartos com sala de 33 m² violava "iluminação 1/6" em todas as sementes.
+ */
+describe('F6b — iluminação da sala e frente em colunas', () => {
+  it.each([
+    [9000, 16850],
+    [10500, 14500],
+    [12000, 12700],
+  ])('apartamento 3 quartos em %i × %i: a melhor de 8 sementes não viola regra de ambiente', (W, D) => {
+    const programa = programaSemente('APTO_3Q_SUITE');
+    const ret = [point(0, 0), point(W, 0), point(W, D), point(0, D)];
+    const melhor = Math.min(
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((s) => gerar({ programa, envelope: ret, direcaoDaFrente: null, rotacaoNorteDeg: null, latitudeGraus: -19.9 }, s, { automaticos: false }).regras.filter((x) => x.estado === 'VIOLADA' && x.regra.severidade === 'ERRO' && x.regra.escopo === 'AMBIENTE').length),
+    );
+    expect(melhor).toBe(0);
+  });
+});
+

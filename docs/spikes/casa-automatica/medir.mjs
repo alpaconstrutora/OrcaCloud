@@ -57,7 +57,8 @@ for (const graus of [0, 30]) {
   const an = p.ancoras;
   conferir(an.caixaDaguaL > 0 && an.caixaDeGordura, `${t} caixa d'água de ${an.caixaDaguaL} L e caixa de gordura`);
   conferir(an.vagas === an.vagasPedidas && an.vagasNaGaragem === an.vagasPedidas, `${t} ${an.vagasNaGaragem} de ${an.vagasPedidas} vagas dentro da garagem`);
-  console.log(`   aquecedor ${t}: ${an.aquecedor ? 'lançado' : 'não (ver pendência)'}`);
+  // F6b: na casa estreita, a cozinha tem janela (parede externa) — e por isso o aquecedor tem onde ficar.
+  conferir(!p.pendencias.some((x) => /Cozinha exige/.test(x)) && an.aquecedor, `${t} a cozinha tem parede externa e o aquecedor foi lançado`);
   conferir(p.ambientesAtendidos === p.ambientesPedidos, `${t} ambientes do programa atendidos: ${p.ambientesAtendidos} de ${p.ambientesPedidos}`);
   conferir(p.ambientesNomeados >= p.ambientesPedidos, `${t} ambientes nomeados no desenho: ${p.ambientesNomeados} (nenhum fundido)`);
   conferir(p.aberturasCriadas === p.aberturasPedidas, `${t} aberturas: ${p.aberturasCriadas} criadas de ${p.aberturasPedidas} pedidas`);

@@ -19,6 +19,7 @@ Sessão f3b9bc19 · 14/10/2026. A segunda mensagem chegou assim, terminando em v
 | 14/10/2026 | Esgoto | Hipótese do estudo "há rede pública" (padrão sim); sem rede → tanque séptico + filtro + sumidouro |
 | 14/10/2026 | Plano | Aprovado ("pode seguir" a cada fase) |
 | 15/10/2026 | O E6.2 fatia a faixa íntima com uma profundidade só (banheiro 0,80 × 5,75 m) — corrigir antes da F4? | **Corrigir agora, fase nova F3b** |
+| 15/10/2026 | Na casa estreita, serviço, lavabo e às vezes a cozinha ficam sem parede externa — corrigir antes da F7? | **Corrigir agora, fase nova F6b** |
 
 ## Contexto
 
@@ -130,6 +131,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F4 — estrutura (ver "Registro da F4")
 - [x] F5 — telhado (ver "Registro da F5")
 - [x] F6 — peças-âncora + rede pública (ver "Registro da F6")
+- [x] F6b — cozinha, serviço e lavabo com parede externa na casa estreita (decisão de 15/10; ver "Registro da F6b" — cozinha resolvida, serviço/lavabo em parte)
 - [ ] F7 — mobiliário + louças com pontos
 - [ ] F8 — hidro encadeada
 - [ ] F9 — elétrica + climatização
@@ -492,4 +494,55 @@ Provas:
   fora e as 2 vagas na garagem; âncoras desligadas; premissas hidro do estudo.
 - Harness: o portão confere caixa, caixa de gordura e vagas dentro da garagem.
 - 33 arquivos dependentes, 219 testes; typecheck limpo.
+
+## Registro da F6b (15/10/2026)
+
+Pedido: *"Corrigir o layout agora (nova fase F6b)"* (cozinha, serviço e lavabo sem parede externa na casa
+estreita).
+
+**Diagnóstico.** Com a garagem em fila tomando a lateral esquerda, o resto da frente só tem a rua e UMA
+lateral como fachada. O treemap empilha LINHAS paralelas à rua, e em cada linha só o último cômodo toca
+a lateral.
+
+O que mudou em `utils/blueprintGerador.ts`:
+- **Frente em linhas OU em colunas** (`Plano.frenteEmColunas`). Em colunas, todos os cômodos da coluna
+  encostada na lateral têm fachada. Sementes pares partem de colunas, ímpares de linhas, e o
+  recozimento pode trocar (`fatiar`: o mesmo treemap com os eixos trocados). Vale ao lado da garagem,
+  na linha de trás e na faixa sem garagem.
+- **Pesos da função objetivo na ordem da lei.** Sem lado externo, quem exige ILUMINAÇÃO (dormitório,
+  cozinha) passou de 6 para 15, acima da PREFERÊNCIA de a sala dar para a rua (12). Antes, o
+  recozimento preferia uma cozinha sem janela a tirar a sala da frente. A falta de ventilação ficou em
+  5: com 10, a cozinha voltou a ficar sem janela num lote e o apartamento voltou a violar
+  (medido e descartado).
+- **Janela em mais de um lado** quando a do melhor lado não cobre a fração exigida.
+- **A porta de entrada vai para a ponta da fachada.** No meio, ela partia a fachada da sala em dois
+  trechos curtos e a janela de 1/6 não cabia (sala de 33 m² do apartamento com 2 m² de janela).
+
+Medido em 8 lotes do orquestrador (12 × 30 reto e a 30°, 15 × 25, 12 × 30 com 1 e 3 vagas, 15 × 30
+R1-B, 10 × 30 2Q, 14 × 28 R1-A):
+
+| | Regras | Aquecedor sem lugar | Sem parede externa | Cozinha sem janela |
+|---|---|---|---|---|
+| F6 | 3 | 2 | 9 | 2 |
+| **F6b** | 3 | **0** | **6** | **0** |
+
+Por formato (melhor de 8 sementes): 3 quartos, 2 quartos, apartamentos 2Q e 3Q e a semente: **0 nos
+3 formatos**. 4 quartos: 6 / 2 / 0.
+
+**O que fica em aberto (dito):**
+- No lote de referência 12 × 30, **área de serviço e lavabo** ainda no miolo (sem ventilação natural).
+  A geometria (casa de 9 m, garagem em fila) não dá fachada a todos. Lavabo admite exaustão mecânica;
+  a área de serviço sai como pendência SEM_SOLUCAO.
+- R1-B 15 × 30: área de serviço com 1,40 m (pede 1,50) e dormitório com 2,33 m (pede 2,40). As áreas
+  a 85 % deixam os cômodos no limite.
+- R1-A 14 × 28: escritório sem janela.
+- **Observação do kernel (não é da F6b):** com a estrutura lançada, o pilar no encontro de paredes
+  ("cede sobreposição") pode criar um micro-ambiente (0,001 m²; a laje o pula: "ambiente com menos de
+  0,5 m²"). Sem a estrutura, 9 lotes medidos sem lasca, sem parede oblíqua e sem parede fora da malha.
+
+Provas:
+- `blueprintCasaAutomatica.test.ts`: lote reto e a 30° com a cozinha com parede externa, o aquecedor
+  lançado e 0 regras. Com o gerador anterior, falha nos dois.
+- `blueprintGerador.test.ts`: apartamento 3 quartos com 0 nos 3 formatos.
+- Harness: o portão confere a cozinha com fachada e o aquecedor.
 

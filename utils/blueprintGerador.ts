@@ -306,6 +306,23 @@ interface Plano {
   frente: ItemPlanejado[];
   fundo: ItemPlanejado[];
   corredor: ItemPlanejado | null;
+  /**
+   * F6b (casa automática, 15/10/2026): a frente fatiada em COLUNAS (perpendiculares à rua) em vez de linhas.
+   * Ao lado de uma garagem em fila, o resto da frente só tem a rua e UMA lateral como fachada: em linhas, só o
+   * último de cada linha a toca, e cozinha, serviço e lavabo caíam no miolo; em colunas, todos os da última
+   * coluna a tocam. O recozimento escolhe — a função objetivo já pune quem fica sem fachada.
+   */
+  frenteEmColunas?: boolean;
+}
+
+/** O treemap em LINHAS (paralelas à frente) ou em COLUNAS (o mesmo, com os eixos trocados). */
+function fatiar(itens: readonly ItemPlanejado[], W: number, D: number, y0: number, emColunas: boolean, hip: HipotesesDoGerador): Map<ItemPlanejado, CaixaCanonica> {
+  if (!emColunas) return treemapEmFaixas(itens, W, D, y0, false, hip);
+  // Trocados: a "largura" do treemap corre ao longo de y (o fundo) e as "linhas" empilham ao longo de x — cada
+  // coluna vai da rua para dentro; a 1ª fica à esquerda e o 1º item de cada coluna encosta na rua.
+  const out = new Map<ItemPlanejado, CaixaCanonica>();
+  for (const [k, b] of treemapEmFaixas(itens, D, W, 0, false, hip)) out.set(k, { x0: b.y0, x1: b.y1, y0: y0 + b.x0, y1: y0 + b.x1 });
+  return out;
 }
 
 /** Treemap em faixas (ordem preservada): itens em linhas paralelas à frente, dentro de uma faixa W × D. */
@@ -531,13 +548,13 @@ function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, p
       const atras = daFrente.filter((t) => !aoLado.includes(t));
       if (aoLado.length) for (const [k, v] of treemapEmFaixas(aoLado, W - x0, caixaDaGaragem.y1, 0, false, hip)) out.set(k, { x0: v.x0 + x0, y0: v.y0, x1: v.x1 + x0, y1: v.y1 });
       else caixaDaGaragem.x1 = W; // nada coube ao lado: a garagem fica com a linha da rua inteira
-      if (atras.length) for (const [k, v] of treemapEmFaixas(atras, W, dFrente - caixaDaGaragem.y1, caixaDaGaragem.y1, false, hip)) out.set(k, v);
+      if (atras.length) for (const [k, v] of fatiar(atras, W, dFrente - caixaDaGaragem.y1, caixaDaGaragem.y1, !!plano.frenteEmColunas, hip)) out.set(k, v);
       else caixaDaGaragem.y1 = dFrente;
     } else {
       // O resto da frente ao lado da garagem, na mesma profundidade da faixa.
-      for (const [k, v] of treemapEmFaixas(daFrente, W - x0, dFrente, 0, false, hip)) out.set(k, { x0: v.x0 + x0, y0: v.y0, x1: v.x1 + x0, y1: v.y1 });
+      for (const [k, v] of fatiar(daFrente, W - x0, dFrente, 0, !!plano.frenteEmColunas, hip)) out.set(k, { x0: v.x0 + x0, y0: v.y0, x1: v.x1 + x0, y1: v.y1 });
     }
-  } else if (daFrente.length) for (const [k, v] of treemapEmFaixas(daFrente, W, dFrente, 0, false, hip)) out.set(k, v);
+  } else if (daFrente.length) for (const [k, v] of fatiar(daFrente, W, dFrente, 0, !!plano.frenteEmColunas, hip)) out.set(k, v);
   if (plano.corredor) out.set(plano.corredor, { x0: 0, y0: dFrente, x1: W, y1: dFrente + dCorredor });
   for (const [k, v] of fundo.caixas) out.set(k, v);
   return out;
@@ -593,7 +610,10 @@ function objetivo(plano: Plano, caixas: Map<ItemPlanejado, CaixaCanonica>, W: nu
     }
     const lados = ladosExternosDe(c, W, D);
     if (t.item.exigeFachada && lados.length === 0) J += 8;
-    if (t.item.exigeIluminacao && lados.length === 0) J += 6;
+    // F6b: sem lado externo, quem exige ILUMINAÇÃO (dormitório, cozinha) fica sem janela — exigência de código de
+    // obras. Pesava 6, menos que a PREFERÊNCIA de a sala dar para a rua (12): o recozimento preferia uma cozinha
+    // sem janela a tirar a sala da frente. Agora pesa mais.
+    if (t.item.exigeIluminacao && lados.length === 0) J += 15;
     // F6 (15/10/2026): quem só exige VENTILAÇÃO (serviço, lavabo, banheiro, garagem) não pesava nada sem lado
     // externo — com a garagem num canto da fachada, o serviço e o lavabo iam para o miolo e o aquecedor e a
     // caixa de gordura ficavam sem parede externa.
@@ -656,7 +676,7 @@ function itensPlanejados(programa: Programa, hip: HipotesesDoGerador): { frente:
 }
 
 function recozer(plano: Plano, W: number, D: number, programa: Programa, frente: LadoDaFrente, rotacaoNorteDeg: number | null, corredorMm: number, iteracoes: number, rnd: () => number, hip: HipotesesDoGerador): { plano: Plano; inicial: number; final: number } {
-  let atual: Plano = { frente: [...plano.frente], fundo: [...plano.fundo], corredor: plano.corredor };
+  let atual: Plano = { frente: [...plano.frente], fundo: [...plano.fundo], corredor: plano.corredor, frenteEmColunas: plano.frenteEmColunas };
   let J = objetivo(atual, caixasDoPlano(atual, W, D, corredorMm, programa, hip), W, D, programa, frente, rotacaoNorteDeg, hip);
   const inicial = J;
   let melhor = atual;
@@ -664,9 +684,12 @@ function recozer(plano: Plano, W: number, D: number, programa: Programa, frente:
   const T0 = Math.max(1, J) / 2;
   for (let it = 0; it < iteracoes; it++) {
     const T = T0 * (1 - it / iteracoes) + 0.01;
-    const cand: Plano = { frente: [...atual.frente], fundo: [...atual.fundo], corredor: atual.corredor };
+    const cand: Plano = { frente: [...atual.frente], fundo: [...atual.fundo], corredor: atual.corredor, frenteEmColunas: atual.frenteEmColunas };
     const tipo = rnd();
-    if (tipo < 0.45 && cand.frente.length > 1) {
+    if (tipo < 0.08) {
+      // F6b: linhas ⇄ colunas na frente.
+      cand.frenteEmColunas = !cand.frenteEmColunas;
+    } else if (tipo < 0.45 && cand.frente.length > 1) {
       const i = Math.floor(rnd() * cand.frente.length);
       const j = Math.floor(rnd() * cand.frente.length);
       [cand.frente[i], cand.frente[j]] = [cand.frente[j], cand.frente[i]];
@@ -895,6 +918,8 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     frente: [...embaralhar(base.frente.filter((i) => i.zona === 'SOCIAL')), ...embaralhar(base.frente.filter((i) => i.zona === 'SERVICO'))],
     fundo: embaralhar(base.fundo),
     corredor: base.corredor,
+    // F6b: as sementes pares partem da frente em colunas, as ímpares em linhas — as 8 tentadas exploram os dois.
+    frenteEmColunas: semente % 2 === 0,
   };
   const { plano, inicial, final } = recozer(inicialDoPlano, W, D, programa, frente, entrada.rotacaoNorteDeg, hip.larguraCorredorMm, hip.iteracoes, rnd, hip);
   decisoes.push(`Recozimento simulado: ${hip.iteracoes} iterações com a semente ${semente}; função objetivo ${f2(inicial)} → ${f2(final)} (largura mínima, proporção, fachada e sol de quem exige, matriz de proximidade, privacidade).`);
@@ -1019,13 +1044,15 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     return null;
   };
   const reservar = (w: Wall, off: number, largura: number) => ocupados.set(w.id, [...(ocupados.get(w.id) ?? []), { ini: off, fim: off + largura }]);
-  const porta = (seg: { a: Point; b: Point }, largura: number): Command | null => {
+  const porta = (seg: { a: Point; b: Point }, largura: number, noCanto = false): Command | null => {
     const w = paredeDoSegmento(paredes(), seg.a, seg.b);
     if (!w) return null;
     const meio = point((seg.a.x + seg.b.x) / 2, (seg.a.y + seg.b.y) / 2);
     const lo = Math.min(offsetNaParede(w, seg.a), offsetNaParede(w, seg.b)) + FOLGA;
     const hi = Math.max(offsetNaParede(w, seg.a), offsetNaParede(w, seg.b)) - FOLGA;
-    const off = encaixar(w, offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
+    // F6b: a porta de ENTRADA vai para a ponta da fachada — no meio, partia a fachada da sala em dois trechos
+    // curtos e a janela (1/6 do piso) não cabia em nenhum (sala de 33 m² com 2 m² de janela).
+    const off = encaixar(w, noCanto ? lo : offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
     if (off === null) return null;
     reservar(w, off, largura);
     return { type: 'AddOpening', wallId: w.id, wallUid: w.uid, kind: 'door', offsetMm: off, widthMm: largura, heightMm: hip.alturaPortaMm, sillMm: 0 };
@@ -1074,7 +1101,7 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   const entradaEm = [sala, ...ambientes.filter((a) => a.zona === 'SOCIAL' && a !== sala), corredor, ...ambientes].find((a) => !!trechoDaFrente(a ?? null)) ?? null;
   if (entradaEm) {
     const seg = trechoDaFrente(entradaEm)!;
-    const cmd = porta(seg, hip.larguraEntradaMm);
+    const cmd = porta(seg, hip.larguraEntradaMm, true);
     if (cmd) {
       aberturas.push(cmd);
       decisoes.push(`Entrada de ${f2(hip.larguraEntradaMm / 1000)} m pela frente, em ${entradaEm.nome}.`);
@@ -1094,8 +1121,7 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     }
     // Prefere o lado mais ao norte (sol de inverno no hemisfério sul); desempate pelo comprimento.
     const az = (l: LadoDaFrente) => ({ N: 0, L: 90, S: 180, O: 270 })[l];
-    const escolhido = [...ladosExt].sort((p, q) => Math.min(az(p.lado), 360 - az(p.lado)) - Math.min(az(q.lado), 360 - az(q.lado)) || Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y) - Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y))[0];
-    const comprimento = Math.hypot(escolhido.b.x - escolhido.a.x, escolhido.b.y - escolhido.a.y);
+    const porPreferencia = [...ladosExt].sort((p, q) => Math.min(az(p.lado), 360 - az(p.lado)) - Math.min(az(q.lado), 360 - az(q.lado)) || Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y) - Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y));
     const banheiro = a.item.uso === 'BANHEIRO' || a.item.uso === 'LAVABO';
     const alturaDaJanela = banheiro ? 600 : hip.janela.alturaMm;
     // F3b: a janela cobre a fração mínima do piso (1/6 habitável, 1/8 banheiro/cozinha — as regras semente),
@@ -1104,32 +1130,41 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     const tipo = TIPO_NBR5410_DO_USO[a.item.uso];
     const fracao = tipo === 'SALA_DORMITORIO' ? hip.iluminacaoMinima.habitavel : tipo === 'BANHEIRO' || tipo === 'COZINHA_SERVICO' ? hip.iluminacaoMinima.servico : 0;
     const pisoUtilMm2 = Math.max(0, a.ret.x1 - a.ret.x0 - hip.espessuraInternaMm) * Math.max(0, a.ret.y1 - a.ret.y0 - hip.espessuraInternaMm);
-    const pelaNorma = Math.ceil((pisoUtilMm2 * fracao) / alturaDaJanela / hip.malhaMm) * hip.malhaMm;
-    const estetica = banheiro ? 600 : Math.max(hip.janela.minMm, Math.min(hip.janela.maxMm, snap(comprimento * hip.janela.fracaoDoLado, hip.malhaMm)));
-    const desejada = Math.min(Math.max(estetica, pelaNorma), Math.floor((comprimento - 400) / hip.malhaMm) * hip.malhaMm);
-    if (desejada < 600) continue;
-    const w = paredeDoSegmento(paredes(), escolhido.a, escolhido.b);
-    if (!w) continue;
-    const meio = point((escolhido.a.x + escolhido.b.x) / 2, (escolhido.a.y + escolhido.b.y) / 2);
-    const lo = Math.min(offsetNaParede(w, escolhido.a), offsetNaParede(w, escolhido.b)) + FOLGA;
-    const hi = Math.max(offsetNaParede(w, escolhido.a), offsetNaParede(w, escolhido.b)) - FOLGA;
-    // F3b: a maior que cabe ao lado do que já está na parede (a porta de entrada na fachada da sala): desce de
-    // 250 em 250 mm até 0,60 m — desistir da janela inteira, como era, deixava a sala sem janela nenhuma.
-    let largura = desejada;
-    let off = encaixar(w, offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
-    while (off === null && largura - 250 >= 600) {
-      largura -= 250;
-      off = encaixar(w, offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
+    // F6b (15/10/2026): JANELA EM MAIS DE UM LADO. Uma janela só, no melhor lado, deixava a sala de 33 m² do
+    // apartamento com 2 m² (a porta de entrada divide a fachada; 1/6 pede 5,6). Agora: no melhor lado, e
+    // enquanto faltar área, no lado externo seguinte. Os lados seguintes só entram por FALTA (não por estética).
+    let faltaMm2 = pisoUtilMm2 * fracao;
+    let algumaJanela = false;
+    for (const [n, escolhido] of porPreferencia.entries()) {
+      if (n > 0 && faltaMm2 <= 0) break;
+      const comprimento = Math.hypot(escolhido.b.x - escolhido.a.x, escolhido.b.y - escolhido.a.y);
+      const pelaNorma = Math.ceil(Math.max(0, faltaMm2) / alturaDaJanela / hip.malhaMm) * hip.malhaMm;
+      const estetica = n > 0 ? 0 : banheiro ? 600 : Math.max(hip.janela.minMm, Math.min(hip.janela.maxMm, snap(comprimento * hip.janela.fracaoDoLado, hip.malhaMm)));
+      const desejada = Math.min(Math.max(estetica, pelaNorma, 600), Math.floor((comprimento - 400) / hip.malhaMm) * hip.malhaMm);
+      if (desejada < 600) continue;
+      const w = paredeDoSegmento(paredes(), escolhido.a, escolhido.b);
+      if (!w) continue;
+      const meio = point((escolhido.a.x + escolhido.b.x) / 2, (escolhido.a.y + escolhido.b.y) / 2);
+      const lo = Math.min(offsetNaParede(w, escolhido.a), offsetNaParede(w, escolhido.b)) + FOLGA;
+      const hi = Math.max(offsetNaParede(w, escolhido.a), offsetNaParede(w, escolhido.b)) - FOLGA;
+      // F3b: a maior que cabe ao lado do que já está na parede (a porta de entrada na fachada da sala): desce de
+      // 250 em 250 mm até 0,60 m — desistir da janela inteira, como era, deixava a sala sem janela nenhuma.
+      let largura = desejada;
+      let off = encaixar(w, offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
+      while (off === null && largura - 250 >= 600) {
+        largura -= 250;
+        off = encaixar(w, offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
+      }
+      if (off === null) continue;
+      // Sem aviso quando ainda falta área: a estimativa do piso útil é conservadora e o aviso saía com a regra de
+      // iluminação CONFORME. Quem acusa é a regra (`sem-iluminacao-*`), pela área útil de verdade.
+      reservar(w, off, largura);
+      aberturas.push({ type: 'AddOpening', wallId: w.id, wallUid: w.uid, kind: 'window', offsetMm: off, widthMm: largura, heightMm: alturaDaJanela, sillMm: banheiro ? 1600 : hip.janela.peitorilMm });
+      janelas.push(`${a.nome} (${escolhido.lado})`);
+      faltaMm2 -= largura * alturaDaJanela;
+      algumaJanela = true;
     }
-    if (off === null) {
-      avisos.push(`${a.nome}: não coube janela no lado ${escolhido.lado} (a porta ocupa o trecho).`);
-      continue;
-    }
-    // Sem aviso aqui quando `pelaNorma > largura`: a estimativa do piso útil é conservadora e o aviso saía com a
-    // regra de iluminação CONFORME. Quem acusa é a regra (`sem-iluminacao-*`), pela área útil de verdade.
-    reservar(w, off, largura);
-    aberturas.push({ type: 'AddOpening', wallId: w.id, wallUid: w.uid, kind: 'window', offsetMm: off, widthMm: largura, heightMm: alturaDaJanela, sillMm: banheiro ? 1600 : hip.janela.peitorilMm });
-    janelas.push(`${a.nome} (${escolhido.lado})`);
+    if (!algumaJanela) avisos.push(`${a.nome}: não coube janela na parede externa (a porta ocupa o trecho).`);
   }
   aplicar(aberturas);
   if (janelas.length) decisoes.push(`Janelas na fachada de quem exige, preferindo o norte: ${janelas.join(', ')}.`);

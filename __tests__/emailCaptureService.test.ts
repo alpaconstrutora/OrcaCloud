@@ -16,11 +16,12 @@ vi.mock('../lib/supabase', () => {
                 update: (payload: unknown) => (chamadas.push({ op: 'update', payload }), { eq: () => fim }),
             }),
             rpc: async (rpc: string, args: unknown) => (chamadas.push({ op: 'rpc', rpc, args }), { data: null, error: null }),
+            functions: { invoke: async (nome: string, opts: { body: unknown }) => (chamadas.push({ op: 'fn', rpc: nome, args: opts.body }), { data: { busca: { id: 'b1' } }, error: null }) },
         },
     };
 });
 
-import { emailCaptureService } from '../services/emailCaptureService';
+import { emailCaptureService, progressoDaBusca } from '../services/emailCaptureService';
 
 const PERMITIDAS = ['organization_id', 'account_id', 'supplier_id', 'nome', 'tipo', 'email', 'dominio', 'palavras_chave', 'importacao', 'exigir_dmarc', 'ativo'];
 
@@ -51,5 +52,25 @@ describe('definirSenhaPdf — pela RPC, vazio remove', () => {
             { op: 'rpc', rpc: 'email_capture_definir_senha_pdf', args: { p_sender: 's1', p_senha: '12345' } },
             { op: 'rpc', rpc: 'email_capture_definir_senha_pdf', args: { p_sender: 's1', p_senha: '' } },
         ]);
+    });
+});
+
+describe('busca por período', () => {
+    it('iniciar, continuar e cancelar chamam a sincronização com o modo certo', async () => {
+        await emailCaptureService.buscarPeriodo('c1', '2026-09-01', '2026-09-30');
+        await emailCaptureService.continuarBusca('c1');
+        await emailCaptureService.cancelarBusca('b1');
+        expect(chamadas).toEqual([
+            { op: 'fn', rpc: 'email-capture-sync', args: { modo: 'periodo', accountId: 'c1', de: '2026-09-01', ate: '2026-09-30' } },
+            { op: 'fn', rpc: 'email-capture-sync', args: { modo: 'periodo', accountId: 'c1' } },
+            { op: 'fn', rpc: 'email-capture-sync', args: { modo: 'cancelar_busca', buscaId: 'b1' } },
+        ]);
+    });
+
+    it('progresso: null antes de contar, 100 quando conclui ou não há e-mails', () => {
+        expect(progressoDaBusca({ status: 'pendente', total_mensagens: null, mensagens_processadas: 0 })).toBeNull();
+        expect(progressoDaBusca({ status: 'em_andamento', total_mensagens: 200, mensagens_processadas: 50 })).toBe(25);
+        expect(progressoDaBusca({ status: 'em_andamento', total_mensagens: 0, mensagens_processadas: 0 })).toBe(100);
+        expect(progressoDaBusca({ status: 'concluida', total_mensagens: 10, mensagens_processadas: 3 })).toBe(100);
     });
 });

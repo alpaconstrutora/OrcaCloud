@@ -71,6 +71,40 @@ export interface MensagemCaptura {
     created_at: string;
 }
 
+export type StatusBusca = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada' | 'erro';
+
+/** Busca retroativa de e-mails por período numa caixa (email_capture_buscas). */
+export interface BuscaPeriodo {
+    id: string;
+    organization_id: string;
+    account_id: string;
+    data_de: string;
+    data_ate: string;
+    status: StatusBusca;
+    total_mensagens: number | null;
+    mensagens_processadas: number;
+    criados: number;
+    duplicados: number;
+    ignorados: number;
+    erros: number;
+    ultimo_erro: string | null;
+    pedida_por: string | null;
+    created_at: string;
+    concluida_em: string | null;
+}
+
+export const ROTULO_STATUS_BUSCA: Record<StatusBusca, string> = {
+    pendente: 'Na fila', em_andamento: 'Em andamento', concluida: 'Concluída', cancelada: 'Cancelada', erro: 'Com erro',
+};
+
+/** Percentual de uma busca (null enquanto ninguém contou as mensagens do período). */
+export function progressoDaBusca(b: Pick<BuscaPeriodo, 'status' | 'total_mensagens' | 'mensagens_processadas'>): number | null {
+    if (b.status === 'concluida') return 100;
+    if (b.total_mensagens == null) return null;
+    if (b.total_mensagens === 0) return 100;
+    return Math.min(100, Math.round((b.mensagens_processadas / b.total_mensagens) * 100));
+}
+
 const COLUNAS_CONTA = 'id, organization_id, provedor, host, porta, usuario, status, modo, data_inicial, modo_piloto, last_sync_at, ultimo_erro, created_by_email, created_at';
 const COLUNAS_REMETENTE = 'id, organization_id, account_id, supplier_id, nome, tipo, email, dominio, palavras_chave, importacao, exigir_dmarc, ativo, pdf_senha_atualizada_em, created_at';
 const COLUNAS_MENSAGEM = 'id, organization_id, account_id, remetente, assunto, data_email, documento_nome, resultado, motivo, erro, tentativas, boleto_id, auth_results, created_at';
@@ -92,6 +126,8 @@ async function erroDaFunction(error: unknown, padrao: string): Promise<Error> {
     const corpo = await ctx?.json?.().catch(() => null) as { error?: string; motivo?: string } | null;
     return new Error(corpo?.error ?? corpo?.motivo ?? (error as Error)?.message ?? padrao);
 }
+
+const COLUNAS_BUSCA = 'id, organization_id, account_id, data_de, data_ate, status, total_mensagens, mensagens_processadas, criados, duplicados, ignorados, erros, ultimo_erro, pedida_por, created_at, concluida_em';
 
 async function chamar<T>(nome: 'email-capture-accounts' | 'email-capture-sync', body: Record<string, unknown>, padrao: string): Promise<T> {
     const { data, error } = await supabase.functions.invoke(nome, { body });
@@ -157,6 +193,32 @@ export const emailCaptureService = {
 
     async sincronizarAgora(accountId: string): Promise<{ mensagens: number; criados: number; duplicados: number; ignorados: number; erros: number }> {
         return chamar('email-capture-sync', { modo: 'agora', accountId }, 'Não foi possível sincronizar a caixa.');
+    },
+
+    /** Buscas por período mais recentes (ativas primeiro na tela). */
+    async listarBuscas(organizationId: string | null, limite = 20): Promise<BuscaPeriodo[]> {
+        let q = supabase.from('email_capture_buscas').select(COLUNAS_BUSCA).order('created_at', { ascending: false }).limit(limite);
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q;
+        if (error) throw error;
+        return (data ?? []) as BuscaPeriodo[];
+    },
+
+    /** Cria a busca do período (de/até AAAA-MM-DD) e já processa a primeira parte. */
+    async buscarPeriodo(accountId: string, de: string, ate: string): Promise<BuscaPeriodo | null> {
+        const r = await chamar<{ busca: BuscaPeriodo | null }>('email-capture-sync', { modo: 'periodo', accountId, de, ate }, 'Não foi possível iniciar a busca.');
+        return r.busca;
+    },
+
+    /** Processa a próxima parte da busca ativa da caixa. */
+    async continuarBusca(accountId: string): Promise<BuscaPeriodo | null> {
+        const r = await chamar<{ busca: BuscaPeriodo | null }>('email-capture-sync', { modo: 'periodo', accountId }, 'Não foi possível continuar a busca.');
+        return r.busca;
+    },
+
+    async cancelarBusca(buscaId: string): Promise<BuscaPeriodo> {
+        const r = await chamar<{ busca: BuscaPeriodo }>('email-capture-sync', { modo: 'cancelar_busca', buscaId }, 'Não foi possível cancelar a busca.');
+        return r.busca;
     },
 
     /** Configuração que o gestor altera direto (a RLS só deixa gestor; GRANT só nestas colunas). */

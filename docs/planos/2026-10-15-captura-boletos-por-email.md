@@ -824,3 +824,19 @@ Atualizado em 15/10/2026, ao fim da sessão de implementação.
 - [x] S4 sincronização publicada: 401 sem header e com token falso; execução real 200 (1 conta, 0 reprocessados — nenhuma senha ainda). `abrirPdf` provado com PDF criptografado de verdade (jsPDF, senha 12345): sem senha e senha errada → protegido sem leitura; senha de OUTRO remetente da caixa → lê linha, valor e CNPJ.
 - [x] S5 tela: typecheck e `check-ui-standard` limpos; vista em produção com login (domínio em `0feacdb`): coluna "Senha do PDF" e campo "Senha dos PDFs" no remetente Energisa, sem erro de console nem HTTP 4xx/5xx; CI do commit `5b986196` verde.
 - [ ] Prova de ponta a ponta com o boleto nº 1423 — **depende do usuário** cadastrar a senha do PDF da Energisa no remetente.
+
+## Pedido posterior — 15/10/2026 (busca por período)
+
+> atualmente o app busca por email somente do dia ou consigo buscar por data especifica ou periodo especifico?
+
+Resposta: hoje só "a partir de uma data" (definida ao conectar), sem data final, sem editar pela tela, e
+o marcador (`last_uid`) impede reler e-mails anteriores à última leitura. Proposta: ação "Buscar período".
+Resposta do usuário, literal:
+
+> sim
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| P1 | `supabase/migrations/aplicar_20271015130000_email_capture_buscas.sql` | tabela `email_capture_buscas` (período, cursor, contadores, status); uma ativa por caixa; membro só lê | aplicada 2×; travas de migration verdes; anon não lê |
+| P2 | `supabase/functions/email-capture-sync/index.ts` | modo `periodo` (cria e avança a busca), `cancelar_busca`; o cron continua busca ativa; leitura por `SINCE de` + `BEFORE até+1`, cursor próprio — o `last_uid` da leitura automática não muda | 401 sem header; busca real de 1 dia na caixa da ALPA conclui sem boleto duplicado |
+| P3 | `services/emailCaptureService.ts` + `components/boletos/EmailCaptureBuscaSheet.tsx` + `EmailCapturaConfig.tsx` | botão "Buscar período" na caixa; painel com De/Até, progresso que avança sozinho enquanto aberto, cancelar; seção "Buscas por período" | harness + produção com login |

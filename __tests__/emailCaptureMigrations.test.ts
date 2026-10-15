@@ -23,6 +23,7 @@ const tabelas = ler('aplicar_20271015110000_email_capture_tabelas.sql');
 const rpcs = ler('aplicar_20271015110100_email_capture_rpcs.sql');
 const cron = ler('aplicar_20271015110200_email_capture_cron.sql');
 const senhaPdf = ler('aplicar_20271015120000_email_capture_senha_pdf.sql');
+const buscas = ler('aplicar_20271015130000_email_capture_buscas.sql');
 
 describe('tabelas da captura', () => {
     it('RLS ligada nas três tabelas', () => {
@@ -120,5 +121,21 @@ describe('senha dos PDFs por remetente (15/10/2026)', () => {
     it('excluir o remetente apaga a senha do cofre (gatilho com REVOKE)', () => {
         expect(senhaPdf).toMatch(/AFTER DELETE ON public\.email_capture_senders/);
         expect(senhaPdf).toContain('REVOKE EXECUTE ON FUNCTION public.fn_email_capture_sender_apaga_senha() FROM PUBLIC, anon, authenticated;');
+    });
+});
+
+describe('busca por período (15/10/2026)', () => {
+    it('RLS ligada; membro só LÊ; criar/avançar/cancelar é da Edge Function', () => {
+        expect(buscas).toMatch(/ALTER TABLE public\.email_capture_buscas ENABLE ROW LEVEL SECURITY/);
+        expect(buscas).toContain('REVOKE ALL ON TABLE public.email_capture_buscas FROM anon, authenticated;');
+        expect(buscas).toContain('GRANT SELECT ON TABLE public.email_capture_buscas TO authenticated;');
+        expect(buscas).not.toMatch(/GRANT[^;]*(INSERT|UPDATE|DELETE)[^;]*email_capture_buscas TO authenticated/);
+        expect(buscas).toMatch(/FOR SELECT TO authenticated\s+USING \(public\.is_org_member\(organization_id\)\)/);
+    });
+
+    it('uma busca ativa por caixa; período válido; presa à caixa da mesma org', () => {
+        expect(buscas).toMatch(/ON public\.email_capture_buscas \(account_id\) WHERE status IN \('pendente', 'em_andamento'\)/);
+        expect(buscas).toContain('CHECK (data_de <= data_ate)');
+        expect(buscas).toMatch(/FOREIGN KEY \(account_id, organization_id\)\s+REFERENCES public\.email_capture_accounts \(id, organization_id\)/);
     });
 });

@@ -14,8 +14,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Mail, Plus, RefreshCw, KeyRound, Pause, Play, FlaskConical, Inbox, Users, History,
-    CheckCircle2, Copy as CopyIcon, AlertTriangle, Loader2,
+    CheckCircle2, Copy as CopyIcon, AlertTriangle, Loader2, CalendarSearch,
 } from 'lucide-react';
+import { SegmentedProgress } from '../ui/SegmentedProgress';
 import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
 import { KpiCard } from '../ui/KpiCard';
@@ -37,8 +38,12 @@ import {
     type RemetenteRascunho,
     type StatusConta,
     type ResultadoMensagem,
+    type BuscaPeriodo,
+    ROTULO_STATUS_BUSCA,
+    progressoDaBusca,
 } from '../../services/emailCaptureService';
 import EmailCaptureAccountSheet from './EmailCaptureAccountSheet';
+import EmailCaptureBuscaSheet from './EmailCaptureBuscaSheet';
 import EmailCaptureSenderSheet, { type FornecedorDaOrg } from './EmailCaptureSenderSheet';
 
 const COR_STATUS: Record<StatusConta, string> = {
@@ -57,10 +62,24 @@ const COLS_CONTAS: StandardTableColumn[] = [
     { key: 'status', label: 'Status', sortable: true, width: 110 },
     { key: 'modo', label: 'Remetentes lidos', sortable: true, width: 170 },
     { key: 'piloto', label: 'Piloto', sortable: true, width: 80 },
-    { key: 'data_inicial', label: 'Lê desde', sortable: true, width: 120 },
-    { key: 'last_sync_at', label: 'Última leitura', sortable: true, width: 150 },
-    { key: 'ultimo_erro', label: 'Último erro', sortable: true, width: 180 },
+    { key: 'data_inicial', label: 'Lê desde', sortable: true, width: 110 },
+    { key: 'last_sync_at', label: 'Última leitura', sortable: true, width: 140 },
+    { key: 'ultimo_erro', label: 'Último erro', sortable: true, width: 150 },
 ];
+
+const COLS_BUSCAS: StandardTableColumn[] = [
+    { key: 'caixa', label: 'Caixa', sortable: true, width: 200 },
+    { key: 'periodo', label: 'Período', sortable: true, width: 190 },
+    { key: 'status', label: 'Situação', sortable: true, width: 130 },
+    { key: 'progresso', label: 'Progresso', sortable: true, width: 190 },
+    { key: 'resultado', label: 'Resultado', sortable: false, width: 230 },
+    { key: 'pedida_por', label: 'Pedida por', sortable: true, width: 190 },
+];
+
+const COR_BUSCA: Record<BuscaPeriodo['status'], string> = {
+    pendente: 'text-blue-700', em_andamento: 'text-blue-700', concluida: 'text-emerald-700', cancelada: 'text-gray-500', erro: 'text-red-600',
+};
+const dataBR = (d: string) => d.split('-').reverse().join('/');
 
 const COLS_REMETENTES: StandardTableColumn[] = [
     { key: 'nome', label: 'Remetente', sortable: true, width: 160 },
@@ -100,6 +119,8 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
     const [contas, setContas] = useState<ContaCaptura[]>([]);
     const [remetentes, setRemetentes] = useState<RemetenteCaptura[]>([]);
     const [mensagens, setMensagens] = useState<MensagemCaptura[]>([]);
+    const [buscas, setBuscas] = useState<BuscaPeriodo[]>([]);
+    const [sheetBusca, setSheetBusca] = useState<{ aberto: boolean; conta: ContaCaptura | null }>({ aberto: false, conta: null });
     const [fornecedores, setFornecedores] = useState<FornecedorDaOrg[]>([]);
     const [carregando, setCarregando] = useState(true);
     const [erroCarga, setErroCarga] = useState<string | null>(null);
@@ -112,12 +133,15 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
         setCarregando(true);
         setErroCarga(null);
         try {
-            const [c, r, m, f] = await Promise.all([
+            const [c, r, m, f, b] = await Promise.all([
                 emailCaptureService.listarContas(orgId),
                 emailCaptureService.listarRemetentes(orgId),
                 emailCaptureService.listarMensagens(orgId),
                 supplierService.listSuppliers(orgId ?? undefined).catch(() => []),
+                // Buscas por período não podem derrubar a aba se falharem.
+                emailCaptureService.listarBuscas(orgId).catch(() => [] as BuscaPeriodo[]),
             ]);
+            setBuscas(b);
             setContas(c);
             setRemetentes(r);
             setMensagens(m);
@@ -219,6 +243,18 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
         }
     }
 
+    function buscaAtualizada(b: BuscaPeriodo) {
+        setBuscas(prev => [b, ...prev.filter(x => x.id !== b.id)]);
+    }
+
+    async function fecharBusca() {
+        setSheetBusca({ aberto: false, conta: null });
+        // O histórico ganhou linhas durante a busca: recarrega mensagens e contadores.
+        try { setMensagens(await emailCaptureService.listarMensagens(orgId)); } catch { /* fica o que tinha */ }
+    }
+
+    const buscaAtivaDa = (contaId: string) => buscas.find(b => b.account_id === contaId && (b.status === 'pendente' || b.status === 'em_andamento')) ?? null;
+
     // ─── ações dos remetentes ────────────────────────────────────────────────
     function remetenteSalvo(r: RemetenteCaptura) {
         setRemetentes(prev => prev.some(x => x.id === r.id) ? prev.map(x => (x.id === r.id ? r : x)) : [...prev, r]);
@@ -298,9 +334,13 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                         }
                     }}
                     actions={{
-                        width: 210,
+                        width: 250,
                         render: c => (
                             <div className="flex items-center justify-end gap-1.5">
+                                <ActionIconButton kind="history"
+                                    title={c.status !== 'ativa' ? 'Reative a caixa para buscar um período' : buscaAtivaDa(c.id) ? 'Ver a busca por período em andamento' : 'Buscar e-mails de um período'}
+                                    icon={<CalendarSearch className="w-4 h-4" />}
+                                    disabled={c.status !== 'ativa'} onClick={() => setSheetBusca({ aberto: true, conta: c })} />
                                 <ActionIconButton kind="history" title={c.status === 'ativa' ? 'Sincronizar agora' : 'Reative a caixa para sincronizar'}
                                     icon={sincronizando === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                                     disabled={c.status !== 'ativa' || !!sincronizando} onClick={() => sincronizar(c)} />
@@ -318,6 +358,56 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                     empty={{ icon: <Mail className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhuma caixa conectada', subtitle: 'Conecte a caixa do Gmail que recebe os boletos dos fornecedores.' }}
                 />
             </div>
+
+            {buscas.length > 0 && (
+                <div className="space-y-3">
+                    <SecaoTitulo icon={CalendarSearch} titulo="Buscas por período" resumo="Leituras retroativas pedidas nas caixas" />
+                    <StandardTable<BuscaPeriodo>
+                        storageKey="boletos:captura:buscas"
+                        columns={COLS_BUSCAS}
+                        rows={buscas}
+                        rowKey={b => b.id}
+                        maxHeight="30vh"
+                        sortValue={(k, b) => {
+                            switch (k) {
+                                case 'caixa': return caixaPorId[b.account_id] ?? '';
+                                case 'periodo': return b.data_de;
+                                case 'status': return ROTULO_STATUS_BUSCA[b.status];
+                                case 'progresso': return progressoDaBusca(b) ?? -1;
+                                default: return (b as unknown as Record<string, string | null>)[k];
+                            }
+                        }}
+                        renderCell={(k, b) => {
+                            switch (k) {
+                                case 'caixa': return <span className="block truncate text-sm font-normal text-gray-700">{caixaPorId[b.account_id] ?? '—'}</span>;
+                                case 'periodo': return <span className="text-sm font-normal text-gray-700 whitespace-nowrap">{dataBR(b.data_de)} a {dataBR(b.data_ate)}</span>;
+                                case 'status': return <span className={`text-sm font-normal ${COR_BUSCA[b.status]}`}>{ROTULO_STATUS_BUSCA[b.status]}</span>;
+                                case 'progresso': {
+                                    const pct = progressoDaBusca(b);
+                                    return pct == null ? <span className="text-sm font-normal text-gray-400">Contando…</span> : <SegmentedProgress percent={pct} tone="blue" />;
+                                }
+                                case 'resultado': return (
+                                    <span className="block truncate text-sm font-normal text-gray-600" title={b.ultimo_erro ?? undefined}>
+                                        {b.criados} criado(s) · {b.duplicados} duplicado(s){b.erros ? ` · ${b.erros} falha(s)` : ''}
+                                    </span>
+                                );
+                                case 'pedida_por': return <span className="block truncate text-sm font-normal text-gray-600">{b.pedida_por ?? '—'}</span>;
+                                default: return null;
+                            }
+                        }}
+                        actions={{
+                            width: 110,
+                            render: b => (b.status === 'pendente' || b.status === 'em_andamento') ? (
+                                <button onClick={() => setSheetBusca({ aberto: true, conta: contas.find(c => c.id === b.account_id) ?? null })}
+                                    className="whitespace-nowrap text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all">
+                                    Acompanhar
+                                </button>
+                            ) : null,
+                        }}
+                        empty={{ title: 'Nenhuma busca' }}
+                    />
+                </div>
+            )}
 
             <div className="space-y-3">
                 <SecaoTitulo icon={Users} titulo="Remetentes monitorados" resumo={`${remetentes.length} cadastrado(s)`}
@@ -441,6 +531,13 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                 organizationId={sheetConta.orgId}
                 reconectar={sheetConta.reconectar}
                 onPronta={contaPronta}
+            />
+            <EmailCaptureBuscaSheet
+                open={sheetBusca.aberto}
+                onClose={fecharBusca}
+                conta={sheetBusca.conta}
+                buscaAtiva={sheetBusca.conta ? buscaAtivaDa(sheetBusca.conta.id) : null}
+                onAtualizada={buscaAtualizada}
             />
             <EmailCaptureSenderSheet
                 open={sheetRemetente.aberto}

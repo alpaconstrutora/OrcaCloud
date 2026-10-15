@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check,
     Clock, ExternalLink, FileDown, FileText, Landmark, Loader2, RefreshCw,
@@ -20,6 +20,9 @@ import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
+import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 type InvoiceRow = Invoice & { supplierName?: string; supplierOrganizationId?: string };
 
@@ -98,6 +101,26 @@ function isOverdue(inv: InvoiceRow) {
     if (!inv.dueDate) return false;
     if (['paid', 'rejected'].includes(inv.status)) return false;
     return new Date(inv.dueDate + 'T00:00:00') < today();
+}
+
+// "Agrupar" da visão Notas — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra
+// (status efetivo: vencido e não pago aparece "Atrasado", como no StatusBadge).
+type CampoAgruparNotas = 'fornecedor' | 'origem' | 'vencimento' | 'status';
+const OPCOES_AGRUPAR_NOTAS: { value: CampoAgruparNotas; label: string }[] = [
+    { value: 'fornecedor', label: 'Fornecedor' },
+    { value: 'origem', label: 'Origem' },
+    { value: 'vencimento', label: 'Vencimento (mês)' },
+    { value: 'status', label: 'Status' },
+];
+const SEM_GRUPO_NOTAS: Record<CampoAgruparNotas, string> = { fornecedor: 'Sem fornecedor', origem: 'Sem origem', vencimento: 'Sem vencimento', status: 'Sem status' };
+const ORDEM_STATUS_NOTAS = ['pending', 'approved', 'overdue', 'paid', 'rejected'];
+function chaveDoGrupoNotas(campo: CampoAgruparNotas, inv: InvoiceRow): ChaveDeGrupo {
+    switch (campo) {
+        case 'fornecedor': return chavePorNome(inv.supplierName);
+        case 'origem': return chavePorNome((inv.notes ?? '').includes('[boleto:') ? 'Boleto' : 'Manual');
+        case 'vencimento': return chavePorMes(inv.dueDate);
+        case 'status': return isOverdue(inv) ? { key: 'overdue', label: 'Atrasado' } : { key: inv.status, label: STATUS_PT[inv.status] ?? inv.status };
+    }
 }
 
 // Padrão guia seção 8 — texto simples, sem pílula
@@ -217,6 +240,11 @@ const VISAO_LABELS: Record<Visao, string> = {
 
 export default function ContasPagarManager({ organizations }: Props) {
     const [visao, setVisao] = usePersistedState<Visao>('contasPagarManager:visao', 'parcelas');
+    // Âncora do Shift+clique da visão Notas (§10.1) — aqui em cima porque o
+    // "Agrupar" a zera quando as linhas mudam de lugar.
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+    const zerarAncora = useCallback(() => setLastCheckedIndex(null), []);
+    const agrupamento = useAgrupamento<CampoAgruparNotas>('contasPagarManager:notas:groupBy', zerarAncora);
     const [payables, setPayables] = useState<Payable[]>([]);
     // Recorte de PARCELAS após busca/status/período — reportado pelo filho, para
     // o export (abaixo) sair igual ao que a tabela mostra, não a lista inteira.
@@ -429,15 +457,33 @@ export default function ContasPagarManager({ organizations }: Props) {
         return result;
     }, [invoices, statusFilter, vencDe, vencAte, search, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection]);
 
+    const { campo: groupBy, agrupando, recolhidos } = agrupamento;
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filtered, {
+        chave: inv => chaveDoGrupoNotas(groupBy, inv),
+        semRotulo: SEM_GRUPO_NOTAS[groupBy],
+        valor: inv => inv.amount,
+        ordem: groupBy === 'status' ? ORDEM_STATUS_NOTAS : groupBy === 'vencimento' ? 'chave' : 'aparicao',
+    })), [filtered, groupBy]);
+    /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
+    const linhasNaTela = useMemo(() => (agrupando ? linhasDaTela(grupos, recolhidos) : filtered), [agrupando, grupos, recolhidos, filtered]);
+    const entradas: EntradaDaTela<InvoiceRow>[] = useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, recolhidos) : filtered.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, recolhidos, filtered],
+    );
+    /** Células de uma linha: checkbox + colunas de dado + espaçador + Ações (fixa nesta tabela). */
+    const colunasDaLinha = 1 + tableColumns.orderedVisibleColumns.length + 1 + 1;
+
     /** Só linhas ainda pagáveis (não pagas/rejeitadas) podem entrar em ação em massa. */
     const isSelectable = (inv: InvoiceRow) => !['paid', 'rejected'].includes(inv.status);
-    const selectableVisible = useMemo(() => filtered.filter(isSelectable), [filtered]);
-    // Interseção da seleção com o que está visível+pagável (poda filtros que mudaram).
+    /** Pagáveis NA TELA (sem os grupos recolhidos) — base do "selecionar todos". */
+    const selectableVisible = useMemo(() => linhasNaTela.filter(isSelectable), [linhasNaTela]);
+    // Interseção da seleção com o recorte+pagável (poda filtros que mudaram). Inclui
+    // grupo recolhido depois de marcado — é a base do lote.
     const selectedVisible = useMemo(
-        () => selectableVisible.filter(inv => selectedIds.has(inv.id)),
-        [selectableVisible, selectedIds],
+        () => filtered.filter(inv => isSelectable(inv) && selectedIds.has(inv.id)),
+        [filtered, selectedIds],
     );
-    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+    const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every(inv => selectedIds.has(inv.id));
     const selectedTotal = selectedVisible.reduce((s, i) => s + (i.amount ?? 0), 0);
 
     function toggleRow(id: string) {
@@ -448,11 +494,10 @@ export default function ContasPagarManager({ organizations }: Props) {
         });
     }
     // Seleção de intervalo com Shift+clique (ui_ux_guia_unificado.md §10.1)
-    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
     function handleRowCheck(id: string, index: number, shiftKey: boolean) {
         if (shiftKey && lastCheckedIndex !== null) {
             const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
-            const rangeIds = filtered.slice(start, end + 1).filter(isSelectable).map(inv => inv.id);
+            const rangeIds = linhasNaTela.slice(start, end + 1).filter(isSelectable).map(inv => inv.id);
             setSelectedIds(prev => new Set([...prev, ...rangeIds]));
         } else {
             toggleRow(id);
@@ -944,6 +989,17 @@ export default function ContasPagarManager({ organizations }: Props) {
                                 <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                             </div>
 
+                            {/* Agrupar — guia de UI §6.12 */}
+                            <AgruparControles
+                                opcoes={OPCOES_AGRUPAR_NOTAS}
+                                campo={groupBy}
+                                onCampo={agrupamento.setCampo}
+                                chavesDosGrupos={grupos.map(g => g.key)}
+                                algumRecolhido={recolhidos.size > 0}
+                                onAlternarTodos={agrupamento.alternarTodos}
+                                title="Agrupar as notas"
+                            />
+
                             <button
                                 onClick={() => carregar(effectiveOrgId)}
                                 className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0"
@@ -1060,7 +1116,13 @@ export default function ContasPagarManager({ organizations }: Props) {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
-                                    {filtered.map((inv, idx) => {
+                                    {entradas.map(e => {
+                                        if (e.tipo === 'grupo') return (
+                                            <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                                colSpan={colunasDaLinha} onAlternar={agrupamento.alternar} tituloTotal="Soma do valor das notas do grupo" />
+                                        );
+                                        const inv = e.item;
+                                        const idx = e.indice;
                                         const dueDate = inv.dueDate ? new Date(inv.dueDate + 'T00:00:00') : null;
                                         const overdue = isOverdue(inv);
                                         const fromBoleto = (inv.notes ?? '').includes('[boleto:');

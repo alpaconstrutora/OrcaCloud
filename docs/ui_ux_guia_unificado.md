@@ -1279,7 +1279,22 @@ ja usada nas tabelas"*. **Antes de dizer que o app "já usa" uma cor, abrir a oc
 **Referências:** `BoletoManager.tsx` (Boletos a Pagar) e `ContasReceberManager.tsx`
 (Contas a Receber, 15/10/2026 — *"implemente a mesma funcionalidade agrupamentos
 aplicada em financeiro > boletos a pagar"*). Origem do desenho: Minhas Tarefas
-(`TasksList.tsx`).
+(`TasksList.tsx`). Propagado no mesmo dia para Tributos a Pagar, Cobranças, Contas
+a Pagar (Parcelas e Notas) e a fila de Aprovação Financeira
+(`docs/planos/2026-10-15-financeiro-agrupar-propagacao.md`).
+
+**Peças compartilhadas — tela nova usa estas, não copia o markup:**
+
+| Peça | O que faz |
+|---|---|
+| `utils/agruparLinhas.ts` | `agruparLinhas` (genérico), `chavePorNome`/`chavePorMes`/`chavePorRotulo`, `linhasDaTela`, `entradasDaPagina` (cabeçalhos + linhas de uma página) |
+| `hooks/useAgrupamento.ts` | campo persistido, grupos recolhidos em memória, alternar/alternar todos/expandir; `onReorganizar` zera a âncora do Shift+clique |
+| `components/ui/Agrupamento.tsx` | `AgruparControles` (seletor + recolher/expandir todos) e `LinhaDeGrupo` |
+| `StandardTable` prop `agrupamento` | tudo acima embutido (§6.10) — a tela passa só opções, `chave`, `semRotulo`, `ordem`, `valor` |
+
+Em tabela feita à mão, o `<tbody>` itera as entradas e o corpo da linha não muda:
+`{entradas.map(e => { if (e.tipo === 'grupo') return <LinhaDeGrupo …/>; const r = e.item; … })}`.
+`BoletoManager.tsx` ainda tem o markup próprio (anterior às peças) — ao tocar nele, migrar.
 
 - **Controle:** `<select>` `h-9 pl-8 rounded-[6px] text-[13px] font-medium` com ícone
   `Layers` à esquerda, primeira opção "Agrupar" (= sem grupo), na toolbar acoplada
@@ -1308,11 +1323,19 @@ aplicada em financeiro > boletos a pagar"*). Origem do desenho: Minhas Tarefas
   está marcado no recorte, inclusive o que ficou num grupo recolhido depois de marcado.
 - Deep-link (`viewFocus`) para uma linha num grupo recolhido **expande o grupo** antes
   de rolar até ela.
+- **Com paginação (§6.7)** a página continua contando **linhas de dado** (não
+  desligar a paginação ao agrupar: Contas a Pagar › Parcelas voltaria a desenhar
+  2.000 linhas). O cabeçalho vem antes da 1ª linha do grupo na página e, se o grupo
+  começou na página anterior, repete com "(continua)"; contagem e total são do grupo
+  INTEIRO. Grupo recolhido aparece na página em que cairia. Trocar o campo volta para
+  a página 1; recolher não. O "1–100 de N" do rodapé conta as linhas visíveis.
 
 > ❌ Não agrupar no servidor nem reconsultar ao trocar o agrupamento — é recorte de
 > exibição sobre a lista que já está na tela.
-> ℹ️ Trava de tela: `__tests__/components/ContasReceberAgrupar.test.tsx` (cabeçalho,
-> recolher, seleção com grupo recolhido).
+> ℹ️ Travas: `__tests__/agruparLinhas.test.ts` (função pura, páginas que cortam
+> grupo), `components/ContasReceberAgrupar.test.tsx`, `FinanceiroAgrupar.test.tsx`
+> (Tributos, Cobranças, Notas), `ContasPagarParcelasAgrupar.test.tsx` (paginação,
+> deep-link em grupo recolhido, Shift+clique) e `StandardTableAgrupar.test.tsx`.
 
 ---
 

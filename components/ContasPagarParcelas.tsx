@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertCircle, Building2, Check, ChevronDown, Download, FileText, Loader2, MoveHorizontal, Receipt, RefreshCw, Search, Tag, Undo2, X,
 } from 'lucide-react';
@@ -17,6 +17,9 @@ import BaixaRecebivelSheet, { type DadosDaBaixa, type TituloDaBaixa } from './fi
 import { financialReceiptService, type ReciboAtivo } from '../services/financialReceiptService';
 import { mensagemResultadoBaixa } from '../utils/baixaRecebivel';
 import { numeroRecibo } from '../utils/reciboRecebimento';
+import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, contarLinhasDaTela, entradasDaPagina, linhasDaTela, type ChaveDeGrupo } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 /**
  * Rótulo de origem por `source_system`. É a coluna que responde "de onde essa
@@ -298,6 +301,39 @@ interface Props {
     logoDaOrg?: (organizationId: string) => string | null | undefined;
 }
 
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+type CampoAgrupar = 'credor' | 'origem' | 'obra' | 'centro_custo' | 'plano_contas' | 'imovel' | 'vencimento' | 'status';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'credor', label: 'Credor' },
+    { value: 'origem', label: 'Origem' },
+    { value: 'obra', label: 'Obra' },
+    { value: 'centro_custo', label: 'Centro de Custo' },
+    { value: 'plano_contas', label: 'Plano de Contas' },
+    { value: 'imovel', label: 'Imóvel' },
+    { value: 'vencimento', label: 'Vencimento (mês)' },
+    { value: 'status', label: 'Status' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = {
+    credor: 'Sem credor', origem: 'Sem origem', obra: 'Sem obra', centro_custo: 'Sem centro de custo',
+    plano_contas: 'Sem plano de contas', imovel: 'Sem imóvel', vencimento: 'Sem vencimento', status: 'Sem status',
+};
+function chaveDoGrupo(campo: CampoAgrupar, r: ParcelaRow): ChaveDeGrupo {
+    switch (campo) {
+        case 'credor': {
+            // `payableParty` devolve "—" quando não há credor: isso é ausência, não um nome.
+            const credor = r.credor_display || payableParty(r);
+            return chavePorNome(credor === '—' ? null : credor);
+        }
+        case 'origem': return chavePorNome(origemLabel(r.source_system));
+        case 'obra': return chavePorNome(r.obra_name);
+        case 'centro_custo': return chavePorNome(r.cost_center_name);
+        case 'plano_contas': return chavePorNome(r.plano_de_contas_name);
+        case 'imovel': return chavePorNome(r.imovel_label);
+        case 'vencimento': return chavePorMes(r.due_date);
+        case 'status': return chavePorRotulo(r.effective_status, STATUS_PT);
+    }
+}
+
 export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg }: Props) {
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('contasPagarParcelas:search', '');
@@ -316,6 +352,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     // nota para a RPC de rateio falharia só no uso real.
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+    const zerarAncora = useCallback(() => setLastCheckedIndex(null), []);
+    const agrupamento = useAgrupamento<CampoAgrupar>('contasPagarParcelas:groupBy', zerarAncora);
+    const { campo: groupBy, agrupando, recolhidos } = agrupamento;
     // Deep-link (§ efeito abaixo): linha destacada por alguns segundos + as refs
     // das <tr> para rolar até ela.
     const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -491,6 +530,16 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
 
     useEffect(() => { onVisibleRowsChange?.(filtered); }, [filtered, onVisibleRowsChange]);
 
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filtered, {
+        chave: r => chaveDoGrupo(groupBy, r),
+        semRotulo: SEM_GRUPO[groupBy],
+        valor: r => r.amount,
+        ordem: groupBy === 'status' ? Object.keys(STATUS_PT) : groupBy === 'vencimento' ? 'chave' : 'aparicao',
+    })), [filtered, groupBy]);
+    /** Linhas na ordem da tela, sem os grupos recolhidos — base da página, do Shift+clique e do deep-link. */
+    const linhasNaTela = useMemo(() => (agrupando ? linhasDaTela(grupos, recolhidos) : filtered), [agrupando, grupos, recolhidos, filtered]);
+    const totalLinhas = agrupando ? contarLinhasDaTela(grupos, recolhidos) : filtered.length;
+
     /*
      * Paginação da EXIBIÇÃO (§6.7). Desenhar as ~2.000 parcelas de uma vez eram
      * 83 mil nós no <tbody> e ~600 ms de tela congelada na abertura, mais ~100 ms
@@ -506,11 +555,21 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     // status: marcar como pago na página 3 não pode jogar o usuário na 1 (§22).
     // Linha que sai do recorte só encurta a lista; `currentPage` abaixo prende
     // a página no novo total.
-    useEffect(() => { setPage(1); }, [search, statusFiltro, origemFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection, pageSize, organizationId]);
-    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    // Trocar o agrupamento reordena tudo: também volta para a 1. Recolher um grupo
+    // não — só encurta a lista, e `currentPage` prende a página no novo total.
+    useEffect(() => { setPage(1); }, [search, statusFiltro, origemFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection, pageSize, organizationId, groupBy]);
+    // Agrupado, a página continua contando LINHAS DE DADO; os cabeçalhos de grupo
+    // entram por cima (e repetem com "continua" quando o grupo vem da página anterior).
+    const totalPages = Math.max(1, Math.ceil(totalLinhas / pageSize));
     const currentPage = Math.min(page, totalPages);
     const pageStart = (currentPage - 1) * pageSize;
-    const pageRows = useMemo(() => filtered.slice(pageStart, pageStart + pageSize), [filtered, pageStart, pageSize]);
+    const pageRows = useMemo(() => linhasNaTela.slice(pageStart, pageStart + pageSize), [linhasNaTela, pageStart, pageSize]);
+    const entradasDaPaginaAtual = useMemo(
+        () => (agrupando
+            ? entradasDaPagina(grupos, recolhidos, pageStart, pageStart + pageSize)
+            : pageRows.map((item, i) => ({ tipo: 'linha' as const, item, indice: pageStart + i }))),
+        [agrupando, grupos, recolhidos, pageStart, pageSize, pageRows],
+    );
     function irParaPagina(p: number) {
         setPage(Math.max(1, Math.min(p, totalPages)));
         if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
@@ -532,8 +591,11 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     useEffect(() => {
         if (!focusId || loading) return;
         if (!rows.some(r => r.id === focusId)) { onFocusConsumed?.(false, false); return; }
-        const indice = filtered.findIndex(r => r.id === focusId);
+        const indice = linhasNaTela.findIndex(r => r.id === focusId);
         if (indice < 0) {
+            // Está num grupo recolhido: abre o grupo e espera a lista recalcular.
+            const grupoDoFoco = agrupando ? grupos.find(g => recolhidos.has(g.key) && g.itens.some(r => r.id === focusId)) : undefined;
+            if (grupoDoFoco) { agrupamento.expandir(grupoDoFoco.key); return; }
             setSearch('');
             setStatusFiltro('all');
             setOrigemFiltro('all');
@@ -553,12 +615,12 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         const t = setTimeout(() => setHighlightId(null), 4000);
         return () => clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [focusId, loading, rows, filtered, currentPage, pageSize]);
+    }, [focusId, loading, rows, filtered, linhasNaTela, currentPage, pageSize]);
 
     /** Cancelado não tem despesa a apropriar — o NOI já o ignora. Parcela PAGA
      *  entra: despesa paga é exatamente a que precisa cair no OPEX. */
     const isSelectable = (row: Payable) => row.effective_status !== 'CANCELADO';
-    const selectableVisible = useMemo(() => filtered.filter(isSelectable), [filtered]);
+    const selectableVisible = useMemo(() => filtered.filter(isSelectable), [filtered]);  // recorte inteiro — base do lote
     // Interseção da seleção com o recorte: se o filtro mudou, o que sumiu da
     // tela não pode continuar entrando na ação em lote. Linha marcada à mão
     // noutra página do MESMO recorte continua valendo — o usuário a viu.
@@ -591,11 +653,12 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         });
     }
     // Seleção de intervalo com Shift+clique (ui_ux_guia_unificado.md §10.1).
-    // `index` é GLOBAL em `filtered` (pageStart + i), não o da página (§6.7).
+    // `index` é GLOBAL nas linhas da tela (pageStart + i), não o da página (§6.7);
+    // agrupado, a lista é a dos grupos abertos, na ordem em que aparecem.
     function handleRowCheck(id: string, index: number, shiftKey: boolean) {
         if (shiftKey && lastCheckedIndex !== null) {
             const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
-            const rangeIds = filtered.slice(start, end + 1).filter(isSelectable).map(r => r.id);
+            const rangeIds = linhasNaTela.slice(start, end + 1).filter(isSelectable).map(r => r.id);
             setSelectedIds(prev => new Set([...prev, ...rangeIds]));
         } else {
             toggleRow(id);
@@ -876,6 +939,17 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                         <RefreshCw className="w-4 h-4" />
                     </button>
 
+                    {/* Agrupar — guia de UI §6.12 */}
+                    <AgruparControles
+                        opcoes={OPCOES_AGRUPAR}
+                        campo={groupBy}
+                        onCampo={agrupamento.setCampo}
+                        chavesDosGrupos={grupos.map(g => g.key)}
+                        algumRecolhido={recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar as parcelas"
+                    />
+
                     {/* Separador entre grupo "filtrar" e grupo "visualizar" (§5.1) */}
                     <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
@@ -980,8 +1054,13 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {pageRows.map((row, idxNaPagina) => {
-                                    const idx = pageStart + idxNaPagina;
+                                {entradasDaPaginaAtual.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={totalColunas} onAlternar={agrupamento.alternar} tituloTotal="Soma do valor das parcelas do grupo" />
+                                    );
+                                    const row = e.item;
+                                    const idx = e.indice;
                                     const vencido = row.effective_status === 'VENCIDO';
                                     const quitado = ['PAGO', 'CANCELADO'].includes(row.effective_status);
                                     const selecionada = selectedIds.has(row.id);
@@ -1098,7 +1177,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                         StandardTable. Fora do container que rola: fica sempre à vista. */}
                     <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-gray-100 text-sm text-gray-500">
                         <div className="flex items-center gap-2">
-                            <span>{`${pageStart + 1}–${Math.min(pageStart + pageSize, filtered.length)} de ${filtered.length.toLocaleString('pt-BR')}`}</span>
+                            <span>{totalLinhas === 0 ? '0 de 0' : `${pageStart + 1}–${Math.min(pageStart + pageSize, totalLinhas)} de ${totalLinhas.toLocaleString('pt-BR')}`}</span>
                             <select
                                 value={pageSize}
                                 onChange={e => setPageSize(Number(e.target.value))}

@@ -16,6 +16,9 @@ import { useConfirm } from './ui/confirm';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import ActionIconButton from './ui/ActionIconButton';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -158,6 +161,33 @@ function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean): Reac
             return <StatusBadge status={r.effective_status} />;
         default:
             return null;
+    }
+}
+
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+type CampoAgrupar = 'tributo' | 'origem' | 'cliente' | 'empreendimento' | 'competencia' | 'vencimento' | 'status';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'tributo', label: 'Tributo' },
+    { value: 'origem', label: 'Origem' },
+    { value: 'cliente', label: 'Cliente' },
+    { value: 'empreendimento', label: 'Empreendimento' },
+    { value: 'competencia', label: 'Competência' },
+    { value: 'vencimento', label: 'Vencimento (mês)' },
+    { value: 'status', label: 'Status' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = {
+    tributo: 'Sem tributo', origem: 'Sem origem', cliente: 'Sem cliente', empreendimento: 'Sem empreendimento',
+    competencia: 'Sem competência', vencimento: 'Sem vencimento', status: 'Sem status',
+};
+function chaveDoGrupo(campo: CampoAgrupar, r: TaxPayable): ChaveDeGrupo {
+    switch (campo) {
+        case 'tributo': return chavePorNome(r.party_name);
+        case 'origem': return chavePorNome(r.category);
+        case 'cliente': return chavePorNome(r.client_name);
+        case 'empreendimento': return chavePorNome(r.empreendimento_name);
+        case 'competencia': return chavePorMes(r.transaction_date);
+        case 'vencimento': return chavePorMes(r.due_date);
+        case 'status': return chavePorRotulo(r.effective_status, STATUS_LABEL);
     }
 }
 
@@ -359,6 +389,11 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     const [dueTo, setDueTo]             = usePersistedState('tributosPagarManagerFilters:dueTo', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [activeView, setActiveView] = usePersistedState<ViewId>('tributosPagarManager:view', 'tributos');
+    // Âncora do Shift+clique (§10.1) — aqui em cima porque o "Agrupar" a zera
+    // quando as linhas mudam de lugar.
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+    const zerarAncora = useCallback(() => setLastCheckedIndex(null), []);
+    const agrupamento = useAgrupamento<CampoAgrupar>('tributosPagarManagerFilters:groupBy', zerarAncora);
 
     // Filtro de status — dropdown dentro da toolbar acoplada. Antes eram 5 pílulas
     // lado a lado, que não cabiam junto dos outros grupos da barra; virou um único
@@ -603,19 +638,39 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         return result;
     }, [rows, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection, activeView, competencia]);
 
+    const { campo: groupBy, agrupando, recolhidos } = agrupamento;
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(sorted, {
+        chave: r => chaveDoGrupo(groupBy, r),
+        semRotulo: SEM_GRUPO[groupBy],
+        valor: r => r.amount,
+        ordem: groupBy === 'status' ? Object.keys(STATUS_LABEL) : groupBy === 'competencia' || groupBy === 'vencimento' ? 'chave' : 'aparicao',
+    })), [sorted, groupBy]);
+    /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
+    const linhasNaTela = useMemo(() => (agrupando ? linhasDaTela(grupos, recolhidos) : sorted), [agrupando, grupos, recolhidos, sorted]);
+    const entradas: EntradaDaTela<TaxPayable>[] = useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, recolhidos) : sorted.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, recolhidos, sorted],
+    );
+    /** Células de uma linha: checkbox + colunas de dado + espaçador + Ações. */
+    const colunasDaLinha = 1
+        + tableColumns.orderedVisibleColumns.filter(k => k !== 'actions' && TRIBUTO_COLUMN_HEADERS[k]).length
+        + 1
+        + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
+
     /** Só não-PAGO pode ser baixado. */
     /** Retido o cliente recolhe — não entra em baixa por aqui. */
     const isSelectable = (t: TaxPayable) => !['PAGO', 'CANCELADO', 'RETIDO'].includes(t.effective_status);
-    const selectableVisible = useMemo(() => sorted.filter(isSelectable), [sorted]);
+    const selectableVisible = useMemo(() => linhasNaTela.filter(isSelectable), [linhasNaTela]);
     const selectableIndexById = useMemo(
         () => new Map(selectableVisible.map((r, i) => [r.id, i])),
         [selectableVisible],
     );
+    /** Selecionados do recorte inteiro (inclui grupo recolhido depois de marcado) — base do lote. */
     const selectedVisible = useMemo(
-        () => selectableVisible.filter(r => selectedIds.has(r.id)),
-        [selectableVisible, selectedIds],
+        () => sorted.filter(r => isSelectable(r) && selectedIds.has(r.id)),
+        [sorted, selectedIds],
     );
-    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+    const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every(r => selectedIds.has(r.id));
     const selectedTotal = selectedVisible.reduce((s, r) => s + (r.amount ?? 0), 0);
 
     function toggleRow(id: string) {
@@ -625,8 +680,6 @@ export default function TributosAPagarManager({ organizationId, organizations }:
             return next;
         });
     }
-
-    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
 
     function handleRowCheck(id: string, index: number, shiftKey: boolean) {
         if (shiftKey && lastCheckedIndex !== null) {
@@ -833,6 +886,17 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                             <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                         </div>
 
+                        {/* Agrupar — guia de UI §6.12 */}
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar os tributos"
+                        />
+
                         <button
                             onClick={load}
                             className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0"
@@ -975,7 +1039,12 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {sorted.map(r => {
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={colunasDaLinha} onAlternar={agrupamento.alternar} tituloTotal="Soma do valor dos tributos do grupo" />
+                                    );
+                                    const r = e.item;
                                     const isVencido = r.effective_status === 'VENCIDO';
                                     const isPago = r.effective_status === 'PAGO';
                                     const isCancelado = r.effective_status === 'CANCELADO';

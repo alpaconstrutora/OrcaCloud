@@ -4,6 +4,9 @@ import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader,
     usePersistedState, usePersistedScopedSearch, useResizableColumns,
 } from './TableUtils';
+import { agruparLinhas, contarLinhasDaTela, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela, type OpcoesAgrupar } from '../../utils/agruparLinhas';
+import { useAgrupamento } from '../../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './Agrupamento';
 
 /**
  * Tabela padrão — §5.2 (toolbar acoplada) + §6.1 (redimensionar/autofit) de
@@ -24,7 +27,10 @@ import {
  *  - paginação §6.7 OPT-IN (`pagination`): o corte acontece DEPOIS da busca e da
  *    ordenação, que vivem aqui dentro — fatiar `rows` do lado de fora faria a
  *    busca enxergar só a página. Sem a prop, nada muda: rolagem com cabeçalho
- *    fixo, como as tabelas de RH sempre foram.
+ *    fixo, como as tabelas de RH sempre foram;
+ *  - "Agrupar" §6.12 OPT-IN (`agrupamento`): agrupa DEPOIS da busca e da ordenação;
+ *    com paginação, a página conta linhas de dado e o cabeçalho do grupo repete
+ *    ("continua") quando o grupo vem da página anterior.
  *
  * A tela declara só: colunas (com largura inicial), `renderCell`, `sortValue`,
  * `searchText` e, se houver, `actions`. Tipografia das células continua sendo
@@ -102,12 +108,28 @@ interface StandardTableProps<T> {
         onChange: (next: Set<string>) => void;
         canSelect?: (row: T) => boolean;
     };
+    /** "Agrupar" §6.12 (opt-in). O campo escolhido persiste em `${storageKey}:groupBy`. */
+    agrupamento?: {
+        opcoes: { value: string; label: string }[];
+        /** Chave da linha no campo escolhido — o MESMO texto que a célula mostra. */
+        chave: (campo: string, row: T) => ChaveDeGrupo;
+        /** Rótulo do grupo sem valor ("Sem obra"). */
+        semRotulo: (campo: string) => string;
+        /** Ordem dos grupos por campo (padrão: 1ª aparição). */
+        ordem?: (campo: string) => OpcoesAgrupar<T>['ordem'];
+        /** Valor somado no total do grupo. */
+        valor?: (row: T) => number | null | undefined;
+        /** `title` do seletor — "Agrupar os títulos". */
+        title?: string;
+        /** `title` do total do grupo — diz o que foi somado. */
+        tituloTotal?: string;
+    };
 }
 
 export function StandardTable<T>({
     columns, storageKey, rows, rowKey, renderCell, sortValue, searchText, searchPlaceholder = 'Buscar...',
     search: controlledSearch, onSearchChange, searchScope, actions, onRowClick, rowClassName, loading, empty, dense, filters, toolbarRight, filtersPanel, toolbarTop,
-    footer, renderTotals, renderExpanded, maxHeight = '70vh', bare, selection, pagination,
+    footer, renderTotals, renderExpanded, maxHeight = '70vh', bare, selection, pagination, agrupamento: agrupar,
 }: StandardTableProps<T>) {
     const allColumns: ColumnConfig[] = useMemo(
         () => (actions ? [...columns, { key: 'actions', label: actions.label ?? 'Ações', sortable: false }] : columns),
@@ -151,18 +173,39 @@ export function StandardTable<T>({
         });
     }, [rows, search, searchText, tableColumns.sortColumn, tableColumns.sortDirection, getSort]);
 
+    // "Agrupar" §6.12 — o hook roda sempre (regra dos hooks); sem a prop, nada agrupa.
+    const grupoEstado = useAgrupamento<string>(`${storageKey}:groupBy`);
+    const campoAgrupar = agrupar ? grupoEstado.campo : 'none';
+    const agrupando = campoAgrupar !== 'none';
+    const grupos = useMemo(() => (!agrupar || campoAgrupar === 'none' ? [] : agruparLinhas(filtered, {
+        chave: r => agrupar.chave(campoAgrupar, r),
+        semRotulo: agrupar.semRotulo(campoAgrupar),
+        valor: agrupar.valor,
+        ordem: agrupar.ordem?.(campoAgrupar),
+    })), [agrupar, campoAgrupar, filtered]);
+    /** Linhas na ordem da tela, sem os grupos recolhidos. */
+    const linhas = useMemo(() => (agrupando ? linhasDaTela(grupos, grupoEstado.recolhidos) : filtered), [agrupando, grupos, grupoEstado.recolhidos, filtered]);
+    const totalLinhas = agrupando ? contarLinhasDaTela(grupos, grupoEstado.recolhidos) : filtered.length;
+
     // Paginação §6.7 — só quando a tela pede. Tamanho persiste, página atual não.
     const pageSizes = pagination?.pageSizes ?? [50, 100, 200, 500];
     const [pageSize, setPageSize] = usePersistedState<number>(`${storageKey}:pageSize`, pagination?.defaultPageSize ?? pageSizes[0]);
     const [page, setPage] = useState(1);
-    // Qualquer mudança de recorte (linhas, busca, ordenação, tamanho) volta para a 1.
-    useEffect(() => { setPage(1); }, [rows, search, tableColumns.sortColumn, tableColumns.sortDirection, pageSize]);
-    const totalPages = pagination ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1;
+    // Qualquer mudança de recorte (linhas, busca, ordenação, tamanho, agrupamento) volta para a 1.
+    useEffect(() => { setPage(1); }, [rows, search, tableColumns.sortColumn, tableColumns.sortDirection, pageSize, campoAgrupar]);
+    const totalPages = pagination ? Math.max(1, Math.ceil(totalLinhas / pageSize)) : 1;
     const currentPage = Math.min(page, totalPages);
     const pageStart = pagination ? (currentPage - 1) * pageSize : 0;
     const visibleRows = useMemo(
-        () => (pagination ? filtered.slice(pageStart, pageStart + pageSize) : filtered),
-        [pagination, filtered, pageStart, pageSize],
+        () => (pagination ? linhas.slice(pageStart, pageStart + pageSize) : linhas),
+        [pagination, linhas, pageStart, pageSize],
+    );
+    /** O que vai no <tbody>: cabeçalhos de grupo intercalados com as linhas da página. */
+    const entradas: EntradaDaTela<T>[] = useMemo(
+        () => (agrupando
+            ? entradasDaPagina(grupos, grupoEstado.recolhidos, pageStart, pagination ? pageStart + pageSize : undefined)
+            : visibleRows.map((item, i) => ({ tipo: 'linha' as const, item, indice: pageStart + i }))),
+        [agrupando, grupos, grupoEstado.recolhidos, pageStart, pagination, pageSize, visibleRows],
     );
 
     const dataKeys = tableColumns.orderedVisibleColumns.filter(k => k !== 'actions' && byKey[k]);
@@ -214,7 +257,20 @@ export function StandardTable<T>({
                         </div>
                     )}
                     {filters && <div className="flex flex-wrap items-center gap-2 shrink-0">{filters}</div>}
-                    {!searchText && controlledSearch === undefined && !filters && <div className="flex-1" />}
+                    {agrupar && (
+                        <div className="flex items-center gap-2 shrink-0">
+                            <AgruparControles
+                                opcoes={agrupar.opcoes}
+                                campo={grupoEstado.campo}
+                                onCampo={grupoEstado.setCampo}
+                                chavesDosGrupos={grupos.map(g => g.key)}
+                                algumRecolhido={grupoEstado.recolhidos.size > 0}
+                                onAlternarTodos={grupoEstado.alternarTodos}
+                                title={agrupar.title ?? 'Agrupar as linhas'}
+                            />
+                        </div>
+                    )}
+                    {!searchText && controlledSearch === undefined && !filters && !agrupar && <div className="flex-1" />}
                     <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                         <ColumnConfigButton
@@ -290,7 +346,13 @@ export function StandardTable<T>({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {visibleRows.map(row => (
+                            {entradas.map(e => {
+                                if (e.tipo === 'grupo') return (
+                                    <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                        colSpan={visibleCount} onAlternar={grupoEstado.alternar} tituloTotal={agrupar?.tituloTotal} />
+                                );
+                                const row = e.item;
+                                return (
                                 <React.Fragment key={rowKey(row)}>
                                 <tr
                                     onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -319,7 +381,8 @@ export function StandardTable<T>({
                                 </tr>
                                 {renderExpanded?.(row, visibleCount)}
                                 </React.Fragment>
-                            ))}
+                                );
+                            })}
                             {renderTotals?.(visibleCount)}
                         </tbody>
                     </table>
@@ -329,7 +392,7 @@ export function StandardTable<T>({
             {pagination && !loading && filtered.length > 0 && (
                 <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-gray-100 text-sm text-gray-500">
                     <div className="flex items-center gap-2">
-                        <span>{`${pageStart + 1}–${Math.min(pageStart + pageSize, filtered.length)} de ${filtered.length.toLocaleString('pt-BR')}`}</span>
+                        <span>{totalLinhas === 0 ? '0 de 0' : `${pageStart + 1}–${Math.min(pageStart + pageSize, totalLinhas)} de ${totalLinhas.toLocaleString('pt-BR')}`}</span>
                         <select
                             value={pageSize}
                             onChange={e => setPageSize(Number(e.target.value))}

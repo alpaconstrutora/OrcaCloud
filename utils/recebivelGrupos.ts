@@ -1,5 +1,5 @@
 import type { Receivable } from '../types/financial';
-import { rotuloMes } from './boletoGrupos';
+import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, type ChaveDeGrupo, type Grupo } from './agruparLinhas';
 
 /**
  * "Agrupar" de Contas a Receber — o mesmo recurso de Boletos a Pagar
@@ -26,13 +26,7 @@ export type LinhaAgrupavel = Pick<Receivable,
     'effective_status' | 'party_name' | 'empreendimento_name' | 'project_name' | 'due_date' | 'amount'
 > & { cost_center_name?: string; plano_de_contas_name?: string };
 
-export interface GrupoRecebiveis<T> {
-    key: string;
-    label: string;
-    itens: T[];
-    /** Soma do valor bruto (`amount`) dos títulos do grupo. */
-    total: number;
-}
+export type GrupoRecebiveis<T> = Grupo<T>;
 
 const SEM: Record<Exclude<CampoAgruparRecebivel, 'none'>, string> = {
     status: 'Sem status',
@@ -44,65 +38,33 @@ const SEM: Record<Exclude<CampoAgruparRecebivel, 'none'>, string> = {
     vencimento: 'Sem vencimento',
 };
 
-const VAZIO = '__vazio__';
-
-function chaveERotulo(
-    r: LinhaAgrupavel,
-    campo: Exclude<CampoAgruparRecebivel, 'none'>,
-    rotulosStatus: Record<string, string>,
-): [string, string] {
-    const nome = (v: string | null | undefined): [string, string] => {
-        const t = (v ?? '').trim();
-        return t ? [t.toLowerCase(), t] : [VAZIO, SEM[campo]];
-    };
-    switch (campo) {
-        case 'status':
-            return r.effective_status ? [r.effective_status, rotulosStatus[r.effective_status] ?? r.effective_status] : [VAZIO, SEM.status];
-        case 'cliente': return nome(r.party_name);
-        case 'empreendimento': return nome(r.empreendimento_name);
-        case 'obra': return nome(r.project_name);
-        case 'centro_custo': return nome(r.cost_center_name);
-        case 'plano_contas': return nome(r.plano_de_contas_name);
-        case 'vencimento': {
-            const am = (r.due_date ?? '').slice(0, 7);
-            return /^\d{4}-\d{2}$/.test(am) ? [am, rotuloMes(am)] : [VAZIO, SEM.vencimento];
-        }
-    }
-}
-
 /**
  * Agrupa mantendo a ordem da lista recebida (que já vem ordenada pela coluna escolhida):
  * grupos na ordem da 1ª aparição; status na ordem do mapa de rótulos da tela;
  * vencimento cronológico. O grupo "Sem …" vai sempre por último.
+ * Casca de `agruparLinhas` (utils/agruparLinhas.ts) com as chaves desta tela.
  */
 export function agruparRecebiveis<T extends LinhaAgrupavel>(
     linhas: T[],
     campo: CampoAgruparRecebivel,
     rotulosStatus: Record<string, string>,
 ): GrupoRecebiveis<T>[] {
-    if (campo === 'none') return [{ key: 'todos', label: '', itens: linhas, total: soma(linhas) }];
-
-    const mapa = new Map<string, GrupoRecebiveis<T>>();
-    for (const r of linhas) {
-        const [key, label] = chaveERotulo(r, campo, rotulosStatus);
-        let g = mapa.get(key);
-        if (!g) { g = { key, label, itens: [], total: 0 }; mapa.set(key, g); }
-        g.itens.push(r);
-        g.total += Number(r.amount) || 0;
-    }
-
-    const grupos = [...mapa.values()];
-    if (campo === 'status') {
-        const ordem = Object.keys(rotulosStatus);
-        const pos = (k: string) => { const i = ordem.indexOf(k); return i === -1 ? Number.MAX_SAFE_INTEGER : i; };
-        grupos.sort((a, b) => pos(a.key) - pos(b.key));
-    } else if (campo === 'vencimento') {
-        grupos.sort((a, b) => a.key.localeCompare(b.key));
-    }
-    const semValor = grupos.filter(g => g.key === VAZIO);
-    return [...grupos.filter(g => g.key !== VAZIO), ...semValor];
-}
-
-function soma(rs: LinhaAgrupavel[]): number {
-    return rs.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    if (campo === 'none') return [{ key: 'todos', label: '', itens: linhas, total: linhas.reduce((s, r) => s + (Number(r.amount) || 0), 0) }];
+    const chave = (r: T): ChaveDeGrupo => {
+        switch (campo) {
+            case 'status': return chavePorRotulo(r.effective_status, rotulosStatus);
+            case 'cliente': return chavePorNome(r.party_name);
+            case 'empreendimento': return chavePorNome(r.empreendimento_name);
+            case 'obra': return chavePorNome(r.project_name);
+            case 'centro_custo': return chavePorNome(r.cost_center_name);
+            case 'plano_contas': return chavePorNome(r.plano_de_contas_name);
+            case 'vencimento': return chavePorMes(r.due_date);
+        }
+    };
+    return agruparLinhas(linhas, {
+        chave,
+        semRotulo: SEM[campo],
+        valor: r => r.amount,
+        ordem: campo === 'status' ? Object.keys(rotulosStatus) : campo === 'vencimento' ? 'chave' : 'aparicao',
+    });
 }

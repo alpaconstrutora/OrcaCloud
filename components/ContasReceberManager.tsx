@@ -1,7 +1,7 @@
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AlertCircle, Check, ChevronDown, ChevronUp, ChevronRight, ChevronsDownUp, ChevronsUpDown, Layers,
+    AlertCircle, Check, ChevronDown, ChevronUp,
     Loader2, Plus, RefreshCw, Search, TrendingUp, X, Filter,
     FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle, MoveHorizontal, Undo2, Receipt, Download,
 } from 'lucide-react';
@@ -15,6 +15,9 @@ import BaixaRecebivelSheet, { type DadosDaBaixa, tituloDeRecebivel } from './fin
 import { mensagemResultadoBaixa } from '../utils/baixaRecebivel';
 import { numeroRecibo } from '../utils/reciboRecebimento';
 import { agruparRecebiveis, OPCOES_AGRUPAR_RECEBIVEL, type CampoAgruparRecebivel } from '../utils/recebivelGrupos';
+import { linhasDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
@@ -764,10 +767,13 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const [competencia, setCompetencia] = usePersistedState('contasReceberManagerFilters:competencia', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [showInad, setShowInad]        = useState(false);
-    // "Agrupar" — o mesmo recurso de Boletos a Pagar (BoletoManager). Persistido;
-    // os grupos recolhidos ficam só em memória, como lá.
-    const [groupBy, setGroupBy] = usePersistedState<CampoAgruparRecebivel>('contasReceberManagerFilters:groupBy', 'none');
-    const [gruposRecolhidos, setGruposRecolhidos] = useState<Set<string>>(new Set());
+    // Âncora do Shift+clique (§10.1) — aqui em cima porque o "Agrupar" a zera
+    // quando as linhas mudam de lugar.
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+    const zerarAncora = useCallback(() => setLastCheckedIndex(null), []);
+    // "Agrupar" — guia de UI §6.12 (peças compartilhadas com o resto do Financeiro).
+    const agrupamento = useAgrupamento<Exclude<CampoAgruparRecebivel, 'none'>>('contasReceberManagerFilters:groupBy', zerarAncora);
+    const { campo: groupBy, agrupando, recolhidos: gruposRecolhidos } = agrupamento;
     // storageKey explícito — antes usava o default 'tableColumns' e colidia com
     // qualquer outro componente que também não passasse a chave.
     const tableColumns = useTableColumns(RECEBER_COLUMNS, 'contasReceberManagerColumns');
@@ -1191,14 +1197,13 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     // mais lenta das duas.
     }, [rowsWithNames, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection, recibos]);
 
-    const agrupando = groupBy !== 'none';
     const grupos = useMemo(() => agruparRecebiveis(sorted, groupBy, STATUS_LABEL), [sorted, groupBy]);
 
     // As linhas NA ORDEM DA TELA (grupos recolhidos ficam de fora). É sobre esta lista que
     // o "selecionar todos" e o Shift+clique trabalham — com `sorted`, agrupado, o intervalo
     // marcaria títulos que não estão entre as duas linhas clicadas (mesma solução de BoletoManager).
     const linhasNaTela = useMemo(
-        () => (agrupando ? grupos.flatMap(g => (gruposRecolhidos.has(g.key) ? [] : g.itens)) : sorted),
+        () => (agrupando ? linhasDaTela(grupos, gruposRecolhidos) : sorted),
         [agrupando, grupos, gruposRecolhidos, sorted],
     );
 
@@ -1207,15 +1212,6 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         + tableColumns.orderedVisibleColumns.filter(k => RECEBER_COLUMN_HEADERS[k]).length
         + 1
         + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
-
-    function toggleGrupo(key: string) {
-        setGruposRecolhidos(prev => {
-            const next = new Set(prev);
-            if (next.has(key)) next.delete(key); else next.add(key);
-            return next;
-        });
-        setLastCheckedIndex(null);
-    }
 
     useEffect(() => {
         if (!focusId || loading) return;
@@ -1247,9 +1243,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         setDestacado(focusId);
         // Título dentro de um grupo recolhido não teria linha para rolar até ela.
         const grupoDoFoco = agrupando ? grupos.find(g => g.itens.some(r => r.id === focusId)) : undefined;
-        if (grupoDoFoco && gruposRecolhidos.has(grupoDoFoco.key)) {
-            setGruposRecolhidos(prev => { const next = new Set(prev); next.delete(grupoDoFoco.key); return next; });
-        }
+        if (grupoDoFoco) agrupamento.expandir(grupoDoFoco.key);
         const limpou = focoLimpouFiltros.current;
         focoLimpouFiltros.current = false;
         requestAnimationFrame(() => document.getElementById(`receber-row-${focusId}`)?.scrollIntoView({ block: 'center' }));
@@ -1290,7 +1284,6 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         });
     }
 
-    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
 
     /** F4 (§10.1) — Shift+clique seleciona o intervalo entre a última linha marcada e a atual. */
     function handleRowCheck(id: string, index: number, shiftKey: boolean) {
@@ -1455,33 +1448,16 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                             <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                         </div>
 
-                        {/* Agrupar — mesmo controle de Boletos a Pagar (BoletoManager). */}
-                        <div className="relative shrink-0">
-                            <Layers className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${agrupando ? 'text-white' : 'text-gray-500'}`} />
-                            <select
-                                value={groupBy}
-                                onChange={e => { setGroupBy(e.target.value as CampoAgruparRecebivel); setGruposRecolhidos(new Set()); setLastCheckedIndex(null); }}
-                                title="Agrupar os títulos"
-                                className={`h-9 pl-8 pr-3 rounded-[6px] text-[13px] font-medium border appearance-none cursor-pointer transition-all ${
-                                    agrupando
-                                        ? 'bg-blue-600 text-white border-blue-600 [&>option]:bg-white [&>option]:text-gray-900'
-                                        : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-50'
-                                }`}
-                            >
-                                <option value="none">Agrupar</option>
-                                {OPCOES_AGRUPAR_RECEBIVEL.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                        </div>
-                        {agrupando && (
-                            <button
-                                type="button"
-                                onClick={() => { setGruposRecolhidos(prev => (prev.size ? new Set() : new Set(grupos.map(g => g.key)))); setLastCheckedIndex(null); }}
-                                title={gruposRecolhidos.size ? 'Expandir todos os grupos' : 'Recolher todos os grupos'}
-                                className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 shrink-0"
-                            >
-                                {gruposRecolhidos.size ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
-                            </button>
-                        )}
+                        {/* Agrupar — guia de UI §6.12 */}
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR_RECEBIVEL}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={gruposRecolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar os títulos"
+                        />
 
                         <button
                             onClick={load}
@@ -1749,24 +1725,13 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                     if (!agrupando) return <React.Fragment key="todos">{grupo.itens.map(renderLinha)}</React.Fragment>;
                                     return (
                                         <React.Fragment key={grupo.key}>
-                                            {/* Cabeçalho do grupo — mesmo desenho de BoletoManager (Boletos a Pagar), com o total bruto do grupo. */}
-                                            <tr>
-                                                <td colSpan={colunasDaLinha} className="p-0">
-                                                    <div
-                                                        onClick={() => toggleGrupo(grupo.key)}
-                                                        className="flex items-center gap-2.5 px-6 py-2 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none border-b border-slate-200 transition-colors"
-                                                    >
-                                                        <span className="text-slate-400 flex-shrink-0">
-                                                            {recolhido ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                                                        </span>
-                                                        <span className="font-semibold text-sm text-slate-800">{grupo.label}</span>
-                                                        <span className="text-xs font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">{grupo.itens.length}</span>
-                                                        {/* Total logo após a contagem: no fim da linha ele caía fora da tela (tabela larga). */}
-                                                        <span className="text-sm font-medium text-gray-800 whitespace-nowrap" title="Soma do valor bruto dos títulos do grupo">{fmt(grupo.total)}</span>
-                                                        <div className="flex-1 h-px bg-slate-200" />
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                            <LinhaDeGrupo
+                                                grupo={grupo}
+                                                recolhido={recolhido}
+                                                colSpan={colunasDaLinha}
+                                                onAlternar={agrupamento.alternar}
+                                                tituloTotal="Soma do valor bruto dos títulos do grupo"
+                                            />
                                             {!recolhido && grupo.itens.map(renderLinha)}
                                         </React.Fragment>
                                     );

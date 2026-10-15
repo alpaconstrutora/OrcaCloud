@@ -21,6 +21,7 @@ import type {
 import Button from './ui/Button';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { useConfirm } from './ui/confirm';
+import { chavePorMes, chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 
 // ─── dispatch por entidade ───────────────────────────────────
 // A fila é unificada; cada ação vai ao serviço de domínio correto.
@@ -226,6 +227,35 @@ function queueStatusLabel(item: ActionQueueItem): string {
 
 const ACTION_LINK = 'text-sm font-medium p-1.5 rounded-[6px] transition-all whitespace-nowrap disabled:opacity-50';
 
+// "Agrupar" da fila — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+// Constante de módulo: o StandardTable memoiza os grupos pela identidade deste objeto.
+const SEM_GRUPO_FILA: Record<string, string> = { tipo: 'Sem tipo', parte: 'Sem parte', obra: 'Sem obra', vencimento: 'Sem vencimento', status: 'Sem status' };
+const AGRUPAR_FILA = {
+    opcoes: [
+        { value: 'tipo', label: 'Tipo' },
+        { value: 'parte', label: 'Parte' },
+        { value: 'obra', label: 'Obra' },
+        { value: 'vencimento', label: 'Vencimento (mês)' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, i: ActionQueueItem) => {
+        switch (campo) {
+            case 'tipo': return chavePorRotulo(i.entity, ENTITY_TAG);
+            case 'parte': return chavePorNome(i.party_name);
+            case 'obra': return chavePorNome(i.project_name);
+            case 'vencimento': return chavePorMes(i.due_date);
+            case 'status': return chavePorNome(queueStatusLabel(i));
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_FILA[campo] ?? 'Sem valor',
+    // Tipo na ordem do mapa; mês cronológico; status "Nível 1/2" → "Nível 2/2" → "Rascunho".
+    ordem: (campo: string) => (campo === 'tipo' ? Object.keys(ENTITY_TAG) : campo === 'vencimento' || campo === 'status' ? 'chave' as const : 'aparicao' as const),
+    valor: (i: ActionQueueItem) => i.amount,
+    title: 'Agrupar a fila',
+    tituloTotal: 'Soma do valor dos itens do grupo',
+};
+
 interface QueueProps {
     organizationId: string;
     userEmail: string;
@@ -318,6 +348,7 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                 rowKey={i => i.id}
                 loading={loading}
                 pagination={{ defaultPageSize: 100 }}
+                agrupamento={AGRUPAR_FILA}
                 searchText={i => `${ENTITY_TAG[i.entity]} ${i.title} ${i.party_name ?? ''} ${i.project_name ?? ''}`}
                 searchPlaceholder="Buscar por título, parte ou obra..."
                 filters={

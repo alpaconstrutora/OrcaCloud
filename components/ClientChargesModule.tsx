@@ -9,6 +9,9 @@ import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import KpiCard from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
+import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 // Asaas status → rótulo + cor. Padrão guia seção 8 — texto simples, sem pílula.
 const STATUS_META: Record<string, { label: string; cls: string }> = {
@@ -30,6 +33,29 @@ function StatusBadge({ status }: { status: string }) {
             {m.label}
         </span>
     );
+}
+
+/** Rótulo do Tipo — o MESMO que a célula mostra. */
+function rotuloTipo(c: ClientCharge): string {
+    return c.billing_type === 'PIX' ? 'PIX' : c.billing_type === 'UNDEFINED' ? 'Boleto+PIX' : 'Boleto';
+}
+
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+type CampoAgrupar = 'cliente' | 'tipo' | 'vencimento' | 'status';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'cliente', label: 'Cliente' },
+    { value: 'tipo', label: 'Tipo' },
+    { value: 'vencimento', label: 'Vencimento (mês)' },
+    { value: 'status', label: 'Status' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = { cliente: 'Sem cliente', tipo: 'Sem tipo', vencimento: 'Sem vencimento', status: 'Sem status' };
+function chaveDoGrupo(campo: CampoAgrupar, c: ClientCharge): ChaveDeGrupo {
+    switch (campo) {
+        case 'cliente': return chavePorNome(c.party_name);
+        case 'tipo': return chavePorNome(rotuloTipo(c));
+        case 'vencimento': return chavePorMes(c.due_date);
+        case 'status': return c.status ? { key: c.status, label: STATUS_META[c.status]?.label ?? c.status } : null;
+    }
 }
 
 type StatusFilter = 'all' | 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED';
@@ -78,7 +104,7 @@ function renderChargeCell(key: string, c: ClientCharge, isOverdue: boolean): Rea
         case 'description':
             return <span className="text-sm font-normal text-gray-700 max-w-[200px] truncate block">{c.description ?? '—'}</span>;
         case 'billing_type':
-            return <span className="text-sm font-normal text-gray-600">{c.billing_type === 'PIX' ? 'PIX' : c.billing_type === 'UNDEFINED' ? 'Boleto+PIX' : 'Boleto'}</span>;
+            return <span className="text-sm font-normal text-gray-600">{rotuloTipo(c)}</span>;
         case 'due_date':
             return <span className={`text-sm font-normal whitespace-nowrap ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>{fmtDate(c.due_date)}</span>;
         case 'value':
@@ -103,6 +129,11 @@ export default function ClientChargesModule({ organizationId }: Props) {
     const [error, setError]       = useState<string | null>(null);
     const [search, setSearch]     = usePersistedState('clientChargesModuleFilters:search', '');
     const [filter, setFilter]     = usePersistedState<StatusFilter>('clientChargesModuleFilters:status', 'all');
+    // Âncora do Shift+clique (§10.1) — aqui em cima porque o "Agrupar" a zera
+    // quando as linhas mudam de lugar.
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+    const zerarAncora = useCallback(() => setLastCheckedIndex(null), []);
+    const agrupamento = useAgrupamento<CampoAgrupar>('clientChargesModuleFilters:groupBy', zerarAncora);
     const [expanded, setExpanded] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [cancelling, setCancelling]   = useState<string | null>(null);
@@ -174,18 +205,38 @@ export default function ClientChargesModule({ organizationId }: Props) {
         return r;
     }, [rows, filter, search, tableColumns.sortColumn, tableColumns.sortDirection]);
 
+    const { campo: groupBy, agrupando, recolhidos } = agrupamento;
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filtered, {
+        chave: c => chaveDoGrupo(groupBy, c),
+        semRotulo: SEM_GRUPO[groupBy],
+        valor: c => c.value,
+        ordem: groupBy === 'status' ? Object.keys(STATUS_META) : groupBy === 'vencimento' ? 'chave' : 'aparicao',
+    })), [filtered, groupBy]);
+    /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
+    const linhasNaTela = useMemo(() => (agrupando ? linhasDaTela(grupos, recolhidos) : filtered), [agrupando, grupos, recolhidos, filtered]);
+    const entradas: EntradaDaTela<ClientCharge>[] = useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, recolhidos) : filtered.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, recolhidos, filtered],
+    );
+    /** Células de uma linha: checkbox + colunas de dado + espaçador + Ações. */
+    const colunasDaLinha = 1
+        + tableColumns.orderedVisibleColumns.filter(k => k !== 'actions').length
+        + 1
+        + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
+
     /** Mesmo critério do handleCancel: precisa estar ativa e vinculada a um recebível. */
     const isSelectable = (c: ClientCharge) => c.status !== 'CANCELLED' && !PAID.includes(c.status) && !!c.transaction_id;
-    const selectableVisible = useMemo(() => filtered.filter(isSelectable), [filtered]);
+    const selectableVisible = useMemo(() => linhasNaTela.filter(isSelectable), [linhasNaTela]);
     const selectableIndexById = useMemo(
         () => new Map(selectableVisible.map((c, i) => [c.id, i])),
         [selectableVisible],
     );
+    /** Selecionadas do recorte inteiro (inclui grupo recolhido depois de marcado) — base do lote. */
     const selectedVisible = useMemo(
-        () => selectableVisible.filter(c => selectedIds.has(c.id)),
-        [selectableVisible, selectedIds],
+        () => filtered.filter(c => isSelectable(c) && selectedIds.has(c.id)),
+        [filtered, selectedIds],
     );
-    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+    const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every(c => selectedIds.has(c.id));
     const selectedTotal = selectedVisible.reduce((s, c) => s + (c.value ?? 0), 0);
 
     function toggleRow(id: string) {
@@ -196,7 +247,6 @@ export default function ClientChargesModule({ organizationId }: Props) {
         });
     }
 
-    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
 
     /** §10.1 — Shift+clique seleciona o intervalo entre a última linha marcada e a atual. */
     function handleRowCheck(id: string, index: number, shiftKey: boolean) {
@@ -394,6 +444,17 @@ export default function ClientChargesModule({ organizationId }: Props) {
                             })}
                         </div>
 
+                        {/* Agrupar — guia de UI §6.12 */}
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar as cobranças"
+                        />
+
                         {/* Separador entre grupo "filtrar" e grupo "visualizar" (§5.1) */}
                         <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
@@ -486,7 +547,12 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 bg-white">
-                                {filtered.map(c => {
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={colunasDaLinha} onAlternar={agrupamento.alternar} tituloTotal="Soma do valor das cobranças do grupo" />
+                                    );
+                                    const c = e.item;
                                     const isOverdue = c.status === 'OVERDUE';
                                     const isCancelled = c.status === 'CANCELLED';
                                     const active = !isCancelled && !PAID.includes(c.status);

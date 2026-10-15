@@ -55,6 +55,47 @@ describe('alvos e variáveis', () => {
   });
 });
 
+describe('desenho girado (casa automática F3, 14/10/2026)', () => {
+  /** A mesma casa de `casa()`, girada 30°: os vértices do arranjo viram interseções arredondadas ao mm. */
+  function casaGirada(): BlueprintModel {
+    const c = Math.cos(Math.PI / 6);
+    const sn = Math.sin(Math.PI / 6);
+    const g = (x: number, y: number) => point(Math.round(x * c - y * sn), Math.round(x * sn + y * c));
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2600 }).model;
+    const t = m.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: g(ax, ay), b: g(bx, by), thicknessMm: 150, heightMm: 2600 });
+    m = applyBatch(m, [
+      w(0, 0, 4150, 0),
+      w(4150, 0, 4150, 4150),
+      w(4150, 4150, 0, 4150),
+      w(0, 4150, 0, 0),
+      w(4150, 0, 5400, 0),
+      w(5400, 0, 5400, 2400),
+      // a junção em T passa 3 mm além (ALEM_MM): girada, a ponta exata morre no arredondamento
+      w(5400, 2400, 4147, 2400),
+    ]).model;
+    const sala = m.spaces.find((s) => s.areaMm2 > 10_000_000)!;
+    const banho = m.spaces.find((s) => s.areaMm2 < 10_000_000)!;
+    const frente = m.walls.find((x) => x.a.x === 0 && x.a.y === 0)!;
+    m = applyBatch(m, [
+      { type: 'NameSpace', spaceId: sala.id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' },
+      { type: 'NameSpace', spaceId: banho.id, name: 'Banho', tipoDeAmbiente: 'BANHEIRO' },
+      { type: 'AddOpening', wallId: frente.id, kind: 'window', offsetMm: 1000, widthMm: 1500, heightMm: 1200, sillMm: 1000 },
+    ]).model;
+    return m;
+  }
+
+  it('a janela é do ambiente e a largura mínima é a do cômodo, não a da caixa dos eixos do mundo', () => {
+    const m = casaGirada();
+    const ambientes = alvosDoEscopo(m, 'AMBIENTE', {});
+    const sala = ambientes.find((a) => a.rotulo === 'Sala')!;
+    const banho = ambientes.find((a) => a.rotulo === 'Banho')!;
+    expect(sala.vars.area_janelas).toBe(1.8);
+    expect(sala.vars.largura_min as number).toBeCloseTo(4, 2);
+    expect(banho.vars.largura_min as number).toBeCloseTo(1.1, 2);
+  });
+});
+
 describe('avaliação', () => {
   it('semente na casa: banheiro viola área/largura/iluminação, porta de 0,70 viola o vão, sala conforme; lote sem zona → não avaliada com motivo; quando falso não aparece', () => {
     const m = casa();

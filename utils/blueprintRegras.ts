@@ -310,18 +310,52 @@ export function larguraMinimaMm(s: Space, paredes: Wall[]): number {
   const n = s.ring.length;
   const recuos = s.ring.map((a, i) => {
     const b = s.ring[(i + 1) % n];
-    const w = paredes.find((x) => {
-      const cruz = (p: { x: number; y: number }) => (x.b.x - x.a.x) * (p.y - x.a.y) - (x.b.y - x.a.y) * (p.x - x.a.x);
-      const entre = (p: { x: number; y: number }) => Math.min(x.a.x, x.b.x) <= p.x && p.x <= Math.max(x.a.x, x.b.x) && Math.min(x.a.y, x.b.y) <= p.y && p.y <= Math.max(x.a.y, x.b.y);
-      return cruz(a) === 0 && cruz(b) === 0 && entre(a) && entre(b);
-    });
+    const w = paredes.find((x) => paredeContemLado(x, a, b));
     return w ? w.thicknessMm / 2 : 0;
   });
   const anel = anelRecuado(s.ring, recuos);
   const base = anel.length >= 3 ? anel : s.ring;
-  const xs = base.map((p) => p.x);
-  const ys = base.map((p) => p.y);
-  return Math.max(0, Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)));
+  // A caixa no quadro do LADO MAIS LONGO do ambiente (casa automática F3, 14/10/2026): alinhado aos
+  // eixos, esse lado é horizontal ou vertical e a conta é a de sempre; num desenho girado a caixa
+  // dos eixos do mundo dava uma largura MAIOR que a real.
+  let u = { x: 1, y: 0 };
+  let maior = 0;
+  for (let i = 0; i < s.ring.length; i++) {
+    const a = s.ring[i];
+    const b = s.ring[(i + 1) % s.ring.length];
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L > maior + 1e-9) {
+      maior = L;
+      u = { x: (b.x - a.x) / L, y: (b.y - a.y) / L };
+    }
+  }
+  const pu = base.map((p) => p.x * u.x + p.y * u.y);
+  const pv = base.map((p) => -p.x * u.y + p.y * u.x);
+  return Math.max(0, Math.min(Math.max(...pu) - Math.min(...pu), Math.max(...pv) - Math.min(...pv)));
+}
+
+/**
+ * O arranjo do kernel une pontas a até 5 mm (o snap da junção em T): num desenho girado, a parede
+ * interna passa `ALEM_MM` = 3 mm além do encontro e o VÉRTICE do ambiente fica nessa ponta, 3 mm
+ * fora da reta da parede hospedeira. A tolerância do lado acompanha a do arranjo.
+ */
+const TOLERANCIA_DO_LADO_MM = 5;
+
+/**
+ * A parede contém o lado a–b do anel do ambiente? Por DISTÂNCIA à reta da parede, não por
+ * colinearidade exata: num desenho girado os vértices do arranjo são interseções arredondadas ao
+ * mm (ou pontas esticadas) e nunca caem exatamente na reta — o teste exato não achava parede
+ * nenhuma e o ambiente ficava sem janela e sem recuo de face (casa automática F3, 14/10/2026).
+ */
+function paredeContemLado(w: Wall, a: { x: number; y: number }, b: { x: number; y: number }, tolMm = TOLERANCIA_DO_LADO_MM): boolean {
+  const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+  if (L < 1e-9) return false;
+  const dist = (p: { x: number; y: number }) => Math.abs((w.b.x - w.a.x) * (p.y - w.a.y) - (w.b.y - w.a.y) * (p.x - w.a.x)) / L;
+  const entre = (p: { x: number; y: number }) => {
+    const t = ((p.x - w.a.x) * (w.b.x - w.a.x) + (p.y - w.a.y) * (w.b.y - w.a.y)) / L;
+    return t >= -tolMm && t <= L + tolMm;
+  };
+  return dist(a) <= tolMm && dist(b) <= tolMm && entre(a) && entre(b);
 }
 
 /** Aberturas nas paredes que compõem o contorno do ambiente (colineares e contidas num lado). */
@@ -332,11 +366,7 @@ function aberturasDoAmbiente(model: BlueprintModel, s: Space): Opening[] {
   for (let i = 0; i < n; i++) {
     const a = s.ring[i];
     const b = s.ring[(i + 1) % n];
-    for (const w of paredes) {
-      const cruz = (p: { x: number; y: number }) => (w.b.x - w.a.x) * (p.y - w.a.y) - (w.b.y - w.a.y) * (p.x - w.a.x);
-      const entre = (p: { x: number; y: number }) => Math.min(w.a.x, w.b.x) <= p.x && p.x <= Math.max(w.a.x, w.b.x) && Math.min(w.a.y, w.b.y) <= p.y && p.y <= Math.max(w.a.y, w.b.y);
-      if (cruz(a) === 0 && cruz(b) === 0 && entre(a) && entre(b)) ids.add(w.id);
-    }
+    for (const w of paredes) if (paredeContemLado(w, a, b)) ids.add(w.id);
   }
   return model.openings.filter((o) => ids.has(o.wallId));
 }

@@ -29,12 +29,32 @@
  * mão direita de quem olha da rua —, e a `transformacao` leva ao mundo. Com a
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
-import { polygonArea, type Boundary, type Point } from './blueprintKernel';
+import { applyBatch, point, polygonArea, snapshotHash, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
 import { recuosEfetivos } from './blueprintZonaUrbanistica';
-import { maiorRetanguloInscrito, type Retangulo } from './blueprintGerador';
-import { resumoDoPrograma, type Programa, type ProgramaCurtoDaCasa } from './blueprintPrograma';
+import {
+  comandosDeAplicacao,
+  gerar,
+  HIPOTESES_DO_GERADOR_PADRAO,
+  maiorRetanguloInscrito,
+  type EntradaDoGerador,
+  type HipotesesDoGerador,
+  type Retangulo,
+  type ResultadoDoGerador,
+} from './blueprintGerador';
+import {
+  HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO,
+  programaDaCasa,
+  resumoDoPrograma,
+  type HipotesesDoProgramaDaCasa,
+  type Programa,
+  type ProgramaCurtoDaCasa,
+} from './blueprintPrograma';
+import { conferirPrograma } from './blueprintConferenciaDoPrograma';
+import { avaliarRegras, loteParaRegras, REGRAS_SEMENTE, type ContextoDeRegras } from './blueprintRegras';
+import { ALEM_MM } from './blueprintPavimentoTipoDaMassa';
+import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
 
 // ─── Hipóteses ──────────────────────────────────────────────────────────────
 
@@ -284,4 +304,324 @@ export function implantacaoDaCasa(
 export function resumoDaImplantacao(i: ImplantacaoDaCasa): string {
   const m = i.medidas;
   return `${f2((i.retanguloLocal.x1 - i.retanguloLocal.x0) / 1000)} × ${f2((i.retanguloLocal.y1 - i.retanguloLocal.y0) / 1000)} m · projeção ${f2(m.projecaoM2)} m² · TO ${f1(m.toPct)} %${m.toMaxPct != null ? ` (máx. ${f1(m.toMaxPct)} %)` : ''} · permeável ${f1(m.permeabilidadePct)} %${m.permeabilidadeMinPct != null ? ` (mín. ${f1(m.permeabilidadeMinPct)} %)` : ''} · limitada ${LIMITADA_POR[i.limitante]}`;
+}
+
+// ─── F3: O ORQUESTRADOR ─────────────────────────────────────────────────────
+//
+// Molde de `gerarPpci`/`gerarClimatizacao`: cada etapa planeja sobre a CÓPIA de
+// trabalho já com as anteriores aplicadas (`applyBatch`), o plano acumula os
+// comandos e os ids criados, e `conferirPlanoDaCasa` reaplica no original antes de
+// gravar — o kernel dá ids determinísticos (`seq` por prefixo), então o mesmo lote
+// no mesmo original cria os MESMOS ids. Um `runBatch`, um Ctrl+Z.
+//
+// Só a ARQUITETURA é fatal: sem paredes, nenhuma etapa seguinte tem o que fazer.
+// As outras (F4 em diante) falham com motivo e o plano segue.
+//
+// SEMENTES: o E6.2 é determinístico por semente. Achado da F2: num lote estreito
+// a área de serviço fica sem lado externo em todas as sementes testadas — então o
+// orquestrador gera VÁRIAS e fica com a de menos problemas graves (sem acesso,
+// abaixo da mínima, sem fachada exigida); empate → maior nota; empate → menor semente.
+//
+// QUADRO DA FRENTE: a planta é gerada no quadro local (frente ao sul, `direcaoDaFrente`
+// nula) e levada ao mundo. Com a frente num eixo do desenho a transformação é exata.
+// Girada, as pontas viram frações e o arredondamento ao mm desfaz a junção em T (o
+// kernel só corta parede em interseção EXATA — achado da M6b): a ponta que encontra o
+// meio de outra parede passa `ALEM_MM` além, e o offset das aberturas anda junto.
+
+export type EtapaDaCasaId = 'IMPLANTACAO' | 'ARQUITETURA' | 'CONFERENCIA';
+
+export interface EtapaDaCasa {
+  id: EtapaDaCasaId;
+  rotulo: string;
+  situacao: SituacaoDaEtapa;
+  comandos: number;
+  nota: string | null;
+}
+
+export interface EntradaDaCasa {
+  /** O pavimento onde a casa nasce — precisa estar sem paredes. */
+  levelId: ObjectId;
+  /** Terreno, divisas com papel, recuos e índices da zona (o contexto do estudo de massa). */
+  ctx: ContextoDaMassa;
+  curto: ProgramaCurtoDaCasa;
+  /** Programa já editado pelo usuário; ausente = `programaDaCasa(curto)`. */
+  programa?: Programa | null;
+  /** A zona inteira para as regras (testada mínima, área mínima do lote…). Ausente = só o que `ctx.zona` tem. */
+  zonaDasRegras?: ContextoDeRegras['zona'];
+  rotacaoNorteDeg: number | null;
+  latitudeGraus: number;
+}
+
+export interface HipotesesDaCasa {
+  programa: HipotesesDoProgramaDaCasa;
+  implantacao: Partial<HipotesesDaImplantacao>;
+  gerador: Partial<HipotesesDoGerador>;
+  /** As sementes que o E6.2 tenta; fica a de menos problemas graves. */
+  sementes: number[];
+}
+
+export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
+  programa: HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO,
+  implantacao: {},
+  gerador: {},
+  sementes: [1, 2, 3, 4, 5, 6, 7, 8],
+};
+
+export interface PlanoDaCasa {
+  levelId: ObjectId;
+  /** O LOTE: aplicado no modelo original de uma vez, um Ctrl+Z. */
+  comandos: Command[];
+  /** Os ids que o lote cria, na ordem — para conferir a reaplicação. */
+  criados: ObjectId[];
+  etapas: EtapaDaCasa[];
+  pendencias: PendenciaDoPpci[];
+  /** O modelo DEPOIS do lote (a prévia). */
+  resultado: BlueprintModel;
+  programa: Programa;
+  implantacao: ImplantacaoDaCasa | null;
+  /** A alternativa do E6.2 escolhida (no quadro da frente). */
+  semente: number | null;
+  /** Por que esta semente: "2 de 4 sem problema grave; nota 71". */
+  escolha: string | null;
+  decisoes: string[];
+  resumo: {
+    areaConstruidaM2: number | null;
+    ambientesPedidos: number;
+    ambientesAtendidos: number;
+    regrasVioladas: number;
+  };
+}
+
+/** Por que o botão "Gerar casa" não roda — `null` = pode. */
+export function motivoParaNaoGerar(model: BlueprintModel, levelId: ObjectId | null): string | null {
+  if (!levelId || !model.levels.some((l) => l.id === levelId)) return 'Abra um pavimento para gerar a casa.';
+  if (model.walls.some((w) => w.levelId === levelId)) return 'O pavimento já tem paredes — a casa automática nasce num pavimento vazio (crie uma alternativa ou limpe o pavimento).';
+  return null;
+}
+
+/** Os avisos do E6.2 que tornam a planta pior que outra semente sem eles. */
+const GRAVE = /sem acesso|abaixo da área mínima|ficou sem lado externo|sem fachada|não coube/i;
+
+/**
+ * Problemas graves de uma alternativa: os avisos acima + as regras de AMBIENTE de severidade ERRO
+ * violadas (largura e área mínimas, iluminação). Achado de 14/10/2026: o E6.2 dá à faixa íntima uma
+ * profundidade só e divide a largura — banheiro de 0,80 × 5,75 m — em TODAS as sementes de um lote
+ * de 9 m; escolher pela nota sozinha deixava a pior.
+ */
+function problemasGraves(r: ResultadoDoGerador): number {
+  return r.avisos.filter((a) => GRAVE.test(a)).length + r.regras.filter((x) => x.estado === 'VIOLADA' && x.regra.severidade === 'ERRO' && x.regra.escopo === 'AMBIENTE').length;
+}
+
+function escolherSemente(resultados: ResultadoDoGerador[]): { r: ResultadoDoGerador; texto: string } {
+  const g = new Map(resultados.map((r) => [r, problemasGraves(r)]));
+  const ordem = [...resultados].sort((a, b) => g.get(a)! - g.get(b)! || (b.avaliacao.notaGeral ?? -1) - (a.avaliacao.notaGeral ?? -1) || a.semente - b.semente);
+  const r = ordem[0];
+  const contagem = resultados.map((x) => g.get(x)!);
+  const texto = `semente ${r.semente} de ${resultados.length} tentada(s): ${g.get(r) ? `${g.get(r)} problema(s) grave(s) — o menor entre ${Math.min(...contagem)} e ${Math.max(...contagem)}` : 'sem problema grave'}; nota ${r.avaliacao.notaGeral ?? '—'}`;
+  return { r, texto };
+}
+
+/** O norte do desenho visto do quadro da frente (mesma convenção de `direcaoDoSol`: norte = (sen θ, cos θ)). */
+function norteNoQuadro(q: QuadroDaFrente, rotacaoNorteDeg: number | null): number | null {
+  const th = ((rotacaoNorteDeg ?? 0) * Math.PI) / 180;
+  const n = { x: Math.sin(th), y: Math.cos(th) };
+  const local = Math.round(((Math.atan2(n.x * q.ex.x + n.y * q.ex.y, n.x * q.ey.x + n.y * q.ey.y) * 180) / Math.PI) * 1000) / 1000;
+  return rotacaoNorteDeg == null && Math.abs(local) < 1e-9 ? null : local === 0 ? 0 : local;
+}
+
+/**
+ * As paredes, aberturas e nomes do E6.2 (no quadro da frente) levados ao mundo, nos três
+ * comandos de lote. Exata quando a frente cai num eixo; girada, estica as pontas em T.
+ */
+export function comandosNoMundo(r: ResultadoDoGerador, levelId: ObjectId, q: QuadroDaFrente, exataNoDesenho: boolean): Command[] {
+  const base = comandosDeAplicacao(r, levelId);
+  const mundo = (p: Point): Point => {
+    const m = paraMundo(q, p);
+    return point(Math.round(m.x), Math.round(m.y));
+  };
+  const walls = base.flatMap((c) => (c.type === 'AddWalls' ? c.walls : []));
+  const pontas = walls.flatMap((w) => [w.a, w.b]);
+  const compartilhada = (p: Point, propria: number) => pontas.some((o, k) => Math.floor(k / 2) !== propria && Math.abs(o.x - p.x) < 1 && Math.abs(o.y - p.y) < 1);
+  // Quanto a ponta `a` de cada parede andou para trás (o offset das aberturas cresce o mesmo).
+  const andouA = new Map<string, number>();
+  const novas = walls.map((w, i) => {
+    let a = w.a;
+    let b = w.b;
+    if (!exataNoDesenho) {
+      const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const ux = (b.x - a.x) / L;
+      const uy = (b.y - a.y) / L;
+      if (!compartilhada(a, i)) {
+        a = { x: a.x - ux * ALEM_MM, y: a.y - uy * ALEM_MM };
+        if (w.uid) andouA.set(w.uid, ALEM_MM);
+      }
+      if (!compartilhada(b, i)) b = { x: b.x + ux * ALEM_MM, y: b.y + uy * ALEM_MM };
+    }
+    return { ...w, a: mundo(a), b: mundo(b) };
+  });
+  const out: Command[] = [];
+  for (const c of base) {
+    if (c.type === 'AddWalls') out.push({ type: 'AddWalls', walls: novas });
+    else if (c.type === 'AddOpenings') out.push({ type: 'AddOpenings', openings: c.openings.map((o) => ({ ...o, offsetMm: Math.round(o.offsetMm + (o.wallUid ? (andouA.get(o.wallUid) ?? 0) : 0)) })) });
+    else if (c.type === 'PlaceSpaceLabels') out.push({ type: 'PlaceSpaceLabels', labels: c.labels.map((l) => ({ ...l, at: mundo(l.at) })) });
+    else out.push(c);
+  }
+  return out;
+}
+
+export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> = {}): PlanoDaCasa {
+  const hip: HipotesesDaCasa = { ...HIPOTESES_DA_CASA_PADRAO, ...hipParcial };
+  const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
+  // A implantação usa a mesma parede externa e a mesma malha do gerador.
+  const hipImplantacao: Partial<HipotesesDaImplantacao> = {
+    espessuraExternaMm: hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm,
+    malhaMm: hipGerador.malhaMm ?? HIPOTESES_DO_GERADOR_PADRAO.malhaMm,
+    ...hip.implantacao,
+  };
+  const etapas: EtapaDaCasa[] = [];
+  const pendencias: PendenciaDoPpci[] = [];
+  const decisoes: string[] = [];
+  const comandos: Command[] = [];
+  const criados: ObjectId[] = [];
+  let m = original;
+  const etapa = (id: EtapaDaCasaId, rotulo: string, situacao: SituacaoDaEtapa, n: number, nota: string | null = null) =>
+    etapas.push({ id, rotulo, situacao: situacao === 'LANCOU' && n === 0 ? 'NADA_A_FAZER' : situacao, comandos: n, nota });
+  const aplicar = (lote: Command[]): number => {
+    if (!lote.length) return 0;
+    const r = applyBatch(m, lote);
+    m = r.model;
+    comandos.push(...lote);
+    criados.push(...r.diff.created);
+    return lote.length;
+  };
+
+  const doCurto = programaDaCasa(entrada.curto, hip.programa);
+  const programa = entrada.programa && entrada.programa.itens.length ? entrada.programa : doCurto.programa;
+  if (!entrada.programa) for (const a of doCurto.avisos) pendencias.push({ grupo: 'PREMISSA', texto: `Programa: ${a}` });
+  const pedidos = programa.itens.filter((i) => i.uso !== 'CIRCULACAO').reduce((s, i) => s + i.quantidade, 0);
+  const vazio = (motivo: string, implantacao: ImplantacaoDaCasa | null = null): PlanoDaCasa => {
+    for (const [id, rot] of [['ARQUITETURA', 'Arquitetura (gerador E6.2)'], ['CONFERENCIA', 'Conferência']] as const) if (!etapas.some((e) => e.id === id)) etapa(id, rot, 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
+    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0 } };
+  };
+
+  const impedimento = motivoParaNaoGerar(original, entrada.levelId);
+  if (impedimento) {
+    etapa('IMPLANTACAO', 'Implantação pela lei', 'NAO_RODOU', 0, impedimento);
+    return vazio(impedimento);
+  }
+
+  // ── IMPLANTACAO ───────────────────────────────────────────────────────────
+  const imp = implantacaoDaCasa(entrada.ctx, programa, doCurto.curto, hipImplantacao);
+  if (!imp.ok) {
+    etapa('IMPLANTACAO', 'Implantação pela lei', 'NAO_RODOU', 0, imp.motivo);
+    pendencias.push({ grupo: 'PREMISSA', texto: imp.motivo });
+    return vazio('sem implantação');
+  }
+  const implantacao = imp.implantacao;
+  etapa('IMPLANTACAO', 'Implantação pela lei', 'CALCULOU', 0, resumoDaImplantacao(implantacao));
+  for (const a of implantacao.avisos) pendencias.push({ grupo: 'PREMISSA', texto: a });
+
+  // ── ARQUITETURA ───────────────────────────────────────────────────────────
+  const q = implantacao.quadro;
+  const rl = implantacao.retanguloLocal;
+  const terreno = entrada.ctx.terreno;
+  const loteDasRegras = loteParaRegras(terreno, entrada.ctx.limites);
+  const zona = entrada.ctx.zona;
+  const zonaDasRegras: ContextoDeRegras['zona'] = entrada.zonaDasRegras ?? {
+    taxaOcupacaoMax: zona.taxaOcupacaoMaxPct,
+    coeficienteMax: zona.coeficienteMax,
+    gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM,
+    gabaritoPavimentos: zona.gabaritoPavimentos,
+    taxaPermeabilidadeMin: zona.taxaPermeabilidadeMinPct,
+  };
+  const entradaDoGerador: EntradaDoGerador = {
+    programa,
+    envelope: [point(rl.x0, rl.y0), point(rl.x1, rl.y0), point(rl.x1, rl.y1), point(rl.x0, rl.y1)],
+    direcaoDaFrente: null, // no quadro da frente, a rua é o sul (−y)
+    rotacaoNorteDeg: norteNoQuadro(q, entrada.rotacaoNorteDeg),
+    latitudeGraus: entrada.latitudeGraus,
+    contextoDeRegras: { lote: loteDasRegras, zona: zonaDasRegras },
+  };
+  const resultados: ResultadoDoGerador[] = [];
+  const falhas: string[] = [];
+  for (const s of hip.sementes.length ? hip.sementes : [1]) {
+    try {
+      resultados.push(gerar(entradaDoGerador, s, hipGerador));
+    } catch (e) {
+      falhas.push(`semente ${s}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  if (!resultados.length) {
+    const motivo = `o gerador não fechou a planta (${falhas.join('; ')})`;
+    etapa('ARQUITETURA', 'Arquitetura (gerador E6.2)', 'NAO_RODOU', 0, motivo);
+    pendencias.push({ grupo: 'SEM_SOLUCAO', texto: motivo });
+    return vazio(motivo, implantacao);
+  }
+  const { r, texto: escolha } = escolherSemente(resultados);
+  decisoes.push(...r.decisoes);
+  let n = 0;
+  try {
+    n = aplicar(comandosNoMundo(r, entrada.levelId, q, implantacao.alinhadaAoDesenho));
+  } catch (e) {
+    const motivo = `as paredes geradas não entraram no desenho: ${e instanceof Error ? e.message : String(e)}`;
+    etapa('ARQUITETURA', 'Arquitetura (gerador E6.2)', 'NAO_RODOU', 0, motivo);
+    pendencias.push({ grupo: 'SEM_SOLUCAO', texto: motivo });
+    return vazio(motivo, implantacao);
+  }
+  const paredes = m.walls.filter((w) => w.levelId === entrada.levelId).length;
+  const aberturas = m.openings.filter((o) => m.walls.some((w) => w.id === o.wallId && w.levelId === entrada.levelId)).length;
+  etapa('ARQUITETURA', 'Arquitetura (gerador E6.2)', 'LANCOU', n, `${paredes} paredes, ${aberturas} portas e janelas, ${r.ambientes.length} ambientes — ${escolha}`);
+  for (const a of r.avisos) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura: ${a}` });
+
+  // ── CONFERENCIA ───────────────────────────────────────────────────────────
+  const conferencia = conferirPrograma(m, programa);
+  for (const it of conferencia.itens) {
+    if (it.item.uso === 'CIRCULACAO' || it.faltam <= 0) continue;
+    pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Programa: falta ${it.faltam} × ${it.item.nome} no desenho` });
+  }
+  for (const rel of conferencia.relacoes) {
+    if (rel.estado === 'VIOLADA' && rel.relacao.tipo !== 'DESEJAVEL') pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Programa: ${rel.a.nome} × ${rel.b.nome} — ${rel.relacao.tipo === 'OBRIGATORIA' ? 'deviam ter porta direta' : 'não podiam ser vizinhos'} (${rel.valor})` });
+  }
+  const atendidos = conferencia.itens.filter((it) => it.item.uso !== 'CIRCULACAO').reduce((s, it) => s + it.casados.length, 0);
+  const areaConstruidaM2 = r.resumo.areaConstruidaM2;
+  const regras = avaliarRegras(m, REGRAS_SEMENTE, {
+    lote: loteDasRegras,
+    zona: zonaDasRegras,
+    taxaOcupacaoPct: loteDasRegras && loteDasRegras.areaM2 > 0 ? Math.round((areaConstruidaM2 / loteDasRegras.areaM2) * 1000) / 10 : null,
+    coeficiente: loteDasRegras && loteDasRegras.areaM2 > 0 ? Math.round((areaConstruidaM2 / loteDasRegras.areaM2) * 100) / 100 : null,
+    alturaM: (hipGerador.peDireitoMm ?? HIPOTESES_DO_GERADOR_PADRAO.peDireitoMm) / 1000,
+  });
+  const violadas = regras.filter((x) => x.estado === 'VIOLADA' && x.regra.severidade === 'ERRO');
+  for (const v of violadas) pendencias.push({ grupo: 'VERIFICACAO', texto: `Legislação: ${v.regra.nome} — ${v.alvoRotulo}${v.valores ? ` (${v.valores})` : ''}` });
+  etapa('CONFERENCIA', 'Conferência (programa e legislação)', 'CALCULOU', 0, `${atendidos} de ${pedidos} ambientes do programa; ${violadas.length} regra(s) violada(s)`);
+
+  return {
+    levelId: entrada.levelId,
+    comandos,
+    criados,
+    etapas,
+    pendencias,
+    resultado: m,
+    programa,
+    implantacao,
+    semente: r.semente,
+    escolha,
+    decisoes,
+    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length },
+  };
+}
+
+/** Trava antes de gravar: o lote reaplicado no desenho ATUAL cria os mesmos ids e o mesmo modelo da prévia. */
+export function conferirPlanoDaCasa(original: BlueprintModel, plano: PlanoDaCasa): { ok: true } | { ok: false; motivo: string } {
+  if (!plano.comandos.length) return { ok: false, motivo: 'O plano não tem nada a lançar.' };
+  const impedimento = motivoParaNaoGerar(original, plano.levelId);
+  if (impedimento) return { ok: false, motivo: impedimento };
+  try {
+    const r = applyBatch(original, plano.comandos);
+    const iguais = r.diff.created.length === plano.criados.length && r.diff.created.every((id, i) => id === plano.criados[i]);
+    if (!iguais || snapshotHash(r.model) !== snapshotHash(plano.resultado)) return { ok: false, motivo: 'O desenho mudou desde a prévia — gere de novo.' };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, motivo: `O desenho mudou desde a prévia — gere de novo (${e instanceof Error ? e.message : String(e)}).` };
+  }
 }

@@ -124,7 +124,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F0 — frente `casa-automatica`, este plano, esqueleto do harness
 - [x] F1 — programa paramétrico da casa (ver "Registro da F1" abaixo)
 - [x] F2 — implantação pela lei + regras com zona no gerador (ver "Registro da F2" abaixo)
-- [ ] F3 — orquestrador mínimo (arquitetura num lote)
+- [x] F3 — orquestrador mínimo (arquitetura num lote) (ver "Registro da F3" abaixo)
 - [ ] F4 — estrutura
 - [ ] F5 — telhado
 - [ ] F6 — peças-âncora + rede pública
@@ -211,4 +211,62 @@ permeabilidade apertada, vagas descobertas, zona sem índices, sem frente/sem lo
 direita, frente ao norte, lote girado 30°, quadro exato, gerador com `sem-lote-to` e
 `sem-lote-ca` CONFORMES, TO VIOLADA quando o retângulo é o envelope inteiro, e sem contexto
 como antes. `BlueprintEditor.test.tsx` 254/254.
+
+## Registro da F3 (14/10/2026)
+
+O que entrou:
+
+- Em `utils/blueprintCasaAutomatica.ts`:
+  - `planejarCasa(original, entrada, hip?) → PlanoDaCasa` com as etapas IMPLANTACAO (calcula),
+    ARQUITETURA (lança) e CONFERENCIA (calcula).
+  - `conferirPlanoDaCasa(original, plano)`: a trava, que reaplica e compara os ids criados e o
+    hash. `motivoParaNaoGerar(model, levelId)`: pavimento existe e está sem paredes.
+  - `comandosNoMundo`: os três comandos de lote do E6.2 levados do quadro da frente ao mundo.
+  - `HIPOTESES_DA_CASA_PADRAO`: programa, implantação, gerador e sementes 1–8. A parede externa
+    e a malha da implantação vêm das hipóteses do gerador (uma fonte).
+  - Molde de `gerarPpci`: a cópia de trabalho acumula comandos e `criados`. Só a ARQUITETURA é
+    fatal; o que falta vira motivo e pendência, nunca exceção. Tipos de situação e pendência
+    reusados do PPCI.
+- A planta é gerada no QUADRO DA FRENTE (rua ao sul, norte recalculado no quadro). Com a frente num
+  eixo do desenho, a transformação é exata. Girada, a ponta que encontra o meio de outra parede
+  passa `ALEM_MM` (3 mm) além, e o offset das aberturas anda junto (técnica da M6b).
+  Sonda 14/10, 12 ambientes gerados:
+
+  | Giro | Com `ALEM_MM` | Sem |
+  |---|---|---|
+  | 17° | 12 | 4 |
+  | 30° | 12 | 1 |
+  | 45° | 12 | 8 |
+
+  Teste de fidelidade: lote a 30° com o norte girado junto dá a MESMA planta do lote reto
+  (paredes, aberturas, nomes; áreas a menos de 0,05 m²).
+- **Defeito do motor de regras corrigido (vale para qualquer desenho fora de eixo, não só para a
+  casa):**
+  - `aberturasDoAmbiente` e `larguraMinimaMm` casavam parede e lado do ambiente por colinearidade
+    EXATA. Girado, nenhum vértice cai exatamente na reta: o ambiente ficava sem janela
+    (`area_janelas = 0`, "Iluminação 1/6" violada em falso) e sem recuo de face.
+  - Agora o casamento é por distância à reta (`paredeContemLado`, 5 mm, a tolerância de snap do
+    arranjo: o vértice fica na ponta esticada, 3 mm fora). A largura é medida no quadro do lado
+    mais longo; alinhado aos eixos, a conta é a mesma de antes.
+  - Teste em `blueprintRegras.test.ts`. Com a tolerância zerada (o comportamento antigo), ele
+    falha com `area_janelas` 0.
+- Escolha da semente: menos problemas graves (avisos do E6.2 + regras de AMBIENTE com severidade
+  ERRO violadas); empate → maior nota; empate → menor semente.
+
+Mudança em relação ao plano: o worker e o hook (`useCasaAutomatica`) ficaram para a F10, quando há
+tela que os consome. Hoje não teriam quem os chamasse. As 8 sementes rodam em cerca de 150 ms no
+teste.
+
+**Achado que pede decisão: o gerador E6.2 fatia a faixa íntima com UMA profundidade só.**
+Banheiro de 0,80 × 5,75 m e dormitório de 2,15 m de largura no lote de 9 m. Em todas as 8
+sementes e nos 3 formatos medidos (9 × 16,85; 10,5 × 14,5; 12 × 12,7 m), a melhor planta viola
+**pelo menos 5 regras de AMBIENTE** (largura mínima de banheiro e dormitório, área do lavabo,
+iluminação da sala). O gerador não usa a `larguraMinMm` do item ao fatiar. A F3 escolhe a menos
+pior e lista cada violação como pendência, mas não corrige. A correção é no gerador (mexe no E6.2,
+que o "Gerar" do editor também usa).
+
+Portão do harness (`docs/spikes/casa-automatica/medir.mjs`, lote reto e a 30°): etapas certas, 11
+de 11 ambientes atendidos, 12 nomeados (nenhum fundido), aberturas criadas = pedidas, TO 43,6 %,
+nenhuma regra de lote violada, trava aprovando. As pendências do lote girado são as mesmas do
+lote reto. Prova: `__tests__/blueprintCasaAutomatica.test.ts`, 15 testes.
 

@@ -29,17 +29,31 @@ page.on('pageerror', (e) => erros.push(String(e)));
 const falhas = [];
 const conferir = (ok, msg) => { console.log(`${ok ? '✅' : '❌'} ${msg}`); if (!ok) falhas.push(msg); };
 
-await page.goto(`${urlBase}/docs/spikes/casa-automatica/index.html`);
-await page.locator('canvas').first().waitFor();
-await page.waitForTimeout(500);
-const estado = await page.evaluate(() => window.__estado);
+for (const graus of [0, 30]) {
+  erros.length = 0;
+  await page.goto(`${urlBase}/docs/spikes/casa-automatica/index.html?graus=${graus}`);
+  await page.locator('canvas').first().waitFor();
+  await page.waitForTimeout(700);
+  const e = await page.evaluate(() => window.__estado);
+  const p = e?.plano;
+  const t = `[${graus}°]`;
+  conferir(erros.length === 0, `${t} sem erro de JS na página${erros.length ? `: ${erros.join(' | ')}` : ''}`);
+  conferir(e?.divisas === 4 && e?.frente === 1, `${t} lote de prova com 4 divisas e uma FRENTE`);
+  conferir(!!p, `${t} o plano existe`);
+  if (!p) continue;
+  const situacoes = p.etapas.map((x) => `${x.id}:${x.situacao}`).join(' ');
+  conferir(situacoes === 'IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU CONFERENCIA:CALCULOU', `${t} etapas: ${situacoes}`);
+  conferir(p.comandos === 3, `${t} três comandos de lote (${p.comandos})`);
+  conferir(p.ambientesAtendidos === p.ambientesPedidos, `${t} ambientes do programa atendidos: ${p.ambientesAtendidos} de ${p.ambientesPedidos}`);
+  conferir(p.ambientesNomeados >= p.ambientesPedidos, `${t} ambientes nomeados no desenho: ${p.ambientesNomeados} (nenhum fundido)`);
+  conferir(p.aberturasCriadas === p.aberturasPedidas, `${t} aberturas: ${p.aberturasCriadas} criadas de ${p.aberturasPedidas} pedidas`);
+  conferir(p.toPct != null && p.toPct <= p.toMaxPct, `${t} TO ${p.toPct} % ≤ ${p.toMaxPct} %`);
+  conferir(!p.pendencias.some((x) => /Legislação: (Taxa de ocupação|Coeficiente)/.test(x)), `${t} nenhuma regra de lote violada`);
+  conferir(p.conferido, `${t} a trava aprova: reaplicado no original dá os mesmos ids e o mesmo modelo`);
+  console.log(`   pendências ${t}: ${p.pendencias.length ? p.pendencias.join(' | ') : 'nenhuma'}`);
+  await page.screenshot({ path: path.join(saida, `casa-automatica-${graus}.png`) });
+}
 
-conferir(erros.length === 0, `sem erro de JS na página${erros.length ? `: ${erros.join(' | ')}` : ''}`);
-conferir(estado?.divisas === 4, `lote de prova com 4 divisas TERRENO (${estado?.divisas})`);
-conferir(estado?.frente === 1, `uma divisa FRENTE (${estado?.frente})`);
-console.log(`plano: ${estado?.plano == null ? 'sem plano (F0)' : 'presente'}`);
-
-await page.screenshot({ path: path.join(saida, 'casa-automatica.png') });
 await browser.close();
 if (falhas.length) {
   console.log(`\n❌ ${falhas.length} conferência(s) reprovada(s)`);

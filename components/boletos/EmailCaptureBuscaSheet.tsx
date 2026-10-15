@@ -150,7 +150,7 @@ const EmailCaptureBuscaSheet: React.FC<Props> = ({ open, onClose, conta, buscaAt
                         )}
                         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                             <span className="text-gray-500">Boletos criados</span><span className="text-emerald-700">{busca.criados}</span>
-                            <span className="text-gray-500">Duplicados (já existiam)</span><span className="text-gray-700">{busca.duplicados}</span>
+                            <span className="text-gray-500" title="Boleto que já estava cadastrado: lido antes nesta caixa, ou mesmo arquivo/linha digitável de outro boleto">Já existiam</span><span className="text-gray-700">{busca.duplicados}</span>
                             <span className="text-gray-500">Ignorados</span><span className="text-gray-700">{busca.ignorados}</span>
                             <span className="text-gray-500">Falhas</span><span className={busca.erros ? 'text-red-600' : 'text-gray-700'}>{busca.erros}</span>
                         </div>

@@ -388,7 +388,7 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                                 }
                                 case 'resultado': return (
                                     <span className="block truncate text-sm font-normal text-gray-600" title={b.ultimo_erro ?? undefined}>
-                                        {b.criados} criado(s) · {b.duplicados} duplicado(s){b.erros ? ` · ${b.erros} falha(s)` : ''}
+                                        {b.criados} criado(s) · {b.duplicados} já existia(m){b.erros ? ` · ${b.erros} falha(s)` : ''}
                                     </span>
                                 );
                                 case 'pedida_por': return <span className="block truncate text-sm font-normal text-gray-600">{b.pedida_por ?? '—'}</span>;

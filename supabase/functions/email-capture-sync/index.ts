@@ -462,7 +462,13 @@ async function processarAnexo(
                 .eq('uid', a.uid).eq('attachment_index', a.indice).maybeSingle();
             const preso = existente?.resultado === 'processando'
                 && Date.now() - new Date(existente.updated_at).getTime() > 10 * 60_000;
-            if (!preso) return;
+            if (!preso) {
+                // Já lido antes (busca por período sobre dias já lidos): conta como
+                // "já existia" — senão o painel mostra tudo zerado e parece que
+                // a busca não achou nada.
+                if (existente && ['criado', 'duplicado'].includes(existente.resultado)) totais.duplicados++;
+                return;
+            }
             mensagemId = existente.id;
         } else {
             mensagemId = nova.id;

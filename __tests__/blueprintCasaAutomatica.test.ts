@@ -759,10 +759,9 @@ describe('planejarCasa — F12c: as instalações do sobrado', () => {
     expect(plano.etapas.find((e) => e.id === 'ANCORAS')!.nota).toMatch(/shaft/);
   });
 
-  it('prumada pelo meio de cômodo de outro pavimento: só a ventilação (que sobe no ponto da peça) — e vira pendência', () => {
-    const soltas = prumadasPeloMeioDoComodo(r);
-    expect(soltas.every((x) => x.rotulo === 'Ventilação')).toBe(true);
-    if (soltas.length) expect(plano.pendencias.some((p) => p.grupo === 'VERIFICACAO' && /^Prumada pelo meio do cômodo/.test(p.texto))).toBe(true);
+  it('nenhuma prumada pelo meio de cômodo de outro pavimento — nem a ventilação, que agora sobe na parede', () => {
+    expect(prumadasPeloMeioDoComodo(r)).toEqual([]);
+    expect(plano.pendencias.some((p) => /^Prumada pelo meio do cômodo/.test(p.texto))).toBe(false);
   });
 
   it('um quadro, no térreo, numa parede com parede em cima; circuitos nos dois pavimentos e todo ponto com potência ligado', () => {

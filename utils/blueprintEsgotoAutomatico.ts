@@ -74,6 +74,12 @@ export interface HipotesesDeEsgoto {
   rotaMaximaVezes: number | null;
   /** Raio em que um SHAFT (E2.4) atrai o tubo de queda. Ausente = 3000. */
   raioDoShaftMm?: number;
+  /**
+   * Até onde a coluna de ventilação nova vai, SOB O PISO e em aclive, buscar uma parede (ou o shaft) para subir
+   * nela — em vez de subir no ponto da peça, no meio do cômodo (e, no sobrado, pelo meio do cômodo de cima).
+   * Ausente = 1500; 0 = sobe na posição da peça, como antes.
+   */
+  ventilacaoAteAParedeMm?: number;
   /** Quanto a caixa de inspeção AUTOMÁTICA fica para fora da fachada, mm (13/10/2026). Ausente = 1000. */
   afastamentoDaCiMm?: number;
   /**

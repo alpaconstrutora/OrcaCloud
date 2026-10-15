@@ -44,3 +44,16 @@ describe('hipotesesDasPremissas', () => {
     expect(h.telhado).toMatchObject({ lancar: true, tipo: 'DUAS_AGUAS', inclinacaoPct: 30, beiralMm: 600 });
   });
 });
+
+describe('F12d — o sobrado nas premissas', () => {
+  it('pavimentos só 1 ou 2 (o resto cai na térrea); o grupo do sobrado completa como os outros; vira hipótese do motor', () => {
+    expect(premissasDaCasaDaColuna({}).pavimentos).toBe(1);
+    expect(premissasDaCasaDaColuna({ pavimentos: 3 }).pavimentos).toBe(1);
+    const p = premissasDaCasaDaColuna({ pavimentos: 2, sobrado: { lajeEntrePavimentosMm: 120, shaftMm: 'x' } });
+    expect(p.pavimentos).toBe(2);
+    expect(p.sobrado).toEqual({ lajeEntrePavimentosMm: 120, shaftMm: 400 });
+    const h = hipotesesDasPremissas(p);
+    expect(h.pavimentos).toBe(2);
+    expect(h.sobrado).toMatchObject({ lajeEntrePavimentosMm: 120, shaftMm: 400 });
+  });
+});

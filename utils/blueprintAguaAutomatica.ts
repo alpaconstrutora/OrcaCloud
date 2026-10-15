@@ -48,7 +48,8 @@
  * (entrar num custa 10 m de tubo) e a coluna que cairia num pilar escorrega pela parede. Ver
  * `blueprintObstaculosEstruturais.ts`.
  */
-import type { BlueprintModel, Command, DisciplinaDeRede, MaterialDeTubo, ObjectId, Terminal, Trecho } from './blueprintKernel';
+import type { BlueprintModel, Command, DisciplinaDeRede, MaterialDeTubo, ObjectId, Point, Terminal, Trecho } from './blueprintKernel';
+import { pointInPolygon } from './blueprintKernel';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import {
   arvoreComRotaLimitada,
@@ -63,7 +64,7 @@ import {
 import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidraulica';
 import { shaftPreferido } from './blueprintNucleoVertical';
 import { arvorePelasParedes, chaveP, encaixarNaParede, faceDaParede, paredesEmComum } from './blueprintRotaPelasParedes';
-import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, SOBRE_A_LAJE_MM, VAO_MINIMO_ABAIXO_DA_VIGA_MM, foraDaViga, foraDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares, topoDaLajeDoTetoMm } from './blueprintObstaculosEstruturais';
+import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, SOBRE_A_LAJE_MM, VAO_MINIMO_ABAIXO_DA_VIGA_MM, anelDoPilar, desvioDoPilar, foraDaViga, foraDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares, topoDaLajeDoTetoMm } from './blueprintObstaculosEstruturais';
 
 /**
  * A tabela de DN do lançamento é a do MATERIAL (E1.1): uma fonte só para o
@@ -355,9 +356,22 @@ export function planejarAgua(
   for (const p of pontos) {
     if (!pelasParedes || estaLigado(p)) continue;
     const f = faceDaParede(p.at, paredesDe(p.levelId), raioDeEncaixe);
-    if (!f?.mover) continue;
-    encostos.push({ type: 'TranslateEntities', wallIds: [], boundaryIds: [], structuralIds: [], terminalIds: [p.id], delta: { x: f.face.x - p.at.x, y: f.face.y - p.at.y }, manterJuncoes: false });
-    efetivo.set(p.id, { ...p, at: f.face });
+    if (!f) continue;
+    let alvo = f.face;
+    // E o ponto SUGERIDO que cai DENTRO do pilar do encontro (a louça no canto: o chuveiro na quina — F12d, sobrado a
+    // 30°, o toco raspava 1 cm do pilar) escorrega pela parede até fora dele, na mesma face. O ponto que a pessoa pôs
+    // não se move: a verificação acusa o pilar (E5.5).
+    // Com o anel do contorno (o mesmo da rota pelas paredes): o ponto colado na QUINA do pilar girado conta como dentro.
+    const pegadas = pegadasDePilares(model, p.levelId).map((g) => anelDoPilar(g, contorno) as Point[]);
+    const e = p.sugerida && pegadas.some((g) => pointInPolygon(g, alvo as Point)) ? encaixarNaParede(p.at, paredesDe(p.levelId), raioDeEncaixe) : null;
+    if (e) {
+      const q2 = foraDoPilar(e.q, e.parede, pegadas);
+      const d = Math.hypot(alvo.x - e.q.x, alvo.y - e.q.y);
+      if (d > 0) alvo = { x: Math.round(q2.x + ((alvo.x - e.q.x) / d) * d), y: Math.round(q2.y + ((alvo.y - e.q.y) / d) * d) };
+    }
+    if (alvo.x === p.at.x && alvo.y === p.at.y) continue;
+    encostos.push({ type: 'TranslateEntities', wallIds: [], boundaryIds: [], structuralIds: [], terminalIds: [p.id], delta: { x: alvo.x - p.at.x, y: alvo.y - p.at.y }, manterJuncoes: false });
+    efetivo.set(p.id, { ...p, at: alvo });
   }
   if (encostos.length > 0) avisos.push(`${encostos.length} ponto(s) solto(s) no cômodo encostado(s) na face da parede — a água chega por dentro dela`);
   const naPosicao = (p: Terminal) => efetivo.get(p.id) ?? p;
@@ -507,7 +521,13 @@ export function planejarAgua(
         if (q) {
           // Desce DENTRO da parede, no eixo, até a cota do ponto; e sai para a face.
           if (p.cotaMm !== cotaRamal) addTrecho(nivel.id, q, cotaRamal, q, p.cotaMm);
-          if (chaveP(q) !== chaveP(p.at)) addTrecho(nivel.id, q, p.cotaMm, p.at, p.cotaMm);
+          if (chaveP(q) !== chaveP(p.at)) {
+            // O toco do eixo à face pode raspar o pilar do encontro (lote girado: 1 cm no sobrado a 30°, F12d) —
+            // contorna pelos cantos dele, como o esgoto e o eletroduto; sem caminho livre, fica a reta.
+            const desvio = desvioDoPilar(q, p.at, pegadasDePilares(model, nivel.id)) ?? [];
+            const pts = [q, ...desvio, p.at];
+            for (let i = 1; i < pts.length; i++) addTrecho(nivel.id, pts[i - 1], p.cotaMm, pts[i], p.cotaMm);
+          }
           continue;
         }
         if (pelas) foraDaParede++;

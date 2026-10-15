@@ -13,7 +13,7 @@ import {
   planejarVentilacao,
   verificarVentilacao,
 } from '../utils/blueprintVentilacao';
-import { esgotoTrechoATrecho } from '../utils/blueprintEsgotoAutomatico';
+import { esgotoTrechoATrecho, HIPOTESES_ESGOTO_PADRAO } from '../utils/blueprintEsgotoAutomatico';
 import { sobrado } from './fixtures/sobradoHidro';
 
 describe('E5.4 — as tabelas', () => {
@@ -69,7 +69,9 @@ describe('E5.4 — o lançamento', () => {
   it('sobrado: estende a coluna do TQ a 30 cm acima da cobertura e sobe UMA coluna nas sifonadas empilhadas; depois, tudo em ordem', () => {
     const m = sobrado(true);
     const p = planejarVentilacao(m);
-    expect(p.resumo).toEqual(['1 coluna(s) nova(s)', '1 estendida(s) até 30 cm acima da cobertura']);
+    // 15/10/2026: a coluna sobe na PAREDE (não no ponto da peça); a sifonada de cima, empilhada, liga o ramal dela no
+    // pé da mesma coluna — antes ficava ventilada por coincidência (a coluna passava no ponto dela).
+    expect(p.resumo).toEqual(['1 coluna(s) nova(s)', '1 ramal(is) ligado(s) ao pé de uma coluna que já sobe ali', '1 estendida(s) até 30 cm acima da cobertura']);
     const depois = lancar(m);
     const v = verificarVentilacao(depois);
     expect(v.desconectores.every((d) => d.ventilado)).toBe(true);
@@ -81,6 +83,37 @@ describe('E5.4 — o lançamento', () => {
     const m = sobrado(true);
     const tira = (x: ReturnType<typeof esgotoTrechoATrecho>) => x.map((c) => [c.trechoId, c.uhc, c.papel, c.contrafluxo]);
     expect(tira(esgotoTrechoATrecho(lancar(m)))).toEqual(tira(esgotoTrechoATrecho(m)));
+  });
+
+  it('a coluna nova sobe NA PAREDE: sai do nó sob a peça, corre sob o piso em aclive de 1 % e sobe rente à parede', () => {
+    const m = sobrado(false);
+    const p = planejarVentilacao(m);
+    const vent = p.comandos.filter((c): c is Extract<typeof c, { type: 'AddTrecho' }> => c.type === 'AddTrecho');
+    const verticais = vent.filter((c) => c.a.x === c.b.x && c.a.y === c.b.y);
+    const pernas = vent.filter((c) => c.a.x !== c.b.x || c.a.y !== c.b.y);
+    expect(pernas.length).toBeGreaterThan(0);
+    for (const c of pernas) {
+      const L = Math.hypot(c.b.x - c.a.x, c.b.y - c.a.y);
+      expect(c.cotaBMm - c.cotaAMm).toBeGreaterThanOrEqual(Math.ceil(L * 0.01));
+    }
+    const rente = (q: { x: number; y: number }) =>
+      m.walls.some((w) => {
+        const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+        const t = ((q.x - w.a.x) * (w.b.x - w.a.x) + (q.y - w.a.y) * (w.b.y - w.a.y)) / L;
+        return t >= -1 && t <= L + 1 && Math.abs((q.x - w.a.x) * (w.b.y - w.a.y) - (q.y - w.a.y) * (w.b.x - w.a.x)) / L <= w.thicknessMm / 2 + 60;
+      });
+    for (const c of verticais) expect(rente(c.a)).toBe(true);
+    const depois = applyBatch(m, p.comandos).model;
+    expect(verificarVentilacao(depois).desconectores.every((d) => d.ventilado)).toBe(true);
+  });
+
+  it('ventilacaoAteAParedeMm 0: a coluna sobe na posição da peça, como antes', () => {
+    const m = sobrado(false);
+    const p = planejarVentilacao(m, { ...HIPOTESES_ESGOTO_PADRAO, ventilacaoAteAParedeMm: 0 });
+    const vent = p.comandos.filter((c): c is Extract<typeof c, { type: 'AddTrecho' }> => c.type === 'AddTrecho');
+    expect(vent.every((c) => c.a.x === c.b.x && c.a.y === c.b.y)).toBe(true);
+    const sifonada = m.terminais!.find((t) => t.tipoHidraulico === 'CAIXA_SIFONADA')!;
+    expect(vent.some((c) => c.a.x === sifonada.at.x && c.a.y === sifonada.at.y)).toBe(true);
   });
 
   it('casa térrea: uma coluna no vaso (DN 50) e outra na sifonada (DN 40), cada uma até a cobertura', () => {

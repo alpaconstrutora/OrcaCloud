@@ -5,7 +5,7 @@
  * saídas (lançar com a trava; criar alternativa).
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import TelaCasaAutomatica from '../../components/blueprint/TelaCasaAutomatica';
 import { emptyModel } from '../../utils/blueprintKernel';
@@ -150,5 +150,21 @@ describe('TelaCasaAutomatica (F10)', () => {
     expect(p.onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ disciplinas: expect.objectContaining({ climatizacao: false }) }));
     fireEvent.change(screen.getByLabelText('Preencher pela unidade do Empreendimento'), { target: { value: 'u1' } });
     expect(p.onPreencherPelaUnidade).toHaveBeenCalledWith('u1');
+  });
+
+  it('F12d: sobrado — o seletor de pavimentos muda a premissa; as hipóteses do sobrado aparecem; o resumo e o botão dizem os dois pavimentos', () => {
+    const onPremissas = vi.fn();
+    tela({ onPremissas });
+    expect(screen.queryByLabelText('Laje entre os pavimentos (cm)')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Pavimentos'), { target: { value: '2' } });
+    expect(onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ pavimentos: 2 }));
+    cleanup();
+
+    const doSobrado = { ...plano, sobrado: { nivelSuperiorId: 'lvl_0002', nucleo: { lado: 'DIREITA' }, escada: { degraus: 17, espelhoMm: 171, pisoMm: 306, blondelMm: 647 }, portas: { terreo: 'Sala', superior: 'Circulação' } } } as unknown as PlanoDaCasa;
+    tela({ premissas: { ...PREMISSAS_DA_CASA_PADRAO, pavimentos: 2 }, casa: casa({ plano: doSobrado }) });
+    expect((screen.getByLabelText('Laje entre os pavimentos (cm)') as HTMLInputElement).value).toBe('10');
+    expect((screen.getByLabelText('Shaft das instalações (cm)') as HTMLInputElement).value).toBe('40');
+    expect(screen.getByTestId('sobrado-da-casa').textContent).toMatch(/17 degraus de 171 × 306 mm/);
+    expect(screen.getByTestId('lancar-casa').textContent).toBe('Lançar os dois pavimentos');
   });
 });

@@ -1426,7 +1426,16 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     const lado = nucleo.lado === 'DIREITA' ? 'direita' : 'esquerda';
     if (!sobrado.portas.terreo) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Escada: nenhum ambiente do térreo encosta no patamar — abra a porta do núcleo à mão.' });
     if (!sobrado.portas.superior) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Escada: o patamar de cima não encosta no corredor — abra a porta do núcleo à mão.' });
-    for (const a of nucleo.perdidos) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo come boa parte de ${a} — confira a área ou mude a escada de lugar.` });
+    // O que o núcleo comeu, medido no DESENHO: abaixo do mínimo do programa é sem solução; acima, conferir.
+    for (const a of nucleo.perdidos) {
+      const amb = [...et.r.ambientes, ...es.r.ambientes].find((x) => x.nome === a);
+      const sp = m.spaces.find((x) => (x.levelId === T || x.levelId === sobrado.nivelSuperiorId) && x.name === a);
+      const ficouM2 = sp ? Math.round(sp.areaMm2 / 1e4) / 100 : null;
+      const minimoM2 = amb?.item.areaMinM2 ?? null;
+      if (ficouM2 != null && minimoM2 != null && ficouM2 >= minimoM2)
+        pendencias.push({ grupo: 'CONFERIR', texto: `Escada: o núcleo come boa parte de ${a} — fica com ${f2(ficouM2)} m² (mínimo do programa ${f2(minimoM2)} m²); confira o uso ou mude a escada de lugar.` });
+      else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo deixa ${a} ${ficouM2 != null ? `com ${f2(ficouM2)} m²` : 'sem área'}${minimoM2 != null ? `, abaixo do mínimo de ${f2(minimoM2)} m²` : ''} — mude a escada de lugar.` });
+    }
     for (const a of nucleo.partidos) pendencias.push({ grupo: 'VERIFICACAO', texto: `Escada: o núcleo parte ${a} em dois — o pedaço menor fica sem nome.` });
     for (const [pav, x] of [['térreo', et.r], ['superior', es.r]] as const) for (const a of x.avisos) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura (${pav}): ${a}` });
     const paredes = m.walls.filter((w) => w.levelId === T || w.levelId === sobrado.nivelSuperiorId).length;

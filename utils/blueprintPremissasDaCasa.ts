@@ -31,6 +31,10 @@ export interface PremissasDaCasa {
   eletrica: { chuveiroEletricoVA: number; medidor: boolean };
   /** Quantas alternativas do gerador E6.2 a casa tenta (fica a de menos problemas graves). */
   sementes: number;
+  /** F12d: 1 = térrea; 2 = sobrado. */
+  pavimentos: 1 | 2;
+  /** F12d: as hipóteses do sobrado que a tela expõe (o núcleo e a escada seguem o padrão do motor). */
+  sobrado: { lajeEntrePavimentosMm: number; shaftMm: number };
 }
 
 export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
@@ -41,6 +45,8 @@ export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
   ancoras: { aguaQuente: 'PELO_PADRAO', caixaDeGordura: true },
   eletrica: { chuveiroEletricoVA: 5500, medidor: true },
   sementes: 8,
+  pavimentos: 1,
+  sobrado: { lajeEntrePavimentosMm: 100, shaftMm: 400 },
 };
 
 /** Os valores aceitos de cada enumerado (o resto cai no padrão). */
@@ -89,6 +95,8 @@ export function premissasDaCasaDaColuna(raw: unknown): PremissasDaCasa {
     ancoras: completar(r.ancoras, PREMISSAS_DA_CASA_PADRAO.ancoras),
     eletrica: completar(r.eletrica, PREMISSAS_DA_CASA_PADRAO.eletrica),
     sementes,
+    pavimentos: r.pavimentos === 2 ? 2 : 1,
+    sobrado: completar(r.sobrado, PREMISSAS_DA_CASA_PADRAO.sobrado),
   };
 }
 
@@ -105,5 +113,7 @@ export function hipotesesDasPremissas(p: PremissasDaCasa): Partial<HipotesesDaCa
     hidraulica: { lancar: d.hidraulica },
     eletrica: { lancar: d.eletrica, chuveiroEletricoVA: p.eletrica.chuveiroEletricoVA, medidor: p.eletrica.medidor } as HipotesesDaCasa['eletrica'],
     climatizacao: { lancar: d.climatizacao },
+    pavimentos: p.pavimentos,
+    sobrado: { lajeEntrePavimentosMm: p.sobrado.lajeEntrePavimentosMm, shaftMm: p.sobrado.shaftMm } as HipotesesDaCasa['sobrado'],
   };
 }

@@ -17,12 +17,20 @@
  *
  * O LANÇAMENTO (`planejarVentilacao`) estende as colunas que param abaixo da
  * cobertura, corrige o DN das sugeridas e, para o desconector sem ventilação
- * ao alcance, sobe uma coluna do nó logo abaixo dele até a cobertura — a mesma
- * simplificação do tubo de queda (a coluna sobe na posição da peça). Tudo
+ * ao alcance, sai do nó logo abaixo dele e sobe até a cobertura. Tudo
  * "Ventilação", sugerido, num lote.
+ *
+ * ONDE A COLUNA SOBE (15/10/2026, a pendência do sobrado): subia na posição da peça — no meio do banheiro, e no
+ * sobrado, pelo meio do dormitório de cima. Agora ela sai do mesmo nó (a distância pelo tubo, que a norma mede, não
+ * muda), corre SOB O PISO em aclive de 1 % até a parede mais perto (`ventilacaoAteAParedeMm`) — a que existe em
+ * todos os pavimentos que ela atravessa, fora de porta e janela, rente ao pilar e à viga — ou até o shaft, e sobe
+ * nela. Sem parede ao alcance, fica a de antes.
  */
-import type { BlueprintModel, Command, ObjectId, Terminal, Trecho } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho } from './blueprintKernel';
 import { applyBatch, pointInPolygon } from './blueprintKernel';
+import { foraDaViga, foraDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { encaixarNaParede, paredesEmComum } from './blueprintRotaPelasParedes';
+import { shaftPreferido } from './blueprintNucleoVertical';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { comprimentoMm, distanciasDesde, fazerChave, type Aresta } from './blueprintGrafoDeRede';
 import { esgotoTrechoATrecho, type HipotesesDeEsgoto } from './blueprintEsgotoAutomatico';
@@ -161,22 +169,30 @@ export function verificarVentilacao(model: BlueprintModel, hip?: HipotesesDeEsgo
     })
     .sort((a, b) => a.terminalId.localeCompare(b.terminalId));
 
-  // As COLUNAS: os trechos de ventilação no mesmo (x, y).
+  // As COLUNAS: os trechos VERTICAIS de ventilação no mesmo (x, y) — a perna sob o piso até a parede não é coluna.
   const calc = esgotoTrechoATrecho(model, hip);
   const porPosicao = new Map<string, Trecho[]>();
-  for (const t of esgoto.filter(ehVentilacao)) {
+  for (const t of esgoto.filter((x) => ehVentilacao(x) && x.a.x === x.b.x && x.a.y === x.b.y)) {
     const k = `${t.a.x},${t.a.y}`;
     porPosicao.set(k, [...(porPosicao.get(k) ?? []), t]);
+  }
+  // A PERNA sob o piso (da peça até a parede onde a coluna sobe): a coluna ventila o que passa na outra ponta dela.
+  const pernaAte = new Map<string, Trecho>();
+  for (const t of esgoto.filter((x) => ehVentilacao(x) && (x.a.x !== x.b.x || x.a.y !== x.b.y))) {
+    const [baixa, alta] = t.cotaAMm <= t.cotaBMm ? [t.a, t.b] : [t.b, t.a];
+    pernaAte.set(`${alta.x},${alta.y}`, { ...t, a: baixa, b: alta });
   }
   const colunas: ColunaDeVentilacao[] = [];
   for (const [k, ts] of porPosicao) {
     const [x, y] = k.split(',').map(Number);
-    const comprimentoM = ts.reduce((s, t) => s + comprimentoMm(t), 0) / 1000;
+    const perna = pernaAte.get(k) ?? null;
+    const comprimentoM = (ts.reduce((s, t) => s + comprimentoMm(t), 0) + (perna ? comprimentoMm(perna) : 0)) / 1000;
     const topoMm = Math.max(...ts.map((t) => (elev.get(t.levelId) ?? 0) + Math.max(t.cotaAMm, t.cotaBMm)));
-    // O que ela ventila: o TQ nesta posição; sem TQ, o ramal que passa aqui.
+    // O que ela ventila: o TQ nesta posição; sem TQ, o ramal que passa aqui (ou na ponta de baixo da perna).
+    const origem = perna ? perna.a : { x, y };
     const aqui = calc.filter((c) => {
       const t = esgoto.find((e) => e.id === c.trechoId)!;
-      return [t.a, t.b].some((p) => p.x === x && p.y === y);
+      return [t.a, t.b].some((p) => p.x === origem.x && p.y === origem.y);
     });
     const tqs = aqui.filter((c) => c.papel === 'TUBO_DE_QUEDA');
     const base = tqs.length ? tqs : aqui;
@@ -192,6 +208,56 @@ export function verificarVentilacao(model: BlueprintModel, hip?: HipotesesDeEsgo
   }
   colunas.sort((a, b) => a.x - b.x || a.y - b.y);
   return { desconectores, colunas };
+}
+
+/** Ausente nas hipóteses: até onde a coluna nova busca a parede (mm). */
+export const VENTILACAO_ATE_A_PAREDE_MM = 1500;
+/** O aclive da perna de ventilação sob o piso (NBR 8160: ventilação em aclive, para escoar ao ramal). */
+export const ACLIVE_DA_VENTILACAO = 0.01;
+/** Folga entre o tubo e a lateral de uma porta ou janela, mm. */
+const FOLGA_DA_ABERTURA_MM = 75;
+
+/**
+ * Onde a coluna de ventilação de um ponto em `p` sobe: o shaft ao alcance, senão a parede mais perto que existe em
+ * TODOS os pavimentos que a coluna atravessa (do dela até o último), fora de porta e janela em cada um, escorregada
+ * para fora do pilar e rente à viga. `null` = nenhuma a até `raioMm` (ou `raioMm` 0): sobe no ponto.
+ */
+export function ondeAColunaSobe(model: BlueprintModel, levelId: ObjectId, p: { x: number; y: number }, raioMm: number): Point | null {
+  if (raioMm <= 0) return null;
+  const nivel = model.levels.find((l) => l.id === levelId);
+  if (!nivel) return null;
+  const acima = model.levels.filter((l) => l.elevationMm >= nivel.elevationMm).sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
+  const shaft = shaftPreferido(model, p, levelId, raioMm);
+  if (shaft) return { x: Math.round(shaft.x), y: Math.round(shaft.y) };
+  const paredesDe = (L: ObjectId) => model.walls.filter((w) => w.levelId === L);
+  const outros = acima.filter((L) => L !== levelId).map(paredesDe);
+  const candidatas = outros.length ? paredesEmComum(paredesDe(levelId), outros) : paredesDe(levelId);
+  const naAbertura = (q: { x: number; y: number }) =>
+    acima.some((L) =>
+      model.walls.some((w) => {
+        if (w.levelId !== L) return false;
+        const Lw = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+        if (Lw < 1) return false;
+        const t = ((q.x - w.a.x) * (w.b.x - w.a.x) + (q.y - w.a.y) * (w.b.y - w.a.y)) / Lw;
+        const d = Math.abs((q.x - w.a.x) * (w.b.y - w.a.y) - (q.y - w.a.y) * (w.b.x - w.a.x)) / Lw;
+        if (t < -1 || t > Lw + 1 || d > w.thicknessMm / 2 + 5) return false;
+        return model.openings.some((o) => o.wallId === w.id && t > o.offsetMm - FOLGA_DA_ABERTURA_MM && t < o.offsetMm + o.widthMm + FOLGA_DA_ABERTURA_MM);
+      }),
+    );
+  const pilares = acima.flatMap((L) => pegadasDePilares(model, L));
+  const vigas = (model.structures ?? []).filter((s) => s.kind === 'VIGA' && acima.includes(s.levelId));
+  // A mais perto que serve: as paredes em ordem de distância; a primeira cujo ponto não cai em porta ou janela.
+  const ordem = candidatas
+    .map((w) => ({ w, e: encaixarNaParede(p, [w], raioMm) }))
+    .filter((x): x is { w: (typeof candidatas)[number]; e: NonNullable<ReturnType<typeof encaixarNaParede>> } => !!x.e)
+    .sort((a, b) => a.e.d - b.e.d);
+  for (const { w, e } of ordem) {
+    const noEixo = foraDoPilar(e.q, w, pilares);
+    const q = foraDaViga(noEixo, vigas, p, pilares);
+    if (naAbertura(q)) continue;
+    return { x: Math.round(q.x), y: Math.round(q.y) };
+  }
+  return null;
 }
 
 export interface PlanoDaVentilacao {
@@ -253,6 +319,7 @@ export function planejarVentilacao(model: BlueprintModel, hip?: HipotesesDeEsgot
 
   // 2. O desconector sem ventilação ao alcance: uma coluna do nó logo abaixo dele até a cobertura.
   let novas = 0;
+  let ligadas = 0;
   const cobertos = new Set(v.desconectores.filter((d) => d.ventilado).map((d) => d.terminalId));
   const faltam = v.desconectores.filter((d) => !d.ventilado).sort((a, b) => b.dnMm - a.dnMm || a.terminalId.localeCompare(b.terminalId));
   const terminal = new Map((model.terminais ?? []).map((t) => [t.id, t]));
@@ -270,23 +337,40 @@ export function planejarVentilacao(model: BlueprintModel, hip?: HipotesesDeEsgot
     // — na 1ª passada; a 2ª confere PELO TUBO, como a verificação, e ventila quem ficou de fora.
     if (poupar && colunasNovas.some((c) => Math.hypot(c.x - t.at.x, c.y - t.at.y) / 1000 <= d.maximaM)) return;
     const base = Math.min(prumada.cotaAMm, prumada.cotaBMm);
-    const topoAbs = coberturaNoPontoMm(model, t.at) + ACIMA_DA_COBERTURA_MM;
-    const comprimentoM = (topoAbs - ((elev.get(t.levelId) ?? 0) + base)) / 1000;
+    // Onde ela sobe: na parede (ou no shaft) a até `ventilacaoAteAParedeMm`; a perna sob o piso em aclive de 1 %.
+    const sobe = ondeAColunaSobe(model, t.levelId, t.at, hip?.ventilacaoAteAParedeMm ?? VENTILACAO_ATE_A_PAREDE_MM) ?? { x: t.at.x, y: t.at.y };
+    const perna = Math.hypot(sobe.x - t.at.x, sobe.y - t.at.y);
+    const cotaDaPerna = perna > 0 ? base + Math.max(1, Math.ceil(perna * ACLIVE_DA_VENTILACAO)) : base;
+    const topoAbs = coberturaNoPontoMm(model, sobe) + ACIMA_DA_COBERTURA_MM;
+    const comprimentoM = (topoAbs - ((elev.get(t.levelId) ?? 0) + base) + perna) / 1000;
     const dn = dnDaColunaDeVentilacao(d.dnMm, FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico!].uhcNbr8160 ?? 1, comprimentoM, d.dnMm >= 100);
-    for (const s of subirAte(model, t.levelId, t.at.x, t.at.y, base, topoAbs)) add(s.levelId, t.at.x, t.at.y, s.ca, s.cb, dn);
+    // Já SOBE uma coluna de ventilação ali, neste pavimento (a da peça empilhada de baixo, que buscou a mesma parede):
+    // a perna liga no PÉ dela — sem segunda coluna sobreposta.
+    const naParede = [...(model.trechos ?? []), ...comandos.flatMap((c) => (c.type === 'AddTrecho' ? [c as unknown as Trecho] : []))].filter(
+      (x) => x.disciplina === 'ESGOTO' && x.rotulo === ROTULO_DA_VENTILACAO && x.levelId === t.levelId && x.a.x === sobe.x && x.a.y === sobe.y && x.b.x === sobe.x && x.b.y === sobe.y,
+    );
+    const peDaColuna = naParede.length ? Math.min(...naParede.map((x) => Math.min(x.cotaAMm, x.cotaBMm))) : null;
+    if (perna > 0) comandos.push({ type: 'AddTrecho', levelId: t.levelId, disciplina: 'ESGOTO', a: { x: t.at.x, y: t.at.y }, b: { ...sobe }, cotaAMm: base, cotaBMm: cotaDaPerna, bitolaMm: dn, rotulo: ROTULO_DA_VENTILACAO, sugerido: true });
     colunasNovas.push({ x: t.at.x, y: t.at.y });
     cobertos.add(d.terminalId);
+    if (perna > 0 && peDaColuna != null && cotaDaPerna <= peDaColuna) {
+      if (cotaDaPerna < peDaColuna) add(t.levelId, sobe.x, sobe.y, cotaDaPerna, peDaColuna, dn);
+      ligadas++;
+      return;
+    }
+    for (const s of subirAte(model, t.levelId, sobe.x, sobe.y, cotaDaPerna, topoAbs)) add(s.levelId, sobe.x, sobe.y, s.ca, s.cb, dn);
     novas++;
   };
   for (const d of faltam) ventilar(d, true);
   // F8b da casa automática (15/10/2026): a economia acima mede em LINHA RETA, a verificação mede PELO TUBO —
   // a caixa sifonada a 1,1 m em planta da coluna do vaso e a 1,57 m pelo tubo ficava sem ventilação.
-  if (novas > 0) {
+  if (novas + ligadas > 0) {
     const depois = verificarVentilacao(applyBatch(model, comandos).model, hip);
     for (const d of depois.desconectores.filter((x) => !x.ventilado).sort((a, b) => b.dnMm - a.dnMm || a.terminalId.localeCompare(b.terminalId))) ventilar(d, false);
   }
   const resumo = [
     novas ? `${novas} coluna(s) nova(s)` : '',
+    ligadas ? `${ligadas} ramal(is) ligado(s) ao pé de uma coluna que já sobe ali` : '',
     estendidas ? `${estendidas} estendida(s) até ${ACIMA_DA_COBERTURA_MM / 10} cm acima da cobertura` : '',
     corrigidas ? `${corrigidas} trecho(s) com o DN da tabela` : '',
   ].filter(Boolean);

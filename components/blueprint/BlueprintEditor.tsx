@@ -11493,7 +11493,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="casa">
           {cabecalhoDaTela(
             'Casa automática',
-            'Do terreno e da lei, a casa térrea inteira: implantação, arquitetura, estrutura, telhado, louças, água, esgoto, pluvial, elétrica e climatização — uma prévia, e um lote só para lançar (um Ctrl+Z desfaz tudo).',
+            'Do terreno e da lei, a casa inteira — térrea ou sobrado: implantação, arquitetura, escada, estrutura, telhado, louças, água, esgoto, pluvial, elétrica e climatização — uma prévia, e um lote só para lançar (um Ctrl+Z desfaz tudo).',
             Home,
             'Analisar',
           )}
@@ -11512,7 +11512,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               const prova = conferirPlanoDaCasa(editor.model, plano);
               if (!prova.ok) throw new Error(prova.motivo);
               const criados = editor.runBatch(plano.comandos);
-              setLancadoCasa(`${criados.length} elemento(s) lançados num lote só — Ctrl+Z desfaz tudo. Volte ao editor para ver a casa.`);
+              setLancadoCasa(`${criados.length} elemento(s) lançados num lote só${plano.sobrado ? ', no térreo e no pavimento superior (criado agora)' : ''} — Ctrl+Z desfaz tudo. Volte ao editor para ver a casa.`);
             }}
             onCriarAlternativa={async () => {
               const plano = casa.plano;

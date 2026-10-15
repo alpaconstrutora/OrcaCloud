@@ -23,14 +23,20 @@ fs.mkdirSync(saida, { recursive: true });
 const browser = await chromium.launch({ headless: true, executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' });
 const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 }, deviceScaleFactor: 1 });
 await ctx.route(/supabase\.co\//, (r) => r.abort());
-const page = await ctx.newPage();
 const erros = [];
-page.on('pageerror', (e) => erros.push(String(e)));
+// Uma página NOVA por rodada: a casa inteira pesa, e a mesma aba recarregada quatro vezes chegou a cair ("Page crashed").
+let page = null;
+const novaPagina = async () => {
+  if (page) await page.close();
+  page = await ctx.newPage();
+  page.on('pageerror', (e) => erros.push(String(e)));
+};
 const falhas = [];
 const conferir = (ok, msg) => { console.log(`${ok ? '✅' : '❌'} ${msg}`); if (!ok) falhas.push(msg); };
 
 for (const graus of [0, 30]) {
   erros.length = 0;
+  await novaPagina();
   await page.goto(`${urlBase}/docs/spikes/casa-automatica/index.html?graus=${graus}`);
   await page.locator('canvas').first().waitFor();
   await page.waitForTimeout(700);
@@ -87,6 +93,47 @@ for (const graus of [0, 30]) {
   conferir(p.conferido, `${t} a trava aprova: reaplicado no original dá os mesmos ids e o mesmo modelo`);
   console.log(`   pendências ${t}: ${p.pendencias.length ? p.pendencias.join(' | ') : 'nenhuma'}`);
   await page.screenshot({ path: path.join(saida, `casa-automatica-${graus}.png`) });
+}
+
+// ── F12d: o SOBRADO — a mesma casa em dois pavimentos, a 0° e a 30° ─────────────────────────────────────────
+for (const graus of [0, 30]) {
+  erros.length = 0;
+  await novaPagina();
+  const t = `[sobrado ${graus}°]`;
+  await page.goto(`${urlBase}/docs/spikes/casa-automatica/index.html?graus=${graus}&pavimentos=2`);
+  await page.locator('canvas').first().waitFor();
+  await page.waitForTimeout(700);
+  const e = await page.evaluate(() => window.__estado);
+  const p = e?.plano;
+  const s = e?.sobrado;
+  conferir(erros.length === 0, `${t} sem erro de JS na página${erros.length ? `: ${erros.join(' | ')}` : ''}`);
+  conferir(!!p && !!s, `${t} o plano e o sobrado existem`);
+  if (!p || !s) continue;
+  const situacoes = p.etapas.map((x) => `${x.id}:${x.situacao}`).join(' ');
+  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU MOBILIARIO:LANCOU LOUCAS:LANCOU PONTOS_HIDRAULICOS:LANCOU AGUA:LANCOU ESGOTO:LANCOU PLUVIAL:LANCOU PONTOS_ELETRICOS:LANCOU QUADRO:LANCOU CIRCUITOS:LANCOU CLIMATIZACAO:LANCOU DR_DPS:LANCOU ELETRODUTOS:LANCOU CONFERENCIA:CALCULOU`;
+  conferir(situacoes === esperadas, `${t} etapas: ${situacoes}`);
+  conferir(s.niveis === 2 && s.elevacaoDoSuperior === 2900, `${t} dois pavimentos, o de cima a ${s.elevacaoDoSuperior} mm`);
+  conferir(s.escada.degraus >= 16 && s.escada.espelhoMm <= 185 && s.escada.pisoMm >= 280 && s.escada.avisos === 0, `${t} escada em U: ${s.escada.degraus} × ${s.escada.espelhoMm}/${s.escada.pisoMm} mm, ${s.escada.avisos} aviso(s)`);
+  conferir(!!s.portas.terreo && !!s.portas.superior, `${t} o núcleo abre para ${s.portas.terreo} e para ${s.portas.superior}`);
+  conferir(!p.pendencias.some((x) => /^SEM_SOLUCAO: Escada:/.test(x)), `${t} o núcleo não deixa ambiente abaixo do mínimo`);
+  conferir(p.ambientesAtendidos === p.ambientesPedidos && p.regrasVioladas === 0, `${t} programa ${p.ambientesAtendidos} de ${p.ambientesPedidos}, ${p.regrasVioladas} regra(s) violada(s)`);
+  conferir(s.pilaresSemPrumada === 0, `${t} todo pilar de cima em prumada ou em viga de transição (${s.pilaresSemPrumada} solto(s))`);
+  conferir(s.furos === 1, `${t} a escada sobre a laje do térreo (o furo é derivado)`);
+  conferir(s.telhadoNoSuperior, `${t} o telhado sobre o superior`);
+  conferir(s.caixaNoSuperior && s.quadroNoTerreo, `${t} caixa d'água em cima, quadro embaixo`);
+  conferir(s.shafts > 0 && s.tqForaDoShaft === 0, `${t} ${s.shafts} shaft(s); tubo de queda dentro dele`);
+  conferir(s.prumadasPeloMeio.length === 0, `${t} nenhuma prumada pelo meio de cômodo${s.prumadasPeloMeio.length ? ` — ${s.prumadasPeloMeio.join(' | ')}` : ''}`);
+  conferir(p.errosDeRede === 0, `${t} as redes ligadas: nenhum ERRO da verificação de rede (${p.errosDeRede})`);
+  conferir(p.eletrica.faltas === 0 && s.soltosPorNivel.terreo === 0 && s.soltosPorNivel.superior === 0, `${t} NBR 5410 sem falta; nenhum ponto de carga sem circuito (${p.eletrica.circuitos} circuitos)`);
+  conferir(s.splitsPorNivel.terreo === 1 && s.splitsPorNivel.superior === 3, `${t} splits: ${s.splitsPorNivel.terreo} embaixo, ${s.splitsPorNivel.superior} em cima`);
+  conferir(p.conferido, `${t} a trava aprova o lote dos dois pavimentos`);
+  console.log(`   pendências ${t}: ${p.pendencias.length ? p.pendencias.join(' | ') : 'nenhuma'}`);
+  await page.screenshot({ path: path.join(saida, `casa-sobrado-${graus}-terreo.png`) });
+  await novaPagina();
+  await page.goto(`${urlBase}/docs/spikes/casa-automatica/index.html?graus=${graus}&pavimentos=2&ver=superior`);
+  await page.locator('canvas').first().waitFor();
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: path.join(saida, `casa-sobrado-${graus}-superior.png`) });
 }
 
 await browser.close();

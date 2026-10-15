@@ -7,7 +7,8 @@
  * o RESULTADO é desenhado (enquadrado) e o essencial do plano vai para `window.__estado`, que o
  * `medir.mjs` confere (exit ≠ 0 reprova).
  *
- * Abrir em: /docs/spikes/casa-automatica/index.html[?graus=30] no servidor de dev.
+ * Abrir em: /docs/spikes/casa-automatica/index.html[?graus=30][&pavimentos=2][&ver=superior] no servidor de dev.
+ * F12d: `pavimentos=2` gera o SOBRADO; `ver=superior` desenha o pavimento de cima.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -26,6 +27,7 @@ import { modelosDoCatalogo } from '../../../utils/blueprintSelecaoClimatizacao';
 import { SEMENTES_DE_TIPOS } from '../../../utils/blueprintCatalogoDeTipos';
 import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../../../utils/blueprintClimatizacao';
 import { pontosElegiveis } from '../../../utils/blueprintCircuitosAutomaticos';
+import { prumadasPeloMeioDoComodo } from '../../../utils/blueprintSobrado';
 
 declare global {
   interface Window {
@@ -56,6 +58,25 @@ declare global {
         hidraulica: { agua: number; esgoto: number; pluvial: number; porTipo: Record<string, number> };
         alimentadorNoBaldrame: { maiorMm: number; larguraMm: number; travessias: number };
         eletrica: { faltas: number; regras: string[]; soltos: number; circuitos: number; splits: number; marcasDoAr: Record<string, number>; entrada: string | null };
+        errosDeRede: number;
+      } | null;
+      /** F12d: o sobrado (null na térrea). */
+      sobrado: {
+        niveis: number;
+        elevacaoDoSuperior: number;
+        escada: { degraus: number; espelhoMm: number; pisoMm: number; avisos: number };
+        portas: { terreo: string | null; superior: string | null };
+        ambientesNomeados: { terreo: number; superior: number };
+        pilaresSemPrumada: number;
+        furos: number;
+        shafts: number;
+        tqForaDoShaft: number;
+        caixaNoSuperior: boolean;
+        telhadoNoSuperior: boolean;
+        quadroNoTerreo: boolean;
+        soltosPorNivel: { terreo: number; superior: number };
+        splitsPorNivel: { terreo: number; superior: number };
+        prumadasPeloMeio: string[];
       } | null;
     };
   }
@@ -64,7 +85,10 @@ declare global {
 const FRENTE_MM = 12000;
 const FUNDO_MM = 30000;
 const TO_MAX = 60;
-const graus = Number(new URLSearchParams(location.search).get('graus') ?? '0') || 0;
+const params = new URLSearchParams(location.search);
+const graus = Number(params.get('graus') ?? '0') || 0;
+const pavimentos: 1 | 2 = params.get('pavimentos') === '2' ? 2 : 1;
+const verSuperior = params.get('ver') === 'superior';
 
 function loteDeProva(): BlueprintModel {
   const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
@@ -99,8 +123,54 @@ const plano = planejarCasa(lote, {
   // F9: o catálogo semente de evaporadoras e o clima declarado (as premissas que o estudo traria).
   modelosDeClimatizacao: modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades }))),
   climatizacao: { ...HIPOTESES_CLIMATIZACAO_PADRAO, clima: { cidade: null, tbsExternaC: 34, tbuExternaC: 25, altitudeM: 0 } },
-});
+}, { pavimentos });
 const model = plano.resultado;
+const superiorId = plano.sobrado?.nivelSuperiorId ?? null;
+const nivelVisto = verSuperior && superiorId ? superiorId : levelId;
+
+/** F12d: o que o sobrado tem de próprio, nos dois pavimentos. */
+function sobradoDoModelo(m: BlueprintModel) {
+  if (!plano.sobrado || !superiorId) return null;
+  const S = superiorId;
+  const T = levelId;
+  const pil = (L: string) => m.structures.filter((x) => x.kind === 'PILAR' && x.levelId === L);
+  const vigasT = m.structures.filter((x) => x.kind === 'VIGA' && x.levelId === T);
+  const perto = (a: Point, b: Point, mm: number) => Math.hypot(a.x - b.x, a.y - b.y) <= mm;
+  const naViga = (q: Point) =>
+    vigasT.some((v) => {
+      const [a, b] = v.pontos;
+      const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const t = ((q.x - a.x) * (b.x - a.x) + (q.y - a.y) * (b.y - a.y)) / L;
+      return t >= -300 && t <= L + 300 && Math.abs((q.x - a.x) * (b.y - a.y) - (q.y - a.y) * (b.x - a.x)) / L <= v.larguraMm / 2 + 300;
+    });
+  const shafts = (m.nucleos ?? []).filter((n) => n.tipo === 'SHAFT');
+  const tq = m.trechos.filter((t) => t.levelId === T && t.rotulo === 'TQ' && t.a.x === t.b.x && t.a.y === t.b.y);
+  const caixa = m.terminais.find((t) => t.tipoHidraulico === 'RESERVATORIO');
+  const splits = (L: string) => m.terminais.filter((t) => t.levelId === L && t.tipoEletrico === 'AR_CONDICIONADO').length;
+  const nomeados = (L: string) => m.spaces.filter((s) => s.levelId === L && (s.name ?? '').trim()).length;
+  const furos = (() => {
+    // o furo da escada é derivado: a escada sobre a laje do térreo
+    const e = m.stairs[0];
+    return e ? m.structures.filter((x) => x.kind === 'LAJE' && x.levelId === T && e.pontos.some((q) => pointInPolygon(x.pontos, q))).length : 0;
+  })();
+  return {
+    niveis: m.levels.length,
+    elevacaoDoSuperior: m.levels.find((l) => l.id === S)?.elevationMm ?? 0,
+    escada: { degraus: plano.sobrado.escada.degraus, espelhoMm: plano.sobrado.escada.espelhoMm, pisoMm: plano.sobrado.escada.pisoMm, avisos: plano.pendencias.filter((p) => p.grupo === 'VERIFICACAO' && /^Escada:/.test(p.texto)).length },
+    portas: plano.sobrado.portas,
+    ambientesNomeados: { terreo: nomeados(T), superior: nomeados(S) },
+    pilaresSemPrumada: pil(S).filter((x) => !pil(T).some((y) => perto(x.pontos[0], y.pontos[0], 200)) && !naViga(x.pontos[0])).length,
+    furos,
+    shafts: shafts.length,
+    tqForaDoShaft: tq.filter((t) => !shafts.some((n) => pointInPolygon(n.ring, t.a))).length,
+    caixaNoSuperior: caixa?.levelId === S,
+    telhadoNoSuperior: m.roofs.length > 0 && m.roofs.every((r) => r.levelId === S),
+    quadroNoTerreo: (m.quadros ?? []).length === 1 && m.quadros[0].levelId === T,
+    soltosPorNivel: { terreo: pontosElegiveis(m, T).length, superior: pontosElegiveis(m, S).length },
+    splitsPorNivel: { terreo: splits(T), superior: splits(S) },
+    prumadasPeloMeio: prumadasPeloMeioDoComodo(m).map((x) => `${x.rotulo ?? x.disciplina} em ${x.comodo} (${x.nivel})`),
+  };
+}
 
 /** F8c: os encontros do alimentador com o baldrame — o maior pedaço dentro dele e a largura do baldrame. */
 function alimentadorNoBaldrame(m: BlueprintModel) {
@@ -208,10 +278,12 @@ window.__estado = {
       marcasDoAr: plano.resumo.climatizacao.verificacao.porTipo,
       entrada: plano.resumo.eletrica.entrada ? `${plano.resumo.eletrica.entrada.categoria} ${plano.resumo.eletrica.entrada.ligacao} ${plano.resumo.eletrica.entrada.demandaKva} kVA` : null,
     },
+    errosDeRede: plano.resumo.hidraulica.verificacao.erros + plano.resumo.climatizacao.verificacao.erros,
   },
+  sobrado: sobradoDoModelo(model),
 };
 document.getElementById('dump')!.textContent = [
-  `graus ${graus} · semente ${plano.semente}`,
+  `graus ${graus} · ${pavimentos === 2 ? `sobrado (vendo o ${verSuperior ? 'superior' : 'térreo'})` : 'térrea'} · semente ${plano.semente}`,
   ...plano.etapas.map((e) => `${e.id} ${e.situacao}${e.nota ? ` — ${e.nota}` : ''}`),
   ...plano.pendencias.map((p) => `· ${p.grupo}: ${p.texto}`),
 ].join('\n');
@@ -229,7 +301,7 @@ function App() {
         <BlueprintCanvas
           model={model}
           tool="selecionar"
-          levelId={levelId}
+          levelId={nivelVisto}
           selectedIds={[]}
           onSelecionar={() => {}}
           onAddWall={() => null}

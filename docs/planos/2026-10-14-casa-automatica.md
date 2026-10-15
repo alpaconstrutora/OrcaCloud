@@ -139,7 +139,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F9 — elétrica + climatização (ver "F9 — plano detalhado" e "Registro da F9")
 - [x] F10 — tela da Casa automática (ver "Registro da F10")
 - [x] F11 — saídas (ver "Registro da F11")
-- [ ] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [x] F12c instalações (ver "Registro da F12c") · [ ] F12d tela e provas
+- [ ] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [x] F12c instalações (ver "Registro da F12c") · [x] F12d tela e provas (ver "Registro da F12d"; falta a conferência no app real)
 
 ## Registro da F1 (14/10/2026)
 
@@ -1313,3 +1313,52 @@ Testes: bloco "F12c" (7) e "F12c: climatização" (2) em `blueprintCasaAutomatic
 `blueprintSobrado.test.ts` (parede em comum, prumada pelo meio do cômodo); 1 em
 `blueprintAguaAutomatica.test.ts` (a coluna da origem abaixo); 1 em
 `blueprintObstaculosEstruturais.test.ts` (viga sobre parede).
+
+## Correção da ventilação (15/10/2026, pedido do usuário após a F12c)
+
+> "corrigir pendência: a ventilação do lavabo do térreo ainda sobe pelo Dormitório 1 […] apos corrigir
+> pendencia seguir com F12d."
+
+A coluna de ventilação nova subia NA POSIÇÃO DA PEÇA: no meio do banheiro (térrea e sobrado) e, no
+sobrado, pelo meio do dormitório de cima. Agora (`planejarVentilacao` → `ondeAColunaSobe`):
+
+- sai do MESMO nó sob a peça (a distância pelo tubo, que a NBR 8160 mede, não muda — a verificação já
+  aceitava a ponta de baixo de qualquer trecho de ventilação), corre SOB O PISO em aclive de 1 % até a
+  parede mais perto e sobe nela, rente à viga (`foraDaViga`) e fora do pilar (`foraDoPilar`);
+- a parede tem de existir em TODOS os pavimentos que a coluna atravessa (`paredesEmComum`) e estar livre
+  de porta e janela em cada um; o shaft ao alcance vem antes;
+- hipótese nova `HipotesesDeEsgoto.ventilacaoAteAParedeMm` (padrão 1500; 0 = como antes);
+- a coluna da peça EMPILHADA (a sifonada de cima, no mesmo ponto da de baixo) liga a perna no pé da
+  coluna que já sobe ali, em vez de pôr uma segunda coluna sobreposta (antes ela ficava ventilada por
+  coincidência — a coluna passava no ponto dela);
+- a verificação agrupa como coluna só os trechos VERTICAIS, e mede o DN que a coluna precisa pela rede
+  na outra ponta da perna (sem isso, 2 colunas acusavam DN errado).
+
+Medido (12 × 30): térrea e sobrado sem nenhuma prumada pelo meio de cômodo e sem erro de verificação
+de rede; a pendência "Prumada pelo meio do cômodo" não aparece mais.
+
+## Registro da F12d (15/10/2026) — o sobrado na tela e as provas
+
+- **Tela:** "Pavimentos" (Térrea / Sobrado) no programa; no sobrado, "Laje entre os pavimentos (cm)" e
+  "Shaft das instalações (cm)" nas hipóteses (o núcleo e a escada seguem o padrão do motor — mudar a
+  largura da escada pede redimensionar o núcleo junto); no resumo da prévia, a escada e o lado do
+  núcleo; o botão diz "Lançar os dois pavimentos"; a mensagem depois de lançar diz que o pavimento
+  superior foi criado. `check-ui-standard` limpo.
+- **Premissas** (`blueprint_study_casa.hipoteses`, sem migration — é JSON parcial): `pavimentos` (só 1
+  ou 2; o resto cai na térrea) e o grupo `sobrado`, completado como os outros.
+- **Harness** (`docs/spikes/casa-automatica/`): `?pavimentos=2` e `?ver=superior`; o `medir.mjs`
+  ganhou a rodada do sobrado a 0° e a 30° (etapas, cota do superior, escada, portas do núcleo, núcleo
+  sem deixar ambiente abaixo do mínimo, programa, prumada dos pilares, furo, telhado em cima, caixa em
+  cima e quadro embaixo, shaft com o tubo de queda, nenhuma prumada pelo meio de cômodo, redes sem
+  ERRO, NBR 5410, splits por pavimento, trava) — 93 conferências, aprovado. Uma página nova por
+  rodada (a mesma aba recarregada caía com "Page crashed").
+- **O que o portão do sobrado a 30° achou e foi corrigido:**
+  - um toco de água a 2,10 m raspava 1 cm do pilar girado: o chuveiro estava na quina, dentro da
+    pegada crescida do contorno. O encosto da água agora tira o ponto de dentro do anel do pilar
+    (escorrega pela parede, `foraDoPilar`) — só o ponto SUGERIDO; o que a pessoa pôs não se move e a
+    verificação acusa (decisão do E5.5, teste mantido) —, e o toco do eixo à face contorna o pilar (`desvioDoPilar`);
+  - "o núcleo come boa parte da Sala" saía SEM SOLUÇÃO com a sala ainda acima do mínimo: agora a área
+    que sobra é medida no desenho — acima do mínimo do programa vira CONFERIR (com quanto sobrou), abaixo
+    continua SEM SOLUÇÃO.
+- **Conferência no app real:** pendente — precisa da senha do agente-leitura (não fica guardada) e do OK
+  para criar e arquivar um estudo descartável, como na F10.

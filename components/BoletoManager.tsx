@@ -63,6 +63,8 @@ const ABAS_BOLETOS = [
     { id: 'captura' as const, label: 'Captura por e-mail' },
 ];
 
+const MESES_FILTRO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
 const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'numero', label: 'Código', sortable: true },
     { key: 'documento', label: 'Documento', sortable: true },
@@ -543,6 +545,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [showFiltros, setShowFiltros] = useState(false);
     const [vencDe, setVencDe] = usePersistedState('boletoManagerFilters:vencDe', '');
     const [vencAte, setVencAte] = usePersistedState('boletoManagerFilters:vencAte', '');
+    // Ano e Mês do vencimento — independentes (15/10/2026): só o ano = o ano inteiro; só o
+    // mês = aquele mês em todos os anos; os dois = o mês daquele ano. '' = todos.
+    const [vencAno, setVencAno] = usePersistedState('boletoManagerFilters:vencAno', '');
+    const [vencMes, setVencMes] = usePersistedState('boletoManagerFilters:vencMes', '');
     const [valorMin, setValorMin] = usePersistedState('boletoManagerFilters:valorMin', '');
     const [valorMax, setValorMax] = usePersistedState('boletoManagerFilters:valorMax', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('boletoManagerFilters:viewMode', 'list');
@@ -569,10 +575,15 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const setViewFocus = useStore(s => s.setViewFocus);
     const [highlightId, setHighlightId] = useState<string | null>(null);
 
-    const temFiltroAtivo = vencDe || vencAte || valorMin || valorMax;
+    const temFiltroAtivo = vencDe || vencAte || vencAno || vencMes || valorMin || valorMax;
+
+    const anosVencimento = useMemo(
+        () => [...new Set(boletos.map(b => (b.vencimento ?? '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))].sort().reverse(),
+        [boletos],
+    );
 
     function limparFiltros() {
-        setVencDe(''); setVencAte(''); setValorMin(''); setValorMax('');
+        setVencDe(''); setVencAte(''); setVencAno(''); setVencMes(''); setValorMin(''); setValorMax('');
     }
 
     // Org vem do seletor global do topo; vazio = "Todas as organizações" (REGRA #5:
@@ -839,6 +850,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         // Vencimento de/até
         if (vencDe)  list = list.filter(b => b.vencimento && b.vencimento >= vencDe);
         if (vencAte) list = list.filter(b => b.vencimento && b.vencimento <= vencAte);
+        // Ano / Mês do vencimento ("AAAA-MM-DD"), cada um independente do outro.
+        if (vencAno) list = list.filter(b => (b.vencimento ?? '').slice(0, 4) === vencAno);
+        if (vencMes) list = list.filter(b => (b.vencimento ?? '').slice(5, 7) === vencMes);
 
         // Faixa de valor
         const min = valorMin ? Number(valorMin) : null;
@@ -877,7 +891,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         });
 
         return list;
-    }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, advancedFilters.rules, advancedFields, supplierMap, userNameMap, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [boletos, buscaDebounced, vencDe, vencAte, vencAno, vencMes, valorMin, valorMax, advancedFilters.rules, advancedFields, supplierMap, userNameMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // Agrupamento só no modo lista (a grade não tem linha de grupo).
     const agrupando = viewMode === 'list' && groupBy !== 'none';
@@ -1291,7 +1305,33 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                        {/* Ano do vencimento — independente do mês */}
+                        <div>
+                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Ano (vencimento)</label>
+                            <select
+                                value={vencAno}
+                                onChange={(e) => setVencAno(e.target.value)}
+                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm"
+                            >
+                                <option value="">Todos</option>
+                                {anosVencimento.map(a => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                        </div>
+                        {/* Mês do vencimento — independente do ano */}
+                        <div>
+                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Mês (vencimento)</label>
+                            <select
+                                value={vencMes}
+                                onChange={(e) => setVencMes(e.target.value)}
+                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm"
+                            >
+                                <option value="">Todos</option>
+                                {MESES_FILTRO.map((nome, i) => (
+                                    <option key={nome} value={String(i + 1).padStart(2, '0')}>{nome}</option>
+                                ))}
+                            </select>
+                        </div>
                         {/* Vencimento de */}
                         <div>
                             <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Vencimento de</label>

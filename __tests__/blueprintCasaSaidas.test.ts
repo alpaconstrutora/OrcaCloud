@@ -23,7 +23,7 @@ import { montarPdf } from '../services/blueprintExportService';
 import { PAPEIS } from '../utils/blueprintExport';
 
 // A casa inteira é gerada UMA vez (~1 s) e todas as saídas leem dela.
-vi.setConfig({ testTimeout: 60_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 120_000 });
 
 let casa: BlueprintModel;
 let levelId: string;

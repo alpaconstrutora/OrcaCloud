@@ -577,6 +577,8 @@ export interface DecisaoDaPressao {
   deficitM: number;
   restanteM: number;
   elevacaoMm: number;
+  /** O plano da água JÁ traçado sobre o modelo com estes comandos (a última simulação) — a etapa ÁGUA o reaproveita. */
+  plano: ReturnType<typeof planejarAguaCompleta> | null;
 }
 
 /**
@@ -586,16 +588,17 @@ export interface DecisaoDaPressao {
  * então ajusta os diâmetros já contando com a solução.
  */
 export function decidirPressao(model: BlueprintModel, hidro: HipotesesHidro, terreno: LeitorDoTerreno | null, hip: HipotesesDaPressaoDaCasa): DecisaoDaPressao {
-  const nada: DecisaoDaPressao = { solucao: 'NENHUMA', comandos: [], deficitM: 0, restanteM: 0, elevacaoMm: 0 };
+  const nada: DecisaoDaPressao = { solucao: 'NENHUMA', comandos: [], deficitM: 0, restanteM: 0, elevacaoMm: 0, plano: null };
   const caixa = (model.terminais ?? []).find((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA' && t.papelReservatorio !== 'INFERIOR');
   if (!caixa || !hip.resolver) return nada;
   const simular = (cmds: Command[]) => {
     const m1 = cmds.length ? applyBatch(model, cmds).model : model;
     const plano = planejarAguaCompleta(m1, hidro, terreno);
-    return deficitDePressaoM(plano.comandos.length ? applyBatch(m1, plano.comandos).model : m1, hidro.pressao);
+    return { deficit: deficitDePressaoM(plano.comandos.length ? applyBatch(m1, plano.comandos).model : m1, hidro.pressao), plano };
   };
-  const deficitM = simular([]);
-  if (deficitM <= 0) return { ...nada, deficitM };
+  const inicial = simular([]);
+  const deficitM = inicial.deficit;
+  if (deficitM <= 0) return { ...nada, deficitM, plano: inicial.plano };
   const passo = (mm: number) => Math.ceil(mm / PASSO_DA_ELEVACAO_MM) * PASSO_DA_ELEVACAO_MM;
   // Subir a caixa 1 m rende no máximo 1 m (medido: ~0,9 — o ajuste de diâmetro muda junto): com o déficit acima do
   // limite, nem tenta. Senão, sobe pelo déficit e confere; o que sobrar entra na próxima (a última, no limite).
@@ -604,17 +607,18 @@ export function decidirPressao(model: BlueprintModel, hidro: HipotesesHidro, ter
     for (let tentativa = 0; tentativa < 5; tentativa++) {
       const alvo = Math.min(subir, hip.caixaElevadaAteMm);
       const cmd: Command = { type: 'SetTerminalProps', terminalId: caixa.id, cotaMm: caixa.cotaMm + alvo } as Command;
-      const resto = simular([cmd]);
-      if (resto <= 0) return { solucao: 'CAIXA_ELEVADA', comandos: [cmd], deficitM, restanteM: 0, elevacaoMm: alvo };
+      const r = simular([cmd]);
+      if (r.deficit <= 0) return { solucao: 'CAIXA_ELEVADA', comandos: [cmd], deficitM, restanteM: 0, elevacaoMm: alvo, plano: r.plano };
       if (alvo >= hip.caixaElevadaAteMm) break;
-      subir = passo(alvo + resto * 1000 + FOLGA_DA_ELEVACAO_MM);
+      subir = passo(alvo + r.deficit * 1000 + FOLGA_DA_ELEVACAO_MM);
     }
   }
   const bomba: Command = {
     type: 'AddTerminal', levelId: caixa.levelId, disciplina: 'AGUA_FRIA', tipo: 'Pressurizador', at: point(caixa.at.x + PRESSURIZADOR_AO_LADO_DA_CAIXA_MM, caixa.at.y),
     cotaMm: caixa.cotaMm, tipoHidraulico: 'BOMBA', rotulo: 'Pressurizador', sugerida: true,
   } as Command;
-  return { solucao: 'PRESSURIZADOR', comandos: [bomba], deficitM, restanteM: simular([bomba]), elevacaoMm: 0 };
+  const comBomba = simular([bomba]);
+  return { solucao: 'PRESSURIZADOR', comandos: [bomba], deficitM, restanteM: comBomba.deficit, elevacaoMm: 0, plano: comBomba.plano };
 }
 
 /** F9: as hipóteses da elétrica da casa. */
@@ -1220,8 +1224,8 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       'AGUA',
       () => {
         pressao = decidirPressao(m, hidro, terrenoHidro, hip.pressao);
-        const m1 = pressao.comandos.length ? applyBatch(m, pressao.comandos).model : m;
-        const plano = planejarAguaCompleta(m1, hidro, terrenoHidro);
+        // O plano da última simulação já é o traçado sobre o modelo com a solução — sem traçar de novo.
+        const plano = pressao.plano ?? planejarAguaCompleta(pressao.comandos.length ? applyBatch(m, pressao.comandos).model : m, hidro, terrenoHidro);
         return { ...plano, comandos: [...pressao.comandos, ...plano.comandos] };
       },
       (c) => {

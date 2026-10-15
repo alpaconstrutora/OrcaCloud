@@ -822,5 +822,5 @@ Atualizado em 15/10/2026, ao fim da sessão de implementação.
 - [x] S2 upload na tela: `PasswordException` do pdf.js vira o aviso — teste com pdf.js simulado.
 - [x] S3 migration aplicada 2×; conferido no banco: ler senha = só service_role; definir = authenticated sim, anon não; authenticated **não** atualiza `pdf_senha_atualizada_em`; gatilho de exclusão criado.
 - [x] S4 sincronização publicada: 401 sem header e com token falso; execução real 200 (1 conta, 0 reprocessados — nenhuma senha ainda). `abrirPdf` provado com PDF criptografado de verdade (jsPDF, senha 12345): sem senha e senha errada → protegido sem leitura; senha de OUTRO remetente da caixa → lê linha, valor e CNPJ.
-- [ ] S5 tela: typecheck e `check-ui-standard` limpos; falta ver no app logado depois do deploy.
+- [x] S5 tela: typecheck e `check-ui-standard` limpos; vista em produção com login (domínio em `0feacdb`): coluna "Senha do PDF" e campo "Senha dos PDFs" no remetente Energisa, sem erro de console nem HTTP 4xx/5xx; CI do commit `5b986196` verde.
 - [ ] Prova de ponta a ponta com o boleto nº 1423 — **depende do usuário** cadastrar a senha do PDF da Energisa no remetente.

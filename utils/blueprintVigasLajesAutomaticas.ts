@@ -24,6 +24,7 @@ import {
   proximoNumeroDoRotulo,
   type Cadeia,
 } from './blueprintPilaresAutomaticos';
+import { semEspiculas } from './blueprintDistribuicao';
 
 /**
  * LANÇAMENTO AUTOMÁTICO DE VIGAS E LAJES (16/09/2026).
@@ -453,7 +454,9 @@ export function planejarLajes(
     candidatas.push({
       spaceId: sp.id,
       ambiente: sp.name?.trim() ? sp.name.trim() : null,
-      pontos: sp.ring.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })),
+      // Sem as espículas do anel (o dente de ~2 cm que o pilar ou a ponta de parede deixam): com elas a laje deixa de
+      // ser convexa e o furo da escada nela não se recorta (F12b, 15/10/2026 — sobrado sem furo).
+      pontos: semEspiculas(sp.ring).map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })),
       areaMm2,
       espessuraMm: espessura,
       baseMm: level.defaultHeightMm,

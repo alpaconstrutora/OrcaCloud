@@ -139,7 +139,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F9 — elétrica + climatização (ver "F9 — plano detalhado" e "Registro da F9")
 - [x] F10 — tela da Casa automática (ver "Registro da F10")
 - [x] F11 — saídas (ver "Registro da F11")
-- [ ] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [ ] F12b estrutura e cobertura · [ ] F12c instalações · [ ] F12d tela e provas
+- [ ] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [ ] F12c instalações · [ ] F12d tela e provas
 
 ## Registro da F1 (14/10/2026)
 
@@ -1221,3 +1221,49 @@ Testes: `__tests__/blueprintSobrado.test.ts` (13 — programa dividido, pedaços
 recorte, escada espelhada) e o bloco "F12a" em `blueprintCasaAutomatica.test.ts` (10 — pavimento
 superior na cota, escada sem aviso, portas, programa atendido nos dois, superior sem porta para a
 rua, TO/CA, etapas que ainda não rodam, trava, lote girado 30°, zona de 1 pavimento).
+
+## Registro da F12b (15/10/2026) — estrutura e telhado do sobrado
+
+No sobrado, as etapas PILARES → VIGAS → LAJES → FUNDACOES → EIXOS → TELHADO agora rodam nos dois
+pavimentos, no mesmo lote (as instalações seguem `NAO_RODOU` até a F12c). O que foi decidido e medido:
+
+- **Pilar é prumada** (`pilaresDoSobrado`). O térreo pelo planejador de sempre; cada pilar do térreo
+  com parede do superior em cima **sobe** (mesma seção, mesmo ponto); o planejador do superior
+  completa, e cada pilar novo dele **desce** ao térreo quando há parede embaixo fora de porta e
+  janela (`paredeSobOPonto`). Sem parede embaixo, ele **nasce numa viga de transição** quando cai
+  sobre uma; senão sai, e vira pendência — pilar não nasce no meio de um cômodo.
+- **Vigas de transição** (`trechosDeTransicao` + `vigasDeTransicao`). Medido: o superior sai igual
+  em todas as sementes, e ~32 m das paredes internas dele não têm parede do térreo embaixo em
+  qualquer par de sementes (64 pares, 4 formas) — escolher o par não resolve. Então, no térreo, sob
+  cada trecho de parede do superior sem parede embaixo, uma viga de face a face das paredes do térreo
+  que ela cruza (cada uma é apoio), com o mesmo pré-dimensionamento das vigas automáticas (vão ÷ 10,
+  mínimo 30 cm, largura da parede), topo no pé-direito. Vai para "conferir" com o calculista.
+- **Lajes:** a do térreo é o piso de cima; a do superior, o forro. O **furo da escada** é derivado
+  pelo kernel (`furosDaEscada`) — e não saía: o anel do ambiente traz ESPÍCULAS (o dente de ~2 cm
+  que o pilar ou a ponta de parede deixam, … P, Q, P …); com elas a laje não é convexa e o
+  `recorteComum` devolvia um ponto. **Corrigido na laje automática** (`planejarLajes` usa
+  `semEspiculas`, o mesmo da F9) — vale para todo desenho, não só a casa. A laje automática não
+  entra no bundle da planta-api (só kernel, IFC e planilha); nada a regerar.
+- **Fundação só no térreo**, um bloco por pilar do térreo; **eixos** do térreo.
+- **Telhado** sobre o superior (o retângulo é o mesmo nos dois — não sobra cobertura de térreo).
+- **Corrimão** dos dois lados dos LANCES (o sugeridor do app, sem o segmento da virada — o corrimão
+  dele atravessaria os lances) e **guarda-corpo** de 1,10 m no superior, na borda do furo sobre o
+  primeiro lance.
+
+Medido (programa 3/1/2/2 R1-N):
+
+| Lote | Pilares T / S | Sobem · descem · nascem em viga · fora | Vigas T · transição · S | Furo | Conflitos |
+|---|---|---|---|---|---|
+| 12 × 30 | 26 / 25 | 12 · 5 · 7 · 2 | 12 · 10 (28,5 m, maior vão 5,8 m) · 11 | 4,89 m² | 0 |
+| 10 × 25 | 25 / 27 | 15 · 4 · 8 · 1 | 12 · 10 (26,8 m, 5,1 m) · 11 | 4,89 m² | 0 |
+| 15 × 20 | 26 / 25 | 12 · 5 · 7 · 2 | 12 · 10 (28,5 m, 5,8 m) · 11 | 4,89 m² | 0 |
+
+Os 1–2 pilares "fora" — medido, não suposto — caem sobre JANELA do térreo (o encontro de parede do
+superior na fachada, em cima do vão de uma janela de baixo): a pendência diz "sobre porta ou janela"
+separado de "no meio de um cômodo". ~0,2 s por sobrado inteiro.
+
+Testes: bloco "F12b" em `blueprintCasaAutomatica.test.ts` (7 — pilar sobre parede, prumada ou viga,
+toda parede do superior com parede ou viga embaixo, furo na laje do térreo e fundação só embaixo,
+telhado em cima com corrimãos e guarda-corpo, zero conflito + trava, estrutura desligada) e 4 em
+`blueprintSobrado.test.ts` (modelo sintético: trechos, vigas, pilares em prumada com descida, apoio
+fora da porta).

@@ -4,7 +4,7 @@
  * Plano: `docs/planos/2026-10-14-casa-automatica.md`.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, point, pointInPolygon, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
+import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada, point, pointInPolygon, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
@@ -603,12 +603,13 @@ describe('planejarCasa — F12a: o sobrado (arquitetura dos dois pavimentos e a 
     expect(plano.etapas.find((e) => e.id === 'IMPLANTACAO')!.nota).toMatch(/2 pavimentos/);
   });
 
-  it('a estrutura e as instalações ainda não rodam no sobrado — cada etapa diz, e a premissa avisa', () => {
+  it('as instalações ainda não rodam no sobrado — cada etapa diz, e a premissa avisa (estrutura e telhado: F12b)', () => {
     const porId = Object.fromEntries(plano.etapas.map((e) => [e.id, e]));
     expect(porId.IMPLANTACAO.situacao).toBe('CALCULOU');
-    expect(porId.ARQUITETURA.situacao).toBe('LANCOU');
     expect(porId.CONFERENCIA.situacao).toBe('CALCULOU');
-    for (const e of plano.etapas.filter((x) => !['IMPLANTACAO', 'ARQUITETURA', 'CONFERENCIA'].includes(x.id))) {
+    const lancadas = ['ARQUITETURA', 'PILARES', 'VIGAS', 'LAJES', 'FUNDACOES', 'EIXOS', 'TELHADO'];
+    for (const id of lancadas) expect(porId[id].situacao).toBe('LANCOU');
+    for (const e of plano.etapas.filter((x) => !['IMPLANTACAO', 'CONFERENCIA', ...lancadas].includes(x.id))) {
       expect(e.situacao).toBe('NAO_RODOU');
       expect(e.nota).toMatch(/sobrado/);
     }
@@ -634,5 +635,95 @@ describe('planejarCasa — F12a: o sobrado (arquitetura dos dois pavimentos e a 
     expect(p.comandos).toEqual([]);
     expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
     expect(p.etapas[0].nota).toMatch(/1 pavimento.*térrea/);
+  });
+});
+
+describe('planejarCasa — F12b: a estrutura e o telhado do sobrado', () => {
+  const m = lote();
+  const plano = planejarCasa(m, entrada(m), { pavimentos: 2 });
+  const T = m.levels[0].id;
+  const r = plano.resultado;
+  const S = plano.sobrado!.nivelSuperiorId;
+  const pecas = (L: string, kind: string) => (r.structures ?? []).filter((x) => x.levelId === L && x.kind === kind);
+  const dist = (p: Point, a: Point, b: Point) => {
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / L;
+    return { t, L, d: Math.abs((p.x - a.x) * (b.y - a.y) - (p.y - a.y) * (b.x - a.x)) / L };
+  };
+  const noCorpo = (p: Point, a: Point, b: Point, meia: number) => {
+    const x = dist(p, a, b);
+    return x.t >= -meia && x.t <= x.L + meia && x.d <= meia + 5;
+  };
+
+  it('todo pilar sobre uma parede do próprio pavimento', () => {
+    for (const L of [T, S]) {
+      for (const pil of pecas(L, 'PILAR')) expect(r.walls.some((w) => w.levelId === L && noCorpo(pil.pontos[0], w.a, w.b, w.thicknessMm / 2))).toBe(true);
+    }
+  });
+
+  it('pilar do superior é PRUMADA: tem pilar embaixo no mesmo ponto, ou nasce numa viga do térreo', () => {
+    const vigasT = pecas(T, 'VIGA');
+    for (const pil of pecas(S, 'PILAR')) {
+      const at = pil.pontos[0];
+      const emPrumada = pecas(T, 'PILAR').some((x) => Math.hypot(x.pontos[0].x - at.x, x.pontos[0].y - at.y) <= Math.max(pil.larguraMm, pil.profundidadeMm) / 2);
+      const naViga = vigasT.some((v) => noCorpo(at, v.pontos[0], v.pontos[1], v.larguraMm / 2 + Math.max(pil.larguraMm, pil.profundidadeMm) / 2));
+      expect(emPrumada || naViga).toBe(true);
+    }
+    expect(pecas(S, 'PILAR').length).toBeGreaterThan(10);
+  });
+
+  it('toda parede do superior tem embaixo uma parede ou uma viga do térreo (as vigas de transição)', () => {
+    const apoios = [...r.walls.filter((w) => w.levelId === T).map((w) => ({ a: w.a, b: w.b, meia: w.thicknessMm / 2 })), ...pecas(T, 'VIGA').map((v) => ({ a: v.pontos[0], b: v.pontos[1], meia: v.larguraMm / 2 }))];
+    let soltoMm = 0;
+    for (const w of r.walls.filter((x) => x.levelId === S)) {
+      const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+      const n = Math.max(1, Math.round(L / 100));
+      for (let k = 0; k < n; k++) {
+        const p = { x: w.a.x + ((w.b.x - w.a.x) * (k + 0.5)) / n, y: w.a.y + ((w.b.y - w.a.y) * (k + 0.5)) / n };
+        if (!apoios.some((x) => noCorpo(p, x.a, x.b, x.meia))) soltoMm += L / n;
+      }
+    }
+    // Só as pontas: a viga de transição para na face da parede do térreo que a apoia.
+    expect(soltoMm).toBeLessThan(1500);
+    expect(plano.pendencias.some((p) => p.grupo === 'CONFERIR' && /viga\(s\) de transição/.test(p.texto))).toBe(true);
+  });
+
+  it('a laje do térreo é o piso de cima e tem o FURO da escada; fundação só no térreo, e uma por pilar do térreo', () => {
+    expect(pecas(T, 'LAJE').length).toBeGreaterThan(0);
+    expect(pecas(S, 'LAJE').length).toBeGreaterThan(0);
+    const furos = furosDaEscada(r);
+    expect(furos).toHaveLength(1);
+    expect(pecas(T, 'LAJE').some((l) => l.id === furos[0].structuralId)).toBe(true);
+    expect(furos[0].areaMm2 / 1e6).toBeGreaterThan(4);
+    const fundacoes = (r.structures ?? []).filter((x) => ['BLOCO', 'SAPATA', 'ESTACA', 'BALDRAME'].includes(x.kind));
+    expect(fundacoes.length).toBeGreaterThan(0);
+    expect(fundacoes.every((x) => x.levelId === T)).toBe(true);
+    expect(plano.resumo.estrutura.blocos).toBe(pecas(T, 'PILAR').length);
+  });
+
+  it('o telhado fica sobre o superior; corrimãos nos lances e guarda-corpo na borda do furo', () => {
+    expect(r.roofs.filter((x) => x.levelId === S).length).toBeGreaterThan(0);
+    expect(r.roofs.filter((x) => x.levelId === T)).toEqual([]);
+    const g = r.guardaCorpos ?? [];
+    expect(g.filter((x) => x.levelId === T && x.tipo === 'CORRIMAO')).toHaveLength(4);
+    expect(g.filter((x) => x.levelId === S && x.tipo === 'GUARDA_CORPO')).toHaveLength(1);
+  });
+
+  it('pilar do superior que fica fora cai sobre porta ou janela do térreo — nunca no meio de um cômodo (há viga de transição)', () => {
+    expect(plano.pendencias.filter((p) => /meio de um cômodo/.test(p.texto))).toEqual([]);
+    const fora = plano.pendencias.filter((p) => /Pilares: .*porta ou janela/.test(p.texto));
+    expect(fora.length).toBeLessThanOrEqual(1);
+  });
+
+  it('nenhum conflito entre as peças; a trava confere o lote inteiro', () => {
+    expect(conflitosDoModelo(r)).toEqual([]);
+    expect(conferirPlanoDaCasa(m, plano)).toEqual({ ok: true });
+  });
+
+  it('estrutura desligada: só a arquitetura e o telhado (sem laje, direto na parede)', () => {
+    const p = planejarCasa(m, entrada(m), { pavimentos: 2, estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, lancar: false } });
+    expect(p.etapas.filter((e) => ['PILARES', 'VIGAS', 'LAJES', 'FUNDACOES', 'EIXOS'].includes(e.id)).every((e) => e.situacao === 'NAO_EXIGIDA')).toBe(true);
+    expect(p.resultado.structures ?? []).toEqual([]);
+    expect(p.etapas.find((e) => e.id === 'TELHADO')!.situacao).toBe('LANCOU');
   });
 });

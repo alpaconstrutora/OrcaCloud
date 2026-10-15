@@ -3,10 +3,23 @@
  * fica, o que recorta) e a escada em U. O orquestrador inteiro está em `blueprintCasaAutomatica.test.ts`.
  */
 import { describe, expect, it } from 'vitest';
-import { point, type Command } from '../utils/blueprintKernel';
+import { applyBatch, emptyModel, point, type Command, type Point } from '../utils/blueprintKernel';
 import { programaDaCasa, PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
 import type { AmbienteGerado, Retangulo } from '../utils/blueprintGerador';
-import { comandoDaEscada, dividirPrograma, escolherNucleo, HIPOTESES_DO_SOBRADO_PADRAO, pedacosFora, recortarNucleo, USOS_DO_TERREO, type NucleoDaEscada } from '../utils/blueprintSobrado';
+import {
+  comandoDaEscada,
+  dividirPrograma,
+  escolherNucleo,
+  HIPOTESES_DO_SOBRADO_PADRAO,
+  paredeSobOPonto,
+  pedacosFora,
+  pilaresDoSobrado,
+  recortarNucleo,
+  trechosDeTransicao,
+  USOS_DO_TERREO,
+  vigasDeTransicao,
+  type NucleoDaEscada,
+} from '../utils/blueprintSobrado';
 
 const amb = (nome: string, uso: string, ret: Retangulo, areaMinM2 = 3): AmbienteGerado => ({ nome, ret, item: { uso, areaMinM2 } }) as unknown as AmbienteGerado;
 
@@ -144,5 +157,79 @@ describe('comandoDaEscada', () => {
     expect(e[0].x).toBeLessThan(e[3].x);
     expect(e.map((p) => p.y)).toEqual(d.map((p) => p.y));
     expect(e[0].x - 0).toBe(9000 - d[0].x);
+  });
+});
+
+describe('F12b — a estrutura dos dois pavimentos (modelo sintético 8 × 6 m)', () => {
+  // Térreo: o retângulo e uma parede interna em x = 4 m (de frente a fundos). Superior: o retângulo e uma parede
+  // interna em y = 2 m (de lado a lado) — que cruza a do térreo no meio e não tem parede embaixo no resto.
+  const base = applyBatch(emptyModel(), [
+    { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 },
+    { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 },
+  ]).model;
+  const [T, S] = base.levels.map((l) => l.id);
+  const parede = (levelId: string, a: Point, b: Point, e: number) => ({ levelId, a, b, thicknessMm: e, heightMm: 2800 });
+  const ret = (L: string) => [parede(L, point(0, 0), point(8000, 0), 200), parede(L, point(8000, 0), point(8000, 6000), 200), parede(L, point(8000, 6000), point(0, 6000), 200), parede(L, point(0, 6000), point(0, 0), 200)];
+  const model = applyBatch(base, [
+    { type: 'AddWalls', walls: [...ret(T), parede(T, point(4000, 0), point(4000, 6000), 150), ...ret(S), parede(S, point(0, 2000), point(8000, 2000), 150)] } as Command,
+  ]).model;
+
+  it('trechosDeTransicao: a parede do superior sem parede embaixo, partida onde cruza a do térreo', () => {
+    const t = trechosDeTransicao(model, T, S);
+    expect(t).toHaveLength(2);
+    for (const x of t) {
+      expect(x.a.y).toBe(2000);
+      expect(x.b.y).toBe(2000);
+      expect(x.larguraMm).toBe(150);
+    }
+    const [e, d] = t;
+    // de face a face: da parede externa (meia de 100) à interna do térreo (meia de 75)
+    expect(e.a.x).toBeGreaterThanOrEqual(50);
+    expect(e.b.x).toBeLessThanOrEqual(4000 - 75);
+    expect(d.a.x).toBeGreaterThanOrEqual(4000 + 75);
+    expect(d.b.x).toBeLessThanOrEqual(8000 - 50);
+    expect(e.b.x - e.a.x).toBeGreaterThan(3600);
+  });
+
+  it('vigasDeTransicao: uma viga no TÉRREO por trecho, topo no pé-direito, altura pelo vão', () => {
+    const t = trechosDeTransicao(model, T, S);
+    const v = vigasDeTransicao(model, T, t);
+    const vigas = v.comandos.filter((c) => c.type === 'AddStructural');
+    expect(vigas).toHaveLength(2);
+    for (const c of vigas) {
+      if (c.type !== 'AddStructural') continue;
+      expect(c.levelId).toBe(T);
+      expect(c.kind).toBe('VIGA');
+      expect(c.alturaMm).toBe(400); // ~3,85 m ÷ 10, de 5 em 5 cm
+      expect((c.baseMm ?? 0) + c.alturaMm).toBe(2800);
+    }
+    expect(v.comandos.filter((c) => c.type === 'SetCedeSobreposicao')).toHaveLength(2);
+    expect(applyBatch(model, v.comandos).model.structures!.filter((x) => x.kind === 'VIGA')).toHaveLength(2);
+  });
+
+  it('pilaresDoSobrado: os do superior em prumada ou numa viga de transição — nenhum solto', () => {
+    const t = trechosDeTransicao(model, T, S);
+    const p = pilaresDoSobrado(model, T, S, undefined, t);
+    const r = applyBatch(model, p.comandos).model;
+    const pil = (L: string) => (r.structures ?? []).filter((x) => x.levelId === L && x.kind === 'PILAR');
+    expect(p.sobem).toBeGreaterThanOrEqual(4); // os quatro cantos
+    expect(p.semApoio).toBe(0);
+    for (const x of pil(S)) {
+      const at = x.pontos[0];
+      const emPrumada = pil(T).some((y) => Math.hypot(y.pontos[0].x - at.x, y.pontos[0].y - at.y) < 1);
+      const naViga = t.some((v) => Math.abs(at.y - v.a.y) < 1 && at.x >= v.a.x - 300 && at.x <= v.b.x + 300);
+      expect(emPrumada || naViga).toBe(true);
+    }
+    // O encontro da parede do superior com a fachada (x = 0 e 8 m, y = 2 m) tem parede embaixo e o térreo não tinha
+    // pilar ali (o intermediário dele é em y = 3 m): desce.
+    expect(pil(T).some((y) => y.pontos[0].x === 0 && y.pontos[0].y === 2000)).toBe(true);
+    expect(p.descem).toBeGreaterThanOrEqual(2);
+  });
+
+  it('paredeSobOPonto: no corpo da parede sim; no vão da porta, não', () => {
+    const comPorta = applyBatch(model, [{ type: 'AddOpening', wallId: model.walls.find((w) => w.levelId === T && w.a.x === 4000)!.id, kind: 'door', offsetMm: 2500, widthMm: 900, heightMm: 2100 } as Command]).model;
+    expect(paredeSobOPonto(comPorta, T, point(4000, 1000), 100)).not.toBeNull();
+    expect(paredeSobOPonto(comPorta, T, point(4000, 2950), 100)).toBeNull();
+    expect(paredeSobOPonto(comPorta, T, point(2000, 2000), 100)).toBeNull();
   });
 });

@@ -19,8 +19,11 @@
  *
  * Tudo no QUADRO LOCAL da frente (o mesmo do gerador): quem chama leva ao mundo com `comandosNoMundoDe`.
  */
-import type { Command, ObjectId, Point } from './blueprintKernel';
-import { point, uidDeterministico } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point, Wall } from './blueprintKernel';
+import { applyBatch, point, uidDeterministico } from './blueprintKernel';
+import { HIPOTESES_PILARES_PADRAO, idsPrevistosDeEstrutura, pilaresExistentesNoNivel, planejarPilares, proximoNumeroDePilar, proximoNumeroDoRotulo, type HipotesesDePilares } from './blueprintPilaresAutomaticos';
+import { alturaDaViga, HIPOTESES_VIGAS_PADRAO, type HipotesesDeVigas } from './blueprintVigasLajesAutomaticas';
+import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, sugerirGuardaCorpos } from './blueprintGuardaCorpo';
 import type { Programa, UsoDoAmbiente } from './blueprintPrograma';
 import type { AmbienteGerado, Retangulo } from './blueprintGerador';
 
@@ -406,3 +409,298 @@ export function semPortaDeEntrada(cmds: readonly Command[], casa: Retangulo): Co
   const externas = new Set(cmds.flatMap((c) => (c.type === 'AddWalls' ? c.walls.filter(naBorda).map((w) => w.uid) : [])));
   return cmds.map((c) => (c.type === 'AddOpenings' ? { ...c, openings: c.openings.filter((o) => !((o.kind === 'door' || o.kind === 'sliding') && externas.has(o.wallUid ?? undefined))) } : c)) as Command[];
 }
+
+// ─── F12b: a estrutura dos dois pavimentos ─────────────────────────────────
+
+/** Folga além da meia espessura para um ponto contar como "sobre a parede". */
+const FOLGA_SOBRE_PAREDE_MM = 5;
+/** Folga entre a face do pilar e a lateral de uma porta ou janela. */
+const FOLGA_DA_ABERTURA_MM = 50;
+
+function projetar(p: Point, a: Point, b: Point): { t: number; L: number; d: number } {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const L = Math.hypot(dx, dy);
+  if (L < 1) return { t: 0, L: 0, d: Math.hypot(p.x - a.x, p.y - a.y) };
+  const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / L;
+  return { t, L, d: Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / L };
+}
+
+/**
+ * A parede do pavimento que tem o ponto no corpo (eixo a menos de meia espessura), longe das portas e janelas dela
+ * (`meioComprimentoMm` = meia peça ao longo da parede + folga). `null` = não há onde a peça apoiar.
+ */
+export function paredeSobOPonto(model: BlueprintModel, levelId: ObjectId, p: Point, meioComprimentoMm = 0, ignorarAberturas = false): Wall | null {
+  for (const w of model.walls) {
+    if (w.levelId !== levelId) continue;
+    const pr = projetar(p, w.a, w.b);
+    if (pr.L < 1 || pr.t < -1 || pr.t > pr.L + 1 || pr.d > w.thicknessMm / 2 + FOLGA_SOBRE_PAREDE_MM) continue;
+    const naAbertura = model.openings.some((o) => o.wallId === w.id && pr.t > o.offsetMm - meioComprimentoMm - FOLGA_DA_ABERTURA_MM && pr.t < o.offsetMm + o.widthMm + meioComprimentoMm + FOLGA_DA_ABERTURA_MM);
+    if (!naAbertura || ignorarAberturas) return w;
+  }
+  return null;
+}
+
+const pilarPerto = (model: BlueprintModel, levelId: ObjectId, p: Point, mm: number) =>
+  pilaresExistentesNoNivel(model, levelId).some((x) => Math.hypot(x.pontos[0].x - p.x, x.pontos[0].y - p.y) <= mm);
+
+export interface PilaresDoSobrado {
+  comandos: Command[];
+  motivo: string | null;
+  avisos: string[];
+  foraDoPlano: string[];
+  /** Pilares novos no térreo (do planejador + os que descem do superior). */
+  terreo: number;
+  /** Pilares novos no superior (os que sobem do térreo + os do planejador que têm apoio). */
+  superior: number;
+  /** Do térreo que continuam no superior (há parede em cima). */
+  sobem: number;
+  /** Do superior que descem ao térreo (há parede embaixo, fora de porta e janela). */
+  descem: number;
+  /** Do superior que nascem numa viga de transição do térreo (sem parede embaixo, mas com a viga). */
+  nascemEmViga: number;
+  /** Do superior que ficaram fora: sem parede nem viga de transição embaixo, o pilar nasceria no meio de um cômodo. */
+  semApoio: number;
+  /** Onde ficaram os que saíram. */
+  semApoioEm: Point[];
+  /** Dos que saíram, quantos caíam sobre porta ou janela do térreo (a parede está lá, aberta). */
+  sobreAbertura: number;
+}
+
+/**
+ * Os pilares do sobrado, ALINHADOS: um pilar é uma prumada. O térreo pelo planejador de sempre; cada pilar do térreo
+ * que tem parede do superior em cima CONTINUA no superior (a mesma seção, no mesmo ponto); o planejador do superior
+ * completa o que falta (encontros e vãos), e cada pilar novo dele DESCE ao térreo quando há parede embaixo fora de
+ * porta e janela. O que não tem parede embaixo sai: um pilar não nasce no meio do cômodo de baixo sem viga de
+ * transição — fica dito, e a viga do superior vence o vão maior.
+ */
+export function pilaresDoSobrado(
+  model: BlueprintModel,
+  T: ObjectId,
+  S: ObjectId,
+  hip: HipotesesDePilares = HIPOTESES_PILARES_PADRAO,
+  transicao: readonly TrechoDeTransicao[] = [],
+): PilaresDoSobrado {
+  const comandos: Command[] = [];
+  const cedem = new Set<ObjectId>();
+  let m = model;
+  const lancar = (lote: Command[]) => {
+    if (!lote.length) return;
+    m = applyBatch(m, lote).model;
+    comandos.push(...lote);
+  };
+  const ceder = (w: Wall, lote: Command[]) => {
+    if (w.cedeSobreposicao === true || cedem.has(w.id)) return;
+    cedem.add(w.id);
+    lote.push({ type: 'SetCedeSobreposicao', id: w.id, cede: true });
+  };
+  const altura = (id: ObjectId) => m.levels.find((l) => l.id === id)?.defaultHeightMm ?? 2800;
+  const copia = (x: { at: Point; larguraMm: number; profundidadeMm: number; circular: boolean; rotacaoDeg: number; rotulo: string | null }, levelId: ObjectId): Command => ({
+    type: 'AddStructural',
+    levelId,
+    kind: 'PILAR',
+    pontos: [x.at],
+    larguraMm: x.larguraMm,
+    profundidadeMm: x.profundidadeMm,
+    alturaMm: altura(levelId),
+    baseMm: 0,
+    circular: x.circular,
+    rotacaoDeg: x.rotacaoDeg,
+    rotulo: x.rotulo,
+  });
+  const meio = (x: { larguraMm: number; profundidadeMm: number }) => Math.max(x.larguraMm, x.profundidadeMm) / 2;
+
+  // 1. O térreo.
+  const pT = planejarPilares(m, T, hip);
+  lancar(pT.comandos);
+  const terreoDoPlanejador = pT.pilares.length;
+
+  // 2. Os do térreo que sobem.
+  const sobem: Command[] = [];
+  for (const x of pilaresExistentesNoNivel(m, T)) {
+    const at = x.pontos[0];
+    const w = paredeSobOPonto(m, S, at, meio(x));
+    if (!w || pilarPerto(m, S, at, meio(x))) continue;
+    sobem.push(copia({ at, larguraMm: x.larguraMm, profundidadeMm: x.profundidadeMm, circular: x.circular, rotacaoDeg: x.rotacaoDeg, rotulo: x.rotulo ?? null }, S));
+    ceder(w, sobem);
+  }
+  lancar(sobem);
+  const nSobem = sobem.filter((c) => c.type === 'AddStructural').length;
+
+  // 3. O superior completa; cada novo desce ou sai.
+  const pS = planejarPilares(m, S, hip);
+  const manter: Command[] = [];
+  const descer: Command[] = [];
+  let semApoio = 0;
+  const semApoioEm: Point[] = [];
+  let nascemEmViga = 0;
+  let n = proximoNumeroDePilar(m);
+  for (const x of pS.pilares) {
+    const embaixo = paredeSobOPonto(m, T, x.at, meio(x));
+    const naViga = !embaixo && sobreAlgumTrecho(transicao, x.at);
+    if (!embaixo && !naViga) {
+      semApoio++;
+      semApoioEm.push(x.at);
+      continue;
+    }
+    const rotulo = `P${n++}`;
+    manter.push(copia({ at: x.at, larguraMm: x.larguraMm, profundidadeMm: x.profundidadeMm, circular: false, rotacaoDeg: x.rotacaoDeg, rotulo }, S));
+    for (const id of x.wallIds) {
+      const w = m.walls.find((y) => y.id === id);
+      if (w) ceder(w, manter);
+    }
+    if (naViga) {
+      nascemEmViga++;
+      continue;
+    }
+    if (embaixo && !pilarPerto(m, T, x.at, meio(x))) {
+      descer.push(copia({ at: x.at, larguraMm: x.larguraMm, profundidadeMm: x.profundidadeMm, circular: false, rotacaoDeg: x.rotacaoDeg, rotulo }, T));
+      ceder(embaixo, descer);
+    }
+  }
+  lancar(manter);
+  lancar(descer);
+  const nManter = manter.filter((c) => c.type === 'AddStructural').length;
+  const nDescer = descer.filter((c) => c.type === 'AddStructural').length;
+
+  const foraDoPlano = [...pT.foraDoPlano.map((f) => `térreo: ${f.motivo}`), ...pS.foraDoPlano.map((f) => `superior: ${f.motivo}`)];
+  const sobreAbertura = semApoioEm.filter((p) => paredeSobOPonto(m, T, p, 0, true)).length;
+  const noVazio = semApoio - sobreAbertura;
+  if (sobreAbertura) foraDoPlano.push(`${sobreAbertura} pilar(es) do superior cairiam sobre porta ou janela do térreo e ficaram fora — a viga do superior vence o vão maior; confira com o calculista (ou mude a abertura)`);
+  if (noVazio) foraDoPlano.push(`${noVazio} pilar(es) do superior sem parede nem viga embaixo ficaram fora (nasceriam no meio de um cômodo do térreo) — a viga do superior vence o vão maior; confira com o calculista`);
+  return {
+    comandos,
+    motivo: comandos.length ? null : (pT.motivo ?? pS.motivo),
+    avisos: [...pT.avisos.map((a) => `térreo: ${a}`), ...pS.avisos.map((a) => `superior: ${a}`)],
+    foraDoPlano,
+    terreo: terreoDoPlanejador + nDescer,
+    superior: nSobem + nManter,
+    sobem: nSobem,
+    descem: nDescer,
+    nascemEmViga,
+    semApoio,
+    semApoioEm,
+    sobreAbertura,
+  };
+}
+
+/** Um trecho de parede do superior sem parede embaixo: onde a viga de transição do térreo passa. */
+export interface TrechoDeTransicao {
+  a: Point;
+  b: Point;
+  larguraMm: number;
+}
+
+const apoiadaEmBaixo = (p: Point, debaixo: readonly Wall[]) =>
+  debaixo.some((d) => {
+    const pr = projetar(p, d.a, d.b);
+    return pr.L >= 1 && pr.t >= -1 && pr.t <= pr.L + 1 && pr.d <= d.thicknessMm / 2 + FOLGA_SOBRE_PAREDE_MM;
+  });
+
+function sobreAlgumTrecho(trechos: readonly TrechoDeTransicao[], p: Point): boolean {
+  return trechos.some((t) => {
+    const pr = projetar(p, t.a, t.b);
+    return pr.L >= 1 && pr.t >= -t.larguraMm && pr.t <= pr.L + t.larguraMm && pr.d <= t.larguraMm / 2 + FOLGA_SOBRE_PAREDE_MM;
+  });
+}
+
+/**
+ * Os trechos das paredes do superior que não têm parede do térreo embaixo, de face a face das paredes do térreo
+ * que cruzam (cada uma é um apoio), emendados quando colineares. Abaixo de `minimoMm` não vira viga.
+ */
+export function trechosDeTransicao(model: BlueprintModel, T: ObjectId, S: ObjectId, minimoMm = 300, passoMm = 50): TrechoDeTransicao[] {
+  const debaixo = model.walls.filter((w) => w.levelId === T);
+  const brutos: TrechoDeTransicao[] = [];
+  for (const w of model.walls) {
+    if (w.levelId !== S) continue;
+    const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    const n = Math.max(1, Math.round(L / passoMm));
+    const em = (t: number) => point(Math.round(w.a.x + (w.b.x - w.a.x) * t), Math.round(w.a.y + (w.b.y - w.a.y) * t));
+    let ini: number | null = null;
+    for (let k = 0; k <= n; k++) {
+      const solta = k < n && !apoiadaEmBaixo({ x: w.a.x + ((w.b.x - w.a.x) * (k + 0.5)) / n, y: w.a.y + ((w.b.y - w.a.y) * (k + 0.5)) / n }, debaixo);
+      if (solta && ini === null) ini = k;
+      if (!solta && ini !== null) {
+        brutos.push({ a: em(ini / n), b: em(k / n), larguraMm: w.thicknessMm });
+        ini = null;
+      }
+    }
+  }
+  // Emendar os colineares que se tocam (a parede do superior partida em duas no encontro em T).
+  const out = brutos.map((t) => ({ ...t }));
+  for (let mudou = true; mudou; ) {
+    mudou = false;
+    for (let i = 0; i < out.length && !mudou; i++) {
+      for (let j = i + 1; j < out.length && !mudou; j++) {
+        const p = out[i];
+        const q = out[j];
+        const ux = p.b.x - p.a.x;
+        const uy = p.b.y - p.a.y;
+        const col = (r: Point) => Math.abs(ux * (r.y - p.a.y) - uy * (r.x - p.a.x)) / (Math.hypot(ux, uy) || 1) < 1;
+        if (!col(q.a) || !col(q.b)) continue;
+        const pontas = [p.a, p.b, q.a, q.b];
+        const toca = [p.a, p.b].some((x) => [q.a, q.b].some((y) => Math.hypot(x.x - y.x, x.y - y.y) <= 2));
+        if (!toca) continue;
+        const L = Math.hypot(ux, uy) || 1;
+        const t = (r: Point) => ((r.x - p.a.x) * ux + (r.y - p.a.y) * uy) / L;
+        const ord = pontas.slice().sort((x, y) => t(x) - t(y));
+        out[i] = { a: ord[0], b: ord[3], larguraMm: Math.max(p.larguraMm, q.larguraMm) };
+        out.splice(j, 1);
+        mudou = true;
+      }
+    }
+  }
+  return out.filter((t) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) >= minimoMm).sort((p, q) => p.a.x - q.a.x || p.a.y - q.a.y || p.b.x - q.b.x || p.b.y - q.b.y);
+}
+
+/**
+ * As VIGAS DE TRANSIÇÃO: no térreo, sob cada trecho de parede do superior sem parede embaixo — de apoio a apoio
+ * (as paredes do térreo que ela cruza, com a viga delas). O mesmo pré-dimensionamento das vigas automáticas (vão ÷
+ * divisor, mínimo, largura da parede), topo no pé-direito do térreo; cede o volume como as outras.
+ */
+export function vigasDeTransicao(
+  model: BlueprintModel,
+  T: ObjectId,
+  trechos: readonly TrechoDeTransicao[],
+  hip: HipotesesDeVigas = HIPOTESES_VIGAS_PADRAO,
+): { comandos: Command[]; vigas: number; metros: number; maiorVaoMm: number; motivo: string | null; foraDoPlano: { motivo: string }[] } {
+  const nivel = model.levels.find((l) => l.id === T);
+  if (!nivel || trechos.length === 0) return { comandos: [], vigas: 0, metros: 0, maiorVaoMm: 0, motivo: null, foraDoPlano: [] };
+  const n0 = proximoNumeroDoRotulo(model, 'V');
+  const ids = idsPrevistosDeEstrutura(model, trechos.length);
+  const comandos: Command[] = [];
+  let mm = 0;
+  let maior = 0;
+  trechos.forEach((t, k) => {
+    const L = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+    mm += L;
+    maior = Math.max(maior, L);
+    const h = alturaDaViga(L, hip);
+    comandos.push({ type: 'AddStructural', levelId: T, kind: 'VIGA', pontos: [t.a, t.b], larguraMm: Math.max(hip.larguraMinimaMm, t.larguraMm), alturaMm: h, baseMm: nivel.defaultHeightMm - h, rotulo: `V${n0 + k}` });
+  });
+  comandos.push(...ids.map((id): Command => ({ type: 'SetCedeSobreposicao', id, cede: true })));
+  return { comandos, vigas: trechos.length, metros: Math.round(mm / 100) / 10, maiorVaoMm: Math.round(maior), motivo: null, foraDoPlano: [] };
+}
+
+/**
+ * O guarda-corpo e os corrimãos da escada em U do núcleo. Corrimão dos dois lados dos LANCES (o sugeridor do app;
+ * o segmento da virada fica de fora — o corrimão dele atravessaria os lances). Guarda-corpo no superior, na borda do
+ * furo sobre o primeiro lance: quem chega ao patamar de cima tem o vão do lance que sai do térreo ao lado.
+ */
+export function guardaCorpoDaEscada(model: BlueprintModel, T: ObjectId, S: ObjectId): Command[] {
+  const e = (model.stairs ?? []).find((x) => x.levelId === T && x.pontos.length === 4);
+  if (!e) return [];
+  const corrimaos = sugerirGuardaCorpos(model, T, HIPOTESES_DE_GUARDA_CORPO_PADRAO)
+    .sugestoes.filter((x) => x.origem === 'ESCADA' && x.origemId === e.id && !/lance 2$/.test(x.rotulo))
+    .map((x) => x.comando);
+  const [p0, , , p3] = e.pontos;
+  const L = Math.hypot(p0.x - p3.x, p0.y - p3.y) || 1;
+  const u = { x: (p0.x - p3.x) / L, y: (p0.y - p3.y) / L };
+  const meio = point(Math.round((p0.x + p3.x) / 2), Math.round((p0.y + p3.y) / 2));
+  const fora = point(Math.round(p0.x + (u.x * e.larguraMm) / 2), Math.round(p0.y + (u.y * e.larguraMm) / 2));
+  return [
+    ...corrimaos,
+    { type: 'AddGuardaCorpo', levelId: S, tipo: 'GUARDA_CORPO', pontos: [meio, fora], alturaMm: HIPOTESES_DE_GUARDA_CORPO_PADRAO.alturaGuardaCorpoMm, material: 'METALICO', rotulo: `${e.rotulo || 'Escada'} · guarda-corpo do furo`, sugerido: true },
+  ];
+}
+

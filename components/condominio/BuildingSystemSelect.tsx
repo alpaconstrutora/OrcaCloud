@@ -245,7 +245,7 @@ const BuildingSystemSelect: React.FC<Props> = ({
     const formulario = edicao && (
         <div className="px-4 py-4 border-b border-gray-100 bg-gray-50/60 space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">{edicao.id ? 'Editar sistema' : 'Novo sistema'}</h3>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                 <div className="space-y-1.5 col-span-2 sm:col-span-1">
                     <label htmlFor="sistema-nome" className={ROTULO}>Nome</label>
                     <input

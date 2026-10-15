@@ -184,6 +184,8 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §6.6 `px-6` + separador vertical (`border-r`) em toda célula e todo cabeçalho
 - [ ] §6.9 Se a tabela vive dentro de `Sheet`/`Modal` — `px-3`/`px-4` em vez de `px-6`
 - [ ] §6.10 Tabela nova usa `StandardTable` (ou justifica hand-rolled)
+- [ ] §6.11 Cabeçalho de tabela com fundo branco
+- [ ] §6.12 Se a tela agrupa linhas: controle, linha de grupo com contagem+total, seleção sobre as linhas na tela
 - [ ] §7 Tabela — `<tbody>` e TDs (tipografia por tipo de dado)
 - [ ] §7.1 Campos editáveis inline dentro de TD
 - [ ] §7.1.2 Se o formulário escolhe marca/modelo (catálogo criável): usa `BrandModelPicker`/`CreatableCombobox` com a org do registro, não `<select>` nem texto livre
@@ -1271,6 +1273,46 @@ ja usada nas tabelas"*. **Antes de dizer que o app "já usa" uma cor, abrir a oc
 > 🔒 **Trava:** `__tests__/cabecalhoSemCinzaGuard.test.ts` reprova cabeçalho com FUNDO cinza novo.
 > O `BASELINE` do teste ficou **vazio** em 12/10/2026: os 180 arquivos / 273 linhas escritos à mão
 > foram migrados (fundo branco, texto `text-gray-700`). Não adicione entrada: use `CABECALHO_TABELA`.
+
+### 6.12 "Agrupar" — linhas em grupos recolhíveis, com contagem e total
+
+**Referências:** `BoletoManager.tsx` (Boletos a Pagar) e `ContasReceberManager.tsx`
+(Contas a Receber, 15/10/2026 — *"implemente a mesma funcionalidade agrupamentos
+aplicada em financeiro > boletos a pagar"*). Origem do desenho: Minhas Tarefas
+(`TasksList.tsx`).
+
+- **Controle:** `<select>` `h-9 pl-8 rounded-[6px] text-[13px] font-medium` com ícone
+  `Layers` à esquerda, primeira opção "Agrupar" (= sem grupo), na toolbar acoplada
+  logo depois do Filtro avançado. Ativo vira `bg-blue-600 text-white` (é estado, como
+  o toggle grade/lista) com `[&>option]:bg-white [&>option]:text-gray-900`. Ao lado,
+  só enquanto agrupa, um botão `h-9 w-9` que recolhe/expande todos
+  (`ChevronsDownUp`/`ChevronsUpDown`). Escolha em `usePersistedState`; grupos
+  recolhidos só em memória.
+- **Agrupamento é função pura em `utils/`** (`boletoGrupos.ts`, `recebivelGrupos.ts`):
+  recebe a lista **já filtrada e ordenada** e devolve `{ key, label, itens, total }`.
+  Grupos na ordem da 1ª aparição (respeita a coluna ordenada); status na ordem do mapa
+  de rótulos da tela; mês de vencimento cronológico ("Julho/2026"); o grupo "Sem …"
+  sempre por último. Nomes que só diferem na caixa caem no mesmo grupo. O rótulo é o
+  MESMO texto que a célula mostra (nome resolvido, não id).
+- **Linha de grupo:** `<tr>` sem classe, um `<td colSpan={todas as células da linha}
+  className="p-0">` (checkbox + dados + espaçador §6.1.1 + Ações) com um `<div>`
+  clicável `px-6 py-2 bg-slate-50 hover:bg-slate-100 border-b border-slate-200`:
+  chevron, rótulo `font-semibold text-sm text-slate-800`, contagem em chip
+  `text-xs bg-slate-200 rounded-[6px]`, **total logo depois da contagem** em
+  `text-sm font-medium text-gray-800` (no fim da linha ele cai fora da tela numa tabela
+  larga) e um filete `flex-1 h-px bg-slate-200`. O `bg-slate-50` é do separador de
+  grupo, não de cabeçalho — o §6.11 vale para `<thead>`.
+- **Seleção:** "selecionar todos" e Shift+clique (§10.1) trabalham sobre as linhas
+  **na ordem da tela, sem os grupos recolhidos** — com a lista plana, o intervalo
+  marcaria títulos fora do trecho clicado ou escondidos. Já o **lote** usa tudo que
+  está marcado no recorte, inclusive o que ficou num grupo recolhido depois de marcado.
+- Deep-link (`viewFocus`) para uma linha num grupo recolhido **expande o grupo** antes
+  de rolar até ela.
+
+> ❌ Não agrupar no servidor nem reconsultar ao trocar o agrupamento — é recorte de
+> exibição sobre a lista que já está na tela.
+> ℹ️ Trava de tela: `__tests__/components/ContasReceberAgrupar.test.tsx` (cabeçalho,
+> recolher, seleção com grupo recolhido).
 
 ---
 

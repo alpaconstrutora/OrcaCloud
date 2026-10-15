@@ -1,7 +1,7 @@
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AlertCircle, Check, ChevronDown, ChevronUp,
+    AlertCircle, Check, ChevronDown, ChevronUp, ChevronRight, ChevronsDownUp, ChevronsUpDown, Layers,
     Loader2, Plus, RefreshCw, Search, TrendingUp, X, Filter,
     FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle, MoveHorizontal, Undo2, Receipt, Download,
 } from 'lucide-react';
@@ -14,6 +14,7 @@ import { financialReceiptService, type ReciboAtivo } from '../services/financial
 import BaixaRecebivelSheet, { type DadosDaBaixa, tituloDeRecebivel } from './financeiro/BaixaRecebivelSheet';
 import { mensagemResultadoBaixa } from '../utils/baixaRecebivel';
 import { numeroRecibo } from '../utils/reciboRecebimento';
+import { agruparRecebiveis, OPCOES_AGRUPAR_RECEBIVEL, type CampoAgruparRecebivel } from '../utils/recebivelGrupos';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
@@ -763,6 +764,10 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const [competencia, setCompetencia] = usePersistedState('contasReceberManagerFilters:competencia', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [showInad, setShowInad]        = useState(false);
+    // "Agrupar" — o mesmo recurso de Boletos a Pagar (BoletoManager). Persistido;
+    // os grupos recolhidos ficam só em memória, como lá.
+    const [groupBy, setGroupBy] = usePersistedState<CampoAgruparRecebivel>('contasReceberManagerFilters:groupBy', 'none');
+    const [gruposRecolhidos, setGruposRecolhidos] = useState<Set<string>>(new Set());
     // storageKey explícito — antes usava o default 'tableColumns' e colidia com
     // qualquer outro componente que também não passasse a chave.
     const tableColumns = useTableColumns(RECEBER_COLUMNS, 'contasReceberManagerColumns');
@@ -1186,6 +1191,32 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     // mais lenta das duas.
     }, [rowsWithNames, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection, recibos]);
 
+    const agrupando = groupBy !== 'none';
+    const grupos = useMemo(() => agruparRecebiveis(sorted, groupBy, STATUS_LABEL), [sorted, groupBy]);
+
+    // As linhas NA ORDEM DA TELA (grupos recolhidos ficam de fora). É sobre esta lista que
+    // o "selecionar todos" e o Shift+clique trabalham — com `sorted`, agrupado, o intervalo
+    // marcaria títulos que não estão entre as duas linhas clicadas (mesma solução de BoletoManager).
+    const linhasNaTela = useMemo(
+        () => (agrupando ? grupos.flatMap(g => (gruposRecolhidos.has(g.key) ? [] : g.itens)) : sorted),
+        [agrupando, grupos, gruposRecolhidos, sorted],
+    );
+
+    /** Células de uma linha da tabela: checkbox + colunas de dado + espaçador + Ações. */
+    const colunasDaLinha = 1
+        + tableColumns.orderedVisibleColumns.filter(k => RECEBER_COLUMN_HEADERS[k]).length
+        + 1
+        + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
+
+    function toggleGrupo(key: string) {
+        setGruposRecolhidos(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key); else next.add(key);
+            return next;
+        });
+        setLastCheckedIndex(null);
+    }
+
     useEffect(() => {
         if (!focusId || loading) return;
         if (focoAguardaCarga.current !== null && loadSeq.current <= focoAguardaCarga.current) return;
@@ -1214,6 +1245,11 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         }
         setViewFocus(null);
         setDestacado(focusId);
+        // Título dentro de um grupo recolhido não teria linha para rolar até ela.
+        const grupoDoFoco = agrupando ? grupos.find(g => g.itens.some(r => r.id === focusId)) : undefined;
+        if (grupoDoFoco && gruposRecolhidos.has(grupoDoFoco.key)) {
+            setGruposRecolhidos(prev => { const next = new Set(prev); next.delete(grupoDoFoco.key); return next; });
+        }
         const limpou = focoLimpouFiltros.current;
         focoLimpouFiltros.current = false;
         requestAnimationFrame(() => document.getElementById(`receber-row-${focusId}`)?.scrollIntoView({ block: 'center' }));
@@ -1232,16 +1268,18 @@ export default function ContasReceberManager({ organizationId, organizations }: 
 
     /** Mesmo critério do botão "Baixar" por linha: só não-RECEBIDO pode ser baixado. */
     const isSelectable = (r: Receivable) => r.effective_status !== 'RECEBIDO';
-    const selectableVisible = useMemo(() => sorted.filter(isSelectable), [sorted]);
+    /** Selecionáveis NA TELA (sem os grupos recolhidos) — base do "selecionar todos" e do Shift+clique. */
+    const selectableVisible = useMemo(() => linhasNaTela.filter(isSelectable), [linhasNaTela]);
     const selectableIndexById = useMemo(
         () => new Map(selectableVisible.map((r, i) => [r.id, i])),
         [selectableVisible],
     );
+    /** Selecionados do recorte INTEIRO (inclui grupo recolhido depois de marcado) — base do lote. */
     const selectedVisible = useMemo(
-        () => selectableVisible.filter(r => selectedIds.has(r.id)),
-        [selectableVisible, selectedIds],
+        () => sorted.filter(r => isSelectable(r) && selectedIds.has(r.id)),
+        [sorted, selectedIds],
     );
-    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+    const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every(r => selectedIds.has(r.id));
     const selectedTotal = selectedVisible.reduce((s, r) => s + (r.amount ?? 0), 0);
 
     function toggleRow(id: string) {
@@ -1417,6 +1455,34 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                             <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                         </div>
 
+                        {/* Agrupar — mesmo controle de Boletos a Pagar (BoletoManager). */}
+                        <div className="relative shrink-0">
+                            <Layers className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${agrupando ? 'text-white' : 'text-gray-500'}`} />
+                            <select
+                                value={groupBy}
+                                onChange={e => { setGroupBy(e.target.value as CampoAgruparRecebivel); setGruposRecolhidos(new Set()); setLastCheckedIndex(null); }}
+                                title="Agrupar os títulos"
+                                className={`h-9 pl-8 pr-3 rounded-[6px] text-[13px] font-medium border appearance-none cursor-pointer transition-all ${
+                                    agrupando
+                                        ? 'bg-blue-600 text-white border-blue-600 [&>option]:bg-white [&>option]:text-gray-900'
+                                        : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-50'
+                                }`}
+                            >
+                                <option value="none">Agrupar</option>
+                                {OPCOES_AGRUPAR_RECEBIVEL.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                        </div>
+                        {agrupando && (
+                            <button
+                                type="button"
+                                onClick={() => { setGruposRecolhidos(prev => (prev.size ? new Set() : new Set(grupos.map(g => g.key)))); setLastCheckedIndex(null); }}
+                                title={gruposRecolhidos.size ? 'Expandir todos os grupos' : 'Recolher todos os grupos'}
+                                className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 shrink-0"
+                            >
+                                {gruposRecolhidos.size ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
+                            </button>
+                        )}
+
                         <button
                             onClick={load}
                             className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0"
@@ -1565,117 +1631,144 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {sorted.map(r => {
-                                    const isVencido = r.effective_status === 'VENCIDO';
-                                    const isRecebido = r.effective_status === 'RECEBIDO';
-                                    // Só lançamento manual é editável/excluível aqui: os demais
-                                    // são espelho de outro módulo e voltariam no próximo sync.
-                                    const isManual = r.source_system === 'MANUAL';
+                                {grupos.map(grupo => {
+                                    const recolhido = gruposRecolhidos.has(grupo.key);
+                                    const renderLinha = (r: ReceberRow) => {
+                                        const isVencido = r.effective_status === 'VENCIDO';
+                                        const isRecebido = r.effective_status === 'RECEBIDO';
+                                        // Só lançamento manual é editável/excluível aqui: os demais
+                                        // são espelho de outro módulo e voltariam no próximo sync.
+                                        const isManual = r.source_system === 'MANUAL';
+                                        return (
+                                            <tr key={r.id} id={`receber-row-${r.id}`} className={`hover:bg-blue-50/50 transition-colors ${destacado === r.id ? 'bg-amber-50' : selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
+                                                <td className="px-6 py-2.5 text-center border-r border-gray-100">
+                                                    {isSelectable(r) ? (
+                                                        <input
+                                                            type="checkbox"
+                                                            title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            checked={selectedIds.has(r.id)}
+                                                            onChange={e => handleRowCheck(r.id, selectableIndexById.get(r.id) ?? 0, (e.nativeEvent as MouseEvent).shiftKey)}
+                                                        />
+                                                    ) : null}
+                                                </td>
+                                                {tableColumns.orderedVisibleColumns.map(key => {
+                                                    if (!RECEBER_COLUMN_HEADERS[key]) return null;
+                                                    return (
+                                                        <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            {key === 'recibo' ? renderReciboCell(r) : renderReceberCell(key, r)}
+                                                        </td>
+                                                    );
+                                                })}
+                                                {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                                {tableColumns.visibleColumns.includes('actions') && (
+                                                <td className="px-6 py-2.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        {!isRecebido && (
+                                                            <button
+                                                                onClick={() => handleBaixa(r)}
+                                                                className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all flex items-center gap-1"
+                                                            >
+                                                                <Check className="w-3.5 h-3.5" /> Baixar
+                                                            </button>
+                                                        )}
+                                                        {!isRecebido && (
+                                                            charges[r.id] ? (
+                                                                <button
+                                                                    onClick={() => setEmitindo(r)}
+                                                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all flex items-center gap-1"
+                                                                    title="Ver cobrança emitida"
+                                                                >
+                                                                    <FileText className="w-3.5 h-3.5" /> Cobrança
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={() => setEmitindo(r)}
+                                                                    className="text-violet-700 hover:text-violet-800 text-sm font-medium p-1.5 hover:bg-violet-50 rounded-[6px] transition-all flex items-center gap-1"
+                                                                    title="Emitir boleto/PIX via Asaas"
+                                                                >
+                                                                    <FileText className="w-3.5 h-3.5" /> Emitir
+                                                                </button>
+                                                            )
+                                                        )}
+                                                        {isRecebido && (
+                                                            <ActionIconButton
+                                                                kind="download"
+                                                                title={recibos.has(r.id)
+                                                                    ? `Reimprimir recibo Nº ${numeroRecibo(recibos.get(r.id)!.receipt_number)}`
+                                                                    : 'Emitir recibo'}
+                                                                icon={gerandoRecibo === r.id
+                                                                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                                    : <Receipt className="w-4 h-4" />}
+                                                                disabled={gerandoRecibo === r.id}
+                                                                onClick={() => handleRecibo(r)}
+                                                            />
+                                                        )}
+                                                        {isRecebido && (
+                                                            <ActionIconButton
+                                                                kind="settings"
+                                                                title="Estornar baixa"
+                                                                icon={<Undo2 className="w-4 h-4" />}
+                                                                disabled={changingStatus === r.id}
+                                                                onClick={() => estornar(r)}
+                                                            />
+                                                        )}
+                                                        {!isRecebido && (
+                                                            <select
+                                                                value={r.business_status}
+                                                                disabled={changingStatus === r.id}
+                                                                onChange={e => handleChangeStatus(r.id, e.target.value)}
+                                                                className="text-sm font-normal border border-gray-200 rounded-[6px] px-2 py-1 bg-white focus:outline-none cursor-pointer"
+                                                            >
+                                                                {(['PREVISTO','EMITIDO','ENVIADO','PARCIAL','RENEGOCIADO','CANCELADO'] as const).map(s => (
+                                                                    <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                                                                ))}
+                                                            </select>
+                                                        )}
+                                                        {isManual && (
+                                                            <>
+                                                                <ActionIconButton
+                                                                    kind="edit"
+                                                                    title="Editar lançamento"
+                                                                    onClick={() => setEditando(r)}
+                                                                />
+                                                                <ActionIconButton
+                                                                    kind="delete"
+                                                                    title="Excluir lançamento"
+                                                                    onClick={() => handleDelete(r)}
+                                                                />
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                )}
+                                            </tr>
+                                        );
+                                    };
+                                    if (!agrupando) return <React.Fragment key="todos">{grupo.itens.map(renderLinha)}</React.Fragment>;
                                     return (
-                                        <tr key={r.id} id={`receber-row-${r.id}`} className={`hover:bg-blue-50/50 transition-colors ${destacado === r.id ? 'bg-amber-50' : selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
-                                            <td className="px-6 py-2.5 text-center border-r border-gray-100">
-                                                {isSelectable(r) ? (
-                                                    <input
-                                                        type="checkbox"
-                                                        title="Dica: segure Shift e clique para selecionar um intervalo"
-                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                        checked={selectedIds.has(r.id)}
-                                                        onChange={e => handleRowCheck(r.id, selectableIndexById.get(r.id) ?? 0, (e.nativeEvent as MouseEvent).shiftKey)}
-                                                    />
-                                                ) : null}
-                                            </td>
-                                            {tableColumns.orderedVisibleColumns.map(key => {
-                                                if (!RECEBER_COLUMN_HEADERS[key]) return null;
-                                                return (
-                                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        {key === 'recibo' ? renderReciboCell(r) : renderReceberCell(key, r)}
-                                                    </td>
-                                                );
-                                            })}
-                                            {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
-                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
-                                            {tableColumns.visibleColumns.includes('actions') && (
-                                            <td className="px-6 py-2.5">
-                                                <div className="flex items-center gap-1.5">
-                                                    {!isRecebido && (
-                                                        <button
-                                                            onClick={() => handleBaixa(r)}
-                                                            className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all flex items-center gap-1"
-                                                        >
-                                                            <Check className="w-3.5 h-3.5" /> Baixar
-                                                        </button>
-                                                    )}
-                                                    {!isRecebido && (
-                                                        charges[r.id] ? (
-                                                            <button
-                                                                onClick={() => setEmitindo(r)}
-                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all flex items-center gap-1"
-                                                                title="Ver cobrança emitida"
-                                                            >
-                                                                <FileText className="w-3.5 h-3.5" /> Cobrança
-                                                            </button>
-                                                        ) : (
-                                                            <button
-                                                                onClick={() => setEmitindo(r)}
-                                                                className="text-violet-700 hover:text-violet-800 text-sm font-medium p-1.5 hover:bg-violet-50 rounded-[6px] transition-all flex items-center gap-1"
-                                                                title="Emitir boleto/PIX via Asaas"
-                                                            >
-                                                                <FileText className="w-3.5 h-3.5" /> Emitir
-                                                            </button>
-                                                        )
-                                                    )}
-                                                    {isRecebido && (
-                                                        <ActionIconButton
-                                                            kind="download"
-                                                            title={recibos.has(r.id)
-                                                                ? `Reimprimir recibo Nº ${numeroRecibo(recibos.get(r.id)!.receipt_number)}`
-                                                                : 'Emitir recibo'}
-                                                            icon={gerandoRecibo === r.id
-                                                                ? <Loader2 className="w-4 h-4 animate-spin" />
-                                                                : <Receipt className="w-4 h-4" />}
-                                                            disabled={gerandoRecibo === r.id}
-                                                            onClick={() => handleRecibo(r)}
-                                                        />
-                                                    )}
-                                                    {isRecebido && (
-                                                        <ActionIconButton
-                                                            kind="settings"
-                                                            title="Estornar baixa"
-                                                            icon={<Undo2 className="w-4 h-4" />}
-                                                            disabled={changingStatus === r.id}
-                                                            onClick={() => estornar(r)}
-                                                        />
-                                                    )}
-                                                    {!isRecebido && (
-                                                        <select
-                                                            value={r.business_status}
-                                                            disabled={changingStatus === r.id}
-                                                            onChange={e => handleChangeStatus(r.id, e.target.value)}
-                                                            className="text-sm font-normal border border-gray-200 rounded-[6px] px-2 py-1 bg-white focus:outline-none cursor-pointer"
-                                                        >
-                                                            {(['PREVISTO','EMITIDO','ENVIADO','PARCIAL','RENEGOCIADO','CANCELADO'] as const).map(s => (
-                                                                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-                                                            ))}
-                                                        </select>
-                                                    )}
-                                                    {isManual && (
-                                                        <>
-                                                            <ActionIconButton
-                                                                kind="edit"
-                                                                title="Editar lançamento"
-                                                                onClick={() => setEditando(r)}
-                                                            />
-                                                            <ActionIconButton
-                                                                kind="delete"
-                                                                title="Excluir lançamento"
-                                                                onClick={() => handleDelete(r)}
-                                                            />
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            )}
-                                        </tr>
+                                        <React.Fragment key={grupo.key}>
+                                            {/* Cabeçalho do grupo — mesmo desenho de BoletoManager (Boletos a Pagar), com o total bruto do grupo. */}
+                                            <tr>
+                                                <td colSpan={colunasDaLinha} className="p-0">
+                                                    <div
+                                                        onClick={() => toggleGrupo(grupo.key)}
+                                                        className="flex items-center gap-2.5 px-6 py-2 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none border-b border-slate-200 transition-colors"
+                                                    >
+                                                        <span className="text-slate-400 flex-shrink-0">
+                                                            {recolhido ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                                        </span>
+                                                        <span className="font-semibold text-sm text-slate-800">{grupo.label}</span>
+                                                        <span className="text-xs font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">{grupo.itens.length}</span>
+                                                        {/* Total logo após a contagem: no fim da linha ele caía fora da tela (tabela larga). */}
+                                                        <span className="text-sm font-medium text-gray-800 whitespace-nowrap" title="Soma do valor bruto dos títulos do grupo">{fmt(grupo.total)}</span>
+                                                        <div className="flex-1 h-px bg-slate-200" />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {!recolhido && grupo.itens.map(renderLinha)}
+                                        </React.Fragment>
                                     );
                                 })}
                             </tbody>

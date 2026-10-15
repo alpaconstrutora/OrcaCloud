@@ -105,6 +105,7 @@ export default function PainelPressoesDaAgua({ pressoes, nomeDaOrigem, hip, onHi
           `estática ≤ ${fmt(hip.estaticaMaximaKpa)} kPa`,
           `lâmina ${fmt(hip.laminaDaguaMm)} mm`,
           `aquecedor ${fmt(hip.perdaDoAquecedorKpa)} kPa`,
+          `pressurizador +${fmt(hip.ganhoDoPressurizadorKpa)} kPa`,
         ].join(' · ')}
         regras={
           <li>
@@ -120,6 +121,7 @@ export default function PainelPressoesDaAgua({ pressoes, nomeDaOrigem, hip, onHi
         {campo('Qmáx do hidrômetro', 'qMaxDoHidrometroM3h', 'm³/h', 0.5, 'Vazão máxima do hidrômetro, em m³/h', { casas: 1, min: 0.5, max: 50, title: 'A perda no hidrômetro é (36·Q)² ÷ Qmáx²: com Qmáx 0 ela seria infinita' })}
         {campo('Pressão mínima', 'pressaoMinimaKpa', 'kPa', 5, 'Pressão mínima nos pontos, em kPa', { max: 200, title: 'NBR 5626: 10 kPa nos pontos de utilização (o aparelho cuja ficha pede mais usa a da ficha)' })}
         {campo('Estática máxima', 'estaticaMaximaKpa', 'kPa', 10, 'Pressão estática máxima nos pontos, em kPa', { max: 2000, title: 'NBR 5626: 400 kPa de pressão estática nos pontos de utilização' })}
+        {campo('Ganho do pressurizador', 'ganhoDoPressurizadorKpa', 'kPa', 10, 'O que o pressurizador na saída da caixa soma à pressão, em kPa', { max: 600, title: 'Vale para a bomba posta a até 60 cm da caixa d’água, no mesmo pavimento — confira no catálogo do modelo' })}
       </BlocoDeHipoteses>
     </div>
   );

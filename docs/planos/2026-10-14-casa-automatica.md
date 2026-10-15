@@ -1374,3 +1374,39 @@ de rede; a pendência "Prumada pelo meio do cômodo" não aparece mais.
   pendência VERIFICACAO por rede ("Pressão da água quente: N ponto(s) abaixo do mínimo — o pior … eleve a caixa
   … ou preveja um pressurizador"), e o resumo ganhou `hidraulica.pressaoInsuficiente`. A correção espera a
   decisão do usuário.
+
+## F13 — pressão da água: caixa elevada ou pressurizador (15/10/2026)
+
+Pergunta feita ao usuário depois do achado da pressão: *"Como a casa automática deve garantir a pressão da
+água (térrea e sobrado)?"* — resposta: **"Escolher por caso"** (o motor tenta a caixa elevada até uma altura
+máxima, hipótese editável, e, se não bastar, lança o pressurizador).
+
+O desenho:
+- **Cálculo de pressão** (`blueprintPressaoDaRede`): o PRESSURIZADOR é um terminal `BOMBA` (água fria) a até
+  600 mm da caixa d'água, no mesmo pavimento — na saída dela; soma `ganhoDoPressurizadorKpa` (hipótese nova
+  das premissas de pressão do estudo, padrão 100 kPa) à carga de partida da rede fria. A quente herda pelo
+  aquecedor. Sem mudança no kernel.
+- **Casa** (`HipotesesDaCasa.pressao`: `caixaElevadaAteMm` 2000, `potenciaDoPressurizadorW` 370): antes da
+  etapa ÁGUA, simula a água como está e mede o maior déficit (fria e quente); se elevar a caixa até o máximo
+  cobre, eleva (e confere de novo); senão, põe o pressurizador na saída da caixa ANTES de traçar (o ajuste de
+  DN por pressão já conta com ele). O pressurizador ganha o ponto elétrico (ligação direta) e o circuito.
+  O que ainda faltar continua na pendência de pressão.
+- **Tela**: "Elevar a caixa até (m)" e "Pressurizador (W)" nas hipóteses; o ganho, no painel de pressões.
+
+### Registro da F13 (15/10/2026)
+
+Feito como planejado acima. Medido (12 × 30, R1-N):
+
+| Caso | Déficit antes | Solução | Pior ponto depois (fria / quente) |
+|---|---|---|---|
+| Térrea, limite 2 m (padrão) | 7,62 m | pressurizador +100 kPa, 370 W | 83,3 / 26,7 kPa |
+| Sobrado, limite 2 m | 5,63 m | pressurizador | 71,3 / 39,0 kPa |
+| Térrea, limite 10 m | 7,62 m | caixa elevada 9,35 m | 67,8 / 11,3 kPa |
+
+Nenhum ponto abaixo do mínimo nem acima da estática máxima; a trava confere o lote; NBR 5410 sem falta (o
+pressurizador ganha ligação direta e circuito). Achado no caminho: subir a caixa 1 m rende ~0,9 m (o ajuste de
+diâmetro muda junto) — a 1ª versão desistia depois de 2 tentativas e caía no pressurizador com o limite sobrando;
+agora até 5, a última no limite, e com o déficit acima do limite vai direto ao pressurizador. O ganho do
+pressurizador é hipótese da pressão do ESTUDO (painel "Pressões da água" e memorial — só quando a bomba está na
+saída da caixa; a de recalque não conta). Harness: 97 conferências, com "pressão: nenhum ponto abaixo do mínimo"
+nas quatro rodadas.

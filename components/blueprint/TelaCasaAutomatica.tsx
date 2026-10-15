@@ -263,6 +263,8 @@ export default function TelaCasaAutomatica(props: Props) {
               <input type="checkbox" checked={p.eletrica.medidor} onChange={(e) => set('eletrica', { medidor: e.target.checked })} className="h-4 w-4 rounded border-gray-300" />
               Medidor na frente do lote
             </label>
+            <Numero rotulo="Elevar a caixa d'água até (m)" valor={p.pressao.caixaElevadaAteMm / 1000} min={0} max={15} passo={0.5} onValor={(v) => v != null && set('pressao', { caixaElevadaAteMm: Math.round(v * 1000) })} />
+            <Numero rotulo="Pressurizador (W)" valor={p.pressao.potenciaDoPressurizadorW} min={100} max={3000} passo={10} onValor={(v) => v != null && set('pressao', { potenciaDoPressurizadorW: Math.round(v) })} />
             {p.pavimentos === 2 && (
               <>
                 <Numero rotulo="Laje entre os pavimentos (cm)" valor={p.sobrado.lajeEntrePavimentosMm / 10} min={8} max={30} onValor={(v) => v != null && set('sobrado', { lajeEntrePavimentosMm: Math.round(v * 10) })} />

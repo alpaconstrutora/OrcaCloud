@@ -52,6 +52,11 @@ export interface HipotesesDePressao {
   pressaoMinimaKpa: number;
   /** Pressão estática máxima, kPa (NBR 5626). */
   estaticaMaximaKpa: number;
+  /**
+   * F13 da casa automática (15/10/2026): o que o PRESSURIZADOR na saída da caixa soma à carga, kPa — o terminal
+   * `BOMBA` a até `RAIO_DO_PRESSURIZADOR_MM` da caixa, no mesmo pavimento. Confira no catálogo do modelo escolhido.
+   */
+  ganhoDoPressurizadorKpa: number;
 }
 
 export const HIPOTESES_PRESSAO_PADRAO: HipotesesDePressao = {
@@ -61,7 +66,21 @@ export const HIPOTESES_PRESSAO_PADRAO: HipotesesDePressao = {
   qMaxDoHidrometroM3h: 3,
   pressaoMinimaKpa: 10,
   estaticaMaximaKpa: 400,
+  ganhoDoPressurizadorKpa: 100,
 };
+
+/** Até onde da caixa d'água uma `BOMBA` conta como o pressurizador na saída dela, mm. */
+export const RAIO_DO_PRESSURIZADOR_MM = 600;
+
+/** O pressurizador na saída da caixa (`BOMBA` de água fria a até 600 mm dela, no mesmo pavimento), se houver. */
+export function pressurizadorDaCaixa(model: BlueprintModel, caixa: Terminal): Terminal | null {
+  if (caixa.tipoHidraulico !== 'RESERVATORIO') return null;
+  return (
+    (model.terminais ?? []).find(
+      (t) => t.tipoHidraulico === 'BOMBA' && t.disciplina === 'AGUA_FRIA' && t.levelId === caixa.levelId && Math.hypot(t.at.x - caixa.at.x, t.at.y - caixa.at.y) <= RAIO_DO_PRESSURIZADOR_MM,
+    ) ?? null
+  );
+}
 
 export type EstadoDaPressao = 'OK' | 'INSUFICIENTE' | 'EXCESSIVA' | 'NAO_AVALIADO';
 
@@ -221,8 +240,11 @@ export function pressoesDaOrigem(
   const pecasDe = (t: Trecho) => (model.terminais ?? []).filter((x) => x.disciplina === disciplina && x.tipoHidraulico && sobreOTrecho(x, t));
 
   // ── A caminhada ──────────────────────────────────────────────────────────
-  const cargaMca = new Map<string, number>([[raiz, cargaInicialMca?.dinamica ?? hip.laminaDaguaMm / 1000]]);
-  const estaticaMca = new Map<string, number>([[raiz, cargaInicialMca?.estatica ?? hip.laminaDaguaMm / 1000]]);
+  // O pressurizador na saída da caixa soma o ganho dele à carga de partida (a dinâmica e a estática: parado na pressão
+  // de desligamento, é a estática que ele mantém).
+  const ganho = pressurizadorDaCaixa(model, origem) ? (hip.ganhoDoPressurizadorKpa ?? HIPOTESES_PRESSAO_PADRAO.ganhoDoPressurizadorKpa) / KPA_POR_MCA : 0;
+  const cargaMca = new Map<string, number>([[raiz, cargaInicialMca?.dinamica ?? hip.laminaDaguaMm / 1000 + ganho]]);
+  const estaticaMca = new Map<string, number>([[raiz, cargaInicialMca?.estatica ?? hip.laminaDaguaMm / 1000 + ganho]]);
   const trechos: TrechoCalculado[] = [];
   const avisos: string[] = [];
   for (const k of ordem.slice(1)) {

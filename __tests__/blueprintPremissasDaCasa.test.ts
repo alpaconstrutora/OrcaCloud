@@ -57,3 +57,12 @@ describe('F12d — o sobrado nas premissas', () => {
     expect(h.sobrado).toMatchObject({ lajeEntrePavimentosMm: 120, shaftMm: 400 });
   });
 });
+
+describe('F13 — a pressão nas premissas', () => {
+  it('o grupo da pressão completa como os outros e vira a hipótese do motor (sempre resolvendo)', () => {
+    expect(premissasDaCasaDaColuna({}).pressao).toEqual({ caixaElevadaAteMm: 2000, potenciaDoPressurizadorW: 370 });
+    const p = premissasDaCasaDaColuna({ pressao: { caixaElevadaAteMm: 5000, potenciaDoPressurizadorW: 'x' } });
+    expect(p.pressao).toEqual({ caixaElevadaAteMm: 5000, potenciaDoPressurizadorW: 370 });
+    expect(hipotesesDasPremissas(p).pressao).toEqual({ resolver: true, caixaElevadaAteMm: 5000, potenciaDoPressurizadorW: 370 });
+  });
+});

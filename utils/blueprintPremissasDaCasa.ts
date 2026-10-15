@@ -35,6 +35,8 @@ export interface PremissasDaCasa {
   pavimentos: 1 | 2;
   /** F12d: as hipóteses do sobrado que a tela expõe (o núcleo e a escada seguem o padrão do motor). */
   sobrado: { lajeEntrePavimentosMm: number; shaftMm: number };
+  /** F13: a pressão por caso — até quanto a caixa sobe; acima disso, o pressurizador (e a potência dele). */
+  pressao: { caixaElevadaAteMm: number; potenciaDoPressurizadorW: number };
 }
 
 export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
@@ -47,6 +49,7 @@ export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
   sementes: 8,
   pavimentos: 1,
   sobrado: { lajeEntrePavimentosMm: 100, shaftMm: 400 },
+  pressao: { caixaElevadaAteMm: 2000, potenciaDoPressurizadorW: 370 },
 };
 
 /** Os valores aceitos de cada enumerado (o resto cai no padrão). */
@@ -97,6 +100,7 @@ export function premissasDaCasaDaColuna(raw: unknown): PremissasDaCasa {
     sementes,
     pavimentos: r.pavimentos === 2 ? 2 : 1,
     sobrado: completar(r.sobrado, PREMISSAS_DA_CASA_PADRAO.sobrado),
+    pressao: completar(r.pressao, PREMISSAS_DA_CASA_PADRAO.pressao),
   };
 }
 
@@ -115,5 +119,6 @@ export function hipotesesDasPremissas(p: PremissasDaCasa): Partial<HipotesesDaCa
     climatizacao: { lancar: d.climatizacao },
     pavimentos: p.pavimentos,
     sobrado: { lajeEntrePavimentosMm: p.sobrado.lajeEntrePavimentosMm, shaftMm: p.sobrado.shaftMm } as HipotesesDaCasa['sobrado'],
+    pressao: { resolver: true, caixaElevadaAteMm: p.pressao.caixaElevadaAteMm, potenciaDoPressurizadorW: p.pressao.potenciaDoPressurizadorW },
   };
 }

@@ -59,6 +59,8 @@ declare global {
         alimentadorNoBaldrame: { maiorMm: number; larguraMm: number; travessias: number };
         eletrica: { faltas: number; regras: string[]; soltos: number; circuitos: number; splits: number; marcasDoAr: Record<string, number>; entrada: string | null };
         errosDeRede: number;
+        pressaoInsuficiente: { fria: number; quente: number };
+        pressurizador: boolean;
       } | null;
       /** F12d: o sobrado (null na térrea). */
       sobrado: {
@@ -279,6 +281,8 @@ window.__estado = {
       entrada: plano.resumo.eletrica.entrada ? `${plano.resumo.eletrica.entrada.categoria} ${plano.resumo.eletrica.entrada.ligacao} ${plano.resumo.eletrica.entrada.demandaKva} kVA` : null,
     },
     errosDeRede: plano.resumo.hidraulica.verificacao.erros + plano.resumo.climatizacao.verificacao.erros,
+    pressaoInsuficiente: plano.resumo.hidraulica.pressaoInsuficiente,
+    pressurizador: model.terminais.some((t) => t.tipoHidraulico === 'BOMBA'),
   },
   sobrado: sobradoDoModelo(model),
 };

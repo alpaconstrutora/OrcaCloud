@@ -25,7 +25,7 @@ import { KERNEL_VERSION, extensaoVerticalDaCaixa, materialDoTrecho, snapshotHash
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import { HIPOTESES_AGUA_PADRAO, origensDeAgua, type HipotesesDeAgua } from './blueprintAguaAutomatica';
-import { HIPOTESES_PRESSAO_PADRAO, pressoesDoModelo, type EstadoDaPressao, type HipotesesDePressao } from './blueprintPressaoDaRede';
+import { HIPOTESES_PRESSAO_PADRAO, pressoesDoModelo, pressurizadorDaCaixa, type EstadoDaPressao, type HipotesesDePressao } from './blueprintPressaoDaRede';
 import { HIPOTESES_ESGOTO_PADRAO, caixasDeInspecao, destinoDoEsgoto, esgotoTrechoATrecho, fontesDeEsgoto, type HipotesesDeEsgoto } from './blueprintEsgotoAutomatico';
 import { colunasDoModelo, linhasDaLegendaDeColunas } from './blueprintEsquemaVertical';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
@@ -132,6 +132,8 @@ function blocoDePremissas(model: BlueprintModel, hip: HipotesesHidro, temAgua: b
     );
     // Só o que existe no desenho: premissa de aquecedor sem aquecedor é ruído.
     if (tipos.has('AQUECEDOR')) linhas.push(['Água', 'Perda no aquecedor', `${nBr(hip.pressao.perdaDoAquecedorKpa, 0)} kPa`]);
+    // A bomba de RECALQUE não é pressurizador: só a que está na saída de uma caixa (F13 da casa automática).
+    if ((model.terminais ?? []).some((t) => pressurizadorDaCaixa(model, t))) linhas.push(['Água', 'Ganho do pressurizador (na saída da caixa)', `${nBr(hip.pressao.ganhoDoPressurizadorKpa, 0)} kPa`]);
     if (tipos.has('HIDROMETRO')) linhas.push(['Água', 'Hidrômetro', `Qmáx ${nBr(hip.pressao.qMaxDoHidrometroM3h, 1)} m³/h; Δh = (36·Q)²/Qmáx²`]);
   }
   if (temEsgoto) {

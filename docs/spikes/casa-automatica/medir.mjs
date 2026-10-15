@@ -90,6 +90,8 @@ for (const graus of [0, 30]) {
   conferir(!p.pendencias.some((x) => /Legislação: (Taxa de ocupação|Coeficiente)/.test(x)), `${t} nenhuma regra de lote violada`);
   // F3b (15/10/2026): antes, a melhor semente violava 5 regras de ambiente (banheiro de 0,80 m, dormitório de 2,0 m).
   conferir(p.regrasVioladas === 0, `${t} nenhuma regra de severidade ERRO violada (${p.regrasVioladas})`);
+  // F13: a pressão por caso — nenhum ponto abaixo do mínimo, na fria e na quente.
+  conferir(p.pressaoInsuficiente.fria === 0 && p.pressaoInsuficiente.quente === 0, `${t} pressão: nenhum ponto abaixo do mínimo (fria ${p.pressaoInsuficiente.fria}, quente ${p.pressaoInsuficiente.quente})${p.pressurizador ? ' — com pressurizador' : ''}`);
   conferir(p.conferido, `${t} a trava aprova: reaplicado no original dá os mesmos ids e o mesmo modelo`);
   console.log(`   pendências ${t}: ${p.pendencias.length ? p.pendencias.join(' | ') : 'nenhuma'}`);
   await page.screenshot({ path: path.join(saida, `casa-automatica-${graus}.png`) });
@@ -126,6 +128,7 @@ for (const graus of [0, 30]) {
   conferir(p.errosDeRede === 0, `${t} as redes ligadas: nenhum ERRO da verificação de rede (${p.errosDeRede})`);
   conferir(p.eletrica.faltas === 0 && s.soltosPorNivel.terreo === 0 && s.soltosPorNivel.superior === 0, `${t} NBR 5410 sem falta; nenhum ponto de carga sem circuito (${p.eletrica.circuitos} circuitos)`);
   conferir(s.splitsPorNivel.terreo === 1 && s.splitsPorNivel.superior === 3, `${t} splits: ${s.splitsPorNivel.terreo} embaixo, ${s.splitsPorNivel.superior} em cima`);
+  conferir(p.pressaoInsuficiente.fria === 0 && p.pressaoInsuficiente.quente === 0, `${t} pressão: nenhum ponto abaixo do mínimo (fria ${p.pressaoInsuficiente.fria}, quente ${p.pressaoInsuficiente.quente})${p.pressurizador ? ' — com pressurizador' : ''}`);
   conferir(p.conferido, `${t} a trava aprova o lote dos dois pavimentos`);
   console.log(`   pendências ${t}: ${p.pendencias.length ? p.pendencias.join(' | ') : 'nenhuma'}`);
   await page.screenshot({ path: path.join(saida, `casa-sobrado-${graus}-terreo.png`) });

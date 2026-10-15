@@ -79,7 +79,8 @@ import { pontoNaFrente, type LeitorDoTerreno } from './blueprintAncorasHidro';
 import { amostradorDaGrade, type GradeDeElevacao } from './blueprintTopografia';
 import { medirTerreno } from './blueprintTerreno';
 import { marcasDeVerificacao } from './blueprintVerificacaoRede';
-import { pressoesDoModelo } from './blueprintPressaoDaRede';
+import { pressoesDoModelo, type HipotesesDePressao } from './blueprintPressaoDaRede';
+import { KPA_POR_MCA } from './blueprintHidraulicaPressao';
 import { comandosDePontosDoNivel } from './blueprintPontosEletricosDoNivel';
 import { encaixarNaParede, paredesEmComum } from './blueprintRotaPelasParedes';
 import { centroDeCargas, comandosParaOCentro } from './blueprintCentroDeCargas';
@@ -540,6 +541,80 @@ export interface HipotesesDaCasa {
   eletrica: HipotesesDaEletricaDaCasa;
   /** F9: lançar a climatização (premissas e catálogo na `EntradaDaCasa`). */
   climatizacao: { lancar: boolean };
+  /** F13: como garantir a pressão nos pontos — caixa elevada até um limite, senão pressurizador. */
+  pressao: HipotesesDaPressaoDaCasa;
+}
+
+/** F13 (decisão do usuário, 15/10/2026: "escolher por caso"). */
+export interface HipotesesDaPressaoDaCasa {
+  /** Resolver a pressão (desligado = só a pendência, como antes). */
+  resolver: boolean;
+  /** Quanto a caixa d'água pode SUBIR além da posição dela (a base elevada / torre), mm; acima disso, pressurizador. */
+  caixaElevadaAteMm: number;
+  /** A potência do pressurizador (o ponto elétrico dele, ligação direta), W. */
+  potenciaDoPressurizadorW: number;
+}
+
+export const HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO: HipotesesDaPressaoDaCasa = { resolver: true, caixaElevadaAteMm: 2000, potenciaDoPressurizadorW: 370 };
+
+/** O maior déficit de pressão entre os pontos de água (fria e quente), em metros de coluna; 0 = todos atendidos. */
+export function deficitDePressaoM(model: BlueprintModel, hip?: HipotesesDePressao): number {
+  let d = 0;
+  for (const r of pressoesDoModelo(model, hip)) for (const p of r.pontos) if (p.estado === 'INSUFICIENTE' && p.disponivelKpa != null) d = Math.max(d, (p.minimaKpa - p.disponivelKpa) / KPA_POR_MCA);
+  return d;
+}
+
+/** Folga sobre o déficit ao elevar a caixa, e o passo da elevação, mm. */
+const FOLGA_DA_ELEVACAO_MM = 100;
+const PASSO_DA_ELEVACAO_MM = 50;
+/** Onde o pressurizador fica em relação à caixa (fora do tubo de saída, dentro do raio que o cálculo reconhece), mm. */
+const PRESSURIZADOR_AO_LADO_DA_CAIXA_MM = 400;
+
+export interface DecisaoDaPressao {
+  solucao: 'NENHUMA' | 'CAIXA_ELEVADA' | 'PRESSURIZADOR';
+  comandos: Command[];
+  /** O déficit antes, e o que sobra depois (m de coluna). */
+  deficitM: number;
+  restanteM: number;
+  elevacaoMm: number;
+}
+
+/**
+ * F13 — A PRESSÃO POR CASO: simula a água como o lançamento vai fazê-la e mede o maior déficit; se elevar a caixa
+ * (em passos de 50 mm, com folga) até `caixaElevadaAteMm` resolve, eleva; senão, põe o PRESSURIZADOR na saída dela
+ * (a bomba a 40 cm da caixa — o cálculo de pressão soma o ganho dele). Os comandos vão ANTES do traçado da água, que
+ * então ajusta os diâmetros já contando com a solução.
+ */
+export function decidirPressao(model: BlueprintModel, hidro: HipotesesHidro, terreno: LeitorDoTerreno | null, hip: HipotesesDaPressaoDaCasa): DecisaoDaPressao {
+  const nada: DecisaoDaPressao = { solucao: 'NENHUMA', comandos: [], deficitM: 0, restanteM: 0, elevacaoMm: 0 };
+  const caixa = (model.terminais ?? []).find((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA' && t.papelReservatorio !== 'INFERIOR');
+  if (!caixa || !hip.resolver) return nada;
+  const simular = (cmds: Command[]) => {
+    const m1 = cmds.length ? applyBatch(model, cmds).model : model;
+    const plano = planejarAguaCompleta(m1, hidro, terreno);
+    return deficitDePressaoM(plano.comandos.length ? applyBatch(m1, plano.comandos).model : m1, hidro.pressao);
+  };
+  const deficitM = simular([]);
+  if (deficitM <= 0) return { ...nada, deficitM };
+  const passo = (mm: number) => Math.ceil(mm / PASSO_DA_ELEVACAO_MM) * PASSO_DA_ELEVACAO_MM;
+  // Subir a caixa 1 m rende no máximo 1 m (medido: ~0,9 — o ajuste de diâmetro muda junto): com o déficit acima do
+  // limite, nem tenta. Senão, sobe pelo déficit e confere; o que sobrar entra na próxima (a última, no limite).
+  let subir = passo(deficitM * 1000 + FOLGA_DA_ELEVACAO_MM);
+  if (subir <= hip.caixaElevadaAteMm) {
+    for (let tentativa = 0; tentativa < 5; tentativa++) {
+      const alvo = Math.min(subir, hip.caixaElevadaAteMm);
+      const cmd: Command = { type: 'SetTerminalProps', terminalId: caixa.id, cotaMm: caixa.cotaMm + alvo } as Command;
+      const resto = simular([cmd]);
+      if (resto <= 0) return { solucao: 'CAIXA_ELEVADA', comandos: [cmd], deficitM, restanteM: 0, elevacaoMm: alvo };
+      if (alvo >= hip.caixaElevadaAteMm) break;
+      subir = passo(alvo + resto * 1000 + FOLGA_DA_ELEVACAO_MM);
+    }
+  }
+  const bomba: Command = {
+    type: 'AddTerminal', levelId: caixa.levelId, disciplina: 'AGUA_FRIA', tipo: 'Pressurizador', at: point(caixa.at.x + PRESSURIZADOR_AO_LADO_DA_CAIXA_MM, caixa.at.y),
+    cotaMm: caixa.cotaMm, tipoHidraulico: 'BOMBA', rotulo: 'Pressurizador', sugerida: true,
+  } as Command;
+  return { solucao: 'PRESSURIZADOR', comandos: [bomba], deficitM, restanteM: simular([bomba]), elevacaoMm: 0 };
 }
 
 /** F9: as hipóteses da elétrica da casa. */
@@ -575,6 +650,7 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   hidraulica: { lancar: true },
   eletrica: HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO,
   climatizacao: { lancar: true },
+  pressao: HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO,
 };
 
 export interface PlanoDaCasa {
@@ -786,6 +862,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     hidraulica: { lancar: true, ...(hipParcial.hidraulica ?? {}) },
     eletrica: { ...HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, ...(hipParcial.eletrica ?? {}) },
     climatizacao: { lancar: true, ...(hipParcial.climatizacao ?? {}) },
+    pressao: { ...HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, ...(hipParcial.pressao ?? {}) },
   };
   const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
   // A implantação usa a mesma parede externa e a mesma malha do gerador.
@@ -1137,7 +1214,37 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
         return { pecas: 0, tubos: 0 };
       }
     };
-    hidraulica.agua = etapaDeRede('AGUA', () => planejarAguaCompleta(m, hidro, terrenoHidro), (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s)`);
+    // F13: a pressão por caso, ANTES do traçado — a caixa elevada ou o pressurizador entram no mesmo lote.
+    let pressao: DecisaoDaPressao | null = null;
+    hidraulica.agua = etapaDeRede(
+      'AGUA',
+      () => {
+        pressao = decidirPressao(m, hidro, terrenoHidro, hip.pressao);
+        const m1 = pressao.comandos.length ? applyBatch(m, pressao.comandos).model : m;
+        const plano = planejarAguaCompleta(m1, hidro, terrenoHidro);
+        return { ...plano, comandos: [...pressao.comandos, ...plano.comandos] };
+      },
+      (c) => {
+        const d = pressao as DecisaoDaPressao | null;
+        const sol =
+          d?.solucao === 'CAIXA_ELEVADA'
+            ? `; caixa d'água elevada em ${f2(d.elevacaoMm / 1000)} m para a pressão`
+            : d?.solucao === 'PRESSURIZADOR'
+              ? `; pressurizador na saída da caixa (+${hidro.pressao.ganhoDoPressurizadorKpa} kPa)`
+              : '';
+        return `${c.tubos} tubo(s) e ${c.pecas} peça(s)${sol}`;
+      },
+    );
+    {
+      const d = pressao as DecisaoDaPressao | null;
+      if (d?.solucao === 'CAIXA_ELEVADA')
+        pendencias.push({ grupo: 'CONFERIR', texto: `Pressão: a caixa d'água subiu ${f2(d.elevacaoMm / 1000)} m (faltavam ${f2(d.deficitM)} m de coluna no ponto mais desfavorável) — preveja a base elevada (torre) na estrutura.` });
+      if (d?.solucao === 'PRESSURIZADOR')
+        pendencias.push({
+          grupo: 'CONFERIR',
+          texto: `Pressão: faltavam ${f2(d.deficitM)} m de coluna — elevar a caixa até ${f2(hip.pressao.caixaElevadaAteMm / 1000)} m não basta; pressurizador na saída da caixa (+${hidro.pressao.ganhoDoPressurizadorKpa} kPa, ${hip.pressao.potenciaDoPressurizadorW} W, com ponto elétrico e circuito) — confira o modelo no catálogo.`,
+        });
+    }
     const destino = destinoDoEsgoto(hidro.esgoto);
     hidraulica.esgoto = {
       ...etapaDeRede(
@@ -1235,6 +1342,13 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
               cotaMm: COTA_USUAL_DO_PONTO_ELETRICO.LIGACAO_DIRETA, tipoEletrico: 'LIGACAO_DIRETA', potenciaW: hip.eletrica.chuveiroEletricoVA, rotulo: 'Chuveiro', sugerida: true,
             } as Command);
           }
+        }
+        // F13: o PRESSURIZADOR é ligação direta, com a potência das hipóteses (ganha circuito próprio).
+        for (const b of (m.terminais ?? []).filter((t) => niveis.includes(t.levelId) && t.tipoHidraulico === 'BOMBA' && t.disciplina === 'AGUA_FRIA')) {
+          lote.push({
+            type: 'AddTerminal', levelId: b.levelId, disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO.LIGACAO_DIRETA, at: { ...b.at },
+            cotaMm: b.cotaMm, tipoEletrico: 'LIGACAO_DIRETA', potenciaW: hip.pressao.potenciaDoPressurizadorW, rotulo: 'Pressurizador', sugerida: true,
+          } as Command);
         }
         const tipoDe = (c: Command) => (c.type === 'AddTerminal' ? (c as { tipoEletrico?: string | null }).tipoEletrico ?? null : null);
         eletrica.pontos = {

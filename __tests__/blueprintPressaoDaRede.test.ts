@@ -263,3 +263,23 @@ describe('Incêndio E0.4 — o anel não some calado', () => {
     expect(r.trechosDoAnel).toHaveLength(1);
   });
 });
+
+describe('F13 da casa automática — o pressurizador na saída da caixa', () => {
+  it('a BOMBA a até 60 cm da caixa soma o ganho à carga (dinâmica e estática); longe dela (o recalque), não', () => {
+    const { m, t, caixa } = simples(1000); // a caixa só 40 cm acima do lavatório: insuficiente sem bomba
+    const sem = pressoesDaOrigem(m, caixa).pontos[0];
+    expect(sem.estado).toBe('INSUFICIENTE');
+    const bomba = (x: number): Command => ({ type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Pressurizador', at: point(x, 300), cotaMm: 1000, tipoHidraulico: 'BOMBA' } as Command);
+    const comBomba = applyBatch(m, [bomba(400)]).model;
+    const com = pressoesDaOrigem(comBomba, caixa).pontos[0];
+    const ganho = HIPOTESES_PRESSAO_PADRAO.ganhoDoPressurizadorKpa;
+    expect(com.disponivelKpa! - sem.disponivelKpa!).toBeCloseTo(ganho, 6);
+    expect(com.estaticaKpa! - sem.estaticaKpa!).toBeCloseTo(ganho, 6);
+    expect(com.estado).toBe('OK');
+    // o ganho é hipótese
+    expect(pressoesDaOrigem(comBomba, caixa, { ...HIPOTESES_PRESSAO_PADRAO, ganhoDoPressurizadorKpa: 50 }).pontos[0].disponivelKpa! - sem.disponivelKpa!).toBeCloseTo(50, 6);
+    // a bomba a 2 m da caixa não é o pressurizador dela
+    const longe = pressoesDaOrigem(applyBatch(m, [bomba(2000)]).model, caixa).pontos[0];
+    expect(longe.disponivelKpa).toBeCloseTo(sem.disponivelKpa!, 6);
+  });
+});

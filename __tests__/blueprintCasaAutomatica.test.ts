@@ -8,7 +8,7 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { conferirPlanoDaCasa, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
 import { PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
@@ -845,5 +845,47 @@ describe('planejarCasa — a pressão nos pontos fica DITA (15/10/2026)', () => 
       }
       expect(p.resumo.hidraulica.pressaoInsuficiente[d === 'AGUA_QUENTE' ? 'quente' : 'fria']).toBe(n);
     }
+  });
+});
+
+describe('planejarCasa — F13: a pressão por caso (caixa elevada ou pressurizador)', () => {
+  const m = lote();
+  const pressoesOk = (r: BlueprintModel) => pressoesDoModelo(r).every((x) => x.pontos.every((p) => p.estado !== 'INSUFICIENTE'));
+
+  it.each([1, 2] as const)('%i pavimento(s), padrão (até 2 m): o déficit passa do limite — pressurizador na saída da caixa, com ponto elétrico e circuito; nenhum ponto abaixo do mínimo', (pavimentos) => {
+    const p = planejarCasa(m, entrada(m), { pavimentos });
+    const r = p.resultado;
+    const caixa = r.terminais.find((t) => t.tipoHidraulico === 'RESERVATORIO')!;
+    const bombas = r.terminais.filter((t) => t.tipoHidraulico === 'BOMBA');
+    expect(bombas).toHaveLength(1);
+    expect(bombas[0].levelId).toBe(caixa.levelId);
+    expect(Math.hypot(bombas[0].at.x - caixa.at.x, bombas[0].at.y - caixa.at.y)).toBeLessThanOrEqual(600);
+    const lig = r.terminais.filter((t) => t.disciplina === 'ELETRICA' && t.rotulo === 'Pressurizador');
+    expect(lig).toHaveLength(1);
+    expect(lig[0]).toMatchObject({ tipoEletrico: 'LIGACAO_DIRETA', potenciaW: HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO.potenciaDoPressurizadorW });
+    expect(lig[0].circuitoId).toBeTruthy();
+    expect(pressoesOk(r)).toBe(true);
+    expect(p.resumo.hidraulica.pressaoInsuficiente).toEqual({ fria: 0, quente: 0 });
+    expect(p.pendencias.some((x) => x.grupo === 'CONFERIR' && /^Pressão: faltavam .* pressurizador na saída da caixa/.test(x.texto))).toBe(true);
+    expect(p.etapas.find((e) => e.id === 'AGUA')!.nota).toMatch(/pressurizador/);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+
+  it('com espaço para a torre (até 10 m): a caixa sobe o que precisa, sem bomba; nenhum ponto abaixo do mínimo', () => {
+    const p = planejarCasa(m, entrada(m), { pressao: { ...HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, caixaElevadaAteMm: 10000 } });
+    const r = p.resultado;
+    expect(r.terminais.filter((t) => t.tipoHidraulico === 'BOMBA')).toEqual([]);
+    const caixa = r.terminais.find((t) => t.tipoHidraulico === 'RESERVATORIO')!;
+    expect(caixa.cotaMm).toBeGreaterThan(3200);
+    expect(caixa.cotaMm).toBeLessThanOrEqual(3200 + 10000);
+    expect(pressoesOk(r)).toBe(true);
+    expect(p.pendencias.some((x) => x.grupo === 'CONFERIR' && /^Pressão: a caixa d'água subiu/.test(x.texto))).toBe(true);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+
+  it('desligado: nada muda na caixa, sem bomba — e a pendência de pressão diz o que falta', () => {
+    const p = planejarCasa(m, entrada(m), { pressao: { ...HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, resolver: false } });
+    expect(p.resultado.terminais.filter((t) => t.tipoHidraulico === 'BOMBA')).toEqual([]);
+    expect(p.pendencias.some((x) => x.grupo === 'VERIFICACAO' && /^Pressão da água quente: \d+ ponto/.test(x.texto))).toBe(true);
   });
 });

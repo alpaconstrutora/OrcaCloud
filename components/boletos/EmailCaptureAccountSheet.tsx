@@ -23,7 +23,9 @@ interface Props {
     onPronta: (conta: ContaCaptura) => void;
 }
 
-const hoje = () => new Date().toISOString().slice(0, 10);
+/** Data LOCAL em AAAA-MM-DD — `toISOString()` é UTC e, depois das 21h em Brasília, já dá o dia seguinte. */
+const dataLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const hoje = () => dataLocal(new Date());
 
 const EmailCaptureAccountSheet: React.FC<Props> = ({ open, onClose, organizationId, reconectar, onPronta }) => {
     const [usuario, setUsuario] = useState('');

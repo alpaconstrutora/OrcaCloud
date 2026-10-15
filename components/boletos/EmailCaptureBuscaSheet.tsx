@@ -25,8 +25,10 @@ import {
 const ROTULO = 'text-xs font-semibold text-slate-500';
 const CAMPO = 'w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all disabled:opacity-60';
 
-const hoje = () => new Date().toISOString().slice(0, 10);
-const diasAtras = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+/** Data LOCAL em AAAA-MM-DD — `toISOString()` é UTC e, depois das 21h em Brasília, já dá o dia seguinte. */
+const dataLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const hoje = () => dataLocal(new Date());
+const diasAtras = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return dataLocal(d); };
 const ativa = (b: BuscaPeriodo | null) => !!b && (b.status === 'pendente' || b.status === 'em_andamento');
 const br = (d: string) => d.split('-').reverse().join('/');
 

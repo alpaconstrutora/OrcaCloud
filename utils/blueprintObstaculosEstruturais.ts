@@ -41,6 +41,20 @@ const dentroDeAlguma = (pegadas: readonly Point[][], p: P2) => pegadas.some((g) 
 /** A fração (0–1) do segmento que corre DENTRO de alguma pegada (amostragem a cada ~50 mm). */
 export function fracaoDentro(a: P2, b: P2, pegadas: readonly Point[][]): number {
   if (pegadas.length === 0) return 0;
+  // Só as pegadas cuja caixa envolvente encosta na do segmento — o resultado é o mesmo, sem amostrar contra
+  // todos os pilares do pavimento (na casa automática, ~30 pilares × centenas de arestas por traçado).
+  const [sx0, sx1, sy0, sy1] = [Math.min(a.x, b.x), Math.max(a.x, b.x), Math.min(a.y, b.y), Math.max(a.y, b.y)];
+  pegadas = pegadas.filter((g) => {
+    let gx0 = Infinity, gx1 = -Infinity, gy0 = Infinity, gy1 = -Infinity;
+    for (const p of g) {
+      if (p.x < gx0) gx0 = p.x;
+      if (p.x > gx1) gx1 = p.x;
+      if (p.y < gy0) gy0 = p.y;
+      if (p.y > gy1) gy1 = p.y;
+    }
+    return gx0 <= sx1 && gx1 >= sx0 && gy0 <= sy1 && gy1 >= sy0;
+  });
+  if (pegadas.length === 0) return 0;
   const L = Math.hypot(b.x - a.x, b.y - a.y);
   const n = Math.max(2, Math.ceil(L / 50));
   let dentro = 0;

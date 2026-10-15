@@ -3,7 +3,7 @@
  * (E6.2, várias sementes) → conferência — num lote só, e a trava `conferirPlanoDaCasa`.
  * Plano: `docs/planos/2026-10-14-casa-automatica.md`.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
@@ -14,6 +14,11 @@ import { HIPOTESES_DAS_ANCORAS_PADRAO } from '../utils/blueprintAncorasDaCasa';
 import { HIPOTESES_HIDRO_PADRAO } from '../utils/blueprintMemorialHidro';
 import { planejarCalhas } from '../utils/blueprintCalhas';
 import { HIPOTESES_PLUVIAIS_PADRAO } from '../utils/blueprintPluvial';
+
+// Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
+// ~0,5–0,8 s nesta máquina, e a CI, disputando CPU com a suíte toda, chegou a passar dos 5 s do padrão
+// (15/10/2026, run 38725612771). O limite é do arquivo, não um teste lento escondido.
+vi.setConfig({ testTimeout: 30_000 });
 
 type Papel = 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA';
 

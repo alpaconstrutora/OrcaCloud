@@ -753,3 +753,16 @@ Provas:
   `{ erros: 0, avisos: 0, porTipo: {} }`, sem pendência "Rede de …".
 - Harness: o portão reprova qualquer marca da verificação de rede.
 
+**CI vermelha no commit da F8b (9fc6acbd, run 38725612771):**
+- O que falhou: 4 testes da casa estouraram os 5 s do Vitest. Localmente levam 0,85–1,4 s, e a CI
+  disputa CPU com a suíte toda.
+- A causa, medida com perfil de CPU: o traçado em si leva ~14 ms. Quem domina é o AJUSTE DE DN PELA
+  PRESSÃO (`ajustarDnPorPressao`), que reaplicava cada troca de DN pelo kernel inteiro (hash SHA-256 e
+  invariantes do modelo) a cada passo. A F8b aumentou os trechos de água (81 → 129) e as conexões do
+  contorno, então cada passo ficou mais caro.
+- Correção: a simulação troca o DN numa cópia rasa do modelo. O `SetTrechoProps` de verdade vai no lote
+  como antes, e o kernel só mexe no `bitolaMm` nesse comando, então o resultado é o mesmo.
+- Efeito: o teste mais pesado da casa caiu de 1,37 s para 0,75 s, abaixo do que era antes da F8b.
+  Além disso, o arquivo de testes da casa ganhou limite explícito de 30 s: cada teste gera a casa
+  inteira.
+

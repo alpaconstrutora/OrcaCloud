@@ -25,7 +25,7 @@
  * número conferido).
  */
 import type { BlueprintModel, Command, DisciplinaDeRede, ObjectId, Terminal, Trecho } from './blueprintKernel';
-import { applyBatch, applyCommand, conexoesDerivadas, materialDoTrecho } from './blueprintKernel';
+import { applyBatch, conexoesDerivadas, materialDoTrecho } from './blueprintKernel';
 import { fazerChave, comprimentoMm } from './blueprintGrafoDeRede';
 import { DIAMETROS, origensDeAgua, pesoDoPonto, pontosDeAgua, redeDaOrigem, vazaoDeProjetoLs, type PlanoDeAgua } from './blueprintAguaAutomatica';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
@@ -403,7 +403,12 @@ export function ajustarDnPorPressao(
       continue;
     }
     novoDn.set(candidato.t.id, candidato.proximo!);
-    m = applyCommand(m, { type: 'SetTrechoProps', trechoId: candidato.t.id, bitolaMm: candidato.proximo! }).model;
+    // A simulação só precisa do DN novo para recalcular a pressão: cópia rasa com o trecho trocado, sem passar
+    // o modelo inteiro pelo kernel (hash + invariantes) a cada passo — na casa automática eram ~2/3 do tempo
+    // da água (F8b, 15/10/2026). O `SetTrechoProps` de verdade vai no lote, como antes.
+    const id = candidato.t.id;
+    const dn = candidato.proximo!;
+    m = { ...m, trechos: (m.trechos ?? []).map((t) => (t.id === id ? { ...t, bitolaMm: dn } : t)) };
   }
   return {
     comandos: [...novoDn.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([trechoId, bitolaMm]) => ({ type: 'SetTrechoProps' as const, trechoId, bitolaMm })),

@@ -122,7 +122,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 ## Estado
 
 - [x] F0 — frente `casa-automatica`, este plano, esqueleto do harness
-- [ ] F1 — programa paramétrico da casa
+- [x] F1 — programa paramétrico da casa (ver "Registro da F1" abaixo)
 - [ ] F2 — implantação pela lei + regras com zona no gerador
 - [ ] F3 — orquestrador mínimo (arquitetura num lote)
 - [ ] F4 — estrutura
@@ -134,3 +134,38 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [ ] F10 — UI
 - [ ] F11 — saídas (prova)
 - [ ] F12 — sobrado (posterior)
+
+## Registro da F1 (14/10/2026)
+
+O que entrou, em `utils/blueprintPrograma.ts` (só acréscimo; nada existente mudou):
+
+- `ProgramaCurtoDaCasa` (`dormitorios` com as suítes, `suites`, `banheiros` com os das suítes,
+  `vagas`, `garagemCoberta`, `areaAlvoM2`, `padrao` R1-B/N/A) e `PROGRAMA_CURTO_PADRAO` (3/1/2/2, R1-N).
+- `HipotesesDoProgramaDaCasa` + `HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO`: fator de área por padrão
+  (0,85 / 1 / 1,25 sobre a área ideal, preso entre a mínima e a máxima do item), 15 m² ideal e
+  12,5 m² mínimo por vaga, útil/privativa 0,85, limites do formulário (6 dormitórios, 6 vagas).
+- `normalizarProgramaCurto`: corrige o formulário e DIZ cada correção (suítes ≤ dormitórios;
+  banheiros ≥ suítes + 1 social quando há dormitório simples ou nenhuma suíte).
+- `programaDaCasa(curto, hip?) → { programa, curto, avisos }`: semente CASA_TERREA; R1-B sem varanda
+  e sem lavabo; R1-A com escritório; garagem só com vagas cobertas; área alvo (útil, com circulação,
+  SEM a garagem) fechada por iteração sobre os itens livres, e dita quando não fecha.
+- `programaCurtoDaUnidade(unidade)`: lê bedrooms/suites/bathrooms/parking_spaces; padrão pela
+  `typology` ("alto/luxo" → R1-A, "baixo/popular" → R1-B, senão R1-N); área alvo = privativa × 0,85 −
+  garagem. Campo vazio fica com o padrão, e isso é dito.
+
+Mudança em relação ao plano: `garagemCoberta` saiu das hipóteses de implantação e entrou no
+formulário curto, porque decide se existe o item Garagem. `programaDaCasa` devolve
+`{ programa, curto, avisos }` e não só o `Programa`: a tela precisa mostrar o que foi corrigido.
+
+**Decisão medida: cada suíte é um item, não `quantidade`.** O gerador expande a quantidade em
+cópias, mas a relação OBRIGATÓRIA suíte × banheiro se dá por satisfeita com UM par encostado.
+Sonda no E6.2, lote 12 × 16 m, sementes 1–8:
+- `quantidade: 2` (o jeito antigo): **6 de 8** sementes deixaram uma suíte sem banheiro encostado;
+- um item por suíte: 2 suítes 8/8 (com e sem garagem); 3 suítes 7/8.
+O caso que falhou (3 suítes, semente 2) é limite do gerador: no recozimento, a relação
+obrigatória pesa como penalidade, não como trava. Fica para a CONFERENCIA da F3 acusar, com a
+pendência dita.
+
+Prova: `__tests__/blueprintProgramaDaCasa.test.ts`, 13 testes: 6 combinações do plano, a
+correção do formulário, o determinismo, 2 suítes no gerador real e a unidade do Empreendimento.
+

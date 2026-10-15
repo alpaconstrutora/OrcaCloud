@@ -22,6 +22,7 @@
  * ajusta item a item. As sementes por tipologia partem deles.
  */
 import { TIPO_NBR5410_DO_USO, USOS_DO_AMBIENTE, type TipoDeAmbiente, type UsoDoAmbiente } from './blueprintKernel';
+import type { EmpreendimentoUnit } from '../types/empreendimento';
 
 // 14/10/2026: o vocabulário de USO mora no kernel — a etiqueta do ambiente o
 // grava (`SpaceLabel.uso`), e o tipo NBR 5410 é derivado dele. Reexportado aqui
@@ -545,4 +546,243 @@ export function programaSemente(tipologia: TipologiaSemente): Programa {
         ],
       );
   }
+}
+
+// ─── Casa automática F1 (14/10/2026): o programa da casa pelo formulário curto ──
+//
+// O usuário diz "3 dormitórios, 1 suíte, 2 banheiros, 2 vagas, padrão R1-N" e o
+// gerador precisa de um `Programa`. Parte-se da semente CASA_TERREA (mesmos usos,
+// áreas e relações) e muda-se só o que o formulário decide.
+//
+// SUÍTE É UM ITEM POR SUÍTE, não `quantidade`: o gerador expande a quantidade em
+// cópias, mas a relação OBRIGATÓRIA suíte × banheiro conta satisfeita com UM par
+// encostado — com "Suíte ×2" a segunda podia nascer sem banheiro. Dormitório
+// simples continua como quantidade (as relações dele são todas desejáveis).
+//
+// Contagens no vocabulário da incorporação (o mesmo de `empreendimento_units`):
+// `dormitorios` INCLUI as suítes; `banheiros` INCLUI os das suítes; lavabo à
+// parte (vem do padrão). Toda folga é hipótese com padrão exportado.
+
+/** Padrões CUB da residência unifamiliar (NBR 12721) — os mesmos de `PADROES_DO_PRODUTO`. */
+export const PADROES_DA_CASA = ['R1-B', 'R1-N', 'R1-A'] as const;
+export type PadraoDaCasa = (typeof PADROES_DA_CASA)[number];
+export const ROTULO_DO_PADRAO_DA_CASA: Record<PadraoDaCasa, string> = { 'R1-B': 'R1-B (baixo)', 'R1-N': 'R1-N (normal)', 'R1-A': 'R1-A (alto)' };
+
+export interface ProgramaCurtoDaCasa {
+  /** Total de dormitórios, suítes incluídas. */
+  dormitorios: number;
+  suites: number;
+  /** Total de banheiros, os das suítes incluídos (lavabo à parte). */
+  banheiros: number;
+  vagas: number;
+  /** Vagas dentro da casa (item Garagem) ou descobertas no recuo (sem item; o lançamento põe as vagas). */
+  garagemCoberta: boolean;
+  /** Área útil alvo dos ambientes, com circulação e SEM a garagem (m²). `null` = áreas de referência do padrão. */
+  areaAlvoM2: number | null;
+  padrao: PadraoDaCasa;
+}
+
+export const PROGRAMA_CURTO_PADRAO: ProgramaCurtoDaCasa = { dormitorios: 3, suites: 1, banheiros: 2, vagas: 2, garagemCoberta: true, areaAlvoM2: null, padrao: 'R1-N' };
+
+export interface HipotesesDoProgramaDaCasa {
+  /** Multiplica a área IDEAL de cada ambiente (presa entre a mínima e a máxima do item). */
+  fatorDeAreaDoPadrao: Record<PadraoDaCasa, number>;
+  /** Área por vaga coberta (m²): ideal e mínima — 2,50 × 5,00 m é a vaga mínima usual. */
+  areaIdealPorVagaM2: number;
+  areaMinPorVagaM2: number;
+  /** Área útil / área privativa, para tirar a área alvo da unidade (as paredes ficam de fora). */
+  fatorUtilDaPrivativa: number;
+  /** Limites do formulário. */
+  maxDormitorios: number;
+  maxVagas: number;
+}
+
+export const HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO: HipotesesDoProgramaDaCasa = {
+  fatorDeAreaDoPadrao: { 'R1-B': 0.85, 'R1-N': 1, 'R1-A': 1.25 },
+  areaIdealPorVagaM2: 15,
+  areaMinPorVagaM2: 12.5,
+  fatorUtilDaPrivativa: 0.85,
+  maxDormitorios: 6,
+  maxVagas: 6,
+};
+
+export interface ResultadoDoProgramaDaCasa {
+  programa: Programa;
+  /** O formulário como foi USADO (depois de corrigido) — é o que a tela mostra de volta. */
+  curto: ProgramaCurtoDaCasa;
+  /** Cada correção e cada meta que não fechou, dita. */
+  avisos: string[];
+}
+
+const inteiroEntre = (v: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(Number.isFinite(v) ? v : min)));
+const m2 = (v: number) => Math.round(v * 100) / 100;
+const plural = (n: number, um: string, varios: string) => (n === 1 ? um : varios);
+
+/** Corrige o formulário (inteiros, suítes ≤ dormitórios, banheiro para quem não tem suíte) e diz o que corrigiu. */
+export function normalizarProgramaCurto(c: ProgramaCurtoDaCasa, hip: HipotesesDoProgramaDaCasa = HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO): { curto: ProgramaCurtoDaCasa; avisos: string[] } {
+  const avisos: string[] = [];
+  const dormitorios = inteiroEntre(c.dormitorios, 1, hip.maxDormitorios);
+  if (dormitorios !== c.dormitorios) avisos.push(`Dormitórios: ${c.dormitorios} → ${dormitorios} (de 1 a ${hip.maxDormitorios}).`);
+  const suites = inteiroEntre(c.suites, 0, dormitorios);
+  if (suites !== c.suites) avisos.push(`Suítes: ${c.suites} → ${suites} (no máximo uma por dormitório).`);
+  // Quem não é suíte precisa de um banheiro social: dormitório simples, ou casa sem suíte nenhuma.
+  const precisaDeSocial = dormitorios - suites > 0 || suites === 0;
+  const minBanheiros = suites + (precisaDeSocial ? 1 : 0);
+  const banheiros = inteiroEntre(c.banheiros, minBanheiros, suites + hip.maxDormitorios);
+  if (banheiros !== c.banheiros) {
+    avisos.push(
+      banheiros > c.banheiros
+        ? `Banheiros: ${c.banheiros} → ${banheiros} (${suites} de suíte${precisaDeSocial ? ' + 1 social para quem não tem suíte' : ''}).`
+        : `Banheiros: ${c.banheiros} → ${banheiros}.`,
+    );
+  }
+  const vagas = inteiroEntre(c.vagas, 0, hip.maxVagas);
+  if (vagas !== c.vagas) avisos.push(`Vagas: ${c.vagas} → ${vagas} (de 0 a ${hip.maxVagas}).`);
+  const padrao: PadraoDaCasa = (PADROES_DA_CASA as readonly string[]).includes(c.padrao) ? c.padrao : 'R1-N';
+  if (padrao !== c.padrao) avisos.push(`Padrão "${c.padrao}" desconhecido → R1-N.`);
+  const areaAlvoM2 = c.areaAlvoM2 != null && Number.isFinite(c.areaAlvoM2) && c.areaAlvoM2 > 0 ? m2(c.areaAlvoM2) : null;
+  if (c.areaAlvoM2 != null && areaAlvoM2 == null) avisos.push('Área alvo inválida — usadas as áreas de referência do padrão.');
+  return { curto: { dormitorios, suites, banheiros, vagas, garagemCoberta: !!c.garagemCoberta, areaAlvoM2, padrao }, avisos };
+}
+
+/**
+ * O programa da casa a partir do formulário curto. Puro e determinístico: os ids dos
+ * itens são chaves legíveis ("suite1", "bsuite1", "dorm"), como nas sementes.
+ */
+export function programaDaCasa(entrada: ProgramaCurtoDaCasa, hip: HipotesesDoProgramaDaCasa = HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO): ResultadoDoProgramaDaCasa {
+  const { curto: c, avisos } = normalizarProgramaCurto(entrada, hip);
+  const simples = c.dormitorios - c.suites;
+  const sociais = c.banheiros - c.suites;
+  const alto = c.padrao === 'R1-A';
+  const baixo = c.padrao === 'R1-B';
+
+  const esbocos: EsbocoDeItem[] = [];
+  if (!baixo) esbocos.push({ chave: 'var', uso: 'VARANDA', nome: 'Varanda de entrada', areaIdealM2: 6 });
+  esbocos.push(
+    { chave: 'sala', uso: 'SALA', nome: 'Sala de estar/jantar', areaIdealM2: 24, areaMinM2: 16 },
+    { chave: 'coz', uso: 'COZINHA', areaIdealM2: 12 },
+    { chave: 'serv', uso: 'AREA_DE_SERVICO', areaIdealM2: 6 },
+  );
+  if (!baixo) esbocos.push({ chave: 'lav', uso: 'LAVABO' });
+  if (alto) esbocos.push({ chave: 'esc', uso: 'ESCRITORIO' });
+  for (let k = 1; k <= c.suites; k++) {
+    const n = c.suites > 1 ? ` ${k}` : '';
+    esbocos.push({ chave: `suite${k}`, uso: 'SUITE', nome: `Suíte${n}` }, { chave: `bsuite${k}`, uso: 'BANHEIRO', nome: `Banheiro da suíte${n}`, areaIdealM2: 4.5 });
+  }
+  if (simples > 0) esbocos.push({ chave: 'dorm', uso: 'DORMITORIO', quantidade: simples });
+  if (sociais > 0) esbocos.push({ chave: 'banho', uso: 'BANHEIRO', nome: 'Banheiro social', quantidade: sociais });
+  esbocos.push({ chave: 'circ', uso: 'CIRCULACAO' });
+  if (c.vagas > 0 && c.garagemCoberta) {
+    esbocos.push({
+      chave: 'gar',
+      uso: 'GARAGEM',
+      nome: `Garagem (${c.vagas} ${plural(c.vagas, 'vaga', 'vagas')})`,
+      areaIdealM2: m2(c.vagas * hip.areaIdealPorVagaM2),
+      areaMinM2: m2(c.vagas * hip.areaMinPorVagaM2),
+    });
+  }
+
+  // As relações da semente CASA_TERREA, só entre os itens que existem.
+  const tem = new Set(esbocos.map((e) => e.chave));
+  const rel: EsbocoDeRelacao[] = [];
+  const r = (a: string, b: string, v: number | 'O' | 'P') => {
+    if (tem.has(a) && tem.has(b)) rel.push([a, b, v]);
+  };
+  r('var', 'sala', 'O');
+  r('sala', 'coz', 8);
+  r('coz', 'serv', 'O');
+  r('sala', 'lav', 7);
+  r('sala', 'esc', 6);
+  r('sala', 'circ', 8);
+  r('circ', 'dorm', 9);
+  r('circ', 'banho', 9);
+  r('dorm', 'banho', 7);
+  r('gar', 'serv', 6);
+  r('gar', 'coz', 5);
+  r('coz', 'dorm', 'P');
+  r('gar', 'dorm', 'P');
+  for (let k = 1; k <= c.suites; k++) {
+    r('circ', `suite${k}`, 8);
+    r(`suite${k}`, `bsuite${k}`, 'O');
+    r('coz', `suite${k}`, 'P');
+    r('gar', `suite${k}`, 'P');
+    r('lav', `suite${k}`, 'P');
+  }
+
+  const nome = `Casa térrea ${c.dormitorios} dorm.${c.suites ? ` (${c.suites} ${plural(c.suites, 'suíte', 'suítes')})` : ''} · ${c.padrao}`;
+  let p = montar(nome.slice(0, MAX_NOME_DO_PROGRAMA), 12, esbocos, rel);
+
+  // Padrão: a área ideal escala, presa entre a mínima e a máxima de cada item. A garagem
+  // é das vagas, não do padrão; a circulação é derivada.
+  const fora = (i: ItemDoPrograma) => i.uso === 'GARAGEM' || i.uso === 'CIRCULACAO';
+  const prender = (i: ItemDoPrograma, v: number) => m2(Math.max(i.areaMinM2, i.areaMaxM2 != null ? Math.min(i.areaMaxM2, v) : v));
+  const fatorDoPadrao = hip.fatorDeAreaDoPadrao[c.padrao] ?? 1;
+  p = { ...p, itens: p.itens.map((i) => (fora(i) ? i : { ...i, areaIdealM2: prender(i, i.areaIdealM2 * fatorDoPadrao) })) };
+
+  // Área alvo: escala as áreas ideais (sem garagem) até a soma com circulação bater. Item
+  // preso na mínima/máxima sai da conta e o fator é refeito sobre os livres.
+  if (c.areaAlvoM2 != null) {
+    const alvo = c.areaAlvoM2;
+    const comCirculacao = (v: number) => v * (1 + p.circulacaoMaxPct / 100);
+    const soma = (itens: ItemDoPrograma[], campo: 'areaIdealM2' | 'areaMinM2' = 'areaIdealM2') => itens.filter((i) => !fora(i)).reduce((s, i) => s + i[campo] * i.quantidade, 0);
+    let itens = p.itens;
+    for (let volta = 0; volta < 8; volta++) {
+      const atual = comCirculacao(soma(itens));
+      if (Math.abs(atual - alvo) < 0.05) break;
+      const crescer = atual < alvo;
+      const presos = new Set(itens.filter((i) => !fora(i) && (crescer ? i.areaMaxM2 != null && i.areaIdealM2 >= i.areaMaxM2 : i.areaIdealM2 <= i.areaMinM2)).map((i) => i.id));
+      const livres = itens.filter((i) => !fora(i) && !presos.has(i.id));
+      const somaLivres = livres.reduce((s, i) => s + i.areaIdealM2 * i.quantidade, 0);
+      if (somaLivres <= 0) break;
+      const somaPresos = itens.filter((i) => presos.has(i.id)).reduce((s, i) => s + i.areaIdealM2 * i.quantidade, 0);
+      const k = (alvo / (1 + p.circulacaoMaxPct / 100) - somaPresos) / somaLivres;
+      itens = itens.map((i) => (fora(i) || presos.has(i.id) ? i : { ...i, areaIdealM2: prender(i, i.areaIdealM2 * k) }));
+    }
+    p = { ...p, itens };
+    const final = m2(comCirculacao(soma(p.itens)));
+    if (Math.abs(final - alvo) > Math.max(1, alvo * 0.02)) {
+      const minimo = m2(comCirculacao(soma(p.itens, 'areaMinM2')));
+      avisos.push(
+        final > alvo
+          ? `Área alvo de ${fmt(alvo)} m² abaixo do que o programa pede com as áreas mínimas (${fmt(minimo)} m²) — ficou em ${fmt(final)} m².`
+          : `Área alvo de ${fmt(alvo)} m² acima das áreas máximas dos ambientes — ficou em ${fmt(final)} m².`,
+      );
+    }
+  }
+  if (c.vagas > 0 && !c.garagemCoberta) avisos.push(`${c.vagas} ${plural(c.vagas, 'vaga descoberta', 'vagas descobertas')}: sem ambiente de garagem — as vagas vão para o recuo no lançamento.`);
+  return { programa: p, curto: c, avisos };
+}
+
+/**
+ * O formulário curto pré-preenchido pela unidade do Empreendimento (quando o estudo é
+ * dele). Campo vazio na unidade fica com o padrão — e é dito. A área alvo sai da
+ * privativa: × `fatorUtilDaPrivativa` (paredes) − a garagem coberta.
+ */
+export function programaCurtoDaUnidade(
+  u: Pick<EmpreendimentoUnit, 'name' | 'typology' | 'private_area' | 'bedrooms' | 'bathrooms' | 'suites' | 'parking_spaces'>,
+  hip: HipotesesDoProgramaDaCasa = HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO,
+): { curto: ProgramaCurtoDaCasa; avisos: string[] } {
+  const avisos: string[] = [];
+  const P = PROGRAMA_CURTO_PADRAO;
+  const ou = (v: number | null | undefined, padrao: number, rotulo: string) => {
+    if (v != null && Number.isFinite(v)) return v;
+    avisos.push(`${u.name}: sem ${rotulo} — usado ${padrao}.`);
+    return padrao;
+  };
+  const dormitorios = ou(u.bedrooms, P.dormitorios, 'dormitórios');
+  const suites = ou(u.suites, Math.min(P.suites, dormitorios), 'suítes');
+  const banheiros = ou(u.bathrooms, P.banheiros, 'banheiros');
+  const vagas = ou(u.parking_spaces, P.vagas, 'vagas');
+  const t = (u.typology ?? '').toLowerCase();
+  const padrao: PadraoDaCasa = /\balto\b|\bluxo\b|r1-?a\b/.test(t) ? 'R1-A' : /\bbaixo\b|\bpopular\b|r1-?b\b/.test(t) ? 'R1-B' : 'R1-N';
+  let areaAlvoM2: number | null = null;
+  if (u.private_area != null && u.private_area > 0) {
+    const garagem = vagas * hip.areaIdealPorVagaM2;
+    const alvo = m2(Math.max(0, u.private_area * hip.fatorUtilDaPrivativa - garagem));
+    if (alvo > 0) {
+      areaAlvoM2 = alvo;
+      avisos.push(`Área alvo ${fmt(alvo)} m² = privativa ${fmt(u.private_area)} m² × ${fmt(hip.fatorUtilDaPrivativa)} − garagem ${fmt(garagem)} m².`);
+    } else avisos.push(`${u.name}: privativa de ${fmt(u.private_area)} m² não cobre a garagem — área alvo pelas referências do padrão.`);
+  }
+  return { curto: { dormitorios, suites, banheiros, vagas, garagemCoberta: true, areaAlvoM2, padrao }, avisos };
 }

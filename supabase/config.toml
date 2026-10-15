@@ -424,3 +424,15 @@ verify_jwt = false
 # não é JWT, e o gate é `chamadaDeCron` (REGRA #7).
 [functions.planta-webhooks]
 verify_jwt = false
+
+# Captura de boletos por e-mail (15/10/2026 — docs/planos/2026-10-15-captura-boletos-por-email.md).
+# sync: chamada pelo pg_cron com o CRON_SECRET (não é JWT) e pelo botão
+# "Sincronizar agora" com o JWT do usuário; o gate é `chamadaDeCron` /
+# `exigirMembro` no código (REGRA #7 pergunta 3). Sem header → 401.
+[functions.email-capture-sync]
+verify_jwt = false
+
+# accounts: o gate é `exigirGestor`/`exigirMembro` no código, com a org DONA da
+# conta. Sem header → 401.
+[functions.email-capture-accounts]
+verify_jwt = false

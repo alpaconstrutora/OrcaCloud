@@ -81,7 +81,7 @@ describe('findBeneficiarioCnpj — DV e posição', () => {
 
     it('ignora CNPJ com DV errado e fica com o primeiro válido', () => {
         const t = `Documento ${CNPJ_DV_ERRADO} ... outro ${CNPJ_BENEFICIARIO}`;
-        expect(findBeneficiarioCnpj(t)).toEqual({ valor: CNPJ_BENEFICIARIO, confidence: 70 });
+        expect(findBeneficiarioCnpj(t)).toEqual({ valor: CNPJ_BENEFICIARIO, confidence: 60 });
     });
 
     it('só CNPJ com DV errado → devolve com confiança 30 (não sugere fornecedor sozinho)', () => {
@@ -96,6 +96,42 @@ describe('findBeneficiarioCnpj — DV e posição', () => {
         const { formatada } = linhaValida();
         const t = textoDeBoleto(`Pagador ${CNPJ_PAGADOR}\nCedente: ACME LTDA ${CNPJ_BENEFICIARIO}\n${formatada}`);
         expect(extractFromPdfText(t, 1).campos.beneficiario_cnpj.valor).toBe(CNPJ_BENEFICIARIO);
+    });
+});
+
+/* Casos tirados do spike de 15/10/2026 (três PDFs reais lidos pelo unpdf no
+   Deno). Os textos abaixo reproduzem a FORMA, com dados sintéticos. */
+describe('texto como o unpdf entrega (spike com boletos reais)', () => {
+    it('linha sem separadores com um dígito vizinho grudado (bloco de 48 inválido) → acha a de 47', () => {
+        const { ld } = linhaValida('0000036233');
+        const t = textoDeBoleto(`Pagamento via Pix 7${ld} Beneficiário ACME SERVICOS LTDA - CNPJ: 11222333000181 Vencimento 20/09/2026`);
+        const r = extractFromPdfText(t, 1);
+        expect(r.campos.linha_digitavel.valor).toBe(ld);
+        expect(r.erros).toHaveLength(0);
+    });
+
+    it('CNPJ sem máscara depois de "CNPJ:" vira o CNPJ do beneficiário, formatado', () => {
+        const t = 'Beneficiário ACME SERVICOS LTDA - CNPJ: 11222333000181 Vencimento 20/09/2026';
+        expect(findBeneficiarioCnpj(t)).toEqual({ valor: '11.222.333/0001-81', confidence: 80 });
+    });
+
+    it('CNPJ sob "Pagador" perde para o do beneficiário, mesmo vindo depois', () => {
+        const t = 'Beneficiário ACME LTDA CNPJ/CPF 11222333000181 ... Pagador ALPA CONSTRUTORA CNPJ/CPF: 00000000000191';
+        expect(findBeneficiarioCnpj(t)?.valor).toBe('11.222.333/0001-81');
+    });
+
+    it('só o CNPJ do pagador no texto → confiança 30 (não sugere fornecedor)', () => {
+        expect(findBeneficiarioCnpj('Pagador ALPA CONSTRUTORA CNPJ/CPF: 00000000000191')?.confidence).toBe(30);
+    });
+
+    it('14 dígitos soltos, sem rótulo CNPJ, não são CNPJ', () => {
+        expect(findBeneficiarioCnpj('Nosso número 11222333000181')).toBeNull();
+    });
+
+    it('nome do beneficiário sai sem o "- CNPJ: … Venc" colado', () => {
+        const { formatada } = linhaValida();
+        const t = textoDeBoleto(`${formatada}\nBeneficiário ACME SERVICOS LTDA - CNPJ: 11222333000181 Vencimento 20/09/2026`);
+        expect(extractFromPdfText(t, 1).campos.beneficiario_nome.valor).toBe('ACME SERVICOS LTDA');
     });
 });
 

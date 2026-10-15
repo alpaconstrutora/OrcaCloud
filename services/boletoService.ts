@@ -3,6 +3,7 @@ import { resolverCategoriaPorId } from './financialCategoryResolver';
 import { sanitizeFileName } from '../utils/storageUtils';
 import { renomearDocumentoDoBoleto, renomearDocumentosDosBoletos } from './boletoNomeDocumentoService';
 import { sha256File, extractFromPdfFile, buildExtractionFromLinhaDigitavel } from '../utils/boletoParser';
+import { colunasDaExtracao } from '../utils/boletoTexto';
 import { parseLinhaDigitavel, onlyDigits, nomeBanco, vencimentoPlausivel } from '../utils/febrabanRules';
 import { financialApprovalService } from './financialApprovalService';
 import { validateCpfCnpj } from '../lib/validators';
@@ -149,44 +150,9 @@ function mapRowToBoleto(row: any): Boleto {
     };
 }
 
+/** Conversão extração → colunas: mora em `utils/boletoTexto.ts` (a captura por e-mail usa a mesma). */
 function extractionToColumns(ext: BoletoExtractionResult) {
-    // Guarda da data (24/09/2026): a base tinha um boleto com vencimento
-    // `20023-09-21` — ano de cinco dígitos, vindo de um PDF sem linha
-    // digitável. Data implausível NÃO derruba a importação: vira `null` mais
-    // um aviso, e o usuário preenche. O valor e o beneficiário podem ter vindo
-    // certos, e perder o boleto inteiro por causa da data seria pior.
-    const venc = vencimentoPlausivel(ext.campos.vencimento.valor);
-    const avisoData = venc.ok ? [] : [venc.motivo];
-
-    return {
-        linha_digitavel: ext.campos.linha_digitavel.valor,
-        codigo_barras: ext.campos.codigo_barras.valor,
-        qr_pix: ext.campos.qr_pix.valor,
-        valor: ext.campos.valor.valor,
-        valor_original: ext.campos.valor_original.valor,
-        vencimento: venc.ok ? venc.valor : null,
-        beneficiario_nome: ext.campos.beneficiario_nome.valor,
-        beneficiario_cnpj: ext.campos.beneficiario_cnpj.valor,
-        banco_codigo: ext.campos.banco_codigo.valor,
-        banco_nome: ext.campos.banco_nome.valor,
-        multa: ext.campos.multa.valor,
-        multa_percentual: ext.campos.multa_percentual.valor,
-        juros_dia: ext.campos.juros_dia.valor,
-        juros_dia_tipo: ext.campos.juros_dia_tipo.valor,
-        metodo_extracao: ext.metodo,
-        confidence_score: ext.confidence_score,
-        engine_versao: ext.engine_versao,
-        extracao_raw: ext.raw,
-        extracao_em: new Date().toISOString(),
-        /* `checksum_valido` olha SÓ `erros`. Aviso (ex.: fator de vencimento
-           ambíguo) não pode marcar como inválido um boleto cujos DVs conferem —
-           foi justamente esse campo que descartou o falso alarme dos boletos de
-           2017 em 15/08/2026. */
-        checksum_valido: ext.erros.length === 0,
-        erros_validacao: [...ext.erros, ...(ext.avisos ?? []), ...avisoData].length
-            ? [...ext.erros, ...(ext.avisos ?? []), ...avisoData]
-            : null,
-    };
+    return colunasDaExtracao(ext);
 }
 
 async function registrarAuditoria(

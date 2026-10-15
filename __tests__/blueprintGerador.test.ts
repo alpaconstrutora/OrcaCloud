@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { point, snapshotHash } from '../utils/blueprintKernel';
 import { comandosDeGeometria, frenteDePareto, gerar, gerarAlternativas, ladoDaFrente, maiorRetanguloInscrito, nomesParaOModelo, prng } from '../utils/blueprintGerador';
-import { programaSemente } from '../utils/blueprintPrograma';
+import { PROGRAMA_CURTO_PADRAO, programaDaCasa, programaSemente } from '../utils/blueprintPrograma';
 import { applyBatch, applyCommand, emptyModel } from '../utils/blueprintKernel';
 
 const entrada2Q = { programa: programaSemente('APTO_2Q'), envelope: null, direcaoDaFrente: null, rotacaoNorteDeg: null, latitudeGraus: -23.5 };
@@ -63,7 +63,9 @@ describe('gerador determinístico', () => {
     // Janelas: sala e dormitórios exigem iluminação → têm janela; banheiro tem basculante.
     const janelas = m.openings.filter((o) => o.kind === 'window');
     expect(janelas.length).toBeGreaterThanOrEqual(3);
-    expect(janelas.some((o) => o.widthMm === 600 && o.sillMm === 1600)).toBe(true);
+    // Basculante do banheiro (peitoril 1,60 m, 0,60 m de altura). F3b (15/10/2026): a largura cobre 1/8 do
+    // piso (regra semente) — o 0,60 × 0,60 fixo dava 0,36 m² para um banheiro de 4 m² (pede 0,50).
+    expect(janelas.some((o) => o.sillMm === 1600 && o.heightMm === 600 && o.widthMm >= 600)).toBe(true);
     // Avaliação e resumo.
     expect(r.avaliacao.notaGeral).not.toBeNull();
     expect(r.resumo.areaConstruidaM2).toBeCloseTo(10.2 * 12.2, 1);
@@ -116,5 +118,50 @@ describe('gerador determinístico', () => {
     expect(nomes).toHaveLength(8);
     alvo = applyBatch(alvo, nomes).model;
     expect(alvo.spaces.map((s) => s.name).sort()).toEqual(lista[0].model.spaces.map((s) => s.name).sort());
+  });
+});
+
+/**
+ * F3b (casa automática, 15/10/2026): o fundo deixou de ser UMA linha (banheiro de 0,80 × 5,75 m num lote de
+ * 9 m — ≥ 5 regras de ambiente violadas em todas as sementes). Colunas com mínimo no eixo, banheiro da suíte
+ * empilhado atrás (ou ao lado, se a faixa é rasa), transbordo para a frente, janela pela norma.
+ */
+describe('F3b — mínimos dos ambientes', () => {
+  const programa3Q = programaDaCasa(PROGRAMA_CURTO_PADRAO).programa;
+  const ret = (W: number, D: number) => [point(0, 0), point(W, 0), point(W, D), point(0, D)];
+  const violadas = (r: ReturnType<typeof gerar>) => r.regras.filter((x) => x.estado === 'VIOLADA' && x.regra.severidade === 'ERRO' && x.regra.escopo === 'AMBIENTE');
+  const encostam = (a: { x0: number; y0: number; x1: number; y1: number }, b: { x0: number; y0: number; x1: number; y1: number }) =>
+    ((a.x1 === b.x0 || b.x1 === a.x0) && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) >= 700) || ((a.y1 === b.y0 || b.y1 === a.y0) && Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) >= 700);
+
+  it.each([
+    [9000, 16850],
+    [10500, 14500],
+    [12000, 12700],
+  ])('3 quartos em %i × %i: a melhor de 8 sementes não viola regra de ambiente (antes: 5 em todas)', (W, D) => {
+    const rs = [1, 2, 3, 4, 5, 6, 7, 8].map((s) => gerar({ programa: programa3Q, envelope: ret(W, D), direcaoDaFrente: null, rotacaoNorteDeg: null, latitudeGraus: -19.9 }, s, { automaticos: false }));
+    expect(Math.min(...rs.map((r) => violadas(r).length))).toBe(0);
+    // e nenhum banheiro/lavabo mais estreito que 1,20 livre + parede externa, em semente nenhuma
+    for (const r of rs) for (const a of r.ambientes.filter((x) => x.item.uso === 'BANHEIRO' || x.item.uso === 'LAVABO')) expect(Math.min(a.ret.x1 - a.ret.x0, a.ret.y1 - a.ret.y0)).toBeGreaterThanOrEqual(1400 - 25);
+  });
+
+  it('faixa funda: o banheiro da suíte EMPILHA atrás dela; faixa rasa: vira coluna AO LADO — encostado nos dois casos', () => {
+    const fundo = gerar({ programa: programa3Q, envelope: ret(9000, 16850), direcaoDaFrente: null, rotacaoNorteDeg: null, latitudeGraus: -19.9 }, 1, { automaticos: false });
+    const raso = gerar({ programa: programa3Q, envelope: ret(12000, 12700), direcaoDaFrente: null, rotacaoNorteDeg: null, latitudeGraus: -19.9 }, 1, { automaticos: false });
+    for (const r of [fundo, raso]) {
+      const suite = r.ambientes.find((a) => a.item.id === 'suite1')!;
+      const banho = r.ambientes.find((a) => a.item.id === 'bsuite1')!;
+      expect(encostam(suite.ret, banho.ret)).toBe(true);
+    }
+    const s = fundo.ambientes.find((a) => a.item.id === 'suite1')!.ret;
+    const b = fundo.ambientes.find((a) => a.item.id === 'bsuite1')!.ret;
+    expect([b.x0, b.x1]).toEqual([s.x0, s.x1]); // mesma coluna, um atrás do outro
+  });
+
+  it('a sala nunca fica SEM janela (a porta de entrada na mesma fachada); alguma semente cumpre 1/6', () => {
+    const rs = [1, 2, 3, 4, 5, 6, 7, 8].map((s) => gerar({ programa: programa3Q, envelope: ret(10500, 14500), direcaoDaFrente: null, rotacaoNorteDeg: null, latitudeGraus: -19.9 }, s, { automaticos: false }));
+    const daSala = (r: ReturnType<typeof gerar>) => r.regras.find((x) => x.regraId === 'sem-iluminacao-habitavel' && /Sala/.test(x.alvoRotulo))!;
+    // antes da correção, janela pela norma que não cabia ao lado da porta era DESCARTADA: area_janelas = 0
+    for (const r of rs) expect(daSala(r).valores).not.toMatch(/area_janelas = 0 /);
+    expect(rs.some((r) => daSala(r).estado === 'CONFORME')).toBe(true);
   });
 });

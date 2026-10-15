@@ -49,6 +49,8 @@ for (const graus of [0, 30]) {
   conferir(p.aberturasCriadas === p.aberturasPedidas, `${t} aberturas: ${p.aberturasCriadas} criadas de ${p.aberturasPedidas} pedidas`);
   conferir(p.toPct != null && p.toPct <= p.toMaxPct, `${t} TO ${p.toPct} % ≤ ${p.toMaxPct} %`);
   conferir(!p.pendencias.some((x) => /Legislação: (Taxa de ocupação|Coeficiente)/.test(x)), `${t} nenhuma regra de lote violada`);
+  // F3b (15/10/2026): antes, a melhor semente violava 5 regras de ambiente (banheiro de 0,80 m, dormitório de 2,0 m).
+  conferir(p.regrasVioladas === 0, `${t} nenhuma regra de severidade ERRO violada (${p.regrasVioladas})`);
   conferir(p.conferido, `${t} a trava aprova: reaplicado no original dá os mesmos ids e o mesmo modelo`);
   console.log(`   pendências ${t}: ${p.pendencias.length ? p.pendencias.join(' | ') : 'nenhuma'}`);
   await page.screenshot({ path: path.join(saida, `casa-automatica-${graus}.png`) });

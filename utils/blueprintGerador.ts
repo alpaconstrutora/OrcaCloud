@@ -48,6 +48,8 @@ import {
   type Command,
   type ObjectId,
   type Point,
+  TIPO_NBR5410_DO_USO,
+  type TipoDeAmbiente,
   type Wall,
 } from './blueprintKernel';
 import { areaRecuada, uidDeterministico, wallLength } from './blueprintKernel';
@@ -81,6 +83,14 @@ export interface HipotesesDoGerador {
   /** Quando não há envelope (sem lote): o retângulo a preencher. */
   retanguloSemEnvelope: { larguraMm: number; profundidadeMm: number };
   automaticos: boolean;
+  /**
+   * F3b (casa automática, 15/10/2026): pisos por tipo NBR 5410 — LARGURA LIVRE e ÁREA ÚTIL mínimas, os
+   * mesmos das regras semente (`sem-banheiro-*`, `sem-cozinha-*`, `sem-sala-*`). O gerador soma a parede
+   * externa (a mais grossa — conservador) para chegar ao eixo; a ficha do uso continua valendo quando é maior.
+   */
+  minimosPorTipo: Partial<Record<TipoDeAmbiente, { larguraLivreMm: number; areaUtilM2: number }>>;
+  /** Fração mínima da janela sobre o piso (regras semente): 1/6 no habitável, 1/8 em banheiro e cozinha/serviço. */
+  iluminacaoMinima: { habitavel: number; servico: number };
 }
 
 export const HIPOTESES_DO_GERADOR_PADRAO: HipotesesDoGerador = {
@@ -97,7 +107,36 @@ export const HIPOTESES_DO_GERADOR_PADRAO: HipotesesDoGerador = {
   janela: { alturaMm: 1200, peitorilMm: 1000, fracaoDoLado: 0.4, minMm: 1000, maxMm: 2000 },
   retanguloSemEnvelope: { larguraMm: 10000, profundidadeMm: 12000 },
   automaticos: true,
+  minimosPorTipo: {
+    BANHEIRO: { larguraLivreMm: 1200, areaUtilM2: 2.5 },
+    COZINHA_SERVICO: { larguraLivreMm: 1500, areaUtilM2: 4 },
+    SALA_DORMITORIO: { larguraLivreMm: 2400, areaUtilM2: 8 },
+  },
+  iluminacaoMinima: { habitavel: 1 / 6, servico: 1 / 8 },
 };
+
+// ─── F3b: os mínimos de cada ambiente, no EIXO das paredes ───────────────────
+
+/** Largura LIVRE mínima do item: a maior entre a ficha do uso e o piso do tipo NBR 5410. */
+function livreMinMm(item: ItemDoPrograma, hip: HipotesesDoGerador): number {
+  return Math.max(item.larguraMinMm, hip.minimosPorTipo[TIPO_NBR5410_DO_USO[item.uso]]?.larguraLivreMm ?? 0);
+}
+
+/** Largura mínima no EIXO das paredes: a livre + uma parede externa inteira (conservador: meia de cada lado). */
+function eixoMinMm(item: ItemDoPrograma, hip: HipotesesDoGerador): number {
+  return livreMinMm(item, hip) + hip.espessuraExternaMm;
+}
+
+/** Área mínima no eixo para a área ÚTIL do tipo caber com a largura livre mínima. */
+function areaEixoMinMm2(item: ItemDoPrograma, hip: HipotesesDoGerador): number {
+  const m = hip.minimosPorTipo[TIPO_NBR5410_DO_USO[item.uso]];
+  if (!m) return 0;
+  const L = livreMinMm(item, hip);
+  const e = hip.espessuraExternaMm;
+  return (L + e) * ((m.areaUtilM2 * 1e6) / L + e);
+}
+
+const ehMolhado = (item: ItemDoPrograma) => item.uso === 'BANHEIRO' || item.uso === 'LAVABO';
 
 export interface EntradaDoGerador {
   programa: Programa;
@@ -267,7 +306,7 @@ interface Plano {
 }
 
 /** Treemap em faixas (ordem preservada): itens em linhas paralelas à frente, dentro de uma faixa W × D. */
-function treemapEmFaixas(itens: readonly ItemPlanejado[], W: number, D: number, y0: number, umaLinha = false): Map<ItemPlanejado, CaixaCanonica> {
+function treemapEmFaixas(itens: readonly ItemPlanejado[], W: number, D: number, y0: number, umaLinha = false, hip: HipotesesDoGerador | null = null): Map<ItemPlanejado, CaixaCanonica> {
   const out = new Map<ItemPlanejado, CaixaCanonica>();
   const total = itens.reduce((s, i) => s + i.areaAlvoMm2, 0) || 1;
   const escala = (W * D) / total;
@@ -283,6 +322,10 @@ function treemapEmFaixas(itens: readonly ItemPlanejado[], W: number, D: number, 
       const h = area / W;
       return Math.max(...ls.map((x) => {
         const w = (x.areaAlvoMm2 * escala) / h;
+        // F3b: na linha, ninguém fica mais estreito (nem mais raso) que o seu mínimo no eixo. Uma linha inviável
+        // vale infinito: a de um item só também (sozinho, o lavabo virava uma tira de 9,00 × 0,40 m) — e
+        // infinito ≤ infinito deixa a linha crescer até ficar viável, puxando os próximos itens.
+        if (hip && Math.min(w, h) < eixoMinMm(x.item, hip)) return Infinity;
         return Math.max(w / h, h / w);
       }));
     };
@@ -298,9 +341,15 @@ function treemapEmFaixas(itens: readonly ItemPlanejado[], W: number, D: number, 
     }
     const areaLinha = linha.reduce((s, x) => s + x.areaAlvoMm2 * escala, 0);
     const h = i + linha.length >= itens.length ? y0 + D - y : areaLinha / W; // a última linha fecha a faixa
+    // F3b: dentro da linha, cada um recebe primeiro o seu mínimo no eixo e só a SOBRA vai pela área — a
+    // última linha fecha a faixa com o que restou, e repartida só pela área deixava o lavabo em 0,95 m.
+    const minimos = linha.map((t) => (hip ? eixoMinMm(t.item, hip) : 0));
+    const somaMin = minimos.reduce((s, v) => s + v, 0);
+    const pelaArea = !hip || somaMin > W;
     let x = 0;
     linha.forEach((x0, k) => {
-      const w = k === linha.length - 1 ? W - x : ((x0.areaAlvoMm2 * escala) / areaLinha) * W;
+      const parte = (x0.areaAlvoMm2 * escala) / areaLinha;
+      const w = k === linha.length - 1 ? W - x : pelaArea ? parte * W : minimos[k] + parte * (W - somaMin);
       out.set(x0, { x0: x, y0: y, x1: x + w, y1: y + h });
       x += w;
     });
@@ -310,17 +359,103 @@ function treemapEmFaixas(itens: readonly ItemPlanejado[], W: number, D: number, 
   return out;
 }
 
-function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number): Map<ItemPlanejado, CaixaCanonica> {
+/**
+ * F3b (15/10/2026) — O FUNDO EM COLUNAS. Antes era um treemap de UMA linha: a faixa íntima inteira com uma
+ * profundidade só, e a largura repartida pela área — banheiro de 0,80 × 5,75 m num lote de 9 m (achado da
+ * F3 da casa automática: ≥ 5 regras de ambiente violadas em todas as sementes). Agora:
+ *  - cada íntimo é uma COLUNA encostada no corredor, nunca mais estreita que o seu mínimo no eixo;
+ *  - o banheiro com relação OBRIGATÓRIA com um não-molhado do fundo (o da suíte) EMPILHA atrás dele, na
+ *    mesma coluna — porta direta pela relação, janela na fachada dos fundos;
+ *  - se os mínimos não cabem na largura, o banheiro SEM par (o social) passa para o lado de cá do corredor:
+ *    `transbordo`, que vai para a ÚLTIMA linha da faixa da frente (a que encosta no corredor).
+ * A sobra de largura é repartida pela área de cada coluna.
+ */
+function colunasDoFundo(
+  fundo: readonly ItemPlanejado[],
+  W: number,
+  Dfundo: number,
+  y0: number,
+  programa: Programa,
+  hip: HipotesesDoGerador,
+): { caixas: Map<ItemPlanejado, CaixaCanonica>; transbordo: ItemPlanejado[] } {
+  const obrigatoria = (a: ItemPlanejado, b: ItemPlanejado) =>
+    programa.relacoes.some((r) => r.tipo === 'OBRIGATORIA' && ((r.a === a.item.id && r.b === b.item.id) || (r.a === b.item.id && r.b === a.item.id)));
+  // Quem empilha atrás de quem (um molhado por hospedeiro) — só se os DOIS mínimos cabem na profundidade.
+  // Não cabendo (faixa rasa), o molhado vira coluna IMEDIATAMENTE ao lado do par: encostam, e a porta direta
+  // da relação obrigatória sai igual (achado de 15/10: suíte 3,0 + banheiro 1,4 numa faixa de 4,2 m
+  // espremia o banheiro em 1,20 m).
+  const hospedeiro = new Map<ItemPlanejado, ItemPlanejado>();
+  const aoLadoDe = new Map<ItemPlanejado, ItemPlanejado>();
+  const hospedados = new Set<ItemPlanejado>();
+  for (const t of fundo) {
+    if (!ehMolhado(t.item)) continue;
+    const h = fundo.find((y) => !ehMolhado(y.item) && !hospedados.has(y) && obrigatoria(t, y));
+    if (!h) continue;
+    hospedados.add(h);
+    if (eixoMinMm(h.item, hip) + eixoMinMm(t.item, hip) <= Dfundo) hospedeiro.set(t, h);
+    else aoLadoDe.set(t, h);
+  }
+  const naOrdem: ItemPlanejado[] = [];
+  for (const t of fundo) {
+    if (hospedeiro.has(t) || aoLadoDe.has(t)) continue;
+    naOrdem.push(t);
+    for (const [m, h] of aoLadoDe) if (h === t) naOrdem.push(m);
+  }
+  let colunas = naOrdem.map((t) => ({ frente: t, atras: fundo.filter((x) => hospedeiro.get(x) === t) }));
+  const minDaColuna = (c: { frente: ItemPlanejado; atras: ItemPlanejado[] }) => Math.max(eixoMinMm(c.frente.item, hip), ...c.atras.map((x) => eixoMinMm(x.item, hip)));
+  const transbordo: ItemPlanejado[] = [];
+  // Não cabe: o molhado sem par sai primeiro (o último da ordem), um de cada vez.
+  while (colunas.reduce((s, c) => s + minDaColuna(c), 0) > W) {
+    const i = [...colunas.keys()].reverse().find((k) => ehMolhado(colunas[k].frente.item) && colunas[k].atras.length === 0 && !aoLadoDe.has(colunas[k].frente));
+    if (i === undefined) break;
+    transbordo.push(colunas[i].frente);
+    colunas = colunas.filter((_, k) => k !== i);
+  }
+  const mins = colunas.map(minDaColuna);
+  const areas = colunas.map((c) => c.frente.areaAlvoMm2 + c.atras.reduce((s, x) => s + x.areaAlvoMm2, 0));
+  const somaMin = mins.reduce((s, v) => s + v, 0);
+  const somaArea = areas.reduce((s, v) => s + v, 0) || 1;
+  const sobra = W - somaMin;
+  const caixas = new Map<ItemPlanejado, CaixaCanonica>();
+  let x = 0;
+  colunas.forEach((c, k) => {
+    const w = k === colunas.length - 1 ? W - x : sobra >= 0 ? mins[k] + (sobra * areas[k]) / somaArea : (mins[k] * W) / (somaMin || 1);
+    // Os empilhados atrás: profundidade pela área, nunca menor que o mínimo deles, e deixando o mínimo do da frente.
+    const minFrente = eixoMinMm(c.frente.item, hip);
+    let resto = Dfundo;
+    const fundos: { t: ItemPlanejado; d: number }[] = [];
+    for (const a of [...c.atras].reverse()) {
+      const d = Math.min(Math.max(eixoMinMm(a.item, hip), a.areaAlvoMm2 / Math.max(1, w)), resto - minFrente);
+      if (d <= 0) continue;
+      fundos.push({ t: a, d });
+      resto -= d;
+    }
+    caixas.set(c.frente, { x0: x, y0, x1: x + w, y1: y0 + resto });
+    let y = y0 + resto;
+    for (const f of fundos.reverse()) {
+      caixas.set(f.t, { x0: x, y0: y, x1: x + w, y1: y + f.d });
+      y += f.d;
+    }
+    // Um empilhado que não coube (d ≤ 0) volta a ser coluna? Não: fica sem caixa e o chamador o põe no transbordo.
+    for (const a of c.atras) if (!caixas.has(a)) transbordo.push(a);
+    x += w;
+  });
+  return { caixas, transbordo };
+}
+
+function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, programa: Programa, hip: HipotesesDoGerador): Map<ItemPlanejado, CaixaCanonica> {
   const areaFrente = plano.frente.reduce((s, i) => s + i.areaAlvoMm2, 0);
   const areaFundo = plano.fundo.reduce((s, i) => s + i.areaAlvoMm2, 0);
   const dCorredor = plano.corredor ? corredorMm : 0;
   const disponivel = D - dCorredor;
   const dFrente = plano.fundo.length === 0 ? disponivel : plano.frente.length === 0 ? 0 : (disponivel * areaFrente) / (areaFrente + areaFundo || 1);
   const out = new Map<ItemPlanejado, CaixaCanonica>();
-  if (plano.frente.length) for (const [k, v] of treemapEmFaixas(plano.frente, W, dFrente, 0)) out.set(k, v);
+  const fundo = plano.fundo.length ? colunasDoFundo(plano.fundo, W, disponivel - dFrente, dFrente + dCorredor, programa, hip) : { caixas: new Map<ItemPlanejado, CaixaCanonica>(), transbordo: [] };
+  // O transbordo entra no FIM da frente: a última linha do treemap é a que encosta no corredor.
+  const daFrente = [...plano.frente, ...fundo.transbordo];
+  if (daFrente.length) for (const [k, v] of treemapEmFaixas(daFrente, W, dFrente, 0, false, hip)) out.set(k, v);
   if (plano.corredor) out.set(plano.corredor, { x0: 0, y0: dFrente, x1: W, y1: dFrente + dCorredor });
-  // O fundo é UMA linha: todo íntimo encosta no corredor (ou na faixa da frente) e ganha porta.
-  if (plano.fundo.length) for (const [k, v] of treemapEmFaixas(plano.fundo, W, disponivel - dFrente, dFrente + dCorredor, true)) out.set(k, v);
+  for (const [k, v] of fundo.caixas) out.set(k, v);
   return out;
 }
 
@@ -355,7 +490,7 @@ function azimuteDoLado(lado: 'FRENTE' | 'FUNDO' | 'ESQ' | 'DIR', frente: LadoDaF
   return (azFundo + 270) % 360;
 }
 
-function objetivo(plano: Plano, caixas: Map<ItemPlanejado, CaixaCanonica>, W: number, D: number, programa: Programa, frente: LadoDaFrente, rotacaoNorteDeg: number | null): number {
+function objetivo(plano: Plano, caixas: Map<ItemPlanejado, CaixaCanonica>, W: number, D: number, programa: Programa, frente: LadoDaFrente, rotacaoNorteDeg: number | null, hip: HipotesesDoGerador): number {
   let J = 0;
   const todos = [...plano.frente, ...(plano.corredor ? [plano.corredor] : []), ...plano.fundo];
   const porItemId = new Map<string, ItemPlanejado[]>();
@@ -366,7 +501,9 @@ function objetivo(plano: Plano, caixas: Map<ItemPlanejado, CaixaCanonica>, W: nu
     const h = c.y1 - c.y0;
     const menor = Math.min(w, h);
     if (t.zona !== 'CIRCULACAO') {
-      if (menor < t.item.larguraMinMm) J += (10 * (t.item.larguraMinMm - menor)) / t.item.larguraMinMm;
+      // F3b: o mínimo no EIXO (livre da ficha ou do tipo NBR + parede), o mesmo das colunas do fundo.
+      const minimo = eixoMinMm(t.item, hip);
+      if (menor < minimo) J += (10 * (minimo - menor)) / minimo;
       const prop = Math.max(w, h) / Math.max(1, menor);
       if (prop > 2.2) J += 2 * (prop - 2.2);
     }
@@ -408,14 +545,15 @@ function objetivo(plano: Plano, caixas: Map<ItemPlanejado, CaixaCanonica>, W: nu
 
 // ─── Geração ─────────────────────────────────────────────────────────────────
 
-function itensPlanejados(programa: Programa): { frente: ItemPlanejado[]; fundo: ItemPlanejado[]; corredor: ItemPlanejado | null } {
+function itensPlanejados(programa: Programa, hip: HipotesesDoGerador): { frente: ItemPlanejado[]; fundo: ItemPlanejado[]; corredor: ItemPlanejado | null } {
   const frente: ItemPlanejado[] = [];
   const fundo: ItemPlanejado[] = [];
   let corredor: ItemPlanejado | null = null;
   for (const item of programa.itens) {
     for (let k = 0; k < item.quantidade; k++) {
       const nome = item.quantidade > 1 ? `${item.nome} ${k + 1}` : item.nome;
-      const areaAlvoMm2 = Math.max(item.areaIdealM2, item.areaMinM2) * 1e6;
+      // F3b: nunca abaixo do que o tipo NBR exige de área útil (no eixo, com a largura livre mínima).
+      const areaAlvoMm2 = Math.max(item.areaIdealM2 * 1e6, item.areaMinM2 * 1e6, item.uso === 'CIRCULACAO' ? 0 : areaEixoMinMm2(item, hip));
       if (item.uso === 'CIRCULACAO') {
         if (!corredor) corredor = { item, nome: item.nome, zona: 'CIRCULACAO', areaAlvoMm2 };
         continue;
@@ -429,9 +567,9 @@ function itensPlanejados(programa: Programa): { frente: ItemPlanejado[]; fundo: 
   return { frente, fundo, corredor };
 }
 
-function recozer(plano: Plano, W: number, D: number, programa: Programa, frente: LadoDaFrente, rotacaoNorteDeg: number | null, corredorMm: number, iteracoes: number, rnd: () => number): { plano: Plano; inicial: number; final: number } {
+function recozer(plano: Plano, W: number, D: number, programa: Programa, frente: LadoDaFrente, rotacaoNorteDeg: number | null, corredorMm: number, iteracoes: number, rnd: () => number, hip: HipotesesDoGerador): { plano: Plano; inicial: number; final: number } {
   let atual: Plano = { frente: [...plano.frente], fundo: [...plano.fundo], corredor: plano.corredor };
-  let J = objetivo(atual, caixasDoPlano(atual, W, D, corredorMm), W, D, programa, frente, rotacaoNorteDeg);
+  let J = objetivo(atual, caixasDoPlano(atual, W, D, corredorMm, programa, hip), W, D, programa, frente, rotacaoNorteDeg, hip);
   const inicial = J;
   let melhor = atual;
   let melhorJ = J;
@@ -458,7 +596,7 @@ function recozer(plano: Plano, W: number, D: number, programa: Programa, frente:
         else continue;
       }
     } else continue;
-    const Jc = objetivo(cand, caixasDoPlano(cand, W, D, corredorMm), W, D, programa, frente, rotacaoNorteDeg);
+    const Jc = objetivo(cand, caixasDoPlano(cand, W, D, corredorMm, programa, hip), W, D, programa, frente, rotacaoNorteDeg, hip);
     if (Jc <= J || rnd() < Math.exp((J - Jc) / T)) {
       atual = cand;
       J = Jc;
@@ -524,7 +662,13 @@ function offsetNaParede(w: Wall, p: Point): number {
 }
 
 export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Partial<HipotesesDoGerador> = {}): ResultadoDoGerador {
-  const hip: HipotesesDoGerador = { ...HIPOTESES_DO_GERADOR_PADRAO, ...hipParcial, janela: { ...HIPOTESES_DO_GERADOR_PADRAO.janela, ...(hipParcial.janela ?? {}) } };
+  const hip: HipotesesDoGerador = {
+    ...HIPOTESES_DO_GERADOR_PADRAO,
+    ...hipParcial,
+    janela: { ...HIPOTESES_DO_GERADOR_PADRAO.janela, ...(hipParcial.janela ?? {}) },
+    minimosPorTipo: { ...HIPOTESES_DO_GERADOR_PADRAO.minimosPorTipo, ...(hipParcial.minimosPorTipo ?? {}) },
+    iluminacaoMinima: { ...HIPOTESES_DO_GERADOR_PADRAO.iluminacaoMinima, ...(hipParcial.iluminacaoMinima ?? {}) },
+  };
   const decisoes: string[] = [];
   const avisos: string[] = [];
   const rnd = prng(semente);
@@ -589,7 +733,7 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   };
 
   // (a)+(b) zona e alocação.
-  const base = itensPlanejados(programa);
+  const base = itensPlanejados(programa, hip);
   if (base.frente.length + base.fundo.length === 0) throw new Error('gerador: o programa não tem ambientes (fora a circulação)');
 
   // F11 — OS ANEXOS: cada um recebe ambientes íntimos (depois, de serviço) até a sua parte da área,
@@ -664,9 +808,9 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     fundo: embaralhar(base.fundo),
     corredor: base.corredor,
   };
-  const { plano, inicial, final } = recozer(inicialDoPlano, W, D, programa, frente, entrada.rotacaoNorteDeg, hip.larguraCorredorMm, hip.iteracoes, rnd);
+  const { plano, inicial, final } = recozer(inicialDoPlano, W, D, programa, frente, entrada.rotacaoNorteDeg, hip.larguraCorredorMm, hip.iteracoes, rnd, hip);
   decisoes.push(`Recozimento simulado: ${hip.iteracoes} iterações com a semente ${semente}; função objetivo ${f2(inicial)} → ${f2(final)} (largura mínima, proporção, fachada e sol de quem exige, matriz de proximidade, privacidade).`);
-  const caixas = caixasDoPlano(plano, W, D, hip.larguraCorredorMm);
+  const caixas = caixasDoPlano(plano, W, D, hip.larguraCorredorMm, programa, hip);
 
   // Malha: arredonda as coordenadas cumulativas (mantém adjacência).
   const snapC = (c: CaixaCanonica): CaixaCanonica => ({ x0: snap(c.x0, hip.malhaMm), y0: snap(c.y0, hip.malhaMm), x1: snap(c.x1, hip.malhaMm), y1: snap(c.y1, hip.malhaMm) });
@@ -865,20 +1009,38 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     const escolhido = [...ladosExt].sort((p, q) => Math.min(az(p.lado), 360 - az(p.lado)) - Math.min(az(q.lado), 360 - az(q.lado)) || Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y) - Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y))[0];
     const comprimento = Math.hypot(escolhido.b.x - escolhido.a.x, escolhido.b.y - escolhido.a.y);
     const banheiro = a.item.uso === 'BANHEIRO' || a.item.uso === 'LAVABO';
-    const largura = banheiro ? 600 : Math.max(hip.janela.minMm, Math.min(hip.janela.maxMm, snap(comprimento * hip.janela.fracaoDoLado, hip.malhaMm)));
-    if (largura > comprimento - 400) continue;
+    const alturaDaJanela = banheiro ? 600 : hip.janela.alturaMm;
+    // F3b: a janela cobre a fração mínima do piso (1/6 habitável, 1/8 banheiro/cozinha — as regras semente),
+    // acima do teto estético `maxMm` se preciso. O piso é o ÚTIL, como a regra mede (eixo − meia parede de
+    // cada lado, pela interna — a externa é mais grossa, então a conta sobra a favor da regra).
+    const tipo = TIPO_NBR5410_DO_USO[a.item.uso];
+    const fracao = tipo === 'SALA_DORMITORIO' ? hip.iluminacaoMinima.habitavel : tipo === 'BANHEIRO' || tipo === 'COZINHA_SERVICO' ? hip.iluminacaoMinima.servico : 0;
+    const pisoUtilMm2 = Math.max(0, a.ret.x1 - a.ret.x0 - hip.espessuraInternaMm) * Math.max(0, a.ret.y1 - a.ret.y0 - hip.espessuraInternaMm);
+    const pelaNorma = Math.ceil((pisoUtilMm2 * fracao) / alturaDaJanela / hip.malhaMm) * hip.malhaMm;
+    const estetica = banheiro ? 600 : Math.max(hip.janela.minMm, Math.min(hip.janela.maxMm, snap(comprimento * hip.janela.fracaoDoLado, hip.malhaMm)));
+    const desejada = Math.min(Math.max(estetica, pelaNorma), Math.floor((comprimento - 400) / hip.malhaMm) * hip.malhaMm);
+    if (desejada < 600) continue;
     const w = paredeDoSegmento(paredes(), escolhido.a, escolhido.b);
     if (!w) continue;
     const meio = point((escolhido.a.x + escolhido.b.x) / 2, (escolhido.a.y + escolhido.b.y) / 2);
     const lo = Math.min(offsetNaParede(w, escolhido.a), offsetNaParede(w, escolhido.b)) + FOLGA;
     const hi = Math.max(offsetNaParede(w, escolhido.a), offsetNaParede(w, escolhido.b)) - FOLGA;
-    const off = encaixar(w, offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
+    // F3b: a maior que cabe ao lado do que já está na parede (a porta de entrada na fachada da sala): desce de
+    // 250 em 250 mm até 0,60 m — desistir da janela inteira, como era, deixava a sala sem janela nenhuma.
+    let largura = desejada;
+    let off = encaixar(w, offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
+    while (off === null && largura - 250 >= 600) {
+      largura -= 250;
+      off = encaixar(w, offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
+    }
     if (off === null) {
       avisos.push(`${a.nome}: não coube janela no lado ${escolhido.lado} (a porta ocupa o trecho).`);
       continue;
     }
+    // Sem aviso aqui quando `pelaNorma > largura`: a estimativa do piso útil é conservadora e o aviso saía com a
+    // regra de iluminação CONFORME. Quem acusa é a regra (`sem-iluminacao-*`), pela área útil de verdade.
     reservar(w, off, largura);
-    aberturas.push({ type: 'AddOpening', wallId: w.id, wallUid: w.uid, kind: 'window', offsetMm: off, widthMm: largura, heightMm: banheiro ? 600 : hip.janela.alturaMm, sillMm: banheiro ? 1600 : hip.janela.peitorilMm });
+    aberturas.push({ type: 'AddOpening', wallId: w.id, wallUid: w.uid, kind: 'window', offsetMm: off, widthMm: largura, heightMm: alturaDaJanela, sillMm: banheiro ? 1600 : hip.janela.peitorilMm });
     janelas.push(`${a.nome} (${escolhido.lado})`);
   }
   aplicar(aberturas);

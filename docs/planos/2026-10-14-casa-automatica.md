@@ -18,6 +18,7 @@ Sessão f3b9bc19 · 14/10/2026. A segunda mensagem chegou assim, terminando em v
 | 14/10/2026 | Até onde vai o botão único | Tudo: arquitetura → estrutura → telhado → mobiliário → hidro → elétrica → climatização, num lote (um Ctrl+Z). PPCI não se aplica (A-1 unifamiliar dispensada) |
 | 14/10/2026 | Esgoto | Hipótese do estudo "há rede pública" (padrão sim); sem rede → tanque séptico + filtro + sumidouro |
 | 14/10/2026 | Plano | Aprovado ("pode seguir" a cada fase) |
+| 15/10/2026 | O E6.2 fatia a faixa íntima com uma profundidade só (banheiro 0,80 × 5,75 m) — corrigir antes da F4? | **Corrigir agora, fase nova F3b** |
 
 ## Contexto
 
@@ -125,6 +126,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F1 — programa paramétrico da casa (ver "Registro da F1" abaixo)
 - [x] F2 — implantação pela lei + regras com zona no gerador (ver "Registro da F2" abaixo)
 - [x] F3 — orquestrador mínimo (arquitetura num lote) (ver "Registro da F3" abaixo)
+- [x] F3b — gerador respeita a largura mínima livre de cada ambiente (decisão de 15/10; ver "Registro da F3b")
 - [ ] F4 — estrutura
 - [ ] F5 — telhado
 - [ ] F6 — peças-âncora + rede pública
@@ -269,4 +271,69 @@ Portão do harness (`docs/spikes/casa-automatica/medir.mjs`, lote reto e a 30°)
 de 11 ambientes atendidos, 12 nomeados (nenhum fundido), aberturas criadas = pedidas, TO 43,6 %,
 nenhuma regra de lote violada, trava aprovando. As pendências do lote girado são as mesmas do
 lote reto. Prova: `__tests__/blueprintCasaAutomatica.test.ts`, 15 testes.
+
+## Registro da F3b (15/10/2026)
+
+Pedido: *"Corrigir agora, nova fase F3b"* (resposta à pergunta de 15/10 sobre o fatiamento do E6.2).
+Critério combinado: zero regra de largura/área mínima violada nos 3 formatos medidos, para o
+programa de referência (3 quartos, R1-N).
+
+O que mudou em `utils/blueprintGerador.ts`. Vale também para o botão "Gerar" do editor e para a
+planta das unidades do estudo de massa, que usam o mesmo gerador:
+
+- `HipotesesDoGerador.minimosPorTipo`: largura livre e área útil mínimas por tipo NBR 5410, com os
+  valores das regras semente (banheiro 1,20 m / 2,5 m²; cozinha/serviço 1,50 m / 4 m²;
+  sala/dormitório 2,40 m / 8 m²). `iluminacaoMinima`: 1/6 e 1/8. O mínimo no EIXO é a largura livre
+  mais uma parede externa (conservador). A área alvo nunca fica abaixo da área útil do tipo, convertida
+  para o eixo.
+- **Fundo em colunas** (`colunasDoFundo`), no lugar do treemap de uma linha:
+  - cada íntimo é uma coluna encostada no corredor, nunca abaixo do seu mínimo;
+  - o banheiro com relação OBRIGATÓRIA EMPILHA atrás do par quando os dois mínimos cabem na
+    profundidade; senão, vira coluna logo ao lado;
+  - o banheiro sem par transborda para a última linha da frente, que encosta no corredor;
+  - a sobra de largura é repartida pela área.
+- **Treemap da frente**: linha que deixa alguém abaixo do mínimo vale infinito (inclusive a de um
+  item só; antes, o lavabo virava tira de 9,00 × 0,40 m). Dentro de cada linha, cada item recebe
+  primeiro o seu mínimo e a sobra vai pela área (antes, lavabo de 0,95 m na última linha).
+- A função objetivo usa o mesmo mínimo no eixo.
+- **Janela pela norma**: largura para 1/6 (habitável) ou 1/8 (banheiro, cozinha/serviço) do piso
+  útil, acima do teto estético de 2,0 m quando preciso. Se não cabe ao lado da porta, desce de
+  250 em 250 mm até 0,60 m. Antes, desistir da janela deixava a sala SEM janela; foi uma regressão
+  minha, achada na F3b e corrigida aqui.
+- A ponte uso → tipo é `TIPO_NBR5410_DO_USO` do kernel. `dc4eb3a2` (o USO do ambiente no kernel, de
+  14/10) tirou o `FICHA_DO_USO` do gerador.
+
+Medido: menor número de regras de AMBIENTE (ERRO) violadas, na melhor de 8 sementes:
+
+| Programa | 9 × 16,85 | 10,5 × 14,5 | 12 × 12,7 |
+|---|---|---|---|
+| 3 quartos (R1-N) | 5 → **0** | 5 → **0** | 5 → **0** |
+| 2 quartos | 3 → **0** | 4 → **0** | 3 → **0** |
+| 4 quartos (2 suítes) | 9 → 4 | 9 → 2 | 8 → **0** |
+| Apartamentos 2Q e 3Q | 0 | 0 | 0 |
+
+Pelo orquestrador, nos lotes 12 × 30, 15 × 25, 10 × 30 (2 quartos) e 15 × 30 (4 quartos):
+**0 regras violadas** em todos.
+
+O que fica em aberto (dito, não escondido):
+- **4 quartos em casa de 9–10,5 m de largura**: quatro dormitórios legais não cabem lado a lado. Pede
+  uma 2ª fileira de quartos ou um corredor longitudinal. Fica como pendência futura do gerador.
+- **Ventilação** de área de serviço ou lavabo sem parede externa (AVISO), na semente escolhida de
+  alguns lotes. O orquestrador já a conta como problema grave na escolha.
+- Relação obrigatória sem porta direta em alguns lotes: cozinha × serviço, varanda × sala. Vira
+  pendência SEM_SOLUCAO.
+- Um teste do apartamento esperava a janela de banheiro com exatamente 0,60 m. Passou a esperar
+  "≥ 0,60 m": o 0,60 × 0,60 fixo violava a regra de 1/8 num banheiro de 4 m².
+
+Provas:
+- `__tests__/blueprintGerador.test.ts`, describe "F3b":
+  - 3 formatos: a melhor semente sem violação, e nenhum banheiro mais estreito que o mínimo em
+    semente nenhuma;
+  - empilhar × coluna ao lado;
+  - a sala nunca fica sem janela.
+- Os 15 arquivos que dependem do gerador ou das regras: 110 testes.
+- Harness: o portão ganhou "nenhuma regra ERRO violada", que passa com o lote reto e a 30°.
+- `BlueprintEditor.test.tsx` isolado: 254/254 em 187,8 s, contra 187,6 s com as regras da F2 (mesmo
+  tempo). Na suíte cheia, esse arquivo fica "still running" quando o relatório é escrito (206
+  pendentes). Isolado passa inteiro, e a queda de worker aconteceu também com o código da F2.
 

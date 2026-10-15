@@ -756,7 +756,14 @@ Atualizado em 15/10/2026, ao fim da sessão de implementação.
 - [x] **Fase 1 — correções: 6 de 6** (commit `6f682cc7`).
 - [x] **Fase 2 — banco: 3 de 3**, aplicadas 2× cada no remoto (idempotentes), conferidas de fora (RLS, privilégios, cron `*/15` só com caixa ativa).
 - [x] **Fase 3 — Edge Functions: 5 de 5** (commit `ba5351eb`). `email-capture-sync` e `email-capture-accounts` publicadas `--no-verify-jwt`; sem header → 401, token falso → 401, cron → 200 `{contas:0}`.
-- [x] **Fase 4 — UI: 6 de 6.** Verificada em harness sem login (`docs/spikes/captura-email/`) com prints; **não** verificada no app logado (a senha do usuário de leitura não estava disponível nesta sessão).
+- [x] **Fase 4 — UI: 6 de 6.** Verificada em harness sem login (`docs/spikes/captura-email/`) e,
+  depois que o usuário passou a senha, **em produção com login** (usuário de leitura, commit `c479a6e`,
+  15/10/2026), sem erro de console nem HTTP 4xx/5xx:
+  - topo em **"Todas"**: aba abre (título, 4 KPIs, 3 seções; as 3 tabelas respondem 200); "Conectar
+    caixa" pergunta a organização (Alpa / Garden Cambuhy SPE) — REGRA #5, a caixa tem dona;
+  - topo na **ALPA**: "Conectar caixa" abre o painel direto, sem perguntar;
+  - lista de boletos com a coluna **Origem**; formulário do boleto #1422 com o painel **Histórico**
+    mostrando os eventos reais (Capturado · Sistema; Campos alterados · usuário e campos).
 - [ ] **Fase 5 — testes e piloto: 7 de 8.** 5.1–5.7 escritos e verdes; 5.8 (piloto de 2 semanas com caixa real) depende da 0.3.
 
 ### Desvios do plano registrados na execução (15/10/2026)

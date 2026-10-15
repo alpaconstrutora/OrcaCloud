@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, emptyModel, point, type Command, type Point } from '../utils/blueprintKernel';
+import { paredesEmComum } from '../utils/blueprintRotaPelasParedes';
 import { programaDaCasa, PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
 import type { AmbienteGerado, Retangulo } from '../utils/blueprintGerador';
 import {
@@ -12,6 +13,7 @@ import {
   escolherNucleo,
   HIPOTESES_DO_SOBRADO_PADRAO,
   paredeSobOPonto,
+  prumadasPeloMeioDoComodo,
   pedacosFora,
   pilaresDoSobrado,
   recortarNucleo,
@@ -231,5 +233,41 @@ describe('F12b — a estrutura dos dois pavimentos (modelo sintético 8 × 6 m)'
     expect(paredeSobOPonto(comPorta, T, point(4000, 1000), 100)).not.toBeNull();
     expect(paredeSobOPonto(comPorta, T, point(4000, 2950), 100)).toBeNull();
     expect(paredeSobOPonto(comPorta, T, point(2000, 2000), 100)).toBeNull();
+  });
+});
+
+describe('F12c — prumadas entre os pavimentos (modelo sintético 8 × 6 m)', () => {
+  const base = applyBatch(emptyModel(), [
+    { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 },
+    { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 },
+  ]).model;
+  const [T, S] = base.levels.map((l) => l.id);
+  const parede = (levelId: string, a: Point, b: Point, e: number) => ({ levelId, a, b, thicknessMm: e, heightMm: 2800 });
+  const ret = (L: string) => [parede(L, point(0, 0), point(8000, 0), 200), parede(L, point(8000, 0), point(8000, 6000), 200), parede(L, point(8000, 6000), point(0, 6000), 200), parede(L, point(0, 6000), point(0, 0), 200)];
+  // Térreo: interna em x = 4 m inteira. Superior: interna em x = 4 m só até y = 3 m, e outra em y = 3 m.
+  const model = applyBatch(base, [
+    { type: 'AddWalls', walls: [...ret(T), parede(T, point(4000, 0), point(4000, 6000), 150), ...ret(S), parede(S, point(4000, 0), point(4000, 3000), 150), parede(S, point(0, 3000), point(8000, 3000), 150)] } as Command,
+    { type: 'PlaceSpaceLabel', levelId: S, at: point(2000, 4500), name: 'Dormitório 1' } as Command,
+  ]).model;
+  const paredesDe = (L: string) => model.walls.filter((w) => w.levelId === L);
+
+  it('paredesEmComum: só os trechos com parede nos dois pavimentos', () => {
+    const comum = paredesEmComum(paredesDe(T), [paredesDe(S)]);
+    // a interna do térreo (x = 4 m) só tem parede em cima até y = 3 m
+    const interna = comum.filter((w) => w.a.x === 4000 && w.b.x === 4000);
+    expect(interna).toHaveLength(1);
+    expect(Math.max(interna[0].a.y, interna[0].b.y)).toBeLessThanOrEqual(3100);
+    // as quatro externas inteiras
+    expect(comum.filter((w) => !(w.a.x === 4000 && w.b.x === 4000)).length).toBe(4);
+  });
+
+  it('prumadasPeloMeioDoComodo: a que vem de baixo pelo meio do cômodo de cima é dita; na parede, não', () => {
+    const m2 = applyBatch(model, [
+      { type: 'AddTrecho', levelId: S, disciplina: 'ESGOTO', a: point(2000, 4500), b: point(2000, 4500), cotaAMm: 0, cotaBMm: 3200, bitolaMm: 50, rotulo: 'Ventilação' } as Command,
+      { type: 'AddTrecho', levelId: S, disciplina: 'AGUA_FRIA', a: point(4000, 1000), b: point(4000, 1000), cotaAMm: 2800, cotaBMm: 0, bitolaMm: 25 } as Command,
+    ]).model;
+    const soltas = prumadasPeloMeioDoComodo(m2);
+    expect(soltas).toHaveLength(1);
+    expect(soltas[0]).toMatchObject({ disciplina: 'ESGOTO', rotulo: 'Ventilação', nivel: 'Superior' });
   });
 });

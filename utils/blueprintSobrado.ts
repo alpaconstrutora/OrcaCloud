@@ -20,11 +20,11 @@
  * Tudo no QUADRO LOCAL da frente (o mesmo do gerador): quem chama leva ao mundo com `comandosNoMundoDe`.
  */
 import type { BlueprintModel, Command, ObjectId, Point, Wall } from './blueprintKernel';
-import { applyBatch, point, uidDeterministico } from './blueprintKernel';
+import { applyBatch, point, pointInPolygon, uidDeterministico } from './blueprintKernel';
 import { HIPOTESES_PILARES_PADRAO, idsPrevistosDeEstrutura, pilaresExistentesNoNivel, planejarPilares, proximoNumeroDePilar, proximoNumeroDoRotulo, type HipotesesDePilares } from './blueprintPilaresAutomaticos';
 import { alturaDaViga, HIPOTESES_VIGAS_PADRAO, type HipotesesDeVigas } from './blueprintVigasLajesAutomaticas';
 import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, sugerirGuardaCorpos } from './blueprintGuardaCorpo';
-import type { Programa, UsoDoAmbiente } from './blueprintPrograma';
+import { usoDoNome, type Programa, type UsoDoAmbiente } from './blueprintPrograma';
 import type { AmbienteGerado, Retangulo } from './blueprintGerador';
 
 /** O que vai para o térreo; o resto (dormitórios, suítes, banhos, circulação) sobe. */
@@ -48,6 +48,8 @@ export interface HipotesesDoSobrado {
   alturaDaPortaMm: number;
   /** Abaixo disto (% da área gerada) o ambiente que o núcleo come conta como PERDIDO na escolha do núcleo. */
   sobraMinimaDoAmbientePct: number;
+  /** F12c: o lado do shaft das instalações junto do banheiro de cima, mm. */
+  shaftMm: number;
 }
 
 export const HIPOTESES_DO_SOBRADO_PADRAO: HipotesesDoSobrado = {
@@ -62,6 +64,7 @@ export const HIPOTESES_DO_SOBRADO_PADRAO: HipotesesDoSobrado = {
   larguraDaPortaMm: 900,
   alturaDaPortaMm: 2100,
   sobraMinimaDoAmbientePct: 50,
+  shaftMm: 400,
 };
 
 /** O programa repartido pelos pavimentos (as relações ficam só entre itens do mesmo pavimento). */
@@ -704,3 +707,101 @@ export function guardaCorpoDaEscada(model: BlueprintModel, T: ObjectId, S: Objec
   ];
 }
 
+// ─── F12c: o SHAFT das instalações ─────────────────────────────────────────
+
+/** Onde o shaft prefere cair no térreo (o primeiro que serve vence): área molhada e de serviço antes de sala. */
+const PREFERENCIA_DO_SHAFT_NO_TERREO: string[] = ['AREA_DE_SERVICO', 'LAVABO', 'COZINHA', 'GARAGEM', 'ESCRITORIO', 'VARANDA', 'SALA'];
+
+export interface ShaftDoSobrado {
+  ring: Point[];
+  /** O banheiro de cima que ele atende e o cômodo do térreo onde ele desce. */
+  banheiro: string;
+  noTerreo: string | null;
+}
+
+/**
+ * O SHAFT de cada banheiro do superior (o tubo de queda e as colunas de água descem por ele — `shaftPreferido` do
+ * esgoto e da água, num raio de 3 m): um quadrado de `ladoMm` dentro do banheiro, encostado numa parede que TEM
+ * parede do térreo embaixo, fora de porta e janela (nos dois pavimentos), de pilar e do núcleo da escada. No
+ * térreo ele vira um enchimento junto da mesma parede — no cômodo de serviço antes da sala. Um shaft a até
+ * `raioMm` de outro banheiro já o atende.
+ */
+export function shaftsDoSobrado(model: BlueprintModel, T: ObjectId, S: ObjectId, nucleo: Point[] | null, ladoMm = 400, raioMm = 2500): ShaftDoSobrado[] {
+  const banheiros = model.spaces
+    .filter((x) => x.levelId === S && usoDoNome(x.name) === 'BANHEIRO' && x.ring.length >= 3)
+    .sort((a, b) => b.areaMm2 - a.areaMm2);
+  const pilares = (model.structures ?? []).filter((x) => x.kind === 'PILAR' && (x.levelId === T || x.levelId === S));
+  const centroDe = (r: Point[]) => ({ x: r.reduce((a, p) => a + p.x, 0) / r.length, y: r.reduce((a, p) => a + p.y, 0) / r.length });
+  const saida: ShaftDoSobrado[] = [];
+  for (const ban of banheiros) {
+    const cb = centroDe(ban.ring);
+    if (saida.some((x) => Math.hypot(centroDe(x.ring).x - cb.x, centroDe(x.ring).y - cb.y) <= raioMm)) continue;
+    const anel = ban.ring;
+    let melhor: { ring: Point[]; custo: number; noTerreo: string | null } | null = null;
+    for (let i = 0; i < anel.length; i++) {
+      const a = anel[i];
+      const b = anel[(i + 1) % anel.length];
+      const L = Math.hypot(b.x - a.x, b.y - a.y);
+      if (L < ladoMm + 400) continue;
+      const u = { x: (b.x - a.x) / L, y: (b.y - a.y) / L };
+      // A normal para DENTRO do banheiro.
+      const meio = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      let n = { x: -u.y, y: u.x };
+      if (!pointInPolygon(anel, { x: meio.x + n.x * 50, y: meio.y + n.y * 50 })) n = { x: u.y, y: -u.x };
+      const wS = paredeSobOPonto(model, S, meio, 0, true);
+      if (!wS) continue;
+      const recuo = wS.thicknessMm / 2;
+      for (let t = 200; t + ladoMm <= L - 200; t += 100) {
+        const p0 = { x: a.x + u.x * t, y: a.y + u.y * t };
+        const p1 = { x: a.x + u.x * (t + ladoMm), y: a.y + u.y * (t + ladoMm) };
+        const pm = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+        // Parede do térreo embaixo em toda a face, e nenhuma porta ou janela no trecho — nos dois pavimentos.
+        if (![p0, pm, p1].every((q) => paredeSobOPonto(model, T, q, 0, true))) continue;
+        if (!paredeSobOPonto(model, T, pm, ladoMm / 2) || !paredeSobOPonto(model, S, pm, ladoMm / 2)) continue;
+        const ring = [
+          { x: p0.x + n.x * recuo, y: p0.y + n.y * recuo },
+          { x: p1.x + n.x * recuo, y: p1.y + n.y * recuo },
+          { x: p1.x + n.x * (recuo + ladoMm), y: p1.y + n.y * (recuo + ladoMm) },
+          { x: p0.x + n.x * (recuo + ladoMm), y: p0.y + n.y * (recuo + ladoMm) },
+        ].map((q) => point(Math.round(q.x), Math.round(q.y)));
+        const c = centroDe(ring);
+        if (!ring.every((q) => pointInPolygon(anel, q) || Math.hypot(q.x - c.x, q.y - c.y) < 1)) continue;
+        if (nucleo && (ring.some((q) => pointInPolygon(nucleo, q)) || pointInPolygon(nucleo, c))) continue;
+        if (pilares.some((x) => Math.hypot(x.pontos[0].x - c.x, x.pontos[0].y - c.y) < ladoMm / 2 + Math.max(x.larguraMm, x.profundidadeMm) / 2 + 30)) continue;
+        const embaixo = model.spaces.find((x) => x.levelId === T && pointInPolygon(x.ring, c)) ?? null;
+        const pref = embaixo ? PREFERENCIA_DO_SHAFT_NO_TERREO.indexOf(usoDoNome(embaixo.name) ?? '') : -1;
+        const custo = (pref < 0 ? 50 : pref * 5) + Math.hypot(c.x - cb.x, c.y - cb.y) / 1000;
+        if (!melhor || custo < melhor.custo) melhor = { ring, custo, noTerreo: embaixo?.name ?? null };
+      }
+    }
+    if (melhor) saida.push({ ring: melhor.ring, banheiro: ban.name ?? 'Banheiro', noTerreo: melhor.noTerreo });
+  }
+  return saida;
+}
+
+/**
+ * As PRUMADAS que atravessam um cômodo de outro pavimento: trecho vertical que encosta no piso do pavimento (vem de
+ * baixo ou desce para baixo), com pelo menos `minimoMm`, fora de parede e de shaft. O que sobra depois do shaft e da
+ * parede sobre parede (a ventilação de uma peça do térreo sobe na posição dela) — vira pendência com o cômodo.
+ */
+/** Até isto além da face, a prumada está rente à parede (no enchimento), não no meio do cômodo. */
+const RENTE_A_PAREDE_MM = 60;
+
+export function prumadasPeloMeioDoComodo(model: BlueprintModel, minimoMm = 1500): { disciplina: string; rotulo: string | null; nivel: string; comodo: string }[] {
+  const saida: { disciplina: string; rotulo: string | null; nivel: string; comodo: string }[] = [];
+  for (const t of model.trechos ?? []) {
+    if (Math.abs(t.a.x - t.b.x) >= 1 || Math.abs(t.a.y - t.b.y) >= 1) continue;
+    if (Math.min(t.cotaAMm, t.cotaBMm) !== 0 || Math.abs(t.cotaAMm - t.cotaBMm) < minimoMm) continue;
+    // Rente à parede conta como na parede (a coluna que desce a 3 cm da face da viga — F8b — fica no enchimento).
+    const rente = model.walls.some((w) => {
+      if (w.levelId !== t.levelId) return false;
+      const pr = projetar(t.a, w.a, w.b);
+      return pr.L >= 1 && pr.t >= -1 && pr.t <= pr.L + 1 && pr.d <= w.thicknessMm / 2 + RENTE_A_PAREDE_MM;
+    });
+    if (rente || (model.nucleos ?? []).some((n) => pointInPolygon(n.ring, t.a))) continue;
+    const comodo = model.spaces.find((x) => x.levelId === t.levelId && pointInPolygon(x.ring, t.a));
+    if (!comodo) continue;
+    saida.push({ disciplina: t.disciplina, rotulo: t.rotulo ?? null, nivel: model.levels.find((l) => l.id === t.levelId)?.name ?? '', comodo: comodo.name ?? 'cômodo sem nome' });
+  }
+  return saida;
+}

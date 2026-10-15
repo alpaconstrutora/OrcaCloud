@@ -139,7 +139,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F9 — elétrica + climatização (ver "F9 — plano detalhado" e "Registro da F9")
 - [x] F10 — tela da Casa automática (ver "Registro da F10")
 - [x] F11 — saídas (ver "Registro da F11")
-- [ ] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [ ] F12c instalações · [ ] F12d tela e provas
+- [ ] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [x] F12c instalações (ver "Registro da F12c") · [ ] F12d tela e provas
 
 ## Registro da F1 (14/10/2026)
 
@@ -1267,3 +1267,49 @@ toda parede do superior com parede ou viga embaixo, furo na laje do térreo e fu
 telhado em cima com corrimãos e guarda-corpo, zero conflito + trava, estrutura desligada) e 4 em
 `blueprintSobrado.test.ts` (modelo sintético: trechos, vigas, pilares em prumada com descida, apoio
 fora da porta).
+
+## Registro da F12c (15/10/2026) — instalações do sobrado
+
+As instalações (âncoras → eletrodutos) viraram UM bloco que recebe a lista de pavimentos —
+`[térreo]` na térrea, `[térreo, superior]` no sobrado — e todas as 22 etapas rodam no sobrado com a
+mesma situação da térrea do mesmo lote (teste). Água, esgoto, pluvial, eletrodutos e climatização já
+liam o modelo inteiro; âncoras, mobiliário, pontos, circuitos e as conferências (NBR 5410, verificação
+de rede) passaram a rodar pavimento a pavimento.
+
+- **Âncoras:** a caixa d'água vai para o pavimento de CIMA, sobre o banheiro, acima da laje dele
+  (`ContextoDasAncoras.caixaDagua: false` no térreo); aquecedor, caixa de gordura e vagas, embaixo.
+- **Quadro:** um só, no TÉRREO, pelo centro de cargas de lá (solto, ia para o pavimento de mais carga) e
+  numa parede que tem parede em cima — a prumada do eletroduto sobe na posição do quadro e, antes,
+  aparecia no meio da suíte. Circuitos dos dois pavimentos saem dele.
+- **SHAFT** (`shaftsDoSobrado`, hipótese `shaftMm` 400): junto de cada banheiro de cima, numa parede
+  com parede embaixo, fora de porta, janela, pilar e núcleo da escada; embaixo prefere serviço, lavabo,
+  cozinha, garagem antes da sala. O esgoto e a água já desviavam o tubo de queda e as colunas para um
+  shaft a até 3 m (`shaftPreferido`, E2.4) — faltava o shaft. Medido antes: o tubo de queda descia no
+  ponto do vaso, no meio da garagem do térreo.
+- **Barrilete da água quente** (aquecedor no térreo, chuveiros em cima): ficava a 2,80 m, DENTRO da
+  laje (54 conflitos), porque a "viga mais baixa do teto" era a de transição (60 cm, solta no cômodo).
+  `fundoDaVigaMaisBaixaMm(..., { soSobreParede })`: o barrilete anda pelas paredes e só passa sob a viga
+  que corre sobre parede. (Tentei o mesmo no eletroduto e desfiz: ele corta o teto em linha reta — o
+  teste dele provou — e para ele toda viga está no caminho.)
+- **Bug do planejador de água corrigido:** com a origem ABAIXO dos pontos e o barrilete abaixo do
+  teto, a coluna começava no piso de cima e faltava o trecho barrilete → teto no pavimento da origem
+  (duas pontas abertas). Existia antes; aparecia agora porque o barrilete deixou o teto.
+- **Coluna que atravessa pavimentos** (`paredesEmComum`): procura antes a parede que existe em todos
+  os pavimentos que ela atravessa (parede sobre parede) — a do lavabo do térreo subia pelo meio do
+  dormitório de cima.
+- **Pendência** `Prumada pelo meio do cômodo` (`prumadasPeloMeioDoComodo`, rente à parede = até 6 cm
+  da face): sobra a VENTILAÇÃO do lavabo do térreo, que sobe no ponto da peça pelo dormitório de cima.
+  É a regra geral da ventilação (na térrea as colunas também sobem no meio dos banheiros) — fica para
+  a compatibilização.
+
+Medido (12 × 30, R1-N, com intensidade de chuva): todas as redes ligadas (0 erro de verificação: 0
+ponta aberta, 0 trecho sem destino); conflitos 201 (91 por 100 m²) × 85 da térrea (54 por 100 m²) —
+o excesso é passagem vertical pela laje entre pavimentos e cruzamento entre redes, que dobram com dois
+pavimentos; os de ESTRUTURA caíram de 210 para 109 com o shaft e o barrilete. Com catálogo: 4 splits
+(sala embaixo; suíte e dois dormitórios em cima), rede de ar sem erro, NBR 5410 sem falta, nenhum
+ponto de carga sem circuito nos dois pavimentos.
+
+Testes: bloco "F12c" (7) e "F12c: climatização" (2) em `blueprintCasaAutomatica.test.ts`; 2 em
+`blueprintSobrado.test.ts` (parede em comum, prumada pelo meio do cômodo); 1 em
+`blueprintAguaAutomatica.test.ts` (a coluna da origem abaixo); 1 em
+`blueprintObstaculosEstruturais.test.ts` (viga sobre parede).

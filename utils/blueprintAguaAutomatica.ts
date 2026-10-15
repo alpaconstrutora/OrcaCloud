@@ -62,7 +62,7 @@ import {
 } from './blueprintGrafoDeRede';
 import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidraulica';
 import { shaftPreferido } from './blueprintNucleoVertical';
-import { arvorePelasParedes, chaveP, encaixarNaParede, faceDaParede } from './blueprintRotaPelasParedes';
+import { arvorePelasParedes, chaveP, encaixarNaParede, faceDaParede, paredesEmComum } from './blueprintRotaPelasParedes';
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, SOBRE_A_LAJE_MM, VAO_MINIMO_ABAIXO_DA_VIGA_MM, foraDaViga, foraDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares, topoDaLajeDoTetoMm } from './blueprintObstaculosEstruturais';
 
 /**
@@ -311,7 +311,8 @@ export function planejarAgua(
   // sobre a laje da casa) → o barrilete corre SOBRE a laje, como se faz na obra; as colunas descem pela laje.
   // E, sem espaço de 10 cm entre o ramal e a viga, o barrilete corre no MEIO desse vão — abaixo da viga —
   // em vez de subir ao teto e correr dentro dela.
-  const fundoDaViga = fundoDaVigaMaisBaixaMm(model, origem.levelId, nivelDaOrigem.defaultHeightMm);
+  // Pelas paredes, o barrilete só passa sob as vigas que correm sobre parede (não sob a de transição do sobrado).
+  const fundoDaViga = fundoDaVigaMaisBaixaMm(model, origem.levelId, nivelDaOrigem.defaultHeightMm, { soSobreParede: hip.pelasParedes !== false });
   const abaixoDaViga = fundoDaViga == null ? null : fundoDaViga - ABAIXO_DA_VIGA_MM;
   const topoDaLaje = topoDaLajeDoTetoMm(model, origem.levelId, nivelDaOrigem.defaultHeightMm);
   const sobreALaje = topoDaLaje == null ? null : topoDaLaje + (hip.barrileteSobreALajeMm ?? SOBRE_A_LAJE_MM);
@@ -390,8 +391,13 @@ export function planejarAgua(
     const base = { x: grupo[0].at.x, y: grupo[0].at.y };
     const shaft = shaftPreferido(model, base, grupo[0].levelId, hip.raioDoShaftMm ?? 3000);
     if (shaft) return shaft;
-    // PELAS PAREDES: a coluna desce no EIXO da parede mais próxima, não na face.
-    const naParede = pelasParedes ? encaixarNaParede(base, paredesDe(grupo[0].levelId), raioDeEncaixe) : null;
+    // PELAS PAREDES: a coluna desce no EIXO da parede mais próxima, não na face. A que ATRAVESSA pavimentos
+    // (a caixa num, o ponto noutro) procura antes a parede que existe em todos eles — senão sobe pelo meio do
+    // cômodo do outro pavimento (F12c, sobrado); sem uma a até 2× o raio, fica a de sempre.
+    const idxs = [idxO, ...grupo.map((p) => indice.get(p.levelId) ?? idxO)];
+    const atravessados = niveis.slice(Math.min(...idxs), Math.max(...idxs) + 1).map((l) => l.id).filter((id) => id !== grupo[0].levelId);
+    const emComum = pelasParedes && atravessados.length ? paredesEmComum(paredesDe(grupo[0].levelId), atravessados.map(paredesDe)) : [];
+    const naParede = pelasParedes ? (encaixarNaParede(base, emComum, raioDeEncaixe * 2) ?? encaixarNaParede(base, paredesDe(grupo[0].levelId), raioDeEncaixe)) : null;
     // E5.5: a coluna que cairia dentro de um pilar (de qualquer pavimento que ela cruza) escorrega pela parede.
     const noEixo = naParede ? foraDoPilar(naParede.q, naParede.parede, pilaresDaPrumada) : base;
     // F8b: e a que desceria DENTRO da viga que corre sobre a parede desce rente a ela, do lado do grupo.
@@ -451,7 +457,10 @@ export function planejarAgua(
         addTrecho(nivel.id, pos, nivel.defaultHeightMm, pos, hip.cotaRamalMm);
       } else {
         // Acima da origem (caixa no térreo, ponto no andar): sobe piso→teto nos
-        // pavimentos intermediários e piso→ramal neste.
+        // pavimentos intermediários e piso→ramal neste. No da origem, do barrilete ao teto — o barrilete abaixo
+        // da viga não está no teto (F12c, 15/10/2026: o aquecedor do térreo do sobrado deixava a coluna da água
+        // quente com um buraco de 2,25 a 2,80 m, e as duas pontas abertas).
+        if (tetoO !== nivelDaOrigem.defaultHeightMm) addTrecho(origem.levelId, pos, tetoO, pos, nivelDaOrigem.defaultHeightMm);
         for (let k = idxO + 1; k < idx; k++) {
           const m = niveis[k];
           addTrecho(m.id, pos, 0, pos, m.defaultHeightMm);

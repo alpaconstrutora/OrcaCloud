@@ -62,6 +62,37 @@ function projetar(p: P2, a: P2, b: P2): { q: P2; t: number; d: number } {
 }
 
 /** A parede mais próxima de `p` (e a projeção nela), se a menos de `raio`. */
+/**
+ * Os trechos das `paredes` (de um pavimento) que têm parede EM CIMA/EMBAIXO em todos os outros pavimentos dados — a
+ * parede sobre parede, por onde uma prumada atravessa os pavimentos sem passar pelo meio de um cômodo (F12c, sobrado:
+ * a coluna do lavabo do térreo, encaixada na parede de baixo, subia pelo meio do dormitório de cima). Cada trecho é a
+ * parede original aparada (o mesmo `id`); abaixo de `minimoMm`, não conta.
+ */
+export function paredesEmComum(paredes: readonly Wall[], outros: readonly (readonly Wall[])[], passoMm = 50, minimoMm = 200): Wall[] {
+  const coberto = (p: P2, ws: readonly Wall[]) =>
+    ws.some((w) => {
+      const r = projetar(p, w.a, w.b);
+      const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+      return L >= 1 && r.t >= -1 / L && r.t <= 1 + 1 / L && r.d <= w.thicknessMm / 2 + 5;
+    });
+  const saida: Wall[] = [];
+  for (const w of paredes) {
+    const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    const n = Math.max(1, Math.round(L / passoMm));
+    const em = (t: number) => ({ x: Math.round(w.a.x + (w.b.x - w.a.x) * t), y: Math.round(w.a.y + (w.b.y - w.a.y) * t) });
+    let ini: number | null = null;
+    for (let k = 0; k <= n; k++) {
+      const ok = k < n && outros.every((ws) => coberto({ x: w.a.x + ((w.b.x - w.a.x) * (k + 0.5)) / n, y: w.a.y + ((w.b.y - w.a.y) * (k + 0.5)) / n }, ws));
+      if (ok && ini === null) ini = k;
+      if (!ok && ini !== null) {
+        if (((k - ini) * L) / n >= minimoMm) saida.push({ ...w, a: em(ini / n), b: em(k / n) });
+        ini = null;
+      }
+    }
+  }
+  return saida;
+}
+
 export function encaixarNaParede(p: P2, paredes: readonly Wall[], raio: number): { parede: Wall; q: P2; d: number } | null {
   let melhor: { parede: Wall; q: P2; d: number } | null = null;
   for (const w of paredes) {

@@ -5,8 +5,8 @@
  * para evitar vira marca e item da conferência.
  */
 import { describe, expect, it } from 'vitest';
-import { applyCommand, emptyModel, point, pointInPolygon, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
-import { PENALIDADE_DO_PILAR_MM, anelDoPilar, custoComPilares, foraDaViga, foraDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares } from '../utils/blueprintObstaculosEstruturais';
+import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
+import { PENALIDADE_DO_PILAR_MM, anelDoPilar, custoComPilares, foraDaViga, foraDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares, vigaSobreParede } from '../utils/blueprintObstaculosEstruturais';
 import { arvorePelasParedes } from '../utils/blueprintRotaPelasParedes';
 import { planejarAgua } from '../utils/blueprintAguaAutomatica';
 import { marcasDeVerificacao } from '../utils/blueprintVerificacaoRede';
@@ -186,3 +186,21 @@ describe('F8b — compatibilização (casa automática, 15/10/2026)', () => {
   });
 });
 
+describe('F12c — a viga no caminho de quem anda pelas paredes', () => {
+  it('soSobreParede: a viga de transição solta no cômodo não baixa o barrilete; a da parede, sim', () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m.levels[0].id;
+    m = applyBatch(m, [
+      { type: 'AddWall', levelId: l, a: point(0, 0), b: point(6000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddStructural', levelId: l, kind: 'VIGA', pontos: [point(0, 0), point(6000, 0)], larguraMm: 150, alturaMm: 400, baseMm: 2400 },
+      // a de transição, no meio do cômodo (sem parede embaixo), mais funda
+      { type: 'AddStructural', levelId: l, kind: 'VIGA', pontos: [point(0, 3000), point(6000, 3000)], larguraMm: 150, alturaMm: 600, baseMm: 2200 },
+    ]).model;
+    expect(fundoDaVigaMaisBaixaMm(m, l, 2800)).toBe(2200);
+    expect(fundoDaVigaMaisBaixaMm(m, l, 2800, { soSobreParede: true })).toBe(2400);
+    const [sobre, solta] = m.structures!.filter((x) => x.kind === 'VIGA');
+    const paredes = m.walls.filter((w) => w.levelId === l);
+    expect(vigaSobreParede(sobre, paredes)).toBe(true);
+    expect(vigaSobreParede(solta, paredes)).toBe(false);
+  });
+});

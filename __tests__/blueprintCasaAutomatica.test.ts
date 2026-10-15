@@ -8,7 +8,8 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { conferirPlanoDaCasa, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
 import { HIPOTESES_DO_TELHADO_PADRAO } from '../utils/blueprintTelhadoAutomatico';
 import { HIPOTESES_DAS_ANCORAS_PADRAO } from '../utils/blueprintAncorasDaCasa';
@@ -603,17 +604,10 @@ describe('planejarCasa — F12a: o sobrado (arquitetura dos dois pavimentos e a 
     expect(plano.etapas.find((e) => e.id === 'IMPLANTACAO')!.nota).toMatch(/2 pavimentos/);
   });
 
-  it('as instalações ainda não rodam no sobrado — cada etapa diz, e a premissa avisa (estrutura e telhado: F12b)', () => {
-    const porId = Object.fromEntries(plano.etapas.map((e) => [e.id, e]));
-    expect(porId.IMPLANTACAO.situacao).toBe('CALCULOU');
-    expect(porId.CONFERENCIA.situacao).toBe('CALCULOU');
-    const lancadas = ['ARQUITETURA', 'PILARES', 'VIGAS', 'LAJES', 'FUNDACOES', 'EIXOS', 'TELHADO'];
-    for (const id of lancadas) expect(porId[id].situacao).toBe('LANCOU');
-    for (const e of plano.etapas.filter((x) => !['IMPLANTACAO', 'CONFERENCIA', ...lancadas].includes(x.id))) {
-      expect(e.situacao).toBe('NAO_RODOU');
-      expect(e.nota).toMatch(/sobrado/);
-    }
-    expect(plano.pendencias.some((p) => p.grupo === 'PREMISSA' && /^Sobrado:/.test(p.texto))).toBe(true);
+  it('todas as etapas rodam como na térrea do mesmo lote (F12c: as instalações também)', () => {
+    const terrea = planejarCasa(m, entrada(m));
+    expect(plano.etapas.map((e) => [e.id, e.situacao])).toEqual(terrea.etapas.map((e) => [e.id, e.situacao]));
+    expect(plano.pendencias.some((p) => /^Sobrado:/.test(p.texto))).toBe(false);
   });
 
   it('a trava: reaplicado no original dá os mesmos ids e o mesmo modelo — o pavimento de cima incluso', () => {
@@ -715,8 +709,9 @@ describe('planejarCasa — F12b: a estrutura e o telhado do sobrado', () => {
     expect(fora.length).toBeLessThanOrEqual(1);
   });
 
-  it('nenhum conflito entre as peças; a trava confere o lote inteiro', () => {
-    expect(conflitosDoModelo(r)).toEqual([]);
+  it('a estrutura e a arquitetura sozinhas: nenhum conflito; a trava confere o lote inteiro', () => {
+    const so = planejarCasa(m, entrada(m), { pavimentos: 2, hidraulica: { lancar: false }, eletrica: { ...HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, lancar: false } });
+    expect(conflitosDoModelo(so.resultado)).toEqual([]);
     expect(conferirPlanoDaCasa(m, plano)).toEqual({ ok: true });
   });
 
@@ -725,5 +720,111 @@ describe('planejarCasa — F12b: a estrutura e o telhado do sobrado', () => {
     expect(p.etapas.filter((e) => ['PILARES', 'VIGAS', 'LAJES', 'FUNDACOES', 'EIXOS'].includes(e.id)).every((e) => e.situacao === 'NAO_EXIGIDA')).toBe(true);
     expect(p.resultado.structures ?? []).toEqual([]);
     expect(p.etapas.find((e) => e.id === 'TELHADO')!.situacao).toBe('LANCOU');
+  });
+});
+
+describe('planejarCasa — F12c: as instalações do sobrado', () => {
+  const m = lote();
+  const comChuva = { hidro: { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_PLUVIAIS_PADRAO, intensidadeMmH: 150 } } };
+  const plano = planejarCasa(m, entrada(m, comChuva), { pavimentos: 2 });
+  const T = m.levels[0].id;
+  const r = plano.resultado;
+  const S = plano.sobrado!.nivelSuperiorId;
+  const ts = (L: string) => (r.terminais ?? []).filter((t) => t.levelId === L);
+
+  it("a caixa d'água fica em cima, acima da laje do superior; aquecedor, caixa de gordura e vagas, embaixo", () => {
+    const caixa = (r.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO');
+    expect(caixa).toHaveLength(1);
+    expect(caixa[0].levelId).toBe(S);
+    expect(caixa[0].cotaMm).toBeGreaterThan(2800 + 100);
+    expect(ts(T).some((t) => t.tipoHidraulico === 'AQUECEDOR')).toBe(true);
+    expect(ts(T).some((t) => t.tipoHidraulico === 'CAIXA_GORDURA')).toBe(true);
+    expect((r.vagas ?? []).every((v) => v.levelId === T)).toBe(true);
+    expect((r.vagas ?? []).length).toBe(2);
+  });
+
+  it('louças e pontos nos dois pavimentos; água, esgoto e pluvial lançados, nenhuma ponta aberta', () => {
+    for (const L of [T, S]) expect(ts(L).filter((t) => t.disciplina === 'ESGOTO').length).toBeGreaterThan(0);
+    for (const id of ['AGUA', 'ESGOTO', 'PLUVIAL']) expect(plano.etapas.find((e) => e.id === id)!.situacao).toBe('LANCOU');
+    expect(plano.resumo.hidraulica.verificacao.erros).toBe(0);
+  });
+
+  it('o SHAFT junto do banheiro de cima leva o tubo de queda: ele não desce pelo meio de um cômodo do térreo', () => {
+    const shafts = (r.nucleos ?? []).filter((n) => n.tipo === 'SHAFT');
+    expect(shafts.length).toBeGreaterThan(0);
+    for (const n of shafts) expect([n.levelId, n.ateLevelId]).toEqual([T, S]);
+    const tq = (r.trechos ?? []).filter((t) => t.levelId === T && t.rotulo === 'TQ' && t.a.x === t.b.x && t.a.y === t.b.y);
+    expect(tq.length).toBeGreaterThan(0);
+    for (const t of tq) expect(shafts.some((n) => pointInPolygon(n.ring, t.a))).toBe(true);
+    expect(plano.etapas.find((e) => e.id === 'ANCORAS')!.nota).toMatch(/shaft/);
+  });
+
+  it('prumada pelo meio de cômodo de outro pavimento: só a ventilação (que sobe no ponto da peça) — e vira pendência', () => {
+    const soltas = prumadasPeloMeioDoComodo(r);
+    expect(soltas.every((x) => x.rotulo === 'Ventilação')).toBe(true);
+    if (soltas.length) expect(plano.pendencias.some((p) => p.grupo === 'VERIFICACAO' && /^Prumada pelo meio do cômodo/.test(p.texto))).toBe(true);
+  });
+
+  it('um quadro, no térreo, numa parede com parede em cima; circuitos nos dois pavimentos e todo ponto com potência ligado', () => {
+    expect(r.quadros ?? []).toHaveLength(1);
+    const q = r.quadros![0];
+    expect(q.levelId).toBe(T);
+    const naParede = (L: string) => r.walls.some((w) => {
+      if (w.levelId !== L) return false;
+      const L2 = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+      const t = ((q.at.x - w.a.x) * (w.b.x - w.a.x) + (q.at.y - w.a.y) * (w.b.y - w.a.y)) / L2;
+      return t >= -1 && t <= L2 + 1 && Math.abs((q.at.x - w.a.x) * (w.b.y - w.a.y) - (q.at.y - w.a.y) * (w.b.x - w.a.x)) / L2 <= w.thicknessMm / 2 + 5;
+    });
+    expect(naParede(T) && naParede(S)).toBe(true);
+    expect(plano.etapas.find((e) => e.id === 'CIRCUITOS')!.nota).toMatch(/no térreo, \d+ no superior/);
+    const comPotencia = (r.terminais ?? []).filter((t) => t.disciplina === 'ELETRICA' && (t.potenciaW ?? 0) > 0);
+    expect(comPotencia.some((t) => t.levelId === S)).toBe(true);
+    expect(comPotencia.every((t) => t.circuitoId)).toBe(true);
+  });
+
+  it('R1-B: os chuveiros elétricos dos banheiros de cima são ligação direta, com circuito', () => {
+    const p = planejarCasa(m, entrada(m, { curto: { ...PROGRAMA_CURTO_PADRAO, padrao: 'R1-B' } }), { pavimentos: 2 });
+    const lig = (p.resultado.terminais ?? []).filter((t) => t.tipoEletrico === 'LIGACAO_DIRETA');
+    const chuveiros = (p.resultado.terminais ?? []).filter((t) => t.tipoHidraulico === 'CHUVEIRO' && t.disciplina === 'AGUA_FRIA');
+    expect(lig.length).toBe(chuveiros.length);
+    expect(lig.length).toBeGreaterThan(0);
+    expect(lig.every((t) => t.levelId === S && t.circuitoId)).toBe(true);
+  });
+
+  it('a trava confere o lote inteiro (dois pavimentos, estrutura e instalações)', () => {
+    expect(conferirPlanoDaCasa(m, plano)).toEqual({ ok: true });
+  });
+});
+
+describe('planejarCasa — F12c: a climatização do sobrado', () => {
+  const modelos = modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades })));
+  const m = lote();
+  const p = planejarCasa(
+    m,
+    entrada(m, {
+      hidro: { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } },
+      modelosDeClimatizacao: modelos,
+      climatizacao: { ...HIPOTESES_CLIMATIZACAO_PADRAO, clima: { cidade: null, tbsExternaC: 34, tbuExternaC: 25, altitudeM: 0 } },
+    }),
+    { pavimentos: 2 },
+  );
+  const r = p.resultado;
+  const T = m.levels[0].id;
+  const S = p.sobrado!.nivelSuperiorId;
+
+  it('as seis etapas elétricas lançadas, a NBR 5410 sem falta e nenhum ponto solto em nenhum pavimento', () => {
+    expect(['PONTOS_ELETRICOS', 'QUADRO', 'CIRCUITOS', 'CLIMATIZACAO', 'DR_DPS', 'ELETRODUTOS'].map((id) => p.etapas.find((e) => e.id === id)?.situacao)).toEqual(Array(6).fill('LANCOU'));
+    expect(p.resumo.eletrica.conferencia.faltas).toBe(0);
+    expect(pontosElegiveis(r, T)).toEqual([]);
+    expect(pontosElegiveis(r, S)).toEqual([]);
+  });
+
+  it('um split por ambiente climatizável — a sala embaixo; a suíte e os dois dormitórios em cima — e a rede de ar sem erro', () => {
+    expect(p.resumo.climatizacao.equipamentos).toBe(4);
+    const splits = (r.terminais ?? []).filter((t) => t.tipoEletrico === 'AR_CONDICIONADO');
+    expect(splits.filter((t) => t.levelId === T)).toHaveLength(1);
+    expect(splits.filter((t) => t.levelId === S)).toHaveLength(3);
+    expect(p.resumo.climatizacao.verificacao.erros).toBe(0);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
   });
 });

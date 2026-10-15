@@ -68,6 +68,8 @@ export interface ContextoDasAncoras {
   /** O anel do lote (a caixa de gordura e as vagas descobertas têm de cair dentro). */
   anelDoLote: Point[] | null;
   reservatorio?: HipotesesDeReservatorio;
+  /** F12c: `false` = a caixa d'água vai noutro pavimento (no sobrado, sobre o banheiro de cima). Ausente = aqui. */
+  caixaDagua?: boolean;
 }
 
 export interface ResultadoDasAncoras {
@@ -130,7 +132,9 @@ export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras
   const sonda = cx.espessuraExternaMm + 300;
 
   // ── Caixa d'água ────────────────────────────────────────────────────────
-  if (tem('RESERVATORIO')) notas.push("Caixa d'água já desenhada — mantida.");
+  if (cx.caixaDagua === false) {
+    // noutro pavimento
+  } else if (tem('RESERVATORIO')) notas.push("Caixa d'água já desenhada — mantida.");
   else {
     const ordem: UsoDoAmbiente[] = [hip.caixaDaguaSobre, 'BANHEIRO', 'AREA_DE_SERVICO', 'COZINHA'];
     const alvo = ordem.map((u) => maisPerto(doUso(u))).find(Boolean) ?? null;

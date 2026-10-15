@@ -142,9 +142,34 @@ export function desvioDoPilar(a: P2, b: P2, pegadas: readonly Point[][]): P2[] |
  * `null` sem viga de teto. Viga de teto: o topo dela chega a menos de 20 cm do
  * teto — a verga baixa no meio da parede não conta.
  */
-export function fundoDaVigaMaisBaixaMm(model: BlueprintModel, levelId: ObjectId, tetoMm: number): number | null {
-  const vigas = (model.structures ?? []).filter((s) => s.kind === 'VIGA' && s.levelId === levelId && s.baseMm + s.alturaMm >= tetoMm - VIGA_DE_TETO_MM && s.baseMm < tetoMm);
+export function fundoDaVigaMaisBaixaMm(model: BlueprintModel, levelId: ObjectId, tetoMm: number, opcoes: { soSobreParede?: boolean } = {}): number | null {
+  const paredes = opcoes.soSobreParede ? model.walls.filter((w) => w.levelId === levelId) : [];
+  const vigas = (model.structures ?? []).filter(
+    (s) => s.kind === 'VIGA' && s.levelId === levelId && s.baseMm + s.alturaMm >= tetoMm - VIGA_DE_TETO_MM && s.baseMm < tetoMm && (!opcoes.soSobreParede || vigaSobreParede(s, paredes)),
+  );
   return vigas.length === 0 ? null : Math.min(...vigas.map((v) => v.baseMm));
+}
+
+/**
+ * A viga corre SOBRE uma parede (o meio dela no corpo da parede, na mesma direção)? Quem anda pelas paredes (o
+ * barrilete da água) só passa sob estas — o eletroduto corta o teto em linha reta, e para ele toda viga conta — a viga de TRANSIÇÃO do sobrado, solta no meio do cômodo de baixo
+ * (F12c, 15/10/2026), não está no caminho dele, e contá-la jogava o barrilete para dentro da laje.
+ */
+export function vigaSobreParede(v: Pick<Structural, 'pontos'>, paredes: readonly Wall[]): boolean {
+  const [a, b] = v.pontos;
+  if (!a || !b) return false;
+  const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  return paredes.some((w) => {
+    const dx = w.b.x - w.a.x;
+    const dy = w.b.y - w.a.y;
+    const Lw = Math.hypot(dx, dy);
+    if (Lw < 1) return false;
+    const paralela = Math.abs((b.x - a.x) * dy - (b.y - a.y) * dx) / (L * Lw) < 0.02;
+    const t = ((m.x - w.a.x) * dx + (m.y - w.a.y) * dy) / Lw;
+    const d = Math.abs((m.x - w.a.x) * dy - (m.y - w.a.y) * dx) / Lw;
+    return paralela && t >= -1 && t <= Lw + 1 && d <= w.thicknessMm / 2 + 20;
+  });
 }
 
 /**

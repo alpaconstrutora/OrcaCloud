@@ -189,4 +189,25 @@ describe('planejarAgua — sobrado e água quente', () => {
     const aplicado = applyBatch(casa, [...fria.comandos, ...quente.comandos]).model;
     expect(conexoesDerivadas(aplicado).pontasAbertas).toHaveLength(0);
   });
+
+  it('F12c: aquecedor no térreo, chuveiro em cima e o barrilete ABAIXO da viga — a coluna sobe do barrilete ao teto, sem buraco', () => {
+    let { m } = nivel();
+    m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 }).model;
+    const [terreo, superior] = m.levels.map((l) => l.id);
+    m = applyBatch(m, [
+      { type: 'AddWall', levelId: terreo, a: point(0, 0), b: point(8000, 0), thicknessMm: 150, heightMm: 2800 },
+      // A viga sobre a parede: o fundo a 2,40 m tira o barrilete do teto (vai a 2,30 m).
+      { type: 'AddStructural', levelId: terreo, kind: 'VIGA', pontos: [point(0, 0), point(8000, 0)], larguraMm: 150, alturaMm: 400, baseMm: 2400 },
+      ponto(terreo, 'AGUA_QUENTE', 'AQUECEDOR', 500, 500, 1600),
+      ponto(superior, 'AGUA_QUENTE', 'CHUVEIRO', 1000, 400, 2100),
+    ]).model;
+    const aq = m.terminais!.find((x) => x.tipoHidraulico === 'AQUECEDOR')!;
+    const plano = planejarAgua(m, aq);
+    expect(plano.motivo).toBeNull();
+    const tr = novos(plano);
+    expect(tr.some((c) => c.levelId === terreo && c.a.x !== c.b.x && c.cotaAMm === 2300)).toBe(true);
+    // Antes: a coluna começava no piso de cima e o trecho 2,30 → 2,80 do térreo faltava (duas pontas abertas).
+    expect(tr.some((c) => c.levelId === terreo && c.a.x === c.b.x && c.a.y === c.b.y && c.cotaAMm === 2300 && c.cotaBMm === 2800)).toBe(true);
+    expect(conexoesDerivadas(applyBatch(m, plano.comandos).model).pontasAbertas).toHaveLength(0);
+  });
 });

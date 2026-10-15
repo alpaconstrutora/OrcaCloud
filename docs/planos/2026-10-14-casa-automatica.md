@@ -123,7 +123,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 
 - [x] F0 — frente `casa-automatica`, este plano, esqueleto do harness
 - [x] F1 — programa paramétrico da casa (ver "Registro da F1" abaixo)
-- [ ] F2 — implantação pela lei + regras com zona no gerador
+- [x] F2 — implantação pela lei + regras com zona no gerador (ver "Registro da F2" abaixo)
 - [ ] F3 — orquestrador mínimo (arquitetura num lote)
 - [ ] F4 — estrutura
 - [ ] F5 — telhado
@@ -168,4 +168,47 @@ pendência dita.
 
 Prova: `__tests__/blueprintProgramaDaCasa.test.ts`, 13 testes: 6 combinações do plano, a
 correção do formulário, o determinismo, 2 suítes no gerador real e a unidade do Empreendimento.
+
+## Registro da F2 (14/10/2026)
+
+O que entrou:
+
+- `utils/blueprintCasaAutomatica.ts` (arquivo novo, motor puro):
+  - `implantacaoDaCasa(ctx: ContextoDaMassa, programa, {vagas, garagemCoberta}, hip?)`. Recebe o
+    mesmo contexto do estudo de massa e devolve `{ok, implantacao}` ou `{ok:false, motivo}`.
+    A projeção é a MENOR entre o programa, TO × lote × (1 − folga), CA × lote e o impermeável
+    permitido (lote × (1 − perm. mín.) − pavimentação externa − vagas descobertas), presa ao maior
+    retângulo do envelope dos recuos. O vencedor vai em `limitante` e é dito no aviso.
+  - O retângulo encosta no recuo de frente e na divisa escolhida (convenção de `papeisSugeridos`:
+    direita e esquerda de quem está na rua olhando para o lote) e fica na malha de 50 mm.
+  - `quadroDaFrente` / `paraLocal` / `paraMundo`: a conta é feita no quadro da FRENTE. Lote girado
+    funciona (testado a 30°) e `alinhadaAoDesenho` diz se o gerador pode receber o anel do mundo
+    direto. Lote girado só chega ao desenho na F3, que gira os comandos.
+  - `HIPOTESES_DA_IMPLANTACAO_PADRAO`: folga da TO 5 %, encostar à esquerda, proporção 0,7,
+    pavimentação externa 10 % do lote, vaga descoberta 12,5 m², retângulo/útil 1,08, parede
+    externa 200 mm, malha 50 mm.
+- `utils/blueprintGerador.ts`: `EntradaDoGerador.contextoDeRegras` (lote + zona). A TO e o CA
+  saem da área construída da própria planta, e a altura sai do pé-direito. Antes, as regras eram
+  avaliadas com contexto vazio. `ResultadoDoGerador.regras` expõe o que foi avaliado.
+- `utils/blueprintRegras.ts`: `loteParaRegras(terreno, limites)` e `zonaParaRegras(zona)`, uma
+  conta só. O painel de Legislação do editor passou a usá-las (a testada era calculada inline).
+- `BlueprintEditor.tsx`: o botão "Gerar" que já existia também passa a mandar o lote e a zona,
+  então a nota das alternativas passa a contar TO e CA de verdade.
+
+Medido (lote 12 × 30 m, recuos 3/1,5/1,5/3 m, programa 3Q R1-N):
+- TO 60 %: 9,00 × 16,85 m, projeção 156,86 m², TO 43,6 %, permeável 46,4 %, limitada pelo programa.
+  O gerador construiu exatamente 156,86 m² (136,64 m² úteis).
+- TO 30 %: 8,30 × 11,85 m, projeção 102,43 m², TO 28,5 % (folga de 5 %), limitada pela TO, e o aviso
+  diz que as áreas serão reduzidas.
+
+Achado para a F3: nesse lote estreito (9 m de largura útil), o gerador deixa a ÁREA DE SERVIÇO
+sem lado externo nas sementes 1, 2 e 3 ("exige ventilação e ficou sem lado externo"). A
+CONFERENCIA deve acusar, e o orquestrador pode gerar algumas sementes e ficar com a de menos
+avisos.
+
+Prova: `__tests__/blueprintCasaImplantacao.test.ts`, 14 testes: caso base, TO apertada,
+permeabilidade apertada, vagas descobertas, zona sem índices, sem frente/sem lote, encosto à
+direita, frente ao norte, lote girado 30°, quadro exato, gerador com `sem-lote-to` e
+`sem-lote-ca` CONFORMES, TO VIOLADA quando o retângulo é o envelope inteiro, e sem contexto
+como antes. `BlueprintEditor.test.tsx` 254/254.
 

@@ -41,7 +41,10 @@ import {
   type Opening,
   type Space,
   type Wall,
+  type Boundary,
 } from './blueprintKernel';
+import type { Terreno } from './blueprintTerreno';
+import type { ValoresDaZona } from './blueprintZonaUrbanistica';
 import { etiquetaDoAmbiente } from './blueprintDistribuicao';
 import { avaliar, erroDeSintaxe, formatarValor, variaveisCitadas, type Valor, type Variaveis } from './blueprintFormulas';
 import { unidadePorEtiqueta, medirUnidade, quadroDeUnidades } from './blueprintUnidades';
@@ -232,6 +235,34 @@ export interface ContextoDeRegras {
   insolacaoPorAmbiente?: Record<ObjectId, { horasSolInverno: number; horasSolVerao: number; ventilacaoCruzada: boolean; temJanela: boolean }> | null;
   /** Envelope 3D por pavimento (E3.3): `envelopePorPavimentoParaRegras`. Ausente = variáveis ausentes. */
   envelopePorPavimento?: Record<ObjectId, { areaEnvelopeM2: number; areaForaM2: number | null; cabe: boolean; acimaDoGabarito: boolean }> | null;
+}
+
+/**
+ * O LOTE para as regras: área, perímetro e testada (soma das divisas FRENTE). Uma conta só para o
+ * painel de Legislação e para o gerador (casa automática F2, 14/10/2026). `null` sem lote fechado.
+ */
+export function loteParaRegras(terreno: Terreno | null, limites: readonly Boundary[]): ContextoDeRegras['lote'] {
+  if (!terreno) return null;
+  const frentes = limites.filter((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
+  const testadaM = frentes.length ? Math.round(frentes.reduce((s, b) => s + Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y), 0)) / 1000 : null;
+  return { areaM2: terreno.areaMm2 / 1_000_000, perimetroM: terreno.perimetroMm / 1000, testadaM };
+}
+
+/** Os índices da ZONA para as regras, com os nomes do contexto (mesmas unidades de `ValoresDaZona`). */
+export function zonaParaRegras(
+  z: Pick<ValoresDaZona, 'taxaOcupacaoMax' | 'coeficienteMax' | 'gabaritoAlturaMaxM' | 'gabaritoPavimentos' | 'taxaPermeabilidadeMin' | 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'insolacaoMinimaH' | 'vagasPorUnidade'>,
+): NonNullable<ContextoDeRegras['zona']> {
+  return {
+    taxaOcupacaoMax: z.taxaOcupacaoMax,
+    coeficienteMax: z.coeficienteMax,
+    gabaritoAlturaMaxM: z.gabaritoAlturaMaxM,
+    gabaritoPavimentos: z.gabaritoPavimentos,
+    taxaPermeabilidadeMin: z.taxaPermeabilidadeMin,
+    testadaMinimaMm: z.testadaMinimaMm,
+    areaMinimaDoLoteM2: z.areaMinimaDoLoteM2,
+    insolacaoMinimaH: z.insolacaoMinimaH,
+    vagasPorUnidade: z.vagasPorUnidade,
+  };
 }
 
 export type EstadoDaRegra = 'CONFORME' | 'VIOLADA' | 'NAO_AVALIADA';

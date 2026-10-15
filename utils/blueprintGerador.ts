@@ -54,7 +54,7 @@ import { areaRecuada, uidDeterministico, wallLength } from './blueprintKernel';
 import { type ItemDoPrograma, type Programa, type RelacaoDoPrograma } from './blueprintPrograma';
 import { avaliar, type Avaliacao, type HipotesesDaAvaliacao, HIPOTESES_DA_AVALIACAO_PADRAO } from './blueprintAvaliacao';
 import { conferirPrograma } from './blueprintConferenciaDoPrograma';
-import { avaliarRegras, REGRAS_SEMENTE } from './blueprintRegras';
+import { avaliarRegras, REGRAS_SEMENTE, type ContextoDeRegras, type ResultadoDeRegra } from './blueprintRegras';
 import { planejarPilares } from './blueprintPilaresAutomaticos';
 import { planejarLajes, planejarVigas } from './blueprintVigasLajesAutomaticas';
 import { planejarPontosDoNivel } from './blueprintPontosHidraulicos';
@@ -109,6 +109,12 @@ export interface EntradaDoGerador {
   latitudeGraus: number;
   /** Hipóteses da avaliação (pesos) para a nota final. */
   hipotesesDaAvaliacao?: HipotesesDaAvaliacao;
+  /**
+   * Casa automática F2 (14/10/2026): o LOTE e a ZONA para as regras de lote e edificação. A TO
+   * e o CA saem da própria planta (área construída ÷ lote — térrea, os dois são iguais) e a
+   * altura do pé-direito. Ausente = como antes: regras avaliadas sem zona (ficam NAO_AVALIADAS).
+   */
+  contextoDeRegras?: Pick<ContextoDeRegras, 'lote' | 'zona'> | null;
 }
 
 export interface Retangulo {
@@ -145,6 +151,8 @@ export interface ResultadoDoGerador {
   model: BlueprintModel;
   levelId: ObjectId;
   avaliacao: Avaliacao;
+  /** As regras avaliadas (F2 da casa automática: com o lote e a zona quando a entrada os traz). */
+  regras: ResultadoDeRegra[];
   resumo: { areaConstruidaM2: number; areaUtilM2: number; paredesM: number; objetivoInicial: number; objetivoFinal: number };
   decisoes: string[];
   avisos: string[];
@@ -910,19 +918,32 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     decisoes.push(`Automáticos: ${contagem.join(' · ')}. Água e esgoto ficam para depois (precisam de reservatório e caixa de inspeção posicionados).`);
   }
 
-  // (f) avaliação.
+  // (f) avaliação — a área construída vem antes: a TO e o CA das regras saem dela.
+  const perimetro = contorno.reduce((s, p, i) => s + Math.hypot(contorno[(i + 1) % contorno.length].x - p.x, contorno[(i + 1) % contorno.length].y - p.y), 0);
+  const areaConstruidaM2 = anexos.length
+    ? (Math.abs(polygonArea(contorno)) + (perimetro * hip.espessuraExternaMm) / 2) / 1e6
+    : ((ret.x1 - ret.x0 + hip.espessuraExternaMm) * (ret.y1 - ret.y0 + hip.espessuraExternaMm)) / 1e6;
   const conferencia = conferirPrograma(model, programa);
-  const regras = avaliarRegras(model, REGRAS_SEMENTE, {});
+  const lote = entrada.contextoDeRegras?.lote ?? null;
+  const regras = avaliarRegras(
+    model,
+    REGRAS_SEMENTE,
+    entrada.contextoDeRegras
+      ? {
+          lote,
+          zona: entrada.contextoDeRegras.zona ?? null,
+          taxaOcupacaoPct: lote && lote.areaM2 > 0 ? Math.round((areaConstruidaM2 / lote.areaM2) * 1000) / 10 : null,
+          coeficiente: lote && lote.areaM2 > 0 ? Math.round((areaConstruidaM2 / lote.areaM2) * 100) / 100 : null,
+          alturaM: hip.peDireitoMm / 1000,
+        }
+      : {},
+  );
   const avaliacao = avaliar(
     { model, programa, conferencia, resultadosDeRegras: regras, insolacao: { latitudeGraus: entrada.latitudeGraus, rotacaoNorteDeg: entrada.rotacaoNorteDeg, prismas: [] }, insolacaoMinimaH: null, custoTotalBRL: null },
     entrada.hipotesesDaAvaliacao ?? HIPOTESES_DA_AVALIACAO_PADRAO,
   );
   const paredesM = model.walls.reduce((s, w) => s + wallLength(w), 0) / 1000;
   const areaUtilM2 = model.spaces.reduce((s, sp) => s + areaRecuada(sp.ring, model.walls).areaMm2, 0) / 1e6;
-  const perimetro = contorno.reduce((s, p, i) => s + Math.hypot(contorno[(i + 1) % contorno.length].x - p.x, contorno[(i + 1) % contorno.length].y - p.y), 0);
-  const areaConstruidaM2 = anexos.length
-    ? (Math.abs(polygonArea(contorno)) + (perimetro * hip.espessuraExternaMm) / 2) / 1e6
-    : ((ret.x1 - ret.x0 + hip.espessuraExternaMm) * (ret.y1 - ret.y0 + hip.espessuraExternaMm)) / 1e6;
   decisoes.push(`Resultado: ${f2(areaConstruidaM2)} m² construídos, ${f2(areaUtilM2)} m² úteis, ${f2(paredesM)} m de parede; nota ${avaliacao.notaGeral ?? '—'}.`);
   return {
     semente,
@@ -936,6 +957,7 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     model,
     levelId,
     avaliacao,
+    regras,
     resumo: { areaConstruidaM2: Math.round(areaConstruidaM2 * 100) / 100, areaUtilM2: Math.round(areaUtilM2 * 100) / 100, paredesM: Math.round(paredesM * 100) / 100, objetivoInicial: inicial, objetivoFinal: final },
     decisoes,
     avisos,

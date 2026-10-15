@@ -876,7 +876,7 @@ import { cubDoPadrao, type CubDoPadrao } from '../../services/cubService';
 import { massaEmpreendimentoSync } from '../../services/massaEmpreendimentoSync';
 import { blueprintSnapshotProdutoService } from '../../services/blueprintSnapshotProdutoService';
 import { cenarioDeMassa, nomeSugeridoDoCenario, type ReguaDoComparador } from '../../utils/blueprintComparadorDeMassa';
-import { avaliarRegras, REGRAS_SEMENTE, type Regra, type ResultadoDeRegra } from '../../utils/blueprintRegras';
+import { avaliarRegras, loteParaRegras, REGRAS_SEMENTE, zonaParaRegras, type Regra, type ResultadoDeRegra } from '../../utils/blueprintRegras';
 import { blueprintRuleSetService, type ConjuntoDeRegras } from '../../services/blueprintRuleSetService';
 import PainelGrupo from './PainelGrupo';
 import { quadroDeUnidades, rotuloDaUnidade, unidadePorEtiqueta } from '../../utils/blueprintUnidades';
@@ -5864,25 +5864,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     [editor.model, programaDoEstudo.programa],
   );
   const resultadosDeRegras = useMemo((): ResultadoDeRegra[] => {
-    const frentes = limitesDoNivel.filter((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
-    const testadaM = frentes.length ? Math.round(frentes.reduce((s, b) => s + Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y), 0)) / 1000 : null;
     const doMotor = avaliarRegras(editor.model, [...REGRAS_SEMENTE, ...regrasDaOrganizacao], {
-      lote: terreno ? { areaM2: terreno.areaMm2 / 1_000_000, perimetroM: terreno.perimetroMm / 1000, testadaM } : null,
+      lote: loteParaRegras(terreno, limitesDoNivel),
       taxaOcupacaoPct: aproveitamento ? Math.round(aproveitamento.taxaOcupacao * 1000) / 10 : null,
       coeficiente: aproveitamento ? Math.round(aproveitamento.coeficienteAproveitamento * 100) / 100 : null,
       // A massa (M1) entra na altura: um estudo só de blocos também tem gabarito a conferir.
       alturaM: massa.blocos.length > 0 ? Math.max(alturaDesenhadaM ?? 0, massa.alturaMaxM) : alturaDesenhadaM,
-      zona: {
-        taxaOcupacaoMax: zona.taxaOcupacaoMax,
-        coeficienteMax: zona.coeficienteMax,
-        gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM,
-        gabaritoPavimentos: zona.gabaritoPavimentos,
-        taxaPermeabilidadeMin: zona.taxaPermeabilidadeMin,
-        testadaMinimaMm: zona.testadaMinimaMm,
-        areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2,
-        insolacaoMinimaH: zona.insolacaoMinimaH,
-        vagasPorUnidade: zona.vagasPorUnidade,
-      },
+      zona: zonaParaRegras(zona),
       envelopePorPavimento: envelopePorPavimentoParaRegras(envelope3d),
       insolacaoPorAmbiente: insolacaoParaRegras(insolacaoDoNivel),
     });
@@ -5994,10 +5982,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       if (n > 1) direcaoDaFrente = { x: d.x / n, y: d.y / n };
     }
     return {
-      entrada: { programa: programaDoEstudo.programa, envelope: anel, direcaoDaFrente, rotacaoNorteDeg: norteDoDesenho, latitudeGraus: latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual },
+      // Casa automática F2: o lote e a zona vão às regras do gerador (antes, avaliadas sem zona).
+      entrada: { programa: programaDoEstudo.programa, envelope: anel, direcaoDaFrente, rotacaoNorteDeg: norteDoDesenho, latitudeGraus: latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual, contextoDeRegras: { lote: loteParaRegras(terreno, limitesDoNivel), zona: zonaParaRegras(zona) } },
       contexto: { temPrograma: programaDoEstudo.programa.itens.length > 0, temEnvelope: !!anel, frenteDeclarada: !!direcaoDaFrente, envelopeM2: anel ? Math.round(Math.abs(polygonArea(anel)) / 10_000) / 100 : null },
     };
-  }, [contornoDoGerador, envelope3d, envelope, levelId, limitesDoNivel, terreno, programaDoEstudo.programa, norteDoDesenho, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual]);
+  }, [contornoDoGerador, envelope3d, envelope, levelId, limitesDoNivel, terreno, programaDoEstudo.programa, norteDoDesenho, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, zona.insolacaoMinimaH, zona.vagasPorUnidade]);
   /** "Aplicar neste pavimento": geometria num lote (paredes por uid + aberturas por wallUid), nomes no segundo. */
   const aplicarAlternativaGerada = async (r: ResultadoDoGerador) => {
     if (!levelId) throw new Error('Abra um pavimento para aplicar.');

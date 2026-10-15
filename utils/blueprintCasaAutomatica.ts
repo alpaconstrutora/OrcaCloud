@@ -68,6 +68,8 @@ import { HIPOTESES_FUNDACOES_PADRAO, planejarFundacoes, type HipotesesDeFundacoe
 import { comandosDoTelhado, HIPOTESES_DO_TELHADO_PADRAO, type HipotesesDoTelhado, type ResumoDoTelhado } from './blueprintTelhadoAutomatico';
 import { comandosDasAncoras, HIPOTESES_DAS_ANCORAS_PADRAO, type HipotesesDasAncoras, type ResultadoDasAncoras } from './blueprintAncorasDaCasa';
 import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from './blueprintMemorialHidro';
+import { comandosDeMobiliario, HIPOTESES_MOBILIARIO_PADRAO, mobiliarNivel, type HipotesesDeMobiliario } from './blueprintMobiliario';
+import { HIPOTESES_PONTOS_PADRAO, planejarPontosDoNivel, pontosDasLoucasCriadas, type HipotesesDePontos } from './blueprintPontosHidraulicos';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
 
 // ─── Hipóteses ──────────────────────────────────────────────────────────────
@@ -342,7 +344,7 @@ export function resumoDaImplantacao(i: ImplantacaoDaCasa): string {
 // kernel só corta parede em interseção EXATA — achado da M6b): a ponta que encontra o
 // meio de outra parede passa `ALEM_MM` além, e o offset das aberturas anda junto.
 
-export type EtapaDaCasaId = 'IMPLANTACAO' | 'ARQUITETURA' | 'PILARES' | 'VIGAS' | 'LAJES' | 'FUNDACOES' | 'EIXOS' | 'TELHADO' | 'ANCORAS' | 'CONFERENCIA';
+export type EtapaDaCasaId = 'IMPLANTACAO' | 'ARQUITETURA' | 'PILARES' | 'VIGAS' | 'LAJES' | 'FUNDACOES' | 'EIXOS' | 'TELHADO' | 'ANCORAS' | 'MOBILIARIO' | 'LOUCAS' | 'PONTOS_HIDRAULICOS' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
@@ -355,6 +357,9 @@ export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
   EIXOS: 'Eixos (documentam a estrutura)',
   TELHADO: 'Telhado',
   ANCORAS: "Peças-âncora (caixa d'água, aquecedor, caixa de gordura, vagas)",
+  MOBILIARIO: 'Mobiliário e louças',
+  LOUCAS: 'Pontos das louças (água e esgoto)',
+  PONTOS_HIDRAULICOS: 'Pontos que completam o kit (caixa sifonada, ralo…)',
   CONFERENCIA: 'Conferência (programa e legislação)',
 };
 const ORDEM_DAS_ETAPAS = Object.keys(ROTULO_DA_ETAPA_DA_CASA) as EtapaDaCasaId[];
@@ -417,6 +422,9 @@ export interface HipotesesDaCasa {
   telhado: HipotesesDoTelhado;
   /** F6: caixa d'água, aquecedor, caixa de gordura e vagas. */
   ancoras: HipotesesDasAncoras;
+  /** F7: o mobiliário mínimo (as louças lançam os pontos) e os pontos do kit hidráulico. */
+  mobiliario: HipotesesDeMobiliario & { lancar: boolean };
+  pontos: HipotesesDePontos;
 }
 
 export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
@@ -427,6 +435,8 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   estrutura: HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO,
   telhado: HIPOTESES_DO_TELHADO_PADRAO,
   ancoras: HIPOTESES_DAS_ANCORAS_PADRAO,
+  mobiliario: { ...HIPOTESES_MOBILIARIO_PADRAO, lancar: true },
+  pontos: HIPOTESES_PONTOS_PADRAO,
 };
 
 export interface PlanoDaCasa {
@@ -457,6 +467,8 @@ export interface PlanoDaCasa {
     telhado: ResumoDoTelhado | null;
     /** F6: as peças-âncora postas; `null` quando a etapa não rodou. */
     ancoras: ResultadoDasAncoras['resumo'] | null;
+    /** F7: peças de mobiliário e pontos hidráulicos lançados. */
+    mobiliario: { pecas: number; pontosDasLoucas: number; pontosDoKit: number };
   };
 }
 
@@ -546,6 +558,8 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, ...(hipParcial.estrutura ?? {}) },
     telhado: { ...HIPOTESES_DO_TELHADO_PADRAO, ...(hipParcial.telhado ?? {}) },
     ancoras: { ...HIPOTESES_DAS_ANCORAS_PADRAO, ...(hipParcial.ancoras ?? {}) },
+    mobiliario: { ...HIPOTESES_MOBILIARIO_PADRAO, lancar: true, ...(hipParcial.mobiliario ?? {}) },
+    pontos: { ...HIPOTESES_PONTOS_PADRAO, ...(hipParcial.pontos ?? {}) },
   };
   const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
   // A implantação usa a mesma parede externa e a mesma malha do gerador.
@@ -577,7 +591,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   const pedidos = programa.itens.filter((i) => i.uso !== 'CIRCULACAO').reduce((s, i) => s + i.quantidade, 0);
   const vazio = (motivo: string, implantacao: ImplantacaoDaCasa | null = null): PlanoDaCasa => {
     for (const id of ORDEM_DAS_ETAPAS) if (id !== 'IMPLANTACAO' && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
-    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null } };
+    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 } } };
   };
 
   const impedimento = motivoParaNaoGerar(original, entrada.levelId);
@@ -801,6 +815,57 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     }
   }
 
+  // ── MOBILIÁRIO, LOUÇAS E PONTOS (F7) ──────────────────────────────────────
+  // O kit mínimo de cada ambiente (cama, armário, bancada com pia, vaso, lavatório, box, tanque, máquina…); cada
+  // LOUÇA lança os pontos dela (água e esgoto, na face da parede — `pontosDasLoucasCriadas`); o planejador por
+  // ambiente completa o kit hidráulico SEM duplicar (pula tipo × disciplina que já existe no ambiente): entram a
+  // caixa sifonada do banheiro e o que nenhuma louça cobre. Tudo `sugerida`. Água QUENTE só com aquecedor: no
+  // chuveiro elétrico (R1-B) ou sem água quente, nenhum ponto de AQ — não há rede para ligá-los.
+  const mobiliario = { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 };
+  const semAguaQuente = !ancoras?.aquecedor && (ancoras?.chuveiroEletrico || hip.ancoras.aguaQuente === 'NENHUM' || hip.ancoras.aguaQuente === 'CHUVEIRO_ELETRICO');
+  const hipPontos: HipotesesDePontos = semAguaQuente ? { ...hip.pontos, aguaQuenteEm: [] } : hip.pontos;
+  const etapaSimples = (id: 'MOBILIARIO' | 'LOUCAS' | 'PONTOS_HIDRAULICOS', fazer: () => { comandos: Command[]; nota: string }) => {
+    if (!hip.mobiliario.lancar) {
+      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
+      return 0;
+    }
+    try {
+      const { comandos: lote, nota } = fazer();
+      const n = aplicar(lote);
+      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'LANCOU', n, nota);
+      return n;
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${motivo}` });
+      return 0;
+    }
+  };
+  let criadosDoMobiliario: ObjectId[] = [];
+  etapaSimples('MOBILIARIO', () => {
+    const lista = mobiliarNivel(m, entrada.levelId, hip.mobiliario);
+    const lote = comandosDeMobiliario(lista, entrada.levelId, m);
+    // Os ids que o mobiliário vai criar (o kernel é determinístico: a simulação dá os mesmos ids da aplicação) —
+    // os pontos das louças são planejados para eles.
+    criadosDoMobiliario = lote.length ? applyBatch(m, lote).diff.created : [];
+    const naoCouberam = lista.flatMap((a) => a.naoCouberam.map((x) => `${a.rotulo}: ${x}`));
+    for (const x of naoCouberam) pendencias.push({ grupo: 'VERIFICACAO', texto: `Mobiliário: ${x}` });
+    mobiliario.pecas = lote.length;
+    return { comandos: lote, nota: `${lote.length} peça(s) em ${lista.filter((a) => a.pecas.length).length} ambiente(s)${naoCouberam.length ? `; ${naoCouberam.length} não couberam` : ''}` };
+  });
+  etapaSimples('LOUCAS', () => {
+    const lote = pontosDasLoucasCriadas(m, criadosDoMobiliario, hipPontos, { sugerida: true });
+    mobiliario.pontosDasLoucas = lote.length;
+    return { comandos: lote, nota: `${lote.length} ponto(s) — cada louça liga a sua água e o seu esgoto${semAguaQuente ? '; sem água quente (não há aquecedor)' : ''}` };
+  });
+  etapaSimples('PONTOS_HIDRAULICOS', () => {
+    const planos = planejarPontosDoNivel(m, entrada.levelId, hipPontos);
+    const lote = planos.flatMap((pl) => pl.comandos);
+    for (const pl of planos) if (pl.motivo && !pl.comandos.length && pl.aCriar === 0 && pl.jaExistentes === 0) pendencias.push({ grupo: 'VERIFICACAO', texto: `Pontos de ${pl.nome}: ${pl.motivo}` });
+    mobiliario.pontosDoKit = lote.length;
+    return { comandos: lote, nota: `${lote.length} ponto(s) que nenhuma louça cobre (caixa sifonada, ralo…)` };
+  });
+
   // ── CONFERENCIA ───────────────────────────────────────────────────────────
   const conferencia = conferirPrograma(m, programa);
   for (const it of conferencia.itens) {
@@ -835,7 +900,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     semente: r.semente,
     escolha,
     decisoes,
-    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura, telhado, ancoras },
+    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura, telhado, ancoras, mobiliario },
   };
 }
 

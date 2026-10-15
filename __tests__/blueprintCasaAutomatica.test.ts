@@ -62,6 +62,9 @@ describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
       ['EIXOS', 'LANCOU'],
       ['TELHADO', 'LANCOU'],
       ['ANCORAS', 'LANCOU'],
+      ['MOBILIARIO', 'LANCOU'],
+      ['LOUCAS', 'LANCOU'],
+      ['PONTOS_HIDRAULICOS', 'LANCOU'],
       ['CONFERENCIA', 'CALCULOU'],
     ]);
     expect(plano.comandos.slice(0, 3).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
@@ -121,7 +124,7 @@ describe('planejarCasa — o que falta vira motivo, nunca exceção', () => {
     expect(p.comandos).toEqual([]);
     expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
     expect(p.etapas[0].nota).toMatch(/FRENTE/);
-    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(10).fill('NAO_RODOU'));
+    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(13).fill('NAO_RODOU'));
   });
 
   it('pavimento inexistente', () => {
@@ -308,7 +311,7 @@ describe('planejarCasa — F6: as peças-âncora', () => {
     const m = lote();
     const p = planejarCasa(m, entrada(m), { ancoras: { ...HIPOTESES_DAS_ANCORAS_PADRAO, lancar: false } });
     expect(p.etapas.find((e) => e.id === 'ANCORAS')?.situacao).toBe('NAO_EXIGIDA');
-    expect(p.resultado.terminais).toHaveLength(0);
+    expect(p.resultado.terminais.filter((x) => ['RESERVATORIO', 'AQUECEDOR', 'CAIXA_GORDURA'].includes(x.tipoHidraulico ?? ''))).toHaveLength(0);
     expect(p.resultado.vagas).toHaveLength(0);
   });
 
@@ -330,6 +333,38 @@ describe('planejarCasa — F6b: cozinha com janela na casa estreita', () => {
     expect(p.pendencias.filter((x) => /Cozinha exige/.test(x.texto))).toEqual([]);
     expect(p.resumo.ancoras?.aquecedor).toBe(true);
     expect(p.resumo.regrasVioladas).toBe(0);
+  });
+});
+
+describe('planejarCasa — F7: mobiliário, louças e pontos', () => {
+  const porAmbiente = (p: ReturnType<typeof planejarCasa>, L: string, re: RegExp) =>
+    p.resultado.spaces
+      .filter((s) => s.levelId === L && re.test(s.name ?? ''))
+      .map((s) => ({ nome: s.name, chaves: p.resultado.terminais.filter((t) => t.levelId === L && t.tipoHidraulico && pointInPolygon(s.ring, t.at)).map((t) => `${t.tipoHidraulico}:${t.disciplina}`) }));
+
+  it.each([0, 30])('lote a %i°: cada ambiente molhado com o kit completo e sem duplicata; tudo sugerido', (graus) => {
+    const m = lote(graus);
+    const L = m.levels[0].id;
+    const p = planejarCasa(m, entrada(m));
+    expect(p.resumo.mobiliario.pecas).toBeGreaterThan(10);
+    for (const b of porAmbiente(p, L, /^banheiro/i)) {
+      for (const k of ['VASO_SANITARIO:AGUA_FRIA', 'VASO_SANITARIO:ESGOTO', 'LAVATORIO:AGUA_FRIA', 'LAVATORIO:AGUA_QUENTE', 'LAVATORIO:ESGOTO', 'CHUVEIRO:AGUA_FRIA', 'CHUVEIRO:AGUA_QUENTE', 'CAIXA_SIFONADA:ESGOTO']) expect(b.chaves).toContain(k);
+      expect(new Set(b.chaves).size).toBe(b.chaves.length); // nenhum (tipo, disciplina) duas vezes
+    }
+    const [coz] = porAmbiente(p, L, /^cozinha/i);
+    for (const k of ['PIA_COZINHA:AGUA_FRIA', 'PIA_COZINHA:AGUA_QUENTE', 'PIA_COZINHA:ESGOTO']) expect(coz.chaves).toContain(k);
+    const [serv] = porAmbiente(p, L, /servi/i);
+    for (const k of ['TANQUE:AGUA_FRIA', 'TANQUE:ESGOTO', 'MAQUINA_LAVAR:AGUA_FRIA', 'MAQUINA_LAVAR:ESGOTO']) expect(serv.chaves).toContain(k);
+    expect(p.resultado.terminais.filter((t) => t.tipoHidraulico).every((t) => t.sugerida)).toBe(true);
+    expect(p.resultado.componentes.every((c) => c.sugerido)).toBe(true);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+
+  it('R1-B (chuveiro elétrico): nenhum ponto de água quente — não há rede para ligá-los', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m, { curto: { ...PROGRAMA_CURTO_PADRAO, padrao: 'R1-B' } }));
+    expect(p.resultado.terminais.filter((t) => t.disciplina === 'AGUA_QUENTE')).toEqual([]);
+    expect(p.resultado.terminais.some((t) => t.tipoHidraulico === 'CHUVEIRO' && t.disciplina === 'AGUA_FRIA')).toBe(true);
   });
 });
 

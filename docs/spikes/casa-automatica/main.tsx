@@ -45,6 +45,8 @@ declare global {
         ambientesNoPavimento: number;
         telhado: { aguas: number; paredesCobertas: boolean; calhas: number; motivoDaPluvial: string | null };
         ancoras: { caixaDaguaL: number | null; caixaDeGordura: boolean; aquecedor: boolean; vagas: number; vagasNaGaragem: number; vagasPedidas: number };
+        kits: { ambiente: string; faltam: string[]; duplicados: number }[];
+        pecasDeMobiliario: number;
       } | null;
     };
   }
@@ -85,6 +87,23 @@ const plano = planejarCasa(lote, {
   latitudeGraus: -19.9,
 });
 const model = plano.resultado;
+
+/** F7: em cada ambiente molhado, o que falta do kit hidráulico e quantos (tipo, disciplina) aparecem duas vezes. */
+function kitsDoModelo(m: BlueprintModel) {
+  const KIT: [RegExp, string[]][] = [
+    [/^banheiro/i, ['VASO_SANITARIO:AGUA_FRIA', 'VASO_SANITARIO:ESGOTO', 'LAVATORIO:AGUA_FRIA', 'LAVATORIO:ESGOTO', 'CHUVEIRO:AGUA_FRIA', 'CAIXA_SIFONADA:ESGOTO']],
+    [/^cozinha/i, ['PIA_COZINHA:AGUA_FRIA', 'PIA_COZINHA:ESGOTO']],
+    [/servi/i, ['TANQUE:AGUA_FRIA', 'TANQUE:ESGOTO', 'MAQUINA_LAVAR:AGUA_FRIA', 'MAQUINA_LAVAR:ESGOTO']],
+  ];
+  return m.spaces
+    .filter((s) => s.levelId === levelId)
+    .flatMap((s) => {
+      const k = KIT.find(([re]) => re.test(s.name ?? ''));
+      if (!k) return [];
+      const chaves = m.terminais.filter((t) => t.levelId === levelId && t.tipoHidraulico && pointInPolygon(s.ring, t.at)).map((t) => `${t.tipoHidraulico}:${t.disciplina}`);
+      return [{ ambiente: s.name ?? '', faltam: k[1].filter((x) => !chaves.includes(x)), duplicados: chaves.length - new Set(chaves).size }];
+    });
+}
 
 /** F5: as águas, se cobrem todas as pontas de parede, e o que a pluvial faz com elas (intensidade de 150 mm/h). */
 function telhadoDoModelo(m: BlueprintModel) {
@@ -145,6 +164,8 @@ window.__estado = {
       })(),
       vagasPedidas: PROGRAMA_CURTO_PADRAO.vagas,
     },
+    kits: kitsDoModelo(model),
+    pecasDeMobiliario: plano.resumo.mobiliario.pecas,
   },
 };
 document.getElementById('dump')!.textContent = [

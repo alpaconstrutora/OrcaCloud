@@ -132,7 +132,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F5 — telhado (ver "Registro da F5")
 - [x] F6 — peças-âncora + rede pública (ver "Registro da F6")
 - [x] F6b — cozinha, serviço e lavabo com parede externa na casa estreita (decisão de 15/10; ver "Registro da F6b" — cozinha resolvida, serviço/lavabo em parte)
-- [ ] F7 — mobiliário + louças com pontos
+- [x] F7 — mobiliário + louças com pontos (ver "Registro da F7")
 - [ ] F8 — hidro encadeada
 - [ ] F9 — elétrica + climatização
 - [ ] F10 — UI
@@ -545,4 +545,47 @@ Provas:
   lançado e 0 regras. Com o gerador anterior, falha nos dois.
 - `blueprintGerador.test.ts`: apartamento 3 quartos com 0 nos 3 formatos.
 - Harness: o portão confere a cozinha com fachada e o aquecedor.
+
+## Registro da F7 (15/10/2026)
+
+O que já existia no `main` e foi reusado:
+- `kitDoAmbiente` já lê o USO gravado na etiqueta (kernel 0.102, de 14/10), e o gerador já grava o
+  `uso` em `PlaceSpaceLabels`. A divergência "tipo × nome" do plano estava em boa parte resolvida.
+- `pontosDasLoucasCriadas` já lança água, esgoto e o ponto elétrico de cada louça criada.
+
+O que mudou:
+- `utils/blueprintPontosHidraulicos.ts`: `pontosDaLouca` e `pontosDasLoucasCriadas` ganham
+  `opcoes.sugerida`. A louça posta à mão continua lançando pontos "decididos".
+- `utils/blueprintMobiliario.ts`:
+  - `mobiliarDoAmbiente` usa o `uso` da etiqueta antes do nome, o mesmo critério do kit hidráulico.
+  - `comandosDeMobiliarioComPontos(lista, levelId, model)`: as peças e os pontos das louças criadas,
+    num lote só.
+- **`BlueprintEditor.tsx`: o "Aceitar" do mobiliário passa a lançar os pontos das louças** (defeito
+  levantado no planejamento: a louça aceita ficava sem ponto, e água e esgoto automáticos não a viam).
+  É um lote só, com um Ctrl+Z.
+- No orquestrador: etapas MOBILIARIO → LOUCAS → PONTOS_HIDRAULICOS depois das âncoras. O planejador
+  por ambiente completa o kit sem duplicar (pula tipo × disciplina que já existe): entram a caixa
+  sifonada do banheiro e o ralo do serviço. Tudo `sugerida`. Sem aquecedor (chuveiro elétrico ou
+  nenhum), nenhum ponto de água quente. `HipotesesDaCasa.mobiliario` (com `lancar`) e `.pontos`;
+  `resumo.mobiliario`.
+
+Medido no lote 12 × 30 (reto e a 30°): 23 e 19 peças de mobiliário, 21 pontos de louça e 8 de kit.
+- Banheiros: vaso (AF, ESG), lavatório (AF, AQ, ESG), chuveiro (AF, AQ), caixa sifonada (ESG).
+- Cozinha: pia (AF, AQ, ESG). Serviço: tanque, máquina e ralo.
+- Nenhum tipo × disciplina repetido no mesmo ambiente; trava aprovando.
+- R1-B: nenhum ponto de água quente.
+
+**Fica em aberto (dito):** o mobiliário automático às vezes não acha lugar para uma peça, por exemplo
+o vaso e o lavatório no banheiro de suíte longo e estreito, ou o armário de um dormitório. Os PONTOS
+desse ambiente saem completos (o kit preenche o que a louça não lançou), mas a peça não aparece
+desenhada e vira pendência VERIFICACAO "Mobiliário: …".
+
+Provas:
+- `blueprintMobiliario.test.ts`: aceitar um banheiro lança água e esgoto sugeridos, sem duplicar ao
+  aceitar de novo; o uso da etiqueta vale antes do nome ("Cômodo 7" com uso BANHEIRO).
+- `blueprintCasaAutomatica.test.ts`: kit completo por ambiente molhado, a 0° e a 30°, sem duplicata e
+  tudo sugerido; R1-B sem água quente.
+- Harness: o portão confere o kit completo dos 4 ambientes molhados e o mobiliário.
+- `check-ui-standard` no `BlueprintEditor.tsx` sem violações; 23 arquivos dependentes, 186 testes;
+  typecheck limpo.
 

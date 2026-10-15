@@ -43,7 +43,7 @@ for (const graus of [0, 30]) {
   if (!p) continue;
   const situacoes = p.etapas.map((x) => `${x.id}:${x.situacao}`).join(' ');
   // F4: a estrutura entra entre a arquitetura e a conferência; os eixos não rodam com o lote girado (paredes oblíquas).
-  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU CONFERENCIA:CALCULOU`;
+  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU MOBILIARIO:LANCOU LOUCAS:LANCOU PONTOS_HIDRAULICOS:LANCOU CONFERENCIA:CALCULOU`;
   conferir(situacoes === esperadas, `${t} etapas: ${situacoes}`);
   conferir(p.comandos > 3, `${t} um lote só com arquitetura e estrutura (${p.comandos} comandos)`);
   const es = p.estrutura;
@@ -59,6 +59,10 @@ for (const graus of [0, 30]) {
   conferir(an.vagas === an.vagasPedidas && an.vagasNaGaragem === an.vagasPedidas, `${t} ${an.vagasNaGaragem} de ${an.vagasPedidas} vagas dentro da garagem`);
   // F6b: na casa estreita, a cozinha tem janela (parede externa) — e por isso o aquecedor tem onde ficar.
   conferir(!p.pendencias.some((x) => /Cozinha exige/.test(x)) && an.aquecedor, `${t} a cozinha tem parede externa e o aquecedor foi lançado`);
+  // F7: o kit hidráulico de cada ambiente molhado completo, sem (tipo, disciplina) repetido.
+  const kitsRuins = p.kits.filter((k) => k.faltam.length || k.duplicados);
+  conferir(p.kits.length >= 4 && kitsRuins.length === 0, `${t} ${p.kits.length} ambientes molhados com o kit completo${kitsRuins.length ? ` — ${kitsRuins.map((k) => `${k.ambiente}: falta ${k.faltam.join(', ')}${k.duplicados ? `, ${k.duplicados} duplicado(s)` : ''}`).join(' | ')}` : ''}`);
+  conferir(p.pecasDeMobiliario > 10, `${t} ${p.pecasDeMobiliario} peças de mobiliário`);
   conferir(p.ambientesAtendidos === p.ambientesPedidos, `${t} ambientes do programa atendidos: ${p.ambientesAtendidos} de ${p.ambientesPedidos}`);
   conferir(p.ambientesNomeados >= p.ambientesPedidos, `${t} ambientes nomeados no desenho: ${p.ambientesNomeados} (nenhum fundido)`);
   conferir(p.aberturasCriadas === p.aberturasPedidas, `${t} aberturas: ${p.aberturasCriadas} criadas de ${p.aberturasPedidas} pedidas`);

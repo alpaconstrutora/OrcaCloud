@@ -337,7 +337,7 @@ import { comAjusteDePressao, pressoesDoModelo, type HipotesesDePressao } from '.
 import { marcasDeVerificacao } from '../../utils/blueprintVerificacaoRede';
 import SeletorDeTipo from './SeletorDeTipo';
 import { camposDoComponente, propriedadesDoComponente, type PropriedadesDeComponente } from '../../utils/blueprintTipos';
-import { comandosDeMobiliario } from '../../utils/blueprintMobiliario';
+import { comandosDeMobiliarioComPontos } from '../../utils/blueprintMobiliario';
 import PainelVagas from './PainelVagas';
 import TelaEstudoDeMassa from './TelaEstudoDeMassa';
 import PainelBlocoSelecionado from './PainelBlocoSelecionado';
@@ -17082,7 +17082,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               vagasResultado={resultadoDeVagas}
               onAceitarMobiliario={(spaceId) => {
                 const lista = spaceId ? mobiliarioDoNivel.filter((a) => a.spaceId === spaceId) : mobiliarioDoNivel;
-                const cmds = levelId ? comandosDeMobiliario(lista, levelId, editor.model) : [];
+                // Casa automática F7 (15/10/2026): as LOUÇAS aceitas lançam os pontos delas (água, esgoto) no mesmo
+                // lote — um Ctrl+Z desfaz os dois. Antes o aceitar deixava a louça sem ponto.
+                const cmds = levelId ? comandosDeMobiliarioComPontos(lista, levelId, editor.model) : [];
                 if (cmds.length === 0) return;
                 const criados = editor.runBatch(cmds);
                 if (criados.length > 0) selecionar(criados);

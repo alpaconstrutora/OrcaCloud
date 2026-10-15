@@ -351,6 +351,8 @@ export function pontosDaLouca(
   model: BlueprintModel,
   componente: Componente,
   hip: HipotesesDePontos = HIPOTESES_PONTOS_PADRAO,
+  /** Casa automática F7 (15/10/2026): os pontos nascem `sugerida` quando a louça também é sugerida (mobiliário aceito, casa gerada). */
+  opcoes: { sugerida?: boolean } = {},
 ): Extract<Command, { type: 'AddTerminal' }>[] {
   const tipo = (CATALOGO_DE_COMPONENTES[componente.tipoId] as FichaDoComponente | undefined)?.ligaAoPonto;
   if (!tipo) return [];
@@ -382,6 +384,7 @@ export function pontosDaLouca(
         at: { x: ponto.x, y: ponto.y },
         cotaMm: ficha.cotaMm[d] ?? 0,
         tipoHidraulico: tipo,
+        ...(opcoes.sugerida ? { sugerida: true } : {}),
       };
     });
 }
@@ -579,12 +582,13 @@ export function pontosDasLoucasCriadas(
   depois: BlueprintModel,
   criados: readonly string[],
   hip: HipotesesDePontos = HIPOTESES_PONTOS_PADRAO,
+  opcoes: { sugerida?: boolean } = {},
 ): Extract<Command, { type: 'AddTerminal' }>[] {
   const ids = new Set(criados);
   const comandos: Extract<Command, { type: 'AddTerminal' }>[] = [];
   for (const c of depois.componentes ?? []) {
     if (!ids.has(c.id)) continue;
-    comandos.push(...pontosDaLouca(depois, c, hip));
+    comandos.push(...pontosDaLouca(depois, c, hip, opcoes));
     comandos.push(...pontosEletricosDoComponente(depois, c));
   }
   return comandos;

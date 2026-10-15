@@ -32,6 +32,9 @@
  */
 import { anelRecuado, contornoDoComponente, pointInPolygon, wallLength, type BlueprintModel, type Command, type ObjectId, type Opening, type Point, type Space, type TipoDeComponente, type Wall } from './blueprintKernel';
 import { usoDoNome, type UsoDoAmbiente } from './blueprintPrograma';
+import { etiquetaDoAmbiente } from './blueprintDistribuicao';
+import { applyBatch } from './blueprintKernel';
+import { HIPOTESES_PONTOS_PADRAO, pontosDasLoucasCriadas, type HipotesesDePontos } from './blueprintPontosHidraulicos';
 
 export type TipoDePeca =
   | 'CAMA_CASAL'
@@ -292,7 +295,9 @@ const recortar = (r: Retangulo, interno: Retangulo): Retangulo => ({ x0: Math.ma
 
 export function mobiliarDoAmbiente(model: BlueprintModel, s: Space, hip: HipotesesDeMobiliario = HIPOTESES_MOBILIARIO_PADRAO): MobiliarioDoAmbiente {
   const paredes = model.walls.filter((w) => w.levelId === s.levelId);
-  const uso = usoDoNome(s.name);
+  // O USO gravado na etiqueta (kernel 0.102) vale antes do nome — o mesmo critério do kit hidráulico
+  // (`kitDoAmbiente`); o nome fica para o desenho antigo, sem uso na etiqueta (casa automática F7, 15/10/2026).
+  const uso = etiquetaDoAmbiente(s, model.labels)?.uso ?? usoDoNome(s.name);
   const rotulo = s.name || 'Ambiente';
   const vazio = (interno: Retangulo | null): MobiliarioDoAmbiente => ({ spaceId: s.id, levelId: s.levelId, rotulo, uso, interno, pecas: [], naoCouberam: [], circulacao: { larguraLivreMm: null, ok90: true, ok120: true, foraDaRota90: [], semPorta: false } });
   const kit = uso ? KIT_POR_USO[uso] : undefined;
@@ -603,3 +608,22 @@ export function comandosDeMobiliario(lista: readonly MobiliarioDoAmbiente[], lev
   }
   return out;
 }
+
+/**
+ * Aceitar o mobiliário COM os pontos das louças (casa automática F7, 15/10/2026): as peças e, de cada louça
+ * criada, a água e o esgoto dela (`pontosDasLoucasCriadas`), num lote só — um Ctrl+Z desfaz os dois. O
+ * "Aceitar" da gaveta gravava só as peças: a louça ficava sem ponto e o esgoto/água automáticos (que só leem
+ * pontos) não a viam. Os pontos nascem `sugerida`, como as peças.
+ */
+export function comandosDeMobiliarioComPontos(
+  lista: readonly MobiliarioDoAmbiente[],
+  levelId: ObjectId,
+  model: BlueprintModel,
+  hipPontos: HipotesesDePontos = HIPOTESES_PONTOS_PADRAO,
+): Command[] {
+  const pecas = comandosDeMobiliario(lista, levelId, model);
+  if (!pecas.length) return [];
+  const r = applyBatch(model, pecas);
+  return [...pecas, ...pontosDasLoucasCriadas(r.model, r.diff.created, hipPontos, { sugerida: true })];
+}
+

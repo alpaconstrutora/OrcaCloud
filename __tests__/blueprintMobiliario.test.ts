@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { KIT_POR_USO, mobiliarDoAmbiente, mobiliarNivel, resumirMobiliario } from '../utils/blueprintMobiliario';
+import { comandosDeMobiliario, comandosDeMobiliarioComPontos, KIT_POR_USO, mobiliarDoAmbiente, mobiliarNivel, resumirMobiliario } from '../utils/blueprintMobiliario';
 
 /** Um cômodo isolado `w × d` (eixo), paredes de 150, porta na parede sul e janela opcional na norte. */
 function comodo(nome: string, w: number, d: number, porta = true, janelaNorte = true): { m: BlueprintModel; spaceId: string } {
@@ -78,3 +78,34 @@ describe('mobiliário mínimo', () => {
     expect(Object.keys(KIT_POR_USO)).toEqual(expect.arrayContaining(['DORMITORIO', 'SALA', 'COZINHA', 'BANHEIRO']));
   });
 });
+
+describe('aceitar o mobiliário COM os pontos das louças (casa automática F7, 15/10/2026)', () => {
+  it('banheiro 2,20 × 2,40: as louças aceitas lançam a água e o esgoto delas, sugeridos, no mesmo lote', () => {
+    const { m } = comodo('Banheiro', 2200, 2400);
+    const t = m.levels[0].id;
+    const lista = mobiliarNivel(m, t);
+    const soPecas = comandosDeMobiliario(lista, t, m);
+    const comPontos = comandosDeMobiliarioComPontos(lista, t, m);
+    // antes: só as peças (a louça sem ponto); agora, as peças e os pontos
+    expect(soPecas.every((c) => c.type === 'AddComponente')).toBe(true);
+    const pontos = comPontos.filter((c) => c.type === 'AddTerminal');
+    expect(comPontos.length).toBe(soPecas.length + pontos.length);
+    const depois = applyBatch(m, comPontos).model;
+    const tipos = new Set(depois.terminais.map((x) => `${x.tipoHidraulico}:${x.disciplina}`));
+    expect(tipos).toContain('VASO_SANITARIO:ESGOTO');
+    expect(tipos).toContain('VASO_SANITARIO:AGUA_FRIA');
+    expect(tipos).toContain('LAVATORIO:ESGOTO');
+    expect(depois.terminais.every((x) => x.sugerida)).toBe(true);
+    // aceitar de novo não duplica nem peça nem ponto
+    expect(comandosDeMobiliarioComPontos(mobiliarNivel(depois, t), t, depois)).toEqual([]);
+  });
+
+  it('o USO da etiqueta vale antes do nome: "Sanitário B" com uso BANHEIRO recebe o kit do banheiro', () => {
+    const { m, spaceId } = comodo('Sanitário B', 2200, 2400);
+    const t = m.levels[0].id;
+    const comUso = applyBatch(m, [{ type: 'NameSpace', spaceId, name: 'Cômodo 7', uso: 'BANHEIRO' } as Command]).model;
+    const r = mobiliarDoAmbiente(comUso, comUso.spaces.find((s) => s.levelId === t)!);
+    expect(r.uso).toBe('BANHEIRO');
+  });
+});
+

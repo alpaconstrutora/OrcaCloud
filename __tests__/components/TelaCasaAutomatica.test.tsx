@@ -1,0 +1,154 @@
+// @vitest-environment jsdom
+/**
+ * F10 da casa automática (15/10/2026): a tela — o programa e as hipóteses do estudo, gerar desligado dizendo por
+ * quê, o progresso por etapa, o resumo (área, índices, custo pelo CUB), as etapas, o relatório por grupo e as duas
+ * saídas (lançar com a trava; criar alternativa).
+ */
+import React from 'react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import TelaCasaAutomatica from '../../components/blueprint/TelaCasaAutomatica';
+import { emptyModel } from '../../utils/blueprintKernel';
+import { PREMISSAS_DA_CASA_PADRAO } from '../../utils/blueprintPremissasDaCasa';
+import type { EstadoDaCasaAutomatica } from '../../hooks/useCasaAutomatica';
+import type { PlanoDaCasa } from '../../utils/blueprintCasaAutomatica';
+
+const plano = {
+  levelId: 'lvl_0001',
+  comandos: [{ type: 'AddLevel', name: 'x', elevationMm: 0, defaultHeightMm: 2800 }],
+  criados: ['lvl_0002'],
+  etapas: [
+    { id: 'ARQUITETURA', rotulo: 'Arquitetura (gerador E6.2)', situacao: 'LANCOU', comandos: 3, nota: '15 paredes' },
+    { id: 'PLUVIAL', rotulo: 'Águas pluviais (calhas, condutores, saída)', situacao: 'NAO_RODOU', comandos: 0, nota: 'sem intensidade de chuva' },
+    { id: 'CLIMATIZACAO', rotulo: 'Climatização', situacao: 'NAO_EXIGIDA', comandos: 0, nota: 'desligada nas hipóteses da casa' },
+  ],
+  pendencias: [
+    { grupo: 'VERIFICACAO', texto: 'Rede de água fria: 3 trecho(s) passando por porta ou janela' },
+    { grupo: 'PREMISSA', texto: 'Águas pluviais: informe a cidade ou a intensidade de chuva' },
+    { grupo: 'CONFERIR', texto: 'Entrada de energia: confira o padrão da concessionária' },
+  ],
+  resultado: emptyModel(),
+  programa: { itens: [], relacoes: [] },
+  implantacao: { medidas: { toPct: 43.6, toMaxPct: 60, coeficiente: 0.44, coeficienteMax: 1.2, permeabilidadePct: 38.1, permeabilidadeMinPct: 20 } },
+  semente: 2,
+  escolha: 'semente 2 de 8: nenhum problema grave',
+  decisoes: [],
+  resumo: {
+    areaConstruidaM2: 100,
+    ambientesPedidos: 11,
+    ambientesAtendidos: 11,
+    regrasVioladas: 0,
+    eletrica: { circuitos: 30, entrada: { categoria: 'T2', ligacao: 'FFF', demandaKva: 17.7 } },
+    climatizacao: { equipamentos: 4 },
+  },
+} as unknown as PlanoDaCasa;
+
+const casa = (extra: Partial<EstadoDaCasaAutomatica> = {}): EstadoDaCasaAutomatica => ({ rodando: false, plano: null, erro: null, progresso: null, gerar: vi.fn(), cancelar: vi.fn(), limpar: vi.fn(), ...extra });
+
+function tela(extra: Partial<React.ComponentProps<typeof TelaCasaAutomatica>> = {}) {
+  const props: React.ComponentProps<typeof TelaCasaAutomatica> = {
+    casa: casa(),
+    premissas: PREMISSAS_DA_CASA_PADRAO,
+    onPremissas: vi.fn(),
+    persistenciaIndisponivel: false,
+    motivoParaNaoGerar: null,
+    onGerar: vi.fn(),
+    prova: { ok: true },
+    onLancar: vi.fn(async () => {}),
+    onCriarAlternativa: vi.fn(async () => {}),
+    lancado: null,
+    cub: { valorM2: 2000, estimado: false, referencia: 'MG · 09/2026' },
+    unidades: [],
+    onPreencherPelaUnidade: vi.fn(),
+    ...extra,
+  };
+  render(<TelaCasaAutomatica {...props} />);
+  return props;
+}
+
+describe('TelaCasaAutomatica (F10)', () => {
+  it('sem prévia: gerar chama o motor; não há o que lançar ainda', () => {
+    const p = tela();
+    fireEvent.click(screen.getByTestId('gerar-casa'));
+    expect(p.onGerar).toHaveBeenCalled();
+    expect(screen.queryByTestId('lancar-casa')).toBeNull();
+  });
+
+  it('sem o que gerar: o botão desligado DIZ o motivo (no title e na tela)', () => {
+    tela({ motivoParaNaoGerar: 'Marque a divisa da FRENTE do lote.' });
+    const b = screen.getByTestId('gerar-casa') as HTMLButtonElement;
+    expect(b.disabled).toBe(true);
+    expect(b.title).toBe('Marque a divisa da FRENTE do lote.');
+    expect(screen.getByTestId('motivo-gerar-casa').textContent).toBe('Marque a divisa da FRENTE do lote.');
+  });
+
+  it('gerando: parar no lugar de gerar, e a etapa em curso', () => {
+    const c = casa({ rodando: true, progresso: { indice: 7, total: 22, rotulo: 'Vigas' } });
+    tela({ casa: c });
+    expect(screen.getByTestId('progresso-casa').textContent).toBe('Etapa 7 de 22: Vigas');
+    fireEvent.click(screen.getByTestId('parar-casa'));
+    expect(c.cancelar).toHaveBeenCalled();
+  });
+
+  it('com a prévia: o resumo (área, índices, custo pelo CUB), as etapas com o motivo e o relatório por grupo', () => {
+    tela({ casa: casa({ plano }) });
+    const resumo = screen.getByTestId('resumo-da-casa');
+    expect(resumo.textContent).toContain('100,00 m²');
+    expect(resumo.textContent).toContain('11 de 11');
+    expect(resumo.textContent).toContain('43,6 %');
+    expect(screen.getByTestId('custo-da-casa').textContent).toMatch(/200\.000/);
+    const etapas = within(screen.getByTestId('etapas-da-casa')).getAllByRole('listitem');
+    expect(etapas.map((li) => li.textContent)).toEqual([
+      'Arquitetura (gerador E6.2)lança · 315 paredes',
+      'Águas pluviais (calhas, condutores, saída)não rodousem intensidade de chuva',
+      'Climatizaçãodesligadadesligada nas hipóteses da casa',
+    ]);
+    // A premissa que faltou, em destaque.
+    expect(screen.getByTestId('casa-parou').textContent).toContain('informe a cidade');
+    // As faltas abertas; os outros grupos recolhidos até o clique.
+    const rel = screen.getByTestId('pendencias-da-casa');
+    expect(rel.textContent).toContain('3 trecho(s) passando por porta ou janela');
+    expect(rel.textContent).not.toContain('confira o padrão da concessionária');
+    fireEvent.click(within(rel).getByRole('button', { name: /CONFERIR NA NORMA/ }));
+    expect(rel.textContent).toContain('confira o padrão da concessionária');
+  });
+
+  it('lançar: desligado com o motivo da trava; ligado, chama o lançamento; criar alternativa também', async () => {
+    tela({ casa: casa({ plano }), prova: { ok: false, motivo: 'O desenho mudou depois da prévia — gere de novo.' } });
+    const lancar = screen.getByTestId('lancar-casa') as HTMLButtonElement;
+    expect(lancar.disabled).toBe(true);
+    expect(lancar.title).toBe('O desenho mudou depois da prévia — gere de novo.');
+    expect(screen.getAllByText('O desenho mudou depois da prévia — gere de novo.').length).toBeGreaterThan(0);
+  });
+
+  it('lançar e criar alternativa chamam as saídas', async () => {
+    const p = tela({ casa: casa({ plano }) });
+    fireEvent.click(screen.getByTestId('lancar-casa'));
+    await waitFor(() => expect(p.onLancar).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('criar-alternativa-casa'));
+    await waitFor(() => expect(p.onCriarAlternativa).toHaveBeenCalled());
+  });
+
+  it('o número é livre enquanto se digita: o "5" de "5500" não vira 2000; sai do campo, volta para a faixa', () => {
+    const p = tela();
+    const chuveiro = screen.getByLabelText('Chuveiro elétrico (W)') as HTMLInputElement;
+    fireEvent.change(chuveiro, { target: { value: '5' } });
+    expect(p.onPremissas).not.toHaveBeenCalled();
+    expect(chuveiro.value).toBe('5');
+    fireEvent.change(chuveiro, { target: { value: '6500' } });
+    expect(p.onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ eletrica: expect.objectContaining({ chuveiroEletricoVA: 6500 }) }));
+    fireEvent.change(chuveiro, { target: { value: '50' } });
+    fireEvent.blur(chuveiro);
+    expect(p.onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ eletrica: expect.objectContaining({ chuveiroEletricoVA: 2000 }) }));
+  });
+
+  it('o programa e as disciplinas mexem nas premissas; a unidade do Empreendimento preenche o programa', () => {
+    const p = tela({ unidades: [{ id: 'u1', rotulo: 'Torre A · Casa 01 (3Q)' }] });
+    fireEvent.change(screen.getByLabelText('Padrão (CUB)'), { target: { value: 'R1-A' } });
+    expect(p.onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ curto: expect.objectContaining({ padrao: 'R1-A' }) }));
+    fireEvent.click(screen.getByLabelText('Climatização'));
+    expect(p.onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ disciplinas: expect.objectContaining({ climatizacao: false }) }));
+    fireEvent.change(screen.getByLabelText('Preencher pela unidade do Empreendimento'), { target: { value: 'u1' } });
+    expect(p.onPreencherPelaUnidade).toHaveBeenCalledWith('u1');
+  });
+});

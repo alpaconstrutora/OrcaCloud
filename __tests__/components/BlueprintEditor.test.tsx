@@ -2407,6 +2407,29 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(screen.getByLabelText('Unidade do ambiente Dormitório 2')).toBeInTheDocument();
   }, 40000);
 
+  it('casa automática (F10): Analisar › Gerar › Casa automática abre a TELA (in-flow, cabeçalho da Planta); sem lote, "Gerar prévia" desligado DIZ o motivo; voltar devolve o editor', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
+    const botao = screen.getAllByRole('button', { name: /casa automática/i }).find((x) => x.getAttribute('title')?.startsWith('Casa automática:'))!;
+    await user.click(botao);
+    const h1 = await screen.findByRole('heading', { level: 1, name: /^casa automática$/i });
+    const tela = h1.closest('[data-tela="casa"]') as HTMLElement;
+    expect(tela).not.toBeNull();
+    // Tela, não overlay: o cabeçalho não está dentro de nenhum diálogo.
+    expect(h1.closest('[role="dialog"]')).toBeNull();
+    const gerar = within(tela).getByTestId('gerar-casa') as HTMLButtonElement;
+    expect(gerar.disabled).toBe(true);
+    expect(gerar.title.length).toBeGreaterThan(0);
+    expect(within(tela).getByTestId('motivo-gerar-casa').textContent).toBe(gerar.title);
+    // O programa da casa e as disciplinas estão na tela.
+    expect(within(tela).getByLabelText('Padrão (CUB)')).toBeInTheDocument();
+    expect(within(tela).getByLabelText('Climatização')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Voltar ao editor' }));
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: /^casa automática$/i })).toBeNull());
+  }, 40000);
+
   it('mobiliário (E6.3): a gaveta lista o kit por ambiente e a circulação livre; o toggle desenha no canvas; o dormitório estreito não passa 0,90; garagem oferece vagas; shaft só com 2 pavimentos', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

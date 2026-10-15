@@ -76,6 +76,8 @@ import { planejarPluvialCompleta } from './blueprintPluvialCompleto';
 import { destinoDoEsgoto } from './blueprintEsgotoAutomatico';
 import { dimensionarTratamento, medidasDimensionadas } from './blueprintTratamento';
 import { pontoNaFrente, type LeitorDoTerreno } from './blueprintAncorasHidro';
+import { amostradorDaGrade, type GradeDeElevacao } from './blueprintTopografia';
+import { medirTerreno } from './blueprintTerreno';
 import { marcasDeVerificacao } from './blueprintVerificacaoRede';
 import { comandosDePontosDoNivel } from './blueprintPontosEletricosDoNivel';
 import { centroDeCargas, comandosParaOCentro } from './blueprintCentroDeCargas';
@@ -83,7 +85,7 @@ import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos, type HipotesesDeCircuito
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO, sugerirDPS, type HipotesesEletricas } from './blueprintEletricaDimensionamento';
 import { comandosDasSugestoesDeDR, conferirNbr5410, sugerirDRs } from './blueprintNbr5410';
 import { HIPOTESES_ELETRODUTO_PADRAO, comandosDeBitolaPelaOcupacao, planejarEletrodutosDoModelo } from './blueprintEletrodutos';
-import { gerarClimatizacao } from './blueprintGeradorClimatizacao';
+import { gerarClimatizacao, type ContextoDoGeradorDeClimatizacao } from './blueprintGeradorClimatizacao';
 import { HIPOTESES_CLIMATIZACAO_PADRAO, type HipotesesClimatizacao } from './blueprintClimatizacao';
 import type { ModeloDoCatalogo } from './blueprintSelecaoClimatizacao';
 import { COTA_USUAL_DO_PONTO_ELETRICO, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
@@ -472,6 +474,11 @@ export interface EntradaDaCasa {
   climatizacao?: HipotesesClimatizacao | null;
   /** F9: o catálogo de evaporadoras (`modelosDoCatalogo`). Vazio ou ausente = a climatização não roda, e diz. */
   modelosDeClimatizacao?: readonly ModeloDoCatalogo[] | null;
+  /**
+   * F10: o contexto da carga térmica que o editor dá ao gerador de climatização dele — os materiais da biblioteca
+   * (o U das paredes e do teto) e a cidade da zona (o clima). Ausente = o padrão do gerador.
+   */
+  cargaDaClimatizacao?: ContextoDoGeradorDeClimatizacao['carga'] | null;
 }
 
 export interface HipotesesDaCasa {
@@ -624,6 +631,11 @@ const ROTULO_DA_DISCIPLINA_DO_AR: Record<string, string> = { FRIGORIGENA: 'linha
 export function motivoParaNaoGerar(model: BlueprintModel, levelId: ObjectId | null): string | null {
   if (!levelId || !model.levels.some((l) => l.id === levelId)) return 'Abra um pavimento para gerar a casa.';
   if (model.walls.some((w) => w.levelId === levelId)) return 'O pavimento já tem paredes — a casa automática nasce num pavimento vazio (crie uma alternativa ou limpe o pavimento).';
+  // F10: o lote e a frente, ANTES de gerar — o botão diz, em vez de a prévia sair vazia com "implantação não rodou".
+  const divisas = model.boundaries.filter((b) => b.levelId === levelId && b.kind === 'TERRENO');
+  if (divisas.length === 0) return 'Desenhe o lote (as divisas do terreno) neste pavimento — a casa se implanta dentro dele.';
+  if (!medirTerreno(divisas)?.fechado) return 'Feche o lote: as divisas do terreno precisam formar um contorno.';
+  if (!divisas.some((b) => b.papel === 'FRENTE')) return 'Marque a divisa da FRENTE do lote (a que dá para a rua) — a casa se implanta a partir dela.';
   return null;
 }
 
@@ -697,7 +709,12 @@ export function comandosNoMundo(r: ResultadoDoGerador, levelId: ObjectId, q: Qua
   return out;
 }
 
-export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> = {}): PlanoDaCasa {
+/** F10: o aviso de progresso — cada etapa concluída, na ordem (a tela mostra "etapa N de M"). */
+export interface OpcoesDoPlanoDaCasa {
+  aoConcluirEtapa?: (e: EtapaDaCasa, indice: number, total: number) => void;
+}
+
+export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> = {}, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const hip: HipotesesDaCasa = {
     ...HIPOTESES_DA_CASA_PADRAO,
     ...hipParcial,
@@ -723,8 +740,10 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   const comandos: Command[] = [];
   const criados: ObjectId[] = [];
   let m = original;
-  const etapa = (id: EtapaDaCasaId, rotulo: string, situacao: SituacaoDaEtapa, n: number, nota: string | null = null) =>
+  const etapa = (id: EtapaDaCasaId, rotulo: string, situacao: SituacaoDaEtapa, n: number, nota: string | null = null) => {
     etapas.push({ id, rotulo, situacao: situacao === 'LANCOU' && n === 0 ? 'NADA_A_FAZER' : situacao, comandos: n, nota });
+    opcoes.aoConcluirEtapa?.(etapas[etapas.length - 1], etapas.length, ORDEM_DAS_ETAPAS.length);
+  };
   const aplicar = (lote: Command[]): number => {
     if (!lote.length) return 0;
     const r = applyBatch(m, lote);
@@ -1197,9 +1216,13 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
         pendencias.push({ grupo: 'PREMISSA', texto: `Climatização: ${motivo}` });
         return;
       }
-      const plano = gerarClimatizacao(m, entrada.climatizacao ?? HIPOTESES_CLIMATIZACAO_PADRAO, { modelos, circuitos: { hip: hipCircuitos, eletricas: hipEletricas } });
+      const plano = gerarClimatizacao(m, entrada.climatizacao ?? HIPOTESES_CLIMATIZACAO_PADRAO, { modelos, circuitos: { hip: hipCircuitos, eletricas: hipEletricas }, ...(entrada.cargaDaClimatizacao ? { carga: entrada.cargaDaClimatizacao } : {}) });
       for (const e of plano.etapas) climatizacao.etapas[e.id] = e.situacao;
-      for (const x of plano.pendencias) pendencias.push({ ...x, texto: `Climatização: ${x.texto}` });
+      // O "conflito" de 0 mm é ENCOSTO (redes paralelas lado a lado — a linha com o dreno do mesmo split, o ramal ao
+      // lado do eletroduto): nenhum eixo dentro. Um a um, eram ~90 linhas que escondiam o resto; vira uma, com a conta.
+      const encostos = plano.pendencias.filter((x) => x.grupo === 'CONFLITO' && /\(0 mm dentro\)/.test(x.texto)).length;
+      for (const x of plano.pendencias) if (!(x.grupo === 'CONFLITO' && /\(0 mm dentro\)/.test(x.texto))) pendencias.push({ ...x, texto: `Climatização: ${x.texto}` });
+      if (encostos) pendencias.push({ grupo: 'CONFERIR', texto: `Climatização: ${encostos} encosto(s) entre redes (lado a lado, nenhum eixo dentro) — o afastamento entre redes não é tratado` });
       const n = aplicar(plano.comandos);
       climatizacao.equipamentos = plano.comandos.filter((c) => c.type === 'AddTerminal' && (c as { tipoEletrico?: string | null }).tipoEletrico === 'AR_CONDICIONADO').length;
       const lancou = plano.etapas.filter((e) => e.situacao === 'LANCOU').map((e) => e.rotulo.toLowerCase());
@@ -1325,3 +1348,23 @@ export function conferirPlanoDaCasa(original: BlueprintModel, plano: PlanoDaCasa
     return { ok: false, motivo: `O desenho mudou desde a prévia — gere de novo (${e instanceof Error ? e.message : String(e)}).` };
   }
 }
+
+// ─── F10: o pedido que atravessa o Web Worker ───────────────────────────────
+
+/**
+ * O que a tela manda ao worker: tudo CLONÁVEL. O leitor do terreno é uma função e não atravessa — vai a GRADE da
+ * topografia (e a cota zero), e o leitor é remontado do lado de lá (`amostradorDaGrade`).
+ */
+export interface PedidoDaCasa {
+  original: BlueprintModel;
+  entrada: Omit<EntradaDaCasa, 'leitorDoTerreno'>;
+  terreno: { grade: GradeDeElevacao; cotaZeroM: number } | null;
+  hip: Partial<HipotesesDaCasa>;
+}
+
+/** O pedido → o plano. O mesmo no worker e no fio principal (sem `Worker`, nos testes): o motor é determinístico. */
+export function planejarCasaDoPedido(pedido: PedidoDaCasa, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
+  const leitorDoTerreno = pedido.terreno ? { cotaEmM: amostradorDaGrade(pedido.terreno.grade), cotaZeroM: pedido.terreno.cotaZeroM } : null;
+  return planejarCasa(pedido.original, { ...pedido.entrada, leitorDoTerreno }, pedido.hip, opcoes);
+}
+

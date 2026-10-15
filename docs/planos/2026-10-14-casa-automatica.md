@@ -137,7 +137,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F8b — compatibilização hidráulica × estrutura (ver "F8b — plano" e "Registro da F8b")
 - [x] F8c — alimentador enterrado fora do baldrame (ver "F8c — plano" e "Registro da F8c")
 - [x] F9 — elétrica + climatização (ver "F9 — plano detalhado" e "Registro da F9")
-- [ ] F10 — UI
+- [x] F10 — tela da Casa automática (ver "Registro da F10")
 - [ ] F11 — saídas (prova)
 - [ ] F12 — sobrado (posterior)
 
@@ -958,4 +958,97 @@ Provas:
   - espícula;
   - parede do lado com tolerância.
 - Harness: o portão confere NBR sem falta, nenhum ponto solto, 4 splits e o ar sem marca.
+
+## Registro da F10 (15/10/2026)
+
+Pedido: "pode seguir". Depois veio "desconsidere minha última mensagem"; perguntei, e o usuário confirmou
+"Seguir com a F10".
+
+Arquivos:
+
+| Arquivo | O que faz |
+|---|---|
+| `components/blueprint/TelaCasaAutomatica.tsx` | A tela. Molde: `TelaGerador` e `PainelGeradorPpci`. |
+| `hooks/useCasaAutomatica.ts` | O motor num Web Worker, com progresso por etapa. Molde: `useGeradorDeMassa`. |
+| `utils/blueprintCasaAutomatica.worker.ts` | O worker. |
+| `utils/blueprintPremissasDaCasa.ts` | As premissas da casa do estudo: tipo, padrão, leitura tolerante da coluna e ida para as hipóteses do motor. |
+| `hooks/useBlueprintCasa.ts` | Persistência com respiro de 500 ms; grava na hora ao desmontar com gravação pendente. |
+| `services/blueprintCasaService.ts` | Serviço da tabela. |
+| `types/blueprint.ts` | `BlueprintCasaRow`. |
+| `supabase/migrations/aplicar_20271015100000_blueprint_study_casa.sql` | Tabela nova (abaixo). |
+
+A tabela `blueprint_study_casa` é o desenho de `_climatizacao`: RLS `is_org_member`, REVOKE/GRANT.
+Foi APLICADA no banco em 15/10 (`db query -f`) e conferida: RLS ligada, 1 política, anon não lê,
+authenticated lê.
+
+**A tela.** In-flow, como as outras telas do editor. A memória registra três rejeições a tela cheia e
+painel sobreposto; esta é um `telaAberta === 'casa'` com `cabecalhoDaTela`, e o editor fica montado e
+escondido.
+- Abre por um botão "Casa automática" em Analisar › Gerar.
+- Card 1, em seções §30 (`SecaoTitulo`):
+  - **Programa da casa**: padrão CUB, dormitórios, suítes, banheiros, vagas, área alvo e garagem;
+    "preencher pela unidade do Empreendimento" ligado ao estudo, com `programaCurtoDaUnidade`;
+  - **O que a casa leva**: as disciplinas;
+  - **Hipóteses**: telhado, implantação, água quente, chuveiro, medidor, caixa de gordura,
+    alternativas tentadas.
+- Card 2, **Prévia**:
+  - "Gerar prévia", desligado com o motivo no `title` e na tela, ou "Parar" enquanto gera, com a
+    etapa em curso ("Etapa 7 de 22: Vigas");
+  - o resumo: área, ambientes, TO, CA e permeabilidade contra a zona, custo = área × CUB do padrão na
+    UF, elétrica, splits;
+  - as etapas com a nota;
+  - o relatório por grupo;
+  - "Criar alternativa com a casa" (um ramo novo com o resultado) e "Lançar no pavimento" (um lote,
+    com a trava `conferirPlanoDaCasa` antes; desligado com o motivo).
+
+**A entrada no editor.** É a mesma que cada disciplina já recebe:
+- o terreno e a zona do estudo de massa, e as regras da zona;
+- o norte e a latitude;
+- as premissas hidro, com a cidade da zona na chuva de projeto quando a pluvial não diz outra (a nota
+  da F8);
+- os circuitos, as elétricas e a climatização, com o catálogo de evaporadoras (o efeito que carrega o
+  catálogo passou a rodar também com a tela da casa) e o contexto de carga: materiais e cidade, que a
+  casa não passava ao gerador de climatização (`EntradaDaCasa.cargaDaClimatizacao`);
+- a GRADE da topografia: o leitor do terreno é uma função e não atravessa o worker
+  (`PedidoDaCasa` / `planejarCasaDoPedido` remontam o leitor do lado de lá).
+
+**Ajustes no motor que a tela pediu:**
+- `motivoParaNaoGerar` passa a dizer, ANTES de gerar, o lote ausente, o lote aberto e a frente não
+  marcada. Antes a prévia saía vazia com "implantação não rodou". No motor, o plano sai vazio com o
+  mesmo motivo.
+- `planejarCasa(…, opcoes.aoConcluirEtapa)`: o progresso.
+- Os "conflitos" de 0 mm da climatização são encostos entre redes paralelas, sem eixo dentro. Viraram
+  uma linha com a contagem em vez de ~90 itens no relatório (de 132 para 61).
+
+**Conferido no navegador** (harness `docs/spikes/casa-automatica/tela.html`):
+- A tela de verdade com o hook de verdade, ou seja, o Web Worker do navegador, que o jsdom não roda.
+- Numa casca com a barra lateral de 256 px e o mesmo cabeçalho.
+- Portões:
+  - nenhum diálogo, com a tela in-flow;
+  - gerou pelo worker, 22 etapas, com o progresso visto;
+  - resumo com área e custo (156,86 m², R$ 415.679 no CUB de prova);
+  - lançar ligado, com a trava aprovando;
+  - sem erro de JS.
+- Os prints foram olhados.
+
+A conferência no app real, com login e uma planta descartável, precisa da senha da conta de leitura
+(que não fica guardada) e da autorização da escrita: fica oferecida.
+
+Provas:
+- `TelaCasaAutomatica.test.tsx`, 8 testes:
+  - gerar;
+  - gerar desligado com o motivo;
+  - parar e o progresso;
+  - resumo, etapas e relatório por grupo;
+  - lançar desligado com o motivo da trava;
+  - lançar e criar alternativa;
+  - o número livre enquanto se digita (o "5" de "5500" não vira 2000);
+  - programa, disciplinas e unidade.
+- `useBlueprintCasa.test.tsx`, 4 testes: a linha completada, o vazio, uma gravação por rajada e a
+  gravação ao sair antes do respiro (reprova sem a correção), e sem a tabela.
+- `blueprintPremissasDaCasa.test.ts`, 4 testes.
+- `BlueprintEditor.test.tsx`, +1: Analisar › Gerar › Casa automática abre a tela (h1 fora de diálogo);
+  sem lote, gerar desligado com o motivo; voltar devolve o editor.
+- `check-ui-standard` sem violações na tela e no editor; `segurancaMigrations` e `migrationsPrefixo`
+  passam.
 

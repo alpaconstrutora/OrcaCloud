@@ -562,6 +562,13 @@ import { blueprintWebhookService, type EntregaDeWebhook, type Webhook as Webhook
 import { blueprintApiTokenService, urlBaseDaApi, type TokenDaApi } from '../../services/blueprintApiTokenService';
 import type { UsoDeMaterial } from '../../utils/blueprintMateriais';
 import { empreendimentoService } from '../../services/empreendimentoService';
+import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
+import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
+import { useCasaAutomatica } from '../../hooks/useCasaAutomatica';
+import { conferirPlanoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
+import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
+import { programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
+import type { EmpreendimentoUnit, EmpreendimentoWithChildren } from '../../types/empreendimento';
 import type { Empreendimento } from '../../types/empreendimento';
 import {
   areaEmM2,
@@ -2126,7 +2133,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721' | 'dimensionamento-agua';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721' | 'dimensionamento-agua' | 'casa';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -8765,6 +8772,99 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // (`blueprint_study_hidro`) e não mais no navegador — a emissão com ART amarra o
   // hash delas. Sem a tabela, o hook segue no navegador como antes.
   const hidroDoEstudo = useBlueprintHidro(study.id, study.organization_id);
+
+  // ─── CASA AUTOMÁTICA (F10, 15/10/2026) ────────────────────────────────────
+  // As premissas do estudo (programa curto, disciplinas, hipóteses da tela), o motor num Web Worker e as duas
+  // saídas: lançar no pavimento (um lote, a trava antes) e criar alternativa. A ENTRADA é a mesma que o editor já
+  // dá a cada disciplina: o terreno e a zona do estudo de massa, as premissas hidro, elétricas, de circuitos e de
+  // climatização do estudo, o catálogo de evaporadoras e a grade da topografia (o leitor é remontado no worker).
+  const casaDoEstudo = useBlueprintCasa(study.id, study.organization_id);
+  const casa = useCasaAutomatica();
+  const [lancadoCasa, setLancadoCasa] = useState<string | null>(null);
+  const motivoParaNaoGerarCasa = useMemo(() => (levelId ? motivoParaNaoGerarACasa(editor.model, levelId) : 'Abra um pavimento.'), [editor.model, levelId]);
+  const gerarCasa = useCallback(() => {
+    if (!levelId) return;
+    setLancadoCasa(null);
+    const p = casaDoEstudo.premissas;
+    const cidade = zona.cidade?.name ?? null;
+    const hidro = hidroDoEstudo.hipoteses;
+    const v = topografia.selecionada;
+    casa.gerar({
+      original: editor.model,
+      entrada: {
+        levelId,
+        ctx: {
+          terreno,
+          limites: limitesDoNivel,
+          recuosBase: zona.recuos,
+          zona: {
+            afastamentoProgressivo: zona.afastamentoProgressivo,
+            recuoFrenteEscalonado: zona.recuoFrenteEscalonado,
+            gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM,
+            gabaritoPavimentos: zona.gabaritoPavimentos,
+            taxaOcupacaoMaxPct: zona.taxaOcupacaoMax,
+            coeficienteMax: zona.coeficienteMax,
+            coeficienteBasico: zona.coeficienteBasico,
+            coeficienteMin: zona.coeficienteMin,
+            taxaPermeabilidadeMinPct: zona.taxaPermeabilidadeMin,
+          },
+        },
+        curto: p.curto,
+        zonaDasRegras: zonaParaRegras(zona),
+        rotacaoNorteDeg: norteDoDesenho,
+        latitudeGraus: latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual,
+        // A cidade da zona alimenta a chuva de projeto quando a premissa pluvial não diz outra (o plano, F8).
+        hidro: hidro.pluvial.cidade || !cidade ? hidro : { ...hidro, pluvial: { ...hidro.pluvial, cidade } },
+        circuitos: hipotesesDeCircuitos,
+        eletricas: hipotesesEletricas,
+        climatizacao: climatizacaoDoEstudo.hipoteses,
+        modelosDeClimatizacao,
+        cargaDaClimatizacao: { materiais: biblioteca.materiais, cidadeDoContexto: cidade },
+      },
+      terreno: v ? { grade: v.grade, cotaZeroM: cotaZeroDoTerrenoM } : null,
+      hip: hipotesesDasPremissas(p),
+    });
+  }, [levelId, casaDoEstudo.premissas, zona, hidroDoEstudo.hipoteses, topografia.selecionada, casa, editor.model, terreno, limitesDoNivel, norteDoDesenho, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, hipotesesDeCircuitos, hipotesesEletricas, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, cotaZeroDoTerrenoM]);
+  /** A trava, só com a tela aberta: o lote recria os mesmos ids no desenho de agora? */
+  const provaDaCasa = useMemo(() => (telaAberta === 'casa' && casa.plano ? conferirPlanoDaCasa(editor.model, casa.plano) : null), [telaAberta, casa.plano, editor.model]);
+  // O CUB do padrão escolhido, na UF do produto (ou da cidade da zona) — o custo da prévia.
+  const [cubDaCasa, setCubDaCasa] = useState<CubDoPadrao | null>(null);
+  const ufDaCasa = ufDoProduto || zona.cidade?.state_code || 'MG';
+  useEffect(() => {
+    if (telaAberta !== 'casa') return;
+    let vivo = true;
+    cubDoPadrao(ufDaCasa, casaDoEstudo.premissas.curto.padrao)
+      .then((c) => vivo && setCubDaCasa(c))
+      .catch(() => vivo && setCubDaCasa(null));
+    return () => {
+      vivo = false;
+    };
+  }, [telaAberta, ufDaCasa, casaDoEstudo.premissas.curto.padrao]);
+  // As unidades do Empreendimento ligado ao estudo — para preencher o programa pela unidade.
+  const [unidadesDaCasa, setUnidadesDaCasa] = useState<{ opcoes: UnidadeParaOPrograma[]; porId: Map<string, EmpreendimentoUnit> }>({ opcoes: [], porId: new Map() });
+  const empreendimentoDaCasa = empreendimentos.find((e) => e.blueprint_study_id === study.id)?.id ?? zona.empreendimentoId ?? empreendimentoSugerido;
+  useEffect(() => {
+    if (telaAberta !== 'casa' || !empreendimentoDaCasa) return;
+    let vivo = true;
+    empreendimentoService
+      .getById(empreendimentoDaCasa, { includeChildren: true })
+      .then((e) => {
+        if (!vivo || !e) return;
+        const torres = (e as EmpreendimentoWithChildren).towers ?? [];
+        const porId = new Map<string, EmpreendimentoUnit>();
+        const opcoes: UnidadeParaOPrograma[] = [];
+        for (const t of torres)
+          for (const u of t.units ?? []) {
+            porId.set(u.id, u);
+            opcoes.push({ id: u.id, rotulo: `${t.name} · ${u.name}${u.typology ? ` (${u.typology})` : ''}` });
+          }
+        setUnidadesDaCasa({ opcoes, porId });
+      })
+      .catch((err) => console.warn('[casa] unidades do empreendimento indisponíveis:', err));
+    return () => {
+      vivo = false;
+    };
+  }, [telaAberta, empreendimentoDaCasa]);
   /** INCÊNDIO (30/09/2026, E0): premissas do estudo; classificação e exigências derivadas, só com a tarefa aberta. */
   const incendioDoEstudo = useBlueprintIncendio(study.id, study.organization_id);
   /** Incêndio E1.4: a numeração derivada (H-1, SPK-3), para o painel do ponto. */
@@ -8895,8 +8995,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   useEffect(() => {
     // O catálogo de bombas carrega quando o cálculo abre (uma vez por abertura).
-    if (tarefaAberta === 'incendioCalculo' || tarefaAberta === 'incendioPpci' || tarefaAberta === 'selecaoSplit' || tarefaAberta === 'geradorClimatizacao') recarregarCatalogoDeTipos();
-  }, [tarefaAberta, recarregarCatalogoDeTipos]);
+    if (tarefaAberta === 'incendioCalculo' || tarefaAberta === 'incendioPpci' || tarefaAberta === 'selecaoSplit' || tarefaAberta === 'geradorClimatizacao' || telaAberta === 'casa') recarregarCatalogoDeTipos();
+  }, [tarefaAberta, telaAberta, recarregarCatalogoDeTipos]);
   /** E3.1: o plano da rede de hidrantes — só com a tarefa aberta. */
   const planoDaRedeDeHidrantes = useMemo(
     () => (tarefaAberta === 'incendioRede' ? planejarRedeDeHidrantes(editor.model, incendioDoEstudo.hipoteses.rede) : null),
@@ -11389,6 +11489,48 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           </div>
         </div>
       )}
+      {telaAberta === 'casa' && levelId && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="casa">
+          {cabecalhoDaTela(
+            'Casa automática',
+            'Do terreno e da lei, a casa térrea inteira: implantação, arquitetura, estrutura, telhado, louças, água, esgoto, pluvial, elétrica e climatização — uma prévia, e um lote só para lançar (um Ctrl+Z desfaz tudo).',
+            Home,
+            'Analisar',
+          )}
+          <TelaCasaAutomatica
+            casa={casa}
+            premissas={casaDoEstudo.premissas}
+            onPremissas={casaDoEstudo.setPremissas}
+            persistenciaIndisponivel={casaDoEstudo.persistenciaIndisponivel}
+            motivoParaNaoGerar={motivoParaNaoGerarCasa}
+            onGerar={gerarCasa}
+            prova={provaDaCasa}
+            lancado={lancadoCasa}
+            onLancar={async () => {
+              const plano = casa.plano;
+              if (!plano) return;
+              const prova = conferirPlanoDaCasa(editor.model, plano);
+              if (!prova.ok) throw new Error(prova.motivo);
+              const criados = editor.runBatch(plano.comandos);
+              setLancadoCasa(`${criados.length} elemento(s) lançados num lote só — Ctrl+Z desfaz tudo. Volte ao editor para ver a casa.`);
+            }}
+            onCriarAlternativa={async () => {
+              const plano = casa.plano;
+              if (!plano) return;
+              const c = casaDoEstudo.premissas.curto;
+              await createAlternative({ studyId: study.id, organizationId: study.organization_id, fromBranchId: branchId, nome: `Casa automática — ${c.dormitorios} dorm., ${c.padrao}`, descricao: plano.escolha ?? undefined, model: plano.resultado });
+              await recarregarRamos();
+              setTelaAberta('alternativas');
+            }}
+            cub={cubDaCasa ? { valorM2: cubDaCasa.valorM2, estimado: cubDaCasa.fonte === 'ESTIMADO', referencia: cubDaCasa.referencia ?? null } : null}
+            unidades={unidadesDaCasa.opcoes}
+            onPreencherPelaUnidade={(id) => {
+              const u = unidadesDaCasa.porId.get(id);
+              if (u) casaDoEstudo.setPremissas({ ...casaDoEstudo.premissas, curto: programaCurtoDaUnidade(u).curto });
+            }}
+          />
+        </div>
+      )}
       {telaAberta === 'gerar-massa' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="gerar-massa">
           {cabecalhoDaTela(
@@ -13810,6 +13952,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     ativo={telaAberta === 'gerar'}
                     onClick={() => alternarTela('gerar')}
                     ajuda="Gerar plantas: do programa e do envelope, N alternativas determinísticas (zona por fluxo, treemap, recozimento com semente, paredes, portas, janelas, automáticos, avaliação)"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (
+                  <BotaoDoRibbon
+                    icone={Home}
+                    rotulo="Casa automática"
+                    ativo={telaAberta === 'casa'}
+                    onClick={() => alternarTela('casa')}
+                    ajuda="Casa automática: do terreno e da lei, a casa térrea inteira — arquitetura, estrutura, telhado, hidráulica, elétrica e climatização — numa prévia, e um lote só para lançar"
                   />
                 )}
                 {relatorioVisivel('quantitativos') && (

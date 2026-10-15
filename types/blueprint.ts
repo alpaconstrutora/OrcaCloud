@@ -193,6 +193,16 @@ export interface BlueprintReferenciasRow {
   updated_at: string;
 }
 
+/** F10 da casa automática (15/10/2026): as premissas da casa do estudo (`PremissasDaCasa`, parcial). */
+export interface BlueprintCasaRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  hipoteses: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BlueprintClimatizacaoRow {
   id: string;
   study_id: string;

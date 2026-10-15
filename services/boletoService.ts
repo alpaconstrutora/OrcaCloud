@@ -5,6 +5,7 @@ import { renomearDocumentoDoBoleto, renomearDocumentosDosBoletos } from './bolet
 import { sha256File, extractFromPdfFile, buildExtractionFromLinhaDigitavel } from '../utils/boletoParser';
 import { parseLinhaDigitavel, onlyDigits, nomeBanco, vencimentoPlausivel } from '../utils/febrabanRules';
 import { financialApprovalService } from './financialApprovalService';
+import { validateCpfCnpj } from '../lib/validators';
 import type {
     Boleto,
     BoletoStatus,
@@ -13,6 +14,9 @@ import type {
     BoletoAuditoria,
     BoletoStats,
 } from '../types/boletos';
+
+/** Frase única: o service recusa com ela e o botão "Aprovar e Lançar" a mostra desabilitado. */
+export const MOTIVO_SEM_VENCIMENTO = 'Informe o vencimento antes de aprovar — é ele que define a competência do título.';
 
 const BUCKET = 'boletos';
 const TABLE = 'boletos';
@@ -26,7 +30,7 @@ const AUDIT_TABLE = 'boletos_auditoria';
  */
 const PAGE_SIZE = 1000;
 
-const BOLETO_COLUMNS = 'id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, plano_de_contas_id, category_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, descricao, observacoes, created_by, created_by_email, created_at, updated_at';
+const BOLETO_COLUMNS = 'id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, plano_de_contas_id, category_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, descricao, observacoes, created_by, created_by_email, created_at, updated_at, origem, email_message_id, nosso_numero';
 
 // ─── Helpers internos ───────────────────────────────────────────────────────
 
@@ -42,6 +46,7 @@ function applyFilters<Q>(queryIn: Q, organizationId: string | undefined, filters
     }
     if (filters.supplier_id) q = q.eq('supplier_id', filters.supplier_id);
     if (filters.project_id) q = q.eq('project_id', filters.project_id);
+    if (filters.origem) q = q.eq('origem', filters.origem);
     if (filters.vencimento_de) q = q.gte('vencimento', filters.vencimento_de);
     if (filters.vencimento_ate) q = q.lte('vencimento', filters.vencimento_ate);
     if (filters.search) {
@@ -138,6 +143,9 @@ function mapRowToBoleto(row: any): Boleto {
         created_by_email: row.created_by_email,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        origem: row.origem ?? 'upload',
+        email_message_id: row.email_message_id ?? null,
+        nosso_numero: row.nosso_numero ?? null,
     };
 }
 
@@ -226,7 +234,7 @@ export const boletoService = {
         // 2. Checar duplicidade
         const { data: existente } = await supabase
             .from(TABLE)
-            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, plano_de_contas_id, category_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, descricao, observacoes, created_by, created_by_email, created_at, updated_at')
+            .select(BOLETO_COLUMNS)
             .eq('organization_id', organizationId)
             .eq('documento_hash', hash)
             .maybeSingle();
@@ -504,13 +512,22 @@ export const boletoService = {
     async aprovarECriarInvoice(boletoId: string, organizationId: string, userEmail?: string): Promise<Boleto> {
         const { data: boletoRow, error: berr } = await supabase
             .from(TABLE)
-            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, plano_de_contas_id, category_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, descricao, observacoes, created_by, created_by_email, created_at, updated_at')
+            .select(BOLETO_COLUMNS)
             .eq('id', boletoId)
             .single();
         if (berr) throw berr;
 
         if (!boletoRow.supplier_id) {
             throw new Error('Selecione um fornecedor antes de aprovar.');
+        }
+        /* Sem vencimento não há competência (15/10/2026). Até aqui o título
+           nascia com `transaction_date = hoje`, e "hoje" é o dia do clique —
+           o defeito de 24/09 (boleto de 2021 na competência de setembro/2026)
+           voltava para os 29% de boletos sem vencimento. Decisão do usuário:
+           o boleto não vira título sem a data; o usuário a informa e aprova.
+           Ver docs/planos/2026-10-15-captura-boletos-por-email.md, item 1.4. */
+        if (!boletoRow.vencimento) {
+            throw new Error(MOTIVO_SEM_VENCIMENTO);
         }
 
         let invoiceId = boletoRow.invoice_id;
@@ -590,7 +607,6 @@ export const boletoService = {
             .maybeSingle();
 
         if (!txExistente) {
-            const hoje = new Date().toISOString().slice(0, 10);
             /* ── A data de COMPETÊNCIA do título (24/09/2026) ───────────────
                Até aqui `transaction_date` recebia `hoje` — o dia em que o
                boleto foi APROVADO. Medido na base: 532 dos 634 títulos de
@@ -605,14 +621,16 @@ export const boletoService = {
                setembro/2026, e o condômino seria cobrado hoje por despesa de
                cinco anos atrás.
 
-               `hoje` continua como reserva porque o vencimento é opcional
+               [15/10/2026: a reserva `hoje` abaixo FOI REMOVIDA — sem
+               vencimento a aprovação é recusada lá em cima.]
+               `hoje` continuava como reserva porque o vencimento é opcional
                (810 de 1.147 boletos o têm). Sem vencimento não há data melhor
                — e uma data errada é pior que uma aproximada declarada.
 
                ⚠️ Isto NÃO reescreve o passado: os 532 títulos já gravados
                seguem com a data da captura. O backfill é decisão própria, com
                efeito em DRE, balancete e nos rateios já feitos. */
-            const dataCompetencia = boletoRow.vencimento ?? hoje;
+            const dataCompetencia: string = boletoRow.vencimento;
             const categoriaBoleto = await resolverCategoriaPorId(boletoRow.category_id);
             /* O título NÃO nasce aprovado. Até 15/08/2026 este insert gravava
                `approval_status: 'APROVADO'`, então todo boleto se autodeclarava
@@ -750,28 +768,41 @@ export const boletoService = {
     },
 
     /**
-     * Sugestão de fornecedor por CNPJ exato (MVP — fuzzy fica para fase 2).
-     * Retorna o id do supplier encontrado, ou null.
+     * Sugestão de fornecedor pelo CPF/CNPJ do beneficiário, SÓ dentro da
+     * organização do boleto. Retorna o id do fornecedor, ou null.
+     *
+     * Até 15/10/2026 era `suppliers.document ILIKE '%<só dígitos>%'` sem
+     * filtro de organização — dois defeitos: `document` é gravado COM máscara
+     * (`11.222.333/0001-81`), então o padrão só com dígitos não casava; e,
+     * quando casava, podia trazer fornecedor de OUTRA organização (a RLS deixa
+     * quem é membro de várias ler todas) e gravá-lo como FK do boleto. Com a
+     * captura automática por e-mail isso viraria vínculo cross-tenant sem
+     * ninguém olhando. A RPC compara só dígitos e recorta pela organização.
+     *
+     * Mais de um fornecedor com o mesmo documento na org (legado anterior à
+     * trava de 16/07/2026): sugere o mais antigo — é sugestão, o usuário confirma.
      */
-    async sugerirFornecedor(boletoId: string, organizationId: string, cnpj: string): Promise<string | null> {
-        const cnpjLimpo = onlyDigits(cnpj);
-        if (cnpjLimpo.length < 11) return null;
+    async sugerirFornecedor(boletoId: string, organizationId: string, documento: string): Promise<string | null> {
+        const doc = onlyDigits(documento);
+        if (!validateCpfCnpj(doc)) return null;
 
-        const { data: supplier } = await supabase
-            .from('suppliers')
-            .select('id, name, document')
-            .ilike('document', `%${cnpjLimpo}%`)
-            .limit(1)
-            .maybeSingle();
-
-        if (supplier) {
-            await supabase
-                .from(TABLE)
-                .update({ sugestao_supplier_id: supplier.id, sugestao_confianca: 95 })
-                .eq('id', boletoId);
-            return supplier.id as string;
+        const { data, error } = await supabase.rpc('find_supplier_in_org_by_document', {
+            p_organization_id: organizationId,
+            p_document: doc,
+        });
+        if (error) {
+            console.warn('[boletoService] busca de fornecedor por documento falhou', error);
+            return null;
         }
-        return null;
+        const supplier = (Array.isArray(data) ? data[0] : data) as { id?: string } | null;
+        if (!supplier?.id) return null;
+
+        await supabase
+            .from(TABLE)
+            .update({ sugestao_supplier_id: supplier.id, sugestao_confianca: 95 })
+            .eq('id', boletoId)
+            .eq('organization_id', organizationId);
+        return supplier.id;
     },
 
     /**
@@ -847,7 +878,7 @@ export const boletoService = {
     async getById(boletoId: string): Promise<Boleto | null> {
         const { data, error } = await supabase
             .from(TABLE)
-            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, plano_de_contas_id, category_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, descricao, observacoes, created_by, created_by_email, created_at, updated_at')
+            .select(BOLETO_COLUMNS)
             .eq('id', boletoId)
             .maybeSingle();
         if (error) throw error;

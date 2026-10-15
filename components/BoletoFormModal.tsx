@@ -9,7 +9,7 @@ import HierarchicalSelect from './HierarchicalSelect';
 import SupplierSelect from './SupplierSelect';
 import CostCenterSelect from './CostCenterSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
-import { boletoService } from '../services/boletoService';
+import { boletoService, MOTIVO_SEM_VENCIMENTO } from '../services/boletoService';
 import { supplierService } from '../services/supplierService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
@@ -258,6 +258,23 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         }
     }
 
+    /** Põe no formulário os campos de um boleto já gravado (ex.: o duplicado encontrado). */
+    function carregarCampos(b: Boleto) {
+        setSupplierId(b.supplier_id ?? '');
+        setCostCenterId(b.cost_center_id ?? '');
+        setPlanoDeContasId(b.plano_de_contas_id ?? '');
+        setCategoryId(b.category_id ?? '');
+        setSelectedProjectId(b.project_id ?? '');
+        setDescricao(b.descricao ?? '');
+        setObservacoes(b.observacoes ?? '');
+        setValor(b.valor != null ? String(b.valor) : '');
+        setVencimento(b.vencimento ?? '');
+        setMulta(b.multa != null ? String(b.multa) : '');
+        setMultaPercentual(b.multa_percentual != null ? String(b.multa_percentual) : '');
+        setJurosDia(b.juros_dia != null ? String(b.juros_dia) : '');
+        setJurosDiaTipo(b.juros_dia_tipo ?? 'valor');
+    }
+
     async function handleUploadAndSave(closeAfter = true) {
         if (!pendingFile || !organizationId) return;
         setBusy(true);
@@ -268,6 +285,23 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 projectId: selectedProjectId || projectId,
                 extraction: pendingExtraction,
             });
+
+            /* Duplicado: o arquivo (ou a linha digitável) JÁ é de um boleto
+               existente. Até 15/10/2026 o código seguia e chamava `associar`
+               com os campos deste formulário — sobrescrevendo fornecedor, CC,
+               valor e vencimento do boleto que já existia, às vezes aprovado
+               (e `associar` propaga para o título). Agora só abre o existente,
+               com os campos DELE, e o usuário decide o que editar. */
+            if (result.duplicate) {
+                setPendingFile(null);
+                setPendingExtraction(null);
+                setBoleto(result.boleto);
+                carregarCampos(result.boleto);
+                setInfo('Este boleto já havia sido capturado anteriormente — abrimos o registro existente, sem alterar nada nele.');
+                setBusy(false);
+                return;
+            }
+
             // Aplica associações do formulário
             const updated = await boletoService.associar(result.boleto.id, organizationId, {
                 // Vazio grava null (limpar o campo SALVA) — `|| undefined` não mandava a coluna
@@ -290,11 +324,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setPendingFile(null);
             setPendingExtraction(null);
             onSaved(updated);
-            if (result.duplicate) {
-                // Boleto duplicado: mostra aviso e permanece no modal com os dados existentes
-                setBoleto(updated);
-                setInfo('Este boleto já havia sido capturado anteriormente. Carregando registro existente.');
-            } else if (closeAfter) {
+            if (closeAfter) {
                 onClose();
             } else {
                 setBoleto(updated);
@@ -451,10 +481,17 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         }
     }
 
+    /** Por que "Aprovar e Lançar" está desligado — o botão mostra a frase (botão mudo é defeito). */
+    const motivoParaNaoAprovar: string | null = !supplierId
+        ? 'Selecione um fornecedor antes de aprovar.'
+        : !vencimento
+            ? MOTIVO_SEM_VENCIMENTO
+            : null;
+
     async function handleAprovar() {
         if (!boleto) return;
-        if (!supplierId) {
-            setError('Selecione um fornecedor antes de aprovar.');
+        if (motivoParaNaoAprovar) {
+            setError(motivoParaNaoAprovar);
             return;
         }
         setBusy(true);
@@ -662,7 +699,8 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                         {(boleto.status === 'rascunho' || boleto.status === 'revisao') && (
                             <button
                                 onClick={handleAprovar}
-                                disabled={busy || !supplierId}
+                                disabled={busy || !!motivoParaNaoAprovar}
+                                title={motivoParaNaoAprovar ?? 'Cria o título em Contas a Pagar e o envia para a alçada'}
                                 className="px-5 py-2 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
                             >
                                 <ThumbsUp className="w-3.5 h-3.5" /> Aprovar e Lançar

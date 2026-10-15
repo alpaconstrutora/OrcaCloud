@@ -119,7 +119,15 @@ export interface Boleto {
     created_by_email?: string;
     created_at: string;
     updated_at?: string;
+
+    /** De onde veio: tela (upload) ou caixa de e-mail monitorada. */
+    origem?: BoletoOrigem;
+    /** Mensagem/anexo de origem quando `origem = 'email'` (email_capture_messages.id). */
+    email_message_id?: string | null;
+    nosso_numero?: string | null;
 }
+
+export type BoletoOrigem = 'upload' | 'email';
 
 export interface BoletoAuditoria {
     id: string;
@@ -138,6 +146,7 @@ export interface BoletoFilters {
     status?: BoletoStatus | BoletoStatus[];
     supplier_id?: string;
     project_id?: string;
+    origem?: BoletoOrigem;
     vencimento_de?: string;
     vencimento_ate?: string;
     search?: string;

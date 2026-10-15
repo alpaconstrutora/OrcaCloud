@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateCPF, validateAllocationTotal } from '../lib/validators';
+import { validateCPF, validateCNPJ, validateCpfCnpj, validateAllocationTotal } from '../lib/validators';
 import { payrollService } from '../services/payrollService';
 
 // ─── validateCPF ─────────────────────────────────────────────────────────────
@@ -116,5 +116,37 @@ describe('payrollService.saveAllocations — rejeita alocação > 100%', () => {
         await expect(
             payrollService.saveAllocations('emp-test', '2024-01', alocacoes as any)
         ).rejects.toThrow('120.0%');
+    });
+});
+
+// ─── validateCNPJ ────────────────────────────────────────────────────────────
+
+describe('validateCNPJ — dígitos verificadores mod-11', () => {
+    it('aceita CNPJ válido sem e com máscara', () => {
+        expect(validateCNPJ('11222333000181')).toBe(true);
+        expect(validateCNPJ('11.222.333/0001-81')).toBe(true);
+        // CNPJ público do Banco do Brasil
+        expect(validateCNPJ('00.000.000/0001-91')).toBe(true);
+    });
+
+    it('rejeita primeiro DV errado e segundo DV errado', () => {
+        expect(validateCNPJ('11.222.333/0001-91')).toBe(false);
+        expect(validateCNPJ('11.222.333/0001-82')).toBe(false);
+    });
+
+    it('rejeita sequência repetida e tamanho errado', () => {
+        expect(validateCNPJ('11111111111111')).toBe(false);
+        expect(validateCNPJ('00000000000000')).toBe(false);
+        expect(validateCNPJ('1122233300018')).toBe(false);
+        expect(validateCNPJ('')).toBe(false);
+    });
+});
+
+describe('validateCpfCnpj — escolhe pelo tamanho', () => {
+    it('valida CPF e CNPJ, recusa outros tamanhos', () => {
+        expect(validateCpfCnpj('529.982.247-25')).toBe(true);
+        expect(validateCpfCnpj('11.222.333/0001-81')).toBe(true);
+        expect(validateCpfCnpj('11.222.333/0001-82')).toBe(false);
+        expect(validateCpfCnpj('123')).toBe(false);
     });
 });

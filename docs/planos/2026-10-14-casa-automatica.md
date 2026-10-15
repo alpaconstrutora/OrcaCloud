@@ -129,7 +129,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F3b — gerador respeita a largura mínima livre de cada ambiente (decisão de 15/10; ver "Registro da F3b")
 - [x] F4 — estrutura (ver "Registro da F4")
 - [x] F5 — telhado (ver "Registro da F5")
-- [ ] F6 — peças-âncora + rede pública
+- [x] F6 — peças-âncora + rede pública (ver "Registro da F6")
 - [ ] F7 — mobiliário + louças com pontos
 - [ ] F8 — hidro encadeada
 - [ ] F9 — elétrica + climatização
@@ -421,4 +421,75 @@ Provas:
 - Harness: o portão confere 2 águas, paredes cobertas e calhas. 25 arquivos dependentes, 168 testes.
 - Suíte cheia: 0 falhas; 198 pendentes do `BlueprintEditor.test.tsx`, que não termina sob carga.
   Nenhum arquivo do app importa os módulos da casa.
+
+## Registro da F6 (15/10/2026)
+
+**Parte (a), rede pública × tratamento: já existia.** A frente `dee77095` (14/10, "destino do esgoto")
+pôs `HipotesesDeEsgoto.destino` (ausente = rede pública) e o `planejarEsgotoCompleto` com caixa →
+tanque → filtro → sumidouro. Reusei sem reimplementar. A casa a usa na F8 pelas premissas hidro do
+estudo, que agora entram na entrada (`EntradaDaCasa.hidro`, ausente = `HIPOTESES_HIDRO_PADRAO`).
+
+**Parte (b), as peças-âncora:** `utils/blueprintAncorasDaCasa.ts` (novo, puro): `comandosDasAncoras`.
+Tudo nasce `sugerida`, e o que já está desenhado fica.
+- **Caixa d'água:** `RESERVATORIO` SUPERIOR de água fria sobre o banheiro (ou serviço ou cozinha) mais
+  perto do meio da casa, a 0,30 m acima da laje. Volume por `dimensionarReservacao` com as premissas do
+  estudo. Testado: 2 dias de reserva dão caixa maior.
+- **Água quente por padrão:**
+  - R1-N e R1-A: aquecedor de passagem. São dois terminais no mesmo ponto (fria = consumo, quente =
+    origem; convenção da fixture `sobradoHidro`), na parede externa da área de serviço. Sem ela, vai na
+    da cozinha, com pendência "confira a ventilação (NBR 13103)".
+  - R1-B: chuveiro elétrico. Não há aquecedor; a TUE fica para a F9.
+- **Caixa de gordura:** do lado de fora da parede externa da cozinha, dentro do lote, na cota da ficha.
+  Se a cozinha não tem parede externa, vai do lado de fora da parede externa mais perto dela. Fora do
+  lote, não põe e diz.
+- **Vagas:** em grade, sempre com o comprimento da rua para dentro (lado a lado e em fila). A vaga
+  paralela à rua cabia num recuo de 2,90 m, mas o carro não entra assim. Saem na garagem, ou no recuo de
+  frente quando são descobertas.
+- No orquestrador: etapa ANCORAS depois do TELHADO; `resumo.ancoras`; `HipotesesDaCasa.ancoras`.
+
+**O gerador precisou mudar para as vagas caberem.** A garagem "de 2 vagas" saía com 4,40 m livres (só
+uma vaga), ou rasa: 7,10 × 3,85 m, e a vaga é 2,50 × 5,00 m.
+- Programa (`programaDaCasa`): o menor lado da garagem passa a ser min(vagas × 2,50 m, 5,00 m)
+  (`larguraPorVagaMm`, `comprimentoDaVagaMm`).
+- Gerador, garagem num canto da frente, em retângulo próprio, fora do treemap: vagas lado a lado
+  quando sobram ≥ 5 m ao lado; EM FILA no lote estreito, porque lado a lado deixava 3,2 m para sala,
+  cozinha e serviço e 3 regras violadas. Se nenhuma das duas cabe, a garagem volta ao treemap.
+  `HipotesesDoGerador.areaPorVagaM2` = 15 conta as vagas pela área.
+- Gerador, a frente em DUAS LINHAS quando sobra fundo atrás da garagem: na rua, a garagem e os
+  pequenos sociais (varanda, lavabo); atrás, sala, cozinha e serviço na largura toda, com as duas
+  fachadas laterais. Comparado em 8 lotes contra a garagem na profundidade toda (regras / aquecedor sem
+  lugar / cômodos sem parede externa / cozinha sem janela):
+
+  | Variante | Regras | Aquecedor sem lugar | Sem parede externa | Cozinha sem janela |
+  |---|---|---|---|---|
+  | Garagem na profundidade toda | 2 | 3 | 12 | 3 |
+  | Duas linhas (a escolhida) | 3 | 2 | 9 | 2 |
+
+  Também comparada e descartada: dar só o fundo atrás da garagem ao serviço. Empatou (3 × 2 regras,
+  2 × 3 aquecedores).
+- Gerador, `piorDe` passou a avaliar a linha com a MESMA repartição do desenho (mínimo primeiro, sobra
+  pela área). Avaliar só pela área julgava inviável uma linha viável, e o serviço ia sozinho para uma
+  tira de 1,30 m. A linha também não recusa um item se o que SOBRA ficar raso demais.
+- Gerador, penalidade para quem só exige ventilação ficar sem lado externo (serviço, lavabo, banheiro).
+
+Medido depois de tudo: melhor de 8 sementes, regras de ambiente violadas.
+- 3 quartos, 2 quartos, apartamentos e a semente "Casa térrea": **0 nos 3 formatos**.
+- 4 quartos: 6 / 3 / 0.
+- No orquestrador, lote 12 × 30: 2 de 2 vagas em fila dentro da garagem, caixa d'água de 1.500 L,
+  caixa de gordura.
+
+**O que fica em aberto (dito):**
+- O fatiamento em faixas ainda põe serviço, lavabo e às vezes a cozinha no miolo, sem parede externa,
+  na casa estreita. No lote 12 × 30, a cozinha sem janela também deixa o aquecedor sem lugar
+  (pendência). É limite do layout do E6.2, não das âncoras. Proposto como fase própria do gerador.
+- Recuo de frente de 3 m não comporta vaga descoberta (5 m): vira pendência.
+
+Provas:
+- `__tests__/blueprintAncorasDaCasa.test.ts`, 7 testes: caixa sobre o banheiro com a cota e o volume;
+  aquecedor com 2 terminais na parede externa; chuveiro elétrico no R1-B; caixa de gordura fora e
+  dentro do lote; não duplica; vagas no recuo fundo e no raso.
+- `blueprintCasaAutomatica.test.ts`: lote reto e a 30° com caixa sobre banheiro, caixa de gordura
+  fora e as 2 vagas na garagem; âncoras desligadas; premissas hidro do estudo.
+- Harness: o portão confere caixa, caixa de gordura e vagas dentro da garagem.
+- 33 arquivos dependentes, 219 testes; typecheck limpo.
 

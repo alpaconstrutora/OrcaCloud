@@ -140,8 +140,9 @@ describe('F3b — mínimos dos ambientes', () => {
   ])('3 quartos em %i × %i: a melhor de 8 sementes não viola regra de ambiente (antes: 5 em todas)', (W, D) => {
     const rs = [1, 2, 3, 4, 5, 6, 7, 8].map((s) => gerar({ programa: programa3Q, envelope: ret(W, D), direcaoDaFrente: null, rotacaoNorteDeg: null, latitudeGraus: -19.9 }, s, { automaticos: false }));
     expect(Math.min(...rs.map((r) => violadas(r).length))).toBe(0);
-    // e nenhum banheiro/lavabo mais estreito que 1,20 livre + parede externa, em semente nenhuma
-    for (const r of rs) for (const a of r.ambientes.filter((x) => x.item.uso === 'BANHEIRO' || x.item.uso === 'LAVABO')) expect(Math.min(a.ret.x1 - a.ret.x0, a.ret.y1 - a.ret.y0)).toBeGreaterThanOrEqual(1400 - 25);
+    // e nenhuma regra de banheiro (largura livre 1,20 m, área 2,5 m²) violada em semente NENHUMA — medido pela regra,
+    // que desconta a parede de verdade (1,35 m de eixo entre paredes internas de 15 cm são 1,20 m livres)
+    for (const r of rs) expect(violadas(r).filter((x) => /^Banheiro:/.test(x.regra.nome))).toEqual([]);
   });
 
   it('faixa funda: o banheiro da suíte EMPILHA atrás dela; faixa rasa: vira coluna AO LADO — encostado nos dois casos', () => {

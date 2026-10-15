@@ -91,6 +91,8 @@ export interface HipotesesDoGerador {
   minimosPorTipo: Partial<Record<TipoDeAmbiente, { larguraLivreMm: number; areaUtilM2: number }>>;
   /** Fração mínima da janela sobre o piso (regras semente): 1/6 no habitável, 1/8 em banheiro e cozinha/serviço. */
   iluminacaoMinima: { habitavel: number; servico: number };
+  /** F6: área de garagem por vaga, m² — conta as vagas do item Garagem pela área (a mesma do programa da casa). */
+  areaPorVagaM2: number;
 }
 
 export const HIPOTESES_DO_GERADOR_PADRAO: HipotesesDoGerador = {
@@ -113,6 +115,7 @@ export const HIPOTESES_DO_GERADOR_PADRAO: HipotesesDoGerador = {
     SALA_DORMITORIO: { larguraLivreMm: 2400, areaUtilM2: 8 },
   },
   iluminacaoMinima: { habitavel: 1 / 6, servico: 1 / 8 },
+  areaPorVagaM2: 15,
 };
 
 // ─── F3b: os mínimos de cada ambiente, no EIXO das paredes ───────────────────
@@ -317,11 +320,25 @@ function treemapEmFaixas(itens: readonly ItemPlanejado[], W: number, D: number, 
     let linha = [itens[i]];
     let melhorPior = Infinity;
     let j = i + 1;
+    // As larguras de uma linha: com `hip`, cada um recebe primeiro o seu mínimo e a SOBRA vai pela área — a MESMA
+    // repartição do layout abaixo (F6: avaliar pela área e desenhar pelo mínimo discordavam; a linha "lavabo +
+    // varanda + serviço", viável no desenho, era julgada inviável e o serviço ia sozinho para uma tira de 1,30 m).
+    const largurasDa = (ls: ItemPlanejado[]): number[] => {
+      const areaLinha = ls.reduce((s, x) => s + x.areaAlvoMm2 * escala, 0) || 1;
+      const minimos = ls.map((t) => (hip ? eixoMinMm(t.item, hip) : 0));
+      const somaMin = minimos.reduce((s, v) => s + v, 0);
+      const pelaArea = !hip || somaMin > W;
+      return ls.map((t, k) => {
+        const parte = (t.areaAlvoMm2 * escala) / areaLinha;
+        return pelaArea ? parte * W : minimos[k] + parte * (W - somaMin);
+      });
+    };
     const piorDe = (ls: ItemPlanejado[]) => {
       const area = ls.reduce((s, x) => s + x.areaAlvoMm2 * escala, 0);
       const h = area / W;
-      return Math.max(...ls.map((x) => {
-        const w = (x.areaAlvoMm2 * escala) / h;
+      const ws = largurasDa(ls);
+      return Math.max(...ls.map((x, k) => {
+        const w = ws[k];
         // F3b: na linha, ninguém fica mais estreito (nem mais raso) que o seu mínimo no eixo. Uma linha inviável
         // vale infinito: a de um item só também (sozinho, o lavabo virava uma tira de 9,00 × 0,40 m) — e
         // infinito ≤ infinito deixa a linha crescer até ficar viável, puxando os próximos itens.
@@ -333,7 +350,11 @@ function treemapEmFaixas(itens: readonly ItemPlanejado[], W: number, D: number, 
     while (j < itens.length) {
       const teste = [...linha, itens[j]];
       const pior = piorDe(teste);
-      if (umaLinha || pior <= melhorPior) {
+      // F6: recusar o próximo só se o que SOBRA, em linhas próprias, ainda tem o fundo mínimo — a área de serviço
+      // sozinha na última linha ficava com 1,40 m (pede 1,70) por um ganho de proporção na linha de cima.
+      const sobra = itens.slice(j);
+      const sobraRasa = !!hip && pior !== Infinity && (sobra.reduce((s2, x) => s2 + x.areaAlvoMm2 * escala, 0) / W) < Math.max(...sobra.map((x) => eixoMinMm(x.item, hip)));
+      if (umaLinha || pior <= melhorPior || sobraRasa) {
         linha = teste;
         melhorPior = pior;
         j++;
@@ -343,13 +364,10 @@ function treemapEmFaixas(itens: readonly ItemPlanejado[], W: number, D: number, 
     const h = i + linha.length >= itens.length ? y0 + D - y : areaLinha / W; // a última linha fecha a faixa
     // F3b: dentro da linha, cada um recebe primeiro o seu mínimo no eixo e só a SOBRA vai pela área — a
     // última linha fecha a faixa com o que restou, e repartida só pela área deixava o lavabo em 0,95 m.
-    const minimos = linha.map((t) => (hip ? eixoMinMm(t.item, hip) : 0));
-    const somaMin = minimos.reduce((s, v) => s + v, 0);
-    const pelaArea = !hip || somaMin > W;
+    const ws = largurasDa(linha);
     let x = 0;
     linha.forEach((x0, k) => {
-      const parte = (x0.areaAlvoMm2 * escala) / areaLinha;
-      const w = k === linha.length - 1 ? W - x : pelaArea ? parte * W : minimos[k] + parte * (W - somaMin);
+      const w = k === linha.length - 1 ? W - x : ws[k];
       out.set(x0, { x0: x, y0: y, x1: x + w, y1: y + h });
       x += w;
     });
@@ -443,17 +461,83 @@ function colunasDoFundo(
   return { caixas, transbordo };
 }
 
+/** A vaga comum (2,50 × 5,00 m — `DIMENSAO_DA_VAGA.COMUM` do kernel). */
+const LARGURA_DA_VAGA_MM = 2500;
+const COMPRIMENTO_DA_VAGA_MM = 5000;
+/** Largura mínima que sobra ao lado da garagem para o resto da frente; abaixo disso, a garagem volta ao treemap. */
+const RESTO_MINIMO_AO_LADO_DA_GARAGEM_MM = 3000;
+/** Com pelo menos isto ao lado, as vagas ficam LADO A LADO; abaixo, EM FILA (lote estreito). */
+const RESTO_CONFORTAVEL_AO_LADO_DA_GARAGEM_MM = 5000;
+/** Fundo mínimo atrás da garagem para virar a linha de trás da frente (sala, cozinha, serviço). */
+const LINHA_MINIMA_ATRAS_DA_GARAGEM_MM = 3000;
+
 function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, programa: Programa, hip: HipotesesDoGerador): Map<ItemPlanejado, CaixaCanonica> {
   const areaFrente = plano.frente.reduce((s, i) => s + i.areaAlvoMm2, 0);
   const areaFundo = plano.fundo.reduce((s, i) => s + i.areaAlvoMm2, 0);
   const dCorredor = plano.corredor ? corredorMm : 0;
   const disponivel = D - dCorredor;
-  const dFrente = plano.fundo.length === 0 ? disponivel : plano.frente.length === 0 ? 0 : (disponivel * areaFrente) / (areaFrente + areaFundo || 1);
+  let dFrente = plano.fundo.length === 0 ? disponivel : plano.frente.length === 0 ? 0 : (disponivel * areaFrente) / (areaFrente + areaFundo || 1);
   const out = new Map<ItemPlanejado, CaixaCanonica>();
+  // F6 (casa automática, 15/10/2026) — A GARAGEM NUM CANTO DA FRENTE. No treemap, o mínimo garante a largura de cada
+  // item na linha, não a PROFUNDIDADE da linha — e a vaga pede 5 m de fundo (sonda: garagem "de 2 vagas" de
+  // 7,30 × 4,05 m; a de 1 vaga, 5,05 × 2,60 m e sem fachada). Retângulo próprio, encostado na rua e num lado
+  // (acesso de carro e ventilação), na profundidade TODA da faixa da frente (sem buraco atrás). As vagas:
+  //  - LADO A LADO quando sobram ≥ 5 m ao lado;
+  //  - EM FILA (largura de uma vaga, fundo de n) no lote estreito — lado a lado, a casa de 9 m ficava com
+  //    3,2 m para sala, cozinha e serviço (3 regras violadas na melhor semente);
+  //  - nenhuma cabe → a garagem volta ao treemap, como antes.
+  // As vagas saem da área do item (`areaPorVagaM2` — a do programa da casa).
+  const garagem = plano.frente.find((t) => t.item.uso === 'GARAGEM') ?? null;
+  let caixaDaGaragem: CaixaCanonica | null = null;
+  if (garagem && plano.frente.length > 1) {
+    const e = hip.espessuraExternaMm;
+    const n = Math.max(1, Math.round(garagem.areaAlvoMm2 / (hip.areaPorVagaM2 * 1e6)));
+    const fundoMinimo = plano.fundo.length ? 3000 : 0;
+    const opcoes = [
+      { gw: n * LARGURA_DA_VAGA_MM + e, gd: COMPRIMENTO_DA_VAGA_MM + e },
+      { gw: LARGURA_DA_VAGA_MM + e, gd: n * COMPRIMENTO_DA_VAGA_MM + e },
+    ]
+      .map((o) => ({ ...o, d: Math.min(Math.max(dFrente, o.gd), disponivel - fundoMinimo) }))
+      .filter((o) => o.d >= o.gd && W - o.gw >= RESTO_MINIMO_AO_LADO_DA_GARAGEM_MM);
+    const escolhida = opcoes.find((o) => W - o.gw >= RESTO_CONFORTAVEL_AO_LADO_DA_GARAGEM_MM) ?? [...opcoes].sort((a, b) => a.gw - b.gw)[0];
+    if (escolhida) {
+      dFrente = escolhida.d;
+      caixaDaGaragem = { x0: 0, y0: 0, x1: escolhida.gw, y1: escolhida.d };
+      // Sobrando fundo atrás da garagem para uma LINHA de cômodos, a frente vira duas linhas: na rua, a garagem
+      // (só o fundo das vagas) e o que couber ao lado; atrás, o resto na LARGURA TODA da casa — com as duas
+      // fachadas laterais. A garagem na profundidade toda deixava o resto da frente com uma fachada só e, no lote
+      // de 12 m, a cozinha sem parede externa (sem janela).
+      if (escolhida.d - escolhida.gd >= LINHA_MINIMA_ATRAS_DA_GARAGEM_MM) caixaDaGaragem.y1 = escolhida.gd;
+    }
+  }
   const fundo = plano.fundo.length ? colunasDoFundo(plano.fundo, W, disponivel - dFrente, dFrente + dCorredor, programa, hip) : { caixas: new Map<ItemPlanejado, CaixaCanonica>(), transbordo: [] };
   // O transbordo entra no FIM da frente: a última linha do treemap é a que encosta no corredor.
-  const daFrente = [...plano.frente, ...fundo.transbordo];
-  if (daFrente.length) for (const [k, v] of treemapEmFaixas(daFrente, W, dFrente, 0, false, hip)) out.set(k, v);
+  const daFrente = [...plano.frente.filter((t) => !(caixaDaGaragem && t === garagem)), ...fundo.transbordo];
+  if (caixaDaGaragem && garagem) {
+    out.set(garagem, caixaDaGaragem);
+    const x0 = caixaDaGaragem.x1;
+    if (caixaDaGaragem.y1 < dFrente - 1) {
+      // Duas linhas. Ao lado da garagem, na rua: os pequenos sociais primeiro (varanda, lavabo — a entrada), depois
+      // o que mais couber INTEIRO; o resto vai à linha de trás, na largura toda.
+      const areaAoLado = (W - x0) * caixaDaGaragem.y1;
+      const preferencia = (t: ItemPlanejado) => (t.item.uso === 'VARANDA' ? 0 : t.item.uso === 'LAVABO' ? 1 : t.zona === 'SOCIAL' && t.item.uso !== 'SALA' ? 2 : 3);
+      const aoLado: ItemPlanejado[] = [];
+      let soma = 0;
+      for (const t of [...daFrente].sort((a, b) => preferencia(a) - preferencia(b) || a.areaAlvoMm2 - b.areaAlvoMm2)) {
+        if (t.item.uso === 'SALA' || soma + t.areaAlvoMm2 > areaAoLado) continue;
+        aoLado.push(t);
+        soma += t.areaAlvoMm2;
+      }
+      const atras = daFrente.filter((t) => !aoLado.includes(t));
+      if (aoLado.length) for (const [k, v] of treemapEmFaixas(aoLado, W - x0, caixaDaGaragem.y1, 0, false, hip)) out.set(k, { x0: v.x0 + x0, y0: v.y0, x1: v.x1 + x0, y1: v.y1 });
+      else caixaDaGaragem.x1 = W; // nada coube ao lado: a garagem fica com a linha da rua inteira
+      if (atras.length) for (const [k, v] of treemapEmFaixas(atras, W, dFrente - caixaDaGaragem.y1, caixaDaGaragem.y1, false, hip)) out.set(k, v);
+      else caixaDaGaragem.y1 = dFrente;
+    } else {
+      // O resto da frente ao lado da garagem, na mesma profundidade da faixa.
+      for (const [k, v] of treemapEmFaixas(daFrente, W - x0, dFrente, 0, false, hip)) out.set(k, { x0: v.x0 + x0, y0: v.y0, x1: v.x1 + x0, y1: v.y1 });
+    }
+  } else if (daFrente.length) for (const [k, v] of treemapEmFaixas(daFrente, W, dFrente, 0, false, hip)) out.set(k, v);
   if (plano.corredor) out.set(plano.corredor, { x0: 0, y0: dFrente, x1: W, y1: dFrente + dCorredor });
   for (const [k, v] of fundo.caixas) out.set(k, v);
   return out;
@@ -510,6 +594,10 @@ function objetivo(plano: Plano, caixas: Map<ItemPlanejado, CaixaCanonica>, W: nu
     const lados = ladosExternosDe(c, W, D);
     if (t.item.exigeFachada && lados.length === 0) J += 8;
     if (t.item.exigeIluminacao && lados.length === 0) J += 6;
+    // F6 (15/10/2026): quem só exige VENTILAÇÃO (serviço, lavabo, banheiro, garagem) não pesava nada sem lado
+    // externo — com a garagem num canto da fachada, o serviço e o lavabo iam para o miolo e o aquecedor e a
+    // caixa de gordura ficavam sem parede externa.
+    if (t.item.exigeVentilacao && !t.item.exigeIluminacao && !t.item.exigeFachada && lados.length === 0) J += 5;
     if (t.item.exigeIluminacao && lados.length > 0) {
       // Sol: quanto mais ao norte (hemisfério sul) a melhor fachada, menor a penalidade (0 a 2).
       const melhor = Math.min(...lados.map((l) => Math.min(azimuteDoLado(l, frente, rotacaoNorteDeg), 360 - azimuteDoLado(l, frente, rotacaoNorteDeg))));

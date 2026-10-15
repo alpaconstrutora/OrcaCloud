@@ -4,12 +4,14 @@
  * Plano: `docs/planos/2026-10-14-casa-automatica.md`.
  */
 import { describe, expect, it } from 'vitest';
-import { applyBatch, applyCommand, emptyModel, point, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
+import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
 import { conferirPlanoDaCasa, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
 import { HIPOTESES_DO_TELHADO_PADRAO } from '../utils/blueprintTelhadoAutomatico';
+import { HIPOTESES_DAS_ANCORAS_PADRAO } from '../utils/blueprintAncorasDaCasa';
+import { HIPOTESES_HIDRO_PADRAO } from '../utils/blueprintMemorialHidro';
 import { planejarCalhas } from '../utils/blueprintCalhas';
 import { HIPOTESES_PLUVIAIS_PADRAO } from '../utils/blueprintPluvial';
 
@@ -59,6 +61,7 @@ describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
       ['FUNDACOES', 'LANCOU'],
       ['EIXOS', 'LANCOU'],
       ['TELHADO', 'LANCOU'],
+      ['ANCORAS', 'LANCOU'],
       ['CONFERENCIA', 'CALCULOU'],
     ]);
     expect(plano.comandos.slice(0, 3).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
@@ -118,7 +121,7 @@ describe('planejarCasa — o que falta vira motivo, nunca exceção', () => {
     expect(p.comandos).toEqual([]);
     expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
     expect(p.etapas[0].nota).toMatch(/FRENTE/);
-    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(9).fill('NAO_RODOU'));
+    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(10).fill('NAO_RODOU'));
   });
 
   it('pavimento inexistente', () => {
@@ -220,7 +223,8 @@ describe('planejarCasa — F4: a estrutura no mesmo lote', () => {
     expect(pecas(p.resultado, 'VIGA').length).toBeGreaterThan(0);
     expect(pecas(p.resultado, 'VIGA_FUNDACAO').length).toBeGreaterThan(0);
     expect(p.resumo.estrutura.pilares).toBe(pilares.length);
-    expect(p.pendencias.filter((x) => /^(Pilares|Vigas|Lajes|Fundações)/.test(x.texto))).toEqual([]);
+    // pulado (pilar quase duplicado) é VERIFICACAO; falta de solução da estrutura, nenhuma
+    expect(p.pendencias.filter((x) => x.grupo === 'SEM_SOLUCAO' && /^(Pilares|Vigas|Lajes|Fundações)/.test(x.texto))).toEqual([]);
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
   });
 
@@ -242,7 +246,8 @@ describe('planejarCasa — F4: a estrutura no mesmo lote', () => {
     const m = lote();
     const p = planejarCasa(m, entrada(m), { estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, lancar: false } });
     expect(p.etapas.filter((e) => ['PILARES', 'VIGAS', 'LAJES', 'FUNDACOES', 'EIXOS'].includes(e.id)).map((e) => e.situacao)).toEqual(Array(5).fill('NAO_EXIGIDA'));
-    expect(p.comandos.map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels', 'AddRoofByExtrusion']);
+    expect(p.comandos.slice(0, 4).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels', 'AddRoofByExtrusion']);
+    expect(p.comandos.some((c) => c.type === 'AddStructural')).toBe(false);
   });
 });
 
@@ -278,3 +283,40 @@ describe('planejarCasa — F5: o telhado', () => {
     expect(p.resumo.telhado).toBeNull();
   });
 });
+
+describe('planejarCasa — F6: as peças-âncora', () => {
+  it.each([0, 30])("lote a %i°: caixa d'água sobre um banheiro, caixa de gordura fora da casa, as 2 vagas na garagem", (graus) => {
+    const m = lote(graus);
+    const L = m.levels[0].id;
+    const p = planejarCasa(m, entrada(m));
+    expect(p.etapas.find((e) => e.id === 'ANCORAS')?.situacao).toBe('LANCOU');
+    const ts = p.resultado.terminais.filter((t) => t.levelId === L);
+    const caixa = ts.find((t) => t.tipoHidraulico === 'RESERVATORIO')!;
+    expect(caixa.volumeL).toBeGreaterThan(0);
+    expect(p.resultado.spaces.some((s) => /banh/i.test(s.name ?? '') && pointInPolygon(s.ring, caixa.at))).toBe(true);
+    const cg = ts.find((t) => t.tipoHidraulico === 'CAIXA_GORDURA')!;
+    expect(p.resultado.spaces.filter((s) => s.levelId === L).some((s) => pointInPolygon(s.ring, cg.at))).toBe(false);
+    // as vagas pedidas (2) dentro da garagem
+    const garagem = p.resultado.spaces.find((s) => /garagem/i.test(s.name ?? ''))!;
+    const vagas = p.resultado.vagas.filter((v) => v.levelId === L);
+    expect(vagas).toHaveLength(2);
+    for (const v of vagas) expect(pointInPolygon(garagem.ring, v.at)).toBe(true);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+
+  it('âncoras desligadas: a etapa NAO_EXIGIDA e nenhuma peça hidráulica nem vaga', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m), { ancoras: { ...HIPOTESES_DAS_ANCORAS_PADRAO, lancar: false } });
+    expect(p.etapas.find((e) => e.id === 'ANCORAS')?.situacao).toBe('NAO_EXIGIDA');
+    expect(p.resultado.terminais).toHaveLength(0);
+    expect(p.resultado.vagas).toHaveLength(0);
+  });
+
+  it('as premissas hidro do estudo entram: mais per capita, caixa maior', () => {
+    const m = lote();
+    const padrao = planejarCasa(m, entrada(m)).resumo.ancoras!.caixaDaguaL!;
+    const mais = planejarCasa(m, entrada(m, { hidro: { ...HIPOTESES_HIDRO_PADRAO, reservatorio: { ...HIPOTESES_HIDRO_PADRAO.reservatorio, diasDeReserva: 2 } } })).resumo.ancoras!.caixaDaguaL!;
+    expect(mais).toBeGreaterThan(padrao);
+  });
+});
+

@@ -13,7 +13,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
-import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command, type Point } from '../../../utils/blueprintKernel';
+import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, type BlueprintModel, type Command, type Point } from '../../../utils/blueprintKernel';
 import { medirTerreno } from '../../../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA } from '../../../utils/blueprintMassa';
 import { conferirPlanoDaCasa, planejarCasa } from '../../../utils/blueprintCasaAutomatica';
@@ -44,6 +44,7 @@ declare global {
         pilaresForaDeParede: number;
         ambientesNoPavimento: number;
         telhado: { aguas: number; paredesCobertas: boolean; calhas: number; motivoDaPluvial: string | null };
+        ancoras: { caixaDaguaL: number | null; caixaDeGordura: boolean; aquecedor: boolean; vagas: number; vagasNaGaragem: number; vagasPedidas: number };
       } | null;
     };
   }
@@ -133,6 +134,17 @@ window.__estado = {
     pilaresForaDeParede: pilaresForaDeParede(model),
     ambientesNoPavimento: model.spaces.filter((s) => s.levelId === levelId).length,
     telhado: telhadoDoModelo(model),
+    ancoras: {
+      caixaDaguaL: plano.resumo.ancoras?.caixaDaguaL ?? null,
+      caixaDeGordura: plano.resumo.ancoras?.caixaDeGordura ?? false,
+      aquecedor: plano.resumo.ancoras?.aquecedor ?? false,
+      vagas: model.vagas.filter((v) => v.levelId === levelId).length,
+      vagasNaGaragem: (() => {
+        const g = model.spaces.find((x) => /garagem/i.test(x.name ?? ''));
+        return g ? model.vagas.filter((v) => pointInPolygon(g.ring, v.at)).length : 0;
+      })(),
+      vagasPedidas: PROGRAMA_CURTO_PADRAO.vagas,
+    },
   },
 };
 document.getElementById('dump')!.textContent = [

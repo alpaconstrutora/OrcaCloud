@@ -66,6 +66,8 @@ import {
 } from './blueprintVigasLajesAutomaticas';
 import { HIPOTESES_FUNDACOES_PADRAO, planejarFundacoes, type HipotesesDeFundacoes } from './blueprintFundacoesAutomaticas';
 import { comandosDoTelhado, HIPOTESES_DO_TELHADO_PADRAO, type HipotesesDoTelhado, type ResumoDoTelhado } from './blueprintTelhadoAutomatico';
+import { comandosDasAncoras, HIPOTESES_DAS_ANCORAS_PADRAO, type HipotesesDasAncoras, type ResultadoDasAncoras } from './blueprintAncorasDaCasa';
+import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from './blueprintMemorialHidro';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
 
 // ─── Hipóteses ──────────────────────────────────────────────────────────────
@@ -340,7 +342,7 @@ export function resumoDaImplantacao(i: ImplantacaoDaCasa): string {
 // kernel só corta parede em interseção EXATA — achado da M6b): a ponta que encontra o
 // meio de outra parede passa `ALEM_MM` além, e o offset das aberturas anda junto.
 
-export type EtapaDaCasaId = 'IMPLANTACAO' | 'ARQUITETURA' | 'PILARES' | 'VIGAS' | 'LAJES' | 'FUNDACOES' | 'EIXOS' | 'TELHADO' | 'CONFERENCIA';
+export type EtapaDaCasaId = 'IMPLANTACAO' | 'ARQUITETURA' | 'PILARES' | 'VIGAS' | 'LAJES' | 'FUNDACOES' | 'EIXOS' | 'TELHADO' | 'ANCORAS' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
@@ -352,6 +354,7 @@ export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
   FUNDACOES: 'Fundações (blocos, estacas, baldrame)',
   EIXOS: 'Eixos (documentam a estrutura)',
   TELHADO: 'Telhado',
+  ANCORAS: "Peças-âncora (caixa d'água, aquecedor, caixa de gordura, vagas)",
   CONFERENCIA: 'Conferência (programa e legislação)',
 };
 const ORDEM_DAS_ETAPAS = Object.keys(ROTULO_DA_ETAPA_DA_CASA) as EtapaDaCasaId[];
@@ -396,6 +399,11 @@ export interface EntradaDaCasa {
   zonaDasRegras?: ContextoDeRegras['zona'];
   rotacaoNorteDeg: number | null;
   latitudeGraus: number;
+  /**
+   * F6: as premissas hidrossanitárias do ESTUDO (`blueprint_study_hidro`) — reservação, esgoto (destino: rede
+   * pública × tratamento), pluvial. Ausente = `HIPOTESES_HIDRO_PADRAO`.
+   */
+  hidro?: HipotesesHidro | null;
 }
 
 export interface HipotesesDaCasa {
@@ -407,6 +415,8 @@ export interface HipotesesDaCasa {
   estrutura: HipotesesDaEstruturaDaCasa;
   /** F5: a cobertura (`lancar: false` = sem telhado). */
   telhado: HipotesesDoTelhado;
+  /** F6: caixa d'água, aquecedor, caixa de gordura e vagas. */
+  ancoras: HipotesesDasAncoras;
 }
 
 export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
@@ -416,6 +426,7 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   sementes: [1, 2, 3, 4, 5, 6, 7, 8],
   estrutura: HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO,
   telhado: HIPOTESES_DO_TELHADO_PADRAO,
+  ancoras: HIPOTESES_DAS_ANCORAS_PADRAO,
 };
 
 export interface PlanoDaCasa {
@@ -444,6 +455,8 @@ export interface PlanoDaCasa {
     estrutura: { eixos: number; pilares: number; vigas: number; lajes: number; blocos: number; estacas: number; baldrames: number };
     /** F5: a cobertura lançada; `null` sem telhado. */
     telhado: ResumoDoTelhado | null;
+    /** F6: as peças-âncora postas; `null` quando a etapa não rodou. */
+    ancoras: ResultadoDasAncoras['resumo'] | null;
   };
 }
 
@@ -532,6 +545,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     ...hipParcial,
     estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, ...(hipParcial.estrutura ?? {}) },
     telhado: { ...HIPOTESES_DO_TELHADO_PADRAO, ...(hipParcial.telhado ?? {}) },
+    ancoras: { ...HIPOTESES_DAS_ANCORAS_PADRAO, ...(hipParcial.ancoras ?? {}) },
   };
   const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
   // A implantação usa a mesma parede externa e a mesma malha do gerador.
@@ -563,7 +577,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   const pedidos = programa.itens.filter((i) => i.uso !== 'CIRCULACAO').reduce((s, i) => s + i.quantidade, 0);
   const vazio = (motivo: string, implantacao: ImplantacaoDaCasa | null = null): PlanoDaCasa => {
     for (const id of ORDEM_DAS_ETAPAS) if (id !== 'IMPLANTACAO' && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
-    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null } };
+    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null } };
   };
 
   const impedimento = motivoParaNaoGerar(original, entrada.levelId);
@@ -661,7 +675,9 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       const { nota, foraDoPlano = [] } = contar(plano);
       etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'LANCOU', n, nota);
       for (const a of plano.avisos ?? []) pendencias.push({ grupo: 'VERIFICACAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${a}` });
-      for (const f of foraDoPlano) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${f}` });
+      // "Fora do plano" é o planejador PULANDO um ponto (pilar quase duplicado, viga já existente…): o lugar ficou
+      // atendido por outra peça ou pede conferência — não é falta de solução.
+      for (const f of foraDoPlano) pendencias.push({ grupo: 'VERIFICACAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${f}` });
     } catch (e) {
       const motivo = e instanceof Error ? e.message : String(e);
       etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);
@@ -748,6 +764,43 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     }
   }
 
+  // ── ÂNCORAS (F6) ──────────────────────────────────────────────────────────
+  // As peças que os lançamentos de instalações exigem no desenho: caixa d'água (água fria), aquecedor (água
+  // quente), caixa de gordura (pia → CG → CI) e as vagas. O destino do esgoto já é hipótese do estudo
+  // (`hidro.esgoto.destino`, de 14/10) e entra na F8.
+  let ancoras: ResultadoDasAncoras['resumo'] | null = null;
+  if (!hip.ancoras.lancar) etapa('ANCORAS', ROTULO_DA_ETAPA_DA_CASA.ANCORAS, 'NAO_EXIGIDA', 0, 'desligadas nas hipóteses da casa');
+  else {
+    try {
+      const espessuraExterna = hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm;
+      const topoMm = (hipGerador.peDireitoMm ?? HIPOTESES_DO_GERADOR_PADRAO.peDireitoMm) + (estrutura.lajes > 0 ? hip.estrutura.lajes.espessuraMm : 0);
+      const a = comandosDasAncoras(
+        m,
+        {
+          levelId: entrada.levelId,
+          padrao: doCurto.curto.padrao,
+          topoMm,
+          espessuraExternaMm: espessuraExterna,
+          vagas: doCurto.curto.vagas,
+          garagemCoberta: doCurto.curto.garagemCoberta,
+          quadro: q,
+          retanguloLocal: r.retangulo,
+          anelDoLote: terreno?.anel ?? null,
+          reservatorio: (entrada.hidro ?? HIPOTESES_HIDRO_PADRAO).reservatorio,
+        },
+        hip.ancoras,
+      );
+      const n = aplicar(a.comandos);
+      ancoras = a.resumo;
+      etapa('ANCORAS', ROTULO_DA_ETAPA_DA_CASA.ANCORAS, 'LANCOU', n, a.notas.join(' ') || null);
+      for (const x of a.pendencias) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: x });
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      etapa('ANCORAS', ROTULO_DA_ETAPA_DA_CASA.ANCORAS, 'NAO_RODOU', 0, motivo);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Peças-âncora: ${motivo}` });
+    }
+  }
+
   // ── CONFERENCIA ───────────────────────────────────────────────────────────
   const conferencia = conferirPrograma(m, programa);
   for (const it of conferencia.itens) {
@@ -782,7 +835,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     semente: r.semente,
     escolha,
     decisoes,
-    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura, telhado },
+    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura, telhado, ancoras },
   };
 }
 

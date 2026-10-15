@@ -1,0 +1,108 @@
+/**
+ * Casa automática F6 (15/10/2026): as peças-âncora (`comandosDasAncoras`) — caixa d'água, aquecedor, caixa de
+ * gordura e vagas. Plano: `docs/planos/2026-10-14-casa-automatica.md`.
+ */
+import { describe, expect, it } from 'vitest';
+import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import { comandosDasAncoras, HIPOTESES_DAS_ANCORAS_PADRAO, type ContextoDasAncoras } from '../utils/blueprintAncorasDaCasa';
+
+/**
+ * Casinha de 9,00 × 3,00 m (eixos) com quatro ambientes lado a lado, todos com as fachadas da frente (y = 0) e
+ * dos fundos (y = 3000): Cozinha 0–3, Área de serviço 3–5, Banheiro 5–7, Dormitório 7–9 m.
+ */
+function casinha(): { m: BlueprintModel; L: string } {
+  const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+  const L = base.levels[0].id;
+  const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: L, a: point(ax, ay), b: point(bx, by), thicknessMm: 200, heightMm: 2800 });
+  let m = applyBatch(base, [w(0, 0, 9000, 0), w(9000, 0, 9000, 3000), w(9000, 3000, 0, 3000), w(0, 3000, 0, 0), w(3000, 0, 3000, 3000), w(5000, 0, 5000, 3000), w(7000, 0, 7000, 3000)]).model;
+  const nome = (x: number, n: string): Command => ({ type: 'NameSpace', spaceId: m.spaces.find((s) => pointInPolygon(s.ring, point(x, 1500)))!.id, name: n });
+  m = applyBatch(m, [nome(1500, 'Cozinha'), nome(4000, 'Área de serviço'), nome(6000, 'Banheiro'), nome(8000, 'Dormitório')]).model;
+  return { m, L };
+}
+
+const ctxDe = (L: string, mudanca: Partial<ContextoDasAncoras> = {}): ContextoDasAncoras => ({
+  levelId: L,
+  padrao: 'R1-N',
+  topoMm: 2900,
+  espessuraExternaMm: 200,
+  vagas: 0,
+  garagemCoberta: true,
+  quadro: { ex: { x: 1, y: 0 }, ey: { x: 0, y: 1 } },
+  retanguloLocal: { x0: 0, y0: 0, x1: 9000, y1: 3000 },
+  anelDoLote: [point(-5000, -5000), point(14000, -5000), point(14000, 8000), point(-5000, 8000)],
+  ...mudanca,
+});
+
+describe('comandosDasAncoras', () => {
+  it("caixa d'água sobre o banheiro, acima da laje, com o volume da reservação (2 pessoas × 200 L)", () => {
+    const { m, L } = casinha();
+    const r = comandosDasAncoras(m, ctxDe(L));
+    const depois = applyBatch(m, r.comandos).model;
+    const caixa = depois.terminais.find((t) => t.tipoHidraulico === 'RESERVATORIO')!;
+    expect(caixa.disciplina).toBe('AGUA_FRIA');
+    expect(caixa.papelReservatorio).toBe('SUPERIOR');
+    expect(caixa.cotaMm).toBe(2900 + HIPOTESES_DAS_ANCORAS_PADRAO.caixaAcimaDaLajeMm);
+    expect(pointInPolygon(depois.spaces.find((s) => s.name === 'Banheiro')!.ring, caixa.at)).toBe(true);
+    expect(r.resumo.caixaDaguaL).toBeGreaterThanOrEqual(400); // 1 dormitório × 2 pessoas × 200 L/dia, comercial acima
+    expect(caixa.sugerida).toBe(true);
+  });
+
+  it('aquecedor (R1-N): DOIS terminais no mesmo ponto (fria = consumo, quente = origem), na parede externa do serviço', () => {
+    const { m, L } = casinha();
+    const r = comandosDasAncoras(m, ctxDe(L));
+    const depois = applyBatch(m, r.comandos).model;
+    const aq = depois.terminais.filter((t) => t.tipoHidraulico === 'AQUECEDOR');
+    expect(aq.map((t) => t.disciplina).sort()).toEqual(['AGUA_FRIA', 'AGUA_QUENTE']);
+    expect(aq[0].at).toEqual(aq[1].at);
+    expect(pointInPolygon(depois.spaces.find((s) => s.name === 'Área de serviço')!.ring, aq[0].at)).toBe(true);
+    // encostado numa fachada: a menos de meia parede + 150 mm + folga de y = 0 ou y = 3000
+    expect(Math.min(Math.abs(aq[0].at.y - 0), Math.abs(aq[0].at.y - 3000))).toBeLessThanOrEqual(100 + 150 + 1);
+    expect(r.resumo.aquecedor).toBe(true);
+  });
+
+  it('R1-B: chuveiro elétrico — sem aquecedor, e dito', () => {
+    const { m, L } = casinha();
+    const r = comandosDasAncoras(m, ctxDe(L, { padrao: 'R1-B' }));
+    expect(r.comandos.some((c) => c.type === 'AddTerminal' && c.tipoHidraulico === 'AQUECEDOR')).toBe(false);
+    expect(r.resumo.chuveiroEletrico).toBe(true);
+    expect(r.notas.join(' ')).toMatch(/chuveiro elétrico/);
+  });
+
+  it('caixa de gordura do lado de FORA da cozinha, no lote, na cota da ficha', () => {
+    const { m, L } = casinha();
+    const r = comandosDasAncoras(m, ctxDe(L));
+    const depois = applyBatch(m, r.comandos).model;
+    const cg = depois.terminais.find((t) => t.tipoHidraulico === 'CAIXA_GORDURA')!;
+    expect(cg.disciplina).toBe('ESGOTO');
+    expect(cg.cotaMm).toBe(-400);
+    expect(depois.spaces.some((s) => pointInPolygon(s.ring, cg.at))).toBe(false);
+    expect(cg.at.x).toBeGreaterThan(0);
+    expect(cg.at.x).toBeLessThan(3000);
+  });
+
+  it('caixa de gordura fora do lote: não põe, e diz', () => {
+    const { m, L } = casinha();
+    const r = comandosDasAncoras(m, ctxDe(L, { anelDoLote: [point(-100, -100), point(9100, -100), point(9100, 3100), point(-100, 3100)] }));
+    expect(r.resumo.caixaDeGordura).toBe(false);
+    expect(r.pendencias.join(' ')).toMatch(/fora do lote/);
+  });
+
+  it('o que já está desenhado fica: não duplica caixa, aquecedor nem caixa de gordura', () => {
+    const { m, L } = casinha();
+    const uma = applyBatch(m, comandosDasAncoras(m, ctxDe(L)).comandos).model;
+    const deNovo = comandosDasAncoras(uma, ctxDe(L));
+    expect(deNovo.comandos.filter((c) => c.type === 'AddTerminal')).toEqual([]);
+    expect(deNovo.notas.join(' ')).toMatch(/já desenhada/);
+  });
+
+  it('vagas descobertas no recuo de frente: cabem se o recuo tem o comprimento da vaga', () => {
+    const { m, L } = casinha();
+    // casa em y 6–9 m, lote começando em y = 0: 6 m de recuo de frente − meia parede
+    const desloc = applyBatch(m, []).model;
+    const r = comandosDasAncoras(desloc, ctxDe(L, { vagas: 2, garagemCoberta: false, retanguloLocal: { x0: 0, y0: 6000, x1: 9000, y1: 9000 }, anelDoLote: [point(0, 0), point(9000, 0), point(9000, 30000), point(0, 30000)] }));
+    expect(r.resumo.vagas).toBe(2);
+    const raso = comandosDasAncoras(desloc, ctxDe(L, { vagas: 2, garagemCoberta: false, retanguloLocal: { x0: 0, y0: 3000, x1: 9000, y1: 6000 }, anelDoLote: [point(0, 0), point(9000, 0), point(9000, 30000), point(0, 30000)] }));
+    expect(raso.resumo.vagas).toBe(0);
+    expect(raso.pendencias.join(' ')).toMatch(/não couberam/);
+  });
+});

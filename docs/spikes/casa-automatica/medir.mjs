@@ -43,7 +43,7 @@ for (const graus of [0, 30]) {
   if (!p) continue;
   const situacoes = p.etapas.map((x) => `${x.id}:${x.situacao}`).join(' ');
   // F4: a estrutura entra entre a arquitetura e a conferência; os eixos não rodam com o lote girado (paredes oblíquas).
-  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU CONFERENCIA:CALCULOU`;
+  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU CONFERENCIA:CALCULOU`;
   conferir(situacoes === esperadas, `${t} etapas: ${situacoes}`);
   conferir(p.comandos > 3, `${t} um lote só com arquitetura e estrutura (${p.comandos} comandos)`);
   const es = p.estrutura;
@@ -53,6 +53,11 @@ for (const graus of [0, 30]) {
   // F5: telhado de duas águas cobrindo toda parede; a pluvial acha o beiral e põe calha.
   conferir(p.telhado.aguas === 2 && p.telhado.paredesCobertas, `${t} telhado: ${p.telhado.aguas} águas, paredes cobertas: ${p.telhado.paredesCobertas}`);
   conferir(p.telhado.motivoDaPluvial === null && p.telhado.calhas > 0, `${t} a pluvial lança ${p.telhado.calhas} calha(s) no beiral${p.telhado.motivoDaPluvial ? ` — ${p.telhado.motivoDaPluvial}` : ''}`);
+  // F6: as peças-âncora — caixa d'água com volume, caixa de gordura e todas as vagas pedidas DENTRO da garagem.
+  const an = p.ancoras;
+  conferir(an.caixaDaguaL > 0 && an.caixaDeGordura, `${t} caixa d'água de ${an.caixaDaguaL} L e caixa de gordura`);
+  conferir(an.vagas === an.vagasPedidas && an.vagasNaGaragem === an.vagasPedidas, `${t} ${an.vagasNaGaragem} de ${an.vagasPedidas} vagas dentro da garagem`);
+  console.log(`   aquecedor ${t}: ${an.aquecedor ? 'lançado' : 'não (ver pendência)'}`);
   conferir(p.ambientesAtendidos === p.ambientesPedidos, `${t} ambientes do programa atendidos: ${p.ambientesAtendidos} de ${p.ambientesPedidos}`);
   conferir(p.ambientesNomeados >= p.ambientesPedidos, `${t} ambientes nomeados no desenho: ${p.ambientesNomeados} (nenhum fundido)`);
   conferir(p.aberturasCriadas === p.aberturasPedidas, `${t} aberturas: ${p.aberturasCriadas} criadas de ${p.aberturasPedidas} pedidas`);

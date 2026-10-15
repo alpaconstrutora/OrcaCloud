@@ -418,7 +418,7 @@ export const ROTULO_DA_TIPOLOGIA: Record<TipologiaSemente, string> = {
   CASA_TERREA: 'Casa térrea',
 };
 
-type EsbocoDeItem = { chave: string; uso: UsoDoAmbiente; nome?: string; quantidade?: number; areaIdealM2?: number; areaMinM2?: number; areaMaxM2?: number | null };
+type EsbocoDeItem = { chave: string; uso: UsoDoAmbiente; nome?: string; quantidade?: number; areaIdealM2?: number; areaMinM2?: number; areaMaxM2?: number | null; larguraMinMm?: number };
 type EsbocoDeRelacao = [string, string, number | 'O' | 'P'];
 
 function montar(nome: string, circulacaoMaxPct: number, esbocos: EsbocoDeItem[], relacoes: EsbocoDeRelacao[]): Programa {
@@ -431,6 +431,7 @@ function montar(nome: string, circulacaoMaxPct: number, esbocos: EsbocoDeItem[],
     if (e.areaIdealM2 != null) item.areaIdealM2 = e.areaIdealM2;
     if (e.areaMinM2 != null) item.areaMinM2 = e.areaMinM2;
     if (e.areaMaxM2 !== undefined) item.areaMaxM2 = e.areaMaxM2;
+    if (e.larguraMinMm != null) item.larguraMinMm = e.larguraMinMm;
     porChave.set(e.chave, item);
     p = adicionarItem(p, item);
   }
@@ -590,6 +591,9 @@ export interface HipotesesDoProgramaDaCasa {
   /** Área por vaga coberta (m²): ideal e mínima — 2,50 × 5,00 m é a vaga mínima usual. */
   areaIdealPorVagaM2: number;
   areaMinPorVagaM2: number;
+  /** Largura e comprimento de uma vaga (as vagas ficam lado a lado na garagem), mm. */
+  larguraPorVagaMm: number;
+  comprimentoDaVagaMm: number;
   /** Área útil / área privativa, para tirar a área alvo da unidade (as paredes ficam de fora). */
   fatorUtilDaPrivativa: number;
   /** Limites do formulário. */
@@ -601,6 +605,8 @@ export const HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO: HipotesesDoProgramaDaCasa = {
   fatorDeAreaDoPadrao: { 'R1-B': 0.85, 'R1-N': 1, 'R1-A': 1.25 },
   areaIdealPorVagaM2: 15,
   areaMinPorVagaM2: 12.5,
+  larguraPorVagaMm: 2500,
+  comprimentoDaVagaMm: 5000,
   fatorUtilDaPrivativa: 0.85,
   maxDormitorios: 6,
   maxVagas: 6,
@@ -679,6 +685,11 @@ export function programaDaCasa(entrada: ProgramaCurtoDaCasa, hip: HipotesesDoPro
       nome: `Garagem (${c.vagas} ${plural(c.vagas, 'vaga', 'vagas')})`,
       areaIdealM2: m2(c.vagas * hip.areaIdealPorVagaM2),
       areaMinM2: m2(c.vagas * hip.areaMinPorVagaM2),
+      // F6 (15/10/2026): o MENOR lado da garagem (é o que o gerador garante) = min(vagas × largura, comprimento
+      // da vaga). Com 1 vaga, 2,50 m; com 2 ou mais, os dois lados ≥ 5,00 m — as vagas cabem lado a lado. A
+      // largura de UMA vaga deixava a garagem "de 2 vagas" com 4,40 m (cabia uma); 2 × 2,50 m sozinho, rasa
+      // (7,10 × 3,85 m — a vaga de 5 m não entra).
+      larguraMinMm: Math.min(c.vagas * hip.larguraPorVagaMm, hip.comprimentoDaVagaMm),
     });
   }
 

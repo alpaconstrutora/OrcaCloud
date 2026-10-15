@@ -138,7 +138,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F8c — alimentador enterrado fora do baldrame (ver "F8c — plano" e "Registro da F8c")
 - [x] F9 — elétrica + climatização (ver "F9 — plano detalhado" e "Registro da F9")
 - [x] F10 — tela da Casa automática (ver "Registro da F10")
-- [ ] F11 — saídas (prova)
+- [x] F11 — saídas (ver "Registro da F11")
 - [ ] F12 — sobrado (posterior)
 
 ## Registro da F1 (14/10/2026)
@@ -1051,4 +1051,73 @@ Provas:
   sem lote, gerar desligado com o motivo; voltar devolve o editor.
 - `check-ui-standard` sem violações na tela e no editor; `segurancaMigrations` e `migrationsPrefixo`
   passam.
+
+**Conferência no APP REAL (15/10/2026, depois do publish da F10).** O usuário mandou a senha da conta de leitura
+e o "pode seguir". O roteiro é `c:/tmp/pwtest/conferencia-casa.cjs`: dev server da frente no `a7aae20a`, uma
+planta DESCARTÁVEL criada pelo serviço com o lote 12 × 30 e a FRENTE, ARQUIVADA no fim e conferida no banco
+(status ARQUIVADO). Todos os portões passaram:
+- Analisar › Gerar › Casa automática abre a tela: in-flow, sem diálogo, com a barra lateral do app à vista;
+- "Gerar prévia" ligado;
+- "guardado no estudo": a tabela `blueprint_study_casa` responde com o login real;
+- as premissas sobrevivem a recarregar (dormitórios 2 voltou do banco);
+- a prévia pelo Web Worker do app sai com as 22 etapas, o CUB REAL da tabela (R$ 2.945/m², R1-N, 01/2026),
+  30 circuitos e entrada B2;
+- "Lançar no pavimento" põe a casa no rascunho: 15 paredes, 12 ambientes, camadas de estrutura 132,
+  elétrica 234, hidráulica 201, mecânica 92 e 697 peças; "Rascunho salvo";
+- depois de lançar, "gerar de novo" fica desligado dizendo que o pavimento já tem paredes;
+- nenhum erro de página, console ou HTTP.
+
+Um achado da conferência: o selo "Conferência" do editor marca 207 achados sobre a casa lançada. São os
+conflitos gerais, incluindo os encostos entre redes e as redes nas aberturas, a compatibilização pendente
+(F9).
+
+## Registro da F11 (15/10/2026) — as saídas
+
+Pedido: "Senha … Pode seguir": a conferência no app real e a F11. Sem código de produto, como o plano
+previa. A casa gerada (`plano.resultado`) alimenta, sem adaptação, o que o app produz de qualquer
+planta. O adaptador opcional para a unidade do Empreendimento (`casaParaUnidadeAdapter`) não foi
+feito: depende de um "pode seguir" próprio.
+
+Provas (`__tests__/blueprintCasaSaidas.test.ts`, 5 testes; a casa de prova R1-N com climatização é
+gerada UMA vez):
+
+**Orçamento (`resumoDasMedidas`)**: 34 medidas, todas com quantidade.
+
+| Grupo | Lote reto |
+|---|---|
+| Construída | 156,86 m² |
+| Alvenaria | 37 m³ |
+| Concreto: pilar / viga / laje / fundação | 3,7 / 8 / 15,2 / 33,6 m³ |
+| Formas | sim |
+| Estacas | 248 m |
+| Aço | 4.604 kg |
+| Telhado | 198 m² |
+| Calha | 36,5 m |
+| Tubos: AF / AQ / esgoto / pluvial | 67 / 35 / 76 / 18 m |
+| Eletroduto | 169 m |
+| Condutor | 2.758 m |
+| Quadro / disjuntores / DR / DPS | 1 / 30 / 8 / 1 |
+| Linha frigorígena / dreno | 31 / 29 m |
+| Equipamentos de climatização | sim |
+
+**Planilha**: as abas Totais, Ambientes, Paredes, Aberturas, Estrutura, Armadura, Instalações e
+Telhado, com linhas.
+
+**DXF**: EOF, 54 camadas, 133 polilinhas, 191 textos.
+
+**IFC**: as classes da casa, cada uma presente.
+- Arquitetura: parede (uma por parede do desenho), porta, janela, espaço, telhado.
+- Estrutura: pilar (um por pilar), viga, laje, sapata/bloco, estaca.
+- Água e esgoto: tubo, conexão, louça, caixa d'água.
+- Elétrica: eletroduto, cabo, tomada, luminária, interruptor, circuito. O quadro sai como
+  `IfcFlowController` no IFC4.
+- Climatização: o split.
+
+**Prancha em PDF**: A3, 1:100, `%PDF-`, 272 KB.
+
+**No APP REAL** (`c:/tmp/pwtest/conferencia-casa.cjs`, outra planta descartável, arquivada no fim):
+- depois de lançar a casa, "Publicar versão": a versão existe no banco (revisão 1, hash
+  `d642f97d12b9`);
+- Colaborar › Versões baixou o DXF (75 KB, `AC1009`) e o IFC (2 MB, `ISO-10303-21`);
+- nenhum erro de página, console ou HTTP.
 

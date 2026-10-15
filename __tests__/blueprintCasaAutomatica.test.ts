@@ -65,6 +65,9 @@ describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
       ['MOBILIARIO', 'LANCOU'],
       ['LOUCAS', 'LANCOU'],
       ['PONTOS_HIDRAULICOS', 'LANCOU'],
+      ['AGUA', 'LANCOU'],
+      ['ESGOTO', 'LANCOU'],
+      ['PLUVIAL', 'NAO_RODOU'], // sem a intensidade de chuva nas premissas do estudo (a casa de 190 m² passa de 100 m²)
       ['CONFERENCIA', 'CALCULOU'],
     ]);
     expect(plano.comandos.slice(0, 3).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
@@ -124,7 +127,7 @@ describe('planejarCasa — o que falta vira motivo, nunca exceção', () => {
     expect(p.comandos).toEqual([]);
     expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
     expect(p.etapas[0].nota).toMatch(/FRENTE/);
-    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(13).fill('NAO_RODOU'));
+    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(16).fill('NAO_RODOU'));
   });
 
   it('pavimento inexistente', () => {
@@ -368,3 +371,57 @@ describe('planejarCasa — F7: mobiliário, louças e pontos', () => {
   });
 });
 
+
+describe('planejarCasa — F8: água, esgoto e pluvial encadeados', () => {
+  const comChuva = (destino: 'REDE_PUBLICA' | 'TRATAMENTO' = 'REDE_PUBLICA') => ({
+    ...HIPOTESES_HIDRO_PADRAO,
+    esgoto: { ...HIPOTESES_HIDRO_PADRAO.esgoto, destino },
+    pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 },
+  });
+  const situacao = (p: ReturnType<typeof planejarCasa>, id: string) => p.etapas.find((e) => e.id === id)?.situacao;
+  const tipos = (p: ReturnType<typeof planejarCasa>) => new Set(p.resultado.terminais.map((t) => t.tipoHidraulico));
+
+  it.each([0, 30])('lote a %i°, com a intensidade de chuva: as três redes lançadas, ligadas e com a trava aprovando', (graus) => {
+    const m = lote(graus);
+    const p = planejarCasa(m, entrada(m, { hidro: comChuva() }));
+    expect([situacao(p, 'AGUA'), situacao(p, 'ESGOTO'), situacao(p, 'PLUVIAL')]).toEqual(['LANCOU', 'LANCOU', 'LANCOU']);
+    const h = p.resumo.hidraulica;
+    expect(h.agua.tubos).toBeGreaterThan(0);
+    expect(h.esgoto.tubos).toBeGreaterThan(0);
+    expect(h.pluvial.tubos).toBeGreaterThan(0);
+    expect(h.esgoto.destino).toBe('REDE_PUBLICA');
+    // A rede sai LIGADA: nenhum tubo com ponta solta, nenhum trecho sem destino.
+    expect(h.verificacao.porTipo.PONTA_ABERTA ?? 0).toBe(0);
+    expect(h.verificacao.porTipo.SEM_DESTINO ?? 0).toBe(0);
+    expect(tipos(p).has('HIDROMETRO')).toBe(true);
+    expect(tipos(p).has('LIGACAO_ESGOTO')).toBe(true);
+    // Tudo proposta do sistema — inclusive o ponto que a água encostou na parede.
+    expect(p.resultado.terminais.filter((t) => t.tipoHidraulico).every((t) => t.sugerida)).toBe(true);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+
+  it('sem rede pública: tanque séptico, filtro e sumidouro no lugar da ligação', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m, { hidro: comChuva('TRATAMENTO') }));
+    expect(situacao(p, 'ESGOTO')).toBe('LANCOU');
+    expect(p.resumo.hidraulica.esgoto.destino).toBe('TRATAMENTO');
+    for (const t of ['TANQUE_SEPTICO', 'FILTRO_ANAEROBIO', 'SUMIDOURO']) expect(tipos(p).has(t as never)).toBe(true);
+    expect(tipos(p).has('LIGACAO_ESGOTO')).toBe(false);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+
+  it('sem a intensidade de chuva: a pluvial não roda e vira premissa — água e esgoto seguem', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m));
+    expect(situacao(p, 'PLUVIAL')).toBe('NAO_RODOU');
+    expect(p.pendencias.some((x) => x.grupo === 'PREMISSA' && /^Águas pluviais/.test(x.texto))).toBe(true);
+    expect([situacao(p, 'AGUA'), situacao(p, 'ESGOTO')]).toEqual(['LANCOU', 'LANCOU']);
+  });
+
+  it('desligada nas hipóteses: nenhuma rede, etapas NAO_EXIGIDA', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m, { hidro: comChuva() }), { hidraulica: { lancar: false } });
+    expect([situacao(p, 'AGUA'), situacao(p, 'ESGOTO'), situacao(p, 'PLUVIAL')]).toEqual(['NAO_EXIGIDA', 'NAO_EXIGIDA', 'NAO_EXIGIDA']);
+    expect(p.resultado.trechos ?? []).toEqual([]);
+  });
+});

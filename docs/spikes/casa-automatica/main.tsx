@@ -20,6 +20,7 @@ import { conferirPlanoDaCasa, planejarCasa } from '../../../utils/blueprintCasaA
 import { PROGRAMA_CURTO_PADRAO } from '../../../utils/blueprintPrograma';
 import { planejarCalhas } from '../../../utils/blueprintCalhas';
 import { HIPOTESES_PLUVIAIS_PADRAO } from '../../../utils/blueprintPluvial';
+import { HIPOTESES_HIDRO_PADRAO } from '../../../utils/blueprintMemorialHidro';
 
 declare global {
   interface Window {
@@ -47,6 +48,7 @@ declare global {
         ancoras: { caixaDaguaL: number | null; caixaDeGordura: boolean; aquecedor: boolean; vagas: number; vagasNaGaragem: number; vagasPedidas: number };
         kits: { ambiente: string; faltam: string[]; duplicados: number }[];
         pecasDeMobiliario: number;
+        hidraulica: { agua: number; esgoto: number; pluvial: number; porTipo: Record<string, number> };
       } | null;
     };
   }
@@ -85,6 +87,8 @@ const plano = planejarCasa(lote, {
   curto: PROGRAMA_CURTO_PADRAO,
   rotacaoNorteDeg: null,
   latitudeGraus: -19.9,
+  // F8: a intensidade de chuva das premissas (150 mm/h) — sem ela a pluvial não roda.
+  hidro: { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } },
 });
 const model = plano.resultado;
 
@@ -166,6 +170,12 @@ window.__estado = {
     },
     kits: kitsDoModelo(model),
     pecasDeMobiliario: plano.resumo.mobiliario.pecas,
+    hidraulica: {
+      agua: plano.resumo.hidraulica.agua.tubos,
+      esgoto: plano.resumo.hidraulica.esgoto.tubos,
+      pluvial: plano.resumo.hidraulica.pluvial.tubos,
+      porTipo: plano.resumo.hidraulica.verificacao.porTipo,
+    },
   },
 };
 document.getElementById('dump')!.textContent = [

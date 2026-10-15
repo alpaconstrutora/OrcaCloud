@@ -43,7 +43,7 @@ for (const graus of [0, 30]) {
   if (!p) continue;
   const situacoes = p.etapas.map((x) => `${x.id}:${x.situacao}`).join(' ');
   // F4: a estrutura entra entre a arquitetura e a conferência; os eixos não rodam com o lote girado (paredes oblíquas).
-  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU MOBILIARIO:LANCOU LOUCAS:LANCOU PONTOS_HIDRAULICOS:LANCOU CONFERENCIA:CALCULOU`;
+  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU MOBILIARIO:LANCOU LOUCAS:LANCOU PONTOS_HIDRAULICOS:LANCOU AGUA:LANCOU ESGOTO:LANCOU PLUVIAL:LANCOU CONFERENCIA:CALCULOU`;
   conferir(situacoes === esperadas, `${t} etapas: ${situacoes}`);
   conferir(p.comandos > 3, `${t} um lote só com arquitetura e estrutura (${p.comandos} comandos)`);
   const es = p.estrutura;
@@ -63,6 +63,10 @@ for (const graus of [0, 30]) {
   const kitsRuins = p.kits.filter((k) => k.faltam.length || k.duplicados);
   conferir(p.kits.length >= 4 && kitsRuins.length === 0, `${t} ${p.kits.length} ambientes molhados com o kit completo${kitsRuins.length ? ` — ${kitsRuins.map((k) => `${k.ambiente}: falta ${k.faltam.join(', ')}${k.duplicados ? `, ${k.duplicados} duplicado(s)` : ''}`).join(' | ')}` : ''}`);
   conferir(p.pecasDeMobiliario > 10, `${t} ${p.pecasDeMobiliario} peças de mobiliário`);
+  // F8: as três redes lançadas e LIGADAS (a verificação de rede do app sem ponta aberta nem trecho sem destino).
+  const h = p.hidraulica;
+  conferir(h.agua > 0 && h.esgoto > 0 && h.pluvial > 0, `${t} redes lançadas: água ${h.agua}, esgoto ${h.esgoto}, pluvial ${h.pluvial} tubo(s)`);
+  conferir(!h.porTipo.PONTA_ABERTA && !h.porTipo.SEM_DESTINO, `${t} nenhuma ponta aberta nem trecho sem destino — marcas: ${JSON.stringify(h.porTipo)}`);
   conferir(p.ambientesAtendidos === p.ambientesPedidos, `${t} ambientes do programa atendidos: ${p.ambientesAtendidos} de ${p.ambientesPedidos}`);
   conferir(p.ambientesNomeados >= p.ambientesPedidos, `${t} ambientes nomeados no desenho: ${p.ambientesNomeados} (nenhum fundido)`);
   conferir(p.aberturasCriadas === p.aberturasPedidas, `${t} aberturas: ${p.aberturasCriadas} criadas de ${p.aberturasPedidas} pedidas`);

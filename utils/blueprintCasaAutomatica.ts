@@ -70,6 +70,13 @@ import { comandosDasAncoras, HIPOTESES_DAS_ANCORAS_PADRAO, type HipotesesDasAnco
 import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from './blueprintMemorialHidro';
 import { comandosDeMobiliario, HIPOTESES_MOBILIARIO_PADRAO, mobiliarNivel, type HipotesesDeMobiliario } from './blueprintMobiliario';
 import { HIPOTESES_PONTOS_PADRAO, planejarPontosDoNivel, pontosDasLoucasCriadas, type HipotesesDePontos } from './blueprintPontosHidraulicos';
+import { planejarAguaCompleta } from './blueprintAguaCompleta';
+import { planejarEsgotoCompleto } from './blueprintEsgotoCompleto';
+import { planejarPluvialCompleta } from './blueprintPluvialCompleto';
+import { destinoDoEsgoto } from './blueprintEsgotoAutomatico';
+import { dimensionarTratamento, medidasDimensionadas } from './blueprintTratamento';
+import type { LeitorDoTerreno } from './blueprintAncorasHidro';
+import { marcasDeVerificacao } from './blueprintVerificacaoRede';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
 
 // ─── Hipóteses ──────────────────────────────────────────────────────────────
@@ -344,7 +351,23 @@ export function resumoDaImplantacao(i: ImplantacaoDaCasa): string {
 // kernel só corta parede em interseção EXATA — achado da M6b): a ponta que encontra o
 // meio de outra parede passa `ALEM_MM` além, e o offset das aberturas anda junto.
 
-export type EtapaDaCasaId = 'IMPLANTACAO' | 'ARQUITETURA' | 'PILARES' | 'VIGAS' | 'LAJES' | 'FUNDACOES' | 'EIXOS' | 'TELHADO' | 'ANCORAS' | 'MOBILIARIO' | 'LOUCAS' | 'PONTOS_HIDRAULICOS' | 'CONFERENCIA';
+export type EtapaDaCasaId =
+  | 'IMPLANTACAO'
+  | 'ARQUITETURA'
+  | 'PILARES'
+  | 'VIGAS'
+  | 'LAJES'
+  | 'FUNDACOES'
+  | 'EIXOS'
+  | 'TELHADO'
+  | 'ANCORAS'
+  | 'MOBILIARIO'
+  | 'LOUCAS'
+  | 'PONTOS_HIDRAULICOS'
+  | 'AGUA'
+  | 'ESGOTO'
+  | 'PLUVIAL'
+  | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
@@ -360,6 +383,9 @@ export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
   MOBILIARIO: 'Mobiliário e louças',
   LOUCAS: 'Pontos das louças (água e esgoto)',
   PONTOS_HIDRAULICOS: 'Pontos que completam o kit (caixa sifonada, ralo…)',
+  AGUA: 'Água fria e quente (hidrômetro, alimentador, barrilete, colunas, ramais)',
+  ESGOTO: 'Esgoto (caixas, ramais, ventilação, ligação ou tratamento)',
+  PLUVIAL: 'Águas pluviais (calhas, condutores, saída)',
   CONFERENCIA: 'Conferência (programa e legislação)',
 };
 const ORDEM_DAS_ETAPAS = Object.keys(ROTULO_DA_ETAPA_DA_CASA) as EtapaDaCasaId[];
@@ -409,6 +435,12 @@ export interface EntradaDaCasa {
    * pública × tratamento), pluvial. Ausente = `HIPOTESES_HIDRO_PADRAO`.
    */
   hidro?: HipotesesHidro | null;
+  /**
+   * F8: a cota do terreno em cada ponto (a topografia do estudo) — a caixa de inspeção, a ligação e o
+   * hidrômetro na frente do lote leem a cota dali. Ausente = terreno plano na cota zero. (Não é clonável: a F10
+   * passa a grade ao worker e monta o leitor lá.)
+   */
+  leitorDoTerreno?: LeitorDoTerreno | null;
 }
 
 export interface HipotesesDaCasa {
@@ -425,6 +457,8 @@ export interface HipotesesDaCasa {
   /** F7: o mobiliário mínimo (as louças lançam os pontos) e os pontos do kit hidráulico. */
   mobiliario: HipotesesDeMobiliario & { lancar: boolean };
   pontos: HipotesesDePontos;
+  /** F8: lançar as redes de água, esgoto e pluvial (as premissas são as do estudo, em `EntradaDaCasa.hidro`). */
+  hidraulica: { lancar: boolean };
 }
 
 export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
@@ -437,6 +471,7 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   ancoras: HIPOTESES_DAS_ANCORAS_PADRAO,
   mobiliario: { ...HIPOTESES_MOBILIARIO_PADRAO, lancar: true },
   pontos: HIPOTESES_PONTOS_PADRAO,
+  hidraulica: { lancar: true },
 };
 
 export interface PlanoDaCasa {
@@ -469,10 +504,34 @@ export interface PlanoDaCasa {
     ancoras: ResultadoDasAncoras['resumo'] | null;
     /** F7: peças de mobiliário e pontos hidráulicos lançados. */
     mobiliario: { pecas: number; pontosDasLoucas: number; pontosDoKit: number };
+    /** F8: o que cada rede lançou (peças = terminais; tubos = trechos) e o destino do esgoto. */
+    hidraulica: {
+      agua: { pecas: number; tubos: number };
+      esgoto: { pecas: number; tubos: number; destino: 'REDE_PUBLICA' | 'TRATAMENTO' };
+      pluvial: { pecas: number; tubos: number };
+      /** A verificação de rede do app sobre o resultado (`marcasDeVerificacao`), por tipo de marca. */
+      verificacao: { erros: number; avisos: number; porTipo: Record<string, number> };
+    };
   };
 }
 
 const ESTRUTURA_ZERADA = { eixos: 0, pilares: 0, vigas: 0, lajes: 0, blocos: 0, estacas: 0, baldrames: 0 };
+const HIDRAULICA_ZERADA = (): PlanoDaCasa['resumo']['hidraulica'] => ({ agua: { pecas: 0, tubos: 0 }, esgoto: { pecas: 0, tubos: 0, destino: 'REDE_PUBLICA' }, pluvial: { pecas: 0, tubos: 0 }, verificacao: { erros: 0, avisos: 0, porTipo: {} } });
+
+/** As marcas da verificação de rede ditas em português, pelo tipo (as demais saem com o texto da marca). */
+const MARCA_DA_REDE: Record<string, string> = {
+  PONTA_ABERTA: 'ponta(s) aberta(s)',
+  SEM_DESTINO: 'trecho(s) sem destino',
+  CONTRAFLUXO: 'trecho(s) em contrafluxo',
+  DECLIVIDADE_BAIXA: 'trecho(s) com declividade baixa',
+  SEM_VENTILACAO: 'desconector(es) sem ventilação',
+  ATRAVESSA_PILAR: 'trecho(s) atravessando pilar',
+  CRUZA_VIGA: 'trecho(s) cruzando viga',
+  DN_MENOR: 'trecho(s) com DN abaixo do necessário',
+  CALHA_INSUFICIENTE: 'calha(s) insuficiente(s)',
+  CONDUTOR_INSUFICIENTE: 'condutor(es) insuficiente(s)',
+};
+const ROTULO_DA_DISCIPLINA_DA_REDE: Record<string, string> = { AGUA_FRIA: 'água fria', AGUA_QUENTE: 'água quente', ESGOTO: 'esgoto', PLUVIAL: 'pluvial' };
 
 /** Por que o botão "Gerar casa" não roda — `null` = pode. */
 export function motivoParaNaoGerar(model: BlueprintModel, levelId: ObjectId | null): string | null {
@@ -560,6 +619,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     ancoras: { ...HIPOTESES_DAS_ANCORAS_PADRAO, ...(hipParcial.ancoras ?? {}) },
     mobiliario: { ...HIPOTESES_MOBILIARIO_PADRAO, lancar: true, ...(hipParcial.mobiliario ?? {}) },
     pontos: { ...HIPOTESES_PONTOS_PADRAO, ...(hipParcial.pontos ?? {}) },
+    hidraulica: { lancar: true, ...(hipParcial.hidraulica ?? {}) },
   };
   const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
   // A implantação usa a mesma parede externa e a mesma malha do gerador.
@@ -591,7 +651,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   const pedidos = programa.itens.filter((i) => i.uso !== 'CIRCULACAO').reduce((s, i) => s + i.quantidade, 0);
   const vazio = (motivo: string, implantacao: ImplantacaoDaCasa | null = null): PlanoDaCasa => {
     for (const id of ORDEM_DAS_ETAPAS) if (id !== 'IMPLANTACAO' && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
-    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 } } };
+    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA() } };
   };
 
   const impedimento = motivoParaNaoGerar(original, entrada.levelId);
@@ -866,6 +926,85 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     return { comandos: lote, nota: `${lote.length} ponto(s) que nenhuma louça cobre (caixa sifonada, ralo…)` };
   });
 
+  // ── HIDRÁULICA (F8) ───────────────────────────────────────────────────────
+  // Os "Lançar tudo" das gavetas, na ordem e com as premissas do ESTUDO (`hidro`, as mesmas da gaveta):
+  //  - ÁGUA: peças da caixa → barrilete, colunas e ramais (fria e, com aquecedor, quente) → hidrômetro e
+  //    alimentador na frente do lote → recalque, se houver reservatório inferior;
+  //  - ESGOTO: caixa de inspeção, ramais e coletor até a LIGAÇÃO à rede pública — ou, com o destino TRATAMENTO
+  //    (`hidro.esgoto.destino`), tanque séptico, filtro e sumidouro dimensionados pela reservação — e ventilação;
+  //  - PLUVIAL: calhas no beiral do telhado, condutores e saída na frente (precisa da intensidade de chuva:
+  //    a cidade ou o valor nas premissas).
+  // O que cada um PRESUMIU (cota estimada da rede, posição da caixa…) vai às pendências CONFERIR; o que faltou do
+  // mundo, às PREMISSA. A casa nasce num pavimento vazio: não há peça confirmada do outro destino para apagar.
+  const hidro = entrada.hidro ?? HIPOTESES_HIDRO_PADRAO;
+  const terrenoHidro = entrada.leitorDoTerreno ?? null;
+  const hidraulica = HIDRAULICA_ZERADA();
+  const contar = (lote: Command[]) => ({ pecas: lote.filter((c) => c.type === 'AddTerminal').length, tubos: lote.filter((c) => c.type === 'AddTrecho').length });
+  const etapaDeRede = (id: 'AGUA' | 'ESGOTO' | 'PLUVIAL', planejar: () => { comandos: Command[]; presumido: string[]; pendencias: string[] }, nota: (n: { pecas: number; tubos: number }) => string): { pecas: number; tubos: number } => {
+    if (!hip.hidraulica.lancar) {
+      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
+      return { pecas: 0, tubos: 0 };
+    }
+    try {
+      const plano = planejar();
+      for (const x of plano.presumido) pendencias.push({ grupo: 'CONFERIR', texto: `${ROTULO_DA_ETAPA_DA_CASA[id].split(' (')[0]}: ${x}` });
+      for (const x of plano.pendencias) pendencias.push({ grupo: 'PREMISSA', texto: `${ROTULO_DA_ETAPA_DA_CASA[id].split(' (')[0]}: ${x}` });
+      if (!plano.comandos.length) {
+        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], plano.pendencias.length ? 'NAO_RODOU' : 'NADA_A_FAZER', 0, plano.pendencias[0] ?? null);
+        return { pecas: 0, tubos: 0 };
+      }
+      const c = contar(plano.comandos);
+      // A água ENCOSTA na face da parede o ponto solto no cômodo (`TranslateEntities`), e o kernel trata mover
+      // como decidir: a marca "sugerida" cai. Aqui ninguém decidiu nada — o ponto continua proposta do sistema,
+      // e volta a ser marcado no mesmo lote.
+      const sugeridos = new Set(m.terminais.filter((t) => t.sugerida).map((t) => t.id));
+      let n = aplicar(plano.comandos);
+      n += aplicar(m.terminais.filter((t) => sugeridos.has(t.id) && !t.sugerida).map((t): Command => ({ type: 'SetTerminalProps', terminalId: t.id, sugerida: true })));
+      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'LANCOU', n, nota(c) + (plano.pendencias.length ? ` — ${plano.pendencias.length} pendência(s)` : ''));
+      return c;
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${motivo}` });
+      return { pecas: 0, tubos: 0 };
+    }
+  };
+  hidraulica.agua = etapaDeRede('AGUA', () => planejarAguaCompleta(m, hidro, terrenoHidro), (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s)`);
+  const destino = destinoDoEsgoto(hidro.esgoto);
+  hidraulica.esgoto = {
+    ...etapaDeRede(
+      'ESGOTO',
+      () => {
+        const medidas = destino === 'TRATAMENTO' ? medidasDimensionadas(dimensionarTratamento(m, hidro.tratamento, hidro.reservatorio)) : undefined;
+        return planejarEsgotoCompleto(m, hidro.esgoto, terrenoHidro, { tratamento: { comFiltro: hidro.tratamento.comFiltro, medidas } });
+      },
+      (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s) — destino: ${destino === 'TRATAMENTO' ? 'tratamento individual (tanque, filtro, sumidouro)' : 'rede pública'}`,
+    ),
+    destino,
+  };
+  hidraulica.pluvial = etapaDeRede('PLUVIAL', () => planejarPluvialCompleta(m, hidro.pluvial, terrenoHidro), (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s)`);
+
+  // A VERIFICAÇÃO DE REDE do app sobre o resultado: tubos soltos, sem destino, contrafluxo, desconector sem
+  // ventilação, tubo atravessando pilar ou cruzando viga. O que ela acusa vira pendência com a contagem, por tipo
+  // (ERRO → VERIFICACAO; AVISO → CONFERIR). Medido em 15/10: a rede sai ligada (nenhuma ponta aberta, nenhum
+  // trecho sem destino), mas o traçado pelas paredes cruza os pilares dos encontros — compatibilização à parte.
+  if (hip.hidraulica.lancar && (hidraulica.agua.tubos + hidraulica.esgoto.tubos + hidraulica.pluvial.tubos) > 0) {
+    const marcas = marcasDeVerificacao(m, entrada.levelId, [], hidro.pluvial).filter((x) => x.disciplina && x.disciplina in ROTULO_DA_DISCIPLINA_DA_REDE);
+    const grupos = new Map<string, { severidade: 'ERRO' | 'AVISO'; disciplina: string; tipo: string; n: number; texto: string }>();
+    for (const x of marcas) {
+      const k = `${x.severidade}|${x.disciplina}|${x.tipo}`;
+      const g = grupos.get(k) ?? { severidade: x.severidade, disciplina: x.disciplina!, tipo: x.tipo, n: 0, texto: x.texto };
+      g.n++;
+      grupos.set(k, g);
+    }
+    for (const g of grupos.values()) {
+      hidraulica.verificacao[g.severidade === 'ERRO' ? 'erros' : 'avisos'] += g.n;
+      hidraulica.verificacao.porTipo[g.tipo] = (hidraulica.verificacao.porTipo[g.tipo] ?? 0) + g.n;
+      const oque = MARCA_DA_REDE[g.tipo] ? `${g.n} ${MARCA_DA_REDE[g.tipo]}` : `${g.n} × ${g.texto}`;
+      pendencias.push({ grupo: g.severidade === 'ERRO' ? 'VERIFICACAO' : 'CONFERIR', texto: `Rede de ${ROTULO_DA_DISCIPLINA_DA_REDE[g.disciplina]}: ${oque}` });
+    }
+  }
+
   // ── CONFERENCIA ───────────────────────────────────────────────────────────
   const conferencia = conferirPrograma(m, programa);
   for (const it of conferencia.itens) {
@@ -900,7 +1039,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     semente: r.semente,
     escolha,
     decisoes,
-    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura, telhado, ancoras, mobiliario },
+    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura, telhado, ancoras, mobiliario, hidraulica },
   };
 }
 

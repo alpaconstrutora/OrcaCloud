@@ -133,7 +133,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F6 — peças-âncora + rede pública (ver "Registro da F6")
 - [x] F6b — cozinha, serviço e lavabo com parede externa na casa estreita (decisão de 15/10; ver "Registro da F6b" — cozinha resolvida, serviço/lavabo em parte)
 - [x] F7 — mobiliário + louças com pontos (ver "Registro da F7")
-- [ ] F8 — hidro encadeada
+- [x] F8 — hidro encadeada (ver "Registro da F8")
 - [ ] F9 — elétrica + climatização
 - [ ] F10 — UI
 - [ ] F11 — saídas (prova)
@@ -589,3 +589,55 @@ Provas:
 - `check-ui-standard` no `BlueprintEditor.tsx` sem violações; 23 arquivos dependentes, 186 testes;
   typecheck limpo.
 
+## Registro da F8 (15/10/2026)
+
+O que mudou, só em `utils/blueprintCasaAutomatica.ts`. Os três planejadores já existiam e foram reusados
+sem mudança:
+- Etapas AGUA → ESGOTO → PLUVIAL, depois dos pontos hidráulicos e antes da CONFERENCIA. São os
+  "Lançar tudo" das gavetas (`planejarAguaCompleta`, `planejarEsgotoCompleto`,
+  `planejarPluvialCompleta`), com as premissas do ESTUDO (`EntradaDaCasa.hidro`, as mesmas da gaveta).
+- O que cada planejador PRESUMIU vira pendência CONFERIR; o que faltou vira PREMISSA. Exemplos de
+  presunção: a cota estimada da rede, o hidrômetro no cavalete, a saída pluvial na frente. Exemplo de
+  falta: a intensidade de chuva.
+- Sem comandos e com pendência, a etapa fica NAO_RODOU com o motivo.
+- Esgoto pelo destino do estudo (`hidro.esgoto.destino`):
+  - REDE_PUBLICA: caixa de inspeção, ramais, coletor e ligação.
+  - TRATAMENTO: tanque séptico, filtro anaeróbio e sumidouro, dimensionados por `dimensionarTratamento`
+    pela reservação.
+- `EntradaDaCasa.leitorDoTerreno`: a cota do terreno para caixa, ligação e hidrômetro. Ausente = plano
+  na cota zero. A F10 passa a grade ao worker.
+- `HipotesesDaCasa.hidraulica.lancar` (padrão `true`). `resumo.hidraulica` traz peças e tubos por rede,
+  o destino do esgoto e a verificação.
+- **Verificação de rede sobre o resultado**: a mesma do app, `marcasDeVerificacao`. Cada tipo de marca
+  vira uma pendência com a contagem: ERRO → VERIFICACAO, AVISO → CONFERIR.
+- **"Mover é decidir" × casa automática**: a água ENCOSTA na face da parede o ponto solto no cômodo
+  (`TranslateEntities`), e o kernel tira a marca `sugerida` de quem foi movido. O orquestrador
+  remarca, no mesmo lote, os pontos que eram sugeridos (`SetTerminalProps sugerida: true`). Aqui
+  ninguém decidiu nada.
+- Fica para a F10: "o editor pré-preenche `pluvial.cidade` com a da zona". É montagem da entrada na UI.
+  Hoje, sem cidade nem intensidade nas premissas, a pluvial não roda e vira PREMISSA.
+
+Medido no lote 12 × 30 (harness, reto e a 30°):
+- Tubos lançados: água 81 e 95; esgoto 40 e 41; pluvial 6 e 6.
+- Nenhuma ponta aberta e nenhum trecho sem destino.
+- A trava aprova, num lote só (um Ctrl+Z).
+
+**Fica em aberto (dito): compatibilização hidráulica × estrutura.** O traçado da água corre pelas
+paredes e cruza os pilares dos encontros:
+- 30 trechos atravessando pilar (ERRO) no lote reto e 47 a 30°;
+- 44 trechos cruzando viga (AVISO);
+- 1 desconector de esgoto sem ventilação no lote reto.
+
+Tudo aparece nas pendências com a contagem. O conserto é desviar o tubo do pilar (contornar pela face)
+e furar a viga com a regra de passagem. É uma fase própria, que proponho como **F8b** antes ou depois
+da elétrica.
+
+Provas:
+- `blueprintCasaAutomatica.test.ts`, +5 testes:
+  - a 0° e a 30°: três redes LANCOU, sem PONTA_ABERTA nem SEM_DESTINO, hidrômetro e ligação, tudo
+    sugerido, trava ok;
+  - sem rede pública: tanque, filtro e sumidouro, sem ligação;
+  - sem intensidade: PLUVIAL NAO_RODOU e PREMISSA, enquanto água e esgoto seguem;
+  - desligada: NAO_EXIGIDA e nenhum tubo.
+- Harness: portão com as etapas AGUA, ESGOTO e PLUVIAL LANCOU, redes com tubos e nenhuma ponta aberta
+  nem trecho sem destino.

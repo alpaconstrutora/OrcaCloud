@@ -35,9 +35,14 @@
  *      90° nem um ângulo qualquer. Na caixa sifonada e na de gordura cada
  *      aparelho entra direto na caixa (é para isso que ela existe).
  *
+ *   8. PILAR (F8b da casa automática, 15/10/2026): o trecho em reta que atravessa
+ *      um pilar contorna pelo canto (`desvioDoPilar`, o do eletroduto), com o
+ *      mesmo desnível repartido pelo caminho — desde que o caimento continue na
+ *      mínima; senão fica reto e a verificação acusa.
+ *
  * Idempotente: ponto que já tem trecho de esgoto na sua posição está ligado.
  * Relançar apaga os sugeridos da rede da CI; refazer apaga tudo. Não há
- * desvio de fundação, viga ou laje — o desenho não os conhece. É
+ * desvio de fundação, viga ou laje — só de pilar (item 8). É
  * pré-dimensionamento; o executivo é do projetista.
  */
 import { dnDoRamalDeEsgoto, dnDoSubcoletor, dnDoTuboDeQueda, type PapelNoEsgoto } from './blueprintNbr8160';
@@ -56,6 +61,7 @@ import { shaftPreferido } from './blueprintNucleoVertical';
 import { redeDaOrigem } from './blueprintAguaAutomatica';
 import { pontosDaLouca } from './blueprintPontosHidraulicos';
 import { pontoNaFrente } from './blueprintAncorasHidro';
+import { desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 
 export interface HipotesesDeEsgoto {
   /** Caimento mínimo, em %, para DN até 75 e para DN 100 ou mais (NBR 8160). */
@@ -675,13 +681,35 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
   const aLigar = pavimentos.reduce((n, p) => n + p.aLigar, 0);
   const ligadas = pavimentos.reduce((n, p) => n + p.ligadas, 0);
   const uhcTotal = fontes.reduce((s, f) => s + f.uhc, 0);
-  const comandos: Command[] = novos;
+  const comandos: Command[] = novos.flatMap((c) => contornarPilar(model, c, hip));
   if (comandos.length === 0) return vazio('todos os pontos de esgoto já estão ligados', { destinoId: ci.id, pavimentos, fontes: todas.length, ligadas, sugeridos, trechosDaRede: rede.length, uhcTotal });
-  const metros = novos.reduce((s, c) => s + comprimentoMm(c), 0);
+  const metros = comandos.reduce((s, c) => s + (c.type === 'AddTrecho' ? comprimentoMm(c) : 0), 0);
   return {
     destinoId: ci.id, pavimentos, fontes: todas.length, ligadas, aLigar, uhcTotal, dnMaximoMm, cotaDeChegadaMm,
     sugeridos, trechosDaRede: rede.length, comandos, metrosPrevistos: Math.round(metros / 100) / 10, avisos, motivo: null,
   };
+}
+
+/**
+ * F8b: o trecho em reta que atravessa um pilar vira o contorno pelo canto, com o desnível repartido pelo
+ * comprimento (cada pedaço com o mesmo caimento). Fica reto se o caimento cairia abaixo da mínima.
+ */
+function contornarPilar(model: BlueprintModel, c: Extract<Command, { type: 'AddTrecho' }>, hip: HipotesesDeEsgoto): Extract<Command, { type: 'AddTrecho' }>[] {
+  if (c.a.x === c.b.x && c.a.y === c.b.y) return [c];
+  const desvio = desvioDoPilar(c.a, c.b, pegadasDePilares(model, c.levelId));
+  if (!desvio || desvio.length === 0) return [c];
+  const pts = [c.a, ...desvio, c.b];
+  const comp = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
+  const total = comp.reduce((s, x) => s + x, 0);
+  const queda = c.cotaAMm - c.cotaBMm;
+  if ((Math.abs(queda) / total) * 100 + 1e-9 < caimentoPct(c.bitolaMm, hip)) return [c];
+  let feito = 0;
+  const cota = (i: number) => (i === pts.length - 1 ? c.cotaBMm : Math.round(c.cotaAMm - (queda * feito) / total));
+  return pts.slice(1).map((b, i) => {
+    const cotaA = cota(i);
+    feito += comp[i];
+    return { ...c, a: { x: pts[i].x, y: pts[i].y }, b: { x: b.x, y: b.y }, cotaAMm: cotaA, cotaBMm: cota(i + 1) };
+  });
 }
 
 /** RELANÇAR: apaga os trechos SUGERIDOS ligados às caixas de inspeção e refaz. */

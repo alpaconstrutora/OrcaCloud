@@ -63,7 +63,7 @@ import {
 import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidraulica';
 import { shaftPreferido } from './blueprintNucleoVertical';
 import { arvorePelasParedes, chaveP, encaixarNaParede, faceDaParede } from './blueprintRotaPelasParedes';
-import { ABAIXO_DA_VIGA_MM, foraDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, SOBRE_A_LAJE_MM, VAO_MINIMO_ABAIXO_DA_VIGA_MM, foraDaViga, foraDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares, topoDaLajeDoTetoMm } from './blueprintObstaculosEstruturais';
 
 /**
  * A tabela de DN do lançamento é a do MATERIAL (E1.1): uma fonte só para o
@@ -95,6 +95,16 @@ export interface HipotesesDeAgua {
   pelasParedes?: boolean;
   /** Distância máxima do ponto (ou da coluna) ao eixo da parede para correr por ela. Ausente = 700. */
   raioDeEncaixeMm?: number;
+  /**
+   * F8b (15/10/2026): o ramal e o barrilete CONTORNAM o pilar a esta distância da face, em vez de
+   * atravessá-lo no encontro das paredes. Ausente = `CONTORNO_DO_PILAR_MM` (40); 0 = só a penalidade.
+   */
+  contornoDoPilarMm?: number;
+  /**
+   * F8b: com a caixa ACIMA do teto e laje cobrindo o pavimento, o barrilete corre SOBRE a laje, com o eixo
+   * a isto do topo dela — e não no teto, dentro das vigas. Ausente = `SOBRE_A_LAJE_MM` (150).
+   */
+  barrileteSobreALajeMm?: number;
 }
 
 export const HIPOTESES_AGUA_PADRAO: HipotesesDeAgua = {
@@ -297,13 +307,28 @@ export function planejarAgua(
   // ── A origem sobe/desce ao teto do pavimento dela: o barrilete ───────────
   // E5.5: com viga no teto, o barrilete corre 10 cm abaixo do fundo da mais baixa
   // (desde que ainda acima do ramal) — `tetoO` é a cota DO BARRILETE, não a do teto.
+  // F8b (15/10/2026), antes de tudo: a caixa ACIMA do teto, com laje cobrindo o pavimento (a caixa d'água
+  // sobre a laje da casa) → o barrilete corre SOBRE a laje, como se faz na obra; as colunas descem pela laje.
+  // E, sem espaço de 10 cm entre o ramal e a viga, o barrilete corre no MEIO desse vão — abaixo da viga —
+  // em vez de subir ao teto e correr dentro dela.
   const fundoDaViga = fundoDaVigaMaisBaixaMm(model, origem.levelId, nivelDaOrigem.defaultHeightMm);
   const abaixoDaViga = fundoDaViga == null ? null : fundoDaViga - ABAIXO_DA_VIGA_MM;
-  const tetoO = abaixoDaViga != null && abaixoDaViga > hip.cotaRamalMm ? abaixoDaViga : nivelDaOrigem.defaultHeightMm;
-  if (abaixoDaViga != null) {
-    avisos.push(tetoO === abaixoDaViga
-      ? `barrilete a ${(tetoO / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m do piso — 10 cm abaixo da viga mais baixa do teto`
-      : 'a viga do teto desce até o ramal — o barrilete ficou no teto, cruzando a viga (confira o furo com o projeto estrutural)');
+  const topoDaLaje = topoDaLajeDoTetoMm(model, origem.levelId, nivelDaOrigem.defaultHeightMm);
+  const sobreALaje = topoDaLaje == null ? null : topoDaLaje + (hip.barrileteSobreALajeMm ?? SOBRE_A_LAJE_MM);
+  const noVaoAbaixoDaViga = fundoDaViga != null && fundoDaViga - hip.cotaRamalMm >= VAO_MINIMO_ABAIXO_DA_VIGA_MM ? Math.round((fundoDaViga + hip.cotaRamalMm) / 2) : null;
+  const m2 = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  let tetoO = nivelDaOrigem.defaultHeightMm;
+  if (sobreALaje != null && origem.cotaMm >= sobreALaje) {
+    tetoO = sobreALaje;
+    avisos.push(`barrilete sobre a laje, a ${m2(tetoO)} m do piso — as colunas descem pela laje`);
+  } else if (abaixoDaViga != null && abaixoDaViga > hip.cotaRamalMm) {
+    tetoO = abaixoDaViga;
+    avisos.push(`barrilete a ${m2(tetoO)} m do piso — 10 cm abaixo da viga mais baixa do teto`);
+  } else if (noVaoAbaixoDaViga != null) {
+    tetoO = noVaoAbaixoDaViga;
+    avisos.push(`barrilete a ${m2(tetoO)} m do piso — entre o ramal e a viga mais baixa do teto, que desce até perto dele`);
+  } else if (abaixoDaViga != null) {
+    avisos.push('a viga do teto desce até o ramal — o barrilete ficou no teto, cruzando a viga (confira o furo com o projeto estrutural)');
   }
   const noDaOrigem = chave(origem.levelId, origem.at.x, origem.at.y, origem.cotaMm);
   const noDaOrigemNoTeto = chave(origem.levelId, origem.at.x, origem.at.y, tetoO);
@@ -321,6 +346,7 @@ export function planejarAgua(
   const estaLigado = (p: Terminal) => pontasEmPlanta.get(p.levelId)?.has(`${p.at.x},${p.at.y}`) ?? false;
   const pelasParedes = hip.pelasParedes !== false;
   const raioDeEncaixe = hip.raioDeEncaixeMm ?? 700;
+  const contorno = hip.contornoDoPilarMm ?? CONTORNO_DO_PILAR_MM;
   const paredesDe = (levelId: ObjectId) => model.walls.filter((w) => w.levelId === levelId);
   // O ponto SOLTO no cômodo vai para a FACE da parede antes de traçar.
   const encostos: Command[] = [];
@@ -355,6 +381,10 @@ export function planejarAgua(
   for (const k of alcancadosNoBarrilete.keys()) rota.set(k, rotaBarrilete.get(k) ?? Infinity);
   rota.set(noDaOrigemNoTeto, 0);
   const pilaresDaPrumada = niveis.flatMap((l) => pegadasDePilares(model, l.id));
+  // F8b: as vigas que a prumada cruza em ALTURA — no pavimento da origem, as que entram na faixa entre o
+  // barrilete e o ramal; nos outros, todas (a coluna atravessa o pavimento inteiro ou chega ao ramal dele).
+  const [zLo, zHi] = [Math.min(tetoO, hip.cotaRamalMm), Math.max(tetoO, hip.cotaRamalMm)];
+  const vigasDaPrumada = (model.structures ?? []).filter((s) => s.kind === 'VIGA' && (s.levelId !== origem.levelId || (s.baseMm < zHi && s.baseMm + s.alturaMm > zLo)));
   // NÚCLEO VERTICAL (E2.4): o grupo perto de um shaft sobe por ele.
   const posicaoDaColuna = (grupo: Terminal[]): Ponto2 => {
     const base = { x: grupo[0].at.x, y: grupo[0].at.y };
@@ -363,7 +393,11 @@ export function planejarAgua(
     // PELAS PAREDES: a coluna desce no EIXO da parede mais próxima, não na face.
     const naParede = pelasParedes ? encaixarNaParede(base, paredesDe(grupo[0].levelId), raioDeEncaixe) : null;
     // E5.5: a coluna que cairia dentro de um pilar (de qualquer pavimento que ela cruza) escorrega pela parede.
-    return naParede ? foraDoPilar(naParede.q, naParede.parede, pilaresDaPrumada) : base;
+    const noEixo = naParede ? foraDoPilar(naParede.q, naParede.parede, pilaresDaPrumada) : base;
+    // F8b: e a que desceria DENTRO da viga que corre sobre a parede desce rente a ela, do lado do grupo.
+    const cx = grupo.reduce((s, p) => s + p.at.x, 0) / grupo.length;
+    const cy = grupo.reduce((s, p) => s + p.at.y, 0) / grupo.length;
+    return foraDaViga(noEixo, vigasDaPrumada, { x: cx, y: cy }, pilaresDaPrumada);
   };
   const cabecas = new Map<No, Ponto2>();
   for (const grupo of colunas) {
@@ -374,7 +408,7 @@ export function planejarAgua(
   // PELAS PAREDES: o barrilete corre no teto por cima das paredes até as cabeças.
   const paredesDaOrigem = paredesDe(origem.levelId);
   const barrilete = pelasParedes && paredesDaOrigem.length > 0 && cabecas.size > 0
-    ? arvorePelasParedes({ paredes: paredesDaOrigem, raiz: origem.at, pendentes: [...cabecas.values()], raioDeEncaixeMm: raioDeEncaixe, obstaculos: pegadasDePilares(model, origem.levelId) })
+    ? arvorePelasParedes({ paredes: paredesDaOrigem, raiz: origem.at, pendentes: [...cabecas.values()], raioDeEncaixeMm: raioDeEncaixe, obstaculos: pegadasDePilares(model, origem.levelId), contornoDoPilarMm: contorno })
     : null;
   if (barrilete?.raiz) {
     if (chaveP(barrilete.raiz) !== chaveP(origem.at)) addTrecho(origem.levelId, origem.at, tetoO, barrilete.raiz, tetoO);
@@ -442,7 +476,7 @@ export function planejarAgua(
       const doNivel = grupo.filter((p) => p.levelId === nivel.id);
       const paredesDoNivel = paredesDe(nivel.id);
       const pelas = pelasParedes && paredesDoNivel.length > 0
-        ? arvorePelasParedes({ paredes: paredesDoNivel, raiz: pos, pendentes: doNivel.map((p) => p.at), raioDeEncaixeMm: raioDeEncaixe, obstaculos: pegadasDePilares(model, nivel.id) })
+        ? arvorePelasParedes({ paredes: paredesDoNivel, raiz: pos, pendentes: doNivel.map((p) => p.at), raioDeEncaixeMm: raioDeEncaixe, obstaculos: pegadasDePilares(model, nivel.id), contornoDoPilarMm: contorno })
         : null;
       if (pelas?.raiz) {
         // Da coluna ao eixo (se ela não está nele), e o ramal pelo eixo das paredes.

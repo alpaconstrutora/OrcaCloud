@@ -22,7 +22,7 @@
  * "Ventilação", sugerido, num lote.
  */
 import type { BlueprintModel, Command, ObjectId, Terminal, Trecho } from './blueprintKernel';
-import { pointInPolygon } from './blueprintKernel';
+import { applyBatch, pointInPolygon } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { comprimentoMm, distanciasDesde, fazerChave, type Aresta } from './blueprintGrafoDeRede';
 import { esgotoTrechoATrecho, type HipotesesDeEsgoto } from './blueprintEsgotoAutomatico';
@@ -257,24 +257,33 @@ export function planejarVentilacao(model: BlueprintModel, hip?: HipotesesDeEsgot
   const faltam = v.desconectores.filter((d) => !d.ventilado).sort((a, b) => b.dnMm - a.dnMm || a.terminalId.localeCompare(b.terminalId));
   const terminal = new Map((model.terminais ?? []).map((t) => [t.id, t]));
   const colunasNovas: { x: number; y: number }[] = [];
-  for (const d of faltam) {
-    if (cobertos.has(d.terminalId)) continue;
+  const ventilar = (d: (typeof faltam)[number], poupar: boolean) => {
+    if (cobertos.has(d.terminalId)) return;
     const t = terminal.get(d.terminalId) as Terminal;
     // O nó LOGO ABAIXO: a outra ponta da prumada que sai da peça (o ramal sob o piso).
     const prumada = (model.trechos ?? []).find((x) => x.disciplina === 'ESGOTO' && x.levelId === t.levelId && x.a.x === t.at.x && x.a.y === t.at.y && x.b.x === t.at.x && x.b.y === t.at.y && Math.max(x.cotaAMm, x.cotaBMm) === t.cotaMm);
     if (!prumada) {
       avisos.push(`${d.sigla} sem ventilação e sem a prumada que liga ao ramal: ventile à mão.`);
-      continue;
+      return;
     }
-    // Um desconector perto de uma coluna nova (no mesmo pavimento, dentro do alcance em planta) já fica coberto.
-    if (colunasNovas.some((c) => Math.hypot(c.x - t.at.x, c.y - t.at.y) / 1000 <= d.maximaM)) continue;
+    // Um desconector perto de uma coluna nova (no mesmo pavimento, dentro do alcance em planta) já fica coberto
+    // — na 1ª passada; a 2ª confere PELO TUBO, como a verificação, e ventila quem ficou de fora.
+    if (poupar && colunasNovas.some((c) => Math.hypot(c.x - t.at.x, c.y - t.at.y) / 1000 <= d.maximaM)) return;
     const base = Math.min(prumada.cotaAMm, prumada.cotaBMm);
     const topoAbs = coberturaNoPontoMm(model, t.at) + ACIMA_DA_COBERTURA_MM;
     const comprimentoM = (topoAbs - ((elev.get(t.levelId) ?? 0) + base)) / 1000;
     const dn = dnDaColunaDeVentilacao(d.dnMm, FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico!].uhcNbr8160 ?? 1, comprimentoM, d.dnMm >= 100);
     for (const s of subirAte(model, t.levelId, t.at.x, t.at.y, base, topoAbs)) add(s.levelId, t.at.x, t.at.y, s.ca, s.cb, dn);
     colunasNovas.push({ x: t.at.x, y: t.at.y });
+    cobertos.add(d.terminalId);
     novas++;
+  };
+  for (const d of faltam) ventilar(d, true);
+  // F8b da casa automática (15/10/2026): a economia acima mede em LINHA RETA, a verificação mede PELO TUBO —
+  // a caixa sifonada a 1,1 m em planta da coluna do vaso e a 1,57 m pelo tubo ficava sem ventilação.
+  if (novas > 0) {
+    const depois = verificarVentilacao(applyBatch(model, comandos).model, hip);
+    for (const d of depois.desconectores.filter((x) => !x.ventilado).sort((a, b) => b.dnMm - a.dnMm || a.terminalId.localeCompare(b.terminalId))) ventilar(d, false);
   }
   const resumo = [
     novas ? `${novas} coluna(s) nova(s)` : '',

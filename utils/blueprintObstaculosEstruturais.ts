@@ -17,7 +17,7 @@
  * tubo que atravessa um pilar (o desvio do esgoto é backlog) e o que cruza uma
  * viga (furo em viga é decisão do projeto estrutural).
  */
-import type { BlueprintModel, ObjectId, Point, Wall } from './blueprintKernel';
+import type { BlueprintModel, ObjectId, Point, Structural, Wall } from './blueprintKernel';
 import { pegadaEmPlanta, pointInPolygon } from './blueprintKernel';
 
 type P2 = { x: number; y: number };
@@ -131,4 +131,213 @@ export function desvioDoPilar(a: P2, b: P2, pegadas: readonly Point[][]): P2[] |
 export function fundoDaVigaMaisBaixaMm(model: BlueprintModel, levelId: ObjectId, tetoMm: number): number | null {
   const vigas = (model.structures ?? []).filter((s) => s.kind === 'VIGA' && s.levelId === levelId && s.baseMm + s.alturaMm >= tetoMm - VIGA_DE_TETO_MM && s.baseMm < tetoMm);
   return vigas.length === 0 ? null : Math.min(...vigas.map((v) => v.baseMm));
+}
+
+/**
+ * F8b da casa automática — O ANEL DO PILAR (15/10/2026).
+ *
+ * Na casa com pilar em TODO encontro de paredes, a penalidade de 10 m não desvia nada: não há "outro
+ * caminho" que não passe por um encontro. O anel resolve no GRAFO: a pegada do pilar crescida de
+ * `afastamentoMm` (o tubo corre a essa distância da face) tira do grafo tudo o que está dentro dela, e
+ * o perímetro do anel liga as paredes que chegavam ali. A curva do ramal no canto vira duas curvas em
+ * volta do pilar — por fora dele, colada à face.
+ *
+ * O afastamento é menor que `FOLGA_DO_PILAR_MM`: o ponto que `foraDoPilar` escorregou fica FORA do anel.
+ */
+export const CONTORNO_DO_PILAR_MM = 40;
+/**
+ * O que custa, em mm de tubo, cada lado do anel: contornar o pilar tira o tubo da parede, então a rota dá a
+ * volta POR DENTRO das paredes quando isso custa menos — e só contorna quando não há (a casa com pilar em
+ * todo encontro). Metade da penalidade de atravessar.
+ */
+export const PENALIDADE_DO_ANEL_MM = PENALIDADE_DO_PILAR_MM / 2;
+
+/** A pegada (convexa) crescida de `f` mm, com os cantos ao mm. A não convexa sai como veio. */
+export function anelDoPilar(pegada: readonly Point[], f: number): P2[] {
+  const n = pegada.length;
+  if (n < 3) return pegada.map((p) => ({ x: p.x, y: p.y }));
+  const cx = pegada.reduce((s, p) => s + p.x, 0) / n;
+  const cy = pegada.reduce((s, p) => s + p.y, 0) / n;
+  // A normal de FORA de cada lado i → i+1.
+  const normais = pegada.map((a, i) => {
+    const b = pegada[(i + 1) % n];
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    let nx = (b.y - a.y) / L;
+    let ny = -(b.x - a.x) / L;
+    if (nx * ((a.x + b.x) / 2 - cx) + ny * ((a.y + b.y) / 2 - cy) < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    return { x: nx, y: ny };
+  });
+  return pegada.map((v, i) => {
+    const n1 = normais[(i - 1 + n) % n];
+    const n2 = normais[i];
+    const k = 1 + n1.x * n2.x + n1.y * n2.y;
+    const s = k < 1e-6 ? f : f / k;
+    return { x: Math.round(v.x + (n1.x + n2.x) * s), y: Math.round(v.y + (n1.y + n2.y) * s) };
+  });
+}
+
+/**
+ * O intervalo de `t` (0–1) em que o segmento a→b corre DENTRO do anel convexo (Cyrus–Beck), ou `null`.
+ * Encostar num canto ou correr sobre um lado não conta.
+ */
+export function dentroDoAnel(a: P2, b: P2, anel: readonly P2[]): [number, number] | null {
+  const n = anel.length;
+  if (n < 3) return null;
+  const cx = anel.reduce((s, p) => s + p.x, 0) / n;
+  const cy = anel.reduce((s, p) => s + p.y, 0) / n;
+  const d = { x: b.x - a.x, y: b.y - a.y };
+  let t0 = 0;
+  let t1 = 1;
+  for (let i = 0; i < n; i++) {
+    const p = anel[i];
+    const q = anel[(i + 1) % n];
+    let nx = q.y - p.y;
+    let ny = -(q.x - p.x);
+    if (nx * ((p.x + q.x) / 2 - cx) + ny * ((p.y + q.y) / 2 - cy) < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const L = Math.hypot(nx, ny) || 1;
+    nx /= L;
+    ny /= L;
+    const num = (p.x - a.x) * nx + (p.y - a.y) * ny; // > 0: `a` do lado de dentro deste lado
+    const den = d.x * nx + d.y * ny;
+    if (Math.abs(den) < 1e-12) {
+      if (num <= 0.5) return null;
+      continue;
+    }
+    const t = num / den;
+    if (den < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+  }
+  const comprimento = Math.hypot(d.x, d.y);
+  return (t1 - t0) * comprimento > 1 ? [t0, t1] : null;
+}
+
+/** O ponto estritamente dentro do anel convexo (meio mm de tolerância)? */
+export function noAnel(p: P2, anel: readonly P2[]): boolean {
+  const n = anel.length;
+  if (n < 3) return false;
+  const cx = anel.reduce((s, q) => s + q.x, 0) / n;
+  const cy = anel.reduce((s, q) => s + q.y, 0) / n;
+  for (let i = 0; i < n; i++) {
+    const a = anel[i];
+    const b = anel[(i + 1) % n];
+    let nx = b.y - a.y;
+    let ny = -(b.x - a.x);
+    if (nx * ((a.x + b.x) / 2 - cx) + ny * ((a.y + b.y) / 2 - cy) < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const L = Math.hypot(nx, ny) || 1;
+    if (((p.x - a.x) * nx + (p.y - a.y) * ny) / L > -0.5) return false;
+  }
+  return true;
+}
+
+/**
+ * O grafo (arestas em planta; o terceiro campo diz se é lado de anel) refeito em volta dos anéis: o pedaço de aresta dentro de um anel some, e
+ * o anel ganha nós nos pontos de entrada e nos cantos (os que não caem dentro de OUTRO anel) — os nós
+ * do perímetro, em ordem de ângulo, ligam-se dois a dois. Determinístico (ordem das arestas e dos anéis).
+ */
+export function grafoEmVoltaDosAneis(arestas: readonly [P2, P2][], aneis: readonly P2[][]): [P2, P2, boolean][] {
+  if (aneis.length === 0) return arestas.map(([a, b]) => [a, b, false]);
+  const saida: [P2, P2, boolean][] = [];
+  const nosDoAnel = aneis.map((anel) => anel.filter((c) => !aneis.some((o) => o !== anel && noAnel(c, o))));
+  const em = (a: P2, b: P2, t: number): P2 => ({ x: Math.round(a.x + (b.x - a.x) * t), y: Math.round(a.y + (b.y - a.y) * t) });
+  for (const [a, b] of arestas) {
+    const cortes: { t0: number; t1: number; i: number }[] = [];
+    aneis.forEach((anel, i) => {
+      const r = dentroDoAnel(a, b, anel);
+      if (r) cortes.push({ t0: r[0], t1: r[1], i });
+    });
+    if (cortes.length === 0) {
+      saida.push([a, b, false]);
+      continue;
+    }
+    cortes.sort((x, y) => x.t0 - y.t0 || x.i - y.i);
+    // Junta os cortes que se sobrepõem (anéis encostados): a entrada é do primeiro, a saída do último.
+    const juntos: { t0: number; i0: number; t1: number; i1: number }[] = [];
+    for (const c of cortes) {
+      const u = juntos[juntos.length - 1];
+      if (u && c.t0 <= u.t1 + 1e-9) {
+        if (c.t1 > u.t1) {
+          u.t1 = c.t1;
+          u.i1 = c.i;
+        }
+      } else juntos.push({ t0: c.t0, i0: c.i, t1: c.t1, i1: c.i });
+    }
+    let desde = 0;
+    for (const j of juntos) {
+      const entrada = em(a, b, j.t0);
+      const saidaP = em(a, b, j.t1);
+      if (j.t0 > 1e-9) {
+        saida.push([em(a, b, desde), entrada, false]);
+        nosDoAnel[j.i0].push(entrada);
+      }
+      if (j.t1 < 1 - 1e-9) nosDoAnel[j.i1].push(saidaP);
+      desde = j.t1;
+    }
+    if (desde < 1 - 1e-9) saida.push([em(a, b, desde), b, false]);
+  }
+  // O perímetro de cada anel.
+  aneis.forEach((anel, i) => {
+    const cx = anel.reduce((s, p) => s + p.x, 0) / anel.length;
+    const cy = anel.reduce((s, p) => s + p.y, 0) / anel.length;
+    const vistos = new Map<string, P2>();
+    for (const p of nosDoAnel[i]) vistos.set(`${p.x},${p.y}`, p);
+    const nos = [...vistos.values()].sort((p, q) => Math.atan2(p.y - cy, p.x - cx) - Math.atan2(q.y - cy, q.x - cx) || p.x - q.x || p.y - q.y);
+    if (nos.length < 2) return;
+    for (let k = 0; k < nos.length; k++) {
+      const p = nos[k];
+      const q = nos[(k + 1) % nos.length];
+      if (nos.length === 2 && k === 1) break;
+      saida.push([p, q, true]);
+    }
+  });
+  return saida.filter(([a, b]) => a.x !== b.x || a.y !== b.y);
+}
+
+/** F8b: o eixo do barrilete SOBRE a laje fica a isto do topo dela (o tubo deitado na laje, com o apoio). */
+export const SOBRE_A_LAJE_MM = 150;
+
+/**
+ * F8b: o topo da laje que cobre o pavimento (cota relativa ao piso dele), ou `null` sem laje de teto.
+ * Laje de teto: a base dela a menos de 20 cm do teto, para baixo ou para cima.
+ */
+export function topoDaLajeDoTetoMm(model: BlueprintModel, levelId: ObjectId, tetoMm: number): number | null {
+  const lajes = (model.structures ?? []).filter((s) => s.kind === 'LAJE' && s.levelId === levelId && Math.abs(s.baseMm - tetoMm) <= VIGA_DE_TETO_MM);
+  return lajes.length === 0 ? null : Math.max(...lajes.map((l) => l.baseMm + l.alturaMm));
+}
+
+/** F8b: o vão mínimo entre o ramal e o fundo da viga para o barrilete correr entre os dois. */
+export const VAO_MINIMO_ABAIXO_DA_VIGA_MM = 50;
+
+/** F8b: o eixo da coluna que desce rente à viga fica a isto da face dela (o raio do tubo e a folga). */
+export const FOLGA_DA_VIGA_MM = 30;
+
+/**
+ * F8b — A PRUMADA FORA DA VIGA: a coluna posta no eixo da parede desce DENTRO da viga que corre sobre ela.
+ * Aqui ela desce rente à face da viga, do lado de `lado` (o cômodo que atende): o eixo do tubo a `folga`
+ * além da face. Se desse lado cai noutra viga ou num pilar, tenta o outro; sem saída, fica onde está (e a
+ * verificação acusa o furo). `vigas`: as que a prumada cruza em altura — quem chama filtra.
+ */
+export function foraDaViga(p: P2, vigas: readonly Structural[], lado: P2, pilares: readonly Point[][], folga: number = FOLGA_DA_VIGA_MM): P2 {
+  const dentro = (q: P2) => vigas.find((v) => pointInPolygon(pegadaEmPlanta(v), q as Point));
+  const v = dentro(p);
+  if (!v || v.pontos.length < 2) return p;
+  const [a, b] = v.pontos;
+  const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const n = { x: -(b.y - a.y) / L, y: (b.x - a.x) / L };
+  const d = (p.x - a.x) * n.x + (p.y - a.y) * n.y;
+  const ladoDoAlvo = (lado.x - a.x) * n.x + (lado.y - a.y) * n.y >= 0 ? 1 : -1;
+  for (const s of [ladoDoAlvo, -ladoDoAlvo]) {
+    const alvo = s * (v.larguraMm / 2 + folga);
+    const q = { x: Math.round(p.x + n.x * (alvo - d)), y: Math.round(p.y + n.y * (alvo - d)) };
+    if (!dentro(q) && !dentroDeAlguma(pilares, q)) return q;
+  }
+  return p;
 }

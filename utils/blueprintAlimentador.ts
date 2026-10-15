@@ -29,6 +29,8 @@ import type { BlueprintModel, Command, ObjectId, Terminal, Trecho, Wall } from '
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { FICHA_DO_MATERIAL, KPA_POR_MCA, comprimentoEquivalenteM, perdaDistribuida, perdaNoHidrometroKpa } from './blueprintHidraulicaPressao';
 import { arvorePelasParedes, encaixarNaParede } from './blueprintRotaPelasParedes';
+import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, foraDaViga, foraDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { pegadaEmPlanta, pointInPolygon } from './blueprintKernel';
 import { dimensionarReservacao, type HipotesesDeReservatorio } from './blueprintReservacao';
 import { applyBatch } from './blueprintKernel';
 import { cotaDoTerrenoEm, pontoNaFrente, type LeitorDoTerreno, type OrigemDaFrente } from './blueprintAncorasHidro';
@@ -123,18 +125,39 @@ export function rotaPelasParedesAte(
     pontas.push({ levelId, a: { ...a }, b: { ...b }, ca, cb });
   };
   add(n0.id, origem.at, origem.cotaMm, origem.at, cotaDoPercurso);
-  const sobAChegada = encaixarNaParede(alvo.at, paredes0, 3000)?.q ?? { ...alvo.at };
-  const naParede = encaixarNaParede(origem.at, paredes0, 1e9)?.q;
+  // F8b (15/10/2026): o percurso pelas paredes CONTORNA os pilares (o anel), e as pontas que caem na parede
+  // — a entrada e o pé da subida — já ficam fora do anel (senão a árvore as escorregaria e o tubo abriria).
+  const pilares0 = pegadasDePilares(model, n0.id);
+  const aneis0 = pilares0.map((g) => anelDoPilar(g, CONTORNO_DO_PILAR_MM));
+  const naParedeDe = (p: P, raio: number) => {
+    const e = encaixarNaParede(p, paredes0, raio);
+    return e ? foraDoPilar(e.q, e.parede, aneis0) : null;
+  };
+  const sobAChegada = naParedeDe(alvo.at, 3000) ?? { ...alvo.at };
+  const naParede = naParedeDe(origem.at, 1e9);
   if (naParede) {
     add(n0.id, origem.at, cotaDoPercurso, naParede, cotaDoPercurso);
-    const arvore = arvorePelasParedes({ paredes: paredes0, raiz: naParede, pendentes: [sobAChegada], raioDeEncaixeMm: 50 });
+    const arvore = arvorePelasParedes({ paredes: paredes0, raiz: naParede, pendentes: [sobAChegada], raioDeEncaixeMm: 50, obstaculos: pilares0, contornoDoPilarMm: CONTORNO_DO_PILAR_MM });
     for (const a of arvore.arestas) add(n0.id, a.de, cotaDoPercurso, a.para, cotaDoPercurso);
   } else {
     add(n0.id, origem.at, cotaDoPercurso, sobAChegada, cotaDoPercurso);
   }
-  const pe = sobAChegada;
+  let pe = sobAChegada;
   if (id === i0) {
-    add(n0.id, pe, cotaDoPercurso, pe, alvo.cotaMm);
+    // F8b: a subida corre DENTRO da parede até logo abaixo da viga que está sobre ela, sai para a face da
+    // viga e sobe rente a ela (a caixa d'água sobre a laje) — sem furo na viga.
+    const vigas = (model.structures ?? []).filter((s) => s.kind === 'VIGA' && s.levelId === n0.id && s.baseMm < alvo.cotaMm && s.baseMm + s.alturaMm > cotaDoPercurso);
+    const viga = vigas.find((v) => pointInPolygon(pegadaEmPlanta(v), pe));
+    const rente = viga ? foraDaViga(pe, vigas, alvo.at, pilares0) : pe;
+    if (viga && (rente.x !== pe.x || rente.y !== pe.y)) {
+      const z = Math.max(cotaDoPercurso, Math.min(alvo.cotaMm, viga.baseMm - ABAIXO_DA_VIGA_MM));
+      add(n0.id, pe, cotaDoPercurso, pe, z);
+      add(n0.id, pe, z, rente, z);
+      add(n0.id, rente, z, rente, alvo.cotaMm);
+      pe = rente;
+    } else {
+      add(n0.id, pe, cotaDoPercurso, pe, alvo.cotaMm);
+    }
   } else {
     add(n0.id, pe, cotaDoPercurso, pe, n0.defaultHeightMm);
     for (let k = i0 + 1; k < id; k++) add(niveis[k].id, pe, 0, pe, niveis[k].defaultHeightMm);

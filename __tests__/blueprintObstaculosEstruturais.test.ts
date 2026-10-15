@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyCommand, emptyModel, point, pointInPolygon, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
-import { PENALIDADE_DO_PILAR_MM, custoComPilares, foraDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares } from '../utils/blueprintObstaculosEstruturais';
+import { PENALIDADE_DO_PILAR_MM, anelDoPilar, custoComPilares, foraDaViga, foraDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares } from '../utils/blueprintObstaculosEstruturais';
 import { arvorePelasParedes } from '../utils/blueprintRotaPelasParedes';
 import { planejarAgua } from '../utils/blueprintAguaAutomatica';
 import { marcasDeVerificacao } from '../utils/blueprintVerificacaoRede';
@@ -117,3 +117,72 @@ describe('E5.5 — no sobrado', () => {
     expect(marcas[0]).toMatchObject({ severidade: 'AVISO', texto: 'cruza viga — furo a aprovar' });
   });
 });
+
+describe('F8b — compatibilização (casa automática, 15/10/2026)', () => {
+  const sala = () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m.levels[0].id;
+    for (const [ax, ay, bx, by] of [[0, 0, 4000, 0], [4000, 0, 4000, 3000], [4000, 3000, 0, 3000], [0, 3000, 0, 0]]) {
+      m = applyCommand(m, { type: 'AddWall', levelId: l, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }).model;
+    }
+    return m;
+  };
+  const noCanto = (x: number, y: number) => quadrado.map((p) => point(p.x + x, p.y + y));
+
+  it('o anel: a pegada crescida do afastamento, ao mm', () => {
+    expect(anelDoPilar(quadrado, 40)).toEqual([{ x: -140, y: -140 }, { x: 140, y: -140 }, { x: 140, y: 140 }, { x: -140, y: 140 }]);
+  });
+
+  it('pilar em TODO canto: só a penalidade atravessa um; com o anel, a rota contorna e continua ligada', () => {
+    const m = sala();
+    const obstaculos = [noCanto(0, 0), noCanto(4000, 0), noCanto(4000, 3000), noCanto(0, 3000)];
+    const base = { paredes: m.walls, raiz: { x: 4000, y: 1500 }, pendentes: [{ x: 2000, y: 3000 }], raioDeEncaixeMm: 100, obstaculos };
+    const so = arvorePelasParedes(base);
+    expect(so.arestas.some((a) => fracaoDentro(a.de, a.para, obstaculos) > 0)).toBe(true);
+    const anel = arvorePelasParedes({ ...base, contornoDoPilarMm: 40 });
+    expect(anel.arestas.length).toBeGreaterThan(0);
+    expect(anel.arestas.every((a) => fracaoDentro(a.de, a.para, obstaculos) === 0)).toBe(true);
+    // Ligada: cada ponta é ponta de outra aresta, salvo a raiz e o alvo.
+    const pontas = anel.arestas.flatMap((a) => [a.de, a.para]).map((p) => `${p.x},${p.y}`);
+    const soltas = [...new Set(pontas)].filter((k) => pontas.filter((x) => x === k).length === 1);
+    expect(soltas.sort()).toEqual(['2000,3000', '4000,1500']);
+  });
+
+  it('com o anel, a volta POR DENTRO das paredes ainda ganha quando é curta (o anel tira o tubo da parede)', () => {
+    const m = sala();
+    const obstaculos = [noCanto(2000, 0)];
+    const r = arvorePelasParedes({ paredes: m.walls, raiz: { x: 4000, y: 0 }, pendentes: [{ x: 0, y: 0 }], raioDeEncaixeMm: 100, obstaculos, contornoDoPilarMm: 40 });
+    expect(r.arestas.some((a) => a.de.y === 3000 || a.para.y === 3000)).toBe(true);
+    expect(r.arestas.every((a) => fracaoDentro(a.de, a.para, obstaculos) === 0)).toBe(true);
+  });
+
+  it('a prumada sob a viga desce rente à face dela, do lado do cômodo; bloqueado, do outro', () => {
+    const m = applyCommand(applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model, viga('lvl_0001', 2400)).model;
+    const vigas = m.structures.filter((x) => x.kind === 'VIGA');
+    expect(foraDaViga({ x: 2000, y: 3000 }, vigas, { x: 2000, y: 2000 }, [])).toEqual({ x: 2000, y: 2895 });
+    expect(foraDaViga({ x: 2000, y: 3000 }, vigas, { x: 2000, y: 2000 }, [noCanto(2000, 2895)])).toEqual({ x: 2000, y: 3105 });
+    expect(foraDaViga({ x: 2000, y: 2000 }, vigas, { x: 0, y: 0 }, [])).toEqual({ x: 2000, y: 2000 });
+  });
+
+  it("caixa d'água acima do teto, com laje: o barrilete corre SOBRE a laje, com aviso", () => {
+    const laje = (levelId: string): Command => ({ type: 'AddStructural', levelId, kind: 'LAJE', pontos: [{ x: -500, y: -500 }, { x: 5000, y: -500 }, { x: 5000, y: 3500 }, { x: -500, y: 3500 }], alturaMm: 100, baseMm: 2800 }) as Command;
+    const m = sobrado(true, { cotaDaCaixaMm: 3300, estrutura: (n) => [laje(n[1]), viga(n[1], 2400)] });
+    const sup = m.levels[1].id;
+    expect(agua(m).some((t) => t.levelId === sup && t.cotaAMm === 3050 && t.cotaBMm === 3050)).toBe(true);
+    expect(agua(m).some((t) => t.levelId === sup && t.cotaAMm === t.cotaBMm && t.cotaAMm === 2800)).toBe(false);
+    const cx = m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!;
+    expect(planejarAgua(m, cx).avisos).toContain('barrilete sobre a laje, a 3,05 m do piso — as colunas descem pela laje');
+  });
+
+  it('viga descendo até perto do ramal: o barrilete corre ENTRE o ramal e ela, e não no teto dentro dela', () => {
+    const m = sobrado(true, { estrutura: (n) => [viga(n[1], 2280)] });
+    const sup = m.levels[1].id;
+    const horizontais = agua(m).filter((t) => t.levelId === sup && t.cotaAMm === t.cotaBMm && t.cotaAMm > 2200);
+    expect(horizontais.length).toBeGreaterThan(0);
+    expect(horizontais.every((t) => t.cotaAMm === 2240)).toBe(true);
+    const cx = m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!;
+    expect(planejarAgua(m, cx).avisos).toContain('barrilete a 2,24 m do piso — entre o ramal e a viga mais baixa do teto, que desce até perto dele');
+    expect(marcasDeVerificacao(m).filter((x) => x.tipo === 'CRUZA_VIGA')).toEqual([]);
+  });
+});
+

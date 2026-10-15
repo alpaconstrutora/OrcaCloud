@@ -66,7 +66,8 @@ for (const graus of [0, 30]) {
   // F8: as três redes lançadas e LIGADAS (a verificação de rede do app sem ponta aberta nem trecho sem destino).
   const h = p.hidraulica;
   conferir(h.agua > 0 && h.esgoto > 0 && h.pluvial > 0, `${t} redes lançadas: água ${h.agua}, esgoto ${h.esgoto}, pluvial ${h.pluvial} tubo(s)`);
-  conferir(!h.porTipo.PONTA_ABERTA && !h.porTipo.SEM_DESTINO, `${t} nenhuma ponta aberta nem trecho sem destino — marcas: ${JSON.stringify(h.porTipo)}`);
+  // F8b: e COMPATÍVEIS com a estrutura — nenhuma marca: nem pilar, nem viga, nem desconector sem ventilação.
+  conferir(Object.keys(h.porTipo).length === 0, `${t} a verificação de rede sem marca (ponta aberta, sem destino, pilar, viga, ventilação)${Object.keys(h.porTipo).length ? ` — ${JSON.stringify(h.porTipo)}` : ''}`);
   conferir(p.ambientesAtendidos === p.ambientesPedidos, `${t} ambientes do programa atendidos: ${p.ambientesAtendidos} de ${p.ambientesPedidos}`);
   conferir(p.ambientesNomeados >= p.ambientesPedidos, `${t} ambientes nomeados no desenho: ${p.ambientesNomeados} (nenhum fundido)`);
   conferir(p.aberturasCriadas === p.aberturasPedidas, `${t} aberturas: ${p.aberturasCriadas} criadas de ${p.aberturasPedidas} pedidas`);

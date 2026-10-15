@@ -381,7 +381,7 @@ describe('planejarCasa — F8: água, esgoto e pluvial encadeados', () => {
   const situacao = (p: ReturnType<typeof planejarCasa>, id: string) => p.etapas.find((e) => e.id === id)?.situacao;
   const tipos = (p: ReturnType<typeof planejarCasa>) => new Set(p.resultado.terminais.map((t) => t.tipoHidraulico));
 
-  it.each([0, 30])('lote a %i°, com a intensidade de chuva: as três redes lançadas, ligadas e com a trava aprovando', (graus) => {
+  it.each([0, 30])('lote a %i°, com a intensidade de chuva: as três redes lançadas, ligadas, compatíveis com a estrutura e com a trava aprovando', (graus) => {
     const m = lote(graus);
     const p = planejarCasa(m, entrada(m, { hidro: comChuva() }));
     expect([situacao(p, 'AGUA'), situacao(p, 'ESGOTO'), situacao(p, 'PLUVIAL')]).toEqual(['LANCOU', 'LANCOU', 'LANCOU']);
@@ -390,9 +390,11 @@ describe('planejarCasa — F8: água, esgoto e pluvial encadeados', () => {
     expect(h.esgoto.tubos).toBeGreaterThan(0);
     expect(h.pluvial.tubos).toBeGreaterThan(0);
     expect(h.esgoto.destino).toBe('REDE_PUBLICA');
-    // A rede sai LIGADA: nenhum tubo com ponta solta, nenhum trecho sem destino.
-    expect(h.verificacao.porTipo.PONTA_ABERTA ?? 0).toBe(0);
-    expect(h.verificacao.porTipo.SEM_DESTINO ?? 0).toBe(0);
+    // A rede sai LIGADA e COMPATÍVEL (F8b): a verificação de rede do app sem marca nenhuma — nem ponta
+    // aberta, nem trecho sem destino, nem tubo atravessando pilar ou cruzando viga, nem desconector sem
+    // ventilação.
+    expect(h.verificacao).toEqual({ erros: 0, avisos: 0, porTipo: {} });
+    expect(p.pendencias.filter((x) => /^Rede de /.test(x.texto))).toEqual([]);
     expect(tipos(p).has('HIDROMETRO')).toBe(true);
     expect(tipos(p).has('LIGACAO_ESGOTO')).toBe(true);
     // Tudo proposta do sistema — inclusive o ponto que a água encostou na parede.

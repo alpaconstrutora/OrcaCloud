@@ -134,6 +134,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F6b — cozinha, serviço e lavabo com parede externa na casa estreita (decisão de 15/10; ver "Registro da F6b" — cozinha resolvida, serviço/lavabo em parte)
 - [x] F7 — mobiliário + louças com pontos (ver "Registro da F7")
 - [x] F8 — hidro encadeada (ver "Registro da F8")
+- [x] F8b — compatibilização hidráulica × estrutura (ver "F8b — plano" e "Registro da F8b")
 - [ ] F9 — elétrica + climatização
 - [ ] F10 — UI
 - [ ] F11 — saídas (prova)
@@ -641,3 +642,114 @@ Provas:
   - desligada: NAO_EXIGIDA e nenhum tubo.
 - Harness: portão com as etapas AGUA, ESGOTO e PLUVIAL LANCOU, redes com tubos e nenhuma ponta aberta
   nem trecho sem destino.
+
+## F8b — plano (15/10/2026)
+
+Pedido do usuário depois do relatório da F8, que propunha "uma F8b de compatibilização: desviar o tubo
+do pilar pela face e passar a viga pela regra de furo":
+
+> F8b
+
+O que a sonda mediu no lote 12 × 30 reto: 30 trechos atravessando pilar (ERRO) e 44 cruzando viga
+(AVISO).
+
+| Origem | Pilar | Viga |
+|---|---|---|
+| Barrilete de água fria na cota 2,80 m (dentro da laje e das vigas) | 1 | 14 + 7 descidas |
+| Água quente: sobe do aquecedor ao teto 2,80 m e corre lá | 16 | 19 + 4 descidas |
+| Ramais de água fria a 2,20 m, no eixo das paredes | 6 | — |
+| Alimentador enterrado (o pilar desce até −0,50 m) | 7 | — |
+
+As causas:
+- **Os encontros das paredes são nós do grafo pelas paredes, e o pilar está em cada encontro.** A
+  penalidade de 10 m por pilar (E5.5) só desvia quando há outro caminho, e na casa não há.
+- **As vigas descem até 2,30 m.** A regra "barrilete 10 cm abaixo da viga" só vale com espaço acima do
+  ramal (2,20 m); sem esse espaço, o barrilete volta ao teto, dentro das vigas.
+- **A coluna desce no eixo da parede**, onde está a viga.
+
+O que muda. É código compartilhado: vale para toda planta, não só para a casa.
+1. **Contorno do pilar no traçado pelas paredes**, como opção de `arvorePelasParedes`. O nó dentro do
+   pilar sai do grafo e um ANEL em volta dele, afastado da face, liga as paredes que chegavam ali. A
+   água (barrilete e ramais) e o alimentador/recalque ligam a opção. Eletroduto, linha frigorígena e
+   VRF ficam como estão.
+2. **Barrilete fora das vigas:**
+   - origem acima do teto, com laje sobre o pavimento (a caixa d'água sobre a laje): o barrilete corre
+     SOBRE a laje;
+   - origem abaixo do teto (o aquecedor) e viga sem espaço acima do ramal: o barrilete corre na cota
+     do ramal, abaixo das vigas, e não no teto.
+3. **Prumada fora da viga:** a coluna que desceria dentro de uma viga desce rente à face dela, do lado
+   do cômodo que atende.
+4. Esgoto: o desconector sem ventilação (lote reto) e o trecho que atravessa pilar (lote a 30°).
+
+Folgas novas são hipóteses editáveis da água: afastamento do anel, altura sobre a laje e folga da viga.
+
+Pronto quando: o harness reprova qualquer ATRAVESSA_PILAR e mostra o CRUZA_VIGA que sobrar, nos dois
+ângulos; os testes de água, obstáculos e rota pelas paredes seguem verdes, com casos novos para o anel
+e o barrilete.
+
+## Registro da F8b (15/10/2026)
+
+Resultado no lote 12 × 30 (harness, reto e a 30°): a verificação de rede do app sai **sem nenhuma
+marca**. Antes eram 30/47 trechos atravessando pilar (ERRO), 44 cruzando viga (AVISO) e 1 desconector
+sem ventilação.
+
+Custo em tubo:
+- Água: 106,0 → 106,8 m no lote reto; 104,4 → 104,4 m a 30°.
+- Esgoto: 71,9 → 76,5 m no lote reto (a coluna de ventilação nova); 67,0 → 67,0 m a 30°.
+
+O que mudou. É código compartilhado, vale para toda planta:
+
+**`blueprintObstaculosEstruturais.ts`**
+- `anelDoPilar`, `dentroDoAnel`, `noAnel`, `grafoEmVoltaDosAneis`.
+- `topoDaLajeDoTetoMm`, `foraDaViga`.
+- Constantes: `CONTORNO_DO_PILAR_MM` 40, `PENALIDADE_DO_ANEL_MM` 5 m, `SOBRE_A_LAJE_MM` 150,
+  `VAO_MINIMO_ABAIXO_DA_VIGA_MM` 50, `FOLGA_DA_VIGA_MM` 30.
+
+**`blueprintRotaPelasParedes.ts`**
+- Opção `contornoDoPilarMm`: o pilar vira anel no grafo. Cada lado do anel custa 5 m a mais, então a
+  volta POR DENTRO das paredes ainda ganha quando é curta (o caso E5.5 continua igual); o anel só é
+  usado quando não há outro caminho.
+- Eletroduto, linha frigorígena e VRF não ligam a opção e ficam como estavam.
+
+**`blueprintAguaAutomatica.ts`**
+- Barrilete SOBRE a laje quando a caixa está acima do teto e há laje cobrindo o pavimento (aviso
+  próprio).
+- Barrilete ENTRE o ramal e a viga quando ela desce até perto do ramal, em vez de subir ao teto.
+- Coluna que desceria dentro da viga desce rente à face dela, do lado do grupo que atende. O tubo fica
+  aparente entre o ramal (2,20 m) e a laje: é o trecho que o forro do ambiente molhado esconde.
+- Hipóteses novas: `contornoDoPilarMm`, `barrileteSobreALajeMm`.
+
+**Demais arquivos**
+- `blueprintAlimentador.ts` (`rotaPelasParedesAte`, também do recalque): o percurso pelas paredes
+  contorna o pilar; a entrada e o pé da subida ficam fora do anel. A subida corre na parede até 10 cm
+  abaixo da viga e sobe rente a ela.
+- `blueprintEsgotoAutomatico.ts`: o trecho reto que atravessa pilar contorna pelo canto
+  (`desvioDoPilar`, o do eletroduto), com o mesmo desnível repartido pelo caminho. Fica reto se o
+  caimento cairia abaixo da mínima.
+- `blueprintVentilacao.ts`: a economia de coluna media o alcance em LINHA RETA; a verificação mede
+  PELO TUBO. A caixa sifonada do banheiro social (1,1 m em planta, 1,57 m pelo tubo, máximo 1,20 m)
+  ficava sem ventilação. Agora o lançador reverifica pela mesma régua e ventila quem ficou de fora.
+
+Conferido no desenho dos dados (planta recortada, água sobre a estrutura):
+- os ramais de 2,20 m dão a volta em cada pilar;
+- as diagonais que restam são do barrilete a 3,05 m, sobre a laje (antes estavam a 2,80 m, dentro da
+  laje e das vigas).
+
+**Fica em aberto (dito): o alimentador ENTERRADO corre dentro do baldrame.** O percurso "pelas paredes"
+a −0,30 m fica no eixo da parede, e o baldrame (−0,50 a 0, largura da parede) está lá. Já era assim
+antes da F8b. A verificação de rede só olha pilar e viga, não baldrame, por isso não aparecia; o
+relatório de conflitos da Planta o lista como ESTRUTURA. Conserto proposto: no solo, o alimentador em
+reta até o pé da subida, cruzando o baldrame só na transversal (passagem prevista).
+
+Provas:
+- `blueprintObstaculosEstruturais.test.ts`, +6 testes:
+  - o anel;
+  - pilar em todo canto: só a penalidade atravessa; com o anel, contorna e fica ligada;
+  - a volta por dentro ainda ganha quando é curta;
+  - `foraDaViga`, inclusive com o lado bloqueado;
+  - barrilete sobre a laje;
+  - barrilete entre o ramal e a viga.
+- `blueprintCasaAutomatica.test.ts`: a 0° e a 30°, `verificacao` igual a
+  `{ erros: 0, avisos: 0, porTipo: {} }`, sem pendência "Rede de …".
+- Harness: o portão reprova qualquer marca da verificação de rede.
+

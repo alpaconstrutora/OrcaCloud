@@ -23,9 +23,13 @@
  *
  * E5.5 (29/09/2026): com `obstaculos` (pegadas de pilares), a aresta que entra
  * num pilar custa 10 m a mais — ver `blueprintObstaculosEstruturais.ts`.
+ *
+ * F8b da casa automática (15/10/2026): com `contornoDoPilarMm`, o pilar vira um ANEL no grafo — o que
+ * está dentro dele sai, e o perímetro (a essa distância da face) liga as paredes que chegavam ali. Sem
+ * isso, na planta com pilar em todo encontro, todo ramal que dobra uma esquina atravessa um pilar.
  */
 import type { Point, Wall } from './blueprintKernel';
-import { custoComPilares, foraDoPilar } from './blueprintObstaculosEstruturais';
+import { PENALIDADE_DO_ANEL_MM, anelDoPilar, custoComPilares, foraDoPilar, grafoEmVoltaDosAneis } from './blueprintObstaculosEstruturais';
 
 export type P2 = { x: number; y: number };
 
@@ -74,9 +78,12 @@ export function arvorePelasParedes(opts: {
   raioDeEncaixeMm: number;
   /** E5.5: pegadas de pilares — a aresta que entra numa custa 10 m a mais (desvia quando há outro caminho). */
   obstaculos?: readonly Point[][];
+  /** F8b: contornar cada pilar por um anel a esta distância da face (mm). Ausente ou 0 = só a penalidade. */
+  contornoDoPilarMm?: number;
 }): ArvorePelasParedes {
   const { paredes, raioDeEncaixeMm } = opts;
   const obstaculos = opts.obstaculos ?? [];
+  const aneis = (opts.contornoDoPilarMm ?? 0) > 0 ? obstaculos.map((g) => anelDoPilar(g, opts.contornoDoPilarMm!) as Point[]) : [];
   const encaixe = new Map<string, P2>();
   const foraDaParede: P2[] = [];
   // Pontos a pôr sobre cada parede: pontas, encontros e projeções.
@@ -90,13 +97,13 @@ export function arvorePelasParedes(opts: {
   };
   const vizinhos = new Map<string, { k: string; mm: number }[]>();
   const posicao = new Map<string, P2>();
-  const ligar = (a: P2, b: P2) => {
+  const ligar = (a: P2, b: P2, noAnel = false) => {
     const ka = chaveP(a);
     const kb = chaveP(b);
     if (ka === kb) return;
     posicao.set(ka, a);
     posicao.set(kb, b);
-    const mm = custoComPilares(a, b, obstaculos);
+    const mm = custoComPilares(a, b, obstaculos) + (noAnel ? PENALIDADE_DO_ANEL_MM : 0);
     const va = vizinhos.get(ka) ?? [];
     if (!va.some((v) => v.k === kb)) va.push({ k: kb, mm });
     vizinhos.set(ka, va);
@@ -129,7 +136,8 @@ export function arvorePelasParedes(opts: {
     const e = encaixarNaParede(p, ordenadas, raioDeEncaixeMm);
     if (!e) return null;
     // E5.5: a descida até o ponto não fica dentro de pilar — escorrega pela parede.
-    const q = obstaculos.length > 0 ? foraDoPilar(e.q, e.parede, obstaculos) : e.q;
+    // F8b: com anel, escorrega para fora do ANEL (o grafo não tem nó dentro dele).
+    const q = obstaculos.length > 0 ? foraDoPilar(e.q, e.parede, aneis.length > 0 ? aneis : obstaculos) : e.q;
     pendurar(e.parede, q);
     return q;
   };
@@ -143,6 +151,13 @@ export function arvorePelasParedes(opts: {
   for (const w of ordenadas) {
     const lista = [...(sobre.get(w.id) ?? [])].sort((x, y) => x.t - y.t || x.q.x - y.q.x || x.q.y - y.q.y);
     for (let i = 1; i < lista.length; i++) ligar(lista[i - 1].q, lista[i].q);
+  }
+  // F8b: o grafo refeito em volta dos anéis dos pilares.
+  if (aneis.length > 0) {
+    const brutas: [P2, P2][] = [];
+    for (const [k, vs] of vizinhos) for (const v of vs) if (k < v.k) brutas.push([posicao.get(k)!, posicao.get(v.k)!]);
+    vizinhos.clear();
+    for (const [a, b, noAnel] of grafoEmVoltaDosAneis(brutas, aneis)) ligar(a, b, noAnel);
   }
 
   if (!raiz) return { arestas: [], encaixe, foraDaParede: [...opts.pendentes], raiz: null };

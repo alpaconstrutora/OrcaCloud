@@ -118,6 +118,7 @@ describe('StandardTable — agrupamento', () => {
         expect(cabecalhos().length).toBeGreaterThan(0);
         fireEvent.change(screen.getByTitle('Agrupar os itens'), { target: { value: 'none' } });
         expect(cabecalhos()).toEqual([]);
-        expect(within(document.body).queryByTitle('Recolher todos os grupos')).toBeNull();
+        // Botão "recolher todos" continua à vista, desligado (§6.12).
+        expect((within(document.body).getByRole('button', { name: 'Recolher todos os grupos' }) as HTMLButtonElement).disabled).toBe(true);
     });
 });

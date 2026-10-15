@@ -52,3 +52,18 @@
 1. `npx vitest run __tests__/agruparLinhas.test.ts __tests__/recebivelGrupos.test.ts __tests__/components/*Agrupar*.test.tsx`
 2. `bash scripts/check-ui-standard.sh` em cada tela tocada
 3. Cada tela: Agrupar › cada opção; recolher um grupo; recolher todos; "selecionar todos" com grupo recolhido; nas paginadas, ir à página 2 com um grupo cortado.
+
+## Pedido posterior — 15/10/2026
+> em boletos existe botao expandir e recolher todos os grupos. Esse botão deve ser propagado junto com o filtro agrupar
+>
+> (resposta minha: já estava nas 7 tabelas, mas só aparecia depois de escolher um agrupamento — conferido em produção; ofereci deixá-lo sempre visível)
+>
+> Se preferir o botão sempre visível, posso fazer: sim
+
+| Arquivo | O que muda | Como sei que terminou |
+|---|---|---|
+| `components/ui/Agrupamento.tsx` | botão "recolher/expandir todos" sempre à vista; sem agrupamento, desligado com `MOTIVO_SEM_AGRUPAMENTO` no `title` | testes de tela cobram botão presente + desligado + motivo |
+| `components/BoletoManager.tsx` | troca o markup próprio por `AgruparControles` (só no modo lista, como antes) | preview: Boletos com o botão desligado e funcionando ao agrupar |
+| `docs/ui_ux_guia_unificado.md` §6.12 | "sempre visível" no lugar de "só enquanto agrupa" | seção atualizada |
+
+- [x] implementado e testado; conferido no preview local nas 7 tabelas (botão desligado com o motivo sem agrupar; recolher todos → só cabeçalhos; expandir todos → todas as linhas; 0 erros)

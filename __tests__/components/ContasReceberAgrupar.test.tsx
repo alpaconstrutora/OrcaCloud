@@ -130,6 +130,21 @@ describe('ContasReceberManager — Agrupar', () => {
         render(<ContasReceberManager organizationId="org1" />);
         await screen.findByText('Parcela M1');
         expect(document.querySelectorAll('tbody span.font-semibold')).toHaveLength(0);
-        expect(screen.queryByTitle('Recolher todos os grupos')).toBeNull();
+        // "Recolher/expandir todos" fica SEMPRE à vista (15/10/2026) — desligado,
+        // dizendo o que fazer para ligar.
+        const todos = screen.getByRole('button', { name: 'Recolher todos os grupos' }) as HTMLButtonElement;
+        expect(todos.disabled).toBe(true);
+        expect(todos.title).toMatch(/Escolha um campo em "Agrupar"/);
+    });
+
+    it('ao agrupar, "recolher todos" liga e alterna para "expandir todos"', async () => {
+        render(<ContasReceberManager organizationId="org1" />);
+        await screen.findByText('Parcela M1');
+        agruparPor('cliente');
+        const todos = screen.getByRole('button', { name: 'Recolher todos os grupos' }) as HTMLButtonElement;
+        expect(todos.disabled).toBe(false);
+        fireEvent.click(todos);
+        expect(screen.queryByText('Parcela M1')).toBeNull();
+        expect(screen.getByRole('button', { name: 'Expandir todos os grupos' })).toBeTruthy();
     });
 });

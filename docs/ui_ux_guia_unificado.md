@@ -1300,9 +1300,12 @@ Em tabela feita à mão, o `<tbody>` itera as entradas e o corpo da linha não m
   `Layers` à esquerda, primeira opção "Agrupar" (= sem grupo), na toolbar acoplada
   logo depois do Filtro avançado. Ativo vira `bg-blue-600 text-white` (é estado, como
   o toggle grade/lista) com `[&>option]:bg-white [&>option]:text-gray-900`. Ao lado,
-  só enquanto agrupa, um botão `h-9 w-9` que recolhe/expande todos
-  (`ChevronsDownUp`/`ChevronsUpDown`). Escolha em `usePersistedState`; grupos
-  recolhidos só em memória.
+  **sempre visível**, um botão `h-9 w-9` que recolhe/expande todos
+  (`ChevronsDownUp`/`ChevronsUpDown`); sem agrupamento ele fica desligado
+  (`disabled:opacity-40`) com o motivo no `title` — `MOTIVO_SEM_AGRUPAMENTO`, "Escolha um
+  campo em "Agrupar"…" (pedido de 15/10/2026: até então só aparecia ao agrupar, e não
+  se descobria que existia). Escolha em `usePersistedState`; grupos recolhidos só em
+  memória.
 - **Agrupamento é função pura em `utils/`** (`boletoGrupos.ts`, `recebivelGrupos.ts`):
   recebe a lista **já filtrada e ordenada** e devolve `{ key, label, itens, total }`.
   Grupos na ordem da 1ª aparição (respeita a coluna ordenada); status na ordem do mapa

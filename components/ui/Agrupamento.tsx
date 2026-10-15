@@ -9,6 +9,9 @@ import { formatMoney } from './Format';
  * grupos, de `utils/agruparLinhas`.
  */
 
+/** Por que "recolher/expandir todos" está desligado — e o caminho para ligar. */
+export const MOTIVO_SEM_AGRUPAMENTO = 'Escolha um campo em "Agrupar" para recolher ou expandir os grupos';
+
 interface ControlesProps<C extends string> {
     opcoes: { value: C; label: string }[];
     campo: C | 'none';
@@ -21,7 +24,8 @@ interface ControlesProps<C extends string> {
     title: string;
 }
 
-/** Seletor "Agrupar" + recolher/expandir todos. Vai na toolbar acoplada, depois do Filtro avançado. */
+/** Seletor "Agrupar" + recolher/expandir todos (sempre visível; desligado sem agrupamento).
+ *  Vai na toolbar acoplada, depois do Filtro avançado. */
 export function AgruparControles<C extends string>({ opcoes, campo, onCampo, chavesDosGrupos, algumRecolhido, onAlternarTodos, title }: ControlesProps<C>) {
     const ativo = campo !== 'none';
     return (
@@ -42,16 +46,21 @@ export function AgruparControles<C extends string>({ opcoes, campo, onCampo, cha
                     {opcoes.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
             </div>
-            {ativo && (
+            {/* Sempre visível (pedido de 15/10/2026): sem agrupamento fica desligado e
+                DIZ O PORQUÊ — ícone cinza mudo é lido como defeito. O `title` vai também
+                no invólucro porque nem todo navegador mostra dica em botão desabilitado. */}
+            <span className="shrink-0" title={ativo ? undefined : MOTIVO_SEM_AGRUPAMENTO}>
                 <button
                     type="button"
                     onClick={() => onAlternarTodos(chavesDosGrupos)}
-                    title={algumRecolhido ? 'Expandir todos os grupos' : 'Recolher todos os grupos'}
-                    className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 shrink-0"
+                    disabled={!ativo}
+                    title={!ativo ? MOTIVO_SEM_AGRUPAMENTO : algumRecolhido ? 'Expandir todos os grupos' : 'Recolher todos os grupos'}
+                    aria-label={!ativo ? 'Recolher todos os grupos' : algumRecolhido ? 'Expandir todos os grupos' : 'Recolher todos os grupos'}
+                    className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:scale-100"
                 >
-                    {algumRecolhido ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
+                    {ativo && algumRecolhido ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
                 </button>
-            )}
+            </span>
         </>
     );
 }

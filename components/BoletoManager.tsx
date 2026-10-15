@@ -5,7 +5,7 @@ import {
     Building2, Calendar, AlertTriangle,
     Wallet, Clock, CheckCircle2, SlidersHorizontal, X,
     Download, LayoutGrid, List, Upload, Pencil, AlertCircle, Trash2, MoveHorizontal, ChevronDown,
-    ChevronRight, ChevronsDownUp, ChevronsUpDown, Layers,
+    ChevronRight,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
 import { renomearSelecionados } from '../services/boletoNomeDocumentoService';
@@ -18,6 +18,7 @@ import type { Boleto, BoletoStatus, BoletoFilters, BoletoStats, Organization, Co
 import type { SupplierOption } from './SupplierSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
 import { agruparBoletos, OPCOES_AGRUPAR, type CampoAgrupar } from '../utils/boletoGrupos';
+import { AgruparControles } from './ui/Agrupamento';
 import { onlyObras } from '../utils/projectClassification';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
@@ -1220,34 +1221,18 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
 
-                {/* Agrupar — mesmo controle de Minhas Tarefas (TasksModule). Só no modo lista. */}
+                {/* Agrupar + recolher/expandir todos — peça compartilhada do guia de UI §6.12.
+                    Só no modo lista: a grade não tem linha de grupo. */}
                 {viewMode === 'list' && (
-                    <div className="relative shrink-0">
-                        <Layers className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${groupBy !== 'none' ? 'text-white' : 'text-gray-500'}`} />
-                        <select
-                            value={groupBy}
-                            onChange={e => { setGroupBy(e.target.value as CampoAgrupar); setGruposRecolhidos(new Set()); lastSelectedIndexRef.current = null; }}
-                            title="Agrupar os boletos"
-                            className={`h-9 pl-8 pr-3 rounded-[6px] text-[13px] font-medium border appearance-none cursor-pointer transition-all ${
-                                groupBy !== 'none'
-                                    ? 'bg-blue-600 text-white border-blue-600 [&>option]:bg-white [&>option]:text-gray-900'
-                                    : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-50'
-                            }`}
-                        >
-                            <option value="none">Agrupar</option>
-                            {OPCOES_AGRUPAR.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                    </div>
-                )}
-                {agrupando && (
-                    <button
-                        type="button"
-                        onClick={() => setGruposRecolhidos(prev => (prev.size ? new Set() : new Set(grupos.map(g => g.key))))}
-                        title={gruposRecolhidos.size ? 'Expandir todos os grupos' : 'Recolher todos os grupos'}
-                        className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 shrink-0"
-                    >
-                        {gruposRecolhidos.size ? <ChevronsUpDown className="w-4 h-4" /> : <ChevronsDownUp className="w-4 h-4" />}
-                    </button>
+                    <AgruparControles<Exclude<CampoAgrupar, 'none'>>
+                        opcoes={OPCOES_AGRUPAR}
+                        campo={groupBy}
+                        onCampo={c => { setGroupBy(c); setGruposRecolhidos(new Set()); lastSelectedIndexRef.current = null; }}
+                        chavesDosGrupos={grupos.map(g => g.key)}
+                        algumRecolhido={gruposRecolhidos.size > 0}
+                        onAlternarTodos={keys => setGruposRecolhidos(prev => (prev.size ? new Set() : new Set(keys)))}
+                        title="Agrupar os boletos"
+                    />
                 )}
 
                 {/* Separador entre grupo "filtrar" e grupo "visualizar" — só na variante desaninhada (§5.1) */}

@@ -2229,8 +2229,15 @@ O respiro entre a moldura do app (sidebar, barra superior) e o conteúdo da tela
 
 ```tsx
 // components/Layout.tsx — <main>
-<main className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-hide relative">
+<main className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-4 md:p-6 relative">
 ```
+
+> ✅ **A área de conteúdo mostra a barra de rolagem** (15/10/2026). Até então era
+> `scrollbar-hide`, e tela longa ficava sem o indicador de quanto falta. A barra é a
+> do app (8px, alarga ao se aproximar). `[scrollbar-gutter:stable]` reserva o espaço
+> sempre, para o conteúdo não pular 8px entre tela curta e longa — a borda direita
+> do conteúdo fica a 24px + 8px da moldura. O menu lateral continua `scrollbar-hide`:
+> é curto e quase nunca rola.
 
 | | Gutter |
 |---|---|

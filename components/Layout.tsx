@@ -1594,8 +1594,12 @@ const Layout: React.FC<LayoutProps> = ({
             `h1` das telas é 30px numa caixa de 36px, então ~8px de meia-entrelinha
             entram no vão percebido — 32px lia como ~40px.
             Ver docs/ui_ux_guia_unificado.md §20.2. Quem compensa esse padding com
-            margem negativa (full-bleed) tem que usar `-mx-4 md:-mx-6`, não `-8`. */}
-        <main className={`flex-1 overflow-y-auto p-4 md:p-6 scrollbar-hide relative ${w.main}`}>
+            margem negativa (full-bleed) tem que usar `-mx-4 md:-mx-6`, não `-8`.
+            Barra de rolagem VISÍVEL (15/10/2026, pedido do usuário): era
+            `scrollbar-hide`, e tela longa ficava sem o indicador de "quanto falta".
+            `[scrollbar-gutter:stable]` reserva os 8px da barra sempre — sem ele o
+            conteúdo pularia 8px para o lado ao trocar entre tela curta e longa. */}
+        <main className={`flex-1 overflow-y-auto [scrollbar-gutter:stable] p-4 md:p-6 relative ${w.main}`}>
           {children}
         </main>
       </div>

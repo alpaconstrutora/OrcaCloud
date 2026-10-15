@@ -139,7 +139,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F9 — elétrica + climatização (ver "F9 — plano detalhado" e "Registro da F9")
 - [x] F10 — tela da Casa automática (ver "Registro da F10")
 - [x] F11 — saídas (ver "Registro da F11")
-- [ ] F12 — sobrado (posterior)
+- [ ] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [ ] F12b estrutura e cobertura · [ ] F12c instalações · [ ] F12d tela e provas
 
 ## Registro da F1 (14/10/2026)
 
@@ -1121,3 +1121,103 @@ Telhado, com linhas.
 - Colaborar › Versões baixou o DXF (75 KB, `AC1009`) e o IFC (2 MB, `ISO-10303-21`);
 - nenhum erro de página, console ou HTTP.
 
+## F12 — plano detalhado (15/10/2026, "pode seguir")
+
+O usuário disse "pode seguir" sem escolher entre F12, compatibilização e o adaptador para a unidade;
+segui a ordem do plano (F12).
+
+O que o levantamento achou (código em `1290c127`):
+- **O gerador E6.2 faz UM pavimento por chamada.** Não aceita cômodo fixo nem furo, não conhece
+  escada (não há uso ESCADA), põe sempre a porta de entrada na frente e repete os uids das paredes
+  (`gerador:${semente}:parede:k`). Dois pavimentos com a mesma semente dão DUPLICATE_UID no lote.
+- **O envelope aceita contorno ortogonal (L, U, T).** `retangulosDoContorno` reparte em principal e
+  anexos.
+- **A escada do kernel é completa** (`AddEscada`: 2, 3 ou 4 pontos = reta, L ou U; espelho alvo; o
+  furo na laje é derivado; avisos de espelho e Blondel), mas nada a posiciona sozinho.
+- **Estrutura** (pilares, vigas, lajes, fundações) é por pavimento e não alinha pilares entre
+  pavimentos.
+- **Já são multipavimento:** água (colunas que descem), esgoto (tubo de queda a partir do superior),
+  pluvial (condutores descem), circuitos (um QDC alimenta os outros pavimentos), eletrodutos
+  (prumadas entre pavimentos) e climatização.
+- **`aproveitamentoDoEstudo`** já faz TO pela projeção e CA pela soma; a casa hoje iguala os dois.
+
+Decisões de desenho (hipóteses editáveis):
+- `pavimentos: 1 | 2` (padrão 1).
+- No sobrado, o térreo leva o social, o serviço, o lavabo e a garagem; o superior, os dormitórios,
+  suítes e banhos, mais a circulação.
+- A ESCADA vive num NÚCLEO reservado no contorno, um entalhe igual nos dois pavimentos:
+  - o gerador recebe o contorno da casa menos o núcleo, a escada (U, 1,0 m) entra no núcleo, e o
+    núcleo ganha as paredes e as portas para o cômodo vizinho em cada pavimento;
+  - o pé-direito é o mesmo; o superior fica na cota pé-direito + laje.
+
+Fases (cada uma com "pode seguir"):
+- **F12a: arquitetura dos dois pavimentos.**
+  - programa dividido; núcleo da escada; gerador por pavimento (uids por pavimento; sem porta de
+    entrada no superior);
+  - o fechamento do núcleo e as portas; `AddEscada` U;
+  - a implantação pelo pavimento maior: TO pela projeção, CA pela soma, recuo do 2º pavimento.
+- **F12b: estrutura e cobertura.**
+  - pilares alinhados: o superior primeiro, e o que não tem apoio desce para o térreo;
+  - lajes sem a do núcleo; fundação só no térreo; eixos por último;
+  - telhado no superior; cobertura do térreo que sobra (garagem); guarda-corpo da escada.
+- **F12c: instalações.**
+  - âncoras repartidas: caixa d'água em cima; aquecedor, caixa de gordura e vagas embaixo;
+  - mobiliário e pontos por pavimento;
+  - água, esgoto (shaft e tubo de queda) e pluvial; quadro no térreo; circuitos por pavimento;
+    climatização.
+- **F12d: tela e provas.** O número de pavimentos na tela, harness, conferência no app.
+
+## Registro da F12a (15/10/2026) — arquitetura dos dois pavimentos e a escada
+
+**Mudou em relação ao plano acima:** o núcleo da escada como ENTALHE no contorno antes de gerar
+foi medido e descartado — sem cômodo na faixa da frente, o gerador põe o corredor do superior na
+fachada e o entalhe come a repartição. Ficou o que um projetista faz:
+
+1. **programa dividido** (`dividirPrograma`): o térreo leva sala, cozinha, serviço, lavabo,
+   varanda, garagem e escritório; o superior, o resto. No superior os dormitórios recebem
+   privacidade SOCIAL **só para o zoneamento** (o uso continua dormitório): o corredor cai no meio,
+   de lado a lado, com os quartos na frente e a suíte nos fundos;
+2. os dois pavimentos gerados **no mesmo retângulo**, cada um com as suas sementes; no superior só
+   servem as alternativas com corredor (a escada chega nele);
+3. o **núcleo** (2,40 × 3,60 m) é recortado **depois**, na ponta do corredor de cima, encostado numa
+   fachada lateral. `escolherNucleo` testa as 4 opções (direita/esquerda × para os fundos/para a
+   frente) e pontua os DOIS pavimentos: ambiente que fica abaixo da área mínima ou com menos de
+   `sobraMinimaDoAmbientePct` (50 %) da área gerada pesa 100; ambiente partido em dois, 10; o resto,
+   a fração comida. As paredes que atravessam o núcleo são cortadas na borda dele (a abertura do
+   trecho cortado sai; a do pedaço de lá é re-ancorada); o núcleo ganha as paredes que faltam e as
+   portas — em cima, do patamar para o corredor; embaixo, para o melhor vizinho (sala > varanda >
+   cozinha > …). A etiqueta do ambiente cujo centro caiu no núcleo **ou na parede dele** vai para o
+   maior pedaço que sobrou (achado: na parede, o kernel dava o nome ao núcleo e o ambiente ficava
+   sem nome); o núcleo ganha a etiqueta "Escada";
+4. a **escada em U** dentro do núcleo: patamar de 1,0 m alinhado com o corredor, dois lances lado a
+   lado, virada no outro extremo; espelhada no núcleo da esquerda.
+
+No orquestrador: `HipotesesDaCasa.pavimentos: 1 | 2` (padrão 1) e `sobrado: HipotesesDoSobrado`
+(laje 100, núcleo, patamar, lance, largura, espelho alvo, porta, sobra mínima — todas editáveis). A
+implantação recebe o programa do pavimento MAIOR + o núcleo, divide o potencial do CA por dois, usa
+os recuos da altura do sobrado (2 × (pé-direito + laje)) e recusa com motivo quando o gabarito da
+zona não deixa dois pavimentos. O superior entra por `AddLevel` no mesmo lote (cota pé-direito +
+laje = 2,90 m), sem a porta de entrada que o gerador põe na fachada, com uids por pavimento
+(`comUidsDoPavimento` — a mesma semente nos dois dava DUPLICATE_UID). `comandosNoMundo` virou
+`comandosLocaisNoMundo` (qualquer lote, inclusive `AddEscada`). A conferência é comum às duas casas
+(`fechar`): TO pela projeção, CA pela soma. **Estrutura, telhado e instalações do sobrado ficam
+`NAO_RODOU`** com a nota "no sobrado, esta etapa ainda não é lançada sozinha" e uma pendência de
+premissa — são a F12b e a F12c.
+
+Medido (programa 3/1/2/2 R1-N, sementes 1–8):
+
+| Lote | Retângulo | TO / CA | Núcleo | Escada | Portas | Programa |
+|---|---|---|---|---|---|---|
+| 12 × 30 | 8,60 × 12,30 | 30,6 % / 0,61 | direita, fundos | 17 × 171/306, Blondel 647 | sala · circulação | 11/11, 0 regra violada |
+| 10 × 25 | 7,00 × 15,15 | 44,2 % / 0,88 | direita, fundos | idem | cozinha · circulação | 11/11, 0 regra violada |
+| 15 × 20 | 8,60 × 12,30 | 36,7 % / 0,73 | direita, fundos | idem | sala · circulação | 11/11, 0 regra violada |
+
+Nas formas de casa soltas (8,2 × 11,75; 9 × 10,5; 7 × 13,5; 10 × 9): os 7 ambientes nomeados nos dois
+pavimentos e nenhuma regra de ambiente violada; no 10 × 9 o núcleo ainda come a garagem (18,4 m²
+para 2 vagas) — sai como pendência "o núcleo come boa parte de Garagem", porque as 4 opções perdem
+algum ambiente.
+
+Testes: `__tests__/blueprintSobrado.test.ts` (13 — programa dividido, pedaços, escolha do núcleo,
+recorte, escada espelhada) e o bloco "F12a" em `blueprintCasaAutomatica.test.ts` (10 — pavimento
+superior na cota, escada sem aviso, portas, programa atendido nos dois, superior sem porta para a
+rua, TO/CA, etapas que ainda não rodam, trava, lote girado 30°, zona de 1 pavimento).

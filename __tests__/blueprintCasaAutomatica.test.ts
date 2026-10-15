@@ -540,3 +540,99 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
   });
 });
 
+
+describe('planejarCasa — F12a: o sobrado (arquitetura dos dois pavimentos e a escada)', () => {
+  const m = lote();
+  const plano = planejarCasa(m, entrada(m), { pavimentos: 2 });
+  const T = m.levels[0].id;
+  const r = plano.resultado;
+  const S = plano.sobrado?.nivelSuperiorId ?? '';
+
+  it('o pavimento superior nasce no mesmo lote, um andar acima (pé-direito + laje)', () => {
+    expect(plano.sobrado).not.toBeNull();
+    expect(r.levels).toHaveLength(2);
+    expect(r.levels.find((l) => l.id === S)?.elevationMm).toBe(2800 + 100);
+    expect(r.walls.filter((w) => w.levelId === T).length).toBeGreaterThan(10);
+    expect(r.walls.filter((w) => w.levelId === S).length).toBeGreaterThan(10);
+  });
+
+  it('a escada em U liga os dois: degraus confortáveis (Blondel), sem aviso', () => {
+    expect(r.stairs).toHaveLength(1);
+    const e = plano.sobrado!.escada;
+    expect(e.degraus).toBeGreaterThanOrEqual(16);
+    expect(e.espelhoMm).toBeLessThanOrEqual(185);
+    expect(e.pisoMm).toBeGreaterThanOrEqual(280);
+    expect(e.blondelMm).toBeGreaterThanOrEqual(630);
+    expect(e.blondelMm).toBeLessThanOrEqual(650);
+    expect(plano.pendencias.filter((p) => p.texto.startsWith('Escada:') && p.grupo === 'SEM_SOLUCAO')).toEqual([]);
+  });
+
+  it('o núcleo abre para um ambiente no térreo e para o corredor em cima', () => {
+    expect(plano.sobrado!.portas.terreo).not.toBeNull();
+    expect(plano.sobrado!.portas.superior).toMatch(/circula/i);
+    for (const L of [T, S]) expect(r.spaces.some((s) => s.levelId === L && s.name === 'Escada')).toBe(true);
+  });
+
+  it('o programa inteiro atendido nos dois pavimentos: social e serviço embaixo, íntimo em cima', () => {
+    expect(plano.resumo.ambientesAtendidos).toBe(plano.resumo.ambientesPedidos);
+    const nomes = (L: string) => r.spaces.filter((s) => s.levelId === L).map((s) => s.name ?? '');
+    expect(nomes(T).some((n) => /sala/i.test(n))).toBe(true);
+    expect(nomes(T).some((n) => /dormit|su[ií]te/i.test(n))).toBe(false);
+    expect(nomes(S).filter((n) => /dormit|su[ií]te/i.test(n)).length).toBeGreaterThanOrEqual(3);
+    expect(plano.resumo.regrasVioladas).toBe(0);
+  });
+
+  it('o superior não tem porta para a rua', () => {
+    const anel = plano.implantacao!.anelNoMundo;
+    const naFachada = (a: Point, b: Point) => anel.some((p, i) => {
+      const q = anel[(i + 1) % anel.length];
+      const col = (x: Point) => Math.abs((q.x - p.x) * (x.y - p.y) - (q.y - p.y) * (x.x - p.x)) / Math.hypot(q.x - p.x, q.y - p.y) < 5;
+      return col(a) && col(b);
+    });
+    const externas = new Set(r.walls.filter((w) => w.levelId === S && naFachada(w.a, w.b)).map((w) => w.id));
+    expect(externas.size).toBeGreaterThan(0);
+    expect(r.openings.filter((o) => externas.has(o.wallId) && (o.kind === 'door' || o.kind === 'sliding'))).toEqual([]);
+  });
+
+  it('TO pela projeção, CA pela soma dos pavimentos — dentro da zona', () => {
+    const i = plano.implantacao!;
+    expect(i.pavimentos).toBe(2);
+    expect(i.medidas.toPct).toBeLessThanOrEqual(60);
+    expect(i.medidas.coeficiente).toBeCloseTo((2 * i.medidas.projecaoM2) / i.medidas.loteM2, 1);
+    expect(i.medidas.coeficiente).toBeLessThanOrEqual(1.2);
+    expect(plano.etapas.find((e) => e.id === 'IMPLANTACAO')!.nota).toMatch(/2 pavimentos/);
+  });
+
+  it('a estrutura e as instalações ainda não rodam no sobrado — cada etapa diz, e a premissa avisa', () => {
+    const porId = Object.fromEntries(plano.etapas.map((e) => [e.id, e]));
+    expect(porId.IMPLANTACAO.situacao).toBe('CALCULOU');
+    expect(porId.ARQUITETURA.situacao).toBe('LANCOU');
+    expect(porId.CONFERENCIA.situacao).toBe('CALCULOU');
+    for (const e of plano.etapas.filter((x) => !['IMPLANTACAO', 'ARQUITETURA', 'CONFERENCIA'].includes(x.id))) {
+      expect(e.situacao).toBe('NAO_RODOU');
+      expect(e.nota).toMatch(/sobrado/);
+    }
+    expect(plano.pendencias.some((p) => p.grupo === 'PREMISSA' && /^Sobrado:/.test(p.texto))).toBe(true);
+  });
+
+  it('a trava: reaplicado no original dá os mesmos ids e o mesmo modelo — o pavimento de cima incluso', () => {
+    expect(conferirPlanoDaCasa(m, plano)).toEqual({ ok: true });
+    expect(snapshotHash(applyBatch(m, plano.comandos).model)).toBe(snapshotHash(r));
+  });
+
+  it('lote GIRADO 30°: o sobrado sai igual (dois pavimentos, escada, trava ok)', () => {
+    const g = lote(30);
+    const p = planejarCasa(g, entrada(g), { pavimentos: 2 });
+    expect(p.sobrado).not.toBeNull();
+    expect(p.resultado.stairs).toHaveLength(1);
+    expect(p.resumo.ambientesAtendidos).toBe(p.resumo.ambientesPedidos);
+    expect(conferirPlanoDaCasa(g, p)).toEqual({ ok: true });
+  });
+
+  it('zona que só permite um pavimento: a implantação diz por quê e nada é lançado', () => {
+    const p = planejarCasa(m, entrada(m, { ctx: { ...entrada(m).ctx, zona: { ...ZONA, gabaritoPavimentos: 1 } } }), { pavimentos: 2 });
+    expect(p.comandos).toEqual([]);
+    expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
+    expect(p.etapas[0].nota).toMatch(/1 pavimento.*térrea/);
+  });
+});

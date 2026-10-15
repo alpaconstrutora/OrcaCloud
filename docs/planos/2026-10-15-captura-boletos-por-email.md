@@ -747,9 +747,40 @@ Depois: e-mail real com boleto → aparece em Boletos a Pagar › Em revisão co
 
 ## Estado
 
-- [ ] Fase 0 — spikes (0.1 IMAP em Deno · 0.2 PDF em Deno · 0.3 senha de app — depende do usuário)
-- [ ] Fase 1 — correções (1.1 CNPJ · 1.2 boletoTexto · 1.3 boletoParser · 1.4 service · 1.5 form · 1.6 tipos)
-- [ ] Fase 2 — banco (2.1 tabelas · 2.2 RPCs · 2.3 cron)
-- [ ] Fase 3 — Edge Functions (3.1–3.5)
-- [ ] Fase 4 — UI (4.1–4.6)
-- [ ] Fase 5 — testes e piloto (5.1–5.8)
+Atualizado em 15/10/2026, ao fim da sessão de implementação.
+
+- [x] **Fase 0 — spikes: 2 de 3.**
+  - [x] 0.1 IMAP no Deno: imapflow 1.0.164 chega ao LOGIN de `imap.gmail.com:993` no Deno 2.1 local **e** no Edge Runtime publicado (function de spike temporária, 0,9 s, `AUTHENTICATIONFAILED` reconhecido; function apagada em seguida, OPTIONS → 404).
+  - [x] 0.2 PDF no Deno: `npm:unpdf@0.12.1` + `extractFromPdfText` leram 3 boletos reais (VR, Santander, escaneado) local e no runtime publicado (123 ms). O spike achou 3 defeitos do leitor, corrigidos (abaixo).
+  - [ ] 0.3 Senha de app da caixa Gmail — **depende do usuário** (ativar 2 etapas, gerar senha de app, conectar pela tela).
+- [x] **Fase 1 — correções: 6 de 6** (commit `6f682cc7`).
+- [x] **Fase 2 — banco: 3 de 3**, aplicadas 2× cada no remoto (idempotentes), conferidas de fora (RLS, privilégios, cron `*/15` só com caixa ativa).
+- [x] **Fase 3 — Edge Functions: 5 de 5** (commit `ba5351eb`). `email-capture-sync` e `email-capture-accounts` publicadas `--no-verify-jwt`; sem header → 401, token falso → 401, cron → 200 `{contas:0}`.
+- [x] **Fase 4 — UI: 6 de 6.** Verificada em harness sem login (`docs/spikes/captura-email/`) com prints; **não** verificada no app logado (a senha do usuário de leitura não estava disponível nesta sessão).
+- [ ] **Fase 5 — testes e piloto: 7 de 8.** 5.1–5.7 escritos e verdes; 5.8 (piloto de 2 semanas com caixa real) depende da 0.3.
+
+### Desvios do plano registrados na execução (15/10/2026)
+
+- **Leitor (item 1.2), três defeitos achados pelo spike com PDFs reais**, corrigidos com teste:
+  linha digitável colada a um dígito vizinho (bloco de 48 inválido) devolvia lixo; CNPJ sem máscara
+  ("CNPJ: 07604526000120") não era visto; o CNPJ do PAGADOR podia ser tomado pelo do beneficiário.
+  Agora: formato impresso reconhecido primeiro, janela de 47/48 só nas bordas do bloco (janela de 44
+  dava falso positivo ~1 em 11), CNPJ rotulado aceito, dono do CNPJ pelo rótulo mais próximo.
+- **Conversão extração → colunas** saiu de `boletoService` para `utils/boletoTexto.ts`
+  (`colunasDaExtracao`): o boleto da tela e o do e-mail gravam igual.
+- **Tela:** em vez de "badge", a lista ganhou a **coluna Origem** (Upload/E-mail) + filtro avançado
+  "Origem". A aba "Captura por e-mail" ganhou também o **Histórico da captura** (um anexo por linha,
+  com DMARC, resultado e "Ver boleto"), que cobre a rastreabilidade do RF-09 sem tela nova.
+- **Formulário do boleto:** além de "Recebido por e-mail de… · Monitorar remetente", o painel
+  **Histórico** passou a mostrar `boletos_auditoria` para QUALQUER boleto (antes nenhuma tela lia).
+- **Larguras das tabelas** da aba corrigidas depois do print: com a soma original (1.360–1.470 px)
+  as ações saíam pela borda.
+
+### Efeito medido na base (15/10/2026)
+
+| | boletos |
+|---|---|
+| com CNPJ do beneficiário | 529 |
+| com sugestão de fornecedor (ILIKE antigo) | 165 |
+| que a busca nova encontraria | 473 |
+| em aberto sem vencimento — "Aprovar e Lançar" passa a pedir a data | 147 |

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     Upload, Loader2, ArrowLeft, FileText, AlertCircle, CheckCircle2,
     Building2, Calendar, DollarSign, Hash, Eye, Save,
-    ThumbsUp, Ban, Trash2, UserPlus, Undo2, Receipt, Tag, StickyNote, Pencil,
+    ThumbsUp, Ban, Trash2, UserPlus, Undo2, Receipt, Tag, StickyNote, Pencil, History, Mail,
 } from 'lucide-react';
 import PlanoContasSelect from './PlanoContasSelect';
 import HierarchicalSelect from './HierarchicalSelect';
@@ -15,12 +15,14 @@ import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { extractFromPdfFile } from '../utils/boletoParser';
 import { onlyDigits } from '../utils/febrabanRules';
-import { formatMoney } from './ui/Format';
+import { formatMoney, formatDateTimeBR } from './ui/Format';
 import { useConfirm } from './ui/confirm';
 import { renomearDocumentoDeNovo } from '../services/boletoNomeDocumentoService';
 import { useWritableOrganizations } from '../hooks/useOrgContext';
 import MoneyCentsInput from './ui/MoneyCentsInput';
-import type { Boleto, BoletoExtractionResult, Supplier, CostCenter, ChartOfAccount } from '../types';
+import { emailCaptureService, type ContaCaptura, type MensagemCaptura } from '../services/emailCaptureService';
+import EmailCaptureSenderSheet from './boletos/EmailCaptureSenderSheet';
+import type { Boleto, BoletoAuditoria, BoletoExtractionResult, Supplier, CostCenter, ChartOfAccount } from '../types';
 
 interface BoletoFormModalProps {
     organizationId: string;
@@ -80,6 +82,35 @@ const Secao: React.FC<React.PropsWithChildren<{ titulo: string; icone: React.Com
     </Painel>
 );
 
+/** Ações gravadas em `boletos_auditoria` — o texto que o painel Histórico mostra. */
+const ROTULO_AUDITORIA: Record<string, string> = {
+    upload: 'Capturado',
+    extracao_manual: 'Linha digitável informada à mão',
+    associacao: 'Campos alterados',
+    associacao_lote: 'Alterado em lote',
+    aprovacao: 'Aprovado e lançado em contas a pagar',
+    status_pago: 'Marcado como pago',
+    status_rascunho: 'Revertido para rascunho',
+    cancelamento: 'Cancelado',
+    mudanca_organizacao: 'Movido de organização',
+    pagamento_asaas_disparado: 'Pagamento via Asaas disparado',
+};
+
+/** Resumo legível de um evento: origem do e-mail na captura, campos na edição. */
+function detalheDaAuditoria(a: BoletoAuditoria): string | null {
+    const d = (a.valor_depois ?? null) as Record<string, unknown> | null;
+    if (a.acao === 'upload' && d?.origem === 'email') {
+        const motivos = Array.isArray(d.motivos) && d.motivos.length ? ` — revisão: ${(d.motivos as string[]).join(' ')}` : '';
+        return `Por e-mail de ${String(d.remetente ?? '?')}${motivos}`;
+    }
+    if (a.campo) return `Campo: ${a.campo}`;
+    if (d && typeof d === 'object') {
+        const chaves = Object.keys(d).filter(k => !['confidence', 'documento_nome'].includes(k));
+        if (chaves.length) return `Campos: ${chaves.join(', ')}`;
+    }
+    return null;
+}
+
 /* Barreira de navegador para a data do vencimento — a mesma janela que
    `vencimentoPlausivel` aplica no service. Sem `min`/`max` o `<input
    type="date">` aceita ano de até 275760, que foi como um `20023-09-21` entrou
@@ -107,6 +138,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const [info, setInfo] = useState<string | null>(null);
 
     const [linhaManual, setLinhaManual] = useState('');
+    // Captura por e-mail (15/10/2026): de onde veio, e o histórico do boleto.
+    const [origemEmail, setOrigemEmail] = useState<MensagemCaptura | null>(null);
+    const [auditoria, setAuditoria] = useState<BoletoAuditoria[] | null>(null);
+    const [favorito, setFavorito] = useState<{ aberto: boolean; contas: ContaCaptura[] }>({ aberto: false, contas: [] });
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
     const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
@@ -164,6 +199,33 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setProjects(((projs || []) as ProjectRow[]).map((p) => ({ id: p.id, name: p.name })));
         }).catch(err => console.warn('falha ao carregar registros', err));
     }, [organizationId]);
+
+    // Origem por e-mail e histórico: só de boleto gravado; falha aqui não trava o formulário.
+    useEffect(() => {
+        setOrigemEmail(null);
+        setAuditoria(null);
+        if (!boleto?.id) return;
+        let vivo = true;
+        if (boleto.email_message_id) {
+            emailCaptureService.mensagemDoBoleto(boleto.email_message_id)
+                .then(m => { if (vivo) setOrigemEmail(m); })
+                .catch(err => console.warn('origem do boleto por e-mail', err));
+        }
+        boletoService.listAuditoria(boleto.id)
+            .then(a => { if (vivo) setAuditoria(a); })
+            .catch(() => { if (vivo) setAuditoria([]); });
+        return () => { vivo = false; };
+    }, [boleto?.id, boleto?.email_message_id, boleto?.status]);
+
+    async function monitorarRemetente() {
+        if (!boleto) return;
+        try {
+            const contas = (await emailCaptureService.listarContas(boleto.organization_id)).filter(c => c.status !== 'desconectada');
+            setFavorito({ aberto: true, contas });
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        }
+    }
 
     // Aplica sugestão de fornecedor caso nenhum esteja selecionado
     useEffect(() => {
@@ -652,6 +714,19 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 </span>
                                 <span className="text-gray-300">·</span>
                                 <span>Confiança: {boleto.confidence_score ?? 0}%</span>
+                                {origemEmail && (
+                                    <>
+                                        <span className="text-gray-300">·</span>
+                                        <Mail className="w-3.5 h-3.5 text-blue-600" />
+                                        <span className="truncate max-w-[22rem]" title={`${origemEmail.remetente ?? ''}${origemEmail.assunto ? ` — ${origemEmail.assunto}` : ''}`}>
+                                            Recebido por e-mail de {origemEmail.remetente ?? '?'}
+                                        </span>
+                                        <button type="button" onClick={monitorarRemetente}
+                                            className="text-blue-600 hover:text-blue-800 font-medium hover:underline">
+                                            Monitorar remetente
+                                        </button>
+                                    </>
+                                )}
                             </p>
                         )}
                         </div>
@@ -1385,12 +1460,51 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         </div>
                                     )}
                                 </Secao>
+
+                                <Secao titulo="Histórico" icone={History}>
+                                    {auditoria === null ? (
+                                        <p className="text-sm text-gray-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</p>
+                                    ) : auditoria.length === 0 ? (
+                                        <p className="text-sm text-gray-400">Nenhum evento registrado.</p>
+                                    ) : (
+                                        <ul className="divide-y divide-gray-100">
+                                            {auditoria.map(a => {
+                                                const detalhe = detalheDaAuditoria(a);
+                                                return (
+                                                    <li key={a.id} className="py-2.5 flex items-start gap-3 text-sm">
+                                                        <span className="text-gray-500 whitespace-nowrap w-36 shrink-0">{formatDateTimeBR(a.created_at)}</span>
+                                                        <span className="min-w-0">
+                                                            <span className="text-gray-800">{ROTULO_AUDITORIA[a.acao] ?? a.acao}</span>
+                                                            <span className="text-gray-400"> · {a.metodo === 'sistema' ? 'Sistema' : (a.usuario_email ?? 'Usuário')}</span>
+                                                            {detalhe && <span className="block text-xs text-gray-500 truncate" title={detalhe}>{detalhe}</span>}
+                                                        </span>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    )}
+                                </Secao>
                             </div>
                         </div>
                     )}
                 </div>
 
             </div>
+            {boleto && origemEmail && (
+                <EmailCaptureSenderSheet
+                    open={favorito.aberto}
+                    onClose={() => setFavorito({ aberto: false, contas: [] })}
+                    contas={favorito.contas}
+                    fornecedores={suppliers.map(s => ({ id: s.id, name: s.name, nickname: s.nickname, document: s.document, category: s.category, organization_id: s.organization_id ?? null }))}
+                    prefill={{
+                        account_id: origemEmail.account_id,
+                        tipo: 'exato',
+                        email: (origemEmail.remetente?.match(/<([^>]+)>/)?.[1] ?? origemEmail.remetente ?? '').trim().toLowerCase() || null,
+                        supplier_id: supplierId || null,
+                    }}
+                    onSalvo={() => setInfo('Remetente monitorado. Os próximos boletos dele serão priorizados na captura.')}
+                />
+            )}
         </div>
     );
 };

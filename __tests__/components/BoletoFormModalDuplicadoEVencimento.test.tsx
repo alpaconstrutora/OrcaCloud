@@ -23,7 +23,14 @@ const svc = vi.hoisted(() => ({
     podeMudarOrganizacao: vi.fn().mockReturnValue(true),
     motivoParaNaoMudarOrganizacao: vi.fn().mockReturnValue(null),
     aprovarECriarInvoice: vi.fn(),
+    listAuditoria: vi.fn().mockResolvedValue([]),
 }));
+
+const captura = vi.hoisted(() => ({
+    mensagemDoBoleto: vi.fn(),
+    listarContas: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../../services/emailCaptureService', () => ({ emailCaptureService: captura }));
 
 vi.mock('../../services/boletoService', () => ({
     boletoService: svc,
@@ -103,5 +110,36 @@ describe('BoletoFormModal — aprovar sem vencimento', () => {
         render(<ConfirmProvider><BoletoFormModal organizationId="org-1" boleto={rascunho('2026-11-10')} onClose={vi.fn()} onSaved={vi.fn()} /></ConfirmProvider>);
         const botao = await screen.findByRole('button', { name: /Aprovar e Lançar/i });
         await waitFor(() => expect(botao).not.toBeDisabled());
+    });
+});
+
+describe('BoletoFormModal — origem por e-mail e histórico (15/10/2026)', () => {
+    const base = {
+        id: 'b9', organization_id: 'org-1', status: 'revisao', documento_path: 'org-1/2026/c.pdf',
+        documento_nome: 'c.pdf', documento_hash: 'h', valor: 10, vencimento: '2026-11-10', created_at: '2026-10-01T00:00:00Z',
+    };
+
+    it('boleto de e-mail mostra o remetente e o histórico com a captura', async () => {
+        captura.mensagemDoBoleto.mockResolvedValue({ id: 'm1', account_id: 'c1', remetente: 'ACME <cobranca@acme.com.br>', assunto: 'Boleto' });
+        svc.listAuditoria.mockResolvedValue([{
+            id: 'a1', boleto_id: 'b9', organization_id: 'org-1', acao: 'upload', metodo: 'sistema', created_at: '2026-10-15T12:00:00Z',
+            valor_depois: { origem: 'email', remetente: 'cobranca@acme.com.br', motivos: ['Caixa em modo piloto: todo boleto passa pela revisão.'] },
+        }]);
+        render(<ConfirmProvider><BoletoFormModal organizationId="org-1" boleto={{ ...base, origem: 'email', email_message_id: 'm1' } as never} onClose={vi.fn()} onSaved={vi.fn()} /></ConfirmProvider>);
+
+        expect(await screen.findByText(/Recebido por e-mail de ACME/)).toBeTruthy();
+        expect(screen.getByRole('button', { name: /Monitorar remetente/i })).toBeTruthy();
+        expect(await screen.findByText('Capturado')).toBeTruthy();
+        expect(screen.getByText(/modo piloto/)).toBeTruthy();
+        expect(captura.mensagemDoBoleto).toHaveBeenCalledWith('m1');
+    });
+
+    it('boleto enviado na tela não consulta a captura nem mostra "Recebido por e-mail"', async () => {
+        captura.mensagemDoBoleto.mockClear();
+        svc.listAuditoria.mockResolvedValue([]);
+        render(<ConfirmProvider><BoletoFormModal organizationId="org-1" boleto={{ ...base, origem: 'upload' } as never} onClose={vi.fn()} onSaved={vi.fn()} /></ConfirmProvider>);
+        expect(await screen.findByText('Nenhum evento registrado.')).toBeTruthy();
+        expect(screen.queryByText(/Recebido por e-mail/)).toBeNull();
+        expect(captura.mensagemDoBoleto).not.toHaveBeenCalled();
     });
 });

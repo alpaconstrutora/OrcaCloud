@@ -29,6 +29,8 @@ import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilter
 import { formatDateBR, formatDateTimeBR } from './ui/Format';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
+import { TabsBar } from './ui/TabsBar';
+import EmailCapturaConfig from './boletos/EmailCapturaConfig';
 
 interface BoletoManagerProps {
     organizationId: string;
@@ -40,6 +42,25 @@ interface BoletoManagerProps {
        quando esta tela era aba dele. Agora ela é sempre rota própria
        (AppRouter 'boletos-pagar') e não tem barra de abas de pai nenhum. */
 }
+
+type AbaBoletos = 'boletos' | 'captura';
+
+/** O título muda com a aba (guia §19.1 — aba que troca o conteúdo troca o h1). */
+const CABECALHO_DA_ABA: Record<AbaBoletos, { titulo: string; subtitulo: string }> = {
+    boletos: {
+        titulo: 'Boletos a Pagar',
+        subtitulo: 'Capture boletos via PDF e gere lançamentos automaticamente em contas a pagar.',
+    },
+    captura: {
+        titulo: 'Captura por e-mail',
+        subtitulo: 'Caixas do Gmail lidas a cada 15 minutos: cada PDF de boleto vira um boleto em revisão nesta tela.',
+    },
+};
+
+const ABAS_BOLETOS = [
+    { id: 'boletos' as const, label: 'Boletos' },
+    { id: 'captura' as const, label: 'Captura por e-mail' },
+];
 
 const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'numero', label: 'Código', sortable: true },
@@ -53,6 +74,9 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
     { key: 'capturado_em', label: 'Capturado em', sortable: true },
     { key: 'capturado_por', label: 'Capturado por', sortable: true },
+    // Origem (15/10/2026): 'E-mail' quando veio da caixa monitorada — é o que
+    // separa, em "Em revisão", o que chegou sozinho do que alguém subiu.
+    { key: 'origem', label: 'Origem', sortable: true },
     // Clicar na linha já abre o boleto (ação dominante, única relevante — guia
     // §9.1). A coluna 'actions' fica só com o que não é a ação dominante:
     // excluir (restrito a rascunho/aprovado, igual à exclusão em lote —
@@ -88,13 +112,14 @@ const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     capturado_em: { label: 'Capturado em', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     capturado_por: { label: 'Capturado por', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    origem: { label: 'Origem', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     actions: { label: 'Ações', sortable: false, className: 'px-6 py-2 text-right' },
 };
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     numero: 118, documento: 260, beneficiario: 220, descricao: 220, obra: 160, centro_custo: 179, valor: 130,
-    vencimento: 150, status: 130, capturado_em: 165, capturado_por: 167, actions: 100,
+    vencimento: 150, status: 130, capturado_em: 165, capturado_por: 167, origem: 100, actions: 100,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
@@ -109,6 +134,7 @@ function buildAdvancedFilterFields(boletos: Boleto[], supplierMap: Record<string
         { key: 'valor', label: 'Valor', type: 'number' },
         { key: 'vencimento', label: 'Vencimento', type: 'date' },
         { key: 'banco', label: 'Banco', type: 'text' },
+        { key: 'origem', label: 'Origem', type: 'select', options: [{ value: 'Upload', label: 'Upload' }, { value: 'E-mail', label: 'E-mail' }] },
     ];
 }
 
@@ -125,6 +151,7 @@ function getAdvancedFilterValue(b: Boleto, key: string, supplierMap: Record<stri
         case 'valor': return b.valor ?? null;
         case 'vencimento': return b.vencimento ?? null;
         case 'banco': return b.banco_nome ?? '';
+        case 'origem': return rotuloOrigem(b);
         default: return null;
     }
 }
@@ -132,6 +159,11 @@ function getAdvancedFilterValue(b: Boleto, key: string, supplierMap: Record<stri
 // Conteúdo de cada célula (td) por coluna — extraído para função pura para que
 // o tbody possa mapear `orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna (padrão renderClientCell em ClientList.tsx).
+/** O texto que a coluna Origem mostra (o filtro avançado compara com ele — §5.5). */
+function rotuloOrigem(b: Boleto): string {
+    return b.origem === 'email' ? 'E-mail' : 'Upload';
+}
+
 /** Quem capturou: o nome do cadastro; sem nome, o próprio e-mail. */
 function nomeCapturador(b: Boleto, userNameMap: Record<string, string>): string {
     const email = b.created_by_email ?? '';
@@ -245,6 +277,12 @@ function renderBoletoCell(
             return (
                 <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
                     {formatDateTimeBR(b.created_at)}
+                </span>
+            );
+        case 'origem':
+            return (
+                <span className={`text-sm font-normal ${b.origem === 'email' ? 'text-blue-700' : 'text-gray-600'}`}>
+                    {rotuloOrigem(b)}
                 </span>
             );
         case 'capturado_por':
@@ -447,7 +485,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     // w-full/100% junto com table-layout:fixed (§6.1). Sem coluna "Ações" (§9.1) —
     // o espaçador vai no FINAL, não antes de nada (não há coluna fixa pra ancorar).
     const tableTotalWidth = 40
-        + (['numero', 'documento', 'beneficiario', 'descricao', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por', 'actions'] as const)
+        + (['numero', 'documento', 'beneficiario', 'descricao', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por', 'origem', 'actions'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0);
 
     // Documento em abertura (path) — a célula mostra "Abrindo..." enquanto a URL assinada sai.
@@ -829,6 +867,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 case 'status':        va = a.status;                            vb = b.status;                            break;
                 case 'capturado_em':  va = a.created_at;                        vb = b.created_at;                       break;
                 case 'capturado_por': va = nomeCapturador(a, userNameMap).toLowerCase(); vb = nomeCapturador(b, userNameMap).toLowerCase(); break;
+                case 'origem':        va = rotuloOrigem(a);                     vb = rotuloOrigem(b);                     break;
                 default:              va = a.created_at;                        vb = b.created_at;
             }
             if (va < vb) return sortDir === 'asc' ? -1 : 1;
@@ -914,6 +953,19 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Aba (15/10/2026): Boletos | Captura por e-mail. A captura não tem "caixa de
+    // entrada" própria — o boleto capturado é uma linha desta lista (Origem =
+    // E-mail) e a revisão é o filtro "Em revisão". A aba é configuração + histórico.
+    const [aba, setAba] = usePersistedState<AbaBoletos>('boletoManager:aba', 'boletos');
+
+    /** "Ver boleto" do histórico da captura: abre o formulário daquele boleto. */
+    const abrirBoletoPorId = useCallback(async (id: string) => {
+        const b = boletos.find(x => x.id === id) ?? await boletoService.getById(id);
+        if (!b) { notify('Boleto não encontrado — pode ter sido excluído.', 'error'); return; }
+        setEditing(b);
+        setIsModalOpen(true);
+    }, [boletos]);
+
     const abrirEdicao = useCallback((b: Boleto) => {
         savedScrollTopRef.current = scrollContainerRef.current?.scrollTop ?? 0;
         setEditing(b);
@@ -985,12 +1037,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 alinhados à direita; não há mais toolbar de botões separada. */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Boletos a Pagar</h1>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{CABECALHO_DA_ABA[aba].titulo}</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                        Capture boletos via PDF e gere lançamentos automaticamente em contas a pagar.
+                        {CABECALHO_DA_ABA[aba].subtitulo}
                     </p>
                 </div>
 
+                {aba === 'boletos' && (
                 <div className="flex flex-wrap items-center gap-2 lg:justify-end shrink-0">
                     {/* Exports — só fazem sentido com lista carregada */}
                     {filtered.length > 0 && (
@@ -1040,7 +1093,15 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         Novo boleto
                     </button>
                 </div>
+                )}
             </div>
+
+            {/* 2. Abas — depois do título, antes dos KPIs (anatomia do guia). */}
+            <TabsBar tabs={ABAS_BOLETOS} value={aba} onChange={setAba} />
+
+            {aba === 'captura' ? (
+                <EmailCapturaConfig onAbrirBoleto={abrirBoletoPorId} />
+            ) : (<>
 
             {/* 3. Cards de resumo — padrão guia seção 4 (componente KpiCard) */}
             {!loading && boletos.length > 0 && (
@@ -1492,8 +1553,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 <td className="px-4 py-2 text-right text-sm font-medium text-gray-900">
                                     {formatBRL(filtered.filter(b => !['pago','cancelado'].includes(b.status)).reduce((s, b) => s + (b.valor ?? 0), 0))}
                                 </td>
-                                {/* colSpan 6: vencimento + status + capturado_em + capturado_por + actions + espaçador final */}
-                                <td colSpan={6} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
+                                {/* colSpan 7: vencimento + status + capturado_em + capturado_por + origem + actions + espaçador final */}
+                                <td colSpan={7} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -1524,6 +1585,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     onSaved={() => carregar(effectiveOrgId)}
                 />
             )}
+            </>)}
             {/* Toast de Notificação — padrão guia seção 13 */}
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${

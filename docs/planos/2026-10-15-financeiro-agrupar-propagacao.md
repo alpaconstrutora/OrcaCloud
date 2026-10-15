@@ -67,3 +67,4 @@
 | `docs/ui_ux_guia_unificado.md` §6.12 | "sempre visível" no lugar de "só enquanto agrupa" | seção atualizada |
 
 - [x] implementado e testado; conferido no preview local nas 7 tabelas (botão desligado com o motivo sem agrupar; recolher todos → só cabeçalhos; expandir todos → todas as linhas; 0 erros)
+- [x] publicado em `bd6378fb`; domínio carimbado com o commit e o chunk compartilhado `Agrupamento` com o motivo do botão desligado; CI `ci` success

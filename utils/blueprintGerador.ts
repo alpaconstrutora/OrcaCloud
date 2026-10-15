@@ -60,8 +60,7 @@ import { avaliarRegras, REGRAS_SEMENTE, type ContextoDeRegras, type ResultadoDeR
 import { planejarPilares } from './blueprintPilaresAutomaticos';
 import { planejarLajes, planejarVigas } from './blueprintVigasLajesAutomaticas';
 import { planejarPontosDoNivel } from './blueprintPontosHidraulicos';
-import { comandosDeIluminacao, comandosParaCompletar, conferirIluminacao, conferirTomadas, distribuirAoLongo, etiquetaDoAmbiente, ladosDePiso } from './blueprintDistribuicao';
-import { aplicarPotenciaPadrao } from './blueprintPotenciaPadrao';
+import { comandosDePontosDoNivel } from './blueprintPontosEletricosDoNivel';
 import { anelDoRetangulo, areaDoRetangulo, ladoComumDosRetangulos, retangulosDoContorno, subtrairBorda, trechosNaBorda, type LadoNoDesenho } from './blueprintContorno';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -1184,21 +1183,7 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     tentar('pilares', () => planejarPilares(model, levelId).comandos);
     tentar('vigas', () => planejarVigas(model, levelId).comandos);
     tentar('lajes', () => planejarLajes(model, levelId).comandos);
-    tentar('tomadas e luz (NBR 5410)', () => {
-      const cmds: Command[] = [];
-      const ws = paredes();
-      for (const s of model.spaces.filter((x) => x.levelId === levelId)) {
-        const tipo = etiquetaDoAmbiente(s, model.labels)?.tipoDeAmbiente ?? null;
-        const areaM2 = areaRecuada(s.ring, ws).areaMm2 / 1e6;
-        const conf = conferirTomadas(s, tipo, ws, model.terminais ?? [], areaM2);
-        if (conf) {
-          const pontos = distribuirAoLongo(ladosDePiso(s, ws), Math.max(conf.deficit, conf.deficitMedias), model.walls, model.openings, 150, []);
-          cmds.push(...comandosParaCompletar(levelId, pontos, conf));
-        }
-        cmds.push(...comandosDeIluminacao(levelId, s, model.walls, model.openings, hip.peDireitoMm, conferirIluminacao(s, model.terminais ?? [], areaM2, tipo), model.terminais ?? []));
-      }
-      return aplicarPotenciaPadrao(model, cmds);
-    });
+    tentar('tomadas e luz (NBR 5410)', () => comandosDePontosDoNivel(model, levelId, { peDireitoMm: hip.peDireitoMm }));
     tentar('pontos hidráulicos', () => planejarPontosDoNivel(model, levelId).flatMap((p) => p.comandos));
     decisoes.push(`Automáticos: ${contagem.join(' · ')}. Água e esgoto ficam para depois (precisam de reservatório e caixa de inspeção posicionados).`);
   }

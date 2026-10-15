@@ -26,9 +26,7 @@
  */
 import {
   anelRecuado,
-  areCollinear,
   interiorPoint,
-  isBetween,
   pointInPolygon,
   polygonArea,
   type BlueprintModel,
@@ -42,6 +40,7 @@ import {
   type TipoDeAmbiente,
   type Wall,
 } from './blueprintKernel';
+import { paredeDoLado } from './blueprintLadoDaParede';
 
 /**
  * Como cada tipo de ambiente se chama na tela. As classes são as que a NBR 5410
@@ -81,13 +80,35 @@ export interface LadoDoAmbiente {
 }
 
 /** A parede cujo eixo contém o segmento `a`–`b`, se houver. */
-function paredeDoLado(walls: readonly Wall[], a: Point, b: Point): Wall | null {
-  for (const w of walls) {
-    if (!areCollinear(w.a, w.b, a) || !areCollinear(w.a, w.b, b)) continue;
-    if (!isBetween(w.a, w.b, a) || !isBetween(w.a, w.b, b)) continue;
-    return w;
+
+/**
+ * O anel sem ESPÍCULAS — o vai-e-volta até um ponto e de volta ao mesmo vértice (… P, Q, P …) — nem vértices
+ * repetidos em seguida. Num desenho girado, a ponta da parede interna passa alguns mm do encontro em T (o
+ * `ALEM_MM` da casa automática, para o arranjo não desfazer a junção) e o anel do ambiente do OUTRO lado
+ * ganha esse dente de ~2 cm. Recuado até a face, o dente virava o lado errado da parede: a tomada e o
+ * interruptor caíam no cômodo vizinho (F9, 15/10/2026, a 30°).
+ */
+export function semEspiculas(anel: readonly Point[]): Point[] {
+  const r = anel.map((p) => ({ x: p.x, y: p.y }));
+  for (let mudou = true; mudou && r.length > 3; ) {
+    mudou = false;
+    for (let i = 0; i < r.length && !mudou; i++) {
+      const j = (i + 1) % r.length;
+      if (r[i].x === r[j].x && r[i].y === r[j].y) {
+        r.splice(j, 1);
+        mudou = true;
+      }
+    }
+    for (let i = 0; i < r.length && !mudou; i++) {
+      const a = r[(i - 1 + r.length) % r.length];
+      const c = r[(i + 1) % r.length];
+      if (a.x === c.x && a.y === c.y) {
+        r.splice(i, 1);
+        mudou = true;
+      }
+    }
   }
-  return null;
+  return r;
 }
 
 /**
@@ -99,11 +120,12 @@ function paredeDoLado(walls: readonly Wall[], a: Point, b: Point): Wall | null {
  * ela ficaria enterrada no meio da alvenaria e ambígua quanto ao lado.
  */
 export function ladosDePiso(space: Space, walls: readonly Wall[]): LadoDoAmbiente[] {
-  const n = space.ring.length;
+  const contorno = semEspiculas(space.ring);
+  const n = contorno.length;
   if (n < 3) return [];
-  const paredes = space.ring.map((p, i) => paredeDoLado(walls, p, space.ring[(i + 1) % n]));
+  const paredes = contorno.map((p, i) => paredeDoLado(walls, p, contorno[(i + 1) % n]));
   const recuos = paredes.map((w) => (w ? w.thicknessMm / 2 : 0));
-  const anel = anelRecuado(space.ring, recuos);
+  const anel = anelRecuado(contorno, recuos);
   if (anel.length !== n) return [];
   return anel.map((p, i) => ({
     a: p,

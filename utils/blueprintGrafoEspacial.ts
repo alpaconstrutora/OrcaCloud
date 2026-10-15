@@ -26,7 +26,6 @@
  * conferência do programa (E4.3) e a avaliação (E5.2).
  */
 import {
-  areCollinear,
   isBetween,
   pointInPolygon,
   polygonArea,
@@ -38,6 +37,7 @@ import {
   type Space,
   type Wall,
 } from './blueprintKernel';
+import { paredeDoLado } from './blueprintLadoDaParede';
 import { etiquetaDoAmbiente } from './blueprintDistribuicao';
 import { menorCaminhoEntre, type Aresta as ArestaDeRede } from './blueprintGrafoDeRede';
 import { usoDoNome, type UsoDoAmbiente } from './blueprintPrograma';
@@ -127,14 +127,6 @@ function pontoAoLado(a: Point, b: Point, dist: number): Point {
 }
 function dentroDoAmbiente(s: Space, p: Point): boolean {
   return pointInPolygon(s.ring, p) && !s.holes.some((h) => pointInPolygon(h, p));
-}
-function paredeDoLado(paredes: Wall[], a: Point, b: Point): Wall | null {
-  for (const w of paredes) {
-    if (!areCollinear(w.a, w.b, a) || !areCollinear(w.a, w.b, b)) continue;
-    if (!isBetween(w.a, w.b, a) || !isBetween(w.a, w.b, b)) continue;
-    return w;
-  }
-  return null;
 }
 
 /** Centróide do anel; se cai fora (L, U), a média dos vértices; se ainda fora, o primeiro vértice recuado. */

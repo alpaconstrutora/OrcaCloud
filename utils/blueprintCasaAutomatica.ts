@@ -29,7 +29,7 @@
  * mão direita de quem olha da rua —, e a `transformacao` leva ao mundo. Com a
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
-import { applyBatch, point, polygonArea, snapshotHash, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point } from './blueprintKernel';
+import { applyBatch, conflitosDoModelo, point, polygonArea, snapshotHash, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
 import { recuosEfetivos } from './blueprintZonaUrbanistica';
@@ -75,8 +75,19 @@ import { planejarEsgotoCompleto } from './blueprintEsgotoCompleto';
 import { planejarPluvialCompleta } from './blueprintPluvialCompleto';
 import { destinoDoEsgoto } from './blueprintEsgotoAutomatico';
 import { dimensionarTratamento, medidasDimensionadas } from './blueprintTratamento';
-import type { LeitorDoTerreno } from './blueprintAncorasHidro';
+import { pontoNaFrente, type LeitorDoTerreno } from './blueprintAncorasHidro';
 import { marcasDeVerificacao } from './blueprintVerificacaoRede';
+import { comandosDePontosDoNivel } from './blueprintPontosEletricosDoNivel';
+import { centroDeCargas, comandosParaOCentro } from './blueprintCentroDeCargas';
+import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos, type HipotesesDeCircuitos } from './blueprintCircuitosAutomaticos';
+import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO, sugerirDPS, type HipotesesEletricas } from './blueprintEletricaDimensionamento';
+import { comandosDasSugestoesDeDR, conferirNbr5410, sugerirDRs } from './blueprintNbr5410';
+import { HIPOTESES_ELETRODUTO_PADRAO, comandosDeBitolaPelaOcupacao, planejarEletrodutosDoModelo } from './blueprintEletrodutos';
+import { gerarClimatizacao } from './blueprintGeradorClimatizacao';
+import { HIPOTESES_CLIMATIZACAO_PADRAO, type HipotesesClimatizacao } from './blueprintClimatizacao';
+import type { ModeloDoCatalogo } from './blueprintSelecaoClimatizacao';
+import { COTA_USUAL_DO_PONTO_ELETRICO, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
+import { entradaDoQuadro, padraoDeEntrada } from './blueprintEntradaDeEnergia';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
 
 // ─── Hipóteses ──────────────────────────────────────────────────────────────
@@ -367,6 +378,12 @@ export type EtapaDaCasaId =
   | 'AGUA'
   | 'ESGOTO'
   | 'PLUVIAL'
+  | 'PONTOS_ELETRICOS'
+  | 'QUADRO'
+  | 'CIRCUITOS'
+  | 'CLIMATIZACAO'
+  | 'DR_DPS'
+  | 'ELETRODUTOS'
   | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
@@ -386,6 +403,12 @@ export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
   AGUA: 'Água fria e quente (hidrômetro, alimentador, barrilete, colunas, ramais)',
   ESGOTO: 'Esgoto (caixas, ramais, ventilação, ligação ou tratamento)',
   PLUVIAL: 'Águas pluviais (calhas, condutores, saída)',
+  PONTOS_ELETRICOS: 'Pontos elétricos pela norma (tomadas, luz, interruptores, chuveiro elétrico)',
+  QUADRO: 'Quadro no centro de cargas e entrada de energia (medidor na frente)',
+  CIRCUITOS: 'Circuitos',
+  CLIMATIZACAO: 'Climatização (carga térmica, splits, linhas, circuitos)',
+  DR_DPS: 'Proteção (DR e DPS) e ligação da entrada',
+  ELETRODUTOS: 'Eletrodutos',
   CONFERENCIA: 'Conferência (programa e legislação)',
 };
 const ORDEM_DAS_ETAPAS = Object.keys(ROTULO_DA_ETAPA_DA_CASA) as EtapaDaCasaId[];
@@ -441,6 +464,14 @@ export interface EntradaDaCasa {
    * passa a grade ao worker e monta o leitor lá.)
    */
   leitorDoTerreno?: LeitorDoTerreno | null;
+  /** F9: as hipóteses de circuitos do estudo (a gaveta de circuitos). Ausente = `HIPOTESES_CIRCUITOS_PADRAO`. */
+  circuitos?: HipotesesDeCircuitos | null;
+  /** F9: as hipóteses elétricas do estudo (`blueprint_study_eletrica`). Ausente = o padrão. */
+  eletricas?: HipotesesEletricas | null;
+  /** F9: as premissas de climatização do estudo — o clima (TBS/TBU externas) e as condições internas. */
+  climatizacao?: HipotesesClimatizacao | null;
+  /** F9: o catálogo de evaporadoras (`modelosDoCatalogo`). Vazio ou ausente = a climatização não roda, e diz. */
+  modelosDeClimatizacao?: readonly ModeloDoCatalogo[] | null;
 }
 
 export interface HipotesesDaCasa {
@@ -459,7 +490,29 @@ export interface HipotesesDaCasa {
   pontos: HipotesesDePontos;
   /** F8: lançar as redes de água, esgoto e pluvial (as premissas são as do estudo, em `EntradaDaCasa.hidro`). */
   hidraulica: { lancar: boolean };
+  /** F9: a elétrica. */
+  eletrica: HipotesesDaEletricaDaCasa;
+  /** F9: lançar a climatização (premissas e catálogo na `EntradaDaCasa`). */
+  climatizacao: { lancar: boolean };
 }
+
+/** F9: as hipóteses da elétrica da casa. */
+export interface HipotesesDaEletricaDaCasa {
+  lancar: boolean;
+  /** Uma luz de teto a cada tantos m² (null = uma por ambiente — a da norma). */
+  areaPorLuminariaM2: number | null;
+  /** A potência do chuveiro elétrico (a ligação direta no banheiro), W. */
+  chuveiroEletricoVA: number;
+  /** Lançar a entrada de serviço e o medidor na frente do lote, ligados ao quadro. */
+  medidor: boolean;
+}
+
+export const HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO: HipotesesDaEletricaDaCasa = {
+  lancar: true,
+  areaPorLuminariaM2: null,
+  chuveiroEletricoVA: 5500,
+  medidor: true,
+};
 
 export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   programa: HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO,
@@ -472,6 +525,8 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   mobiliario: { ...HIPOTESES_MOBILIARIO_PADRAO, lancar: true },
   pontos: HIPOTESES_PONTOS_PADRAO,
   hidraulica: { lancar: true },
+  eletrica: HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO,
+  climatizacao: { lancar: true },
 };
 
 export interface PlanoDaCasa {
@@ -512,10 +567,40 @@ export interface PlanoDaCasa {
       /** A verificação de rede do app sobre o resultado (`marcasDeVerificacao`), por tipo de marca. */
       verificacao: { erros: number; avisos: number; porTipo: Record<string, number> };
     };
+    /** F9: a elétrica lançada e a conferência NBR 5410 sobre o resultado. */
+    eletrica: ResumoDaEletricaDaCasa;
+    /**
+     * F9: as redes (água, esgoto, eletroduto, linha e dreno do ar) que passam por PORTA ou JANELA, por disciplina
+     * (`conflitosDoModelo`, classe ABERTURA, com o eixo dentro do vão). Compatibilização entre redes e aberturas
+     * é fase à parte; aqui ela fica à vista.
+     */
+    aberturas: Record<string, number>;
+    /** F9: a climatização — as etapas do gerador de climatização e o que ele lançou. */
+    climatizacao: { equipamentos: number; etapas: Record<string, SituacaoDaEtapa>; verificacao: { erros: number; avisos: number; porTipo: Record<string, number> } };
   };
 }
 
 const ESTRUTURA_ZERADA = { eixos: 0, pilares: 0, vigas: 0, lajes: 0, blocos: 0, estacas: 0, baldrames: 0 };
+
+/** F9: o resumo da elétrica. */
+export interface ResumoDaEletricaDaCasa {
+  pontos: { tomadas: number; luzes: number; interruptores: number; ligacoesDiretas: number };
+  quadro: string | null;
+  medidor: boolean;
+  circuitos: number;
+  drs: number;
+  dps: boolean;
+  /** A categoria do padrão de entrada pela demanda, e a ligação que ela dá ao quadro. */
+  entrada: { categoria: string; ligacao: string; demandaKva: number } | null;
+  eletrodutos: number;
+  /** `conferirNbr5410` do pavimento: faltas e avisos, e por regra (código → contagem). */
+  conferencia: { faltas: number; avisos: number; porRegra: Record<string, { faltas: number; avisos: number }> };
+}
+const ELETRICA_ZERADA = (): ResumoDaEletricaDaCasa => ({
+  pontos: { tomadas: 0, luzes: 0, interruptores: 0, ligacoesDiretas: 0 }, quadro: null, medidor: false, circuitos: 0, drs: 0, dps: false, entrada: null, eletrodutos: 0,
+  conferencia: { faltas: 0, avisos: 0, porRegra: {} },
+});
+const CLIMATIZACAO_ZERADA = (): PlanoDaCasa['resumo']['climatizacao'] => ({ equipamentos: 0, etapas: {}, verificacao: { erros: 0, avisos: 0, porTipo: {} } });
 const HIDRAULICA_ZERADA = (): PlanoDaCasa['resumo']['hidraulica'] => ({ agua: { pecas: 0, tubos: 0 }, esgoto: { pecas: 0, tubos: 0, destino: 'REDE_PUBLICA' }, pluvial: { pecas: 0, tubos: 0 }, verificacao: { erros: 0, avisos: 0, porTipo: {} } });
 
 /** As marcas da verificação de rede ditas em português, pelo tipo (as demais saem com o texto da marca). */
@@ -532,6 +617,8 @@ const MARCA_DA_REDE: Record<string, string> = {
   CONDUTOR_INSUFICIENTE: 'condutor(es) insuficiente(s)',
 };
 const ROTULO_DA_DISCIPLINA_DA_REDE: Record<string, string> = { AGUA_FRIA: 'água fria', AGUA_QUENTE: 'água quente', ESGOTO: 'esgoto', PLUVIAL: 'pluvial' };
+/** F9: as redes da climatização na mesma verificação. */
+const ROTULO_DA_DISCIPLINA_DO_AR: Record<string, string> = { FRIGORIGENA: 'linha frigorígena', DRENO_AC: 'dreno do ar-condicionado', MECANICA: 'dutos' };
 
 /** Por que o botão "Gerar casa" não roda — `null` = pode. */
 export function motivoParaNaoGerar(model: BlueprintModel, levelId: ObjectId | null): string | null {
@@ -620,6 +707,8 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     mobiliario: { ...HIPOTESES_MOBILIARIO_PADRAO, lancar: true, ...(hipParcial.mobiliario ?? {}) },
     pontos: { ...HIPOTESES_PONTOS_PADRAO, ...(hipParcial.pontos ?? {}) },
     hidraulica: { lancar: true, ...(hipParcial.hidraulica ?? {}) },
+    eletrica: { ...HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, ...(hipParcial.eletrica ?? {}) },
+    climatizacao: { lancar: true, ...(hipParcial.climatizacao ?? {}) },
   };
   const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
   // A implantação usa a mesma parede externa e a mesma malha do gerador.
@@ -651,7 +740,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   const pedidos = programa.itens.filter((i) => i.uso !== 'CIRCULACAO').reduce((s, i) => s + i.quantidade, 0);
   const vazio = (motivo: string, implantacao: ImplantacaoDaCasa | null = null): PlanoDaCasa => {
     for (const id of ORDEM_DAS_ETAPAS) if (id !== 'IMPLANTACAO' && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
-    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA() } };
+    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA() } };
   };
 
   const impedimento = motivoParaNaoGerar(original, entrada.levelId);
@@ -988,8 +1077,8 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   // ventilação, tubo atravessando pilar ou cruzando viga. O que ela acusa vira pendência com a contagem, por tipo
   // (ERRO → VERIFICACAO; AVISO → CONFERIR). Medido em 15/10: a rede sai ligada (nenhuma ponta aberta, nenhum
   // trecho sem destino), mas o traçado pelas paredes cruza os pilares dos encontros — compatibilização à parte.
-  if (hip.hidraulica.lancar && (hidraulica.agua.tubos + hidraulica.esgoto.tubos + hidraulica.pluvial.tubos) > 0) {
-    const marcas = marcasDeVerificacao(m, entrada.levelId, [], hidro.pluvial).filter((x) => x.disciplina && x.disciplina in ROTULO_DA_DISCIPLINA_DA_REDE);
+  const verificarRedes = (rotulos: Record<string, string>, alvo: { erros: number; avisos: number; porTipo: Record<string, number> }) => {
+    const marcas = marcasDeVerificacao(m, entrada.levelId, [], hidro.pluvial).filter((x) => x.disciplina && x.disciplina in rotulos);
     const grupos = new Map<string, { severidade: 'ERRO' | 'AVISO'; disciplina: string; tipo: string; n: number; texto: string }>();
     for (const x of marcas) {
       const k = `${x.severidade}|${x.disciplina}|${x.tipo}`;
@@ -998,11 +1087,190 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       grupos.set(k, g);
     }
     for (const g of grupos.values()) {
-      hidraulica.verificacao[g.severidade === 'ERRO' ? 'erros' : 'avisos'] += g.n;
-      hidraulica.verificacao.porTipo[g.tipo] = (hidraulica.verificacao.porTipo[g.tipo] ?? 0) + g.n;
+      alvo[g.severidade === 'ERRO' ? 'erros' : 'avisos'] += g.n;
+      alvo.porTipo[g.tipo] = (alvo.porTipo[g.tipo] ?? 0) + g.n;
       const oque = MARCA_DA_REDE[g.tipo] ? `${g.n} ${MARCA_DA_REDE[g.tipo]}` : `${g.n} × ${g.texto}`;
-      pendencias.push({ grupo: g.severidade === 'ERRO' ? 'VERIFICACAO' : 'CONFERIR', texto: `Rede de ${ROTULO_DA_DISCIPLINA_DA_REDE[g.disciplina]}: ${oque}` });
+      pendencias.push({ grupo: g.severidade === 'ERRO' ? 'VERIFICACAO' : 'CONFERIR', texto: `Rede de ${rotulos[g.disciplina]}: ${oque}` });
     }
+  };
+  if (hip.hidraulica.lancar && (hidraulica.agua.tubos + hidraulica.esgoto.tubos + hidraulica.pluvial.tubos) > 0) verificarRedes(ROTULO_DA_DISCIPLINA_DA_REDE, hidraulica.verificacao);
+
+  // ── ELÉTRICA E CLIMATIZAÇÃO (F9) ──────────────────────────────────────────
+  // A ordem é a que as peças pedem: os PONTOS pela norma (com a potência padrão — o centro de cargas precisa
+  // dela) e o chuveiro elétrico → o QUADRO no centro de cargas (+ entrada de serviço e medidor na frente) →
+  // os CIRCUITOS → a CLIMATIZAÇÃO (ela liga os circuitos dos splits só com UM quadro e nenhum ponto solto, por
+  // isso depois) → DR e DPS (o DR é por circuito) → ELETRODUTOS por último (precisam dos circuitos). No fim,
+  // `conferirNbr5410` sobre o resultado: FALTA → VERIFICACAO, AVISO → CONFERIR.
+  const eletrica = ELETRICA_ZERADA();
+  const climatizacao = CLIMATIZACAO_ZERADA();
+  const hipCircuitos = entrada.circuitos ?? HIPOTESES_CIRCUITOS_PADRAO;
+  const hipEletricas = entrada.eletricas ?? HIPOTESES_ELETRICAS_PADRAO;
+  const ETAPAS_ELETRICAS = ['PONTOS_ELETRICOS', 'QUADRO', 'CIRCUITOS', 'CLIMATIZACAO', 'DR_DPS', 'ELETRODUTOS'] as const;
+  const nivelDaCasa = m.levels.find((l) => l.id === entrada.levelId)!;
+  let quadroId: ObjectId | null = null;
+  const tentarEletrica = (id: (typeof ETAPAS_ELETRICAS)[number], fazer: () => void) => {
+    try {
+      fazer();
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${motivo}` });
+    }
+  };
+  if (!hip.eletrica.lancar) {
+    for (const id of ETAPAS_ELETRICAS) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
+  } else {
+    tentarEletrica('PONTOS_ELETRICOS', () => {
+      const lote = comandosDePontosDoNivel(m, entrada.levelId, {
+        peDireitoMm: nivelDaCasa.defaultHeightMm,
+        areaPorLuminariaM2: hip.eletrica.areaPorLuminariaM2,
+        ocupados: (m.terminais ?? []).filter((t) => t.levelId === entrada.levelId && t.disciplina === 'ELETRICA').map((t) => t.at),
+      });
+      // O CHUVEIRO ELÉTRICO é LIGAÇÃO DIRETA (a 9.5.2.3 acusa chuveiro em tomada), no ponto hidráulico dele, com a
+      // potência declarada — a padrão não dá potência a ligação direta. Exige DR e ganha circuito próprio.
+      if (ancoras?.chuveiroEletrico) {
+        for (const c of (m.terminais ?? []).filter((t) => t.levelId === entrada.levelId && t.tipoHidraulico === 'CHUVEIRO' && t.disciplina === 'AGUA_FRIA')) {
+          lote.push({
+            type: 'AddTerminal', levelId: entrada.levelId, disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO.LIGACAO_DIRETA, at: { ...c.at },
+            cotaMm: COTA_USUAL_DO_PONTO_ELETRICO.LIGACAO_DIRETA, tipoEletrico: 'LIGACAO_DIRETA', potenciaW: hip.eletrica.chuveiroEletricoVA, rotulo: 'Chuveiro', sugerida: true,
+          } as Command);
+        }
+      }
+      const tipoDe = (c: Command) => (c.type === 'AddTerminal' ? (c as { tipoEletrico?: string | null }).tipoEletrico ?? null : null);
+      eletrica.pontos = {
+        tomadas: lote.filter((c) => tipoDe(c) === 'TUG' || tipoDe(c) === 'TUE').length,
+        luzes: lote.filter((c) => /^ILUMINACAO/.test(tipoDe(c) ?? '')).length,
+        interruptores: lote.filter((c) => tipoDe(c) === 'INTERRUPTOR').length,
+        ligacoesDiretas: lote.filter((c) => tipoDe(c) === 'LIGACAO_DIRETA').length,
+      };
+      const p = eletrica.pontos;
+      etapa('PONTOS_ELETRICOS', ROTULO_DA_ETAPA_DA_CASA.PONTOS_ELETRICOS, 'LANCOU', aplicar(lote), `${p.tomadas} tomada(s), ${p.luzes} luz(es), ${p.interruptores} interruptor(es)${p.ligacoesDiretas ? `, ${p.ligacoesDiretas} chuveiro(s) elétrico(s) de ${hip.eletrica.chuveiroEletricoVA} W` : ''}`);
+    });
+    tentarEletrica('QUADRO', () => {
+      const c = centroDeCargas(m, null);
+      if (!c) {
+        etapa('QUADRO', ROTULO_DA_ETAPA_DA_CASA.QUADRO, 'NAO_RODOU', 0, 'nenhum ponto com potência — sem centro de cargas');
+        return;
+      }
+      const antes = new Set((m.quadros ?? []).map((q) => q.id));
+      let n = aplicar(comandosParaOCentro(m, c));
+      const quadro = (m.quadros ?? []).find((q) => !antes.has(q.id)) ?? (m.quadros ?? []).find((q) => q.id === c.quadroId) ?? null;
+      quadroId = quadro?.id ?? null;
+      eletrica.quadro = quadro?.nome ?? null;
+      let nota = quadro ? `${quadro.nome} no centro de cargas` : 'sem quadro';
+      if (quadro && hip.eletrica.medidor) {
+        const frente = pontoNaFrente(m, quadro.at);
+        if (frente) {
+          const infra = (tipoEletrico: 'ENTRADA_SERVICO' | 'MEDIDOR'): Command => ({
+            type: 'AddTerminal', levelId: entrada.levelId, disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO[tipoEletrico], at: { ...frente.ponto },
+            cotaMm: COTA_USUAL_DO_PONTO_ELETRICO[tipoEletrico], tipoEletrico, quadroId: quadro.id, sugerida: true,
+          } as Command);
+          n += aplicar([infra('ENTRADA_SERVICO'), infra('MEDIDOR')]);
+          eletrica.medidor = true;
+          nota += '; entrada de serviço e medidor na frente do lote';
+          pendencias.push({ grupo: 'CONFERIR', texto: 'Entrada de energia: medidor posto na frente do lote, junto da divisa — confira o padrão de entrada da concessionária.' });
+        } else {
+          pendencias.push({ grupo: 'PREMISSA', texto: 'Entrada de energia: sem a frente do lote para o medidor.' });
+        }
+      }
+      etapa('QUADRO', ROTULO_DA_ETAPA_DA_CASA.QUADRO, 'LANCOU', n, nota);
+    });
+    tentarEletrica('CIRCUITOS', () => {
+      if (!quadroId) {
+        etapa('CIRCUITOS', ROTULO_DA_ETAPA_DA_CASA.CIRCUITOS, 'NAO_RODOU', 0, 'sem quadro');
+        return;
+      }
+      const plano = planejarCircuitos(m, entrada.levelId, quadroId, hipCircuitos, hipEletricas);
+      for (const f of plano.foraDoPlano) pendencias.push({ grupo: 'CONFERIR', texto: `Circuitos: ponto ${f.terminalId} fora do plano — ${f.motivo}` });
+      eletrica.circuitos = plano.circuitos.length;
+      etapa('CIRCUITOS', ROTULO_DA_ETAPA_DA_CASA.CIRCUITOS, plano.comandos.length ? 'LANCOU' : 'NADA_A_FAZER', aplicar(plano.comandos), plano.comandos.length ? `${plano.circuitos.length} circuito(s)` : plano.motivo);
+    });
+    tentarEletrica('CLIMATIZACAO', () => {
+      if (!hip.climatizacao.lancar) {
+        etapa('CLIMATIZACAO', ROTULO_DA_ETAPA_DA_CASA.CLIMATIZACAO, 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
+        return;
+      }
+      const modelos = entrada.modelosDeClimatizacao ?? [];
+      if (modelos.length === 0) {
+        const motivo = 'sem catálogo de evaporadoras — cadastre os modelos (Catálogo de tipos) para escolher os splits';
+        etapa('CLIMATIZACAO', ROTULO_DA_ETAPA_DA_CASA.CLIMATIZACAO, 'NAO_RODOU', 0, motivo);
+        pendencias.push({ grupo: 'PREMISSA', texto: `Climatização: ${motivo}` });
+        return;
+      }
+      const plano = gerarClimatizacao(m, entrada.climatizacao ?? HIPOTESES_CLIMATIZACAO_PADRAO, { modelos, circuitos: { hip: hipCircuitos, eletricas: hipEletricas } });
+      for (const e of plano.etapas) climatizacao.etapas[e.id] = e.situacao;
+      for (const x of plano.pendencias) pendencias.push({ ...x, texto: `Climatização: ${x.texto}` });
+      const n = aplicar(plano.comandos);
+      climatizacao.equipamentos = plano.comandos.filter((c) => c.type === 'AddTerminal' && (c as { tipoEletrico?: string | null }).tipoEletrico === 'AR_CONDICIONADO').length;
+      const lancou = plano.etapas.filter((e) => e.situacao === 'LANCOU').map((e) => e.rotulo.toLowerCase());
+      const travou = plano.etapas.find((e) => e.situacao === 'NAO_RODOU');
+      etapa('CLIMATIZACAO', ROTULO_DA_ETAPA_DA_CASA.CLIMATIZACAO, n > 0 ? 'LANCOU' : 'NAO_RODOU', n, n > 0 ? `${climatizacao.equipamentos} split(s); lançou: ${lancou.join(', ')}` : (travou?.nota ?? 'nada a climatizar'));
+      if (n > 0) verificarRedes(ROTULO_DA_DISCIPLINA_DO_AR, climatizacao.verificacao);
+    });
+    tentarEletrica('DR_DPS', () => {
+      if (!quadroId) {
+        etapa('DR_DPS', ROTULO_DA_ETAPA_DA_CASA.DR_DPS, 'NAO_RODOU', 0, 'sem quadro');
+        return;
+      }
+      const drs = comandosDasSugestoesDeDR(sugerirDRs(m, quadroId, hipEletricas));
+      const quadro = (m.quadros ?? []).find((q) => q.id === quadroId);
+      const dps: Command[] = quadro && !quadro.dps ? [{ type: 'SetQuadroProps', quadroId, dps: sugerirDPS(hipEletricas) } as Command] : [];
+      // A LIGAÇÃO pela demanda (com os circuitos prontos): a menor categoria do padrão de entrada que comporta a
+      // demanda — no empate, a de menos fases. O quadro nasce sem ligação (vale FN), e a casa com chuveiro, forno e
+      // ar passa dos 10 kVA de uma monofásica.
+      const nFases = { FN: 1, FF: 2, FFF: 3 } as Record<string, number>;
+      const entradaAgora = entradaDoQuadro(m, quadroId, hipEletricas);
+      const categoria = entradaAgora
+        ? [...padraoDeEntrada(hipEletricas.padraoDeEntrada).categorias].sort((a, b) => a.demandaMaxKva - b.demandaMaxKva || (nFases[a.ligacao] ?? 9) - (nFases[b.ligacao] ?? 9)).find((c) => c.demandaMaxKva >= entradaAgora.demandaKva) ?? null
+        : null;
+      const ligacao: Command[] = categoria && entradaAgora && categoria.ligacao !== entradaAgora.ligacao ? [{ type: 'SetQuadroProps', quadroId, ligacao: categoria.ligacao } as Command] : [];
+      eletrica.drs = drs.length;
+      eletrica.dps = dps.length > 0 || !!quadro?.dps;
+      eletrica.entrada = categoria && entradaAgora ? { categoria: categoria.id, ligacao: categoria.ligacao, demandaKva: Math.round(entradaAgora.demandaKva * 10) / 10 } : null;
+      if (entradaAgora && !categoria) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Entrada de energia: demanda ${entradaAgora.demandaKva.toFixed(1)} kVA acima da maior categoria do padrão — trate com a concessionária` });
+      const notaDaEntrada = eletrica.entrada ? `; entrada ${eletrica.entrada.categoria} (${eletrica.entrada.ligacao}, ${eletrica.entrada.demandaKva.toLocaleString('pt-BR')} kVA)` : '';
+      etapa('DR_DPS', ROTULO_DA_ETAPA_DA_CASA.DR_DPS, 'LANCOU', aplicar([...drs, ...dps, ...ligacao]), `${drs.length} DR(s) de 30 mA${dps.length ? '; DPS no quadro' : ''}${notaDaEntrada}`);
+    });
+    tentarEletrica('ELETRODUTOS', () => {
+      const planos = planejarEletrodutosDoModelo(m, HIPOTESES_ELETRODUTO_PADRAO, hipEletricas);
+      const lote = planos.flatMap((p) => p.comandos);
+      for (const a of new Set(planos.flatMap((p) => p.avisos))) pendencias.push({ grupo: 'CONFERIR', texto: `Eletrodutos: ${a}` });
+      eletrica.eletrodutos = lote.filter((c) => c.type === 'AddTrecho').length;
+      const motivo = planos.find((p) => p.motivo)?.motivo ?? null;
+      let n = aplicar(lote);
+      // O diâmetro pela fiação DERIVADA (a régua da conferência 6.2.11.1.6), não pela base por ligação.
+      const bitolas = comandosDeBitolaPelaOcupacao(m, hipEletricas);
+      n += aplicar(bitolas);
+      etapa('ELETRODUTOS', ROTULO_DA_ETAPA_DA_CASA.ELETRODUTOS, lote.length ? 'LANCOU' : 'NAO_RODOU', n, lote.length ? `${eletrica.eletrodutos} trecho(s)${bitolas.length ? `; ${bitolas.length} com o diâmetro aumentado pela ocupação` : ''}` : (motivo ?? 'nada a ligar'));
+    });
+
+    eletrica.circuitos = (m.circuitos ?? []).filter((c) => c.quadroId === quadroId).length;
+    // A CONFERÊNCIA NBR 5410 do app sobre o resultado, por regra.
+    const nbr = conferirNbr5410(m, entrada.levelId, hipEletricas);
+    for (const r of nbr.regras) {
+      const faltas = r.achados.filter((a) => a.nivel === 'FALTA').length;
+      const avisosR = r.achados.filter((a) => a.nivel === 'AVISO').length;
+      if (!faltas && !avisosR) continue;
+      eletrica.conferencia.porRegra[r.codigo] = { faltas, avisos: avisosR };
+      eletrica.conferencia.faltas += faltas;
+      eletrica.conferencia.avisos += avisosR;
+      if (faltas) pendencias.push({ grupo: 'VERIFICACAO', texto: `Elétrica (${r.codigo} — ${r.titulo}): ${faltas} falta(s) — ${r.achados.find((a) => a.nivel === 'FALTA')!.mensagem}` });
+      if (avisosR) pendencias.push({ grupo: 'CONFERIR', texto: `Elétrica (${r.codigo} — ${r.titulo}): ${avisosR} aviso(s) — ${r.achados.find((a) => a.nivel === 'AVISO')!.mensagem}` });
+    }
+  }
+
+  // As redes × PORTAS e JANELAS: o tubo que corre na cota do topo da janela (2,20 m — a mesma dos ramais, do
+  // eletroduto e da linha abaixo da viga) ou que sai da parede para fora no vão dela. Fica à vista, por rede.
+  const redesEmAberturas: Record<string, number> = {};
+  {
+    const porId = new Map((m.trechos ?? []).map((t) => [t.id, t]));
+    for (const c of conflitosDoModelo(m)) {
+      if (c.classe !== 'ABERTURA' || c.comprimentoDentroMm <= 0) continue;
+      const d = porId.get(c.trechoId)?.disciplina;
+      if (d) redesEmAberturas[d] = (redesEmAberturas[d] ?? 0) + 1;
+    }
+    const nome: Record<string, string> = { ...ROTULO_DA_DISCIPLINA_DA_REDE, ...ROTULO_DA_DISCIPLINA_DO_AR, ELETRICA: 'eletroduto' };
+    for (const [d, n] of Object.entries(redesEmAberturas)) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rede de ${nome[d] ?? d.toLowerCase()}: ${n} trecho(s) passando por porta ou janela` });
   }
 
   // ── CONFERENCIA ───────────────────────────────────────────────────────────
@@ -1039,7 +1307,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     semente: r.semente,
     escolha,
     decisoes,
-    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura, telhado, ancoras, mobiliario, hidraulica },
+    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura, telhado, ancoras, mobiliario, hidraulica, eletrica, aberturas: redesEmAberturas, climatizacao },
   };
 }
 

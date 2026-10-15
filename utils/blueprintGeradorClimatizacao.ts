@@ -46,7 +46,7 @@ import { planejarEquipamentosSplit } from './blueprintPosicaoSplit';
 import { comandosDaLinhaPelaCapacidade, planejarLinhasFrigorigenas } from './blueprintLinhaFrigorigena';
 import { planejarVrf } from './blueprintVrf';
 import { planejarRedeDeAr, vazoesDosTerminais } from './blueprintRedeDeAr';
-import { planejarCircuitos, type HipotesesDeCircuitos } from './blueprintCircuitosAutomaticos';
+import { planejarCircuitos, pontosElegiveis, type HipotesesDeCircuitos } from './blueprintCircuitosAutomaticos';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 import { volumesDasPecasDeClimatizacao } from './blueprintRede';
 import { materiaisDeClimatizacao } from './blueprintMateriaisClimatizacao';
@@ -230,7 +230,10 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
     let n = 0;
     const novos = new Set(criados);
     for (const levelId of niveis) {
-      const soltos = (m.terminais ?? []).filter((t) => t.levelId === levelId && t.disciplina === 'ELETRICA' && t.circuitoId == null);
+      // Os soltos que o planejador de circuitos LIGA (`pontosElegiveis`): dado, aterramento, entrada de serviço e
+      // medidor nunca ganham circuito e não podem travar o do ar (casa automática F9, 15/10/2026 — os 2 pontos de
+      // dados da sala deixavam os splits sem circuito).
+      const soltos = pontosElegiveis(m, levelId);
       const doGerador = soltos.filter((t) => novos.has(t.id));
       if (doGerador.length === 0) continue;
       const nome = nomeDoNivel(levelId);

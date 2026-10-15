@@ -32,8 +32,6 @@
  */
 import {
   areaConstruidaMm2,
-  areCollinear,
-  isBetween,
   pointInPolygon,
   type BlueprintModel,
   type Command,
@@ -43,6 +41,7 @@ import {
   type Unidade,
   type Wall,
 } from './blueprintKernel';
+import { paredeDoLado } from './blueprintLadoDaParede';
 
 export type LadoDaUnidade = 'INTERNA' | 'GEMINADA' | 'COMUM' | 'EXTERNA';
 
@@ -106,15 +105,6 @@ function dentroDoAmbiente(s: Space, p: { x: number; y: number }): boolean {
   return pointInPolygon(s.ring, p) && !s.holes.some((h) => pointInPolygon(h, p));
 }
 
-/** A parede sobre a qual o lado a→b do anel corre (colinear e contido). */
-function paredeDoLado(paredes: Wall[], a: { x: number; y: number }, b: { x: number; y: number }): Wall | null {
-  for (const w of paredes) {
-    if (!areCollinear(w.a, w.b, a) || !areCollinear(w.a, w.b, b)) continue;
-    if (!isBetween(w.a, w.b, a) || !isBetween(w.a, w.b, b)) continue;
-    return w;
-  }
-  return null;
-}
 
 /** uid da etiqueta → unidade. */
 export function unidadePorEtiqueta(model: BlueprintModel): Map<string, Unidade> {

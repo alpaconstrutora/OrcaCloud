@@ -829,10 +829,8 @@ import {
 } from '../../utils/blueprintEsgotoAutomatico';
 import {
   ROTULO_DO_TIPO_DE_AMBIENTE,
-  comandosDeIluminacao,
   AREAS_POR_LUMINARIA_M2,
   comandosDeTomadasSugeridas,
-  comandosParaCompletar,
   conferirIluminacao,
   conferirTomadas,
   distribuirAoLongo,
@@ -842,6 +840,7 @@ import {
   perimetroInternoM,
   type LadoDoAmbiente,
 } from '../../utils/blueprintDistribuicao';
+import { comandosDePontosDoAmbiente } from '../../utils/blueprintPontosEletricosDoNivel';
 import DistribuirTomadas, { ConferenciaDoAmbiente, TomadasNaParede } from './DistribuirTomadas';
 import { SituacaoDoAmbiente } from './SituacaoDoAmbiente';
 import PainelConferenciaNbr from './PainelConferenciaNbr';
@@ -3641,40 +3640,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const a = ambientes.find((x) => x.id === spaceId);
     const space = editor.model.spaces.find((s) => s.id === spaceId);
     if (!a || !space) return 0;
-    const paredes = editor.model.walls.filter((w) => w.levelId === space.levelId);
-    const terminais = editor.model.terminais ?? [];
-    const comandos: Command[] = [];
-    // Tomadas (9.5.2.2.1) — só com o ambiente classificado.
-    if (a.conferencia) {
-      const ocupados = terminais
-        .filter((t) => t.levelId === space.levelId && t.disciplina === 'ELETRICA')
-        .map((t) => t.at);
-      const total = Math.max(a.conferencia.deficit, a.conferencia.deficitMedias);
-      const pontos = distribuirAoLongo(
-        ladosDePiso(space, paredes),
-        total,
-        editor.model.walls,
-        editor.model.openings,
-        150,
-        ocupados,
-      );
-      comandos.push(...comandosParaCompletar(levelId, pontos, a.conferencia));
-    }
-    // Iluminação (9.5.2.1) — todo cômodo.
+    // Tomadas (9.5.2.2.1, só com o ambiente classificado) e iluminação (9.5.2.1, todo cômodo) — o mesmo
+    // encadeamento do gerador e da casa automática (`comandosDePontosDoAmbiente`, F9 15/10/2026).
     const nivel = editor.model.levels.find((l) => l.id === space.levelId);
-    comandos.push(
-      ...comandosDeIluminacao(
-        levelId,
-        space,
-        editor.model.walls,
-        editor.model.openings,
-        nivel?.defaultHeightMm ?? 2800,
-        a.luz,
-        terminais,
-        // E6.3: luz de teto em malha por área (hipótese da tarefa), ou uma só.
-        areaPorLuminaria,
-      ),
-    );
+    const comandos = comandosDePontosDoAmbiente(editor.model, levelId, space, {
+      peDireitoMm: nivel?.defaultHeightMm ?? 2800,
+      // E6.3: luz de teto em malha por área (hipótese da tarefa), ou uma só.
+      areaPorLuminariaM2: areaPorLuminaria,
+      ocupados: (editor.model.terminais ?? []).filter((t) => t.levelId === space.levelId && t.disciplina === 'ELETRICA').map((t) => t.at),
+    });
     if (comandos.length === 0) return 0;
     // A luz sugerida já traz o mínimo; as tomadas ganham a potência da norma aqui.
     const criados = editor.runBatch(aplicarPotenciaPadrao(editor.model, comandos));

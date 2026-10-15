@@ -190,7 +190,14 @@ function lugarDaEvaporadoraNaParede(
   const candidatos: LugarDaEvaporadora[] = [];
   for (const lado of lados) {
     if (!lado.wallId) continue;
-    if (openings.some((o) => o.wallId === lado.wallId && (o.kind === 'door' || o.kind === 'sliding' || o.kind === 'passage'))) continue;
+    // A parede da PORTA do ambiente não recebe a evaporadora. Só a porta que cai NESTE lado: o eixo de uma parede
+    // longa (o corredor da casa) atravessa vários cômodos, e a porta do vizinho tirava a parede inteira — a suíte
+    // e a sala da casa automática ficavam sem split (F9, 15/10/2026).
+    const portas = openings.filter((o) => o.wallId === lado.wallId && (o.kind === 'door' || o.kind === 'sliding' || o.kind === 'passage'));
+    if (portas.length > 0) {
+      const soma = (ts: readonly { de: number; ate: number }[]) => ts.reduce((acc, t) => acc + (t.ate - t.de), 0);
+      if (soma(trechosUtilizaveis(lado, walls, portas, 0)) < soma(trechosUtilizaveis(lado, walls, [], 0)) - 1) continue;
+    }
     const utilizaveis = trechosUtilizaveis(lado, walls, openings, FOLGA_DA_EVAPORADORA_MM);
     const trechos = (desviarDosComponentes ? semOcupados(utilizaveis, ocupadosPorComponentes(model, lado, space.levelId)) : utilizaveis).filter((t) => t.ate - t.de >= larguraMm);
     if (trechos.length === 0) continue;

@@ -43,6 +43,7 @@ import {
   type Wall,
   type Boundary,
 } from './blueprintKernel';
+import { paredeContemLado } from './blueprintLadoDaParede';
 import type { Terreno } from './blueprintTerreno';
 import type { ValoresDaZona } from './blueprintZonaUrbanistica';
 import { etiquetaDoAmbiente } from './blueprintDistribuicao';
@@ -334,29 +335,6 @@ export function larguraMinimaMm(s: Space, paredes: Wall[]): number {
   return Math.max(0, Math.min(Math.max(...pu) - Math.min(...pu), Math.max(...pv) - Math.min(...pv)));
 }
 
-/**
- * O arranjo do kernel une pontas a até 5 mm (o snap da junção em T): num desenho girado, a parede
- * interna passa `ALEM_MM` = 3 mm além do encontro e o VÉRTICE do ambiente fica nessa ponta, 3 mm
- * fora da reta da parede hospedeira. A tolerância do lado acompanha a do arranjo.
- */
-const TOLERANCIA_DO_LADO_MM = 5;
-
-/**
- * A parede contém o lado a–b do anel do ambiente? Por DISTÂNCIA à reta da parede, não por
- * colinearidade exata: num desenho girado os vértices do arranjo são interseções arredondadas ao
- * mm (ou pontas esticadas) e nunca caem exatamente na reta — o teste exato não achava parede
- * nenhuma e o ambiente ficava sem janela e sem recuo de face (casa automática F3, 14/10/2026).
- */
-function paredeContemLado(w: Wall, a: { x: number; y: number }, b: { x: number; y: number }, tolMm = TOLERANCIA_DO_LADO_MM): boolean {
-  const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
-  if (L < 1e-9) return false;
-  const dist = (p: { x: number; y: number }) => Math.abs((w.b.x - w.a.x) * (p.y - w.a.y) - (w.b.y - w.a.y) * (p.x - w.a.x)) / L;
-  const entre = (p: { x: number; y: number }) => {
-    const t = ((p.x - w.a.x) * (w.b.x - w.a.x) + (p.y - w.a.y) * (w.b.y - w.a.y)) / L;
-    return t >= -tolMm && t <= L + tolMm;
-  };
-  return dist(a) <= tolMm && dist(b) <= tolMm && entre(a) && entre(b);
-}
 
 /** Aberturas nas paredes que compõem o contorno do ambiente (colineares e contidas num lado). */
 function aberturasDoAmbiente(model: BlueprintModel, s: Space): Opening[] {

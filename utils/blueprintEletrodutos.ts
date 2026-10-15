@@ -83,13 +83,14 @@ import type {
   Terminal,
   Trecho,
 } from './blueprintKernel';
-import { TIPOS_DE_INFRAESTRUTURA_ELETRICA } from './blueprintKernel';
+import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, composicaoDaRede } from './blueprintKernel';
 import { ABAIXO_DA_VIGA_MM, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP } from './blueprintRotaPelasParedes';
 import { REGRA_DE_CAIXAS_PADRAO, caixasDaRede, type RegraDeCaixas, type SegmentoDaRede } from './blueprintCaixasDePassagem';
 import {
   HIPOTESES_PADRAO,
   bitolaMinimaPorOcupacao,
+  ocupacaoDoTrecho,
   preDimensionarCircuito,
   type HipotesesEletricas,
 } from './blueprintEletricaDimensionamento';
@@ -714,3 +715,26 @@ export function planejarEletrodutosDoModelo(
 ): PlanoDeEletrodutos[] {
   return (model.quadros ?? []).map((q) => planejarEletrodutos(model, q, hip, hipEletricas));
 }
+
+/**
+ * O DIÂMETRO PELA OCUPAÇÃO DE VERDADE (F9 da casa automática, 15/10/2026).
+ *
+ * O lançamento escolhe a bitola com a base por ligação (`condutoresPorLigacao`: 3 por circuito FN, como
+ * hipótese), e a conferência 6.2.11.1.6 mede a fiação DERIVADA dos esquemas (`composicaoDaRede`: retornos,
+ * neutro, PE). No tronco que sai do quadro de uma casa inteira a derivada é bem maior: ficava "Ø50 com 121 ×
+ * 2,5 mm² — 57 %, limite 40 %". Aqui, com a MESMA régua da conferência, o eletroduto SUGERIDO que passa do
+ * limite sobe para o diâmetro que atende. Confirmado não muda (quem aceitou decidiu); acima do maior da
+ * tabela, fica — e a conferência segue acusando.
+ */
+export function comandosDeBitolaPelaOcupacao(model: BlueprintModel, hipEletricas: HipotesesEletricas = HIPOTESES_PADRAO): Extract<Command, { type: 'SetTrechoProps' }>[] {
+  const fiacao = composicaoDaRede(model);
+  const saida: Extract<Command, { type: 'SetTrechoProps' }>[] = [];
+  for (const t of model.trechos ?? []) {
+    if (t.disciplina !== 'ELETRICA' || !t.sugerido) continue;
+    const { ocupacao } = ocupacaoDoTrecho(model, t, hipEletricas, fiacao.get(t.id)?.lista ?? null);
+    if (!ocupacao || ocupacao.atende || ocupacao.bitolaQueAtendeMm == null || ocupacao.bitolaQueAtendeMm <= t.bitolaMm) continue;
+    saida.push({ type: 'SetTrechoProps', trechoId: t.id, bitolaMm: ocupacao.bitolaQueAtendeMm });
+  }
+  return saida;
+}
+

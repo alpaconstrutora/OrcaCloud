@@ -15,6 +15,10 @@ import { HIPOTESES_DAS_ANCORAS_PADRAO } from '../utils/blueprintAncorasDaCasa';
 import { HIPOTESES_HIDRO_PADRAO } from '../utils/blueprintMemorialHidro';
 import { planejarCalhas } from '../utils/blueprintCalhas';
 import { HIPOTESES_PLUVIAIS_PADRAO } from '../utils/blueprintPluvial';
+import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
+import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
+import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
+import { pontosElegiveis } from '../utils/blueprintCircuitosAutomaticos';
 
 // Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
 // ~0,5–0,8 s nesta máquina, e a CI, disputando CPU com a suíte toda, chegou a passar dos 5 s do padrão
@@ -74,6 +78,12 @@ describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
       ['AGUA', 'LANCOU'],
       ['ESGOTO', 'LANCOU'],
       ['PLUVIAL', 'NAO_RODOU'], // sem a intensidade de chuva nas premissas do estudo (a casa de 190 m² passa de 100 m²)
+      ['PONTOS_ELETRICOS', 'LANCOU'],
+      ['QUADRO', 'LANCOU'],
+      ['CIRCUITOS', 'LANCOU'],
+      ['CLIMATIZACAO', 'NAO_RODOU'], // sem o catálogo de evaporadoras na entrada
+      ['DR_DPS', 'LANCOU'],
+      ['ELETRODUTOS', 'LANCOU'],
       ['CONFERENCIA', 'CALCULOU'],
     ]);
     expect(plano.comandos.slice(0, 3).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
@@ -133,7 +143,7 @@ describe('planejarCasa — o que falta vira motivo, nunca exceção', () => {
     expect(p.comandos).toEqual([]);
     expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
     expect(p.etapas[0].nota).toMatch(/FRENTE/);
-    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(16).fill('NAO_RODOU'));
+    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(22).fill('NAO_RODOU'));
   });
 
   it('pavimento inexistente', () => {
@@ -400,7 +410,8 @@ describe('planejarCasa — F8: água, esgoto e pluvial encadeados', () => {
     // aberta, nem trecho sem destino, nem tubo atravessando pilar ou cruzando viga, nem desconector sem
     // ventilação.
     expect(h.verificacao).toEqual({ erros: 0, avisos: 0, porTipo: {} });
-    expect(p.pendencias.filter((x) => /^Rede de /.test(x.texto))).toEqual([]);
+    // (F9: as redes que passam por porta ou janela são OUTRA pendência — `resumo.aberturas` —, compatibilização à parte.)
+    expect(p.pendencias.filter((x) => /^Rede de /.test(x.texto) && !/porta ou janela/.test(x.texto))).toEqual([]);
     expect(tipos(p).has('HIDROMETRO')).toBe(true);
     expect(tipos(p).has('LIGACAO_ESGOTO')).toBe(true);
     // Tudo proposta do sistema — inclusive o ponto que a água encostou na parede.
@@ -430,7 +441,7 @@ describe('planejarCasa — F8: água, esgoto e pluvial encadeados', () => {
     const m = lote();
     const p = planejarCasa(m, entrada(m, { hidro: comChuva() }), { hidraulica: { lancar: false } });
     expect([situacao(p, 'AGUA'), situacao(p, 'ESGOTO'), situacao(p, 'PLUVIAL')]).toEqual(['NAO_EXIGIDA', 'NAO_EXIGIDA', 'NAO_EXIGIDA']);
-    expect(p.resultado.trechos ?? []).toEqual([]);
+    expect((p.resultado.trechos ?? []).filter((t) => ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'].includes(t.disciplina))).toEqual([]);
   });
 });
 
@@ -450,6 +461,82 @@ describe('planejarCasa — F8c: o alimentador enterrado fora do baldrame', () =>
     for (const c of noBaldrame) expect(c.comprimentoDentroMm).toBeLessThanOrEqual(peca.get(c.outroId)!.larguraMm * 1.2);
     expect(p.resumo.hidraulica.verificacao).toEqual({ erros: 0, avisos: 0, porTipo: {} });
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+});
+
+describe('planejarCasa — F9: elétrica e climatização', () => {
+  // O catálogo semente (8 hi-wall, 9k–60k BTU/h) e o clima declarado — as premissas que o estudo traria.
+  const modelos = modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades })));
+  const comAr = (m: BlueprintModel, mudanca: Partial<EntradaDaCasa> = {}) =>
+    entrada(m, {
+      hidro: { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } },
+      modelosDeClimatizacao: modelos,
+      climatizacao: { ...HIPOTESES_CLIMATIZACAO_PADRAO, clima: { cidade: null, tbsExternaC: 34, tbuExternaC: 25, altitudeM: 0 } },
+      ...mudanca,
+    });
+  const ELETRICAS = ['PONTOS_ELETRICOS', 'QUADRO', 'CIRCUITOS', 'CLIMATIZACAO', 'DR_DPS', 'ELETRODUTOS'];
+  const situacoes = (p: ReturnType<typeof planejarCasa>) => ELETRICAS.map((id) => p.etapas.find((e) => e.id === id)?.situacao);
+
+  it.each([0, 30])('lote a %i°: tudo lançado, a NBR 5410 sem falta, todo ponto de carga com circuito, um split por ambiente climatizável, nada na estrutura', (graus) => {
+    const m = lote(graus);
+    const L = m.levels[0].id;
+    const p = planejarCasa(m, comAr(m));
+    const r = p.resultado;
+    expect(situacoes(p)).toEqual(Array(6).fill('LANCOU'));
+    const e = p.resumo.eletrica;
+    expect(e.conferencia.faltas).toBe(0);
+    expect(e.quadro).toBe('QDC');
+    expect(e.dps).toBe(true);
+    expect(e.drs).toBeGreaterThan(0);
+    expect(e.entrada).not.toBeNull();
+    // A entrada de serviço e o medidor, ligados ao quadro, na frente do lote.
+    const qdc = (r.quadros ?? [])[0];
+    expect((r.terminais ?? []).filter((t) => t.quadroId === qdc.id).map((t) => t.tipoEletrico).sort()).toEqual(['ENTRADA_SERVICO', 'MEDIDOR']);
+    // Nenhum ponto que o planejador de circuitos liga ficou solto (os splits inclusive).
+    expect(pontosElegiveis(r, L)).toEqual([]);
+    // Sala, suíte e os 2 dormitórios.
+    expect(p.resumo.climatizacao.equipamentos).toBe(4);
+    expect(p.resumo.climatizacao.verificacao).toEqual({ erros: 0, avisos: 0, porTipo: {} });
+    // Eletroduto, linha e dreno do ar: só a LAJE (a descida da luz de teto, a passagem prevista) — nenhum pilar, viga.
+    const peca = new Map(r.structures.map((x) => [x.id, x]));
+    const novas = (r.trechos ?? []).filter((t) => ['ELETRICA', 'FRIGORIGENA', 'DRENO_AC'].includes(t.disciplina));
+    const naEstrutura = conflitosDoModelo({ ...r, trechos: novas }).filter((c) => c.classe === 'ESTRUTURA' && c.comprimentoDentroMm > 0);
+    expect(naEstrutura.filter((c) => peca.get(c.outroId)!.kind !== 'LAJE')).toEqual([]);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+
+  it('sem o catálogo de evaporadoras: a climatização não roda e diz o porquê; a elétrica lança', () => {
+    const m = lote();
+    const p = planejarCasa(m, comAr(m, { modelosDeClimatizacao: [] }));
+    expect(situacoes(p)).toEqual(['LANCOU', 'LANCOU', 'LANCOU', 'NAO_RODOU', 'LANCOU', 'LANCOU']);
+    expect(p.pendencias.some((x) => x.grupo === 'PREMISSA' && /Climatização: sem catálogo de evaporadoras/.test(x.texto))).toBe(true);
+    expect(p.resumo.eletrica.conferencia.faltas).toBe(0);
+  });
+
+  it('R1-B: o chuveiro elétrico é ligação direta de 5.500 W no ponto do chuveiro, com circuito próprio e DR', () => {
+    const m = lote();
+    const p = planejarCasa(m, comAr(m, { curto: { ...PROGRAMA_CURTO_PADRAO, padrao: 'R1-B' } }));
+    const r = p.resultado;
+    const chuveiros = (r.terminais ?? []).filter((t) => t.tipoHidraulico === 'CHUVEIRO' && t.disciplina === 'AGUA_FRIA');
+    const diretas = (r.terminais ?? []).filter((t) => t.tipoEletrico === 'LIGACAO_DIRETA');
+    expect(diretas.length).toBe(chuveiros.length);
+    expect(diretas.length).toBeGreaterThan(0);
+    for (const d of diretas) {
+      expect(d.potenciaW).toBe(5500);
+      expect(chuveiros.some((c) => c.at.x === d.at.x && c.at.y === d.at.y)).toBe(true);
+      expect(d.circuitoId).toBeTruthy();
+      // Circuito só dele.
+      expect((r.terminais ?? []).filter((t) => t.circuitoId === d.circuitoId)).toHaveLength(1);
+      expect((r.quadros ?? [])[0].drs?.some((dr) => (dr.circuitoIds ?? []).includes(d.circuitoId!))).toBe(true);
+    }
+    expect(p.resumo.eletrica.conferencia.faltas).toBe(0);
+  });
+
+  it('elétrica desligada: as seis etapas NAO_EXIGIDA e nenhum ponto elétrico', () => {
+    const m = lote();
+    const p = planejarCasa(m, comAr(m), { eletrica: { lancar: false, areaPorLuminariaM2: null, chuveiroEletricoVA: 5500, medidor: true } });
+    expect(situacoes(p)).toEqual(Array(6).fill('NAO_EXIGIDA'));
+    expect((p.resultado.terminais ?? []).filter((t) => t.disciplina === 'ELETRICA')).toEqual([]);
   });
 });
 

@@ -43,7 +43,7 @@ for (const graus of [0, 30]) {
   if (!p) continue;
   const situacoes = p.etapas.map((x) => `${x.id}:${x.situacao}`).join(' ');
   // F4: a estrutura entra entre a arquitetura e a conferência; os eixos não rodam com o lote girado (paredes oblíquas).
-  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU MOBILIARIO:LANCOU LOUCAS:LANCOU PONTOS_HIDRAULICOS:LANCOU AGUA:LANCOU ESGOTO:LANCOU PLUVIAL:LANCOU CONFERENCIA:CALCULOU`;
+  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU MOBILIARIO:LANCOU LOUCAS:LANCOU PONTOS_HIDRAULICOS:LANCOU AGUA:LANCOU ESGOTO:LANCOU PLUVIAL:LANCOU PONTOS_ELETRICOS:LANCOU QUADRO:LANCOU CIRCUITOS:LANCOU CLIMATIZACAO:LANCOU DR_DPS:LANCOU ELETRODUTOS:LANCOU CONFERENCIA:CALCULOU`;
   conferir(situacoes === esperadas, `${t} etapas: ${situacoes}`);
   conferir(p.comandos > 3, `${t} um lote só com arquitetura e estrutura (${p.comandos} comandos)`);
   const es = p.estrutura;
@@ -70,6 +70,12 @@ for (const graus of [0, 30]) {
   // F8c: o alimentador enterrado só ATRAVESSA o baldrame — nenhum pedaço correndo dentro dele.
   const ab = p.alimentadorNoBaldrame;
   conferir(ab.maiorMm <= ab.larguraMm * 1.2, `${t} alimentador: ${ab.travessias} travessia(s) de baldrame, a maior com ${ab.maiorMm} mm (baldrame de ${ab.larguraMm} mm)`);
+  // F9: a elétrica fecha a NBR 5410 (sem FALTA), nenhum ponto de carga sem circuito, um split por ambiente
+  // climatizável (sala, suíte, 2 dormitórios) e a linha e o dreno do ar sem marca da verificação de rede.
+  const el = p.eletrica;
+  conferir(el.faltas === 0, `${t} NBR 5410 sem falta (${el.circuitos} circuitos; entrada ${el.entrada})${el.faltas ? ` — ${el.faltas} falta(s) em ${el.regras.join(', ')}` : ''}`);
+  conferir(el.soltos === 0, `${t} nenhum ponto de carga sem circuito (${el.soltos} solto(s))`);
+  conferir(el.splits === 4 && Object.keys(el.marcasDoAr).length === 0, `${t} ${el.splits} split(s); linha e dreno sem marca${Object.keys(el.marcasDoAr).length ? ` — ${JSON.stringify(el.marcasDoAr)}` : ''}`);
   conferir(Object.keys(h.porTipo).length === 0, `${t} a verificação de rede sem marca (ponta aberta, sem destino, pilar, viga, ventilação)${Object.keys(h.porTipo).length ? ` — ${JSON.stringify(h.porTipo)}` : ''}`);
   conferir(p.ambientesAtendidos === p.ambientesPedidos, `${t} ambientes do programa atendidos: ${p.ambientesAtendidos} de ${p.ambientesPedidos}`);
   conferir(p.ambientesNomeados >= p.ambientesPedidos, `${t} ambientes nomeados no desenho: ${p.ambientesNomeados} (nenhum fundido)`);

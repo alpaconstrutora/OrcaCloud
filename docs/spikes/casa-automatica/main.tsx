@@ -22,6 +22,10 @@ import { PROGRAMA_CURTO_PADRAO } from '../../../utils/blueprintPrograma';
 import { planejarCalhas } from '../../../utils/blueprintCalhas';
 import { HIPOTESES_PLUVIAIS_PADRAO } from '../../../utils/blueprintPluvial';
 import { HIPOTESES_HIDRO_PADRAO } from '../../../utils/blueprintMemorialHidro';
+import { modelosDoCatalogo } from '../../../utils/blueprintSelecaoClimatizacao';
+import { SEMENTES_DE_TIPOS } from '../../../utils/blueprintCatalogoDeTipos';
+import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../../../utils/blueprintClimatizacao';
+import { pontosElegiveis } from '../../../utils/blueprintCircuitosAutomaticos';
 
 declare global {
   interface Window {
@@ -51,6 +55,7 @@ declare global {
         pecasDeMobiliario: number;
         hidraulica: { agua: number; esgoto: number; pluvial: number; porTipo: Record<string, number> };
         alimentadorNoBaldrame: { maiorMm: number; larguraMm: number; travessias: number };
+        eletrica: { faltas: number; regras: string[]; soltos: number; circuitos: number; splits: number; marcasDoAr: Record<string, number>; entrada: string | null };
       } | null;
     };
   }
@@ -91,6 +96,9 @@ const plano = planejarCasa(lote, {
   latitudeGraus: -19.9,
   // F8: a intensidade de chuva das premissas (150 mm/h) — sem ela a pluvial não roda.
   hidro: { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } },
+  // F9: o catálogo semente de evaporadoras e o clima declarado (as premissas que o estudo traria).
+  modelosDeClimatizacao: modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades }))),
+  climatizacao: { ...HIPOTESES_CLIMATIZACAO_PADRAO, clima: { cidade: null, tbsExternaC: 34, tbuExternaC: 25, altitudeM: 0 } },
 });
 const model = plano.resultado;
 
@@ -191,6 +199,15 @@ window.__estado = {
       porTipo: plano.resumo.hidraulica.verificacao.porTipo,
     },
     alimentadorNoBaldrame: alimentadorNoBaldrame(model),
+    eletrica: {
+      faltas: plano.resumo.eletrica.conferencia.faltas,
+      regras: Object.entries(plano.resumo.eletrica.conferencia.porRegra).filter(([, v]) => v.faltas > 0).map(([k]) => k),
+      soltos: pontosElegiveis(model, levelId).length,
+      circuitos: plano.resumo.eletrica.circuitos,
+      splits: plano.resumo.climatizacao.equipamentos,
+      marcasDoAr: plano.resumo.climatizacao.verificacao.porTipo,
+      entrada: plano.resumo.eletrica.entrada ? `${plano.resumo.eletrica.entrada.categoria} ${plano.resumo.eletrica.entrada.ligacao} ${plano.resumo.eletrica.entrada.demandaKva} kVA` : null,
+    },
   },
 };
 document.getElementById('dump')!.textContent = [

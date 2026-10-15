@@ -136,7 +136,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F8 — hidro encadeada (ver "Registro da F8")
 - [x] F8b — compatibilização hidráulica × estrutura (ver "F8b — plano" e "Registro da F8b")
 - [x] F8c — alimentador enterrado fora do baldrame (ver "F8c — plano" e "Registro da F8c")
-- [ ] F9 — elétrica + climatização
+- [x] F9 — elétrica + climatização (ver "F9 — plano detalhado" e "Registro da F9")
 - [ ] F10 — UI
 - [ ] F11 — saídas (prova)
 - [ ] F12 — sobrado (posterior)
@@ -821,4 +821,141 @@ Provas:
   máximo a largura dele (com 20 % de folga para o ângulo); nenhum com pilar; verificação sem marca;
   trava ok.
 - Harness: o portão confere a maior travessia contra a largura do baldrame.
+
+## F9 — plano detalhado (15/10/2026, "Pode seguir")
+
+O que o levantamento achou (código da frente em `a0ac5a5f`):
+- **Pontos pela norma.** O mesmo encadeamento existia no "Completar pela norma" do editor e no
+  automático do gerador E6.2. Fica um só: `utils/blueprintPontosEletricosDoNivel.ts`
+  (`comandosDePontosDoAmbiente` / `comandosDePontosDoNivel`). Gerador, editor e casa usam esse.
+- **Chuveiro elétrico.** Nada cria o ponto elétrico dele hoje; a âncora da F6 só anota. O certo é a
+  LIGAÇÃO DIRETA (a regra 9.5.2.3 acusa chuveiro em TUG/TUE), com a potência explícita, porque a
+  potência padrão devolve nulo para ligação direta. Ela exige DR e ganha circuito próprio. Posição: o
+  ponto hidráulico do chuveiro, a 2,20 m.
+- **Quadro.** `centroDeCargas` → `comandosParaOCentro` cria o QDC (precisa de potência nos pontos).
+- **Medidor e entrada de serviço.** Os tipos existem (`MEDIDOR`, `ENTRADA_SERVICO`, ligados ao quadro
+  por `quadroId`), mas nada os lança. A casa os põe na frente do lote (`pontoNaFrente`, como o
+  hidrômetro).
+- **Circuitos.** `planejarCircuitos` com o QDC; os ids saem de `seq`, então aplica logo depois.
+- **Climatização.** `gerarClimatizacao` precisa do catálogo de evaporadoras e da TBS externa. Ela liga
+  os PRÓPRIOS circuitos quando o pavimento tem um quadro só e nenhum ponto solto, por isso vem depois
+  dos circuitos.
+  - Sem catálogo, NAO_RODOU com o motivo.
+  - Sem TBS, as premissas do estudo dizem o que falta.
+  - As etapas e pendências dela entram prefixadas.
+- **DR e DPS.** `sugerirDRs` → `comandosDasSugestoesDeDR`; o DPS vai por `SetQuadroProps` com
+  `sugerirDPS`.
+- **Eletrodutos.** `planejarEletrodutosDoModelo`, por último (precisa de circuitos).
+- **Conferência.** `conferirNbr5410` sobre o resultado: FALTA vira pendência VERIFICACAO e AVISO vira
+  CONFERIR, por regra. É o critério de "pronto", como a verificação de rede foi na hidráulica.
+
+Etapas novas, depois da PLUVIAL e antes da CONFERENCIA: PONTOS_ELETRICOS → QUADRO → CIRCUITOS →
+CLIMATIZACAO → DR_DPS → ELETRODUTOS.
+
+Entradas novas (premissas do estudo, como `hidro`):
+- `circuitos` e `eletricas`;
+- `climatizacao` (com o clima);
+- `modelosDeClimatizacao` (o catálogo).
+
+Hipóteses da casa: `eletrica {lancar, areaPorLuminariaM2, chuveiroEletricoVA 5500, medidor}` e
+`climatizacao {lancar}`.
+
+## Registro da F9 (15/10/2026)
+
+O que a casa ganhou (`utils/blueprintCasaAutomatica.ts`): seis etapas depois da PLUVIAL.
+
+1. **PONTOS_ELETRICOS**
+   - Tomadas e luz com interruptor pela norma, em todo ambiente (`comandosDePontosDoNivel`).
+   - O chuveiro elétrico (quando a âncora o pôs, por exemplo no R1-B) vira LIGAÇÃO DIRETA no ponto
+     hidráulico do chuveiro, a 2,20 m, com `chuveiroEletricoVA`.
+2. **QUADRO**
+   - O QDC no centro de cargas.
+   - A ENTRADA DE SERVIÇO e o MEDIDOR na frente do lote (`pontoNaFrente`), ligados ao quadro.
+3. **CIRCUITOS**: `planejarCircuitos` no QDC.
+4. **CLIMATIZACAO**: `gerarClimatizacao` com o catálogo e o clima do estudo; liga os circuitos dos splits.
+   Sem catálogo: NAO_RODOU e PREMISSA.
+5. **DR_DPS**
+   - DR por circuito que exige (`sugerirDRs`) e DPS no quadro.
+   - A LIGAÇÃO da entrada pela demanda: a menor categoria do padrão que a comporta, e no empate a de
+     menos fases. A casa passa dos 10 kVA de uma monofásica.
+6. **ELETRODUTOS**: `planejarEletrodutosDoModelo` e, depois, o DIÂMETRO pela fiação derivada
+   (`comandosDeBitolaPelaOcupacao`).
+
+No fim, `conferirNbr5410` sobre o resultado, por regra: FALTA → VERIFICACAO, AVISO → CONFERIR.
+
+As redes que passam por PORTA ou JANELA (`conflitosDoModelo` ABERTURA) ficam no resumo e nas
+pendências, por rede. Hipóteses novas da casa: `eletrica` (lançar, luz por área, chuveiro, medidor) e
+`climatizacao.lancar`. Entradas novas: `circuitos`, `eletricas`, `climatizacao`, `modelosDeClimatizacao`.
+
+**Defeitos do app achados e corrigidos no caminho** (código compartilhado, vale para toda planta):
+- **O lado do ambiente em desenho GIRADO**, em duas partes:
+  - `paredeDoLado` testava colinearidade EXATA, e com os vértices arredondados o lado não achava a
+    parede. O recuo virava zero e a tomada ficava no EIXO, na borda do ambiente, e sumia da contagem.
+    Eram quatro cópias (regras, distribuição, grafo espacial, unidades); ficou uma, por distância
+    (`utils/blueprintLadoDaParede.ts`, tolerância de 5 mm, a mesma das regras da F3).
+  - O anel do ambiente tinha ESPÍCULAS (P, Q, P) da ponta em T esticada; recuado, o dente punha a
+    tomada e o interruptor no cômodo VIZINHO. `semEspiculas` limpa o anel em `ladosDePiso`.
+  - Antes, a 30°: 3 ambientes sem interruptor e 6 com tomada faltando. Depois: nenhum.
+- **A tomada dentro do pilar:** a distribuição evitava porta e canto, não pilar. O pilar entra como
+  posição ocupada.
+- **O split que não achava parede:** a regra tirava a parede INTEIRA com porta, e o eixo do corredor
+  atravessa vários cômodos; a porta do vizinho tirava a parede da suíte e da sala. Agora só a porta
+  que cai no trecho do próprio ambiente. Antes 2 splits (lote reto) e 0 (a 30°); agora 4 e 4.
+- **O circuito dos splits:** a trava "há outros pontos soltos" contava ponto de DADOS, que nunca tem
+  circuito, e os splits ficavam sem circuito. Agora conta só os pontos que o planejador de circuitos
+  liga (`pontosElegiveis`).
+- **A linha frigorígena na estrutura:**
+  - corria a 2,50 m, dentro das vigas (que descem a 2,30 m); agora vai 10 cm abaixo do fundo da viga
+    do teto, como o eletroduto e o barrilete;
+  - o caminho pelas paredes (linha e dreno) contorna o pilar pelo anel da F8b.
+  - Antes, 28 a 31 trechos em pilar e 21 a 27 em viga; agora nenhum.
+- **A ocupação do eletroduto:**
+  - O lançamento escolhia o diâmetro com 3 condutores por circuito, e a conferência mede a fiação
+    derivada (retornos, neutro, PE).
+  - O tronco do quadro ficava "Ø50 com 121 condutores, 57 %, limite 40 %".
+  - `comandosDeBitolaPelaOcupacao` sobe o diâmetro com a régua da conferência.
+- **Uma lógica só para pontos:** `comandosDePontosDoAmbiente`/`comandosDePontosDoNivel` são o
+  encadeamento único do "Completar pela norma" do editor, do gerador E6.2 e da casa.
+
+Medido na casa de prova (harness, lote 12 × 30, R1-N):
+
+| | Lote reto | 30° |
+|---|---|---|
+| Etapas elétricas | 6 LANCOU | 6 LANCOU |
+| Pontos | 38 tomadas, 12 luzes, 12 interruptores | 38 tomadas, 12 luzes, 12 interruptores |
+| Circuitos | 30 | 30 |
+| Splits | 4 | 4 |
+| Entrada | T2 trifásica, 17,7 kVA | B2 bifásica, 14,8 kVA |
+| NBR 5410 | 0 falta | 0 falta |
+| Ponto de carga sem circuito | 0 | 0 |
+| Linha e dreno com marca | 0 | 0 |
+
+- Restam dois AVISOS: a capacidade de interrupção dos disjuntores é hipótese (a confirmar com a
+  concessionária) e as tomadas sugeridas aguardam posição.
+- A entrada muda com o ângulo porque a carga térmica dos splits depende da orientação.
+- No R1-B, 2 chuveiros elétricos de 5.500 W, cada um com circuito próprio e DR. Com os 4 splits, a
+  demanda vai a 25,9 kVA (T3); a climatização pode ser desligada nas hipóteses.
+
+**Fica em aberto (dito): redes × aberturas e afastamento entre redes.**
+- A janela do gerador vai de 1,00 a 2,20 m, e o topo dela é a mesma cota de ramal, eletroduto e linha
+  abaixo da viga (2,20 m). O tubo corre colado no topo da janela.
+- A linha e o dreno saem da parede para a condensadora no vão da janela (6 + 6 trechos, lote reto).
+- O aquecedor (âncora F6) ficou na parede da janela (3 trechos de água fria).
+- Tudo está nas pendências ("Rede de …: N trecho(s) passando por porta ou janela").
+- As redes paralelas encostadas (raspão, sem eixo dentro) não são tratadas.
+- Proposta: fase de compatibilização entre redes e aberturas.
+
+Provas:
+- `blueprintCasaAutomatica.test.ts`, +5 testes:
+  - a 0° e a 30°: tudo LANCOU, NBR sem falta, nenhum ponto de carga solto, 4 splits, nada além da
+    laje na estrutura, trava ok;
+  - sem catálogo: CLIMATIZACAO NAO_RODOU com PREMISSA;
+  - R1-B: ligação direta de 5.500 W no ponto do chuveiro, circuito só dela e DR;
+  - elétrica desligada.
+- `blueprintPontosEletricosDoNivel.test.ts` (novo):
+  - a 0°, 17°, 30° e 45°: a norma fecha e cada ambiente tem as suas 4 tomadas;
+  - a tomada não vai dentro do pilar (o teste reprova sem a correção);
+  - espícula;
+  - parede do lado com tolerância.
+- Harness: o portão confere NBR sem falta, nenhum ponto solto, 4 splits e o ar sem marca.
 

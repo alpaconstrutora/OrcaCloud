@@ -45,7 +45,7 @@ import { TIPOS_DE_CONDENSADORA, TIPOS_DE_EVAPORADORA, applyBatch } from './bluep
 import { conexoesDerivadas } from './blueprintKernel/conexoes';
 import { comprimentoMm, fazerChave, menorCaminhoEntre, type Aresta, type No } from './blueprintGrafoDeRede';
 import { arvorePelasParedes, chaveP, encaixarNaParede, type P2 } from './blueprintRotaPelasParedes';
-import { desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { componentesSugeridos, lancesDaPrumada, pavimentosEntre, pontoDaPrumada } from './blueprintPrumadaClimatizacao';
 import { HIPOTESES_DA_LINHA_PADRAO, type HipotesesDaLinha } from './blueprintClimatizacao';
@@ -282,7 +282,9 @@ function caminhoEmPlanta(model: BlueprintModel, levelId: ObjectId, de: P2, para:
     return [de, ...desvio, para];
   };
   if (paredes.length === 0) return { pontos: reta(), pelaParede: false };
-  const arvore = arvorePelasParedes({ paredes, raiz: de, pendentes: [para], raioDeEncaixeMm: hip.raioDeEncaixeMm, obstaculos: pegadas });
+  // F9 da casa automática (15/10/2026): com pilar em todo encontro de paredes, a penalidade não desvia — o pilar
+  // vira ANEL no grafo (como a água e o alimentador na F8b).
+  const arvore = arvorePelasParedes({ paredes, raiz: de, pendentes: [para], raioDeEncaixeMm: hip.raioDeEncaixeMm, obstaculos: pegadas, contornoDoPilarMm: CONTORNO_DO_PILAR_MM });
   const q1 = arvore.encaixe.get(chaveP(para));
   if (!arvore.raiz || !q1) return { pontos: reta(), pelaParede: false };
   // As duas peças diante do MESMO ponto da parede (a condensadora logo atrás da
@@ -438,7 +440,12 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     const faixa = faixaDaLinha(s.evaporadora.capacidadeBtuH ?? s.condensadora.capacidadeBtuH);
     const isolamentoMm = isolamentoDaLinhaMm(s.evaporadora.capacidadeBtuH ?? s.condensadora.capacidadeBtuH, hip);
     const avisos: string[] = [];
-    const cotaLinha = Math.round(hip.cotaDaLinhaMm);
+    // F9 da casa automática (15/10/2026): a linha não corre DENTRO da viga do teto — com a viga abaixo da cota da
+    // linha, ela corre 10 cm abaixo do fundo dela (a regra do eletroduto e do barrilete), com aviso.
+    const nivelDaEvap = base.levels.find((x) => x.id === e.levelId);
+    const fundoDaViga = nivelDaEvap ? fundoDaVigaMaisBaixaMm(base, e.levelId, nivelDaEvap.defaultHeightMm) : null;
+    const cotaLinha = fundoDaViga != null && fundoDaViga - ABAIXO_DA_VIGA_MM < hip.cotaDaLinhaMm ? Math.round(fundoDaViga - ABAIXO_DA_VIGA_MM) : Math.round(hip.cotaDaLinhaMm);
+    if (cotaLinha !== Math.round(hip.cotaDaLinhaMm)) avisos.push(`linha a ${(cotaLinha / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m do piso — 10 cm abaixo da viga mais baixa do teto`);
     let comprimento = 0;
     const desnivel = desnivelDoSistemaMm(base, s);
     // C1: a condensadora em OUTRO pavimento — a linha vai até a PRUMADA e sobe/desce por ela.

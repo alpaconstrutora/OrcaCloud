@@ -20,6 +20,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
+import BuildingSystemSelect from './BuildingSystemSelect';
 import {
     maintenanceService, formatarPeriodicidade, diasParaVencer,
 } from '../../services/maintenanceService';
@@ -292,8 +293,9 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
     }, [chamados, searchTerm, chamadoColumns.sortColumn, chamadoColumns.sortDirection]);
 
     /** Monta a proposta a partir dos sistemas prediais cadastrados na organização. */
-    const abrirCriacaoPlano = () => {
-        const linhas = sistemas.flatMap(s =>
+    const montarPropostos = (lista: BuildingSystem[]) => {
+        // Desativado não entra na proposta — é justamente o "não temos isto aqui".
+        const linhas = lista.filter(s => s.is_active).flatMap(s =>
             (CATALOGO_MANUTENCAO[s.slug] || []).map((item, i) => ({
                 key: `${s.id}:${i}`,
                 systemId: s.id,
@@ -303,7 +305,39 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
             })),
         );
         setPropostos(linhas);
+    };
+    const abrirCriacaoPlano = () => {
+        montarPropostos(sistemas);
         setSheetPlano(true);
+    };
+
+    /**
+     * A lista de sistemas mudou no seletor (cadastro/edição/exclusão). §22: o
+     * nome novo chega às colunas "Sistema" das tabelas sem recarregar a aba.
+     */
+    const atualizarSistemas = (lista: BuildingSystem[]) => {
+        setSistemas(lista);
+        const nome = new Map(lista.map(s => [s.id, s.name]));
+        const renomear = <T extends { building_system_id?: string | null; _system_name: string }>(r: T): T =>
+            r.building_system_id ? { ...r, _system_name: nome.get(r.building_system_id) || '—' } : r;
+        setItens(prev => prev.map(renomear));
+        setOrdens(prev => prev.map(renomear));
+    };
+
+    const [cadastrandoPadrao, setCadastrandoPadrao] = React.useState(false);
+    // O botão já vem desligado sem org (com o motivo no title); o service
+    // recusaria NULL no NOT NULL de qualquer jeito.
+    const cadastrarSistemasPadrao = async () => {
+        setCadastrandoPadrao(true);
+        try {
+            const lista = await maintenanceService.seedDefaultSystems(orgId);
+            atualizarSistemas(lista);
+            montarPropostos(lista);
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao cadastrar os sistemas padrão.', 'error');
+        } finally {
+            setCadastrandoPadrao(false);
+        }
     };
 
     const alternarProposto = (key: string) => {
@@ -929,10 +963,21 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                             <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                             <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum item sugerido</h3>
                             <p className="text-sm text-gray-500 max-w-md mx-auto">
-                                {sistemas.length === 0
-                                    ? 'Não há sistemas prediais cadastrados nesta organização — o bloco 9 da migration 000018 tem a semente da NBR 14037 pronta para rodar.'
-                                    : 'Os sistemas cadastrados não têm itens no catálogo padrão. O plano será criado vazio e você adiciona os itens à mão.'}
+                                {sistemas.some(s => s.is_active)
+                                    ? 'Os sistemas cadastrados não têm itens no catálogo padrão. O plano será criado vazio e você adiciona os itens à mão.'
+                                    : 'Não há sistemas prediais ativos nesta organização. Cadastre os do rol da NBR 14037 e o plano já nasce com os itens padrão de cada um.'}
                             </p>
+                            {!sistemas.some(s => s.is_active) && (
+                                <button
+                                    onClick={cadastrarSistemasPadrao}
+                                    disabled={cadastrandoPadrao || !orgId}
+                                    title={!orgId ? 'O empreendimento não tem organização — não há onde cadastrar os sistemas.' : undefined}
+                                    className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" />
+                                    {cadastrandoPadrao ? 'Cadastrando...' : 'Cadastrar os sistemas padrão'}
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <div className="space-y-3">
@@ -1006,20 +1051,17 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                 <SheetPanel className="p-6">
                     <div className="space-y-4">
                         <div>
-                            <label className="text-xs font-semibold text-slate-500">Sistema predial</label>
-                            <select
-                                value={formItem.building_system_id}
-                                onChange={e => setFormItem(f => ({ ...f, building_system_id: e.target.value }))}
-                                className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                            >
-                                <option value="">Sem sistema definido</option>
-                                {sistemas.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                            {sistemas.length === 0 && (
-                                <p className="text-xs text-amber-600 mt-1">
-                                    Nenhum sistema cadastrado. O bloco 9 da migration tem a semente da NBR 14037 pronta para rodar.
-                                </p>
-                            )}
+                            <label htmlFor="item-sistema" className="text-xs font-semibold text-slate-500">Sistema predial</label>
+                            <div className="mt-1">
+                                <BuildingSystemSelect
+                                    id="item-sistema"
+                                    organizationId={orgId}
+                                    sistemas={sistemas}
+                                    onSistemasChange={atualizarSistemas}
+                                    value={formItem.building_system_id}
+                                    onChange={v => setFormItem(f => ({ ...f, building_system_id: v }))}
+                                />
+                            </div>
                         </div>
 
                         <div>
@@ -1120,15 +1162,17 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                         </div>
 
                         <div>
-                            <label className="text-xs font-semibold text-slate-500">Sistema predial</label>
-                            <select
-                                value={formOrdem.building_system_id}
-                                onChange={e => setFormOrdem(f => ({ ...f, building_system_id: e.target.value }))}
-                                className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                            >
-                                <option value="">Sem sistema definido</option>
-                                {sistemas.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
+                            <label htmlFor="ordem-sistema" className="text-xs font-semibold text-slate-500">Sistema predial</label>
+                            <div className="mt-1">
+                                <BuildingSystemSelect
+                                    id="ordem-sistema"
+                                    organizationId={orgId}
+                                    sistemas={sistemas}
+                                    onSistemasChange={atualizarSistemas}
+                                    value={formOrdem.building_system_id}
+                                    onChange={v => setFormOrdem(f => ({ ...f, building_system_id: v }))}
+                                />
+                            </div>
                         </div>
 
                         <div>

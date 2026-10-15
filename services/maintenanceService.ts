@@ -8,6 +8,7 @@
 // vai estar errado em algum momento e ninguém vai saber qual.
 
 import { supabase } from '../lib/supabase';
+import { SISTEMAS_PADRAO } from './maintenanceCatalog';
 import type {
     BuildingSystem,
     BuildingSystemInsert,
@@ -56,6 +57,9 @@ export function traduzirErroManutencao(mensagem: string): string {
     if (mensagem.includes('maintenance_orders_concluida_tem_data')) {
         return 'Informe a data de execução para concluir a ordem — é ela que define o próximo vencimento no plano.';
     }
+    if (mensagem.includes('uidx_building_systems_slug')) {
+        return 'Já existe um sistema predial com esse nome nesta organização.';
+    }
     if (mensagem.includes('periodicity_value')) {
         return 'A periodicidade tem de ser maior que zero.';
     }
@@ -81,6 +85,52 @@ export const maintenanceService = {
             .insert(payload).select(SYSTEM_COLS).single();
         if (error) throw new Error(traduzirErroManutencao(error.message));
         return data as BuildingSystem;
+    },
+
+    /** Renomear não mexe no `slug`: é a chave do catálogo de itens padrão. */
+    async updateSystem(
+        id: string,
+        patch: Partial<Pick<BuildingSystem, 'name' | 'norm_ref' | 'description' | 'is_active' | 'sort_order'>>,
+    ): Promise<BuildingSystem> {
+        const { data, error } = await supabase.from('building_systems')
+            .update(patch).eq('id', id).select(SYSTEM_COLS).single();
+        if (error) throw new Error(traduzirErroManutencao(error.message));
+        return data as BuildingSystem;
+    },
+
+    async deleteSystem(id: string): Promise<void> {
+        const { data, error } = await supabase.from('building_systems').delete().eq('id', id).select('id');
+        if (error) throw new Error(traduzirErroManutencao(error.message));
+        // RLS que recusa DELETE não dá erro — devolve 0 linhas. Sem esta
+        // checagem a tela diria "excluído" e o sistema voltaria no recarregar.
+        if (!data || data.length === 0) throw new Error('O sistema não foi excluído — sem permissão nesta organização.');
+    },
+
+    /**
+     * Quem aponta para o sistema. Itens do plano e ativos têm FK `SET NULL` —
+     * excluir os desligaria calado —, e `maintenance_orders` nem FK tem: a
+     * ordem ficaria com id órfão. Por isso a tela só exclui sistema sem uso.
+     */
+    async countSystemUsage(id: string): Promise<{ itens: number; ativos: number; ordens: number }> {
+        const contar = async (tabela: string) => {
+            const { count, error } = await supabase.from(tabela)
+                .select('id', { count: 'exact', head: true }).eq('building_system_id', id);
+            if (error) throw new Error(`Falha ao verificar o uso do sistema: ${error.message}`);
+            return count ?? 0;
+        };
+        const [itens, ativos, ordens] = await Promise.all([
+            contar('maintenance_plan_items'), contar('opura_assets'), contar('maintenance_orders'),
+        ]);
+        return { itens, ativos, ordens };
+    },
+
+    /** Cadastra os sistemas padrão que faltam (o slug já existente é mantido como está). */
+    async seedDefaultSystems(organizationId: string): Promise<BuildingSystem[]> {
+        const linhas = SISTEMAS_PADRAO.map(s => ({ ...s, organization_id: organizationId }));
+        const { error } = await supabase.from('building_systems')
+            .upsert(linhas, { onConflict: 'organization_id,slug', ignoreDuplicates: true });
+        if (error) throw new Error(traduzirErroManutencao(error.message));
+        return this.listSystems(organizationId);
     },
 
     // ── Plano ────────────────────────────────────────────────────────────────

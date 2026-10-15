@@ -98,3 +98,58 @@ export function primeiroVencimento(item: ItemPadrao, hoje = new Date()): string 
     }
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+// ── Sistemas prediais padrão ─────────────────────────────────────────────────
+// Era o bloco 9 da migration 000018, comentado para alguém rodar à mão com o
+// UUID da organização. Com a lista vazia, a tela oferece cadastrar estes de uma
+// vez (Condomínio › Manutenção › campo "Sistema predial"). O `slug` é a chave
+// de `CATALOGO_MANUTENCAO` — é ele que faz "Criar plano" sugerir os itens.
+
+export interface SistemaPadrao {
+    name: string;
+    slug: string;
+    norm_ref: string | null;
+    sort_order: number;
+}
+
+export const SISTEMAS_PADRAO: SistemaPadrao[] = [
+    { name: 'Elevadores', slug: 'elevadores', norm_ref: 'NBR 16083', sort_order: 10 },
+    { name: 'Bombas e recalque', slug: 'bombas', norm_ref: null, sort_order: 20 },
+    { name: 'Reservatórios de água', slug: 'reservatorios', norm_ref: null, sort_order: 30 },
+    { name: 'SPDA (para-raios)', slug: 'spda', norm_ref: 'NBR 5419', sort_order: 40 },
+    { name: 'Instalações elétricas', slug: 'eletrica', norm_ref: 'NBR 5410', sort_order: 50 },
+    { name: 'Instalações hidrossanitárias', slug: 'hidraulica', norm_ref: null, sort_order: 60 },
+    { name: 'Combate a incêndio', slug: 'incendio', norm_ref: 'NBR 17240', sort_order: 70 },
+    { name: 'Gerador', slug: 'gerador', norm_ref: null, sort_order: 80 },
+    { name: 'Portões e automação', slug: 'portoes', norm_ref: null, sort_order: 90 },
+    { name: 'Fachada e revestimentos', slug: 'fachada', norm_ref: null, sort_order: 100 },
+    { name: 'Impermeabilização', slug: 'impermeabilizacao', norm_ref: null, sort_order: 110 },
+    { name: 'Esquadrias', slug: 'esquadrias', norm_ref: null, sort_order: 120 },
+];
+
+/** Slug de um sistema novo a partir do nome: sem acento, minúsculo, hífens. */
+export function slugDoSistema(nome: string): string {
+    return nome
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60)
+        .replace(/-+$/g, '') || 'sistema';
+}
+
+/**
+ * Primeiro slug livre na organização. O UNIQUE é (organization_id, slug): dois
+ * nomes distintos que dão o mesmo slug ("Portões" / "Portoes!") não podem
+ * colidir — o segundo vira `portoes-2`. O nome repetido de verdade é recusado
+ * antes, pela tela.
+ */
+export function slugLivre(nome: string, existentes: readonly { slug: string }[]): string {
+    const base = slugDoSistema(nome);
+    const usados = new Set(existentes.map(s => s.slug));
+    if (!usados.has(base)) return base;
+    for (let n = 2; ; n++) {
+        const candidato = `${base}-${n}`;
+        if (!usados.has(candidato)) return candidato;
+    }
+}

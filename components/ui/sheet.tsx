@@ -113,11 +113,21 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
     onClose();
   }, [dirty, onClose, confirm]);
 
+  // A pilha segue a ORDEM DE ABERTURA, e só ela: o efeito não pode depender de
+  // `requestClose`. Quase todo chamador passa `onClose={() => set...(false)}`
+  // inline — identidade nova a cada render —, e cada render tirava e repunha o
+  // Sheet no TOPO. Com um seletor aberto por cima do formulário, bastava o pai
+  // re-renderizar (cadastrar um sistema predial no seletor, 15/10/2026) para o
+  // formulário voltar ao topo, e o Esc fechava a gaveta de baixo com o seletor
+  // ainda aberto. A versão atual do fechamento vem pela ref.
+  const requestCloseRef = React.useRef(requestClose);
+  requestCloseRef.current = requestClose;
+
   React.useEffect(() => {
     if (!open) return;
     pilhaAbertos.push(id);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && pilhaAbertos[pilhaAbertos.length - 1] === id) requestClose();
+      if (e.key === 'Escape' && pilhaAbertos[pilhaAbertos.length - 1] === id) requestCloseRef.current();
     };
     document.addEventListener('keydown', onKey);
     return () => {
@@ -125,7 +135,7 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
       const i = pilhaAbertos.lastIndexOf(id);
       if (i >= 0) pilhaAbertos.splice(i, 1);
     };
-  }, [open, requestClose, id]);
+  }, [open, id]);
 
   const floating = variant === 'floating';
 

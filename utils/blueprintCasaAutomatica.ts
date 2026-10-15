@@ -29,7 +29,7 @@
  * mão direita de quem olha da rua —, e a `transformacao` leva ao mundo. Com a
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
-import { applyBatch, conflitosDoModelo, medirEscada, point, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point } from './blueprintKernel';
+import { applyBatch, conflitosDoModelo, medirEscada, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
 import { recuosEfetivos } from './blueprintZonaUrbanistica';
@@ -79,6 +79,7 @@ import { pontoNaFrente, type LeitorDoTerreno } from './blueprintAncorasHidro';
 import { amostradorDaGrade, type GradeDeElevacao } from './blueprintTopografia';
 import { medirTerreno } from './blueprintTerreno';
 import { marcasDeVerificacao } from './blueprintVerificacaoRede';
+import { pressoesDoModelo } from './blueprintPressaoDaRede';
 import { comandosDePontosDoNivel } from './blueprintPontosEletricosDoNivel';
 import { encaixarNaParede, paredesEmComum } from './blueprintRotaPelasParedes';
 import { centroDeCargas, comandosParaOCentro } from './blueprintCentroDeCargas';
@@ -615,6 +616,8 @@ export interface PlanoDaCasa {
       pluvial: { pecas: number; tubos: number };
       /** A verificação de rede do app sobre o resultado (`marcasDeVerificacao`), por tipo de marca. */
       verificacao: { erros: number; avisos: number; porTipo: Record<string, number> };
+      /** Pontos com pressão disponível abaixo do mínimo (`pressoesDoModelo`), por rede. */
+      pressaoInsuficiente: { fria: number; quente: number };
     };
     /** F9: a elétrica lançada e a conferência NBR 5410 sobre o resultado. */
     eletrica: ResumoDaEletricaDaCasa;
@@ -659,7 +662,7 @@ const ELETRICA_ZERADA = (): ResumoDaEletricaDaCasa => ({
   conferencia: { faltas: 0, avisos: 0, porRegra: {} },
 });
 const CLIMATIZACAO_ZERADA = (): PlanoDaCasa['resumo']['climatizacao'] => ({ equipamentos: 0, etapas: {}, verificacao: { erros: 0, avisos: 0, porTipo: {} } });
-const HIDRAULICA_ZERADA = (): PlanoDaCasa['resumo']['hidraulica'] => ({ agua: { pecas: 0, tubos: 0 }, esgoto: { pecas: 0, tubos: 0, destino: 'REDE_PUBLICA' }, pluvial: { pecas: 0, tubos: 0 }, verificacao: { erros: 0, avisos: 0, porTipo: {} } });
+const HIDRAULICA_ZERADA = (): PlanoDaCasa['resumo']['hidraulica'] => ({ agua: { pecas: 0, tubos: 0 }, esgoto: { pecas: 0, tubos: 0, destino: 'REDE_PUBLICA' }, pluvial: { pecas: 0, tubos: 0 }, verificacao: { erros: 0, avisos: 0, porTipo: {} }, pressaoInsuficiente: { fria: 0, quente: 0 } });
 
 /** As marcas da verificação de rede ditas em português, pelo tipo (as demais saem com o texto da marca). */
 const MARCA_DA_REDE: Record<string, string> = {
@@ -1170,6 +1173,26 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       }
     };
     if (hip.hidraulica.lancar && (hidraulica.agua.tubos + hidraulica.esgoto.tubos + hidraulica.pluvial.tubos) > 0) verificarRedes(ROTULO_DA_DISCIPLINA_DA_REDE, hidraulica.verificacao);
+
+    // A PRESSÃO nos pontos (o cálculo do app, o mesmo do selo no desenho): por gravidade, a caixa pouco acima do teto
+    // não vence a perda do aquecedor (térrea) nem a altura dos pontos de cima (sobrado) — medido em 15/10/2026, a
+    // água quente da térrea saía com −27 a −65 kPa e nada dizia. Aqui fica DITO, por rede, com as saídas; resolver
+    // (caixa elevada ou pressurizador) é decisão de projeto.
+    if (hip.hidraulica.lancar && hidraulica.agua.tubos > 0) {
+      const caixa = (m.terminais ?? []).find((t) => t.tipoHidraulico === 'RESERVATORIO');
+      const cotaDaCaixaM = caixa ? ((m.levels.find((l) => l.id === caixa.levelId)?.elevationMm ?? 0) + caixa.cotaMm) / 1000 : null;
+      for (const rede of pressoesDoModelo(m)) {
+        const baixos = rede.pontos.filter((x) => x.estado === 'INSUFICIENTE' && x.disponivelKpa != null);
+        if (!baixos.length) continue;
+        const pior = [...baixos].sort((a, b) => a.disponivelKpa! - a.minimaKpa - (b.disponivelKpa! - b.minimaKpa))[0];
+        const comodo = m.spaces.find((x) => x.levelId === pior.levelId && pointInPolygon(x.ring, pior.at as Point))?.name;
+        hidraulica.pressaoInsuficiente[rede.disciplina === 'AGUA_QUENTE' ? 'quente' : 'fria'] += baixos.length;
+        pendencias.push({
+          grupo: 'VERIFICACAO',
+          texto: `Pressão da ${ROTULO_DA_DISCIPLINA_DA_REDE[rede.disciplina]}: ${baixos.length} ponto(s) abaixo do mínimo — o pior, ${pior.nome}${comodo ? ` (${comodo})` : ''}, com ${pior.disponivelKpa!.toFixed(1).replace('.', ',')} kPa (mínimo ${String(pior.minimaKpa).replace('.', ',')}). ${cotaDaCaixaM != null ? `Com a caixa d'água a ${f2(cotaDaCaixaM)} m, a gravidade não basta: ` : ''}eleve a caixa (hipótese "caixa acima da laje") ou preveja um pressurizador.`,
+        });
+      }
+    }
 
     // ── ELÉTRICA E CLIMATIZAÇÃO (F9) ──────────────────────────────────────────
     // A ordem é a que as peças pedem: os PONTOS pela norma (com a potência padrão — o centro de cargas precisa

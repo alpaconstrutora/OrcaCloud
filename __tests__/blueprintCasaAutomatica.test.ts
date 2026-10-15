@@ -10,6 +10,7 @@ import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
 import { conferirPlanoDaCasa, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
+import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
 import { PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
 import { HIPOTESES_DO_TELHADO_PADRAO } from '../utils/blueprintTelhadoAutomatico';
 import { HIPOTESES_DAS_ANCORAS_PADRAO } from '../utils/blueprintAncorasDaCasa';
@@ -825,5 +826,24 @@ describe('planejarCasa — F12c: a climatização do sobrado', () => {
     expect(splits.filter((t) => t.levelId === S)).toHaveLength(3);
     expect(p.resumo.climatizacao.verificacao.erros).toBe(0);
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+});
+
+describe('planejarCasa — a pressão nos pontos fica DITA (15/10/2026)', () => {
+  it.each([1, 2] as const)('%i pavimento(s): cada rede com ponto abaixo do mínimo vira uma pendência, com a contagem do cálculo do app', (pavimentos) => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m), { pavimentos });
+    const porRede = pressoesDoModelo(p.resultado).map((r) => ({ d: r.disciplina, n: r.pontos.filter((x) => x.estado === 'INSUFICIENTE' && x.disponivelKpa != null).length }));
+    for (const { d, n } of porRede) {
+      const rotulo = d === 'AGUA_QUENTE' ? 'água quente' : 'água fria';
+      const pend = p.pendencias.filter((x) => x.texto.startsWith(`Pressão da ${rotulo}:`));
+      expect(pend).toHaveLength(n > 0 ? 1 : 0);
+      if (n > 0) {
+        expect(pend[0].grupo).toBe('VERIFICACAO');
+        expect(pend[0].texto.startsWith(`Pressão da ${rotulo}: ${n} ponto(s) abaixo do mínimo`)).toBe(true);
+        expect(pend[0].texto).toMatch(/eleve a caixa .* ou preveja um pressurizador/);
+      }
+      expect(p.resumo.hidraulica.pressaoInsuficiente[d === 'AGUA_QUENTE' ? 'quente' : 'fria']).toBe(n);
+    }
   });
 });

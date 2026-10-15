@@ -1360,5 +1360,17 @@ de rede; a pendência "Prumada pelo meio do cômodo" não aparece mais.
   - "o núcleo come boa parte da Sala" saía SEM SOLUÇÃO com a sala ainda acima do mínimo: agora a área
     que sobra é medida no desenho — acima do mínimo do programa vira CONFERIR (com quanto sobrou), abaixo
     continua SEM SOLUÇÃO.
-- **Conferência no app real:** pendente — precisa da senha do agente-leitura (não fica guardada) e do OK
-  para criar e arquivar um estudo descartável, como na F10.
+- **Conferência no app real (15/10/2026, senha do agente-leitura dada pelo usuário):** `c:/tmp/pwtest/conferencia-sobrado.cjs`
+  — estudo DESCARTÁVEL arquivado no fim. Aprovada: a tela abre com "térrea ou sobrado"; os campos do sobrado
+  só aparecem no sobrado; "Sobrado" sobrevive a recarregar (`blueprint_study_casa`); a prévia sai com as 22
+  etapas, 11 de 11 ambientes, 220 m², escada em U de 17 × 171/306 mm, 34 circuitos, 4 splits; "Lançar os dois
+  pavimentos" grava, e o rascunho tem Térreo (12 paredes, 26 pilares) e Pavimento superior a 2,90 m (11 paredes,
+  25 pilares), 1 escada, 2 shafts, telhado; sem erro de página, console ou HTTP.
+- **ACHADO na conferência: a PRESSÃO.** O desenho mostrava selos de pressão NEGATIVA. Medido (12 × 30): na
+  TÉRREA, a água quente sai com −27 a −65 kPa em todos os pontos (a caixa a 3,20 m entrega 12,4 kPa ao aquecedor,
+  que perde 20); no SOBRADO, até a água fria dos pontos de cima fica abaixo do mínimo (a caixa só 1,1 m acima dos
+  chuveiros de cima). Por gravidade, essa altura de caixa não vence — é decisão de projeto: caixa elevada (torre)
+  ou pressurizador. Nada dizia isso: a casa agora confere `pressoesDoModelo` no fim da hidráulica e põe uma
+  pendência VERIFICACAO por rede ("Pressão da água quente: N ponto(s) abaixo do mínimo — o pior … eleve a caixa
+  … ou preveja um pressurizador"), e o resumo ganhou `hidraulica.pressaoInsuficiente`. A correção espera a
+  decisão do usuário.

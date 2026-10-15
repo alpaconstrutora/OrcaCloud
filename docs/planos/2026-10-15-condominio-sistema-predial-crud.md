@@ -84,5 +84,12 @@ Sessão de 15/10/2026 (VS Code), transcrito literalmente:
   - item 4: `check-ui-standard.sh` sem violação nos 3 arquivos de tela;
     `orgContextGuard` passa; suíte inteira 9.621 ✓ / 0 ✗;
   - item 5: teste de regressão falha sem o conserto, passa com ele.
-  - **Não verificado:** a tela logada em produção (sem a senha do usuário de
-    teste nesta sessão) — a conferência foi no harness.
+  - Conferência LOGADA (agente-leitura, frente local contra o banco real,
+    010 - Galeria Altavista): os 12 sistemas reais listados; cadastrar já
+    escolhe; "elevadores" recusado como repetido; excluir "Elevadores" mostrou
+    a contagem REAL ("2 itens de plano, 2 ordens de serviço") e ofereceu
+    desativar; excluir o sistema sem uso confirmou e limpou o campo; Esc fechou
+    só o seletor. Escritas de `building_systems` respondidas pelo roteiro,
+    nenhuma outra escrita REST; banco conferido depois (12 sistemas, 0
+    desativados, nada de teste sobrando).
+  - **Não verificado ainda:** produção (a frente não foi publicada).

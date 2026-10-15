@@ -43,7 +43,7 @@
 - [x] Aprovação Financeira › fila (via StandardTable)
 - [x] guia §6.12
 - [x] conferência visual nas 5 tabelas — preview local, login de leitura, dados reais: colSpan do cabeçalho = colunas do colgroup nas 5; "(continua)" na página 2 de Parcelas e da fila; recolher encolhe as linhas; 0 escritas, 0 erros. Script `c:/tmp/pwtest/financeiro-agrupar.js`. Achado e corrigido: Parcelas › Credor criava grupo "—" (texto de ausência) em vez de "Sem credor".
-- [ ] publicado e conferido
+- [x] publicado em `57f14bf7`; domínio carimbado com o commit e os chunks das 5 tabelas com o seletor (Tributos, Cobranças, Notas, Parcelas, fila de Aprovação); CI `ci` success
 
 ## Observado nos dados (fora do escopo)
 - Contas a Pagar › Notas: o grupo "Energisa" soma R$ 411.896.600,98 — alguma nota tem valor fora de escala. É dado, não o agrupamento; reportado ao usuário.

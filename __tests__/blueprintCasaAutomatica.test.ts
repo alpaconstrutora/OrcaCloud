@@ -9,6 +9,9 @@ import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
 import { conferirPlanoDaCasa, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
+import { HIPOTESES_DO_TELHADO_PADRAO } from '../utils/blueprintTelhadoAutomatico';
+import { planejarCalhas } from '../utils/blueprintCalhas';
+import { HIPOTESES_PLUVIAIS_PADRAO } from '../utils/blueprintPluvial';
 
 type Papel = 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA';
 
@@ -55,6 +58,7 @@ describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
       ['LAJES', 'LANCOU'],
       ['FUNDACOES', 'LANCOU'],
       ['EIXOS', 'LANCOU'],
+      ['TELHADO', 'LANCOU'],
       ['CONFERENCIA', 'CALCULOU'],
     ]);
     expect(plano.comandos.slice(0, 3).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
@@ -114,7 +118,7 @@ describe('planejarCasa — o que falta vira motivo, nunca exceção', () => {
     expect(p.comandos).toEqual([]);
     expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
     expect(p.etapas[0].nota).toMatch(/FRENTE/);
-    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(8).fill('NAO_RODOU'));
+    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(9).fill('NAO_RODOU'));
   });
 
   it('pavimento inexistente', () => {
@@ -238,7 +242,39 @@ describe('planejarCasa — F4: a estrutura no mesmo lote', () => {
     const m = lote();
     const p = planejarCasa(m, entrada(m), { estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, lancar: false } });
     expect(p.etapas.filter((e) => ['PILARES', 'VIGAS', 'LAJES', 'FUNDACOES', 'EIXOS'].includes(e.id)).map((e) => e.situacao)).toEqual(Array(5).fill('NAO_EXIGIDA'));
-    expect(p.comandos.map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
+    expect(p.comandos.map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels', 'AddRoofByExtrusion']);
   });
 });
 
+describe('planejarCasa — F5: o telhado', () => {
+  it.each([0, 30])('lote a %i°: duas águas cobrindo a casa com beiral; a pluvial acha o beiral e lança calhas', (graus) => {
+    const m = lote(graus);
+    const L = m.levels[0].id;
+    const p = planejarCasa(m, entrada(m));
+    const aguas = (p.resultado.roofs ?? []).filter((a) => a.levelId === L);
+    expect(aguas).toHaveLength(2);
+    expect(p.resumo.telhado?.aguas).toBe(2);
+    // toda ponta de parede da casa fica DENTRO da projeção da cobertura
+    const naCobertura = (q: Point) =>
+      aguas.some((a) => {
+        let d = false;
+        const r = a.pontos;
+        for (let i = 0, j = r.length - 1; i < r.length; j = i++) if ((r[i].y > q.y) !== (r[j].y > q.y) && q.x < ((r[j].x - r[i].x) * (q.y - r[i].y)) / (r[j].y - r[i].y) + r[i].x) d = !d;
+        return d;
+      });
+    for (const w of p.resultado.walls.filter((x) => x.levelId === L)) for (const q of [w.a, w.b]) expect(naCobertura(q)).toBe(true);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+    // O critério da F5: a pluvial enxerga o beiral (sem o "desenhe o telhado") e põe calha.
+    const calhas = planejarCalhas(p.resultado, { ...HIPOTESES_PLUVIAIS_PADRAO, intensidadeMmH: 150 });
+    expect(calhas.motivo).toBeNull();
+    expect(calhas.calhas.length).toBeGreaterThan(0);
+  });
+
+  it('telhado desligado: a etapa NAO_EXIGIDA e nenhuma água', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m), { telhado: { ...HIPOTESES_DO_TELHADO_PADRAO, lancar: false } });
+    expect(p.etapas.find((e) => e.id === 'TELHADO')?.situacao).toBe('NAO_EXIGIDA');
+    expect(p.resultado.roofs ?? []).toHaveLength(0);
+    expect(p.resumo.telhado).toBeNull();
+  });
+});

@@ -18,6 +18,8 @@ import { medirTerreno } from '../../../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA } from '../../../utils/blueprintMassa';
 import { conferirPlanoDaCasa, planejarCasa } from '../../../utils/blueprintCasaAutomatica';
 import { PROGRAMA_CURTO_PADRAO } from '../../../utils/blueprintPrograma';
+import { planejarCalhas } from '../../../utils/blueprintCalhas';
+import { HIPOTESES_PLUVIAIS_PADRAO } from '../../../utils/blueprintPluvial';
 
 declare global {
   interface Window {
@@ -41,6 +43,7 @@ declare global {
         estrutura: { eixos: number; pilares: number; vigas: number; lajes: number; blocos: number; estacas: number; baldrames: number };
         pilaresForaDeParede: number;
         ambientesNoPavimento: number;
+        telhado: { aguas: number; paredesCobertas: boolean; calhas: number; motivoDaPluvial: string | null };
       } | null;
     };
   }
@@ -82,6 +85,21 @@ const plano = planejarCasa(lote, {
 });
 const model = plano.resultado;
 
+/** F5: as águas, se cobrem todas as pontas de parede, e o que a pluvial faz com elas (intensidade de 150 mm/h). */
+function telhadoDoModelo(m: BlueprintModel) {
+  const aguas = (m.roofs ?? []).filter((a) => a.levelId === levelId);
+  const dentro = (q: Point) =>
+    aguas.some((a) => {
+      let d = false;
+      const r = a.pontos;
+      for (let i = 0, j = r.length - 1; i < r.length; j = i++) if ((r[i].y > q.y) !== (r[j].y > q.y) && q.x < ((r[j].x - r[i].x) * (q.y - r[i].y)) / (r[j].y - r[i].y) + r[i].x) d = !d;
+      return d;
+    });
+  const paredesCobertas = m.walls.filter((w) => w.levelId === levelId).every((w) => dentro(w.a) && dentro(w.b));
+  const calhas = planejarCalhas(m, { ...HIPOTESES_PLUVIAIS_PADRAO, intensidadeMmH: 150 });
+  return { aguas: aguas.length, paredesCobertas, calhas: calhas.calhas.length, motivoDaPluvial: calhas.motivo };
+}
+
 /** F4: pilar cujo centro não está sobre parede nenhuma (meia espessura + 10 mm). */
 function pilaresForaDeParede(m: BlueprintModel): number {
   const ws = m.walls.filter((w) => w.levelId === levelId);
@@ -114,6 +132,7 @@ window.__estado = {
     estrutura: plano.resumo.estrutura,
     pilaresForaDeParede: pilaresForaDeParede(model),
     ambientesNoPavimento: model.spaces.filter((s) => s.levelId === levelId).length,
+    telhado: telhadoDoModelo(model),
   },
 };
 document.getElementById('dump')!.textContent = [

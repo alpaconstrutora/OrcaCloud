@@ -128,7 +128,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F3 — orquestrador mínimo (arquitetura num lote) (ver "Registro da F3" abaixo)
 - [x] F3b — gerador respeita a largura mínima livre de cada ambiente (decisão de 15/10; ver "Registro da F3b")
 - [x] F4 — estrutura (ver "Registro da F4")
-- [ ] F5 — telhado
+- [x] F5 — telhado (ver "Registro da F5")
 - [ ] F6 — peças-âncora + rede pública
 - [ ] F7 — mobiliário + louças com pontos
 - [ ] F8 — hidro encadeada
@@ -382,4 +382,43 @@ Provas:
   carga. Isolado, em 7 rodadas: 2× 254/254, 4 quedas de worker e 1× "1 failed" que não se repetiu.
   Nenhum arquivo do app importa `blueprintCasaAutomatica`, então a F4 não alcança esse teste: é a
   instabilidade conhecida.
+
+## Registro da F5 (15/10/2026)
+
+O que entrou:
+
+- `utils/blueprintTelhadoAutomatico.ts` (novo, puro): `comandosDoTelhado(levelId, ret, quadro,
+  alturaDoTopoMm, meiaParedeExternaMm, hip)` devolve UM `AddRoofByExtrusion`. Não há geometria nova:
+  o kernel faz as águas (P2.13), e cada água sai com o beiral no lado baixo.
+  - A cobertura avança meia parede mais o beiral além do EIXO das paredes externas, nos quatro lados.
+  - DUAS ÁGUAS: cumeeira ao longo do lado maior, ou como as hipóteses mandarem.
+  - UMA ÁGUA: eixo paralelo à frente, caindo para os FUNDOS (padrão) ou para a frente.
+  - Alturas: topo da parede (pé-direito + laje lançada) na face; a ponta do beiral desce
+    beiral × inclinação; a cumeeira sobe meio vão × inclinação.
+  - O eixo vai ao mundo pelo quadro da frente (lote girado funciona).
+  - Antes de devolver, o perfil passa por `aguasDaExtrusao`: recusa vira motivo.
+- `HIPOTESES_DO_TELHADO_PADRAO`: duas águas, 30 %, beiral de 0,60 m, 50 mm, cumeeira ao longo do
+  maior, uma água caindo para os fundos, `lancar: true`. Ficam em `HipotesesDaCasa.telhado`.
+- No orquestrador: etapa TELHADO depois dos EIXOS; `resumo.telhado`. Anexo da planta sem cobertura
+  vira pendência NAO_DECIDIDO (com a implantação retangular, hoje não há anexos).
+
+Confirmado na prática: o `AddRoofByExtrusion` dá à água um `uid` aleatório (`novoUid()`), e a trava
+(`conferirPlanoDaCasa`: mesmos ids e mesmo hash) aprova com o telhado no lote. O `uid` está fora do
+hash, como a memória do kernel registrava.
+
+Critério de pronto ("`planejarCalhas` não acusa sem beiral"): no lote reto e a 30°,
+`planejarCalhas(resultado, intensidade 150 mm/h)` volta com `motivo: null` e 2 calhas.
+
+Medido (casa 9,00 × 16,85 m): beiral a 2,72 m e cumeeira a 4,28 m (topo 2,90 m, 30 %), projeção de
+189,8 m², cumeeira de 18,25 m da frente para os fundos.
+
+Provas:
+- `__tests__/blueprintTelhadoAutomatico.test.ts`, 5 testes: geometria e alturas da casa funda; a casa
+  larga vira a cumeeira; uma água para os fundos e para a frente; quadro girado com a mesma área;
+  recusas.
+- `blueprintCasaAutomatica.test.ts`, 23 testes: telhado no lote reto e a 30°, cobrindo toda parede,
+  com calha pela pluvial; telhado desligado.
+- Harness: o portão confere 2 águas, paredes cobertas e calhas. 25 arquivos dependentes, 168 testes.
+- Suíte cheia: 0 falhas; 198 pendentes do `BlueprintEditor.test.tsx`, que não termina sob carga.
+  Nenhum arquivo do app importa os módulos da casa.
 

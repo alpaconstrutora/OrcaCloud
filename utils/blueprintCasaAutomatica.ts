@@ -65,6 +65,7 @@ import {
   type HipotesesDeVigas,
 } from './blueprintVigasLajesAutomaticas';
 import { HIPOTESES_FUNDACOES_PADRAO, planejarFundacoes, type HipotesesDeFundacoes } from './blueprintFundacoesAutomaticas';
+import { comandosDoTelhado, HIPOTESES_DO_TELHADO_PADRAO, type HipotesesDoTelhado, type ResumoDoTelhado } from './blueprintTelhadoAutomatico';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
 
 // ─── Hipóteses ──────────────────────────────────────────────────────────────
@@ -339,7 +340,7 @@ export function resumoDaImplantacao(i: ImplantacaoDaCasa): string {
 // kernel só corta parede em interseção EXATA — achado da M6b): a ponta que encontra o
 // meio de outra parede passa `ALEM_MM` além, e o offset das aberturas anda junto.
 
-export type EtapaDaCasaId = 'IMPLANTACAO' | 'ARQUITETURA' | 'PILARES' | 'VIGAS' | 'LAJES' | 'FUNDACOES' | 'EIXOS' | 'CONFERENCIA';
+export type EtapaDaCasaId = 'IMPLANTACAO' | 'ARQUITETURA' | 'PILARES' | 'VIGAS' | 'LAJES' | 'FUNDACOES' | 'EIXOS' | 'TELHADO' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
@@ -350,6 +351,7 @@ export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
   LAJES: 'Lajes',
   FUNDACOES: 'Fundações (blocos, estacas, baldrame)',
   EIXOS: 'Eixos (documentam a estrutura)',
+  TELHADO: 'Telhado',
   CONFERENCIA: 'Conferência (programa e legislação)',
 };
 const ORDEM_DAS_ETAPAS = Object.keys(ROTULO_DA_ETAPA_DA_CASA) as EtapaDaCasaId[];
@@ -403,6 +405,8 @@ export interface HipotesesDaCasa {
   /** As sementes que o E6.2 tenta; fica a de menos problemas graves. */
   sementes: number[];
   estrutura: HipotesesDaEstruturaDaCasa;
+  /** F5: a cobertura (`lancar: false` = sem telhado). */
+  telhado: HipotesesDoTelhado;
 }
 
 export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
@@ -411,6 +415,7 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   gerador: {},
   sementes: [1, 2, 3, 4, 5, 6, 7, 8],
   estrutura: HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO,
+  telhado: HIPOTESES_DO_TELHADO_PADRAO,
 };
 
 export interface PlanoDaCasa {
@@ -437,6 +442,8 @@ export interface PlanoDaCasa {
     regrasVioladas: number;
     /** F4: peças de estrutura lançadas. */
     estrutura: { eixos: number; pilares: number; vigas: number; lajes: number; blocos: number; estacas: number; baldrames: number };
+    /** F5: a cobertura lançada; `null` sem telhado. */
+    telhado: ResumoDoTelhado | null;
   };
 }
 
@@ -524,6 +531,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     ...HIPOTESES_DA_CASA_PADRAO,
     ...hipParcial,
     estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, ...(hipParcial.estrutura ?? {}) },
+    telhado: { ...HIPOTESES_DO_TELHADO_PADRAO, ...(hipParcial.telhado ?? {}) },
   };
   const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
   // A implantação usa a mesma parede externa e a mesma malha do gerador.
@@ -555,7 +563,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   const pedidos = programa.itens.filter((i) => i.uso !== 'CIRCULACAO').reduce((s, i) => s + i.quantidade, 0);
   const vazio = (motivo: string, implantacao: ImplantacaoDaCasa | null = null): PlanoDaCasa => {
     for (const id of ORDEM_DAS_ETAPAS) if (id !== 'IMPLANTACAO' && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
-    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA } } };
+    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null } };
   };
 
   const impedimento = motivoParaNaoGerar(original, entrada.levelId);
@@ -712,6 +720,34 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     },
   );
 
+  // ── TELHADO (F5) ──────────────────────────────────────────────────────────
+  // Duas águas (ou uma) por extrusão sobre o retângulo da arquitetura, no quadro da frente. A parede termina
+  // no pé-direito; com laje lançada, o telhado começa em cima dela.
+  let telhado: ResumoDoTelhado | null = null;
+  if (!hip.telhado.lancar) etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
+  else {
+    const peDireito = hipGerador.peDireitoMm ?? HIPOTESES_DO_GERADOR_PADRAO.peDireitoMm;
+    const comLaje = estrutura.lajes > 0 ? hip.estrutura.lajes.espessuraMm : 0;
+    const espessuraExterna = hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm;
+    const t = comandosDoTelhado(entrada.levelId, r.retangulo, q, peDireito + comLaje, espessuraExterna / 2, hip.telhado);
+    if (!t.ok) {
+      etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_RODOU', 0, t.motivo);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Telhado: ${t.motivo}` });
+    } else {
+      try {
+        const n = aplicar(t.comandos);
+        telhado = t.resumo;
+        const tr = t.resumo;
+        etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'LANCOU', n, `${tr.aguas === 2 ? 'duas águas' : 'uma água'} a ${String(hip.telhado.inclinacaoPct).replace('.', ',')} %, cumeeira ${tr.direcao} (${String(tr.cumeeiraM).replace('.', ',')} m), beiral de ${String(hip.telhado.beiralMm / 1000).replace('.', ',')} m — ${String(tr.projecaoM2).replace('.', ',')} m² de projeção`);
+        if (r.anexos.length) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Telhado: ${r.anexos.length} anexo(s) da planta ficaram sem cobertura — cubra à mão (Telhado › Extrusão).` });
+      } catch (e) {
+        const motivo = e instanceof Error ? e.message : String(e);
+        etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_RODOU', 0, motivo);
+        pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Telhado: ${motivo}` });
+      }
+    }
+  }
+
   // ── CONFERENCIA ───────────────────────────────────────────────────────────
   const conferencia = conferirPrograma(m, programa);
   for (const it of conferencia.itens) {
@@ -746,7 +782,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     semente: r.semente,
     escolha,
     decisoes,
-    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura },
+    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura, telhado },
   };
 }
 

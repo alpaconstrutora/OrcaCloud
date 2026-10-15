@@ -568,6 +568,14 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                             <tbody className="divide-y divide-gray-200">
                                 {sortedRows.map(item => {
                                     const clickable = units.some(u => u.id === item.property_id);
+                                    // Unidade já vendida não aceita nova proposta — trava o botão
+                                    // E o checkbox da cesta (senão dava pra incluí-la via cesta
+                                    // mesmo com o botão da linha desabilitado).
+                                    const isSold = item.property_status === 'SOLD';
+                                    const canPropose = clickable && !isSold;
+                                    const proposalTitle = isSold
+                                        ? 'Unidade já vendida'
+                                        : (clickable ? undefined : 'Unidade não disponível no estoque atual');
                                     return (
                                         <tr
                                             key={item.id}
@@ -584,12 +592,12 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                                     <input
                                                         type="checkbox"
                                                         checked={!!selectedUnitIds?.includes(item.property_id)}
-                                                        disabled={!clickable}
+                                                        disabled={!canPropose}
                                                         onChange={() => {
                                                             const u = units.find(x => x.id === item.property_id);
                                                             if (u) onToggleUnit(u);
                                                         }}
-                                                        title="Incluir esta unidade na proposta"
+                                                        title={isSold ? proposalTitle : 'Incluir esta unidade na proposta'}
                                                         className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-400 cursor-pointer disabled:cursor-not-allowed"
                                                     />
                                                 </td>
@@ -598,8 +606,8 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                                 <div className="flex items-center justify-end">
                                                     <button
                                                         onClick={() => handleMakeProposal(item.property_id)}
-                                                        disabled={!clickable}
-                                                        title={clickable ? undefined : 'Unidade não disponível no estoque atual'}
+                                                        disabled={!canPropose}
+                                                        title={proposalTitle}
                                                         className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap disabled:text-gray-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                                                     >
                                                         Fazer Proposta

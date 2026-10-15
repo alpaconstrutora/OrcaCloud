@@ -6,18 +6,23 @@
 // Visível apenas quando `caracteristicas` (carregado e filtrado pelo tipo do
 // empreendimento em EmpreendimentoDetail.tsx) não está vazio.
 import React from 'react';
-import { Plus, Search, RefreshCw, AlertCircle, MoveHorizontal, ListChecks, Settings2 } from 'lucide-react';
+import { Plus, Search, RefreshCw, AlertCircle, MoveHorizontal, ListChecks, Settings2, Home } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useToast } from '../../hooks/useToast';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import SecaoTitulo from '../ui/SecaoTitulo';
+import UnitFormFields, {
+    FLOOR_TIPO_LABEL, UnitFormValues, emptyUnitFormValues, unitFormFromRecord, unitFormToPayload,
+} from './UnitFormFields';
 import { colorClasses } from '../../services/obraTypeService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoUnitCharacteristicService } from '../../services/empreendimentoUnitCharacteristicService';
 import {
     Empreendimento, EmpreendimentoTower, EmpreendimentoUnitInsert,
-    FloorTipo, UnitPositionType, UnitSunOrientation, UnitViewType,
+    FloorTipo,
     EmpreendimentoUnitCharacteristic, UnitCharacteristicsRow,
 } from '../../types';
 import {
@@ -25,10 +30,6 @@ import {
     UNIT_STATUS_LABEL, UNIT_STATUS_STYLE,
 } from '../../utils/empreendimentoComercial';
 
-const FLOOR_TIPO_LABEL: Record<FloorTipo, string> = {
-    SUBSOLO: 'Subsolo', TERREO: 'Térreo', MEZANINO: 'Mezanino', TIPO: 'Tipo',
-    COBERTURA: 'Cobertura', TECNICO: 'Técnico', GARAGEM: 'Garagem', OUTRO: 'Outro',
-};
 const FLOOR_TIPO_STYLE: Record<FloorTipo, string> = {
     SUBSOLO: 'bg-slate-500/10 text-slate-600', TERREO: 'bg-lime-500/10 text-lime-700',
     MEZANINO: 'bg-teal-500/10 text-teal-700', TIPO: 'bg-blue-500/10 text-blue-600',
@@ -97,14 +98,10 @@ const STATIC_DEFAULT_WIDTHS: Record<string, number> = {
 };
 const CHAR_DEFAULT_WIDTH = 170;
 
-function emptyUnitForm() {
-    return {
-        tower_id: '', name: '', floor: '', floor_tipo: '' as FloorTipo | '', typology: '',
-        private_area: '', common_area: '', bedrooms: '', bathrooms: '', suites: '', parking_spaces: '',
-        position_type: '' as UnitPositionType | '', view_type: '' as UnitViewType | '', sun_orientation: '' as UnitSunOrientation | '',
-    };
-}
-type UnitForm = ReturnType<typeof emptyUnitForm>;
+// Os 13 campos e a conversão form ⇄ registro moram em UnitFormFields (fonte única,
+// compartilhada com Torres & Unidades). Aqui só se acrescenta a torre.
+type UnitForm = UnitFormValues & { tower_id: string };
+const emptyUnitForm = (): UnitForm => ({ ...emptyUnitFormValues(), tower_id: '' });
 
 function CaracteristicaField({ characteristic, values, onChange }: {
     characteristic: EmpreendimentoUnitCharacteristic;
@@ -298,9 +295,18 @@ export const CaracteristicasAdicionaisTab: React.FC<Props> = ({ empreendimento, 
     const [unitForm, setUnitForm] = React.useState<UnitForm>(emptyUnitForm());
     const [caracteristicaValues, setCaracteristicaValues] = React.useState<Record<string, string[]>>({});
     const [saving, setSaving] = React.useState(false);
+    const [erroNome, setErroNome] = React.useState<string | undefined>();
+    const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
+    const patchUnitForm = (patch: Partial<UnitForm>) => {
+        setUnitForm(p => ({ ...p, ...patch }));
+        if ('name' in patch) setErroNome(undefined);
+        markDirty();
+    };
 
     const openCreate = () => {
         setEditingRow(null);
+        setErroNome(undefined);
+        markSaved();
         setUnitForm({ ...emptyUnitForm(), tower_id: towers[0]?.id ?? '' });
         setCaracteristicaValues({});
         setSheetOpen(true);
@@ -308,43 +314,24 @@ export const CaracteristicasAdicionaisTab: React.FC<Props> = ({ empreendimento, 
 
     const openEdit = (row: UnitCharacteristicsRow) => {
         setEditingRow(row);
-        setUnitForm({
-            tower_id: row.tower_id, name: row.name, floor: row.floor?.toString() ?? '',
-            floor_tipo: row.floor_tipo ?? '', typology: row.typology ?? '',
-            private_area: row.private_area?.toString() ?? '', common_area: row.common_area?.toString() ?? '',
-            bedrooms: row.bedrooms?.toString() ?? '', bathrooms: row.bathrooms?.toString() ?? '', suites: row.suites?.toString() ?? '',
-            parking_spaces: row.parking_spaces?.toString() ?? '',
-            position_type: row.position_type ?? '', view_type: row.view_type ?? '', sun_orientation: row.sun_orientation ?? '',
-        });
+        setErroNome(undefined);
+        markSaved();
+        setUnitForm({ ...unitFormFromRecord(row), tower_id: row.tower_id });
         setCaracteristicaValues({ ...row._caracteristicas });
         setSheetOpen(true);
     };
 
-    const closeSheet = () => { setSheetOpen(false); setEditingRow(null); };
+    // Fecha sem perguntar: o Sheet já confirmou (ESC/fundo com `dirty`) ou não havia o que perder.
+    const closeSheet = () => { setSheetOpen(false); setEditingRow(null); setErroNome(undefined); markSaved(); };
+    // X do cabeçalho e "Cancelar": pergunta antes se há alteração não salva (§25).
+    const pedirFechar = async () => { if (await confirmDiscard()) closeSheet(); };
 
     const handleSaveUnit = async () => {
-        if (!unitForm.name.trim()) { showToast('Informe o nome/identificação da unidade.', 'error'); return; }
+        if (!unitForm.name.trim()) { setErroNome('Informe a identificação da unidade.'); return; }
         if (!unitForm.tower_id) { showToast('Selecione a torre.', 'error'); return; }
         setSaving(true);
         try {
-            const priv = unitForm.private_area ? Number(unitForm.private_area) : undefined;
-            const common = unitForm.common_area ? Number(unitForm.common_area) : undefined;
-            const payload = {
-                tower_id: unitForm.tower_id,
-                name: unitForm.name.trim(),
-                floor: unitForm.floor ? Number(unitForm.floor) : undefined,
-                floor_tipo: (unitForm.floor_tipo || null) as FloorTipo | null,
-                typology: unitForm.typology || undefined,
-                private_area: priv, common_area: common,
-                total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
-                bedrooms: unitForm.bedrooms ? Number(unitForm.bedrooms) : undefined,
-                bathrooms: unitForm.bathrooms ? Number(unitForm.bathrooms) : undefined,
-                suites: unitForm.suites ? Number(unitForm.suites) : undefined,
-                parking_spaces: unitForm.parking_spaces ? Number(unitForm.parking_spaces) : undefined,
-                position_type: (unitForm.position_type || null) as UnitPositionType | null,
-                view_type: (unitForm.view_type || null) as UnitViewType | null,
-                sun_orientation: (unitForm.sun_orientation || null) as UnitSunOrientation | null,
-            };
+            const payload = { tower_id: unitForm.tower_id, ...unitFormToPayload(unitForm) };
             const saved = editingRow
                 ? await empreendimentoService.updateUnit(editingRow.id, payload)
                 : await empreendimentoService.createUnit({
@@ -591,104 +578,36 @@ export const CaracteristicasAdicionaisTab: React.FC<Props> = ({ empreendimento, 
                 )}
             </div>
 
-            <Sheet open={sheetOpen} onClose={closeSheet} size="lg">
-                <SheetHeader onClose={closeSheet}>
+            <Sheet open={sheetOpen} onClose={closeSheet} size="lg" dirty={dirty}>
+                <SheetHeader onClose={pedirFechar}>
                     <SheetTitle>{editingRow ? 'Editar Unidade' : 'Nova Unidade'}</SheetTitle>
                     <SheetDescription>{empreendimento.name}</SheetDescription>
                 </SheetHeader>
-                <SheetPanel className="p-6 space-y-6">
-                    <div>
-                        <h3 className="font-black text-slate-800 text-sm mb-3">Dados da Unidade</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            <div className="col-span-2 md:col-span-3">
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Torre *</label>
-                                <select
-                                    className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                    value={unitForm.tower_id}
-                                    onChange={e => setUnitForm(p => ({ ...p, tower_id: e.target.value }))}
-                                >
-                                    <option value="">Selecione a torre...</option>
-                                    {towers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="col-span-2 md:col-span-3">
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Unidade (ex: 101) *</label>
-                                <input className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.name} onChange={e => setUnitForm(p => ({ ...p, name: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Pavimento</label>
-                                <input type="number" className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.floor} onChange={e => setUnitForm(p => ({ ...p, floor: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Tipo de Pavimento</label>
-                                <select className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.floor_tipo} onChange={e => setUnitForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}>
-                                    <option value="">—</option>
-                                    {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Tipologia</label>
-                                <input className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.typology} onChange={e => setUnitForm(p => ({ ...p, typology: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Área Priv. (m²)</label>
-                                <input type="number" step="0.01" className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.private_area} onChange={e => setUnitForm(p => ({ ...p, private_area: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Área Comum (m²)</label>
-                                <input type="number" step="0.01" className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.common_area} onChange={e => setUnitForm(p => ({ ...p, common_area: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Dormitórios</label>
-                                <input type="number" className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.bedrooms} onChange={e => setUnitForm(p => ({ ...p, bedrooms: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Banheiros</label>
-                                <input type="number" className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.bathrooms} onChange={e => setUnitForm(p => ({ ...p, bathrooms: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Suítes</label>
-                                <input type="number" className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.suites} onChange={e => setUnitForm(p => ({ ...p, suites: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Vagas</label>
-                                <input type="number" className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.parking_spaces} onChange={e => setUnitForm(p => ({ ...p, parking_spaces: e.target.value }))} />
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Posição</label>
-                                <select className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.position_type} onChange={e => setUnitForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))}>
-                                    <option value="">—</option>
-                                    {(Object.keys(POSITION_LABEL) as UnitPositionType[]).map(t => <option key={t} value={t}>{POSITION_LABEL[t]}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Vista</label>
-                                <select className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.view_type} onChange={e => setUnitForm(p => ({ ...p, view_type: e.target.value as UnitViewType | '' }))}>
-                                    <option value="">—</option>
-                                    {(Object.keys(VIEW_LABEL) as UnitViewType[]).map(t => <option key={t} value={t}>{VIEW_LABEL[t]}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-semibold text-slate-500 block mb-1">Orientação</label>
-                                <select className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={unitForm.sun_orientation} onChange={e => setUnitForm(p => ({ ...p, sun_orientation: e.target.value as UnitSunOrientation | '' }))}>
-                                    <option value="">—</option>
-                                    {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
-                                </select>
-                            </div>
-                        </div>
+                <SheetPanel className="p-6 space-y-8">
+                    <div className="space-y-4">
+                        <SecaoTitulo icon={Home} titulo="Dados da unidade" />
+                        <UnitFormFields
+                            idPrefix="caract-unidade"
+                            value={unitForm}
+                            onChange={patchUnitForm}
+                            towers={towers}
+                            towerId={unitForm.tower_id}
+                            onTowerChange={id => patchUnitForm({ tower_id: id })}
+                            erroNome={erroNome}
+                        />
                     </div>
 
                     {caracteristicas.length > 0 && (
-                        <div>
-                            <h3 className="font-black text-slate-800 text-sm mb-3">Características Adicionais</h3>
+                        <div className="space-y-4">
+                            <SecaoTitulo icon={ListChecks} titulo="Características adicionais" />
                             <div className="space-y-4">
                                 {caracteristicas.map(c => (
-                                    <div key={c.id}>
-                                        <label className="text-xs font-semibold text-slate-500 block mb-1.5">{c.name}</label>
+                                    <div key={c.id} className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 block">{c.name}</label>
                                         <CaracteristicaField
                                             characteristic={c}
                                             values={caracteristicaValues[c.id] ?? []}
-                                            onChange={values => setCaracteristicaValues(prev => ({ ...prev, [c.id]: values }))}
+                                            onChange={values => { setCaracteristicaValues(prev => ({ ...prev, [c.id]: values })); markDirty(); }}
                                         />
                                     </div>
                                 ))}
@@ -697,7 +616,7 @@ export const CaracteristicasAdicionaisTab: React.FC<Props> = ({ empreendimento, 
                     )}
                 </SheetPanel>
                 <SheetFooter>
-                    <button onClick={closeSheet} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95">
+                    <button onClick={pedirFechar} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95">
                         Cancelar
                     </button>
                     <button
@@ -705,7 +624,7 @@ export const CaracteristicasAdicionaisTab: React.FC<Props> = ({ empreendimento, 
                         disabled={saving}
                         className="h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                     >
-                        {saving ? 'Salvando...' : 'Salvar'}
+                        {saving ? 'Salvando…' : 'Salvar unidade'}
                     </button>
                 </SheetFooter>
             </Sheet>

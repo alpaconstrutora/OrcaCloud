@@ -2999,6 +2999,12 @@ moldura.
 > `SupplierModal.tsx`, `ClientModal.tsx`, `ProjectModal.tsx` etc. ainda usam
 > `space-y-2`/`gap-6`/`space-y-10` — ao tocar em qualquer formulário, aplicar
 > esta régua.
+> ✅ **Componente do título de seção: `components/ui/SecaoTitulo.tsx`** (ícone +
+> `h3` + `resumo` opcional + `acoes` à direita, já com `border-b pb-3`). Criado
+> em 2026-10-14 para Comercial › Empreendimentos › Torres & Unidades, onde cada
+> bloco tinha um título próprio derivado (`h4 text-xs`, rótulo de 10px) e o
+> usuário achou a tela "sem separação clara". Seção nova usa o componente, não o
+> markup copiado; `ContractModal.tsx` ainda tem o markup inline.
 
 ---
 

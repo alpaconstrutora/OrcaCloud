@@ -3,13 +3,26 @@
 // Torres & Unidades do Empreendimento. Usa o primitivo compartilhado <TorreCard> — a mesma
 // casca visual da Viabilidade e (futuramente) do Planta IA. O miolo aqui é FloorEditor +
 // UnitEditor (unidade individual real); nos outros módulos o miolo difere, a casca não.
+//
+// Estrutura (desde 14/10/2026 — "confuso com campos sem uma ordem, sem separação clara"):
+//   Terreno   — título §30 + 5 campos rotulados + "Salvar terreno"
+//   Torres    — título §30 + "Nova torre" (painel lateral) + cards
+//     └ card  — Pavimentos (FloorEditor) · Unidades (UnitEditor)
+// Plano e decisões: docs/planos/2026-10-14-torres-unidades-reorganizacao.md.
 import React from 'react';
-import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, AlertCircle, MapPin } from 'lucide-react';
+import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, MapPin } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import ActionIconButton from '../ui/ActionIconButton';
+import Button from '../ui/Button';
+import SecaoTitulo from '../ui/SecaoTitulo';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
+import { useToast } from '../../hooks/useToast';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { useStore } from '../../store/useStore';
-import { Empreendimento, EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit } from '../../types';
+import {
+  Empreendimento, EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit, EmpreendimentoFloor,
+} from '../../types';
 import UnitEditor from './UnitEditor';
 import FloorEditor from './FloorEditor';
 import { TorreCard, TorreEmpty, TorreTotais, TorreTotalMetric } from '../torres/TorreCard';
@@ -18,7 +31,11 @@ import { isObra } from '../../utils/projectClassification';
 interface Props {
   empreendimentoId: string;
   organizationId: string;
-  /** Dados atuais do empreendimento — só usados para pré-preencher a barra de Terreno. */
+  /**
+   * Dados atuais do empreendimento. Sem ele a seção Terreno NÃO aparece: as telas de
+   * estudo (Viabilidade, Planta IA) montam este editor sem o empreendimento, e antes a
+   * seção aparecia em branco lá, como se o terreno não estivesse cadastrado.
+   */
   empreendimento?: Empreendimento;
   /** Chamado depois de salvar o Terreno, para o pai recarregar o empreendimento (Visão Geral usa os mesmos campos). */
   onTerrenoSaved?: () => void;
@@ -32,6 +49,16 @@ interface Props {
 
 const TERRENO_TIPO_OPTIONS = ['Regular (Retangular)', 'Irregular (Geometria complexa)'];
 
+const terrenoDe = (e?: Empreendimento) => ({
+  terreno_tipo: e?.terreno_tipo ?? '',
+  terreno_area: e?.terreno_area?.toString() ?? '',
+  terreno_frente: e?.terreno_frente?.toString() ?? '',
+  terreno_fundos: e?.terreno_fundos?.toString() ?? '',
+  terreno_profundidade: e?.terreno_profundidade?.toString() ?? '',
+});
+type TerrenoForm = ReturnType<typeof terrenoDe>;
+const emptyTorreForm = () => ({ name: '', floors_count: '', units_per_floor: '' });
+
 export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId, empreendimento, onTerrenoSaved, somenteLeitura }) => {
   const travado = !!somenteLeitura;
   const { projects } = useStore();
@@ -41,37 +68,54 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
   const [saving, setSaving] = React.useState(false);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [editingId, setEditingId] = React.useState<string | null>(null);
-  const [editForm, setEditForm] = React.useState({ name: '', floors_count: '', units_per_floor: '' });
-  const [form, setForm] = React.useState({ name: '', floors_count: '', units_per_floor: '' });
+  const [editForm, setEditForm] = React.useState(emptyTorreForm());
   const [unitsByTower, setUnitsByTower] = React.useState<Record<string, EmpreendimentoUnit[]>>({});
-  const [unitKeyByTower, setUnitKeyByTower] = React.useState<Record<string, number>>({});
-  const [notice, setNotice] = React.useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  const [terrenoForm, setTerrenoForm] = React.useState({
-    terreno_tipo: empreendimento?.terreno_tipo ?? '',
-    terreno_area: empreendimento?.terreno_area?.toString() ?? '',
-    terreno_frente: empreendimento?.terreno_frente?.toString() ?? '',
-    terreno_fundos: empreendimento?.terreno_fundos?.toString() ?? '',
-    terreno_profundidade: empreendimento?.terreno_profundidade?.toString() ?? '',
-  });
-  const [savingTerreno, setSavingTerreno] = React.useState(false);
+  const [floorsByTower, setFloorsByTower] = React.useState<Record<string, EmpreendimentoFloor[]>>({});
+  const { showToast } = useToast();
+  const notify = (msg: string, type: 'success' | 'error' = 'success') => showToast(msg, type);
 
-  const notify = (msg: string, type: 'success' | 'error' = 'success') => {
-    setNotice({ msg, type });
-    setTimeout(() => setNotice(null), 4000);
+  // ── Nova torre (painel lateral) ─────────────────────────────────────────────
+  const [novaTorreAberta, setNovaTorreAberta] = React.useState(false);
+  const [form, setForm] = React.useState(emptyTorreForm());
+  const [erroNomeTorre, setErroNomeTorre] = React.useState<string | undefined>();
+  const novaTorre = useUnsavedChanges();
+  const abrirNovaTorre = () => { setForm(emptyTorreForm()); setErroNomeTorre(undefined); novaTorre.markSaved(); setNovaTorreAberta(true); };
+  const fecharNovaTorre = () => { setNovaTorreAberta(false); setErroNomeTorre(undefined); novaTorre.markSaved(); };
+  const pedirFecharNovaTorre = async () => { if (await novaTorre.confirmDiscard()) fecharNovaTorre(); };
+  const patchTorre = (patch: Partial<ReturnType<typeof emptyTorreForm>>) => {
+    setForm(p => ({ ...p, ...patch }));
+    if ('name' in patch) setErroNomeTorre(undefined);
+    novaTorre.markDirty();
   };
+
+  // ── Terreno ─────────────────────────────────────────────────────────────────
+  // O formulário acompanha o empreendimento: depois de salvar, o pai recarrega o
+  // registro e os campos se realinham (antes ficavam no valor da 1ª montagem).
+  const terrenoSalvo = React.useMemo(() => terrenoDe(empreendimento), [
+    empreendimento?.terreno_tipo, empreendimento?.terreno_area, empreendimento?.terreno_frente,
+    empreendimento?.terreno_fundos, empreendimento?.terreno_profundidade,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [terrenoForm, setTerrenoForm] = React.useState<TerrenoForm>(terrenoSalvo);
+  React.useEffect(() => { setTerrenoForm(terrenoSalvo); }, [terrenoSalvo]);
+  const terrenoDirty = (Object.keys(terrenoSalvo) as (keyof TerrenoForm)[]).some(k => terrenoForm[k] !== terrenoSalvo[k]);
+  const [savingTerreno, setSavingTerreno] = React.useState(false);
 
   const handleSaveTerreno = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingTerreno(true);
+    // Campo apagado vira NULL (limpa a coluna). Com `undefined` o update ignorava o
+    // campo e o valor antigo voltava depois de salvar. Os tipos do registro não
+    // declaram `null`, mas as colunas são opcionais no banco.
+    const n = (s: string) => (s.trim() === '' ? null : Number(s)) as number | undefined;
     try {
       await empreendimentoService.update(empreendimentoId, {
-        terreno_tipo: terrenoForm.terreno_tipo || undefined,
-        terreno_area: terrenoForm.terreno_area ? Number(terrenoForm.terreno_area) : undefined,
-        terreno_frente: terrenoForm.terreno_frente ? Number(terrenoForm.terreno_frente) : undefined,
-        terreno_fundos: terrenoForm.terreno_fundos ? Number(terrenoForm.terreno_fundos) : undefined,
-        terreno_profundidade: terrenoForm.terreno_profundidade ? Number(terrenoForm.terreno_profundidade) : undefined,
+        terreno_tipo: (terrenoForm.terreno_tipo || null) as string | undefined,
+        terreno_area: n(terrenoForm.terreno_area),
+        terreno_frente: n(terrenoForm.terreno_frente),
+        terreno_fundos: n(terrenoForm.terreno_fundos),
+        terreno_profundidade: n(terrenoForm.terreno_profundidade),
       });
-      notify('Terreno salvo com sucesso.');
+      notify('Terreno salvo.');
       onTerrenoSaved?.();
     } catch (err: any) {
       notify(`Erro ao salvar terreno: ${err.message}`, 'error');
@@ -84,9 +128,8 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
     setUnitsByTower(prev => ({ ...prev, [towerId]: units }));
   }, []);
 
-  const handleUnitsRegenerated = React.useCallback((towerId: string) => {
-    setUnitsByTower(prev => ({ ...prev, [towerId]: [] }));
-    setUnitKeyByTower(prev => ({ ...prev, [towerId]: (prev[towerId] ?? 0) + 1 }));
+  const handleFloorsChange = React.useCallback((towerId: string, floors: EmpreendimentoFloor[]) => {
+    setFloorsByTower(prev => ({ ...prev, [towerId]: floors }));
   }, []);
 
   // organization_id (coluna nativa) tem precedência sobre settings.organizationId — ver
@@ -112,7 +155,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) { notify('Informe o nome da torre/bloco.', 'error'); return; }
+    if (!form.name.trim()) { setErroNomeTorre('Informe o nome da torre ou bloco.'); return; }
     setSaving(true);
     try {
       const payload: EmpreendimentoTowerInsert = {
@@ -122,9 +165,12 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
         units_per_floor: form.units_per_floor ? Number(form.units_per_floor) : undefined,
         sort_order: towers.length,
       };
-      await empreendimentoService.createTower(payload);
-      setForm({ name: '', floors_count: '', units_per_floor: '' });
-      await load();
+      const created = await empreendimentoService.createTower(payload);
+      setTowers(prev => [...prev, created]);   // §22 — sem recarregar a lista
+      // Próximo passo natural é cadastrar os pavimentos: a torre nova já abre.
+      setExpandedId(created.id);
+      notify(`Torre cadastrada: ${created.name}.`);
+      fecharNovaTorre();
     } catch (err: any) {
       notify(`Erro ao adicionar torre: ${err.message}`, 'error');
     } finally {
@@ -177,81 +223,72 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
     }
   };
 
-  const inputCls = 'h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all';
+  const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all';
+  const rotuloCls = 'text-xs font-semibold text-slate-500';
   const editInputCls = 'h-9 px-2.5 border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:border-blue-500 bg-white';
   const fmt = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
-  return (
-    <div className="space-y-4">
-      {/* Terreno — dado do empreendimento (não de uma torre), 1 por empreendimento.
-          Mesmo visual da barra de "Adicionar Pavimento" (FloorEditor), com os campos do
-          terreno em vez dos de andar. */}
-      <div className="space-y-2">
-        <h4 className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
-          <MapPin className="w-3.5 h-3.5" /> Terreno
-        </h4>
-        <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0">
-        <form onSubmit={handleSaveTerreno} className="bg-blue-50/40 border border-blue-100 rounded-[10px] p-3 grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 block mb-1">Tipo de Terreno</label>
-            <select className={inputCls + ' w-full'} value={terrenoForm.terreno_tipo}
-              onChange={e => setTerrenoForm(p => ({ ...p, terreno_tipo: e.target.value }))}>
-              <option value="">— Selecione —</option>
-              {TERRENO_TIPO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 block mb-1">Área Total (m²)</label>
-            <input className={inputCls + ' w-full'} type="number" step="0.01" placeholder="—" value={terrenoForm.terreno_area}
-              onChange={e => setTerrenoForm(p => ({ ...p, terreno_area: e.target.value }))} />
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 block mb-1">Testada (m) - Frente</label>
-            <input className={inputCls + ' w-full'} type="number" step="0.01" placeholder="—" value={terrenoForm.terreno_frente}
-              onChange={e => setTerrenoForm(p => ({ ...p, terreno_frente: e.target.value }))} />
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 block mb-1">Fundos (m)</label>
-            <input className={inputCls + ' w-full'} type="number" step="0.01" placeholder="—" value={terrenoForm.terreno_fundos}
-              onChange={e => setTerrenoForm(p => ({ ...p, terreno_fundos: e.target.value }))} />
-          </div>
-          <div>
-            <label className="text-[10px] font-semibold text-gray-400 block mb-1">Profundidade (m)</label>
-            <input className={inputCls + ' w-full'} type="number" step="0.01" placeholder="—" value={terrenoForm.terreno_profundidade}
-              onChange={e => setTerrenoForm(p => ({ ...p, terreno_profundidade: e.target.value }))} />
-          </div>
-          <button
-            type="submit"
-            disabled={savingTerreno}
-            className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-          >
-            {savingTerreno ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-            Adicionar Terreno
-          </button>
-        </form>
-        </fieldset>
-      </div>
+  const terrenoCampos: { key: Exclude<keyof TerrenoForm, 'terreno_tipo'>; label: string }[] = [
+    { key: 'terreno_area', label: 'Área total (m²)' },
+    { key: 'terreno_frente', label: 'Testada / frente (m)' },
+    { key: 'terreno_fundos', label: 'Fundos (m)' },
+    { key: 'terreno_profundidade', label: 'Profundidade (m)' },
+  ];
 
-      <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0">
-      <form onSubmit={handleAdd} className="grid grid-cols-2 md:grid-cols-4 gap-2.5 items-center">
-        <input className={inputCls} placeholder="Nome (ex: Torre A)" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-        <input className={inputCls} placeholder="Nº pavimentos" type="number" value={form.floors_count} onChange={e => setForm(p => ({ ...p, floors_count: e.target.value }))} />
-        <input className={inputCls} placeholder="Unid./pavimento" type="number" value={form.units_per_floor} onChange={e => setForm(p => ({ ...p, units_per_floor: e.target.value }))} />
-        <button
-          type="submit"
-          disabled={saving}
-          className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />}
-          Adicionar torre
-        </button>
-      </form>
-      </fieldset>
+  return (
+    <div className="space-y-8">
+      {/* Terreno — dado do empreendimento (não de uma torre), 1 por empreendimento.
+          Só com o empreendimento em mãos: nas telas de estudo ele não vem e a seção
+          mostraria campos vazios como se não houvesse terreno cadastrado. */}
+      {empreendimento && (
+        <section className="space-y-4">
+          <SecaoTitulo icon={MapPin} titulo="Terreno" />
+          <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0">
+            <form onSubmit={handleSaveTerreno} className="grid grid-cols-2 md:grid-cols-6 gap-x-6 gap-y-4 items-end">
+              <div className="space-y-1.5">
+                <label htmlFor="terreno-tipo" className={rotuloCls}>Tipo de terreno</label>
+                <select id="terreno-tipo" className={inputCls} value={terrenoForm.terreno_tipo}
+                  onChange={e => setTerrenoForm(p => ({ ...p, terreno_tipo: e.target.value }))}>
+                  <option value="">—</option>
+                  {TERRENO_TIPO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              {terrenoCampos.map(({ key, label }) => (
+                <div key={key} className="space-y-1.5">
+                  <label htmlFor={`terreno-${key}`} className={rotuloCls}>{label}</label>
+                  <input id={`terreno-${key}`} className={inputCls} type="number" step="0.01" min="0" value={terrenoForm[key]}
+                    onChange={e => setTerrenoForm(p => ({ ...p, [key]: e.target.value }))} />
+                </div>
+              ))}
+              <span title={!terrenoDirty && !travado ? 'Altere algum campo do terreno para salvar.' : undefined} className="col-span-2 md:col-span-1">
+                <Button type="submit" disabled={savingTerreno || !terrenoDirty} className="w-full">
+                  {savingTerreno ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-[15px] h-[15px]" />}
+                  Salvar terreno
+                </Button>
+              </span>
+            </form>
+          </fieldset>
+        </section>
+      )}
+
+      <section className="space-y-4">
+        <SecaoTitulo
+          icon={Building}
+          titulo="Torres"
+          resumo={towers.length > 0 ? `${towers.length} ${towers.length === 1 ? 'torre' : 'torres'}` : undefined}
+          acoes={
+            <span title={somenteLeitura}>
+              <Button onClick={abrirNovaTorre} disabled={travado}>
+                <Plus className="w-[15px] h-[15px]" /> Nova torre
+              </Button>
+            </span>
+          }
+        />
 
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>
       ) : towers.length === 0 ? (
-        <TorreEmpty icon={Building} text="Nenhuma torre/bloco cadastrado." />
+        <TorreEmpty icon={Building} text="Nenhuma torre ou bloco cadastrado. Comece por &quot;Nova torre&quot;." />
       ) : (
         <div className="space-y-2.5">
           {towers.map(tower => {
@@ -326,10 +363,10 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
               >
                 <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0 divide-y divide-gray-100">
                   <div className="p-4">
-                    <FloorEditor tower={tower} onUnitsRegenerated={() => handleUnitsRegenerated(tower.id)} />
+                    <FloorEditor tower={tower} onFloorsChange={handleFloorsChange} />
                   </div>
                   <div className="p-4">
-                    <UnitEditor key={unitKeyByTower[tower.id] ?? 0} tower={tower} onUnitsChange={handleUnitsChange} />
+                    <UnitEditor tower={tower} floors={floorsByTower[tower.id]} onUnitsChange={handleUnitsChange} />
                   </div>
                 </fieldset>
               </TorreCard>
@@ -359,13 +396,52 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
         );
       })()}
 
-      {notice && (
-        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
-          notice.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-        }`}>
-          <AlertCircle className="w-4 h-4 shrink-0" /> {notice.msg}
-        </div>
-      )}
+      </section>
+
+      {/* Painel: Nova torre. O conteúdo só existe aberto — o Sheet fechado mantém os
+          filhos no DOM, e campos invisíveis ainda recebem Tab e leitor de tela. */}
+      <Sheet open={novaTorreAberta} onClose={fecharNovaTorre} size="md" dirty={novaTorre.dirty}>
+        {novaTorreAberta && <>
+        <SheetHeader onClose={pedirFecharNovaTorre}>
+          <SheetTitle>Nova torre</SheetTitle>
+          {empreendimento && <SheetDescription>{empreendimento.name}</SheetDescription>}
+        </SheetHeader>
+        <form onSubmit={handleAdd} className="flex-1 flex flex-col min-h-0">
+          <SheetPanel className="p-6">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <div className="space-y-1.5 col-span-2">
+                <label htmlFor="nova-torre-nome" className={rotuloCls}>Nome *</label>
+                <input id="nova-torre-nome" className={`${inputCls} ${erroNomeTorre ? 'border-red-300' : ''}`}
+                  placeholder="ex: Torre A, Bloco 1" value={form.name}
+                  onChange={e => patchTorre({ name: e.target.value })}
+                  aria-invalid={!!erroNomeTorre} />
+                {erroNomeTorre && <p className="text-xs text-red-600">{erroNomeTorre}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="nova-torre-pav" className={rotuloCls}>Nº de pavimentos</label>
+                <input id="nova-torre-pav" className={inputCls} type="number" min="0" value={form.floors_count}
+                  onChange={e => patchTorre({ floors_count: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="nova-torre-upf" className={rotuloCls}>Unidades por pavimento</label>
+                <input id="nova-torre-upf" className={inputCls} type="number" min="0" value={form.units_per_floor}
+                  onChange={e => patchTorre({ units_per_floor: e.target.value })} />
+              </div>
+              <p className="col-span-2 text-xs text-gray-500">
+                Depois de criar, cadastre os pavimentos e as unidades dentro do card da torre.
+              </p>
+            </div>
+          </SheetPanel>
+          <SheetFooter>
+            <Button type="button" variant="ghost" onClick={pedirFecharNovaTorre}>Cancelar</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              Salvar torre
+            </Button>
+          </SheetFooter>
+        </form>
+        </>}
+      </Sheet>
     </div>
   );
 };

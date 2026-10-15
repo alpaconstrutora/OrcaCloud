@@ -1,17 +1,26 @@
 // components/empreendimento/FloorEditor.tsx
 // Cadastro de pavimentos template (Frente B). Modelo: template + materialização.
 // Cada linha = um "tipo de andar" com nome, tipo, nº inicial, repetições e un./pav.
-// O botão "Gerar Unidades" expande os templates nos andares reais via generateUnitsFromFloors.
+//
+// Gerar as unidades a partir destes pavimentos NÃO mora mais aqui: desde 14/10/2026
+// o botão "Gerar a partir dos pavimentos" fica na seção Unidades (UnitEditor), ao
+// lado de "Gerar em série" — eram dois "gerar unidades" com efeitos opostos, um em
+// cada seção, e o usuário não sabia qual era qual. Este componente só publica a
+// lista de pavimentos (`onFloorsChange`) para o UnitEditor contar e habilitar.
 import React from 'react';
-import { Plus, Loader2, Layers, Zap, Check, X, AlertCircle } from 'lucide-react';
+import { Plus, Loader2, Layers, Check, X } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import ActionIconButton from '../ui/ActionIconButton';
+import Button from '../ui/Button';
+import SecaoTitulo from '../ui/SecaoTitulo';
 import { useConfirm } from '../ui/confirm';
+import { useToast } from '../../hooks/useToast';
 import { EmpreendimentoTower, EmpreendimentoFloor, EmpreendimentoFloorInsert, FloorTipo } from '../../types';
 
 interface Props {
   tower: EmpreendimentoTower;
-  onUnitsRegenerated?: () => void;
+  /** Lista atual de pavimentos da torre — o UnitEditor usa para "Gerar a partir dos pavimentos". */
+  onFloorsChange?: (towerId: string, floors: EmpreendimentoFloor[]) => void;
 }
 
 const TIPO_OPTIONS: { value: FloorTipo; label: string }[] = [
@@ -42,20 +51,16 @@ const emptyForm = () => ({
   floor_number: '', repeat_count: '1', units_per_floor: '', prefix: '',
 });
 
-export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
+export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
   const [floors, setFloors] = React.useState<EmpreendimentoFloor[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
-  const [generating, setGenerating] = React.useState(false);
   const [form, setForm] = React.useState(emptyForm());
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editForm, setEditForm] = React.useState(emptyForm());
   const confirm = useConfirm();
-  const [notice, setNotice] = React.useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  const notify = (msg: string, type: 'success' | 'error' = 'success') => {
-    setNotice({ msg, type });
-    setTimeout(() => setNotice(null), 4500);
-  };
+  const { showToast } = useToast();
+  const notify = (msg: string, type: 'success' | 'error' = 'success') => showToast(msg, type);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -65,6 +70,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
   }, [tower.id]);
 
   React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => { if (!loading) onFloorsChange?.(tower.id, floors); }, [floors, loading, tower.id, onFloorsChange]);
 
   const totalAndares = floors.reduce((s, f) => s + f.repeat_count, 0);
   const totalUnidades = floors.reduce((s, f) =>
@@ -86,9 +92,10 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
         prefix: form.prefix || undefined,
         sort_order: floors.length,
       };
-      await empreendimentoService.createFloor(payload);
+      // §22: entra na lista local — sem recarregar tudo (sort_order = fim da lista).
+      const created = await empreendimentoService.createFloor(payload);
+      setFloors(prev => [...prev, created]);
       setForm(emptyForm());
-      await load();
     } catch (err: any) {
       notify(`Erro ao adicionar pavimento: ${err.message}`, 'error');
     } finally { setSaving(false); }
@@ -109,7 +116,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
   const handleSaveEdit = async (f: EmpreendimentoFloor) => {
     if (!editForm.name.trim()) { notify('Informe o nome do pavimento.', 'error'); return; }
     try {
-      await empreendimentoService.updateFloor(f.id, {
+      const updated = await empreendimentoService.updateFloor(f.id, {
         name: editForm.name.trim(),
         tipo: editForm.tipo,
         floor_number: Number(editForm.floor_number),
@@ -117,8 +124,8 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
         units_per_floor: editForm.units_per_floor ? Number(editForm.units_per_floor) : undefined,
         prefix: editForm.prefix || undefined,
       });
+      setFloors(prev => prev.map(x => x.id === f.id ? updated : x));
       setEditingId(null);
-      await load();
     } catch (err: any) {
       notify(`Erro ao salvar pavimento: ${err.message}`, 'error');
     }
@@ -140,26 +147,8 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
     }
   };
 
-  const handleGenerate = async () => {
-    if (!floors.length) { notify('Cadastre ao menos um pavimento antes de gerar unidades.', 'error'); return; }
-    const ok = await confirm({
-      title: `Gerar ${totalUnidades} unidades para "${tower.name}"?`,
-      message: 'Atenção: as unidades existentes serão excluídas e recriadas a partir dos pavimentos.',
-      confirmLabel: 'Gerar',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    setGenerating(true);
-    try {
-      await empreendimentoService.deleteUnitsByTower(tower.id);
-      await empreendimentoService.generateUnitsFromFloors(tower);
-      onUnitsRegenerated?.();
-    } catch (err: any) {
-      notify(`Erro ao gerar unidades: ${err.message}`, 'error');
-    } finally { setGenerating(false); }
-  };
-
-  const inputCls = 'h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-all';
+  const inputCls = 'w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white transition-all';
+  const rotuloCls = 'text-xs font-semibold text-slate-500';
   const editCls  = 'px-2 py-1 border border-blue-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400 bg-white';
 
   // Preview do nomes dos andares para a linha em edição / adição
@@ -171,71 +160,61 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
     return `${labelFloor(s, tipo)} → ${labelFloor(s + r - 1, tipo)}`;
   };
 
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between mb-1">
-        <h4 className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
-          <Layers className="w-3.5 h-3.5" /> Pavimentos
-        </h4>
-        {floors.length > 0 && (
-          <div className="flex items-center gap-3 text-xs text-gray-400 font-semibold">
-            <span>{totalAndares} andares · {totalUnidades} unidades</span>
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="flex items-center gap-1.5 h-8 px-3 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-xs transition-all active:scale-95 disabled:opacity-50"
-            >
-              {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-              Gerar unidades ({totalUnidades})
-            </button>
-          </div>
-        )}
-      </div>
+  const previaNovo = previewRange(form.floor_number, form.repeat_count, form.tipo);
 
-      {/* Formulário de adição */}
-      <form onSubmit={handleAdd} className="bg-blue-50/40 border border-blue-100 rounded-[10px] p-3 grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
-        <div className="md:col-span-2">
-          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Nome *</label>
-          <input className={inputCls + ' w-full'} placeholder="ex: Pavimento Tipo" value={form.name}
+  return (
+    <div className="space-y-4">
+      <SecaoTitulo
+        icon={Layers}
+        titulo="Pavimentos"
+        resumo={floors.length > 0 ? `${totalAndares} ${totalAndares === 1 ? 'andar' : 'andares'} · ${totalUnidades} unidades` : undefined}
+      />
+
+      {/* Formulário de adição — inline de propósito: pavimentos se digitam em sequência
+          (subsolo, térreo, tipo ×N, cobertura), é um formulário só (§30). */}
+      <form onSubmit={handleAdd} className="grid grid-cols-2 md:grid-cols-7 gap-x-6 gap-y-4 items-end">
+        <div className="space-y-1.5 col-span-2">
+          <label htmlFor={`pav-nome-${tower.id}`} className={rotuloCls}>Nome *</label>
+          <input id={`pav-nome-${tower.id}`} className={inputCls} placeholder="ex: Pavimento Tipo" value={form.name}
             onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
         </div>
-        <div>
-          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Tipo *</label>
-          <select className={inputCls + ' w-full'} value={form.tipo}
+        <div className="space-y-1.5">
+          <label htmlFor={`pav-tipo-${tower.id}`} className={rotuloCls}>Tipo *</label>
+          <select id={`pav-tipo-${tower.id}`} className={inputCls} value={form.tipo}
             onChange={e => setForm(p => ({ ...p, tipo: e.target.value as FloorTipo }))}>
             {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
-        <div>
-          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Nº inicial *</label>
-          <input className={inputCls + ' w-full'} type="number" placeholder="ex: 1" value={form.floor_number}
+        <div className="space-y-1.5">
+          <label htmlFor={`pav-num-${tower.id}`} className={rotuloCls}>Nº inicial *</label>
+          <input id={`pav-num-${tower.id}`} className={inputCls} type="number" placeholder="ex: 1" value={form.floor_number}
             onChange={e => setForm(p => ({ ...p, floor_number: e.target.value }))} />
         </div>
-        <div>
-          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Repete</label>
-          <input className={inputCls + ' w-full'} type="number" min="1" placeholder="1" value={form.repeat_count}
+        <div className="space-y-1.5">
+          <label htmlFor={`pav-rep-${tower.id}`} className={rotuloCls}>Repete</label>
+          <input id={`pav-rep-${tower.id}`} className={inputCls} type="number" min="1" placeholder="1" value={form.repeat_count}
             onChange={e => setForm(p => ({ ...p, repeat_count: e.target.value }))} />
         </div>
-        <div>
-          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Un./pav.</label>
-          <input className={inputCls + ' w-full'} type="number" min="1" placeholder="—" value={form.units_per_floor}
+        <div className="space-y-1.5">
+          <label htmlFor={`pav-upf-${tower.id}`} className={rotuloCls}>Un./pav.</label>
+          <input id={`pav-upf-${tower.id}`} className={inputCls} type="number" min="1"
+            placeholder={tower.units_per_floor ? String(tower.units_per_floor) : '—'} value={form.units_per_floor}
             onChange={e => setForm(p => ({ ...p, units_per_floor: e.target.value }))} />
         </div>
-        <button
-          type="submit"
-          disabled={saving}
-          className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          Adicionar
-        </button>
+        <Button type="submit" disabled={saving} className="col-span-2 md:col-span-1">
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />}
+          Adicionar pavimento
+        </Button>
+        {previaNovo && (
+          <p className="col-span-full -mt-2 text-xs text-gray-500">Andares: <span className="text-gray-700">{previaNovo}</span></p>
+        )}
       </form>
 
       {/* Lista de pavimentos */}
       {loading ? (
         <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-blue-600" /></div>
       ) : floors.length === 0 ? (
-        <p className="text-center text-xs text-gray-400 py-4">Nenhum pavimento cadastrado. Adicione acima para estruturar os andares da torre.</p>
+        <p className="text-center text-xs text-gray-400 py-4">Nenhum pavimento cadastrado. Cadastre acima os andares da torre (ex.: Térreo, Tipo ×10, Cobertura) — com eles, a seção Unidades gera as unidades sozinha.</p>
       ) : (
         <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
           <table className="w-full text-left text-xs">
@@ -313,9 +292,9 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
             </tbody>
             {floors.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-gray-200 bg-white font-bold text-xs text-gray-700">
+                <tr className="border-t-2 border-gray-200 bg-white font-medium text-xs text-gray-700">
                   <td className="py-2.5 px-4" colSpan={3}>
-                    <span className="text-[10px] font-semibold text-gray-400">Total</span>
+                    <span className="text-xs font-semibold text-gray-400">Total</span>
                   </td>
                   <td className="py-2.5 px-4 text-blue-600">{totalAndares} andares</td>
                   <td className="py-2.5 px-4" colSpan={3}>{totalUnidades} unidades</td>
@@ -326,13 +305,6 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
         </div>
       )}
 
-      {notice && (
-        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
-          notice.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-        }`}>
-          <AlertCircle className="w-4 h-4 shrink-0" /> {notice.msg}
-        </div>
-      )}
     </div>
   );
 };

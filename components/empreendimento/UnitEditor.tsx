@@ -1,15 +1,34 @@
 // components/empreendimento/UnitEditor.tsx
+//
+// Seção "Unidades" de uma torre (Torres & Unidades). Desde 14/10/2026 a seção
+// abre com UM título e as três formas de criar unidade lado a lado, cada uma com
+// nome que diz o que faz:
+//   • "Gerar a partir dos pavimentos" — SUBSTITUI as unidades pelas que os
+//     pavimentos cadastrados acima descrevem (era o botão do FloorEditor);
+//   • "Gerar em série" — ACRESCENTA N pav × M un/pav, sem olhar os pavimentos
+//     (era o acordeão tracejado "Gerar unidades automaticamente");
+//   • "Nova unidade" — uma unidade, em painel lateral com os campos rotulados
+//     (era uma grade de 13 inputs sem rótulo acima da tabela).
+// O pedido que originou: docs/planos/2026-10-14-torres-unidades-reorganizacao.md.
 import React from 'react';
 import {
-  Plus, Loader2, Layers, X, Check, Zap,
-  ChevronDown, ChevronUp, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, AlertCircle,
+  Plus, Loader2, Layers, X, Check, Zap, Home, ListPlus, Hash, Tag,
+  ChevronDown, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
+import Button from '../ui/Button';
+import SecaoTitulo from '../ui/SecaoTitulo';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { empreendimentoService } from '../../services/empreendimentoService';
+import { useToast } from '../../hooks/useToast';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import {
-  EmpreendimentoTower, EmpreendimentoUnit, FloorTipo, EmpreendimentoUnitInsert,
+  EmpreendimentoTower, EmpreendimentoUnit, EmpreendimentoFloor, FloorTipo, EmpreendimentoUnitInsert,
   UnitPositionType, UnitSunOrientation, UnitViewType, RentalUnitStatus,
 } from '../../types';
+import UnitFormFields, {
+  FLOOR_TIPO_LABEL, UnitFormValues, emptyUnitFormValues, unitFormToPayload,
+} from './UnitFormFields';
 import {
   POSITION_LABEL, VIEW_LABEL, SUN_LABEL, POSITION_STYLE, VIEW_STYLE, SUN_STYLE,
   RENTAL_STATUS_LABEL,
@@ -19,10 +38,6 @@ import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 // ── Constantes de exibição ───────────────────────────────────────────────────
 
-const FLOOR_TIPO_LABEL: Record<FloorTipo, string> = {
-  SUBSOLO: 'Subsolo', TERREO: 'Térreo', MEZANINO: 'Mezanino', TIPO: 'Tipo',
-  COBERTURA: 'Cobertura', TECNICO: 'Técnico', GARAGEM: 'Garagem', OUTRO: 'Outro',
-};
 const FLOOR_TIPO_STYLE: Record<FloorTipo, string> = {
   SUBSOLO: 'bg-slate-500/10 text-slate-600', TERREO: 'bg-lime-500/10 text-lime-700',
   MEZANINO: 'bg-teal-500/10 text-teal-700', TIPO: 'bg-blue-500/10 text-blue-600',
@@ -34,13 +49,8 @@ const FLOOR_TIPO_STYLE: Record<FloorTipo, string> = {
 const textColor = (style?: string) => style?.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
 type SortCol = 'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'bedrooms' | 'bathrooms' | 'suites' | 'parking_spaces' | 'position_type' | 'view_type' | 'sun_orientation';
 
-const emptyForm = () => ({
-  name: '', floor: '', typology: '', private_area: '', common_area: '',
-  bedrooms: '', bathrooms: '', suites: '',
-  parking_spaces: '', floor_tipo: '' as FloorTipo | '',
-  position_type: '' as UnitPositionType | '', view_type: '' as UnitViewType | '',
-  sun_orientation: '' as UnitSunOrientation | '',
-});
+// Estado da edição inline na tabela — mesmas chaves do formulário do painel.
+const emptyForm = emptyUnitFormValues;
 const emptyBulkForm = () => ({
   floor: '', floor_tipo: '' as FloorTipo | '',
   typology: '', private_area: '', common_area: '', bedrooms: '', bathrooms: '', suites: '', parking_spaces: '',
@@ -52,34 +62,49 @@ const emptyBulkForm = () => ({
 
 const fmtArea = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
+const emptyGenForm = (tower: EmpreendimentoTower) => ({
+  floors_count: tower.floors_count?.toString() ?? '',
+  units_per_floor: tower.units_per_floor?.toString() ?? '',
+  start_floor: '1', prefix: '', typology: '',
+  private_area: '', common_area: '', parking_spaces: '', price: '', rental_price: '',
+});
+
+/** Quantas unidades os pavimentos descrevem — mesma conta do gerador (generateUnitsFromFloors). */
+const unidadesDosPavimentos = (floors: EmpreendimentoFloor[], tower: EmpreendimentoTower) =>
+  floors.reduce((s, f) => s + f.repeat_count * (f.units_per_floor ?? tower.units_per_floor ?? 1), 0);
+
 // ── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
   tower: EmpreendimentoTower;
+  /** Pavimentos cadastrados na torre (FloorEditor) — base de "Gerar a partir dos pavimentos". */
+  floors?: EmpreendimentoFloor[];
   onUnitsChange?: (towerId: string, units: EmpreendimentoUnit[]) => void;
 }
 
 // ── Componente principal ─────────────────────────────────────────────────────
 
-export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
+export const UnitEditor: React.FC<Props> = ({ tower, floors = [], onUnitsChange }) => {
   const confirm = useConfirm();
   const [units, setUnits] = React.useState<EmpreendimentoUnit[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
-  const [form, setForm] = React.useState(emptyForm());
+
+  // Painel aberto — um só por vez (UI_PATTERNS §4: nada de drawer sobre drawer).
+  const [painel, setPainel] = React.useState<'nova' | 'serie' | null>(null);
+
+  // "Nova unidade"
+  const [form, setForm] = React.useState<UnitFormValues>(emptyUnitFormValues());
+  const [erroNome, setErroNome] = React.useState<string | undefined>();
+  const nova = useUnsavedChanges();
 
   // Inline edit
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editForm, setEditForm] = React.useState({ ...emptyForm(), floor_id: '' });
 
-  // Geração automática
-  const [genOpen, setGenOpen] = React.useState(false);
-  const [genForm, setGenForm] = React.useState({
-    floors_count: tower.floors_count?.toString() ?? '',
-    units_per_floor: tower.units_per_floor?.toString() ?? '',
-    start_floor: '1', prefix: '', typology: '',
-    private_area: '', common_area: '', parking_spaces: '', price: '', rental_price: '',
-  });
+  // "Gerar em série" e "Gerar a partir dos pavimentos"
+  const [genForm, setGenForm] = React.useState(() => emptyGenForm(tower));
+  const serie = useUnsavedChanges();
   const [generating, setGenerating] = React.useState(false);
 
   // Ordenação
@@ -94,12 +119,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const [bulkForm, setBulkForm] = React.useState(emptyBulkForm());
   const [bulkSaving, setBulkSaving] = React.useState(false);
 
-  // Toast (§13)
-  const [notice, setNotice] = React.useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  const notify = (msg: string, type: 'success' | 'error' = 'success') => {
-    setNotice({ msg, type });
-    setTimeout(() => setNotice(null), 4500);
-  };
+  // Toast (§13) — quem desenha é o ToastProvider da raiz.
+  const { showToast } = useToast();
+  const notify = (msg: string, type: 'success' | 'error' = 'success') => showToast(msg, type);
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -185,34 +207,32 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
 
   // ── Handlers CRUD ──────────────────────────────────────────────────────────
 
-  const buildPayload = (f: typeof form): Omit<EmpreendimentoUnitInsert, 'tower_id' | 'name'> => {
-    const priv = f.private_area ? Number(f.private_area) : undefined;
-    const common = f.common_area ? Number(f.common_area) : undefined;
-    return {
-      floor: f.floor ? Number(f.floor) : undefined,
-      floor_tipo: (f.floor_tipo || undefined) as FloorTipo | undefined,
-      typology: f.typology || undefined,
-      private_area: priv, common_area: common,
-      total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
-      bedrooms: f.bedrooms ? Number(f.bedrooms) : undefined,
-      bathrooms: f.bathrooms ? Number(f.bathrooms) : undefined,
-      suites: f.suites ? Number(f.suites) : undefined,
-      parking_spaces: f.parking_spaces ? Number(f.parking_spaces) : undefined,
-      position_type: (f.position_type || undefined) as UnitPositionType | undefined,
-      view_type: (f.view_type || undefined) as UnitViewType | undefined,
-      sun_orientation: (f.sun_orientation || undefined) as UnitSunOrientation | undefined,
-      status: 'DISPONIVEL', rental_status: 'DISPONIVEL', is_vendavel: true,
-    };
+  const abrirNova = () => {
+    setForm(emptyUnitFormValues());
+    setErroNome(undefined);
+    nova.markSaved();
+    setPainel('nova');
+  };
+  const fecharNova = () => { setPainel(null); setErroNome(undefined); nova.markSaved(); };
+  const pedirFecharNova = async () => { if (await nova.confirmDiscard()) fecharNova(); };
+  const patchForm = (patch: Partial<UnitFormValues>) => {
+    setForm(p => ({ ...p, ...patch }));
+    if ('name' in patch) setErroNome(undefined);
+    nova.markDirty();
   };
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) { notify('Informe o nome/identificação da unidade.', 'error'); return; }
+  const handleCreate = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!form.name.trim()) { setErroNome('Informe a identificação da unidade.'); return; }
     setSaving(true);
     try {
-      await empreendimentoService.createUnit({ tower_id: tower.id, name: form.name.trim(), ...buildPayload(form) });
-      setForm(emptyForm());
-      await load();
+      const saved = await empreendimentoService.createUnit({
+        tower_id: tower.id, ...unitFormToPayload(form),
+        status: 'DISPONIVEL', rental_status: 'DISPONIVEL', is_vendavel: true, sort_order: units.length,
+      });
+      setUnits(prev => [...prev, saved]);   // §22 — sem recarregar a lista
+      notify(`Unidade ${saved.name} criada.`);
+      fecharNova();
     } catch (err: any) { notify(`Erro ao adicionar: ${err.message}`, 'error'); }
     finally { setSaving(false); }
   };
@@ -258,7 +278,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
 
   const handleDuplicate = async (u: EmpreendimentoUnit) => {
     try {
-      await empreendimentoService.createUnit({
+      const created = await empreendimentoService.createUnit({
         tower_id: tower.id, name: `${u.name} (cópia)`,
         floor: u.floor ?? undefined, floor_tipo: u.floor_tipo ?? undefined,
         typology: u.typology ?? undefined, private_area: u.private_area ?? undefined,
@@ -268,7 +288,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         bathrooms: u.bathrooms ?? undefined, suites: u.suites ?? undefined, parking_spaces: u.parking_spaces ?? undefined,
         status: 'DISPONIVEL', rental_status: 'DISPONIVEL', is_vendavel: true, sort_order: units.length,
       });
-      await load();
+      setUnits(prev => [...prev, created]);
     } catch (err: any) { notify(`Erro ao duplicar: ${err.message}`, 'error'); }
   };
 
@@ -331,22 +351,60 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
 
   // ── Geração automática ──────────────────────────────────────────────────────
 
+  const totalDosPavimentos = unidadesDosPavimentos(floors, tower);
+
+  const handleGenerateFromFloors = async () => {
+    if (floors.length === 0) return;
+    const atuais = units.length;
+    const ok = await confirm({
+      title: `Gerar ${totalDosPavimentos} unidades a partir dos pavimentos?`,
+      message: atuais > 0
+        ? `As ${atuais} unidades atuais de "${tower.name}" serão excluídas e substituídas pelas que os pavimentos descrevem.`
+        : `As unidades de "${tower.name}" serão criadas conforme os pavimentos cadastrados.`,
+      confirmLabel: atuais > 0 ? 'Substituir e gerar' : 'Gerar unidades',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setGenerating(true);
+    try {
+      await empreendimentoService.deleteUnitsByTower(tower.id);
+      const criadas = await empreendimentoService.generateUnitsFromFloors(tower);
+      setUnits(criadas);
+      setSelected(new Set());
+      notify(`${criadas.length} unidades geradas a partir dos pavimentos.`);
+    } catch (err: any) {
+      notify(`Erro ao gerar unidades: ${err.message}`, 'error');
+    } finally { setGenerating(false); }
+  };
+
+  const abrirSerie = () => {
+    setGenForm(emptyGenForm(tower));
+    serie.markSaved();
+    setPainel('serie');
+  };
+  const fecharSerie = () => { setPainel(null); serie.markSaved(); };
+  const pedirFecharSerie = async () => { if (await serie.confirmDiscard()) fecharSerie(); };
+  const patchGen = (patch: Partial<ReturnType<typeof emptyGenForm>>) => {
+    setGenForm(p => ({ ...p, ...patch }));
+    serie.markDirty();
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const floors = Number(genForm.floors_count), perFloor = Number(genForm.units_per_floor);
+    const nPav = Number(genForm.floors_count), perFloor = Number(genForm.units_per_floor);
     const startFloor = Number(genForm.start_floor);
-    if (!floors || !perFloor) { notify('Informe número de pavimentos e unidades por pavimento.', 'error'); return; }
-    if (floors > 100 || perFloor > 50) { notify('Máx 100 pav / 50 un/pav.', 'error'); return; }
+    if (!nPav || !perFloor) { notify('Informe número de pavimentos e unidades por pavimento.', 'error'); return; }
+    if (nPav > 100 || perFloor > 50) { notify('Máx 100 pav / 50 un/pav.', 'error'); return; }
     const ok = await confirm({
       title: 'Gerar unidades?',
-      message: `${floors * perFloor} unidades serão criadas para "${tower.name}".`,
+      message: `${nPav * perFloor} unidades serão acrescentadas a "${tower.name}". As existentes continuam.`,
       variant: 'warning', confirmLabel: 'Gerar',
     });
     if (!ok) return;
     setGenerating(true);
     try {
       const toCreate: EmpreendimentoUnitInsert[] = [];
-      for (let f = 0; f < floors; f++) {
+      for (let f = 0; f < nPav; f++) {
         const floorNum = startFloor + f;
         for (let u = 1; u <= perFloor; u++) {
           const priv = genForm.private_area ? Number(genForm.private_area) : undefined;
@@ -365,9 +423,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
           });
         }
       }
-      await empreendimentoService.bulkUpsertUnits(toCreate);
-      setGenOpen(false);
-      await load();
+      const criadas = await empreendimentoService.bulkUpsertUnits(toCreate);
+      setUnits(prev => [...prev, ...criadas]);
+      notify(`${criadas.length} unidades acrescentadas.`);
+      fecharSerie();
     } catch (err: any) { notify(`Erro ao gerar: ${err.message}`, 'error'); }
     finally { setGenerating(false); }
   };
@@ -381,7 +440,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
 
   const genTotal = (Number(genForm.floors_count) || 0) * (Number(genForm.units_per_floor) || 0);
 
-  const inputCls = 'px-3 py-2 border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:border-blue-400';
+  const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+  const rotuloCls = 'text-xs font-semibold text-slate-500';
+  const semPavimentos = floors.length === 0;
+  const motivoSemPavimentos = 'Cadastre os pavimentos desta torre na seção acima para gerar as unidades a partir deles.';
   const editCls = 'px-2 py-1 border border-blue-200 rounded-[6px] text-sm font-normal outline-none focus:border-blue-400 bg-white w-full';
 
   // Totais gerais
@@ -392,108 +454,26 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
 
   return (
     <div className="space-y-4">
-      {/* Add form */}
-      <form onSubmit={handleAdd} className="bg-gray-50/60 border border-gray-100 rounded-[10px] p-4 grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
-        <input className={inputCls} placeholder="Unidade (ex: 101)" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-        <input className={inputCls} placeholder="Pav." type="number" value={form.floor} onChange={e => setForm(p => ({ ...p, floor: e.target.value }))} />
-        <select className={inputCls} value={form.floor_tipo} onChange={e => setForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}>
-          <option value="">Tipo Pav.</option>
-          {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
-        </select>
-        <input className={inputCls} placeholder="Tipologia" value={form.typology} onChange={e => setForm(p => ({ ...p, typology: e.target.value }))} />
-        <input className={inputCls} placeholder="Priv. m²" type="number" step="0.01" value={form.private_area} onChange={e => setForm(p => ({ ...p, private_area: e.target.value }))} />
-        <input className={inputCls} placeholder="Comum m²" type="number" step="0.01" value={form.common_area} onChange={e => setForm(p => ({ ...p, common_area: e.target.value }))} />
-        <input className={inputCls} placeholder="Dormitórios" type="number" value={form.bedrooms} onChange={e => setForm(p => ({ ...p, bedrooms: e.target.value }))} />
-        <input className={inputCls} placeholder="Banheiros" type="number" value={form.bathrooms} onChange={e => setForm(p => ({ ...p, bathrooms: e.target.value }))} />
-        <input className={inputCls} placeholder="Suítes" type="number" value={form.suites} onChange={e => setForm(p => ({ ...p, suites: e.target.value }))} />
-        <input className={inputCls} placeholder="Vagas" type="number" value={form.parking_spaces} onChange={e => setForm(p => ({ ...p, parking_spaces: e.target.value }))} />
-        <select className={inputCls} value={form.position_type} onChange={e => setForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))}>
-          <option value="">Posição</option>
-          {(Object.keys(POSITION_LABEL) as UnitPositionType[]).map(t => <option key={t} value={t}>{POSITION_LABEL[t]}</option>)}
-        </select>
-        <select className={inputCls} value={form.view_type} onChange={e => setForm(p => ({ ...p, view_type: e.target.value as UnitViewType | '' }))}>
-          <option value="">Vista</option>
-          {(Object.keys(VIEW_LABEL) as UnitViewType[]).map(t => <option key={t} value={t}>{VIEW_LABEL[t]}</option>)}
-        </select>
-        <select className={inputCls} value={form.sun_orientation} onChange={e => setForm(p => ({ ...p, sun_orientation: e.target.value as UnitSunOrientation | '' }))}>
-          <option value="">Orientação</option>
-          {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
-        </select>
-        <button
-          type="submit"
-          disabled={saving}
-          className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />} Adicionar
-        </button>
-      </form>
-
-      {/* Geração automática */}
-      <div className="border border-dashed border-blue-200 rounded-[10px] overflow-hidden">
-        <button onClick={() => setGenOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-3 text-blue-600 hover:bg-blue-50/50 transition-colors">
-          <span className="flex items-center gap-2 text-sm font-semibold">
-            <Zap className="w-4 h-4" /> Gerar unidades automaticamente
+      <SecaoTitulo
+        icon={Home}
+        titulo="Unidades"
+        resumo={units.length > 0 ? `${units.length} unid.` : undefined}
+        acoes={<>
+          {/* span: botão desabilitado não mostra `title` em todo navegador — o motivo fica no invólucro */}
+          <span title={semPavimentos ? motivoSemPavimentos : 'Substitui as unidades desta torre pelas que os pavimentos descrevem'}>
+            <Button variant="secondary" onClick={handleGenerateFromFloors} disabled={semPavimentos || generating}>
+              {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-[15px] h-[15px]" />}
+              Gerar a partir dos pavimentos{!semPavimentos ? ` (${totalDosPavimentos})` : ''}
+            </Button>
           </span>
-          {genOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-        {genOpen && (
-          <form onSubmit={handleGenerate} className="px-4 pb-4 space-y-4 border-t border-blue-100 pt-4 bg-blue-50/20">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { label: 'Nº Pavimentos *', key: 'floors_count', type: 'number' },
-                { label: 'Unid./Pavimento *', key: 'units_per_floor', type: 'number' },
-                { label: 'Pav. Inicial', key: 'start_floor', type: 'number' },
-                { label: 'Prefixo (opcional)', key: 'prefix', type: 'text', placeholder: 'ex: A' },
-              ].map(({ label, key, type, placeholder }) => (
-                <div key={key}>
-                  <label className="text-xs font-semibold text-slate-500 block mb-1">{label}</label>
-                  <input type={type} min={type === 'number' ? '0' : undefined} className={inputCls + ' w-full'} placeholder={placeholder}
-                    value={(genForm as any)[key]} onChange={e => setGenForm(p => ({ ...p, [key]: e.target.value }))} />
-                </div>
-              ))}
-            </div>
-            {genTotal > 0 && (
-              <p className="text-xs text-gray-500 font-medium">
-                Exemplo: <b className="text-gray-700">{genForm.prefix ? `${genForm.prefix}-` : ''}{genForm.start_floor || 1}01</b>
-                {' '}a{' '}
-                <b className="text-gray-700">{genForm.prefix ? `${genForm.prefix}-` : ''}{(Number(genForm.start_floor) || 1) + (Number(genForm.floors_count) || 1) - 1}{String(Number(genForm.units_per_floor)).padStart(2, '0')}</b>
-                {' '}— <b className="text-blue-600">{genTotal} unidades</b>
-              </p>
-            )}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {[
-                { label: 'Tipologia', key: 'typology', type: 'text', placeholder: 'ex: 2 Quartos' },
-                { label: 'Área Priv. (m²)', key: 'private_area', type: 'number' },
-                { label: 'Área Comum (m²)', key: 'common_area', type: 'number' },
-                { label: 'Vagas', key: 'parking_spaces', type: 'number' },
-                { label: 'Preço Padrão (R$)', key: 'price', type: 'number' },
-                { label: 'Aluguel Padrão (R$)', key: 'rental_price', type: 'number' },
-              ].map(({ label, key, type, placeholder }) => (
-                <div key={key}>
-                  <label className="text-xs font-semibold text-slate-500 block mb-1">{label}</label>
-                  {key === 'price' || key === 'rental_price' ? (
-                    <MoneyCentsInput className={inputCls + ' w-full'}
-                      value={(genForm as any)[key]} onChange={v => setGenForm(p => ({ ...p, [key]: v }))} />
-                  ) : (
-                    <input type={type} step={type === 'number' ? '0.01' : undefined} className={inputCls + ' w-full'} placeholder={placeholder}
-                      value={(genForm as any)[key]} onChange={e => setGenForm(p => ({ ...p, [key]: e.target.value }))} />
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={generating || genTotal === 0}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-              >
-                {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-[15px] h-[15px]" />}
-                Gerar {genTotal > 0 ? `${genTotal} unidades` : 'unidades'}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
+          <Button variant="secondary" onClick={abrirSerie} title="Acrescenta unidades numeradas em série (ex.: 101 a 1504), sem usar os pavimentos">
+            <ListPlus className="w-[15px] h-[15px]" /> Gerar em série
+          </Button>
+          <Button onClick={abrirNova}>
+            <Plus className="w-[15px] h-[15px]" /> Nova unidade
+          </Button>
+        </>}
+      />
 
       {/* Tabela */}
       {loading ? (
@@ -502,6 +482,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         <div className="text-center py-10 text-gray-400">
           <Layers className="w-8 h-8 mx-auto mb-2 text-gray-300" />
           <p className="text-xs font-semibold">Nenhuma unidade cadastrada nesta torre.</p>
+          <p className="text-xs mt-1">Use os botões acima: gere a partir dos pavimentos, gere em série ou cadastre uma a uma.</p>
         </div>
       ) : (
         <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
@@ -763,13 +744,106 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         </div>
       )}
 
-      {notice && (
-        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
-          notice.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-        }`}>
-          <AlertCircle className="w-4 h-4 shrink-0" /> {notice.msg}
-        </div>
-      )}
+      {/* Painéis: o conteúdo só existe aberto — o Sheet fechado mantém os filhos no
+          DOM, e campos invisíveis ainda recebem Tab e leitor de tela. */}
+      {/* Painel: Nova unidade */}
+      <Sheet open={painel === 'nova'} onClose={fecharNova} size="lg" dirty={nova.dirty}>
+        {painel === 'nova' && <>
+        <SheetHeader onClose={pedirFecharNova}>
+          <SheetTitle>Nova unidade</SheetTitle>
+          <SheetDescription>{tower.name}</SheetDescription>
+        </SheetHeader>
+        <form onSubmit={handleCreate} className="flex-1 flex flex-col min-h-0">
+          <SheetPanel className="p-6">
+            <UnitFormFields idPrefix={`nova-unidade-${tower.id}`} value={form} onChange={patchForm} erroNome={erroNome} />
+          </SheetPanel>
+          <SheetFooter>
+            <Button type="button" variant="ghost" onClick={pedirFecharNova}>Cancelar</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              Salvar unidade
+            </Button>
+          </SheetFooter>
+        </form>
+        </>}
+      </Sheet>
+
+      {/* Painel: Gerar em série */}
+      <Sheet open={painel === 'serie'} onClose={fecharSerie} size="lg" dirty={serie.dirty}>
+        {painel === 'serie' && <>
+        <SheetHeader onClose={pedirFecharSerie}>
+          <SheetTitle>Gerar unidades em série</SheetTitle>
+          <SheetDescription>
+            {tower.name} — acrescenta unidades numeradas por pavimento. As unidades existentes continuam.
+          </SheetDescription>
+        </SheetHeader>
+        <form onSubmit={handleGenerate} className="flex-1 flex flex-col min-h-0">
+          <SheetPanel className="p-6 space-y-8">
+            <div className="space-y-4">
+              <SecaoTitulo icon={Hash} titulo="Numeração" />
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                {([
+                  { label: 'Nº de pavimentos *', key: 'floors_count', type: 'number' },
+                  { label: 'Unidades por pavimento *', key: 'units_per_floor', type: 'number' },
+                  { label: 'Pavimento inicial', key: 'start_floor', type: 'number' },
+                  { label: 'Prefixo (opcional)', key: 'prefix', type: 'text', placeholder: 'ex: A' },
+                ] as const).map(({ label, key, type, ...rest }) => (
+                  <div key={key} className="space-y-1.5">
+                    <label htmlFor={`serie-${key}-${tower.id}`} className={rotuloCls}>{label}</label>
+                    <input id={`serie-${key}-${tower.id}`} type={type} min={type === 'number' ? '0' : undefined} className={inputCls}
+                      placeholder={'placeholder' in rest ? rest.placeholder : undefined}
+                      value={genForm[key]} onChange={e => patchGen({ [key]: e.target.value })} />
+                  </div>
+                ))}
+              </div>
+              {genTotal > 0 && (
+                <p className="text-xs text-gray-500">
+                  De <span className="font-semibold text-gray-700">{genForm.prefix ? `${genForm.prefix}-` : ''}{genForm.start_floor || 1}01</span>
+                  {' '}a{' '}
+                  <span className="font-semibold text-gray-700">{genForm.prefix ? `${genForm.prefix}-` : ''}{(Number(genForm.start_floor) || 1) + (Number(genForm.floors_count) || 1) - 1}{String(Number(genForm.units_per_floor)).padStart(2, '0')}</span>
+                  {' '}— <span className="font-semibold text-blue-600">{genTotal} unidades</span>
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <SecaoTitulo icon={Tag} titulo="Padrão das unidades" resumo="aplicado a todas; ajuste depois na tabela" />
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                {([
+                  { label: 'Tipologia', key: 'typology', type: 'text', placeholder: 'ex: 2 quartos' },
+                  { label: 'Área privativa (m²)', key: 'private_area', type: 'number' },
+                  { label: 'Área comum (m²)', key: 'common_area', type: 'number' },
+                  { label: 'Vagas', key: 'parking_spaces', type: 'number' },
+                  { label: 'Preço de venda (R$)', key: 'price', type: 'money' },
+                  { label: 'Aluguel-alvo (R$)', key: 'rental_price', type: 'money' },
+                ] as const).map(({ label, key, type, ...rest }) => (
+                  <div key={key} className="space-y-1.5">
+                    <label htmlFor={`serie-${key}-${tower.id}`} className={rotuloCls}>{label}</label>
+                    {type === 'money' ? (
+                      <MoneyCentsInput id={`serie-${key}-${tower.id}`} className={inputCls}
+                        value={genForm[key]} onChange={v => patchGen({ [key]: v })} />
+                    ) : (
+                      <input id={`serie-${key}-${tower.id}`} type={type} step={type === 'number' ? '0.01' : undefined} className={inputCls}
+                        placeholder={'placeholder' in rest ? rest.placeholder : undefined}
+                        value={genForm[key]} onChange={e => patchGen({ [key]: e.target.value })} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </SheetPanel>
+          <SheetFooter>
+            <Button type="button" variant="ghost" onClick={pedirFecharSerie}>Cancelar</Button>
+            <span title={genTotal === 0 ? 'Informe o nº de pavimentos e de unidades por pavimento.' : undefined}>
+              <Button type="submit" disabled={generating || genTotal === 0}>
+                {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-[15px] h-[15px]" />}
+                Gerar {genTotal > 0 ? `${genTotal} unidades` : 'unidades'}
+              </Button>
+            </span>
+          </SheetFooter>
+        </form>
+        </>}
+      </Sheet>
     </div>
   );
 };

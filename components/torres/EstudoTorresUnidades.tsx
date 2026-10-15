@@ -8,6 +8,10 @@
 //
 // O vínculo é reverso: o empreendimento referencia o estudo (empreendimentos.imovib_study_id /
 // planta_ai_study_id), então aqui procuramos o empreendimento que aponta para este estudo.
+//
+// O Terreno NÃO aparece aqui: é cadastro do empreendimento (aba Torres & Unidades do
+// módulo Empreendimentos), e o TowerEditor só mostra a seção quando recebe `empreendimento`.
+// Antes de 14/10/2026 ela aparecia em branco nestas telas, como se não houvesse terreno.
 import React from 'react';
 import { Link2Off, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';

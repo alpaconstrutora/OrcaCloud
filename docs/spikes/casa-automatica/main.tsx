@@ -38,6 +38,9 @@ declare global {
         regrasVioladas: number;
         conferido: boolean;
         pendencias: string[];
+        estrutura: { eixos: number; pilares: number; vigas: number; lajes: number; blocos: number; estacas: number; baldrames: number };
+        pilaresForaDeParede: number;
+        ambientesNoPavimento: number;
       } | null;
     };
   }
@@ -78,6 +81,18 @@ const plano = planejarCasa(lote, {
   latitudeGraus: -19.9,
 });
 const model = plano.resultado;
+
+/** F4: pilar cujo centro não está sobre parede nenhuma (meia espessura + 10 mm). */
+function pilaresForaDeParede(m: BlueprintModel): number {
+  const ws = m.walls.filter((w) => w.levelId === levelId);
+  const dseg = (a: Point, b: Point, q: Point) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(q.x - (a.x + t * dx), q.y - (a.y + t * dy));
+  };
+  return m.structures.filter((x) => x.kind === 'PILAR' && !ws.some((w) => dseg(w.a, w.b, x.pontos[0]) <= w.thicknessMm / 2 + 10)).length;
+}
 const loteM2 = (FRENTE_MM * FUNDO_MM) / 1e6;
 window.__estado = {
   graus,
@@ -96,6 +111,9 @@ window.__estado = {
     regrasVioladas: plano.resumo.regrasVioladas,
     conferido: conferirPlanoDaCasa(lote, plano).ok,
     pendencias: plano.pendencias.map((p) => `${p.grupo}: ${p.texto}`),
+    estrutura: plano.resumo.estrutura,
+    pilaresForaDeParede: pilaresForaDeParede(model),
+    ambientesNoPavimento: model.spaces.filter((s) => s.levelId === levelId).length,
   },
 };
 document.getElementById('dump')!.textContent = [

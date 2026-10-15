@@ -127,7 +127,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F2 — implantação pela lei + regras com zona no gerador (ver "Registro da F2" abaixo)
 - [x] F3 — orquestrador mínimo (arquitetura num lote) (ver "Registro da F3" abaixo)
 - [x] F3b — gerador respeita a largura mínima livre de cada ambiente (decisão de 15/10; ver "Registro da F3b")
-- [ ] F4 — estrutura
+- [x] F4 — estrutura (ver "Registro da F4")
 - [ ] F5 — telhado
 - [ ] F6 — peças-âncora + rede pública
 - [ ] F7 — mobiliário + louças com pontos
@@ -336,4 +336,50 @@ Provas:
 - `BlueprintEditor.test.tsx` isolado: 254/254 em 187,8 s, contra 187,6 s com as regras da F2 (mesmo
   tempo). Na suíte cheia, esse arquivo fica "still running" quando o relatório é escrito (206
   pendentes). Isolado passa inteiro, e a queda de worker aconteceu também com o código da F2.
+
+## Registro da F4 (15/10/2026)
+
+O que entrou em `utils/blueprintCasaAutomatica.ts`:
+
+- Etapas PILARES → VIGAS → LAJES → FUNDACOES → EIXOS, entre ARQUITETURA e CONFERENCIA. Cada uma
+  chama o lançamento automático que a gaveta Estrutural já usa (`planejarPilares`, `planejarVigas`,
+  `planejarLajes`, `planejarFundacoes`, `propostaDeEixos`) sobre a cópia com a anterior aplicada.
+  Tudo vai no mesmo lote, com um Ctrl+Z.
+- `HipotesesDaEstruturaDaCasa` (`lancar` + as hipóteses de cada gaveta, padrões de lá) em
+  `HipotesesDaCasa.estrutura`. `lancar: false` deixa as cinco etapas NAO_EXIGIDA.
+- `ROTULO_DA_ETAPA_DA_CASA` é a ordem e o rótulo de cada etapa, uma fonte para a tela e o
+  relatório. `resumo.estrutura` traz as contagens.
+- Recusa, exceção ou "fora do plano" vira nota na etapa e pendência; nada aborta.
+
+**Decisão medida: os EIXOS vêm depois dos pilares, não antes.** `planejarPilares` põe pilar em todo
+cruzamento de eixos, "com ou sem parede ali" (a malha do calculista manda). Com os eixos
+automáticos, um por linha de parede, lançados antes, a sonda de 15/10 (casa de 157 m²) deu:
+- **ordem antiga:** 52 pilares (49 em cruzamento de eixo), **2 dentro de ambiente, longe de
+  parede**, e 26 recusados por colidir;
+- **ordem nova:** 32 pilares, todos sobre parede, sem conflito.
+
+Os eixos passam a documentar a estrutura lançada. No lote girado eles não rodam: as paredes são
+oblíquas ao desenho, e a etapa diz isso (NADA_A_FAZER com a nota).
+
+Medido no lote 12 × 30 (reto e a 30°): 32 pilares, 15 vigas, 12 lajes (uma por ambiente), 32
+blocos, 32 estacas, 15 baldrames, e 14 eixos no lote reto. São ~230 comandos num lote só, e a trava
+aprova (ids e hash).
+
+Achado de método: a primeira sonda dos "pilares fora de parede" lia `model.structurals`, e o campo
+é `structures`. A lista vazia deu "0 fora" por construção. Refeita com o campo certo antes de
+qualquer afirmação.
+
+Observação estética (não bloqueia): paredes paralelas próximas dão eixos próximos, e as bolhas de
+C, D, E e F se sobrepõem no print. Fica para o acabamento da prancha.
+
+Provas:
+- `__tests__/blueprintCasaAutomatica.test.ts`: 20 testes. Lote reto e girado com todo pilar sobre
+  parede, bloco e estaca por pilar, laje por ambiente e nenhuma pendência de estrutura; eixos
+  depois; eixos que não rodam no girado com o motivo; estrutura desligada.
+- Harness: o portão confere a estrutura, e aprova a 0° e a 30°.
+- 19 arquivos dependentes, 178 testes; typecheck limpo.
+- Suíte cheia: 0 falhas. Os 213 pendentes são do `BlueprintEditor.test.tsx`, que não termina sob
+  carga. Isolado, em 7 rodadas: 2× 254/254, 4 quedas de worker e 1× "1 failed" que não se repetiu.
+  Nenhum arquivo do app importa `blueprintCasaAutomatica`, então a F4 não alcança esse teste: é a
+  instabilidade conhecida.
 

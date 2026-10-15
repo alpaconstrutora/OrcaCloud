@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { conferirPlanoDaCasa, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
 
 type Papel = 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA';
@@ -46,13 +46,18 @@ describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
   const plano = planejarCasa(m, entrada(m));
   const L = m.levels[0].id;
 
-  it('três etapas: implantação calculada, arquitetura lançada, conferência calculada', () => {
+  it('as etapas na ordem: implantação, arquitetura, estrutura (pilares → vigas → lajes → fundações → eixos), conferência', () => {
     expect(plano.etapas.map((e) => [e.id, e.situacao])).toEqual([
       ['IMPLANTACAO', 'CALCULOU'],
       ['ARQUITETURA', 'LANCOU'],
+      ['PILARES', 'LANCOU'],
+      ['VIGAS', 'LANCOU'],
+      ['LAJES', 'LANCOU'],
+      ['FUNDACOES', 'LANCOU'],
+      ['EIXOS', 'LANCOU'],
       ['CONFERENCIA', 'CALCULOU'],
     ]);
-    expect(plano.comandos.map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
+    expect(plano.comandos.slice(0, 3).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
     expect(plano.semente).not.toBeNull();
     expect(plano.escolha).toMatch(/semente \d+ de 8/);
   });
@@ -109,7 +114,7 @@ describe('planejarCasa — o que falta vira motivo, nunca exceção', () => {
     expect(p.comandos).toEqual([]);
     expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
     expect(p.etapas[0].nota).toMatch(/FRENTE/);
-    expect(p.etapas.map((e) => e.situacao)).toEqual(['NAO_RODOU', 'NAO_RODOU', 'NAO_RODOU']);
+    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(8).fill('NAO_RODOU'));
   });
 
   it('pavimento inexistente', () => {
@@ -187,3 +192,53 @@ describe('planejarCasa — o quadro da frente', () => {
     expect(p.resumo.ambientesAtendidos).toBe(p.resumo.ambientesPedidos);
   });
 });
+
+describe('planejarCasa — F4: a estrutura no mesmo lote', () => {
+  const dseg = (a: Point, b: Point, q: Point) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(q.x - (a.x + t * dx), q.y - (a.y + t * dy));
+  };
+  const pecas = (m: BlueprintModel, kind: string) => m.structures.filter((s) => s.kind === kind);
+
+  it.each([0, 30])('lote a %i°: todo pilar sobre parede; um bloco e uma estaca por pilar; laje por ambiente; baldrame', (graus) => {
+    const m = lote(graus);
+    const L = m.levels[0].id;
+    const p = planejarCasa(m, entrada(m));
+    const ws = p.resultado.walls.filter((w) => w.levelId === L);
+    const pilares = pecas(p.resultado, 'PILAR');
+    expect(pilares.length).toBeGreaterThanOrEqual(4);
+    for (const x of pilares) expect(ws.some((w) => dseg(w.a, w.b, x.pontos[0]) <= w.thicknessMm / 2 + 10)).toBe(true);
+    expect(pecas(p.resultado, 'BLOCO_COROAMENTO').length).toBe(pilares.length);
+    expect(pecas(p.resultado, 'ESTACA').length).toBe(pilares.length); // 1 estaca por bloco (padrão)
+    expect(pecas(p.resultado, 'LAJE').length).toBe(p.resultado.spaces.filter((s) => s.levelId === L).length);
+    expect(pecas(p.resultado, 'VIGA').length).toBeGreaterThan(0);
+    expect(pecas(p.resultado, 'VIGA_FUNDACAO').length).toBeGreaterThan(0);
+    expect(p.resumo.estrutura.pilares).toBe(pilares.length);
+    expect(p.pendencias.filter((x) => /^(Pilares|Vigas|Lajes|Fundações)/.test(x.texto))).toEqual([]);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  });
+
+  it('os eixos vêm DEPOIS dos pilares: nenhum pilar em cruzamento de eixo solto (antes: 52 pilares, 2 dentro de ambiente)', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m));
+    expect(p.resumo.estrutura.eixos).toBeGreaterThan(0);
+    expect(p.resumo.estrutura.pilares).toBeLessThanOrEqual(40);
+  });
+
+  it('lote girado: os eixos não rodam e dizem por quê (paredes oblíquas ao desenho)', () => {
+    const m = lote(30);
+    const e = planejarCasa(m, entrada(m)).etapas.find((x) => x.id === 'EIXOS')!;
+    expect(e.situacao).toBe('NADA_A_FAZER');
+    expect(e.nota).toMatch(/oblíqua/);
+  });
+
+  it('estrutura desligada nas hipóteses: as cinco etapas NAO_EXIGIDA e o lote é só a arquitetura', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m), { estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, lancar: false } });
+    expect(p.etapas.filter((e) => ['PILARES', 'VIGAS', 'LAJES', 'FUNDACOES', 'EIXOS'].includes(e.id)).map((e) => e.situacao)).toEqual(Array(5).fill('NAO_EXIGIDA'));
+    expect(p.comandos.map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
+  });
+});
+

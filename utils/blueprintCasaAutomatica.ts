@@ -54,6 +54,17 @@ import {
 import { conferirPrograma } from './blueprintConferenciaDoPrograma';
 import { avaliarRegras, loteParaRegras, REGRAS_SEMENTE, type ContextoDeRegras } from './blueprintRegras';
 import { ALEM_MM } from './blueprintPavimentoTipoDaMassa';
+import { HIPOTESES_EIXOS_PADRAO, propostaDeEixos, type HipotesesDeEixos } from './blueprintEixosAutomaticos';
+import { HIPOTESES_PILARES_PADRAO, planejarPilares, type HipotesesDePilares } from './blueprintPilaresAutomaticos';
+import {
+  HIPOTESES_LAJES_PADRAO,
+  HIPOTESES_VIGAS_PADRAO,
+  planejarLajes,
+  planejarVigas,
+  type HipotesesDeLajes,
+  type HipotesesDeVigas,
+} from './blueprintVigasLajesAutomaticas';
+import { HIPOTESES_FUNDACOES_PADRAO, planejarFundacoes, type HipotesesDeFundacoes } from './blueprintFundacoesAutomaticas';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
 
 // ─── Hipóteses ──────────────────────────────────────────────────────────────
@@ -328,7 +339,40 @@ export function resumoDaImplantacao(i: ImplantacaoDaCasa): string {
 // kernel só corta parede em interseção EXATA — achado da M6b): a ponta que encontra o
 // meio de outra parede passa `ALEM_MM` além, e o offset das aberturas anda junto.
 
-export type EtapaDaCasaId = 'IMPLANTACAO' | 'ARQUITETURA' | 'CONFERENCIA';
+export type EtapaDaCasaId = 'IMPLANTACAO' | 'ARQUITETURA' | 'PILARES' | 'VIGAS' | 'LAJES' | 'FUNDACOES' | 'EIXOS' | 'CONFERENCIA';
+
+/** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
+export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
+  IMPLANTACAO: 'Implantação pela lei',
+  ARQUITETURA: 'Arquitetura (gerador E6.2)',
+  PILARES: 'Pilares',
+  VIGAS: 'Vigas',
+  LAJES: 'Lajes',
+  FUNDACOES: 'Fundações (blocos, estacas, baldrame)',
+  EIXOS: 'Eixos (documentam a estrutura)',
+  CONFERENCIA: 'Conferência (programa e legislação)',
+};
+const ORDEM_DAS_ETAPAS = Object.keys(ROTULO_DA_ETAPA_DA_CASA) as EtapaDaCasaId[];
+
+/** F4: as hipóteses da ESTRUTURA — as mesmas das gavetas de lançamento automático (padrões de lá). */
+export interface HipotesesDaEstruturaDaCasa {
+  /** `false` = a casa sai só com a arquitetura. */
+  lancar: boolean;
+  eixos: Partial<HipotesesDeEixos>;
+  pilares: HipotesesDePilares;
+  vigas: HipotesesDeVigas;
+  lajes: HipotesesDeLajes;
+  fundacoes: HipotesesDeFundacoes;
+}
+
+export const HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO: HipotesesDaEstruturaDaCasa = {
+  lancar: true,
+  eixos: HIPOTESES_EIXOS_PADRAO,
+  pilares: HIPOTESES_PILARES_PADRAO,
+  vigas: HIPOTESES_VIGAS_PADRAO,
+  lajes: HIPOTESES_LAJES_PADRAO,
+  fundacoes: HIPOTESES_FUNDACOES_PADRAO,
+};
 
 export interface EtapaDaCasa {
   id: EtapaDaCasaId;
@@ -358,6 +402,7 @@ export interface HipotesesDaCasa {
   gerador: Partial<HipotesesDoGerador>;
   /** As sementes que o E6.2 tenta; fica a de menos problemas graves. */
   sementes: number[];
+  estrutura: HipotesesDaEstruturaDaCasa;
 }
 
 export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
@@ -365,6 +410,7 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   implantacao: {},
   gerador: {},
   sementes: [1, 2, 3, 4, 5, 6, 7, 8],
+  estrutura: HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO,
 };
 
 export interface PlanoDaCasa {
@@ -389,8 +435,12 @@ export interface PlanoDaCasa {
     ambientesPedidos: number;
     ambientesAtendidos: number;
     regrasVioladas: number;
+    /** F4: peças de estrutura lançadas. */
+    estrutura: { eixos: number; pilares: number; vigas: number; lajes: number; blocos: number; estacas: number; baldrames: number };
   };
 }
+
+const ESTRUTURA_ZERADA = { eixos: 0, pilares: 0, vigas: 0, lajes: 0, blocos: 0, estacas: 0, baldrames: 0 };
 
 /** Por que o botão "Gerar casa" não roda — `null` = pode. */
 export function motivoParaNaoGerar(model: BlueprintModel, levelId: ObjectId | null): string | null {
@@ -470,7 +520,11 @@ export function comandosNoMundo(r: ResultadoDoGerador, levelId: ObjectId, q: Qua
 }
 
 export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> = {}): PlanoDaCasa {
-  const hip: HipotesesDaCasa = { ...HIPOTESES_DA_CASA_PADRAO, ...hipParcial };
+  const hip: HipotesesDaCasa = {
+    ...HIPOTESES_DA_CASA_PADRAO,
+    ...hipParcial,
+    estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, ...(hipParcial.estrutura ?? {}) },
+  };
   const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
   // A implantação usa a mesma parede externa e a mesma malha do gerador.
   const hipImplantacao: Partial<HipotesesDaImplantacao> = {
@@ -500,25 +554,25 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   if (!entrada.programa) for (const a of doCurto.avisos) pendencias.push({ grupo: 'PREMISSA', texto: `Programa: ${a}` });
   const pedidos = programa.itens.filter((i) => i.uso !== 'CIRCULACAO').reduce((s, i) => s + i.quantidade, 0);
   const vazio = (motivo: string, implantacao: ImplantacaoDaCasa | null = null): PlanoDaCasa => {
-    for (const [id, rot] of [['ARQUITETURA', 'Arquitetura (gerador E6.2)'], ['CONFERENCIA', 'Conferência']] as const) if (!etapas.some((e) => e.id === id)) etapa(id, rot, 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
-    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0 } };
+    for (const id of ORDEM_DAS_ETAPAS) if (id !== 'IMPLANTACAO' && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
+    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA } } };
   };
 
   const impedimento = motivoParaNaoGerar(original, entrada.levelId);
   if (impedimento) {
-    etapa('IMPLANTACAO', 'Implantação pela lei', 'NAO_RODOU', 0, impedimento);
+    etapa('IMPLANTACAO', ROTULO_DA_ETAPA_DA_CASA.IMPLANTACAO, 'NAO_RODOU', 0, impedimento);
     return vazio(impedimento);
   }
 
   // ── IMPLANTACAO ───────────────────────────────────────────────────────────
   const imp = implantacaoDaCasa(entrada.ctx, programa, doCurto.curto, hipImplantacao);
   if (!imp.ok) {
-    etapa('IMPLANTACAO', 'Implantação pela lei', 'NAO_RODOU', 0, imp.motivo);
+    etapa('IMPLANTACAO', ROTULO_DA_ETAPA_DA_CASA.IMPLANTACAO, 'NAO_RODOU', 0, imp.motivo);
     pendencias.push({ grupo: 'PREMISSA', texto: imp.motivo });
     return vazio('sem implantação');
   }
   const implantacao = imp.implantacao;
-  etapa('IMPLANTACAO', 'Implantação pela lei', 'CALCULOU', 0, resumoDaImplantacao(implantacao));
+  etapa('IMPLANTACAO', ROTULO_DA_ETAPA_DA_CASA.IMPLANTACAO, 'CALCULOU', 0, resumoDaImplantacao(implantacao));
   for (const a of implantacao.avisos) pendencias.push({ grupo: 'PREMISSA', texto: a });
 
   // ── ARQUITETURA ───────────────────────────────────────────────────────────
@@ -553,7 +607,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   }
   if (!resultados.length) {
     const motivo = `o gerador não fechou a planta (${falhas.join('; ')})`;
-    etapa('ARQUITETURA', 'Arquitetura (gerador E6.2)', 'NAO_RODOU', 0, motivo);
+    etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, motivo);
     pendencias.push({ grupo: 'SEM_SOLUCAO', texto: motivo });
     return vazio(motivo, implantacao);
   }
@@ -564,14 +618,99 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     n = aplicar(comandosNoMundo(r, entrada.levelId, q, implantacao.alinhadaAoDesenho));
   } catch (e) {
     const motivo = `as paredes geradas não entraram no desenho: ${e instanceof Error ? e.message : String(e)}`;
-    etapa('ARQUITETURA', 'Arquitetura (gerador E6.2)', 'NAO_RODOU', 0, motivo);
+    etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, motivo);
     pendencias.push({ grupo: 'SEM_SOLUCAO', texto: motivo });
     return vazio(motivo, implantacao);
   }
   const paredes = m.walls.filter((w) => w.levelId === entrada.levelId).length;
   const aberturas = m.openings.filter((o) => m.walls.some((w) => w.id === o.wallId && w.levelId === entrada.levelId)).length;
-  etapa('ARQUITETURA', 'Arquitetura (gerador E6.2)', 'LANCOU', n, `${paredes} paredes, ${aberturas} portas e janelas, ${r.ambientes.length} ambientes — ${escolha}`);
+  etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'LANCOU', n, `${paredes} paredes, ${aberturas} portas e janelas, ${r.ambientes.length} ambientes — ${escolha}`);
   for (const a of r.avisos) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura: ${a}` });
+
+  // ── ESTRUTURA (F4) ────────────────────────────────────────────────────────
+  // Os lançamentos automáticos da gaveta Estrutural, em cadeia: cada um lê o modelo com o anterior aplicado
+  // (vigas apoiam nos pilares, fundações descem dos pilares). Falha ou recusa = motivo na etapa e segue.
+  const estrutura = { ...ESTRUTURA_ZERADA };
+  const L = entrada.levelId;
+  const etapaEstrutural = <P extends { comandos: Command[]; motivo: string | null; avisos?: string[] }>(
+    id: Exclude<EtapaDaCasaId, 'IMPLANTACAO' | 'ARQUITETURA' | 'CONFERENCIA'>,
+    planejar: (modelo: BlueprintModel) => P,
+    contar: (plano: P) => { nota: string; foraDoPlano?: string[] },
+  ) => {
+    if (!hip.estrutura.lancar) {
+      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
+      return;
+    }
+    try {
+      const plano = planejar(m);
+      if (!plano.comandos.length) {
+        // Sem nada a lançar: o motivo (recusa) ou, não havendo, o aviso diz por quê (paredes oblíquas, nos eixos).
+        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], plano.motivo ? 'NAO_RODOU' : 'NADA_A_FAZER', 0, plano.motivo ?? (plano.avisos?.length ? plano.avisos.join('; ') : null));
+        if (plano.motivo) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${plano.motivo}` });
+        return;
+      }
+      const n = aplicar(plano.comandos);
+      const { nota, foraDoPlano = [] } = contar(plano);
+      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'LANCOU', n, nota);
+      for (const a of plano.avisos ?? []) pendencias.push({ grupo: 'VERIFICACAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${a}` });
+      for (const f of foraDoPlano) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${f}` });
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${motivo}` });
+    }
+  };
+  etapaEstrutural(
+    'PILARES',
+    (x) => planejarPilares(x, L, hip.estrutura.pilares),
+    (p) => {
+      estrutura.pilares = p.pilares.length;
+      return { nota: `${p.pilares.length} pilar(es)${p.pontasSoltas ? `; ${p.pontasSoltas} ponta(s) de parede solta(s) sem pilar` : ''}`, foraDoPlano: p.foraDoPlano.map((f) => f.motivo) };
+    },
+  );
+  etapaEstrutural(
+    'VIGAS',
+    (x) => planejarVigas(x, L, hip.estrutura.vigas),
+    (p) => {
+      estrutura.vigas = p.vigas.length;
+      return { nota: `${p.vigas.length} viga(s)`, foraDoPlano: p.foraDoPlano.map((f) => f.motivo) };
+    },
+  );
+  etapaEstrutural(
+    'LAJES',
+    (x) => planejarLajes(x, L, hip.estrutura.lajes),
+    (p) => {
+      estrutura.lajes = p.lajes.length;
+      return { nota: `${p.lajes.length} laje(s) de ${hip.estrutura.lajes.espessuraMm} mm`, foraDoPlano: p.foraDoPlano.map((f) => f.motivo) };
+    },
+  );
+  etapaEstrutural(
+    'FUNDACOES',
+    (x) => planejarFundacoes(x, L, hip.estrutura.fundacoes),
+    (p) => {
+      estrutura.blocos = p.blocos.length;
+      estrutura.estacas = p.estacas.length;
+      estrutura.baldrames = p.baldrames.length;
+      return { nota: `${p.blocos.length} bloco(s), ${p.estacas.length} estaca(s), ${p.baldrames.length} baldrame(s)` };
+    },
+  );
+
+  // Eixos POR ÚLTIMO: o `planejarPilares` põe pilar em todo cruzamento de eixos "com ou sem parede ali" (a malha
+  // do calculista manda). Com os eixos automáticos — um por linha de parede — antes dos pilares, a malha cobria
+  // a casa inteira (sonda de 15/10, casa de 157 m²: 52 pilares, 49 em cruzamento de eixo, 2 DENTRO de ambiente
+  // longe de parede, 26 recusados por colidir; nesta ordem: 32, todos sobre parede). Depois, os eixos documentam
+  // a estrutura lançada. Das paredes ortogonais; com paredes no pavimento, o envelope do lote não entra.
+  etapaEstrutural(
+    'EIXOS',
+    (x) => {
+      const p = propostaDeEixos(x, L, hip.estrutura.eixos);
+      return { ...p, motivo: p.comandos.length ? null : p.motivoVazio && p.paredesObliquas === 0 ? p.motivoVazio : null, avisos: p.paredesObliquas ? [`${p.paredesObliquas} parede(s) oblíqua(s) ao desenho ficam fora da malha de eixos`] : [] };
+    },
+    (p) => {
+      estrutura.eixos = p.novos;
+      return { nota: `${p.novos} eixo(s)` };
+    },
+  );
 
   // ── CONFERENCIA ───────────────────────────────────────────────────────────
   const conferencia = conferirPrograma(m, programa);
@@ -593,7 +732,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   });
   const violadas = regras.filter((x) => x.estado === 'VIOLADA' && x.regra.severidade === 'ERRO');
   for (const v of violadas) pendencias.push({ grupo: 'VERIFICACAO', texto: `Legislação: ${v.regra.nome} — ${v.alvoRotulo}${v.valores ? ` (${v.valores})` : ''}` });
-  etapa('CONFERENCIA', 'Conferência (programa e legislação)', 'CALCULOU', 0, `${atendidos} de ${pedidos} ambientes do programa; ${violadas.length} regra(s) violada(s)`);
+  etapa('CONFERENCIA', ROTULO_DA_ETAPA_DA_CASA.CONFERENCIA, 'CALCULOU', 0, `${atendidos} de ${pedidos} ambientes do programa; ${violadas.length} regra(s) violada(s)`);
 
   return {
     levelId: entrada.levelId,
@@ -607,7 +746,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     semente: r.semente,
     escolha,
     decisoes,
-    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length },
+    resumo: { areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, estrutura },
   };
 }
 

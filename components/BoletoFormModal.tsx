@@ -277,8 +277,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 plano_de_contas_id:   planoDeContasId || null,
                 category_id:          categoryId || null,
                 project_id:           selectedProjectId || null, // '' = "Sem vínculo" (estado já nasce com a obra de contexto)
-                descricao:            descricao.trim() || undefined,
-                observacoes:          observacoes || undefined,
+                // Vazio grava null: apagar o texto SALVA (`|| undefined` não mandava a coluna).
+                descricao:            descricao.trim() || null,
+                observacoes:          observacoes.trim() || null,
                 valor:                valor ? Number(valor) : undefined,
                 vencimento:           vencimento || undefined,
                 multa:                multa ? Number(multa) : undefined,
@@ -428,8 +429,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 // '' = "— Sem vínculo —": grava null. O antigo `|| projectId || boleto.project_id`
                 // fazia o vazio voltar para a obra anterior (o estado já nasce com ela).
                 project_id: selectedProjectId || null,
-                descricao: descricao.trim() || undefined,
-                observacoes: observacoes || undefined,
+                // Vazio grava null: apagar Descrição/Anotações SALVA — antes `|| undefined` não
+                // mandava a coluna e o texto antigo ficava (mesmo defeito da Obra, 14-15/10/2026).
+                descricao: descricao.trim() || null,
+                observacoes: observacoes.trim() || null,
                 valor: valor ? Number(valor) : undefined,
                 vencimento: vencimento || undefined,
                 multa: multa ? Number(multa) : undefined,

@@ -112,8 +112,8 @@ export interface Boleto {
 
     status: BoletoStatus;
     /** Texto livre: o que é o boleto. Vai para `description` do título gerado. */
-    descricao?: string;
-    observacoes?: string;
+    descricao?: string | null;
+    observacoes?: string | null;
 
     created_by?: string;
     created_by_email?: string;

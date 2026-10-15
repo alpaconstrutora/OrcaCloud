@@ -103,7 +103,14 @@ Um item por arquivo. Cada item diz o que muda e como sei que terminou.
 
 ## Estado
 
-Em 14/10/2026 os 10 itens foram feitos e verificados na frente `feat/torres-unidades-reorganizacao`. Ainda **não há commit**: a publicação depende do pedido do usuário.
+Em 14/10/2026 os 10 itens foram feitos e verificados na frente `feat/torres-unidades-reorganizacao`.
+
+**Publicado em 15/10/2026 no commit `708c9ed7`.** A prova veio de fora:
+
+- **Domínio:** serve o commit carimbado `708c9ed`.
+- **Chunk:** `TowerEditor-DvPs9qIp.js` traz "Gerar a partir dos pavimentos", "Salvar terreno", "Gerar unidades em série" e "Adicionar pavimento".
+- **Textos antigos:** "Adicionar Terreno" e "Gerar unidades automaticamente" sumiram do chunk.
+- **CI:** o check-run `ci` do commit terminou com `success`.
 
 - [x] 1. plano
 - [x] 2. SecaoTitulo

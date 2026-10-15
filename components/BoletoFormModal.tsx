@@ -94,6 +94,7 @@ const ROTULO_AUDITORIA: Record<string, string> = {
     cancelamento: 'Cancelado',
     mudanca_organizacao: 'Movido de organização',
     pagamento_asaas_disparado: 'Pagamento via Asaas disparado',
+    reprocessamento: 'Lido de novo com a senha do PDF',
 };
 
 /** Resumo legível de um evento: origem do e-mail na captura, campos na edição. */

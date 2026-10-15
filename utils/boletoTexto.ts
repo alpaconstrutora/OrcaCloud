@@ -33,6 +33,19 @@ export const MIN_TEXTO_UTIL = 50;
 
 export const ERRO_SEM_TEXTO = 'PDF sem camada de texto extraível — informe a linha digitável manualmente';
 export const ERRO_SEM_LINHA = 'Linha digitável não encontrada no texto extraído';
+/**
+ * PDF criptografado (15/10/2026): o 1º boleto lido da caixa real — Energisa,
+ * "Reaviso Digital" — vem com senha, e o aviso dizia "sem camada de texto",
+ * mandando o usuário procurar o problema errado. Concessionárias costumam
+ * proteger a conta com dígitos do CPF/CNPJ do titular.
+ */
+export const ERRO_PDF_COM_SENHA = 'PDF protegido por senha — cadastre a senha no remetente monitorado ou informe a linha digitável manualmente';
+
+/** pdf.js / unpdf sinalizam senha ausente ou errada com este nome de erro. */
+export function ehErroDeSenha(e: unknown): boolean {
+    const nome = (e as { name?: string } | null)?.name ?? '';
+    return nome === 'PasswordException' || /password/i.test((e as { message?: string } | null)?.message ?? '');
+}
 
 /**
  * Regex robusta para linha digitável em texto livre.
@@ -359,6 +372,18 @@ export function buildExtractionFromLinhaDigitavel(
     };
 
     return result;
+}
+
+/** Resultado de um PDF que não abriu por falta da senha certa. */
+export function resultadoPdfComSenha(): BoletoExtractionResult {
+    return {
+        metodo: 'pdf_text',
+        confidence_score: 0,
+        engine_versao: ENGINE_VERSAO,
+        campos: emptyFields(),
+        raw: { paginas: 0, protegidoPorSenha: true },
+        erros: [ERRO_PDF_COM_SENHA],
+    };
 }
 
 /**

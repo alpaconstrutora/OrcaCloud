@@ -10,7 +10,7 @@
  * OCR de imagens fica fora do MVP — imagens caem no fluxo manual.
  */
 
-import { extractFromPdfText } from './boletoTexto.ts';
+import { extractFromPdfText, ehErroDeSenha, resultadoPdfComSenha } from './boletoTexto.ts';
 import type { BoletoExtractionResult } from '../types/boletos.ts';
 
 export {
@@ -20,6 +20,9 @@ export {
     buildExtractionFromLinhaDigitavel,
     findBeneficiarioCnpj,
     extractFromPdfText,
+    ehErroDeSenha,
+    resultadoPdfComSenha,
+    ERRO_PDF_COM_SENHA,
 } from './boletoTexto.ts';
 
 /**
@@ -72,6 +75,13 @@ export async function extractTextFromPdf(file: File): Promise<{ text: string; pa
  * de `boletoTexto`. Imagens devolvem texto vazio e caem no fluxo manual.
  */
 export async function extractFromPdfFile(file: File, referenceDate = new Date()): Promise<BoletoExtractionResult> {
-    const { text, paginas } = await extractTextFromPdf(file);
-    return extractFromPdfText(text, paginas, referenceDate);
+    let lido: { text: string; paginas: number };
+    try {
+        lido = await extractTextFromPdf(file);
+    } catch (e) {
+        // PDF com senha: aviso próprio, em vez de "falha na extração" genérica.
+        if (ehErroDeSenha(e)) return resultadoPdfComSenha();
+        throw e;
+    }
+    return extractFromPdfText(lido.text, lido.paginas, referenceDate);
 }

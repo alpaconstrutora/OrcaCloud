@@ -63,12 +63,13 @@ const COLS_CONTAS: StandardTableColumn[] = [
 ];
 
 const COLS_REMETENTES: StandardTableColumn[] = [
-    { key: 'nome', label: 'Remetente', sortable: true, width: 180 },
-    { key: 'endereco', label: 'E-mail ou domínio', sortable: true, width: 220 },
-    { key: 'fornecedor', label: 'Fornecedor', sortable: true, width: 180 },
-    { key: 'caixa', label: 'Caixa', sortable: true, width: 180 },
-    { key: 'palavras', label: 'Palavras-chave', sortable: true, width: 140 },
-    { key: 'importacao', label: 'Importação', sortable: true, width: 120 },
+    { key: 'nome', label: 'Remetente', sortable: true, width: 160 },
+    { key: 'endereco', label: 'E-mail ou domínio', sortable: true, width: 210 },
+    { key: 'fornecedor', label: 'Fornecedor', sortable: true, width: 170 },
+    { key: 'caixa', label: 'Caixa', sortable: true, width: 160 },
+    { key: 'palavras', label: 'Palavras-chave', sortable: true, width: 120 },
+    { key: 'senha', label: 'Senha do PDF', sortable: true, width: 120 },
+    { key: 'importacao', label: 'Importação', sortable: true, width: 110 },
     { key: 'ativo', label: 'Situação', sortable: true, width: 100 },
 ];
 
@@ -343,6 +344,7 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                             case 'fornecedor': return r.supplier_id ? nomeFornecedor[r.supplier_id] ?? '' : '';
                             case 'caixa': return caixaPorId[r.account_id] ?? '';
                             case 'palavras': return r.palavras_chave.join(', ');
+                            case 'senha': return r.pdf_senha_atualizada_em ? 1 : 0;
                             default: return (r as unknown as Record<string, string | boolean | null>)[k] as string | boolean | null;
                         }
                     }}
@@ -353,6 +355,9 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                             case 'fornecedor': return <span className="block truncate text-sm font-normal text-gray-700">{r.supplier_id ? nomeFornecedor[r.supplier_id] ?? '—' : '—'}</span>;
                             case 'caixa': return <span className="block truncate text-sm font-normal text-gray-600">{caixaPorId[r.account_id] ?? '—'}</span>;
                             case 'palavras': return <span className="block truncate text-sm font-normal text-gray-600" title={r.palavras_chave.join(', ')}>{r.palavras_chave.join(', ') || '—'}</span>;
+                            case 'senha': return r.pdf_senha_atualizada_em
+                                ? <span className="text-sm font-normal text-emerald-700">Cadastrada</span>
+                                : <span className="text-sm font-normal text-gray-400">—</span>;
                             case 'importacao': return <span className={`text-sm font-normal ${r.importacao === 'automatica' ? 'text-blue-700' : 'text-gray-600'}`}>{r.importacao === 'automatica' ? 'Automática' : 'Revisão'}</span>;
                             case 'ativo': return <span className={`text-sm font-normal ${r.ativo ? 'text-emerald-700' : 'text-gray-500'}`}>{r.ativo ? 'Ativo' : 'Inativo'}</span>;
                             default: return null;

@@ -22,6 +22,7 @@ const ler = (f: string) => readFileSync(join(dir, f), 'utf8');
 const tabelas = ler('aplicar_20271015110000_email_capture_tabelas.sql');
 const rpcs = ler('aplicar_20271015110100_email_capture_rpcs.sql');
 const cron = ler('aplicar_20271015110200_email_capture_cron.sql');
+const senhaPdf = ler('aplicar_20271015120000_email_capture_senha_pdf.sql');
 
 describe('tabelas da captura', () => {
     it('RLS ligada nas três tabelas', () => {
@@ -90,5 +91,34 @@ describe('agendamento', () => {
         const comando = cron.split('$cron$')[1] ?? '';
         expect(comando).toContain('fn_cron_secret');
         expect(comando).not.toMatch(/service_role/i);
+    });
+});
+
+describe('senha dos PDFs por remetente (15/10/2026)', () => {
+    it('senha no Vault pelo NOME do remetente — nenhuma coluna guarda segredo nem id de segredo', () => {
+        expect(senhaPdf).toContain("'email_capture_pdf:' || p_sender::text");
+        expect(senhaPdf).not.toMatch(/ADD COLUMN[^;]*secret/i);
+    });
+
+    it('ler: só service_role (REVOKE literal inclui authenticated) e papel checado dentro', () => {
+        expect(senhaPdf).toContain('REVOKE EXECUTE ON FUNCTION public.email_capture_ler_senha_pdf(uuid) FROM PUBLIC, anon, authenticated;');
+        expect(senhaPdf).toMatch(/email_capture_ler_senha_pdf[\s\S]*coalesce\(auth\.role\(\), 'service_role'\) <> 'service_role'/);
+    });
+
+    it('definir: membro da org do remetente, checado dentro; anon fora', () => {
+        expect(senhaPdf).toContain('REVOKE EXECUTE ON FUNCTION public.email_capture_definir_senha_pdf(uuid, text) FROM PUBLIC, anon;');
+        expect(senhaPdf).toMatch(/NOT public\.is_org_member\(v_org\)/);
+    });
+
+    it('remetente: INSERT/UPDATE por coluna, sem a data da senha', () => {
+        expect(senhaPdf).toContain('REVOKE INSERT, UPDATE ON TABLE public.email_capture_senders FROM authenticated;');
+        const grants = senhaPdf.match(/GRANT (INSERT|UPDATE) \([^)]*\)\s+ON TABLE public\.email_capture_senders TO authenticated/g) ?? [];
+        expect(grants.length).toBe(2);
+        for (const g of grants) expect(g).not.toContain('pdf_senha_atualizada_em');
+    });
+
+    it('excluir o remetente apaga a senha do cofre (gatilho com REVOKE)', () => {
+        expect(senhaPdf).toMatch(/AFTER DELETE ON public\.email_capture_senders/);
+        expect(senhaPdf).toContain('REVOKE EXECUTE ON FUNCTION public.fn_email_capture_sender_apaga_senha() FROM PUBLIC, anon, authenticated;');
     });
 });

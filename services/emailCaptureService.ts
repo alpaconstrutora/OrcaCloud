@@ -47,10 +47,12 @@ export interface RemetenteCaptura {
     importacao: 'automatica' | 'revisao';
     exigir_dmarc: boolean;
     ativo: boolean;
+    /** Quando a senha dos PDFs foi gravada (null = sem senha). A senha em si nunca volta à tela. */
+    pdf_senha_atualizada_em: string | null;
     created_at: string;
 }
 
-export type RemetenteRascunho = Omit<RemetenteCaptura, 'id' | 'created_at'>;
+export type RemetenteRascunho = Omit<RemetenteCaptura, 'id' | 'created_at' | 'pdf_senha_atualizada_em'>;
 
 export interface MensagemCaptura {
     id: string;
@@ -70,7 +72,7 @@ export interface MensagemCaptura {
 }
 
 const COLUNAS_CONTA = 'id, organization_id, provedor, host, porta, usuario, status, modo, data_inicial, modo_piloto, last_sync_at, ultimo_erro, created_by_email, created_at';
-const COLUNAS_REMETENTE = 'id, organization_id, account_id, supplier_id, nome, tipo, email, dominio, palavras_chave, importacao, exigir_dmarc, ativo, created_at';
+const COLUNAS_REMETENTE = 'id, organization_id, account_id, supplier_id, nome, tipo, email, dominio, palavras_chave, importacao, exigir_dmarc, ativo, pdf_senha_atualizada_em, created_at';
 const COLUNAS_MENSAGEM = 'id, organization_id, account_id, remetente, assunto, data_email, documento_nome, resultado, motivo, erro, tentativas, boleto_id, auth_results, created_at';
 
 /** Rótulos — a tela mostra exatamente estes textos (e o filtro avançado compara com eles). */
@@ -165,8 +167,18 @@ export const emailCaptureService = {
     },
 
     async salvarRemetente(id: string | null, r: RemetenteRascunho): Promise<RemetenteCaptura> {
+        // Colunas por NOME: o banco só concede INSERT/UPDATE destas (a data da
+        // senha é da RPC; id/created_at não se regravam). Espalhar o objeto do
+        // formulário mandaria `id` e `pdf_senha_atualizada_em` e levaria 42501.
         const linha = {
-            ...r,
+            organization_id: r.organization_id,
+            account_id: r.account_id,
+            supplier_id: r.supplier_id,
+            nome: r.nome,
+            tipo: r.tipo,
+            importacao: r.importacao,
+            exigir_dmarc: r.exigir_dmarc,
+            ativo: r.ativo,
             email: r.tipo === 'exato' ? (r.email ?? '').trim().toLowerCase() || null : null,
             dominio: r.tipo === 'dominio' ? (r.dominio ?? '').trim().toLowerCase().replace(/^@/, '') || null : null,
             palavras_chave: r.palavras_chave.map(p => p.trim()).filter(Boolean),
@@ -181,6 +193,16 @@ export const emailCaptureService = {
             throw error;
         }
         return data as RemetenteCaptura;
+    },
+
+    /**
+     * Senha dos PDFs do remetente — vai para o cofre (Vault) pela RPC e nunca
+     * volta. Vazio/null remove. Concessionárias costumam usar dígitos do
+     * CPF/CNPJ do titular da conta.
+     */
+    async definirSenhaPdf(remetenteId: string, senha: string | null): Promise<void> {
+        const { error } = await supabase.rpc('email_capture_definir_senha_pdf', { p_sender: remetenteId, p_senha: senha ?? '' });
+        if (error) throw error;
     },
 
     async excluirRemetente(id: string): Promise<void> {

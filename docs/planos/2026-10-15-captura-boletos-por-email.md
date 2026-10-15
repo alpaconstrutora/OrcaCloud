@@ -428,6 +428,20 @@
 Depois da avaliação (Parte 1), o usuário respondeu às perguntas da tabela de decisões e aprovou o
 plano da Parte 2 em 15/10/2026.
 
+### Pedido posterior — 15/10/2026, mesma sessão (senha de PDF)
+
+Contexto: a primeira leitura real da caixa `alpaconstrutora@gmail.com` criou o boleto nº 1423 (Energisa,
+"ESS - Reaviso Digital") sem valor nem vencimento. O PDF é criptografado (`/Encrypt`; o leitor recebe
+`PasswordException: No password given`), e o aviso gravado dizia "PDF sem camada de texto" — errado.
+Propus duas melhorias; resposta do usuário, literal:
+
+> Duas melhorias que proponho, sob sua decisão:
+> 1. Aviso correto (pequena): de acordo
+> 2. Senha por remetente (maior): criar campo para cadastro de senha
+> 3
+
+(O "3" veio solto; tratado como mensagem cortada e perguntado ao usuário.)
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -791,3 +805,22 @@ Atualizado em 15/10/2026, ao fim da sessão de implementação.
 | com sugestão de fornecedor (ILIKE antigo) | 165 |
 | que a busca nova encontraria | 473 |
 | em aberto sem vencimento — "Aprovar e Lançar" passa a pedir a data | 147 |
+
+## Plano — senha de PDF por remetente (15/10/2026)
+
+| # | Arquivo | O que muda | Como sei que terminou |
+|---|---|---|---|
+| S1 | `utils/boletoTexto.ts` | `ERRO_PDF_COM_SENHA` + resultado próprio para PDF protegido | teste: o resultado traz o erro novo, não o de "sem camada de texto" |
+| S2 | `utils/boletoParser.ts` | upload na tela: `PasswordException` do pdf.js vira o aviso de senha | teste com pdf.js simulado lançando `PasswordException` |
+| S3 | `supabase/migrations/aplicar_20271015120000_email_capture_senha_pdf.sql` | `email_capture_senders.pdf_senha_atualizada_em`; senha no Vault por NOME (`email_capture_pdf:<remetente>`), nunca em coluna; RPC `email_capture_definir_senha_pdf` (membro da org; vazio apaga) e `email_capture_ler_senha_pdf` (só service_role); gatilho apaga a senha quando o remetente é excluído; `email_capture_messages.reprocessado_em`; INSERT/UPDATE de remetente por coluna (authenticated não grava a data da senha) | aplicada 2×; `segurancaMigrations` + `emailCaptureMigrations` verdes; authenticated lendo a senha → 42501 |
+| S4 | `supabase/functions/email-capture-sync/` | abre PDF com as senhas do remetente casado e, se faltar, as dos demais remetentes da caixa; sem senha certa → boleto em revisão com o aviso de senha; **reprocessa** boletos em revisão sem linha digitável quando uma senha de remetente muda depois da última tentativa | PDF criptografado de teste (jsPDF) abre só com a senha certa no runtime publicado; 401 sem header |
+| S5 | `services/emailCaptureService.ts` + `components/boletos/EmailCaptureSenderSheet.tsx` + `EmailCapturaConfig.tsx` | campo "Senha dos PDFs" (gravar / trocar / remover; nunca exibida de volta) e coluna "Senha do PDF" | harness + tela em produção; senha gravada aparece só como "Cadastrada" |
+
+### Estado — senha de PDF (15/10/2026)
+
+- [x] S1 aviso "PDF protegido por senha" no leitor (`ERRO_PDF_COM_SENHA`, `resultadoPdfComSenha`) — teste `boletoParserSenha`.
+- [x] S2 upload na tela: `PasswordException` do pdf.js vira o aviso — teste com pdf.js simulado.
+- [x] S3 migration aplicada 2×; conferido no banco: ler senha = só service_role; definir = authenticated sim, anon não; authenticated **não** atualiza `pdf_senha_atualizada_em`; gatilho de exclusão criado.
+- [x] S4 sincronização publicada: 401 sem header e com token falso; execução real 200 (1 conta, 0 reprocessados — nenhuma senha ainda). `abrirPdf` provado com PDF criptografado de verdade (jsPDF, senha 12345): sem senha e senha errada → protegido sem leitura; senha de OUTRO remetente da caixa → lê linha, valor e CNPJ.
+- [ ] S5 tela: typecheck e `check-ui-standard` limpos; falta ver no app logado depois do deploy.
+- [ ] Prova de ponta a ponta com o boleto nº 1423 — **depende do usuário** cadastrar a senha do PDF da Energisa no remetente.

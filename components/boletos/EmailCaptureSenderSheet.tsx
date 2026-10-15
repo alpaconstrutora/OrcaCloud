@@ -7,7 +7,7 @@
  * cadastrado (utils/emailCaptureRegras.ts). O texto da tela diz isso.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { Loader2, ShieldCheck, KeyRound } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import SupplierSelect, { type SupplierOption } from '../SupplierSelect';
 import {
@@ -56,6 +56,10 @@ const EmailCaptureSenderSheet: React.FC<Props> = ({ open, onClose, contas, forne
     const [form, setForm] = useState<RemetenteRascunho>(() => vazio(contas, prefill));
     const [palavras, setPalavras] = useState('');
     const [dirty, setDirty] = useState(false);
+    // Senha dos PDFs: nunca vem do banco; o campo é só para gravar/trocar.
+    const [senhaPdf, setSenhaPdf] = useState('');
+    const [trocandoSenha, setTrocandoSenha] = useState(false);
+    const [removerSenha, setRemoverSenha] = useState(false);
     const [salvando, setSalvando] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
 
@@ -64,6 +68,9 @@ const EmailCaptureSenderSheet: React.FC<Props> = ({ open, onClose, contas, forne
         const base = remetente ? { ...remetente } : vazio(contas, prefill);
         setForm(base);
         setPalavras((base.palavras_chave ?? []).join(', '));
+        setSenhaPdf('');
+        setTrocandoSenha(false);
+        setRemoverSenha(false);
         setDirty(false);
         setErro(null);
     }, [open, remetente, prefill, contas]);
@@ -101,6 +108,14 @@ const EmailCaptureSenderSheet: React.FC<Props> = ({ open, onClose, contas, forne
                 organization_id: conta.organization_id,
                 palavras_chave: palavras.split(',').map(p => p.trim()).filter(Boolean),
             });
+            if (senhaPdf.trim()) {
+                await emailCaptureService.definirSenhaPdf(salvo.id, senhaPdf.trim());
+                salvo.pdf_senha_atualizada_em = new Date().toISOString();
+            } else if (removerSenha) {
+                await emailCaptureService.definirSenhaPdf(salvo.id, null);
+                salvo.pdf_senha_atualizada_em = null;
+            }
+            setSenhaPdf('');
             setDirty(false);
             onSalvo(salvo);
             onClose();
@@ -164,6 +179,38 @@ const EmailCaptureSenderSheet: React.FC<Props> = ({ open, onClose, contas, forne
                             <p className="text-xs text-gray-500">Separadas por vírgula. Com palavras, só casa mensagem cujo assunto ou nome do anexo tenha uma delas.</p>
                         </div>
                     </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <KeyRound className="w-4 h-4 text-blue-600" />
+                        <h3 className="text-sm font-semibold text-gray-900">Senha dos PDFs</h3>
+                    </div>
+                    {remetente?.pdf_senha_atualizada_em && !trocandoSenha && !removerSenha ? (
+                        <div className="flex items-center gap-3 text-sm">
+                            <span className="text-emerald-700">Senha cadastrada</span>
+                            <span className="text-gray-400">em {new Date(remetente.pdf_senha_atualizada_em).toLocaleDateString('pt-BR')}</span>
+                            <button type="button" onClick={() => setTrocandoSenha(true)} className="ml-auto text-blue-600 hover:text-blue-800 font-medium">Trocar</button>
+                            <button type="button" onClick={() => { setRemoverSenha(true); setDirty(true); }} className="text-red-600 hover:text-red-700 font-medium">Remover</button>
+                        </div>
+                    ) : removerSenha ? (
+                        <div className="flex items-center gap-3 text-sm">
+                            <span className="text-red-600">A senha será removida ao salvar.</span>
+                            <button type="button" onClick={() => setRemoverSenha(false)} className="ml-auto text-blue-600 hover:text-blue-800 font-medium">Desfazer</button>
+                        </div>
+                    ) : (
+                        <div className="space-y-1.5">
+                            <label className={ROTULO} htmlFor="erem-senha-pdf">{remetente?.pdf_senha_atualizada_em ? 'Nova senha' : 'Senha (opcional)'}</label>
+                            <input id="erem-senha-pdf" type="password" autoComplete="new-password" value={senhaPdf}
+                                onChange={e => { setSenhaPdf(e.target.value); setDirty(true); }}
+                                placeholder="Só se os PDFs deste remetente pedirem senha" className={CAMPO} />
+                            <p className="text-xs text-gray-500">
+                                Contas de energia, água e telefone costumam vir com senha — em geral os primeiros dígitos do CPF ou CNPJ do titular
+                                (o e-mail da concessionária diz a regra). Fica guardada no cofre e não aparece de novo. Se outro remetente da mesma
+                                caixa mandar PDF com senha, esta também é tentada; boletos parados por falta de senha são lidos de novo na próxima leitura.
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-4">

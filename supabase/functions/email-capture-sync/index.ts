@@ -25,13 +25,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-// @ts-ignore — pacote npm sem tipos no Deno
-import { extractText, getDocumentProxy } from "npm:unpdf@0.12.1";
 import { chamadaDeCron, exigirMembro, respostaDeErro } from "../_shared/auth.ts";
 import { novoClienteImap, falhaDeAutenticacao, mensagemDeErroImap, lerTudo, type ClienteImap } from "../_shared/imapCaptura.ts";
 // ⚠️ MESMOS arquivos que o navegador carrega — não são cópias. Leitura do
 // boleto e regras de destino têm uma verdade só.
-import { extractFromPdfText, colunasDaExtracao, findBeneficiarioCnpj } from "../../../utils/boletoTexto.ts";
+import { extractFromPdfText, colunasDaExtracao, findBeneficiarioCnpj, resultadoPdfComSenha } from "../../../utils/boletoTexto.ts";
+import { abrirPdf, ordemDasSenhas } from "./pdf.ts";
 import { onlyDigits } from "../../../utils/febrabanRules.ts";
 import {
     parseAuthenticationResults,
@@ -86,7 +85,7 @@ interface Conta {
     last_uid: number | null;
 }
 
-interface Totais { contas: number; mensagens: number; criados: number; duplicados: number; ignorados: number; erros: number }
+interface Totais { contas: number; mensagens: number; criados: number; duplicados: number; ignorados: number; erros: number; reprocessados: number }
 
 interface AnexoParaProcessar {
     uid: number;
@@ -138,7 +137,7 @@ serve(async (req: Request) => {
     }
 
     const inicio = Date.now();
-    const totais: Totais = { contas: 0, mensagens: 0, criados: 0, duplicados: 0, ignorados: 0, erros: 0 };
+    const totais: Totais = { contas: 0, mensagens: 0, criados: 0, duplicados: 0, ignorados: 0, erros: 0, reprocessados: 0 };
     const orcamento = { anexos: MAX_ANEXOS_POR_EXECUCAO, prazo: inicio + PRAZO_MS };
 
     for (const conta of contas) {
@@ -165,9 +164,20 @@ async function sincronizarConta(admin: SupabaseLike, conta: Conta, totais: Totai
 
     const { data: remetentesBrutos } = await admin
         .from('email_capture_senders')
-        .select('id, tipo, email, dominio, palavras_chave, importacao, exigir_dmarc, ativo, supplier_id')
+        .select('id, tipo, email, dominio, palavras_chave, importacao, exigir_dmarc, ativo, supplier_id, pdf_senha_atualizada_em')
         .eq('account_id', conta.id);
-    const remetentes = (remetentesBrutos ?? []) as RemetenteMonitorado[];
+    const remetentes = (remetentesBrutos ?? []) as Array<RemetenteMonitorado & { pdf_senha_atualizada_em: string | null }>;
+
+    // Senhas dos PDFs (Vault, só service_role). Remetente sem senha não entra.
+    const senhas = new Map<string, string>();
+    for (const r of remetentes.filter(x => x.pdf_senha_atualizada_em)) {
+        const { data } = await admin.rpc('email_capture_ler_senha_pdf', { p_sender: r.id });
+        if (data) senhas.set(r.id, String(data));
+    }
+    const ultimaSenha = remetentes.map(r => r.pdf_senha_atualizada_em).filter(Boolean).sort().pop() ?? null;
+    if (senhas.size && ultimaSenha) {
+        await reprocessarParados(admin, conta, remetentes, senhas, ultimaSenha, totais, orcamento);
+    }
 
     const cliente: ClienteImap = novoClienteImap({ host: conta.host, porta: conta.porta, usuario: conta.usuario, senha });
     try {
@@ -261,7 +271,7 @@ async function sincronizarConta(admin: SupabaseLike, conta: Conta, totais: Totai
             for (const anexo of anexos) {
                 if (Date.now() > orcamento.prazo || orcamento.anexos <= 0) { completa = false; break; }
                 orcamento.anexos--;
-                await processarAnexo(admin, cliente, conta, uidValidity, anexo, remetentes, totais);
+                await processarAnexo(admin, cliente, conta, uidValidity, anexo, remetentes, senhas, totais);
             }
             if (!completa) break;
             if (!ehRetry || novos.includes(meta.uid)) lastUid = Math.max(lastUid, meta.uid);
@@ -281,6 +291,7 @@ async function processarAnexo(
     uidValidity: number,
     a: AnexoParaProcessar,
     remetentes: RemetenteMonitorado[],
+    senhas: Map<string, string>,
     totais: Totais,
 ) {
     const auth = parseAuthenticationResults(a.authHeaders);
@@ -345,19 +356,13 @@ async function processarAnexo(
             return;
         }
 
-        // 4. Texto e leitura — a MESMA do navegador
-        let texto = '';
-        let paginas = 0;
-        try {
-            const pdf = await getDocumentProxy(new Uint8Array(bytes));
-            const r = await extractText(pdf, { mergePages: true });
-            texto = String(r.text ?? '');
-            paginas = Number(r.totalPages ?? 0);
-        } catch (e) {
-            texto = '';
-            console.warn('[email-capture-sync] PDF ilegível', a.nome, (e as Error)?.message);
-        }
-        const extracao = extractFromPdfText(texto, paginas);
+        // 4. Texto e leitura — a MESMA do navegador. PDF com senha: tenta as
+        //    senhas cadastradas (a do remetente casado primeiro).
+        const remetente = remetenteCasa(a.remetente, [a.assunto ?? '', a.nome].join(' '), remetentes);
+        const aberto = await abrirPdf(bytes, ordemDasSenhas(remetente?.id ?? null, senhas));
+        const texto = aberto.texto;
+        const extracao = aberto.semSenhaCerta ? resultadoPdfComSenha() : extractFromPdfText(texto, aberto.paginas);
+        const paginas = aberto.paginas;
         const colunas = colunasDaExtracao(extracao);
 
         // 5. Mesma LINHA DIGITÁVEL já é um boleto desta org
@@ -388,7 +393,6 @@ async function processarAnexo(
         }
 
         // 7. Destino
-        const remetente = remetenteCasa(a.remetente, [a.assunto ?? '', a.nome].join(' '), remetentes);
         const destino = decidirDestino({
             modoPiloto: conta.modo_piloto,
             remetente,
@@ -459,7 +463,10 @@ async function processarAnexo(
         });
 
         totais.criados++;
-        await fechar({ resultado: 'criado', boleto_id: boleto.id, motivo: destino.motivos.join(' ') || null, erro: null, next_retry_at: null });
+        const avisoSenha = aberto.semSenhaCerta
+            ? [senhas.size ? 'PDF com senha: nenhuma senha cadastrada abriu.' : 'PDF com senha: cadastre a senha no remetente monitorado.']
+            : [];
+        await fechar({ resultado: 'criado', boleto_id: boleto.id, motivo: [...avisoSenha, ...destino.motivos].join(' ') || null, erro: null, next_retry_at: null });
     } catch (e) {
         if (pathEnviado) await admin.storage.from(BUCKET).remove([pathEnviado]).catch(() => undefined);
         totais.erros++;
@@ -471,6 +478,97 @@ async function processarAnexo(
             tentativas,
             next_retry_at: proxima ? proxima.toISOString() : null,
         });
+    }
+}
+
+/**
+ * Boletos que entraram sem leitura porque o PDF tinha senha (ou antes de a
+ * senha existir) são lidos de novo quando uma senha de remetente da caixa muda
+ * depois da última tentativa (`reprocessado_em`). Só mexe em boleto ainda em
+ * revisão/rascunho e SEM linha digitável — nunca no que alguém já preencheu.
+ */
+async function reprocessarParados(
+    admin: SupabaseLike,
+    conta: Conta,
+    remetentes: Array<RemetenteMonitorado & { pdf_senha_atualizada_em: string | null }>,
+    senhas: Map<string, string>,
+    ultimaSenha: string,
+    totais: Totais,
+    orcamento: { anexos: number; prazo: number },
+) {
+    const { data: candidatas } = await admin.from('email_capture_messages')
+        .select('id, boleto_id, remetente, assunto, documento_nome, auth_results, reprocessado_em')
+        .eq('account_id', conta.id).eq('resultado', 'criado').not('boleto_id', 'is', null)
+        .or(`reprocessado_em.is.null,reprocessado_em.lt."${ultimaSenha}"`)
+        .order('created_at', { ascending: false })
+        .limit(Math.max(0, Math.min(10, orcamento.anexos)));
+
+    for (const m of candidatas ?? []) {
+        if (Date.now() > orcamento.prazo || orcamento.anexos <= 0) break;
+        const agora = new Date().toISOString();
+        const { data: b } = await admin.from('boletos')
+            .select('id, numero, status, linha_digitavel, documento_path, supplier_id, sugestao_supplier_id')
+            .eq('id', m.boleto_id).maybeSingle();
+        await admin.from('email_capture_messages').update({ reprocessado_em: agora, updated_at: agora }).eq('id', m.id);
+        if (!b || b.linha_digitavel || !['revisao', 'rascunho'].includes(b.status)) continue;
+
+        orcamento.anexos--;
+        const { data: blob, error: dlErr } = await admin.storage.from(BUCKET).download(b.documento_path);
+        if (dlErr || !blob) continue;
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+
+        const remetente = remetenteCasa(m.remetente, [m.assunto ?? '', m.documento_nome ?? ''].join(' '), remetentes);
+        const aberto = await abrirPdf(bytes, ordemDasSenhas(remetente?.id ?? null, senhas));
+        if (!aberto.texto) continue;
+
+        const extracao = extractFromPdfText(aberto.texto, aberto.paginas);
+        const colunas = colunasDaExtracao(extracao);
+        const linha = onlyDigits(colunas.linha_digitavel ?? '');
+
+        const cnpj = findBeneficiarioCnpj(aberto.texto);
+        const cnpjConfianca = cnpj?.confidence ?? 0;
+        if (!colunas.beneficiario_cnpj && cnpj && cnpjConfianca >= CONFIANCA_MINIMA_CNPJ) colunas.beneficiario_cnpj = cnpj.valor;
+        let fornecedores: string[] = [];
+        if (cnpj && cnpjConfianca >= CONFIANCA_MINIMA_CNPJ) {
+            const { data } = await admin.rpc('find_supplier_in_org_by_document', { p_organization_id: conta.organization_id, p_document: cnpj.valor });
+            fornecedores = ((data ?? []) as Array<{ id: string }>).map(f => f.id);
+        }
+        const auth = (m.auth_results ?? { spf: 'none', dkim: 'none', dmarc: 'none', headerFrom: null, servidor: null }) as Parameters<typeof decidirDestino>[0]['auth'];
+        const destino = decidirDestino({
+            modoPiloto: conta.modo_piloto,
+            remetente,
+            auth,
+            dominioFrom: extrairEndereco(m.remetente)?.dominio ?? null,
+            checksumValido: !!colunas.checksum_valido && linha.length >= 44,
+            vencimento: colunas.vencimento ?? null,
+            fornecedoresDoCnpj: fornecedores,
+            cnpjConfianca,
+        });
+
+        const errosValidacao = [...(colunas.erros_validacao ?? []), ...destino.motivos.map(x => `Captura: ${x}`)];
+        const patch: Record<string, unknown> = {
+            ...colunas,
+            documento_paginas: aberto.paginas || null,
+            erros_validacao: errosValidacao.length ? errosValidacao : null,
+            supplier_id: b.supplier_id ?? destino.supplierId,
+            sugestao_supplier_id: b.sugestao_supplier_id ?? destino.sugestaoSupplierId,
+            sugestao_confianca: (b.sugestao_supplier_id ?? destino.sugestaoSupplierId) ? 95 : null,
+            status: b.status === 'revisao' && destino.status === 'rascunho' ? 'rascunho' : b.status,
+        };
+        const { error: upErr } = await admin.from('boletos').update(patch).eq('id', b.id);
+        if (upErr) {
+            // 23505: a linha digitável já é de outro boleto desta org — este é duplicado.
+            const aviso = upErr.code === '23505' ? 'Lido com a senha, mas a linha digitável já pertence a outro boleto (duplicado).' : `Releitura falhou: ${upErr.message}`;
+            await admin.from('email_capture_messages').update({ motivo: aviso, updated_at: agora }).eq('id', m.id);
+            continue;
+        }
+        await admin.from('boletos_auditoria').insert({
+            boleto_id: b.id, organization_id: conta.organization_id, acao: 'reprocessamento', metodo: 'sistema',
+            usuario_email: conta.usuario,
+            valor_depois: { motivo: 'PDF aberto com a senha cadastrada no remetente', linha_digitavel: colunas.linha_digitavel, valor: colunas.valor, vencimento: colunas.vencimento, motivos: destino.motivos },
+        });
+        await admin.from('email_capture_messages').update({ motivo: ['Lido de novo com a senha do PDF.', ...destino.motivos].join(' '), updated_at: agora }).eq('id', m.id);
+        totais.reprocessados++;
     }
 }
 

@@ -26,7 +26,7 @@
 - [x] `ContasReceberManager.tsx` + teste de tela
 - [x] guia §6.12
 - [x] conferência visual na tela — preview local, login de leitura, dados reais (362 títulos; 15 grupos por cliente; colSpan 16 = colgroup; reload mantém; 0 escritas, 0 erros). Script: `c:/tmp/pwtest/receber-agrupar.js`
-- [ ] publicado (push em main) e conferido em produção
+- [x] publicado em `ee3e4eb9` (push em main); domínio carimbado com o commit e chunk `ContasReceberManager` com o agrupamento; CI `ci` success
 
 ## Verificação
 1. `npx vitest run __tests__/recebivelGrupos.test.ts __tests__/components/ContasReceberAgrupar.test.tsx`

@@ -24,6 +24,13 @@ interface BrokerProposalSimulatorProps {
      *  de política passam a usar as RPCs anon (fn_broker_portal_get_sales_plans /
      *  fn_broker_portal_validate_sales_simulation) em vez do client autenticado. */
     portalToken?: string;
+    /**
+     * Celular (BrokerPortalMobile): cabeçalho curto (o título "Nova proposta" já
+     * está no topo da casca), etapas numa linha, rodapé de cada etapa preso ao fim
+     * da tela e sem "Cancelar" (a seta do cabeçalho cancela).
+     * Plano: docs/planos/2026-10-16-portal-corretor-mobile.md (F2, item 8).
+     */
+    compacto?: boolean;
 }
 
 const VERDICT_LABEL: Record<Verdict, string> = {
@@ -48,6 +55,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
     onSubmitProposal,
     onCancel,
     portalToken,
+    compacto = false,
 }) => {
     // A unidade PRINCIPAL é a primeira da cesta: é ela que vai para
     // broker_portal_proposals.property_id e que define o eixo (venda × locação)
@@ -124,7 +132,10 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
     // idêntico a simular a cesta consolidada, e os percentuais (nominal,
     // financeiro, econômico) já saem com o denominador certo. Pelo mesmo motivo
     // `fn_validate_sales_simulation` continua recebendo o payload consolidado.
-    const unitPriceOf = useCallback((u: BrokerUnit) => Number(u.current_price) || 0, []);
+    // Pelo link (`fn_broker_portal_get_units`) a unidade não traz `current_price`,
+    // só `price`: sem a queda a proposta saía sobre R$ 0 (16/10/2026). Vindo de
+    // Empreendimentos, `current_price` já chega com o preço da tabela vigente.
+    const unitPriceOf = useCallback((u: BrokerUnit) => Number(u.current_price ?? u.price) || 0, []);
     const unitPrice = useMemo(
         () => units.reduce((s, u) => s + unitPriceOf(u), 0),
         [units, unitPriceOf]
@@ -288,15 +299,25 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
 
     if (!unit) return null;
 
+    // Rodapé de etapa: no celular fica preso ao fim da tela (a raiz não pode ter
+    // overflow-hidden, senão o sticky não pega) e os botões encolhem.
+    const rodape = (base: string) => compacto
+        ? `${base} sticky bottom-0 z-10 -mx-4 px-4 py-3 bg-white border-t border-gray-100`
+        : base;
+    const btn = (cls: string) => compacto
+        ? cls.replace(/\bpx-[68]\b/g, 'px-4').replace(' uppercase tracking-widest', '')
+        : cls;
+
     const StepButton = ({ step, label, number }: { step: 'buyer' | 'payment' | 'rateio' | 'review'; label: string; number: number }) => (
         <button
             onClick={() => setActiveStep(step)}
-            className={`flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-bold transition-all ${activeStep === step
+            aria-current={activeStep === step ? 'step' : undefined}
+            className={`flex items-center rounded-xl font-bold transition-all ${compacto ? 'flex-col justify-center gap-1 px-1 py-2 text-xs' : 'gap-3 px-5 py-3 text-sm'} ${activeStep === step
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
                 : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
         >
-            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${activeStep === step ? 'bg-white text-indigo-600' : 'bg-gray-300 text-white'}`}>
+            <span className={`${compacto ? 'w-6 h-6' : 'w-7 h-7'} rounded-full flex items-center justify-center text-xs font-black ${activeStep === step ? 'bg-white text-indigo-600' : 'bg-gray-300 text-white'}`}>
                 {number}
             </span>
             {label}
@@ -304,12 +325,14 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
     );
 
     return (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+        <div className={compacto
+            ? 'bg-white rounded-2xl border border-gray-100 shadow-sm'
+            : 'bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300'}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 p-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-black text-white">Simulador de Proposta</h2>
+            <div className={`bg-gradient-to-r from-indigo-600 to-indigo-800 ${compacto ? 'p-4 rounded-t-2xl' : 'p-6'}`}>
+                <div className={`flex justify-between ${compacto ? 'items-end gap-3' : 'items-center'}`}>
+                    <div className="min-w-0">
+                        <h2 className={compacto ? 'sr-only' : 'text-xl font-black text-white'}>Simulador de Proposta</h2>
                         {isBasket ? (
                             <p className="text-indigo-200 text-sm mt-1">
                                 {units.length} unidades • {units.map(u => u.number || u.name).filter(Boolean).join(' + ')}
@@ -320,11 +343,11 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                             </p>
                         )}
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                         <p className="text-xs font-black text-indigo-300 uppercase tracking-widest">
                             {isBasket ? 'Total da Cesta' : 'Valor da Unidade'}
                         </p>
-                        <p className="text-2xl font-black text-white">{formatCurrency(unitPrice)}</p>
+                        <p className={`${compacto ? 'text-xl' : 'text-2xl'} font-black text-white`}>{formatCurrency(unitPrice)}</p>
                     </div>
                 </div>
             </div>
@@ -342,14 +365,16 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
             )}
 
             {/* Step Navigation */}
-            <div className="flex gap-3 p-4 border-b border-gray-100 bg-gray-50 flex-wrap">
+            <div className={compacto
+                ? 'grid grid-flow-col auto-cols-fr gap-1.5 p-2 border-b border-gray-100 bg-gray-50'
+                : 'flex gap-3 p-4 border-b border-gray-100 bg-gray-50 flex-wrap'}>
                 <StepButton step="buyer" label="Comprador" number={1} />
                 <StepButton step="payment" label="Pagamento" number={2} />
                 {isBasket && <StepButton step="rateio" label="Rateio" number={3} />}
                 <StepButton step="review" label="Revisão" number={isBasket ? 4 : 3} />
             </div>
 
-            <div className="p-6">
+            <div className={compacto ? 'p-4' : 'p-6'}>
                 {/* Step 1: Buyer Info */}
                 {activeStep === 'buyer' && (
                     <div className="space-y-4 animate-in fade-in duration-300">
@@ -395,9 +420,9 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     placeholder="R$ 0,00" />
                             </div>
                         </div>
-                        <div className="flex justify-end pt-4">
+                        <div className={rodape('flex justify-end pt-4')}>
                             <button onClick={() => setActiveStep('payment')} disabled={!canProceedBuyer}
-                                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20">
+                                className={btn("flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20")}>
                                 Próximo <ArrowRight className="w-4 h-4" />
                             </button>
                         </div>
@@ -634,13 +659,13 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                             </div>
                         )}
 
-                        <div className="flex justify-between pt-2">
+                        <div className={rodape('flex justify-between pt-2')}>
                             <button onClick={() => setActiveStep('buyer')}
-                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
+                                className={btn("px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all")}>
                                 Voltar
                             </button>
                             <button onClick={() => setActiveStep(isBasket ? 'rateio' : 'review')} disabled={!canProceedPayment}
-                                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                                className={btn("flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed")}>
                                 {isBasket ? 'Rateio' : 'Revisar'} <ArrowRight className="w-4 h-4" />
                             </button>
                         </div>
@@ -712,18 +737,18 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                             </div>
                         </div>
 
-                        <div className="flex justify-between pt-2">
+                        <div className={rodape('flex justify-between pt-2')}>
                             <button onClick={() => setActiveStep('payment')}
-                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
+                                className={btn("px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all")}>
                                 Voltar
                             </button>
                             <div className="flex gap-3">
                                 <button onClick={() => setManualAlloc(null)}
-                                    className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
+                                    className={btn("px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all")}>
                                     Redistribuir
                                 </button>
                                 <button onClick={() => setActiveStep('review')} disabled={!allocationOk}
-                                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    className={btn("flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed")}>
                                     Revisar <ArrowRight className="w-4 h-4" />
                                 </button>
                             </div>
@@ -799,18 +824,20 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                 placeholder="Notas adicionais para a incorporadora..." />
                         </div>
 
-                        <div className="flex justify-between pt-2">
+                        <div className={rodape('flex justify-between pt-2')}>
                             <button onClick={() => setActiveStep(isBasket ? 'rateio' : 'payment')}
-                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
+                                className={btn("px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all")}>
                                 Voltar
                             </button>
                             <div className="flex gap-3">
+                                {!compacto && (
                                 <button onClick={onCancel}
-                                    className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
+                                    className={btn("px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all")}>
                                     Cancelar
                                 </button>
+                                )}
                                 <button onClick={handleSubmit} disabled={!canSubmit}
-                                    className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-500/20 active:scale-95 disabled:opacity-50">
+                                    className={btn("flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-500/20 active:scale-95 disabled:opacity-50")}>
                                     <Send className="w-4 h-4" />
                                     Enviar Proposta
                                 </button>

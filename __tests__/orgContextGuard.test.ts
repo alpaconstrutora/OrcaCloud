@@ -67,7 +67,9 @@ const RULES: Rule[] = [
         allow: {
             'hooks/useOrgContext.tsx':
                 'É a própria implementação: com UMA só organização, o alvo não é ambíguo.',
-            'components/BrokerPortal.tsx':
+            // 16/10/2026: o trecho saiu de BrokerPortal.tsx para o hook, sem mudar
+            // (docs/planos/2026-10-16-portal-corretor-mobile.md) — a exceção foi junto.
+            'components/broker/useBrokerPortal.ts':
                 'Portal do corretor: o contexto é o do corretor logado (initialOrgId), não o seletor do topo do admin.',
             'components/EmitDocumentModal.tsx':
                 'Busca a org por id primeiro; o índice 0 incide sobre uma lista já filtrada por membro.',

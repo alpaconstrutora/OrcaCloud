@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Building2, ChevronLeft, Loader2, MapPin, Info, Image as ImageIcon, X } from 'lucide-react';
+import { Building2, Check, ChevronLeft, ChevronRight, Loader2, MapPin, Info, Image as ImageIcon, Plus, X } from 'lucide-react';
 import { commercialPriceTableService } from '../../services/commercialPriceTableService';
 import type { CommercialPriceTable, CommercialPriceTableItem } from '../../services/commercialPriceTableService';
 import { rentalPriceTableService } from '../../services/rentalPriceTableService';
@@ -28,6 +28,13 @@ interface BrokerDevelopmentsProps {
      */
     selectedUnitIds?: string[];
     onToggleUnit?: (unit: BrokerUnit) => void;
+    /**
+     * Celular (BrokerPortalMobile): empreendimentos e unidades em CARTÕES, sem
+     * <table>. As colunas que o gestor liberou para o corretor
+     * (broker_portal_price_columns) continuam mandando no que o cartão mostra.
+     * Plano: docs/planos/2026-10-16-portal-corretor-mobile.md (F2, item 4).
+     */
+    compacto?: boolean;
 }
 
 // Status da unidade — mesmas labels/cores de PriceTableManager.tsx e PropertyUnitMap.tsx.
@@ -198,7 +205,7 @@ type SortKey = 'unit' | 'status' | 'privArea' | 'bedrooms' | 'parking' | 'bathro
     | 'position' | 'current' | 'price' | 'delta' | 'visibleToBroker' | 'showPrice';
 type BuildingSortKey = 'name' | 'units';
 
-const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, units, portalToken, organizationId, onMakeProposal, selectedUnitIds, onToggleUnit }) => {
+const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, units, portalToken, organizationId, onMakeProposal, selectedUnitIds, onToggleUnit, compacto = false }) => {
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
     // Eixo de preço exibido: venda (price) ou locação (rental_price). Toggle no
     // detalhe do empreendimento — o mesmo prédio pode ter as duas tabelas.
@@ -280,6 +287,14 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
         const counts: Record<string, number> = {};
         units.forEach(u => {
             if (u.type !== 'BUILDING' && u.parent_id) counts[u.parent_id] = (counts[u.parent_id] || 0) + 1;
+        });
+        return counts;
+    }, [units]);
+    // Disponíveis por empreendimento — o que o corretor quer saber antes de abrir.
+    const availableByBuilding = useMemo(() => {
+        const counts: Record<string, number> = {};
+        units.forEach(u => {
+            if (u.type !== 'BUILDING' && u.parent_id && u.status === 'AVAILABLE') counts[u.parent_id] = (counts[u.parent_id] || 0) + 1;
         });
         return counts;
     }, [units]);
@@ -399,14 +414,74 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
     // a coluna Foto existe, a linha passou a ter duas ações prováveis (ampliar a
     // imagem × iniciar proposta), então o clique na linha inteira deixou de ser
     // inequívoco — condição que a §9.1 exige para o padrão de linha clicável.
-    const handleMakeProposal = (propertyId: string) => {
-        const unit = units.find(u => u.id === propertyId);
+    const handleMakeProposal = (item: CommercialPriceTableItem) => {
+        const unit = units.find(u => u.id === item.property_id);
         if (!unit) return;
-        onMakeProposal(unit);
+        onMakeProposal(comPrecoDaTabela(unit, item));
+    };
+
+    /**
+     * A unidade vai para a cesta/simulador com o preço DESTA tabela (venda).
+     * Pelo link, `fn_broker_portal_get_units` não devolve `current_price` — e o
+     * simulador e o total da cesta liam só ele: a proposta saía sobre R$ 0
+     * (visto em 16/10/2026, unidade de R$ 648.893 somando "R$ 0" na cesta).
+     * Locação fica como estava: o simulador é de venda.
+     */
+    const comPrecoDaTabela = (unit: BrokerUnit, item: CommercialPriceTableItem): BrokerUnit =>
+        priceMode === 'sale' && showPrice(item) && item.price > 0 ? { ...unit, current_price: item.price } : unit;
+    const toggleComPreco = (item: CommercialPriceTableItem) => {
+        const u = units.find(x => x.id === item.property_id);
+        if (u && onToggleUnit) onToggleUnit(comPrecoDaTabela(u, item));
     };
 
     // Foto ampliada — mesmo padrão de components/investor/PhotoGallery.tsx.
     const [lightbox, setLightbox] = useState<string | null>(null);
+
+    // ── Master no celular: um cartão por empreendimento ─────────────────────
+    if (!selectedBuilding && compacto) {
+        if (buildings.length === 0) {
+            return (
+                <div className="text-center px-6 py-12 bg-white rounded-2xl shadow-sm border border-gray-100">
+                    <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                    <h3 className="text-base font-semibold text-gray-900 mb-1">Nenhum empreendimento liberado</h3>
+                    <p className="text-sm text-gray-500">A incorporadora ainda não liberou empreendimentos para você.</p>
+                </div>
+            );
+        }
+        return (
+            <ul className="space-y-3">
+                {sortedBuildings.map(b => {
+                    const foto = b.images?.[0];
+                    const total = unitCountByBuilding[b.id] || 0;
+                    const livres = availableByBuilding[b.id] || 0;
+                    return (
+                        <li key={b.id}>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedBuildingId(b.id)}
+                                className="w-full flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-3 text-left active:bg-gray-50"
+                            >
+                                <span className="w-14 h-14 rounded-xl bg-indigo-50 text-indigo-600 overflow-hidden flex items-center justify-center shrink-0">
+                                    {foto ? <img src={foto} alt="" className="w-full h-full object-cover" /> : <Building2 className="w-6 h-6" />}
+                                </span>
+                                <span className="flex-1 min-w-0">
+                                    <span className="block text-sm font-bold text-gray-900 truncate">{b.name}</span>
+                                    {b.address && <span className="block text-xs text-gray-500 line-clamp-2 mt-0.5">{b.address}</span>}
+                                    <span className="block text-xs mt-1">
+                                        <span className={livres > 0 ? 'font-semibold text-emerald-700' : 'text-gray-500'}>
+                                            {livres} {livres === 1 ? 'disponível' : 'disponíveis'}
+                                        </span>
+                                        <span className="text-gray-400"> de {total}</span>
+                                    </span>
+                                </span>
+                                <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+                            </button>
+                        </li>
+                    );
+                })}
+            </ul>
+        );
+    }
 
     // ── Master: lista de empreendimentos ────────────────────────────────────
     if (!selectedBuilding) {
@@ -459,6 +534,180 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // ── Detalhe no celular: cartões de unidade ──────────────────────────────
+    if (compacto) {
+        const ver = (k: string) => visibleColumns.includes(k);
+        const ORDENS: { col: SortKey; label: string }[] = [
+            { col: 'unit', label: 'Unidade' },
+            { col: 'price', label: 'Preço' },
+            { col: 'privArea', label: 'Área privativa' },
+            { col: 'floor', label: 'Pavimento' },
+            { col: 'status', label: 'Status' },
+        ];
+        return (
+            <div className="space-y-3">
+                <div>
+                    <button
+                        type="button"
+                        onClick={() => setSelectedBuildingId(null)}
+                        className="flex items-center gap-1 -ml-1 py-1 text-sm font-medium text-gray-500 active:text-gray-800"
+                    >
+                        <ChevronLeft className="w-4 h-4" /> Empreendimentos
+                    </button>
+                    <h2 className="text-lg font-bold text-gray-900 leading-tight mt-1">{selectedBuilding.name}</h2>
+                    {selectedBuilding.address && (
+                        <p className="text-xs text-gray-500 mt-1 flex items-start gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 shrink-0 mt-px" />{selectedBuilding.address}
+                        </p>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-2 bg-gray-100 p-1 rounded-xl gap-1">
+                    {([['sale', 'Venda'], ['rental', 'Locação']] as const).map(([modo, rotulo]) => (
+                        <button
+                            key={modo}
+                            type="button"
+                            onClick={() => setPriceMode(modo)}
+                            aria-pressed={priceMode === modo}
+                            className={`h-8 rounded-lg text-sm font-medium ${priceMode === modo ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'}`}
+                        >
+                            {rotulo}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-gray-500 min-w-0 truncate">
+                        {activeTable ? `Tabela vigente: ${activeTable.version_label}` : (loading ? '' : 'Sem tabela vigente')}
+                    </span>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-500 shrink-0">
+                        Ordenar
+                        <select
+                            value={`${itemSort.col}:${itemSort.dir}`}
+                            onChange={e => { const [col, dir] = e.target.value.split(':'); setItemSort({ col: col as SortKey, dir: dir as 'asc' | 'desc' }); }}
+                            className="h-8 pl-2 pr-7 bg-white border border-gray-200 rounded-lg text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        >
+                            {ORDENS.flatMap(o => [
+                                <option key={`${o.col}:asc`} value={`${o.col}:asc`}>{o.label} ↑</option>,
+                                <option key={`${o.col}:desc`} value={`${o.col}:desc`}>{o.label} ↓</option>,
+                            ])}
+                        </select>
+                    </label>
+                </div>
+
+                {loading ? (
+                    <div className="text-center py-12">
+                        <Loader2 className="w-7 h-7 animate-spin text-indigo-600 mx-auto" />
+                        <p className="mt-2 text-sm text-gray-500">Carregando tabela de preços...</p>
+                    </div>
+                ) : sortedRows.length === 0 ? (
+                    <div className="text-center px-6 py-12 bg-white rounded-2xl shadow-sm border border-gray-100">
+                        <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                        <h3 className="text-base font-semibold text-gray-900 mb-1">Nenhuma unidade encontrada</h3>
+                        <p className="text-sm text-gray-500">Este empreendimento ainda não tem unidades publicadas.</p>
+                    </div>
+                ) : (
+                    <ul className="space-y-3">
+                        {sortedRows.map(item => {
+                            const clickable = units.some(u => u.id === item.property_id);
+                            const isSold = item.property_status === 'SOLD';
+                            const canPropose = clickable && !isSold;
+                            const motivo = isSold ? 'Unidade já vendida' : (clickable ? '' : 'Unidade fora do estoque atual');
+                            const naCesta = !!selectedUnitIds?.includes(item.property_id);
+                            // A cesta só aceita unidade DISPONÍVEL (handleToggleCart recusa o
+                            // resto). Sem esta trava o "Adicionar" ficava ativo numa unidade
+                            // alugada e o clique morria calado — o aviso da recusa mora na
+                            // barra da cesta, que com a cesta vazia nem existe.
+                            const disponivel = !item.property_status || item.property_status === 'AVAILABLE';
+                            const podeJuntar = canPropose && (disponivel || naCesta);
+                            const motivoJuntar = !motivo && !podeJuntar
+                                ? `${UNIT_STATUS_LABEL[item.property_status || ''] || 'Indisponível'}: só proposta individual`
+                                : '';
+                            const ficha = [
+                                ver('privArea') && item.private_area != null ? areaFmt(item.private_area) : null,
+                                ver('bedrooms') && item.bedrooms != null ? `${item.bedrooms} dorm.` : null,
+                                ver('parking') && item.parking_spaces != null ? `${item.parking_spaces} ${item.parking_spaces === 1 ? 'vaga' : 'vagas'}` : null,
+                                ver('bathrooms') && item.bathrooms != null ? `${item.bathrooms} banh.` : null,
+                                // `!= null` e não truthy: pavimento 0 é o térreo.
+                                ver('floor') && item.floor != null ? (item.floor === 0 ? 'Térreo' : `${item.floor}º pav.`) : null,
+                                ver('position') && item.position_type ? (POSITION_LABEL[item.position_type] || item.position_type) : null,
+                            ].filter(Boolean);
+                            const valor = ver('price') ? item.price : (ver('current') ? (item.current_price ?? item.price) : null);
+                            const diff = itemDelta(item);
+                            return (
+                                <li key={item.id} className={`bg-white rounded-2xl border shadow-sm p-3 ${naCesta ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-gray-100'} ${clickable ? '' : 'opacity-60'}`}>
+                                    <div className="flex gap-3">
+                                        {ver('photo') && (
+                                            <span className="w-14 h-14 rounded-xl border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0">
+                                                {item.photo_url
+                                                    ? <img src={item.photo_url} alt={`Foto da unidade ${item.property_name || ''}`} className="w-full h-full object-cover" onClick={() => setLightbox(item.photo_url!)} />
+                                                    : <ImageIcon className="w-5 h-5 text-gray-300" />}
+                                            </span>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <p className="text-sm font-bold text-gray-900 truncate">{item.property_name || '—'}</p>
+                                                {ver('status') && <span className="shrink-0"><UnitStatusBadge status={item.property_status} /></span>}
+                                            </div>
+                                            {ficha.length > 0 && <p className="text-xs text-gray-500 mt-0.5">{ficha.join(' · ')}</p>}
+                                            {valor != null && (
+                                                <p className="mt-1 flex items-baseline gap-2">
+                                                    {/* R$ 0,00 é "sem preço" (unidade sem tabela nem valor cadastrado), não preço. */}
+                                                    <span className={showPrice(item) && valor > 0 ? 'text-base font-bold text-gray-900' : 'text-sm text-gray-500'}>
+                                                        {!showPrice(item) ? 'Preço sob consulta' : valor > 0 ? formatMoney(valor) : 'Preço não informado'}
+                                                    </span>
+                                                    {ver('delta') && showPrice(item) && diff !== 0 && (
+                                                        <span className={`text-xs font-medium ${diff > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                                                        </span>
+                                                    )}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {(motivo || (onToggleUnit && motivoJuntar)) && <p className="text-xs text-gray-500 mt-2">{motivo || motivoJuntar}</p>}
+                                    <div className="flex items-center gap-2 mt-3">
+                                        {onToggleUnit && (
+                                            <button
+                                                type="button"
+                                                disabled={!podeJuntar}
+                                                aria-pressed={naCesta}
+                                                onClick={() => toggleComPreco(item)}
+                                                title={motivo || motivoJuntar || (naCesta ? 'Tirar da proposta' : 'Juntar a outras unidades numa proposta só')}
+                                                className={`flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border text-sm font-medium disabled:opacity-40 ${
+                                                    naCesta ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-700 active:bg-gray-50'}`}
+                                            >
+                                                {naCesta ? <><Check className="w-4 h-4" /> Na proposta</> : <><Plus className="w-4 h-4" /> Adicionar</>}
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleMakeProposal(item)}
+                                            disabled={!canPropose}
+                                            title={motivo || undefined}
+                                            className="flex-1 h-10 rounded-xl bg-indigo-600 text-white text-sm font-semibold active:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400"
+                                        >
+                                            Fazer proposta
+                                        </button>
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+
+                {lightbox && (
+                    <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+                        <button className="absolute top-4 right-4 p-2 text-white/70 bg-white/10 rounded-xl" onClick={() => setLightbox(null)} aria-label="Fechar foto">
+                            <X className="w-5 h-5" />
+                        </button>
+                        <img src={lightbox} alt="Foto ampliada" className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl" onClick={e => e.stopPropagation()} />
                     </div>
                 )}
             </div>
@@ -593,10 +842,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                                         type="checkbox"
                                                         checked={!!selectedUnitIds?.includes(item.property_id)}
                                                         disabled={!canPropose}
-                                                        onChange={() => {
-                                                            const u = units.find(x => x.id === item.property_id);
-                                                            if (u) onToggleUnit(u);
-                                                        }}
+                                                        onChange={() => toggleComPreco(item)}
                                                         title={isSold ? proposalTitle : 'Incluir esta unidade na proposta'}
                                                         className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-400 cursor-pointer disabled:cursor-not-allowed"
                                                     />
@@ -605,7 +851,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end">
                                                     <button
-                                                        onClick={() => handleMakeProposal(item.property_id)}
+                                                        onClick={() => handleMakeProposal(item)}
                                                         disabled={!canPropose}
                                                         title={proposalTitle}
                                                         className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap disabled:text-gray-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"

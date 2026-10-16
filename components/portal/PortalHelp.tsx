@@ -48,6 +48,8 @@ export interface PortalHelpProps {
    * ele põe no topo da primeira aba visível. Sem a prop, não há cartão.
    */
   checklistSlot?: HTMLElement | null;
+  /** cartão "Primeiros passos" em uma linha que abre a lista (celular) */
+  checklistCompacto?: boolean;
   /** só o Parceiro tem solicitações; sem a prop o botão não aparece */
   onOpenRequest?: () => void;
   /**
@@ -72,7 +74,7 @@ const soDigitos = (s: string) => s.replace(/\D/g, '');
 
 export const PortalHelp: React.FC<PortalHelpProps> = ({
   open, onClose, portal, token, orgId, visibleSections, currentSection, onNavigate, onOpenRequest,
-  tourKey, autoTour = false, forcarTour = null, modoPrevia = false, accent = 'orange', checklistSlot = null,
+  tourKey, autoTour = false, forcarTour = null, modoPrevia = false, accent = 'orange', checklistSlot = null, checklistCompacto = false,
 }) => {
   const a = ACCENT[accent];
   const podeTour = !!tourKey || modoPrevia;
@@ -165,6 +167,7 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
         onIr={onNavigate}
         onOcultar={gravaChecklist ? ocultarChecklist : undefined}
         accent={accent}
+        compacto={checklistCompacto}
       />,
       checklistSlot,
     )

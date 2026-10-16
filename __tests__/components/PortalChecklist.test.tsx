@@ -48,4 +48,17 @@ describe('PortalChecklist', () => {
     rerender(<PortalChecklist portal="parceiro" itens={[]} feitos={new Set()} />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  // Celular (docs/planos/2026-10-16-portal-corretor-mobile.md, D4): uma linha só.
+  it('compacto: uma linha com o progresso que abre a lista e recolhe de volta', async () => {
+    const user = userEvent.setup();
+    render(<PortalChecklist portal="parceiro" itens={itens} feitos={new Set([itens[0].key])} onIr={vi.fn()} compacto />);
+    const linha = screen.getByRole('button', { name: `Primeiros passos: 1 de ${itens.length} feitos. Abrir a lista` });
+    expect(linha).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText(itens[1].title)).not.toBeInTheDocument();
+    await user.click(linha);
+    expect(screen.getByText(itens[1].title)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Recolher' }));
+    expect(screen.queryByText(itens[1].title)).not.toBeInTheDocument();
+  });
 });

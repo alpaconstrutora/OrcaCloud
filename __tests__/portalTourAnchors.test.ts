@@ -100,7 +100,7 @@ describe('Primeiros passos: toda ação do checklist é avisada pelo portal (F8)
   const ONDE_AVISA: Record<Portal, string[]> = {
     parceiro: ['components/partner/PartnerPortal.tsx'],
     fornecedor: ['components/SupplierDashboard.tsx', 'components/supplier/portal/PortalInvoices.tsx', 'components/QuotationResponseForm.tsx'],
-    corretor: ['components/BrokerPortal.tsx', 'components/broker/BrokerLeadManager.tsx', 'components/broker/BrokerMaterials.tsx'],
+    corretor: ['components/BrokerPortal.tsx', 'components/broker/useBrokerPortal.ts', 'components/broker/BrokerLeadManager.tsx', 'components/broker/BrokerMaterials.tsx'],
     cliente: ['components/ClientArea.tsx'],
     treinamentos: ['components/training/TrainingPortal.tsx', 'components/training/useTrainingPortal.ts', 'components/training/portal/TraineeCatalogTab.tsx', 'components/training/portal/TraineeCertificatesTab.tsx'],
   };

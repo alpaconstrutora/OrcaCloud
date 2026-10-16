@@ -166,8 +166,9 @@ seletor em "/", e o fornecedor por e-mail abre sem a faixa.
   (print): Authentication › URL Configuration › Redirect URLs tem `https://orcacloud.vercel.app/**`,
   que cobre `/portal-cliente`, `/portal-fornecedor`, `/portal-corretor` e qualquer rota nova do
   domínio. Nada a cadastrar por portal.
-- [ ] Convite real de Cliente/Corretor/Fornecedor para uma caixa de entrada do usuário (único
-  passo que prova o e-mail chegando e o "criar senha" caindo na casca do portal).
+- [x] Convite real para uma caixa de entrada do usuário — testado pelo usuário em 2026-10-16
+  ("já fiz o teste e funcionou"): o e-mail chegou e o "criar senha" caiu no portal.
+  **Plano fechado — nada pendente.**
 
 ## Verificação
 

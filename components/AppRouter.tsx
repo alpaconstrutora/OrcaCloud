@@ -1276,7 +1276,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <TrainingsModule
           // Atribuição por obra: `typedProjects` já vem sem projeto de sistema e só OBRA (REGRA #2/#3).
-          projects={typedProjects.map(p => ({ id: p.id, name: p.name }))}
+          projects={typedProjects.map(p => ({ id: p.id, name: p.name, orgId: (p as { organizationId?: string }).organizationId ?? null }))}
           podeEditar={podeEditarTreinamentos({
             permissoes: currentMember?.permissions as unknown as Record<string, unknown> | undefined,
             administrador: currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !currentMember || currentMember.role === 'admin',

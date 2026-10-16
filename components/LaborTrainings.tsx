@@ -166,7 +166,7 @@ interface LaborTrainingsProps {
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
     /** Obras vindas de useStore().projects (sem projeto de sistema, só OBRA). */
-    projects?: Array<{ id: string; name: string }>;
+    projects?: Array<{ id: string; name: string; orgId?: string | null }>;
     podeEditar?: boolean;
 }
 

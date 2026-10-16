@@ -8,6 +8,7 @@ import {
 import AcademyAssignmentSheet, { type AlvoOpcao } from './AcademyAssignmentSheet';
 import { academyService } from '../../services/academyService';
 import { laborService } from '../../services/laborService';
+import { useOrgWriteTarget } from '../../hooks/useOrgContext';
 import type {
     AcademyAssignment, AcademyAssignmentAlvo, TrainingCourse,
 } from '../../types/academy';
@@ -105,7 +106,8 @@ interface Props {
     orgId?: string | null;
     courses: TrainingCourse[];
     employees: Employee[];
-    projects: Array<{ id: string; name: string }>;
+    /** `orgId` da obra recorta as obras do painel pela organização da atribuição. */
+    projects: Array<{ id: string; name: string; orgId?: string | null }>;
     podeEditar: boolean;
     notify: (msg: string, tipo?: 'success' | 'error') => void;
 }
@@ -127,7 +129,16 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
     const [assignments, setAssignments] = useState<AcademyAssignment[]>([]);
     const [carregando, setCarregando] = useState(true);
     const [processando, setProcessando] = useState(false);
-    const [sheet, setSheet] = useState<{ assignment: AcademyAssignment | null } | null>(null);
+    // O painel abre SEMPRE com a organização da atribuição: a do registro (editar)
+    // ou a escolhida (criar). Até 16/10/2026 o painel exigia a org do topo e, em
+    // "Todas as organizações", o clique em "Nova atribuição" não fazia nada —
+    // sem aviso (docs/planos/2026-10-16-treinamentos-em-portais-e-nova-atribuicao.md).
+    const [sheet, setSheet] = useState<{
+        assignment: AcademyAssignment | null;
+        orgId: string;
+        opcoes: Record<Exclude<AcademyAssignmentAlvo, 'TODOS'>, AlvoOpcao[]>;
+    } | null>(null);
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const [opcoes, setOpcoes] = useState<Record<Exclude<AcademyAssignmentAlvo, 'TODOS'>, AlvoOpcao[]>>({
         COLABORADOR: [], CARGO: [], FUNCAO: [], EQUIPE: [], OBRA: [],
     });
@@ -148,25 +159,50 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
 
     // Opções de alvo. Obras vêm do container (useStore().projects — já sem
     // projeto de sistema e só OBRA, REGRA #2/#3).
+    // `org` null = "Todas" (lista); com org, recorta pela organização do painel.
+    const carregarOpcoes = useCallback(async (org: string | null) => {
+        const [{ cargos, funcoes }, teams] = await Promise.all([
+            academyService.listCargoFuncaoOptions(org),
+            org ? laborService.listTeams(org) : Promise.resolve([]),
+        ]);
+        return {
+            COLABORADOR: employees
+                .filter(e => e.status === 'ATIVO' && (!org || e.org_id === org))
+                .map(e => ({ id: e.id, nome: e.name })),
+            CARGO: cargos.map(c => ({ id: c.id, nome: c.nome })),
+            FUNCAO: funcoes.map(f => ({ id: f.id, nome: f.nome })),
+            EQUIPE: (teams as Array<{ id: string; name: string }>).map(t => ({ id: t.id, nome: t.name })),
+            // Obra sem organização conhecida fica (melhor sobrar que sumir).
+            OBRA: projects.filter(p => !org || !p.orgId || p.orgId === org).map(p => ({ id: p.id, nome: p.name })),
+        };
+    }, [employees, projects]);
+
     useEffect(() => {
         (async () => {
             try {
-                const [{ cargos, funcoes }, teams] = await Promise.all([
-                    academyService.listCargoFuncaoOptions(orgId),
-                    orgId ? laborService.listTeams(orgId) : Promise.resolve([]),
-                ]);
-                setOpcoes({
-                    COLABORADOR: employees.filter(e => e.status === 'ATIVO').map(e => ({ id: e.id, nome: e.name })),
-                    CARGO: cargos.map(c => ({ id: c.id, nome: c.nome })),
-                    FUNCAO: funcoes.map(f => ({ id: f.id, nome: f.nome })),
-                    EQUIPE: (teams as Array<{ id: string; name: string }>).map(t => ({ id: t.id, nome: t.name })),
-                    OBRA: projects.map(p => ({ id: p.id, nome: p.name })),
-                });
+                setOpcoes(await carregarOpcoes(orgId ?? null));
             } catch {
                 // Opções incompletas não impedem ver a lista.
             }
         })();
-    }, [orgId, employees, projects]);
+    }, [orgId, carregarOpcoes]);
+
+    const abrirPainel = async (assignment: AcademyAssignment | null) => {
+        // Editar: a org é a do registro. Criar: o topo manda; em "Todas", pergunta
+        // (REGRA #5 — atribuição pertence a UMA organização, modo 'single').
+        let org: string | null = assignment?.org_id ?? null;
+        if (!org) {
+            const alvo = await resolveWriteOrg('single');
+            if (!alvo || alvo.kind !== 'org') return;   // cancelou
+            org = alvo.orgId;
+        }
+        try {
+            const opcoesDoPainel = org === orgId ? opcoes : await carregarOpcoes(org);
+            setSheet({ assignment, orgId: org, opcoes: opcoesDoPainel });
+        } catch (e: any) {
+            notify('Não foi possível carregar as opções da atribuição: ' + (e?.message || ''), 'error');
+        }
+    };
 
     const nomeDoAlvo = useCallback((a: AcademyAssignment) => {
         if (a.alvo_tipo === 'TODOS') return 'Toda a organização';
@@ -302,7 +338,7 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                     </button>
 
                     <button
-                        onClick={() => setSheet({ assignment: null })}
+                        onClick={() => { void abrirPainel(null); }}
                         disabled={!podeEditar || courses.length === 0}
                         title={!podeEditar ? 'Você não tem permissão para atribuir treinamentos'
                              : courses.length === 0 ? 'Cadastre um treinamento primeiro' : undefined}
@@ -377,7 +413,7 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                                             <div className="flex items-center justify-end gap-1.5">
                                                 <ActionIconButton
                                                     kind="edit"
-                                                    onClick={() => setSheet({ assignment: a })}
+                                                    onClick={() => { void abrirPainel(a); }}
                                                     disabled={!podeEditar}
                                                 />
                                                 <ActionIconButton
@@ -396,14 +432,17 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                 </div>
             )}
 
-            {sheet && orgId && (
+            {orgTargetModal}
+
+            {sheet && (
                 <AcademyAssignmentSheet
                     open
                     onClose={() => setSheet(null)}
-                    orgId={orgId}
-                    courses={courses}
+                    orgId={sheet.orgId}
+                    // Só os treinamentos da organização da atribuição.
+                    courses={courses.filter(c => c.org_id === sheet.orgId)}
                     assignment={sheet.assignment}
-                    opcoes={opcoes}
+                    opcoes={sheet.opcoes}
                     onSaved={() => { void carregar(); notify(sheet.assignment ? 'Atribuição atualizada.' : 'Atribuição criada.'); }}
                     notify={notify}
                 />

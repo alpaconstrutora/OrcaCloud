@@ -21,7 +21,7 @@ import { useEmployees, useOrganizations } from '../../hooks/useLaborQueries';
 
 interface Props {
     /** Obras (só OBRA, sem projeto de sistema) para atribuir por obra. */
-    projects?: Array<{ id: string; name: string }>;
+    projects?: Array<{ id: string; name: string; orgId?: string | null }>;
     podeEditar: boolean;
 }
 

@@ -475,6 +475,11 @@ const Layout: React.FC<LayoutProps> = ({
   const t = resolvedThemeMode === 'light' ? sidebarLight : resolvedThemeMode === 'midnight' ? sidebarMidnight : sidebarDark;
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
+  // Abre sozinho quando a tela ativa é um dos portais (ex.: chegar ao Portal de
+  // Treinamentos pelo endereço antigo `labor-trainings` ou pela busca).
+  React.useEffect(() => {
+    if (['client-properties','investor-portal','supplier-area','partner-workspaces-admin','broker-area','condomino-portal','treinamentos'].includes(activeView)) setIsPortalsOpen(true);
+  }, [activeView]);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
   const [isDesenvolvimentoImobOpen, setIsDesenvolvimentoImobOpen] = React.useState(false);
   const [isInteligenciaNegociosOpen, setIsInteligenciaNegociosOpen] = React.useState(false);
@@ -522,7 +527,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'dashboard', label: 'Dashboard', group: 'Geral', icon: LayoutDashboard },
       { id: 'tarefas', label: 'Minhas tarefas', group: 'Geral', icon: CheckSquare, shortcut: 'N' },
       { id: 'meus-treinamentos', label: 'Meus treinamentos', group: 'Geral', icon: GraduationCap },
-      { id: 'treinamentos', label: 'Treinamentos', group: 'Operacional', icon: GraduationCap },
+      { id: 'treinamentos', label: 'Portal de Treinamentos', group: 'Portais', icon: GraduationCap },
       { id: 'notifications-center', label: 'Notificações', group: 'Geral', icon: Bell },
       { id: 'eng-obras', label: 'Obras', group: 'Engenharia', icon: Building2 },
       { id: 'eng-orcamentos', label: 'Orcamentos', group: 'Engenharia', icon: FolderOpen },
@@ -993,13 +998,6 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              {/* Gestão de treinamentos — saiu de dentro de Recursos Humanos em
-                  16/10/2026: atende colaboradores e terceirizados, e quem gerencia
-                  não é só o RH. Permissão própria, herdando do RH. */}
-              {(mod.treinamentos || isDev) && (
-                <NavItem id="treinamentos" icon={GraduationCap} label="Treinamentos" />
-              )}
-
               {(mod.rh || isDev) && (
                 <NavDropdown
                   label="Recursos Humanos"
@@ -1197,7 +1195,7 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={Shield}
                     isOpen={isPortalsOpen}
                     onToggle={() => setIsPortalsOpen(o => !o)}
-                    hasActiveChild={['client-properties','investor-portal','supplier-area','partner-workspaces-admin','broker-area','condomino-portal'].includes(activeView)}
+                    hasActiveChild={['client-properties','investor-portal','supplier-area','partner-workspaces-admin','broker-area','condomino-portal','treinamentos'].includes(activeView)}
                   >
                     <DropdownItem id="client-properties" label="Portal do Cliente" icon={Building2} />
                     <DropdownItem id="investor-portal" label="Portal do Investidor" icon={TrendingUp} />
@@ -1210,11 +1208,24 @@ const Layout: React.FC<LayoutProps> = ({
                     {(mod.broker_portal || isDev) && (
                       <DropdownItem id="broker-area" label="Portal do Corretor" icon={Briefcase} />
                     )}
+                    {/* Gestão de treinamentos (catálogo, atribuições, registros, painéis e
+                        acessos de quem entra em /portal-treinamentos). Saiu do RH em
+                        16/10/2026 e veio para Portais em 16/10/2026 (mais tarde), a pedido do usuário.
+                        Permissão própria, herdando do RH (utils/permissaoTreinamentos.ts). */}
+                    {(mod.treinamentos || isDev) && (
+                      <DropdownItem id="treinamentos" label="Portal de Treinamentos" icon={GraduationCap} />
+                    )}
                   </NavDropdown>
                 </>
               ) : (
                 <>
                   <NavItem id="client-area" icon={User} label="Visão do Cliente" />
+                  {/* Portais só aparece para quem administra a organização; quem gerencia
+                      treinamento sem ser administrador (segurança do trabalho, engenharia)
+                      não pode perder o acesso — fica o item solto. */}
+                  {mod.treinamentos && (
+                    <NavItem id="treinamentos" icon={GraduationCap} label="Portal de Treinamentos" />
+                  )}
                 </>
               )}
 
@@ -1355,9 +1366,17 @@ const Layout: React.FC<LayoutProps> = ({
                   <NavItem id="supplier-area" icon={Truck} label="Portal do Fornecedor" forceFull />
                   <NavItem id="broker-area" icon={Briefcase} label="Portal do Corretor" forceFull />
                   <NavItem id="partner-workspaces-admin" icon={Users} label="Portal de Parceiros" forceFull />
+                  {(mod.treinamentos || isDev) && (
+                    <NavItem id="treinamentos" icon={GraduationCap} label="Portal de Treinamentos" forceFull />
+                  )}
                 </div>
               ) : (
-                <NavItem id="client-area" icon={User} label="Área do Cliente" forceFull />
+                <>
+                  <NavItem id="client-area" icon={User} label="Área do Cliente" forceFull />
+                  {mod.treinamentos && (
+                    <NavItem id="treinamentos" icon={GraduationCap} label="Portal de Treinamentos" forceFull />
+                  )}
+                </>
               )}
 
               <NavGroup label="Inteligência de Negócios" />
@@ -1370,9 +1389,6 @@ const Layout: React.FC<LayoutProps> = ({
               )}
 
               <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" forceFull />
-              {(mod.treinamentos || isDev) && (
-                <NavItem id="treinamentos" icon={GraduationCap} label="Treinamentos" forceFull />
-              )}
 
               {(mod.ecommerce || isDev) && (
                 <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" forceFull />

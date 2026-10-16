@@ -6,14 +6,14 @@
  * diâmetros, isolamento, gás e curvas; relançar é idempotente.
  */
 import { describe, expect, it } from 'vitest';
-import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { conexoesDerivadas } from '../utils/blueprintKernel/conexoes';
 import { HIPOTESES_CLIMATIZACAO_PADRAO, HIPOTESES_DA_LINHA_PADRAO, HIPOTESES_DE_SELECAO_PADRAO, hipotesesClimatizacaoDaColuna, type HipotesesClimatizacao } from '../utils/blueprintClimatizacao';
 import { cargaTermicaDoNivel } from '../utils/blueprintCargaTermica';
 import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
 import { modelosDoCatalogo, selecaoDoNivel } from '../utils/blueprintSelecaoClimatizacao';
 import { planejarEquipamentosSplit } from '../utils/blueprintPosicaoSplit';
-import { conferenciaDaLinha, drenosConferidos, drenosTrechoATrecho, faixaDaLinha, linhaExistente, linhasConferidas, planejarLinhasFrigorigenas, raioMinimoDaCurvaMm, sistemasDoNivel } from '../utils/blueprintLinhaFrigorigena';
+import { conferenciaDaLinha, drenosConferidos, drenosTrechoATrecho, faixaDaLinha, linhaExistente, linhasConferidas, planejarLinhasFrigorigenas, raioMinimoDaCurvaMm, saidaPelaParede, sistemasDoNivel } from '../utils/blueprintLinhaFrigorigena';
 import { marcasDeVerificacao } from '../utils/blueprintVerificacaoRede';
 
 const catalogo = modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades })));
@@ -178,5 +178,57 @@ describe('climatização E5.1/E5.2/E5.4 · linha e dreno do split lançado', () 
     expect(lim.estado).toBe('FALTA');
     expect(lim.obtido).toMatch(/acima do comprimento/);
     expect(linhasConferidas(depois, t, hipLinha)[0].pendencias.some((p) => /acima do máximo de 15 m/.test(p))).toBe(true);
+  });
+});
+
+describe('F14d — a evaporadora na parede externa; a linha e o dreno saem juntos pela parede e descem lado a lado', () => {
+  /** A mesma casa, com o split posto pela convenção da casa automática ("Evaporadora na parede externa"). */
+  function casaNaParedeExterna() {
+    const a = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = a.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    let m = applyBatch(a, [w(0, 0, 8000, 0), w(8000, 0, 8000, 4000), w(8000, 4000, 0, 4000), w(0, 4000, 0, 0), w(4000, 0, 4000, 4000)]).model;
+    const sala = m.spaces.find((s) => s.ring.every((p) => p.x <= 4100))!;
+    const coz = m.spaces.find((s) => s.id !== sala.id)!;
+    m = applyBatch(m, [{ type: 'NameSpace', spaceId: sala.id, name: 'Sala' }, { type: 'NameSpace', spaceId: coz.id, name: 'Cozinha' }]).model;
+    const carga = cargaTermicaDoNivel(m, hipClima, t);
+    const plano = planejarEquipamentosSplit(m, selecaoDoNivel(m, carga, HIPOTESES_DE_SELECAO_PADRAO, catalogo), carga, HIPOTESES_DE_SELECAO_PADRAO, { naParedeExterna: { topoMaximoMm: 2550 } });
+    return { m: applyBatch(m, plano.comandos).model, t };
+  }
+
+  it('a linha atravessa a parede atrás da evaporadora e desce pela fachada; o dreno, ao lado dela, desce até um ponto ao pé da fachada', () => {
+    const { m, t } = casaNaParedeExterna();
+    const s = sistemasDoNivel(m, t);
+    expect(s.length).toBeGreaterThan(0);
+    for (const x of s) expect(saidaPelaParede(m, x.evaporadora, x.condensadora)).not.toBeNull();
+    const plano = planejarLinhasFrigorigenas(m, t, hipLinha, { pelaParedeExterna: true });
+    expect(plano.motivo).toBeNull();
+    const r = applyBatch(m, plano.comandos).model;
+    const linha = trechos(r).filter((x) => x.disciplina === 'FRIGORIGENA');
+    const dreno = trechos(r).filter((x) => x.disciplina === 'DRENO_AC');
+    // A linha não sobe ao teto: fica na cota da evaporadora e desce pela fachada até a condensadora.
+    expect(Math.max(...linha.flatMap((x) => [x.cotaAMm, x.cotaBMm]))).toBeLessThanOrEqual(Math.max(...terminais(r).filter((x) => x.tipoHidraulico === 'EVAPORADORA_HI_WALL').map((x) => x.cotaMm)));
+    const descidas = linha.filter((x) => x.a.x === x.b.x && x.a.y === x.b.y && Math.abs(x.cotaAMm - x.cotaBMm) > 1000);
+    expect(descidas.length).toBe(s.length);
+    // O dreno termina num ponto de dreno ao pé da fachada, a até 30 cm da descida da linha.
+    const pontos = terminais(r).filter((x) => x.tipoHidraulico === 'PONTO_DRENO');
+    expect(pontos.length).toBe(s.length);
+    for (const p of pontos) {
+      expect(p.cotaMm).toBe(0);
+      expect(Math.min(...descidas.map((d) => Math.hypot(d.a.x - p.at.x, d.a.y - p.at.y)))).toBeLessThanOrEqual(300);
+    }
+    // Lado a lado, sem se encostar; o dreno sempre descendo; nada em porta ou janela.
+    const ids = new Set([...linha, ...dreno].map((x) => x.id));
+    const porId = new Map(trechos(r).map((x) => [x.id, x]));
+    const conflitos = conflitosDoModelo(r).filter((c) => ids.has(c.trechoId) && (c.classe === 'ABERTURA' || (c.classe === 'REDE' && ids.has(c.outroId))));
+    expect(conflitos.map((c) => `${c.classe} ${porId.get(c.trechoId)?.disciplina}`)).toEqual([]);
+    for (const d of dreno) expect(d.cotaBMm).toBeLessThanOrEqual(d.cotaAMm);
+  });
+
+  it('a evaporadora em parede interna, ou a condensadora longe: sem saída direta (a regra de antes)', () => {
+    const { m, t } = casaNaParedeExterna();
+    const x = sistemasDoNivel(m, t)[0];
+    // A condensadora do lado de DENTRO da casa: não há parede entre as duas.
+    expect(saidaPelaParede(m, x.evaporadora, { ...x.condensadora, at: point(2000, 2000) })).toBeNull();
   });
 });

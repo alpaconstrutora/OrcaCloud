@@ -84,6 +84,11 @@ export interface ContextoDoGeradorDeClimatizacao {
   circuitos?: { hip: HipotesesDeCircuitos; eletricas: HipotesesEletricas } | null;
   /** F14b da casa automática: a linha frigorígena no forro (faixa e afastamento); ausente = como antes. */
   linhaNoForro?: LinhaNoForro | null;
+  /**
+   * F14d da casa automática ("Evaporadora na parede externa"): a evaporadora na parede externa, mesmo sobre a janela
+   * (o topo dela até `topoMaximoMm`), e a linha e o dreno saindo juntos pela parede atrás dela. Ausente = a regra de antes.
+   */
+  splitNaParedeExterna?: { topoMaximoMm: number } | null;
 }
 
 /** Medidas do orçamento que a climatização alimenta (E9). */
@@ -159,7 +164,7 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
       for (const a of selecao.ambientes) {
         if (!a.sugestao.escolhido && a.sugestao.motivo && a.evaporadoras.length === 0) pendencia('SEM_SOLUCAO', `${nomeDoNivel(nivel.levelId)} › ${a.nome}: ${a.sugestao.motivo}`);
       }
-      const plano = planejarEquipamentosSplit(m, selecao, nivel, hip.selecao);
+      const plano = planejarEquipamentosSplit(m, selecao, nivel, hip.selecao, { naParedeExterna: cx.splitNaParedeExterna ?? null });
       n += aplicar(plano.comandos);
       // 11/10/2026: as pendências do ambiente sobre o desenho DEPOIS do lote — antes saía "evaporadora sem
       // condensadora" para a evaporadora que acabou de ganhar a dela.
@@ -186,7 +191,7 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
     let n = 0;
     const notas: string[] = [];
     for (const levelId of niveis) {
-      const plano = planejarLinhasFrigorigenas(m, levelId, hip.linha, { noForro: cx.linhaNoForro ?? null });
+      const plano = planejarLinhasFrigorigenas(m, levelId, hip.linha, { noForro: cx.linhaNoForro ?? null, pelaParedeExterna: !!cx.splitNaParedeExterna });
       n += aplicar(plano.comandos);
       for (const s of plano.semLugar) pendencia('SEM_SOLUCAO', `${nomeDoNivel(levelId)} › ${s.nome}: ${s.motivo}`);
       if (plano.aCriar.length) notas.push(`${nomeDoNivel(levelId)}: ${plano.aCriar.length} sistema(s)`);

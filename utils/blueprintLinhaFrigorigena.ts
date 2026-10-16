@@ -41,7 +41,7 @@
  * como peça no fim da linha (FRIGORIGENA) e do dreno (DRENO_AC).
  */
 import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho, Wall } from './blueprintKernel';
-import { TIPOS_DE_CONDENSADORA, TIPOS_DE_EVAPORADORA, applyBatch } from './blueprintKernel';
+import { TIPOS_DE_CONDENSADORA, TIPOS_DE_EVAPORADORA, applyBatch, pointInPolygon } from './blueprintKernel';
 import { conexoesDerivadas } from './blueprintKernel/conexoes';
 import { comprimentoMm, fazerChave, menorCaminhoEntre, type Aresta, type No } from './blueprintGrafoDeRede';
 import { arvorePelasParedes, chaveP, encaixarNaParede, type P2 } from './blueprintRotaPelasParedes';
@@ -407,7 +407,134 @@ export interface LinhaNoForro {
   folgaSobAVigaMm: number;
 }
 
-export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: ObjectId, hip: HipotesesDaLinha, opcoes: { noForro?: LinhaNoForro | null } = {}): PlanoDaLinha {
+/** F14d: a distância entre a linha e o dreno que saem juntos pela parede, mm (eixo a eixo). */
+const DRENO_AO_LADO_DA_LINHA_MM = 120;
+/** F14d: quanto a linha e o dreno se afastam da face externa da parede ao descer pela fachada, mm. */
+const AFASTAMENTO_NA_FACHADA_MM = 150;
+/** F14d: até onde, além da ponta da evaporadora, a saída dos tubos pode ficar ("ao lado dela"), mm. */
+const SAIDA_ALEM_DA_PONTA_MM = 400;
+/** F14d: o dreno sai da evaporadora DESCENDO isto antes de ir para a parede (a linha sai na cota dela), mm. */
+const DRENO_ABAIXO_DA_LINHA_MM = 80;
+/** F14d: a condensadora a até isto da face externa da parede da evaporadora (perpendicular) para a saída direta, mm. */
+const CONDENSADORA_ATRAS_ATE_MM = 1500;
+
+export interface SaidaPelaParede {
+  /** No eixo da parede e do lado de fora (face + afastamento), a linha e o dreno. */
+  linhaNoEixo: P2;
+  linhaFora: P2;
+  drenoNoEixo: P2;
+  drenoFora: P2;
+  /** Onde descem pela fachada: o mesmo ponto de fora, ou além do batente quando saem acima da janela. */
+  linhaDesce: P2;
+  drenoDesce: P2;
+}
+
+/**
+ * F14d da casa automática (decisão do usuário, 16/10/2026: "Evaporadora na parede externa"): a evaporadora encostada
+ * numa parede externa com a condensadora do outro lado dela — a linha e o dreno saem JUNTOS pela parede, atrás da
+ * evaporadora ou ao lado dela (até `SAIDA_ALEM_DA_PONTA_MM` além da ponta), sobre parede cheia ou acima da verga, a
+ * `DRENO_AO_LADO_DA_LINHA_MM` um do outro, fora de pilar e longe das prumadas das outras redes; por fora, descem lado a
+ * lado pela fachada — além do batente, se saíram acima da janela. `null` = não há a saída direta (a evaporadora em
+ * parede interna, a condensadora longe ou em outro pavimento, ou nenhum ponto livre).
+ */
+export function saidaPelaParede(model: BlueprintModel, e: Terminal, c: Terminal): SaidaPelaParede | null {
+  if (c.levelId !== e.levelId) return null;
+  const meiaProf = (e.profundidadeMm ?? 220) / 2;
+  const meiaLarg = (e.larguraMm ?? 900) / 2;
+  let melhor: { w: Wall; u: P2; n: P2; te: number; tc: number; L: number; d: number } | null = null;
+  for (const w of model.walls) {
+    if (w.levelId !== e.levelId) continue;
+    const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    if (L < 1) continue;
+    const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+    const lado = (p: P2) => (p.x - w.a.x) * u.y - (p.y - w.a.y) * u.x;
+    const te = (e.at.x - w.a.x) * u.x + (e.at.y - w.a.y) * u.y;
+    const tc = (c.at.x - w.a.x) * u.x + (c.at.y - w.a.y) * u.y;
+    const de = lado(e.at);
+    const dc = lado(c.at);
+    if (te < 0 || te > L || Math.abs(de) > w.thicknessMm / 2 + meiaProf + 60) continue;
+    if (Math.sign(de) === Math.sign(dc) || Math.abs(dc) > w.thicknessMm / 2 + CONDENSADORA_ATRAS_ATE_MM || tc < -500 || tc > L + 500) continue;
+    // A normal para FORA (o lado da condensadora).
+    const n = dc > 0 ? { x: u.y, y: -u.x } : { x: -u.y, y: u.x };
+    if (!melhor || Math.abs(de) < melhor.d) melhor = { w, u, n, te, tc, L, d: Math.abs(de) };
+  }
+  if (!melhor) return null;
+  const { w, u, n, te, tc, L } = melhor;
+  const vaos = model.openings.filter((o) => o.wallId === w.id);
+  const raio = 40;
+  const noEixo = (t: number) => ({ x: Math.round(w.a.x + u.x * t), y: Math.round(w.a.y + u.y * t) });
+  const fora = (p: P2, mais = 0) => ({ x: Math.round(p.x + n.x * (w.thicknessMm / 2 + AFASTAMENTO_NA_FACHADA_MM + mais)), y: Math.round(p.y + n.y * (w.thicknessMm / 2 + AFASTAMENTO_NA_FACHADA_MM + mais)) });
+  // Os obstáculos: o vão na cota da saída, o pilar, e as prumadas das outras redes que passam nessa cota.
+  const pilares = pegadasDePilares(model, e.levelId);
+  const prumadas = (model.trechos ?? []).filter(
+    (t) => t.levelId === e.levelId && t.a.x === t.b.x && t.a.y === t.b.y && t.disciplina !== 'FRIGORIGENA' && t.disciplina !== 'DRENO_AC' && Math.min(t.cotaAMm, t.cotaBMm) < e.cotaMm + 100 && Math.max(t.cotaAMm, t.cotaBMm) > e.cotaMm - 200,
+  );
+  const distSeg = (p: P2, a: P2, b: P2) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const L2 = dx * dx + dy * dy;
+    const k = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2));
+    return Math.hypot(p.x - (a.x + k * dx), p.y - (a.y + k * dy));
+  };
+  const longeDasPrumadas = (a: P2, b: P2) => prumadas.every((t) => distSeg(t.a, a, b) > raio + t.bitolaMm / 2 + 20);
+  const livre = (t: number) => {
+    if (t < 0 || t > L) return false;
+    if (!vaos.every((o) => t < o.offsetMm - raio || t > o.offsetMm + o.widthMm + raio || e.cotaMm - raio > o.sillMm + o.heightMm || e.cotaMm + raio < o.sillMm)) return false;
+    const p = noEixo(t);
+    const q = fora(p);
+    if (pilares.some((g) => pointInPolygon(g, p as Point) || pointInPolygon(g, q as Point) || g.some((v, i) => distSeg(p, g[(i + g.length - 1) % g.length], v) < raio))) return false;
+    // E o caminho da evaporadora até ali não corta o pilar (o do canto, na térrea a 0°).
+    for (let k = 1; k < 20; k++) {
+      const r = { x: e.at.x + ((p.x - e.at.x) * k) / 20, y: e.at.y + ((p.y - e.at.y) * k) / 20 };
+      if (pilares.some((g) => pointInPolygon(g, r as Point) || g.some((v, i) => distSeg(r, g[(i + g.length - 1) % g.length], v) < raio))) return false;
+    }
+    return longeDasPrumadas(e.at, p) && longeDasPrumadas(p, q);
+  };
+  // Por fora, a descida não passa diante de janela — saindo acima dela, os dois correm até além do batente.
+  const diante = (t: number) => vaos.some((o) => o.kind === 'window' && o.sillMm < e.cotaMm && t > o.offsetMm - 60 && t < o.offsetMm + o.widthMm + 60);
+  const deslocamento = (tl: number): number | null => {
+    if (!diante(tl)) return 0;
+    for (let k = 10; k <= L; k += 10) for (const sinal of tc >= tl ? [1, -1] : [-1, 1]) if (tl + sinal * k >= 0 && tl + sinal * k <= L && !diante(tl + sinal * k)) return sinal * k;
+    return null;
+  };
+  // O ponto livre mais perto do meio da evaporadora; o dreno a `DRENO_AO_LADO_DA_LINHA_MM` da linha, do lado OPOSTO
+  // ao da condensadora (contado de onde a linha desce) — a linha volta pela fachada até ela e passava rente à descida
+  // do dreno.
+  let escolha: { tl: number; td: number; delta: number; d: number } | null = null;
+  for (let tl = te - meiaLarg - SAIDA_ALEM_DA_PONTA_MM; tl <= te + meiaLarg + SAIDA_ALEM_DA_PONTA_MM; tl += 10) {
+    const d = Math.abs(tl - te);
+    if ((escolha && d >= escolha.d) || !livre(tl)) continue;
+    const delta = deslocamento(tl);
+    if (delta == null) continue;
+    for (const sentido of tc >= tl + delta ? [-1, 1] : [1, -1]) {
+      const td = tl + sentido * DRENO_AO_LADO_DA_LINHA_MM;
+      if (!livre(td) || diante(td + delta)) continue;
+      escolha = { tl, td, delta, d };
+      break;
+    }
+  }
+  if (!escolha) return null;
+  const { tl, td, delta } = escolha;
+  const linhaNoEixo = noEixo(tl);
+  const drenoNoEixo = noEixo(td);
+  return {
+    linhaNoEixo,
+    linhaFora: fora(linhaNoEixo),
+    drenoNoEixo,
+    // Por fora, o dreno corre um passo MAIS AFASTADO da fachada que a linha: deslocados além do batente, o dreno que corria
+    // na mesma linha passava pela descida dela.
+    drenoFora: fora(drenoNoEixo, DRENO_AO_LADO_DA_LINHA_MM),
+    linhaDesce: fora(noEixo(tl + delta)),
+    drenoDesce: fora(noEixo(td + delta), DRENO_AO_LADO_DA_LINHA_MM),
+  };
+}
+
+export function planejarLinhasFrigorigenas(
+  model: BlueprintModel,
+  levelId: ObjectId,
+  hip: HipotesesDaLinha,
+  opcoes: { noForro?: LinhaNoForro | null; pelaParedeExterna?: boolean } = {},
+): PlanoDaLinha {
   const noForro = opcoes.noForro ?? null;
   const vazio = (motivo: string, apagar: Command[] = []): PlanoDaLinha => ({ comandos: apagar, aCriar: [], jaLigados: [], semLugar: [], apagados: apagar.length, motivo, resumo: [] });
   // Relançar apaga o que este planejador sugeriu antes: a linha do SPLIT deste pavimento (C1: onde
@@ -467,7 +594,19 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     const prumada = outroNivel ? pontoDaPrumada(base, c.at, pavimentosEntre(base, e.levelId, c.levelId).map((x) => x.id), hip.raioDoShaftMm) : null;
     /** Onde a linha sai deste pavimento: a prumada, ou a própria condensadora. */
     const saidaAt = prumada?.at ?? c.at;
-    if (precisaLinha) {
+    // F14d: a saída direta pela parede externa (linha e dreno juntos, lado a lado pela fachada).
+    const direta = opcoes.pelaParedeExterna && !outroNivel ? saidaPelaParede(base, e, c) : null;
+    if (precisaLinha && direta) {
+      const baseLinha = { levelId, disciplina: 'FRIGORIGENA' as const, bitolaMm: faixa.liquidoMm, bitolaSuccaoMm: faixa.succaoMm, isolamentoMm, sugerido: true };
+      const antes = l.comandos.length;
+      // Da evaporadora ao eixo da parede atrás dela, para fora, desce pela fachada e entra na condensadora por baixo.
+      l.add(baseLinha, e.at, e.cotaMm, direta.linhaNoEixo, e.cotaMm);
+      l.add(baseLinha, direta.linhaNoEixo, e.cotaMm, direta.linhaFora, e.cotaMm);
+      if (!mesmoP(direta.linhaFora, direta.linhaDesce)) l.add(baseLinha, direta.linhaFora, e.cotaMm, direta.linhaDesce, e.cotaMm);
+      l.add(baseLinha, direta.linhaDesce, e.cotaMm, direta.linhaDesce, c.cotaMm);
+      l.add(baseLinha, direta.linhaDesce, c.cotaMm, c.at, c.cotaMm);
+      comprimento = l.arestas.slice(antes).reduce((acc, a) => acc + a.mm, 0);
+    } else if (precisaLinha) {
       const paredesDaRota = noForro ? paredesDoForro(base, levelId, noForro.faixa.afastamentoDaFaceMm) : undefined;
       // F14b: as prumadas das outras redes (as colunas de água) que cruzam a faixa da linha são obstáculo.
       const prumadas = noForro ? prumadasQueCruzam(base, levelId, cotaLinha, 'FRIGORIGENA', 2 * (faixa.succaoMm / 2 + isolamentoMm) + 5) : [];
@@ -516,7 +655,13 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     let destinoAt: P2;
     let destinoCota: number;
     let destino: 'PONTO_EXISTENTE' | 'PONTO_NOVO_NA_FACHADA';
-    if (existentePonto) {
+    if (direta && !existentePonto) {
+      // F14d: ao pé da fachada, sob a saída do dreno — ele desce ao lado da linha.
+      destinoAt = direta.drenoDesce;
+      destinoCota = 0;
+      destino = 'PONTO_NOVO_NA_FACHADA';
+      pecas.push({ type: 'AddTerminal', levelId, disciplina: 'DRENO_AC', tipo: 'Ponto de dreno', tipoHidraulico: 'PONTO_DRENO', at: destinoAt, cotaMm: 0, sugerida: true } as Command);
+    } else if (existentePonto) {
       destinoAt = existentePonto.at;
       destinoCota = existentePonto.cotaMm;
       destino = 'PONTO_EXISTENTE';
@@ -547,7 +692,12 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     }
     // F14c: no forro, o dreno (no eixo da parede, junto do teto) desvia das prumadas das outras redes — a descida da
     // água fria dentro da parede, do forro ao ponto, cruzava o dreno que corria na mesma parede (térrea a 30°).
-    const caminhoDreno = caminhoEmPlanta(base, levelId, e.at, destinoAt, hip, undefined, noForro ? prumadasQueCruzam(base, levelId, e.cotaMm, 'DRENO_AC', hip.dnDrenoMm / 2, 10, false) : []);
+    // F14d: na saída direta, atrás da evaporadora → para fora → e o último lance, de comprimento zero em planta, é a
+    // descida pela fachada até o ponto (o laço da gravidade dá a ele a cota do destino).
+    const caminhoDreno =
+      direta && !existentePonto
+        ? { pontos: [e.at, direta.drenoNoEixo, direta.drenoFora, ...(mesmoP(direta.drenoFora, direta.drenoDesce) ? [] : [direta.drenoDesce]), direta.drenoDesce], pelaParede: true }
+        : caminhoEmPlanta(base, levelId, e.at, destinoAt, hip, undefined, noForro ? prumadasQueCruzam(base, levelId, e.cotaMm, 'DRENO_AC', hip.dnDrenoMm / 2, 10, false) : []);
     const pontosD = caminhoDreno.pontos;
     // C6: o caminho por gravidade já com o vértice do SIFÃO (colinear: não muda o comprimento).
     const comSifao = verticeNoCaminho(pontosD, hip.distanciaDoSifaoMm);
@@ -593,6 +743,12 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
       // Gravidade: cada lance desce a sua queda; o último cai na cota do destino (que está abaixo, pela conta acima).
       let atual: P2 = e.at;
       let cota = cotaSaida;
+      // F14d: na saída direta, o dreno desce primeiro sob a evaporadora — a linha sai na cota dela, ao lado; saindo do
+      // mesmo nó quase na mesma direção, os dois se encostavam (25 mm).
+      if (direta && !existentePonto) {
+        addDreno(e.at, cota, e.at, cota - DRENO_ABAIXO_DA_LINHA_MM);
+        cota -= DRENO_ABAIXO_DA_LINHA_MM;
+      }
       pontosG.slice(1).forEach((q, i, arr) => {
         const ultimo = i === arr.length - 1;
         const cotaQ = ultimo ? destinoCota : cota - quedas[i];

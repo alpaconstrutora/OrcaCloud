@@ -123,7 +123,7 @@ export function hipotesesDasPremissas(p: PremissasDaCasa): Partial<HipotesesDaCa
     mobiliario: { lancar: d.mobiliario } as HipotesesDaCasa['mobiliario'],
     hidraulica: { lancar: d.hidraulica },
     eletrica: { lancar: d.eletrica, chuveiroEletricoVA: p.eletrica.chuveiroEletricoVA, medidor: p.eletrica.medidor } as HipotesesDaCasa['eletrica'],
-    climatizacao: { lancar: d.climatizacao },
+    climatizacao: { lancar: d.climatizacao } as HipotesesDaCasa['climatizacao'],
     pavimentos: p.pavimentos,
     sobrado: { lajeEntrePavimentosMm: p.sobrado.lajeEntrePavimentosMm, shaftMm: p.sobrado.shaftMm } as HipotesesDaCasa['sobrado'],
     pressao: { resolver: true, caixaElevadaAteMm: p.pressao.caixaElevadaAteMm, potenciaDoPressurizadorW: p.pressao.potenciaDoPressurizadorW },

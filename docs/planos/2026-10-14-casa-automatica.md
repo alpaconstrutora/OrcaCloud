@@ -1702,3 +1702,64 @@ seguinte, com o mesmo código, deu o resultado real): número que muda muito sem
 arquivos de teste, tipos e build; o 1º push pegou 2 erros de tipo que o `tsc` local, caindo por segfault, não mostrou).
 Check-run `ci` da main verde; o domínio serve um commit que contém este, com "Furos previstos para o calculista" no
 bundle. Harness: 103 conferências, nenhuma reprovada (térrea e sobrado, 0° e 30°).
+
+## F14d — a linha do ar e o dreno lado a lado; provas (16/10/2026, "sim" para seguir)
+
+### Retrato (12 × 30, R1-N, catálogo e chuva) — antes
+
+| | Térrea 0° | Térrea 30° | Sobrado 0° | Sobrado 30° |
+|---|---|---|---|---|
+| Rede × rede | 1 (alimentador) | 9 (alimentador) | 0 | 0 |
+| Dreno passando por janela | 6 | 6 | 6 | 3 |
+| Água passando por porta ou janela | 0 | 4 | 7 | 9 |
+| Dreno a até 30 cm da linha frigorígena | 19 % | 20 % | 49 % | 70 % |
+
+Na térrea a 0°, 3 das 4 evaporadoras ficam em parede INTERNA: a regra do split prefere a parede externa, mas só num
+trecho livre de janela — a fachada cheia de janelas a manda para dentro. A linha sobe ao forro e vai quase reta à
+condensadora (4 m); o dreno, que sai da evaporadora a 2,20 m e só pode descer, corre embutido nas paredes a ~2,15 m
+por até 9,6 m até a fachada — na altura das janelas (1,00 a 2,20 m) — e cai em diagonal até o ponto de dreno.
+
+### Decisão do usuário (16/10/2026)
+
+Pergunta: *"Para a linha frigorígena e o dreno do ar correrem juntos (F14d), qual convenção a casa automática
+segue?"* — Resposta: **"Evaporadora na parede externa"** (a evaporadora sempre na parede externa do cômodo, mesmo
+sobre a janela, a 2,20 m acima da verga; linha e dreno saem JUNTOS pela parede, ao lado dela, e descem lado a lado
+pela fachada até a condensadora e o ponto de dreno; cômodo sem parede externa cai na bomba de dreno). Descartadas:
+bomba de dreno e forro em todo split fora da parede externa; dreno embutido sob o peitoril.
+
+### Registro da F14d (16/10/2026) — a linha do ar e o dreno lado a lado
+
+**Posição do split** (`OpcoesDaPosicaoDoSplit.naParedeExterna`, ligada pela casa): a evaporadora vai para a parede
+EXTERNA do cômodo mesmo sobre a janela — sobe até a base passar da verga, com o topo abaixo do forro
+(`climatizacao.folgaDaEvaporadoraAoForroMm`, 30) — com uma faixa de parede cheia de 20 cm a até 40 cm além da ponta
+dela (a saída); sem parede cheia (o lado inteiro é janela: a suíte de cima do sobrado), a saída é atrás dela, acima
+da verga. A condensadora fica do lado de fora, sob a saída.
+
+**Linha e dreno** (`saidaPelaParede`, `planejarLinhasFrigorigenas(..., { pelaParedeExterna })`): os dois atravessam a
+parede juntos, a 12 cm um do outro, fora de vão, de pilar e longe das prumadas das outras redes; o dreno desce 8 cm
+sob a evaporadora antes de ir para a parede (a linha sai na cota dela) e, por fora, corre 12 cm mais afastado da
+fachada; saindo acima da janela, os dois correm até além do batente e só então descem lado a lado — a linha até a
+condensadora, o dreno até um ponto de dreno ao pé da fachada, por gravidade. Sem saída direta (evaporadora em parede
+interna, condensadora longe), a regra de antes.
+
+**De quebra** (o que a medição expôs): a subida do alimentador sai do vão de todo pavimento que atravessa (subia pela
+janela alta do banheiro de cima); o aquecedor tenta o outro cômodo candidato e, com a parede externa toda tomada
+(janela, shaft, laje rebaixada), uma parede interna fora do vão e do pilar, com o duto de exaustão dito na pendência;
+a coluna de água escorrega pela parede inteira para fora do vão.
+
+**Medido** (12 × 30, R1-N, catálogo e chuva):
+
+| | Térrea 0° | Térrea 30° | Sobrado 0° | Sobrado 30° |
+|---|---|---|---|---|
+| Dreno a até 30 cm da linha (antes → depois) | 19 % → 100 % | 20 % → 100 % | 49 % → 100 % | 70 % → 100 % |
+| Dreno em porta ou janela | 6 → 0 | 6 → 0 | 6 → 0 | 3 → 0 |
+| Linha + dreno, comprimento | 54,0 → 24,1 m | 54,4 → 23,6 m | 32,4 → 24,6 m | 30,8 → 24,0 m |
+| Encontros linha × dreno | 0 | 0 | 0 | 0 |
+
+Harness: 107 conferências, nenhuma reprovada (as quatro novas da F14d: dreno junto da linha ≥ 95 %, nenhum dreno em
+vão, nenhum encontro linha × dreno).
+
+**Pendência fora da F14 (mobiliário):** a água ainda entra em PORTA em três casas porque a louça está encostada na
+parede da porta, dentro do vão dela (o vaso do banheiro social de cima no sobrado a 0°; o chuveiro e o lavatório
+junto da porta nas casas a 30°) — o mobiliário põe a peça diante da porta; a rede só denuncia. Já estava no retrato
+antes da F14.

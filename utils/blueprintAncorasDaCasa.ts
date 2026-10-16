@@ -18,7 +18,7 @@
  * Tudo nasce `sugerida` — mover confirma, como os outros automáticos. Puro: lê o modelo, devolve comandos.
  */
 import { pointInPolygon, polygonArea, type BlueprintModel, type Command, type ObjectId, type Point, type Space } from './blueprintKernel';
-import { DIMENSAO_DA_VAGA, pavimentosDoNucleo } from './blueprintKernel';
+import { DIMENSAO_DA_VAGA, pavimentosDoNucleo, pegadaEmPlanta } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { dimensionarReservacao, HIPOTESES_RESERVATORIO_PADRAO, type HipotesesDeReservatorio } from './blueprintReservacao';
 import { usoDoNome, type PadraoDaCasa, type UsoDoAmbiente } from './blueprintPrograma';
@@ -128,6 +128,23 @@ function ladoExterno(s: Space, espacos: readonly Space[], sonda: number): { a: P
   return lados.sort((p, q) => q.comprimento - p.comprimento)[0] ?? null;
 }
 
+/** F14d: os lados do cômodo (≥ 60 cm), do maior ao menor, com a normal para FORA dele. */
+function ladosDoComodo(s: Space): { a: Point; b: Point; n: Point; comprimento: number }[] {
+  const c = centroide(s.ring);
+  const lados: { a: Point; b: Point; n: Point; comprimento: number }[] = [];
+  for (let i = 0; i < s.ring.length; i++) {
+    const a = s.ring[i];
+    const b = s.ring[(i + 1) % s.ring.length];
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L < 600) continue;
+    let n = { x: -(b.y - a.y) / L, y: (b.x - a.x) / L };
+    const meio = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    if ((c.x - meio.x) * n.x + (c.y - meio.y) * n.y > 0) n = { x: -n.x, y: -n.y };
+    lados.push({ a, b, n, comprimento: L });
+  }
+  return lados.sort((p, q) => q.comprimento - p.comprimento);
+}
+
 /** F14b: o mínimo entre o eixo do aquecedor e o batente — metade do aparelho (~30 cm de largura). */
 const AQUECEDOR_FORA_DO_BATENTE_MM = 150;
 
@@ -153,6 +170,13 @@ function posicaoForaDosVaos(model: BlueprintModel, levelId: ObjectId, lado: { a:
       const t1 = t({ x: w.a.x + uw.x * (o.offsetMm + o.widthMm), y: w.a.y + uw.y * (o.offsetMm + o.widthMm) } as Point);
       bloqueados.push([Math.min(t0, t1) - folga, Math.max(t0, t1) + folga]);
     }
+  }
+  // F14d: e o PILAR encostado no lado (o aquecedor na parede interna caía rente ao pilar do canto e a ligação o cortava).
+  for (const pil of (model.structures ?? []).filter((x) => x.kind === 'PILAR' && x.levelId === levelId)) {
+    const g = pegadaEmPlanta(pil);
+    if (Math.min(...g.map((q) => d(q))) > 400) continue;
+    const ts = g.map((q) => t(q));
+    bloqueados.push([Math.min(...ts) - folga, Math.max(...ts) + folga]);
   }
   // F14c: e o SHAFT encostado na parede — o aquecedor do sobrado a 30° ficou dentro dele (a água entrava e saía pelo
   // meio do shaft, onde descem o tubo de queda e as colunas).
@@ -225,9 +249,14 @@ export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras
     else {
       // Na parede externa da área de serviço; sem ela, na da cozinha (dito, para conferir a ventilação).
       const candidatos = [maisPerto(doUso('AREA_DE_SERVICO')), maisPerto(doUso('COZINHA'))].filter((x): x is Space => !!x);
-      const comLado = candidatos.map((sp) => ({ sp, lado: ladoExterno(sp, espacos, sonda) })).find((x) => x.lado);
+      // F14d: o primeiro cômodo com parede externa E trecho livre de vão (fora da laje rebaixada e do shaft); só sem
+      // nenhum assim, o primeiro com parede externa (e o aquecedor fica diante do vão, dito) — na área de serviço do
+      // sobrado, a parede externa é quase toda janela e as ligações dele corriam pelo vão.
+      const comLados = candidatos.map((sp) => ({ sp, lado: ladoExterno(sp, espacos, sonda) })).filter((x) => x.lado);
+      const comLado =
+        comLados.find((x) => posicaoForaDosVaos(model, cx.levelId, x.lado!, AQUECEDOR_FORA_DO_BATENTE_MM + hip.aquecedorFriaQuenteMm / 2) != null) ?? comLados[0];
       const serv = comLado?.sp ?? null;
-      const lado = comLado?.lado ?? null;
+      let lado = comLado?.lado ?? null;
       if (!serv || !lado) pendencias.push(`Aquecedor: ${candidatos.length ? `${candidatos.map((x) => x.name).join(' e ')} sem parede externa` : 'sem área de serviço nem cozinha'} — o aquecedor a gás pede ventilação; ponha à mão.`);
       else {
         if (serv !== candidatos[0]) pendencias.push(`Aquecedor na ${serv.name}: ${candidatos[0].name} não tem parede externa — confira a ventilação permanente (NBR 13103).`);
@@ -245,7 +274,20 @@ export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras
         if (t == null && diante != null) {
           t = diante;
           pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre de janela e porta fora da laje rebaixada — ficou diante do vão; confira.`);
-        } else if (t == null) pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre de janela e porta — ficou no meio, diante do vão; confira.`);
+        } else if (t == null) {
+          // F14d: nem assim (janela, shaft e laje rebaixada tomam a parede externa inteira — a área de serviço do sobrado):
+          // numa parede INTERNA do cômodo, fora do vão, com o duto de exaustão até a fachada. Diante da janela, as
+          // ligações dele corriam pelo vão.
+          const interna = ladosDoComodo(serv)
+            .filter((x) => !(Math.abs(x.a.x - lado!.a.x) < 1 && Math.abs(x.a.y - lado!.a.y) < 1 && Math.abs(x.b.x - lado!.b.x) < 1 && Math.abs(x.b.y - lado!.b.y) < 1))
+            .map((x) => ({ x, t: posicaoForaDosVaos(model, cx.levelId, x, AQUECEDOR_FORA_DO_BATENTE_MM + hip.aquecedorFriaQuenteMm / 2) }))
+            .find((x) => x.t != null);
+          if (interna) {
+            lado = interna.x;
+            t = interna.t;
+            pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre (janela, shaft, laje rebaixada) — ficou numa parede interna; o duto de exaustão atravessa até a fachada: confira (NBR 13103).`);
+          } else pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre de janela e porta — ficou no meio, diante do vão; confira.`);
+        }
         else if (folgaUsada < hip.aquecedorLongeDoVaoMm) pendencias.push(`Aquecedor na ${serv.name}: a ${f2(folgaUsada / 1000)} m do vão (pedido: ${f2(hip.aquecedorLongeDoVaoMm / 1000)} m) — a parede externa não tem mais trecho livre.`);
         const u = { x: (lado.b.x - lado.a.x) / lado.comprimento, y: (lado.b.y - lado.a.y) / lado.comprimento };
         const recuo = cx.espessuraExternaMm / 2 + hip.aquecedorDaFaceMm;
@@ -256,7 +298,7 @@ export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras
           comandos.push({ type: 'AddTerminal', levelId: cx.levelId, disciplina, tipo: 'Aquecedor', at: noLado(d), cotaMm: hip.cotaDoAquecedorMm, tipoHidraulico: 'AQUECEDOR', sugerida: true });
         }
         resumo.aquecedor = true;
-        notas.push(`Aquecedor de passagem na parede externa de ${serv.name}.`);
+        notas.push(`Aquecedor de passagem na parede ${t != null && pendencias.some((x) => x.includes('ficou numa parede interna')) ? 'interna' : 'externa'} de ${serv.name}.`);
       }
     }
   }

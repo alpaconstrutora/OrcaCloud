@@ -112,7 +112,30 @@ interface LugarDaEvaporadora {
   normal: { x: number; y: number };
   externa: boolean;
   livreMm: number;
+  /** F14d: a cota do centro quando ela sobe para passar sobre a janela; ausente = a do modelo. */
+  cotaMm?: number;
+  /** F14d: onde a linha e o dreno atravessam a parede (na face, sobre parede cheia, na ponta da evaporadora). */
+  saida?: Point;
 }
+
+/**
+ * F14d da casa automática (decisão do usuário, 16/10/2026: "Evaporadora na parede externa"): a evaporadora vai para a
+ * parede EXTERNA do ambiente mesmo sobre a janela — sobe até a base dela passar da verga, sem passar do `topoMaximoMm`
+ * (o forro) — com uma PONTA sobre parede cheia, por onde a linha e o dreno saem juntos; a condensadora fica do lado de
+ * fora, sob essa saída. Ausente = a regra de antes (parede livre de vão, externa de preferência).
+ */
+export interface OpcoesDaPosicaoDoSplit {
+  naParedeExterna?: { topoMaximoMm: number } | null;
+}
+
+/** F14d: a faixa de parede cheia por onde a linha e o dreno atravessam juntos (12 cm entre eles e os raios), mm. */
+const FAIXA_DA_SAIDA_MM = 200;
+/** F14d: até onde, além da ponta da evaporadora, a saída dos tubos pode ficar ("ao lado dela"), mm. */
+const SAIDA_ALEM_DA_PONTA_MM = 400;
+/** F14d: o "alcance" da saída acima da verga — atrás da evaporadora, a última escolha (a de parede cheia ganha). */
+const SAIDA_ACIMA_DA_VERGA = 1_000_000;
+/** F14d: a folga entre a ponta da saída e o batente da janela, mm. */
+const FOLGA_DA_SAIDA_AO_VAO_MM = 50;
 
 /** 11/10/2026: até esta distância da face (mm), o componente está "encostado" na parede e ocupa o trecho. */
 const ENCOSTADO_NA_PAREDE_MM = 300;
@@ -219,6 +242,96 @@ function lugarDaEvaporadoraNaParede(
   return candidatos[0];
 }
 
+/**
+ * F14d: o lugar na parede EXTERNA, mesmo sobre a janela (ver `OpcoesDaPosicaoDoSplit`). Por lado externo sem a porta
+ * do ambiente: a evaporadora inteira no trecho útil (fora dos cantos e dos componentes encostados) e, a até
+ * `SAIDA_ALEM_DA_PONTA_MM` das pontas dela, uma faixa de parede CHEIA de `FAIXA_DA_SAIDA_MM` — por onde a linha e o dreno
+ * atravessam juntos. A que não passa sobre janela ganha; depois a de saída mais perto do aparelho e a do meio do lado.
+ */
+function lugarNaParedeExterna(
+  model: BlueprintModel,
+  space: Space,
+  larguraMm: number,
+  profundidadeMm: number,
+  alturaMm: number,
+  cotaMm: number,
+  topoMaximoMm: number,
+  ehExterna: (wallId: string) => boolean,
+): LugarDaEvaporadora | null {
+  const walls = model.walls.filter((w) => w.levelId === space.levelId);
+  const idsDasParedes = new Set(walls.map((w) => w.id));
+  const openings = model.openings.filter((o) => idsDasParedes.has(o.wallId));
+  const candidatos: (LugarDaEvaporadora & { sobreJanela: boolean; alcance: number; doMeio: number })[] = [];
+  for (const lado of ladosDePiso(space, walls)) {
+    if (!lado.wallId || !ehExterna(lado.wallId)) continue;
+    const doLado = openings.filter((o) => o.wallId === lado.wallId);
+    if (doLado.some((o) => o.kind === 'door' || o.kind === 'sliding' || o.kind === 'passage')) continue;
+    const L = comprimento(lado.a, lado.b);
+    if (L < larguraMm) continue;
+    // O útil (cantos e componentes), o CHEIO (fora das janelas, com folga) e as janelas com a cabeça de cada uma.
+    const util = semOcupados(trechosUtilizaveis(lado, walls, [], FOLGA_DA_EVAPORADORA_MM), ocupadosPorComponentes(model, lado, space.levelId));
+    const cheio = trechosUtilizaveis(lado, walls, doLado, FOLGA_DA_SAIDA_AO_VAO_MM).filter((t) => t.ate - t.de >= FAIXA_DA_SAIDA_MM);
+    const janelas = doLado.map((o) => {
+      // O intervalo do vão ao longo do lado: o buraco entre os trechos livres sem ele (folga zero).
+      const fora = trechosUtilizaveis(lado, walls, [o], 0).sort((a, b) => a.de - b.de);
+      const vao =
+        fora.length >= 2 ? { de: fora[0].ate, ate: fora[1].de }
+        : fora.length === 1 ? (fora[0].de > 1 ? { de: 0, ate: fora[0].de } : { de: fora[0].ate, ate: L })
+        : { de: 0, ate: L };
+      return { ...vao, cabeca: o.sillMm + o.heightMm };
+    });
+    const n = normalInterna(lado, space.ring);
+    const ponto = (t: number) => ({ x: lado.a.x + ((lado.b.x - lado.a.x) * t) / L, y: lado.a.y + ((lado.b.y - lado.a.y) * t) / L });
+    let melhorDoLado: (typeof candidatos)[number] | null = null;
+    for (const t of util) {
+      for (let c = t.de + larguraMm / 2; c <= t.ate - larguraMm / 2; c += 50) {
+        const [e0, e1] = [c - larguraMm / 2, c + larguraMm / 2];
+        // A saída: o ponto de parede cheia mais perto do aparelho, a até `SAIDA_ALEM_DA_PONTA_MM` das pontas.
+        let saida: number | null = null;
+        let alcance = Infinity;
+        for (const f of cheio) {
+          const de = f.de + FAIXA_DA_SAIDA_MM / 2;
+          const ate = f.ate - FAIXA_DA_SAIDA_MM / 2;
+          if (ate < de) continue;
+          const alvo = Math.min(Math.max(c, de), ate);
+          const fora = Math.max(0, e0 - alvo, alvo - e1);
+          if (fora > SAIDA_ALEM_DA_PONTA_MM) continue;
+          const d = Math.abs(alvo - c);
+          if (d < alcance) [saida, alcance] = [alvo, d];
+        }
+        const sobre = janelas.filter((j) => j.ate > e0 && j.de < e1);
+        const cota = sobre.length ? Math.max(cotaMm, ...sobre.map((j) => j.cabeca + alturaMm / 2)) : cotaMm;
+        if (cota + alturaMm / 2 > topoMaximoMm) continue;
+        // Sem parede cheia ao alcance (o lado inteiro é janela — a suíte de cima do sobrado), a saída é ATRÁS dela,
+        // acima da verga: os tubos correm por fora, acima da janela, até passar do batente (ver `saidaPelaParede`).
+        if (saida == null && sobre.length) [saida, alcance] = [c, SAIDA_ACIMA_DA_VERGA];
+        if (saida == null) continue;
+        const base = ponto(c);
+        const sp = ponto(saida);
+        const cand = {
+          lado,
+          at: { x: Math.round(base.x + n.x * (profundidadeMm / 2)), y: Math.round(base.y + n.y * (profundidadeMm / 2)) } as Point,
+          normal: n,
+          externa: true,
+          livreMm: t.ate - t.de,
+          ...(cota !== cotaMm ? { cotaMm: Math.round(cota) } : {}),
+          saida: { x: Math.round(sp.x), y: Math.round(sp.y) } as Point,
+          sobreJanela: sobre.length > 0,
+          alcance,
+          doMeio: Math.abs(c - L / 2),
+        };
+        const melhor = (a: typeof cand, b: typeof cand) => Number(a.sobreJanela) - Number(b.sobreJanela) || a.alcance - b.alcance || a.doMeio - b.doMeio;
+        if (!melhorDoLado || melhor(cand, melhorDoLado) < 0) melhorDoLado = cand;
+      }
+    }
+    if (melhorDoLado) candidatos.push(melhorDoLado);
+  }
+  if (!candidatos.length) return null;
+  candidatos.sort((a, b) => Number(a.sobreJanela) - Number(b.sobreJanela) || b.livreMm - a.livreMm || a.alcance - b.alcance);
+  const { sobreJanela: _s, alcance: _a, doMeio: _d, ...lugar } = candidatos[0];
+  return lugar;
+}
+
 /** O ponto do lado de FORA da parede externa `lado` (face externa + meia profundidade + folga). */
 function foraDaParede(model: BlueprintModel, space: Space, lado: LadoDoAmbiente, profundidadeMm: number): Point | null {
   const parede = model.walls.find((w) => w.id === lado.wallId);
@@ -240,6 +353,16 @@ export function lugarDaCondensadora(
   profundidadeMm: number,
   ehExterna: (wallId: string) => boolean,
 ): { at: Point; lugar: 'FACHADA' | 'AMBIENTE_TECNICO' } | null {
+  // F14d: com a saída dos tubos na parede externa, a condensadora fica do lado de fora, sob ela.
+  if (evaporadora.saida && evaporadora.lado.wallId && ehExterna(evaporadora.lado.wallId)) {
+    const parede = model.walls.find((w) => w.id === evaporadora.lado.wallId);
+    if (parede) {
+      const recuo = parede.thicknessMm + FOLGA_DA_CONDENSADORA_MM + profundidadeMm / 2;
+      const n = evaporadora.normal;
+      const p = { x: Math.round(evaporadora.saida.x - n.x * recuo), y: Math.round(evaporadora.saida.y - n.y * recuo) } as Point;
+      if (!model.spaces.some((x) => x.levelId === space.levelId && pointInPolygon(x.ring, p))) return { at: p, lugar: 'FACHADA' };
+    }
+  }
   const walls = model.walls.filter((w) => w.levelId === space.levelId);
   const lados = ladosDePiso(space, walls).filter((l) => l.wallId && ehExterna(l.wallId));
   const ordem = [...lados].sort((a, b) => Number(b.wallId === evaporadora.lado.wallId) - Number(a.wallId === evaporadora.lado.wallId) || comprimento(b.a, b.b) - comprimento(a.a, a.b));
@@ -256,7 +379,7 @@ export function lugarDaCondensadora(
 }
 
 /** O plano: um split por ambiente climatizado sem equipamento confirmado. */
-export function planejarEquipamentosSplit(model: BlueprintModel, selecao: SelecaoDoNivel, carga: CargaTermicaDoNivel, hip: HipotesesDeSelecao): PlanoDeEquipamentosSplit {
+export function planejarEquipamentosSplit(model: BlueprintModel, selecao: SelecaoDoNivel, carga: CargaTermicaDoNivel, hip: HipotesesDeSelecao, opcoes: OpcoesDaPosicaoDoSplit = {}): PlanoDeEquipamentosSplit {
   const vazio = (motivo: string, apagados = 0, comandos: Command[] = []): PlanoDeEquipamentosSplit => ({ comandos, aCriar: [], condensadorasParaExistentes: [], capacidadesPreenchidas: [], jaAtendidos: [], semLugar: [], apagados, motivo, resumo: [] });
   const levelId = selecao.levelId;
   // As sugestões anteriores deste planejador somem no relançar (peça de climatização sugerida + o ponto elétrico sugerido do aparelho).
@@ -371,7 +494,9 @@ export function planejarEquipamentosSplit(model: BlueprintModel, selecao: Seleca
     const larguraMm = modelo.larguraMm ?? fichaEvap.medidasMm?.larguraMm ?? 900;
     const profundidadeMm = modelo.profundidadeMm ?? fichaEvap.medidasMm?.profundidadeMm ?? 220;
     const alturaMm = modelo.alturaMm ?? fichaEvap.medidasMm?.alturaMm ?? 300;
-    const lugar = lugarDaEvaporadora(model, space, larguraMm, profundidadeMm, ehExterna);
+    const lugar =
+      (opcoes.naParedeExterna ? lugarNaParedeExterna(model, space, larguraMm, profundidadeMm, alturaMm, modelo.cotaMm, opcoes.naParedeExterna.topoMaximoMm, ehExterna) : null) ??
+      lugarDaEvaporadora(model, space, larguraMm, profundidadeMm, ehExterna);
     if (!lugar) {
       semLugar.push({ nome: amb.nome, motivo: `nenhuma parede sem porta com ${(larguraMm / 1000).toLocaleString('pt-BR')} m livres fora dos vãos — posicione a evaporadora à mão` });
       continue;
@@ -389,7 +514,7 @@ export function planejarEquipamentosSplit(model: BlueprintModel, selecao: Seleca
       tipo: modelo.nome,
       tipoHidraulico: modelo.tipoHidraulico,
       at: lugar.at,
-      cotaMm: modelo.cotaMm,
+      cotaMm: lugar.cotaMm ?? modelo.cotaMm,
       capacidadeBtuH: modelo.capacidadeBtuH,
       potenciaW: potenciaVA,
       larguraMm,

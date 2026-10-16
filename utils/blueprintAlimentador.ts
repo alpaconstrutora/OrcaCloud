@@ -25,12 +25,12 @@
  * terreno ali; o `AddTerminal` vai à frente do lote de comandos. Sem frente
  * conhecida, o motivo pede a frente.
  */
-import type { BlueprintModel, Command, ObjectId, Terminal, Trecho, Wall } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho, Wall } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { FICHA_DO_MATERIAL, KPA_POR_MCA, comprimentoEquivalenteM, perdaDistribuida, perdaNoHidrometroKpa } from './blueprintHidraulicaPressao';
 import { arvorePelasParedes, encaixarNaParede } from './blueprintRotaPelasParedes';
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, foraDaViga, foraDoPilar, fracaoDentro, pegadasDePilares } from './blueprintObstaculosEstruturais';
-import { pegadaEmPlanta, pointInPolygon } from './blueprintKernel';
+import { cantosDaParede, pegadaEmPlanta, pointInPolygon } from './blueprintKernel';
 import { dimensionarReservacao, type HipotesesDeReservatorio } from './blueprintReservacao';
 import { applyBatch } from './blueprintKernel';
 import { cotaDoTerrenoEm, pontoNaFrente, type LeitorDoTerreno, type OrigemDaFrente } from './blueprintAncorasHidro';
@@ -59,6 +59,8 @@ export interface HipotesesDeAlimentacao {
 
 /** F8c: o eixo do tubo que sobe ao lado do baldrame fica a isto da face dele. */
 export const FOLGA_DO_BALDRAME_MM = 50;
+/** F14d: a folga entre a subida do alimentador e o batente do vão, mm. */
+const FOLGA_DA_SUBIDA_AO_VAO_MM = 50;
 /** F8c: a subida entra na parede a isto acima do topo do baldrame. */
 export const ENTRADA_NA_PAREDE_MM = 100;
 
@@ -151,7 +153,21 @@ export function rotaPelasParedesAte(
     const e = encaixarNaParede(p, paredes0, raio);
     return e ? foraDoPilar(e.q, e.parede, aneis0) : null;
   };
-  const sobAChegada = naParedeDe(alvo.at, 3000) ?? { ...alvo.at };
+  // F14d: e a SUBIDA fica fora do vão de porta ou janela de todo pavimento que ela atravessa (no sobrado, subia pela
+  // janela alta do banheiro de cima).
+  const atravessados = new Set(niveis.slice(i0, id + 1).map((l) => l.id));
+  const paredePorId = new Map(model.walls.map((w) => [w.id, w]));
+  const vaos: Point[][] = model.openings.flatMap((o) => {
+    const w = paredePorId.get(o.wallId);
+    if (!w || !atravessados.has(w.levelId)) return [];
+    const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+    const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+    const p0 = { x: w.a.x + u.x * (o.offsetMm - FOLGA_DA_SUBIDA_AO_VAO_MM), y: w.a.y + u.y * (o.offsetMm - FOLGA_DA_SUBIDA_AO_VAO_MM) } as Point;
+    const p1 = { x: w.a.x + u.x * (o.offsetMm + o.widthMm + FOLGA_DA_SUBIDA_AO_VAO_MM), y: w.a.y + u.y * (o.offsetMm + o.widthMm + FOLGA_DA_SUBIDA_AO_VAO_MM) } as Point;
+    return [cantosDaParede(p0, p1, w.thicknessMm + 2 * FOLGA_DA_SUBIDA_AO_VAO_MM) as Point[]];
+  });
+  const chegada = encaixarNaParede(alvo.at, paredes0, 3000);
+  const sobAChegada = chegada ? foraDoPilar(chegada.q, chegada.parede, [...aneis0, ...vaos]) : { ...alvo.at };
   let zPe = cotaDoPercurso;
   const baldrames = (model.structures ?? []).filter((s) => s.kind === 'VIGA_FUNDACAO' && s.levelId === n0.id && s.baseMm < cotaDoPercurso && s.baseMm + s.alturaMm > cotaDoPercurso);
   const naParede = baldrames.length > 0 ? null : naParedeDe(origem.at, 1e9);

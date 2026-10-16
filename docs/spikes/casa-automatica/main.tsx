@@ -66,6 +66,8 @@ declare global {
         /** F14c: os furos previstos para o calculista e a laje rebaixada sob os banheiros de cima. */
         furos: { emViga: number; dispensa: number; verificar: number; emBaldrame: number; emLaje: number } | null;
         rebaixo: { lajes: number; esgotoForaMm: number };
+        /** F14d: a linha do ar e o dreno lado a lado. */
+        ar: { drenoEmVao: number; linhaComDreno: number; drenoJuntoDaLinhaPct: number };
       } | null;
       /** F12d: o sobrado (null na térrea). */
       sobrado: {
@@ -291,6 +293,7 @@ window.__estado = {
     forro: plano.resumo.forro ? { ...plano.resumo.forro, encontros: encontrosNoForro(model) } : null,
     furos: plano.resumo.furos ? { emViga: plano.resumo.furos.emViga, dispensa: plano.resumo.furos.dispensa, verificar: plano.resumo.furos.verificar, emBaldrame: plano.resumo.furos.emBaldrame, emLaje: plano.resumo.furos.emLaje } : null,
     rebaixo: rebaixoDoModelo(model),
+    ar: arDoModelo(model),
   },
   sobrado: sobradoDoModelo(model),
 };
@@ -335,6 +338,43 @@ function rebaixoDoModelo(m: BlueprintModel): { lajes: number; esgotoForaMm: numb
     }
   }
   return { lajes, esgotoForaMm: Math.round(fora) };
+}
+
+/**
+ * F14d ("Evaporadora na parede externa"): o dreno do ar nos vãos, os encontros entre a linha e o dreno, e quanto do
+ * dreno corre a até 30 cm da linha (lado a lado).
+ */
+function arDoModelo(m: BlueprintModel): { drenoEmVao: number; linhaComDreno: number; drenoJuntoDaLinhaPct: number } {
+  const porId = new Map((m.trechos ?? []).map((t) => [t.id, t]));
+  let drenoEmVao = 0;
+  let linhaComDreno = 0;
+  for (const c of conflitosDoModelo(m)) {
+    const a = porId.get(c.trechoId);
+    if (c.classe === 'ABERTURA' && a?.disciplina === 'DRENO_AC') drenoEmVao++;
+    if (c.classe === 'REDE') {
+      const par = [a?.disciplina, porId.get(c.outroId)?.disciplina].sort().join('×');
+      if (par === 'DRENO_AC×FRIGORIGENA') linhaComDreno++;
+    }
+  }
+  const linha = (m.trechos ?? []).filter((t) => t.disciplina === 'FRIGORIGENA');
+  const dseg = (p: Point, a: Point, b: Point) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const L2 = dx * dx + dy * dy;
+    const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  };
+  let junto = 0;
+  let total = 0;
+  for (const t of (m.trechos ?? []).filter((x) => x.disciplina === 'DRENO_AC')) {
+    const n = Math.max(1, Math.ceil(Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) / 100));
+    for (let k = 0; k <= n; k++) {
+      const q = { x: t.a.x + ((t.b.x - t.a.x) * k) / n, y: t.a.y + ((t.b.y - t.a.y) * k) / n } as Point;
+      total++;
+      if (linha.some((l) => l.levelId === t.levelId && dseg(q, l.a, l.b) <= 300)) junto++;
+    }
+  }
+  return { drenoEmVao, linhaComDreno, drenoJuntoDaLinhaPct: total ? Math.round((junto / total) * 100) : 100 };
 }
 
 /** F14b: os encontros (REDE × REDE) entre as quatro redes que correm nas faixas do forro. */

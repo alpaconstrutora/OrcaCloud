@@ -550,7 +550,11 @@ export interface HipotesesDaCasa {
   /** F9: a elétrica. */
   eletrica: HipotesesDaEletricaDaCasa;
   /** F9: lançar a climatização (premissas e catálogo na `EntradaDaCasa`). */
-  climatizacao: { lancar: boolean };
+  /**
+   * F14d (decisão do usuário, 16/10/2026: "Evaporadora na parede externa"): a evaporadora na parede externa, mesmo
+   * sobre a janela, com o topo a `folgaDaEvaporadoraAoForroMm` do forro; a linha e o dreno saem juntos pela parede.
+   */
+  climatizacao: { lancar: boolean; naParedeExterna: boolean; folgaDaEvaporadoraAoForroMm: number };
   /** F13: como garantir a pressão nos pontos — caixa elevada até um limite, senão pressurizador. */
   pressao: HipotesesDaPressaoDaCasa;
   /**
@@ -742,7 +746,7 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   pontos: { ...HIPOTESES_PONTOS_PADRAO, afastamentoFriaQuenteMm: 150 },
   hidraulica: { lancar: true },
   eletrica: HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO,
-  climatizacao: { lancar: true },
+  climatizacao: { lancar: true, naParedeExterna: true, folgaDaEvaporadoraAoForroMm: 30 },
   pressao: HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO,
   faixas: { aguaQuenteMm: 45, esgotoMm: -60 },
   forro: HIPOTESES_DO_FORRO_DA_CASA_PADRAO,
@@ -1062,7 +1066,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     pontos: { ...HIPOTESES_PONTOS_PADRAO, afastamentoFriaQuenteMm: 150, ...(hipParcial.pontos ?? {}) },
     hidraulica: { lancar: true, ...(hipParcial.hidraulica ?? {}) },
     eletrica: { ...HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, ...(hipParcial.eletrica ?? {}) },
-    climatizacao: { lancar: true, ...(hipParcial.climatizacao ?? {}) },
+    climatizacao: { ...HIPOTESES_DA_CASA_PADRAO.climatizacao, ...(hipParcial.climatizacao ?? {}) },
     pressao: { ...HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, ...(hipParcial.pressao ?? {}) },
     faixas: { aguaQuenteMm: 45, esgotoMm: -60, ...(hipParcial.faixas ?? {}) },
     forro: {
@@ -1753,7 +1757,17 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
           pendencias.push({ grupo: 'PREMISSA', texto: `Climatização: ${motivo}` });
           return;
         }
-        const plano = gerarClimatizacao(m, entrada.climatizacao ?? HIPOTESES_CLIMATIZACAO_PADRAO, { modelos, circuitos: { hip: hipCircuitos, eletricas: hipEletricas }, linhaNoForro: forroLigado ? { faixa: hip.forro.frigorigena, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } : null, ...(entrada.cargaDaClimatizacao ? { carga: entrada.cargaDaClimatizacao } : {}) });
+        // F14d (decisão do usuário, 16/10/2026: "Evaporadora na parede externa"): o split na parede externa, mesmo sobre a
+        // janela (o topo da evaporadora abaixo do forro), e a linha e o dreno saindo juntos pela parede atrás dela.
+        const tetoDoAr = Math.min(...niveis.map((L) => m.levels.find((l) => l.id === L)?.defaultHeightMm ?? 2800));
+        const topoDaEvaporadora = forroLigado ? tetoDoAr - rebaixoDoForro - hip.climatizacao.folgaDaEvaporadoraAoForroMm : tetoDoAr - hip.climatizacao.folgaDaEvaporadoraAoForroMm - 200;
+        const plano = gerarClimatizacao(m, entrada.climatizacao ?? HIPOTESES_CLIMATIZACAO_PADRAO, {
+          modelos,
+          circuitos: { hip: hipCircuitos, eletricas: hipEletricas },
+          linhaNoForro: forroLigado ? { faixa: hip.forro.frigorigena, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } : null,
+          splitNaParedeExterna: hip.climatizacao.naParedeExterna ? { topoMaximoMm: topoDaEvaporadora } : null,
+          ...(entrada.cargaDaClimatizacao ? { carga: entrada.cargaDaClimatizacao } : {}),
+        });
         for (const e of plano.etapas) climatizacao.etapas[e.id] = e.situacao;
         // O "conflito" de 0 mm é ENCOSTO (redes paralelas lado a lado — a linha com o dreno do mesmo split, o ramal ao
         // lado do eletroduto): nenhum eixo dentro. Um a um, eram ~90 linhas que escondiam o resto; vira uma, com a conta.

@@ -49,7 +49,7 @@
  * `blueprintObstaculosEstruturais.ts`.
  */
 import type { BlueprintModel, Command, DisciplinaDeRede, MaterialDeTubo, ObjectId, Point, Terminal, Trecho } from './blueprintKernel';
-import { applyBatch, pointInPolygon } from './blueprintKernel';
+import { applyBatch, cantosDaParede, pointInPolygon } from './blueprintKernel';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import {
   arvoreComRotaLimitada,
@@ -452,6 +452,19 @@ export function planejarAgua(
   const alturaDe = new Map(model.levels.map((l) => [l.id, l.defaultHeightMm]));
   const rebaixos = noForro ? (model.structures ?? []).filter((s) => s.kind === 'LAJE' && s.baseMm < (alturaDe.get(s.levelId) ?? Infinity) - 1).map((s) => s.pontos as Point[]) : [];
   const sobRebaixo = (p: Ponto2) => rebaixos.some((g) => pointInPolygon(g, p as Point));
+  // F14d: os vãos de todos os pavimentos, como retângulos em planta (a coluna atravessa os pavimentos inteiros).
+  const paredePorId = new Map(model.walls.map((w) => [w.id, w]));
+  const vaosDaPrumada: Point[][] = noForro
+    ? model.openings.flatMap((o) => {
+        const w = paredePorId.get(o.wallId);
+        if (!w) return [];
+        const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+        const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+        const p0 = { x: w.a.x + u.x * (o.offsetMm - RAIO_NA_DESCIDA_MM), y: w.a.y + u.y * (o.offsetMm - RAIO_NA_DESCIDA_MM) } as Point;
+        const p1 = { x: w.a.x + u.x * (o.offsetMm + o.widthMm + RAIO_NA_DESCIDA_MM), y: w.a.y + u.y * (o.offsetMm + o.widthMm + RAIO_NA_DESCIDA_MM) } as Point;
+        return [cantosDaParede(p0, p1, w.thicknessMm + 2 * RAIO_NA_DESCIDA_MM) as Point[]];
+      })
+    : [];
   // NÚCLEO VERTICAL (E2.4): o grupo perto de um shaft sobe por ele.
   const posicaoDaColuna = (grupo: Terminal[]): Ponto2 => {
     const base = { x: grupo[0].at.x, y: grupo[0].at.y };
@@ -467,8 +480,11 @@ export function planejarAgua(
     // (sobrado a 30°: a coluna caía na parede só do térreo e atravessava a suíte de cima).
     const naParede = pelasParedes ? (encaixarNaParede(base, emComum, Math.max(raioDeEncaixe * 2, ALCANCE_DA_PAREDE_EM_COMUM_MM)) ?? encaixarNaParede(base, paredesDe(grupo[0].levelId), raioDeEncaixe)) : null;
     // E5.5: a coluna que cairia dentro de um pilar (de qualquer pavimento que ela cruza) escorrega pela parede — e,
-    // no forro, para fora da laje rebaixada (F14c).
-    const noEixo = naParede ? foraDoPilar(naParede.q, naParede.parede, [...pilaresDaPrumada, ...rebaixos]) : base;
+    // no forro, para fora da laje rebaixada (F14c) e do VÃO de porta ou janela de qualquer pavimento (F14d: a coluna da
+    // fria atravessava a janela alta do banheiro de cima).
+    // O escorregão pela parede INTEIRA (o pedaço em comum com os outros pavimentos pode ser curto demais para sair do vão).
+    const paredeInteira = naParede ? (paredesDe(grupo[0].levelId).find((w) => w.id === naParede.parede.id) ?? naParede.parede) : null;
+    const noEixo = naParede && paredeInteira ? foraDoPilar(naParede.q, paredeInteira, [...pilaresDaPrumada, ...rebaixos, ...vaosDaPrumada]) : base;
     // F8b: e a que desceria DENTRO da viga que corre sobre a parede desce rente a ela, do lado do grupo.
     const cx = grupo.reduce((s, p) => s + p.at.x, 0) / grupo.length;
     const cy = grupo.reduce((s, p) => s + p.at.y, 0) / grupo.length;

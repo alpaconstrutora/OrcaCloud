@@ -135,6 +135,16 @@ async function erroDaFunction(error: unknown, padrao: string): Promise<Error> {
     return new Error(corpo?.error ?? corpo?.motivo ?? (error as Error)?.message ?? padrao);
 }
 
+export interface ResultadoSincronizacao {
+    mensagens: number;
+    criados: number;
+    duplicados: number;
+    ignorados: number;
+    erros: number;
+    /** Acabou o lote e ainda há e-mails na fila (segue no automático, a cada 15 min). */
+    pendente: boolean;
+}
+
 const COLUNAS_BUSCA = 'id, organization_id, account_id, data_de, data_ate, status, total_mensagens, mensagens_processadas, criados, duplicados, ignorados, erros, ultimo_erro, pedida_por, remetentes, created_at, concluida_em';
 
 async function chamar<T>(nome: 'email-capture-accounts' | 'email-capture-sync', body: Record<string, unknown>, padrao: string): Promise<T> {
@@ -199,8 +209,21 @@ export const emailCaptureService = {
         await chamar('email-capture-accounts', { acao: 'desconectar', accountId }, 'Não foi possível desconectar a caixa.');
     },
 
-    async sincronizarAgora(accountId: string): Promise<{ mensagens: number; criados: number; duplicados: number; ignorados: number; erros: number }> {
-        return chamar('email-capture-sync', { modo: 'agora', accountId }, 'Não foi possível sincronizar a caixa.');
+    /** A função trabalha em lotes curtos quando a chamada vem da tela (~15 s) e
+     *  diz se ficou fila (`pendente`); repete até `maxRodadas` e soma (16/10/2026). */
+    async sincronizarAgora(accountId: string, maxRodadas = 6): Promise<ResultadoSincronizacao> {
+        const soma: ResultadoSincronizacao = { mensagens: 0, criados: 0, duplicados: 0, ignorados: 0, erros: 0, pendente: false };
+        for (let i = 0; i < maxRodadas; i++) {
+            const r = await chamar<Partial<ResultadoSincronizacao>>('email-capture-sync', { modo: 'agora', accountId }, 'Não foi possível sincronizar a caixa.');
+            soma.mensagens += r.mensagens ?? 0;
+            soma.criados += r.criados ?? 0;
+            soma.duplicados += r.duplicados ?? 0;
+            soma.ignorados += r.ignorados ?? 0;
+            soma.erros += r.erros ?? 0;
+            soma.pendente = !!r.pendente;
+            if (!soma.pendente) break;
+        }
+        return soma;
     },
 
     /** Buscas por período mais recentes (ativas primeiro na tela). */

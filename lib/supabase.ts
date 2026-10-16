@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 // Precisa ser avaliado ANTES do createClient: ele apaga o #type=invite|recovery
 // da URL na inicialização. Ver lib/linkDeAcesso.ts.
 import './linkDeAcesso';
+import { tempoLimiteDaRequisicao } from './tempoLimiteRequisicao';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -13,15 +14,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Timeout de rede: sem isto, se o backend (Postgres/PostgREST) travar, as
 // requisições ficam pendentes indefinidamente e a UI fica presa em
 // "Sincronizando..." sem nunca cair no catch. Um AbortController aborta a
-// chamada após REQUEST_TIMEOUT_MS, transformando o travamento num erro
+// chamada após o tempo limite, transformando o travamento num erro
 // tratável (que o overlay do App transforma em tela de "Falha de conexão").
-const REQUEST_TIMEOUT_MS = 20000;
-
+// 20 s para o banco; 150 s para Edge Function — ver lib/tempoLimiteRequisicao.ts.
 const fetchWithTimeout: typeof fetch = (input, init) => {
     // Respeita um AbortSignal já existente (ex.: cancelamento do supabase-js)
     // combinando-o com o nosso timeout.
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), tempoLimiteDaRequisicao(input));
 
     const externalSignal = init?.signal;
     if (externalSignal) {
@@ -33,8 +33,9 @@ const fetchWithTimeout: typeof fetch = (input, init) => {
         .finally(() => clearTimeout(timer));
 };
 
-/** Para chamadas que precisam de corte de tempo PRÓPRIO, fora dos 20 s do client
- *  global — hoje só o motor de conciliação na Edge (26–61 s na Alpa). */
+/** Para chamadas que precisam de corte de tempo PRÓPRIO, fora do client global —
+ *  o motor de conciliação na Edge (180 s; 26–61 s na Alpa) e o import do ÒPURA
+ *  Market. Edge Function chamada pelo client já espera 150 s (16/10/2026). */
 export const SUPABASE_URL: string = supabaseUrl;
 export const SUPABASE_ANON_KEY: string = supabaseAnonKey;
 

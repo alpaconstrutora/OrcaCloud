@@ -189,9 +189,10 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
         setSincronizando(conta.id);
         try {
             const r = await emailCaptureService.sincronizarAgora(conta.id);
-            showToast(r.mensagens
+            const fila = r.pendente ? ' Ainda há e-mails na fila: a leitura automática continua a cada 15 minutos.' : '';
+            showToast((r.mensagens
                 ? `${r.criados} boleto(s) criado(s), ${r.duplicados} duplicado(s), ${r.ignorados} ignorado(s), ${r.erros} falha(s).`
-                : 'Nenhuma mensagem nova com boleto.');
+                : 'Nenhuma mensagem nova com boleto.') + fila);
             await carregar();
         } catch (e) {
             showToast(e instanceof Error ? e.message : String(e), 'error');

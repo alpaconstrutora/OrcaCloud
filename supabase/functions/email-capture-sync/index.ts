@@ -80,8 +80,13 @@ const MAX_ANEXOS_POR_EXECUCAO = 20;
 const MAX_ANEXOS_BUSCA = 40;
 /** Mensagens com metadados lidos de uma vez numa busca (o resto fica para a próxima chamada). */
 const LOTE_BUSCA = 150;
-/** Não começa anexo novo depois disto (a Edge Function tem tempo limitado). */
+/** Não começa anexo novo depois disto (a Edge Function tem tempo limitado) — cron. */
 const PRAZO_MS = 100_000;
+/** Chamada feita pela TELA ("Sincronizar agora", busca por período): lotes curtos.
+ *  Cada PDF leva 4–7 s; com 100 s a busca de 16/10/2026 durou 32 s e o navegador
+ *  (então com 20 s) mostrou "Failed to send a request to the Edge Function" com o
+ *  trabalho feito. O painel chama de novo enquanto houver fila (`pendente`). */
+const PRAZO_INTERATIVO_MS = 15_000;
 const BUCKET = 'boletos';
 
 interface Conta {
@@ -132,6 +137,7 @@ serve(async (req: Request) => {
     let contas: Conta[] = [];
     let buscaPrimeiro = false;
     let maxAnexos = MAX_ANEXOS_POR_EXECUCAO;
+    let prazoMs = PRAZO_MS;
     if (body.modo === 'cancelar_busca' && body.buscaId) {
         if (!req.headers.get('Authorization')) return json({ error: 'Unauthorized' }, 401);
         const { data: b } = await admin.from('email_capture_buscas').select('id, organization_id, status').eq('id', body.buscaId).maybeSingle();
@@ -179,6 +185,7 @@ serve(async (req: Request) => {
         contas = [conta];
         buscaPrimeiro = true;
         maxAnexos = MAX_ANEXOS_BUSCA;
+        prazoMs = PRAZO_INTERATIVO_MS;
     } else if (body.modo === 'agendado') {
         if (!chamadaDeCron(req)) return json({ error: 'Unauthorized' }, 401);
         const { data, error } = await admin.from('email_capture_accounts').select('*').eq('status', 'ativa');
@@ -194,6 +201,7 @@ serve(async (req: Request) => {
         if (!conta) return json({ error: 'Conta não encontrada' }, 404);
         if (conta.status !== 'ativa') return json({ error: `A caixa está "${conta.status}" — reative ou reconecte antes de sincronizar.` }, 409);
         contas = [conta];
+        prazoMs = PRAZO_INTERATIVO_MS;
     } else {
         // Sem modo reconhecido: não revela nada além de "não autorizado" a quem não é o cron.
         if (!chamadaDeCron(req) && !req.headers.get('Authorization')) return json({ error: 'Unauthorized' }, 401);
@@ -202,7 +210,7 @@ serve(async (req: Request) => {
 
     const inicio = Date.now();
     const totais: Totais = { contas: 0, mensagens: 0, criados: 0, duplicados: 0, ignorados: 0, erros: 0, reprocessados: 0 };
-    const orcamento = { anexos: maxAnexos, prazo: inicio + PRAZO_MS };
+    const orcamento: Orcamento = { anexos: maxAnexos, prazo: inicio + prazoMs, esgotado: false };
 
     for (const conta of contas) {
         if (Date.now() > orcamento.prazo || orcamento.anexos <= 0) break;
@@ -220,9 +228,9 @@ serve(async (req: Request) => {
         // Devolve a busca como ficou (a mais recente da caixa) para o painel mostrar o progresso.
         const { data: busca } = await admin.from('email_capture_buscas').select('*')
             .eq('account_id', contas[0].id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-        return json({ ...totais, ms: Date.now() - inicio, busca });
+        return json({ ...totais, pendente: orcamento.esgotado, ms: Date.now() - inicio, busca });
     }
-    return json({ ...totais, ms: Date.now() - inicio });
+    return json({ ...totais, pendente: orcamento.esgotado, ms: Date.now() - inicio });
 });
 
 /** De/até em AAAA-MM-DD, de ≤ até, até ≤ hoje. Devolve a mensagem de erro, ou null. */
@@ -235,7 +243,7 @@ function validarPeriodo(de?: string, ate?: string): string | null {
     return null;
 }
 
-async function sincronizarConta(admin: SupabaseLike, conta: Conta, totais: Totais, orcamento: { anexos: number; prazo: number }, buscaPrimeiro = false) {
+async function sincronizarConta(admin: SupabaseLike, conta: Conta, totais: Totais, orcamento: Orcamento, buscaPrimeiro = false) {
     const { data: senha, error: errSenha } = await admin.rpc('email_capture_ler_segredo', { p_account: conta.id });
     if (errSenha || !senha) {
         await marcarConta(admin, conta.id, { status: 'reautenticar', ultimo_erro: 'Senha da caixa não encontrada no cofre — reconecte.' });
@@ -289,7 +297,8 @@ async function sincronizarConta(admin: SupabaseLike, conta: Conta, totais: Totai
     }
 }
 
-type Orcamento = { anexos: number; prazo: number };
+/** `esgotado`: o lote parou por tempo/anexos com mensagem ainda na fila. */
+type Orcamento = { anexos: number; prazo: number; esgotado?: boolean };
 type Meta = { uid: number; envelope: any; bodyStructure: ParteDaMensagem; headers: Uint8Array };
 
 async function buscarMetas(cliente: ClienteImap, uids: number[]): Promise<Meta[]> {
@@ -350,7 +359,10 @@ async function processarMeta(
         });
 
     for (const anexo of anexos) {
-        if (Date.now() > orcamento.prazo || orcamento.anexos <= 0) return 'interrompida';
+        if (Date.now() > orcamento.prazo || orcamento.anexos <= 0) {
+            orcamento.esgotado = true;
+            return 'interrompida';
+        }
         orcamento.anexos--;
         await processarAnexo(admin, cliente, conta, uidValidity, anexo, remetentes, senhas, totais);
     }
@@ -412,7 +424,10 @@ async function continuarBusca(
     const { data: b } = await admin.from('email_capture_buscas').select('*')
         .eq('account_id', conta.id).in('status', ['pendente', 'em_andamento']).maybeSingle();
     if (!b) return;
-    if (Date.now() > orcamento.prazo || orcamento.anexos <= 0) return;
+    if (Date.now() > orcamento.prazo || orcamento.anexos <= 0) {
+        orcamento.esgotado = true;
+        return;
+    }
 
     const agora = () => new Date().toISOString();
     try {
@@ -696,7 +711,7 @@ async function reprocessarParados(
     senhas: Map<string, string>,
     ultimaSenha: string,
     totais: Totais,
-    orcamento: { anexos: number; prazo: number },
+    orcamento: Orcamento,
 ) {
     const { data: candidatas } = await admin.from('email_capture_messages')
         .select('id, boleto_id, remetente, assunto, documento_nome, auth_results, reprocessado_em')

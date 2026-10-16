@@ -6,6 +6,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const chamadas: Array<{ op: string; payload?: unknown; rpc?: string; args?: unknown }> = [];
+/** Respostas das Edge Functions, na ordem; vazio = resposta padrão. */
+const respostasFn: unknown[] = [];
 
 vi.mock('../lib/supabase', () => {
     const fim = { select: () => ({ single: async () => ({ data: { id: 's1' }, error: null }) }) };
@@ -16,7 +18,7 @@ vi.mock('../lib/supabase', () => {
                 update: (payload: unknown) => (chamadas.push({ op: 'update', payload }), { eq: () => fim }),
             }),
             rpc: async (rpc: string, args: unknown) => (chamadas.push({ op: 'rpc', rpc, args }), { data: null, error: null }),
-            functions: { invoke: async (nome: string, opts: { body: unknown }) => (chamadas.push({ op: 'fn', rpc: nome, args: opts.body }), { data: { busca: { id: 'b1' } }, error: null }) },
+            functions: { invoke: async (nome: string, opts: { body: unknown }) => (chamadas.push({ op: 'fn', rpc: nome, args: opts.body }), { data: respostasFn.length ? respostasFn.shift() : { busca: { id: 'b1' } }, error: null }) },
         },
     };
 });
@@ -25,7 +27,7 @@ import { emailCaptureService, progressoDaBusca } from '../services/emailCaptureS
 
 const PERMITIDAS = ['organization_id', 'account_id', 'supplier_id', 'nome', 'tipo', 'email', 'dominio', 'palavras_chave', 'importacao', 'exigir_dmarc', 'ativo'];
 
-beforeEach(() => { chamadas.length = 0; });
+beforeEach(() => { chamadas.length = 0; respostasFn.length = 0; });
 
 describe('salvarRemetente — só colunas concedidas', () => {
     it('editar a partir do registro lido não manda id, created_at nem a data da senha', async () => {
@@ -83,5 +85,35 @@ describe('busca por período com remetentes', () => {
             { op: 'fn', rpc: 'email-capture-sync', args: { modo: 'periodo', accountId: 'c1', de: '2026-09-01', ate: '2026-09-30', remetentes: ['energisaonline.com.br'] } },
             { op: 'fn', rpc: 'email-capture-sync', args: { modo: 'periodo', accountId: 'c1', de: '2026-09-01', ate: '2026-09-30' } },
         ]);
+    });
+});
+
+/* 16/10/2026: chamada da tela trabalha em lotes de ~15 s (o navegador corta
+   Edge Function em 150 s, e o resto do client em 20 s); a função diz se ficou fila. */
+describe('Sincronizar agora — repete enquanto a função disser que ficou fila', () => {
+    const lote = (n: number, pendente: boolean) =>
+        ({ contas: 1, mensagens: n, criados: n, duplicados: 1, ignorados: 0, erros: 0, pendente });
+
+    it('soma os lotes e para quando a fila acaba', async () => {
+        respostasFn.push(lote(2, true), lote(3, true), lote(1, false));
+        const r = await emailCaptureService.sincronizarAgora('c1');
+        expect(chamadas.filter(c => c.op === 'fn')).toHaveLength(3);
+        expect(chamadas.every(c => (c.args as { modo: string }).modo === 'agora')).toBe(true);
+        expect(r).toEqual({ mensagens: 6, criados: 6, duplicados: 3, ignorados: 0, erros: 0, pendente: false });
+    });
+
+    it('para no limite de rodadas e avisa que ainda há fila', async () => {
+        respostasFn.push(lote(1, true), lote(1, true), lote(1, true));
+        const r = await emailCaptureService.sincronizarAgora('c1', 2);
+        expect(chamadas.filter(c => c.op === 'fn')).toHaveLength(2);
+        expect(r.pendente).toBe(true);
+        expect(r.criados).toBe(2);
+    });
+
+    it('função antiga, sem "pendente": uma rodada só', async () => {
+        respostasFn.push({ contas: 1, mensagens: 0, criados: 0, duplicados: 0, ignorados: 0, erros: 0 });
+        const r = await emailCaptureService.sincronizarAgora('c1');
+        expect(chamadas.filter(c => c.op === 'fn')).toHaveLength(1);
+        expect(r.pendente).toBe(false);
     });
 });

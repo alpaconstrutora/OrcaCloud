@@ -154,6 +154,11 @@ ela; teste `__tests__/components/entradaDaUrlAtual.test.ts` (jsdom) trava a leit
 Junto: a faixa "Acesso via link público" das cascas some quando a pessoa entrou por e-mail
 (`onLogout` presente). Provado no vite da frente com a conta real: as duas recusas terminam no
 seletor em "/", e o fornecedor por e-mail abre sem a faixa.
+
+- [x] Correção publicada: `ce224fa4` em `main`, check-run `ci` verde (suíte `9817 = 9783 + 34 pendentes`, 0 falhas;
+  `tsc exit=0`; `vite build` ok); domínio serve `ce224fa`; **em produção**, com a conta real: as
+  duas recusas terminam no seletor em "/" e o fornecedor por e-mail abre sem a faixa e "Sair"
+  volta à página própria.
 - [x] Publicação em `main` — `0d3e0b51` + `8f2f5ec4` (2026-10-16); check-run `ci` verde;
   `conferir-producao.sh "Crie sua senha"` ✅ (domínio carimbado com o topo de `main`, texto no
   bundle servido)

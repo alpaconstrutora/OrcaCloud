@@ -159,10 +159,18 @@ export const invoiceService = {
      * Faz duas queries separadas para evitar problemas de RLS no join.
      */
     async listAll(organizationId?: string): Promise<(Invoice & { supplierName?: string; supplierOrganizationId?: string })[]> {
-        const { data: invoicesData, error: invErr } = await supabase
+        // Org vem da COLUNA DA NOTA (`invoices.organization_id`), não do fornecedor dela — uma
+        // nota sem fornecedor cadastrado (`supplier_id` nulo) sumia desta lista inteira quando
+        // uma organização específica estava selecionada, porque o corte antigo era
+        // `supplierMap[row.supplier_id]?.organization_id === organizationId` (15/10/2026,
+        // achado ao testar o filtro de Ano/Mês do vencimento — flagrado num boleto sem
+        // fornecedor que tinha vencimento em 20/07/2026). REGRA #5: sem org, não filtra.
+        let query = supabase
             .from('invoices')
-            .select('id, supplier_id, order_id, file_path, file_name, amount, due_date, cost_center_id, chart_of_accounts_id, status, notes, created_at')
+            .select('id, organization_id, supplier_id, order_id, file_path, file_name, amount, due_date, cost_center_id, chart_of_accounts_id, status, notes, created_at')
             .order('created_at', { ascending: false });
+        if (organizationId) query = query.eq('organization_id', organizationId);
+        const { data: invoicesData, error: invErr } = await query;
         if (invErr) throw invErr;
 
         const rows = invoicesData || [];
@@ -182,10 +190,6 @@ export const invoiceService = {
         const nameMode = appSettingsService.get().supplierNameDisplay;
 
         return rows
-            .filter((row: any) => {
-                if (!organizationId) return true;
-                return supplierMap[row.supplier_id]?.organization_id === organizationId;
-            })
             .map((row: any) => ({
                 id: row.id,
                 supplierId: row.supplier_id,

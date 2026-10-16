@@ -112,8 +112,6 @@ const RULES: Rule[] = [
                 'Classificação de equipe é por-organização; sem org não há regra a aplicar (devolve null, não esconde lista).',
             'services/empreendimentoAuditService.ts':
                 'Trilha de auditoria é gravada por organização; sem org não há o que auditar.',
-            'services/invoiceService.ts':
-                'Predicado de filtro: sem org devolve `true` (não filtra) — exatamente o comportamento de "Todas".',
             'services/taxPayableService.ts':
                 'Regime de reconhecimento é por-empresa; em "Todas" assume CAIXA em vez de esconder a lista.',
             'services/receivableService.ts':

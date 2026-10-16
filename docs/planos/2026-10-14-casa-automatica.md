@@ -1960,3 +1960,7 @@ Medido (sonda `conflitosDoModelo`, 12 × 30, R1-N, catálogo e chuva; duas rodad
 Testes novos (os três REPROVAM sem a correção): `blueprintAlimentador.test.ts` (enterrado só por fora; sobe na fachada;
 sem a premissa, como antes), `blueprintPosicaoSplit.test.ts` (a evaporadora longe da tomada) e
 `blueprintAncorasDaCasa.test.ts` (fachadas do serviço tomadas por janela → parede interna, não diante do vão).
+
+A 1ª CI reprovou o teste F8c, que exigia o alimentador ATRAVESSANDO o baldrame (ele corria por baixo da casa). Pela
+decisão da F17 ele não atravessa mais: o teste passou a exigir nenhum pedaço em baldrame nem em pilar e nenhum trecho
+enterrado dentro de um cômodo.

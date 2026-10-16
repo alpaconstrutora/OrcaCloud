@@ -947,3 +947,28 @@ escaneado de remetente avulso, ex. Destro, também fica de fora). Resposta do us
   abaixo do campo no painel da caixa.
 - Boletos já criados que a regra teria ignorado (NF, Nubank, Anthropic, Destro, reavisos): NÃO mexidos.
 
+
+## Pedido posterior — 16/10/2026 (escolher a regra de leitura depois de conectar)
+
+> verifique se é um bug: a busca esta trazendo não somente os remetentes cadastrados, mas também outros
+> remementes não cadastrados. veja exemplos de remetentes que foram puxados pelos sistema
+> Anthropic, PBC <invoice+statements@mail.anthropic.com> · contasareceber@destro.com.br ·
+> Ingrid Martins <ingrid@elevaconvip.com.br · LL CONTABIL <llcontabil@yahoo.com.br>
+
+Diagnóstico: não é bug do filtro — a caixa está em "Monitorados + boletos" (lê todos os remetentes; de
+quem não é cadastrado, só PDF com linha digitável válida) e só 1 remetente está cadastrado. Anthropic
+(1440/1441) e Destro (1424/1425) entraram ANTES da regra de 06:29 UTC; Eleva (1449/1453) e LL Contábil
+(1442–1444) são boletos válidos, sem duplicata. Defeito real achado: o modo só era escolhido ao CONECTAR —
+depois não havia onde trocar (nem "Reconectar" mostra o campo). Resposta do usuário, literal:
+
+> criar opcao para o usuario escolher: ler somentes remetentes cadastratos e o modelo atual
+
+- [x] `EmailCaptureRegraSheet` (novo, Sheet) — "Regra de leitura": "Só remetentes monitorados" ×
+  "Monitorados + boletos", com a ajuda de cada uma; salvar desligado sem mudança, com o motivo; grava
+  `email_capture_accounts.modo` por `atualizarConta` (o banco já concede UPDATE na coluna `modo`).
+- [x] `EmailCapturaConfig` — botão "Regra de leitura" nas ações da caixa (+36 px; Organização e Último
+  erro −18 px cada, soma igual); aviso ao salvar.
+- [x] `MODOS_OFERECIDOS = ['favoritos','hibrido']` também no painel de conectar caixa: "Todos os PDFs"
+  sai das opções da tela (continua válido no banco/função; caixa que esteja nele continua mostrando).
+- Testes: `__tests__/components/EmailCaptureRegraSheet.test.tsx` (2 opções com a atual marcada; salvar
+  desligado e o motivo; troca grava `modo: 'favoritos'`).

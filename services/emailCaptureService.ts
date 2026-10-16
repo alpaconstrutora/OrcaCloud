@@ -120,10 +120,14 @@ export const ROTULO_MODO: Record<ModoCaptura, string> = {
 };
 /** O que cada modo traz — o PDF sem linha digitável de remetente avulso só entra em "todos" (16/10/2026). */
 export const AJUDA_MODO: Record<ModoCaptura, string> = {
-    favoritos: 'Só e-mails dos remetentes monitorados.',
+    favoritos: 'Só e-mails dos remetentes monitorados. Boleto de quem não está cadastrado fica de fora.',
     hibrido: 'Tudo dos remetentes monitorados e, dos demais, só PDF com linha digitável — nota fiscal, fatura de cartão e escaneado ficam de fora.',
     todos: 'Qualquer PDF de qualquer remetente vai para a revisão.',
 };
+/** Regras que a tela oferece (16/10/2026, pedido do usuário: "ler somente remetentes
+ *  cadastrados e o modelo atual"). "todos" continua válido no banco e na função,
+ *  mas não é oferecido — caixa que já esteja nele continua mostrando. */
+export const MODOS_OFERECIDOS: ModoCaptura[] = ['favoritos', 'hibrido'];
 export const ROTULO_RESULTADO: Record<ResultadoMensagem, string> = {
     processando: 'Processando', criado: 'Boleto criado', duplicado: 'Duplicado', ignorado: 'Ignorado', erro: 'Falhou',
 };

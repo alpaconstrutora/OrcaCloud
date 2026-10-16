@@ -14,7 +14,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Mail, Plus, RefreshCw, KeyRound, Pause, Play, FlaskConical, Inbox, Users, History,
-    CheckCircle2, Copy as CopyIcon, AlertTriangle, Loader2, CalendarSearch,
+    CheckCircle2, Copy as CopyIcon, AlertTriangle, Loader2, CalendarSearch, ListFilter,
 } from 'lucide-react';
 import { SegmentedProgress } from '../ui/SegmentedProgress';
 import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
@@ -44,6 +44,7 @@ import {
 } from '../../services/emailCaptureService';
 import EmailCaptureAccountSheet from './EmailCaptureAccountSheet';
 import EmailCaptureBuscaSheet from './EmailCaptureBuscaSheet';
+import EmailCaptureRegraSheet from './EmailCaptureRegraSheet';
 import EmailCaptureSenderSheet, { type FornecedorDaOrg } from './EmailCaptureSenderSheet';
 
 const COR_STATUS: Record<StatusConta, string> = {
@@ -58,13 +59,13 @@ const COR_RESULTADO: Record<ResultadoMensagem, string> = {
 // com as larguras anteriores (1360–1470px) as ações saíam pela borda.
 const COLS_CONTAS: StandardTableColumn[] = [
     { key: 'usuario', label: 'Caixa', sortable: true, width: 220 },
-    { key: 'organizacao', label: 'Organização', sortable: true, width: 160 },
+    { key: 'organizacao', label: 'Organização', sortable: true, width: 142 },
     { key: 'status', label: 'Status', sortable: true, width: 110 },
     { key: 'modo', label: 'Remetentes lidos', sortable: true, width: 170 },
     { key: 'piloto', label: 'Piloto', sortable: true, width: 80 },
     { key: 'data_inicial', label: 'Lê desde', sortable: true, width: 110 },
     { key: 'last_sync_at', label: 'Última leitura', sortable: true, width: 140 },
-    { key: 'ultimo_erro', label: 'Último erro', sortable: true, width: 150 },
+    { key: 'ultimo_erro', label: 'Último erro', sortable: true, width: 132 },
 ];
 
 const COLS_BUSCAS: StandardTableColumn[] = [
@@ -122,6 +123,7 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
     const [mensagens, setMensagens] = useState<MensagemCaptura[]>([]);
     const [buscas, setBuscas] = useState<BuscaPeriodo[]>([]);
     const [sheetBusca, setSheetBusca] = useState<{ aberto: boolean; conta: ContaCaptura | null }>({ aberto: false, conta: null });
+    const [sheetRegra, setSheetRegra] = useState<ContaCaptura | null>(null);
     const [fornecedores, setFornecedores] = useState<FornecedorDaOrg[]>([]);
     const [carregando, setCarregando] = useState(true);
     const [erroCarga, setErroCarga] = useState<string | null>(null);
@@ -199,6 +201,11 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
         } finally {
             setSincronizando(null);
         }
+    }
+
+    function regraSalva(conta: ContaCaptura) {
+        setContas(prev => prev.map(c => (c.id === conta.id ? { ...c, modo: conta.modo } : c)));
+        showToast(`Regra de leitura de ${conta.usuario}: ${ROTULO_MODO[conta.modo].toLowerCase()}.`);
     }
 
     async function alternarPausa(conta: ContaCaptura) {
@@ -336,7 +343,7 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                         }
                     }}
                     actions={{
-                        width: 250,
+                        width: 286,
                         render: c => (
                             <div className="flex items-center justify-end gap-1.5">
                                 <ActionIconButton kind="history"
@@ -346,6 +353,8 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                                 <ActionIconButton kind="history" title={c.status === 'ativa' ? 'Sincronizar agora' : 'Reative a caixa para sincronizar'}
                                     icon={sincronizando === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                                     disabled={c.status !== 'ativa' || !!sincronizando} onClick={() => sincronizar(c)} />
+                                <ActionIconButton kind="settings" title="Regra de leitura (quais remetentes ler)"
+                                    icon={<ListFilter className="w-4 h-4" />} onClick={() => setSheetRegra(c)} />
                                 <ActionIconButton kind="lock" title="Reconectar (nova senha de app)" icon={<KeyRound className="w-4 h-4" />}
                                     onClick={() => setSheetConta({ aberto: true, orgId: c.organization_id, reconectar: c })} />
                                 <ActionIconButton kind="settings" title={c.status === 'pausada' ? 'Reativar leitura' : 'Pausar leitura'}
@@ -537,6 +546,12 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                 organizationId={sheetConta.orgId}
                 reconectar={sheetConta.reconectar}
                 onPronta={contaPronta}
+            />
+            <EmailCaptureRegraSheet
+                open={!!sheetRegra}
+                onClose={() => setSheetRegra(null)}
+                conta={sheetRegra}
+                onSalva={regraSalva}
             />
             <EmailCaptureBuscaSheet
                 open={sheetBusca.aberto}

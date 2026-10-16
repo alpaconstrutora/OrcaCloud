@@ -13,13 +13,13 @@ import BrokerRanking from './broker/BrokerRanking';
 import BrokerTraining from './broker/BrokerTraining';
 import BrokerEvents from './broker/BrokerEvents';
 import BrokerChat from './broker/BrokerChat';
-import BrokerAnalytics from './broker/BrokerAnalytics';
 import BrokerHealthPanel from './broker/BrokerHealthPanel';
 import BrokerPortalMobile from './broker/BrokerPortalMobile';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useBrokerPortal, ALL_TABS, TAB_BY_ID, formatCurrency, type PortalTab } from './broker/useBrokerPortal';
+import { ehAbaDeDemonstracao } from '../utils/brokerPortalTabs';
 import type { BrokerProfile } from '../types';
 
 interface BrokerPortalProps {
@@ -476,6 +476,22 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                         <div className="p-8 space-y-3">
                             {ALL_TABS.map(tab => {
                                 const isVisible = enabledTabIds.includes(tab.id);
+                                // Demonstração (D9): desligada para todos e o botão diz por quê.
+                                if (ehAbaDeDemonstracao(tab.id)) {
+                                    return (
+                                        <div
+                                            key={tab.id}
+                                            title="Esta aba só mostra dados de demonstração (fixos no sistema). Volta a poder ser ligada quando tiver dados reais."
+                                            className="w-full flex items-center justify-between gap-4 p-4 rounded-[6px] border bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <tab.icon className="w-4 h-4 text-gray-300" />
+                                                <span className="text-sm font-medium">{tab.label}</span>
+                                            </div>
+                                            <span className="text-xs text-gray-400 text-right">Demonstração, sem dados reais</span>
+                                        </div>
+                                    );
+                                }
                                 return (
                                     <button
                                         key={tab.id}
@@ -755,7 +771,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
             )}
 
             {currentTab === 'materiais' && (
-                <div data-tour="materiais-grade"><BrokerMaterials organizationId={initialOrgId || selectedOrgId || 'demo'} /></div>
+                <div data-tour="materiais-grade"><BrokerMaterials organizationId={initialOrgId || selectedOrgId || 'demo'} portalToken={portalToken} /></div>
             )}
 
             {currentTab === 'ranking' && (
@@ -774,9 +790,9 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                 <BrokerChat brokerEmail={effectiveBrokerEmail || ''} />
             )}
 
-            {currentTab === 'analytics' && (
-                <div data-tour="analytics-graficos"><BrokerAnalytics organizationId={initialOrgId || selectedOrgId || 'demo'} /></div>
-            )}
+            {/* O miolo do Analytics (BrokerAnalytics) é DEMONSTRAÇÃO — gerador fixo no
+                componente. Saiu do portal (D9, 16/10/2026); a aba fica só com os 4
+                KPIs reais do topo. */}
 
             {currentTab === 'saude' && (
                 <BrokerHealthPanel organizationId={initialOrgId || selectedOrgId || 'demo'} />

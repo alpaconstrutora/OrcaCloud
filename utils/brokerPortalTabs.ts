@@ -11,25 +11,41 @@ export const BROKER_PORTAL_TAB_IDS = [
 export type BrokerPortalTabId = typeof BROKER_PORTAL_TAB_IDS[number];
 
 /**
+ * Abas que hoje só mostram DEMONSTRAÇÃO: os dados vêm de geradores fixos no
+ * próprio componente (`generateDemoLeads`, `generateDemoMessages`…), sem ler
+ * nem gravar no banco. Ficam fora do portal do corretor até terem dados reais
+ * (decisão do usuário em 16/10/2026, plano 2026-10-16-portal-corretor-mobile,
+ * D9 — o mesmo caminho da aba Integrações em 14/10). Corretor com Chat
+ * liberado via mensagens inventadas, e o que digitava não ia para ninguém.
+ * O código das abas fica; ao ligar uma delas ao banco, tirá-la daqui.
+ */
+export const ABAS_DE_DEMONSTRACAO: readonly BrokerPortalTabId[] = [
+  'leads', 'chat', 'ranking', 'agenda', 'treinamento',
+];
+export const ehAbaDeDemonstracao = (id: string): boolean =>
+  (ABAS_DE_DEMONSTRACAO as readonly string[]).includes(id);
+
+/**
  * Abas habilitadas para o corretor — `broker_profiles.settings.brokerPortalTabs`,
  * gravado pelo botão "Configurar abas visíveis do corretor". Lista vazia ou
- * ausente = todas (regra de sempre do desktop). Id desconhecido é descartado.
+ * ausente = todas (regra de sempre do desktop). Id desconhecido é descartado,
+ * e aba de demonstração nunca entra, mesmo que esteja salva como ligada (D9).
  */
 export const abasHabilitadas = (
   settings?: { brokerPortalTabs?: readonly string[] | null } | null,
 ): BrokerPortalTabId[] => {
   const salvas = settings?.brokerPortalTabs ?? [];
-  if (salvas.length === 0) return [...BROKER_PORTAL_TAB_IDS];
-  return BROKER_PORTAL_TAB_IDS.filter(id => salvas.includes(id));
+  const base = salvas.length === 0 ? [...BROKER_PORTAL_TAB_IDS] : BROKER_PORTAL_TAB_IDS.filter(id => salvas.includes(id));
+  return base.filter(id => !ehAbaDeDemonstracao(id));
 };
 
 /**
  * Ordem das abas no CELULAR (plano 2026-10-16-portal-corretor-mobile, D2): o
- * trabalho de rua primeiro. Saúde fica de fora (D6) — é painel de gestão.
+ * trabalho de rua primeiro. Saúde fica de fora (D6) — é painel de gestão — e as
+ * de demonstração também (D9).
  */
 export const ORDEM_DO_CELULAR: readonly BrokerPortalTabId[] = [
-  'empreendimentos', 'estoque', 'propostas', 'comissoes',
-  'leads', 'materiais', 'chat', 'agenda', 'ranking', 'treinamento', 'analytics',
+  'empreendimentos', 'estoque', 'propostas', 'comissoes', 'materiais', 'analytics',
 ];
 
 /** Quantas abas a barra inferior comporta (4 + "Mais", ou 5 sem "Mais"). */

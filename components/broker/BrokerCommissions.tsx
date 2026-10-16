@@ -8,6 +8,11 @@ interface BrokerCommissionsProps {
     brokerEmail: string;
     organizationId?: string;
     portalToken?: string;
+    /**
+     * Celular (BrokerPortalMobile): resumo em um cartão só, filtros em faixa
+     * rolável, linhas enxutas. Plano: docs/planos/2026-10-16-portal-corretor-mobile.md (F3).
+     */
+    compacto?: boolean;
 }
 
 const STATUS_CONFIG: Record<BrokerCommission['status'], { label: string; color: string; bg: string; icon: React.ElementType }> = {
@@ -17,7 +22,7 @@ const STATUS_CONFIG: Record<BrokerCommission['status'], { label: string; color: 
     PAGA: { label: 'Paga', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CheckCircle2 },
 };
 
-const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, organizationId, portalToken }) => {
+const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, organizationId, portalToken, compacto = false }) => {
     const [commissions, setCommissions] = useState<BrokerCommission[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -57,8 +62,30 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
     }), [commissions]);
 
     return (
-        <div className="space-y-6">
+        <div className={compacto ? 'space-y-4' : 'space-y-6'}>
+            {/* Resumo no celular: as três somas num cartão, uma por linha */}
+            {compacto && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-2.5" data-tour="comissoes-totais">
+                    {[
+                        { label: 'Prevista', valor: totals.predicted, cor: 'text-gray-900', barra: 'bg-gray-400', pct: 100 },
+                        { label: 'Liberada', valor: totals.released, cor: 'text-blue-700', barra: 'bg-blue-500', pct: totals.predicted > 0 ? totals.released / totals.predicted * 100 : 0 },
+                        { label: 'Paga', valor: totals.paid, cor: 'text-emerald-700', barra: 'bg-emerald-500', pct: totals.predicted > 0 ? totals.paid / totals.predicted * 100 : 0 },
+                    ].map(l => (
+                        <div key={l.label}>
+                            <div className="flex items-baseline justify-between gap-3">
+                                <span className="text-xs text-gray-500">{l.label}</span>
+                                <span className={`text-base font-bold ${l.cor}`}>{formatCurrency(l.valor)}</span>
+                            </div>
+                            <div className="mt-1 bg-gray-100 rounded-full h-1.5">
+                                <div className={`${l.barra} rounded-full h-1.5`} style={{ width: `${l.pct}%` }} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Summary Cards */}
+            {!compacto && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-tour="comissoes-totais">
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
                     <div className="flex items-center justify-between">
@@ -99,11 +126,12 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                     </div>
                 </div>
             </div>
+            )}
 
             {/* Status Filter */}
-            <div className="flex gap-2">
+            <div className={compacto ? 'flex gap-2 overflow-x-auto -mx-4 px-4 pb-1 scrollbar-hide' : 'flex gap-2'}>
                 <button onClick={() => setStatusFilter('all')}
-                    className={`px-4 py-2 rounded-xl text-button font-bold border transition-all ${statusFilter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+                    className={`${compacto ? 'shrink-0 whitespace-nowrap ' : ''}px-4 py-2 rounded-xl text-button font-bold border transition-all ${statusFilter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
                     Todas ({commissions.length})
                 </button>
                 {Object.entries(STATUS_CONFIG).map(([status, cfg]) => {
@@ -111,7 +139,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                     const Icon = cfg.icon;
                     return (
                         <button key={status} onClick={() => setStatusFilter(status as BrokerCommission['status'])}
-                            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${statusFilter === status ? `${cfg.bg} ${cfg.color} ring-2 ring-offset-1` : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+                            className={`${compacto ? 'shrink-0 whitespace-nowrap ' : ''}flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${statusFilter === status ? `${cfg.bg} ${cfg.color} ring-2 ring-offset-1` : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
                             <Icon className="w-3.5 h-3.5" />
                             {cfg.label} ({count})
                         </button>
@@ -121,6 +149,11 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
 
             {/* Commission List */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" data-tour="comissoes-lista">
+                {!loading && filtered.length === 0 && (
+                    <p className="text-center text-sm text-gray-500 px-6 py-10">
+                        {commissions.length === 0 ? 'Nenhuma comissão ainda — ela nasce quando uma venda sua é aprovada.' : 'Nenhuma comissão com esse status.'}
+                    </p>
+                )}
                 <div className="divide-y divide-gray-100">
                     {filtered.map(comm => {
                         const cfg = STATUS_CONFIG[comm.status];
@@ -130,9 +163,9 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                         return (
                             <div key={comm.id}>
                                 <button onClick={() => setExpandedId(isExpanded ? null : comm.id)}
-                                    className="w-full p-5 flex items-center justify-between hover:bg-gray-50 transition-colors text-left">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                                    className={`w-full ${compacto ? 'p-4 gap-3' : 'p-5'} flex items-center justify-between hover:bg-gray-50 transition-colors text-left`}>
+                                    <div className="flex items-center gap-4 min-w-0">
+                                        <div className={`${compacto ? 'hidden' : 'flex'} w-10 h-10 bg-indigo-100 rounded-xl items-center justify-center shrink-0`}>
                                             <Building2 className="w-5 h-5 text-indigo-600" />
                                         </div>
                                         <div>
@@ -140,7 +173,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                                             <p className="text-xs text-gray-400 mt-0.5">Venda: {formatCurrency(comm.sale_value)} • {comm.commission_pct}% comissão</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-4">
+                                    <div className={`flex items-center shrink-0 ${compacto ? 'gap-2' : 'gap-4'}`}>
                                         <div className="text-right">
                                             <p className="text-sm font-black text-gray-900">{formatCurrency(comm.commission_predicted || 0)}</p>
                                             <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${cfg.bg} ${cfg.color}`}>

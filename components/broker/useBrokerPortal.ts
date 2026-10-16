@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Building2, FileText, LayoutGrid, DollarSign, Users, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity } from 'lucide-react';
 import { useConfirm } from '../ui/confirm';
 import { avisarAcaoDoPortal } from '../../utils/portalEventos';
-import { BROKER_PORTAL_TAB_IDS, abasHabilitadas } from '../../utils/brokerPortalTabs';
+import { BROKER_PORTAL_TAB_IDS, abasHabilitadas, ehAbaDeDemonstracao } from '../../utils/brokerPortalTabs';
 import { downloadProposalPdf } from '../../services/proposalPdfService';
 import { useStore } from '../../store/useStore';
 import { commercialService } from '../../services/commercialService';
@@ -109,8 +109,9 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
     const effectiveBrokerSettings = effectiveBroker?.settings ?? {};
     const enabledTabIds: string[] = abasHabilitadas(effectiveBrokerSettings);
     const visibleTabs = ALL_TABS.filter(t => enabledTabIds.includes(t.id));
-    // admin vê todas (para poder configurar); corretor vê só as habilitadas
-    const navTabs = isAdmin ? ALL_TABS : visibleTabs;
+    // admin vê todas (para poder configurar); corretor vê só as habilitadas.
+    // As de demonstração (D9) não aparecem para ninguém na navegação.
+    const navTabs = isAdmin ? ALL_TABS.filter(t => !ehAbaDeDemonstracao(t.id)) : visibleTabs;
 
     const irParaAba = React.useCallback((tab: PortalTab) => {
         setCurrentTab(tab);
@@ -118,10 +119,16 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
     }, []);
 
     const toggleTabVisibility = async (tabId: string) => {
-        if (!effectiveBroker) return;
-        const next = enabledTabIds.includes(tabId)
-            ? enabledTabIds.filter(id => id !== tabId)
-            : [...enabledTabIds, tabId];
+        if (!effectiveBroker || ehAbaDeDemonstracao(tabId)) return;
+        // Parte da lista GRAVADA (não de `enabledTabIds`, que já tirou as de
+        // demonstração): senão ligar/desligar uma aba apagava do cadastro as de
+        // demonstração que o gestor tinha deixado ligadas.
+        const salvas: string[] = (effectiveBrokerSettings.brokerPortalTabs ?? []).length > 0
+            ? [...effectiveBrokerSettings.brokerPortalTabs!]
+            : ALL_TABS.map(t => t.id);
+        const next = salvas.includes(tabId)
+            ? salvas.filter(id => id !== tabId)
+            : [...salvas, tabId];
         try {
             const updated = await brokerService.saveProfile({
                 id: effectiveBroker.id,
@@ -132,7 +139,7 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
             // Se a aba que acabamos de ocultar é a que está aberta agora, sai dela — senão o
             // conteúdo continua na tela mesmo depois de "ocultada" (só o botão da nav mudava).
             if (currentTab === tabId && !next.includes(tabId)) {
-                const effectiveNext = next.length > 0 ? next : ALL_TABS.map(t => t.id);
+                const effectiveNext: string[] = abasHabilitadas({ brokerPortalTabs: next });
                 const fallback = (effectiveNext.includes('estoque') ? 'estoque' : effectiveNext[0]) as PortalTab;
                 irParaAba(fallback);
             }

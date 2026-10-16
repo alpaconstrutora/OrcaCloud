@@ -18,7 +18,6 @@ import BrokerRanking from './BrokerRanking';
 import BrokerTraining from './BrokerTraining';
 import BrokerEvents from './BrokerEvents';
 import BrokerChat from './BrokerChat';
-import BrokerAnalytics from './BrokerAnalytics';
 import { useBrokerPortal, TAB_BY_ID, formatCurrency, type PortalTab } from './useBrokerPortal';
 import { abasDoCelular, abasHabilitadas } from '../../utils/brokerPortalTabs';
 import type { BrokerProfile } from '../../types';
@@ -244,6 +243,7 @@ const BrokerPortalMobile: React.FC<Props> = ({ profile, organizationId, portalTo
                                         onReserveUnit={h.handleReserve}
                                         selectedUnitIds={h.cart.map(u => u.id)}
                                         onToggleUnit={h.handleToggleCart}
+                                        compacto
                                     />
                                 </div>
                             </div>
@@ -271,14 +271,13 @@ const BrokerPortalMobile: React.FC<Props> = ({ profile, organizationId, portalTo
                                     <KpiCard label="Aprovadas" value={h.loading ? '…' : h.stats.approved} sub="Vendas confirmadas" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
                                     <KpiCard label="Comissão" value={h.loading ? '…' : formatCurrency(h.stats.totalCommission)} sub="5% sobre aprovadas" icon={<DollarSign className="w-5 h-5" />} color="violet" />
                                 </div>
-                                <div data-tour="analytics-graficos"><BrokerAnalytics organizationId={h.orgIdEfetivo || 'demo'} /></div>
                             </>
                         )}
 
                         {h.currentTab === 'leads' && <BrokerLeadManager brokerEmail={h.effectiveBrokerEmail || ''} />}
-                        {h.currentTab === 'comissoes' && <BrokerCommissions brokerEmail={h.effectiveBrokerEmail || ''} portalToken={portalToken} />}
+                        {h.currentTab === 'comissoes' && <BrokerCommissions brokerEmail={h.effectiveBrokerEmail || ''} portalToken={portalToken} compacto />}
                         {h.currentTab === 'materiais' && (
-                            <div data-tour="materiais-grade"><BrokerMaterials organizationId={h.orgIdEfetivo || 'demo'} /></div>
+                            <div data-tour="materiais-grade"><BrokerMaterials organizationId={h.orgIdEfetivo || 'demo'} portalToken={portalToken} compacto /></div>
                         )}
                         {h.currentTab === 'ranking' && <BrokerRanking brokerEmail={h.effectiveBrokerEmail || ''} />}
                         {h.currentTab === 'treinamento' && <BrokerTraining brokerEmail={h.effectiveBrokerEmail || ''} />}

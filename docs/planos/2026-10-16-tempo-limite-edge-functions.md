@@ -35,4 +35,7 @@ da tela em lotes de ~15 s, com o painel chamando de novo. Resposta do usuário, 
 
 - [x] 1 e 2 implementados com testes (92 verdes nos arquivos tocados), `deno check`, typecheck parcial,
   `check-ui-standard` limpo.
-- [ ] Publicar (função + push) e provar: busca por período curta pela tela sem o erro.
+- [x] Publicado: função `email-capture-sync` (401 sem header) e push `9837357d`. Resposta do cron das
+  10:00 UTC (lida em `net._http_response`) já traz `"pendente":false` (16 s, 6 releituras, prazo do cron).
+- [ ] Prova pela tela (usuário): "Sincronizar agora" ou "Buscar período" sem o erro — o modo da tela
+  exige membro da org; o usuário de leitura não dispara.

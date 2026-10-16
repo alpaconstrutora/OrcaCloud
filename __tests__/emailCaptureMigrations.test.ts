@@ -25,6 +25,7 @@ const cron = ler('aplicar_20271015110200_email_capture_cron.sql');
 const senhaPdf = ler('aplicar_20271015120000_email_capture_senha_pdf.sql');
 const buscas = ler('aplicar_20271015130000_email_capture_buscas.sql');
 const buscasRemetentes = ler('aplicar_20271016100000_email_capture_buscas_remetentes.sql');
+const padroes = ler('aplicar_20271016210000_email_capture_padroes_remetente.sql');
 
 describe('tabelas da captura', () => {
     it('RLS ligada nas três tabelas', () => {
@@ -146,5 +147,38 @@ describe('busca por período com remetentes (16/10/2026)', () => {
         expect(buscasRemetentes).toContain('ADD COLUMN IF NOT EXISTS remetentes TEXT[]');
         expect(buscasRemetentes).toContain('CHECK (remetentes IS NULL OR cardinality(remetentes) <= 20)');
         expect(buscasRemetentes).not.toMatch(/\bGRANT\b|CREATE POLICY|SECURITY DEFINER/);
+    });
+});
+
+describe('padrões do boleto por remetente (16/10/2026)', () => {
+    const COLUNAS = ['padrao_descricao', 'padrao_observacoes', 'padrao_project_id', 'padrao_cost_center_id',
+        'padrao_plano_de_contas_id', 'padrao_category_id', 'padrao_dia_vencimento', 'padrao_valor',
+        'padrao_multa', 'padrao_multa_percentual', 'padrao_juros_dia', 'padrao_juros_dia_tipo'];
+
+    it('12 colunas idempotentes, 4 FKs ON DELETE SET NULL e os CHECKs', () => {
+        for (const c of COLUNAS) expect(padroes).toMatch(new RegExp(`ADD COLUMN IF NOT EXISTS ${c}\\s`));
+        expect(padroes.match(/ON DELETE SET NULL/g)?.length).toBe(4);
+        expect(padroes).toContain('padrao_dia_vencimento BETWEEN 1 AND 31');
+        expect(padroes).toContain('padrao_valor IS NULL OR padrao_valor > 0');
+        expect(padroes).toContain('padrao_multa IS NULL OR padrao_multa_percentual IS NULL');
+    });
+
+    it('gatilho INVOKER confere a organização dos 4 ids (conta financeira aceita global) e responde 23503', () => {
+        expect(padroes).toMatch(/fn_email_capture_sender_padroes_da_org\(\)\s*RETURNS trigger\s*LANGUAGE plpgsql\s*SECURITY INVOKER/);
+        expect(padroes.match(/organization_id = NEW\.organization_id/g)?.length).toBe(4);
+        expect(padroes).toContain('fc.organization_id IS NULL OR fc.organization_id = NEW.organization_id');
+        expect(padroes.match(/ERRCODE = '23503'/g)?.length).toBe(4);
+        expect(padroes).toContain('REVOKE EXECUTE ON FUNCTION public.fn_email_capture_sender_padroes_da_org() FROM PUBLIC, anon, authenticated;');
+    });
+
+    it('grants só aditivos e por coluna; nada de policy nova nem SECURITY DEFINER', () => {
+        const grants = padroes.match(/GRANT (INSERT|UPDATE) \(([^)]*)\)/g) ?? [];
+        expect(grants).toHaveLength(2);
+        for (const g of grants) {
+            for (const c of COLUNAS) expect(g).toContain(c);
+            expect(g).not.toContain('pdf_senha_atualizada_em');
+        }
+        expect(padroes).not.toMatch(/REVOKE\s+INSERT[^;]*ON TABLE/);
+        expect(padroes).not.toMatch(/CREATE POLICY|SECURITY DEFINER/);
     });
 });

@@ -49,9 +49,29 @@ import {
     MAX_FILTROS_REMETENTE,
     ignorarPdfSemBoleto,
     MOTIVO_PDF_SEM_BOLETO_AVULSO,
+    aplicarPadroesDoRemetente,
+    camposDoPadraoIntactos,
+    dataLocalDoEmail,
     type RemetenteMonitorado,
     type ModoCaptura,
+    type PadroesRemetente,
+    type CamposParaPadroes,
+    type PatchDosPadroes,
 } from "../../../utils/emailCaptureRegras.ts";
+
+/** Remetente com os padrões do boleto (16/10/2026) e a data da senha do PDF. */
+type RemetenteDaCaixa = RemetenteMonitorado & Partial<PadroesRemetente> & { pdf_senha_atualizada_em?: string | null };
+
+const CAMPOS_DOS_PADROES: Array<keyof CamposParaPadroes> = [
+    'vencimento', 'valor', 'multa', 'multa_percentual', 'juros_dia', 'juros_dia_tipo',
+    'descricao', 'observacoes', 'project_id', 'cost_center_id', 'plano_de_contas_id', 'category_id',
+];
+/** Só as colunas que um padrão pode preencher (ausente = null). */
+function camposDe(obj: Record<string, unknown>): CamposParaPadroes {
+    return Object.fromEntries(CAMPOS_DOS_PADROES.map(k => [k, (obj[k] ?? null)])) as unknown as CamposParaPadroes;
+}
+const COLUNAS_PADROES = 'padrao_descricao, padrao_observacoes, padrao_project_id, padrao_cost_center_id, padrao_plano_de_contas_id, '
+    + 'padrao_category_id, padrao_dia_vencimento, padrao_valor, padrao_multa, padrao_multa_percentual, padrao_juros_dia, padrao_juros_dia_tipo';
 import {
     encontrarPdfs,
     valoresDoCabecalho,
@@ -252,9 +272,9 @@ async function sincronizarConta(admin: SupabaseLike, conta: Conta, totais: Totai
 
     const { data: remetentesBrutos } = await admin
         .from('email_capture_senders')
-        .select('id, tipo, email, dominio, palavras_chave, importacao, exigir_dmarc, ativo, supplier_id, pdf_senha_atualizada_em')
+        .select(`id, tipo, email, dominio, palavras_chave, importacao, exigir_dmarc, ativo, supplier_id, pdf_senha_atualizada_em, ${COLUNAS_PADROES}`)
         .eq('account_id', conta.id);
-    const remetentes = (remetentesBrutos ?? []) as Array<RemetenteMonitorado & { pdf_senha_atualizada_em: string | null }>;
+    const remetentes = (remetentesBrutos ?? []) as RemetenteDaCaixa[];
 
     // Senhas dos PDFs (Vault, só service_role). Remetente sem senha não entra.
     const senhas = new Map<string, string>();
@@ -609,7 +629,12 @@ async function processarAnexo(
             fornecedores = ((data ?? []) as Array<{ id: string }>).map(f => f.id);
         }
 
-        // 7. Destino
+        // 6b. Padrões do remetente (16/10/2026): só o que o PDF NÃO trouxe.
+        const padroes = remetente
+            ? aplicarPadroesDoRemetente(camposDe(colunas as Record<string, unknown>), remetente as RemetenteDaCaixa, dataLocalDoEmail(a.data))
+            : { patch: {} as PatchDosPadroes, campos: [] as Array<keyof CamposParaPadroes> };
+
+        // 7. Destino — com o vencimento do PDF; o do padrão nunca autoriza importação automática.
         const destino = decidirDestino({
             modoPiloto: conta.modo_piloto,
             remetente,
@@ -620,6 +645,7 @@ async function processarAnexo(
             vencimento: colunas.vencimento ?? null,
             fornecedoresDoCnpj: fornecedores,
             cnpjConfianca,
+            doPadrao: { vencimento: padroes.campos.includes('vencimento'), valor: padroes.campos.includes('valor') },
         });
 
         // 8. Arquivo no bucket — mesmo caminho do upload manual
@@ -640,6 +666,7 @@ async function processarAnexo(
             documento_tamanho: bytes.byteLength,
             documento_paginas: paginas || null,
             ...colunas,
+            ...padroes.patch,
             erros_validacao: errosValidacao.length ? errosValidacao : null,
             status: destino.status,
             supplier_id: destino.supplierId,
@@ -676,6 +703,8 @@ async function processarAnexo(
                 status: destino.status,
                 motivos: destino.motivos,
                 confidence: extracao.confidence_score,
+                // O que veio do padrão: a releitura do PDF pode trocar enquanto ninguém mexer.
+                ...(padroes.campos.length ? { padroes_do_remetente: { remetente_id: remetente!.id, valores: padroes.patch } } : {}),
             },
         });
 
@@ -707,14 +736,14 @@ async function processarAnexo(
 async function reprocessarParados(
     admin: SupabaseLike,
     conta: Conta,
-    remetentes: Array<RemetenteMonitorado & { pdf_senha_atualizada_em: string | null }>,
+    remetentes: RemetenteDaCaixa[],
     senhas: Map<string, string>,
     ultimaSenha: string,
     totais: Totais,
     orcamento: Orcamento,
 ) {
     const { data: candidatas } = await admin.from('email_capture_messages')
-        .select('id, boleto_id, remetente, assunto, documento_nome, auth_results, reprocessado_em')
+        .select('id, boleto_id, remetente, assunto, documento_nome, auth_results, reprocessado_em, data_email')
         .eq('account_id', conta.id).eq('resultado', 'criado').not('boleto_id', 'is', null)
         .or(`reprocessado_em.is.null,reprocessado_em.lt."${ultimaSenha}"`)
         .order('created_at', { ascending: false })
@@ -749,6 +778,28 @@ async function reprocessarParados(
             const { data } = await admin.rpc('find_supplier_in_org_by_document', { p_organization_id: conta.organization_id, p_document: cnpj.valor });
             fornecedores = ((data ?? []) as Array<{ id: string }>).map(f => f.id);
         }
+        // O que a captura gravou pelo PADRÃO do remetente e ninguém alterou conta
+        // como vazio: o PDF agora legível troca (vencimento real no lugar do "dia 10").
+        const { data: auditorias } = await admin.from('boletos_auditoria').select('valor_depois')
+            .eq('boleto_id', b.id).in('acao', ['upload', 'padroes_remetente', 'reprocessamento'])
+            .order('created_at', { ascending: true });
+        const gravadoPeloPadrao: PatchDosPadroes = Object.assign({}, ...((auditorias ?? []) as Array<{ valor_depois: Record<string, unknown> | null }>)
+            .map(x => ((x.valor_depois?.padroes_do_remetente as { valores?: PatchDosPadroes } | undefined)?.valores ?? {})));
+        const intactos = new Set<string>(camposDoPadraoIntactos(camposDe(b as Record<string, unknown>), gravadoPeloPadrao));
+
+        // Só preenche o que está VAZIO no boleto: o que alguém já digitou na
+        // revisão (valor, vencimento, beneficiário…) nunca é sobrescrito.
+        const vazios = Object.fromEntries(Object.entries(colunas).filter(([k, v]) => {
+            const atual = (b as Record<string, unknown>)[k];
+            if (intactos.has(k)) return v !== null && v !== undefined && v !== '';
+            return atual === null || atual === undefined || atual === '';
+        }));
+        // Padrões de novo sobre o resultado (o que continuar vazio; descrição com o mês certo).
+        const base = { ...(b as Record<string, unknown>), ...Object.fromEntries([...intactos].map(k => [k, null])), ...vazios };
+        const padroes = remetente
+            ? aplicarPadroesDoRemetente(camposDe(base), remetente as RemetenteDaCaixa, dataLocalDoEmail(m.data_email))
+            : { patch: {} as PatchDosPadroes, campos: [] as Array<keyof CamposParaPadroes> };
+
         const auth = (m.auth_results ?? { spf: 'none', dkim: 'none', dmarc: 'none', headerFrom: null, servidor: null }) as Parameters<typeof decidirDestino>[0]['auth'];
         const destino = decidirDestino({
             modoPiloto: conta.modo_piloto,
@@ -759,17 +810,19 @@ async function reprocessarParados(
             vencimento: colunas.vencimento ?? null,
             fornecedoresDoCnpj: fornecedores,
             cnpjConfianca,
+            doPadrao: { vencimento: padroes.campos.includes('vencimento'), valor: padroes.campos.includes('valor') },
         });
 
+        // Campo do padrão, intacto, que nem o PDF nem o padrão reaplicado preenchem
+        // mais (ex.: o PDF trouxe juros → a multa do padrão sai junto): volta a vazio.
+        const retirados = Object.fromEntries([...intactos]
+            .filter(k => !(k in vazios) && !(k in padroes.patch)).map(k => [k, null]));
+
         const errosValidacao = [...(colunas.erros_validacao ?? []), ...destino.motivos.map(x => `Captura: ${x}`)];
-        // Só preenche o que está VAZIO no boleto: o que alguém já digitou na
-        // revisão (valor, vencimento, beneficiário…) nunca é sobrescrito.
-        const vazios = Object.fromEntries(Object.entries(colunas).filter(([k]) => {
-            const atual = (b as Record<string, unknown>)[k];
-            return atual === null || atual === undefined || atual === '';
-        }));
         const patch: Record<string, unknown> = {
+            ...retirados,
             ...vazios,
+            ...padroes.patch,
             documento_paginas: b.documento_paginas ?? (aberto.paginas || null),
             erros_validacao: errosValidacao.length ? errosValidacao : null,
             supplier_id: b.supplier_id ?? destino.supplierId,
@@ -787,7 +840,13 @@ async function reprocessarParados(
         await admin.from('boletos_auditoria').insert({
             boleto_id: b.id, organization_id: conta.organization_id, acao: 'reprocessamento', metodo: 'sistema',
             usuario_email: conta.usuario,
-            valor_depois: { motivo: 'Releitura do PDF (senha cadastrada no remetente)', campos_preenchidos: Object.keys(vazios).filter(k => vazios[k] !== null && vazios[k] !== undefined), linha_digitavel: patch.linha_digitavel ?? b.linha_digitavel, valor: patch.valor ?? b.valor, vencimento: patch.vencimento ?? b.vencimento, motivos: destino.motivos },
+            valor_depois: {
+                motivo: 'Releitura do PDF (senha cadastrada no remetente)',
+                campos_preenchidos: Object.keys(vazios).filter(k => vazios[k] !== null && vazios[k] !== undefined),
+                linha_digitavel: patch.linha_digitavel ?? b.linha_digitavel, valor: patch.valor ?? b.valor, vencimento: patch.vencimento ?? b.vencimento,
+                motivos: destino.motivos,
+                ...(padroes.campos.length ? { padroes_do_remetente: { remetente_id: remetente!.id, valores: padroes.patch } } : {}),
+            },
         });
         await admin.from('email_capture_messages').update({ motivo: ['Lido de novo com a senha do PDF.', ...destino.motivos].join(' '), updated_at: agora }).eq('id', m.id);
         totais.reprocessados++;

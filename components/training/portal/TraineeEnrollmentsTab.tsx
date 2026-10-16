@@ -11,7 +11,7 @@ import type { AcademyTraineeEnrollment } from '../../../types/academy';
 /**
  * Meus treinamentos — as matrículas do treinando, em cartões.
  *
- * Mesmo desenho da Sala de treinamento do app (AcademyClassroomTab): o volume
+ * Mesmo desenho de "Meus Treinamentos" no app (academy/meus/MeusTreinamentosCursos): o volume
  * por pessoa é pequeno e o que importa é "continuar de onde parei".
  */
 

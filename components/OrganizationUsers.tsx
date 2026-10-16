@@ -167,6 +167,10 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         canEditQuality: false,
         canViewWarranty: true, canEditWarranty: false,
         canEditLabor: false,
+        // Gestão de treinamentos fora do RH (16/10/2026). Mesmo padrão do RH:
+        // ver sim, editar não. Membro já gravado SEM a chave herda do RH (ver
+        // `effectivePerms` abaixo e utils/permissaoTreinamentos.ts).
+        canViewTrainings: true, canEditTrainings: false,
         canViewPayroll: true, canEditPayroll: false,
         canViewTimeTracking: true, canEditTimeTracking: false,
         canViewEsocial: true, canEditEsocial: false,
@@ -279,6 +283,8 @@ const MODULES_BY_PRODUCT: Record<ProductContext, { key: string; label: string; d
         { key: 'obras',      label: 'Engenharia / Obras',               description: 'Obras, Orçamentos, Cronogramas e Composições' },
         { key: 'compras',    label: 'Suprimentos / Compras',            description: 'Solicitações, Pedidos, Cotações, Recebimento e Contratos' },
         { key: 'rh',         label: 'Mão de Obra / RH',                 description: 'Colaboradores, Equipes, Ponto, Folha e SST' },
+        // Sem valor gravado na matriz, segue o que o cargo tem em "Mão de Obra / RH".
+        { key: 'treinamentos', label: 'Treinamentos',                   description: 'Catálogo, atribuições, registros e Portal de Treinamentos (colaboradores e terceirizados)' },
         { key: 'crm',        label: 'Comercial & Vendas',               description: 'Espelho de vendas e CRM de serviços' },
         { key: 'rentals',    label: 'Comercial — Locações',             description: 'Gestão de locações, contratos de aluguel e inadimplência' },
         { key: 'incorporacao', label: 'Viabilidade Imobiliária',        description: 'Estudos e simulações financeiras de empreendimentos' },
@@ -363,6 +369,10 @@ const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?:
     // não mudava nada, e a tela sugeria dois módulos onde há um. A chave
     // `canViewQuality` fica como está: está persistida nos perfis já gravados.
     { group: 'Operação de Obra', title: 'Pós-Obra e Garantia', view: 'canViewQuality', edit: 'canEditQuality' },
+
+    // --- Treinamentos --- (saiu de dentro do RH em 16/10/2026: quem gerencia
+    // treinamento não é só o RH — segurança do trabalho, engenharia de obra)
+    { group: 'Treinamentos', title: 'Gestão de treinamentos (catálogo, atribuições, registros, Portal de Treinamentos)', view: 'canViewTrainings', edit: 'canEditTrainings' },
 
     // --- Recursos Humanos ---
     { group: 'Recursos Humanos', title: 'Mão de Obra / RH', view: 'canViewLabor', edit: 'canEditLabor' },
@@ -524,6 +534,19 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         }
     }, [currentOrg]);
 
+    /**
+     * O que a matriz vale para o cargo: o gravado, senão ligado. Exceção:
+     * Treinamentos (saiu do RH em 16/10/2026) sem valor gravado segue o que o
+     * cargo tem em "Mão de Obra / RH" — a mesma herança do menu e da rota
+     * (utils/permissaoTreinamentos.ts).
+     */
+    const visivelNaMatriz = (settings: typeof visibilitySettings, roleId: string, moduleKey: string): boolean => {
+        const roleSettings = (settings[activeProductTab] || {})[roleId];
+        if (roleSettings && roleSettings[moduleKey] !== undefined) return roleSettings[moduleKey];
+        if (moduleKey === 'treinamentos') return visivelNaMatriz(settings, roleId, 'rh');
+        return true;
+    };
+
     const handleToggleVisibility = (roleId: string, moduleKey: string) => {
         setVisibilitySettings(prev => {
             const productMap: ProductModuleMap = { ...(prev[activeProductTab] || {}) };
@@ -536,19 +559,16 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     ...productMap,
                     [roleId]: {
                         ...roleSettings,
-                        [moduleKey]: roleSettings[moduleKey] === false ? true : false
+                        // Inverte o que a tela mostra (inclui a herança de Treinamentos).
+                        [moduleKey]: !visivelNaMatriz(prev, roleId, moduleKey)
                     }
                 }
             };
         });
     };
 
-    const getVisibility = (roleId: string, moduleKey: string): boolean => {
-        const productMap = visibilitySettings[activeProductTab] || {};
-        const roleSettings = productMap[roleId];
-        if (roleSettings && roleSettings[moduleKey] !== undefined) return roleSettings[moduleKey];
-        return true;
-    };
+    const getVisibility = (roleId: string, moduleKey: string): boolean =>
+        visivelNaMatriz(visibilitySettings, roleId, moduleKey);
 
     const handleSaveVisibility = async () => {
         try {
@@ -838,15 +858,24 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         const currentPerms = m.permissions || getDefaultPermissions(m.role);
         void persistMemberAccess(userId, {
             customRoleId: null, // Clear template link if manually overridden
-            permissions: { ...currentPerms, [perm]: !currentPerms[perm] },
+            // Inverte o que a tela MOSTRA (efetivo), não o valor cru gravado: chave
+            // que o membro ainda não tem gravada aparece pelo padrão/herança, e
+            // `!undefined` a gravaria como `true` — o clique não desmarcaria nada.
+            permissions: { ...currentPerms, [perm]: !effectivePerms(m)[perm] },
         });
     };
 
     /** Permissões efetivas do membro (as salvas, com o default do papel como fallback). */
-    const effectivePerms = (member: OrganizationMember): UserPermissions => ({
-        ...getDefaultPermissions(member.role),
-        ...(member.permissions || {}),
-    });
+    const effectivePerms = (member: OrganizationMember): UserPermissions => {
+        const salvas = (member.permissions || {}) as UserPermissions;
+        const efetivas: UserPermissions = { ...getDefaultPermissions(member.role), ...salvas };
+        // Treinamentos saiu do RH em 16/10/2026: membro gravado antes disso não
+        // tem a chave e HERDA o que tem no RH — a tela mostra a herança, igual ao
+        // menu e à rota (utils/permissaoTreinamentos.ts).
+        if (salvas.canViewTrainings === undefined && salvas.canViewLabor !== undefined) efetivas.canViewTrainings = salvas.canViewLabor;
+        if (salvas.canEditTrainings === undefined && salvas.canEditLabor !== undefined) efetivas.canEditTrainings = salvas.canEditLabor;
+        return efetivas;
+    };
 
     const isGroupFullyChecked = (member: OrganizationMember, modules: typeof DETAILED_PERMISSIONS) => {
         const perms = effectivePerms(member);

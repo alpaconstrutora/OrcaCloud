@@ -24,6 +24,7 @@ const rpcs = ler('aplicar_20271015110100_email_capture_rpcs.sql');
 const cron = ler('aplicar_20271015110200_email_capture_cron.sql');
 const senhaPdf = ler('aplicar_20271015120000_email_capture_senha_pdf.sql');
 const buscas = ler('aplicar_20271015130000_email_capture_buscas.sql');
+const buscasRemetentes = ler('aplicar_20271016100000_email_capture_buscas_remetentes.sql');
 
 describe('tabelas da captura', () => {
     it('RLS ligada nas três tabelas', () => {
@@ -137,5 +138,13 @@ describe('busca por período (15/10/2026)', () => {
         expect(buscas).toMatch(/ON public\.email_capture_buscas \(account_id\) WHERE status IN \('pendente', 'em_andamento'\)/);
         expect(buscas).toContain('CHECK (data_de <= data_ate)');
         expect(buscas).toMatch(/FOREIGN KEY \(account_id, organization_id\)\s+REFERENCES public\.email_capture_accounts \(id, organization_id\)/);
+    });
+});
+
+describe('busca por período com remetentes (16/10/2026)', () => {
+    it('coluna opcional com teto de 20; nada de grant/policy novo', () => {
+        expect(buscasRemetentes).toContain('ADD COLUMN IF NOT EXISTS remetentes TEXT[]');
+        expect(buscasRemetentes).toContain('CHECK (remetentes IS NULL OR cardinality(remetentes) <= 20)');
+        expect(buscasRemetentes).not.toMatch(/\bGRANT\b|CREATE POLICY|SECURITY DEFINER/);
     });
 });

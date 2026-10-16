@@ -15,6 +15,9 @@ import {
     decidirDestino,
     proximaTentativa,
     pareceSenhaDePdf,
+    normalizarFiltroRemetente,
+    remetenteNoFiltro,
+    criterioImapDosRemetentes,
     type RemetenteMonitorado,
     type EntradaDestino,
 } from '../utils/emailCaptureRegras';
@@ -196,5 +199,37 @@ describe('fornecedor do remetente como sugestão quando o PDF não tem CNPJ (16/
         const e = base();
         e.remetente = remetente({ supplier_id: null });
         expect(decidirDestino(e).sugestaoSupplierId).toBeNull();
+    });
+});
+
+describe('filtro de remetentes da busca por período (16/10/2026)', () => {
+    it('normaliza e-mail exato e domínio; recusa o resto', () => {
+        expect(normalizarFiltroRemetente(' Cobranca@ACME.com.br ')).toEqual({ tipo: 'email', valor: 'cobranca@acme.com.br' });
+        expect(normalizarFiltroRemetente('energisaonline.com.br')).toEqual({ tipo: 'dominio', valor: 'energisaonline.com.br' });
+        expect(normalizarFiltroRemetente('@energisa.com.br')).toEqual({ tipo: 'dominio', valor: 'energisa.com.br' });
+        expect(normalizarFiltroRemetente('energisa')).toBeNull();
+        expect(normalizarFiltroRemetente('a b@x.com')).toBeNull();
+        expect(normalizarFiltroRemetente('')).toBeNull();
+    });
+
+    it('confere exato: e-mail igual; domínio e subdomínio — e NÃO o trecho que o IMAP casaria', () => {
+        const f = ['energisaonline.com.br', 'faturas@energisa.com.br'];
+        expect(remetenteNoFiltro('Energisa <reavisoenergisa03@energisaonline.com.br>', f)).toBe(true);
+        expect(remetenteNoFiltro('x@mail.energisaonline.com.br', f)).toBe(true);
+        expect(remetenteNoFiltro('faturas@energisa.com.br', f)).toBe(true);
+        expect(remetenteNoFiltro('golpe@falso-energisaonline.com.br', f)).toBe(false);
+        expect(remetenteNoFiltro('outro@energisa.com.br', f)).toBe(false);
+        expect(remetenteNoFiltro(null, f)).toBe(false);
+    });
+
+    it('filtro vazio = todos', () => {
+        expect(remetenteNoFiltro('qualquer@x.com', [])).toBe(true);
+        expect(remetenteNoFiltro('qualquer@x.com', null)).toBe(true);
+    });
+
+    it('critério IMAP: nada, FROM único ou OR de vários', () => {
+        expect(criterioImapDosRemetentes([])).toEqual({});
+        expect(criterioImapDosRemetentes(['ACME.com.br'])).toEqual({ from: 'acme.com.br' });
+        expect(criterioImapDosRemetentes(['a@x.com', 'y.com.br'])).toEqual({ or: [{ from: 'a@x.com' }, { from: 'y.com.br' }] });
     });
 });

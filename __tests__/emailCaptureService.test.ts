@@ -74,3 +74,14 @@ describe('busca por período', () => {
         expect(progressoDaBusca({ status: 'concluida', total_mensagens: 10, mensagens_processadas: 3 })).toBe(100);
     });
 });
+
+describe('busca por período com remetentes', () => {
+    it('manda remetentes só quando há algum', async () => {
+        await emailCaptureService.buscarPeriodo('c1', '2026-09-01', '2026-09-30', ['energisaonline.com.br']);
+        await emailCaptureService.buscarPeriodo('c1', '2026-09-01', '2026-09-30', []);
+        expect(chamadas).toEqual([
+            { op: 'fn', rpc: 'email-capture-sync', args: { modo: 'periodo', accountId: 'c1', de: '2026-09-01', ate: '2026-09-30', remetentes: ['energisaonline.com.br'] } },
+            { op: 'fn', rpc: 'email-capture-sync', args: { modo: 'periodo', accountId: 'c1', de: '2026-09-01', ate: '2026-09-30' } },
+        ]);
+    });
+});

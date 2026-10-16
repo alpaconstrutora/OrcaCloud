@@ -89,6 +89,8 @@ export interface BuscaPeriodo {
     erros: number;
     ultimo_erro: string | null;
     pedida_por: string | null;
+    /** Remetentes escolhidos (e-mails ou domínios). null = todos, conforme a regra da caixa. */
+    remetentes: string[] | null;
     created_at: string;
     concluida_em: string | null;
 }
@@ -127,7 +129,7 @@ async function erroDaFunction(error: unknown, padrao: string): Promise<Error> {
     return new Error(corpo?.error ?? corpo?.motivo ?? (error as Error)?.message ?? padrao);
 }
 
-const COLUNAS_BUSCA = 'id, organization_id, account_id, data_de, data_ate, status, total_mensagens, mensagens_processadas, criados, duplicados, ignorados, erros, ultimo_erro, pedida_por, created_at, concluida_em';
+const COLUNAS_BUSCA = 'id, organization_id, account_id, data_de, data_ate, status, total_mensagens, mensagens_processadas, criados, duplicados, ignorados, erros, ultimo_erro, pedida_por, remetentes, created_at, concluida_em';
 
 async function chamar<T>(nome: 'email-capture-accounts' | 'email-capture-sync', body: Record<string, unknown>, padrao: string): Promise<T> {
     const { data, error } = await supabase.functions.invoke(nome, { body });
@@ -204,9 +206,12 @@ export const emailCaptureService = {
         return (data ?? []) as BuscaPeriodo[];
     },
 
-    /** Cria a busca do período (de/até AAAA-MM-DD) e já processa a primeira parte. */
-    async buscarPeriodo(accountId: string, de: string, ate: string): Promise<BuscaPeriodo | null> {
-        const r = await chamar<{ busca: BuscaPeriodo | null }>('email-capture-sync', { modo: 'periodo', accountId, de, ate }, 'Não foi possível iniciar a busca.');
+    /** Cria a busca do período (de/até AAAA-MM-DD) e já processa a primeira parte.
+     *  `remetentes` (e-mails ou domínios) restringe a busca; vazio = todos. */
+    async buscarPeriodo(accountId: string, de: string, ate: string, remetentes: string[] = []): Promise<BuscaPeriodo | null> {
+        const corpo: Record<string, unknown> = { modo: 'periodo', accountId, de, ate };
+        if (remetentes.length) corpo.remetentes = remetentes;
+        const r = await chamar<{ busca: BuscaPeriodo | null }>('email-capture-sync', corpo, 'Não foi possível iniciar a busca.');
         return r.busca;
     },
 

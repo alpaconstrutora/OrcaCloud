@@ -43,6 +43,10 @@ import {
     decidirDestino,
     proximaTentativa,
     CONFIANCA_MINIMA_CNPJ,
+    normalizarFiltroRemetente,
+    remetenteNoFiltro,
+    criterioImapDosRemetentes,
+    MAX_FILTROS_REMETENTE,
     type RemetenteMonitorado,
     type ModoCaptura,
 } from "../../../utils/emailCaptureRegras.ts";
@@ -118,7 +122,7 @@ serve(async (req: Request) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const admin: SupabaseLike = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
-    let body: { modo?: string; accountId?: string; de?: string; ate?: string; buscaId?: string } = {};
+    let body: { modo?: string; accountId?: string; de?: string; ate?: string; buscaId?: string; remetentes?: string[] } = {};
     try { body = await req.json(); } catch { /* corpo vazio */ }
 
     let contas: Conta[] = [];
@@ -149,10 +153,20 @@ serve(async (req: Request) => {
         if (body.de || body.ate) {
             const v = validarPeriodo(body.de, body.ate);
             if (v) return json({ error: v }, 400);
+            // Filtro de remetentes (opcional): e-mails exatos ou domínios, normalizados.
+            const brutos = Array.isArray(body.remetentes) ? body.remetentes.map(String).filter(x => x.trim()) : [];
+            if (brutos.length > MAX_FILTROS_REMETENTE) return json({ error: `No máximo ${MAX_FILTROS_REMETENTE} remetentes por busca.` }, 400);
+            const filtros: string[] = [];
+            for (const x of brutos) {
+                const f = normalizarFiltroRemetente(x);
+                if (!f) return json({ error: `Remetente inválido: "${x}". Use um e-mail ou um domínio (ex.: fornecedor.com.br).` }, 400);
+                if (!filtros.includes(f.valor)) filtros.push(f.valor);
+            }
             if (ativa) return json({ error: `Já há uma busca em andamento nesta caixa (${ativa.data_de} a ${ativa.data_ate}). Continue ou cancele antes.` }, 409);
             const { error: insErr } = await admin.from('email_capture_buscas').insert({
                 organization_id: conta.organization_id, account_id: conta.id,
                 data_de: body.de, data_ate: body.ate, status: 'pendente', pedida_por: vinculo.email,
+                remetentes: filtros.length ? filtros : null,
             });
             if (insErr) return json({ error: insErr.code === '23505' ? 'Já há uma busca em andamento nesta caixa.' : insErr.message }, insErr.code === '23505' ? 409 : 500);
         } else if (!ativa) {
@@ -294,6 +308,8 @@ async function processarMeta(
     admin: SupabaseLike, cliente: ClienteImap, conta: Conta, uidValidity: number, meta: Meta,
     remetentes: RemetenteMonitorado[], senhas: Map<string, string>, totais: Totais, orcamento: Orcamento,
     retryDaMensagem?: Array<{ id: string; indice: number; tentativas: number }>,
+    /** Busca com remetentes escolhidos: substitui a regra (modo) da caixa. */
+    filtroRemetentes?: string[] | null,
 ): Promise<'pulada' | 'completa' | 'interrompida'> {
     const de = meta.envelope?.from?.[0];
     const remetente = de?.address ? (de.name ? `${de.name} <${de.address}>` : de.address) : null;
@@ -301,7 +317,16 @@ async function processarMeta(
     const pdfs = encontrarPdfs(meta.bodyStructure);
 
     const casado = remetenteCasa(remetente, [assunto ?? '', ...pdfs.map(p => p.nome)].join(' '), remetentes);
-    if (!retryDaMensagem && (!pdfs.length || !deveProcessar(conta.modo, casado))) return 'pulada';
+    if (!retryDaMensagem) {
+        if (!pdfs.length) return 'pulada';
+        if (filtroRemetentes?.length) {
+            // Escolha explícita do usuário vale mais que o modo da caixa; mas o
+            // IMAP filtra por trecho, então confere o endereço exato aqui.
+            if (!remetenteNoFiltro(remetente, filtroRemetentes)) return 'pulada';
+        } else if (!deveProcessar(conta.modo, casado)) {
+            return 'pulada';
+        }
+    }
     totais.mensagens++;
 
     const base = {
@@ -389,14 +414,17 @@ async function continuarBusca(
         const cursorInicial = b.uid_validity === uidValidity ? Number(b.cursor_uid ?? 0) : 0;
         const fimExclusivo = new Date(`${b.data_ate}T00:00:00Z`);
         fimExclusivo.setUTCDate(fimExclusivo.getUTCDate() + 1);
-        const todos: number[] = (await cliente.search({ since: new Date(`${b.data_de}T00:00:00Z`), before: fimExclusivo }, { uid: true }) || [])
+        const filtro: string[] | null = b.remetentes?.length ? b.remetentes : null;
+        const todos: number[] = (await cliente.search({
+            since: new Date(`${b.data_de}T00:00:00Z`), before: fimExclusivo, ...criterioImapDosRemetentes(filtro),
+        }, { uid: true }) || [])
             .map(Number).sort((x: number, y: number) => x - y);
         const pendentes = todos.filter(u => u > cursorInicial);
 
         const antes = { ...totais };
         let cursor = cursorInicial;
         for (const meta of await buscarMetas(cliente, pendentes.slice(0, LOTE_BUSCA))) {
-            const r = await processarMeta(admin, cliente, conta, uidValidity, meta, remetentes, senhas, totais, orcamento);
+            const r = await processarMeta(admin, cliente, conta, uidValidity, meta, remetentes, senhas, totais, orcamento, undefined, filtro);
             if (r === 'interrompida') break;
             cursor = meta.uid;
         }

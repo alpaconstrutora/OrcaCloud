@@ -225,3 +225,47 @@ export function proximaTentativa(tentativas: number, agora = new Date()): Date |
 export function pareceSenhaDePdf(palavra: string): boolean {
     return /^\d{3,14}$/.test(palavra.trim());
 }
+
+// ─── Filtro de remetentes da busca por período (16/10/2026) ─────────────────
+
+export interface FiltroRemetente { tipo: 'email' | 'dominio'; valor: string }
+
+/** Máximo de remetentes numa busca (o pedido IMAP vira um OR por item). */
+export const MAX_FILTROS_REMETENTE = 20;
+
+/**
+ * "Cobranca@ACME.com.br" → e-mail exato; "acme.com.br" ou "@acme.com.br" → domínio.
+ * Qualquer outra coisa → null (a tela recusa com mensagem).
+ */
+export function normalizarFiltroRemetente(entrada: string): FiltroRemetente | null {
+    const s = (entrada ?? '').trim().toLowerCase().replace(/^mailto:/, '');
+    if (!s) return null;
+    if (/^[^\s@<>"',;]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(s)) return { tipo: 'email', valor: s };
+    const dom = s.replace(/^@/, '');
+    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(dom)) return { tipo: 'dominio', valor: dom };
+    return null;
+}
+
+/**
+ * O remetente da mensagem está no filtro? Filtro vazio = todos. E-mail compara
+ * exato; domínio casa o próprio e subdomínios. O IMAP só filtra por TRECHO do
+ * cabeçalho From ("energisaonline.com.br" casaria "falso-energisaonline.com.br"),
+ * por isso esta conferência exata depois.
+ */
+export function remetenteNoFiltro(from: string | null | undefined, filtros: string[] | null | undefined): boolean {
+    const fs = (filtros ?? []).map(normalizarFiltroRemetente).filter((f): f is FiltroRemetente => !!f);
+    if (!fs.length) return true;
+    const end = extrairEndereco(from);
+    if (!end) return false;
+    return fs.some(f => f.tipo === 'email'
+        ? end.endereco === f.valor
+        : end.dominio === f.valor || end.dominio.endsWith('.' + f.valor));
+}
+
+/** Parte do SEARCH do imapflow para os remetentes: nada, `{ from }` ou `{ or: [...] }`. */
+export function criterioImapDosRemetentes(filtros: string[] | null | undefined): Record<string, unknown> {
+    const vs = (filtros ?? []).map(normalizarFiltroRemetente).filter((f): f is FiltroRemetente => !!f).map(f => f.valor);
+    if (!vs.length) return {};
+    if (vs.length === 1) return { from: vs[0] };
+    return { or: vs.map(v => ({ from: v })) };
+}

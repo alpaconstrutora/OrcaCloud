@@ -68,12 +68,13 @@ const COLS_CONTAS: StandardTableColumn[] = [
 ];
 
 const COLS_BUSCAS: StandardTableColumn[] = [
-    { key: 'caixa', label: 'Caixa', sortable: true, width: 200 },
-    { key: 'periodo', label: 'Período', sortable: true, width: 190 },
-    { key: 'status', label: 'Situação', sortable: true, width: 130 },
-    { key: 'progresso', label: 'Progresso', sortable: true, width: 190 },
-    { key: 'resultado', label: 'Resultado', sortable: false, width: 230 },
-    { key: 'pedida_por', label: 'Pedida por', sortable: true, width: 190 },
+    { key: 'caixa', label: 'Caixa', sortable: true, width: 170 },
+    { key: 'periodo', label: 'Período', sortable: true, width: 180 },
+    { key: 'remetentes', label: 'Remetentes', sortable: true, width: 170 },
+    { key: 'status', label: 'Situação', sortable: true, width: 120 },
+    { key: 'progresso', label: 'Progresso', sortable: true, width: 170 },
+    { key: 'resultado', label: 'Resultado', sortable: false, width: 200 },
+    { key: 'pedida_por', label: 'Pedida por', sortable: true, width: 120 },
 ];
 
 const COR_BUSCA: Record<BuscaPeriodo['status'], string> = {
@@ -372,6 +373,7 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                             switch (k) {
                                 case 'caixa': return caixaPorId[b.account_id] ?? '';
                                 case 'periodo': return b.data_de;
+                                case 'remetentes': return b.remetentes?.join(', ') ?? '';
                                 case 'status': return ROTULO_STATUS_BUSCA[b.status];
                                 case 'progresso': return progressoDaBusca(b) ?? -1;
                                 default: return (b as unknown as Record<string, string | null>)[k];
@@ -381,6 +383,9 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                             switch (k) {
                                 case 'caixa': return <span className="block truncate text-sm font-normal text-gray-700">{caixaPorId[b.account_id] ?? '—'}</span>;
                                 case 'periodo': return <span className="text-sm font-normal text-gray-700 whitespace-nowrap">{dataBR(b.data_de)} a {dataBR(b.data_ate)}</span>;
+                                case 'remetentes': return b.remetentes?.length
+                                    ? <span className="block truncate text-sm font-normal text-gray-700" title={b.remetentes.join(', ')}>{b.remetentes.join(', ')}</span>
+                                    : <span className="text-sm font-normal text-gray-400">Todos</span>;
                                 case 'status': return <span className={`text-sm font-normal ${COR_BUSCA[b.status]}`}>{ROTULO_STATUS_BUSCA[b.status]}</span>;
                                 case 'progresso': {
                                     const pct = progressoDaBusca(b);
@@ -538,6 +543,7 @@ const EmailCapturaConfig: React.FC<Props> = ({ onAbrirBoleto }) => {
                 conta={sheetBusca.conta}
                 buscaAtiva={sheetBusca.conta ? buscaAtivaDa(sheetBusca.conta.id) : null}
                 onAtualizada={buscaAtualizada}
+                remetentesDaCaixa={sheetBusca.conta ? remetentes.filter(r => r.account_id === sheetBusca.conta!.id && r.ativo) : []}
             />
             <EmailCaptureSenderSheet
                 open={sheetRemetente.aberto}

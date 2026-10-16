@@ -885,3 +885,22 @@ e não traz CNPJ. Propostas (1) vencimento pelo texto e (2) fornecedor do remete
 - [x] `utils/emailCaptureRegras.ts` › `decidirDestino`: sem CNPJ confiável, `sugestaoSupplierId` = fornecedor
   do remetente; com CNPJ de outro beneficiário, não — testes em `emailCaptureRegras` (4 casos).
 - [x] `email-capture-sync` › releitura também de boleto em revisão SEM VENCIMENTO, preenchendo só campos vazios.
+
+## Pedido posterior — 16/10/2026 (busca por mês e por remetentes escolhidos)
+
+> pergunta: 1. como disparar a captura de email como defirnir uma data especifica ou um intervalo de data ou mês.
+> 2. é possive disparar alem do item 1 tambem definir um remetente especifico ou um conjunto de rementes escolhidos pelo usuario
+
+Resposta: (1) já existe pelo "Buscar período" (dia = De=Até; mês = 1º ao último dia); (2) não existia.
+Proposto filtro de remetentes + atalho de mês. Resposta do usuário, literal:
+
+> sim
+
+- [x] `aplicar_20271016100000_email_capture_buscas_remetentes.sql` — `email_capture_buscas.remetentes text[]` (≤ 20).
+- [x] `utils/emailCaptureRegras.ts` — `normalizarFiltroRemetente`, `remetenteNoFiltro` (exato; o IMAP casa por
+  TRECHO — `falso-energisaonline.com.br` passaria), `criterioImapDosRemetentes` (FROM / OR no SEARCH do Gmail).
+- [x] `email-capture-sync` — `periodo` aceita `remetentes`; com filtro, a escolha vale mais que o modo da caixa.
+- [x] `EmailCaptureBuscaSheet` — atalho "Mês inteiro", "Todos" × "Só os que eu escolher" (monitorados marcados +
+  e-mail/domínio digitado); `EmailCapturaConfig` — coluna "Remetentes" nas buscas.
+- Verificação local: 67 testes; `deno check`; typecheck parcial (arquivos alterados + grafo de imports) limpo —
+  o completo caiu no Node 24 local; portão final = CI.

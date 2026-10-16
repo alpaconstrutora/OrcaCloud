@@ -41,7 +41,7 @@ import { CATALOGO_DE_COMPONENTES, DISCIPLINAS_DO_PONTO_HIDRAULICO, TIPOS_DE_EVAP
 import type { Point } from './blueprintKernel';
 import { etiquetaDoAmbiente, ladosDePiso, pontoJuntoAPorta, type LadoDoAmbiente } from './blueprintDistribuicao';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
-import { faceDaParede } from './blueprintRotaPelasParedes';
+import { encaixarNaParede, faceDaParede } from './blueprintRotaPelasParedes';
 import { COTA_USUAL_DO_PONTO_ELETRICO, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
 import { potenciaPadraoVA } from './blueprintPotenciaPadrao';
 import { potenciaEletricaVA } from './blueprintSelecaoClimatizacao';
@@ -63,6 +63,12 @@ export interface HipotesesDePontos {
   coletorDoBanheiro: 'CAIXA_SIFONADA' | 'RALO_SIFONADO';
   /** Afastamento do ponto à FACE da parede, em mm. */
   recuoDaParedeMm: number;
+  /**
+   * F14a da casa automática (15/10/2026): a água fria e a quente da mesma louça LADO A LADO na face da parede (como o
+   * misturador), a esta distância entre si, mm — juntas no mesmo ponto, as duas descidas se encostavam. Ausente ou 0
+   * = no mesmo ponto, como antes.
+   */
+  afastamentoFriaQuenteMm?: number;
 }
 
 export const HIPOTESES_PONTOS_PADRAO: HipotesesDePontos = {
@@ -290,6 +296,19 @@ export function planejarPontosDoAmbiente(
     const jaTem = disciplinas.filter((d) => irmaos.some((t) => t.disciplina === d));
     jaExistentes += jaTem.length;
     pecas.push({ papel: p.papel, tipo: p.tipo, disciplinas, ponto, existentes: jaTem });
+    // F14a: a fria e a quente lado a lado ao longo da parede (`afastamentoFriaQuenteMm`) — como em `pontosDaLouca`.
+    const posicaoDe = (d: DisciplinaDeRede) => {
+      const meio = (hip.afastamentoFriaQuenteMm ?? 0) / 2;
+      const ehAgua = (x: DisciplinaDeRede) => x === 'AGUA_FRIA' || x === 'AGUA_QUENTE';
+      if (!meio || !ehAgua(d) || !(disciplinas.includes('AGUA_FRIA') && disciplinas.includes('AGUA_QUENTE'))) return ponto;
+      const e = encaixarNaParede(ponto, walls, 1500);
+      if (!e || e.d < 1) return ponto;
+      const t = { x: -(ponto.y - e.q.y) / e.d, y: (ponto.x - e.q.x) / e.d };
+      const s = d === 'AGUA_FRIA' ? -1 : 1;
+      // Um já existe (o irmão está em `ponto`): o outro nasce a um afastamento inteiro dele; os dois novos, meio para cada lado.
+      const passo = irmaos.some((x) => ehAgua(x.disciplina)) ? 2 * meio : meio;
+      return { x: Math.round(ponto.x + s * t.x * passo), y: Math.round(ponto.y + s * t.y * passo) };
+    };
     for (const d of disciplinas) {
       if (jaTem.includes(d)) continue;
       const ficha = FICHA_DO_PONTO_HIDRAULICO[p.tipo];
@@ -298,7 +317,7 @@ export function planejarPontosDoAmbiente(
         levelId: space.levelId,
         disciplina: d,
         tipo: ficha.rotulo,
-        at: ponto,
+        at: posicaoDe(d),
         cotaMm: ficha.cotaMm[d] ?? 0,
         tipoHidraulico: p.tipo,
         sugerida: true,
@@ -357,7 +376,8 @@ export function pontosDaLouca(
   const tipo = (CATALOGO_DE_COMPONENTES[componente.tipoId] as FichaDoComponente | undefined)?.ligaAoPonto;
   if (!tipo) return [];
   const alcance = Math.max(componente.larguraMm, componente.profundidadeMm) / 2 + 400;
-  const naFace = faceDaParede(componente.at, model.walls.filter((w) => w.levelId === componente.levelId), alcance)?.face;
+  const encaixe = faceDaParede(componente.at, model.walls.filter((w) => w.levelId === componente.levelId), alcance);
+  const naFace = encaixe?.face;
   // ⚠️ A5 (plano pós-roadmap): "irmão" também é o ponto que já está ONDE o novo nasceria (a face da
   // parede). Medindo só a partir do centro, o box grande afastado da parede (face a > 600 mm) não
   // achava a própria água e a lançava de novo no mesmo lugar a cada vez.
@@ -370,8 +390,24 @@ export function pontosDaLouca(
   const ficha = FICHA_DO_PONTO_HIDRAULICO[tipo];
   const ehAgua = (d: DisciplinaDeRede) => d === 'AGUA_FRIA' || d === 'AGUA_QUENTE';
   const irmaoDeAgua = irmaos.find((t) => ehAgua(t.disciplina));
-  const posicao = (d: DisciplinaDeRede) =>
-    ehAgua(d) ? (irmaoDeAgua?.at ?? naFace ?? componente.at) : (irmaos.find((t) => !ehAgua(t.disciplina))?.at ?? componente.at);
+  // F14a: fria e quente lado a lado AO LONGO da parede (a direção é a da face: perpendicular a eixo → face).
+  const lado = (() => {
+    const meio = (hip.afastamentoFriaQuenteMm ?? 0) / 2;
+    if (!meio || !encaixe || irmaoDeAgua) return null;
+    const nx = encaixe.face.x - encaixe.q.x;
+    const ny = encaixe.face.y - encaixe.q.y;
+    const n = Math.hypot(nx, ny);
+    if (n < 1) return null;
+    return { x: (-ny / n) * meio, y: (nx / n) * meio };
+  })();
+  const comQuente = disciplinasDoAparelho(tipo, hip).includes('AGUA_QUENTE');
+  const posicao = (d: DisciplinaDeRede) => {
+    if (!ehAgua(d)) return irmaos.find((t) => !ehAgua(t.disciplina))?.at ?? componente.at;
+    const base = irmaoDeAgua?.at ?? naFace ?? componente.at;
+    if (!lado || !comQuente) return base;
+    const s = d === 'AGUA_FRIA' ? -1 : 1;
+    return { x: Math.round(base.x + s * lado.x), y: Math.round(base.y + s * lado.y) };
+  };
   return disciplinasDoAparelho(tipo, hip)
     .filter((d) => !irmaos.some((t) => t.disciplina === d))
     .map((d) => {

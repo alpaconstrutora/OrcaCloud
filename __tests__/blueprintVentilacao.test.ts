@@ -107,6 +107,19 @@ describe('E5.4 — o lançamento', () => {
     expect(verificarVentilacao(depois).desconectores.every((d) => d.ventilado)).toBe(true);
   });
 
+  it('F14a: a coluna não encosta em tubo de outra rede — com uma água bem onde ela subiria, escorrega pela parede', () => {
+    const m = sobrado(false);
+    const antes = planejarVentilacao(m).comandos.filter((c): c is Extract<typeof c, { type: 'AddTrecho' }> => c.type === 'AddTrecho' && c.a.x === c.b.x && c.a.y === c.b.y);
+    expect(antes.length).toBeGreaterThan(0);
+    const alvo = antes[0].a;
+    // um tubo de água fria vertical exatamente onde a primeira coluna subiria
+    const t = m.levels[0].id;
+    const comAgua = applyCommand(m, { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: { ...alvo }, b: { ...alvo }, cotaAMm: 300, cotaBMm: 2200, bitolaMm: 25 } as never).model;
+    const depois = planejarVentilacao(comAgua).comandos.filter((c): c is Extract<typeof c, { type: 'AddTrecho' }> => c.type === 'AddTrecho' && c.a.x === c.b.x && c.a.y === c.b.y);
+    for (const c of depois) expect(Math.hypot(c.a.x - alvo.x, c.a.y - alvo.y)).toBeGreaterThanOrEqual(25 + 12.5 + 20);
+    expect(verificarVentilacao(applyBatch(comAgua, planejarVentilacao(comAgua).comandos).model).desconectores.every((d) => d.ventilado)).toBe(true);
+  });
+
   it('ventilacaoAteAParedeMm 0: a coluna sobe na posição da peça, como antes', () => {
     const m = sobrado(false);
     const p = planejarVentilacao(m, { ...HIPOTESES_ESGOTO_PADRAO, ventilacaoAteAParedeMm: 0 });

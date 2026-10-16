@@ -139,7 +139,10 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F9 — elétrica + climatização (ver "F9 — plano detalhado" e "Registro da F9")
 - [x] F10 — tela da Casa automática (ver "Registro da F10")
 - [x] F11 — saídas (ver "Registro da F11")
-- [ ] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [x] F12c instalações (ver "Registro da F12c") · [x] F12d tela e provas (ver "Registro da F12d"; falta a conferência no app real)
+- [x] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [x] F12c instalações (ver "Registro da F12c") · [x] F12d tela e provas (ver "Registro da F12d", com a conferência no app real)
+- [x] F13 — pressão da água por caso: caixa elevada ou pressurizador (ver "Registro da F13")
+- [ ] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [ ] F14b forro e plenum · [ ] F14c vigas · [ ] F14d linha do ar e dreno; provas
+- [ ] F15 — a casa na unidade do Empreendimento
 
 ## Registro da F1 (14/10/2026)
 
@@ -1410,3 +1413,90 @@ agora até 5, a última no limite, e com o déficit acima do limite vai direto a
 pressurizador é hipótese da pressão do ESTUDO (painel "Pressões da água" e memorial — só quando a bomba está na
 saída da caixa; a de recalque não conta). Harness: 97 conferências, com "pressão: nenhum ponto abaixo do mínimo"
 nas quatro rodadas.
+
+## F14 — compatibilização das redes · F15 — a casa na unidade do Empreendimento (15/10/2026)
+
+Pedido do usuário (sobre os próximos passos propostos depois da F13):
+
+> 1. a compatibilização geral das redes (cruzamentos entre si, com vigas e com portas e janelas), que vale para
+>    as duas casas: de acordo
+> 2. o adaptador que leva a casa para a unidade do Empreendimento: de acordo
+
+### Retrato medido (12 × 30, R1-N, com catálogo de evaporadoras e chuva) — `conflitosDoModelo`
+
+| | Térrea | Sobrado |
+|---|---|---|
+| Total | 217 | 234 |
+| REDE × REDE (eixos mais perto que a soma dos raios) | ~150 | ~100 |
+| Passagem pela LAJE (prumadas) | 25 | 63 |
+| VIGA e baldrame | 23 | 35 |
+| Porta e janela | 15 | 21 |
+
+As causas dos encontros REDE × REDE, classificadas pela geometria:
+- água fria e quente no MESMO eixo: os ramais correm pelas mesmas paredes na mesma cota (2,20 m), e os pontos
+  da mesma louça coincidem (9 / 31 pares paralelos; 6 / 10 verticais no mesmo ponto);
+- a ventilação, que agora sobe na parede, cruzando os ramais de água da mesma parede (15 no sobrado);
+- eletroduto e frigorígena na MESMA cota sob a viga, cruzando-se (17 / 5); água fria e eletroduto também;
+- dreno do ar descendo em caimento e cruzando a frigorígena várias vezes (≈ 60 na térrea);
+- o ramal a 2,20 m é exatamente o topo da janela (o tubo conta como dentro do vão).
+
+Entre o topo da janela (2,20 m) e o fundo da viga (2,30–2,40 m na térrea) sobram 10–20 cm para cinco redes —
+separar só por cota não cabe. A convenção de onde cada rede corre é decisão do usuário (perguntada em 15/10).
+
+**Decisão do usuário (15/10/2026):** *"Para compatibilizar as redes, qual convenção de onde cada rede corre a casa
+automática deve seguir?"* → **"Forro com faixas"** — forro rebaixado nos ambientes por onde as redes correm, com
+plenum onde eletroduto, frigorígena, dreno e água correm em FAIXAS de cota próprias; nas paredes, cada disciplina
+com o seu afastamento lateral. O forro já existe no kernel (acabamento do ambiente: `forro { camadas, rebaixoMm }`)
+— sem mudança no kernel.
+
+### Fases (cada uma com "pode seguir")
+
+- **F14a — pontos e faixas na parede.** Os pontos da mesma louça separados (água fria e quente do misturador
+  lado a lado; o esgoto deslocado); afastamento lateral por disciplina nos trechos que correm DENTRO da parede
+  (fria, quente, ventilação). Alvo: nenhum par vertical no mesmo ponto, nenhum par paralelo na mesma cota.
+- **F14b — forro e plenum.** A casa lança o forro de gesso (acabamento) nos ambientes por onde as redes
+  horizontais passam, com o pé-direito livre acima do mínimo do uso (hipóteses: 2,50 m habitável; 2,30 m banheiro,
+  serviço e circulação); as faixas de cota do plenum por disciplina (eletroduto, frigorígena e dreno, água quente,
+  água fria) entram nas hipóteses de cada planejador. Ramais acima do topo das janelas. Alvo: nenhum cruzamento na
+  mesma cota entre disciplinas; nenhuma rede no vão de porta ou janela.
+- **F14c — vigas.** O que ainda cruza viga vira FURO PREVISTO (posição, diâmetro, a viga) — pendência para o
+  calculista com a lista —, e o que dá para passar sob a viga passa.
+- **F14d — linha do ar e dreno lado a lado; provas** (harness com a compatibilização; app real).
+- **F15 — a casa na unidade do Empreendimento.** O adaptador `blueprint` do sincronismo (hoje: loteamento →
+  quadras e lotes) passa a reconhecer a CASA no snapshot publicado: 1 torre, 1 unidade com área privativa,
+  dormitórios, suítes, banheiros, vagas e o padrão — o caminho inverso de `programaCurtoDaUnidade` (F10).
+
+### Registro da F14a (15/10/2026) — pontos e faixas na parede
+
+Pedido: "Forro com faixas" (decisão acima); a F14a cuida do que corre DENTRO da parede.
+
+- **Pontos da mesma louça separados:** fria e quente do misturador lado a lado, ao longo da parede, afastadas de
+  `afastamentoFriaQuenteMm` (hipótese dos pontos, padrão 150 mm) — em `pontosDaLouca` e em `planejarPontosDoAmbiente`
+  (com um irmão já lançado, o novo fica no afastamento inteiro).
+- **Faixas por disciplina na parede:** a água quente roteia por paredes deslocadas de `faixas.aguaQuenteMm`
+  (padrão +45 mm) e o esgoto/ventilação por `faixas.esgotoMm` (padrão −60 mm) — hipóteses da casa, passadas aos
+  planejadores como `faixaDaAguaQuente` / `faixa`. No shaft, a posição é a do shaft + faixa × `FAIXA_NO_SHAFT` (1,5).
+  O traçado é FEITO na faixa (com pilares e vigas reais); a 1ª tentativa, transladar depois de traçar, punha tubo
+  dentro de pilar e ventilação baixa — descartada.
+- **Ventilação** (`ondeAColunaSobe`): desvia de pilar, viga, porta/janela e agora também dos tubos das OUTRAS redes
+  (desliza 0/±100…±400 mm ao longo da parede até achar livre).
+- **Encosto em pilar:** ponto SUGERIDO que caía no anel do pilar sai para fora dele (o do usuário não se mexe); o
+  toco do eixo à face contorna o pilar.
+- **Coluna de água atravessando pavimento:** procura a parede em comum dos dois pavimentos até 3 m
+  (`ALCANCE_DA_PAREDE_EM_COMUM_MM`) — no sobrado a 30° a coluna de AF da Suíte subia no meio do cômodo.
+- Água: corrigido o trecho que faltava no nível da origem quando os pontos ficam acima dela (pontas soltas após o
+  barrilete descer para baixo do forro).
+
+Medido (`conflitosDoModelo`, 12 × 30, R1-N, catálogo e chuva):
+
+| Casa | Antes | Depois da F14a |
+|---|---|---|
+| Térrea | 217 | 189 |
+| Sobrado | 234 | 162 |
+
+Provado nos testes (térrea e sobrado): nenhuma prumada de disciplinas diferentes no mesmo ponto e sobreposta em
+altura; fria e quente de cada louça a mais de 10 cm; na térrea, nenhum encontro entre água e esgoto vertical. Nenhuma
+marca ERRO na verificação. O que sobra é, em maioria,
+coincidência de COTA (eletroduto × frigorígena, AF × eletroduto, ramais de AF e AQ na mesma cota) — é a F14b — e 3
+encontros dentro dos shafts do sobrado. Harness: 97 conferências, portão aprovado nas quatro rodadas (térrea e
+sobrado, 0° e 30°).

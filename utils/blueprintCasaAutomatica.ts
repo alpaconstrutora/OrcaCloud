@@ -543,6 +543,11 @@ export interface HipotesesDaCasa {
   climatizacao: { lancar: boolean };
   /** F13: como garantir a pressão nos pontos — caixa elevada até um limite, senão pressurizador. */
   pressao: HipotesesDaPressaoDaCasa;
+  /**
+   * F14a (decisão do usuário: "forro com faixas"): o afastamento lateral de cada rede em relação ao eixo das paredes
+   * (e ao centro do shaft), mm — a água fria fica no eixo. Igual nas duas direções do quadro da frente.
+   */
+  faixas: { aguaQuenteMm: number; esgotoMm: number };
 }
 
 /** F13 (decisão do usuário, 15/10/2026: "escolher por caso"). */
@@ -650,11 +655,13 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   telhado: HIPOTESES_DO_TELHADO_PADRAO,
   ancoras: HIPOTESES_DAS_ANCORAS_PADRAO,
   mobiliario: { ...HIPOTESES_MOBILIARIO_PADRAO, lancar: true },
-  pontos: HIPOTESES_PONTOS_PADRAO,
+  // F14a: fria e quente da mesma louça lado a lado (15 cm, como o misturador).
+  pontos: { ...HIPOTESES_PONTOS_PADRAO, afastamentoFriaQuenteMm: 150 },
   hidraulica: { lancar: true },
   eletrica: HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO,
   climatizacao: { lancar: true },
   pressao: HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO,
+  faixas: { aguaQuenteMm: 45, esgotoMm: -60 },
 };
 
 export interface PlanoDaCasa {
@@ -862,11 +869,12 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     telhado: { ...HIPOTESES_DO_TELHADO_PADRAO, ...(hipParcial.telhado ?? {}) },
     ancoras: { ...HIPOTESES_DAS_ANCORAS_PADRAO, ...(hipParcial.ancoras ?? {}) },
     mobiliario: { ...HIPOTESES_MOBILIARIO_PADRAO, lancar: true, ...(hipParcial.mobiliario ?? {}) },
-    pontos: { ...HIPOTESES_PONTOS_PADRAO, ...(hipParcial.pontos ?? {}) },
+    pontos: { ...HIPOTESES_PONTOS_PADRAO, afastamentoFriaQuenteMm: 150, ...(hipParcial.pontos ?? {}) },
     hidraulica: { lancar: true, ...(hipParcial.hidraulica ?? {}) },
     eletrica: { ...HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, ...(hipParcial.eletrica ?? {}) },
     climatizacao: { lancar: true, ...(hipParcial.climatizacao ?? {}) },
     pressao: { ...HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, ...(hipParcial.pressao ?? {}) },
+    faixas: { aguaQuenteMm: 45, esgotoMm: -60, ...(hipParcial.faixas ?? {}) },
   };
   const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
   // A implantação usa a mesma parede externa e a mesma malha do gerador.
@@ -937,6 +945,11 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
 
   // ── ARQUITETURA ───────────────────────────────────────────────────────────
   const q = implantacao.quadro;
+  // F14a: a faixa (d, d) do quadro da frente levada ao mundo — numa casa ortogonal, d mm do eixo em qualquer parede.
+  const faixaNoMundo = (d: number): Point => {
+    const v = paraMundo(q, { x: d, y: d });
+    return { x: Math.round(v.x), y: Math.round(v.y) };
+  };
   const rl = implantacao.retanguloLocal;
   const terreno = entrada.ctx.terreno;
   const loteDasRegras = loteParaRegras(terreno, entrada.ctx.limites);
@@ -1185,7 +1198,13 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     //    a cidade ou o valor nas premissas).
     // O que cada um PRESUMIU (cota estimada da rede, posição da caixa…) vai às pendências CONFERIR; o que faltou do
     // mundo, às PREMISSA. A casa nasce num pavimento vazio: não há peça confirmada do outro destino para apagar.
-    const hidro = entrada.hidro ?? HIPOTESES_HIDRO_PADRAO;
+    // F14a ("forro com faixas"): a água quente e o esgoto traçados nas FAIXAS deles — a fria no eixo das paredes.
+    const hidroDoEstudo = entrada.hidro ?? HIPOTESES_HIDRO_PADRAO;
+    const hidro: HipotesesHidro = {
+      ...hidroDoEstudo,
+      agua: { ...hidroDoEstudo.agua, faixaDaAguaQuente: faixaNoMundo(hip.faixas.aguaQuenteMm) },
+      esgoto: { ...hidroDoEstudo.esgoto, faixa: faixaNoMundo(hip.faixas.esgotoMm) },
+    };
     const terrenoHidro = entrada.leitorDoTerreno ?? null;
     const hidraulica = HIDRAULICA_ZERADA();
     const contar = (lote: Command[]) => ({ pecas: lote.filter((c) => c.type === 'AddTerminal').length, tubos: lote.filter((c) => c.type === 'AddTrecho').length });

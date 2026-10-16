@@ -59,6 +59,9 @@ export function caixaDoNucleo(n: Pick<Nucleo, 'ring'>): { larguraMm: number; pro
  * `raioMm` — é onde a coluna de água ou o tubo de queda devem subir. `null` =
  * nenhum ao alcance; o lançamento segue na posição do ponto, como antes.
  */
+/** F14a da casa automática: no shaft, a FAIXA de cada rede vale 1,5× (o tubo de queda DN 100 não encosta na coluna de água do centro). */
+export const FAIXA_NO_SHAFT = 1.5;
+
 export function shaftPreferido(model: BlueprintModel, ponto: Point, levelId: ObjectId, raioMm: number): Point | null {
   let melhor: { centro: Point; d: number } | null = null;
   for (const n of model.nucleos ?? []) {

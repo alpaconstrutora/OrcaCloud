@@ -57,7 +57,7 @@ import {
   type Ponto2,
 } from './blueprintGrafoDeRede';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
-import { shaftPreferido } from './blueprintNucleoVertical';
+import { FAIXA_NO_SHAFT, shaftPreferido } from './blueprintNucleoVertical';
 import { redeDaOrigem } from './blueprintAguaAutomatica';
 import { pontosDaLouca } from './blueprintPontosHidraulicos';
 import { pontoNaFrente } from './blueprintAncorasHidro';
@@ -80,6 +80,12 @@ export interface HipotesesDeEsgoto {
    * Ausente = 1500; 0 = sobe na posição da peça, como antes.
    */
   ventilacaoAteAParedeMm?: number;
+  /**
+   * F14a da casa automática ("forro com faixas"): a FAIXA do esgoto — deslocamento (no mundo, mm) do tubo de queda e
+   * das colunas de ventilação em relação ao ponto que eles teriam (o centro do shaft, o eixo da parede), para não
+   * dividirem o lugar com as colunas de água. Ausente = sem deslocamento.
+   */
+  faixa?: { x: number; y: number } | null;
   /** Quanto a caixa de inspeção AUTOMÁTICA fica para fora da fachada, mm (13/10/2026). Ausente = 1000. */
   afastamentoDaCiMm?: number;
   /**
@@ -638,7 +644,9 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
     // desenhado (rótulo "TQ") na mesma posição é reaproveitado pela idempotência.
     const maior = [...doNivel].sort((a, b) => b.uhc - a.uhc || a.terminal.at.x - b.terminal.at.x || a.terminal.at.y - b.terminal.at.y)[0];
     // NÚCLEO VERTICAL (E2.4): com um shaft ao alcance, o TQ desce por ele.
-    const tq = shaftPreferido(model, { x: maior.terminal.at.x, y: maior.terminal.at.y }, nivel.id, hip.raioDoShaftMm ?? 3000) ?? { x: maior.terminal.at.x, y: maior.terminal.at.y };
+    const noShaft = shaftPreferido(model, { x: maior.terminal.at.x, y: maior.terminal.at.y }, nivel.id, hip.raioDoShaftMm ?? 3000);
+    // F14a: no shaft, o TQ na faixa do esgoto (as colunas de água ficam no centro e na faixa delas).
+    const tq = noShaft ? { x: Math.round(noShaft.x + (hip.faixa?.x ?? 0) * FAIXA_NO_SHAFT), y: Math.round(noShaft.y + (hip.faixa?.y ?? 0) * FAIXA_NO_SHAFT) } : { x: maior.terminal.at.x, y: maior.terminal.at.y };
     const { cotaRaiz, uhc, dnMinimo } = construirArvoreDoNivel(nivel.id, tq, doNivel, null);
     // Ventilação: do nó do TQ ao teto do andar.
     novos.push({ type: 'AddTrecho', levelId: nivel.id, disciplina: 'ESGOTO', a: { ...tq }, b: { ...tq }, cotaAMm: cotaRaiz, cotaBMm: nivel.defaultHeightMm, bitolaMm: hip.dnVentilacaoMm, sugerido: true, rotulo: 'Ventilação' });

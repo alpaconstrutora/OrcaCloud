@@ -30,7 +30,7 @@ import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho } from 
 import { applyBatch, pointInPolygon } from './blueprintKernel';
 import { foraDaViga, foraDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { encaixarNaParede, paredesEmComum } from './blueprintRotaPelasParedes';
-import { shaftPreferido } from './blueprintNucleoVertical';
+import { FAIXA_NO_SHAFT, shaftPreferido } from './blueprintNucleoVertical';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { comprimentoMm, distanciasDesde, fazerChave, type Aresta } from './blueprintGrafoDeRede';
 import { esgotoTrechoATrecho, type HipotesesDeEsgoto } from './blueprintEsgotoAutomatico';
@@ -222,14 +222,17 @@ const FOLGA_DA_ABERTURA_MM = 75;
  * TODOS os pavimentos que a coluna atravessa (do dela até o último), fora de porta e janela em cada um, escorregada
  * para fora do pilar e rente à viga. `null` = nenhuma a até `raioMm` (ou `raioMm` 0): sobe no ponto.
  */
-export function ondeAColunaSobe(model: BlueprintModel, levelId: ObjectId, p: { x: number; y: number }, raioMm: number): Point | null {
+export function ondeAColunaSobe(model: BlueprintModel, levelId: ObjectId, p: { x: number; y: number }, raioMm: number, faixa: { x: number; y: number } | null = null): Point | null {
   if (raioMm <= 0) return null;
   const nivel = model.levels.find((l) => l.id === levelId);
   if (!nivel) return null;
   const acima = model.levels.filter((l) => l.elevationMm >= nivel.elevationMm).sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
+  const fx = faixa?.x ?? 0;
+  const fy = faixa?.y ?? 0;
   const shaft = shaftPreferido(model, p, levelId, raioMm);
-  if (shaft) return { x: Math.round(shaft.x), y: Math.round(shaft.y) };
-  const paredesDe = (L: ObjectId) => model.walls.filter((w) => w.levelId === L);
+  if (shaft) return { x: Math.round(shaft.x + fx * FAIXA_NO_SHAFT), y: Math.round(shaft.y + fy * FAIXA_NO_SHAFT) };
+  // F14a: na faixa do esgoto — as paredes deslocadas dela; pilar, viga e abertura ficam onde estão.
+  const paredesDe = (L: ObjectId) => model.walls.filter((w) => w.levelId === L).map((w) => (fx || fy ? { ...w, a: { x: w.a.x + fx, y: w.a.y + fy }, b: { x: w.b.x + fx, y: w.b.y + fy } } : w));
   const outros = acima.filter((L) => L !== levelId).map(paredesDe);
   const candidatas = outros.length ? paredesEmComum(paredesDe(levelId), outros) : paredesDe(levelId);
   const naAbertura = (q: { x: number; y: number }) =>
@@ -251,14 +254,35 @@ export function ondeAColunaSobe(model: BlueprintModel, levelId: ObjectId, p: { x
     .map((w) => ({ w, e: encaixarNaParede(p, [w], raioMm) }))
     .filter((x): x is { w: (typeof candidatas)[number]; e: NonNullable<ReturnType<typeof encaixarNaParede>> } => !!x.e)
     .sort((a, b) => a.e.d - b.e.d);
+  // F14a: e LIVRE dos tubos de outra disciplina nos pavimentos que ela atravessa (a saída de água do vaso, o barrilete
+  // sobre a laje): encostada, o clash acusava. Sem lugar livre no ponto, escorrega pela parede até 40 cm.
+  const tubosDeOutrasRedes = (model.trechos ?? []).filter((t) => t.disciplina !== 'ESGOTO' && acima.includes(t.levelId));
+  const livre = (q: { x: number; y: number }) =>
+    tubosDeOutrasRedes.every((t) => {
+      const dx = t.b.x - t.a.x;
+      const dy = t.b.y - t.a.y;
+      const L2 = dx * dx + dy * dy;
+      const u = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((q.x - t.a.x) * dx + (q.y - t.a.y) * dy) / L2));
+      return Math.hypot(q.x - (t.a.x + u * dx), q.y - (t.a.y + u * dy)) >= RAIO_DA_COLUNA_MM + t.bitolaMm / 2 + FOLGA_ENTRE_REDES_MM;
+    });
   for (const { w, e } of ordem) {
-    const noEixo = foraDoPilar(e.q, w, pilares);
-    const q = foraDaViga(noEixo, vigas, p, pilares);
-    if (naAbertura(q)) continue;
-    return { x: Math.round(q.x), y: Math.round(q.y) };
+    const Lw = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+    const ux = (w.b.x - w.a.x) / Lw;
+    const uy = (w.b.y - w.a.y) / Lw;
+    for (const passo of [0, 100, -100, 200, -200, 300, -300, 400, -400]) {
+      const base = { x: e.q.x + ux * passo, y: e.q.y + uy * passo };
+      const noEixo = foraDoPilar(base, w, pilares);
+      const q = foraDaViga(noEixo, vigas, p, pilares);
+      if (naAbertura(q) || !livre(q)) continue;
+      return { x: Math.round(q.x), y: Math.round(q.y) };
+    }
   }
   return null;
 }
+
+/** O raio da coluna de ventilação na conta de folga (DN 50), e a folga entre redes, mm. */
+const RAIO_DA_COLUNA_MM = 25;
+const FOLGA_ENTRE_REDES_MM = 20;
 
 export interface PlanoDaVentilacao {
   comandos: Command[];
@@ -338,7 +362,7 @@ export function planejarVentilacao(model: BlueprintModel, hip?: HipotesesDeEsgot
     if (poupar && colunasNovas.some((c) => Math.hypot(c.x - t.at.x, c.y - t.at.y) / 1000 <= d.maximaM)) return;
     const base = Math.min(prumada.cotaAMm, prumada.cotaBMm);
     // Onde ela sobe: na parede (ou no shaft) a até `ventilacaoAteAParedeMm`; a perna sob o piso em aclive de 1 %.
-    const sobe = ondeAColunaSobe(model, t.levelId, t.at, hip?.ventilacaoAteAParedeMm ?? VENTILACAO_ATE_A_PAREDE_MM) ?? { x: t.at.x, y: t.at.y };
+    const sobe = ondeAColunaSobe(model, t.levelId, t.at, hip?.ventilacaoAteAParedeMm ?? VENTILACAO_ATE_A_PAREDE_MM, hip?.faixa ?? null) ?? { x: t.at.x, y: t.at.y };
     const perna = Math.hypot(sobe.x - t.at.x, sobe.y - t.at.y);
     const cotaDaPerna = perna > 0 ? base + Math.max(1, Math.ceil(perna * ACLIVE_DA_VENTILACAO)) : base;
     const topoAbs = coberturaNoPontoMm(model, sobe) + ACIMA_DA_COBERTURA_MM;

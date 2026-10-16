@@ -62,7 +62,7 @@ import {
   type Ponto2,
 } from './blueprintGrafoDeRede';
 import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidraulica';
-import { shaftPreferido } from './blueprintNucleoVertical';
+import { FAIXA_NO_SHAFT, shaftPreferido } from './blueprintNucleoVertical';
 import { arvorePelasParedes, chaveP, encaixarNaParede, faceDaParede, paredesEmComum } from './blueprintRotaPelasParedes';
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, SOBRE_A_LAJE_MM, VAO_MINIMO_ABAIXO_DA_VIGA_MM, anelDoPilar, desvioDoPilar, foraDaViga, foraDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares, topoDaLajeDoTetoMm } from './blueprintObstaculosEstruturais';
 
@@ -106,6 +106,12 @@ export interface HipotesesDeAgua {
    * a isto do topo dela — e não no teto, dentro das vigas. Ausente = `SOBRE_A_LAJE_MM` (150).
    */
   barrileteSobreALajeMm?: number;
+  /**
+   * F14a da casa automática (15/10/2026, "forro com faixas"): a FAIXA da água quente — um deslocamento (no mundo, mm)
+   * das paredes por onde ela é traçada, para não correr no mesmo eixo da fria. A rota anda pelas paredes deslocadas,
+   * desviando dos pilares e das vigas REAIS; a coluna no shaft fica no centro dele mais a faixa. Ausente = no eixo.
+   */
+  faixaDaAguaQuente?: { x: number; y: number } | null;
 }
 
 export const HIPOTESES_AGUA_PADRAO: HipotesesDeAgua = {
@@ -258,6 +264,9 @@ function colunasDe(pontos: readonly Terminal[], raioMm: number): Terminal[][] {
 /**
  * O plano da rede de UMA origem. Puro: devolve os comandos para um lote só.
  */
+/** Até onde a coluna que atravessa pavimentos procura a parede que existe em todos eles, mm. */
+const ALCANCE_DA_PAREDE_EM_COMUM_MM = 3000;
+
 export function planejarAgua(
   model: BlueprintModel,
   origem: Terminal,
@@ -349,7 +358,10 @@ export function planejarAgua(
   const pelasParedes = hip.pelasParedes !== false;
   const raioDeEncaixe = hip.raioDeEncaixeMm ?? 700;
   const contorno = hip.contornoDoPilarMm ?? CONTORNO_DO_PILAR_MM;
-  const paredesDe = (levelId: ObjectId) => model.walls.filter((w) => w.levelId === levelId);
+  // F14a: a água QUENTE anda pelas paredes deslocadas da faixa dela (os pilares e as vigas ficam onde estão).
+  const faixa = disciplina === 'AGUA_QUENTE' && hip.faixaDaAguaQuente && (hip.faixaDaAguaQuente.x || hip.faixaDaAguaQuente.y) ? hip.faixaDaAguaQuente : null;
+  const paredesNaFaixa = faixa ? model.walls.map((w) => ({ ...w, a: { x: w.a.x + faixa.x, y: w.a.y + faixa.y }, b: { x: w.b.x + faixa.x, y: w.b.y + faixa.y } })) : model.walls;
+  const paredesDe = (levelId: ObjectId) => paredesNaFaixa.filter((w) => w.levelId === levelId);
   // O ponto SOLTO no cômodo vai para a FACE da parede antes de traçar.
   const encostos: Command[] = [];
   const efetivo = new Map<ObjectId, Terminal>();
@@ -404,14 +416,16 @@ export function planejarAgua(
   const posicaoDaColuna = (grupo: Terminal[]): Ponto2 => {
     const base = { x: grupo[0].at.x, y: grupo[0].at.y };
     const shaft = shaftPreferido(model, base, grupo[0].levelId, hip.raioDoShaftMm ?? 3000);
-    if (shaft) return shaft;
+    if (shaft) return faixa ? { x: Math.round(shaft.x + faixa.x * FAIXA_NO_SHAFT), y: Math.round(shaft.y + faixa.y * FAIXA_NO_SHAFT) } : shaft;
     // PELAS PAREDES: a coluna desce no EIXO da parede mais próxima, não na face. A que ATRAVESSA pavimentos
     // (a caixa num, o ponto noutro) procura antes a parede que existe em todos eles — senão sobe pelo meio do
     // cômodo do outro pavimento (F12c, sobrado); sem uma a até 2× o raio, fica a de sempre.
     const idxs = [idxO, ...grupo.map((p) => indice.get(p.levelId) ?? idxO)];
     const atravessados = niveis.slice(Math.min(...idxs), Math.max(...idxs) + 1).map((l) => l.id).filter((id) => id !== grupo[0].levelId);
     const emComum = pelasParedes && atravessados.length ? paredesEmComum(paredesDe(grupo[0].levelId), atravessados.map(paredesDe)) : [];
-    const naParede = pelasParedes ? (encaixarNaParede(base, emComum, raioDeEncaixe * 2) ?? encaixarNaParede(base, paredesDe(grupo[0].levelId), raioDeEncaixe)) : null;
+    // F14a: até 3 m — com a fria e a quente lado a lado, a base anda e a parede comum ficava fora dos 1,4 m de antes
+    // (sobrado a 30°: a coluna caía na parede só do térreo e atravessava a suíte de cima).
+    const naParede = pelasParedes ? (encaixarNaParede(base, emComum, Math.max(raioDeEncaixe * 2, ALCANCE_DA_PAREDE_EM_COMUM_MM)) ?? encaixarNaParede(base, paredesDe(grupo[0].levelId), raioDeEncaixe)) : null;
     // E5.5: a coluna que cairia dentro de um pilar (de qualquer pavimento que ela cruza) escorrega pela parede.
     const noEixo = naParede ? foraDoPilar(naParede.q, naParede.parede, pilaresDaPrumada) : base;
     // F8b: e a que desceria DENTRO da viga que corre sobre a parede desce rente a ela, do lado do grupo.

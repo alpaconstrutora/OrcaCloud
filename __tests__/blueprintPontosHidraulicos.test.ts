@@ -185,6 +185,25 @@ describe('pontosDaLouca (27/09/2026): a peça desenhada lança os pontos dela', 
     return { m: applyBatch(r.model, pontos).model, pontos };
   };
 
+  it('F14a: com afastamentoFriaQuenteMm, a fria e a quente ficam LADO A LADO na face (ao longo da parede); sem, no mesmo ponto', () => {
+    const { m: m0, t } = terreo();
+    const m = applyCommand(m0, { type: 'AddWall', levelId: t, a: point(0, 0), b: point(5000, 0), thicknessMm: 150, heightMm: 2800 } as Command).model;
+    const comLav = applyCommand(m, { type: 'AddComponente', levelId: t, tipoId: 'LAVATORIO', at: point(2500, 300) } as Command).model;
+    const lav = comLav.componentes!.find((c) => c.tipoId === 'LAVATORIO')!;
+    const ponto = (cmds: ReturnType<typeof pontosDaLouca>, d: string) => cmds.find((c) => c.disciplina === d)!.at;
+    const juntos = pontosDaLouca(comLav, lav);
+    expect(ponto(juntos, 'AGUA_FRIA')).toEqual(ponto(juntos, 'AGUA_QUENTE'));
+    const lado = pontosDaLouca(comLav, lav, { ...HIPOTESES_PONTOS_PADRAO, afastamentoFriaQuenteMm: 150 });
+    const af = ponto(lado, 'AGUA_FRIA');
+    const aq = ponto(lado, 'AGUA_QUENTE');
+    expect(af.y).toBe(75); // na face
+    expect(aq.y).toBe(75);
+    expect(Math.abs(aq.x - af.x)).toBe(150);
+    expect((af.x + aq.x) / 2).toBe(ponto(juntos, 'AGUA_FRIA').x);
+    // o esgoto não anda
+    expect(ponto(lado, 'ESGOTO')).toEqual(ponto(juntos, 'ESGOTO'));
+  });
+
   it('A5 (plano pós-roadmap): box grande AFASTADO da parede — rodar de novo não duplica a água da face', () => {
     // O ponto de água nasce na FACE da parede (a 800 mm do centro do box); o "já lançado" media só
     // 600 mm a partir do centro, não achava o irmão e lançava outro no mesmo lugar.

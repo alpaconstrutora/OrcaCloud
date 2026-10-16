@@ -784,8 +784,8 @@ export function shaftsDoSobrado(model: BlueprintModel, T: ObjectId, S: ObjectId,
  * baixo ou desce para baixo), com pelo menos `minimoMm`, fora de parede e de shaft. O que sobra depois do shaft e da
  * parede sobre parede (a ventilação de uma peça do térreo sobe na posição dela) — vira pendência com o cômodo.
  */
-/** Até isto além da face, a prumada está rente à parede (no enchimento), não no meio do cômodo. */
-const RENTE_A_PAREDE_MM = 60;
+/** Até isto além da face, a prumada está rente à parede (no enchimento, e na faixa da disciplina — F14a), não no meio do cômodo. */
+const RENTE_A_PAREDE_MM = 100;
 
 export function prumadasPeloMeioDoComodo(model: BlueprintModel, minimoMm = 1500): { disciplina: string; rotulo: string | null; nivel: string; comodo: string }[] {
   const saida: { disciplina: string; rotulo: string | null; nivel: string; comodo: string }[] = [];

@@ -889,3 +889,40 @@ describe('planejarCasa — F13: a pressão por caso (caixa elevada ou pressuriza
     expect(p.pendencias.some((x) => x.grupo === 'VERIFICACAO' && /^Pressão da água quente: \d+ ponto/.test(x.texto))).toBe(true);
   });
 });
+
+describe('planejarCasa — F14a: as faixas das redes na parede e no shaft', () => {
+  const verticais = (r: BlueprintModel) => (r.trechos ?? []).filter((t) => t.a.x === t.b.x && t.a.y === t.b.y && Math.abs(t.cotaAMm - t.cotaBMm) > 0);
+  it.each([1, 2] as const)('%i pavimento(s): nenhuma prumada de disciplinas diferentes no mesmo ponto; a fria e a quente de cada louça lado a lado', (pavimentos) => {
+    const m = lote();
+    const r = planejarCasa(m, entrada(m), { pavimentos }).resultado;
+    // no mesmo ponto em planta E sobrepostas em altura (a caixa sobre a laje e a luz do teto embaixo dela não contam)
+    const vs = verticais(r);
+    const juntas = vs.flatMap((t, i) =>
+      vs.slice(i + 1).filter((u) => u.disciplina !== t.disciplina && u.levelId === t.levelId && u.a.x === t.a.x && u.a.y === t.a.y && Math.min(Math.max(t.cotaAMm, t.cotaBMm), Math.max(u.cotaAMm, u.cotaBMm)) > Math.max(Math.min(t.cotaAMm, t.cotaBMm), Math.min(u.cotaAMm, u.cotaBMm))).map((u) => `${t.disciplina}×${u.disciplina}@${t.a.x},${t.a.y}`),
+    );
+    expect(juntas).toEqual([]);
+    // as louças com fria e quente: os dois pontos a 15 cm
+    const quentes = (r.terminais ?? []).filter((t) => t.disciplina === 'AGUA_QUENTE' && t.tipoHidraulico !== 'AQUECEDOR');
+    expect(quentes.length).toBeGreaterThan(0);
+    for (const q of quentes) {
+      const fria = (r.terminais ?? []).filter((t) => t.disciplina === 'AGUA_FRIA' && t.tipoHidraulico === q.tipoHidraulico && t.levelId === q.levelId).sort((a, b) => Math.hypot(a.at.x - q.at.x, a.at.y - q.at.y) - Math.hypot(b.at.x - q.at.x, b.at.y - q.at.y))[0];
+      expect(Math.hypot(fria.at.x - q.at.x, fria.at.y - q.at.y)).toBeGreaterThan(100);
+    }
+  });
+
+  it('térrea: nenhum encontro entre a água e o esgoto vertical (a ventilação e o tubo de queda na faixa do esgoto)', () => {
+    const m = lote();
+    const r = planejarCasa(m, entrada(m)).resultado;
+    const porId = new Map((r.trechos ?? []).map((t) => [t.id, t]));
+    const agua = new Set(['AGUA_FRIA', 'AGUA_QUENTE']);
+    const encontros = conflitosDoModelo(r).filter((c) => {
+      if (c.classe !== 'REDE') return false;
+      const a = porId.get(c.trechoId)!;
+      const b = porId.get(c.outroId)!;
+      const esg = a.disciplina === 'ESGOTO' ? a : b.disciplina === 'ESGOTO' ? b : null;
+      const ag = agua.has(a.disciplina) ? a : agua.has(b.disciplina) ? b : null;
+      return !!esg && !!ag && esg.a.x === esg.b.x && esg.a.y === esg.b.y;
+    });
+    expect(encontros).toEqual([]);
+  });
+});

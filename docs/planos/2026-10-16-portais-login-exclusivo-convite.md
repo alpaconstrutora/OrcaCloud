@@ -127,7 +127,8 @@ página de login do Portal de Treinamentos, `2026-10-16-login-exclusivo-portal-t
   cartão com `replaceState`, Investidor segue no `Auth`, celular sem aside e sem rolagem
   lateral); 0 erros de console/HTTP. Prints `portal-*-desktop.png`, `*-primeiro-acesso.png`,
   `*-celular.png`.
-- [ ] Suíte completa (JSON, conta fechando) e `vite build`
+- [x] Suíte completa `9754 = 9720 passados + 34 pendentes`, 0 falhas (reporter JSON); `vite build
+  exit=0` ("✓ built in 32.30s")
 - [ ] Navegador com conta real (passos com `PW_SENHA`; cadastro de teste grava em produção)
 - [ ] Publicação em `main` + `conferir-producao.sh`
 - [ ] Allow-list de redirect do Supabase Auth para `/portal-cliente`, `/portal-fornecedor`,

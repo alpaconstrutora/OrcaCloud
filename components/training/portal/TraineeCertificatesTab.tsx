@@ -21,6 +21,8 @@ import type { AcademyTraineeCertificate } from '../../../types/academy';
 interface Props {
     mostrarOrganizacao: boolean;
     notify: (msg: string, tipo?: 'success' | 'error') => void;
+    /** celular: cartões no lugar da tabela (mesmos dados e ações) */
+    compacto?: boolean;
 }
 
 const situacao = (c: AcademyTraineeCertificate) => {
@@ -28,7 +30,7 @@ const situacao = (c: AcademyTraineeCertificate) => {
     return VIGENCIA_LABEL[vigenciaDe(c.data_validade)];
 };
 
-const TraineeCertificatesTab: React.FC<Props> = ({ mostrarOrganizacao, notify }) => {
+const TraineeCertificatesTab: React.FC<Props> = ({ mostrarOrganizacao, notify, compacto = false }) => {
     const [baixando, setBaixando] = useState<string | null>(null);
     const [copiado, setCopiado] = useState<string | null>(null);
 
@@ -62,22 +64,83 @@ const TraineeCertificatesTab: React.FC<Props> = ({ mostrarOrganizacao, notify })
         }
     };
 
+    const acoes = (c: AcademyTraineeCertificate, cheio: boolean) => (
+        <div className={cheio ? 'flex gap-2' : 'inline-flex items-center gap-1'}>
+            <button
+                type="button"
+                onClick={() => baixar(c)}
+                disabled={!c.tem_pdf || baixando === c.id}
+                title={c.tem_pdf ? 'Baixar o PDF' : 'O PDF ainda não foi gerado pela empresa'}
+                className={softBtn + (cheio ? ' flex-1' : ' h-8 px-2.5')}
+            >
+                {baixando === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                PDF
+            </button>
+            <button
+                type="button"
+                onClick={() => copiarValidacao(c)}
+                title="Copiar o link público de validação"
+                className={ghostBtn + (cheio ? ' flex-1 border border-gray-200' : ' h-8 px-2.5')}
+            >
+                {copiado === c.id ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiado === c.id ? 'Copiado' : 'Validação'}
+            </button>
+        </div>
+    );
+
+    const estado = isLoading ? (
+        <PortalLoading label="Carregando certificados..." />
+    ) : error ? (
+        <PortalEmpty icon={<Award className="w-9 h-9" />} title="Não foi possível carregar os certificados" subtitle={(error as Error)?.message} />
+    ) : certificados.length === 0 ? (
+        <PortalEmpty
+            icon={<Award className="w-9 h-9" />}
+            title="Nenhum certificado emitido ainda"
+            subtitle="Ao concluir um treinamento com conteúdo EAD, o certificado aparece aqui."
+        />
+    ) : null;
+
     return (
         <div className="space-y-5">
             <SectionTitle title="Certificados" subtitle="Certificados emitidos nos treinamentos que você concluiu, com link público de validação." />
 
-            <PortalCard className="overflow-hidden" data-tour="certificados-lista">
-                {isLoading ? (
-                    <PortalLoading label="Carregando certificados..." />
-                ) : error ? (
-                    <PortalEmpty icon={<Award className="w-9 h-9" />} title="Não foi possível carregar os certificados" subtitle={(error as Error)?.message} />
-                ) : certificados.length === 0 ? (
-                    <PortalEmpty
-                        icon={<Award className="w-9 h-9" />}
-                        title="Nenhum certificado emitido ainda"
-                        subtitle="Ao concluir um treinamento com conteúdo EAD, o certificado aparece aqui."
-                    />
-                ) : (
+            {estado ? (
+                <PortalCard data-tour="certificados-lista">{estado}</PortalCard>
+            ) : compacto ? (
+                <div className="space-y-3" data-tour="certificados-lista">
+                    {certificados.map(c => {
+                        const s = situacao(c);
+                        return (
+                            <PortalCard key={c.id} className="p-4 flex flex-col gap-3">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-gray-400">{c.numero}</p>
+                                        <h3 className="text-sm font-bold text-[#1F2430]">{c.curso}</h3>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            {c.nr_referencia ? `${c.nr_referencia} · ` : ''}v{c.versao ?? 1}
+                                            {c.carga_horaria ? ` · ${c.carga_horaria}h` : ''}
+                                            {mostrarOrganizacao ? ` · ${c.org_nome}` : ''}
+                                        </p>
+                                    </div>
+                                    <span className={`text-xs font-medium shrink-0 ${s.cor}`}>{s.label}</span>
+                                </div>
+                                <dl className="grid grid-cols-2 gap-x-3 text-xs">
+                                    <div>
+                                        <dt className="text-gray-400">Emitido em</dt>
+                                        <dd className="text-[#1F2430]">{fmtDataHora(c.emitido_em)}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-gray-400">Validade</dt>
+                                        <dd className="text-[#1F2430]">{c.data_validade ? fmtData(c.data_validade) : 'Sem validade'}</dd>
+                                    </div>
+                                </dl>
+                                {acoes(c, true)}
+                            </PortalCard>
+                        );
+                    })}
+                </div>
+            ) : (
+                <PortalCard className="overflow-hidden" data-tour="certificados-lista">
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="border-b border-[#ECECEF]">
@@ -108,37 +171,15 @@ const TraineeCertificatesTab: React.FC<Props> = ({ mostrarOrganizacao, notify })
                                             <Td className="whitespace-nowrap">{fmtDataHora(c.emitido_em)}</Td>
                                             <Td className="whitespace-nowrap">{c.data_validade ? fmtData(c.data_validade) : 'Sem validade'}</Td>
                                             <Td><span className={s.cor}>{s.label}</span></Td>
-                                            <Td className="text-right whitespace-nowrap">
-                                                <div className="inline-flex items-center gap-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => baixar(c)}
-                                                        disabled={!c.tem_pdf || baixando === c.id}
-                                                        title={c.tem_pdf ? 'Baixar o PDF' : 'O PDF ainda não foi gerado pela empresa'}
-                                                        className={softBtn + ' h-8 px-2.5'}
-                                                    >
-                                                        {baixando === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                                                        PDF
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => copiarValidacao(c)}
-                                                        title="Copiar o link público de validação"
-                                                        className={ghostBtn + ' h-8 px-2.5'}
-                                                    >
-                                                        {copiado === c.id ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                                                        {copiado === c.id ? 'Copiado' : 'Validação'}
-                                                    </button>
-                                                </div>
-                                            </Td>
+                                            <Td className="text-right whitespace-nowrap">{acoes(c, false)}</Td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
                         </table>
                     </div>
-                )}
-            </PortalCard>
+                </PortalCard>
+            )}
         </div>
     );
 };

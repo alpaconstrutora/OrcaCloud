@@ -1,27 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Award, BookOpen, ChevronDown, GraduationCap, HelpCircle, History, Loader2, LogOut,
-    AlertTriangle, CheckCircle2, User, Library,
+    AlertTriangle, CheckCircle2, User, Library, Smartphone,
 } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { academyTraineeService } from '../../services/academyTraineeService';
-import { academyKeys } from '../../lib/queryKeys';
-import { STALE } from '../../lib/queryClient';
-import { usePersistedState } from '../ui/TableUtils';
 import { PortalHelp } from '../portal/PortalHelp';
-import { avisarAcaoDoPortal } from '../../utils/portalEventos';
 import {
     TRAINING_PORTAL_TAB_IDS, TRAINING_PORTAL_TAB_LABELS, resolverAbaDoPortalDeTreinamentos,
     type TrainingPortalTabId,
 } from '../../utils/trainingPortalTabs';
 import AcademyPlayerView from '../academy/AcademyPlayerView';
-import { createTraineeChannel } from '../academy/academyChannel';
+import MobilePreviewFrame from '../MobilePreviewFrame';
 import TraineeEnrollmentsTab from './portal/TraineeEnrollmentsTab';
 import TraineeCatalogTab from './portal/TraineeCatalogTab';
 import TraineeCertificatesTab from './portal/TraineeCertificatesTab';
 import TraineeHistoryTab from './portal/TraineeHistoryTab';
 import TraineeMyDataSheet from './portal/TraineeMyDataSheet';
-import type { AcademyTraineeEnrollment } from '../../types/academy';
+import TrainingPortalMobile from './TrainingPortalMobile';
+import { useTrainingPortal } from './useTrainingPortal';
 
 /**
  * Portal de Treinamentos — /portal-treinamentos.
@@ -42,6 +37,11 @@ import type { AcademyTraineeEnrollment } from '../../types/academy';
  * "Assistir aula" é TELA (troca o conteúdo in-flow, mantendo a casca) — nunca
  * overlay. O player é o mesmo do app e do Portal do Colaborador; só o canal
  * (createTraineeChannel) muda.
+ *
+ * Celular (16/10, docs/planos/2026-10-16-portal-treinamentos-mobile.md): com
+ * `innerWidth < 768` na montagem entra a casca de app `TrainingPortalMobile`;
+ * o estado e as ações são o hook `useTrainingPortal`, comum às duas. No desktop
+ * o botão "Ver no celular" abre a mesma casca mobile dentro de MobilePreviewFrame.
  */
 
 interface Props {
@@ -58,37 +58,24 @@ const TAB_ICONS: Record<TrainingPortalTabId, React.ComponentType<{ className?: s
     historico: History,
 };
 
-const TrainingPortal: React.FC<Props> = ({ userEmail, onLogout, forcarTour = null }) => {
-    const qc = useQueryClient();
-    const [abaSalva, setAbaSalva] = usePersistedState<string>('traineePortal:aba', 'treinamentos');
-    const activeTab = resolverAbaDoPortalDeTreinamentos(abaSalva);
-    const setActiveTab = (id: TrainingPortalTabId) => { setAulaAberta(null); setAbaSalva(id); };
+const TrainingPortal: React.FC<Props> = (props) => {
+    // Lido uma vez na montagem, como Minhas Tarefas e o Diário (TasksModule).
+    const [isMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+    return isMobile ? <TrainingPortalMobile {...props} /> : <TrainingPortalDesktop {...props} />;
+};
 
-    const [aulaAberta, setAulaAberta] = useState<AcademyTraineeEnrollment | null>(null);
+const TrainingPortalDesktop: React.FC<Props> = ({ userEmail, onLogout, forcarTour = null }) => {
+    const {
+        activeTab, setActiveTab, aulaAberta, abrirMatricula, abrirMatriculaPorId, voltarDaAula,
+        toast, notify, channel, identidades, carregandoAcesso, erroAcesso, principal,
+        mostrarOrganizacao, orgDaAjuda, iniciais,
+    } = useTrainingPortal(userEmail);
     const [isHelpOpen, setIsHelpOpen] = useState(false);
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
     const [meusDadosAberto, setMeusDadosAberto] = useState(false);
+    const [previaMobile, setPreviaMobile] = useState(false);
     const [slotChecklist, setSlotChecklist] = useState<HTMLDivElement | null>(null);
-    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const accountMenuRef = useRef<HTMLDivElement>(null);
-
-    const channel = useMemo(() => createTraineeChannel(), []);
-
-    const notify = (message: string, type: 'success' | 'error' = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 4500);
-    };
-
-    const { data: identidades = [], isLoading: carregandoAcesso, error: erroAcesso } = useQuery({
-        queryKey: academyKeys.traineeAccess(),
-        queryFn: () => academyTraineeService.myAccess(),
-        staleTime: STALE.normal,
-    });
-    const principal = identidades[0];
-    const mostrarOrganizacao = new Set(identidades.map(i => i.org_id)).size > 1;
-    // Com uma organização só, a ajuda sabe de qual ler; com várias, deixa a
-    // central escolher (portal_help_get_mine devolve a lista).
-    const orgDaAjuda = mostrarOrganizacao ? null : (principal?.org_id ?? null);
 
     useEffect(() => {
         if (!isAccountMenuOpen) return;
@@ -98,34 +85,6 @@ const TrainingPortal: React.FC<Props> = ({ userEmail, onLogout, forcarTour = nul
         document.addEventListener('mousedown', fechar);
         return () => document.removeEventListener('mousedown', fechar);
     }, [isAccountMenuOpen]);
-
-    const abrirMatricula = (m: AcademyTraineeEnrollment) => {
-        setAbaSalva('treinamentos');
-        setAulaAberta(m);
-        avisarAcaoDoPortal('abriu-treinamento');
-    };
-
-    const abrirMatriculaPorId = async (enrollmentId: string) => {
-        setAbaSalva('treinamentos');
-        const lista = await qc.fetchQuery({
-            queryKey: academyKeys.traineeEnrollments(),
-            queryFn: () => academyTraineeService.listEnrollments(),
-            staleTime: 0,
-        });
-        const m = lista.find(x => x.id === enrollmentId);
-        if (m) abrirMatricula(m);
-    };
-
-    const voltarDaAula = () => {
-        setAulaAberta(null);
-        // Progresso, certificado e histórico podem ter mudado na sala.
-        qc.invalidateQueries({ queryKey: academyKeys.traineeEnrollments() });
-        qc.invalidateQueries({ queryKey: academyKeys.traineeCertificates() });
-        qc.invalidateQueries({ queryKey: academyKeys.traineeHistory() });
-        qc.invalidateQueries({ queryKey: academyKeys.traineeCatalog() });
-    };
-
-    const iniciais = (principal?.name || userEmail || 'T').trim().charAt(0).toUpperCase();
 
     return (
         <div className="flex flex-col h-screen bg-white overflow-hidden font-sans">
@@ -142,6 +101,15 @@ const TrainingPortal: React.FC<Props> = ({ userEmail, onLogout, forcarTour = nul
                     </h1>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setPreviaMobile(true)}
+                        title="Ver como fica no celular"
+                        aria-label="Ver o portal como fica no celular"
+                        className="hidden md:inline-flex p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                    >
+                        <Smartphone className="w-5 h-5" />
+                    </button>
                     <button
                         type="button"
                         onClick={() => setIsHelpOpen(true)}
@@ -286,7 +254,8 @@ const TrainingPortal: React.FC<Props> = ({ userEmail, onLogout, forcarTour = nul
                 </main>
             </div>
 
-            {/* Barra inferior (celular) — as 4 abas cabem; o header fica visível no celular. */}
+            {/* Barra inferior `md:hidden` — só rede de segurança para janela redimensionada abaixo de
+                768px DEPOIS de montar; no celular de verdade entra TrainingPortalMobile. */}
             <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
                 <div className="flex">
                     {TRAINING_PORTAL_TAB_IDS.map(id => {
@@ -339,6 +308,13 @@ const TrainingPortal: React.FC<Props> = ({ userEmail, onLogout, forcarTour = nul
                     {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
                     {toast.message}
                 </div>
+            )}
+
+            {/* Prévia no celular — a casca mobile dentro do iframe estreito, com os dados do próprio treinando. */}
+            {previaMobile && (
+                <MobilePreviewFrame onClose={() => setPreviaMobile(false)} title="Prévia — Portal de Treinamentos no celular">
+                    <TrainingPortalMobile userEmail={userEmail} previa />
+                </MobilePreviewFrame>
             )}
         </div>
     );

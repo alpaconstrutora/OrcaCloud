@@ -27,9 +27,11 @@ interface Props {
     mostrarOrganizacao: boolean;
     notify: (msg: string, tipo?: 'success' | 'error') => void;
     onInscrito: (enrollmentId: string) => void;
+    /** celular: busca abaixo do título, na largura toda */
+    compacto?: boolean;
 }
 
-const TraineeCatalogTab: React.FC<Props> = ({ mostrarOrganizacao, notify, onInscrito }) => {
+const TraineeCatalogTab: React.FC<Props> = ({ mostrarOrganizacao, notify, onInscrito, compacto = false }) => {
     const qc = useQueryClient();
     const [busca, setBusca] = usePersistedState('traineePortal:catalogo:busca', '');
     const [inscrevendo, setInscrevendo] = useState<string | null>(null);
@@ -64,23 +66,26 @@ const TraineeCatalogTab: React.FC<Props> = ({ mostrarOrganizacao, notify, onInsc
         (c.nr_referencia || '').toLowerCase().includes(termo) ||
         (c.descricao || '').toLowerCase().includes(termo));
 
+    const campoBusca = (
+        <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+                placeholder="Buscar treinamento ou NR..."
+                className={`h-9 ${compacto ? 'w-full' : 'w-56'} pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all`}
+            />
+        </div>
+    );
+
     return (
         <div className="space-y-5">
             <SectionTitle
                 title="Catálogo"
                 subtitle="Treinamentos abertos para inscrição. Ao se inscrever, ele passa a aparecer em Meus treinamentos."
-                right={
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            value={busca}
-                            onChange={e => setBusca(e.target.value)}
-                            placeholder="Buscar treinamento ou NR..."
-                            className="h-9 w-56 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all"
-                        />
-                    </div>
-                }
+                right={compacto ? undefined : campoBusca}
             />
+            {compacto && campoBusca}
 
             {isLoading ? (
                 <PortalCard><PortalLoading label="Carregando o catálogo..." /></PortalCard>

@@ -16,7 +16,7 @@ import { useConfirm } from './ui/confirm';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import ActionIconButton from './ui/ActionIconButton';
 import MoneyCentsInput from './ui/MoneyCentsInput';
-import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
@@ -387,6 +387,11 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     const [statusFilter, setStatusFilter] = usePersistedState<StatusFilter>('tributosPagarManagerFilters:status', 'all');
     const [dueFrom, setDueFrom]         = usePersistedState('tributosPagarManagerFilters:dueFrom', '');
     const [dueTo, setDueTo]             = usePersistedState('tributosPagarManagerFilters:dueTo', '');
+    // Ano e Mês do vencimento — independentes ENTRE SI (15/10/2026, mesmo recurso de
+    // Boletos a Pagar): só o ano = o ano inteiro; só o mês = aquele mês em todos os anos;
+    // os dois = aquele mês daquele ano. Somam-se a Venc. de/até (não substituem).
+    const [vencAno, setVencAno] = usePersistedState('tributosPagarManagerFilters:vencAno', '');
+    const [vencMes, setVencMes] = usePersistedState('tributosPagarManagerFilters:vencMes', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [activeView, setActiveView] = usePersistedState<ViewId>('tributosPagarManager:view', 'tributos');
     // Âncora do Shift+clique (§10.1) — aqui em cima porque o "Agrupar" a zera
@@ -609,6 +614,8 @@ export default function TributosAPagarManager({ organizationId, organizations }:
 
     const sorted = useMemo(() => {
         let result = applyFilterRules(rows, advancedFilters.rules, advancedFields, getAdvancedFilterValue);
+        if (vencAno) result = result.filter(r => (r.due_date ?? '').slice(0, 4) === vencAno);
+        if (vencMes) result = result.filter(r => (r.due_date ?? '').slice(5, 7) === vencMes);
         // Fechamento: recorta pela competência (mês do fato gerador = transaction_date)
         if (activeView === 'fechamento' && competencia) {
             result = result.filter(r => (r.transaction_date ?? '').slice(0, 7) === competencia);
@@ -636,7 +643,12 @@ export default function TributosAPagarManager({ organizationId, organizations }:
             });
         }
         return result;
-    }, [rows, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection, activeView, competencia]);
+    }, [rows, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection, activeView, competencia, vencAno, vencMes]);
+    // Anos com vencimento nos tributos carregados, mais recente primeiro.
+    const anosVencimento = useMemo(
+        () => [...new Set(rows.map(r => (r.due_date ?? '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))].sort().reverse(),
+        [rows],
+    );
 
     const { campo: groupBy, agrupando, recolhidos } = agrupamento;
     const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(sorted, {
@@ -967,6 +979,40 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                 <button onClick={() => { setDueFrom(''); setDueTo(''); }}
                                     className="text-sm text-blue-600 font-medium hover:underline flex items-center gap-1">
                                     <X className="w-3 h-3" /> Limpar datas
+                                </button>
+                            )}
+
+                            <div className="w-px h-6 bg-gray-200 shrink-0"></div>
+
+                            {/* Ano/Mês do vencimento — independentes entre si e de Venc. de/até (somam-se). */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 font-semibold">Ano</span>
+                                <select
+                                    value={vencAno}
+                                    onChange={e => setVencAno(e.target.value)}
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                                >
+                                    <option value="">Todos</option>
+                                    {anosVencimento.map(a => <option key={a} value={a}>{a}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 font-semibold">Mês</span>
+                                <select
+                                    value={vencMes}
+                                    onChange={e => setVencMes(e.target.value)}
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                                >
+                                    <option value="">Todos</option>
+                                    {MESES.map((nome, i) => (
+                                        <option key={nome} value={String(i + 1).padStart(2, '0')}>{nome}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {(vencAno || vencMes) && (
+                                <button onClick={() => { setVencAno(''); setVencMes(''); }}
+                                    className="text-sm text-blue-600 font-medium hover:underline flex items-center gap-1">
+                                    <X className="w-3 h-3" /> Limpar ano/mês
                                 </button>
                             )}
                         </div>

@@ -21,7 +21,7 @@ import type {
 import Button from './ui/Button';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { useConfirm } from './ui/confirm';
-import { chavePorMes, chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
+import { chavePorMes, chavePorNome, chavePorRotulo, MESES } from '../utils/agruparLinhas';
 
 // ─── dispatch por entidade ───────────────────────────────────
 // A fila é unificada; cada ação vai ao serviço de domínio correto.
@@ -268,6 +268,11 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
     const [expanded, setExpanded] = useState<string | null>(null);
     const [modal, setModal] = useState<{ item: ActionQueueItem; mode: 'approve' | 'reject' } | null>(null);
     const [entityFilter, setEntityFilter] = usePersistedState<EntityFilter>('financeiro:aprovacao:fila:tipo', 'all');
+    // Ano e Mês do vencimento — independentes ENTRE SI (15/10/2026, mesmo recurso de
+    // Boletos a Pagar): só o ano = o ano inteiro; só o mês = aquele mês em todos os anos;
+    // os dois = aquele mês daquele ano.
+    const [vencAno, setVencAno] = usePersistedState('financeiro:aprovacao:fila:vencAno', '');
+    const [vencMes, setVencMes] = usePersistedState('financeiro:aprovacao:fila:vencMes', '');
 
     const [submittingId, setSubmittingId] = useState<string | null>(null);
 
@@ -302,8 +307,16 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
     // Memoizado: a paginação do StandardTable volta à página 1 quando `rows`
     // muda de identidade — um `.filter()` solto aqui zeraria a página a cada render.
     const rows = useMemo(
-        () => (entityFilter === 'all' ? items : items.filter(i => i.entity === entityFilter)),
-        [items, entityFilter],
+        () => items
+            .filter(i => entityFilter === 'all' || i.entity === entityFilter)
+            .filter(i => !vencAno || (i.due_date ?? '').slice(0, 4) === vencAno)
+            .filter(i => !vencMes || (i.due_date ?? '').slice(5, 7) === vencMes),
+        [items, entityFilter, vencAno, vencMes],
+    );
+    // Anos com vencimento nos itens da fila, mais recente primeiro.
+    const anosVencimento = useMemo(
+        () => [...new Set(items.map(i => (i.due_date ?? '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))].sort().reverse(),
+        [items],
     );
 
     function renderCell(key: string, item: ActionQueueItem) {
@@ -352,16 +365,49 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                 searchText={i => `${ENTITY_TAG[i.entity]} ${i.title} ${i.party_name ?? ''} ${i.project_name ?? ''}`}
                 searchPlaceholder="Buscar por título, parte ou obra..."
                 filters={
-                    <select
-                        value={entityFilter}
-                        onChange={e => setEntityFilter(e.target.value as EntityFilter)}
-                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
-                    >
-                        <option value="all">Todos os tipos</option>
-                        {(Object.keys(ENTITY_TAG) as ActionQueueItem['entity'][]).map(k => (
-                            <option key={k} value={k}>{ENTITY_TAG[k]}</option>
-                        ))}
-                    </select>
+                    <>
+                        <select
+                            value={entityFilter}
+                            onChange={e => setEntityFilter(e.target.value as EntityFilter)}
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                        >
+                            <option value="all">Todos os tipos</option>
+                            {(Object.keys(ENTITY_TAG) as ActionQueueItem['entity'][]).map(k => (
+                                <option key={k} value={k}>{ENTITY_TAG[k]}</option>
+                            ))}
+                        </select>
+                        {/* Ano/Mês do vencimento — independentes entre si (15/10/2026). */}
+                        <select
+                            value={vencAno}
+                            onChange={e => setVencAno(e.target.value)}
+                            title="Ano do vencimento"
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                        >
+                            <option value="">Ano</option>
+                            {anosVencimento.map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                        <select
+                            value={vencMes}
+                            onChange={e => setVencMes(e.target.value)}
+                            title="Mês do vencimento"
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                        >
+                            <option value="">Mês</option>
+                            {MESES.map((nome, i) => (
+                                <option key={nome} value={String(i + 1).padStart(2, '0')}>{nome}</option>
+                            ))}
+                        </select>
+                        {(vencAno || vencMes) && (
+                            <button
+                                type="button"
+                                onClick={() => { setVencAno(''); setVencMes(''); }}
+                                className="h-9 w-9 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all"
+                                title="Limpar ano/mês"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </>
                 }
                 sortValue={(key, i) => {
                     if (key === 'entity') return ENTITY_TAG[i.entity];

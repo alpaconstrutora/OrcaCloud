@@ -35,7 +35,7 @@ export interface OpcoesAgrupar<T> {
 
 export const CHAVE_VAZIA = '__vazio__';
 
-const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+export const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 /** "2026-07" → "Julho/2026". */
 export function rotuloMes(anoMes: string): string {

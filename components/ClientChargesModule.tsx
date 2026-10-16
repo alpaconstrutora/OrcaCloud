@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check, ChevronDown, ChevronUp, Copy, ExternalLink,
-    FileText, Loader2, Mail, QrCode, RefreshCw, Search, Slash, Landmark, MoveHorizontal,
+    FileText, Loader2, Mail, QrCode, RefreshCw, Search, Slash, Landmark, MoveHorizontal, X,
 } from 'lucide-react';
 import { clientChargeService } from '../services/clientChargeService';
 import type { ClientCharge } from '../services/clientChargeService';
@@ -9,7 +9,7 @@ import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import KpiCard from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
-import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
@@ -129,6 +129,11 @@ export default function ClientChargesModule({ organizationId }: Props) {
     const [error, setError]       = useState<string | null>(null);
     const [search, setSearch]     = usePersistedState('clientChargesModuleFilters:search', '');
     const [filter, setFilter]     = usePersistedState<StatusFilter>('clientChargesModuleFilters:status', 'all');
+    // Ano e Mês do vencimento — independentes ENTRE SI (15/10/2026, mesmo recurso de
+    // Boletos a Pagar): só o ano = o ano inteiro; só o mês = aquele mês em todos os anos;
+    // os dois = aquele mês daquele ano.
+    const [vencAno, setVencAno] = usePersistedState('clientChargesModuleFilters:vencAno', '');
+    const [vencMes, setVencMes] = usePersistedState('clientChargesModuleFilters:vencMes', '');
     // Âncora do Shift+clique (§10.1) — aqui em cima porque o "Agrupar" a zera
     // quando as linhas mudam de lugar.
     const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
@@ -177,6 +182,8 @@ export default function ClientChargesModule({ organizationId }: Props) {
         let r = rows;
         if (filter === 'PAID')       r = r.filter(c => PAID.includes(c.status));
         else if (filter !== 'all')   r = r.filter(c => c.status === filter);
+        if (vencAno) r = r.filter(c => (c.due_date ?? '').slice(0, 4) === vencAno);
+        if (vencMes) r = r.filter(c => (c.due_date ?? '').slice(5, 7) === vencMes);
         if (search) {
             const q = search.toLowerCase();
             r = r.filter(c =>
@@ -203,7 +210,12 @@ export default function ClientChargesModule({ organizationId }: Props) {
             });
         }
         return r;
-    }, [rows, filter, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [rows, filter, search, vencAno, vencMes, tableColumns.sortColumn, tableColumns.sortDirection]);
+    // Anos com vencimento nas cobranças carregadas, mais recente primeiro.
+    const anosVencimento = useMemo(
+        () => [...new Set(rows.map(c => (c.due_date ?? '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))].sort().reverse(),
+        [rows],
+    );
 
     const { campo: groupBy, agrupando, recolhidos } = agrupamento;
     const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filtered, {
@@ -454,6 +466,37 @@ export default function ClientChargesModule({ organizationId }: Props) {
                             onAlternarTodos={agrupamento.alternarTodos}
                             title="Agrupar as cobranças"
                         />
+
+                        {/* Ano/Mês do vencimento — independentes entre si (15/10/2026). */}
+                        <select
+                            value={vencAno}
+                            onChange={e => setVencAno(e.target.value)}
+                            title="Ano do vencimento"
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer transition-all shrink-0"
+                        >
+                            <option value="">Ano</option>
+                            {anosVencimento.map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                        <select
+                            value={vencMes}
+                            onChange={e => setVencMes(e.target.value)}
+                            title="Mês do vencimento"
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer transition-all shrink-0"
+                        >
+                            <option value="">Mês</option>
+                            {MESES.map((nome, i) => (
+                                <option key={nome} value={String(i + 1).padStart(2, '0')}>{nome}</option>
+                            ))}
+                        </select>
+                        {(vencAno || vencMes) && (
+                            <button
+                                onClick={() => { setVencAno(''); setVencMes(''); }}
+                                className="h-9 w-9 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all shrink-0"
+                                title="Limpar ano/mês"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
 
                         {/* Separador entre grupo "filtrar" e grupo "visualizar" (§5.1) */}
                         <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>

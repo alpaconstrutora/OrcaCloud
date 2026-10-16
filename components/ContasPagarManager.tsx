@@ -20,7 +20,7 @@ import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
-import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
@@ -270,6 +270,11 @@ export default function ContasPagarManager({ organizations }: Props) {
     // Competência mensal (vencimento) — atalho de 1 campo para o range vencDe/vencAte;
     // os dois ficam mutuamente exclusivos (mesmo padrão de ContasReceberManager.tsx/BankReconciliation.tsx).
     const [competencia, setCompetencia] = usePersistedState('contasPagarManagerFilters:competencia', '');
+    // Ano e Mês do vencimento — independentes ENTRE SI (15/10/2026, mesmo recurso de
+    // Boletos a Pagar): só o ano = o ano inteiro; só o mês = aquele mês em todos os anos;
+    // os dois = aquele mês daquele ano. Somam-se aos filtros acima (não substituem).
+    const [vencAno, setVencAno] = usePersistedState('contasPagarManagerFilters:vencAno', '');
+    const [vencMes, setVencMes] = usePersistedState('contasPagarManagerFilters:vencMes', '');
     const tableColumns = useTableColumns(CONTAS_COLUMNS, 'contasPagarManagerColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'contasPagarManagerColWidths');
     // Largura total = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
@@ -389,6 +394,11 @@ export default function ContasPagarManager({ organizations }: Props) {
     function handleVencDeChange(value: string) { setVencDe(value); setCompetencia(''); }
     function handleVencAteChange(value: string) { setVencAte(value); setCompetencia(''); }
     function clearVencRange() { setVencDe(''); setVencAte(''); setCompetencia(''); }
+    // Anos com vencimento nas notas carregadas, mais recente primeiro.
+    const anosVencimento = useMemo(
+        () => [...new Set(invoices.map(i => (i.dueDate ?? '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))].sort().reverse(),
+        [invoices],
+    );
 
     async function handleMarcarPago(inv: InvoiceRow) {
         setMarcandoPago(inv.id);
@@ -409,6 +419,8 @@ export default function ContasPagarManager({ organizations }: Props) {
             else if (statusFilter !== 'all') { if (inv.status !== statusFilter) return false; }
             if (vencDe && inv.dueDate && inv.dueDate < vencDe) return false;
             if (vencAte && inv.dueDate && inv.dueDate > vencAte) return false;
+            if (vencAno && (inv.dueDate ?? '').slice(0, 4) !== vencAno) return false;
+            if (vencMes && (inv.dueDate ?? '').slice(5, 7) !== vencMes) return false;
             if (search) {
                 const q = search.toLowerCase();
                 const hit = (inv.supplierName ?? '').toLowerCase().includes(q)
@@ -455,7 +467,7 @@ export default function ContasPagarManager({ organizations }: Props) {
             });
         }
         return result;
-    }, [invoices, statusFilter, vencDe, vencAte, search, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [invoices, statusFilter, vencDe, vencAte, vencAno, vencMes, search, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const { campo: groupBy, agrupando, recolhidos } = agrupamento;
     const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filtered, {
@@ -893,6 +905,39 @@ export default function ContasPagarManager({ organizations }: Props) {
                                     onClick={clearVencRange}
                                     className="h-9 w-9 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all"
                                     title="Limpar período"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+
+                            <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                            {/* Ano/Mês do vencimento — independentes entre si e dos filtros acima (somam-se a eles). */}
+                            <select
+                                value={vencAno}
+                                onChange={e => setVencAno(e.target.value)}
+                                title="Ano do vencimento"
+                                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                            >
+                                <option value="">Ano</option>
+                                {anosVencimento.map(a => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                            <select
+                                value={vencMes}
+                                onChange={e => setVencMes(e.target.value)}
+                                title="Mês do vencimento"
+                                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                            >
+                                <option value="">Mês</option>
+                                {MESES.map((nome, i) => (
+                                    <option key={nome} value={String(i + 1).padStart(2, '0')}>{nome}</option>
+                                ))}
+                            </select>
+                            {(vencAno || vencMes) && (
+                                <button
+                                    onClick={() => { setVencAno(''); setVencMes(''); }}
+                                    className="h-9 w-9 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all"
+                                    title="Limpar ano/mês"
                                 >
                                     <X className="w-3.5 h-3.5" />
                                 </button>

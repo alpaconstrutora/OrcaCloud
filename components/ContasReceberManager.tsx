@@ -15,7 +15,7 @@ import BaixaRecebivelSheet, { type DadosDaBaixa, tituloDeRecebivel } from './fin
 import { mensagemResultadoBaixa } from '../utils/baixaRecebivel';
 import { numeroRecibo } from '../utils/reciboRecebimento';
 import { agruparRecebiveis, OPCOES_AGRUPAR_RECEBIVEL, type CampoAgruparRecebivel } from '../utils/recebivelGrupos';
-import { linhasDaTela } from '../utils/agruparLinhas';
+import { linhasDaTela, MESES } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
@@ -765,6 +765,11 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     // Competência mensal (vencimento) — atalho de 1 campo para o range dueFrom/dueTo;
     // os dois ficam mutuamente exclusivos (mesmo padrão de BankReconciliation.tsx).
     const [competencia, setCompetencia] = usePersistedState('contasReceberManagerFilters:competencia', '');
+    // Ano e Mês do vencimento — independentes ENTRE SI (15/10/2026, mesmo recurso de
+    // Boletos a Pagar): só o ano = o ano inteiro; só o mês = aquele mês em todos os anos;
+    // os dois = aquele mês daquele ano. Somam-se aos filtros acima (não substituem).
+    const [vencAno, setVencAno] = usePersistedState('contasReceberManagerFilters:vencAno', '');
+    const [vencMes, setVencMes] = usePersistedState('contasReceberManagerFilters:vencMes', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [showInad, setShowInad]        = useState(false);
     // Âncora do Shift+clique (§10.1) — aqui em cima porque o "Agrupar" a zera
@@ -1151,8 +1156,15 @@ export default function ContasReceberManager({ organizationId, organizations }: 
      *  seguem este recorte (como sempre seguiram: a lista filtrada era a que
      *  voltava do servidor). */
     const rowsFiltrados = useMemo(
-        () => filtrarRecebiveis(rows, { search, status: statusFilter }),
-        [rows, search, statusFilter],
+        () => filtrarRecebiveis(rows, { search, status: statusFilter })
+            .filter(r => !vencAno || (r.due_date ?? '').slice(0, 4) === vencAno)
+            .filter(r => !vencMes || (r.due_date ?? '').slice(5, 7) === vencMes),
+        [rows, search, statusFilter, vencAno, vencMes],
+    );
+    // Anos com vencimento nos recebíveis carregados, mais recente primeiro.
+    const anosVencimento = useMemo(
+        () => [...new Set(rows.map(r => (r.due_date ?? '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))].sort().reverse(),
+        [rows],
     );
 
     /** Injeta os nomes resolvidos de Centro de Custo/Plano de Contas — a view só
@@ -1537,6 +1549,40 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                 <button onClick={clearDueRange}
                                     className="text-sm text-blue-600 font-medium hover:underline flex items-center gap-1">
                                     <X className="w-3 h-3" /> Limpar datas
+                                </button>
+                            )}
+
+                            <div className="w-px h-6 bg-gray-200 shrink-0"></div>
+
+                            {/* Ano/Mês do vencimento — independentes entre si e dos filtros acima (somam-se a eles). */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 font-semibold">Ano</span>
+                                <select
+                                    value={vencAno}
+                                    onChange={e => setVencAno(e.target.value)}
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                                >
+                                    <option value="">Todos</option>
+                                    {anosVencimento.map(a => <option key={a} value={a}>{a}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 font-semibold">Mês</span>
+                                <select
+                                    value={vencMes}
+                                    onChange={e => setVencMes(e.target.value)}
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                                >
+                                    <option value="">Todos</option>
+                                    {MESES.map((nome, i) => (
+                                        <option key={nome} value={String(i + 1).padStart(2, '0')}>{nome}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {(vencAno || vencMes) && (
+                                <button onClick={() => { setVencAno(''); setVencMes(''); }}
+                                    className="text-sm text-blue-600 font-medium hover:underline flex items-center gap-1">
+                                    <X className="w-3 h-3" /> Limpar ano/mês
                                 </button>
                             )}
                         </div>

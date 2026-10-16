@@ -456,7 +456,7 @@ describe('planejarCasa — F8: água, esgoto e pluvial encadeados', () => {
 });
 
 describe('planejarCasa — F8c: o alimentador enterrado fora do baldrame', () => {
-  it.each([0, 30])('lote a %i°: o alimentador só ATRAVESSA baldrame (nenhum pedaço correndo dentro dele) e não toca pilar', (graus) => {
+  it.each([0, 30])('lote a %i°: o alimentador não entra em baldrame nem toca pilar — F17: sobe pela fachada, ao lado do baldrame', (graus) => {
     const m = lote(graus);
     const p = planejarCasa(m, entrada(m, { hidro: { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } } }));
     const r = p.resultado;
@@ -465,10 +465,13 @@ describe('planejarCasa — F8c: o alimentador enterrado fora do baldrame', () =>
     const peca = new Map(r.structures.map((x) => [x.id, x]));
     const encontros = conflitosDoModelo({ ...r, trechos: alimentador }).filter((c) => c.classe === 'ESTRUTURA' && c.comprimentoDentroMm > 0);
     expect(encontros.filter((c) => peca.get(c.outroId)!.kind === 'PILAR')).toEqual([]);
-    const noBaldrame = encontros.filter((c) => peca.get(c.outroId)!.kind === 'VIGA_FUNDACAO');
-    expect(noBaldrame.length).toBeGreaterThan(0); // a casa fica entre a rua e a caixa: o tubo atravessa
-    // Uma travessia: no máximo a largura do baldrame, com folga para o ângulo.
-    for (const c of noBaldrame) expect(c.comprimentoDentroMm).toBeLessThanOrEqual(peca.get(c.outroId)!.larguraMm * 1.2);
+    // F17 ("sobe pela fachada"): enterrado só até a parede da frente — o pé fica ao lado do baldrame dela e entra na
+    // parede acima dele (F8c). Antes ele corria por baixo da casa e ATRAVESSAVA o baldrame (e cruzava o esgoto).
+    expect(encontros.filter((c) => peca.get(c.outroId)!.kind === 'VIGA_FUNDACAO')).toEqual([]);
+    const enterrado = alimentador.filter((t) => t.cotaAMm < 0 && t.cotaBMm < 0 && (t.a.x !== t.b.x || t.a.y !== t.b.y));
+    expect(enterrado.length).toBeGreaterThan(0);
+    const contorno = r.spaces.filter((s) => s.levelId === r.levels[0].id).map((s) => s.ring);
+    for (const t of enterrado) expect(contorno.some((g) => pointInPolygon(g, t.a) || pointInPolygon(g, t.b)), JSON.stringify(t)).toBe(false);
     semMarcaAlemDoFuro(p.resumo.hidraulica.verificacao);
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
   });

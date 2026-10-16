@@ -420,7 +420,8 @@ describe('planejarCasa — F8: água, esgoto e pluvial encadeados', () => {
     // travessia de viga no forro é o único aviso aceito — FURO A APROVAR (CRUZA_VIGA), a lista da F14c.
     semMarcaAlemDoFuro(h.verificacao);
     // (F9: as redes que passam por porta ou janela são OUTRA pendência — `resumo.aberturas` —, compatibilização à parte.)
-    expect(p.pendencias.filter((x) => /^Rede de /.test(x.texto) && !/porta ou janela/.test(x.texto))).toEqual([]);
+    // F14b: a travessia de viga é furo a aprovar (pendência CONFERIR que a F14c transforma na lista do calculista).
+    expect(p.pendencias.filter((x) => /^Rede de /.test(x.texto) && !/porta ou janela|furo a aprovar/.test(x.texto))).toEqual([]);
     expect(tipos(p).has('HIDROMETRO')).toBe(true);
     expect(tipos(p).has('LIGACAO_ESGOTO')).toBe(true);
     // Tudo proposta do sistema — inclusive o ponto que a água encostou na parede.
@@ -514,7 +515,8 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
     expect(naEstrutura.filter((c) => peca.get(c.outroId)!.kind === 'PILAR')).toEqual([]);
     for (const c of naEstrutura.filter((x) => peca.get(x.outroId)!.kind === 'VIGA')) {
       const v = peca.get(c.outroId)!;
-      expect(c.comprimentoDentroMm).toBeLessThanOrEqual(Math.max(v.larguraMm, v.alturaMm) * 1.2);
+      // Atravessar é passar de lado a lado (a largura) ou subir por ela (a altura) — no quadro, os dois, em "L".
+      expect(c.comprimentoDentroMm).toBeLessThanOrEqual((v.larguraMm + v.alturaMm) * 1.2);
     }
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
   });

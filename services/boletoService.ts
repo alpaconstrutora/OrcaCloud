@@ -1152,17 +1152,23 @@ export const boletoService = {
      * título sozinho, e em 24/09 eram 517 `CONCILIATED` para 7 conciliações
      * bancárias reais. Quem trava são os vínculos, em `desfazerLancamento`.)
      *
-     * `programado` (pagamento já agendado, ex.: Asaas) e `cancelado` continuam
-     * fora, e de propósito: nenhum dos dois tinha caminho nenhum até 16/10/2026
-     * (nem para excluir, nem para voltar — `reverterParaRascunho` só aceita
-     * `pago`, e a tela não mostra "Marcar como Pago" para `programado`), e
-     * cancelar é a saída que PRESERVA o histórico — se pudesse ser excluído,
-     * cancelar deixaria de significar alguma coisa.
+     * `cancelado` ENTROU em 16/10/2026: cancelar nasceu como a saída que
+     * preserva histórico, mas na prática também é usado para engano de captura
+     * (duplicata, PDF que não era boleto, documento pessoal) — esses precisam
+     * de um jeito de sair do app de vez, não só ficar marcados e invisíveis.
+     * `cancelado` é MISTO (28 de 53 têm `invoice_id`, 25 não) porque `cancelar`
+     * nunca desfez o lançamento financeiro — por isso passa pelo MESMO caminho
+     * de `aprovado` logo abaixo (`invoice_id` decide, não o status).
+     *
+     * `programado` (pagamento já agendado, ex.: Asaas) continua fora: não tinha
+     * caminho nenhum até aqui (nem para excluir, nem para voltar —
+     * `reverterParaRascunho` só aceita `pago`, e a tela não mostra "Marcar como
+     * Pago" para `programado`) — o caminho é cancelar primeiro.
      *
      * `motivoParaNaoExcluir` é quem diz tudo isso na tela.
      */
     podeExcluir(status: BoletoStatus): boolean {
-        return status === 'rascunho' || status === 'revisao' || status === 'aprovado';
+        return status !== 'pago' && status !== 'programado';
     },
 
     /**
@@ -1171,16 +1177,32 @@ export const boletoService = {
      *
      * Botão desligado que não diz o porquê foi exatamente a queixa que abriu
      * esta linha de trabalho (24/09/2026). Quando existe um caminho, o texto
-     * aponta o caminho; quando não existe (`programado`), o texto diz isso em
-     * vez de inventar um (16/10/2026 — a mensagem antiga chamava `revisao` e
-     * `programado` de "cancelado" por engano, e "em revisão" nem tinha como ser
-     * excluído: corrigido junto).
+     * aponta o caminho; quando não existe, o texto diz isso em vez de inventar
+     * um.
      */
     motivoParaNaoExcluir(status: BoletoStatus): string | null {
         if (this.podeExcluir(status)) return null;
         if (status === 'pago') return 'Reverta para rascunho antes de excluir';
-        if (status === 'programado') return 'Boleto com pagamento programado: cancele — não há como excluir direto';
-        return 'Boleto cancelado fica no histórico';
+        return 'Boleto com pagamento programado: cancele — não há como excluir direto';
+    },
+
+    /**
+     * Texto do diálogo de confirmação ao excluir — fonte única para
+     * `BoletoManager.tsx` e `BoletoFormModal.tsx` (16/10/2026: eram dois
+     * textos duplicados que já tinham divergido um do outro).
+     *
+     * `cancelado` com `invoice_id` avisa explicitamente que o cancelamento NÃO
+     * tinha removido o título — porque esse é o caso novo e mais surpreendente
+     * (excluir um boleto "só histórico" também apaga dinheiro lançado).
+     */
+    mensagemConfirmacaoExclusao(b: Pick<Boleto, 'status' | 'invoice_id'>): string {
+        if (b.status === 'aprovado') {
+            return 'Este boleto já foi aprovado: o título dele no financeiro e a nota serão removidos junto. Essa ação não pode ser desfeita.';
+        }
+        if (b.status === 'cancelado' && b.invoice_id) {
+            return 'Este boleto cancelado ainda tem um título no financeiro (o cancelamento não o removeu): o título e a nota serão removidos agora. Essa ação não pode ser desfeita.';
+        }
+        return 'Excluir permanentemente este boleto? Essa ação não pode ser desfeita.';
     },
 
     /**
@@ -1460,7 +1482,8 @@ export const boletoService = {
         }
 
         // Só desfaz o lançamento se ele existir de verdade — rascunho e revisão
-        // nunca têm `invoice_id` (ver podeExcluir); aprovado sempre tem.
+        // nunca têm `invoice_id` (ver podeExcluir); aprovado sempre tem; cancelado
+        // é misto (16/10/2026: 28 de 53 têm, porque `cancelar` nunca desfez).
         if (boleto.invoice_id) {
             await this.desfazerLancamento(boletoId, organizationId, boleto.invoice_id);
         }

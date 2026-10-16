@@ -78,18 +78,6 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
 // uma sequência fixa de JSX (padrão ClientList.tsx). 'actions' não tem
 // ordenação própria (sortable: false) mas participa do arraste igual às demais.
-/**
- * O texto da confirmação muda com o que a exclusão VAI LEVAR JUNTO: rascunho
- * não leva nada, aprovado leva título e nota. Quem clica precisa saber disso
- * antes, não depois. (Pago não chega aqui — passa antes por reverter.)
- */
-function mensagemDeExclusao(status: Boleto['status']): string {
-    if (status === 'aprovado') {
-        return 'Este boleto já foi aprovado: o título dele no financeiro e a nota serão removidos junto. Essa ação não pode ser desfeita.';
-    }
-    return 'Excluir permanentemente este boleto? Essa ação não pode ser desfeita.';
-}
-
 const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; uppercase?: boolean; className: string }> = {
     numero: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     documento: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -643,32 +631,35 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     async function handleExcluirLote() {
         const selecionados = filtered.filter(b => selectedIds.has(b.id));
         const elegiveis = selecionados.filter(b => boletoService.podeExcluir(b.status));
-        const bloqueados = selecionados.length - elegiveis.length;
-        const aprovados = elegiveis.filter(b => b.status === 'aprovado').length;
+        // Cancelado passou a ser elegível em 16/10/2026 — só pago e programado
+        // continuam bloqueados, cada um por razão própria (ver motivoParaNaoExcluir).
         const pagosNaSelecao = selecionados.filter(b => b.status === 'pago').length;
+        const programadosNaSelecao = selecionados.filter(b => b.status === 'programado').length;
         if (elegiveis.length === 0) {
             notify(
-                pagosNaSelecao > 0
+                pagosNaSelecao > 0 && programadosNaSelecao === 0
                     ? 'Boleto pago não é excluído direto: abra o boleto e reverta para rascunho primeiro.'
-                    : 'Nenhum dos boletos selecionados pode ser excluído — cancelados ficam no histórico.',
+                    : programadosNaSelecao > 0 && pagosNaSelecao === 0
+                        ? 'Boleto com pagamento programado não é excluído direto: cancele antes.'
+                        : 'Nenhum dos boletos selecionados pode ser excluído.',
                 'error',
             );
             return;
         }
-        const avisoAprovados = aprovados > 0
-            ? ` ${aprovados} ${aprovados !== 1 ? 'já foram aprovados' : 'já foi aprovado'}: o título no financeiro e a nota serão removidos junto.`
+        // "Com título no financeiro" cobre aprovado E cancelado-com-invoice_id
+        // (16/10/2026: cancelar nunca desfez o lançamento, então parte dos
+        // cancelados ainda tem título — a exclusão agora remove os dois).
+        const comTitulo = elegiveis.filter(b => b.status === 'aprovado' || (b.status === 'cancelado' && b.invoice_id)).length;
+        const avisoComTitulo = comTitulo > 0
+            ? ` ${comTitulo} ${comTitulo !== 1 ? 'já têm' : 'já tem'} título no financeiro: será${comTitulo !== 1 ? 'ão' : ''} removido${comTitulo !== 1 ? 's' : ''} junto.`
             : '';
-        /* Pago e cancelado são ignorados pelo MESMO `if`, mas por razões
-           diferentes — e o usuário precisa da diferença: um tem caminho
-           (reverter), o outro não. */
-        const canceladosNaSelecao = bloqueados - pagosNaSelecao;
         const avisoBloqueados = [
             pagosNaSelecao > 0 ? ` ${pagosNaSelecao} pago${pagosNaSelecao !== 1 ? 's serão ignorados' : ' será ignorado'} (reverta para rascunho antes).` : '',
-            canceladosNaSelecao > 0 ? ` ${canceladosNaSelecao} cancelado${canceladosNaSelecao !== 1 ? 's serão ignorados' : ' será ignorado'}.` : '',
+            programadosNaSelecao > 0 ? ` ${programadosNaSelecao} com pagamento programado ${programadosNaSelecao !== 1 ? 'serão ignorados' : 'será ignorado'} (cancele antes).` : '',
         ].join('');
         const ok = await confirm({
             title: `Excluir ${elegiveis.length} boleto${elegiveis.length !== 1 ? 's' : ''}?`,
-            message: `Essa ação não pode ser desfeita.${avisoAprovados}${avisoBloqueados}`,
+            message: `Essa ação não pode ser desfeita.${avisoComTitulo}${avisoBloqueados}`,
             variant: 'danger',
             confirmLabel: 'Excluir',
         });
@@ -715,7 +706,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         }
         const ok = await confirm({
             title: 'Excluir boleto?',
-            message: mensagemDeExclusao(b.status),
+            message: boletoService.mensagemConfirmacaoExclusao(b),
             variant: 'danger',
             confirmLabel: 'Excluir',
         });

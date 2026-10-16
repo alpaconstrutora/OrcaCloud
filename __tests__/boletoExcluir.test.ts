@@ -99,40 +99,81 @@ beforeEach(() => {
 });
 
 describe('quais status podem ser excluídos', () => {
-    it('rascunho, revisão e aprovado sim; pago, programado e cancelado não (16/10/2026)', () => {
+    it('rascunho, revisão, aprovado e cancelado sim; pago e programado não (16/10/2026: cancelado liberado)', () => {
         expect(boletoService.podeExcluir('rascunho')).toBe(true);
         expect(boletoService.podeExcluir('revisao')).toBe(true);
         expect(boletoService.podeExcluir('aprovado')).toBe(true);
+        expect(boletoService.podeExcluir('cancelado')).toBe(true);
         expect(boletoService.podeExcluir('pago')).toBe(false);
         expect(boletoService.podeExcluir('programado')).toBe(false);
-        expect(boletoService.podeExcluir('cancelado')).toBe(false);
     });
 
     /* A queixa que abriu tudo isto foi um ícone cinza que não dizia por quê.
-       Botão desligado sem motivo é o defeito; com motivo, é instrução.
-       16/10/2026: a mensagem antiga chamava `revisao` e `programado` de
-       "cancelado" por engano — cada status tem seu motivo de verdade agora,
-       e `revisao` nem fica mais desligado. */
+       Botão desligado sem motivo é o defeito; com motivo, é instrução. */
     it('o botão desligado sempre tem motivo certo para o status', () => {
         expect(boletoService.motivoParaNaoExcluir('rascunho')).toBeNull();
         expect(boletoService.motivoParaNaoExcluir('revisao')).toBeNull();
         expect(boletoService.motivoParaNaoExcluir('aprovado')).toBeNull();
+        expect(boletoService.motivoParaNaoExcluir('cancelado')).toBeNull();
         expect(boletoService.motivoParaNaoExcluir('pago')).toMatch(/reverta para rascunho/i);
         expect(boletoService.motivoParaNaoExcluir('programado')).toMatch(/programado/i);
         expect(boletoService.motivoParaNaoExcluir('programado')).not.toMatch(/cancelado/i);
-        expect(boletoService.motivoParaNaoExcluir('cancelado')).toMatch(/histórico/i);
     });
 
-    it('recusa cancelado com mensagem, sem apagar nada', async () => {
-        cenario('cancelado');
-        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/cancelado fica no histórico/i);
-        expect(db.boletos).toHaveLength(1);
-    });
-
-    it('recusa programado com mensagem própria (não "cancelado"), sem apagar nada', async () => {
+    it('recusa programado com mensagem própria, sem apagar nada', async () => {
         cenario('programado');
         await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/programado/i);
         expect(db.boletos).toHaveLength(1);
+    });
+});
+
+describe('excluir cancelado (16/10/2026 — boletos "por engano" precisam de saída definitiva)', () => {
+    it('sem invoice_id: apaga o boleto e o arquivo, sem mexer no financeiro', async () => {
+        cenario('cancelado', null);
+        db.boletos[0].invoice_id = null;
+        db.invoices = [];
+        await boletoService.excluir('b1', ORG);
+        expect(db.boletos).toHaveLength(0);
+        expect(storageRemovidos).toEqual([['org/b1.pdf']]);
+    });
+
+    it('com invoice_id (cancelar nunca desfez o lançamento): remove o boleto, o título e a nota junto', async () => {
+        cenario('cancelado', 'PENDING');
+        await boletoService.excluir('b1', ORG);
+        expect(db.boletos).toHaveLength(0);
+        expect(db.internal_transactions).toHaveLength(0);
+        expect(db.invoices).toHaveLength(0);
+    });
+
+    it('com invoice_id conciliado: recusa, mesma guarda do aprovado', async () => {
+        cenario('cancelado', 'PENDING');
+        db.reconciliation_matches = [{ id: 'm1', internal_transaction_id: 'tx-1' }];
+        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/conciliado/i);
+        expect(db.boletos).toHaveLength(1);
+        expect(db.internal_transactions).toHaveLength(1);
+    });
+});
+
+describe('mensagem de confirmação de exclusão (fonte única BoletoManager/BoletoFormModal)', () => {
+    it('aprovado: avisa que título e nota saem junto', () => {
+        expect(boletoService.mensagemConfirmacaoExclusao({ status: 'aprovado', invoice_id: 'inv-1' }))
+            .toMatch(/título.*nota.*removidos junto/i);
+    });
+
+    it('cancelado com invoice_id: avisa que o cancelamento não tinha removido o título', () => {
+        expect(boletoService.mensagemConfirmacaoExclusao({ status: 'cancelado', invoice_id: 'inv-1' }))
+            .toMatch(/cancelamento não o removeu/i);
+    });
+
+    it('cancelado sem invoice_id: mensagem genérica, sem menção a título', () => {
+        const msg = boletoService.mensagemConfirmacaoExclusao({ status: 'cancelado', invoice_id: undefined });
+        expect(msg).toMatch(/excluir permanentemente/i);
+        expect(msg).not.toMatch(/título/i);
+    });
+
+    it('rascunho: mensagem genérica', () => {
+        const msg = boletoService.mensagemConfirmacaoExclusao({ status: 'rascunho', invoice_id: undefined });
+        expect(msg).toMatch(/excluir permanentemente/i);
     });
 });
 

@@ -740,11 +740,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         if (!boleto) return;
         const ok = await confirm({
             title: boleto.status === 'rascunho' ? 'Excluir rascunho?' : 'Excluir boleto?',
-            message: boleto.status === 'pago'
-                ? 'Este boleto está marcado como PAGO: o título já baixado no financeiro e a nota serão removidos junto, e o valor sai do realizado. Essa ação não pode ser desfeita.'
-                : boleto.status === 'aprovado'
-                    ? 'Este boleto já foi aprovado: o título dele no financeiro e a nota serão removidos junto. Essa ação não pode ser desfeita.'
-                    : 'Excluir este rascunho permanentemente? Essa ação não pode ser desfeita.',
+            // Fonte única com BoletoManager.tsx (16/10/2026) — antes era um
+            // ternário duplicado que já tinha divergido (dizia "rascunho" até
+            // para 'revisao', e não sabia de 'cancelado' com título pendente).
+            message: boletoService.mensagemConfirmacaoExclusao(boleto),
             variant: 'danger',
             confirmLabel: 'Excluir',
         });

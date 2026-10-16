@@ -70,6 +70,9 @@ const AcademyCourseSheet: React.FC<Props> = ({
         roles_obrigatorios: course?.roles_obrigatorios || [],
         cargos_obrigatorios: course?.cargos_obrigatorios || [],
         status: course?.status || 'ATIVO',
+        // Portal de Treinamentos: catálogo com inscrição pelo próprio treinando.
+        inscricao_aberta: course?.inscricao_aberta ?? false,
+        inscricao_prazo_dias: course?.inscricao_prazo_dias ?? null,
     });
 
     const set = <K extends keyof TrainingCourse>(k: K, v: TrainingCourse[K]) =>
@@ -241,6 +244,37 @@ const AcademyCourseSheet: React.FC<Props> = ({
                                 </p>
                             </div>
                         )}
+                    </div>
+
+                    {/* Portal de Treinamentos — catálogo com inscrição (15/10/2026) */}
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                        <button
+                            type="button"
+                            onClick={() => set('inscricao_aberta', !form.inscricao_aberta)}
+                            className={`flex items-center gap-2 h-9 px-3 rounded-[6px] border text-sm font-medium transition-all ${
+                                form.inscricao_aberta
+                                    ? 'bg-teal-50 border-teal-200 text-teal-800'
+                                    : 'bg-gray-50 border-gray-200 text-gray-500'
+                            }`}
+                        >
+                            {form.inscricao_aberta ? 'Aberto para inscrição no Portal de Treinamentos' : 'Sem inscrição pelo portal'}
+                        </button>
+                        {form.inscricao_aberta && (
+                            <Campo label="Prazo para concluir após a inscrição (dias)">
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={form.inscricao_prazo_dias ?? ''}
+                                    onChange={e => set('inscricao_prazo_dias', e.target.value ? Number(e.target.value) : null)}
+                                    placeholder="Sem prazo"
+                                    className={inputCls}
+                                />
+                            </Campo>
+                        )}
+                        <p className="text-xs text-gray-400">
+                            Aparece no catálogo do portal só com uma versão de conteúdo publicada; a inscrição
+                            cria a matrícula na versão vigente.
+                        </p>
                     </div>
                 </div>
             </SheetPanel>

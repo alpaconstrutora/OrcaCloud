@@ -15,13 +15,14 @@ export interface PortalChecklistProps {
   feitos: ReadonlySet<string>;
   onIr?: (section: string) => void;
   onOcultar?: () => void;
-  accent?: 'orange' | 'coral' | 'indigo';
+  accent?: 'orange' | 'coral' | 'indigo' | 'teal';
 }
 
 const ACCENT = {
   orange: { barra: 'bg-orange-500', link: 'text-orange-600' },
   coral: { barra: 'bg-[#E1553C]', link: 'text-[#C24428]' },
   indigo: { barra: 'bg-indigo-600', link: 'text-indigo-600' },
+  teal: { barra: 'bg-teal-600', link: 'text-teal-700' },
 };
 
 export const PortalChecklist: React.FC<PortalChecklistProps> = ({ portal, itens, feitos, onIr, onOcultar, accent = 'orange' }) => {

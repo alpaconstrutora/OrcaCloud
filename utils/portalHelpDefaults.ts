@@ -17,7 +17,7 @@
  * `sanitizeHtml` na mesma linha do sink (scripts/check-xss-sinks.sh).
  */
 
-export type Portal = 'parceiro' | 'fornecedor' | 'corretor' | 'cliente';
+export type Portal = 'parceiro' | 'fornecedor' | 'corretor' | 'cliente' | 'treinamentos';
 export type HelpKind = 'artigo' | 'faq' | 'tour' | 'checklist';
 
 export const PORTAL_LABELS: Record<Portal, string> = {
@@ -25,6 +25,7 @@ export const PORTAL_LABELS: Record<Portal, string> = {
   fornecedor: 'Portal do Fornecedor',
   corretor: 'Portal do Corretor',
   cliente: 'Portal do Cliente',
+  treinamentos: 'Portal de Treinamentos',
 };
 
 export interface PortalSection { id: string; label: string }
@@ -86,6 +87,13 @@ export const PORTAL_SECTIONS: Record<Portal, PortalSection[]> = {
     { id: 'condominio.financeiro', label: 'Condomínio › Financeiro' },
     { id: 'condominio.manutencao', label: 'Condomínio › Manutenção' },
     { id: 'condominio.equipamentos', label: 'Condomínio › Equipamentos' },
+  ],
+  // utils/trainingPortalTabs.ts › TRAINING_PORTAL_TAB_IDS (15/10/2026)
+  treinamentos: [
+    { id: 'treinamentos', label: 'Meus treinamentos' },
+    { id: 'catalogo', label: 'Catálogo' },
+    { id: 'certificados', label: 'Certificados' },
+    { id: 'historico', label: 'Histórico' },
   ],
 };
 
@@ -655,7 +663,99 @@ const CLIENTE: DefaultHelpItem[] = [
   },
 ];
 
+// ── Portal de Treinamentos (15/10/2026) ──────────────────────────────────────
+// Só entra por e-mail e senha (convite do RH): as FAQs de link não se aplicam.
+const TREINAMENTOS: DefaultHelpItem[] = [
+  {
+    key: 'treinamentos.geral.o-que-e', kind: 'artigo', section: null,
+    title: 'O que é o Portal de Treinamentos',
+    body_html: p(
+      'Este portal é a sua sala de treinamento com a empresa: os treinamentos atribuídos a você, as aulas e as provas, os certificados emitidos e o histórico do que você já fez, com as datas de validade.',
+      'Colaboradores e terceirizados entram pelo mesmo lugar, com o e-mail e a senha criados a partir do convite enviado pelo RH.',
+    ),
+  },
+  {
+    key: 'treinamentos.treinamentos.visao', kind: 'artigo', section: 'treinamentos',
+    title: 'Meus treinamentos: o que fazer e até quando',
+    body_html: p(
+      'Cada cartão é um treinamento atribuído a você (pelo RH, pela sua função, equipe ou obra) ou em que você se inscreveu pelo Catálogo. Ele mostra a versão do conteúdo, a carga horária, o prazo e o andamento.',
+      '"Começar" ou "Continuar" abre a sala de aula no ponto em que você parou. Um treinamento concluído fica com "Rever treinamento" e o certificado passa a aparecer na seção Certificados.',
+    ),
+  },
+  {
+    key: 'treinamentos.treinamentos.conclusao', kind: 'artigo', section: 'treinamentos',
+    title: 'Como um treinamento é considerado concluído',
+    body_html: p(
+      'Abrir o vídeo não conclui a aula. O sistema credita o tempo realmente assistido; dependendo do treinamento, também exige nota mínima na prova e um aceite formal.',
+      'Esses critérios são definidos pela empresa na versão do conteúdo, e a conclusão é decidida pelo servidor, com registro de cada acesso — é a evidência numa fiscalização.',
+    ),
+  },
+  {
+    key: 'treinamentos.treinamentos.reciclagem', kind: 'artigo', section: 'treinamentos',
+    title: 'Reciclagem e prazo vencido',
+    body_html: p(
+      'Treinamentos com validade (NRs, por exemplo) geram uma nova matrícula de reciclagem antes de vencer. O cartão mostra "reciclagem" e o novo prazo.',
+      'Quando o prazo passa, o cartão fica com "Em atraso". Ele continua podendo ser feito; fale com o RH se o prazo precisar ser revisto.',
+    ),
+  },
+  {
+    key: 'treinamentos.catalogo.visao', kind: 'artigo', section: 'catalogo',
+    title: 'Catálogo: treinamentos abertos para inscrição',
+    body_html: p(
+      'A empresa pode abrir alguns treinamentos para quem quiser fazer. Eles aparecem aqui com a descrição, a carga horária e, quando houver, o prazo para concluir a partir da inscrição.',
+      '"Inscrever-se" cria a sua matrícula na hora e o treinamento passa a aparecer em Meus treinamentos. Os treinamentos obrigatórios não passam pelo catálogo: o RH atribui e eles já chegam prontos.',
+    ),
+  },
+  {
+    key: 'treinamentos.certificados.visao', kind: 'artigo', section: 'certificados',
+    title: 'Certificados: baixar e validar',
+    body_html: p(
+      'Cada treinamento EAD concluído emite um certificado numerado, com a carga horária, a nota (quando há prova) e a validade.',
+      '"PDF" abre o arquivo, quando a empresa já o gerou. "Validação" copia o link público que confirma a autenticidade do certificado — é o mesmo endereço do QR impresso no PDF.',
+    ),
+  },
+  {
+    key: 'treinamentos.historico.visao', kind: 'artigo', section: 'historico',
+    title: 'Histórico e vencimentos',
+    body_html: p(
+      'Aqui está tudo o que foi registrado para você: treinamentos presenciais lançados pelo RH (com nota e instrutor) e os EAD concluídos no portal.',
+      'A situação diz se o registro está válido, vencendo nos próximos 30 dias ou vencido. Treinamento vencido normalmente vira uma reciclagem em Meus treinamentos.',
+    ),
+  },
+  {
+    key: 'treinamentos.faq.senha', kind: 'faq', section: null,
+    title: 'Como entro no portal?',
+    body_html: p(
+      'Abra <strong>/portal-treinamentos</strong> e entre com o seu e-mail e a senha que você criou pelo e-mail de convite.',
+      'Se ainda não criou a senha, peça ao RH para reenviar o convite. Cada link de convite funciona uma vez só.',
+    ),
+  },
+  {
+    key: 'treinamentos.faq.esqueci-senha', kind: 'faq', section: null,
+    title: 'Esqueci a senha.',
+    body_html: p(
+      'Na tela de entrada, use "Esqueceu a senha?" para receber um e-mail de redefinição. Se o e-mail não chegar, peça ao RH para reenviar o convite: o link do convite também serve para definir uma nova senha.',
+    ),
+  },
+  {
+    key: 'treinamentos.faq.video-nao-conta', kind: 'faq', section: null,
+    title: 'Assisti o vídeo e a aula não ficou concluída. Por quê?',
+    body_html: p(
+      'O sistema credita o tempo realmente assistido e, em alguns treinamentos, não aceita pular trechos. Adiantar o vídeo ou deixá-lo rodando em outra aba não conta.',
+      'Assista a aula até o fim na velocidade normal; se o treinamento tiver prova ou aceite, eles também precisam ser feitos.',
+    ),
+  },
+  {
+    key: 'treinamentos.faq.dados-cadastrais', kind: 'faq', section: null,
+    title: 'Como altero meus dados ou meu e-mail de acesso?',
+    body_html: p(
+      'Nome, CPF, empresa e o e-mail de acesso são mantidos pelo RH da empresa que liberou o seu acesso. Peça a alteração a ele.',
+    ),
+  },
+];
+
 export const DEFAULT_ITEMS: Record<Portal, DefaultHelpItem[]> = {
+  treinamentos: TREINAMENTOS,
   parceiro: PARCEIRO,
   fornecedor: FORNECEDOR,
   corretor: CORRETOR,
@@ -679,6 +779,34 @@ const tourDe = (tour: TourId, passos: PassoSemTour[]): TourStep[] => passos.map(
  * no padrão: só existem depois de uma ação do usuário.
  */
 export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<string, TourStep[]>> }> = {
+  treinamentos: {
+    geral: tourDe('geral', [
+      { key: 'treinamentos.tour.geral.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal de Treinamentos', body: 'Este menu leva às suas seções: Meus treinamentos, Catálogo, Certificados e Histórico.' },
+      { key: 'treinamentos.tour.geral.treinamentos', anchor: 'aba-treinamentos', section: 'treinamentos', title: 'Meus treinamentos', body: 'Os treinamentos atribuídos a você, com prazo e andamento. É daqui que você abre a sala de aula.' },
+      { key: 'treinamentos.tour.geral.treinamentos-lista', anchor: 'treinamentos-lista', section: 'treinamentos', title: 'Começar ou continuar', body: 'Cada cartão é um treinamento. "Começar" ou "Continuar" abre as aulas no ponto em que você parou.', quando: 'quando houver um treinamento atribuído a você' },
+      { key: 'treinamentos.tour.geral.catalogo', anchor: 'aba-catalogo', section: 'catalogo', title: 'Catálogo', body: 'Treinamentos que a empresa abriu para inscrição. Ao se inscrever, ele passa para Meus treinamentos.' },
+      { key: 'treinamentos.tour.geral.certificados', anchor: 'aba-certificados', section: 'certificados', title: 'Certificados', body: 'Os certificados dos treinamentos concluídos: baixe o PDF ou copie o link de validação.' },
+      { key: 'treinamentos.tour.geral.historico', anchor: 'aba-historico', section: 'historico', title: 'Histórico', body: 'Tudo o que foi registrado para você, presencial e EAD, com validade e vencimento.' },
+      { key: 'treinamentos.tour.geral.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da empresa.' },
+      { key: 'treinamentos.tour.geral.conta', anchor: 'conta', section: null, title: 'Sua conta', body: 'No menu da conta você vê seus dados cadastrais e sai do portal.' },
+    ]),
+    porAba: {
+      treinamentos: tourDe('treinamentos', [
+        { key: 'treinamentos.tour.treinamentos.kpis', anchor: 'treinamentos-kpis', section: 'treinamentos', title: 'Seus números', body: 'Quantos treinamentos estão pendentes, em atraso e concluídos.' },
+        { key: 'treinamentos.tour.treinamentos.lista', anchor: 'treinamentos-lista', section: 'treinamentos', title: 'Os treinamentos', body: 'Prazo, versão do conteúdo e andamento de cada um. Concluído fica verde e ganha "Rever treinamento".', quando: 'quando houver um treinamento atribuído a você' },
+      ]),
+      catalogo: tourDe('catalogo', [
+        { key: 'treinamentos.tour.catalogo.lista', anchor: 'catalogo-lista', section: 'catalogo', title: 'Treinamentos abertos', body: 'Descrição, carga horária e prazo de cada treinamento. "Inscrever-se" cria a matrícula na hora.', quando: 'quando a empresa abrir um treinamento para inscrição' },
+      ]),
+      certificados: tourDe('certificados', [
+        { key: 'treinamentos.tour.certificados.lista', anchor: 'certificados-lista', section: 'certificados', title: 'Seus certificados', body: 'Número, validade e situação. "PDF" abre o arquivo e "Validação" copia o link público de autenticidade.' },
+      ]),
+      historico: tourDe('historico', [
+        { key: 'treinamentos.tour.historico.kpis', anchor: 'historico-kpis', section: 'historico', title: 'Válidos, vencendo e vencidos', body: 'O resumo das validades dos seus registros.' },
+        { key: 'treinamentos.tour.historico.lista', anchor: 'historico-lista', section: 'historico', title: 'Os registros', body: 'Presencial e EAD, com data, validade, nota e situação.' },
+      ]),
+    },
+  },
   parceiro: {
     geral: tourDe('geral', [
       { key: 'parceiro.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Parceiro', body: 'Este menu leva às seções liberadas para a sua empresa: contratos, documentos, financeiro, solicitações e conversas.' },
@@ -908,6 +1036,13 @@ export interface ChecklistItem {
 }
 
 export const CHECKLIST_ITEMS: Record<Portal, ChecklistItem[]> = {
+  treinamentos: [
+    { key: 'treinamentos.checklist.abrir', title: 'Abra um treinamento', section: 'treinamentos', evento: 'acao:abriu-treinamento' },
+    { key: 'treinamentos.checklist.catalogo', title: 'Conheça o catálogo', section: 'catalogo', evento: 'aba:catalogo' },
+    { key: 'treinamentos.checklist.inscricao', title: 'Inscreva-se em um treinamento', section: 'catalogo', evento: 'acao:inscreveu-treinamento' },
+    { key: 'treinamentos.checklist.certificado', title: 'Baixe um certificado', section: 'certificados', evento: 'acao:baixou-certificado' },
+    { key: 'treinamentos.checklist.historico', title: 'Confira seu histórico', section: 'historico', evento: 'aba:historico' },
+  ],
   parceiro: [
     { key: 'parceiro.checklist.contratos', title: 'Conheça seus contratos', section: 'contratos', evento: 'aba:contratos' },
     { key: 'parceiro.checklist.abrir-contrato', title: 'Abra um contrato', section: 'contratos', evento: 'acao:abriu-contrato' },
@@ -946,6 +1081,7 @@ export const TOUR_STEPS: Record<Portal, TourStep[]> = {
   fornecedor: TOURS.fornecedor.geral,
   corretor: TOURS.corretor.geral,
   cliente: TOURS.cliente.geral,
+  treinamentos: TOURS.treinamentos.geral,
 };
 
 /** Todos os passos padrão de um portal (geral + por aba), na ordem de declaração. */

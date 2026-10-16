@@ -48,12 +48,47 @@ serve(async (req: Request) => {
 
     const { token, lessonId, materialId, certificateId } = body;
 
-    if (!token) return json({ error: 'token é obrigatório' }, 400);
     if (!lessonId && !materialId && !certificateId) {
         return json({ error: 'Informe lessonId, materialId ou certificateId' }, 400);
     }
 
     const admin = createClient(supabaseUrl, serviceRoleKey);
+
+    // ── 0. Portal de Treinamentos (treinando logado por e-mail, sem token) ──
+    // Pedido de 15/10/2026 (docs/planos/2026-10-15-portal-de-treinamentos.md).
+    // O treinando não é membro da organização, então a policy do bucket não o
+    // alcança. A autorização inteira fica na RPC `academy_portal_user_media_path`,
+    // chamada COM O JWT DELE (cliente anon + Authorization): ela devolve o path
+    // só se uma das fichas dele tem matrícula viva na versão do recurso (ou é
+    // dono do certificado) e já grava a evidência no log. Aqui só se assina.
+    if (!token) {
+        const authHeader = req.headers.get('Authorization');
+        if (!authHeader) return json({ error: 'token ou Authorization é obrigatório' }, 401);
+        const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+        const asUser = createClient(supabaseUrl, anonKey, {
+            global: { headers: { Authorization: authHeader } },
+            auth: { autoRefreshToken: false, persistSession: false },
+        });
+        const { data: resolvido, error: rpcError } = await asUser.rpc('academy_portal_user_media_path', {
+            p_lesson_id: lessonId ?? null,
+            p_material_id: materialId ?? null,
+            p_certificate_id: certificateId ?? null,
+            p_user_agent: req.headers.get('user-agent'),
+        });
+        if (rpcError || !resolvido?.storage_path) {
+            const msg = rpcError?.message || 'Recurso não encontrado';
+            const status = rpcError?.code === '42501' ? 403 : rpcError?.code === 'P0002' ? 404 : 401;
+            return json({ error: msg }, status);
+        }
+        const { data: signedUser, error: signUserError } = await admin.storage
+            .from('academy-media')
+            .createSignedUrl(resolvido.storage_path as string, TTL_SEGUNDOS);
+        if (signUserError || !signedUser) {
+            console.error('[academy-portal-media] erro ao assinar URL (treinando):', signUserError);
+            return json({ error: 'Erro ao gerar link de acesso' }, 500);
+        }
+        return json({ signedUrl: signedUser.signedUrl, expiresIn: TTL_SEGUNDOS });
+    }
 
     // ── 1. Token → colaborador ──────────────────────────────────────────
     const { data: tok, error: tokError } = await admin

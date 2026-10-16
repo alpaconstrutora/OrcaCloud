@@ -23,7 +23,7 @@ import { elementoDaAncora, posicaoDoPopover, type Caixa } from '../../utils/port
 export interface PortalTourProps {
   steps: readonly MergedTourStep[];
   onFinish: (motivo: 'concluido' | 'pulado', passoAlcancado: number) => void;
-  accent?: 'orange' | 'coral' | 'indigo';
+  accent?: 'orange' | 'coral' | 'indigo' | 'teal';
   /** aba ativa do portal */
   currentSection?: string | null;
   /** o portal troca de aba (e fecha detalhe aberto) */
@@ -39,6 +39,7 @@ const ACCENT = {
   orange: { btn: 'bg-orange-500 hover:bg-orange-600', dot: 'bg-orange-500', ring: 'ring-orange-400' },
   coral: { btn: 'bg-[#E1553C] hover:bg-[#C24428]', dot: 'bg-[#E1553C]', ring: 'ring-[#E1553C]' },
   indigo: { btn: 'bg-indigo-600 hover:bg-indigo-700', dot: 'bg-indigo-600', ring: 'ring-indigo-500' },
+  teal: { btn: 'bg-teal-600 hover:bg-teal-700', dot: 'bg-teal-600', ring: 'ring-teal-500' },
 };
 
 const POPOVER = { width: 320, height: 210 };

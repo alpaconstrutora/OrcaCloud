@@ -12,6 +12,7 @@ import { PARTNER_PORTAL_TAB_IDS } from '../utils/partnerPortalTabs';
 import { SUPPLIER_PORTAL_TAB_IDS } from '../utils/supplierPortalTabs';
 import { BROKER_PORTAL_TAB_IDS } from '../utils/brokerPortalTabs';
 import { CLIENT_PORTAL_SECTION_IDS } from '../utils/clientPortalTabs';
+import { TRAINING_PORTAL_TAB_IDS } from '../utils/trainingPortalTabs';
 
 describe('PORTAL_SECTIONS ≡ ids das abas dos portais', () => {
   it('parceiro', () => {
@@ -26,5 +27,8 @@ describe('PORTAL_SECTIONS ≡ ids das abas dos portais', () => {
   it('cliente', () => {
     // abas + as subseções do Condomínio (`condominio.avisos`…), seções próprias da ajuda
     expect(PORTAL_SECTIONS.cliente.map(s => s.id)).toEqual(CLIENT_PORTAL_SECTION_IDS);
+  });
+  it('treinamentos', () => {
+    expect(PORTAL_SECTIONS.treinamentos.map(s => s.id)).toEqual([...TRAINING_PORTAL_TAB_IDS]);
   });
 });

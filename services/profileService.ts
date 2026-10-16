@@ -144,6 +144,19 @@ export const profileService = {
                 return { isValid: false, error: 'Seu e-mail não está cadastrado como parceiro autorizado.' };
             }
 
+            if (group === ProfileGroup.TRAINEE) {
+                // O treinando não é membro de organização: ler `academy_portal_users`
+                // direto devolveria [] pela RLS. A RPC resolve pelo e-mail do JWT e
+                // devolve as identidades ativas (uma por organização que convidou).
+                const { data, error } = await supabase.rpc('academy_portal_user_my_access');
+                if (error) {
+                    console.error('Trainee validation error:', error.message);
+                    return { isValid: false, error: 'Erro de validação do acesso ao Portal de Treinamentos. Por favor, contate o suporte.' };
+                }
+                if (Array.isArray(data) && data.length > 0) return { isValid: true };
+                return { isValid: false, error: 'Seu e-mail não está cadastrado no Portal de Treinamentos. Peça ao RH da empresa para enviar o convite.' };
+            }
+
             return { isValid: true };
         } catch (err) {
             console.error("Validation error:", err);

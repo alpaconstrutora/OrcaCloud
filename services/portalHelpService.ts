@@ -55,11 +55,13 @@ export interface PortalHelpRecord extends PortalHelpRow {
   created_at: string;
 }
 
-const RPC_POR_PORTAL: Record<Portal, string> = {
+// `null` = o portal não tem acesso por link (só e-mail): a ajuda é lida por getMine.
+const RPC_POR_PORTAL: Record<Portal, string | null> = {
   parceiro: 'partner_portal_help_get',
   fornecedor: 'supplier_portal_help_get',
   corretor: 'broker_portal_help_get',
   cliente: 'client_portal_help_get',
+  treinamentos: null,
 };
 
 const COLS = 'id, organization_id, portal, kind, default_key, section, title, body_html, sort_order, is_published, default_hash, created_by, created_at, updated_at, anchor, tour_id';
@@ -67,7 +69,9 @@ const COLS = 'id, organization_id, portal, kind, default_key, section, title, bo
 export const portalHelpService = {
   /** Acesso pelo link: a org vem do token. `null` = token inválido/vencido. */
   async getByToken(portal: Portal, token: string): Promise<PortalHelpPayload | null> {
-    const { data, error } = await supabase.rpc(RPC_POR_PORTAL[portal], { p_token: token });
+    const rpc = RPC_POR_PORTAL[portal];
+    if (!rpc) throw new Error(`O ${portal} não tem acesso por link.`);
+    const { data, error } = await supabase.rpc(rpc, { p_token: token });
     if (error) throw error;
     if (!data?.valid) return null;
     return { org_id: data.org_id, contact: data.contact ?? null, items: data.items ?? [], seen: data.seen ?? [] };

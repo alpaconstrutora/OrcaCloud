@@ -116,6 +116,12 @@ export const academyKeys = {
                       ['academy', 'certificates', orgId ?? 'all', employeeId ?? 'all'] as const,
     managerPanel: (orgId?: string | null) => ['academy', 'managerPanel', orgId ?? 'all'] as const,
     hrPanel:      (orgId?: string | null) => ['academy', 'hrPanel', orgId ?? 'all'] as const,
+    // Portal de Treinamentos (treinando logado por e-mail; components/training/).
+    traineeAccess:       ()              => ['portal', 'trainee', 'access'] as const,
+    traineeEnrollments:  ()              => ['portal', 'trainee', 'enrollments'] as const,
+    traineeCertificates: ()              => ['portal', 'trainee', 'certificates'] as const,
+    traineeHistory:      ()              => ['portal', 'trainee', 'history'] as const,
+    traineeCatalog:      ()              => ['portal', 'trainee', 'catalog'] as const,
     // Portal externo mantém o namespace do portal (LaborPortal.tsx).
     portalEnrollments: (token: string)   => ['portal', 'academy', 'enrollments', token] as const,
     portalContent: (token: string, enrollmentId: string) =>

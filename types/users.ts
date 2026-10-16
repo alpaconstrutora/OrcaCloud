@@ -251,7 +251,13 @@ export enum ProfileGroup {
     BROKER = 'CORRETOR',
     PARTNER = 'PARCEIRO',
     /** Instituição financeira no Portal de Crédito (Credit Room). Entra com login + MFA. */
-    LENDER = 'CREDOR'
+    LENDER = 'CREDOR',
+    /**
+     * Treinando no Portal de Treinamentos (/portal-treinamentos): colaborador
+     * ou terceirizado cadastrado em `academy_portal_users`, entra por e-mail e
+     * senha via convite. Não é membro da organização — lê tudo por RPC.
+     */
+    TRAINEE = 'TREINANDO'
 }
 
 export enum UserProfile {
@@ -265,7 +271,8 @@ export enum UserProfile {
     SUPPLIER = 'FORNECEDOR',
     BROKER = 'CORRETOR',
     PARTNER = 'PARCEIRO',
-    LENDER = 'CREDOR'
+    LENDER = 'CREDOR',
+    TRAINEE = 'TREINANDO'
 }
 
 export interface UserPermissions {

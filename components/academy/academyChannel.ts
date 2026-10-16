@@ -11,6 +11,7 @@
 
 import { academyService } from '../../services/academyService';
 import { academyPortalService } from '../../services/academyPortalService';
+import { academyTraineeService } from '../../services/academyTraineeService';
 import type {
     AcademyPlayerContent, AcademyHeartbeatResult, AcademyCompleteLessonResult,
     AcademyAttemptStart, AcademyAttemptResult, AcademyFinalizeResult,
@@ -66,6 +67,30 @@ export function createAppChannel(): AcademyChannel {
             if (!cert?.storage_path) throw new Error('Certificado ainda não gerado.');
             return academyService.getSignedMediaUrl(cert.storage_path);
         },
+    };
+}
+
+/**
+ * Canal do Portal de Treinamentos — treinando logado por e-mail, sem ser
+ * membro da organização. Tudo por RPC `academy_portal_user_*`; a mídia passa
+ * pela mesma Edge Function do portal por token, mas com o JWT dele.
+ * `canal: 'PORTAL'` de propósito: o player trata o certificado como "já
+ * armazenado no servidor" (não tenta desenhar/subir o PDF sem RLS de membro).
+ */
+export function createTraineeChannel(): AcademyChannel {
+    return {
+        canal: 'PORTAL',
+        getContent: id => academyTraineeService.getContent(id),
+        heartbeat: a => academyTraineeService.heartbeat(a),
+        completeLesson: (e, l) => academyTraineeService.completeLesson(e, l),
+        startAttempt: (e, a) => academyTraineeService.startAttempt(e, a),
+        submitAttempt: a => academyTraineeService.submitAttempt(a),
+        accept: e => academyTraineeService.accept(e),
+        ackVersion: e => academyTraineeService.ackVersion(e),
+        finalize: e => academyTraineeService.finalize(e),
+        getLessonMediaUrl: lessonId => academyTraineeService.getMediaUrl({ lessonId }),
+        getMaterialUrl: materialId => academyTraineeService.getMediaUrl({ materialId }),
+        getCertificateUrl: certificateId => academyTraineeService.getMediaUrl({ certificateId }),
     };
 }
 

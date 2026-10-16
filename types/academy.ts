@@ -38,6 +38,9 @@ export interface TrainingCourse {
     cargos_obrigatorios?: string[];
     funcoes_obrigatorias?: string[];
     capa_storage_path?: string;
+    // Portal de Treinamentos (aplicar_20271015000100): catálogo com inscrição
+    inscricao_aberta?: boolean;
+    inscricao_prazo_dias?: number | null;
     created_at?: string;
     updated_at?: string;
 }
@@ -247,7 +250,9 @@ export type AcademyEnrollmentStatus =
     | 'REPROVADO' | 'CONCLUIDO' | 'EXPIRADO' | 'CANCELADO';
 
 export type AcademyEnrollmentOrigem =
-    | 'ATRIBUICAO' | 'MANUAL' | 'AUTOMATICA' | 'RECICLAGEM';
+    | 'ATRIBUICAO' | 'MANUAL' | 'AUTOMATICA' | 'RECICLAGEM'
+    /** inscrição feita pelo próprio treinando no catálogo do Portal de Treinamentos */
+    | 'INSCRICAO';
 
 export interface AcademyEnrollment {
     id: string;
@@ -542,6 +547,117 @@ export interface AcademyPortalEnrollment {
     data_conclusao?: string;
     certificate_id?: string;
     carga_horaria?: number;
+}
+
+// ── Portal de Treinamentos (treinando logado por e-mail) ────────────────
+// Plano: docs/planos/2026-10-15-portal-de-treinamentos.md
+
+export type AcademyPortalUserTipo = 'COLABORADOR' | 'TERCEIRO';
+
+/** Linha de `academy_portal_users` — quem pode entrar no /portal-treinamentos. */
+export interface AcademyPortalUser {
+    id: string;
+    org_id: string;
+    email: string;
+    name: string;
+    phone?: string | null;
+    cpf?: string | null;
+    tipo: AcademyPortalUserTipo;
+    employee_id: string;
+    empresa_terceira?: string | null;
+    contractor_id?: string | null;
+    is_active: boolean;
+    invited_at?: string | null;
+    last_access_at?: string | null;
+    created_by?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    // enriquecido na leitura (join resolvido no cliente — sem FK por design)
+    employee_name?: string;
+    employee_role?: string;
+}
+
+/** Uma identidade do treinando (ele pode ter sido convidado por mais de uma organização). */
+export interface AcademyPortalIdentity {
+    portal_user_id: string;
+    org_id: string;
+    org_nome: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+    cpf?: string | null;
+    tipo: AcademyPortalUserTipo;
+    employee_id: string;
+    empresa_terceira?: string | null;
+    funcao?: string | null;
+    matricula?: string | null;
+}
+
+/** Matrícula vista pelo treinando — o item do portal por token + organização. */
+export interface AcademyTraineeEnrollment extends AcademyPortalEnrollment {
+    org_id: string;
+    org_nome: string;
+}
+
+export interface AcademyTraineeCertificate {
+    id: string;
+    enrollment_id: string;
+    numero: string;
+    codigo_validacao: string;
+    emitido_em: string;
+    carga_horaria?: number | null;
+    nota_final?: number | null;
+    data_conclusao: string;
+    data_validade?: string | null;
+    tem_pdf: boolean;
+    revogado_em?: string | null;
+    curso: string;
+    nr_referencia?: string | null;
+    versao?: number | null;
+    org_id: string;
+    org_nome: string;
+}
+
+/** Registro legal (`employee_trainings`) visto pelo treinando. */
+export interface AcademyTraineeHistoryItem {
+    id: string;
+    course_id: string;
+    course_nome: string;
+    nr_referencia?: string | null;
+    categoria?: TrainingCategoria;
+    origem: EmployeeTrainingOrigem;
+    data_realizacao: string;
+    data_validade?: string | null;
+    status: 'ATIVO' | 'VENCIDO' | 'PENDENTE';
+    nota?: number | null;
+    aprovado: boolean;
+    carga_horaria?: number | null;
+    instrutor?: string | null;
+    local?: string | null;
+    academy_certificate_id?: string | null;
+    tem_certificado_arquivo: boolean;
+    org_id: string;
+    org_nome: string;
+}
+
+/** Curso aberto para inscrição no catálogo do portal. */
+export interface AcademyTraineeCatalogItem {
+    id: string;
+    nome: string;
+    descricao?: string | null;
+    nr_referencia?: string | null;
+    categoria?: TrainingCategoria;
+    modalidade?: TrainingModalidade;
+    carga_horaria?: number | null;
+    validade_meses?: number | null;
+    inscricao_prazo_dias?: number | null;
+    versao: number;
+    version_id: string;
+    org_id: string;
+    org_nome: string;
+    enrollment_id?: string | null;
+    enrollment_status?: AcademyEnrollmentStatus | null;
+    ja_matriculado: boolean;
 }
 
 // ── Agregados de painel ──────────────────────────────────────────────────

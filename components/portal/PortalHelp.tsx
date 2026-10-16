@@ -57,14 +57,15 @@ export interface PortalHelpProps {
   tourKey?: string | null;
   /** abre o tour sozinho no primeiro acesso deste aparelho (false na prévia) */
   autoTour?: boolean;
-  /** acento do portal: laranja (parceiro) ou coral (kit §24) */
-  accent?: 'orange' | 'coral' | 'indigo';
+  /** acento do portal: laranja (parceiro), coral (kit §24), índigo (corretor) ou teal (treinamentos) */
+  accent?: 'orange' | 'coral' | 'indigo' | 'teal';
 }
 
 const ACCENT = {
   orange: { text: 'text-orange-600', bg: 'bg-orange-500 hover:bg-orange-600', ring: 'focus:ring-orange-500/20 focus:border-orange-500', soft: 'bg-orange-50 text-orange-700' },
   coral: { text: 'text-[#C24428]', bg: 'bg-[#E1553C] hover:bg-[#C24428]', ring: 'focus:ring-[#E1553C]/20 focus:border-[#E1553C]', soft: 'bg-[#FDEDE8] text-[#C24428]' },
   indigo: { text: 'text-indigo-600', bg: 'bg-indigo-600 hover:bg-indigo-700', ring: 'focus:ring-indigo-500/20 focus:border-indigo-500', soft: 'bg-indigo-50 text-indigo-700' },
+  teal: { text: 'text-teal-700', bg: 'bg-teal-600 hover:bg-teal-700', ring: 'focus:ring-teal-500/20 focus:border-teal-500', soft: 'bg-teal-50 text-teal-800' },
 };
 
 const soDigitos = (s: string) => s.replace(/\D/g, '');

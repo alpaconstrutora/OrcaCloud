@@ -18,7 +18,7 @@ import {
 import { chaveDoTour } from '../utils/portalTour';
 import { PARTNER_PORTAL_TAB_IDS } from '../utils/partnerPortalTabs';
 
-const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor', 'cliente'];
+const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor', 'cliente', 'treinamentos'];
 
 const row = (o: Partial<PortalHelpRow> & Pick<PortalHelpRow, 'id'>): PortalHelpRow => ({
   kind: 'artigo', default_key: null, section: null, title: 't', body_html: '<p>b</p>',

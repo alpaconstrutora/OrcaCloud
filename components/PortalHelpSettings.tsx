@@ -47,7 +47,7 @@ const ClientAreaPrevia = React.lazy(() => import('./ClientArea').then(m => ({ de
  * link. Em "Todas", junta as organizações em que o usuário é gestor.
  */
 
-const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor', 'cliente'];
+const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor', 'cliente', 'treinamentos'];
 const KINDS: { id: HelpKind; label: string }[] = [
   { id: 'artigo', label: 'Artigos' },
   { id: 'faq', label: 'Perguntas frequentes' },
@@ -405,7 +405,11 @@ const PortalHelpSettings: React.FC = () => {
   };
 
   // ── pré-visualização ───────────────────────────────────────────────────
-  const motivoPreviaDesligada = !orgId ? 'Escolha uma organização no topo para pré-visualizar' : undefined;
+  // O Portal de Treinamentos não tem "pessoa" para simular: ele mostra a identidade
+  // de quem está logado (academy_portal_user_my_access). Rever o tour = entrar nele.
+  const motivoPreviaDesligada = portal === 'treinamentos'
+    ? 'O Portal de Treinamentos é visto com a conta do treinando: abra /portal-treinamentos e use "Rever o tour" na ajuda'
+    : !orgId ? 'Escolha uma organização no topo para pré-visualizar' : undefined;
 
   const toursComPassos: TourId[] = React.useMemo(() => {
     if (!orgId) return ['geral'];
@@ -414,7 +418,7 @@ const PortalHelpSettings: React.FC = () => {
   }, [orgId, portal, rows, toursDoPortal]);
 
   const abrirPrevia = async () => {
-    if (!orgId) return;
+    if (!orgId || portal === 'treinamentos') return;
     setPessoas(null);
     setPreviaForm({ pessoaId: '', tourId: toursComPassos.includes(tourSel) ? tourSel : 'geral' });
     try {
@@ -446,7 +450,7 @@ const PortalHelpSettings: React.FC = () => {
     setPreviaForm(null);
   };
 
-  const ROTULO_PESSOA: Record<Portal, string> = { parceiro: 'Parceiro', fornecedor: 'Fornecedor', corretor: 'Corretor', cliente: 'Cliente' };
+  const ROTULO_PESSOA: Record<Portal, string> = { parceiro: 'Parceiro', fornecedor: 'Fornecedor', corretor: 'Corretor', cliente: 'Cliente', treinamentos: 'Treinando' };
   const rotuloPessoa = ROTULO_PESSOA[portal];
 
   const origemTexto = (l: Linha) => {

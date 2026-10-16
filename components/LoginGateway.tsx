@@ -10,7 +10,8 @@ import {
     Truck,
     Briefcase,
     Users,
-    Landmark
+    Landmark,
+    GraduationCap
 } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
@@ -83,6 +84,14 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onSelectGroup }) => {
             icon: Landmark,
             color: 'rose',
             theme: 'bg-rose-600'
+        },
+        {
+            id: ProfileGroup.TRAINEE,
+            title: 'Portal de Treinamentos',
+            desc: 'Colaboradores e terceirizados: aulas, provas, certificados e histórico de treinamentos.',
+            icon: GraduationCap,
+            color: 'teal',
+            theme: 'bg-teal-600'
         }
     ];
 

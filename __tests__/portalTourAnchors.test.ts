@@ -17,10 +17,15 @@ import { PARTNER_PORTAL_TAB_IDS } from '../utils/partnerPortalTabs';
 import { SUPPLIER_PORTAL_TAB_IDS } from '../utils/supplierPortalTabs';
 import { BROKER_PORTAL_TAB_IDS } from '../utils/brokerPortalTabs';
 import { CLIENT_PORTAL_SECTION_IDS } from '../utils/clientPortalTabs';
+import { TRAINING_PORTAL_TAB_IDS } from '../utils/trainingPortalTabs';
 
 // Arquivos onde as âncoras de cada portal podem estar: a casca + os filhos que
 // desenham o conteúdo das abas. O primeiro é o arquivo do portal.
 const ARQUIVOS: Record<Portal, string[]> = {
+  treinamentos: [
+    'components/training/TrainingPortal.tsx',
+    ...['Enrollments', 'Catalog', 'Certificates', 'History'].map(x => `components/training/portal/Trainee${x}Tab.tsx`),
+  ],
   parceiro: ['components/partner/PartnerPortal.tsx', 'components/partner/PartnerPortalFinanceiro.tsx'],
   fornecedor: [
     'components/SupplierDashboard.tsx',
@@ -40,8 +45,9 @@ const ABAS: Record<Portal, readonly string[]> = {
   corretor: BROKER_PORTAL_TAB_IDS,
   // `aba-condominio.<sub>`: subitens do menu lateral e abas do CondominioTab
   cliente: CLIENT_PORTAL_SECTION_IDS,
+  treinamentos: TRAINING_PORTAL_TAB_IDS,
 };
-const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor', 'cliente'];
+const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor', 'cliente', 'treinamentos'];
 
 describe('âncoras do tour existem nos portais', () => {
   it.each(PORTAIS)('%s', (portal) => {
@@ -96,6 +102,7 @@ describe('Primeiros passos: toda ação do checklist é avisada pelo portal (F8)
     fornecedor: ['components/SupplierDashboard.tsx', 'components/supplier/portal/PortalInvoices.tsx', 'components/QuotationResponseForm.tsx'],
     corretor: ['components/BrokerPortal.tsx', 'components/broker/BrokerLeadManager.tsx', 'components/broker/BrokerMaterials.tsx'],
     cliente: ['components/ClientArea.tsx'],
+    treinamentos: ['components/training/TrainingPortal.tsx', 'components/training/portal/TraineeCatalogTab.tsx', 'components/training/portal/TraineeCertificatesTab.tsx'],
   };
   it.each(PORTAIS)('%s', (portal) => {
     const fonte = ONDE_AVISA[portal].map(f => readFileSync(resolve(__dirname, '..', f), 'utf-8')).join('\n');

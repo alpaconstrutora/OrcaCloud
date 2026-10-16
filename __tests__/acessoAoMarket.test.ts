@@ -16,6 +16,8 @@ const ESPERADO: Record<ProfileGroup, boolean> = {
   [ProfileGroup.BROKER]: false,
   [ProfileGroup.PARTNER]: false,
   [ProfileGroup.LENDER]: false,
+  // Treinando do Portal de Treinamentos: não é membro de organização.
+  [ProfileGroup.TRAINEE]: false,
 };
 
 describe('ÒPURA Market — quem entra', () => {

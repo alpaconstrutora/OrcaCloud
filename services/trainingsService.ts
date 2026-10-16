@@ -17,7 +17,7 @@ import type { TrainingCourse, EmployeeTraining } from '../types/academy';
 const COURSE_COLS =
     'id, org_id, nome, descricao, nr_referencia, categoria, carga_horaria, validade_meses, ' +
     'instrutor, is_obrigatorio, roles_obrigatorios, status, modalidade, cargos_obrigatorios, ' +
-    'funcoes_obrigatorias, capa_storage_path, created_at, updated_at';
+    'funcoes_obrigatorias, capa_storage_path, inscricao_aberta, inscricao_prazo_dias, created_at, updated_at';
 
 const TRAINING_COLS =
     'id, org_id, employee_id, course_id, data_realizacao, data_validade, instrutor, local, ' +

@@ -11,7 +11,9 @@ export type PortalAcao =
   | 'abriu-contrato' | 'enviou-documento' | 'abriu-solicitacao'
   | 'respondeu-cotacao' | 'atualizou-logistica' | 'enviou-nf'
   | 'enviou-proposta' | 'criou-lead' | 'baixou-material'
-  | 'baixou-documento' | 'abriu-chamado';
+  | 'baixou-documento' | 'abriu-chamado'
+  // Portal de Treinamentos (15/10/2026)
+  | 'abriu-treinamento' | 'inscreveu-treinamento' | 'baixou-certificado';
 
 type Ouvinte = (acao: PortalAcao) => void;
 const ouvintes = new Set<Ouvinte>();

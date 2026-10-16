@@ -170,6 +170,9 @@ const InvestorDashboardPublic = React.lazy(() => import('./components/InvestorDa
 const LenderPortal = React.lazy(() => import('./components/credit/portal/LenderPortal'));
 const PartnerPortalPublic = React.lazy(() => import('./components/partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 const SupplierDashboardPublic = React.lazy(() => import('./components/SupplierDashboard'));
+// Portal de Treinamentos — casca própria, fora do <Layout>: o treinando
+// (colaborador ou terceirizado) não é membro de organização; entra por e-mail.
+const TrainingPortal = React.lazy(() => import('./components/training/TrainingPortal'));
 
 // Portal do Investidor via token público
 const InvestorPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
@@ -733,6 +736,25 @@ const App: React.FC = () => {
     }
   }, [authError, partnerPortalToken]);
 
+  // ── /portal-treinamentos = entrada do treinando por e-mail e senha ────────────
+  // Pedido de 15/10/2026 (docs/planos/2026-10-15-portal-de-treinamentos.md).
+  // Mesmo desenho do /portal-parceiro acima: não há token, o convite por e-mail
+  // aponta para cá (#type=invite|recovery), e o grupo é escolhido SÓ EM MEMÓRIA,
+  // reafirmado a cada mudança (o useAuthSync zera o grupo no evento inicial).
+  React.useEffect(() => {
+    if (window.location.pathname !== '/portal-treinamentos') return;
+    const vindoDoConvite = !!tipoDoLinkDeAcesso;
+    if (loadingSession && !vindoDoConvite) return;
+    const deveForcar = vindoDoConvite || !session || (!selectedLoginGroup && loginFeitoNestaAba(session?.user?.email));
+    if (deveForcar && selectedLoginGroup !== ProfileGroup.TRAINEE) selectLoginGroupForRoute(ProfileGroup.TRAINEE);
+  }, [loadingSession, session, selectedLoginGroup, selectLoginGroupForRoute]);
+
+  React.useEffect(() => {
+    if (authError && window.location.pathname === '/portal-treinamentos') {
+      window.history.replaceState(null, '', '/');
+    }
+  }, [authError]);
+
   // Link de convite/redefinição que o servidor recusou (já usado ou vencido): o
   // retorno vem com #error=…&error_code=otp_expired, sem `type`. Em vez de cair
   // calado num login, mostra o motivo uma vez.
@@ -794,6 +816,7 @@ const App: React.FC = () => {
         // Saindo da entrada própria do parceiro: o endereço vira "/" para a regra
         // de /portal-parceiro (acima) não devolver a tela do parceiro.
         if (window.location.pathname === '/portal-parceiro') window.history.replaceState(null, '', '/');
+        if (window.location.pathname === '/portal-treinamentos') window.history.replaceState(null, '', '/');
         setSelectedLoginGroup(null);
       }}
     />
@@ -849,6 +872,27 @@ const App: React.FC = () => {
     return (
       <React.Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
         <PartnerPortalPublic
+          userEmail={session?.user?.email || ''}
+          onLogout={() => { setSelectedLoginGroup(null); setSession(null); supabase.auth.signOut(); }}
+        />
+      </React.Suspense>
+    );
+  }
+
+  // ── Portal de Treinamentos (login por e-mail) ────────────────────────────────
+  // Casca própria (header "Portal de Treinamentos" + menu do treinando), fora do
+  // <Layout>: o treinando não tem organização ativa nem sidebar do ÒPURA.
+  if (selectedLoginGroup === ProfileGroup.TRAINEE) {
+    if (!profileSynchronized) {
+      return (
+        <div className="min-h-screen bg-[#F2F2F4] flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        </div>
+      );
+    }
+    return (
+      <React.Suspense fallback={<div className="min-h-screen bg-[#F2F2F4] flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+        <TrainingPortal
           userEmail={session?.user?.email || ''}
           onLogout={() => { setSelectedLoginGroup(null); setSession(null); supabase.auth.signOut(); }}
         />

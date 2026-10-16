@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { marcarLoginNestaAba } from '../lib/loginNestaAba';
-import { Building2, Lock, Mail, Loader2, AlertCircle, User, TrendingUp, Code, ArrowLeft, Truck, Briefcase, Landmark } from 'lucide-react';
+import { Building2, Lock, Mail, Loader2, AlertCircle, User, TrendingUp, Code, ArrowLeft, Truck, Briefcase, Landmark, GraduationCap } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
 interface AuthProps {
@@ -92,6 +92,17 @@ const Auth: React.FC<AuthProps> = ({ group = ProfileGroup.USER, onBack }) => {
                     icon: Landmark,
                     title: 'Portal de Crédito',
                     subtitle: 'Acesso da instituição financeira à operação'
+                };
+            // Mesmo cartão (ícone e cor) de `LoginGateway.tsx`, pelo mesmo motivo
+            // dos blocos acima: escolher o portal e entrar nele não troca de identidade.
+            case ProfileGroup.TRAINEE:
+                return {
+                    primary: 'bg-teal-600',
+                    ring: 'focus:ring-teal-500',
+                    text: 'text-teal-600',
+                    icon: GraduationCap,
+                    title: 'Portal de Treinamentos',
+                    subtitle: 'Aulas, provas, certificados e histórico'
                 };
             default:
                 return {

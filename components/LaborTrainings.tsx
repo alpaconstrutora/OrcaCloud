@@ -12,6 +12,7 @@ import AcademyAssignmentsTab from './academy/AcademyAssignmentsTab';
 import AcademyPanels from './academy/AcademyPanels';
 import AcademyCourseBuilder from './academy/AcademyCourseBuilder';
 import AcademyRecordSheet from './academy/AcademyRecordSheet';
+import AcademyPortalAccessTab from './academy/AcademyPortalAccessTab';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { laborService, Employee } from '../services/laborService';
 import { trainingsService } from '../services/trainingsService';
@@ -41,13 +42,14 @@ import type {
  * Spec: PLANO_MODULO_TREINAMENTOS.md
  */
 
-type TView = 'catalog' | 'assignments' | 'records' | 'panels';
+type TView = 'catalog' | 'assignments' | 'records' | 'panels' | 'portal';
 
 const VIEWS: Array<{ id: TView; label: string }> = [
     { id: 'catalog',     label: 'Catálogo' },
     { id: 'assignments', label: 'Atribuições' },
     { id: 'records',     label: 'Registros' },
     { id: 'panels',      label: 'Painéis' },
+    { id: 'portal',      label: 'Portal' },
 ];
 
 // O <h1> muda com a aba — senão o título mente (§19.1).
@@ -56,6 +58,7 @@ const VIEW_HEADERS: Record<TView, { title: string; subtitle: string }> = {
     assignments: { title: 'Atribuições',              subtitle: 'Quem precisa fazer cada treinamento, com prazo e reciclagem.' },
     records:     { title: 'Registros de treinamento', subtitle: 'Evidências de participação e controle de vencimento.' },
     panels:      { title: 'Painéis de treinamento',   subtitle: 'Aderência da equipe e conformidade de NR.' },
+    portal:      { title: 'Portal de Treinamentos',   subtitle: 'Quem entra em /portal-treinamentos por e-mail: colaboradores e terceirizados, com convite.' },
 };
 
 const RECORD_COLUMNS: ColumnConfig[] = [
@@ -375,6 +378,10 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
             )}
 
             {view === 'panels' && <AcademyPanels orgId={orgId} />}
+
+            {view === 'portal' && (
+                <AcademyPortalAccessTab orgId={orgId} employees={employees} podeEditar={podeEditar} notify={notify} />
+            )}
 
             {view === 'records' && (
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">

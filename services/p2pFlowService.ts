@@ -1,74 +1,35 @@
-import { supabase } from '../lib/supabase';
 import { projectService } from './projectService';
 import { purchaseRequestService } from './purchaseRequestService';
 import { statusDaSolicitacao, STATUS_LABEL } from '../utils/solicitacaoCompra';
 import type { PurchaseRequestDisplayStatus } from '../types/purchaseRequest';
-import type { ProcessEventKey, ProcessInstanceStatus } from '../types/process';
+import type { ProcessEventKey } from '../types/process';
+import type {
+  SeamStatus, FlowTemplateAtivo, FlowEdge, FlowGroup, FlowProcessSummary, FlowProcessItem,
+  FlowRecord, FlowStage, FlowSnapshot,
+} from '../types/processFlow';
+import {
+  countRows, fetchRows, lerMotor, resumirProcessos, montarArestas, processosDoNo,
+  edgeId, fmtBrl, fmtDate, type Filters,
+} from './processFlowShared';
+
+/**
+ * Os tipos do fluxo moram em `types/processFlow.ts` desde que a Torre do
+ * Financeiro nasceu (16/10/2026); os nomes `P2P*` continuam valendo para quem
+ * já importava daqui.
+ */
+export type { SeamStatus };
+export type P2PTemplateAtivo = FlowTemplateAtivo;
+export type P2PEdge = FlowEdge;
+export type P2PGroup = FlowGroup;
+export type P2PProcessSummary = FlowProcessSummary;
+export type P2PProcessItem = FlowProcessItem;
+export type P2PRecord = FlowRecord;
+export type P2PStage = FlowStage;
+export type P2PFlowSnapshot = FlowSnapshot;
+export { edgeId };
 
 /** SC que ainda pede ação de alguém (a etapa "Solicitação" do quadro). */
 const SC_ABERTA: PurchaseRequestDisplayStatus[] = ['rascunho', 'em_aprovacao', 'aprovada', 'em_atendimento'];
-
-/**
- * Costura de entrada de um nó. `orquestrada` não é rótulo fixo: é derivada do
- * motor de Processos — a organização tem template ATIVO com gatilho por evento
- * para o nó anterior, então a transição é conduzida por um processo, com
- * etapas, responsável e SLA. Os outros três continuam sendo o retrato estático
- * do código (ver `DEFINICAO_DOS_NOS`).
- */
-export type SeamStatus = 'auto' | 'manual' | 'gap' | 'orquestrada';
-
-/** Modelo ATIVO do motor que escuta um evento — o que a aresta precisa para abrir o editor. */
-export interface P2PTemplateAtivo {
-  id: string;
-  name: string;
-  organizationId: string;
-  /** O evento que este modelo escuta — a aresta pode aceitar vários, a biblioteca conta por evento. */
-  eventKey: ProcessEventKey;
-}
-
-/**
- * Uma transição do fluxo. A costura (`seam`) mora AQUI desde 16/10/2026 — o
- * nó só a herda da sua aresta de entrada (`inboundSeam`), para os KPIs e o
- * drawer continuarem contando por etapa. `eventKeys` é o evento do motor que
- * CONDUZ esta transição (`EDGE_EVENT_KEYS`); `templates` são os modelos ativos
- * que o escutam — vazio significa "ninguém orquestra".
- */
-export interface P2PEdge {
-  id: string;
-  from: string;
-  to: string;
-  seam: SeamStatus;
-  note?: string;
-  eventKeys?: ProcessEventKey[];
-  templates?: P2PTemplateAtivo[];
-}
-
-/** Área do fluxo que agrupa nós no desenho (as "lanes" do canvas). */
-export interface P2PGroup {
-  id: string;
-  label: string;
-  nodeIds: string[];
-}
-
-/** Resumo das instâncias de processo nascidas num nó. */
-export interface P2PProcessSummary {
-  ativos: number;
-  atrasados: number;
-  /** Nomes dos templates ATIVOS que escutam os eventos deste nó. */
-  templates: string[];
-}
-
-/** Uma instância de processo, do jeito que o drawer do nó a mostra. */
-export interface P2PProcessItem {
-  id: string;
-  title: string;
-  status: ProcessInstanceStatus;
-  templateName: string;
-  stepName?: string;
-  startedAt: string;
-  dueAt?: string;
-  overdue: boolean;
-}
 
 /**
  * Eventos do motor de Processos que NASCEM em cada nó. O processo que nasce no
@@ -125,42 +86,6 @@ export const P2P_GROUPS: ReadonlyArray<P2PGroup> = [
   { id: 'financeiro',  label: 'Financeiro',       nodeIds: ['financeiro', 'pagamento'] },
 ];
 
-export const edgeId = (from: string, to: string) => `${from}->${to}`;
-
-export interface P2PRecord {
-  id: string;
-  label: string;
-  sublabel?: string;
-  value?: number;
-  status?: string;
-  date?: string;
-}
-
-export interface P2PStage {
-  id: string;
-  label: string;
-  owner: string;
-  view?: string;
-  count: number;
-  pending?: number;
-  inboundSeam: SeamStatus;
-  inboundNote?: string;
-  records?: P2PRecord[];
-  /** Eventos do motor que nascem neste nó (ver `STAGE_EVENT_KEYS`). */
-  eventKeys?: ProcessEventKey[];
-  /** Instâncias ativas nascidas neste nó. Só existe quando há `eventKeys`. */
-  processes?: P2PProcessSummary;
-}
-
-export interface P2PFlowSnapshot {
-  stages: P2PStage[];
-  edges: P2PEdge[];
-  groups: P2PGroup[];
-  generatedAt: string;
-}
-
-type Filters = Record<string, string | string[] | null | undefined>;
-
 /**
  * `quotation_requests` NÃO tem `organization_id` — ela escopa por `project_id`
  * (migration `20260218000001`), e a RLS confirma: `is_member_of_project_org`.
@@ -198,181 +123,6 @@ async function filtroPorObrasDaOrg(organizationId: string): Promise<Filters> {
     return {};
   }
 }
-
-async function countRows(table: string, filters: Filters): Promise<number> {
-  try {
-    let q = supabase.from(table).select('id', { count: 'exact', head: true });
-    for (const [col, val] of Object.entries(filters)) {
-      if (val === null || val === undefined) continue;
-      if (Array.isArray(val)) q = q.in(col, val);
-      else q = q.eq(col, val);
-    }
-    const { count, error } = await q;
-    if (error) { console.warn(`[p2pFlow] count ${table}:`, error.message); return 0; }
-    return count ?? 0;
-  } catch (e) {
-    console.warn(`[p2pFlow] count ${table}:`, e); return 0;
-  }
-}
-
-async function fetchRows<T extends Record<string, unknown>>(
-  table: string,
-  columns: string,
-  filters: Filters,
-  limit = 50,
-): Promise<T[]> {
-  try {
-    let q = supabase.from(table).select(columns).limit(limit).order('created_at', { ascending: false });
-    for (const [col, val] of Object.entries(filters)) {
-      if (val === null || val === undefined) continue;
-      if (Array.isArray(val)) q = q.in(col, val);
-      else q = q.eq(col, val);
-    }
-    const { data, error } = await q;
-    if (error) { console.warn(`[p2pFlow] fetch ${table}:`, error.message); return []; }
-    return (data ?? []) as unknown as T[];
-  } catch (e) {
-    console.warn(`[p2pFlow] fetch ${table}:`, e); return [];
-  }
-}
-
-// ── Motor de Processos — o que a Torre lê dele ──────────────────────────────
-
-interface InstanciaDoMotor {
-  id: string;
-  title: string;
-  status: ProcessInstanceStatus;
-  started_at: string;
-  due_at: string | null;
-  current_step_id: string | null;
-  process_templates: { name: string; trigger_event_key: string | null } | null;
-}
-
-interface LeituraDoMotor {
-  /** trigger_event_key → templates ATIVOS que o escutam. */
-  templatesAtivos: Map<string, P2PTemplateAtivo[]>;
-  /** Instâncias não terminais de templates com gatilho por evento. */
-  instancias: InstanciaDoMotor[];
-  /** id da etapa atual → { nome, due_at }. */
-  etapaAtual: Map<string, { name: string; due_at: string | null }>;
-}
-
-const MOTOR_VAZIO: LeituraDoMotor = { templatesAtivos: new Map(), instancias: [], etapaAtual: new Map() };
-
-/**
- * Duas consultas em paralelo (templates ATIVOS por evento; instâncias não
- * terminais com o template embutido) e uma terceira, só se houver instância,
- * para a etapa atual — `process_instances` ↔ `process_instance_steps` têm DUAS
- * FKs (a etapa aponta para a instância; a instância aponta para a etapa
- * atual), então o embed do PostgREST fica ambíguo e a consulta separada é o
- * caminho que não depende do nome da constraint.
- *
- * Erro em qualquer uma devolve o motor vazio: a Torre então mostra o retrato
- * estático, como antes — nunca esconde o quadro por causa do motor.
- */
-async function lerMotor(organizationId: string | null, projectId?: string): Promise<LeituraDoMotor> {
-  try {
-    let tq = supabase
-      .from('process_templates')
-      .select('id, name, trigger_event_key, organization_id')
-      .eq('trigger_type', 'EVENTO')
-      .eq('status', 'ATIVO')
-      .not('trigger_event_key', 'is', null);
-    if (organizationId) tq = tq.eq('organization_id', organizationId);
-
-    let iq = supabase
-      .from('process_instances')
-      .select('id, title, status, started_at, due_at, current_step_id, process_templates!inner(name, trigger_event_key)')
-      .not('status', 'in', '(CONCLUIDO,CANCELADO)')
-      .order('started_at', { ascending: false })
-      .limit(200);
-    if (organizationId) iq = iq.eq('organization_id', organizationId);
-    if (projectId) iq = iq.eq('project_id', projectId);
-
-    const [t, i] = await Promise.all([tq, iq]);
-    if (t.error) { console.warn('[p2pFlow] templates do motor:', t.error.message); return MOTOR_VAZIO; }
-    if (i.error) { console.warn('[p2pFlow] instâncias do motor:', i.error.message); return MOTOR_VAZIO; }
-
-    const templatesAtivos = new Map<string, P2PTemplateAtivo[]>();
-    for (const row of (t.data ?? []) as { id: string; name: string; trigger_event_key: string | null; organization_id: string }[]) {
-      if (!row.trigger_event_key) continue;
-      templatesAtivos.set(row.trigger_event_key, [
-        ...(templatesAtivos.get(row.trigger_event_key) ?? []),
-        { id: row.id, name: row.name, organizationId: row.organization_id, eventKey: row.trigger_event_key as ProcessEventKey },
-      ]);
-    }
-
-    const instancias = ((i.data ?? []) as unknown as InstanciaDoMotor[])
-      .filter(inst => inst.process_templates?.trigger_event_key);
-
-    const etapaAtual = new Map<string, { name: string; due_at: string | null }>();
-    const idsEtapa = instancias.map(inst => inst.current_step_id).filter((id): id is string => !!id);
-    if (idsEtapa.length > 0) {
-      const { data: etapas, error } = await supabase
-        .from('process_instance_steps')
-        .select('id, name, due_at')
-        .in('id', idsEtapa);
-      if (error) console.warn('[p2pFlow] etapa atual do motor:', error.message);
-      for (const e of (etapas ?? []) as { id: string; name: string; due_at: string | null }[]) {
-        etapaAtual.set(e.id, { name: e.name, due_at: e.due_at });
-      }
-    }
-
-    return { templatesAtivos, instancias, etapaAtual };
-  } catch (e) {
-    console.warn('[p2pFlow] motor:', e);
-    return MOTOR_VAZIO;
-  }
-}
-
-/** Atrasada = status já diz, ou a etapa atual/instância passou do prazo. */
-function instanciaAtrasada(inst: InstanciaDoMotor, motor: LeituraDoMotor, agora: number): boolean {
-  if (inst.status === 'ATRASADO') return true;
-  const etapa = inst.current_step_id ? motor.etapaAtual.get(inst.current_step_id) : undefined;
-  const prazo = etapa?.due_at ?? inst.due_at;
-  return !!prazo && new Date(prazo).getTime() < agora;
-}
-
-function instanciasDoNo(motor: LeituraDoMotor, eventKeys: ProcessEventKey[]): InstanciaDoMotor[] {
-  const chaves = new Set<string>(eventKeys);
-  return motor.instancias.filter(inst => chaves.has(inst.process_templates!.trigger_event_key!));
-}
-
-function resumirProcessos(motor: LeituraDoMotor, eventKeys: ProcessEventKey[], agora: number): P2PProcessSummary {
-  const lista = instanciasDoNo(motor, eventKeys);
-  return {
-    ativos: lista.length,
-    atrasados: lista.filter(inst => instanciaAtrasada(inst, motor, agora)).length,
-    templates: eventKeys.flatMap(k => motor.templatesAtivos.get(k) ?? []).map(t => t.name),
-  };
-}
-
-/** Arestas com a costura real: o retrato estático, sobreposto pelo motor onde há modelo ativo escutando. */
-function montarArestas(motor: LeituraDoMotor): P2PEdge[] {
-  return DEFINICAO_DAS_ARESTAS.map(def => {
-    const id = edgeId(def.from, def.to);
-    const eventKeys = EDGE_EVENT_KEYS[id];
-    if (!eventKeys) return { id, ...def };
-    const templates = eventKeys.flatMap(k => motor.templatesAtivos.get(k) ?? []);
-    const orquestrada = templates.length > 0;
-    return {
-      id, ...def, eventKeys, templates,
-      ...(orquestrada ? {
-        seam: 'orquestrada' as SeamStatus,
-        note: `Conduzida por Processos: ${[...new Set(templates.map(t => t.name))].join(', ')}`,
-      } : {}),
-    };
-  });
-}
-
-const fmtBrl = (n?: number) =>
-  n != null ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : undefined;
-
-const fmtDate = (iso?: string) => {
-  if (!iso) return undefined;
-  const [y, m, d] = iso.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
-};
 
 export const p2pFlowService = {
   /**
@@ -512,7 +262,7 @@ export const p2pFlowService = {
     // estático. O nó que EMITE evento ganha o resumo das instâncias nascidas
     // nele. "Todas as organizações" (org null) conta template de qualquer org
     // do usuário — a RLS já recortou.
-    const edges = montarArestas(motor);
+    const edges = montarArestas(DEFINICAO_DAS_ARESTAS, EDGE_EVENT_KEYS, motor);
     const agora = Date.now();
     const stages: P2PStage[] = definicoes.map(no => {
       const entrada = edges.find(e => e.to === no.id);
@@ -532,23 +282,7 @@ export const p2pFlowService = {
     organizationId: string | null,
     projectId?: string,
   ): Promise<P2PProcessItem[]> {
-    const eventKeys = STAGE_EVENT_KEYS[stageId];
-    if (!eventKeys) return [];
-    const motor = await lerMotor(organizationId, projectId);
-    const agora = Date.now();
-    return instanciasDoNo(motor, eventKeys).map(inst => {
-      const etapa = inst.current_step_id ? motor.etapaAtual.get(inst.current_step_id) : undefined;
-      return {
-        id: inst.id,
-        title: inst.title,
-        status: inst.status,
-        templateName: inst.process_templates?.name ?? '',
-        stepName: etapa?.name,
-        startedAt: inst.started_at,
-        dueAt: etapa?.due_at ?? inst.due_at ?? undefined,
-        overdue: instanciaAtrasada(inst, motor, agora),
-      };
-    });
+    return processosDoNo(STAGE_EVENT_KEYS[stageId], organizationId, projectId);
   },
 
   async getStageRecords(

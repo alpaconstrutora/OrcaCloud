@@ -9,11 +9,12 @@ import { SEAM_CFG } from './p2pSeam';
  * vertical na ordem das etapas, com a transição de entrada de cada uma como
  * uma linha de texto entre os cartões.
  */
-export function P2PListaMobile({ stages, edges, onOpenNode, onNavigate }: {
+export function P2PListaMobile({ stages, edges, onOpenNode, onNavigate, icones }: {
   stages: P2PStage[];
   edges: P2PEdge[];
   onOpenNode: (id: string) => void;
   onNavigate: (view: string) => void;
+  icones?: Record<string, React.ElementType>;
 }) {
   return (
     <div className="space-y-2">
@@ -31,7 +32,7 @@ export function P2PListaMobile({ stages, edges, onOpenNode, onNavigate }: {
                 </span>
               </div>
             )}
-            <P2PNodeCard stage={stage} selected={false} onOpen={() => onOpenNode(stage.id)} onNavigate={onNavigate} />
+            <P2PNodeCard stage={stage} selected={false} onOpen={() => onOpenNode(stage.id)} onNavigate={onNavigate} icones={icones} />
           </React.Fragment>
         );
       })}

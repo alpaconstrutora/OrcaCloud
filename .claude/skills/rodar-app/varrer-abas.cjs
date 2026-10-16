@@ -40,7 +40,7 @@ const PRESETS = {
     'condominios', 'rentals', 'gestao-vendas', 'services-commercial', 'service-contracts',
     // Financeiro
     'contas-a-pagar', 'contas-a-receber', 'extrato-bancario', 'tributos-a-pagar',
-    'financial-dashboard', 'boletos-pagar',
+    'financial-dashboard', 'boletos-pagar', 'fluxo-financeiro',
     // Suprimentos
     'supplies-solicitacoes', 'supplies-orders', 'supplies-quotations', 'supplies-contracts', 'fluxo-p2p',
     // Engenharia e Incorporação

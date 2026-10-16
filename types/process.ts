@@ -230,7 +230,17 @@ export type ProcessEventKey =
     /** `receiptService.createReceipt` — recebimento com divergência de ITEM sem o pedido inteiro virar Divergência (nasce no nó Recebimento). */
     | 'purchase_receipt.divergence'
     /** `payableService.updateStatus('PAGO')` / `bankReconciliationService.createMatch` — título DEBIT de um pedido baixado (nasce no nó Contas a Pagar). */
-    | 'internal_transaction.paid';
+    | 'internal_transaction.paid'
+    // ── Financeiro (Torre do Financeiro, docs/planos/2026-10-16-torre-fluxo-financeiro.md) ──
+    // Valem para título de QUALQUER origem; `internal_transaction.paid` acima continua só de pedido.
+    /** `boletoService.aprovarECriarInvoice` — o boleto foi aprovado e o título nasceu dele (nasce no nó Boletos capturados). */
+    | 'boleto.approved'
+    /** `financialApprovalService` — a alçada do título a pagar fechou em APROVADO, inclusive a liberação abaixo do piso (nasce no nó Alçada). */
+    | 'payable.approved'
+    /** `payableService` (baixa manual), `boletoService.marcarPago` e a conciliação no app — título DEBIT baixado (nasce no nó Pagamento). */
+    | 'payable.settled'
+    /** `receivableService` (baixa manual) e a conciliação no app — título CREDIT recebido (nasce no nó Cobrança). */
+    | 'receivable.settled';
 
 /** Rótulo de cada evento para a tela do modelo ("Dispara quando…"). */
 export const PROCESS_EVENT_LABEL: Record<ProcessEventKey, string> = {
@@ -240,6 +250,10 @@ export const PROCESS_EVENT_LABEL: Record<ProcessEventKey, string> = {
     'purchase_receipt.divergence': 'Recebimento com divergência de item',
     'nfe.linked':                  'NF-e vinculada a título do pedido',
     'internal_transaction.paid':   'Título do pedido pago',
+    'boleto.approved':             'Boleto aprovado (título criado)',
+    'payable.approved':            'Título a pagar aprovado na alçada',
+    'payable.settled':             'Título a pagar baixado',
+    'receivable.settled':          'Título a receber recebido',
 };
 
 /** Cabeçalho do modelo que a tela cria/edita. */

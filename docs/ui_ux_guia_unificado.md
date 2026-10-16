@@ -3103,6 +3103,19 @@ dois prints de referência do usuário** (editor de workflow com biblioteca
 Vale para tela que **desenha um fluxo de nós ligados por linhas** dentro do app.
 Não é a Planta Inteligente (desenho técnico em `<canvas>`, §19.5) nem o Gantt.
 
+> ✅ **Fluxo novo usa o shell, não copia a página** (16/10/2026, Financeiro › Torre de
+> Controle — Fluxo Financeiro, `docs/planos/2026-10-16-torre-fluxo-financeiro.md`). A
+> página inteira — KPIs de costura, biblioteca, canvas, painel, drawers, editor de
+> gatilho — é `components/fluxo/ProcessFlowBoard.tsx`, configurada por
+> `FlowBoardConfig`: textos do cabeçalho, o serviço (`FlowService` de
+> `types/processFlow.ts`: `getSnapshot`/`getStageRecords`/`getStageProcesses`/`listProjects`),
+> o mapa de células (`utils/p2pLayout.ts`, um `CELULAS_*` por fluxo), os ícones por
+> etapa e as duas chaves de `usePersistedState`. A tela do fluxo é um wrapper de ~20
+> linhas (`P2PFlowBoard.tsx`, `FinanceiroFlowBoard.tsx`). O serviço reaproveita
+> `services/processFlowShared.ts` (contagem que não derruba o quadro, leitura do
+> motor, `montarArestas`). A biblioteca lista só os eventos que as arestas DO FLUXO
+> conduzem — o motor tem eventos de vários fluxos.
+
 ### 31.1 Anatomia
 
 ```
@@ -3117,15 +3130,18 @@ drawers (Sheet) · editor (Modal) · modal de organização   ← irmãos da gra
   `backgroundSize: ${20·escala}px`, `backgroundPosition: ${dx}px ${dy}px` — os
   pontos acompanham pan/zoom. Dentro, UMA camada `absolute` com
   `transform: translate(dx, dy) scale(escala)` e `transformOrigin: 0 0`.
-- **Pan/zoom** — `hooks/usePanZoom.ts`: escala 0,5–2 (passo ×1,2) ancorada no
+- **Pan/zoom** — `hooks/usePanZoom.ts`: escala 0,25–2 (passo ×1,2) ancorada no
   cursor; roda por `useRodaNaoPassiva` (o `onWheel` do React é passivo e rola a
   página junto); arraste no FUNDO = pan, com limiar de 4 px; nós, rótulos e
   controles levam `data-no-pan`. Controles no canto inferior esquerdo, empilhados
   num card `rounded-[6px] border bg-white`: `+`, `%`, `−`, enquadrar (`h-8 w-8`).
-- **Cartão-nó** (`P2PNodeCard`) — 240×148, `rounded-[10px] border bg-white
+- **Cartão-nó** (`P2PNodeCard`) — 240×184, `rounded-[10px] border bg-white
   shadow-sm`; selecionado = `ring-2 ring-blue-400`. Cabeçalho: ícone em bolha
-  `w-7 h-7 rounded-[6px] bg-indigo-50 text-indigo-600`, título `text-sm
-  font-semibold text-gray-800`, dono `text-xs text-gray-500` à direita. Corpo:
+  `w-7 h-7 rounded-[6px] bg-indigo-50 text-indigo-600` e título `text-sm
+  font-semibold text-gray-800` — **sem o dono** (16/10/2026: à direita ele
+  truncava o nome da etapa; vai no `title` do cartão, no drawer e no painel).
+  Altura 184, não 148: com a linha "Processos" o corpo tem quatro pares e, em
+  148, o último ficava escondido atrás do rodapé (código estava 208×148). Corpo:
   `<dl>` de pares `text-xs text-gray-500` → `text-sm` (valor principal
   `font-medium text-gray-800`; pendência `text-amber-600`; atraso `text-red-600`).
   Situação da entrada = **texto colorido (§8)**, nunca pílula. Rodapé: um botão
@@ -3167,14 +3183,17 @@ drawers (Sheet) · editor (Modal) · modal de organização   ← irmãos da gra
 > ✅ **Drawers e modais ficam FORA da camada com `transform`.** `Sheet` e `Modal`
 > são `fixed inset-0` sem portal (`ui/sheet.tsx`, `ui/modal.tsx`): dentro de um
 > ancestral transformado, `fixed` vira relativo a ele e o painel nasce preso e
-> escalado no canvas. No `P2PFlowBoard` eles são irmãos da grade.
+> escalado no canvas. No `ProcessFlowBoard` eles são irmãos da grade.
 > ✅ **Desktop × celular decidido por JS** (`window.matchMedia('(min-width:
 > 1024px)')`, desktop quando não existe), não por `hidden lg:block`: renderizar
 > canvas e lista ao mesmo tempo duplica o nome de cada nó no DOM. Abaixo de `lg`
 > o fluxo é uma lista vertical com a transição de entrada como linha de texto.
 > ✅ **Posições são fixas por id** (`utils/p2pLayout.ts`), não um algoritmo: são
 > poucas etapas conhecidas e o arranjo à mão lê melhor. Id desconhecido cai numa
-> grade de reserva — nunca some.
+> grade de reserva (abaixo da linha mais baixa do mapa) — nunca some. Mapa novo
+> leva teste de "nenhuma caixa de grupo encosta na de outro grupo nem cobre cartão
+> alheio" (`__tests__/financeiroFlowService.test.ts`): a caixa tem 20 px de respiro
+> e um grupo que termina na coluna N e outro que começa na mesma coluna se tocam.
 > ✅ Nó NÃO repete a nota da transição — ela mora no rótulo da aresta e no painel.
 > ✅ Títulos da biblioteca e do painel são `h3` — `h2` é do `SheetTitle`.
 > ❌ Nada de `reactflow`/`dagre`: o app não tem dependência de grafo e não precisa.

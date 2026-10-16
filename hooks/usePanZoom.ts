@@ -33,8 +33,10 @@ interface Opcoes {
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 export function usePanZoom<T extends HTMLElement = HTMLDivElement>(opcoes: Opcoes = {}) {
-  // 0,35 é o que deixa o fluxo inteiro (7 colunas) caber num canvas de ~700px ao enquadrar.
-  const min = opcoes.min ?? 0.35;
+  // 0,25: o fluxo inteiro (7 colunas de cartões de 240px, ~2.440px) cabe num
+  // canvas de ~700px ao enquadrar. Era 0,35 com cartões de 208px; com 240 o
+  // Enquadrar parava antes e a última etapa ficava fora da vista (16/10/2026).
+  const min = opcoes.min ?? 0.25;
   const max = opcoes.max ?? 2;
   const passo = opcoes.passo ?? 1.2;
   const limiar = opcoes.limiarArraste ?? 4;

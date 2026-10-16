@@ -3,8 +3,9 @@
  * sem Supabase, para o desenho ser testável e determinístico.
  *
  * O fluxo tem posições FIXAS por id (coluna × linha), não um algoritmo de
- * layout: são 8 etapas conhecidas, e um arranjo escolhido à mão lê melhor do
- * que qualquer heurística. Id que o serviço vier a inventar cai numa grade de
+ * layout: são poucas etapas conhecidas, e um arranjo escolhido à mão lê melhor
+ * do que qualquer heurística. Cada fluxo traz o seu mapa (`CELULAS_P2P`,
+ * `CELULAS_FINANCEIRO`). Id que o serviço vier a inventar cai numa grade de
  * reserva (abaixo das linhas conhecidas) em vez de sumir do desenho.
  */
 
@@ -20,8 +21,13 @@ export interface Ponto {
   y: number;
 }
 
-export const NODE_W = 208;
-export const NODE_H = 148;
+/**
+ * 240 × 184 (16/10/2026, conferido no navegador nas duas Torres): com 208 × 148
+ * o nome da etapa truncava ("Solicitaç…", "Boletos …") e, no cartão com a linha
+ * "Processos", a linha "Entrada" ficava escondida atrás do botão do rodapé.
+ */
+export const NODE_W = 240;
+export const NODE_H = 184;
 /** Vão entre colunas: cabe o rótulo curto da aresta ("Orquestrada · 3") sem invadir os cartões. */
 export const COL_GAP = 112;
 export const ROW_GAP = 32;
@@ -30,8 +36,11 @@ export const GROUP_PAD = 20;
 /** Margem do desenho inteiro (deixa a caixa do grupo da primeira coluna aparecer). */
 export const MARGEM = 32;
 
-/** Coluna × linha de cada etapa. A linha 0.5 = centrada entre as duas linhas. */
-const CELULA_DO_NO: Record<string, { col: number; linha: number }> = {
+/** Coluna × linha de uma etapa. A linha 0.5 = centrada entre duas linhas. */
+export type Celulas = Record<string, { col: number; linha: number }>;
+
+/** Torre P2P (Suprimentos): Recebimento ramifica em Estoque e Nota Fiscal. */
+export const CELULAS_P2P: Celulas = {
   solicitacao: { col: 0, linha: 0.5 },
   cotacao:     { col: 1, linha: 0.5 },
   pedido:      { col: 2, linha: 0.5 },
@@ -40,6 +49,27 @@ const CELULA_DO_NO: Record<string, { col: number; linha: number }> = {
   fiscal:      { col: 4, linha: 1 },
   financeiro:  { col: 5, linha: 0.5 },
   pagamento:   { col: 6, linha: 0.5 },
+};
+
+/**
+ * Torre do Financeiro: a pagar em cima (linhas 0–1, colunas 0–3), a receber
+ * embaixo (linha 2,5, colunas 0–2), Tesouraria à direita (Extrato na linha de
+ * baixo, Pago/Recebido no meio, onde as duas linhas convergem) e o fechamento
+ * no fim. Tesouraria começa na coluna 4 para a caixa dela não encostar na do
+ * "A pagar" (que vai até a coluna 3) — o teste `p2pLayout` trava isso.
+ */
+export const CELULAS_FINANCEIRO: Celulas = {
+  boletos:         { col: 0, linha: 0 },
+  origens_pagar:   { col: 0, linha: 1 },
+  a_pagar:         { col: 1, linha: 0.5 },
+  aprovacao:       { col: 2, linha: 0.5 },
+  pagamento:       { col: 3, linha: 0.5 },
+  origens_receber: { col: 0, linha: 2.5 },
+  a_receber:       { col: 1, linha: 2.5 },
+  cobranca:        { col: 2, linha: 2.5 },
+  extrato:         { col: 4, linha: 2.5 },
+  baixado:         { col: 5, linha: 1.5 },
+  fechamento:      { col: 6, linha: 1.5 },
 };
 
 const PASSO_X = NODE_W + COL_GAP;
@@ -51,15 +81,18 @@ function retDaCelula(col: number, linha: number): Ret {
 }
 
 /**
- * Posição de cada nó. Ids desconhecidos ganham uma linha de reserva (linha 2),
- * em colunas sucessivas — ficam visíveis e não se sobrepõem aos conhecidos.
+ * Posição de cada nó. Ids desconhecidos ganham uma linha de reserva (a primeira
+ * linha inteira abaixo da mais baixa do mapa), em colunas sucessivas — ficam
+ * visíveis e não se sobrepõem aos conhecidos.
  */
-export function posicoesDosNos(ids: readonly string[]): Record<string, Ret> {
+export function posicoesDosNos(ids: readonly string[], celulas: Celulas = CELULAS_P2P): Record<string, Ret> {
   const out: Record<string, Ret> = {};
+  const linhas = Object.values(celulas).map(c => c.linha);
+  const linhaDeReserva = linhas.length > 0 ? Math.ceil(Math.max(...linhas)) + 1 : 0;
   let reserva = 0;
   for (const id of ids) {
-    const c = CELULA_DO_NO[id];
-    out[id] = c ? retDaCelula(c.col, c.linha) : retDaCelula(reserva++, 2);
+    const c = celulas[id];
+    out[id] = c ? retDaCelula(c.col, c.linha) : retDaCelula(reserva++, linhaDeReserva);
   }
   return out;
 }

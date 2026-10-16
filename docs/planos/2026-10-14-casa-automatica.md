@@ -1768,3 +1768,33 @@ O teste da F14b ("o horizontal de cada rede, no forro, na cota da faixa dela") e
 faixa do forro; com a saída direta ela não sobe ao forro. Ele passou a aceitar, para a linha do ar, a saída na cota
 da evaporadora quando TODAS saem pela parede — e continua reprovando qualquer horizontal entre a face do forro e a
 laje fora da faixa, e qualquer encontro entre as quatro redes.
+
+### Conferência da F14d no app real (16/10/2026)
+
+Com a senha da conta de leitura (mandada pelo usuário em resposta ao pedido de senha + OK para a planta descartável),
+`c:/tmp/pwtest/conferencia-f14d.cjs` cria uma planta DESCARTÁVEL com o lote 12 × 30 e a FRENTE, gera pela tela, lança,
+lê o rascunho gravado e arquiva no fim (numa aba nova, se a página cair).
+
+**Achado:** na térrea do app (a casa da organização é outra que as do harness: catálogo e premissas do estudo), a
+evaporadora da suíte foi para a parede INTERNA, na cota antiga, e o dreno desse caminho antigo descia pela fachada em
+cima da janela (3 de 4 pela parede; dreno junto da linha 52 %; 2 drenos em vão). Causa: a CAMA encostada na parede
+externa ocupava a parede como se fosse um armário (sobravam 78 cm para uma evaporadora de 90 cm). Correção: na escolha
+da parede externa, o MOBILIÁRIO cujo topo fica abaixo da base da evaporadora (cama, sofá, mesa) não ocupa a parede;
+louça, bancada, armário e equipamento seguem ocupando (o vaso sanitário de 11/10). Teste novo em
+`blueprintPosicaoSplit.test.ts`, que reprova sem a correção.
+
+| App real (depois da correção) | Térrea | Sobrado |
+|---|---|---|
+| Linha do ar saindo direto pela parede | 4 de 4 | 4 de 4 |
+| Dreno junto da linha | 100 % | 100 % |
+| Dreno ou linha em porta ou janela | 0 | 0 |
+| Encontros linha × dreno | 0 | 0 |
+| Linha / dreno | 14,6 / 14,1 m | 12,2 / 12,5 m |
+
+**Queda da aba no sobrado:** a página caiu ("Page crashed") em 4 de 7 gerações do sobrado, sempre logo depois da etapa
+da água. O mesmo pedido no Node termina em 3,3 s (≤ 172 MB); o worker do DEV SERVER sozinho, sem o app, caiu 3 de 5; o
+worker EMPACOTADO de produção, no domínio, com o mesmo pedido, terminou 5 de 5. É o modo dev desta máquina (a mesma
+que derruba o Node e o `tsc`), não o app publicado.
+
+**Fica (anterior à F14d):** quando a evaporadora não acha parede externa, o caminho antigo leva o dreno pelo forro e
+a descida dele na fachada não desvia de janela (E5.4).

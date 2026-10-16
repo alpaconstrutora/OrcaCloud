@@ -167,6 +167,23 @@ describe('climatização E4.2/E4.3 · posição automática do split', () => {
     expect(p2.motivo).toMatch(/Sala \(nenhuma parede sem porta/);
   });
 
+  it('F14d (app real, 16/10/2026): na parede externa, a cama encostada não ocupa a parede — o armário alto ocupa', () => {
+    // Oeste e norte inteiras com um móvel encostado; a sul tem a janela. Com a CAMA (50 cm), o split fica na parede
+    // cheia (oeste ou norte); com o ARMÁRIO (2,20 m, acima da base da evaporadora), só sobra a sul, sobre a janela.
+    const com = (tipoId: 'CAMA_CASAL' | 'ARMARIO', familia: 'MOBILIARIO' | 'ARMARIO', alturaMm: number) => {
+      const { m, t } = casa();
+      const bloco = (x: number, y: number, larguraMm: number, profundidadeMm: number): Command => ({ type: 'AddComponente', levelId: t, tipoId, familia, at: point(x, y), larguraMm, profundidadeMm, alturaMm, rotacaoGraus: 0 });
+      const m2 = applyBatch(m, [bloco(575, 1500, 1000, 2850), bloco(2000, 3425, 3850, 1000)]).model;
+      const carga = cargaTermicaDoNivel(m2, hipClima, t);
+      const plano = planejarEquipamentosSplit(m2, selecaoDoNivel(m2, carga, hip, catalogo), carga, hip, { naParedeExterna: { topoMaximoMm: 2600 } });
+      return terminais(applyBatch(m2, plano.comandos).model).find((x) => x.tipoHidraulico === 'EVAPORADORA_HI_WALL')!;
+    };
+    const naCama = com('CAMA_CASAL', 'MOBILIARIO', 500);
+    expect(naCama.at.x < 300 || naCama.at.y > 3700, JSON.stringify(naCama.at)).toBe(true);
+    const noArmario = com('ARMARIO', 'ARMARIO', 2200);
+    expect(noArmario.at.y, JSON.stringify(noArmario.at)).toBeLessThan(300);
+  });
+
   it('o giro aponta as lâminas para dentro: normal interna +y (parede sul) → 180°; −y (norte) → 0°; +x (oeste) → 90°', () => {
     expect(giroParaSoprarParaDentro({ x: 0, y: 1 })).toBe(180);
     expect(giroParaSoprarParaDentro({ x: 0, y: -1 })).toBe(0);

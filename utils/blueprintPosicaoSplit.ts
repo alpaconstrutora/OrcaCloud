@@ -145,7 +145,7 @@ const ENCOSTADO_NA_PAREDE_MM = 300;
  * encostado na parede (louça, armário, cama…) — a evaporadora ia para cima do vaso
  * sanitário. Em mm ao longo do lado, já com a folga da evaporadora dos dois lados.
  */
-function ocupadosPorComponentes(model: BlueprintModel, lado: LadoDoAmbiente, levelId: ObjectId): { de: number; ate: number }[] {
+function ocupadosPorComponentes(model: BlueprintModel, lado: LadoDoAmbiente, levelId: ObjectId, baseDaEvaporadoraMm: number | null = null): { de: number; ate: number }[] {
   const L = comprimento(lado.a, lado.b);
   if (L === 0) return [];
   const ux = (lado.b.x - lado.a.x) / L;
@@ -153,6 +153,10 @@ function ocupadosPorComponentes(model: BlueprintModel, lado: LadoDoAmbiente, lev
   const saida: { de: number; ate: number }[] = [];
   for (const c of model.componentes ?? []) {
     if (c.levelId !== levelId || c.familia === 'CLIMATIZACAO') continue;
+    // F14d (conferência no app real, 16/10/2026): o MÓVEL baixo (cama, sofá, mesa) cujo topo fica abaixo da base da
+    // evaporadora não ocupa a parede — a cama encostada na parede externa da suíte mandava o split para a parede
+    // interna. Louça, bancada, armário e equipamento seguem ocupando (o vaso sanitário de 11/10).
+    if (baseDaEvaporadoraMm != null && c.familia === 'MOBILIARIO' && (c.cotaMm ?? 0) + c.alturaMm <= baseDaEvaporadoraMm) continue;
     const pts = contornoDoComponente(c);
     const ao = pts.map((p) => (p.x - lado.a.x) * ux + (p.y - lado.a.y) * uy);
     const perp = Math.min(...pts.map((p) => Math.abs((p.x - lado.a.x) * uy - (p.y - lado.a.y) * ux)));
@@ -269,7 +273,7 @@ function lugarNaParedeExterna(
     const L = comprimento(lado.a, lado.b);
     if (L < larguraMm) continue;
     // O útil (cantos e componentes), o CHEIO (fora das janelas, com folga) e as janelas com a cabeça de cada uma.
-    const util = semOcupados(trechosUtilizaveis(lado, walls, [], FOLGA_DA_EVAPORADORA_MM), ocupadosPorComponentes(model, lado, space.levelId));
+    const util = semOcupados(trechosUtilizaveis(lado, walls, [], FOLGA_DA_EVAPORADORA_MM), ocupadosPorComponentes(model, lado, space.levelId, cotaMm - alturaMm / 2));
     const cheio = trechosUtilizaveis(lado, walls, doLado, FOLGA_DA_SAIDA_AO_VAO_MM).filter((t) => t.ate - t.de >= FAIXA_DA_SAIDA_MM);
     const janelas = doLado.map((o) => {
       // O intervalo do vão ao longo do lado: o buraco entre os trechos livres sem ele (folga zero).

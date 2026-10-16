@@ -840,3 +840,14 @@ Resposta do usuário, literal:
 | P1 | `supabase/migrations/aplicar_20271015130000_email_capture_buscas.sql` | tabela `email_capture_buscas` (período, cursor, contadores, status); uma ativa por caixa; membro só lê | aplicada 2×; travas de migration verdes; anon não lê |
 | P2 | `supabase/functions/email-capture-sync/index.ts` | modo `periodo` (cria e avança a busca), `cancelar_busca`; o cron continua busca ativa; leitura por `SINCE de` + `BEFORE até+1`, cursor próprio — o `last_uid` da leitura automática não muda | 401 sem header; busca real de 1 dia na caixa da ALPA conclui sem boleto duplicado |
 | P3 | `services/emailCaptureService.ts` + `components/boletos/EmailCaptureBuscaSheet.tsx` + `EmailCapturaConfig.tsx` | botão "Buscar período" na caixa; painel com De/Até, progresso que avança sozinho enquanto aberto, cancelar; seção "Buscas por período" | harness + produção com login |
+
+### Estado — busca por período (15/10/2026)
+
+- [x] P1 `email_capture_buscas` aplicada 2×; travas de migration verdes (membro só lê, uma ativa por caixa).
+- [x] P2 sincronização publicada (`5e2df16e`, `b38c4c7c`): modos `periodo` e `cancelar_busca`; cron continua
+  busca ativa; 401 sem header, 200 no cron (um 503 passageiro logo após o deploy, 200 nas chamadas seguintes).
+  E-mail já lido passa a contar como "já existia" — a 1ª busca real mostrou tudo zerado e parecia não achar nada.
+- [x] P3 tela em produção com login (domínio em `b38c4c7`, CI verde): busca de 15/10 na caixa da ALPA concluída
+  pelo painel — 26 de 26 e-mails, 0 criados, 1 já existia (o boleto nº 1423), 0 falhas; nenhum boleto duplicado
+  (continua 1 boleto com origem e-mail). Datas padrão dos painéis em horário local (`1e057196`): `toISOString()`
+  dava o dia seguinte depois das 21h de Brasília.

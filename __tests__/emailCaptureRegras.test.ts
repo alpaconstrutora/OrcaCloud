@@ -14,6 +14,8 @@ import {
     deveProcessar,
     ignorarPdfSemBoleto,
     remetenteJaCadastrado,
+    MOTIVO_VENCIMENTO_DO_PADRAO,
+    MOTIVO_VALOR_DO_PADRAO,
     decidirDestino,
     proximaTentativa,
     pareceSenhaDePdf,
@@ -267,5 +269,29 @@ describe('remetente já cadastrado — para o histórico não oferecer "Monitora
         expect(remetenteJaCadastrado('a@falso-llcontabil.com.br', cadastrados)).toBe(false);
         expect(remetenteJaCadastrado(null, cadastrados)).toBe(false);
         expect(remetenteJaCadastrado('a@b.com', [])).toBe(false);
+    });
+});
+
+describe('decidirDestino com valores vindos do padrão do remetente (16/10/2026)', () => {
+    const base = {
+        modoPiloto: false,
+        remetente: { id: 's1', tipo: 'exato' as const, email: 'a@x.com', dominio: null, palavras_chave: [], importacao: 'automatica' as const, exigir_dmarc: false, ativo: true, supplier_id: 'f1' },
+        auth: { spf: 'pass' as const, dkim: 'pass' as const, dmarc: 'pass' as const, headerFrom: 'x.com', servidor: 'mx.google.com' },
+        dominioFrom: 'x.com', checksumValido: true, fornecedoresDoCnpj: ['f1'], cnpjConfianca: 90,
+    };
+    it('vencimento do padrão: continua em revisão, com o motivo próprio', () => {
+        const d = decidirDestino({ ...base, vencimento: null, doPadrao: { vencimento: true } });
+        expect(d.status).toBe('revisao');
+        expect(d.motivos).toContain(MOTIVO_VENCIMENTO_DO_PADRAO);
+        expect(d.motivos).not.toContain('Vencimento ausente ou implausível.');
+    });
+    it('valor do padrão: revisão com aviso, mesmo com tudo o mais certo', () => {
+        const d = decidirDestino({ ...base, vencimento: '2026-11-10', doPadrao: { valor: true } });
+        expect(d.status).toBe('revisao');
+        expect(d.motivos).toEqual([MOTIVO_VALOR_DO_PADRAO]);
+    });
+    it('sem doPadrao: igual a antes', () => {
+        expect(decidirDestino({ ...base, vencimento: '2026-11-10' }).status).toBe('rascunho');
+        expect(decidirDestino({ ...base, vencimento: null }).motivos).toContain('Vencimento ausente ou implausível.');
     });
 });

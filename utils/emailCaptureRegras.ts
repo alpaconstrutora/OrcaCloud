@@ -131,13 +131,177 @@ export function remetenteJaCadastrado(
     from: string | null | undefined,
     remetentes: Array<Pick<RemetenteMonitorado, 'tipo' | 'email' | 'dominio'>>,
 ): boolean {
+    return !!encontrarRemetenteCadastrado(from, remetentes);
+}
+
+/** O cadastro do endereço (ativo ou não, sem palavras-chave): e-mail exato ganha de domínio. */
+export function encontrarRemetenteCadastrado<T extends Pick<RemetenteMonitorado, 'tipo' | 'email' | 'dominio'>>(
+    from: string | null | undefined,
+    remetentes: T[],
+): T | null {
     const end = extrairEndereco(from);
-    if (!end) return false;
-    return remetentes.some(r => {
-        if (r.tipo === 'exato') return !!r.email && r.email.toLowerCase() === end.endereco;
+    if (!end) return null;
+    const exato = remetentes.find(r => r.tipo === 'exato' && !!r.email && r.email.toLowerCase() === end.endereco);
+    if (exato) return exato;
+    return remetentes.find(r => {
+        if (r.tipo !== 'dominio') return false;
         const d = (r.dominio ?? '').toLowerCase().replace(/^@/, '');
         return !!d && (end.dominio === d || end.dominio.endsWith('.' + d));
-    });
+    }) ?? null;
+}
+
+// ─── Padrões do boleto por remetente (16/10/2026) ───────────────────────────
+// Pedido: "Ao cadastrar o e-mail do remetente, criar campo para cadastrar também
+// os dados para cadastro do boleto (cards Cobrança, Quem recebe, Classificação e
+// Observações)". O padrão SÓ preenche o que o PDF não trouxe — nunca troca o que
+// veio do boleto. Plano: docs/planos/2026-10-16-captura-padroes-do-remetente.md.
+
+export interface PadroesRemetente {
+    padrao_descricao: string | null;
+    padrao_observacoes: string | null;
+    padrao_project_id: string | null;
+    padrao_cost_center_id: string | null;
+    padrao_plano_de_contas_id: string | null;
+    padrao_category_id: string | null;
+    padrao_dia_vencimento: number | null;
+    padrao_valor: number | null;
+    padrao_multa: number | null;
+    padrao_multa_percentual: number | null;
+    padrao_juros_dia: number | null;
+    padrao_juros_dia_tipo: 'valor' | 'percentual' | null;
+}
+
+/** As colunas de `boletos` que um padrão pode preencher. */
+export interface CamposParaPadroes {
+    vencimento: string | null;
+    valor: number | null;
+    multa: number | null;
+    multa_percentual: number | null;
+    juros_dia: number | null;
+    juros_dia_tipo: 'valor' | 'percentual' | null;
+    descricao: string | null;
+    observacoes: string | null;
+    project_id: string | null;
+    cost_center_id: string | null;
+    plano_de_contas_id: string | null;
+    category_id: string | null;
+}
+export type PatchDosPadroes = Partial<CamposParaPadroes>;
+
+export const MOTIVO_VENCIMENTO_DO_PADRAO = 'Vencimento pelo padrão do remetente (o PDF não trouxe): confira antes de aprovar.';
+export const MOTIVO_VALOR_DO_PADRAO = 'Valor pelo padrão do remetente (o PDF não trouxe): confira antes de aprovar.';
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Data do e-mail (ISO) → AAAA-MM-DD em Brasília. Sem data → `agora`. */
+export function dataLocalDoEmail(iso: string | null | undefined, agora: Date = new Date()): string {
+    const d = iso ? new Date(iso) : agora;
+    const ok = Number.isNaN(d.getTime()) ? agora : d;
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(ok);
+}
+
+/**
+ * Primeira data com o dia `dia` na `referencia` (AAAA-MM-DD) ou depois. Mês que
+ * não tem o dia (31 em abril, 30 em fevereiro) usa o último dia do mês.
+ */
+export function vencimentoPeloDia(dia: number, referencia: string): string {
+    const [a, m, d] = referencia.split('-').map(Number);
+    const ultimoDia = (ano: number, mes: number) => new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+    let ano = a, mes = m;
+    let alvo = Math.min(dia, ultimoDia(ano, mes));
+    if (alvo < d) {
+        mes += 1;
+        if (mes > 12) { mes = 1; ano += 1; }
+        alvo = Math.min(dia, ultimoDia(ano, mes));
+    }
+    return `${ano}-${pad2(mes)}-${pad2(alvo)}`;
+}
+
+const MARCADOR_MES = /\{\s*m[eéêEÉÊ]s\s*\}/giu;
+
+/** "{mês}" (ou {mes}, {MÊS}) → MM/AAAA do vencimento; sem vencimento, o mês da referência. */
+export function descricaoComMes(modelo: string, vencimento: string | null, referencia: string): string {
+    const base = vencimento ?? referencia;
+    const [ano, mes] = base.split('-');
+    return modelo.replace(MARCADOR_MES, `${mes}/${ano}`);
+}
+
+/** Inverso, para "Monitorar remetente": o MM/AAAA do vencimento vira "{mês}". */
+export function modeloDaDescricao(descricao: string, vencimento: string | null): string {
+    if (!vencimento) return descricao;
+    const [ano, mes] = vencimento.split('-');
+    return descricao.split(`${mes}/${ano}`).join('{mês}');
+}
+
+const textoVazio = (v: string | null | undefined) => v == null || String(v).trim() === '';
+const idVazio = (v: string | null | undefined) => v == null || v === '';
+
+/**
+ * Patch com o que o padrão do remetente preenche — SÓ campos vazios. O patch
+ * nunca tem `null`; `campos` diz o que veio do padrão (vai para a auditoria e
+ * para a releitura poder trocar pelo valor do PDF).
+ */
+export function aplicarPadroesDoRemetente(
+    boleto: CamposParaPadroes,
+    padroes: Partial<PadroesRemetente>,
+    dataEmail: string,
+): { patch: PatchDosPadroes; campos: Array<keyof CamposParaPadroes> } {
+    const patch: PatchDosPadroes = {};
+
+    if (!boleto.vencimento && padroes.padrao_dia_vencimento) {
+        patch.vencimento = vencimentoPeloDia(padroes.padrao_dia_vencimento, dataEmail);
+    }
+    if ((boleto.valor == null || Number(boleto.valor) === 0) && padroes.padrao_valor != null && Number(padroes.padrao_valor) > 0) {
+        patch.valor = Number(padroes.padrao_valor);
+    }
+    // Multa e juros são um GRUPO: se o PDF trouxe qualquer um, o padrão não entra.
+    if (boleto.multa == null && boleto.multa_percentual == null && boleto.juros_dia == null) {
+        if (padroes.padrao_multa != null) patch.multa = Number(padroes.padrao_multa);
+        if (padroes.padrao_multa_percentual != null) patch.multa_percentual = Number(padroes.padrao_multa_percentual);
+        if (padroes.padrao_juros_dia != null) {
+            patch.juros_dia = Number(padroes.padrao_juros_dia);
+            patch.juros_dia_tipo = padroes.padrao_juros_dia_tipo ?? 'valor';
+        }
+    }
+    if (textoVazio(boleto.descricao) && !textoVazio(padroes.padrao_descricao)) {
+        patch.descricao = descricaoComMes(padroes.padrao_descricao!.trim(), patch.vencimento ?? boleto.vencimento, dataEmail);
+    }
+    if (textoVazio(boleto.observacoes) && !textoVazio(padroes.padrao_observacoes)) {
+        patch.observacoes = padroes.padrao_observacoes!.trim();
+    }
+    if (idVazio(boleto.project_id) && padroes.padrao_project_id) patch.project_id = padroes.padrao_project_id;
+    if (idVazio(boleto.cost_center_id) && padroes.padrao_cost_center_id) patch.cost_center_id = padroes.padrao_cost_center_id;
+    if (idVazio(boleto.plano_de_contas_id) && padroes.padrao_plano_de_contas_id) patch.plano_de_contas_id = padroes.padrao_plano_de_contas_id;
+    if (idVazio(boleto.category_id) && padroes.padrao_category_id) patch.category_id = padroes.padrao_category_id;
+
+    return { patch, campos: Object.keys(patch) as Array<keyof CamposParaPadroes> };
+}
+
+const GRUPO_MULTA_JUROS: Array<keyof CamposParaPadroes> = ['multa', 'multa_percentual', 'juros_dia', 'juros_dia_tipo'];
+
+function normalizado(v: unknown): unknown {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') return v;
+    const s = String(v).trim();
+    return s !== '' && !Number.isNaN(Number(s)) && /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : s;
+}
+
+/**
+ * Dos campos que a captura gravou pelo padrão, quais o usuário NÃO alterou — a
+ * releitura do PDF (senha cadastrada depois) pode trocá-los pelo valor real.
+ * Multa e juros andam juntos: mexeu em um, o grupo é do usuário.
+ */
+export function camposDoPadraoIntactos(
+    atual: Partial<CamposParaPadroes>,
+    gravado: PatchDosPadroes,
+): Array<keyof CamposParaPadroes> {
+    const chaves = Object.keys(gravado) as Array<keyof CamposParaPadroes>;
+    const igual = (k: keyof CamposParaPadroes) => normalizado(atual[k]) === normalizado(gravado[k]);
+    const intactos = chaves.filter(k => !GRUPO_MULTA_JUROS.includes(k) && igual(k));
+    if (chaves.some(k => GRUPO_MULTA_JUROS.includes(k)) && GRUPO_MULTA_JUROS.every(igual)) {
+        intactos.push(...chaves.filter(k => GRUPO_MULTA_JUROS.includes(k)));
+    }
+    return intactos;
 }
 
 /** Modo "favoritos" só processa mensagem de remetente monitorado; os outros processam tudo. */
@@ -183,6 +347,9 @@ export interface EntradaDestino {
     fornecedoresDoCnpj: string[];
     /** Confiança do CNPJ lido (findBeneficiarioCnpj). */
     cnpjConfianca: number;
+    /** O que veio do PADRÃO do remetente, não do PDF (16/10/2026): nunca autoriza
+     *  importação automática — `vencimento` acima continua sendo só o do PDF. */
+    doPadrao?: { vencimento?: boolean; valor?: boolean };
 }
 
 export interface Destino {
@@ -221,7 +388,8 @@ export function decidirDestino(e: EntradaDestino): Destino {
     }
 
     if (!e.checksumValido) motivos.push('Linha digitável ausente ou com dígito verificador inválido.');
-    if (!e.vencimento) motivos.push('Vencimento ausente ou implausível.');
+    if (!e.vencimento) motivos.push(e.doPadrao?.vencimento ? MOTIVO_VENCIMENTO_DO_PADRAO : 'Vencimento ausente ou implausível.');
+    if (e.doPadrao?.valor) motivos.push(MOTIVO_VALOR_DO_PADRAO);
 
     if (e.cnpjConfianca < CONFIANCA_MINIMA_CNPJ) {
         motivos.push('CNPJ do beneficiário não identificado com segurança.');

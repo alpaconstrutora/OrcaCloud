@@ -141,7 +141,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F11 — saídas (ver "Registro da F11")
 - [x] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [x] F12c instalações (ver "Registro da F12c") · [x] F12d tela e provas (ver "Registro da F12d", com a conferência no app real)
 - [x] F13 — pressão da água por caso: caixa elevada ou pressurizador (ver "Registro da F13")
-- [ ] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [x] F14b forro e plenum (ver "Registro da F14b") · [ ] F14c vigas · [ ] F14d linha do ar e dreno; provas
+- [ ] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [x] F14b forro e plenum (ver "Registro da F14b") · [x] F14c furos, laje rebaixada e um tubo de queda por banheiro (ver "Registro da F14c"; f95aa616 no ar em 16/10) · [ ] F14d linha do ar e dreno; provas
 - [ ] F15 — a casa na unidade do Empreendimento
 
 ## Registro da F1 (14/10/2026)
@@ -1697,3 +1697,8 @@ dois cômodos é curta e os pilares estão nos encontros) e pelos furos vizinhos
 ⚠️ A máquina seguiu instável (segfault / "Fatal error" do V8 em parte das execuções; o pool `threads` do Vitest
 aguenta melhor que o `forks`) e deu UM resultado errado (o sobrado a 30° com 0 encontros e metade dos furos — a rodada
 seguinte, com o mesmo código, deu o resultado real): número que muda muito sem mudança de código se confirma de novo.
+
+**Publicado** em 16/10/2026: `f95aa616` na main (rebase sobre a main; antes, a PR de rascunho #10 rodou a CI — 967
+arquivos de teste, tipos e build; o 1º push pegou 2 erros de tipo que o `tsc` local, caindo por segfault, não mostrou).
+Check-run `ci` da main verde; o domínio serve um commit que contém este, com "Furos previstos para o calculista" no
+bundle. Harness: 103 conferências, nenhuma reprovada (térrea e sobrado, 0° e 30°).

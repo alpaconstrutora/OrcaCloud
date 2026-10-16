@@ -99,19 +99,27 @@ beforeEach(() => {
 });
 
 describe('quais status podem ser excluídos', () => {
-    it('rascunho e aprovado sim; pago e cancelado não', () => {
+    it('rascunho, revisão e aprovado sim; pago, programado e cancelado não (16/10/2026)', () => {
         expect(boletoService.podeExcluir('rascunho')).toBe(true);
+        expect(boletoService.podeExcluir('revisao')).toBe(true);
         expect(boletoService.podeExcluir('aprovado')).toBe(true);
         expect(boletoService.podeExcluir('pago')).toBe(false);
+        expect(boletoService.podeExcluir('programado')).toBe(false);
         expect(boletoService.podeExcluir('cancelado')).toBe(false);
     });
 
     /* A queixa que abriu tudo isto foi um ícone cinza que não dizia por quê.
-       Botão desligado sem motivo é o defeito; com motivo, é instrução. */
-    it('o botão desligado sempre tem motivo, e o do pago aponta o caminho', () => {
+       Botão desligado sem motivo é o defeito; com motivo, é instrução.
+       16/10/2026: a mensagem antiga chamava `revisao` e `programado` de
+       "cancelado" por engano — cada status tem seu motivo de verdade agora,
+       e `revisao` nem fica mais desligado. */
+    it('o botão desligado sempre tem motivo certo para o status', () => {
         expect(boletoService.motivoParaNaoExcluir('rascunho')).toBeNull();
+        expect(boletoService.motivoParaNaoExcluir('revisao')).toBeNull();
         expect(boletoService.motivoParaNaoExcluir('aprovado')).toBeNull();
         expect(boletoService.motivoParaNaoExcluir('pago')).toMatch(/reverta para rascunho/i);
+        expect(boletoService.motivoParaNaoExcluir('programado')).toMatch(/programado/i);
+        expect(boletoService.motivoParaNaoExcluir('programado')).not.toMatch(/cancelado/i);
         expect(boletoService.motivoParaNaoExcluir('cancelado')).toMatch(/histórico/i);
     });
 
@@ -119,6 +127,23 @@ describe('quais status podem ser excluídos', () => {
         cenario('cancelado');
         await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/cancelado fica no histórico/i);
         expect(db.boletos).toHaveLength(1);
+    });
+
+    it('recusa programado com mensagem própria (não "cancelado"), sem apagar nada', async () => {
+        cenario('programado');
+        await expect(boletoService.excluir('b1', ORG)).rejects.toThrow(/programado/i);
+        expect(db.boletos).toHaveLength(1);
+    });
+});
+
+describe('excluir em revisão', () => {
+    it('apaga o boleto e o arquivo, e não mexe no financeiro (nunca teve invoice_id — 0 de 62 no banco em 16/10)', async () => {
+        cenario('revisao', null);
+        db.boletos[0].invoice_id = null;
+        db.invoices = [];
+        await boletoService.excluir('b1', ORG);
+        expect(db.boletos).toHaveLength(0);
+        expect(storageRemovidos).toEqual([['org/b1.pdf']]);
     });
 });
 

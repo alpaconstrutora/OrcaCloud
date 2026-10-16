@@ -706,13 +706,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     }
 
     async function handleExcluirBoleto(b: Boleto) {
-        if (!boletoService.podeExcluir(b.status)) {
-            notify(
-                b.status === 'pago'
-                    ? 'Boleto pago não é excluído direto: abra o boleto e reverta para rascunho primeiro.'
-                    : 'Boleto cancelado fica no histórico e não pode ser excluído.',
-                'error',
-            );
+        // Mesma frase do ícone desabilitado na tabela (motivoParaNaoExcluir) —
+        // fonte única, em vez de repetir (e divergir) o texto aqui (16/10/2026).
+        const motivo = boletoService.motivoParaNaoExcluir(b.status);
+        if (motivo) {
+            notify(motivo, 'error');
             return;
         }
         const ok = await confirm({

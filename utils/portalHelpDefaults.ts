@@ -913,7 +913,7 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
     porAba: {
       analytics: tourDe('analytics', [
         { key: 'corretor.tour.analytics.kpis', anchor: 'analytics-kpis', section: 'analytics', title: 'Seus números', body: 'Unidades disponíveis, propostas enviadas e aprovadas e a comissão acumulada.' },
-        { key: 'corretor.tour.analytics.graficos', anchor: 'analytics-graficos', section: 'analytics', title: 'Evolução', body: 'Gráficos de vendas e propostas para acompanhar o seu desempenho.' },
+        // 'corretor.tour.analytics.graficos' saiu em 16/10/2026: os gráficos eram demonstração (D9 do plano 2026-10-16-portal-corretor-mobile).
       ]),
       estoque: tourDe('estoque', [
         { key: 'corretor.tour.estoque.finalidade', anchor: 'estoque-finalidade', section: 'estoque', title: 'Venda ou locação', body: 'Filtre as unidades pela finalidade.' },

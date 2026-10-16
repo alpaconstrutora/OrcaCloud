@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Building2, Clock, Lock, CheckCircle2, AlertTriangle, Eye, MapPin, Sun, Edit, Tag, FileSignature, Wallet } from 'lucide-react';
+import { Building2, Check, Clock, Lock, CheckCircle2, AlertTriangle, Eye, MapPin, Plus, Sun, Edit, Tag, FileSignature, Wallet } from 'lucide-react';
 import type { Property, PropertyDeal, TowerMatrixConfig, GridCellConfig } from '../../types';
 
 interface PropertyUnitMapProps {
@@ -20,6 +20,13 @@ interface PropertyUnitMapProps {
     renderExtraActions?: (unit: Property) => React.ReactNode;
     showDetailsPanel?: boolean;
     mode?: 'broker' | 'admin';
+    /**
+     * Celular (BrokerPortalMobile): controles em uma linha, coluna de pavimento
+     * estreita, densidade sempre compacta, e o toque na unidade abre uma FOLHA com
+     * os dados e as ações em vez de saltar direto para o simulador.
+     * Plano: docs/planos/2026-10-16-portal-corretor-mobile.md (F2, item 5).
+     */
+    compacto?: boolean;
 }
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label: string; icon: React.ElementType }> = {
@@ -30,6 +37,10 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string;
     'EXCHANGED': { color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200', label: 'Permutado', icon: Tag },
     'MAINTENANCE': { color: 'text-gray-500', bg: 'bg-gray-50', border: 'border-gray-200', label: 'Bloqueado', icon: AlertTriangle },
 };
+
+// O nome da torre costuma já vir com a palavra ("TORRE B"): sem isto o
+// espelho escrevia "Torre TORRE B".
+const rotuloTorre = (nome: string) => (/^\s*torre\b/i.test(nome) ? nome : `Torre ${nome}`);
 
 const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({ 
     units,
@@ -42,7 +53,8 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
     onEditUnit,
     renderExtraActions,
     showDetailsPanel = true,
-    mode = 'broker'
+    mode = 'broker',
+    compacto = false,
 }) => {
     const [selectedBlock, setSelectedBlock] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<string | 'all'>('all');
@@ -57,7 +69,8 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
         setDensity(value);
         if (typeof window !== 'undefined') localStorage.setItem('propertyUnitMap.density', value);
     };
-    const isCompact = density === 'compacto';
+    // No celular a densidade é sempre compacta (a "Visão: Completa" não cabe).
+    const isCompact = compacto || density === 'compacto';
 
     // Dicionário de Status do Negócio
     const DEAL_STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; icon: React.ElementType }> = {
@@ -99,21 +112,26 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
 
     const handleUnitClick = (unit: Property) => {
         setSelectedUnit(unit);
+        // No celular o toque só abre a folha da unidade; a ação é escolhida lá.
+        if (compacto) return;
         if (onSelectUnit) onSelectUnit(unit);
     };
 
     const formatPrice = (value: number) =>
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 
-    const renderUnit = (unit: Property) => {
-        const unitDealsMatched = deals.filter(d => 
-            d && d.property_id && unit && unit.id && 
+    // Status que o espelho PINTA: o da unidade, sobreposto pelo negócio ativo
+    // (proposta enviada = reservado, aprovada = vendido/alugado...). O quadrinho
+    // e a folha do celular precisam dizer a mesma coisa.
+    const statusDaUnidade = (unit: Property) => {
+        const unitDealsMatched = deals.filter(d =>
+            d && d.property_id && unit && unit.id &&
             String(d.property_id).toLowerCase() === String(unit.id).toLowerCase()
         );
         const activeDeal = unitDealsMatched.find(d => d.status !== 'CANCELLED') || unitDealsMatched[0];
-        
+
         let cfg = STATUS_CONFIG[unit.status] || STATUS_CONFIG['AVAILABLE'];
-        
+
         if (activeDeal) {
             const status = activeDeal.status as string;
             const type = activeDeal.type as string;
@@ -125,6 +143,11 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                 cfg = STATUS_CONFIG['MAINTENANCE'];
             }
         }
+        return { cfg, activeDeal };
+    };
+
+    const renderUnit = (unit: Property) => {
+        const { cfg, activeDeal } = statusDaUnidade(unit);
 
         const Icon = cfg.icon;
         const isSelected = selectedUnit?.id === unit.id;
@@ -152,8 +175,11 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                     className={`relative flex flex-col items-center justify-center p-1.5 rounded-lg border transition-all min-w-[64px] ${cfg.bg} ${isInCart ? 'border-indigo-500 ring-2 ring-indigo-400' : cfg.border} ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-1 scale-105' : ''} cursor-pointer hover:scale-105 hover:shadow-md focus:outline-none`}
                 >
                     <span className={`text-xs font-black leading-none ${cfg.color}`}>{unit.name || unit.number || 'N/A'}</span>
-                    <span className="text-[9px] font-bold text-gray-400 leading-none mt-0.5">{formatPrice(unitPrice)}</span>
-                    {onToggleUnit && (
+                    {/* R$ 0 é "sem preço", não preço — no celular some do quadrinho. */}
+                    {!(compacto && !unitPrice) && (
+                        <span className="text-[9px] font-bold text-gray-400 leading-none mt-0.5">{formatPrice(unitPrice)}</span>
+                    )}
+                    {onToggleUnit && !compacto && (
                         <button
                             onClick={(e) => { e.stopPropagation(); onToggleUnit(unit); }}
                             title={isInCart ? 'Remover da proposta' : 'Adicionar à proposta'}
@@ -288,11 +314,11 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
 
     return (
         <div className="space-y-6">
-            {/* Status Summary Bar */}
-            <div className="flex flex-wrap gap-3">
+            {/* Status Summary Bar — no celular, uma faixa rolável (não quebra em 2–3 linhas) */}
+            <div className={compacto ? 'flex gap-2 overflow-x-auto -mx-4 px-4 pb-1 scrollbar-hide' : 'flex flex-wrap gap-3'}>
                 <button
                     onClick={() => setStatusFilter('all')}
-                    className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-wider border transition-all ${statusFilter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
+                    className={`${compacto ? 'shrink-0 whitespace-nowrap px-3 py-1.5 text-xs' : 'px-4 py-2 text-button'} rounded-xl font-black uppercase tracking-wider border transition-all ${statusFilter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
                 >
                     Todas ({units.length})
                 </button>
@@ -304,7 +330,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                         <button
                             key={status}
                             onClick={() => setStatusFilter(status)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${statusFilter === status ? `${cfg.bg} ${cfg.color} ${cfg.border} ring-2 ring-offset-1` : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}
+                            className={`flex items-center gap-2 ${compacto ? 'shrink-0 whitespace-nowrap px-3 py-1.5' : 'px-4 py-2'} rounded-xl text-xs font-bold border transition-all ${statusFilter === status ? `${cfg.bg} ${cfg.color} ${cfg.border} ring-2 ring-offset-1` : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}
                         >
                             <Icon className="w-3.5 h-3.5" />
                             {cfg.label} ({count})
@@ -313,7 +339,35 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                 })}
             </div>
 
-            {/* View Customizer Bar */}
+            {/* View Customizer Bar — no celular: "Agrupar" curto + torre em lista, sem "Visão" */}
+            {compacto ? (
+                <div className="flex items-center gap-2">
+                    <div className="flex bg-gray-100 p-1 rounded-xl" role="group" aria-label="Agrupar unidades por">
+                        {([['position', 'Posição'], ['orientation', 'Sol']] as const).map(([modo, rotulo]) => (
+                            <button
+                                key={modo}
+                                type="button"
+                                onClick={() => setGroupingMode(modo)}
+                                aria-pressed={groupingMode === modo}
+                                className={`px-3 h-8 rounded-lg text-sm font-medium ${groupingMode === modo ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'}`}
+                            >
+                                {rotulo}
+                            </button>
+                        ))}
+                    </div>
+                    {blocks.length > 1 && (
+                        <select
+                            value={selectedBlock}
+                            onChange={e => setSelectedBlock(e.target.value)}
+                            aria-label="Torre"
+                            className="flex-1 min-w-0 h-10 px-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        >
+                            <option value="all">Todas as torres</option>
+                            {blocks.map(b => <option key={b} value={b}>{rotuloTorre(b)}</option>)}
+                        </select>
+                    )}
+                </div>
+            ) : (
             <div className="flex items-center justify-between gap-4 p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2">
@@ -377,16 +431,24 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                     </div>
                 )}
             </div>
+            )}
 
             {/* Floor Grid */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="divide-y divide-gray-100">
                     {floors.map(([floor, floorUnits]) => (
                         <div key={floor} className="flex items-stretch">
-                            <div className="w-20 shrink-0 flex items-center justify-center bg-gray-50 border-r border-gray-100">
+                            <div className={`${compacto ? 'w-10' : 'w-20'} shrink-0 flex items-center justify-center bg-gray-50 border-r border-gray-100`}>
+                                {compacto ? (
+                                    // Pavimento 0 é o térreo (ver memória "Pavimento 0 = TÉRREO").
+                                    <span className="text-xs font-black text-gray-500 leading-tight text-center" title={floor === 0 ? 'Térreo' : `${floor}º pavimento`}>
+                                        {floor === 0 ? 'T' : `${floor}º`}
+                                    </span>
+                                ) : (
                                 <span className="text-xs font-black text-gray-400 uppercase tracking-widest leading-tight text-center px-1">
                                     {floor}º<br/>Pavimento
                                 </span>
+                                )}
                             </div>
                             <div className={`flex-1 flex flex-wrap ${isCompact ? 'gap-1.5 p-2' : 'gap-2 p-3'}`}>
                                 {(() => {
@@ -406,14 +468,14 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
 
                                     if (matrixConfig && matrixConfig.length > 0) {
                                         return (
-                                            <div className="flex-1 flex flex-col items-center p-6 bg-slate-50/50 rounded-2xl border border-slate-100/50 overflow-x-auto relative shadow-inner md:px-12 w-full">
+                                            <div className={`flex-1 flex flex-col items-center bg-slate-50/50 rounded-2xl border border-slate-100/50 overflow-x-auto relative shadow-inner w-full ${compacto ? 'p-2' : 'p-6 md:px-12'}`}>
                                                 {(() => {
                                                     const sunLabels: Record<string, string> = { 'NORTH': 'Norte', 'SOUTH': 'Sul', 'EAST': 'Leste', 'WEST': 'Oeste' };
                                                     const floorOrientations = [...new Set(floorUnits.map(u => u.sun_orientation).filter(Boolean))];
                                                     
                                                     return connectedTowers && (
                                                         <div className="flex flex-col items-center gap-1 mb-4">
-                                                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] border border-slate-200 bg-white px-4 py-1 rounded-full shadow-sm">
+                                                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] border border-slate-200 bg-white px-4 py-1 rounded-md shadow-sm">
                                                                 {connectionDirection === 'HORIZONTAL' ? 'Lado A (Lateral)' : 'Lado A (Frente Rua)'}
                                                             </div>
                                                             {floorOrientations.length > 0 && (
@@ -432,7 +494,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                         
                                                         return connectedTowers && connectionDirection === 'HORIZONTAL' && (
                                                             <div className="-rotate-90 absolute -left-20 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-20">
-                                                                <div className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] whitespace-nowrap border border-blue-200 bg-white px-3 py-0.5 rounded-full shadow-sm">
+                                                                <div className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] whitespace-nowrap border border-blue-200 bg-white px-3 py-0.5 rounded-md shadow-sm">
                                                                     Frente (Rua)
                                                                 </div>
                                                                 {frontOrientations.length > 0 && (
@@ -458,7 +520,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                 )}
                                                                 <div className={`flex flex-col relative z-0 items-center bg-white p-4 rounded-xl border border-dashed border-gray-200 shadow-sm mx-1 my-1 ${!connectedTowers ? 'mt-4 w-full' : ''}`}>
                                                                     <div className="absolute -top-3 left-6 px-3 bg-white border border-blue-200 rounded-full shadow-sm">
-                                                                        <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">Torre {t.name}</span>
+                                                                        <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">{rotuloTorre(t.name)}</span>
                                                                     </div>
                                                                     
                                                                     <div 
@@ -501,7 +563,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                         
                                                         return connectedTowers && connectionDirection === 'HORIZONTAL' && (
                                                             <div className="rotate-90 absolute -right-20 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-20">
-                                                                <div className="text-[9px] font-black text-orange-400 uppercase tracking-[0.2em] whitespace-nowrap border border-orange-200 bg-white px-3 py-0.5 rounded-full shadow-sm">
+                                                                <div className="text-[9px] font-black text-orange-400 uppercase tracking-[0.2em] whitespace-nowrap border border-orange-200 bg-white px-3 py-0.5 rounded-md shadow-sm">
                                                                     Fundos
                                                                 </div>
                                                                 {backOrientations.length > 0 && (
@@ -519,7 +581,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                 const leftOrientations = [...new Set(floorUnits.filter(u => u.position_type === 'LATERAL' && u.specs?.grid_x === 0).map(u => u.sun_orientation).filter(Boolean))];
                                                                 return (
                                                                     <div className="-rotate-90 absolute -left-20 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-20">
-                                                                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap border border-slate-200 bg-white px-3 py-0.5 rounded-full shadow-sm">Lateral (Lado D)</div>
+                                                                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap border border-slate-200 bg-white px-3 py-0.5 rounded-md shadow-sm">Lateral (Lado D)</div>
                                                                         {leftOrientations.length > 0 && (
                                                                             <div className="text-[8px] font-bold text-blue-400 uppercase tracking-tighter whitespace-nowrap">
                                                                                 {leftOrientations.map(o => o ? (sunLabels[o] || o) : '').filter(Boolean).join('/')}
@@ -533,7 +595,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                 const rightOrientations = [...new Set(floorUnits.filter(u => u.position_type === 'LATERAL' && u.specs?.grid_x !== 0).map(u => u.sun_orientation).filter(Boolean))];
                                                                 return (
                                                                     <div className="rotate-90 absolute -right-20 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 z-20">
-                                                                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap border border-slate-200 bg-white px-3 py-0.5 rounded-full shadow-sm">Lateral (Lado B)</div>
+                                                                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap border border-slate-200 bg-white px-3 py-0.5 rounded-md shadow-sm">Lateral (Lado B)</div>
                                                                         {rightOrientations.length > 0 && (
                                                                             <div className="text-[8px] font-bold text-blue-400 uppercase tracking-tighter whitespace-nowrap">
                                                                                 {rightOrientations.map(o => o ? (sunLabels[o] || o) : '').filter(Boolean).join('/')}
@@ -553,7 +615,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                     
                                                     return connectedTowers && (
                                                         <div className="flex flex-col items-center gap-1 mt-4">
-                                                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] border border-slate-200 bg-white px-4 py-1 rounded-full shadow-sm">
+                                                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] border border-slate-200 bg-white px-4 py-1 rounded-md shadow-sm">
                                                                 {connectionDirection === 'HORIZONTAL' ? 'Lado C (Lateral)' : 'Lado C (Fundos)'}
                                                             </div>
                                                             {bottomOrientations.length > 0 && (
@@ -577,9 +639,9 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                 if (blockUnits.length === 0) return <div key={blockName} className="hidden md:block" />;
 
                                                 return (
-                                                    <div key={blockName} className="p-3 border-2 border-dashed border-blue-200 rounded-[2rem] relative mt-2 min-h-[96px] flex flex-col gap-3">
+                                                    <div key={blockName} className={`border-2 border-dashed border-blue-200 relative mt-2 flex flex-col ${compacto ? 'p-2 pt-4 rounded-xl gap-2' : 'p-3 rounded-[2rem] min-h-[96px] gap-3'}`}>
                                                         <div className="absolute -top-3 left-6 px-3 bg-white border border-blue-200 rounded-full shadow-sm">
-                                                            <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">Torre {blockName}</span>
+                                                            <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">{rotuloTorre(blockName)}</span>
                                                         </div>
                                                         
                                                         {(() => {
@@ -643,8 +705,8 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                 const orientationLabel = orientationsForLabel.length > 0 ? ` ${orientationsForLabel.map(o => orientationLabels[String(o).toUpperCase()] || o).join('/')}` : '';
 
                                                                 return (
-                                                                    <div key={String(key)} className="flex items-center gap-4">
-                                                                        <div className="w-16 shrink-0 flex flex-col items-end">
+                                                                    <div key={String(key)} className={`flex items-center ${compacto ? 'gap-2' : 'gap-4'}`}>
+                                                                        <div className={`${compacto ? 'w-12' : 'w-16'} shrink-0 flex flex-col items-end`}>
                                                                             <span className="text-xs font-black text-gray-400 uppercase tracking-tighter text-right leading-tight">
                                                                                 {rowLabel}
                                                                                 {groupingMode === 'position' && orientationLabel && (
@@ -678,8 +740,91 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                 </div>
             </div>
 
+            {/* Folha da unidade — celular. `fixed` sem portal: dentro do iframe da
+                prévia ela fica no telefone. Ações só para unidade disponível (mesma
+                regra do painel de desktop); fora disso, a folha diz por quê. */}
+            {compacto && selectedUnit && (() => {
+                const u = selectedUnit;
+                const { cfg, activeDeal } = statusDaUnidade(u);
+                const disponivel = cfg === STATUS_CONFIG['AVAILABLE'];
+                const preco = activeDeal?.value || u.current_price || u.price || 0;
+                const naCesta = !!selectedUnitIds?.includes(u.id);
+                const dorm = u.bedrooms || u.specs?.bedrooms;
+                const vagas = u.parking_spaces || u.specs?.parkingSpaces;
+                const area = u.private_area || u.area;
+                const ficha = [
+                    area ? `${area} m²` : null,
+                    dorm ? `${dorm} dorm.` : null,
+                    vagas ? `${vagas} ${vagas === 1 ? 'vaga' : 'vagas'}` : null,
+                    u.block ? rotuloTorre(u.block) : null,
+                    u.floor != null ? (u.floor === 0 ? 'Térreo' : `${u.floor}º pav.`) : null,
+                ].filter(Boolean);
+                const fechar = () => setSelectedUnit(null);
+                return (
+                    <div className="fixed inset-0 z-40 bg-black/40 flex items-end" onClick={fechar}>
+                        <div
+                            role="dialog"
+                            aria-label={`Unidade ${u.name || u.number}`}
+                            className="w-full bg-white rounded-t-3xl p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-4"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto" />
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    {/* mesmo rótulo do quadrinho (nome antes do número) */}
+                                    <h3 className="text-lg font-bold text-gray-900 truncate">Unidade {u.name || u.number}</h3>
+                                    {ficha.length > 0 && <p className="text-xs text-gray-500 mt-0.5">{ficha.join(' · ')}</p>}
+                                </div>
+                                <span className={`text-sm shrink-0 ${cfg.color}`}>{cfg.label}</span>
+                            </div>
+                            <p className={preco > 0 ? 'text-2xl font-bold text-gray-900' : 'text-sm text-gray-500'}>
+                                {preco > 0 ? formatPrice(preco) : 'Preço não informado'}
+                            </p>
+                            {disponivel && mode === 'broker' ? (
+                                <div className="space-y-2">
+                                    {onSelectUnit && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { fechar(); onSelectUnit(u); }}
+                                            className="w-full h-11 rounded-xl bg-indigo-600 text-white text-sm font-semibold active:bg-indigo-700"
+                                        >
+                                            Fazer proposta
+                                        </button>
+                                    )}
+                                    <div className="flex gap-2">
+                                        {onToggleUnit && (
+                                            <button
+                                                type="button"
+                                                onClick={() => { onToggleUnit(u); fechar(); }}
+                                                aria-pressed={naCesta}
+                                                className={`flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl border text-sm font-medium ${naCesta ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-700 active:bg-gray-50'}`}
+                                            >
+                                                {naCesta ? <><Check className="w-4 h-4" /> Tirar da proposta</> : <><Plus className="w-4 h-4" /> Adicionar</>}
+                                            </button>
+                                        )}
+                                        {onReserveUnit && (
+                                            <button
+                                                type="button"
+                                                onClick={() => { fechar(); onReserveUnit(u); }}
+                                                className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 active:bg-gray-50"
+                                            >
+                                                <Clock className="w-4 h-4" /> Reservar 48h
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-gray-600 bg-gray-50 rounded-xl px-3 py-2.5">
+                                    {cfg.label}: esta unidade não aceita proposta agora.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Unit Detail Panel */}
-            {showDetailsPanel && selectedUnit && (
+            {!compacto && showDetailsPanel && selectedUnit && (
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-xl p-6 animate-in slide-in-from-bottom-4 duration-300">
                     <div className="flex items-start justify-between mb-6">
                         <div>

@@ -22,6 +22,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const predio = { id: 'b-1', type: 'BUILDING', name: '010 - Galeria Altavista', address: 'Rua Angelo Bernardo Faccio, 98', status: 'AVAILABLE' };
 const ap101 = { id: 'u-101', type: 'APARTMENT', name: 'Apto 101', number: '101', parent_id: 'b-1', status: 'AVAILABLE', current_price: 812000 };
 const ap102 = { id: 'u-102', type: 'APARTMENT', name: 'Apto 102', number: '102', parent_id: 'b-1', status: 'SOLD', current_price: 790000 };
+const ap104 = { id: 'u-104', type: 'APARTMENT', name: 'Apto 104', number: '104', parent_id: 'b-1', status: 'AVAILABLE', current_price: 650000 };
 const loja = { id: 'u-103', type: 'STORE', name: 'Loja 103', number: '103', parent_id: 'b-1', status: 'RENTED', current_price: 0 };
 const item = (u: typeof ap101, extra: Record<string, unknown> = {}) => ({
     id: `i-${u.id}`, price_table_id: 't-1', property_id: u.id, price: u.current_price, current_price: u.current_price,
@@ -36,17 +37,18 @@ const proposta = {
 vi.mock('../../services/brokerPortalService', () => ({
     brokerPortalService: {
         // como a RPC real: sem current_price e com price 0 — o preço está na TABELA
-        getUnitsByToken: vi.fn(async () => [predio, ap101, ap102, loja].map(u => ({
+        getUnitsByToken: vi.fn(async () => [predio, ap101, ap102, ap104, loja].map(u => ({
             ...Object.fromEntries(Object.entries(u).filter(([k]) => k !== 'current_price')), price: 0,
         }))),
         getProposalsByToken: vi.fn(async () => [proposta]),
         getPriceColumnsByToken: vi.fn(async () => null),
         getPriceTableByToken: vi.fn(async () => ({
             table: { id: 't-1', version_label: 'v3', effective_date: '2026-10-01', status: 'ACTIVE', activated_at: '' },
-            items: [item(ap101), item(ap102), item(loja)],
+            items: [item(ap101), item(ap102), item(ap104), item(loja)],
         })),
         getRentalPriceTableByToken: vi.fn(async () => ({ table: null, items: [] })),
         getSalesPlansByToken: vi.fn(async () => []),
+        getMaterialsByToken: vi.fn(async () => [{ id: 'm-1', title: 'Book do Garden', type: 'BOOK', file_url: 'https://exemplo/book.pdf', version: 2, views_count: 0 }]),
         validateSalesSimulationByToken: vi.fn(async () => null),
     },
 }));
@@ -81,11 +83,12 @@ const barra = () => screen.getByRole('navigation', { name: 'Seções do portal' 
 describe('BrokerPortalMobile', () => {
     beforeEach(() => { localStorage.clear(); });
 
-    it('só as abas habilitadas pela engrenagem; até 5 cabem sem "Mais" (o caso do print)', async () => {
+    it('só as abas habilitadas pela engrenagem, sem as de demonstração; cabem sem "Mais" (o caso do print)', async () => {
         montar(['empreendimentos', 'propostas', 'comissoes', 'materiais', 'chat']);
         expect(screen.getByRole('heading', { level: 1, name: 'Olá, Geleia' })).toBeInTheDocument();
         const botoes = within(barra()).getAllByRole('button');
-        expect(botoes.map(b => b.textContent)).toEqual(['Empreend.', 'Propostas', 'Comissões', 'Materiais', 'Chat']);
+        // Chat estava ligado para o Geleia, mas é demonstração (D9): sai
+        expect(botoes.map(b => b.textContent)).toEqual(['Empreend.', 'Propostas', 'Comissões', 'Materiais']);
         expect(within(barra()).getByRole('button', { name: /empreend/i })).toHaveAttribute('aria-current', 'page');
         expect(within(barra()).queryByRole('button', { name: /mais/i })).toBeNull();
         expect(await screen.findByText('010 - Galeria Altavista')).toBeInTheDocument();
@@ -99,7 +102,8 @@ describe('BrokerPortalMobile', () => {
         await user.click(within(barra()).getByRole('button', { name: /mais/i }));
         const folha = screen.getByRole('dialog', { name: 'Mais seções' });
         const rotulos = within(folha).getAllByRole('button').map(b => b.textContent);
-        expect(rotulos).toEqual(['Leads', 'Materiais', 'Chat', 'Agenda', 'Ranking', 'Treinamento', 'Analytics']);
+        expect(rotulos).toEqual(['Materiais', 'Analytics']);
+        for (const demo of ['Leads', 'Chat', 'Ranking', 'Agenda', 'Treinamento']) expect(screen.queryByText(demo)).toBeNull();
         expect(screen.queryByText('Saúde')).toBeNull();
     });
 
@@ -108,8 +112,8 @@ describe('BrokerPortalMobile', () => {
         const { container } = montar(['empreendimentos', 'propostas']);
         const cartao = await screen.findByRole('button', { name: /010 - Galeria Altavista/ });
         expect(within(cartao).getByText('Rua Angelo Bernardo Faccio, 98')).toBeInTheDocument();
-        expect(cartao.textContent).toContain('1 disponível');
-        expect(cartao.textContent).toContain('de 3');
+        expect(cartao.textContent).toContain('2 disponíveis');
+        expect(cartao.textContent).toContain('de 4');
         expect(container.querySelector('table')).toBeNull();
 
         await user.click(cartao);
@@ -147,6 +151,42 @@ describe('BrokerPortalMobile', () => {
         await user.click(await screen.findByRole('button', { name: 'Voltar sem enviar a proposta' }));
         expect(container.querySelector('[data-tour="cesta-barra"]')).toBeNull();
         expect(within(barra()).getByRole('button', { name: /empreend/i })).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('Materiais pelo token: linha tocável que abre o arquivo, sem "Novo Material" para o corretor (D10)', async () => {
+        const user = userEvent.setup();
+        const abrir = vi.spyOn(window, 'open').mockImplementation(() => null);
+        const { container } = montar(['empreendimentos', 'materiais']);
+        await user.click(within(barra()).getByRole('button', { name: /materiais/i }));
+        const linha = await screen.findByRole('button', { name: /Book do Garden/ });
+        expect(linha.textContent).toContain('v2');
+        expect(screen.queryByRole('button', { name: /novo material/i })).toBeNull();
+        expect(container.querySelector('table')).toBeNull();
+        await user.click(linha);
+        expect(abrir).toHaveBeenCalledWith('https://exemplo/book.pdf', '_blank');
+        abrir.mockRestore();
+    });
+
+    it('Estoque: tocar na unidade abre a folha com as ações; vendida diz por que não aceita proposta', async () => {
+        const user = userEvent.setup();
+        montar(['empreendimentos', 'estoque']);
+        await user.click(within(barra()).getByRole('button', { name: /estoque/i }));
+        await user.click(await screen.findByText('Apto 104'));
+        const folha = screen.getByRole('dialog', { name: 'Unidade Apto 104' });
+        expect(within(folha).getByRole('button', { name: 'Fazer proposta' })).toBeInTheDocument();
+        expect(within(folha).getByRole('button', { name: /adicionar/i })).toBeInTheDocument();
+        expect(within(folha).getByRole('button', { name: /reservar 48h/i })).toBeInTheDocument();
+        // tocar não pulou para o simulador
+        expect(screen.queryByRole('button', { name: 'Voltar sem enviar a proposta' })).toBeNull();
+        await user.click(within(folha).getByRole('button', { name: /adicionar/i }));
+        expect(screen.getByText('1 unidade')).toBeInTheDocument();
+
+        // 101 está livre no cadastro, mas tem proposta APROVADA: o espelho a pinta
+        // como vendida e a folha diz o mesmo que o quadrinho
+        await user.click(screen.getByText('Apto 101'));
+        const vendida = screen.getByRole('dialog', { name: 'Unidade Apto 101' });
+        expect(within(vendida).getByText('Vendido: esta unidade não aceita proposta agora.')).toBeInTheDocument();
+        expect(within(vendida).queryByRole('button', { name: 'Fazer proposta' })).toBeNull();
     });
 
     it('Propostas em cartões: unidade, status por extenso, comprador e valor', async () => {

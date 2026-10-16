@@ -1,11 +1,20 @@
 import React, { useState, useMemo } from 'react';
 import { avisarAcaoDoPortal } from '../../utils/portalEventos';
 import { FileImage, Video, Eye, Download, ExternalLink, Search, BookOpen, Map, Camera, Play, FileText, Table2, Plus } from 'lucide-react';
+import { brokerPortalService } from '../../services/brokerPortalService';
 import ActionIconButton from '../ui/ActionIconButton';
 import type { BrokerMaterial } from '../../types';
 
 interface BrokerMaterialsProps {
     organizationId: string;
+    /**
+     * Link do corretor (anon ou login por e-mail): lê pela RPC
+     * fn_broker_portal_get_materials e NÃO oferece criar/editar/excluir — isso é
+     * do gestor. Sem token, é a visão do gestor de sempre.
+     */
+    portalToken?: string;
+    /** Celular: uma linha tocável por material (o "abrir" do cartão era hover). */
+    compacto?: boolean;
 }
 
 const TYPE_CONFIG: Record<BrokerMaterial['type'], { label: string; icon: React.ElementType; color: string; bg: string }> = {
@@ -21,12 +30,20 @@ import { brokerMaterialService } from '../../services/brokerMaterialService';
 import { supabase } from '../../lib/supabase';
 import { projectService, ProjectData } from '../../services/projectService';
 import MaterialModal from '../MaterialModal';
+import { usePersistedState } from '../ui/TableUtils';
+import { useConfirm } from '../ui/confirm';
 
-const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => {
+const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId, portalToken, compacto = false }) => {
+    // Criar/editar/excluir material é do gestor; o corretor só vê e baixa.
+    // Na casca do celular (compacto) também não: até na prévia ela mostra o que o
+    // corretor vê.
+    const podeGerir = !portalToken && !compacto;
+    const confirm = useConfirm();
     const [materials, setMaterials] = useState<BrokerMaterial[]>([]);
     const [projects, setProjects] = useState<ProjectData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [search, setSearch] = useState('');
+    // Busca sobrevive a navegar entre abas e recarregar (guia §3).
+    const [search, setSearch] = usePersistedState<string>('brokerMaterials:busca', '');
     const [typeFilter, setTypeFilter] = useState<BrokerMaterial['type'] | 'all'>('all');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
@@ -34,9 +51,20 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
 
     React.useEffect(() => {
         loadMaterials();
-    }, [organizationId]);
+    }, [organizationId, portalToken]);
 
     const loadMaterials = async () => {
+        if (portalToken) {
+            try {
+                setIsLoading(true);
+                setMaterials(await brokerPortalService.getMaterialsByToken(portalToken) as BrokerMaterial[]);
+            } catch (error) {
+                console.error('Failed to load materials by token:', error);
+            } finally {
+                setIsLoading(false);
+            }
+            return;
+        }
         try {
             setIsLoading(true);
             const [data, projectsData] = await Promise.all([
@@ -58,11 +86,15 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
     const handleMaterialClick = async (material: BrokerMaterial) => {
         if (!material.file_url) return;
         
-        try {
-            await brokerMaterialService.incrementViewsCount(material.id);
-            setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, views_count: (m.views_count || 0) + 1 } : m));
-        } catch (e) {
-            console.error(e);
+        // Pelo link não há como gravar (a tabela é protegida por RLS): a contagem
+        // de visualizações fica só para quem abre logado como gestor.
+        if (!portalToken) {
+            try {
+                await brokerMaterialService.incrementViewsCount(material.id);
+                setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, views_count: (m.views_count || 0) + 1 } : m));
+            } catch (e) {
+                console.error(e);
+            }
         }
 
         avisarAcaoDoPortal('baixou-material');
@@ -81,7 +113,13 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
     };
 
     const handleDeleteMaterial = async (id: string) => {
-        if (window.confirm('Excluir permanentemente este material de divulgação?')) {
+        const ok = await confirm({
+            title: 'Excluir material?',
+            message: 'O material de divulgação será excluído permanentemente e some do portal dos corretores.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (ok) {
             try {
                 await brokerMaterialService.deleteMaterial(id);
                 loadMaterials();
@@ -95,7 +133,7 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
         let result = materials;
         if (search) {
             const q = search.toLowerCase();
-            result = result.filter(m => m.title.toLowerCase().includes(q) || m.project_name.toLowerCase().includes(q));
+            result = result.filter(m => (m.title || '').toLowerCase().includes(q) || (m.project_name || '').toLowerCase().includes(q));
         }
         if (typeFilter !== 'all') result = result.filter(m => m.type === typeFilter);
         return result;
@@ -118,7 +156,7 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
     ];
 
     return (
-        <div className="space-y-6">
+        <div className={compacto ? 'space-y-4' : 'space-y-6'}>
             {/* Search & Filters */}
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
@@ -127,11 +165,12 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                         <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar material..."
                             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
                     </div>
-                    <div className="flex bg-gray-100 rounded-xl p-1">
+                    <div className={`${compacto ? 'hidden' : 'flex'} bg-gray-100 rounded-xl p-1`}>
                         <button onClick={() => setViewMode('grid')} className={`px-3 py-1.5 rounded-lg text-form-input font-bold transition-all ${viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Grid</button>
                         <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-lg text-button font-bold transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Lista</button>
                     </div>
                 </div>
+                {podeGerir && (
                 <button
                     onClick={() => {
                         setEditingMaterial(undefined);
@@ -142,10 +181,11 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                     <Plus className="w-4 h-4" />
                     Novo Material
                 </button>
+                )}
             </div>
 
-            {/* Type Filters */}
-            <div className="flex flex-wrap gap-2">
+            {/* Type Filters — no celular, faixa rolável */}
+            <div className={compacto ? 'flex gap-2 overflow-x-auto -mx-4 px-4 pb-1 scrollbar-hide [&>button]:shrink-0 [&>button]:whitespace-nowrap' : 'flex flex-wrap gap-2'}>
                 <button onClick={() => setTypeFilter('all')}
                     className={`px-4 py-2 rounded-xl text-button font-bold border transition-all ${typeFilter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
                     Todos ({materials.length})
@@ -164,8 +204,40 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                 })}
             </div>
 
+            {/* Celular: uma linha tocável por material */}
+            {compacto && filtered.length > 0 && (
+                <ul className="space-y-2">
+                    {filtered.map(mat => {
+                        const cfg = TYPE_CONFIG[mat.type] ?? TYPE_CONFIG.BOOK;
+                        const Icon = cfg.icon;
+                        return (
+                            <li key={mat.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => handleMaterialClick(mat)}
+                                    disabled={!mat.file_url}
+                                    title={mat.file_url ? 'Abrir o material' : 'Material sem arquivo'}
+                                    className="w-full flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-3 text-left active:bg-gray-50 disabled:opacity-60"
+                                >
+                                    <span className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${cfg.bg}`}>
+                                        <Icon className={`w-5 h-5 ${cfg.color}`} />
+                                    </span>
+                                    <span className="flex-1 min-w-0">
+                                        <span className="block text-sm font-bold text-gray-900 line-clamp-2">{mat.title}</span>
+                                        <span className="block text-xs text-gray-500 mt-0.5">
+                                            {cfg.label}{mat.version ? ` · v${mat.version}` : ''}{mat.project_name ? ` · ${mat.project_name}` : ''}
+                                        </span>
+                                    </span>
+                                    <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+
             {/* Grid View */}
-            {viewMode === 'grid' && (
+            {!compacto && viewMode === 'grid' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {filtered.map((mat, i) => {
                         const cfg = TYPE_CONFIG[mat.type];
@@ -202,10 +274,12 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                                             <Eye className="w-3.5 h-3.5" />
                                             <span className="text-xs font-bold">{mat.views_count} views</span>
                                         </div>
+                                        {podeGerir && (
                                         <div className="flex gap-1.5">
                                             <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingMaterial(mat); setIsMaterialModalOpen(true); }} />
                                             <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteMaterial(mat.id)} />
                                         </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -215,7 +289,7 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
             )}
 
             {/* List View */}
-            {viewMode === 'list' && (
+            {!compacto && viewMode === 'list' && (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <table className="w-full">
                         <thead>
@@ -235,21 +309,21 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                                 return (
                                     <tr key={mat.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="p-4">
-                                            <p className="text-sm font-bold text-gray-900">{mat.title}</p>
+                                            <p className="text-sm font-normal text-gray-900">{mat.title}</p>
                                             <p className="text-xs text-gray-400">{mat.project_name || 'Geral'}</p>
                                         </td>
                                         <td className="p-4">
-                                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${cfg.bg} ${cfg.color}`}>
+                                            <span className={`inline-flex items-center gap-1 text-sm font-normal ${cfg.color}`}>
                                                 <Icon className="w-3 h-3" />{cfg.label}
                                             </span>
                                         </td>
                                         <td className="p-4">
-                                            <span className="text-xs font-bold text-gray-600">v{mat.version}</span>
+                                            <span className="text-sm font-normal text-gray-600">v{mat.version}</span>
                                         </td>
                                         <td className="p-4">
                                             <div className="flex items-center gap-1 text-gray-500">
                                                 <Eye className="w-3.5 h-3.5" />
-                                                <span className="text-xs font-bold">{mat.views_count}</span>
+                                                <span className="text-sm font-normal">{mat.views_count}</span>
                                             </div>
                                         </td>
                                         <td className="p-4">
@@ -258,8 +332,8 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                                         <td className="p-4">
                                             <div className="flex gap-1">
                                                 <button onClick={() => handleMaterialClick(mat)} className="p-1.5 hover:bg-emerald-50 rounded-lg transition-colors" title="Visualizar"><ExternalLink className="w-4 h-4 text-emerald-500" /></button>
-                                                <ActionIconButton kind="edit" onClick={() => { setEditingMaterial(mat); setIsMaterialModalOpen(true); }} />
-                                                <ActionIconButton kind="delete" onClick={() => handleDeleteMaterial(mat.id)} />
+                                                {podeGerir && <ActionIconButton kind="edit" onClick={() => { setEditingMaterial(mat); setIsMaterialModalOpen(true); }} />}
+                                                {podeGerir && <ActionIconButton kind="delete" onClick={() => handleDeleteMaterial(mat.id)} />}
                                             </div>
                                         </td>
                                     </tr>
@@ -284,6 +358,7 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                 </div>
             )}
 
+            {podeGerir && (
             <MaterialModal
                 isOpen={isMaterialModalOpen}
                 onClose={() => { setIsMaterialModalOpen(false); setEditingMaterial(undefined); }}
@@ -292,6 +367,7 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                 projects={projects}
                 organizationId={organizationId}
             />
+            )}
         </div>
     );
 };

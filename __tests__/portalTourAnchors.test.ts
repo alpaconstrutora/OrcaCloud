@@ -102,7 +102,7 @@ describe('Primeiros passos: toda ação do checklist é avisada pelo portal (F8)
     fornecedor: ['components/SupplierDashboard.tsx', 'components/supplier/portal/PortalInvoices.tsx', 'components/QuotationResponseForm.tsx'],
     corretor: ['components/BrokerPortal.tsx', 'components/broker/BrokerLeadManager.tsx', 'components/broker/BrokerMaterials.tsx'],
     cliente: ['components/ClientArea.tsx'],
-    treinamentos: ['components/training/TrainingPortal.tsx', 'components/training/portal/TraineeCatalogTab.tsx', 'components/training/portal/TraineeCertificatesTab.tsx'],
+    treinamentos: ['components/training/TrainingPortal.tsx', 'components/training/useTrainingPortal.ts', 'components/training/portal/TraineeCatalogTab.tsx', 'components/training/portal/TraineeCertificatesTab.tsx'],
   };
   it.each(PORTAIS)('%s', (portal) => {
     const fonte = ONDE_AVISA[portal].map(f => readFileSync(resolve(__dirname, '..', f), 'utf-8')).join('\n');

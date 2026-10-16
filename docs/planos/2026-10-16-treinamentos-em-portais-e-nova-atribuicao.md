@@ -35,4 +35,4 @@ mesmo defeito.
 
 - [x] 1 · 2 · 3 — tipos dos 6 arquivos tocados: 0 erros; `check-ui-standard` sem violação; testes do menu e da trava de org 27/27
 - [x] Verificação no navegador (16/10/2026, `C:/tmp/pwtest/treinamentos-em-portais/`, conta agente-leitura, nada salvo): em "Todas", "Nova atribuição" abre a escolha de organização e, escolhida a Alpa, o painel com os treinamentos dela; na Alpa, Portais abre sozinho com "Portal de Treinamentos" ativo; em "Todas" (sem administrar organização nesse contexto) o item aparece solto. O item saiu do Operacional. Sem erro de console nem 4xx/5xx.
-- [ ] Publicação
+- [x] Publicação: `main` em `7f6b8330` (16/10/2026); domínio conferido servindo o commit; check-run `ci` verde

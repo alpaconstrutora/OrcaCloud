@@ -126,6 +126,31 @@ export function deveProcessar(modo: ModoCaptura, remetente: RemetenteMonitorado 
     return modo === 'favoritos' ? remetente !== null : true;
 }
 
+/**
+ * PDF sem linha digitável de quem não é monitorado não vira boleto (16/10/2026).
+ *
+ * A 1ª busca por período real (01/07–16/10, caixa em "híbrido") pôs em revisão
+ * nota fiscal, fatura de cartão e invoice pago no cartão — PDFs que não são
+ * boleto. Decisão do usuário: "sim" a ignorar o PDF sem linha digitável quando o
+ * remetente não é monitorado (aceitando que PDF ESCANEADO de remetente avulso
+ * também fica de fora — ele aparece no histórico como ignorado).
+ *
+ * Vale para "híbrido" e "favoritos"; "todos" continua trazendo qualquer PDF.
+ * Remetente escolhido na busca por período conta como monitorado.
+ */
+export const MOTIVO_PDF_SEM_BOLETO_AVULSO =
+    'Sem linha digitável e o remetente não é monitorado: não virou boleto. Para trazer, monitore o remetente e busque o período de novo.';
+
+export function ignorarPdfSemBoleto(e: {
+    modo: ModoCaptura;
+    remetenteMonitorado: boolean;
+    escolhidoNaBusca: boolean;
+    temLinhaValida: boolean;
+}): boolean {
+    if (e.temLinhaValida || e.remetenteMonitorado || e.escolhidoNaBusca) return false;
+    return e.modo !== 'todos';
+}
+
 export interface EntradaDestino {
     modoPiloto: boolean;
     remetente: RemetenteMonitorado | null;

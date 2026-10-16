@@ -12,6 +12,7 @@ import {
     extrairEndereco,
     remetenteCasa,
     deveProcessar,
+    ignorarPdfSemBoleto,
     decidirDestino,
     proximaTentativa,
     pareceSenhaDePdf,
@@ -231,5 +232,24 @@ describe('filtro de remetentes da busca por período (16/10/2026)', () => {
         expect(criterioImapDosRemetentes([])).toEqual({});
         expect(criterioImapDosRemetentes(['ACME.com.br'])).toEqual({ from: 'acme.com.br' });
         expect(criterioImapDosRemetentes(['a@x.com', 'y.com.br'])).toEqual({ or: [{ from: 'a@x.com' }, { from: 'y.com.br' }] });
+    });
+});
+
+describe('PDF sem linha digitável de remetente avulso (16/10/2026)', () => {
+    const base = { modo: 'hibrido' as const, remetenteMonitorado: false, escolhidoNaBusca: false, temLinhaValida: false };
+
+    it('híbrido e favoritos: ignora o PDF sem linha de quem não é monitorado', () => {
+        expect(ignorarPdfSemBoleto(base)).toBe(true);
+        expect(ignorarPdfSemBoleto({ ...base, modo: 'favoritos' })).toBe(true);
+    });
+
+    it('com linha válida, monitorado ou escolhido na busca: vira boleto', () => {
+        expect(ignorarPdfSemBoleto({ ...base, temLinhaValida: true })).toBe(false);
+        expect(ignorarPdfSemBoleto({ ...base, remetenteMonitorado: true })).toBe(false);
+        expect(ignorarPdfSemBoleto({ ...base, escolhidoNaBusca: true })).toBe(false);
+    });
+
+    it('"todos" continua trazendo qualquer PDF', () => {
+        expect(ignorarPdfSemBoleto({ ...base, modo: 'todos' })).toBe(false);
     });
 });

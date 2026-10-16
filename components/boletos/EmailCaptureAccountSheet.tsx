@@ -8,7 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, Mail, KeyRound, Info } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
-import { emailCaptureService, ROTULO_MODO, type ContaCaptura, type ModoCaptura } from '../../services/emailCaptureService';
+import { emailCaptureService, ROTULO_MODO, AJUDA_MODO, type ContaCaptura, type ModoCaptura } from '../../services/emailCaptureService';
 
 const ROTULO = 'text-xs font-semibold text-slate-500';
 const CAMPO = 'w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all disabled:opacity-60';
@@ -122,6 +122,7 @@ const EmailCaptureAccountSheet: React.FC<Props> = ({ open, onClose, organization
                                 <select id="ecap-modo" value={modo} onChange={e => setModo(e.target.value as ModoCaptura)} className={CAMPO}>
                                     {(Object.keys(ROTULO_MODO) as ModoCaptura[]).map(m => <option key={m} value={m}>{ROTULO_MODO[m]}</option>)}
                                 </select>
+                                <p className="text-xs text-gray-500">{AJUDA_MODO[modo]}</p>
                             </div>
                             <div className="space-y-1.5">
                                 <label className={ROTULO} htmlFor="ecap-data">Ler e-mails a partir de</label>

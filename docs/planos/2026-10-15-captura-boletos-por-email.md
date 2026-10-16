@@ -922,5 +922,25 @@ ao conferir o teste do filtro de remetentes. Lido nos PDFs reais (baixados do bu
   `extractFromPdfText` e na prévia gravada; sem fallback de linha inválida; `findVencimentoNoTexto` com mês
   escrito e rótulo depois (só se nenhum rótulo vier antes); data inexistente (31 FEV) recusada.
   Testes em `boletoTexto` (5 casos, dados sintéticos no formato dos PDFs reais). Conferido nos 4 PDFs reais.
-- [ ] Publicar a Edge Function (as 4 mensagens com erro têm nova tentativa automática).
-- [ ] Linhas já gravadas (1428, 1430, 1431, 1432, 1438 com linha/valor falsos): corrigir só com o OK do usuário.
+- [x] Publicar a Edge Function — 2 das 4 mensagens já voltaram como `criado` na retentativa das 06:15 UTC.
+- [ ] Linhas já gravadas (1428, 1430, 1431, 1432, 1438 com linha/valor falsos): OK do usuário ("1. Sim");
+  a escrita no banco foi barrada pela permissão da sessão — SQL pronto, aguardando o usuário liberar/rodar.
+
+## Pedido posterior — 16/10/2026 (PDF que não é boleto)
+
+Proposto: "ignorar o PDF sem linha digitável quando o remetente não é monitorado" (custo dito: PDF
+escaneado de remetente avulso, ex. Destro, também fica de fora). Resposta do usuário, literal:
+
+> 1. Sim
+> 2.sim
+
+- [x] `utils/emailCaptureRegras.ts` › `ignorarPdfSemBoleto` + `MOTIVO_PDF_SEM_BOLETO_AVULSO`: sem linha válida,
+  remetente não monitorado e não escolhido na busca → `ignorado`. Vale em "híbrido" e "favoritos"; "todos"
+  continua trazendo qualquer PDF (o "híbrido" passa a ter sentido próprio: monitorados + boletos).
+- [x] `email-capture-sync` — regra aplicada depois da leitura e ANTES do upload (nada vai ao bucket); ignorado
+  por essa regra é LIDO DE NOVO numa busca se o remetente passou a ser monitorado ou foi escolhido; anexo já
+  ignorado conta em "ignorados" na busca.
+- [x] Tela: modo "Híbrido" → "Monitorados + boletos", "Todos os remetentes" → "Todos os PDFs", ajuda do modo
+  abaixo do campo no painel da caixa.
+- Boletos já criados que a regra teria ignorado (NF, Nubank, Anthropic, Destro, reavisos): NÃO mexidos.
+

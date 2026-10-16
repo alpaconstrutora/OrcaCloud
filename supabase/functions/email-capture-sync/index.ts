@@ -47,6 +47,8 @@ import {
     remetenteNoFiltro,
     criterioImapDosRemetentes,
     MAX_FILTROS_REMETENTE,
+    ignorarPdfSemBoleto,
+    MOTIVO_PDF_SEM_BOLETO_AVULSO,
     type RemetenteMonitorado,
     type ModoCaptura,
 } from "../../../utils/emailCaptureRegras.ts";
@@ -112,6 +114,8 @@ interface AnexoParaProcessar {
     /** Linha existente em email_capture_messages (retentativa). */
     mensagemId?: string;
     tentativas?: number;
+    /** Veio de busca por período com remetentes escolhidos: conta como monitorado. */
+    escolhidoNaBusca?: boolean;
 }
 
 serve(async (req: Request) => {
@@ -336,6 +340,7 @@ async function processarMeta(
         assunto,
         data: meta.envelope?.date ? new Date(meta.envelope.date).toISOString() : null,
         authHeaders: valoresDoCabecalho(meta.headers, 'authentication-results'),
+        escolhidoNaBusca: !!filtroRemetentes?.length,
     };
     const anexos: AnexoParaProcessar[] = pdfs
         .filter(p => !retryDaMensagem || retryDaMensagem.some(r => r.indice === p.indice))
@@ -485,16 +490,27 @@ async function processarAnexo(
             // Já existe. Só retoma se ficou preso em 'processando' (execução que
             // caiu no meio) há mais de 10 min; senão outra execução cuidou dele.
             const { data: existente } = await admin.from('email_capture_messages')
-                .select('id, resultado, updated_at')
+                .select('id, resultado, motivo, updated_at')
                 .eq('account_id', conta.id).eq('uid_validity', uidValidity)
                 .eq('uid', a.uid).eq('attachment_index', a.indice).maybeSingle();
             const preso = existente?.resultado === 'processando'
                 && Date.now() - new Date(existente.updated_at).getTime() > 10 * 60_000;
-            if (!preso) {
+            // Ignorado por ser PDF sem boleto de remetente avulso: lê de novo se,
+            // agora, o remetente é monitorado ou foi escolhido nesta busca.
+            const liberado = existente?.resultado === 'ignorado'
+                && existente.motivo === MOTIVO_PDF_SEM_BOLETO_AVULSO
+                && !ignorarPdfSemBoleto({
+                    modo: conta.modo,
+                    remetenteMonitorado: !!remetenteCasa(a.remetente, [a.assunto ?? '', a.nome].join(' '), remetentes),
+                    escolhidoNaBusca: !!a.escolhidoNaBusca,
+                    temLinhaValida: false,
+                });
+            if (!preso && !liberado) {
                 // Já lido antes (busca por período sobre dias já lidos): conta como
                 // "já existia" — senão o painel mostra tudo zerado e parece que
                 // a busca não achou nada.
                 if (existente && ['criado', 'duplicado'].includes(existente.resultado)) totais.duplicados++;
+                else if (existente?.resultado === 'ignorado') totais.ignorados++;
                 return;
             }
             mensagemId = existente.id;
@@ -548,6 +564,19 @@ async function processarAnexo(
                 await fechar({ resultado: 'duplicado', boleto_id: mesmaLinha.id, motivo: `Mesma linha digitável do boleto nº ${mesmaLinha.numero ?? '?'}.` });
                 return;
             }
+        }
+
+        // 5b. PDF sem linha digitável de remetente avulso não vira boleto (16/10/2026):
+        //     nota fiscal, fatura de cartão e invoice entravam em revisão.
+        if (ignorarPdfSemBoleto({
+            modo: conta.modo,
+            remetenteMonitorado: !!remetente,
+            escolhidoNaBusca: !!a.escolhidoNaBusca,
+            temLinhaValida: !!colunas.checksum_valido && linha.length >= 44,
+        })) {
+            totais.ignorados++;
+            await fechar({ resultado: 'ignorado', motivo: MOTIVO_PDF_SEM_BOLETO_AVULSO, erro: null, next_retry_at: null });
+            return;
         }
 
         // 6. Fornecedor na org (só com CNPJ confiável)

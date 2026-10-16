@@ -116,7 +116,13 @@ export const ROTULO_STATUS_CONTA: Record<StatusConta, string> = {
     ativa: 'Ativa', pausada: 'Pausada', reautenticar: 'Reconectar', desconectada: 'Desconectada',
 };
 export const ROTULO_MODO: Record<ModoCaptura, string> = {
-    favoritos: 'Só remetentes monitorados', todos: 'Todos os remetentes', hibrido: 'Híbrido',
+    favoritos: 'Só remetentes monitorados', hibrido: 'Monitorados + boletos', todos: 'Todos os PDFs',
+};
+/** O que cada modo traz — o PDF sem linha digitável de remetente avulso só entra em "todos" (16/10/2026). */
+export const AJUDA_MODO: Record<ModoCaptura, string> = {
+    favoritos: 'Só e-mails dos remetentes monitorados.',
+    hibrido: 'Tudo dos remetentes monitorados e, dos demais, só PDF com linha digitável — nota fiscal, fatura de cartão e escaneado ficam de fora.',
+    todos: 'Qualquer PDF de qualquer remetente vai para a revisão.',
 };
 export const ROTULO_RESULTADO: Record<ResultadoMensagem, string> = {
     processando: 'Processando', criado: 'Boleto criado', duplicado: 'Duplicado', ignorado: 'Ignorado', erro: 'Falhou',

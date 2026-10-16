@@ -48,7 +48,7 @@ enviar o convite por e-mail no Portal do Parceiro:
 - [x] 3 · painel (`PartnerWorkspaceManager.tsx`): cartão do contato, preenchimento automático, "Usar este contato", leitura pelo id quando o fornecedor não está na lista, resposta atrasada de abertura anterior descartada
 - [x] Verificação no navegador (16/10/2026, `C:\tmp\pwtest\parceiro-convite\painel.js`, conta agente-leitura na Alpa, só ABRINDO o painel): Álvaro Esteves Junior (PF) → nome, e-mail e telefone preenchidos (3 "Preenchido automaticamente"); AFONSO H VILELA (PJ) → e-mail e telefone, nome vazio com aviso; Débora Cristina Duarte (PF sem e-mail) → nome e telefone, aviso de e-mail. Sem erro de console nem 4xx/5xx.
 - [x] Tipos: checagem por arquivo (o `tsc` desta máquina cai com SIGSEGV) — 0 erros; testes 42/42; `check-ui-standard` sem violação
-- [ ] Publicação
+- [x] Publicação: `main` em `5c682634` (16/10/2026); domínio conferido servindo o commit com "Contato em Meus Fornecedores" no bundle; check-run `ci` verde
 
 ## Verificação
 

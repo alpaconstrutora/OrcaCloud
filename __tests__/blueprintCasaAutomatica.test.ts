@@ -1000,7 +1000,10 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     });
     expect(foraDaFaixa.map((t) => `${t.disciplina}@${t.cotaAMm}`)).toEqual([]);
     const temNaFaixa = (d: string) => (r.trechos ?? []).some((t) => t.disciplina === d && t.cotaAMm === t.cotaBMm && t.cotaAMm === 2800 - FAIXA[d]);
-    for (const d of REDES_DO_FORRO) expect(temNaFaixa(d), d).toBe(true);
+    // F14d: a linha do ar sai direto pela parede externa, na cota da evaporadora — só a que não tem essa saída corre no forro.
+    const evaporadoras = (r.terminais ?? []).filter((t) => (t.tipoHidraulico ?? '').startsWith('EVAPORADORA'));
+    const saiPelaParede = evaporadoras.length > 0 && evaporadoras.every((e) => (r.trechos ?? []).some((t) => t.disciplina === 'FRIGORIGENA' && t.cotaAMm === e.cotaMm && t.cotaBMm === e.cotaMm && [t.a, t.b].some((q) => q.x === e.at.x && q.y === e.at.y)));
+    for (const d of REDES_DO_FORRO) expect(temNaFaixa(d) || (d === 'FRIGORIGENA' && saiPelaParede), d).toBe(true);
   });
 
   it('térrea: nenhuma dessas redes em vão de porta ou janela (o aquecedor ao lado da janela; o dreno do ar é a F14d)', () => {

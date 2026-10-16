@@ -15,6 +15,7 @@ import TraineeCertificatesTab from './portal/TraineeCertificatesTab';
 import TraineeHistoryTab from './portal/TraineeHistoryTab';
 import TraineeMyDataSheet from './portal/TraineeMyDataSheet';
 import { useTrainingPortal } from './useTrainingPortal';
+import { VerComoContext } from './portal/verComo';
 
 /**
  * Portal de Treinamentos no celular — app de tela cheia.
@@ -37,6 +38,11 @@ import { useTrainingPortal } from './useTrainingPortal';
  *
  * As quatro abas são as MESMAS do desktop (mesmas RPCs, mesmos `data-tour`);
  * Certificados, Histórico e Catálogo recebem `compacto` para virar cartões.
+ *
+ * `verComo` (16/10, docs/planos/2026-10-16-portal-treinamentos-previa-ver-como.md):
+ * prévia do GESTOR como a pessoa (aba Portal da gestão). Implica `previa`;
+ * as abas leem o alvo pelo VerComoContext; faixa "nada é gravado"; ajuda em
+ * `modoPrevia` sem tourKey (tour disponível, nada gravado).
  */
 
 interface Props {
@@ -44,6 +50,8 @@ interface Props {
     onLogout?: () => void;
     /** dentro do MobilePreviewFrame: barra de status falsa + altura do iframe */
     previa?: boolean;
+    /** prévia do gestor "ver como" esta pessoa (id de academy_portal_users); implica `previa` */
+    verComo?: string | null;
     forcarTour?: string | null;
 }
 
@@ -78,8 +86,9 @@ const StatusBar: React.FC = () => {
     );
 };
 
-const TrainingPortalMobile: React.FC<Props> = ({ userEmail, onLogout, previa = false, forcarTour = null }) => {
-    const p = useTrainingPortal(userEmail);
+const TrainingPortalMobile: React.FC<Props> = ({ userEmail, onLogout, previa: previaProp = false, verComo = null, forcarTour = null }) => {
+    const previa = previaProp || !!verComo;
+    const p = useTrainingPortal(userEmail, verComo);
     const [isHelpOpen, setIsHelpOpen] = useState(false);
     const [contaAberta, setContaAberta] = useState(false);
     const [meusDadosAberto, setMeusDadosAberto] = useState(false);
@@ -88,10 +97,12 @@ const TrainingPortalMobile: React.FC<Props> = ({ userEmail, onLogout, previa = f
     const semAcesso = !!p.erroAcesso || p.identidades.length === 0;
 
     return (
+        <VerComoContext.Provider value={verComo}>
         <div
             className={`flex flex-col bg-[#F2F2F4] font-sans overflow-hidden relative ${
                 previa ? 'h-screen' : 'h-screen supports-[height:100dvh]:h-dvh'}`}
             data-modo={previa ? 'previa' : 'aparelho'}
+            data-ver-como={verComo ?? undefined}
         >
             {previa && <StatusBar />}
 
@@ -165,6 +176,11 @@ const TrainingPortalMobile: React.FC<Props> = ({ userEmail, onLogout, previa = f
                     </div>
                 ) : (
                     <>
+                        {verComo && (
+                            <div role="note" className="mb-3 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
+                                Prévia — vendo como <strong>{p.principal?.name || userEmail}</strong>. Nada é gravado.
+                            </div>
+                        )}
                         {p.activeTab === TRAINING_PORTAL_TAB_IDS[0] && <div ref={setSlotChecklist} className="empty:hidden mb-4" />}
                         {p.activeTab === 'treinamentos' && (
                             <TraineeEnrollmentsTab mostrarOrganizacao={p.mostrarOrganizacao} onAbrir={p.abrirMatricula} />
@@ -278,9 +294,10 @@ const TrainingPortalMobile: React.FC<Props> = ({ userEmail, onLogout, previa = f
                 currentSection={p.activeTab}
                 onNavigate={s => p.setActiveTab(resolverAbaDoPortalDeTreinamentos(s))}
                 forcarTour={previa ? null : forcarTour}
+                modoPrevia={!!verComo}
                 checklistSlot={slotChecklist}
                 accent="teal"
-                tourKey={userEmail || p.principal?.email || null}
+                tourKey={verComo ? null : (userEmail || p.principal?.email || null)}
                 autoTour={!previa && p.identidades.length > 0}
             />
 
@@ -297,6 +314,7 @@ const TrainingPortalMobile: React.FC<Props> = ({ userEmail, onLogout, previa = f
                 </div>
             )}
         </div>
+        </VerComoContext.Provider>
     );
 };
 

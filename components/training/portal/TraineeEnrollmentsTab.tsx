@@ -7,6 +7,7 @@ import { STALE } from '../../../lib/queryClient';
 import { KpiStrip, PortalCard, PortalEmpty, PortalLoading } from '../../portal/PortalKit';
 import { accentBtn, fmtData, hojeIso, Progresso, SectionTitle } from './traineeKit';
 import type { AcademyTraineeEnrollment } from '../../../types/academy';
+import { useVerComo } from './verComo';
 
 /**
  * Meus treinamentos — as matrículas do treinando, em cartões.
@@ -31,9 +32,10 @@ interface Props {
 }
 
 const TraineeEnrollmentsTab: React.FC<Props> = ({ mostrarOrganizacao, onAbrir }) => {
+    const verComo = useVerComo();
     const { data: matriculas = [], isLoading, error } = useQuery({
-        queryKey: academyKeys.traineeEnrollments(),
-        queryFn: () => academyTraineeService.listEnrollments(),
+        queryKey: academyKeys.traineeEnrollments(verComo),
+        queryFn: () => academyTraineeService.listEnrollments(verComo),
         staleTime: STALE.fast,
     });
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Loader2, Mail, Plus, Users } from 'lucide-react';
+import { ChevronDown, Loader2, Mail, Plus, Smartphone, Users } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -11,6 +11,10 @@ import { laborService, type Contractor, type Employee } from '../../services/lab
 import { laborKeys } from '../../lib/queryKeys';
 import { STALE } from '../../lib/queryClient';
 import type { AcademyPortalUser, AcademyPortalUserTipo } from '../../types/academy';
+import MobilePreviewFrame from '../MobilePreviewFrame';
+
+// Casca do celular do portal (só carrega quando alguém pede a prévia).
+const TrainingPortalMobile = React.lazy(() => import('../training/TrainingPortalMobile'));
 
 /**
  * RH › Treinamentos › Portal — quem pode entrar no Portal de Treinamentos
@@ -23,6 +27,10 @@ import type { AcademyPortalUser, AcademyPortalUserTipo } from '../../types/acade
  *   TERCEIRO    → prestador/terceirizado: o cadastro cria uma ficha própria
  *                 em employees (contract_type EMPREITEIRO, academy_externo),
  *                 porque a Academia só matricula e certifica fichas.
+ *
+ * Prévia no celular (16/10, docs/planos/2026-10-16-portal-treinamentos-previa-ver-como.md):
+ * ação por linha que abre a casca mobile do portal "vendo como" aquela pessoa
+ * (leituras com `p_ver_como`, autorizadas por membro da org; nada é gravado).
  */
 
 const inputCls = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
@@ -58,6 +66,7 @@ interface Props {
 
 const AcademyPortalAccessTab: React.FC<Props> = ({ orgId, employees, podeEditar, notify }) => {
     const qc = useQueryClient();
+    const [previa, setPrevia] = useState<AcademyPortalUser | null>(null);
     const confirm = useConfirm();
     const [sheet, setSheet] = useState<'novo' | AcademyPortalUser | null>(null);
     const [enviando, setEnviando] = useState<string | null>(null);
@@ -153,9 +162,15 @@ const AcademyPortalAccessTab: React.FC<Props> = ({ orgId, employees, podeEditar,
                     }
                 }}
                 actions={{
-                    width: 150,
+                    width: 190,
                     render: u => (
                         <div className="flex items-center justify-end gap-1.5">
+                            <ActionIconButton
+                                kind="view"
+                                icon={<Smartphone className="w-4 h-4" />}
+                                onClick={() => setPrevia(u)}
+                                title="Prévia no celular — ver o portal como esta pessoa"
+                            />
                             <button
                                 type="button"
                                 onClick={() => convidar(u)}
@@ -223,6 +238,15 @@ const AcademyPortalAccessTab: React.FC<Props> = ({ orgId, employees, podeEditar,
                     }}
                     notify={notify}
                 />
+            )}
+
+            {/* Prévia no celular, "vendo como" a pessoa: o iframe é o telefone; nada é gravado. */}
+            {previa && (
+                <MobilePreviewFrame onClose={() => setPrevia(null)} title={`Prévia — Portal de Treinamentos · ${previa.name}`}>
+                    <React.Suspense fallback={<div className="p-6 text-sm text-gray-500">Carregando a prévia...</div>}>
+                        <TrainingPortalMobile userEmail={previa.email} previa verComo={previa.id} />
+                    </React.Suspense>
+                </MobilePreviewFrame>
             )}
         </>
     );

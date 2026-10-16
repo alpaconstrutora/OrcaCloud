@@ -8,6 +8,7 @@ import { PortalCard, PortalEmpty, PortalLoading, Td, Th } from '../../portal/Por
 import { avisarAcaoDoPortal } from '../../../utils/portalEventos';
 import { fmtData, fmtDataHora, ghostBtn, SectionTitle, softBtn, VIGENCIA_LABEL, vigenciaDe } from './traineeKit';
 import type { AcademyTraineeCertificate } from '../../../types/academy';
+import { useVerComo } from './verComo';
 
 /**
  * Certificados — os emitidos pela Academia para as fichas do treinando.
@@ -34,18 +35,19 @@ const TraineeCertificatesTab: React.FC<Props> = ({ mostrarOrganizacao, notify, c
     const [baixando, setBaixando] = useState<string | null>(null);
     const [copiado, setCopiado] = useState<string | null>(null);
 
+    const verComo = useVerComo();
     const { data: certificados = [], isLoading, error } = useQuery({
-        queryKey: academyKeys.traineeCertificates(),
-        queryFn: () => academyTraineeService.listCertificates(),
+        queryKey: academyKeys.traineeCertificates(verComo),
+        queryFn: () => academyTraineeService.listCertificates(verComo),
         staleTime: STALE.normal,
     });
 
     const baixar = async (c: AcademyTraineeCertificate) => {
         setBaixando(c.id);
         try {
-            const url = await academyTraineeService.getMediaUrl({ certificateId: c.id });
+            const url = await academyTraineeService.getMediaUrl({ certificateId: c.id, verComo });
             window.open(url, '_blank', 'noopener');
-            avisarAcaoDoPortal('baixou-certificado');
+            if (!verComo) avisarAcaoDoPortal('baixou-certificado');
         } catch (e: any) {
             notify(e?.message || 'Não foi possível abrir o certificado.', 'error');
         } finally {

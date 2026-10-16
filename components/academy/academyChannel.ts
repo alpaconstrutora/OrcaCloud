@@ -94,6 +94,29 @@ export function createTraineeChannel(): AcademyChannel {
     };
 }
 
+/**
+ * Canal da PRÉVIA do gestor ("ver como" a pessoa, aba Portal da gestão):
+ * leituras com `p_ver_como`; escritas são no-op — o banco também as recusa
+ * (42501) porque elas continuam presas ao JWT. O player avisa pelo `motivo`.
+ */
+export function createTraineePreviewChannel(verComo: string): AcademyChannel {
+    const naoGrava = 'Prévia: nada é gravado.';
+    return {
+        canal: 'PORTAL',
+        getContent: id => academyTraineeService.getContent(id, verComo),
+        heartbeat: async () => ({ segundos_assistidos: 0, percentual: 0, creditado: 0 }),
+        completeLesson: async () => ({ concluida: false, percentual: 0, minimo: 0, motivo: naoGrava }),
+        startAttempt: async () => { throw new Error('Na prévia a avaliação não pode ser feita.'); },
+        submitAttempt: async () => { throw new Error('Na prévia a avaliação não pode ser feita.'); },
+        accept: async () => {},
+        ackVersion: async () => new Date().toISOString(),
+        finalize: async () => ({ concluido: false, motivo: naoGrava }),
+        getLessonMediaUrl: lessonId => academyTraineeService.getMediaUrl({ lessonId, verComo }),
+        getMaterialUrl: materialId => academyTraineeService.getMediaUrl({ materialId, verComo }),
+        getCertificateUrl: certificateId => academyTraineeService.getMediaUrl({ certificateId, verComo }),
+    };
+}
+
 /** Canal do Portal do Colaborador — tudo amarrado ao token. */
 export function createPortalChannel(token: string): AcademyChannel {
     return {

@@ -12,6 +12,11 @@
  * portal passa pela Edge Function `academy-portal-media` SEM token — ela usa
  * o Authorization do treinando e deixa a RPC `academy_portal_user_media_path`
  * decidir se ele é dono do recurso.
+ *
+ * `verComo` (16/10, docs/planos/2026-10-16-portal-treinamentos-previa-ver-como.md):
+ * prévia do gestor na gestão — as LEITURAS aceitam o id de `academy_portal_users`
+ * e o banco autoriza por membro da organização da pessoa. As escritas não
+ * recebem alvo: na prévia nada é gravado (canal createTraineePreviewChannel).
  */
 
 import { supabase } from '../lib/supabase';
@@ -31,18 +36,21 @@ async function rpc<T>(nome: string, args?: Record<string, unknown>): Promise<T> 
     return data as T;
 }
 
+/** Só manda `p_ver_como` quando há alvo: sem ele a chamada é a de sempre. */
+const alvo = (verComo?: string | null) => (verComo ? { p_ver_como: verComo } : {});
+
 export const academyTraineeService = {
     /** Identidades ativas do e-mail logado. Vazio = não cadastrado. */
-    async myAccess(): Promise<AcademyPortalIdentity[]> {
-        return (await rpc<AcademyPortalIdentity[] | null>('academy_portal_user_my_access')) ?? [];
+    async myAccess(verComo?: string | null): Promise<AcademyPortalIdentity[]> {
+        return (await rpc<AcademyPortalIdentity[] | null>('academy_portal_user_my_access', alvo(verComo))) ?? [];
     },
 
-    async listEnrollments(): Promise<AcademyTraineeEnrollment[]> {
-        return (await rpc<AcademyTraineeEnrollment[] | null>('academy_portal_user_list_enrollments')) ?? [];
+    async listEnrollments(verComo?: string | null): Promise<AcademyTraineeEnrollment[]> {
+        return (await rpc<AcademyTraineeEnrollment[] | null>('academy_portal_user_list_enrollments', alvo(verComo))) ?? [];
     },
 
-    getContent(enrollmentId: string): Promise<AcademyPlayerContent> {
-        return rpc<AcademyPlayerContent>('academy_portal_user_get_content', { p_enrollment_id: enrollmentId });
+    getContent(enrollmentId: string, verComo?: string | null): Promise<AcademyPlayerContent> {
+        return rpc<AcademyPlayerContent>('academy_portal_user_get_content', { p_enrollment_id: enrollmentId, ...alvo(verComo) });
     },
 
     heartbeat(args: { enrollmentId: string; lessonId: string; posicao: number; delta: number }): Promise<AcademyHeartbeatResult> {
@@ -88,20 +96,20 @@ export const academyTraineeService = {
         return rpc<AcademyFinalizeResult>('academy_portal_user_finalize', { p_enrollment_id: enrollmentId });
     },
 
-    getCertificate(enrollmentId: string): Promise<AcademyPortalCertificate> {
-        return rpc<AcademyPortalCertificate>('academy_portal_user_certificate', { p_enrollment_id: enrollmentId });
+    getCertificate(enrollmentId: string, verComo?: string | null): Promise<AcademyPortalCertificate> {
+        return rpc<AcademyPortalCertificate>('academy_portal_user_certificate', { p_enrollment_id: enrollmentId, ...alvo(verComo) });
     },
 
-    async listCertificates(): Promise<AcademyTraineeCertificate[]> {
-        return (await rpc<AcademyTraineeCertificate[] | null>('academy_portal_user_certificates')) ?? [];
+    async listCertificates(verComo?: string | null): Promise<AcademyTraineeCertificate[]> {
+        return (await rpc<AcademyTraineeCertificate[] | null>('academy_portal_user_certificates', alvo(verComo))) ?? [];
     },
 
-    async listHistory(): Promise<AcademyTraineeHistoryItem[]> {
-        return (await rpc<AcademyTraineeHistoryItem[] | null>('academy_portal_user_history')) ?? [];
+    async listHistory(verComo?: string | null): Promise<AcademyTraineeHistoryItem[]> {
+        return (await rpc<AcademyTraineeHistoryItem[] | null>('academy_portal_user_history', alvo(verComo))) ?? [];
     },
 
-    async listCatalog(): Promise<AcademyTraineeCatalogItem[]> {
-        return (await rpc<AcademyTraineeCatalogItem[] | null>('academy_portal_user_catalog')) ?? [];
+    async listCatalog(verComo?: string | null): Promise<AcademyTraineeCatalogItem[]> {
+        return (await rpc<AcademyTraineeCatalogItem[] | null>('academy_portal_user_catalog', alvo(verComo))) ?? [];
     },
 
     enroll(courseId: string): Promise<{ enrollment_id: string; ja_existia: boolean }> {
@@ -113,9 +121,12 @@ export const academyTraineeService = {
      * treinando (o `functions.invoke` já manda o Authorization da sessão).
      * Envia lessonId/materialId/certificateId — NUNCA um storagePath.
      */
-    async getMediaUrl(args: { lessonId?: string; materialId?: string; certificateId?: string }): Promise<string> {
+    async getMediaUrl(args: { lessonId?: string; materialId?: string; certificateId?: string; verComo?: string | null }): Promise<string> {
         const { data, error } = await supabase.functions.invoke('academy-portal-media', {
-            body: { lessonId: args.lessonId, materialId: args.materialId, certificateId: args.certificateId },
+            body: {
+                lessonId: args.lessonId, materialId: args.materialId, certificateId: args.certificateId,
+                verComo: args.verComo || undefined,
+            },
         });
         if (error) {
             let msg = error.message || 'Não foi possível liberar a mídia.';

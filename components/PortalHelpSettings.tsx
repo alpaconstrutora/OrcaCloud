@@ -405,10 +405,11 @@ const PortalHelpSettings: React.FC = () => {
   };
 
   // ── pré-visualização ───────────────────────────────────────────────────
-  // O Portal de Treinamentos não tem "pessoa" para simular: ele mostra a identidade
-  // de quem está logado (academy_portal_user_my_access). Rever o tour = entrar nele.
+  // O Portal de Treinamentos é visto pelo e-mail de quem está logado
+  // (academy_portal_user_my_access); a prévia "como a pessoa" existe na gestão:
+  // Portais › Portal de Treinamentos › Portal, ícone de celular na linha (16/10).
   const motivoPreviaDesligada = portal === 'treinamentos'
-    ? 'O Portal de Treinamentos é visto com a conta do treinando: abra /portal-treinamentos e use "Rever o tour" na ajuda'
+    ? 'A prévia do Portal de Treinamentos fica em Portais › Portal de Treinamentos › Portal (ícone de celular na linha da pessoa)'
     : !orgId ? 'Escolha uma organização no topo para pré-visualizar' : undefined;
 
   const toursComPassos: TourId[] = React.useMemo(() => {

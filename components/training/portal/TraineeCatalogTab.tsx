@@ -9,6 +9,7 @@ import { avisarAcaoDoPortal } from '../../../utils/portalEventos';
 import { usePersistedState } from '../../ui/TableUtils';
 import { accentBtn, SectionTitle, softBtn } from './traineeKit';
 import type { AcademyTraineeCatalogItem } from '../../../types/academy';
+import { useVerComo } from './verComo';
 
 /**
  * Catálogo — treinamentos que a empresa abriu para inscrição
@@ -36,9 +37,10 @@ const TraineeCatalogTab: React.FC<Props> = ({ mostrarOrganizacao, notify, onInsc
     const [busca, setBusca] = usePersistedState('traineePortal:catalogo:busca', '');
     const [inscrevendo, setInscrevendo] = useState<string | null>(null);
 
+    const verComo = useVerComo();
     const { data: cursos = [], isLoading, error } = useQuery({
-        queryKey: academyKeys.traineeCatalog(),
-        queryFn: () => academyTraineeService.listCatalog(),
+        queryKey: academyKeys.traineeCatalog(verComo),
+        queryFn: () => academyTraineeService.listCatalog(verComo),
         staleTime: STALE.normal,
     });
 
@@ -47,11 +49,11 @@ const TraineeCatalogTab: React.FC<Props> = ({ mostrarOrganizacao, notify, onInsc
         onMutate: c => setInscrevendo(c.id),
         onSuccess: (res, c) => {
             // §22: atualiza o cache em vez de recarregar o catálogo inteiro.
-            qc.setQueryData<AcademyTraineeCatalogItem[]>(academyKeys.traineeCatalog(), prev =>
+            qc.setQueryData<AcademyTraineeCatalogItem[]>(academyKeys.traineeCatalog(verComo), prev =>
                 (prev ?? []).map(x => x.id === c.id
                     ? { ...x, ja_matriculado: true, enrollment_id: res.enrollment_id, enrollment_status: x.enrollment_status ?? 'NAO_INICIADO' }
                     : x));
-            qc.invalidateQueries({ queryKey: academyKeys.traineeEnrollments() });
+            qc.invalidateQueries({ queryKey: academyKeys.traineeEnrollments(verComo) });
             avisarAcaoDoPortal('inscreveu-treinamento');
             notify(res.ja_existia ? 'Você já estava inscrito neste treinamento.' : 'Inscrição feita. O treinamento já está em Meus treinamentos.');
             onInscrito(res.enrollment_id);
@@ -135,7 +137,8 @@ const TraineeCatalogTab: React.FC<Props> = ({ mostrarOrganizacao, notify, onInsc
                                     <button
                                         type="button"
                                         onClick={() => inscrever.mutate(c)}
-                                        disabled={ocupado}
+                                        disabled={ocupado || !!verComo}
+                                        title={verComo ? 'Na prévia a inscrição não é feita' : undefined}
                                         className={accentBtn}
                                     >
                                         {ocupado ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <UserPlus className="w-[15px] h-[15px]" />}

@@ -39,14 +39,14 @@ serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-    let body: { token?: string; lessonId?: string; materialId?: string; certificateId?: string };
+    let body: { token?: string; lessonId?: string; materialId?: string; certificateId?: string; verComo?: string };
     try {
         body = await req.json();
     } catch {
         return json({ error: 'Corpo inválido' }, 400);
     }
 
-    const { token, lessonId, materialId, certificateId } = body;
+    const { token, lessonId, materialId, certificateId, verComo } = body;
 
     if (!lessonId && !materialId && !certificateId) {
         return json({ error: 'Informe lessonId, materialId ou certificateId' }, 400);
@@ -61,6 +61,8 @@ serve(async (req: Request) => {
     // chamada COM O JWT DELE (cliente anon + Authorization): ela devolve o path
     // só se uma das fichas dele tem matrícula viva na versão do recurso (ou é
     // dono do certificado) e já grava a evidência no log. Aqui só se assina.
+    // `verComo` (16/10): prévia do gestor — a RPC autoriza por membro da org da
+    // pessoa e NÃO grava evidência (docs/planos/2026-10-16-portal-treinamentos-previa-ver-como.md).
     if (!token) {
         const authHeader = req.headers.get('Authorization');
         if (!authHeader) return json({ error: 'token ou Authorization é obrigatório' }, 401);
@@ -74,6 +76,7 @@ serve(async (req: Request) => {
             p_material_id: materialId ?? null,
             p_certificate_id: certificateId ?? null,
             p_user_agent: req.headers.get('user-agent'),
+            p_ver_como: verComo ?? null,
         });
         if (rpcError || !resolvido?.storage_path) {
             const msg = rpcError?.message || 'Recurso não encontrado';

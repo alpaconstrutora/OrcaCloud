@@ -6,7 +6,7 @@ import { STALE } from '../../lib/queryClient';
 import { usePersistedState } from '../ui/TableUtils';
 import { avisarAcaoDoPortal } from '../../utils/portalEventos';
 import { resolverAbaDoPortalDeTreinamentos, type TrainingPortalTabId } from '../../utils/trainingPortalTabs';
-import { createTraineeChannel } from '../academy/academyChannel';
+import { createTraineeChannel, createTraineePreviewChannel } from '../academy/academyChannel';
 import type { AcademyTraineeEnrollment } from '../../types/academy';
 
 /**
@@ -16,19 +16,24 @@ import type { AcademyTraineeEnrollment } from '../../types/academy';
  *
  * O que muda entre as cascas é só o desenho; aba ativa, aula aberta, acesso,
  * toast e as invalidações ao sair da sala vivem aqui, uma vez só.
+ *
+ * `verComo` (16/10, docs/planos/2026-10-16-portal-treinamentos-previa-ver-como.md):
+ * prévia do gestor como a pessoa (id de academy_portal_users). Leituras com o
+ * alvo e chaves de cache próprias; canal sem escrita; nada avisado ao tour;
+ * aba guardada em chave separada para não mexer na do portal real.
  */
 
 export type ToastDoPortal = { message: string; type: 'success' | 'error' };
 
-export function useTrainingPortal(userEmail: string) {
+export function useTrainingPortal(userEmail: string, verComo: string | null = null) {
     const qc = useQueryClient();
-    const [abaSalva, setAbaSalva] = usePersistedState<string>('traineePortal:aba', 'treinamentos');
+    const [abaSalva, setAbaSalva] = usePersistedState<string>(verComo ? 'traineePortal:aba:previa' : 'traineePortal:aba', 'treinamentos');
     const activeTab = resolverAbaDoPortalDeTreinamentos(abaSalva);
 
     const [aulaAberta, setAulaAberta] = useState<AcademyTraineeEnrollment | null>(null);
     const [toast, setToast] = useState<ToastDoPortal | null>(null);
 
-    const channel = useMemo(() => createTraineeChannel(), []);
+    const channel = useMemo(() => (verComo ? createTraineePreviewChannel(verComo) : createTraineeChannel()), [verComo]);
 
     const setActiveTab = (id: TrainingPortalTabId) => { setAulaAberta(null); setAbaSalva(id); };
 
@@ -38,8 +43,8 @@ export function useTrainingPortal(userEmail: string) {
     };
 
     const { data: identidades = [], isLoading: carregandoAcesso, error: erroAcesso } = useQuery({
-        queryKey: academyKeys.traineeAccess(),
-        queryFn: () => academyTraineeService.myAccess(),
+        queryKey: academyKeys.traineeAccess(verComo),
+        queryFn: () => academyTraineeService.myAccess(verComo),
         staleTime: STALE.normal,
     });
     const principal = identidades[0];
@@ -52,14 +57,14 @@ export function useTrainingPortal(userEmail: string) {
     const abrirMatricula = (m: AcademyTraineeEnrollment) => {
         setAbaSalva('treinamentos');
         setAulaAberta(m);
-        avisarAcaoDoPortal('abriu-treinamento');
+        if (!verComo) avisarAcaoDoPortal('abriu-treinamento');
     };
 
     const abrirMatriculaPorId = async (enrollmentId: string) => {
         setAbaSalva('treinamentos');
         const lista = await qc.fetchQuery({
-            queryKey: academyKeys.traineeEnrollments(),
-            queryFn: () => academyTraineeService.listEnrollments(),
+            queryKey: academyKeys.traineeEnrollments(verComo),
+            queryFn: () => academyTraineeService.listEnrollments(verComo),
             staleTime: 0,
         });
         const m = lista.find(x => x.id === enrollmentId);
@@ -69,10 +74,10 @@ export function useTrainingPortal(userEmail: string) {
     const voltarDaAula = () => {
         setAulaAberta(null);
         // Progresso, certificado e histórico podem ter mudado na sala.
-        qc.invalidateQueries({ queryKey: academyKeys.traineeEnrollments() });
-        qc.invalidateQueries({ queryKey: academyKeys.traineeCertificates() });
-        qc.invalidateQueries({ queryKey: academyKeys.traineeHistory() });
-        qc.invalidateQueries({ queryKey: academyKeys.traineeCatalog() });
+        qc.invalidateQueries({ queryKey: academyKeys.traineeEnrollments(verComo) });
+        qc.invalidateQueries({ queryKey: academyKeys.traineeCertificates(verComo) });
+        qc.invalidateQueries({ queryKey: academyKeys.traineeHistory(verComo) });
+        qc.invalidateQueries({ queryKey: academyKeys.traineeCatalog(verComo) });
     };
 
     return {
@@ -81,5 +86,6 @@ export function useTrainingPortal(userEmail: string) {
         toast, notify,
         channel,
         identidades, carregandoAcesso, erroAcesso, principal, mostrarOrganizacao, orgDaAjuda, iniciais,
+        verComo,
     };
 }

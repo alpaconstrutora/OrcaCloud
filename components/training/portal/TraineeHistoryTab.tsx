@@ -6,6 +6,7 @@ import { academyKeys } from '../../../lib/queryKeys';
 import { STALE } from '../../../lib/queryClient';
 import { KpiStrip, PortalCard, PortalEmpty, PortalLoading, Td, Th } from '../../portal/PortalKit';
 import { fmtData, SectionTitle, VIGENCIA_LABEL, vigenciaDe } from './traineeKit';
+import { useVerComo } from './verComo';
 
 /**
  * Histórico — o registro legal (`employee_trainings`): presencial lançado
@@ -19,9 +20,10 @@ interface Props {
 }
 
 const TraineeHistoryTab: React.FC<Props> = ({ mostrarOrganizacao, compacto = false }) => {
+    const verComo = useVerComo();
     const { data: itens = [], isLoading, error } = useQuery({
-        queryKey: academyKeys.traineeHistory(),
-        queryFn: () => academyTraineeService.listHistory(),
+        queryKey: academyKeys.traineeHistory(verComo),
+        queryFn: () => academyTraineeService.listHistory(verComo),
         staleTime: STALE.normal,
     });
 

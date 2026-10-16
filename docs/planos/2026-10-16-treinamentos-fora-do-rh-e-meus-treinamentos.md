@@ -72,7 +72,7 @@ Resposta do usuário (16/10/2026):
 - [x] 7 · PRD atualizado (§2.1 e §4)
 - [x] Tipos: rodada completa por arquivo achou 1 erro (conversão em `Layout.tsx`), corrigido e rechecado nos 6 arquivos tocados de interface — 0 erros; testes 66/66; `check-ui-standard` sem violação nos 10 `.tsx` tocados
 - [x] Verificação no navegador (16/10/2026, `C:\tmp\pwtest\treinamentos-fora-do-rh\telas.js`, conta agente-leitura na Alpa, só leitura): item "Treinamentos" no menu e fora do RH; `#/treinamentos` abre a gestão; aba Painéis carrega sem erro (antes caía no PGRST200); `#/labor-trainings` vira `treinamentos`; "Meus Treinamentos" com as quatro abas e título por aba (a conta não tem ficha → aviso de vínculo). Sem erro de console nem 4xx/5xx. **Não verificado com dados na tela**: a conta de teste não é colaboradora; a leitura com dados está provada no banco (item 2).
-- [ ] Publicação
+- [x] Publicação: `main` em `9250b818` (16/10/2026); domínio conferido servindo o commit com o texto novo de "Meus Treinamentos" no bundle; check-run `ci` verde
 
 ## Verificação
 

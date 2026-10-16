@@ -1,5 +1,8 @@
 import { supabase } from '../lib/supabase';
 
+/** Contador de assinantes de `subscribeToNotifications` — garante um canal Realtime por consumidor. */
+let proximoAssinante = 0;
+
 export interface Notification {
     id: string;
     recipientEmail: string;
@@ -154,8 +157,21 @@ export const notificationService = {
         window.dispatchEvent(new CustomEvent('notifications_updated'));
     },
 
+    /**
+     * Assina mudanças em `notifications` via Realtime e devolve a função que cancela.
+     *
+     * ⚠️ O nome do canal é ÚNICO POR CHAMADA, de propósito. `supabase.channel(topico)`
+     * devolve a MESMA instância quando o tópico já existe (realtime-js 2.90). Com o
+     * nome antigo (`notifications-<email>`), Layout e NotificationPanel dividiam a
+     * instância: fechar o sino chamava `removeChannel` e matava também a assinatura
+     * do Layout (badge e toast ficavam só com o polling). E, como era o último canal,
+     * o socket caía no meio do handshake — daí o "WebSocket is closed before the
+     * connection is established" no console (16/10/2026).
+     * Prova: __tests__/notificacoesCanalPorConsumidor.test.ts
+     */
     subscribeToNotifications(onUpdate: (payload?: any) => void, email?: string) {
-        const channelId = email ? `notifications-${email}` : 'notifications-all';
+        proximoAssinante += 1;
+        const channelId = `notifications-${email ?? 'all'}-${proximoAssinante}`;
         const channel = supabase
             .channel(channelId)
             .on(

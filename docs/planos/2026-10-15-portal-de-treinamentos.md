@@ -153,7 +153,8 @@ função), ações: enviar/reenviar convite, editar, ativar/desativar. Serviço 
 - [x] 10 — RH › Treinamentos › aba **Portal** (`AcademyPortalAccessTab`, StandardTable) + "Aberto para inscrição" no formulário do curso
 - [x] 11 — documentação (`PLANO_MODULO_TREINAMENTOS.md` §2.1)
 - [x] Prova da camada de dados (2026-10-15, `BEGIN … ROLLBACK`, nada gravado): gestor cria TERCEIRO pela RPC → ficha `EMPREITEIRO`/`academy_externo`/salário 0; treinando vê 1 identidade, 1 curso no catálogo, inscreve-se (prazo +30 dias, origem `INSCRICAO`), lista a matrícula, lê o conteúdo (v2, 1 módulo), `ja_matriculado` vira `true`; leitura direta da tabela = 0 linhas; intruso: `my_access` = `[]` e `get_content` alheio → `42501`
-- [ ] Verificação no navegador com login (RH › Portal, convite real, `/portal-treinamentos` logado) — depende da senha da conta de teste / de um e-mail real para o convite
+- [x] Verificação no navegador com login (2026-10-15, Playwright, `C:\tmp\pwtest\portal-treinamentos\logado.js`): RH › Treinamentos › Portal em "Todas" (botão desligado dizendo o motivo) e na Alpa → "Liberar acesso" de um TERCEIRO com o e-mail da conta de teste → linha na tabela + toast; `/portal-treinamentos` com a mesma conta → casca, tour do portal (8 passos), checklist "Primeiros passos", 4 abas (estados vazios corretos), mini-tours por aba, Ajuda (artigos por seção + FAQ), Meus dados, celular (barra inferior). Sem erro de console nem 4xx/5xx. Dado de teste removido depois (acesso, ficha de terceiro e progresso de tour).
+- [ ] Convite por e-mail real (exige caixa de entrada do usuário) — a Edge Function foi sondada só sem credencial (401)
 - [ ] Publicação em `main`
 
 ## Verificação

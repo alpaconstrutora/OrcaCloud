@@ -204,10 +204,19 @@ Mesmas props, mais `ajuda?` e classes opcionais. `BoletoFormModal` passa a impor
 
 ## Estado
 
-- [ ] A — regras puras + testes
-- [ ] B — migration aplicada 2× + prova do 23503
-- [ ] C — Edge Function publicada (401 sem header)
-- [ ] D — serviços
-- [ ] E/F/G — telas
-- [ ] H — Beneficiário
-- [ ] Verificação final + produção
+- [x] A — regras puras + testes (`emailCapturePadroes` 15, `emailCaptureRegras` 41).
+- [x] B — migration aplicada 2× (verificação embutida passou nas duas); prova num bloco desfeito: centro de
+  custo de outra org → 23503, da mesma org → aceito; 0 remetentes alterados depois.
+- [x] C — Edge Function publicada (401 sem header); `deno check` limpo. Releitura: campo do padrão intacto é
+  trocado pelo PDF; do grupo multa/juros que o PDF não trouxer mais, volta a vazio.
+- [x] D — serviços: `salvarRemetente` (+12 colunas por nome), `previaDosPadroes`, `preencherComPadroesDoRemetente`
+  (trava por `updated_at`), `listChartOfAccounts` com `organization_id`.
+- [x] E/F/G — `MultaJurosFields` extraído; cadastro do remetente com Cobrança/Quem recebe/Classificação/
+  Observações (`size="xl"`, `SecaoTitulo`); "Aplicar aos N boletos"; atalho do boleto pré-preenche e abre em
+  edição quando o remetente existe; histórico do boleto mostra os campos vindos do padrão.
+- [x] H — `utils/boletoBeneficiario.ts` em célula, grade, filtro, ordenação, agrupar, lote e exportações;
+  aprovação sem `documento_nome` na descrição do título.
+- Verificação local: 24 arquivos de teste por arquivo (231 testes) verdes; typecheck parcial em 2 grupos limpo
+  (pegou 11 erros de tipo que os testes não pegavam: corrigidos); `check-ui-standard`, `check-system-projects`,
+  `check-project-classification` e `check-xss-sinks` limpos.
+- [ ] Publicar o front, CI, domínio e conferência em produção.

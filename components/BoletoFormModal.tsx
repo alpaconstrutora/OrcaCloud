@@ -20,7 +20,8 @@ import { useConfirm } from './ui/confirm';
 import { renomearDocumentoDeNovo } from '../services/boletoNomeDocumentoService';
 import { useWritableOrganizations } from '../hooks/useOrgContext';
 import MoneyCentsInput from './ui/MoneyCentsInput';
-import { emailCaptureService, type ContaCaptura, type MensagemCaptura } from '../services/emailCaptureService';
+import { emailCaptureService, type ContaCaptura, type MensagemCaptura, type RemetenteCaptura, type RemetenteRascunho } from '../services/emailCaptureService';
+import { encontrarRemetenteCadastrado, modeloDaDescricao } from '../utils/emailCaptureRegras';
 import EmailCaptureSenderSheet from './boletos/EmailCaptureSenderSheet';
 import MultaJurosFields from './boletos/MultaJurosFields';
 import type { Boleto, BoletoAuditoria, BoletoExtractionResult, Supplier, CostCenter, ChartOfAccount } from '../types';
@@ -85,6 +86,7 @@ const Secao: React.FC<React.PropsWithChildren<{ titulo: string; icone: React.Com
 
 /** Ações gravadas em `boletos_auditoria` — o texto que o painel Histórico mostra. */
 const ROTULO_AUDITORIA: Record<string, string> = {
+    padroes_remetente: 'Preenchido com os padrões do remetente',
     upload: 'Capturado',
     extracao_manual: 'Linha digitável informada à mão',
     associacao: 'Campos alterados',
@@ -98,13 +100,29 @@ const ROTULO_AUDITORIA: Record<string, string> = {
     reprocessamento: 'Lido de novo com a senha do PDF',
 };
 
+const NOME_DO_CAMPO_PADRAO: Record<string, string> = {
+    vencimento: 'vencimento', valor: 'valor', multa: 'multa', multa_percentual: 'multa', juros_dia: 'juros',
+    descricao: 'descrição', observacoes: 'observações', project_id: 'obra', cost_center_id: 'centro de custo',
+    plano_de_contas_id: 'plano de contas', category_id: 'conta financeira',
+};
+
+/** Quais campos vieram dos padrões do remetente (16/10/2026), em texto. */
+function camposDoPadrao(d: Record<string, unknown> | null): string | null {
+    const valores = (d?.padroes_do_remetente as { valores?: Record<string, unknown> } | undefined)?.valores;
+    if (!valores) return null;
+    const nomes = [...new Set(Object.keys(valores).map(k => NOME_DO_CAMPO_PADRAO[k]).filter(Boolean))];
+    return nomes.length ? nomes.join(', ') : null;
+}
+
 /** Resumo legível de um evento: origem do e-mail na captura, campos na edição. */
 function detalheDaAuditoria(a: BoletoAuditoria): string | null {
     const d = (a.valor_depois ?? null) as Record<string, unknown> | null;
+    const doPadrao = camposDoPadrao(d);
     if (a.acao === 'upload' && d?.origem === 'email') {
         const motivos = Array.isArray(d.motivos) && d.motivos.length ? ` — revisão: ${(d.motivos as string[]).join(' ')}` : '';
-        return `Por e-mail de ${String(d.remetente ?? '?')}${motivos}`;
+        return `Por e-mail de ${String(d.remetente ?? '?')}${doPadrao ? ` — padrões do remetente: ${doPadrao}` : ''}${motivos}`;
     }
+    if (a.acao === 'padroes_remetente' && doPadrao) return `Campos: ${doPadrao}`;
     if (a.campo) return `Campo: ${a.campo}`;
     if (d && typeof d === 'object') {
         const chaves = Object.keys(d).filter(k => !['confidence', 'documento_nome'].includes(k));
@@ -143,7 +161,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     // Captura por e-mail (15/10/2026): de onde veio, e o histórico do boleto.
     const [origemEmail, setOrigemEmail] = useState<MensagemCaptura | null>(null);
     const [auditoria, setAuditoria] = useState<BoletoAuditoria[] | null>(null);
-    const [favorito, setFavorito] = useState<{ aberto: boolean; contas: ContaCaptura[] }>({ aberto: false, contas: [] });
+    const [favorito, setFavorito] = useState<{ aberto: boolean; contas: ContaCaptura[]; existente: RemetenteCaptura | null; prefill: Partial<RemetenteRascunho> | null }>({ aberto: false, contas: [], existente: null, prefill: null });
+    // Cadastro do remetente deste e-mail, se já existir: o link vira "Padrões do remetente" e abre em edição.
+    const [remetenteDoEmail, setRemetenteDoEmail] = useState<RemetenteCaptura | null>(null);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
     const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
@@ -219,14 +239,69 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         return () => { vivo = false; };
     }, [boleto?.id, boleto?.email_message_id, boleto?.status]);
 
+    useEffect(() => {
+        let vivo = true;
+        setRemetenteDoEmail(null);
+        if (!origemEmail) return;
+        // Remetentes da CAIXA da mensagem (a org vem da caixa, não do topo).
+        emailCaptureService.listarRemetentes(null)
+            .then(rs => {
+                if (!vivo) return;
+                setRemetenteDoEmail(encontrarRemetenteCadastrado(origemEmail.remetente, rs.filter(r => r.account_id === origemEmail.account_id)));
+            })
+            .catch(() => undefined);
+        return () => { vivo = false; };
+    }, [origemEmail]);
+
     async function monitorarRemetente() {
-        if (!boleto) return;
+        if (!boleto || !origemEmail) return;
         try {
-            const contas = (await emailCaptureService.listarContas(boleto.organization_id)).filter(c => c.status !== 'desconectada');
-            setFavorito({ aberto: true, contas });
+            const contas = (await emailCaptureService.listarContas(null)).filter(c => c.status !== 'desconectada');
+            const existente = remetenteDoEmail;
+            // Novo: já sai com o que este boleto tem (16/10/2026). Fornecedor e
+            // classificação só se o boleto é da MESMA org da caixa — são cadastros
+            // da org, e o banco recusa os de outra (era o 23503 deste atalho).
+            const orgDaCaixa = contas.find(c => c.id === origemEmail.account_id)?.organization_id ?? null;
+            const mesmaOrg = !!orgDaCaixa && orgDaCaixa === boleto.organization_id;
+            const prefill: Partial<RemetenteRascunho> | null = existente ? null : {
+                account_id: origemEmail.account_id,
+                tipo: 'exato',
+                email: (origemEmail.remetente?.match(/<([^>]+)>/)?.[1] ?? origemEmail.remetente ?? '').trim().toLowerCase() || null,
+                supplier_id: mesmaOrg ? (supplierId || null) : null,
+                padrao_project_id: mesmaOrg ? (selectedProjectId || null) : null,
+                padrao_cost_center_id: mesmaOrg ? (costCenterId || null) : null,
+                padrao_plano_de_contas_id: mesmaOrg ? (planoDeContasId || null) : null,
+                padrao_category_id: mesmaOrg ? (categoryId || null) : null,
+                padrao_descricao: descricao.trim() ? modeloDaDescricao(descricao.trim(), vencimento || null) : null,
+                padrao_dia_vencimento: vencimento ? Number(vencimento.slice(8, 10)) : null,
+                padrao_multa: multa ? Number(multa) : null,
+                padrao_multa_percentual: multaPercentual ? Number(multaPercentual) : null,
+                padrao_juros_dia: jurosDia ? Number(jurosDia) : null,
+                padrao_juros_dia_tipo: jurosDia ? jurosDiaTipo : null,
+            };
+            setFavorito({ aberto: true, contas, existente, prefill });
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         }
+    }
+
+    /** O boleto aberto recebeu os padrões do remetente: atualiza a tela só nos campos vazios. */
+    function padroesAplicadosAqui(atual: Boleto) {
+        setBoleto(atual);
+        if (!vencimento && atual.vencimento) setVencimento(atual.vencimento);
+        if (!valor && atual.valor != null) setValor(String(atual.valor));
+        if (!descricao && atual.descricao) setDescricao(atual.descricao);
+        if (!observacoes && atual.observacoes) setObservacoes(atual.observacoes);
+        if (!selectedProjectId && atual.project_id) setSelectedProjectId(atual.project_id);
+        if (!costCenterId && atual.cost_center_id) setCostCenterId(atual.cost_center_id);
+        if (!planoDeContasId && atual.plano_de_contas_id) setPlanoDeContasId(atual.plano_de_contas_id);
+        if (!categoryId && atual.category_id) setCategoryId(atual.category_id);
+        if (!multa && !multaPercentual && !jurosDia) {
+            if (atual.multa != null) setMulta(String(atual.multa));
+            if (atual.multa_percentual != null) setMultaPercentual(String(atual.multa_percentual));
+            if (atual.juros_dia != null) { setJurosDia(String(atual.juros_dia)); setJurosDiaTipo(atual.juros_dia_tipo ?? 'valor'); }
+        }
+        onSaved(atual);
     }
 
     // Aplica sugestão de fornecedor caso nenhum esteja selecionado
@@ -725,7 +800,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         </span>
                                         <button type="button" onClick={monitorarRemetente}
                                             className="text-blue-600 hover:text-blue-800 font-medium hover:underline">
-                                            Monitorar remetente
+                                            {remetenteDoEmail ? 'Padrões do remetente' : 'Monitorar remetente'}
                                         </button>
                                     </>
                                 )}
@@ -1495,16 +1570,19 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             {boleto && origemEmail && (
                 <EmailCaptureSenderSheet
                     open={favorito.aberto}
-                    onClose={() => setFavorito({ aberto: false, contas: [] })}
+                    onClose={() => setFavorito({ aberto: false, contas: [], existente: null, prefill: null })}
                     contas={favorito.contas}
                     fornecedores={suppliers.map(s => ({ id: s.id, name: s.name, nickname: s.nickname, document: s.document, category: s.category, organization_id: s.organization_id ?? null }))}
-                    prefill={{
-                        account_id: origemEmail.account_id,
-                        tipo: 'exato',
-                        email: (origemEmail.remetente?.match(/<([^>]+)>/)?.[1] ?? origemEmail.remetente ?? '').trim().toLowerCase() || null,
-                        supplier_id: supplierId || null,
+                    remetente={favorito.existente}
+                    prefill={favorito.prefill}
+                    onSalvo={(r, resultado) => {
+                        setRemetenteDoEmail(r);
+                        const aqui = resultado?.atualizados.find(b => b.id === boleto.id);
+                        if (aqui) padroesAplicadosAqui(aqui);
+                        setInfo(resultado
+                            ? `Remetente salvo. Padrões aplicados a ${resultado.atualizados.length} boleto(s) em revisão${aqui ? ', inclusive este' : ''}.`
+                            : 'Remetente salvo. Os próximos boletos dele já chegam com os padrões.');
                     }}
-                    onSalvo={() => setInfo('Remetente monitorado. Os próximos boletos dele serão priorizados na captura.')}
                 />
             )}
         </div>

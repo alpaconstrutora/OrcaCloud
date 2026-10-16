@@ -221,7 +221,7 @@ export const emailCaptureService = {
         if (organizationId) q = q.eq('organization_id', organizationId);
         const { data, error } = await q;
         if (error) throw error;
-        return (data ?? []) as RemetenteCaptura[];
+        return (data ?? []) as unknown as RemetenteCaptura[];
     },
 
     /** Últimas mensagens processadas (histórico da captura), mais recentes primeiro. */
@@ -388,7 +388,7 @@ export const emailCaptureService = {
             if (error.code === '23514') throw new Error('Padrão inválido: dia do vencimento de 1 a 31, valor maior que zero e multa em R$ ou em %, não os dois.');
             throw error;
         }
-        return data as RemetenteCaptura;
+        return data as unknown as RemetenteCaptura;
     },
 
     /**
@@ -402,7 +402,7 @@ export const emailCaptureService = {
         const { data: daCaixa, error: eRem } = await supabase.from('email_capture_senders')
             .select(COLUNAS_REMETENTE).eq('account_id', r.account_id);
         if (eRem) throw eRem;
-        const remetentes = (daCaixa ?? []) as RemetenteCaptura[];
+        const remetentes = (daCaixa ?? []) as unknown as RemetenteCaptura[];
 
         const PAGINA = 1000;
         const mensagens: Array<{ boleto_id: string; remetente: string | null; assunto: string | null; documento_nome: string | null; data_email: string | null; created_at: string }> = [];
@@ -430,7 +430,7 @@ export const emailCaptureService = {
                 .in('status', ['revisao', 'rascunho'])
                 .is('invoice_id', null);
             if (error) throw error;
-            for (const b of (data ?? []) as Array<CamposParaPadroes & { id: string; numero: number | null; updated_at: string; erros_validacao: string[] | null }>) {
+            for (const b of (data ?? []) as unknown as Array<CamposParaPadroes & { id: string; numero: number | null; updated_at: string; erros_validacao: string[] | null }>) {
                 const { patch, campos } = aplicarPadroesDoRemetente(b, r, dataPorBoleto.get(b.id)!);
                 if (campos.length) previa.push({ boleto: { id: b.id, numero: b.numero, updated_at: b.updated_at, erros_validacao: b.erros_validacao }, patch, campos });
             }

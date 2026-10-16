@@ -46,7 +46,7 @@ const remetente = (x: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
     vi.clearAllMocks();
-    svc.salvarRemetente.mockImplementation(async (_id: string, r: Record<string, unknown>) => ({ ...remetente(), ...r, id: 's1' }));
+    svc.salvarRemetente.mockImplementation(async (_id: string, r: Record<string, unknown>) => ({ ...(remetente() as object), ...r, id: 's1' }));
     svc.previaDosPadroes.mockResolvedValue([]);
     boletos.preencherComPadroesDoRemetente.mockResolvedValue({ atualizados: [{ id: 'b1' }, { id: 'b2' }], pulados: 0 });
 });

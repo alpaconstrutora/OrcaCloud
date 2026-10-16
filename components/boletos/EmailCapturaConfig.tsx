@@ -57,7 +57,8 @@ import type { SecaoCaptura } from './abasBoletos';
 import EmailCaptureAccountSheet from './EmailCaptureAccountSheet';
 import EmailCaptureBuscaSheet from './EmailCaptureBuscaSheet';
 import EmailCaptureRegraSheet from './EmailCaptureRegraSheet';
-import EmailCaptureSenderSheet, { type FornecedorDaOrg } from './EmailCaptureSenderSheet';
+import EmailCaptureSenderSheet, { type FornecedorDaOrg, type ResultadoDosPadroes } from './EmailCaptureSenderSheet';
+import type { Boleto } from '../../types';
 
 const COR_STATUS: Record<StatusConta, string> = {
     ativa: 'text-emerald-700', pausada: 'text-gray-600', reautenticar: 'text-red-600', desconectada: 'text-gray-500',
@@ -136,9 +137,11 @@ interface Props {
     onAbrirBoleto?: (boletoId: string) => void;
     /** Algo que muda os contadores das abas aconteceu (busca, sincronização). */
     onResumoMudou?: () => void;
+    /** Boletos em revisão que receberam os padrões do remetente ao salvar (16/10/2026). */
+    onBoletosAtualizados?: (boletos: Boleto[]) => void;
 }
 
-const EmailCapturaConfig: React.FC<Props> = ({ secao, onAbrirBoleto, onResumoMudou }) => {
+const EmailCapturaConfig: React.FC<Props> = ({ secao, onAbrirBoleto, onResumoMudou, onBoletosAtualizados }) => {
     const { orgId } = useOrgContext();
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const organizations = useStore(s => s.organizations);
@@ -358,9 +361,15 @@ const EmailCapturaConfig: React.FC<Props> = ({ secao, onAbrirBoleto, onResumoMud
     const buscaDaUnicaCaixa = contasAtivas.length === 1 ? buscaAtivaDa(contasAtivas[0].id) : null;
 
     // ─── ações dos remetentes ────────────────────────────────────────────────
-    function remetenteSalvo(r: RemetenteCaptura) {
+    function remetenteSalvo(r: RemetenteCaptura, resultado?: ResultadoDosPadroes) {
         const doIgnorado = !!sheetRemetente.doIgnorado;
         setRemetentes(prev => prev.some(x => x.id === r.id) ? prev.map(x => (x.id === r.id ? r : x)) : [...prev, r]);
+        if (resultado) {
+            if (resultado.atualizados.length) onBoletosAtualizados?.(resultado.atualizados);
+            const pulados = resultado.pulados ? ` ${resultado.pulados} ficaram de fora: foram alterados por alguém enquanto isso.` : '';
+            showToast(`Remetente salvo. Padrões aplicados a ${resultado.atualizados.length} boleto(s) em revisão.${pulados}`);
+            return;
+        }
         showToast(doIgnorado ? MSG_DO_IGNORADO : 'Remetente salvo.');
     }
 

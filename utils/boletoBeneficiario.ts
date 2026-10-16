@@ -10,7 +10,12 @@
  * Decisão do usuário: sem fornecedor confirmado, mostrar o SUGERIDO em cinza.
  * Plano: docs/planos/2026-10-16-captura-padroes-do-remetente.md (passo H).
  */
-import type { Boleto } from '../types';
+/** O que o nome precisa do boleto — aceita a linha do banco (null) e o tipo Boleto (opcional). */
+export interface BoletoParaBeneficiario {
+    supplier_id?: string | null;
+    sugestao_supplier_id?: string | null;
+    beneficiario_nome?: string | null;
+}
 
 export type OrigemBeneficiario = 'fornecedor' | 'boleto' | 'sugerido' | 'nenhum';
 
@@ -29,7 +34,7 @@ export function limparNomeDoBeneficiario(nome: string | null | undefined): strin
  * NUNCA o nome do arquivo.
  */
 export function beneficiarioDoBoleto(
-    b: Pick<Boleto, 'supplier_id' | 'sugestao_supplier_id' | 'beneficiario_nome'>,
+    b: BoletoParaBeneficiario,
     nomesFornecedor: Record<string, string>,
 ): { nome: string | null; origem: OrigemBeneficiario } {
     if (b.supplier_id && nomesFornecedor[b.supplier_id]) return { nome: nomesFornecedor[b.supplier_id], origem: 'fornecedor' };
@@ -43,7 +48,7 @@ export function beneficiarioDoBoleto(
 
 /** Para texto corrido (exportação, lista de lote): o nome, ou "—". */
 export function nomeDoBeneficiario(
-    b: Pick<Boleto, 'supplier_id' | 'sugestao_supplier_id' | 'beneficiario_nome'>,
+    b: BoletoParaBeneficiario,
     nomesFornecedor: Record<string, string>,
 ): string {
     return beneficiarioDoBoleto(b, nomesFornecedor).nome ?? '—';

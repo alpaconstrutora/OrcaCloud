@@ -29,6 +29,8 @@ const svc = vi.hoisted(() => ({
 const captura = vi.hoisted(() => ({
     mensagemDoBoleto: vi.fn(),
     listarContas: vi.fn().mockResolvedValue([]),
+    // Desde 16/10/2026 o formulário procura o cadastro do remetente (link "Padrões do remetente").
+    listarRemetentes: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('../../services/emailCaptureService', () => ({ emailCaptureService: captura }));
 

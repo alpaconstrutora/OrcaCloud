@@ -1117,7 +1117,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             <TabsBar tabs={abasComContador} value={aba} onChange={setAba} />
 
             {secaoCaptura ? (
-                <EmailCapturaConfig secao={secaoCaptura} onAbrirBoleto={abrirBoletoPorId} onResumoMudou={atualizarResumoCaptura} />
+                <EmailCapturaConfig secao={secaoCaptura} onAbrirBoleto={abrirBoletoPorId} onResumoMudou={atualizarResumoCaptura}
+                    onBoletosAtualizados={atualizados => {
+                        // §22: troca as linhas na lista em vez de recarregar tudo.
+                        const porId = new Map(atualizados.map(b => [b.id, b]));
+                        setBoletos(prev => prev.map(b => porId.get(b.id) ?? b));
+                        void recarregarStats();
+                    }} />
             ) : (<>
 
             {/* 3. Cards de resumo — padrão guia seção 4 (componente KpiCard) */}

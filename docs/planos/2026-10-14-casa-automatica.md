@@ -142,7 +142,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [x] F12c instalações (ver "Registro da F12c") · [x] F12d tela e provas (ver "Registro da F12d", com a conferência no app real)
 - [x] F13 — pressão da água por caso: caixa elevada ou pressurizador (ver "Registro da F13")
 - [x] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [x] F14b forro e plenum (ver "Registro da F14b") · [x] F14c furos, laje rebaixada e um tubo de queda por banheiro (ver "Registro da F14c"; f95aa616 no ar em 16/10) · [x] F14d linha do ar e dreno lado a lado (ver "Registro da F14d")
-- [ ] F15 — a casa na unidade do Empreendimento (ver "Registro da F15")
+- [x] F15 — a casa na unidade do Empreendimento (ver "Registro da F15")
 
 ## Registro da F1 (14/10/2026)
 
@@ -1835,3 +1835,12 @@ Desenho:
 - Adaptador `blueprint`: `ladoDaCasa` (premissas de `blueprint_study_casa`; a unidade conferida no mesmo
   Empreendimento por duas consultas — sem embed). A auditoria diz "Casa da Planta Inteligente".
 - Tela: "Unidade do Empreendimento desta casa" (com "Nenhuma" e "Unidade não encontrada"); premissas com `unidadeId`.
+
+**Conferência no app real (16/10/2026, `c:/tmp/pwtest/conferencia-f15.cjs`; escrita autorizada pelo usuário: "sim" ao
+Empreendimento descartável):** Empreendimento "ZZ TESTE Casa F15 (descartável)" ligado a uma planta descartável, torre
+"Residencial ZZ" com a unidade "Casa 07" (só nome e tipologia "3Q R1-N"). Na tela, o seletor listou "Residencial ZZ ·
+Casa 07"; a escolha sobreviveu a recarregar; gerar, lançar, publicar a versão; sincronizar: ensaio 0 torre / 0 unidade
+novas, 1 atualizada; a "Casa 07" e a torre ficaram com a chave do estudo e com 156,45 m², 3 dormitórios, 1 suíte,
+2 banheiros e 2 vagas — o que `unidadeDaCasa` mede na versão publicada; nome e tipologia intactos; sincronizar de novo
+não muda nada; nenhuma proposta na Curadoria. Limpeza conferida no banco: estudo ARQUIVADO, Empreendimento e torre
+apagados (unidades em cascata). Ficam, de propósito, os eventos da trilha de auditoria (sem FK, por desenho).

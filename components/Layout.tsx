@@ -11,6 +11,7 @@ import { taskService } from '../services/taskService';
 import { academyService } from '../services/academyService';
 import { viewUrl } from '../lib/tabRouter';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
+import { podeVerTreinamentos } from '../utils/permissaoTreinamentos';
 
 const ThemeModeIcon = ({ mode, className }: { mode: ThemeMode; className?: string }) => {
   if (mode === 'light') return <Sun className={className} />;
@@ -224,15 +225,15 @@ const Layout: React.FC<LayoutProps> = ({
 
     if (profile.group === 'DESENVOLVEDOR' || isDevEmail) {
       return {
-        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true
+        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true
       };
     }
 
-    if (!currentMember) return { ...baseMods, ecommerce: false };
+    if (!currentMember) return { ...baseMods, ecommerce: false, treinamentos: baseMods.rh !== false };
 
     if (currentMember.role === 'admin') {
       return {
-        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true
+        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true
       };
     }
 
@@ -272,6 +273,7 @@ const Layout: React.FC<LayoutProps> = ({
         pro: checkModule('pro', 'canViewPro', 'pro'),
         rentals: false,
         ecommerce: false,
+        treinamentos: false,
       };
     }
 
@@ -285,13 +287,22 @@ const Layout: React.FC<LayoutProps> = ({
         crm: checkModule('crm', 'canViewSales', 'crm'),
         rentals: checkModule('crm', 'canViewRentals', 'rentals'),
         ecommerce: false,
+        treinamentos: false,
       };
     }
 
+    const rh = checkModule('rh', 'canViewLabor', 'rh');
     return {
       obras: checkModule('obras', 'canViewBudget', 'obras'),
       compras: checkModule('compras', 'canViewOrders', 'compras'),
-      rh: checkModule('rh', 'canViewLabor', 'rh'),
+      rh,
+      // Gestão de treinamentos fora do RH (16/10/2026): chave própria; sem nada
+      // gravado, herda o que o RH decide para o usuário (utils/permissaoTreinamentos.ts).
+      treinamentos: podeVerTreinamentos({
+        permissoes: currentMember.permissions as unknown as Record<string, unknown> | undefined,
+        matrizDoCargo: roleConfig,
+        podeVerRh: rh,
+      }),
       offices: checkModule('offices', 'canViewOffices', 'offices'),
       pro: checkModule('pro', 'canViewPro', 'pro'),
       crm: checkModule('crm', 'canViewSales', 'crm'),
@@ -511,6 +522,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'dashboard', label: 'Dashboard', group: 'Geral', icon: LayoutDashboard },
       { id: 'tarefas', label: 'Minhas tarefas', group: 'Geral', icon: CheckSquare, shortcut: 'N' },
       { id: 'meus-treinamentos', label: 'Meus treinamentos', group: 'Geral', icon: GraduationCap },
+      { id: 'treinamentos', label: 'Treinamentos', group: 'Operacional', icon: GraduationCap },
       { id: 'notifications-center', label: 'Notificações', group: 'Geral', icon: Bell },
       { id: 'eng-obras', label: 'Obras', group: 'Engenharia', icon: Building2 },
       { id: 'eng-orcamentos', label: 'Orcamentos', group: 'Engenharia', icon: FolderOpen },
@@ -981,6 +993,13 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
+              {/* Gestão de treinamentos — saiu de dentro de Recursos Humanos em
+                  16/10/2026: atende colaboradores e terceirizados, e quem gerencia
+                  não é só o RH. Permissão própria, herdando do RH. */}
+              {(mod.treinamentos || isDev) && (
+                <NavItem id="treinamentos" icon={GraduationCap} label="Treinamentos" />
+              )}
+
               {(mod.rh || isDev) && (
                 <NavDropdown
                   label="Recursos Humanos"
@@ -1017,7 +1036,6 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="labor-timebank" label="Banco de Horas" icon={Clock} />
                   <DropdownItem id="labor-productivity" label="Produtividade" icon={Target} />
                   <DropdownItem id="labor-absences" label="Férias e Ausências" icon={Calendar} />
-                  <DropdownItem id="labor-trainings" label="Treinamentos" icon={BookOpen} />
                   <DropdownItem id="labor-epis" label="EPIs" icon={Shield} />
                   <DropdownItem id="labor-sst" label="SST" icon={Shield} />
                   <DropdownItem id="labor-documents" label="Documentos" icon={FileText} />
@@ -1352,6 +1370,9 @@ const Layout: React.FC<LayoutProps> = ({
               )}
 
               <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" forceFull />
+              {(mod.treinamentos || isDev) && (
+                <NavItem id="treinamentos" icon={GraduationCap} label="Treinamentos" forceFull />
+              )}
 
               {(mod.ecommerce || isDev) && (
                 <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" forceFull />

@@ -403,6 +403,13 @@ export interface UserPermissions {
     canViewWarranty?: boolean;
     canEditWarranty?: boolean;
 
+    // --- Treinamentos (gestão da Academia) ---
+    // Saiu de dentro do RH em 16/10/2026: quem gerencia treinamento não é só o RH
+    // (segurança do trabalho, engenharia de obra). Sem valor gravado, herda do RH
+    // (`canViewLabor`/`canEditLabor`) — ver utils/permissaoTreinamentos.ts.
+    canViewTrainings?: boolean;
+    canEditTrainings?: boolean;
+
     // --- Recursos Humanos ---
     canEditLabor?: boolean;
     canViewPayroll?: boolean;

@@ -64,6 +64,7 @@ const OperacionalModule     = React.lazy(() => import('./OperacionalModule'));
 const StructuralModule      = React.lazy(() => import('./StructuralModule'));
 const TasksModule           = React.lazy(() => import('./TasksModule'));
 const MeusTreinamentosView  = React.lazy(() => import('./academy/MeusTreinamentosView'));
+const TrainingsModule       = React.lazy(() => import('./training/TrainingsModule'));
 const ServicesCommercialModule = React.lazy(() => import('./ServicesCommercialModule'));
 const ServiceContractsModule   = React.lazy(() => import('./ServiceContractsModule'));
 const SalesManagementModule    = React.lazy(() => import('./SalesManagementModule'));
@@ -72,6 +73,7 @@ import { VIEW_TO_CONTROLADORIA_TAB } from '../constants/controladoríaTabs';
 // Só o tipo: o componente continua lazy (import type não gera chunk).
 import type { SupplierPortalTab } from './SupplierDashboard';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
+import { podeEditarTreinamentos } from '../utils/permissaoTreinamentos';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const AppraisalModule = React.lazy(() => import('./AppraisalModule'));
@@ -260,7 +262,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   // Fora do guard de rota porque também decide o que aparece DENTRO de uma tela:
   // a aba Mapa Regulatório da Planta Inteligente leva a mesma trava que a rota
   // `regulatory-maps` levava — a regra mora aqui uma vez só, não copiada no módulo.
-  const isModuleAllowed = React.useCallback((userPermKey: string, matrixKey: string): boolean => {
+  const isModuleAllowed = React.useCallback((userPermKey: string, matrixKey: string, padrao?: () => boolean): boolean => {
     // Desenvolvedores sempre têm acesso total
     if (currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !activeOrganizationId) return true;
     // Sem membro correspondente na organização selecionada (pode estar carregando)
@@ -288,7 +290,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     if (roleConfig[matrixKey] !== undefined) {
       return !!roleConfig[matrixKey];
     }
-    return true; // Default true
+    // Nada gravado: o padrão é liberar — ou herdar de outro módulo, quando a
+    // chave nasceu de dentro dele (Treinamentos herda do RH, 16/10/2026).
+    return padrao ? padrao() : true;
   }, [currentProfile.group, isDevEmail, activeOrganizationId, currentMember, activeOrg]);
 
   // O Mapa Regulatório deixou de ser item de menu e virou aba da Planta
@@ -318,10 +322,23 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return;
     }
 
+    // RH › Treinamentos virou o item "Treinamentos" (16/10/2026,
+    // docs/planos/2026-10-16-treinamentos-fora-do-rh-e-meus-treinamentos.md). O
+    // endereço antigo — atalhos do Dashboard RH, view salva, busca — cai no novo,
+    // ANTES da trava do RH: quem gerencia treinamento sem ser do RH não pode ser
+    // barrado pelo endereço velho.
+    if (activeView === 'labor-trainings') {
+      setActiveView('treinamentos');
+      return;
+    }
+
     // Mapear activeView para suas respectivas permissões
     let allowed = true;
-    
-    if (activeView.startsWith('labor-') || activeView === 'labor-management') {
+
+    if (activeView === 'treinamentos') {
+      // Chave própria; sem nada gravado, herda do RH (utils/permissaoTreinamentos.ts).
+      allowed = isModuleAllowed('canViewTrainings', 'treinamentos', () => isModuleAllowed('canViewLabor', 'rh'));
+    } else if (activeView.startsWith('labor-') || activeView === 'labor-management') {
       allowed = isModuleAllowed('canViewLabor', 'rh');
     } else if (activeView === 'pro-dashboard') {
       allowed = isModuleAllowed('canViewPro', 'pro');
@@ -858,7 +875,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     // Fase 1 extras
     case 'labor-epis':
     case 'labor-absences':
-    case 'labor-trainings':
     case 'labor-rh-dashboard':
     case 'labor-termination':
     // Fase 2
@@ -1251,6 +1267,22 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     // não tem permissão de RH. A gestão continua em RH › Treinamentos.
     case 'meus-treinamentos':
       return <MeusTreinamentosView orgId={activeOrganizationId ?? undefined} />;
+
+    // ── Treinamentos (gestão) — fora do RH desde 16/10/2026 ───────────────────
+    // `labor-trainings` é redirecionado para cá pela trava de rotas; o case dele
+    // segura o quadro entre o render e o redirecionamento.
+    case 'treinamentos':
+    case 'labor-trainings':
+      return (
+        <TrainingsModule
+          // Atribuição por obra: `typedProjects` já vem sem projeto de sistema e só OBRA (REGRA #2/#3).
+          projects={typedProjects.map(p => ({ id: p.id, name: p.name }))}
+          podeEditar={podeEditarTreinamentos({
+            permissoes: currentMember?.permissions as unknown as Record<string, unknown> | undefined,
+            administrador: currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !currentMember || currentMember.role === 'admin',
+          })}
+        />
+      );
 
     // ── Estrutural / Ferragem Armada ───────────────────────────────────────────
     case 'estrutural':

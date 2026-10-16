@@ -20,7 +20,6 @@ import LaborFiscalSettings from './LaborFiscalSettings';
 import LaborEncargos from './LaborEncargos';
 import LaborEPIs from './LaborEPIs';
 import LaborAbsences from './LaborAbsences';
-import LaborTrainings from './LaborTrainings';
 import LaborRHDashboard from './LaborRHDashboard';
 import LaborTermination from './LaborTermination';
 import LaborTimeBank from './LaborTimeBank';
@@ -556,17 +555,10 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
                             organizations={organizations}
                         />
                     )}
-                    {activeTab === 'trainings' && (
-                        <LaborTrainings
-                            orgId={orgId}
-                            employees={employees}
-                            onRefresh={refetchAll}
-                            organizations={organizations}
-                            // Atribuição por obra. `projects` já chega sem projeto
-                            // de sistema e só com OBRA (REGRA #2/#3).
-                            projects={projects.map(p => ({ id: p.id, name: p.name }))}
-                        />
-                    )}
+                    {/* Treinamentos saiu do RH em 16/10/2026: item próprio "Treinamentos"
+                        (components/training/TrainingsModule.tsx). O atalho do painel
+                        abaixo continua levando a `labor-trainings`, que o AppRouter
+                        redireciona para `treinamentos`. */}
                     {activeTab === 'rh_dashboard' && (
                         <LaborRHDashboard
                             orgId={orgId}

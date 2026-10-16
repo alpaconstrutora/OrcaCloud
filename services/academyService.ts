@@ -29,6 +29,30 @@ import type {
 } from '../types/academy';
 
 export const ACADEMY_BUCKET = 'academy-media';
+
+/**
+ * Colaboradores por id — no lugar do embed `employee:employees!employee_id(...)`.
+ *
+ * As tabelas da Academia (`academy_enrollments`, `academy_certificates`) NÃO têm
+ * FK para `employees`, de propósito (tabela quente — deadlock 40P01, ver
+ * 20270850000002). Sem FK o PostgREST recusa o embed com PGRST200 e a consulta
+ * INTEIRA falha: foi assim que "Meus Treinamentos" ficou vazio para todos desde
+ * 08/2026 (docs/planos/2026-10-16-treinamentos-fora-do-rh-e-meus-treinamentos.md).
+ * Por isso o nome vem de uma segunda leitura, que nunca derruba a primeira.
+ */
+async function colaboradoresPorId(
+    ids: Array<string | null | undefined>, cols = 'id, name, role',
+): Promise<Map<string, { name?: string; role?: string; cpf?: string }>> {
+    const unicos = [...new Set(ids.filter((x): x is string => !!x))];
+    if (!unicos.length) return new Map();
+    const { data, error } = await supabase.from('employees').select(cols).in('id', unicos);
+    if (error) {
+        console.warn('[academyService] nomes dos colaboradores não carregaram:', error.message);
+        return new Map();
+    }
+    return new Map(((data || []) as unknown as Array<{ id: string; name?: string; role?: string; cpf?: string }>)
+        .map(e => [e.id, e]));
+}
 const SIGNED_URL_TTL = 60 * 15;   // 15 min (PLANO_STORAGE_PRIVATIZACAO)
 
 const VERSION_COLS =
@@ -597,8 +621,8 @@ export const academyService = {
     }): Promise<AcademyEnrollment[]> {
         let query = supabase
             .from('academy_enrollments')
+            // Sem embed de `employees`: não há FK (ver `colaboradoresPorId`).
             .select(`${ENROLLMENT_COLS},
-                employee:employees!employee_id(name, role),
                 course:training_courses!course_id(nome, nr_referencia, categoria, carga_horaria),
                 versao:academy_course_versions!version_id(versao)`)
             .neq('status', 'CANCELADO')
@@ -612,10 +636,11 @@ export const academyService = {
         const { data, error } = await query;
         if (error) throw error;
 
+        const pessoas = await colaboradoresPorId(((data || []) as any[]).map(e => e.employee_id));
         return ((data || []) as any[]).map(e => ({
             ...e,
-            employee_name: e.employee?.name,
-            employee_role: e.employee?.role,
+            employee_name: pessoas.get(e.employee_id)?.name,
+            employee_role: pessoas.get(e.employee_id)?.role,
             course_nome:   e.course?.nome,
             nr_referencia: e.course?.nr_referencia,
             categoria:     e.course?.categoria,
@@ -928,8 +953,8 @@ export const academyService = {
     async listCertificates(orgId?: string | null, employeeId?: string): Promise<AcademyCertificate[]> {
         let query = supabase
             .from('academy_certificates')
+            // Sem embed de `employees`: não há FK (ver `colaboradoresPorId`).
             .select(`${CERTIFICATE_COLS},
-                employee:employees!employee_id(name),
                 course:training_courses!course_id(nome, nr_referencia)`)
             .order('emitido_em', { ascending: false });
         if (orgId)      query = query.eq('org_id', orgId);
@@ -937,9 +962,10 @@ export const academyService = {
 
         const { data, error } = await query;
         if (error) throw error;
+        const pessoas = await colaboradoresPorId(((data || []) as any[]).map(c => c.employee_id));
         return ((data || []) as any[]).map(c => ({
             ...c,
-            employee_name: c.employee?.name,
+            employee_name: pessoas.get(c.employee_id)?.name,
             course_nome:   c.course?.nome,
             nr_referencia: c.course?.nr_referencia,
         })) as AcademyCertificate[];
@@ -948,8 +974,8 @@ export const academyService = {
     async getCertificate(certificateId: string): Promise<AcademyCertificate | null> {
         const { data, error } = await supabase
             .from('academy_certificates')
+            // Sem embed de `employees`: não há FK (ver `colaboradoresPorId`).
             .select(`${CERTIFICATE_COLS},
-                employee:employees!employee_id(name, cpf),
                 course:training_courses!course_id(nome, nr_referencia),
                 versao:academy_course_versions!version_id(versao)`)
             .eq('id', certificateId)
@@ -958,9 +984,10 @@ export const academyService = {
         if (!data) return null;
 
         const c = data as any;
+        const pessoa = (await colaboradoresPorId([c.employee_id], 'id, name')).get(c.employee_id);
         return {
             ...c,
-            employee_name: c.employee?.name,
+            employee_name: pessoa?.name,
             course_nome:   c.course?.nome,
             nr_referencia: c.course?.nr_referencia,
             versao:        c.versao?.versao,
@@ -1012,8 +1039,8 @@ export const academyService = {
     }): Promise<AcademyManagerRow[]> {
         let query = supabase
             .from('academy_enrollments')
-            .select(`employee_id, status, data_limite,
-                     employee:employees!employee_id(name, role)`)
+            // Sem embed de `employees`: não há FK (ver `colaboradoresPorId`).
+            .select('employee_id, status, data_limite')
             .neq('status', 'CANCELADO');
         if (args.orgId) query = query.eq('org_id', args.orgId);
         if (args.employeeIds?.length) query = query.in('employee_id', args.employeeIds);
@@ -1023,14 +1050,15 @@ export const academyService = {
 
         const hoje = new Date().toISOString().split('T')[0];
         const porPessoa = new Map<string, AcademyManagerRow>();
+        const pessoas = await colaboradoresPorId(((data || []) as any[]).map(r => r.employee_id));
 
         for (const row of (data || []) as any[]) {
             const id = row.employee_id as string;
             if (!porPessoa.has(id)) {
                 porPessoa.set(id, {
                     employee_id: id,
-                    employee_name: row.employee?.name ?? '—',
-                    employee_role: row.employee?.role ?? undefined,
+                    employee_name: pessoas.get(id)?.name ?? '—',
+                    employee_role: pessoas.get(id)?.role ?? undefined,
                     total: 0, concluidos: 0, pendentes: 0, atrasados: 0, aderencia_pct: 0,
                 });
             }

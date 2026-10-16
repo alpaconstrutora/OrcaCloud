@@ -75,8 +75,8 @@ serve.
 
 | Quem | Onde | Como chega |
 |---|---|---|
-| RH, SESMT, gestor | **Recursos Humanos › Treinamentos** — catálogo, atribuições, registros, painéis | menu de RH, atrás de `canViewLabor` |
-| Colaborador **com** login | **Meus Treinamentos** — área pessoal | item solto na sidebar, **sem guarda de módulo**, ao lado de Minhas Tarefas |
+| RH, SESMT, gestor, engenharia de obra | **Treinamentos** (item próprio no menu Operacional desde 16/10/2026; era Recursos Humanos › Treinamentos) — catálogo, atribuições, registros, painéis, acessos ao Portal de Treinamentos | `canViewTrainings`/`canEditTrainings`; sem valor gravado, herda do RH (`utils/permissaoTreinamentos.ts`) |
+| Colaborador **com** login | **Meus Treinamentos** — área pessoal, com as mesmas quatro abas do Portal de Treinamentos (Meus treinamentos · Catálogo com inscrição · Certificados · Histórico) desde 16/10/2026 | item solto na sidebar, **sem guarda de módulo**, ao lado de Minhas Tarefas |
 | Colaborador **sem** login (maior parte da mão de obra) | **Portal do Colaborador** | link `/portal?token=`, gerado pelo RH |
 | Colaborador ou **terceirizado/prestador** com e-mail | **Portal de Treinamentos** (`components/training/`, 15/10/2026) | `/portal-treinamentos`, e-mail + senha por convite (`academy_portal_users`, Edge Function `academy-portal-invite`); RH › Treinamentos › aba Portal gerencia os acessos. Plano: `docs/planos/2026-10-15-portal-de-treinamentos.md` |
 
@@ -148,7 +148,7 @@ Gamificação (opcional, só depois de haver volume real de usuários).
 
 ## 4. Papéis e permissões
 
-Permissão base: `canViewLabor` (ver) e `canEditLabor` (administrar), como o
+Permissão base: `canViewTrainings` (ver) e `canEditTrainings` (administrar) — chaves próprias desde 16/10/2026; sem valor gravado, valem `canViewLabor`/`canEditLabor`, como era (`utils/permissaoTreinamentos.ts`). Antes, como o
 resto do RH.
 
 | Papel | O que faz |

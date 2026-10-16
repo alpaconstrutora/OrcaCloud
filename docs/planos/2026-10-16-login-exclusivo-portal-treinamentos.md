@@ -102,7 +102,11 @@ já existe desde 15/10 — fora do escopo.
   0 erros de console/HTTP. Prints `40-…45-login-exclusivo-*.png`.
 - [ ] Navegador, passo 4 (recusa → seletor) e passo 5 (treinando real, grava em produção) — precisam da
   senha da conta de teste e do OK do usuário
-- [ ] Publicação em `main` + `conferir-producao.sh`
+- [x] Provas locais antes do push: `vite build exit=0` ("✓ built in 31.32s", PWA 28 entradas),
+  suíte completa `9730 = 9696 passados + 34 pendentes`, 0 falhas (reporter JSON, conta fechando),
+  `check-xss-sinks.sh` limpo
+- [x] Publicação em `main` — `a1d8a087` (2026-10-16); `conferir-producao.sh "Fale com o RH da sua
+  empresa"` ✅ na 3ª rodada (domínio carimbado `a1d8a08`, texto presente no bundle servido)
 
 ## Verificação
 

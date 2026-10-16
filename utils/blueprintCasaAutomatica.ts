@@ -29,7 +29,7 @@
  * mão direita de quem olha da rua —, e a `transformacao` leva ao mundo. Com a
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
-import { applyBatch, conflitosDoModelo, medirEscada, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point } from './blueprintKernel';
+import { TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, envelopeDoTrecho, medirEscada, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point, type SpaceLabel } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
 import { recuosEfetivos } from './blueprintZonaUrbanistica';
@@ -47,6 +47,7 @@ import {
   HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO,
   programaDaCasa,
   resumoDoPrograma,
+  usoDoNome,
   type HipotesesDoProgramaDaCasa,
   type Programa,
   type ProgramaCurtoDaCasa,
@@ -82,7 +83,10 @@ import { marcasDeVerificacao } from './blueprintVerificacaoRede';
 import { pressoesDoModelo, type HipotesesDePressao } from './blueprintPressaoDaRede';
 import { KPA_POR_MCA } from './blueprintHidraulicaPressao';
 import { comandosDePontosDoNivel } from './blueprintPontosEletricosDoNivel';
+import { comodosComForro, type FaixaDoForro } from './blueprintRotaPeloForro';
+import { presetDeAcabamento, presetsSugeridos } from './blueprintAcabamentos';
 import { encaixarNaParede, paredesEmComum } from './blueprintRotaPelasParedes';
+import { pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { centroDeCargas, comandosParaOCentro } from './blueprintCentroDeCargas';
 import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos, type HipotesesDeCircuitos } from './blueprintCircuitosAutomaticos';
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO, sugerirDPS, type HipotesesEletricas } from './blueprintEletricaDimensionamento';
@@ -422,6 +426,7 @@ export type EtapaDaCasaId =
   | 'CLIMATIZACAO'
   | 'DR_DPS'
   | 'ELETRODUTOS'
+  | 'FORRO'
   | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
@@ -447,6 +452,7 @@ export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
   CLIMATIZACAO: 'Climatização (carga térmica, splits, linhas, circuitos)',
   DR_DPS: 'Proteção (DR e DPS) e ligação da entrada',
   ELETRODUTOS: 'Eletrodutos',
+  FORRO: 'Forro dos cômodos (as redes nas faixas do plenum)',
   CONFERENCIA: 'Conferência (programa e legislação)',
 };
 const ORDEM_DAS_ETAPAS = Object.keys(ROTULO_DA_ETAPA_DA_CASA) as EtapaDaCasaId[];
@@ -548,7 +554,64 @@ export interface HipotesesDaCasa {
    * (e ao centro do shaft), mm — a água fria fica no eixo. Igual nas duas direções do quadro da frente.
    */
   faixas: { aguaQuenteMm: number; esgotoMm: number };
+  /**
+   * F14b (decisões do usuário: "forro com faixas", 15/10, e "manter 2,80 m, furar vigas", 16/10): o forro dos cômodos e
+   * a faixa de cada rede no plenum acima dele. `lancar: false` = como até a F14a (as redes 10 cm sob a viga, sem forro).
+   */
+  forro: HipotesesDoForroDaCasa;
 }
+
+/** F14b — o forro e as faixas das redes no plenum. */
+export interface HipotesesDoForroDaCasa {
+  lancar: boolean;
+  /** Pé-direito livre mínimo (do piso acabado à face do forro), mm: cômodos de permanência (sala, dormitório, suíte, cozinha, escritório) e os demais. */
+  peDireitoLivrePermanenciaMm: number;
+  peDireitoLivreDemaisMm: number;
+  /** A espessura do piso acabado na conta do pé-direito livre (a casa não lança o piso), mm. */
+  pisoAcabadoMm: number;
+  /** O forro fica a esta folga abaixo do tubo mais baixo do plenum, mm. */
+  folgaSobAFaixaMm: number;
+  /** A descida até o ponto entra na parede a esta folga do fundo da viga, mm. */
+  folgaSobAVigaMm: number;
+  /** A faixa de cada rede: cota (abaixo da laje) e afastamento da face da parede ou da viga. */
+  eletrica: FaixaDoForro;
+  frigorigena: FaixaDoForro;
+  aguaQuente: FaixaDoForro;
+  aguaFria: FaixaDoForro;
+}
+
+/**
+ * As faixas, de cima para baixo: eletroduto, linha frigorígena, água quente, água fria. Entre duas faixas, a soma dos
+ * MAIORES raios das duas (a conferência de conflitos mede o tubo como esfera: a linha frigorígena, com os dois tubos
+ * lado a lado, conta 39 mm) mais 5 mm; o eletroduto de 75 mm do quadro ainda passa sob a laje. Para dentro do cômodo,
+ * cada uma ~60 mm além da anterior: a descida de uma não cruza o ramal da outra (afastamento ≥ soma dos raios). Com
+ * pé-direito de 2,80 m, o forro fica a 2,55 m — o pé-direito livre de 2,50 m com 5 cm de piso.
+ */
+export const HIPOTESES_DO_FORRO_DA_CASA_PADRAO: HipotesesDoForroDaCasa = {
+  lancar: true,
+  peDireitoLivrePermanenciaMm: 2500,
+  peDireitoLivreDemaisMm: 2300,
+  pisoAcabadoMm: 50,
+  folgaSobAFaixaMm: 15,
+  folgaSobAVigaMm: 50,
+  eletrica: { abaixoDoTetoMm: 45, afastamentoDaFaceMm: 50 },
+  frigorigena: { abaixoDoTetoMm: 115, afastamentoDaFaceMm: 140 },
+  aguaQuente: { abaixoDoTetoMm: 170, afastamentoDaFaceMm: 200 },
+  aguaFria: { abaixoDoTetoMm: 202, afastamentoDaFaceMm: 250 },
+};
+
+const FAIXAS_DO_FORRO = ['eletrica', 'frigorigena', 'aguaQuente', 'aguaFria'] as const;
+/** O raio do tubo da faixa mais baixa (a água fria) na conta do rebaixo — DN 32 de PVC, o maior ramal da casa. */
+const RAIO_NO_PLENUM_MM = 16;
+
+/** O rebaixo do forro (da laje à face de cima dele): a faixa mais baixa, o raio do tubo e a folga. */
+export function rebaixoDoForroMm(f: HipotesesDoForroDaCasa): number {
+  return Math.max(...FAIXAS_DO_FORRO.map((k) => f[k].abaixoDoTetoMm)) + RAIO_NO_PLENUM_MM + f.folgaSobAFaixaMm;
+}
+
+const USOS_DE_PERMANENCIA = new Set(['SALA', 'COZINHA', 'DORMITORIO', 'SUITE', 'ESCRITORIO']);
+/** F14b: o raio dos eletrodutos que sobem do quadro (o tronco chega a DN 75). */
+const SUBIDA_DO_QUADRO_MM = 37.5;
 
 /** F13 (decisão do usuário, 15/10/2026: "escolher por caso"). */
 export interface HipotesesDaPressaoDaCasa {
@@ -662,6 +725,7 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   climatizacao: { lancar: true },
   pressao: HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO,
   faixas: { aguaQuenteMm: 45, esgotoMm: -60 },
+  forro: HIPOTESES_DO_FORRO_DA_CASA_PADRAO,
 };
 
 export interface PlanoDaCasa {
@@ -716,6 +780,8 @@ export interface PlanoDaCasa {
     aberturas: Record<string, number>;
     /** F9: a climatização — as etapas do gerador de climatização e o que ele lançou. */
     climatizacao: { equipamentos: number; etapas: Record<string, SituacaoDaEtapa>; verificacao: { erros: number; avisos: number; porTipo: Record<string, number> } };
+    /** F14b: o forro lançado — cômodos, rebaixo e o menor pé-direito livre; `null` sem forro. */
+    forro: { comodos: number; rebaixoMm: number; peDireitoLivreMinimoMm: number | null } | null;
   };
 }
 
@@ -875,6 +941,11 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     climatizacao: { lancar: true, ...(hipParcial.climatizacao ?? {}) },
     pressao: { ...HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, ...(hipParcial.pressao ?? {}) },
     faixas: { aguaQuenteMm: 45, esgotoMm: -60, ...(hipParcial.faixas ?? {}) },
+    forro: {
+      ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO,
+      ...(hipParcial.forro ?? {}),
+      ...Object.fromEntries(FAIXAS_DO_FORRO.map((k) => [k, { ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO[k], ...(hipParcial.forro?.[k] ?? {}) }])),
+    },
   };
   const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
   // A implantação usa a mesma parede externa e a mesma malha do gerador.
@@ -908,7 +979,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   const pedidos = programa.itens.filter((i) => i.uso !== 'CIRCULACAO').reduce((s, i) => s + i.quantidade, 0);
   const vazio = (motivo: string, implantacao: ImplantacaoDaCasa | null = null): PlanoDaCasa => {
     for (const id of ORDEM_DAS_ETAPAS) if (id !== 'IMPLANTACAO' && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
-    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, sobrado: null, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA() } };
+    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, sobrado: null, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA(), forro: null } };
   };
 
   const impedimento = motivoParaNaoGerar(original, entrada.levelId);
@@ -949,6 +1020,20 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   const faixaNoMundo = (d: number): Point => {
     const v = paraMundo(q, { x: d, y: d });
     return { x: Math.round(v.x), y: Math.round(v.y) };
+  };
+  // F14b: o forro de cada cômodo (gesso; PVC nos molhados) a um rebaixo só, que acomoda as faixas das redes.
+  const forroLigado = hip.forro.lancar;
+  const rebaixoDoForro = rebaixoDoForroMm(hip.forro);
+  const etiquetaDoComodo = (model: BlueprintModel, sp: BlueprintModel['spaces'][number]): SpaceLabel | null =>
+    model.labels.find((l) => l.levelId === sp.levelId && pointInPolygon(sp.ring, l.at)) ?? null;
+  const forroDoComodo = (model: BlueprintModel, sp: BlueprintModel['spaces'][number]) => {
+    const etiqueta = etiquetaDoComodo(model, sp);
+    const uso = etiqueta?.uso ?? usoDoNome(sp.name);
+    const sugerido = presetsSugeridos(uso ? TIPO_NBR5410_DO_USO[uso] : null).forro;
+    const preset = sugerido.rebaixoMm ? sugerido : presetDeAcabamento('FORRO_GESSO')!;
+    const espessuraMm = preset.camadas.reduce((n, c) => n + c.espessuraMm, 0);
+    const tetoMm = model.levels.find((l) => l.id === sp.levelId)?.defaultHeightMm ?? 0;
+    return { etiqueta, preset, espessuraMm, faceMm: tetoMm - rebaixoDoForro - espessuraMm, minimoMm: uso && USOS_DE_PERMANENCIA.has(uso) ? hip.forro.peDireitoLivrePermanenciaMm : hip.forro.peDireitoLivreDemaisMm, tetoMm };
   };
   const rl = implantacao.retanguloLocal;
   const terreno = entrada.ctx.terreno;
@@ -1202,7 +1287,12 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     const hidroDoEstudo = entrada.hidro ?? HIPOTESES_HIDRO_PADRAO;
     const hidro: HipotesesHidro = {
       ...hidroDoEstudo,
-      agua: { ...hidroDoEstudo.agua, faixaDaAguaQuente: faixaNoMundo(hip.faixas.aguaQuenteMm) },
+      // F14b: e os ramais no forro, nas faixas da fria e da quente.
+      agua: {
+        ...hidroDoEstudo.agua,
+        faixaDaAguaQuente: faixaNoMundo(hip.faixas.aguaQuenteMm),
+        noForro: forroLigado ? { aguaFria: hip.forro.aguaFria, aguaQuente: hip.forro.aguaQuente, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } : null,
+      },
       esgoto: { ...hidroDoEstudo.esgoto, faixa: faixaNoMundo(hip.faixas.esgotoMm) },
     };
     const terrenoHidro = entrada.leitorDoTerreno ?? null;
@@ -1353,9 +1443,20 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
           comandosDePontosDoNivel(m, L, {
             peDireitoMm: m.levels.find((l) => l.id === L)!.defaultHeightMm,
             areaPorLuminariaM2: hip.eletrica.areaPorLuminariaM2,
-            ocupados: (m.terminais ?? []).filter((t) => t.levelId === L && t.disciplina === 'ELETRICA').map((t) => t.at),
+            // F14b: no forro, a tomada também fica longe do ponto de água (a descida dela cruzava a entrada da quente no
+            // aquecedor, na mesma posição ao longo da parede).
+            ocupados: (m.terminais ?? []).filter((t) => t.levelId === L && (t.disciplina === 'ELETRICA' || (forroLigado && (t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE')))).map((t) => t.at),
           }),
         );
+        // F14b: a luz de teto na FACE do forro do cômodo — a rede corre no plenum, acima dela.
+        if (forroLigado) {
+          for (let i = 0; i < lote.length; i++) {
+            const c = lote[i];
+            if (c.type !== 'AddTerminal' || (c as { tipoEletrico?: string | null }).tipoEletrico !== 'ILUMINACAO_TETO') continue;
+            const sp = comodosComForro(m, c.levelId).find((x) => pointInPolygon(x.ring, c.at));
+            if (sp) lote[i] = { ...c, cotaMm: Math.round(forroDoComodo(m, sp).faceMm) } as Command;
+          }
+        }
         // O CHUVEIRO ELÉTRICO é LIGAÇÃO DIRETA (a 9.5.2.3 acusa chuveiro em tomada), no ponto hidráulico dele, com a
         // potência declarada — a padrão não dá potência a ligação direta. Exige DR e ganha circuito próprio.
         if (ancoras?.chuveiroEletrico) {
@@ -1394,6 +1495,38 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
         if (!c) {
           etapa('QUADRO', ROTULO_DA_ETAPA_DA_CASA.QUADRO, 'NAO_RODOU', 0, 'nenhum ponto com potência — sem centro de cargas');
           return;
+        }
+        // F14b: no forro, os eletrodutos sobem do quadro até a faixa deles — se a travessia de outra rede (lançada antes)
+        // passa bem ali, o quadro escorrega pela parede até ficar livre (de 10 em 10 cm, até 80 cm; fora de vão e pilar).
+        if (forroLigado) {
+          const L0 = niveis[0];
+          const teto = m.levels.find((l) => l.id === L0)!.defaultHeightMm;
+          const parede = encaixarNaParede(c.posicaoSugerida, m.walls.filter((w) => w.levelId === L0), 600)?.parede ?? null;
+          const dSeg = (p: Point, a: Point, b: Point) => {
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const L2 = dx * dx + dy * dy;
+            const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2));
+            return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+          };
+          const noForro = (m.trechos ?? []).filter((t) => t.levelId === L0 && t.disciplina !== 'ELETRICA' && t.cotaAMm === t.cotaBMm && t.cotaAMm > teto - rebaixoDoForro && t.cotaAMm < teto);
+          const pilares = pegadasDePilares(m, L0);
+          const livre = (p: Point) =>
+            noForro.every((t) => dSeg(p, t.a, t.b) > SUBIDA_DO_QUADRO_MM + envelopeDoTrecho(t).raioPlantaMm + 20) &&
+            !pilares.some((g) => pointInPolygon(g as Point[], p)) &&
+            !(parede && m.openings.some((o) => {
+              if (o.wallId !== parede.id) return false;
+              const L = Math.hypot(parede.b.x - parede.a.x, parede.b.y - parede.a.y);
+              const t = ((p.x - parede.a.x) * (parede.b.x - parede.a.x) + (p.y - parede.a.y) * (parede.b.y - parede.a.y)) / (L || 1);
+              return t > o.offsetMm - 300 && t < o.offsetMm + o.widthMm + 300;
+            }));
+          if (parede && !livre(c.posicaoSugerida)) {
+            const L = Math.hypot(parede.b.x - parede.a.x, parede.b.y - parede.a.y) || 1;
+            const u = { x: (parede.b.x - parede.a.x) / L, y: (parede.b.y - parede.a.y) / L };
+            const desvios = [100, -100, 200, -200, 300, -300, 400, -400, 500, -500, 600, -600, 700, -700, 800, -800];
+            const novo = desvios.map((d) => point(Math.round(c.posicaoSugerida.x + u.x * d), Math.round(c.posicaoSugerida.y + u.y * d))).find(livre);
+            if (novo) c.posicaoSugerida = novo;
+          }
         }
         const antes = new Set((m.quadros ?? []).map((q) => q.id));
         let n = aplicar(comandosParaOCentro(m, c));
@@ -1451,7 +1584,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
           pendencias.push({ grupo: 'PREMISSA', texto: `Climatização: ${motivo}` });
           return;
         }
-        const plano = gerarClimatizacao(m, entrada.climatizacao ?? HIPOTESES_CLIMATIZACAO_PADRAO, { modelos, circuitos: { hip: hipCircuitos, eletricas: hipEletricas }, ...(entrada.cargaDaClimatizacao ? { carga: entrada.cargaDaClimatizacao } : {}) });
+        const plano = gerarClimatizacao(m, entrada.climatizacao ?? HIPOTESES_CLIMATIZACAO_PADRAO, { modelos, circuitos: { hip: hipCircuitos, eletricas: hipEletricas }, linhaNoForro: forroLigado ? { faixa: hip.forro.frigorigena, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } : null, ...(entrada.cargaDaClimatizacao ? { carga: entrada.cargaDaClimatizacao } : {}) });
         for (const e of plano.etapas) climatizacao.etapas[e.id] = e.situacao;
         // O "conflito" de 0 mm é ENCOSTO (redes paralelas lado a lado — a linha com o dreno do mesmo split, o ramal ao
         // lado do eletroduto): nenhum eixo dentro. Um a um, eram ~90 linhas que escondiam o resto; vira uma, com a conta.
@@ -1490,7 +1623,9 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
         etapa('DR_DPS', ROTULO_DA_ETAPA_DA_CASA.DR_DPS, 'LANCOU', aplicar([...drs, ...dps, ...ligacao]), `${drs.length} DR(s) de 30 mA${dps.length ? '; DPS no quadro' : ''}${notaDaEntrada}`);
       });
       tentarEletrica('ELETRODUTOS', () => {
-        const planos = planejarEletrodutosDoModelo(m, HIPOTESES_ELETRODUTO_PADRAO, hipEletricas);
+        // F14b: no forro, na faixa do eletroduto, pelos anéis dos cômodos.
+        const hipEletrodutos = forroLigado ? { ...HIPOTESES_ELETRODUTO_PADRAO, noForro: { faixa: hip.forro.eletrica, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } } : HIPOTESES_ELETRODUTO_PADRAO;
+        const planos = planejarEletrodutosDoModelo(m, hipEletrodutos, hipEletricas);
         const lote = planos.flatMap((p) => p.comandos);
         for (const a of new Set(planos.flatMap((p) => p.avisos))) pendencias.push({ grupo: 'CONFERIR', texto: `Eletrodutos: ${a}` });
         eletrica.eletrodutos = lote.filter((c) => c.type === 'AddTrecho').length;
@@ -1516,6 +1651,37 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       }
     }
 
+    // ── FORRO (F14b) ───────────────────────────────────────────────────────────
+    // O forro de cada cômodo com nome (o vazio da escada e o shaft, não) — gesso; PVC nos molhados — ao rebaixo que
+    // acomoda as faixas das redes; o pé-direito livre conferido pelo uso (permanência ou não).
+    let forro: PlanoDaCasa['resumo']['forro'] = null;
+    if (!forroLigado) etapa('FORRO', ROTULO_DA_ETAPA_DA_CASA.FORRO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa — as redes correm 10 cm sob a viga');
+    else {
+      const lote: Command[] = [];
+      let menorLivre = Infinity;
+      const abaixo: string[] = [];
+      for (const L of niveis) {
+        for (const sp of comodosComForro(m, L)) {
+          const f = forroDoComodo(m, sp);
+          if (!f.etiqueta) continue;
+          const livre = f.faceMm - hip.forro.pisoAcabadoMm;
+          menorLivre = Math.min(menorLivre, livre);
+          if (livre < f.minimoMm) abaixo.push(`${sp.name} (${f2(livre / 1000)} m; mínimo ${f2(f.minimoMm / 1000)} m)`);
+          lote.push({
+            type: 'SetSpaceLabelProps',
+            labelId: f.etiqueta.id,
+            acabamentos: { ...(f.etiqueta.acabamentos ?? {}), forro: { camadas: f.preset.camadas.map((c) => ({ ...c })), rebaixoMm: rebaixoDoForro } },
+          } as Command);
+        }
+      }
+      const n = aplicar(lote);
+      forro = { comodos: lote.length, rebaixoMm: rebaixoDoForro, peDireitoLivreMinimoMm: Number.isFinite(menorLivre) ? Math.round(menorLivre) : null };
+      if (abaixo.length)
+        pendencias.push({ grupo: 'PREMISSA', texto: `Forro: pé-direito livre abaixo do mínimo em ${abaixo.join(', ')} — as faixas das redes pedem ${f2(rebaixoDoForro / 1000)} m de plenum; aumente o pé-direito ou aperte as faixas` });
+      pendencias.push({ grupo: 'CONFERIR', texto: `Forro: as redes correm no plenum (${f2(rebaixoDoForro / 1000)} m), atravessam as vigas entre os cômodos e descem aos pontos junto da viga, em caixote de gesso — os furos vão ao calculista (F14c)` });
+      etapa('FORRO', ROTULO_DA_ETAPA_DA_CASA.FORRO, 'LANCOU', n, `${lote.length} cômodo(s), rebaixo de ${f2(rebaixoDoForro / 1000)} m; pé-direito livre mínimo de ${Number.isFinite(menorLivre) ? f2(menorLivre / 1000) : '—'} m`);
+    }
+
     // As redes × PORTAS e JANELAS: o tubo que corre na cota do topo da janela (2,20 m — a mesma dos ramais, do
     // eletroduto e da linha abaixo da viga) ou que sai da parede para fora no vão dela. Fica à vista, por rede.
     const redesEmAberturas: Record<string, number> = {};
@@ -1529,7 +1695,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       const nome: Record<string, string> = { ...ROTULO_DA_DISCIPLINA_DA_REDE, ...ROTULO_DA_DISCIPLINA_DO_AR, ELETRICA: 'eletroduto' };
       for (const [d, n] of Object.entries(redesEmAberturas)) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rede de ${nome[d] ?? d.toLowerCase()}: ${n} trecho(s) passando por porta ou janela` });
     }
-    return { ancoras, mobiliario, hidraulica, eletrica, climatizacao, redesEmAberturas };
+    return { ancoras, mobiliario, hidraulica, eletrica, climatizacao, redesEmAberturas, forro };
   };
 
   // ── SOBRADO (F12a) ────────────────────────────────────────────────────────
@@ -1732,7 +1898,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       semente: et.r.semente,
       escolha: `térreo: ${et.texto}; superior: ${es.texto}`,
       sobrado,
-      disciplinas: { estrutura, telhado, ancoras: inst.ancoras, mobiliario: inst.mobiliario, hidraulica: inst.hidraulica, eletrica: inst.eletrica, aberturas: inst.redesEmAberturas, climatizacao: inst.climatizacao },
+      disciplinas: { estrutura, telhado, ancoras: inst.ancoras, mobiliario: inst.mobiliario, hidraulica: inst.hidraulica, eletrica: inst.eletrica, aberturas: inst.redesEmAberturas, climatizacao: inst.climatizacao, forro: inst.forro },
     });
   }
 
@@ -1826,7 +1992,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     semente: r.semente,
     escolha,
     sobrado: null,
-    disciplinas: { estrutura, telhado, ancoras: inst.ancoras, mobiliario: inst.mobiliario, hidraulica: inst.hidraulica, eletrica: inst.eletrica, aberturas: inst.redesEmAberturas, climatizacao: inst.climatizacao },
+    disciplinas: { estrutura, telhado, ancoras: inst.ancoras, mobiliario: inst.mobiliario, hidraulica: inst.hidraulica, eletrica: inst.eletrica, aberturas: inst.redesEmAberturas, climatizacao: inst.climatizacao, forro: inst.forro },
   });
 }
 

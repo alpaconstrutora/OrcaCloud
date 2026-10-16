@@ -167,4 +167,18 @@ describe('TelaCasaAutomatica (F10)', () => {
     expect(screen.getByTestId('sobrado-da-casa').textContent).toMatch(/17 degraus de 171 × 306 mm/);
     expect(screen.getByTestId('lancar-casa').textContent).toBe('Lançar os dois pavimentos');
   });
+
+  it('F14b: o forro — ligado mostra o pé-direito livre de cada uso e o piso; desligar muda a premissa e esconde os campos', () => {
+    const onPremissas = vi.fn();
+    tela({ onPremissas });
+    expect((screen.getByTestId('forro-da-casa') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Pé-direito livre: sala, dormitório, cozinha (m)') as HTMLInputElement).value).toBe('2.5');
+    expect((screen.getByLabelText('Pé-direito livre: banheiro, serviço, circulação (m)') as HTMLInputElement).value).toBe('2.3');
+    expect((screen.getByLabelText('Piso acabado (cm)') as HTMLInputElement).value).toBe('5');
+    fireEvent.click(screen.getByTestId('forro-da-casa'));
+    expect(onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ forro: expect.objectContaining({ lancar: false }) }));
+    cleanup();
+    tela({ premissas: { ...PREMISSAS_DA_CASA_PADRAO, forro: { ...PREMISSAS_DA_CASA_PADRAO.forro, lancar: false } } });
+    expect(screen.queryByLabelText('Piso acabado (cm)')).toBeNull();
+  });
 });

@@ -49,7 +49,7 @@ for (const graus of [0, 30]) {
   if (!p) continue;
   const situacoes = p.etapas.map((x) => `${x.id}:${x.situacao}`).join(' ');
   // F4: a estrutura entra entre a arquitetura e a conferência; os eixos não rodam com o lote girado (paredes oblíquas).
-  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU MOBILIARIO:LANCOU LOUCAS:LANCOU PONTOS_HIDRAULICOS:LANCOU AGUA:LANCOU ESGOTO:LANCOU PLUVIAL:LANCOU PONTOS_ELETRICOS:LANCOU QUADRO:LANCOU CIRCUITOS:LANCOU CLIMATIZACAO:LANCOU DR_DPS:LANCOU ELETRODUTOS:LANCOU CONFERENCIA:CALCULOU`;
+  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU MOBILIARIO:LANCOU LOUCAS:LANCOU PONTOS_HIDRAULICOS:LANCOU AGUA:LANCOU ESGOTO:LANCOU PLUVIAL:LANCOU PONTOS_ELETRICOS:LANCOU QUADRO:LANCOU CIRCUITOS:LANCOU CLIMATIZACAO:LANCOU DR_DPS:LANCOU ELETRODUTOS:LANCOU FORRO:LANCOU CONFERENCIA:CALCULOU`;
   conferir(situacoes === esperadas, `${t} etapas: ${situacoes}`);
   conferir(p.comandos > 3, `${t} um lote só com arquitetura e estrutura (${p.comandos} comandos)`);
   const es = p.estrutura;
@@ -81,8 +81,12 @@ for (const graus of [0, 30]) {
   const el = p.eletrica;
   conferir(el.faltas === 0, `${t} NBR 5410 sem falta (${el.circuitos} circuitos; entrada ${el.entrada})${el.faltas ? ` — ${el.faltas} falta(s) em ${el.regras.join(', ')}` : ''}`);
   conferir(el.soltos === 0, `${t} nenhum ponto de carga sem circuito (${el.soltos} solto(s))`);
-  conferir(el.splits === 4 && Object.keys(el.marcasDoAr).length === 0, `${t} ${el.splits} split(s); linha e dreno sem marca${Object.keys(el.marcasDoAr).length ? ` — ${JSON.stringify(el.marcasDoAr)}` : ''}`);
-  conferir(Object.keys(h.porTipo).length === 0, `${t} a verificação de rede sem marca (ponta aberta, sem destino, pilar, viga, ventilação)${Object.keys(h.porTipo).length ? ` — ${JSON.stringify(h.porTipo)}` : ''}`);
+  // F14b ("manter 2,80 m, furar vigas"): a travessia da viga no forro é FURO A APROVAR (aviso CRUZA_VIGA) — conta,
+  // não reprova; a lista vai ao calculista na F14c. Qualquer outra marca reprova.
+  const semViga = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'CRUZA_VIGA'));
+  const furos = (el.marcasDoAr.CRUZA_VIGA ?? 0) + (h.porTipo.CRUZA_VIGA ?? 0);
+  conferir(el.splits === 4 && Object.keys(semViga(el.marcasDoAr)).length === 0, `${t} ${el.splits} split(s); linha e dreno sem marca${Object.keys(semViga(el.marcasDoAr)).length ? ` — ${JSON.stringify(semViga(el.marcasDoAr))}` : ''}`);
+  conferir(Object.keys(semViga(h.porTipo)).length === 0, `${t} a verificação de rede sem marca (ponta aberta, sem destino, pilar, ventilação)${Object.keys(semViga(h.porTipo)).length ? ` — ${JSON.stringify(semViga(h.porTipo))}` : ''}; ${furos} travessia(s) de viga = furo a aprovar (F14c)`);
   conferir(p.ambientesAtendidos === p.ambientesPedidos, `${t} ambientes do programa atendidos: ${p.ambientesAtendidos} de ${p.ambientesPedidos}`);
   conferir(p.ambientesNomeados >= p.ambientesPedidos, `${t} ambientes nomeados no desenho: ${p.ambientesNomeados} (nenhum fundido)`);
   conferir(p.aberturasCriadas === p.aberturasPedidas, `${t} aberturas: ${p.aberturasCriadas} criadas de ${p.aberturasPedidas} pedidas`);
@@ -92,6 +96,8 @@ for (const graus of [0, 30]) {
   conferir(p.regrasVioladas === 0, `${t} nenhuma regra de severidade ERRO violada (${p.regrasVioladas})`);
   // F13: a pressão por caso — nenhum ponto abaixo do mínimo, na fria e na quente.
   conferir(p.pressaoInsuficiente.fria === 0 && p.pressaoInsuficiente.quente === 0, `${t} pressão: nenhum ponto abaixo do mínimo (fria ${p.pressaoInsuficiente.fria}, quente ${p.pressaoInsuficiente.quente})${p.pressurizador ? ' — com pressurizador' : ''}`);
+  // F14b: o forro em todo cômodo, o pé-direito livre de 2,50 m, e nenhum encontro entre as redes que correm nele.
+  conferir(!!p.forro && p.forro.comodos > 0 && p.forro.peDireitoLivreMinimoMm >= 2500 && p.forro.encontros === 0, `${t} forro em ${p.forro?.comodos} cômodo(s), pé-direito livre mínimo ${p.forro?.peDireitoLivreMinimoMm} mm; ${p.forro?.encontros} encontro(s) entre eletroduto, linha e águas no forro`);
   conferir(p.conferido, `${t} a trava aprova: reaplicado no original dá os mesmos ids e o mesmo modelo`);
   console.log(`   pendências ${t}: ${p.pendencias.length ? p.pendencias.join(' | ') : 'nenhuma'}`);
   await page.screenshot({ path: path.join(saida, `casa-automatica-${graus}.png`) });
@@ -112,7 +118,7 @@ for (const graus of [0, 30]) {
   conferir(!!p && !!s, `${t} o plano e o sobrado existem`);
   if (!p || !s) continue;
   const situacoes = p.etapas.map((x) => `${x.id}:${x.situacao}`).join(' ');
-  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU MOBILIARIO:LANCOU LOUCAS:LANCOU PONTOS_HIDRAULICOS:LANCOU AGUA:LANCOU ESGOTO:LANCOU PLUVIAL:LANCOU PONTOS_ELETRICOS:LANCOU QUADRO:LANCOU CIRCUITOS:LANCOU CLIMATIZACAO:LANCOU DR_DPS:LANCOU ELETRODUTOS:LANCOU CONFERENCIA:CALCULOU`;
+  const esperadas = `IMPLANTACAO:CALCULOU ARQUITETURA:LANCOU PILARES:LANCOU VIGAS:LANCOU LAJES:LANCOU FUNDACOES:LANCOU EIXOS:${graus === 0 ? 'LANCOU' : 'NADA_A_FAZER'} TELHADO:LANCOU ANCORAS:LANCOU MOBILIARIO:LANCOU LOUCAS:LANCOU PONTOS_HIDRAULICOS:LANCOU AGUA:LANCOU ESGOTO:LANCOU PLUVIAL:LANCOU PONTOS_ELETRICOS:LANCOU QUADRO:LANCOU CIRCUITOS:LANCOU CLIMATIZACAO:LANCOU DR_DPS:LANCOU ELETRODUTOS:LANCOU FORRO:LANCOU CONFERENCIA:CALCULOU`;
   conferir(situacoes === esperadas, `${t} etapas: ${situacoes}`);
   conferir(s.niveis === 2 && s.elevacaoDoSuperior === 2900, `${t} dois pavimentos, o de cima a ${s.elevacaoDoSuperior} mm`);
   conferir(s.escada.degraus >= 16 && s.escada.espelhoMm <= 185 && s.escada.pisoMm >= 280 && s.escada.avisos === 0, `${t} escada em U: ${s.escada.degraus} × ${s.escada.espelhoMm}/${s.escada.pisoMm} mm, ${s.escada.avisos} aviso(s)`);
@@ -129,6 +135,8 @@ for (const graus of [0, 30]) {
   conferir(p.eletrica.faltas === 0 && s.soltosPorNivel.terreo === 0 && s.soltosPorNivel.superior === 0, `${t} NBR 5410 sem falta; nenhum ponto de carga sem circuito (${p.eletrica.circuitos} circuitos)`);
   conferir(s.splitsPorNivel.terreo === 1 && s.splitsPorNivel.superior === 3, `${t} splits: ${s.splitsPorNivel.terreo} embaixo, ${s.splitsPorNivel.superior} em cima`);
   conferir(p.pressaoInsuficiente.fria === 0 && p.pressaoInsuficiente.quente === 0, `${t} pressão: nenhum ponto abaixo do mínimo (fria ${p.pressaoInsuficiente.fria}, quente ${p.pressaoInsuficiente.quente})${p.pressurizador ? ' — com pressurizador' : ''}`);
+  // F14b: o forro em todo cômodo, o pé-direito livre de 2,50 m, e nenhum encontro entre as redes que correm nele.
+  conferir(!!p.forro && p.forro.comodos > 0 && p.forro.peDireitoLivreMinimoMm >= 2500 && p.forro.encontros === 0, `${t} forro em ${p.forro?.comodos} cômodo(s), pé-direito livre mínimo ${p.forro?.peDireitoLivreMinimoMm} mm; ${p.forro?.encontros} encontro(s) entre eletroduto, linha e águas no forro`);
   conferir(p.conferido, `${t} a trava aprova o lote dos dois pavimentos`);
   console.log(`   pendências ${t}: ${p.pendencias.length ? p.pendencias.join(' | ') : 'nenhuma'}`);
   await page.screenshot({ path: path.join(saida, `casa-sobrado-${graus}-terreo.png`) });

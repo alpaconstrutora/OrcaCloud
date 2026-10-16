@@ -47,17 +47,35 @@ describe('comandosDasAncoras', () => {
     expect(caixa.sugerida).toBe(true);
   });
 
-  it('aquecedor (R1-N): DOIS terminais no mesmo ponto (fria = consumo, quente = origem), na parede externa do serviço', () => {
+  it('aquecedor (R1-N): fria (consumo) e quente (origem) lado a lado, a 15 cm, na parede externa do serviço', () => {
+    // F14b (16/10/2026): no MESMO ponto, as duas descidas convergiam e se cruzavam a 1,60 m; agora como o misturador.
     const { m, L } = casinha();
     const r = comandosDasAncoras(m, ctxDe(L));
     const depois = applyBatch(m, r.comandos).model;
     const aq = depois.terminais.filter((t) => t.tipoHidraulico === 'AQUECEDOR');
     expect(aq.map((t) => t.disciplina).sort()).toEqual(['AGUA_FRIA', 'AGUA_QUENTE']);
-    expect(aq[0].at).toEqual(aq[1].at);
-    expect(pointInPolygon(depois.spaces.find((s) => s.name === 'Área de serviço')!.ring, aq[0].at)).toBe(true);
-    // encostado numa fachada: a menos de meia parede + 150 mm + folga de y = 0 ou y = 3000
-    expect(Math.min(Math.abs(aq[0].at.y - 0), Math.abs(aq[0].at.y - 3000))).toBeLessThanOrEqual(100 + 150 + 1);
+    expect(Math.hypot(aq[0].at.x - aq[1].at.x, aq[0].at.y - aq[1].at.y)).toBe(HIPOTESES_DAS_ANCORAS_PADRAO.aquecedorFriaQuenteMm);
+    for (const t of aq) {
+      expect(pointInPolygon(depois.spaces.find((s) => s.name === 'Área de serviço')!.ring, t.at)).toBe(true);
+      // encostado numa fachada: a menos de meia parede + 150 mm + folga de y = 0 ou y = 3000
+      expect(Math.min(Math.abs(t.at.y - 0), Math.abs(t.at.y - 3000))).toBeLessThanOrEqual(100 + 150 + 1);
+    }
     expect(r.resumo.aquecedor).toBe(true);
+  });
+
+  it('aquecedor fora da janela: com o vão no meio da fachada, vai para o lado dele (a folga cai até caber) e diz a quanto ficou', () => {
+    // F14b: no meio do lado, o aquecedor caía diante da janela da área de serviço e a água descia pelo vão.
+    const { m: m0, L } = casinha();
+    const frente = m0.walls.find((w) => w.a.y === 0 && w.b.y === 0)!;
+    const fundos = m0.walls.find((w) => w.a.y === 3000 && w.b.y === 3000)!;
+    const janela = (wallId: string, offsetMm: number): Command => ({ type: 'AddOpening', wallId, kind: 'window', offsetMm, widthMm: 800, heightMm: 1200, sillMm: 1000 });
+    const m = applyBatch(m0, [janela(frente.id, 3600), janela(fundos.id, 4600)]).model;
+    const r = comandosDasAncoras(m, ctxDe(L));
+    const aq = applyBatch(m, r.comandos).model.terminais.filter((t) => t.tipoHidraulico === 'AQUECEDOR');
+    expect(aq).toHaveLength(2);
+    // As duas janelas vão de x = 3,60 a 4,40 m: nenhum dos dois terminais diante delas.
+    for (const t of aq) expect(t.at.x <= 3600 - 150 || t.at.x >= 4400 + 150).toBe(true);
+    expect(r.pendencias.join(' ')).toMatch(/Aquecedor na Área de serviço: a 0,20 m do vão \(pedido: 0,40 m\)/);
   });
 
   it('R1-B: chuveiro elétrico — sem aquecedor, e dito', () => {

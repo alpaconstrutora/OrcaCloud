@@ -141,7 +141,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F11 — saídas (ver "Registro da F11")
 - [x] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [x] F12c instalações (ver "Registro da F12c") · [x] F12d tela e provas (ver "Registro da F12d", com a conferência no app real)
 - [x] F13 — pressão da água por caso: caixa elevada ou pressurizador (ver "Registro da F13")
-- [ ] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [ ] F14b forro e plenum · [ ] F14c vigas · [ ] F14d linha do ar e dreno; provas
+- [ ] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [x] F14b forro e plenum (ver "Registro da F14b") · [ ] F14c vigas · [ ] F14d linha do ar e dreno; provas
 - [ ] F15 — a casa na unidade do Empreendimento
 
 ## Registro da F1 (14/10/2026)
@@ -1500,3 +1500,93 @@ marca ERRO na verificação. O que sobra é, em maioria,
 coincidência de COTA (eletroduto × frigorígena, AF × eletroduto, ramais de AF e AQ na mesma cota) — é a F14b — e 3
 encontros dentro dos shafts do sobrado. Harness: 97 conferências, portão aprovado nas quatro rodadas (térrea e
 sobrado, 0° e 30°).
+
+## F14b — forro e plenum (16/10/2026, "sim" para seguir)
+
+### Retrato antes da F14b (12 × 30, R1-N, catálogo e chuva) — onde cada rede corre
+
+| | Térrea | Sobrado |
+|---|---|---|
+| Pé-direito | 2,80 m | 2,80 m (os dois pavimentos) |
+| Fundo das vigas | 2,30–2,50 m | 2,20–2,50 m (transição 2,20 m, 55–60 cm de altura) |
+| Topo de janela / porta | 2,20 / 2,10 m | 2,20 / 2,10 m |
+| Água fria / quente (horizontal) | 2,20 / 2,25 m | 2,20 / 2,20–2,25 m |
+| Eletroduto e linha frigorígena | 2,20 m | 2,10 m |
+| Dreno do ar | nasce a 2,20 m e desce | idem |
+| Largura das vigas | = espessura da parede (150 / 200 mm), sobre a parede | idem |
+
+Todos usam a mesma regra ("10 cm abaixo da viga mais baixa"), daí a mesma cota. Conflitos (térrea 185 /
+sobrado 162): dreno × frigorígena 69 / 4, eletroduto × frigorígena 17 / 5, dreno × eletroduto 14, água × eletroduto
+7+; no sobrado água fria × quente 14 (as grades deslocadas da F14a se cruzam na mesma cota) e água dentro das
+vigas de transição (fundo 2,20 m).
+
+### Decisão do usuário (16/10/2026)
+
+Pergunta: *"Medido na casa gerada: pé-direito 2,80 m; o fundo das vigas fica a 2,30–2,50 m (2,20 m nas vigas de
+transição do sobrado); as janelas vão até 2,20 m. Com o forro no mínimo do uso (2,50 m nos cômodos de permanência,
+2,30 m nos molhados), o forro fica na altura ou ACIMA do fundo de TODAS as vigas: não sobra espaço livre entre o
+forro e as vigas em cômodo nenhum. Como a casa deve resolver?"*
+
+Resposta: **"Manter 2,80 m, furar vigas"** — forro entre as vigas (vigas aparentes abaixo dele), redes em faixas
+de cota no plenum acima do forro; cada passagem por viga vira furo previsto (posição, diâmetro, viga) na lista
+para o calculista (F14c), inclusive a descida de cada ponto (pela viga ou junto dela num caixote de gesso).
+Descartada: subir o pé-direito para ≈ 3,20 m (3,30 m no sobrado).
+
+### Registro da F14b (16/10/2026) — o forro e as redes nas faixas do plenum
+
+Feito na convenção decidida ("forro com faixas" + "manter 2,80 m, furar vigas"). Tudo novo fica atrás de uma opção
+(`noForro`) dos planejadores — o "Lançar tudo" das gavetas do editor não muda; só a casa liga.
+
+**A peça nova — `utils/blueprintRotaPeloForro.ts`:**
+- `paredesDoForro(model, nível, afastamento)`: as "paredes" por onde a árvore anda no forro — o anel de cada cômodo
+  recuado da face da parede (ou da viga, se mais larga) mais o afastamento da rede, e TRAVESSIAS de um cômodo ao
+  vizinho no meio do trecho de parede que eles dividem e perto das duas pontas (com uma só, no meio, a quente do
+  sobrado andava 17 m num térreo de 5 m). Os lados colineares do anel juntam-se antes de recuar: o encontro em T
+  deixa no anel um pedaço de 2 cm que, recuado 12 cm, virava do avesso e recusava o cômodo inteiro (10 de 12).
+- `descidaDoForro`: do anel até a peça — desce junto da viga (no caixote de gesso), entra na parede logo abaixo
+  dela (folga + raio), desce na alvenaria; a que cairia num vão de porta/janela corre acima dele até o batente.
+- `prumadasQueCruzam`: o que vai atravessar a faixa vira obstáculo para quem traça DEPOIS — as prumadas das outras
+  redes, a luz de teto e o quadro (o eletroduto vai subir deles) e o SHAFT do pavimento.
+- `encaixaNoAnel`: o ponto encaixa só no anel (a travessia é passagem — encaixado nela, a fria e a quente desciam
+  no mesmo lugar). Contorno de obstáculo com penalidade pequena no forro (`PENALIDADE_DO_CONTORNO_NO_FORRO_MM`).
+
+**As faixas** (hipóteses da casa, `forro`; abaixo da laje / afastamento da face): eletroduto 45/50 mm, linha
+frigorígena 115/140, água quente 170/200, água fria 202/250. O espaçamento em cota é a soma dos MAIORES raios das
+duas redes vizinhas + 5 mm (a conferência mede o tubo como esfera: a linha, com os dois tubos lado a lado, conta 39
+mm); o lateral, maior que a soma dos raios (a descida de uma não cruza o ramal da outra). Rebaixo do forro 23,3 cm →
+forro a 2,553 m (gesso) / 2,559 m (PVC nos molhados) → **pé-direito livre 2,503 m** com 5 cm de piso (mínimo 2,50).
+
+**Planejadores:** água (ramais e barrilete no forro; fria antes da quente, em sequência, para a quente ver as colunas
+da fria; a cabeça de grupo sem altura fica no anel, sem toco solto; a ligação da coluna ao anel desvia das prumadas);
+eletrodutos (pontos de parede pelo anel, descida no rasgo da caixa — no eixo corre o dreno —, luz pendurada no nó mais
+perto, reta desviando das prumadas); linha frigorígena (sai da evaporadora para o anel e sobe ali). **Casa:** etapa
+FORRO (acabamento do cômodo por `SetSpaceLabelProps`, gesso / PVC nos molhados, pé-direito livre conferido pelo uso —
+2,50 m sala, dormitório, suíte, cozinha, escritório; 2,30 m os demais), luz de teto na face do forro, quadro escorregando
+pela parede para longe das travessias, tomada longe do ponto de água. **Âncoras:** aquecedor fora do vão (40 cm do
+batente, caindo à metade até 15 cm) e fria/quente lado a lado (15 cm). **Pontos da louça:** o par escorrega JUNTO para
+fora do pilar; a louça longe da parede (60 cm, pelo mobiliário) toma a direção da parede mais perto (fria e quente
+nasciam no mesmo ponto). **Tela:** "Forro com as redes no plenum", pé-direito livre por uso, piso acabado.
+
+**Medido** (`conflitosDoModelo`, 12 × 30, R1-N, catálogo e chuva):
+
+| | Térrea antes | Térrea depois | Sobrado antes | Sobrado depois |
+|---|---|---|---|---|
+| Rede × rede | 117 | 1 | 28 | 13 |
+| Porta / janela | 15 | 6 | 27 | 9 |
+| Estrutura (viga, laje, baldrame, pilar) | 53 | 85 | 107 | 142 |
+| Total | 185 | 92 | 162 | 164 |
+
+Nas quatro casas (térrea e sobrado, 0° e 30°): **nenhum encontro entre eletroduto, linha e as duas águas**, nenhum
+ERRO da verificação de rede (pontas abertas zeradas), pressão atendida (com pressurizador) e a trava aprovando. O que
+sobra é da F14c/F14d: a térrea, 1 alimentador × esgoto enterrado (anterior); o sobrado, 13 do ESGOTO do pavimento de cima
+correndo no plenum do térreo (cruza as faixas de água); as aberturas são do dreno do ar (F14d) e 3 anteriores no
+sobrado; a estrutura subiu porque a travessia da viga é agora FURO A APROVAR (aviso CRUZA_VIGA da verificação — 10 a 12
+por casa), a lista que vai ao calculista na F14c. O harness conta essas travessias e não reprova por elas.
+
+⚠️ **A máquina desta sessão ficou instável** (16/10): o Windows registrou 4 desligamentos inesperados de manhã
+(Kernel-Power 41, 05:36–05:58) e, depois, o Node 24 e o Node 22 caíram em quase toda execução longa (segfault,
+"Fatal error" do V8), o Chrome do harness deu "Page crashed" e chegou a dar um resultado ERRADO que não se repetiu (a
+água "não rodou" uma vez a 30°; na rodada seguinte, lançou 178 tubos). O `tsc` caiu até no commit anterior, sem
+mudança. Por isso a prova de tipos, da suíte inteira e do build desta fase é a CI do GitHub (Linux), rodada numa PR de
+rascunho antes da publicação.
+

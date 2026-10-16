@@ -38,6 +38,13 @@ export interface HipotesesDasAncoras {
   cotaDoAquecedorMm: number;
   /** Quanto o aquecedor se afasta da face interna da parede externa, mm. */
   aquecedorDaFaceMm: number;
+  /**
+   * F14b (16/10/2026): o eixo do aquecedor a pelo menos isto de um vão (janela, porta) da parede e do canto, mm —
+   * no meio do lado ele caía na janela da área de serviço, e a fria e a quente desciam pelo vão.
+   */
+  aquecedorLongeDoVaoMm: number;
+  /** F14b: a entrada de fria e a saída de quente do aquecedor lado a lado, a esta distância (como o misturador), mm. */
+  aquecedorFriaQuenteMm: number;
   caixaDeGordura: boolean;
   /** Distância do centro da caixa de gordura à face EXTERNA da parede da cozinha, mm. */
   caixaDeGorduraDaFaceMm: number;
@@ -50,6 +57,8 @@ export const HIPOTESES_DAS_ANCORAS_PADRAO: HipotesesDasAncoras = {
   caixaAcimaDaLajeMm: 300,
   cotaDoAquecedorMm: 1600,
   aquecedorDaFaceMm: 150,
+  aquecedorLongeDoVaoMm: 400,
+  aquecedorFriaQuenteMm: 150,
   caixaDeGordura: true,
   caixaDeGorduraDaFaceMm: 600,
 };
@@ -119,6 +128,37 @@ function ladoExterno(s: Space, espacos: readonly Space[], sonda: number): { a: P
   return lados.sort((p, q) => q.comprimento - p.comprimento)[0] ?? null;
 }
 
+/** F14b: o mínimo entre o eixo do aquecedor e o batente — metade do aparelho (~30 cm de largura). */
+const AQUECEDOR_FORA_DO_BATENTE_MM = 150;
+
+/**
+ * F14b: a posição ao longo do lado (distância de `a`) mais perto do meio que fica a pelo menos `folga` de todo vão
+ * das paredes sobre o lado e dos cantos; `null` se não há.
+ */
+function posicaoForaDosVaos(model: BlueprintModel, levelId: ObjectId, lado: { a: Point; b: Point; comprimento: number }, folga: number): number | null {
+  const L = lado.comprimento;
+  const u = { x: (lado.b.x - lado.a.x) / L, y: (lado.b.y - lado.a.y) / L };
+  const t = (p: Point) => (p.x - lado.a.x) * u.x + (p.y - lado.a.y) * u.y;
+  const d = (p: Point) => Math.abs((p.x - lado.a.x) * u.y - (p.y - lado.a.y) * u.x);
+  const bloqueados: [number, number][] = [];
+  for (const w of model.walls) {
+    if (w.levelId !== levelId) continue;
+    if (d(w.a) > w.thicknessMm / 2 + 5 || d(w.b) > w.thicknessMm / 2 + 5) continue;
+    const Lw = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    if (Lw < 1) continue;
+    const uw = { x: (w.b.x - w.a.x) / Lw, y: (w.b.y - w.a.y) / Lw };
+    for (const o of model.openings) {
+      if (o.wallId !== w.id) continue;
+      const t0 = t({ x: w.a.x + uw.x * o.offsetMm, y: w.a.y + uw.y * o.offsetMm } as Point);
+      const t1 = t({ x: w.a.x + uw.x * (o.offsetMm + o.widthMm), y: w.a.y + uw.y * (o.offsetMm + o.widthMm) } as Point);
+      bloqueados.push([Math.min(t0, t1) - folga, Math.max(t0, t1) + folga]);
+    }
+  }
+  const livre = (x: number) => x >= folga && x <= L - folga && bloqueados.every(([lo, hi]) => x <= lo || x >= hi);
+  const candidatos = [L / 2, ...bloqueados.flat()].filter(livre).sort((p, q) => Math.abs(p - L / 2) - Math.abs(q - L / 2));
+  return candidatos[0] ?? null;
+}
+
 export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras, hip: HipotesesDasAncoras = HIPOTESES_DAS_ANCORAS_PADRAO): ResultadoDasAncoras {
   const comandos: Command[] = [];
   const notas: string[] = [];
@@ -167,11 +207,24 @@ export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras
       if (!serv || !lado) pendencias.push(`Aquecedor: ${candidatos.length ? `${candidatos.map((x) => x.name).join(' e ')} sem parede externa` : 'sem área de serviço nem cozinha'} — o aquecedor a gás pede ventilação; ponha à mão.`);
       else {
         if (serv !== candidatos[0]) pendencias.push(`Aquecedor na ${serv.name}: ${candidatos[0].name} não tem parede externa — confira a ventilação permanente (NBR 13103).`);
-        const meio = { x: (lado.a.x + lado.b.x) / 2, y: (lado.a.y + lado.b.y) / 2 };
+        // O ponto do lado mais perto do meio que fica longe dos vãos da parede e dos cantos (a fria e a quente juntas).
+        // A folga do vão cai à metade até o mínimo (o aparelho fora do batente) — a parede externa da área de serviço é
+        // quase toda janela; sem lugar nem assim, fica no meio, dito.
+        let folgaUsada = hip.aquecedorLongeDoVaoMm;
+        let t = posicaoForaDosVaos(model, cx.levelId, lado, folgaUsada + hip.aquecedorFriaQuenteMm / 2);
+        while (t == null && folgaUsada > AQUECEDOR_FORA_DO_BATENTE_MM) {
+          folgaUsada = Math.max(AQUECEDOR_FORA_DO_BATENTE_MM, folgaUsada / 2);
+          t = posicaoForaDosVaos(model, cx.levelId, lado, folgaUsada + hip.aquecedorFriaQuenteMm / 2);
+        }
+        if (t == null) pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre de janela e porta — ficou no meio, diante do vão; confira.`);
+        else if (folgaUsada < hip.aquecedorLongeDoVaoMm) pendencias.push(`Aquecedor na ${serv.name}: a ${f2(folgaUsada / 1000)} m do vão (pedido: ${f2(hip.aquecedorLongeDoVaoMm / 1000)} m) — a parede externa não tem mais trecho livre.`);
+        const u = { x: (lado.b.x - lado.a.x) / lado.comprimento, y: (lado.b.y - lado.a.y) / lado.comprimento };
         const recuo = cx.espessuraExternaMm / 2 + hip.aquecedorDaFaceMm;
-        const at = inteiro({ x: meio.x - lado.n.x * recuo, y: meio.y - lado.n.y * recuo });
-        for (const disciplina of ['AGUA_FRIA', 'AGUA_QUENTE'] as const) {
-          comandos.push({ type: 'AddTerminal', levelId: cx.levelId, disciplina, tipo: 'Aquecedor', at, cotaMm: hip.cotaDoAquecedorMm, tipoHidraulico: 'AQUECEDOR', sugerida: true });
+        const noLado = (d: number) => inteiro({ x: lado.a.x + u.x * d - lado.n.x * recuo, y: lado.a.y + u.y * d - lado.n.y * recuo });
+        const meioT = t ?? lado.comprimento / 2;
+        const meia = hip.aquecedorFriaQuenteMm / 2;
+        for (const [disciplina, d] of [['AGUA_FRIA', meioT - meia], ['AGUA_QUENTE', meioT + meia]] as const) {
+          comandos.push({ type: 'AddTerminal', levelId: cx.levelId, disciplina, tipo: 'Aquecedor', at: noLado(d), cotaMm: hip.cotaDoAquecedorMm, tipoHidraulico: 'AQUECEDOR', sugerida: true });
         }
         resumo.aquecedor = true;
         notas.push(`Aquecedor de passagem na parede externa de ${serv.name}.`);

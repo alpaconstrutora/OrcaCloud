@@ -42,6 +42,7 @@ import type { Point } from './blueprintKernel';
 import { etiquetaDoAmbiente, ladosDePiso, pontoJuntoAPorta, type LadoDoAmbiente } from './blueprintDistribuicao';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { encaixarNaParede, faceDaParede } from './blueprintRotaPelasParedes';
+import { CONTORNO_DO_PILAR_MM, anelDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { COTA_USUAL_DO_PONTO_ELETRICO, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
 import { potenciaPadraoVA } from './blueprintPotenciaPadrao';
 import { potenciaEletricaVA } from './blueprintSelecaoClimatizacao';
@@ -366,6 +367,12 @@ const MESMO_PONTO_MM = 50;
  * da água atravessava o cômodo no ar até a louça. Sem parede ao alcance
  * (a peça solta no ambiente), tudo no centro, como antes.
  */
+/** F14b: até onde se procura a parede que dá a DIREÇÃO do par fria/quente da louça longe dela, mm. */
+const ALCANCE_DA_DIRECAO_MM = 3000;
+/** F14b: até onde (e de quanto em quanto) o par fria/quente escorrega pela parede para sair do pilar, mm. */
+const DESLIZE_MAXIMO_DO_PAR_MM = 600;
+const PASSO_DO_DESLIZE_MM = 25;
+
 export function pontosDaLouca(
   model: BlueprintModel,
   componente: Componente,
@@ -393,20 +400,38 @@ export function pontosDaLouca(
   // F14a: fria e quente lado a lado AO LONGO da parede (a direção é a da face: perpendicular a eixo → face).
   const lado = (() => {
     const meio = (hip.afastamentoFriaQuenteMm ?? 0) / 2;
-    if (!meio || !encaixe || irmaoDeAgua) return null;
-    const nx = encaixe.face.x - encaixe.q.x;
-    const ny = encaixe.face.y - encaixe.q.y;
+    // F14b: a louça LONGE da parede (o mobiliário a pôs a 60 cm dela) não tinha direção: fria e quente nasciam no
+    // MESMO ponto e, encostadas cada uma pela sua rede, ficavam a 4,5 cm. A direção vem da parede mais perto.
+    const ref = encaixe ?? faceDaParede(componente.at, model.walls.filter((w) => w.levelId === componente.levelId), ALCANCE_DA_DIRECAO_MM);
+    if (!meio || !ref || irmaoDeAgua) return null;
+    const nx = ref.face.x - ref.q.x;
+    const ny = ref.face.y - ref.q.y;
     const n = Math.hypot(nx, ny);
     if (n < 1) return null;
     return { x: (-ny / n) * meio, y: (nx / n) * meio };
   })();
   const comQuente = disciplinasDoAparelho(tipo, hip).includes('AGUA_QUENTE');
+  // F14b (16/10/2026, sobrado a 30°): o PAR fria/quente que cai no contorno do pilar do canto escorrega JUNTO pela
+  // parede, mantendo o afastamento — escorregados um a um no traçado da água, os dois paravam no mesmo lugar (4,5 cm).
+  const deslize = (() => {
+    if (!lado || !comQuente || irmaoDeAgua) return { x: 0, y: 0 };
+    const aneis = pegadasDePilares(model, componente.levelId).map((g) => anelDoPilar(g, CONTORNO_DO_PILAR_MM) as Point[]);
+    if (aneis.length === 0) return { x: 0, y: 0 };
+    const base = naFace ?? componente.at;
+    const L = Math.hypot(lado.x, lado.y);
+    const u = { x: lado.x / L, y: lado.y / L };
+    const livre = (d: number) => [-1, 1].every((s) => !aneis.some((g) => pointInPolygon(g, { x: base.x + u.x * d + s * lado.x, y: base.y + u.y * d + s * lado.y } as Point)));
+    for (let k = 0; k <= DESLIZE_MAXIMO_DO_PAR_MM / PASSO_DO_DESLIZE_MM; k++) {
+      for (const d of k === 0 ? [0] : [k * PASSO_DO_DESLIZE_MM, -k * PASSO_DO_DESLIZE_MM]) if (livre(d)) return { x: u.x * d, y: u.y * d };
+    }
+    return { x: 0, y: 0 };
+  })();
   const posicao = (d: DisciplinaDeRede) => {
     if (!ehAgua(d)) return irmaos.find((t) => !ehAgua(t.disciplina))?.at ?? componente.at;
     const base = irmaoDeAgua?.at ?? naFace ?? componente.at;
     if (!lado || !comQuente) return base;
     const s = d === 'AGUA_FRIA' ? -1 : 1;
-    return { x: Math.round(base.x + s * lado.x), y: Math.round(base.y + s * lado.y) };
+    return { x: Math.round(base.x + deslize.x + s * lado.x), y: Math.round(base.y + deslize.y + s * lado.y) };
   };
   return disciplinasDoAparelho(tipo, hip)
     .filter((d) => !irmaos.some((t) => t.disciplina === d))

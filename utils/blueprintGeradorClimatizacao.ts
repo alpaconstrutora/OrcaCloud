@@ -43,7 +43,7 @@ import type { HipotesesClimatizacao } from './blueprintClimatizacao';
 import { cargaTermicaDoEstudo, type CargaTermicaDoNivel, type ContextoDaCarga } from './blueprintCargaTermica';
 import { selecaoDoNivel, type ModeloDoCatalogo } from './blueprintSelecaoClimatizacao';
 import { planejarEquipamentosSplit } from './blueprintPosicaoSplit';
-import { comandosDaLinhaPelaCapacidade, planejarLinhasFrigorigenas } from './blueprintLinhaFrigorigena';
+import { comandosDaLinhaPelaCapacidade, planejarLinhasFrigorigenas, type LinhaNoForro } from './blueprintLinhaFrigorigena';
 import { planejarVrf } from './blueprintVrf';
 import { planejarRedeDeAr, vazoesDosTerminais } from './blueprintRedeDeAr';
 import { planejarCircuitos, pontosElegiveis, type HipotesesDeCircuitos } from './blueprintCircuitosAutomaticos';
@@ -82,6 +82,8 @@ export interface ContextoDoGeradorDeClimatizacao {
   modelos: readonly ModeloDoCatalogo[];
   /** As premissas do planejador de circuitos da Elétrica; ausente = o circuito fica para lá. */
   circuitos?: { hip: HipotesesDeCircuitos; eletricas: HipotesesEletricas } | null;
+  /** F14b da casa automática: a linha frigorígena no forro (faixa e afastamento); ausente = como antes. */
+  linhaNoForro?: LinhaNoForro | null;
 }
 
 /** Medidas do orçamento que a climatização alimenta (E9). */
@@ -184,7 +186,7 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
     let n = 0;
     const notas: string[] = [];
     for (const levelId of niveis) {
-      const plano = planejarLinhasFrigorigenas(m, levelId, hip.linha);
+      const plano = planejarLinhasFrigorigenas(m, levelId, hip.linha, { noForro: cx.linhaNoForro ?? null });
       n += aplicar(plano.comandos);
       for (const s of plano.semLugar) pendencia('SEM_SOLUCAO', `${nomeDoNivel(levelId)} › ${s.nome}: ${s.motivo}`);
       if (plano.aCriar.length) notas.push(`${nomeDoNivel(levelId)}: ${plano.aCriar.length} sistema(s)`);

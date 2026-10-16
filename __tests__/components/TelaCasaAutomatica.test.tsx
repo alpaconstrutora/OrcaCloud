@@ -181,4 +181,33 @@ describe('TelaCasaAutomatica (F10)', () => {
     tela({ premissas: { ...PREMISSAS_DA_CASA_PADRAO, forro: { ...PREMISSAS_DA_CASA_PADRAO.forro, lancar: false } } });
     expect(screen.queryByLabelText('Piso acabado (cm)')).toBeNull();
   });
+
+  it('F14c: os furos previstos — a contagem pelos critérios e a tabela para o calculista (peça, rede, Ø, cota, apoio, situação)', () => {
+    const resultado = { ...emptyModel(), levels: [{ ...emptyModel().levels[0], id: 'lvl_0001', name: 'Térreo' }] };
+    const furo = (extra: Record<string, unknown>) => ({
+      pecaId: 's1', peca: 'V3', tipoDaPeca: 'VIGA', levelId: 'lvl_0001', trechoId: 't1', disciplina: 'AGUA_FRIA', direcao: 'HORIZONTAL',
+      diametroMm: 52, ponto: { x: 0, y: 0 }, cotaMm: 2598, aoLongoMm: 1850, distanciaAoApoioMm: 1200, dispensa: true, motivos: [], ...extra,
+    });
+    const lista = [
+      furo({}),
+      furo({ trechoId: 't2', disciplina: 'ELETRICA', aoLongoMm: 300, distanciaAoApoioMm: 260, dispensa: false, motivos: ['a 26 cm do apoio (pede 80 cm)'] }),
+      furo({ pecaId: 's2', peca: 'L4rc', tipoDaPeca: 'LAJE', trechoId: 't3', disciplina: 'ESGOTO', direcao: 'VERTICAL', aoLongoMm: null, distanciaAoApoioMm: null, dispensa: null }),
+    ];
+    const comFuros = { ...plano, resultado, resumo: { ...plano.resumo, furos: { emViga: 2, dispensa: 1, verificar: 1, emBaldrame: 0, emLaje: 1, lista } } } as unknown as PlanoDaCasa;
+    tela({ casa: casa({ plano: comFuros }) });
+    const sec = screen.getByTestId('furos-da-casa');
+    expect(sec.textContent).toContain('Furos previstos para o calculista (3)');
+    expect(sec.textContent).toContain('1 dispensam a verificação');
+    expect(sec.textContent).toContain('1 a verificar com o calculista');
+    expect(sec.textContent).toContain('dispensa a verificação');
+    expect(sec.textContent).toContain('verificar com o calculista');
+    expect(sec.textContent).toContain('a 26 cm do apoio (pede 80 cm)');
+    expect(sec.textContent).toContain('passagem na laje');
+    expect(sec.textContent).toContain('Térreo');
+    expect(sec.textContent).toContain('5,2');
+    // Sem furos, a seção não aparece.
+    cleanup();
+    tela({ casa: casa({ plano }) });
+    expect(screen.queryByTestId('furos-da-casa')).toBeNull();
+  });
 });

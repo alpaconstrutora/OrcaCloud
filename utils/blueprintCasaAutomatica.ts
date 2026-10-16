@@ -29,7 +29,7 @@
  * mão direita de quem olha da rua —, e a `transformacao` leva ao mundo. Com a
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
-import { TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, envelopeDoTrecho, medirEscada, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point, type SpaceLabel } from './blueprintKernel';
+import { TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point, type SpaceLabel } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
 import { recuosEfetivos } from './blueprintZonaUrbanistica';
@@ -84,6 +84,7 @@ import { pressoesDoModelo, type HipotesesDePressao } from './blueprintPressaoDaR
 import { KPA_POR_MCA } from './blueprintHidraulicaPressao';
 import { comandosDePontosDoNivel } from './blueprintPontosEletricosDoNivel';
 import { comodosComForro, type FaixaDoForro } from './blueprintRotaPeloForro';
+import { furosPrevistos, type FuroPrevisto } from './blueprintFurosPrevistos';
 import { presetDeAcabamento, presetsSugeridos } from './blueprintAcabamentos';
 import { encaixarNaParede, paredesEmComum } from './blueprintRotaPelasParedes';
 import { pegadasDePilares } from './blueprintObstaculosEstruturais';
@@ -104,6 +105,9 @@ import {
   dividirPrograma,
   escolherNucleo,
   guardaCorpoDaEscada,
+  lajesComRebaixo,
+  shaftDoGrupo,
+  zonasMolhadasDoBanheiro,
   HIPOTESES_DO_SOBRADO_PADRAO,
   pavimentoComNucleo,
   pilaresDoSobrado,
@@ -594,10 +598,12 @@ export const HIPOTESES_DO_FORRO_DA_CASA_PADRAO: HipotesesDoForroDaCasa = {
   pisoAcabadoMm: 50,
   folgaSobAFaixaMm: 15,
   folgaSobAVigaMm: 50,
-  eletrica: { abaixoDoTetoMm: 45, afastamentoDaFaceMm: 50 },
-  frigorigena: { abaixoDoTetoMm: 115, afastamentoDaFaceMm: 140 },
-  aguaQuente: { abaixoDoTetoMm: 170, afastamentoDaFaceMm: 200 },
-  aguaFria: { abaixoDoTetoMm: 202, afastamentoDaFaceMm: 250 },
+  eletrica: { abaixoDoTetoMm: 45, afastamentoDaFaceMm: 50, degrauNaParedeMm: 0 },
+  frigorigena: { abaixoDoTetoMm: 115, afastamentoDaFaceMm: 140, degrauNaParedeMm: 0 },
+  // F14c: dentro da parede, abaixo da viga, cada rede no seu degrau — a elétrica logo abaixo, a fria 6 cm mais baixo,
+  // a quente 12 cm (os dois raios e 2 cm entre cada par).
+  aguaQuente: { abaixoDoTetoMm: 170, afastamentoDaFaceMm: 200, degrauNaParedeMm: 120 },
+  aguaFria: { abaixoDoTetoMm: 202, afastamentoDaFaceMm: 250, degrauNaParedeMm: 60 },
 };
 
 const FAIXAS_DO_FORRO = ['eletrica', 'frigorigena', 'aguaQuente', 'aguaFria'] as const;
@@ -686,7 +692,21 @@ export function decidirPressao(model: BlueprintModel, hidro: HipotesesHidro, ter
     cotaMm: caixa.cotaMm, tipoHidraulico: 'BOMBA', rotulo: 'Pressurizador', sugerida: true,
   } as Command;
   const comBomba = simular([bomba]);
-  return { solucao: 'PRESSURIZADOR', comandos: [bomba], deficitM, restanteM: comBomba.deficit, elevacaoMm: 0, plano: comBomba.plano };
+  if (comBomba.deficit <= 0) return { solucao: 'PRESSURIZADOR', comandos: [bomba], deficitM, restanteM: 0, elevacaoMm: 0, plano: comBomba.plano };
+  // F14c: o pressurizador sozinho não basta (sobrado: a quente do chuveiro de cima sai do aquecedor do térreo por um
+  // caminho longo) — com ele, a caixa também sobe, até o limite; o que ainda faltar fica dito na verificação.
+  let melhor = { comandos: [bomba] as Command[], restanteM: comBomba.deficit, elevacaoMm: 0, plano: comBomba.plano };
+  let subirJunto = passo(comBomba.deficit * 1000 + FOLGA_DA_ELEVACAO_MM);
+  for (let tentativa = 0; tentativa < 5; tentativa++) {
+    const alvo = Math.min(subirJunto, hip.caixaElevadaAteMm);
+    const cmd: Command = { type: 'SetTerminalProps', terminalId: caixa.id, cotaMm: caixa.cotaMm + alvo } as Command;
+    const junto = { ...bomba, cotaMm: caixa.cotaMm + alvo } as Command;
+    const r = simular([cmd, junto]);
+    if (r.deficit < melhor.restanteM) melhor = { comandos: [cmd, junto], restanteM: r.deficit, elevacaoMm: alvo, plano: r.plano };
+    if (r.deficit <= 0 || alvo >= hip.caixaElevadaAteMm) break;
+    subirJunto = passo(alvo + r.deficit * 1000 + FOLGA_DA_ELEVACAO_MM);
+  }
+  return { solucao: 'PRESSURIZADOR', comandos: melhor.comandos, deficitM, restanteM: Math.max(0, melhor.restanteM), elevacaoMm: melhor.elevacaoMm, plano: melhor.plano };
 }
 
 /** F9: as hipóteses da elétrica da casa. */
@@ -782,6 +802,11 @@ export interface PlanoDaCasa {
     climatizacao: { equipamentos: number; etapas: Record<string, SituacaoDaEtapa>; verificacao: { erros: number; avisos: number; porTipo: Record<string, number> } };
     /** F14b: o forro lançado — cômodos, rebaixo e o menor pé-direito livre; `null` sem forro. */
     forro: { comodos: number; rebaixoMm: number; peDireitoLivreMinimoMm: number | null } | null;
+    /**
+     * F14c: os FUROS PREVISTOS na estrutura (a lista para o calculista) — em viga, quantos dispensam a verificação
+     * pelos critérios (NBR 6118, 13.2.5.1, hipóteses) e quantos ficam para verificar; em baldrame e em laje.
+     */
+    furos: { emViga: number; dispensa: number; verificar: number; emBaldrame: number; emLaje: number; lista: FuroPrevisto[] } | null;
   };
 }
 
@@ -927,6 +952,104 @@ export interface OpcoesDoPlanoDaCasa {
   aoConcluirEtapa?: (e: EtapaDaCasa, indice: number, total: number) => void;
 }
 
+/**
+ * F14c: as peças de esgoto de cima agrupadas como o esgoto agrupa os tubos de queda — a até `raioMm` umas das outras e
+ * no MESMO cômodo ("um tubo de queda por banheiro de cima"). O passo do shaft e a previsão da laje rebaixada usam isto.
+ */
+function gruposDoTuboDeQueda<T extends { at: Point }>(model: BlueprintModel, levelId: ObjectId, pecas: readonly T[], raioMm: number): T[][] {
+  const comodos = model.spaces.filter((sp) => sp.levelId === levelId);
+  const comodoDe = (p: Point) => comodos.find((sp) => pointInPolygon(sp.ring, p))?.id ?? null;
+  const grupos: T[][] = [];
+  for (const t of pecas) {
+    const perto = grupos.filter((g) => g.some((u) => Math.hypot(u.at.x - t.at.x, u.at.y - t.at.y) <= raioMm && comodoDe(u.at) === comodoDe(t.at)));
+    for (const g of perto) grupos.splice(grupos.indexOf(g), 1);
+    grupos.push([t, ...perto.flat()]);
+  }
+  return grupos;
+}
+
+/** F14c: quanto o coletor do box sai além da face do shaft, mm (o raio da caixa sifonada e a folga). */
+const COLETOR_ALEM_DO_SHAFT_MM = 150;
+
+/** F14c: o coletor do box (caixa sifonada, ralo) do lote que cai DENTRO de um shaft sai dele (`foraDoShaft`). */
+function coletoresForaDoShaft(model: BlueprintModel, lote: Command[]): Command[] {
+  return lote.map((c) => {
+    if (c.type !== 'AddTerminal' || (c.tipoHidraulico !== 'CAIXA_SIFONADA' && c.tipoHidraulico !== 'RALO_SIFONADO')) return c;
+    const fora = foraDoShaft(model, c.levelId, c.at, COLETOR_ALEM_DO_SHAFT_MM);
+    return fora ? ({ ...c, at: fora } as Command) : c;
+  });
+}
+
+/**
+ * F14c: o ponto `at` caiu dentro de um SHAFT do pavimento? Devolve o mais perto fora dele — o pé em cada lado, `alemMm`
+ * para fora — que fica no mesmo cômodo e fora de outro shaft; `null` se não caiu (ou não há para onde ir).
+ */
+function foraDoShaft(model: BlueprintModel, levelId: ObjectId, at: Point, alemMm: number): Point | null {
+  const shafts = (model.nucleos ?? []).filter((n) => n.tipo === 'SHAFT' && pavimentosDoNucleo(model, n).some((l) => l.id === levelId)).map((n) => n.ring);
+  const comodo = model.spaces.find((sp) => sp.levelId === levelId && pointInPolygon(sp.ring, at))?.ring ?? null;
+  return foraDoPoligono(shafts, at, comodo, alemMm);
+}
+
+/**
+ * F14c: pontos ao longo do contorno dos cômodos (a cada 20 cm) onde a parede fica sob a laje REBAIXADA do pavimento —
+ * o ponto 25 cm para dentro do cômodo cai nela. Entram nos `ocupados` da distribuição das tomadas.
+ */
+function paredesSobORebaixo(model: BlueprintModel, levelId: ObjectId): Point[] {
+  const teto = model.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? Infinity;
+  const rebaixos = (model.structures ?? []).filter((x) => x.kind === 'LAJE' && x.levelId === levelId && x.baseMm < teto - 1).map((x) => x.pontos as Point[]);
+  if (!rebaixos.length) return [];
+  const saida: Point[] = [];
+  for (const sp of model.spaces.filter((x) => x.levelId === levelId && x.ring.length >= 3)) {
+    const horario = sp.ring.reduce((acc, p, i) => acc + p.x * sp.ring[(i + 1) % sp.ring.length].y - sp.ring[(i + 1) % sp.ring.length].x * p.y, 0) < 0;
+    for (let i = 0; i < sp.ring.length; i++) {
+      const a = sp.ring[i];
+      const b = sp.ring[(i + 1) % sp.ring.length];
+      const L = Math.hypot(b.x - a.x, b.y - a.y);
+      if (L < 1) continue;
+      const u = { x: (b.x - a.x) / L, y: (b.y - a.y) / L };
+      // A normal para dentro do cômodo.
+      const n = horario ? { x: u.y, y: -u.x } : { x: -u.y, y: u.x };
+      for (let d = 0; d <= L; d += 200) {
+        const q = { x: a.x + u.x * d, y: a.y + u.y * d };
+        if (rebaixos.some((g) => pointInPolygon(g, { x: q.x + n.x * 250, y: q.y + n.y * 250 } as Point))) saida.push({ x: Math.round(q.x), y: Math.round(q.y) } as Point);
+      }
+    }
+  }
+  return saida;
+}
+
+/** F14c: quanto a luz de teto sai além da borda da laje rebaixada, mm (o eletroduto sobe ali, no plenum). */
+const LUZ_ALEM_DO_REBAIXO_MM = 300;
+
+/**
+ * F14c: o ponto `at` caiu dentro de um dos `poligonos` (convexos)? Devolve o mais perto fora dele — o pé em cada lado,
+ * `alemMm` para fora — que fica no `comodo` e fora dos outros; `null` se não caiu (ou não há para onde ir).
+ */
+function foraDoPoligono(poligonos: readonly (readonly Point[])[], at: Point, comodo: readonly Point[] | null, alemMm: number): Point | null {
+  const sh = poligonos.find((g) => pointInPolygon(g as Point[], at));
+  if (!sh) return null;
+  const c = { x: sh.reduce((a, p) => a + p.x, 0) / sh.length, y: sh.reduce((a, p) => a + p.y, 0) / sh.length };
+  let melhor: { p: Point; d: number } | null = null;
+  for (let i = 0; i < sh.length; i++) {
+    const a = sh[i];
+    const b = sh[(i + 1) % sh.length];
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L < 1) continue;
+    const u = { x: (b.x - a.x) / L, y: (b.y - a.y) / L };
+    const t = Math.max(0, Math.min(L, (at.x - a.x) * u.x + (at.y - a.y) * u.y));
+    const pe = { x: a.x + u.x * t, y: a.y + u.y * t };
+    // A normal para FORA (do centro do polígono para o lado).
+    let n = { x: -u.y, y: u.x };
+    if ((pe.x - c.x) * n.x + (pe.y - c.y) * n.y < 0) n = { x: u.y, y: -u.x };
+    const q = { x: Math.round(pe.x + n.x * alemMm), y: Math.round(pe.y + n.y * alemMm) } as Point;
+    if (comodo && !pointInPolygon(comodo as Point[], q)) continue;
+    if (poligonos.some((g) => pointInPolygon(g as Point[], q))) continue;
+    const d = Math.hypot(q.x - at.x, q.y - at.y);
+    if (!melhor || d < melhor.d) melhor = { p: q, d };
+  }
+  return melhor?.p ?? null;
+}
+
 export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> = {}, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const hip: HipotesesDaCasa = {
     ...HIPOTESES_DA_CASA_PADRAO,
@@ -980,7 +1103,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   const pedidos = programa.itens.filter((i) => i.uso !== 'CIRCULACAO').reduce((s, i) => s + i.quantidade, 0);
   const vazio = (motivo: string, implantacao: ImplantacaoDaCasa | null = null): PlanoDaCasa => {
     for (const id of ORDEM_DAS_ETAPAS) if (id !== 'IMPLANTACAO' && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
-    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, sobrado: null, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA(), forro: null } };
+    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, sobrado: null, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA(), forro: null, furos: null } };
   };
 
   const impedimento = motivoParaNaoGerar(original, entrada.levelId);
@@ -1268,11 +1391,39 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     });
     etapaSimples('PONTOS_HIDRAULICOS', () => {
       const planos = niveis.flatMap((L) => planejarPontosDoNivel(m, L, hipPontos));
-      const lote = planos.flatMap((pl) => pl.comandos);
+      // F14c: o coletor do box (caixa sifonada, ralo) que cai DENTRO de um shaft (o do F12c nasce antes dele) sai pelo
+      // lado mais perto, 15 cm além da face, no mesmo cômodo — dentro, o esgoto que chega nele cruzava as colunas de
+      // água do centro do shaft (sobrado a 30°).
+      const lote = coletoresForaDoShaft(m, planos.flatMap((pl) => pl.comandos));
       for (const pl of planos) if (pl.motivo && !pl.comandos.length && pl.aCriar === 0 && pl.jaExistentes === 0) pendencias.push({ grupo: 'VERIFICACAO', texto: `Pontos de ${pl.nome}: ${pl.motivo}` });
       mobiliario.pontosDoKit = lote.length;
       return { comandos: lote, nota: `${lote.length} ponto(s) que nenhuma louça cobre (caixa sifonada, ralo…)` };
     });
+
+    // F14c: no sobrado, cada grupo de peças de cima (o banheiro) com o shaft a até `shaftAteAsPecasMm` do centro delas —
+    // o shaft do F12c nasce antes do mobiliário e, no banheiro comprido, ficava a 5 m das peças; sem um perto, ganha um
+    // junto delas (o tubo de queda desce ali e o esgoto cabe no enchimento da laje rebaixada).
+    if (niveis.length > 1) {
+      const [T0, S0] = niveis;
+      const pecas = (m.terminais ?? []).filter((t) => t.levelId === S0 && t.disciplina === 'ESGOTO');
+      const grupos = gruposDoTuboDeQueda(m, S0, pecas, hip.sobrado.grupoDoTuboDeQuedaMm);
+      const escada = m.spaces.find((sp) => sp.levelId === S0 && /escada/i.test(sp.name ?? ''))?.ring ?? null;
+      const novos: string[] = [];
+      for (const g of grupos) {
+        const alvo = { x: g.reduce((a, t) => a + t.at.x, 0) / g.length, y: g.reduce((a, t) => a + t.at.y, 0) / g.length };
+        const ban = m.spaces.find((sp) => sp.levelId === S0 && g.filter((t) => pointInPolygon(sp.ring, t.at)).length * 2 >= g.length);
+        if (!ban) continue;
+        const sh = shaftDoGrupo(m, T0, S0, ban.ring, alvo, escada, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm);
+        if (sh && !sh.novo) continue;
+        if (!sh) {
+          pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Shaft: ${ban.name} não tem lugar junto das peças para o shaft (parede com parede embaixo, ou cômodo de baixo que aceite a caixa) — o tubo de queda desce longe delas; ponha o shaft à mão.` });
+          continue;
+        }
+        aplicar([{ type: 'AddNucleo', levelId: T0, ateLevelId: S0, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' } as Command]);
+        novos.push(`${ban.name}${sh.noTerreo ? ` (descendo na ${sh.noTerreo})` : ''}`);
+      }
+      if (novos.length) pendencias.push({ grupo: 'CONFERIR', texto: `Shaft junto das peças: ${novos.join('; ')} — o do F12c ficava a mais de ${f2(hip.sobrado.shaftAteAsPecasMm / 1000)} m delas.` });
+    }
 
     // ── HIDRÁULICA (F8) ───────────────────────────────────────────────────────
     // Os "Lançar tudo" das gavetas, na ordem e com as premissas do ESTUDO (`hidro`, as mesmas da gaveta):
@@ -1294,7 +1445,8 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
         faixaDaAguaQuente: faixaNoMundo(hip.faixas.aguaQuenteMm),
         noForro: forroLigado ? { aguaFria: hip.forro.aguaFria, aguaQuente: hip.forro.aguaQuente, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } : null,
       },
-      esgoto: { ...hidroDoEstudo.esgoto, faixa: faixaNoMundo(hip.faixas.esgotoMm) },
+      // F14c: no sobrado, um tubo de queda por banheiro de cima (cada um no shaft dele).
+      esgoto: { ...hidroDoEstudo.esgoto, faixa: faixaNoMundo(hip.faixas.esgotoMm), ...(niveis.length > 1 ? { tuboDeQuedaPorGrupoMm: hip.sobrado.grupoDoTuboDeQuedaMm, raioDoShaftMm: hip.sobrado.tuboDeQuedaAteOShaftMm } : {}) },
     };
     const terrenoHidro = entrada.leitorDoTerreno ?? null;
     const hidraulica = HIDRAULICA_ZERADA();
@@ -1356,7 +1508,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       if (d?.solucao === 'PRESSURIZADOR')
         pendencias.push({
           grupo: 'CONFERIR',
-          texto: `Pressão: faltavam ${f2(d.deficitM)} m de coluna — elevar a caixa até ${f2(hip.pressao.caixaElevadaAteMm / 1000)} m não basta; pressurizador na saída da caixa (+${hidro.pressao.ganhoDoPressurizadorKpa} kPa, ${hip.pressao.potenciaDoPressurizadorW} W, com ponto elétrico e circuito) — confira o modelo no catálogo.`,
+          texto: `Pressão: faltavam ${f2(d.deficitM)} m de coluna — elevar a caixa até ${f2(hip.pressao.caixaElevadaAteMm / 1000)} m não basta; pressurizador na saída da caixa (+${hidro.pressao.ganhoDoPressurizadorKpa} kPa, ${hip.pressao.potenciaDoPressurizadorW} W, com ponto elétrico e circuito)${d.elevacaoMm > 0 ? ` e, como ele sozinho também não bastava, a caixa subiu ${f2(d.elevacaoMm / 1000)} m — preveja a base elevada (torre)` : ''} — confira o modelo no catálogo.`,
         });
     }
     const destino = destinoDoEsgoto(hidro.esgoto);
@@ -1446,7 +1598,15 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
             areaPorLuminariaM2: hip.eletrica.areaPorLuminariaM2,
             // F14b: no forro, a tomada também fica longe do ponto de água (a descida dela cruzava a entrada da quente no
             // aquecedor, na mesma posição ao longo da parede).
-            ocupados: (m.terminais ?? []).filter((t) => t.levelId === L && (t.disciplina === 'ELETRICA' || (forroLigado && (t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE')))).map((t) => t.at),
+            // F14c: e das PRUMADAS das outras redes que correm na parede (a coluna de ventilação do esgoto: a descida da
+            // tomada caía em cima dela, térrea a 30°).
+            ocupados: [
+              ...(m.terminais ?? []).filter((t) => t.levelId === L && (t.disciplina === 'ELETRICA' || (forroLigado && (t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE')))).map((t) => t.at),
+              ...(forroLigado ? (m.trechos ?? []).filter((t) => t.levelId === L && t.disciplina !== 'ELETRICA' && t.a.x === t.b.x && t.a.y === t.b.y && Math.max(t.cotaAMm, t.cotaBMm) > 300).map((t) => t.a) : []),
+              // F14c: e da parede sob a laje REBAIXADA — ali o forro não tem plenum, e o eletroduto não chega pelo anel
+              // (a tomada do canto da cozinha, sob o banheiro da suíte, ficava ligada em reta pelo meio do cômodo).
+              ...(forroLigado ? paredesSobORebaixo(m, L) : []),
+            ],
           }),
         );
         // F14b: a luz de teto na FACE do forro do cômodo — a rede corre no plenum, acima dela.
@@ -1455,7 +1615,12 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
             const c = lote[i];
             if (c.type !== 'AddTerminal' || (c as { tipoEletrico?: string | null }).tipoEletrico !== 'ILUMINACAO_TETO') continue;
             const sp = comodosComForro(m, c.levelId).find((x) => pointInPolygon(x.ring, c.at));
-            if (sp) lote[i] = { ...c, cotaMm: Math.round(forroDoComodo(m, sp).faceMm) } as Command;
+            // F14c: e fora da laje REBAIXADA (sob o banheiro de cima): ali o forro não tem plenum, e o eletroduto da luz
+            // atravessava a área rebaixada em reta (sobrado a 0°).
+            const teto = m.levels.find((l) => l.id === c.levelId)?.defaultHeightMm ?? Infinity;
+            const rebaixos = (m.structures ?? []).filter((x) => x.kind === 'LAJE' && x.levelId === c.levelId && x.baseMm < teto - 1).map((x) => x.pontos as Point[]);
+            const at = (sp && foraDoPoligono(rebaixos, c.at, sp.ring, LUZ_ALEM_DO_REBAIXO_MM)) || c.at;
+            if (sp) lote[i] = { ...c, at, cotaMm: Math.round(forroDoComodo(m, sp).faceMm) } as Command;
           }
         }
         // O CHUVEIRO ELÉTRICO é LIGAÇÃO DIRETA (a 9.5.2.3 acusa chuveiro em tomada), no ponto hidráulico dele, com a
@@ -1686,6 +1851,25 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       etapa('FORRO', ROTULO_DA_ETAPA_DA_CASA.FORRO, 'LANCOU', n, `${lote.length} cômodo(s), rebaixo de ${f2(rebaixoDoForro / 1000)} m; pé-direito livre mínimo de ${Number.isFinite(menorLivre) ? f2(menorLivre / 1000) : '—'} m`);
     }
 
+    // ── FUROS PREVISTOS (F14c) ─────────────────────────────────────────────────
+    // Toda passagem de rede por viga, baldrame e laje, com a avaliação dos critérios na viga — a lista para o calculista
+    // (decisão do usuário: "manter 2,80 m, furar vigas"). Sai do modelo como ele ficou, com todas as redes.
+    const listaDeFuros = furosPrevistos(m);
+    const naViga = listaDeFuros.filter((f) => f.tipoDaPeca === 'VIGA');
+    const furos: PlanoDaCasa['resumo']['furos'] = {
+      emViga: naViga.length,
+      dispensa: naViga.filter((f) => f.dispensa).length,
+      verificar: naViga.filter((f) => f.dispensa === false).length,
+      emBaldrame: listaDeFuros.filter((f) => f.tipoDaPeca === 'VIGA_FUNDACAO').length,
+      emLaje: listaDeFuros.filter((f) => f.tipoDaPeca === 'LAJE').length,
+      lista: listaDeFuros,
+    };
+    if (listaDeFuros.length)
+      pendencias.push({
+        grupo: 'CONFERIR',
+        texto: `Furos previstos para o calculista: ${furos.emViga} em viga (${furos.dispensa} dispensam a verificação pelos critérios da NBR 6118, 13.2.5.1; ${furos.verificar} a verificar), ${furos.emBaldrame} em baldrame e ${furos.emLaje} passagem(ns) em laje — a lista está na tela da casa.`,
+      });
+
     // As redes × PORTAS e JANELAS: o tubo que corre na cota do topo da janela (2,20 m — a mesma dos ramais, do
     // eletroduto e da linha abaixo da viga) ou que sai da parede para fora no vão dela. Fica à vista, por rede.
     const redesEmAberturas: Record<string, number> = {};
@@ -1699,7 +1883,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       const nome: Record<string, string> = { ...ROTULO_DA_DISCIPLINA_DA_REDE, ...ROTULO_DA_DISCIPLINA_DO_AR, ELETRICA: 'eletroduto' };
       for (const [d, n] of Object.entries(redesEmAberturas)) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rede de ${nome[d] ?? d.toLowerCase()}: ${n} trecho(s) passando por porta ou janela` });
     }
-    return { ancoras, mobiliario, hidraulica, eletrica, climatizacao, redesEmAberturas, forro };
+    return { ancoras, mobiliario, hidraulica, eletrica, climatizacao, redesEmAberturas, forro, furos };
   };
 
   // ── SOBRADO (F12a) ────────────────────────────────────────────────────────
@@ -1829,18 +2013,88 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       },
     );
     let guardas = 0;
+    let lajesRebaixadas = 0;
+    /** F14c: as áreas molhadas dos banheiros de cima, pelas peças de esgoto PREVISTAS (simulação de mobiliário, louças e kit). */
+    const zonasMolhadasDeCima = (x: BlueprintModel, T0: ObjectId, S0: ObjectId): Point[][] => {
+      if (!hip.mobiliario.lancar || hip.sobrado.rebaixoDaLajeDoBanheiroMm <= 0) return [];
+      try {
+        // Os DOIS pavimentos, como as etapas de lá: o shaft previsto não pode cair em cima de uma peça do térreo.
+        const porNivel = [T0, S0].map((L) => ({ L, lista: mobiliarNivel(x, L, hip.mobiliario) }));
+        const mob = porNivel.flatMap((p) => comandosDeMobiliario(p.lista, p.L, x));
+        const r1 = mob.length ? applyBatch(x, mob) : null;
+        const m1 = r1?.model ?? x;
+        const louc = pontosDasLoucasCriadas(m1, r1?.diff.created ?? [], hip.pontos, { sugerida: true });
+        const m2 = louc.length ? applyBatch(m1, louc).model : m1;
+        const kit = coletoresForaDoShaft(m2, [T0, S0].flatMap((L) => planejarPontosDoNivel(m2, L, hip.pontos)).flatMap((pl) => pl.comandos));
+        const m3 = kit.length ? applyBatch(m2, kit).model : m2;
+        const pecas = (m3.terminais ?? []).filter((t) => t.levelId === S0 && t.disciplina === 'ESGOTO');
+        const grupos = gruposDoTuboDeQueda(m3, S0, pecas, hip.sobrado.grupoDoTuboDeQuedaMm);
+        const zonas: Point[][] = [];
+        const escada = m3.spaces.find((sp) => sp.levelId === S0 && /escada/i.test(sp.name ?? ''))?.ring ?? null;
+        const banheiros = m3.spaces.filter((sp) => sp.levelId === S0 && ['BANHEIRO', 'LAVABO'].includes(usoDoNome(sp.name) ?? ''));
+        // O shaft onde o tubo de queda de cada grupo vai descer — a mesma decisão do passo do shaft, adiante (e o shaft
+        // novo entra no modelo, como lá, para o grupo seguinte não cair em cima dele).
+        let m4 = m3;
+        const shaftDo = new Map<(typeof grupos)[number], Point[]>();
+        for (const g of grupos) {
+          const ban = banheiros.find((sp) => g.filter((t) => pointInPolygon(sp.ring, t.at)).length * 2 >= g.length);
+          if (!ban) continue;
+          const alvo = { x: g.reduce((a, t) => a + t.at.x, 0) / g.length, y: g.reduce((a, t) => a + t.at.y, 0) / g.length };
+          const sh = shaftDoGrupo(m4, T0, S0, ban.ring, alvo, escada, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm);
+          if (!sh) continue;
+          shaftDo.set(g, sh.ring);
+          if (sh.novo) m4 = applyBatch(m4, [{ type: 'AddNucleo', levelId: T0, ateLevelId: S0, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' } as Command]).model;
+        }
+        // Uma zona por GRUPO e por banheiro que ele toca: as peças do grupo nele e o caminho delas até o shaft (a reta de
+        // cada peça ao centro dele), até a face do shaft. Por grupo: no banheiro comprido da suíte, a caixa sifonada de
+        // uma ponta e o vaso da outra cercavam o shaft e o rebaixo o engolia (a água de baixo não chegava às colunas). Por
+        // banheiro: o grupo pode juntar peças de dois vizinhos (a 30°, a caixa sifonada do social desce no shaft da
+        // suíte) — cada um ganha o pedaço dele.
+        for (const g of grupos) {
+          const sh = shaftDo.get(g) ?? null;
+          const centro = sh ? { x: sh.reduce((a, p) => a + p.x, 0) / sh.length, y: sh.reduce((a, p) => a + p.y, 0) / sh.length } : null;
+          for (const ban of banheiros) {
+            const doBanheiro = g.filter((t) => pointInPolygon(ban.ring, t.at)).map((t) => t.at);
+            const caminho: Point[] = [];
+            if (centro) {
+              for (const t of g) {
+                const L = Math.hypot(centro.x - t.at.x, centro.y - t.at.y);
+                for (let d = 0; d <= L; d += 100) {
+                  const q = { x: t.at.x + ((centro.x - t.at.x) * d) / (L || 1), y: t.at.y + ((centro.y - t.at.y) * d) / (L || 1) } as Point;
+                  if (pointInPolygon(ban.ring, q) && !pointInPolygon(sh!, q)) caminho.push(q);
+                }
+              }
+            }
+            if (!doBanheiro.length && !caminho.length) continue;
+            zonas.push(...zonasMolhadasDoBanheiro(ban.ring, doBanheiro, hip.sobrado.margemDoRebaixoMm, sh, caminho));
+          }
+        }
+        if (!zonas.length) pendencias.push({ grupo: 'CONFERIR', texto: `Laje rebaixada: nenhuma área molhada prevista nos banheiros de cima (${pecas.length} peça(s) de esgoto, ${grupos.length} grupo(s)) — a laje ficou sem rebaixo.` });
+        return zonas;
+      } catch (e) {
+        pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Laje rebaixada: a previsão das peças de cima falhou (${e instanceof Error ? e.message : String(e)}) — a laje ficou sem rebaixo.` });
+        return [];
+      }
+    };
     etapaEstrutural(
       'LAJES',
       (x) => {
         const d = emDois(x, (y) => planejarLajes(y, T, hip.estrutura.lajes), (y) => planejarLajes(y, S, hip.estrutura.lajes));
+        // F14c ("laje rebaixada"): a laje do térreo — o piso de cima — desce sob a ÁREA MOLHADA de cada banheiro de cima.
+        // As peças ainda não existem aqui (a laje vem antes do mobiliário): são PREVISTAS rodando mobiliário, louças e kit
+        // numa cópia — determinísticos, dão as posições que as etapas de lá vão lançar.
+        const zonas = zonasMolhadasDeCima(x, T, S);
+        const comRebaixo = lajesComRebaixo(d.a.comandos, T, zonas, hip.sobrado.rebaixoDaLajeDoBanheiroMm);
+        lajesRebaixadas = comRebaixo.rebaixadas;
         const g = guardaCorpoDaEscada(x, T, S);
         guardas = g.length;
-        return { ...d, comandos: [...d.comandos, ...g], motivo: d.comandos.length || g.length ? null : d.motivo };
+        const comandos = [...comRebaixo.comandos, ...d.b.comandos, ...g];
+        return { ...d, comandos, motivo: comandos.length ? null : d.motivo };
       },
       (p) => {
         estrutura.lajes = p.a.lajes.length + p.b.lajes.length;
         return {
-          nota: `${p.a.lajes.length} laje(s) no térreo (o piso de cima, com o furo da escada) e ${p.b.lajes.length} no superior, de ${hip.estrutura.lajes.espessuraMm} mm${guardas ? `; ${guardas - 1} corrimão(s) nos lances e guarda-corpo na borda do furo` : ''}`,
+          nota: `${p.a.lajes.length} laje(s) no térreo (o piso de cima, com o furo da escada) e ${p.b.lajes.length} no superior, de ${hip.estrutura.lajes.espessuraMm} mm${lajesRebaixadas ? `; rebaixada ${f2(hip.sobrado.rebaixoDaLajeDoBanheiroMm / 1000)} m sob ${lajesRebaixadas} trecho(s) de banheiro de cima` : ''}${guardas ? `; ${guardas - 1} corrimão(s) nos lances e guarda-corpo na borda do furo` : ''}`,
           foraDoPlano: p.foraDoPlano,
         };
       },
@@ -1902,7 +2156,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       semente: et.r.semente,
       escolha: `térreo: ${et.texto}; superior: ${es.texto}`,
       sobrado,
-      disciplinas: { estrutura, telhado, ancoras: inst.ancoras, mobiliario: inst.mobiliario, hidraulica: inst.hidraulica, eletrica: inst.eletrica, aberturas: inst.redesEmAberturas, climatizacao: inst.climatizacao, forro: inst.forro },
+      disciplinas: { estrutura, telhado, ancoras: inst.ancoras, mobiliario: inst.mobiliario, hidraulica: inst.hidraulica, eletrica: inst.eletrica, aberturas: inst.redesEmAberturas, climatizacao: inst.climatizacao, forro: inst.forro, furos: inst.furos },
     });
   }
 
@@ -1996,7 +2250,7 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     semente: r.semente,
     escolha,
     sobrado: null,
-    disciplinas: { estrutura, telhado, ancoras: inst.ancoras, mobiliario: inst.mobiliario, hidraulica: inst.hidraulica, eletrica: inst.eletrica, aberturas: inst.redesEmAberturas, climatizacao: inst.climatizacao, forro: inst.forro },
+    disciplinas: { estrutura, telhado, ancoras: inst.ancoras, mobiliario: inst.mobiliario, hidraulica: inst.hidraulica, eletrica: inst.eletrica, aberturas: inst.redesEmAberturas, climatizacao: inst.climatizacao, forro: inst.forro, furos: inst.furos },
   });
 }
 

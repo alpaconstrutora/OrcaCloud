@@ -18,7 +18,7 @@
  * Tudo nasce `sugerida` — mover confirma, como os outros automáticos. Puro: lê o modelo, devolve comandos.
  */
 import { pointInPolygon, polygonArea, type BlueprintModel, type Command, type ObjectId, type Point, type Space } from './blueprintKernel';
-import { DIMENSAO_DA_VAGA } from './blueprintKernel';
+import { DIMENSAO_DA_VAGA, pavimentosDoNucleo } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { dimensionarReservacao, HIPOTESES_RESERVATORIO_PADRAO, type HipotesesDeReservatorio } from './blueprintReservacao';
 import { usoDoNome, type PadraoDaCasa, type UsoDoAmbiente } from './blueprintPrograma';
@@ -135,7 +135,7 @@ const AQUECEDOR_FORA_DO_BATENTE_MM = 150;
  * F14b: a posição ao longo do lado (distância de `a`) mais perto do meio que fica a pelo menos `folga` de todo vão
  * das paredes sobre o lado e dos cantos; `null` se não há.
  */
-function posicaoForaDosVaos(model: BlueprintModel, levelId: ObjectId, lado: { a: Point; b: Point; comprimento: number }, folga: number): number | null {
+function posicaoForaDosVaos(model: BlueprintModel, levelId: ObjectId, lado: { a: Point; b: Point; comprimento: number; n?: Point }, folga: number, ignorarVaos = false): number | null {
   const L = lado.comprimento;
   const u = { x: (lado.b.x - lado.a.x) / L, y: (lado.b.y - lado.a.y) / L };
   const t = (p: Point) => (p.x - lado.a.x) * u.x + (p.y - lado.a.y) * u.y;
@@ -148,10 +148,34 @@ function posicaoForaDosVaos(model: BlueprintModel, levelId: ObjectId, lado: { a:
     if (Lw < 1) continue;
     const uw = { x: (w.b.x - w.a.x) / Lw, y: (w.b.y - w.a.y) / Lw };
     for (const o of model.openings) {
-      if (o.wallId !== w.id) continue;
+      if (o.wallId !== w.id || ignorarVaos) continue;
       const t0 = t({ x: w.a.x + uw.x * o.offsetMm, y: w.a.y + uw.y * o.offsetMm } as Point);
       const t1 = t({ x: w.a.x + uw.x * (o.offsetMm + o.widthMm), y: w.a.y + uw.y * (o.offsetMm + o.widthMm) } as Point);
       bloqueados.push([Math.min(t0, t1) - folga, Math.max(t0, t1) + folga]);
+    }
+  }
+  // F14c: e o SHAFT encostado na parede — o aquecedor do sobrado a 30° ficou dentro dele (a água entrava e saía pelo
+  // meio do shaft, onde descem o tubo de queda e as colunas).
+  for (const n of model.nucleos ?? []) {
+    if (n.tipo !== 'SHAFT' || !pavimentosDoNucleo(model, n).some((l) => l.id === levelId)) continue;
+    if (Math.min(...n.ring.map((p) => d(p))) > 600) continue;
+    const ts = n.ring.map((p) => t(p));
+    bloqueados.push([Math.min(...ts) - folga, Math.max(...ts) + folga]);
+  }
+  // F14c: e fora da laje REBAIXADA (sob o banheiro de cima): sob ela o forro não tem plenum, e a água do aquecedor
+  // não tinha por onde subir até as faixas (sobrado a 30°: a quente saiu em reta pelo plenum).
+  const teto = model.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? Infinity;
+  const rebaixos = (model.structures ?? []).filter((x) => x.kind === 'LAJE' && x.levelId === levelId && x.baseMm < teto - 1).map((x) => x.pontos as Point[]);
+  if (rebaixos.length && lado.n) {
+    const dentro = (x: number) => rebaixos.some((g) => pointInPolygon(g, { x: lado.a.x + u.x * x - lado.n!.x * 300, y: lado.a.y + u.y * x - lado.n!.y * 300 } as Point));
+    let inicio: number | null = null;
+    for (let x = 0; x <= L + 50; x += 50) {
+      const d = x <= L && dentro(x);
+      if (d && inicio == null) inicio = x;
+      if (!d && inicio != null) {
+        bloqueados.push([inicio - 50 - folga, x + folga]);
+        inicio = null;
+      }
     }
   }
   const livre = (x: number) => x >= folga && x <= L - folga && bloqueados.every(([lo, hi]) => x <= lo || x >= hi);
@@ -216,7 +240,12 @@ export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras
           folgaUsada = Math.max(AQUECEDOR_FORA_DO_BATENTE_MM, folgaUsada / 2);
           t = posicaoForaDosVaos(model, cx.levelId, lado, folgaUsada + hip.aquecedorFriaQuenteMm / 2);
         }
-        if (t == null) pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre de janela e porta — ficou no meio, diante do vão; confira.`);
+        // F14c: sem trecho livre de vão, ao menos fora da laje rebaixada e do shaft (sob a laje, a água não sobe ao forro).
+        const diante = t == null ? posicaoForaDosVaos(model, cx.levelId, lado, AQUECEDOR_FORA_DO_BATENTE_MM + hip.aquecedorFriaQuenteMm / 2, true) : null;
+        if (t == null && diante != null) {
+          t = diante;
+          pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre de janela e porta fora da laje rebaixada — ficou diante do vão; confira.`);
+        } else if (t == null) pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre de janela e porta — ficou no meio, diante do vão; confira.`);
         else if (folgaUsada < hip.aquecedorLongeDoVaoMm) pendencias.push(`Aquecedor na ${serv.name}: a ${f2(folgaUsada / 1000)} m do vão (pedido: ${f2(hip.aquecedorLongeDoVaoMm / 1000)} m) — a parede externa não tem mais trecho livre.`);
         const u = { x: (lado.b.x - lado.a.x) / lado.comprimento, y: (lado.b.y - lado.a.y) / lado.comprimento };
         const recuo = cx.espessuraExternaMm / 2 + hip.aquecedorDaFaceMm;

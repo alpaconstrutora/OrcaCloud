@@ -545,7 +545,9 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
       destino = 'PONTO_NOVO_NA_FACHADA';
       pecas.push({ type: 'AddTerminal', levelId, disciplina: 'DRENO_AC', tipo: 'Ponto de dreno', tipoHidraulico: 'PONTO_DRENO', at: destinoAt, cotaMm: 0, sugerida: true } as Command);
     }
-    const caminhoDreno = caminhoEmPlanta(base, levelId, e.at, destinoAt, hip);
+    // F14c: no forro, o dreno (no eixo da parede, junto do teto) desvia das prumadas das outras redes — a descida da
+    // água fria dentro da parede, do forro ao ponto, cruzava o dreno que corria na mesma parede (térrea a 30°).
+    const caminhoDreno = caminhoEmPlanta(base, levelId, e.at, destinoAt, hip, undefined, noForro ? prumadasQueCruzam(base, levelId, e.cotaMm, 'DRENO_AC', hip.dnDrenoMm / 2, 10, false) : []);
     const pontosD = caminhoDreno.pontos;
     // C6: o caminho por gravidade já com o vértice do SIFÃO (colinear: não muda o comprimento).
     const comSifao = verticeNoCaminho(pontosD, hip.distanciaDoSifaoMm);

@@ -1590,3 +1590,110 @@ por casa), a lista que vai ao calculista na F14c. O harness conta essas travessi
 mudança. Por isso a prova de tipos, da suíte inteira e do build desta fase é a CI do GitHub (Linux), rodada numa PR de
 rascunho antes da publicação.
 
+
+## F14c — furos nas vigas e o esgoto do pavimento de cima (16/10/2026, "sim" para seguir)
+
+### Retrato (12 × 30, R1-N, 0°)
+
+| | Térrea | Sobrado |
+|---|---|---|
+| Furos (trecho × viga e baldrame) | 69 | 89 |
+| Diâmetro acima de 12 cm ou h/3 | 0 | 0 |
+| A menos de 2h do apoio | 36 | 62 |
+| Seções com mais de um furo | 4 | 8 |
+
+O esgoto do pavimento de cima: 27,2 m correndo no forro do térreo (2,56–2,75 m), sobre garagem (14,5 m), área de
+serviço (7,2 m) e cozinha (5,5 m). Causa: o esgoto põe UM tubo de queda por pavimento (no ponto de maior UHC) e o
+banheiro da suíte de cima despeja nele a ~7 m, na diagonal; o banheiro da suíte nem ganhou shaft (`shaftsDoSobrado`
+exige parede do térreo embaixo da face, e ele fica sobre a área de serviço).
+
+### Decisão do usuário (16/10/2026)
+
+Pergunta: *"Mesmo curto (~1–2 m, depois de pôr o tubo de queda colado em cada banheiro de cima), o esgoto dos
+banheiros do pavimento superior precisa correr por baixo do piso deles até o tubo de queda, com caimento, em tubo de
+100 mm. Por onde?"* — Resposta: **"Laje rebaixada"** (a laje sob cada banheiro de cima desce ~25 cm; o esgoto corre
+no enchimento do piso até o tubo de queda; nada no forro do térreo, nenhum furo de 100 mm em viga; o calculista
+confere). Descartadas: faixa do esgoto no forro do térreo; piso elevado com degrau.
+
+### Escopo
+
+1. **Um tubo de queda por banheiro de cima**, no shaft colado nele (o esgoto agrupa as peças por proximidade; o
+   sobrado dá shaft a todo banheiro de cima — sem parede do térreo embaixo, o shaft é caixa no canto do cômodo de
+   baixo, se ele for garagem, serviço ou circulação).
+2. **Laje rebaixada** sob cada banheiro de cima (hipótese `rebaixoDaLajeDoBanheiroMm`, 250): a laje do térreo é
+   recortada em volta do banheiro e a peça do banheiro desce; o esgoto de cima fica no enchimento; o forro do cômodo
+   de baixo desce até caber sob ela (pé-direito livre conferido); as redes do térreo contornam a área rebaixada.
+3. **Furos previstos** — a lista para o calculista (viga, rede, diâmetro do furo, cota, posição ao longo da viga,
+   distância ao apoio) com os critérios que dispensam a verificação (NBR 6118, 13.2.5.1: furo ≤ 12 cm e ≤ h/3, a ≥ 2h
+   da face do apoio, furos a ≥ 2h entre si) como HIPÓTESES — "dispensa" ou "verificar com o calculista"; a tela mostra
+   a lista. As travessias do forro saem da zona de 2h junto do apoio quando a parede comporta.
+
+### Registro da F14c (16/10/2026) — furos para o calculista, laje rebaixada, um tubo de queda por banheiro
+
+**Furos previstos** (`utils/blueprintFurosPrevistos.ts`): cada passagem de rede por viga, baldrame ou laje (os
+encontros ESTRUTURA de `conflitosDoModelo`) vira um furo — peça, rede, direção (atravessa / desce), diâmetro (o tubo
+com o isolamento e 1 cm de folga em volta), cota, posição ao longo da viga e distância à face do apoio (pilar ou ponta).
+Os critérios da NBR 6118 (13.2.5.1) são HIPÓTESES (`HIPOTESES_DOS_FUROS_PADRAO`): Ø ≤ 12 cm e ≤ h/3, a ≥ 2h do apoio,
+furos a ≥ 2h entre si; fora deles, "verificar com o calculista" com o motivo — nunca "proibido". Na laje, a passagem é
+listada sem critério. **Tela:** "Furos previstos para o calculista" (`TabelaFurosPrevistos.tsx`, StandardTable com
+busca) e a contagem no relatório. As travessias do forro saem da zona de 2h junto do apoio quando a parede comporta.
+
+**Laje rebaixada** (decisão "Laje rebaixada"): a laje do térreo desce 22 cm (`rebaixoDaLajeDoBanheiroMm`) sob a área
+molhada de cada banheiro de cima — o retângulo das peças de esgoto de cada grupo com 60 cm de margem
+(`margemDoRebaixoMm`), recortado pelo banheiro e esticado até a FACE do shaft do grupo, sem cobri-lo (o esgoto entra no
+shaft pela face; a água do térreo chega às colunas pelos outros lados — com o shaft dentro, sob a laje rebaixada sobram
+3 cm de plenum). As peças ainda não existem na etapa da laje: são previstas rodando mobiliário, louças e kit dos DOIS
+pavimentos numa cópia (determinístico). A 22 cm a laje ainda fica acima do forro do térreo, que não desce; o que fica
+embaixo dela foge: o aquecedor, a luz de teto (30 cm além da borda) e as redes do forro (obstáculo).
+
+**Um tubo de queda por banheiro de cima** (escopo 1): o esgoto agrupa as peças de cima a até 2,5 m
+(`grupoDoTuboDeQuedaMm`) e no MESMO cômodo; cada grupo ganha o shaft dele (`shaftDoGrupo`): o que já está dentro do
+banheiro a até 2 m (`shaftAteAsPecasMm`), senão um novo junto das peças — fora de peça e de móvel já postos; o tubo de
+queda busca o shaft até 4 m (`tuboDeQuedaAteOShaftMm`: no banheiro comprido da suíte, o vaso e o lavatório tomam a
+ponta e o shaft fica a 3,5 m). A perna de ventilação de cima fica dentro da laje rebaixada.
+
+**Compatibilização** (o que a mudança de lugar das travessias e a laje rebaixada trouxeram de volta, e o que a medição
+de cada caso expôs):
+
+- a descida do forro entra na parede em ÂNGULO RETO e corre nela até o ponto (antes, diagonal pendurada no cômodo); o
+  nó escorrega pelo contorno quando a descida cruzaria um tubo de outra rede ou um vão (`descidaDoForro` com a rede);
+- cada rede entra na parede no seu DEGRAU abaixo da viga (`degrauNaParedeMm` na faixa: elétrica 0, fria 6 cm,
+  quente 12 cm) — no mesmo degrau, a fria cortava a face da parede a 8 mm do eletroduto da tomada;
+- no forro, a fria é traçada antes da quente (o sobrado tinha o aquecedor antes da caixa na ordem do modelo);
+- o tubo de queda e a ventilação no shaft ficam onde nenhum tubo de outra rede passa (`lugarNoShaft`: a faixa e as
+  três posições giradas; nenhuma livre, a de maior folga);
+- o dreno do ar desvia das prumadas das outras redes; a tomada fica longe delas; o coletor do box sai de dentro do
+  shaft; o aquecedor fica fora do shaft e da laje rebaixada;
+- o anel do forro perde o DEDO estreito do contorno antes de recuar (`semDedosEstreitos`): a sala do sobrado a 30° tem
+  uma fresta de 25 cm entre duas paredes, ficava sem forro, e a quente ia em reta de 9,6 m pelo plenum.
+
+- a laje rebaixada é feita por GRUPO de tubo de queda e por banheiro que ele toca, e com as peças em volta do shaft
+  uma área por FACE dele (`zonasMolhadasDoBanheiro`): no banheiro comprido da suíte (caixa sifonada numa ponta, vaso
+  na outra) e com as peças em "L" em volta do shaft, uma área só o engolia; o tubo de queda agrupa só peças do MESMO
+  cômodo, e grupos que caem no mesmo ponto do shaft viram um (dividiam a cota da raiz: o ramal DN 50 saía a 1,1 %);
+- sob a laje rebaixada não há plenum: a coluna de água sai dela (o shaft engolido não serve à água; a coluna na
+  parede escorrega para fora), a luz de teto sai 30 cm além da borda, a tomada foge da parede sob ela, o aquecedor
+  também (sem lugar longe da janela, ao menos fora dela); o encaixe no anel tenta as outras paredes quando a mais
+  perto está toda bloqueada, e a coluna só liga ao anel se alguma peça encaixou nele (senão, ponta aberta);
+- PRESSÃO: o ajuste de diâmetro corre rede a rede sobre o modelo com as anteriores — o da quente rodava sem a fria
+  ("a rede fria não chega ao aquecedor") e nunca aumentava nada; sem ele, o chuveiro de cima ficava abaixo do mínimo
+  mesmo com o pressurizador. E quando o pressurizador sozinho não basta, a caixa sobe junto, até o limite (dito).
+
+**Medido** (`conflitosDoModelo`, 12 × 30, R1-N, catálogo e chuva; uma casa por processo):
+
+| | Térrea 0° | Térrea 30° | Sobrado 0° | Sobrado 30° |
+|---|---|---|---|---|
+| Rede × rede | 1 | 9 | 0 | 0 |
+| Esgoto de cima fora da laje rebaixada | — | — | 0 | 0 |
+| Furos em viga (dispensam / a verificar) | 47 (11 / 36) | 43 (12 / 31) | 82 (7 / 75) | 94 (11 / 83) |
+| Furos em baldrame · passagens em laje | 23 · 13 | 19 · 13 | 11 · 52 | 11 · 48 |
+| Pressão (déficit sem correção → solução) | 2,85 m → pressurizador | 3,90 m → pressurizador | 6,97 m → pressurizador | 3,57 m → pressurizador |
+
+O que sobra nas térreas é o ALIMENTADOR enterrado (−0,30 m, reta do hidrômetro à subida) cruzando o esgoto do térreo
+— anterior à F14c (a F14b registrou o da térrea a 0°; a 30° não tinha sido medido; nem o alimentador nem o esgoto do
+térreo mudaram aqui). A maior parte dos furos em viga fica "a verificar" pela distância ao apoio (a parede comum entre
+dois cômodos é curta e os pilares estão nos encontros) e pelos furos vizinhos — é a lista para o calculista decidir.
+
+⚠️ A máquina seguiu instável (segfault / "Fatal error" do V8 em parte das execuções; o pool `threads` do Vitest
+aguenta melhor que o `forks`) e deu UM resultado errado (o sobrado a 30° com 0 encontros e metade dos furos — a rodada
+seguinte, com o mesmo código, deu o resultado real): número que muda muito sem mudança de código se confirma de novo.

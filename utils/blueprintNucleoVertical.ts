@@ -9,7 +9,7 @@
  * decisão do tipo × instância da E1.1): o desenho não muda quando a tabela
  * for revista.
  */
-import { interiorPoint, pavimentosDoNucleo, type BlueprintModel, type Nucleo, type ObjectId, type Point } from './blueprintKernel';
+import { envelopeDoTrecho, interiorPoint, pavimentosDoNucleo, type BlueprintModel, type DisciplinaDeRede, type Nucleo, type ObjectId, type Point } from './blueprintKernel';
 
 export interface FichaDoElevador {
   capacidade: number;
@@ -73,6 +73,41 @@ export function shaftPreferido(model: BlueprintModel, ponto: Point, levelId: Obj
   }
   return melhor?.centro ?? null;
 }
+
+/**
+ * F14c da casa automática: o lugar da prumada de `disciplina` no shaft (centro `centro`) — a faixa dela (× 1,5); se
+ * já passa tubo de OUTRA rede ali (em qualquer cota dos pavimentos `levelIds`: a prumada atravessa todos), as outras
+ * três posições, girando a faixa de 90°. O barrilete da fria chega ao centro do shaft por cima do telhado e passava
+ * justo sobre o tubo de queda e a ventilação (sobrado, 0° e 30°). Nenhuma livre: a de maior folga.
+ */
+export function lugarNoShaft(model: BlueprintModel, centro: Point, faixa: { x: number; y: number } | null, disciplina: DisciplinaDeRede, raioMm: number, levelIds: readonly ObjectId[]): Point {
+  const fx = (faixa?.x ?? 0) * FAIXA_NO_SHAFT;
+  const fy = (faixa?.y ?? 0) * FAIXA_NO_SHAFT;
+  const posicoes = [{ x: fx, y: fy }, { x: -fy, y: fx }, { x: -fx, y: -fy }, { x: fy, y: -fx }].map((d) => ({ x: Math.round(centro.x + d.x), y: Math.round(centro.y + d.y) }) as Point);
+  if (!fx && !fy) return posicoes[0];
+  const niveis = new Set(levelIds);
+  const outros = (model.trechos ?? []).filter((t) => t.disciplina !== disciplina && niveis.has(t.levelId));
+  // A folga da posição: a menor distância livre (entre as paredes dos tubos) a um tubo de outra rede.
+  const folga = (q: Point) =>
+    Math.min(
+      Infinity,
+      ...outros.map((t) => {
+        const dx = t.b.x - t.a.x;
+        const dy = t.b.y - t.a.y;
+        const L2 = dx * dx + dy * dy;
+        const u = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((q.x - t.a.x) * dx + (q.y - t.a.y) * dy) / L2));
+        const env = envelopeDoTrecho(t);
+        return Math.hypot(q.x - (t.a.x + u * dx), q.y - (t.a.y + u * dy)) - raioMm - Math.max(env.raioPlantaMm, env.raioVerticalMm);
+      }),
+    );
+  const folgas = posicoes.map(folga);
+  const i = folgas.findIndex((f) => f > FOLGA_NO_SHAFT_MM);
+  // Nenhuma livre: a de MAIOR folga (o shaft cheio de tubos — a menos ruim).
+  return posicoes[i >= 0 ? i : folgas.indexOf(Math.max(...folgas))];
+}
+
+/** F14c: a folga entre a prumada e o tubo de outra rede no shaft, além dos dois raios, mm. */
+const FOLGA_NO_SHAFT_MM = 20;
 
 /** Os nucleos visíveis num pavimento (atravessam-no). */
 export function nucleosDoNivel(model: BlueprintModel, levelId: ObjectId | null): Nucleo[] {

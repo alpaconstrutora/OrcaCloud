@@ -467,7 +467,7 @@ export function planejarEletrodutos(
           // F14b: do anel no forro, junto da viga, entra na parede abaixo dela e desce no rasgo da caixa (na face — no
           // eixo da parede corre o dreno do ar, e a descida o cruzava).
           const naFace = encaixarNaParede(p.at, paredesDoNivel, RAIO_DE_ENCAIXE_ELETRICO_MM) ? p.at : null;
-          const pedacos = descidaDoForro(model, nivel.id, { q, cotaDaFaixaMm: teto, alvo: p.at, cotaDoAlvoMm: p.cotaMm, naParede: naFace, raioMm: hip.bitolaMm / 2, folgaSobAVigaMm: hip.noForro.folgaSobAVigaMm });
+          const pedacos = descidaDoForro(model, nivel.id, { q, cotaDaFaixaMm: teto, alvo: p.at, cotaDoAlvoMm: p.cotaMm, naParede: naFace, raioMm: hip.bitolaMm / 2, folgaSobAVigaMm: hip.noForro.folgaSobAVigaMm + (hip.noForro.faixa.degrauNaParedeMm ?? 0), disciplina: 'ELETRICA' });
           sobrePonto.set(`${nivel.id}|${q.x},${q.y},${teto}`, pedacos.reduce((mm, x) => mm + comprimentoMm(x), 0));
           for (const x of pedacos) addTrecho(nivel.id, x.a, x.cotaAMm, x.b, x.cotaBMm);
           continue;

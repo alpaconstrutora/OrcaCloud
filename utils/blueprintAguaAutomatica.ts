@@ -393,7 +393,7 @@ export function planejarAgua(
   /** F14b: do nó no forro à peça (ou à origem) embutida na parede — os pedaços da descida. */
   const descer = (levelId: ObjectId, q: Ponto2, cota: number, alvo: Ponto2, cotaDoAlvo: number) => {
     const w = encaixarNaParede(alvo, paredesDe(levelId), raioDeEncaixe)?.q ?? null;
-    for (const s of descidaDoForro(model, levelId, { q, cotaDaFaixaMm: cota, alvo, cotaDoAlvoMm: cotaDoAlvo, naParede: w, raioMm: RAIO_NA_DESCIDA_MM, folgaSobAVigaMm: hip.noForro!.folgaSobAVigaMm }))
+    for (const s of descidaDoForro(model, levelId, { q, cotaDaFaixaMm: cota, alvo, cotaDoAlvoMm: cotaDoAlvo, naParede: w, raioMm: RAIO_NA_DESCIDA_MM, folgaSobAVigaMm: hip.noForro!.folgaSobAVigaMm + (noForro?.degrauNaParedeMm ?? 0), disciplina }))
       addTrecho(levelId, s.a, s.cotaAMm, s.b, s.cotaBMm);
   };
   // O ponto SOLTO no cômodo vai para a FACE da parede antes de traçar.
@@ -446,11 +446,17 @@ export function planejarAgua(
   // barrilete e o ramal; nos outros, todas (a coluna atravessa o pavimento inteiro ou chega ao ramal dele).
   const [zLo, zHi] = [Math.min(tetoO, cotaRamalDaOrigem), Math.max(tetoO, cotaRamalDaOrigem)];
   const vigasDaPrumada = (model.structures ?? []).filter((s) => s.kind === 'VIGA' && (s.levelId !== origem.levelId || (s.baseMm < zHi && s.baseMm + s.alturaMm > zLo)));
+  // F14c: no forro, a coluna não fica sob a laje REBAIXADA (sob o banheiro de cima): ali o forro de baixo não tem
+  // plenum e o ramal não chega à coluna — no sobrado, a da quente para o banheiro social nasceu dentro da área
+  // rebaixada e o caminho até ela deu 35,7 m de volta; a 30°, o shaft cercado por ela deixava a água ir em reta.
+  const alturaDe = new Map(model.levels.map((l) => [l.id, l.defaultHeightMm]));
+  const rebaixos = noForro ? (model.structures ?? []).filter((s) => s.kind === 'LAJE' && s.baseMm < (alturaDe.get(s.levelId) ?? Infinity) - 1).map((s) => s.pontos as Point[]) : [];
+  const sobRebaixo = (p: Ponto2) => rebaixos.some((g) => pointInPolygon(g, p as Point));
   // NÚCLEO VERTICAL (E2.4): o grupo perto de um shaft sobe por ele.
   const posicaoDaColuna = (grupo: Terminal[]): Ponto2 => {
     const base = { x: grupo[0].at.x, y: grupo[0].at.y };
     const shaft = shaftPreferido(model, base, grupo[0].levelId, hip.raioDoShaftMm ?? 3000);
-    if (shaft) return faixa ? { x: Math.round(shaft.x + faixa.x * FAIXA_NO_SHAFT), y: Math.round(shaft.y + faixa.y * FAIXA_NO_SHAFT) } : shaft;
+    if (shaft && !sobRebaixo(shaft)) return faixa ? { x: Math.round(shaft.x + faixa.x * FAIXA_NO_SHAFT), y: Math.round(shaft.y + faixa.y * FAIXA_NO_SHAFT) } : shaft;
     // PELAS PAREDES: a coluna desce no EIXO da parede mais próxima, não na face. A que ATRAVESSA pavimentos
     // (a caixa num, o ponto noutro) procura antes a parede que existe em todos eles — senão sobe pelo meio do
     // cômodo do outro pavimento (F12c, sobrado); sem uma a até 2× o raio, fica a de sempre.
@@ -460,8 +466,9 @@ export function planejarAgua(
     // F14a: até 3 m — com a fria e a quente lado a lado, a base anda e a parede comum ficava fora dos 1,4 m de antes
     // (sobrado a 30°: a coluna caía na parede só do térreo e atravessava a suíte de cima).
     const naParede = pelasParedes ? (encaixarNaParede(base, emComum, Math.max(raioDeEncaixe * 2, ALCANCE_DA_PAREDE_EM_COMUM_MM)) ?? encaixarNaParede(base, paredesDe(grupo[0].levelId), raioDeEncaixe)) : null;
-    // E5.5: a coluna que cairia dentro de um pilar (de qualquer pavimento que ela cruza) escorrega pela parede.
-    const noEixo = naParede ? foraDoPilar(naParede.q, naParede.parede, pilaresDaPrumada) : base;
+    // E5.5: a coluna que cairia dentro de um pilar (de qualquer pavimento que ela cruza) escorrega pela parede — e,
+    // no forro, para fora da laje rebaixada (F14c).
+    const noEixo = naParede ? foraDoPilar(naParede.q, naParede.parede, [...pilaresDaPrumada, ...rebaixos]) : base;
     // F8b: e a que desceria DENTRO da viga que corre sobre a parede desce rente a ela, do lado do grupo.
     const cx = grupo.reduce((s, p) => s + p.at.x, 0) / grupo.length;
     const cy = grupo.reduce((s, p) => s + p.at.y, 0) / grupo.length;
@@ -586,7 +593,9 @@ export function planejarAgua(
       const pelas = pelasParedes && paredesDoNivel.length > 0
         ? arvorePelasParedes({ paredes: paredesDoNivel, raiz: pos, pendentes: doNivel.map((p) => p.at), raioDeEncaixeMm: raioDeEncaixe, obstaculos: obstaculosDoRamal, contornoDoPilarMm: contorno, encaixarEm: encaixaNoAnel, ...(noForro ? { penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}) })
         : null;
-      if (pelas?.raiz) {
+      // F14c: a raiz no anel só vale se alguma peça encaixou nele — sem nenhuma (todas sob a laje rebaixada, ligadas
+      // em reta), a ligação da coluna ao anel ficava pendurada: ponta aberta (sobrado a 30°, o aquecedor da cozinha).
+      if (pelas?.raiz && pelas.encaixe.size > 0) {
         // Da coluna ao eixo (se ela não está nele), e o ramal pelo eixo das paredes.
         if (chaveP(pelas.raiz) !== chaveP(pos)) {
           // F14b: no forro, a ligação da coluna ao anel desvia da prumada das outras redes (a coluna da fria corre ao
@@ -763,9 +772,12 @@ export function planejarAguaDoModelo(model: BlueprintModel, hip: HipotesesDeAgua
   if (!hip.noForro) return origensDeAgua(model).map(({ origem }) => planejarAgua(model, origem, hip));
   // F14b: no forro, uma origem depois da outra (a fria antes da quente) — a de depois vê as colunas da de antes e
   // desvia delas. Os comandos são os mesmos que aplicados juntos: cada plano só acrescenta.
+  // F14c: a fria SEMPRE antes — na ordem do modelo, o aquecedor do sobrado vinha antes da caixa, a quente traçava
+  // primeiro e passava rente ao ponto onde a fria desce (fixo: a fria não tinha para onde escorregar).
   const planos: PlanoDeAgua[] = [];
   let m = model;
-  for (const { origem } of origensDeAgua(model)) {
+  const ordem = [...origensDeAgua(model)].sort((a, b) => Number(a.disciplina === 'AGUA_QUENTE') - Number(b.disciplina === 'AGUA_QUENTE'));
+  for (const { origem } of ordem) {
     const p = planejarAgua(m, origem, hip);
     planos.push(p);
     if (p.comandos.length) m = applyBatch(m, p.comandos).model;

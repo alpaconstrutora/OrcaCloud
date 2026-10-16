@@ -212,6 +212,26 @@ describe('planejarEsgoto — sobrado', () => {
   });
 });
 
+describe('planejarEsgoto — um tubo de queda por banheiro de cima (F14c)', () => {
+  it('dois banheiros vizinhos, vasos a 1,5 m: com o agrupamento por proximidade, um TQ para cada um — o grupo não passa a parede', () => {
+    let { m } = nivel();
+    m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2800, defaultHeightMm: 2800 }).model;
+    const [terreo, superior] = m.levels.map((l) => l.id);
+    m = applyBatch(m, [
+      w(superior, 0, 0, 4000, 0), w(superior, 4000, 0, 4000, 3000), w(superior, 4000, 3000, 0, 3000), w(superior, 0, 3000, 0, 0), w(superior, 2000, 0, 2000, 3000),
+      esg(superior, 'VASO_SANITARIO', 1300, 800, 0),
+      esg(superior, 'VASO_SANITARIO', 2800, 800, 0),
+      esg(terreo, 'CAIXA_INSPECAO', 5000, -1500, -700),
+    ]).model;
+    const tqs = (hip: Parameters<typeof planejarEsgoto>[1]) => novos(planejarEsgoto(m, hip)).filter((c) => c.rotulo === 'TQ');
+    // Sem o agrupamento (o de antes): um TQ por pavimento.
+    expect(tqs(HIPOTESES_ESGOTO_PADRAO)).toHaveLength(1);
+    // Agrupando a 2,5 m, mas só no mesmo cômodo: um em cada banheiro.
+    const doisTqs = tqs({ ...HIPOTESES_ESGOTO_PADRAO, tuboDeQuedaPorGrupoMm: 2500 });
+    expect(doisTqs.map((c) => c.a).sort((a, b) => a.x - b.x)).toEqual([{ x: 1300, y: 800 }, { x: 2800, y: 800 }]);
+  });
+});
+
 describe('junção 45° (27/09/2026): "os tubos e conexoes devem ser detalhados" — o Y do isométrico', () => {
   it('árvore: o tronco sai do mais distante; o outro entra nele a 45° a favor do fluxo', () => {
     const arestas = arvoreComJuncoes45({ raiz: { x: 6000, y: -1500 }, pendentes: [{ x: 3000, y: 0 }, { x: 1000, y: 0 }], limite: 1.5 });

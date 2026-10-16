@@ -23,7 +23,7 @@ import {
   type BlueprintModel,
   type Command,
 } from '../utils/blueprintKernel';
-import { fichaPorCapacidade, rotuloDoNucleo, shaftPreferido, nucleosDoNivel } from '../utils/blueprintNucleoVertical';
+import { fichaPorCapacidade, lugarNoShaft, rotuloDoNucleo, shaftPreferido, nucleosDoNivel } from '../utils/blueprintNucleoVertical';
 
 /** Três pavimentos (0 / 2800 / 5600), cada um com uma laje de teto 10 × 8 m. */
 function predio(): { m: BlueprintModel; t: string; p1: string; p2: string } {
@@ -143,5 +143,44 @@ describe('núcleo vertical', () => {
     expect(volta.nucleos[0].ateLevelId).toBe(volta.levels[2].id);
     expect(volta.stairs[0].ateLevelId).toBe(volta.levels[2].id);
     expect(snapshotHash(volta)).toBe(snapshotHash(y));
+  });
+});
+
+describe('lugarNoShaft (F14c): a prumada de uma rede no shaft, livre dos tubos das outras', () => {
+  const doisPavimentos = () => {
+    let m = applyBatch(emptyModel(), [
+      { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 },
+      { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 },
+    ]).model;
+    const [t, s] = m.levels.map((l) => l.id);
+    m = applyBatch(m, [{ type: 'AddNucleo', levelId: t, ateLevelId: s, tipo: 'SHAFT', ring: [point(800, 800), point(1200, 800), point(1200, 1200), point(800, 1200)], rotulo: 'Shaft' } as Command]).model;
+    return { m, t, s };
+  };
+  const faixa = { x: -60, y: -60 };
+
+  it('livre: na faixa da rede (× 1,5) a partir do centro', () => {
+    const { m, t, s } = doisPavimentos();
+    expect(lugarNoShaft(m, point(1000, 1000), faixa, 'ESGOTO', 50, [t, s])).toEqual({ x: 910, y: 910 });
+  });
+
+  it('o barrilete da fria chegando ao centro por cima do lugar: a faixa gira 90°', () => {
+    const d = doisPavimentos();
+    const m = applyBatch(d.m, [{ type: 'AddTrecho', levelId: d.s, disciplina: 'AGUA_FRIA', a: point(500, 500), b: point(1000, 1000), cotaAMm: 3050, cotaBMm: 3050, bitolaMm: 25 } as Command]).model;
+    expect(lugarNoShaft(m, point(1000, 1000), faixa, 'ESGOTO', 50, [d.t, d.s])).toEqual({ x: 1090, y: 910 });
+    // A própria rede não é obstáculo.
+    expect(lugarNoShaft(m, point(1000, 1000), faixa, 'AGUA_FRIA', 50, [d.t, d.s])).toEqual({ x: 910, y: 910 });
+  });
+
+  it('nenhuma livre: a de maior folga', () => {
+    const d = doisPavimentos();
+    // Um tubo em cada diagonal do shaft (as quatro posições caem neles) e um eletroduto rente a uma delas.
+    const m = applyBatch(d.m, [
+      { type: 'AddTrecho', levelId: d.s, disciplina: 'AGUA_FRIA', a: point(800, 800), b: point(1200, 1200), cotaAMm: 3050, cotaBMm: 3050, bitolaMm: 25 } as Command,
+      { type: 'AddTrecho', levelId: d.t, disciplina: 'AGUA_QUENTE', a: point(1200, 800), b: point(800, 1200), cotaAMm: 2630, cotaBMm: 2630, bitolaMm: 25 } as Command,
+      { type: 'AddTrecho', levelId: d.t, disciplina: 'ELETRICA', a: point(1110, 890), b: point(1110, 890), cotaAMm: 0, cotaBMm: 2800, bitolaMm: 25 } as Command,
+    ]).model;
+    const q = lugarNoShaft(m, point(1000, 1000), faixa, 'ESGOTO', 50, [d.t, d.s]);
+    expect([{ x: 910, y: 910 }, { x: 1090, y: 910 }, { x: 1090, y: 1090 }, { x: 910, y: 1090 }]).toContainEqual(q);
+    expect(q).not.toEqual({ x: 1090, y: 910 });
   });
 });

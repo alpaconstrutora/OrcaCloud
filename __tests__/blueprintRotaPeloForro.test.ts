@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { cotaDaFaixa, descidaDoForro, fundoDaVigaSobre, paredesDoForro } from '../utils/blueprintRotaPeloForro';
+import { cotaDaFaixa, descidaDoForro, fundoDaVigaSobre, paredesDoForro, semDedosEstreitos } from '../utils/blueprintRotaPeloForro';
 import { arvorePelasParedes } from '../utils/blueprintRotaPelasParedes';
 
 /** Dois cômodos de 3 × 4 m lado a lado (paredes de 15 cm), vigas de 40 cm sobre todas as paredes; janela opcional na do meio. */
@@ -112,5 +112,78 @@ describe('rede pelo forro (F14b) — a descida até o ponto', () => {
       [2825, 2700, 2825, 2200],
       [2825, 2200, 2925, 2200],
     ]);
+  });
+});
+
+describe('rede pelo forro (F14c) — a descida entra na parede em ângulo reto e escorrega do tubo de outra rede', () => {
+  const pedacos = (d: ReturnType<typeof descidaDoForro>) => d.map((s) => [s.a.x, s.a.y, s.cotaAMm, s.b.x, s.b.y, s.cotaBMm]);
+
+  it('o nó afastado do ponto (empurrado por um shaft): reto até a parede e por dentro dela, abaixo da viga — nunca na diagonal pelo cômodo', () => {
+    const { m, L } = casinha();
+    const d = descidaDoForro(m, L, { q: { x: 2825, y: 1600 }, cotaDaFaixaMm: 2700, alvo: { x: 2925, y: 1000 }, cotaDoAlvoMm: 300, naParede: { x: 3000, y: 1000 }, raioMm: 16, folgaSobAVigaMm: 50 });
+    expect(pedacos(d)).toEqual([
+      [2825, 1600, 2700, 2825, 1600, 2334],
+      [2825, 1600, 2334, 3000, 1600, 2334],
+      [3000, 1600, 2334, 3000, 1000, 2334],
+      [3000, 1000, 2334, 3000, 1000, 300],
+      [3000, 1000, 300, 2925, 1000, 300],
+    ]);
+    // Cada pedaço horizontal é paralelo ou perpendicular à parede.
+    for (const s of d) expect(s.a.x === s.b.x || s.a.y === s.b.y).toBe(true);
+  });
+
+  it('a travessia de outra rede passando onde o tubo desceria: o nó escorrega pelo contorno até ficar livre', () => {
+    let { m, L } = casinha();
+    // A fria atravessa a viga do meio em y = 1 m, na faixa dela (2,65 m) — justo onde a quente desceria.
+    m = applyCommand(m, { type: 'AddTrecho', levelId: L, disciplina: 'AGUA_FRIA', a: point(2700, 1000), b: point(3300, 1000), cotaAMm: 2650, cotaBMm: 2650, bitolaMm: 25 } as Command).model;
+    const o = { q: { x: 2825, y: 1000 }, cotaDaFaixaMm: 2700, alvo: { x: 2925, y: 1000 }, cotaDoAlvoMm: 300, naParede: { x: 3000, y: 1000 }, raioMm: 20, folgaSobAVigaMm: 50 };
+    // Sem a disciplina, como antes: desce em cima da fria.
+    expect(pedacos(descidaDoForro(m, L, o))[0]).toEqual([2825, 1000, 2700, 2825, 1000, 2330]);
+    const d = descidaDoForro(m, L, { ...o, disciplina: 'AGUA_QUENTE' });
+    // Anda 5 cm pelo contorno, no forro (para um lado ou outro); desce; entra na parede em ângulo reto; corre nela até o ponto.
+    const y = d[0].b.y;
+    expect(Math.abs(y - 1000)).toBe(50);
+    expect(pedacos(d)).toEqual([
+      [2825, 1000, 2700, 2825, y, 2700],
+      [2825, y, 2700, 2825, y, 2330],
+      [2825, y, 2330, 3000, y, 2330],
+      [3000, y, 2330, 3000, 1000, 2330],
+      [3000, 1000, 2330, 3000, 1000, 300],
+      [3000, 1000, 300, 2925, 1000, 300],
+    ]);
+    // A mesma rede não é obstáculo de si mesma.
+    expect(pedacos(descidaDoForro(m, L, { ...o, disciplina: 'AGUA_FRIA' }))[0]).toEqual([2825, 1000, 2700, 2825, 1000, 2330]);
+  });
+
+  it('o escorregão não entra na parede: rente à parede de cima, vai para o outro lado', () => {
+    let { m, L } = casinha();
+    // A fria passa em y = 3,88 m; o nó ali está a 12 cm do eixo da parede de cima (meia parede 7,5 + raio 2): 5 cm para
+    // cima já encostaria nela.
+    m = applyCommand(m, { type: 'AddTrecho', levelId: L, disciplina: 'AGUA_FRIA', a: point(2700, 3880), b: point(3300, 3880), cotaAMm: 2650, cotaBMm: 2650, bitolaMm: 25 } as Command).model;
+    const d = descidaDoForro(m, L, { q: { x: 2825, y: 3880 }, cotaDaFaixaMm: 2700, alvo: { x: 2925, y: 3880 }, cotaDoAlvoMm: 300, naParede: { x: 3000, y: 3880 }, raioMm: 20, folgaSobAVigaMm: 50, disciplina: 'AGUA_QUENTE' });
+    expect(d[0].b).toEqual({ x: 2825, y: 3830 });
+  });
+});
+
+describe('rede pelo forro (F14c) — o dedo estreito do contorno sai antes de recuar', () => {
+  it('a fresta de 25 cm (recuo de 27,5 cm de cada lado) é cortada rente à base; os lados dela ficam sem anel', () => {
+    // Retângulo 6 × 4 m com um dedo de 25 cm × 2 m para cima (x de 3 a 3,25 m).
+    const v = [{ x: 0, y: 0 }, { x: 6000, y: 0 }, { x: 6000, y: 4000 }, { x: 3250, y: 4000 }, { x: 3250, y: 6000 }, { x: 3000, y: 6000 }, { x: 3000, y: 4000 }, { x: 0, y: 4000 }];
+    const r = semDedosEstreitos(v, v.map(() => 275))!;
+    // Sobra o retângulo.
+    expect(r.vertices.map((p) => `${p.x},${p.y}`).sort()).toEqual(['0,0', '0,4000', '6000,0', '6000,4000']);
+    // Os lados do dedo (3, 4, 5) não viram lado do anel; os de baixo e da direita continuam.
+    expect([r.novo[3], r.novo[4], r.novo[5]]).toEqual([-1, -1, -1]);
+    expect(r.novo[0]).toBeGreaterThanOrEqual(0);
+    expect(r.novo[1]).toBeGreaterThanOrEqual(0);
+    // O lado de cima junta os dois pedaços da parede de cima.
+    expect(r.novo[2]).toBe(r.novo[6]);
+  });
+
+  it('o dedo largo (mais que os dois recuos) e o recorte para dentro ficam', () => {
+    const largo = [{ x: 0, y: 0 }, { x: 6000, y: 0 }, { x: 6000, y: 4000 }, { x: 3600, y: 4000 }, { x: 3600, y: 6000 }, { x: 3000, y: 6000 }, { x: 3000, y: 4000 }, { x: 0, y: 4000 }];
+    expect(semDedosEstreitos(largo, largo.map(() => 275))).toBeNull();
+    const recorte = [{ x: 0, y: 0 }, { x: 6000, y: 0 }, { x: 6000, y: 4000 }, { x: 3250, y: 4000 }, { x: 3250, y: 2000 }, { x: 3000, y: 2000 }, { x: 3000, y: 4000 }, { x: 0, y: 4000 }];
+    expect(semDedosEstreitos(recorte, recorte.map(() => 275))).toBeNull();
   });
 });

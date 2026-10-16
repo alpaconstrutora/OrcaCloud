@@ -30,7 +30,7 @@ import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho } from 
 import { applyBatch, pointInPolygon } from './blueprintKernel';
 import { foraDaViga, foraDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { encaixarNaParede, paredesEmComum } from './blueprintRotaPelasParedes';
-import { FAIXA_NO_SHAFT, shaftPreferido } from './blueprintNucleoVertical';
+import { lugarNoShaft, shaftPreferido } from './blueprintNucleoVertical';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { comprimentoMm, distanciasDesde, fazerChave, type Aresta } from './blueprintGrafoDeRede';
 import { esgotoTrechoATrecho, type HipotesesDeEsgoto } from './blueprintEsgotoAutomatico';
@@ -229,8 +229,22 @@ export function ondeAColunaSobe(model: BlueprintModel, levelId: ObjectId, p: { x
   const acima = model.levels.filter((l) => l.elevationMm >= nivel.elevationMm).sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
   const fx = faixa?.x ?? 0;
   const fy = faixa?.y ?? 0;
+  // F14c: no pavimento de cima, a perna sob o piso corre no enchimento da laje REBAIXADA do banheiro; fora dela,
+  // estaria no forro do pavimento de baixo, cruzando as redes de lá (sobrado a 30°: a 2 mm do eletroduto da luz).
+  // Vale quando a peça está sobre a rebaixada; sem lugar assim, a busca de sempre.
+  const deBaixo = model.levels.filter((l) => l.elevationMm < nivel.elevationMm).sort((a, b) => b.elevationMm - a.elevationMm)[0];
+  const rebaixos = deBaixo ? (model.structures ?? []).filter((s) => s.kind === 'LAJE' && s.levelId === deBaixo.id && s.baseMm < deBaixo.defaultHeightMm - 1).map((s) => s.pontos as Point[]) : [];
+  const sobreRebaixo = (q: { x: number; y: number }) => rebaixos.some((g) => pointInPolygon(g, q as Point));
+  const pernaNoRebaixo = (q: { x: number; y: number }) => {
+    const L = Math.hypot(q.x - p.x, q.y - p.y);
+    const n = Math.max(1, Math.ceil(L / 50));
+    for (let k = 0; k <= n; k++) if (!sobreRebaixo({ x: p.x + ((q.x - p.x) * k) / n, y: p.y + ((q.y - p.y) * k) / n })) return false;
+    return true;
+  };
+  const presa = sobreRebaixo(p);
   const shaft = shaftPreferido(model, p, levelId, raioMm);
-  if (shaft) return { x: Math.round(shaft.x + fx * FAIXA_NO_SHAFT), y: Math.round(shaft.y + fy * FAIXA_NO_SHAFT) };
+  const noShaft = shaft ? lugarNoShaft(model, shaft, faixa, 'ESGOTO', RAIO_DA_COLUNA_MM, acima) : null;
+  if (noShaft && (!presa || pernaNoRebaixo(noShaft))) return noShaft;
   // F14a: na faixa do esgoto — as paredes deslocadas dela; pilar, viga e abertura ficam onde estão.
   const paredesDe = (L: ObjectId) => model.walls.filter((w) => w.levelId === L).map((w) => (fx || fy ? { ...w, a: { x: w.a.x + fx, y: w.a.y + fy }, b: { x: w.b.x + fx, y: w.b.y + fy } } : w));
   const outros = acima.filter((L) => L !== levelId).map(paredesDe);
@@ -265,16 +279,19 @@ export function ondeAColunaSobe(model: BlueprintModel, levelId: ObjectId, p: { x
       const u = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((q.x - t.a.x) * dx + (q.y - t.a.y) * dy) / L2));
       return Math.hypot(q.x - (t.a.x + u * dx), q.y - (t.a.y + u * dy)) >= RAIO_DA_COLUNA_MM + t.bitolaMm / 2 + FOLGA_ENTRE_REDES_MM;
     });
-  for (const { w, e } of ordem) {
-    const Lw = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
-    const ux = (w.b.x - w.a.x) / Lw;
-    const uy = (w.b.y - w.a.y) / Lw;
-    for (const passo of [0, 100, -100, 200, -200, 300, -300, 400, -400]) {
-      const base = { x: e.q.x + ux * passo, y: e.q.y + uy * passo };
-      const noEixo = foraDoPilar(base, w, pilares);
-      const q = foraDaViga(noEixo, vigas, p, pilares);
-      if (naAbertura(q) || !livre(q)) continue;
-      return { x: Math.round(q.x), y: Math.round(q.y) };
+  for (const exigirRebaixo of presa ? [true, false] : [false]) {
+    if (!exigirRebaixo && noShaft) return noShaft;
+    for (const { w, e } of ordem) {
+      const Lw = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+      const ux = (w.b.x - w.a.x) / Lw;
+      const uy = (w.b.y - w.a.y) / Lw;
+      for (const passo of [0, 100, -100, 200, -200, 300, -300, 400, -400]) {
+        const base = { x: e.q.x + ux * passo, y: e.q.y + uy * passo };
+        const noEixo = foraDoPilar(base, w, pilares);
+        const q = foraDaViga(noEixo, vigas, p, pilares);
+        if (naAbertura(q) || !livre(q) || (exigirRebaixo && !pernaNoRebaixo(q))) continue;
+        return { x: Math.round(q.x), y: Math.round(q.y) };
+      }
     }
   }
   return null;

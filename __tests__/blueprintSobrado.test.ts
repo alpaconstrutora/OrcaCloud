@@ -15,6 +15,9 @@ import {
   paredeSobOPonto,
   prumadasPeloMeioDoComodo,
   pedacosFora,
+  shaftDoGrupo,
+  zonaMolhadaDoBanheiro,
+  zonasMolhadasDoBanheiro,
   pilaresDoSobrado,
   recortarNucleo,
   trechosDeTransicao,
@@ -269,5 +272,92 @@ describe('F12c — prumadas entre os pavimentos (modelo sintético 8 × 6 m)', (
     const soltas = prumadasPeloMeioDoComodo(m2);
     expect(soltas).toHaveLength(1);
     expect(soltas[0]).toMatchObject({ disciplina: 'ESGOTO', rotulo: 'Ventilação', nivel: 'Superior' });
+  });
+});
+
+describe('F14c — a laje rebaixada e o shaft de cada banheiro de cima', () => {
+  const ban = [point(0, 0), point(3000, 0), point(3000, 2000), point(0, 2000)];
+  const caixa = (lo: [number, number], hi: [number, number]) => [point(lo[0], lo[1]), point(hi[0], lo[1]), point(hi[0], hi[1]), point(lo[0], hi[1])];
+  const extremos = (r: Point[] | null) => (r ? [Math.min(...r.map((p) => p.x)), Math.min(...r.map((p) => p.y)), Math.max(...r.map((p) => p.x)), Math.max(...r.map((p) => p.y))] : null);
+
+  it('zonaMolhadaDoBanheiro: o retângulo das peças com a margem, recortado pelo banheiro', () => {
+    expect(extremos(zonaMolhadaDoBanheiro(ban, [point(500, 500), point(1000, 500)], 300))).toEqual([200, 200, 1300, 800]);
+    // A margem não passa do banheiro.
+    expect(extremos(zonaMolhadaDoBanheiro(ban, [point(100, 100)], 600))).toEqual([0, 0, 700, 700]);
+  });
+
+  it('com o shaft para onde o esgoto corre: a área vai ATÉ a face dele, do lado das peças, e para ali', () => {
+    // O shaft depois das peças (x de 2,4 a 2,8 m): a área estica até x = 2,4 m e cobre a face inteira (y de 0 a 0,4).
+    expect(extremos(zonaMolhadaDoBanheiro(ban, [point(500, 500), point(1000, 500)], 300, [caixa([2400, 0], [2800, 400])]))).toEqual([200, 0, 2400, 800]);
+    // O shaft colado nas peças (a margem o cobriria): a área para na face (x = 1,2 m), sem cobri-lo.
+    expect(extremos(zonaMolhadaDoBanheiro(ban, [point(500, 500), point(1000, 500)], 300, [caixa([1200, 0], [1600, 400])]))).toEqual([200, 0, 1200, 800]);
+    // Peças dos dois lados do shaft: ele entra inteiro.
+    expect(extremos(zonaMolhadaDoBanheiro(ban, [point(500, 500), point(2500, 500)], 100, [caixa([1200, 300], [1600, 700])]))).toEqual([400, 300, 2600, 700]);
+  });
+
+  it('zonasMolhadasDoBanheiro: peças dos dois lados do shaft viram DUAS áreas, cada uma até a face dela — a frente do shaft fica livre', () => {
+    const zonas = zonasMolhadasDoBanheiro(ban, [point(500, 500), point(2500, 500)], 100, caixa([1200, 0], [1600, 400]));
+    expect(zonas.map(extremos)).toEqual([
+      [400, 0, 1200, 600],
+      [1600, 0, 2600, 600],
+    ]);
+    // Um lado só: uma área (a de sempre).
+    expect(zonasMolhadasDoBanheiro(ban, [point(500, 500), point(1000, 500)], 300, caixa([2400, 0], [2800, 400])).map(extremos)).toEqual([[200, 0, 2400, 800]]);
+  });
+
+  it('zonasMolhadasDoBanheiro: peças em "L" em volta do shaft (uma ao lado, outra à frente) — uma área por face, o shaft fora das duas', () => {
+    // Shaft no meio da parede de baixo (x 1,2–1,6 m, y 0–0,4 m); o vaso ao lado dele (x 2 m), o ralo à frente (y 0,8 m).
+    const sh = caixa([1200, 0], [1600, 400]);
+    const zonas = zonasMolhadasDoBanheiro(ban, [point(2000, 200), point(1400, 800)], 100, sh);
+    expect(zonas).toHaveLength(2);
+    // Nenhuma área cobre o centro do shaft.
+    for (const z of zonas) {
+      const [x0, y0, x1, y1] = extremos(z)!;
+      expect(1400 > x0 && 1400 < x1 && 200 > y0 && 200 < y1).toBe(false);
+    }
+  });
+
+  describe('shaftDoGrupo (modelo sintético 8 × 6 m: o banheiro em cima, de x = 4 a 8 m e y = 0 a 3 m)', () => {
+    const base = applyBatch(emptyModel(), [
+      { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 },
+      { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 },
+    ]).model;
+    const [T, S] = base.levels.map((l) => l.id);
+    const parede = (levelId: string, a: Point, b: Point, e: number) => ({ levelId, a, b, thicknessMm: e, heightMm: 2800 });
+    const ret = (L: string) => [parede(L, point(0, 0), point(8000, 0), 200), parede(L, point(8000, 0), point(8000, 6000), 200), parede(L, point(8000, 6000), point(0, 6000), 200), parede(L, point(0, 6000), point(0, 0), 200)];
+    const model = applyBatch(base, [
+      { type: 'AddWalls', walls: [...ret(T), parede(T, point(4000, 0), point(4000, 6000), 150), ...ret(S), parede(S, point(4000, 0), point(4000, 3000), 150), parede(S, point(0, 3000), point(8000, 3000), 150)] } as Command,
+    ]).model;
+    const banheiro = [point(4000, 0), point(8000, 0), point(8000, 3000), point(4000, 3000)];
+    const alvo = { x: 5000, y: 1000 };
+
+    it('o shaft de OUTRO cômodo (do outro lado da parede, a 1,5 m) não serve: nasce um dentro do banheiro', () => {
+      const comVizinho = applyBatch(model, [{ type: 'AddNucleo', levelId: T, ateLevelId: S, tipo: 'SHAFT', ring: caixa([3400, 200], [3800, 600]), rotulo: 'Shaft' } as Command]).model;
+      const sh = shaftDoGrupo(comVizinho, T, S, banheiro, alvo, null, 400, 2000)!;
+      expect(sh.novo).toBe(true);
+      for (const q of sh.ring) expect(q.x).toBeGreaterThanOrEqual(4000);
+    });
+
+    it('o shaft que já está dentro do banheiro, perto das peças, serve (não nasce outro)', () => {
+      const ring = caixa([4100, 100], [4500, 500]);
+      const comProprio = applyBatch(model, [{ type: 'AddNucleo', levelId: T, ateLevelId: S, tipo: 'SHAFT', ring, rotulo: 'Shaft' } as Command]).model;
+      const sh = shaftDoGrupo(comProprio, T, S, banheiro, alvo, null, 400, 2000)!;
+      expect(sh.novo).toBe(false);
+      expect(sh.ring).toEqual(ring);
+    });
+
+    it('o shaft novo não cai em cima de uma peça já posta (o aquecedor do térreo)', () => {
+      const livre = shaftDoGrupo(model, T, S, banheiro, alvo, null, 400, 2000)!;
+      const c = { x: livre.ring.reduce((a, p) => a + p.x, 0) / 4, y: livre.ring.reduce((a, p) => a + p.y, 0) / 4 };
+      const comAquecedor = applyBatch(model, [{ type: 'AddTerminal', levelId: T, disciplina: 'AGUA_QUENTE', tipo: 'Aquecedor', at: point(Math.round(c.x), Math.round(c.y)), cotaMm: 1600, tipoHidraulico: 'AQUECEDOR' } as Command]).model;
+      const sh = shaftDoGrupo(comAquecedor, T, S, banheiro, alvo, null, 400, 2000);
+      expect(sh?.ring).not.toEqual(livre.ring);
+      if (sh) {
+        const xs = sh.ring.map((p) => p.x);
+        const ys = sh.ring.map((p) => p.y);
+        const dentro = c.x > Math.min(...xs) && c.x < Math.max(...xs) && c.y > Math.min(...ys) && c.y < Math.max(...ys);
+        expect(dentro).toBe(false);
+      }
+    });
   });
 });

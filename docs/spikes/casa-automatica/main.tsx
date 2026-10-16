@@ -63,6 +63,9 @@ declare global {
         pressurizador: boolean;
         /** F14b: o forro e os encontros entre as quatro redes que correm nele (eletroduto, linha, quente, fria). */
         forro: { comodos: number; peDireitoLivreMinimoMm: number | null; encontros: number } | null;
+        /** F14c: os furos previstos para o calculista e a laje rebaixada sob os banheiros de cima. */
+        furos: { emViga: number; dispensa: number; verificar: number; emBaldrame: number; emLaje: number } | null;
+        rebaixo: { lajes: number; esgotoForaMm: number };
       } | null;
       /** F12d: o sobrado (null na térrea). */
       sobrado: {
@@ -286,6 +289,8 @@ window.__estado = {
     pressaoInsuficiente: plano.resumo.hidraulica.pressaoInsuficiente,
     pressurizador: model.terminais.some((t) => t.tipoHidraulico === 'BOMBA'),
     forro: plano.resumo.forro ? { ...plano.resumo.forro, encontros: encontrosNoForro(model) } : null,
+    furos: plano.resumo.furos ? { emViga: plano.resumo.furos.emViga, dispensa: plano.resumo.furos.dispensa, verificar: plano.resumo.furos.verificar, emBaldrame: plano.resumo.furos.emBaldrame, emLaje: plano.resumo.furos.emLaje } : null,
+    rebaixo: rebaixoDoModelo(model),
   },
   sobrado: sobradoDoModelo(model),
 };
@@ -294,6 +299,43 @@ document.getElementById('dump')!.textContent = [
   ...plano.etapas.map((e) => `${e.id} ${e.situacao}${e.nota ? ` — ${e.nota}` : ''}`),
   ...plano.pendencias.map((p) => `· ${p.grupo}: ${p.texto}`),
 ].join('\n');
+
+/**
+ * F14c ("laje rebaixada"): as peças de laje rebaixadas e quanto do esgoto de cima corre sob o piso FORA delas (no forro
+ * de baixo) — a parte dentro de um shaft conta como dentro, e a ponta que entra nele pela quina também (o eixo a até
+ * 5 cm da face: o raio do tubo e a folga).
+ */
+function pertoDoAnel(anel: readonly Point[], q: Point, mm: number): boolean {
+  return anel.some((a, i) => {
+    const b = anel[(i + 1) % anel.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const L2 = dx * dx + dy * dy;
+    const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / L2));
+    return Math.hypot(q.x - (a.x + t * dx), q.y - (a.y + t * dy)) <= mm;
+  });
+}
+
+function rebaixoDoModelo(m: BlueprintModel): { lajes: number; esgotoForaMm: number } {
+  const niveis = [...m.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+  let lajes = 0;
+  let fora = 0;
+  for (let i = 1; i < niveis.length; i++) {
+    const baixo = niveis[i - 1];
+    const reb = m.structures.filter((s) => s.kind === 'LAJE' && s.levelId === baixo.id && s.baseMm < baixo.defaultHeightMm - 1).map((s) => s.pontos as Point[]);
+    lajes += reb.length;
+    for (const t of m.trechos ?? []) {
+      if (t.levelId !== niveis[i].id || t.disciplina !== 'ESGOTO' || Math.max(t.cotaAMm, t.cotaBMm) >= 0) continue;
+      const L = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+      const n = Math.max(1, Math.ceil(L / 50));
+      for (let k = 0; k <= n; k++) {
+        const q = { x: t.a.x + ((t.b.x - t.a.x) * k) / n, y: t.a.y + ((t.b.y - t.a.y) * k) / n } as Point;
+        if (!reb.some((g) => pointInPolygon(g, q)) && !m.nucleos.some((x) => x.tipo === 'SHAFT' && (pointInPolygon(x.ring, q) || pertoDoAnel(x.ring, q, 50)))) fora += L / (n + 1);
+      }
+    }
+  }
+  return { lajes, esgotoForaMm: Math.round(fora) };
+}
 
 /** F14b: os encontros (REDE × REDE) entre as quatro redes que correm nas faixas do forro. */
 function encontrosNoForro(m: BlueprintModel): number {

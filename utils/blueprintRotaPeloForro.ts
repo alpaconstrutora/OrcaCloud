@@ -19,8 +19,9 @@
  * Com afastamentos diferentes, a descida de uma disciplina não cruza o ramal de outra; com cotas diferentes, as
  * travessias não se encontram. Um afastamento ≥ raio + raio do vizinho é responsabilidade das hipóteses.
  */
-import { anelRecuado, envelopeDoTrecho, envelopeValido, pavimentosDoNucleo, type BlueprintModel, type DisciplinaDeRede, type ObjectId, type Point, type Wall } from './blueprintKernel';
+import { anelRecuado, distanciaEntreEixos3D, envelopeDoTrecho, envelopeValido, pavimentosDoNucleo, pointInPolygon, type BlueprintModel, type DisciplinaDeRede, type ObjectId, type Point, type Wall } from './blueprintKernel';
 import { semEspiculas } from './blueprintDistribuicao';
+import { pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { TOLERANCIA_DO_LADO_MM, paredeContemLado, paredeDoLado } from './blueprintLadoDaParede';
 
 type P2 = { x: number; y: number };
@@ -31,6 +32,12 @@ export interface FaixaDoForro {
   abaixoDoTetoMm: number;
   /** O eixo da rede a esta distância da FACE da parede (ou da viga, se mais larga), dentro do cômodo, mm. */
   afastamentoDaFaceMm: number;
+  /**
+   * F14c: abaixo da viga, a rede entra na parede este tanto MAIS BAIXO que a folga comum — cada rede no seu degrau.
+   * No mesmo degrau, a fria cortava a face da parede (do anel ao eixo) a 8 mm do eletroduto que corria nela até a
+   * tomada (sobrado a 30°). Ausente = 0.
+   */
+  degrauNaParedeMm?: number;
 }
 
 /** A cota da faixa num pavimento: o teto dele menos a distância da faixa. */
@@ -42,6 +49,8 @@ export function cotaDaFaixa(tetoMm: number, f: FaixaDoForro): number {
 const VIGA_DE_TETO_MM = 200;
 /** A travessia só entra onde os dois cômodos dividem ao menos isto de parede, além dos afastamentos. */
 const TRAVESSIA_MINIMA_MM = 200;
+/** F14c: a travessia (furo na viga) a pelo menos isto × a altura da viga da face do apoio — NBR 6118, 13.2.5.1. */
+const DISTANCIA_DO_APOIO_EM_ALTURAS = 2;
 /** A descida que cairia num vão desce a esta folga do batente. */
 const FOLGA_DO_VAO_MM = 50;
 
@@ -80,6 +89,103 @@ function colinear(a: P2, b: P2, c: P2): boolean {
   return d <= TOLERANCIA_DO_LADO_MM && t > 0 && t < 1;
 }
 
+/**
+ * F14c: o contorno sem os DEDOS estreitos — dois lados opostos (antiparalelos), ligados por um lado curto, mais perto
+ * um do outro que a soma dos recuos deles, com cantos convexos nas duas pontas do lado curto (uma saliência, não um
+ * recorte). Recuado, o dedo vira do avesso e o anel inteiro era recusado: a sala do sobrado a 30° tem uma fresta de
+ * 25 cm entre duas paredes paralelas, ficava sem forro, e a água ligava as pontas soltas em reta pelo plenum (9,6 m).
+ * O dedo é cortado rente à base, no braço mais curto; o corte é lado novo, sem parede (recua o do lado curto).
+ * `novo[k]` = o lado de agora do lado `k` de antes (−1 = saiu). `null` = nada a cortar.
+ */
+export function semDedosEstreitos(vertices: readonly P2[], recuos: readonly number[]): { vertices: P2[]; recuos: number[]; novo: number[] } | null {
+  type Lado = { recuo: number; de: number[] };
+  let v = vertices.map((p) => ({ x: p.x, y: p.y }));
+  let l: Lado[] = recuos.map((r, k) => ({ recuo: r, de: [k] }));
+  let mudou = false;
+  const unit = (a: P2, b: P2) => {
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return { x: (b.x - a.x) / L, y: (b.y - a.y) / L };
+  };
+  for (let volta = 0; volta < 4 && v.length >= 5; volta++) {
+    const m = v.length;
+    const at = (i: number) => v[((i % m) + m) % m];
+    const ld = (i: number) => l[((i % m) + m) % m];
+    const orient = Math.sign(v.reduce((acc, p, i) => acc + p.x * at(i + 1).y - at(i + 1).x * p.y, 0));
+    const convexo = (a: P2, b: P2, c: P2) => orient * ((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)) > 0;
+    let i = -1;
+    for (let k = 0; k < m; k++) {
+      const [a0, a1, b0, b1] = [at(k - 1), at(k), at(k + 1), at(k + 2)];
+      const [uA, uB] = [unit(a0, a1), unit(b0, b1)];
+      if (uA.x * uB.x + uA.y * uB.y > -0.98) continue;
+      if (Math.hypot(b0.x - a1.x, b0.y - a1.y) >= ld(k - 1).recuo + ld(k + 1).recuo) continue;
+      if (!convexo(a0, a1, b0) || !convexo(a1, b0, b1)) continue;
+      i = k;
+      break;
+    }
+    if (i < 0) break;
+    const [a0, a1, b0, b1] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
+    const LA = Math.hypot(a1.x - a0.x, a1.y - a0.y);
+    const LB = Math.hypot(b1.x - b0.x, b1.y - b0.y);
+    const corte: Lado = { recuo: ld(i).recuo, de: [] };
+    // Os vértices i e i+1 (as pontas do lado curto) dão lugar a P; os lados i−1, i, i+1 dão lugar a dois.
+    let P: P2;
+    let antes: Lado;
+    let depois: Lado;
+    if (LA <= LB) {
+      const uB = unit(b0, b1);
+      const t = (a0.x - b0.x) * uB.x + (a0.y - b0.y) * uB.y;
+      P = { x: b0.x + uB.x * t, y: b0.y + uB.y * t };
+      antes = corte;
+      // O resto do braço longo continua com a parede dele; consumido inteiro, sai.
+      depois = Math.hypot(b1.x - P.x, b1.y - P.y) < 1 ? { recuo: ld(i + 1).recuo, de: [] } : ld(i + 1);
+    } else {
+      const uA = unit(a0, a1);
+      const t = (b1.x - a0.x) * uA.x + (b1.y - a0.y) * uA.y;
+      P = { x: a0.x + uA.x * t, y: a0.y + uA.y * t };
+      antes = Math.hypot(P.x - a0.x, P.y - a0.y) < 1 ? { recuo: ld(i - 1).recuo, de: [] } : ld(i - 1);
+      depois = corte;
+    }
+    const nv: P2[] = [];
+    const nl: Lado[] = [];
+    for (let k = 0; k < m; k++) {
+      const j = (i + 2 + k) % m; // começa no vértice depois do dedo
+      if (j === i % m || j === (i + 1) % m) continue;
+      nv.push(v[j]);
+      // O lado que sai de j: o de antes do dedo (j = i−1) vira `antes`, e depois dele vem P com `depois`.
+      if (j === ((i - 1) % m + m) % m) {
+        nl.push(antes);
+        nv.push(P);
+        nl.push(depois);
+      } else nl.push(l[j]);
+    }
+    v = nv;
+    l = nl;
+    // E os vértices que ficaram na reta dos vizinhos saem (os lados se juntam, com o maior recuo).
+    for (let k = 0; k < v.length && v.length > 3; ) {
+      const n2 = v.length;
+      const a = v[(k + n2 - 1) % n2];
+      const c = v[(k + 1) % n2];
+      const L = Math.hypot(c.x - a.x, c.y - a.y);
+      const d = L < 1 ? 0 : Math.abs((c.x - a.x) * (v[k].y - a.y) - (c.y - a.y) * (v[k].x - a.x)) / L;
+      if (d <= TOLERANCIA_DO_LADO_MM) {
+        const anterior = (k + n2 - 1) % n2;
+        l[anterior] = { recuo: Math.max(l[anterior].recuo, l[k].recuo), de: [...l[anterior].de, ...l[k].de] };
+        v.splice(k, 1);
+        l.splice(k, 1);
+        continue;
+      }
+      k++;
+    }
+    mudou = true;
+  }
+  if (!mudou) return null;
+  const novo = recuos.map(() => -1);
+  l.forEach((x, k) => {
+    for (const o of x.de) novo[o] = k;
+  });
+  return { vertices: v, recuos: l.map((x) => x.recuo), novo };
+}
+
 function aneisDoForro(model: BlueprintModel, levelId: ObjectId, afastamentoMm: number): AnelDoForro[] {
   const paredes = model.walls.filter((w) => w.levelId === levelId);
   const vigas = vigasDeTeto(model, levelId).map((v) => ({ a: v.pontos[0], b: v.pontos[v.pontos.length - 1], largura: v.larguraMm }));
@@ -111,9 +217,13 @@ function aneisDoForro(model: BlueprintModel, levelId: ObjectId, afastamentoMm: n
       }
       return r;
     });
-    const recuado = anelRecuado(vertices, recuos);
+    // F14c: o DEDO estreito do contorno sai antes de recuar (ver `semDedosEstreitos`); os lados dele ficam sem anel.
+    const limpo = semDedosEstreitos(vertices, recuos);
+    const [vs, rs] = limpo ? [limpo.vertices, limpo.recuos] : [vertices, recuos];
+    if (limpo) for (const l of lados) l.juntado = l.juntado >= 0 ? limpo.novo[l.juntado] : -1;
+    const recuado = anelRecuado(vs as Point[], rs);
     // Cômodo estreito demais para o afastamento: fica sem rede no forro (a árvore contorna).
-    if (!envelopeValido(vertices, recuado)) continue;
+    if (!envelopeValido(vs as Point[], recuado)) continue;
     saida.push({ spaceId: s.id, recuado, lados });
   }
   return saida;
@@ -140,6 +250,30 @@ export function paredesDoForro(model: BlueprintModel, levelId: ObjectId, afastam
       saida.push(parede(`forro:${an.spaceId}:${i}`, a, b));
     }
   }
+  // F14c: a altura da viga de teto sobre o eixo que passa por `m` na direção `u` (0 = sem viga) e os APOIOS dela ao
+  // longo desse eixo (o centro de cada pilar sobre ele, menos a meia seção — a face —, medido de `m`).
+  const vigas = vigasDeTeto(model, levelId);
+  const pilares = (model.structures ?? []).filter((x) => x.kind === 'PILAR' && x.levelId === levelId);
+  const alturaDaVigaSobre = (m: P2, u: P2): number => {
+    let h = 0;
+    for (const v of vigas) {
+      const a = v.pontos[0];
+      const b = v.pontos[v.pontos.length - 1];
+      const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const paralela = Math.abs(((b.x - a.x) / L) * u.y - ((b.y - a.y) / L) * u.x) < 0.02;
+      const d = Math.abs((m.x - a.x) * (b.y - a.y) - (m.y - a.y) * (b.x - a.x)) / L;
+      if (paralela && d <= v.larguraMm / 2 + 5) h = Math.max(h, v.alturaMm);
+    }
+    return h;
+  };
+  const apoiosAoLongo = (m: P2, u: P2): number[] =>
+    pilares
+      .filter((p) => Math.abs((p.pontos[0].x - m.x) * u.y - (p.pontos[0].y - m.y) * u.x) <= Math.max(p.larguraMm, p.profundidadeMm))
+      .flatMap((p) => {
+        const t = (p.pontos[0].x - m.x) * u.x + (p.pontos[0].y - m.y) * u.y;
+        const meia = Math.max(p.larguraMm, p.profundidadeMm) / 2;
+        return [t - meia, t + meia];
+      });
   // O ponto do meio projetado no lado recuado `k` do anel (dentro dele), ou `null`.
   const pe = (an: AnelDoForro, k: number, m: P2): P2 | null => {
     const r0 = an.recuado[k];
@@ -178,9 +312,21 @@ export function paredesDoForro(model: BlueprintModel, levelId: ObjectId, afastam
         if (c.comum < 2 * folga + TRAVESSIA_MINIMA_MM) continue;
         // No meio do trecho em comum e, com folga, perto de cada ponta: com uma travessia só (no meio), a rede que
         // atravessa vários cômodos ia ao meio de cada parede — a água quente do sobrado andava 17 m num térreo de 5 m.
+        // F14c: cada travessia é um FURO na viga — fora da zona de 2h junto do apoio (NBR 6118, 13.2.5.1) quando a parede
+        // comporta, e a 2h entre si; sem posição boa, fica a do meio (os cômodos não se desligam; a lista a marca).
         const meia = c.comum / 2;
         const ate = meia - folga - TRAVESSIA_MINIMA_MM / 2;
-        const desvios = ate >= TRAVESSIA_MINIMA_MM ? [-ate, 0, ate] : [0];
+        const h = alturaDaVigaSobre(c.m, c.u);
+        const apoios = apoiosAoLongo(c.m, c.u);
+        const zona = h * DISTANCIA_DO_APOIO_EM_ALTURAS;
+        const candidatas = ate >= TRAVESSIA_MINIMA_MM ? [0, -ate, ate, ...apoios.flatMap((t) => [t - zona, t + zona])].filter((d) => Math.abs(d) <= ate + 1) : [0];
+        const livre = (d: number) => !h || apoios.every((t) => Math.abs(d - t) >= zona);
+        const escolhidas: number[] = [];
+        for (const d of [...new Set(candidatas.map((x) => Math.round(x)))].sort((x, y) => Math.abs(x) - Math.abs(y))) {
+          if (!livre(d) || escolhidas.some((e) => Math.abs(e - d) < Math.max(zona, TRAVESSIA_MINIMA_MM))) continue;
+          if (escolhidas.length < 3) escolhidas.push(d);
+        }
+        const desvios = escolhidas.length ? escolhidas : [0];
         for (const d of desvios) {
           const m = aoLongo(c.m, c.u, d);
           const pa = pe(A, c.ka, m);
@@ -212,6 +358,13 @@ export function prumadasQueCruzam(model: BlueprintModel, levelId: ObjectId, cota
     const h = Math.ceil(Math.max(env.raioPlantaMm, env.raioVerticalMm) + raioMm + folgaMm);
     const { x, y } = t.a;
     saida.push([{ x: x - h, y: y - h }, { x: x + h, y: y - h }, { x: x + h, y: y + h }, { x: x - h, y: y + h }] as Point[]);
+  }
+  // F14c: a LAJE REBAIXADA (sob o banheiro de cima) desce até o plenum — acima dela é o piso do banheiro: nenhuma faixa
+  // passa ali, de nenhuma rede. A pegada dela vira obstáculo, contornado no forro.
+  const teto = model.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? Infinity;
+  for (const s of model.structures ?? []) {
+    if (s.kind !== 'LAJE' || s.levelId !== levelId || s.baseMm >= teto - 1 || s.baseMm >= cotaMm + raioMm) continue;
+    saida.push(s.pontos.map((p) => ({ x: p.x, y: p.y })) as Point[]);
   }
   // E a LUZ de teto (na face do forro) e o QUADRO: o eletroduto vai subir dali até a faixa dele, atravessando as de
   // baixo (a travessia da fria passava bem onde os eletrodutos do quadro sobem).
@@ -278,39 +431,154 @@ export interface PedacoDaDescida {
  * - Peça APARENTE na face (`naParede` = null — a evaporadora): desce em `q` até a cota dela e vai até ela.
  *
  * Devolve os pedaços na ordem, do forro à peça; nenhum de comprimento zero.
+ *
+ * F14c (16/10/2026): a entrada na parede é em ÂNGULO RETO — do nó, reto até o eixo (ou a face) da parede, e por
+ * dentro dela, abaixo da viga, até o ponto. Antes ia em diagonal do nó ao ponto, pendurada no cômodo: com o nó
+ * empurrado por um shaft ou uma prumada, a da fria e a da quente se cruzavam (sobrado: 1,26 m de diagonal sobre o
+ * tubo de queda). Com `disciplina`, o nó ESCORREGA pelo contorno (até 40 cm, de 5 em 5) quando a descida cruzaria um
+ * tubo de outra rede já traçado — a travessia de viga da fria passando justo onde a quente descia — ou quando a
+ * corrida dentro da parede passaria por um vão. Sem lugar livre, fica no nó.
  */
 export function descidaDoForro(
   model: BlueprintModel,
   levelId: ObjectId,
-  o: { q: P2; cotaDaFaixaMm: number; alvo: P2; cotaDoAlvoMm: number; naParede: P2 | null; raioMm: number; folgaSobAVigaMm: number },
+  o: { q: P2; cotaDaFaixaMm: number; alvo: P2; cotaDoAlvoMm: number; naParede: P2 | null; raioMm: number; folgaSobAVigaMm: number; disciplina?: DisciplinaDeRede | null },
 ): PedacoDaDescida[] {
-  const pts: { p: P2; z: number }[] = [{ p: o.q, z: o.cotaDaFaixaMm }];
-  const ir = (p: P2, z: number) => {
-    const u = pts[pts.length - 1];
-    if (u.p.x === p.x && u.p.y === p.y && u.z === z) return;
-    pts.push({ p: { x: Math.round(p.x), y: Math.round(p.y) }, z: Math.round(z) });
-  };
-  if (!o.naParede) {
-    ir(o.q, o.cotaDoAlvoMm);
-    ir(o.alvo, o.cotaDoAlvoMm);
-  } else {
-    const w = o.naParede;
-    const fundo = fundoDaVigaSobre(model, levelId, w, o.raioMm);
-    let entra = fundo == null ? o.cotaDaFaixaMm : Math.min(o.cotaDaFaixaMm, fundo - o.folgaSobAVigaMm - o.raioMm);
-    if (entra < o.cotaDoAlvoMm) entra = o.cotaDoAlvoMm;
-    ir(o.q, entra);
-    ir(w, entra);
-    const desvio = foraDoVao(model, levelId, w, Math.min(entra, o.cotaDoAlvoMm), Math.max(entra, o.cotaDoAlvoMm), o.raioMm);
-    if (desvio) {
-      ir(desvio, entra);
-      ir(desvio, o.cotaDoAlvoMm);
+  const w = o.naParede;
+  const parede = w ? paredeQueContem(model, levelId, w) : null;
+  const entraEm = (ps: P2[]) => {
+    let entra = o.cotaDaFaixaMm;
+    for (const p of ps) {
+      const fundo = fundoDaVigaSobre(model, levelId, p, o.raioMm);
+      if (fundo != null) entra = Math.min(entra, fundo - o.folgaSobAVigaMm - o.raioMm);
     }
-    ir(w, o.cotaDoAlvoMm);
+    return Math.max(entra, o.cotaDoAlvoMm);
+  };
+  /** Do forro ao ponto da parede (`w`, na cota de entrada) descendo em `q` — a parte que depende do nó. */
+  const cabeca = (q: P2, reto: boolean): { pts: { p: P2; z: number }[]; entra: number; noEixo: P2 | null } => {
+    const pts: { p: P2; z: number }[] = [{ p: o.q, z: o.cotaDaFaixaMm }];
+    const ir = (p: P2, z: number) => {
+      const u = pts[pts.length - 1];
+      const r = { x: Math.round(p.x), y: Math.round(p.y) };
+      if (u.p.x === r.x && u.p.y === r.y && u.z === Math.round(z)) return;
+      pts.push({ p: r, z: Math.round(z) });
+    };
+    ir(q, o.cotaDaFaixaMm);
+    if (!w) {
+      ir(q, o.cotaDoAlvoMm);
+      return { pts, entra: o.cotaDoAlvoMm, noEixo: null };
+    }
+    const s = parede ? (q.x - w.x) * parede.u.x + (q.y - w.y) * parede.u.y : 0;
+    const noEixo = reto && parede ? { x: w.x + parede.u.x * s, y: w.y + parede.u.y * s } : null;
+    const entra = entraEm(noEixo ? [w, noEixo] : [w]);
+    ir(q, entra);
+    if (noEixo) ir(noEixo, entra);
+    ir(w, entra);
+    return { pts, entra, noEixo };
+  };
+  const montar = (c: ReturnType<typeof cabeca>): PedacoDaDescida[] => {
+    const pts = [...c.pts];
+    const ir = (p: P2, z: number) => {
+      const u = pts[pts.length - 1];
+      const r = { x: Math.round(p.x), y: Math.round(p.y) };
+      if (u.p.x === r.x && u.p.y === r.y && u.z === Math.round(z)) return;
+      pts.push({ p: r, z: Math.round(z) });
+    };
+    if (w) {
+      const desvio = foraDoVao(model, levelId, w, Math.min(c.entra, o.cotaDoAlvoMm), Math.max(c.entra, o.cotaDoAlvoMm), o.raioMm);
+      if (desvio) {
+        ir(desvio, c.entra);
+        ir(desvio, o.cotaDoAlvoMm);
+      }
+      ir(w, o.cotaDoAlvoMm);
+    }
     ir(o.alvo, o.cotaDoAlvoMm);
+    const saida: PedacoDaDescida[] = [];
+    for (let i = 1; i < pts.length; i++) saida.push({ a: pts[i - 1].p, b: pts[i].p, cotaAMm: pts[i - 1].z, cotaBMm: pts[i].z });
+    return saida;
+  };
+  if (!o.disciplina) return montar(cabeca(o.q, true));
+
+  // Os tubos de OUTRAS redes por perto (no mundo: cota + elevação do pavimento).
+  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+  const e0 = elevacao.get(levelId) ?? 0;
+  const alcance = DESLIZE_DA_DESCIDA_MM + Math.hypot(o.q.x - (w ?? o.alvo).x, o.q.y - (w ?? o.alvo).y) + 300;
+  const outros = (model.trechos ?? [])
+    .filter((t) => t.disciplina !== o.disciplina && Math.min(t.a.x, t.b.x) < o.q.x + alcance && Math.max(t.a.x, t.b.x) > o.q.x - alcance && Math.min(t.a.y, t.b.y) < o.q.y + alcance && Math.max(t.a.y, t.b.y) > o.q.y - alcance)
+    .map((t) => {
+      const env = envelopeDoTrecho(t);
+      const e = elevacao.get(t.levelId) ?? 0;
+      return { A: { x: t.a.x, y: t.a.y, z: e + t.cotaAMm }, B: { x: t.b.x, y: t.b.y, z: e + t.cotaBMm }, r: Math.max(env.raioPlantaMm, env.raioVerticalMm) };
+    });
+  const livre = (c: ReturnType<typeof cabeca>) => {
+    for (let i = 1; i < c.pts.length; i++) {
+      const A = { x: c.pts[i - 1].p.x, y: c.pts[i - 1].p.y, z: e0 + c.pts[i - 1].z };
+      const B = { x: c.pts[i].p.x, y: c.pts[i].p.y, z: e0 + c.pts[i].z };
+      for (const t of outros) if (distanciaEntreEixos3D(A, B, t.A, t.B) <= o.raioMm + t.r + FOLGA_DA_DESCIDA_MM) return false;
+    }
+    // A corrida dentro da parede (do pé do nó até `w`) não passa por porta nem janela.
+    if (parede && c.noEixo && w) {
+      const L = Math.hypot(parede.parede.b.x - parede.parede.a.x, parede.parede.b.y - parede.parede.a.y);
+      const ao = (p: P2) => (p.x - parede.parede.a.x) * parede.u.x + (p.y - parede.parede.a.y) * parede.u.y;
+      const [de, ate] = [Math.min(ao(c.noEixo), ao(w)), Math.max(ao(c.noEixo), ao(w))];
+      for (const v of model.openings) {
+        if (v.wallId !== parede.parede.id) continue;
+        if (ate < v.offsetMm - o.raioMm || de > v.offsetMm + v.widthMm + o.raioMm || de > L) continue;
+        if (c.entra + o.raioMm > v.sillMm && c.entra - o.raioMm < v.sillMm + v.heightMm) return false;
+      }
+    }
+    return true;
+  };
+  const inicial = cabeca(o.q, true);
+  if (livre(inicial) || !parede) return montar(inicial);
+  // O caminho do escorregão, no forro, não entra em parede, viga, pilar, shaft nem laje rebaixada.
+  const barreiras = [...pegadasDePilares(model, levelId), ...prumadasQueCruzam(model, levelId, o.cotaDaFaixaMm, o.disciplina, o.raioMm, 2, true)];
+  const paredesDoNivel = model.walls.filter((x) => x.levelId === levelId);
+  const passa = (p: P2) =>
+    fundoDaVigaSobre(model, levelId, p, o.raioMm) == null &&
+    !barreiras.some((g) => pointInPolygon(g, p as Point)) &&
+    paredesDoNivel.every((x) => distanciaAoEixo(x, p) > x.thicknessMm / 2 + o.raioMm);
+  for (let s = PASSO_DO_DESLIZE_MM; s <= DESLIZE_DA_DESCIDA_MM; s += PASSO_DO_DESLIZE_MM) {
+    for (const k of [1, -1]) {
+      const q = { x: Math.round(o.q.x + parede.u.x * s * k), y: Math.round(o.q.y + parede.u.y * s * k) };
+      let ok = true;
+      for (let d = 25; d <= s && ok; d += 25) ok = passa({ x: o.q.x + parede.u.x * d * k, y: o.q.y + parede.u.y * d * k });
+      if (!ok || !passa(q)) continue;
+      const c = cabeca(q, true);
+      if (livre(c)) return montar(c);
+    }
   }
-  const saida: PedacoDaDescida[] = [];
-  for (let i = 1; i < pts.length; i++) saida.push({ a: pts[i - 1].p, b: pts[i].p, cotaAMm: pts[i - 1].z, cotaBMm: pts[i].z });
-  return saida;
+  return montar(inicial);
+}
+
+/** F14c: a folga entre a descida e o tubo de outra rede, além dos dois raios, mm. */
+const FOLGA_DA_DESCIDA_MM = 5;
+/** F14c: até onde o nó da descida escorrega pelo contorno, e o passo, mm. */
+const DESLIZE_DA_DESCIDA_MM = 400;
+const PASSO_DO_DESLIZE_MM = 50;
+
+const distanciaAoEixo = (x: Wall, p: P2) => {
+  const dx = x.b.x - x.a.x;
+  const dy = x.b.y - x.a.y;
+  const L2 = dx * dx + dy * dy;
+  const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - x.a.x) * dx + (p.y - x.a.y) * dy) / L2));
+  return Math.hypot(p.x - (x.a.x + t * dx), p.y - (x.a.y + t * dy));
+};
+
+/** A parede do pavimento que contém `w` (no eixo, na face, ou na faixa da água quente — até 60 mm além da face). */
+function paredeQueContem(model: BlueprintModel, levelId: ObjectId, w: P2): { parede: Wall; u: P2 } | null {
+  let melhor: { parede: Wall; u: P2; d: number } | null = null;
+  for (const x of model.walls) {
+    if (x.levelId !== levelId) continue;
+    const L = Math.hypot(x.b.x - x.a.x, x.b.y - x.a.y);
+    if (L < 1) continue;
+    const u = { x: (x.b.x - x.a.x) / L, y: (x.b.y - x.a.y) / L };
+    const t = (w.x - x.a.x) * u.x + (w.y - x.a.y) * u.y;
+    const d = Math.abs((w.x - x.a.x) * u.y - (w.y - x.a.y) * u.x);
+    if (t < -1 || t > L + 1 || d > x.thicknessMm / 2 + 60) continue;
+    if (!melhor || d < melhor.d) melhor = { parede: x, u, d };
+  }
+  return melhor ? { parede: melhor.parede, u: melhor.u } : null;
 }
 
 /**

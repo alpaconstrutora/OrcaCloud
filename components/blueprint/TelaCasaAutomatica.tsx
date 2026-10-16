@@ -1,7 +1,8 @@
 /**
  * TELA "Casa automática" (F10 da casa automática, 15/10/2026): o programa curto e as hipóteses do estudo, o botão
  * que gera a PRÉVIA da casa inteira num Web Worker (a etapa em curso aparece), o resumo (área, índices da lei,
- * custo pelo CUB), as etapas com a situação de cada uma, o relatório de pendências por grupo e as duas saídas:
+ * custo pelo CUB), as etapas com a situação de cada uma, o relatório de pendências por grupo, a lista dos furos previstos
+ * para o calculista (F14c) e as duas saídas:
  * "Lançar no pavimento" (um lote, um Ctrl+Z — com a trava `conferirPlanoDaCasa` antes) e "Criar alternativa" (um
  * ramo novo com a casa, o desenho atual intacto). Molde: `TelaGerador` (tela in-flow do editor) e
  * `PainelGeradorPpci` (etapas e relatório).
@@ -11,6 +12,7 @@ import { Home, ListChecks, Play, SlidersHorizontal, Square, Wand2 } from 'lucide
 
 import Button from '../ui/Button';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
+import { TabelaFurosPrevistos } from './TabelaFurosPrevistos';
 import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type SituacaoDaEtapa } from '../../utils/blueprintGeradorPpci';
 import { PADROES_DA_CASA, ROTULO_DO_PADRAO_DA_CASA, type PadraoDaCasa } from '../../utils/blueprintPrograma';
 import { PREMISSAS_DA_CASA_PADRAO, type PremissasDaCasa } from '../../utils/blueprintPremissasDaCasa';
@@ -448,6 +450,17 @@ export default function TelaCasaAutomatica(props: Props) {
                 )}
               </section>
             </div>
+
+            {plano.resumo.furos && plano.resumo.furos.lista.length > 0 && (
+              <section className="space-y-2" data-testid="furos-da-casa">
+                <h4 className={rotuloCls}>Furos previstos para o calculista ({plano.resumo.furos.lista.length})</h4>
+                <p className="text-xs text-slate-500">
+                  {plano.resumo.furos.emViga} em viga — {plano.resumo.furos.dispensa} dispensam a verificação pelos critérios da NBR 6118 (13.2.5.1), tomados como hipóteses, e{' '}
+                  {plano.resumo.furos.verificar} a verificar com o calculista; {plano.resumo.furos.emBaldrame} em baldrame; {plano.resumo.furos.emLaje} passagem(ns) em laje.
+                </p>
+                <TabelaFurosPrevistos furos={plano.resumo.furos.lista} pavimentos={new Map(plano.resultado.levels.map((l) => [l.id, l.name]))} />
+              </section>
+            )}
 
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 pt-4">
               {(motivoDeLancar || motivoDeCriar) && plano.comandos.length > 0 && <p className="mr-auto text-xs text-amber-700">{motivoDeLancar ?? motivoDeCriar}</p>}

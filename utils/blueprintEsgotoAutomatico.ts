@@ -46,7 +46,7 @@
  * pré-dimensionamento; o executivo é do projetista.
  */
 import { dnDoRamalDeEsgoto, dnDoSubcoletor, dnDoTuboDeQueda, type PapelNoEsgoto } from './blueprintNbr8160';
-import type { BlueprintModel, Command, ObjectId, Space, Terminal, TipoDePontoHidraulico } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point, Space, Terminal, TipoDePontoHidraulico } from './blueprintKernel';
 import { CATALOGO_DE_COMPONENTES, applyBatch, pointInPolygon } from './blueprintKernel';
 import {
   arvoreComRotaLimitada,
@@ -57,7 +57,7 @@ import {
   type Ponto2,
 } from './blueprintGrafoDeRede';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
-import { FAIXA_NO_SHAFT, shaftPreferido } from './blueprintNucleoVertical';
+import { lugarNoShaft, shaftPreferido } from './blueprintNucleoVertical';
 import { redeDaOrigem } from './blueprintAguaAutomatica';
 import { pontosDaLouca } from './blueprintPontosHidraulicos';
 import { pontoNaFrente } from './blueprintAncorasHidro';
@@ -86,6 +86,13 @@ export interface HipotesesDeEsgoto {
    * dividirem o lugar com as colunas de água. Ausente = sem deslocamento.
    */
   faixa?: { x: number; y: number } | null;
+  /**
+   * F14c da casa automática (16/10/2026): um tubo de queda por GRUPO de peças do pavimento de cima — as que ficam a
+   * até esta distância umas das outras (o banheiro), cada grupo no shaft mais perto. Com um TQ só por pavimento, o
+   * banheiro da suíte despejava no TQ do outro banheiro, a 7 m, num ramal que cruzava o forro do térreo. Ausente = um
+   * TQ por pavimento (como antes).
+   */
+  tuboDeQuedaPorGrupoMm?: number | null;
   /** Quanto a caixa de inspeção AUTOMÁTICA fica para fora da fachada, mm (13/10/2026). Ausente = 1000. */
   afastamentoDaCiMm?: number;
   /**
@@ -175,6 +182,38 @@ export interface CaixaProposta {
   cotaMm: number;
   /** De onde veio a direção: a frente do lote (e qual regra a achou) ou, sem frente, a fachada mais perto. */
   rumo: 'PAPEL' | 'TESTADA' | 'VIA' | 'FACHADA';
+}
+
+/**
+ * F14c: as peças do pavimento em grupos por proximidade (encadeada: entra no grupo quem está a até `raioMm` de alguma
+ * peça dele) — a caixa sifonada fica no grupo das peças que despejam nela. `null` = um grupo só.
+ */
+function gruposDeTuboDeQueda<F extends { terminal: { id: string; at: { x: number; y: number } }; destino: { id: string } | null }>(
+  fontes: readonly F[],
+  raioMm: number | null,
+  comodoDe: (p: { x: number; y: number }) => string | null = () => null,
+): F[][] {
+  if (!raioMm || fontes.length <= 1) return [fontes.slice()];
+  const grupo = fontes.map((_, i) => i);
+  const raiz = (i: number): number => (grupo[i] === i ? i : (grupo[i] = raiz(grupo[i])));
+  const unir = (i: number, j: number) => {
+    const a = raiz(i);
+    const b = raiz(j);
+    if (a !== b) grupo[Math.max(a, b)] = Math.min(a, b);
+  };
+  for (let i = 0; i < fontes.length; i++) {
+    for (let j = i + 1; j < fontes.length; j++) {
+      const a = fontes[i].terminal.at;
+      const b = fontes[j].terminal.at;
+      const despeja = fontes[i].destino?.id === fontes[j].terminal.id || fontes[j].destino?.id === fontes[i].terminal.id;
+      // F14c: só no MESMO cômodo ("um tubo de queda por banheiro de cima"): a caixa sifonada do banheiro social a 2,5 m
+      // do da suíte descia no shaft dele, e o ramal cortava o cômodo entre os dois, fora da laje rebaixada.
+      if (despeja || (Math.hypot(a.x - b.x, a.y - b.y) <= raioMm && comodoDe(a) === comodoDe(b))) unir(i, j);
+    }
+  }
+  const porRaiz = new Map<number, F[]>();
+  fontes.forEach((f, i) => porRaiz.set(raiz(i), [...(porRaiz.get(raiz(i)) ?? []), f]));
+  return [...porRaiz.keys()].sort((a, b) => a - b).map((k) => porRaiz.get(k)!);
 }
 
 type Fonte = {
@@ -505,8 +544,14 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
     if (APARELHOS_DO_COLETOR.includes(tipo)) {
       const espaco = espacoDe(model, t);
       const noAmbiente = coletores.filter((c) => c.id !== t.id && (espaco ? pointInPolygon(espaco.ring, c.at) && c.levelId === t.levelId : false));
-      const caixa = noAmbiente.find((c) => c.tipoHidraulico === 'CAIXA_SIFONADA') ?? noAmbiente[0] ?? null;
-      if (caixa) destino = caixa;
+      let caixa = noAmbiente.find((c) => c.tipoHidraulico === 'CAIXA_SIFONADA') ?? noAmbiente[0] ?? null;
+      // F14c: com um TQ por grupo (casa automática), o aparelho longe da caixa sifonada (o lavatório na outra ponta do
+      // banheiro comprido) vai direto ao tubo de queda pelo sifão dele — preso à caixa, amarrava as duas pontas num grupo
+      // só e o esgoto corria 5 m sob o piso, mais que o enchimento da laje rebaixada comporta.
+      if (caixa && hip.tuboDeQuedaPorGrupoMm && distancia(caixa.at, t.at) > hip.tuboDeQuedaPorGrupoMm) {
+        avisos.push(`${FICHA_DO_PONTO_HIDRAULICO[tipo].rotulo} em ${espaco?.name ?? 'ambiente sem nome'} a ${(distancia(caixa.at, t.at) / 1000).toFixed(1).replace('.', ',')} m da caixa sifonada — ligado direto ao tubo de queda pelo sifão dele`);
+        caixa = null;
+      } else if (caixa) destino = caixa;
       else avisos.push(`${FICHA_DO_PONTO_HIDRAULICO[tipo].rotulo} em ${espaco?.name ?? 'ambiente sem nome'} sem caixa sifonada — ligado direto à caixa de inspeção`);
     } else if (tipo === 'PIA_COZINHA') {
       const cg = maisProxima(t, gorduras);
@@ -640,22 +685,38 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
       pavimentos.push({ levelId: nivel.id, nome: nivel.name, fontes: todasDoNivel.length, ligadas: todasDoNivel.length, aLigar: 0, tuboDeQueda: false });
       continue;
     }
-    // O TQ na posição do ponto de maior UHC do andar (o vaso, em geral); um TQ já
-    // desenhado (rótulo "TQ") na mesma posição é reaproveitado pela idempotência.
-    const maior = [...doNivel].sort((a, b) => b.uhc - a.uhc || a.terminal.at.x - b.terminal.at.x || a.terminal.at.y - b.terminal.at.y)[0];
-    // NÚCLEO VERTICAL (E2.4): com um shaft ao alcance, o TQ desce por ele.
-    const noShaft = shaftPreferido(model, { x: maior.terminal.at.x, y: maior.terminal.at.y }, nivel.id, hip.raioDoShaftMm ?? 3000);
-    // F14a: no shaft, o TQ na faixa do esgoto (as colunas de água ficam no centro e na faixa delas).
-    const tq = noShaft ? { x: Math.round(noShaft.x + (hip.faixa?.x ?? 0) * FAIXA_NO_SHAFT), y: Math.round(noShaft.y + (hip.faixa?.y ?? 0) * FAIXA_NO_SHAFT) } : { x: maior.terminal.at.x, y: maior.terminal.at.y };
-    const { cotaRaiz, uhc, dnMinimo } = construirArvoreDoNivel(nivel.id, tq, doNivel, null);
-    // Ventilação: do nó do TQ ao teto do andar.
-    novos.push({ type: 'AddTrecho', levelId: nivel.id, disciplina: 'ESGOTO', a: { ...tq }, b: { ...tq }, cotaAMm: cotaRaiz, cotaBMm: nivel.defaultHeightMm, bitolaMm: hip.dnVentilacaoMm, sugerido: true, rotulo: 'Ventilação' });
-    arestas.push({ ref: { novo: novos.length - 1 }, de: chave(nivel.id, tq.x, tq.y, cotaRaiz), para: chave(nivel.id, tq.x, tq.y, nivel.defaultHeightMm), mm: nivel.defaultHeightMm - cotaRaiz });
-    // A chegada no pavimento de baixo: o TQ começa onde o ramal do andar termina
-    // (sob o piso dele = teto do de baixo + cotaRaiz, negativa) e desce até o
-    // ramal do térreo — a árvore do térreo o recebe como fonte na posição do TQ.
-    const abaixo = niveis[(indice.get(nivel.id) ?? 1) - 1];
-    chegadasDeCima.push({ pos: tq, uhc, dnMinimo: Math.max(dnMinimo, hip.dnTuboQuedaMm), topoNoTerreoMm: abaixo.defaultHeightMm + cotaRaiz });
+    // F14c: um TQ por grupo de peças próximas (o banheiro), quando pedido; senão um só por pavimento.
+    const comodosDoNivel = model.spaces.filter((sp) => sp.levelId === nivel.id);
+    const comodoDe = (p: { x: number; y: number }) => comodosDoNivel.find((sp) => pointInPolygon(sp.ring, p as Point))?.id ?? null;
+    // F14c: os grupos que caem no MESMO tubo de queda (o mesmo lugar do shaft) viram um só — dois grupos com a raiz no
+    // mesmo ponto dividiam a cota dela (a árvore guarda a cota por posição): o ramal DN 50 da caixa sifonada herdava a
+    // do vaso, a 1 % (sobrado a 30°), e a ventilação saía dobrada.
+    const porTq = new Map<string, { tq: { x: number; y: number }; grupo: typeof doNivel }>();
+    for (const grupo of gruposDeTuboDeQueda(doNivel, hip.tuboDeQuedaPorGrupoMm ?? null, comodoDe)) {
+      // O TQ na posição do ponto de maior UHC do grupo (o vaso, em geral); um TQ já
+      // desenhado (rótulo "TQ") na mesma posição é reaproveitado pela idempotência.
+      const maior = [...grupo].sort((a, b) => b.uhc - a.uhc || a.terminal.at.x - b.terminal.at.x || a.terminal.at.y - b.terminal.at.y)[0];
+      // NÚCLEO VERTICAL (E2.4): com um shaft ao alcance, o TQ desce por ele.
+      const noShaft = shaftPreferido(model, { x: maior.terminal.at.x, y: maior.terminal.at.y }, nivel.id, hip.raioDoShaftMm ?? 3000);
+      // F14a: no shaft, o TQ na faixa do esgoto (as colunas de água ficam no centro e na faixa delas). F14c: girada, se
+      // um tubo de outra rede já passa ali (o barrilete da fria sobre o shaft).
+      const tq = noShaft ? lugarNoShaft(model, noShaft as Point, hip.faixa ?? null, 'ESGOTO', hip.dnTuboQuedaMm / 2, model.levels.map((l) => l.id)) : { x: maior.terminal.at.x, y: maior.terminal.at.y };
+      const chaveDoTq = `${tq.x},${tq.y}`;
+      const ja = porTq.get(chaveDoTq);
+      if (ja) ja.grupo = [...ja.grupo, ...grupo];
+      else porTq.set(chaveDoTq, { tq, grupo });
+    }
+    for (const { tq, grupo } of porTq.values()) {
+      const { cotaRaiz, uhc, dnMinimo } = construirArvoreDoNivel(nivel.id, tq, grupo, null);
+      // Ventilação: do nó do TQ ao teto do andar.
+      novos.push({ type: 'AddTrecho', levelId: nivel.id, disciplina: 'ESGOTO', a: { ...tq }, b: { ...tq }, cotaAMm: cotaRaiz, cotaBMm: nivel.defaultHeightMm, bitolaMm: hip.dnVentilacaoMm, sugerido: true, rotulo: 'Ventilação' });
+      arestas.push({ ref: { novo: novos.length - 1 }, de: chave(nivel.id, tq.x, tq.y, cotaRaiz), para: chave(nivel.id, tq.x, tq.y, nivel.defaultHeightMm), mm: nivel.defaultHeightMm - cotaRaiz });
+      // A chegada no pavimento de baixo: o TQ começa onde o ramal do andar termina
+      // (sob o piso dele = teto do de baixo + cotaRaiz, negativa) e desce até o
+      // ramal do térreo — a árvore do térreo o recebe como fonte na posição do TQ.
+      const abaixo = niveis[(indice.get(nivel.id) ?? 1) - 1];
+      chegadasDeCima.push({ pos: tq, uhc, dnMinimo: Math.max(dnMinimo, hip.dnTuboQuedaMm), topoNoTerreoMm: abaixo.defaultHeightMm + cotaRaiz });
+    }
     pavimentos.push({ levelId: nivel.id, nome: nivel.name, fontes: todasDoNivel.length, ligadas: todasDoNivel.length - doNivel.length, aLigar: doNivel.length, tuboDeQueda: true });
   }
 

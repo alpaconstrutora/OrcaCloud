@@ -20,7 +20,8 @@
  * Tudo no QUADRO LOCAL da frente (o mesmo do gerador): quem chama leva ao mundo com `comandosNoMundoDe`.
  */
 import type { BlueprintModel, Command, ObjectId, Point, Wall } from './blueprintKernel';
-import { applyBatch, point, pointInPolygon, uidDeterministico } from './blueprintKernel';
+import { applyBatch, contornoDoComponente, point, pointInPolygon, signedArea, uidDeterministico } from './blueprintKernel';
+import { semEspiculas } from './blueprintDistribuicao';
 import { HIPOTESES_PILARES_PADRAO, idsPrevistosDeEstrutura, pilaresExistentesNoNivel, planejarPilares, proximoNumeroDePilar, proximoNumeroDoRotulo, type HipotesesDePilares } from './blueprintPilaresAutomaticos';
 import { alturaDaViga, HIPOTESES_VIGAS_PADRAO, type HipotesesDeVigas } from './blueprintVigasLajesAutomaticas';
 import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, sugerirGuardaCorpos } from './blueprintGuardaCorpo';
@@ -50,6 +51,29 @@ export interface HipotesesDoSobrado {
   sobraMinimaDoAmbientePct: number;
   /** F12c: o lado do shaft das instalações junto do banheiro de cima, mm. */
   shaftMm: number;
+  /** F14c: as peças de cima a até isto umas das outras descem pelo mesmo tubo de queda (um TQ por banheiro), mm. */
+  grupoDoTuboDeQuedaMm: number;
+  /** F14c: o shaft fica a até isto do centro das peças que despejam nele; mais longe, ganha um shaft junto delas, mm. */
+  shaftAteAsPecasMm: number;
+  /**
+   * F14c (decisão do usuário, 16/10/2026: "laje rebaixada"): quanto a laje sob cada banheiro de cima desce, mm — o
+   * esgoto dele corre no enchimento do piso até o tubo de queda, sem entrar no forro do térreo. 0 = sem rebaixo.
+   * 22 cm: a laje rebaixada ainda fica ACIMA do forro do térreo (2,567 m com o padrão), que não precisa descer — nem
+   * sob a cozinha, de 2,50 m; o tubo de queda colado nas peças deixa o ramal curto o bastante para o enchimento.
+   */
+  rebaixoDaLajeDoBanheiroMm: number;
+  /**
+   * F14c: o rebaixo cobre só a ÁREA MOLHADA — o retângulo das peças de esgoto do grupo mais esta margem (o shaft colado
+   * nelas e o caimento do ramal), recortado pelo banheiro. Sob o banheiro inteiro, o rebaixo tirava do térreo faixas
+   * de forro onde a água precisava passar (o banheiro da suíte cobria os fundos da casa e o aquecedor). mm.
+   */
+  margemDoRebaixoMm: number;
+  /**
+   * F14c: até onde o esgoto de cima busca o shaft para o tubo de queda, mm. O shaft junto das peças fica onde a parede
+   * e os móveis deixam (no banheiro da suíte, comprido, o vaso e o lavatório tomam a ponta: 3,5 m) — com os 3 m de
+   * antes, o tubo de queda descia no vaso, pelo meio da cozinha de baixo.
+   */
+  tuboDeQuedaAteOShaftMm: number;
 }
 
 export const HIPOTESES_DO_SOBRADO_PADRAO: HipotesesDoSobrado = {
@@ -65,6 +89,11 @@ export const HIPOTESES_DO_SOBRADO_PADRAO: HipotesesDoSobrado = {
   alturaDaPortaMm: 2100,
   sobraMinimaDoAmbientePct: 50,
   shaftMm: 400,
+  grupoDoTuboDeQuedaMm: 2500,
+  shaftAteAsPecasMm: 2000,
+  rebaixoDaLajeDoBanheiroMm: 220,
+  margemDoRebaixoMm: 600,
+  tuboDeQuedaAteOShaftMm: 4000,
 };
 
 /** O programa repartido pelos pavimentos (as relações ficam só entre itens do mesmo pavimento). */
@@ -711,6 +740,8 @@ export function guardaCorpoDaEscada(model: BlueprintModel, T: ObjectId, S: Objec
 
 /** Onde o shaft prefere cair no térreo (o primeiro que serve vence): área molhada e de serviço antes de sala. */
 const PREFERENCIA_DO_SHAFT_NO_TERREO: string[] = ['AREA_DE_SERVICO', 'LAVABO', 'COZINHA', 'GARAGEM', 'ESCRITORIO', 'VARANDA', 'SALA'];
+/** F14c: onde o shaft pode ser CAIXA no canto do cômodo de baixo (sem parede do térreo sob a face). */
+const USOS_QUE_ACEITAM_CAIXA_DE_SHAFT = new Set(['AREA_DE_SERVICO', 'GARAGEM', 'CIRCULACAO', 'BANHEIRO', 'LAVABO', 'DEPOSITO']);
 
 export interface ShaftDoSobrado {
   ring: Point[];
@@ -730,14 +761,60 @@ export function shaftsDoSobrado(model: BlueprintModel, T: ObjectId, S: ObjectId,
   const banheiros = model.spaces
     .filter((x) => x.levelId === S && usoDoNome(x.name) === 'BANHEIRO' && x.ring.length >= 3)
     .sort((a, b) => b.areaMm2 - a.areaMm2);
-  const pilares = (model.structures ?? []).filter((x) => x.kind === 'PILAR' && (x.levelId === T || x.levelId === S));
-  const centroDe = (r: Point[]) => ({ x: r.reduce((a, p) => a + p.x, 0) / r.length, y: r.reduce((a, p) => a + p.y, 0) / r.length });
   const saida: ShaftDoSobrado[] = [];
   for (const ban of banheiros) {
-    const cb = centroDe(ban.ring);
-    if (saida.some((x) => Math.hypot(centroDe(x.ring).x - cb.x, centroDe(x.ring).y - cb.y) <= raioMm)) continue;
-    const anel = ban.ring;
-    let melhor: { ring: Point[]; custo: number; noTerreo: string | null } | null = null;
+    const cb = centroDoAnel(ban.ring);
+    if (saida.some((x) => Math.hypot(centroDoAnel(x.ring).x - cb.x, centroDoAnel(x.ring).y - cb.y) <= raioMm)) continue;
+    const melhor = lugarDoShaft(model, T, S, ban.ring, nucleo, ladoMm, (c, embaixo) => {
+      const pref = embaixo ? PREFERENCIA_DO_SHAFT_NO_TERREO.indexOf(usoDoNome(embaixo.name) ?? '') : -1;
+      return (pref < 0 ? 50 : pref * 5) + Math.hypot(c.x - cb.x, c.y - cb.y) / 1000;
+    });
+    if (melhor) saida.push({ ring: melhor.ring, banheiro: ban.name ?? 'Banheiro', noTerreo: melhor.noTerreo });
+  }
+  return saida;
+}
+
+const distanciaAoLado = (p: Point, a: Point, b: Point) => {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const L2 = dx * dx + dy * dy;
+  const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+};
+
+const centroDoAnel = (r: readonly Point[]) => ({ x: r.reduce((a, p) => a + p.x, 0) / r.length, y: r.reduce((a, p) => a + p.y, 0) / r.length });
+
+/**
+ * O melhor lugar de um shaft (quadrado de `ladoMm`) encostado numa parede de dentro do `anel` do pavimento de cima —
+ * pelo `custo` (menor ganha). Duas passadas (F14c, 16/10/2026): a 1ª exige parede do térreo embaixo da face; sem lugar
+ * assim (o banheiro da suíte sobre a área de serviço ficava SEM shaft e despejava a 7 m), a 2ª aceita o shaft como
+ * CAIXA no canto do cômodo de baixo, se ele não for de permanência (garagem, serviço, circulação, banheiro, depósito).
+ */
+function lugarDoShaft(
+  model: BlueprintModel,
+  T: ObjectId,
+  S: ObjectId,
+  anel: readonly Point[],
+  nucleo: Point[] | null,
+  ladoMm: number,
+  custo: (c: { x: number; y: number }, embaixo: BlueprintModel['spaces'][number] | null) => number,
+): { ring: Point[]; custo: number; noTerreo: string | null } | null {
+  const pilares = (model.structures ?? []).filter((x) => x.kind === 'PILAR' && (x.levelId === T || x.levelId === S));
+  const shafts = (model.nucleos ?? []).filter((n) => n.tipo === 'SHAFT');
+  // F14c: as peças já postas nos dois pavimentos (louças, aquecedor, caixa sifonada, móveis) — o shaft junto das peças,
+  // que nasce depois delas, cobria o aquecedor do térreo e a caixa sifonada de cima (sobrado a 30°). Só a peça DENTRO
+  // do shaft o recusa: encostada do lado de fora é o bom, o vaso despeja direto no tubo de queda (com 2 cm de folga, o
+  // ralo do vaso a 5 mm da face deixava o banheiro da suíte sem shaft e o tubo de queda descia no meio da cozinha).
+  const pecas = (model.terminais ?? []).filter((x) => x.levelId === T || x.levelId === S).map((x) => x.at);
+  const moveis = (model.componentes ?? []).filter((x) => x.levelId === T || x.levelId === S).map((x) => contornoDoComponente(x));
+  const cobrePeca = (ring: Point[]) => {
+    if (pecas.some((p) => pointInPolygon(ring, p))) return true;
+    const c = centroDoAnel(ring) as Point;
+    return moveis.some((m) => pointInPolygon(m, c) || ring.some((q) => pointInPolygon(m, q)) || m.some((q) => pointInPolygon(ring, q)));
+  };
+  let melhor: { ring: Point[]; custo: number; noTerreo: string | null } | null = null;
+  for (const exigente of [true, false]) {
+    if (melhor) break;
     for (let i = 0; i < anel.length; i++) {
       const a = anel[i];
       const b = anel[(i + 1) % anel.length];
@@ -747,7 +824,7 @@ export function shaftsDoSobrado(model: BlueprintModel, T: ObjectId, S: ObjectId,
       // A normal para DENTRO do banheiro.
       const meio = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       let n = { x: -u.y, y: u.x };
-      if (!pointInPolygon(anel, { x: meio.x + n.x * 50, y: meio.y + n.y * 50 })) n = { x: u.y, y: -u.x };
+      if (!pointInPolygon(anel as Point[], { x: meio.x + n.x * 50, y: meio.y + n.y * 50 } as Point)) n = { x: u.y, y: -u.x };
       const wS = paredeSobOPonto(model, S, meio, 0, true);
       if (!wS) continue;
       const recuo = wS.thicknessMm / 2;
@@ -756,27 +833,114 @@ export function shaftsDoSobrado(model: BlueprintModel, T: ObjectId, S: ObjectId,
         const p1 = { x: a.x + u.x * (t + ladoMm), y: a.y + u.y * (t + ladoMm) };
         const pm = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
         // Parede do térreo embaixo em toda a face, e nenhuma porta ou janela no trecho — nos dois pavimentos.
-        if (![p0, pm, p1].every((q) => paredeSobOPonto(model, T, q, 0, true))) continue;
-        if (!paredeSobOPonto(model, T, pm, ladoMm / 2) || !paredeSobOPonto(model, S, pm, ladoMm / 2)) continue;
+        if (exigente && ![p0, pm, p1].every((q) => paredeSobOPonto(model, T, q, 0, true))) continue;
+        if ((exigente && !paredeSobOPonto(model, T, pm, ladoMm / 2)) || !paredeSobOPonto(model, S, pm, ladoMm / 2)) continue;
         const ring = [
           { x: p0.x + n.x * recuo, y: p0.y + n.y * recuo },
           { x: p1.x + n.x * recuo, y: p1.y + n.y * recuo },
           { x: p1.x + n.x * (recuo + ladoMm), y: p1.y + n.y * (recuo + ladoMm) },
           { x: p0.x + n.x * (recuo + ladoMm), y: p0.y + n.y * (recuo + ladoMm) },
         ].map((q) => point(Math.round(q.x), Math.round(q.y)));
-        const c = centroDe(ring);
-        if (!ring.every((q) => pointInPolygon(anel, q) || Math.hypot(q.x - c.x, q.y - c.y) < 1)) continue;
-        if (nucleo && (ring.some((q) => pointInPolygon(nucleo, q)) || pointInPolygon(nucleo, c))) continue;
+        const c = centroDoAnel(ring);
+        if (!ring.every((q) => pointInPolygon(anel as Point[], q) || Math.hypot(q.x - c.x, q.y - c.y) < 1)) continue;
+        if (nucleo && (ring.some((q) => pointInPolygon(nucleo, q)) || pointInPolygon(nucleo, c as Point))) continue;
         if (pilares.some((x) => Math.hypot(x.pontos[0].x - c.x, x.pontos[0].y - c.y) < ladoMm / 2 + Math.max(x.larguraMm, x.profundidadeMm) / 2 + 30)) continue;
-        const embaixo = model.spaces.find((x) => x.levelId === T && pointInPolygon(x.ring, c)) ?? null;
-        const pref = embaixo ? PREFERENCIA_DO_SHAFT_NO_TERREO.indexOf(usoDoNome(embaixo.name) ?? '') : -1;
-        const custo = (pref < 0 ? 50 : pref * 5) + Math.hypot(c.x - cb.x, c.y - cb.y) / 1000;
-        if (!melhor || custo < melhor.custo) melhor = { ring, custo, noTerreo: embaixo?.name ?? null };
+        // Não em cima de outro shaft.
+        if (shafts.some((sh) => pointInPolygon(sh.ring, c as Point) || ring.some((q) => pointInPolygon(sh.ring, q)))) continue;
+        if (cobrePeca(ring)) continue;
+        const embaixo = model.spaces.find((x) => x.levelId === T && pointInPolygon(x.ring, c as Point)) ?? null;
+        // Na 2ª passada, o shaft é caixa no cômodo de baixo: todo o anel dentro dele, e ele não é de permanência.
+        if (!exigente && (!embaixo || !USOS_QUE_ACEITAM_CAIXA_DE_SHAFT.has(usoDoNome(embaixo.name) ?? '') || !ring.every((q) => pointInPolygon(embaixo.ring, q)))) continue;
+        const k = custo(c, embaixo);
+        if (!melhor || k < melhor.custo) melhor = { ring, custo: k, noTerreo: embaixo?.name ?? null };
       }
     }
-    if (melhor) saida.push({ ring: melhor.ring, banheiro: ban.name ?? 'Banheiro', noTerreo: melhor.noTerreo });
   }
-  return saida;
+  return melhor;
+}
+
+/**
+ * F14c: o shaft JUNTO DAS PEÇAS de um banheiro de cima — o mais perto de `alvo` (o centro das peças que despejam
+ * nele). O shaft do F12c nasce antes do mobiliário e vai para a ponta preferida do banheiro; no banheiro comprido (o
+ * da suíte, 6,5 × 1,4 m) as peças ficavam a 5 m dele. `null` = sem lugar.
+ */
+export function shaftJuntoDasPecas(model: BlueprintModel, T: ObjectId, S: ObjectId, banheiro: readonly Point[], alvo: { x: number; y: number }, nucleo: Point[] | null, ladoMm = 400): ShaftDoSobrado | null {
+  const melhor = lugarDoShaft(model, T, S, banheiro, nucleo, ladoMm, (c) => Math.hypot(c.x - alvo.x, c.y - alvo.y));
+  return melhor ? { ring: melhor.ring, banheiro: '', noTerreo: melhor.noTerreo } : null;
+}
+
+/**
+ * F14c: as ÁREAS MOLHADAS de um grupo num banheiro — `zonaMolhadaDoBanheiro`, mas com as peças em volta do shaft
+ * repartidas pela FACE dele que cada uma enxerga (a de maior afastamento): uma área por face, cada uma parando nela.
+ * No banheiro da suíte do sobrado a 30°, o vaso e o lavatório ficam de um lado e a caixa sifonada de outro, em "L":
+ * com uma área só, o shaft ficava dentro dela e a água de baixo não chegava às colunas; assim, as faces sem peça
+ * ficam fora do rebaixo.
+ */
+export function zonasMolhadasDoBanheiro(
+  banheiro: readonly Point[],
+  pontos: readonly { x: number; y: number }[],
+  margemMm: number,
+  shaft: readonly Point[] | null,
+  caminho: readonly { x: number; y: number }[] = [],
+): Point[][] {
+  const uma = () => {
+    const z = zonaMolhadaDoBanheiro(banheiro, pontos, margemMm, shaft ? [shaft] : [], caminho);
+    return z ? [z] : [];
+  };
+  const b = anelLimpo(banheiro as Point[]);
+  if (!shaft || b.length < 3 || pontos.length < 2) return uma();
+  const L = Math.hypot(b[1].x - b[0].x, b[1].y - b[0].y) || 1;
+  const u = { x: (b[1].x - b[0].x) / L, y: (b[1].y - b[0].y) / L };
+  const n = { x: -u.y, y: u.x };
+  const em = (p: { x: number; y: number }) => ({ s: p.x * u.x + p.y * u.y, t: p.x * n.x + p.y * n.y });
+  const es = shaft.map(em);
+  const [a0, a1] = [Math.min(...es.map((q) => q.s)), Math.max(...es.map((q) => q.s))];
+  const [b0, b1] = [Math.min(...es.map((q) => q.t)), Math.max(...es.map((q) => q.t))];
+  /** A face que o ponto enxerga (0: antes em s, 1: depois em s, 2: antes em t, 3: depois em t), ou −1 (dentro). */
+  const face = (p: { x: number; y: number }) => {
+    const q = em(p);
+    const afast = [a0 - q.s, q.s - a1, b0 - q.t, q.t - b1];
+    const k = afast.indexOf(Math.max(...afast));
+    return afast[k] >= 0 ? k : -1;
+  };
+  const fora = pontos.filter((p) => face(p) >= 0);
+  const faces = [...new Set(fora.map(face))];
+  if (faces.length <= 1) return uma();
+  const zonas: Point[][] = [];
+  for (const f of faces.sort()) {
+    const z = zonaMolhadaDoBanheiro(banheiro, fora.filter((p) => face(p) === f), margemMm, [shaft], caminho.filter((p) => face(p) === f));
+    if (z) zonas.push(z);
+  }
+  return zonas;
+}
+
+/**
+ * F14c: o shaft que atende um grupo de peças de cima (o banheiro) — decisão do usuário: *"um tubo de queda por
+ * banheiro de cima, no shaft colado nele"*. Vale o shaft que já existe DENTRO do banheiro (ou colado nele: um canto a
+ * até 5 cm do contorno) a até `ateMm` do centro das peças; senão, um novo junto delas (`novo`). Antes valia qualquer
+ * shaft a até 2 m — o de outro banheiro, do outro lado da parede, e o esgoto corria fora da laje rebaixada, no forro de
+ * baixo (sobrado a 30°: 2,4 m). A previsão da laje rebaixada e o passo do shaft chamam esta mesma função.
+ */
+export function shaftDoGrupo(
+  model: BlueprintModel,
+  T: ObjectId,
+  S: ObjectId,
+  banheiro: readonly Point[],
+  alvo: { x: number; y: number },
+  nucleo: Point[] | null,
+  ladoMm: number,
+  ateMm: number,
+): { ring: Point[]; novo: boolean; noTerreo: string | null } | null {
+  const doBanheiro = (n: { ring: Point[] }) =>
+    n.ring.some((q) => pointInPolygon(banheiro as Point[], q) || banheiro.some((b, i) => distanciaAoLado(q, banheiro[(i + banheiro.length - 1) % banheiro.length], b) <= 50));
+  const existente = (model.nucleos ?? [])
+    .filter((n) => n.tipo === 'SHAFT' && doBanheiro(n))
+    .map((n) => ({ n, d: Math.hypot(centroDoAnel(n.ring).x - alvo.x, centroDoAnel(n.ring).y - alvo.y) }))
+    .filter((x) => x.d <= ateMm)
+    .sort((a, b) => a.d - b.d)[0];
+  if (existente) return { ring: existente.n.ring, novo: false, noTerreo: null };
+  const sh = shaftJuntoDasPecas(model, T, S, banheiro, alvo, nucleo, ladoMm);
+  return sh ? { ring: sh.ring, novo: true, noTerreo: sh.noTerreo } : null;
 }
 
 /**
@@ -805,3 +969,184 @@ export function prumadasPeloMeioDoComodo(model: BlueprintModel, minimoMm = 1500)
   }
   return saida;
 }
+
+// ─── F14c: a laje rebaixada sob os banheiros de cima ─────────────────────────────────────────────────────────────
+
+/** O anel sem pontas repetidas nem vértices colineares, no sentido anti-horário. */
+function anelLimpo(anel: readonly Point[]): Point[] {
+  let r = semEspiculas(anel).map((p) => ({ x: p.x, y: p.y })) as Point[];
+  for (let mudou = true; mudou && r.length > 3; ) {
+    mudou = false;
+    for (let i = 0; i < r.length && r.length > 3; i++) {
+      const a = r[(i + r.length - 1) % r.length];
+      const b = r[i];
+      const c = r[(i + 1) % r.length];
+      const L = Math.hypot(c.x - a.x, c.y - a.y);
+      if (L < 1 || Math.abs((c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x)) / L <= 2) {
+        r.splice(i, 1);
+        mudou = true;
+        break;
+      }
+    }
+  }
+  if (signedArea(r) < 0) r = r.reverse();
+  return r;
+}
+
+/** O polígono recortado pelo semiplano à ESQUERDA de a→b (`esquerda`) ou à direita (Sutherland–Hodgman). */
+function recortarNoSemiplano(poli: readonly Point[], a: Point, b: Point, esquerda: boolean): Point[] {
+  const lado = (p: Point) => ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) * (esquerda ? 1 : -1);
+  const saida: Point[] = [];
+  for (let i = 0; i < poli.length; i++) {
+    const p = poli[i];
+    const q = poli[(i + 1) % poli.length];
+    const lp = lado(p);
+    const lq = lado(q);
+    if (lp >= 0) saida.push(p);
+    if ((lp >= 0) !== (lq >= 0)) {
+      const t = lp / (lp - lq);
+      saida.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t } as Point);
+    }
+  }
+  return saida;
+}
+
+/** O polígono no inteiro do mm, sem repetidos; `null` se sobrar menos que uma faixa útil. */
+function pecaValida(poli: readonly Point[], areaMinimaMm2: number): Point[] | null {
+  const r: Point[] = [];
+  for (const p of poli) {
+    const q = point(Math.round(p.x), Math.round(p.y));
+    if (!r.length || r[r.length - 1].x !== q.x || r[r.length - 1].y !== q.y) r.push(q);
+  }
+  while (r.length > 1 && r[0].x === r[r.length - 1].x && r[0].y === r[r.length - 1].y) r.pop();
+  if (r.length < 3) return null;
+  const limpo = anelLimpo(r);
+  return limpo.length >= 3 && Math.abs(signedArea(limpo)) >= areaMinimaMm2 ? limpo : null;
+}
+
+/** Abaixo disto a sobra da laje recortada some (a faixa debaixo da parede), mm². */
+const AREA_MINIMA_DA_PECA_DE_LAJE_MM2 = 100_000;
+
+/**
+ * F14c (decisão do usuário, 16/10/2026: "laje rebaixada"): as lajes do térreo (o piso de cima) recortadas em volta de
+ * cada banheiro de cima — a peça sob o banheiro desce `rebaixoMm` (o esgoto dele corre no enchimento do piso até o
+ * tubo de queda, fora do forro do térreo), o resto continua no nível. Os banheiros são convexos (retângulos do
+ * gerador): a laje fora de cada um sai em até 4 peças sem sobreposição (a de cada lado do banheiro), a de dentro é a
+ * rebaixada. As bordas do rebaixo ficam sob as paredes do banheiro (viga ou parede do térreo embaixo — F12b).
+ */
+export function lajesComRebaixo(cmds: readonly Command[], levelId: ObjectId, banheiros: readonly (readonly Point[])[], rebaixoMm: number): { comandos: Command[]; rebaixadas: number } {
+  if (rebaixoMm <= 0 || banheiros.length === 0) return { comandos: [...cmds], rebaixadas: 0 };
+  const convexos = banheiros.map((b) => anelLimpo(b as Point[])).filter((b) => b.length >= 3 && b.every((p, i) => {
+    const a = b[(i + b.length - 1) % b.length];
+    const c = b[(i + 1) % b.length];
+    return (p.x - a.x) * (c.y - p.y) - (p.y - a.y) * (c.x - p.x) >= 0;
+  }));
+  const saida: Command[] = [];
+  let rebaixadas = 0;
+  for (const c of cmds) {
+    const laje = c as Extract<Command, { type: 'AddStructural' }>;
+    if (c.type !== 'AddStructural' || laje.kind !== 'LAJE' || laje.levelId !== levelId) {
+      saida.push(c);
+      continue;
+    }
+    let pecas: { anel: Point[]; rebaixada: boolean }[] = [{ anel: anelLimpo(laje.pontos as Point[]), rebaixada: false }];
+    for (const b of convexos) {
+      const novas: typeof pecas = [];
+      for (const p of pecas) {
+        if (p.rebaixada) {
+          novas.push(p);
+          continue;
+        }
+        let dentro: Point[] = p.anel;
+        for (let i = 0; i < b.length && dentro.length >= 3; i++) dentro = recortarNoSemiplano(dentro, b[i], b[(i + 1) % b.length], true);
+        const dentroValida = dentro.length >= 3 ? pecaValida(dentro, AREA_MINIMA_DA_PECA_DE_LAJE_MM2) : null;
+        if (!dentroValida) {
+          novas.push(p);
+          continue;
+        }
+        // Fora do banheiro: à direita do lado i e à esquerda dos anteriores.
+        for (let i = 0; i < b.length; i++) {
+          let fora: Point[] = recortarNoSemiplano(p.anel, b[i], b[(i + 1) % b.length], false);
+          for (let j = 0; j < i && fora.length >= 3; j++) fora = recortarNoSemiplano(fora, b[j], b[(j + 1) % b.length], true);
+          const v = fora.length >= 3 ? pecaValida(fora, AREA_MINIMA_DA_PECA_DE_LAJE_MM2) : null;
+          if (v) novas.push({ anel: v, rebaixada: false });
+        }
+        novas.push({ anel: dentroValida, rebaixada: true });
+      }
+      pecas = novas;
+    }
+    if (pecas.length === 1 && !pecas[0].rebaixada) {
+      saida.push(c);
+      continue;
+    }
+    pecas.forEach((p, k) => {
+      if (p.rebaixada) rebaixadas++;
+      saida.push({
+        ...laje,
+        pontos: p.anel.map((q) => ({ x: q.x, y: q.y })),
+        baseMm: p.rebaixada ? laje.baseMm - rebaixoMm : laje.baseMm,
+        rotulo: laje.rotulo ? `${laje.rotulo}${p.rebaixada ? 'r' : ''}${String.fromCharCode(97 + k)}` : laje.rotulo,
+      } as Command);
+    });
+  }
+  return { comandos: saida, rebaixadas };
+}
+
+/**
+ * F14c: a ÁREA MOLHADA de um banheiro de cima — o retângulo das peças (no quadro do próprio banheiro: a direção do 1º
+ * lado e a normal), aumentado de `margemMm` e recortado pelo banheiro (convexo). `null` se não sobra área.
+ *
+ * Com os `shafts` para onde o esgoto das peças corre, a área vai ATÉ A FACE de cada um, do lado das peças — o esgoto
+ * entra no shaft por ela — e para ali: o shaft fica fora da laje rebaixada, para a água do pavimento de baixo chegar
+ * às colunas dele pelo forro (com o shaft dentro, sob a laje rebaixada sobravam 3 cm de plenum e a água ia em reta).
+ * O shaft cercado pelas peças (nenhuma face com todas do mesmo lado) entra inteiro. `caminho`: pontos do esgoto até o
+ * shaft (a reta de cada peça ao tubo de queda, a parte dentro deste banheiro) — entram no retângulo, não na escolha da
+ * face; sem peça no banheiro (o esgoto do vizinho só passa por ele), valem como peças.
+ */
+export function zonaMolhadaDoBanheiro(
+  banheiro: readonly Point[],
+  pontos: readonly { x: number; y: number }[],
+  margemMm: number,
+  shafts: readonly (readonly Point[])[] = [],
+  caminho: readonly { x: number; y: number }[] = [],
+): Point[] | null {
+  const b = anelLimpo(banheiro as Point[]);
+  if (pontos.length === 0) [pontos, caminho] = [caminho, []];
+  if (b.length < 3 || pontos.length === 0) return null;
+  const L = Math.hypot(b[1].x - b[0].x, b[1].y - b[0].y) || 1;
+  const u = { x: (b[1].x - b[0].x) / L, y: (b[1].y - b[0].y) / L };
+  const n = { x: -u.y, y: u.x };
+  const em = (p: { x: number; y: number }) => ({ s: p.x * u.x + p.y * u.y, t: p.x * n.x + p.y * n.y });
+  const ss = pontos.map((p) => em(p).s);
+  const ts = pontos.map((p) => em(p).t);
+  const cs = [...ss, ...caminho.map((p) => em(p).s)];
+  const ct = [...ts, ...caminho.map((p) => em(p).t)];
+  let [s0, s1, t0, t1] = [Math.min(...cs) - margemMm, Math.max(...cs) + margemMm, Math.min(...ct) - margemMm, Math.max(...ct) + margemMm];
+  for (const sh of shafts) {
+    // A peça que caiu DENTRO do shaft (sai dele no lançamento) não conta na escolha da face.
+    const fora = pontos.filter((p) => !pointInPolygon(sh as Point[], p as Point));
+    const fs = (fora.length ? fora : pontos).map((p) => em(p));
+    const [ps0, ps1, pt0, pt1] = [Math.min(...fs.map((q) => q.s)), Math.max(...fs.map((q) => q.s)), Math.min(...fs.map((q) => q.t)), Math.max(...fs.map((q) => q.t))];
+    const es = sh.map((q) => em(q));
+    const [a0, a1] = [Math.min(...es.map((q) => q.s)), Math.max(...es.map((q) => q.s))];
+    const [b0, b1] = [Math.min(...es.map((q) => q.t)), Math.max(...es.map((q) => q.t))];
+    // A face do shaft que deixa TODAS as peças do outro lado: a área vai até ela e para.
+    if (ps1 <= a0) s1 = a0;
+    else if (ps0 >= a1) s0 = a1;
+    else if (pt1 <= b0) t1 = b0;
+    else if (pt0 >= b1) t0 = b1;
+    else {
+      [s0, s1, t0, t1] = [Math.min(s0, a0), Math.max(s1, a1), Math.min(t0, b0), Math.max(t1, b1)];
+      continue;
+    }
+    // E a área cobre a face inteira na outra direção (o esgoto entra no shaft em qualquer ponto dela).
+    if (ps1 <= a0 || ps0 >= a1) [t0, t1] = [Math.min(t0, b0), Math.max(t1, b1)];
+    else [s0, s1] = [Math.min(s0, a0), Math.max(s1, a1)];
+  }
+  const de = (s: number, t: number) => ({ x: s * u.x + t * n.x, y: s * u.y + t * n.y }) as Point;
+  let r: Point[] = [de(s0, t0), de(s1, t0), de(s1, t1), de(s0, t1)];
+  if (signedArea(r) < 0) r = r.reverse();
+  for (let i = 0; i < b.length && r.length >= 3; i++) r = recortarNoSemiplano(r, b[i], b[(i + 1) % b.length], true);
+  return r.length >= 3 ? pecaValida(r, AREA_MINIMA_DA_PECA_DE_LAJE_MM2) : null;
+}
+

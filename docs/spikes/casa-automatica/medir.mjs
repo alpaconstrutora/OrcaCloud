@@ -98,6 +98,7 @@ for (const graus of [0, 30]) {
   conferir(p.pressaoInsuficiente.fria === 0 && p.pressaoInsuficiente.quente === 0, `${t} pressão: nenhum ponto abaixo do mínimo (fria ${p.pressaoInsuficiente.fria}, quente ${p.pressaoInsuficiente.quente})${p.pressurizador ? ' — com pressurizador' : ''}`);
   // F14b: o forro em todo cômodo, o pé-direito livre de 2,50 m, e nenhum encontro entre as redes que correm nele.
   conferir(!!p.forro && p.forro.comodos > 0 && p.forro.peDireitoLivreMinimoMm >= 2500 && p.forro.encontros === 0, `${t} forro em ${p.forro?.comodos} cômodo(s), pé-direito livre mínimo ${p.forro?.peDireitoLivreMinimoMm} mm; ${p.forro?.encontros} encontro(s) entre eletroduto, linha e águas no forro`);
+  if (p.furos) console.log(`   furos previstos ${t}: ${p.furos.emViga} em viga (${p.furos.dispensa} dispensam, ${p.furos.verificar} a verificar), ${p.furos.emBaldrame} em baldrame, ${p.furos.emLaje} em laje`);
   conferir(p.conferido, `${t} a trava aprova: reaplicado no original dá os mesmos ids e o mesmo modelo`);
   console.log(`   pendências ${t}: ${p.pendencias.length ? p.pendencias.join(' | ') : 'nenhuma'}`);
   await page.screenshot({ path: path.join(saida, `casa-automatica-${graus}.png`) });
@@ -137,6 +138,9 @@ for (const graus of [0, 30]) {
   conferir(p.pressaoInsuficiente.fria === 0 && p.pressaoInsuficiente.quente === 0, `${t} pressão: nenhum ponto abaixo do mínimo (fria ${p.pressaoInsuficiente.fria}, quente ${p.pressaoInsuficiente.quente})${p.pressurizador ? ' — com pressurizador' : ''}`);
   // F14b: o forro em todo cômodo, o pé-direito livre de 2,50 m, e nenhum encontro entre as redes que correm nele.
   conferir(!!p.forro && p.forro.comodos > 0 && p.forro.peDireitoLivreMinimoMm >= 2500 && p.forro.encontros === 0, `${t} forro em ${p.forro?.comodos} cômodo(s), pé-direito livre mínimo ${p.forro?.peDireitoLivreMinimoMm} mm; ${p.forro?.encontros} encontro(s) entre eletroduto, linha e águas no forro`);
+  // F14c ("laje rebaixada"): o esgoto de cima corre no enchimento da laje rebaixada até o shaft — nada no forro de baixo.
+  conferir(p.rebaixo.lajes > 0 && p.rebaixo.esgotoForaMm === 0, `${t} laje rebaixada: ${p.rebaixo.lajes} peça(s); esgoto de cima fora dela ${p.rebaixo.esgotoForaMm} mm`);
+  if (p.furos) console.log(`   furos previstos ${t}: ${p.furos.emViga} em viga (${p.furos.dispensa} dispensam, ${p.furos.verificar} a verificar), ${p.furos.emBaldrame} em baldrame, ${p.furos.emLaje} em laje`);
   conferir(p.conferido, `${t} a trava aprova o lote dos dois pavimentos`);
   console.log(`   pendências ${t}: ${p.pendencias.length ? p.pendencias.join(' | ') : 'nenhuma'}`);
   await page.screenshot({ path: path.join(saida, `casa-sobrado-${graus}-terreo.png`) });

@@ -59,15 +59,25 @@ export function planejarAguaCompleta(model: BlueprintModel, hip: HipotesesDaAgua
     if (atual) aplicar(planejarPecasDaCaixa(m, atual, hip.alimentacao.dnMinimoMm).comandos);
   }
 
-  // 2. A rede de cada origem, com o ajuste de pressão.
-  const planos = planejarAguaDoModelo(m, hip.agua).map((p) => comAjusteDePressao(m, p, hip.pressao));
-  if (planos.length === 0) pendencias.push("Sem origem de água no desenho (caixa d'água ou aquecedor).");
-  const daRede = planos.flatMap((p) => {
-    if (p.comandos.length > 0) return p.comandos;
-    if (p.sugeridos === 0) return [];
-    const origem = (m.terminais ?? []).find((t) => t.id === p.origemId);
-    return origem ? comAjusteDePressao(m, relancarAgua(m, origem, hip.agua), hip.pressao).comandos : [];
-  });
+  // 2. A rede de cada origem, com o ajuste de pressão — EM SEQUÊNCIA, cada uma sobre o modelo com as de antes (a mesma
+  // ordem do lote: os ids batem). F14c: a pressão da QUENTE parte do que a fria entrega ao aquecedor; ajustada sobre o
+  // modelo sem a fria ("a rede fria não chega ao aquecedor"), o diâmetro dela nunca aumentava — no sobrado, o chuveiro
+  // de cima ficava abaixo do mínimo mesmo com o pressurizador e a caixa elevada.
+  const planosBrutos = planejarAguaDoModelo(m, hip.agua);
+  if (planosBrutos.length === 0) pendencias.push("Sem origem de água no desenho (caixa d'água ou aquecedor).");
+  const daRede: Command[] = [];
+  let mRede = m;
+  for (const bruto of planosBrutos) {
+    const p = comAjusteDePressao(mRede, bruto, hip.pressao);
+    let cs = p.comandos;
+    if (cs.length === 0 && p.sugeridos > 0) {
+      const origem = (mRede.terminais ?? []).find((t) => t.id === p.origemId);
+      cs = origem ? comAjusteDePressao(mRede, relancarAgua(mRede, origem, hip.agua), hip.pressao).comandos : [];
+    }
+    if (cs.length === 0) continue;
+    daRede.push(...cs);
+    mRede = applyBatch(mRede, cs).model;
+  }
   aplicar(daRede);
 
   // 3. O alimentador (o hidrômetro, se faltar, nasce na frente do lote).

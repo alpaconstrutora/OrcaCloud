@@ -29,6 +29,7 @@
  * isso, na planta com pilar em todo encontro, todo ramal que dobra uma esquina atravessa um pilar.
  */
 import type { Point, Wall } from './blueprintKernel';
+import { pointInPolygon } from './blueprintKernel';
 import { PENALIDADE_DO_ANEL_MM, anelDoPilar, custoComPilares, foraDoPilar, grafoEmVoltaDosAneis } from './blueprintObstaculosEstruturais';
 
 export type P2 = { x: number; y: number };
@@ -176,12 +177,33 @@ export function arvorePelasParedes(opts: {
   }
   // Raiz e pendentes: a projeção na parede mais próxima.
   const encaixar = (p: P2): P2 | null => {
-    const e = encaixarNaParede(p, opts.encaixarEm ? ordenadas.filter(opts.encaixarEm) : ordenadas, raioDeEncaixeMm);
+    const elegiveis = opts.encaixarEm ? ordenadas.filter(opts.encaixarEm) : ordenadas;
+    const e = encaixarNaParede(p, elegiveis, raioDeEncaixeMm);
     if (!e) return null;
     // E5.5: a descida até o ponto não fica dentro de pilar — escorrega pela parede.
     // F8b: com anel, escorrega para fora do ANEL (o grafo não tem nó dentro dele).
-    const q = obstaculos.length > 0 ? foraDoPilar(e.q, e.parede, aneis.length > 0 ? aneis : obstaculos) : e.q;
-    pendurar(e.parede, q);
+    const pegadas = aneis.length > 0 ? aneis : obstaculos;
+    let q = obstaculos.length > 0 ? foraDoPilar(e.q, e.parede, pegadas) : e.q;
+    let parede = e.parede;
+    // F14c: a parede inteira dentro do obstáculo (o lado do anel do forro todo sob a laje rebaixada do banheiro de
+    // cima) — o ponto ficava preso nele, sem aresta, e a árvore ligava em reta: as outras paredes ao alcance, da mais
+    // perto à mais longe, até uma em que ele saia.
+    const dentro = (x: P2) => pegadas.some((g) => pointInPolygon(g, x as Point));
+    if (obstaculos.length > 0 && dentro(q)) {
+      const outras = elegiveis
+        .filter((w) => w.id !== e.parede.id)
+        .map((w) => ({ w, r: projetar(p, w.a, w.b) }))
+        .filter((x) => x.r.d <= raioDeEncaixeMm)
+        .sort((a, b) => a.r.d - b.r.d);
+      for (const { w, r } of outras) {
+        const q2 = foraDoPilar(r.q, w, pegadas);
+        if (dentro(q2)) continue;
+        q = q2;
+        parede = w;
+        break;
+      }
+    }
+    pendurar(parede, q);
     return q;
   };
   const raiz = encaixar(opts.raiz);

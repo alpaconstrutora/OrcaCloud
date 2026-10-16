@@ -869,3 +869,19 @@ Proposto (1) apagar a palavra-chave pelo banco e (2) aviso na tela. Resposta do 
   abaixo de Palavras-chave com "Mover para Senha dos PDFs" — testes `emailCaptureRegras` e
   `components/EmailCaptureSenderSheetSenhaNoCampoErrado` (3 casos).
 - [ ] Senha certa do PDF da Energisa — **depende do usuário** (o valor de 4 dígitos não abre o arquivo).
+
+## Pedido posterior — 16/10/2026 (vencimento pelo texto e fornecedor pelo remetente)
+
+> senha correta cadastrada
+
+A releitura com a senha abriu o boleto nº 1423 (linha de arrecadação de 48 dígitos, DV válido, R$ 169,30),
+mas sem vencimento nem CNPJ: o texto traz "Venc. 02/10/2026" (a linha de concessionária não carrega data)
+e não traz CNPJ. Propostas (1) vencimento pelo texto e (2) fornecedor do remetente como sugestão. Resposta:
+
+> sim
+
+- [x] `utils/boletoTexto.ts` › `findVencimentoNoTexto` ("Venc.", "Vencimento", "Data de vencimento"); só
+  quando a linha não deu a data; também no caminho "sem linha" — testes em `boletoTexto` (5 casos, dados sintéticos).
+- [x] `utils/emailCaptureRegras.ts` › `decidirDestino`: sem CNPJ confiável, `sugestaoSupplierId` = fornecedor
+  do remetente; com CNPJ de outro beneficiário, não — testes em `emailCaptureRegras` (4 casos).
+- [x] `email-capture-sync` › releitura também de boleto em revisão SEM VENCIMENTO, preenchendo só campos vazios.

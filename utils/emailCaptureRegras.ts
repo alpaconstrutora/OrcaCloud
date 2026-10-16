@@ -193,7 +193,12 @@ export function decidirDestino(e: EntradaDestino): Destino {
         motivos.push('O beneficiário do boleto não é o fornecedor deste remetente.');
     }
 
-    const sugestao = fornecedorUnico ?? null;
+    // Sem CNPJ identificado no PDF (o reaviso da Energisa não imprime CNPJ), o
+    // fornecedor do remetente monitorado vira SUGESTÃO — nunca supplier_id
+    // automático (o motivo do CNPJ continua mandando para revisão). Com CNPJ de
+    // OUTRO beneficiário não entra: aí é o alerta de beneficiário trocado.
+    const sugestao = fornecedorUnico
+        ?? (e.cnpjConfianca < CONFIANCA_MINIMA_CNPJ ? (e.remetente?.supplier_id ?? null) : null);
     if (motivos.length) {
         return { status: 'revisao', supplierId: null, sugestaoSupplierId: sugestao, motivos };
     }

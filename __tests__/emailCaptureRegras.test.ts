@@ -163,3 +163,38 @@ describe('pareceSenhaDePdf — senha digitada em Palavras-chave (16/10/2026)', (
         expect(pareceSenhaDePdf('')).toBe(false);
     });
 });
+
+describe('fornecedor do remetente como sugestão quando o PDF não tem CNPJ (16/10/2026)', () => {
+    const base = (): EntradaDestino => ({
+        modoPiloto: false, remetente: remetente({ supplier_id: 'sup-energisa' }),
+        auth: parseAuthenticationResults([GMAIL_OK]), dominioFrom: 'acme.com.br',
+        checksumValido: true, vencimento: '2026-10-02', fornecedoresDoCnpj: [], cnpjConfianca: 0,
+    });
+
+    it('sem CNPJ: sugere o fornecedor do remetente, mas continua em revisão e sem supplier_id', () => {
+        const d = decidirDestino(base());
+        expect(d.status).toBe('revisao');
+        expect(d.supplierId).toBeNull();
+        expect(d.sugestaoSupplierId).toBe('sup-energisa');
+        expect(d.motivos.join(' ')).toMatch(/CNPJ do beneficiário/);
+    });
+
+    it('CNPJ de OUTRO beneficiário: não sugere o do remetente (é alerta, não sugestão)', () => {
+        const e = base();
+        e.cnpjConfianca = 80;
+        e.fornecedoresDoCnpj = ['sup-outro'];
+        expect(decidirDestino(e).sugestaoSupplierId).toBe('sup-outro');
+    });
+
+    it('CNPJ confiável mas sem cadastro na org: sem sugestão', () => {
+        const e = base();
+        e.cnpjConfianca = 80;
+        expect(decidirDestino(e).sugestaoSupplierId).toBeNull();
+    });
+
+    it('remetente sem fornecedor vinculado: sem sugestão', () => {
+        const e = base();
+        e.remetente = remetente({ supplier_id: null });
+        expect(decidirDestino(e).sugestaoSupplierId).toBeNull();
+    });
+});

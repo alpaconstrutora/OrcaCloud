@@ -8,11 +8,12 @@ import { describe, it, expect } from 'vitest';
 import {
     extractFromPdfText,
     findBeneficiarioCnpj,
+    findVencimentoNoTexto,
     ERRO_SEM_TEXTO,
     ERRO_SEM_LINHA,
 } from '../utils/boletoTexto';
 import * as parser from '../utils/boletoParser';
-import { mod11, codigoBarrasToLinhaDigitavel } from '../utils/febrabanRules';
+import { mod10, mod11, codigoBarrasToLinhaDigitavel } from '../utils/febrabanRules';
 
 /** Linha digitável de 47 dígitos com DVs corretos, formatada como no PDF. */
 function linhaValida(valorCentavos = '0000010000') {
@@ -141,5 +142,50 @@ describe('boletoParser continua expondo as funções puras (call-sites antigos)'
         expect(typeof parser.findLinhaDigitavelInText).toBe('function');
         expect(typeof parser.buildExtractionFromLinhaDigitavel).toBe('function');
         expect(typeof parser.extractFromPdfFile).toBe('function');
+    });
+});
+
+/* Conta de concessionária (16/10/2026): a linha de arrecadação (começa com 8)
+   não carrega data — o reaviso da Energisa (boleto nº 1423) entrou sem
+   vencimento com "Venc. 02/10/2026" impresso. Dados SINTÉTICOS. */
+describe('vencimento impresso no texto (conta de concessionária)', () => {
+    /** Linha de arrecadação de 48 dígitos, segmentos com DV mod10 (3º dígito 6). */
+    function linhaArrecadacao(valorCentavos = '00000016930') {
+        const cb = '836' + '0' + valorCentavos + '0001' + '1234567890123456789012345'.slice(0, 25);
+        expect(cb.length).toBe(44);
+        return [0, 11, 22, 33].map(i => cb.slice(i, i + 11)).map(seg => seg + mod10(seg)).join('');
+    }
+
+    it('acha "Venc. dd/mm/aaaa", "Vencimento:" e "Data de vencimento"', () => {
+        expect(findVencimentoNoTexto('Mês/Ano: 9/2026 - Venc. 02/10/2026 - Valor R$169,30')).toBe('2026-10-02');
+        expect(findVencimentoNoTexto('Vencimento: 20/09/2026')).toBe('2026-09-20');
+        expect(findVencimentoNoTexto('Data de vencimento 10/11/2026')).toBe('2026-11-10');
+    });
+
+    it('ignora data sem rótulo de vencimento e data impossível', () => {
+        expect(findVencimentoNoTexto('Resolução ANEEL n° 1.000, de 07/12/2021')).toBeNull();
+        expect(findVencimentoNoTexto('Vencimento 31/13/2026')).toBeNull();
+    });
+
+    it('linha de arrecadação válida + "Venc." no texto → vencimento preenchido', () => {
+        const ld = linhaArrecadacao();
+        const t = textoDeBoleto(`Sua fatura está em aberto. Mês/Ano: 9/2026 - Venc. 02/10/2026 - Valor R$169,30 ${ld.slice(0, 12)} ${ld.slice(12, 24)} ${ld.slice(24, 36)} ${ld.slice(36)}`);
+        const r = extractFromPdfText(t, 1);
+        expect(r.erros).toHaveLength(0);
+        expect(r.campos.linha_digitavel.valor).toBe(ld);
+        expect(r.campos.valor.valor).toBe(169.3);
+        expect(r.campos.vencimento.valor).toBe('2026-10-02');
+    });
+
+    it('vencimento da LINHA (boleto bancário) não é trocado pelo do texto', () => {
+        const { formatada } = linhaValida();
+        const r = extractFromPdfText(textoDeBoleto(`${formatada}\nVencimento 01/01/2030`), 1);
+        expect(r.campos.vencimento.valor).not.toBe('2030-01-01');
+    });
+
+    it('sem linha digitável, o vencimento impresso ainda entra', () => {
+        const r = extractFromPdfText(textoDeBoleto('Fatura sem código de barras. Vencimento: 20/09/2026'), 1);
+        expect(r.erros).toEqual([ERRO_SEM_LINHA]);
+        expect(r.campos.vencimento.valor).toBe('2026-09-20');
     });
 });

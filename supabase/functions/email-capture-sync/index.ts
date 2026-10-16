@@ -651,11 +651,10 @@ async function reprocessarParados(
     for (const m of candidatas ?? []) {
         if (Date.now() > orcamento.prazo || orcamento.anexos <= 0) break;
         const agora = new Date().toISOString();
-        const { data: b } = await admin.from('boletos')
-            .select('id, numero, status, linha_digitavel, documento_path, supplier_id, sugestao_supplier_id')
-            .eq('id', m.boleto_id).maybeSingle();
+        const { data: b } = await admin.from('boletos').select('*').eq('id', m.boleto_id).maybeSingle();
         await admin.from('email_capture_messages').update({ reprocessado_em: agora, updated_at: agora }).eq('id', m.id);
-        if (!b || b.linha_digitavel || !['revisao', 'rascunho'].includes(b.status)) continue;
+        // Relê boleto em revisão/rascunho que ainda não tem linha OU vencimento.
+        if (!b || !['revisao', 'rascunho'].includes(b.status) || (b.linha_digitavel && b.vencimento)) continue;
 
         orcamento.anexos--;
         const { data: blob, error: dlErr } = await admin.storage.from(BUCKET).download(b.documento_path);
@@ -691,9 +690,15 @@ async function reprocessarParados(
         });
 
         const errosValidacao = [...(colunas.erros_validacao ?? []), ...destino.motivos.map(x => `Captura: ${x}`)];
+        // Só preenche o que está VAZIO no boleto: o que alguém já digitou na
+        // revisão (valor, vencimento, beneficiário…) nunca é sobrescrito.
+        const vazios = Object.fromEntries(Object.entries(colunas).filter(([k]) => {
+            const atual = (b as Record<string, unknown>)[k];
+            return atual === null || atual === undefined || atual === '';
+        }));
         const patch: Record<string, unknown> = {
-            ...colunas,
-            documento_paginas: aberto.paginas || null,
+            ...vazios,
+            documento_paginas: b.documento_paginas ?? (aberto.paginas || null),
             erros_validacao: errosValidacao.length ? errosValidacao : null,
             supplier_id: b.supplier_id ?? destino.supplierId,
             sugestao_supplier_id: b.sugestao_supplier_id ?? destino.sugestaoSupplierId,
@@ -710,7 +715,7 @@ async function reprocessarParados(
         await admin.from('boletos_auditoria').insert({
             boleto_id: b.id, organization_id: conta.organization_id, acao: 'reprocessamento', metodo: 'sistema',
             usuario_email: conta.usuario,
-            valor_depois: { motivo: 'PDF aberto com a senha cadastrada no remetente', linha_digitavel: colunas.linha_digitavel, valor: colunas.valor, vencimento: colunas.vencimento, motivos: destino.motivos },
+            valor_depois: { motivo: 'Releitura do PDF (senha cadastrada no remetente)', campos_preenchidos: Object.keys(vazios).filter(k => vazios[k] !== null && vazios[k] !== undefined), linha_digitavel: patch.linha_digitavel ?? b.linha_digitavel, valor: patch.valor ?? b.valor, vencimento: patch.vencimento ?? b.vencimento, motivos: destino.motivos },
         });
         await admin.from('email_capture_messages').update({ motivo: ['Lido de novo com a senha do PDF.', ...destino.motivos].join(' '), updated_at: agora }).eq('id', m.id);
         totais.reprocessados++;

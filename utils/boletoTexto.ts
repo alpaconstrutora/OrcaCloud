@@ -333,6 +333,27 @@ function limparNomeBeneficiario(candidato: string): string {
 }
 
 /**
+ * Vencimento impresso no texto ("Venc. 02/10/2026", "Vencimento: 20/09/2026",
+ * "Data de vencimento 10/11/2026"), em AAAA-MM-DD.
+ *
+ * Existe para conta de CONCESSIONÁRIA (linha de arrecadação, começa com 8): a
+ * linha não carrega data, e o 1º reaviso da Energisa lido pela captura
+ * (boleto nº 1423, 16/10/2026) entrou sem vencimento com "Venc. 02/10/2026"
+ * impresso. Só é usado quando a linha digitável não deu a data.
+ */
+export function findVencimentoNoTexto(text: string): string | null {
+    const re = /(?:\bVenc(?:imento|to)?\.?|\bData\s+de\s+vencimento)\s*[:\-–]?\s*(\d{2})\/(\d{2})\/(\d{4})/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+        const [, dd, mm, aaaa] = m;
+        const dia = Number(dd), mes = Number(mm);
+        if (mes < 1 || mes > 12 || dia < 1 || dia > 31) continue;
+        return `${aaaa}-${mm}-${dd}`;
+    }
+    return null;
+}
+
+/**
  * Constrói um ExtractionResult a partir de uma linha digitável já isolada.
  * Reutilizado tanto pelo fluxo de PDF quanto pelo manual.
  */
@@ -409,17 +430,27 @@ export function extractFromPdfText(
 
     const linha = findLinhaDigitavelInText(text, referenceDate);
     if (!linha) {
+        // Sem linha, a revisão ao menos já abre com o vencimento impresso.
+        const campos = emptyFields();
+        const vencTexto = findVencimentoNoTexto(text);
+        if (vencTexto) campos.vencimento = { valor: vencTexto, confidence: 60 };
         return {
             metodo: 'pdf_text',
             confidence_score: 0,
             engine_versao: ENGINE_VERSAO,
-            campos: emptyFields(),
+            campos,
             raw: { paginas, pdfText: text.slice(0, 500) },
             erros: [ERRO_SEM_LINHA],
         };
     }
 
     const base = buildExtractionFromLinhaDigitavel(linha, 'pdf_text', referenceDate);
+
+    // Linha sem data (arrecadação/concessionária): vencimento pelo texto impresso.
+    if (!base.campos.vencimento.valor) {
+        const vencTexto = findVencimentoNoTexto(text);
+        if (vencTexto) base.campos.vencimento = { valor: vencTexto, confidence: 70 };
+    }
 
     const cnpj = findBeneficiarioCnpj(text);
     if (cnpj) base.campos.beneficiario_cnpj = cnpj;

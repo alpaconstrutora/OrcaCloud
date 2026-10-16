@@ -501,7 +501,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['fluxo-p2p','supplies-solicitacoes','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','financial-boletos','contas-a-pagar','tributos-a-pagar','boletos-pagar','extrato-bancario','bank-reconciliation','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module', 'dividas-financiamentos'];
+  const financeiroViews = ['fluxo-financeiro','financial-dashboard','contas-a-receber','financial-boletos','contas-a-pagar','tributos-a-pagar','boletos-pagar','extrato-bancario','bank-reconciliation','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module', 'dividas-financiamentos'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const systemConfigViews = ['settings','master-data'];
@@ -539,6 +539,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'financial-dashboard', label: 'Dashboard financeiro', group: 'Financeiro', icon: DollarSign },
       { id: 'contas-a-pagar', label: 'Contas a pagar', group: 'Financeiro', icon: DollarSign },
       { id: 'project-financial', label: 'Financeiro da obra', group: 'Financeiro', icon: BarChart3 },
+      { id: 'fluxo-financeiro', label: 'Fluxo financeiro (Torre de Controle)', group: 'Financeiro', icon: Workflow },
       { id: 'contas-a-receber', label: 'Contas a receber', group: 'Financeiro', icon: TrendingUp },
       { id: 'boletos-pagar', label: 'Boletos a pagar', group: 'Financeiro', icon: Banknote },
       { id: 'dividas-financiamentos', label: 'Dívidas e financiamentos', group: 'Financeiro', icon: Landmark },
@@ -1129,6 +1130,7 @@ const Layout: React.FC<LayoutProps> = ({
                         <DropdownItem id="financial-approval" label="Aprovações" icon={Shield} />
 
                         <DropdownGroupLabel label="Análise" />
+                        <DropdownItem id="fluxo-financeiro" label="Fluxo Financeiro" icon={Workflow} />
                         <DropdownItem id="financial-dashboard" label="Dashboard" icon={LayoutDashboard} />
                         <DropdownItem id="fpa-module" label="FP&A" icon={Calculator} />
                         <DropdownItem id="financial-intelligence" label="Inteligência" icon={Brain} />

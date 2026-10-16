@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { originIdFromRef } from '../lib/receivableRef';
 import { empreendimentoService } from './empreendimentoService';
+import { processService } from './processService';
 import type { Receivable, ReceivableBusinessStatus, ReceivableEffectiveStatus, ReceivablePaymentType, InadimplenciaFaixa } from '../types/financial';
 
 /**
@@ -256,6 +257,10 @@ export const receivableService = {
             .update(updates)
             .eq('id', id);
         if (error) throw error;
+
+        // Costura Financeiro (plano 2026-10-16-torre-fluxo-financeiro, C.4).
+        // `triggerForFinancialTitle` não lança — a baixa já está gravada.
+        if (newStatus === 'RECEBIDO') await processService.triggerForFinancialTitle(id, 'receivable.settled');
     },
 
     /**
@@ -279,6 +284,8 @@ export const receivableService = {
             })
             .eq('id', id);
         if (error) throw error;
+
+        await processService.triggerForFinancialTitle(id, 'receivable.settled');
     },
 
     async create(

@@ -145,3 +145,21 @@ describe('p2pLayout — enquadrar', () => {
     expect(enquadrarDesenho({ w: 500, h: 400 }, { w: 700, h: 560 }, { min: 0.35, max: 2, legivel: 0.7 }).escala).toBeCloseTo(1.4);
   });
 });
+
+describe('p2pLayout — mapa de células por fluxo (16/10/2026, Torre do Financeiro)', () => {
+  it('aceita o mapa do fluxo; sem mapa usa o do P2P (comportamento antigo)', () => {
+    const celulas = { a: { col: 0, linha: 0 }, b: { col: 2, linha: 3 } };
+    const p = posicoesDosNos(['a', 'b'], celulas);
+    expect(p.b.x).toBeGreaterThan(p.a.x);
+    expect(p.b.y).toBeGreaterThan(p.a.y);
+    expect(posicoesDosNos(IDS)).toEqual(posicoesDosNos(IDS, undefined));
+  });
+
+  it('a linha de reserva fica abaixo da mais baixa DO MAPA usado, não numa linha fixa', () => {
+    const celulas = { a: { col: 0, linha: 0 }, b: { col: 1, linha: 3.5 } };
+    const p = posicoesDosNos(['a', 'b', 'inventado'], celulas);
+    expect(p.inventado.y).toBeGreaterThanOrEqual(p.b.y + p.b.h);
+    expect(sobrepoe(p.inventado, p.a)).toBe(false);
+    expect(sobrepoe(p.inventado, p.b)).toBe(false);
+  });
+});

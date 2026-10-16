@@ -1231,6 +1231,10 @@ export const bankReconciliationService = {
         } catch (e) {
             console.error('[bankReconciliationService] process trigger (paid) failed:', e);
         }
+        // Costura Financeiro (16/10/2026): baixa de título de qualquer origem,
+        // a pagar ou a receber — o resolvedor escolhe pela direção. O motor da
+        // Edge Function (CRON) não passa por aqui: lá não abre processo.
+        await processService.triggerSettlement(internalTxId);
 
         return data as { match_id: string; payment_date: string; adjustment_id: string | null };
     },
@@ -1264,6 +1268,7 @@ export const bankReconciliationService = {
             } catch (e) {
                 console.error('[bankReconciliationService] process trigger (paid) failed:', e);
             }
+            await processService.triggerSettlement(id);
         }
 
         return data as ReconcileGroupResult;

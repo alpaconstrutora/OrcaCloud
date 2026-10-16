@@ -404,6 +404,9 @@ export const processService = {
         clientId?: string;
         contractId?: string;
         purchaseOrderId?: string;
+        /** Título financeiro de origem (eventos `payable.*`/`receivable.*`/`boleto.*`, 16/10/2026). */
+        internalTransactionId?: string;
+        boletoId?: string;
     }): Promise<ProcessInstanceWithSteps> {
         const { data: template, error: tplErr } = await supabase
             .from('process_templates')
@@ -436,6 +439,12 @@ export const processService = {
                 client_id: opts.clientId ?? null,
                 contract_id: opts.contractId ?? null,
                 purchase_order_id: opts.purchaseOrderId ?? null,
+                // Só vão no INSERT quando existem: as colunas nasceram em
+                // `aplicar_20271016400000_processos_vinculo_titulo.sql`, e mandar
+                // `null` numa coluna que o banco ainda não tem derruba TODO
+                // processo (inclusive os do P2P) com PGRST204.
+                ...(opts.internalTransactionId ? { internal_transaction_id: opts.internalTransactionId } : {}),
+                ...(opts.boletoId ? { boleto_id: opts.boletoId } : {}),
                 due_at: opts.dueAt ?? null,
             })
             .select()
@@ -585,7 +594,10 @@ export const processService = {
     async triggerEvent(
         organizationId: string,
         eventKey: ProcessEventKey,
-        ctx: { title: string; purchaseOrderId?: string; supplierId?: string; projectId?: string; contractId?: string; clientId?: string },
+        ctx: {
+            title: string; purchaseOrderId?: string; supplierId?: string; projectId?: string; contractId?: string; clientId?: string;
+            internalTransactionId?: string; boletoId?: string;
+        },
     ): Promise<void> {
         const { data: templates, error } = await supabase
             .from('process_templates')
@@ -610,6 +622,20 @@ export const processService = {
                         .not('status', 'in', '(CONCLUIDO,CANCELADO)')
                         .maybeSingle();
                     if (existing) continue; // já existe instância ativa para este pedido
+                } else if (ctx.internalTransactionId || ctx.boletoId) {
+                    // Mesma idempotência, pelo título (ou boleto) — o título é
+                    // regravado PAGO por mais de um caminho (painel, conciliação).
+                    const [coluna, valor] = ctx.internalTransactionId
+                        ? ['internal_transaction_id', ctx.internalTransactionId]
+                        : ['boleto_id', ctx.boletoId!];
+                    const { data: existing } = await supabase
+                        .from('process_instances')
+                        .select('id')
+                        .eq('process_template_id', template.id)
+                        .eq(coluna, valor)
+                        .not('status', 'in', '(CONCLUIDO,CANCELADO)')
+                        .maybeSingle();
+                    if (existing) continue;
                 }
                 await this.startInstance({
                     organizationId,
@@ -620,6 +646,8 @@ export const processService = {
                     projectId: ctx.projectId,
                     contractId: ctx.contractId,
                     clientId: ctx.clientId,
+                    internalTransactionId: ctx.internalTransactionId,
+                    boletoId: ctx.boletoId,
                 });
             } catch (startErr) {
                 console.error('[processService] triggerEvent (startInstance):', startErr);
@@ -689,6 +717,99 @@ export const processService = {
             await this.triggerPurchaseOrderEvent(tx.purchase_order_id, eventKey, { titleSuffix: 'Pago' });
         } catch (e) {
             console.error('[processService] triggerForTransaction:', e);
+        }
+    },
+
+    // ── Costura Financeiro — gatilho de evento do título (16/10/2026) ───────
+    //
+    // Plano docs/planos/2026-10-16-torre-fluxo-financeiro.md, seção C. O
+    // `internal_transaction.paid` acima continua SÓ de pedido: torná-lo
+    // genérico faria os modelos já semeados em 3 organizações dispararem para
+    // toda folha e tributo pago. O Financeiro tem chaves próprias.
+
+    /**
+     * Dispara um evento financeiro A PARTIR DO TÍTULO, de qualquer origem.
+     * `payable.*` só segue para DEBIT, `receivable.*` só para CREDIT — direção
+     * errada é chamada errada, não processo. A organização é a DO TÍTULO; o
+     * título vira o vínculo e a chave de idempotência da instância. Best-effort:
+     * nunca lança — quem chama acabou de gravar uma baixa ou uma aprovação.
+     */
+    async triggerForFinancialTitle(
+        internalTransactionId: string,
+        eventKey: Extract<ProcessEventKey, 'payable.approved' | 'payable.settled' | 'receivable.settled'>,
+    ): Promise<void> {
+        try {
+            const { data: tx, error } = await supabase
+                .from('internal_transactions')
+                .select('id, direction, organization_id, project_id, supplier_id, description')
+                .eq('id', internalTransactionId)
+                .maybeSingle();
+            if (error || !tx) {
+                if (error) console.error('[processService] triggerForFinancialTitle (título):', error);
+                return;
+            }
+            const direcaoEsperada = eventKey.startsWith('receivable.') ? 'CREDIT' : 'DEBIT';
+            if (tx.direction !== direcaoEsperada || !tx.organization_id) return;
+            await this.triggerEvent(tx.organization_id, eventKey, {
+                title: tx.description || `Título ${String(tx.id).slice(0, 8)}`,
+                internalTransactionId: tx.id,
+                projectId: tx.project_id ?? undefined,
+                supplierId: tx.supplier_id ?? undefined,
+            });
+        } catch (e) {
+            console.error('[processService] triggerForFinancialTitle:', e);
+        }
+    },
+
+    /**
+     * O título acabou de ser baixado (painel, conciliação): `payable.settled`
+     * para DEBIT, `receivable.settled` para CREDIT. Uma leitura só para saber a
+     * direção — quem chama (a conciliação) não sabe de que lado está o título.
+     */
+    async triggerSettlement(internalTransactionId: string): Promise<void> {
+        try {
+            const { data: tx, error } = await supabase
+                .from('internal_transactions')
+                .select('direction')
+                .eq('id', internalTransactionId)
+                .maybeSingle();
+            if (error || !tx) {
+                if (error) console.error('[processService] triggerSettlement (título):', error);
+                return;
+            }
+            if (tx.direction === 'DEBIT') await this.triggerForFinancialTitle(internalTransactionId, 'payable.settled');
+            else if (tx.direction === 'CREDIT') await this.triggerForFinancialTitle(internalTransactionId, 'receivable.settled');
+        } catch (e) {
+            console.error('[processService] triggerSettlement:', e);
+        }
+    },
+
+    /**
+     * Boleto aprovado: o título acabou de nascer dele. Organização e
+     * fornecedor vêm do título (a mesma linha que o boleto acabou de criar);
+     * o vínculo guarda os dois — boleto e título. Best-effort.
+     */
+    async triggerBoletoApproved(boletoId: string, internalTransactionId: string): Promise<void> {
+        try {
+            const { data: tx, error } = await supabase
+                .from('internal_transactions')
+                .select('id, organization_id, project_id, supplier_id, description')
+                .eq('id', internalTransactionId)
+                .maybeSingle();
+            if (error || !tx) {
+                if (error) console.error('[processService] triggerBoletoApproved (título):', error);
+                return;
+            }
+            if (!tx.organization_id) return;
+            await this.triggerEvent(tx.organization_id, 'boleto.approved', {
+                title: tx.description ? `Boleto — ${tx.description}` : `Boleto ${boletoId.slice(0, 8)}`,
+                internalTransactionId: tx.id,
+                boletoId,
+                projectId: tx.project_id ?? undefined,
+                supplierId: tx.supplier_id ?? undefined,
+            });
+        } catch (e) {
+            console.error('[processService] triggerBoletoApproved:', e);
         }
     },
 

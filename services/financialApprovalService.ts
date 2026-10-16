@@ -5,6 +5,7 @@ import type {
     ApprovalQueueItem,
 } from '../types/financial';
 import { approvalService } from './approvalService';
+import { processService } from './processService';
 
 export const financialApprovalService = {
 
@@ -91,10 +92,15 @@ export const financialApprovalService = {
     async submitForApproval(transactionId: string, _organizationId?: string): Promise<void> {
         // `semFaixa: 'liberar'` — título abaixo do piso da alçada não entra na
         // fila. Ver a explicação em `approvalService.submit`.
-        await approvalService.submit('transaction', transactionId, {
+        const row = await approvalService.submit('transaction', transactionId, {
             business_status: 'AGUARDANDO_APROVACAO',
             updated_at:      new Date().toISOString(),
         }, { semFaixa: 'liberar' });
+        // Abaixo do piso o título nasce liberado: para o fluxo é "aprovado na
+        // alçada" do mesmo jeito (plano 2026-10-16-torre-fluxo-financeiro, C.4).
+        if (row?.approval_status === 'APROVADO') {
+            await processService.triggerForFinancialTitle(transactionId, 'payable.approved');
+        }
     },
 
     async approve(
@@ -104,10 +110,14 @@ export const financialApprovalService = {
         config: { level1_label: string; level2_label?: string },
         notes?: string,
     ): Promise<void> {
-        await approvalService.approve(
+        const row = await approvalService.approve(
             'transaction', transactionId, level, approvedBy, config, notes,
             { business_status: 'APROVADO', updated_at: new Date().toISOString() },
         );
+        // Só quando a alçada FECHA (nível 1 de 2 ainda é PENDENTE).
+        if (row?.approval_status === 'APROVADO') {
+            await processService.triggerForFinancialTitle(transactionId, 'payable.approved');
+        }
     },
 
     async reject(

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { Plus, Minus, Maximize2 } from 'lucide-react';
 import type { P2PEdge, P2PGroup, P2PStage, P2PTemplateAtivo } from '../../services/p2pFlowService';
-import { posicoesDosNos, caixaDoGrupo, tamanhoDoDesenho, caminhoOrtogonal } from '../../utils/p2pLayout';
+import { posicoesDosNos, caixaDoGrupo, tamanhoDoDesenho, caminhoOrtogonal, type Celulas } from '../../utils/p2pLayout';
 import { usePanZoom } from '../../hooks/usePanZoom';
 import { P2PNodeCard } from './P2PNodeCard';
 import { P2PEdges } from './P2PEdges';
@@ -22,6 +22,7 @@ const ESCALA_LEGIVEL = 0.7;
 export function P2PCanvas({
   stages, edges, groups, selecao, modoEscolher, onCancelarModo,
   onSelectNode, onOpenNode, onNavigate, onSelectEdge, onEscolherAresta, onNovoGatilho, onEditarTemplate,
+  celulas, icones,
 }: {
   stages: P2PStage[];
   edges: P2PEdge[];
@@ -36,8 +37,11 @@ export function P2PCanvas({
   onEscolherAresta: (edge: P2PEdge) => void;
   onNovoGatilho: (edge: P2PEdge) => void;
   onEditarTemplate: (tpl: P2PTemplateAtivo, edge: P2PEdge) => void;
+  /** Posição de cada etapa (coluna × linha) — sem ela, o arranjo do P2P. */
+  celulas?: Celulas;
+  icones?: Record<string, React.ElementType>;
 }) {
-  const posicoes = useMemo(() => posicoesDosNos(stages.map(s => s.id)), [stages]);
+  const posicoes = useMemo(() => posicoesDosNos(stages.map(s => s.id), celulas), [stages, celulas]);
   const tamanho = useMemo(() => tamanhoDoDesenho(posicoes), [posicoes]);
   const { vista, ref, zoomIn, zoomOut, enquadrar, onPointerDown, onPointerMove, onPointerUp, min, max } = usePanZoom<HTMLDivElement>();
 
@@ -141,6 +145,7 @@ export function P2PCanvas({
             selected={noSelecionado === stage.id}
             onOpen={() => { onSelectNode(stage.id); onOpenNode(stage.id); }}
             onNavigate={onNavigate}
+            icones={icones}
           />
         ))}
       </div>

@@ -9,8 +9,6 @@ import { descreverCondicao } from '../../utils/processCondition';
 import { STAGE_ICON } from './P2PNodeCard';
 import type { P2PSelecao } from './P2PCanvas';
 
-const EVENT_KEYS = Object.keys(PROCESS_EVENT_LABEL) as ProcessEventKey[];
-
 /** Título de seção da biblioteca — rótulo em caixa alta (como "TRIGGER / CONDITIONS" do desenho de referência); não é status. */
 const TituloDeSecao: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{children}</h3>
@@ -30,7 +28,7 @@ interface CondicaoListada {
  * transição que ele conduz; "Novo gatilho" põe o canvas no modo de escolher a
  * transição. As condições são carregadas só quando a seção abre.
  */
-export function P2PLibrary({ stages, edges, selecao, modoEscolher, onFocusNode, onSelectEdge, onNovoGatilho, onEditarTemplate }: {
+export function P2PLibrary({ stages, edges, selecao, modoEscolher, onFocusNode, onSelectEdge, onNovoGatilho, onEditarTemplate, icones = STAGE_ICON }: {
   stages: P2PStage[];
   edges: P2PEdge[];
   selecao: P2PSelecao;
@@ -39,7 +37,12 @@ export function P2PLibrary({ stages, edges, selecao, modoEscolher, onFocusNode, 
   onSelectEdge: (edge: P2PEdge) => void;
   onNovoGatilho: () => void;
   onEditarTemplate: (tpl: P2PTemplateAtivo, edge: P2PEdge) => void;
+  icones?: Record<string, React.ElementType>;
 }) {
+  // Só os eventos que alguma transição DESTE fluxo conduz, na ordem das
+  // arestas — o motor tem eventos de outros fluxos (P2P × Financeiro), e
+  // listá-los aqui ofereceria gatilho para transição que não está no desenho.
+  const eventKeys = [...new Set(edges.flatMap(e => e.eventKeys ?? []))] as ProcessEventKey[];
   const [condicoesAbertas, setCondicoesAbertas] = useState(false);
   const [condicoes, setCondicoes] = useState<CondicaoListada[] | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -75,7 +78,7 @@ export function P2PLibrary({ stages, edges, selecao, modoEscolher, onFocusNode, 
         <TituloDeSecao>Etapas</TituloDeSecao>
         <ul className="space-y-0.5">
           {stages.map(s => {
-            const Icon = STAGE_ICON[s.id] ?? Workflow;
+            const Icon = icones[s.id] ?? Workflow;
             const ativa = selecao?.tipo === 'no' && selecao.id === s.id;
             return (
               <li key={s.id}>
@@ -98,7 +101,7 @@ export function P2PLibrary({ stages, edges, selecao, modoEscolher, onFocusNode, 
       <section className="space-y-1.5">
         <TituloDeSecao>Gatilhos</TituloDeSecao>
         <ul className="space-y-0.5">
-          {EVENT_KEYS.map(key => {
+          {eventKeys.map(key => {
             const edge = edges.find(e => e.eventKeys?.includes(key));
             const modelosDoEvento = (edge?.templates ?? []).filter(t => t.eventKey === key);
             const ativa = !!edge && selecao?.tipo === 'aresta' && selecao.id === edge.id;

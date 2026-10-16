@@ -31,14 +31,16 @@ export const STAGE_ICON: Record<string, React.ElementType> = {
  * `inboundNote` NÃO aparece aqui de propósito: a nota é da transição e mora
  * no rótulo da aresta e no painel de detalhes.
  */
-export function P2PNodeCard({ stage, pos, selected, onOpen, onNavigate }: {
+export function P2PNodeCard({ stage, pos, selected, onOpen, onNavigate, icones = STAGE_ICON }: {
   stage: P2PStage;
   pos?: Ret;
   selected: boolean;
   onOpen: () => void;
   onNavigate?: (view: string) => void;
+  /** Ícone por id de etapa — cada fluxo traz o seu; sem ele, os do P2P. */
+  icones?: Record<string, React.ElementType>;
 }) {
-  const Icon = STAGE_ICON[stage.id] ?? Workflow;
+  const Icon = icones[stage.id] ?? Workflow;
   const seam = SEAM_CFG[stage.inboundSeam];
   const processos = stage.processes;
 
@@ -50,9 +52,13 @@ export function P2PNodeCard({ stage, pos, selected, onOpen, onNavigate }: {
         ${selected ? 'ring-2 ring-blue-400 border-blue-300' : seam.border}`}
       style={pos ? { position: 'absolute', left: pos.x, top: pos.y, width: pos.w, height: pos.h } : undefined}
     >
+      {/* O dono da etapa NÃO vai no cabeçalho (16/10/2026): ao lado do nome ele
+          ocupava até 40% da linha e truncava o nome da etapa. Fica no `title`,
+          no drawer (descrição) e no painel de métricas. */}
       <button
         type="button"
         onClick={onOpen}
+        title={`${stage.label} · ${stage.owner}`}
         className="flex-1 min-h-0 text-left px-3 pt-2.5 pb-1.5 rounded-t-[10px] hover:bg-slate-50 transition-colors"
       >
         <div className="flex items-center gap-2">
@@ -60,7 +66,6 @@ export function P2PNodeCard({ stage, pos, selected, onOpen, onNavigate }: {
             <Icon className="w-4 h-4" />
           </span>
           <span className="text-sm font-semibold text-gray-800 truncate">{stage.label}</span>
-          <span className="ml-auto text-xs text-gray-500 truncate shrink-0 max-w-[40%]" title={stage.owner}>{stage.owner}</span>
         </div>
 
         <dl className="mt-2 space-y-0.5">

@@ -138,6 +138,8 @@ export const payableService = {
             } catch (e) {
                 console.error('[payableService] process trigger (paid) failed:', e);
             }
+            // Costura Financeiro (16/10/2026): o mesmo título, de QUALQUER origem.
+            await processService.triggerForFinancialTitle(id, 'payable.settled');
         }
     },
 
@@ -171,6 +173,7 @@ export const payableService = {
         } catch (e) {
             console.error('[payableService] process trigger (paid, darBaixa) failed:', e);
         }
+        await processService.triggerForFinancialTitle(id, 'payable.settled');
     },
 
     async create(

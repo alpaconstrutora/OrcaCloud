@@ -117,6 +117,7 @@ const PortalCondominoAdmin  = React.lazy(() => import('./condominio/PortalCondom
 const InventoryModule       = React.lazy(() => import('./InventoryModule').then(m => ({ default: m.InventoryModule })));
 const ProcurementModule     = React.lazy(() => import('./ProcurementModule').then(m => ({ default: m.ProcurementModule })));
 const P2PFlowBoard          = React.lazy(() => import('./P2PFlowBoard').then(m => ({ default: m.P2PFlowBoard })));
+const FinanceiroFlowBoard   = React.lazy(() => import('./FinanceiroFlowBoard').then(m => ({ default: m.FinanceiroFlowBoard })));
 const PartnerPortal         = React.lazy(() => import('./partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 const PartnerWorkspaceManager = React.lazy(() => import('./partner/PartnerWorkspaceManager').then(m => ({ default: m.PartnerWorkspaceManager })));
 const SupplierPortalManager = React.lazy(() => import('./supplier/SupplierPortalManager').then(m => ({ default: m.SupplierPortalManager })));
@@ -627,6 +628,18 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <P2PFlowBoard
+            activeOrganizationId={activeOrganizationId}
+            onChangeView={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    // Torre de Controle do Financeiro — mesma página da P2P (ProcessFlowBoard),
+    // plano docs/planos/2026-10-16-torre-fluxo-financeiro.md.
+    case 'fluxo-financeiro':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <FinanceiroFlowBoard
             activeOrganizationId={activeOrganizationId}
             onChangeView={setActiveView}
           />

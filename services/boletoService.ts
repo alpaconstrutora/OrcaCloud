@@ -8,6 +8,7 @@ import { sha256File, extractFromPdfFile, buildExtractionFromLinhaDigitavel } fro
 import { colunasDaExtracao } from '../utils/boletoTexto';
 import { parseLinhaDigitavel, onlyDigits, nomeBanco, vencimentoPlausivel } from '../utils/febrabanRules';
 import { financialApprovalService } from './financialApprovalService';
+import { processService } from './processService';
 import { validateCpfCnpj } from '../lib/validators';
 import type {
     Boleto,
@@ -478,6 +479,8 @@ export const boletoService = {
      * O invoice é a entidade que aparece no contas a pagar existente.
      */
     async aprovarECriarInvoice(boletoId: string, organizationId: string, userEmail?: string): Promise<Boleto> {
+        /** Título que ESTA chamada criou — só ele dispara `boleto.approved` (a corrida perdida não). */
+        let tituloNascido: string | null = null;
         const { data: boletoRow, error: berr } = await supabase
             .from(TABLE)
             .select(BOLETO_COLUMNS)
@@ -676,6 +679,7 @@ export const boletoService = {
                pode ser submetido depois pela tela de Aprovações — perder o
                boleto aprovado seria pior que um título fora da fila. */
             if (txId) {
+                tituloNascido = txId;
                 try {
                     await financialApprovalService.submitForApproval(txId, organizationId);
                 } catch (err) {
@@ -697,6 +701,11 @@ export const boletoService = {
             usuario_email: userEmail,
             valor_depois: { invoice_id: invoiceId },
         });
+
+        // Costura Financeiro (plano 2026-10-16-torre-fluxo-financeiro, C.4):
+        // boleto aprovado = título nascido. Depois do boleto gravado, fora de
+        // qualquer caminho que possa desfazer a aprovação. Best-effort.
+        if (tituloNascido) await processService.triggerBoletoApproved(boletoId, tituloNascido);
 
         return mapRowToBoleto(data);
     },
@@ -736,6 +745,11 @@ export const boletoService = {
                 'lançamento (internal_transactions) correspondente foi encontrado. ' +
                 'O título segue em aberto no Contas a Pagar.',
             );
+        }
+        // Costura Financeiro: o título do boleto foi baixado aqui, sem passar
+        // por `payableService`. Best-effort.
+        for (const t of (txResult?.data ?? []) as { id: string }[]) {
+            await processService.triggerForFinancialTitle(t.id, 'payable.settled');
         }
         return boleto;
     },

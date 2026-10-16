@@ -5,7 +5,6 @@ import {
 } from 'recharts';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
-import { p2pFlowService } from '../../services/p2pFlowService';
 import type { P2PEdge, P2PProcessItem, P2PStage, P2PTemplateAtivo } from '../../services/p2pFlowService';
 import { INSTANCE_STATUS_LABEL } from '../../types/process';
 import { SEAM_CFG } from './p2pSeam';
@@ -34,17 +33,22 @@ const COLUNAS: StandardTableColumn[] = [
 
 const fmtDataHora = (iso?: string) => iso ? new Date(iso).toLocaleDateString('pt-BR') : undefined;
 
+/** Carrega as instâncias de processo nascidas num nó — o `getStageProcesses` do serviço do fluxo. */
+export type CarregarProcessos = (stageId: string, organizationId: string | null, projectId?: string) => Promise<P2PProcessItem[]>;
+
 /** Instâncias de processo nascidas no nó emissor da aresta selecionada. */
-function ProcessosDaAresta({ edge, organizationId, projectId }: { edge: P2PEdge; organizationId: string | null; projectId?: string }) {
+function ProcessosDaAresta({ edge, organizationId, projectId, carregarProcessos }: {
+  edge: P2PEdge; organizationId: string | null; projectId?: string; carregarProcessos: CarregarProcessos;
+}) {
   const [itens, setItens] = useState<P2PProcessItem[] | null>(null);
   useEffect(() => {
     let vivo = true;
     setItens(null);
-    p2pFlowService.getStageProcesses(edge.from, organizationId, projectId)
+    carregarProcessos(edge.from, organizationId, projectId)
       .then(lista => { if (vivo) setItens(lista); })
       .catch(() => { if (vivo) setItens([]); });
     return () => { vivo = false; };
-  }, [edge.from, organizationId, projectId]);
+  }, [edge.from, organizationId, projectId, carregarProcessos]);
 
   if (itens === null) return <div className="py-3 flex justify-center"><Loader2 className="w-4 h-4 animate-spin text-blue-600" /></div>;
   if (itens.length === 0) return <p className="text-xs text-gray-500">Nenhum processo em andamento nesta transição.</p>;
@@ -76,6 +80,7 @@ function ProcessosDaAresta({ edge, organizationId, projectId }: { edge: P2PEdge;
 export function P2PMetricsPanel({
   stages, edges, selecao, organizationId, projectId, loading,
   onClose, onSelectNode, onOpenNode, onNovoGatilho, onEditarTemplate, nomeDaOrg,
+  carregarProcessos, storageKey = 'p2p:metricas:etapas',
 }: {
   stages: P2PStage[];
   edges: P2PEdge[];
@@ -90,6 +95,9 @@ export function P2PMetricsPanel({
   onEditarTemplate: (tpl: P2PTemplateAtivo, edge: P2PEdge) => void;
   /** Nome da organização dona de um modelo — só aparece quando a transição tem modelos de mais de uma org ("Todas"). */
   nomeDaOrg?: (id: string) => string | undefined;
+  carregarProcessos: CarregarProcessos;
+  /** Chave da tabela de etapas (colunas, larguras) — uma por fluxo. */
+  storageKey?: string;
 }) {
   const noId = selecao?.tipo === 'no' ? selecao.id : null;
   const no = noId ? stages.find(s => s.id === noId) ?? null : null;
@@ -139,9 +147,9 @@ export function P2PMetricsPanel({
         <section>
           <h4 className="text-sm font-semibold text-gray-700 mb-2">Etapas</h4>
           <div className="rounded-[10px] border border-gray-100 overflow-hidden">
-            {/* Sem busca: são 8 linhas fixas, o filtro da tela é o de obra no cabeçalho. */}
+            {/* Sem busca: poucas linhas fixas (8 no P2P, 11 no Financeiro); o filtro da tela é o de obra no cabeçalho. */}
             <StandardTable<P2PStage>
-              storageKey="p2p:metricas:etapas"
+              storageKey={storageKey}
               columns={COLUNAS}
               rows={linhas}
               rowKey={s => s.id}
@@ -219,7 +227,7 @@ export function P2PMetricsPanel({
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-slate-500">Processos em andamento</p>
-                  <ProcessosDaAresta edge={aresta} organizationId={organizationId} projectId={projectId} />
+                  <ProcessosDaAresta edge={aresta} organizationId={organizationId} projectId={projectId} carregarProcessos={carregarProcessos} />
                 </div>
                 <button
                   type="button"

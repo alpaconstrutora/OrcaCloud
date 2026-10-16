@@ -66,6 +66,18 @@ export const brokerPortalService = {
         return res?.units ?? [];
     },
 
+    /**
+     * Materiais ativos da organização do token (fn_broker_portal_get_materials,
+     * 17/10/2026). Antes a aba lia a tabela direto e, pelo link, a RLS devolvia []
+     * em silêncio.
+     */
+    async getMaterialsByToken(token: string): Promise<any[]> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_get_materials', { p_token: token });
+        if (error) throw error;
+        const res = data as { valid: boolean; materials?: any[] };
+        return res?.materials ?? [];
+    },
+
     async getProposalsByToken(token: string): Promise<any[]> {
         const { data, error } = await supabase.rpc('fn_broker_portal_get_proposals', { p_token: token });
         if (error) throw error;

@@ -132,6 +132,21 @@ corretor efetivo (`effectiveBroker.settings`) nos dois modos — pelo link vem d
 | D7 | Admin no app interno pelo celular | Fora do escopo: a casca de app vale para o **corretor** (link/login) e para a **prévia**. O admin no celular continua com a visão interna. |
 | D8 | "Configurar abas visíveis" vale no celular? | **Sim.** A barra inferior e o "Mais" são montados SÓ com as abas habilitadas (`brokerPortalTabs`; lista vazia = todas, como no desktop), na ordem de prioridade do D2, menos Saúde (D6). Uma função pura só (`abasDoCelular` em `utils/brokerPortalTabs.ts`) decide barra × Mais, testada. Com 5 abas ou menos não há botão "Mais": todas cabem na barra (Ajuda fica no cabeçalho, onde já está). Aba ocultada com o portal aberto: sai para a primeira da barra, como no desktop. A prévia do admin mostra o que o corretor vê (só as habilitadas, sem as cinzas de "oculta") e reflete na hora a troca feita pela engrenagem. |
 
+### Continuação (16/10/2026, "Sim" para seguir com o restante) — achado e decisões
+
+O raio-x das abas no celular (`C:/tmp/pwtest/corretor-mobile-raiox.js`, todas as abas ligadas só na
+resposta da RPC, sem gravar) mostrou que **Leads, Chat, Ranking, Agenda, Treinamento e o miolo do
+Analytics são só demonstração**: geradores fixos no código (`generateDemoLeads`, `generateDemoMessages`,
+`generateDemoRanking`, `generateDemoEvents`, `generateDemoModules`, `generateDemoAnalytics`), sem ler nem
+gravar no banco. Corretores reais (Geleia, zoio) tinham Chat liberado e viam mensagens inventadas.
+E **Materiais** é real, mas pelo link não mostra nada (o serviço exige login) e oferece "+ Novo Material"
+ao corretor.
+
+| # | Pergunta | Decisão do usuário |
+|---|---|---|
+| D9 | O que fazer com as abas de demonstração? | **Esconder do corretor** (celular e desktop) até terem dados reais, como a aba Integrações em 14/10. Código fica. Na engrenagem do gestor aparecem desligadas com o motivo. Analytics fica só com os 4 números reais do topo. |
+| D10 | Materiais pelo link | **RPC de leitura pelo token** (migration nova, REGRA #7: REVOKE + GRANT só a anon) e o "+ Novo Material" some para o corretor. |
+
 ## Plano
 
 ### F1 — casca do celular e prévia fiel (resolve o print)
@@ -191,7 +206,29 @@ corretor efetivo (`effectiveBroker.settings`) nos dois modos — pelo link vem d
     folha de conta (Meus dados · Ajuda · Sair), "Primeiros passos" em uma linha
     (`PortalChecklist compacto`, via `PortalHelp checklistCompacto`), toast próprio.
   - 3 `BrokerPortal.tsx` vira seletor; prévia do gestor renderiza `BrokerPortalMobile previa`; `alert()` → toast.
-- [ ] **F2 — 4 de 5**
+- [x] **Continuação (16–17/10/2026) — feito nesta rodada, ainda NÃO publicado:**
+  - F2 item 5 concluído: `PropertyUnitMap compacto` — filtros de status em faixa rolável, "Agrupar"
+    curto + torre em `<select>` (sem "Visão": densidade sempre compacta), coluna de pavimento estreita
+    ("5º", "T" = térreo), molduras sem respiro; **tocar na unidade abre a folha** (dados + Fazer
+    proposta / Adicionar / Reservar 48h; indisponível diz por quê) em vez de saltar para o simulador.
+    Status da folha = o do quadrinho (`statusDaUnidade`, negócio ativo sobrepõe o cadastro).
+    "Torre TORRE B" → "Torre B" (`rotuloTorre`, vale também no desktop).
+  - Comissões `compacto`: resumo num cartão (Prevista/Liberada/Paga), filtros em faixa rolável, linha
+    enxuta; lista vazia agora diz que está vazia (também no desktop).
+  - **D9** abas de demonstração fora: `ABAS_DE_DEMONSTRACAO` em `utils/brokerPortalTabs.ts`;
+    `abasHabilitadas` nunca as devolve (celular, desktop, ajuda e tour juntos); a engrenagem as mostra
+    desligadas com "Demonstração, sem dados reais"; ligar/desligar outra aba preserva as gravadas.
+    Analytics fica só com os 4 KPIs reais (o `BrokerAnalytics` saiu das duas cascas).
+  - **D10** `fn_broker_portal_get_materials` — migration
+    `aplicar_20271017000200_broker_portal_materiais_por_token.sql` **APLICADA no banco em 17/10/2026**
+    (ACL sem PUBLIC: anon + authenticated; token do zoio → 3 materiais; token inválido → valid false).
+    `BrokerMaterials` lê por ela com `portalToken`; sem "Novo Material"/editar/excluir no link nem no
+    celular; no celular, uma linha tocável por material (o "abrir" do cartão era só no hover).
+    Busca não quebra mais ao digitar (`project_name` não vem na consulta).
+- [x] **F2 — 5 de 5**
+- [x] **F3 — fechada pelas decisões D9/D10:** Leads, Chat, Ranking, Agenda, Treinamento saíram (eram
+  demonstração); Analytics ficou só com o real; Materiais e Comissões ganharam modo celular.
+- [ ] _(histórico)_ **F2 — 4 de 5**
   - [x] 4 Empreendimentos e tabela de preços em cartões (respeitam as colunas liberadas ao corretor).
   - [ ] 5 Estoque: **feito** o filtro compacto (segmentado + `<select>` de empreendimento); **falta** a folha
     ao tocar na unidade do espelho e tirar o `p-6` em volta do espelho.

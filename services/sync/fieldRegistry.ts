@@ -110,6 +110,13 @@ export const SYNC_FIELDS: Record<SyncOrigin, FieldSpec[]> = {
         // evita que arredondar 12,005 vire divergência eterna.
         { entity: 'unit', field: 'testada_m', label: 'Testada (m)', group: 'estrutura', compare: 'numeric', tolerance: CENT },
         { entity: 'unit', field: 'position_type', label: 'Posição', group: 'estrutura', compare: 'exact' },
+        // CASA (F15 da casa automática, 16/10/2026): o que o desenho da casa sabe da unidade. O lote não os propõe —
+        // campo que a origem não preenche não vira proposta. A tipologia da casa fica no createOnly pela mesma razão
+        // do lote: na unidade adotada ela é texto do usuário (e é dela que o padrão CUB é lido).
+        { entity: 'unit', field: 'bedrooms', label: 'Dormitórios', group: 'estrutura', compare: 'exact' },
+        { entity: 'unit', field: 'suites', label: 'Suítes', group: 'estrutura', compare: 'exact' },
+        { entity: 'unit', field: 'bathrooms', label: 'Banheiros', group: 'estrutura', compare: 'exact' },
+        { entity: 'unit', field: 'parking_spaces', label: 'Vagas', group: 'estrutura', compare: 'exact' },
     ],
 
     // ── Estudo de Massa (Planta Inteligente, M3) ─────────────────────────────

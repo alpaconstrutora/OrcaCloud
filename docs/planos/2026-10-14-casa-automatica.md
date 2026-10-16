@@ -141,8 +141,8 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F11 — saídas (ver "Registro da F11")
 - [x] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [x] F12c instalações (ver "Registro da F12c") · [x] F12d tela e provas (ver "Registro da F12d", com a conferência no app real)
 - [x] F13 — pressão da água por caso: caixa elevada ou pressurizador (ver "Registro da F13")
-- [ ] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [x] F14b forro e plenum (ver "Registro da F14b") · [x] F14c furos, laje rebaixada e um tubo de queda por banheiro (ver "Registro da F14c"; f95aa616 no ar em 16/10) · [x] F14d linha do ar e dreno lado a lado (ver "Registro da F14d")
-- [ ] F15 — a casa na unidade do Empreendimento
+- [x] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [x] F14b forro e plenum (ver "Registro da F14b") · [x] F14c furos, laje rebaixada e um tubo de queda por banheiro (ver "Registro da F14c"; f95aa616 no ar em 16/10) · [x] F14d linha do ar e dreno lado a lado (ver "Registro da F14d")
+- [ ] F15 — a casa na unidade do Empreendimento (ver "Registro da F15")
 
 ## Registro da F1 (14/10/2026)
 
@@ -1798,3 +1798,40 @@ que derruba o Node e o `tsc`), não o app publicado.
 
 **Fica (anterior à F14d):** quando a evaporadora não acha parede externa, o caminho antigo leva o dreno pelo forro e
 a descida dele na fachada não desvia de janela (E5.4).
+
+## F15 — a casa na unidade do Empreendimento (16/10/2026, "sim" para seguir)
+
+Pergunta: *"Quando a casa gerada for sincronizada com o Empreendimento, em qual unidade ela deve cair?"* — resposta do
+usuário: **"A escolhida na tela"**: a unidade usada em "Preencher pela unidade" fica gravada nas premissas do estudo;
+o sincronismo atualiza ESSA unidade (área, dormitórios, suítes, banheiros, vagas, tipologia). Sem unidade escolhida,
+cria a torre "Casa" com 1 unidade. Divergências vão para a Curadoria, como hoje.
+
+Desenho:
+
+- **Premissas:** `unidadeId` (padrão nenhuma). O seletor da tela vira "Unidade da casa": escolher preenche o formulário
+  pela unidade (F10) e grava o vínculo; "Nenhuma" desfaz o vínculo sem mexer no formulário.
+- **`utils/blueprintCasaNaUnidade.ts:unidadeDaCasa(modelo, padrão)`** — o caminho inverso de `programaCurtoDaUnidade`,
+  medido no DESENHO PUBLICADO: área construída (face externa das paredes, soma dos pavimentos — `areaConstruidaMm2`),
+  dormitórios (com as suítes), suítes, banheiros (sem o lavabo), vagas (`model.vagas`) e a tipologia ("Casa térrea
+  R1-N" / "Sobrado R1-N", que `programaCurtoDaUnidade` lê de volta). `null` = o desenho não é uma casa (sem dormitório).
+- **Adaptador `blueprint`:** sem lote na versão publicada e com casa → 1 torre + 1 unidade, a chave das duas = o `id`
+  do estudo (as colunas de proveniência são UUID; uma casa por estudo, estável ao gerar de novo). A unidade escolhida
+  (conferida no MESMO Empreendimento) e a torre dela são ADOTADAS pelo id — o planner ganha `adoptId`, ao lado da
+  adoção por nome. A unidade adotada não é renomeada; área comum e total são do Empreendimento (só a privativa vem do
+  desenho). Criada: torre "Casa", unidade "Casa", disponível.
+- **Registro de campos `blueprint`:** + dormitórios, suítes, banheiros e vagas (o lote não os propõe; campo que a
+  origem não preenche não vira proposta). A TIPOLOGIA ficou de fora, como no lote: na unidade adotada ela é texto do
+  usuário (e é dela que o padrão CUB é lido) — comparada a cada sincronização, viraria conflito eterno. Ela entra só
+  na unidade CRIADA ("Casa térrea R1-N").
+
+### Registro da F15 (16/10/2026)
+
+- `utils/blueprintCasaNaUnidade.ts` + `__tests__/blueprintCasaNaUnidade.test.ts` (térrea, sobrado, "não é casa", ida e
+  volta com `programaCurtoDaUnidade`).
+- Planner: `adoptId` na torre e na unidade canônicas, antes da adoção por nome; a entidade já vinculada a outro
+  desenho não é tomada (a casa entra numa nova, e é dito). Casos novos em `blueprintEmpreendimentoSync.test.ts`
+  (adoção pelo id com preenchimento e Curadoria, escolha vence nome, 2ª sincronização sem nada, vinculada a outro
+  desenho, sem escolha → torre "Casa").
+- Adaptador `blueprint`: `ladoDaCasa` (premissas de `blueprint_study_casa`; a unidade conferida no mesmo
+  Empreendimento por duas consultas — sem embed). A auditoria diz "Casa da Planta Inteligente".
+- Tela: "Unidade do Empreendimento desta casa" (com "Nenhuma" e "Unidade não encontrada"); premissas com `unidadeId`.

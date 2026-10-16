@@ -216,6 +216,17 @@ function makeTowerAdopter(
     }
 
     return (ct, already) => {
+        if (ct.adoptId) {
+            // F15: o usuário escolheu a entidade — vale ela, desde que ainda sem vínculo com esta origem.
+            const escolhida = target.towers.find(t => t.id === ct.adoptId);
+            if (!escolhida) plan.warnings.push('A torre da unidade escolhida não está mais no Empreendimento — a casa entra numa torre nova.');
+            else if (escolhida[towerKey] && escolhida[towerKey] !== ct.sourceId) plan.warnings.push(`"${escolhida.name}" já está vinculada a outro desenho — a casa entra numa torre nova.`);
+            else if (!already.has(escolhida.id)) {
+                already.add(escolhida.id);
+                plan.adoptions.push({ entity: 'tower', existingId: escolhida.id, sourceId: ct.sourceId });
+                return escolhida;
+            }
+        }
         if (!ct.matchName) return null;
         const key = upper(ct.matchName);
         if ((originNameCounts.get(key) ?? 0) > 1) {
@@ -256,6 +267,17 @@ function makeUnitAdopter(
     }
 
     return (cu, already) => {
+        if (cu.adoptId) {
+            // F15: a unidade escolhida pelo usuário, nesta torre e ainda sem vínculo com esta origem.
+            const escolhida = towerUnits.find(u => u.id === cu.adoptId);
+            if (!escolhida) plan.warnings.push('A unidade escolhida não está nesta torre (ou foi apagada) — a casa entra numa unidade nova.');
+            else if (escolhida[unitKey] && escolhida[unitKey] !== cu.sourceId) plan.warnings.push(`"${escolhida.name}" já está vinculada a outro desenho — a casa entra numa unidade nova.`);
+            else if (!already.has(escolhida.id)) {
+                already.add(escolhida.id);
+                plan.adoptions.push({ entity: 'unit', existingId: escolhida.id, sourceId: cu.sourceId });
+                return escolhida;
+            }
+        }
         const key = upper(cu.fields.name);
         if (!key || (originNameCounts.get(key) ?? 0) > 1) return null;
         const candidates = (unlinkedByName.get(key) ?? []).filter(u => !already.has(u.id));

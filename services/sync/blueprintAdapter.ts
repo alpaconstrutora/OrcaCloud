@@ -21,6 +21,9 @@ import { getSnapshot, listSnapshots } from '../blueprintService';
 import { Empreendimento, EmpreendimentoUnitInsert, UnitStatus } from '../../types/empreendimento';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
 import { medirLote, rotuloDoLote } from '../../utils/blueprintLoteamento';
+import { unidadeDaCasa } from '../../utils/blueprintCasaNaUnidade';
+import { premissasDaCasaDaColuna } from '../../utils/blueprintPremissasDaCasa';
+import { blueprintCasaService } from '../blueprintCasaService';
 import { modeloDoPayloadPublicado } from './modeloPublicado';
 import { CanonicalSide, CanonicalTower, CanonicalUnit } from './types';
 
@@ -35,6 +38,75 @@ const m2 = (v: number): number => Math.round(v * 100) / 100;
 function posicaoPelaTestada(frentes: number): 'FRENTE' | 'LATERAL' | null {
   if (frentes >= 1) return 'FRENTE';
   return null;
+}
+
+/**
+ * F15 da casa automática (16/10/2026): a CASA da versão publicada → 1 torre e 1 unidade. A chave das duas é o `id` do
+ * estudo (as colunas de proveniência são UUID; uma casa por estudo, e gerar a casa de novo não muda a chave).
+ *
+ * A unidade é a ESCOLHIDA na tela da casa (decisão do usuário: "a escolhida na tela") — `premissas.unidadeId`, conferida
+ * no MESMO Empreendimento; ela e a torre dela são adotadas pelo id. Sem escolha (ou com a unidade sumida), nasce a torre
+ * "Casa" com a unidade "Casa". O desenho só propõe o que mede: área privativa, dormitórios, suítes, banheiros e vagas;
+ * nome, tipologia, áreas comum e total, preço e status da unidade adotada são do Empreendimento.
+ *
+ * `null` = o desenho não é uma casa (nenhum dormitório) — segue o caminho do loteamento, com o aviso dele.
+ */
+async function ladoDaCasa(empreendimento: Empreendimento, studyId: string, model: BlueprintModel): Promise<CanonicalSide | null> {
+  const linha = await blueprintCasaService.get(studyId).catch(() => null);
+  const premissas = premissasDaCasaDaColuna(linha?.hipoteses ?? null);
+  const casa = unidadeDaCasa(model, linha ? premissas.curto.padrao : null);
+  if (!casa) return null;
+  const warnings: string[] = [];
+
+  let alvo: { unidade: string; torre: string } | null = null;
+  if (premissas.unidadeId) {
+    const { data: u } = await supabase.from('empreendimento_units').select('id, tower_id').eq('id', premissas.unidadeId).maybeSingle();
+    const { data: t } = u
+      ? await supabase.from('empreendimento_towers').select('id').eq('id', u.tower_id).eq('empreendimento_id', empreendimento.id).maybeSingle()
+      : { data: null };
+    if (u && t) alvo = { unidade: u.id, torre: t.id };
+    else warnings.push('A unidade escolhida na tela da casa não está neste Empreendimento (foi apagada ou é de outro) — a casa entra numa torre nova. Escolha a unidade de novo na tela da casa.');
+  } else {
+    warnings.push('Nenhuma unidade escolhida na tela da casa: a casa fica na torre "Casa" (criada pelo sincronismo na primeira vez). Para ela atualizar uma unidade que já existe, escolha-a em Analisar › Casa automática.');
+  }
+
+  const unidade: CanonicalUnit = {
+    sourceId: studyId,
+    ...(alvo ? { adoptId: alvo.unidade } : {}),
+    fields: {
+      private_area: casa.privativaM2,
+      bedrooms: casa.dormitorios,
+      suites: casa.suites,
+      bathrooms: casa.banheiros,
+      parking_spaces: casa.vagas,
+    },
+    createOnly: {
+      blueprint_lote_uid: studyId,
+      name: 'Casa',
+      typology: casa.tipologia,
+      common_area: 0,
+      total_area: casa.privativaM2,
+      is_vendavel: true,
+      status: 'DISPONIVEL' as UnitStatus,
+    } satisfies Partial<EmpreendimentoUnitInsert> as Record<string, unknown>,
+  };
+  return {
+    origin: 'blueprint',
+    empreendimento,
+    towers: [
+      {
+        sourceId: studyId,
+        ...(alvo ? { adoptId: alvo.torre } : {}),
+        fields: {},
+        createOnly: { blueprint_quadra_uid: studyId, name: 'Casa' },
+        units: [unidade],
+      },
+    ],
+    commonAreaCandidates: [],
+    liveTowerSourceIds: new Set([studyId]),
+    liveUnitSourceIds: new Set([studyId]),
+    warnings,
+  };
 }
 
 export async function loadBlueprintSide(empreendimento: Empreendimento): Promise<CanonicalSide> {
@@ -81,6 +153,11 @@ export async function loadBlueprintSide(empreendimento: Empreendimento): Promise
 
   const quadras = model.quadras ?? [];
   const lotes = (model.lotes ?? []).filter((l) => l.tipo === 'LOTE');
+  // F15 da casa automática: sem lote e com uma CASA desenhada, o estudo é a casa — 1 torre, 1 unidade.
+  if (lotes.length === 0 && quadras.length === 0) {
+    const daCasa = await ladoDaCasa(empreendimento, study.id, model);
+    if (daCasa) return daCasa;
+  }
   if (lotes.length === 0) {
     warnings.push('A versão publicada não tem lote nenhum. Desenhe os lotes (aba Terreno › Lotear) e publique de novo.');
   }

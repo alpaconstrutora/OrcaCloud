@@ -11524,9 +11524,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             }}
             cub={cubDaCasa ? { valorM2: cubDaCasa.valorM2, estimado: cubDaCasa.fonte === 'ESTIMADO', referencia: cubDaCasa.referencia ?? null } : null}
             unidades={unidadesDaCasa.opcoes}
-            onPreencherPelaUnidade={(id) => {
-              const u = unidadesDaCasa.porId.get(id);
-              if (u) casaDoEstudo.setPremissas({ ...casaDoEstudo.premissas, curto: programaCurtoDaUnidade(u).curto });
+            onUnidade={(id) => {
+              // F15: a unidade escolhida preenche o programa e fica como A unidade desta casa; "nenhuma" só desfaz o vínculo.
+              const u = id ? unidadesDaCasa.porId.get(id) : undefined;
+              casaDoEstudo.setPremissas({ ...casaDoEstudo.premissas, ...(u ? { curto: programaCurtoDaUnidade(u).curto } : {}), unidadeId: id });
             }}
           />
         </div>

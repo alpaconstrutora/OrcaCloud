@@ -75,3 +75,12 @@ describe('F14b — o forro nas premissas', () => {
     expect(hipotesesDasPremissas(p).forro).toEqual({ lancar: false, peDireitoLivrePermanenciaMm: 2600, peDireitoLivreDemaisMm: 2300, pisoAcabadoMm: 50 });
   });
 });
+
+describe('F15 — a unidade do Empreendimento nas premissas', () => {
+  it('padrão: nenhuma; texto não vazio fica; vazio, número ou lixo voltam a nenhuma; não vira hipótese do motor', () => {
+    expect(PREMISSAS_DA_CASA_PADRAO.unidadeId).toBeNull();
+    expect(premissasDaCasaDaColuna({ unidadeId: 'u-07' }).unidadeId).toBe('u-07');
+    for (const lixo of ['', '   ', 7, {}, null]) expect(premissasDaCasaDaColuna({ unidadeId: lixo }).unidadeId).toBeNull();
+    expect('unidadeId' in hipotesesDasPremissas({ ...PREMISSAS_DA_CASA_PADRAO, unidadeId: 'u-07' })).toBe(false);
+  });
+});

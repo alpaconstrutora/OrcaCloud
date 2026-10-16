@@ -114,6 +114,11 @@ export interface CanonicalUnit {
     fields: Record<string, unknown>;
     /** Campos escritos só na CRIAÇÃO e nunca mais (ex: preço-semente do Planta IA). */
     createOnly: Record<string, unknown>;
+    /**
+     * Adoção por ID explícito (F15 da casa automática): a unidade existente, sem vínculo, que ESTA unidade da origem
+     * é — escolhida pelo usuário, não deduzida pelo nome. Vale antes da adoção por nome.
+     */
+    adoptId?: string;
 }
 
 export interface CanonicalTower {
@@ -126,6 +131,8 @@ export interface CanonicalTower {
      * casa por nome — fica undefined.
      */
     matchName?: string;
+    /** Adoção por ID explícito (F15): a torre existente, sem vínculo, que esta torre da origem é. Antes do nome. */
+    adoptId?: string;
     fields: Record<string, unknown>;
     createOnly: Record<string, unknown>;
     units: CanonicalUnit[];

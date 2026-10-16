@@ -59,7 +59,7 @@ function tela(extra: Partial<React.ComponentProps<typeof TelaCasaAutomatica>> = 
     lancado: null,
     cub: { valorM2: 2000, estimado: false, referencia: 'MG · 09/2026' },
     unidades: [],
-    onPreencherPelaUnidade: vi.fn(),
+    onUnidade: vi.fn(),
     ...extra,
   };
   render(<TelaCasaAutomatica {...props} />);
@@ -148,8 +148,23 @@ describe('TelaCasaAutomatica (F10)', () => {
     expect(p.onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ curto: expect.objectContaining({ padrao: 'R1-A' }) }));
     fireEvent.click(screen.getByLabelText('Climatização'));
     expect(p.onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ disciplinas: expect.objectContaining({ climatizacao: false }) }));
-    fireEvent.change(screen.getByLabelText('Preencher pela unidade do Empreendimento'), { target: { value: 'u1' } });
-    expect(p.onPreencherPelaUnidade).toHaveBeenCalledWith('u1');
+    fireEvent.change(screen.getByLabelText('Unidade do Empreendimento desta casa'), { target: { value: 'u1' } });
+    expect(p.onUnidade).toHaveBeenCalledWith('u1');
+  });
+
+  it('F15: a unidade vinculada aparece escolhida; "nenhuma" desfaz; vínculo com unidade que sumiu é dito', () => {
+    const p = tela({ unidades: [{ id: 'u1', rotulo: 'Torre A · Casa 01 (3Q)' }], premissas: { ...PREMISSAS_DA_CASA_PADRAO, unidadeId: 'u1' } });
+    const sel = screen.getByLabelText('Unidade do Empreendimento desta casa') as HTMLSelectElement;
+    expect(sel.value).toBe('u1');
+    fireEvent.change(sel, { target: { value: '' } });
+    expect(p.onUnidade).toHaveBeenLastCalledWith(null);
+  });
+
+  it('F15: sem unidades carregadas mas com vínculo gravado, o seletor aparece e diz que a unidade não foi encontrada', () => {
+    tela({ unidades: [], premissas: { ...PREMISSAS_DA_CASA_PADRAO, unidadeId: 'sumiu' } });
+    const sel = screen.getByLabelText('Unidade do Empreendimento desta casa') as HTMLSelectElement;
+    expect(sel.value).toBe('sumiu');
+    expect(screen.getByText('Unidade não encontrada no Empreendimento')).toBeTruthy();
   });
 
   it('F12d: sobrado — o seletor de pavimentos muda a premissa; as hipóteses do sobrado aparecem; o resumo e o botão dizem os dois pavimentos', () => {

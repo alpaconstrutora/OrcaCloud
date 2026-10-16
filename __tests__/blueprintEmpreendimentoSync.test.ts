@@ -218,3 +218,86 @@ describe('adoção por nome', () => {
     expect(plano.unitCreates[0].towerId).toBe('tow_manual');
   });
 });
+
+describe('F15 · a CASA automática na unidade escolhida (adoção por id)', () => {
+  const ESTUDO = '44444444-4444-4444-8444-444444444444';
+  /** O que `ladoDaCasa` entrega: 1 torre e 1 unidade com a chave do estudo; com escolha, `adoptId` nas duas. */
+  function casaCanonica(escolha: { torre: string; unidade: string } | null, campos: Record<string, unknown> = {}): CanonicalTower {
+    return {
+      sourceId: ESTUDO,
+      ...(escolha ? { adoptId: escolha.torre } : {}),
+      fields: {},
+      createOnly: { blueprint_quadra_uid: ESTUDO, name: 'Casa' },
+      units: [
+        {
+          sourceId: ESTUDO,
+          ...(escolha ? { adoptId: escolha.unidade } : {}),
+          fields: { private_area: 168.4, bedrooms: 3, suites: 1, bathrooms: 2, parking_spaces: 2, ...campos },
+          createOnly: { blueprint_lote_uid: ESTUDO, name: 'Casa', typology: 'Casa térrea R1-N', common_area: 0, total_area: 168.4, is_vendavel: true, status: 'DISPONIVEL' },
+        },
+      ],
+    };
+  }
+  /** O Empreendimento com a unidade cadastrada à mão — sem vínculo, nome sem nada a ver com "Casa". */
+  const aMao: TargetState = {
+    towers: [torre({ id: 'tow_res', name: 'Residencial' })],
+    units: [unidade({ id: 'uni_07', tower_id: 'tow_res', name: 'Casa 07', typology: '3Q alto padrão', bedrooms: 3, private_area: 150 })],
+    commonAreas: [],
+  };
+
+  it('o registry da origem blueprint propõe dormitórios, suítes, banheiros e vagas — e segue sem tipologia', () => {
+    const campos = specsFor('blueprint', 'unit').map((s) => s.field);
+    for (const c of ['bedrooms', 'suites', 'bathrooms', 'parking_spaces']) expect(campos).toContain(c);
+    expect(campos).not.toContain('typology');
+  });
+
+  it('a unidade escolhida e a torre dela são ADOTADAS pelo id: nada nasce, vazio é preenchido, o que diverge vai à Curadoria; nome e tipologia ficam', () => {
+    const plano = buildPlan(lado([casaCanonica({ torre: 'tow_res', unidade: 'uni_07' })]), aMao);
+    expect(plano.towerCreates).toHaveLength(0);
+    expect(plano.unitCreates).toHaveLength(0);
+    expect(plano.adoptions).toEqual([
+      { entity: 'tower', existingId: 'tow_res', sourceId: ESTUDO },
+      { entity: 'unit', existingId: 'uni_07', sourceId: ESTUDO },
+    ]);
+    expect(plano.fills.map((c) => c.field).sort()).toEqual(['bathrooms', 'parking_spaces', 'suites']);
+    expect(plano.conflicts.map((c) => `${c.field}:${c.from}→${c.to}`)).toEqual(['private_area:150→168.4']);
+    expect([...plano.fills, ...plano.conflicts].some((c) => c.field === 'name' || c.field === 'typology')).toBe(false);
+  });
+
+  it('a escolha vale mais que o nome: "Casa 07" é adotada mesmo havendo uma unidade "Casa" sem vínculo na torre', () => {
+    const comHomonima: TargetState = { ...aMao, units: [...aMao.units, unidade({ id: 'uni_casa', tower_id: 'tow_res', name: 'Casa' })] };
+    const plano = buildPlan(lado([casaCanonica({ torre: 'tow_res', unidade: 'uni_07' })]), comHomonima);
+    expect(plano.adoptions.find((a) => a.entity === 'unit')?.existingId).toBe('uni_07');
+  });
+
+  it('segunda sincronização (vínculo gravado): nada a adotar nem a criar', () => {
+    const vinculado: TargetState = {
+      towers: [torre({ id: 'tow_res', name: 'Residencial', blueprint_quadra_uid: ESTUDO })],
+      units: [unidade({ id: 'uni_07', tower_id: 'tow_res', name: 'Casa 07', blueprint_lote_uid: ESTUDO, private_area: 168.4, bedrooms: 3, suites: 1, bathrooms: 2, parking_spaces: 2 })],
+      commonAreas: [],
+    };
+    const plano = buildPlan(lado([casaCanonica({ torre: 'tow_res', unidade: 'uni_07' })]), vinculado);
+    expect(plano.adoptions).toHaveLength(0);
+    expect(plano.towerCreates).toHaveLength(0);
+    expect(plano.unitCreates).toHaveLength(0);
+    expect(plano.fills).toHaveLength(0);
+    expect(plano.conflicts).toHaveLength(0);
+  });
+
+  it('a unidade escolhida já vinculada a OUTRO desenho não é tomada: a casa entra numa unidade nova, e é dito', () => {
+    const deOutro: TargetState = { ...aMao, units: [unidade({ id: 'uni_07', tower_id: 'tow_res', name: 'Casa 07', blueprint_lote_uid: UID_LOTE_1 })] };
+    const plano = buildPlan(lado([casaCanonica({ torre: 'tow_res', unidade: 'uni_07' })]), deOutro);
+    expect(plano.adoptions).toEqual([{ entity: 'tower', existingId: 'tow_res', sourceId: ESTUDO }]);
+    expect(plano.unitCreates).toHaveLength(1);
+    expect(plano.unitCreates[0].insert).toMatchObject({ name: 'Casa', blueprint_lote_uid: ESTUDO, typology: 'Casa térrea R1-N', total_area: 168.4 });
+    expect(plano.warnings.some((w) => /já está vinculada a outro desenho/.test(w))).toBe(true);
+  });
+
+  it('sem escolha: nasce a torre "Casa" com a unidade "Casa" (tipologia e áreas do desenho)', () => {
+    const plano = buildPlan(lado([casaCanonica(null)]), aMao);
+    expect(plano.adoptions).toHaveLength(0);
+    expect(plano.towerCreates).toHaveLength(1);
+    expect(plano.towerCreates[0].insert).toMatchObject({ name: 'Casa', blueprint_quadra_uid: ESTUDO });
+    expect(plano.towerCreates[0].units[0]).toMatchObject({ name: 'Casa', blueprint_lote_uid: ESTUDO, private_area: 168.4, bedrooms: 3, suites: 1, typology: 'Casa térrea R1-N', status: 'DISPONIVEL' });
+  });
+});

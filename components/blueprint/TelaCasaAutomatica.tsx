@@ -66,7 +66,11 @@ interface Props {
   cub: { valorM2: number; estimado: boolean; referencia: string | null } | null;
   /** Unidades do Empreendimento ligado ao estudo, para preencher o programa. */
   unidades: UnidadeParaOPrograma[];
-  onPreencherPelaUnidade: (id: string) => void;
+  /**
+   * F15: escolher a unidade preenche o programa por ela e a grava como A unidade desta casa (o sincronismo atualiza
+   * ela); `null` desfaz o vínculo sem mexer no programa.
+   */
+  onUnidade: (id: string | null) => void;
 }
 
 const rotuloCls = 'text-xs font-semibold text-slate-500';
@@ -174,18 +178,24 @@ export default function TelaCasaAutomatica(props: Props) {
               </Button>
             }
           />
-          {props.unidades.length > 0 && (
+          {(props.unidades.length > 0 || p.unidadeId) && (
             <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
-              <Campo rotulo="Preencher pela unidade do Empreendimento">
-                <select aria-label="Preencher pela unidade do Empreendimento" className={campoCls} value="" onChange={(e) => e.target.value && props.onPreencherPelaUnidade(e.target.value)}>
-                  <option value="">Escolha a unidade…</option>
-                  {props.unidades.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.rotulo}
-                    </option>
-                  ))}
-                </select>
-              </Campo>
+              <div className="col-span-2 space-y-1.5">
+                <Campo rotulo="Unidade do Empreendimento desta casa">
+                  <select aria-label="Unidade do Empreendimento desta casa" data-testid="unidade-da-casa" className={campoCls} value={p.unidadeId ?? ''} onChange={(e) => props.onUnidade(e.target.value || null)}>
+                    <option value="">Nenhuma — o sincronismo cria a torre "Casa"</option>
+                    {p.unidadeId && !props.unidades.some((u) => u.id === p.unidadeId) && <option value={p.unidadeId}>Unidade não encontrada no Empreendimento</option>}
+                    {props.unidades.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.rotulo}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+                <p className="text-xs text-slate-500">
+                  Escolher preenche o programa pela unidade; ao sincronizar o Empreendimento com a Planta, a casa publicada atualiza essa unidade (área, dormitórios, suítes, banheiros, vagas e tipologia).
+                </p>
+              </div>
             </div>
           )}
           <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">

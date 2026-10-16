@@ -108,7 +108,8 @@ export const blueprintEmpreendimentoSync = {
       organizationId: sync.side.empreendimento.organization_id,
       entityType: 'study_link',
       entityId: sync.side.empreendimento.blueprint_study_id ?? null,
-      entityLabel: 'Loteamento da Planta Inteligente',
+      // F15: a casa automática tem a torre e a unidade com a chave do próprio estudo.
+      entityLabel: sync.side.towers.some((t) => t.sourceId === sync.side.empreendimento.blueprint_study_id) ? 'Casa da Planta Inteligente' : 'Loteamento da Planta Inteligente',
       action: 'sync',
       source: 'sync_blueprint',
       // Um evento resumo, como nas outras arestas: o sync mexe em centenas de

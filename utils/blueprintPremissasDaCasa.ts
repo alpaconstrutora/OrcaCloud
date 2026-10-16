@@ -42,6 +42,11 @@ export interface PremissasDaCasa {
    * livre mínimo que ele respeita. As faixas de cada rede seguem o padrão do motor (`HIPOTESES_DO_FORRO_DA_CASA_PADRAO`).
    */
   forro: { lancar: boolean; peDireitoLivrePermanenciaMm: number; peDireitoLivreDemaisMm: number; pisoAcabadoMm: number };
+  /**
+   * F15: a unidade do Empreendimento que esta casa É (decisão do usuário, 16/10/2026: "a escolhida na tela") — o
+   * sincronismo atualiza ela. `null` = nenhuma: o sincronismo cria a torre "Casa" com 1 unidade.
+   */
+  unidadeId: string | null;
 }
 
 export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
@@ -56,6 +61,7 @@ export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
   sobrado: { lajeEntrePavimentosMm: 100, shaftMm: 400 },
   pressao: { caixaElevadaAteMm: 2000, potenciaDoPressurizadorW: 370 },
   forro: { lancar: true, peDireitoLivrePermanenciaMm: 2500, peDireitoLivreDemaisMm: 2300, pisoAcabadoMm: 50 },
+  unidadeId: null,
 };
 
 /** Os valores aceitos de cada enumerado (o resto cai no padrão). */
@@ -108,6 +114,7 @@ export function premissasDaCasaDaColuna(raw: unknown): PremissasDaCasa {
     sobrado: completar(r.sobrado, PREMISSAS_DA_CASA_PADRAO.sobrado),
     pressao: completar(r.pressao, PREMISSAS_DA_CASA_PADRAO.pressao),
     forro: completar(r.forro, PREMISSAS_DA_CASA_PADRAO.forro),
+    unidadeId: typeof r.unidadeId === 'string' && r.unidadeId.trim() ? r.unidadeId : null,
   };
 }
 

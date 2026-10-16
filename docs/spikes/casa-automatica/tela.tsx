@@ -99,7 +99,7 @@ function App() {
             onCriarAlternativa={async () => setLancado('Alternativa criada (harness).')}
             cub={{ valorM2: 2650, estimado: false, referencia: 'MG · 09/2026' }}
             unidades={[{ id: 'u1', rotulo: 'Quadra A · Casa 01 (3Q)' }]}
-            onPreencherPelaUnidade={() => setPremissas({ ...premissas, curto: { ...premissas.curto, dormitorios: 3, suites: 1 } })}
+            onUnidade={(id) => setPremissas({ ...premissas, ...(id ? { curto: { ...premissas.curto, dormitorios: 3, suites: 1 } } : {}), unidadeId: id })}
           />
         </div>
       </main>

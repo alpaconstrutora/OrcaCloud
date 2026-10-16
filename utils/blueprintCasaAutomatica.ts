@@ -825,7 +825,8 @@ const MARCA_DA_REDE: Record<string, string> = {
   DECLIVIDADE_BAIXA: 'trecho(s) com declividade baixa',
   SEM_VENTILACAO: 'desconector(es) sem ventilação',
   ATRAVESSA_PILAR: 'trecho(s) atravessando pilar',
-  CRUZA_VIGA: 'trecho(s) cruzando viga',
+  // F14b ("furar vigas"): a travessia da viga no forro é furo previsto — a lista vai ao calculista na F14c.
+  CRUZA_VIGA: 'travessia(s) de viga — furo a aprovar com o calculista (F14c)',
   DN_MENOR: 'trecho(s) com DN abaixo do necessário',
   CALHA_INSUFICIENTE: 'calha(s) insuficiente(s)',
   CONDUTOR_INSUFICIENTE: 'condutor(es) insuficiente(s)',

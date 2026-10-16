@@ -1,55 +1,61 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Workflow, RefreshCw, ArrowRight, ArrowDown,
-  CheckCircle2, AlertTriangle, XCircle,
-  ClipboardList, FileSearch, ShoppingCart, Truck,
-  Warehouse, FileText, DollarSign, Landmark,
-  ChevronRight, Loader2, Inbox,
-  Building2,
+  Workflow, RefreshCw, ChevronRight, Loader2, Inbox, Building2, BarChart3, Plus,
 } from 'lucide-react';
-import { p2pFlowService, P2PStage, P2PRecord, P2PProcessItem, SeamStatus } from '../services/p2pFlowService';
-import { INSTANCE_STATUS_LABEL } from '../types/process';
+import {
+  p2pFlowService, P2PStage, P2PRecord, P2PProcessItem, P2PEdge, P2PGroup, P2PTemplateAtivo, SeamStatus,
+} from '../services/p2pFlowService';
+import { processService } from '../services/processService';
+import { INSTANCE_STATUS_LABEL, PROCESS_EVENT_LABEL } from '../types/process';
 import { KpiCard, KpiColor } from './ui/KpiCard';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
+import { usePersistedState } from './ui/TableUtils';
+import { useStore } from '../store/useStore';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useToast } from '../hooks/useToast';
+import TemplateEditorModal, { type ModeloEmEdicao } from './processos/TemplateEditorModal';
+import { SEAM_CFG } from './p2p/p2pSeam';
+import { STAGE_ICON } from './p2p/P2PNodeCard';
+import { P2PCanvas, type P2PSelecao } from './p2p/P2PCanvas';
+import { P2PLibrary } from './p2p/P2PLibrary';
+import { P2PMetricsPanel } from './p2p/P2PMetricsPanel';
+import { P2PListaMobile } from './p2p/P2PListaMobile';
 
 interface Props {
   activeOrganizationId: string | null;
   onChangeView: (view: string) => void;
 }
 
-const STAGE_ICON: Record<string, React.ElementType> = {
-  solicitacao: ClipboardList,
-  cotacao:     FileSearch,
-  pedido:      ShoppingCart,
-  recebimento: Truck,
-  estoque:     Warehouse,
-  fiscal:      FileText,
-  financeiro:  DollarSign,
-  pagamento:   Landmark,
-};
-
-const SEAM_CFG: Record<SeamStatus, { label: string; color: string; lineColor: string; border: string; icon: React.ElementType }> = {
-  auto:        { label: 'Automático',  color: 'text-emerald-600', lineColor: 'bg-emerald-300', border: 'border-slate-200',  icon: CheckCircle2 },
-  orquestrada: { label: 'Orquestrada', color: 'text-indigo-600',  lineColor: 'bg-indigo-300',  border: 'border-indigo-200', icon: Workflow },
-  manual:      { label: 'Semi-manual', color: 'text-amber-600',   lineColor: 'bg-amber-300',   border: 'border-amber-200',  icon: AlertTriangle },
-  gap:         { label: 'Lacuna',      color: 'text-red-600',     lineColor: 'bg-red-300',     border: 'border-red-200',    icon: XCircle },
-};
-
-/** Costuras que pedem atenção (a legenda do rodapé). `orquestrada` é conduzida por processo, não é pendência. */
-const SEAM_ATENCAO: SeamStatus[] = ['manual', 'gap'];
-
 // KPIs de saúde das integrações — um por situação da costura de entrada.
-const SEAM_KPI: { seam: SeamStatus; label: string; sub: string; color: KpiColor; icon: React.ElementType; vazio: string }[] = [
-  { seam: 'auto',        label: 'Automáticas',  sub: 'Integração sem intervenção', color: 'emerald', icon: CheckCircle2,  vazio: 'Nenhuma etapa recebe dados automaticamente.' },
-  { seam: 'orquestrada', label: 'Orquestradas', sub: 'Conduzidas por um processo', color: 'indigo',  icon: Workflow,      vazio: 'Nenhuma etapa é conduzida por processo. Ative um template com gatilho por evento em Processos › Templates.' },
-  { seam: 'manual',      label: 'Semi-manuais', sub: 'Exigem ação do usuário',     color: 'amber',   icon: AlertTriangle, vazio: 'Nenhuma etapa depende de ação manual.' },
-  { seam: 'gap',         label: 'Lacunas',      sub: 'Sem integração',             color: 'red',     icon: XCircle,       vazio: 'Nenhuma lacuna de integração.' },
+const SEAM_KPI: { seam: SeamStatus; label: string; sub: string; color: KpiColor; vazio: string }[] = [
+  { seam: 'auto',        label: 'Automáticas',  sub: 'Integração sem intervenção', color: 'emerald', vazio: 'Nenhuma etapa recebe dados automaticamente.' },
+  { seam: 'orquestrada', label: 'Orquestradas', sub: 'Conduzidas por um processo', color: 'indigo',  vazio: 'Nenhuma etapa é conduzida por processo. Crie um gatilho numa transição do fluxo.' },
+  { seam: 'manual',      label: 'Semi-manuais', sub: 'Exigem ação do usuário',     color: 'amber',   vazio: 'Nenhuma etapa depende de ação manual.' },
+  { seam: 'gap',         label: 'Lacunas',      sub: 'Sem integração',             color: 'red',     vazio: 'Nenhuma lacuna de integração.' },
 ];
 
 const fmtDataHora = (iso?: string) => iso ? new Date(iso).toLocaleDateString('pt-BR') : undefined;
 
-const BTN_PRIMARIO   = 'flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95';
-const BTN_SECUNDARIO = 'flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95';
+const BTN_PRIMARIO   = 'flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50';
+const BTN_SECUNDARIO = 'flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50';
+
+/**
+ * Desktop × celular decidido por JS, não por CSS: renderizar canvas e lista
+ * ao mesmo tempo (escondendo um por `hidden lg:block`) duplicaria o nome de
+ * cada etapa no DOM. Sem `matchMedia` (jsdom) é desktop.
+ */
+function useDesktop(): boolean {
+  const consulta = () => (typeof window === 'undefined' || !window.matchMedia) ? true : window.matchMedia('(min-width: 1024px)').matches;
+  const [desktop, setDesktop] = useState(consulta);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const aoMudar = () => setDesktop(mq.matches);
+    mq.addEventListener('change', aoMudar);
+    return () => mq.removeEventListener('change', aoMudar);
+  }, []);
+  return desktop;
+}
 
 // ── Registros de uma etapa (corpo do drawer) ────────────────────────────────
 function StageRecords({ stageId, organizationId, projectId }: {
@@ -83,7 +89,7 @@ function StageRecords({ stageId, organizationId, projectId }: {
   );
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+    <div className="bg-white border border-gray-200 rounded-[10px] divide-y divide-gray-100">
       {records.map(r => (
         <div key={r.id} className="flex items-start justify-between gap-3 px-4 py-2.5">
           <div className="min-w-0">
@@ -91,11 +97,7 @@ function StageRecords({ stageId, organizationId, projectId }: {
             {r.sublabel && <p className="text-xs text-gray-500 break-words">{r.sublabel}</p>}
           </div>
           <div className="flex flex-col items-end gap-0.5 shrink-0">
-            {r.status && (
-              <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
-                {r.status}
-              </span>
-            )}
+            {r.status && <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{r.status}</span>}
             {r.date && <span className="text-xs text-gray-400">{r.date}</span>}
           </div>
         </div>
@@ -145,10 +147,10 @@ function StageProcesses({ stage, organizationId, projectId, onNavigate }: {
         <p className="text-sm text-gray-500 py-3">
           {templates.length > 0
             ? 'Nenhum processo em andamento nascido nesta etapa.'
-            : 'Nenhum template ativo escuta esta etapa. Ative um em Processos › Templates para a transição seguinte virar orquestrada.'}
+            : 'Nenhum modelo ativo escuta esta etapa. Crie um gatilho na transição seguinte para ela virar orquestrada.'}
         </p>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+        <div className="bg-white border border-gray-200 rounded-[10px] divide-y divide-gray-100">
           {itens.map(p => (
             <div key={p.id} className="flex items-start justify-between gap-3 px-4 py-2.5">
               <div className="min-w-0">
@@ -194,9 +196,9 @@ function StageSheet({ stage, organizationId, projectId, onClose, onNavigate }: {
 
           <SheetPanel className="p-6 space-y-4">
             <div className="flex items-start gap-2">
-              <seam.icon className={`w-4 h-4 mt-0.5 shrink-0 ${seam.color}`} />
+              <seam.icon className={`w-4 h-4 mt-0.5 shrink-0 ${seam.text}`} />
               <div>
-                <p className={`text-sm font-medium ${seam.color}`}>Entrada: {seam.label}</p>
+                <p className={`text-sm font-medium ${seam.text}`}>Entrada: {seam.label}</p>
                 {stage.inboundNote && <p className="text-xs text-gray-500">{stage.inboundNote}</p>}
               </div>
             </div>
@@ -228,10 +230,11 @@ function SeamSheet({ seam, stages, onClose, onOpenStage }: {
   onOpenStage: (id: string) => void;
 }) {
   const kpi = SEAM_KPI.find(k => k.seam === seam);
+  const cfg = seam ? SEAM_CFG[seam] : null;
   const lista = stages.filter(s => s.inboundSeam === seam);
   return (
     <Sheet open={!!seam} onClose={onClose} size="lg">
-      {kpi && (
+      {kpi && cfg && (
         <>
           <SheetHeader onClose={onClose}>
             <SheetTitle>Integrações {kpi.label.toLowerCase()}</SheetTitle>
@@ -241,12 +244,12 @@ function SeamSheet({ seam, stages, onClose, onOpenStage }: {
           <SheetPanel className="p-6">
             {lista.length === 0 ? (
               <div className="text-center py-12">
-                <kpi.icon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <cfg.icon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma etapa</h3>
                 <p className="text-sm text-gray-500">{kpi.vazio}</p>
               </div>
             ) : (
-              <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+              <div className="bg-white border border-gray-200 rounded-[10px] divide-y divide-gray-100">
                 {lista.map(s => {
                   const Icon = STAGE_ICON[s.id] ?? Workflow;
                   return (
@@ -278,79 +281,35 @@ function SeamSheet({ seam, stages, onClose, onOpenStage }: {
   );
 }
 
-// ── Nó do fluxo ──────────────────────────────────────────────────────────────
-function StageCard({ stage, selected, onOpen }: {
-  stage: P2PStage;
-  selected: boolean;
-  onOpen: () => void;
-}) {
-  const Icon = STAGE_ICON[stage.id] ?? Workflow;
-  const seam = SEAM_CFG[stage.inboundSeam];
-
-  return (
-    <button
-      onClick={onOpen}
-      className={`w-full sm:w-48 text-left p-4 bg-white border rounded-2xl shadow-sm hover:bg-slate-50 transition-all
-        ${selected ? 'ring-2 ring-indigo-400' : ''}
-        ${seam.border}`}
-    >
-      <div className="flex items-center gap-2 mb-3">
-        <div className="bg-indigo-50 text-indigo-600 p-2 rounded-xl shrink-0">
-          <Icon className="w-4 h-4" />
-        </div>
-        <ChevronRight className="w-4 h-4 text-slate-400 ml-auto" />
-      </div>
-
-      <p className="text-xs font-black uppercase tracking-wider text-slate-400 leading-none">{stage.owner}</p>
-      <p className="text-sm font-bold text-slate-800 leading-snug mt-0.5">{stage.label}</p>
-
-      <div className="mt-3 flex items-baseline gap-2">
-        <span className="text-2xl font-black text-slate-900">{stage.count}</span>
-        {stage.pending != null && stage.pending > 0 && (
-          <span className="text-xs font-bold text-amber-600">{stage.pending} pend.</span>
-        )}
-      </div>
-
-      {/* Processos nascidos neste nó (só nó com evento do motor) */}
-      {stage.processes && (
-        <p className={`mt-1 text-xs ${stage.processes.atrasados > 0 ? 'text-red-600' : 'text-indigo-600'}`}>
-          {stage.processes.ativos} {stage.processes.ativos === 1 ? 'processo' : 'processos'}
-          {stage.processes.atrasados > 0 && ` · ${stage.processes.atrasados} atrasado${stage.processes.atrasados === 1 ? '' : 's'}`}
-        </p>
-      )}
-
-      {/* Badge da costura de entrada */}
-      <div className={`mt-2 flex items-center gap-1 ${seam.color}`}>
-        <seam.icon className="w-3 h-3" />
-        <span className="text-xs font-bold uppercase tracking-wide">{seam.label}</span>
-      </div>
-    </button>
-  );
-}
-
-// ── Seta de conexão ──────────────────────────────────────────────────────────
-function Seam({ status, horizontal }: { status: SeamStatus; horizontal: boolean }) {
-  const s = SEAM_CFG[status];
-  const Arrow = horizontal ? ArrowRight : ArrowDown;
-  return (
-    <div className={`flex ${horizontal ? 'flex-col w-12' : 'flex-row h-12'} items-center justify-center gap-0.5 shrink-0`}>
-      <div className={`flex items-center justify-center gap-0.5 ${horizontal ? 'flex-col' : 'flex-row'}`}>
-        <div className={`${horizontal ? 'h-0.5 w-6' : 'w-0.5 h-6'} ${s.lineColor} rounded-full`} />
-        <Arrow className={`w-4 h-4 ${s.color}`} />
-      </div>
-    </div>
-  );
+/** O editor de modelo aberto a partir do canvas: org resolvida, e ou um modelo a editar, ou os valores de partida. */
+interface EditorAberto {
+  orgId: string;
+  editando?: ModeloEmEdicao;
+  inicial?: { trigger_type: 'EVENTO'; trigger_event_key: string; name: string };
 }
 
 // ── Página principal ─────────────────────────────────────────────────────────
 export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeView }) => {
   const [stages, setStages] = useState<P2PStage[]>([]);
+  const [edges, setEdges] = useState<P2PEdge[]>([]);
+  const [groups, setGroups] = useState<P2PGroup[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [generatedAt, setGeneratedAt] = useState('');
   const [openStageId, setOpenStageId] = useState<string | null>(null);
   const [openSeam, setOpenSeam] = useState<SeamStatus | null>(null);
+  const [selecao, setSelecao] = useState<P2PSelecao>(null);
+  const [painelAberto, setPainelAberto] = usePersistedState<boolean>('p2p:painel', true);
+  const [modoEscolher, setModoEscolher] = useState(false);
+  const [editor, setEditor] = useState<EditorAberto | null>(null);
+  const desktop = useDesktop();
+  // Só para NOMEAR a org de um modelo quando a transição tem modelos de mais de
+  // uma ("Todas as organizações") — não decide de qual org ler (REGRA #5).
+  const organizacoes = useStore(s => s.organizations);
+  const nomeDaOrg = useCallback((id: string) => organizacoes?.find(o => o.id === id)?.name, [organizacoes]);
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+  const { showToast, localToast } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -360,6 +319,9 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
         selectedProjectId || undefined,
       );
       setStages(snap.stages);
+      // Mocks antigos do snapshot não trazem arestas/grupos — a Torre segue sem desenhar linhas.
+      setEdges(snap.edges ?? []);
+      setGroups(snap.groups ?? []);
       setGeneratedAt(snap.generatedAt);
     } finally {
       setLoading(false);
@@ -379,31 +341,71 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
     manual:      stages.filter(s => s.inboundSeam === 'manual').length,
     gap:         stages.filter(s => s.inboundSeam === 'gap').length,
   };
-  const etapasComAtencao = stages.filter(s => SEAM_ATENCAO.includes(s.inboundSeam));
   const openStage = stages.find(s => s.id === openStageId) ?? null;
+
+  // ── editor de gatilho ──
+  /**
+   * Modelo é por organização: com o topo numa org não pergunta nada; em
+   * "Todas", `resolveWriteOrg('single')` pergunta qual (REGRA #5). Mesmo
+   * caminho de `ProcessosModule.handleNewTemplate`.
+   */
+  const novoGatilhoNaAresta = useCallback(async (edge: P2PEdge) => {
+    setModoEscolher(false);
+    const key = edge.eventKeys?.[0];
+    if (!key) return;
+    const target = await resolveWriteOrg('single');
+    if (!target || target.kind !== 'org') return;
+    setSelecao({ tipo: 'aresta', id: edge.id });
+    setEditor({
+      orgId: target.orgId,
+      inicial: { trigger_type: 'EVENTO', trigger_event_key: key, name: `Processo: ${PROCESS_EVENT_LABEL[key]}` },
+    });
+  }, [resolveWriteOrg]);
+
+  /** A org do modelo é a dele — não se pergunta (o modelo já existe lá). */
+  const editarTemplate = useCallback(async (tpl: P2PTemplateAtivo, edge: P2PEdge) => {
+    setSelecao({ tipo: 'aresta', id: edge.id });
+    try {
+      const [templates, steps] = await Promise.all([
+        processService.listTemplates(tpl.organizationId),
+        processService.getTemplateSteps(tpl.id),
+      ]);
+      const template = templates.find(t => t.id === tpl.id);
+      if (!template) { showToast('Modelo não encontrado — atualize o quadro.', 'error'); return; }
+      setEditor({ orgId: tpl.organizationId, editando: { template, steps } });
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Não foi possível abrir o modelo.', 'error');
+    }
+  }, [showToast]);
+
+  const aoSalvarModelo = useCallback(() => {
+    load();
+    showToast(editor?.editando ? 'Modelo salvo.' : 'Modelo salvo — a transição agora é orquestrada.');
+  }, [editor?.editando, load, showToast]);
+
+  const focarNo = (id: string) => setSelecao({ tipo: 'no', id });
+  const abrirNo = (id: string) => setOpenStageId(id);
+  const selecionarAresta = (edge: P2PEdge) => setSelecao({ tipo: 'aresta', id: edge.id });
 
   return (
     <div className="space-y-6 pb-20">
-      {/* Cabeçalho */}
-      <div className="flex flex-wrap items-start gap-4">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
-            <Workflow className="w-5 h-5 text-indigo-600 shrink-0" />
-            Torre de Controle — Fluxo P2P
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Suprimentos → Estoque → Fiscal → Financeiro → Tesouraria. Clique num nó para ver os registros.
+      {/* Cabeçalho (§20) */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Torre de Controle — Fluxo P2P</h1>
+          <p className="text-gray-400 text-sm mt-1.5 font-medium">
+            Suprimentos → Estoque & Fiscal → Financeiro. Clique numa etapa para ver os registros; numa transição, para ver quem a conduz.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Filtro por obra */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {projects.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm">
-              <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+            <div className="relative">
+              <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               <select
                 value={selectedProjectId}
                 onChange={e => { setSelectedProjectId(e.target.value); setOpenStageId(null); }}
-                className="bg-transparent text-slate-700 font-medium focus:outline-none max-w-[180px]"
+                className="h-9 pl-8 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer max-w-[220px]"
+                title="Filtrar por obra"
               >
                 <option value="">Todas as obras</option>
                 {projects.map(p => (
@@ -413,85 +415,108 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
             </div>
           )}
           <button
+            type="button"
             onClick={() => { load(); setOpenStageId(null); }}
             disabled={loading}
-            className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50"
+            title="Atualizar o quadro"
+            className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Atualizar
+          </button>
+          {desktop && (
+            <button
+              type="button"
+              onClick={() => setPainelAberto(v => !v)}
+              aria-pressed={painelAberto}
+              className={`${BTN_SECUNDARIO} ${painelAberto ? 'border-blue-300 bg-blue-50 text-blue-700' : ''}`}
+            >
+              <BarChart3 className="w-[15px] h-[15px]" /> Métricas
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => { setModoEscolher(true); }}
+            disabled={modoEscolher || !desktop}
+            title={!desktop ? 'Disponível no desktop (precisa do desenho do fluxo)' : modoEscolher ? 'Escolha a transição no desenho (Esc cancela)' : 'Criar um modelo de processo que nasce de um evento do fluxo'}
+            className={BTN_PRIMARIO}
+          >
+            <Plus className="w-[15px] h-[15px]" /> Novo gatilho
           </button>
         </div>
       </div>
 
       {/* KPIs de saúde das integrações (§4) — clicar abre as etapas daquela situação */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        {SEAM_KPI.map(k => (
-          <KpiCard
-            key={k.seam}
-            label={k.label}
-            value={contagemPorSeam[k.seam]}
-            sub={k.sub}
-            icon={<k.icon className="w-4 h-4" />}
-            color={k.color}
-            onClick={() => setOpenSeam(k.seam)}
-            title={`Ver etapas: ${k.label.toLowerCase()}`}
-          />
-        ))}
+        {SEAM_KPI.map(k => {
+          const Icon = SEAM_CFG[k.seam].icon;
+          return (
+            <KpiCard
+              key={k.seam}
+              label={k.label}
+              value={contagemPorSeam[k.seam]}
+              sub={k.sub}
+              icon={<Icon className="w-4 h-4" />}
+              color={k.color}
+              onClick={() => setOpenSeam(k.seam)}
+              title={`Ver etapas: ${k.label.toLowerCase()}`}
+            />
+          );
+        })}
       </div>
 
       {/* Fluxo */}
-      <div className="bg-slate-50 border border-slate-200 rounded-3xl p-4 sm:p-6 overflow-x-auto">
-        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-start gap-1">
-          {stages.map((stage, i) => (
-            <React.Fragment key={stage.id}>
-              <StageCard
-                stage={stage}
-                selected={openStageId === stage.id}
-                onOpen={() => setOpenStageId(stage.id)}
-              />
-              {i < stages.length - 1 && (
-                <>
-                  <div className="hidden sm:flex items-center self-start mt-8">
-                    <Seam status={stages[i + 1].inboundSeam} horizontal />
-                  </div>
-                  <div className="sm:hidden self-center">
-                    <Seam status={stages[i + 1].inboundSeam} horizontal={false} />
-                  </div>
-                </>
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
-
-      {/* Legenda dos pontos de atenção */}
-      {etapasComAtencao.length > 0 && (
-        <div>
-          <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-2">
-            Pontos de atenção nas integrações
-          </h2>
-          <div className="space-y-2">
-            {etapasComAtencao.map(s => {
-              const cfg = SEAM_CFG[s.inboundSeam];
-              return (
-                <div key={s.id} className="flex items-start gap-3 bg-white border border-slate-200 rounded-xl p-3">
-                  <cfg.icon className={`w-4 h-4 mt-0.5 shrink-0 ${cfg.color}`} />
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">
-                      → {s.label}{' '}
-                      <span className={`text-xs font-black ${cfg.color}`}>({cfg.label})</span>
-                    </p>
-                    <p className="text-xs text-slate-500">{s.inboundNote}</p>
-                  </div>
-                </div>
-              );
-            })}
+      {desktop ? (
+        <div className={`grid gap-3 items-start ${painelAberto ? 'lg:grid-cols-[224px_minmax(0,1fr)_320px]' : 'lg:grid-cols-[224px_minmax(0,1fr)]'}`}>
+          <P2PLibrary
+            stages={stages}
+            edges={edges}
+            selecao={selecao}
+            modoEscolher={modoEscolher}
+            onFocusNode={focarNo}
+            onSelectEdge={selecionarAresta}
+            onNovoGatilho={() => setModoEscolher(true)}
+            onEditarTemplate={editarTemplate}
+          />
+          <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+            <P2PCanvas
+              stages={stages}
+              edges={edges}
+              groups={groups}
+              selecao={selecao}
+              modoEscolher={modoEscolher}
+              onCancelarModo={() => setModoEscolher(false)}
+              onSelectNode={focarNo}
+              onOpenNode={abrirNo}
+              onNavigate={onChangeView}
+              onSelectEdge={selecionarAresta}
+              onEscolherAresta={novoGatilhoNaAresta}
+              onNovoGatilho={novoGatilhoNaAresta}
+              onEditarTemplate={editarTemplate}
+            />
           </div>
+          {painelAberto && (
+            <P2PMetricsPanel
+              stages={stages}
+              edges={edges}
+              selecao={selecao}
+              organizationId={activeOrganizationId}
+              projectId={selectedProjectId || undefined}
+              loading={loading}
+              onClose={() => setPainelAberto(false)}
+              onSelectNode={focarNo}
+              onOpenNode={abrirNo}
+              onNovoGatilho={novoGatilhoNaAresta}
+              onEditarTemplate={editarTemplate}
+              nomeDaOrg={nomeDaOrg}
+            />
+          )}
         </div>
+      ) : (
+        <P2PListaMobile stages={stages} edges={edges} onOpenNode={abrirNo} onNavigate={onChangeView} />
       )}
 
       {generatedAt && (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-gray-400">
           Atualizado em {new Date(generatedAt).toLocaleString('pt-BR')}
           {selectedProjectId && projects.find(p => p.id === selectedProjectId) && (
             <> · Obra: <strong>{projects.find(p => p.id === selectedProjectId)!.name}</strong></>
@@ -499,6 +524,9 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
         </p>
       )}
 
+      {/* Drawers, modal do editor e o modal de organização ficam AQUI, irmãos da
+          grade: `Sheet`/`Modal` são `fixed` sem portal e, dentro da camada com
+          `transform` do canvas, nasceriam presos e escalados. */}
       <SeamSheet
         seam={openSeam}
         stages={stages}
@@ -512,6 +540,20 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
         onClose={() => setOpenStageId(null)}
         onNavigate={onChangeView}
       />
+      <TemplateEditorModal
+        open={!!editor}
+        onClose={() => setEditor(null)}
+        organizationId={editor?.orgId ?? ''}
+        editando={editor?.editando ?? null}
+        inicial={editor?.inicial}
+        onSaved={aoSalvarModelo}
+      />
+      {orgTargetModal}
+      {localToast && (
+        <div className={`fixed bottom-6 right-6 z-[300] px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium text-white ${localToast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}>
+          {localToast.message}
+        </div>
+      )}
     </div>
   );
 };

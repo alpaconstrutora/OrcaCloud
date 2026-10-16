@@ -17,6 +17,39 @@ const SC_ABERTA: PurchaseRequestDisplayStatus[] = ['rascunho', 'em_aprovacao', '
  */
 export type SeamStatus = 'auto' | 'manual' | 'gap' | 'orquestrada';
 
+/** Modelo ATIVO do motor que escuta um evento — o que a aresta precisa para abrir o editor. */
+export interface P2PTemplateAtivo {
+  id: string;
+  name: string;
+  organizationId: string;
+  /** O evento que este modelo escuta — a aresta pode aceitar vários, a biblioteca conta por evento. */
+  eventKey: ProcessEventKey;
+}
+
+/**
+ * Uma transição do fluxo. A costura (`seam`) mora AQUI desde 16/10/2026 — o
+ * nó só a herda da sua aresta de entrada (`inboundSeam`), para os KPIs e o
+ * drawer continuarem contando por etapa. `eventKeys` é o evento do motor que
+ * CONDUZ esta transição (`EDGE_EVENT_KEYS`); `templates` são os modelos ativos
+ * que o escutam — vazio significa "ninguém orquestra".
+ */
+export interface P2PEdge {
+  id: string;
+  from: string;
+  to: string;
+  seam: SeamStatus;
+  note?: string;
+  eventKeys?: ProcessEventKey[];
+  templates?: P2PTemplateAtivo[];
+}
+
+/** Área do fluxo que agrupa nós no desenho (as "lanes" do canvas). */
+export interface P2PGroup {
+  id: string;
+  label: string;
+  nodeIds: string[];
+}
+
 /** Resumo das instâncias de processo nascidas num nó. */
 export interface P2PProcessSummary {
   ativos: number;
@@ -51,6 +84,49 @@ export const STAGE_EVENT_KEYS: Record<string, ProcessEventKey[]> = {
   financeiro:  ['internal_transaction.paid'],
 };
 
+/**
+ * Qual evento CONDUZ qual transição. Até 16/10/2026 a regra era "o nó seguinte
+ * ao emissor fica orquestrado" — servia no fluxo linear. Com a ramificação
+ * Recebimento → {Estoque, Nota Fiscal} ela pintaria a entrada de estoque
+ * (automática, custo médio) como conduzida pelo processo de aprovação de
+ * pagamento, o que é falso. Aqui cada evento aponta a transição que de fato
+ * acompanha: o pedido aprovado conduz ao recebimento; o recebimento (ou a
+ * divergência) conduz à conferência da nota; a nota vinculada conduz ao título;
+ * o título pago conduz à baixa.
+ */
+export const EDGE_EVENT_KEYS: Record<string, ProcessEventKey[]> = {
+  'pedido->recebimento':   STAGE_EVENT_KEYS.pedido,
+  'recebimento->fiscal':   STAGE_EVENT_KEYS.recebimento,
+  'fiscal->financeiro':    STAGE_EVENT_KEYS.fiscal,
+  'financeiro->pagamento': STAGE_EVENT_KEYS.financeiro,
+};
+
+/**
+ * Retrato ESTÁTICO das transições — o que o código faz sozinho, sem o motor.
+ * Conferido contra o código em 28/09/2026 (ver histórico em `DEFINICAO_DOS_NOS`
+ * abaixo). Se uma costura mudar no código, mude AQUI. Estoque é fim de linha:
+ * o consumo na obra não alimenta Contas a Pagar — o título nasce do pedido
+ * recebido ou da NF-e vinculada, que é a aresta `fiscal->financeiro`.
+ */
+export const DEFINICAO_DAS_ARESTAS: ReadonlyArray<Pick<P2PEdge, 'from' | 'to' | 'seam' | 'note'>> = [
+  { from: 'solicitacao', to: 'cotacao',     seam: 'auto',   note: 'Solicitação aprovada (ou o Plano) gera quotation_request' },
+  { from: 'cotacao',     to: 'pedido',      seam: 'auto',   note: 'Cotação equalizada vira pedido' },
+  { from: 'pedido',      to: 'recebimento', seam: 'auto',   note: 'Conferência física do pedido' },
+  { from: 'recebimento', to: 'estoque',     seam: 'auto',   note: 'Recebimento gera entrada (custo médio) automaticamente' },
+  { from: 'recebimento', to: 'fiscal',      seam: 'manual', note: '3-way match (Pedido × Recebimento × Nota) na aba Recebimento do pedido; sem bloqueio automático' },
+  { from: 'fiscal',      to: 'financeiro',  seam: 'auto',   note: 'Título nasce do pedido recebido ou da NF-e vinculada, com o pedido de origem (purchase_order_id)' },
+  { from: 'financeiro',  to: 'pagamento',   seam: 'manual', note: 'Baixa via conciliação bancária' },
+];
+
+/** Áreas do fluxo, na ordem em que aparecem no desenho. */
+export const P2P_GROUPS: ReadonlyArray<P2PGroup> = [
+  { id: 'suprimentos', label: 'Suprimentos',      nodeIds: ['solicitacao', 'cotacao', 'pedido'] },
+  { id: 'estoque',     label: 'Estoque & Fiscal', nodeIds: ['recebimento', 'estoque', 'fiscal'] },
+  { id: 'financeiro',  label: 'Financeiro',       nodeIds: ['financeiro', 'pagamento'] },
+];
+
+export const edgeId = (from: string, to: string) => `${from}->${to}`;
+
 export interface P2PRecord {
   id: string;
   label: string;
@@ -78,6 +154,8 @@ export interface P2PStage {
 
 export interface P2PFlowSnapshot {
   stages: P2PStage[];
+  edges: P2PEdge[];
+  groups: P2PGroup[];
   generatedAt: string;
 }
 
@@ -171,8 +249,8 @@ interface InstanciaDoMotor {
 }
 
 interface LeituraDoMotor {
-  /** trigger_event_key → nomes dos templates ATIVOS que o escutam. */
-  templatesAtivos: Map<string, string[]>;
+  /** trigger_event_key → templates ATIVOS que o escutam. */
+  templatesAtivos: Map<string, P2PTemplateAtivo[]>;
   /** Instâncias não terminais de templates com gatilho por evento. */
   instancias: InstanciaDoMotor[];
   /** id da etapa atual → { nome, due_at }. */
@@ -196,7 +274,7 @@ async function lerMotor(organizationId: string | null, projectId?: string): Prom
   try {
     let tq = supabase
       .from('process_templates')
-      .select('name, trigger_event_key')
+      .select('id, name, trigger_event_key, organization_id')
       .eq('trigger_type', 'EVENTO')
       .eq('status', 'ATIVO')
       .not('trigger_event_key', 'is', null);
@@ -215,10 +293,13 @@ async function lerMotor(organizationId: string | null, projectId?: string): Prom
     if (t.error) { console.warn('[p2pFlow] templates do motor:', t.error.message); return MOTOR_VAZIO; }
     if (i.error) { console.warn('[p2pFlow] instâncias do motor:', i.error.message); return MOTOR_VAZIO; }
 
-    const templatesAtivos = new Map<string, string[]>();
-    for (const row of (t.data ?? []) as { name: string; trigger_event_key: string | null }[]) {
+    const templatesAtivos = new Map<string, P2PTemplateAtivo[]>();
+    for (const row of (t.data ?? []) as { id: string; name: string; trigger_event_key: string | null; organization_id: string }[]) {
       if (!row.trigger_event_key) continue;
-      templatesAtivos.set(row.trigger_event_key, [...(templatesAtivos.get(row.trigger_event_key) ?? []), row.name]);
+      templatesAtivos.set(row.trigger_event_key, [
+        ...(templatesAtivos.get(row.trigger_event_key) ?? []),
+        { id: row.id, name: row.name, organizationId: row.organization_id, eventKey: row.trigger_event_key as ProcessEventKey },
+      ]);
     }
 
     const instancias = ((i.data ?? []) as unknown as InstanciaDoMotor[])
@@ -262,8 +343,26 @@ function resumirProcessos(motor: LeituraDoMotor, eventKeys: ProcessEventKey[], a
   return {
     ativos: lista.length,
     atrasados: lista.filter(inst => instanciaAtrasada(inst, motor, agora)).length,
-    templates: eventKeys.flatMap(k => motor.templatesAtivos.get(k) ?? []),
+    templates: eventKeys.flatMap(k => motor.templatesAtivos.get(k) ?? []).map(t => t.name),
   };
+}
+
+/** Arestas com a costura real: o retrato estático, sobreposto pelo motor onde há modelo ativo escutando. */
+function montarArestas(motor: LeituraDoMotor): P2PEdge[] {
+  return DEFINICAO_DAS_ARESTAS.map(def => {
+    const id = edgeId(def.from, def.to);
+    const eventKeys = EDGE_EVENT_KEYS[id];
+    if (!eventKeys) return { id, ...def };
+    const templates = eventKeys.flatMap(k => motor.templatesAtivos.get(k) ?? []);
+    const orquestrada = templates.length > 0;
+    return {
+      id, ...def, eventKeys, templates,
+      ...(orquestrada ? {
+        seam: 'orquestrada' as SeamStatus,
+        note: `Conduzida por Processos: ${[...new Set(templates.map(t => t.name))].join(', ')}`,
+      } : {}),
+    };
+  });
 }
 
 const fmtBrl = (n?: number) =>
@@ -351,12 +450,14 @@ export const p2pFlowService = {
       lerMotor(organizationId, projectId),
     ]);
 
-    // Retrato ESTÁTICO das costuras — o que o código faz sozinho, sem o motor.
-    // Conferido contra o código em 28/09/2026 (os três últimos nós estavam
-    // com o rótulo de junho: "SEM 3-way match" quando o `matchService` +
-    // `ThreeWayMatchPanel` já existiam na aba Recebimento do pedido, e "NF-e
-    // isolada não gera título" quando `nfeService` já criava o título com
-    // `purchase_order_id`). Se uma costura mudar no código, mude AQUI.
+    // DEFINICAO_DOS_NOS — rótulo, dono, tela e contagem de cada etapa. A
+    // costura de entrada escrita aqui é só o valor de partida: desde 16/10/2026
+    // ela é sobreposta pela aresta (`DEFINICAO_DAS_ARESTAS`), e só
+    // `solicitacao`, sem aresta de entrada, fica com a sua. Histórico: em
+    // 28/09/2026 os três últimos nós estavam com o rótulo de junho ("SEM 3-way
+    // match" quando o `matchService` + `ThreeWayMatchPanel` já existiam na aba
+    // Recebimento do pedido; "NF-e isolada não gera título" quando `nfeService`
+    // já criava o título com `purchase_order_id`).
     const definicoes: P2PStage[] = [
       {
         id: 'solicitacao', label: 'Solicitação', owner: 'Obras / Almoxarifado',
@@ -406,26 +507,23 @@ export const p2pFlowService = {
       },
     ];
 
-    // Sobrepõe o motor ao retrato: o nó que EMITE evento ganha o resumo das
-    // instâncias nascidas nele; o nó SEGUINTE tem a entrada `orquestrada`
-    // quando há template ativo escutando. "Todas as organizações" (org null)
-    // conta template de qualquer org do usuário — a RLS já recortou.
+    // A costura mora na ARESTA (`montarArestas`): o nó herda a da sua única
+    // aresta de entrada — `solicitacao` não tem entrada e fica com o retrato
+    // estático. O nó que EMITE evento ganha o resumo das instâncias nascidas
+    // nele. "Todas as organizações" (org null) conta template de qualquer org
+    // do usuário — a RLS já recortou.
+    const edges = montarArestas(motor);
     const agora = Date.now();
-    const stages: P2PStage[] = definicoes.map((no, i) => {
-      const emissor = definicoes[i - 1];
-      const templatesDoAnterior = emissor?.eventKeys?.flatMap(k => motor.templatesAtivos.get(k) ?? []) ?? [];
-      const orquestrada = templatesDoAnterior.length > 0;
+    const stages: P2PStage[] = definicoes.map(no => {
+      const entrada = edges.find(e => e.to === no.id);
       return {
         ...no,
+        ...(entrada ? { inboundSeam: entrada.seam, inboundNote: entrada.note } : {}),
         ...(no.eventKeys ? { processes: resumirProcessos(motor, no.eventKeys, agora) } : {}),
-        ...(orquestrada ? {
-          inboundSeam: 'orquestrada' as SeamStatus,
-          inboundNote: `Conduzida por Processos: ${[...new Set(templatesDoAnterior)].join(', ')}`,
-        } : {}),
       };
     });
 
-    return { stages, generatedAt: new Date().toISOString() };
+    return { stages, edges, groups: [...P2P_GROUPS], generatedAt: new Date().toISOString() };
   },
 
   /** Instâncias ativas nascidas num nó (drawer do nó). Vazio para nó sem evento. */

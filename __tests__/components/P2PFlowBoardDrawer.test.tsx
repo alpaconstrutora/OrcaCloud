@@ -2,6 +2,12 @@
 /**
  * Torre de Controle — Fluxo P2P: clicar num KPI ou num nó do fluxo abre o
  * drawer padrão (`Sheet`), no lugar da antiga expansão inline do nó.
+ *
+ * 16/10/2026 — a Torre virou canvas (docs/planos/2026-10-16-torre-p2p-processo-visual.md).
+ * O board passou a usar `useOrgWriteTarget` (lê o zustand real) e o nome da
+ * etapa aparece também na biblioteca e no painel de métricas, então o clique
+ * no nó é feito DENTRO do canvas (`[data-canvas]`). O mock do snapshot segue
+ * sem `edges`/`groups` de propósito: o board tolera (`?? []`).
  */
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -22,6 +28,16 @@ vi.mock('../../services/p2pFlowService', () => ({
       : []),
   },
 }));
+
+vi.mock('../../hooks/useOrgContext', () => ({
+  useOrgWriteTarget: () => ({ resolveWriteOrg: vi.fn(async () => ({ kind: 'org', orgId: 'org' })), orgTargetModal: null }),
+}));
+vi.mock('../../store/useStore', () => ({ useStore: (sel: (s: { projects: unknown[] }) => unknown) => sel({ projects: [] }) }));
+vi.mock('../../services/processService', () => ({
+  processService: { listTemplates: vi.fn(async () => []), getTemplateSteps: vi.fn(async () => []), listAssignableMembers: vi.fn(async () => []), listGroups: vi.fn(async () => []) },
+  problemaDoModelo: () => null,
+}));
+vi.mock('../../services/supplierService', () => ({ supplierService: { listSuppliers: vi.fn(async () => []) } }));
 
 import { P2PFlowBoard } from '../../components/P2PFlowBoard';
 import { ConfirmProvider } from '../../components/ui/confirm';
@@ -47,7 +63,8 @@ describe('P2PFlowBoard — drawers', () => {
   it('clicar num nó abre o drawer da etapa com os registros e o botão do módulo', async () => {
     const onChangeView = vi.fn();
     montar(onChangeView);
-    fireEvent.click(await screen.findByText('Pedido de Compra'));
+    const canvas = await waitFor(() => document.querySelector('[data-canvas]') as HTMLElement);
+    fireEvent.click(await within(canvas).findByRole('button', { name: /Pedido de Compra/ }));
     await waitFor(() => expect(dialogo()).toContain('Pedido de Compra'));
     expect(await screen.findByText('PC-0042 — Cimento')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Abrir módulo/ }));

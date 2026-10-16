@@ -3,9 +3,12 @@
  * de Processos. docs/planos/2026-09-28-torre-p2p-processos.md — Passo 2.1
  *
  * O que este arquivo trava:
- *   1. org com template EVENTO ativo para `purchase_order.received` → o nó
- *      SEGUINTE ao Recebimento (Estoque) entra `orquestrada`, e o Recebimento
- *      ganha o resumo das instâncias nascidas nele (ativos/atrasados);
+ *   1. org com template EVENTO ativo para `purchase_order.received` → a
+ *      transição que esse evento CONDUZ (Recebimento → Nota Fiscal) entra
+ *      `orquestrada` — na aresta e na entrada do nó Nota Fiscal — e o
+ *      Recebimento ganha o resumo das instâncias nascidas nele. A entrada de
+ *      Estoque segue `auto`: desde 16/10/2026 o fluxo é ramificado e a entrada
+ *      de estoque (custo médio) não é conduzida pelo processo de pagamento;
  *   2. org sem template → costura estática, sem `orquestrada` em lugar nenhum;
  *   3. nenhum nó sai `gap` por "SEM 3-way match" — o rótulo de junho morreu;
  *   4. motor fora do ar → retrato estático, o quadro não some;
@@ -41,7 +44,7 @@ import { p2pFlowService } from '../services/p2pFlowService';
 const ONTEM = new Date(Date.now() - 86_400_000).toISOString();
 const AMANHA = new Date(Date.now() + 86_400_000).toISOString();
 
-const templateRecebido = { name: 'Aprovação de pagamento de fornecedor', trigger_event_key: 'purchase_order.received' };
+const templateRecebido = { id: 't1', name: 'Aprovação de pagamento de fornecedor', trigger_event_key: 'purchase_order.received', organization_id: 'org1' };
 const instancia = (id: string, stepId: string) => ({
     id, title: `Pedido ${id} — Recebido`, status: 'AGUARDANDO_APROVACAO', started_at: ONTEM, due_at: null,
     current_step_id: stepId, process_templates: templateRecebido,
@@ -54,20 +57,29 @@ describe('p2pFlowService — costura orquestrada pelo motor de Processos', () =>
         vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
-    it('template ativo → entrada do nó seguinte ao Recebimento é orquestrada, e o Recebimento resume as instâncias', async () => {
+    it('template ativo → a transição Recebimento → Nota Fiscal é orquestrada (aresta e nó), Estoque segue auto, e o Recebimento resume as instâncias', async () => {
         dados.process_templates = [templateRecebido];
         dados.process_instances = [instancia('i1', 's1'), instancia('i2', 's2')];
         dados.process_instance_steps = [
             { id: 's1', name: 'Conferência Fiscal', due_at: ONTEM },   // atrasada
             { id: 's2', name: 'Conferência Fiscal', due_at: AMANHA },
         ];
-        const { stages } = await p2pFlowService.getSnapshot('org1');
+        const { stages, edges, groups } = await p2pFlowService.getSnapshot('org1');
         const recebimento = stages.find(s => s.id === 'recebimento')!;
         const estoque = stages.find(s => s.id === 'estoque')!;
+        const fiscal = stages.find(s => s.id === 'fiscal')!;
 
-        expect(estoque.inboundSeam).toBe('orquestrada');
-        expect(estoque.inboundNote).toContain('Aprovação de pagamento de fornecedor');
+        expect(fiscal.inboundSeam).toBe('orquestrada');
+        expect(fiscal.inboundNote).toContain('Aprovação de pagamento de fornecedor');
+        expect(estoque.inboundSeam).toBe('auto');
         expect(recebimento.inboundSeam).toBe('auto'); // a ENTRADA do Recebimento não muda: o processo nasce nele
+
+        const aresta = edges.find(e => e.id === 'recebimento->fiscal')!;
+        expect(aresta.seam).toBe('orquestrada');
+        expect(aresta.templates).toEqual([{ id: 't1', name: 'Aprovação de pagamento de fornecedor', organizationId: 'org1', eventKey: 'purchase_order.received' }]);
+        expect(edges.find(e => e.id === 'recebimento->estoque')!.seam).toBe('auto');
+        expect(edges).toHaveLength(7);
+        expect(groups.map(g => g.id)).toEqual(['suprimentos', 'estoque', 'financeiro']);
         expect(recebimento.processes).toEqual({ ativos: 2, atrasados: 1, templates: ['Aprovação de pagamento de fornecedor'] });
     });
 

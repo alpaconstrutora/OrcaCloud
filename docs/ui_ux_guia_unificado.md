@@ -217,6 +217,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §28 Gráficos — se a tela tem gráfico: cromo, marcas, rótulo, legenda, paleta e estado vazio conferidos item a item
 - [ ] §29 Barra de progresso segmentada — se a tela mostra proporção/percentual em barra: usa `SegmentedProgress` (percentual em texto + quadradinhos), não barra contínua à mão
 - [ ] §30 Malha do formulário — se a tela tem formulário: rótulo 6px / campo 16px / seção 32px / card 24px; seções do mesmo formulário no mesmo card; campos curtos em grade
+- [ ] §31 Diagrama de processo (canvas) — se a tela desenha um fluxo de nós: fundo pontilhado por `style`, cartão-nó, linha 2px com seta por costura, rótulo de aresta em chip `rounded-[6px]` sem caixa alta, caixa de grupo tracejada, controles de zoom; drawers/modais FORA da camada com `transform`
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -3087,6 +3088,99 @@ moldura.
 > bloco tinha um título próprio derivado (`h4 text-xs`, rótulo de 10px) e o
 > usuário achou a tela "sem separação clara". Seção nova usa o componente, não o
 > markup copiado; `ContractModal.tsx` ainda tem o markup inline.
+
+---
+
+## 31. DIAGRAMA DE PROCESSO (canvas) — nós, linhas, grupos, biblioteca e painel
+
+**Criado em 2026-10-16 (Suprimentos › Torre de Controle — Fluxo P2P), a partir de
+dois prints de referência do usuário** (editor de workflow com biblioteca
+"Trigger & Conditions" à esquerda; pipeline com grupos, zoom e painel
+"Metrics & Insights" à direita). Referência: `components/P2PFlowBoard.tsx` +
+`components/p2p/*`, `utils/p2pLayout.ts`, `hooks/usePanZoom.ts`. Plano:
+`docs/planos/2026-10-16-torre-p2p-processo-visual.md`.
+
+Vale para tela que **desenha um fluxo de nós ligados por linhas** dentro do app.
+Não é a Planta Inteligente (desenho técnico em `<canvas>`, §19.5) nem o Gantt.
+
+### 31.1 Anatomia
+
+```
+título §20 · KPIs §4
+grade  [biblioteca 256px] [canvas 1fr] [painel 360px, fechável]    (lg+; abaixo: lista vertical)
+drawers (Sheet) · editor (Modal) · modal de organização   ← irmãos da grade, FORA do canvas
+```
+
+- **Canvas** — container `relative overflow-hidden bg-white` com `touch-action: none`
+  e fundo pontilhado **por `style`** (Tailwind v4 não gera valor dinâmico):
+  `backgroundImage: radial-gradient(circle, #cbd5e1 1px, transparent 1px)`,
+  `backgroundSize: ${20·escala}px`, `backgroundPosition: ${dx}px ${dy}px` — os
+  pontos acompanham pan/zoom. Dentro, UMA camada `absolute` com
+  `transform: translate(dx, dy) scale(escala)` e `transformOrigin: 0 0`.
+- **Pan/zoom** — `hooks/usePanZoom.ts`: escala 0,5–2 (passo ×1,2) ancorada no
+  cursor; roda por `useRodaNaoPassiva` (o `onWheel` do React é passivo e rola a
+  página junto); arraste no FUNDO = pan, com limiar de 4 px; nós, rótulos e
+  controles levam `data-no-pan`. Controles no canto inferior esquerdo, empilhados
+  num card `rounded-[6px] border bg-white`: `+`, `%`, `−`, enquadrar (`h-8 w-8`).
+- **Cartão-nó** (`P2PNodeCard`) — 240×148, `rounded-[10px] border bg-white
+  shadow-sm`; selecionado = `ring-2 ring-blue-400`. Cabeçalho: ícone em bolha
+  `w-7 h-7 rounded-[6px] bg-indigo-50 text-indigo-600`, título `text-sm
+  font-semibold text-gray-800`, dono `text-xs text-gray-500` à direita. Corpo:
+  `<dl>` de pares `text-xs text-gray-500` → `text-sm` (valor principal
+  `font-medium text-gray-800`; pendência `text-amber-600`; atraso `text-red-600`).
+  Situação da entrada = **texto colorido (§8)**, nunca pílula. Rodapé: um botão
+  `h-8 rounded-[6px] border` com a ação secundária. O corpo é um `button` (nome
+  acessível = título) e o rodapé é OUTRO `button`, fora dele.
+- **Linha** (`P2PEdges`) — `<svg absolute pointer-events-none>` do tamanho do
+  desenho; por aresta um `<path>` 2 px na cor da situação (`p2pSeam.ts`:
+  automática `#10b981`, orquestrada `#6366f1`, semi-manual `#f59e0b`, lacuna
+  `#ef4444`) com `<marker markerUnits="userSpaceOnUse">` 12×8 na mesma cor, e um
+  segundo `<path>` transparente de 14 px (`pointer-events: stroke`) que recebe o
+  clique. Caminho ortogonal: `M H` na mesma linha; `M H V H` em linhas diferentes,
+  com a curva nunca antes de 24 px do cartão (`caminhoOrtogonal`). Selecionada =
+  3 px. Em modo de escolha, `strokeDasharray 6 4` + `animate-pulse` + cursor `copy`.
+- **Rótulo de aresta** (`P2PEdgeLabel`) — HTML absoluto no meio do primeiro
+  trecho horizontal (`translate(-50%, -50%)`), não `<text>` SVG: é botão
+  acessível e não borra com o `scale`. Chip `h-6 px-2 rounded-[6px] border
+  bg-white text-[11px] font-medium shadow-sm` com o texto na cor da situação.
+  **Não é §8** (não é status de registro) **nem §8.1** (não nomeia posição no
+  desenho): é a legenda da transição. Por isso `rounded-[6px]` e sentence case —
+  sem `rounded-full`, sem `uppercase`. Ação de criar na transição = segundo
+  chip `+ Gatilho` ao lado.
+- **Caixa de grupo** — `absolute rounded-[10px] border-2 border-dashed
+  border-slate-200`, envolvendo os nós com 20 px de respiro; o nome do grupo é o
+  mesmo chip do rótulo de aresta, no canto superior esquerdo (`-top-3 left-3`).
+- **Biblioteca** (esquerda) — card `rounded-[10px] border p-3`; títulos de seção
+  `h3 text-[11px] font-semibold uppercase tracking-wide text-gray-400` (rótulo de
+  seção, como "TRIGGER/CONDITIONS" do desenho de referência — não é status, e não
+  tem `rounded-full`); itens `h-8 rounded-[6px] text-sm`, ativo `bg-blue-50
+  text-blue-700`; ação de criar em botão secundário `h-9` no fim da seção.
+- **Painel direito** — card `rounded-[10px] border` com cabeçalho `px-4 py-3
+  border-b` (`h3 text-sm font-semibold` + `ActionIconButton` de fechar); dentro,
+  gráfico §28 (barras horizontais, ênfase na seleção: `#3b82f6` + `#94a3b8`),
+  `StandardTable bare dense` (§6.10) e o detalhe do item selecionado. Abre/fecha
+  por um botão secundário no cabeçalho da tela com `aria-pressed`, estado
+  persistido (`usePersistedState`).
+
+### 31.2 Regras
+
+> ✅ **Drawers e modais ficam FORA da camada com `transform`.** `Sheet` e `Modal`
+> são `fixed inset-0` sem portal (`ui/sheet.tsx`, `ui/modal.tsx`): dentro de um
+> ancestral transformado, `fixed` vira relativo a ele e o painel nasce preso e
+> escalado no canvas. No `P2PFlowBoard` eles são irmãos da grade.
+> ✅ **Desktop × celular decidido por JS** (`window.matchMedia('(min-width:
+> 1024px)')`, desktop quando não existe), não por `hidden lg:block`: renderizar
+> canvas e lista ao mesmo tempo duplica o nome de cada nó no DOM. Abaixo de `lg`
+> o fluxo é uma lista vertical com a transição de entrada como linha de texto.
+> ✅ **Posições são fixas por id** (`utils/p2pLayout.ts`), não um algoritmo: são
+> poucas etapas conhecidas e o arranjo à mão lê melhor. Id desconhecido cai numa
+> grade de reserva — nunca some.
+> ✅ Nó NÃO repete a nota da transição — ela mora no rótulo da aresta e no painel.
+> ✅ Títulos da biblioteca e do painel são `h3` — `h2` é do `SheetTitle`.
+> ❌ Nada de `reactflow`/`dagre`: o app não tem dependência de grafo e não precisa.
+> ❌ Pan/zoom no celular; arrastar nós e persistir posições — fora do padrão.
+> ℹ️ `scripts/check-ui-standard.sh` não olha SVG nem o fundo: a conferência do
+> desenho é visual, ao lado dos prints de referência do plano.
 
 ---
 

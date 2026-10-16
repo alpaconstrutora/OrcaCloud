@@ -1270,7 +1270,8 @@ interface Props {
   /** Paredes divididas por duas UNIDADES (E2.2): tracejado violeta sobre o eixo. */
   paredesGeminadas?: ReadonlySet<string>;
   /** MOBILIÁRIO sugerido (E6.3): retângulos no mundo (mm) com rótulo — desenho, não peça. */
-  mobiliario?: { ret: { x0: number; y0: number; x1: number; y1: number }; rotulo: string; ok: boolean }[];
+  /** F16 da casa automática: a peça pelo CONTORNO no mundo (o cômodo girado dá peça girada). */
+  mobiliario?: { contorno: Point[]; rotulo: string; ok: boolean }[];
   /**
    * Desenha a grade.
    *
@@ -9635,25 +9636,29 @@ export default function BlueprintCanvas({
     if (mobiliario && mobiliario.length > 0) {
       ctx.save();
       for (const p of mobiliario) {
-        const a = paraTela({ x: p.ret.x0, y: p.ret.y0 });
-        const b = paraTela({ x: p.ret.x1, y: p.ret.y1 });
-        const x = Math.min(a.x, b.x);
-        const y = Math.min(a.y, b.y);
-        const w = Math.abs(b.x - a.x);
-        const h = Math.abs(b.y - a.y);
+        if (p.contorno.length < 3) continue;
+        const q = p.contorno.map(paraTela);
+        ctx.beginPath();
+        q.forEach((v, i) => (i === 0 ? ctx.moveTo(v.x, v.y) : ctx.lineTo(v.x, v.y)));
+        ctx.closePath();
         ctx.fillStyle = p.ok ? 'rgba(14,116,144,0.10)' : 'rgba(220,38,38,0.10)';
-        ctx.fillRect(x, y, w, h);
+        ctx.fill();
         ctx.setLineDash([5, 4]);
         ctx.strokeStyle = p.ok ? '#0e7490' : '#dc2626';
         ctx.lineWidth = 1.2;
-        ctx.strokeRect(x, y, w, h);
-        if (w > 28 && h > 12) {
+        ctx.stroke();
+        // O rótulo no centro, com o lado mais curto da peça na tela como medida de "cabe".
+        const w = Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y);
+        const h = Math.hypot(q[2].x - q[1].x, q[2].y - q[1].y);
+        if (Math.max(w, h) > 28 && Math.min(w, h) > 12) {
           ctx.setLineDash([]);
           ctx.fillStyle = p.ok ? '#155e75' : '#991b1b';
           ctx.font = '10px system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(p.rotulo.length > 14 ? `${p.rotulo.slice(0, 13)}…` : p.rotulo, x + w / 2, y + h / 2, w - 4);
+          const cx = q.reduce((a, v) => a + v.x, 0) / q.length;
+          const cy = q.reduce((a, v) => a + v.y, 0) / q.length;
+          ctx.fillText(p.rotulo.length > 14 ? `${p.rotulo.slice(0, 13)}…` : p.rotulo, cx, cy, Math.max(w, h) - 4);
         }
       }
       ctx.restore();

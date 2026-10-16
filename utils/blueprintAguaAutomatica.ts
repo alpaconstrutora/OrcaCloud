@@ -120,10 +120,17 @@ export interface HipotesesDeAgua {
    * (ramal na `cotaRamalMm`, pelo eixo das paredes).
    */
   noForro?: { aguaFria: FaixaDoForro; aguaQuente: FaixaDoForro; folgaSobAVigaMm: number } | null;
+  /**
+   * F16 da casa automática (16/10/2026): a folga, além dos raios, entre a coluna desta água e a prumada da OUTRA água
+   * já traçada. Ausente = `AFASTAMENTO_ENTRE_COLUNAS_MM` (50).
+   */
+  afastamentoEntreColunasMm?: number;
 }
 
 /** F14b: o raio do tubo na conta da descida (folga sob a viga) — DN 40 de PVC; o ramal da casa não passa disso. */
 const RAIO_NA_DESCIDA_MM = 20;
+/** F16: o padrão de `HipotesesDeAgua.afastamentoEntreColunasMm`. */
+const AFASTAMENTO_ENTRE_COLUNAS_MM = 50;
 
 export const HIPOTESES_AGUA_PADRAO: HipotesesDeAgua = {
   velocidadeMaxMs: 2,
@@ -465,6 +472,24 @@ export function planejarAgua(
         return [cantosDaParede(p0, p1, w.thicknessMm + 2 * RAIO_NA_DESCIDA_MM) as Point[]];
       })
     : [];
+  // F16: as prumadas da OUTRA água já traçada (a fria vem antes da quente) — no sobrado, a quente que sobe do térreo
+  // nascia no nó em que a fria desce do barrilete, e as duas colunas se cruzavam no mesmo ponto.
+  const outraAgua = disciplina === 'AGUA_QUENTE' ? 'AGUA_FRIA' : disciplina === 'AGUA_FRIA' ? 'AGUA_QUENTE' : null;
+  // E os HORIZONTAIS dela nos pavimentos que a coluna cruza: a coluna sobe atravessando a faixa da outra água no forro
+  // (a quente que sobe do térreo cortava a fria que saía da coluna dela, na faixa de baixo).
+  const niveisDaPrumada = new Set(niveis.map((l) => l.id));
+  const prumadasDaOutraAgua: Point[][] = (model.trechos ?? [])
+    .filter((t) => t.disciplina === outraAgua && niveisDaPrumada.has(t.levelId))
+    .map((t) => {
+      const h = Math.ceil(t.bitolaMm / 2 + RAIO_NA_DESCIDA_MM + (hip.afastamentoEntreColunasMm ?? AFASTAMENTO_ENTRE_COLUNAS_MM));
+      if (t.a.x === t.b.x && t.a.y === t.b.y) return [{ x: t.a.x - h, y: t.a.y - h }, { x: t.a.x + h, y: t.a.y - h }, { x: t.a.x + h, y: t.a.y + h }, { x: t.a.x - h, y: t.a.y + h }] as Point[];
+      const L = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+      const u = { x: (t.b.x - t.a.x) / L, y: (t.b.y - t.a.y) / L };
+      const n = { x: -u.y * h, y: u.x * h };
+      const a = { x: t.a.x - u.x * h, y: t.a.y - u.y * h };
+      const b = { x: t.b.x + u.x * h, y: t.b.y + u.y * h };
+      return [{ x: a.x + n.x, y: a.y + n.y }, { x: b.x + n.x, y: b.y + n.y }, { x: b.x - n.x, y: b.y - n.y }, { x: a.x - n.x, y: a.y - n.y }] as Point[];
+    });
   // NÚCLEO VERTICAL (E2.4): o grupo perto de um shaft sobe por ele.
   const posicaoDaColuna = (grupo: Terminal[]): Ponto2 => {
     const base = { x: grupo[0].at.x, y: grupo[0].at.y };
@@ -484,11 +509,25 @@ export function planejarAgua(
     // fria atravessava a janela alta do banheiro de cima).
     // O escorregão pela parede INTEIRA (o pedaço em comum com os outros pavimentos pode ser curto demais para sair do vão).
     const paredeInteira = naParede ? (paredesDe(grupo[0].levelId).find((w) => w.id === naParede.parede.id) ?? naParede.parede) : null;
-    const noEixo = naParede && paredeInteira ? foraDoPilar(naParede.q, paredeInteira, [...pilaresDaPrumada, ...rebaixos, ...vaosDaPrumada]) : base;
+    const obstaculos = [...pilaresDaPrumada, ...rebaixos, ...vaosDaPrumada, ...prumadasDaOutraAgua];
+    let noEixo = naParede && paredeInteira ? foraDoPilar(naParede.q, paredeInteira, obstaculos) : base;
     // F8b: e a que desceria DENTRO da viga que corre sobre a parede desce rente a ela, do lado do grupo.
     const cx = grupo.reduce((s, p) => s + p.at.x, 0) / grupo.length;
     const cy = grupo.reduce((s, p) => s + p.at.y, 0) / grupo.length;
-    return foraDaViga(noEixo, vigasDaPrumada, { x: cx, y: cy }, pilaresDaPrumada);
+    let pos = foraDaViga(noEixo, vigasDaPrumada, { x: cx, y: cy }, pilaresDaPrumada);
+    // F16: rente à viga, a coluna pode cair na prumada da outra água (as duas passam pela mesma viga, do mesmo lado — a
+    // quente que sobe do térreo nascia no nó da fria): o ponto do eixo que leva até lá vira obstáculo, e ela escorrega.
+    const naOutraAgua = (q: Ponto2) => prumadasDaOutraAgua.some((g) => pointInPolygon(g, q as Point));
+    for (let i = 0; i < 3 && naParede && paredeInteira && naOutraAgua(pos); i++) {
+      const h = Math.ceil(RAIO_NA_DESCIDA_MM * 2 + (hip.afastamentoEntreColunasMm ?? AFASTAMENTO_ENTRE_COLUNAS_MM));
+      obstaculos.push([{ x: noEixo.x - h, y: noEixo.y - h }, { x: noEixo.x + h, y: noEixo.y - h }, { x: noEixo.x + h, y: noEixo.y + h }, { x: noEixo.x - h, y: noEixo.y + h }] as Point[]);
+      noEixo = foraDoPilar(noEixo, paredeInteira, obstaculos);
+      pos = foraDaViga(noEixo, vigasDaPrumada, { x: cx, y: cy }, pilaresDaPrumada);
+    }
+    // Sem lugar livre na parede (as duas escorregavam até a mesma ponta dela), a quente fica na FAIXA dela, ao lado da
+    // fria — como no shaft (F14a).
+    if (naOutraAgua(pos) && faixa) pos = { x: Math.round(pos.x + faixa.x * FAIXA_NO_SHAFT), y: Math.round(pos.y + faixa.y * FAIXA_NO_SHAFT) };
+    return pos;
   };
   // F14b: com o barrilete NO FORRO (a origem no mesmo pavimento, abaixo do teto), a "coluna" do grupo do mesmo
   // pavimento não tem altura — a cabeça já está na cota do ramal. Ela fica no anel do forro: na posição de coluna

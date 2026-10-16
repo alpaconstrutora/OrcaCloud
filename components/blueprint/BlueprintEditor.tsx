@@ -3377,7 +3377,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       mostrarMobiliario
         ? mobiliarioDoNivel.flatMap((a) => {
             const ok = hipotesesDeMobiliario.acessivel ? a.circulacao.ok120 : a.circulacao.ok90;
-            return a.pecas.map((p) => ({ ret: p.ret, rotulo: p.peca.rotulo, ok }));
+            return a.pecas.map((p) => ({ contorno: p.contorno, rotulo: p.peca.rotulo, ok }));
           })
         : undefined,
     [mostrarMobiliario, mobiliarioDoNivel, hipotesesDeMobiliario.acessivel],

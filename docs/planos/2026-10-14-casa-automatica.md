@@ -1844,3 +1844,73 @@ novas, 1 atualizada; a "Casa 07" e a torre ficaram com a chave do estudo e com 1
 2 banheiros e 2 vagas — o que `unidadeDaCasa` mede na versão publicada; nome e tipologia intactos; sincronizar de novo
 não muda nada; nenhuma proposta na Curadoria. Limpeza conferida no banco: estudo ARQUIVADO, Empreendimento e torre
 apagados (unidades em cascata). Ficam, de propósito, os eventos da trilha de auditoria (sem FK, por desenho).
+
+## F16 — louça diante da porta (16/10/2026)
+
+Pedido do usuário (da lista de pendências depois da F15):
+
+> Item 1
+
+O item 1 da lista: *"Água passando por porta. O mobiliário encosta louça na parede da porta, dentro do vão, e o cano
+da água atravessa o vão."*
+
+### Retrato (sonda `conflitosDoModelo`, ABERTURA × água/esgoto; 12 × 30, R1-N)
+
+| Casa | Cômodo | Peça na frente da porta | Ao longo da parede | Porta |
+|---|---|---|---|---|
+| Térrea 0° | — | nenhuma | | |
+| Térrea 30° | Banheiro social | box | 5.980–7.210 | 6.353–7.153 |
+| Térrea 30° | Banheiro da suíte | vaso | 4.759–5.522 | 4.553–5.353 |
+| Sobrado 0° | Banheiro social (cima) | vaso e box | 100–1.400 | 650–1.450 |
+| Sobrado 30° | Banheiro da suíte (cima) e lavabo | vaso | 4.959–5.722 · 722–1.484 | 4.753–5.553 · 853–1.653 |
+
+A rede só obedece: o ponto da louça entra na parede atrás dela, dentro do vão. Duas causas no mobiliário
+(`utils/blueprintMobiliario.ts`, que trabalha em retângulos alinhados a X/Y):
+
+1. **Cômodo girado:** `aberturasNosLados` só projeta abertura de parede exatamente horizontal ou vertical — na casa a
+   30°, NENHUMA porta é vista, nenhum giro é reservado, e as peças ainda nascem com rotação 0 (tortas no cômodo).
+2. **Retângulo interno pela grade:** cômodo não retangular → `maiorRetanguloInterno` na grade de 100 mm; o lado dele
+   chega a 120 mm do eixo da parede e a porta só era reconhecida até meia parede + 30 mm (105) — a porta sumia.
+
+### Correção
+
+- O mobiliário de cada cômodo é calculado no REFERENCIAL DO CÔMODO: o ângulo da aresta mais longa do anel (módulo
+  90°); com ângulo, o cômodo, as paredes e as etiquetas giram para os eixos, o mesmo algoritmo roda, e as peças voltam
+  giradas (centro e rotação = 0°/90° + o ângulo). `MobiliarioDoAmbiente.giro` diz o referencial; `PecaColocada.contorno`
+  é a peça no MUNDO (a prévia do canvas desenha o polígono).
+- A porta é reconhecida até meia parede + o passo da grade + 30 mm.
+- No referencial girado sobraram dois testes EXATOS que a casa a 30° (vértices ao mm) não passava: a aresta do cômodo
+  casava com a parede por produto vetorial < 1 (agora distância ≤ 5 mm, tolerância de arredondamento, e a parede
+  COLINEAR de maior sobreposição — a aresta pode cobrir mais de uma parede alinhada) e a parede "horizontal" exigia
+  |uy| < 1e-6 (agora ~1°). Sem isso, as peças nasciam no eixo da parede e a porta seguia invisível.
+- **Água (efeito do mobiliário novo):** no sobrado, as louças fora da porta fizeram a coluna da QUENTE (que sobe do
+  térreo) nascer no ponto em que a FRIA desce do barrilete — as duas escorregavam até o mesmo ponto rente à viga, ou
+  até a mesma ponta da parede. A coluna agora desvia das prumadas e dos horizontais da outra água já traçada
+  (`afastamentoEntreColunasMm`, hipótese, padrão 50 mm); rente à viga, o ponto do eixo que leva até a outra vira
+  obstáculo e ela escorrega; sem lugar na parede, a quente fica na faixa dela (como no shaft, F14a).
+
+### Registro da F16 (16/10/2026)
+
+Medido (sonda `conflitosDoModelo`, 12 × 30, R1-N, catálogo e chuva; uma casa por processo, repetida quando a máquina
+deu resultado que não se repetiu):
+
+| | Térrea 0° | Térrea 30° | Sobrado 0° | Sobrado 30° |
+|---|---|---|---|---|
+| Água/esgoto em porta ou janela | 0 → 0 | 4 → **0** | 2 → **0** | 6 → **2** (aquecedor, abaixo) |
+| Rede × rede | 1 → 1 | 7 → **4** | 0 → 0 | 0 → 0 |
+| Peças de mobiliário | 23 → 22 | 19 → **22** | 25 → 25 | 21 → **25** |
+| Peça entrando na parede | 0 | 0 | 0 | 0 |
+
+- Térrea 0°, "Armário da suíte não coube" é ACERTO: a suíte tem porta no meio da parede sul (entrada) e no meio da
+  norte (banheiro); antes, as duas eram ignoradas pela grade — a cama ficava diante da entrada e o armário de 2,40 m
+  diante da porta do banheiro.
+- Os rede × rede das térreas são o alimentador enterrado × esgoto (pendência à parte, item 3 da lista).
+- Testes novos em `blueprintMobiliario.test.ts`: o banheiro girado 30° dá o mesmo mobiliário do reto, girado
+  (equivariância, ± 3 mm), com o componente a 30°/120°; o banheiro em L com a porta no lado que a grade encolhe — os
+  dois REPROVAM com o mobiliário antigo. A água é coberta pelo teste F14b do sobrado (nenhum encontro entre as redes do
+  forro), que o mobiliário novo sem a correção da coluna reprovaria (3 encontros fria × quente).
+
+**Fica (dito):** no sobrado a 30°, a quente do AQUECEDOR entra 5 cm na janela da cozinha. O aquecedor mudou de lugar
+porque o mobiliário entra na simulação das áreas molhadas de cima (F14c: shafts e lajes rebaixadas), e ali a ligação da
+quente é empurrada para outra face pelo encosto de ponto solto do traçado da água — as duas ligações ficam a 210 mm, fora
+da direção da parede. Interação âncoras × água, para uma fase própria.

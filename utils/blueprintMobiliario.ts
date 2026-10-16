@@ -106,11 +106,13 @@ export interface Retangulo {
 
 export interface PecaColocada {
   peca: PecaDeMobiliario;
-  /** A peça, em mm do mundo. */
+  /** A peça, em mm — no referencial do cômodo (`MobiliarioDoAmbiente.giro`); sem giro, é o do mundo. */
   ret: Retangulo;
-  /** Peça + faixas de uso. */
+  /** Peça + faixas de uso (no mesmo referencial). */
   comUso: Retangulo;
   lado: 'S' | 'N' | 'O' | 'L' | 'CENTRO';
+  /** F16 da casa automática: os 4 cantos da peça no MUNDO (o que a prévia desenha). */
+  contorno: Point[];
 }
 
 export interface CirculacaoDoAmbiente {
@@ -128,6 +130,11 @@ export interface MobiliarioDoAmbiente {
   levelId: ObjectId;
   rotulo: string;
   uso: UsoDoAmbiente | null;
+  /**
+   * F16 da casa automática (16/10/2026): o referencial do cômodo — o mundo girado de `−graus` em torno de `centro`
+   * deixa as paredes dele nos eixos. `interno`, `ret` e `comUso` estão NESSE referencial; `null` = o do mundo.
+   */
+  giro: { graus: number; centro: Point } | null;
   interno: Retangulo | null;
   pecas: PecaColocada[];
   naoCouberam: string[];
@@ -143,6 +150,10 @@ export interface HipotesesDeMobiliario {
 export const HIPOTESES_MOBILIARIO_PADRAO: HipotesesDeMobiliario = { acessivel: false, giroDaPortaMm: 900 };
 
 const MALHA = 50;
+/** F16: a tolerância de ARREDONDAMENTO (não folga de projeto) para a aresta do cômodo estar na linha da parede. */
+const ALINHADO_A_PAREDE_MM = 5;
+/** O passo da grade do retângulo interno de cômodo não retangular (o lado dele pode ficar até 1 passo dentro da face). */
+const PASSO_DO_RETANGULO_INTERNO = 100;
 
 // ─── Geometria de apoio ──────────────────────────────────────────────────────
 
@@ -163,7 +174,7 @@ function maiorRetanguloInterno(anel: Point[]): Retangulo | null {
     { x: c.x0 + 1, y: c.y1 - 1 },
   ];
   if (cantos.every((p) => pointInPolygon(anel, p))) return c;
-  const passo = 100;
+  const passo = PASSO_DO_RETANGULO_INTERNO;
   const nx = Math.max(1, Math.floor((c.x1 - c.x0) / passo));
   const ny = Math.max(1, Math.floor((c.y1 - c.y0) / passo));
   const livre: boolean[][] = [];
@@ -202,12 +213,23 @@ export function anelInternoDoAmbiente(s: Space, paredes: readonly Wall[]): Point
   const n = s.ring.length;
   const recuos = s.ring.map((a, i) => {
     const b = s.ring[(i + 1) % n];
-    const w = paredes.find((x) => {
-      const cruz = (p: Point) => (x.b.x - x.a.x) * (p.y - x.a.y) - (x.b.y - x.a.y) * (p.x - x.a.x);
-      const entre = (p: Point) => Math.min(x.a.x, x.b.x) - 1 <= p.x && p.x <= Math.max(x.a.x, x.b.x) + 1 && Math.min(x.a.y, x.b.y) - 1 <= p.y && p.y <= Math.max(x.a.y, x.b.y) + 1;
-      return Math.abs(cruz(a)) < 1 && Math.abs(cruz(b)) < 1 && entre(a) && entre(b);
-    });
-    return w ? w.thicknessMm / 2 : 0;
+    // F16: a DISTÂNCIA à linha da parede (até `ALINHADO_A_PAREDE_MM`), não o produto vetorial cru (< 1): no cômodo
+    // girado os vértices são arredondados ao mm (até 3 mm fora da linha, numa parede de 10 m a 30°) e o produto passava
+    // de mil — nenhuma parede casava e o anel não recuava a meia parede (as peças nasciam no eixo dela).
+    // A aresta pode cobrir MAIS DE UMA parede alinhada (o anel passa direto pelo encontro em T): vale a colinear de maior
+    // sobreposição com ela — exigir uma parede que contenha a aresta inteira deixava o lado sem recuo (a peça no eixo).
+    let melhor: { w: Wall; sobrepoe: number } | null = null;
+    const La = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    for (const x of paredes) {
+      const L = Math.hypot(x.b.x - x.a.x, x.b.y - x.a.y) || 1;
+      const dist = (p: Point) => Math.abs((x.b.x - x.a.x) * (p.y - x.a.y) - (x.b.y - x.a.y) * (p.x - x.a.x)) / L;
+      if (dist(a) > ALINHADO_A_PAREDE_MM || dist(b) > ALINHADO_A_PAREDE_MM) continue;
+      const u = { x: (b.x - a.x) / La, y: (b.y - a.y) / La };
+      const t = (p: Point) => (p.x - a.x) * u.x + (p.y - a.y) * u.y;
+      const sobrepoe = Math.min(La, Math.max(t(x.a), t(x.b))) - Math.max(0, Math.min(t(x.a), t(x.b)));
+      if (sobrepoe > 1 && (!melhor || sobrepoe > melhor.sobrepoe)) melhor = { w: x, sobrepoe };
+    }
+    return melhor ? melhor.w.thicknessMm / 2 : 0;
   });
   const anel = anelRecuado(s.ring, recuos);
   return anel.length >= 3 ? anel : s.ring;
@@ -237,14 +259,18 @@ function aberturasNosLados(model: BlueprintModel, s: Space, interno: Retangulo):
     const a = { x: w.a.x + ux * o.offsetMm, y: w.a.y + uy * o.offsetMm };
     const b = { x: a.x + ux * o.widthMm, y: a.y + uy * o.widthMm };
     const meio = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const tol = w.thicknessMm / 2 + 30;
-    const horizontal = Math.abs(uy) < 1e-6;
+    // F16: + o passo da grade — no cômodo não retangular o lado do retângulo interno fica até 1 passo dentro da face,
+    // e a porta a 120 mm do lado sumia (o vaso ia para a frente dela).
+    const tol = w.thicknessMm / 2 + PASSO_DO_RETANGULO_INTERNO + 30;
+    // F16: tolerância de ângulo (~1°) — a parede do cômodo girado, de vértices arredondados ao mm, volta aos eixos com
+    // um resto de 1e-4 e a porta dela não era vista.
+    const horizontal = Math.abs(uy) < 0.02;
     if (horizontal) {
       const dentroX = meio.x >= interno.x0 - 1 && meio.x <= interno.x1 + 1;
       if (!dentroX) continue;
       if (Math.abs(meio.y - interno.y0) <= tol) out.push({ lado: 'S', kind: o.kind, ini: Math.min(a.x, b.x), fim: Math.max(a.x, b.x) });
       else if (Math.abs(meio.y - interno.y1) <= tol) out.push({ lado: 'N', kind: o.kind, ini: Math.min(a.x, b.x), fim: Math.max(a.x, b.x) });
-    } else if (Math.abs(ux) < 1e-6) {
+    } else if (Math.abs(ux) < 0.02) {
       const dentroY = meio.y >= interno.y0 - 1 && meio.y <= interno.y1 + 1;
       if (!dentroY) continue;
       if (Math.abs(meio.x - interno.x0) <= tol) out.push({ lado: 'O', kind: o.kind, ini: Math.min(a.y, b.y), fim: Math.max(a.y, b.y) });
@@ -293,13 +319,58 @@ const recortar = (r: Retangulo, interno: Retangulo): Retangulo => ({ x0: Math.ma
 
 // ─── Colocação ───────────────────────────────────────────────────────────────
 
+/** F16: o ângulo do cômodo — o da aresta mais longa do anel, reduzido a (−45°, 45°]. */
+function anguloDoComodo(ring: readonly Point[]): number {
+  let graus = 0;
+  let maior = -1;
+  ring.forEach((a, i) => {
+    const b = ring[(i + 1) % ring.length];
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L > maior) [maior, graus] = [L, (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI];
+  });
+  const g = ((graus % 90) + 90) % 90;
+  return g > 45 ? g - 90 : g;
+}
+
+const girar = (p: Point, c: Point, graus: number): Point => {
+  const r = (graus * Math.PI) / 180;
+  const [cos, sen] = [Math.cos(r), Math.sin(r)];
+  const [x, y] = [p.x - c.x, p.y - c.y];
+  return { x: c.x + x * cos - y * sen, y: c.y + x * sen + y * cos };
+};
+const cantos = (r: Retangulo): Point[] => [{ x: r.x0, y: r.y0 }, { x: r.x1, y: r.y0 }, { x: r.x1, y: r.y1 }, { x: r.x0, y: r.y1 }];
+
+/**
+ * O mobiliário do ambiente. O algoritmo trabalha em retângulos alinhados aos eixos; F16 da casa automática
+ * (16/10/2026): com o cômodo GIRADO (a casa num lote a 30°), ele roda no referencial do cômodo — o cômodo, as paredes
+ * e as etiquetas giram para os eixos, e as peças voltam giradas. Antes, nenhuma porta do cômodo girado era vista
+ * (nenhum giro reservado: o vaso e o box nasciam na frente da porta) e as peças saíam tortas.
+ */
 export function mobiliarDoAmbiente(model: BlueprintModel, s: Space, hip: HipotesesDeMobiliario = HIPOTESES_MOBILIARIO_PADRAO): MobiliarioDoAmbiente {
+  const graus = anguloDoComodo(s.ring);
+  if (Math.abs(graus) < 0.01) {
+    const r = mobiliarAlinhado(model, s, hip);
+    return { ...r, pecas: r.pecas.map((p) => ({ ...p, contorno: cantos(p.ret) })) };
+  }
+  const centro = { x: s.ring.reduce((a, p) => a + p.x, 0) / s.ring.length, y: s.ring.reduce((a, p) => a + p.y, 0) / s.ring.length };
+  const local = (p: Point) => girar(p, centro, -graus);
+  const noReferencial: BlueprintModel = {
+    ...model,
+    walls: model.walls.map((w) => (w.levelId === s.levelId ? { ...w, a: local(w.a), b: local(w.b) } : w)),
+    labels: model.labels.map((l) => (l.levelId === s.levelId ? { ...l, at: local(l.at) } : l)),
+  };
+  const r = mobiliarAlinhado(noReferencial, { ...s, ring: s.ring.map(local) }, hip);
+  return { ...r, giro: { graus, centro }, pecas: r.pecas.map((p) => ({ ...p, contorno: cantos(p.ret).map((q) => girar(q, centro, graus)) })) };
+}
+
+/** O algoritmo, com as paredes do cômodo nos eixos (ver `mobiliarDoAmbiente`). `contorno` sai vazio — quem chama preenche. */
+function mobiliarAlinhado(model: BlueprintModel, s: Space, hip: HipotesesDeMobiliario): MobiliarioDoAmbiente {
   const paredes = model.walls.filter((w) => w.levelId === s.levelId);
   // O USO gravado na etiqueta (kernel 0.102) vale antes do nome — o mesmo critério do kit hidráulico
   // (`kitDoAmbiente`); o nome fica para o desenho antigo, sem uso na etiqueta (casa automática F7, 15/10/2026).
   const uso = etiquetaDoAmbiente(s, model.labels)?.uso ?? usoDoNome(s.name);
   const rotulo = s.name || 'Ambiente';
-  const vazio = (interno: Retangulo | null): MobiliarioDoAmbiente => ({ spaceId: s.id, levelId: s.levelId, rotulo, uso, interno, pecas: [], naoCouberam: [], circulacao: { larguraLivreMm: null, ok90: true, ok120: true, foraDaRota90: [], semPorta: false } });
+  const vazio = (interno: Retangulo | null): MobiliarioDoAmbiente => ({ spaceId: s.id, levelId: s.levelId, rotulo, uso, giro: null, interno, pecas: [], naoCouberam: [], circulacao: { larguraLivreMm: null, ok90: true, ok120: true, foraDaRota90: [], semPorta: false } });
   const kit = uso ? KIT_POR_USO[uso] : undefined;
   const anel = anelInternoDoAmbiente(s, paredes);
   const interno = maiorRetanguloInterno(anel);
@@ -348,7 +419,7 @@ export function mobiliarDoAmbiente(model: BlueprintModel, s: Space, hip: Hipotes
       ret.x1 = ret.x0 + p.larguraMm;
       ret.y1 = ret.y0 + p.profundidadeMm;
       const comUso = { x0: ret.x0 - p.usoLadosMm, y0: ret.y0 - p.usoFrenteMm, x1: ret.x1 + p.usoLadosMm, y1: ret.y1 + p.usoFrenteMm };
-      if (cabe(comUso, ret)) colocada = { peca: p, ret, comUso: recortar(comUso, interno), lado: 'CENTRO' };
+      if (cabe(comUso, ret)) colocada = { peca: p, ret, comUso: recortar(comUso, interno), lado: 'CENTRO', contorno: [] };
     }
     if (!colocada) {
       for (const lado of ordemDosLados(p)) {
@@ -357,7 +428,7 @@ export function mobiliarDoAmbiente(model: BlueprintModel, s: Space, hip: Hipotes
         for (let t = ini; t + p.larguraMm <= fim + 1; t += MALHA) {
           const { ret, comUso } = colocarNoLado(p, lado, t, interno);
           if (cabe(comUso, ret)) {
-            colocada = { peca: p, ret, comUso: recortar(comUso, interno), lado };
+            colocada = { peca: p, ret, comUso: recortar(comUso, interno), lado, contorno: [] };
             break;
           }
         }
@@ -370,7 +441,7 @@ export function mobiliarDoAmbiente(model: BlueprintModel, s: Space, hip: Hipotes
       ocupadosUsos.push(colocada.comUso);
     } else naoCouberam.push(p.rotulo);
   }
-  return { spaceId: s.id, levelId: s.levelId, rotulo, uso, interno, pecas, naoCouberam, circulacao: verificarCirculacao(interno, pecas, portas) };
+  return { spaceId: s.id, levelId: s.levelId, rotulo, uso, giro: null, interno, pecas, naoCouberam, circulacao: verificarCirculacao(interno, pecas, portas) };
 }
 
 // ─── Circulação livre por grade ──────────────────────────────────────────────
@@ -596,14 +667,18 @@ export function comandosDeMobiliario(lista: readonly MobiliarioDoAmbiente[], lev
   for (const a of lista) {
     for (const p of a.pecas) {
       const tipoId = tipoDeComponenteDaPeca(p.peca);
-      const at = { x: Math.round((p.ret.x0 + p.ret.x1) / 2), y: Math.round((p.ret.y0 + p.ret.y1) / 2) };
+      // F16: o centro no referencial do cômodo volta ao mundo, e a peça gira com o cômodo.
+      const meio = { x: (p.ret.x0 + p.ret.x1) / 2, y: (p.ret.y0 + p.ret.y1) / 2 };
+      const noMundo = a.giro ? girar(meio, a.giro.centro, a.giro.graus) : meio;
+      const at = { x: Math.round(noMundo.x), y: Math.round(noMundo.y) };
       if (existentes.some((c) => c.tipoId === tipoId && pointInPolygon(contornoDoComponente(c), at))) continue;
       const encostadaNaLateral = p.lado === 'O' || p.lado === 'L';
       // A largura do retângulo colocado já está no eixo certo; quando a peça
       // encosta em O/L o kernel gira 90° e troca largura/profundidade.
       const larguraMm = encostadaNaLateral ? p.ret.y1 - p.ret.y0 : p.ret.x1 - p.ret.x0;
       const profundidadeMm = encostadaNaLateral ? p.ret.x1 - p.ret.x0 : p.ret.y1 - p.ret.y0;
-      out.push({ type: 'AddComponente', levelId, tipoId, at, larguraMm, profundidadeMm, rotacaoGraus: encostadaNaLateral ? 90 : 0, rotulo: null, sugerido: true });
+      const rotacaoGraus = ((Math.round((encostadaNaLateral ? 90 : 0) + (a.giro?.graus ?? 0)) % 360) + 360) % 360;
+      out.push({ type: 'AddComponente', levelId, tipoId, at, larguraMm, profundidadeMm, rotacaoGraus, rotulo: null, sugerido: true });
     }
   }
   return out;

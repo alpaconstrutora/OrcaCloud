@@ -544,13 +544,12 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
     if (APARELHOS_DO_COLETOR.includes(tipo)) {
       const espaco = espacoDe(model, t);
       const noAmbiente = coletores.filter((c) => c.id !== t.id && (espaco ? pointInPolygon(espaco.ring, c.at) && c.levelId === t.levelId : false));
-      let caixa = noAmbiente.find((c) => c.tipoHidraulico === 'CAIXA_SIFONADA') ?? noAmbiente[0] ?? null;
+      const caixa = noAmbiente.find((c) => c.tipoHidraulico === 'CAIXA_SIFONADA') ?? noAmbiente[0] ?? null;
       // F14c: com um TQ por grupo (casa automática), o aparelho longe da caixa sifonada (o lavatório na outra ponta do
       // banheiro comprido) vai direto ao tubo de queda pelo sifão dele — preso à caixa, amarrava as duas pontas num grupo
       // só e o esgoto corria 5 m sob o piso, mais que o enchimento da laje rebaixada comporta.
       if (caixa && hip.tuboDeQuedaPorGrupoMm && distancia(caixa.at, t.at) > hip.tuboDeQuedaPorGrupoMm) {
         avisos.push(`${FICHA_DO_PONTO_HIDRAULICO[tipo].rotulo} em ${espaco?.name ?? 'ambiente sem nome'} a ${(distancia(caixa.at, t.at) / 1000).toFixed(1).replace('.', ',')} m da caixa sifonada — ligado direto ao tubo de queda pelo sifão dele`);
-        caixa = null;
       } else if (caixa) destino = caixa;
       else avisos.push(`${FICHA_DO_PONTO_HIDRAULICO[tipo].rotulo} em ${espaco?.name ?? 'ambiente sem nome'} sem caixa sifonada — ligado direto à caixa de inspeção`);
     } else if (tipo === 'PIA_COZINHA') {

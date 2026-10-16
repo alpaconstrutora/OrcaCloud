@@ -1045,10 +1045,12 @@ export function lajesComRebaixo(cmds: readonly Command[], levelId: ObjectId, ban
   let rebaixadas = 0;
   for (const c of cmds) {
     const laje = c as Extract<Command, { type: 'AddStructural' }>;
-    if (c.type !== 'AddStructural' || laje.kind !== 'LAJE' || laje.levelId !== levelId) {
+    // A laje sem base explícita (a do kernel por padrão) fica como está: não há de onde descer o rebaixo.
+    if (c.type !== 'AddStructural' || laje.kind !== 'LAJE' || laje.levelId !== levelId || laje.baseMm == null) {
       saida.push(c);
       continue;
     }
+    const base = laje.baseMm;
     let pecas: { anel: Point[]; rebaixada: boolean }[] = [{ anel: anelLimpo(laje.pontos as Point[]), rebaixada: false }];
     for (const b of convexos) {
       const novas: typeof pecas = [];
@@ -1084,7 +1086,7 @@ export function lajesComRebaixo(cmds: readonly Command[], levelId: ObjectId, ban
       saida.push({
         ...laje,
         pontos: p.anel.map((q) => ({ x: q.x, y: q.y })),
-        baseMm: p.rebaixada ? laje.baseMm - rebaixoMm : laje.baseMm,
+        baseMm: p.rebaixada ? base - rebaixoMm : base,
         rotulo: laje.rotulo ? `${laje.rotulo}${p.rebaixada ? 'r' : ''}${String.fromCharCode(97 + k)}` : laje.rotulo,
       } as Command);
     });

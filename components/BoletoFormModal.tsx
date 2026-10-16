@@ -22,6 +22,7 @@ import { useWritableOrganizations } from '../hooks/useOrgContext';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import { emailCaptureService, type ContaCaptura, type MensagemCaptura } from '../services/emailCaptureService';
 import EmailCaptureSenderSheet from './boletos/EmailCaptureSenderSheet';
+import MultaJurosFields from './boletos/MultaJurosFields';
 import type { Boleto, BoletoAuditoria, BoletoExtractionResult, Supplier, CostCenter, ChartOfAccount } from '../types';
 
 interface BoletoFormModalProps {
@@ -1534,74 +1535,6 @@ const ReadOnlyField: React.FC<{ label: string; value: string; icon?: React.Compo
         </div>
     </div>
 );
-
-interface MultaJurosFieldsProps {
-    multa: string; setMulta: (v: string) => void;
-    multaPercentual: string; setMultaPercentual: (v: string) => void;
-    jurosDia: string; setJurosDia: (v: string) => void;
-    jurosDiaTipo: 'valor' | 'percentual'; setJurosDiaTipo: (v: 'valor' | 'percentual') => void;
-}
-
-const MultaJurosFields: React.FC<MultaJurosFieldsProps> = ({
-    multa, setMulta, multaPercentual, setMultaPercentual,
-    jurosDia, setJurosDia, jurosDiaTipo, setJurosDiaTipo,
-}) => {
-    const temDados = multa || multaPercentual || jurosDia;
-    return (
-        <details open={!!temDados} className="group">
-            <summary className={`flex items-center gap-1.5 ${ROTULO} cursor-pointer select-none list-none mb-2`}>
-                <span className="group-open:rotate-90 inline-block transition-transform">▶</span>
-                Multa &amp; Juros
-                {temDados && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />}
-            </summary>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4 pt-1">
-                <FormField label="Multa (R$)">
-                    <input
-                        type="number" step="0.01" min="0"
-                        value={multa}
-                        onChange={e => { setMulta(e.target.value); if (e.target.value) setMultaPercentual(''); }}
-                        placeholder="0,00"
-                        className={CAMPO}
-                    />
-                </FormField>
-                <FormField label="Multa (%)">
-                    <input
-                        type="number" step="0.0001" min="0" max="100"
-                        value={multaPercentual}
-                        onChange={e => { setMultaPercentual(e.target.value); if (e.target.value) setMulta(''); }}
-                        placeholder="2,00"
-                        className={CAMPO}
-                    />
-                </FormField>
-                <FormField label="Juros/dia">
-                    <div className="flex gap-1">
-                        <input
-                            type="number" step="0.0001" min="0"
-                            value={jurosDia}
-                            onChange={e => setJurosDia(e.target.value)}
-                            placeholder="0,033"
-                            className={CAMPO}
-                        />
-                        <select
-                            value={jurosDiaTipo}
-                            onChange={e => setJurosDiaTipo(e.target.value as 'valor' | 'percentual')}
-                            className={`${CAMPO} w-auto px-2`}
-                        >
-                            <option value="valor">R$</option>
-                            <option value="percentual">%</option>
-                        </select>
-                    </div>
-                </FormField>
-                <div className="flex items-end pb-1">
-                    <p className="text-xs text-gray-400 leading-tight">
-                        Extraídos do texto do boleto.<br />
-                        Confidence baixa — revise antes de aprovar.
-                    </p>
-                </div>
-            </div>
-        </details>
-    );
-};
 
 export default BoletoFormModal;
 export { formatBRL };

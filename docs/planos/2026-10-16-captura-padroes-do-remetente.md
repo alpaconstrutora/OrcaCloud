@@ -219,4 +219,8 @@ Mesmas props, mais `ajuda?` e classes opcionais. `BoletoFormModal` passa a impor
 - Verificação local: 24 arquivos de teste por arquivo (231 testes) verdes; typecheck parcial em 2 grupos limpo
   (pegou 11 erros de tipo que os testes não pegavam: corrigidos); `check-ui-standard`, `check-system-projects`,
   `check-project-classification` e `check-xss-sinks` limpos.
-- [ ] Publicar o front, CI, domínio e conferência em produção.
+- [x] Publicado `4d9f58a2`: CI `ci` verde; domínio serve origin/main; cron 12:45–13:30 UTC com 200 e 0 erros
+  na função nova. Produção (usuário de leitura, sem salvar): 1.120 linhas na aba Boletos, 0 com `.pdf` no
+  Beneficiário (sem fornecedor confirmado aparece o sugerido em cinza); cadastro do remetente com as 4 seções.
+- [ ] Depois que o usuário preencher padrões num remetente: conferir num ciclo do cron os campos preenchidos,
+  o motivo em `erros_validacao` e `padroes_do_remetente` na auditoria.

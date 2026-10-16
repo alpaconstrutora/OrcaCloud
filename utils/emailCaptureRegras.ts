@@ -206,3 +206,17 @@ export function proximaTentativa(tentativas: number, agora = new Date()): Date |
     if (minutos === undefined) return null; // passou de 3: para, fica como erro visível
     return new Date(agora.getTime() + minutos * 60_000);
 }
+
+/**
+ * Palavra-chave que parece SENHA de PDF (16/10/2026): só dígitos, 3 a 14.
+ *
+ * Caso real: a senha da conta da Energisa foi digitada em "Palavras-chave", o
+ * campo logo acima de "Senha dos PDFs". Dois estragos calados: a senha nunca
+ * chegou ao cofre (o boleto seguiu ilegível) e o remetente passou a exigir
+ * esses dígitos no assunto/anexo — deixou de reconhecer os próprios e-mails.
+ * Palavra-chave de verdade é texto ("boleto", "fatura"); número puro com cara
+ * de CPF/CNPJ é senha. É aviso, não bloqueio: "2026" pode ser intencional.
+ */
+export function pareceSenhaDePdf(palavra: string): boolean {
+    return /^\d{3,14}$/.test(palavra.trim());
+}

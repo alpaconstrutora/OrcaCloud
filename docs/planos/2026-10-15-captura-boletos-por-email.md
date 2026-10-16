@@ -851,3 +851,21 @@ Resposta do usuário, literal:
   pelo painel — 26 de 26 e-mails, 0 criados, 1 já existia (o boleto nº 1423), 0 falhas; nenhum boleto duplicado
   (continua 1 boleto com origem e-mail). Datas padrão dos painéis em horário local (`1e057196`): `toISOString()`
   dava o dia seguinte depois das 21h de Brasília.
+
+## Pedido posterior — 16/10/2026 (senha no campo errado)
+
+> Boleto 1234 : senha foi cadastrada
+
+Conferido no banco: o cofre não tinha senha; o remetente Energisa estava com UMA palavra-chave de 4 dígitos
+(salvo às 00h41). O valor foi digitado em "Palavras-chave" (o campo logo acima de "Senha dos PDFs") e,
+testado contra o PDF do boleto nº 1423, deu "senha incorreta" (RC4 128 bits, V2/R3 — formato suportado).
+Efeito colateral: o remetente passou a só reconhecer e-mails com esses dígitos no assunto/anexo.
+Proposto (1) apagar a palavra-chave pelo banco e (2) aviso na tela. Resposta do usuário, literal:
+
+> sim
+
+- [x] Palavra-chave apagada (UPDATE condicionado a "ainda é a única e só dígitos, sem senha"), 03:54 UTC.
+- [x] `utils/emailCaptureRegras.ts` › `pareceSenhaDePdf` (3–14 dígitos) + `EmailCaptureSenderSheet`: aviso
+  abaixo de Palavras-chave com "Mover para Senha dos PDFs" — testes `emailCaptureRegras` e
+  `components/EmailCaptureSenderSheetSenhaNoCampoErrado` (3 casos).
+- [ ] Senha certa do PDF da Energisa — **depende do usuário** (o valor de 4 dígitos não abre o arquivo).

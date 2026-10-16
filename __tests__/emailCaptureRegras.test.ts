@@ -14,6 +14,7 @@ import {
     deveProcessar,
     decidirDestino,
     proximaTentativa,
+    pareceSenhaDePdf,
     type RemetenteMonitorado,
     type EntradaDestino,
 } from '../utils/emailCaptureRegras';
@@ -145,5 +146,20 @@ describe('proximaTentativa', () => {
         expect(proximaTentativa(2, t0)?.toISOString()).toBe('2026-10-15T13:00:00.000Z');
         expect(proximaTentativa(3, t0)?.toISOString()).toBe('2026-10-15T16:00:00.000Z');
         expect(proximaTentativa(4, t0)).toBeNull();
+    });
+});
+
+describe('pareceSenhaDePdf — senha digitada em Palavras-chave (16/10/2026)', () => {
+    it('número puro de 3 a 14 dígitos parece senha', () => {
+        expect(pareceSenhaDePdf('1234')).toBe(true);
+        expect(pareceSenhaDePdf(' 09264 ')).toBe(true);
+        expect(pareceSenhaDePdf('12345678901234')).toBe(true);
+    });
+    it('texto, número curto demais ou longo demais não', () => {
+        expect(pareceSenhaDePdf('boleto')).toBe(false);
+        expect(pareceSenhaDePdf('fatura 2026')).toBe(false);
+        expect(pareceSenhaDePdf('12')).toBe(false);
+        expect(pareceSenhaDePdf('123456789012345')).toBe(false);
+        expect(pareceSenhaDePdf('')).toBe(false);
     });
 });

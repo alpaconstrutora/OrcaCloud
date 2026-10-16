@@ -7,7 +7,8 @@
  * cadastrado (utils/emailCaptureRegras.ts). O texto da tela diz isso.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, ShieldCheck, KeyRound } from 'lucide-react';
+import { Loader2, ShieldCheck, KeyRound, AlertTriangle } from 'lucide-react';
+import { pareceSenhaDePdf } from '../../utils/emailCaptureRegras';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import SupplierSelect, { type SupplierOption } from '../SupplierSelect';
 import {
@@ -98,6 +99,19 @@ const EmailCaptureSenderSheet: React.FC<Props> = ({ open, onClose, contas, forne
                     ? 'Informe o domínio (ex.: fornecedor.com.br).'
                     : null;
 
+    // Número puro em Palavras-chave quase sempre é a senha do PDF no campo errado.
+    const palavrasNumericas = palavras.split(',').map(p => p.trim()).filter(pareceSenhaDePdf);
+
+    function moverParaSenha() {
+        const [senha] = palavrasNumericas;
+        if (!senha) return;
+        setPalavras(palavras.split(',').map(p => p.trim()).filter(p => p && !pareceSenhaDePdf(p)).join(', '));
+        setSenhaPdf(senha);
+        setTrocandoSenha(true);   // mostra o campo mesmo se já houver senha cadastrada
+        setRemoverSenha(false);
+        setDirty(true);
+    }
+
     async function salvar() {
         if (motivoDesligado || !conta) return;
         setSalvando(true);
@@ -177,6 +191,20 @@ const EmailCaptureSenderSheet: React.FC<Props> = ({ open, onClose, contas, forne
                             <input id="erem-palavras" value={palavras} onChange={e => { setPalavras(e.target.value); setDirty(true); }}
                                 placeholder="boleto, fatura, cobrança" className={CAMPO} />
                             <p className="text-xs text-gray-500">Separadas por vírgula. Com palavras, só casa mensagem cujo assunto ou nome do anexo tenha uma delas.</p>
+                            {palavrasNumericas.length > 0 && (
+                                <div className="flex items-start gap-2 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                                    <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />
+                                    <div className="space-y-1.5">
+                                        <p>
+                                            {palavrasNumericas.length === 1 ? 'O número digitado aqui parece' : 'Os números digitados aqui parecem'} a senha do PDF, não uma palavra-chave.
+                                            Como palavra-chave, o remetente só é reconhecido se o assunto ou o anexo tiver esses dígitos.
+                                        </p>
+                                        <button type="button" onClick={moverParaSenha} className="font-medium text-amber-900 underline hover:text-amber-950">
+                                            Mover para Senha dos PDFs
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

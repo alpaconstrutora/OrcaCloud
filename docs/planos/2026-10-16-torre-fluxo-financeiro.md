@@ -137,7 +137,7 @@ Nós:
 | Tipos (`tsc --noEmit`, heap 12 GB) | 1ª rodada caiu com segfault do Node (exit 139, sem erro TS — instabilidade conhecida da máquina); 2ª rodada pelo PowerShell: **exit 0, 0 erros** |
 | Migration aplicada e conferida | ✅ 16/10 (ver C.2) |
 | Visual (Playwright, login real, `c:\tmp\pwtest\torre-financeiro.cjs`, contextos "Todas" e Alpa) | ✅ 16/10 18:30 — menu Financeiro › Análise › Fluxo Financeiro abre a Torre; 11 cartões, 10 linhas, 4 grupos; roda não rola a página; painel da transição Pagamento → Pago/Recebido com a lacuna; 11 drawers abrem; "Novo gatilho" → Alçada → Pagamento → modal de organização em "Todas" (REGRA #5) → editor com `payable.approved` (fechado sem gravar); celular vira lista de 11; Torre P2P com 8/7/3 e biblioteca sem evento do Financeiro. **Sem erro de console/JS nem HTTP 4xx/5xx.** O Chrome caiu ("Page crashed") na 1ª rodada do dia — instabilidade da máquina já registrada; as rodadas seguintes completaram. |
-| Publicação | ⏳ (aguarda ok do usuário) |
+| Publicação | ✅ 16/10 ~22:05 UTC, com ok do usuário — `git push origin HEAD:main` → `d6520791`. Prova de tipos/suíte/build pela CI (PR de rascunho #17, fechada; e a CI de push na main em `d6520791`: Type check, Sinks de XSS, Tests, Build — success), porque nesta máquina o `tsc` e dois arquivos da Planta caíram por crash do V8. `conferir-producao.sh "Torre de Controle — Fluxo Financeiro" "Título a pagar aprovado na alçada"`: domínio serve exatamente `d652079`, os dois textos no bundle. |
 
 ## Fora de escopo (decidido, não esquecido)
 - Emitir eventos a partir das Edge Functions (`reconciliation-engine` CRON, `asaas-webhook`): baixas automáticas por lá não abrem processo — a nota da aresta diz isso.

@@ -289,10 +289,11 @@ export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras
           } else pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre de janela e porta — ficou no meio, diante do vão; confira.`);
         }
         else if (folgaUsada < hip.aquecedorLongeDoVaoMm) pendencias.push(`Aquecedor na ${serv.name}: a ${f2(folgaUsada / 1000)} m do vão (pedido: ${f2(hip.aquecedorLongeDoVaoMm / 1000)} m) — a parede externa não tem mais trecho livre.`);
-        const u = { x: (lado.b.x - lado.a.x) / lado.comprimento, y: (lado.b.y - lado.a.y) / lado.comprimento };
+        const ld = lado!; // não nulo: o ramo do `if (!serv || !lado)`; a troca para a parede interna só troca por outro lado
+        const u = { x: (ld.b.x - ld.a.x) / ld.comprimento, y: (ld.b.y - ld.a.y) / ld.comprimento };
         const recuo = cx.espessuraExternaMm / 2 + hip.aquecedorDaFaceMm;
-        const noLado = (d: number) => inteiro({ x: lado.a.x + u.x * d - lado.n.x * recuo, y: lado.a.y + u.y * d - lado.n.y * recuo });
-        const meioT = t ?? lado.comprimento / 2;
+        const noLado = (d: number) => inteiro({ x: ld.a.x + u.x * d - ld.n.x * recuo, y: ld.a.y + u.y * d - ld.n.y * recuo });
+        const meioT = t ?? ld.comprimento / 2;
         const meia = hip.aquecedorFriaQuenteMm / 2;
         for (const [disciplina, d] of [['AGUA_FRIA', meioT - meia], ['AGUA_QUENTE', meioT + meia]] as const) {
           comandos.push({ type: 'AddTerminal', levelId: cx.levelId, disciplina, tipo: 'Aquecedor', at: noLado(d), cotaMm: hip.cotaDoAquecedorMm, tipoHidraulico: 'AQUECEDOR', sugerida: true });

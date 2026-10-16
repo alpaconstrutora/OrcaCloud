@@ -308,7 +308,7 @@ function lugarNaParedeExterna(
         if (saida == null) continue;
         const base = ponto(c);
         const sp = ponto(saida);
-        const cand = {
+        const cand: LugarDaEvaporadora & { sobreJanela: boolean; alcance: number; doMeio: number } = {
           lado,
           at: { x: Math.round(base.x + n.x * (profundidadeMm / 2)), y: Math.round(base.y + n.y * (profundidadeMm / 2)) } as Point,
           normal: n,
@@ -320,7 +320,7 @@ function lugarNaParedeExterna(
           alcance,
           doMeio: Math.abs(c - L / 2),
         };
-        const melhor = (a: typeof cand, b: typeof cand) => Number(a.sobreJanela) - Number(b.sobreJanela) || a.alcance - b.alcance || a.doMeio - b.doMeio;
+        const melhor = (a: LugarDaEvaporadora & { sobreJanela: boolean; alcance: number; doMeio: number }, b: LugarDaEvaporadora & { sobreJanela: boolean; alcance: number; doMeio: number }) => Number(a.sobreJanela) - Number(b.sobreJanela) || a.alcance - b.alcance || a.doMeio - b.doMeio;
         if (!melhorDoLado || melhor(cand, melhorDoLado) < 0) melhorDoLado = cand;
       }
     }

@@ -13,6 +13,7 @@ import {
     remetenteCasa,
     deveProcessar,
     ignorarPdfSemBoleto,
+    remetenteJaCadastrado,
     decidirDestino,
     proximaTentativa,
     pareceSenhaDePdf,
@@ -251,5 +252,20 @@ describe('PDF sem linha digitável de remetente avulso (16/10/2026)', () => {
 
     it('"todos" continua trazendo qualquer PDF', () => {
         expect(ignorarPdfSemBoleto({ ...base, modo: 'todos' })).toBe(false);
+    });
+});
+
+describe('remetente já cadastrado — para o histórico não oferecer "Monitorar" de novo (16/10/2026)', () => {
+    const cadastrados = [
+        { tipo: 'exato' as const, email: 'faturas@energisa.com.br', dominio: null },
+        { tipo: 'dominio' as const, email: null, dominio: 'llcontabil.com.br' },
+    ];
+    it('e-mail exato e domínio (com subdomínio) contam; trecho parecido não', () => {
+        expect(remetenteJaCadastrado('Energisa <Faturas@Energisa.com.br>', cadastrados)).toBe(true);
+        expect(remetenteJaCadastrado('x@mail.llcontabil.com.br', cadastrados)).toBe(true);
+        expect(remetenteJaCadastrado('outro@energisa.com.br', cadastrados)).toBe(false);
+        expect(remetenteJaCadastrado('a@falso-llcontabil.com.br', cadastrados)).toBe(false);
+        expect(remetenteJaCadastrado(null, cadastrados)).toBe(false);
+        expect(remetenteJaCadastrado('a@b.com', [])).toBe(false);
     });
 });

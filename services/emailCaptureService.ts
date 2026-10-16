@@ -149,6 +149,31 @@ export interface ResultadoSincronizacao {
     pendente: boolean;
 }
 
+/** Recorte do histórico: datas LOCAIS AAAA-MM-DD, as duas inclusivas. */
+export interface PeriodoHistorico { de: string; ate: string }
+export type AtalhoPeriodo = '7' | '30' | '90' | '365' | 'tudo';
+export const ROTULO_ATALHO_PERIODO: Record<AtalhoPeriodo, string> = {
+    '7': 'Últimos 7 dias', '30': 'Últimos 30 dias', '90': 'Últimos 90 dias', '365': 'Últimos 12 meses', tudo: 'Todo o histórico',
+};
+
+/** Atalho → período terminando hoje (dias corridos, hoje incluído). "tudo" = sem recorte. */
+export function periodoDoAtalho(atalho: AtalhoPeriodo, hojeLocal: string): PeriodoHistorico | null {
+    if (atalho === 'tudo') return null;
+    const [a, m, d] = hojeLocal.split('-').map(Number);
+    const ini = new Date(Date.UTC(a, m - 1, d - (Number(atalho) - 1)));
+    return { de: ini.toISOString().slice(0, 10), ate: hojeLocal };
+}
+
+/** Filtro PostgREST do período: pela data do e-mail e, quando o e-mail não tem
+ *  data, pela data de leitura. Fronteiras na meia-noite LOCAL; o último dia entra inteiro. */
+export function filtroDoPeriodo(p: PeriodoHistorico): string {
+    const ini = new Date(`${p.de}T00:00:00`).toISOString();
+    const fimDate = new Date(`${p.ate}T00:00:00`);
+    fimDate.setDate(fimDate.getDate() + 1);
+    const fim = fimDate.toISOString();
+    return `and(data_email.gte."${ini}",data_email.lt."${fim}"),and(data_email.is.null,created_at.gte."${ini}",created_at.lt."${fim}")`;
+}
+
 const COLUNAS_BUSCA = 'id, organization_id, account_id, data_de, data_ate, status, total_mensagens, mensagens_processadas, criados, duplicados, ignorados, erros, ultimo_erro, pedida_por, remetentes, created_at, concluida_em';
 
 async function chamar<T>(nome: 'email-capture-accounts' | 'email-capture-sync', body: Record<string, unknown>, padrao: string): Promise<T> {
@@ -175,13 +200,43 @@ export const emailCaptureService = {
     },
 
     /** Últimas mensagens processadas (histórico da captura), mais recentes primeiro. */
-    async listarMensagens(organizationId: string | null, limite = 300): Promise<MensagemCaptura[]> {
-        let q = supabase.from('email_capture_messages').select(COLUNAS_MENSAGEM)
-            .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(limite);
-        if (organizationId) q = q.eq('organization_id', organizationId);
-        const { data, error } = await q;
-        if (error) throw error;
-        return (data ?? []) as MensagemCaptura[];
+    /** Histórico do período (data do e-mail), inteiro: pagina por `.range()` até a
+     *  página vir incompleta — sem `.limit` fixo, que cortava em 300 sem avisar
+     *  (guia §6.7, 16/10/2026). `periodo` null = tudo. */
+    async listarMensagens(organizationId: string | null, periodo: PeriodoHistorico | null): Promise<MensagemCaptura[]> {
+        const PAGINA = 1000;
+        const todas: MensagemCaptura[] = [];
+        for (let desde = 0; ; desde += PAGINA) {
+            let q = supabase.from('email_capture_messages').select(COLUNAS_MENSAGEM)
+                .order('created_at', { ascending: false }).order('id', { ascending: false })
+                .range(desde, desde + PAGINA - 1);
+            if (organizationId) q = q.eq('organization_id', organizationId);
+            if (periodo) q = q.or(filtroDoPeriodo(periodo));
+            const { data, error } = await q;
+            if (error) throw error;
+            todas.push(...((data ?? []) as MensagemCaptura[]));
+            if (!data || data.length < PAGINA) break;
+        }
+        return todas;
+    },
+
+    /** Contadores das abas: buscas em andamento e falhas ainda sem resolver. Nunca
+     *  derruba a tela — sem resposta, as abas ficam sem contador. */
+    async resumoDasAbas(organizationId: string | null): Promise<{ buscasEmAndamento: number; falhas: number }> {
+        try {
+            let qb = supabase.from('email_capture_buscas').select('id', { count: 'exact', head: true })
+                .in('status', ['pendente', 'em_andamento']);
+            let qf = supabase.from('email_capture_messages').select('id', { count: 'exact', head: true })
+                .eq('resultado', 'erro');
+            if (organizationId) {
+                qb = qb.eq('organization_id', organizationId);
+                qf = qf.eq('organization_id', organizationId);
+            }
+            const [b, f] = await Promise.all([qb, qf]);
+            return { buscasEmAndamento: b.count ?? 0, falhas: f.count ?? 0 };
+        } catch {
+            return { buscasEmAndamento: 0, falhas: 0 };
+        }
     },
 
     /** Mensagem de origem de um boleto capturado (para "Recebido de …" no formulário). */

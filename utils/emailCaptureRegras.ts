@@ -121,6 +121,25 @@ export function remetenteCasa(
     }) ?? null;
 }
 
+/**
+ * O endereço já tem cadastro de remetente — e-mail exato, ou domínio (com
+ * subdomínio) — ativo ou não, sem olhar palavras-chave (16/10/2026). Serve à tela:
+ * o histórico só oferece "Monitorar remetente" a quem ainda não está cadastrado
+ * (cadastrar de novo esbarraria na UNIQUE da caixa).
+ */
+export function remetenteJaCadastrado(
+    from: string | null | undefined,
+    remetentes: Array<Pick<RemetenteMonitorado, 'tipo' | 'email' | 'dominio'>>,
+): boolean {
+    const end = extrairEndereco(from);
+    if (!end) return false;
+    return remetentes.some(r => {
+        if (r.tipo === 'exato') return !!r.email && r.email.toLowerCase() === end.endereco;
+        const d = (r.dominio ?? '').toLowerCase().replace(/^@/, '');
+        return !!d && (end.dominio === d || end.dominio.endsWith('.' + d));
+    });
+}
+
 /** Modo "favoritos" só processa mensagem de remetente monitorado; os outros processam tudo. */
 export function deveProcessar(modo: ModoCaptura, remetente: RemetenteMonitorado | null): boolean {
     return modo === 'favoritos' ? remetente !== null : true;

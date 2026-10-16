@@ -972,3 +972,34 @@ depois não havia onde trocar (nem "Reconectar" mostra o campo). Resposta do usu
   sai das opções da tela (continua válido no banco/função; caixa que esteja nele continua mostrando).
 - Testes: `__tests__/components/EmailCaptureRegraSheet.test.tsx` (2 opções com a atual marcada; salvar
   desligado e o motivo; troca grava `modo: 'favoritos'`).
+
+## Pedido posterior — 16/10/2026 (abas na tela de captura)
+
+> na tela de Captura por e-mail temos 4 tabelas (Caixas de e-mail, Buscas por períodoRemetentes monitorados e
+> Histórico da captura). com excessao da tabela Caixas de e-mail, as outras 3 tendem a crescer e ficar confusa a
+> tela. faça uma sugestão do ponto de vista UX. talvez criar abas separando cada tabela.
+
+Sugestão entregue (guia §19.1/§19.2: duas barras de abas empilhadas confundem a quem os KPIs se referem):
+uma barra só em Boletos a Pagar — Boletos · Caixas e remetentes · Buscas por período · Histórico da captura —
+cada aba com título, KPIs e ação própria; Histórico com filtro por resultado, período (sem o corte silencioso
+de 300 linhas) e "Monitorar remetente" na linha ignorada. Resposta do usuário, literal:
+
+> Implemento assim? sim
+
+- [x] `components/boletos/abasBoletos.ts` (novo, puro) — abas, títulos por aba, aba salva antiga `captura` →
+  `captura_caixas`; aba desconhecida → `boletos`.
+- [x] `TabsBar` — contador com tom de alerta (vermelho) e `title` próprio (`badgeTom`, `badgeTitulo`).
+- [x] `emailCaptureService.listarMensagens(org, periodo)` — período por DATA DO E-MAIL (cai para a data de
+  leitura quando o e-mail não tem data), paginado por `.range()` até a página vir incompleta (§6.7: nada de
+  `.limit` fixo); `periodoDoAtalho` (7/30/90 dias, 12 meses, tudo); `resumoDasAbas` (buscas em andamento,
+  falhas sem resolver) para os contadores das abas.
+- [x] `utils/emailCaptureRegras.ts` › `remetenteJaCadastrado` (e-mail exato ou domínio/subdomínio, ativo ou não).
+- [x] `EmailCapturaConfig` com `secao` — Caixas e remetentes (KPIs: caixas ativas, remetentes, com senha de PDF,
+  sem fornecedor) · Buscas (KPIs: em andamento, concluídas, e-mails lidos, boletos criados; "Nova busca") ·
+  Histórico (barra de período §5.3, `FilterPopover` Resultado §5.4, KPIs do período, "Monitorar remetente" em
+  texto na linha ignorada de remetente sem cadastro).
+- [x] `BoletoManager` — 4 abas com contadores; título por aba.
+- Verificação local: testes por arquivo (abasBoletos 3, emailCaptureHistorico 5, emailCaptureRegras 38,
+  emailCaptureService 8, EmailCapturaHistorico 3 + os demais de boleto/captura); typecheck parcial limpo;
+  `check-ui-standard` limpo em TabsBar, EmailCapturaConfig e BoletoManager. `BlueprintEditor.test.tsx` derruba
+  o worker do Node 24 local COM e SEM estas mudanças (conferido com stash) — portão = CI.

@@ -18,6 +18,10 @@ export interface TabsBarItem<T extends string = string> {
     icon?: React.ReactNode;
     /** Contador discreto ao lado do rótulo (ex.: quantidade de itens da aba). */
     badge?: number | string;
+    /** 'alerta' pinta o contador de vermelho — conta algo que pede ação (ex.: falhas). */
+    badgeTom?: 'alerta';
+    /** O que o contador conta (vira `title` dele) — número solto não se explica. */
+    badgeTitulo?: string;
 }
 
 interface TabsBarProps<T extends string> {
@@ -50,7 +54,8 @@ export function TabsBar<T extends string>({ tabs, value, onChange, children, cla
                             {t.icon}
                             {t.label}
                             {t.badge !== undefined && t.badge !== 0 && (
-                                <span className={`text-xs ${active ? 'text-blue-400' : 'text-gray-400'}`}>{t.badge}</span>
+                                <span title={t.badgeTitulo}
+                                    className={`text-xs ${t.badgeTom === 'alerta' ? 'font-semibold text-red-600' : active ? 'text-blue-400' : 'text-gray-400'}`}>{t.badge}</span>
                             )}
                         </button>
                     );

@@ -32,6 +32,9 @@ import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
 import { TabsBar } from './ui/TabsBar';
 import EmailCapturaConfig from './boletos/EmailCapturaConfig';
+import { ABAS_BOLETOS, CABECALHO_DA_ABA, normalizarAba, secaoDaAba } from './boletos/abasBoletos';
+import { emailCaptureService } from '../services/emailCaptureService';
+import { useOrgContext } from '../hooks/useOrgContext';
 
 interface BoletoManagerProps {
     organizationId: string;
@@ -44,24 +47,7 @@ interface BoletoManagerProps {
        (AppRouter 'boletos-pagar') e não tem barra de abas de pai nenhum. */
 }
 
-type AbaBoletos = 'boletos' | 'captura';
-
-/** O título muda com a aba (guia §19.1 — aba que troca o conteúdo troca o h1). */
-const CABECALHO_DA_ABA: Record<AbaBoletos, { titulo: string; subtitulo: string }> = {
-    boletos: {
-        titulo: 'Boletos a Pagar',
-        subtitulo: 'Capture boletos via PDF e gere lançamentos automaticamente em contas a pagar.',
-    },
-    captura: {
-        titulo: 'Captura por e-mail',
-        subtitulo: 'Caixas do Gmail lidas a cada 15 minutos: cada PDF de boleto vira um boleto em revisão nesta tela.',
-    },
-};
-
-const ABAS_BOLETOS = [
-    { id: 'boletos' as const, label: 'Boletos' },
-    { id: 'captura' as const, label: 'Captura por e-mail' },
-];
+// Abas e títulos por aba: components/boletos/abasBoletos.ts (16/10/2026).
 
 const MESES_FILTRO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -968,10 +954,30 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Aba (15/10/2026): Boletos | Captura por e-mail. A captura não tem "caixa de
-    // entrada" própria — o boleto capturado é uma linha desta lista (Origem =
-    // E-mail) e a revisão é o filtro "Em revisão". A aba é configuração + histórico.
-    const [aba, setAba] = usePersistedState<AbaBoletos>('boletoManager:aba', 'boletos');
+    // Abas (16/10/2026): Boletos · Caixas e remetentes · Buscas por período ·
+    // Histórico da captura — antes a captura era uma aba só com 4 tabelas. A
+    // captura não tem "caixa de entrada" própria: o boleto capturado é uma linha
+    // desta lista (Origem = E-mail) e a revisão é o filtro "Em revisão".
+    const [abaSalva, setAba] = usePersistedState<string>('boletoManager:aba', 'boletos');
+    const aba = normalizarAba(abaSalva);
+    const secaoCaptura = secaoDaAba(aba);
+
+    // Contadores das abas da captura — da MESMA org que a captura lê (REGRA #5).
+    const { orgId: orgDaCaptura } = useOrgContext();
+    const [resumoCaptura, setResumoCaptura] = useState({ buscasEmAndamento: 0, falhas: 0 });
+    const atualizarResumoCaptura = useCallback(() => {
+        emailCaptureService.resumoDasAbas(orgDaCaptura).then(setResumoCaptura);
+    }, [orgDaCaptura]);
+    useEffect(() => { atualizarResumoCaptura(); }, [atualizarResumoCaptura, aba]);
+    const abasComContador = useMemo(() => ABAS_BOLETOS.map(a => {
+        if (a.id === 'captura_buscas' && resumoCaptura.buscasEmAndamento) {
+            return { ...a, badge: resumoCaptura.buscasEmAndamento, badgeTitulo: `${resumoCaptura.buscasEmAndamento} busca(s) em andamento` };
+        }
+        if (a.id === 'captura_historico' && resumoCaptura.falhas) {
+            return { ...a, badge: resumoCaptura.falhas, badgeTom: 'alerta' as const, badgeTitulo: `${resumoCaptura.falhas} PDF(s) com falha sem resolver` };
+        }
+        return a;
+    }), [resumoCaptura]);
 
     /** "Ver boleto" do histórico da captura: abre o formulário daquele boleto. */
     const abrirBoletoPorId = useCallback(async (id: string) => {
@@ -1112,10 +1118,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             </div>
 
             {/* 2. Abas — depois do título, antes dos KPIs (anatomia do guia). */}
-            <TabsBar tabs={ABAS_BOLETOS} value={aba} onChange={setAba} />
+            <TabsBar tabs={abasComContador} value={aba} onChange={setAba} />
 
-            {aba === 'captura' ? (
-                <EmailCapturaConfig onAbrirBoleto={abrirBoletoPorId} />
+            {secaoCaptura ? (
+                <EmailCapturaConfig secao={secaoCaptura} onAbrirBoleto={abrirBoletoPorId} onResumoMudou={atualizarResumoCaptura} />
             ) : (<>
 
             {/* 3. Cards de resumo — padrão guia seção 4 (componente KpiCard) */}

@@ -180,7 +180,11 @@ corretor efetivo (`effectiveBroker.settings`) nos dois modos — pelo link vem d
 ## Estado
 
 - [x] Decisões D2, D5, D6 confirmadas; D8 pedida pelo usuário (16/10/2026)
-- [x] **F1 — 4 de 4** (16/10/2026, frente `portal-corretor-mobile`, sem commit ainda)
+- [x] **Publicado (16/10/2026):** `main` em `2a67eae6`. PR de rascunho #18 antes do push (a máquina
+  local não fecha o `tsc` hoje): CI `ci` verde em 12min53s no PR e verde de novo no commit da `main`;
+  `conferir-producao.sh` provou de fora que o domínio serve `2a67eae` e que os bundles têm
+  "Nenhuma seção liberada" e "só proposta individual" (textos que só existem na tela nova).
+- [x] **F1 — 4 de 4** (16/10/2026, frente `portal-corretor-mobile`)
   - 1 `useBrokerPortal.ts`: todo o comportamento saiu do `BrokerPortal`; desktop só desenha.
   - 1b `abasDoCelular`/`abasHabilitadas` + teste (6 casos).
   - 2 `BrokerPortalMobile.tsx`: aparelho × prévia, cabeçalho "Olá, Nome", barra 5 ou 4+Mais, folha "Mais",

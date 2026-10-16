@@ -130,7 +130,9 @@ página de login do Portal de Treinamentos, `2026-10-16-login-exclusivo-portal-t
 - [x] Suíte completa `9754 = 9720 passados + 34 pendentes`, 0 falhas (reporter JSON); `vite build
   exit=0` ("✓ built in 32.30s")
 - [ ] Navegador com conta real (passos com `PW_SENHA`; cadastro de teste grava em produção)
-- [ ] Publicação em `main` + `conferir-producao.sh`
+- [x] Publicação em `main` — `0d3e0b51` + `8f2f5ec4` (2026-10-16); check-run `ci` verde;
+  `conferir-producao.sh "Crie sua senha"` ✅ (domínio carimbado com o topo de `main`, texto no
+  bundle servido)
 - [ ] Allow-list de redirect do Supabase Auth para `/portal-cliente`, `/portal-fornecedor`,
   `/portal-corretor` (conferir no Dashboard antes do primeiro convite real)
 

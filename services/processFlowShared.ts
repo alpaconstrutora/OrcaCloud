@@ -191,7 +191,12 @@ export function montarArestas(
       id, ...def, eventKeys, templates,
       ...(orquestrada ? {
         seam: 'orquestrada' as SeamStatus,
-        note: `Conduzida por Processos: ${[...new Set(templates.map(t => t.name))].join(', ')}`,
+        // A nota do retrato estático FICA, depois de quem conduz: ela descreve o
+        // que o código faz (ex.: "a baixa não confere a alçada"), e isso não
+        // deixa de ser verdade porque um processo passou a acompanhar a
+        // transição. Até 16/10/2026 a nota era substituída e a lacuna sumia do
+        // painel assim que o modelo do Financeiro foi criado.
+        note: [`Conduzida por Processos: ${[...new Set(templates.map(t => t.name))].join(', ')}`, def.note].filter(Boolean).join(' — '),
       } : {}),
     };
   });

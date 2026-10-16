@@ -13,6 +13,10 @@
 (resposta às três pendências: senha do usuário de leitura para a conferência no navegador — usada só na
 linha de comando, não gravada; aplicar a migration; commit + publicação autorizados.)
 
+> Vamos criar
+>
+> (16/10/2026, depois da publicação — resposta a "falta criar os modelos de processo dos quatro eventos")
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -123,6 +127,21 @@ Nós:
 - **Extrato**: o critério passou a ser o mesmo da aba Pendentes da Conciliação (+ `CONFIRMED`): 9.397 na Alpa — número real, confere com a distribuição de status no banco.
 - **Cartão do canvas (afetava as duas Torres)**: 208×148 truncava o nome da etapa ("Solicitaç…", "Boletos …") e escondia a linha "Entrada" nos cartões com "Processos". Virou 240×184 (o guia já pedia 240 de largura) e o dono saiu do cabeçalho (vai no `title`, drawer e painel). Piso do zoom 0,35 → 0,25 para "Enquadrar" ainda mostrar as 7 colunas. Guia §31 atualizado.
 - **Drawer**: status cru (`VENCIDO`, `AGUARDANDO_APROVACAO`, `NORMALIZED`) virou texto; nó com várias entradas (Contas a Pagar: 2; Pago/Recebido: 3) mostrava só a nota da primeira — agora lista todas e fica com a costura mais exigente (`entradaDoNo`).
+
+### E. Modelos de processo dos quatro eventos (pedido "Vamos criar", 16/10)
+
+Decisões do usuário (pergunta com o volume medido na Alpa, 30 dias: 781 boletos aprovados, 102 liberados na alçada, 274 pagos, 3 recebidos):
+
+| Pergunta | Resposta |
+|---|---|
+| Quais eventos ganham modelo? | **Os quatro.** |
+| Volume: valor mínimo por modelo (código novo) ou todo título abre processo? | **Todo título abre processo** — sem código novo. |
+| Em quais organizações? | **Nas quatro**, como os modelos do P2P. |
+
+- [x] **E.1 `supabase/migrations/aplicar_20271017100000_processos_modelos_financeiro.sql`** — carga idempotente por (organização, evento), mesmo molde de `aplicar_20270928000001` (sem dono nem responsável por etapa; o dono se define no editor). Modelos: "Boleto aprovado — conferência de classificação" (1 etapa), "Programar pagamento" (programar 24 h → anexar comprovante 72 h), "Pós-pagamento: comprovante e conciliação" (comprovante 48 h → conciliação 72 h), "Recebimento: recibo e conciliação" (recibo 24 h → conciliação 72 h). `segurancaMigrations` verde; **aplicada em 16/10** e conferida: 16 modelos ATIVOS (4 × 4 orgs) com as etapas.
+- Consequência registrada: um boleto aprovado abaixo do piso abre DOIS processos na hora (boleto aprovado + programar pagamento) e um terceiro quando é pago.
+- [x] **E.2 `services/processFlowShared.ts`** — achado na conferência em produção depois da carga: transição orquestrada tinha a nota SUBSTITUÍDA por "Conduzida por Processos: …", e a lacuna "a baixa não confere a alçada" sumia do painel. Agora a nota do retrato fica depois de quem conduz (vale para as duas Torres). Teste novo em `financeiroFlowService.test.ts`; P2P verde sem alteração.
+- [x] **E.3 Conferência** — produção (antes de E.2) e frente (depois), login real, "Todas" e Alpa: as quatro transições "Orquestrada", nós Contas a Pagar, Pagamento e Pago/Recebido com entrada orquestrada, KPI Orquestradas = 3, biblioteca com 1 modelo por gatilho; painel da baixa com "Conduzida por Processos: Pós-pagamento… — … A baixa não confere a alçada". Sem erro de console/JS nem HTTP 4xx/5xx. (O roteiro passou a selecionar a transição pela biblioteca: com um modelo, o chip abre o editor.)
 
 ## Verificação
 

@@ -112,6 +112,14 @@ describe('financeiroFlowService — desenho', () => {
         expect(edges.filter(e => e.seam === 'orquestrada').map(e => e.id)).toEqual(['aprovacao->pagamento']);
     });
 
+    it('transição orquestrada mantém a nota do retrato (a lacuna da baixa não some quando o modelo existe)', async () => {
+        dados.process_templates = [{ id: 't3', name: 'Pós-pagamento', trigger_event_key: 'payable.settled', organization_id: 'org1' }];
+        const { edges } = await financeiroFlowService.getSnapshot('org1');
+        const baixa = edges.find(e => e.id === 'pagamento->baixado')!;
+        expect(baixa.seam).toBe('orquestrada');
+        expect(baixa.note).toMatch(/^Conduzida por Processos: Pós-pagamento — .*não confere a alçada$/);
+    });
+
     it('evento do P2P não orquestra nenhuma transição do Financeiro', async () => {
         dados.process_templates = [{ id: 't9', name: 'Pagamento de fornecedor', trigger_event_key: 'internal_transaction.paid', organization_id: 'org1' }];
         const { edges } = await financeiroFlowService.getSnapshot('org1');

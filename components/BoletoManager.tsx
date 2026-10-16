@@ -33,6 +33,7 @@ import { KpiCard } from './ui/KpiCard';
 import { TabsBar } from './ui/TabsBar';
 import EmailCapturaConfig from './boletos/EmailCapturaConfig';
 import { ABAS_BOLETOS, CABECALHO_DA_ABA, normalizarAba, secaoDaAba } from './boletos/abasBoletos';
+import { beneficiarioDoBoleto } from '../utils/boletoBeneficiario';
 import { emailCaptureService } from '../services/emailCaptureService';
 import { useOrgContext } from '../hooks/useOrgContext';
 
@@ -129,12 +130,8 @@ function buildAdvancedFilterFields(boletos: Boleto[], supplierMap: Record<string
 
 function getAdvancedFilterValue(b: Boleto, key: string, supplierMap: Record<string, string>): unknown {
     switch (key) {
-        // Mesma ordem de fallback da célula (renderBoletoCell): com fornecedor vinculado,
-        // o nome do CADASTRO vem primeiro — antes o filtro pulava o supplierMap e não
-        // casava com o nome que a tabela mostra.
-        case 'beneficiario': return (b.supplier_id
-            ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
-            : (b.beneficiario_nome ?? b.documento_nome)) ?? '';
+        // O MESMO nome que a célula mostra (utils/boletoBeneficiario) — nunca o arquivo.
+        case 'beneficiario': return beneficiarioDoBoleto(b, supplierMap).nome ?? '';
         case 'descricao': return b.descricao ?? '';
         case 'status': return b.status;
         case 'valor': return b.valor ?? null;
@@ -200,12 +197,13 @@ function renderBoletoCell(
                 </button>
             );
         case 'beneficiario': {
-            const nome = b.supplier_id
-                ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
-                : (b.beneficiario_nome ?? b.documento_nome);
-            return (
-                <p className="break-words text-sm font-normal text-gray-700">{nome}</p>
-            );
+            // Fornecedor confirmado → nome lido do PDF → fornecedor SUGERIDO em cinza
+            // (decisão do usuário, 16/10/2026). O arquivo tem a coluna Documento.
+            const { nome, origem } = beneficiarioDoBoleto(b, supplierMap);
+            if (!nome) return <span className="text-sm font-normal text-gray-400">—</span>;
+            return origem === 'sugerido'
+                ? <p className="break-words text-sm font-normal text-gray-500" title="Sugerido — confirme na revisão">{nome}</p>
+                : <p className="break-words text-sm font-normal text-gray-700">{nome}</p>;
         }
         case 'descricao':
             return (
@@ -356,9 +354,7 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
                     <div className="flex items-center gap-2 min-w-0">
                         <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
                         <span className="text-sm font-bold text-gray-900 truncate">
-                            {b.supplier_id
-                                ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
-                                : (b.beneficiario_nome ?? b.documento_nome ?? 'Beneficiário desconhecido')}
+                            {beneficiarioDoBoleto(b, supplierMap).nome ?? 'Sem beneficiário'}
                         </span>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -863,7 +859,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 case 'valor':         va = a.valor ?? 0;                        vb = b.valor ?? 0;                        break;
                 case 'obra':          va = projectMap[a.project_id ?? ''] ?? ''; vb = projectMap[b.project_id ?? ''] ?? ''; break;
                 case 'centro_custo':  va = ccMap[a.cost_center_id ?? ''] ?? '';  vb = ccMap[b.cost_center_id ?? ''] ?? '';  break;
-                case 'beneficiario':  va = (a.beneficiario_nome ?? '').toLowerCase(); vb = (b.beneficiario_nome ?? '').toLowerCase(); break;
+                case 'beneficiario':  va = (beneficiarioDoBoleto(a, supplierMap).nome ?? '').toLowerCase(); vb = (beneficiarioDoBoleto(b, supplierMap).nome ?? '').toLowerCase(); break;
                 case 'descricao':     va = (a.descricao ?? '').toLowerCase();         vb = (b.descricao ?? '').toLowerCase();         break;
                 case 'status':        va = a.status;                            vb = b.status;                            break;
                 case 'capturado_em':  va = a.created_at;                        vb = b.created_at;                       break;
@@ -882,7 +878,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     // Agrupamento só no modo lista (a grade não tem linha de grupo).
     const agrupando = viewMode === 'list' && groupBy !== 'none';
     const grupos = useMemo(() => agruparBoletos(filtered, agrupando ? groupBy : 'none', {
-        fornecedor: b => (b.supplier_id ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome) : (b.beneficiario_nome ?? b.documento_nome)),
+        fornecedor: b => beneficiarioDoBoleto(b, supplierMap).nome,
         obra: b => (b.project_id ? projectMap[b.project_id] : null),
         centroCusto: b => (b.cost_center_id ? ccMap[b.cost_center_id] : null),
         capturadoPor: b => (b.created_by_email ? nomeCapturador(b, userNameMap) : null),
@@ -1024,8 +1020,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         setExporting(true);
         try {
             const nome = `boletos${effectiveOrgId ? `_${effectiveOrgId.slice(0, 8)}` : ''}`;
-            if (tipo === 'excel') await boletoService.exportarExcel(filtered, nome);
-            else await boletoService.exportarPDF(filtered, nome);
+            if (tipo === 'excel') await boletoService.exportarExcel(filtered, nome, supplierMap);
+            else await boletoService.exportarPDF(filtered, nome, supplierMap);
             notify(`Exportação para ${tipo === 'excel' ? 'Excel' : 'PDF'} concluída.`);
         } catch (err: unknown) {
             console.error('[export]', err);

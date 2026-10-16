@@ -240,7 +240,9 @@ export const financialRegistryService = {
     async listChartOfAccounts(_organizationId?: string, _empresaId?: string): Promise<ChartOfAccount[]> {
         const { data, error } = await supabase
             .from('financial_categories')
-            .select('id, name, parent_id, dre_group, nature, accounting_nature, sort_order')
+            // organization_id (16/10/2026): o cadastro de padrões do remetente recorta
+            // "da organização da caixa ou global" (aditivo — os demais chamadores ignoram).
+            .select('id, name, parent_id, dre_group, nature, accounting_nature, sort_order, organization_id')
             .order('sort_order', { ascending: true, nullsFirst: false });
 
         if (error) throw error;

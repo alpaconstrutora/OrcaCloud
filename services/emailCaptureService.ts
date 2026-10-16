@@ -12,6 +12,14 @@
  * Function, e nunca volta: nenhuma leitura daqui devolve `vault_secret_id`.
  */
 import { supabase } from '../lib/supabase';
+import {
+    aplicarPadroesDoRemetente,
+    dataLocalDoEmail,
+    remetenteCasa,
+    type CamposParaPadroes,
+    type PadroesRemetente,
+    type PatchDosPadroes,
+} from '../utils/emailCaptureRegras';
 
 export type ModoCaptura = 'favoritos' | 'todos' | 'hibrido';
 export type StatusConta = 'ativa' | 'pausada' | 'reautenticar' | 'desconectada';
@@ -34,7 +42,8 @@ export interface ContaCaptura {
     created_at: string;
 }
 
-export interface RemetenteCaptura {
+/** Remetente monitorado — com os padrões do boleto (16/10/2026; só preenchem o que o PDF não traz). */
+export interface RemetenteCaptura extends PadroesRemetente {
     id: string;
     organization_id: string;
     account_id: string;
@@ -108,7 +117,23 @@ export function progressoDaBusca(b: Pick<BuscaPeriodo, 'status' | 'total_mensage
 }
 
 const COLUNAS_CONTA = 'id, organization_id, provedor, host, porta, usuario, status, modo, data_inicial, modo_piloto, last_sync_at, ultimo_erro, created_by_email, created_at';
-const COLUNAS_REMETENTE = 'id, organization_id, account_id, supplier_id, nome, tipo, email, dominio, palavras_chave, importacao, exigir_dmarc, ativo, pdf_senha_atualizada_em, created_at';
+const COLUNAS_REMETENTE = 'id, organization_id, account_id, supplier_id, nome, tipo, email, dominio, palavras_chave, importacao, exigir_dmarc, ativo, pdf_senha_atualizada_em, created_at, '
+    + 'padrao_descricao, padrao_observacoes, padrao_project_id, padrao_cost_center_id, padrao_plano_de_contas_id, padrao_category_id, '
+    + 'padrao_dia_vencimento, padrao_valor, padrao_multa, padrao_multa_percentual, padrao_juros_dia, padrao_juros_dia_tipo';
+
+/** Boleto em revisão do remetente e o que os padrões preencheriam nele (só vazios). */
+export interface PreviaDoPadrao {
+    boleto: { id: string; numero: number | null; updated_at: string; erros_validacao: string[] | null };
+    patch: PatchDosPadroes;
+    campos: Array<keyof CamposParaPadroes>;
+}
+
+const COLUNAS_BOLETO_DA_PREVIA = 'id, numero, updated_at, erros_validacao, vencimento, valor, multa, multa_percentual, juros_dia, juros_dia_tipo, '
+    + 'descricao, observacoes, project_id, cost_center_id, plano_de_contas_id, category_id';
+
+const textoOuNulo = (v: string | null | undefined) => { const t = (v ?? '').trim(); return t || null; };
+const numeroOuNulo = (v: number | string | null | undefined) =>
+    v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v);
 const COLUNAS_MENSAGEM = 'id, organization_id, account_id, remetente, assunto, data_email, documento_nome, resultado, motivo, erro, tentativas, boleto_id, auth_results, created_at';
 
 /** Rótulos — a tela mostra exatamente estes textos (e o filtro avançado compara com eles). */
@@ -337,6 +362,19 @@ export const emailCaptureService = {
             email: r.tipo === 'exato' ? (r.email ?? '').trim().toLowerCase() || null : null,
             dominio: r.tipo === 'dominio' ? (r.dominio ?? '').trim().toLowerCase().replace(/^@/, '') || null : null,
             palavras_chave: r.palavras_chave.map(p => p.trim()).filter(Boolean),
+            // Padrões do boleto (16/10/2026) — também por nome (grant por coluna).
+            padrao_descricao: textoOuNulo(r.padrao_descricao),
+            padrao_observacoes: textoOuNulo(r.padrao_observacoes),
+            padrao_project_id: r.padrao_project_id || null,
+            padrao_cost_center_id: r.padrao_cost_center_id || null,
+            padrao_plano_de_contas_id: r.padrao_plano_de_contas_id || null,
+            padrao_category_id: r.padrao_category_id || null,
+            padrao_dia_vencimento: numeroOuNulo(r.padrao_dia_vencimento),
+            padrao_valor: (numeroOuNulo(r.padrao_valor) ?? 0) > 0 ? numeroOuNulo(r.padrao_valor) : null,
+            padrao_multa: numeroOuNulo(r.padrao_multa),
+            padrao_multa_percentual: numeroOuNulo(r.padrao_multa_percentual),
+            padrao_juros_dia: numeroOuNulo(r.padrao_juros_dia),
+            padrao_juros_dia_tipo: numeroOuNulo(r.padrao_juros_dia) != null ? (r.padrao_juros_dia_tipo ?? 'valor') : null,
         };
         const q = id
             ? supabase.from('email_capture_senders').update(linha).eq('id', id)
@@ -345,9 +383,59 @@ export const emailCaptureService = {
         if (error) {
             if (error.code === '23505') throw new Error('Este remetente já está cadastrado nesta caixa.');
             if (error.code === '42501') throw new Error('Só gestores da organização podem marcar importação automática.');
+            // 23503: o gatilho diz qual cadastro (fornecedor, obra, CC, plano, conta) é de outra organização.
+            if (error.code === '23503') throw new Error(error.message);
+            if (error.code === '23514') throw new Error('Padrão inválido: dia do vencimento de 1 a 31, valor maior que zero e multa em R$ ou em %, não os dois.');
             throw error;
         }
         return data as RemetenteCaptura;
+    },
+
+    /**
+     * Boletos já capturados deste remetente, ainda em revisão/rascunho e sem
+     * título, e o que os padrões preencheriam em cada um (só campos vazios).
+     * Casa a mensagem com o remetente pela MESMA regra da sincronização.
+     */
+    async previaDosPadroes(r: RemetenteCaptura): Promise<PreviaDoPadrao[]> {
+        const alvo = r.tipo === 'exato' ? r.email : r.dominio;
+        if (!alvo) return [];
+        const { data: daCaixa, error: eRem } = await supabase.from('email_capture_senders')
+            .select(COLUNAS_REMETENTE).eq('account_id', r.account_id);
+        if (eRem) throw eRem;
+        const remetentes = (daCaixa ?? []) as RemetenteCaptura[];
+
+        const PAGINA = 1000;
+        const mensagens: Array<{ boleto_id: string; remetente: string | null; assunto: string | null; documento_nome: string | null; data_email: string | null; created_at: string }> = [];
+        for (let desde = 0; ; desde += PAGINA) {
+            const { data, error } = await supabase.from('email_capture_messages')
+                .select('boleto_id, remetente, assunto, documento_nome, data_email, created_at')
+                .eq('account_id', r.account_id).eq('resultado', 'criado').not('boleto_id', 'is', null)
+                .ilike('remetente', `%${alvo}%`)
+                .order('created_at', { ascending: false }).order('id', { ascending: false })
+                .range(desde, desde + PAGINA - 1);
+            if (error) throw error;
+            mensagens.push(...(data ?? []));
+            if (!data || data.length < PAGINA) break;
+        }
+        const doRemetente = mensagens.filter(m =>
+            remetenteCasa(m.remetente, `${m.assunto ?? ''} ${m.documento_nome ?? ''}`, remetentes)?.id === r.id);
+        const dataPorBoleto = new Map(doRemetente.map(m => [m.boleto_id, dataLocalDoEmail(m.data_email ?? m.created_at)]));
+
+        const ids = [...dataPorBoleto.keys()];
+        const previa: PreviaDoPadrao[] = [];
+        for (let i = 0; i < ids.length; i += 200) {
+            const { data, error } = await supabase.from('boletos').select(COLUNAS_BOLETO_DA_PREVIA)
+                .in('id', ids.slice(i, i + 200))
+                .eq('organization_id', r.organization_id)
+                .in('status', ['revisao', 'rascunho'])
+                .is('invoice_id', null);
+            if (error) throw error;
+            for (const b of (data ?? []) as Array<CamposParaPadroes & { id: string; numero: number | null; updated_at: string; erros_validacao: string[] | null }>) {
+                const { patch, campos } = aplicarPadroesDoRemetente(b, r, dataPorBoleto.get(b.id)!);
+                if (campos.length) previa.push({ boleto: { id: b.id, numero: b.numero, updated_at: b.updated_at, erros_validacao: b.erros_validacao }, patch, campos });
+            }
+        }
+        return previa;
     },
 
     /**

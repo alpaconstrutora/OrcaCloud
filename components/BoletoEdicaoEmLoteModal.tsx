@@ -8,6 +8,7 @@ import PlanoContasSelect, { PlanoContasOption } from './PlanoContasSelect';
 import SupplierSelect, { SupplierOption } from './SupplierSelect';
 import HierarchicalSelect, { HierarchicalSelectItem } from './HierarchicalSelect';
 import { financialRegistryService } from '../services/financialRegistryService';
+import { nomeDoBeneficiario } from '../utils/boletoBeneficiario';
 
 /** Valor da opção "— Sem vínculo —" da Obra: tira a obra dos boletos (grava null). */
 const SEM_VINCULO = '__sem_vinculo__';
@@ -33,6 +34,8 @@ type ActionResult = { ok: string[]; errors: Array<{ id: string; error: string }>
 const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     boletos, organizationId, suppliers, projects, costCenters, userEmail, onClose, onSaved,
 }) => {
+    // Nome do beneficiário na lista: o mesmo da coluna da tela, nunca o arquivo (16/10/2026).
+    const nomesFornecedor = Object.fromEntries(suppliers.map(f => [f.id, f.nickname || f.name]));
     const [supplierId, setSupplierId] = useState('');
     const [projectId, setProjectId] = useState('');
     const [costCenterId, setCostCenterId] = useState('');
@@ -161,7 +164,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                         {boletos.map(b => (
                             <div key={b.id} className="flex items-center justify-between px-4 py-2 text-xs">
                                 <span className="text-gray-700 font-medium truncate max-w-[60%]">
-                                    {b.beneficiario_nome ?? b.documento_nome ?? '—'}
+                                    {nomeDoBeneficiario(b, nomesFornecedor)}
                                 </span>
                                 <span className="text-gray-500 font-bold flex-shrink-0 ml-2">{formatBRL(b.valor)}</span>
                             </div>

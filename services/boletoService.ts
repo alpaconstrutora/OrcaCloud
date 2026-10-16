@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { nomeDoBeneficiario } from '../utils/boletoBeneficiario';
+import { MOTIVO_VENCIMENTO_DO_PADRAO, MOTIVO_VALOR_DO_PADRAO } from '../utils/emailCaptureRegras';
 import { resolverCategoriaPorId } from './financialCategoryResolver';
 import { sanitizeFileName } from '../utils/storageUtils';
 import { renomearDocumentoDoBoleto, renomearDocumentosDosBoletos } from './boletoNomeDocumentoService';
@@ -486,6 +488,11 @@ export const boletoService = {
         if (!boletoRow.supplier_id) {
             throw new Error('Selecione um fornecedor antes de aprovar.');
         }
+        // Nome do fornecedor para a descrição/contraparte do título quando o PDF não
+        // trouxe beneficiário — antes caía no NOME DO ARQUIVO (16/10/2026).
+        const { data: fornecedorDoBoleto } = await supabase.from('suppliers')
+            .select('name, nickname').eq('id', boletoRow.supplier_id).maybeSingle();
+        const nomeDoFornecedor: string | null = fornecedorDoBoleto?.nickname || fornecedorDoBoleto?.name || null;
         /* Sem vencimento não há competência (15/10/2026). Até aqui o título
            nascia com `transaction_date = hoje`, e "hoje" é o dia do clique —
            o defeito de 24/09 (boleto de 2021 na competência de setembro/2026)
@@ -614,9 +621,9 @@ export const boletoService = {
                 amount:           boletoRow.valor,
                 transaction_date: dataCompetencia,
                 due_date:         boletoRow.vencimento ?? null,
-                description:      boletoRow.descricao || boletoRow.beneficiario_nome || boletoRow.documento_nome || 'Boleto',
-                entity_name:      boletoRow.beneficiario_nome ?? null,
-                party_name:       boletoRow.beneficiario_nome ?? null,
+                description:      boletoRow.descricao || nomeDoFornecedor || boletoRow.beneficiario_nome || 'Boleto',
+                entity_name:      boletoRow.beneficiario_nome ?? nomeDoFornecedor,
+                party_name:       boletoRow.beneficiario_nome ?? nomeDoFornecedor,
                 supplier_id:      boletoRow.supplier_id ?? null,
                 project_id:       boletoRow.project_id ?? null,
                 cost_center_id:   boletoRow.cost_center_id ?? null,
@@ -868,7 +875,7 @@ export const boletoService = {
         return data.signedUrl;
     },
 
-    async exportarExcel(boletos: Boleto[], nomeArquivo = 'boletos'): Promise<void> {
+    async exportarExcel(boletos: Boleto[], nomeArquivo = 'boletos', nomesFornecedor: Record<string, string> = {}): Promise<void> {
         const ExcelJS = await import('exceljs');
         const wb = new ExcelJS.Workbook();
         wb.creator = 'Opura';
@@ -902,7 +909,8 @@ export const boletoService = {
             const row = ws.addRow({
                 documento_nome:   b.documento_nome,
                 banco_nome:       b.banco_nome ?? '',
-                beneficiario_nome:b.beneficiario_nome ?? '',
+                // Mesmo nome da coluna da tela (utils/boletoBeneficiario) — nunca o arquivo.
+                beneficiario_nome:nomeDoBeneficiario(b, nomesFornecedor),
                 beneficiario_cnpj:b.beneficiario_cnpj ?? '',
                 valor:            b.valor ?? '',
                 vencimento:       b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '',
@@ -929,7 +937,7 @@ export const boletoService = {
         URL.revokeObjectURL(url);
     },
 
-    async exportarPDF(boletos: Boleto[], nomeArquivo = 'boletos'): Promise<void> {
+    async exportarPDF(boletos: Boleto[], nomeArquivo = 'boletos', nomesFornecedor: Record<string, string> = {}): Promise<void> {
         const { jsPDF } = await import('jspdf');
         const { default: autoTable } = await import('jspdf-autotable');
         const doc = new jsPDF({ orientation: 'landscape' });
@@ -955,9 +963,12 @@ export const boletoService = {
 
         autoTable(doc, {
             startY: 22,
-            head: [['Beneficiário / Documento', 'Banco', 'Valor', 'Vencimento', 'Status']],
+            // Beneficiário e Documento em colunas próprias (16/10/2026): o arquivo
+            // aparecia como beneficiário quando o PDF não trazia o nome.
+            head: [['Beneficiário', 'Documento', 'Banco', 'Valor', 'Vencimento', 'Status']],
             body: boletos.map(b => [
-                (b.beneficiario_nome ?? b.documento_nome) + (b.beneficiario_cnpj ? `\n${b.beneficiario_cnpj}` : ''),
+                nomeDoBeneficiario(b, nomesFornecedor) + (b.beneficiario_cnpj ? `\n${b.beneficiario_cnpj}` : ''),
+                b.documento_nome ?? '—',
                 b.banco_nome ?? '—',
                 b.valor != null ? b.valor.toLocaleString('pt-BR', { style:'currency', currency:'BRL' }) : '—',
                 b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—',
@@ -1377,6 +1388,51 @@ export const boletoService = {
      * remover o título e a nota criados na aprovação — e ela recusa se o título
      * já tiver vida própria no financeiro. Pago e cancelado nunca saem.
      */
+    /**
+     * Preenche boletos em revisão/rascunho com os padrões do remetente (16/10/2026,
+     * "Aplicar aos N boletos em revisão deste remetente?"). Só os campos vazios —
+     * o patch já vem calculado por `emailCaptureService.previaDosPadroes`. Trava
+     * por `updated_at`: boleto editado por alguém entre a prévia e agora é pulado.
+     * Não passa por `associar`: não há título antes de aprovar, e o fornecedor não
+     * muda (nada de renomear o documento).
+     */
+    async preencherComPadroesDoRemetente(
+        itens: Array<{ boleto: { id: string; updated_at: string; erros_validacao: string[] | null }; patch: Record<string, unknown>; campos: string[] }>,
+        remetenteId: string,
+        userEmail?: string,
+    ): Promise<{ atualizados: Boleto[]; pulados: number }> {
+        const atualizados: Boleto[] = [];
+        let pulados = 0;
+        for (const it of itens) {
+            const antes = it.boleto.erros_validacao ?? [];
+            const avisos = [
+                ...(it.campos.includes('vencimento') ? [`Captura: ${MOTIVO_VENCIMENTO_DO_PADRAO}`] : []),
+                ...(it.campos.includes('valor') ? [`Captura: ${MOTIVO_VALOR_DO_PADRAO}`] : []),
+            ];
+            const erros = [
+                // O vencimento agora existe (do padrão): o aviso de "ausente" sai.
+                ...antes.filter(e => !(it.campos.includes('vencimento') && e === 'Captura: Vencimento ausente ou implausível.')),
+                ...avisos.filter(a => !antes.includes(a)),
+            ];
+            const { data, error } = await supabase.from(TABLE)
+                .update({ ...it.patch, erros_validacao: erros.length ? erros : null })
+                .eq('id', it.boleto.id)
+                .eq('updated_at', it.boleto.updated_at)
+                .in('status', ['revisao', 'rascunho'])
+                .is('invoice_id', null)
+                .select(BOLETO_COLUMNS);
+            if (error || !data?.length) { pulados++; continue; }
+            const b = mapRowToBoleto(data[0]);
+            atualizados.push(b);
+            await registrarAuditoria(b.id, b.organization_id, 'padroes_remetente', {
+                valor_depois: { padroes_do_remetente: { remetente_id: remetenteId, valores: it.patch } },
+                metodo: 'usuario',
+                usuario_email: userEmail,
+            });
+        }
+        return { atualizados, pulados };
+    },
+
     async excluir(boletoId: string, organizationId: string, userEmail?: string): Promise<void> {
         const boleto = await this.getById(boletoId);
         if (!boleto) return;

@@ -25,7 +25,10 @@ vi.mock('../lib/supabase', () => {
 
 import { emailCaptureService, progressoDaBusca } from '../services/emailCaptureService';
 
-const PERMITIDAS = ['organization_id', 'account_id', 'supplier_id', 'nome', 'tipo', 'email', 'dominio', 'palavras_chave', 'importacao', 'exigir_dmarc', 'ativo'];
+const PERMITIDAS = ['organization_id', 'account_id', 'supplier_id', 'nome', 'tipo', 'email', 'dominio', 'palavras_chave', 'importacao', 'exigir_dmarc', 'ativo',
+    // Padrões do boleto (16/10/2026) — também concedidos por coluna.
+    'padrao_descricao', 'padrao_observacoes', 'padrao_project_id', 'padrao_cost_center_id', 'padrao_plano_de_contas_id', 'padrao_category_id',
+    'padrao_dia_vencimento', 'padrao_valor', 'padrao_multa', 'padrao_multa_percentual', 'padrao_juros_dia', 'padrao_juros_dia_tipo'];
 
 beforeEach(() => { chamadas.length = 0; respostasFn.length = 0; });
 
@@ -115,5 +118,22 @@ describe('Sincronizar agora — repete enquanto a função disser que ficou fila
         const r = await emailCaptureService.sincronizarAgora('c1');
         expect(chamadas.filter(c => c.op === 'fn')).toHaveLength(1);
         expect(r.pendente).toBe(false);
+    });
+});
+
+describe('salvarRemetente — padrões do boleto (16/10/2026)', () => {
+    it('texto em branco e id vazio viram null; juros sem valor não manda tipo; valor zero não grava', async () => {
+        await emailCaptureService.salvarRemetente(null, {
+            organization_id: 'o1', account_id: 'c1', supplier_id: null, nome: 'LL', tipo: 'exato', email: 'll@x.com', dominio: null,
+            palavras_chave: [], importacao: 'revisao', exigir_dmarc: true, ativo: true,
+            padrao_descricao: '  Honorários {mês} ', padrao_observacoes: '   ', padrao_project_id: '', padrao_cost_center_id: 'cc1',
+            padrao_plano_de_contas_id: null, padrao_category_id: null, padrao_dia_vencimento: 10, padrao_valor: 0,
+            padrao_multa: null, padrao_multa_percentual: 2, padrao_juros_dia: null, padrao_juros_dia_tipo: 'percentual',
+        } as never);
+        const payload = chamadas[0].payload as Record<string, unknown>;
+        expect(payload).toMatchObject({
+            padrao_descricao: 'Honorários {mês}', padrao_observacoes: null, padrao_project_id: null, padrao_cost_center_id: 'cc1',
+            padrao_dia_vencimento: 10, padrao_valor: null, padrao_multa_percentual: 2, padrao_juros_dia: null, padrao_juros_dia_tipo: null,
+        });
     });
 });

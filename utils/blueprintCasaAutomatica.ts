@@ -1449,6 +1449,9 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
         faixaDaAguaQuente: faixaNoMundo(hip.faixas.aguaQuenteMm),
         noForro: forroLigado ? { aguaFria: hip.forro.aguaFria, aguaQuente: hip.forro.aguaQuente, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } : null,
       },
+      // F17 (decisão do usuário, "sobe pela fachada"): o alimentador enterrado só até a parede da frente — sobe nela e
+      // corre sobre a laje até a caixa; sob o piso ele cruzava o esgoto enterrado. A premissa do estudo, se houver, vale.
+      alimentacao: { ...hidroDoEstudo.alimentacao, subida: hidroDoEstudo.alimentacao.subida ?? 'FACHADA' },
       // F14c: no sobrado, um tubo de queda por banheiro de cima (cada um no shaft dele).
       esgoto: { ...hidroDoEstudo.esgoto, faixa: faixaNoMundo(hip.faixas.esgotoMm), ...(niveis.length > 1 ? { tuboDeQuedaPorGrupoMm: hip.sobrado.grupoDoTuboDeQuedaMm, raioDoShaftMm: hip.sobrado.tuboDeQuedaAteOShaftMm } : {}) },
     };

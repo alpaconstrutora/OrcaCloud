@@ -131,3 +131,35 @@ describe('F8c — o alimentador enterrado fora do baldrame (15/10/2026)', () => 
   });
 });
 
+
+describe('F17 da casa automática: o alimentador sobe pela FACHADA ("sobe pela fachada", 16/10/2026)', () => {
+  // A sala 4 × 3 m do F8c (com baldrame); o hidrômetro fora, na frente (y < 0); a caixa perto do fundo.
+  const sala = () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m.levels[0].id;
+    const lados = [[0, 0, 4000, 0], [4000, 0, 4000, 3000], [4000, 3000, 0, 3000], [0, 3000, 0, 0]];
+    m = applyBatch(m, lados.map(([ax, ay, bx, by]): Command => ({ type: 'AddWall', levelId: l, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }))).model;
+    return applyBatch(m, lados.map(([ax, ay, bx, by]) => ({ type: 'AddStructural', levelId: l, kind: 'VIGA_FUNDACAO', pontos: [{ x: ax, y: ay }, { x: bx, y: by }], larguraMm: 150, alturaMm: 500, baseMm: -500 }) as Command)).model;
+  };
+  const rota = (m: BlueprintModel, subida?: 'FACHADA' | 'SOB_A_CAIXA') =>
+    rotaPelasParedesAte(m, { levelId: m.levels[0].id, at: { x: 1000, y: -2000 }, cotaMm: 600 }, -300, { levelId: m.levels[0].id, at: { x: 3000, y: 2700 }, cotaMm: 3900 }, subida ? { subida } : {})!;
+
+  it('enterrado só por FORA da casa (até a parede da frente); sobe nela até a cota da boia e vai à caixa por cima', () => {
+    const r = rota(sala(), 'FACHADA');
+    const enterrados = r.filter((t) => t.ca === -300 && t.cb === -300);
+    expect(enterrados.length).toBeGreaterThan(0);
+    // Nada enterrado sob o piso: todo pedaço a −0,30 m fica do lado de fora da face da frente (y ≤ −75).
+    for (const t of enterrados) expect(Math.max(t.a.y, t.b.y), JSON.stringify(t)).toBeLessThanOrEqual(-75);
+    // A subida (o vertical que chega à cota da boia) fica na parede da frente (y = 0).
+    const sobe = r.find((t) => t.a.x === t.b.x && t.a.y === t.b.y && t.cb === 3900)!;
+    expect(Math.abs(sobe.a.y), JSON.stringify(sobe)).toBeLessThanOrEqual(200);
+    // Contínuo, e termina na boia.
+    for (let i = 1; i < r.length; i++) expect([r[i].a, r[i].ca]).toEqual([r[i - 1].b, r[i - 1].cb]);
+    expect(r[r.length - 1].b).toEqual({ x: 3000, y: 2700 });
+  });
+
+  it('sem a premissa (a ferramenta do editor), como antes: a subida sob a caixa, com o percurso enterrado por baixo da casa', () => {
+    const r = rota(sala());
+    expect(r.some((t) => t.ca === -300 && t.cb === -300 && Math.max(t.a.y, t.b.y) > 1000)).toBe(true);
+  });
+});

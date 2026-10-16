@@ -55,10 +55,19 @@ export interface HipotesesDeAlimentacao {
   folgaDoBaldrameMm?: number;
   /** F8c: a subida entra na parede a isto acima do topo do baldrame. Ausente = `ENTRADA_NA_PAREDE_MM` (100). */
   entradaNaParedeMm?: number;
+  /**
+   * F17 da casa automática (16/10/2026, decisão do usuário "sobe pela fachada"): onde o alimentador SOBE. 'FACHADA' =
+   * na parede mais perto do hidrômetro (a da frente): enterrado só até ela, sobe dentro dela até a cota da boia e corre
+   * sobre a laje até a caixa — nunca sob o piso, não cruza o esgoto enterrado nem o baldrame. 'SOB_A_CAIXA' = na parede
+   * sob a caixa, com o percurso enterrado por baixo da casa (o de antes). Ausente = 'SOB_A_CAIXA'.
+   */
+  subida?: 'FACHADA' | 'SOB_A_CAIXA';
 }
 
 /** F8c: o eixo do tubo que sobe ao lado do baldrame fica a isto da face dele. */
 export const FOLGA_DO_BALDRAME_MM = 50;
+/** F17: até esta distância do ponto da subida, a parede do pavimento de cima conta como a mesma (a subida pela fachada). */
+const PAREDE_DA_SUBIDA_EM_CIMA_MM = 60;
 /** F14d: a folga entre a subida do alimentador e o batente do vão, mm. */
 const FOLGA_DA_SUBIDA_AO_VAO_MM = 50;
 /** F8c: a subida entra na parede a isto acima do topo do baldrame. */
@@ -130,7 +139,8 @@ export function rotaPelasParedesAte(
   origem: { levelId: ObjectId; at: P; cotaMm: number },
   cotaDoPercurso: number,
   alvo: { levelId: ObjectId; at: P; cotaMm: number },
-  opcoes: Pick<HipotesesDeAlimentacao, 'folgaDoBaldrameMm' | 'entradaNaParedeMm'> = {},
+  opcoes: Pick<HipotesesDeAlimentacao, 'folgaDoBaldrameMm' | 'entradaNaParedeMm' | 'subida'> = {},
+  avisos: string[] = [],
 ): PontaDeRota[] | null {
   const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
   const i0 = niveis.findIndex((l) => l.id === origem.levelId);
@@ -166,8 +176,22 @@ export function rotaPelasParedesAte(
     const p1 = { x: w.a.x + u.x * (o.offsetMm + o.widthMm + FOLGA_DA_SUBIDA_AO_VAO_MM), y: w.a.y + u.y * (o.offsetMm + o.widthMm + FOLGA_DA_SUBIDA_AO_VAO_MM) } as Point;
     return [cantosDaParede(p0, p1, w.thicknessMm + 2 * FOLGA_DA_SUBIDA_AO_VAO_MM) as Point[]];
   });
+  // F17: pela FACHADA, a subida é o ponto da parede mais perto do hidrômetro — fora de pilar e de vão — desde que haja
+  // parede ali em todo pavimento que ela atravessa (senão, a de sob a caixa, dito).
+  const naFachada = (() => {
+    if (opcoes.subida !== 'FACHADA') return null;
+    const e = encaixarNaParede(origem.at, paredes0, 1e9);
+    if (!e) return null;
+    const q = foraDoPilar(e.q, e.parede, [...aneis0, ...vaos]);
+    const semParede = niveis.slice(i0 + 1, id + 1).find((l) => !encaixarNaParede(q, model.walls.filter((w) => w.levelId === l.id), PAREDE_DA_SUBIDA_EM_CIMA_MM));
+    if (semParede) {
+      avisos.push(`A fachada não tem parede em ${semParede.name} sobre o ponto da subida: o alimentador sobe sob a caixa, enterrado por baixo da casa.`);
+      return null;
+    }
+    return q;
+  })();
   const chegada = encaixarNaParede(alvo.at, paredes0, 3000);
-  const sobAChegada = chegada ? foraDoPilar(chegada.q, chegada.parede, [...aneis0, ...vaos]) : { ...alvo.at };
+  const sobAChegada = naFachada ?? (chegada ? foraDoPilar(chegada.q, chegada.parede, [...aneis0, ...vaos]) : { ...alvo.at });
   let zPe = cotaDoPercurso;
   const baldrames = (model.structures ?? []).filter((s) => s.kind === 'VIGA_FUNDACAO' && s.levelId === n0.id && s.baseMm < cotaDoPercurso && s.baseMm + s.alturaMm > cotaDoPercurso);
   const naParede = baldrames.length > 0 ? null : naParedeDe(origem.at, 1e9);
@@ -290,7 +314,7 @@ export function planejarAlimentador(
   if (!boia) avisos.push("A caixa não tem torneira de boia: o alimentador chega ao alto dela (lance as peças da caixa).");
 
   // ── A ROTA ────────────────────────────────────────────────────────────────
-  const rota = rotaPelasParedesAte(model, { levelId: n0.id, at: entrada.at, cotaMm: entrada.cotaMm }, hip.cotaEnterradaMm, { levelId: nd.id, at: alvo.at, cotaMm: alvo.cotaMm }, hip);
+  const rota = rotaPelasParedesAte(model, { levelId: n0.id, at: entrada.at, cotaMm: entrada.cotaMm }, hip.cotaEnterradaMm, { levelId: nd.id, at: alvo.at, cotaMm: alvo.cotaMm }, hip, avisos);
   if (!rota) return vazio('A caixa está abaixo do pavimento do hidrômetro: o alimentador não é lançado automaticamente.');
   const pontas = rota;
 

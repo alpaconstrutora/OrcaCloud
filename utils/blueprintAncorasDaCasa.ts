@@ -269,23 +269,27 @@ export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras
           folgaUsada = Math.max(AQUECEDOR_FORA_DO_BATENTE_MM, folgaUsada / 2);
           t = posicaoForaDosVaos(model, cx.levelId, lado, folgaUsada + hip.aquecedorFriaQuenteMm / 2);
         }
-        // F14c: sem trecho livre de vão, ao menos fora da laje rebaixada e do shaft (sob a laje, a água não sobe ao forro).
-        const diante = t == null ? posicaoForaDosVaos(model, cx.levelId, lado, AQUECEDOR_FORA_DO_BATENTE_MM + hip.aquecedorFriaQuenteMm / 2, true) : null;
-        if (t == null && diante != null) {
-          t = diante;
-          pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre de janela e porta fora da laje rebaixada — ficou diante do vão; confira.`);
+        // F14d: sem trecho livre na parede externa (janela, shaft e laje rebaixada a tomam inteira — a área de serviço do
+        // sobrado): numa parede INTERNA do cômodo, fora do vão, com o duto de exaustão até a fachada.
+        // F17 (16/10/2026): ANTES de "diante do vão" — o aquecedor fica a 1,60 m, na altura da janela: diante dela ele
+        // estaria no vidro, e as ligações atravessavam o vão (a cozinha do sobrado a 30°). Diante do vão só sem parede interna.
+        const interna =
+          t == null
+            ? ladosDoComodo(serv)
+                .filter((x) => !(Math.abs(x.a.x - lado!.a.x) < 1 && Math.abs(x.a.y - lado!.a.y) < 1 && Math.abs(x.b.x - lado!.b.x) < 1 && Math.abs(x.b.y - lado!.b.y) < 1))
+                .map((x) => ({ x, t: posicaoForaDosVaos(model, cx.levelId, x, AQUECEDOR_FORA_DO_BATENTE_MM + hip.aquecedorFriaQuenteMm / 2) }))
+                .find((x) => x.t != null)
+            : undefined;
+        if (t == null && interna) {
+          lado = interna.x;
+          t = interna.t;
+          pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre (janela, shaft, laje rebaixada) — ficou numa parede interna; o duto de exaustão atravessa até a fachada: confira (NBR 13103).`);
         } else if (t == null) {
-          // F14d: nem assim (janela, shaft e laje rebaixada tomam a parede externa inteira — a área de serviço do sobrado):
-          // numa parede INTERNA do cômodo, fora do vão, com o duto de exaustão até a fachada. Diante da janela, as
-          // ligações dele corriam pelo vão.
-          const interna = ladosDoComodo(serv)
-            .filter((x) => !(Math.abs(x.a.x - lado!.a.x) < 1 && Math.abs(x.a.y - lado!.a.y) < 1 && Math.abs(x.b.x - lado!.b.x) < 1 && Math.abs(x.b.y - lado!.b.y) < 1))
-            .map((x) => ({ x, t: posicaoForaDosVaos(model, cx.levelId, x, AQUECEDOR_FORA_DO_BATENTE_MM + hip.aquecedorFriaQuenteMm / 2) }))
-            .find((x) => x.t != null);
-          if (interna) {
-            lado = interna.x;
-            t = interna.t;
-            pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre (janela, shaft, laje rebaixada) — ficou numa parede interna; o duto de exaustão atravessa até a fachada: confira (NBR 13103).`);
+          // F14c: sem parede interna livre, ao menos fora da laje rebaixada e do shaft (sob a laje, a água não sobe ao forro).
+          const diante = posicaoForaDosVaos(model, cx.levelId, lado, AQUECEDOR_FORA_DO_BATENTE_MM + hip.aquecedorFriaQuenteMm / 2, true);
+          if (diante != null) {
+            t = diante;
+            pendencias.push(`Aquecedor na ${serv.name}: nenhuma parede do cômodo tem trecho livre de janela e porta fora da laje rebaixada — ficou diante do vão; confira.`);
           } else pendencias.push(`Aquecedor na ${serv.name}: a parede externa não tem trecho livre de janela e porta — ficou no meio, diante do vão; confira.`);
         }
         else if (folgaUsada < hip.aquecedorLongeDoVaoMm) pendencias.push(`Aquecedor na ${serv.name}: a ${f2(folgaUsada / 1000)} m do vão (pedido: ${f2(hip.aquecedorLongeDoVaoMm / 1000)} m) — a parede externa não tem mais trecho livre.`);

@@ -124,3 +124,29 @@ describe('comandosDasAncoras', () => {
     expect(raso.pendencias.join(' ')).toMatch(/não couberam/);
   });
 });
+
+describe('F17 da casa automática: o aquecedor não fica diante da janela', () => {
+  it('fachadas do serviço tomadas por janela: vai para uma parede INTERNA dele (fora do vão), dito — não diante da janela', () => {
+    const { m: m0, L } = casinha();
+    // Sem cozinha (o aquecedor iria para ela): só a área de serviço é candidata.
+    const cozinha = m0.spaces.find((s) => s.name === 'Cozinha')!;
+    const frente = m0.walls.find((w) => w.a.y === 0 && w.b.y === 0)!;
+    const fundos = m0.walls.find((w) => w.a.y === 3000 && w.b.y === 3000)!;
+    // As duas fachadas do serviço (x = 3 a 5 m) quase inteiras de janela: de 3,15 a 4,85 m.
+    const m = applyBatch(m0, [
+      { type: 'NameSpace', spaceId: cozinha.id, name: 'Sala' },
+      { type: 'AddOpening', wallId: frente.id, kind: 'window', offsetMm: 3150, widthMm: 1700, heightMm: 1200, sillMm: 1000 },
+      { type: 'AddOpening', wallId: fundos.id, kind: 'window', offsetMm: 9000 - 4850, widthMm: 1700, heightMm: 1200, sillMm: 1000 },
+    ]).model;
+    const r = comandosDasAncoras(m, ctxDe(L));
+    const aq = applyBatch(m, r.comandos).model.terminais.filter((t) => t.tipoHidraulico === 'AQUECEDOR');
+    expect(aq).toHaveLength(2);
+    for (const t of aq) {
+      // Numa parede interna do serviço (x = 3 ou 5 m), a meia parede + a folga da face — e fora das janelas.
+      expect(Math.min(Math.abs(t.at.x - 3000), Math.abs(t.at.x - 5000)), JSON.stringify(t.at)).toBeLessThanOrEqual(100 + 150 + 1);
+      expect(t.at.y > 0 && t.at.y < 3000).toBe(true);
+    }
+    expect(r.pendencias.join(' ')).toMatch(/Aquecedor na Área de serviço: .* ficou numa parede interna/);
+    expect(r.pendencias.join(' ')).not.toMatch(/diante do vão/);
+  });
+});

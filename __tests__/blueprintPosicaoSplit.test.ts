@@ -184,6 +184,19 @@ describe('climatização E4.2/E4.3 · posição automática do split', () => {
     expect(noArmario.at.y, JSON.stringify(noArmario.at)).toBeLessThan(300);
   });
 
+  it('F17 (térrea a 30°): na parede externa, a evaporadora não fica sobre uma TOMADA — a descida do eletroduto atravessaria o aparelho e o dreno', () => {
+    const { m, t } = casa();
+    // Uma tomada baixa no meio de cada parede externa sem porta (oeste e norte), na face.
+    const tug = (x: number, y: number): Command => ({ type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', tipoEletrico: 'TUG', at: point(x, y), cotaMm: 300 } as Command);
+    const m2 = applyBatch(m, [tug(75, 2000), tug(2000, 3925)]).model;
+    const carga = cargaTermicaDoNivel(m2, hipClima, t);
+    const plano = planejarEquipamentosSplit(m2, selecaoDoNivel(m2, carga, hip, catalogo), carga, hip, { naParedeExterna: { topoMaximoMm: 2600 } });
+    const evap = terminais(applyBatch(m2, plano.comandos).model).find((x) => x.tipoHidraulico === 'EVAPORADORA_HI_WALL')!;
+    // Meia evaporadora (450) + a folga (300) longe da tomada, ao longo da parede em que ela ficou.
+    if (evap.at.x < 300) expect(Math.abs(evap.at.y - 2000), JSON.stringify(evap.at)).toBeGreaterThanOrEqual(750);
+    if (evap.at.y > 3700) expect(Math.abs(evap.at.x - 2000), JSON.stringify(evap.at)).toBeGreaterThanOrEqual(750);
+  });
+
   it('o giro aponta as lâminas para dentro: normal interna +y (parede sul) → 180°; −y (norte) → 0°; +x (oeste) → 90°', () => {
     expect(giroParaSoprarParaDentro({ x: 0, y: 1 })).toBe(180);
     expect(giroParaSoprarParaDentro({ x: 0, y: -1 })).toBe(0);

@@ -1914,3 +1914,49 @@ deu resultado que não se repetiu):
 porque o mobiliário entra na simulação das áreas molhadas de cima (F14c: shafts e lajes rebaixadas), e ali a ligação da
 quente é empurrada para outra face pelo encosto de ponto solto do traçado da água — as duas ligações ficam a 210 mm, fora
 da direção da parede. Interação âncoras × água, para uma fase própria.
+
+**Publicado** em 16/10/2026: `1c01e053` na main (antes, a PR de rascunho #15 rodou a CI inteira); check-run `ci` verde;
+o domínio serve `1c01e05`.
+
+## F17 — o aquecedor do sobrado a 30° e o alimentador × esgoto nas térreas (16/10/2026)
+
+Pedido do usuário:
+
+> implementar o que ainda falta: Sobrado girado 30° e Encontros de tubulação nas térreas
+
+1. **Sobrado a 30°:** a quente do aquecedor entra 5 cm na janela da cozinha (registro da F16).
+2. **Térreas:** o alimentador enterrado (−0,30 m, do hidrômetro à subida) cruza o esgoto enterrado — 1 encontro na
+   térrea a 0° e 4 a 30° (registro da F16).
+
+Pergunta: *"Como o alimentador (hidrômetro → caixa d'água) deve chegar à caixa, para não cruzar o esgoto enterrado?"*
+— resposta do usuário: **"Sobe pela fachada"**: enterrado só do hidrômetro até a parede da frente da casa; sobe dentro
+dessa parede até acima da laje e corre sobre a laje até a caixa. Nunca passa sob o piso: não cruza o esgoto nem o
+baldrame.
+
+### Registro da F17 (16/10/2026)
+
+- **Alimentador pela fachada** (`HipotesesDeAlimentacao.subida`: 'FACHADA' | 'SOB_A_CAIXA', ausente = sob a caixa — a
+  ferramenta do editor segue como era; a casa usa 'FACHADA', ou a premissa do estudo se houver). A subida é o ponto da
+  parede mais perto do hidrômetro, fora de pilar e de vão de todo pavimento que ela atravessa; sem parede em cima no
+  pavimento superior, volta a sob a caixa, dito. Enterrado só do hidrômetro à fachada (o pé ao lado do baldrame, F8c),
+  sobe até a cota da boia e corre sobre a laje até a caixa.
+- **Evaporadora × tomada:** com o alimentador fora do piso, os eletrodutos (o último traçado, sobre a casa inteira)
+  mudaram, e na térrea a 30° a descida de uma tomada SOB a evaporadora cruzou o dreno. Na escolha da parede externa
+  (F14d), os pontos elétricos e de água abaixo do topo do aparelho ocupam a parede com a folga da evaporadora — a
+  descida deles vem do forro e atravessaria o aparelho.
+- **Aquecedor:** sem trecho livre na parede externa, a parede INTERNA do cômodo (fora do vão, com o duto de exaustão
+  até a fachada, dito — F14d) vem ANTES de "diante do vão": o aquecedor fica a 1,60 m, na altura da janela — diante
+  dela, estaria no vidro e as ligações atravessavam o vão (a cozinha do sobrado a 30°, que tem uma só parede externa,
+  de 2,45 m, com janela de 1,45 m).
+
+Medido (sonda `conflitosDoModelo`, 12 × 30, R1-N, catálogo e chuva; duas rodadas idênticas):
+
+| | Térrea 0° | Térrea 30° | Sobrado 0° | Sobrado 30° |
+|---|---|---|---|---|
+| Rede × rede | 1 → **0** | 4 → **0** | 0 → 0 | 0 → 0 |
+| Água/esgoto em porta ou janela | 0 → 0 | 0 → 0 | 0 → 0 | 2 → **0** |
+| Etapas que não rodaram | 0 | 0 | 0 | 0 |
+
+Testes novos (os três REPROVAM sem a correção): `blueprintAlimentador.test.ts` (enterrado só por fora; sobe na fachada;
+sem a premissa, como antes), `blueprintPosicaoSplit.test.ts` (a evaporadora longe da tomada) e
+`blueprintAncorasDaCasa.test.ts` (fachadas do serviço tomadas por janela → parede interna, não diante do vão).

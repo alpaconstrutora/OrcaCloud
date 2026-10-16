@@ -2370,6 +2370,10 @@ header e `<main>` inclusos), não filhos do `<main>` do Layout.
 > caixa que rola, ao contrário do lateral, que dobra a margem visível.
 > ℹ️ Referência: `App.tsx:204,344`, `BrokerPortal.tsx:586`,
 > `partner/PartnerPortal.tsx:1084`, `fiscal/FiscalModule.tsx`, 2026-08-08.
+> ℹ️ Também é casca própria a **página de login exclusiva de um portal** —
+> `training/TrainingLogin.tsx` (2026-10-16): o `<main>` do formulário carrega
+> `p-4 md:p-6` à mão. Não há seção do guia para "tela de entrada de portal":
+> só há uma; a seção nasce quando o segundo portal ganhar página própria.
 
 ---
 

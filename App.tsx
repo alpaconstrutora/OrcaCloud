@@ -3,6 +3,10 @@ import Layout from './components/Layout';
 import Auth from './components/Auth';
 import ResetPassword, { LinkDeAcessoInvalido } from './components/ResetPassword';
 import LoginGateway from './components/LoginGateway';
+// Estático como o Auth (não lazy): é a primeira tela de uma rota de entrada, e um
+// Suspense ali viraria um piscar de loader antes do formulário.
+import TrainingLogin from './components/training/TrainingLogin';
+import { rotaDeEntradaDoPortal } from './lib/rotaDeEntradaDoPortal';
 
 const AIChat      = React.lazy(() => import('./components/AIChat'));
 const ProjectModal = React.lazy(() => import('./components/ProjectModal'));
@@ -741,6 +745,9 @@ const App: React.FC = () => {
   // Mesmo desenho do /portal-parceiro acima: não há token, o convite por e-mail
   // aponta para cá (#type=invite|recovery), e o grupo é escolhido SÓ EM MEMÓRIA,
   // reafirmado a cada mudança (o useAuthSync zera o grupo no evento inicial).
+  // A tela é a `TrainingLogin` (página própria, sem "Voltar"/"Cadastre-se" —
+  // 16/10/2026); o cartão do seletor de portais também troca o endereço para cá
+  // (`rotaDeEntradaDoPortal`), então sair do portal volta a esta mesma página.
   React.useEffect(() => {
     if (window.location.pathname !== '/portal-treinamentos') return;
     const vindoDoConvite = !!tipoDoLinkDeAcesso;
@@ -808,19 +815,37 @@ const App: React.FC = () => {
       onComplete={() => setIsResettingPassword(false)}
     />
   );
-  if (!loadingSession && !selectedLoginGroup) return <LoginGateway onSelectGroup={setSelectedLoginGroup} />;
-  if (!loadingSession && !session) return (
-    <Auth
-      group={selectedLoginGroup || undefined}
-      onBack={() => {
-        // Saindo da entrada própria do parceiro: o endereço vira "/" para a regra
-        // de /portal-parceiro (acima) não devolver a tela do parceiro.
-        if (window.location.pathname === '/portal-parceiro') window.history.replaceState(null, '', '/');
-        if (window.location.pathname === '/portal-treinamentos') window.history.replaceState(null, '', '/');
-        setSelectedLoginGroup(null);
+  if (!loadingSession && !selectedLoginGroup) return (
+    <LoginGateway
+      onSelectGroup={(grupo) => {
+        // Portal com entrada própria: o endereço vira a rota ANTES de escolher o
+        // grupo, para o cartão e o acesso direto caírem no mesmo caminho (o efeito
+        // da rota, acima, passa a sustentar o grupo depois de sair ou ser recusado).
+        // replaceState, não pushState: o seletor não é uma página para "voltar";
+        // o app não escuta popstate para o pathname, e os efeitos de recusa já
+        // usam replaceState('/').
+        const rota = rotaDeEntradaDoPortal(grupo);
+        if (rota && window.location.pathname !== rota) window.history.replaceState(null, '', rota);
+        setSelectedLoginGroup(grupo);
       }}
     />
   );
+  if (!loadingSession && !session) {
+    // Portal de Treinamentos tem página de login própria (16/10/2026) — sem
+    // "Voltar para Portais": a saída para o seletor é só a recusa (efeito acima).
+    if (selectedLoginGroup === ProfileGroup.TRAINEE) return <TrainingLogin />;
+    return (
+      <Auth
+        group={selectedLoginGroup || undefined}
+        onBack={() => {
+          // Saindo da entrada própria do parceiro: o endereço vira "/" para a regra
+          // de /portal-parceiro (acima) não devolver a tela do parceiro.
+          if (window.location.pathname === '/portal-parceiro') window.history.replaceState(null, '', '/');
+          setSelectedLoginGroup(null);
+        }}
+      />
+    );
+  }
   if (authError) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center gap-4">
       <Shield className="w-12 h-12 text-red-500" />

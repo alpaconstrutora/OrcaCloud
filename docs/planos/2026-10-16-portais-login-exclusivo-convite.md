@@ -162,8 +162,12 @@ seletor em "/", e o fornecedor por e-mail abre sem a faixa.
 - [x] Publicação em `main` — `0d3e0b51` + `8f2f5ec4` (2026-10-16); check-run `ci` verde;
   `conferir-producao.sh "Crie sua senha"` ✅ (domínio carimbado com o topo de `main`, texto no
   bundle servido)
-- [ ] Allow-list de redirect do Supabase Auth para `/portal-cliente`, `/portal-fornecedor`,
-  `/portal-corretor` (conferir no Dashboard antes do primeiro convite real)
+- [x] Allow-list de redirect do Supabase Auth — conferida pelo usuário no painel em 2026-10-16
+  (print): Authentication › URL Configuration › Redirect URLs tem `https://orcacloud.vercel.app/**`,
+  que cobre `/portal-cliente`, `/portal-fornecedor`, `/portal-corretor` e qualquer rota nova do
+  domínio. Nada a cadastrar por portal.
+- [ ] Convite real de Cliente/Corretor/Fornecedor para uma caixa de entrada do usuário (único
+  passo que prova o e-mail chegando e o "criar senha" caindo na casca do portal).
 
 ## Verificação
 

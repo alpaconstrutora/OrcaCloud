@@ -904,3 +904,23 @@ Proposto filtro de remetentes + atalho de mês. Resposta do usuário, literal:
   e-mail/domínio digitado); `EmailCapturaConfig` — coluna "Remetentes" nas buscas.
 - Verificação local: 67 testes; `deno check`; typecheck parcial (arquivos alterados + grafo de imports) limpo —
   o completo caiu no Node 24 local; portão final = CI.
+
+## Defeitos achados na 1ª busca por período real — 16/10/2026
+
+Não é pedido novo: é o que a busca do usuário (01/07–16/10, todos os remetentes) mostrou no banco
+ao conferir o teste do filtro de remetentes. Lido nos PDFs reais (baixados do bucket só para diagnóstico).
+
+1. **4 erros "unsupported Unicode escape sequence"** (Invoice/Receipt em PDF): texto do PDF com caractere
+   nulo → PostgREST manda `\u0000` em JSON → Postgres 22P05 (reproduzido com `SELECT '{"x":"a\u0000b"}'::jsonb`).
+2. **5 faturas Energisa (DANF3E, débito automático) com valor de R$ 312 milhões**: o "fallback" antigo de
+   `findLinhaDigitavelInText` devolvia bloco de 48 dígitos com DV errado — era a chave de acesso da nota
+   com o ano grudado — e o valor saía dele.
+3. **Vencimento não lido** em dois formatos reais: DANF3E ("21/08/2026 VENCIMENTO", rótulo depois) e
+   fatura de cartão ("Data de vencimento: 27 JUL 2026").
+
+- [x] `utils/boletoTexto.ts` — `limparTextoDoPdf` (nulo + metade de par UTF-16) na entrada de
+  `extractFromPdfText` e na prévia gravada; sem fallback de linha inválida; `findVencimentoNoTexto` com mês
+  escrito e rótulo depois (só se nenhum rótulo vier antes); data inexistente (31 FEV) recusada.
+  Testes em `boletoTexto` (5 casos, dados sintéticos no formato dos PDFs reais). Conferido nos 4 PDFs reais.
+- [ ] Publicar a Edge Function (as 4 mensagens com erro têm nova tentativa automática).
+- [ ] Linhas já gravadas (1428, 1430, 1431, 1432, 1438 com linha/valor falsos): corrigir só com o OK do usuário.

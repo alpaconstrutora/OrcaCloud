@@ -189,3 +189,60 @@ describe('vencimento impresso no texto (conta de concessionária)', () => {
         expect(r.campos.vencimento.valor).toBe('2026-09-20');
     });
 });
+
+/* Busca por período de 16/10/2026 — achados nos PDFs reais da caixa. Dados SINTÉTICOS
+   no mesmo formato. */
+describe('texto que o Postgres recusa (Invoice/Receipt com caractere nulo)', () => {
+    it('caractere nulo e surrogate solto não chegam ao resultado', () => {
+        const t = textoDeBoleto('Invoice\u0000 number ABC\u0000 Amount due \uD83D fim. Vencimento: 20/09/2026');
+        const r = extractFromPdfText(t, 1);
+        // É o que o PostgREST manda ao banco: "\u0000" em JSON → 22P05
+        // "unsupported Unicode escape sequence" (4 erros da busca de 16/10/2026).
+        const json = JSON.stringify(r);
+        expect(json).not.toContain('\\u0000');
+        expect(json).not.toMatch(/\\ud8[0-9a-f]{2}/i);
+        expect(r.campos.vencimento.valor).toBe('2026-09-20');
+    });
+
+    it('a prévia de 500 caracteres não corta um emoji ao meio', () => {
+        const t = textoDeBoleto('x'.repeat(500 - 82) + '😀' + ' resto do texto');
+        expect(t.slice(0, 500).endsWith('\uD83D')).toBe(true); // o corte cairia no meio do par
+        const r = extractFromPdfText(t, 1);
+        expect(JSON.stringify(r.raw)).not.toMatch(/\\ud83d/i);
+    });
+});
+
+describe('fatura em débito automático (DANF3E da concessionária)', () => {
+    // Chave de acesso da nota (44 dígitos) com o ano grudado na frente: 48
+    // dígitos que NÃO fecham os DVs. Antes virava "linha" com valor de R$ 312 mi.
+    const chave = '2026 3126 0707 2823 7700 8104 6600 2001 9116 5520 6264 5636';
+    const t = textoDeBoleto(`DANF3E - DOCUMENTO AUXILIAR DA NOTA FISCAL DE ENERGIA ELÉTRICA ELETRÔNICA ${chave} `
+        + 'Classif icação: MTC-CONVENCIONAL BAIXA TENSÃO TOTAL A PAGAR R$ 150,52 Nº FATURA 191165521/08/2026 '
+        + 'VENCIMENTOMATRÍCULA 2307695-2026-7-1 FATURA A SER QUITADA ATRAVÉS DE DÉBITO AUTOMÁTICO');
+
+    it('bloco numérico que não fecha os DVs não vira linha nem valor', () => {
+        const r = extractFromPdfText(t, 2);
+        expect(r.campos.linha_digitavel.valor).toBeNull();
+        expect(r.campos.codigo_barras.valor).toBeNull();
+        expect(r.campos.valor.valor).toBeNull();
+        expect(r.erros).toEqual([ERRO_SEM_LINHA]);
+    });
+
+    it('vencimento com o rótulo DEPOIS da data ("21/08/2026 VENCIMENTO")', () => {
+        expect(findVencimentoNoTexto(t)).toBe('2026-08-21');
+        expect(extractFromPdfText(t, 2).campos.vencimento.valor).toBe('2026-08-21');
+    });
+
+    it('rótulo antes da data continua tendo preferência', () => {
+        expect(findVencimentoNoTexto('Emissão 10/08/2026 Vencimento 21/08/2026')).toBe('2026-08-21');
+        expect(findVencimentoNoTexto('Leitura 14/07/2026 próxima 12/08/2026')).toBeNull();
+    });
+});
+
+describe('vencimento com o mês escrito (fatura de cartão)', () => {
+    it('"27 JUL 2026" e "5 de agosto de 2026"', () => {
+        expect(findVencimentoNoTexto('no valor de R$ 415,42 Data de vencimento: 27 JUL 2026 Período vigente')).toBe('2026-07-27');
+        expect(findVencimentoNoTexto('Vencimento: 5 de agosto de 2026')).toBe('2026-08-05');
+        expect(findVencimentoNoTexto('Vencimento: 31 FEV 2026')).toBeNull();
+    });
+});

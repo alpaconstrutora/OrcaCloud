@@ -77,8 +77,27 @@ const BENEFICIARIO_ROTULO = /(?:Benefici[áa]rio|Cedente)\s*[:\-]?\s*([A-ZÁÉÍ
 const JANELA_CNPJ_BENEFICIARIO = 300;
 
 /**
+ * Tira do texto do PDF o que o banco recusa ao gravar: o caractere nulo — o
+ * PostgREST manda "\u0000" em JSON e o Postgres responde 22P05 "unsupported
+ * Unicode escape sequence" (4 Invoice/Receipt em PDF da busca por período de
+ * 16/10/2026 caíram em erro assim) — e metade de par UTF-16 solta, que o jsonb
+ * também recusa (aparece quando o corte da prévia cai no meio de um emoji).
+ */
+export function limparTextoDoPdf(text: string): string {
+    return text
+        .replace(/\u0000/g, '')
+        .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
+}
+
+/** Prévia do texto gravada em `extracao_raw` (o corte pode partir um par UTF-16). */
+function previaDoTexto(text: string): string {
+    return limparTextoDoPdf(text.slice(0, 500));
+}
+
+/**
  * Tenta extrair a linha digitável de um texto.
- * Retorna a primeira ocorrência válida (44, 47 ou 48 dígitos), ou null.
+ * Retorna a primeira ocorrência válida (44, 47 ou 48 dígitos), ou null —
+ * nunca um candidato com DV errado.
  */
 export function findLinhaDigitavelInText(text: string, referenceDate = new Date()): string | null {
     /* 1º: o FORMATO IMPRESSO, que delimita a linha sozinho mesmo com número
@@ -122,13 +141,12 @@ export function findLinhaDigitavelInText(text: string, referenceDate = new Date(
             }
         }
     }
-    // Fallback: retorna o primeiro candidato com tamanho compatível, mesmo inválido
-    for (const m of matches) {
-        const digits = onlyDigits(m);
-        if (digits.length === 44 || digits.length === 47 || digits.length === 48) {
-            return digits;
-        }
-    }
+    /* Sem "fallback" para candidato inválido (16/10/2026): num PDF o texto não
+       tem erro de digitação — bloco de 44/47/48 dígitos que não fecha os DVs
+       é OUTRO número. Na busca por período a chave de acesso da DANF3E de uma
+       fatura em débito automático, com o ano grudado, virou "linha" com valor
+       de R$ 312 milhões. Sem linha, o boleto vai para a revisão e a pessoa
+       cola a linha certa (ou descarta). */
     return null;
 }
 
@@ -340,17 +358,40 @@ function limparNomeBeneficiario(candidato: string): string {
  * linha não carrega data, e o 1º reaviso da Energisa lido pela captura
  * (boleto nº 1423, 16/10/2026) entrou sem vencimento com "Venc. 02/10/2026"
  * impresso. Só é usado quando a linha digitável não deu a data.
+ *
+ * Também (busca por período de 16/10/2026, PDFs reais da caixa):
+ * - mês escrito — fatura de cartão: "Data de vencimento: 27 JUL 2026";
+ * - rótulo DEPOIS da data — DANF3E da concessionária, em que a extração sai
+ *   "Nº FATURA 191165521/08/2026 VENCIMENTO". Só quando nenhum rótulo vem
+ *   antes de uma data: rótulo antes é o caso comum e tem preferência.
  */
 export function findVencimentoNoTexto(text: string): string | null {
-    const re = /(?:\bVenc(?:imento|to)?\.?|\bData\s+de\s+vencimento)\s*[:\-–]?\s*(\d{2})\/(\d{2})\/(\d{4})/gi;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) !== null) {
-        const [, dd, mm, aaaa] = m;
-        const dia = Number(dd), mes = Number(mm);
-        if (mes < 1 || mes > 12 || dia < 1 || dia > 31) continue;
-        return `${aaaa}-${mm}-${dd}`;
+    const ROTULO = String.raw`(?:\bVenc(?:imento|to)?\.?|\bData\s+de\s+vencimento)\s*[:\-–]?\s*`;
+    const tentativas: Array<[RegExp, (m: RegExpExecArray) => [number, number, number]]> = [
+        [new RegExp(ROTULO + String.raw`(\d{2})\/(\d{2})\/(\d{4})`, 'gi'),
+            m => [Number(m[3]), Number(m[2]), Number(m[1])]],
+        [new RegExp(ROTULO + String.raw`(\d{1,2})\s+(?:de\s+)?(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç]*\.?\s+(?:de\s+)?(\d{4})`, 'gi'),
+            m => [Number(m[3]), MESES.indexOf(m[2].toLowerCase()) + 1, Number(m[1])]],
+        [/(\d{2})\/(\d{2})\/(\d{4})\s*VENCIMENTO/gi,
+            m => [Number(m[3]), Number(m[2]), Number(m[1])]],
+    ];
+    for (const [re, partes] of tentativas) {
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(text)) !== null) {
+            const [ano, mes, dia] = partes(m);
+            if (dataExiste(ano, mes, dia)) {
+                return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+            }
+        }
     }
     return null;
+}
+
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+function dataExiste(ano: number, mes: number, dia: number): boolean {
+    if (mes < 1 || mes > 12 || dia < 1) return false;
+    return dia <= new Date(Date.UTC(ano, mes, 0)).getUTCDate();
 }
 
 /**
@@ -417,13 +458,14 @@ export function extractFromPdfText(
     paginas: number,
     referenceDate = new Date(),
 ): BoletoExtractionResult {
-    if (!text || text.length < MIN_TEXTO_UTIL) {
+    text = limparTextoDoPdf(text || '');
+    if (text.length < MIN_TEXTO_UTIL) {
         return {
             metodo: 'pdf_text',
             confidence_score: 0,
             engine_versao: ENGINE_VERSAO,
             campos: emptyFields(),
-            raw: { paginas, pdfText: (text || '').slice(0, 500) },
+            raw: { paginas, pdfText: previaDoTexto(text) },
             erros: [ERRO_SEM_TEXTO],
         };
     }
@@ -439,7 +481,7 @@ export function extractFromPdfText(
             confidence_score: 0,
             engine_versao: ENGINE_VERSAO,
             campos,
-            raw: { paginas, pdfText: text.slice(0, 500) },
+            raw: { paginas, pdfText: previaDoTexto(text) },
             erros: [ERRO_SEM_LINHA],
         };
     }
@@ -476,7 +518,7 @@ export function extractFromPdfText(
     if (mj.juros_dia.valor !== null)        base.campos.juros_dia        = mj.juros_dia;
     if (mj.juros_dia_tipo.valor !== null)   base.campos.juros_dia_tipo   = mj.juros_dia_tipo;
 
-    base.raw = { ...base.raw, paginas, pdfTextPreview: text.slice(0, 500) };
+    base.raw = { ...base.raw, paginas, pdfTextPreview: previaDoTexto(text) };
     return base;
 }
 

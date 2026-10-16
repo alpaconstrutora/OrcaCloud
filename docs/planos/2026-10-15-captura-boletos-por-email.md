@@ -923,8 +923,11 @@ ao conferir o teste do filtro de remetentes. Lido nos PDFs reais (baixados do bu
   escrito e rótulo depois (só se nenhum rótulo vier antes); data inexistente (31 FEV) recusada.
   Testes em `boletoTexto` (5 casos, dados sintéticos no formato dos PDFs reais). Conferido nos 4 PDFs reais.
 - [x] Publicar a Edge Function — 2 das 4 mensagens já voltaram como `criado` na retentativa das 06:15 UTC.
-- [ ] Linhas já gravadas (1428, 1430, 1431, 1432, 1438 com linha/valor falsos): OK do usuário ("1. Sim");
-  a escrita no banco foi barrada pela permissão da sessão — SQL pronto, aguardando o usuário liberar/rodar.
+- [x] Linhas já gravadas (1428, 1430, 1431, 1432, 1438 com linha/valor falsos): OK do usuário ("1. Sim");
+  a 1ª tentativa foi barrada pela permissão da sessão; usuário: "Liberado". Aplicado em 16/10/2026 08:35 UTC:
+  linha/código/valor → NULL, vencimento do PDF (21/08, 03/08 ×3, 21/09), aviso "Fatura em débito automático",
+  ANTES gravado em `boletos_auditoria` (acao `reprocessamento`, `valor_depois.motivo`) — é a reversão.
+  2ª execução não casou nada. Mensagem duplicada em `erros_validacao` do 1438 removida.
 
 ## Pedido posterior — 16/10/2026 (PDF que não é boleto)
 

@@ -1,9 +1,36 @@
 import { supabase } from '../lib/supabase';
 import { ProfileGroup } from '../types';
-import { clientService } from './clientService';
+
+export type PortalComToken = 'cliente' | 'fornecedor' | 'corretor';
+
+/**
+ * Cliente, Fornecedor e Corretor (16/10/2026): a validação é a RPC
+ * `portal_token_para_mim` — SECURITY DEFINER, pela pessoa do JWT. Antes, Cliente
+ * e Fornecedor eram validados em tabela direta (`clients`/`suppliers`), que a RLS
+ * só libera a membro da organização: quem era DE FORA era recusado sempre.
+ * A RPC também devolve o token do portal, e o App abre a casca do link com ele.
+ */
+async function validarPorTokenDoPortal(portal: PortalComToken, nomeDoPortal: string, papel: string): Promise<{ isValid: boolean; error?: string; portalToken?: string }> {
+    const { data, error } = await supabase.rpc('portal_token_para_mim', { p_portal: portal });
+    if (error) {
+        console.error(`[validateAccess] ${portal}:`, error.message);
+        return { isValid: false, error: `Erro de validação do acesso ao ${nomeDoPortal}. Por favor, contate o suporte.` };
+    }
+    const r = (data ?? {}) as { situacao?: string; token?: string };
+    if (r.situacao === 'ok' && r.token) return { isValid: true, portalToken: r.token };
+    if (r.situacao === 'revogado') return { isValid: false, error: `Seu acesso ao ${nomeDoPortal} foi desativado. Fale com a construtora.` };
+    if (r.situacao === 'sem_organizacao') return { isValid: false, error: `Seu cadastro de ${papel} ainda não está ligado a uma construtora. Peça a ela o convite por e-mail.` };
+    return { isValid: false, error: `Seu e-mail não está cadastrado como ${papel} autorizado.` };
+}
 
 export const profileService = {
-    async validateAccess(email: string | undefined, group: ProfileGroup): Promise<{ isValid: boolean; error?: string }> {
+    /**
+     * `portalToken` vem só para Cliente, Fornecedor e Corretor (16/10/2026): o login
+     * por e-mail "entrega a experiência do link" — a RPC `portal_token_para_mim`
+     * resolve o token da própria pessoa (e-mail do JWT) e o App abre a mesma casca
+     * do acesso por link. Plano: docs/planos/2026-10-16-portais-login-exclusivo-convite.md
+     */
+    async validateAccess(email: string | undefined, group: ProfileGroup): Promise<{ isValid: boolean; error?: string; portalToken?: string }> {
         if (!email) return { isValid: false, error: 'Usuário não identificado.' };
 
         const lowerEmail = email.toLowerCase();
@@ -58,13 +85,7 @@ export const profileService = {
                 return { isValid: false, error: 'Seu e-mail não está vinculado a nenhuma organização como usuário.' };
             }
 
-            if (group === ProfileGroup.CLIENT) {
-                const clients = await clientService.listClients();
-                const isClient = clients.some(c => c.email?.toLowerCase() === lowerEmail);
-
-                if (isClient) return { isValid: true };
-                return { isValid: false, error: 'Seu e-mail não está cadastrado como cliente autorizado.' };
-            }
+            if (group === ProfileGroup.CLIENT) return validarPorTokenDoPortal('cliente', 'Portal do Cliente', 'cliente');
 
             if (group === ProfileGroup.INVESTOR) {
                 const { data: investors, error } = await supabase
@@ -82,37 +103,9 @@ export const profileService = {
                 return { isValid: false, error: 'Seu e-mail não está na lista de investidores autorizados.' };
             }
 
-            if (group === ProfileGroup.SUPPLIER) {
-                // If the supplierService still uses localStorage, we can't easily validate on server side,
-                // but let's assume for now we want to allow it if they exist in the list.
-                // We will migrate supplierService to Supabase next.
-                const { data: suppliers, error } = await supabase
-                    .from('suppliers')
-                    .select('email')
-                    .eq('email', lowerEmail);
+            if (group === ProfileGroup.SUPPLIER) return validarPorTokenDoPortal('fornecedor', 'Portal do Fornecedor', 'fornecedor');
 
-                if (error && error.code !== 'PGRST116') { // Ignore missing table for now if needed, but we should create it
-                    console.error("Supplier table check error:", error.message);
-                }
-
-                if (suppliers && suppliers.length > 0) return { isValid: true };
-                return { isValid: false, error: 'Seu e-mail não está cadastrado como fornecedor autorizado.' };
-            }
-
-            if (group === ProfileGroup.BROKER) {
-                const { data: brokers, error } = await supabase
-                    .from('broker_profiles')
-                    .select('email')
-                    .eq('email', lowerEmail)
-                    .eq('is_active', true);
-
-                if (error && error.code !== 'PGRST116') {
-                    console.error("Broker table check error:", error.message);
-                }
-
-                if (brokers && brokers.length > 0) return { isValid: true };
-                return { isValid: false, error: 'Seu e-mail não está cadastrado como corretor autorizado.' };
-            }
+            if (group === ProfileGroup.BROKER) return validarPorTokenDoPortal('corretor', 'Portal do Corretor', 'corretor');
 
             if (group === ProfileGroup.LENDER) {
                 // O credor não é membro de organização nenhuma: o vínculo dele é

@@ -2,8 +2,6 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { profileService } from '../services/profileService';
 import { investorService } from '../services/investorService';
-import { clientService } from '../services/clientService';
-import { supplierService } from '../services/supplierService';
 import { projectService } from '../services/projectService';
 import { ProfileGroup, UserProfile } from '../types';
 import { loginFeitoNestaAba, marcarLoginNestaAba, limparLoginNestaAba } from '../lib/loginNestaAba';
@@ -27,6 +25,8 @@ interface UseAuthSyncProps {
   setInvestorProfile: (profile: any) => void;
   setClientProfile: (profile: any) => void;
   setSupplierProfile: (profile: any) => void;
+  /** Token do portal devolvido pelo validateAccess (Cliente/Fornecedor/Corretor). */
+  setPortalTokenDoLogin?: (token: string | null) => void;
   fetchProjects: (orgs: any[]) => void;
   fetchClients: () => void;
   fetchOrganizations: () => void;
@@ -40,7 +40,7 @@ export const useAuthSync = ({
   session, setSession, setLoadingSession, selectedLoginGroup, setSelectedLoginGroup, selectLoginGroupForRoute,
   setAuthError, setIsResettingPassword, profileSynchronized, setProfileSynchronized,
   currentProfile, setCurrentProfile, setIsValidating, setInvestorProfile, setClientProfile,
-  setSupplierProfile, fetchProjects, fetchClients, fetchOrganizations,
+  setSupplierProfile, setPortalTokenDoLogin, fetchProjects, fetchClients, fetchOrganizations,
   projectId, clientProfile, investorProfile, handleLoadProject
 }: UseAuthSyncProps) => {
   const signOutTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,6 +77,7 @@ export const useAuthSync = ({
       setSession(newSession);
       if (!newSession) {
         limparLoginNestaAba();
+        setPortalTokenDoLogin?.(null);
         setSelectedLoginGroup(null);
         setAuthError(null);
         setProfileSynchronized(false);
@@ -139,14 +140,11 @@ export const useAuthSync = ({
           const profile = await investorService.getByEmail(session.user.email);
           if (!cancelled && profile) setInvestorProfile(profile);
         }
-        if (selectedLoginGroup === ProfileGroup.CLIENT && session.user.email) {
-          const profile = await clientService.getByEmail(session.user.email);
-          if (!cancelled && profile) setClientProfile(profile);
-        }
-        if (selectedLoginGroup === ProfileGroup.SUPPLIER && session.user.email) {
-          const profile = await supplierService.getByEmail(session.user.email);
-          if (!cancelled && profile) setSupplierProfile(profile);
-        }
+        // Cliente/Fornecedor/Corretor (16/10/2026): o login por e-mail abre a casca
+        // do LINK com o token que o validateAccess resolveu (RPC pela pessoa do
+        // JWT). Os `getByEmail` em tabela direta que ficavam aqui saíram: a RLS só
+        // os liberava para membro da organização, e a casca do link não os usa.
+        setPortalTokenDoLogin?.(result.portalToken ?? null);
 
         if (cancelled) return;
 

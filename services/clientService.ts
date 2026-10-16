@@ -83,7 +83,13 @@ export const clientService = {
         const REPRESENTANTE = 'legal_rep_name, legal_rep_document, legal_rep_rg, legal_rep_rg_uf, legal_rep_rg_issuing_agency, legal_rep_nationality, legal_rep_role';
 
         const DEGRAUS: { cols: string; aviso?: string }[] = [
-            { cols: `${BASE_COM_APELIDO}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, is_shared, ${COMUM}` },
+            { cols: `${BASE_COM_APELIDO}, portal_invited_at, ${QUALIFICACAO}, ${REPRESENTANTE}, status, is_shared, ${COMUM}` },
+            {
+                // Degrau novo (regra acima): igual ao de cima, sem `portal_invited_at`
+                // (convite por e-mail do Portal do Cliente, 16/10/2026).
+                cols: `${BASE_COM_APELIDO}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, is_shared, ${COMUM}`,
+                aviso: 'Coluna portal_invited_at ausente — aplique a migration aplicar_20271016000100. O modal de acesso não mostra a data do convite até lá.',
+            },
             {
                 // Degrau novo (regra acima): igual ao de cima, sem `nickname`.
                 cols: `${BASE_SEM_APELIDO}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, is_shared, ${COMUM}`,

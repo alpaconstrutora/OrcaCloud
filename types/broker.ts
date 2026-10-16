@@ -99,6 +99,8 @@ export interface BrokerProfile {
     commission_rate?: number;
     is_active: boolean;
     settings?: BrokerPortalSettings;
+    /** Último convite por e-mail para o Portal do Corretor (16/10/2026). */
+    portal_invited_at?: string | null;
     created_at?: string;
     updated_at?: string;
 }

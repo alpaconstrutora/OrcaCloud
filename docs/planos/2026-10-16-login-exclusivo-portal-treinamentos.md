@@ -144,3 +144,10 @@ já existe desde 15/10 — fora do escopo.
   hook comum de login nasce junto.
 - Depois de "Sair" a pessoa fica na página do treinando, sem caminho ao seletor (decisão do
   usuário). Se incomodar, uma linha "Entrar em outro portal" no rodapé resolve.
+
+## 2026-10-16 (mais tarde) — generalização
+
+`TrainingLogin.tsx` e `rotaDeEntradaDoPortal.ts` foram substituídos por
+`components/portal/PortalLogin.tsx` + `lib/entradasDoPortal.ts` (cinco portais). O hook comum
+previsto na seção "Desenho" nasceu como componente único, não como hook. Ver
+`2026-10-16-portais-login-exclusivo-convite.md`.

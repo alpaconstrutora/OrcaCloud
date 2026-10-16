@@ -14,6 +14,8 @@ export interface Client {
     id: string;
     code?: string;
     name: string;
+    /** Último convite por e-mail para o Portal do Cliente (16/10/2026). */
+    portal_invited_at?: string | null;
     /** Apelido / nome fantasia — mesmo vocabulário de `Supplier.nickname`.
      *  É a saudação do Portal do Cliente ("Olá, <apelido>"); vazio = primeiro
      *  nome de `name`. Migration aplicar_20270923000001. */
@@ -138,6 +140,8 @@ export interface Supplier {
     code?: string;
     name: string;
     nickname?: string | null;
+    /** Último convite por e-mail para o Portal do Fornecedor (16/10/2026). */
+    portal_invited_at?: string | null;
     contact_name?: string;
     email?: string;
     phone?: string;

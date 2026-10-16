@@ -128,7 +128,7 @@ export const brokerService = {
 
         let query = supabase
             .from('broker_profiles')
-            .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, settings, created_at, updated_at')
+            .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, settings, portal_invited_at, created_at, updated_at')
             .order('name');
         if (orgIds.length === 1) query = query.eq('organization_id', orgIds[0]);
         else if (orgIds.length > 1) query = query.in('organization_id', orgIds);
@@ -210,7 +210,7 @@ export const brokerService = {
     async getProfile(id: string) {
         const { data, error } = await supabase
             .from('broker_profiles')
-            .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, settings, created_at, updated_at')
+            .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, settings, portal_invited_at, created_at, updated_at')
             .eq('id', id)
             .single();
 

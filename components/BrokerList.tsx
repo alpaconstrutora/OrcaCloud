@@ -10,6 +10,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
+import ConvitePortalBloco from './portal/ConvitePortalBloco';
 import { useConfirm } from './ui/confirm';
 import { useServicesToast } from './services/useServicestoast';
 import ServicesToast from './services/ServicesToast';
@@ -490,6 +491,16 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                             </button>
                         </div>
 
+                        {/* Convite por e-mail (16/10/2026): a pessoa cria a senha e entra em
+                            /portal-corretor — o login por e-mail abre a mesma casca do link. */}
+                        <ConvitePortalBloco
+                            portal="corretor"
+                            id={tokenModal.broker.id}
+                            email={tokenModal.broker.email}
+                            invitedAt={tokenModal.broker.portal_invited_at}
+                            onResultado={(r) => showToast(r.mensagem, r.ok ? 'success' : 'error')}
+                        />
+                        <p className="text-xs font-semibold text-slate-500">Link de acesso sem senha</p>
                         {tokenLoading ? (
                             <div className="flex justify-center py-8">
                                 <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />

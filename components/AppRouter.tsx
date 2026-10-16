@@ -371,6 +371,11 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   // ── Render interno (envolto em Suspense para lazy components) ───────────────
   const renderContent = () => {
   // ── Portais de perfil específico (acesso direto sem switch) ─────────────────
+  // ⚠️ Os ramos CLIENT, SUPPLIER, BROKER e PARTNER abaixo são INALCANÇÁVEIS pelo
+  // login por e-mail desde 16/10/2026 (PARTNER desde 03/10): o App.tsx renderiza a
+  // casca própria de cada portal ANTES do <Layout> (Cliente/Fornecedor/Corretor
+  // pela casca do link, com o token resolvido no login). Ficam aqui só até a
+  // limpeza — ver docs/planos/2026-10-16-portais-login-exclusivo-convite.md.
   if (currentProfile.group === ProfileGroup.CLIENT) {
     return (
       <ClientArea

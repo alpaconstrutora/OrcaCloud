@@ -71,6 +71,9 @@ filtrar/ocultar quando quiser. A folha não gera linha para quem não tem salár
     (sem "Voltar para Portais" nem "Cadastre-se"; "esqueci a senha" volta para
     `/portal-treinamentos`), e o cartão do seletor troca o endereço para a rota. O tema TRAINEE
     do `Auth` ficou sem uso. Ver `2026-10-16-login-exclusivo-portal-treinamentos.md`.
+  - 2026-10-16 (mais tarde): `TrainingLogin` virou `components/portal/PortalLogin.tsx` com a
+    entrada TREINANDO de `lib/entradasDoPortal.ts` — o mesmo componente serve Cliente,
+    Fornecedor, Parceiro e Corretor. Ver `2026-10-16-portais-login-exclusivo-convite.md`.
 - `validateAccess(TRAINEE)` → RPC `academy_portal_user_my_access()` (SECURITY DEFINER, authenticated):
   devolve as identidades ativas do e-mail do JWT. Vazio = "Seu e-mail não está cadastrado no Portal de
   Treinamentos".

@@ -34,7 +34,8 @@ import {
     EyeOff,
     Smartphone,
     MoreHorizontal,
-    HandCoins
+    HandCoins,
+    LogOut,
 } from 'lucide-react';
 import { Supplier, UserProfile, PurchaseOrder, Invoice, QuotationRequest } from '../types';
 import { supplierAiService, SupplierAIInsight } from '../services/supplierAiService';
@@ -94,6 +95,8 @@ interface SupplierDashboardProps {
     overrideEnabledTabIds?: string[];
     /** Pré-visualização do tour pelo editor da ajuda: abre este tour ao montar. */
     forcarTour?: string | null;
+    /** Login por e-mail (16/10/2026): "Sair" no menu de conta. Pelo link não há sessão. */
+    onLogout?: () => void;
 }
 
 const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
@@ -107,6 +110,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     isPreview = false,
     overrideEnabledTabIds,
     forcarTour = null,
+    onLogout,
 }) => {
     const { localToast, showToast } = useToast();
 
@@ -1402,6 +1406,17 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                             <HelpCircle className="h-4 w-4 text-gray-400" />
                                             <span className="flex-1">Ajuda</span>
                                         </button>
+                                        {onLogout && (
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIsAccountMenuOpen(false); onLogout(); }}
+                                                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                                                role="menuitem"
+                                            >
+                                                <LogOut className="h-4 w-4" />
+                                                <span className="flex-1">Sair</span>
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             )}

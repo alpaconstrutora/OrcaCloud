@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useMemo } from 'react';
-import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X, Download, Share2, ChevronDown, ArrowLeft, Bell, HelpCircle } from 'lucide-react';
+import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X, Download, Share2, ChevronDown, ArrowLeft, Bell, HelpCircle, LogOut } from 'lucide-react';
 import { PortalHelp } from './portal/PortalHelp';
 import BrokerMyData from './broker/BrokerMyData';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
@@ -45,6 +45,8 @@ interface BrokerPortalProps {
     initialBroker?: import('../types').BrokerProfile;
     /** Volta para a lista "Meus Corretores" (botão de voltar §5.3). Ausente = sem botão (ex: link público). */
     onBack?: () => void;
+    /** Login por e-mail (16/10/2026): "Sair" no menu de conta. Pelo link não há sessão. */
+    onLogout?: () => void;
     /** Pré-visualização do tour pelo editor da ajuda: abre este tour ao montar. */
     forcarTour?: string | null;
 }
@@ -78,7 +80,7 @@ const NAV_GROUPS: { label: string; tabs: PortalTab[] }[] = [
 const TAB_BY_ID: Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }> =
     Object.fromEntries(ALL_TABS.map(t => [t.id, t])) as Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }>;
 
-const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analytics', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker, onBack, forcarTour = null }) => {
+const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analytics', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker, onBack, forcarTour = null, onLogout }) => {
     const { organizations } = useStore();
     const confirm = useConfirm();
 
@@ -552,6 +554,17 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                                         <HelpCircle className="h-4 w-4 text-gray-400" />
                                         <span className="flex-1">Ajuda</span>
                                     </button>
+                                    {onLogout && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setIsAccountMenuOpen(false); onLogout(); }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                                            role="menuitem"
+                                        >
+                                            <LogOut className="h-4 w-4" />
+                                            <span className="flex-1">Sair</span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )}

@@ -83,3 +83,11 @@ Perguntas feitas ao usuário antes do plano, e as respostas:
 O recebimento do e-mail e o clique no link precisam de uma caixa de entrada real:
 convidar um integrante de teste com um e-mail seu, abrir o e-mail, criar a senha
 e entrar em `/portal-parceiro`.
+
+## 2026-10-16 — a rota passou ao mapa genérico
+
+O efeito de `/portal-parceiro` em `App.tsx` (força o grupo em memória, reafirmado a cada
+mudança) deixou de ser um bloco próprio: virou o efeito genérico das entradas de
+`lib/entradasDoPortal.ts`, e a tela de login passou a ser `components/portal/PortalLogin.tsx`
+(sem "Voltar para Portais" nem "Cadastre-se"; "esqueci a senha" volta para `/portal-parceiro`).
+O convite (`partner-invite-user`) não mudou. Ver `2026-10-16-portais-login-exclusivo-convite.md`.

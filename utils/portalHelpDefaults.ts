@@ -589,6 +589,14 @@ const CLIENTE: DefaultHelpItem[] = [
     body_html: p('Em <strong>Meus dados</strong> (no menu da conta, no canto superior direito) você vê o cadastro que a construtora tem de você. Para alterar qualquer informação, fale com a construtora.'),
   },
   {
+    key: 'cliente.faq.email-senha', kind: 'faq', section: null,
+    title: 'Como entro com e-mail e senha?',
+    body_html: p(
+      'Abra <strong>/portal-cliente</strong> e entre com o e-mail que a construtora cadastrou. Se recebeu um e-mail de convite, crie a senha pelo link dele; se não recebeu, use <strong>Primeiro acesso? Crie sua senha</strong> na própria tela.',
+      'Esqueceu a senha? Use <strong>Esqueci minha senha</strong>: o link chega no seu e-mail e volta para o portal.',
+    ),
+  },
+  {
     key: 'cliente.faq.link-vencido', kind: 'faq', section: null,
     title: 'Meu link de acesso parou de funcionar. O que faço?',
     body_html: p(

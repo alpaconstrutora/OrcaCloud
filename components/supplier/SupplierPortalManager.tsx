@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
+import ConvitePortalBloco from '../portal/ConvitePortalBloco';
 import { supabase } from '../../lib/supabase';
 import { supplierService, getSupplierDisplayName } from '../../services/supplierService';
 import { appSettingsService } from '../../services/appSettingsService';
@@ -651,6 +652,18 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
               </div>
             )}
 
+            {/* Convite por e-mail (16/10/2026): a pessoa cria a senha e entra em
+                /portal-fornecedor — o login por e-mail abre a mesma casca do link. */}
+            {selectedSupplier && (
+              <ConvitePortalBloco
+                portal="fornecedor"
+                id={selectedSupplier.id}
+                email={selectedSupplier.email}
+                invitedAt={selectedSupplier.portal_invited_at}
+                onResultado={(r) => showToast(r.mensagem, r.ok ? 'success' : 'error')}
+              />
+            )}
+            <p className="text-xs font-semibold text-slate-500">Link de acesso sem senha</p>
             {tokenLoading ? (
               <div className="text-center py-6 text-xs text-gray-400">Carregando...</div>
             ) : portalToken && portalToken.is_active ? (

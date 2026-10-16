@@ -19,6 +19,7 @@ import { organizationService } from '../services/organizationService';
 import { investorService } from '../services/investorService';
 import { supplierService } from '../services/supplierService';
 import { profileService } from '../services/profileService';
+import { destinoAposSair } from '../lib/entradasDoPortal';
 import { companyService } from '../services/companyService';
 import { INITIAL_PROJECT_SETTINGS, INITIAL_BUDGET } from '../constants';
 import { getInitialView, syncViewToUrl, broadcastSignOut } from '../lib/tabRouter';
@@ -41,6 +42,10 @@ interface AuthState {
     investorProfile: Investor | null;
     clientProfile: Client | null;
     supplierProfile: Supplier | null;
+    /** Token do portal resolvido no login por e-mail de Cliente/Fornecedor/Corretor
+     *  (RPC `portal_token_para_mim`): o App abre a casca do link com ele. Só em
+     *  memória; zerado quando a sessão termina. (16/10/2026) */
+    portalTokenDoLogin: string | null;
     authError: string | null;
     isValidating: boolean;
     profileSynchronized: boolean;
@@ -57,6 +62,7 @@ interface AuthState {
     setInvestorProfile: (profile: Investor | null) => void;
     setClientProfile: (profile: Client | null) => void;
     setSupplierProfile: (profile: Supplier | null) => void;
+    setPortalTokenDoLogin: (token: string | null) => void;
     setAuthError: (error: string | null) => void;
     setIsValidating: (validating: boolean) => void;
     setProfileSynchronized: (synced: boolean) => void;
@@ -162,6 +168,7 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     investorProfile: null,
     clientProfile: null,
     supplierProfile: null,
+    portalTokenDoLogin: null,
     authError: null,
     isValidating: false,
     profileSynchronized: false,
@@ -182,6 +189,7 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     setInvestorProfile: (investorProfile) => set({ investorProfile }),
     setClientProfile: (clientProfile) => set({ clientProfile }),
     setSupplierProfile: (supplierProfile) => set({ supplierProfile }),
+    setPortalTokenDoLogin: (portalTokenDoLogin) => set({ portalTokenDoLogin }),
     setAuthError: (authError) => set({ authError }),
     setIsValidating: (isValidating) => set({ isValidating }),
     setProfileSynchronized: (profileSynchronized) => set({ profileSynchronized }),
@@ -358,6 +366,9 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
         }
     },
     logout: () => {
+        // "Sair" de quem entrou por uma página de login própria volta a ela, não ao
+        // seletor (16/10/2026). Lido ANTES de zerar o grupo.
+        const destino = destinoAposSair(get().selectedLoginGroup);
         broadcastSignOut();
         if (typeof window !== 'undefined') {
             // Remove só chaves de sessão/contexto (auth do Supabase + prefixo orca_).
@@ -375,10 +386,11 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
                 role: UserProfile.ADMIN,
             },
             selectedLoginGroup: null,
+            portalTokenDoLogin: null,
             projects: [],
             organizations: [],
             projectId: null
         });
-        if (typeof window !== 'undefined') window.location.href = '/';
+        if (typeof window !== 'undefined') window.location.href = destino;
     }
 }));

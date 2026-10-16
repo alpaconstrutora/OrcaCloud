@@ -66,6 +66,7 @@ function montar(selectedLoginGroup: ProfileGroup | null, session: { user: { id: 
         setInvestorProfile: vi.fn(),
         setClientProfile: vi.fn(),
         setSupplierProfile: vi.fn(),
+        setPortalTokenDoLogin: vi.fn(),
         fetchProjects: vi.fn(),
         fetchClients: vi.fn(),
         fetchOrganizations: vi.fn(),

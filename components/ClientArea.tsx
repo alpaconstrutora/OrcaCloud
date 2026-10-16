@@ -51,7 +51,8 @@ import {
     ChevronDown,
     HelpCircle,
     ArrowLeft,
-    Link2
+    Link2,
+    LogOut,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Bar, LabelList, Legend } from 'recharts';
 import { buildPlanningView, type PlanningView, type PlanningScale } from '../utils/portalPlanningUtils';
@@ -121,6 +122,8 @@ interface ClientAreaProps {
     isPreview?: boolean;
     /** Prévia do gestor (Configurações › Ajuda dos Portais): abre este tour ao montar. */
     forcarTour?: string | null;
+    /** Login por e-mail (16/10/2026): "Sair" no menu de conta. Pelo link não há sessão. */
+    onLogout?: () => void;
 }
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
@@ -136,7 +139,7 @@ const contractDashBadge = (status?: string): { label: string; cls: string; textC
 // §8 — Status Badge de chamados (Últimos Chamados) em texto simples, sem pílula.
 const STATUS_TEXT_COLOR: Record<string, string> = { Aberto: 'text-amber-700', 'Em Andamento': 'text-blue-700', Aguardando: 'text-purple-700', Resolvido: 'text-emerald-700', Cancelado: 'text-gray-400' };
 
-export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false, forcarTour = null }) => {
+export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false, forcarTour = null, onLogout }) => {
     const confirm = useConfirm();
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = React.useState<ClientAreaTabId>(initialTab || 'dashboard');
@@ -4206,6 +4209,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <HelpCircle className="h-4 w-4 text-gray-400" />
                                         <span className="flex-1">Ajuda</span>
                                     </button>
+                                    {onLogout && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setIsAccountMenuOpen(false); onLogout(); }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                                            role="menuitem"
+                                        >
+                                            <LogOut className="h-4 w-4" />
+                                            <span className="flex-1">Sair</span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )}

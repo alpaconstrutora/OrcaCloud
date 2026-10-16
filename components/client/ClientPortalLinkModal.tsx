@@ -6,6 +6,7 @@ import { useOrgContext, useOrgWriteTarget, targetOrgIds } from '../../hooks/useO
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
 import ActionIconButton from '../ui/ActionIconButton';
+import ConvitePortalBloco from '../portal/ConvitePortalBloco';
 
 interface ClientPortalLinkModalProps {
     client: Client;
@@ -128,6 +129,17 @@ const ClientPortalLinkModal: React.FC<ClientPortalLinkModalProps> = ({ client, o
                     </button>
                 </div>
 
+                {/* Convite por e-mail (16/10/2026): a pessoa cria a senha e entra em
+                    /portal-cliente — o login por e-mail abre a mesma casca do link. */}
+                <ConvitePortalBloco
+                    portal="cliente"
+                    id={client.id}
+                    email={client.email}
+                    invitedAt={client.portal_invited_at}
+                    onResultado={(r) => showToast(r.mensagem, r.ok ? 'success' : 'error')}
+                />
+
+                <p className="text-xs font-semibold text-slate-500">Link de acesso sem senha</p>
                 {loading ? (
                     <div className="flex justify-center py-8">
                         <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />

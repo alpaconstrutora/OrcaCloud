@@ -5,8 +5,8 @@ import ResetPassword, { LinkDeAcessoInvalido } from './components/ResetPassword'
 import LoginGateway from './components/LoginGateway';
 // Estático como o Auth (não lazy): é a primeira tela de uma rota de entrada, e um
 // Suspense ali viraria um piscar de loader antes do formulário.
-import TrainingLogin from './components/training/TrainingLogin';
-import { rotaDeEntradaDoPortal } from './lib/rotaDeEntradaDoPortal';
+import PortalLogin from './components/portal/PortalLogin';
+import { entradaDoPortal, entradaDaRota, rotaDeEntradaDoPortal } from './lib/entradasDoPortal';
 
 const AIChat      = React.lazy(() => import('./components/AIChat'));
 const ProjectModal = React.lazy(() => import('./components/ProjectModal'));
@@ -62,7 +62,9 @@ const PortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
   );
 };
 // Portal do Cliente via token público
-const ClientPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
+// `onLogout` só vem no login por e-mail (16/10/2026): a mesma casca do link, com
+// "Sair" no menu de conta. Pelo link não há sessão para encerrar.
+const ClientPortalTokenGate: React.FC<{ token: string; onLogout?: () => void }> = ({ token, onLogout }) => {
   const [state, setState] = React.useState<'loading' | 'ok' | 'error'>('loading');
   const [clientData, setClientData] = React.useState<any>(null);
   const [projectSettings, setProjectSettings] = React.useState<any>(null);
@@ -152,6 +154,7 @@ const ClientPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
           portalToken={token}
           onClientSelect={() => {}}
           isPreview
+          onLogout={onLogout}
         />
       </React.Suspense>
     </div>
@@ -232,7 +235,7 @@ const InvestorPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
 };
 
 // Portal do Corretor via token público
-const BrokerPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
+const BrokerPortalTokenGate: React.FC<{ token: string; onLogout?: () => void }> = ({ token, onLogout }) => {
   const [state, setState] = React.useState<'loading' | 'ok' | 'error'>('loading');
   const [brokerData, setBrokerData] = React.useState<any>(null);
   const [orgId, setOrgId] = React.useState('');
@@ -276,6 +279,7 @@ const BrokerPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
           portalToken={token}
           initialBroker={brokerData}
           isPreview
+          onLogout={onLogout}
         />
       </React.Suspense>
     </div>
@@ -320,7 +324,7 @@ const PartnerPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
 
 // Portal do Fornecedor via token público — mesmo formato do Portal do Parceiro,
 // reaproveitando o próprio SupplierDashboard (que já roda em modo token via `portalToken`).
-const SupplierPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
+const SupplierPortalTokenGate: React.FC<{ token: string; onLogout?: () => void }> = ({ token, onLogout }) => {
   const [state, setState] = React.useState<'loading' | 'ok' | 'error'>('loading');
   const [supplier, setSupplier] = React.useState<import('./types').Supplier | null>(null);
 
@@ -362,7 +366,7 @@ const SupplierPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
   return (
     <div className="min-h-screen bg-gray-50">
       <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><div className="w-6 h-6 border-4 border-[#E1553C] border-t-transparent rounded-full animate-spin" /></div>}>
-        <SupplierDashboardPublic supplierProfile={supplier} portalToken={token} isPreview />
+        <SupplierDashboardPublic supplierProfile={supplier} portalToken={token} isPreview onLogout={onLogout} />
       </React.Suspense>
     </div>
   );
@@ -407,6 +411,7 @@ const App: React.FC = () => {
     investorProfile, setInvestorProfile,
     clientProfile, setClientProfile,
     supplierProfile, setSupplierProfile,
+    portalTokenDoLogin, setPortalTokenDoLogin,
     isNotificationOpen, setIsNotificationOpen,
     projectSettings, setProjectSettings,
     budget, setBudget,
@@ -568,7 +573,7 @@ const App: React.FC = () => {
     session, setSession, setLoadingSession, selectedLoginGroup, setSelectedLoginGroup, selectLoginGroupForRoute,
     setAuthError, setIsResettingPassword, profileSynchronized, setProfileSynchronized,
     currentProfile, setCurrentProfile, setIsValidating, setInvestorProfile, setClientProfile,
-    setSupplierProfile, fetchProjects, fetchClients, fetchOrganizations,
+    setSupplierProfile, setPortalTokenDoLogin, fetchProjects, fetchClients, fetchOrganizations,
     projectId, clientProfile, investorProfile, handleLoadProject
   });
 
@@ -700,72 +705,60 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [showOverlay]);
 
-  // ── /portal-parceiro sem token = entrada do parceiro por e-mail e senha ────────
-  // Pedido de 03/10/2026 ("além do acesso via token, acesso via e-mail"). Sem token,
-  // a rota abre direto a tela de login do parceiro (Auth com tema do parceiro), em
-  // vez do seletor de portais. Também é para onde o convite por e-mail aponta
-  // (#type=invite|recovery): o ResetPassword abre, e ao concluir o grupo já é o do
-  // parceiro, então ele cai no portal.
-  // Quando força: sem sessão, vindo do link do convite, ou com sessão e nenhum
-  // portal escolhido (o parceiro que recarrega a página já logado). Quem está
-  // logado em OUTRO portal não é tocado. Reafirma a cada mudança de grupo: o
-  // listener de auth (useAuthSync) zera o grupo no evento inicial sem sessão, logo
-  // DEPOIS do primeiro ajuste — medido no navegador, uma vez só não segurava.
+  // ── Entrada própria dos portais (sem token) = login por e-mail e senha ─────────
+  // /portal-parceiro (03/10/2026), /portal-treinamentos (15/10) e, desde 16/10,
+  // /portal-cliente, /portal-fornecedor e /portal-corretor — o mapa é
+  // `lib/entradasDoPortal.ts`. Sem token, a rota abre a página de login PRÓPRIA do
+  // portal (`PortalLogin`), em vez do seletor. Também é para onde o convite e o
+  // "esqueci a senha" apontam (#type=invite|recovery): o ResetPassword abre, e ao
+  // concluir o grupo já é o do portal, então a pessoa cai nele.
+  // Quando força: sem sessão, vindo do link, ou com sessão e nenhum portal
+  // escolhido (quem recarregou a página já logado). Quem está logado em OUTRO
+  // portal não é tocado. Reafirma a cada mudança de grupo: o listener de auth
+  // (useAuthSync) zera o grupo no evento inicial sem sessão, logo DEPOIS do
+  // primeiro ajuste — medido no navegador em 03/10, uma vez só não segurava.
   //
   // ⚠️ Escolhe o portal SÓ EM MEMÓRIA (`selectLoginGroupForRoute`), nunca grava no
   // navegador. Até a correção de 03/10/2026 gravava: quem abriu o link do convite
   // ficava com o portal do parceiro marcado, e a conta interna dele (reservada
   // para Desenvolvedor) entrava pela tela do parceiro, era recusada, saía e voltava
-  // à mesma tela — "entra e cai". "Voltar" troca o endereço para "/" (guard do
-  // <Auth>), e um login recusado também (efeito logo abaixo).
+  // à mesma tela — "entra e cai". Um login recusado troca o endereço para "/"
+  // (efeito logo abaixo). O cartão do seletor também troca o endereço para a rota
+  // (`onSelectGroup`), então "Sair" do portal volta a esta mesma página.
+  const entradaDaRotaAtual = React.useMemo(() => entradaDaRota(window.location.pathname), []);
+  const tokenNaUrl = React.useMemo(() => new URLSearchParams(window.location.search).get('token'), []);
   React.useEffect(() => {
-    if (window.location.pathname !== '/portal-parceiro' || partnerPortalToken) return;
+    // Com ?token= o gate do link tem precedência (guards públicos abaixo).
+    if (!entradaDaRotaAtual || tokenNaUrl) return;
     // Tipo do link capturado na carga — o Supabase já apagou o hash (lib/linkDeAcesso.ts).
     const vindoDoConvite = !!tipoDoLinkDeAcesso;
     if (loadingSession && !vindoDoConvite) return;
     // Com sessão e sem portal escolhido, só força se o login foi feito NESTA aba
-    // (o parceiro que recarregou a página). Sessão vinda de outra aba não é
-    // empurrada para o portal do parceiro — ver lib/loginNestaAba.ts.
+    // (quem recarregou a página). Sessão vinda de outra aba não é empurrada para
+    // este portal — ver lib/loginNestaAba.ts.
     const deveForcar = vindoDoConvite || !session || (!selectedLoginGroup && loginFeitoNestaAba(session?.user?.email));
-    if (deveForcar && selectedLoginGroup !== ProfileGroup.PARTNER) selectLoginGroupForRoute(ProfileGroup.PARTNER);
-  }, [loadingSession, session, partnerPortalToken, selectedLoginGroup, selectLoginGroupForRoute]);
+    if (deveForcar && selectedLoginGroup !== entradaDaRotaAtual.grupo) selectLoginGroupForRoute(entradaDaRotaAtual.grupo);
+  }, [entradaDaRotaAtual, tokenNaUrl, loadingSession, session, selectedLoginGroup, selectLoginGroupForRoute]);
 
-  // Login recusado na entrada do parceiro (conta que não é de parceiro): a tela de
-  // "Erro de Acesso" mostra o motivo e o useAuthSync desconecta em 3 s. Sai de
-  // /portal-parceiro já, para que depois disso apareça o seletor de portais em vez
-  // de voltar à tela do parceiro.
+  // Login recusado numa entrada própria (conta que não é daquele portal): a tela
+  // de "Erro de Acesso" mostra o motivo e o useAuthSync desconecta em 3 s. Sai da
+  // rota já, para que depois disso apareça o seletor de portais em vez de voltar
+  // à mesma tela de login.
   React.useEffect(() => {
-    if (authError && window.location.pathname === '/portal-parceiro' && !partnerPortalToken) {
+    if (authError && entradaDaRotaAtual && !tokenNaUrl) {
       window.history.replaceState(null, '', '/');
     }
-  }, [authError, partnerPortalToken]);
-
-  // ── /portal-treinamentos = entrada do treinando por e-mail e senha ────────────
-  // Pedido de 15/10/2026 (docs/planos/2026-10-15-portal-de-treinamentos.md).
-  // Mesmo desenho do /portal-parceiro acima: não há token, o convite por e-mail
-  // aponta para cá (#type=invite|recovery), e o grupo é escolhido SÓ EM MEMÓRIA,
-  // reafirmado a cada mudança (o useAuthSync zera o grupo no evento inicial).
-  // A tela é a `TrainingLogin` (página própria, sem "Voltar"/"Cadastre-se" —
-  // 16/10/2026); o cartão do seletor de portais também troca o endereço para cá
-  // (`rotaDeEntradaDoPortal`), então sair do portal volta a esta mesma página.
-  React.useEffect(() => {
-    if (window.location.pathname !== '/portal-treinamentos') return;
-    const vindoDoConvite = !!tipoDoLinkDeAcesso;
-    if (loadingSession && !vindoDoConvite) return;
-    const deveForcar = vindoDoConvite || !session || (!selectedLoginGroup && loginFeitoNestaAba(session?.user?.email));
-    if (deveForcar && selectedLoginGroup !== ProfileGroup.TRAINEE) selectLoginGroupForRoute(ProfileGroup.TRAINEE);
-  }, [loadingSession, session, selectedLoginGroup, selectLoginGroupForRoute]);
-
-  React.useEffect(() => {
-    if (authError && window.location.pathname === '/portal-treinamentos') {
-      window.history.replaceState(null, '', '/');
-    }
-  }, [authError]);
+  }, [authError, entradaDaRotaAtual, tokenNaUrl]);
 
   // Link de convite/redefinição que o servidor recusou (já usado ou vencido): o
   // retorno vem com #error=…&error_code=otp_expired, sem `type`. Em vez de cair
   // calado num login, mostra o motivo uma vez.
   const [linkInvalidoDispensado, setLinkInvalidoDispensado] = React.useState(false);
+
+  // "Sair" de um portal com casca própria: encerra a sessão sem mudar o endereço —
+  // o efeito da entrada própria (acima) re-força o grupo e a página de login do
+  // portal volta sozinha.
+  const sairDoPortal = () => { setSelectedLoginGroup(null); setSession(null); supabase.auth.signOut(); };
 
   // ── Guards públicos (ordem preservada) ───────────────────────────────────────
   // ⚠️ `/portal-condomino` NÃO existe mais (23/09/2026). O Portal do Condômino
@@ -831,20 +824,12 @@ const App: React.FC = () => {
     />
   );
   if (!loadingSession && !session) {
-    // Portal de Treinamentos tem página de login própria (16/10/2026) — sem
-    // "Voltar para Portais": a saída para o seletor é só a recusa (efeito acima).
-    if (selectedLoginGroup === ProfileGroup.TRAINEE) return <TrainingLogin />;
-    return (
-      <Auth
-        group={selectedLoginGroup || undefined}
-        onBack={() => {
-          // Saindo da entrada própria do parceiro: o endereço vira "/" para a regra
-          // de /portal-parceiro (acima) não devolver a tela do parceiro.
-          if (window.location.pathname === '/portal-parceiro') window.history.replaceState(null, '', '/');
-          setSelectedLoginGroup(null);
-        }}
-      />
-    );
+    // Portais com entrada própria (Cliente, Fornecedor, Parceiro, Corretor,
+    // Treinamentos — 16/10/2026) têm página de login exclusiva, sem "Voltar para
+    // Portais": a saída para o seletor é só a recusa (efeito acima).
+    const entrada = entradaDoPortal(selectedLoginGroup);
+    if (entrada) return <PortalLogin entrada={entrada} />;
+    return <Auth group={selectedLoginGroup || undefined} onBack={() => setSelectedLoginGroup(null)} />;
   }
   if (authError) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center gap-4">
@@ -859,6 +844,36 @@ const App: React.FC = () => {
       </button>
     </div>
   );
+
+  // ── Cliente, Fornecedor e Corretor por e-mail = a casca do LINK ─────────────
+  // 16/10/2026 (docs/planos/2026-10-16-portais-login-exclusivo-convite.md): o
+  // validateAccess resolveu o token do portal da própria pessoa (RPC
+  // `portal_token_para_mim`), e a casca é a mesma do acesso por link — RPCs
+  // SECURITY DEFINER, fora do <Layout>. Antes, esses grupos caíam no AppRouter
+  // lendo tabelas diretas, que a RLS só libera a membro de organização: quem era
+  // de fora via o portal vazio (e o Fornecedor, sem menu).
+  // `profileSynchronized` garante que o token é desta sessão; sem token com a
+  // validação concluída não acontece (isValid implica token), mas o guard evita
+  // abrir a casca com `token=""`.
+  if (
+    (selectedLoginGroup === ProfileGroup.CLIENT || selectedLoginGroup === ProfileGroup.SUPPLIER || selectedLoginGroup === ProfileGroup.BROKER)
+    && (!profileSynchronized || !portalTokenDoLogin)
+  ) {
+    return (
+      <div className="min-h-screen bg-[#F2F2F4] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+  if (selectedLoginGroup === ProfileGroup.CLIENT && portalTokenDoLogin) {
+    return <ClientPortalTokenGate token={portalTokenDoLogin} onLogout={sairDoPortal} />;
+  }
+  if (selectedLoginGroup === ProfileGroup.SUPPLIER && portalTokenDoLogin) {
+    return <SupplierPortalTokenGate token={portalTokenDoLogin} onLogout={sairDoPortal} />;
+  }
+  if (selectedLoginGroup === ProfileGroup.BROKER && portalTokenDoLogin) {
+    return <BrokerPortalTokenGate token={portalTokenDoLogin} onLogout={sairDoPortal} />;
+  }
 
   // ── Portal de Crédito (instituição financeira) — antes do Layout ────────────
   // `profileSynchronized` garante que validateAccess já confirmou o convite

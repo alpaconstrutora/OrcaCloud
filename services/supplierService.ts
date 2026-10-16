@@ -4,8 +4,8 @@ import { assertDocumentNotDuplicated } from './documentDuplicateCheck';
 import { organizationService } from './organizationService';
 
 const CNPJA_COLUMNS = 'cnpj_status, cnpj_status_date, cnpj_updated_at, cnpj_founded_at, cnpj_legal_nature, cnpj_company_size, cnpj_main_activity_code, cnpj_main_activity_text, cnpj_side_activities, cnpj_partners, cnpj_simples_optant, cnpj_simples_since, cnpj_simei_optant, cnpj_simei_since, cnpj_state_registrations';
-const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, portal, address, street, number, neighborhood, city, state, zip_code, organization_id, is_shared, settings, created_at, ${CNPJA_COLUMNS}`;
-const SUPPLIER_LIST_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, portal, address, street, number, neighborhood, city, state, zip_code, organization_id, is_shared, settings, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
+const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, portal, portal_invited_at, address, street, number, neighborhood, city, state, zip_code, organization_id, is_shared, settings, created_at, ${CNPJA_COLUMNS}`;
+const SUPPLIER_LIST_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, portal, portal_invited_at, address, street, number, neighborhood, city, state, zip_code, organization_id, is_shared, settings, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
 const CNPJA_PUBLIC_API_BASE = 'https://open.cnpja.com/office';
 const CNPJA_PUBLIC_LIMIT = 5;
 const CNPJA_PUBLIC_WINDOW_MS = 60_000;

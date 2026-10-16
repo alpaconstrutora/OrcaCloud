@@ -1218,7 +1218,7 @@ const Layout: React.FC<LayoutProps> = ({
             </>
           )}
 
-          {profile.group === 'SUPPLIER' && (
+          {profile.group === 'FORNECEDOR' && (
             <>
               <NavGroup label="Meu Painel" />
               <NavItem id="supplier-area" icon={Truck} label="Negociações" />

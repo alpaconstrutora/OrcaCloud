@@ -43,6 +43,10 @@ const DURACAO = { success: 3000, error: 15000 } as const;
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [avisos, setAvisos] = React.useState<ToastMessage[]>([]);
     const seq = React.useRef(0);
+    // Timers pendentes: cancelados no desmonte. Sem isso o timer dispara num
+    // provider que já saiu (nos testes, depois do jsdom ser derrubado:
+    // "window is not defined" — CI de 16/10/2026).
+    const timers = React.useRef(new Set<number>());
 
     const remover = React.useCallback((id: number) => {
         setAvisos(prev => prev.filter(a => a.id !== id));
@@ -52,8 +56,14 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!message || !String(message).trim()) return;
         const id = ++seq.current;
         setAvisos(prev => [...prev.slice(-3), { id, message, type }]); // no máximo 4 na tela
-        window.setTimeout(() => remover(id), DURACAO[type]);
+        const timer = window.setTimeout(() => { timers.current.delete(timer); remover(id); }, DURACAO[type]);
+        timers.current.add(timer);
     }, [remover]);
+
+    React.useEffect(() => {
+        const pendentes = timers.current;
+        return () => { pendentes.forEach(t => window.clearTimeout(t)); pendentes.clear(); };
+    }, []);
 
     return (
         <ToastContext.Provider value={publicar}>

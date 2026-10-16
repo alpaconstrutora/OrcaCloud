@@ -141,7 +141,7 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F11 — saídas (ver "Registro da F11")
 - [x] F12 — sobrado: [x] F12a arquitetura dos dois pavimentos e escada (ver "Registro da F12a") · [x] F12b estrutura e cobertura (ver "Registro da F12b") · [x] F12c instalações (ver "Registro da F12c") · [x] F12d tela e provas (ver "Registro da F12d", com a conferência no app real)
 - [x] F13 — pressão da água por caso: caixa elevada ou pressurizador (ver "Registro da F13")
-- [ ] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [x] F14b forro e plenum (ver "Registro da F14b") · [x] F14c furos, laje rebaixada e um tubo de queda por banheiro (ver "Registro da F14c"; f95aa616 no ar em 16/10) · [ ] F14d linha do ar e dreno; provas
+- [ ] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [x] F14b forro e plenum (ver "Registro da F14b") · [x] F14c furos, laje rebaixada e um tubo de queda por banheiro (ver "Registro da F14c"; f95aa616 no ar em 16/10) · [x] F14d linha do ar e dreno lado a lado (ver "Registro da F14d")
 - [ ] F15 — a casa na unidade do Empreendimento
 
 ## Registro da F1 (14/10/2026)
@@ -1763,3 +1763,8 @@ vão, nenhum encontro linha × dreno).
 parede da porta, dentro do vão dela (o vaso do banheiro social de cima no sobrado a 0°; o chuveiro e o lavatório
 junto da porta nas casas a 30°) — o mobiliário põe a peça diante da porta; a rede só denuncia. Já estava no retrato
 antes da F14.
+
+O teste da F14b ("o horizontal de cada rede, no forro, na cota da faixa dela") exigia um trecho da linha do ar na
+faixa do forro; com a saída direta ela não sobe ao forro. Ele passou a aceitar, para a linha do ar, a saída na cota
+da evaporadora quando TODAS saem pela parede — e continua reprovando qualquer horizontal entre a face do forro e a
+laje fora da faixa, e qualquer encontro entre as quatro redes.

@@ -42,6 +42,10 @@ import { partnerService } from '../../services/partnerService';
 import { situacaoDaParcela } from '../../utils/situacaoParcelaParceiro';
 import { partnerPortalTokenService, PartnerPortalToken } from '../../services/partnerPortalTokenService';
 import { supplierService, getSupplierDisplayName } from '../../services/supplierService';
+import {
+  contatoDoFornecedor, situacaoDoContato, preencherComContato, marcarEditado, formIgualAoContato,
+  type ContatoDoFornecedor, type ConviteCampo, type SituacaoDoContato,
+} from '../../utils/partnerConviteContato';
 import { appSettingsService } from '../../services/appSettingsService';
 import { organizationService } from '../../services/organizationService';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
@@ -496,17 +500,81 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   // dois (UI_PATTERNS: criar e editar registro = Sheet lateral).
   const [editingPartnerUser, setEditingPartnerUser] = useState<PartnerUser | null>(null);
   const [savingPartnerUser, setSavingPartnerUser] = useState(false);
-  const abrirConvite = () => {
+
+  // Contato do fornecedor do workspace — o painel de convite se preenche com ele
+  // (pedido de 16/10/2026; docs/planos/2026-10-16-parceiro-convite-contato-do-fornecedor.md).
+  // O cadastro é Minha organização › Meus Fornecedores (nome do contato em Dados
+  // gerais; e-mail e telefone em Endereços e contatos). `conviteAuto` = campos que
+  // o preenchimento escreveu; editar à mão tira o campo dali (nunca sobrescrever).
+  const [contatoConvite, setContatoConvite] = useState<ContatoDoFornecedor | null>(null);
+  const [situacaoContato, setSituacaoContato] = useState<SituacaoDoContato | 'carregando'>('carregando');
+  const [conviteAuto, setConviteAuto] = useState<Set<ConviteCampo>>(new Set());
+  // O que está no formulário AGORA (para preencher depois do `await` sem passar
+  // por cima do que a pessoa já digitou) e qual abertura do painel é a vigente
+  // (resposta de uma abertura anterior não pode preencher a atual).
+  const inviteUserRef = React.useRef(inviteUser);
+  inviteUserRef.current = inviteUser;
+  const aberturaConviteRef = React.useRef(0);
+
+  const abrirConvite = async () => {
+    const formVazio = { email: '', name: '', phone: '', role: 'GESTOR' as PartnerRole };
+    const abertura = ++aberturaConviteRef.current;
     setEditingPartnerUser(null);
-    setInviteUser({ email: '', name: '', phone: '', role: 'GESTOR' });
+    setInviteUser(formVazio);
+    inviteUserRef.current = formVazio;
+    setConviteAuto(new Set());
+    setContatoConvite(null);
+    setSituacaoContato('carregando');
     setIsInviteUserModalOpen(true);
+    if (!selectedWorkspace) { setSituacaoContato('sem-cadastro'); return; }
+
+    // A lista carregada cobre a org do topo; workspace compartilhado de outra org
+    // pode ter o fornecedor fora dela — aí busca o cadastro pelo id.
+    const supplierId = selectedWorkspace.supplier_id;
+    const daLista = suppliers.find(s => s.id === supplierId) ?? null;
+    let fornecedor = daLista;
+    if (!fornecedor) {
+      // Falhar a leitura não pode travar o convite: vira "sem cadastro" e o
+      // usuário preenche à mão, como antes.
+      try { fornecedor = await supplierService.getById(supplierId); } catch { fornecedor = null; }
+    }
+    if (abertura !== aberturaConviteRef.current) return;
+
+    const contato = contatoDoFornecedor(fornecedor);
+    const situacao = situacaoDoContato(contato, partnerUsers.map(u => u.email));
+    setContatoConvite(contato);
+    setSituacaoContato(situacao);
+    // Sem e-mail ainda preenche nome e telefone (o e-mail a pessoa digita); só o
+    // contato que JÁ é integrante não preenche — seria convidar a mesma pessoa.
+    if ((situacao === 'disponivel' || situacao === 'sem-email') && contato) {
+      // Preenche só o que ainda está vazio: o que já foi digitado fica.
+      const r = preencherComContato(inviteUserRef.current, new Set(), contato);
+      setInviteUser(r.form);
+      setConviteAuto(r.auto);
+    }
   };
+
+  /** "Usar este contato" — o usuário pediu o contato: repõe mesmo o que foi editado. */
+  const usarContatoNoConvite = () => {
+    if (!contatoConvite) return;
+    const r = preencherComContato(inviteUser, conviteAuto, contatoConvite, true);
+    setInviteUser(r.form);
+    setConviteAuto(r.auto);
+  };
+
+  const editarCampoDoConvite = (campo: ConviteCampo, valor: string) => {
+    setInviteUser(prev => ({ ...prev, [campo]: valor }));
+    if (!editingPartnerUser) setConviteAuto(prev => marcarEditado(prev, campo));
+  };
+
   const abrirEdicao = (user: PartnerUser) => {
     setEditingPartnerUser(user);
     setInviteUser({ email: user.email, name: user.name, phone: user.phone || '', role: user.role });
+    setConviteAuto(new Set());
     setIsInviteUserModalOpen(true);
   };
   const fecharPainelIntegrante = () => {
+    aberturaConviteRef.current += 1;   // descarta preenchimento ainda a caminho
     setIsInviteUserModalOpen(false);
     setEditingPartnerUser(null);
   };
@@ -2495,15 +2563,69 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         <form onSubmit={handleInviteUser} className="flex-1 flex flex-col min-h-0">
           <SheetPanel className="px-6 py-6">
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              {/* Contato que o fornecedor já tem em Minha organização › Meus Fornecedores
+                  (pedido de 16/10/2026). Card porque tem estado e ação próprios (§30). */}
+              {!editingPartnerUser && (
+                <div className="col-span-2 rounded-[10px] border border-gray-100 bg-gray-50 p-4 space-y-2" data-testid="convite-contato-fornecedor">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Building2 className="w-4 h-4 text-orange-500 shrink-0" />
+                      <h3 className="text-sm font-semibold text-gray-900 truncate">
+                        Contato em Meus Fornecedores{contatoConvite?.fornecedor ? ` · ${contatoConvite.fornecedor}` : ''}
+                      </h3>
+                    </div>
+                    {(situacaoContato === 'disponivel' || situacaoContato === 'sem-email') && contatoConvite && !formIgualAoContato(inviteUser, contatoConvite) && (
+                      <button
+                        type="button"
+                        onClick={usarContatoNoConvite}
+                        className="shrink-0 h-8 px-3 rounded-[6px] border border-orange-200 bg-white text-[13px] font-medium text-orange-700 hover:bg-orange-50 transition-all active:scale-95"
+                      >
+                        Usar este contato
+                      </button>
+                    )}
+                  </div>
+
+                  {situacaoContato === 'carregando' ? (
+                    <p className="text-sm text-gray-500">Buscando o contato do fornecedor...</p>
+                  ) : situacaoContato === 'sem-cadastro' ? (
+                    <p className="text-sm text-gray-500">Não foi possível ler o cadastro do fornecedor deste parceiro. Preencha os campos abaixo.</p>
+                  ) : contatoConvite && (
+                    <>
+                      <div className="text-sm text-gray-700 space-y-0.5">
+                        <p>{contatoConvite.nome || <span className="text-gray-400">Sem nome de contato</span>}</p>
+                        <p>{contatoConvite.email || <span className="text-gray-400">Sem e-mail</span>}</p>
+                        {contatoConvite.telefone && <p>{contatoConvite.telefone}</p>}
+                      </div>
+                      {situacaoContato === 'ja-integrante' && (
+                        <p className="text-xs text-amber-700">
+                          Este contato já é integrante deste parceiro. Para convidar outra pessoa, preencha os campos abaixo.
+                        </p>
+                      )}
+                      {situacaoContato === 'sem-email' && (
+                        <p className="text-xs text-amber-700">
+                          O fornecedor não tem e-mail cadastrado. Cadastre em Minha organização › Meus Fornecedores › Endereços e contatos, ou informe o e-mail de login abaixo.
+                        </p>
+                      )}
+                      {situacaoContato === 'disponivel' && !contatoConvite.nome && (
+                        <p className="text-xs text-gray-500">
+                          Sem "Nome do contato" no cadastro (Meus Fornecedores › Dados gerais): informe o nome da pessoa abaixo.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1.5 col-span-2">
                 <label className="text-xs font-semibold text-slate-500">Nome completo</label>
                 <input
                   required
                   value={inviteUser.name}
-                  onChange={(e) => setInviteUser({ ...inviteUser, name: e.target.value })}
+                  onChange={(e) => editarCampoDoConvite('name', e.target.value)}
                   placeholder="Nome do integrante..."
                   className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 disabled:text-gray-500 disabled:cursor-not-allowed"
                 />
+                {conviteAuto.has('name') && <p className="text-xs text-gray-400">Preenchido automaticamente</p>}
               </div>
               <div className="space-y-1.5 col-span-2">
                 <label className="text-xs font-semibold text-slate-500">E-mail de login</label>
@@ -2511,21 +2633,23 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   required
                   type="email"
                   value={inviteUser.email}
-                  onChange={(e) => setInviteUser({ ...inviteUser, email: e.target.value })}
+                  onChange={(e) => editarCampoDoConvite('email', e.target.value)}
                   placeholder="email@parceiro.com"
                   disabled={!!editingPartnerUser}
                   title={editingPartnerUser ? 'O e-mail é o login do integrante. Para trocar, exclua e convide de novo.' : undefined}
                   className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 disabled:text-gray-500 disabled:cursor-not-allowed"
                 />
+                {conviteAuto.has('email') && <p className="text-xs text-gray-400">Preenchido automaticamente</p>}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-500">Celular / telefone</label>
                 <input
                   value={inviteUser.phone}
-                  onChange={(e) => setInviteUser({ ...inviteUser, phone: e.target.value })}
+                  onChange={(e) => editarCampoDoConvite('phone', e.target.value)}
                   placeholder="(00) 00000-0000"
                   className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 disabled:text-gray-500 disabled:cursor-not-allowed"
                 />
+                {conviteAuto.has('phone') && <p className="text-xs text-gray-400">Preenchido automaticamente</p>}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-500">Perfil / permissão</label>

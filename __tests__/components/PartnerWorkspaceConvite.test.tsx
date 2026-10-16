@@ -13,6 +13,11 @@
  *  5. (03/10/2026, "o usuário não tem botão editar") Editar abre o mesmo painel
  *     com os dados; o e-mail (login) não muda; salvar grava nome, telefone e
  *     perfil — e NÃO manda convite.
+ *  6–8. (16/10/2026, "Convidar integrante: buscar automaticamente o integrante já
+ *     cadastrado em organização > meus fornecedores") o painel se preenche com o
+ *     contato do fornecedor; editar tira o "Preenchido automaticamente" só do
+ *     campo editado e "Usar este contato" repõe; contato que já é integrante não
+ *     preenche e avisa. Plano: docs/planos/2026-10-16-parceiro-convite-contato-do-fornecedor.md
  */
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -68,8 +73,15 @@ vi.mock('../../services/partnerPortalTokenService', () => ({
     },
 }));
 
+// Padrão: o fornecedor do workspace não é encontrado (o convite abre vazio, como
+// até 15/10/2026) — os testes 6–8 trocam por um fornecedor com contato.
+const listSuppliers = vi.fn();
+const getSupplierById = vi.fn();
 vi.mock('../../services/supplierService', () => ({
-    supplierService: { listSuppliers: vi.fn(async () => []) },
+    supplierService: {
+        listSuppliers: (...a: unknown[]) => listSuppliers(...a),
+        getById: (...a: unknown[]) => getSupplierById(...a),
+    },
     getSupplierDisplayName: (s: { name?: string }) => s?.name ?? '',
 }));
 
@@ -145,6 +157,8 @@ describe('PartnerWorkspaceManager — convite por e-mail', () => {
             ...u, id: 'novo', invited_at: null, created_at: '', updated_at: '',
         }));
         invitePartnerUser.mockResolvedValue({ kind: 'invite' });
+        listSuppliers.mockResolvedValue([]);
+        getSupplierById.mockResolvedValue(null);
     });
 
     it('1. convidar grava o integrante e em seguida envia o convite para ele', async () => {
@@ -211,5 +225,79 @@ describe('PartnerWorkspaceManager — convite por e-mail', () => {
         expect(await screen.findByText('Integrante atualizado.')).toBeInTheDocument();
         await waitFor(() => expect(within(linhaDe('ana@parceiro.com')).getByText('FINANCEIRO')).toBeInTheDocument());
         expect(within(linhaDe('ana@parceiro.com')).getByText('Ana Souza')).toBeInTheDocument();
+    });
+
+    describe('contato do fornecedor (Meus Fornecedores)', () => {
+        const FORNECEDOR = {
+            id: 'sup1', name: 'Construtora Alfa Ltda', nickname: 'Construtora Alfa', type: 'PJ',
+            contact_name: 'Rui Alves', email: 'Rui@Alfa.com.br', phone: '(31) 9 8888-7777',
+        };
+        const abrirConvite = async (user: ReturnType<typeof userEvent.setup>) => {
+            await user.click(screen.getAllByRole('button', { name: /Convidar Integrante/ })[0]);
+            return {
+                nome: screen.getByPlaceholderText('Nome do integrante...') as HTMLInputElement,
+                email: screen.getByPlaceholderText('email@parceiro.com') as HTMLInputElement,
+                telefone: screen.getByPlaceholderText('(00) 00000-0000') as HTMLInputElement,
+                cartao: screen.getByTestId('convite-contato-fornecedor'),
+            };
+        };
+
+        it('6. preenche nome, e-mail e telefone com o contato e diz que foi automático', async () => {
+            listSuppliers.mockResolvedValue([FORNECEDOR]);
+            const user = await abrirUsuarios();
+            const { nome, email, telefone, cartao } = await abrirConvite(user);
+
+            await waitFor(() => expect(email.value).toBe('rui@alfa.com.br'));
+            expect(nome.value).toBe('Rui Alves');
+            expect(telefone.value).toBe('(31) 9 8888-7777');
+            expect(within(cartao).getByText(/Contato em Meus Fornecedores · Construtora Alfa/)).toBeInTheDocument();
+            expect(screen.getAllByText('Preenchido automaticamente')).toHaveLength(3);
+            expect(within(cartao).queryByRole('button', { name: 'Usar este contato' })).toBeNull();
+
+            const form = email.closest('form')!;
+            await user.click(within(form).getByRole('button', { name: 'Convidar Integrante' }));
+            await waitFor(() => expect(savePartnerUser).toHaveBeenCalledWith(expect.objectContaining({
+                email: 'rui@alfa.com.br', name: 'Rui Alves', phone: '(31) 9 8888-7777',
+            })));
+        });
+
+        it('7. editar um campo tira só ele do automático; "Usar este contato" repõe', async () => {
+            listSuppliers.mockResolvedValue([FORNECEDOR]);
+            const user = await abrirUsuarios();
+            const { nome, email, cartao } = await abrirConvite(user);
+            await waitFor(() => expect(email.value).toBe('rui@alfa.com.br'));
+
+            await user.clear(nome);
+            await user.type(nome, 'Outra Pessoa');
+            expect(screen.getAllByText('Preenchido automaticamente')).toHaveLength(2);
+
+            await user.click(within(cartao).getByRole('button', { name: 'Usar este contato' }));
+            expect(nome.value).toBe('Rui Alves');
+            expect(screen.getAllByText('Preenchido automaticamente')).toHaveLength(3);
+        });
+
+        it('9. fornecedor PF sem e-mail: preenche nome e telefone, avisa que falta o e-mail', async () => {
+            listSuppliers.mockResolvedValue([{ id: 'sup1', name: 'Débora Duarte', type: 'PF', contact_name: null, email: null, phone: '35991946539' }]);
+            const user = await abrirUsuarios();
+            const { nome, email, telefone, cartao } = await abrirConvite(user);
+
+            expect(await within(cartao).findByText(/não tem e-mail cadastrado/)).toBeInTheDocument();
+            expect(nome.value).toBe('Débora Duarte');
+            expect(telefone.value).toBe('35991946539');
+            expect(email.value).toBe('');
+            expect(screen.getAllByText('Preenchido automaticamente')).toHaveLength(2);
+        });
+
+        it('8. contato que já é integrante não preenche e avisa; fornecedor fora da lista é lido pelo id', async () => {
+            getSupplierById.mockResolvedValue({ ...FORNECEDOR, email: 'ANA@parceiro.com' });
+            const user = await abrirUsuarios();
+            const { nome, email, cartao } = await abrirConvite(user);
+
+            expect(await within(cartao).findByText(/já é integrante deste parceiro/)).toBeInTheDocument();
+            expect(getSupplierById).toHaveBeenCalledWith('sup1');
+            expect(email.value).toBe('');
+            expect(nome.value).toBe('');
+            expect(screen.queryByText('Preenchido automaticamente')).toBeNull();
+        });
     });
 });

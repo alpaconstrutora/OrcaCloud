@@ -66,3 +66,12 @@ describe('F13 — a pressão nas premissas', () => {
     expect(hipotesesDasPremissas(p).pressao).toEqual({ resolver: true, caixaElevadaAteMm: 5000, potenciaDoPressurizadorW: 370 });
   });
 });
+
+describe('F14b — o forro nas premissas', () => {
+  it('o grupo do forro completa como os outros e vira a hipótese do motor (as faixas ficam com o padrão dele)', () => {
+    expect(premissasDaCasaDaColuna({}).forro).toEqual({ lancar: true, peDireitoLivrePermanenciaMm: 2500, peDireitoLivreDemaisMm: 2300, pisoAcabadoMm: 50 });
+    const p = premissasDaCasaDaColuna({ forro: { lancar: false, peDireitoLivrePermanenciaMm: 2600, pisoAcabadoMm: 'x' } });
+    expect(p.forro).toEqual({ lancar: false, peDireitoLivrePermanenciaMm: 2600, peDireitoLivreDemaisMm: 2300, pisoAcabadoMm: 50 });
+    expect(hipotesesDasPremissas(p).forro).toEqual({ lancar: false, peDireitoLivrePermanenciaMm: 2600, peDireitoLivreDemaisMm: 2300, pisoAcabadoMm: 50 });
+  });
+});

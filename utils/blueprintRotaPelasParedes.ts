@@ -111,6 +111,18 @@ export function arvorePelasParedes(opts: {
   obstaculos?: readonly Point[][];
   /** F8b: contornar cada pilar por um anel a esta distância da face (mm). Ausente ou 0 = só a penalidade. */
   contornoDoPilarMm?: number;
+  /**
+   * F14b: as paredes em que a raiz e os pendentes PODEM encaixar (as outras só servem de caminho). No forro, a
+   * TRAVESSIA de um cômodo ao outro é passagem: o ponto que caía nela descia no meio da parede, no mesmo lugar para
+   * a fria e a quente (a travessia de todas fica no meio do mesmo trecho). Ausente = todas.
+   */
+  encaixarEm?: (w: Wall) => boolean;
+  /**
+   * F14b: o custo a mais de cada lado do anel de contorno, mm. Ausente = `PENALIDADE_DO_ANEL_MM` (a volta pelas
+   * paredes ganha do contorno). No forro, o contorno de um shaft ou de uma prumada é o caminho certo — com a
+   * penalidade cheia, a água quente do sobrado dava 7 m de volta pelo outro lado do cômodo.
+   */
+  penalidadeDoAnelMm?: number;
 }): ArvorePelasParedes {
   const { paredes, raioDeEncaixeMm } = opts;
   const obstaculos = opts.obstaculos ?? [];
@@ -134,7 +146,7 @@ export function arvorePelasParedes(opts: {
     if (ka === kb) return;
     posicao.set(ka, a);
     posicao.set(kb, b);
-    const mm = custoComPilares(a, b, obstaculos) + (noAnel ? PENALIDADE_DO_ANEL_MM : 0);
+    const mm = custoComPilares(a, b, obstaculos) + (noAnel ? (opts.penalidadeDoAnelMm ?? PENALIDADE_DO_ANEL_MM) : 0);
     const va = vizinhos.get(ka) ?? [];
     if (!va.some((v) => v.k === kb)) va.push({ k: kb, mm });
     vizinhos.set(ka, va);
@@ -164,7 +176,7 @@ export function arvorePelasParedes(opts: {
   }
   // Raiz e pendentes: a projeção na parede mais próxima.
   const encaixar = (p: P2): P2 | null => {
-    const e = encaixarNaParede(p, ordenadas, raioDeEncaixeMm);
+    const e = encaixarNaParede(p, opts.encaixarEm ? ordenadas.filter(opts.encaixarEm) : ordenadas, raioDeEncaixeMm);
     if (!e) return null;
     // E5.5: a descida até o ponto não fica dentro de pilar — escorrega pela parede.
     // F8b: com anel, escorrega para fora do ANEL (o grafo não tem nó dentro dele).

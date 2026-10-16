@@ -61,6 +61,8 @@ declare global {
         errosDeRede: number;
         pressaoInsuficiente: { fria: number; quente: number };
         pressurizador: boolean;
+        /** F14b: o forro e os encontros entre as quatro redes que correm nele (eletroduto, linha, quente, fria). */
+        forro: { comodos: number; peDireitoLivreMinimoMm: number | null; encontros: number } | null;
       } | null;
       /** F12d: o sobrado (null na térrea). */
       sobrado: {
@@ -283,6 +285,7 @@ window.__estado = {
     errosDeRede: plano.resumo.hidraulica.verificacao.erros + plano.resumo.climatizacao.verificacao.erros,
     pressaoInsuficiente: plano.resumo.hidraulica.pressaoInsuficiente,
     pressurizador: model.terminais.some((t) => t.tipoHidraulico === 'BOMBA'),
+    forro: plano.resumo.forro ? { ...plano.resumo.forro, encontros: encontrosNoForro(model) } : null,
   },
   sobrado: sobradoDoModelo(model),
 };
@@ -291,6 +294,13 @@ document.getElementById('dump')!.textContent = [
   ...plano.etapas.map((e) => `${e.id} ${e.situacao}${e.nota ? ` — ${e.nota}` : ''}`),
   ...plano.pendencias.map((p) => `· ${p.grupo}: ${p.texto}`),
 ].join('\n');
+
+/** F14b: os encontros (REDE × REDE) entre as quatro redes que correm nas faixas do forro. */
+function encontrosNoForro(m: BlueprintModel): number {
+  const redes = new Set(['AGUA_FRIA', 'AGUA_QUENTE', 'ELETRICA', 'FRIGORIGENA']);
+  const porId = new Map((m.trechos ?? []).map((t) => [t.id, t]));
+  return conflitosDoModelo(m).filter((c) => c.classe === 'REDE' && redes.has(porId.get(c.trechoId)?.disciplina ?? '') && redes.has(porId.get(c.outroId)?.disciplina ?? '')).length;
+}
 
 function App() {
   // Enquadra depois da 1ª medida do container (a vista inicial não centraliza o desenho).

@@ -37,6 +37,11 @@ export interface PremissasDaCasa {
   sobrado: { lajeEntrePavimentosMm: number; shaftMm: number };
   /** F13: a pressão por caso — até quanto a caixa sobe; acima disso, o pressurizador (e a potência dele). */
   pressao: { caixaElevadaAteMm: number; potenciaDoPressurizadorW: number };
+  /**
+   * F14b: o forro dos cômodos, com as redes nas faixas do plenum (desligado = as redes 10 cm sob a viga), e o pé-direito
+   * livre mínimo que ele respeita. As faixas de cada rede seguem o padrão do motor (`HIPOTESES_DO_FORRO_DA_CASA_PADRAO`).
+   */
+  forro: { lancar: boolean; peDireitoLivrePermanenciaMm: number; peDireitoLivreDemaisMm: number; pisoAcabadoMm: number };
 }
 
 export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
@@ -50,6 +55,7 @@ export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
   pavimentos: 1,
   sobrado: { lajeEntrePavimentosMm: 100, shaftMm: 400 },
   pressao: { caixaElevadaAteMm: 2000, potenciaDoPressurizadorW: 370 },
+  forro: { lancar: true, peDireitoLivrePermanenciaMm: 2500, peDireitoLivreDemaisMm: 2300, pisoAcabadoMm: 50 },
 };
 
 /** Os valores aceitos de cada enumerado (o resto cai no padrão). */
@@ -101,6 +107,7 @@ export function premissasDaCasaDaColuna(raw: unknown): PremissasDaCasa {
     pavimentos: r.pavimentos === 2 ? 2 : 1,
     sobrado: completar(r.sobrado, PREMISSAS_DA_CASA_PADRAO.sobrado),
     pressao: completar(r.pressao, PREMISSAS_DA_CASA_PADRAO.pressao),
+    forro: completar(r.forro, PREMISSAS_DA_CASA_PADRAO.forro),
   };
 }
 
@@ -120,5 +127,7 @@ export function hipotesesDasPremissas(p: PremissasDaCasa): Partial<HipotesesDaCa
     pavimentos: p.pavimentos,
     sobrado: { lajeEntrePavimentosMm: p.sobrado.lajeEntrePavimentosMm, shaftMm: p.sobrado.shaftMm } as HipotesesDaCasa['sobrado'],
     pressao: { resolver: true, caixaElevadaAteMm: p.pressao.caixaElevadaAteMm, potenciaDoPressurizadorW: p.pressao.potenciaDoPressurizadorW },
+    // O motor completa o resto do grupo (as faixas) com o padrão dele.
+    forro: { lancar: p.forro.lancar, peDireitoLivrePermanenciaMm: p.forro.peDireitoLivrePermanenciaMm, peDireitoLivreDemaisMm: p.forro.peDireitoLivreDemaisMm, pisoAcabadoMm: p.forro.pisoAcabadoMm } as HipotesesDaCasa['forro'],
   };
 }

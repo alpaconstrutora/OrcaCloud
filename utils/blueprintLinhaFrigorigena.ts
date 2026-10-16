@@ -40,7 +40,7 @@
  * é por coincidência exata (`conexoes.ts`), e é assim que a evaporadora conta
  * como peça no fim da linha (FRIGORIGENA) e do dreno (DRENO_AC).
  */
-import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho, Wall } from './blueprintKernel';
 import { TIPOS_DE_CONDENSADORA, TIPOS_DE_EVAPORADORA, applyBatch } from './blueprintKernel';
 import { conexoesDerivadas } from './blueprintKernel/conexoes';
 import { comprimentoMm, fazerChave, menorCaminhoEntre, type Aresta, type No } from './blueprintGrafoDeRede';
@@ -49,6 +49,7 @@ import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, desvioDoPilar, fundoDaVigaMais
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { componentesSugeridos, lancesDaPrumada, pavimentosEntre, pontoDaPrumada } from './blueprintPrumadaClimatizacao';
 import { HIPOTESES_DA_LINHA_PADRAO, type HipotesesDaLinha } from './blueprintClimatizacao';
+import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, type FaixaDoForro } from './blueprintRotaPeloForro';
 import type { ItemConferido } from './blueprintConferenciaClimatizacao';
 
 // ─── E5.2: a tabela por capacidade (HIPÓTESE de fabricante) ──────────────────
@@ -274,9 +275,9 @@ export function verticeNoCaminho(pontos: readonly P2[], distanciaMm: number): { 
 }
 
 /** A polilinha em planta da peça `de` à peça `para`, pelo eixo das paredes; reta (com desvio de pilar) quando não há parede perto. */
-function caminhoEmPlanta(model: BlueprintModel, levelId: ObjectId, de: P2, para: P2, hip: HipotesesDaLinha): { pontos: P2[]; pelaParede: boolean } {
-  const paredes = model.walls.filter((w) => w.levelId === levelId);
-  const pegadas = pegadasDePilares(model, levelId);
+function caminhoEmPlanta(model: BlueprintModel, levelId: ObjectId, de: P2, para: P2, hip: HipotesesDaLinha, paredesDaRota?: readonly Wall[], obstaculosExtras: readonly Point[][] = []): { pontos: P2[]; pelaParede: boolean } {
+  const paredes = paredesDaRota ?? model.walls.filter((w) => w.levelId === levelId);
+  const pegadas = [...pegadasDePilares(model, levelId), ...obstaculosExtras];
   const reta = (): P2[] => {
     const desvio = desvioDoPilar(de, para, pegadas) ?? [];
     return [de, ...desvio, para];
@@ -284,7 +285,7 @@ function caminhoEmPlanta(model: BlueprintModel, levelId: ObjectId, de: P2, para:
   if (paredes.length === 0) return { pontos: reta(), pelaParede: false };
   // F9 da casa automática (15/10/2026): com pilar em todo encontro de paredes, a penalidade não desvia — o pilar
   // vira ANEL no grafo (como a água e o alimentador na F8b).
-  const arvore = arvorePelasParedes({ paredes, raiz: de, pendentes: [para], raioDeEncaixeMm: hip.raioDeEncaixeMm, obstaculos: pegadas, contornoDoPilarMm: CONTORNO_DO_PILAR_MM });
+  const arvore = arvorePelasParedes({ paredes, raiz: de, pendentes: [para], raioDeEncaixeMm: hip.raioDeEncaixeMm, obstaculos: pegadas, contornoDoPilarMm: CONTORNO_DO_PILAR_MM, encaixarEm: encaixaNoAnel, ...(paredesDaRota ? { penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}) });
   const q1 = arvore.encaixe.get(chaveP(para));
   if (!arvore.raiz || !q1) return { pontos: reta(), pelaParede: false };
   // As duas peças diante do MESMO ponto da parede (a condensadora logo atrás da
@@ -396,7 +397,18 @@ export function sugeridosDaLinha(model: BlueprintModel, levelId: ObjectId): { tr
 }
 
 /** O plano da linha e do dreno de todos os sistemas do pavimento. */
-export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: ObjectId, hip: HipotesesDaLinha): PlanoDaLinha {
+/**
+ * F14b da casa automática (16/10/2026, "forro com faixas" + "manter 2,80 m, furar vigas"): a linha NO FORRO — na cota
+ * da faixa dela e pelos anéis dos cômodos (`paredesDoForro`, afastada da face; nunca dentro da viga); sai da
+ * evaporadora para o lado do cômodo e sobe junto da parede ao forro. O dreno não muda (F14d).
+ */
+export interface LinhaNoForro {
+  faixa: FaixaDoForro;
+  folgaSobAVigaMm: number;
+}
+
+export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: ObjectId, hip: HipotesesDaLinha, opcoes: { noForro?: LinhaNoForro | null } = {}): PlanoDaLinha {
+  const noForro = opcoes.noForro ?? null;
   const vazio = (motivo: string, apagar: Command[] = []): PlanoDaLinha => ({ comandos: apagar, aCriar: [], jaLigados: [], semLugar: [], apagados: apagar.length, motivo, resumo: [] });
   // Relançar apaga o que este planejador sugeriu antes: a linha do SPLIT deste pavimento (C1: onde
   // quer que esteja — a prumada atravessa outros), o dreno e as peças de dreno sugeridas. A árvore do
@@ -444,8 +456,10 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     // linha, ela corre 10 cm abaixo do fundo dela (a regra do eletroduto e do barrilete), com aviso.
     const nivelDaEvap = base.levels.find((x) => x.id === e.levelId);
     const fundoDaViga = nivelDaEvap ? fundoDaVigaMaisBaixaMm(base, e.levelId, nivelDaEvap.defaultHeightMm) : null;
-    const cotaLinha = fundoDaViga != null && fundoDaViga - ABAIXO_DA_VIGA_MM < hip.cotaDaLinhaMm ? Math.round(fundoDaViga - ABAIXO_DA_VIGA_MM) : Math.round(hip.cotaDaLinhaMm);
-    if (cotaLinha !== Math.round(hip.cotaDaLinhaMm)) avisos.push(`linha a ${(cotaLinha / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m do piso — 10 cm abaixo da viga mais baixa do teto`);
+    const cotaLinha = noForro && nivelDaEvap
+      ? cotaDaFaixa(nivelDaEvap.defaultHeightMm, noForro.faixa)
+      : fundoDaViga != null && fundoDaViga - ABAIXO_DA_VIGA_MM < hip.cotaDaLinhaMm ? Math.round(fundoDaViga - ABAIXO_DA_VIGA_MM) : Math.round(hip.cotaDaLinhaMm);
+    if (!noForro && cotaLinha !== Math.round(hip.cotaDaLinhaMm)) avisos.push(`linha a ${(cotaLinha / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m do piso — 10 cm abaixo da viga mais baixa do teto`);
     let comprimento = 0;
     const desnivel = desnivelDoSistemaMm(base, s);
     // C1: a condensadora em OUTRO pavimento — a linha vai até a PRUMADA e sobe/desce por ela.
@@ -454,14 +468,24 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     /** Onde a linha sai deste pavimento: a prumada, ou a própria condensadora. */
     const saidaAt = prumada?.at ?? c.at;
     if (precisaLinha) {
-      const caminho = caminhoEmPlanta(base, levelId, s.evaporadora.at, saidaAt, hip);
+      const paredesDaRota = noForro ? paredesDoForro(base, levelId, noForro.faixa.afastamentoDaFaceMm) : undefined;
+      // F14b: as prumadas das outras redes (as colunas de água) que cruzam a faixa da linha são obstáculo.
+      const prumadas = noForro ? prumadasQueCruzam(base, levelId, cotaLinha, 'FRIGORIGENA', 2 * (faixa.succaoMm / 2 + isolamentoMm) + 5) : [];
+      const caminho = caminhoEmPlanta(base, levelId, s.evaporadora.at, saidaAt, hip, paredesDaRota, prumadas);
       if (!caminho.pelaParede) avisos.push('sem parede ao alcance: a linha vai em reta (desviando de pilar)');
       const baseLinha = { levelId, disciplina: 'FRIGORIGENA' as const, bitolaMm: faixa.liquidoMm, bitolaSuccaoMm: faixa.succaoMm, isolamentoMm, sugerido: true };
       // Sobe da evaporadora à cota da linha, corre, desce à condensadora.
       const p = caminho.pontos;
       const antes = l.comandos.length;
-      l.add(baseLinha, e.at, e.cotaMm, e.at, cotaLinha);
-      for (let i = 0; i + 1 < p.length; i++) l.add(baseLinha, p[i], cotaLinha, p[i + 1], cotaLinha);
+      if (noForro && caminho.pelaParede && p.length >= 2) {
+        // F14b: sai da evaporadora para o anel do forro na cota dela e sobe ali (junto da parede, no caixote).
+        l.add(baseLinha, e.at, e.cotaMm, p[1], e.cotaMm);
+        l.add(baseLinha, p[1], e.cotaMm, p[1], cotaLinha);
+        for (let i = 1; i + 1 < p.length; i++) l.add(baseLinha, p[i], cotaLinha, p[i + 1], cotaLinha);
+      } else {
+        l.add(baseLinha, e.at, e.cotaMm, e.at, cotaLinha);
+        for (let i = 0; i + 1 < p.length; i++) l.add(baseLinha, p[i], cotaLinha, p[i + 1], cotaLinha);
+      }
       if (!prumada) {
         l.add(baseLinha, c.at, cotaLinha, c.at, c.cotaMm);
       } else {
@@ -472,7 +496,7 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
           l.add({ ...baseLinha, levelId: lance.levelId }, prumada.at, lance.cotaAMm, prumada.at, lance.cotaBMm);
         }
         if (!direto) {
-          const noDestino = caminhoEmPlanta(base, c.levelId, prumada.at, c.at, hip);
+          const noDestino = caminhoEmPlanta(base, c.levelId, prumada.at, c.at, hip, noForro ? paredesDoForro(base, c.levelId, noForro.faixa.afastamentoDaFaceMm) : undefined);
           if (!noDestino.pelaParede) avisos.push(`em ${nomeDoNivel(c.levelId)}, sem parede ao alcance: a linha vai em reta do shaft à condensadora`);
           const q = noDestino.pontos;
           for (let i = 0; i + 1 < q.length; i++) l.add({ ...baseLinha, levelId: c.levelId }, q[i], cotaLinha, q[i + 1], cotaLinha);

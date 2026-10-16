@@ -8,7 +8,7 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { conferirPlanoDaCasa, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
 import { PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
@@ -86,6 +86,7 @@ describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
       ['CLIMATIZACAO', 'NAO_RODOU'], // sem o catálogo de evaporadoras na entrada
       ['DR_DPS', 'LANCOU'],
       ['ELETRODUTOS', 'LANCOU'],
+      ['FORRO', 'LANCOU'],
       ['CONFERENCIA', 'CALCULOU'],
     ]);
     expect(plano.comandos.slice(0, 3).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
@@ -145,7 +146,7 @@ describe('planejarCasa — o que falta vira motivo, nunca exceção', () => {
     expect(p.comandos).toEqual([]);
     expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
     expect(p.etapas[0].nota).toMatch(/FRENTE/);
-    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(22).fill('NAO_RODOU'));
+    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(23).fill('NAO_RODOU'));
   });
 
   it('pavimento inexistente', () => {
@@ -924,5 +925,86 @@ describe('planejarCasa — F14a: as faixas das redes na parede e no shaft', () =
       return !!esg && !!ag && esg.a.x === esg.b.x && esg.a.y === esg.b.y;
     });
     expect(encontros).toEqual([]);
+  });
+});
+
+describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro com faixas", "manter 2,80 m, furar vigas")', () => {
+  const modelos = modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades })));
+  const comAr = (m: BlueprintModel) =>
+    entrada(m, {
+      hidro: { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } },
+      modelosDeClimatizacao: modelos,
+      climatizacao: { ...HIPOTESES_CLIMATIZACAO_PADRAO, clima: { cidade: null, tbsExternaC: 34, tbuExternaC: 25, altitudeM: 0 } },
+    });
+  const planos = new Map<number, ReturnType<typeof planejarCasa>>();
+  const casa = (pavimentos: 1 | 2) => {
+    if (!planos.has(pavimentos)) {
+      const m = lote();
+      planos.set(pavimentos, planejarCasa(m, comAr(m), { pavimentos }));
+    }
+    return planos.get(pavimentos)!;
+  };
+  /** As quatro redes que correm no forro, cada uma na sua faixa (o esgoto suspenso do sobrado fica para a F14c). */
+  const REDES_DO_FORRO = new Set(['AGUA_FRIA', 'AGUA_QUENTE', 'ELETRICA', 'FRIGORIGENA']);
+  const F = HIPOTESES_DO_FORRO_DA_CASA_PADRAO;
+  const FAIXA: Record<string, number> = { ELETRICA: F.eletrica.abaixoDoTetoMm, FRIGORIGENA: F.frigorigena.abaixoDoTetoMm, AGUA_QUENTE: F.aguaQuente.abaixoDoTetoMm, AGUA_FRIA: F.aguaFria.abaixoDoTetoMm };
+  const comNome = (r: BlueprintModel) => r.spaces.filter((s) => (s.name ?? '').trim() && !/escada/i.test(s.name ?? ''));
+  const etiqueta = (r: BlueprintModel, s: BlueprintModel['spaces'][number]) => r.labels.find((l) => l.levelId === s.levelId && pointInPolygon(s.ring, l.at));
+
+  it.each([1, 2] as const)('%i pavimento(s): forro em todo cômodo com nome (menos a escada), no rebaixo das faixas, com o pé-direito livre do uso; a luz na face dele', (pavimentos) => {
+    const p = casa(pavimentos);
+    const r = p.resultado;
+    expect(p.etapas.find((e) => e.id === 'FORRO')?.situacao).toBe('LANCOU');
+    const rebaixo = rebaixoDoForroMm(F);
+    for (const s of comNome(r)) expect(etiqueta(r, s)?.acabamentos?.forro?.rebaixoMm, s.name).toBe(rebaixo);
+    expect(p.resumo.forro?.comodos).toBe(comNome(r).length);
+    expect(p.resumo.forro!.peDireitoLivreMinimoMm!).toBeGreaterThanOrEqual(F.peDireitoLivrePermanenciaMm);
+    expect(p.pendencias.some((x) => /pé-direito livre abaixo do mínimo/.test(x.texto))).toBe(false);
+    const luzes = (r.terminais ?? []).filter((t) => t.tipoEletrico === 'ILUMINACAO_TETO');
+    expect(luzes.length).toBeGreaterThan(0);
+    for (const t of luzes) {
+      const s = comNome(r).find((x) => x.levelId === t.levelId && pointInPolygon(x.ring, t.at));
+      if (!s) continue;
+      const forro = etiqueta(r, s)!.acabamentos!.forro!;
+      const teto = r.levels.find((l) => l.id === t.levelId)!.defaultHeightMm;
+      expect(t.cotaMm, s.name).toBe(teto - forro.rebaixoMm - forro.camadas.reduce((n, c) => n + c.espessuraMm, 0));
+    }
+  });
+
+  it.each([1, 2] as const)('%i pavimento(s): nenhum encontro entre eletroduto, linha do ar, água quente e fria — e o horizontal de cada uma, no forro, na cota da faixa dela', (pavimentos) => {
+    const r = casa(pavimentos).resultado;
+    const porId = new Map((r.trechos ?? []).map((t) => [t.id, t]));
+    const encontros = conflitosDoModelo(r)
+      .filter((c) => c.classe === 'REDE' && REDES_DO_FORRO.has(porId.get(c.trechoId)!.disciplina) && REDES_DO_FORRO.has(porId.get(c.outroId)!.disciplina))
+      .map((c) => `${porId.get(c.trechoId)!.disciplina}×${porId.get(c.outroId)!.disciplina}`);
+    expect(encontros).toEqual([]);
+    // Acima da face do forro e abaixo da laje, o horizontal de cada rede só corre na faixa dela.
+    const foraDaFaixa = (r.trechos ?? []).filter((t) => {
+      if (!REDES_DO_FORRO.has(t.disciplina) || t.cotaAMm !== t.cotaBMm || (t.a.x === t.b.x && t.a.y === t.b.y)) return false;
+      const teto = r.levels.find((l) => l.id === t.levelId)!.defaultHeightMm;
+      const faceDoForro = teto - rebaixoDoForroMm(F) - 14;
+      return t.cotaAMm > faceDoForro && t.cotaAMm < teto && t.cotaAMm !== teto - FAIXA[t.disciplina];
+    });
+    expect(foraDaFaixa.map((t) => `${t.disciplina}@${t.cotaAMm}`)).toEqual([]);
+    const temNaFaixa = (d: string) => (r.trechos ?? []).some((t) => t.disciplina === d && t.cotaAMm === t.cotaBMm && t.cotaAMm === 2800 - FAIXA[d]);
+    for (const d of REDES_DO_FORRO) expect(temNaFaixa(d), d).toBe(true);
+  });
+
+  it('térrea: nenhuma dessas redes em vão de porta ou janela (o aquecedor ao lado da janela; o dreno do ar é a F14d)', () => {
+    const r = casa(1).resultado;
+    const porId = new Map((r.trechos ?? []).map((t) => [t.id, t]));
+    const noVao = conflitosDoModelo(r).filter((c) => c.classe === 'ABERTURA' && REDES_DO_FORRO.has(porId.get(c.trechoId)!.disciplina));
+    expect(noVao.map((c) => porId.get(c.trechoId)!.disciplina)).toEqual([]);
+  });
+
+  it('desligado (`forro.lancar: false`): como até a F14a — sem forro, a luz no teto, o ramal 10 cm sob a viga', () => {
+    const m = lote();
+    const p = planejarCasa(m, comAr(m), { forro: { ...F, lancar: false } });
+    const r = p.resultado;
+    expect(p.etapas.find((e) => e.id === 'FORRO')?.situacao).toBe('NAO_EXIGIDA');
+    expect(p.resumo.forro).toBeNull();
+    expect(r.labels.some((l) => l.acabamentos?.forro)).toBe(false);
+    expect((r.terminais ?? []).filter((t) => t.tipoEletrico === 'ILUMINACAO_TETO').every((t) => t.cotaMm === 2800)).toBe(true);
+    expect((r.trechos ?? []).some((t) => t.disciplina === 'AGUA_FRIA' && t.cotaAMm === 2200 && t.cotaBMm === 2200)).toBe(true);
   });
 });

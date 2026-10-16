@@ -265,6 +265,17 @@ export default function TelaCasaAutomatica(props: Props) {
             </label>
             <Numero rotulo="Elevar a caixa d'água até (m)" valor={p.pressao.caixaElevadaAteMm / 1000} min={0} max={15} passo={0.5} onValor={(v) => v != null && set('pressao', { caixaElevadaAteMm: Math.round(v * 1000) })} />
             <Numero rotulo="Pressurizador (W)" valor={p.pressao.potenciaDoPressurizadorW} min={100} max={3000} passo={10} onValor={(v) => v != null && set('pressao', { potenciaDoPressurizadorW: Math.round(v) })} />
+            <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700">
+              <input type="checkbox" checked={p.forro.lancar} onChange={(e) => set('forro', { lancar: e.target.checked })} className="h-4 w-4 rounded border-gray-300" data-testid="forro-da-casa" />
+              Forro com as redes no plenum
+            </label>
+            {p.forro.lancar && (
+              <>
+                <Numero rotulo="Pé-direito livre: sala, dormitório, cozinha (m)" valor={p.forro.peDireitoLivrePermanenciaMm / 1000} min={2.2} max={3.5} passo={0.05} onValor={(v) => v != null && set('forro', { peDireitoLivrePermanenciaMm: Math.round(v * 1000) })} />
+                <Numero rotulo="Pé-direito livre: banheiro, serviço, circulação (m)" valor={p.forro.peDireitoLivreDemaisMm / 1000} min={2.1} max={3.5} passo={0.05} onValor={(v) => v != null && set('forro', { peDireitoLivreDemaisMm: Math.round(v * 1000) })} />
+                <Numero rotulo="Piso acabado (cm)" valor={p.forro.pisoAcabadoMm / 10} min={0} max={15} passo={0.5} onValor={(v) => v != null && set('forro', { pisoAcabadoMm: Math.round(v * 10) })} />
+              </>
+            )}
             {p.pavimentos === 2 && (
               <>
                 <Numero rotulo="Laje entre os pavimentos (cm)" valor={p.sobrado.lajeEntrePavimentosMm / 10} min={8} max={30} onValor={(v) => v != null && set('sobrado', { lajeEntrePavimentosMm: Math.round(v * 10) })} />

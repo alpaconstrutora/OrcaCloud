@@ -205,6 +205,23 @@ export function entradaDaRota(pathname: string): EntradaDoPortal | null {
     return Object.values(ENTRADAS_DO_PORTAL).find(e => e.rota === limpo) ?? null;
 }
 
+/**
+ * A entrada própria do endereço ATUAL — lido NA HORA, a cada chamada.
+ * `null` quando o endereço não é uma entrada ou traz `?token=` (aí o gate do link manda).
+ *
+ * ⚠️ Nunca memorizar (useMemo/useRef) o resultado no App: um login recusado troca o
+ * endereço para "/" com `replaceState`, e o efeito de rota precisa ver a troca para
+ * PARAR de forçar o portal. Em 16/10/2026 a primeira versão genérica memorizava a
+ * entrada na carga e, depois da recusa, a tela voltava ao login do mesmo portal com
+ * o endereço já em "/" — o seletor nunca aparecia (medido em produção, Playwright).
+ * O código antigo de /portal-parceiro lia `window.location.pathname` a cada execução.
+ */
+export function entradaDaUrlAtual(): EntradaDoPortal | null {
+    if (typeof window === 'undefined') return null;
+    if (new URLSearchParams(window.location.search).get('token')) return null;
+    return entradaDaRota(window.location.pathname);
+}
+
 /** Para onde "Sair" leva: a página do próprio portal, ou o seletor de portais. */
 export function destinoAposSair(grupo: ProfileGroup | null | undefined): string {
     return rotaDeEntradaDoPortal(grupo) ?? '/';

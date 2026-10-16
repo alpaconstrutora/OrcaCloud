@@ -1314,7 +1314,9 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 Portal do Investidor (§24/§20.2.1): a casca é dona do gutter
                 `p-4 md:p-6`, então NÃO existe mais o full-bleed `-mx-4 -mt-4` —
                 o guard de App.tsx não aplica padding próprio. ══ */}
-            {isStandalone && (
+            {/* Só no acesso pelo LINK. Quem entrou por e-mail e senha (`onLogout`
+                presente, 16/10/2026) não está num link público. */}
+            {isStandalone && !onLogout && (
                 <div className="hidden md:flex h-9 bg-[#FDEDE8] border-b border-[#F3D9D1] items-center justify-center gap-3 shrink-0 text-xs font-bold text-[#C24428] uppercase tracking-wider">
                     <span>Acesso via link público</span>
                 </div>

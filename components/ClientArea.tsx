@@ -4113,7 +4113,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             : 'portal-mobile-font min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-6'}>
 
             {/* ══ Casca do portal público — banner + header + sidebar (espelha o Portal do Corretor) ══ */}
-            {isStandalone && (
+            {/* Só no acesso pelo LINK. Quem entrou por e-mail e senha (`onLogout`
+                presente, 16/10/2026) não está num link público. */}
+            {isStandalone && !onLogout && (
                 <div className="hidden md:flex h-9 bg-[#FDEDE8] border-b border-[#F3D9D1] items-center justify-center gap-3 shrink-0 text-xs font-bold text-[#C24428] uppercase tracking-wider">
                     <span>Acesso via link público</span>
                 </div>

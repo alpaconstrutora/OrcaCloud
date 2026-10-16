@@ -6,7 +6,7 @@ import LoginGateway from './components/LoginGateway';
 // Estático como o Auth (não lazy): é a primeira tela de uma rota de entrada, e um
 // Suspense ali viraria um piscar de loader antes do formulário.
 import PortalLogin from './components/portal/PortalLogin';
-import { entradaDoPortal, entradaDaRota, rotaDeEntradaDoPortal } from './lib/entradasDoPortal';
+import { entradaDoPortal, entradaDaUrlAtual, rotaDeEntradaDoPortal } from './lib/entradasDoPortal';
 
 const AIChat      = React.lazy(() => import('./components/AIChat'));
 const ProjectModal = React.lazy(() => import('./components/ProjectModal'));
@@ -725,11 +725,15 @@ const App: React.FC = () => {
   // à mesma tela — "entra e cai". Um login recusado troca o endereço para "/"
   // (efeito logo abaixo). O cartão do seletor também troca o endereço para a rota
   // (`onSelectGroup`), então "Sair" do portal volta a esta mesma página.
-  const entradaDaRotaAtual = React.useMemo(() => entradaDaRota(window.location.pathname), []);
-  const tokenNaUrl = React.useMemo(() => new URLSearchParams(window.location.search).get('token'), []);
+  //
+  // ⚠️ O endereço é lido NA HORA (`entradaDaUrlAtual()`), a cada execução — nunca
+  // memorizado. A recusa abaixo troca o endereço para "/", e este efeito precisa ver
+  // a troca para parar de forçar o portal (16/10/2026: memorizado, a tela voltava
+  // ao login do mesmo portal com o endereço em "/" e o seletor nunca aparecia).
   React.useEffect(() => {
-    // Com ?token= o gate do link tem precedência (guards públicos abaixo).
-    if (!entradaDaRotaAtual || tokenNaUrl) return;
+    // Sem entrada própria no endereço, ou com ?token= (o gate do link manda).
+    const entrada = entradaDaUrlAtual();
+    if (!entrada) return;
     // Tipo do link capturado na carga — o Supabase já apagou o hash (lib/linkDeAcesso.ts).
     const vindoDoConvite = !!tipoDoLinkDeAcesso;
     if (loadingSession && !vindoDoConvite) return;
@@ -737,18 +741,18 @@ const App: React.FC = () => {
     // (quem recarregou a página). Sessão vinda de outra aba não é empurrada para
     // este portal — ver lib/loginNestaAba.ts.
     const deveForcar = vindoDoConvite || !session || (!selectedLoginGroup && loginFeitoNestaAba(session?.user?.email));
-    if (deveForcar && selectedLoginGroup !== entradaDaRotaAtual.grupo) selectLoginGroupForRoute(entradaDaRotaAtual.grupo);
-  }, [entradaDaRotaAtual, tokenNaUrl, loadingSession, session, selectedLoginGroup, selectLoginGroupForRoute]);
+    if (deveForcar && selectedLoginGroup !== entrada.grupo) selectLoginGroupForRoute(entrada.grupo);
+  }, [loadingSession, session, selectedLoginGroup, selectLoginGroupForRoute]);
 
   // Login recusado numa entrada própria (conta que não é daquele portal): a tela
   // de "Erro de Acesso" mostra o motivo e o useAuthSync desconecta em 3 s. Sai da
   // rota já, para que depois disso apareça o seletor de portais em vez de voltar
   // à mesma tela de login.
   React.useEffect(() => {
-    if (authError && entradaDaRotaAtual && !tokenNaUrl) {
+    if (authError && entradaDaUrlAtual()) {
       window.history.replaceState(null, '', '/');
     }
-  }, [authError, entradaDaRotaAtual, tokenNaUrl]);
+  }, [authError]);
 
   // Link de convite/redefinição que o servidor recusou (já usado ou vencido): o
   // retorno vem com #error=…&error_code=otp_expired, sem `type`. Em vez de cair

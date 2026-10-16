@@ -450,7 +450,9 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
     return (
         <div className={isStandalone ? 'flex flex-col h-screen bg-white text-gray-800 overflow-hidden font-sans' : 'animate-in fade-in slide-in-from-top-4 duration-700'}>
             {/* Casca do portal público — banner + header + sidebar (Fase 1+2 do redesign) */}
-            {isStandalone && (
+            {/* Só no acesso pelo LINK. Quem entrou por e-mail e senha (`onLogout`
+                presente, 16/10/2026) não está num link público. */}
+            {isStandalone && !onLogout && (
                 <div className="h-9 bg-indigo-50 border-b border-indigo-200 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-indigo-700 uppercase tracking-wider">
                     <span>Acesso via link público</span>
                 </div>

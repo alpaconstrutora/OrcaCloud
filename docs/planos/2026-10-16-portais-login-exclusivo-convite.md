@@ -129,7 +129,31 @@ página de login do Portal de Treinamentos, `2026-10-16-login-exclusivo-portal-t
   `*-celular.png`.
 - [x] Suíte completa `9754 = 9720 passados + 34 pendentes`, 0 falhas (reporter JSON); `vite build
   exit=0` ("✓ built in 32.30s")
-- [ ] Navegador com conta real (passos com `PW_SENHA`; cadastro de teste grava em produção)
+- [x] Navegador com conta real, em produção (2026-10-16, `C:\tmp\pwtest\portais-login\conta-real.js`,
+  conta `agente-leitura`, autorizada pelo usuário):
+  - recusa de cliente não cadastrado em `/portal-cliente` e de corretor sem organização em
+    `/portal-corretor`: "Erro de Acesso" com a mensagem certa ✅ — **mas o seletor não aparecia
+    depois** (ver "Defeito achado na prova" abaixo);
+  - fornecedor "MCC" (cadastro real da Alpa com o e-mail da conta, token ativo já existente, nada
+    escrito por mim): login → casca do link (cotações, pedidos, NF, financeiro) → "Sair" → página
+    própria ✅, 0 erros de console/HTTP.
+- [ ] Cliente e corretor no caminho feliz com conta real: **não feito**. O INSERT do cliente de
+  teste e do token temporário do corretor foi bloqueado pela permissão de escrita em produção
+  desta sessão. A RPC já foi provada com `BEGIN…ROLLBACK` (JWT de cliente real → token); falta o
+  print da casca do cliente/corretor aberta por e-mail — fica para o convite real do usuário.
+
+### Defeito achado na prova (16/10/2026) e corrigido
+
+Depois de um login recusado, o endereço virava "/", mas a tela voltava ao **login do mesmo
+portal** em vez do seletor. Causa: o efeito genérico de rota em `App.tsx` memorizava a entrada na
+carga (`useMemo(..., [])`) e, depois do `replaceState('/')` da recusa, continuava forçando o
+portal. O código antigo de `/portal-parceiro` lia `window.location.pathname` a cada execução — a
+generalização trocou isso sem perceber. Correção (frente `portais-recusa-volta-seletor`):
+`entradaDaUrlAtual()` em `lib/entradasDoPortal.ts` lê o endereço na hora; os dois efeitos usam
+ela; teste `__tests__/components/entradaDaUrlAtual.test.ts` (jsdom) trava a leitura ao vivo.
+Junto: a faixa "Acesso via link público" das cascas some quando a pessoa entrou por e-mail
+(`onLogout` presente). Provado no vite da frente com a conta real: as duas recusas terminam no
+seletor em "/", e o fornecedor por e-mail abre sem a faixa.
 - [x] Publicação em `main` — `0d3e0b51` + `8f2f5ec4` (2026-10-16); check-run `ci` verde;
   `conferir-producao.sh "Crie sua senha"` ✅ (domínio carimbado com o topo de `main`, texto no
   bundle servido)

@@ -1511,7 +1511,10 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
           };
           const noForro = (m.trechos ?? []).filter((t) => t.levelId === L0 && t.disciplina !== 'ELETRICA' && t.cotaAMm === t.cotaBMm && t.cotaAMm > teto - rebaixoDoForro && t.cotaAMm < teto);
           const pilares = pegadasDePilares(m, L0);
+          // No sobrado, só dentro do trecho de parede que tem parede em cima (a prumada do eletroduto sobe ali).
+          const emComum = niveis.length > 1 ? paredesEmComum(m.walls.filter((w) => w.levelId === L0), niveis.slice(1).map((L) => m.walls.filter((w) => w.levelId === L))) : null;
           const livre = (p: Point) =>
+            (!emComum || !!encaixarNaParede(p, emComum, 5)) &&
             noForro.every((t) => dSeg(p, t.a, t.b) > SUBIDA_DO_QUADRO_MM + envelopeDoTrecho(t).raioPlantaMm + 20) &&
             !pilares.some((g) => pointInPolygon(g as Point[], p)) &&
             !(parede && m.openings.some((o) => {

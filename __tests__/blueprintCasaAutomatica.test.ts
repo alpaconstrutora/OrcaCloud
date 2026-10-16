@@ -56,6 +56,12 @@ function entrada(m: BlueprintModel, mudanca: Partial<EntradaDaCasa> = {}): Entra
   };
 }
 
+/** F14b: a verificação de rede sem erro e sem aviso além da travessia de viga no forro (furo a aprovar — a F14c lista). */
+const semMarcaAlemDoFuro = (v: { erros: number; porTipo: Record<string, number> }) => {
+  expect(v.erros).toBe(0);
+  expect(Object.keys(v.porTipo).filter((k) => k !== 'CRUZA_VIGA')).toEqual([]);
+};
+
 const nomeados = (m: BlueprintModel, levelId: string) => m.spaces.filter((s) => s.levelId === levelId && (s.name ?? '').trim()).length;
 
 describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
@@ -409,10 +415,10 @@ describe('planejarCasa — F8: água, esgoto e pluvial encadeados', () => {
     expect(h.esgoto.tubos).toBeGreaterThan(0);
     expect(h.pluvial.tubos).toBeGreaterThan(0);
     expect(h.esgoto.destino).toBe('REDE_PUBLICA');
-    // A rede sai LIGADA e COMPATÍVEL (F8b): a verificação de rede do app sem marca nenhuma — nem ponta
-    // aberta, nem trecho sem destino, nem tubo atravessando pilar ou cruzando viga, nem desconector sem
-    // ventilação.
-    expect(h.verificacao).toEqual({ erros: 0, avisos: 0, porTipo: {} });
+    // A rede sai LIGADA e COMPATÍVEL (F8b): a verificação de rede do app sem marca — nem ponta aberta, nem trecho sem
+    // destino, nem tubo atravessando pilar, nem desconector sem ventilação. F14b ("manter 2,80 m, furar vigas"): a
+    // travessia de viga no forro é o único aviso aceito — FURO A APROVAR (CRUZA_VIGA), a lista da F14c.
+    semMarcaAlemDoFuro(h.verificacao);
     // (F9: as redes que passam por porta ou janela são OUTRA pendência — `resumo.aberturas` —, compatibilização à parte.)
     expect(p.pendencias.filter((x) => /^Rede de /.test(x.texto) && !/porta ou janela/.test(x.texto))).toEqual([]);
     expect(tipos(p).has('HIDROMETRO')).toBe(true);
@@ -462,7 +468,7 @@ describe('planejarCasa — F8c: o alimentador enterrado fora do baldrame', () =>
     expect(noBaldrame.length).toBeGreaterThan(0); // a casa fica entre a rua e a caixa: o tubo atravessa
     // Uma travessia: no máximo a largura do baldrame, com folga para o ângulo.
     for (const c of noBaldrame) expect(c.comprimentoDentroMm).toBeLessThanOrEqual(peca.get(c.outroId)!.larguraMm * 1.2);
-    expect(p.resumo.hidraulica.verificacao).toEqual({ erros: 0, avisos: 0, porTipo: {} });
+    semMarcaAlemDoFuro(p.resumo.hidraulica.verificacao);
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
   });
 });
@@ -480,7 +486,7 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
   const ELETRICAS = ['PONTOS_ELETRICOS', 'QUADRO', 'CIRCUITOS', 'CLIMATIZACAO', 'DR_DPS', 'ELETRODUTOS'];
   const situacoes = (p: ReturnType<typeof planejarCasa>) => ELETRICAS.map((id) => p.etapas.find((e) => e.id === id)?.situacao);
 
-  it.each([0, 30])('lote a %i°: tudo lançado, a NBR 5410 sem falta, todo ponto de carga com circuito, um split por ambiente climatizável, nada na estrutura', (graus) => {
+  it.each([0, 30])('lote a %i°: tudo lançado, a NBR 5410 sem falta, todo ponto de carga com circuito, um split por ambiente climatizável; na estrutura, só a viga atravessada (furo a aprovar)', (graus) => {
     const m = lote(graus);
     const L = m.levels[0].id;
     const p = planejarCasa(m, comAr(m));
@@ -499,12 +505,17 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
     expect(pontosElegiveis(r, L)).toEqual([]);
     // Sala, suíte e os 2 dormitórios.
     expect(p.resumo.climatizacao.equipamentos).toBe(4);
-    expect(p.resumo.climatizacao.verificacao).toEqual({ erros: 0, avisos: 0, porTipo: {} });
-    // Eletroduto, linha e dreno do ar: só a LAJE (a descida da luz de teto, a passagem prevista) — nenhum pilar, viga.
+    semMarcaAlemDoFuro(p.resumo.climatizacao.verificacao);
+    // Eletroduto, linha e dreno do ar: nenhum pilar; a viga só ATRAVESSADA (F14b: a travessia no forro e a subida do
+    // quadro — furo a aprovar), nunca correndo por dentro dela. A laje é a passagem prevista.
     const peca = new Map(r.structures.map((x) => [x.id, x]));
     const novas = (r.trechos ?? []).filter((t) => ['ELETRICA', 'FRIGORIGENA', 'DRENO_AC'].includes(t.disciplina));
     const naEstrutura = conflitosDoModelo({ ...r, trechos: novas }).filter((c) => c.classe === 'ESTRUTURA' && c.comprimentoDentroMm > 0);
-    expect(naEstrutura.filter((c) => peca.get(c.outroId)!.kind !== 'LAJE')).toEqual([]);
+    expect(naEstrutura.filter((c) => peca.get(c.outroId)!.kind === 'PILAR')).toEqual([]);
+    for (const c of naEstrutura.filter((x) => peca.get(x.outroId)!.kind === 'VIGA')) {
+      const v = peca.get(c.outroId)!;
+      expect(c.comprimentoDentroMm).toBeLessThanOrEqual(Math.max(v.larguraMm, v.alturaMm) * 1.2);
+    }
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
   });
 

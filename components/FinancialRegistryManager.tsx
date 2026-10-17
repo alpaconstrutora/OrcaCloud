@@ -643,8 +643,8 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                                         onLabel="Ativa"
                                                         offLabel="Inativa"
                                                         title={item.is_active !== false
-                                                            ? 'Desativar: a conta some dos seletores de uso novo. O histórico não muda.'
-                                                            : 'Ativar: a conta volta a aparecer nos seletores.'}
+                                                            ? 'Desativar: a conta some dos seletores de uso novo e, se for conta Asaas, a Asaas dela é desligada. O histórico não muda.'
+                                                            : 'Ativar: a conta volta a aparecer nos seletores. A Asaas, se houver, religa-se em Editar › Conta Asaas.'}
                                                     />
                                                 )}
                                                 <button

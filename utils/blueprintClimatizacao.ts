@@ -401,7 +401,7 @@ export interface HipotesesDaLinha {
   saidaAoLadoAteMm?: number;
 }
 
-export const HIPOTESES_DA_LINHA_PADRAO: HipotesesDaLinha = { cotaDaLinhaMm: 2500, raioDeEncaixeMm: 600, preCargaM: 5, declividadeDrenoPct: 1, isolamentoAte24kMm: 9, isolamentoAcimaMm: 13, dnDrenoMm: 25, raioDoShaftMm: 3000, condensadoLhPorKbtu: 0.2, distanciaDoSifaoMm: 300, raioDaCurvaEmDiametros: 4 };
+export const HIPOTESES_DA_LINHA_PADRAO: Required<HipotesesDaLinha> = { cotaDaLinhaMm: 2500, raioDeEncaixeMm: 600, preCargaM: 5, declividadeDrenoPct: 1, isolamentoAte24kMm: 9, isolamentoAcimaMm: 13, dnDrenoMm: 25, raioDoShaftMm: 3000, condensadoLhPorKbtu: 0.2, distanciaDoSifaoMm: 300, raioDaCurvaEmDiametros: 4, folgaSobAVigaNaSaidaMm: 20, folgaEntreLinhaEDrenoNaSaidaMm: 20, saidaAoLadoAteMm: 2500 };
 
 export const LIMITES_DA_LINHA: Record<keyof HipotesesDaLinha, { min: number; max: number }> = {
   cotaDaLinhaMm: { min: 300, max: 6000 },
@@ -415,6 +415,9 @@ export const LIMITES_DA_LINHA: Record<keyof HipotesesDaLinha, { min: number; max
   condensadoLhPorKbtu: { min: 0.02, max: 2 },
   distanciaDoSifaoMm: { min: 50, max: 3000 },
   raioDaCurvaEmDiametros: { min: 2, max: 10 },
+  folgaSobAVigaNaSaidaMm: { min: 0, max: 300 },
+  folgaEntreLinhaEDrenoNaSaidaMm: { min: 0, max: 300 },
+  saidaAoLadoAteMm: { min: 400, max: 10000 },
 };
 
 export function hipotesesDaLinhaDaColuna(raw: unknown): HipotesesDaLinha {

@@ -9,7 +9,7 @@ import React from 'react';
 import { AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react';
 import type { ObjectId } from '../../utils/blueprintKernel';
 import type { HipotesesDaLinha } from '../../utils/blueprintClimatizacao';
-import { LIMITES_DA_LINHA } from '../../utils/blueprintClimatizacao';
+import { HIPOTESES_DA_LINHA_PADRAO, LIMITES_DA_LINHA } from '../../utils/blueprintClimatizacao';
 import { FONTE_DAS_FAIXAS, type LinhaConferida, type PlanoDaLinha } from '../../utils/blueprintLinhaFrigorigena';
 import type { EstadoDaConferencia, ItemConferido } from '../../utils/blueprintConferenciaClimatizacao';
 
@@ -40,7 +40,7 @@ function Numero({ rotulo, chave, hip, onHip, passo }: { rotulo: string; chave: k
         min={faixa.min}
         max={faixa.max}
         step={passo}
-        value={hip[chave]}
+        value={hip[chave] ?? HIPOTESES_DA_LINHA_PADRAO[chave]}
         onChange={(e) => {
           const x = Number(e.target.value);
           if (Number.isFinite(x) && x >= faixa.min && x <= faixa.max) onHip({ ...hip, [chave]: x });
@@ -75,6 +75,9 @@ export default function PainelLinhaFrigorigena({ plano, linhas, conferencia, hip
         <Numero rotulo="Raio da curva (× diâmetro)" chave="raioDaCurvaEmDiametros" passo={0.5} hip={hip} onHip={onHip} />
         <Numero rotulo="Isolamento até 24.000 (mm)" chave="isolamentoAte24kMm" passo={1} hip={hip} onHip={onHip} />
         <Numero rotulo="Isolamento acima de 24.000 (mm)" chave="isolamentoAcimaMm" passo={1} hip={hip} onHip={onHip} />
+        <Numero rotulo="Saída pela parede: folga sob a viga (mm)" chave="folgaSobAVigaNaSaidaMm" passo={5} hip={hip} onHip={onHip} />
+        <Numero rotulo="Saída pela parede: dreno abaixo da linha, folga (mm)" chave="folgaEntreLinhaEDrenoNaSaidaMm" passo={5} hip={hip} onHip={onHip} />
+        <Numero rotulo="Saída pela parede: ao lado até (mm)" chave="saidaAoLadoAteMm" passo={100} hip={hip} onHip={onHip} />
       </div>
       <p className="text-[11px] text-slate-500">{FONTE_DAS_FAIXAS}</p>
 

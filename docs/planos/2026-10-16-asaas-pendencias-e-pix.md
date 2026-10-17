@@ -24,7 +24,7 @@
 |---|---|
 | 0 — painel Asaas (usuário) | 0 de 6 — ⚠️ a chave atual é RECUSADA pela Asaas (HTTP 401), ver item 0.0 |
 | 1 — correções da integração existente | **12 de 14 publicados em 17/10/2026** (`bb5c6d2a`); 1.8 já estava resolvido; 1.14 fora do plano |
-| 2 — conta Asaas como Conta de Pagamento | código pronto na frente `asaas-pix` (17/10), **não publicado** — ver "Andamento da Fase 2" |
+| 2 — conta Asaas como Conta de Pagamento | **5 de 5 publicados em 17/10/2026** (`c55b4558` + `071b77b8`); falta só o USO: cadastrar a conta Asaas com chave válida (depende do item 0.0) |
 | 3 — PIX | não iniciada |
 | 4 — governança | não iniciada |
 
@@ -37,6 +37,12 @@
 | 2.3 baixa grava a conta | código | processador grava `payment_account_id` no título e na taxa; estorno não desfaz título já conciliado com extrato (vira "Baixa pendente"). |
 | 2.4 extrato | código + migration `aplicar_20271017300100` (cron de hora em hora) | Edge `asaas-conta` importa `/v3/financialTransactions` (campos conferidos na doc oficial em 17/10) em `bank_transactions` NORMALIZED; vínculo determinístico por `paymentId/billId/transferId` via `fn_reconcile_match` (só valor igual e só o que o evento já baixou). Regras puras em `utils/asaasExtrato.ts` + 10 testes. |
 | 2.5 tela | código | Minha Organização › Contas › editar conta › seção "Conta Asaas" (`components/financeiro/ContaAsaasSecao.tsx`): chave testada antes de guardar, ambiente, ativo, piloto, 3 tetos, testar conexão, sincronizar extrato; selo "Asaas" na lista. |
+
+Publicação (17/10/2026) — cada passo provado:
+1. `aplicar_20271017300000` aplicada. Prova: tabela, `kind`, `payment_account_id` nas 2 tabelas, `asaas_customer_ids`; ACL de `asaas_conta_ler_chave`/`guardar_chave` = só `postgres`+`service_role`; `pag_select` única policy; `anon` sem grant. ⚠️ A prova achou `TRUNCATE/REFERENCES/TRIGGER` para `authenticated` (grants padrão; TRUNCATE ignora RLS) → REVOKE acrescentado ao arquivo e aplicado; agora só `SELECT`.
+2. Functions: `asaas-conta` v1→v2, `asaas-webhook` v13, `asaas-status-sync` v2 (`verify_jwt=false`), `asaas-charge` v15, `asaas-payment` v6. ⚠️ A prova achou que `asaas-conta` respondia 400 para id inexistente e 401 para existente (enumerava contas) → `exigirUsuario` antes de qualquer consulta; republicada; agora 401 nos dois casos, com e sem chave anon. RPC do cofre chamada com a anon → `permission denied` (42501).
+3. Caminho do cron (pg_net + `fn_cron_secret`): HTTP 200 `{"ok":true,"contas":{}}`. `aplicar_20271017300100` aplicada: job `asaas-conta-extrato` `7 * * * *` ativo.
+4. Push `071b77b8`; `conferir-producao.sh "Testar e guardar chave"` → domínio serve 071b77b com o texto.
 
 Decisões tomadas no caminho (não estavam no plano):
 - **Chave só é guardada depois de aceita pela Asaas** (`GET /finance/balance`). A chave global de 06/2026 é recusada (401) e ninguém sabia.

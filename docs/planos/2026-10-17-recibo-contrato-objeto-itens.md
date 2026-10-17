@@ -137,3 +137,22 @@
   resultados (l.3432/3439); `<p>` de cartões em `text-gray-400 uppercase` (l.2431/2527/2629);
   cabeçalho em grade `bg-gray-50 text-gray-400` das composições (l.3716).
 - Conferência visual no navegador: NÃO feita (mudança de classe; testes de componente verdes).
+
+## Pedido posterior (17/10/2026) — Suprimentos › Contratos › aba Resumo
+> Aba resumo:
+> 1. botao salvar na linha do título e alinhado a esquerda
+> 2. separar os cards como foi feito na aba itens do contrato (veja print). Cards Identificação do Contrato, Identificação da Obra, Cronograma.
+>
+> (print da aba Itens do Contrato: barra no topo com "Importar do orçamento" à esquerda; abaixo, cada bloco no seu card)
+
+Leitura: "linha do título" = a barra de ações do topo da aba (§5.3), onde fica "Importar do
+orçamento" no print de referência.
+
+- [x] 18 — `components/ContractModal.tsx`: props `cardPorSecao` (cada bloco num card branco
+  próprio, `space-y-6` entre eles — exceção ao §30 pedida pelo usuário, como no
+  BoletoFormModal) e `barraDeAcoes` (o "Salvar alterações" + a linha de exposição vão por
+  portal para a barra da tela-mãe; o submit usa `form={formId}`).
+- [x] 19 — `components/ContractDetailView.tsx`: a barra §5.3 passa a existir na aba Resumo, com
+  o encaixe do Salvar como primeiro item (à esquerda); o Resumo liga as duas props. Abas
+  Financeiro e Emissão sem mudança (não pedidas).
+- [ ] 20 — conferência visual (Playwright logado).

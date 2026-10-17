@@ -1,5 +1,6 @@
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import React from 'react';
+import { createPortal } from 'react-dom';
 import SupplierSelect from './SupplierSelect';
 import ClientSelect, { type ClientOption } from './ClientSelect';
 import { onlyObras, onlyOrcamentos } from '../utils/projectClassification';
@@ -78,6 +79,14 @@ interface ContractModalProps {
     // Só usado quando variant='inline': quais blocos do formulário renderizar.
     // Omitido = todos.
     sections?: ContractFormSection[];
+    // Só inline: cada bloco no seu próprio card branco (aba Resumo, pedido de
+    // 17/10/2026 — "separar os cards como na aba Itens do Contrato"). Sem ela, os
+    // blocos são seções do mesmo card (§30).
+    cardPorSecao?: boolean;
+    // Só inline: barra de ações da tela-mãe (§5.3). Quando vem, o "Salvar
+    // alterações" é desenhado nela, à esquerda, e submete o formulário pelo
+    // atributo `form` — o estado (salvando, desabilitado) continua daqui.
+    barraDeAcoes?: HTMLElement | null;
 }
 
 // Gatilho dos seletores hierárquicos (Centro de Custo, Conta Financeira, Plano de
@@ -99,8 +108,16 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     domain,
     variant = 'drawer',
     sections,
+    cardPorSecao = false,
+    barraDeAcoes,
 }) => {
     const inline = variant === 'inline';
+    const cardsSeparados = inline && cardPorSecao;
+    // Raiz de cada bloco: card próprio (Resumo) ou seção do card único (§30).
+    const secaoCls = cardsSeparados
+        ? 'bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4'
+        : 'space-y-4';
+    const formId = `contrato-form-${React.useId().replace(/:/g, '')}`;
     // No drawer todos os blocos aparecem. Embutido: só os pedidos — ou todos,
     // se `sections` for omitido.
     const showGroup = (g: ContractFormSection) => !inline || !sections || sections.includes(g);
@@ -666,7 +683,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
        entra no card branco como terceira seção do mesmo formulário, em 3
        colunas (data/select de 1600px de largura não ganha nada). */
     const cronogramaBlock = showGroup('cronograma') ? (
-        <div className="space-y-4">
+        <div className={secaoCls}>
             <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                 <Calendar className="w-4 h-4 text-blue-600" />
                 <h3 className="text-sm font-semibold text-gray-900">Cronograma</h3>
@@ -766,14 +783,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 {/* Form Body — drawer: 2 colunas (2:1) com scroll próprio.
                     Inline: bloco único que cresce na página, e a antiga coluna
                     lateral vira a barra de rodapé com o botão de salvar. */}
-                <form onSubmit={handleSubmit} className={inline ? 'space-y-3' : 'flex-1 overflow-hidden flex flex-col md:flex-row'}>
+                <form id={formId} onSubmit={handleSubmit} className={inline ? (cardsSeparados ? 'space-y-6' : 'space-y-3') : 'flex-1 overflow-hidden flex flex-col md:flex-row'}>
                     {/* Main Section (2/3 no drawer) */}
                     <div className={inline
-                        ? 'bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8'
+                        ? (cardsSeparados ? 'space-y-6' : 'bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8')
                         : 'flex-[2] overflow-y-auto p-10 space-y-8 scrollbar-hide border-r border-gray-100 bg-white'}>
                         {/* Section: Identificação */}
                         {showGroup('identificacao') && (
-                        <div className="space-y-4">
+                        <div className={secaoCls}>
                             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                                 <div className="flex items-center gap-2">
                                     <Tag className="w-4 h-4 text-blue-600" />
@@ -1030,7 +1047,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             versão (contract_document_versions); signed_contract_url
                             é só o PDF assinado que o webhook do sign-contract grava. */}
                         {showGroup('status_documento') && (
-                        <div className="space-y-4">
+                        <div className={secaoCls}>
                             <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                                 <FileText className="w-4 h-4 text-blue-600" />
                                 <h3 className="text-sm font-semibold text-gray-900">Status do contrato</h3>
@@ -1066,7 +1083,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                         {/* Section: Escopo (OUTGOING only) */}
                         {showGroup('escopo') && isOutgoing && (
-                            <div className="space-y-4">
+                            <div className={secaoCls}>
                                 <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                                     <ClipboardList className="w-4 h-4 text-blue-600" />
                                     <h3 className="text-sm font-semibold text-gray-900">Escopo do Serviço</h3>
@@ -1123,7 +1140,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                         {/* Section: Partes e Execução (OUTGOING only) */}
                         {showGroup('partes') && isOutgoing && (
-                            <div className="space-y-4">
+                            <div className={secaoCls}>
                                 <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                                     <Users className="w-4 h-4 text-blue-600" />
                                     <h3 className="text-sm font-semibold text-gray-900">Partes e Execução</h3>
@@ -1252,7 +1269,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                         {/* Section: Classificação e Valores */}
                         {showGroup('valores') && (
-                        <div className="space-y-4">
+                        <div className={secaoCls}>
                             <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                                 <DollarSign className="w-4 h-4 text-blue-600" />
                                 <h3 className="text-sm font-semibold text-gray-900">Valores</h3>
@@ -1327,7 +1344,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                         {/* Section: Pagamento */}
                         {showGroup('pagamento') && (
-                        <div className="space-y-4">
+                        <div className={secaoCls}>
                             <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                                 <HandCoins className="w-4 h-4 text-blue-600" />
                                 <h3 className="text-sm font-semibold text-gray-900">Condições de Pagamento</h3>
@@ -1649,7 +1666,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                         {/* Section: Locação (só quando nature = Locação) */}
                         {showGroup('locacao') && formData.nature === 'Locação' && (
-                            <div className="space-y-4">
+                            <div className={secaoCls}>
                                 <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                                     <KeyRound className="w-4 h-4 text-emerald-600" />
                                     <h3 className="text-sm font-semibold text-gray-900">Locação</h3>
@@ -1697,7 +1714,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                         {/* Section: Centros de Custo e Orçamento */}
                         {showGroup('centro_custo') && (
-                        <div className="space-y-4">
+                        <div className={secaoCls}>
                             <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                                 <Briefcase className="w-4 h-4 text-blue-600" />
                                 <h3 className="text-sm font-semibold text-gray-900">Centro de Custo e Orçamento</h3>
@@ -1830,7 +1847,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                         {/* Section: Identificação da Obra (Fase 5.4 — CP-02) */}
                         {showGroup('obra') && (
-                        <div className="space-y-4">
+                        <div className={secaoCls}>
                             <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                                 <MapPin className="w-4 h-4 text-blue-600" />
                                 <h3 className="text-sm font-semibold text-gray-900">Identificação da Obra</h3>
@@ -1897,7 +1914,34 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                         )}
 
-                        {inline ? (
+                        {inline && barraDeAcoes ? createPortal(
+                            /* Pedido de 17/10/2026: salvar na barra do topo, à esquerda
+                               (como "Importar do orçamento" na aba Itens). Fora do <form>
+                               no DOM — `form={formId}` faz o submit. */
+                            <>
+                                <button
+                                    type="submit"
+                                    form={formId}
+                                    onClick={() => { submitModeRef.current = 'stay'; }}
+                                    disabled={isSubmitting || isFetchingNumber || !organizationId}
+                                    className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 ${(isSubmitting || isFetchingNumber || !organizationId)
+                                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                                        }`}
+                                >
+                                    {isSubmitting
+                                        ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
+                                        : <Shield className="w-[15px] h-[15px]" />}
+                                    {isSubmitting ? 'Salvando...' : 'Salvar alterações'}
+                                </button>
+                                <p className="text-xs text-gray-500">
+                                    Exposição financeira <span className="font-medium text-gray-800">R$ {formData.original_value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                    <span className="mx-2 text-gray-300">·</span>
+                                    Retenção prevista <span className="font-medium text-gray-800">R$ {((formData.original_value || 0) * (formData.retention_rate || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                </p>
+                            </>,
+                            barraDeAcoes,
+                        ) : inline ? (
                             /* §17 — botão primário compacto; numa aba não existe
                                "sair", então o par Permanecer/Sair do drawer não
                                se aplica aqui. */

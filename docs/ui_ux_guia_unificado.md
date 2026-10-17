@@ -3119,6 +3119,11 @@ moldura.
 > ℹ️ Medido com Playwright em `ContractModal.tsx` (modo `inline`, 2026-09-19):
 > título→rótulo 34px, rótulo→campo 3–6px, último campo→próximo título 32px; o
 > formulário (3 seções + rodapé) passou de ~2 telas para 1 em 1600×1000.
+> ℹ️ **Exceção pedida pelo usuário (17/10/2026):** a aba **Resumo** do contrato
+> (`ContractModal` embutido com `cardPorSecao`) mostra cada bloco — Identificação do
+> Contrato, Identificação da Obra, Cronograma (e Escopo/Partes/Locação quando há) — no seu
+> próprio card, como a aba Itens do Contrato; e o "Salvar alterações" mora na barra de ações
+> do topo (§5.3), à esquerda, não no rodapé. Financeiro e Emissão seguem com card único.
 > ℹ️ **Exceção pedida pelo usuário (13/10/2026):** `BoletoFormModal.tsx` mostra
 > Cobrança, Quem recebe, Classificação e Observações cada uma em seu próprio
 > card (`Secao` renderiza um `Painel`, `space-y-6` entre eles). A regra geral

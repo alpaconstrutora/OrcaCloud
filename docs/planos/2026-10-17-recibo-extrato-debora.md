@@ -105,3 +105,13 @@ removido nesta sessão, com aval do usuário: backup em
   confirmar fica desligado até escolher a forma, e diz o motivo. Sem recibo, segue opcional.
 - **Como sei que terminou:** typecheck; conferência na tela; `check-ui-standard.sh` no arquivo.
 - **Status:** ✅ código + teste; `check-ui-standard.sh` sem violação
+
+## Publicação
+
+- 17/10/2026: código publicado em `main` (`7806a3f7` + `8207002c`). Suíte completa antes do
+  push: 5 falhas — 3 eram testes de tela que confirmavam a baixa sem forma de pagamento
+  (comportamento novo, testes ajustados) e 2 do `PainelVersoes`, em cascata de 2 workers
+  do Vitest que caíram (o arquivo passa sozinho). Typecheck limpo (1ª tentativa caiu com
+  rc=139, Node 24).
+- Migrations `aplicar_20271017988000` e `aplicar_20271017988100`: **não aplicadas** — a
+  aplicação pelo agente é barrada pela permissão automática; ficam com o usuário.

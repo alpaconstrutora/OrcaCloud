@@ -47,7 +47,18 @@ Provas de ponta a ponta:
 Mudanças de acesso feitas para o teste: `desenvolvedor@alpaconstrutora.com.br` promovido de `member` a `admin` na Alpa (pedido do usuário).
 Dados de teste a limpar: 2 títulos MANUAL "TESTE PIX SANDBOX…", 3 `supplier_payments` (1 FAILED + 2 DONE), 4 linhas de extrato da conta Asaas Sandbox, 2 vínculos de conciliação. O histórico (`supplier_payments_auditoria`) fica.
 
-Melhoria anotada: "Sincronizar extrato" mostra "0 movimento(s) novo(s)" quando o cron já importou — dizer também quantos já estavam no período.
+Testes adicionais no sandbox (17/10/2026, tarde):
+- **Cobrança emitida pelo OrçaCloud** (Boleto+PIX R$ 10): QR guardado (`pix_qr_image`), cliente criado na Asaas e cacheado POR CONTA (`asaas_customer_ids`), "Confirmar pagamento" no sandbox → webhook → recebível RECEBIDO na conta Asaas Sandbox + taxa R$ 1,99 com `reference_id`; extrato das 16:07 conciliou recebimento e taxa sozinho. ✅
+- **PIX agendado e cancelado** (R$ 3): SCHEDULED → cancelado no painel → `TRANSFER_CANCELLED` → CANCELLED (autor "Asaas"), título intacto. ✅
+- **Boleto de terceiro**: `bill/simulate` respondeu `unregistered_bank_slip` por 45 min — o sandbox NÃO registra boletos. ⏸ Fica para o piloto em produção (boleto real de valor baixo). A decisão de validação BILL está coberta em `__tests__/asaasSaque.test.ts`.
+- A aprovação do boleto de teste abriu 2 `process_instances` sozinha — limpeza tem de procurar processos também.
+
+Limpeza (17/10/2026, ~16:50 BRT, autorizada): cópia em JSON local; transação com contagem conferida por passo — 6 lançamentos, 4 vínculos, 4 `supplier_payments`, 1 cobrança, 2 processos, 1 boleto + 1 nota, 1 cliente e 1 fornecedor de teste APAGADOS; 6 linhas do extrato da conta Asaas Sandbox marcadas IGNORED (apagar faria o cron reimportar). Mantidos: histórico (`supplier_payments_auditoria`, 15 linhas, com as 4 exclusões), conta Asaas Sandbox ativa, desenvolvedor@ admin.
+
+Ajustes pequenos revelados pelos testes (a fazer):
+1. Botão "Cancelar" no OrçaCloud para pagamento agendado/enviado (hoje só pelo painel da Asaas).
+2. Motivo legível no cancelamento vindo da Asaas ("Cancelado na Asaas" em vez de `TRANSFER_CANCELLED`).
+3. Melhoria anotada: "Sincronizar extrato" mostra "0 movimento(s) novo(s)" quando o cron já importou — dizer também quantos já estavam no período.
 
 ## Andamento da Fase 3 (17/10/2026)
 

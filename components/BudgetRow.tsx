@@ -204,7 +204,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                         value={item.quantity}
                         onChange={(e) => onUpdateQuantity(item.id, Number(e.target.value))}
                         disabled={isLocked}
-                        className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-1 focus:ring-blue-500 outline-none ${isLocked ? 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
+                        className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-1 focus:ring-blue-500 outline-none ${isLocked ? 'bg-gray-50 text-gray-900 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
                     />
                 </td>
 
@@ -217,7 +217,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             value={Number(item.sinapiItem?.price || 0).toFixed(2)}
                             onChange={(v) => onUpdatePrice(item.id, v === '' ? 0 : Number(v))}
                             disabled={isLocked}
-                            className={`w-full text-center text-sm outline-none bg-transparent py-0.5 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''} ${item.sinapiItem?.isOverride ? 'text-amber-700' : ''}`}
+                            className={`w-full text-center text-sm outline-none bg-transparent py-0.5 ${isLocked ? 'cursor-not-allowed' : ''} ${item.sinapiItem?.isOverride ? 'text-amber-700' : 'text-gray-900'}`}
                         />
                         {item.sinapiItem?.isOverride && (
                             <span title="Item editado pelo usuário">
@@ -243,7 +243,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                 onUpdateBDI(item.id, val === '' ? undefined : Number(val));
                             }}
                             disabled={isLocked}
-                            className={`w-full text-center text-sm outline-none bg-transparent py-0.5 placeholder:text-gray-300 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''}`}
+                            className={`w-full text-center text-sm outline-none bg-transparent py-0.5 text-gray-900 placeholder:text-gray-300 ${isLocked ? 'cursor-not-allowed' : ''}`}
                         />
                         <span className="text-xs text-gray-400 shrink-0">%</span>
                     </div>

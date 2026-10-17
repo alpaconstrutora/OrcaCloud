@@ -513,7 +513,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                                     const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
                                                                     handleUpdateDistribution(item.id, column.id, val.toString());
                                                                 }}
-                                                                className={`relative z-10 w-full text-center bg-transparent outline-none text-table-body font-medium py-1 rounded-md focus:bg-white focus:ring-1 focus:ring-blue-300 transition-all ${pct > 0 ? 'text-blue-700 font-medium' : 'text-gray-400'}`}
+                                                                className={`relative z-10 w-full text-center bg-transparent outline-none text-table-body font-medium py-1 rounded-md focus:bg-white focus:ring-1 focus:ring-blue-300 transition-all ${pct > 0 ? 'text-blue-700 font-medium' : 'text-gray-900'}`}
                                                             />
                                                         </div>
                                                         <div className="flex flex-col text-form-input leading-tight px-1">

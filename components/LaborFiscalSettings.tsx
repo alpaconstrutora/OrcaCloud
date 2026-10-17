@@ -476,10 +476,10 @@ const LaborFiscalSettings: React.FC = () => {
                                                                     newBrackets[idx].deduction = parseFloat(e.target.value);
                                                                     setIrrfBrackets(newBrackets);
                                                                 }}
-                                                                className="w-20 bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-right font-black text-slate-400 text-form-input"
+                                                                className="w-20 bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-right font-black text-slate-800 text-form-input"
                                                             />
                                                         ) : (
-                                                            <p className="text-xs font-black text-slate-400">R$ {bracket.deduction.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                            <p className="text-xs font-black text-slate-800">R$ {bracket.deduction.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                                         )}
                                                     </div>
                                                     <div className="text-right">

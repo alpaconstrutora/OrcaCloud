@@ -1498,7 +1498,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     value={gerador.vencimentoEntrada}
                                                     disabled={!(gerador.entrada > 0)}
                                                     onChange={(e) => atualizarGerador({ vencimentoEntrada: e.target.value })}
-                                                    className={`${campo} disabled:text-gray-400 disabled:cursor-not-allowed`}
+                                                    className={`${campo} text-gray-900 disabled:cursor-not-allowed`}
                                                 />
                                             </div>
                                             <div className="space-y-1.5">

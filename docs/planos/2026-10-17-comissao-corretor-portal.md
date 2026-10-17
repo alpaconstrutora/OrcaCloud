@@ -156,3 +156,28 @@ de aluguel não recebido.
 - Achado fora do escopo (revisão): `taxPayableService.generateForDeal` faz upsert com `status PENDING`
   sobre o mesmo `reference_id` de tributo já pago (`removeForDeal` preserva o pago, o upsert seguinte
   o volta a pendente) — não testado, não corrigido.
+
+---
+
+# Fase 3 — achados: comissões órfãs e tributo pago
+
+## Pedido original (17/10/2026, mesma sessão ec9dc1ab)
+
+> Achados fora do pedido:
+> 1. Há 4 títulos de comissão no formato antigo (R$ 90.000 em aberto) ligados a negociações que já foram apagadas. Estão órfãos no Contas a Pagar: apagar tambem
+> Lendo o código, encontrei um possível defeito ainda não confirmado: a regeração de tributos parece poder voltar um tributo já pago para "pendente". Não testei nem corrigi. verificar e corrigir
+
+## Estado
+
+- [x] **Comissões órfãs apagadas** (`supabase/manual/2026-10-17-apagar-comissoes-orfas.sql`): 4 títulos
+  `commission-*`/`tx-comm-*` (R$ 25.000 + 25.000 + 10.000 + 30.000), todos PENDING/RASCUNHO, negócios
+  inexistentes, nenhum vínculo em conciliação/processos/cobrança/recibos/rateios/parcelas. Script com travas
+  (aborta se não forem exatamente esses 4). Resultado: cópia = 4, restantes = 0. Cópia integral para
+  restaurar em `public.comissoes_orfas_apagadas_20261017` (NÃO apagar; comando no COMMENT).
+- [x] **Tributo pago voltava a pendente — CONFIRMADO e corrigido** (`services/taxPayableService.ts`).
+  Causa: `generateForDeal` montava tributo para TODAS as parcelas e fazia upsert com `status PENDING` /
+  `PREVISTO` / valor recalculado pelo mesmo `reference_id`; `removeForDeal` preservava o pago, mas o upsert
+  seguinte o sobrescrevia. Correção: lê os tributos já pagos (conciliado ou PAGO) e os tira do upsert; se a
+  leitura falhar, não grava nada. Teste `__tests__/tributoPagoNaoVoltaAPendente.test.ts` — falhou nos 2
+  casos no código antigo (reprodução) e passa no novo. Em produção ainda não tinha acontecido: os 7 tributos
+  conciliados seguem conciliados e nenhum pendente tem sinal de pagamento (payment_date, conciliação).

@@ -60,6 +60,10 @@ export interface TaxPayableFilters {
 // Marcadores fixos do tributo comercial em internal_transactions.
 // Ver migration 20270824000010_vw_commercial_tax_payables.sql.
 const TAX_PARTY_TYPE = 'TAX';
+
+/** Tributo com dinheiro já saído: conciliado ou baixado como pago. Nunca é apagado nem regravado. */
+const tributoJaPago = (r: { status?: string; business_status?: string }) =>
+    r.status === 'CONCILIATED' || r.business_status === 'PAGO';
 const TAX_SOURCE_SYSTEM = 'COMMERCIAL'; // isenta o hard-lock de período
 
 // Regime de reconhecimento dos tributos comerciais (organizations.settings).
@@ -597,6 +601,24 @@ export const taxPayableService = {
             }
         }
 
+        // Tributos JÁ PAGOS deste negócio: nunca regravados. O upsert abaixo
+        // leva status PENDING e o valor recalculado pelo mesmo reference_id —
+        // sem este corte, salvar a negociação de novo voltava o tributo pago a
+        // "a pagar" (achado 17/10/2026, teste tributoPagoNaoVoltaAPendente).
+        // Sem conseguir ler, não grava: gravar às cegas é o próprio defeito.
+        const { data: existentes, error: exErr } = await supabase
+            .from('internal_transactions')
+            .select('reference_id, status, business_status')
+            .eq('organization_id', organizationId)
+            .eq('party_type', TAX_PARTY_TYPE)
+            .like('reference_id', `tax-${deal.id}-%`);
+        if (exErr) { console.error('[TAX-PAYABLE] Falha ao ler tributos pagos do negócio — nada regerado:', exErr); return; }
+        const refsPagas = new Set(
+            (existentes || [])
+                .filter((r: { status?: string; business_status?: string }) => tributoJaPago(r))
+                .map((r: { reference_id: string }) => r.reference_id),
+        );
+
         // Sempre limpa os automáticos PENDENTES deste negócio antes de regerar
         // (parcela cancelada, mudança de valor, alíquota desativada). Preserva os
         // já PAGOS/conciliados (dinheiro que saiu).
@@ -759,11 +781,12 @@ export const taxPayableService = {
             }
         }
 
-        if (rows.length === 0) return;
+        const aGravar = rows.filter(r => !refsPagas.has(r.reference_id as string));
+        if (aGravar.length === 0) return;
 
         const { error } = await supabase
             .from('internal_transactions')
-            .upsert(rows, { onConflict: 'organization_id,reference_id,entry_type' });
+            .upsert(aGravar, { onConflict: 'organization_id,reference_id,entry_type' });
         if (error) {
             console.error('[TAX-PAYABLE] Falha ao gerar tributos do negócio:', error);
         }
@@ -813,8 +836,7 @@ export const taxPayableService = {
                 .eq('party_type', TAX_PARTY_TYPE)
                 .like('reference_id', `tax-${dealId}-%`);
             const toDelete = (existing || [])
-                .filter((r: { status?: string; business_status?: string }) =>
-                    r.status !== 'CONCILIATED' && r.business_status !== 'PAGO')
+                .filter((r: { status?: string; business_status?: string }) => !tributoJaPago(r))
                 .map((r: { id: string }) => r.id);
             if (toDelete.length) {
                 await supabase.from('internal_transactions').delete().in('id', toDelete);

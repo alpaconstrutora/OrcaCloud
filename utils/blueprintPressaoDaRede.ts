@@ -372,6 +372,9 @@ export function pressoesDoModelo(model: BlueprintModel, hip: HipotesesDePressao 
 /** Limite de passos do ajuste — cada passo aumenta UM trecho em UM DN. */
 const MAX_PASSOS_DO_AJUSTE = 80;
 
+/** F20: o comprimento mínimo com que um trecho entra na escolha do que aumentar, m (ver `ajustarDnPorPressao`). */
+const METROS_MINIMOS_DO_AJUSTE = 1;
+
 /**
  * DIMENSIONAR POR PRESSÃO (28/09/2026, E1.4 — NBR 5626:2020): o DN deixa de
  * ser só "velocidade ≤ limite". Enquanto houver ponto INSUFICIENTE, no caminho
@@ -407,15 +410,20 @@ export function ajustarDnPorPressao(
     }
     const porId = new Map((m.trechos ?? []).map((t) => [t.id, t]));
     const calculado = new Map(r.trechos.map((t) => [t.trechoId, t]));
-    const candidato = (r.caminhos[ruim.terminalId] ?? [])
-      .map((id) => porId.get(id)!)
-      .filter((t) => t && t.sugerido)
-      .map((t) => {
+    // F20 da casa automática (17/10/2026): o trecho conta no mínimo `METROS_MINIMOS_DO_AJUSTE` (trocar o DN custa as
+    // conexões, não só os metros) e nunca fica maior que o de MONTANTE (a rede é uma árvore: o DN não cresce rumo ao
+    // ponto). Por metro, um pedaço de 5 cm com uma conexão tinha a maior "perda por metro" e subia até 54 mm entre dois
+    // de 35 — sem ganho de pressão, e furando a faixa da água fria no forro (sobrado).
+    const caminho = (r.caminhos[ruim.terminalId] ?? []).map((id) => porId.get(id)!);
+    const candidato = caminho
+      .map((t, i) => ({ t, montante: i > 0 ? caminho[i - 1]?.bitolaMm ?? Infinity : Infinity }))
+      .filter(({ t }) => t && t.sugerido)
+      .map(({ t, montante }) => {
         const tabela = DIAMETROS[materialDoTrecho(t) ?? 'PVC_SOLDAVEL'];
         const proximo = tabela.find((l) => l.dn > t.bitolaMm)?.dn ?? null;
         const c = calculado.get(t.id);
-        const metros = Math.max(Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm) / 1000, 0.001);
-        return { t, proximo, porMetro: c ? (c.perdaDistribuidaMca + c.perdaLocalizadaMca) / metros : 0 };
+        const metros = Math.max(Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm) / 1000, METROS_MINIMOS_DO_AJUSTE);
+        return { t, proximo: proximo != null && proximo <= montante ? proximo : null, porMetro: c ? (c.perdaDistribuidaMca + c.perdaLocalizadaMca) / metros : 0 };
       })
       .filter((x) => x.proximo != null)
       .sort((a, b) => b.porMetro - a.porMetro || a.t.id.localeCompare(b.t.id))[0];

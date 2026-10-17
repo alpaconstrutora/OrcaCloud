@@ -162,6 +162,18 @@ describe('completar a iluminação', () => {
     expect(at.x).toBe(2000);
   });
 
+  it('F20: com uma janela 15 cm depois da porta, o interruptor vai para o OUTRO lado da porta — nunca no vão da janela', () => {
+    const base = sala();
+    // Porta de 1000 a 1800; janela de 1950 a 3150 (peitoril 1,00 m, abaixo da cota do interruptor).
+    const m = applyCommand(base, { type: 'AddOpening', wallId: base.walls[0].id, kind: 'window', offsetMm: 1950, widthMm: 1200, heightMm: 1200, sillMm: 1000 }).model;
+    const at = pontoJuntoAPorta(m.spaces[0], m.walls, m.openings)!;
+    expect(at.y).toBe(75);
+    expect(at.x).toBe(800);
+    // Janela ALTA (peitoril 1,60 m), acima do interruptor: o lado de depois da porta continua valendo.
+    const alta = applyCommand(base, { type: 'AddOpening', wallId: base.walls[0].id, kind: 'window', offsetMm: 1950, widthMm: 1200, heightMm: 600, sillMm: 1600 }).model;
+    expect(pontoJuntoAPorta(alta.spaces[0], alta.walls, alta.openings)!.x).toBe(2000);
+  });
+
   it('sem porta, o interruptor vem com o rótulo "Posicione junto à porta"', () => {
     const m = sala(false);
     const c = conferirIluminacao(m.spaces[0], m.terminais, AREA);

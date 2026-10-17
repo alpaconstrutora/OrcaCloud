@@ -1043,17 +1043,29 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     return null;
   };
   const reservar = (w: Wall, off: number, largura: number) => ocupados.set(w.id, [...(ocupados.get(w.id) ?? []), { ini: off, fim: off + largura }]);
-  const porta = (seg: { a: Point; b: Point }, largura: number, noCanto = false): Command | null => {
+  /** F20: o meio de cada porta interna já lançada (para agrupar as portas de um cômodo numa ponta). */
+  const meiosDasPortas: Point[] = [];
+  const porta = (seg: { a: Point; b: Point }, largura: number, noCanto = false, junto: Retangulo[] | null = null): Command | null => {
     const w = paredeDoSegmento(paredes(), seg.a, seg.b);
     if (!w) return null;
-    const meio = point((seg.a.x + seg.b.x) / 2, (seg.a.y + seg.b.y) / 2);
     const lo = Math.min(offsetNaParede(w, seg.a), offsetNaParede(w, seg.b)) + FOLGA;
     const hi = Math.max(offsetNaParede(w, seg.a), offsetNaParede(w, seg.b)) - FOLGA;
     // F6b: a porta de ENTRADA vai para a ponta da fachada — no meio, partia a fachada da sala em dois trechos
     // curtos e a janela (1/6 do piso) não cabia em nenhum (sala de 33 m² com 2 m² de janela).
-    const off = encaixar(w, noCanto ? lo : offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
+    // F20 da casa automática (17/10/2026): a porta INTERNA também vai para uma ponta (a `FOLGA` do canto), a mais perto
+    // das outras portas dos cômodos dela — no meio, as duas portas da suíte (entrada e banheiro) e a janela partiam três
+    // lados ao meio, e o armário só cabia com 0,90 m.
+    const naBorda = (r: Retangulo, q: Point) => q.x >= r.x0 - 1 && q.x <= r.x1 + 1 && q.y >= r.y0 - 1 && q.y <= r.y1 + 1 && (Math.abs(q.x - r.x0) < 1 || Math.abs(q.x - r.x1) < 1 || Math.abs(q.y - r.y0) < 1 || Math.abs(q.y - r.y1) < 1);
+    const vizinhas = meiosDasPortas.filter((q) => (junto ?? []).some((r) => naBorda(r, q)));
+    const pontoDoOffset = (off: number) => point(w.a.x + ((w.b.x - w.a.x) * off) / (wallLength(w) || 1), w.a.y + ((w.b.y - w.a.y) * off) / (wallLength(w) || 1));
+    const distAsVizinhas = (off: number) => Math.min(...vizinhas.map((q) => Math.hypot(q.x - pontoDoOffset(off + largura / 2).x, q.y - pontoDoOffset(off + largura / 2).y)));
+    const meio = point((seg.a.x + seg.b.x) / 2, (seg.a.y + seg.b.y) / 2);
+    // `junto` ausente = a porta no meio (a do banheiro: na ponta, o giro dela tomava o lado do lavatório).
+    const ponta = noCanto || (junto && (!vizinhas.length || distAsVizinhas(lo) <= distAsVizinhas(hi - largura))) ? lo : junto ? hi - largura : offsetNaParede(w, meio) - largura / 2;
+    const off = encaixar(w, ponta, largura, lo, hi);
     if (off === null) return null;
     reservar(w, off, largura);
+    meiosDasPortas.push(pontoDoOffset(off + largura / 2));
     return { type: 'AddOpening', wallId: w.id, wallUid: w.uid, kind: 'door', offsetMm: off, widthMm: largura, heightMm: hip.alturaPortaMm, sillMm: 0 };
   };
   // PORTAS por busca em largura a partir do HUB (corredor; senão a sala): cada
@@ -1066,7 +1078,8 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     if (portasFeitas.has(chave)) return true;
     const seg = ladoComum(a.ret, b.ret);
     if (!seg) return false;
-    const cmd = porta(seg, hip.larguraPortaMm);
+    // As portas dos cômodos (não as do corredor e da sala, que têm muitas) se agrupam numa ponta.
+    const cmd = porta(seg, hip.larguraPortaMm, false, ehMolhado(a.item) || ehMolhado(b.item) ? null : [a, b].filter((x) => x !== corredor && x !== sala).map((x) => x.ret));
     if (!cmd) return false;
     aberturas.push(cmd);
     portasFeitas.add(chave);
@@ -1076,14 +1089,40 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   const alcancados = new Set<AmbienteGerado>([hub]);
   const fila: AmbienteGerado[] = [hub];
   const prioridade = (x: AmbienteGerado, de: AmbienteGerado) => (x === corredor ? 0 : x === sala ? 1 : x.zona === de.zona ? 2 : 3);
+  // F20 da casa automática (17/10/2026): o banheiro e o lavabo são FOLHAS — uma porta, nunca passagem; o banheiro com
+  // relação OBRIGATÓRIA com um vizinho (o da suíte) só abre para ele. Alcançado pelo vizinho na busca, o banheiro da
+  // suíte abria para o dormitório ao lado (e a relação dava a segunda porta, para a suíte); o banheiro social, alcançado
+  // pela sala, abria para a varanda de entrada — e as duas portas tomavam os lados do vaso e do lavatório.
+  const parDoMolhado = (m: AmbienteGerado): AmbienteGerado | null =>
+    ehMolhado(m.item)
+      ? (ambientes.find(
+          (x) => x !== m && !ehMolhado(x.item) && programa.relacoes.some((r) => r.tipo === 'OBRIGATORIA' && ((r.a === m.item.id && r.b === x.item.id) || (r.b === m.item.id && r.a === x.item.id))) && !!ladoComum(m.ret, x.ret),
+        ) ?? null)
+      : null;
   while (fila.length) {
     const atual = fila.shift()!;
     const vizinhos = ambientes.filter((x) => !alcancados.has(x) && ladoComum(atual.ret, x.ret)).sort((p, q) => prioridade(p, atual) - prioridade(q, atual) || p.nome.localeCompare(q.nome, 'pt-BR'));
     for (const v of vizinhos) {
       if (alcancados.has(v)) continue;
+      const par = parDoMolhado(v);
+      if (par && par !== atual) continue;
       if (abrirPorta(v, atual)) {
         alcancados.add(v);
-        fila.push(v);
+        if (!ehMolhado(v.item)) fila.push(v);
+      }
+    }
+  }
+  // F20: sobrou cômodo que só se alcança ATRAVÉS de um molhado (o desenho não deu outro lado comum) — a passagem pelo
+  // banheiro, dita, é melhor que o cômodo sem acesso.
+  if (ambientes.some((a) => !alcancados.has(a))) {
+    const fila2 = [...alcancados];
+    while (fila2.length) {
+      const atual = fila2.shift()!;
+      for (const v of ambientes.filter((x) => !alcancados.has(x) && ladoComum(atual.ret, x.ret)).sort((p, q) => prioridade(p, atual) - prioridade(q, atual) || p.nome.localeCompare(q.nome, 'pt-BR'))) {
+        if (alcancados.has(v) || !abrirPorta(v, atual)) continue;
+        alcancados.add(v);
+        fila2.push(v);
+        if (ehMolhado(atual.item)) avisos.push(`${v.nome}: só tem acesso passando por ${atual.nome}.`);
       }
     }
   }
@@ -1091,13 +1130,21 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   // Relações OBRIGATÓRIAS da matriz = porta direta quando os dois encostam.
   for (const r of programa.relacoes) {
     if (r.tipo !== 'OBRIGATORIA') continue;
-    for (const a of ambientes.filter((x) => x.item.id === r.a)) for (const b of ambientes.filter((x) => x.item.id === r.b)) if (ladoComum(a.ret, b.ret)) abrirPorta(a, b);
+    for (const a of ambientes.filter((x) => x.item.id === r.a))
+      for (const b of ambientes.filter((x) => x.item.id === r.b)) {
+        if (!ladoComum(a.ret, b.ret)) continue;
+        // F20: o molhado que já tem a sua porta não ganha outra (folha).
+        const jaTemPorta = (m: AmbienteGerado) => ehMolhado(m.item) && [...portasFeitas].some((k) => k.split('|').includes(m.nome)) && !portasFeitas.has([a.nome, b.nome].sort().join('|'));
+        if (jaTemPorta(a) || jaTemPorta(b)) continue;
+        abrirPorta(a, b);
+      }
   }
   // Entrada: no lado da frente da sala (ou do corredor).
   // F11: o lado da FRENTE é o trecho do ambiente na borda do contorno que olha para a frente.
   const trechoDaFrente = (a: AmbienteGerado | null) =>
     a ? ladosNaBorda(a.ret).filter((x) => x.lado === (frente as LadoNoDesenho)).sort((p, q) => Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y) - Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y))[0] ?? null : null;
-  const entradaEm = [sala, ...ambientes.filter((a) => a.zona === 'SOCIAL' && a !== sala), corredor, ...ambientes].find((a) => !!trechoDaFrente(a ?? null)) ?? null;
+  // F20: nunca pelo banheiro/lavabo (sem lado da sala na frente, a entrada caía no lavabo — 10,5 × 14,5 m).
+  const entradaEm = [sala, ...ambientes.filter((a) => a.zona === 'SOCIAL' && a !== sala), corredor, ...ambientes].find((a) => !!a && !ehMolhado(a.item) && !!trechoDaFrente(a)) ?? null;
   if (entradaEm) {
     const seg = trechoDaFrente(entradaEm)!;
     const cmd = porta(seg, hip.larguraEntradaMm, true);

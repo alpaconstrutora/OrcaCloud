@@ -1416,8 +1416,11 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       criadosDoMobiliario = lote.length ? applyBatch(m, lote).diff.created : [];
       const naoCouberam = lista.flatMap((a) => a.naoCouberam.map((x) => `${a.rotulo}: ${x}`));
       for (const x of naoCouberam) pendencias.push({ grupo: 'VERIFICACAO', texto: `Mobiliário: ${x}` });
+      // F20: a peça que só coube menor — para conferir, não decidir.
+      const reduzidas = lista.flatMap((a) => a.reduzidas.map((x) => `${a.rotulo}: ${x}`));
+      for (const x of reduzidas) pendencias.push({ grupo: 'CONFERIR', texto: `Mobiliário: ${x} (a maior não coube)` });
       mobiliario.pecas = lote.length;
-      return { comandos: lote, nota: `${lote.length} peça(s) em ${lista.filter((a) => a.pecas.length).length} ambiente(s)${naoCouberam.length ? `; ${naoCouberam.length} não couberam` : ''}` };
+      return { comandos: lote, nota: `${lote.length} peça(s) em ${lista.filter((a) => a.pecas.length).length} ambiente(s)${reduzidas.length ? `; ${reduzidas.length} menor(es)` : ''}${naoCouberam.length ? `; ${naoCouberam.length} não couberam` : ''}` };
     });
     etapaSimples('LOUCAS', () => {
       const lote = pontosDasLoucasCriadas(m, criadosDoMobiliario, hipPontos, { sugerida: true });

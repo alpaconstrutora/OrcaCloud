@@ -187,3 +187,64 @@ describe('F6b — iluminação da sala e frente em colunas', () => {
   });
 });
 
+
+/**
+ * F20 (casa automática, 17/10/2026): o banheiro é FOLHA — uma porta, nunca passagem — e o da suíte só abre para ela; a
+ * porta interna dos cômodos vai para a ponta do lado comum. Na busca em largura, o banheiro alcançado abria para os
+ * vizinhos (o da suíte para o dormitório ao lado, o social para a varanda), e as duas portas tomavam o lugar do vaso e do
+ * lavatório; a porta no meio partia os lados da suíte e o armário só cabia com 0,90 m.
+ */
+describe('F20 — portas: banheiro é folha; porta interna na ponta', () => {
+  const ret = (W: number, D: number) => [point(0, 0), point(W, 0), point(W, D), point(0, D)];
+  const programas = [programaDaCasa(PROGRAMA_CURTO_PADRAO).programa, programaDaCasa({ ...PROGRAMA_CURTO_PADRAO, dormitorios: 2, banheiros: 2, vagas: 1 }).programa];
+  type R = ReturnType<typeof gerar>;
+  /** As portas no contorno do retângulo do ambiente (o meio do vão sobre um lado dele). */
+  const portasDe = (r: R, a: R['ambientes'][number]) =>
+    r.model.openings
+      .filter((o) => o.kind === 'door')
+      .map((o) => {
+        const w = r.model.walls.find((x) => x.id === o.wallId)!;
+        const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+        const k = (o.offsetMm + o.widthMm / 2) / L;
+        return { x: w.a.x + (w.b.x - w.a.x) * k, y: w.a.y + (w.b.y - w.a.y) * k, meia: o.widthMm / 2 };
+      })
+      .filter((p) => {
+        const { x0, y0, x1, y1 } = a.ret;
+        const naBordaX = (Math.abs(p.y - y0) < 1 || Math.abs(p.y - y1) < 1) && p.x > x0 && p.x < x1;
+        const naBordaY = (Math.abs(p.x - x0) < 1 || Math.abs(p.x - x1) < 1) && p.y > y0 && p.y < y1;
+        return naBordaX || naBordaY;
+      });
+  const casos = programas.flatMap((programa) => [[9000, 16850], [10500, 14500], [12000, 12700]].flatMap(([W, D]) => [1, 2, 3, 4].map((s) => gerar({ programa, envelope: ret(W, D), direcaoDaFrente: null, rotacaoNorteDeg: null, latitudeGraus: -19.9 }, s, { automaticos: false }))));
+
+  it('todo banheiro tem UMA porta (a não ser que o aviso diga que é passagem); o da suíte abre para a suíte', () => {
+    for (const r of casos) {
+      for (const a of r.ambientes.filter((x) => x.item.uso === 'BANHEIRO' || x.item.uso === 'LAVABO')) {
+        const passagem = r.avisos.some((x) => x.includes(`passando por ${a.nome}`));
+        if (!passagem) expect(`${a.nome}: ${portasDe(r, a).length}`).toBe(`${a.nome}: 1`);
+      }
+      const suite = r.ambientes.find((a) => a.item.id === 'suite1');
+      const banho = r.ambientes.find((a) => a.item.id === 'bsuite1');
+      if (suite && banho && !r.avisos.some((x) => x.includes(`passando por ${banho.nome}`))) {
+        const [p] = portasDe(r, banho);
+        expect(portasDe(r, suite).some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 1)).toBe(true);
+      }
+    }
+  });
+
+  it('a porta da suíte para a circulação fica na ponta do lado comum (a até 0,30 m de um canto da suíte)', () => {
+    let vistas = 0;
+    for (const r of casos) {
+      const suite = r.ambientes.find((a) => a.item.id === 'suite1');
+      const corredor = r.ambientes.find((a) => a.zona === 'CIRCULACAO');
+      if (!suite || !corredor) continue;
+      const comum = portasDe(r, suite).filter((p) => portasDe(r, corredor).some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 1));
+      for (const p of comum) {
+        vistas++;
+        const { x0, y0, x1, y1 } = suite.ret;
+        const doCanto = Math.min(...[[x0, y0], [x1, y0], [x0, y1], [x1, y1]].map(([cx, cy]) => Math.hypot(p.x - cx, p.y - cy))) - p.meia;
+        expect(doCanto).toBeLessThanOrEqual(300);
+      }
+    }
+    expect(vistas).toBeGreaterThan(0);
+  });
+});

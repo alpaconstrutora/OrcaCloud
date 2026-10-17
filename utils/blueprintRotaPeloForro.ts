@@ -450,6 +450,48 @@ export interface PedacoDaDescida {
   cotaBMm: number;
 }
 
+/** F20: o raio presumido do tubo que ainda descerá até um ponto da outra água, mm. */
+const RAIO_DA_PRUMADA_FUTURA_MM = 12.5;
+
+/** Os tubos de OUTRAS redes perto da descida (no mundo) e, F20, as prumadas que ainda virão até os pontos da outra água. */
+function obstaculosDaDescida(
+  model: BlueprintModel,
+  levelId: ObjectId,
+  o: { q: P2; cotaDaFaixaMm: number; alvo: P2; disciplina?: DisciplinaDeRede | null },
+  w: P2 | null,
+  parede: ReturnType<typeof paredeQueContem>,
+): { e0: number; outros: { A: { x: number; y: number; z: number }; B: { x: number; y: number; z: number }; r: number }[] } {
+  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+  const e0 = elevacao.get(levelId) ?? 0;
+  const alcance = DESLIZE_DA_DESCIDA_MM + Math.hypot(o.q.x - (w ?? o.alvo).x, o.q.y - (w ?? o.alvo).y) + 300;
+  const outros: { A: { x: number; y: number; z: number }; B: { x: number; y: number; z: number }; r: number }[] = (model.trechos ?? [])
+    .filter((t) => t.disciplina !== o.disciplina && Math.min(t.a.x, t.b.x) < o.q.x + alcance && Math.max(t.a.x, t.b.x) > o.q.x - alcance && Math.min(t.a.y, t.b.y) < o.q.y + alcance && Math.max(t.a.y, t.b.y) > o.q.y - alcance)
+    .map((t) => {
+      const env = envelopeDoTrecho(t);
+      const e = elevacao.get(t.levelId) ?? 0;
+      return { A: { x: t.a.x, y: t.a.y, z: e + t.cotaAMm }, B: { x: t.b.x, y: t.b.y, z: e + t.cotaBMm }, r: Math.max(env.raioPlantaMm, env.raioVerticalMm) };
+    });
+  // F20 da casa automática (17/10/2026): o ponto da OUTRA água ainda sem tubo é a prumada que ainda virá — a descida do
+  // forro até ele, no ponto e no eixo da parede. A fria (traçada antes) escorregava na parede e voltava na cota da pia
+  // passando diante do ponto da quente; a quente, depois, cruzava a fria para chegar a ele (cozinha, 15 × 30).
+  const outraAgua = o.disciplina === 'AGUA_FRIA' ? 'AGUA_QUENTE' : o.disciplina === 'AGUA_QUENTE' ? 'AGUA_FRIA' : null;
+  if (outraAgua) {
+    const pontas = new Set((model.trechos ?? []).filter((t) => t.levelId === levelId && t.disciplina === outraAgua).flatMap((t) => [`${t.a.x},${t.a.y},${t.cotaAMm}`, `${t.b.x},${t.b.y},${t.cotaBMm}`]));
+    for (const k of model.terminais ?? []) {
+      if (k.levelId !== levelId || k.disciplina !== outraAgua || k.cotaMm >= o.cotaDaFaixaMm || pontas.has(`${k.at.x},${k.at.y},${k.cotaMm}`)) continue;
+      if (Math.abs(k.at.x - o.q.x) > alcance || Math.abs(k.at.y - o.q.y) > alcance) continue;
+      const lugares: P2[] = [k.at];
+      if (parede) {
+        const s0 = (k.at.x - parede.parede.a.x) * parede.u.x + (k.at.y - parede.parede.a.y) * parede.u.y;
+        lugares.push({ x: parede.parede.a.x + parede.u.x * s0, y: parede.parede.a.y + parede.u.y * s0 });
+      }
+      // Só a parte DENTRO da parede: no forro, o cruzamento das faixas já é resolvido (F14b/F16).
+      for (const q of lugares) outros.push({ A: { x: q.x, y: q.y, z: e0 + k.cotaMm }, B: { x: q.x, y: q.y, z: e0 + o.cotaDaFaixaMm - 100 }, r: RAIO_DA_PRUMADA_FUTURA_MM });
+    }
+  }
+  return { e0, outros };
+}
+
 /**
  * Do nó da rede no forro (`q`, na cota da faixa) até a peça (`alvo`, na cota dela).
  *
@@ -477,7 +519,18 @@ export function descidaDoForro(
   // só há a verga, e a descida e o trecho na parede passavam pelo vão. A descida entra na parede AO LADO da janela,
   // desce até a cota do ponto (abaixo do peitoril) e corre por baixo até ele.
   if (o.naParede) {
-    const lateral = foraDoVao(model, levelId, o.naParede, Math.min(o.cotaDoAlvoMm, o.cotaDaFaixaMm), Math.max(o.cotaDoAlvoMm, o.cotaDaFaixaMm), o.raioMm);
+    // F20: dos dois batentes, o primeiro (o mais perto antes) cuja corrida por baixo da janela até o ponto não cruza
+    // outra rede nem a prumada que ainda virá — a fria contornava pelo batente onde o ponto da quente ia descer.
+    const laterais = ladosForaDoVao(model, levelId, o.naParede, Math.min(o.cotaDoAlvoMm, o.cotaDaFaixaMm), Math.max(o.cotaDoAlvoMm, o.cotaDaFaixaMm), o.raioMm);
+    const naParede = o.naParede;
+    const corridaLivre = (lat: P2) => {
+      if (!o.disciplina) return true;
+      const { e0, outros } = obstaculosDaDescida(model, levelId, o, naParede, paredeQueContem(model, levelId, naParede));
+      const A = { x: lat.x, y: lat.y, z: e0 + o.cotaDoAlvoMm };
+      const B = { x: naParede.x, y: naParede.y, z: e0 + o.cotaDoAlvoMm };
+      return outros.every((t) => distanciaEntreEixos3D(A, B, t.A, t.B) > o.raioMm + t.r + FOLGA_DA_DESCIDA_MM);
+    };
+    const lateral = laterais.find(corridaLivre) ?? laterais[0] ?? null;
     const abaixo = lateral ? !foraDoVao(model, levelId, o.naParede, o.cotaDoAlvoMm - o.raioMm, o.cotaDoAlvoMm + o.raioMm, o.raioMm) : false;
     if (lateral && abaixo && (lateral.x !== o.naParede.x || lateral.y !== o.naParede.y)) {
       // O nó do forro anda junto, no forro (a faixa), para descer já ao lado da janela.
@@ -544,17 +597,8 @@ export function descidaDoForro(
   };
   if (!o.disciplina) return montar(cabeca(o.q, true));
 
-  // Os tubos de OUTRAS redes por perto (no mundo: cota + elevação do pavimento).
-  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
-  const e0 = elevacao.get(levelId) ?? 0;
-  const alcance = DESLIZE_DA_DESCIDA_MM + Math.hypot(o.q.x - (w ?? o.alvo).x, o.q.y - (w ?? o.alvo).y) + 300;
-  const outros = (model.trechos ?? [])
-    .filter((t) => t.disciplina !== o.disciplina && Math.min(t.a.x, t.b.x) < o.q.x + alcance && Math.max(t.a.x, t.b.x) > o.q.x - alcance && Math.min(t.a.y, t.b.y) < o.q.y + alcance && Math.max(t.a.y, t.b.y) > o.q.y - alcance)
-    .map((t) => {
-      const env = envelopeDoTrecho(t);
-      const e = elevacao.get(t.levelId) ?? 0;
-      return { A: { x: t.a.x, y: t.a.y, z: e + t.cotaAMm }, B: { x: t.b.x, y: t.b.y, z: e + t.cotaBMm }, r: Math.max(env.raioPlantaMm, env.raioVerticalMm) };
-    });
+  // Os tubos de OUTRAS redes por perto (no mundo: cota + elevação do pavimento) e as prumadas que ainda virão.
+  const { e0, outros } = obstaculosDaDescida(model, levelId, o, w, parede);
   const livre = (c: ReturnType<typeof cabeca>) => {
     for (let i = 1; i < c.pts.length; i++) {
       const A = { x: c.pts[i - 1].p.x, y: c.pts[i - 1].p.y, z: e0 + c.pts[i - 1].z };
@@ -665,6 +709,15 @@ function paredeQueContem(model: BlueprintModel, levelId: ObjectId, w: P2): { par
  * do lado do batente mais próximo (fora do vão, com folga), onde ela desce; `null` se não cai.
  */
 function foraDoVao(model: BlueprintModel, levelId: ObjectId, w: P2, zLo: number, zHi: number, raioMm: number): P2 | null {
+  return ladosDoVao(model, levelId, w, zLo, zHi, raioMm, false)[0] ?? null;
+}
+
+/** F20: os dois lados do vão (o mais perto primeiro) — vazio se `w` não está em vão. */
+function ladosForaDoVao(model: BlueprintModel, levelId: ObjectId, w: P2, zLo: number, zHi: number, raioMm: number): P2[] {
+  return ladosDoVao(model, levelId, w, zLo, zHi, raioMm, true);
+}
+
+function ladosDoVao(model: BlueprintModel, levelId: ObjectId, w: P2, zLo: number, zHi: number, raioMm: number, todos: boolean): P2[] {
   for (const parede of model.walls) {
     if (parede.levelId !== levelId) continue;
     const L = Math.hypot(parede.b.x - parede.a.x, parede.b.y - parede.a.y);
@@ -684,8 +737,10 @@ function foraDoVao(model: BlueprintModel, levelId: ObjectId, w: P2, zLo: number,
       const lado = t - antes <= depois - t && antes >= 0 ? antes : depois <= L ? depois : antes;
       // O ponto do lado, no mesmo afastamento do eixo que `w`.
       const s = (w.x - parede.a.x) * u.y - (w.y - parede.a.y) * u.x;
-      return { x: Math.round(parede.a.x + u.x * lado + u.y * s), y: Math.round(parede.a.y + u.y * lado - u.x * s) };
+      const noLado = (x: number) => ({ x: Math.round(parede.a.x + u.x * x + u.y * s), y: Math.round(parede.a.y + u.y * x - u.x * s) });
+      if (todos) return [lado, ...[antes, depois].filter((x) => x !== lado && x >= 0 && x <= L)].map(noLado);
+      return [noLado(lado)];
     }
   }
-  return null;
+  return [];
 }

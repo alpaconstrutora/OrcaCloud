@@ -219,4 +219,27 @@ describe('F18 da casa automática', () => {
     const ultimo = pedacos[pedacos.length - 1];
     expect([ultimo.b, ultimo.cotaBMm]).toEqual([alvo, 900]);
   });
+
+  it('F20: sob a janela, a fria contorna pelo batente cuja corrida por baixo NÃO passa onde a quente (ainda sem tubo) vai descer', () => {
+    const { m: m0, L, meio } = casinha();
+    const m = applyBatch(m0, [
+      { type: 'AddOpening', wallId: meio, kind: 'window', offsetMm: 500, widthMm: 1000, heightMm: 1380, sillMm: 1000 },
+      // O ponto da quente logo fora do batente de baixo (y = 0,47 m), ainda sem tubo; o da fria sob a janela, a 0,70 m.
+      { type: 'AddTerminal', levelId: L, disciplina: 'AGUA_QUENTE', tipo: 'Pia', at: point(2925, 470), cotaMm: 900, tipoHidraulico: 'PIA_COZINHA' },
+    ] as Command[]).model;
+    const alvo = point(2925, 700);
+    const pedacos = descidaDoForro(m, L, { q: point(2825, 700), cotaDaFaixaMm: 2685, alvo, cotaDoAlvoMm: 900, naParede: alvo, raioMm: 12, folgaSobAVigaMm: 30, disciplina: 'AGUA_FRIA' });
+    expect(pedacos.length).toBeGreaterThan(0);
+    // A descida da quente (na face e no eixo da parede, da cota do ponto para cima) fica livre: raio + raio + folga.
+    for (const p of pedacos) {
+      for (let k = 0; k <= 40; k++) {
+        const f = k / 40;
+        const [x, y, z] = [p.a.x + (p.b.x - p.a.x) * f, p.a.y + (p.b.y - p.a.y) * f, p.cotaAMm + (p.cotaBMm - p.cotaAMm) * f];
+        if (z < 900 - 30) continue;
+        for (const vx of [2925, 3000]) expect(Math.hypot(x - vx, y - 470), JSON.stringify(p)).toBeGreaterThan(12 + 12.5);
+      }
+    }
+    const ultimo = pedacos[pedacos.length - 1];
+    expect([ultimo.b, ultimo.cotaBMm]).toEqual([alvo, 900]);
+  });
 });

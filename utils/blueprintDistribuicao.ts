@@ -815,9 +815,18 @@ export function pontoJuntoAPorta(
     const o1 = paraLado(porta.offsetMm);
     const o2 = paraLado(porta.offsetMm + porta.widthMm);
     const [ombreiraA, ombreiraB] = o1 < o2 ? [o1, o2] : [o2, o1];
+    // F20 da casa automática (17/10/2026): nunca dentro de OUTRO vão da parede na altura do interruptor — a porta de
+    // entrada a 15 cm da janela punha o interruptor no vidro, e o eletroduto descia por dentro da janela.
+    const emVao = (d: number) =>
+      openings.some((o) => {
+        if (o.wallId !== parede.id || o === porta) return false;
+        if (o.kind === 'window' && (o.sillMm >= COTA_USUAL_INTERRUPTOR_MM + MARGEM_DO_PONTO_AO_VAO_MM || o.sillMm + o.heightMm <= COTA_USUAL_INTERRUPTOR_MM - MARGEM_DO_PONTO_AO_VAO_MM)) return false;
+        const [a, b] = [paraLado(o.offsetMm), paraLado(o.offsetMm + o.widthMm)].sort((x, y) => x - y);
+        return d > a - MARGEM_DO_PONTO_AO_VAO_MM && d < b + MARGEM_DO_PONTO_AO_VAO_MM;
+      });
     // Do lado em que sobra parede; prefere depois da porta.
     const candidatos = [ombreiraB + afastamentoMm, ombreiraA - afastamentoMm].filter(
-      (d) => d > 0 && d < compLado,
+      (d) => d > 0 && d < compLado && !emVao(d),
     );
     if (candidatos.length === 0) continue;
     const f = candidatos[0] / compLado;
@@ -842,6 +851,8 @@ export function proximaLetraDeComando(space: Space, terminais: readonly Terminal
 
 /** Interruptor à altura da mão. */
 export const COTA_USUAL_INTERRUPTOR_MM = 1100;
+/** F20: a distância mínima do interruptor junto à porta à ombreira de outro vão da parede, mm. */
+const MARGEM_DO_PONTO_AO_VAO_MM = 60;
 
 /** E6.3: as opções da malha de luminárias (m² por luminária); `null` = uma por ambiente. */
 export const AREAS_POR_LUMINARIA_M2: readonly (number | null)[] = [null, 6, 9, 12, 16];

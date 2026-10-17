@@ -191,6 +191,22 @@ describe('E1.4 — dimensionar por pressão', () => {
     }
   });
 
+  it('F20 da casa automática: depois do ajuste, o DN nunca CRESCE da caixa rumo ao ponto (a rede é uma árvore)', async () => {
+    const { m } = sala();
+    const { planejarAgua } = await import('../utils/blueprintAguaAutomatica');
+    const { comAjusteDePressao } = await import('../utils/blueprintPressaoDaRede');
+    const caixa = m.terminais!.find((x) => x.tipoHidraulico === 'RESERVATORIO')!;
+    const ajustado = comAjusteDePressao(m, planejarAgua(m, caixa));
+    expect(ajustado.ajustadosPorPressao).toBeGreaterThan(0);
+    const depois = applyBatch(m, ajustado.comandos).model;
+    const porId = new Map(depois.trechos!.map((t) => [t.id, t]));
+    const r = pressoesDoModelo(depois)[0];
+    for (const [ponto, caminho] of Object.entries(r.caminhos)) {
+      const dns = caminho.map((id) => porId.get(id)!.bitolaMm);
+      for (let i = 1; i < dns.length; i++) expect(`${ponto} #${i}: ${dns[i]} ≤ ${dns[i - 1]}`).toBe(`${ponto} #${i}: ${Math.min(dns[i], dns[i - 1])} ≤ ${dns[i - 1]}`);
+    }
+  });
+
   it('chuveiro 70 cm abaixo do fundo da caixa: nenhum diâmetro resolve — o aviso diz o que resolve', async () => {
     const { m, t } = sala();
     const comChuveiro = applyCommand(m, ponto(t, 'CHUVEIRO', 75, 3500, 2100)).model;

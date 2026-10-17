@@ -70,6 +70,11 @@ export interface PecaDeMobiliario {
   /** Preferência de lado: 'CEGO' (sem porta nem janela), 'QUALQUER', 'LIVRE' (não encosta). */
   encosta: 'CEGO' | 'QUALQUER' | 'LIVRE';
   prioridade: number;
+  /**
+   * F20 da casa automática (17/10/2026): versões menores, de mercado, tentadas EM ORDEM quando a peça não cabe — a
+   * faixa de uso fica a mesma (a circulação não encolhe). A usada é declarada em `MobiliarioDoAmbiente.reduzidas`.
+   */
+  variantes?: PecaDeMobiliario[];
 }
 
 const P = (tipo: TipoDePeca, rotulo: string, larguraMm: number, profundidadeMm: number, usoFrenteMm: number, o: Partial<PecaDeMobiliario> = {}): PecaDeMobiliario => ({
@@ -85,16 +90,37 @@ const P = (tipo: TipoDePeca, rotulo: string, larguraMm: number, profundidadeMm: 
   ...o,
 });
 
+/** F20: as versões menores de uma peça (mesmo tipo, encosto, prioridade e faixa de uso), com o rótulo dizendo a medida. */
+const menores = (base: PecaDeMobiliario, medidas: [rotulo: string, larguraMm: number, profundidadeMm: number, tipo?: TipoDePeca][]): PecaDeMobiliario => ({
+  ...base,
+  variantes: medidas.map(([rotulo, larguraMm, profundidadeMm, tipo]) => ({ ...base, tipo: tipo ?? base.tipo, rotulo, larguraMm, profundidadeMm, variantes: undefined })),
+});
+
 /** O kit mínimo por uso, na ordem em que as peças disputam o espaço. */
 export const KIT_POR_USO: Partial<Record<UsoDoAmbiente, PecaDeMobiliario[]>> = {
-  DORMITORIO: [P('CAMA_CASAL', 'Cama de casal', 1400, 1900, 600, { usoLadosMm: 600, encosta: 'CEGO', prioridade: 1 }), P('ARMARIO', 'Armário', 1800, 600, 600, { alta: true, encosta: 'CEGO', prioridade: 2 }), P('CRIADO', 'Criado-mudo', 500, 400, 0, { prioridade: 6 })],
-  SUITE: [P('CAMA_CASAL', 'Cama de casal', 1600, 2000, 600, { usoLadosMm: 600, encosta: 'CEGO', prioridade: 1 }), P('ARMARIO', 'Armário', 2400, 600, 600, { alta: true, encosta: 'CEGO', prioridade: 2 }), P('CRIADO', 'Criado-mudo', 500, 400, 0, { prioridade: 6 })],
-  SALA: [P('SOFA', 'Sofá', 2000, 900, 600, { prioridade: 1 }), P('MESA_JANTAR', 'Mesa de jantar', 1400, 900, 600, { usoLadosMm: 600, encosta: 'LIVRE', prioridade: 2 }), P('RACK', 'Rack/TV', 1600, 450, 0, { prioridade: 4 })],
+  DORMITORIO: [
+    menores(P('CAMA_CASAL', 'Cama de casal', 1400, 1900, 600, { usoLadosMm: 600, encosta: 'CEGO', prioridade: 1 }), [['Cama de solteiro', 880, 1880, 'CAMA_SOLTEIRO']]),
+    menores(P('ARMARIO', 'Armário', 1800, 600, 600, { alta: true, encosta: 'CEGO', prioridade: 2 }), [['Armário 1,20 m', 1200, 600], ['Armário 0,90 m', 900, 600]]),
+    P('CRIADO', 'Criado-mudo', 500, 400, 0, { prioridade: 6 }),
+  ],
+  SUITE: [
+    menores(P('CAMA_CASAL', 'Cama de casal', 1600, 2000, 600, { usoLadosMm: 600, encosta: 'CEGO', prioridade: 1 }), [['Cama de casal 1,40 m', 1400, 1900]]),
+    menores(P('ARMARIO', 'Armário', 2400, 600, 600, { alta: true, encosta: 'CEGO', prioridade: 2 }), [['Armário 1,80 m', 1800, 600], ['Armário 1,20 m', 1200, 600], ['Armário 0,90 m', 900, 600]]),
+    P('CRIADO', 'Criado-mudo', 500, 400, 0, { prioridade: 6 }),
+  ],
+  SALA: [P('SOFA', 'Sofá', 2000, 900, 600, { prioridade: 1 }), P('MESA_JANTAR', 'Mesa de jantar', 1400, 900, 600, { usoLadosMm: 600, encosta: 'LIVRE', prioridade: 2 }), menores(P('RACK', 'Rack/TV', 1600, 450, 0, { prioridade: 4 }), [['Rack/TV 1,20 m', 1200, 400]])],
   COZINHA: [P('BANCADA', 'Bancada com pia', 1800, 600, 900, { prioridade: 1 }), P('GELADEIRA', 'Geladeira', 700, 700, 900, { alta: true, prioridade: 2 }), P('FOGAO', 'Fogão', 600, 600, 900, { prioridade: 3 })],
   AREA_DE_SERVICO: [P('TANQUE', 'Tanque', 600, 600, 800, { prioridade: 1 }), P('MAQUINA', 'Máquina de lavar', 600, 650, 800, { prioridade: 2 })],
-  BANHEIRO: [P('BOX', 'Box', 900, 900, 600, { prioridade: 1 }), P('VASO', 'Vaso sanitário', 400, 650, 600, { prioridade: 2 }), P('LAVATORIO', 'Lavatório', 500, 450, 600, { prioridade: 3 })],
-  LAVABO: [P('VASO', 'Vaso sanitário', 400, 650, 600, { prioridade: 1 }), P('LAVATORIO', 'Lavatório', 500, 450, 600, { prioridade: 2 })],
-  ESCRITORIO: [P('ESCRIVANINHA', 'Escrivaninha', 1200, 600, 800, { prioridade: 1 }), P('ARMARIO', 'Estante', 900, 400, 600, { alta: true, encosta: 'CEGO', prioridade: 3 })],
+  BANHEIRO: [
+    menores(P('BOX', 'Box', 900, 900, 600, { prioridade: 1 }), [['Box 0,80 m', 800, 800]]),
+    P('VASO', 'Vaso sanitário', 400, 650, 600, { prioridade: 2 }),
+    menores(P('LAVATORIO', 'Lavatório', 500, 450, 600, { prioridade: 3 }), [['Lavatório pequeno', 400, 350]]),
+  ],
+  LAVABO: [P('VASO', 'Vaso sanitário', 400, 650, 600, { prioridade: 1 }), menores(P('LAVATORIO', 'Lavatório', 500, 450, 600, { prioridade: 2 }), [['Lavatório pequeno', 400, 350]])],
+  ESCRITORIO: [
+    menores(P('ESCRIVANINHA', 'Escrivaninha', 1200, 600, 800, { prioridade: 1 }), [['Escrivaninha 0,90 m', 900, 600]]),
+    menores(P('ARMARIO', 'Estante', 900, 400, 600, { alta: true, encosta: 'CEGO', prioridade: 3 }), [['Estante 0,60 m', 600, 400]]),
+  ],
 };
 
 export interface Retangulo {
@@ -138,6 +164,8 @@ export interface MobiliarioDoAmbiente {
   interno: Retangulo | null;
   pecas: PecaColocada[];
   naoCouberam: string[];
+  /** F20: as peças que só couberam numa versão menor — "Armário → Armário 1,20 m". */
+  reduzidas: string[];
   circulacao: CirculacaoDoAmbiente;
 }
 
@@ -370,7 +398,7 @@ function mobiliarAlinhado(model: BlueprintModel, s: Space, hip: HipotesesDeMobil
   // (`kitDoAmbiente`); o nome fica para o desenho antigo, sem uso na etiqueta (casa automática F7, 15/10/2026).
   const uso = etiquetaDoAmbiente(s, model.labels)?.uso ?? usoDoNome(s.name);
   const rotulo = s.name || 'Ambiente';
-  const vazio = (interno: Retangulo | null): MobiliarioDoAmbiente => ({ spaceId: s.id, levelId: s.levelId, rotulo, uso, giro: null, interno, pecas: [], naoCouberam: [], circulacao: { larguraLivreMm: null, ok90: true, ok120: true, foraDaRota90: [], semPorta: false } });
+  const vazio = (interno: Retangulo | null): MobiliarioDoAmbiente => ({ spaceId: s.id, levelId: s.levelId, rotulo, uso, giro: null, interno, pecas: [], naoCouberam: [], reduzidas: [], circulacao: { larguraLivreMm: null, ok90: true, ok120: true, foraDaRota90: [], semPorta: false } });
   const kit = uso ? KIT_POR_USO[uso] : undefined;
   const anel = anelInternoDoAmbiente(s, paredes);
   const interno = maiorRetanguloInterno(anel);
@@ -379,10 +407,10 @@ function mobiliarAlinhado(model: BlueprintModel, s: Space, hip: HipotesesDeMobil
   const portas = aberturas.filter((a) => a.kind !== 'window');
   const janelas = aberturas.filter((a) => a.kind === 'window');
   const reservados: Retangulo[] = portas.map((p) => giroDaPorta(p, interno, hip.giroDaPortaMm));
-  const ocupadosPecas: Retangulo[] = [];
-  const ocupadosUsos: Retangulo[] = []; // as faixas de uso podem se sobrepor entre si (o pé da cama e a frente do armário dividem a mesma faixa), nunca com peça
-  const pecas: PecaColocada[] = [];
-  const naoCouberam: string[] = [];
+  let ocupadosPecas: Retangulo[] = [];
+  let ocupadosUsos: Retangulo[] = []; // as faixas de uso podem se sobrepor entre si (o pé da cama e a frente do armário dividem a mesma faixa), nunca com peça
+  let pecas: PecaColocada[] = [];
+  let naoCouberam: string[] = [];
   const ladoTemPorta = (l: Lado) => portas.some((p) => p.lado === l);
   const ladoTemJanela = (l: Lado) => janelas.some((p) => p.lado === l);
   const ladoOpostoAPorta = (): Lado | null => {
@@ -409,7 +437,8 @@ function mobiliarAlinhado(model: BlueprintModel, s: Space, hip: HipotesesDeMobil
     // A peça não invade peça, faixa de uso alheia nem giro de porta; a faixa de uso não invade peça.
     return !ocupadosPecas.some((o) => sobrepoe(o, ret) || sobrepoe(o, uso)) && !ocupadosUsos.some((o) => sobrepoe(o, ret)) && !reservados.some((r) => sobrepoe(r, ret));
   };
-  for (const p of [...kit].sort((a, b) => a.prioridade - b.prioridade)) {
+  let reduzidas: string[] = [];
+  const tentar = (p: PecaDeMobiliario): PecaColocada | null => {
     let colocada: PecaColocada | null = null;
     if (p.encosta === 'LIVRE') {
       // No centro; se não couber, encostada como as outras.
@@ -438,13 +467,46 @@ function mobiliarAlinhado(model: BlueprintModel, s: Space, hip: HipotesesDeMobil
         if (colocada) break;
       }
     }
+    return colocada;
+  };
+  const arranjar = (kitDado: PecaDeMobiliario[]) => {
+  ocupadosPecas = [];
+  ocupadosUsos = [];
+  pecas = [];
+  naoCouberam = [];
+  reduzidas = [];
+  for (const p of [...kitDado].sort((a, b) => a.prioridade - b.prioridade)) {
+    // F20: a peça; não cabendo, as versões menores dela, em ordem.
+    let colocada: PecaColocada | null = null;
+    for (const v of [p, ...(p.variantes ?? [])]) {
+      colocada = tentar(v);
+      if (colocada) {
+        if (v !== p) reduzidas.push(`${p.rotulo} → ${v.rotulo}`);
+        break;
+      }
+    }
     if (colocada) {
       pecas.push(colocada);
       ocupadosPecas.push(colocada.ret);
       ocupadosUsos.push(colocada.comUso);
     } else naoCouberam.push(p.rotulo);
   }
-  return { spaceId: s.id, levelId: s.levelId, rotulo, uso, giro: null, interno, pecas, naoCouberam, circulacao: verificarCirculacao(interno, pecas, portas) };
+  return { pecas, naoCouberam, reduzidas };
+  };
+  let melhor = arranjar(kit);
+  // F20: sobrando peça de fora, refaz com UMA peça anterior já na versão menor (a cama de 1,60 m tomava a suíte de
+  // 2,60 × 3,60 m e o armário ficava de fora por 10 cm) — fica o arranjo com menos peças de fora, depois menos reduções.
+  if (melhor.naoCouberam.length) {
+    for (const [i, p] of kit.entries()) {
+      // Só a MEDIDA da anterior encolhe — o tipo fica (a cama de casal não vira de solteiro para caber o armário).
+      for (const v of (p.variantes ?? []).filter((x) => x.tipo === p.tipo)) {
+        const r = arranjar(kit.map((q, j) => (j === i ? { ...v, variantes: undefined } : q)));
+        r.reduzidas = [`${p.rotulo} → ${v.rotulo}`, ...r.reduzidas];
+        if (r.naoCouberam.length < melhor.naoCouberam.length || (r.naoCouberam.length === melhor.naoCouberam.length && r.reduzidas.length < melhor.reduzidas.length)) melhor = r;
+      }
+    }
+  }
+  return { spaceId: s.id, levelId: s.levelId, rotulo, uso, giro: null, interno, pecas: melhor.pecas, naoCouberam: melhor.naoCouberam, reduzidas: melhor.reduzidas, circulacao: verificarCirculacao(interno, melhor.pecas, portas) };
 }
 
 // ─── Circulação livre por grade ──────────────────────────────────────────────

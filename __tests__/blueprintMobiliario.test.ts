@@ -176,3 +176,34 @@ describe('F16 da casa automática: louça diante da porta', () => {
     for (const p of r.pecas) expect(sobrepoe(p.ret, giro), p.peca.tipo).toBe(false);
   });
 });
+
+/**
+ * F20 da casa automática (17/10/2026): a peça que não cabe ganha a versão menor (de mercado; a faixa de uso fica) e, se
+ * ainda sobrar peça de fora, o arranjo é refeito com UMA peça anterior menor — a medida encolhe, o tipo não (a cama de
+ * casal não vira de solteiro para caber o armário). A usada é declarada em `reduzidas`.
+ */
+describe('F20 — variantes do mobiliário', () => {
+  const suite = (w: number, d: number) => {
+    const { m, spaceId } = comodo('Suíte', w, d);
+    return mobiliarDoAmbiente(m, m.spaces.find((s) => s.id === spaceId)!);
+  };
+
+  it('suíte 2,80 × 4,00: o armário de 2,40 não cabe, o de 0,90 sim — declarado', () => {
+    const r = suite(2800, 4000);
+    expect(r.naoCouberam).toEqual([]);
+    expect(r.pecas.find((p) => p.peca.tipo === 'ARMARIO')?.peca.larguraMm).toBe(900);
+    expect(r.reduzidas).toContain('Armário → Armário 0,90 m');
+  });
+
+  it('suíte 3,30 × 3,60: com a cama de 1,60 o armário fica de fora; refeito com a de 1,40, o armário INTEIRO cabe', () => {
+    const r = suite(3300, 3600);
+    expect(r.naoCouberam).toEqual([]);
+    expect(r.pecas.find((p) => p.peca.tipo === 'ARMARIO')?.peca.larguraMm).toBe(2400);
+    expect(r.pecas.find((p) => p.peca.tipo === 'CAMA_CASAL')?.peca.larguraMm).toBe(1400);
+    expect(r.reduzidas).toEqual(['Cama de casal → Cama de casal 1,40 m']);
+  });
+
+  it('a faixa de uso da versão menor é a mesma da peça (a circulação não encolhe)', () => {
+    for (const kit of Object.values(KIT_POR_USO)) for (const p of kit ?? []) for (const v of p.variantes ?? []) expect([v.usoFrenteMm, v.usoLadosMm, v.encosta, v.alta]).toEqual([p.usoFrenteMm, p.usoLadosMm, p.encosta, p.alta]);
+  });
+});

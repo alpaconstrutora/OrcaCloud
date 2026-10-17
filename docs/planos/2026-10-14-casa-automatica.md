@@ -2003,7 +2003,7 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 
 - [x] F18 — redes nas 8 casas: nenhuma em vão, nenhum rede × rede, nada atravessando pilar (ver "Registro da F18"; 2 luzes em sobra de cômodo vão para a F21)
 - [x] F19 — climatização: ponto de dados, eletroduto força → condensadora, camadas da cobertura (ver "Registro da F19")
-- [ ] F20 — mobiliário: peça que não cabe ganha variante (cama, box, vaso/lavatório, armário)
+- [x] F20 — mobiliário: peça que não cabe ganha variante (cama, box, vaso/lavatório, armário) (ver "Registro da F20"; 2 cômodos estreitos demais vão para a F22)
 - [ ] F21 — gerador: molhados e escritório com lado externo; porta direta nas relações obrigatórias; nenhum "Ambiente N"
 - [ ] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO
 - [ ] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo
@@ -2121,3 +2121,50 @@ O que mudou, por causa:
 Testes novos (reprovam sem a correção): bloco/estaca e móvel do outro lado da parede (`blueprintClimatizacaoGrupoF`); a
 viga baixa sem conflito com a linha/dreno e sem encontro entre eles; a janela larga sob a viga baixa (nada no vão, longe
 dos pontos elétricos); a travessia um pouco ao lado (as descidas separadas) (`blueprintLinhaFrigorigena`).
+
+**Publicado** 17/10/2026: 7b307b70 + d3a4cead na main (CI da PR #24 e check-run `ci` da main verdes; `conferir-producao.sh "Casa automática"` ✅ — o domínio serve 071b77b, que contém d3a4cead). O CI pegou o que a máquina não roda: as três folgas novas precisavam entrar em `HIPOTESES_DA_LINHA_PADRAO`/`LIMITES_DA_LINHA` (agora também campos do painel da linha).
+
+### Registro da F20 (17/10/2026) — o mobiliário
+
+Retrato antes (sonda: `mobiliarNivel` sobre o resultado, com as aberturas de cada cômodo e para onde dão): 25 peças de fora
+nas 8 casas — vaso e lavatório em 4 banheiros de suíte, box em 2 banheiros, o armário da suíte em 6 casas, a cama em 3. A
+causa principal NÃO era o mobiliário: os **banheiros tinham duas portas** — o da suíte abria também para o dormitório ao
+lado, o social para a sala E a varanda — e a segunda porta tomava o lado do vaso.
+
+Depois (8 casas, 2×): nenhum banheiro com peça de fora; 0 em vão e 0 rede × rede em todas (PILAR 2 no 15 × 30 4 dorm. e
+no R1-A: as luzes da sobra de cômodo, F21). Peças menores, declaradas como CONFERIR: o armário da suíte em 6 casas (1,80 m
+em 2, 1,20 m em 3, 0,90 m em 1), o dos dormitórios do 15 × 25 (1,20 m), o rack de 2 salas, o lavatório de 1 banheiro.
+Ficam de fora, para a **F22** (o cômodo é que não cabe o programa): a suíte de 2,60 × 3,60 m do R1-B (sem armário) e a de
+1,60 m de largura do 10 × 30 4 dorm. (sem cama).
+
+O que mudou, por causa:
+
+- **Banheiro é folha** (gerador, busca das portas): o banheiro e o lavabo recebem UMA porta e não abrem para ninguém; o
+  com relação obrigatória (o da suíte) só é alcançado pelo seu par. Se um cômodo só se alcança atravessando um molhado (o
+  desenho não deu outro lado comum), a passagem é aberta e DITA ("só tem acesso passando por…") — melhor que sem acesso.
+  A porta de entrada da casa nunca vai para o banheiro/lavabo (sem lado da sala na frente, ia para o lavabo).
+- **Porta interna na ponta**: entre cômodos secos, a porta vai para a ponta do lado comum (a 15 cm do canto), a mais perto
+  das outras portas do cômodo — no meio, as duas portas da suíte e a janela partiam três lados ao meio. A porta do banheiro
+  fica no meio (na ponta, o giro dela tomava o lado do lavatório — medido).
+- **Variantes** (`PecaDeMobiliario.variantes`, medidas de mercado, a faixa de uso fica a mesma): cama da suíte 1,60 → 1,40;
+  cama do dormitório casal → solteiro; armário da suíte 2,40 → 1,80 → 1,20 → 0,90; do dormitório 1,80 → 1,20 → 0,90; box
+  0,90 → 0,80; lavatório → pequeno; rack 1,60 → 1,20; escrivaninha e estante menores. A usada é declarada
+  (`MobiliarioDoAmbiente.reduzidas` → pendência CONFERIR na casa).
+- **Refazer com a anterior menor**: sobrando peça de fora, o arranjo é refeito com UMA peça anterior na versão menor — só a
+  medida, nunca o tipo (a cama de casal não vira de solteiro para caber o armário) — e fica o de menos peças de fora.
+
+Efeitos em cascata (as portas mudaram os pontos), tratados pela causa:
+
+- **Ajuste de DN por pressão** (`ajustarDnPorPressao`): escolhia o trecho pela perda POR METRO — um pedaço de 5 cm com uma
+  conexão subia até 54 mm entre dois de 35, sem ganho, e furava a faixa da fria no forro (sobrado). Agora o trecho conta no
+  mínimo 1 m e nunca fica maior que o de montante (árvore).
+- **Descida da água sob janela**: a fria contornava pelo batente onde a quente (ainda sem tubo) ia descer. Os pontos da
+  outra água sem tubo são prumadas futuras (dentro da parede) e, dos dois batentes, vale o primeiro com a corrida por baixo
+  livre (cozinha do 15 × 30 4 dorm.).
+- **Interruptor junto à porta** (`pontoJuntoAPorta`): nunca dentro de outro vão da parede na altura dele — a entrada a 15 cm
+  da janela punha o interruptor no vidro, e o eletroduto descia pela janela (4 casas).
+
+Testes novos (reprovam sem a correção): banheiro com uma porta e porta da suíte na ponta (`blueprintGerador`); armário de
+0,90 e cama de 1,40 para caber o armário inteiro (`blueprintMobiliario`); DN que não cresce rumo ao ponto
+(`blueprintPressaoDaRede`); a fria pelo batente livre (`blueprintRotaPeloForro`); o interruptor fora da janela
+(`blueprintNbr5410Iluminacao`).

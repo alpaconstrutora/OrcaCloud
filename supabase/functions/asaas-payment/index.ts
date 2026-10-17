@@ -154,7 +154,14 @@ serve(async (req: Request) => {
             }
         }
 
-        await admin.from('supplier_payments').update({ status: 'CANCELLED', updated_at: new Date().toISOString() }).eq('id', sp.id);
+        // cancelled_by_email: o histórico (gatilho de auditoria) atribui o
+        // cancelamento a quem clicou — sem isso, sairia como "Asaas".
+        await admin.from('supplier_payments').update({
+            status: 'CANCELLED',
+            cancelled_by_email: userEmail,
+            cancelled_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }).eq('id', sp.id);
         if (sp.boleto_id) {
             await admin.from('boletos').update({ status: 'aprovado' }).eq('id', sp.boleto_id)
                 .eq('status', 'programado'); // só reverte se ainda estava programado (não sobrescreve 'pago')

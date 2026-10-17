@@ -78,6 +78,11 @@ export interface HipotesesDePilares {
   incluirInternas: boolean;
   /** Intermediário desvia de porta/janela/vão livre. */
   evitarAberturas: boolean;
+  /**
+   * F23 da casa automática (17/10/2026): no sobrado, até onde o pilar do superior que cairia sobre uma porta ou janela do
+   * térreo escorrega pela parede de cima até ter parede cheia embaixo, mm. Ausente = 1200.
+   */
+  deslizeSobreAberturaMm?: number;
 }
 
 export const HIPOTESES_PILARES_PADRAO: HipotesesDePilares = {

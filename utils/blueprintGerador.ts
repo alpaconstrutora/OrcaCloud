@@ -78,7 +78,11 @@ export interface HipotesesDoGerador {
   larguraPortaMm: number;
   larguraEntradaMm: number;
   alturaPortaMm: number;
-  janela: { alturaMm: number; peitorilMm: number; fracaoDoLado: number; minMm: number; maxMm: number };
+  /**
+   * `montanteMm` (F23, 17/10/2026): a janela pedida pela norma acima de `maxMm` vira várias, separadas por montantes desta
+   * largura — onde o pilar intermediário cabe (seção 19 cm + a folga da abertura dos dois lados). Ausente = 400.
+   */
+  janela: { alturaMm: number; peitorilMm: number; fracaoDoLado: number; minMm: number; maxMm: number; montanteMm?: number };
   /** Quando não há envelope (sem lote): o retângulo a preencher. */
   retanguloSemEnvelope: { larguraMm: number; profundidadeMm: number };
   automaticos: boolean;
@@ -813,6 +817,9 @@ function offsetNaParede(w: Wall, p: Point): number {
   return Math.hypot(p.x - w.a.x, p.y - w.a.y);
 }
 
+/** F23: o padrão de `HipotesesDoGerador.janela.montanteMm`, mm. */
+const MONTANTE_ENTRE_JANELAS_MM = 400;
+
 export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Partial<HipotesesDoGerador> = {}): ResultadoDoGerador {
   const hip: HipotesesDoGerador = {
     ...HIPOTESES_DO_GERADOR_PADRAO,
@@ -1258,6 +1265,28 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
         off = encaixar(w, offsetNaParede(w, meio) - largura / 2, largura, lo, hi);
       }
       if (off === null) continue;
+      // F23 da casa automática (17/10/2026): acima do máximo estético, a janela vira VÁRIAS com montantes entre elas — uma
+      // só de 5 m tomava o vão inteiro entre dois apoios e o pilar intermediário não tinha onde nascer (R1-A). O conjunto
+      // cresce o que os montantes tiram, se a parede deixa (senão, a mesma largura total).
+      const montante = hip.janela.montanteMm ?? MONTANTE_ENTRE_JANELAS_MM;
+      const partes = largura > hip.janela.maxMm ? Math.ceil(largura / hip.janela.maxMm) : 1;
+      if (partes > 1) {
+        const maior = largura + (partes - 1) * montante;
+        const offMaior = encaixar(w, offsetNaParede(w, meio) - maior / 2, maior, lo, hi);
+        const total = offMaior !== null ? maior : largura;
+        const inicio = offMaior !== null ? offMaior : off;
+        const cada = Math.floor((total - (partes - 1) * montante) / partes / hip.malhaMm) * hip.malhaMm;
+        if (cada >= 600) {
+          reservar(w, inicio, total);
+          for (let k = 0; k < partes; k++) {
+            aberturas.push({ type: 'AddOpening', wallId: w.id, wallUid: w.uid, kind: 'window', offsetMm: inicio + k * (cada + montante), widthMm: cada, heightMm: alturaDaJanela, sillMm: banheiro ? 1600 : hip.janela.peitorilMm });
+          }
+          janelas.push(`${a.nome} (${escolhido.lado}, ${partes} folhas)`);
+          faltaMm2 -= partes * cada * alturaDaJanela;
+          algumaJanela = true;
+          continue;
+        }
+      }
       // Sem aviso quando ainda falta área: a estimativa do piso útil é conservadora e o aviso saía com a regra de
       // iluminação CONFORME. Quem acusa é a regra (`sem-iluminacao-*`), pela área útil de verdade.
       reservar(w, off, largura);

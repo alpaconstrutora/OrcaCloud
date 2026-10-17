@@ -289,10 +289,16 @@ export default function TelaCasaAutomatica(props: Props) {
                 <Numero rotulo="Piso acabado (cm)" valor={p.forro.pisoAcabadoMm / 10} min={0} max={15} passo={0.5} onValor={(v) => v != null && set('forro', { pisoAcabadoMm: Math.round(v * 10) })} />
               </>
             )}
+            {p.disciplinas.estrutura && (
+              <Numero rotulo="Montante entre folhas de janela (cm)" valor={p.estrutura.montanteEntreJanelasMm / 10} min={20} max={100} passo={5} onValor={(v) => v != null && set('estrutura', { montanteEntreJanelasMm: Math.round(v * 10) })} />
+            )}
             {p.pavimentos !== 1 && (
               <>
                 <Numero rotulo="Laje entre os pavimentos (cm)" valor={p.sobrado.lajeEntrePavimentosMm / 10} min={8} max={30} onValor={(v) => v != null && set('sobrado', { lajeEntrePavimentosMm: Math.round(v * 10) })} />
                 <Numero rotulo="Shaft das instalações (cm)" valor={p.sobrado.shaftMm / 10} min={20} max={80} passo={5} onValor={(v) => v != null && set('sobrado', { shaftMm: Math.round(v * 10) })} />
+                {p.disciplinas.estrutura && (
+                  <Numero rotulo="Pilar de cima foge da abertura de baixo até (m)" valor={p.estrutura.deslizeSobreAberturaMm / 1000} min={0} max={3} passo={0.05} onValor={(v) => v != null && set('estrutura', { deslizeSobreAberturaMm: Math.round(v * 1000) })} />
+                )}
               </>
             )}
           </div>

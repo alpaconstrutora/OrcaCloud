@@ -501,6 +501,9 @@ export interface PilaresDoSobrado {
   sobreAbertura: number;
 }
 
+/** F23: o padrão de `HipotesesDePilares.deslizeSobreAberturaMm`. */
+const DESLIZE_SOBRE_ABERTURA_MM = 1200;
+
 /**
  * Os pilares do sobrado, ALINHADOS: um pilar é uma prumada. O térreo pelo planejador de sempre; cada pilar do térreo
  * que tem parede do superior em cima CONTINUA no superior (a mesma seção, no mesmo ponto); o planejador do superior
@@ -569,7 +572,28 @@ export function pilaresDoSobrado(
   const semApoioEm: Point[] = [];
   let nascemEmViga = 0;
   let n = proximoNumeroDePilar(m);
-  for (const x of pS.pilares) {
+  for (const x0 of pS.pilares) {
+    // F23 da casa automática (17/10/2026): o pilar do superior que cairia sobre uma porta ou janela do térreo escorrega pela
+    // parede de cima (fora das aberturas dela) até ter parede cheia embaixo — descartado, a viga de cima vencia o vão maior.
+    // Tenta cada parede do pilar (no T, a primeira pode ser a interna, sem parede embaixo) — o menor deslocamento vence.
+    let x = x0;
+    if (!paredeSobOPonto(m, T, x.at, meio(x)) && paredeSobOPonto(m, T, x.at, 0, true)) {
+      const sentidos = x.wallIds.flatMap((id) => {
+        const w = m.walls.find((y) => y.id === id);
+        const L = w ? Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) : 0;
+        return w && L > 1 ? [{ x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L }] : [];
+      });
+      const alcance = hip.deslizeSobreAberturaMm ?? DESLIZE_SOBRE_ABERTURA_MM;
+      for (let d = 50; d <= alcance; d += 50) {
+        const q = sentidos
+          .flatMap((u) => [d, -d].map((k) => point(Math.round(x.at.x + u.x * k), Math.round(x.at.y + u.y * k))))
+          .find((q) => paredeSobOPonto(m, T, q, meio(x)) && paredeSobOPonto(m, S, q, meio(x)));
+        if (q) {
+          x = { ...x, at: q };
+          break;
+        }
+      }
+    }
     const embaixo = paredeSobOPonto(m, T, x.at, meio(x));
     const naViga = !embaixo && sobreAlgumTrecho(transicao, x.at);
     if (!embaixo && !naViga) {

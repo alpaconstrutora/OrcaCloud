@@ -1118,3 +1118,31 @@ describe('F22 — a área de serviço com fachada e junto da cozinha (lote 12 ×
     expect(plano.pendencias.filter((p) => /Cozinha × Área de serviço/.test(p.texto)).map((p) => p.texto)).toEqual([]);
   });
 });
+
+/**
+ * F23 (17/10/2026) — a estrutura das casas de referência: o nó a menos de uma seção de outro pilar é atendido por ele
+ * (CONFERIR, não VERIFICACAO) e a janela grande do R1-A sai em folhas, deixando lugar ao pilar intermediário.
+ */
+describe('F23 — estrutura: pilar vizinho e pilar entre aberturas', () => {
+  const lote = (w: number, dd: number) => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = base.levels[0].id;
+    const d = (a: Point, b: Point, papel: Papel): Command => ({ type: 'AddBoundary', levelId, a, b, kind: 'TERRENO', papel });
+    return applyBatch(base, [d(point(0, 0), point(w, 0), 'FRENTE'), d(point(w, 0), point(w, dd), 'LATERAL_DIREITA'), d(point(w, dd), point(0, dd), 'FUNDOS'), d(point(0, dd), point(0, 0), 'LATERAL_ESQUERDA')]).model;
+  };
+
+  it('15 × 30, 4 dormitórios: o encontro colado em outro pilar é para conferir — o vizinho atende os dois', () => {
+    const m = lote(15000, 30000);
+    const p = planejarCasa(m, entrada(m, { curto: { ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, suites: 1, banheiros: 3, vagas: 2 } }), { pavimentos: 1 });
+    const colados = p.pendencias.filter((x) => /a menos de uma seção de outro pilar/.test(x.texto));
+    expect(colados.length).toBeGreaterThan(0);
+    expect(colados.map((x) => x.grupo)).toEqual(colados.map(() => 'CONFERIR'));
+    expect(colados.every((x) => /o pilar vizinho atende os dois encontros/.test(x.texto))).toBe(true);
+  }, 120_000);
+
+  it('14 × 28 R1-A: nenhum intermediário "sem posição livre entre aberturas" (a janela de 5 m vira folhas)', () => {
+    const m = lote(14000, 28000);
+    const p = planejarCasa(m, entrada(m, { curto: { ...PROGRAMA_CURTO_PADRAO, padrao: 'R1-A' } }), { pavimentos: 1 });
+    expect(p.pendencias.filter((x) => /sem posição livre entre aberturas/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+  }, 120_000);
+});

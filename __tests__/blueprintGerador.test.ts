@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { point, snapshotHash } from '../utils/blueprintKernel';
-import { comandosDeGeometria, frenteDePareto, gerar, gerarAlternativas, ladoDaFrente, maiorRetanguloInscrito, nomesParaOModelo, prng } from '../utils/blueprintGerador';
+import { HIPOTESES_DO_GERADOR_PADRAO, comandosDeGeometria, frenteDePareto, gerar, gerarAlternativas, ladoDaFrente, maiorRetanguloInscrito, nomesParaOModelo, prng } from '../utils/blueprintGerador';
 import { PROGRAMA_CURTO_PADRAO, programaDaCasa, programaSemente } from '../utils/blueprintPrograma';
 import { applyBatch, applyCommand, emptyModel } from '../utils/blueprintKernel';
 
@@ -276,5 +276,39 @@ describe('F21 — nenhuma sobra de cômodo', () => {
     const env = [point(1500, 3000), point(12500, 3000), point(12500, 20500), point(1500, 20500)];
     const r = gerar({ programa: programas[2], envelope: env, direcaoDaFrente: point(0, -1), rotacaoNorteDeg: null, latitudeGraus: -19.9 }, 1, { automaticos: false });
     expect(r.model.spaces.filter((x) => !x.name).map((x) => x.ring)).toEqual([]);
+  });
+});
+
+/**
+ * F23 (casa automática, 17/10/2026): a janela pedida pela norma acima do máximo estético vira várias, separadas por
+ * montantes — uma só de 5 m tomava o vão inteiro entre dois apoios e o pilar intermediário não tinha onde nascer (R1-A).
+ */
+describe('janela acima do máximo vira folhas com montante', () => {
+  // Folhas = janelas vizinhas na mesma parede, da mesma largura, separadas exatamente pelo montante.
+  const folgasEntreFolhas = (m: ReturnType<typeof gerar>['model']) => {
+    const porParede = new Map<string, { offsetMm: number; widthMm: number }[]>();
+    for (const o of m.openings.filter((x) => x.kind === 'window')) porParede.set(o.wallId, [...(porParede.get(o.wallId) ?? []), o].sort((p, q) => p.offsetMm - q.offsetMm));
+    const pares: { folga: number; largura: number }[] = [];
+    for (const l of porParede.values()) for (let k = 1; k < l.length; k++) if (l[k].widthMm === l[k - 1].widthMm) pares.push({ folga: l[k].offsetMm - (l[k - 1].offsetMm + l[k - 1].widthMm), largura: l[k].widthMm });
+    return pares;
+  };
+  const comMaximo = (maxMm: number, montanteMm?: number) =>
+    gerar(entrada2Q, 1, { automaticos: false, janela: { ...HIPOTESES_DO_GERADOR_PADRAO.janela, maxMm, ...(montanteMm === undefined ? {} : { montanteMm }) } });
+
+  it('a janela pedida acima do máximo sai em folhas de até o máximo, separadas pelo montante (padrão 0,40 m)', () => {
+    const r = comMaximo(1200);
+    expect(r.decisoes.join(' ')).toMatch(/\d folhas/);
+    const folhas = folgasEntreFolhas(r.model).filter((p) => p.folga === 400);
+    expect(folhas.length).toBeGreaterThan(0);
+    for (const p of folhas) {
+      expect(p.largura).toBeLessThanOrEqual(1200);
+      expect(p.largura).toBeGreaterThanOrEqual(600);
+    }
+  });
+
+  it('o montante é hipótese: 0,60 m separa as folhas por 0,60 m', () => {
+    const r = comMaximo(1200, 600);
+    expect(folgasEntreFolhas(r.model).some((p) => p.folga === 600)).toBe(true);
+    expect(folgasEntreFolhas(r.model).some((p) => p.folga === 400)).toBe(false);
   });
 });

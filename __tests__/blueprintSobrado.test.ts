@@ -7,6 +7,7 @@ import { applyBatch, emptyModel, point, type Command, type Point } from '../util
 import { paredesEmComum } from '../utils/blueprintRotaPelasParedes';
 import { programaDaCasa, PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
 import type { AmbienteGerado, Retangulo } from '../utils/blueprintGerador';
+import { HIPOTESES_PILARES_PADRAO } from '../utils/blueprintPilaresAutomaticos';
 import {
   comandoDaEscada,
   dividirPrograma,
@@ -229,6 +230,29 @@ describe('F12b — a estrutura dos dois pavimentos (modelo sintético 8 × 6 m)'
     // pilar ali (o intermediário dele é em y = 3 m): desce.
     expect(pil(T).some((y) => y.pontos[0].x === 0 && y.pontos[0].y === 2000)).toBe(true);
     expect(p.descem).toBeGreaterThanOrEqual(2);
+  });
+
+  it('F23: o pilar do superior que cairia sobre a porta do térreo escorrega pela parede de cima até ter parede cheia embaixo', () => {
+    // Porta no térreo, na fachada x = 0 (desenhada de y = 6 para 0 m), de y = 1,5 a 2,5 m — bem sob o T do superior em (0, 2 m).
+    const fachada = model.walls.find((w) => w.levelId === T && w.a.x === 0 && w.b.x === 0)!;
+    const comPorta = applyBatch(model, [{ type: 'AddOpening', wallId: fachada.id, kind: 'door', offsetMm: 3500, widthMm: 1000, heightMm: 2100 } as Command]).model;
+    const t = trechosDeTransicao(comPorta, T, S);
+    const p = pilaresDoSobrado(comPorta, T, S, undefined, t);
+    expect(p.sobreAbertura).toBe(0);
+    const r = applyBatch(comPorta, p.comandos).model;
+    // Na fachada já havia os cantos e o intermediário do térreo que sobe (y = 0, 3 e 6 m); o do T é o quarto.
+    const naFachada = (L: string) => (r.structures ?? []).filter((x) => x.levelId === L && x.kind === 'PILAR' && x.pontos[0].x === 0 && ![0, 3000, 6000].includes(x.pontos[0].y));
+    expect(naFachada(S)).toHaveLength(1);
+    const at = naFachada(S)[0].pontos[0];
+    expect(at.y < 1500 || at.y > 2500).toBe(true);
+    expect(Math.abs(at.y - 2000)).toBeLessThanOrEqual(1200);
+    expect(paredeSobOPonto(r, T, at, 95)).not.toBeNull();
+    // e desce: o térreo ganha o pilar no mesmo ponto
+    expect(naFachada(T).map((x) => x.pontos[0])).toEqual([at]);
+    // O alcance é hipótese: sem deslize, o pilar fica no T, em cima da porta (na ponta da viga de transição), como era.
+    const semDeslize = pilaresDoSobrado(comPorta, T, S, { ...HIPOTESES_PILARES_PADRAO, deslizeSobreAberturaMm: 0 }, t);
+    const r0 = applyBatch(comPorta, semDeslize.comandos).model;
+    expect((r0.structures ?? []).some((x) => x.levelId === S && x.kind === 'PILAR' && x.pontos[0].x === 0 && x.pontos[0].y === 2000)).toBe(true);
   });
 
   it('paredeSobOPonto: no corpo da parede sim; no vão da porta, não', () => {

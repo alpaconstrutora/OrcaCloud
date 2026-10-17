@@ -1339,7 +1339,9 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       for (const a of plano.avisos ?? []) pendencias.push({ grupo: 'VERIFICACAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${a}` });
       // "Fora do plano" é o planejador PULANDO um ponto (pilar quase duplicado, viga já existente…): o lugar ficou
       // atendido por outra peça ou pede conferência — não é falta de solução.
-      for (const f of foraDoPlano) pendencias.push({ grupo: 'VERIFICACAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${f}` });
+      // F23: o nó a menos de uma seção de outro pilar é atendido por ele (que apoia as paredes do nó) — para conferir.
+      for (const f of foraDoPlano)
+        pendencias.push(/a menos de uma seção de outro pilar/.test(f) ? { grupo: 'CONFERIR', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${f} — o pilar vizinho atende os dois encontros` } : { grupo: 'VERIFICACAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${f}` });
     } catch (e) {
       const motivo = e instanceof Error ? e.message : String(e);
       etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);

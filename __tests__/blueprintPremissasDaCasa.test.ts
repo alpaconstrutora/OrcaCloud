@@ -39,7 +39,7 @@ describe('hipotesesDasPremissas', () => {
     const h = hipotesesDasPremissas({ ...PREMISSAS_DA_CASA_PADRAO, sementes: 3, disciplinas: { ...PREMISSAS_DA_CASA_PADRAO.disciplinas, climatizacao: false, estrutura: false } });
     expect(h.sementes).toEqual([1, 2, 3]);
     expect(h.climatizacao).toEqual({ lancar: false });
-    expect(h.estrutura).toEqual({ lancar: false });
+    expect(h.estrutura).toMatchObject({ lancar: false });
     expect(h.eletrica).toEqual({ lancar: true, chuveiroEletricoVA: 5500, medidor: true });
     expect(h.telhado).toMatchObject({ lancar: true, tipo: 'DUAS_AGUAS', inclinacaoPct: 30, beiralMm: 600 });
   });
@@ -84,5 +84,16 @@ describe('F15 — a unidade do Empreendimento nas premissas', () => {
     expect(premissasDaCasaDaColuna({ unidadeId: 'u-07' }).unidadeId).toBe('u-07');
     for (const lixo of ['', '   ', 7, {}, null]) expect(premissasDaCasaDaColuna({ unidadeId: lixo }).unidadeId).toBeNull();
     expect('unidadeId' in hipotesesDasPremissas({ ...PREMISSAS_DA_CASA_PADRAO, unidadeId: 'u-07' })).toBe(false);
+  });
+});
+
+describe('F23 — a estrutura nas premissas', () => {
+  it('montante entre folhas e deslize do pilar: completam como os outros e chegam inteiros ao motor', () => {
+    expect(premissasDaCasaDaColuna({}).estrutura).toEqual({ montanteEntreJanelasMm: 400, deslizeSobreAberturaMm: 1200 });
+    const p = premissasDaCasaDaColuna({ estrutura: { montanteEntreJanelasMm: 600, deslizeSobreAberturaMm: 'x' } });
+    expect(p.estrutura).toEqual({ montanteEntreJanelasMm: 600, deslizeSobreAberturaMm: 1200 });
+    const h = hipotesesDasPremissas({ ...p, estrutura: { montanteEntreJanelasMm: 600, deslizeSobreAberturaMm: 800 } });
+    expect(h.gerador?.janela).toMatchObject({ montanteMm: 600, maxMm: 2000, alturaMm: 1200 });
+    expect(h.estrutura?.pilares).toMatchObject({ deslizeSobreAberturaMm: 800, vaoMaximoMm: 5000 });
   });
 });

@@ -2007,11 +2007,11 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F20 — mobiliário: peça que não cabe ganha variante (cama, box, vaso/lavatório, armário) (ver "Registro da F20"; 2 cômodos estreitos demais vão para a F22)
 - [x] F21 — gerador: molhados e escritório com lado externo; porta direta nas relações obrigatórias; nenhum "Ambiente N" (ver "Registro da F21"; o lado externo do serviço/escritório e a porta direta varanda × sala e cozinha × serviço passaram para a F22 — são do ARRANJO)
 - [x] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO; e (da F21) o arranjo em faixas: varanda de entrada junto da sala, serviço junto da cozinha, serviço e escritório com fachada; e (da F20) a suíte que não cabe o armário/a cama — **partes 1, 2 e 3 feitas** (ver "Registro da F22"); a frente do R1-B e o sobrado no lote estreito vão com a F27
-- [ ] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo
+- [x] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo (ver "Registro da F23"; os 2 pilares do sobrado sobre janela do térreo vão com a F27 — as janelas dos dois pavimentos desalinhadas)
 - [ ] F24 — implantação não retangular (L) e vaga descoberta com recuo curto
 - [ ] F25 — terreno inclinado: platô único
 - [ ] F26 — muro, portão e calçada
-- [ ] F27 — 3 pavimentos; e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede
+- [ ] F27 — 3 pavimentos; e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
 - [ ] F28 — tela e prancha: a chuva de projeto na tela da casa; bolhas dos eixos sem sobrepor
 
 
@@ -2259,3 +2259,37 @@ caixa do banheiro ali tem 1,5 m de fundo e o serviço pede mais (a troca não ca
 dormitórios ficam térreos porque o SOBRADO deles tem mais problemas — os dois vão com a F27 (a qualidade do sobrado).
 
 Teste novo (reprova sem a correção): o serviço do 12 × 30 com fachada e junto da cozinha (`blueprintCasaAutomatica`).
+
+### Registro da F23 (17/10/2026) — a estrutura
+
+Retrato (as 8 casas, antes): o 15 × 30 de 4 dormitórios com "Pilares: a menos de uma seção de outro pilar" em VERIFICACAO;
+o R1-A (14 × 28) com "Pilares: sem posição livre entre aberturas"; o sobrado 12 × 30 com pilar(es) do superior sobre porta
+ou janela do térreo.
+
+Correções:
+
+- **O encontro colado em outro pilar é CONFERIR**, com "o pilar vizinho atende os dois encontros": o planejador pula o nó a
+  menos de uma seção de um pilar porque o vizinho o atende — não é falta de solução.
+- **A janela acima do máximo estético vira folhas** separadas por montantes (`HipotesesDoGerador.janela.montanteMm`,
+  padrão 0,40 m — a seção de 19 cm e a folga da abertura dos dois lados cabem). No R1-A uma janela de 5,05 m tomava o vão
+  inteiro entre os dois apoios (5,45 m > 5 m) e o intermediário não tinha onde nascer. O conjunto cresce o que os
+  montantes tiram quando a parede deixa; cada folha fica entre 0,60 m e o máximo (senão, a janela única de antes).
+- **No sobrado, o pilar do superior que cairia sobre porta ou janela do térreo escorrega** pelas paredes dele (qualquer uma —
+  no T a primeira pode ser a interna) até ter parede cheia embaixo e em cima (`HipotesesDePilares.deslizeSobreAberturaMm`,
+  padrão 1,2 m); antes ele era descartado.
+- As duas folgas viraram premissas da casa (`estrutura.montanteEntreJanelasMm`, `estrutura.deslizeSobreAberturaMm`), com
+  os campos na tela.
+
+Tentado e desfeito (medido): procurar o intermediário entre TODAS as faixas proibidas da parede (só ganhava em casos de
+igualdade exata — se a faixa em que o ideal cai não tem borda no intervalo, ela cobre o intervalo inteiro) e registrar o
+pilar vizinho como apoio das paredes do nó pulado (inerte: a cadeia já nasce apoiada nas duas pontas).
+
+Medido nas 8 casas, 2× (iguais): 0 em vão, 0 rede × rede, 0 pilar; o R1-A e o 15 × 30 de 4 dormitórios sem pendência de
+estrutura. **Falta** (vai com a F27): no sobrado 12 × 30, 2 pilares do superior seguem fora — as janelas do térreo e do
+superior estão desalinhadas na mesma fachada e o primeiro trecho com parede cheia nos dois pavimentos fica a 1,4 m e
+3,3 m (levar o intermediário tão longe desfaz o vão que ele divide); a pendência diz que a viga do superior vence o vão.
+A correção é alinhar as janelas do superior com as do térreo.
+
+Testes novos (reprovam sem a correção): folhas e montante como hipótese (`blueprintGerador`); o deslize no sobrado e o
+alcance zero (`blueprintSobrado`); o 15 × 30 de 4 dormitórios (CONFERIR) e o R1-A sem "sem posição livre"
+(`blueprintCasaAutomatica`); as premissas da estrutura (`blueprintPremissasDaCasa`).

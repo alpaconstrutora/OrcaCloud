@@ -112,4 +112,5 @@ Decisões de execução (não perguntadas, registradas):
 - [x] 4. Tipo · [x] 5. Ajuda/tour · [x] 6. Exceção · [x] 7. Testes (48 passed nos relacionados)
 - [x] Suíte inteira e build — `npm run build` rc=0 (0 erros TS); suíte 10.080 passed, 2 falhas só em
       `PainelVersoes.test.tsx` (Planta, timeout sob carga — 26/26 isolado, igual à 1ª rodada; sem relação)
-- [ ] Publicação
+- [x] Publicação — main `1d461d2e`; domínio serve 1d461d2; check-run `ci` = success. Prints da PRODUÇÃO:
+      parceiro = original (0 px de diferença), corretor = prints locais (0 px), sem erro de console/HTTP

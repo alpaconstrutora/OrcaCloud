@@ -238,6 +238,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     // Ponto de encaixe do "Salvar alterações" do formulário embutido do Resumo na
     // barra de ações (§5.3) — pedido de 17/10/2026, ver ContractModal `barraDeAcoes`.
     const [barraResumo, setBarraResumo] = React.useState<HTMLDivElement | null>(null);
+    // Idem na aba Financeiro › Dados Gerais (pedido de 17/10/2026: cards como no Resumo).
+    const [barraFinanceiro, setBarraFinanceiro] = React.useState<HTMLDivElement | null>(null);
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
     const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingId: string | null; initial: AvulsoItem | null }>({ open: false, editingId: null, initial: null });
     const [isMeasurementModalOpen, setIsMeasurementModalOpen] = React.useState(false);
@@ -1225,10 +1227,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         // abas de acompanhamento (execução, riscos).
                         OVERVIEW_TABS[0],
                         { id: 'items', label: 'Itens do Contrato', icon: FileText },
+                        // Financeiro e Medições logo depois dos Itens (pedido de 17/10/2026):
+                        // o dinheiro do contrato fica junto do que foi contratado.
+                        { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+                        { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
                         ...OVERVIEW_TABS.slice(1),
                         { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
-                        { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
-                        { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
                         { id: 'penalties', label: 'Penalidades', icon: AlertCircle },
                         { id: 'evaluation', label: 'Avaliação de Desempenho', icon: BarChart3 },
                         { id: 'emissao', label: 'Emissão', icon: FileDown },
@@ -1316,6 +1320,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             value={financeSubTab}
                             onChange={setFinanceSubTab}
                         />
+                    )}
+                    {/* Financeiro › Dados Gerais: o "Salvar alterações" do formulário
+                        embutido entra aqui, logo depois das sub-abas, por portal. */}
+                    {activeTab === 'financeiro' && financeSubTab === 'dados' && (
+                        <div ref={setBarraFinanceiro} className="contents" />
                     )}
 
                     {/* §5.3 — escopo da aba ativa. No Financeiro, só na sub-aba
@@ -2804,7 +2813,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 const visibleFinCols = financeColumns.visibleColumns;
 
                 return (
-                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                    // Dados Gerais: 12px entre os cards, o ritmo do Resumo (5bdda9b8).
+                    <div className={`${financeSubTab === 'dados' ? 'space-y-3' : 'space-y-6'} animate-in slide-in-from-bottom-4 duration-500`}>
                         {/* Sub-aba Dados Gerais: condições financeiras do contrato —
                             Valores, Condições de Pagamento e Centro de Custo e
                             Orçamento. Editáveis aqui (e só aqui): é o que define os
@@ -2816,6 +2826,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             isOpen
                             variant="inline"
                             sections={FINANCEIRO_FORM_SECTIONS}
+                            cardPorSecao
+                            barraDeAcoes={barraFinanceiro}
                             initialData={contract}
                             projectId={contract.project_id ?? ''}
                             organizationId={contract.organization_id ?? orgIdProp}
@@ -2834,31 +2846,33 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             própria; vive aqui desde 2026-09-28, junto das
                             condições financeiras do contrato. */}
                         {financeSubTab === 'dados' && (
-                        <div className="space-y-6">
-                            <div className="mb-2">
-                                <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
-                                    <HandCoins className="w-5 h-5 text-amber-500" /> Retenção de Garantia
-                                </h3>
-                                <p className="text-xs font-medium text-gray-400 mt-1">Valores retidos do contrato até liberação (provisória ou definitiva).</p>
+                        // Card próprio, no mesmo desenho dos blocos do formulário acima
+                        // (pedido de 17/10/2026: "separe os cards como na aba Resumo").
+                        <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+                            <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                                <div className="flex items-center gap-2">
+                                    <HandCoins className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Retenção de Garantia</h3>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setReleaseModal(true)}
+                                    disabled={!retentionLedger || retentionLedger.balance <= 0}
+                                    title={!retentionLedger || retentionLedger.balance <= 0 ? 'Não há saldo retido para liberar.' : undefined}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    Liberar Retenção
+                                </button>
                             </div>
+                            <p className="text-xs text-gray-500">Valores retidos do contrato até liberação (provisória ou definitiva).</p>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <KpiCard label="RETIDO" value={`R$ ${fmt(retentionLedger?.total_retained ?? 0)}`} icon={<HandCoins className="w-5 h-5" />} color="gray" />
                                 <KpiCard label="LIBERADO" value={`R$ ${fmt(retentionLedger?.total_released ?? 0)}`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
                                 <KpiCard label="SALDO RETIDO" value={`R$ ${fmt(retentionLedger?.balance ?? 0)}`} icon={<HandCoins className="w-5 h-5" />} color="amber" />
                             </div>
 
-                            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                                <div className="p-2 border-b border-gray-100 bg-white flex items-center justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => setReleaseModal(true)}
-                                        disabled={!retentionLedger || retentionLedger.balance <= 0}
-                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-40"
-                                    >
-                                        Liberar Retenção
-                                    </button>
-                                </div>
+                            <div className="rounded-[10px] border border-gray-100 overflow-hidden">
                                 {retentionReleases.length === 0 ? (
                                     <div className="text-center py-12">
                                         <HandCoins className="w-12 h-12 text-gray-300 mx-auto mb-4" />

@@ -3123,7 +3123,10 @@ moldura.
 > (`ContractModal` embutido com `cardPorSecao`) mostra cada bloco — Identificação do
 > Contrato, Identificação da Obra, Cronograma (e Escopo/Partes/Locação quando há) — no seu
 > próprio card (`space-y-3`, o ritmo da coluna da tela), como a aba Itens do Contrato; e o "Salvar alterações" mora na barra de ações
-> do topo (§5.3), à esquerda, não no rodapé. Financeiro e Emissão seguem com card único.
+> do topo (§5.3), à esquerda, não no rodapé. Desde 17/10/2026 (2º pedido) a aba **Financeiro ›
+> Dados Gerais** segue o mesmo desenho: Valores, Condições de Pagamento, Centro de Custo e
+> Orçamento e Retenção de Garantia, cada um no seu card (`space-y-3`), e o Salvar na barra do
+> topo logo depois das sub-abas. Emissão segue com card único.
 > ℹ️ **Exceção pedida pelo usuário (13/10/2026):** `BoletoFormModal.tsx` mostra
 > Cobrança, Quem recebe, Classificação e Observações cada uma em seu próprio
 > card (`Secao` renderiza um `Painel`, `space-y-6` entre eles). A regra geral

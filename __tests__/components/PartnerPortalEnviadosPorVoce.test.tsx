@@ -13,7 +13,13 @@
  *  2. a coluna Documento mostra o nome do ARQUIVO (sem o prefixo numérico do
  *     upload) e a extensão sai dele;
  *  3. baixar pela coluna Ações usa o mesmo caminho de antes (link assinado do token);
- *  4. sem nada enviado, a seção não aparece.
+ *  4. sem nada enviado, a aba Enviados mostra o estado vazio.
+ *
+ * Pedido de 17/10/2026 (UX): recebidos e enviados empilhados — a lista de enviados
+ * crescia e empurrava a de recebidos para baixo, sem divisão óbvia. Viraram ABAS:
+ *  5. a tela abre em Recebidos; a aba muda título e tabela, com contador;
+ *  6. envio que a construtora revisou desde a última visita à aba Enviados
+ *     aparece como "1 atualizado" no rótulo — e some depois de aberta a aba.
  */
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -78,11 +84,18 @@ async function abrirDocumentos() {
     return user;
 }
 
-/** A tabela de "Enviados por você" é a primeira do <main>. */
-async function tabelaEnviados() {
-    await screen.findByText(/Enviados por você/);
-    return screen.getAllByRole('table')[0];
+const aba = (nome: RegExp) => screen.findByRole('tab', { name: nome });
+
+/** Abre a aba Enviados; só a tabela da aba ativa existe no DOM. */
+async function abrirEnviados() {
+    const user = await abrirDocumentos();
+    await user.click(await aba(/^Enviados/));
+    await screen.findByText('Documentos Enviados');
+    return { user, tabela: screen.getAllByRole('table')[0] };
 }
+
+const cabecalhoDe = (tabela: HTMLElement) =>
+    within(tabela).getAllByRole('columnheader').map(th => th.textContent?.trim()).filter(Boolean);
 
 describe('PartnerPortal › Documentos — Enviados por você', () => {
     beforeEach(() => {
@@ -94,19 +107,13 @@ describe('PartnerPortal › Documentos — Enviados por você', () => {
     });
 
     it('1. tabela com as colunas do envio; só envios de documento; status em texto', async () => {
-        await abrirDocumentos();
-        const tabela = await tabelaEnviados();
+        const { user, tabela } = await abrirEnviados();
 
-        const cabecalho = within(tabela).getAllByRole('columnheader').map(th => th.textContent?.trim()).filter(Boolean);
+        const cabecalho = cabecalhoDe(tabela);
         expect(cabecalho).toEqual([
             'Documento', 'Extensão', 'Autor', 'Nº Doc. Fornecedor', 'Tipo / Categoria', 'Revisão',
             'Obra Vinculada', 'Emissão', 'Validade', 'Status', 'Ações',
         ]);
-        // ...e são exatamente as da tabela de documentos compartilhados logo abaixo
-        const tabelaGed = screen.getAllByRole('table')[1];
-        const cabecalhoGed = within(tabelaGed).getAllByRole('columnheader').map(th => th.textContent?.trim()).filter(Boolean);
-        expect(cabecalho).toEqual(cabecalhoGed);
-        expect(screen.getByText('(2)')).toBeInTheDocument();
 
         const linhas = within(tabela).getAllByRole('row').slice(1);
         expect(linhas).toHaveLength(2);
@@ -116,11 +123,15 @@ describe('PartnerPortal › Documentos — Enviados por você', () => {
         expect(pendente.className).toContain('text-amber-600');
         expect(pendente.className).not.toMatch(/rounded|uppercase|bg-/);
         expect(within(tabela).getByText('Incluído no GED').className).toContain('text-green-600');
+
+        // ...e são exatamente as da tabela de documentos compartilhados (aba Recebidos)
+        await user.click(await aba(/^Recebidos/));
+        await screen.findByText('Documentos Compartilhados');
+        expect(cabecalhoDe(screen.getAllByRole('table')[0])).toEqual(cabecalho);
     });
 
     it('2. nome do arquivo sem o prefixo do upload, extensão dele, autor = parceiro, observação sob o nome', async () => {
-        await abrirDocumentos();
-        const tabela = await tabelaEnviados();
+        const { tabela } = await abrirEnviados();
 
         expect(within(tabela).getByText('Proposta_004.pdf')).toBeInTheDocument();
         expect(within(tabela).getByText('Planta_baixa.dwg')).toBeInTheDocument();
@@ -131,8 +142,7 @@ describe('PartnerPortal › Documentos — Enviados por você', () => {
     });
 
     it('3. baixar pela coluna Ações pede o link assinado do token', async () => {
-        const user = await abrirDocumentos();
-        const tabela = await tabelaEnviados();
+        const { user, tabela } = await abrirEnviados();
 
         const linha = within(tabela).getByText('Proposta_004.pdf').closest('tr')!;
         await user.click(within(linha).getByRole('button'));
@@ -141,11 +151,49 @@ describe('PartnerPortal › Documentos — Enviados por você', () => {
         expect(window.open).toHaveBeenCalledWith('https://assinado/x', '_blank', 'noreferrer');
     });
 
-    it('4. sem envio de documento, a seção não aparece', async () => {
+    it('4. sem envio de documento, a aba Enviados mostra o estado vazio', async () => {
         getRequests.mockResolvedValue([OUTRA_SOLICITACAO]);
-        await abrirDocumentos();
-        await waitFor(() => expect(getRequests).toHaveBeenCalled());
+        await abrirEnviados();
 
-        expect(screen.queryByText(/Enviados por você/)).toBeNull();
+        expect(screen.getByText(/Você ainda não enviou documentos/)).toBeInTheDocument();
+    });
+
+    it('5. abre em Recebidos; a aba troca título e conteúdo; Enviados mostra o contador', async () => {
+        const user = await abrirDocumentos();
+
+        const recebidos = await aba(/^Recebidos/);
+        expect(recebidos).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByText('Documentos Compartilhados')).toBeInTheDocument();
+        expect(screen.queryByText('Proposta_004.pdf')).toBeNull();
+
+        const enviados = await aba(/^Enviados/);
+        await waitFor(() => expect(within(enviados).getByText('2')).toBeInTheDocument());
+
+        await user.click(enviados);
+        expect(enviados).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByText('Documentos Enviados')).toBeInTheDocument();
+        expect(screen.getByText('Proposta_004.pdf')).toBeInTheDocument();
+    });
+
+    it('6. envio revisado desde a última visita aparece como "1 atualizado" até a aba ser aberta', async () => {
+        // Da última vez, os dois envios estavam aguardando; agora r2 foi incluído no GED.
+        window.localStorage.setItem('partnerPortal:sentDocsStatusVisto', JSON.stringify({ r1: 'ABERTO', r2: 'ABERTO' }));
+        const user = await abrirDocumentos();
+
+        const enviados = await aba(/^Enviados/);
+        await waitFor(() => expect(within(enviados).getByText('1 atualizado')).toBeInTheDocument());
+
+        await user.click(enviados);
+        await user.click(await aba(/^Recebidos/));
+
+        await waitFor(() => expect(within(enviados).queryByText('1 atualizado')).toBeNull());
+        expect(within(enviados).getByText('2')).toBeInTheDocument();
+    });
+
+    it('7. envio que o navegador nunca viu não conta como atualizado (primeiro acesso)', async () => {
+        await abrirDocumentos();
+        const enviados = await aba(/^Enviados/);
+        await waitFor(() => expect(within(enviados).getByText('2')).toBeInTheDocument());
+        expect(within(enviados).queryByText(/atualizado/)).toBeNull();
     });
 });

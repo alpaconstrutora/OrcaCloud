@@ -1998,6 +1998,14 @@ tela, não navegação de módulo), esta é a forma canônica. **Referência:
 > §5.1, seletor de escopo §5.3) entra como `children`. Foi criado porque 17 telas
 > de RH tinham cada uma o próprio trilho (`bg-slate-100 rounded-2xl`, aba ativa
 > indigo em caixa alta) — barra nova usa o componente, não copia o snippet.
+> ✅ **`accent="orange"`** (2026-10-17) pinta a aba ativa e o contador de laranja —
+> só para o **Portal do Parceiro**, cuja casca inteira (botão primário, filtro
+> ativo, foco, abas do contrato) é laranja. Padrão `blue` = o app; mesmo racional
+> do `accent` de componente compartilhado da §24, com as classes por extenso num
+> mapa `ACCENTS`. Primeiro uso: Documentos › Recebidos/Enviados (`PartnerPortal.tsx`).
+> ✅ **`badgeTom: 'novo'`** pinta o contador na cor de destaque, em `font-semibold`
+> — novidade ainda não vista (ex.: "1 atualizado" em Enviados). Vermelho
+> (`'alerta'`) fica para o que pede ação/erro.
 >
 > ```tsx
 > <TabsBar tabs={[{ id: 'ciclos', label: 'Ciclos', badge: cycles.length }, { id: 'pdi', label: 'PDI' }]}

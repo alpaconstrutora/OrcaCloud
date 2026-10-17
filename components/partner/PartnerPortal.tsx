@@ -44,6 +44,7 @@ import { enabledPartnerPortalTabs, PARTNER_PORTAL_TAB_LABELS, type PartnerPortal
 import Button from '../ui/Button';
 import { urlDoPdfDoContrato } from '../../utils/contractFileUrl';
 import ActionIconButton from '../ui/ActionIconButton';
+import { TabsBar } from '../ui/TabsBar';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import { PortalHelp } from '../portal/PortalHelp';
 import { avisarAcaoDoPortal } from '../../utils/portalEventos';
@@ -122,6 +123,21 @@ const sharedDocProjectName = (doc: OpuraDocument): string =>
 const PARTNER_DOC_COL_WIDTHS: Record<string, number> = {
   nome: 260, extensao: 100, autor: 150, numero_documento_fornecedor: 160, tipo_documento: 160,
   revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120, status: 110, actions: 140,
+};
+
+// Aba Documentos: o que a construtora compartilhou × o que o parceiro enviou.
+// Título e subtítulo mudam com a aba (§19.1 — aba que troca o conteúdo sem trocar
+// o título deixa o cabeçalho mentindo).
+type DocsView = 'recebidos' | 'enviados';
+const DOCS_VIEW_HEADERS: Record<DocsView, { titulo: string; subtitulo: string }> = {
+  recebidos: {
+    titulo: 'Documentos Compartilhados',
+    subtitulo: 'Projetos e documentos que a construtora compartilhou com você.',
+  },
+  enviados: {
+    titulo: 'Documentos Enviados',
+    subtitulo: 'Arquivos que você enviou à construtora — ficam aqui até serem revisados e incluídos no GED.',
+  },
 };
 
 const TAB_ICONS: Record<PartnerPortalTabId, React.ElementType> = {
@@ -416,6 +432,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const sentDocColumns = useTableColumns(PARTNER_DOC_COLUMNS, 'partnerSentDocsColumns');
   const sentDocCols = useResizableColumns(PARTNER_DOC_COL_WIDTHS, 'partnerPortalSentDocsColWidths');
   const [sentDocSearch, setSentDocSearch] = usePersistedState<string>('partnerPortal:sentDocsSearch', '');
+  // Recebidos × Enviados em abas (pedido de 17/10/2026): empilhadas, a lista de
+  // enviados crescia e empurrava a de recebidos para baixo, sem divisão visível.
+  // useState e não usePersistedState: a aba vale enquanto o portal está aberto
+  // (trocar de seção no menu e voltar mantém), mas toda entrada começa em
+  // Recebidos — o uso mais comum, e onde o tour guiado procura as âncoras.
+  const [docsView, setDocsView] = React.useState<DocsView>('recebidos');
   const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
 
   // Pastas e disciplinas compartilhadas — alimentam os dois selects da toolbar. Vêm junto dos
@@ -935,6 +957,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       }
       setRequests((prev) => [created, ...prev]);
       setIsSendDocModalOpen(false);
+      // Mostra o envio onde ele passa a morar — prova de que deu certo.
+      setDocsView('enviados');
       avisarAcaoDoPortal('enviou-documento');
       setSendDocFile(null);
       setSendDocNote('');
@@ -973,6 +997,29 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       resolveStatus: resolveSentStatus,
     });
   }, [sentDocuments, sentRequestById, sentDocSearch, sentDocColumns.sortColumn, sentDocColumns.sortDirection, workspace?.supplier_name, workspace?.organization_id, resolveSentStatus]);
+
+  // Envio que mudou de status desde a última vez que o parceiro abriu "Enviados"
+  // (hoje: passou a "Incluído no GED"). Guarda, por envio, o último status VISTO:
+  // envio desconhecido entra com o status atual (não é novidade — inclusive no
+  // primeiro acesso deste navegador); abrir a aba Enviados sincroniza todos.
+  // Sem isso, a resposta da construtora ficaria escondida atrás da outra aba.
+  const [sentDocsStatusVisto, setSentDocsStatusVisto] = usePersistedState<Record<string, string>>('partnerPortal:sentDocsStatusVisto', {});
+  useEffect(() => {
+    setSentDocsStatusVisto((prev) => {
+      let mudou = false;
+      const next = { ...prev };
+      sentDocuments.forEach((r) => {
+        if ((!(r.id in next) || docsView === 'enviados') && next[r.id] !== r.status) {
+          next[r.id] = r.status;
+          mudou = true;
+        }
+      });
+      return mudou ? next : prev;
+    });
+  }, [sentDocuments, docsView, setSentDocsStatusVisto]);
+  const sentDocsAtualizados = sentDocuments.filter(
+    (r) => r.id in sentDocsStatusVisto && sentDocsStatusVisto[r.id] !== r.status,
+  ).length;
 
   if (loading) {
     return (
@@ -1352,7 +1399,10 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   toolbar da tabela, que passa a ocupar a largura toda. */}
               <div className="flex flex-col gap-6 min-w-0">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <h3 className="text-base font-bold text-gray-900">Documentos Compartilhados</h3>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-gray-900">{DOCS_VIEW_HEADERS[docsView].titulo}</h3>
+                    <p className="text-sm text-gray-500 mt-1.5">{DOCS_VIEW_HEADERS[docsView].subtitulo}</p>
+                  </div>
                   <Button
                     data-tour="documentos-enviar"
                     onClick={() => setIsSendDocModalOpen(true)}
@@ -1365,13 +1415,30 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   </Button>
                 </div>
 
-                {sentDocuments.length > 0 && (
-                  <div className="flex flex-col gap-3">
-                    <h4 className="text-sm font-semibold text-gray-700">
-                      Enviados por você <span className="text-gray-400 font-normal">({sentDocuments.length})</span>
-                    </h4>
-                    {/* Mesma tabela e mesmas colunas da de documentos abaixo (DocumentsTable),
-                        com a toolbar acoplada do mesmo jeito (§5.2). */}
+                {/* Recebidos × Enviados em abas (§19.1). Antes eram duas tabelas
+                    empilhadas: a de enviados crescia e empurrava a de recebidos
+                    para fora da tela. O <div> junta abas e tabela num bloco só —
+                    12px entre eles (mb-3 do TabsBar), não os 24px do gap-6. */}
+                <div>
+                  <TabsBar<DocsView>
+                    accent="orange"
+                    value={docsView}
+                    onChange={setDocsView}
+                    tabs={[
+                      { id: 'recebidos', label: 'Recebidos', badge: sharedOpuraDocuments.length, badgeTitulo: 'Documentos que a construtora compartilhou com você' },
+                      sentDocsAtualizados > 0 && docsView !== 'enviados'
+                        ? {
+                            id: 'enviados', label: 'Enviados', badgeTom: 'novo',
+                            badge: `${sentDocsAtualizados} ${sentDocsAtualizados === 1 ? 'atualizado' : 'atualizados'}`,
+                            badgeTitulo: 'Envios que a construtora revisou desde a última vez que você abriu esta aba',
+                          }
+                        : { id: 'enviados', label: 'Enviados', badge: sentDocuments.length, badgeTitulo: 'Documentos que você enviou à construtora' },
+                    ]}
+                  />
+
+                  {docsView === 'enviados' ? (
+                    /* Mesma tabela e mesmas colunas da de recebidos (DocumentsTable,
+                       pedido de 03/10/2026), com a toolbar acoplada do mesmo jeito (§5.2). */
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                       <div className="p-2 border-b border-gray-100 bg-white">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -1424,16 +1491,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                           ) : null
                         }
                         emptyState={
-                          <div className="text-sm text-slate-400 font-medium">
-                            Nenhum documento enviado encontrado para a busca.
-                          </div>
+                          sentDocuments.length === 0 ? (
+                            <div className="text-sm text-slate-400 font-medium">
+                              Você ainda não enviou documentos. Use "Enviar Documento" para mandar um arquivo à construtora.
+                            </div>
+                          ) : (
+                            <div className="text-sm text-slate-400 font-medium">
+                              Nenhum documento enviado encontrado para a busca.
+                            </div>
+                          )
                         }
                       />
                     </div>
-                  </div>
-                )}
-
-                {/* Toolbar acoplada à tabela (§5.2 do guia de UI) — busca, filtros e config de colunas */}
+                  ) : (
+                /* Toolbar acoplada à tabela (§5.2 do guia de UI) — busca, filtros e config de colunas */
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden" data-tour="documentos-tabela">
                   <div className="p-2 border-b border-gray-100 bg-white space-y-3">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -1555,6 +1626,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       )
                     }
                   />
+                </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2276,7 +2349,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         orgId={workspace?.organization_id ?? null}
         visibleSections={enabledTabs}
         currentSection={activeTab}
-        onNavigate={(s) => { setDetailContract(null); setActiveTab(s as typeof activeTab); }}
+        onNavigate={(s) => {
+          setDetailContract(null);
+          // As âncoras do tour na aba Documentos (busca, tabela) moram em Recebidos.
+          if (s === 'documentos') setDocsView('recebidos');
+          setActiveTab(s as typeof activeTab);
+        }}
         modoPrevia={isPreview}
         forcarTour={forcarTour}
         checklistSlot={slotChecklist}

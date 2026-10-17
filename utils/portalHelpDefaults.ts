@@ -217,7 +217,7 @@ const PARCEIRO: DefaultHelpItem[] = [
     title: 'Documentos: enviar um arquivo para a construtora',
     body_html: p(
       'Clique em <strong>Enviar Documento</strong>, escolha o arquivo e, se quiser, escreva uma observação.',
-      'O arquivo fica em "Enviados por você" com o status <strong>Aguardando revisão</strong>. Quando a construtora o incluir no GED, o status muda para <strong>Incluído no GED</strong>. Você pode baixar o que enviou a qualquer momento.',
+      'O arquivo aparece na aba <strong>Enviados</strong> com o status <strong>Aguardando revisão</strong>. Quando a construtora o incluir no GED, o status muda para <strong>Incluído no GED</strong>. Você pode baixar o que enviou a qualquer momento.',
     ),
   },
   {
@@ -819,7 +819,7 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
     geral: tourDe('geral', [
       { key: 'parceiro.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Parceiro', body: 'Este menu leva às seções liberadas para a sua empresa: contratos, documentos, financeiro, solicitações e conversas.' },
       { key: 'parceiro.tour.documentos', anchor: 'aba-documentos', section: 'documentos', title: 'Documentos', body: 'Aqui ficam os projetos e contratos que a construtora compartilhou. Também é por aqui que você envia arquivos para ela.' },
-      { key: 'parceiro.tour.geral.documentos-enviar', anchor: 'documentos-enviar', section: 'documentos', title: 'Enviar um arquivo', body: 'Por este botão você manda um documento para a construtora. Ele fica em "Enviados por você" até ser incluído no GED.' },
+      { key: 'parceiro.tour.geral.documentos-enviar', anchor: 'documentos-enviar', section: 'documentos', title: 'Enviar um arquivo', body: 'Por este botão você manda um documento para a construtora. Ele aparece na aba "Enviados" até ser incluído no GED.' },
       { key: 'parceiro.tour.geral.contratos', anchor: 'aba-contratos', section: 'contratos', title: 'Contratos', body: 'Seus contratos com a construtora: valor, prazo, medições e aditivos.' },
       { key: 'parceiro.tour.geral.contratos-lista', anchor: 'contratos-lista', section: 'contratos', title: 'Seus contratos', body: 'Clique em um contrato para abrir a visão geral, os itens, as medições e o PDF assinado.' },
       { key: 'parceiro.tour.solicitacoes', anchor: 'aba-solicitacoes', section: 'solicitacoes', title: 'Solicitações', body: 'Pedidos formais à construtora saem daqui, com número e status para acompanhar.' },

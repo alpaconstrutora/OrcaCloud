@@ -1,5 +1,12 @@
 -- Integração Asaas — Fase 3: pagamento por PIX (POST /v3/transfers)
 --
+-- ⚠️ RENOMEADA em 17/10/2026: nasceu como aplicar_20271017400000_asaas_pix.sql
+-- e colidiu com aplicar_20271017400000_processos_extras_financeiro.sql (outra
+-- frente chegou antes — quem chega depois move). JÁ FOI APLICADA no remoto em
+-- 17/10/2026 com o nome antigo. NÃO reaplicar sem necessidade — ela é
+-- idempotente (ADD COLUMN IF NOT EXISTS + CHECK só se não existir), então
+-- rodar de novo não estraga nada, mas não há o que fazer.
+--
 -- Plano: docs/planos/2026-10-16-asaas-pendencias-e-pix.md (itens 3.1–3.4).
 -- Aplicar com: npx supabase db query --linked -f <este arquivo>   (NUNCA db push)
 -- Aplicar ANTES de publicar a asaas-payment desta fase.

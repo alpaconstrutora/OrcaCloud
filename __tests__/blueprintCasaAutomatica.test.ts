@@ -1104,3 +1104,17 @@ describe('F22 — pavimentos automático', () => {
     expect(p.decisoes).toContain('Pavimentos automático: térrea (o programa cabe nela).');
   });
 });
+
+/**
+ * F22 (parte 3, 17/10/2026): no lote 12 × 30, com a garagem em fila, a área de serviço caía no miolo da frente em colunas
+ * — sem parede externa para o aquecedor. Depois do arranjo, ela troca de caixa com o banheiro que tem a fachada e encosta
+ * na cozinha (o banheiro sem janela ganha exaustor, F21).
+ */
+describe('F22 — a área de serviço com fachada e junto da cozinha (lote 12 × 30)', () => {
+  it('nenhuma pendência de serviço sem lado externo; o serviço encosta na cozinha e numa fachada', () => {
+    const m = lote();
+    const plano = planejarCasa(m, entrada(m));
+    expect(plano.pendencias.filter((p) => /Área de serviço exige ventilação e ficou sem lado externo/.test(p.texto)).map((p) => p.texto)).toEqual([]);
+    expect(plano.pendencias.filter((p) => /Cozinha × Área de serviço/.test(p.texto)).map((p) => p.texto)).toEqual([]);
+  });
+});

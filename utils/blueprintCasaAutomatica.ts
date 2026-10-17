@@ -29,7 +29,7 @@
  * mão direita de quem olha da rua —, e a `transformacao` leva ao mundo. Com a
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
-import { TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type CamadaParede, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
+import { TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, distanciaEntreEixos3D, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type CamadaParede, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
 import { recuosEfetivos } from './blueprintZonaUrbanistica';
@@ -1076,6 +1076,9 @@ function foraDoPoligono(poligonos: readonly (readonly Point[])[], at: Point, com
   return melhor?.p ?? null;
 }
 
+/** F22: entre a subida do eletroduto do pressurizador e os tubos, além dos raios, mm. */
+const FOLGA_DA_SUBIDA_DO_PRESSURIZADOR_MM = 20;
+
 /** F22: por que a TÉRREA não comporta o programa (`null` = comporta): medida mínima de ambiente violada, ou a TO. */
 export function terreaNaoComporta(p: PlanoDaCasa): string | null {
   const motivos = p.pendencias
@@ -1804,9 +1807,19 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           }
         }
         // F13: o PRESSURIZADOR é ligação direta, com a potência das hipóteses (ganha circuito próprio).
+        // F22: o ponto ao LADO da bomba onde a subida do eletroduto (do forro até ele) não encontra tubo — no lugar dela,
+        // ela subia através do barrilete que sai da caixa (12 × 30).
+        const teto = (L: string) => (m.levels.find((l) => l.id === L)?.defaultHeightMm ?? 2800) - 45;
+        const subidaLivre = (q: Point, levelId: string, cota: number) => {
+          const A = { x: q.x, y: q.y, z: Math.min(teto(levelId), cota) };
+          const B = { x: q.x, y: q.y, z: Math.max(teto(levelId), cota) };
+          return (m.trechos ?? []).every((t) => t.levelId !== levelId || distanciaEntreEixos3D(A, B, { x: t.a.x, y: t.a.y, z: t.cotaAMm }, { x: t.b.x, y: t.b.y, z: t.cotaBMm }) > envelopeDoTrecho(t).raioPlantaMm + 25 + FOLGA_DA_SUBIDA_DO_PRESSURIZADOR_MM);
+        };
         for (const b of (m.terminais ?? []).filter((t) => niveis.includes(t.levelId) && t.tipoHidraulico === 'BOMBA' && t.disciplina === 'AGUA_FRIA')) {
+          const lugares = [{ x: 0, y: 0 }, ...[150, 300, 450].flatMap((d) => [{ x: d, y: 0 }, { x: -d, y: 0 }, { x: 0, y: d }, { x: 0, y: -d }])].map((o) => point(b.at.x + o.x, b.at.y + o.y));
+          const at = lugares.find((q) => subidaLivre(q, b.levelId, b.cotaMm)) ?? { ...b.at };
           lote.push({
-            type: 'AddTerminal', levelId: b.levelId, disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO.LIGACAO_DIRETA, at: { ...b.at },
+            type: 'AddTerminal', levelId: b.levelId, disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO.LIGACAO_DIRETA, at,
             cotaMm: b.cotaMm, tipoEletrico: 'LIGACAO_DIRETA', potenciaW: hip.pressao.potenciaDoPressurizadorW, rotulo: 'Pressurizador', sugerida: true,
           } as Command);
         }
@@ -2155,7 +2168,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo deixa ${a} ${ficouM2 != null ? `com ${f2(ficouM2)} m²` : 'sem área'}${minimoM2 != null ? `, abaixo do mínimo de ${f2(minimoM2)} m²` : ''} — mude a escada de lugar.` });
     }
     for (const a of nucleo.partidos) pendencias.push({ grupo: 'VERIFICACAO', texto: `Escada: o núcleo parte ${a} em dois — o pedaço menor fica sem nome.` });
-    for (const [pav, x] of [['térreo', et.r], ['superior', es.r]] as const) for (const a of x.avisos) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura (${pav}): ${a}` });
+    // F22: "sem porta direta" já sai na CONFERÊNCIA do programa — aqui só pesa na escolha (como na térrea).
+    for (const [pav, x] of [['térreo', et.r], ['superior', es.r]] as const) for (const a of x.avisos) if (!/sem porta direta \(relação obrigatória\)/.test(a)) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura (${pav}): ${a}` });
     const paredes = m.walls.filter((w) => w.levelId === T || w.levelId === sobrado.nivelSuperiorId).length;
     etapa(
       'ARQUITETURA',

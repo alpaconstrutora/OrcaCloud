@@ -2006,12 +2006,12 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F19 — climatização: ponto de dados, eletroduto força → condensadora, camadas da cobertura (ver "Registro da F19")
 - [x] F20 — mobiliário: peça que não cabe ganha variante (cama, box, vaso/lavatório, armário) (ver "Registro da F20"; 2 cômodos estreitos demais vão para a F22)
 - [x] F21 — gerador: molhados e escritório com lado externo; porta direta nas relações obrigatórias; nenhum "Ambiente N" (ver "Registro da F21"; o lado externo do serviço/escritório e a porta direta varanda × sala e cozinha × serviço passaram para a F22 — são do ARRANJO)
-- [ ] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO; e (da F21) o arranjo em faixas: varanda de entrada junto da sala, serviço junto da cozinha, serviço e escritório com fachada; e (da F20) a suíte que não cabe o armário/a cama — **partes 1 e 2 feitas** (ver "Registro da F22"); faltam o serviço sem fachada (12 × 30), a frente do R1-B e o sobrado no lote estreito (este vai com a F27)
+- [x] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO; e (da F21) o arranjo em faixas: varanda de entrada junto da sala, serviço junto da cozinha, serviço e escritório com fachada; e (da F20) a suíte que não cabe o armário/a cama — **partes 1, 2 e 3 feitas** (ver "Registro da F22"); a frente do R1-B e o sobrado no lote estreito vão com a F27
 - [ ] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo
 - [ ] F24 — implantação não retangular (L) e vaga descoberta com recuo curto
 - [ ] F25 — terreno inclinado: platô único
 - [ ] F26 — muro, portão e calçada
-- [ ] F27 — 3 pavimentos
+- [ ] F27 — 3 pavimentos; e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede
 - [ ] F28 — tela e prancha: a chuva de projeto na tela da casa; bolhas dos eixos sem sobrepor
 
 
@@ -2213,7 +2213,10 @@ entrada × sala em 4 casas, cozinha × serviço no R1-B, serviço sem fachada (1
 Testes novos (reprovam sem a correção): sem sobra de cômodo no caso medido (`blueprintCasaAutomatica`, F21); o exaustor e
 o duto pela cobertura (`blueprintRedeDeAr`); o pedaço do contorno com a declividade (`blueprintEsgotoAutomatico`).
 
-### Registro da F22 (17/10/2026) — o arranjo (partes 1 e 2)
+### Registro da F22 (17/10/2026) — o arranjo (partes 1, 2 e 3)
+
+**Parte 2 publicada** 17/10: 7c657e53 + 0eb950fa na main (CI da PR #29 e check-run `ci` verdes; o domínio serve 7b96591,
+que contém 0eb950fa).
 
 **Parte 1 — a varanda de entrada junto da sala** (publicada 704f5189): com a garagem num canto da frente, a varanda vira
 uma COLUNA na profundidade da linha da rua — encosta na rua e na sala, atrás. No treemap, ela ficava na 1ª linha e o
@@ -2242,3 +2245,17 @@ do forro do térreo por falta de shaft, uma sobra de cômodo no superior) — va
 Testes novos (reprovam sem a correção): a varanda × sala no 15 × 25 e o Automático (fica o de menos problemas; a térrea
 pedida que não comporta diz; o programa que cabe fica térreo) (`blueprintCasaAutomatica`); as premissas e o seletor
 (`blueprintPremissasDaCasa`, `TelaCasaAutomatica`).
+
+**Parte 3 — o serviço com fachada e junto da cozinha**: depois do arranjo, a área de serviço que ficou sem lado externo ou
+longe da cozinha TROCA de caixa com um banheiro/lavabo (sem relação obrigatória, os dois cabendo pelos mínimos) quando a
+troca lhe dá a fachada E a cozinha (`trocarServicoSemFachada`) — o banheiro sem janela tem exaustor (F21); pesar mais o
+serviço no recozimento desarrumava os mínimos (F3b, medido de novo). Resolveu o 12 × 30 (o serviço no miolo da frente em
+colunas). Efeitos tratados: o ponto do PRESSURIZADOR procura em volta da bomba a posição cuja subida do eletroduto não
+encontra tubo (no lugar dela, subia através do barrilete); o aviso "sem porta direta" do sobrado não se repete (já sai na
+conferência do programa).
+
+Medido nas 8 casas, 2×: 0 em vão, 0 rede × rede, 0 pilar; **nenhuma SEM_SOLUCAO** a não ser a cozinha × serviço do R1-B — a
+caixa do banheiro ali tem 1,5 m de fundo e o serviço pede mais (a troca não cabe); no Automático o R1-B e o 10 × 30 de 4
+dormitórios ficam térreos porque o SOBRADO deles tem mais problemas — os dois vão com a F27 (a qualidade do sobrado).
+
+Teste novo (reprova sem a correção): o serviço do 12 × 30 com fachada e junto da cozinha (`blueprintCasaAutomatica`).

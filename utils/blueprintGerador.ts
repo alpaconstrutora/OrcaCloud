@@ -489,6 +489,31 @@ const VARANDA_EM_COLUNA_ATE_MM = 6000;
 /** Fundo mínimo atrás da garagem para virar a linha de trás da frente (sala, cozinha, serviço). */
 const LINHA_MINIMA_ATRAS_DA_GARAGEM_MM = 3000;
 
+/**
+ * F22 da casa automática (17/10/2026): a ÁREA DE SERVIÇO que ficou sem lado externo, ou longe do seu par obrigatório (a
+ * cozinha), troca de caixa com um banheiro/lavabo — sem relação obrigatória, os dois cabendo um na caixa do outro pelos
+ * mínimos — quando a troca lhe dá a fachada E o par. O serviço precisa da parede externa (o aquecedor a gás, NBR 13103) e
+ * da porta para a cozinha; o banheiro sem janela ganha exaustor (F21). Pesar mais o serviço no recozimento desarrumava os
+ * mínimos dos ambientes (F3b); a troca, depois, não mexe em mais nada. (12 × 30: no miolo da frente em colunas; R1-B: no
+ * fundo, entre os quartos.)
+ */
+function trocarServicoSemFachada(caixas: Map<ItemPlanejado, CaixaCanonica>, W: number, D: number, programa: Programa, hip: HipotesesDoGerador): void {
+  const obrigatorias = (t: ItemPlanejado) => programa.relacoes.filter((r) => r.tipo === 'OBRIGATORIA' && (r.a === t.item.id || r.b === t.item.id));
+  const cabe = (t: ItemPlanejado, c: CaixaCanonica) => Math.min(c.x1 - c.x0, c.y1 - c.y0) >= eixoMinMm(t.item, hip);
+  for (const [s] of [...caixas]) {
+    if (s.item.uso !== 'AREA_DE_SERVICO') continue;
+    const parDoServico = obrigatorias(s).map((r) => (r.a === s.item.id ? r.b : r.a));
+    const atende = (c: CaixaCanonica, sem?: ItemPlanejado) =>
+      ladosExternosDe(c, W, D).length > 0 && (parDoServico.length === 0 || [...caixas].some(([o, co]) => o !== s && o !== sem && parDoServico.includes(o.item.id) && adjacentes(c, co)));
+    const cs = caixas.get(s)!;
+    if (atende(cs)) continue;
+    const escolhido = [...caixas].find(([t, ct]) => t !== s && ehMolhado(t.item) && obrigatorias(t).length === 0 && cabe(s, ct) && cabe(t, cs) && atende(ct, t));
+    if (!escolhido) continue;
+    caixas.set(s, escolhido[1]);
+    caixas.set(escolhido[0], cs);
+  }
+}
+
 function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, programa: Programa, hip: HipotesesDoGerador): Map<ItemPlanejado, CaixaCanonica> {
   const areaFrente = plano.frente.reduce((s, i) => s + i.areaAlvoMm2, 0);
   const areaFundo = plano.fundo.reduce((s, i) => s + i.areaAlvoMm2, 0);
@@ -940,6 +965,7 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   const { plano, inicial, final } = recozer(inicialDoPlano, W, D, programa, frente, entrada.rotacaoNorteDeg, hip.larguraCorredorMm, hip.iteracoes, rnd, hip);
   decisoes.push(`Recozimento simulado: ${hip.iteracoes} iterações com a semente ${semente}; função objetivo ${f2(inicial)} → ${f2(final)} (largura mínima, proporção, fachada e sol de quem exige, matriz de proximidade, privacidade).`);
   const caixas = caixasDoPlano(plano, W, D, hip.larguraCorredorMm, programa, hip);
+  trocarServicoSemFachada(caixas, W, D, programa, hip);
 
   // Malha: arredonda as coordenadas cumulativas (mantém adjacência).
   const snapC = (c: CaixaCanonica): CaixaCanonica => ({ x0: snap(c.x0, hip.malhaMm), y0: snap(c.y0, hip.malhaMm), x1: snap(c.x1, hip.malhaMm), y1: snap(c.y1, hip.malhaMm) });

@@ -28,15 +28,15 @@ describe('BaixaRecebivelSheet', () => {
     it('array novo com os MESMOS títulos não zera a forma escolhida', () => {
         const props = { onClose: () => {}, onConfirm: async () => {} };
         const { rerender } = render(<BaixaRecebivelSheet titulos={titulo()} {...props} />);
-        fireEvent.change(screen.getByLabelText('Forma de pagamento'), { target: { value: 'PIX' } });
+        fireEvent.change(screen.getByLabelText(/Forma de pagamento/), { target: { value: 'PIX' } });
         rerender(<BaixaRecebivelSheet titulos={titulo()} {...props} />);
-        expect((screen.getByLabelText('Forma de pagamento') as HTMLSelectElement).value).toBe('PIX');
+        expect((screen.getByLabelText(/Forma de pagamento/) as HTMLSelectElement).value).toBe('PIX');
     });
 
     it('confirma com data, forma e recibo', async () => {
         const onConfirm = vi.fn(async () => {});
         render(<BaixaRecebivelSheet titulos={titulo()} onClose={() => {}} onConfirm={onConfirm} />);
-        fireEvent.change(screen.getByLabelText('Forma de pagamento'), { target: { value: 'TED' } });
+        fireEvent.change(screen.getByLabelText(/Forma de pagamento/), { target: { value: 'TED' } });
         fireEvent.click(screen.getByRole('button', { name: 'Confirmar recebimento' }));
         await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ paymentType: 'TED', emitirRecibo: true })));
     });

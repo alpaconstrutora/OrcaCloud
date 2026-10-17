@@ -95,9 +95,15 @@ describe('Contas a Pagar — baixa com painel e recibo de pagamento', () => {
         expect(svc.darBaixa).not.toHaveBeenCalled();   // abrir não baixa
         expect(caixaRecibo()?.checked).toBe(true);
 
+        // Com recibo, a forma é obrigatória (ela sai impressa): o botão diz por que está desligado.
+        const confirmar = screen.getByRole('button', { name: /Confirmar pagamento/ });
+        expect(confirmar).toBeDisabled();
+        expect(confirmar).toHaveAttribute('title', 'Escolha a forma de pagamento: ela sai impressa no recibo.');
+        fireEvent.change(screen.getByLabelText(/Forma de pagamento/), { target: { value: 'PIX' } });
+
         fireEvent.click(screen.getByRole('button', { name: /Confirmar pagamento/ }));
         await waitFor(() => expect(svc.baixarPdf).toHaveBeenCalled());
-        expect(svc.darBaixa).toHaveBeenCalledWith('t1', expect.objectContaining({ paymentType: null }));
+        expect(svc.darBaixa).toHaveBeenCalledWith('t1', expect.objectContaining({ paymentType: 'PIX' }));
         expect(svc.baixarPdf).toHaveBeenCalledWith('t1', { kind: 'PAGAMENTO', logoUrl: 'https://logo' });
         expect(onRowChanged).toHaveBeenCalledWith(expect.objectContaining({ id: 't1', effective_status: 'PAGO', status: 'CONCILIATED' }));
     });

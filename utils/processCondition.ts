@@ -10,7 +10,7 @@
 // uma aprovação porque o pedido não tinha valor carregado seria o portão se
 // autoaprovando — o oposto do que quem modelou o processo quis.
 
-import type { ProcessCondition, ProcessConditionContext, ProcessConditionField, ProcessConditionOp } from '../types/process';
+import type { ProcessCondition, ProcessConditionContext, ProcessConditionField, ProcessConditionOp } from '../types/process.ts'; // .ts: também roda no Deno (processMotor → Edge Functions)
 
 export const CONDITION_FIELD_LABEL: Record<ProcessConditionField, string> = {
     amount: 'Valor',

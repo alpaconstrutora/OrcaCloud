@@ -1,4 +1,4 @@
-import { round2 } from './financialMath';
+import { round2 } from './financialMath.ts'; // .ts: também roda no Deno (processMotor → Edge Functions)
 
 /**
  * Valor de um item do pedido de compra — qual dos dois pares de preço vale.

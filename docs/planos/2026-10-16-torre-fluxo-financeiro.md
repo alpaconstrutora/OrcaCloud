@@ -157,6 +157,28 @@ Causa: o rótulo sentava no meio do 1º trecho horizontal da linha; entre coluna
 - [x] **F.4 Guia §31** — regra do posicionamento do rótulo.
 - [x] **F.5 Conferência** — Playwright, login real, "Todas" e Alpa, com medição de retângulos no navegador: **0 rótulos sobre cartões** nas duas Torres; captura de perto (~100%) com "Orquestrada · 1" inteiro no trecho vertical; "Enquadrar" ainda mostra as duas Torres inteiras (27%). Sem erro de console/JS nem HTTP 4xx/5xx.
 
+### G. Baixas automáticas abrem processo (pedido de 16/10)
+
+> cntinue  →  [pergunta: qual item do "fora de escopo"?]  →  "Baixas automáticas abrem processo"
+
+O problema: a conciliação por CRON (`reconciliation-engine`, a cada 10 min) e o webhook do Asaas
+(`asaas-webhook`) baixam títulos sem navegador, e o motor de Processos só existia no navegador
+(`processService`). A maior parte das baixas reais escapava dos modelos criados na seção E.
+
+Decisão técnica: **um motor, dois lugares** — o mesmo molde de `utils/reconciliationRules.ts`
+(memória: regras puras compartilhadas com a Edge Function). Reescrever `startInstance` /
+`advanceToNextStep` em SQL ou dentro da function seriam duas implementações do motor.
+
+- [x] **G.1 `services/processMotor.ts`** (novo) — `criarMotor(db)`: `logAction`, `contextoDaInstancia`, `advanceToNextStep`, `startInstance` (núcleo, devolve o id), `triggerEvent`, `triggerPurchaseOrderEvent`, `triggerForTransaction`, `triggerForFinancialTitle`, `triggerSettlement`, `triggerBoletoApproved`. **Movidos por script** (scratchpad `extrair_motor.py`), não redigitados. Cliente do banco por parâmetro (tipo estrutural); imports só puros e com `.ts` explícito.
+- [x] **G.2 `services/processService.ts`** — `criarMotor(supabase)`, mesmos nomes (`logAction`, `advanceToNextStep`, `contextoDaInstancia`, `WAITING_STATUS_BY_STEP_TYPE`); os gatilhos entram por espalhamento (`this` = processService, o que os testes espionam); `startInstance` vira invólucro que devolve a instância inteira. Prova: os 15 arquivos de teste que usam o `processService` (103 testes) verdes **sem alteração**. Primeira rodada pegou dois nomes que outros métodos usavam (`WAITING_STATUS_BY_STEP_TYPE`, `contextoDaInstancia`) — expostos.
+- [x] **G.3 Cadeia de imports com `.ts`** — `utils/pedidoItemValor.ts`, `utils/processCondition.ts`, `types/supplyChain.ts` (o Deno não resolve import sem extensão; `allowImportingTsExtensions` já estava ligado).
+- [x] **G.4 `supabase/functions/reconciliation-engine/index.ts`** — depois de cada `fn_reconcile_match` aplicado: `internal_transaction.paid` (pedido) + `triggerSettlement` (a pagar/receber pela direção). Best-effort, fora da transação, não derruba o lote.
+- [ ] **G.5 Asaas — ADIADO (16/10, conflito no rebase)**. Feito e testado sobre o webhook antigo, mas outra frente publicou no `main` (`bb5c6d2a`, plano `docs/planos/2026-10-16-asaas-pendencias-e-pix.md`) a reescrita do Asaas: gravação única em `_shared/asaasProcessar.ts` (webhook + `asaas-status-sync`), com **migrations ainda não aplicadas**. Publicar o webhook agora levaria código que depende de colunas inexistentes → quebraria o recebimento de pagamentos. Resolvido ficando com o webhook DELA; o gatilho entra em `_shared/asaasProcessar.ts` (boleto pago → `internal_transaction.paid` + `payable.settled`; cobrança recebida → `receivable.settled`; taxa não dispara) **depois** que a Fase 1 do Asaas estiver aplicada e publicada.
+- [x] **G.6 `__tests__/processMotor.test.ts`** — motor sozinho (`this` = motor, como na function): baixa abre instância ligada ao título com etapa e log; idempotente; título de pedido abre P2P + Financeiro; `processService` usa o MESMO código; a `reconciliation-engine` chama o motor.
+- [x] **G.7 Deno** — `deno check` verde nas duas functions; fumaça com `deno run` (motor real, banco falso): a baixa cria instância, etapas e log.
+- [x] **G.8 Antes do deploy** — `supabase functions download` das duas: o código no ar é IDÊNTICO ao `main` (sem frente paralela sobrescrita); as duas estão com `verify_jwt = false` (portão próprio: segredo do CRON; token do webhook) → deploy com `--no-verify-jwt`.
+- [ ] **G.9 Publicação** — CI (PR de rascunho #23) → `push main` → `functions deploy reconciliation-engine --no-verify-jwt` (só ela) → prova de portão de fora (REGRA #7: sem credencial 401, como na linha de base) → conferir no banco a próxima rodada do CRON. O pacote leva `_shared/auth.ts` (igual ao publicado) e `utils/reconciliationRules.ts` (o deploy de 11/10 13:28:09Z foi 13 s antes do último commit nele — mesmo conteúdo).
+
 ## Verificação
 
 | Prova | Resultado |

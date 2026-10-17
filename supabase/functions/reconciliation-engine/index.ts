@@ -3,6 +3,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { exigirMembro, exigirUsuario, respostaDeErro, chamadaDeCron } from "../_shared/auth.ts";
+// Motor de Processos: o MESMO módulo do navegador (`services/processMotor.ts`), com o cliente
+// daqui. Baixa feita por esta function (CRON a cada 10 min) também abre processo — antes de
+// 16/10/2026 só a baixa feita no app abria. Plano 2026-10-16-torre-fluxo-financeiro, seção G.
+import { criarMotor } from "../../../services/processMotor.ts";
 // ⚠️ MESMO arquivo que o navegador carrega. Não é uma cópia: `utils/reconciliationRules.ts`
 // não tem um único import, justamente para Deno e Vite poderem compartilhá-lo. Reescrever
 // estas regras aqui criaria duas verdades sobre "o que casa com o quê", e em 06/09/2026
@@ -151,6 +155,7 @@ serve(async (req: Request) => {
 
     const url = Deno.env.get('SUPABASE_URL')!;
     const servico = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const motor = criarMotor(servico);
 
     // A organização vem da CONTA, nunca do cliente: é ela que define o escopo, e
     // aceitar do corpo seria deixar o escopo na mão de quem chama.
@@ -308,7 +313,19 @@ serve(async (req: Request) => {
                 p_bank_id: m.bankId, p_internal_id: m.internalId,
                 p_match_type: 'HEURISTIC', p_confidence: Math.min(m.score, 100), p_adjustment_category: null,
             });
-            if (!error) conciliados++;
+            if (!error) {
+                conciliados++;
+                // Mesmos eventos de `bankReconciliationService.createMatch` (baixa no app): o do P2P
+                // (título de pedido) e o do Financeiro (a pagar ou a receber, pela direção). Fora da
+                // transação da RPC e sem derrubar o lote: os dois nunca lançam, e o try é a cinta
+                // por cima do suspensório — a conciliação já está gravada.
+                try {
+                    await motor.triggerForTransaction(m.internalId, 'internal_transaction.paid');
+                    await motor.triggerSettlement(m.internalId);
+                } catch (e) {
+                    console.error('[reconciliation-engine] motor de processos:', e);
+                }
+            }
         }
 
         if (runId) {

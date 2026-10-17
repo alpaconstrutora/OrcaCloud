@@ -1,4 +1,4 @@
-import type { ApprovalStep } from './financial';
+import type { ApprovalStep } from './financial.ts'; // .ts: também carregado pelo Deno (processMotor → Edge Functions)
 
 /**
  * Um item do pedido carrega DOIS pares de preço:

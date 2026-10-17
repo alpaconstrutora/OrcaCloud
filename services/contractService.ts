@@ -1044,10 +1044,25 @@ export async function generateRecurringInstallmentsForPeriod(
         throw new Error('Contrato sem organização — não é possível lançar as parcelas.');
     }
 
+    // Data que uma parcela existente OCUPA na série: a do vencimento E a embutida
+    // no reference_id (`{contrato}-p{data}`). O upsert abaixo colide pelo
+    // reference_id — parcela PAGA com vencimento editado (ref p01-10, venc. 15)
+    // só pelo due_date não era reconhecida, e o upsert a voltava para PENDING
+    // com o valor novo (desfazia o recebimento e a comissão liberada do corretor).
+    const prefixoRef = `${contract.id}-p`;
+    const datasOcupadas = (rows: { due_date?: string | null; reference_id?: string | null }[]) => {
+        const datas = new Set<string>();
+        for (const r of rows) {
+            if (r.due_date) datas.add(r.due_date.slice(0, 10));
+            if (r.reference_id?.startsWith(prefixoRef)) datas.add(r.reference_id.slice(prefixoRef.length, prefixoRef.length + 10));
+        }
+        return datas;
+    };
+
     // ── Contrato org-level: internal_transactions
     const { data: jaExistem } = await supabase
         .from('internal_transactions')
-        .select('id, due_date, status')
+        .select('id, due_date, status, reference_id')
         .eq('organization_id', contract.organization_id)
         .eq('source_system', 'CONTRACT_RECURRING')
         .like('reference_id', `${contract.id}%`)
@@ -1073,9 +1088,9 @@ export async function generateRecurringInstallmentsForPeriod(
             if (delErr) throw delErr;
             removed = previstas.length;
         }
-        existing = new Set(pagas.map(r => (r.due_date as string).slice(0, 10)));
+        existing = datasOcupadas(pagas);
     } else {
-        existing = new Set((jaExistem || []).map(r => (r.due_date as string).slice(0, 10)));
+        existing = datasOcupadas(jaExistem || []);
     }
 
     const novos = dueDates.filter(d => !existing.has(d));

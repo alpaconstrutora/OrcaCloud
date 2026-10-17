@@ -9,7 +9,8 @@ import { commercialService } from '../../services/commercialService';
 import { brokerService } from '../../services/brokerService';
 import { brokerPortalService } from '../../services/brokerPortalService';
 import { PropertyStatus, UserProfile, ProfileGroup } from '../../types';
-import type { BrokerUnit, BrokerProposal, BrokerProfile } from '../../types';
+import type { BrokerUnit, BrokerProposal, BrokerProfile, BrokerCommission } from '../../types';
+import { useOrgContext } from '../../hooks/useOrgContext';
 import type { PropertyDeal } from '../../types/imovib';
 
 /**
@@ -254,12 +255,32 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
         });
     }, [units, enabledPropertyIds]);
 
+    // Comissão do cartão do painel = a MESMA da aba Comissões (derivada da
+    // negociação + títulos no financeiro), não mais 5% fixo sobre propostas.
+    // Pelo link: org e e-mail vêm do token; interno: org do topo (REGRA #5).
+    const { orgId: orgDoTopo } = useOrgContext();
+    const [comissoes, setComissoes] = useState<BrokerCommission[]>([]);
+    React.useEffect(() => {
+        let vivo = true;
+        // Dentro de uma promise: erro (até síncrono) só zera o cartão, nunca o portal.
+        Promise.resolve()
+            .then(() => portalToken
+                ? brokerPortalService.getCommissionsByToken(portalToken)
+                : effectiveBrokerEmail
+                    ? brokerService.listCommissions(orgDoTopo, effectiveBrokerEmail)
+                    : [])
+            .then(lista => { if (vivo) setComissoes(lista as BrokerCommission[]); })
+            .catch(err => console.error('[BrokerPortal] comissões:', err));
+        return () => { vivo = false; };
+    }, [portalToken, effectiveBrokerEmail, orgDoTopo]);
+
     const stats = useMemo(() => ({
         available: visibleUnits.filter(u => u.status === PropertyStatus.AVAILABLE && u.type !== 'BUILDING').length,
         sent: myProposals.filter(p => p.status === 'ENVIADA').length,
         approved: myProposals.filter(p => p.status === 'APROVADA').length,
-        totalCommission: myProposals.filter(p => p.status === 'APROVADA').reduce((acc, p) => acc + ((p.total_value || 0) * 0.05), 0),
-    }), [visibleUnits, myProposals]);
+        totalCommission: comissoes.reduce((acc, c) => acc + (Number(c.commission_predicted) || 0), 0),
+        commissionPaid: comissoes.reduce((acc, c) => acc + (Number(c.commission_paid) || 0), 0),
+    }), [visibleUnits, myProposals, comissoes]);
 
     const buildings = useMemo(() => visibleUnits.filter(u => u.type === 'BUILDING'), [visibleUnits]);
     const displayUnits = useMemo(() => {

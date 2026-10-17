@@ -1772,6 +1772,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         ? clients.find(c => c.id === (expandedBuyerId || formData.client_id))
         : selectedClient;
     const selectedBroker = brokers.find(b => b.id === formData.broker_id);
+    // Locação: comissão é % sobre CADA parcela do aluguel (gatilho no banco,
+    // migration 20271017600000); venda: % uma vez sobre o total.
+    const comissaoPorParcela = formData.type === 'RENTAL';
+    const fmtComissao = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
     // Um mesmo corretor cadastrado como fornecedor "em todas as organizações"
     // é materializado em broker_profiles UMA vez por org (syncRealEstateBrokerProfiles
@@ -4149,7 +4153,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <div className="grid grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-4 animate-in slide-in-from-top-2 duration-300">
                                         <div className="space-y-1.5">
                                             <label className="text-xs font-semibold text-slate-500">
-                                                <Percent className="w-3 h-3 inline mr-1" />% Comissão
+                                                <Percent className="w-3 h-3 inline mr-1" />{comissaoPorParcela ? '% sobre cada parcela do aluguel' : '% Comissão'}
                                             </label>
                                             <div className="relative">
                                                 <input
@@ -4160,10 +4164,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     value={formData.broker_commission_pct ?? ''}
                                                     onChange={(e) => {
                                                         const pct = parseFloat(e.target.value) || 0;
+                                                        // Locação: estimativa de UMA parcela (a real nasce por parcela no financeiro).
+                                                        const base = comissaoPorParcela
+                                                            ? (Number(formData.installment_value) || Number(formData.value) || 0)
+                                                            : (formData.value || 0);
                                                         setFormData({
                                                             ...formData,
                                                             broker_commission_pct: pct,
-                                                            broker_commission_value: recalcCommission(formData.value || 0, pct)
+                                                            broker_commission_value: recalcCommission(base, pct)
                                                         });
                                                     }}
                                                     className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -4173,6 +4181,22 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                         </div>
 
+                                        {comissaoPorParcela ? (
+                                            // Locação: o % é a fonte. A comissão nasce por parcela no
+                                            // financeiro (gatilho fn_trg_comissao_parcela), sobre o valor
+                                            // de CADA parcela — aqui é só a estimativa de uma.
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-semibold text-slate-500">Comissão por parcela (estimada)</label>
+                                                <div className="w-full h-9 px-3 flex items-center bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700">
+                                                    {fmtComissao(recalcCommission(Number(formData.installment_value) || Number(formData.value) || 0, formData.broker_commission_pct || 0))}
+                                                </div>
+                                                <p className="text-xs text-gray-500">
+                                                    {(formData.broker_commission_pct || 0) > 0
+                                                        ? 'Calculada sobre cada parcela do aluguel — informe o %.'
+                                                        : 'Sem % não há comissão para este corretor.'}
+                                                </p>
+                                            </div>
+                                        ) : (
                                         <div className="space-y-1.5">
                                             <label className="text-xs font-semibold text-slate-500">Valor da Comissão</label>
                                             <div className="relative">
@@ -4192,6 +4216,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 />
                                             </div>
                                         </div>
+                                        )}
 
                                         <div className="space-y-1.5">
                                             <label className="text-xs font-semibold text-slate-500">Forma de Pagto.</label>
@@ -4209,6 +4234,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </select>
                                         </div>
 
+                                        {comissaoPorParcela ? (
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-semibold text-slate-500">Data de Pagto.</label>
+                                                <div className="w-full h-9 px-3 flex items-center bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-500">
+                                                    Segue o vencimento de cada parcela
+                                                </div>
+                                            </div>
+                                        ) : (
                                         <div className="space-y-1.5">
                                             <label className="text-xs font-semibold text-slate-500">Data de Pagto.</label>
                                             <input
@@ -4218,6 +4251,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                             />
                                         </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

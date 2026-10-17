@@ -177,8 +177,9 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, port
                                         <div>
                                             <p className="text-sm font-bold text-gray-900">{comm.deal_type ? comm.unit_number : `Unidade ${comm.unit_number}`} {comm.block ? `• ${comm.block}` : ''}</p>
                                             <p className="text-xs text-gray-400 mt-0.5">
-                                                {comm.deal_type === 'RENTAL' ? 'Locação' : 'Venda'}: {formatCurrency(comm.sale_value)}
-                                                {comm.commission_pct ? ` • ${comm.commission_pct}% comissão` : ''}
+                                                {comm.commission_base === 'PARCELA'
+                                                    ? <>Locação: {formatCurrency(comm.sale_value)}/mês{comm.commission_pct ? ` • ${comm.commission_pct}% por parcela` : ''}{comm.parcelas_total ? ` • ${comm.parcelas_total} parcelas` : ''}</>
+                                                    : <>{comm.deal_type === 'RENTAL' ? 'Locação' : 'Venda'}: {formatCurrency(comm.sale_value)}{comm.commission_pct ? ` • ${comm.commission_pct}% comissão` : ''}</>}
                                                 {comm.contract_number ? ` • ${comm.contract_number}` : ''}
                                             </p>
                                         </div>

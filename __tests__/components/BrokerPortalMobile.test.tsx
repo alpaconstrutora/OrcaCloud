@@ -52,6 +52,11 @@ vi.mock('../../services/brokerPortalService', () => ({
         getRankingByToken: vi.fn(async () => ({ posicao: 2, posicao_anterior: 1, total_corretores: 3, com_venda: 2, vendas: 2, volume: 1000000, enviadas: 3, vendas_do_lider: 3 })),
         getMaterialsByToken: vi.fn(async () => [{ id: 'm-1', title: 'Book do Garden', type: 'BOOK', file_url: 'https://exemplo/book.pdf', version: 2, views_count: 0 }]),
         validateSalesSimulationByToken: vi.fn(async () => null),
+        // comissão derivada da negociação (plano 2026-10-17-comissao-corretor-portal, fase 2)
+        getCommissionsByToken: vi.fn(async () => [
+            { id: 'd-1', commission_base: 'PARCELA', commission_predicted: 5200, commission_released: 700, commission_paid: 150, status: 'PARCIAL' },
+            { id: 'd-2', commission_base: 'TOTAL', commission_predicted: 150, commission_released: 0, commission_paid: 0, status: 'PENDENTE' },
+        ]),
     },
 }));
 vi.mock('../../services/brokerService', async (orig) => ({ ...(await orig<typeof import('../../services/brokerService')>()), brokerService: { listEnabledPropertyIds: vi.fn(async () => null), listProfiles: vi.fn(async () => []), saveProfile: vi.fn() } }));
@@ -94,6 +99,16 @@ describe('BrokerPortalMobile', () => {
         expect(within(barra()).getByRole('button', { name: /empreend/i })).toHaveAttribute('aria-current', 'page');
         expect(within(barra()).queryByRole('button', { name: /mais/i })).toBeNull();
         expect(await screen.findByText('010 - Galeria Altavista')).toBeInTheDocument();
+    });
+
+    it('cartão Comissão = soma das comissões reais (não mais 5% sobre propostas aprovadas)', async () => {
+        montar(['analytics']);
+        // proposta aprovada de R$ 800.000 daria R$ 40.000 pela regra antiga (cartão sem centavos)
+        // Intl separa "R$" do número com espaço NÃO separável — \s cobre os dois
+        expect(await screen.findByText(/^R\$\s5\.350$/)).toBeInTheDocument();
+        expect(screen.getByText(/^R\$\s150 paga$/)).toBeInTheDocument();
+        expect(screen.queryByText(/R\$\s40\.000$/)).toBeNull();
+        expect(screen.queryByText('5% sobre aprovadas')).toBeNull();
     });
 
     it('tudo habilitado: 4 na barra + "Mais" com o resto, e nenhuma Saúde', async () => {

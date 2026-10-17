@@ -143,6 +143,10 @@ export interface BrokerCommission {
     /** Negócio de origem (leitura derivada de commercial_deals, fn_broker_comissoes_lista). */
     deal_type?: 'SALE' | 'RENTAL' | 'SERVICE' | string;
     contract_number?: string | null;
+    /** 'TOTAL' = venda (% uma vez sobre o total); 'PARCELA' = locação (% sobre cada parcela). */
+    commission_base?: 'TOTAL' | 'PARCELA';
+    /** Locação: quantos títulos de comissão (um por parcela) existem. */
+    parcelas_total?: number;
     unit_number?: string;
     block?: string;
     buyer_name?: string;

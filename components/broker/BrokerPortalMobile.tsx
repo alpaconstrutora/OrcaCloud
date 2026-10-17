@@ -270,7 +270,7 @@ const BrokerPortalMobile: React.FC<Props> = ({ profile, organizationId, portalTo
                                     <KpiCard label="Disponíveis" value={h.loading ? '…' : h.stats.available} sub={h.loading ? undefined : `de ${h.visibleUnits.length}`} icon={<Building2 className="w-5 h-5" />} color="blue" />
                                     <KpiCard label="Enviadas" value={h.loading ? '…' : h.stats.sent} sub="Aguardando análise" icon={<Send className="w-5 h-5" />} color="amber" />
                                     <KpiCard label="Aprovadas" value={h.loading ? '…' : h.stats.approved} sub="Vendas confirmadas" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
-                                    <KpiCard label="Comissão" value={h.loading ? '…' : formatCurrency(h.stats.totalCommission)} sub="5% sobre aprovadas" icon={<DollarSign className="w-5 h-5" />} color="violet" />
+                                    <KpiCard label="Comissão" value={h.loading ? '…' : formatCurrency(h.stats.totalCommission)} sub={h.loading ? undefined : `${formatCurrency(h.stats.commissionPaid)} paga`} icon={<DollarSign className="w-5 h-5" />} color="violet" />
                                 </div>
                             </>
                         )}

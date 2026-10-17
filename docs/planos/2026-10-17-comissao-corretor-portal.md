@@ -97,3 +97,62 @@ Sessão ec9dc1ab · 17/10/2026
 - Navegador: portal do Geleia pelo link → aba Comissões mostra R$ 150 (CTL-010-014-0001).
 - Contas a Pagar mostra o título "CTL-010-014-0001 - Comissão de corretagem - Geleia"
   quando o negócio muda / é preenchido.
+
+---
+
+# Fase 2 — locação por parcela, títulos dos negócios existentes, cartão do painel
+
+## Pedido original (17/10/2026, mesma sessão ec9dc1ab)
+
+> Preciso de uma decisão sua.
+> 1. Quer que eu crie os títulos dessas, ou só de algumas? Crie de todas
+> 2. Fora do que você pediu: o cartão "Comissão Acumulada" no painel inicial do portal ainda calcula 5% fixo sobre propostas aprovadas e não usa estas comissões. Posso ligá-lo aos mesmos valores: sim
+> 3. Ponto adicional. existem dois Tipos de comissões:
+> 3.1. comercial > venda de unidades: a % Comissão é aplicada uma única vez sobre o valor total da negociação
+> 3.2. locações > a % Comissão é aplicada sobre cada parcela. atualmente o app aplica uma única vez, da mesma maneira que é feita com venda de unidades. entao deve ser corrigido.
+
+## Decisões (AskUserQuestion, 17/10)
+
+| Pergunta | Resposta do usuário |
+|---|---|
+| Locação: quando a comissão de cada parcela fica Liberada? | Quando o aluguel daquela parcela é recebido; Paga = título da comissão conciliado |
+| Parcelas antigas (2016–2019; 6 já recebidas em 2026) | Todas, como disse |
+| Renovação (contrato-filho via `parent_contract_id`) | Sim, mesmo % e corretor |
+| ~39 títulos retroativos vencidos abrem processo "Título a pagar vencido" | Abrir normalmente |
+
+Decisões minhas (da revisão de riscos): gatilho NA PARCELA (as parcelas nascem fora do `saveDeal`);
+erro no caminho da parcela é engolido e registrado em `comissao_corretor_pendencias` (nunca derruba
+regerar / corte de renovação / conciliação); conciliar parcela não dispara nada (liberação é calculada
+na leitura); cancelamento da sincronização = `CANCELADO_AUTO` (o único que ela reabre — cancelamento
+manual é respeitado); reabrir só zera alçada se o valor mudou; título fica na org e no contrato DA
+PARCELA; sem fallback `valor/deal.value` (locação sem % não gera título); distrato cancela só comissão
+de aluguel não recebido.
+
+## Plano e estado
+
+- [x] Migration `20271017600000_comissao_locacao_por_parcela.sql` — **aplicada 17/10/2026**. Prova com
+  rollback (`fase2_cenarios.sql`, P1–P15): 36 títulos/R$ 5.200 (CTL-010-014-0001) e 30/R$ 13.668
+  (CTL-006-012-0001); apagar+reinserir parcela com mesmo valor mantém APROVADO; valor novo → RASCUNHO;
+  conciliar parcela não toca o título e libera na leitura; parcela cancelada → `CANCELADO_AUTO`;
+  cancelamento manual respeitado; pago intocado; % muda → não pagos recalculados; renovação gera;
+  competência fechada → parcela grava e pendência registrada; distrato mantém só aluguéis recebidos;
+  venda inalterada; gestor vê 7 negócios.
+- [x] `services/contractService.ts` — regerar reconhece parcela existente também pela data do
+  `reference_id` (parcela paga com vencimento editado não volta mais a PENDING).
+- [x] Backfill `supabase/manual/2026-10-17-backfill-comissao-corretor.sql` — **executado**: 69 títulos,
+  0 pendências (0008 R$ 20.000; CTV-007-007-0001 R$ 15.000; CTV-007-008-0001 R$ 20.000;
+  CTL-006-012-0001 30 títulos R$ 13.668, todos vencidos; CTL-010-014-0001 36 títulos R$ 5.200, 9 vencidos).
+  `vw_payables`: 69 títulos, R$ 73.868, 39 vencidos. Reversão em `comissao_corretor_backfill_20261017`
+  (NÃO apagar). 30 processos de vencido já abertos na primeira varredura.
+- [x] DealModal › Partes e Comissões (locação): "% sobre cada parcela do aluguel", "Comissão por parcela
+  (estimada)" somente leitura com o motivo, "Data de Pagto." = "Segue o vencimento de cada parcela".
+  ⚠️ Verificado só por `tsc` + `check-ui-standard` — sem credencial do harness autenticado nesta sessão,
+  a tela NÃO foi vista no navegador.
+- [x] Portal: linha "Locação: R$ x/mês • 10% por parcela • n parcelas", marcos por parcela; cartão
+  "Comissão Acumulada"/"Comissão" = soma real (legenda com o pago). Teste novo em
+  `__tests__/components/BrokerPortalMobile.test.tsx`. Navegador (link do Geleia, 1366 e 390 px): 24/24.
+- Achado fora do escopo: 4 títulos de comissão no formato antigo (`commission-*`/`tx-comm-*`,
+  R$ 90.000 PENDING) pertencem a negócios já APAGADOS — ficaram órfãos no Contas a Pagar.
+- Achado fora do escopo (revisão): `taxPayableService.generateForDeal` faz upsert com `status PENDING`
+  sobre o mesmo `reference_id` de tributo já pago (`removeForDeal` preserva o pago, o upsert seguinte
+  o volta a pendente) — não testado, não corrigido.

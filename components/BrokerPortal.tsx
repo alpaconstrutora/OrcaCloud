@@ -447,7 +447,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                 <KpiCard label="Unidades Disponíveis" value={loading ? '…' : stats.available} sub={loading ? undefined : `de ${visibleUnits.length} unidades`} icon={<Building2 className="w-5 h-5" />} color="blue" />
                 <KpiCard label="Propostas Enviadas" value={loading ? '…' : stats.sent} sub="Aguardando análise" icon={<Send className="w-5 h-5" />} color="amber" pulse={!loading && stats.sent > 0} />
                 <KpiCard label="Propostas Aprovadas" value={loading ? '…' : stats.approved} sub="Vendas confirmadas" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
-                <KpiCard label="Comissão Acumulada" value={loading ? '…' : formatCurrency(stats.totalCommission)} sub="5% sobre aprovadas" icon={<DollarSign className="w-5 h-5" />} color="violet" />
+                <KpiCard label="Comissão Acumulada" value={loading ? '…' : formatCurrency(stats.totalCommission)} sub={loading ? undefined : `Prevista • ${formatCurrency(stats.commissionPaid)} paga`} icon={<DollarSign className="w-5 h-5" />} color="violet" />
             </div>
             )}
 

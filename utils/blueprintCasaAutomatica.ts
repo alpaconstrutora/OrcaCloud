@@ -1091,7 +1091,10 @@ export function terreaNaoComporta(p: PlanoDaCasa): string | null {
 export const problemasDoPlano = (p: PlanoDaCasa): number =>
   p.etapas.some((e) => e.id === 'ARQUITETURA' && e.situacao === 'NAO_RODOU')
     ? Infinity
-    : p.pendencias.filter((x) => x.grupo === 'SEM_SOLUCAO' || x.grupo === 'CONFLITO').length * 3 + p.pendencias.filter((x) => x.grupo === 'VERIFICACAO').length + (terreaNaoComporta(p) ? 2 : 0);
+    : // O aviso sobre a ESCOLHA dos pavimentos ("Pavimentos: …") não é defeito do desenho — contado, a térrea pedida
+      // levava um problema a mais que a mesma térrea comparada pelo Automático.
+      ((ps) => ps.filter((x) => x.grupo === 'SEM_SOLUCAO' || x.grupo === 'CONFLITO').length * 3 + ps.filter((x) => x.grupo === 'VERIFICACAO').length)(p.pendencias.filter((x) => !/^Pavimentos/.test(x.texto))) +
+      (terreaNaoComporta(p) ? 2 : 0);
 
 export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> = {}, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const pav = hipParcial.pavimentos ?? HIPOTESES_DA_CASA_PADRAO.pavimentos;

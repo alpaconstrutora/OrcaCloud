@@ -206,7 +206,15 @@ ao corretor.
     folha de conta (Meus dados · Ajuda · Sair), "Primeiros passos" em uma linha
     (`PortalChecklist compacto`, via `PortalHelp checklistCompacto`), toast próprio.
   - 3 `BrokerPortal.tsx` vira seletor; prévia do gestor renderiza `BrokerPortalMobile previa`; `alert()` → toast.
-- [x] **Continuação (16–17/10/2026) — feito nesta rodada, ainda NÃO publicado:**
+- [x] **Continuação publicada (17/10/2026):** `main` em `d18a2437` (rebase sobre `32a3e968`, do
+  Financeiro, sem arquivo em comum). PR de rascunho #20: CI verde em 18min31s; CI verde de novo no
+  commit da `main`; `conferir-producao.sh` provou que o domínio serve `d18a243` e que os bundles têm
+  "Demonstração, sem dados reais" e "não aceita proposta agora".
+- [ ] Fora desta frente (registrado para decidir depois): `fn_broker_portal_get_units` e
+  `fn_broker_portal_get_commissions` ainda têm EXECUTE para PUBLIC (REGRA #7 pede REVOKE); em
+  Empreendimentos uma unidade com proposta APROVADA aparece "Disponível" (status do cadastro),
+  enquanto o Estoque a pinta vendida (negócio ativo).
+- [x] **Continuação (16–17/10/2026) — o que entrou:**
   - F2 item 5 concluído: `PropertyUnitMap compacto` — filtros de status em faixa rolável, "Agrupar"
     curto + torre em `<select>` (sem "Visão": densidade sempre compacta), coluna de pavimento estreita
     ("5º", "T" = térreo), molduras sem respiro; **tocar na unidade abre a folha** (dados + Fazer

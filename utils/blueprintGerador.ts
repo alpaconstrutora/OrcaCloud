@@ -484,6 +484,8 @@ const COMPRIMENTO_DA_VAGA_MM = 5000;
 const RESTO_MINIMO_AO_LADO_DA_GARAGEM_MM = 3000;
 /** Com pelo menos isto ao lado, as vagas ficam LADO A LADO; abaixo, EM FILA (lote estreito). */
 const RESTO_CONFORTAVEL_AO_LADO_DA_GARAGEM_MM = 5000;
+/** F22: a varanda vira coluna da linha da rua só até esta profundidade da linha (a das vagas lado a lado). */
+const VARANDA_EM_COLUNA_ATE_MM = 6000;
 /** Fundo mínimo atrás da garagem para virar a linha de trás da frente (sala, cozinha, serviço). */
 const LINHA_MINIMA_ATRAS_DA_GARAGEM_MM = 3000;
 
@@ -550,7 +552,9 @@ function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, p
       // atrás dela: a varanda não tocava a sala (relação obrigatória sem porta direta em 4 das 8 casas).
       const varanda = aoLado.find((t) => t.item.uso === 'VARANDA') ?? null;
       let xAoLado = x0;
-      if (varanda && aoLado.length > 1) {
+      // Só na linha da rua rasa (as vagas lado a lado, 5 m): com a garagem em FILA (10 m), a coluna virava uma faixa de
+      // 1,4 × 10 m (sobrado 10 × 30).
+      if (varanda && aoLado.length > 1 && caixaDaGaragem.y1 <= VARANDA_EM_COLUNA_ATE_MM) {
         const wv = Math.max(eixoMinMm(varanda.item, hip), Math.ceil(varanda.areaAlvoMm2 / caixaDaGaragem.y1 / hip.malhaMm) * hip.malhaMm);
         if (W - x0 - wv >= Math.max(...aoLado.filter((t) => t !== varanda).map((t) => eixoMinMm(t.item, hip)))) {
           out.set(varanda, { x0, y0: 0, x1: x0 + wv, y1: caixaDaGaragem.y1 });

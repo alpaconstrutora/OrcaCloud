@@ -1998,6 +1998,7 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 | Terreno inclinado: como a casa assenta? | **Platô único** — na cota que equilibra corte e aterro sob a projeção; corte/aterro no orçamento; talude ou arrimo nas bordas acima de uma hipótese; escada/rampa na entrada |
 | Muro, portão e calçada? | **Muro + portão + calçada** — muro nas laterais e fundos (altura hipótese), muro/grade na frente com portão de pedestre e de garagem, calçada interna da entrada e da garagem (na permeabilidade) |
 | 3 pavimentos ou mais? | **Sim, até 3** |
+| (17/10) O programa não cabe na térrea (4 dorm. em lote de 10 m; acima da TO)? | **Opção "Automático"** (o padrão da tela): gera a térrea e, se ela não comporta, o sobrado — fica o de menos problemas; "Térrea" escolhida fica térrea, e a pendência diz que o sobrado resolve |
 
 ### Fases (cada uma: retrato → correção → as 8 casas medidas 2× → CI de rascunho → main)
 
@@ -2005,7 +2006,7 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F19 — climatização: ponto de dados, eletroduto força → condensadora, camadas da cobertura (ver "Registro da F19")
 - [x] F20 — mobiliário: peça que não cabe ganha variante (cama, box, vaso/lavatório, armário) (ver "Registro da F20"; 2 cômodos estreitos demais vão para a F22)
 - [x] F21 — gerador: molhados e escritório com lado externo; porta direta nas relações obrigatórias; nenhum "Ambiente N" (ver "Registro da F21"; o lado externo do serviço/escritório e a porta direta varanda × sala e cozinha × serviço passaram para a F22 — são do ARRANJO)
-- [ ] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO; e (da F21) o arranjo em faixas: varanda de entrada junto da sala, serviço junto da cozinha, serviço e escritório com fachada; e (da F20) a suíte que não cabe o armário/a cama
+- [ ] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO; e (da F21) o arranjo em faixas: varanda de entrada junto da sala, serviço junto da cozinha, serviço e escritório com fachada; e (da F20) a suíte que não cabe o armário/a cama — **partes 1 e 2 feitas** (ver "Registro da F22"); faltam o serviço sem fachada (12 × 30), a frente do R1-B e o sobrado no lote estreito (este vai com a F27)
 - [ ] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo
 - [ ] F24 — implantação não retangular (L) e vaga descoberta com recuo curto
 - [ ] F25 — terreno inclinado: platô único
@@ -2211,3 +2212,33 @@ entrada × sala em 4 casas, cozinha × serviço no R1-B, serviço sem fachada (1
 
 Testes novos (reprovam sem a correção): sem sobra de cômodo no caso medido (`blueprintCasaAutomatica`, F21); o exaustor e
 o duto pela cobertura (`blueprintRedeDeAr`); o pedaço do contorno com a declividade (`blueprintEsgotoAutomatico`).
+
+### Registro da F22 (17/10/2026) — o arranjo (partes 1 e 2)
+
+**Parte 1 — a varanda de entrada junto da sala** (publicada 704f5189): com a garagem num canto da frente, a varanda vira
+uma COLUNA na profundidade da linha da rua — encosta na rua e na sala, atrás. No treemap, ela ficava na 1ª linha e o
+serviço na 2ª, atrás dela. Resolveu a varanda × sala nas 4 casas e, de quebra, o escritório sem fachada do R1-A; o 15 × 25
+ficou sem nenhuma pendência. A varanda é aberta: sem janela não é falta. Na descida da água sob janela, o batente escolhido
+pela descida INTEIRA livre de tubos (o nó do forro, andando junto, caía sobre a linha da outra água).
+
+**Parte 2 — pavimentos "Automático"** (decisão do usuário, 17/10): o padrão da tela. Gera a térrea; se ela não comporta o
+programa (medida mínima de ambiente violada, ou acima da TO), gera o sobrado e fica com o de MENOS problemas
+(`problemasDoPlano`), dito na decisão e numa pendência CONFERIR. "Térrea" escolhida fica térrea, com a pendência de que o
+sobrado resolve. A premissa gravada vale (1 continua térrea); ausente = Automático. E mais:
+
+- a varanda em coluna só na linha da rua RASA (as vagas lado a lado, ≤ 6 m) — com a garagem em fila (10 m) ela virava uma
+  faixa de 1,4 × 10 m;
+- a porta do núcleo da escada do sobrado nasce com peitoril 0 (sem ele, a conferência de vão comparava com `undefined`).
+
+Tentado e desfeito (medido): subir pesos do recozimento (relação obrigatória 10 → 14/20, ventilação 5 → 8) e prender o
+serviço na frente na casa — os dois desarrumavam os mínimos dos ambientes (F3b) ou a frente do R1-B (banheiro de 0,55 m).
+
+Medido nas 8 casas, 2×: 0 em vão, 0 rede × rede, 0 pilar. **Falta** (o arranjo, para a próxima rodada da F22): o serviço sem
+fachada no 12 × 30 (a frente em colunas o deixa no miolo), a frente do R1-B (cozinha × serviço; o serviço vai ao fundo) e o
+**sobrado no lote estreito** — no 10 × 30 de 4 dormitórios o Automático compara e fica com a térrea, porque o sobrado ali
+tem os seus próprios problemas (a varanda com a garagem em fila, o esgoto suspenso do banheiro de cima cruzando as faixas
+do forro do térreo por falta de shaft, uma sobra de cômodo no superior) — vai com a F27 (multipavimentos).
+
+Testes novos (reprovam sem a correção): a varanda × sala no 15 × 25 e o Automático (fica o de menos problemas; a térrea
+pedida que não comporta diz; o programa que cabe fica térreo) (`blueprintCasaAutomatica`); as premissas e o seletor
+(`blueprintPremissasDaCasa`, `TelaCasaAutomatica`).

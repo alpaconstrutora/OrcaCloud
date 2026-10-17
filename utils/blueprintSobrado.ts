@@ -384,7 +384,9 @@ export function pavimentoComNucleo(
   if (melhor && melhor.viz && ordem(melhor.viz) < 99) {
     const alvo = paredeQueContem(todas, melhor.c.fixo, melhor.c.valor, melhor.c.p0, melhor.c.p1);
     if (alvo) {
-      aberturas.push({ wallId: '', wallUid: alvo.uid, kind: 'door', offsetMm: alvo.offsetMm, widthMm: w, heightMm: hip.alturaDaPortaMm } as AberturaLocal);
+      // F22: com o peitoril (0) — sem ele, a conferência de vão comparava cotas com `undefined` e acusava o barrilete que
+      // corre sobre a laje, 3 m acima da porta (sobrado 10 × 30).
+      aberturas.push({ wallId: '', wallUid: alvo.uid, kind: 'door', offsetMm: alvo.offsetMm, widthMm: w, heightMm: hip.alturaDaPortaMm, sillMm: 0 } as AberturaLocal);
       porta = { vizinho: melhor.viz.nome, lado: melhor.c.lado };
     }
   }

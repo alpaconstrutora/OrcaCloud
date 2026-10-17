@@ -200,7 +200,8 @@ export default function TelaCasaAutomatica(props: Props) {
           )}
           <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
             <Campo rotulo="Pavimentos">
-              <select aria-label="Pavimentos" className={campoCls} value={p.pavimentos} onChange={(e) => onPremissas({ ...p, pavimentos: e.target.value === '2' ? 2 : 1 })} data-testid="pavimentos-da-casa">
+              <select aria-label="Pavimentos" className={campoCls} value={p.pavimentos} onChange={(e) => onPremissas({ ...p, pavimentos: e.target.value === '2' ? 2 : e.target.value === '1' ? 1 : 'AUTOMATICO' })} data-testid="pavimentos-da-casa">
+                <option value="AUTOMATICO">Automático (térrea; sobrado se não couber)</option>
                 <option value={1}>Térrea</option>
                 <option value={2}>Sobrado (2 pavimentos)</option>
               </select>
@@ -288,7 +289,7 @@ export default function TelaCasaAutomatica(props: Props) {
                 <Numero rotulo="Piso acabado (cm)" valor={p.forro.pisoAcabadoMm / 10} min={0} max={15} passo={0.5} onValor={(v) => v != null && set('forro', { pisoAcabadoMm: Math.round(v * 10) })} />
               </>
             )}
-            {p.pavimentos === 2 && (
+            {p.pavimentos !== 1 && (
               <>
                 <Numero rotulo="Laje entre os pavimentos (cm)" valor={p.sobrado.lajeEntrePavimentosMm / 10} min={8} max={30} onValor={(v) => v != null && set('sobrado', { lajeEntrePavimentosMm: Math.round(v * 10) })} />
                 <Numero rotulo="Shaft das instalações (cm)" valor={p.sobrado.shaftMm / 10} min={20} max={80} passo={5} onValor={(v) => v != null && set('sobrado', { shaftMm: Math.round(v * 10) })} />

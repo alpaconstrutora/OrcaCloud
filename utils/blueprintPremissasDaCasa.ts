@@ -31,8 +31,8 @@ export interface PremissasDaCasa {
   eletrica: { chuveiroEletricoVA: number; medidor: boolean };
   /** Quantas alternativas do gerador E6.2 a casa tenta (fica a de menos problemas graves). */
   sementes: number;
-  /** F12d: 1 = térrea; 2 = sobrado. */
-  pavimentos: 1 | 2;
+  /** F12d: 1 = térrea; 2 = sobrado. F22: 'AUTOMATICO' (o padrão) = a térrea, ou o sobrado quando ela não comporta. */
+  pavimentos: 1 | 2 | 'AUTOMATICO';
   /** F12d: as hipóteses do sobrado que a tela expõe (o núcleo e a escada seguem o padrão do motor). */
   sobrado: { lajeEntrePavimentosMm: number; shaftMm: number };
   /** F13: a pressão por caso — até quanto a caixa sobe; acima disso, o pressurizador (e a potência dele). */
@@ -57,7 +57,7 @@ export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
   ancoras: { aguaQuente: 'PELO_PADRAO', caixaDeGordura: true },
   eletrica: { chuveiroEletricoVA: 5500, medidor: true },
   sementes: 8,
-  pavimentos: 1,
+  pavimentos: 'AUTOMATICO',
   sobrado: { lajeEntrePavimentosMm: 100, shaftMm: 400 },
   pressao: { caixaElevadaAteMm: 2000, potenciaDoPressurizadorW: 370 },
   forro: { lancar: true, peDireitoLivrePermanenciaMm: 2500, peDireitoLivreDemaisMm: 2300, pisoAcabadoMm: 50 },
@@ -110,7 +110,8 @@ export function premissasDaCasaDaColuna(raw: unknown): PremissasDaCasa {
     ancoras: completar(r.ancoras, PREMISSAS_DA_CASA_PADRAO.ancoras),
     eletrica: completar(r.eletrica, PREMISSAS_DA_CASA_PADRAO.eletrica),
     sementes,
-    pavimentos: r.pavimentos === 2 ? 2 : 1,
+    // A premissa gravada vale (1 = a térrea escolhida); ausente, o padrão (Automático).
+    pavimentos: r.pavimentos === 2 ? 2 : r.pavimentos === 1 ? 1 : 'AUTOMATICO',
     sobrado: completar(r.sobrado, PREMISSAS_DA_CASA_PADRAO.sobrado),
     pressao: completar(r.pressao, PREMISSAS_DA_CASA_PADRAO.pressao),
     forro: completar(r.forro, PREMISSAS_DA_CASA_PADRAO.forro),

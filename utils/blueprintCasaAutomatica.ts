@@ -544,7 +544,12 @@ export interface EntradaDaCasa {
 
 export interface HipotesesDaCasa {
   /** F12: 1 = térrea; 2 = sobrado (social e serviço embaixo, íntimo em cima, escada em U num núcleo). */
-  pavimentos: 1 | 2;
+  /**
+   * F12: 1 = térrea; 2 = sobrado. F22 (decisão do usuário, 17/10/2026: "opção Automático"): 'AUTOMATICO' gera a térrea e,
+   * se ela não comporta o programa (medida mínima de ambiente violada ou o programa acima da TO), também o sobrado — e fica
+   * com o de menos problemas.
+   */
+  pavimentos: 1 | 2 | 'AUTOMATICO';
   /** F12: o núcleo da escada, a laje entre os pavimentos e a escada. */
   sobrado: HipotesesDoSobrado;
   programa: HipotesesDoProgramaDaCasa;
@@ -1071,7 +1076,44 @@ function foraDoPoligono(poligonos: readonly (readonly Point[])[], at: Point, com
   return melhor?.p ?? null;
 }
 
+/** F22: por que a TÉRREA não comporta o programa (`null` = comporta): medida mínima de ambiente violada, ou a TO. */
+export function terreaNaoComporta(p: PlanoDaCasa): string | null {
+  const motivos = p.pendencias
+    .filter((x) => /^Legislação: .*(largura mínima|área mínima)/.test(x.texto) || /^O programa pede .* a taxa de ocupação permite/.test(x.texto))
+    .map((x) => x.texto.replace(/^Legislação: /, ''));
+  return motivos.length ? motivos.join('; ') : null;
+}
+
+/** F22: os problemas que pesam na escolha entre térrea e sobrado (o menor fica). */
+export const problemasDoPlano = (p: PlanoDaCasa): number =>
+  p.etapas.some((e) => e.id === 'ARQUITETURA' && e.situacao === 'NAO_RODOU')
+    ? Infinity
+    : p.pendencias.filter((x) => x.grupo === 'SEM_SOLUCAO' || x.grupo === 'CONFLITO').length * 3 + p.pendencias.filter((x) => x.grupo === 'VERIFICACAO').length + (terreaNaoComporta(p) ? 2 : 0);
+
 export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> = {}, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
+  const pav = hipParcial.pavimentos ?? HIPOTESES_DA_CASA_PADRAO.pavimentos;
+  if (pav !== 'AUTOMATICO') {
+    const p = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: pav }, opcoes);
+    // A térrea pedida que não comporta: dito, com a saída (a escolha da pessoa fica).
+    const motivo = pav === 1 ? terreaNaoComporta(p) : null;
+    if (motivo) p.pendencias.push({ grupo: 'VERIFICACAO', texto: `Pavimentos: a térrea não comporta o programa (${motivo}) — em "Automático" ou "Sobrado", a casa sobe um pavimento.` });
+    return p;
+  }
+  const terrea = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: 1 }, opcoes);
+  const motivo = terreaNaoComporta(terrea);
+  if (!motivo) {
+    terrea.decisoes.push('Pavimentos automático: térrea (o programa cabe nela).');
+    return terrea;
+  }
+  const sobrado = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: 2 }, opcoes);
+  const fica = problemasDoPlano(sobrado) < problemasDoPlano(terrea) ? sobrado : terrea;
+  const texto = fica === sobrado ? `Pavimentos automático: sobrado — a térrea não comportava o programa (${motivo}).` : `Pavimentos automático: térrea — não comporta o programa (${motivo}), mas o sobrado tinha mais problemas.`;
+  fica.decisoes.push(texto);
+  fica.pendencias.push({ grupo: 'CONFERIR', texto });
+  return fica;
+}
+
+function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> & { pavimentos: 1 | 2 }, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const hip: HipotesesDaCasa = {
     ...HIPOTESES_DA_CASA_PADRAO,
     ...hipParcial,

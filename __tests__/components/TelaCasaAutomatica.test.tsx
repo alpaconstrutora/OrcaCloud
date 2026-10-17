@@ -169,10 +169,16 @@ describe('TelaCasaAutomatica (F10)', () => {
 
   it('F12d: sobrado — o seletor de pavimentos muda a premissa; as hipóteses do sobrado aparecem; o resumo e o botão dizem os dois pavimentos', () => {
     const onPremissas = vi.fn();
-    tela({ onPremissas });
+    // Na térrea escolhida, as hipóteses do sobrado somem; no Automático (o padrão, F22) e no sobrado, aparecem.
+    tela({ onPremissas, premissas: { ...PREMISSAS_DA_CASA_PADRAO, pavimentos: 1 } });
     expect(screen.queryByLabelText('Laje entre os pavimentos (cm)')).toBeNull();
     fireEvent.change(screen.getByLabelText('Pavimentos'), { target: { value: '2' } });
     expect(onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ pavimentos: 2 }));
+    fireEvent.change(screen.getByLabelText('Pavimentos'), { target: { value: 'AUTOMATICO' } });
+    expect(onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ pavimentos: 'AUTOMATICO' }));
+    cleanup();
+    tela({});
+    expect(screen.getByLabelText('Laje entre os pavimentos (cm)')).toBeTruthy();
     cleanup();
 
     const doSobrado = { ...plano, sobrado: { nivelSuperiorId: 'lvl_0002', nucleo: { lado: 'DIREITA' }, escada: { degraus: 17, espelhoMm: 171, pisoMm: 306, blondelMm: 647 }, portas: { terreo: 'Sala', superior: 'Circulação' } } } as unknown as PlanoDaCasa;

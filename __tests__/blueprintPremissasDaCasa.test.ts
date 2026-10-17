@@ -46,9 +46,11 @@ describe('hipotesesDasPremissas', () => {
 });
 
 describe('F12d — o sobrado nas premissas', () => {
-  it('pavimentos só 1 ou 2 (o resto cai na térrea); o grupo do sobrado completa como os outros; vira hipótese do motor', () => {
-    expect(premissasDaCasaDaColuna({}).pavimentos).toBe(1);
-    expect(premissasDaCasaDaColuna({ pavimentos: 3 }).pavimentos).toBe(1);
+  it('pavimentos 1, 2 ou Automático (ausente ou outro valor = Automático, F22); a térrea gravada vale; o grupo do sobrado completa; vira hipótese do motor', () => {
+    expect(premissasDaCasaDaColuna({}).pavimentos).toBe('AUTOMATICO');
+    expect(premissasDaCasaDaColuna({ pavimentos: 3 }).pavimentos).toBe('AUTOMATICO');
+    expect(premissasDaCasaDaColuna({ pavimentos: 1 }).pavimentos).toBe(1);
+    expect(hipotesesDasPremissas(premissasDaCasaDaColuna({})).pavimentos).toBe('AUTOMATICO');
     const p = premissasDaCasaDaColuna({ pavimentos: 2, sobrado: { lajeEntrePavimentosMm: 120, shaftMm: 'x' } });
     expect(p.pavimentos).toBe(2);
     expect(p.sobrado).toEqual({ lajeEntrePavimentosMm: 120, shaftMm: 400 });

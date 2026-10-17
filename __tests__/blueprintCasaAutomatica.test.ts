@@ -8,7 +8,7 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { conferirPlanoDaCasa, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
 import { PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
@@ -1062,5 +1062,44 @@ describe('F22 — a varanda de entrada encosta na sala (lote 15 × 25)', () => {
     expect(plano.pendencias.filter((p) => p.grupo === 'SEM_SOLUCAO').map((p) => p.texto)).toEqual([]);
     const varanda = plano.resultado.spaces.find((s) => /Varanda/.test(s.name ?? ''))!;
     expect(Math.min(...varanda.ring.map((p) => p.y))).toBeLessThanOrEqual(3100);
+  });
+});
+
+/**
+ * F22 (decisão do usuário, 17/10/2026: "opção Automático"): pavimentos 'AUTOMATICO' gera a térrea e, se ela não comporta o
+ * programa (medida mínima de ambiente violada ou acima da TO), o sobrado — e fica com o de menos problemas. Com "Térrea"
+ * escolhida, fica a térrea e a pendência diz que o sobrado resolve.
+ */
+describe('F22 — pavimentos automático', () => {
+  const lote10x30 = () => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = base.levels[0].id;
+    const d = (a: Point, b: Point, papel: Papel): Command => ({ type: 'AddBoundary', levelId, a, b, kind: 'TERRENO', papel });
+    return applyBatch(base, [d(point(0, 0), point(10000, 0), 'FRENTE'), d(point(10000, 0), point(10000, 30000), 'LATERAL_DIREITA'), d(point(10000, 30000), point(0, 30000), 'FUNDOS'), d(point(0, 30000), point(0, 0), 'LATERAL_ESQUERDA')]).model;
+  };
+  const quatro = { ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, suites: 1, banheiros: 3, vagas: 2 };
+
+  it('4 dormitórios num lote de 10 m: a térrea não comporta → compara com o sobrado e fica com o de MENOS problemas, dito', () => {
+    const m = lote10x30();
+    const p = planejarCasa(m, entrada(m, { curto: quatro }), { pavimentos: 'AUTOMATICO' });
+    const terrea = planejarCasa(m, entrada(m, { curto: quatro }), { pavimentos: 1 });
+    const sobrado = planejarCasa(m, entrada(m, { curto: quatro }), { pavimentos: 2 });
+    expect(p.pendencias.some((x) => /^Pavimentos automático: (sobrado|térrea) — /.test(x.texto) && /não compor/.test(x.texto))).toBe(true);
+    const fica = problemasDoPlano(sobrado) < problemasDoPlano(terrea) ? 'sobrado' : 'térrea';
+    expect(p.sobrado ? 'sobrado' : 'térrea').toBe(fica);
+  });
+
+  it('a mesma casa com "Térrea" escolhida: fica térrea, e a pendência diz que o sobrado resolve', () => {
+    const m = lote10x30();
+    const p = planejarCasa(m, entrada(m, { curto: quatro }), { pavimentos: 1 });
+    expect(p.sobrado).toBeNull();
+    expect(p.pendencias.some((x) => /^Pavimentos: a térrea não comporta o programa .* "Sobrado"/.test(x.texto))).toBe(true);
+  });
+
+  it('o programa padrão no lote de 12 × 30: cabe na térrea — fica térrea', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m), { pavimentos: 'AUTOMATICO' });
+    expect(p.sobrado).toBeNull();
+    expect(p.decisoes).toContain('Pavimentos automático: térrea (o programa cabe nela).');
   });
 });

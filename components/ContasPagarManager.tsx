@@ -24,7 +24,7 @@ import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, linhasDaTel
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
-type InvoiceRow = Invoice & { supplierName?: string; supplierOrganizationId?: string };
+type InvoiceRow = Invoice & { supplierName?: string; supplierOrganizationId?: string; organizationId?: string };
 
 /** Extrai o boleto_id da marcação `[boleto:{id}]` gravada em invoices.notes (ver boletoService.aprovarECriarInvoice). */
 function extractBoletoId(notes: string | undefined): string | null {
@@ -1206,7 +1206,7 @@ export default function ContasPagarManager({ organizations }: Props) {
 
                                                         {/* Pagar via Asaas — só para invoices originados de boleto com linha digitável.
                                                             Link de texto, padrão §9/ui_ux_guia_unificado.md (mesmo tratamento do "Baixar"/"Emitir" de ContasReceberManager.tsx). */}
-                                                        {!['paid', 'rejected'].includes(inv.status) && fromBoleto && inv.supplierOrganizationId && (
+                                                        {!['paid', 'rejected'].includes(inv.status) && fromBoleto && inv.organizationId && (
                                                             <button
                                                                 onClick={() => setPagandoAsaas(inv)}
                                                                 className="text-emerald-700 hover:text-emerald-800 text-sm font-medium p-1.5 hover:bg-emerald-50 rounded-[6px] transition-all flex items-center gap-1"
@@ -1289,10 +1289,14 @@ export default function ContasPagarManager({ organizations }: Props) {
 
             {pagandoAsaas && (() => {
                 const boletoId = extractBoletoId(pagandoAsaas.notes);
-                if (!boletoId || !pagandoAsaas.supplierOrganizationId) return null;
+                // Org da NOTA (= do boleto), não do fornecedor: o fornecedor pode
+                // ser cadastro de outra organização, e a asaas-payment procura o
+                // boleto com `.eq('organization_id', …)` — com a org do
+                // fornecedor ela não achava o boleto, ou pagava pela org errada.
+                if (!boletoId || !pagandoAsaas.organizationId) return null;
                 return (
                     <PagarBoletoAsaasModal
-                        organizationId={pagandoAsaas.supplierOrganizationId}
+                        organizationId={pagandoAsaas.organizationId}
                         boletoId={boletoId}
                         supplierName={pagandoAsaas.supplierName}
                         amount={pagandoAsaas.amount}

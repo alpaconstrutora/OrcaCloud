@@ -158,7 +158,7 @@ export const invoiceService = {
      * Lista todos os invoices acessíveis ao usuário, com nome do fornecedor.
      * Faz duas queries separadas para evitar problemas de RLS no join.
      */
-    async listAll(organizationId?: string): Promise<(Invoice & { supplierName?: string; supplierOrganizationId?: string })[]> {
+    async listAll(organizationId?: string): Promise<(Invoice & { supplierName?: string; supplierOrganizationId?: string; organizationId?: string })[]> {
         // Org vem da COLUNA DA NOTA (`invoices.organization_id`), não do fornecedor dela — uma
         // nota sem fornecedor cadastrado (`supplier_id` nulo) sumia desta lista inteira quando
         // uma organização específica estava selecionada, porque o corte antigo era
@@ -192,6 +192,7 @@ export const invoiceService = {
         return rows
             .map((row: any) => ({
                 id: row.id,
+                organizationId: row.organization_id,
                 supplierId: row.supplier_id,
                 orderId: row.order_id,
                 filePath: row.file_path,

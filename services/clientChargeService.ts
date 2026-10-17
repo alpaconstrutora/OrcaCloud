@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { cobrancaAtiva } from '../utils/asaasEventos';
 
 export type BillingType = 'BOLETO' | 'PIX' | 'UNDEFINED';
 
@@ -16,6 +17,9 @@ export interface ClientCharge {
     invoice_url?: string;
     bank_slip_url?: string;
     pix_payload?: string;
+    /** PNG em base64 — só vem do `emit` e de `qrDaCobranca`, fora do COLS da lista (pesa). */
+    pix_qr_image?: string;
+    pix_expiration?: string;
     description?: string;
     party_name?: string;
     party_email?: string;
@@ -29,6 +33,7 @@ export interface EmitChargeResult {
     invoice_url?: string;
     bank_slip_url?: string;
     pix_payload?: string;
+    pix_qr_image?: string;
 }
 
 const COLS = 'id,organization_id,transaction_id,client_id,provider,asaas_payment_id,billing_type,value,due_date,status,invoice_url,bank_slip_url,pix_payload,description,party_name,party_email,paid_at,created_at';
@@ -129,13 +134,35 @@ export const clientChargeService = {
         return data as { ok: boolean; email: string | null };
     },
 
-    /** Mapa transaction_id → cobrança mais recente (para badge na grid de AR). */
-    /** `organizationId` null = "Todas as organizações" (`list` já trata: sem `.eq`). */
+    /** QR do PIX de uma cobrança (imagem base64 + copia-e-cola), lido sob demanda. */
+    async qrDaCobranca(chargeId: string): Promise<{ pix_qr_image: string | null; pix_payload: string | null; pix_expiration: string | null }> {
+        const { data, error } = await supabase
+            .from('client_charges')
+            .select('pix_qr_image,pix_payload,pix_expiration')
+            .eq('id', chargeId)
+            .maybeSingle();
+        if (error) throw error;
+        return {
+            pix_qr_image: data?.pix_qr_image ?? null,
+            pix_payload: data?.pix_payload ?? null,
+            pix_expiration: data?.pix_expiration ?? null,
+        };
+    },
+
+    /**
+     * Mapa transaction_id → cobrança VIVA mais recente (badge "Cobrança" ×
+     * "Emitir" na grid de AR). Cancelada/removida/estornada não conta: antes a
+     * mais recente vinha mesmo cancelada, e o recebível mostrava "Cobrança"
+     * para um boleto morto em vez de oferecer "Emitir".
+     * `organizationId` null = "Todas as organizações" (`list` já trata: sem `.eq`).
+     */
     async byTransaction(organizationId: string | null): Promise<Record<string, ClientCharge>> {
         const rows = await this.list(organizationId, { limit: 500 });
         const map: Record<string, ClientCharge> = {};
         for (const c of rows) {
-            if (c.transaction_id && !map[c.transaction_id]) map[c.transaction_id] = c;
+            if (!c.transaction_id || map[c.transaction_id]) continue;
+            if (!cobrancaAtiva(c.status)) continue;
+            map[c.transaction_id] = c;
         }
         return map;
     },

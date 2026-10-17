@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { exigirMembro, respostaDeErro } from "../_shared/auth.ts"
+import { STATUS_SAIDA_OCUPANDO } from "../../../utils/asaasEventos.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -183,6 +184,62 @@ serve(async (req: Request) => {
     // ─── action: pay ────────────────────────────────────────────
     if (!boleto.supplier_id) return json({ error: 'Boleto sem fornecedor vinculado.' }, 422);
 
+    // Pagamento em curso ou concluído para este boleto = não dispara outro.
+    // Antes, dois cliques (ou duas abas) pagavam o mesmo boleto duas vezes.
+    // O índice único parcial `uq_supplier_payments_boleto_ativo` é a trava no
+    // banco; esta checagem só devolve a mensagem certa antes de chegar nele.
+    const { data: emCurso } = await admin
+        .from('supplier_payments')
+        .select('id,status')
+        .eq('boleto_id', boleto.id)
+        .in('status', [...STATUS_SAIDA_OCUPANDO])
+        .limit(1)
+        .maybeSingle();
+    if (emCurso) {
+        return json({
+            error: emCurso.status === 'DONE'
+                ? 'Este boleto já foi pago pela Asaas.'
+                : `Já existe um pagamento deste boleto em andamento (${emCurso.status}). Cancele-o antes de tentar de novo.`,
+            supplier_payment_id: emCurso.id,
+        }, 409);
+    }
+
+    // Título do boleto no razão. Sem ele, `supplier_payments.transaction_id`
+    // ficava sempre nulo — e a trava de `boletoService.desfazerLancamento`,
+    // que procura pagamento por `transaction_id`, nunca achava nada.
+    const { data: titulo } = await admin
+        .from('internal_transactions')
+        .select('id,due_date,transaction_date')
+        .eq('organization_id', organization_id)
+        .eq('source_system', 'BOLETO')
+        .eq('reference_id', boleto.id)
+        .neq('status', 'CANCELLED')
+        .limit(1)
+        .maybeSingle();
+
+    // Competência fechada em Contas a Pagar recusa QUALQUER alteração do
+    // título (gatilho `fn_payable_bloqueia_competencia_fechada`, que vale até
+    // para service_role). Se o dinheiro saísse, a baixa do webhook seria
+    // recusada e o título ficaria aberto com o boleto pago. Recusa ANTES.
+    const dataDoTitulo = (titulo?.due_date ?? titulo?.transaction_date) as string | null | undefined;
+    if (dataDoTitulo) {
+        const competencia = `${dataDoTitulo.slice(0, 7)}-01`;
+        const { data: fechada } = await admin
+            .from('cost_center_closings')
+            .select('competencia')
+            .eq('organization_id', organization_id)
+            .eq('competencia', competencia)
+            .eq('status', 'FECHADO')
+            .limit(1)
+            .maybeSingle();
+        if (fechada) {
+            return json({
+                error: `A competência ${competencia.slice(5, 7)}/${competencia.slice(0, 4)} está fechada em Contas a Pagar. `
+                    + 'Reabra o fechamento antes de pagar — senão o boleto seria pago e o título não poderia ser baixado.',
+            }, 422);
+        }
+    }
+
     // Cria a linha em AWAITING_APPROVAL/APPROVED antes de chamar a Asaas — garante rastro
     // mesmo se a chamada falhar no meio. Gate mínimo (Fase 1): exige boleto já 'aprovado'
     // no fluxo existente (== is_financial_approved implícito). Motor de alçada é Fase 3.
@@ -191,6 +248,7 @@ serve(async (req: Request) => {
         .insert({
             organization_id,
             boleto_id: boleto.id,
+            transaction_id: titulo?.id ?? null,
             supplier_id: boleto.supplier_id,
             provider: 'asaas',
             payment_type: 'BILL',
@@ -204,7 +262,14 @@ serve(async (req: Request) => {
         })
         .select('id')
         .single();
-    if (spErr) return json({ error: 'Falha ao registrar ordem de pagamento', detail: spErr.message }, 500);
+    if (spErr) {
+        // 23505 = índice único parcial: outra chamada registrou o pagamento
+        // entre a checagem acima e este INSERT.
+        if ((spErr as { code?: string }).code === '23505') {
+            return json({ error: 'Já existe um pagamento deste boleto em andamento.' }, 409);
+        }
+        return json({ error: 'Falha ao registrar ordem de pagamento', detail: spErr.message }, 500);
+    }
 
     // NÃO envia `value`/`dueDate` — a documentação da Asaas é explícita: esses campos são só
     // para contas que NÃO têm essa informação embutida (ex.: fatura de cartão). Um boleto

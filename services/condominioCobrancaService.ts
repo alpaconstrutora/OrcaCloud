@@ -13,6 +13,7 @@
 // a tela precisa dizer antes, com o nome de quem falta documento.
 import { supabase } from '../lib/supabase';
 import { clientChargeService, type BillingType } from './clientChargeService';
+import { STATUS_COBRANCA_ENCERRADA } from '../utils/asaasEventos';
 import {
     condominioRateioService, CRITERIO_LABEL,
     type Rateio, type PagadorDaCota,
@@ -367,7 +368,10 @@ export const condominioCobrancaService = {
         const { count } = await supabase
             .from('client_charges')
             .select('id', { count: 'exact', head: true })
-            .in('transaction_id', ids);
+            .in('transaction_id', ids)
+            // Cancelada/removida/estornada não é boleto emitido — senão o lote
+            // aparecia "já emitido" depois de cancelar e não deixava reemitir.
+            .not('status', 'in', `(${STATUS_COBRANCA_ENCERRADA.join(',')})`);
         return count ?? 0;
     },
 
@@ -403,7 +407,8 @@ export const condominioCobrancaService = {
         const { data: cobrancas } = await supabase
             .from('client_charges')
             .select('transaction_id')
-            .in('transaction_id', [...porTx.keys()]);
+            .in('transaction_id', [...porTx.keys()])
+            .not('status', 'in', `(${STATUS_COBRANCA_ENCERRADA.join(',')})`);
 
         // Um recebível pode ter mais de uma cobrança (segunda via, reemissão
         // depois de cancelar). Conta COTAS com boleto, não boletos — senão

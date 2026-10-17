@@ -9,6 +9,7 @@ import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import KpiCard from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
+import QrPixCobranca from './financeiro/QrPixCobranca';
 import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
@@ -666,6 +667,11 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                                     className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-[6px] text-xs font-bold text-gray-700 transition-colors">
                                                                     <ExternalLink className="w-3.5 h-3.5" /> Página de pagamento
                                                                 </a>
+                                                            )}
+                                                            {/* QR só enquanto dá para pagar — cobrança paga ou cancelada não
+                                                                é mais pagável, e a imagem induziria um segundo pagamento. */}
+                                                            {c.pix_payload && active && (
+                                                                <QrPixCobranca chargeId={c.id} />
                                                             )}
                                                             {c.pix_payload && (
                                                                 <button onClick={() => copyPix(c)}

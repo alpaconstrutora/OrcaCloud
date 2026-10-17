@@ -29,6 +29,7 @@ import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import ActionIconButton from './ui/ActionIconButton';
+import QrPixCobranca from './financeiro/QrPixCobranca';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -626,6 +627,9 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                     <span className="flex items-center gap-2"><ExternalLink className="w-4 h-4" /> Página de pagamento</span>
                                     <ExternalLink className="w-3.5 h-3.5" />
                                 </a>
+                            )}
+                            {result.pix_payload && (
+                                <QrPixCobranca chargeId={result.id} imagem={result.pix_qr_image} />
                             )}
                             {result.pix_payload && (
                                 <button onClick={copyPix}

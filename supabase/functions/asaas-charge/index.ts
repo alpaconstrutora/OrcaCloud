@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { exigirMembro, respostaDeErro } from "../_shared/auth.ts"
+import { STATUS_COBRANCA_ENCERRADA } from "../../../utils/asaasEventos.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -199,6 +200,25 @@ serve(async (req: Request) => {
         .single();
     if (txErr || !tx) return json({ error: 'Recebível não encontrado.' }, 404);
 
+    // Uma cobrança viva por recebível. Antes, clicar "Emitir" duas vezes (ou
+    // emitir pelo lote do condomínio e de novo pela tela) gerava dois boletos
+    // reais para o mesmo título — o cliente podia pagar os dois. O índice
+    // único parcial `uq_client_charges_tx_ativa` é a trava no banco.
+    const { data: viva } = await admin
+        .from('client_charges')
+        .select('id,status,asaas_payment_id')
+        .eq('organization_id', organization_id)
+        .eq('transaction_id', tx.id)
+        .not('status', 'in', `(${STATUS_COBRANCA_ENCERRADA.join(',')})`)
+        .limit(1)
+        .maybeSingle();
+    if (viva) {
+        return json({
+            error: `Este recebível já tem uma cobrança ativa (${viva.status}). Cancele-a antes de emitir outra.`,
+            charge_id: viva.id,
+        }, 409);
+    }
+
     // 2. Resolve o cliente (document/email/phone):
     //    (a) por party_id (vínculo direto) → (b) por nome exato → (c) por nome normalizado
     type ClientRow = { id?: string; name?: string; email?: string; document?: string; phone?: string; asaas_customer_id?: string };
@@ -207,7 +227,12 @@ serve(async (req: Request) => {
 
     if (tx.party_id) {
         const { data: c } = await admin
-            .from('clients').select(clientCols).eq('id', tx.party_id).maybeSingle();
+            .from('clients').select(clientCols)
+            .eq('id', tx.party_id)
+            // Sem este filtro, um party_id de outra organização trazia o
+            // cliente (CPF, e-mail, telefone) de outro tenant para a cobrança.
+            .eq('organization_id', organization_id)
+            .maybeSingle();
         client = c;
     }
     if (!client && tx.party_name) {
@@ -305,11 +330,17 @@ serve(async (req: Request) => {
 
     // 5. Busca o copia-e-cola do PIX (endpoint separado), se aplicável
     let pixPayload: string | null = null;
+    let pixQrImage: string | null = null;
+    let pixExpiration: string | null = null;
     if (billingType === 'PIX' || billingType === 'UNDEFINED') {
         const pixRes = await fetch(`${asaasBase}/payments/${payData.id}/pixQrCode`, { headers: asaasHeaders });
         if (pixRes.ok) {
             const pix = await pixRes.json();
             pixPayload = pix.payload ?? null;
+            // PNG em base64. Antes só o copia-e-cola era guardado e nenhuma
+            // tela mostrava o QR — quem paga pelo celular precisa da imagem.
+            pixQrImage = pix.encodedImage ?? null;
+            pixExpiration = pix.expirationDate ?? null;
         }
     }
 
@@ -330,13 +361,26 @@ serve(async (req: Request) => {
             invoice_url: payData.invoiceUrl ?? null,
             bank_slip_url: payData.bankSlipUrl ?? null,
             pix_payload: pixPayload,
+            pix_qr_image: pixQrImage,
+            pix_expiration: pixExpiration,
             description: tx.description ?? null,
             party_name: tx.party_name ?? null,
             party_email: client?.email ?? tx.party_email ?? null,
         })
-        .select('id,invoice_url,bank_slip_url,pix_payload,status,billing_type,value,due_date')
+        .select('id,invoice_url,bank_slip_url,pix_payload,pix_qr_image,status,billing_type,value,due_date')
         .single();
-    if (chErr) return json({ error: 'Cobrança criada no Asaas mas falhou ao salvar localmente', detail: chErr.message }, 500);
+    if (chErr) {
+        // A cobrança EXISTE na Asaas e não ficou registrada aqui: cancela lá
+        // para não sobrar um boleto real órfão que o cliente poderia pagar.
+        await fetch(`${asaasBase}/payments/${payData.id}`, { method: 'DELETE', headers: asaasHeaders }).catch(() => null);
+        const duplicada = (chErr as { code?: string }).code === '23505';
+        return json({
+            error: duplicada
+                ? 'Este recebível já tem uma cobrança ativa (registrada por outra chamada ao mesmo tempo).'
+                : 'Cobrança criada no Asaas mas falhou ao salvar localmente — foi cancelada lá.',
+            detail: chErr.message,
+        }, duplicada ? 409 : 500);
+    }
 
     // 7. Atualiza o recebível para EMITIDO
     await admin
@@ -351,5 +395,6 @@ serve(async (req: Request) => {
         invoice_url: payData.invoiceUrl,
         bank_slip_url: payData.bankSlipUrl,
         pix_payload: pixPayload,
+        pix_qr_image: pixQrImage,
     });
 });

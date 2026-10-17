@@ -146,8 +146,11 @@ de aluguel não recebido.
   (NÃO apagar). 30 processos de vencido já abertos na primeira varredura.
 - [x] DealModal › Partes e Comissões (locação): "% sobre cada parcela do aluguel", "Comissão por parcela
   (estimada)" somente leitura com o motivo, "Data de Pagto." = "Segue o vencimento de cada parcela".
-  ⚠️ Verificado só por `tsc` + `check-ui-standard` — sem credencial do harness autenticado nesta sessão,
-  a tela NÃO foi vista no navegador.
+  Conferido no navegador em PRODUÇÃO em 17/10/2026 (usuário de leitura, escritas bloqueadas e 0 tentadas;
+  `C:/tmp/pwtest/locacao-partes-comissao.js`): Loja 204 / CTL-010-014-0001 mostra "% sobre cada parcela do
+  aluguel" = 10, "Comissão por parcela (estimada)" R$ 150,00 com o motivo, e "Segue o vencimento de cada
+  parcela" — 8/8. Vistos na mesma tela, anteriores a esta frente e NÃO corrigidos: o cartão do corretor diz
+  "Comissão inicial 0%" ao lado do 10%; "Forma de Pagto." exibe PIX com o campo vazio no banco.
 - [x] Portal: linha "Locação: R$ x/mês • 10% por parcela • n parcelas", marcos por parcela; cartão
   "Comissão Acumulada"/"Comissão" = soma real (legenda com o pago). Teste novo em
   `__tests__/components/BrokerPortalMobile.test.tsx`. Navegador (link do Geleia, 1366 e 390 px): 24/24.

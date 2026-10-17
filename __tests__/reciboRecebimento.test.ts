@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     textoRecibo, nomeArquivoRecibo, numeroRecibo, montarReciboPdf, caberNaCaixa, verboDoCredor,
     formatarTelefoneBR, semProtocolo, linhasContatoEmitente, rotulosRecibo, destinatarioDoRecibo,
-    assinanteDoRecibo, linhaTabelaRecibo, limitarLinhas, tamanhoQueCabe, arranjoDeclaracao, rodapeRecibo, dataBR, idDoArquivoPdf,
+    assinanteDoRecibo, linhaTabelaRecibo, linhasItensContrato, limitarLinhas, tamanhoQueCabe, arranjoDeclaracao, rodapeRecibo, dataBR, idDoArquivoPdf,
 } from '../utils/reciboRecebimento';
 import type { FinancialReceipt } from '../types/financial';
 
@@ -298,5 +298,106 @@ describe('recibo de PAGAMENTO — o credor declara que recebeu da organização'
         expect(pdf.output()).toContain('Local e data');
         expect(pdf.output()).toContain('Pago a:');
         expect(montarReciboPdf(reciboPagamento({ cancelled_at: '2026-09-28T12:00:00Z' })).getNumberOfPages()).toBe(1);
+    });
+});
+
+/**
+ * Recibo de CONTRATO — objeto e itens congelados (17/10/2026).
+ * Plano docs/planos/2026-10-17-recibo-contrato-objeto-itens.md.
+ */
+const ITENS_FAXINA = [
+    { description: 'Faxina', unit: 'svç', quantity: 4, unit_price: 150, total_price: 600 },
+];
+
+function reciboDeContrato(over: Partial<FinancialReceipt> = {}): FinancialReceipt {
+    return reciboPagamento({
+        payee_name: 'Débora Cristina Duarte',
+        payee_document: '321.952.978-08',
+        description: 'Fatura Contrato CTS-010-036-0001 (1) - agosto de 2021',
+        amount: 600,
+        contract_number: 'CTS-010-036-0001',
+        contract_title: 'Serviço de Faxina',
+        contract_items: ITENS_FAXINA,
+        ...over,
+    });
+}
+
+describe('recibo de CONTRATO — objeto e itens', () => {
+    it('linha da tabela: "Contrato: X" e "Objeto: Y"; sem título, objeto nulo', () => {
+        const l = linhaTabelaRecibo(reciboDeContrato());
+        expect(l.contrato).toBe('Contrato: CTS-010-036-0001');
+        expect(l.objeto).toBe('Objeto: Serviço de Faxina');
+        expect(linhaTabelaRecibo(recibo()).objeto).toBeNull();
+        expect(linhaTabelaRecibo(recibo({ contract_title: '  ' })).objeto).toBeNull();
+    });
+
+    it('declaração cita o objeto depois da descrição', () => {
+        const t = textoRecibo(reciboDeContrato());
+        expect(t).toContain('referente a Fatura Contrato CTS-010-036-0001 (1) - agosto de 2021 — objeto: Serviço de Faxina.');
+        expect(t).toMatch(/^Recebi de Alpa/);
+    });
+
+    it('objeto já contido na descrição não se repete; sem descrição, o objeto é a referência', () => {
+        expect(textoRecibo(reciboDeContrato({ description: 'Parcela 1 — serviço de faxina' })))
+            .toContain('referente a Parcela 1 — serviço de faxina.');
+        expect(textoRecibo(reciboDeContrato({ description: null }))).toContain('referente a Serviço de Faxina.');
+        expect(textoRecibo(recibo())).toContain('referente a Parcela 3/12 — Lote 7.');
+    });
+
+    it('linhasItensContrato: formata qtd. sem zeros, valores em BRL, números vindos como texto', () => {
+        const { linhas, resto } = linhasItensContrato(
+            [{ description: 'Faxina', unit: 'svç', quantity: '4.0000', unit_price: '150.00', total_price: '600.00' },
+             { description: ' ', unit: null, quantity: 2.5, unit_price: null, total_price: 'x' }],
+            8,
+        );
+        expect(resto).toBeNull();
+        expect(linhas[0]).toMatchObject({ item: 'Faxina', unid: 'svç', qtd: '4' });
+        expect(linhas[0].unitario).toMatch(/R\$\s?150,00/);
+        expect(linhas[0].total).toMatch(/R\$\s?600,00/);
+        expect(linhas[1]).toEqual({ item: '—', unid: '—', qtd: '2,5', unitario: '—', total: '—' });
+    });
+
+    it('linhasItensContrato: não cabendo, a última linha vira "+ N itens — ver contrato X"', () => {
+        const muitos = Array.from({ length: 10 }, (_, i) => ({ ...ITENS_FAXINA[0], description: `Item ${i + 1}` }));
+        const r = linhasItensContrato(muitos, 4, 'CTS-1');
+        expect(r.linhas.map((l) => l.item)).toEqual(['Item 1', 'Item 2', 'Item 3']);
+        expect(r.resto).toBe('+ 7 itens — ver contrato CTS-1');
+        expect(linhasItensContrato(muitos.slice(0, 2), 1).resto).toBe('+ 2 itens');
+        expect(linhasItensContrato(null, 5)).toEqual({ linhas: [], resto: null });
+        expect(linhasItensContrato([], 5)).toEqual({ linhas: [], resto: null });
+    });
+
+    it('PDF traz a seção ITENS DO CONTRATO com o item e o objeto; continua 1 página', () => {
+        const doc = montarReciboPdf(reciboDeContrato());
+        const pdf = doc.output();
+        expect(doc.getNumberOfPages()).toBe(1);
+        expect(pdf).toContain('ITENS DO CONTRATO');
+        expect(pdf).toContain('Faxina');
+        expect(pdf).toContain('150,00');
+        expect(pdf).toContain('Objeto: Servi');
+        expect(pdf).toContain('Contrato: CTS-010-036-0001');
+        expect(pdf).not.toContain('(null)');
+        expect(pdf).not.toContain('(undefined)');
+    });
+
+    it('sem itens (contrato de venda/locação) não desenha a seção', () => {
+        const pdf = montarReciboPdf(reciboDeContrato({ contract_items: null })).output();
+        expect(pdf).not.toContain('ITENS DO CONTRATO');
+        expect(pdf).toContain('Objeto: Servi');
+        expect(montarReciboPdf(recibo()).output()).not.toContain('ITENS DO CONTRATO');
+    });
+
+    it('muitos itens e declaração longa: 1 página, com o resumo dos que não couberam', () => {
+        const muitos = Array.from({ length: 60 }, (_, i) => ({ ...ITENS_FAXINA[0], description: `Item ${i + 1}` }));
+        const longa = Array.from({ length: 90 }, (_, i) => `palavra${i}`).join(' ');
+        for (const description of ['Fatura 1', longa]) {
+            const doc = montarReciboPdf(reciboDeContrato({ contract_items: muitos, description }));
+            expect(doc.getNumberOfPages()).toBe(1);
+            expect(doc.output()).toMatch(/\+ \d+ itens \u2014 ver contrato CTS-010-036-0001|\+ \d+ itens .{1,12} ver contrato CTS-010-036-0001/);
+        }
+    });
+
+    it('o mesmo recibo de contrato gera os mesmos bytes', () => {
+        expect(montarReciboPdf(reciboDeContrato()).output()).toBe(montarReciboPdf(reciboDeContrato()).output());
     });
 });

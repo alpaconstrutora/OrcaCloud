@@ -19,7 +19,8 @@ import { dirname, join } from 'node:path';
 import { montarReciboPdf } from '../utils/reciboRecebimento';
 import type { FinancialReceipt } from '../types/financial';
 
-type Linha = FinancialReceipt & {
+type Linha = Omit<FinancialReceipt, 'contract_items'> & {
+    contract_items?: FinancialReceipt['contract_items'] | string;
     amount: number | string;
     logo_url: string | null;
     phone: string | null;
@@ -53,7 +54,12 @@ for (const l of linhas) {
         process.exit(1);
     }
 
-    const recibo: FinancialReceipt = { ...l, amount: Number(l.amount) };
+    // contract_items (jsonb, aplicar_20271017970000) pode vir como texto JSON conforme o
+    // formato do export; os números dentro dele o gerador já aceita como string.
+    const itens = typeof l.contract_items === 'string'
+        ? JSON.parse(l.contract_items) as FinancialReceipt['contract_items']
+        : l.contract_items;
+    const recibo: FinancialReceipt = { ...l, amount: Number(l.amount), contract_items: itens ?? null };
     const logo = l.logo_url && l.logo_url.startsWith('data:') ? l.logo_url : null;
     if (l.logo_url && !logo) console.warn(`logo de ${l.organization_id} não é data URL — recibo ${l.id} sai sem logo.`);
 

@@ -141,6 +141,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **Salvar não fecha a edição (§25)** — se o formulário é multi-aba/edição longa, salvar grava e permanece aberto (só criar fecha); dirty-tracking + `useConfirm()` na saída com pendência
 - [ ] **Drawer (§26)** — painel lateral vem do `Sheet` (já flutua, com respiro nos 4 lados e `rounded-[10px]`); painel feito à mão precisa das 3 peças da §26
 - [ ] **Identificador técnico só-leitura (§27)** — uid/hash/código exibido como rótulo curto + `title` com o valor inteiro + `<ActionIconButton>` de copiar; nunca `<input readOnly>`, nunca o valor de 36 caracteres cru na tela
+- [ ] **Valor de campo (§32)** — valor sempre escuro (`text-gray-900`), inclusive automático/só-leitura; cinza-claro só no `placeholder:`
 - [ ] **Malha do formulário (§30)** — rótulo→campo `space-y-1.5`, campos `gap-x-6 gap-y-4`, seção `space-y-4` com título `pb-3`, seções `space-y-8` no card; campo curto (data/select/valor) nunca em coluna única; sem `pb-10` morto
 - [ ] **Gráficos (§28)** — card `ChartCard` (título §21 + subtítulo com a base do dado), grade hairline sólida, marcas finas com ponta arredondada, rótulo direto só na ponta em cor de TEXTO, legenda HTML quando há 2+ séries, paleta validada, estado vazio próprio, `—`/vazio em vez de zero quando não medido
 
@@ -218,6 +219,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §29 Barra de progresso segmentada — se a tela mostra proporção/percentual em barra: usa `SegmentedProgress` (percentual em texto + quadradinhos), não barra contínua à mão
 - [ ] §30 Malha do formulário — se a tela tem formulário: rótulo 6px / campo 16px / seção 32px / card 24px; seções do mesmo formulário no mesmo card; campos curtos em grade
 - [ ] §31 Diagrama de processo (canvas) — se a tela desenha um fluxo de nós: fundo pontilhado por `style`, cartão-nó, linha 2px com seta por costura, rótulo de aresta em chip `rounded-[6px]` sem caixa alta, caixa de grupo tracejada, controles de zoom; drawers/modais FORA da camada com `transform`
+- [ ] §32 Valor de campo — nenhum `<input>`/`<textarea>` com o valor em cinza-claro (automático/só-leitura incluído)
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -3233,6 +3235,40 @@ drawers (Sheet) · editor (Modal) · modal de organização   ← irmãos da gra
 > ❌ Pan/zoom no celular; arrastar nós e persistir posições — fora do padrão.
 > ℹ️ `scripts/check-ui-standard.sh` não olha SVG nem o fundo: a conferência do
 > desenho é visual, ao lado dos prints de referência do plano.
+
+---
+
+## 32. VALOR DE CAMPO NUNCA EM CINZA-CLARO (inclusive automático / só-leitura)
+
+**Criado em 2026-10-17 (Suprimentos › Contratos), a pedido do usuário** — *"mais uma
+vez voltamos ao tema do texto cinza"*, com print do **Número do Contrato** numerado
+automaticamente: o campo é `readOnly` e o valor `CTS-010-036-0002` saía em
+`text-gray-400`, ao lado do Título em cor normal. Cinza-claro dentro de campo é a
+linguagem do **placeholder** — o olho lê "vazio", e o usuário não enxerga o dado.
+É o mesmo argumento do §6.11 (cabeçalho cinza lê como desabilitado). Plano:
+`docs/planos/2026-10-17-recibo-contrato-objeto-itens.md`.
+
+```tsx
+// ✅ valor escuro sempre; o cinza é só do placeholder
+<input readOnly={automatico} className="... text-sm text-gray-900 placeholder:text-gray-400" />
+
+// ❌ o valor some
+<input readOnly={automatico} className={`... ${automatico ? 'text-gray-400' : ''}`} />
+```
+
+> ✅ "É automático / não editável" se diz por **outro** sinal: botão ao lado (regerar),
+> texto de apoio `text-xs` abaixo com o motivo, cursor, fundo `bg-gray-50`. Nunca
+> apagando o valor.
+> ✅ Estado vazio continua podendo ser cinza — mas pelo `placeholder:`, não pela cor do
+> campo (o Tailwind v4 deriva o placeholder do `currentColor`, então `text-gray-400` no
+> ramo vazio "funciona", mas confunde com o defeito).
+> ✅ `<select>` não entra: o cinza do estado vazio dele é o §7.1.
+> 🔒 **Trava:** `__tests__/valorDeCampoSemCinzaGuard.test.ts` — catraca sobre `<input>` e
+> `<textarea>` com `text-{gray|slate|zinc|neutral|stone}-{300|400}` (sem variante, ou
+> `disabled:`/`read-only:`). Herança de 17/10/2026 listada no `BASELINE`, cada entrada
+> classificada (VAZIO / TRAVADO / VALOR); só pode diminuir.
+> ⚠️ **Pendência de propagação:** as entradas TRAVADO e VALOR do `BASELINE` (BudgetRow,
+> ObraTypesManager, LaborFiscalSettings, ScheduleGridView, …) aguardam decisão do usuário.
 
 ---
 

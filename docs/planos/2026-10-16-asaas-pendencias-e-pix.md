@@ -25,7 +25,7 @@
 | 0 — painel Asaas (usuário) | 0 de 6 — ⚠️ a chave atual é RECUSADA pela Asaas (HTTP 401), ver item 0.0 |
 | 1 — correções da integração existente | **12 de 14 publicados em 17/10/2026** (`bb5c6d2a`); 1.8 já estava resolvido; 1.14 fora do plano |
 | 2 — conta Asaas como Conta de Pagamento | **5 de 5 publicados em 17/10/2026** (`c55b4558` + `071b77b8`); falta só o USO: cadastrar a conta Asaas com chave válida (depende do item 0.0) |
-| 3 — PIX | código pronto na frente `asaas-pix` (17/10), **não publicado** — ver "Andamento da Fase 3" |
+| 3 — PIX | **publicada em 17/10/2026** (`7b965915`); uso real depende da Fase 0 (chave válida + saída de PIX habilitada na conta Asaas) |
 | 4 — governança | portão de DISPARO antecipado para a Fase 3 (papel, alçada, tetos, piloto, competência); faltam `supplier_payments_auditoria` e RLS de escrita por papel |
 
 ## Andamento da Fase 3 (17/10/2026)
@@ -40,6 +40,14 @@ Contrato da Asaas conferido na documentação oficial (17/10): `POST /v3/transfe
 | 3.4 TRANSFER_* | já na Fase 1 | `decidirSaida('transfer', …)` + processador; baixa grava `payment_type='PIX'` e a conta Asaas. |
 | 3.5 tela | código | Contas a Pagar › Parcelas: ação "PIX" (ou "Asaas" para boleto) só nas linhas cuja org tem conta Asaas; selo "Pagamento enviado / Agendado / Aguardando token"; ícone de alerta quando a última tentativa falhou. `components/financeiro/PagarPixSheet.tsx`: chaves mascaradas do cadastro ou digitada, agendamento, lista de bloqueios, confirmação obrigatória, botão desabilitado sempre com o motivo. Ação da visão Notas removida (nunca baixava o título). |
 | Portão (Fase 4, disparo) | código | `utils/asaasGovernanca.ts` (10 testes) + `_shared/asaasDisparo.ts`: só owner/admin; alçada APROVADO, ou RASCUNHO sem faixa (`fn_resolve_approval_levels`); tetos por pagamento/dia (dia de Brasília)/avulso; piloto; competência fechada; pagamento em curso; e conta Asaas CADASTRADA (a chave global não paga). Vale para boleto e PIX; o modal de boleto mostra os bloqueios. |
+
+Publicação (17/10/2026):
+1. `aplicar_20271017400100_asaas_pix` aplicada (com o nome antigo `…400000`). Prova: 4 colunas em `supplier_payments`, `company_partners.pix_tipo`, 3 CHECKs.
+2. Prova de suíte: nesta máquina o Node/V8 derruba o worker no `blueprintCasaAutomatica.test.ts` (Planta, sem relação) — 54/74 testes ficavam sem resultado. Prova feita na CI em Linux por PR de RASCUNHO (#30). 1ª rodada: **1 falha real minha** — prefixo `aplicar_20271017400000` repetido com `processos_extras_financeiro` (outra frente chegou antes) → renomeada para `…400100`, cabeçalho avisa que já foi aplicada. 2ª rodada: verde (10.066+ testes, tipos e build). PR fechado.
+3. `asaas-payment` v7 publicada (leva `lib/validators.ts`, `utils/pixKey.ts`, `utils/pixDestino.ts`, `utils/asaasGovernanca.ts`). `pix_quote`, `pix_pay`, `cancel` com a chave anon → 401.
+4. Push `7b965915` em main.
+
+⚠️ Não provado de ponta a ponta: um PIX real/sandbox. Depende da Fase 0 (chave válida — a global dá 401 — e transferência PIX habilitada). Roteiro em "Verificação" deste plano.
 
 Fora do escopo, registrado: violações de padrão de UI pré-existentes em `CompanyPartnersTab`, `SupplierBankAccountsTab`, `CompanyBankAccountsTab` (pílula uppercase, `confirm()` nativo) — mesma contagem antes e depois desta mudança.
 

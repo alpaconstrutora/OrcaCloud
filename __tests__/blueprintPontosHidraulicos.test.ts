@@ -185,6 +185,19 @@ describe('pontosDaLouca (27/09/2026): a peça desenhada lança os pontos dela', 
     return { m: applyBatch(r.model, pontos).model, pontos };
   };
 
+  it('F18: a máquina de lavar SOB a janela — a torneira dela desce para abaixo do peitoril (senão a água só chegava pela janela)', () => {
+    const { m: m0, t } = terreo();
+    let m = applyCommand(m0, { type: 'AddWall', levelId: t, a: point(0, 0), b: point(5000, 0), thicknessMm: 150, heightMm: 2800 } as Command).model;
+    m = applyCommand(m, { type: 'AddOpening', wallId: m.walls[0].id, kind: 'window', offsetMm: 2000, widthMm: 1000, heightMm: 1200, sillMm: 1000 } as Command).model;
+    const comMaq = applyCommand(m, { type: 'AddComponente', levelId: t, tipoId: 'MAQUINA', at: point(2500, 400) } as Command).model;
+    const maq = comMaq.componentes!.find((c) => c.tipoId === 'MAQUINA')!;
+    const agua = pontosDaLouca(comMaq, maq).find((c) => c.disciplina === 'AGUA_FRIA')!;
+    expect(agua.cotaMm).toBe(1000 - 100);
+    // Longe da janela, a cota da ficha.
+    const longe = applyCommand(m, { type: 'AddComponente', levelId: t, tipoId: 'MAQUINA', at: point(500, 400) } as Command).model;
+    expect(pontosDaLouca(longe, longe.componentes!.find((c) => c.tipoId === 'MAQUINA')!).find((c) => c.disciplina === 'AGUA_FRIA')!.cotaMm).toBe(1100);
+  });
+
   it('F14a: com afastamentoFriaQuenteMm, a fria e a quente ficam LADO A LADO na face (ao longo da parede); sem, no mesmo ponto', () => {
     const { m: m0, t } = terreo();
     const m = applyCommand(m0, { type: 'AddWall', levelId: t, a: point(0, 0), b: point(5000, 0), thicknessMm: 150, heightMm: 2800 } as Command).model;

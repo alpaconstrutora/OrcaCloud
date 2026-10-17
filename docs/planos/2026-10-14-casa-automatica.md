@@ -1964,3 +1964,107 @@ sem a premissa, como antes), `blueprintPosicaoSplit.test.ts` (a evaporadora long
 A 1ª CI reprovou o teste F8c, que exigia o alimentador ATRAVESSANDO o baldrame (ele corria por baixo da casa). Pela
 decisão da F17 ele não atravessa mais: o teste passou a exigir nenhum pedaço em baldrame nem em pilar e nenhum trecho
 enterrado dentro de um cômodo.
+
+**Publicado** em 16/10/2026: `7352f9d6` na main (antes, a PR de rascunho #16 rodou a CI); check-run `ci` verde; o
+domínio serve um commit que o contém.
+
+## Programa "todas as pendências" (F18–F27, 16/10/2026)
+
+Pedido do usuário:
+
+> Resolver todas as pendências
+
+### Retrato (8 casas de referência, sonda `planejarCasa` + `conflitosDoModelo`)
+
+Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2 dorm., 15 × 30 R1-N 4 dorm., 10 × 30 R1-N
+4 dorm., 15 × 30 R1-B, 14 × 28 R1-A. O que é problema (os "confira" de rotina ficam de fora):
+
+- **Redes:** água fria e dreno do ar em porta/janela (15 × 25: 8 trechos; 10 × 30 2 dorm. e R1-A: 2); rede × rede
+  (15 × 25: 3; R1-B: 4; R1-A: 3); esgoto/água quente atravessando pilar (10 × 30 4 dorm., R1-B, R1-A).
+- **Climatização:** "ponto de dados fora do plano de circuitos" em TODAS (defeito); split sem eletroduto entre o ponto
+  de força e a condensadora; cobertura sem camadas (a carga térmica não avalia o teto).
+- **Mobiliário:** cama, box, vaso, lavatório ou armário que não couberam em 7 das 8.
+- **Arquitetura (gerador E6.2):** lavabo, serviço, banheiro social e escritório sem lado externo; varanda × sala e
+  cozinha × serviço sem porta direta; "Ambiente N" sem nome (sem interruptor; laje < 0,5 m²).
+- **Larguras mínimas:** 4 dorm. em 10 m saem com 1,5 m; R1-B: serviço 1,40 m, dormitório 2,33 m; programa acima da TO.
+- **Estrutura:** pilares a menos de uma seção; pilar sem posição entre aberturas; pilar do superior sobre abertura.
+- **Escopo novo:** implantação não retangular, terreno inclinado, muro/portão/calçada, 3 pavimentos, a chuva de projeto
+  na tela, as bolhas dos eixos na prancha, vaga descoberta com recuo de 3 m.
+
+### Decisões do usuário (16/10/2026)
+
+| Pergunta | Resposta |
+|---|---|
+| Terreno inclinado: como a casa assenta? | **Platô único** — na cota que equilibra corte e aterro sob a projeção; corte/aterro no orçamento; talude ou arrimo nas bordas acima de uma hipótese; escada/rampa na entrada |
+| Muro, portão e calçada? | **Muro + portão + calçada** — muro nas laterais e fundos (altura hipótese), muro/grade na frente com portão de pedestre e de garagem, calçada interna da entrada e da garagem (na permeabilidade) |
+| 3 pavimentos ou mais? | **Sim, até 3** |
+
+### Fases (cada uma: retrato → correção → as 8 casas medidas 2× → CI de rascunho → main)
+
+- [x] F18 — redes nas 8 casas: nenhuma em vão, nenhum rede × rede, nada atravessando pilar (ver "Registro da F18"; 2 luzes em sobra de cômodo vão para a F21)
+- [ ] F19 — climatização: ponto de dados, eletroduto força → condensadora, camadas da cobertura
+- [ ] F20 — mobiliário: peça que não cabe ganha variante (cama, box, vaso/lavatório, armário)
+- [ ] F21 — gerador: molhados e escritório com lado externo; porta direta nas relações obrigatórias; nenhum "Ambiente N"
+- [ ] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO
+- [ ] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo
+- [ ] F24 — implantação não retangular (L) e vaga descoberta com recuo curto
+- [ ] F25 — terreno inclinado: platô único
+- [ ] F26 — muro, portão e calçada
+- [ ] F27 — 3 pavimentos
+- [ ] F28 — tela e prancha: a chuva de projeto na tela da casa; bolhas dos eixos sem sobrepor
+
+
+### Registro da F18 (16/10/2026) — as redes nas 8 casas
+
+Medido (sonda: `planejarCasa` + `conflitosDoModelo`; cada casa até passar — a máquina derruba o Node e deu 1 resultado
+errado, conferido repetindo):
+
+| Casa | Em vão | Rede × rede | Em pilar |
+|---|---|---|---|
+| 12 × 30 térrea | 0 → 0 | 0 → 0 | 0 → 0 |
+| 15 × 25 | 8 → **0** | 3 → **0** | 1 → **0** |
+| 10 × 30, 2 dorm. | 2 → **0** | 1 → **0** | 0 → 0 |
+| 15 × 30, 4 dorm. | 0 → 0 | 1 → **0** | 2 → 2 (*) |
+| 15 × 30 R1-B | 0 → 0 | 4 → **0** | 1 → **0** |
+| 14 × 28 R1-A | 2 → **0** | 3 → **0** | 3 → 2 (*) |
+| 12 × 30 sobrado | 0 → 0 | 0 → 0 | 5 → **0** |
+| 10 × 30, 4 dorm. | 0 → 0 | 0 → 0 | 1 → **0** |
+
+(*) a luz de teto num "Ambiente N" — o triângulo de poucos cm² que o encontro imperfeito de duas paredes geradas deixa
+(o mesmo do chanfro abaixo); é a sobra de cômodo da F21.
+
+O que mudou, por causa (cada uma achada pela sonda, não suposta):
+
+- **Alimentador × esgoto/pluvial** (4 casas): no trecho enterrado curto (hidrômetro → fachada), o esgoto e o condutor
+  pluvial cruzavam na mesma cota. `cotaEnterradaAcimaDasRedes` (alimentador): a cota que passa POR CIMA de todo
+  cruzamento (raios + `afastamentoAcimaDoEsgotoMm`, 50) — NBR 5626 —, ou por baixo, dito, se por cima não houver
+  `recobrimentoMinimoMm` (150); a casa replaneja o alimentador depois do pluvial.
+- **Condutor pluvial × esgoto** (15 × 25): o condutor sobe o início (`profundidadeDoCondutorMm`) de 6 em 6 cm até o
+  detector de conflitos não acusar (passa por cima — a saída é a sarjeta), sem passar do recobrimento.
+- **Armário diante da janela** (R1-A): peça ALTA não cobre janela do lado; o armário da suíte tampava a única parede
+  externa e o ar ia para a parede interna, com o dreno atravessando a casa.
+- **Condensadora no ambiente técnico**: encostada numa parede dele (externa primeiro, fora de vão) — no meio da garagem
+  ela ficava sob a luz, e a linha descia pelo eletroduto.
+- **Dreno × linha** (R1-B): deslocados além do batente, o dreno fica de preferência ATRÁS da linha; à frente, o
+  deslocamento cresce até 2 × o afastamento.
+- **Caminho antigo do dreno** (cômodo sem saída direta): a decisão da F14d ("bomba de dreno") estava sem implementar —
+  agora bomba junto da evaporadora e o dreno pelas paredes SEM declividade logo abaixo dela (acima das portas), descendo
+  na vertical por fora; a linha sobe a 12 cm do nó da evaporadora; o caminho antigo por gravidade também termina na
+  vertical por fora (não mais em diagonal pela janela).
+- **Água × eletroduto**: a vertical da descida do forro dentro da parede também é conferida contra as outras redes
+  (anda ao lado e volta na cota do ponto); o ponto de força do ar vai para o lado sem tubo na altura dele
+  (`afastamentoDoPontoAsRedesMm`, 60); o chuveiro elétrico ao lado da saída d'água (o afastamento lateral dos pontos).
+- **Água na janela** (15 × 25): o ponto de água da louça dentro do vão de uma janela desce para abaixo do peitoril
+  (`abaixoDoPeitorilMm`, 100 — a máquina de lavar sob a janela tinha a torneira a 1,10 m); e a descida do forro até um
+  ponto sob a janela entra na parede AO LADO dela (o nó do forro anda junto) e corre por baixo.
+- **Pilar**: o quadro procura posição fora de pilar e vão nas paredes vizinhas até 1,50 m (no sobrado ele ficava na
+  esquina, dentro do pilar, e a prumada subia por ele os dois pavimentos); interruptor/tomada escorregam pela face para
+  fora do pilar; a luz de teto sai da pegada dele; o esgoto conta o CONTORNO do pilar na queda (no caimento exato, o
+  contorno perdia a mínima e o tubo ficava reto pelo pilar) e contorna pelo tubo, não só pelo eixo.
+- **Anel do forro com chanfro**: o lado minúsculo em diagonal do encontro imperfeito de duas paredes (5 × 2 cm) virava
+  do avesso ao recuar e o cômodo ficava SEM forro (a área de serviço do R1-A — a água quente ia em reta pelo forro);
+  `semChanfros` troca os dois vértices pelo encontro dos lados vizinhos. E a origem no forro sem anel ao alcance procura
+  a raiz até 3 m.
+
+Testes novos (reprovam sem a correção): o alimentador por cima/por baixo (`blueprintAlimentador`), a máquina sob a
+janela (`blueprintPontosHidraulicos`), o anel com chanfro e a descida ao lado da janela (`blueprintRotaPeloForro`).

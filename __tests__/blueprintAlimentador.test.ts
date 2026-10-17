@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, pegadaEmPlanta, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { HIPOTESES_ALIMENTACAO_PADRAO, ROTULO_DO_ALIMENTADOR, planejarAlimentador, rotaPelasParedesAte, trechosDoAlimentador } from '../utils/blueprintAlimentador';
+import { HIPOTESES_ALIMENTACAO_PADRAO, ROTULO_DO_ALIMENTADOR, cotaEnterradaAcimaDasRedes, planejarAlimentador, rotaPelasParedesAte, trechosDoAlimentador } from '../utils/blueprintAlimentador';
 import { fracaoDentro } from '../utils/blueprintObstaculosEstruturais';
 import { HIPOTESES_RESERVATORIO_PADRAO } from '../utils/blueprintReservacao';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
@@ -161,5 +161,28 @@ describe('F17 da casa automática: o alimentador sobe pela FACHADA ("sobe pela f
   it('sem a premissa (a ferramenta do editor), como antes: a subida sob a caixa, com o percurso enterrado por baixo da casa', () => {
     const r = rota(sala());
     expect(r.some((t) => t.ca === -300 && t.cb === -300 && Math.max(t.a.y, t.b.y) > 1000)).toBe(true);
+  });
+});
+
+describe('F18 da casa automática: o alimentador enterrado por CIMA do esgoto e do pluvial que cruza (NBR 5626)', () => {
+  const comCruzamento = (cotaDoEsgoto: number) => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m.levels[0].id;
+    const trecho = (disciplina: 'AGUA_FRIA' | 'ESGOTO', a: [number, number], b: [number, number], cota: number, bitolaMm: number, rotulo?: string): Command =>
+      ({ type: 'AddTrecho', levelId: l, disciplina, a: point(...a), b: point(...b), cotaAMm: cota, cotaBMm: cota, bitolaMm, ...(rotulo ? { rotulo } : {}) }) as Command;
+    m = applyBatch(m, [trecho('AGUA_FRIA', [0, 0], [0, 3000], -300, 25, ROTULO_DO_ALIMENTADOR), trecho('ESGOTO', [-1000, 1500], [1000, 1500], cotaDoEsgoto, 100)]).model;
+    return m;
+  };
+
+  it('esgoto a −0,40 m: por cima — a cota dele + os dois raios + o afastamento, para cima, de 10 em 10', () => {
+    expect(cotaEnterradaAcimaDasRedes(comCruzamento(-400), HIPOTESES_ALIMENTACAO_PADRAO)).toEqual({ cotaMm: -280, cruzamentos: 1, sob: false });
+  });
+
+  it('esgoto raso (−0,20 m): por cima sairia acima do recobrimento — passa POR BAIXO, dito', () => {
+    expect(cotaEnterradaAcimaDasRedes(comCruzamento(-200), HIPOTESES_ALIMENTACAO_PADRAO)).toEqual({ cotaMm: -320, cruzamentos: 1, sob: true });
+  });
+
+  it('sem cruzamento, a cota da premissa', () => {
+    expect(cotaEnterradaAcimaDasRedes(comCruzamento(-400).trechos ? { ...comCruzamento(-400), trechos: comCruzamento(-400).trechos!.filter((t) => t.disciplina !== 'ESGOTO') } : comCruzamento(-400), HIPOTESES_ALIMENTACAO_PADRAO)).toEqual({ cotaMm: -300, cruzamentos: 0, sob: false });
   });
 });

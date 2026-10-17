@@ -21,7 +21,7 @@
  */
 import { anelRecuado, distanciaEntreEixos3D, envelopeDoTrecho, envelopeValido, pavimentosDoNucleo, pointInPolygon, type BlueprintModel, type DisciplinaDeRede, type ObjectId, type Point, type Wall } from './blueprintKernel';
 import { semEspiculas } from './blueprintDistribuicao';
-import { pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { anelDoPilar, fracaoDentro, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { TOLERANCIA_DO_LADO_MM, paredeContemLado, paredeDoLado } from './blueprintLadoDaParede';
 
 type P2 = { x: number; y: number };
@@ -186,12 +186,41 @@ export function semDedosEstreitos(vertices: readonly P2[], recuos: readonly numb
   return { vertices: v, recuos: l.map((x) => x.recuo), novo };
 }
 
+/** F18: o lado mais curto que isto, entre dois lados mais longos, é um CHANFRO do encontro imperfeito de duas paredes. */
+const CHANFRO_MAXIMO_MM = 100;
+
+/**
+ * F18 da casa automática: tira os CHANFROS do anel — o lado minúsculo em diagonal (5 × 2 cm) que o encontro imperfeito
+ * de duas paredes deixa — trocando os dois vértices dele pelo encontro dos lados vizinhos. Recuado, ele virava do
+ * avesso e o cômodo inteiro ficava sem forro (a área de serviço do R1-A: a água quente ia em reta pelo forro).
+ */
+function semChanfros(anel: Point[]): Point[] {
+  let pts = [...anel];
+  for (let volta = 0; volta < pts.length && pts.length > 3; volta++) {
+    const n = pts.length;
+    const i = pts.findIndex((a, k) => Math.hypot(pts[(k + 1) % n].x - a.x, pts[(k + 1) % n].y - a.y) < CHANFRO_MAXIMO_MM);
+    if (i < 0) break;
+    const [p0, a, b, p3] = [pts[(i + n - 1) % n], pts[i], pts[(i + 1) % n], pts[(i + 2) % n]];
+    // O encontro das retas p0→a e b→p3.
+    const r = { x: a.x - p0.x, y: a.y - p0.y };
+    const q = { x: p3.x - b.x, y: p3.y - b.y };
+    const den = r.x * q.y - r.y * q.x;
+    if (Math.abs(den) < 1e-9) break;
+    const t = ((b.x - p0.x) * q.y - (b.y - p0.y) * q.x) / den;
+    const x = { x: Math.round(p0.x + r.x * t), y: Math.round(p0.y + r.y * t) } as Point;
+    const novo = pts.filter((_, k) => k !== i && k !== (i + 1) % n);
+    novo.splice(i < (i + 1) % n ? i : 0, 0, x);
+    pts = novo;
+  }
+  return pts;
+}
+
 function aneisDoForro(model: BlueprintModel, levelId: ObjectId, afastamentoMm: number): AnelDoForro[] {
   const paredes = model.walls.filter((w) => w.levelId === levelId);
   const vigas = vigasDeTeto(model, levelId).map((v) => ({ a: v.pontos[0], b: v.pontos[v.pontos.length - 1], largura: v.larguraMm }));
   const saida: AnelDoForro[] = [];
   for (const s of comodosComForro(model, levelId)) {
-    const eixo = semEspiculas(s.ring) as Point[];
+    const eixo = semChanfros(semEspiculas(s.ring) as Point[]);
     const n = eixo.length;
     if (n < 3) continue;
     const lados: LadoNoEixo[] = eixo.map((a, i) => {
@@ -444,6 +473,22 @@ export function descidaDoForro(
   levelId: ObjectId,
   o: { q: P2; cotaDaFaixaMm: number; alvo: P2; cotaDoAlvoMm: number; naParede: P2 | null; raioMm: number; folgaSobAVigaMm: number; disciplina?: DisciplinaDeRede | null },
 ): PedacoDaDescida[] {
+  // F18 da casa automática: o ponto na parede DENTRO do vão de uma janela (a máquina de lavar sob a janela) — acima dele
+  // só há a verga, e a descida e o trecho na parede passavam pelo vão. A descida entra na parede AO LADO da janela,
+  // desce até a cota do ponto (abaixo do peitoril) e corre por baixo até ele.
+  if (o.naParede) {
+    const lateral = foraDoVao(model, levelId, o.naParede, Math.min(o.cotaDoAlvoMm, o.cotaDaFaixaMm), Math.max(o.cotaDoAlvoMm, o.cotaDaFaixaMm), o.raioMm);
+    const abaixo = lateral ? !foraDoVao(model, levelId, o.naParede, o.cotaDoAlvoMm - o.raioMm, o.cotaDoAlvoMm + o.raioMm, o.raioMm) : false;
+    if (lateral && abaixo && (lateral.x !== o.naParede.x || lateral.y !== o.naParede.y)) {
+      // O nó do forro anda junto, no forro (a faixa), para descer já ao lado da janela.
+      const q2 = { x: Math.round(o.q.x + lateral.x - o.naParede.x), y: Math.round(o.q.y + lateral.y - o.naParede.y) };
+      const ate = descidaDoForro(model, levelId, { ...o, q: q2, naParede: lateral, alvo: lateral });
+      const inicio: PedacoDaDescida[] = q2.x !== o.q.x || q2.y !== o.q.y ? [{ a: { ...o.q }, b: q2, cotaAMm: o.cotaDaFaixaMm, cotaBMm: o.cotaDaFaixaMm }] : [];
+      const fim: PedacoDaDescida[] = [{ a: lateral, b: { ...o.naParede }, cotaAMm: o.cotaDoAlvoMm, cotaBMm: o.cotaDoAlvoMm }];
+      if (o.alvo.x !== o.naParede.x || o.alvo.y !== o.naParede.y) fim.push({ a: { ...o.naParede }, b: { ...o.alvo }, cotaAMm: o.cotaDoAlvoMm, cotaBMm: o.cotaDoAlvoMm });
+      return [...inicio, ...ate, ...fim];
+    }
+  }
   const w = o.naParede;
   const parede = w ? paredeQueContem(model, levelId, w) : null;
   const entraEm = (ps: P2[]) => {
@@ -516,6 +561,10 @@ export function descidaDoForro(
       const B = { x: c.pts[i].p.x, y: c.pts[i].p.y, z: e0 + c.pts[i].z };
       for (const t of outros) if (distanciaEntreEixos3D(A, B, t.A, t.B) <= o.raioMm + t.r + FOLGA_DA_DESCIDA_MM) return false;
     }
+    // F18 da casa automática: nem por dentro de PILAR — a ligação do aquecedor ao anel corria na parede externa e
+    // atravessava o pilar da esquina (R1-A).
+    const aneisDosPilares = pegadasDePilares(model, levelId).map((g) => anelDoPilar(g, o.raioMm) as Point[]);
+    for (let i = 1; i < c.pts.length; i++) if (fracaoDentro(c.pts[i - 1].p, c.pts[i].p, aneisDosPilares) > 0) return false;
     // A corrida dentro da parede (do pé do nó até `w`) não passa por porta nem janela.
     if (parede && c.noEixo && w) {
       const L = Math.hypot(parede.parede.b.x - parede.parede.a.x, parede.parede.b.y - parede.parede.a.y);
@@ -529,8 +578,31 @@ export function descidaDoForro(
     }
     return true;
   };
+  /**
+   * F18 da casa automática: a VERTICAL dentro da parede (da entrada à cota do ponto) também não cruza outra rede — o
+   * eletroduto que descia até o ponto de força do ar cortava a água que corre na parede (R1-B). Cruzando, ela anda na
+   * parede até o lado (`DESLIZE_DA_DESCIDA_MM`, fora do vão), desce ali e volta na cota do ponto.
+   */
+  const segLivre = (a: P2, za: number, b: P2, zb: number) =>
+    outros.every((t) => distanciaEntreEixos3D({ x: a.x, y: a.y, z: e0 + za }, { x: b.x, y: b.y, z: e0 + zb }, t.A, t.B) > o.raioMm + t.r + FOLGA_DA_DESCIDA_MM);
+  const semCruzarNaParede = (c: ReturnType<typeof cabeca>): PedacoDaDescida[] => {
+    if (!w || !parede || segLivre(w, c.entra, w, o.cotaDoAlvoMm)) return montar(c);
+    for (let s = PASSO_DO_DESLIZE_MM; s <= DESLIZE_DA_DESCIDA_MM; s += PASSO_DO_DESLIZE_MM) {
+      for (const k of [1, -1]) {
+        const w2 = { x: Math.round(w.x + parede.u.x * s * k), y: Math.round(w.y + parede.u.y * s * k) };
+        if (!segLivre(w, c.entra, w2, c.entra) || !segLivre(w2, c.entra, w2, o.cotaDoAlvoMm) || !segLivre(w2, o.cotaDoAlvoMm, w, o.cotaDoAlvoMm)) continue;
+        if (foraDoVao(model, levelId, w2, Math.min(c.entra, o.cotaDoAlvoMm), Math.max(c.entra, o.cotaDoAlvoMm), o.raioMm)) continue;
+        if (!dentroDaParede(parede.parede, w2)) continue;
+        const pts = [...c.pts, { p: w2, z: c.entra }, { p: w2, z: o.cotaDoAlvoMm }, { p: { x: Math.round(w.x), y: Math.round(w.y) }, z: o.cotaDoAlvoMm }, { p: { x: Math.round(o.alvo.x), y: Math.round(o.alvo.y) }, z: o.cotaDoAlvoMm }];
+        const saida: PedacoDaDescida[] = [];
+        for (let i = 1; i < pts.length; i++) if (pts[i].p.x !== pts[i - 1].p.x || pts[i].p.y !== pts[i - 1].p.y || pts[i].z !== pts[i - 1].z) saida.push({ a: pts[i - 1].p, b: pts[i].p, cotaAMm: pts[i - 1].z, cotaBMm: pts[i].z });
+        return saida;
+      }
+    }
+    return montar(c);
+  };
   const inicial = cabeca(o.q, true);
-  if (livre(inicial) || !parede) return montar(inicial);
+  if (livre(inicial) || !parede) return semCruzarNaParede(inicial);
   // O caminho do escorregão, no forro, não entra em parede, viga, pilar, shaft nem laje rebaixada.
   const barreiras = [...pegadasDePilares(model, levelId), ...prumadasQueCruzam(model, levelId, o.cotaDaFaixaMm, o.disciplina, o.raioMm, 2, true)];
   const paredesDoNivel = model.walls.filter((x) => x.levelId === levelId);
@@ -545,11 +617,18 @@ export function descidaDoForro(
       for (let d = 25; d <= s && ok; d += 25) ok = passa({ x: o.q.x + parede.u.x * d * k, y: o.q.y + parede.u.y * d * k });
       if (!ok || !passa(q)) continue;
       const c = cabeca(q, true);
-      if (livre(c)) return montar(c);
+      if (livre(c)) return semCruzarNaParede(c);
     }
   }
-  return montar(inicial);
+  return semCruzarNaParede(inicial);
 }
+
+/** F18: o ponto cai no comprimento da parede (o deslize na parede não sai pela ponta dela). */
+const dentroDaParede = (x: Wall, p: P2) => {
+  const L = Math.hypot(x.b.x - x.a.x, x.b.y - x.a.y) || 1;
+  const t = ((p.x - x.a.x) * (x.b.x - x.a.x) + (p.y - x.a.y) * (x.b.y - x.a.y)) / L;
+  return t >= 0 && t <= L;
+};
 
 /** F14c: a folga entre a descida e o tubo de outra rede, além dos dois raios, mm. */
 const FOLGA_DA_DESCIDA_MM = 5;

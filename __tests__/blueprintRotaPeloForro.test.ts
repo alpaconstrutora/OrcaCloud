@@ -187,3 +187,36 @@ describe('rede pelo forro (F14c) — o dedo estreito do contorno sai antes de re
     expect(semDedosEstreitos(recorte, recorte.map(() => 275))).toBeNull();
   });
 });
+
+describe('F18 da casa automática', () => {
+  it('o anel com CHANFRO (o encontro imperfeito de duas paredes: 5 × 2 cm em diagonal) ganha forro — antes o cômodo ficava sem', () => {
+    const { m, L } = casinha();
+    const sala = m.spaces.find((s) => s.name === 'Sala')!;
+    // O canto (0, 0) da Sala vira o chanfro (0, 20) → (50, 0).
+    const comChanfro = { ...m, spaces: m.spaces.map((s) => (s.id !== sala.id ? s : { ...s, ring: s.ring.flatMap((p) => (p.x === 0 && p.y === 0 ? [point(0, 20), point(50, 0)] : [p])) })) };
+    const anelDaSala = (x: BlueprintModel) => paredesDoForro(x, L, 100).filter((w) => w.id.startsWith(`forro:${sala.id}:`));
+    expect(anelDaSala(m).length).toBe(4);
+    expect(anelDaSala(comChanfro).length).toBe(4);
+    // O canto refeito: o anel recua do encontro das paredes, (175, 175).
+    expect(anelDaSala(comChanfro).some((w) => (w.a.x === 175 && w.a.y === 175) || (w.b.x === 175 && w.b.y === 175))).toBe(true);
+  });
+
+  it('o ponto na parede DENTRO do vão da janela (abaixo do peitoril): a descida entra na parede AO LADO da janela e corre por baixo dela', () => {
+    const { m: m0, L, meio } = casinha();
+    // A janela da parede do meio (x = 3 m) sobe até 2,38 m — acima da entrada na parede (sob a viga de 2,40 m): y de 0,5
+    // a 1,5 m. O ponto na face, sob ela, a 0,90 m.
+    const m = applyCommand(m0, { type: 'AddOpening', wallId: meio, kind: 'window', offsetMm: 500, widthMm: 1000, heightMm: 1380, sillMm: 1000 }).model;
+    const alvo = point(2925, 1000);
+    const pedacos = descidaDoForro(m, L, { q: point(2825, 1000), cotaDaFaixaMm: 2685, alvo, cotaDoAlvoMm: 900, naParede: alvo, raioMm: 12, folgaSobAVigaMm: 30, disciplina: 'AGUA_FRIA' });
+    const noVao = (x: number, y: number, z: number) => Math.abs(x - 3000) <= 75 + 12 && y > 500 - 12 && y < 1500 + 12 && z > 1000 - 12 && z < 2380 + 12;
+    for (const p of pedacos) {
+      for (let k = 0; k <= 20; k++) {
+        const f = k / 20;
+        const [x, y, z] = [p.a.x + (p.b.x - p.a.x) * f, p.a.y + (p.b.y - p.a.y) * f, p.cotaAMm + (p.cotaBMm - p.cotaAMm) * f];
+        expect(noVao(x, y, z), JSON.stringify(p)).toBe(false);
+      }
+    }
+    const ultimo = pedacos[pedacos.length - 1];
+    expect([ultimo.b, ultimo.cotaBMm]).toEqual([alvo, 900]);
+  });
+});

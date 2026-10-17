@@ -70,6 +70,12 @@ export interface HipotesesDePontos {
    * = no mesmo ponto, como antes.
    */
   afastamentoFriaQuenteMm?: number;
+  /**
+   * F18 da casa automática (16/10/2026): o ponto de ÁGUA que cairia dentro do vão de uma janela da parede dele desce
+   * para esta distância abaixo do peitoril, mm — a máquina de lavar sob a janela da área de serviço tinha a torneira a
+   * 1,10 m, com o peitoril a 1,00 m, e a água só chegava a ela pela janela. Ausente = 100.
+   */
+  abaixoDoPeitorilMm?: number;
 }
 
 export const HIPOTESES_PONTOS_PADRAO: HipotesesDePontos = {
@@ -433,17 +439,30 @@ export function pontosDaLouca(
     const s = d === 'AGUA_FRIA' ? -1 : 1;
     return { x: Math.round(base.x + deslize.x + s * lado.x), y: Math.round(base.y + deslize.y + s * lado.y) };
   };
+  // F18: o ponto de água dentro do vão de uma janela da parede dele desce para abaixo do peitoril.
+  const paredesDoNivel = model.walls.filter((w) => w.levelId === componente.levelId);
+  const cotaForaDaJanela = (ponto: { x: number; y: number }, cota: number): number => {
+    const e = encaixarNaParede(ponto, paredesDoNivel, 400);
+    if (!e) return cota;
+    const w = e.parede;
+    const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+    const t = ((ponto.x - w.a.x) * (w.b.x - w.a.x) + (ponto.y - w.a.y) * (w.b.y - w.a.y)) / L;
+    const folga = hip.abaixoDoPeitorilMm ?? 100;
+    const janela = model.openings.find((o) => o.wallId === w.id && o.kind === 'window' && t > o.offsetMm - folga && t < o.offsetMm + o.widthMm + folga && cota > o.sillMm - folga && cota < o.sillMm + o.heightMm);
+    return janela ? Math.max(0, janela.sillMm - folga) : cota;
+  };
   return disciplinasDoAparelho(tipo, hip)
     .filter((d) => !irmaos.some((t) => t.disciplina === d))
     .map((d) => {
       const ponto = posicao(d);
+      const cota = ficha.cotaMm[d] ?? 0;
       return {
         type: 'AddTerminal' as const,
         levelId: componente.levelId,
         disciplina: d,
         tipo: ficha.rotulo,
         at: { x: ponto.x, y: ponto.y },
-        cotaMm: ficha.cotaMm[d] ?? 0,
+        cotaMm: ehAgua(d) ? cotaForaDaJanela(ponto, cota) : cota,
         tipoHidraulico: tipo,
         ...(opcoes.sugerida ? { sugerida: true } : {}),
       };

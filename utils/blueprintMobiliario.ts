@@ -426,6 +426,9 @@ function mobiliarAlinhado(model: BlueprintModel, s: Space, hip: HipotesesDeMobil
         if (p.encosta === 'CEGO' && ladoTemPorta(lado) && LADOS.some((l) => !ladoTemPorta(l) && !ladoTemJanela(l))) continue;
         const [ini, fim] = comprimentoDoLado(lado, interno);
         for (let t = ini; t + p.larguraMm <= fim + 1; t += MALHA) {
+          // F18 da casa automática: a peça ALTA (armário, geladeira) não cobre janela do lado — o armário da suíte tampava
+          // a única janela (a única parede externa), e o ar-condicionado ia para a parede interna.
+          if (p.alta && janelas.some((j) => j.lado === lado && j.ini < t + p.larguraMm && j.fim > t)) continue;
           const { ret, comUso } = colocarNoLado(p, lado, t, interno);
           if (cabe(comUso, ret)) {
             colocada = { peca: p, ret, comUso: recortar(comUso, interno), lado, contorno: [] };

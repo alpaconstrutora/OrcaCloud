@@ -29,7 +29,7 @@
  * mão direita de quem olha da rua —, e a `transformacao` leva ao mundo. Com a
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
-import { TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point, type SpaceLabel } from './blueprintKernel';
+import { TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
 import { recuosEfetivos } from './blueprintZonaUrbanistica';
@@ -72,6 +72,8 @@ import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from './blueprintMemorial
 import { comandosDeMobiliario, HIPOTESES_MOBILIARIO_PADRAO, mobiliarNivel, type HipotesesDeMobiliario } from './blueprintMobiliario';
 import { HIPOTESES_PONTOS_PADRAO, planejarPontosDoNivel, pontosDasLoucasCriadas, type HipotesesDePontos } from './blueprintPontosHidraulicos';
 import { planejarAguaCompleta } from './blueprintAguaCompleta';
+import { cotaEnterradaAcimaDasRedes, planejarAlimentador } from './blueprintAlimentador';
+import { planejarCondutores } from './blueprintCondutoresPluviais';
 import { planejarEsgotoCompleto } from './blueprintEsgotoCompleto';
 import { planejarPluvialCompleta } from './blueprintPluvialCompleto';
 import { destinoDoEsgoto } from './blueprintEsgotoAutomatico';
@@ -87,7 +89,8 @@ import { comodosComForro, type FaixaDoForro } from './blueprintRotaPeloForro';
 import { furosPrevistos, type FuroPrevisto } from './blueprintFurosPrevistos';
 import { presetDeAcabamento, presetsSugeridos } from './blueprintAcabamentos';
 import { encaixarNaParede, paredesEmComum } from './blueprintRotaPelasParedes';
-import { pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { distanciaAoTrecho3D } from './blueprintPosicaoSplit';
+import { anelDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { centroDeCargas, comandosParaOCentro } from './blueprintCentroDeCargas';
 import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos, type HipotesesDeCircuitos } from './blueprintCircuitosAutomaticos';
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO, sugerirDPS, type HipotesesEletricas } from './blueprintEletricaDimensionamento';
@@ -241,6 +244,18 @@ export type ResultadoDaImplantacao = { ok: true; implantacao: ImplantacaoDaCasa 
 const m2 = (v: number) => Math.round(v * 100) / 100;
 const pct = (v: number) => Math.round(v * 10) / 10;
 const f2 = (v: number) => v.toFixed(2).replace('.', ',');
+/** F18: quanto o início do condutor pluvial sobe a cada volta para passar por cima do esgoto, mm. */
+const PASSO_DO_PLUVIAL_SOBRE_O_ESGOTO_MM = 60;
+
+/** F18: os encontros (conflito de rede) entre o pluvial enterrado e o esgoto — o cruzamento e a passagem rente. */
+function pluvialRenteAoEsgoto(m: BlueprintModel): number {
+  const porId = new Map((m.trechos ?? []).map((t) => [t.id, t]));
+  return conflitosDoModelo(m).filter((c) => {
+    if (c.classe !== 'REDE') return false;
+    const par = [porId.get(c.trechoId)?.disciplina, porId.get(c.outroId)?.disciplina].sort().join('×');
+    return par === 'ESGOTO×PLUVIAL';
+  }).length;
+}
 const f1 = (v: number) => v.toFixed(1).replace('.', ',');
 const piso = (v: number, malha: number) => Math.floor(v / malha + 1e-9) * malha;
 
@@ -1024,6 +1039,8 @@ function paredesSobORebaixo(model: BlueprintModel, levelId: ObjectId): Point[] {
 
 /** F14c: quanto a luz de teto sai além da borda da laje rebaixada, mm (o eletroduto sobe ali, no plenum). */
 const LUZ_ALEM_DO_REBAIXO_MM = 300;
+/** F18: a luz de teto a até isto da face do pilar conta como dentro dele (o raio do eletroduto e a folga), mm. */
+const LUZ_FORA_DO_PILAR_MM = 50;
 
 /**
  * F14c: o ponto `at` caiu dentro de um dos `poligonos` (convexos)? Devolve o mais perto fora dele — o pé em cada lado,
@@ -1531,6 +1548,41 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       destino,
     };
     hidraulica.pluvial = etapaDeRede('PLUVIAL', () => planejarPluvialCompleta(m, hidro.pluvial, terrenoHidro), (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s)`);
+    // F18: o condutor pluvial horizontal (enterrado, para a saída na frente do lote) é traçado depois do esgoto e o
+    // cruzava rente (15 × 25: a ligação de esgoto, com 6 cm entre os eixos). Ele passa POR CIMA — a saída fica na
+    // sarjeta —: o início sobe (`profundidadeDoCondutorMm`) até livrar todo cruzamento, sem passar do recobrimento.
+    if (hip.hidraulica.lancar && hidraulica.pluvial.tubos > 0 && pluvialRenteAoEsgoto(m) > 0) {
+      let prof = hidro.pluvial.profundidadeDoCondutorMm;
+      const minimo = hidro.alimentacao.recobrimentoMinimoMm ?? 150;
+      for (let volta = 0; volta < 4 && pluvialRenteAoEsgoto(m) > 0; volta++) {
+        const nova = prof - PASSO_DO_PLUVIAL_SOBRE_O_ESGOTO_MM;
+        if (nova < minimo) break;
+        const cond = planejarCondutores(m, { ...hidro.pluvial, profundidadeDoCondutorMm: nova }, terrenoHidro);
+        if (cond.motivo || !cond.comandos.length) break;
+        prof = nova;
+        aplicar(cond.comandos);
+      }
+      if (pluvialRenteAoEsgoto(m) > 0) pendencias.push({ grupo: 'VERIFICACAO', texto: `Águas pluviais: o condutor horizontal passa rente ao esgoto mesmo começando a ${f2(-prof / 1000)} m — confira o cruzamento (ou mude a saída).` });
+      else pendencias.push({ grupo: 'CONFERIR', texto: `Águas pluviais: o condutor horizontal começa a ${f2(-prof / 1000)} m para passar por cima do esgoto.` });
+    }
+    // F18: o alimentador ENTERRADO é traçado antes do esgoto e do pluvial, que depois o cruzavam na mesma cota (o
+    // esgoto e o condutor horizontal correm para a frente do lote). Agora ele passa POR CIMA deles (NBR 5626) — ou,
+    // sem recobrimento para isso, por baixo, dito.
+    if (hip.hidraulica.lancar) {
+      const ajuste = cotaEnterradaAcimaDasRedes(m, hidro.alimentacao);
+      if (ajuste.cruzamentos > 0 && ajuste.cotaMm !== hidro.alimentacao.cotaEnterradaMm) {
+        const alim = planejarAlimentador(m, { ...hidro.alimentacao, cotaEnterradaMm: ajuste.cotaMm }, hidro.reservatorio, hidro.pressao.qMaxDoHidrometroM3h, terrenoHidro);
+        if (!alim.motivo && alim.comandos.length) {
+          aplicar(alim.comandos);
+          const cota = f2(ajuste.cotaMm / 1000);
+          pendencias.push(
+            ajuste.sob
+              ? { grupo: 'VERIFICACAO', texto: `Alimentador: a ${cota} m, POR BAIXO de ${ajuste.cruzamentos} cruzamento(s) com esgoto/pluvial — por cima não havia recobrimento; proteja a travessia (luva) e confira (NBR 5626).` }
+              : { grupo: 'CONFERIR', texto: `Alimentador: a ${cota} m, por cima de ${ajuste.cruzamentos} cruzamento(s) com esgoto/pluvial (NBR 5626).` },
+          );
+        }
+      }
+    }
 
     // A VERIFICAÇÃO DE REDE do app sobre o resultado: tubos soltos, sem destino, contrafluxo, desconector sem
     // ventilação, tubo atravessando pilar ou cruzando viga. O que ela acusa vira pendência com a contagem, por tipo
@@ -1630,12 +1682,53 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
             if (sp) lote[i] = { ...c, at, cotaMm: Math.round(forroDoComodo(m, sp).faceMm) } as Command;
           }
         }
+        // F18: os pontos NA PAREDE (interruptor, tomada) fora do PILAR: escorregam pela face, fora de vão — o interruptor
+        // junto da porta caía na pegada do pilar do canto, e a descida do eletroduto corria dentro dele (15 × 25).
+        for (let i = 0; i < lote.length; i++) {
+          const c = lote[i] as Extract<Command, { type: 'AddTerminal' }>;
+          if (c.type !== 'AddTerminal' || !c.tipoEletrico || c.tipoEletrico === 'ILUMINACAO_TETO') continue;
+          const aneis = pegadasDePilares(m, c.levelId).map((g) => anelDoPilar(g, LUZ_FORA_DO_PILAR_MM) as Point[]);
+          if (!aneis.some((g) => pointInPolygon(g, c.at))) continue;
+          const enc = encaixarNaParede(c.at, m.walls.filter((w) => w.levelId === c.levelId), 400);
+          if (!enc) continue;
+          const w = enc.parede;
+          const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+          const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+          const t0 = (c.at.x - w.a.x) * u.x + (c.at.y - w.a.y) * u.y;
+          const noVao = (t: number) => m.openings.some((o) => o.wallId === w.id && t > o.offsetMm - LUZ_FORA_DO_PILAR_MM && t < o.offsetMm + o.widthMm + LUZ_FORA_DO_PILAR_MM && c.cotaMm > o.sillMm - LUZ_FORA_DO_PILAR_MM && c.cotaMm < o.sillMm + o.heightMm);
+          for (let d = 50; d <= 800; d += 50) {
+            const q = [d, -d].map((k) => ({ k, p: { x: Math.round(c.at.x + u.x * k), y: Math.round(c.at.y + u.y * k) } as Point })).find(({ k, p }) => t0 + k >= 0 && t0 + k <= L && !noVao(t0 + k) && !aneis.some((g) => pointInPolygon(g, p)));
+            if (q) {
+              lote[i] = { ...c, at: q.p } as Command;
+              break;
+            }
+          }
+        }
+        // F18: e a luz de teto fora do PILAR (com ou sem forro) — no centro de um cômodo pequeno ela caía na pegada dele,
+        // e o eletroduto subia por dentro do pilar (R1-A).
+        for (let i = 0; i < lote.length; i++) {
+          const c = lote[i];
+          if (c.type !== 'AddTerminal' || (c as { tipoEletrico?: string | null }).tipoEletrico !== 'ILUMINACAO_TETO') continue;
+          const pilares = pegadasDePilares(m, c.levelId).map((g) => anelDoPilar(g, LUZ_FORA_DO_PILAR_MM) as Point[]);
+          const sp = m.spaces.find((x) => x.levelId === c.levelId && pointInPolygon(x.ring, c.at));
+          const at = foraDoPoligono(pilares, c.at, sp?.ring ?? null, LUZ_ALEM_DO_REBAIXO_MM);
+          if (at) lote[i] = { ...c, at } as Command;
+        }
         // O CHUVEIRO ELÉTRICO é LIGAÇÃO DIRETA (a 9.5.2.3 acusa chuveiro em tomada), no ponto hidráulico dele, com a
         // potência declarada — a padrão não dá potência a ligação direta. Exige DR e ganha circuito próprio.
         if (ancoras?.chuveiroEletrico) {
           for (const c of (m.terminais ?? []).filter((t) => niveis.includes(t.levelId) && t.tipoHidraulico === 'CHUVEIRO' && t.disciplina === 'AGUA_FRIA')) {
+            // F18: AO LADO da saída d'água, na face (o afastamento lateral dos pontos), do lado sem tubo — no mesmo ponto, a
+            // água e o eletroduto desciam juntos na parede e se cruzavam (R1-B).
+            const cota = COTA_USUAL_DO_PONTO_ELETRICO.LIGACAO_DIRETA;
+            const enc = encaixarNaParede(c.at, m.walls.filter((w) => w.levelId === c.levelId), 400);
+            const afast = hip.pontos.afastamentoFriaQuenteMm ?? 150;
+            const u = enc ? { x: (enc.parede.b.x - enc.parede.a.x) / Math.hypot(enc.parede.b.x - enc.parede.a.x, enc.parede.b.y - enc.parede.a.y), y: (enc.parede.b.y - enc.parede.a.y) / Math.hypot(enc.parede.b.x - enc.parede.a.x, enc.parede.b.y - enc.parede.a.y) } : null;
+            const lados = u ? [1, -1].map((k) => ({ x: Math.round(c.at.x + u.x * afast * k), y: Math.round(c.at.y + u.y * afast * k) })) : [];
+            const livre = (q: Point) => (m.trechos ?? []).every((t) => t.levelId !== c.levelId || distanciaAoTrecho3D(q, cota, t) > t.bitolaMm / 2 + afast / 2);
+            const at = lados.find(livre) ?? { ...c.at };
             lote.push({
-              type: 'AddTerminal', levelId: c.levelId, disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO.LIGACAO_DIRETA, at: { ...c.at },
+              type: 'AddTerminal', levelId: c.levelId, disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO.LIGACAO_DIRETA, at,
               cotaMm: COTA_USUAL_DO_PONTO_ELETRICO.LIGACAO_DIRETA, tipoEletrico: 'LIGACAO_DIRETA', potenciaW: hip.eletrica.chuveiroEletricoVA, rotulo: 'Chuveiro', sugerida: true,
             } as Command);
           }
@@ -1701,7 +1794,29 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
             const u = { x: (parede.b.x - parede.a.x) / L, y: (parede.b.y - parede.a.y) / L };
             const desvios = [100, -100, 200, -200, 300, -300, 400, -400, 500, -500, 600, -600, 700, -700, 800, -800];
             const novo = desvios.map((d) => point(Math.round(c.posicaoSugerida.x + u.x * d), Math.round(c.posicaoSugerida.y + u.y * d))).find(livre);
-            if (novo) c.posicaoSugerida = novo;
+            // F18: sem posição que atenda tudo, ao menos FORA do pilar e do vão (com parede em cima no sobrado), até 1,50 m —
+            // o quadro do sobrado ficava dentro do pilar, e a prumada do eletroduto subia por ele os dois pavimentos.
+            // Pela mesma parede e, na esquina (a ponta dela é o pilar), pelas outras paredes até 1,50 m — o ponto livre mais perto.
+            const p0 = c.posicaoSugerida;
+            const candidatas = (emComum ?? m.walls.filter((w) => w.levelId === L0)).flatMap((w) => {
+              const Lw = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+              const uw = { x: (w.b.x - w.a.x) / Lw, y: (w.b.y - w.a.y) / Lw };
+              const t0 = (p0.x - w.a.x) * uw.x + (p0.y - w.a.y) * uw.y;
+              const pts: Point[] = [];
+              for (let t = Math.max(0, Math.round((t0 - 1500) / 50) * 50); t <= Math.min(Lw, t0 + 1500); t += 50) pts.push(point(Math.round(w.a.x + uw.x * t), Math.round(w.a.y + uw.y * t)));
+              return pts;
+            });
+            const livreNaSuaParede = (q: Point) => {
+              const pw = encaixarNaParede(q, m.walls.filter((w) => w.levelId === L0), 5)?.parede;
+              return !!pw && !pilares.some((g) => pointInPolygon(g as Point[], q)) && (!emComum || !!encaixarNaParede(q, emComum, 5)) && !m.openings.some((o) => {
+                if (o.wallId !== pw.id) return false;
+                const Lp = Math.hypot(pw.b.x - pw.a.x, pw.b.y - pw.a.y) || 1;
+                const t = ((q.x - pw.a.x) * (pw.b.x - pw.a.x) + (q.y - pw.a.y) * (pw.b.y - pw.a.y)) / Lp;
+                return t > o.offsetMm - 300 && t < o.offsetMm + o.widthMm + 300;
+              });
+            };
+            const reserva = novo ?? candidatas.filter((q) => Math.hypot(q.x - p0.x, q.y - p0.y) <= 1500 && livreNaSuaParede(q)).sort((a, b) => Math.hypot(a.x - p0.x, a.y - p0.y) - Math.hypot(b.x - p0.x, b.y - p0.y))[0];
+            if (reserva) c.posicaoSugerida = reserva;
           }
         }
         const antes = new Set((m.quadros ?? []).map((q) => q.id));

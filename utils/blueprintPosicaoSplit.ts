@@ -126,6 +126,11 @@ interface LugarDaEvaporadora {
  */
 export interface OpcoesDaPosicaoDoSplit {
   naParedeExterna?: { topoMaximoMm: number } | null;
+  /**
+   * F18 da casa automática: a folga entre o ponto de força do ar e o tubo de outra rede, além do raio dele, mm (o
+   * eletroduto desce até o ponto). Ausente = `AFASTAMENTO_DO_PONTO_AS_REDES_MM` (60).
+   */
+  afastamentoDoPontoAsRedesMm?: number;
 }
 
 /** F14d: a faixa de parede cheia por onde a linha e o dreno atravessam juntos (12 cm entre eles e os raios), mm. */
@@ -188,6 +193,17 @@ function ocupadosPorPontos(model: BlueprintModel, lado: LadoDoAmbiente, levelId:
     saida.push({ de: Math.max(0, ao - FOLGA_DA_EVAPORADORA_MM), ate: Math.min(L, ao + FOLGA_DA_EVAPORADORA_MM) });
   }
   return saida;
+}
+
+/** F18: o padrão de `OpcoesDaPosicaoDoSplit.afastamentoDoPontoAsRedesMm`. */
+const AFASTAMENTO_DO_PONTO_AS_REDES_MM = 60;
+
+/** F18: a distância do ponto (na cota) ao eixo do trecho, no espaço. */
+export function distanciaAoTrecho3D(q: Point, cotaMm: number, t: { a: Point; b: Point; cotaAMm: number; cotaBMm: number }): number {
+  const d = { x: t.b.x - t.a.x, y: t.b.y - t.a.y, z: t.cotaBMm - t.cotaAMm };
+  const L2 = d.x * d.x + d.y * d.y + d.z * d.z;
+  const k = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((q.x - t.a.x) * d.x + (q.y - t.a.y) * d.y + (cotaMm - t.cotaAMm) * d.z) / L2));
+  return Math.hypot(q.x - (t.a.x + k * d.x), q.y - (t.a.y + k * d.y), cotaMm - (t.cotaAMm + k * d.z));
 }
 
 /** Os trechos livres menos os ocupados. */
@@ -400,7 +416,23 @@ export function lugarDaCondensadora(
     .filter((s) => s.levelId === space.levelId && s.id !== space.id)
     .map((s) => ({ s, nome: model.labels.find((l) => l.levelId === s.levelId && pointInPolygon(s.ring, l.at))?.name ?? '' }))
     .find((x) => AMBIENTE_TECNICO.test(x.nome));
-  if (tecnico) return { at: interiorPoint(tecnico.s.ring, tecnico.s.holes), lugar: 'AMBIENTE_TECNICO' };
+  if (tecnico) {
+    // F18 da casa automática: ENCOSTADA numa parede do ambiente técnico (a externa primeiro), fora de porta e vão —
+    // no ponto interior (o meio da garagem) ela ficava sob a luz de teto, e a linha descia pelo eletroduto dela.
+    const ladosT = ladosDePiso(tecnico.s, walls).filter((l) => !!l.wallId && comprimento(l.a, l.b) >= 1000);
+    const vaosDe = (l: LadoDoAmbiente) => trechosUtilizaveis(l, walls, model.openings.filter((o) => o.wallId === l.wallId), FOLGA_DA_CONDENSADORA_MM).filter((t) => t.ate - t.de >= 1000);
+    const ordemT = [...ladosT].sort((a, b) => Number(!!b.wallId && ehExterna(b.wallId)) - Number(!!a.wallId && ehExterna(a.wallId)) || comprimento(b.a, b.b) - comprimento(a.a, a.b));
+    for (const l of ordemT) {
+      const livre = vaosDe(l)[0];
+      if (!livre) continue;
+      const L = comprimento(l.a, l.b);
+      const t = (livre.de + livre.ate) / 2;
+      const n = normalInterna(l, tecnico.s.ring);
+      const d = profundidadeMm / 2 + FOLGA_DA_CONDENSADORA_MM;
+      return { at: { x: Math.round(l.a.x + ((l.b.x - l.a.x) * t) / L + n.x * d), y: Math.round(l.a.y + ((l.b.y - l.a.y) * t) / L + n.y * d) } as Point, lugar: 'AMBIENTE_TECNICO' };
+    }
+    return { at: interiorPoint(tecnico.s.ring, tecnico.s.holes), lugar: 'AMBIENTE_TECNICO' };
+  }
   return null;
 }
 
@@ -570,7 +602,12 @@ export function planejarEquipamentosSplit(model: BlueprintModel, selecao: Seleca
     // E4.3: o ponto de força do aparelho, com a potência da placa (ou do EER) — não os 1400 VA fixos.
     // 11/10/2026: na face, AO LADO do aparelho — no centro dele ficava escondido sob a peça.
     const encDoSplit = encostoNaParede(model, levelId, lugar.at, profundidadeMm);
-    const pontoDeForca = encDoSplit ? lugaresDoPontoDeForca(model, encDoSplit, larguraMm)[0] : { x: lugar.at.x, y: lugar.at.y };
+    // F18 da casa automática: o lado (dos dois) em que nenhum tubo de outra rede passa na altura do ponto — a água
+    // corria 2 cm acima dele na parede, e o eletroduto que desce até ele não tinha por onde passar (R1-B).
+    const candidatosDoPonto = encDoSplit ? lugaresDoPontoDeForca(model, encDoSplit, larguraMm) : [];
+    const longeDasRedes = (q: Point) =>
+      (model.trechos ?? []).every((t) => t.levelId !== levelId || distanciaAoTrecho3D(q, modelo.cotaMm, t) > t.bitolaMm / 2 + (opcoes.afastamentoDoPontoAsRedesMm ?? AFASTAMENTO_DO_PONTO_AS_REDES_MM));
+    const pontoDeForca = candidatosDoPonto.find(longeDasRedes) ?? candidatosDoPonto[0] ?? { x: lugar.at.x, y: lugar.at.y };
     adds.push({
       type: 'AddTerminal',
       levelId,

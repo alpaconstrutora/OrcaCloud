@@ -131,6 +131,8 @@ export interface HipotesesDeAgua {
 const RAIO_NA_DESCIDA_MM = 20;
 /** F16: o padrão de `HipotesesDeAgua.afastamentoEntreColunasMm`. */
 const AFASTAMENTO_ENTRE_COLUNAS_MM = 50;
+/** F18: até onde a origem no forro (o aquecedor) procura o anel quando não há um ao alcance de encaixe, mm. */
+const ALCANCE_DA_RAIZ_NO_FORRO_MM = 3000;
 
 export const HIPOTESES_AGUA_PADRAO: HipotesesDeAgua = {
   velocidadeMaxMs: 2,
@@ -552,9 +554,13 @@ export function planejarAgua(
   const paredesDaOrigem = origemNoForro ? paredesDoRamal(origem.levelId) : paredesDe(origem.levelId);
   // F14b: o barrilete no forro (o da quente, que nasce no aquecedor) também desvia das prumadas das outras redes.
   const obstaculosDoBarrilete = origemNoForro ? [...pegadasDePilares(model, origem.levelId), ...prumadasQueCruzam(model, origem.levelId, tetoO, disciplina, RAIO_NA_DESCIDA_MM)] : pegadasDePilares(model, origem.levelId);
-  const barrilete = pelasParedes && paredesDaOrigem.length > 0 && cabecas.size > 0
-    ? arvorePelasParedes({ paredes: paredesDaOrigem, raiz: origem.at, pendentes: [...cabecas.values()], raioDeEncaixeMm: raioDeEncaixe, obstaculos: obstaculosDoBarrilete, contornoDoPilarMm: contorno, encaixarEm: encaixaNoAnel, ...(origemNoForro ? { penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}) })
-    : null;
+  const arvoreDoBarrilete = (raio: number) =>
+    arvorePelasParedes({ paredes: paredesDaOrigem, raiz: origem.at, pendentes: [...cabecas.values()], raioDeEncaixeMm: raio, obstaculos: obstaculosDoBarrilete, contornoDoPilarMm: contorno, encaixarEm: encaixaNoAnel, ...(origemNoForro ? { penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}) });
+  let barrilete = pelasParedes && paredesDaOrigem.length > 0 && cabecas.size > 0 ? arvoreDoBarrilete(raioDeEncaixe) : null;
+  // F18 da casa automática: no forro, a origem (o aquecedor) sem anel ao alcance — sem raiz, o barrilete inteiro da
+  // quente ia em RETA pelo forro e atravessava pilar (R1-A). De novo, com alcance de `ALCANCE_DA_RAIZ_NO_FORRO_MM`: a
+  // descida da origem até a raiz é a de sempre.
+  if (origemNoForro && barrilete && !barrilete.raiz) barrilete = arvoreDoBarrilete(Math.max(raioDeEncaixe, ALCANCE_DA_RAIZ_NO_FORRO_MM));
   if (origemNoForro && barrilete?.raiz) {
     // F14b: a origem sobe pela descida até o anel; o nó dela "no teto" (que não existe) sai dos alcançados.
     descer(origem.levelId, barrilete.raiz, tetoO, origem.at, origem.cotaMm);

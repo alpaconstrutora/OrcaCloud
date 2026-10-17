@@ -62,6 +62,55 @@ export interface HipotesesDeAlimentacao {
    * sob a caixa, com o percurso enterrado por baixo da casa (o de antes). Ausente = 'SOB_A_CAIXA'.
    */
   subida?: 'FACHADA' | 'SOB_A_CAIXA';
+  /**
+   * F18 da casa automática (16/10/2026): onde o trecho enterrado cruza esgoto ou pluvial, a água passa POR CIMA (NBR
+   * 5626) — com este afastamento entre as geratrizes, mm. Ausente = `AFASTAMENTO_ACIMA_DO_ESGOTO_MM` (50).
+   */
+  afastamentoAcimaDoEsgotoMm?: number;
+  /** F18: o recobrimento mínimo do trecho enterrado (o eixo nunca sobe acima de −isto), mm. Ausente = `RECOBRIMENTO_MINIMO_MM` (150). */
+  recobrimentoMinimoMm?: number;
+}
+
+/** F18: o padrão de `afastamentoAcimaDoEsgotoMm`. */
+export const AFASTAMENTO_ACIMA_DO_ESGOTO_MM = 50;
+/** F18: o padrão de `recobrimentoMinimoMm`. */
+export const RECOBRIMENTO_MINIMO_MM = 150;
+
+/**
+ * F18 da casa automática: a cota do trecho ENTERRADO do alimentador que passa ACIMA de todo esgoto e pluvial que ele
+ * cruza em planta (a cota deles no cruzamento + os dois raios + o afastamento) — NBR 5626, a água potável por cima —,
+ * nunca abaixo da cota da premissa. Se por cima ele sairia acima do recobrimento mínimo (o esgoto raso junto da
+ * fachada), passa POR BAIXO de todos, com o mesmo afastamento: `sob` (a água sob o esgoto pede proteção, dito).
+ */
+export function cotaEnterradaAcimaDasRedes(model: BlueprintModel, hip: HipotesesDeAlimentacao): { cotaMm: number; cruzamentos: number; sob: boolean } {
+  const enterrados = (model.trechos ?? []).filter((t) => t.rotulo === ROTULO_DO_ALIMENTADOR && t.cotaAMm < 0 && t.cotaBMm < 0 && (t.a.x !== t.b.x || t.a.y !== t.b.y));
+  const outros = (model.trechos ?? []).filter((t) => (t.disciplina === 'ESGOTO' || t.disciplina === 'PLUVIAL') && (t.a.x !== t.b.x || t.a.y !== t.b.y));
+  const afastamento = hip.afastamentoAcimaDoEsgotoMm ?? AFASTAMENTO_ACIMA_DO_ESGOTO_MM;
+  let acima = hip.cotaEnterradaMm;
+  let abaixo = hip.cotaEnterradaMm;
+  let cruzamentos = 0;
+  for (const a of enterrados) {
+    for (const b of outros) {
+      if (b.levelId !== a.levelId) continue;
+      // Interseção dos dois segmentos em planta (t ao longo do outro).
+      const r = { x: a.b.x - a.a.x, y: a.b.y - a.a.y };
+      const q = { x: b.b.x - b.a.x, y: b.b.y - b.a.y };
+      const den = r.x * q.y - r.y * q.x;
+      if (Math.abs(den) < 1e-9) continue;
+      const w = { x: b.a.x - a.a.x, y: b.a.y - a.a.y };
+      const u = (w.x * q.y - w.y * q.x) / den;
+      const t = (w.x * r.y - w.y * r.x) / den;
+      if (u < -1e-6 || u > 1 + 1e-6 || t < -1e-6 || t > 1 + 1e-6) continue;
+      cruzamentos++;
+      const cotaDoOutro = b.cotaAMm + (b.cotaBMm - b.cotaAMm) * t;
+      const folga = b.bitolaMm / 2 + a.bitolaMm / 2 + afastamento;
+      acima = Math.max(acima, cotaDoOutro + folga);
+      abaixo = Math.min(abaixo, cotaDoOutro - folga);
+    }
+  }
+  const teto = -(hip.recobrimentoMinimoMm ?? RECOBRIMENTO_MINIMO_MM);
+  if (acima <= teto) return { cotaMm: Math.ceil(acima / 10) * 10, cruzamentos, sob: false };
+  return { cotaMm: Math.floor(abaixo / 10) * 10, cruzamentos, sob: true };
 }
 
 /** F8c: o eixo do tubo que sobe ao lado do baldrame fica a isto da face dele. */

@@ -61,7 +61,7 @@ import { lugarNoShaft, shaftPreferido } from './blueprintNucleoVertical';
 import { redeDaOrigem } from './blueprintAguaAutomatica';
 import { pontosDaLouca } from './blueprintPontosHidraulicos';
 import { pontoNaFrente } from './blueprintAncorasHidro';
-import { desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { anelDoPilar, desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 
 export interface HipotesesDeEsgoto {
   /** Caimento mínimo, em %, para DN até 75 e para DN 100 ou mais (NBR 8160). */
@@ -632,6 +632,14 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
     const total = acumular(raizKey);
 
     // 4) Cotas das folhas para a raiz: cada trecho desce com o caimento do seu DN.
+    const pilaresDoNivel = pegadasDePilares(model, levelId);
+    // O tubo, não só o eixo: a pegada do pilar crescida pelo raio dele (o DN 100 encostava no pilar com o eixo fora).
+    const comprimentoComContorno = (a: Ponto2, b: Ponto2, dn: number): number => {
+      const desvio = a.x === b.x && a.y === b.y ? null : desvioDoPilar(a, b, pilaresDoNivel.map((g) => anelDoPilar(g, dn / 2) as Point[]));
+      if (!desvio || desvio.length === 0) return distancia(a, b);
+      const pts = [a, ...desvio, b];
+      return pts.slice(1).reduce((s, q, i) => s + distancia(pts[i], q), 0);
+    };
     const dnDaAresta = (d: (typeof dirigidas)[number]) => Math.max(dnPorUhc(uhcPorNo.get(d.paraKey) ?? 0), dnMinPorNo.get(d.paraKey) ?? 40);
     const cotaDe = (key: string): number => {
       const memo = cotaPorNo.get(key);
@@ -641,7 +649,9 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
         const dn = dnDaAresta(d);
         // Para CIMA (28/09/2026, achado pelo memorial E3.1): com `round`, 0,72 m a 2 % davam
         // 14 mm de queda = 1,94 % — abaixo da mínima que o próprio lançamento promete.
-        const queda = Math.max(1, Math.ceil((distancia(d.de, d.para) * caimentoPct(dn, hip)) / 100 - 1e-9));
+        // F18: pelo comprimento COM o contorno do pilar (o mesmo de `contornarPilar`, adiante) — em reta, o trecho no
+        // caimento exato perdia a mínima ao contornar, ficava reto e atravessava o pilar (10 × 30, 4 dorm.).
+        const queda = Math.max(1, Math.ceil((comprimentoComContorno(d.de, d.para, dn) * caimentoPct(dn, hip)) / 100 - 1e-9));
         cota = Math.min(cota, cotaDe(d.paraKey) - queda);
       }
       if (key === raizKey && cotaDaRaizMinima != null) cota = Math.min(cota, cotaDaRaizMinima);
@@ -770,7 +780,8 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
  */
 function contornarPilar(model: BlueprintModel, c: Extract<Command, { type: 'AddTrecho' }>, hip: HipotesesDeEsgoto): Extract<Command, { type: 'AddTrecho' }>[] {
   if (c.a.x === c.b.x && c.a.y === c.b.y) return [c];
-  const desvio = desvioDoPilar(c.a, c.b, pegadasDePilares(model, c.levelId));
+  // F18: com a pegada crescida pelo raio do tubo (o mesmo da queda, na árvore).
+  const desvio = desvioDoPilar(c.a, c.b, pegadasDePilares(model, c.levelId).map((g) => anelDoPilar(g, c.bitolaMm / 2) as Point[]));
   if (!desvio || desvio.length === 0) return [c];
   const pts = [c.a, ...desvio, c.b];
   const comp = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));

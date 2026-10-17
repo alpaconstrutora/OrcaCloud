@@ -506,10 +506,16 @@ export function saidaPelaParede(model: BlueprintModel, e: Terminal, c: Terminal)
     if ((escolha && d >= escolha.d) || !livre(tl)) continue;
     const delta = deslocamento(tl);
     if (delta == null) continue;
-    for (const sentido of tc >= tl + delta ? [-1, 1] : [1, -1]) {
+    // F18: deslocados além do batente, o dreno fica de preferência ATRÁS da linha no sentido em que os dois andam — à
+    // frente, o trecho dele que atravessa a parede passava rente à descida dela (R1-B, 1 cm).
+    for (const sentido of delta !== 0 ? [-Math.sign(delta), Math.sign(delta)] : tc >= tl ? [-1, 1] : [1, -1]) {
       const td = tl + sentido * DRENO_AO_LADO_DA_LINHA_MM;
-      if (!livre(td) || diante(td + delta)) continue;
-      escolha = { tl, td, delta, d };
+      // À frente, a descida da linha (em tl + delta) tem de passar ALÉM da travessia do dreno (em td): o deslocamento
+      // cresce até 2 × o afastamento entre os dois.
+      const aFrente = delta !== 0 && Math.sign(sentido) === Math.sign(delta);
+      const d2 = aFrente && Math.abs(delta) < 2 * DRENO_AO_LADO_DA_LINHA_MM ? Math.sign(delta) * 2 * DRENO_AO_LADO_DA_LINHA_MM : delta;
+      if (!livre(td) || diante(td + d2) || diante(tl + d2) || tl + d2 < 0 || tl + d2 > L || td + d2 < 0 || td + d2 > L) continue;
+      escolha = { tl, td, delta: d2, d };
       break;
     }
   }
@@ -618,9 +624,30 @@ export function planejarLinhasFrigorigenas(
       const antes = l.comandos.length;
       if (noForro && caminho.pelaParede && p.length >= 2) {
         // F14b: sai da evaporadora para o anel do forro na cota dela e sobe ali (junto da parede, no caixote).
-        l.add(baseLinha, e.at, e.cotaMm, p[1], e.cotaMm);
-        l.add(baseLinha, p[1], e.cotaMm, p[1], cotaLinha);
-        for (let i = 1; i + 1 < p.length; i++) l.add(baseLinha, p[i], cotaLinha, p[i + 1], cotaLinha);
+        // F18: sobe a pelo menos `DRENO_AO_LADO_DA_LINHA_MM` da evaporadora — o dreno desce no nó dela, e a 3 cm as duas
+        // verticais se encostavam (R1-A). Até lá, corre pelo anel na cota do aparelho (atrás dele).
+        const dist = (q: P2) => Math.hypot(q.x - e.at.x, q.y - e.at.y);
+        let sobe = 1;
+        let ponto: P2 = p[1];
+        if (dist(p[1]) < DRENO_AO_LADO_DA_LINHA_MM) {
+          for (let i = 1; i + 1 < p.length; i++) {
+            const [a, b] = [p[i], p[i + 1]];
+            const L = Math.hypot(b.x - a.x, b.y - a.y);
+            const k = [...Array(Math.max(1, Math.ceil(L / 10)))].map((_, j) => (j + 1) / Math.max(1, Math.ceil(L / 10))).find((f) => dist({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f }) >= DRENO_AO_LADO_DA_LINHA_MM);
+            if (k != null) {
+              ponto = { x: Math.round(a.x + (b.x - a.x) * k), y: Math.round(a.y + (b.y - a.y) * k) };
+              sobe = i;
+              break;
+            }
+          }
+        }
+        if (mesmoP(ponto, p[1])) l.add(baseLinha, e.at, e.cotaMm, p[1], e.cotaMm);
+        // Direto do nó da evaporadora ao ponto da subida (atrás do aparelho): pelo ponto do anel colado a ela, a linha
+        // passava a 3 cm do começo do dreno.
+        else l.add(baseLinha, e.at, e.cotaMm, ponto, e.cotaMm);
+        l.add(baseLinha, ponto, e.cotaMm, ponto, cotaLinha);
+        if (!mesmoP(ponto, p[sobe]) && sobe + 1 < p.length) l.add(baseLinha, ponto, cotaLinha, p[sobe + 1], cotaLinha);
+        for (let i = mesmoP(ponto, p[sobe]) ? sobe : sobe + 1; i + 1 < p.length; i++) l.add(baseLinha, p[i], cotaLinha, p[i + 1], cotaLinha);
       } else {
         l.add(baseLinha, e.at, e.cotaMm, e.at, cotaLinha);
         for (let i = 0; i + 1 < p.length; i++) l.add(baseLinha, p[i], cotaLinha, p[i + 1], cotaLinha);
@@ -698,7 +725,10 @@ export function planejarLinhasFrigorigenas(
       direta && !existentePonto
         ? { pontos: [e.at, direta.drenoNoEixo, direta.drenoFora, ...(mesmoP(direta.drenoFora, direta.drenoDesce) ? [] : [direta.drenoDesce]), direta.drenoDesce], pelaParede: true }
         : caminhoEmPlanta(base, levelId, e.at, destinoAt, hip, undefined, noForro ? prumadasQueCruzam(base, levelId, e.cotaMm, 'DRENO_AC', hip.dnDrenoMm / 2, 10, false) : []);
-    const pontosD = caminhoDreno.pontos;
+    // F18: pelo caminho antigo até um ponto novo na fachada, o último lance era uma DIAGONAL do eixo da parede até o
+    // chão lá fora — cortava a parede abaixo do topo da janela. Agora atravessa a parede com a declividade e desce na
+    // vertical, por fora.
+    const pontosD = !direta && destino === 'PONTO_NOVO_NA_FACHADA' && !mesmoP(caminhoDreno.pontos[caminhoDreno.pontos.length - 2] ?? destinoAt, destinoAt) ? [...caminhoDreno.pontos, destinoAt] : caminhoDreno.pontos;
     // C6: o caminho por gravidade já com o vértice do SIFÃO (colinear: não muda o comprimento).
     const comSifao = verticeNoCaminho(pontosD, hip.distanciaDoSifaoMm);
     const pontosG = comSifao.pontos;
@@ -709,7 +739,8 @@ export function planejarLinhasFrigorigenas(
     const quedaNecessaria = quedas.reduce((acc, q) => acc + q, 0);
     // A base da evaporadora é por onde o condensado sai; a ponta do dreno fica no nó da peça (coincidência exata).
     const cotaSaida = e.cotaMm;
-    const comBomba = cotaSaida - quedaNecessaria < destinoCota;
+    // F18: o dreno desce `DRENO_ABAIXO_DA_LINHA_MM` sob a evaporadora antes de sair (em todo caminho por gravidade).
+    const comBomba = cotaSaida - DRENO_ABAIXO_DA_LINHA_MM - quedaNecessaria < destinoCota;
     const baseDreno = { levelId, disciplina: 'DRENO_AC' as const, bitolaMm: Math.round(hip.dnDrenoMm), sugerido: true };
     const antesD = l.comandos.length;
     /** C5: os trechos (índices) por onde o condensado DESTA evaporadora passa. */
@@ -718,7 +749,28 @@ export function planejarLinhasFrigorigenas(
       const i = l.add(baseDreno, a, cotaA, b, cotaB);
       if (i != null) doDreno.push(i);
     };
-    if (comBomba) {
+    // F18 (decisão da F14d: "cômodo sem parede externa cai na bomba de dreno"): sem a saída direta, com forro e um
+    // ponto novo na fachada, a bomba fica junto da evaporadora e o dreno corre pelas paredes SEM declividade, logo abaixo
+    // dela (acima do topo das portas), até a fachada, e desce por fora. Por gravidade ele descia ao longo do caminho e
+    // passava pelo topo das portas (o escritório do R1-A); no forro, cruzava a linha nas esquinas dos anéis.
+    const peloForro = !direta && !!noForro && !existentePonto && destino === 'PONTO_NOVO_NA_FACHADA';
+    if (peloForro) {
+      const cotaDoDreno = cotaSaida - DRENO_ABAIXO_DA_LINHA_MM;
+      const q0 = pontosD.length > 1 ? pontosD[1] : destinoAt;
+      const dd = Math.hypot(q0.x - e.at.x, q0.y - e.at.y) || 1;
+      const bombaAt = { x: Math.round(e.at.x + ((q0.x - e.at.x) / dd) * Math.min(300, dd)), y: Math.round(e.at.y + ((q0.y - e.at.y) / dd) * Math.min(300, dd)) };
+      pecas.push({ type: 'AddTerminal', levelId, disciplina: 'DRENO_AC', tipo: 'Bomba de dreno', tipoHidraulico: 'BOMBA_DRENO', at: bombaAt, cotaMm: cotaDoDreno, sugerida: true } as Command);
+      addDreno(e.at, cotaSaida, e.at, cotaDoDreno);
+      addDreno(e.at, cotaDoDreno, bombaAt, cotaDoDreno);
+      let atual: P2 = bombaAt;
+      for (const q of pontosD.slice(1)) {
+        if (mesmoP(q, atual)) continue;
+        addDreno(atual, cotaDoDreno, q, cotaDoDreno);
+        atual = q;
+      }
+      addDreno(atual, cotaDoDreno, atual, destinoCota);
+      avisos.push('cômodo sem parede externa: bomba de dreno junto da evaporadora — o dreno corre pelas paredes logo abaixo dela até a fachada');
+    } else if (comBomba) {
       // Recalque: a bomba junto da evaporadora (30 cm ao longo do primeiro lance), e o dreno sobe o que precisar.
       const q0 = pontosD.length > 1 ? pontosD[1] : destinoAt;
       const dd = Math.hypot(q0.x - e.at.x, q0.y - e.at.y) || 1;
@@ -745,7 +797,8 @@ export function planejarLinhasFrigorigenas(
       let cota = cotaSaida;
       // F14d: na saída direta, o dreno desce primeiro sob a evaporadora — a linha sai na cota dela, ao lado; saindo do
       // mesmo nó quase na mesma direção, os dois se encostavam (25 mm).
-      if (direta && !existentePonto) {
+      // F18: e também no caminho pelo forro — a linha sobe ali do lado, e o dreno saía na cota dela (R1-A, 3 cm).
+      {
         addDreno(e.at, cota, e.at, cota - DRENO_ABAIXO_DA_LINHA_MM);
         cota -= DRENO_ABAIXO_DA_LINHA_MM;
       }

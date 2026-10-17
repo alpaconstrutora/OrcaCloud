@@ -158,3 +158,13 @@ orçamento" no print de referência.
 - [x] 20 — conferência visual (Playwright logado, só leitura, 0 escritas, 0 erros): Salvar na barra
   do topo à esquerda com `form=` do formulário; os 3 cards próprios; espaçamento entre cards
   igualado a 12px depois do print (era 24px dentro do formulário × 12px na coluna).
+
+## Pedido posterior (17/10/2026) — "sim" a corrigir os pontos anotados do BudgetEditor
+- [x] 21 — `components/BudgetEditor.tsx`: renomear versão vira `ActionIconButton` sempre visível;
+  "Excluir"/"Adicionar" da lista de resultados sempre visíveis (sem `opacity-0 group-hover`,
+  "Adicionar" em `font-medium`); rótulos dos cartões do comparativo/filtros (3) e os 2 títulos do
+  menu de ações ("Análise", "Importar / Exportar") em `text-xs font-semibold text-slate-500`, sem
+  caixa alta; cabeçalho em grade das composições no §6.11 (fundo branco, `text-gray-700`
+  semibold, linha embaixo, sem caixa alta). *Pronto:* nenhum `opacity-0 group-hover` nem
+  `text-gray-400 uppercase` no arquivo; checador só com o §3 da exceção §3.2; 52 testes verdes.
+- Conferência visual no navegador: NÃO feita (mudanças de classe).

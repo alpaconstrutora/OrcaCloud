@@ -1087,7 +1087,8 @@ describe('F22 — pavimentos automático', () => {
     expect(p.pendencias.some((x) => /^Pavimentos automático: (sobrado|térrea) — /.test(x.texto) && /não compor/.test(x.texto))).toBe(true);
     const fica = problemasDoPlano(sobrado) < problemasDoPlano(terrea) ? 'sobrado' : 'térrea';
     expect(p.sobrado ? 'sobrado' : 'térrea').toBe(fica);
-  });
+    // Quatro casas inteiras (a automática faz térrea e sobrado; e as duas de conferência).
+  }, 120_000);
 
   it('a mesma casa com "Térrea" escolhida: fica térrea, e a pendência diz que o sobrado resolve', () => {
     const m = lote10x30();

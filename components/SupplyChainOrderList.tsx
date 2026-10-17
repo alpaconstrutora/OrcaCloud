@@ -9,6 +9,9 @@ import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
 import EmpreendimentoCell, { resolveOrderEmpreendimento } from './empreendimento/EmpreendimentoCell';
 import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
+import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 // Número da NF-e (não confundir com a chave de acesso de 44 dígitos) — mesmos
 // dígitos 26-34 da chave, convenção usada em FiscalDocuments.tsx.
@@ -49,6 +52,22 @@ const ORDER_STATUS_KEYS = {
 // §5.5: fornecedor, obra, empreendimento, CC e plano de contas viram lista com
 // busca — valores distintos das linhas carregadas (antes de busca/filtro), pelo
 // MESMO getAdvancedFilterValue que o filtro compara. Por isso é builder + useMemo.
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+type CampoAgrupar = 'status' | 'fornecedor' | 'obra' | 'empreendimento' | 'centro_custo' | 'plano_contas' | 'data';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'status', label: 'Status' },
+    { value: 'fornecedor', label: 'Fornecedor' },
+    { value: 'obra', label: 'Obra' },
+    { value: 'empreendimento', label: 'Empreendimento' },
+    { value: 'centro_custo', label: 'Centro de Custo' },
+    { value: 'plano_contas', label: 'Plano de Contas' },
+    { value: 'data', label: 'Data do pedido (mês)' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = {
+    status: 'Sem status', fornecedor: 'Sem fornecedor', obra: 'Sem obra', empreendimento: 'Sem empreendimento',
+    centro_custo: 'Sem centro de custo', plano_contas: 'Sem plano de contas', data: 'Sem data',
+};
+
 function buildAdvancedFilterFields(
     orders: any[],
     empreendimentoByProject: Record<string, { id: string; name: string; towerName?: string }>,
@@ -221,6 +240,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const [nfFilter, setNfFilter] = usePersistedState<'all' | 'sem-nf'>('supplyChainOrderFilters:nf', 'all');
     const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
     const [lastCheckedIndex, setLastCheckedIndex] = React.useState<number | null>(null);
+    const zerarAncora = React.useCallback(() => setLastCheckedIndex(null), []);
+    const agrupamento = useAgrupamento<CampoAgrupar>('supplyChainOrderFilters:groupBy', zerarAncora);
     const [bulkLoading, setBulkLoading] = React.useState(false);
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -374,15 +395,50 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         return filtered;
     }, [orders, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, nfeNumbersByOrderId, advancedFilters.rules, advancedFields, empreendimentoByProject]);
 
+    // "Agrupar" só no modo lista (a grade não tem linha de grupo).
+    const groupBy = agrupamento.campo;
+    const agrupando = viewMode === 'list' && groupBy !== 'none';
+    const grupos = React.useMemo(() => {
+        if (groupBy === 'none') return [];
+        const chave = (o: any): ChaveDeGrupo => {
+            switch (groupBy) {
+                case 'status': return chavePorNome(o.status);
+                case 'fornecedor': return chavePorNome(o.supplierName);
+                case 'obra': return chavePorNome(o.projectClassification === 'ORCAMENTO' ? o.linkedProjectName : o.projectName);
+                case 'empreendimento': return chavePorNome(resolveOrderEmpreendimento(o, empreendimentoByProject)?.name);
+                case 'centro_custo': return chavePorNome(o.costCenter);
+                case 'plano_contas': return chavePorNome(o.chartOfAccounts);
+                case 'data': return chavePorMes(o.created_at ? String(o.created_at) : null);
+            }
+        };
+        return agruparLinhas(filteredOrders, {
+            chave,
+            semRotulo: SEM_GRUPO[groupBy],
+            valor: o => totalEfetivoDoPedido(o.items),
+            ordem: groupBy === 'status' ? Object.keys(ORDER_STATUS_KEYS).map(s => s.toLowerCase()) : groupBy === 'data' ? 'chave' : 'aparicao',
+        });
+    }, [groupBy, filteredOrders, empreendimentoByProject]);
+    /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
+    const linhasNaTela = React.useMemo(
+        () => (agrupando ? linhasDaTela(grupos, agrupamento.recolhidos) : filteredOrders),
+        [agrupando, grupos, agrupamento.recolhidos, filteredOrders],
+    );
+    const entradas: EntradaDaTela<any>[] = React.useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredOrders.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, filteredOrders],
+    );
+
+    /** Selecionáveis NA TELA (sem os grupos recolhidos) — base do "selecionar todos". */
     const selectableVisible = React.useMemo(
-        () => filteredOrders.filter(o => canDeleteOrder(o.status)),
-        [filteredOrders],
+        () => linhasNaTela.filter(o => canDeleteOrder(o.status)),
+        [linhasNaTela],
     );
+    /** Selecionados do recorte inteiro (inclui grupo recolhido depois de marcado) — base do lote. */
     const selectedVisible = React.useMemo(
-        () => selectableVisible.filter(o => selectedIds.has(o.id)),
-        [selectableVisible, selectedIds],
+        () => filteredOrders.filter(o => canDeleteOrder(o.status) && selectedIds.has(o.id)),
+        [filteredOrders, selectedIds],
     );
-    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+    const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every(o => selectedIds.has(o.id));
 
     function toggleRow(id: string) {
         setSelectedIds(prev => {
@@ -395,7 +451,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     function handleRowCheck(id: string, index: number, shiftKey: boolean) {
         if (shiftKey && lastCheckedIndex !== null) {
             const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
-            const rangeIds = filteredOrders.slice(start, end + 1)
+            const rangeIds = linhasNaTela.slice(start, end + 1)
                 .filter(o => canDeleteOrder(o.status))
                 .map(o => o.id);
             setSelectedIds(prev => new Set([...prev, ...rangeIds]));
@@ -557,6 +613,19 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
 
+                {/* Agrupar — guia de UI §6.12. Só no modo lista. */}
+                {viewMode === 'list' && (
+                    <AgruparControles
+                        opcoes={OPCOES_AGRUPAR}
+                        campo={groupBy}
+                        onCampo={agrupamento.setCampo}
+                        chavesDosGrupos={grupos.map(g => g.key)}
+                        algumRecolhido={agrupamento.recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar os pedidos"
+                    />
+                )}
+
                 <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
@@ -692,7 +761,15 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredOrders.map((order, rowIndex) => (
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={1 + tableColumns.orderedVisibleColumns.filter(k => k !== 'actions').length + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0)}
+                                            onAlternar={agrupamento.alternar} tituloTotal="Soma do valor total dos pedidos do grupo" />
+                                    );
+                                    const order = e.item;
+                                    const rowIndex = e.indice;
+                                    return (
                                     <tr
                                         key={order.id}
                                         className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedIds.has(order.id) ? 'bg-blue-50/60' : ''}`}
@@ -758,7 +835,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                             </td>
                                         )}
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                         </div>

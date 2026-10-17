@@ -12,6 +12,9 @@ import { KpiCard } from './ui/KpiCard';
 import TabsBar, { TabsBarItem } from './ui/TabsBar';
 import { useToast } from '../hooks/useToast';
 import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
+import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -47,6 +50,19 @@ const RECEIPT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
     status: { label: 'Status Logístico', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     date: { label: 'Previsão', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
+
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+// A tabela não tem coluna de valor: o cabeçalho do grupo mostra só a contagem.
+type CampoAgrupar = 'status' | 'fornecedor' | 'obra' | 'empreendimento' | 'previsao';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'status', label: 'Status logístico' },
+    { value: 'fornecedor', label: 'Fornecedor' },
+    { value: 'obra', label: 'Obra' },
+    { value: 'empreendimento', label: 'Empreendimento' },
+    { value: 'previsao', label: 'Previsão (mês)' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = { status: 'Sem status', fornecedor: 'Sem fornecedor', obra: 'Sem obra', empreendimento: 'Sem empreendimento', previsao: 'Sem previsão' };
+const ORDEM_STATUS_LOGISTICO = ['confirmado', 'separação', 'em trânsito', 'entregue', 'recebido', 'divergência'];
 
 // Badge de status — sem estado próprio, movida para escopo de módulo para poder
 // ser usada dentro de renderReceiptCell (função pura, fora do componente).
@@ -119,6 +135,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
     const [loading, setLoading] = React.useState(true);
     const [searchTerm, setSearchTerm] = usePersistedState<string>('supplyChainReceiptFilters:search', '');
     const [filterStatus, setFilterStatus] = usePersistedState<ReceiptTab>('supplyChainReceiptFilters:status', 'all');
+    const agrupamento = useAgrupamento<CampoAgrupar>('supplyChainReceiptFilters:groupBy');
     const [selectedOrder, setSelectedOrder] = React.useState<PurchaseOrder | null>(null);
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
     const { localToast, showToast } = useToast();
@@ -219,6 +236,30 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
             });
     }, [orders, searchTerm, filterStatus, tableColumns.sortColumn, tableColumns.sortDirection, empreendimentoByProject]);
 
+    const groupBy = agrupamento.campo;
+    const agrupando = groupBy !== 'none';
+    const grupos = React.useMemo(() => {
+        if (groupBy === 'none') return [];
+        const chave = (o: PurchaseOrder): ChaveDeGrupo => {
+            switch (groupBy) {
+                case 'status': return chavePorNome(o.status);
+                case 'fornecedor': return chavePorNome(o.supplierName);
+                case 'obra': return chavePorNome(o.projectClassification === 'ORCAMENTO' ? o.linkedProjectName : o.projectName);
+                case 'empreendimento': return chavePorNome(resolveOrderEmpreendimento(o, empreendimentoByProject)?.name);
+                case 'previsao': return chavePorMes(o.deliveryDate);
+            }
+        };
+        return agruparLinhas(filteredOrders, {
+            chave,
+            semRotulo: SEM_GRUPO[groupBy],
+            ordem: groupBy === 'status' ? ORDEM_STATUS_LOGISTICO : groupBy === 'previsao' ? 'chave' : 'aparicao',
+        });
+    }, [groupBy, filteredOrders, empreendimentoByProject]);
+    const entradas: EntradaDaTela<PurchaseOrder>[] = React.useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredOrders.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, filteredOrders],
+    );
+
     // Contadores das abas — sobre a lista completa (não a filtrada), para a aba
     // inativa dizer quantos itens tem antes do clique.
     const receiptTabs: TabsBarItem<ReceiptTab>[] = [
@@ -271,6 +312,17 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                 >
                     <RefreshCw className="w-4 h-4" />
                 </button>
+
+                {/* Agrupar — guia de UI §6.12 */}
+                <AgruparControles
+                    opcoes={OPCOES_AGRUPAR}
+                    campo={groupBy}
+                    onCampo={agrupamento.setCampo}
+                    chavesDosGrupos={grupos.map(g => g.key)}
+                    algumRecolhido={agrupamento.recolhidos.size > 0}
+                    onAlternarTodos={agrupamento.alternarTodos}
+                    title="Agrupar os recebimentos"
+                />
 
                 <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
@@ -343,7 +395,14 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {filteredOrders.map(order => (
+                            {entradas.map(e => {
+                                if (e.tipo === 'grupo') return (
+                                    <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                        colSpan={tableColumns.orderedVisibleColumns.filter(k => k !== 'actions').length + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0)}
+                                        onAlternar={agrupamento.alternar} semTotal />
+                                );
+                                const order = e.item;
+                                return (
                                 <tr
                                     key={order.id}
                                     className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
@@ -393,7 +452,8 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                                         </td>
                                     )}
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                     </div>

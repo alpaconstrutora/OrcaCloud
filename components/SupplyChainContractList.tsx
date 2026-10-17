@@ -21,6 +21,9 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
@@ -59,6 +62,14 @@ const CONTRACT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
     costCenter: { label: 'Centro de Custo', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     planoContas: { label: 'Plano de Contas', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
 };
+
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+type CampoAgrupar = 'obra' | 'empreendimento' | 'parte' | 'status' | 'inicio' | 'centro_custo' | 'plano_contas';
+const SEM_GRUPO: Record<CampoAgrupar, string> = {
+    obra: 'Sem obra', empreendimento: 'Sem empreendimento', parte: 'Sem contratada/contratante', status: 'Sem status',
+    inicio: 'Sem data de início', centro_custo: 'Sem centro de custo', plano_contas: 'Sem plano de contas',
+};
+const ORDEM_STATUS_CONTRATO = ['Rascunho', 'Minuta', 'Ativo', 'Suspenso', 'Encerrado', 'Cancelado'];
 
 // Explicação do "—" quando o contrato TEM project_id mas ele não é uma obra
 // visível nesta organização. Ver o comentário do case 'project'.
@@ -219,6 +230,8 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     const [searchTerm, setSearchTerm] = usePersistedState('supplyChainContractFilters:search', '');
     const [statusFilter, setStatusFilter] = usePersistedState('supplyChainContractFilters:status', 'all');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainContractFilters:viewMode', 'list');
+    // O mesmo componente serve Suprimentos, Serviços, Locação e Vendas: cada domínio guarda o seu agrupamento.
+    const agrupamento = useAgrupamento<CampoAgrupar>(`supplyChainContractFilters:groupBy:${domain ?? 'SUPRIMENTOS'}:${direction}`);
     const [localShowAll, setLocalShowAll] = React.useState(true);
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainContractColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'supplyChainContractColWidths');
@@ -355,6 +368,43 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             });
     }, [contracts, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, statusFilter, supplierMap, projectMap, empreendimentoByProject, empreendimentoById, costCenterMap, planoContasMap]);
 
+    // "Agrupar" só no modo lista (a grade não tem linha de grupo).
+    const groupBy = agrupamento.campo;
+    const agrupando = viewMode === 'list' && groupBy !== 'none';
+    const opcoesAgrupar: { value: CampoAgrupar; label: string }[] = [
+        { value: 'status', label: 'Status' },
+        { value: 'parte', label: direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor' },
+        { value: 'obra', label: 'Obra' },
+        { value: 'empreendimento', label: 'Empreendimento' },
+        { value: 'inicio', label: 'Início da vigência (mês)' },
+        { value: 'centro_custo', label: 'Centro de Custo' },
+        { value: 'plano_contas', label: 'Plano de Contas' },
+    ];
+    const grupos = React.useMemo(() => {
+        if (groupBy === 'none') return [];
+        const chave = (c: Contract): ChaveDeGrupo => {
+            switch (groupBy) {
+                case 'obra': return chavePorNome(c.project_id ? projectMap[c.project_id] : null);
+                case 'empreendimento': return chavePorNome((c.empreendimento_id ? empreendimentoById[c.empreendimento_id]?.name : undefined) ?? (c.project_id ? empreendimentoByProject[c.project_id]?.name : undefined));
+                case 'parte': return chavePorNome(direction === 'OUTGOING' ? (c.client_id ? clientMap[c.client_id] : null) : (c.supplier_id ? supplierMap[c.supplier_id] : null));
+                case 'status': return chavePorNome(c.status);
+                case 'inicio': return chavePorMes(c.start_date);
+                case 'centro_custo': return chavePorNome(c.cost_center_id ? costCenterMap[c.cost_center_id] : null);
+                case 'plano_contas': return chavePorNome(c.plano_de_contas_id ? planoContasMap[c.plano_de_contas_id] : null);
+            }
+        };
+        return agruparLinhas(filteredContracts, {
+            chave,
+            semRotulo: SEM_GRUPO[groupBy],
+            valor: c => c.current_value,
+            ordem: groupBy === 'status' ? ORDEM_STATUS_CONTRATO.map(s => s.toLowerCase()) : groupBy === 'inicio' ? 'chave' : 'aparicao',
+        });
+    }, [groupBy, filteredContracts, direction, projectMap, empreendimentoById, empreendimentoByProject, clientMap, supplierMap, costCenterMap, planoContasMap]);
+    const entradas: EntradaDaTela<Contract>[] = React.useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredContracts.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, filteredContracts],
+    );
+
     // Dashboard data
     const stats = {
         total: contracts.length,
@@ -453,6 +503,19 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     <option value="Encerrado">Encerrado</option>
                     <option value="Cancelado">Cancelado</option>
                 </select>
+
+                {/* Agrupar — guia de UI §6.12. Só no modo lista. */}
+                {viewMode === 'list' && (
+                    <AgruparControles
+                        opcoes={opcoesAgrupar}
+                        campo={groupBy}
+                        onCampo={agrupamento.setCampo}
+                        chavesDosGrupos={grupos.map(g => g.key)}
+                        algumRecolhido={agrupamento.recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar os contratos"
+                    />
+                )}
 
                 <button
                     onClick={loadContracts}
@@ -643,7 +706,14 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredContracts.map((contract) => (
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={tableColumns.orderedVisibleColumns.filter(k => k !== 'actions').length + 2}
+                                            onAlternar={agrupamento.alternar} tituloTotal="Soma do valor atual dos contratos do grupo" />
+                                    );
+                                    const contract = e.item;
+                                    return (
                                     <tr
                                         key={contract.id}
                                         className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
@@ -675,7 +745,8 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

@@ -10,6 +10,9 @@ import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilter
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -78,6 +81,18 @@ const QUOTATION_COLUMN_HEADERS: Record<string, { label: string; sortable?: boole
 // Badge de status — sem estado próprio, movida para escopo de módulo para poder
 // ser usada dentro de renderQuotationCell (função pura, fora do componente) e
 // também na visão em blocos.
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+// Cotação não tem valor em dinheiro na tabela: o cabeçalho do grupo mostra só a contagem.
+type CampoAgrupar = 'obra' | 'empreendimento' | 'status' | 'prazo';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'status', label: 'Status' },
+    { value: 'obra', label: 'Obra' },
+    { value: 'empreendimento', label: 'Empreendimento' },
+    { value: 'prazo', label: 'Prazo final (mês)' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = { obra: 'Sem obra', empreendimento: 'Sem empreendimento', status: 'Sem status', prazo: 'Sem prazo' };
+const ORDEM_STATUS_COTACAO = ['aberta', 'em análise', 'concluída', 'cancelada'];
+
 const QuotationStatusBadge = ({ status }: { status: string }) => {
     const colors: Record<string, string> = {
         'Aberta': 'text-blue-700',
@@ -143,6 +158,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('supplyChainQuotationFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainQuotationFilters:viewMode', 'list');
+    const agrupamento = useAgrupamento<CampoAgrupar>('supplyChainQuotationFilters:groupBy');
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainQuotationColumns');
     const advancedFields = React.useMemo(() => buildAdvancedFilterFields(requests, empreendimentoByProject), [requests, empreendimentoByProject]);
     const advancedFilters = useAdvancedFilters(advancedFields, 'supplyChainQuotationFilters:advanced');
@@ -234,6 +250,30 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
         return filtered;
     }, [requests, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules, advancedFields, empreendimentoByProject]);
 
+    // "Agrupar" só no modo lista (a grade não tem linha de grupo).
+    const groupBy = agrupamento.campo;
+    const agrupando = viewMode === 'list' && groupBy !== 'none';
+    const grupos = React.useMemo(() => {
+        if (groupBy === 'none') return [];
+        const chave = (r: QuotationRequest): ChaveDeGrupo => {
+            switch (groupBy) {
+                case 'obra': return chavePorNome(r.projectName);
+                case 'empreendimento': return chavePorNome(r.projectId ? empreendimentoByProject[r.projectId]?.name : null);
+                case 'status': return chavePorNome(r.status);
+                case 'prazo': return chavePorMes(r.deadline);
+            }
+        };
+        return agruparLinhas(filteredRequests, {
+            chave,
+            semRotulo: SEM_GRUPO[groupBy],
+            ordem: groupBy === 'status' ? ORDEM_STATUS_COTACAO : groupBy === 'prazo' ? 'chave' : 'aparicao',
+        });
+    }, [groupBy, filteredRequests, empreendimentoByProject]);
+    const entradas: EntradaDaTela<QuotationRequest>[] = React.useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredRequests.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, filteredRequests],
+    );
+
     return (
         <div className="space-y-6">
             {/* Header — título à esquerda e, na mesma linha, na borda direita, a ação
@@ -288,6 +328,19 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                 <div className="flex items-center h-9">
                     <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
+
+                {/* Agrupar — guia de UI §6.12. Só no modo lista. */}
+                {viewMode === 'list' && (
+                    <AgruparControles
+                        opcoes={OPCOES_AGRUPAR}
+                        campo={groupBy}
+                        onCampo={agrupamento.setCampo}
+                        chavesDosGrupos={grupos.map(g => g.key)}
+                        algumRecolhido={agrupamento.recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar as cotações"
+                    />
+                )}
 
                 <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
@@ -385,7 +438,14 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredRequests.map(req => (
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={tableColumns.orderedVisibleColumns.filter(k => k !== 'actions').length + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0)}
+                                            onAlternar={agrupamento.alternar} semTotal />
+                                    );
+                                    const req = e.item;
+                                    return (
                                     <tr
                                         key={req.id}
                                         className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
@@ -428,7 +488,8 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                             </td>
                                         )}
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                         </div>

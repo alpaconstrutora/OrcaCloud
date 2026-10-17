@@ -1285,7 +1285,10 @@ a Pagar (Parcelas e Notas) e a fila de Aprovação Financeira
 (`docs/planos/2026-10-15-financeiro-agrupar-propagacao.md`). Em 17/10/2026 para Meus
 Fornecedores, Meus Clientes, Gestão de Ativos (Ativos Patrimoniais, Retirada,
 Manutenções), Gestão de Documentos e Ofícios (Ofícios, Recebidos, Modelos)
-(`docs/planos/2026-10-17-agrupar-cadastros-ativos-documentos.md`).
+(`docs/planos/2026-10-17-agrupar-cadastros-ativos-documentos.md`). E em Suprimentos:
+Contratos (o mesmo `SupplyChainContractList` serve Serviços/Locação/Vendas — a
+escolha fica guardada por domínio), Cotações, Pedidos, Recebimento e Almoxarifado
+(Saldos, Movimentos, Itens) (`docs/planos/2026-10-17-suprimentos-agrupar.md`).
 
 **Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
 clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com

@@ -58,6 +58,9 @@ import type {
     CreateMaterialRequestInput,
 } from '../types/inventory';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 const StatusBadge = ({ status, label }: { status: 'success'|'danger'|'warning'|'info', label: string }) => {
     const colors = {
@@ -339,6 +342,23 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
     );
 };
 
+// "Agrupar" das abas Saldos e Movimentos — guia de UI §6.12. Chave = o MESMO texto
+// que a coluna mostra. Posição Líquida e Lead Time são cálculos (relatório) e
+// Transferências/Almoxarifados/Requisições são cartões: ficam fora.
+type CampoAgruparSaldos = 'almoxarifado' | 'insumo';
+const OPCOES_AGRUPAR_SALDOS: { value: CampoAgruparSaldos; label: string }[] = [
+    { value: 'almoxarifado', label: 'Almoxarifado' },
+    { value: 'insumo', label: 'Insumo' },
+];
+type CampoAgruparMovimentos = 'tipo' | 'almoxarifado' | 'insumo' | 'mes';
+const OPCOES_AGRUPAR_MOVIMENTOS: { value: CampoAgruparMovimentos; label: string }[] = [
+    { value: 'tipo', label: 'Tipo' },
+    { value: 'almoxarifado', label: 'Almoxarifado' },
+    { value: 'insumo', label: 'Insumo' },
+    { value: 'mes', label: 'Data (mês)' },
+];
+const TIPO_MOVIMENTO: Record<string, string> = { in: 'Entrada', out: 'Saída', adjust: 'Ajuste', transfer_in: 'Transf. In', transfer_out: 'Transf. Out' };
+
 // ─── Configuração de Colunas ─────────────────────────────────────────────────────
 
 const COLUMNS_SALDOS: ColumnConfig[] = [
@@ -504,6 +524,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const tableSaldos = useTableColumns(COLUMNS_SALDOS, 'inventory-saldos-cols');
     const tableMovimentos = useTableColumns(COLUMNS_MOVIMENTOS, 'inventory-movimentos-cols');
     const tableItems = useTableColumns(STOCK_ITEMS_COLUMNS, 'inventory-itens-cols');
+    const agruparSaldos = useAgrupamento<CampoAgruparSaldos>('inventory-saldos:groupBy');
+    const agruparMovimentos = useAgrupamento<CampoAgruparMovimentos>('inventory-movimentos:groupBy');
 
     // View modes
     const [viewMode, setViewMode] = usePersistedState<'list'|'grid'>('inventory-view-mode', 'list');
@@ -580,6 +602,24 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
         !searchTerm || b.inputDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
         b.inputCode?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    const gruposSaldos = agruparSaldos.campo === 'none' ? [] : agruparLinhas(filteredBalances, {
+        chave: b => chavePorNome(agruparSaldos.campo === 'almoxarifado' ? b.warehouseName : b.inputDescription),
+        semRotulo: agruparSaldos.campo === 'almoxarifado' ? 'Sem almoxarifado' : 'Sem insumo',
+        valor: b => b.totalValue,
+    });
+    const gruposMovimentos = agruparMovimentos.campo === 'none' ? [] : agruparLinhas(filteredMovements, {
+        chave: (m): ChaveDeGrupo => {
+            switch (agruparMovimentos.campo) {
+                case 'tipo': return chavePorRotulo(m.type, TIPO_MOVIMENTO);
+                case 'almoxarifado': return chavePorNome(m.warehouseName);
+                case 'insumo': return chavePorNome(m.inputDescription);
+                default: return chavePorMes(m.movedAt);
+            }
+        },
+        semRotulo: agruparMovimentos.campo === 'mes' ? 'Sem data' : agruparMovimentos.campo === 'tipo' ? 'Sem tipo' : agruparMovimentos.campo === 'almoxarifado' ? 'Sem almoxarifado' : 'Sem insumo',
+        valor: m => m.totalCost,
+        ordem: agruparMovimentos.campo === 'mes' ? 'chave' : agruparMovimentos.campo === 'tipo' ? Object.keys(TIPO_MOVIMENTO) : 'aparicao',
+    });
     const filteredStockItems = stockItems.filter(i =>
         !searchTerm || i.inputDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
         i.inputCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -698,6 +738,29 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                 </div>
 
                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    {/* Agrupar — guia de UI §6.12, por aba (cada uma guarda a sua escolha). */}
+                    {tab === 'saldos' && (
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR_SALDOS}
+                            campo={agruparSaldos.campo}
+                            onCampo={agruparSaldos.setCampo}
+                            chavesDosGrupos={gruposSaldos.map(g => g.key)}
+                            algumRecolhido={agruparSaldos.recolhidos.size > 0}
+                            onAlternarTodos={agruparSaldos.alternarTodos}
+                            title="Agrupar os saldos"
+                        />
+                    )}
+                    {tab === 'movimentos' && (
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR_MOVIMENTOS}
+                            campo={agruparMovimentos.campo}
+                            onCampo={agruparMovimentos.setCampo}
+                            chavesDosGrupos={gruposMovimentos.map(g => g.key)}
+                            algumRecolhido={agruparMovimentos.recolhidos.size > 0}
+                            onAlternarTodos={agruparMovimentos.alternarTodos}
+                            title="Agrupar os movimentos"
+                        />
+                    )}
                     {tab === 'saldos' && <ColumnConfigButton columns={COLUMNS_SALDOS} visibleColumns={tableSaldos.visibleColumns} showColumnConfig={tableSaldos.showColumnConfig} onToggleShow={() => tableSaldos.setShowColumnConfig(!tableSaldos.showColumnConfig)} onToggleColumn={tableSaldos.toggleColumn} onReset={tableSaldos.resetColumns} />}
                     {tab === 'movimentos' && <ColumnConfigButton columns={COLUMNS_MOVIMENTOS} visibleColumns={tableMovimentos.visibleColumns} showColumnConfig={tableMovimentos.showColumnConfig} onToggleShow={() => tableMovimentos.setShowColumnConfig(!tableMovimentos.showColumnConfig)} onToggleColumn={tableMovimentos.toggleColumn} onReset={tableMovimentos.resetColumns} />}
                     {tab === 'itens' && <ColumnConfigButton columns={STOCK_ITEMS_COLUMNS} visibleColumns={tableItems.visibleColumns} showColumnConfig={tableItems.showColumnConfig} onToggleShow={() => tableItems.setShowColumnConfig(!tableItems.showColumnConfig)} onToggleColumn={tableItems.toggleColumn} onReset={tableItems.resetColumns} />}
@@ -755,7 +818,17 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
-                                            {filteredBalances.map((b, i) => (
+                                            {(agruparSaldos.agrupando
+                                                ? entradasDaPagina(gruposSaldos, agruparSaldos.recolhidos)
+                                                : filteredBalances.map((item, indice): EntradaDaTela<typeof item> => ({ tipo: 'linha', item, indice }))
+                                            ).map(e => {
+                                                if (e.tipo === 'grupo') return (
+                                                    <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                                        colSpan={tableSaldos.orderedVisibleColumns.filter(k => SALDOS_COLUMN_HEADERS[k]).length}
+                                                        onAlternar={agruparSaldos.alternar} tituloTotal="Soma do valor total em estoque do grupo" />
+                                                );
+                                                const b = e.item;
+                                                return (
                                                 <tr
                                                     key={`${b.warehouseId}-${b.inputCode}`}
                                                     className="group hover:bg-gray-50/50 transition-colors"
@@ -766,7 +839,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                         </td>
                                                     ))}
                                                 </tr>
-                                            ))}
+                                                );
+                                            })}
                                         </tbody>
                                         <tfoot>
                                             <tr className="border-t border-gray-100 bg-gray-50/80">
@@ -978,7 +1052,16 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
-                                            {filteredMovements.map(m => {
+                                            {(agruparMovimentos.agrupando
+                                                ? entradasDaPagina(gruposMovimentos, agruparMovimentos.recolhidos)
+                                                : filteredMovements.map((item, indice): EntradaDaTela<typeof item> => ({ tipo: 'linha', item, indice }))
+                                            ).map(e => {
+                                                if (e.tipo === 'grupo') return (
+                                                    <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                                        colSpan={tableMovimentos.orderedVisibleColumns.filter(k => MOVIMENTOS_COLUMN_HEADERS[k]).length}
+                                                        onAlternar={agruparMovimentos.alternar} tituloTotal="Soma do valor dos movimentos do grupo" />
+                                                );
+                                                const m = e.item;
                                                 const isIn = m.type === 'in' || m.type === 'transfer_in';
                                                 const typeLabel: Record<string, string> = {
                                                     in: 'Entrada', out: 'Saída', adjust: 'Ajuste',

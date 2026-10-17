@@ -10,6 +10,9 @@ import { useConfirm } from '../ui/confirm';
 import { useTableColumns, SortableHeader, ColumnConfig } from '../ui/TableUtils';
 import { inventoryService } from '../../services/inventoryService';
 import type { StockItem, StockItemSource } from '../../types/inventory';
+import { agruparLinhas, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../../utils/agruparLinhas';
+import { useAgrupamento } from '../../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from '../ui/Agrupamento';
 
 export const STOCK_ITEMS_COLUMNS: ColumnConfig[] = [
     { key: 'inputCode', label: 'Código', sortable: true },
@@ -36,6 +39,20 @@ const SOURCE_LABELS: Record<StockItemSource, string> = {
 /** "Marca Modelo" do item — o texto que o banco espelha do catálogo. */
 export const marcaModelo = (i: Pick<StockItem, 'brand' | 'model'>) => [i.brand, i.model].filter(v => v && v.trim()).join(' ');
 
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra. Catálogo
+// sem valor em dinheiro: o cabeçalho do grupo mostra só a contagem.
+type CampoAgrupar = 'categoria' | 'marca_modelo' | 'fornecedor' | 'origem' | 'situacao';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'categoria', label: 'Categoria' },
+    { value: 'marca_modelo', label: 'Marca / modelo' },
+    { value: 'fornecedor', label: 'Fornecedor padrão' },
+    { value: 'origem', label: 'Origem' },
+    { value: 'situacao', label: 'Situação' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = {
+    categoria: 'Sem categoria', marca_modelo: 'Sem marca / modelo', fornecedor: 'Sem fornecedor padrão', origem: 'Sem origem', situacao: 'Sem situação',
+};
+
 interface Props {
     items: StockItem[];
     tableItems: ReturnType<typeof useTableColumns>;
@@ -51,6 +68,7 @@ interface Props {
 
 const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onImport, onChanged, assetLinks, onPatrimoniar }) => {
     const confirm = useConfirm();
+    const agrupamento = useAgrupamento<CampoAgrupar>('inventory-itens:groupBy');
 
     const sorted = React.useMemo(() => {
         if (!tableItems.sortColumn) return items;
@@ -63,6 +81,26 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
             return av.localeCompare(bv) * dir;
         });
     }, [items, tableItems.sortColumn, tableItems.sortDirection]);
+
+    const groupBy = agrupamento.campo;
+    const grupos = React.useMemo(() => {
+        if (groupBy === 'none') return [];
+        const chave = (i: StockItem): ChaveDeGrupo => {
+            switch (groupBy) {
+                case 'categoria': return chavePorNome(i.category);
+                case 'marca_modelo': return chavePorNome(marcaModelo(i));
+                case 'fornecedor': return chavePorNome(i.defaultSupplierName);
+                // Mesma regra da célula: item que é ativo aparece como "Ativo patrimonial".
+                case 'origem': return chavePorNome(assetLinks?.get(i.id) ? 'Ativo patrimonial' : i.source ? SOURCE_LABELS[i.source] : null);
+                case 'situacao': return i.isActive ? { key: 'ativo', label: 'Ativo' } : { key: 'inativo', label: 'Inativo' };
+            }
+        };
+        return agruparLinhas(sorted, { chave, semRotulo: SEM_GRUPO[groupBy], ordem: groupBy === 'situacao' ? ['ativo', 'inativo'] : 'aparicao' });
+    }, [groupBy, sorted, assetLinks]);
+    const entradas: EntradaDaTela<StockItem>[] = React.useMemo(
+        () => (groupBy !== 'none' ? entradasDaPagina(grupos, agrupamento.recolhidos) : sorted.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [groupBy, grupos, agrupamento.recolhidos, sorted],
+    );
 
     const handleToggleActive = async (item: StockItem) => {
         if (item.isActive) {
@@ -86,6 +124,16 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
                     <p className="text-xs text-gray-500 mt-1">Cadastro mestre de insumos usado por Entrada, Saída, Transferência e Requisições.</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Agrupar — guia de UI §6.12 */}
+                    <AgruparControles
+                        opcoes={OPCOES_AGRUPAR}
+                        campo={groupBy}
+                        onCampo={agrupamento.setCampo}
+                        chavesDosGrupos={grupos.map(g => g.key)}
+                        algumRecolhido={agrupamento.recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar os itens"
+                    />
                     <button
                         onClick={onImport}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95"
@@ -136,7 +184,14 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {sorted.map(item => (
+                            {entradas.map(e => {
+                                if (e.tipo === 'grupo') return (
+                                    <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                        colSpan={tableItems.orderedVisibleColumns.filter(k => STOCK_ITEMS_COLUMNS.some(c => c.key === k)).length}
+                                        onAlternar={agrupamento.alternar} semTotal />
+                                );
+                                const item = e.item;
+                                return (
                                 <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
                                     {tableItems.orderedVisibleColumns.map(key => {
                                         const ativo = assetLinks?.get(item.id);
@@ -209,7 +264,8 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
                                         return null;
                                     })}
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

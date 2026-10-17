@@ -1029,3 +1029,19 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     expect((r.trechos ?? []).some((t) => t.disciplina === 'AGUA_FRIA' && t.cotaAMm === 2200 && t.cotaBMm === 2200)).toBe(true);
   });
 });
+
+/**
+ * F21 (17/10/2026): a casa no lote 14 × 28 R1-A tinha um "Ambiente N" de 5 cm² — duas paredes desalinhadas em 5 cm, uma
+ * de cada lado de uma terceira (luz sem interruptor, laje < 0,5 m², luz dentro do pilar). O gerador alinha as bordas.
+ */
+describe('F21 — nenhuma sobra de cômodo (lote 14 × 28, R1-A)', () => {
+  it('todo cômodo do resultado tem nome', () => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = base.levels[0].id;
+    const d = (a: Point, b: Point, papel: Papel): Command => ({ type: 'AddBoundary', levelId, a, b, kind: 'TERRENO', papel });
+    const m = applyBatch(base, [d(point(0, 0), point(14000, 0), 'FRENTE'), d(point(14000, 0), point(14000, 28000), 'LATERAL_DIREITA'), d(point(14000, 28000), point(0, 28000), 'FUNDOS'), d(point(0, 28000), point(0, 0), 'LATERAL_ESQUERDA')]).model;
+    const plano = planejarCasa(m, entrada(m, { curto: { ...PROGRAMA_CURTO_PADRAO, padrao: 'R1-A' } }));
+    expect(plano.resultado.spaces.filter((s) => !(s.name ?? '').trim()).map((s) => s.ring)).toEqual([]);
+    expect(plano.pendencias.filter((p) => /Ambiente \d+|menos de 0,5 m²/.test(p.texto)).map((p) => p.texto)).toEqual([]);
+  });
+});

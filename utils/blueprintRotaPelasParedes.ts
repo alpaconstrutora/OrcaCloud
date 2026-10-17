@@ -94,13 +94,23 @@ export function paredesEmComum(paredes: readonly Wall[], outros: readonly (reado
   return saida;
 }
 
-export function encaixarNaParede(p: P2, paredes: readonly Wall[], raio: number): { parede: Wall; q: P2; d: number } | null {
-  let melhor: { parede: Wall; q: P2; d: number } | null = null;
+export function encaixarNaParede(p: P2, paredes: readonly Wall[], raio: number, preferirNoComprimento = false): { parede: Wall; q: P2; d: number } | null {
+  // F20 da casa automática (17/10/2026): com `preferirNoComprimento`, a parede em que `p` cai DENTRO do comprimento vale
+  // antes da que só alcança pela PONTA (a projeção presa nela) — a bancada que passava do fim de uma parede encostava na
+  // quina dela, e a fria e a quente da pia iam para o canto, a 1,5 cm uma da outra (sobrado). Só para a FACE da louça
+  // (`faceDaParede`): no anel do forro, que contorna o pilar, o segmento "no comprimento" fica longe e a descida voltava
+  // por dentro do pilar (R1-A).
+  let melhor: { parede: Wall; q: P2; d: number; dentro: boolean } | null = null;
   for (const w of paredes) {
     const r = projetar(p, w.a, w.b);
-    if (r.d <= raio && (!melhor || r.d < melhor.d || (r.d === melhor.d && w.id < melhor.parede.id))) melhor = { parede: w, q: r.q, d: r.d };
+    if (r.d > raio) continue;
+    const L2 = (w.b.x - w.a.x) ** 2 + (w.b.y - w.a.y) ** 2;
+    const t = L2 < 1 ? -1 : ((p.x - w.a.x) * (w.b.x - w.a.x) + (p.y - w.a.y) * (w.b.y - w.a.y)) / L2;
+    const dentro = preferirNoComprimento && t >= 0 && t <= 1;
+    const melhorQue = !melhor || (dentro && !melhor.dentro) || (dentro === melhor.dentro && (r.d < melhor.d || (r.d === melhor.d && w.id < melhor.parede.id)));
+    if (melhorQue) melhor = { parede: w, q: r.q, d: r.d, dentro };
   }
-  return melhor;
+  return melhor ? { parede: melhor.parede, q: melhor.q, d: melhor.d } : null;
 }
 
 export function arvorePelasParedes(opts: {
@@ -329,13 +339,13 @@ export function arvorePelasParedes(opts: {
  * `mover` diz se `p` está solto no cômodo (além da face). `null`: sem parede a
  * menos de `raio`.
  */
-export function faceDaParede(p: P2, paredes: readonly Wall[], raio: number): { q: P2; face: P2; mover: boolean } | null {
-  const e = encaixarNaParede(p, paredes, raio);
+export function faceDaParede(p: P2, paredes: readonly Wall[], raio: number): { q: P2; face: P2; mover: boolean; parede: Wall } | null {
+  const e = encaixarNaParede(p, paredes, raio, true);
   if (!e) return null;
   const meia = e.parede.thicknessMm / 2;
-  if (e.d <= meia + 1) return { q: e.q, face: { x: p.x, y: p.y }, mover: false };
+  if (e.d <= meia + 1) return { q: e.q, face: { x: p.x, y: p.y }, mover: false, parede: e.parede };
   const ux = (p.x - e.q.x) / e.d;
   const uy = (p.y - e.q.y) / e.d;
-  return { q: e.q, face: { x: Math.round(e.q.x + ux * meia), y: Math.round(e.q.y + uy * meia) }, mover: true };
+  return { q: e.q, face: { x: Math.round(e.q.x + ux * meia), y: Math.round(e.q.y + uy * meia) }, mover: true, parede: e.parede };
 }
 

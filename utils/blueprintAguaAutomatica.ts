@@ -65,7 +65,7 @@ import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidrauli
 import { FAIXA_NO_SHAFT, shaftPreferido } from './blueprintNucleoVertical';
 import { arvorePelasParedes, chaveP, encaixarNaParede, faceDaParede, paredesEmComum } from './blueprintRotaPelasParedes';
 import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, type FaixaDoForro } from './blueprintRotaPeloForro';
-import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, SOBRE_A_LAJE_MM, VAO_MINIMO_ABAIXO_DA_VIGA_MM, anelDoPilar, desvioDoPilar, foraDaViga, foraDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares, topoDaLajeDoTetoMm } from './blueprintObstaculosEstruturais';
+import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, SOBRE_A_LAJE_MM, VAO_MINIMO_ABAIXO_DA_VIGA_MM, anelDoPilar, desvioDoPilar, fracaoDentro, foraDaViga, foraDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares, topoDaLajeDoTetoMm } from './blueprintObstaculosEstruturais';
 
 /**
  * A tabela de DN do lançamento é a do MATERIAL (E1.1): uma fonte só para o
@@ -495,7 +495,14 @@ export function planejarAgua(
   // NÚCLEO VERTICAL (E2.4): o grupo perto de um shaft sobe por ele.
   const posicaoDaColuna = (grupo: Terminal[]): Ponto2 => {
     const base = { x: grupo[0].at.x, y: grupo[0].at.y };
-    const shaft = shaftPreferido(model, base, grupo[0].levelId, hip.raioDoShaftMm ?? 3000);
+    // F20 da casa automática (17/10/2026): o shaft é para a coluna que ATRAVESSA pavimentos — o grupo no pavimento da
+    // origem com o barrilete no forro não sobe por ele (a pia da cozinha ia para o shaft da área de serviço, a 1,7 m e
+    // do outro lado da parede: o barrilete chegava lá e a descida saía da cozinha — ponta aberta, sobrado).
+    const mesmoPavimentoNoForro = origemNoForro && grupo.every((p) => p.levelId === origem.levelId);
+    const shaftAchado = mesmoPavimentoNoForro ? null : shaftPreferido(model, base, grupo[0].levelId, hip.raioDoShaftMm ?? 3000);
+    // F21: nem o shaft do outro lado de um PILAR — a descida voltava do shaft ao ponto por dentro da parede, atravessando
+    // o pilar (R1-A, 15 × 30 4 dorm., 10 × 30 4 dorm.).
+    const shaft = shaftAchado && fracaoDentro(shaftAchado, base, pilaresDaPrumada) > 0 ? null : shaftAchado;
     if (shaft && !sobRebaixo(shaft)) return faixa ? { x: Math.round(shaft.x + faixa.x * FAIXA_NO_SHAFT), y: Math.round(shaft.y + faixa.y * FAIXA_NO_SHAFT) } : shaft;
     // PELAS PAREDES: a coluna desce no EIXO da parede mais próxima, não na face. A que ATRAVESSA pavimentos
     // (a caixa num, o ponto noutro) procura antes a parede que existe em todos eles — senão sobe pelo meio do
@@ -512,7 +519,7 @@ export function planejarAgua(
     // O escorregão pela parede INTEIRA (o pedaço em comum com os outros pavimentos pode ser curto demais para sair do vão).
     const paredeInteira = naParede ? (paredesDe(grupo[0].levelId).find((w) => w.id === naParede.parede.id) ?? naParede.parede) : null;
     const obstaculos = [...pilaresDaPrumada, ...rebaixos, ...vaosDaPrumada, ...prumadasDaOutraAgua];
-    let noEixo = naParede && paredeInteira ? foraDoPilar(naParede.q, paredeInteira, obstaculos) : base;
+    let noEixo = naParede && paredeInteira ? foraDoPilar(naParede.q, paredeInteira, obstaculos, pilaresDaPrumada) : base;
     // F8b: e a que desceria DENTRO da viga que corre sobre a parede desce rente a ela, do lado do grupo.
     const cx = grupo.reduce((s, p) => s + p.at.x, 0) / grupo.length;
     const cy = grupo.reduce((s, p) => s + p.at.y, 0) / grupo.length;
@@ -523,7 +530,7 @@ export function planejarAgua(
     for (let i = 0; i < 3 && naParede && paredeInteira && naOutraAgua(pos); i++) {
       const h = Math.ceil(RAIO_NA_DESCIDA_MM * 2 + (hip.afastamentoEntreColunasMm ?? AFASTAMENTO_ENTRE_COLUNAS_MM));
       obstaculos.push([{ x: noEixo.x - h, y: noEixo.y - h }, { x: noEixo.x + h, y: noEixo.y - h }, { x: noEixo.x + h, y: noEixo.y + h }, { x: noEixo.x - h, y: noEixo.y + h }] as Point[]);
-      noEixo = foraDoPilar(noEixo, paredeInteira, obstaculos);
+      noEixo = foraDoPilar(noEixo, paredeInteira, obstaculos, pilaresDaPrumada);
       pos = foraDaViga(noEixo, vigasDaPrumada, { x: cx, y: cy }, pilaresDaPrumada);
     }
     // Sem lugar livre na parede (as duas escorregavam até a mesma ponta dela), a quente fica na FAIXA dela, ao lado da
@@ -540,7 +547,16 @@ export function planejarAgua(
   const posicaoFinal = (grupo: Terminal[]): Ponto2 => {
     const pos = posicaoDaColuna(grupo);
     if (!origemNoForro || !grupo.every((p) => p.levelId === origem.levelId)) return pos;
-    const q = encaixarNaParede(pos, paredesDoRamal(origem.levelId).filter(encaixaNoAnel), raioDeEncaixe)?.q ?? pos;
+    // F20 da casa automática (17/10/2026): o anel do LADO do grupo — a coluna no eixo da parede fica a meia distância dos
+    // anéis dos dois cômodos, e o empate (pela ordem das paredes) levava a cabeça da pia da cozinha para o anel da área de
+    // serviço: o barrilete ia até lá e a descida saía do lado da cozinha (ponta aberta, sobrado).
+    const cx = grupo.reduce((s, p) => s + p.at.x, 0) / grupo.length;
+    const cy = grupo.reduce((s, p) => s + p.at.y, 0) / grupo.length;
+    const doAnel = paredesDoRamal(origem.levelId).filter(encaixaNoAnel);
+    const perto = encaixarNaParede(pos, doAnel, raioDeEncaixe);
+    const empatados = perto ? doAnel.map((w) => encaixarNaParede(pos, [w], raioDeEncaixe)).filter((e): e is NonNullable<typeof e> => !!e && e.d <= perto.d + 1) : [];
+    const doLado = empatados.sort((a, b) => Math.hypot(a.q.x - cx, a.q.y - cy) - Math.hypot(b.q.x - cx, b.q.y - cy))[0] ?? perto;
+    const q = doLado?.q ?? pos;
     cabecaSemAltura.add(chaveP(q));
     return cabecaNoAnel.get(chaveP(q)) ?? q;
   };

@@ -892,7 +892,7 @@ export function motivoParaNaoGerar(model: BlueprintModel, levelId: ObjectId | nu
 }
 
 /** Os avisos do E6.2 que tornam a planta pior que outra semente sem eles. */
-const GRAVE = /sem acesso|abaixo da área mínima|ficou sem lado externo|sem fachada|não coube/i;
+const GRAVE = /sem acesso|abaixo da área mínima|ficou sem lado externo|sem fachada|não coube|sem porta direta|só tem acesso passando/i;
 
 /**
  * Problemas graves de uma alternativa: os avisos acima + as regras de AMBIENTE de severidade ERRO
@@ -1203,6 +1203,17 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   // A CONFERÊNCIA e o plano — o fim comum da térrea e do sobrado. TO pela projeção; CA pela soma dos pavimentos.
   type ResumoDasDisciplinas = Omit<PlanoDaCasa['resumo'], 'areaConstruidaM2' | 'ambientesPedidos' | 'ambientesAtendidos' | 'regrasVioladas'>;
   const fechar = (f: { projecaoM2: number; areaConstruidaM2: number; alturaM: number; semente: number; escolha: string; sobrado: ResumoDoSobrado | null; disciplinas: ResumoDasDisciplinas }): PlanoDaCasa => {
+    // F21: o molhado sem lado externo que ganhou EXAUSTOR (a climatização lança onde não há janela) está resolvido pela
+    // ventilação mecânica — fica para conferir no código de obras, não "sem solução".
+    for (const pd of pendencias) {
+      const nome = /^Arquitetura: (.+) exige ventilação e ficou sem lado externo\.$/.exec(pd.texto)?.[1];
+      if (!nome) continue;
+      const sp = m.spaces.find((x) => x.name === nome);
+      if (sp && (m.terminais ?? []).some((t) => t.tipoHidraulico === 'EXAUSTOR_AR' && t.levelId === sp.levelId && pointInPolygon(sp.ring, t.at))) {
+        pd.grupo = 'CONFERIR';
+        pd.texto = `Arquitetura: ${nome} sem lado externo — ventilação por exaustor com duto até a fachada (confira no código de obras).`;
+      }
+    }
     const conferencia = conferirPrograma(m, programa);
     for (const it of conferencia.itens) {
       if (it.item.uso === 'CIRCULACAO' || it.faltam <= 0) continue;
@@ -2332,7 +2343,8 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   const paredes = m.walls.filter((w) => w.levelId === entrada.levelId).length;
   const aberturas = m.openings.filter((o) => m.walls.some((w) => w.id === o.wallId && w.levelId === entrada.levelId)).length;
   etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'LANCOU', n, `${paredes} paredes, ${aberturas} portas e janelas, ${r.ambientes.length} ambientes — ${escolha}`);
-  for (const a of r.avisos) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura: ${a}` });
+  // F21: "sem porta direta" já sai na CONFERÊNCIA do programa (com a distância em portas) — aqui só pesa na escolha.
+  for (const a of r.avisos) if (!/sem porta direta \(relação obrigatória\)/.test(a)) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura: ${a}` });
 
   // ── ESTRUTURA (F4) ────────────────────────────────────────────────────────
   etapaEstrutural(

@@ -972,6 +972,11 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   // anexo não é fachada (no desenho: S/N/L/O pela normal externa da borda).
   if (anexos.length) for (const a of ambientes) a.ladosExternos = [...new Set(ladosNaBorda(a.ret).map((x) => x.lado as LadoDaFrente))];
 
+  // F21 da casa automática (17/10/2026): bordas a menos de uma espessura de parede uma da outra viram UMA coordenada —
+  // duas paredes que se encontram desalinhadas em 5 cm (uma de cada lado de uma terceira) sobrepõem as faces, e o kernel
+  // fechava ali um "Ambiente N" de 5 cm² (sem nome, luz sem interruptor, laje < 0,5 m², luz no pilar).
+  alinharBordas(ambientes, contorno, hip.espessuraInternaMm);
+
   // (d) paredes.
   let model = emptyModel();
   const comandos: Command[] = [];
@@ -1139,6 +1144,14 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
         abrirPorta(a, b);
       }
   }
+  // F21: a relação obrigatória que ficou SEM porta direta é dita (a casa conta como problema grave ao escolher a semente).
+  for (const r of programa.relacoes) {
+    if (r.tipo !== 'OBRIGATORIA') continue;
+    const as = ambientes.filter((x) => x.item.id === r.a);
+    const bs = ambientes.filter((x) => x.item.id === r.b);
+    if (!as.length || !bs.length) continue;
+    if (!as.some((a) => bs.some((b) => portasFeitas.has([a.nome, b.nome].sort().join('|'))))) avisos.push(`${as[0].nome} × ${bs[0].nome}: sem porta direta (relação obrigatória).`);
+  }
   // Entrada: no lado da frente da sala (ou do corredor).
   // F11: o lado da FRENTE é o trecho do ambiente na borda do contorno que olha para a frente.
   const trechoDaFrente = (a: AmbienteGerado | null) =>
@@ -1304,6 +1317,42 @@ export function frenteDePareto(resultados: readonly ResultadoDoGerador[]): Set<n
     if (!dominado) front.add(a.semente);
   }
   return front;
+}
+
+/**
+ * F21: une as coordenadas x (e as y) das bordas dos retângulos que distam menos de `tolerancia` (a espessura da parede) —
+ * a do contorno vale (é a fachada); senão, a mais repetida (empate: a menor). Atualiza área e largura mínima.
+ */
+function alinharBordas(ambientes: AmbienteGerado[], contorno: readonly Point[], tolerancia: number): void {
+  const mapa = (valores: number[], ancoras: Set<number>): Map<number, number> => {
+    const conta = new Map<number, number>();
+    for (const v of valores) conta.set(v, (conta.get(v) ?? 0) + 1);
+    const distintos = [...conta.keys()].sort((a, b) => a - b);
+    const saida = new Map<number, number>();
+    let grupo: number[] = [];
+    const fechar = () => {
+      if (!grupo.length) return;
+      const ancora = grupo.find((v) => ancoras.has(v));
+      const rep = ancora ?? [...grupo].sort((a, b) => conta.get(b)! - conta.get(a)! || a - b)[0];
+      for (const v of grupo) saida.set(v, rep);
+      grupo = [];
+    };
+    for (const v of distintos) {
+      if (grupo.length && v - grupo[grupo.length - 1] >= tolerancia) fechar();
+      grupo.push(v);
+    }
+    fechar();
+    return saida;
+  };
+  const mx = mapa(ambientes.flatMap((a) => [a.ret.x0, a.ret.x1]), new Set(contorno.map((p) => p.x)));
+  const my = mapa(ambientes.flatMap((a) => [a.ret.y0, a.ret.y1]), new Set(contorno.map((p) => p.y)));
+  for (const a of ambientes) {
+    const r = { x0: mx.get(a.ret.x0) ?? a.ret.x0, y0: my.get(a.ret.y0) ?? a.ret.y0, x1: mx.get(a.ret.x1) ?? a.ret.x1, y1: my.get(a.ret.y1) ?? a.ret.y1 };
+    if (r.x1 - r.x0 < tolerancia || r.y1 - r.y0 < tolerancia) continue;
+    a.ret = r;
+    a.areaM2 = Math.round(((r.x1 - r.x0) * (r.y1 - r.y0)) / 10_000) / 100;
+    a.larguraMinM = Math.min(r.x1 - r.x0, r.y1 - r.y0) / 1000;
+  }
 }
 
 /**

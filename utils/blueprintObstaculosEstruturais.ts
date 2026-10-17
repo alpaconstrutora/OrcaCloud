@@ -75,21 +75,28 @@ export function custoComPilares(a: P2, b: P2, pegadas: readonly Point[][]): numb
  * dentro de um, escorrega pelo eixo — para o lado mais perto — até
  * `FOLGA_DO_PILAR_MM` além da face. Sem saída dentro da parede, fica onde está.
  */
-export function foraDoPilar(p: P2, w: Pick<Wall, 'a' | 'b'>, pegadas: readonly Point[][]): P2 {
+export function foraDoPilar(p: P2, w: Pick<Wall, 'a' | 'b'>, pegadas: readonly Point[][], semAtravessar: readonly Point[][] = []): P2 {
   if (!dentroDeAlguma(pegadas, p)) return p;
   const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
   if (L === 0) return p;
   const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
   const t0 = (p.x - w.a.x) * u.x + (p.y - w.a.y) * u.y;
   const em = (s: number) => ({ x: Math.round(w.a.x + u.x * s), y: Math.round(w.a.y + u.y * s) });
-  for (let d = 1; d <= L; d++) {
-    for (const s of [t0 - d, t0 + d]) {
-      if (s < 0 || s > L || dentroDeAlguma(pegadas, em(s))) continue;
-      const comFolga = Math.max(0, Math.min(L, s + (s < t0 ? -FOLGA_DO_PILAR_MM : FOLGA_DO_PILAR_MM)));
-      return dentroDeAlguma(pegadas, em(comFolga)) ? em(s) : em(comFolga);
+  // F21 da casa automática (17/10/2026): o escorregão não ATRAVESSA `semAtravessar` (os pilares) — do lado do ponto havia
+  // a prumada da outra água, e o primeiro lugar livre do outro lado ficava além do pilar: a coluna pulava o pilar e a
+  // descida voltava por dentro dele até o ponto (R1-A). Sem lugar assim, o de antes.
+  const buscar = (respeitar: boolean): P2 | null => {
+    for (let d = 1; d <= L; d++) {
+      for (const s of [t0 - d, t0 + d]) {
+        if (s < 0 || s > L || dentroDeAlguma(pegadas, em(s))) continue;
+        if (respeitar && semAtravessar.length && fracaoDentro(p, em(s), semAtravessar) > 0) continue;
+        const comFolga = Math.max(0, Math.min(L, s + (s < t0 ? -FOLGA_DO_PILAR_MM : FOLGA_DO_PILAR_MM)));
+        return dentroDeAlguma(pegadas, em(comFolga)) || (respeitar && semAtravessar.length && fracaoDentro(p, em(comFolga), semAtravessar) > 0) ? em(s) : em(comFolga);
+      }
     }
-  }
-  return p;
+    return null;
+  };
+  return buscar(true) ?? buscar(false) ?? p;
 }
 
 /** Afastamento dos cantos do pilar que o eletroduto contorna (E6.3), mm. */

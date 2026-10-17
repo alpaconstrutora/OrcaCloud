@@ -460,11 +460,11 @@ function obstaculosDaDescida(
   o: { q: P2; cotaDaFaixaMm: number; alvo: P2; disciplina?: DisciplinaDeRede | null },
   w: P2 | null,
   parede: ReturnType<typeof paredeQueContem>,
-): { e0: number; outros: { A: { x: number; y: number; z: number }; B: { x: number; y: number; z: number }; r: number }[] } {
+): { e0: number; outros: { A: { x: number; y: number; z: number }; B: { x: number; y: number; z: number }; r: number; futura?: boolean }[] } {
   const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
   const e0 = elevacao.get(levelId) ?? 0;
   const alcance = DESLIZE_DA_DESCIDA_MM + Math.hypot(o.q.x - (w ?? o.alvo).x, o.q.y - (w ?? o.alvo).y) + 300;
-  const outros: { A: { x: number; y: number; z: number }; B: { x: number; y: number; z: number }; r: number }[] = (model.trechos ?? [])
+  const outros: { A: { x: number; y: number; z: number }; B: { x: number; y: number; z: number }; r: number; futura?: boolean }[] = (model.trechos ?? [])
     .filter((t) => t.disciplina !== o.disciplina && Math.min(t.a.x, t.b.x) < o.q.x + alcance && Math.max(t.a.x, t.b.x) > o.q.x - alcance && Math.min(t.a.y, t.b.y) < o.q.y + alcance && Math.max(t.a.y, t.b.y) > o.q.y - alcance)
     .map((t) => {
       const env = envelopeDoTrecho(t);
@@ -486,7 +486,7 @@ function obstaculosDaDescida(
         lugares.push({ x: parede.parede.a.x + parede.u.x * s0, y: parede.parede.a.y + parede.u.y * s0 });
       }
       // Só a parte DENTRO da parede: no forro, o cruzamento das faixas já é resolvido (F14b/F16).
-      for (const q of lugares) outros.push({ A: { x: q.x, y: q.y, z: e0 + k.cotaMm }, B: { x: q.x, y: q.y, z: e0 + o.cotaDaFaixaMm - 100 }, r: RAIO_DA_PRUMADA_FUTURA_MM });
+      for (const q of lugares) outros.push({ A: { x: q.x, y: q.y, z: e0 + k.cotaMm }, B: { x: q.x, y: q.y, z: e0 + o.cotaDaFaixaMm - 100 }, r: RAIO_DA_PRUMADA_FUTURA_MM, futura: true });
     }
   }
   return { e0, outros };
@@ -599,11 +599,11 @@ export function descidaDoForro(
 
   // Os tubos de OUTRAS redes por perto (no mundo: cota + elevação do pavimento) e as prumadas que ainda virão.
   const { e0, outros } = obstaculosDaDescida(model, levelId, o, w, parede);
-  const livre = (c: ReturnType<typeof cabeca>) => {
+  const livre = (c: ReturnType<typeof cabeca>, comFuturas = true) => {
     for (let i = 1; i < c.pts.length; i++) {
       const A = { x: c.pts[i - 1].p.x, y: c.pts[i - 1].p.y, z: e0 + c.pts[i - 1].z };
       const B = { x: c.pts[i].p.x, y: c.pts[i].p.y, z: e0 + c.pts[i].z };
-      for (const t of outros) if (distanciaEntreEixos3D(A, B, t.A, t.B) <= o.raioMm + t.r + FOLGA_DA_DESCIDA_MM) return false;
+      for (const t of outros) if ((comFuturas || !t.futura) && distanciaEntreEixos3D(A, B, t.A, t.B) <= o.raioMm + t.r + FOLGA_DA_DESCIDA_MM) return false;
     }
     // F18 da casa automática: nem por dentro de PILAR — a ligação do aquecedor ao anel corria na parede externa e
     // atravessava o pilar da esquina (R1-A).
@@ -629,12 +629,16 @@ export function descidaDoForro(
    */
   const segLivre = (a: P2, za: number, b: P2, zb: number) =>
     outros.every((t) => distanciaEntreEixos3D({ x: a.x, y: a.y, z: e0 + za }, { x: b.x, y: b.y, z: e0 + zb }, t.A, t.B) > o.raioMm + t.r + FOLGA_DA_DESCIDA_MM);
+  const aneisDoEscorregao = pegadasDePilares(model, levelId).map((g) => anelDoPilar(g, o.raioMm) as Point[]);
   const semCruzarNaParede = (c: ReturnType<typeof cabeca>): PedacoDaDescida[] => {
     if (!w || !parede || segLivre(w, c.entra, w, o.cotaDoAlvoMm)) return montar(c);
     for (let s = PASSO_DO_DESLIZE_MM; s <= DESLIZE_DA_DESCIDA_MM; s += PASSO_DO_DESLIZE_MM) {
       for (const k of [1, -1]) {
         const w2 = { x: Math.round(w.x + parede.u.x * s * k), y: Math.round(w.y + parede.u.y * s * k) };
         if (!segLivre(w, c.entra, w2, c.entra) || !segLivre(w2, c.entra, w2, o.cotaDoAlvoMm) || !segLivre(w2, o.cotaDoAlvoMm, w, o.cotaDoAlvoMm)) continue;
+        // F20: e não entra em PILAR ao andar na parede — com as prumadas futuras, ela escorrega mais e atravessava o pilar
+        // da parede (R1-A, 15 × 30 4 dorm.).
+        if (fracaoDentro(w, w2, aneisDoEscorregao) > 0 || aneisDoEscorregao.some((g) => pointInPolygon(g, w2 as Point))) continue;
         if (foraDoVao(model, levelId, w2, Math.min(c.entra, o.cotaDoAlvoMm), Math.max(c.entra, o.cotaDoAlvoMm), o.raioMm)) continue;
         if (!dentroDaParede(parede.parede, w2)) continue;
         const pts = [...c.pts, { p: w2, z: c.entra }, { p: w2, z: o.cotaDoAlvoMm }, { p: { x: Math.round(w.x), y: Math.round(w.y) }, z: o.cotaDoAlvoMm }, { p: { x: Math.round(o.alvo.x), y: Math.round(o.alvo.y) }, z: o.cotaDoAlvoMm }];
@@ -654,17 +658,26 @@ export function descidaDoForro(
     fundoDaVigaSobre(model, levelId, p, o.raioMm) == null &&
     !barreiras.some((g) => pointInPolygon(g, p as Point)) &&
     paredesDoNivel.every((x) => distanciaAoEixo(x, p) > x.thicknessMm / 2 + o.raioMm);
-  for (let s = PASSO_DO_DESLIZE_MM; s <= DESLIZE_DA_DESCIDA_MM; s += PASSO_DO_DESLIZE_MM) {
-    for (const k of [1, -1]) {
-      const q = { x: Math.round(o.q.x + parede.u.x * s * k), y: Math.round(o.q.y + parede.u.y * s * k) };
-      let ok = true;
-      for (let d = 25; d <= s && ok; d += 25) ok = passa({ x: o.q.x + parede.u.x * d * k, y: o.q.y + parede.u.y * d * k });
-      if (!ok || !passa(q)) continue;
-      const c = cabeca(q, true);
-      if (livre(c)) return semCruzarNaParede(c);
+  const buscar = (comFuturas: boolean): ReturnType<typeof cabeca> | null => {
+    for (let s = PASSO_DO_DESLIZE_MM; s <= DESLIZE_DA_DESCIDA_MM; s += PASSO_DO_DESLIZE_MM) {
+      for (const k of [1, -1]) {
+        const q = { x: Math.round(o.q.x + parede.u.x * s * k), y: Math.round(o.q.y + parede.u.y * s * k) };
+        let ok = true;
+        for (let d = 25; d <= s && ok; d += 25) ok = passa({ x: o.q.x + parede.u.x * d * k, y: o.q.y + parede.u.y * d * k });
+        if (!ok || !passa(q)) continue;
+        const c = cabeca(q, true);
+        if (livre(c, comFuturas)) return c;
+      }
     }
-  }
-  return semCruzarNaParede(inicial);
+    return null;
+  };
+  const achada = buscar(true);
+  if (achada) return semCruzarNaParede(achada);
+  // F20: sem lugar que respeite também as prumadas que AINDA virão, o que respeita as redes de verdade e o pilar — o
+  // último recurso (o nó inicial, como está) atravessava o pilar da parede (R1-A, 15 × 30 4 dorm.).
+  if (livre(inicial, false)) return semCruzarNaParede(inicial);
+  const semFuturas = buscar(false);
+  return semCruzarNaParede(semFuturas ?? inicial);
 }
 
 /** F18: o ponto cai no comprimento da parede (o deslize na parede não sai pela ponta dela). */

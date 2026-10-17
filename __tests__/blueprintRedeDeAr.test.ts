@@ -16,6 +16,8 @@ import {
   comandosDeDimensionamento,
   conferenciaDaRedeDeAr,
   cotaDoDutoNoForro,
+  exaustoresDoNivel,
+  exaustoresQueFaltam,
   perdaPorAtritoPa,
   planejarRedeDeAr,
   secaoProposta,
@@ -154,6 +156,47 @@ describe('climatização E7.3 · exaustão e renovação', () => {
     expect(banheiro(false, false)).toMatchObject({ estado: 'FALTA', obtido: expect.stringMatching(/Banheiro sem janela: exige exaustão mecânica \(90 m³\/h\)/) });
     expect(banheiro(false, true).estado).toBe('OK');
     expect(banheiro(true, false).estado).toBe('OK');
+  });
+
+  it('F21 da casa automática: o banheiro sem janela GANHA o exaustor (no teto, longe da luz e o mais longe das paredes) e, no pavimento de cima, o duto sobe acima da cobertura', () => {
+    const a = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = a.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    // O banheiro (0..2 × 0..2,5 m) atrás de uma sala; a fachada é a parede de baixo da sala (y = −3 m).
+    let m = applyBatch(a, [w(0, -3000, 2000, -3000), w(2000, -3000, 2000, 2500), w(2000, 2500, 0, 2500), w(0, 2500, 0, -3000), w(0, 0, 2000, 0)]).model;
+    const banho = m.spaces.find((s) => s.ring.every((p) => p.y >= -1))!;
+    const sala = m.spaces.find((s) => s.id !== banho.id)!;
+    m = applyBatch(m, [
+      { type: 'NameSpace', spaceId: banho.id, name: 'Banheiro' },
+      { type: 'NameSpace', spaceId: sala.id, name: 'Sala' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'Luz', tipoEletrico: 'ILUMINACAO_TETO', at: point(1000, 1250), cotaMm: 2800 } as Command,
+    ]).model;
+    const carga = cargaTermicaDoNivel(m, hipClima, t);
+    const cmds = exaustoresQueFaltam(m, carga, hip);
+    const exs = cmds.filter((c) => c.type === 'AddTerminal' && (c as { tipoHidraulico?: string }).tipoHidraulico === 'EXAUSTOR_AR');
+    expect(exs).toHaveLength(1);
+    const ex = exs[0] as Extract<Command, { type: 'AddTerminal' }>;
+    expect(ex).toMatchObject({ tipoHidraulico: 'EXAUSTOR_AR', disciplina: 'MECANICA', sugerida: true });
+    // 2,0 × 2,5 m de eixo: não cabem 50 cm das paredes E 50 cm da luz — vale a grade: a luz a ≥ 40 cm (obrigatório; no
+    // centro ele caía NELA) e o mais longe das paredes que der (os anéis do forro correm junto delas).
+    expect(Math.hypot(ex.at.x - 1000, ex.at.y - 1250)).toBeGreaterThanOrEqual(400);
+    const dParede = Math.min(ex.at.x, 2000 - ex.at.x, ex.at.y, 2500 - ex.at.y);
+    expect(dParede).toBeGreaterThanOrEqual(75 + 500);
+    const comEx = applyBatch(m, cmds).model;
+    expect(conferenciaDaRedeDeAr([], ventilacaoDoNivel(comEx, cargaTermicaDoNivel(comEx, hipClima, t), hip), hip).find((c) => c.codigo === 'EXAUSTAO')!.estado).toBe('OK');
+    // Já com exaustor, nada a lançar.
+    expect(exaustoresQueFaltam(comEx, cargaTermicaDoNivel(comEx, hipClima, t), hip)).toEqual([]);
+    // Sem pavimento acima: o duto sobe reto do exaustor até 30 cm acima da cobertura (sem telhado: do topo da parede) e
+    // termina na descarga — nada atravessa o cômodo no forro.
+    const dutos = (comEx.trechos ?? []).filter((x) => x.disciplina === 'MECANICA');
+    expect(dutos).toHaveLength(1);
+    expect([dutos[0].a, dutos[0].b]).toEqual([ex.at, ex.at]);
+    expect(Math.max(dutos[0].cotaAMm, dutos[0].cotaBMm)).toBe(2800 + 300);
+    expect(exaustoresDoNivel(comEx, t).map((x) => x.chegaNaFachada)).toEqual([true]);
+    // O planejador da rede de ar não apaga essa descarga (não é dele) e não traça outro duto.
+    const carga2 = cargaTermicaDoNivel(comEx, hipClima, t);
+    const plano = planejarRedeDeAr(comEx, t, vazoesDosTerminais(comEx, carga2, hip), hip);
+    expect(exaustoresDoNivel(applyBatch(comEx, plano.comandos).model, t).map((x) => x.chegaNaFachada)).toEqual([true]);
   });
 
   it('sem rede de dutos a conferência não inventa: REDE fica "não avaliado"', () => {

@@ -42,8 +42,10 @@
  * Física (ar a ~20 °C): ρ = 1,2 kg/m³, ν = 1,5·10⁻⁵ m²/s, cp = 1005 J/kg·K.
  */
 import type { BlueprintModel, Command, ObjectId, Terminal, TipoDePontoHidraulico, Trecho } from './blueprintKernel';
-import { applyBatch } from './blueprintKernel';
-import { pointInPolygon } from './blueprintKernel/geom';
+import { applyBatch, distanciaEntreEixos3D, envelopeDoTrecho } from './blueprintKernel';
+import { interiorPoint, point, pointInPolygon } from './blueprintKernel/geom';
+import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
+import { ACIMA_DA_COBERTURA_MM, coberturaNoPontoMm } from './blueprintVentilacao';
 import { conexoesDerivadas } from './blueprintKernel/conexoes';
 import { comprimentoMm, fazerChave, type No } from './blueprintGrafoDeRede';
 import { desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
@@ -421,6 +423,119 @@ export function ventilacaoDoNivel(model: BlueprintModel, carga: CargaTermicaDoNi
   });
 }
 
+/** F21: o rótulo do duto do exaustor que sai pela cobertura e da descarga dele (o planejador da rede de ar não os apaga). */
+export const ROTULO_DA_EXAUSTAO_PELA_COBERTURA = 'Exaustão pela cobertura';
+
+/** F21 da casa automática: do exaustor às paredes do cômodo e à luz de teto, mm (o forro em volta e a luminária). */
+// 50 cm: a 30 cm o exaustor (e o duto que sobe dele) caía sobre o anel do forro, por onde o eletroduto corre junto das
+// paredes (10 × 30).
+const AFASTAMENTO_DO_EXAUSTOR_AS_PAREDES_MM = 500;
+const AFASTAMENTO_DO_EXAUSTOR_A_LUZ_MM = 500;
+/** F21: no cômodo pequeno, o mínimo da luz que vale sempre, mm. */
+const MINIMO_DO_EXAUSTOR_A_LUZ_MM = 400;
+/** F21: entre o duto que sobe do exaustor e os tubos já lançados, além dos raios, mm. */
+const FOLGA_DO_DUTO_AOS_TUBOS_MM = 30;
+
+/**
+ * F21 da casa automática (17/10/2026): um EXAUSTOR (`EXAUSTOR_AR`, sugerido) em cada cômodo que `ventilacaoDoNivel` acusa
+ * — sem janela, com exaustão pedida pelo uso (banheiro, cozinha, garagem). No teto, do centro rumo à fachada mais perto
+ * (o duto até a veneziana fica curto — `planejarRedeDeAr` o traça), a 50 cm das paredes e da luz de teto.
+ * Ninguém lançava: a conferência só acusava a falta. No pavimento de CIMA (nada sobre o exaustor), o duto sobe reto
+ * até `ACIMA_DA_COBERTURA_MM` acima da cobertura, com a descarga lá (a regra da coluna de ventilação do esgoto) — no
+ * forro, abaixo das vigas, ele cruzava portas, janelas e as descidas d'água. Com pavimento acima, o duto até a fachada
+ * fica com `planejarRedeDeAr`.
+ */
+export function exaustoresQueFaltam(model: BlueprintModel, carga: CargaTermicaDoNivel, hip: HipotesesDoAr): Command[] {
+  const nivel = model.levels.find((l) => l.id === carga.levelId);
+  const cota = FICHA_DO_PONTO_HIDRAULICO.EXAUSTOR_AR.cotaMm?.MECANICA ?? Math.round((nivel?.defaultHeightMm ?? 2800) - 300);
+  const medidas = FICHA_DO_PONTO_HIDRAULICO.EXAUSTOR_AR.medidasMm;
+  const distSeg = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const L2 = dx * dx + dy * dy;
+    const k = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2));
+    return Math.hypot(p.x - (a.x + k * dx), p.y - (a.y + k * dy));
+  };
+  // O anel do cômodo passa pelo EIXO das paredes: o afastamento conta da face (+ meia parede).
+  const meiaParede = Math.max(0, ...model.walls.filter((w) => w.levelId === carga.levelId).map((w) => w.thicknessMm)) / 2;
+  const longe = AFASTAMENTO_DO_EXAUSTOR_AS_PAREDES_MM + meiaParede;
+  const saida: Command[] = [];
+  for (const v of ventilacaoDoNivel(model, carga, hip)) {
+    if (!v.falta) continue;
+    const s = model.spaces.find((x) => x.id === v.spaceId);
+    if (!s) continue;
+    const centro = interiorPoint(s.ring, s.holes);
+    const rumo = descargaNaFachada(model, carga.levelId, centro)?.noEixo ?? centro;
+    const luzes = (model.terminais ?? []).filter((t) => t.levelId === carga.levelId && t.tipoEletrico === 'ILUMINACAO_TETO' && pointInPolygon(s.ring, t.at));
+    const dParede = (q: { x: number; y: number }) => Math.min(...s.ring.map((a, i) => distSeg(q, a, s.ring[(i + 1) % s.ring.length])));
+    const dLuz = (q: { x: number; y: number }) => Math.min(Infinity, ...luzes.map((l) => Math.hypot(l.at.x - q.x, l.at.y - q.y)));
+    // A coluna do duto até a cobertura (sem pavimento acima) não encontra tubo já lançado — o barrilete da fria sobre a
+    // laje passava por ela (15 × 30, 4 dorm.).
+    const elevacaoN = nivel?.elevationMm ?? 0;
+    const elevDe = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+    const outrosTubos = (model.trechos ?? []).map((t) => {
+      const env = envelopeDoTrecho(t);
+      const e = elevDe.get(t.levelId) ?? 0;
+      return { A: { x: t.a.x, y: t.a.y, z: e + t.cotaAMm }, B: { x: t.b.x, y: t.b.y, z: e + t.cotaBMm }, r: Math.max(env.raioPlantaMm, env.raioVerticalMm) };
+    });
+    const raioDoDuto = Math.max(FICHA_DO_PONTO_HIDRAULICO.EXAUSTOR_AR.dnMinimoMm?.MECANICA ?? 100, 100) / 2;
+    const colunaLivre = (q: { x: number; y: number }) => {
+      // Com pavimento acima, o duto vai à fachada (`planejarRedeDeAr`), não sobe.
+      if (model.levels.some((l) => l.elevationMm > elevacaoN && model.spaces.some((sp) => sp.levelId === l.id && pointInPolygon(sp.ring, q)))) return true;
+      const A = { x: q.x, y: q.y, z: elevacaoN + cota };
+      const B = { x: q.x, y: q.y, z: coberturaNoPontoMm(model, q) + ACIMA_DA_COBERTURA_MM };
+      return outrosTubos.every((t) => distanciaEntreEixos3D(A, B, t.A, t.B) > raioDoDuto + t.r + FOLGA_DO_DUTO_AOS_TUBOS_MM);
+    };
+    // Do centro rumo à fachada, em passos de 50 mm: o ponto mais perto da fachada a `longe` das paredes e da luz.
+    let at: { x: number; y: number } | null = null;
+    const Lr = Math.hypot(rumo.x - centro.x, rumo.y - centro.y);
+    for (let d = Math.floor(Lr / 50) * 50; d >= 0 && !at; d -= 50) {
+      const f = Lr > 0 ? d / Lr : 0;
+      const q = { x: Math.round(centro.x + (rumo.x - centro.x) * f), y: Math.round(centro.y + (rumo.y - centro.y) * f) };
+      if (pointInPolygon(s.ring, q) && dParede(q) >= longe && dLuz(q) >= AFASTAMENTO_DO_EXAUSTOR_A_LUZ_MM && colunaLivre(q)) at = q;
+    }
+    // Cômodo pequeno (o banheiro de 1,5 m): numa grade de 50 mm, longe da luz — obrigatório, no centro ele caía NELA
+    // (10 × 30) — e, entre esses, o mais longe das paredes (os anéis do forro correm junto delas).
+    if (!at) {
+      const xs = s.ring.map((q) => q.x);
+      const ys = s.ring.map((q) => q.y);
+      let melhor = -Infinity;
+      for (let x = Math.min(...xs); x <= Math.max(...xs); x += 50)
+        for (let y = Math.min(...ys); y <= Math.max(...ys); y += 50) {
+          const q = { x, y };
+          if (!pointInPolygon(s.ring, q) || dLuz(q) < MINIMO_DO_EXAUSTOR_A_LUZ_MM || !colunaLivre(q)) continue;
+          const nota = dParede(q);
+          if (nota > melhor) {
+            melhor = nota;
+            at = q;
+          }
+        }
+    }
+    const lugar = point(at?.x ?? Math.round(centro.x), at?.y ?? Math.round(centro.y));
+    const elevacao = nivel?.elevationMm ?? 0;
+    const temAcima = model.levels.some((l) => l.elevationMm > elevacao && model.spaces.some((sp) => sp.levelId === l.id && pointInPolygon(sp.ring, lugar)));
+    saida.push({
+      type: 'AddTerminal',
+      levelId: carga.levelId,
+      disciplina: 'MECANICA',
+      tipo: 'Exaustor',
+      tipoHidraulico: 'EXAUSTOR_AR',
+      at: lugar,
+      cotaMm: cota,
+      ...(medidas ? { larguraMm: medidas.larguraMm, profundidadeMm: medidas.profundidadeMm, alturaMm: medidas.alturaMm } : {}),
+      rotulo: `${v.nome}: sem janela — exaustão mecânica (${v.exaustaoM3h} m³/h); confira no código de obras`,
+      sugerida: true,
+    } as Command);
+    if (!temAcima) {
+      const topo = coberturaNoPontoMm(model, lugar) + ACIMA_DA_COBERTURA_MM - elevacao;
+      const dn = Math.max(FICHA_DO_PONTO_HIDRAULICO.EXAUSTOR_AR.dnMinimoMm?.MECANICA ?? 100, 100);
+      saida.push({ type: 'AddTrecho', levelId: carga.levelId, disciplina: 'MECANICA', a: lugar, b: lugar, cotaAMm: cota, cotaBMm: topo, bitolaMm: dn, rotulo: ROTULO_DA_EXAUSTAO_PELA_COBERTURA, sugerido: true } as Command);
+      saida.push({ type: 'AddTerminal', levelId: carga.levelId, disciplina: 'MECANICA', tipo: 'Saída da exaustão na cobertura', tipoHidraulico: 'VENEZIANA_AR', at: lugar, cotaMm: topo, rotulo: ROTULO_DA_EXAUSTAO_PELA_COBERTURA, sugerida: true } as Command);
+    }
+  }
+  return saida;
+}
+
 // ─── C7: o exaustor chega à fachada? ─────────────────────────────────────────
 
 export interface ExaustorConferido {
@@ -575,7 +690,8 @@ export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoe
   const vazio = (motivo: string, apagar: Command[] = []): PlanoDaRedeDeAr => ({ comandos: apagar, aCriar: [], jaLigados: [], semLugar: [], apagados: apagar.length, motivo, resumo: [] });
   const sugeridos = (model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && t.disciplina === 'MECANICA' && t.rotulo === ROTULO_DA_REDE_DE_AR);
   // C7: a veneziana sugerida da descarga do exaustor é deste planejador.
-  const pecasSugeridas = (model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.disciplina === 'MECANICA' && t.tipoHidraulico === 'VENEZIANA_AR');
+  // F21: a descarga do exaustor pela cobertura não é deste planejador (fica).
+  const pecasSugeridas = (model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.disciplina === 'MECANICA' && t.tipoHidraulico === 'VENEZIANA_AR' && t.rotulo !== ROTULO_DA_EXAUSTAO_PELA_COBERTURA);
   const apagar = [...sugeridos.map((t) => ({ type: 'DeleteTrecho', trechoId: t.id }) as Command), ...pecasSugeridas.map((t) => ({ type: 'DeleteTerminal', terminalId: t.id }) as Command)];
   const ids = new Set([...sugeridos.map((t) => t.id), ...pecasSugeridas.map((t) => t.id)]);
   const base: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !ids.has(t.id)), terminais: (model.terminais ?? []).filter((t) => !ids.has(t.id)) };

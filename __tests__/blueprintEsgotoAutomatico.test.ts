@@ -302,3 +302,26 @@ describe('peças novas (28/09/2026, E0.4)', () => {
   });
 });
 
+
+/**
+ * F20 da casa automática (17/10/2026): o trecho que contorna o pilar é dividido nos vértices do contorno — e CADA pedaço
+ * tem a declividade mínima. Com a cota interpolada e arredondada vértice a vértice, um pedaço ficava com 0,97 % ("1 % <
+ * 1 %" na verificação; 12 × 30 a 0°).
+ */
+describe('F20 — o contorno do pilar não perde a declividade em pedaço nenhum', () => {
+  it('pilares no caminho: cada pedaço horizontal do esgoto com i ≥ o caimento do DN; algum pedaço contornou', () => {
+    const { m, t } = casa();
+    const pilares: Command[] = [[5000, 0], [5200, -500], [5600, -1000], [3500, 1800], [1200, 1500], [2000, 1400]].map(([x, y]) => ({ type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [point(x, y)], larguraMm: 200, profundidadeMm: 300, alturaMm: 2800 }) as Command);
+    const mp = applyBatch(m, pilares).model;
+    const p = planejarEsgoto(mp, HIPOTESES_ESGOTO_PADRAO);
+    const hs = novos(p).filter(horizontal);
+    expect(hs.length).toBeGreaterThan(0);
+    const fora = (x: number) => x % 50 !== 0;
+    expect(hs.some((c) => fora(c.a.x) || fora(c.a.y) || fora(c.b.x) || fora(c.b.y))).toBe(true);
+    for (const c of hs) {
+      const L = Math.hypot(c.b.x - c.a.x, c.b.y - c.a.y);
+      const i = (Math.abs(c.cotaAMm - c.cotaBMm) / L) * 100;
+      expect(i, JSON.stringify(c)).toBeGreaterThanOrEqual(caimentoPct(c.bitolaMm, HIPOTESES_ESGOTO_PADRAO) - 1e-9);
+    }
+  });
+});

@@ -634,11 +634,11 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
     // 4) Cotas das folhas para a raiz: cada trecho desce com o caimento do seu DN.
     const pilaresDoNivel = pegadasDePilares(model, levelId);
     // O tubo, não só o eixo: a pegada do pilar crescida pelo raio dele (o DN 100 encostava no pilar com o eixo fora).
-    const comprimentoComContorno = (a: Ponto2, b: Ponto2, dn: number): number => {
+    // F20: a queda pedaço a pedaço (cada um para cima, nos vértices já em mm) — a MESMA que `contornarPilar` distribui.
+    // Pelo comprimento total, com um arredondamento só, um pedaço do contorno ficava com 0,97 % (12 × 30 a 0°).
+    const quedaComContorno = (a: Ponto2, b: Ponto2, dn: number): number => {
       const desvio = a.x === b.x && a.y === b.y ? null : desvioDoPilar(a, b, pilaresDoNivel.map((g) => anelDoPilar(g, dn / 2) as Point[]));
-      if (!desvio || desvio.length === 0) return distancia(a, b);
-      const pts = [a, ...desvio, b];
-      return pts.slice(1).reduce((s, q, i) => s + distancia(pts[i], q), 0);
+      return quedasDoCaminho(caminhoDoContorno(a, b, desvio), caimentoPct(dn, hip)).reduce((s, q) => s + q, 0);
     };
     const dnDaAresta = (d: (typeof dirigidas)[number]) => Math.max(dnPorUhc(uhcPorNo.get(d.paraKey) ?? 0), dnMinPorNo.get(d.paraKey) ?? 40);
     const cotaDe = (key: string): number => {
@@ -651,7 +651,7 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
         // 14 mm de queda = 1,94 % — abaixo da mínima que o próprio lançamento promete.
         // F18: pelo comprimento COM o contorno do pilar (o mesmo de `contornarPilar`, adiante) — em reta, o trecho no
         // caimento exato perdia a mínima ao contornar, ficava reto e atravessava o pilar (10 × 30, 4 dorm.).
-        const queda = Math.max(1, Math.ceil((comprimentoComContorno(d.de, d.para, dn) * caimentoPct(dn, hip)) / 100 - 1e-9));
+        const queda = Math.max(1, quedaComContorno(d.de, d.para, dn));
         cota = Math.min(cota, cotaDe(d.paraKey) - queda);
       }
       if (key === raizKey && cotaDaRaizMinima != null) cota = Math.min(cota, cotaDaRaizMinima);
@@ -783,18 +783,34 @@ function contornarPilar(model: BlueprintModel, c: Extract<Command, { type: 'AddT
   // F18: com a pegada crescida pelo raio do tubo (o mesmo da queda, na árvore).
   const desvio = desvioDoPilar(c.a, c.b, pegadasDePilares(model, c.levelId).map((g) => anelDoPilar(g, c.bitolaMm / 2) as Point[]));
   if (!desvio || desvio.length === 0) return [c];
-  const pts = [c.a, ...desvio, c.b];
+  const pts = caminhoDoContorno(c.a, c.b, desvio);
   const comp = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
   const total = comp.reduce((s, x) => s + x, 0);
   const queda = c.cotaAMm - c.cotaBMm;
   if ((Math.abs(queda) / total) * 100 + 1e-9 < caimentoPct(c.bitolaMm, hip)) return [c];
+  // F20: cada pedaço com a SUA queda mínima (para cima); o último leva o que sobrar até a cota de jusante. Interpolada e
+  // arredondada vértice a vértice, um pedaço perdia até 0,5 mm e ficava abaixo da mínima.
+  const quedas = quedasDoCaminho(pts, caimentoPct(c.bitolaMm, hip));
+  const cabe = quedas.reduce((s, q) => s + q, 0) <= queda;
   let feito = 0;
-  const cota = (i: number) => (i === pts.length - 1 ? c.cotaBMm : Math.round(c.cotaAMm - (queda * feito) / total));
+  let cotaAtual = c.cotaAMm;
   return pts.slice(1).map((b, i) => {
-    const cotaA = cota(i);
+    const cotaA = cotaAtual;
     feito += comp[i];
-    return { ...c, a: { x: pts[i].x, y: pts[i].y }, b: { x: b.x, y: b.y }, cotaAMm: cotaA, cotaBMm: cota(i + 1) };
+    const cotaB = i === pts.length - 2 ? c.cotaBMm : cabe ? cotaA - quedas[i] : Math.round(c.cotaAMm - (queda * feito) / total);
+    cotaAtual = cotaB;
+    return { ...c, a: { x: pts[i].x, y: pts[i].y }, b: { x: b.x, y: b.y }, cotaAMm: cotaA, cotaBMm: cotaB };
   });
+}
+
+/** F20: o caminho de `a` a `b` pelo contorno do pilar, com os vértices em mm. */
+function caminhoDoContorno(a: Ponto2, b: Ponto2, desvio: readonly Ponto2[] | null): Ponto2[] {
+  return [a, ...(desvio ?? []).map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), b].filter((p, i, arr) => i === 0 || p.x !== arr[i - 1].x || p.y !== arr[i - 1].y);
+}
+
+/** F20: a queda mínima de cada pedaço do caminho, mm inteiros para cima (o pedaço nunca abaixo da declividade). */
+function quedasDoCaminho(pts: readonly Ponto2[], caimento: number): number[] {
+  return pts.slice(1).map((p, i) => Math.ceil((Math.hypot(p.x - pts[i].x, p.y - pts[i].y) * caimento) / 100 - 1e-9));
 }
 
 /** RELANÇAR: apaga os trechos SUGERIDOS ligados às caixas de inspeção e refaz. */

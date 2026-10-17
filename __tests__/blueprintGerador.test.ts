@@ -248,3 +248,33 @@ describe('F20 — portas: banheiro é folha; porta interna na ponta', () => {
     expect(vistas).toBeGreaterThan(0);
   });
 });
+
+/**
+ * F21 (casa automática, 17/10/2026): as bordas dos ambientes a menos de uma espessura de parede uma da outra viram uma
+ * coordenada só — duas paredes desalinhadas em 5 cm, uma de cada lado de uma terceira, fechavam um "Ambiente N" de 5 cm²
+ * (sem nome; luz sem interruptor, laje < 0,5 m², luz dentro do pilar).
+ */
+describe('F21 — nenhuma sobra de cômodo', () => {
+  const ret = (W: number, D: number) => [point(0, 0), point(W, 0), point(W, D), point(0, D)];
+  const programas = [
+    programaDaCasa(PROGRAMA_CURTO_PADRAO).programa,
+    programaDaCasa({ ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, banheiros: 3 }).programa,
+    programaDaCasa({ ...PROGRAMA_CURTO_PADRAO, padrao: 'R1-A' }).programa,
+  ];
+  it('em 3 programas × 4 lotes × 4 sementes, todo cômodo do desenho é um ambiente nomeado (nenhum de fora do programa)', () => {
+    const sobras: string[] = [];
+    for (const programa of programas)
+      for (const [W, D] of [[9000, 16850], [10500, 14500], [11000, 19000], [12000, 12700]])
+        for (const s of [1, 2, 3, 4]) {
+          const r = gerar({ programa, envelope: ret(W, D), direcaoDaFrente: null, rotacaoNorteDeg: null, latitudeGraus: -19.9 }, s, { automaticos: false });
+          for (const sp of r.model.spaces.filter((x) => !x.name)) sobras.push(`${W}×${D} s${s}: ${sp.ring.map((p) => `${p.x},${p.y}`).join(' ')}`);
+        }
+    expect(sobras).toEqual([]);
+  });
+
+  it('o caso medido (R1-A no lote 14 × 28: implantação 1,5–12,5 × 3,0–20,5 m, frente para −y, semente 1): sem sobra', () => {
+    const env = [point(1500, 3000), point(12500, 3000), point(12500, 20500), point(1500, 20500)];
+    const r = gerar({ programa: programas[2], envelope: env, direcaoDaFrente: point(0, -1), rotacaoNorteDeg: null, latitudeGraus: -19.9 }, 1, { automaticos: false });
+    expect(r.model.spaces.filter((x) => !x.name).map((x) => x.ring)).toEqual([]);
+  });
+});

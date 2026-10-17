@@ -410,10 +410,21 @@ export function pontosDaLouca(
     // MESMO ponto e, encostadas cada uma pela sua rede, ficavam a 4,5 cm. A direção vem da parede mais perto.
     const ref = encaixe ?? faceDaParede(componente.at, model.walls.filter((w) => w.levelId === componente.levelId), ALCANCE_DA_DIRECAO_MM);
     if (!meio || !ref || irmaoDeAgua) return null;
-    const nx = ref.face.x - ref.q.x;
-    const ny = ref.face.y - ref.q.y;
+    // F20 da casa automática (17/10/2026): a normal EXATA da parede (virada para a face) — de `face − q`, com a projeção
+    // presa na ponta da parede (a bancada passando do fim dela), a direção saía na diagonal, e o par nascia torto e, já
+    // encostado pela água, a 4,9 cm (sobrado, cozinha).
+    let nx = ref.face.x - ref.q.x;
+    let ny = ref.face.y - ref.q.y;
+    const w = ref.parede;
+    const Lw = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    if (Lw > 1) {
+      const pn = { x: -(w.b.y - w.a.y) / Lw, y: (w.b.x - w.a.x) / Lw };
+      const sinal = pn.x * nx + pn.y * ny < 0 ? -1 : 1;
+      nx = pn.x * sinal;
+      ny = pn.y * sinal;
+    }
     const n = Math.hypot(nx, ny);
-    if (n < 1) return null;
+    if (n < 1e-9) return null;
     return { x: (-ny / n) * meio, y: (nx / n) * meio };
   })();
   const comQuente = disciplinasDoAparelho(tipo, hip).includes('AGUA_QUENTE');

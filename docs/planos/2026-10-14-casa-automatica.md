@@ -2004,8 +2004,8 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F18 — redes nas 8 casas: nenhuma em vão, nenhum rede × rede, nada atravessando pilar (ver "Registro da F18"; 2 luzes em sobra de cômodo vão para a F21)
 - [x] F19 — climatização: ponto de dados, eletroduto força → condensadora, camadas da cobertura (ver "Registro da F19")
 - [x] F20 — mobiliário: peça que não cabe ganha variante (cama, box, vaso/lavatório, armário) (ver "Registro da F20"; 2 cômodos estreitos demais vão para a F22)
-- [ ] F21 — gerador: molhados e escritório com lado externo; porta direta nas relações obrigatórias; nenhum "Ambiente N"
-- [ ] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO
+- [x] F21 — gerador: molhados e escritório com lado externo; porta direta nas relações obrigatórias; nenhum "Ambiente N" (ver "Registro da F21"; o lado externo do serviço/escritório e a porta direta varanda × sala e cozinha × serviço passaram para a F22 — são do ARRANJO)
+- [ ] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO; e (da F21) o arranjo em faixas: varanda de entrada junto da sala, serviço junto da cozinha, serviço e escritório com fachada; e (da F20) a suíte que não cabe o armário/a cama
 - [ ] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo
 - [ ] F24 — implantação não retangular (L) e vaga descoberta com recuo curto
 - [ ] F25 — terreno inclinado: platô único
@@ -2168,3 +2168,46 @@ Testes novos (reprovam sem a correção): banheiro com uma porta e porta da suí
 0,90 e cama de 1,40 para caber o armário inteiro (`blueprintMobiliario`); DN que não cresce rumo ao ponto
 (`blueprintPressaoDaRede`); a fria pelo batente livre (`blueprintRotaPeloForro`); o interruptor fora da janela
 (`blueprintNbr5410Iluminacao`).
+
+**CI da PR #27 (a suíte completa):** 4 testes da casa (lote 12 × 30 da suíte, térrea e sobrado) reprovaram — a mudança das
+portas mexeu nas louças e expôs defeitos latentes, que as 8 casas da sonda não pegavam (ela não contava a verificação de
+rede do app). Corrigidos pela causa:
+
+- **Declividade no contorno do pilar**: a árvore do esgoto reservava a queda pelo comprimento total e o `contornarPilar`
+  interpolava as cotas vértice a vértice — um pedaço ficava com 0,97 % ("1 % < 1 %"). Agora a queda é pedaço a pedaço,
+  para cima, a mesma nos dois lados.
+- **Fria e quente da pia a 4,9 cm**: a direção do par vinha de `face − q`, diagonal quando a projeção presa na PONTA da
+  parede (a bancada passando do fim dela) — agora a normal exata da parede; e `faceDaParede` prefere a parede em que o
+  ponto cai DENTRO do comprimento (só ela: no anel do forro, que contorna o pilar, isso afastava a cabeça da descida).
+- **Ponta aberta da quente (sobrado)**: a pia, no pavimento do aquecedor com o barrilete no forro, subia pelo shaft da área
+  de serviço (1,7 m e outra parede) — o grupo do mesmo pavimento não usa shaft; e a cabeça no forro vai para o anel do
+  LADO do grupo (no eixo da parede, os dois anéis empatavam).
+
+Os 5 testes reprovados passam agora (rodados um a um — o arquivo inteiro não roda nesta máquina).
+
+### Registro da F21 (17/10/2026) — o gerador
+
+- **"Ambiente N"** (R1-A, 15 × 30 4 dorm.): um triângulo de 5 cm² — duas paredes desalinhadas em 5 cm, uma de cada lado de
+  uma terceira, com as faces sobrepostas. O gerador alinha as bordas dos ambientes a menos de uma espessura de parede (a
+  do contorno vale; senão a mais repetida) antes de virar parede. Some a luz sem interruptor, a laje < 0,5 m², o PILAR das
+  luzes e o vizinho "Ambiente" da carga térmica.
+- **Exaustão onde não há janela**: ninguém lançava o exaustor — a conferência só acusava. `exaustoresQueFaltam` (módulo de
+  ar) o põe em todo cômodo que a ventilação acusa: no pavimento de cima, o duto SOBE até 30 cm acima da cobertura (a regra
+  da ventilação do esgoto), com a descarga lá — no forro, abaixo das vigas, ele cruzava portas, janelas e descidas d'água —
+  e a travessia da laje é furo previsto (CONFERIR); com pavimento acima, o duto vai à fachada (`planejarRedeDeAr`). Fica a
+  50 cm das paredes (os anéis do forro) e da luz; no cômodo pequeno, a luz a ≥ 40 cm (no centro ele caía nela) e o mais
+  longe das paredes; a coluna livre dos tubos já lançados (o barrilete sobre a laje). Com o exaustor, o molhado sem lado
+  externo deixa de ser "sem solução" e fica para conferir no código de obras.
+- **Relação obrigatória sem porta direta** vira aviso do gerador e conta como problema GRAVE na escolha da semente (com a
+  passagem por molhado).
+- **Efeitos em cascata, pela causa**: o escorregão da descida na parede não entra em pilar; as prumadas futuras (F20) são
+  restrição MOLE — sem lugar que respeite tudo, vale o que respeita as redes de verdade e o pilar; `foraDoPilar` não pula
+  o pilar (do lado do ponto, a prumada da outra água; o primeiro livre do outro lado ficava além dele) e a coluna não vai
+  ao shaft do outro lado de um pilar; o interruptor junto da porta já estava fora da janela (F20).
+
+Medido nas 8 casas, 2×: **0 em vão, 0 rede × rede, 0 pilar** em todas. Fica para a F22 (é o ARRANJO em faixas — subir os
+pesos do recozimento resolvia a varanda e desarrumava os mínimos dos ambientes, F3b; 16 sementes também não): varanda de
+entrada × sala em 4 casas, cozinha × serviço no R1-B, serviço sem fachada (12 × 30) e escritório sem fachada (R1-A).
+
+Testes novos (reprovam sem a correção): sem sobra de cômodo no caso medido (`blueprintCasaAutomatica`, F21); o exaustor e
+o duto pela cobertura (`blueprintRedeDeAr`); o pedaço do contorno com a declividade (`blueprintEsgotoAutomatico`).

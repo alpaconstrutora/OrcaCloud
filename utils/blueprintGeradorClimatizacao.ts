@@ -45,7 +45,7 @@ import { selecaoDoNivel, type ModeloDoCatalogo } from './blueprintSelecaoClimati
 import { planejarEquipamentosSplit } from './blueprintPosicaoSplit';
 import { comandosDaLinhaPelaCapacidade, planejarLinhasFrigorigenas, type LinhaNoForro } from './blueprintLinhaFrigorigena';
 import { planejarVrf } from './blueprintVrf';
-import { planejarRedeDeAr, vazoesDosTerminais } from './blueprintRedeDeAr';
+import { ROTULO_DA_EXAUSTAO_PELA_COBERTURA, exaustoresQueFaltam, planejarRedeDeAr, vazoesDosTerminais } from './blueprintRedeDeAr';
 import { planejarCircuitos, pontosElegiveis, type HipotesesDeCircuitos } from './blueprintCircuitosAutomaticos';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 import { volumesDasPecasDeClimatizacao } from './blueprintRede';
@@ -224,6 +224,11 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
   }
 
   // ── Rede de dutos (E7) ─────────────────────────────────────────────────────
+  // F21 da casa automática (17/10/2026): o exaustor onde a ventilação acusa (sem janela, exaustão pedida pelo uso) —
+  // ninguém lançava; a conferência só dizia "exaustão mecânica onde não há janela". O duto até a fachada vem abaixo.
+  let exaustores = 0;
+  for (const nivel of cargas) exaustores += aplicar(exaustoresQueFaltam(m, nivel, hip.ar));
+  if (exaustores) pendencia('CONFERIR', `${exaustores} exaustor(es) em cômodo sem janela (banheiro, cozinha, garagem) — ventilação mecânica com duto até a fachada; confira se o código de obras aceita e ligue no circuito da luz do cômodo`);
   // C7 (10/10/2026): o exaustor também pede duto (até a fachada).
   const temTerminalDeAr = (m.terminais ?? []).some((t) => (TIPOS_DE_TERMINAL_DE_AR as readonly string[]).includes(t.tipoHidraulico ?? '') || t.tipoHidraulico === 'EXAUSTOR_AR');
   if (!temTerminalDeAr) etapa('DUTOS', ROTULOS.DUTOS, 'NAO_EXIGIDA', 0, 'sem terminal de ar nem exaustor no desenho');
@@ -278,14 +283,23 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
   const novos = new Set(criados);
   const vigaPorId = new Map((m.structures ?? []).filter((x) => x.kind === 'VIGA').map((x) => [x.id, x]));
   let furosEmViga = 0;
+  const lajePorId = new Set((m.structures ?? []).filter((x) => x.kind === 'LAJE').map((x) => x.id));
+  const dutoPelaCobertura = new Set((m.trechos ?? []).filter((t) => t.rotulo === ROTULO_DA_EXAUSTAO_PELA_COBERTURA).map((t) => t.id));
+  let furosNaLaje = 0;
   for (const c of conflitosDoModelo(m, { pecas: volumesDasPecasDeClimatizacao(m) })) {
     if (!novos.has(c.trechoId) && !novos.has(c.outroId)) continue;
     if (cx.travessiaDeVigaEhFuro && c.classe === 'ESTRUTURA' && vigaPorId.has(c.outroId)) {
       furosEmViga++;
       continue;
     }
+    // F21: o duto do exaustor que SOBE à cobertura atravessa a laje (e o telhado) por projeto — furo previsto, não conflito.
+    if (c.classe === 'ESTRUTURA' && dutoPelaCobertura.has(c.trechoId) && lajePorId.has(c.outroId)) {
+      furosNaLaje++;
+      continue;
+    }
     pendencia('CONFLITO', `${c.classe.replace(/_/g, ' ').toLowerCase()}: trecho ${c.trechoId} × ${c.outroId} (${um(c.comprimentoDentroMm, 0)} mm dentro).`);
   }
+  if (furosNaLaje) pendencia('CONFERIR', `${furosNaLaje} travessia(s) de laje do duto de exaustão até a cobertura — furo a prever com o calculista.`);
   if (furosEmViga) pendencia('CONFERIR', `${furosEmViga} travessia(s) de viga da linha e do dreno — furo a aprovar com o calculista (na lista de furos previstos).`);
   // F6 (10/10/2026): o equipamento lançado × parede, vão, estrutura e móvel (a caixa inteira).
   for (const c of conflitosArquitetonicos(m, { pecas: volumesDasPecasDeClimatizacao(m) })) {

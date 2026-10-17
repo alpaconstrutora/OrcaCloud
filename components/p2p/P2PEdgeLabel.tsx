@@ -5,8 +5,9 @@ import type { Ponto } from '../../utils/p2pLayout';
 import { SEAM_CFG } from './p2pSeam';
 
 /**
- * Rótulo de uma aresta: HTML absoluto sobre o `meio` do primeiro trecho da
- * linha (não `<text>` SVG — assim é botão acessível e não borra no `scale`).
+ * Rótulo de uma aresta: HTML absoluto sobre o `meio` da linha
+ * (`caminhoOrtogonal` escolhe o trecho onde ele cabe sem tocar em cartão) —
+ * não `<text>` SVG, assim é botão acessível e não borra no `scale`.
  *
  * Chip `rounded-[6px]`, sem caixa alta e sem `rounded-full`: não é status de
  * registro (§8) nem rótulo de posição no desenho (§8.1) — é a legenda da
@@ -50,7 +51,7 @@ export function P2PEdgeLabel({ edge, meio, selecionada, modoEscolher, onSelect, 
           if (templates.length === 1) return onEditarTemplate(templates[0], edge);
           onSelect(edge);
         }}
-        className={`h-6 max-w-[160px] px-2 rounded-[6px] border bg-white text-[11px] font-medium truncate shadow-sm transition-colors
+        className={`h-6 max-w-[112px] px-2 rounded-[6px] border bg-white text-[11px] font-medium truncate shadow-sm transition-colors
           ${elegivel ? 'border-blue-400 text-blue-700 hover:bg-blue-50' : selecionada ? `border-blue-300 ${cfg.text}` : `border-gray-200 ${cfg.text} hover:border-gray-300`}`}
       >
         {elegivel ? 'Escolher esta transição' : texto}

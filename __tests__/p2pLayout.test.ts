@@ -10,8 +10,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   posicoesDosNos, caixaDoGrupo, caminhoOrtogonal, tamanhoDoDesenho, sobrepoe, enquadrarDesenho, NODE_W, NODE_H,
+  ROTULO_W, ROTULO_H, COL_GAP, CELULAS_P2P, CELULAS_FINANCEIRO,
 } from '../utils/p2pLayout';
 import { DEFINICAO_DAS_ARESTAS, P2P_GROUPS, EDGE_EVENT_KEYS, STAGE_EVENT_KEYS } from '../services/p2pFlowService';
+import { DEFINICAO_DAS_ARESTAS_FIN, FIN_GROUPS } from '../services/financeiroFlowService';
 
 const IDS = ['solicitacao', 'cotacao', 'pedido', 'recebimento', 'estoque', 'fiscal', 'financeiro', 'pagamento'];
 
@@ -99,7 +101,9 @@ describe('p2pLayout — caminho ortogonal', () => {
     expect(y1).toBe(p.fiscal.y + p.fiscal.h / 2);
     expect(xm).toBeGreaterThanOrEqual(x0 + 24);
     expect(xm).toBeLessThan(x1);
-    expect(meio).toEqual({ x: (x0 + xm) / 2, y: y0 });
+    // Colunas vizinhas: o 1º trecho horizontal é meio vão — o rótulo vai para o
+    // meio do trecho vertical, no centro do vão (16/10/2026, chip invadia o cartão).
+    expect(meio).toEqual({ x: xm, y: (y0 + y1) / 2 });
   });
 });
 
@@ -161,5 +165,37 @@ describe('p2pLayout — mapa de células por fluxo (16/10/2026, Torre do Finance
     expect(p.inventado.y).toBeGreaterThanOrEqual(p.b.y + p.b.h);
     expect(sobrepoe(p.inventado, p.a)).toBe(false);
     expect(sobrepoe(p.inventado, p.b)).toBe(false);
+  });
+});
+
+describe('rótulos de aresta não encostam em nada (16/10/2026, "Orquestrada" escondido pelo cartão)', () => {
+  type Def = { from: string; to: string };
+  type Grupo = { id: string; label: string; nodeIds: string[] };
+  const caixaDoRotulo = (m: { x: number; y: number }) => ({ x: m.x - ROTULO_W / 2, y: m.y - ROTULO_H / 2, w: ROTULO_W, h: ROTULO_H });
+  // Chip do nome do grupo: `-top-3 left-3`, h-6, ~7 px por letra + padding.
+  const chipDoGrupo = (caixa: { x: number; y: number }, label: string) => ({ x: caixa.x + 12, y: caixa.y - 12, w: label.length * 7 + 16, h: 24 });
+
+  const conferir = (ids: string[], celulas: Parameters<typeof posicoesDosNos>[1], defs: readonly Def[], grupos: readonly Grupo[]) => {
+    const p = posicoesDosNos(ids, celulas);
+    const rotulos = defs.map(d => ({ id: `${d.from}->${d.to}`, r: caixaDoRotulo(caminhoOrtogonal(p[d.from], p[d.to]).meio) }));
+    for (const { id, r } of rotulos) {
+      for (const no of ids) expect(sobrepoe(r, p[no]), `${id} × cartão ${no}`).toBe(false);
+      for (const outro of rotulos) if (outro.id !== id) expect(sobrepoe(r, outro.r), `${id} × ${outro.id}`).toBe(false);
+      for (const g of grupos) {
+        const caixa = caixaDoGrupo(g.nodeIds, p)!;
+        expect(sobrepoe(r, chipDoGrupo(caixa, g.label)), `${id} × grupo ${g.id}`).toBe(false);
+      }
+    }
+  };
+
+  it('Torre P2P', () => conferir(IDS, CELULAS_P2P, DEFINICAO_DAS_ARESTAS, P2P_GROUPS));
+
+  it('Torre do Financeiro', () => conferir(
+    ['boletos', 'origens_pagar', 'a_pagar', 'aprovacao', 'pagamento', 'origens_receber', 'a_receber', 'cobranca', 'extrato', 'baixado', 'fechamento'],
+    CELULAS_FINANCEIRO, DEFINICAO_DAS_ARESTAS_FIN, FIN_GROUPS,
+  ));
+
+  it('o vão entre colunas comporta o rótulo inteiro com folga', () => {
+    expect(COL_GAP).toBeGreaterThanOrEqual(ROTULO_W + 12);
   });
 });

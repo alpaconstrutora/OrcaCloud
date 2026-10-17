@@ -28,8 +28,19 @@ export interface Ponto {
  */
 export const NODE_W = 240;
 export const NODE_H = 184;
-/** Vão entre colunas: cabe o rótulo curto da aresta ("Orquestrada · 3") sem invadir os cartões. */
-export const COL_GAP = 112;
+/**
+ * Vão entre colunas: o rótulo da aresta (até `ROTULO_W`) cabe nele com folga.
+ * Era 112 — "Orquestrada · 1" (~106 px) encostava nos cartões (print do
+ * usuário, 16/10/2026).
+ */
+export const COL_GAP = 152;
+/**
+ * Largura MÁXIMA do rótulo de aresta (chip + o "+" de gatilho ao lado). O chip
+ * trunca acima disso (`P2PEdgeLabel`); é a medida que o posicionamento e o
+ * teste de sobreposição usam.
+ */
+export const ROTULO_W = 140;
+export const ROTULO_H = 24;
 export const ROW_GAP = 32;
 /** Respiro entre a caixa do grupo e os nós que ela contém. */
 export const GROUP_PAD = 20;
@@ -122,8 +133,16 @@ export function tamanhoDoDesenho(posicoes: Record<string, Ret>): { w: number; h:
  * Caminho ortogonal de A para B: sai pelo meio da borda direita de A e entra
  * pelo meio da borda esquerda de B. Mesma linha → um traço reto; linhas
  * diferentes → desce/sobe no meio do vão (`H xm V y1 H x1`), nunca antes de
- * `degrau` px para a seta não nascer colada no cartão. `meio` é o centro do
- * primeiro trecho horizontal — onde o rótulo da aresta senta.
+ * `degrau` px para a seta não nascer colada no cartão.
+ *
+ * `meio` é onde o rótulo da aresta senta (centro do chip):
+ *   - mesma linha → meio do traço (centro do vão);
+ *   - linhas diferentes e o 1º trecho horizontal comporta o chip (aresta que
+ *     atravessa colunas) → meio desse trecho;
+ *   - senão → meio do trecho VERTICAL, que corre no centro do vão. Até
+ *     16/10/2026 era sempre o meio do 1º trecho horizontal; entre colunas
+ *     vizinhas esse trecho tem meio vão (~56 px) e o chip, centrado ali,
+ *     invadia o cartão de origem (print do usuário: "Orquestrada" escondido).
  */
 export function caminhoOrtogonal(a: Ret, b: Ret, degrau = 24): { d: string; meio: Ponto } {
   const x0 = a.x + a.w;
@@ -134,7 +153,11 @@ export function caminhoOrtogonal(a: Ret, b: Ret, degrau = 24): { d: string; meio
     return { d: `M ${x0} ${y0} H ${x1}`, meio: { x: (x0 + x1) / 2, y: y0 } };
   }
   const xm = x0 + Math.max(degrau, (x1 - x0) / 2);
-  return { d: `M ${x0} ${y0} H ${xm} V ${y1} H ${x1}`, meio: { x: (x0 + xm) / 2, y: y0 } };
+  const cabeNoPrimeiroTrecho = xm - x0 >= ROTULO_W + 16;
+  return {
+    d: `M ${x0} ${y0} H ${xm} V ${y1} H ${x1}`,
+    meio: cabeNoPrimeiroTrecho ? { x: (x0 + xm) / 2, y: y0 } : { x: xm, y: (y0 + y1) / 2 },
+  };
 }
 
 /** Dois retângulos se sobrepõem (área comum > 0)? */

@@ -143,6 +143,20 @@ Decisões do usuário (pergunta com o volume medido na Alpa, 30 dias: 781 boleto
 - [x] **E.2 `services/processFlowShared.ts`** — achado na conferência em produção depois da carga: transição orquestrada tinha a nota SUBSTITUÍDA por "Conduzida por Processos: …", e a lacuna "a baixa não confere a alçada" sumia do painel. Agora a nota do retrato fica depois de quem conduz (vale para as duas Torres). Teste novo em `financeiroFlowService.test.ts`; P2P verde sem alteração.
 - [x] **E.3 Conferência** — produção (antes de E.2) e frente (depois), login real, "Todas" e Alpa: as quatro transições "Orquestrada", nós Contas a Pagar, Pagamento e Pago/Recebido com entrada orquestrada, KPI Orquestradas = 3, biblioteca com 1 modelo por gatilho; painel da baixa com "Conduzida por Processos: Pós-pagamento… — … A baixa não confere a alçada". Sem erro de console/JS nem HTTP 4xx/5xx. (O roteiro passou a selecionar a transição pela biblioteca: com um modelo, o chip abre o editor.)
 
+### F. Rótulo de aresta escondido pelo cartão (pedido de 16/10, com print)
+
+> faça ajustes visuais: veja exemplo no print que o texto Orquestrada esta sendo escondido pelo card
+>
+> [print: "Orquestrada · 1" na transição Boletos capturados → Contas a Pagar, com a metade esquerda do chip coberta pelo cartão de Boletos, zoom 121%]
+
+Causa: o rótulo sentava no meio do 1º trecho horizontal da linha; entre colunas vizinhas, quando a linha muda de linha da grade, esse trecho tem meio vão (~56 px) e o chip centrado ali invadia o cartão de origem. O P2P tinha o mesmo defeito (Recebimento → Estoque/Nota Fiscal).
+
+- [x] **F.1 `utils/p2pLayout.ts`** — `caminhoOrtogonal` escolhe onde o rótulo senta: meio do traço (mesma linha); meio do 1º trecho horizontal se ele comporta o rótulo (aresta que atravessa colunas — no trecho vertical ela cairia sobre o nome do grupo "Tesouraria"); senão meio do trecho vertical (centro do vão). `ROTULO_W` 140 / `ROTULO_H` 24; `COL_GAP` 112 → 152.
+- [x] **F.2 `components/p2p/P2PEdgeLabel.tsx`** — chip `max-w-[160px]` → `max-w-[112px]` (chip + "+" = `ROTULO_W`).
+- [x] **F.3 `__tests__/p2pLayout.test.ts`** — nas duas Torres, nenhum rótulo sobre cartão, outro rótulo ou nome de grupo; `COL_GAP ≥ ROTULO_W + 12`. Mutação (voltar a regra antiga): reprova P2P e Financeiro.
+- [x] **F.4 Guia §31** — regra do posicionamento do rótulo.
+- [x] **F.5 Conferência** — Playwright, login real, "Todas" e Alpa, com medição de retângulos no navegador: **0 rótulos sobre cartões** nas duas Torres; captura de perto (~100%) com "Orquestrada · 1" inteiro no trecho vertical; "Enquadrar" ainda mostra as duas Torres inteiras (27%). Sem erro de console/JS nem HTTP 4xx/5xx.
+
 ## Verificação
 
 | Prova | Resultado |

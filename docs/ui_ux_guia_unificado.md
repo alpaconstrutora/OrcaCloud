@@ -3155,8 +3155,15 @@ drawers (Sheet) · editor (Modal) · modal de organização   ← irmãos da gra
   clique. Caminho ortogonal: `M H` na mesma linha; `M H V H` em linhas diferentes,
   com a curva nunca antes de 24 px do cartão (`caminhoOrtogonal`). Selecionada =
   3 px. Em modo de escolha, `strokeDasharray 6 4` + `animate-pulse` + cursor `copy`.
-- **Rótulo de aresta** (`P2PEdgeLabel`) — HTML absoluto no meio do primeiro
-  trecho horizontal (`translate(-50%, -50%)`), não `<text>` SVG: é botão
+- **Rótulo de aresta** (`P2PEdgeLabel`) — HTML absoluto no `meio` que
+  `caminhoOrtogonal` escolhe (`translate(-50%, -50%)`): meio do traço na mesma
+  linha; meio do 1º trecho horizontal quando ele comporta o rótulo (aresta que
+  atravessa colunas); senão meio do trecho VERTICAL, no centro do vão. Nunca
+  "sempre o 1º trecho": entre colunas vizinhas ele tem meio vão e o chip
+  invadia o cartão (16/10/2026, print do usuário com "Orquestrada" escondido).
+  Medidas: chip `max-w-[112px]`, rótulo inteiro (chip + "+") `ROTULO_W` 140,
+  vão `COL_GAP` 152; o teste `p2pLayout` confere, nas duas Torres, que nenhum
+  rótulo encosta em cartão, em outro rótulo ou no nome de grupo. Não `<text>` SVG: é botão
   acessível e não borra com o `scale`. Chip `h-6 px-2 rounded-[6px] border
   bg-white text-[11px] font-medium shadow-sm` com o texto na cor da situação.
   **Não é §8** (não é status de registro) **nem §8.1** (não nomeia posição no

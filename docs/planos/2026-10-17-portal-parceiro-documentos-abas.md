@@ -40,5 +40,14 @@ novidade em Enviados e "Enviar Documento" levando à aba Enviados. Resposta:
 3. ✅ `utils/portalHelpDefaults.ts` — tour e artigo deixam de citar "Enviados por você".
    *Pronto quando:* `portalHelpDefaults.test.ts` e `PortalHelp*` verdes.
 4. ✅ `docs/ui_ux_guia_unificado.md` §19.1 — `accent` e `badgeTom: 'novo'` documentados.
-5. ⏳ Verificação visual no navegador (portal por link público). *Pronto quando:*
-   print da tela com as duas abas.
+5. ✅ Verificação visual no navegador (portal por link público). *Pronto quando:*
+   print da tela com as duas abas. Feito no dev server da frente com o link do
+   workspace do Álvaro Esteves Junior: Recebidos 4 / Enviados 1, título troca,
+   1 tabela por aba, sem erro de console, 390px sem rolagem lateral.
+
+## Publicação
+
+- tsc local caiu (crash do V8 da máquina, 0xC0000005) — prova de tipos pelo PR
+  de rascunho #32: `ci` pass (15 min), build do Vercel pass.
+- `a149f991` empurrado para main; `conferir-producao.sh "Documentos Enviados"`:
+  o domínio serve exatamente origin/main (a149f99), texto novo no bundle.

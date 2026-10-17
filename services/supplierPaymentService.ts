@@ -71,6 +71,28 @@ export interface PixQuote {
     conta: { env: 'sandbox' | 'production'; cadastrada: boolean } | null;
 }
 
+/** Uma linha de supplier_payments_auditoria (gravada por gatilho, imutável). */
+export interface EventoPagamento {
+    id: string;
+    supplier_payment_id: string;
+    acao: 'criado' | 'status' | 'atualizado' | 'excluido';
+    status_antes: string | null;
+    status_depois: string | null;
+    valor: number | null;
+    autor: string;
+    detalhe: {
+        tipo?: string;
+        favorecido?: string;
+        favorecido_origem?: string;
+        agendado_para?: string;
+        taxa?: number;
+        motivo?: string;
+        comprovante?: string;
+        aguardando_token?: boolean;
+    };
+    created_at: string;
+}
+
 export type DestinoPix =
     | { ref: string }
     | { avulso: { tipo: string; chave: string; nome: string; documento: string } };
@@ -194,6 +216,28 @@ export const supplierPaymentService = {
             }
         }
         return mapa;
+    },
+
+    /**
+     * Histórico de pagamentos pela Asaas de um título: as tentativas que ainda
+     * existem e a linha do tempo de TODAS — inclusive de pagamentos cujo
+     * registro foi apagado depois (a auditoria guarda o transaction_id no
+     * `detalhe` e não tem FK, de propósito).
+     */
+    async historicoDoTitulo(transactionId: string): Promise<{ pagamentos: SupplierPayment[]; eventos: EventoPagamento[] }> {
+        const [pag, ev] = await Promise.all([
+            supabase.from('supplier_payments').select(COLS)
+                .eq('transaction_id', transactionId).order('created_at', { ascending: true }),
+            supabase.from('supplier_payments_auditoria')
+                .select('id,supplier_payment_id,acao,status_antes,status_depois,valor,autor,detalhe,created_at')
+                .eq('detalhe->>transaction_id', transactionId).order('created_at', { ascending: true }),
+        ]);
+        if (pag.error) throw pag.error;
+        if (ev.error) throw ev.error;
+        return {
+            pagamentos: (pag.data || []) as SupplierPayment[],
+            eventos: (ev.data || []) as unknown as EventoPagamento[],
+        };
     },
 
     /** Última ordem de pagamento de um boleto (para exibir status na UI). */

@@ -20,6 +20,7 @@ import { numeroRecibo } from '../utils/reciboRecebimento';
 import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, contarLinhasDaTela, entradasDaPagina, linhasDaTela, type ChaveDeGrupo } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import PagarPixSheet from './financeiro/PagarPixSheet';
+import HistoricoPagamentoAsaasSheet from './financeiro/HistoricoPagamentoAsaasSheet';
 import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 import { asaasContaService } from '../services/asaasContaService';
 import { supplierPaymentService, type SupplierPayment } from '../services/supplierPaymentService';
@@ -498,6 +499,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     useEffect(() => { recarregarPagamentosAsaas(); }, [recarregarPagamentosAsaas]);
 
     const [cancelandoAsaas, setCancelandoAsaas] = useState<string | null>(null);
+    const [historicoAsaas, setHistoricoAsaas] = useState<Payable | null>(null);
     const cancelarPagamentoAsaas = async (row: Payable, sp: SupplierPayment) => {
         const agendado = sp.status === 'SCHEDULED';
         const ok = await confirm({
@@ -1247,6 +1249,15 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                             />
                                                         </>
                                                     )}
+                                                    {/* Histórico dos pagamentos pela Asaas (quem disparou, quem
+                                                        cancelou, o que a Asaas respondeu) — só quando houve algum. */}
+                                                    {pagamentosAsaas[row.id] && (
+                                                        <ActionIconButton
+                                                            kind="history"
+                                                            title="Histórico de pagamentos pela Asaas"
+                                                            onClick={() => setHistoricoAsaas(row)}
+                                                        />
+                                                    )}
                                                     {/* Apropriar a imóvel — a mesma Sheet do lote, com um
                                                         lançamento só. Cancelada não tem o que apropriar. */}
                                                     {isSelectable(row) && (
@@ -1411,6 +1422,14 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     recarregarPagamentosAsaas();
                     notify('Pagamento enviado à Asaas. A baixa acontece quando o banco confirmar.');
                 }}
+            />
+        )}
+
+        {historicoAsaas && (
+            <HistoricoPagamentoAsaasSheet
+                transactionId={historicoAsaas.id}
+                descricao={historicoAsaas.description}
+                onClose={() => setHistoricoAsaas(null)}
             />
         )}
 

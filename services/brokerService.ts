@@ -278,6 +278,61 @@ export const brokerService = {
     },
 
     // --- Broker Proposals (Gestão de Propostas do Portal) ---
+    /**
+     * Ranking completo da organização para o GESTOR (fn_broker_ranking_da_organizacao,
+     * 17/10/2026): propostas APROVADAS no período, posição por vendas e volume.
+     * Só membro da organização (a função recusa com 42501).
+     */
+    async rankingDaOrganizacao(organizationId: string, periodo: 'MES' | 'TRIMESTRE' | 'ANO'): Promise<Array<{
+        email: string; nome: string | null; vendas: number; volume: number; enviadas: number;
+        posicao: number | null; posicao_anterior: number | null;
+    }>> {
+        const { data, error } = await supabase.rpc('fn_broker_ranking_da_organizacao', { p_org: organizationId, p_periodo: periodo });
+        if (error) throw error;
+        return (data as never[]) ?? [];
+    },
+
+    /**
+     * Leads dos corretores da organização para o GESTOR (só leitura; RLS = membro
+     * da organização). Com `brokerEmail`, só os daquele corretor (prévia do portal).
+     */
+    async listLeadsDaOrganizacao(organizationId: string, brokerEmail?: string): Promise<any[]> {
+        let q = supabase
+            .from('broker_portal_leads')
+            .select('id, organization_id, broker_email, name, email, phone, cpf, income, origin, stage, interest, protection_until, notes, created_at, updated_at, interacoes:broker_portal_lead_interactions(id, type, description, created_by, created_at)')
+            .eq('organization_id', organizationId)
+            .order('updated_at', { ascending: false });
+        if (brokerEmail) q = q.ilike('broker_email', brokerEmail);
+        const { data, error } = await q;
+        if (error) throw error;
+        return data ?? [];
+    },
+
+    // ── Agenda do gestor (17/10/2026, plano 2026-10-17 F4) ───────────────────
+    // RLS: membro da organização grava os eventos e lê as inscrições.
+    async listEventos(organizationId: string): Promise<any[]> {
+        const { data, error } = await supabase
+            .from('broker_portal_events')
+            .select('id, organization_id, project_id, title, description, type, date, end_date, location, max_capacity, status, created_at, inscricoes:broker_portal_event_registrations(id, broker_email, status, created_at)')
+            .eq('organization_id', organizationId)
+            .order('date', { ascending: true });
+        if (error) throw error;
+        return data ?? [];
+    },
+    async salvarEvento(evento: Record<string, unknown>): Promise<any> {
+        const { id, ...campos } = evento;
+        const q = id
+            ? supabase.from('broker_portal_events').update(campos).eq('id', id as string)
+            : supabase.from('broker_portal_events').insert(campos);
+        const { data, error } = await q.select('id').single();
+        if (error) throw error;
+        return data;
+    },
+    async cancelarEvento(id: string): Promise<void> {
+        const { error } = await supabase.from('broker_portal_events').update({ status: 'CANCELADO' }).eq('id', id);
+        if (error) throw error;
+    },
+
     async listProposals(organizationId: string, brokerEmail?: string) {
         const BASE_COLS = 'id, property_id, broker_id, broker_email, organization_id, buyer_name, buyer_cpf, buyer_email, buyer_phone, buyer_income, unit_price, down_payment, monthly_installments, monthly_value, balloon_value, financing_value, payment_plan, discount_pct, total_value, status, notes, admin_notes, created_at, updated_at';
         const UNITS_EMBED = ', units:broker_portal_proposal_units(id, proposal_id, property_id, organization_id, unit_price, allocated_value, is_primary, sort_order)';

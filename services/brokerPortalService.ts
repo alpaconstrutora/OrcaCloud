@@ -78,6 +78,64 @@ export const brokerPortalService = {
         return res?.materials ?? [];
     },
 
+    /**
+     * Posição do próprio corretor no ranking da organização do token
+     * (fn_broker_portal_get_ranking, 17/10/2026). Sem nomes nem números de colegas,
+     * só a meta (vendas do 1º colocado).
+     */
+    async getRankingByToken(token: string, periodo: 'MES' | 'TRIMESTRE' | 'ANO'): Promise<{
+        posicao: number | null; posicao_anterior: number | null; total_corretores: number; com_venda: number;
+        vendas: number; volume: number; enviadas: number; vendas_do_lider: number;
+    } | null> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_get_ranking', { p_token: token, p_periodo: periodo });
+        if (error) throw error;
+        const res = data as { valid: boolean } & Record<string, unknown>;
+        return res?.valid ? (res as never) : null;
+    },
+
+    // ── Leads do corretor pelo link (17/10/2026, plano 2026-10-17 F3) ─────────
+    // Tudo preso ao corretor do token: lead de outro corretor não é lido nem alterado.
+    async getLeadsByToken(token: string): Promise<any[]> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_leads', { p_token: token });
+        if (error) throw error;
+        const res = data as { valid: boolean; leads?: any[] };
+        return res?.leads ?? [];
+    },
+    async salvarLeadByToken(token: string, lead: Record<string, unknown>): Promise<any> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_lead_salvar', { p_token: token, p_lead: lead });
+        if (error) throw error;
+        return data;
+    },
+    async etapaLeadByToken(token: string, leadId: string, etapa: string): Promise<any> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_lead_etapa', { p_token: token, p_lead_id: leadId, p_etapa: etapa });
+        if (error) throw error;
+        return data;
+    },
+    async interacaoLeadByToken(token: string, leadId: string, tipo: string, descricao: string): Promise<any> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_lead_interacao', { p_token: token, p_lead_id: leadId, p_tipo: tipo, p_descricao: descricao });
+        if (error) throw error;
+        return data;
+    },
+
+    // ── Agenda pelo link (17/10/2026, plano 2026-10-17 F4) ───────────────────
+    // "Lotado" é calculado no banco; inscrever trava a linha do evento.
+    async getEventosByToken(token: string): Promise<any[]> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_eventos', { p_token: token });
+        if (error) throw error;
+        const res = data as { valid: boolean; eventos?: any[] };
+        return res?.eventos ?? [];
+    },
+    async inscreverEventoByToken(token: string, eventoId: string): Promise<any> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_evento_inscrever', { p_token: token, p_evento_id: eventoId });
+        if (error) throw error;
+        return data;
+    },
+    async cancelarInscricaoByToken(token: string, eventoId: string): Promise<any> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_evento_cancelar', { p_token: token, p_evento_id: eventoId });
+        if (error) throw error;
+        return data;
+    },
+
     async getProposalsByToken(token: string): Promise<any[]> {
         const { data, error } = await supabase.rpc('fn_broker_portal_get_proposals', { p_token: token });
         if (error) throw error;

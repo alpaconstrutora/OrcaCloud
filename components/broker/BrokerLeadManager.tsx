@@ -1,389 +1,478 @@
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { avisarAcaoDoPortal } from '../../utils/portalEventos';
-import { Users, Plus, Shield, Phone, Mail, MessageSquare, Calendar, ChevronRight, Search, Clock, X, Eye } from 'lucide-react';
-import type { BrokerLead, BrokerLeadStage, BrokerLeadInteraction } from '../../types';
+import { Plus, Phone, Mail, MessageSquare, Calendar, Search, Clock, FileText, StickyNote, Loader2, Pencil, Users, Shield } from 'lucide-react';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
+import { usePersistedState } from '../ui/TableUtils';
+import { brokerPortalService } from '../../services/brokerPortalService';
+import { brokerService } from '../../services/brokerService';
+
+/**
+ * Leads do Portal do Corretor — dado REAL desde 17/10/2026 (antes, gerador fixo).
+ * Plano: docs/planos/2026-10-17-portal-corretor-pendencias.md (F3, decisão P4).
+ *
+ * O funil é do corretor: ele cria, edita, muda de etapa e registra contatos, tudo
+ * pelas RPCs do token (fn_broker_portal_lead_*), presas a ele. O gestor (visão
+ * interna) vê os leads da organização só para leitura, com o corretor de cada um.
+ * Sem token e na visão do corretor (prévia do gestor), mostra os leads daquele
+ * corretor sem permitir gravar — a prévia não escreve em nome dele.
+ *
+ * Vocabulário = CHECKs de `broker_portal_leads` / `_lead_interactions`.
+ */
+
+type Etapa = 'LEAD' | 'VISITA' | 'PROPOSTA' | 'NEGOCIACAO' | 'VENDA' | 'PERDIDO';
+
+interface Interacao { id: string; type: string; description: string; created_by?: string | null; created_at: string }
+interface Lead {
+    id: string;
+    broker_email: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    cpf?: string | null;
+    income?: number | null;
+    origin?: string | null;
+    stage: Etapa;
+    interest?: string | null;
+    notes?: string | null;
+    protection_until?: string | null;
+    created_at: string;
+    updated_at?: string | null;
+    interacoes?: Interacao[];
+}
 
 interface BrokerLeadManagerProps {
     brokerEmail: string;
+    portalToken?: string;
+    organizationId?: string;
+    visao?: 'corretor' | 'gestor';
+    compacto?: boolean;
 }
 
-const STAGE_CONFIG: Record<BrokerLeadStage, { label: string; color: string; bg: string; border: string }> = {
-    LEAD: { label: 'Lead', color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200' },
-    VISITA: { label: 'Visita', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
-    PROPOSTA: { label: 'Proposta', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
-    NEGOCIACAO: { label: 'Negociação', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
-    VENDA: { label: 'Venda', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+export const ETAPAS: { id: Etapa; label: string; cor: string }[] = [
+    { id: 'LEAD', label: 'Lead', cor: 'text-gray-600' },
+    { id: 'VISITA', label: 'Visita', cor: 'text-blue-600' },
+    { id: 'PROPOSTA', label: 'Proposta', cor: 'text-amber-600' },
+    { id: 'NEGOCIACAO', label: 'Negociação', cor: 'text-purple-600' },
+    { id: 'VENDA', label: 'Venda', cor: 'text-emerald-600' },
+    { id: 'PERDIDO', label: 'Perdido', cor: 'text-red-600' },
+];
+const ETAPA_BY_ID = Object.fromEntries(ETAPAS.map(e => [e.id, e])) as Record<Etapa, typeof ETAPAS[number]>;
+
+export const ORIGENS: Record<string, string> = {
+    DIRETO: 'Contato direto', SITE: 'Site', INDICACAO: 'Indicação', PLANTAO: 'Plantão', REDES_SOCIAIS: 'Redes sociais', OUTRO: 'Outro',
 };
 
-const ORIGIN_LABELS: Record<string, string> = {
-    SITE: 'Site', INDICACAO: 'Indicação', PLANTAO: 'Plantão',
-    REDES_SOCIAIS: 'Redes Sociais', IMOBILIARIA: 'Imobiliária', OUTRO: 'Outro',
+const TIPOS_CONTATO: { id: string; label: string; icon: React.ElementType }[] = [
+    { id: 'LIGACAO', label: 'Ligação', icon: Phone },
+    { id: 'WHATSAPP', label: 'WhatsApp', icon: MessageSquare },
+    { id: 'VISITA', label: 'Visita', icon: Calendar },
+    { id: 'EMAIL', label: 'E-mail', icon: Mail },
+    { id: 'PROPOSTA', label: 'Proposta', icon: FileText },
+    { id: 'NOTE', label: 'Anotação', icon: StickyNote },
+];
+const ICONE_CONTATO = Object.fromEntries(TIPOS_CONTATO.map(t => [t.id, t.icon])) as Record<string, React.ElementType>;
+
+const VAZIO = { id: '', name: '', phone: '', email: '', origin: 'DIRETO', interest: '', notes: '' };
+
+const msgErro = (e: unknown) => {
+    const m = (e as { message?: string })?.message || '';
+    if (/23514/.test(String((e as { code?: string })?.code)) || /check constraint/i.test(m)) return 'Valor não aceito pelo sistema.';
+    return m || 'Não foi possível salvar. Tente de novo.';
 };
 
-const generateDemoLeads = (email: string): BrokerLead[] => {
-    const names = ['Ana Silva', 'Carlos Mendes', 'Mariana Costa', 'Pedro Almeida', 'Julia Santos', 'Fernando Lima', 'Beatriz Rocha', 'Lucas Oliveira'];
-    const origins: BrokerLead['origin'][] = ['SITE', 'INDICACAO', 'PLANTAO', 'REDES_SOCIAIS', 'IMOBILIARIA'];
-    const stages: BrokerLeadStage[] = ['LEAD', 'LEAD', 'VISITA', 'VISITA', 'PROPOSTA', 'NEGOCIACAO', 'VENDA', 'LEAD'];
-    const typologies = ['2Q', '2Q Suite', '3Q', '3Q Suite', 'Cobertura'];
+const soDigitos = (s?: string | null) => (s || '').replace(/\D/g, '');
+const dataCurta = (d: string) => new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 
-    return names.map((name, i) => {
-        const created = new Date();
-        created.setDate(created.getDate() - (30 - i * 3));
-        const protection = new Date(created);
-        protection.setDate(protection.getDate() + 90);
+const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail, portalToken, organizationId, visao = 'corretor', compacto = false }) => {
+    const ehGestor = visao === 'gestor' && !portalToken;
+    // Só quem entra pelo link grava (as RPCs exigem o token do corretor).
+    const podeEditar = !!portalToken;
 
-        const interactions: BrokerLeadInteraction[] = [
-            { id: `int-${i}-1`, date: created.toISOString(), type: 'LIGACAO', description: 'Primeiro contato via telefone' },
-        ];
-        if (stages[i] !== 'LEAD') {
-            interactions.push({ id: `int-${i}-2`, date: new Date(created.getTime() + 3 * 86400000).toISOString(), type: 'VISITA', description: 'Visita ao stand de vendas' });
+    const [leads, setLeads] = useState<Lead[]>([]);
+    const [carregando, setCarregando] = useState(true);
+    const [erroCarga, setErroCarga] = useState<string | null>(null);
+    const [busca, setBusca] = usePersistedState<string>('brokerLeads:busca', '');
+    const [filtro, setFiltro] = useState<Etapa | 'all'>('all');
+    const [abertoId, setAbertoId] = useState<string | null>(null);
+    const [form, setForm] = useState<typeof VAZIO | null>(null);
+    const [salvando, setSalvando] = useState(false);
+    const [erroForm, setErroForm] = useState<string | null>(null);
+    const [contato, setContato] = useState({ tipo: 'LIGACAO', texto: '' });
+
+    const carregar = useCallback(async () => {
+        setErroCarga(null);
+        try {
+            const dados = portalToken
+                ? await brokerPortalService.getLeadsByToken(portalToken)
+                : organizationId
+                    ? await brokerService.listLeadsDaOrganizacao(organizationId, ehGestor ? undefined : brokerEmail)
+                    : [];
+            setLeads((dados as Lead[]).map(l => ({
+                ...l,
+                interacoes: [...(l.interacoes || [])].sort((a, b) => b.created_at.localeCompare(a.created_at)),
+            })));
+        } catch (e) {
+            console.error('[BrokerLeadManager]', e);
+            setErroCarga('Não foi possível carregar os leads agora.');
+        } finally {
+            setCarregando(false);
         }
-        if (['PROPOSTA', 'NEGOCIACAO', 'VENDA'].includes(stages[i])) {
-            interactions.push({ id: `int-${i}-3`, date: new Date(created.getTime() + 7 * 86400000).toISOString(), type: 'PROPOSTA', description: 'Proposta enviada para unidade 802' });
-        }
+    }, [portalToken, organizationId, ehGestor, brokerEmail]);
 
-        return {
-            id: `lead-${i + 1}`,
-            broker_id: 'demo',
-            broker_email: email,
-            organization_id: 'demo',
-            name,
-            cpf: `${String(100 + i).padStart(3, '0')}.${String(200 + i).padStart(3, '0')}.${String(300 + i).padStart(3, '0')}-${String(i).padStart(2, '0')}`,
-            email: `${name.toLowerCase().replace(' ', '.')}@email.com`,
-            phone: `(11) 9${String(8000 + i * 111).padStart(4, '0')}-${String(1000 + i * 111).padStart(4, '0')}`,
-            origin: origins[i % origins.length],
-            stage: stages[i],
-            interest_typology: typologies[i % typologies.length],
-            interest_block: i % 2 === 0 ? 'Torre A' : 'Torre B',
-            budget_range: i % 3 === 0 ? 'R$ 300-400k' : i % 3 === 1 ? 'R$ 400-500k' : 'R$ 500k+',
-            protection_until: protection.toISOString(),
-            interactions,
-            created_at: created.toISOString(),
-        };
-    });
-};
+    useEffect(() => { setCarregando(true); carregar(); }, [carregar]);
 
-const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) => {
-    const [leads, setLeads] = useState<BrokerLead[]>(() => generateDemoLeads(brokerEmail));
-    const [search, setSearch] = useState('');
-    const [stageFilter, setStageFilter] = useState<BrokerLeadStage | 'all'>('all');
-    const [viewMode, setViewMode] = useState<'funnel' | 'list'>('funnel');
-    const [selectedLead, setSelectedLead] = useState<BrokerLead | null>(null);
-    const [showNewLeadForm, setShowNewLeadForm] = useState(false);
-
-    // New Lead form
-    const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', origin: 'SITE' as BrokerLead['origin'], interest_typology: '', notes: '' });
-
-    const filteredLeads = useMemo(() => {
-        let result = leads;
-        if (search) {
-            const q = search.toLowerCase();
-            result = result.filter(l => l.name.toLowerCase().includes(q) || l.email?.toLowerCase().includes(q) || l.phone?.includes(q));
-        }
-        if (stageFilter !== 'all') result = result.filter(l => l.stage === stageFilter);
-        return result;
-    }, [leads, search, stageFilter]);
-
-    const funnelData = useMemo(() => {
-        const stages: BrokerLeadStage[] = ['LEAD', 'VISITA', 'PROPOSTA', 'NEGOCIACAO', 'VENDA'];
-        return stages.map(stage => ({
-            stage,
-            leads: leads.filter(l => l.stage === stage),
-            count: leads.filter(l => l.stage === stage).length,
-        }));
+    const contagem = useMemo(() => {
+        const c: Record<string, number> = {};
+        leads.forEach(l => { c[l.stage] = (c[l.stage] || 0) + 1; });
+        return c;
     }, [leads]);
 
-    const handleAddLead = () => {
-        if (!newLead.name) return;
-        const protection = new Date();
-        protection.setDate(protection.getDate() + 90);
-        const lead: BrokerLead = {
-            id: `lead-${Date.now()}`,
-            broker_id: 'demo',
-            broker_email: brokerEmail,
-            organization_id: 'demo',
-            name: newLead.name,
-            email: newLead.email,
-            phone: newLead.phone,
-            origin: newLead.origin,
-            stage: 'LEAD',
-            interest_typology: newLead.interest_typology,
-            protection_until: protection.toISOString(),
-            notes: newLead.notes,
-            interactions: [{ id: `int-${Date.now()}`, date: new Date().toISOString(), type: 'LIGACAO', description: 'Cadastro inicial' }],
-            created_at: new Date().toISOString(),
-        };
-        setLeads(prev => [lead, ...prev]);
-        setNewLead({ name: '', phone: '', email: '', origin: 'SITE', interest_typology: '', notes: '' });
-        setShowNewLeadForm(false);
-        avisarAcaoDoPortal('criou-lead');
-    };
+    const visiveis = useMemo(() => {
+        const q = busca.trim().toLowerCase();
+        return leads.filter(l =>
+            (filtro === 'all' || l.stage === filtro) &&
+            (!q || l.name.toLowerCase().includes(q) || (l.email || '').toLowerCase().includes(q)
+                || soDigitos(l.phone).includes(soDigitos(q)) && soDigitos(q).length > 0
+                || (ehGestor && l.broker_email.toLowerCase().includes(q))));
+    }, [leads, busca, filtro, ehGestor]);
 
-    const advanceStage = (lead: BrokerLead) => {
-        const order: BrokerLeadStage[] = ['LEAD', 'VISITA', 'PROPOSTA', 'NEGOCIACAO', 'VENDA'];
-        const idx = order.indexOf(lead.stage);
-        if (idx < order.length - 1) {
-            setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: order[idx + 1] } : l));
-            if (selectedLead?.id === lead.id) setSelectedLead({ ...lead, stage: order[idx + 1] });
+    const aberto = leads.find(l => l.id === abertoId) || null;
+
+    const salvarForm = async () => {
+        if (!portalToken || !form) return;
+        setSalvando(true); setErroForm(null);
+        try {
+            const novo = !form.id;
+            const r = await brokerPortalService.salvarLeadByToken(portalToken, { ...form, id: form.id || null });
+            await carregar();
+            setForm(null);
+            if (novo) { avisarAcaoDoPortal('criou-lead'); setAbertoId((r as Lead)?.id ?? null); }
+        } catch (e) {
+            setErroForm(msgErro(e));
+        } finally {
+            setSalvando(false);
         }
     };
 
-    const daysUntilExpiry = (dateStr: string) => {
-        const diff = new Date(dateStr).getTime() - Date.now();
-        return Math.ceil(diff / 86400000);
+    const mudarEtapa = async (etapa: Etapa) => {
+        if (!portalToken || !aberto || aberto.stage === etapa) return;
+        setSalvando(true); setErroForm(null);
+        try {
+            await brokerPortalService.etapaLeadByToken(portalToken, aberto.id, etapa);
+            await carregar();
+        } catch (e) {
+            setErroForm(msgErro(e));
+        } finally {
+            setSalvando(false);
+        }
     };
 
-    const formatDate = (d: string) => new Date(d).toLocaleDateString('pt-BR');
+    const registrarContato = async () => {
+        if (!portalToken || !aberto || !contato.texto.trim()) return;
+        setSalvando(true); setErroForm(null);
+        try {
+            await brokerPortalService.interacaoLeadByToken(portalToken, aberto.id, contato.tipo, contato.texto.trim());
+            setContato(c => ({ ...c, texto: '' }));
+            await carregar();
+        } catch (e) {
+            setErroForm(msgErro(e));
+        } finally {
+            setSalvando(false);
+        }
+    };
+
+    const diasDeProtecao = (d?: string | null) => (d ? Math.ceil((new Date(d).getTime() - Date.now()) / 86400000) : null);
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input data-tour="leads-busca" type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar lead..."
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
-                    </div>
-                    <div className="flex bg-gray-100 rounded-xl p-1">
-                        <button onClick={() => setViewMode('funnel')} className={`px-3 py-1.5 rounded-lg text-form-input font-bold transition-all ${viewMode === 'funnel' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Funil</button>
-                        <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-lg text-button font-bold transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Lista</button>
-                    </div>
+        <div className={compacto ? 'space-y-4' : 'space-y-6'}>
+            {/* Busca + novo */}
+            <div className="flex items-center gap-2">
+                <div className="relative flex-1 min-w-0">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                        data-tour="leads-busca"
+                        type="text"
+                        value={busca}
+                        onChange={e => setBusca(e.target.value)}
+                        placeholder={ehGestor ? 'Buscar lead ou corretor…' : 'Buscar lead…'}
+                        className="w-full h-10 pl-10 pr-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    />
                 </div>
-                <button data-tour="leads-novo" onClick={() => setShowNewLeadForm(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
-                    <Plus className="w-4 h-4" /> Novo Lead
-                </button>
+                {podeEditar && (
+                    <button
+                        type="button"
+                        data-tour="leads-novo"
+                        onClick={() => { setErroForm(null); setForm({ ...VAZIO }); }}
+                        className="shrink-0 h-10 px-4 flex items-center gap-1.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold active:bg-indigo-700 hover:bg-indigo-700"
+                    >
+                        <Plus className="w-4 h-4" /> Novo lead
+                    </button>
+                )}
             </div>
 
-            {/* New Lead Modal */}
-            {showNewLeadForm && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowNewLeadForm(false)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-black text-gray-900">Novo Lead</h3>
-                            <button onClick={() => setShowNewLeadForm(false)} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="col-span-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Nome *</label>
-                                <input type="text" value={newLead.name} onChange={e => setNewLead(p => ({ ...p, name: e.target.value }))}
-                                    className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm" placeholder="Nome completo" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Telefone</label>
-                                <input type="text" value={newLead.phone} onChange={e => setNewLead(p => ({ ...p, phone: e.target.value }))}
-                                    className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm" placeholder="(00) 00000-0000" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">E-mail</label>
-                                <input type="text" value={newLead.email} onChange={e => setNewLead(p => ({ ...p, email: e.target.value }))}
-                                    className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm" placeholder="email@exemplo.com" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Origem</label>
-                                <select value={newLead.origin} onChange={e => setNewLead(p => ({ ...p, origin: e.target.value as BrokerLead['origin'] }))}
-                                    className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm bg-white">
-                                    {Object.entries(ORIGIN_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Interesse</label>
-                                <input type="text" value={newLead.interest_typology} onChange={e => setNewLead(p => ({ ...p, interest_typology: e.target.value }))}
-                                    className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm" placeholder="Ex: 3Q Suite" />
-                            </div>
-                            <div className="col-span-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Observações</label>
-                                <textarea value={newLead.notes} onChange={e => setNewLead(p => ({ ...p, notes: e.target.value }))} rows={2}
-                                    className="w-full mt-1 p-2.5 rounded-xl border border-gray-200 text-sm" />
-                            </div>
-                        </div>
-                        <button onClick={handleAddLead} disabled={!newLead.name}
-                            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50">
-                            Cadastrar Lead
+            {/* Etapas = filtro (faixa rolável no celular) */}
+            <div className={compacto ? 'flex gap-2 overflow-x-auto -mx-4 px-4 pb-1 scrollbar-hide' : 'flex flex-wrap gap-2'} role="group" aria-label="Filtrar por etapa">
+                {[{ id: 'all' as const, label: 'Todos', cor: 'text-gray-700' }, ...ETAPAS].map(e => {
+                    const n = e.id === 'all' ? leads.length : (contagem[e.id] || 0);
+                    const ativo = filtro === e.id;
+                    return (
+                        <button
+                            key={e.id}
+                            type="button"
+                            onClick={() => setFiltro(e.id as Etapa | 'all')}
+                            aria-pressed={ativo}
+                            className={`shrink-0 whitespace-nowrap h-8 px-3 rounded-xl border text-sm ${ativo ? 'bg-gray-900 text-white border-gray-900' : `bg-white border-gray-200 ${e.cor}`}`}
+                        >
+                            {e.label} ({n})
                         </button>
-                    </div>
-                </div>
-            )}
+                    );
+                })}
+            </div>
 
-            {/* Funnel View */}
-            {viewMode === 'funnel' && (
-                <div className="grid grid-cols-5 gap-4">
-                    {funnelData.map(({ stage, leads: stageLeads, count }) => {
-                        const cfg = STAGE_CONFIG[stage];
+            {carregando ? (
+                <div className="py-16 text-center"><Loader2 className="w-7 h-7 animate-spin text-indigo-600 mx-auto" /></div>
+            ) : erroCarga ? (
+                <p className="text-sm text-gray-500 bg-white rounded-2xl border border-gray-100 p-6 text-center">{erroCarga}</p>
+            ) : visiveis.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-gray-100 text-center px-6 py-12">
+                    <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-gray-600">
+                        {leads.length === 0 ? (ehGestor ? 'Nenhum corretor cadastrou leads ainda.' : 'Nenhum lead ainda.') : 'Nenhum lead com esse filtro.'}
+                    </p>
+                    {leads.length === 0 && podeEditar && <p className="text-xs text-gray-400 mt-1">Cadastre os interessados que você atende para acompanhar cada um até a venda.</p>}
+                </div>
+            ) : (
+                <ul className={compacto ? 'space-y-2' : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3'} data-tour="leads-lista">
+                    {visiveis.map(l => {
+                        const et = ETAPA_BY_ID[l.stage] || ETAPAS[0];
+                        const ultimo = l.interacoes?.[0];
+                        const dias = diasDeProtecao(l.protection_until);
                         return (
-                            <div key={stage} className="space-y-3">
-                                <div className={`rounded-xl p-3 ${cfg.bg} border ${cfg.border}`}>
-                                    <div className="flex items-center justify-between">
-                                        <span className={`text-xs font-black uppercase tracking-wider ${cfg.color}`}>{cfg.label}</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black ${cfg.bg} ${cfg.color} border ${cfg.border}`}>{count}</span>
+                            <li key={l.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => { setErroForm(null); setAbertoId(l.id); }}
+                                    className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:border-indigo-200 active:bg-gray-50"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <p className="text-sm font-bold text-gray-900 truncate">{l.name}</p>
+                                        <span className={`text-sm shrink-0 ${et.cor}`}>{et.label}</span>
                                     </div>
-                                </div>
-                                <div className="space-y-2 max-h-[500px] overflow-y-auto scrollbar-hide">
-                                    {stageLeads.map(lead => (
-                                        <button key={lead.id} onClick={() => setSelectedLead(lead)}
-                                            className={`w-full text-left bg-white rounded-xl p-3 border border-gray-100 hover:shadow-md hover:border-indigo-200 transition-all ${selectedLead?.id === lead.id ? 'ring-2 ring-indigo-500 border-indigo-300' : ''}`}>
-                                            <p className="text-sm font-bold text-gray-900 truncate">{lead.name}</p>
-                                            <p className="text-xs text-gray-400 mt-0.5">{lead.interest_typology || 'Sem preferência'}</p>
-                                            <div className="flex items-center gap-1 mt-2">
-                                                <Shield className="w-3 h-3 text-emerald-500" />
-                                                <span className="text-xs font-bold text-emerald-600">{daysUntilExpiry(lead.protection_until)}d</span>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
+                                    <p className="text-xs text-gray-500 mt-0.5 truncate">
+                                        {[l.interest, l.origin ? ORIGENS[l.origin] || l.origin : null].filter(Boolean).join(' · ') || 'Sem interesse informado'}
+                                    </p>
+                                    {ehGestor && <p className="text-xs text-indigo-600 mt-1 truncate">{l.broker_email}</p>}
+                                    <div className="flex items-center justify-between gap-2 mt-2 text-xs text-gray-400">
+                                        <span className="truncate">{ultimo ? `Último contato: ${dataCurta(ultimo.created_at)}` : `Cadastrado em ${dataCurta(l.created_at)}`}</span>
+                                        {dias !== null && (
+                                            <span className={`inline-flex items-center gap-1 shrink-0 ${dias < 15 ? 'text-red-600' : 'text-emerald-600'}`} title="Dias de proteção do lead">
+                                                <Shield className="w-3 h-3" />{dias}d
+                                            </span>
+                                        )}
+                                    </div>
+                                </button>
+                            </li>
                         );
                     })}
-                </div>
+                </ul>
             )}
 
-            {/* List View */}
-            {viewMode === 'list' && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="bg-gray-50 border-b border-gray-100">
-                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Lead</th>
-                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Contato</th>
-                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Origem</th>
-                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Etapa</th>
-                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Proteção</th>
-                                    <th className="text-left p-4 text-xs font-black text-gray-400 uppercase tracking-wider">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {filteredLeads.map(lead => {
-                                    const cfg = STAGE_CONFIG[lead.stage];
-                                    const days = daysUntilExpiry(lead.protection_until);
-                                    return (
-                                        <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="p-4">
-                                                <p className="text-sm font-bold text-gray-900">{lead.name}</p>
-                                                <p className="text-xs text-gray-400">{lead.interest_typology} • {lead.interest_block}</p>
-                                            </td>
-                                            <td className="p-4">
-                                                <p className="text-xs text-gray-600">{lead.phone}</p>
-                                                <p className="text-xs text-gray-400">{lead.email}</p>
-                                            </td>
-                                            <td className="p-4">
-                                                <span className="text-xs font-bold text-gray-600">{ORIGIN_LABELS[lead.origin]}</span>
-                                            </td>
-                                            <td className="p-4">
-                                                <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${cfg.bg} ${cfg.color} border ${cfg.border}`}>
-                                                    {cfg.label}
-                                                </span>
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex items-center gap-1">
-                                                    <Shield className={`w-3.5 h-3.5 ${days < 15 ? 'text-red-500' : days < 30 ? 'text-amber-500' : 'text-emerald-500'}`} />
-                                                    <span className={`text-xs font-bold ${days < 15 ? 'text-red-600' : days < 30 ? 'text-amber-600' : 'text-emerald-600'}`}>{days}d</span>
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex gap-1">
-                                                    <button onClick={() => setSelectedLead(lead)} className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-600 transition-colors">
-                                                        <Eye className="w-4 h-4" />
-                                                    </button>
-                                                    {lead.stage !== 'VENDA' && (
-                                                        <button onClick={() => advanceStage(lead)} className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors" title="Avançar etapa">
-                                                            <ChevronRight className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
+            {/* Ficha do lead */}
+            <Sheet open={!!aberto && !form} onClose={() => setAbertoId(null)} size="xl">
+                {aberto && (
+                    <>
+                        <SheetHeader onClose={() => setAbertoId(null)}>
+                            <SheetTitle>{aberto.name}</SheetTitle>
+                            <SheetDescription>
+                                {[aberto.interest, aberto.origin ? ORIGENS[aberto.origin] || aberto.origin : null, ehGestor ? aberto.broker_email : null].filter(Boolean).join(' · ') || 'Lead'}
+                            </SheetDescription>
+                        </SheetHeader>
+                        <SheetPanel className="px-4 py-5 md:px-6 space-y-5">
+                            {/* Atalhos de contato */}
+                            {(aberto.phone || aberto.email) && (
+                                <div className="flex flex-wrap gap-2">
+                                    {aberto.phone && (
+                                        <a href={`tel:${soDigitos(aberto.phone)}`} className="h-9 px-3 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+                                            <Phone className="w-4 h-4" /> {aberto.phone}
+                                        </a>
+                                    )}
+                                    {aberto.phone && (
+                                        <a href={`https://wa.me/55${soDigitos(aberto.phone).replace(/^55/, '')}`} target="_blank" rel="noreferrer" className="h-9 px-3 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">
+                                            <MessageSquare className="w-4 h-4" /> WhatsApp
+                                        </a>
+                                    )}
+                                    {aberto.email && (
+                                        <a href={`mailto:${aberto.email}`} className="h-9 px-3 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 max-w-full">
+                                            <Mail className="w-4 h-4 shrink-0" /> <span className="truncate">{aberto.email}</span>
+                                        </a>
+                                    )}
+                                </div>
+                            )}
 
-            {/* Lead Detail Drawer */}
-            {selectedLead && (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-xl p-6 animate-in slide-in-from-bottom-4 duration-300">
-                    <div className="flex items-start justify-between mb-6">
-                        <div>
-                            <h3 className="text-xl font-black text-gray-900">{selectedLead.name}</h3>
-                            <p className="text-sm text-gray-500 mt-1">{selectedLead.email} • {selectedLead.phone}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <span className={`px-4 py-2 rounded-xl text-table-body font-black uppercase tracking-wider ${STAGE_CONFIG[selectedLead.stage].bg} ${STAGE_CONFIG[selectedLead.stage].color} border ${STAGE_CONFIG[selectedLead.stage].border}`}>
-                                {STAGE_CONFIG[selectedLead.stage].label}
-                            </span>
-                            <button onClick={() => setSelectedLead(null)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-                                <X className="w-5 h-5 text-gray-400" />
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-gray-50 rounded-xl p-3">
-                            <p className="text-xs font-black text-gray-400 uppercase">Origem</p>
-                            <p className="text-sm font-bold text-gray-900">{ORIGIN_LABELS[selectedLead.origin]}</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-3">
-                            <p className="text-xs font-black text-gray-400 uppercase">Interesse</p>
-                            <p className="text-sm font-bold text-gray-900">{selectedLead.interest_typology || '-'}</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-3">
-                            <p className="text-xs font-black text-gray-400 uppercase">Faixa</p>
-                            <p className="text-sm font-bold text-gray-900">{selectedLead.budget_range || '-'}</p>
-                        </div>
-                        <div className={`rounded-xl p-3 ${daysUntilExpiry(selectedLead.protection_until) < 15 ? 'bg-red-50' : 'bg-emerald-50'}`}>
-                            <p className="text-xs font-black text-gray-400 uppercase">Proteção</p>
-                            <div className="flex items-center gap-1">
-                                <Shield className={`w-4 h-4 ${daysUntilExpiry(selectedLead.protection_until) < 15 ? 'text-red-500' : 'text-emerald-500'}`} />
-                                <p className={`text-sm font-bold ${daysUntilExpiry(selectedLead.protection_until) < 15 ? 'text-red-700' : 'text-emerald-700'}`}>
-                                    {daysUntilExpiry(selectedLead.protection_until)} dias restantes
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Timeline */}
-                    <div>
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Histórico de Interações</h4>
-                        <div className="space-y-3">
-                            {selectedLead.interactions?.map((interaction, i) => {
-                                const iconMap: Record<string, React.ElementType> = {
-                                    LIGACAO: Phone, VISITA: Calendar, EMAIL: Mail,
-                                    WHATSAPP: MessageSquare, REUNIAO: Users, PROPOSTA: ChevronRight
-                                };
-                                const Icon = iconMap[interaction.type] || Clock;
-                                return (
-                                    <div key={interaction.id} className="flex items-start gap-3">
-                                        <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-                                            <Icon className="w-4 h-4 text-indigo-600" />
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold text-gray-900">{interaction.description}</p>
-                                            <p className="text-xs text-gray-400 mt-0.5">{formatDate(interaction.date)}</p>
-                                        </div>
+                            {/* Etapa */}
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500 mb-2">Etapa</p>
+                                {podeEditar ? (
+                                    <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Etapa do lead">
+                                        {ETAPAS.map(e => (
+                                            <button
+                                                key={e.id}
+                                                type="button"
+                                                disabled={salvando}
+                                                onClick={() => mudarEtapa(e.id)}
+                                                aria-pressed={aberto.stage === e.id}
+                                                className={`h-9 rounded-xl border text-sm ${aberto.stage === e.id ? 'bg-indigo-600 border-indigo-600 text-white' : `bg-white border-gray-200 ${e.cor}`} disabled:opacity-60`}
+                                            >
+                                                {e.label}
+                                            </button>
+                                        ))}
                                     </div>
-                                );
-                            })}
-                        </div>
-                    </div>
+                                ) : (
+                                    <p className={`text-sm ${ETAPA_BY_ID[aberto.stage]?.cor}`}>{ETAPA_BY_ID[aberto.stage]?.label}</p>
+                                )}
+                            </div>
 
-                    {selectedLead.stage !== 'VENDA' && (
-                        <div className="mt-6 pt-4 border-t border-gray-100">
-                            <button onClick={() => advanceStage(selectedLead)}
-                                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
-                                <ChevronRight className="w-4 h-4" />
-                                Avançar para {STAGE_CONFIG[
-                                    (['LEAD', 'VISITA', 'PROPOSTA', 'NEGOCIACAO', 'VENDA'] as BrokerLeadStage[])[
-                                    ['LEAD', 'VISITA', 'PROPOSTA', 'NEGOCIACAO', 'VENDA'].indexOf(selectedLead.stage) + 1
-                                    ] || 'VENDA'
-                                ].label}
+                            {aberto.notes && (
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-500 mb-1">Observações</p>
+                                    <p className="text-sm text-gray-700 whitespace-pre-line">{aberto.notes}</p>
+                                </div>
+                            )}
+
+                            {/* Registrar contato */}
+                            {podeEditar && (
+                                <div className="bg-gray-50 rounded-2xl p-3 space-y-2">
+                                    <p className="text-xs font-semibold text-gray-500">Registrar contato</p>
+                                    <select
+                                        value={contato.tipo}
+                                        onChange={e => setContato(c => ({ ...c, tipo: e.target.value }))}
+                                        aria-label="Tipo de contato"
+                                        className="w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-sm"
+                                    >
+                                        {TIPOS_CONTATO.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                    </select>
+                                    <textarea
+                                        value={contato.texto}
+                                        onChange={e => setContato(c => ({ ...c, texto: e.target.value }))}
+                                        rows={2}
+                                        placeholder="O que foi conversado"
+                                        aria-label="Descrição do contato"
+                                        className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={registrarContato}
+                                        disabled={salvando || !contato.texto.trim()}
+                                        title={!contato.texto.trim() ? 'Escreva o que foi conversado' : undefined}
+                                        className="w-full h-10 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-50"
+                                    >
+                                        Registrar
+                                    </button>
+                                </div>
+                            )}
+
+                            {erroForm && <p className="text-sm text-red-600">{erroForm}</p>}
+
+                            {/* Histórico */}
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500 mb-2">Histórico</p>
+                                {(aberto.interacoes || []).length === 0 ? (
+                                    <p className="text-sm text-gray-400">Nenhum contato registrado.</p>
+                                ) : (
+                                    <ol className="space-y-3">
+                                        {(aberto.interacoes || []).map(i => {
+                                            const Icon = ICONE_CONTATO[i.type] || Clock;
+                                            return (
+                                                <li key={i.id} className="flex items-start gap-3">
+                                                    <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><Icon className="w-4 h-4" /></span>
+                                                    <span className="min-w-0">
+                                                        <span className="block text-sm text-gray-800">{i.description}</span>
+                                                        <span className="block text-xs text-gray-400 mt-0.5">{new Date(i.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                                                    </span>
+                                                </li>
+                                            );
+                                        })}
+                                    </ol>
+                                )}
+                            </div>
+                        </SheetPanel>
+                        {podeEditar && (
+                            <SheetFooter>
+                                <button
+                                    type="button"
+                                    onClick={() => { setErroForm(null); setForm({ id: aberto.id, name: aberto.name, phone: aberto.phone || '', email: aberto.email || '', origin: aberto.origin || 'DIRETO', interest: aberto.interest || '', notes: aberto.notes || '' }); }}
+                                    className="h-10 px-4 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                    <Pencil className="w-4 h-4" /> Editar dados
+                                </button>
+                            </SheetFooter>
+                        )}
+                    </>
+                )}
+            </Sheet>
+
+            {/* Cadastro / edição */}
+            <Sheet open={!!form} onClose={() => setForm(null)} size="lg" dirty={!!form && !!form.name && !form.id}>
+                {form && (
+                    <>
+                        <SheetHeader onClose={() => setForm(null)}>
+                            <SheetTitle>{form.id ? 'Editar lead' : 'Novo lead'}</SheetTitle>
+                            <SheetDescription>Só você e a incorporadora veem os seus leads.</SheetDescription>
+                        </SheetHeader>
+                        <SheetPanel className="px-4 py-5 md:px-6 space-y-3">
+                            {([
+                                ['name', 'Nome *', 'Nome completo', 'text'],
+                                ['phone', 'Telefone', '(00) 00000-0000', 'tel'],
+                                ['email', 'E-mail', 'email@exemplo.com', 'email'],
+                                ['interest', 'Interesse', 'Ex.: 3 dormitórios, Torre A', 'text'],
+                            ] as const).map(([campo, rotulo, ph, tipo]) => (
+                                <label key={campo} className="block">
+                                    <span className="text-xs font-semibold text-gray-500">{rotulo}</span>
+                                    <input
+                                        type={tipo}
+                                        value={form[campo]}
+                                        onChange={e => setForm(f => f && ({ ...f, [campo]: e.target.value }))}
+                                        placeholder={ph}
+                                        className="mt-1 w-full h-10 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                                    />
+                                </label>
+                            ))}
+                            <label className="block">
+                                <span className="text-xs font-semibold text-gray-500">Origem</span>
+                                <select
+                                    value={form.origin}
+                                    onChange={e => setForm(f => f && ({ ...f, origin: e.target.value }))}
+                                    className="mt-1 w-full h-10 px-3 rounded-xl border border-gray-200 text-sm bg-white"
+                                >
+                                    {Object.entries(ORIGENS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                </select>
+                            </label>
+                            <label className="block">
+                                <span className="text-xs font-semibold text-gray-500">Observações</span>
+                                <textarea
+                                    value={form.notes}
+                                    onChange={e => setForm(f => f && ({ ...f, notes: e.target.value }))}
+                                    rows={3}
+                                    className="mt-1 w-full p-3 rounded-xl border border-gray-200 text-sm"
+                                />
+                            </label>
+                            {erroForm && <p className="text-sm text-red-600">{erroForm}</p>}
+                        </SheetPanel>
+                        <SheetFooter>
+                            <button type="button" onClick={() => setForm(null)} className="h-10 px-4 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Cancelar</button>
+                            <button
+                                type="button"
+                                onClick={salvarForm}
+                                disabled={salvando || !form.name.trim()}
+                                title={!form.name.trim() ? 'Informe o nome do lead' : undefined}
+                                className="h-10 px-5 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-50"
+                            >
+                                {salvando ? 'Salvando…' : form.id ? 'Salvar' : 'Cadastrar'}
                             </button>
-                        </div>
-                    )}
-                </div>
-            )}
+                        </SheetFooter>
+                    </>
+                )}
+            </Sheet>
         </div>
     );
 };

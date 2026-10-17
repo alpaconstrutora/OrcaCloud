@@ -8,6 +8,7 @@ import { formatMoney } from '../ui/Format';
 import { SortableHeader, ColumnConfigButton, useTableColumns } from '../ui/TableUtils';
 import type { ColumnConfig } from '../ui/TableUtils';
 import type { BrokerUnit } from '../../types';
+import { negocioAtivoDaUnidade, statusEfetivoDaUnidade, type NegocioDaUnidade } from '../../utils/statusEfetivoDaUnidade';
 
 interface BrokerDevelopmentsProps {
     /** Empreendimentos (commercial_properties com type='BUILDING') — já carregados pelo portal. */
@@ -29,6 +30,12 @@ interface BrokerDevelopmentsProps {
     selectedUnitIds?: string[];
     onToggleUnit?: (unit: BrokerUnit) => void;
     /**
+     * Negócios/propostas da organização (os mesmos que pintam o espelho do
+     * Estoque). Com eles o status da unidade aqui é o EFETIVO — proposta aprovada
+     * = Vendido, enviada = Reservado —, igual ao do Estoque. Sem eles, o do cadastro.
+     */
+    deals?: readonly NegocioDaUnidade[];
+    /**
      * Celular (BrokerPortalMobile): empreendimentos e unidades em CARTÕES, sem
      * <table>. As colunas que o gestor liberou para o corretor
      * (broker_portal_price_columns) continuam mandando no que o cartão mostra.
@@ -45,6 +52,7 @@ const UNIT_STATUS_LABEL: Record<string, string> = {
     RENTED: 'Alugado',
     WAITING_PAYMENT: 'Aguardando pagamento',
     BLOCKED: 'Bloqueado',
+    MAINTENANCE: 'Em negociação',
     EXCHANGED: 'Permutado',
 };
 const UNIT_STATUS_COLOR: Record<string, string> = {
@@ -54,6 +62,7 @@ const UNIT_STATUS_COLOR: Record<string, string> = {
     RENTED: 'text-blue-700',
     WAITING_PAYMENT: 'text-amber-700',
     BLOCKED: 'text-gray-600',
+    MAINTENANCE: 'text-gray-600',
     EXCHANGED: 'text-violet-700',
 };
 
@@ -205,7 +214,7 @@ type SortKey = 'unit' | 'status' | 'privArea' | 'bedrooms' | 'parking' | 'bathro
     | 'position' | 'current' | 'price' | 'delta' | 'visibleToBroker' | 'showPrice';
 type BuildingSortKey = 'name' | 'units';
 
-const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, units, portalToken, organizationId, onMakeProposal, selectedUnitIds, onToggleUnit, compacto = false }) => {
+const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, units, portalToken, organizationId, onMakeProposal, selectedUnitIds, onToggleUnit, compacto = false, deals }) => {
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
     // Eixo de preço exibido: venda (price) ou locação (rental_price). Toggle no
     // detalhe do empreendimento — o mesmo prédio pode ter as duas tabelas.
@@ -294,10 +303,14 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
     const availableByBuilding = useMemo(() => {
         const counts: Record<string, number> = {};
         units.forEach(u => {
-            if (u.type !== 'BUILDING' && u.parent_id && u.status === 'AVAILABLE') counts[u.parent_id] = (counts[u.parent_id] || 0) + 1;
+            // status EFETIVO: unidade com proposta aprovada/enviada não conta como livre
+            if (u.type !== 'BUILDING' && u.parent_id
+                && statusEfetivoDaUnidade(u.status, negocioAtivoDaUnidade(u.id, deals)) === 'AVAILABLE') {
+                counts[u.parent_id] = (counts[u.parent_id] || 0) + 1;
+            }
         });
         return counts;
-    }, [units]);
+    }, [units, deals]);
 
     useEffect(() => {
         if (!selectedBuildingId) return;
@@ -369,7 +382,13 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
             }));
     }, [activeTable, loading, units, selectedBuildingId, priceMode]);
 
-    const rows = activeTable ? items : fallbackRows;
+    // Status EFETIVO em cada linha (utils/statusEfetivoDaUnidade.ts): daqui para
+    // baixo — selo, travas de proposta/cesta e ordenação — tudo lê o mesmo status
+    // que o espelho do Estoque mostra.
+    const rows = useMemo(() => (activeTable ? items : fallbackRows).map(i => {
+        const efetivo = statusEfetivoDaUnidade(i.property_status, negocioAtivoDaUnidade(i.property_id, deals));
+        return efetivo === i.property_status ? i : { ...i, property_status: efetivo ?? undefined };
+    }), [activeTable, items, fallbackRows, deals]);
 
     const sortedBuildings = useMemo(() => {
         const dir = buildingSort.dir === 'asc' ? 1 : -1;

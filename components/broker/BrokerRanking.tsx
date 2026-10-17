@@ -1,181 +1,244 @@
-import React, { useState, useMemo } from 'react';
-import { Trophy, TrendingUp, TrendingDown, Minus, Target, Award, Star, Flame, Zap, Medal } from 'lucide-react';
-import type { BrokerRankEntry, BrokerBadge } from '../../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Trophy, TrendingUp, TrendingDown, Minus, Loader2, Info } from 'lucide-react';
+import { brokerService } from '../../services/brokerService';
+import { brokerPortalService } from '../../services/brokerPortalService';
+
+/**
+ * Ranking do Portal do Corretor — dado REAL desde 17/10/2026 (antes era um
+ * gerador fixo no componente). Plano: docs/planos/2026-10-17-portal-corretor-pendencias.md (F2).
+ *
+ * Decisão do usuário (P3): o corretor vê SÓ a própria posição ("3º de 12"), as
+ * próprias vendas, volume e propostas, e as vendas do 1º colocado como meta — sem
+ * nomes nem números de colegas. O gestor (visão interna) vê a lista completa.
+ *
+ * Fonte: propostas APROVADAS no período (fn_broker_portal_get_ranking pelo token;
+ * fn_broker_ranking_da_organizacao para o gestor). Sem token (prévia do gestor /
+ * impersonação), a visão do corretor sai da lista do gestor filtrada pelo e-mail.
+ */
+
+type Periodo = 'MES' | 'TRIMESTRE' | 'ANO';
 
 interface BrokerRankingProps {
     brokerEmail: string;
+    portalToken?: string;
+    organizationId?: string;
+    /** 'gestor' = lista completa (visão interna do admin); 'corretor' = só a própria posição. */
+    visao?: 'corretor' | 'gestor';
+    compacto?: boolean;
 }
 
-const BADGE_ICONS: Record<string, any> = { star: Star, flame: Flame, zap: Zap, trophy: Trophy, medal: Medal, award: Award };
+interface MinhaPosicao {
+    posicao: number | null;
+    posicao_anterior: number | null;
+    total_corretores: number;
+    com_venda: number;
+    vendas: number;
+    volume: number;
+    enviadas: number;
+    vendas_do_lider: number;
+}
 
-const generateDemoRanking = (email: string): BrokerRankEntry[] => {
-    const names = ['Carlos Andrade', 'Maria Santos', 'João Lima', 'Ana Ferreira', 'Pedro Costa', 'Laura Mendes', 'Rafael Alves', 'Camila Rocha'];
-    const badgePool: BrokerBadge[] = [
-        { id: 'b1', name: 'Primeira Venda', icon: 'star', description: 'Fechou a primeira venda', earned_at: '2026-01-15' },
-        { id: 'b2', name: 'Top 3', icon: 'trophy', description: 'Ficou entre os 3 melhores', earned_at: '2026-02-01' },
-        { id: 'b3', name: 'Hat-trick', icon: 'flame', description: '3 vendas em um mês', earned_at: '2026-02-15' },
-        { id: 'b4', name: 'Maratonista', icon: 'zap', description: '10 propostas enviadas', earned_at: '2026-02-20' },
-        { id: 'b5', name: 'Milhão', icon: 'medal', description: 'R$ 1M em vendas', earned_at: '2026-03-01' },
-    ];
+interface LinhaRanking {
+    email: string;
+    nome: string | null;
+    vendas: number;
+    volume: number;
+    enviadas: number;
+    posicao: number | null;
+    posicao_anterior: number | null;
+}
 
-    return names.map((name, i) => ({
-        id: `rank-${i + 1}`,
-        broker_id: `br-${i + 1}`,
-        broker_name: name,
-        broker_email: i === 2 ? email : `${name.toLowerCase().replace(' ', '.')}@corretor.com`,
-        sales_count: 8 - i + Math.floor(Math.random() * 3),
-        sales_volume: (2500000 - i * 280000) + Math.floor(Math.random() * 200000),
-        leads_converted: 12 - i + Math.floor(Math.random() * 4),
-        proposals_sent: 15 - i + Math.floor(Math.random() * 5),
-        position: i + 1,
-        previous_position: i === 0 ? 2 : i === 1 ? 1 : i === 2 ? 4 : i + 1,
-        badges: badgePool.slice(0, Math.max(1, 5 - i)),
-        goal_sales: 10,
-        goal_volume: 3000000,
-    }));
+const PERIODOS: { id: Periodo; label: string }[] = [
+    { id: 'MES', label: 'Mês' },
+    { id: 'TRIMESTRE', label: 'Trimestre' },
+    { id: 'ANO', label: 'Ano' },
+];
+
+const formatCurrency = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(v) || 0);
+
+/** Visão do corretor a partir da lista completa (prévia do gestor, sem token). */
+export const minhaPosicaoDaLista = (lista: LinhaRanking[], email: string): MinhaPosicao => {
+    const eu = lista.find(l => l.email === (email || '').toLowerCase());
+    return {
+        posicao: eu?.posicao ?? null,
+        posicao_anterior: eu?.posicao_anterior ?? null,
+        total_corretores: Math.max(lista.length, eu ? lista.length : lista.length + 1),
+        com_venda: lista.filter(l => Number(l.vendas) > 0).length,
+        vendas: Number(eu?.vendas) || 0,
+        volume: Number(eu?.volume) || 0,
+        enviadas: Number(eu?.enviadas) || 0,
+        vendas_do_lider: lista.reduce((m, l) => Math.max(m, Number(l.vendas) || 0), 0),
+    };
 };
 
-const BrokerRanking: React.FC<BrokerRankingProps> = ({ brokerEmail }) => {
-    const [ranking] = useState<BrokerRankEntry[]>(() => generateDemoRanking(brokerEmail));
-    const [period, setPeriod] = useState<'mes' | 'trimestre' | 'ano'>('mes');
+const Tendencia: React.FC<{ atual: number | null; anterior: number | null; claro?: boolean }> = ({ atual, anterior, claro }) => {
+    if (!atual || !anterior) return null;
+    const diff = anterior - atual;
+    if (diff > 0) return <span className={`inline-flex items-center gap-1 text-xs font-semibold ${claro ? 'text-emerald-300' : 'text-emerald-600'}`}><TrendingUp className="w-3.5 h-3.5" />subiu {diff}</span>;
+    if (diff < 0) return <span className={`inline-flex items-center gap-1 text-xs font-semibold ${claro ? 'text-rose-300' : 'text-rose-600'}`}><TrendingDown className="w-3.5 h-3.5" />caiu {-diff}</span>;
+    return <span className={`inline-flex items-center gap-1 text-xs ${claro ? 'text-indigo-200' : 'text-gray-400'}`}><Minus className="w-3.5 h-3.5" />manteve</span>;
+};
 
-    const me = useMemo(() => ranking.find(r => r.broker_email === brokerEmail), [ranking, brokerEmail]);
+const BrokerRanking: React.FC<BrokerRankingProps> = ({ brokerEmail, portalToken, organizationId, visao = 'corretor', compacto = false }) => {
+    const [periodo, setPeriodo] = useState<Periodo>('MES');
+    const [minha, setMinha] = useState<MinhaPosicao | null>(null);
+    const [lista, setLista] = useState<LinhaRanking[]>([]);
+    const [carregando, setCarregando] = useState(true);
+    const [erro, setErro] = useState<string | null>(null);
 
-    const formatCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
+    useEffect(() => {
+        let cancelado = false;
+        (async () => {
+            setCarregando(true);
+            setErro(null);
+            try {
+                if (portalToken) {
+                    const r = await brokerPortalService.getRankingByToken(portalToken, periodo);
+                    if (!cancelado) { setMinha(r); setLista([]); }
+                } else if (organizationId) {
+                    const l = await brokerService.rankingDaOrganizacao(organizationId, periodo);
+                    if (!cancelado) { setLista(l); setMinha(minhaPosicaoDaLista(l, brokerEmail)); }
+                } else if (!cancelado) {
+                    setMinha(null); setLista([]);
+                }
+            } catch (e) {
+                console.error('[BrokerRanking]', e);
+                if (!cancelado) setErro('Não foi possível carregar o ranking agora.');
+            } finally {
+                if (!cancelado) setCarregando(false);
+            }
+        })();
+        return () => { cancelado = true; };
+    }, [portalToken, organizationId, brokerEmail, periodo]);
 
-    const PositionBadge = ({ pos, prev }: { pos: number; prev?: number }) => {
-        const diff = prev ? prev - pos : 0;
+    const lider = minha?.vendas_do_lider ?? 0;
+    const pctMeta = useMemo(() => (lider > 0 ? Math.min(100, ((minha?.vendas ?? 0) / lider) * 100) : 0), [minha, lider]);
+
+    const seletor = (
+        <div className="flex bg-gray-100 rounded-xl p-1" role="group" aria-label="Período do ranking">
+            {PERIODOS.map(p => (
+                <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPeriodo(p.id)}
+                    aria-pressed={periodo === p.id}
+                    className={`${compacto ? 'flex-1' : ''} px-4 h-8 rounded-lg text-sm font-medium transition-all ${periodo === p.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'}`}
+                >
+                    {p.label}
+                </button>
+            ))}
+        </div>
+    );
+
+    if (carregando) {
         return (
-            <div className="flex items-center gap-2">
-                <span className={`text-2xl font-black ${pos <= 3 ? 'text-amber-500' : 'text-gray-400'}`}>
-                    {pos}º
-                </span>
-                {diff > 0 && <span className="flex items-center text-emerald-500 text-xs font-bold"><TrendingUp className="w-3 h-3" />+{diff}</span>}
-                {diff < 0 && <span className="flex items-center text-red-500 text-xs font-bold"><TrendingDown className="w-3 h-3" />{diff}</span>}
-                {diff === 0 && prev && <Minus className="w-3 h-3 text-gray-300" />}
+            <div className="space-y-4">
+                {seletor}
+                <div className="py-16 text-center"><Loader2 className="w-7 h-7 animate-spin text-indigo-600 mx-auto" /></div>
             </div>
         );
-    };
+    }
 
-    return (
-        <div className="space-y-6">
-            {/* My Progress Card */}
-            {me && (
-                <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 rounded-2xl p-6 text-white shadow-xl shadow-indigo-500/20">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest">Minha Posição</p>
-                            <div className="flex items-center gap-3 mt-1">
-                                <span className="text-5xl font-black">{me.position}º</span>
-                                {me.previous_position && me.previous_position > me.position && (
-                                    <span className="flex items-center gap-1 px-3 py-1 bg-emerald-500/20 rounded-full text-emerald-300 text-sm font-bold">
-                                        <TrendingUp className="w-4 h-4" />Subiu {me.previous_position - me.position}
+    if (erro) {
+        return (
+            <div className="space-y-4">
+                {seletor}
+                <p className="text-sm text-gray-500 bg-white rounded-2xl border border-gray-100 p-6 text-center">{erro}</p>
+            </div>
+        );
+    }
+
+    // ── Gestor: ranking completo ────────────────────────────────────────────
+    if (visao === 'gestor' && !portalToken) {
+        return (
+            <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-lg font-bold text-gray-900">Ranking dos corretores</h3>
+                    {seletor}
+                </div>
+                <p className="text-xs text-gray-500 flex items-start gap-1.5">
+                    <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
+                    Conta as propostas aprovadas no período. Cada corretor vê só a própria posição, sem nomes de colegas.
+                </p>
+                {lista.length === 0 ? (
+                    <p className="text-sm text-gray-500 bg-white rounded-2xl border border-gray-100 p-8 text-center">
+                        Nenhum corretor com proposta nesta organização ainda.
+                    </p>
+                ) : (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100">
+                        {lista.map(l => (
+                            <div key={l.email} className="flex items-center justify-between gap-4 p-4">
+                                <div className="flex items-center gap-4 min-w-0">
+                                    <span className={`w-10 text-center text-xl font-black ${l.posicao && l.posicao <= 3 ? 'text-amber-500' : 'text-gray-400'}`}>
+                                        {l.posicao ? `${l.posicao}º` : '—'}
                                     </span>
-                                )}
-                            </div>
-                        </div>
-                        <Trophy className="w-16 h-16 text-amber-400/30" />
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                            <p className="text-xs text-indigo-200 font-bold uppercase">Vendas</p>
-                            <p className="text-xl font-black">{me.sales_count}<span className="text-sm font-bold text-indigo-300">/{me.goal_sales}</span></p>
-                            <div className="mt-1.5 bg-white/20 rounded-full h-1.5">
-                                <div className="bg-emerald-400 rounded-full h-1.5 transition-all" style={{ width: `${Math.min(100, (me.sales_count / me.goal_sales) * 100)}%` }} />
-                            </div>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                            <p className="text-xs text-indigo-200 font-bold uppercase">Volume</p>
-                            <p className="text-xl font-black">{formatCurrency(me.sales_volume)}</p>
-                            <div className="mt-1.5 bg-white/20 rounded-full h-1.5">
-                                <div className="bg-amber-400 rounded-full h-1.5 transition-all" style={{ width: `${Math.min(100, (me.sales_volume / me.goal_volume) * 100)}%` }} />
-                            </div>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                            <p className="text-xs text-indigo-200 font-bold uppercase">Leads Convertidos</p>
-                            <p className="text-xl font-black">{me.leads_converted}</p>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                            <p className="text-xs text-indigo-200 font-bold uppercase">Propostas</p>
-                            <p className="text-xl font-black">{me.proposals_sent}</p>
-                        </div>
-                    </div>
-                    {/* My Badges */}
-                    {me.badges.length > 0 && (
-                        <div className="flex gap-2 mt-4 pt-4 border-t border-white/10">
-                            {me.badges.map(badge => {
-                                const Icon = BADGE_ICONS[badge.icon] || Award;
-                                return (
-                                    <div key={badge.id} title={badge.description}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 rounded-full backdrop-blur-sm hover:bg-white/20 transition-colors cursor-default">
-                                        <Icon className="w-3.5 h-3.5 text-amber-400" />
-                                        <span className="text-xs font-bold text-white">{badge.name}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Period Selector */}
-            <div className="flex items-center justify-between">
-                <h3 className="text-lg font-black text-gray-900">Ranking Geral</h3>
-                <div className="flex bg-gray-100 rounded-xl p-1">
-                    {(['mes', 'trimestre', 'ano'] as const).map(p => (
-                        <button key={p} onClick={() => setPeriod(p)}
-                            className={`px-4 py-1.5 rounded-lg text-button font-bold transition-all capitalize ${period === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>
-                            {p === 'mes' ? 'Mês' : p === 'trimestre' ? 'Trimestre' : 'Ano'}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Ranking Table */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="divide-y divide-gray-50">
-                    {ranking.map((entry, i) => {
-                        const isMe = entry.broker_email === brokerEmail;
-                        const podium = entry.position <= 3;
-                        return (
-                            <div key={entry.id}
-                                className={`flex items-center justify-between p-4 transition-colors ${isMe ? 'bg-indigo-50 border-l-4 border-l-indigo-500' : 'hover:bg-gray-50'}`}>
-                                <div className="flex items-center gap-4">
-                                    <PositionBadge pos={entry.position} prev={entry.previous_position} />
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm ${podium ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                                        {entry.broker_name.split(' ').map(n => n[0]).join('')}
-                                    </div>
-                                    <div>
-                                        <p className={`text-sm font-bold ${isMe ? 'text-indigo-700' : 'text-gray-900'}`}>
-                                            {entry.broker_name} {isMe && <span className="text-xs text-indigo-400 ml-1">(você)</span>}
-                                        </p>
-                                        <div className="flex gap-1 mt-0.5">
-                                            {entry.badges.slice(0, 3).map(b => {
-                                                const Icon = BADGE_ICONS[b.icon] || Award;
-                                                return <Icon key={b.id} className="w-3 h-3 text-amber-500" title={b.name} />;
-                                            })}
-                                        </div>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-gray-900 truncate">{l.nome || l.email}</p>
+                                        <Tendencia atual={l.posicao} anterior={l.posicao_anterior} />
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-8 text-right">
-                                    <div>
-                                        <p className="text-xs font-black text-gray-400 uppercase">Vendas</p>
-                                        <p className="text-sm font-black text-gray-900">{entry.sales_count}</p>
-                                    </div>
-                                    <div className="hidden md:block">
-                                        <p className="text-xs font-black text-gray-400 uppercase">Volume</p>
-                                        <p className="text-sm font-black text-gray-900">{formatCurrency(entry.sales_volume)}</p>
-                                    </div>
-                                    <div className="hidden md:block">
-                                        <p className="text-xs font-black text-gray-400 uppercase">Conversão</p>
-                                        <p className="text-sm font-black text-gray-900">{entry.leads_converted}</p>
-                                    </div>
+                                <div className="flex items-center gap-6 text-right shrink-0">
+                                    <div><p className="text-xs text-gray-500">Vendas</p><p className="text-sm font-semibold text-gray-900">{l.vendas}</p></div>
+                                    <div className="hidden md:block"><p className="text-xs text-gray-500">Volume</p><p className="text-sm font-medium text-gray-900">{formatCurrency(l.volume)}</p></div>
+                                    <div className="hidden md:block"><p className="text-xs text-gray-500">Propostas</p><p className="text-sm font-semibold text-gray-900">{l.enviadas}</p></div>
                                 </div>
                             </div>
-                        );
-                    })}
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // ── Corretor: só a própria posição ──────────────────────────────────────
+    const m = minha;
+    return (
+        <div className="space-y-4">
+            {seletor}
+            <div className={`bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 rounded-2xl text-white shadow-xl shadow-indigo-500/20 ${compacto ? 'p-5' : 'p-6'}`} data-tour="ranking-posicao">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest">Minha posição</p>
+                        {m?.posicao ? (
+                            <>
+                                <p className="mt-1"><span className="text-5xl font-black">{m.posicao}º</span><span className="text-indigo-200 text-sm ml-2">de {m.total_corretores}</span></p>
+                                <div className="mt-1"><Tendencia atual={m.posicao} anterior={m.posicao_anterior} claro /></div>
+                            </>
+                        ) : (
+                            <p className="mt-2 text-lg font-bold">Ainda sem venda neste período</p>
+                        )}
+                    </div>
+                    <Trophy className="w-14 h-14 text-amber-400/30 shrink-0" />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+                    <div className="bg-white/10 rounded-xl p-3">
+                        <p className="text-xs text-indigo-200 font-bold uppercase">Vendas</p>
+                        <p className="text-xl font-black">{m?.vendas ?? 0}{lider > 0 && <span className="text-sm font-bold text-indigo-300">/{lider}</span>}</p>
+                        {lider > 0 && (
+                            <div className="mt-1.5 bg-white/20 rounded-full h-1.5" title={`Meta: as ${lider} vendas do 1º colocado`}>
+                                <div className="bg-emerald-400 rounded-full h-1.5" style={{ width: `${pctMeta}%` }} />
+                            </div>
+                        )}
+                    </div>
+                    <div className="bg-white/10 rounded-xl p-3">
+                        <p className="text-xs text-indigo-200 font-bold uppercase">Volume</p>
+                        <p className="text-xl font-black truncate">{formatCurrency(m?.volume ?? 0)}</p>
+                    </div>
+                    <div className="bg-white/10 rounded-xl p-3">
+                        <p className="text-xs text-indigo-200 font-bold uppercase">Propostas</p>
+                        <p className="text-xl font-black">{m?.enviadas ?? 0}</p>
+                    </div>
+                    <div className="bg-white/10 rounded-xl p-3">
+                        <p className="text-xs text-indigo-200 font-bold uppercase">Com venda</p>
+                        <p className="text-xl font-black">{m?.com_venda ?? 0}<span className="text-sm font-bold text-indigo-300"> corretores</span></p>
+                    </div>
                 </div>
             </div>
+            <p className="text-xs text-gray-500 flex items-start gap-1.5">
+                <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
+                Conta as propostas aprovadas pela incorporadora no período. A meta é o número de vendas do 1º colocado; os nomes dos colegas não aparecem.
+            </p>
         </div>
     );
 };

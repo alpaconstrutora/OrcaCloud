@@ -630,6 +630,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                     onMakeProposal={handleMakeProposal}
                     selectedUnitIds={cart.map(u => u.id)}
                     onToggleUnit={handleToggleCart}
+                    deals={dealsDoMapa}
                 />
                 </div>
             )}
@@ -763,7 +764,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
             )}
 
             {currentTab === 'leads' && (
-                <BrokerLeadManager brokerEmail={effectiveBrokerEmail || ''} />
+                <BrokerLeadManager brokerEmail={effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={initialOrgId || selectedOrgId} visao={isAdmin ? 'gestor' : 'corretor'} />
             )}
 
             {currentTab === 'comissoes' && (
@@ -775,7 +776,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
             )}
 
             {currentTab === 'ranking' && (
-                <BrokerRanking brokerEmail={effectiveBrokerEmail || ''} />
+                <BrokerRanking brokerEmail={effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={initialOrgId || selectedOrgId} visao={isAdmin ? 'gestor' : 'corretor'} />
             )}
 
             {currentTab === 'treinamento' && (
@@ -783,7 +784,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
             )}
 
             {currentTab === 'agenda' && (
-                <BrokerEvents brokerEmail={effectiveBrokerEmail || ''} />
+                <BrokerEvents brokerEmail={effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={initialOrgId || selectedOrgId} visao={isAdmin ? 'gestor' : 'corretor'} />
             )}
 
             {currentTab === 'chat' && (

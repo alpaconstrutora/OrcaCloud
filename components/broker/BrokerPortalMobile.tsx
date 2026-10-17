@@ -227,6 +227,7 @@ const BrokerPortalMobile: React.FC<Props> = ({ profile, organizationId, portalTo
                                     selectedUnitIds={h.cart.map(u => u.id)}
                                     onToggleUnit={h.handleToggleCart}
                                     compacto
+                                    deals={h.dealsDoMapa}
                                 />
                             </div>
                         )}
@@ -274,14 +275,14 @@ const BrokerPortalMobile: React.FC<Props> = ({ profile, organizationId, portalTo
                             </>
                         )}
 
-                        {h.currentTab === 'leads' && <BrokerLeadManager brokerEmail={h.effectiveBrokerEmail || ''} />}
+                        {h.currentTab === 'leads' && <BrokerLeadManager brokerEmail={h.effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={h.orgIdEfetivo} compacto />}
                         {h.currentTab === 'comissoes' && <BrokerCommissions brokerEmail={h.effectiveBrokerEmail || ''} portalToken={portalToken} compacto />}
                         {h.currentTab === 'materiais' && (
                             <div data-tour="materiais-grade"><BrokerMaterials organizationId={h.orgIdEfetivo || 'demo'} portalToken={portalToken} compacto /></div>
                         )}
-                        {h.currentTab === 'ranking' && <BrokerRanking brokerEmail={h.effectiveBrokerEmail || ''} />}
+                        {h.currentTab === 'ranking' && <BrokerRanking brokerEmail={h.effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={h.orgIdEfetivo} compacto />}
                         {h.currentTab === 'treinamento' && <BrokerTraining brokerEmail={h.effectiveBrokerEmail || ''} />}
-                        {h.currentTab === 'agenda' && <BrokerEvents brokerEmail={h.effectiveBrokerEmail || ''} />}
+                        {h.currentTab === 'agenda' && <BrokerEvents brokerEmail={h.effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={h.orgIdEfetivo} compacto />}
                         {h.currentTab === 'chat' && <BrokerChat brokerEmail={h.effectiveBrokerEmail || ''} />}
                     </div>
                 )}

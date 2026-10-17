@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Building2, Check, Clock, Lock, CheckCircle2, AlertTriangle, Eye, MapPin, Plus, Sun, Edit, Tag, FileSignature, Wallet } from 'lucide-react';
 import type { Property, PropertyDeal, TowerMatrixConfig, GridCellConfig } from '../../types';
+import { negocioAtivoDaUnidade, statusEfetivoDaUnidade, type NegocioDaUnidade } from '../../utils/statusEfetivoDaUnidade';
 
 interface PropertyUnitMapProps {
     units: Property[];
@@ -123,26 +124,11 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
     // Status que o espelho PINTA: o da unidade, sobreposto pelo negócio ativo
     // (proposta enviada = reservado, aprovada = vendido/alugado...). O quadrinho
     // e a folha do celular precisam dizer a mesma coisa.
+    // A regra mora em utils/statusEfetivoDaUnidade.ts — a aba Empreendimentos usa a mesma.
     const statusDaUnidade = (unit: Property) => {
-        const unitDealsMatched = deals.filter(d =>
-            d && d.property_id && unit && unit.id &&
-            String(d.property_id).toLowerCase() === String(unit.id).toLowerCase()
-        );
-        const activeDeal = unitDealsMatched.find(d => d.status !== 'CANCELLED') || unitDealsMatched[0];
-
-        let cfg = STATUS_CONFIG[unit.status] || STATUS_CONFIG['AVAILABLE'];
-
-        if (activeDeal) {
-            const status = activeDeal.status as string;
-            const type = activeDeal.type as string;
-            if (status === 'COMPLETED' || status === 'CLOSED' || status === 'APROVADA') {
-                cfg = type === 'RENTAL' ? STATUS_CONFIG['RENTED'] : STATUS_CONFIG['SOLD'];
-            } else if (status === 'PENDING' || status === 'ENVIADA') {
-                cfg = STATUS_CONFIG['RESERVED'];
-            } else if (status === 'IN_NEGOTIATION') {
-                cfg = STATUS_CONFIG['MAINTENANCE'];
-            }
-        }
+        const activeDeal = negocioAtivoDaUnidade(unit?.id, deals);
+        const efetivo = statusEfetivoDaUnidade(unit.status, activeDeal as NegocioDaUnidade | undefined);
+        const cfg = STATUS_CONFIG[efetivo as string] || STATUS_CONFIG['AVAILABLE'];
         return { cfg, activeDeal };
     };
 

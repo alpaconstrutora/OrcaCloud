@@ -52,3 +52,16 @@
 1. Testes de tela de cada item + `agruparLinhas.test.ts`.
 2. `bash scripts/check-ui-standard.sh` em cada arquivo tocado.
 3. Playwright com o usuário de leitura: cada tela, cada aba, Agrupar › opções, recolher, recolher/expandir todos.
+
+## Pedido posterior — 17/10/2026
+> Dois achados nos dados, fora do escopo:
+> 1. Status sem rótulo em Ativos: a coluna Status mostra o código cru ("disponivel") ao lado de "Em Obra", e o agrupamento repete o que a coluna mostra. Corrigir o rótulo é uma tarefa pequena, se quiser: Sim Corrigir
+
+| Arquivo | O que muda | Como sei que terminou |
+|---|---|---|
+| `utils/assetStatus.ts` (novo) | mapa único de rótulos de status de Ativo, Retirada e Manutenção (`Record<…Status, string>` — status sem rótulo não compila) | `__tests__/assetStatus.test.ts` |
+| `components/OpuraAssetsModule.tsx` | coluna Status das 3 tabelas, card da grade, filtros, "Agrupar", formulário de manutenção, KPI "Em oficina" e confirmações de entregar/devolver usam o mapa | preview: nenhum código cru na tela |
+
+Decisão: `em_uso` era "Em Obra" na tabela/card e "Em Uso" no filtro e na confirmação — ficou **"Em obra"** em todos (o bem foi entregue a uma obra; a coluna Alocação diz qual). Retirada `ativa` = "Em uso". Sentence case (guia §6.2/§8).
+
+- [x] implementado; conferido no preview com dados reais: Ativos ["Em obra", "Disponível"], filtro com os mesmos rótulos, grupos iguais à coluna, grade sem "disponivel" cru, Retirada ["Aprovada"], Manutenções ["Concluída"]; 0 erros

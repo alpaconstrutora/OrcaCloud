@@ -71,6 +71,7 @@ import { itemTypeDaCategoria, type BrandModelValue, type ProductItemType, type P
 import { aplicarPadroesDoModelo, origemInicial, type OrigemCampo } from '../utils/catalogoAutopreencher';
 import { ASSET_CATEGORIES, ASSET_CATEGORY_LABELS } from '../utils/assetToStockItemRow';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { ASSET_STATUS_LABELS, MAINTENANCE_STATUS_LABELS, RESERVATION_STATUS_LABELS, rotuloDoStatus } from '../utils/assetStatus';
 import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela, type Grupo } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
@@ -278,7 +279,7 @@ function renderReservationCell(
     case 'requester':
       return <span className="text-sm font-normal text-gray-500">{res.requested_by_email}</span>;
     case 'status':
-      return <span className={`text-sm font-normal ${ctx.statusColor[res.status] || 'text-gray-600'}`}>{res.status === 'ativa' ? 'Em Uso' : res.status}</span>;
+      return <span className={`text-sm font-normal ${ctx.statusColor[res.status] || 'text-gray-600'}`}>{rotuloDoStatus(RESERVATION_STATUS_LABELS, res.status)}</span>;
     default:
       return null;
   }
@@ -326,7 +327,7 @@ function renderMaintenanceCell(
         : <span className="text-sm font-normal text-gray-400">—</span>;
     }
     case 'status':
-      return <span className={`text-sm font-normal ${ctx.statusColor[m.status] || 'text-gray-600'}`}>{m.status === 'em_execucao' ? 'Em Oficina' : m.status}</span>;
+      return <span className={`text-sm font-normal ${ctx.statusColor[m.status] || 'text-gray-600'}`}>{rotuloDoStatus(MAINTENANCE_STATUS_LABELS, m.status)}</span>;
     default:
       return null;
   }
@@ -417,7 +418,7 @@ function renderAssetCell(
       return <span className="text-sm font-normal text-gray-600">{ASSET_CATEGORY_LABELS[asset.category] ?? asset.category}</span>;
     case 'status': {
       const statusColor = asset.status === 'disponivel' ? 'text-emerald-700' : asset.status === 'em_uso' ? 'text-blue-700' : asset.status === 'manutencao' ? 'text-amber-700' : asset.status === 'baixado' ? 'text-gray-400' : 'text-gray-600';
-      return <span className={`text-sm font-normal ${statusColor}`}>{asset.status === 'em_uso' ? 'Em Obra' : asset.status}</span>;
+      return <span className={`text-sm font-normal ${statusColor}`}>{rotuloDoStatus(ASSET_STATUS_LABELS, asset.status)}</span>;
     }
     case 'brand_model': {
       const marcaModelo = [asset.brand, asset.model].filter(Boolean).join(' ');
@@ -941,7 +942,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Iniciar Reserva (Entregar ativo à obra)
   const handleStartReservation = async (reservation: OpuraAssetReservation) => {
-    if (!await confirm({ title: 'Entregar ativo à obra?', message: 'O status do ativo será alterado para "Em Uso".', confirmLabel: 'Entregar' })) {
+    if (!await confirm({ title: 'Entregar ativo à obra?', message: `O status do ativo será alterado para "${ASSET_STATUS_LABELS.em_uso}".`, confirmLabel: 'Entregar' })) {
       return;
     }
     setActionLoading(true);
@@ -959,7 +960,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Finalizar Reserva (Devolução do ativo à sede)
   const handleFinalizeReservation = async (reservation: OpuraAssetReservation) => {
-    if (!await confirm({ title: 'Devolver ativo à sede?', message: 'O status do ativo voltará a ser "Disponível".', confirmLabel: 'Devolver' })) {
+    if (!await confirm({ title: 'Devolver ativo à sede?', message: `O status do ativo voltará a ser "${ASSET_STATUS_LABELS.disponivel}".`, confirmLabel: 'Devolver' })) {
       return;
     }
     setActionLoading(true);
@@ -1592,7 +1593,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const chaveDoBem = (campo: CampoAgruparBens, a: OpuraAsset): ChaveDeGrupo => {
     switch (campo) {
       case 'categoria': return chavePorRotulo(a.category, ASSET_CATEGORY_LABELS);
-      case 'status': return a.status ? { key: a.status, label: a.status === 'em_uso' ? 'Em Obra' : a.status } : null;
+      case 'status': return a.status ? { key: a.status, label: rotuloDoStatus(ASSET_STATUS_LABELS, a.status) } : null;
       case 'alocacao': return chavePorNome(projects.find(p => p.id === a.current_project_id)?.name);
       case 'almoxarifado': return a.warehouse_id ? chavePorNome(warehouseName(a.warehouse_id) ?? 'Outro almoxarifado') : null;
       case 'marca': return chavePorNome(a.brand);
@@ -1604,7 +1605,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       case 'obra': return chavePorNome(projects.find(p => p.id === r.project_id)?.name);
       case 'responsavel': return chavePorNome(employees.find(e => e.id === r.responsible_employee_id)?.name);
       case 'solicitante': return chavePorNome(r.requested_by_email);
-      case 'status': return r.status ? { key: r.status, label: r.status === 'ativa' ? 'Em Uso' : r.status } : null;
+      case 'status': return r.status ? { key: r.status, label: rotuloDoStatus(RESERVATION_STATUS_LABELS, r.status) } : null;
     }
   };
   const chaveDaManutencao = (campo: CampoAgruparManutencoes, m: OpuraAssetMaintenance): ChaveDeGrupo => {
@@ -1613,7 +1614,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       case 'tipo': return chavePorRotulo(m.type, MAINT_TYPE_LABELS);
       case 'centro_custo': return chavePorNome(costCenterName(m.cost_center_id));
       case 'mes': return chavePorMes(m.scheduled_date);
-      case 'status': return m.status ? { key: m.status, label: m.status === 'em_execucao' ? 'Em Oficina' : m.status } : null;
+      case 'status': return m.status ? { key: m.status, label: rotuloDoStatus(MAINTENANCE_STATUS_LABELS, m.status) } : null;
     }
   };
   const gruposDeBens = (lista: OpuraAsset[]): Grupo<OpuraAsset>[] => (agruparBens.campo === 'none' ? [] : agruparLinhas(lista, {
@@ -1843,11 +1844,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer shrink-0"
                   >
                     <option value="todos">Todos Status</option>
-                    <option value="disponivel">Disponível</option>
-                    <option value="em_uso">Em Uso</option>
-                    <option value="manutencao">Manutenção</option>
-                    <option value="ocioso">Ocioso</option>
-                    <option value="baixado">Baixado</option>
+                    {(Object.keys(ASSET_STATUS_LABELS) as (keyof typeof ASSET_STATUS_LABELS)[]).map(s => (
+                      <option key={s} value={s}>{ASSET_STATUS_LABELS[s]}</option>
+                    ))}
                   </select>
 
                   {/* Agrupar — guia de UI §6.12. Só no modo lista. */}
@@ -1935,7 +1934,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                             <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md
                               ${asset.status === 'disponivel' ? 'bg-emerald-500/10 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
-                              {asset.status === 'em_uso' ? 'Em Obra' : asset.status}
+                              {rotuloDoStatus(ASSET_STATUS_LABELS, asset.status)}
                             </span>
                           </div>
 
@@ -2265,7 +2264,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               {/* Métricas rápidas — KpiCard (guia §4) */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <KpiCard label="Total Gasto em Oficina" value={`R$ ${maintenances.reduce((acc, m) => acc + (m.cost || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<DollarSign />} color="blue" />
-                <KpiCard label="Em Oficina" value={`${maintenances.filter(m => m.status === 'em_execucao').length} ordens`} icon={<AlertTriangle />} color="amber" />
+                <KpiCard label={MAINTENANCE_STATUS_LABELS.em_execucao} value={`${maintenances.filter(m => m.status === 'em_execucao').length} ordens`} icon={<AlertTriangle />} color="amber" />
                 <KpiCard label="Próximas Agendadas" value={`${maintenances.filter(m => m.status === 'agendada').length} agendamentos`} icon={<Calendar />} color="blue" />
               </div>
 
@@ -2300,10 +2299,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                     >
                       <option value="todos">Todos Status</option>
-                      <option value="agendada">Agendada</option>
-                      <option value="em_execucao">Em Oficina</option>
-                      <option value="concluida">Concluída</option>
-                      <option value="cancelada">Cancelada</option>
+                      {(Object.keys(MAINTENANCE_STATUS_LABELS) as (keyof typeof MAINTENANCE_STATUS_LABELS)[]).map(s => (
+                        <option key={s} value={s}>{MAINTENANCE_STATUS_LABELS[s]}</option>
+                      ))}
                     </select>
 
                     {/* Agrupar — guia de UI §6.12 (chaves da lista inteira, como em Reservas). */}
@@ -3198,12 +3196,12 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       onChange={(e) => setMaintForm(prev => ({ ...prev, status: e.target.value as MaintenanceStatus }))}
                       className={campo}
                     >
-                      <option value="agendada">Agendada</option>
-                      <option value="em_execucao">Em Oficina (Em Execução)</option>
+                      <option value="agendada">{MAINTENANCE_STATUS_LABELS.agendada}</option>
+                      <option value="em_execucao">{MAINTENANCE_STATUS_LABELS.em_execucao} (em execução)</option>
                       {maintModalMode !== 'create' && (
                         <>
-                          <option value="concluida">Concluída</option>
-                          <option value="cancelada">Cancelada</option>
+                          <option value="concluida">{MAINTENANCE_STATUS_LABELS.concluida}</option>
+                          <option value="cancelada">{MAINTENANCE_STATUS_LABELS.cancelada}</option>
                         </>
                       )}
                     </select>

@@ -16,7 +16,8 @@
  *   - `text-{gray|slate|zinc|neutral|stone}-{300|400}` sem variante, ou com `disabled:` /
  *     `read-only:` (campo travado continua mostrando um valor);
  *   - NÃO conta `placeholder:`, `hover:`, `focus:` etc. nem comentário.
- * Limite conhecido: className vindo de constante (`className={CAMPO}`) não é lido.
+ * Também `<MoneyCentsInput>` (repassa o className ao <input>). Limites conhecidos: className vindo
+ * de constante (`className={CAMPO}`) e outros componentes que embrulham <input> não são lidos.
  *
  * É uma CATRACA, como `cabecalhoSemCinzaGuard`: `BASELINE` é a dívida herdada de 17/10/2026
  * e SÓ PODE DIMINUIR. NÃO adicione entrada para "fazer passar": use `text-gray-900` no valor.
@@ -27,7 +28,8 @@ import { join, relative, sep } from 'node:path';
 
 const RAIZ = join(__dirname, '..');
 
-const ABERTURA = /<(input|textarea)\b/g;
+// `MoneyCentsInput` repassa o className ao <input> (186 usos): o preço travado do BudgetRow escapava.
+const ABERTURA = /<(input|textarea|MoneyCentsInput)\b/g;
 const CINZA = /(^|[\s"'`{(])((?:[a-z-]+:)*)text-(?:gray|slate|zinc|neutral|stone)-(?:300|400)(?![\w-])/g;
 const VARIANTES_DE_VALOR = new Set(['disabled', 'read-only']);
 
@@ -83,26 +85,17 @@ export function contarValoresCinza(texto: string): number {
 }
 
 /**
- * Herança de 17/10/2026 — só diminui. Cada entrada conferida à mão:
- *   VAZIO   o cinza está no ramo "sem valor" de um ternário: pinta só o placeholder (o
- *           Tailwind v4 deriva a cor do placeholder do `currentColor`). Não é o defeito, mas
- *           por texto o detector não separa; o certo seria `placeholder:text-gray-400`.
- *   TRAVADO valor real em cinza quando o campo está desabilitado/só-leitura — o defeito do
- *           Número do Contrato. Pendente de decisão do usuário.
- *   VALOR   valor real em cinza sempre (ou quando é zero).
+ * Herança — só diminui. Em 17/10/2026 eram 13 ocorrências; as de valor real em cinza
+ * (campo travado/desabilitado, ou sempre cinza) foram corrigidas a pedido do usuário
+ * ("sim"). Ficam só as legítimas, que o texto não distingue:
+ *   VAZIO      o cinza está no ramo "sem valor" de um ternário: pinta só o placeholder (o
+ *              Tailwind v4 deriva a cor do placeholder do `currentColor`).
+ *   CARREGANDO cinza pulsante (`animate-pulse`) enquanto o valor ainda está sendo buscado.
  */
 const BASELINE: Record<string, number> = {
-    'components/condominio/FracoesTab.tsx': 1,             // VAZIO   fração sem valor
-    'components/blueprint/QuadroDeDivisas.tsx': 1,         // VAZIO   vértice provisório (defaultValue '')
-    'components/blueprint/BlueprintEditor.tsx': 1,         // TRAVADO carga máx. por circuito (critério 'funcao')
-    'components/blueprint/PainelTopografia.tsx': 1,        // TRAVADO talude da aresta com muro
-    'components/BudgetRow.tsx': 2,                         // TRAVADO qtd./BDI do item com orçamento travado
-    'components/ContractModal.tsx': 1,                     // TRAVADO entrada do gerador de parcelas sem entrada
-    'components/market/MarketFeedPanel.tsx': 1,            // TRAVADO campo numérico do feed enquanto salva
-    'components/ObraTypesManager.tsx': 1,                  // TRAVADO slug travado do tipo de obra
-    'components/DatabaseExplorer.tsx': 1,                  // VALOR   célula numérica do explorador
-    'components/LaborFiscalSettings.tsx': 1,               // VALOR   alíquota da faixa (font-black text-slate-400)
-    'components/schedule/ScheduleGridView.tsx': 1,         // VALOR   % = 0 no grid do cronograma
+    'components/condominio/FracoesTab.tsx': 1,             // VAZIO      fração sem valor
+    'components/blueprint/QuadroDeDivisas.tsx': 1,         // VAZIO      vértice provisório (defaultValue '')
+    'components/DatabaseExplorer.tsx': 1,                  // CARREGANDO preço do insumo enquanto o auxiliar carrega
 };
 
 function tsx(dir: string): string[] {

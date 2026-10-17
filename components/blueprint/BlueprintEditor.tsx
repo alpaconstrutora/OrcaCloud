@@ -19554,7 +19554,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                         })
                       }
                       aria-label="Carga máxima por circuito"
-                      className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs disabled:bg-slate-100 disabled:text-slate-400"
+                      className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 disabled:bg-slate-100"
                     />
                     VA
                   </label>

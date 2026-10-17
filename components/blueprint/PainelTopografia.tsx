@@ -2626,7 +2626,7 @@ function CampoDeAresta({
         const v = Number(t);
         if (Number.isFinite(v) && v >= 0.1) onMudar(v);
       }}
-      className="w-full min-w-0 rounded-md border border-slate-300 px-1.5 py-1 text-right text-xs text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
+      className="w-full min-w-0 rounded-md border border-slate-300 px-1.5 py-1 text-right text-xs text-slate-800 disabled:bg-slate-100"
     />
   );
 }

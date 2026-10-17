@@ -3263,12 +3263,14 @@ linguagem do **placeholder** — o olho lê "vazio", e o usuário não enxerga o
 > campo (o Tailwind v4 deriva o placeholder do `currentColor`, então `text-gray-400` no
 > ramo vazio "funciona", mas confunde com o defeito).
 > ✅ `<select>` não entra: o cinza do estado vazio dele é o §7.1.
-> 🔒 **Trava:** `__tests__/valorDeCampoSemCinzaGuard.test.ts` — catraca sobre `<input>` e
-> `<textarea>` com `text-{gray|slate|zinc|neutral|stone}-{300|400}` (sem variante, ou
-> `disabled:`/`read-only:`). Herança de 17/10/2026 listada no `BASELINE`, cada entrada
-> classificada (VAZIO / TRAVADO / VALOR); só pode diminuir.
-> ⚠️ **Pendência de propagação:** as entradas TRAVADO e VALOR do `BASELINE` (BudgetRow,
-> ObraTypesManager, LaborFiscalSettings, ScheduleGridView, …) aguardam decisão do usuário.
+> ✅ Campo desabilitado também: o `disabled` do navegador já esmaece o texto se não houver
+> cor explícita — declarar `text-gray-900`/`text-slate-800` e marcar o estado pelo fundo
+> (`disabled:bg-slate-50`) e pelo cursor.
+> 🔒 **Trava:** `__tests__/valorDeCampoSemCinzaGuard.test.ts` — catraca sobre `<input>`,
+> `<textarea>` e `<MoneyCentsInput>` com `text-{gray|slate|zinc|neutral|stone}-{300|400}` (sem
+> variante, ou `disabled:`/`read-only:`). Os 10 casos de valor real em cinza achados em
+> 17/10/2026 foram corrigidos; o `BASELINE` guarda só 3 legítimos (cinza no ramo VAZIO e um
+> CARREGANDO com `animate-pulse`) e só pode diminuir.
 
 ---
 

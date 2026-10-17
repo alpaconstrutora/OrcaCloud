@@ -1242,7 +1242,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                                             type="text"
                                                                             value={comp.code}
                                                                             onChange={(e) => handleUpdateComposition({ code: e.target.value }, idx)}
-                                                                            className="w-full text-center outline-none bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 text-gray-400"
+                                                                            className="w-full text-center outline-none bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 text-gray-700"
                                                                         />
                                                                         {auxiliaryItems.has(comp.code) && (
                                                                             <button

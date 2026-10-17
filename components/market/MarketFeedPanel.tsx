@@ -113,7 +113,7 @@ function AjusteMaxDetalhes({ fonte, desabilitado, onSalvo, onErro }: {
         onChange={(e) => setValor(e.target.value)}
         onBlur={salvar}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        className="w-20 h-8 px-2 bg-white border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 text-right focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:text-slate-400"
+        className="w-20 h-8 px-2 bg-white border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 text-right focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50"
       />
     </label>
   );

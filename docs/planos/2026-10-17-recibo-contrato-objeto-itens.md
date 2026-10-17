@@ -73,7 +73,18 @@
   os 4 de recebimento são venda/locação, sem itens); helper só para postgres/service_role.
 - [x] 5, 6, 7, 8 — 43 testes do recibo verdes; recibo SEM contrato sai byte a byte igual ao
   gerador do `origin/main` (3 casos conferidos).
-- [ ] 9 — regerar os 5 PDFs no Storage.
+- [x] 9 — 5 PDFs regerados: backup baixado, gerados pelo script, conferidos em imagem
+  (000001 pagamento e 000005 recebimento), `rm`+`cp` no mesmo `file_path`, baixados de novo
+  do bucket com sha256 igual ao gerado.
+- [x] 10 — pedido de 17/10/2026, resposta "sim" a "Quer que eu corrija os grupos 2 e 3?":
+  os 10 campos de valor real em cinza corrigidos (BudgetRow qtd./preço/BDI, BlueprintEditor,
+  PainelTopografia, ContractModal vencimento da entrada, MarketFeedPanel, ObraTypesManager,
+  DatabaseExplorer código, LaborFiscalSettings dedução — input e leitura —, ScheduleGridView).
+  A trava passou a ler `<MoneyCentsInput>` (o preço travado do BudgetRow escapava) e achou o
+  CARREGANDO do DatabaseExplorer. BASELINE final: 3 legítimos. ScheduleGridView era na verdade
+  VAZIO (`value={pct || ''}`, sem placeholder): trocado sem efeito visual.
+  `check-ui-standard` acusa em BudgetRow (§7, l.179/185/262) e DatabaseExplorer (§3, busca)
+  violações ANTERIORES, em linhas não tocadas — não corrigidas aqui.
 - [ ] Publicação — `tsc` local cai com segfault (máquina, ver memória); prova por PR de
   rascunho (CI em Linux) antes do push para `main`.
 

@@ -140,6 +140,9 @@ export interface BrokerCommission {
     organization_id: string;
     proposal_id?: string;
     broker_email: string;
+    /** Negócio de origem (leitura derivada de commercial_deals, fn_broker_comissoes_lista). */
+    deal_type?: 'SALE' | 'RENTAL' | 'SERVICE' | string;
+    contract_number?: string | null;
     unit_number?: string;
     block?: string;
     buyer_name?: string;

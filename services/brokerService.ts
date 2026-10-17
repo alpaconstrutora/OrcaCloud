@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { BrokerProposal, BrokerProposalUnit, BrokerProfile } from '../types';
+import { BrokerProposal, BrokerProposalUnit, BrokerProfile, BrokerCommission } from '../types';
 import { supplierService } from './supplierService';
 
 /**
@@ -612,27 +612,22 @@ export const brokerService = {
     // nfeService.deleteNfeInvoice().
 
     // --- Broker Commissions ---
-    async listCommissions(organizationId: string | null, brokerEmail?: string) {
-        console.log(`[BROKER SERVICE] listing commissions for org: ${organizationId}, email: ${brokerEmail}`);
-        let query = supabase
-            .from('broker_portal_commissions')
-            .select('id, organization_id, proposal_id, broker_email, unit_number, block, buyer_name, sale_value, commission_pct, commission_predicted, commission_released, commission_paid, status, milestones, created_at, updated_at')
-            .order('created_at', { ascending: false });
-        if (organizationId) query = query.eq('organization_id', organizationId);
-
-        if (brokerEmail) {
-            // Case insensitive search using ilike
-            query = query.ilike('broker_email', brokerEmail);
-        }
-
-        const { data, error } = await query;
-
+    /**
+     * Comissões dos corretores, DERIVADAS da negociação (commercial_deals.broker_*)
+     * + título a pagar da comissão (internal_transactions 'brk-{deal}').
+     * `organizationId` null = "Todas" (só as orgs de que o usuário é membro —
+     * autorizado no banco); `brokerEmail` vazio = todos os corretores.
+     * Plano: docs/planos/2026-10-17-comissao-corretor-portal.md
+     */
+    async listCommissions(organizationId: string | null, brokerEmail?: string): Promise<BrokerCommission[]> {
+        const { data, error } = await supabase.rpc('fn_broker_comissoes_gestor', {
+            p_org: organizationId,
+            p_email: brokerEmail || null,
+        });
         if (error) {
             console.error('[BROKER SERVICE] Error listing commissions:', error);
             throw error;
         }
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (data || []) as any[];
+        return (data || []) as BrokerCommission[];
     }
 };

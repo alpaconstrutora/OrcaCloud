@@ -3,10 +3,13 @@ import { DollarSign, CheckCircle2, Clock, AlertCircle, TrendingUp, Building2, Ch
 import type { BrokerCommission } from '../../types';
 import { brokerService } from '../../services/brokerService';
 import { brokerPortalService } from '../../services/brokerPortalService';
+import { useOrgContext } from '../../hooks/useOrgContext';
+
+/** 'AAAA-MM-DD' → 'DD/MM/AAAA' sem passar por Date (new Date lê como UTC e volta um dia). */
+const dataBR = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
 
 interface BrokerCommissionsProps {
     brokerEmail: string;
-    organizationId?: string;
     portalToken?: string;
     /**
      * Celular (BrokerPortalMobile): resumo em um cartão só, filtros em faixa
@@ -22,7 +25,10 @@ const STATUS_CONFIG: Record<BrokerCommission['status'], { label: string; color: 
     PAGA: { label: 'Paga', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CheckCircle2 },
 };
 
-const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, organizationId, portalToken, compacto = false }) => {
+const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, portalToken, compacto = false }) => {
+    // Visão interna (gestor/prévia): org do seletor do topo (REGRA #5). Pelo
+    // link, org e e-mail vêm do token, no banco.
+    const { orgId: organizationId } = useOrgContext();
     const [commissions, setCommissions] = useState<BrokerCommission[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -36,7 +42,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                     const data = await brokerPortalService.getCommissionsByToken(portalToken);
                     setCommissions(data as BrokerCommission[]);
                 } else {
-                    const data = await brokerService.listCommissions(organizationId ?? null, brokerEmail);
+                    const data = await brokerService.listCommissions(organizationId, brokerEmail);
                     setCommissions(data);
                 }
             } catch (err) {
@@ -151,7 +157,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" data-tour="comissoes-lista">
                 {!loading && filtered.length === 0 && (
                     <p className="text-center text-sm text-gray-500 px-6 py-10">
-                        {commissions.length === 0 ? 'Nenhuma comissão ainda — ela nasce quando uma venda sua é aprovada.' : 'Nenhuma comissão com esse status.'}
+                        {commissions.length === 0 ? 'Nenhuma comissão ainda — ela aparece quando você é o corretor de uma negociação com comissão.' : 'Nenhuma comissão com esse status.'}
                     </p>
                 )}
                 <div className="divide-y divide-gray-100">
@@ -169,8 +175,12 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                                             <Building2 className="w-5 h-5 text-indigo-600" />
                                         </div>
                                         <div>
-                                            <p className="text-sm font-bold text-gray-900">Unidade {comm.unit_number} {comm.block ? `• ${comm.block}` : ''}</p>
-                                            <p className="text-xs text-gray-400 mt-0.5">Venda: {formatCurrency(comm.sale_value)} • {comm.commission_pct}% comissão</p>
+                                            <p className="text-sm font-bold text-gray-900">{comm.deal_type ? comm.unit_number : `Unidade ${comm.unit_number}`} {comm.block ? `• ${comm.block}` : ''}</p>
+                                            <p className="text-xs text-gray-400 mt-0.5">
+                                                {comm.deal_type === 'RENTAL' ? 'Locação' : 'Venda'}: {formatCurrency(comm.sale_value)}
+                                                {comm.commission_pct ? ` • ${comm.commission_pct}% comissão` : ''}
+                                                {comm.contract_number ? ` • ${comm.contract_number}` : ''}
+                                            </p>
                                         </div>
                                     </div>
                                     <div className={`flex items-center shrink-0 ${compacto ? 'gap-2' : 'gap-4'}`}>
@@ -197,7 +207,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                                                             </div>
                                                             <div>
                                                                 <p className="text-sm font-bold text-gray-900">{m.name}</p>
-                                                                {m.date && <p className="text-xs text-gray-400">{new Date(m.date).toLocaleDateString('pt-BR')}</p>}
+                                                                {m.date && <p className="text-xs text-gray-400">{dataBR(m.date)}</p>}
                                                             </div>
                                                         </div>
                                                         <span className={`text-sm font-black ${m.paid ? 'text-emerald-600' : 'text-gray-400'}`}>

@@ -2,7 +2,6 @@ import { supabase } from '../lib/supabase';
 import { PropertyDeal, ProjectSettings, PaymentInstallment, FinancialTransaction } from '../types';
 import { refPrefixOrFilter } from '../lib/receivableRef';
 import { projectService } from './projectService';
-import { brokerService } from './brokerService';
 
 // Supabase project row as returned by .select('id, name, settings') / .select('*')
 interface CommercialProjectRow {
@@ -496,8 +495,6 @@ export const commercialFinanceService = {
             console.error('[COMMERCIAL-FINANCE] Erro ao limpar espelho em internal_transactions:', e);
         }
 
-        // Remover comissão do Portal do Corretor
-        await this.deleteBrokerCommissionFromPortal(dealId);
     },
 
     /**
@@ -570,76 +567,6 @@ export const commercialFinanceService = {
         return removed;
     },
 
-    /**
-     * Sincroniza a comissão do corretor para a tabela do Portal do Corretor.
-     * Isso permite que o corretor veja suas comissões em tempo real no portal dele.
-     */
-    async syncBrokerCommissionToPortal(deal: PropertyDeal, unitNumber: string, block: string, clientName: string) {
-        if (!deal.broker_id || !deal.organization_id) return;
-
-        console.log(`[COMMERCIAL-FINANCE] Syncing Broker Commission to Portal for Deal ${deal.id}`);
-
-        try {
-            // 1. Obter o e-mail do corretor (chave de vinculação no portal)
-            const profile = await brokerService.getProfile(deal.broker_id);
-            if (!profile || !profile.email) {
-                console.warn(`[COMMERCIAL-FINANCE] Could not find broker profile or email for ID ${deal.broker_id}. Portal sync skipped.`);
-                return;
-            }
-
-            // 2. Preparar payload para a tabela broker_portal_commissions
-            const commission = {
-                organization_id: deal.organization_id,
-                broker_email: profile.email,
-                proposal_id: null, // deal originado no comercial não tem obrigatoriamente uma proposta no portal
-                unit_number: unitNumber,
-                block: block,
-                buyer_name: clientName,
-                sale_value: deal.value,
-                commission_pct: deal.broker_commission_pct || 0,
-                commission_predicted: deal.broker_commission_value || 0,
-                commission_released: 0, // Inicia como zero, liberadora via financeiro
-                commission_paid: 0,
-                status: 'PENDENTE',
-                updated_at: new Date().toISOString()
-            };
-
-            // 3. Upsert baseado na origem (Deal ID em um campo de metadados se existisse, mas usaremos a ID da comissão idêntica ao dealId)
-            // deal.id já é um UUID válido no banco, então removemos o prefixo de string que causou o erro 22P02.
-            const commissionId = deal.id;
-
-            const { error } = await supabase
-                .from('broker_portal_commissions')
-                .upsert({
-                    id: commissionId,
-                    ...commission
-                });
-
-            if (error) {
-                console.error('[COMMERCIAL-FINANCE] Failed to upsert broker portal commission:', error);
-            } else {
-                console.log(`[COMMERCIAL-FINANCE] Broker commission synced to portal for ${profile.email}`);
-            }
-
-        } catch (err) {
-            console.error('[COMMERCIAL-FINANCE] Error in syncBrokerCommissionToPortal:', err);
-        }
-    },
-
-    /**
-     * Remove a comissão do corretor vinculada a um deal comercial.
-     */
-    async deleteBrokerCommissionFromPortal(dealId: string) {
-        console.log(`[COMMERCIAL-FINANCE] Deleting Broker Commission for Deal ${dealId} from portal`);
-        const { error } = await supabase
-            .from('broker_portal_commissions')
-            .delete()
-            .eq('id', dealId);
-
-        if (error) {
-            console.error('[COMMERCIAL-FINANCE] Failed to delete broker portal commission:', error);
-        }
-    },
     /**
      * Busca parcelas vinculadas a um cliente dentro da organização do cliente.
      * Escoped por organizationId para evitar vazamento cross-tenant.

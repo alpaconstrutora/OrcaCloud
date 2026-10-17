@@ -236,7 +236,7 @@ const PARCEIRO: DefaultHelpItem[] = [
     key: 'parceiro.financeiro.parcelas', kind: 'artigo', section: 'financeiro',
     title: 'Financeiro: parcelas, medições e retenção',
     body_html: p(
-      'A aba Financeiro mostra um cartão por contrato: abra o cartão para ver cada parcela com vencimento, valor e situação (paga, vencida ou a vencer). Os botões acima da lista filtram as parcelas por situação. Abaixo ficam as medições, com valor bruto, retenção e líquido, e o saldo retido de garantia.',
+      'A aba Financeiro mostra as parcelas a receber dos seus contratos, com vencimento, valor e status (pago ou pendente), as medições com valor bruto, retenção e líquido, e o saldo retido de garantia.',
       'Quando um pagamento é feito, o recibo fica disponível na linha da parcela.',
     ),
   },
@@ -375,7 +375,7 @@ const CORRETOR: DefaultHelpItem[] = [
   {
     key: 'corretor.comissoes.acompanhar', kind: 'artigo', section: 'comissoes',
     title: 'Comissões: o que está previsto e o que foi pago',
-    body_html: p('Veja as comissões de cada venda, o status (prevista, liberada, paga) e as datas.'),
+    body_html: p('No topo, o total previsto, a liberar, liberado e pago. Abaixo, uma linha por parcela de cada comissão, com a negociação, a data, o valor e a situação (pendente, liberada ou paga). As abas acima da tabela filtram por situação.', 'Na locação, cada parcela é liberada quando o aluguel correspondente é recebido.'),
   },
   {
     key: 'corretor.materiais.baixar', kind: 'artigo', section: 'materiais',
@@ -846,9 +846,9 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
         { key: 'parceiro.tour.contratos.detalhes', anchor: 'contratos-detalhes', section: 'contratos', title: 'Ver Detalhes', body: 'Abre a visão geral, os itens, as medições, os aditivos e a retenção do contrato.', quando: 'quando a construtora liberar um contrato' },
       ]),
       financeiro: tourDe('financeiro', [
-        { key: 'parceiro.tour.financeiro.kpis', anchor: 'financeiro-kpis', section: 'financeiro', title: 'Resumo financeiro', body: 'O total dos seus contratos, o que você já recebeu, o que está em aberto e o que venceu.' },
-        { key: 'parceiro.tour.financeiro.parcelas', anchor: 'financeiro-parcelas', section: 'financeiro', title: 'Parcelas', body: 'Um cartão por contrato: abra para ver o vencimento e o valor de cada parcela. O recibo aparece quando o pagamento é feito.' },
-        { key: 'parceiro.tour.financeiro.medicoes', anchor: 'financeiro-medicoes', section: 'financeiro', title: 'Medições', body: 'Valor bruto, retenção e líquido de cada medição, e o saldo retido de garantia.' },
+        { key: 'parceiro.tour.financeiro.kpis', anchor: 'financeiro-kpis', section: 'financeiro', title: 'Resumo financeiro', body: 'O que você tem a receber, o que já recebeu e o que está retido de garantia.' },
+        { key: 'parceiro.tour.financeiro.parcelas', anchor: 'financeiro-parcelas', section: 'financeiro', title: 'Parcelas', body: 'Vencimento, valor e status de cada parcela. O recibo aparece quando o pagamento é feito.' },
+        { key: 'parceiro.tour.financeiro.medicoes', anchor: 'financeiro-medicoes', section: 'financeiro', title: 'Medições', body: 'Valor bruto, retenção e líquido de cada medição.' },
         { key: 'parceiro.tour.financeiro.anexar-nf', anchor: 'financeiro-anexar-nf', section: 'financeiro', title: 'Anexar a nota fiscal', body: 'Envie a NF da medição por aqui. Sem ela a parcela não é liberada.', quando: 'quando houver uma medição sem nota fiscal' },
       ]),
       solicitacoes: tourDe('solicitacoes', [
@@ -931,8 +931,8 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
         { key: 'corretor.tour.leads.novo', anchor: 'leads-novo', section: 'leads', title: 'Novo Lead', body: 'Cadastre o interessado com contato e o que ele procura.' },
       ]),
       comissoes: tourDe('comissoes', [
-        { key: 'corretor.tour.comissoes.totais', anchor: 'comissoes-totais', section: 'comissoes', title: 'Totais', body: 'Comissão prevista, liberada e paga.' },
-        { key: 'corretor.tour.comissoes.lista', anchor: 'comissoes-lista', section: 'comissoes', title: 'Por venda', body: 'Valor, situação e datas de cada comissão.' },
+        { key: 'corretor.tour.comissoes.totais', anchor: 'comissoes-totais', section: 'comissoes', title: 'Totais', body: 'Comissão prevista, a liberar, liberada e paga, e a data da próxima liberação.' },
+        { key: 'corretor.tour.comissoes.lista', anchor: 'comissoes-lista', section: 'comissoes', title: 'Parcelas', body: 'Cada parcela das suas comissões, com negociação, data, valor e situação. As abas filtram pendentes, liberadas e pagas.' },
       ]),
       materiais: tourDe('materiais', [
         { key: 'corretor.tour.materiais.grade', anchor: 'materiais-grade', section: 'materiais', title: 'Materiais de venda', body: 'Tabelas, plantas e peças publicadas pela incorporadora. Use sempre a versão mais recente.' },

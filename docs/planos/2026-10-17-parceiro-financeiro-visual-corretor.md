@@ -9,11 +9,21 @@ Prints: Financeiro do Parceiro (Débora Cristina Duarte, 5 KPIs + tabela de 73 p
 e Comissões do Corretor (Geleia, 3 cards com barra + chips + cartão que abre com
 "Marcos de liberação").
 
+### 2º pedido — 17/10/2026, ~14:20 (CORRIGE O RUMO)
+> voce fez tudo errado.
+> Era para aplicar o design no portal do parceiro no portal do corretor e nao o contrato.
+
+⚠️ O 1º pedido foi lido ao contrário: o certo era levar o desenho do **Parceiro ›
+Financeiro** (faixa de KPIs, abas de filtro, tabela, pílula) para as **Comissões do
+Corretor** — não o das Comissões para o parceiro. O que está abaixo de "Plano" (itens
+1–7) é a execução errada, publicada em `b21f8f41`/`d3c3c78f` e **revertida** pelo 2º plano.
+
 ## Decisões tomadas com o usuário
 | Data | Pergunta | Resposta |
 |---|---|---|
 | 17/10/2026 | Como organizar as parcelas: um cartão por contrato, ou a mesma lista solta no visual do corretor? | **Um cartão por contrato** (abre e mostra as parcelas) — o banco passa a devolver o contrato de cada parcela |
 | 17/10/2026 | E o card de Medições? | **Mesmo visual também** |
+| 17/10/2026 (2º) | Nas Comissões, com o desenho do parceiro, qual é a linha da tabela? | **Uma linha por parcela** (marco) de cada comissão |
 
 Decisões de execução (não perguntadas, registradas):
 - Com **um contrato só**, o cartão já nasce aberto — fechado, a aba mostraria só um cabeçalho.
@@ -72,3 +82,33 @@ Decisões de execução (não perguntadas, registradas):
   de celular — em 390 px a aba fica espremida, e já ficava na produção antes desta mudança
   (pior: a faixa de 5 KPIs virava letras soltas). O corretor tem `BrokerPortalMobile`; o
   parceiro precisaria do equivalente. Não feito — não foi pedido.
+
+---
+
+## 2º plano (17/10/2026) — Comissões do Corretor no desenho do Parceiro
+
+1. **Reverter a 1ª execução** — `git revert` de `b21f8f41` + `d3c3c78f`, exceto a
+   migration `aplicar_20271017900000_partner_ws_financials_contract_id.sql` (já aplicada,
+   só acrescenta `installments[].contract_id`, inofensiva) e este plano.
+   `PortalCardsKit.tsx` apagado. *Terminou quando:* parceiro, corretor, PortalKit e o teste
+   iguais ao `e9c86243`; guia/ajuda só com as mudanças da frente de Documentos (`a149f991`).
+2. **Banco** — `aplicar_20271017950000_comissao_marco_released.sql`: `fn_broker_comissoes_lista`
+   devolve `milestones[].released` (mesma regra do `liberado` agregado), a partir do ARQUIVO
+   `20271017600000`. *Terminou quando:* Geleia — 6 marcos `released` = R$ 700 = `commission_released`.
+3. **Corretor** — `components/broker/BrokerCommissions.tsx` com o `PortalKit`: `KpiStrip`
+   (Prevista / A liberar / Liberada / Paga / Próxima liberação), faixa da próxima liberação,
+   `PortalCard`+`CardHeader`+`PortalTabs` (Todas/Pendentes/Liberadas/Pagas) e tabela
+   PARCELA/NEGOCIAÇÃO/DATA/VALOR/STATUS com `StatusPill`. Celular (`compacto`): lista empilhada.
+4. **Tipo** — `types/broker.ts`: `milestones[].released?`.
+5. **Ajuda/tour** — `utils/portalHelpDefaults.ts`: textos de Comissões do corretor.
+6. **Exceção** — guia §24 (linha "Corretor") e cabeçalho do `PortalKit.tsx`.
+7. **Testes** — `__tests__/components/BrokerCommissions.test.tsx` (novo).
+
+### Estado (2º plano)
+- [x] 1. Reversão — parceiro local × print da produção ANTES da 1ª execução: **0 pixels diferentes**
+- [x] 2. Banco — aplicado; 6 marcos `released` somam R$ 700 (= agregado)
+- [x] 3. Corretor — Playwright no link da Geleia, desktop e celular, sem erro de console/HTTP:
+      Prevista R$ 5.200, A liberar R$ 4.500, Liberada R$ 700, Paga R$ 0; abas 21/15/6/0
+- [x] 4. Tipo · [x] 5. Ajuda/tour · [x] 6. Exceção · [x] 7. Testes (48 passed nos relacionados)
+- [ ] Suíte inteira e build
+- [ ] Publicação

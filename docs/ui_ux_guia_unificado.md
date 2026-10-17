@@ -2654,8 +2654,8 @@ acesso por link público (`isPublicExperience` em `InvestorDashboard.tsx` e em
 |---|---|---|
 | Investidor (desde 2026-08-15) | as 10 do módulo (Resumo, Simulador, Carteira, Financeiro, Fiscal, Oportunidades, Documentos, Comunicados, SPE, Relatórios) | `components/investor/portal/*` + trechos de `InvestorDashboard.tsx` sob `isPublicExperience` |
 | Fornecedor (desde 2026-08-19) | as 5 do módulo (Estatísticas, Lances, Cotações, Pedidos, Nota Fiscal) | `components/supplier/portal/*` + trechos de `SupplierDashboard.tsx` sob `isPublicExperience` |
-| Parceiro (desde 2026-09-30) | **só a aba Financeiro** — as demais abas do Portal do Parceiro seguem fora do §24. ⚠️ Desde 2026-10-17 no vocabulário de **cartões** (§24.1), não mais no `PortalKit` | `components/partner/PartnerPortalFinanceiro.tsx` (montado por `PartnerPortal.tsx`) |
-| Corretor › Comissões (vocabulário de cartões, §24.1) | só a aba Comissões | `components/broker/BrokerCommissions.tsx` |
+| Parceiro (desde 2026-09-30) | **só a aba Financeiro** — as demais abas do Portal do Parceiro seguem fora do §24 | `components/partner/PartnerPortalFinanceiro.tsx` (montado por `PartnerPortal.tsx`) |
+| Corretor (desde 2026-10-17) | **só a aba Comissões**, no desenho do Financeiro do Parceiro (faixa de KPIs, abas, tabela de parcelas) — as demais abas do Portal do Corretor seguem fora do §24 | `components/broker/BrokerCommissions.tsx` (desktop e `compacto` do celular) |
 
 O kit vive em **`components/portal/PortalKit.tsx`** (era
 `components/investor/portal/PortalKit.tsx` até virar de dois portais).
@@ -2712,35 +2712,9 @@ delimitado aos portais**, não a nova régua do app.
 - Estados de loading e vazio explícitos (§11/§12) — `PortalLoading`/`PortalEmpty`;
 - Datas nunca via `new Date('YYYY-MM-DD')` cru (âncora de meio-dia em `parseDate`).
 
-### 24.1 Vocabulário de CARTÕES (`PortalCardsKit`) — Corretor › Comissões e Parceiro › Financeiro
-
-**Origem:** 2026-10-17, pedido literal do usuário com os dois prints lado a lado:
-*"portal do parceiro (visão do parceiro) veja print. Compare com o portal do
-corretor (visão do corretor), veja print. Aplique o mesmo Design"*. Perguntado,
-escolheu **um cartão por contrato** (abre e mostra as parcelas) e **Medições no
-mesmo visual**. Plano: `docs/planos/2026-10-17-parceiro-financeiro-visual-corretor.md`.
-
-O desenho é o que a aba Comissões do corretor já tinha à mão; ele foi extraído
-para **`components/portal/PortalCardsKit.tsx`** (classes copiadas literalmente,
-o corretor não mudou na tela) e as duas abas importam de lá:
-
-| Elemento | Guia | Cartões | Primitiva |
-|---|---|---|---|
-| KPI | §4 `KpiCard` | card grande com bolha de ícone à direita e barra contínua embaixo (§29 não se aplica) | `KpiProgressCard` |
-| Filtro | §5.4 popover | chips "Todas (n)" + um por situação, com ícone e contagem | `FilterChips` |
-| Lista | §6 tabela | cartões que abrem, corpo cinza com linhas de bolinha | `ExpandableList`/`ExpandableItem`/`StaticItem`/`MarcoLinha` |
-| Status | §8 texto colorido | badge com fundo, ícone e caixa alta | `StatusBadge` |
-| Escala | §16 compacta | `rounded-2xl`/`rounded-xl`, `font-black` | — |
-
-Não há `<table>` nesse vocabulário, então §6/§7 não se aplicam. Continuam
-valendo: loading e vazio explícitos (`CarregandoLista`, `vazio` da lista), datas
-sem `new Date('YYYY-MM-DD')` cru (`dataBR`), ações sempre visíveis (a NF da
-medição fica na linha, fora do cartão que abre).
-
 ### Regra de manutenção
 
-Toda cor/medida do vocabulário mora em `components/portal/PortalKit.tsx` — ou,
-para o vocabulário de cartões (§24.1), em `components/portal/PortalCardsKit.tsx`.
+Toda cor/medida do vocabulário mora em `components/portal/PortalKit.tsx`.
 Tela do portal **não escreve `bg-[#E1553C]` à mão** — usa a primitiva. Se
 precisar de um elemento novo, ele nasce no kit.
 

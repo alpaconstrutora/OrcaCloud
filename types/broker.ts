@@ -156,7 +156,8 @@ export interface BrokerCommission {
     commission_released: number;
     commission_paid: number;
     status: 'PENDENTE' | 'PARCIAL' | 'LIBERADA' | 'PAGA';
-    milestones?: { name: string; date?: string; value: number; paid: boolean }[];
+    /** `released` = liberada para pagamento (mesma regra do `commission_released`), desde aplicar_20271017950000. */
+    milestones?: { name: string; date?: string; value: number; paid: boolean; released?: boolean }[];
     created_at?: string;
     updated_at?: string;
 }

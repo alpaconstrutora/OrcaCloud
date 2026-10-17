@@ -11,11 +11,9 @@ import React from 'react';
  * usado no portal do fornecedor > financeiro").
  * Vale SÓ para `components/investor/portal/*` e `components/supplier/portal/*`,
  * mais os trechos recortados por `isPublicExperience` nos dois dashboards, mais
- * `components/partner/PartnerPortalFinanceiro.tsx`.
- *
- * ⚠️ Desde 2026-10-17 a aba Financeiro do Parceiro saiu deste vocabulário: está
- * no de CARTÕES (`components/portal/PortalCardsKit.tsx`, o desenho das Comissões
- * do Corretor — guia §24.1). Ela só usa daqui o `parseDate`.
+ * `components/partner/PartnerPortalFinanceiro.tsx`, e à aba Comissões do Portal do
+ * Corretor em 2026-10-17 ("aplicar o design do portal do parceiro no portal do
+ * corretor") — `components/broker/BrokerCommissions.tsx`.
  * Nenhuma tela interna do app usa este arquivo.
  *
  * O que diverge do guia (e só aqui): pílula de status com fundo (§8), `<thead>`

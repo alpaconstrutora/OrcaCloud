@@ -13,6 +13,12 @@ export interface ActionQueueItem {
     approval_status: ApprovalStatus;
     approval_chain: ApprovalStep[];
     approval_required_levels: number;
+    /**
+     * Título já baixado (conciliação/Asaas) com a alçada ainda pendente — marcado
+     * pela tela a partir de `pago_sem_alcada_em` (item H.1 do plano 2026-10-16),
+     * não pela RPC (`fn_approval_action_queue` alimenta também a Central).
+     */
+    pago_sem_alcada?: boolean;
 }
 
 // ============================================================

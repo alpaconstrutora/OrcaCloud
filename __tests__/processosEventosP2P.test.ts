@@ -97,7 +97,8 @@ describe('processService — resolvedor único do pedido', () => {
         dados.companies = { org_id: 'org-da-empresa' };
         await processService.triggerPurchaseOrderEvent('po1', 'purchase_order.approved', { titleSuffix: 'Aprovado' });
         expect(disparos).toEqual([{ orgId: 'org-do-pedido', eventKey: 'purchase_order.approved',
-            ctx: { title: 'Pedido PC-1 — Aprovado', purchaseOrderId: 'po1', supplierId: 'sup1', projectId: 'obra1' } }]);
+            // `amount` (16/10/2026): o valor do pedido vai no contexto para o valor mínimo do modelo; este pedido não tem itens.
+            ctx: { title: 'Pedido PC-1 — Aprovado', purchaseOrderId: 'po1', supplierId: 'sup1', projectId: 'obra1', amount: null } }]);
     });
 
     it('pedido antigo sem organization_id cai em companies.org_id', async () => {

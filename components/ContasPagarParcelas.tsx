@@ -20,6 +20,7 @@ import { numeroRecibo } from '../utils/reciboRecebimento';
 import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, contarLinhasDaTela, entradasDaPagina, linhasDaTela, type ChaveDeGrupo } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
+import { idsComAlcadaPendente, MOTIVO_ALCADA_PENDENTE } from '../services/alcadaDaBaixa';
 
 /**
  * Rótulo de origem por `source_system`. É a coluna que responde "de onde essa
@@ -453,6 +454,19 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             .catch(err => console.error('[ContasPagarParcelas] Erro ao carregar recibos:', err));
     }, [organizationId, loading]);
 
+    // Títulos pendentes na alçada (17/10/2026, item H.1): a baixa manual deles é
+    // recusada no serviço; aqui o botão desliga e diz por quê. Mesma régua dos
+    // recibos — depois da lista, com guarda de resposta fora de ordem.
+    const [alcadaPendente, setAlcadaPendente] = useState<Set<string>>(new Set());
+    const alcadaSeq = useRef(0);
+    useEffect(() => {
+        if (loading) return;
+        const seq = ++alcadaSeq.current;
+        idsComAlcadaPendente(organizationId ?? null)
+            .then(ids => { if (seq === alcadaSeq.current) setAlcadaPendente(ids); })
+            .catch(err => console.error('[ContasPagarParcelas] Erro ao conferir a alçada:', err));
+    }, [organizationId, loading]);
+
     /* Origens realmente presentes nos dados, ordenadas pelo rótulo. Se o filtro
        persistido apontar para uma origem que sumiu do recorte atual, ele é
        mantido na lista para o <select> não cair calado numa opção inexistente
@@ -834,7 +848,10 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     }
 
     // Títulos em aberto da seleção — os que a baixa em lote alcança.
-    const selecionadasEmAberto = selectedVisible.filter(r => !['PAGO', 'CANCELADO'].includes(r.effective_status));
+    const selecionadasNaoQuitadas = selectedVisible.filter(r => !['PAGO', 'CANCELADO'].includes(r.effective_status));
+    // Pendente na alçada não entra no lote (item H.1) — o título do botão diz quantas ficaram de fora.
+    const selecionadasEmAberto = selecionadasNaoQuitadas.filter(r => !alcadaPendente.has(r.id));
+    const presasNaAlcada = selecionadasNaoQuitadas.length - selecionadasEmAberto.length;
 
     /** Props do painel para os títulos em baixa: rótulos de Pagar, credor como
      *  contraparte, recibo desmarcado em lote só de boleto e ausente em Folha. */
@@ -1097,9 +1114,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                     {!quitado && (
                                                         <button
                                                             onClick={() => setBaixando([row])}
-                                                            disabled={salvando === row.id}
-                                                            className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all disabled:opacity-50 flex items-center gap-1"
-                                                            title="Dar baixa: data, forma de pagamento e recibo"
+                                                            disabled={salvando === row.id || alcadaPendente.has(row.id)}
+                                                            className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                                            title={alcadaPendente.has(row.id) ? MOTIVO_ALCADA_PENDENTE : 'Dar baixa: data, forma de pagamento e recibo'}
                                                         >
                                                             {salvando === row.id
                                                                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1223,8 +1240,10 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     onClick={() => setBaixando(selecionadasEmAberto)}
                     disabled={selecionadasEmAberto.length === 0}
                     title={selecionadasEmAberto.length
-                        ? 'Dar baixa nas parcelas em aberto da seleção (data, forma e recibo)'
-                        : 'Todas as parcelas selecionadas já estão pagas ou canceladas.'}
+                        ? `Dar baixa nas parcelas em aberto da seleção (data, forma e recibo)${presasNaAlcada ? ` — ${presasNaAlcada} aguardando aprovação na alçada fica${presasNaAlcada === 1 ? '' : 'm'} de fora` : ''}`
+                        : presasNaAlcada
+                            ? MOTIVO_ALCADA_PENDENTE
+                            : 'Todas as parcelas selecionadas já estão pagas ou canceladas.'}
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 rounded-[6px] text-[13px] font-medium hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-95"
                 >
                     <Check className="w-3.5 h-3.5" />

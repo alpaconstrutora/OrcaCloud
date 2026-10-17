@@ -25,6 +25,9 @@ import {
  */
 export const STAGE_EVENT_KEYS_FIN: Record<string, ProcessEventKey[]> = {
   boletos:   ['boleto.approved'],
+  // Vencido nasce no nó do título (varredura de hora em hora no servidor, 16/10/2026).
+  a_pagar:   ['payable.overdue'],
+  a_receber: ['receivable.overdue'],
   aprovacao: ['payable.approved'],
   pagamento: ['payable.settled'],
   cobranca:  ['receivable.settled'],
@@ -33,6 +36,9 @@ export const STAGE_EVENT_KEYS_FIN: Record<string, ProcessEventKey[]> = {
 /** Qual transição cada evento CONDUZ (a costura mora na aresta, como no P2P). */
 export const EDGE_EVENT_KEYS_FIN: Record<string, ProcessEventKey[]> = {
   'boletos->a_pagar':     STAGE_EVENT_KEYS_FIN.boletos,
+  // Título vencido pede decisão (pagar, renegociar) → conduz à alçada; a receber vencido leva à cobrança.
+  'a_pagar->aprovacao':   STAGE_EVENT_KEYS_FIN.a_pagar,
+  'a_receber->cobranca':  STAGE_EVENT_KEYS_FIN.a_receber,
   'aprovacao->pagamento': STAGE_EVENT_KEYS_FIN.aprovacao,
   'pagamento->baixado':   STAGE_EVENT_KEYS_FIN.pagamento,
   'cobranca->baixado':    STAGE_EVENT_KEYS_FIN.cobranca,
@@ -48,7 +54,7 @@ export const DEFINICAO_DAS_ARESTAS_FIN: ReadonlyArray<Pick<FlowEdge, 'from' | 't
   { from: 'origens_pagar',   to: 'a_pagar',    seam: 'auto',   note: 'Pedido recebido, contrato, medição, folha fechada e tributo do negócio geram o título sozinhos; NF-e e dívida pedem um clique' },
   { from: 'a_pagar',         to: 'aprovacao',  seam: 'manual', note: 'Só o boleto entra na alçada sozinho; os demais títulos são enviados pela tela de Aprovações' },
   { from: 'aprovacao',       to: 'pagamento',  seam: 'auto',   note: 'Alçada fechada marca o título como Aprovado' },
-  { from: 'pagamento',       to: 'baixado',    seam: 'manual', note: 'Baixa no painel ou boleto marcado como pago; o Asaas baixa sozinho pelo webhook. A baixa não confere a alçada' },
+  { from: 'pagamento',       to: 'baixado',    seam: 'manual', note: 'Baixa no painel ou boleto marcado como pago; o Asaas baixa sozinho pelo webhook. Título pendente na alçada não é baixado à mão; conciliação e Asaas não são barrados e marcam "pago sem aprovação"' },
   { from: 'extrato',         to: 'baixado',    seam: 'auto',   note: 'Motor de conciliação (no app e por CRON a cada 10 min) vincula extrato × título; o que não casa vira sugestão. Baixa pelo CRON não abre processo' },
   { from: 'origens_receber', to: 'a_receber',  seam: 'auto',   note: 'Contrato de venda gera as parcelas depois de emitido/assinado; locação ("Gerar parcelas") e condomínio (rateio fechado) pedem um clique' },
   { from: 'a_receber',       to: 'cobranca',   seam: 'manual', note: 'Boleto/PIX do Asaas emitido na tela de Cobranças; a régua de cobrança só envia e-mail' },
@@ -87,11 +93,13 @@ const EXTRATO_PENDENTE = ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']
  * `approval_status = 'APROVADO'` — na Alpa, em 16/10/2026, 75 títulos liberados
  * tinham `business_status` vazio, e contar `business_status = 'APROVADO'` dava
  * ZERO no nó Pagamento. Só abertos (`status = 'PENDING'`): título já baixado
- * que ficou PENDENTE na alçada é a lacuna "a baixa não confere a alçada", não
+ * que ficou PENDENTE na alçada é "pago sem aprovação" (PAGO_SEM_ALCADA), não
  * fila de aprovação.
  */
 const NA_ALCADA: Filters = { direction: 'DEBIT', status: 'PENDING', approval_status: 'PENDENTE' };
 const LIBERADO_PARA_PAGAR: Filters = { direction: 'DEBIT', status: 'PENDING', approval_status: 'APROVADO' };
+/** Baixado (conciliação/Asaas) com a alçada ainda pendente — carimbo do banco (17/10/2026, item H.1). */
+const PAGO_SEM_ALCADA: Filters = { direction: 'DEBIT', approval_status: 'PENDENTE', pago_sem_alcada_em: { notNull: true } };
 
 /** Origem do título em texto — o mesmo vocabulário da Conciliação (`BankReconciliation`), com as origens que ela não nomeia. */
 const ORIGEM_LABEL: Record<string, string> = {
@@ -168,7 +176,7 @@ export const financeiroFlowService: FlowService = {
       boletosCapturados, boletosEmRevisao,
       origensPagar, aPagar, aPagarVencidos, naAlcada, aprovadosAPagar,
       origensReceber, aReceber, aReceberVencidos, emCobranca,
-      extratoPendente, pagos, recebidos, mesesFechados,
+      extratoPendente, pagos, recebidos, mesesFechados, pagosSemAlcada,
       motor,
     ] = await Promise.all([
       countRows('boletos', { ...org, ...proj, status: BOLETO_CAPTURADO }),
@@ -186,6 +194,7 @@ export const financeiroFlowService: FlowService = {
       countRows('vw_payables', { ...org, ...proj, effective_status: 'PAGO' }),
       countRows('vw_receivables', { ...org, ...proj, effective_status: 'RECEBIDO' }),
       countRows('financial_period_locks', { ...org, is_closed: 'true' }),
+      countRows('internal_transactions', { ...org, ...proj, ...PAGO_SEM_ALCADA }),
       lerMotor(organizationId, projectId),
     ]);
 
@@ -252,7 +261,11 @@ export const financeiroFlowService: FlowService = {
       },
     ];
 
-    const edges = montarArestas(DEFINICAO_DAS_ARESTAS_FIN, EDGE_EVENT_KEYS_FIN, motor);
+    // A baixa que passou por cima da alçada (conciliação/Asaas) aparece com número na transição.
+    const edges = montarArestas(DEFINICAO_DAS_ARESTAS_FIN, EDGE_EVENT_KEYS_FIN, motor).map(e =>
+      e.id === 'pagamento->baixado' && pagosSemAlcada > 0
+        ? { ...e, note: `${e.note} — ${pagosSemAlcada} ${pagosSemAlcada === 1 ? 'título pago' : 'títulos pagos'} sem aprovação` }
+        : e);
     const agora = Date.now();
     const rotulo = (id: string) => definicoes.find(d => d.id === id)?.label ?? id;
     const stages: FlowStage[] = definicoes.map(no => ({
@@ -308,12 +321,14 @@ export const financeiroFlowService: FlowService = {
         return titulos('vw_payables', { effective_status: PAGAR_ABERTO }, true);
 
       case 'aprovacao': {
-        const rows = await fetchRows<LinhaTitulo>(
-          'internal_transactions',
-          'id, description, amount, due_date, source_system, party_name',
-          { ...org, ...proj, ...NA_ALCADA },
-        );
-        return rows.map(r => ({ ...tituloParaRegistro(r, origem(r.source_system)), status: 'Na alçada' }));
+        const [naFila, pagosSem] = await Promise.all([
+          fetchRows<LinhaTitulo>('internal_transactions', 'id, description, amount, due_date, source_system, party_name', { ...org, ...proj, ...NA_ALCADA }),
+          fetchRows<LinhaTitulo>('internal_transactions', 'id, description, amount, due_date, source_system, party_name', { ...org, ...proj, ...PAGO_SEM_ALCADA }),
+        ]);
+        return [
+          ...naFila.map(r => ({ ...tituloParaRegistro(r, origem(r.source_system)), status: 'Na alçada' })),
+          ...pagosSem.map(r => ({ ...tituloParaRegistro(r, origem(r.source_system)), status: 'Pago sem aprovação' })),
+        ];
       }
 
       case 'a_receber':

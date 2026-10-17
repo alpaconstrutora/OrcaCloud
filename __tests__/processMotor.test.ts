@@ -130,3 +130,51 @@ describe('a Edge Function da conciliação chama o motor', () => {
         expect(src).toContain("motor.triggerForTransaction(m.internalId, 'internal_transaction.paid')");
     });
 });
+
+describe('valor mínimo do modelo e evento vencido (16/10/2026, seção H)', () => {
+    it('passaNoValorMinimo: sem mínimo abre; abaixo barra; valor desconhecido abre', async () => {
+        const { passaNoValorMinimo } = await import('../services/processMotor');
+        expect(passaNoValorMinimo(null, 10)).toBe(true);
+        expect(passaNoValorMinimo(5000, 4999.99)).toBe(false);
+        expect(passaNoValorMinimo(5000, 5000)).toBe(true);
+        expect(passaNoValorMinimo(5000, null)).toBe(true);
+    });
+
+    it('modelo com mínimo acima do valor do título não abre processo; abaixo do valor, abre', async () => {
+        db.process_templates[0].trigger_min_amount = 1000;
+        db.internal_transactions[0].amount = 250;
+        await criarMotor(cliente()).triggerSettlement('t-avulso');
+        expect(inserts.filter(i => i.tabela === 'process_instances')).toHaveLength(0);
+        db.internal_transactions[0].amount = 1500;
+        await criarMotor(cliente()).triggerSettlement('t-avulso');
+        expect(inserts.filter(i => i.tabela === 'process_instances')).toHaveLength(1);
+    });
+
+    it('vencido: abre uma vez por título — mesmo com a instância anterior CONCLUÍDA, não reabre', async () => {
+        db.process_templates.push({ id: 'tpl-venc', organization_id: 'org1', trigger_type: 'EVENTO', trigger_event_key: 'payable.overdue', status: 'ATIVO', version: 1, criticality: 'ALTA' });
+        db.process_template_steps.push({ id: 'ts3', process_template_id: 'tpl-venc', name: 'Apurar o atraso', step_type: 'task', order_index: 0, sla_hours: 24 });
+        db.internal_transactions[0].due_date = '2026-10-10';
+        const motor = criarMotor(cliente());
+        await motor.triggerForFinancialTitle('t-avulso', 'payable.overdue');
+        const inst = inserts.filter(i => i.tabela === 'process_instances').map(i => i.linha);
+        expect(inst).toHaveLength(1);
+        expect(inst[0]).toMatchObject({ process_template_id: 'tpl-venc', title: 'Energia — vencido em 10/10/2026' });
+        db.process_instances[0].status = 'CONCLUIDO';
+        await motor.triggerForFinancialTitle('t-avulso', 'payable.overdue');
+        expect(inserts.filter(i => i.tabela === 'process_instances')).toHaveLength(1);
+    });
+
+    it('vencido de título a receber exige CREDIT', async () => {
+        db.process_templates.push({ id: 'tpl-rv', organization_id: 'org1', trigger_type: 'EVENTO', trigger_event_key: 'receivable.overdue', status: 'ATIVO', version: 1, criticality: 'ALTA' });
+        await criarMotor(cliente()).triggerForFinancialTitle('t-avulso', 'receivable.overdue');
+        expect(inserts.filter(i => i.tabela === 'process_instances')).toHaveLength(0);
+    });
+
+    it('a Edge Function de vencidos chama o motor com o evento vindo da função SQL', () => {
+        const src = readFileSync('supabase/functions/process-overdue-sweep/index.ts', 'utf-8');
+        expect(src).toContain('from "../../../services/processMotor.ts"');
+        expect(src).toContain('if (!chamadaDeCron(req)) return json');
+        expect(src).toContain("admin.rpc('fn_titulos_vencidos_para_processo'");
+        expect(src).toContain('motor.triggerForFinancialTitle(c.titulo_id, c.evento)');
+    });
+});

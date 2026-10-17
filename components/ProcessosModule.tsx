@@ -119,6 +119,17 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
     const [docPickerStep, setDocPickerStep] = useState<string | null>(null);
     const [rejectStep, setRejectStep] = useState<ProcessInstanceStep | null>(null);
     const [rejectReason, setRejectReason] = useState('');
+    // Origem financeira (17/10/2026, item H.3): título ou boleto que abriu o processo, com link.
+    const [origem, setOrigem] = useState<Awaited<ReturnType<typeof processService.getOrigemFinanceira>>>(null);
+    const navigateToFocus = useStore(s => s.navigateToFocus);
+    useEffect(() => {
+        if (!instance || (!instance.internal_transaction_id && !instance.boleto_id)) { setOrigem(null); return; }
+        let vivo = true;
+        processService.getOrigemFinanceira(instance)
+            .then(o => { if (vivo) setOrigem(o); })
+            .catch(() => { if (vivo) setOrigem(null); });
+        return () => { vivo = false; };
+    }, [instance?.id, instance?.internal_transaction_id, instance?.boleto_id]); // eslint-disable-line react-hooks/exhaustive-deps
     // F3 — bloqueio manual: campo de motivo aberto inline no cabeçalho.
     const [blockOpen, setBlockOpen] = useState(false);
     const [blockReason, setBlockReason] = useState('');
@@ -292,6 +303,19 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
                             <div>
                                 <h3 className="text-lg font-black text-gray-900">{instance.title}</h3>
                                 <p className="text-xs text-gray-500 mt-0.5">{instance.template_name}</p>
+                                {origem && (
+                                    <p className="text-xs text-gray-500 mt-1 flex flex-wrap items-center gap-x-1.5">
+                                        <span>Origem: <span className="font-medium text-gray-700">{origem.rotulo}</span>{origem.detalhe && ` · ${origem.detalhe}`}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => { onClose(); navigateToFocus(origem.view, origem.ref, origem.source); }}
+                                            className="inline-flex items-center gap-0.5 font-medium text-blue-600 hover:text-blue-800"
+                                            title={`Abrir ${origem.rotulo.toLowerCase()} na tela de origem`}
+                                        >
+                                            Abrir <ChevronRight className="w-3.5 h-3.5" />
+                                        </button>
+                                    </p>
+                                )}
                             </div>
                             <StatusBadge status={instance.status} />
                         </div>

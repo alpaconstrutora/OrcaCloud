@@ -91,9 +91,10 @@ describe('financeiroFlowService — desenho', () => {
         expect(stages.find(s => s.id === 'aprovacao')!.inboundNote).toContain('Só o boleto entra na alçada sozinho');
     });
 
-    it('a lacuna conhecida fica escrita na transição: a baixa não confere a alçada', () => {
+    it('a regra da alçada fica escrita na transição da baixa (17/10: manual barrada, conciliação marca)', () => {
         const baixa = DEFINICAO_DAS_ARESTAS_FIN.find(d => d.from === 'pagamento' && d.to === 'baixado')!;
-        expect(baixa.note).toContain('não confere a alçada');
+        expect(baixa.note).toContain('Título pendente na alçada não é baixado à mão');
+        expect(baixa.note).toContain('"pago sem aprovação"');
     });
 
     it('modelo ativo em payable.approved → Alçada → Pagamento orquestrada (aresta e nó) e a Alçada resume as instâncias', async () => {
@@ -112,19 +113,19 @@ describe('financeiroFlowService — desenho', () => {
         expect(edges.filter(e => e.seam === 'orquestrada').map(e => e.id)).toEqual(['aprovacao->pagamento']);
     });
 
-    it('transição orquestrada mantém a nota do retrato (a lacuna da baixa não some quando o modelo existe)', async () => {
+    it('transição orquestrada mantém a nota do retrato (a regra da baixa não some quando o modelo existe)', async () => {
         dados.process_templates = [{ id: 't3', name: 'Pós-pagamento', trigger_event_key: 'payable.settled', organization_id: 'org1' }];
         const { edges } = await financeiroFlowService.getSnapshot('org1');
         const baixa = edges.find(e => e.id === 'pagamento->baixado')!;
         expect(baixa.seam).toBe('orquestrada');
-        expect(baixa.note).toMatch(/^Conduzida por Processos: Pós-pagamento — .*não confere a alçada$/);
+        expect(baixa.note).toMatch(/^Conduzida por Processos: Pós-pagamento — .*"pago sem aprovação"$/);
     });
 
     it('evento do P2P não orquestra nenhuma transição do Financeiro', async () => {
         dados.process_templates = [{ id: 't9', name: 'Pagamento de fornecedor', trigger_event_key: 'internal_transaction.paid', organization_id: 'org1' }];
         const { edges } = await financeiroFlowService.getSnapshot('org1');
         expect(edges.some(e => e.seam === 'orquestrada')).toBe(false);
-        expect(edges.flatMap(e => e.eventKeys ?? []).sort()).toEqual(['boleto.approved', 'payable.approved', 'payable.settled', 'receivable.settled']);
+        expect(edges.flatMap(e => e.eventKeys ?? []).sort()).toEqual(['boleto.approved', 'payable.approved', 'payable.overdue', 'payable.settled', 'receivable.overdue', 'receivable.settled']);
     });
 
     it('motor fora do ar → retrato estático, o quadro não some', async () => {
@@ -172,9 +173,15 @@ describe('financeiroFlowService — recorte (REGRA #5 e filtro de obra)', () => 
 
     it('Alçada e Pagamento contam pelo approval_status de títulos ABERTOS — o liberado abaixo do piso não tem business_status (16/10: 75 títulos, nó dava zero)', async () => {
         await financeiroFlowService.getSnapshot('org1');
-        const porAprovacao = consultasDe('internal_transactions').filter(c => c.ops.some(o => o[1] === 'approval_status'));
+        // A fila (aberta) e o liberado; o "pago sem aprovação" (17/10) é outra conta, conferida abaixo.
+        const porAprovacao = consultasDe('internal_transactions')
+            .filter(c => c.ops.some(o => o[1] === 'approval_status') && !c.ops.some(o => o[1] === 'pago_sem_alcada_em'));
         const valores = porAprovacao.map(c => c.ops.find(o => o[1] === 'approval_status')![2]).sort();
         expect(valores).toEqual(['APROVADO', 'PENDENTE']);
+        const pagoSem = consultasDe('internal_transactions').filter(c => c.ops.some(o => o[1] === 'pago_sem_alcada_em'));
+        expect(pagoSem).toHaveLength(1);
+        expect(pagoSem[0].ops).toContainEqual(['not', 'pago_sem_alcada_em', 'is null']);
+        expect(pagoSem[0].ops).toContainEqual(['eq', 'approval_status', 'PENDENTE']);
         for (const c of porAprovacao) {
             expect(c.ops).toContainEqual(['eq', 'status', 'PENDING']);
             expect(c.ops).toContainEqual(['eq', 'direction', 'DEBIT']);

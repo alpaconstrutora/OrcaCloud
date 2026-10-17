@@ -193,6 +193,8 @@ export default function TemplateEditorModal({ open, onClose, organizationId, onS
     const [ownerUserId, setOwnerUserId] = useState('');
     const [triggerType, setTriggerType] = useState<ProcessTriggerType>('MANUAL');
     const [triggerEventKey, setTriggerEventKey] = useState('');
+    // Valor mínimo (16/10/2026): texto do campo; vazio = todo evento abre processo.
+    const [minAmount, setMinAmount] = useState('');
     const [saving, setSaving] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
     // Preenche o formulário ao abrir: com o modelo (editar) ou vazio (criar).
@@ -204,6 +206,7 @@ export default function TemplateEditorModal({ open, onClose, organizationId, onS
         setOwnerUserId(t?.owner_user_id ?? '');
         setTriggerType(t?.trigger_type ?? inicial?.trigger_type ?? 'MANUAL');
         setTriggerEventKey(t?.trigger_event_key ?? inicial?.trigger_event_key ?? '');
+        setMinAmount(t?.trigger_min_amount != null ? String(t.trigger_min_amount) : '');
         setSteps(editando?.steps.length ? editando.steps.map(etapaParaEdicao) : [{ ...ETAPA_VAZIA }]);
         setErro(null);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,6 +248,9 @@ export default function TemplateEditorModal({ open, onClose, organizationId, onS
             name, category, trigger_type: triggerType,
             trigger_event_key: triggerType === 'EVENTO' ? (triggerEventKey || null) : null,
             owner_user_id: ownerUserId || null,
+            trigger_min_amount: triggerType === 'EVENTO' && minAmount.trim() !== ''
+                ? Number(minAmount.replace(',', '.'))
+                : null,
         };
         const etapas: ProcessTemplateStepDraft[] = steps.map((s, i) => ({
             id: s.id,
@@ -310,6 +316,17 @@ export default function TemplateEditorModal({ open, onClose, organizationId, onS
                                 <option value="">Escolha o evento…</option>
                                 {EVENT_KEYS.map(k => <option key={k} value={k}>{PROCESS_EVENT_LABEL[k]}</option>)}
                             </select>
+                        </div>
+                    )}
+                    {triggerType === 'EVENTO' && (
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-500">Só dispara a partir de (R$)</label>
+                            <input
+                                type="number" min="0" step="0.01" inputMode="decimal"
+                                value={minAmount} onChange={e => setMinAmount(e.target.value)}
+                                className="w-full h-9 px-3 rounded-[6px] border border-gray-200 text-sm" placeholder="Vazio = todo evento"
+                            />
+                            <p className="text-xs text-gray-500">Vale para eventos com valor (título, boleto, pedido). Abaixo dele, o evento não abre processo.</p>
                         </div>
                     )}
                     <div className="space-y-1.5">

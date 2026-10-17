@@ -9,6 +9,7 @@ import { colunasDaExtracao } from '../utils/boletoTexto';
 import { parseLinhaDigitavel, onlyDigits, nomeBanco, vencimentoPlausivel } from '../utils/febrabanRules';
 import { financialApprovalService } from './financialApprovalService';
 import { processService } from './processService';
+import { MOTIVO_ALCADA_PENDENTE } from './alcadaDaBaixa';
 import { validateCpfCnpj } from '../lib/validators';
 import type {
     Boleto,
@@ -711,10 +712,29 @@ export const boletoService = {
     },
 
     /**
+     * O título que nasceu deste boleto está pendente na alçada? É o que desliga o
+     * "Marcar como pago" (com o motivo) e o que `marcarPago` confere antes de gravar.
+     * Sem filtro de org: `reference_id` é o uuid do boleto (ver `marcarPago`).
+     */
+    async alcadaPendente(boletoId: string): Promise<boolean> {
+        const { data, error } = await supabase
+            .from('internal_transactions')
+            .select('id')
+            .eq('source_system', 'BOLETO')
+            .eq('reference_id', boletoId)
+            .eq('approval_status', 'PENDENTE')
+            .limit(1);
+        if (error) throw new Error(`Não foi possível conferir a alçada do boleto: ${error.message}`);
+        return ((data ?? []) as unknown[]).length > 0;
+    },
+
+    /**
      * Marca como pago (já programado anteriormente ou direto a partir de aprovado).
      * Atualiza o invoice associado e o lançamento no razão para CONCILIATED.
      */
     async marcarPago(boletoId: string, organizationId: string, userEmail?: string): Promise<Boleto> {
+        // Antes de mexer no boleto: o título dele ainda pendente na alçada não é baixado à mão (item H.1).
+        if (await this.alcadaPendente(boletoId)) throw new Error(MOTIVO_ALCADA_PENDENTE);
         const boleto = await this.transitar(boletoId, organizationId, 'pago', userEmail);
         const hoje = new Date().toISOString().slice(0, 10);
         const [, txResult] = await Promise.all([

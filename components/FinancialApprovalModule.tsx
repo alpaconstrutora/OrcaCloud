@@ -21,6 +21,7 @@ import type {
 import Button from './ui/Button';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { useConfirm } from './ui/confirm';
+import { idsPagosSemAlcada } from '../services/alcadaDaBaixa';
 import { chavePorMes, chavePorNome, chavePorRotulo, MESES } from '../utils/agruparLinhas';
 
 // ─── dispatch por entidade ───────────────────────────────────
@@ -220,6 +221,8 @@ const QUEUE_COLUMNS: StandardTableColumn[] = [
 type EntityFilter = 'all' | ActionQueueItem['entity'];
 
 function queueStatusLabel(item: ActionQueueItem): string {
+    // Antes do nível: o dinheiro já saiu — aprovar agora é regularizar (17/10/2026, item H.1).
+    if (item.pago_sem_alcada) return 'Pago sem aprovação';
     if (item.approval_status === 'RASCUNHO') return 'Rascunho';
     const approved = item.approval_chain.filter(s => s.action === 'APROVADO').length;
     return `Nível ${approved + 1}/${item.approval_required_levels}`;
@@ -282,7 +285,14 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
         setLoading(true);
         setError(null);
         try {
-            setItems(await approvalService.listActionQueue(organizationId));
+            // A RPC da fila não distingue título pago; os pagos com a alçada pendente
+            // vêm do carimbo do banco (`pago_sem_alcada_em`), numa consulta pequena à parte.
+            const [lista, pagosSemAlcada] = await Promise.all([
+                approvalService.listActionQueue(organizationId),
+                // string vazia não é org: vira "todas" (a RLS recorta), como a RPC da fila faz.
+                idsPagosSemAlcada(organizationId || null),
+            ]);
+            setItems(lista.map(i => (i.entity === 'transaction' && pagosSemAlcada.has(i.id) ? { ...i, pago_sem_alcada: true } : i)));
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar fila');
         } finally {
@@ -339,6 +349,9 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                 return <span className="text-sm font-medium text-gray-800">{fmt(item.amount)}</span>;
             case 'status':
                 // §8 — texto colorido simples, sem pílula/fundo/uppercase
+                if (item.pago_sem_alcada) {
+                    return <span className="text-sm font-normal text-red-600" title="Baixado pela conciliação ou pelo Asaas antes de a alçada aprovar.">Pago sem aprovação</span>;
+                }
                 return item.approval_status === 'RASCUNHO'
                     ? <span className="text-sm font-normal text-gray-600">Rascunho</span>
                     : <span className="text-sm font-normal text-amber-700">{queueStatusLabel(item)}</span>;

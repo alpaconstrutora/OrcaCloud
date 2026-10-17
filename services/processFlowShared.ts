@@ -11,8 +11,8 @@ import type {
  * quando o segundo fluxo apareceu — o comportamento é o mesmo de lá.
  */
 
-/** `{ notIn }` exclui valores (ex.: origem do título ≠ MANUAL). */
-export type FilterValue = string | string[] | { notIn: string[] } | null | undefined;
+/** `{ notIn }` exclui valores (ex.: origem do título ≠ MANUAL); `{ notNull: true }` exige a coluna preenchida. */
+export type FilterValue = string | string[] | { notIn: string[] } | { notNull: true } | null | undefined;
 export type Filters = Record<string, FilterValue>;
 
 type Consulta = {
@@ -26,7 +26,9 @@ function aplicarFiltros<Q>(q: Q, filters: Filters): Q {
   for (const [col, val] of Object.entries(filters)) {
     if (val === null || val === undefined) continue;
     if (Array.isArray(val)) out = out.in(col, val);
-    else if (typeof val === 'object') out = out.not(col, 'in', `(${val.notIn.join(',')})`);
+    else if (typeof val === 'object') {
+      out = 'notNull' in val ? out.not(col, 'is', 'null') : out.not(col, 'in', `(${val.notIn.join(',')})`);
+    }
     else out = out.eq(col, val);
   }
   return out as unknown as Q;
@@ -192,7 +194,7 @@ export function montarArestas(
       ...(orquestrada ? {
         seam: 'orquestrada' as SeamStatus,
         // A nota do retrato estático FICA, depois de quem conduz: ela descreve o
-        // que o código faz (ex.: "a baixa não confere a alçada"), e isso não
+        // que o código faz (ex.: a regra da alçada na baixa), e isso não
         // deixa de ser verdade porque um processo passou a acompanhar a
         // transição. Até 16/10/2026 a nota era substituída e a lacuna sumia do
         // painel assim que o modelo do Financeiro foi criado.

@@ -542,7 +542,9 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
     expect(diretas.length).toBeGreaterThan(0);
     for (const d of diretas) {
       expect(d.potenciaW).toBe(5500);
-      expect(chuveiros.some((c) => c.at.x === d.at.x && c.at.y === d.at.y)).toBe(true);
+      // F18: AO LADO da saída d'água (o afastamento lateral dos pontos, 15 cm) — no mesmo ponto, a água e o eletroduto
+      // desciam juntos na parede e se cruzavam.
+      expect(chuveiros.some((c) => Math.hypot(c.at.x - d.at.x, c.at.y - d.at.y) <= 150 + 1), JSON.stringify(d.at)).toBe(true);
       expect(d.circuitoId).toBeTruthy();
       // Circuito só dele.
       expect((r.terminais ?? []).filter((t) => t.circuitoId === d.circuitoId)).toHaveLength(1);

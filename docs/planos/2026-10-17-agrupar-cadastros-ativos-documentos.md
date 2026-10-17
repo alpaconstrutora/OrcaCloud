@@ -65,3 +65,4 @@
 Decisão: `em_uso` era "Em Obra" na tabela/card e "Em Uso" no filtro e na confirmação — ficou **"Em obra"** em todos (o bem foi entregue a uma obra; a coluna Alocação diz qual). Retirada `ativa` = "Em uso". Sentence case (guia §6.2/§8).
 
 - [x] implementado; conferido no preview com dados reais: Ativos ["Em obra", "Disponível"], filtro com os mesmos rótulos, grupos iguais à coluna, grade sem "disponivel" cru, Retirada ["Aprovada"], Manutenções ["Concluída"]; 0 erros
+- [x] publicado em `da867fdf`; domínio carimbado com o commit e o chunk `OpuraAssetsModule` com os rótulos novos; CI `ci` success

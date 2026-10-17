@@ -149,10 +149,12 @@ Leitura: "linha do título" = a barra de ações do topo da aba (§5.3), onde fi
 orçamento" no print de referência.
 
 - [x] 18 — `components/ContractModal.tsx`: props `cardPorSecao` (cada bloco num card branco
-  próprio, `space-y-6` entre eles — exceção ao §30 pedida pelo usuário, como no
+  próprio, `space-y-3` entre eles (o mesmo ritmo da coluna da tela) — exceção ao §30 pedida pelo usuário, como no
   BoletoFormModal) e `barraDeAcoes` (o "Salvar alterações" + a linha de exposição vão por
   portal para a barra da tela-mãe; o submit usa `form={formId}`).
 - [x] 19 — `components/ContractDetailView.tsx`: a barra §5.3 passa a existir na aba Resumo, com
   o encaixe do Salvar como primeiro item (à esquerda); o Resumo liga as duas props. Abas
   Financeiro e Emissão sem mudança (não pedidas).
-- [ ] 20 — conferência visual (Playwright logado).
+- [x] 20 — conferência visual (Playwright logado, só leitura, 0 escritas, 0 erros): Salvar na barra
+  do topo à esquerda com `form=` do formulário; os 3 cards próprios; espaçamento entre cards
+  igualado a 12px depois do print (era 24px dentro do formulário × 12px na coluna).

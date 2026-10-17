@@ -783,10 +783,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 {/* Form Body — drawer: 2 colunas (2:1) com scroll próprio.
                     Inline: bloco único que cresce na página, e a antiga coluna
                     lateral vira a barra de rodapé com o botão de salvar. */}
-                <form id={formId} onSubmit={handleSubmit} className={inline ? (cardsSeparados ? 'space-y-6' : 'space-y-3') : 'flex-1 overflow-hidden flex flex-col md:flex-row'}>
+                <form id={formId} onSubmit={handleSubmit} className={inline ? 'space-y-3' : 'flex-1 overflow-hidden flex flex-col md:flex-row'}>
                     {/* Main Section (2/3 no drawer) */}
                     <div className={inline
-                        ? (cardsSeparados ? 'space-y-6' : 'bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8')
+                        ? (cardsSeparados ? 'space-y-3' : 'bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8')
                         : 'flex-[2] overflow-y-auto p-10 space-y-8 scrollbar-hide border-r border-gray-100 bg-white'}>
                         {/* Section: Identificação */}
                         {showGroup('identificacao') && (

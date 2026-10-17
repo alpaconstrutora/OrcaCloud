@@ -110,7 +110,7 @@ export const asaasContaService = {
     },
 
     sincronizarExtrato(paymentAccountId: string) {
-        return invocar<{ ok: boolean; importadas: number; vinculadas: number; sem_vinculo: number; janela: string }>(
+        return invocar<{ ok: boolean; no_periodo: number; importadas: number; vinculadas: number; sem_vinculo: number; janela: string }>(
             'sincronizar', { payment_account_id: paymentAccountId },
         );
     },

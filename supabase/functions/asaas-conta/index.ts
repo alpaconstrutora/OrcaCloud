@@ -206,7 +206,7 @@ async function registrarSaldoOuErro(admin: Admin, contaId: string, t: Teste): Pr
 
 // ─── Extrato ────────────────────────────────────────────────────────────
 
-type ResultadoSync = { importadas: number; vinculadas: number; sem_vinculo: number; janela: string } | { erro: string };
+type ResultadoSync = { no_periodo: number; importadas: number; vinculadas: number; sem_vinculo: number; janela: string } | { erro: string };
 
 /** Sincroniza e grava o resultado (ou o erro) na própria conta — para a tela mostrar. */
 async function sincronizarComRegistro(admin: Admin, contaId: string): Promise<ResultadoSync> {
@@ -290,7 +290,9 @@ async function sincronizarExtrato(admin: Admin, contaId: string): Promise<Result
         ultimo_erro: null, ultimo_erro_em: null, updated_at: agora,
     }).eq('payment_account_id', contaId);
 
-    return { importadas, vinculadas, sem_vinculo: semVinculo, janela: `${inicio}..${fim}` };
+    // no_periodo: o botão dizia "0 novo(s)" quando o cron já tinha importado
+    // tudo — parecia que não havia movimento nenhum.
+    return { no_periodo: itens.length, importadas, vinculadas, sem_vinculo: semVinculo, janela: `${inicio}..${fim}` };
 }
 
 interface Titulo { id: string; amount: number; direction: string }

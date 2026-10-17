@@ -156,6 +156,9 @@ describe('motivoDaFalha', () => {
     it('lê failReason, failReasons em lista ou cai no evento', () => {
         expect(motivoDaFalha('TRANSFER_FAILED', { transfer: { id: 't', failReason: 'Chave PIX inexistente' } })).toBe('Chave PIX inexistente');
         expect(motivoDaFalha('BILL_FAILED', { bill: { id: 'b', failReasons: [{ description: 'Boleto vencido' }, 'Sem saldo'] } })).toBe('Boleto vencido; Sem saldo');
-        expect(motivoDaFalha('BILL_FAILED', { bill: { id: 'b' } })).toBe('BILL_FAILED');
+        expect(motivoDaFalha('BILL_FAILED', { bill: { id: 'b' } })).toBe('Pagamento do boleto falhou (a Asaas não informou o motivo)');
+        // Visto no sandbox (17/10): cancelamento vem sem texto — antes ficava `TRANSFER_CANCELLED`.
+        expect(motivoDaFalha('TRANSFER_CANCELLED', { transfer: { id: 't' } })).toBe('Cancelado na Asaas');
+        expect(motivoDaFalha('EVENTO_NOVO', {})).toBe('EVENTO_NOVO');
     });
 });

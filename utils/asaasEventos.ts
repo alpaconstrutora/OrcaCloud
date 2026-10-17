@@ -259,5 +259,16 @@ export function motivoDaFalha(evento: string, p: PayloadAsaas): string {
         return b.map(x => (typeof x === 'string' ? x : (x as { description?: string })?.description ?? JSON.stringify(x))).join('; ');
     }
     if (typeof b === 'string' && b) return b;
-    return evento;
+    // A Asaas costuma não mandar texto no cancelamento/bloqueio: o histórico e
+    // a tela mostravam o código cru (`TRANSFER_CANCELLED`).
+    return MOTIVO_PADRAO[evento] ?? evento;
 }
+
+const MOTIVO_PADRAO: Record<string, string> = {
+    TRANSFER_CANCELLED: 'Cancelado na Asaas',
+    BILL_CANCELLED: 'Cancelado na Asaas',
+    TRANSFER_BLOCKED: 'Transferência bloqueada pela Asaas',
+    TRANSFER_FAILED: 'Transferência recusada (a Asaas não informou o motivo)',
+    BILL_FAILED: 'Pagamento do boleto falhou (a Asaas não informou o motivo)',
+    BILL_REFUNDED: 'Pagamento do boleto estornado pela Asaas',
+};

@@ -224,7 +224,13 @@ export default function ContaAsaasSecao({ paymentAccountId }: Props) {
                     title={!temChave ? motivoSemChave : 'Importa agora o extrato da Asaas para esta conta (também roda de hora em hora)'}
                     onClick={() => executar('extrato', async () => {
                         const r = await asaasContaService.sincronizarExtrato(paymentAccountId);
-                        return `Extrato ${r.janela.replace('..', ' a ')}: ${r.importadas} movimento(s) novo(s), ${r.vinculadas} conciliado(s) automaticamente.`;
+                        const [de, ate] = r.janela.split('..').map(d => formatDateBR(d));
+                        const periodo = de === ate ? de : `${de} a ${ate}`;
+                        if (r.no_periodo === 0) return `Extrato ${periodo}: nenhum movimento na Asaas neste período.`;
+                        const jaEstavam = r.no_periodo - r.importadas;
+                        return `Extrato ${periodo}: ${r.no_periodo} movimento(s) na Asaas — ${r.importadas} novo(s)`
+                            + (jaEstavam > 0 ? `, ${jaEstavam} já importado(s) antes` : '')
+                            + `; ${r.vinculadas} conciliado(s) automaticamente agora.`;
                     })}
                     className={`${BOTAO} border border-gray-200 bg-white text-gray-700 hover:bg-gray-50`}
                 >

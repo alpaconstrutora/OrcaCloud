@@ -497,6 +497,31 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     }, [rows, orgsComAsaas]);
     useEffect(() => { recarregarPagamentosAsaas(); }, [recarregarPagamentosAsaas]);
 
+    const [cancelandoAsaas, setCancelandoAsaas] = useState<string | null>(null);
+    const cancelarPagamentoAsaas = async (row: Payable, sp: SupplierPayment) => {
+        const agendado = sp.status === 'SCHEDULED';
+        const ok = await confirm({
+            title: agendado ? 'Cancelar o pagamento agendado?' : 'Cancelar o pagamento enviado?',
+            message: `${sp.payment_type === 'BILL' ? 'Boleto' : 'PIX'} de ${formatMoney(sp.value)}`
+                + `${sp.beneficiary_name ? ` para ${sp.beneficiary_name}` : ''}`
+                + `${agendado && sp.scheduled_date ? `, agendado para ${formatDateBR(sp.scheduled_date)}` : ''}. `
+                + 'A Asaas só cancela o que ainda não foi concluído; o título continua em aberto para pagar de novo.',
+            variant: 'danger',
+            confirmLabel: 'Cancelar pagamento',
+        });
+        if (!ok) return;
+        setCancelandoAsaas(sp.id);
+        try {
+            await supplierPaymentService.cancel(row.organization_id, sp.id);
+            notify('Pagamento cancelado na Asaas. O título continua em aberto.');
+        } catch (e) {
+            notify('Não foi possível cancelar: ' + ((e as Error).message ?? 'erro desconhecido'), 'error');
+        } finally {
+            setCancelandoAsaas(null);
+            recarregarPagamentosAsaas();
+        }
+    };
+
     /* Origens realmente presentes nos dados, ordenadas pelo rótulo. Se o filtro
        persistido apontar para uma origem que sumiu do recorte atual, ele é
        mantido na lista para o <select> não cair calado numa opção inexistente
@@ -1161,12 +1186,25 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                                 : sp.status === 'SCHEDULED' ? `Agendado ${formatDateBR(sp.scheduled_date)}`
                                                                 : 'Pagamento enviado';
                                                             return (
-                                                                <span className="flex items-center gap-1 text-sm font-normal text-blue-700"
-                                                                    title={sp.asaas_authorized === false
-                                                                        ? 'A Asaas está esperando a autorização por token no app/SMS da conta.'
-                                                                        : 'A baixa acontece sozinha quando a Asaas confirmar.'}>
-                                                                    <Landmark className="w-3.5 h-3.5" /> {rotulo}
-                                                                </span>
+                                                                <>
+                                                                    <span className="flex items-center gap-1 text-sm font-normal text-blue-700"
+                                                                        title={sp.asaas_authorized === false
+                                                                            ? 'A Asaas está esperando a autorização por token no app/SMS da conta.'
+                                                                            : 'A baixa acontece sozinha quando a Asaas confirmar.'}>
+                                                                        <Landmark className="w-3.5 h-3.5" /> {rotulo}
+                                                                    </span>
+                                                                    {/* Antes só dava para cancelar pelo painel da Asaas (visto
+                                                                        no teste do sandbox, 17/10). A Asaas só aceita cancelar
+                                                                        antes de concluir — PIX imediato costuma concluir em
+                                                                        segundos; agendado, até o dia. */}
+                                                                    <ActionIconButton
+                                                                        kind="delete"
+                                                                        title={cancelandoAsaas === sp.id ? 'Cancelando…' : 'Cancelar este pagamento na Asaas'}
+                                                                        icon={cancelandoAsaas === sp.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                                                                        disabled={cancelandoAsaas === sp.id}
+                                                                        onClick={() => cancelarPagamentoAsaas(row, sp)}
+                                                                    />
+                                                                </>
                                                             );
                                                         }
                                                         return (

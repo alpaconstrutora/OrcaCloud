@@ -236,7 +236,7 @@ const PARCEIRO: DefaultHelpItem[] = [
     key: 'parceiro.financeiro.parcelas', kind: 'artigo', section: 'financeiro',
     title: 'Financeiro: parcelas, medições e retenção',
     body_html: p(
-      'A aba Financeiro mostra as parcelas a receber dos seus contratos, com vencimento, valor e status (pago ou pendente), as medições com valor bruto, retenção e líquido, e o saldo retido de garantia.',
+      'A aba Financeiro mostra um cartão por contrato: abra o cartão para ver cada parcela com vencimento, valor e situação (paga, vencida ou a vencer). Os botões acima da lista filtram as parcelas por situação. Abaixo ficam as medições, com valor bruto, retenção e líquido, e o saldo retido de garantia.',
       'Quando um pagamento é feito, o recibo fica disponível na linha da parcela.',
     ),
   },
@@ -846,9 +846,9 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
         { key: 'parceiro.tour.contratos.detalhes', anchor: 'contratos-detalhes', section: 'contratos', title: 'Ver Detalhes', body: 'Abre a visão geral, os itens, as medições, os aditivos e a retenção do contrato.', quando: 'quando a construtora liberar um contrato' },
       ]),
       financeiro: tourDe('financeiro', [
-        { key: 'parceiro.tour.financeiro.kpis', anchor: 'financeiro-kpis', section: 'financeiro', title: 'Resumo financeiro', body: 'O que você tem a receber, o que já recebeu e o que está retido de garantia.' },
-        { key: 'parceiro.tour.financeiro.parcelas', anchor: 'financeiro-parcelas', section: 'financeiro', title: 'Parcelas', body: 'Vencimento, valor e status de cada parcela. O recibo aparece quando o pagamento é feito.' },
-        { key: 'parceiro.tour.financeiro.medicoes', anchor: 'financeiro-medicoes', section: 'financeiro', title: 'Medições', body: 'Valor bruto, retenção e líquido de cada medição.' },
+        { key: 'parceiro.tour.financeiro.kpis', anchor: 'financeiro-kpis', section: 'financeiro', title: 'Resumo financeiro', body: 'O total dos seus contratos, o que você já recebeu, o que está em aberto e o que venceu.' },
+        { key: 'parceiro.tour.financeiro.parcelas', anchor: 'financeiro-parcelas', section: 'financeiro', title: 'Parcelas', body: 'Um cartão por contrato: abra para ver o vencimento e o valor de cada parcela. O recibo aparece quando o pagamento é feito.' },
+        { key: 'parceiro.tour.financeiro.medicoes', anchor: 'financeiro-medicoes', section: 'financeiro', title: 'Medições', body: 'Valor bruto, retenção e líquido de cada medição, e o saldo retido de garantia.' },
         { key: 'parceiro.tour.financeiro.anexar-nf', anchor: 'financeiro-anexar-nf', section: 'financeiro', title: 'Anexar a nota fiscal', body: 'Envie a NF da medição por aqui. Sem ela a parcela não é liberada.', quando: 'quando houver uma medição sem nota fiscal' },
       ]),
       solicitacoes: tourDe('solicitacoes', [

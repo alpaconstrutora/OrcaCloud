@@ -333,6 +333,34 @@ export const brokerService = {
         if (error) throw error;
     },
 
+    // ── Chat do gestor (17/10/2026, plano 2026-10-17 F5) — membro da organização ──
+    async chatGestorCanais(organizationId: string): Promise<any[]> {
+        const { data, error } = await supabase.rpc('fn_broker_chat_gestor_canais', { p_org: organizationId });
+        if (error) throw error;
+        return (data as any[]) ?? [];
+    },
+    async chatGestorMensagens(buildingId: string): Promise<any[]> {
+        const { data, error } = await supabase.rpc('fn_broker_chat_gestor_mensagens', { p_building: buildingId });
+        if (error) throw error;
+        return (data as any[]) ?? [];
+    },
+    async chatGestorEnviar(buildingId: string, texto: string): Promise<any> {
+        const { data, error } = await supabase.rpc('fn_broker_chat_gestor_enviar', { p_building: buildingId, p_texto: texto });
+        if (error) throw error;
+        return data;
+    },
+    async chatGestorFixar(mensagemId: string, fixar: boolean): Promise<void> {
+        const { error } = await supabase.rpc('fn_broker_chat_gestor_fixar', { p_mensagem: mensagemId, p_fixar: fixar });
+        if (error) throw error;
+    },
+
+    /** Situação de um corretor na Academia, para o gestor (membro da organização). */
+    async treinamentosDoCorretor(organizationId: string, email: string): Promise<any> {
+        const { data, error } = await supabase.rpc('fn_broker_treinamentos_do_corretor', { p_org: organizationId, p_email: email });
+        if (error) throw error;
+        return data;
+    },
+
     async listProposals(organizationId: string, brokerEmail?: string) {
         const BASE_COLS = 'id, property_id, broker_id, broker_email, organization_id, buyer_name, buyer_cpf, buyer_email, buyer_phone, buyer_income, unit_price, down_payment, monthly_installments, monthly_value, balloon_value, financing_value, payment_plan, discount_pct, total_value, status, notes, admin_notes, created_at, updated_at';
         const UNITS_EMBED = ', units:broker_portal_proposal_units(id, proposal_id, property_id, organization_id, unit_price, allocated_value, is_primary, sort_order)';

@@ -136,6 +136,38 @@ export const brokerPortalService = {
         return data;
     },
 
+    // ── Chat por empreendimento pelo link (17/10/2026, plano 2026-10-17 F5) ─────
+    // Só os prédios em que o corretor está habilitado; o canal nasce na 1ª mensagem.
+    async getChatCanaisByToken(token: string): Promise<any[]> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_chat_canais', { p_token: token });
+        if (error) throw error;
+        const res = data as { valid: boolean; canais?: any[] };
+        return res?.canais ?? [];
+    },
+    async getChatMensagensByToken(token: string, buildingId: string): Promise<any[]> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_chat_mensagens', { p_token: token, p_building: buildingId });
+        if (error) throw error;
+        const res = data as { valid: boolean; mensagens?: any[] };
+        return res?.mensagens ?? [];
+    },
+    async enviarChatByToken(token: string, buildingId: string, texto: string): Promise<any> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_chat_enviar', { p_token: token, p_building: buildingId, p_texto: texto });
+        if (error) throw error;
+        return data;
+    },
+
+    /**
+     * Treinamentos do corretor na Academia (fn_broker_portal_treinamentos,
+     * 17/10/2026, plano 2026-10-17 F6): o acesso ATIVO com o e-mail dele na
+     * organização do token e os cursos atribuídos.
+     */
+    async getTreinamentosByToken(token: string): Promise<any | null> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_treinamentos', { p_token: token });
+        if (error) throw error;
+        const res = data as { valid: boolean };
+        return res?.valid ? res : null;
+    },
+
     async getProposalsByToken(token: string): Promise<any[]> {
         const { data, error } = await supabase.rpc('fn_broker_portal_get_proposals', { p_token: token });
         if (error) throw error;

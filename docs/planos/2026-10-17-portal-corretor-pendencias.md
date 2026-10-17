@@ -108,8 +108,21 @@ gerador `generateDemo*` correspondente é apagado na mesma fase.
 - Provas F1–F4: tipos 0 erros; `check-ui-standard`/`check-xss-sinks` limpos; suítes vizinhas 230/230;
   navegador (`C:/tmp/pwtest/corretor-pendencias.js`, 390×844 e 1440, link real do zoio): Leads, Agenda
   e Ranking de volta com dado real (vazios, nada inventado), Chat e Treinamento ainda fora, sem erro.
-- [ ] F5 — 0 de 3
-- [ ] F6 — 0 de 2
+- [x] **F5 — 3 de 3** (17/10/2026). Migration `…000700` aplicada: `building_id` no canal (tabela vazia;
+  canal nasce na 1ª mensagem), RPCs do token (canais dos prédios habilitados / mensagens / enviar) e do
+  gestor (canais da org / mensagens / responder como incorporadora / fixar), todas com a régua de
+  habilitação de `fn_broker_portal_get_units`. Prova no banco (desfeita): zoio vê só Garden Cambuhy,
+  Geleia só Galeria Altavista; mensagem do zoio entra como CORRETOR e aparece no resumo; Geleia ler ou
+  escrever no Garden = 42501. `BrokerChat` reescrito (lista de canais, conversa com fixadas, envio;
+  gestor fixa), atualização a cada 15 s; jsdom 3.
+- [x] **F6 — 2 de 2** (17/10/2026). Migration `…000800` aplicada (`fn_broker_portal_treinamentos` pelo
+  token, `fn_broker_treinamentos_do_corretor` para o gestor; mesma consulta das matrículas da Academia).
+  Prova no banco (desfeita, com uma matrícula real e um acesso temporário): acesso ativo traz o curso
+  (e-mail sem diferenciar maiúscula); sem acesso = vazio; bloqueado = vazio + `bloqueado`. Gestor libera
+  o corretor como TERCEIRO (`academy_portal_users_create`) e envia o convite (Edge `academy-portal-invite`)
+  em botões separados; corretor vê os cursos e o link da sala de aula; jsdom 4.
+- `ABAS_DE_DEMONSTRACAO` ficou VAZIA: as cinco abas voltaram com dado real. A regra fica para a próxima
+  aba que nascer sem banco.
 
 ## Verificação
 

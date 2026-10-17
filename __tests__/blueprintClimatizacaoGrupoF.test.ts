@@ -130,6 +130,26 @@ describe('F6 · o equipamento real × a arquitetura (a caixa inteira)', () => {
     expect(conflitosArquitetonicos(x).filter((c) => c.classe === 'PONTO_X_ESTRUTURA' && c.pecaId === cond.id)).toHaveLength(1);
   });
 
+  it('F19: o aparelho SOBRE o bloco de coroamento e a estaca (abaixo do chão) não é acusado; sobre o pilar, sim', () => {
+    const { m, t } = sala();
+    const x = applyBatch(m, [
+      { type: 'AddStructural', levelId: t, kind: 'BLOCO_COROAMENTO', pontos: [point(3000, 2000)], larguraMm: 600, profundidadeMm: 600, alturaMm: 600, baseMm: -1100 } as Command,
+      { type: 'AddStructural', levelId: t, kind: 'ESTACA', pontos: [point(3000, 2000)], larguraMm: 300, profundidadeMm: 300, alturaMm: 8000, baseMm: -9100 } as Command,
+      peca(t, 'CONDENSADORA_SPLIT', 3000, 2000, 350, { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 }),
+    ]).model;
+    expect(daClasse(x, 'EQUIPAMENTO_X_ESTRUTURA')).toEqual([]);
+  });
+
+  it('F19: o móvel do OUTRO lado da parede (a folga da condensadora de fora alcançava a mesa da sala) não é acusado', () => {
+    const { m, t } = sala();
+    // A condensadora do lado de fora da parede norte (y = 4000); o armário dentro da sala, colado na mesma parede.
+    const x = applyBatch(m, [
+      peca(t, 'CONDENSADORA_SPLIT', 1400, 4300, 350, { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 }),
+      { type: 'AddComponente', levelId: t, tipoId: 'ARMARIO', at: point(1400, 3600) } as Command,
+    ]).model;
+    expect(daClasse(x, 'EQUIPAMENTO_X_COMPONENTE')).toEqual([]);
+  });
+
   it('móvel dentro da folga de manutenção (300 mm da condensadora): EQUIPAMENTO_X_COMPONENTE', () => {
     const { m, t } = sala();
     const x = applyBatch(m, [

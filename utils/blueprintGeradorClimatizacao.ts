@@ -89,6 +89,11 @@ export interface ContextoDoGeradorDeClimatizacao {
    * (o topo dela até `topoMaximoMm`), e a linha e o dreno saindo juntos pela parede atrás dela. Ausente = a regra de antes.
    */
   splitNaParedeExterna?: { topoMaximoMm: number } | null;
+  /**
+   * F19 da casa automática: a travessia de VIGA é furo previsto (decisão "manter 2,80 m, furar vigas" — vai à lista de
+   * furos para o calculista), não conflito. Ausente = conflito, como antes.
+   */
+  travessiaDeVigaEhFuro?: boolean;
 }
 
 /** Medidas do orçamento que a climatização alimenta (E9). */
@@ -169,7 +174,9 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
       // 11/10/2026: as pendências do ambiente sobre o desenho DEPOIS do lote — antes saía "evaporadora sem
       // condensadora" para a evaporadora que acabou de ganhar a dela.
       for (const a of selecaoDoNivel(m, nivel, hip.selecao, cx.modelos).ambientes) {
-        for (const p of a.pendencias) pendencia('NAO_DECIDIDO', `${nomeDoNivel(nivel.levelId)} › ${a.nome}: ${p}`);
+        // F19 da casa automática: o que só pede conferência ("carga térmica com hipóteses — CONFERIR antes de comprar")
+        // não é decisão pendente.
+        for (const p of a.pendencias) pendencia(/CONFERIR/.test(p) ? 'CONFERIR' : 'NAO_DECIDIDO', `${nomeDoNivel(nivel.levelId)} › ${a.nome}: ${p}`);
       }
       for (const s of plano.semLugar) pendencia('SEM_SOLUCAO', `${nomeDoNivel(nivel.levelId)} › ${s.nome}: ${s.motivo}`);
       if (plano.aCriar.length) notas.push(`${nomeDoNivel(nivel.levelId)}: ${plano.aCriar.length} split(s)`);
@@ -259,7 +266,9 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
         const plano = planejarCircuitos(m, levelId, quadros[0].id, cx.circuitos.hip, cx.circuitos.eletricas);
         if (plano.motivo) pendencia('NAO_DECIDIDO', `${nome}: circuito do ar-condicionado — ${plano.motivo}`);
         n += aplicar(plano.comandos);
-        for (const f of plano.foraDoPlano) pendencia('SEM_SOLUCAO', `${nome}: ponto ${f.terminalId} fora do plano de circuitos — ${f.motivo}`);
+        // F19 da casa automática: só os pontos que ESTE gerador criou — o planejador lista todo ponto solto do pavimento, e os
+        // de dados (que nunca ganham circuito de força, por desenho) viravam "sem solução" em toda casa.
+        for (const f of plano.foraDoPlano) if (novos.has(f.terminalId)) pendencia('SEM_SOLUCAO', `${nome}: ponto ${f.terminalId} fora do plano de circuitos — ${f.motivo}`);
       }
     }
     etapa('CIRCUITOS', ROTULOS.CIRCUITOS, 'LANCOU', n);
@@ -267,10 +276,17 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
 
   // ── Conflitos que a proposta criou (E10.2) ────────────────────────────────
   const novos = new Set(criados);
+  const vigaPorId = new Map((m.structures ?? []).filter((x) => x.kind === 'VIGA').map((x) => [x.id, x]));
+  let furosEmViga = 0;
   for (const c of conflitosDoModelo(m, { pecas: volumesDasPecasDeClimatizacao(m) })) {
     if (!novos.has(c.trechoId) && !novos.has(c.outroId)) continue;
+    if (cx.travessiaDeVigaEhFuro && c.classe === 'ESTRUTURA' && vigaPorId.has(c.outroId)) {
+      furosEmViga++;
+      continue;
+    }
     pendencia('CONFLITO', `${c.classe.replace(/_/g, ' ').toLowerCase()}: trecho ${c.trechoId} × ${c.outroId} (${um(c.comprimentoDentroMm, 0)} mm dentro).`);
   }
+  if (furosEmViga) pendencia('CONFERIR', `${furosEmViga} travessia(s) de viga da linha e do dreno — furo a aprovar com o calculista (na lista de furos previstos).`);
   // F6 (10/10/2026): o equipamento lançado × parede, vão, estrutura e móvel (a caixa inteira).
   for (const c of conflitosArquitetonicos(m, { pecas: volumesDasPecasDeClimatizacao(m) })) {
     if (!c.classe.startsWith('EQUIPAMENTO_') || !novos.has(c.pecaId)) continue;
@@ -281,7 +297,8 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
   const quant = computeQuantities(m, POLITICA_PADRAO);
   const materiais = materiaisDeClimatizacao(m, hip, quant);
   etapa('QUANTITATIVO', ROTULOS.QUANTITATIVO, 'CALCULOU', 0, `${materiais.totais.length} item(ns) na lista, ${materiais.porSistema.length} sistema(s)`);
-  for (const a of materiais.avisos) pendencia('NAO_DECIDIDO', `Lista de materiais: ${a}`);
+  // F19: o cobre curvado (sem peça) e o cabo de interligação junto da linha (a prática) são para conferir, não decidir.
+  for (const a of materiais.avisos) pendencia(/cobre CURVADO|o cabo seguiu a linha/.test(a) ? 'CONFERIR' : 'NAO_DECIDIDO', `Lista de materiais: ${a}`);
   const medidas = resumoDasMedidas(quant).filter((x) => MEDIDAS_DA_CLIMATIZACAO.includes(x.medidaId) && x.quantidade > 0);
   etapa(
     'ORCAMENTO',

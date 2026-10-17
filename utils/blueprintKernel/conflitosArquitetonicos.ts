@@ -410,10 +410,12 @@ export function conflitosDoEquipamento(model: BlueprintModel, pecas: readonly Vo
     const topo = base + p.alturaMm;
     const mesmo = (outroId: ObjectId, outroUid: string, outroFamilia: ConflitoArquitetonico['outroFamilia'], classe: ConflitoArquitetonico['classe'], medidaMm: number, em: Point) =>
       saida.push({ pecaId: p.id, pecaUid: p.uid, familia: 'terminal', outroId, outroUid, outroFamilia, classe, levelId: p.levelId, medidaMm: Math.round(medidaMm), em });
-    // Estrutura: pilar sempre; viga/laje só se a faixa de altura cruza a da caixa.
+    // Estrutura: pilar sempre; o resto (viga, bloco, estaca) só se a faixa de altura cruza a da caixa — F19 da casa
+    // automática: o bloco de coroamento e a estaca (de −1,10 m para baixo), em forma de PONTO, acusavam a evaporadora a
+    // 2,20 m e a condensadora no chão sobre eles.
     for (const s of model.structures) {
       if (s.levelId !== p.levelId || s.kind === 'LAJE') continue;
-      if (FORMA_ESTRUTURAL[s.kind] !== 'PONTO' && (s.baseMm >= topo || s.baseMm + s.alturaMm <= base)) continue;
+      if (s.kind !== 'PILAR' && (s.baseMm >= topo || s.baseMm + s.alturaMm <= base)) continue;
       const comum = recorteComum(caixa, pegadaEmPlanta(s));
       if (comum.length < 3) continue;
       const a = areaDe(comum);
@@ -447,8 +449,12 @@ export function conflitosDoEquipamento(model: BlueprintModel, pecas: readonly Vo
       mesmo(o.id, o.uid, 'opening', 'EQUIPAMENTO_X_VAO', aoLongo, { x: Math.round(w.a.x + u.x * meio), y: Math.round(w.a.y + u.y * meio) });
     }
     // Componente (móvel) dentro da caixa + folga, na mesma faixa de altura — a reserva antiga não conta.
+    // F19 da casa automática: e do MESMO lado da parede (o mesmo cômodo, ou os dois fora) — a folga da condensadora, do
+    // lado de fora, acusava a mesa de jantar da sala, atrás da parede.
+    const comodoDe = (q: Point) => model.spaces.find((x) => x.levelId === p.levelId && pointInPolygon(x.ring, q))?.id ?? null;
+    const comodoDaPeca = comodoDe(p.at);
     for (const c of model.componentes ?? []) {
-      if (c.levelId !== p.levelId || ehReservaDeEquipamento(c)) continue;
+      if (c.levelId !== p.levelId || ehReservaDeEquipamento(c) || comodoDe(c.at) !== comodoDaPeca) continue;
       const baseC = c.cotaMm ?? 0;
       if (baseC >= topo + folga || baseC + c.alturaMm <= base - folga) continue;
       const comum = recorteComum(caixaComFolga, contornoDoComponente(c));

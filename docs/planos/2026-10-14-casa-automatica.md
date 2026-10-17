@@ -2002,7 +2002,7 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 ### Fases (cada uma: retrato → correção → as 8 casas medidas 2× → CI de rascunho → main)
 
 - [x] F18 — redes nas 8 casas: nenhuma em vão, nenhum rede × rede, nada atravessando pilar (ver "Registro da F18"; 2 luzes em sobra de cômodo vão para a F21)
-- [ ] F19 — climatização: ponto de dados, eletroduto força → condensadora, camadas da cobertura
+- [x] F19 — climatização: ponto de dados, eletroduto força → condensadora, camadas da cobertura (ver "Registro da F19")
 - [ ] F20 — mobiliário: peça que não cabe ganha variante (cama, box, vaso/lavatório, armário)
 - [ ] F21 — gerador: molhados e escritório com lado externo; porta direta nas relações obrigatórias; nenhum "Ambiente N"
 - [ ] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO
@@ -2068,3 +2068,56 @@ O que mudou, por causa (cada uma achada pela sonda, não suposta):
 
 Testes novos (reprovam sem a correção): o alimentador por cima/por baixo (`blueprintAlimentador`), a máquina sob a
 janela (`blueprintPontosHidraulicos`), o anel com chanfro e a descida ao lado da janela (`blueprintRotaPeloForro`).
+
+**Publicado** 17/10/2026: 6314c940 + 0c2e38e9, rebaseados para a main em 833b2435 (CI da PR #21 e check-run `ci` da main verdes; `conferir-producao.sh "Casa automática"` ✅ — o domínio serve bb5c6d2, que contém 833b2435).
+
+### Registro da F19 (17/10/2026) — a climatização
+
+Medido nas 8 casas, 2× (a sonda agora passa à casa o catálogo de materiais, como a tela — os splits mudam de modelo e de
+lugar, e foi assim que apareceram os encontros abaixo, que a sonda da F18 não via):
+
+| Casa | Em vão | Rede × rede | Pendências da climatização (fora "confira") |
+|---|---|---|---|
+| 12 × 30 térrea | 0 | 0 | 1 VERIFICACAO (exaustão sem janela — F21) |
+| 15 × 25 | 0 | 0 | 0 |
+| 10 × 30, 2 dorm. | 0 | 0 | 1 VERIFICACAO (exaustão — F21) |
+| 15 × 30, 4 dorm. | 0 | 0 | 1 PREMISSA (vizinho "Ambiente" — F21), 1 VERIFICACAO (F21) |
+| 15 × 30 R1-B | 0 | 0 | 0 |
+| 14 × 28 R1-A | 0 | 0 | 1 PREMISSA (vizinho "Ambiente" — F21) |
+| 12 × 30 sobrado | 0 | 0 | 0 |
+| 10 × 30, 4 dorm. | 0 | 0 | 0 |
+
+(PILAR 2 no 15 × 30 4 dorm. e no R1-A: as luzes da sobra de cômodo, F21.)
+
+O que mudou, por causa:
+
+- **Ponto de dados "fora do plano de circuitos"** (todas): o gerador acusava os pontos que ele não criou; agora só os
+  novos. Pendência de ambiente com "CONFERIR" e os avisos de cobre curvado / cabo de interligação seguindo a linha (é a
+  prática — o cabo força → condensadora vai junto da linha) vão para o grupo CONFERIR.
+- **Camadas da cobertura**: depois do telhado, o teto ganha camadas presumidas (ático 300 mm, laje se houver, gesso 13 mm
+  se houver forro), com pendência CONFERIR — a carga térmica passa a avaliar o teto.
+- **Conflito arquitetônico por altura**: estrutura (bloco, estaca, viga) só conflita com a peça na faixa de altura dela
+  (o pilar segue em toda a altura); componente só conflita no mesmo cômodo — a condensadora sobre o bloco de fundação e o
+  móvel do outro lado da parede eram acusados.
+- **Travessia de viga no forro**: com forro, os cruzamentos da linha/dreno com VIGA são uma pendência CONFERIR ("furo a
+  aprovar"), não N conflitos.
+- **Saída direta pela parede (F14d) sob a viga**: a linha e o dreno atravessam a parede ABAIXO do fundo da viga sobre ela
+  (`folgaSobAVigaNaSaidaMm`, 20) — com a evaporadora subida acima da janela, a linha saía na base da viga. As cotas da
+  travessia são calculadas na escolha do ponto (`saidaPelaParede`), e o vão é conferido NELAS — antes, na cota da
+  evaporadora, e o dreno rebaixado entrava na janela larga (R1-A).
+- **Dreno abaixo da linha**: o dreno atravessa abaixo da linha pelo FEIXE dela (o raio que o detector de encontros usa) +
+  `folgaEntreLinhaEDrenoNaSaidaMm` (20) — espremidos sob a viga, encostavam (5 casas).
+- **Por dentro, paralelos à parede**: com a travessia ao lado da evaporadora (além do batente), os tubos correm paralelos à
+  parede e atravessam de frente — em diagonal, entravam na espessura da parede ainda dentro do vão (sobrado). A linha desce
+  na perpendicular, 6 cm atrás do nó (com a travessia 2 cm ao lado, as duas descidas ficavam a 1 cm — 10 × 30 4 dorm.), e o
+  caminho conferido é o que ela vai percorrer.
+- **Pontos elétricos como prumadas futuras**: o eletroduto desce do teto na vertical até cada ponto, planejado DEPOIS da
+  climatização — a linha que corria paralela passava sobre o ponto de força (sobrado). A escolha da travessia evita os
+  pontos abaixo dela.
+- **Alcance ao lado**: sem ponto livre perto (a janela larga atrás da evaporadora com a viga logo acima), a travessia
+  procura do mais perto ao mais longe até `saidaAoLadoAteMm` (2,5 m) — antes, sem saída direta, o caminho antigo furava a
+  janela.
+
+Testes novos (reprovam sem a correção): bloco/estaca e móvel do outro lado da parede (`blueprintClimatizacaoGrupoF`); a
+viga baixa sem conflito com a linha/dreno e sem encontro entre eles; a janela larga sob a viga baixa (nada no vão, longe
+dos pontos elétricos); a travessia um pouco ao lado (as descidas separadas) (`blueprintLinhaFrigorigena`).

@@ -225,6 +225,86 @@ describe('F14d — a evaporadora na parede externa; a linha e o dreno saem junto
     for (const d of dreno) expect(d.cotaBMm).toBeLessThanOrEqual(d.cotaAMm);
   });
 
+  it('F19: com a viga BAIXA sobre a parede da saída, a linha e o dreno atravessam a parede abaixo do fundo dela, sem se encontrar', () => {
+    const { m: m0, t } = casaNaParedeExterna();
+    // Vigas em todas as paredes, com o fundo a 2,15 m (abaixo da evaporadora, a 2,20 m).
+    const vigas: Command[] = m0.walls.map((w) => ({ type: 'AddStructural', levelId: t, kind: 'VIGA', pontos: [w.a, w.b], larguraMm: 150, alturaMm: 650, baseMm: 2150 }) as Command);
+    const m = applyBatch(m0, vigas).model;
+    const plano = planejarLinhasFrigorigenas(m, t, hipLinha, { pelaParedeExterna: true });
+    expect(plano.motivo).toBeNull();
+    const r = applyBatch(m, plano.comandos).model;
+    const ids = new Set(trechos(r).filter((x) => x.disciplina === 'FRIGORIGENA' || x.disciplina === 'DRENO_AC').map((x) => x.id));
+    const est = new Map(r.structures.map((x) => [x.id, x]));
+    const naViga = conflitosDoModelo(r).filter((c) => ids.has(c.trechoId) && c.classe === 'ESTRUTURA' && est.get(c.outroId)?.kind === 'VIGA');
+    expect(naViga).toEqual([]);
+    // E a linha, descendo atrás até a travessia, não encontra o dreno que sai do nó rumo à parede.
+    const entre = conflitosDoModelo(r).filter((c) => c.classe === 'REDE' && ids.has(c.trechoId) && ids.has(c.outroId));
+    expect(entre).toEqual([]);
+  });
+
+  it('F19: com a travessia um pouco ao lado (uma prumada atrás da evaporadora) e a viga baixa, a linha desce longe da descida do dreno', () => {
+    const { m: m0, t } = casaNaParedeExterna();
+    const evap = terminais(m0).filter((x) => x.tipoHidraulico === 'EVAPORADORA_HI_WALL')[0];
+    expect(evap.at).toMatchObject({ x: 1975, y: 185 });
+    // A coluna de água fria no eixo da parede atrás dela; a viga com o fundo a 2,15 m.
+    const coluna: Command = { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(1975, 0), b: point(1975, 0), cotaAMm: 300, cotaBMm: 2700, bitolaMm: 25 } as Command;
+    const vigas: Command[] = m0.walls.map((w) => ({ type: 'AddStructural', levelId: t, kind: 'VIGA', pontos: [w.a, w.b], larguraMm: 150, alturaMm: 650, baseMm: 2150 }) as Command);
+    const m = applyBatch(m0, [coluna, ...vigas]).model;
+    const x = sistemasDoNivel(m, t)[0];
+    const saida = saidaPelaParede(m, x.evaporadora, x.condensadora, { raioLinhaMm: 20, raioDrenoMm: 12.5 })!;
+    expect(Math.abs(saida.linhaNoEixo.x - 1975)).toBeGreaterThan(0);
+    expect(Math.abs(saida.linhaNoEixo.x - 1975)).toBeLessThan(120);
+    const plano = planejarLinhasFrigorigenas(m, t, hipLinha, { pelaParedeExterna: true });
+    expect(plano.motivo).toBeNull();
+    const r = applyBatch(m, plano.comandos).model;
+    const ids = new Set(trechos(r).filter((y) => y.disciplina === 'FRIGORIGENA' || y.disciplina === 'DRENO_AC').map((y) => y.id));
+    const porId = new Map(trechos(r).map((y) => [y.id, y]));
+    const entre = conflitosDoModelo(r).filter((c) => c.classe === 'REDE' && ids.has(c.trechoId) && ids.has(c.outroId));
+    expect(entre.map((c) => `${porId.get(c.trechoId)?.disciplina} × ${porId.get(c.outroId)?.disciplina} ${Math.round(c.folgaEntreEixosMm)} mm`)).toEqual([]);
+  });
+
+  it('F19: com a viga BAIXA logo acima de uma janela larga atrás da evaporadora, nem a linha nem o dreno atravessam a parede dentro do vão — correm por dentro até além do batente, longe dos pontos elétricos', () => {
+    const { m: m0, t } = casaNaParedeExterna();
+    // Atrás de cada evaporadora, a janela quase da largura da parede, com o topo a 2,10 m; a viga com o fundo a 2,15 m.
+    // Não cabem os dois tubos empilhados entre o topo da janela e a viga — a travessia vai para além do batente.
+    const evaps = terminais(m0).filter((x) => x.tipoHidraulico === 'EVAPORADORA_HI_WALL');
+    expect(evaps.length).toBeGreaterThan(0);
+    const dist = (w: (typeof m0.walls)[number], p: { x: number; y: number }) => {
+      const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+      return Math.abs(((p.x - w.a.x) * (w.b.y - w.a.y) - (p.y - w.a.y) * (w.b.x - w.a.x)) / L);
+    };
+    const paredes = new Set(evaps.map((e) => [...m0.walls].sort((a, b) => dist(a, e.at) - dist(b, e.at))[0].id));
+    const janelas: Command[] = [...paredes].map((id) => {
+      const w = m0.walls.find((x) => x.id === id)!;
+      const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+      return { type: 'AddOpening', wallId: id, kind: 'window', offsetMm: 200, widthMm: Math.round(L / 2 - 1300), heightMm: 1100, sillMm: 1000 } as Command;
+    });
+    // A janela de 0,2 a 2,9 m deixa livre o lado direito (mais perto); ali, entre a evaporadora e o batente, uma tomada
+    // alta na faixa por onde a linha corre por dentro.
+    const evap = evaps[0];
+    const tomada: Command = { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', tipoEletrico: 'TUG', at: point(2700, evap.at.y - 35), cotaMm: 1900 } as Command;
+    const vigas: Command[] = m0.walls.map((w) => ({ type: 'AddStructural', levelId: t, kind: 'VIGA', pontos: [w.a, w.b], larguraMm: 150, alturaMm: 650, baseMm: 2150 }) as Command);
+    const m = applyBatch(m0, [...janelas, ...vigas, tomada]).model;
+    expect(evap.at.x).toBe(1975);
+    const plano = planejarLinhasFrigorigenas(m, t, hipLinha, { pelaParedeExterna: true });
+    expect(plano.motivo).toBeNull();
+    const r = applyBatch(m, plano.comandos).model;
+    const porId = new Map(trechos(r).map((x) => [x.id, x]));
+    const ids = new Set(trechos(r).filter((x) => x.disciplina === 'FRIGORIGENA' || x.disciplina === 'DRENO_AC').map((x) => x.id));
+    const noVao = conflitosDoModelo(r).filter((c) => ids.has(c.trechoId) && c.classe === 'ABERTURA');
+    expect(noVao.map((c) => `${porId.get(c.trechoId)?.disciplina} ${c.comprimentoDentroMm} mm`)).toEqual([]);
+    // Correndo paralelos à parede até além do batente, não passam sobre os pontos elétricos: o eletroduto que descerá do
+    // teto até cada um (planejado depois) não encontra a linha nem o dreno.
+    const descidas: Command[] = terminais(r)
+      .filter((x) => x.disciplina === 'ELETRICA')
+      .map((x) => ({ type: 'AddTrecho', levelId: t, disciplina: 'ELETRICA', a: x.at, b: x.at, cotaAMm: 2755, cotaBMm: x.cotaMm, bitolaMm: 25 }) as Command);
+    expect(descidas.length).toBeGreaterThan(0);
+    const r2 = applyBatch(r, descidas).model;
+    const eletr = new Set(trechos(r2).filter((x) => x.disciplina === 'ELETRICA').map((x) => x.id));
+    const comEletroduto = conflitosDoModelo(r2).filter((c) => c.classe === 'REDE' && ((ids.has(c.trechoId) && eletr.has(c.outroId)) || (eletr.has(c.trechoId) && ids.has(c.outroId))));
+    expect(comEletroduto).toEqual([]);
+  });
+
   it('a evaporadora em parede interna, ou a condensadora longe: sem saída direta (a regra de antes)', () => {
     const { m, t } = casaNaParedeExterna();
     const x = sistemasDoNivel(m, t)[0];

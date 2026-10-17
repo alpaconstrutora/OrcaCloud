@@ -29,7 +29,7 @@
  * mão direita de quem olha da rua —, e a `transformacao` leva ao mundo. Com a
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
-import { TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
+import { TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type CamadaParede, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
 import { recuosEfetivos } from './blueprintZonaUrbanistica';
@@ -1304,7 +1304,21 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
       return;
     }
     try {
+      const antes = new Set((m.roofs ?? []).map((r) => r.id));
       const n = aplicar(t.comandos);
+      // F19 da casa automática: a COMPOSIÇÃO do teto nas águas (de cima para baixo) — sem ela a carga térmica não avaliava
+      // o teto ("cobertura sem camadas declaradas") em todo cômodo. O ático como câmara de ar, a laje e o forro de gesso;
+      // a telha fica fora (sem condutividade na biblioteca, anularia a conta). Presumida: dita.
+      const camadas: CamadaParede[] = [
+        { espessuraMm: 300, itemCode: '', descricao: 'Ático (câmara de ar)', funcao: 'CAMARA_AR' },
+        ...(comLaje ? [{ espessuraMm: hip.estrutura.lajes.espessuraMm, itemCode: 'INT-CONCRETO', descricao: 'Laje de concreto', funcao: 'ESTRUTURAL' as const }] : []),
+        ...(hip.forro.lancar ? [{ espessuraMm: 13, itemCode: 'INT-GESSO', descricao: 'Forro de gesso', funcao: 'ACABAMENTO' as const }] : []),
+      ];
+      const novas = (m.roofs ?? []).filter((r) => !antes.has(r.id));
+      if (novas.length) {
+        aplicar(novas.map((r) => ({ type: 'SetAguaProps', aguaId: r.id, camadas }) as Command));
+        pendencias.push({ grupo: 'CONFERIR', texto: `Telhado: composição do teto presumida para a carga térmica (ático + ${comLaje ? `laje de ${hip.estrutura.lajes.espessuraMm} mm` : 'sem laje'}${hip.forro.lancar ? ' + forro de gesso' : ''}) — declare as camadas reais nas águas.` });
+      }
       telhado = t.resumo;
       const tr = t.resumo;
       etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'LANCOU', n, `${tr.aguas === 2 ? 'duas águas' : 'uma água'} a ${String(hip.telhado.inclinacaoPct).replace('.', ',')} %, cumeeira ${tr.direcao} (${String(tr.cumeeiraM).replace('.', ',')} m), beiral de ${String(hip.telhado.beiralMm / 1000).replace('.', ',')} m — ${String(tr.projecaoM2).replace('.', ',')} m² de projeção`);
@@ -1884,6 +1898,8 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
           circuitos: { hip: hipCircuitos, eletricas: hipEletricas },
           linhaNoForro: forroLigado ? { faixa: hip.forro.frigorigena, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } : null,
           splitNaParedeExterna: hip.climatizacao.naParedeExterna ? { topoMaximoMm: topoDaEvaporadora } : null,
+          // F19: com o forro (decisão "manter 2,80 m, furar vigas"), a travessia de viga é furo previsto, como nas outras redes.
+          travessiaDeVigaEhFuro: forroLigado,
           ...(entrada.cargaDaClimatizacao ? { carga: entrada.cargaDaClimatizacao } : {}),
         });
         for (const e of plano.etapas) climatizacao.etapas[e.id] = e.situacao;

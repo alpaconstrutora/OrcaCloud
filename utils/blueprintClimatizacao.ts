@@ -387,6 +387,18 @@ export interface HipotesesDaLinha {
   distanciaDoSifaoMm: number;
   /** F1 (10/10/2026): o raio mínimo da curva do cobre, em DIÂMETROS do tubo (HIPÓTESE, CONFERIR). */
   raioDaCurvaEmDiametros: number;
+  /**
+   * F19 da casa automática: na saída direta pela parede (F14d), a folga entre a geratriz do tubo que atravessa a parede
+   * e o fundo da viga sobre ela, mm. Ausente = 20.
+   */
+  folgaSobAVigaNaSaidaMm?: number;
+  /** F19: na mesma saída, a folga entre as geratrizes da linha e do dreno, que desce abaixo dela. Ausente = 20. */
+  folgaEntreLinhaEDrenoNaSaidaMm?: number;
+  /**
+   * F19: na saída direta, até onde além da ponta da evaporadora a travessia pode ir (os tubos correm paralelos à parede,
+   * por dentro) quando não há ponto livre perto — a janela larga atrás dela com a viga logo acima, mm. Ausente = 2500.
+   */
+  saidaAoLadoAteMm?: number;
 }
 
 export const HIPOTESES_DA_LINHA_PADRAO: HipotesesDaLinha = { cotaDaLinhaMm: 2500, raioDeEncaixeMm: 600, preCargaM: 5, declividadeDrenoPct: 1, isolamentoAte24kMm: 9, isolamentoAcimaMm: 13, dnDrenoMm: 25, raioDoShaftMm: 3000, condensadoLhPorKbtu: 0.2, distanciaDoSifaoMm: 300, raioDaCurvaEmDiametros: 4 };

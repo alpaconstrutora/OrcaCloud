@@ -141,7 +141,33 @@ export function desvioDoPilar(a: P2, b: P2, pegadas: readonly Point[][]): P2[] |
       }
     }
   }
-  return melhor ? melhor.pts : null;
+  if (melhor) return melhor.pts;
+  // F24 da casa automática (17/10/2026): mais de um pilar no caminho (a diagonal longa do esgoto enterrado sob a casa em
+  // L) — o menor caminho pelos cantos de TODOS os pilares (grafo de visibilidade). Antes, sem um canto ou par do mesmo
+  // pilar livre, o tubo seguia reto pelos dois.
+  const nos: P2[] = [a, b, ...pegadas.flatMap(cantosDe).filter((w) => !dentroDeAlguma(pegadas, w))];
+  const dist = nos.map(() => Infinity);
+  const veio = nos.map(() => -1);
+  const feito = nos.map(() => false);
+  dist[0] = 0;
+  for (;;) {
+    let u = -1;
+    for (let i = 0; i < nos.length; i++) if (!feito[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
+    if (u < 0 || u === 1) break;
+    feito[u] = true;
+    for (let v = 0; v < nos.length; v++) {
+      if (feito[v] || v === u) continue;
+      const dv = dist[u] + d(nos[u], nos[v]);
+      if (dv < dist[v] - 1e-9 && fracaoDentro(nos[u], nos[v], pegadas) === 0) {
+        dist[v] = dv;
+        veio[v] = u;
+      }
+    }
+  }
+  if (dist[1] === Infinity) return null;
+  const caminho: P2[] = [];
+  for (let v = veio[1]; v > 0; v = veio[v]) caminho.unshift(nos[v]);
+  return caminho;
 }
 
 /**

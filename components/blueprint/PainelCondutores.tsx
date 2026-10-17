@@ -39,6 +39,10 @@ export default function PainelCondutores({ plano, condutores, hip, onHip, onLanc
           Profundidade (mm)
           <input type="number" min={100} step={50} value={hip.profundidadeDoCondutorMm} onChange={(e) => onHip({ ...hip, profundidadeDoCondutorMm: numero(e.target.value, 100, 300) })} aria-label="Profundidade do condutor enterrado em milímetros" className={campo} />
         </label>
+        <label className="flex items-center gap-1.5">
+          Afastamento da casa (mm)
+          <input type="number" min={0} step={50} value={hip.afastamentoDoCondutorDaCasaMm ?? 300} onChange={(e) => onHip({ ...hip, afastamentoDoCondutorDaCasaMm: numero(e.target.value, 0, 300) })} aria-label="Afastamento do condutor horizontal enterrado em relação à face das paredes, em milímetros" className={campo} />
+        </label>
       </div>
       {plano.motivo ? (
         <p className="text-xs text-slate-500" data-testid="condutores-motivo">{plano.motivo}</p>

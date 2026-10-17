@@ -602,6 +602,38 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
     const pend = new Map<string, Ponto2>();
     for (const f of diretas) if (k2(levelId, f.terminal.at) !== raizKey) pend.set(k2(levelId, f.terminal.at), f.terminal.at);
     for (const a of arvoreComJuncoes45({ raiz, pendentes: [...pend.values()], limite: hip.rotaMaximaVezes })) ligarEmPlanta(a.de, a.para);
+    // F24 da casa automática (17/10/2026): a JUNÇÃO a 45° que cai dentro de um pilar (três trechos chegavam nela no L de
+    // 3 dormitórios — com a ponta lá dentro, nenhum desvio resolve) escorrega para fora dele pelo lado mais perto. As
+    // peças e a raiz ficam onde estão.
+    {
+      const fixos = new Set([raizKey, ...doNivel.map((f) => k2(levelId, f.terminal.at))]);
+      const pegadas = pegadasDePilares(model, levelId).map((g) => anelDoPilar(g, RAIO_DO_MAIOR_RAMAL_MM + FOLGA_DA_JUNCAO_AO_PILAR_MM) as Point[]);
+      const movido = new Map<string, Ponto2>();
+      const paraFora = (p: Ponto2): Ponto2 | null => {
+        const g = pegadas.find((x) => pointInPolygon(x, p as Point));
+        if (!g) return null;
+        const xs = g.map((q) => q.x);
+        const ys = g.map((q) => q.y);
+        const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+        const op = [{ x: Math.floor(x0) - 1, y: p.y }, { x: Math.ceil(x1) + 1, y: p.y }, { x: p.x, y: Math.floor(y0) - 1 }, { x: p.x, y: Math.ceil(y1) + 1 }].filter((q) => !pegadas.some((x) => pointInPolygon(x, q as Point)));
+        return op.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0] ?? null;
+      };
+      for (const d of dirigidas) {
+        if (d.levelId !== levelId) continue;
+        for (const lado of ['de', 'para'] as const) {
+          const key = lado === 'de' ? d.deKey : d.paraKey;
+          if (fixos.has(key)) continue;
+          if (!movido.has(key)) {
+            const q = paraFora(lado === 'de' ? d.de : d.para);
+            if (!q) continue;
+            movido.set(key, q);
+          }
+          const q = movido.get(key)!;
+          if (lado === 'de') Object.assign(d, { de: q, deKey: k2(levelId, q) });
+          else Object.assign(d, { para: q, paraKey: k2(levelId, q) });
+        }
+      }
+    }
 
     // 3) UHC e DN mínimo a montante de cada nó (recursão da raiz para as folhas).
     const filhosDe = new Map<string, typeof dirigidas>();
@@ -778,6 +810,10 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
  * F8b: o trecho em reta que atravessa um pilar vira o contorno pelo canto, com o desnível repartido pelo
  * comprimento (cada pedaço com o mesmo caimento). Fica reto se o caimento cairia abaixo da mínima.
  */
+/** F24: o raio do maior ramal enterrado (DN 100) e a folga da junção ao pilar, mm — a junção fica fora disso. */
+const RAIO_DO_MAIOR_RAMAL_MM = 50;
+const FOLGA_DA_JUNCAO_AO_PILAR_MM = 20;
+
 function contornarPilar(model: BlueprintModel, c: Extract<Command, { type: 'AddTrecho' }>, hip: HipotesesDeEsgoto): Extract<Command, { type: 'AddTrecho' }>[] {
   if (c.a.x === c.b.x && c.a.y === c.b.y) return [c];
   // F18: com a pegada crescida pelo raio do tubo (o mesmo da queda, na árvore).

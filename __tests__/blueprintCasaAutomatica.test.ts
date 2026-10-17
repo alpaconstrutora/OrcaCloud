@@ -1176,6 +1176,9 @@ describe('F24 — vagas descobertas e casa em L', () => {
     expect(p.pendencias.filter((x) => /não couberam/.test(x.texto)).map((x) => x.texto)).toEqual([]);
     expect(p.decisoes.some((d) => /^Vagas descobertas: .*a casa recua/.test(d))).toBe(true);
     expect(conflitos(r, 'ABERTURA')).toEqual([]);
+    // F24 parte 2: a varanda de entrada na rua, a entrada por ela e a sala com a janela de 1/6; nenhum tubo × tubo
+    expect(p.pendencias.filter((x) => /Iluminação natural.*Sala/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+    expect(conflitos(r, 'REDE')).toEqual([]);
   }, 120_000);
 
   it('lote em L, 4 dormitórios R1-A: a casa sai em L e alcança o programa; o anexo coberto; nenhum equipamento dentro de parede; nenhuma calha dentro da casa', () => {
@@ -1193,5 +1196,20 @@ describe('F24 — vagas descobertas e casa em L', () => {
     const calhas = (p.resultado.trechos ?? []).filter((t) => t.rotulo === 'Calha');
     const casa = p.resultado.spaces.filter((s) => s.levelId === levelId);
     for (const c of calhas) for (const q of [c.a, c.b, { x: (c.a.x + c.b.x) / 2, y: (c.a.y + c.b.y) / 2 }]) expect(casa.some((s) => pointInPolygon(s.ring, point(q.x, q.y))), JSON.stringify(c)).toBe(false);
+    // F24 parte 2: as rotas enterradas por fora e longe dos pilares; a evaporadora fora do pilar saliente
+    expect(p.pendencias.filter((x) => x.grupo === 'CONFLITO' || /atravessando pilar|rente ao esgoto/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+    expect(conflitos(p.resultado, 'REDE')).toEqual([]);
+  }, 240_000);
+
+  it.each([
+    ['L de frente larga, 3 dormitórios', [[0, 0, 'FRENTE'], [20000, 0, 'LATERAL_DIREITA'], [20000, 15000, 'LATERAL_DIREITA'], [10000, 15000, 'LATERAL_DIREITA'], [10000, 30000, 'FUNDOS'], [0, 30000, 'LATERAL_ESQUERDA']]],
+    ['L de fundo largo, 3 dormitórios', [[0, 0, 'FRENTE'], [10000, 0, 'LATERAL_DIREITA'], [10000, 15000, 'LATERAL_DIREITA'], [20000, 15000, 'LATERAL_DIREITA'], [20000, 30000, 'FUNDOS'], [0, 30000, 'LATERAL_ESQUERDA']]],
+  ] as [string, [number, number, Papel][]][])('%s (retângulo): o esgoto não passa por pilar; o pluvial por fora, longe do esgoto e do alimentador', (_, v) => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = base.levels[0].id;
+    const m = applyBatch(base, v.map(([x, y, papel], i): Command => ({ type: 'AddBoundary', levelId, a: point(x, y), b: point(v[(i + 1) % v.length][0], v[(i + 1) % v.length][1]), kind: 'TERRENO', papel }))).model;
+    const p = planejarCasa(m, comAr(m), { pavimentos: 1 });
+    expect(p.pendencias.filter((x) => /atravessando pilar|rente ao esgoto|POR BAIXO de/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+    expect(conflitos(p.resultado, 'REDE')).toEqual([]);
   }, 240_000);
 });

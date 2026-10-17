@@ -5,7 +5,7 @@
  * a vazão acumulada por gravidade na verificação.
  */
 import { describe, expect, it } from 'vitest';
-import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { planejarCalhas } from '../utils/blueprintCalhas';
 import {
   ROTULO_DO_CONDUTOR_HORIZONTAL,
@@ -113,5 +113,55 @@ describe('E6.3 — a verificação da rede desenhada', () => {
     ] as Command[]).model;
     const tipos = marcasDeVerificacao(m, null, [], hip).filter((x) => x.disciplina === 'PLUVIAL').map((x) => [x.tipo, x.texto]);
     expect(tipos).toEqual(expect.arrayContaining([['CONDUTOR_INSUFICIENTE', 'condutor vertical DN 50 < 75'], ['CONDUTOR_DECLIVIDADE', 'i 0 % < 0,5 %']]));
+  });
+});
+
+/**
+ * F24 da casa automática (17/10/2026): o horizontal enterrado contorna a casa POR FORA — em reta, do pé da descida dos
+ * fundos à saída da frente, ele cruzava a casa em L inteira por baixo (pilar, esgoto, alimentador no caminho) — e desvia
+ * das caixas enterradas das outras redes.
+ */
+describe('condutor horizontal por fora da casa (F24)', () => {
+  const montar = (comCaixaDeGordura: boolean): BlueprintModel => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    const p = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 200, heightMm: 2800 });
+    m = applyBatch(m, [
+      p(0, 0, 10000, 0), p(10000, 0, 10000, 8000), p(10000, 8000, 0, 8000), p(0, 8000, 0, 0),
+      // o ralo atrás da casa, no meio; a saída na frente, no meio
+      { type: 'AddTerminal', levelId: t, disciplina: 'PLUVIAL', tipo: 'Ralo', tipoHidraulico: 'RALO_PLUVIAL', at: point(5000, 8700), cotaMm: 0 } as Command,
+      { type: 'AddTerminal', levelId: t, disciplina: 'PLUVIAL', tipo: 'Saída', tipoHidraulico: 'LIGACAO_PLUVIAL', at: point(5000, -3000), cotaMm: -700 } as Command,
+      ...(comCaixaDeGordura ? [{ type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Caixa de gordura', tipoHidraulico: 'CAIXA_GORDURA', at: point(10700, 4000), cotaMm: -400 } as Command] : []),
+    ]).model;
+    return m;
+  };
+  const horizontais = (m: BlueprintModel) => (m.trechos ?? []).filter((x) => x.rotulo === ROTULO_DO_CONDUTOR_HORIZONTAL);
+
+  it('do ralo dos fundos à saída da frente: por fora, nenhum ponto do tubo dentro da casa, a queda contínua até a saída', () => {
+    const m = montar(false);
+    const r = lancar(m);
+    const h = horizontais(r);
+    expect(h.length).toBeGreaterThan(1);
+    const anel = m.spaces[0].ring;
+    for (const x of h) for (let k = 0; k <= 10; k++) expect(pointInPolygon(anel, point(x.a.x + ((x.b.x - x.a.x) * k) / 10, x.a.y + ((x.b.y - x.a.y) * k) / 10))).toBe(false);
+    for (const x of h) expect(x.cotaBMm).toBeLessThanOrEqual(x.cotaAMm);
+    expect(h[h.length - 1].cotaBMm).toBe(-700);
+  });
+
+  it('a caixa de gordura na lateral (outra rede, enterrada): o horizontal passa longe dela', () => {
+    const m = montar(true);
+    const h = horizontais(lancar(m));
+    const cg = { x: 10700, y: 4000 };
+    const dist = (x: (typeof h)[number]) => {
+      const dx = x.b.x - x.a.x;
+      const dy = x.b.y - x.a.y;
+      const L2 = dx * dx + dy * dy || 1;
+      const k = Math.max(0, Math.min(1, ((cg.x - x.a.x) * dx + (cg.y - x.a.y) * dy) / L2));
+      return Math.hypot(cg.x - (x.a.x + k * dx), cg.y - (x.a.y + k * dy));
+    };
+    for (const x of h) expect(dist(x)).toBeGreaterThanOrEqual(300);
+    // e continua por fora da casa (o contorno pela lateral da caixa é o que exige o desvio)
+    const anel = m.spaces[0].ring;
+    for (const x of h) for (let k = 0; k <= 10; k++) expect(pointInPolygon(anel, point(x.a.x + ((x.b.x - x.a.x) * k) / 10, x.a.y + ((x.b.y - x.a.y) * k) / 10))).toBe(false);
   });
 });

@@ -518,6 +518,28 @@ function trocarServicoSemFachada(caixas: Map<ItemPlanejado, CaixaCanonica>, W: n
   }
 }
 
+/**
+ * F24 da casa automática (17/10/2026): a VARANDA DE ENTRADA que ficou longe da rua (sem garagem, a frente em colunas pôs o
+ * lavabo na esquina e a varanda atrás dele — a porta de entrada caía na sala, que ficava com 2,4 m² de janela para 1/6)
+ * troca de caixa com o banheiro/lavabo da frente que encosta nela — sem relação obrigatória, os dois cabendo um na caixa
+ * do outro, e a varanda seguindo junto do seu par obrigatório (a sala).
+ */
+function trocarVarandaSemRua(caixas: Map<ItemPlanejado, CaixaCanonica>, programa: Programa, hip: HipotesesDoGerador): void {
+  const obrigatorias = (t: ItemPlanejado) => programa.relacoes.filter((r) => r.tipo === 'OBRIGATORIA' && (r.a === t.item.id || r.b === t.item.id));
+  const cabe = (t: ItemPlanejado, c: CaixaCanonica) => Math.min(c.x1 - c.x0, c.y1 - c.y0) >= eixoMinMm(t.item, hip);
+  for (const [v] of [...caixas]) {
+    if (v.item.uso !== 'VARANDA') continue;
+    const cv = caixas.get(v)!;
+    if (cv.y0 < 1) continue;
+    const par = obrigatorias(v).map((r) => (r.a === v.item.id ? r.b : r.a));
+    const junto = (c: CaixaCanonica, sem: ItemPlanejado) => par.length === 0 || [...caixas].some(([o, co]) => o !== v && o !== sem && par.includes(o.item.id) && adjacentes(c, co));
+    const escolhido = [...caixas].find(([t, ct]) => t !== v && ehMolhado(t.item) && obrigatorias(t).length === 0 && ct.y0 < 1 && adjacentes(ct, cv) && cabe(v, ct) && cabe(t, cv) && junto(ct, t));
+    if (!escolhido) continue;
+    caixas.set(v, escolhido[1]);
+    caixas.set(escolhido[0], cv);
+  }
+}
+
 function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, programa: Programa, hip: HipotesesDoGerador): Map<ItemPlanejado, CaixaCanonica> {
   const areaFrente = plano.frente.reduce((s, i) => s + i.areaAlvoMm2, 0);
   const areaFundo = plano.fundo.reduce((s, i) => s + i.areaAlvoMm2, 0);
@@ -982,6 +1004,7 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   decisoes.push(`Recozimento simulado: ${hip.iteracoes} iterações com a semente ${semente}; função objetivo ${f2(inicial)} → ${f2(final)} (largura mínima, proporção, fachada e sol de quem exige, matriz de proximidade, privacidade).`);
   const caixas = caixasDoPlano(plano, W, D, hip.larguraCorredorMm, programa, hip);
   trocarServicoSemFachada(caixas, W, D, programa, hip);
+  trocarVarandaSemRua(caixas, programa, hip);
 
   // Malha: arredonda as coordenadas cumulativas (mantém adjacência).
   const snapC = (c: CaixaCanonica): CaixaCanonica => ({ x0: snap(c.x0, hip.malhaMm), y0: snap(c.y0, hip.malhaMm), x1: snap(c.x1, hip.malhaMm), y1: snap(c.y1, hip.malhaMm) });
@@ -1216,7 +1239,20 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   const trechoDaFrente = (a: AmbienteGerado | null) =>
     a ? ladosNaBorda(a.ret).filter((x) => x.lado === (frente as LadoNoDesenho)).sort((p, q) => Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y) - Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y))[0] ?? null : null;
   // F20: nunca pelo banheiro/lavabo (sem lado da sala na frente, a entrada caía no lavabo — 10,5 × 14,5 m).
-  const entradaEm = [sala, ...ambientes.filter((a) => a.zona === 'SOCIAL' && a !== sala), corredor, ...ambientes].find((a) => !!a && !ehMolhado(a.item) && !!trechoDaFrente(a)) ?? null;
+  // F24: a sala cuja fachada, tirando a porta e as folgas, não comporta a janela de 1/6 (sem garagem, 3,9 m de frente:
+  // 2,4 m² para 3,8) recebe pela VARANDA de entrada que encosta nela e dá para a rua — a porta sai da fachada da sala.
+  const varandaDeEntrada = ambientes.find((a) => a.item.uso === 'VARANDA' && !!trechoDaFrente(a) && !!sala && !!ladoComum(a.ret, sala.ret)) ?? null;
+  const salaSemLugarParaAJanela = (() => {
+    const seg = trechoDaFrente(sala);
+    if (!sala || !seg) return false;
+    const pisoUtil = Math.max(0, sala.ret.x1 - sala.ret.x0 - hip.espessuraInternaMm) * Math.max(0, sala.ret.y1 - sala.ret.y0 - hip.espessuraInternaMm);
+    const janelaPedida = (pisoUtil * hip.iluminacaoMinima.habitavel) / hip.janela.alturaMm;
+    return Math.hypot(seg.b.x - seg.a.x, seg.b.y - seg.a.y) - hip.larguraEntradaMm - 4 * FOLGA < janelaPedida;
+  })();
+  const entradaEm =
+    (varandaDeEntrada && salaSemLugarParaAJanela ? varandaDeEntrada : null) ??
+    [sala, ...ambientes.filter((a) => a.zona === 'SOCIAL' && a !== sala), corredor, ...ambientes].find((a) => !!a && !ehMolhado(a.item) && !!trechoDaFrente(a)) ??
+    null;
   if (entradaEm) {
     const seg = trechoDaFrente(entradaEm)!;
     const cmd = porta(seg, hip.larguraEntradaMm, true);

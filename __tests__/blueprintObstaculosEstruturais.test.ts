@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, pointInPolygon, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
-import { PENALIDADE_DO_PILAR_MM, anelDoPilar, custoComPilares, foraDaViga, foraDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares, vigaSobreParede } from '../utils/blueprintObstaculosEstruturais';
+import { PENALIDADE_DO_PILAR_MM, anelDoPilar, custoComPilares, desvioDoPilar, foraDaViga, foraDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares, vigaSobreParede } from '../utils/blueprintObstaculosEstruturais';
 import { arvorePelasParedes } from '../utils/blueprintRotaPelasParedes';
 import { planejarAgua } from '../utils/blueprintAguaAutomatica';
 import { marcasDeVerificacao } from '../utils/blueprintVerificacaoRede';
@@ -202,5 +202,27 @@ describe('F12c — a viga no caminho de quem anda pelas paredes', () => {
     const paredes = m.walls.filter((w) => w.levelId === l);
     expect(vigaSobreParede(sobre, paredes)).toBe(true);
     expect(vigaSobreParede(solta, paredes)).toBe(false);
+  });
+});
+
+describe('desvioDoPilar — mais de um pilar no caminho (F24 da casa automática, 17/10/2026)', () => {
+  const quadrado = (cx: number, cy: number, meio = 150): Point[] => [point(cx - meio, cy - meio), point(cx + meio, cy - meio), point(cx + meio, cy + meio), point(cx - meio, cy + meio)];
+
+  it('a diagonal que atravessa DOIS pilares contorna os dois — o caminho inteiro livre', () => {
+    // Um pilar logo depois da saída e outro logo antes da chegada, deslocados: nenhum canto único serve aos dois.
+    const pilares = [quadrado(2000, 1000), quadrado(8000, 4000)];
+    const a = { x: 0, y: 0 };
+    const b = { x: 10000, y: 5000 };
+    expect(fracaoDentro(a, b, pilares)).toBeGreaterThan(0);
+    const desvio = desvioDoPilar(a, b, pilares);
+    expect(desvio).not.toBeNull();
+    expect(desvio!.length).toBeGreaterThanOrEqual(2);
+    const pts = [a, ...desvio!, b];
+    for (let i = 1; i < pts.length; i++) expect(fracaoDentro(pts[i - 1], pts[i], pilares)).toBe(0);
+  });
+
+  it('um pilar só: como antes, um canto basta', () => {
+    const desvio = desvioDoPilar({ x: 0, y: 0 }, { x: 4000, y: 0 }, [quadrado(2000, 0)]);
+    expect(desvio).toHaveLength(1);
   });
 });

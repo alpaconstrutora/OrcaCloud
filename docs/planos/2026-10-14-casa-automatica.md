@@ -2010,10 +2010,10 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F21 — gerador: molhados e escritório com lado externo; porta direta nas relações obrigatórias; nenhum "Ambiente N" (ver "Registro da F21"; o lado externo do serviço/escritório e a porta direta varanda × sala e cozinha × serviço passaram para a F22 — são do ARRANJO)
 - [x] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO; e (da F21) o arranjo em faixas: varanda de entrada junto da sala, serviço junto da cozinha, serviço e escritório com fachada; e (da F20) a suíte que não cabe o armário/a cama — **partes 1, 2 e 3 feitas** (ver "Registro da F22"); a frente do R1-B e o sobrado no lote estreito vão com a F27
 - [x] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo (ver "Registro da F23"; os 2 pilares do sobrado sobre janela do térreo vão com a F27 — as janelas dos dois pavimentos desalinhadas)
-- [ ] F24 — implantação não retangular (L) e vaga descoberta com recuo curto — **parte 1 feita** (ver "Registro da F24"); falta a parte 2: as rotas enterradas da casa em L (esgoto e pluvial sob a casa, rentes e por pilar) e os lotes novos em retângulo
+- [x] F24 — implantação não retangular (L) e vaga descoberta com recuo curto — partes 1 e 2 (ver "Registro da F24"); o serviço sem fachada nas casas largas e rasas vai com a F27 (o mesmo arranjo da cozinha × serviço do R1-B)
 - [ ] F25 — terreno inclinado: platô único
 - [ ] F26 — muro, portão e calçada
-- [ ] F27 — 3 pavimentos; e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
+- [ ] F27 — 3 pavimentos; e (da F24) o serviço com fachada nas casas largas e rasas (L e L de fundo largo, 3 dorm.); e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
 - [ ] F28 — tela e prancha: a chuva de projeto na tela da casa; bolhas dos eixos sem sobrepor
 
 
@@ -2349,3 +2349,36 @@ Testes novos (reprovam sem a correção): as vagas no recuo, ao lado e no lote r
 anexo e a garagem no principal (`blueprintGerador`); a uma água para o lado (`blueprintTelhadoAutomatico`); a casa sem
 garagem (2 vagas, nada em janela) e a casa em L (programa alcançado, anexo coberto, nenhum equipamento na parede,
 nenhuma calha dentro da casa) (`blueprintCasaAutomatica`).
+
+### Registro da F24 — parte 2 (17/10/2026): as rotas enterradas dos lotes novos
+
+Retrato (as 6 casas dos lotes novos, com o detalhe de cada encontro): o esgoto enterrado em diagonais longas sob a casa
+passando por DOIS pilares (o desvio só sabia contornar um) ou com a junção a 45° DENTRO do pilar; o condutor horizontal
+do pluvial em reta do pé da descida dos fundos à saída da frente, cruzando a casa por baixo (pilar, o fim do esgoto na
+caixa de gordura da lateral, a descida do alimentador — a saída proposta caía no mesmo ponto da frente que ele); a
+evaporadora encostada num pilar saliente (19 cm na parede de 15) e a linha subindo onde a água quente atravessa a parede;
+no 12 × 30 sem garagem, a varanda de entrada atrás do lavabo e a porta de entrada na sala (2,4 m² de janela para 3,8).
+
+Correções:
+
+- `desvioDoPilar`: sem um canto ou par do mesmo pilar livre, o menor caminho pelos cantos de TODOS (grafo de
+  visibilidade) — vale para o esgoto, o eletroduto e a linha.
+- Esgoto: a junção a 45° que cai dentro do pilar (crescido pelo raio do DN 100 + 2 cm) escorrega para fora dele, antes
+  das cotas.
+- Pluvial: o horizontal contorna POR FORA — os cômodos crescidos até `afastamentoDoCondutorDaCasaMm` (30 cm, no painel
+  dos condutores) além da face, os pilares, as caixas enterradas e as descidas enterradas das outras redes —, com a queda
+  repartida pelo comprimento do contorno (e a saída proposta calculada por ele); a saída proposta escorrega ao longo da
+  frente até ficar a 80 cm das outras redes.
+- Climatização: o pilar que sobressai da face ocupa o trecho da parede (sempre, com ou sem desvio dos componentes); a
+  travessia de outra rede pela parede acima da evaporadora também.
+- Gerador: sem garagem, a varanda de entrada longe da rua troca de caixa com o banheiro/lavabo da frente que encosta nela
+  (`trocarVarandaSemRua`); e, quando a fachada da sala não comporta a janela de 1/6 com a porta, a entrada é pela varanda.
+
+Medido nas 8 casas, 2×: **iguais à F23** (0 / 0 / 0). Nos 6 lotes novos, 2×: **0 em vão, 0 rede × rede, 0 pilar** em
+todos; nenhum CONFLITO; a sala do 12 × 30 sem garagem cumpre 1/6. Sobra só o serviço sem fachada nos dois retângulos
+largos e rasos (L e L de fundo largo, 3 dormitórios) — vai com a F27.
+
+Testes novos (reprovam sem a correção): o desvio por dois pilares (`blueprintObstaculosEstruturais`); o horizontal por fora
+da casa e longe da caixa de gordura (`blueprintCondutoresPluviais`); na casa, o 12 × 30 sem garagem (a sala com 1/6, nada
+tubo × tubo), o L de 4 dormitórios (nenhum CONFLITO, nada por pilar nem rente) e os dois L de 3 dormitórios em
+retângulo (o esgoto sem pilar; o pluvial sem rente, sem o alimentador por baixo) (`blueprintCasaAutomatica`).

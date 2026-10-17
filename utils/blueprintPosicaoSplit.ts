@@ -25,7 +25,7 @@
  * recalculado (ele é derivado do modelo), então os ids batem.
  */
 import type { BlueprintModel, Command, ObjectId, Point, Space, Wall } from './blueprintKernel';
-import { TIPOS_DE_EVAPORADORA, applyBatch, contornoDoComponente } from './blueprintKernel';
+import { TIPOS_DE_EVAPORADORA, applyBatch, contornoDoComponente, pegadaEmPlanta } from './blueprintKernel';
 import { pointInPolygon, signedArea, interiorPoint } from './blueprintKernel/geom';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { ladosDePiso, trechosUtilizaveis, type LadoDoAmbiente } from './blueprintDistribuicao';
@@ -174,6 +174,74 @@ function ocupadosPorComponentes(model: BlueprintModel, lado: LadoDoAmbiente, lev
 }
 
 /**
+ * F24 da casa automática (17/10/2026): o PILAR que sobressai da face para dentro do cômodo (19 cm numa parede de 15) —
+ * a caixa da evaporadora encostada entrava 2 cm nele. O faceado dentro da parede não ocupa. Vale com ou sem o desvio
+ * dos componentes.
+ */
+function ocupadosPorPilares(model: BlueprintModel, lado: LadoDoAmbiente, levelId: ObjectId): { de: number; ate: number }[] {
+  const L = comprimento(lado.a, lado.b);
+  if (L === 0) return [];
+  const ux = (lado.b.x - lado.a.x) / L;
+  const uy = (lado.b.y - lado.a.y) / L;
+  const saida: { de: number; ate: number }[] = [];
+  const w = lado.wallId ? model.walls.find((x) => x.id === lado.wallId) : null;
+  const Lw = w ? Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) : 0;
+  if (w && Lw > 0) {
+    const assinada = (p: { x: number; y: number }) => ((p.x - w.a.x) * (w.b.y - w.a.y) - (p.y - w.a.y) * (w.b.x - w.a.x)) / Lw;
+    const lado0 = Math.sign(assinada(lado.a)) || 1;
+    for (const st of model.structures ?? []) {
+      if (st.levelId !== levelId || st.kind !== 'PILAR') continue;
+      const pts = pegadaEmPlanta(st);
+      if (!pts.some((p) => assinada(p) * lado0 > w.thicknessMm / 2 + 1)) continue;
+      // E é desta parede: o centro dele no corpo dela.
+      const c = { x: pts.reduce((t, p) => t + p.x, 0) / pts.length, y: pts.reduce((t, p) => t + p.y, 0) / pts.length };
+      if (Math.abs(assinada(c)) > w.thicknessMm / 2) continue;
+      const ao = pts.map((p) => (p.x - lado.a.x) * ux + (p.y - lado.a.y) * uy);
+      const de = Math.min(...ao);
+      const ate = Math.max(...ao);
+      if (ate < 0 || de > L) continue;
+      saida.push({ de: Math.max(0, de - FOLGA_DA_EVAPORADORA_MM), ate: Math.min(L, ate + FOLGA_DA_EVAPORADORA_MM) });
+    }
+  }
+  return saida;
+}
+
+/**
+ * F24 da casa automática (17/10/2026): onde um tubo de OUTRA rede atravessa a parede acima da evaporadora (rumo ao forro)
+ * — a linha frigorígena sobe dali até a faixa dela e cruzava a água quente que passava pela parede (12 × 30 sem
+ * garagem). O trecho em volta da travessia fica ocupado.
+ */
+function ocupadosPorTravessias(model: BlueprintModel, lado: LadoDoAmbiente, levelId: ObjectId, acimaDeMm: number): { de: number; ate: number }[] {
+  const L = comprimento(lado.a, lado.b);
+  const w = lado.wallId ? model.walls.find((x) => x.id === lado.wallId) : null;
+  if (L === 0 || !w) return [];
+  const ux = (lado.b.x - lado.a.x) / L;
+  const uy = (lado.b.y - lado.a.y) / L;
+  const saida: { de: number; ate: number }[] = [];
+  for (const t of model.trechos ?? []) {
+    if (t.levelId !== levelId || t.disciplina === 'FRIGORIGENA' || t.disciplina === 'DRENO_AC') continue;
+    if (Math.max(t.cotaAMm, t.cotaBMm) < acimaDeMm || (t.a.x === t.b.x && t.a.y === t.b.y)) continue;
+    // O cruzamento do tubo com o eixo da parede (em planta).
+    const d1 = { x: t.b.x - t.a.x, y: t.b.y - t.a.y };
+    const d2 = { x: w.b.x - w.a.x, y: w.b.y - w.a.y };
+    const den = d1.x * d2.y - d1.y * d2.x;
+    if (Math.abs(den) < 1e-9) continue;
+    const k = ((w.a.x - t.a.x) * d2.y - (w.a.y - t.a.y) * d2.x) / den;
+    const j = ((w.a.x - t.a.x) * d1.y - (w.a.y - t.a.y) * d1.x) / den;
+    if (k < 0 || k > 1 || j < 0 || j > 1) continue;
+    const p = { x: t.a.x + d1.x * k, y: t.a.y + d1.y * k };
+    const ao = (p.x - lado.a.x) * ux + (p.y - lado.a.y) * uy;
+    const meio = (t.bitolaMm ?? 25) / 2 + AFASTAMENTO_DA_TRAVESSIA_MM;
+    if (ao + meio < 0 || ao - meio > L) continue;
+    saida.push({ de: Math.max(0, ao - meio - FOLGA_DA_EVAPORADORA_MM), ate: Math.min(L, ao + meio + FOLGA_DA_EVAPORADORA_MM) });
+  }
+  return saida;
+}
+
+/** F24: entre a travessia de outra rede pela parede e a subida da linha da evaporadora, além dos raios, mm. */
+const AFASTAMENTO_DA_TRAVESSIA_MM = 60;
+
+/**
  * F17 da casa automática (16/10/2026): os PONTOS na parede abaixo do topo da evaporadora — tomada, interruptor, água.
  * A descida deles vem do forro e atravessaria o aparelho e o dreno (na térrea a 30°, o eletroduto de uma tomada sob a
  * evaporadora cruzava o dreno): ocupam o trecho como um componente encostado, com a folga da evaporadora.
@@ -236,8 +304,10 @@ export function lugarDaEvaporadora(
   larguraMm: number,
   profundidadeMm: number,
   ehExterna: (wallId: string) => boolean,
+  /** F24: a cota da evaporadora — as travessias de outras redes pela parede acima dela ocupam o trecho. Ausente = não confere. */
+  cotaMm: number | null = null,
 ): LugarDaEvaporadora | null {
-  return lugarDaEvaporadoraNaParede(model, space, larguraMm, profundidadeMm, ehExterna, true) ?? lugarDaEvaporadoraNaParede(model, space, larguraMm, profundidadeMm, ehExterna, false);
+  return lugarDaEvaporadoraNaParede(model, space, larguraMm, profundidadeMm, ehExterna, true, cotaMm) ?? lugarDaEvaporadoraNaParede(model, space, larguraMm, profundidadeMm, ehExterna, false, cotaMm);
 }
 
 function lugarDaEvaporadoraNaParede(
@@ -247,6 +317,7 @@ function lugarDaEvaporadoraNaParede(
   profundidadeMm: number,
   ehExterna: (wallId: string) => boolean,
   desviarDosComponentes: boolean,
+  cotaMm: number | null = null,
 ): LugarDaEvaporadora | null {
   const walls = model.walls.filter((w) => w.levelId === space.levelId);
   const idsDasParedes = new Set(walls.map((w) => w.id));
@@ -264,7 +335,7 @@ function lugarDaEvaporadoraNaParede(
       if (soma(trechosUtilizaveis(lado, walls, portas, 0)) < soma(trechosUtilizaveis(lado, walls, [], 0)) - 1) continue;
     }
     const utilizaveis = trechosUtilizaveis(lado, walls, openings, FOLGA_DA_EVAPORADORA_MM);
-    const trechos = (desviarDosComponentes ? semOcupados(utilizaveis, ocupadosPorComponentes(model, lado, space.levelId)) : utilizaveis).filter((t) => t.ate - t.de >= larguraMm);
+    const trechos = semOcupados(desviarDosComponentes ? semOcupados(utilizaveis, ocupadosPorComponentes(model, lado, space.levelId)) : utilizaveis, [...ocupadosPorPilares(model, lado, space.levelId), ...(cotaMm == null ? [] : ocupadosPorTravessias(model, lado, space.levelId, cotaMm))]).filter((t) => t.ate - t.de >= larguraMm);
     if (trechos.length === 0) continue;
     const melhor = trechos.reduce((m, t) => (t.ate - t.de > m.ate - m.de ? t : m));
     const L = comprimento(lado.a, lado.b);
@@ -311,7 +382,7 @@ function lugarNaParedeExterna(
     const L = comprimento(lado.a, lado.b);
     if (L < larguraMm) continue;
     // O útil (cantos e componentes), o CHEIO (fora das janelas, com folga) e as janelas com a cabeça de cada uma.
-    const util = semOcupados(trechosUtilizaveis(lado, walls, [], FOLGA_DA_EVAPORADORA_MM), [...ocupadosPorComponentes(model, lado, space.levelId, cotaMm - alturaMm / 2), ...ocupadosPorPontos(model, lado, space.levelId, cotaMm + alturaMm / 2)]);
+    const util = semOcupados(trechosUtilizaveis(lado, walls, [], FOLGA_DA_EVAPORADORA_MM), [...ocupadosPorComponentes(model, lado, space.levelId, cotaMm - alturaMm / 2), ...ocupadosPorPontos(model, lado, space.levelId, cotaMm + alturaMm / 2), ...ocupadosPorPilares(model, lado, space.levelId), ...ocupadosPorTravessias(model, lado, space.levelId, cotaMm)]);
     const cheio = trechosUtilizaveis(lado, walls, doLado, FOLGA_DA_SAIDA_AO_VAO_MM).filter((t) => t.ate - t.de >= FAIXA_DA_SAIDA_MM);
     const janelas = doLado.map((o) => {
       // O intervalo do vão ao longo do lado: o buraco entre os trechos livres sem ele (folga zero).
@@ -554,7 +625,7 @@ export function planejarEquipamentosSplit(model: BlueprintModel, selecao: Seleca
     const alturaMm = modelo.alturaMm ?? fichaEvap.medidasMm?.alturaMm ?? 300;
     const lugar =
       (opcoes.naParedeExterna ? lugarNaParedeExterna(model, space, larguraMm, profundidadeMm, alturaMm, modelo.cotaMm, opcoes.naParedeExterna.topoMaximoMm, ehExterna) : null) ??
-      lugarDaEvaporadora(model, space, larguraMm, profundidadeMm, ehExterna);
+      lugarDaEvaporadora(model, space, larguraMm, profundidadeMm, ehExterna, modelo.cotaMm);
     if (!lugar) {
       semLugar.push({ nome: amb.nome, motivo: `nenhuma parede sem porta com ${(larguraMm / 1000).toLocaleString('pt-BR')} m livres fora dos vãos — posicione a evaporadora à mão` });
       continue;

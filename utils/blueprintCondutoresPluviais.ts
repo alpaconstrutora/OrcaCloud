@@ -37,6 +37,7 @@
  */
 import type { BlueprintModel, Command, ObjectId, Terminal, Trecho } from './blueprintKernel';
 import { applyBatch, extensaoVerticalDaCaixa } from './blueprintKernel';
+import { desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { cotaDoTerrenoEm, pontoNaFrente, type LeitorDoTerreno, type OrigemDaFrente } from './blueprintAncorasHidro';
 import { fazerChave, type No } from './blueprintGrafoDeRede';
@@ -179,6 +180,40 @@ export interface PlanoDeCondutores {
 
 export const MOTIVO_SEM_FRENTE_PARA_A_SAIDA_PLUVIAL = 'Marque a divisa da frente do lote (a que dá para a rua): a saída pluvial vai nela.';
 
+/** F24: os obstáculos do horizontal enterrado — os cômodos do pavimento crescidos até o afastamento além da face, e os pilares. */
+function obstaculosDoCondutor(model: BlueprintModel, levelId: ObjectId, hip: HipotesesPluviais): { x: number; y: number }[][] {
+  const meia = Math.max(0, ...model.walls.filter((w) => w.levelId === levelId).map((w) => w.thicknessMm / 2));
+  const g = meia + (hip.afastamentoDoCondutorDaCasaMm ?? 300);
+  const comodos = model.spaces
+    .filter((s) => s.levelId === levelId && s.ring.length >= 3)
+    .map((s) => {
+      const xs = s.ring.map((p) => p.x);
+      const ys = s.ring.map((p) => p.y);
+      const [x0, x1, y0, y1] = [Math.min(...xs) - g, Math.max(...xs) + g, Math.min(...ys) - g, Math.max(...ys) + g];
+      return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+    });
+  // As caixas enterradas e as verticais enterradas das OUTRAS redes (a caixa de gordura na linha do beiral, a descida
+  // do alimentador na frente): um quadrado com o afastamento.
+  const quadrado = (p: { x: number; y: number }, meio: number) => [{ x: p.x - meio, y: p.y - meio }, { x: p.x + meio, y: p.y - meio }, { x: p.x + meio, y: p.y + meio }, { x: p.x - meio, y: p.y + meio }];
+  const afast = hip.afastamentoDoCondutorDaCasaMm ?? 300;
+  const caixas = (model.terminais ?? []).filter((t) => t.levelId === levelId && t.disciplina !== 'PLUVIAL' && t.cotaMm < 0).map((t) => quadrado(t.at, MEIA_CAIXA_ENTERRADA_MM + afast));
+  const verticais = (model.trechos ?? [])
+    .filter((t) => t.levelId === levelId && t.disciplina !== 'PLUVIAL' && t.a.x === t.b.x && t.a.y === t.b.y && Math.min(t.cotaAMm, t.cotaBMm) < 0)
+    .map((t) => quadrado(t.a, t.bitolaMm / 2 + afast));
+  return [...comodos, ...pegadasDePilares(model, levelId), ...caixas, ...verticais];
+}
+
+/** F24: a meia largura da caixa enterrada de outra rede (gordura, inspeção) que o horizontal contorna, mm. */
+const MEIA_CAIXA_ENTERRADA_MM = 300;
+/** F24: a saída pluvial PROPOSTA longe de onde outra rede já desce ou sai na frente (o alimentador, a ligação), mm. */
+const SAIDA_LONGE_DAS_OUTRAS_REDES_MM = 800;
+
+/** F24: o comprimento de `a` a `b` contornando os obstáculos (o caminho que o tubo faz). */
+function comprimentoPorFora(a: { x: number; y: number }, b: { x: number; y: number }, obstaculos: { x: number; y: number }[][]): number {
+  const pts = [a, ...(desvioDoPilar(a, b, obstaculos) ?? []), b];
+  return pts.slice(1).reduce((s, p, k) => s + Math.hypot(p.x - pts[k].x, p.y - pts[k].y), 0);
+}
+
 /** Sem caixa de areia nem saída: a saída PROPOSTA na frente, e os condutores traçados num rascunho que já a tem. */
 function comSaidaProposta(model: BlueprintModel, hip: HipotesesPluviais, fontes: Terminal[], terreno: LeitorDoTerreno | null): PlanoDeCondutores {
   const vazio = (motivo: string): PlanoDeCondutores => ({ motivo, fontes: 0, verticais: 0, horizontais: 0, apagados: 0, avisos: [], comandos: [] });
@@ -188,11 +223,33 @@ function comSaidaProposta(model: BlueprintModel, hip: HipotesesPluviais, fontes:
     return p ? [{ p, d: Math.hypot(p.ponto.x - f.at.x, p.ponto.y - f.at.y) }] : [];
   });
   if (candidatos.length === 0) return vazio(MOTIVO_SEM_FRENTE_PARA_A_SAIDA_PLUVIAL);
-  const frente = candidatos.sort((a, b) => a.d - b.d)[0].p;
+  let frente = candidatos.sort((a, b) => a.d - b.d)[0].p;
+  // F24: no mesmo ponto da frente em que o alimentador desce (o canto da frente estreita do lote), a saída escorrega
+  // ao longo da divisa até ficar a `SAIDA_LONGE_DAS_OUTRAS_REDES_MM` das outras redes.
+  const ocupados = [
+    ...(model.terminais ?? []).filter((t) => t.disciplina !== 'PLUVIAL').map((t) => t.at),
+    ...(model.trechos ?? []).filter((t) => t.disciplina !== 'PLUVIAL' && t.a.x === t.b.x && t.a.y === t.b.y && Math.min(t.cotaAMm, t.cotaBMm) < 0).map((t) => t.a),
+  ];
+  const longe = (p: { x: number; y: number }) => ocupados.every((o) => Math.hypot(o.x - p.x, o.y - p.y) >= SAIDA_LONGE_DAS_OUTRAS_REDES_MM);
+  if (!longe(frente.ponto)) {
+    const nx = frente.ponto.x - frente.naDivisa.x;
+    const ny = frente.ponto.y - frente.naDivisa.y;
+    const nl = Math.hypot(nx, ny) || 1;
+    const u = { x: -ny / nl, y: nx / nl };
+    achou: for (let k = 1; k <= 60; k++)
+      for (const sentido of [1, -1]) {
+        const q = { x: Math.round(frente.ponto.x + u.x * sentido * k * 250), y: Math.round(frente.ponto.y + u.y * sentido * k * 250) };
+        const pn = pontoNaFrente(model, q);
+        if (pn && Math.hypot(pn.ponto.x - q.x, pn.ponto.y - q.y) < 2 && longe(pn.ponto)) {
+          frente = pn;
+          break achou;
+        }
+      }
+  }
   const terreo = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0];
   // A cota: o condutor MAIS LONGO chega com a declividade da premissa (todos os outros, com mais).
   const i = Math.max(DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT, hip.declividadeDoCondutorPct);
-  const L = Math.max(...fontes.map((f) => Math.hypot(frente.ponto.x - f.at.x, frente.ponto.y - f.at.y)));
+  const L = Math.max(...fontes.map((f) => comprimentoPorFora(f.at, frente.ponto, obstaculosDoCondutor(model, terreo.id, hip))));
   const cotaMm = Math.min(
     cotaDoTerrenoEm(frente.ponto, terreno) - terreo.elevationMm + (FICHA_DO_PONTO_HIDRAULICO.LIGACAO_PLUVIAL.cotaMm.PLUVIAL ?? -300),
     -Math.abs(hip.profundidadeDoCondutorMm) - Math.ceil((L * i) / 100),
@@ -240,6 +297,25 @@ export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais
 
   const add = (levelId: ObjectId, a: { x: number; y: number }, cotaA: number, b: { x: number; y: number }, cotaB: number, dn: number, rotulo: string) =>
     comandos.push({ type: 'AddTrecho', levelId, disciplina: 'PLUVIAL', a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y }, cotaAMm: cotaA, cotaBMm: cotaB, bitolaMm: dn, rotulo, sugerido: true });
+  // F24 da casa automática (17/10/2026): o horizontal enterrado contorna a casa POR FORA (os cômodos crescidos até o
+  // afastamento além da face, e os pilares) — em reta, do pé da descida dos fundos à saída da frente, ele cruzava a casa
+  // em L inteira por baixo: pilar, esgoto e alimentador no caminho. A queda se reparte pelo comprimento do contorno.
+  const obstaculosDe = (levelId: ObjectId) => obstaculosDoCondutor(model, levelId, hip);
+  const horizontal = (levelId: ObjectId, a: { x: number; y: number }, cotaA: number, b: { x: number; y: number }, cotaB: number, dn: number) => {
+    const desvio = desvioDoPilar(a, b, obstaculosDe(levelId)) ?? [];
+    const pts = [a, ...desvio.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), b].filter((p, k, arr) => k === 0 || p.x !== arr[k - 1].x || p.y !== arr[k - 1].y);
+    const comp = pts.slice(1).map((p, k) => Math.hypot(p.x - pts[k].x, p.y - pts[k].y));
+    const total = comp.reduce((s, x) => s + x, 0) || 1;
+    let feito = 0;
+    let cota = cotaA;
+    for (let k = 1; k < pts.length; k++) {
+      feito += comp[k - 1];
+      const prox = k === pts.length - 1 ? cotaB : Math.round(cotaA + ((cotaB - cotaA) * feito) / total);
+      add(levelId, pts[k - 1], cota, pts[k], prox, dn, ROTULO_DO_CONDUTOR_HORIZONTAL);
+      cota = prox;
+    }
+    return total;
+  };
 
   const porBocal = vazaoDosBocais(model, hip);
   const avisos: string[] = [];
@@ -271,19 +347,20 @@ export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais
     // ── O horizontal: do pé à caixa de areia mais perto (sem caixa, à saída mais perto) ──
     const alvos = caixasDeAreia.length > 0 ? caixasDeAreia : saidas;
     const alvo = [...alvos].sort((a, b) => Math.hypot(a.at.x - f.at.x, a.at.y - f.at.y) - Math.hypot(b.at.x - f.at.x, b.at.y - f.at.y) || a.id.localeCompare(b.id))[0];
-    const L = Math.hypot(alvo.at.x - f.at.x, alvo.at.y - f.at.y);
+    // O comprimento PELO CONTORNO (o caminho que o tubo faz) — a chegada e a declividade contam com ele.
+    const L = comprimentoPorFora(f.at, alvo.at, obstaculosDe(destinoNivel));
     const dnH = dnDoHorizontal(q, n, i, dnV);
     if (alvo.tipoHidraulico === 'CAIXA_AREIA') {
       const chegada = enterrado - Math.ceil((L * i) / 100);
       const ext = extensaoVerticalDaCaixa(alvo)!;
       if (chegada < ext.fundoMm) avisos.push(`o condutor chega a ${m1(chegada)} m, abaixo do fundo da caixa de areia (${m1(ext.fundoMm)} m) — aprofunde a caixa`);
-      if (L > 0) add(destinoNivel, f.at, enterrado, alvo.at, Math.max(chegada, ext.fundoMm), dnH, ROTULO_DO_CONDUTOR_HORIZONTAL);
+      if (L > 0) horizontal(destinoNivel, f.at, enterrado, alvo.at, Math.max(chegada, ext.fundoMm), dnH);
       const atual = naCaixa.get(alvo.id) ?? { q: 0, dn: 0 };
       naCaixa.set(alvo.id, { q: atual.q + q, dn: Math.max(atual.dn, dnH) });
     } else {
       const decl = L > 0 ? ((enterrado - alvo.cotaMm) / L) * 100 : 0;
       if (decl + 1e-9 < DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT) avisos.push(`a saída pluvial está alta demais para o condutor chegar por gravidade (${decl.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} %)`);
-      if (L > 0) add(destinoNivel, f.at, enterrado, alvo.at, alvo.cotaMm, dnH, ROTULO_DO_CONDUTOR_HORIZONTAL);
+      if (L > 0) horizontal(destinoNivel, f.at, enterrado, alvo.at, alvo.cotaMm, dnH);
     }
     horizontais++;
     ligadas++;
@@ -299,7 +376,7 @@ export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais
       const fundo = extensaoVerticalDaCaixa(c)!.fundoMm;
       const decl = L > 0 ? ((fundo - s.cotaMm) / L) * 100 : 0;
       if (decl + 1e-9 < DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT) avisos.push(`a saída pluvial está alta demais para a caixa de areia chegar por gravidade (${decl.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} %)`);
-      if (L > 0) add(c.levelId, c.at, fundo, s.at, s.cotaMm, dnDoHorizontal(recebe.q, n, Math.max(decl, DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT), recebe.dn), ROTULO_DO_CONDUTOR_HORIZONTAL);
+      if (L > 0) horizontal(c.levelId, c.at, fundo, s.at, s.cotaMm, dnDoHorizontal(recebe.q, n, Math.max(decl, DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT), recebe.dn));
       horizontais++;
     }
   } else {

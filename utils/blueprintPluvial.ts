@@ -47,6 +47,11 @@ export interface HipotesesPluviais {
   declividadeDoCondutorPct: number;
   /** E6.3: a profundidade do condutor enterrado no pé do vertical, mm abaixo do piso. */
   profundidadeDoCondutorMm: number;
+  /**
+   * F24 da casa automática: o condutor horizontal enterrado contorna a casa POR FORA — a esta distância da face das
+   * paredes (e dos pilares), mm. Ausente = 300.
+   */
+  afastamentoDoCondutorDaCasaMm?: number;
 }
 
 export const HIPOTESES_PLUVIAIS_PADRAO: HipotesesPluviais = {
@@ -58,6 +63,7 @@ export const HIPOTESES_PLUVIAIS_PADRAO: HipotesesPluviais = {
   declividadeDaCalhaPct: 0.5,
   declividadeDoCondutorPct: 1,
   profundidadeDoCondutorMm: 300,
+  afastamentoDoCondutorDaCasaMm: 300,
 };
 
 /**

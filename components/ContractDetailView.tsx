@@ -235,6 +235,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [utilityBills, setUtilityBills] = React.useState<ContractUtilityBill[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [activeTab, setActiveTab] = React.useState<ContractDetailTab>('overview_resumo');
+    // Ponto de encaixe do "Salvar alterações" do formulário embutido do Resumo na
+    // barra de ações (§5.3) — pedido de 17/10/2026, ver ContractModal `barraDeAcoes`.
+    const [barraResumo, setBarraResumo] = React.useState<HTMLDivElement | null>(null);
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
     const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingId: string | null; initial: AvulsoItem | null }>({ open: false, editingId: null, initial: null });
     const [isMeasurementModalOpen, setIsMeasurementModalOpen] = React.useState(false);
@@ -1112,6 +1115,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const podeGerarObra = (contract as any)?.direction === 'OUTGOING' && !contract?.project_id
         && ['Assinado', 'Ativo'].includes(contract?.status ?? '');
     const temAcoesDaAba = activeTab === 'items' || activeTab === 'emissao' || activeTab === 'financeiro'
+        || activeTab === 'overview_resumo'
         || contractTemplates.length > 0 || podeGerarObra;
 
     const activities = React.useMemo(() => {
@@ -1249,6 +1253,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {temAcoesDaAba && (
             <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
+                    {/* Resumo: o "Salvar alterações" do formulário embutido entra aqui,
+                        primeiro da barra (à esquerda), por portal. */}
+                    {activeTab === 'overview_resumo' && <div ref={setBarraResumo} className="contents" />}
                     {/* Ações da planilha de itens — escopo da aba ativa (§5.3) */}
                     {activeTab === 'items' && (
                         <>
@@ -1467,6 +1474,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     isOpen
                                     variant="inline"
                                     sections={RESUMO_FORM_SECTIONS}
+                                    cardPorSecao
+                                    barraDeAcoes={barraResumo}
                                     initialData={contract}
                                     projectId={contract.project_id ?? ''}
                                     organizationId={contract.organization_id ?? orgIdProp}

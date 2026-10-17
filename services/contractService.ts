@@ -9,6 +9,7 @@ import { generateUnitSaleContractNumber } from './unitSaleContractNumberingServi
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 import { BudgetEntry } from '../types/budget';
 import { resolverCategoriaDoContrato } from './financialCategoryResolver';
+import { semParcelasBaixadas } from '../utils/contratoParcelaVariavel';
 import {
     Contract,
     ContractItem,
@@ -812,8 +813,22 @@ async function syncRecurringToFinance(contract: Contract) {
         } else if (contract.organization_id) {
             const party = await resolveContractParty(contract, supplierName);
             const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';
+            // Parcela já BAIXADA fica fora do upsert (utils/contratoParcelaVariavel.ts):
+            // até 17/10/2026 ele regravava amount/status/business_status da série toda, e
+            // "Lançar Financeiro" de novo devolvia parcela paga e conciliada para PENDING.
+            const { data: existentes } = await supabase
+                .from('internal_transactions')
+                .select('reference_id, status, business_status')
+                .eq('organization_id', contract.organization_id)
+                .eq('source_system', 'CONTRACT_RECURRING')
+                .like('reference_id', `${contract.id}-p%`);
+            const lote = semParcelasBaixadas(
+                transactions.map(tx => ({ ...tx, reference_id: `${contract.id}-p${tx.date.split('T')[0]}` })),
+                existentes ?? [],
+            );
+            if (lote.length === 0) return;
             // UPSERT — mesma razão de generateRecurringInstallmentsForPeriod (23505).
-            await supabase.from('internal_transactions').upsert(transactions.map(tx => ({
+            await supabase.from('internal_transactions').upsert(lote.map(tx => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_RECURRING',
                 contract_id: contract.id,
@@ -824,7 +839,7 @@ async function syncRecurringToFinance(contract: Contract) {
                 // negociação (tx-{dealId}-custom-pN). Os filtros usam
                 // `like('{contractId}%')`, então as linhas legadas (reference_id =
                 // id puro) continuam sendo encontradas.
-                reference_id: `${contract.id}-p${tx.date.split('T')[0]}`,
+                reference_id: tx.reference_id,
                 project_id: contract.project_id ?? null,
                 transaction_date: tx.date.split('T')[0],
                 // Vencimento da parcela — Contas a Receber exibe due_date e a view
@@ -1733,7 +1748,7 @@ export const contractService = {
     getContractById: async (id: string): Promise<Contract | null> => {
         const { data, error } = await supabase
             .from('contracts')
-            .select('id, organization_id, project_id, budget_id, budget_snapshot, supplier_id, number, title, description, contract_type, nature, domain, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, empreendimento_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, billing_mode, warranty_claim_id, release_requirements, minuta_versions, retention_cap, retention_release_provisional, retention_release_definitive, retention_definitive_days, liability_cap, penalty_daily_rate, penalty_moratoria_cap, penalty_material_rate, cno, obra_registration, manager_name, inspector_name, start_order_issued_at, start_order_authorized_by, subcontracting_rule, fiscal_classification, created_at')
+            .select('id, organization_id, project_id, budget_id, budget_snapshot, supplier_id, number, title, description, contract_type, nature, domain, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, empreendimento_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, billing_mode, installment_value_mode, warranty_claim_id, release_requirements, minuta_versions, retention_cap, retention_release_provisional, retention_release_definitive, retention_definitive_days, liability_cap, penalty_daily_rate, penalty_moratoria_cap, penalty_material_rate, cno, obra_registration, manager_name, inspector_name, start_order_issued_at, start_order_authorized_by, subcontracting_rule, fiscal_classification, created_at')
             .eq('id', id)
             .maybeSingle();
 

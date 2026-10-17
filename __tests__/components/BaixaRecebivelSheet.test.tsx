@@ -11,6 +11,9 @@ import { vi, describe, it, expect } from 'vitest';
 
 // O Sheet usa useConfirm (guarda de saída com `dirty`).
 vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => vi.fn(async () => true) }));
+// Parcela de contrato com valor variável: o painel pergunta ao banco ao abrir.
+const variaveis = vi.hoisted(() => ({ ids: new Set<string>() }));
+vi.mock('../../services/parcelaVariavelService', () => ({ idsDeValorVariavel: vi.fn(async () => variaveis.ids) }));
 
 import BaixaRecebivelSheet, { type TituloDaBaixa } from '../../components/financeiro/BaixaRecebivelSheet';
 
@@ -39,5 +42,26 @@ describe('BaixaRecebivelSheet', () => {
         fireEvent.change(screen.getByLabelText(/Forma de pagamento/), { target: { value: 'TED' } });
         fireEvent.click(screen.getByRole('button', { name: 'Confirmar recebimento' }));
         await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ paymentType: 'TED', emitirRecibo: true })));
+    });
+
+    it('parcela de valor variável: mostra "Valor pago" e envia o valor quando muda', async () => {
+        variaveis.ids = new Set(['r1']);
+        const onConfirm = vi.fn(async () => {});
+        render(<BaixaRecebivelSheet titulos={titulo()} onClose={() => {}} onConfirm={onConfirm} />);
+        const campo = await screen.findByLabelText(/Valor pago/);
+        fireEvent.change(campo, { target: { value: '750,00' } });
+        fireEvent.change(screen.getByLabelText(/Forma de pagamento/), { target: { value: 'PIX' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Confirmar recebimento' }));
+        await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ valorPago: 750 })));
+        variaveis.ids = new Set();
+    });
+
+    it('parcela fixa: sem "Valor pago" e o valor não muda', async () => {
+        const onConfirm = vi.fn(async () => {});
+        render(<BaixaRecebivelSheet titulos={titulo()} onClose={() => {}} onConfirm={onConfirm} />);
+        fireEvent.change(screen.getByLabelText(/Forma de pagamento/), { target: { value: 'PIX' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Confirmar recebimento' }));
+        await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ valorPago: null })));
+        expect(screen.queryByLabelText(/Valor pago/)).toBeNull();
     });
 });

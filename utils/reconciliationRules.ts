@@ -509,6 +509,40 @@ export interface TituloParaPlano {
     id: string; transaction_date: string; due_date?: string; amount: number; direction: string;
     description?: string; entity_name?: string; party_name?: string;
     party_id?: string; payment_account_id?: string;
+    /** Parcela de contrato com valor VARIÁVEL (campo computado `valor_variavel`). */
+    valor_variavel?: boolean | null;
+}
+
+/**
+ * Campo computado `valor_variavel(internal_transactions)` (migration
+ * aplicar_20271018050000): parcela de contrato recorrente com valor por medição.
+ * Vai no `.select()` junto de COLUNA_VALOR_ESPERADO.
+ */
+export const COLUNA_VALOR_VARIAVEL = 'valor_variavel';
+
+/**
+ * Pontuação de uma parcela de valor VARIÁVEL contra um movimento do extrato.
+ *
+ * O valor previsto é estimativa (faxina por diária: R$ 600 num mês, R$ 750 no outro),
+ * então a diferença de valor não descarta o par — mas, sem o valor para confirmar, o
+ * FORNECEDOR tem de estar reconhecido no extrato, e o par nunca passa de sugestão
+ * (decisão do usuário em 17/10/2026: "só sugerir"). Valor exato segue a regra comum.
+ * Plano: docs/planos/2026-10-17-contrato-valor-fixo-ou-por-medicao.md.
+ */
+export function pontuarParcelaVariavel(
+    bTx: Parameters<typeof scoreCandidate>[0],
+    c: Parameters<typeof scoreCandidate>[1],
+    s: ReconciliationEngineSettings,
+    resolved?: ResolvedParty | null,
+): { score: number; reasons: string[] } {
+    const r = scoreCandidate(bTx, c, s, resolved);
+    if (Math.abs(bTx.amount - c.amount) < 0.01 || r.score === 0) return r;
+    const fornecedor = r.reasons.some(m => m.startsWith('Mesmo fornecedor') || m.startsWith('Fornecedor reconhecido'));
+    if (!fornecedor) return { score: 0, reasons: [...r.reasons, 'Parcela de valor variável sem o fornecedor reconhecido no extrato'] };
+    return {
+        score: Math.min(r.score + 20, s.auto_threshold - 1, 99),
+        reasons: [...r.reasons, 'Parcela de valor variável: ao aceitar, a parcela passa a valer o valor do extrato'],
+    };
 }
 
 /**
@@ -647,11 +681,20 @@ export function planMatching(
         const ranked = candidatesAll
             .filter(c => {
                 if (c.direction !== bTx.direction) return false;
-                if (c.amount < amtMin || c.amount > amtMax) return false;
+                // Parcela de valor variável: a faixa de valor não filtra — a pontuação
+                // (pontuarParcelaVariavel) exige o fornecedor e limita a sugestão. E o
+                // pagamento do ciclo costuma sair ANTES do vencimento (faxina: PIX em 03/07
+                // para a parcela de 10/07), então a janela à frente é o ciclo, não 5 dias.
+                if (!c.valor_variavel && (c.amount < amtMin || c.amount > amtMax)) return false;
                 const t = new Date(c.transaction_date).getTime();
-                return t >= minT && t <= maxT;
+                return t >= minT && t <= (c.valor_variavel ? bDate + 31 * DAY : maxT);
             })
-            .map(c => ({ c, ...scoreCandidate(bTx, c, settings, resolved) }))
+            .map(c => ({
+                c,
+                ...(c.valor_variavel
+                    ? pontuarParcelaVariavel(bTx, c, settings, resolved)
+                    : scoreCandidate(bTx, c, settings, resolved)),
+            }))
             .filter(r => r.score >= MIN_SUGGESTION)
             .sort((a, b) => b.score - a.score);
 

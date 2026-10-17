@@ -154,7 +154,7 @@ export const payableService = {
      */
     async darBaixa(
         id: string,
-        pagamento: { paymentDate: string; paymentType: PayablePaymentType | null },
+        pagamento: { paymentDate: string; paymentType: PayablePaymentType | null; valorPago?: number | null },
     ): Promise<void> {
         // Baixa manual não passa por cima da alçada pendente (item H.1 do plano 2026-10-16).
         await exigirAlcadaLiberada(id);
@@ -165,6 +165,9 @@ export const payableService = {
                 status: 'CONCILIATED',
                 payment_date: pagamento.paymentDate,
                 payment_type: pagamento.paymentType,
+                // Parcela de contrato VARIÁVEL: o valor pago passa a ser o valor da parcela
+                // (o painel só manda quando o título é variável e o valor mudou).
+                ...(pagamento.valorPago ? { amount: pagamento.valorPago } : {}),
                 updated_at: new Date().toISOString(),
             })
             .eq('id', id);

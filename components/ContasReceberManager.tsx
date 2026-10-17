@@ -1015,7 +1015,11 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         for (const [i, r] of alvos.entries()) {
             setBaixaProgresso(alvos.length > 1 ? `Baixando ${i + 1} de ${alvos.length}…` : null);
             try {
-                await receivableService.darBaixa(r.id, { paymentDate: dados.paymentDate, paymentType: dados.paymentType });
+                await receivableService.darBaixa(r.id, {
+                    paymentDate: dados.paymentDate, paymentType: dados.paymentType,
+                    // Só existe com 1 título de valor variável (o painel não mostra o campo em lote).
+                    valorPago: dados.valorPago ?? null,
+                });
                 okIds.push(r.id);
             } catch {
                 falhasBaixa.push(nomeDe(r));
@@ -1035,6 +1039,11 @@ export default function ContasReceberManager({ organizationId, organizations }: 
 
         setBaixaProgresso(null);
         if (okIds.length) aplicarStatusNaLista(okIds, 'RECEBIDO');
+        // §22: parcela variável passou a valer o que foi recebido (só existe com 1 título).
+        if (okIds.length === 1 && dados.valorPago) {
+            const valor = dados.valorPago;
+            setRows(prev => prev.map(r => (r.id === okIds[0] ? { ...r, amount: valor } : r)));
+        }
         setBaixando(null);
         const { texto, erro } = mensagemResultadoBaixa({
             baixados: okIds.length, falhasBaixa, emitirRecibo: dados.emitirRecibo,

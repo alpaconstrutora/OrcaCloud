@@ -12,6 +12,9 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { formatMoney as fmt, formatDateBR as fmtDate } from '../ui/Format';
 import { FORMAS_PAGAMENTO, hojeLocal, motivoBaixaBloqueada } from '../../utils/baixaRecebivel';
 import type { Receivable, ReceivablePaymentType } from '../../types/financial';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
+import { idsDeValorVariavel } from '../../services/parcelaVariavelService';
+import { valorDaBaixa } from '../../utils/contratoParcelaVariavel';
 
 /** O que o painel mostra de cada título — neutro entre Receber e Pagar. */
 export interface TituloDaBaixa {
@@ -59,6 +62,9 @@ export interface DadosDaBaixa {
     paymentDate: string;
     paymentType: ReceivablePaymentType | null;
     emitirRecibo: boolean;
+    /** Parcela de contrato com valor VARIÁVEL (1 título): o valor pago, quando difere do
+     *  previsto. `null` = o valor do título não muda. */
+    valorPago?: number | null;
 }
 
 interface Props {
@@ -97,6 +103,10 @@ export default function BaixaRecebivelSheet({
     const [forma, setForma] = useState<ReceivablePaymentType | ''>('');
     const [emitirRecibo, setEmitirRecibo] = useState(emitirReciboPadrao);
     const [salvando, setSalvando] = useState(false);
+    // Parcela de contrato com valor VARIÁVEL (só com 1 título): o painel pergunta ao
+    // banco ao abrir — as listas vêm de views que não trazem o campo computado.
+    const [valorVariavel, setValorVariavel] = useState(false);
+    const [valorPago, setValorPago] = useState<string>('');
 
     // Cada abertura começa do padrão (hoje, sem forma, com recibo) — o painel
     // é reaproveitado entre títulos e não pode herdar a escolha anterior.
@@ -106,11 +116,20 @@ export default function BaixaRecebivelSheet({
         setForma('');
         setEmitirRecibo(emitirReciboPadrao);
         setSalvando(false);
+        setValorVariavel(false);
+        setValorPago(lista.length === 1 ? String(lista[0].valor) : '');
+        if (lista.length !== 1) return;
+        let vivo = true;
+        void idsDeValorVariavel([lista[0].id]).then(ids => { if (vivo) setValorVariavel(ids.has(lista[0].id)); });
+        return () => { vivo = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `lista` entra pela chave dos ids
     }, [aberto, chaveDosTitulos, emitirReciboPadrao]);
 
     const hoje = hojeLocal();
     const vaiEmitirRecibo = emitirRecibo && !reciboIndisponivel;
-    const motivo = motivoBaixaBloqueada(dataPagamento, hoje, { emitindo: vaiEmitirRecibo, forma });
+    const valorPagoNum = valorPago === '' ? null : Number(valorPago);
+    const motivo = motivoBaixaBloqueada(dataPagamento, hoje, { emitindo: vaiEmitirRecibo, forma })
+        ?? (valorVariavel && !(valorPagoNum && valorPagoNum > 0) ? 'Informe o valor pago desta parcela.' : null);
     const total = useMemo(() => lista.reduce((s, r) => s + (Number(r.valor) || 0), 0), [lista]);
 
     const fechar = () => { if (!salvando) onClose(); };
@@ -119,7 +138,12 @@ export default function BaixaRecebivelSheet({
         if (motivo || salvando) return;
         setSalvando(true);
         try {
-            await onConfirm({ paymentDate: dataPagamento, paymentType: forma || null, emitirRecibo: vaiEmitirRecibo });
+            await onConfirm({
+                paymentDate: dataPagamento, paymentType: forma || null, emitirRecibo: vaiEmitirRecibo,
+                valorPago: lista.length === 1
+                    ? valorDaBaixa({ valorVariavel, valor: lista[0].valor }, valorPagoNum)
+                    : null,
+            });
         } finally {
             setSalvando(false);
         }
@@ -185,6 +209,26 @@ export default function BaixaRecebivelSheet({
                         <h3 className="text-sm font-semibold text-gray-900">Pagamento</h3>
                     </div>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                        {valorVariavel && (
+                            <div className="col-span-2 space-y-1.5">
+                                <label htmlFor="baixa-valor" className="text-xs font-semibold text-slate-500">
+                                    Valor pago<span className="text-red-500 ml-1">*</span>
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
+                                    <MoneyCentsInput
+                                        id="baixa-valor"
+                                        value={valorPago}
+                                        disabled={salvando}
+                                        onChange={setValorPago}
+                                        className={`${inputCls} pl-9`}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                    Parcela de contrato com valor variável (por medição): o previsto era {fmt(lista[0]?.valor ?? 0)}; o valor pago passa a ser o valor da parcela.
+                                </p>
+                            </div>
+                        )}
                         <div className="space-y-1.5">
                             <label htmlFor="baixa-data" className="text-xs font-semibold text-slate-500">Data do pagamento</label>
                             <input

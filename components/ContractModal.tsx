@@ -37,6 +37,7 @@ import {
     type ParametrosCronograma,
 } from '../utils/contractInstallments';
 import { DEFAULT_PAYMENT_TYPES, labelForInstallmentType } from '../constants/paymentTypes';
+import { MODOS_VALOR_PARCELA, modoValorParcela } from '../utils/contratoParcelaVariavel';
 
 /**
  * Seções do formulário, uma chave por bloco. Quando ele é renderizado como aba
@@ -600,6 +601,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             } else {
                 payload.billing_cycle = undefined;
                 payload.due_day = undefined;
+                // Valor variável só existe em contrato recorrente (a opção nem aparece fora dele).
+                if (payload.installment_value_mode === 'VARIAVEL') payload.installment_value_mode = 'FIXO';
             }
             if (payload.payment_term_type === 'Parcelado' && !payload.is_recurring) {
                 payload.payment_schedule = installmentSchedule;
@@ -1277,7 +1280,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">
-                                        {formData.is_recurring ? 'Valor por Ciclo (Opcional)' : 'Valor Original (Base)'}
+                                        {!formData.is_recurring
+                                            ? 'Valor Original (Base)'
+                                            : modoValorParcela(formData) === 'VARIAVEL'
+                                                ? 'Valor Estimado por Ciclo (Opcional)'
+                                                : 'Valor por Ciclo (Opcional)'}
                                     </label>
                                     <div className="relative group">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
@@ -1656,6 +1663,32 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
                                                 />
                                             </div>
+                                        </div>
+                                        {/* Valor das parcelas (17/10/2026, docs/planos/2026-10-17-contrato-valor-fixo-ou-por-medicao.md):
+                                            serviço pago por medição — faxina por diária, por exemplo — tem parcela que
+                                            varia mês a mês; o valor do contrato vira estimativa. */}
+                                        <div className="col-span-full space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Valor das parcelas</label>
+                                            <div className="flex gap-2 flex-wrap">
+                                                {MODOS_VALOR_PARCELA.map(opt => (
+                                                    <button
+                                                        key={opt.value}
+                                                        type="button"
+                                                        aria-pressed={modoValorParcela(formData) === opt.value}
+                                                        onClick={() => setFormData(prev => ({ ...prev, installment_value_mode: opt.value }))}
+                                                        className={`h-9 px-3.5 rounded-[6px] text-[13px] font-medium border transition-all ${
+                                                            modoValorParcela(formData) === opt.value
+                                                                ? 'bg-blue-600 text-white border-blue-600'
+                                                                : 'bg-gray-50 text-gray-500 border-gray-100 hover:border-blue-300'
+                                                        }`}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="text-xs text-gray-500 ml-1">
+                                                {MODOS_VALOR_PARCELA.find(m => m.value === modoValorParcela(formData))?.ajuda}
+                                            </p>
                                         </div>
                                     </>
                                 )}

@@ -250,6 +250,10 @@ export interface InternalTransaction {
      *  retidos pelo cliente. É o que a conciliação confere com o extrato; o
      *  `amount` continua bruto. Ver utils/reconciliationRules › valorParaConciliar. */
     valor_esperado?: number | null;
+    /** Campo computado do banco (só quando pedido no select): parcela de contrato com
+     *  valor VARIÁVEL (por medição) — aceita "Ajustar valor" na conciliação.
+     *  Ver utils/contratoParcelaVariavel.ts. */
+    valor_variavel?: boolean | null;
     created_at?: string;
     updated_at?: string;
 }

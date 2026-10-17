@@ -9,6 +9,7 @@ const MOTOR_TIMEOUT_MS = 180_000;
 import * as regras from '../utils/reconciliationRules';
 import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
 import { separarGemeasDeOutroFormato, type LinhaDeExtrato } from '../utils/extratoDuplicidade';
+import { conciliarAjustandoValor } from '../utils/contratoParcelaVariavel';
 import { processService } from './processService';
 import {
     parseStatementFile,
@@ -1080,7 +1081,7 @@ export const bankReconciliationService = {
         // (campos opcionais tipados sem `null` para casar com scoreCandidate/resolveBankParty;
         //  em runtime o PostgREST devolve null e os `||` lá dentro já tratam)
         type BankRow = { id: string; transaction_date: string; amount: number; direction: string; description_raw: string; description_normalized?: string; counterparty_name?: string; bank_account_id?: string };
-        type PendingRow = { id: string; transaction_date: string; due_date?: string; amount: number; direction: string; description?: string; entity_name?: string; party_name?: string; party_id?: string; payment_account_id?: string; valor_esperado?: number | null };
+        type PendingRow = { id: string; transaction_date: string; due_date?: string; amount: number; direction: string; description?: string; entity_name?: string; party_name?: string; party_id?: string; payment_account_id?: string; valor_esperado?: number | null; valor_variavel?: boolean | null };
 
         const [{ data: bankTxs, error: bankErr }, partyIndex] = await Promise.all([
             fetchAllPages<BankRow>(() => supabase
@@ -1103,7 +1104,7 @@ export const bankReconciliationService = {
 
         const { data: pending, error: pendingErr } = await fetchAllPages<PendingRow>(() => supabase
             .from('internal_transactions')
-            .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id, ${regras.COLUNA_VALOR_ESPERADO}`)
+            .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id, ${regras.COLUNA_VALOR_ESPERADO}, ${regras.COLUNA_VALOR_VARIAVEL}`)
             .in('organization_id', orgsDosTitulos)
             .eq('status', 'PENDING')
             .or(regras.FILTRO_SEM_TRIBUTO_RETIDO)
@@ -1348,7 +1349,20 @@ export const bankReconciliationService = {
      */
     async confirmTransaction(bankTxId: string, internalTxId?: string, organizationId?: string, note?: string) {
         if (internalTxId) {
-            await this.createMatch(bankTxId, internalTxId, 'MANUAL', 100);
+            // Parcela de contrato com valor VARIÁVEL e valor diferente do extrato: concilia
+            // AJUSTANDO o valor (fn_reconcile_group ADJUST_VALUE — a parcela passa a valer o
+            // que saiu do banco; o anterior fica na auditoria). Fixa: vínculo de sempre.
+            const [{ data: titulo }, { data: movimento }] = await Promise.all([
+                supabase.from('internal_transactions').select('amount, valor_variavel').eq('id', internalTxId).maybeSingle(),
+                supabase.from('bank_transactions').select('amount').eq('id', bankTxId).maybeSingle(),
+            ]);
+            if (titulo && movimento && conciliarAjustandoValor(
+                titulo as { amount: number; valor_variavel?: boolean | null }, Number(movimento.amount),
+            )) {
+                await this.reconcileGroup([bankTxId], [internalTxId], 'ADJUST_VALUE');
+            } else {
+                await this.createMatch(bankTxId, internalTxId, 'MANUAL', 100);
+            }
             // Aprende a associação extrato→contraparte para reconhecer nos próximos matches.
             // Sem `await`: é melhor-esforço (já engole o próprio erro) e eram 3 leituras + 1
             // gravação segurando cada clique de "Conciliar".

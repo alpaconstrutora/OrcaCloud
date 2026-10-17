@@ -125,6 +125,9 @@ export interface Contract {
     approval_chain?: ContractApprovalStep[];
     approval_required_levels?: 1 | 2;
     billing_mode?: BillingMode;
+    /** Recorrente: FIXO (parcela = valor do contrato) ou VARIAVEL (valor do contrato é
+     *  estimativa; o real entra na baixa/conciliação). Ver utils/contratoParcelaVariavel.ts. */
+    installment_value_mode?: 'FIXO' | 'VARIAVEL';
     release_requirements?: ReleaseRequirements;
     minuta_versions?: MinutaVersion[];
     // Fase 5 — Retenção faseada (CP-08 / Cl.18)

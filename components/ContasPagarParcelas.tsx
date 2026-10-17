@@ -827,13 +827,19 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         for (const [i, row] of alvos.entries()) {
             setBaixaProgresso(alvos.length > 1 ? `Baixando ${i + 1} de ${alvos.length}…` : null);
             try {
-                await payableService.darBaixa(row.id, { paymentDate: dados.paymentDate, paymentType: dados.paymentType });
+                await payableService.darBaixa(row.id, {
+                    paymentDate: dados.paymentDate, paymentType: dados.paymentType,
+                    // Só existe com 1 título de valor variável (o painel não mostra o campo em lote).
+                    valorPago: alvos.length === 1 ? dados.valorPago : null,
+                });
                 baixados++;
                 onRowChanged({
                     ...row,
                     business_status: 'PAGO',
                     effective_status: 'PAGO',
                     status: 'CONCILIATED',
+                    // §22: parcela variável passou a valer o que foi pago.
+                    ...(alvos.length === 1 && dados.valorPago ? { amount: dados.valorPago } : {}),
                 });
             } catch {
                 falhasBaixa.push(nomeDoCredor(row));

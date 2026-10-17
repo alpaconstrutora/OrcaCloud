@@ -271,7 +271,7 @@ export const receivableService = {
      */
     async darBaixa(
         id: string,
-        pagamento: { paymentDate: string; paymentType: ReceivablePaymentType | null },
+        pagamento: { paymentDate: string; paymentType: ReceivablePaymentType | null; valorPago?: number | null },
     ): Promise<void> {
         const { error } = await supabase
             .from('internal_transactions')
@@ -280,6 +280,8 @@ export const receivableService = {
                 status: 'CONCILIATED',
                 payment_date: pagamento.paymentDate,
                 payment_type: pagamento.paymentType,
+                // Parcela de contrato VARIÁVEL: o valor recebido passa a ser o da parcela.
+                ...(pagamento.valorPago ? { amount: pagamento.valorPago } : {}),
                 updated_at: new Date().toISOString(),
             })
             .eq('id', id);

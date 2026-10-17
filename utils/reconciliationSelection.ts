@@ -114,7 +114,9 @@ export function resumoDaSelecao(
                     : nao('O extrato é maior que os lançamentos — não há saldo a deixar em aberto'),
                 ADJUST_VALUE: lancamentos.length !== 1
                     ? nao('Ajustar valor exige exatamente 1 lançamento selecionado')
-                    : ORIGENS_VALOR_SINCRONIZADO.includes(lancamentos[0].source_system)
+                    // Parcela de contrato com valor VARIÁVEL é a exceção (mesma regra da RPC):
+                    // o valor real é o do extrato, e o sync do contrato não toca parcela baixada.
+                    : ORIGENS_VALOR_SINCRONIZADO.includes(lancamentos[0].source_system) && !lancamentos[0].valor_variavel
                         ? nao('O valor deste lançamento vem da origem e seria regravado pela sincronização')
                         : ok,
             };

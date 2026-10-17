@@ -15,6 +15,7 @@ import { criarMotor } from "../../../services/processMotor.ts";
 import {
     comValorEsperado,
     COLUNA_VALOR_ESPERADO,
+    COLUNA_VALOR_VARIAVEL,
     FILTRO_SEM_TRIBUTO_RETIDO,
     filtroOrgsOuGlobal,
     findInternalTransferPairs,
@@ -275,7 +276,7 @@ serve(async (req: Request) => {
         // retenção casa pelo líquido que o banco credita. Tributo RETIDO fica fora.
         const titulos = (await todasAsPaginas<TituloParaPlano & { valor_esperado?: number | null }>(
             (de, ate) => servico.from('internal_transactions')
-                .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id, ${COLUNA_VALOR_ESPERADO}`)
+                .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id, ${COLUNA_VALOR_ESPERADO}, ${COLUNA_VALOR_VARIAVEL}`)
                 .in('organization_id', orgs)
                 .eq('status', 'PENDING')
                 .or(FILTRO_SEM_TRIBUTO_RETIDO)

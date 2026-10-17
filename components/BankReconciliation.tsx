@@ -46,7 +46,7 @@ import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import { RodapePaginacao, usePaginacaoEmMemoria } from './ui/RodapePaginacao';
 import AjustarDiferencaSheet from './reconciliation/AjustarDiferencaSheet';
 import { resumoDaSelecao, type ModoConciliacaoGrupo } from '../utils/reconciliationSelection';
-import { extratoForaDaConciliacao, valorParaConciliar, COLUNA_VALOR_ESPERADO, FILTRO_SEM_TRIBUTO_RETIDO } from '../utils/reconciliationRules';
+import { extratoForaDaConciliacao, valorParaConciliar, COLUNA_VALOR_ESPERADO, COLUNA_VALOR_VARIAVEL, FILTRO_SEM_TRIBUTO_RETIDO } from '../utils/reconciliationRules';
 import type { ReconcileGroupParams } from '../services/bankReconciliationService';
 import { reconciliationReprocessService, resumoDoReprocesso } from '../services/reconciliationReprocessService';
 import BankStatementImportDrawer, { type CompletudeDaConta } from './BankStatementImportDrawer';
@@ -1327,7 +1327,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 // cliente recolhe, nunca sai do extrato da empresa.
                 let q = supabase
                     .from('internal_transactions')
-                    .select(`*, ${COLUNA_VALOR_ESPERADO}`)
+                    .select(`*, ${COLUNA_VALOR_ESPERADO}, ${COLUNA_VALOR_VARIAVEL}`)
                     .or(FILTRO_SEM_TRIBUTO_RETIDO);
 
                 if (organizationId) {
@@ -1359,7 +1359,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     .select(
                         'id, bank_transaction_id, candidate_internal_transaction_id, confidence, reason, created_at, '
                         + 'bank_transaction:bank_transaction_id!inner(bank_account_id, status, transaction_date), '
-                        + 'candidate_internal_transaction:candidate_internal_transaction_id(id, description, amount, valor_esperado, direction, entity_name, party_name, party_type, due_date, transaction_date, status, category, project_id, cost_center_id)',
+                        + 'candidate_internal_transaction:candidate_internal_transaction_id(id, description, amount, valor_esperado, valor_variavel, direction, entity_name, party_name, party_type, due_date, transaction_date, status, category, project_id, cost_center_id)',
                     )
                     .eq('bank_transaction.bank_account_id', selectedAccountId)
                     .in('bank_transaction.status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']);

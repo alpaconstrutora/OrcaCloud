@@ -76,6 +76,11 @@ export interface ContextoDasAncoras {
   retanguloLocal: Retangulo;
   /** O anel do lote (a caixa de gordura e as vagas descobertas têm de cair dentro). */
   anelDoLote: Point[] | null;
+  /**
+   * F24: onde a implantação reservou as vagas descobertas (no quadro da frente) — o recuo de frente diante da casa ou a
+   * faixa ao lado dela. Ausente = o recuo de frente na largura da casa (como era).
+   */
+  vagasDescobertas?: { caixa: Retangulo; onde: 'RECUO_DE_FRENTE' | 'AO_LADO' } | null;
   reservatorio?: HipotesesDeReservatorio;
   /** F12c: `false` = a caixa d'água vai noutro pavimento (no sobrado, sobre o banheiro de cima). Ausente = aqui. */
   caixaDagua?: boolean;
@@ -366,6 +371,9 @@ export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras
         caixa = { x0: Math.min(...loc.map((p) => p.x)) + e, x1: Math.max(...loc.map((p) => p.x)) - e, y0: Math.min(...loc.map((p) => p.y)) + e, y1: Math.max(...loc.map((p) => p.y)) - e };
         onde = gar.name ?? 'garagem';
       } else pendencias.push('Vagas: a casa não tem garagem nomeada.');
+    } else if (cx.vagasDescobertas) {
+      caixa = cx.vagasDescobertas.caixa;
+      onde = cx.vagasDescobertas.onde === 'AO_LADO' ? 'a faixa ao lado da casa' : 'o recuo de frente';
     } else {
       // Recuo de frente: entre a frente do lote e a casa, na largura da casa.
       const loteLocal = cx.anelDoLote?.map(paraLocal) ?? null;

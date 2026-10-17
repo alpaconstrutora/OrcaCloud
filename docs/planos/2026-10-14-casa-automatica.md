@@ -1999,6 +1999,8 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 | Muro, portão e calçada? | **Muro + portão + calçada** — muro nas laterais e fundos (altura hipótese), muro/grade na frente com portão de pedestre e de garagem, calçada interna da entrada e da garagem (na permeabilidade) |
 | 3 pavimentos ou mais? | **Sim, até 3** |
 | (17/10) O programa não cabe na térrea (4 dorm. em lote de 10 m; acima da TO)? | **Opção "Automático"** (o padrão da tela): gera a térrea e, se ela não comporta, o sobrado — fica o de menos problemas; "Térrea" escolhida fica térrea, e a pendência diz que o sobrado resolve |
+| (17/10) Vaga descoberta com recuo de frente menor que a vaga (3 m × 5 m)? | **Automático**: recua a casa quando a profundidade deixa; senão a vaga vai numa faixa ao lado da casa (que estreita); sem nenhum dos dois, a pendência diz por quê |
+| (17/10) Quando a casa sai em L em vez de retângulo? | **Só quando o retângulo não comporta** (limitado pelos recuos, ou ambiente abaixo da medida mínima): gera também em L e fica a de menos problemas |
 
 ### Fases (cada uma: retrato → correção → as 8 casas medidas 2× → CI de rascunho → main)
 
@@ -2008,7 +2010,7 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F21 — gerador: molhados e escritório com lado externo; porta direta nas relações obrigatórias; nenhum "Ambiente N" (ver "Registro da F21"; o lado externo do serviço/escritório e a porta direta varanda × sala e cozinha × serviço passaram para a F22 — são do ARRANJO)
 - [x] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO; e (da F21) o arranjo em faixas: varanda de entrada junto da sala, serviço junto da cozinha, serviço e escritório com fachada; e (da F20) a suíte que não cabe o armário/a cama — **partes 1, 2 e 3 feitas** (ver "Registro da F22"); a frente do R1-B e o sobrado no lote estreito vão com a F27
 - [x] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo (ver "Registro da F23"; os 2 pilares do sobrado sobre janela do térreo vão com a F27 — as janelas dos dois pavimentos desalinhadas)
-- [ ] F24 — implantação não retangular (L) e vaga descoberta com recuo curto
+- [ ] F24 — implantação não retangular (L) e vaga descoberta com recuo curto — **parte 1 feita** (ver "Registro da F24"); falta a parte 2: as rotas enterradas da casa em L (esgoto e pluvial sob a casa, rentes e por pilar) e os lotes novos em retângulo
 - [ ] F25 — terreno inclinado: platô único
 - [ ] F26 — muro, portão e calçada
 - [ ] F27 — 3 pavimentos; e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
@@ -2293,3 +2295,57 @@ A correção é alinhar as janelas do superior com as do térreo.
 Testes novos (reprovam sem a correção): folhas e montante como hipótese (`blueprintGerador`); o deslize no sobrado e o
 alcance zero (`blueprintSobrado`); o 15 × 30 de 4 dormitórios (CONFERIR) e o R1-A sem "sem posição livre"
 (`blueprintCasaAutomatica`); as premissas da estrutura (`blueprintPremissasDaCasa`).
+
+### Registro da F24 (17/10/2026) — vaga descoberta e casa em L (parte 1)
+
+Retrato (sonda nova com o lote por anel: 12 × 30 sem garagem; lote em L com 20 m de frente nos primeiros 15 m e 10 m nos
+fundos; o mesmo com o fundo largo; trapézio de 12 m de frente abrindo para 20 m):
+
+- 12 × 30 com as vagas descobertas: **0 de 2 vagas** (o recuo de frente tem 2,90 m livres; a vaga pede 5 m) e o dreno do
+  ar em janela;
+- lote em L com 4 dormitórios R1-A: a casa presa no retângulo dos recuos — **184 m² de 222** pedidos, a TO deixava 270;
+- trapézio com 4 dormitórios: a casa estreita (9,75 m) sem usar o fundo largo — **3 dormitórios abaixo da largura
+  mínima**.
+
+Correções:
+
+- **Vagas descobertas** (`HipotesesDaImplantacao.vagaDescoberta`, padrão AUTOMATICO): cabem no recuo de frente → ficam
+  ali; senão RECUAR (a casa vai para trás até as fileiras caberem — vence quando não perde área) ou AO_LADO (uma faixa de
+  2,5 m da rua para dentro, no lado oposto ao encosto; a casa estreita e aprofunda); a de menos perda; a implantação diz
+  onde (`vagasDescobertas`) e as âncoras põem as vagas ali. A decisão sai em CONFERIR. (De quebra, o aviso de área
+  concorda no plural: "os recuos permitem".)
+- **Casa em L** (`HipotesesDaImplantacao.forma`, padrão AUTOMATICA): a térrea em retângulo e, se ele não comporta, a
+  mesma casa em L (`planejarTerrea`) — fica a de menos problemas (empate: a de mais área), dita em CONFERIR. O L: o
+  retângulo da frente mais raso e um anexo colado atrás, no que o envelope tem atrás; o de menor profundidade total que
+  alcança o teto, com ≥ 3 m de lado, ≥ 3 m em comum com o da frente e degrau de 0 ou ≥ 3 m (o de menos virava uma faixa
+  que o gerador tomava por anexo). O gerador recebe o contorno (`contornoLocal`).
+- **Telhado do anexo**: uma água caindo para fora do principal — fundos, frente ou, novo, para o LADO (`DIREITA`/
+  `ESQUERDA`); antes, o anexo ficava "sem cobertura — cubra à mão".
+- **Calha só no beiral fora da casa**: no L, o beiral de trás do principal passa por cima do anexo (ali as águas se
+  encontram); a calha atravessava o cômodo.
+- **Gerador, anexo**: o item vai com os de relação obrigatória (a suíte ia sozinha para o anexo e o banheiro dela ficava
+  do outro lado da casa); a garagem fica no principal.
+- **Climatização**: o dreno com BOMBA corre acima do topo da janela quando ela alcança a cota dele (2,12 m × 2,20 m) —
+  sobe na bomba, não na saída da evaporadora, onde a linha sobe (`folgaDoDrenoSobreAberturaMm`, 25 mm, no painel da
+  linha); a saída direta não desce dentro de OUTRA parede (o canto de dentro do L) e procura o outro sentido; os lados de
+  piso no vértice colinear em que a parede muda de espessura ficam cada um na sua face (a evaporadora girava 359° e
+  entrava 12 mm na parede).
+
+Medido nas 8 casas, 2×: **iguais à F23** (0 em vão, 0 rede × rede, 0 pilar). Nos lotes novos:
+
+| Lote | Antes | Depois |
+|---|---|---|
+| 12 × 30 sem garagem | 0 de 2 vagas; 2 trechos em janela | 2 vagas (a casa recua 2,10 m); 0 / 0 / 0 |
+| L, 4 dorm. R1-A | 184 m² de 222 | em L, 221,6 m²; esgoto em pilar (2), pluvial rente ao esgoto, 2 rede × rede, equipamento a 62 mm da estrutura |
+| trapézio, 4 dorm. R1-A | 3 dormitórios abaixo da mínima; serviço sem fachada | em L, nenhuma medida mínima violada, nenhum "sem solução"; pluvial rente ao esgoto, 1 rede × rede |
+
+**Falta (parte 2):** as rotas ENTERRADAS da casa em L e dos lotes novos — o esgoto e o pluvial em diagonais longas sob a
+casa, passando por pilar e rentes um ao outro na lateral; nos lotes em que o retângulo comporta (L e trapézio com 3
+dormitórios, o L de fundo largo), o serviço sem fachada e o esgoto por pilar, como já eram; a iluminação da sala do
+12 × 30 sem garagem (2,4 m² para 1/6).
+
+Testes novos (reprovam sem a correção): as vagas no recuo, ao lado e no lote raso; o L no lote em L e no trapézio
+(degrau); `anelDoL` (`blueprintCasaImplantacao`); o lado colinear (`blueprintDistribuicao`); a suíte com o banheiro no
+anexo e a garagem no principal (`blueprintGerador`); a uma água para o lado (`blueprintTelhadoAutomatico`); a casa sem
+garagem (2 vagas, nada em janela) e a casa em L (programa alcançado, anexo coberto, nenhum equipamento na parede,
+nenhuma calha dentro da casa) (`blueprintCasaAutomatica`).

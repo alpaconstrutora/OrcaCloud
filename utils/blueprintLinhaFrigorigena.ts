@@ -314,6 +314,33 @@ function caminhoEmPlanta(model: BlueprintModel, levelId: ObjectId, de: P2, para:
   return { pontos, pelaParede: true };
 }
 
+/**
+ * F24: o topo mais alto das aberturas por onde o caminho (em planta, pelo eixo das paredes) passa e que alcançam a cota
+ * `cota` (± `raio`) — `null` se nenhuma. Amostra a cada 50 mm; a abertura conta a ±30 mm do vão e da face da parede.
+ */
+function topoDasAberturasNoCaminho(model: BlueprintModel, levelId: ObjectId, pontos: readonly P2[], cota: number, raio: number): number | null {
+  let topo: number | null = null;
+  const paredes = new Map(model.walls.filter((w) => w.levelId === levelId).map((w) => [w.id, w]));
+  const aberturas = model.openings.filter((o) => paredes.has(o.wallId) && o.sillMm < cota + raio && o.sillMm + o.heightMm > cota - raio);
+  if (!aberturas.length) return null;
+  for (let i = 1; i < pontos.length; i++) {
+    const a = pontos[i - 1];
+    const b = pontos[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 50));
+    for (let k = 0; k <= n; k++) {
+      const p = { x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n };
+      for (const o of aberturas) {
+        const w = paredes.get(o.wallId)!;
+        const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+        const t = ((p.x - w.a.x) * (w.b.x - w.a.x) + (p.y - w.a.y) * (w.b.y - w.a.y)) / L;
+        const d = Math.abs(((p.x - w.a.x) * (w.b.y - w.a.y) - (p.y - w.a.y) * (w.b.x - w.a.x)) / L);
+        if (d <= w.thicknessMm / 2 + 30 && t >= o.offsetMm - 30 && t <= o.offsetMm + o.widthMm + 30) topo = Math.max(topo ?? -Infinity, o.sillMm + o.heightMm);
+      }
+    }
+  }
+  return topo;
+}
+
 /** O ponto de dreno (DRENO_AC) mais perto da evaporadora, no pavimento. */
 function pontoDeDrenoMaisPerto(model: BlueprintModel, evap: Terminal): Terminal | null {
   const pontos = (model.terminais ?? []).filter((t) => t.levelId === evap.levelId && t.disciplina === 'DRENO_AC' && t.tipoHidraulico === 'PONTO_DRENO' && !t.sugerida);
@@ -572,11 +599,30 @@ export function saidaPelaParede(model: BlueprintModel, e: Terminal, c: Terminal,
     }
     return longeDasPrumadas(p, q) && lances.every(([a, b]) => longeDasPrumadas(a, b) && longeDosPontos(a, b, cota, rp));
   };
+  // F24 da casa automática (17/10/2026): por fora, a travessia e a descida não caem no corpo de OUTRA parede — no canto
+  // de dentro da casa em L, o dreno descia dentro da parede do anexo.
+  const outras = model.walls.filter((x) => x.levelId === e.levelId && x.id !== w.id);
+  const foraLivre = (t: number, mais: number, r: number) => {
+    const q = fora(noEixo(t), mais);
+    return outras.every((x) => distSeg(q, x.a, x.b) > x.thicknessMm / 2 + r + 20);
+  };
   // Por fora, a descida não passa diante de janela — saindo acima dela, os dois correm até além do batente.
   const diante = (t: number) => vaos.some((o) => o.kind === 'window' && o.sillMm < e.cotaMm && t > o.offsetMm - 60 && t < o.offsetMm + o.widthMm + 60);
+  // F24: e onde a descida cabe por fora (não no corpo de outra parede — o canto de dentro da casa em L). Guardado por
+  // posição: o deslocamento varre a parede de 10 em 10 mm para cada candidato.
+  const jaVisto = new Map<number, boolean>();
+  const cabe = (x: number) => {
+    const k = Math.round(x);
+    let v = jaVisto.get(k);
+    if (v === undefined) {
+      v = !diante(x) && foraLivre(x, 0, rL) && foraLivre(x - DRENO_AO_LADO_DA_LINHA_MM, DRENO_AO_LADO_DA_LINHA_MM, rD) && foraLivre(x + DRENO_AO_LADO_DA_LINHA_MM, DRENO_AO_LADO_DA_LINHA_MM, rD);
+      jaVisto.set(k, v);
+    }
+    return v;
+  };
   const deslocamento = (tl: number): number | null => {
     if (!diante(tl)) return 0;
-    for (let k = 10; k <= L; k += 10) for (const sinal of tc >= tl ? [1, -1] : [-1, 1]) if (tl + sinal * k >= 0 && tl + sinal * k <= L && !diante(tl + sinal * k)) return sinal * k;
+    for (let k = 10; k <= L; k += 10) for (const sinal of tc >= tl ? [1, -1] : [-1, 1]) if (tl + sinal * k >= 0 && tl + sinal * k <= L && cabe(tl + sinal * k)) return sinal * k;
     return null;
   };
   // O ponto livre mais perto do meio da evaporadora; o dreno a `DRENO_AO_LADO_DA_LINHA_MM` da linha, do lado OPOSTO
@@ -605,6 +651,7 @@ export function saidaPelaParede(model: BlueprintModel, e: Terminal, c: Terminal,
       const d2 = aFrente && Math.abs(delta) < 2 * DRENO_AO_LADO_DA_LINHA_MM ? Math.sign(delta) * 2 * DRENO_AO_LADO_DA_LINHA_MM : delta;
       const cotaD = cotaDrenoEm(td, cotaL);
       if (!livre(td, cotaD, rD, rD, caminhoAte(td, false)) || diante(td + d2) || diante(tl + d2) || tl + d2 < 0 || tl + d2 > L || td + d2 < 0 || td + d2 > L) continue;
+      if (!foraLivre(tl, 0, rL) || !foraLivre(tl + d2, 0, rL) || !foraLivre(td, DRENO_AO_LADO_DA_LINHA_MM, rD) || !foraLivre(td + d2, DRENO_AO_LADO_DA_LINHA_MM, rD)) continue;
       escolha = { tl, td, delta: d2, d, cotaL, cotaD };
       break;
     }
@@ -875,13 +922,20 @@ export function planejarLinhasFrigorigenas(
     // passava pelo topo das portas (o escritório do R1-A); no forro, cruzava a linha nas esquinas dos anéis.
     const peloForro = !direta && !!noForro && !existentePonto && destino === 'PONTO_NOVO_NA_FACHADA';
     if (peloForro) {
-      const cotaDoDreno = cotaSaida - DRENO_ABAIXO_DA_LINHA_MM;
+      // F24: logo abaixo da evaporadora fica acima do topo das PORTAS, não das janelas (2,12 m × 2,20 m): o caminho que
+      // passa por uma janela que alcança essa cota corre acima dela — a bomba recalca, a cota pode subir.
+      const rD = hip.dnDrenoMm / 2;
+      const abaixo = cotaSaida - DRENO_ABAIXO_DA_LINHA_MM;
+      const topo = topoDasAberturasNoCaminho(base, levelId, pontosD, abaixo, rD);
+      const cotaDoDreno = topo == null ? abaixo : Math.round(topo + rD + (hip.folgaDoDrenoSobreAberturaMm ?? HIPOTESES_DA_LINHA_PADRAO.folgaDoDrenoSobreAberturaMm));
       const q0 = pontosD.length > 1 ? pontosD[1] : destinoAt;
       const dd = Math.hypot(q0.x - e.at.x, q0.y - e.at.y) || 1;
       const bombaAt = { x: Math.round(e.at.x + ((q0.x - e.at.x) / dd) * Math.min(300, dd)), y: Math.round(e.at.y + ((q0.y - e.at.y) / dd) * Math.min(300, dd)) };
-      pecas.push({ type: 'AddTerminal', levelId, disciplina: 'DRENO_AC', tipo: 'Bomba de dreno', tipoHidraulico: 'BOMBA_DRENO', at: bombaAt, cotaMm: cotaDoDreno, sugerida: true } as Command);
-      addDreno(e.at, cotaSaida, e.at, cotaDoDreno);
-      addDreno(e.at, cotaDoDreno, bombaAt, cotaDoDreno);
+      // A saída DESCE (a linha sobe no mesmo ponto); se o dreno corre acima da janela, quem sobe é a bomba.
+      pecas.push({ type: 'AddTerminal', levelId, disciplina: 'DRENO_AC', tipo: 'Bomba de dreno', tipoHidraulico: 'BOMBA_DRENO', at: bombaAt, cotaMm: abaixo, sugerida: true } as Command);
+      addDreno(e.at, cotaSaida, e.at, abaixo);
+      addDreno(e.at, abaixo, bombaAt, abaixo);
+      if (cotaDoDreno !== abaixo) addDreno(bombaAt, abaixo, bombaAt, cotaDoDreno);
       let atual: P2 = bombaAt;
       for (const q of pontosD.slice(1)) {
         if (mesmoP(q, atual)) continue;

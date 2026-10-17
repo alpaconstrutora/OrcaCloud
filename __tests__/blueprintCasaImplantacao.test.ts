@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ContextoDaMassa, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { implantacaoDaCasa, paraLocal, paraMundo, quadroDaFrente, resumoDaImplantacao } from '../utils/blueprintCasaAutomatica';
+import { anelDoL, implantacaoDaCasa, paraLocal, paraMundo, quadroDaFrente, resumoDaImplantacao } from '../utils/blueprintCasaAutomatica';
 import { PROGRAMA_CURTO_PADRAO, programaDaCasa } from '../utils/blueprintPrograma';
 import { gerar } from '../utils/blueprintGerador';
 import { loteParaRegras } from '../utils/blueprintRegras';
@@ -179,5 +179,130 @@ describe('gerador E6.2 com o lote e a zona (F2)', () => {
     const envelopeInteiro = [point(1500, 3000), point(10500, 3000), point(10500, 27000), point(1500, 27000)];
     const r = gerar({ ...entrada, envelope: envelopeInteiro, contextoDeRegras: { lote: loteDasRegras, zona: { ...zonaDasRegras, taxaOcupacaoMax: 30 } } }, 1, { automaticos: false });
     expect(r.regras.find((x) => x.regraId === 'sem-lote-to')?.estado).toBe('VIOLADA');
+  });
+});
+
+/**
+ * F24 (decisão do usuário, 17/10/2026: "Automático"): a vaga descoberta (2,5 × 5 m) não cabe no recuo de frente de 3 m —
+ * a casa recua quando a profundidade deixa sem perder área; senão a vaga vai numa faixa ao lado da casa.
+ */
+describe('implantacaoDaCasa — vagas descobertas no recuo curto (F24)', () => {
+  const retangular = (w: number, d: number): BlueprintModel => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = base.levels[0].id;
+    const dd = (a: Point, b: Point, papel: Papel): Command => ({ type: 'AddBoundary', levelId, a, b, kind: 'TERRENO', papel });
+    return applyBatch(base, [dd(point(0, 0), point(w, 0), 'FRENTE'), dd(point(w, 0), point(w, d), 'LATERAL_DIREITA'), dd(point(w, d), point(0, d), 'FUNDOS'), dd(point(0, d), point(0, 0), 'LATERAL_ESQUERDA')]).model;
+  };
+  const descobertas = { vagas: 2, garagemCoberta: false };
+  // o programa sem garagem (as vagas descobertas não pedem ambiente)
+  const semGaragem = programaDaCasa({ ...PROGRAMA_CURTO_PADRAO, garagemCoberta: false }).programa;
+  const implantarDescoberta = (m: BlueprintModel, hip = {}) => {
+    const r = implantacaoDaCasa(contexto(m), semGaragem, descobertas, hip);
+    if (!r.ok) throw new Error(r.motivo);
+    return r.implantacao;
+  };
+
+  it('lote 12 × 30: a casa recua até as vagas caberem na frente dela — sem perder área', () => {
+    const i = implantarDescoberta(retangular(12000, 30000));
+    expect(i.vagasDescobertas?.onde).toBe('RECUO_DE_FRENTE');
+    const c = i.vagasDescobertas!.caixa;
+    expect(c.y1 - c.y0).toBeGreaterThanOrEqual(5000);
+    expect(Math.floor((c.x1 - c.x0) / 2500) * Math.floor((c.y1 - c.y0) / 5000)).toBeGreaterThanOrEqual(2);
+    expect(i.retanguloLocal.y0).toBe(5100); // 5 m de vaga + meia parede, na malha
+    expect(i.limitante).toBe('PROGRAMA');
+    expect(i.avisos.some((a) => /^Vagas descobertas: .*a casa recua 2,10 m/.test(a))).toBe(true);
+    // na garagem coberta, nada muda
+    const r = implantacaoDaCasa(contexto(retangular(12000, 30000)), semGaragem, { vagas: 2, garagemCoberta: true });
+    expect(r.ok && r.implantacao.vagasDescobertas).toBeNull();
+    expect(r.ok && r.implantacao.retanguloLocal.y0).toBe(3000);
+  });
+
+  it('"ao lado" (hipótese): a faixa de 2,5 m na lateral direita, da rua para dentro, livre da casa — que aprofunda', () => {
+    const i = implantarDescoberta(retangular(12000, 30000), { vagaDescoberta: 'AO_LADO' });
+    expect(i.vagasDescobertas?.onde).toBe('AO_LADO');
+    const c = i.vagasDescobertas!.caixa;
+    expect(c).toEqual({ x0: 9500, x1: 12000, y0: 0, y1: 10000 });
+    expect(i.retanguloLocal.x1 + 100).toBeLessThanOrEqual(c.x0);
+    expect(i.retanguloLocal.y0).toBe(3000);
+    expect(i.medidas.projecaoM2).toBeGreaterThanOrEqual(i.medidas.projecaoPedidaM2 - 0.5);
+  });
+
+  it('lote raso 20 × 14 (Automático): recuar perderia área — as vagas vão ao lado e a casa mantém o programa', () => {
+    const i = implantarDescoberta(retangular(20000, 14000));
+    expect(i.vagasDescobertas?.onde).toBe('AO_LADO');
+    expect(i.limitante).toBe('PROGRAMA');
+    expect(i.retanguloLocal.x1 + 100).toBeLessThanOrEqual(i.vagasDescobertas!.caixa.x0);
+    // só recuar: perde, e diz
+    const recuada = implantarDescoberta(retangular(20000, 14000), { vagaDescoberta: 'RECUAR' });
+    expect(recuada.limitante).toBe('VAGAS');
+    expect(recuada.medidas.projecaoM2).toBeLessThan(i.medidas.projecaoM2);
+    expect(recuada.avisos.some((a) => /as vagas descobertas permitem/.test(a))).toBe(true);
+  });
+});
+
+/**
+ * F24 (decisão do usuário, 17/10/2026: "só quando o retângulo não comporta"): a implantação em L — o retângulo da frente
+ * (mais raso) e um anexo colado atrás dele, no que o envelope tem atrás.
+ */
+describe('implantacaoDaCasa — a casa em L (F24)', () => {
+  const porAnel = (v: [number, number, Papel][]): BlueprintModel => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = base.levels[0].id;
+    return applyBatch(base, v.map(([x, y, papel], i): Command => ({ type: 'AddBoundary', levelId, a: point(x, y), b: point(v[(i + 1) % v.length][0], v[(i + 1) % v.length][1]), kind: 'TERRENO', papel }))).model;
+  };
+  // 20 m de frente nos primeiros 15 m; 10 m (à esquerda) nos 15 m de trás.
+  const loteEmL = () => porAnel([[0, 0, 'FRENTE'], [20000, 0, 'LATERAL_DIREITA'], [20000, 15000, 'LATERAL_DIREITA'], [10000, 15000, 'LATERAL_DIREITA'], [10000, 30000, 'FUNDOS'], [0, 30000, 'LATERAL_ESQUERDA']]);
+  // 12 m de frente abrindo para 20 m nos fundos.
+  const trapezio = () => porAnel([[0, 0, 'FRENTE'], [12000, 0, 'LATERAL_DIREITA'], [20000, 30000, 'FUNDOS'], [0, 30000, 'LATERAL_ESQUERDA']]);
+  const grande = programaDaCasa({ ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, suites: 1, banheiros: 3, vagas: 2, padrao: 'R1-A' });
+  const implantarGrande = (m: BlueprintModel, hip = {}) => {
+    const r = implantacaoDaCasa(contexto(m), grande.programa, grande.curto, hip);
+    if (!r.ok) throw new Error(r.motivo);
+    return r.implantacao;
+  };
+
+  it('lote em L: o retângulo fica nos recuos (184 m²); em L, a frente inteira e um anexo atrás alcançam o programa', () => {
+    const ret = implantarGrande(loteEmL(), { forma: 'RETANGULO' });
+    expect(ret.limitante).toBe('ENVELOPE');
+    expect(ret.contornoLocal).toBeNull();
+    const l = implantarGrande(loteEmL(), { forma: 'L' });
+    expect(l.contornoLocal).not.toBeNull();
+    expect(l.medidas.projecaoM2).toBeGreaterThanOrEqual(l.medidas.projecaoPedidaM2 - 0.5);
+    expect(l.medidas.projecaoM2).toBeGreaterThan(ret.medidas.projecaoM2 + 30);
+    expect(l.limitante).toBe('PROGRAMA');
+    // o da frente na largura do envelope; o anexo atrás, dentro do braço de 10 m (recuos de 1,5 m)
+    expect(l.retanguloLocal).toEqual({ x0: 1500, y0: 3000, x1: 18500, y1: 13500 });
+    const xs = l.contornoLocal!.map((p) => p.x);
+    const ys = l.contornoLocal!.map((p) => p.y);
+    expect(Math.max(...ys)).toBeGreaterThan(13500);
+    expect(Math.max(...l.contornoLocal!.filter((p) => p.y > 13500).map((p) => p.x))).toBeLessThanOrEqual(8500);
+    expect(Math.min(...xs)).toBe(1500);
+    expect(l.avisos.some((a) => /^Casa em L: /.test(a))).toBe(true);
+    // no retângulo que comporta, a forma L não muda nada
+    const cabe = implantacaoDaCasa(contexto(loteEmL()), programa, curto, { forma: 'L' });
+    expect(cabe.ok && cabe.implantacao.contornoLocal).toBeNull();
+  });
+
+  it('trapézio: o L fica mais raso e o degrau entre os dois é de 0 ou ≥ 3 m (sem faixa estreita ao lado)', () => {
+    const ret = implantarGrande(trapezio(), { forma: 'RETANGULO' });
+    const l = implantarGrande(trapezio(), { forma: 'L' });
+    expect(l.contornoLocal).not.toBeNull();
+    const fundo = (i: typeof l) => Math.max(...(i.contornoLocal ?? [{ x: 0, y: i.retanguloLocal.y1 }]).map((p) => p.y));
+    expect(fundo(l)).toBeLessThan(fundo(ret) - 1000);
+    const r1 = l.retanguloLocal;
+    const atras = l.contornoLocal!.filter((p) => p.y > r1.y1);
+    const x0 = Math.min(...atras.map((p) => p.x));
+    const x1 = Math.max(...atras.map((p) => p.x));
+    for (const degrau of [x1 - r1.x1, r1.x0 - x0]) expect(degrau === 0 || degrau >= 3000).toBe(true);
+  });
+
+  it('anelDoL: a união do retângulo com o anexo colado atrás, sem vértice repetido nem colinear', () => {
+    expect(anelDoL({ x0: 0, y0: 0, x1: 10000, y1: 5000 }, { x0: 0, y0: 5000, x1: 4000, y1: 9000 })).toEqual([
+      { x: 0, y: 0 }, { x: 10000, y: 0 }, { x: 10000, y: 5000 }, { x: 4000, y: 5000 }, { x: 4000, y: 9000 }, { x: 0, y: 9000 },
+    ]);
+    // o anexo mais largo que a frente, para a direita: um degrau de cada lado do encontro
+    expect(anelDoL({ x0: 0, y0: 0, x1: 6000, y1: 5000 }, { x0: 0, y0: 5000, x1: 9000, y1: 9000 })).toEqual([
+      { x: 0, y: 0 }, { x: 6000, y: 0 }, { x: 6000, y: 5000 }, { x: 9000, y: 5000 }, { x: 9000, y: 9000 }, { x: 0, y: 9000 },
+    ]);
   });
 });

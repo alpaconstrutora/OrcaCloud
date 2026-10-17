@@ -22,6 +22,7 @@
  * Os coeficientes de rugosidade são os da Tabela 2 da norma.
  */
 import type { BlueprintModel, Command, ObjectId, SecaoDeCalha, Trecho } from './blueprintKernel';
+import { pointInPolygon } from './blueprintKernel';
 import { contribuicaoPluvial, type HipotesesPluviais } from './blueprintPluvial';
 
 export const ROTULO_DA_CALHA = 'Calha';
@@ -107,6 +108,39 @@ const distAoSegmento = (p: P, a: P, b: P) => {
 };
 /** A calha corre sob o beiral: as duas pontas a até 300 mm da aresta (a calha fica um pouco para fora). */
 const TOLERANCIA_DO_BEIRAL_MM = 300;
+/** F24: até onde da parede o beiral ainda está "sobre a casa" (o corpo dela e o encontro das águas), mm. */
+const BEIRAL_SOBRE_A_PAREDE_MM = 150;
+/** F24: o menor trecho de beiral livre que ainda leva calha, mm. */
+const MENOR_TRECHO_DE_CALHA_MM = 500;
+
+/**
+ * F24 da casa automática (17/10/2026): o trecho do beiral que NÃO passa sobre a casa — na casa em L, o beiral de trás
+ * do principal corre por cima do anexo (ali as águas se encontram; não há beiral) e a calha atravessava o cômodo dele.
+ * O maior trecho livre (amostrado a cada 50 mm); `null` = nenhum com `MENOR_TRECHO_DE_CALHA_MM`.
+ */
+function trechoDoBeiralForaDaCasa(model: BlueprintModel, levelId: ObjectId, a: P, b: P): { a: P; b: P } | null {
+  const espacos = model.spaces.filter((x) => x.levelId === levelId);
+  const paredes = model.walls.filter((w) => w.levelId === levelId);
+  const L = Math.hypot(b.x - a.x, b.y - a.y);
+  const n = Math.max(1, Math.ceil(L / 50));
+  const em = (k: number): P => ({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n });
+  const sobre = (q: P) =>
+    espacos.some((sp) => pointInPolygon(sp.ring, { x: q.x, y: q.y })) || paredes.some((w) => distAoSegmento(q, w.a, w.b) <= w.thicknessMm / 2 + BEIRAL_SOBRE_A_PAREDE_MM);
+  let melhor: [number, number] | null = null;
+  let inicio: number | null = null;
+  for (let k = 0; k <= n + 1; k++) {
+    const livre = k <= n && !sobre(em(k));
+    if (livre && inicio === null) inicio = k;
+    if (!livre && inicio !== null) {
+      if (!melhor || k - 1 - inicio > melhor[1] - melhor[0]) melhor = [inicio, k - 1];
+      inicio = null;
+    }
+  }
+  if (!melhor || ((melhor[1] - melhor[0]) * L) / n < MENOR_TRECHO_DE_CALHA_MM) return null;
+  if (melhor[0] === 0 && melhor[1] === n) return { a, b };
+  const r = (q: P): P => ({ x: Math.round(q.x), y: Math.round(q.y) });
+  return { a: r(em(melhor[0])), b: r(em(melhor[1])) };
+}
 
 export function verificarCalhas(model: BlueprintModel, hip: HipotesesPluviais): CalhaVerificada[] {
   const c = contribuicaoPluvial(model, hip);
@@ -194,7 +228,12 @@ export function planejarCalhas(model: BlueprintModel, hip: HipotesesPluviais): P
       continue;
     }
     const agua = aguaPorId.get(s.id)!;
-    const { a, b } = s.beiral!;
+    const livre = trechoDoBeiralForaDaCasa(model, s.levelId, s.beiral!.a, s.beiral!.b);
+    if (!livre) {
+      avisos.push(`${s.rotulo}: o beiral inteiro passa sobre a casa (o encontro com outra água) — sem calha; confira o rufo`);
+      continue;
+    }
+    const { a, b } = livre;
     // O bocal na ponta mais perto do destino (empate, ou sem destino: a segunda ponta do beiral).
     const [alto, bocal] = pertoDeDestino(a) < pertoDeDestino(b) ? [b, a] : [a, b];
     const Q = s.vazaoLMin!;

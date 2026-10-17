@@ -66,6 +66,25 @@ describe('distribuição · os lados de piso', () => {
   });
 });
 
+describe('distribuição · lado colinear com espessura diferente (F24 da casa automática)', () => {
+  it('a mesma linha muda de espessura (20 → 15 cm): cada lado fica na SUA face, sem diagonal no encontro', () => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = base.levels[0].id;
+    const p = (ax: number, ay: number, bx: number, by: number, e = 150): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: e, heightMm: 2800 });
+    const m = applyBatch(base, [p(0, 0, 3000, 0, 200), p(3000, 0, 6000, 0), p(6000, 0, 6000, 4000), p(6000, 4000, 0, 4000), p(0, 4000, 0, 0)]).model;
+    const grossa = m.walls[0].id;
+    const fina = m.walls[1].id;
+    const lados = ladosDePiso(m.spaces[0], m.walls);
+    const daGrossa = lados.find((l) => l.wallId === grossa)!;
+    const daFina = lados.find((l) => l.wallId === fina)!;
+    expect([daGrossa.a.y, daGrossa.b.y]).toEqual([100, 100]);
+    expect([daFina.a.y, daFina.b.y]).toEqual([75, 75]);
+    // e os dois terminam diante do encontro (x = 3 m)
+    expect([daGrossa.a.x, daGrossa.b.x]).toContain(3000);
+    expect([daFina.a.x, daFina.b.x]).toContain(3000);
+  });
+});
+
 describe('distribuição · onde os pontos caem', () => {
   it('n = 1 cai no MEIO do que há de livre', () => {
     const m = sala();

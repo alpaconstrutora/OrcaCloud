@@ -911,16 +911,25 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
       }
       let capacidade = areaDoRetangulo(ax) / fatorGlobal;
       const escolhidos: ItemPlanejado[] = [];
-      const candidatos = () => [...base.fundo, ...base.frente.filter((i) => i.zona === 'SERVICO')];
+      // A garagem fica no principal: o carro entra pela rua (F24 — no L de frente larga ela ia para o anexo dos fundos).
+      const candidatos = () => [...base.fundo, ...base.frente.filter((i) => i.zona === 'SERVICO' && i.item.uso !== 'GARAGEM')];
+      // F24 (casa em L): o item vai ao anexo COM os que têm relação obrigatória com ele (a suíte e o banheiro dela) —
+      // um por vez, a suíte ia sozinha e o banheiro dela ficava do outro lado da casa.
+      const doGrupo = (c: ItemPlanejado) => [
+        c,
+        ...candidatos().filter((y) => y !== c && programa.relacoes.some((r) => r.tipo === 'OBRIGATORIA' && ((r.a === c.item.id && r.b === y.item.id) || (r.b === c.item.id && r.a === y.item.id)))),
+      ];
+      const soma = (g: readonly ItemPlanejado[]) => g.reduce((t, i) => t + i.areaAlvoMm2, 0);
       for (;;) {
-        const c = candidatos()
-          .filter((i) => i.areaAlvoMm2 <= capacidade * 1.25)
-          .sort((a, b) => b.areaAlvoMm2 - a.areaAlvoMm2)[0];
-        if (!c) break;
-        escolhidos.push(c);
-        capacidade -= c.areaAlvoMm2;
-        base.fundo = base.fundo.filter((x) => x !== c);
-        base.frente = base.frente.filter((x) => x !== c);
+        const g = candidatos()
+          .map(doGrupo)
+          .filter((x) => soma(x) <= capacidade * 1.25)
+          .sort((a, b) => soma(b) - soma(a))[0];
+        if (!g) break;
+        escolhidos.push(...g);
+        capacidade -= soma(g);
+        base.fundo = base.fundo.filter((x) => !g.includes(x));
+        base.frente = base.frente.filter((x) => !g.includes(x));
       }
       if (!escolhidos.length) {
         const menor = candidatos().sort((a, b) => a.areaAlvoMm2 - b.areaAlvoMm2)[0];

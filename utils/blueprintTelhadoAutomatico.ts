@@ -23,7 +23,8 @@ import { aguasDaExtrusao, perfilDeCobertura, type ParametrosDoPerfil } from './b
 import type { Retangulo } from './blueprintGerador';
 
 export type CumeeiraDoTelhado = 'AO_LONGO_DO_MAIOR' | 'PARALELA_A_FRENTE' | 'PERPENDICULAR_A_FRENTE';
-export type CaimentoDaUmaAgua = 'FUNDOS' | 'FRENTE';
+/** F24: DIREITA/ESQUERDA (de quem olha da rua) — o anexo ao LADO do principal na casa em L. */
+export type CaimentoDaUmaAgua = 'FUNDOS' | 'FRENTE' | 'DIREITA' | 'ESQUERDA';
 
 export interface HipotesesDoTelhado {
   /** `false` = a casa sai sem cobertura. */
@@ -91,7 +92,8 @@ export function comandosDoTelhado(
   const i = hip.inclinacaoPct / 100;
 
   // Eixo ao longo de x (paralelo à frente) ou de y (da frente para os fundos).
-  const aoLongoDeX = hip.tipo === 'UMA_AGUA' || (hip.cumeeira === 'PARALELA_A_FRENTE' ? true : hip.cumeeira === 'PERPENDICULAR_A_FRENTE' ? false : W >= D);
+  const lateral = hip.tipo === 'UMA_AGUA' && (hip.caimentoUmaAgua === 'DIREITA' || hip.caimentoUmaAgua === 'ESQUERDA');
+  const aoLongoDeX = hip.tipo === 'UMA_AGUA' ? !lateral : hip.cumeeira === 'PARALELA_A_FRENTE' ? true : hip.cumeeira === 'PERPENDICULAR_A_FRENTE' ? false : W >= D;
   const xm = (ret.x0 + ret.x1) / 2;
   const ym = (ret.y0 + ret.y1) / 2;
   // Ao longo de x, A→B com u = (+1, 0) deixa o s = 0 (o lado baixo da uma água) nos FUNDOS (+y) — ver
@@ -110,6 +112,8 @@ export function comandosDoTelhado(
   } else {
     A = { x: xm, y: ret.y0 - alem };
     B = { x: xm, y: ret.y1 + alem };
+    // F24: da frente para os fundos (u = (0, +1)) o lado baixo fica à ESQUERDA (−x); caindo para a DIREITA, inverte.
+    if (lateral && hip.caimentoUmaAgua === 'DIREITA') [A, B] = [B, A];
     vao = W + 2 * alem;
     comprimento = D + 2 * alem;
   }

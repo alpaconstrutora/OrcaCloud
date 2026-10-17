@@ -312,3 +312,22 @@ describe('janela acima do máximo vira folhas com montante', () => {
     expect(folgasEntreFolhas(r.model).some((p) => p.folga === 400)).toBe(false);
   });
 });
+
+/**
+ * F24 (casa em L, 17/10/2026): no anexo, o item vai COM os de relação obrigatória (a suíte e o banheiro dela — a suíte
+ * ia sozinha e o banheiro ficava do outro lado da casa) e a garagem fica no principal (o carro entra pela rua).
+ */
+describe('anexo da casa em L', () => {
+  const quatro = programaDaCasa({ ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, suites: 1, banheiros: 3, vagas: 2, padrao: 'R1-A' }).programa;
+  const emL = [point(1500, 3000), point(18500, 3000), point(18500, 13500), point(8450, 13500), point(8450, 18750), point(1500, 18750)];
+  const r = gerar({ programa: quatro, envelope: emL, direcaoDaFrente: point(0, -1), rotacaoNorteDeg: null, latitudeGraus: -19.9 }, 1, { automaticos: false });
+  const noAnexo = (a: (typeof r.ambientes)[number]) => r.anexos.some((x) => a.ret.x0 >= x.x0 - 1 && a.ret.x1 <= x.x1 + 1 && a.ret.y0 >= x.y0 - 1 && a.ret.y1 <= x.y1 + 1);
+
+  it('a suíte e o banheiro dela juntos; a garagem no principal', () => {
+    expect(r.anexos.length).toBeGreaterThan(0);
+    const suite = r.ambientes.find((a) => a.item.uso === 'SUITE' || /^Suíte/.test(a.nome))!;
+    const banho = r.ambientes.find((a) => /Banheiro da suíte/.test(a.nome))!;
+    expect(noAnexo(suite)).toBe(noAnexo(banho));
+    for (const g of r.ambientes.filter((a) => a.item.uso === 'GARAGEM')) expect(noAnexo(g)).toBe(false);
+  });
+});

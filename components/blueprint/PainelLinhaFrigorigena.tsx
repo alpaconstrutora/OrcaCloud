@@ -78,6 +78,7 @@ export default function PainelLinhaFrigorigena({ plano, linhas, conferencia, hip
         <Numero rotulo="Saída pela parede: folga sob a viga (mm)" chave="folgaSobAVigaNaSaidaMm" passo={5} hip={hip} onHip={onHip} />
         <Numero rotulo="Saída pela parede: dreno abaixo da linha, folga (mm)" chave="folgaEntreLinhaEDrenoNaSaidaMm" passo={5} hip={hip} onHip={onHip} />
         <Numero rotulo="Saída pela parede: ao lado até (mm)" chave="saidaAoLadoAteMm" passo={100} hip={hip} onHip={onHip} />
+        <Numero rotulo="Dreno com bomba: acima da janela, folga (mm)" chave="folgaDoDrenoSobreAberturaMm" passo={5} hip={hip} onHip={onHip} />
       </div>
       <p className="text-[11px] text-slate-500">{FONTE_DAS_FAIXAS}</p>
 

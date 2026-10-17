@@ -29,7 +29,7 @@
  * mão direita de quem olha da rua —, e a `transformacao` leva ao mundo. Com a
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
-import { TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, distanciaEntreEixos3D, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type CamadaParede, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
+import { DIMENSAO_DA_VAGA, TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, distanciaEntreEixos3D, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type CamadaParede, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
 import { recuosEfetivos } from './blueprintZonaUrbanistica';
@@ -143,6 +143,18 @@ export interface HipotesesDaImplantacao {
   espessuraExternaMm: number;
   /** A malha do gerador: as medidas do retângulo são múltiplas dela. */
   malhaMm: number;
+  /**
+   * F24 (decisão do usuário, 17/10/2026: "Automático"): as vagas descobertas que não cabem no recuo de frente. RECUAR = a
+   * casa vai para trás até caberem; AO_LADO = uma faixa da largura da vaga, da rua para dentro, ao lado da casa (que
+   * estreita); AUTOMATICO = recua quando a profundidade deixa sem perder área, senão a opção que perde menos.
+   */
+  vagaDescoberta: 'AUTOMATICO' | 'RECUAR' | 'AO_LADO';
+  /**
+   * F24 (decisão do usuário, 17/10/2026: "só quando o retângulo não comporta"): AUTOMATICA = retângulo, e a casa tenta o
+   * L quando o retângulo não comporta o programa (limitado pelos recuos, ou ambiente abaixo da medida mínima) e fica com
+   * o de menos problemas; RETANGULO = nunca L; L = o retângulo da frente (mais raso) e um anexo colado atrás dele.
+   */
+  forma: 'AUTOMATICA' | 'RETANGULO' | 'L';
 }
 
 export const HIPOTESES_DA_IMPLANTACAO_PADRAO: HipotesesDaImplantacao = {
@@ -154,6 +166,8 @@ export const HIPOTESES_DA_IMPLANTACAO_PADRAO: HipotesesDaImplantacao = {
   fatorDoRetanguloSobreUtil: 1.08,
   espessuraExternaMm: 200,
   malhaMm: 50,
+  vagaDescoberta: 'AUTOMATICO',
+  forma: 'AUTOMATICA',
 };
 
 // ─── O quadro da frente ─────────────────────────────────────────────────────
@@ -186,7 +200,7 @@ export const paraMundo = (q: QuadroDaFrente, p: Point): Point => ({ x: p.x * q.e
 
 // ─── Implantação ────────────────────────────────────────────────────────────
 
-export type LimitanteDaImplantacao = 'PROGRAMA' | 'TO' | 'ENVELOPE' | 'CA' | 'PERMEABILIDADE';
+export type LimitanteDaImplantacao = 'PROGRAMA' | 'TO' | 'ENVELOPE' | 'CA' | 'PERMEABILIDADE' | 'VAGAS';
 
 export const ROTULO_DO_LIMITANTE: Record<LimitanteDaImplantacao, string> = {
   PROGRAMA: 'o programa',
@@ -194,6 +208,7 @@ export const ROTULO_DO_LIMITANTE: Record<LimitanteDaImplantacao, string> = {
   ENVELOPE: 'os recuos',
   CA: 'o coeficiente de aproveitamento',
   PERMEABILIDADE: 'a taxa de permeabilidade',
+  VAGAS: 'as vagas descobertas',
 };
 
 /** Com a preposição contraída — "limitada pelo programa", "pela taxa de ocupação". */
@@ -203,6 +218,7 @@ export const LIMITADA_POR: Record<LimitanteDaImplantacao, string> = {
   ENVELOPE: 'pelos recuos',
   CA: 'pelo coeficiente de aproveitamento',
   PERMEABILIDADE: 'pela taxa de permeabilidade',
+  VAGAS: 'pelas vagas descobertas',
 };
 
 export interface ImplantacaoDaCasa {
@@ -236,6 +252,16 @@ export interface ImplantacaoDaCasa {
     permeabilidadePct: number;
     permeabilidadeMinPct: number | null;
   };
+  /**
+   * F24: a casa em L — o anel ortogonal (no quadro da frente) do retângulo da frente (`retanguloLocal`) com o anexo
+   * colado atrás dele. `null` = a casa é o retângulo.
+   */
+  contornoLocal: Point[] | null;
+  /**
+   * F24: onde as vagas descobertas vão (no quadro da frente) — o recuo de frente diante da casa ou a faixa ao lado
+   * dela. `null` = sem vaga descoberta.
+   */
+  vagasDescobertas: { caixa: Retangulo; onde: 'RECUO_DE_FRENTE' | 'AO_LADO' } | null;
   avisos: string[];
 }
 
@@ -258,6 +284,57 @@ function pluvialRenteAoEsgoto(m: BlueprintModel): number {
 }
 const f1 = (v: number) => v.toFixed(1).replace('.', ',');
 const piso = (v: number, malha: number) => Math.floor(v / malha + 1e-9) * malha;
+
+/**
+ * F24: o trecho do lote, em x, livre em TODA a faixa horizontal [y0, y1] (no quadro da frente) — por varredura a cada
+ * 250 mm (as bordas a 1 mm para dentro); `null` se a faixa sai do lote.
+ */
+function faixaDoLote(anel: readonly Point[], y0: number, y1: number, xRef?: number): { xMin: number; xMax: number } | null {
+  let xMin = -Infinity;
+  let xMax = Infinity;
+  const passos = Math.max(1, Math.ceil((y1 - y0) / 250));
+  for (let k = 0; k <= passos; k++) {
+    const y = Math.min(y1 - 1, Math.max(y0 + 1, y0 + (k * (y1 - y0)) / passos));
+    const xs: number[] = [];
+    for (let i = 0; i < anel.length; i++) {
+      const a = anel[i];
+      const b = anel[(i + 1) % anel.length];
+      if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) xs.push(a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x));
+    }
+    if (xs.length < 2) return null;
+    // Anel não convexo (L, U): na linha, o trecho que contém a referência; sem ela, o de fora a fora.
+    xs.sort((a, b) => a - b);
+    let lo = xs[0];
+    let hi = xs[xs.length - 1];
+    if (xRef !== undefined) {
+      const k = xs.findIndex((x, j) => j % 2 === 0 && j + 1 < xs.length && xRef >= x && xRef <= xs[j + 1]);
+      if (k < 0) return null;
+      lo = xs[k];
+      hi = xs[k + 1];
+    }
+    xMin = Math.max(xMin, lo);
+    xMax = Math.min(xMax, hi);
+  }
+  return xMax > xMin ? { xMin, xMax } : null;
+}
+
+/**
+ * F24: o anel (anti-horário, y para os fundos) da união do retângulo da frente `a` com o anexo `b` colado na borda de
+ * trás dele (`b.y0 === a.y1`); sem vértice repetido nem colinear.
+ */
+export function anelDoL(a: Retangulo, b: Retangulo): Point[] {
+  const bruto: Point[] = [
+    point(a.x0, a.y0), point(a.x1, a.y0), point(a.x1, a.y1),
+    point(b.x1, a.y1), point(b.x1, b.y1), point(b.x0, b.y1), point(b.x0, a.y1),
+    point(a.x0, a.y1),
+  ];
+  const semRepetir = bruto.filter((p, i) => { const q = bruto[(i + bruto.length - 1) % bruto.length]; return p.x !== q.x || p.y !== q.y; });
+  return semRepetir.filter((p, i) => {
+    const q = semRepetir[(i + semRepetir.length - 1) % semRepetir.length];
+    const r = semRepetir[(i + 1) % semRepetir.length];
+    return (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x) !== 0;
+  });
+}
 
 /** F12: o sobrado na implantação — a área útil do pavimento MAIOR (com o núcleo da escada) e a altura total. */
 export interface ImplantacaoDoSobrado {
@@ -346,8 +423,113 @@ export function implantacaoDaCasa(
   if (W < 3000 || D < 3000) return { ok: false, motivo: `Sobra só ${f2(W / 1000)} × ${f2(D / 1000)} m para a casa — ${ROTULO_DO_LIMITANTE[limitante]} aperta demais.` };
 
   // Posição: no recuo de frente, encostada na divisa escolhida.
-  const x0 = hip.encostarNaDivisa === 'ESQUERDA' ? rmax.x0 : hip.encostarNaDivisa === 'DIREITA' ? rmax.x1 - W : piso(rmax.x0 + (Wmax - W) / 2, hip.malhaMm);
-  const y0 = rmax.y0;
+  const xNaDivisa = (w: number) => (hip.encostarNaDivisa === 'ESQUERDA' ? rmax.x0 : hip.encostarNaDivisa === 'DIREITA' ? rmax.x1 - w : piso(rmax.x0 + (Wmax - w) / 2, hip.malhaMm));
+  let x0 = xNaDivisa(W);
+  let y0 = rmax.y0;
+
+  // F24: as vagas descobertas. Cabem no recuo de frente diante da casa → ficam ali. Senão: recuar a casa (as fileiras
+  // de vagas à frente dela) ou abrir a faixa ao lado (a casa estreita e aprofunda para não perder área).
+  let vagasDescobertasLocal: ImplantacaoDaCasa['vagasDescobertas'] = null;
+  if (vagasDescobertas > 0) {
+    const { larguraMm: vL, comprimentoMm: vC } = DIMENSAO_DA_VAGA.COMUM;
+    const loteLocal = terreno.anel.map((p) => paraLocal(quadro, p));
+    const yFrente = Math.min(...loteLocal.map((p) => p.y));
+    const cabemNaFrente = (w: number, yCasa: number) => Math.floor(w / vL) * Math.floor((yCasa - e / 2 - yFrente) / vC);
+    const frente = (x: number, w: number, yCasa: number): Retangulo => ({ x0: x, x1: x + w, y0: yFrente, y1: yCasa - e / 2 });
+    if (cabemNaFrente(W, y0) >= vagasDescobertas) vagasDescobertasLocal = { caixa: frente(x0, W, y0), onde: 'RECUO_DE_FRENTE' };
+    else {
+      type Opcao = { W: number; D: number; x0: number; y0: number; caixa: Retangulo; onde: 'RECUO_DE_FRENTE' | 'AO_LADO'; perde: boolean };
+      const opcoes: Opcao[] = [];
+      // RECUAR: as fileiras pedidas, na largura da casa.
+      const colunas = Math.floor(W / vL);
+      if (hip.vagaDescoberta !== 'AO_LADO' && colunas >= 1) {
+        const y0r = Math.ceil((yFrente + Math.ceil(vagasDescobertas / colunas) * vC + e / 2) / hip.malhaMm - 1e-9) * hip.malhaMm;
+        const Dr = Math.min(D, piso(rmax.y1 - y0r, hip.malhaMm));
+        const Wr = Dr < D ? Math.min(Wmax, piso((teto.m2 * 1e6) / (Dr + e) - e, hip.malhaMm)) : W;
+        if (Dr >= 3000 && Wr >= 3000) opcoes.push({ W: Wr, D: Dr, x0: xNaDivisa(Wr), y0: y0r, caixa: frente(xNaDivisa(Wr), Wr, y0r), onde: 'RECUO_DE_FRENTE', perde: projecao(Wr, Dr) < projecao(W, D) - 0.5 });
+      }
+      // AO_LADO: a faixa da largura de uma vaga, as vagas em fila da rua para dentro, no lado oposto ao encosto.
+      if (hip.vagaDescoberta !== 'RECUAR') {
+        const fundoDaFaixa = yFrente + vagasDescobertas * vC;
+        const larg = faixaDoLote(loteLocal, yFrente, fundoDaFaixa, x0 + W / 2);
+        if (larg) {
+          const aDireita = hip.encostarNaDivisa !== 'DIREITA';
+          const caixa: Retangulo = aDireita ? { x0: larg.xMax - vL, x1: larg.xMax, y0: yFrente, y1: fundoDaFaixa } : { x0: larg.xMin, x1: larg.xMin + vL, y0: yFrente, y1: fundoDaFaixa };
+          const xCasa = aDireita ? x0 : Math.max(x0, Math.ceil((caixa.x1 + e / 2) / hip.malhaMm - 1e-9) * hip.malhaMm);
+          const Wl = Math.min(W, piso(aDireita ? caixa.x0 - e / 2 - xCasa : x0 + W - xCasa, hip.malhaMm));
+          const Dl = Wl < W ? Math.min(Dmax, piso((teto.m2 * 1e6) / (Wl + e) - e, hip.malhaMm)) : D;
+          if (Wl >= 3000 && Dl >= 3000) opcoes.push({ W: Wl, D: Dl, x0: xCasa, y0, caixa, onde: 'AO_LADO', perde: projecao(Wl, Dl) < projecao(W, D) - 0.5 });
+        }
+      }
+      const semPerder = opcoes.find((o) => o.onde === 'RECUO_DE_FRENTE' && !o.perde) ?? opcoes.find((o) => !o.perde);
+      const escolhida = semPerder ?? [...opcoes].sort((a, b) => projecao(b.W, b.D) - projecao(a.W, a.D))[0];
+      if (escolhida) {
+        ({ W, D, x0, y0 } = escolhida);
+        vagasDescobertasLocal = { caixa: escolhida.caixa, onde: escolhida.onde };
+        if (escolhida.perde) limitante = 'VAGAS';
+        avisos.push(
+          escolhida.onde === 'AO_LADO'
+            ? `Vagas descobertas: o recuo de frente não comporta ${vagasDescobertas} vaga(s) de ${f2(vL / 1000)} × ${f2(vC / 1000)} m — a casa estreita e as vagas vão numa faixa ao lado dela, da rua para dentro.`
+            : `Vagas descobertas: o recuo de frente não comportava ${vagasDescobertas} vaga(s) de ${f2(vL / 1000)} × ${f2(vC / 1000)} m — a casa recua ${f2((y0 - rmax.y0) / 1000)} m.`,
+        );
+      } else vagasDescobertasLocal = { caixa: frente(x0, W, y0), onde: 'RECUO_DE_FRENTE' };
+    }
+  }
+  // F24: a casa em L. O retângulo da frente fica mais raso e um anexo nasce colado atrás dele, no que o envelope tem
+  // atrás (mais largo no trapézio, o braço de trás no lote em L): o de MENOR profundidade total que alcança o teto,
+  // com ≥ 3 m de lado e ≥ 3 m em comum com o da frente. Fica só se rende mais área ou deixa a casa mais rasa (larga).
+  let contornoLocal: Point[] | null = null;
+  let projecaoDoL: number | null = null;
+  if (hip.forma === 'L') {
+    const alvo = teto.m2;
+    const r1De = (D1: number): Retangulo => ({ x0, y0, x1: x0 + W, y1: y0 + D1 });
+    const projecaoDe = (a: Retangulo, b: Retangulo) => {
+      const comum = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+      const area = (a.x1 - a.x0) * (a.y1 - a.y0) + (b.x1 - b.x0) * (b.y1 - b.y0);
+      const perimetro = 2 * (a.x1 - a.x0 + a.y1 - a.y0) + 2 * (b.x1 - b.x0 + b.y1 - b.y0) - 2 * comum;
+      return (area + (perimetro * e) / 2 + e * e) / 1e6;
+    };
+    const yFundo = Math.max(...envLocal.map((p) => p.y));
+    let melhor: { D1: number; r2: Retangulo; proj: number; fundo: number } | null = null;
+    for (let D1 = 3000; D1 <= D; D1 += 500) {
+      const r1 = r1De(D1);
+      for (let d2 = 3000; r1.y1 + d2 <= yFundo + 1e-9; d2 += 250) {
+        const f = faixaDoLote(envLocal, r1.y1, r1.y1 + d2, x0 + Math.min(W, 3000) / 2);
+        if (!f) break;
+        let r2: Retangulo = { x0: Math.ceil(f.xMin / hip.malhaMm - 1e-9) * hip.malhaMm, x1: piso(f.xMax, hip.malhaMm), y0: r1.y1, y1: r1.y1 + d2 };
+        if (r2.x1 - r2.x0 < 3000 || Math.min(r2.x1, r1.x1) - Math.max(r2.x0, r1.x0) < 3000) break;
+        // Passou do teto: o anexo estreita (preso do lado do encosto), sem ficar abaixo de 3 m nem soltar do da frente.
+        if (projecaoDe(r1, r2) > alvo) {
+          const sobra = ((projecaoDe(r1, r2) - alvo) * 1e6) / (d2 + e);
+          const w2 = Math.max(3000, piso(r2.x1 - r2.x0 - sobra, hip.malhaMm));
+          r2 = hip.encostarNaDivisa === 'DIREITA' ? { ...r2, x0: r2.x1 - w2 } : { ...r2, x1: r2.x0 + w2 };
+          if (Math.min(r2.x1, r1.x1) - Math.max(r2.x0, r1.x0) < 3000 || projecaoDe(r1, r2) > alvo + 0.5) continue;
+        }
+        // Degrau entre os dois de 0 ou ≥ 3 m: o de menos vira uma faixa que o gerador toma por anexo (estreita para
+        // qualquer cômodo) — aparado no da frente. Os dois na mesma largura são um retângulo (já comparado): fora.
+        if (r2.x1 > r1.x1 && r2.x1 - r1.x1 < 3000) r2 = { ...r2, x1: r1.x1 };
+        if (r2.x0 < r1.x0 && r1.x0 - r2.x0 < 3000) r2 = { ...r2, x0: r1.x0 };
+        if ((r1.x1 > r2.x1 && r1.x1 - r2.x1 < 3000) || (r2.x0 > r1.x0 && r2.x0 - r1.x0 < 3000)) continue;
+        if (r2.x0 === r1.x0 && r2.x1 === r1.x1) continue;
+        const proj = projecaoDe(r1, r2);
+        const c = { D1, r2, proj, fundo: D1 + d2 };
+        const valor = (x: typeof c) => Math.min(x.proj, alvo);
+        if (!melhor || valor(c) > valor(melhor) + 0.5 || (Math.abs(valor(c) - valor(melhor)) <= 0.5 && c.fundo < melhor.fundo)) melhor = c;
+        if (proj >= alvo - 0.5) break;
+      }
+    }
+    const projRet = projecao(W, D);
+    if (melhor && (melhor.proj > projRet + 1 || (Math.abs(melhor.proj - projRet) <= 1 && melhor.fundo < D - 1000))) {
+      const r1 = r1De(melhor.D1);
+      const r2 = melhor.r2;
+      D = melhor.D1;
+      projecaoDoL = melhor.proj;
+      contornoLocal = anelDoL(r1, r2);
+      if (melhor.proj >= alvo - 0.5 && limitante === 'ENVELOPE') limitante = teto.limitante;
+      avisos.push(`Casa em L: ${f2(W / 1000)} × ${f2(D / 1000)} m na frente e um anexo de ${f2((r2.x1 - r2.x0) / 1000)} × ${f2((r2.y1 - r2.y0) / 1000)} m atrás — o retângulo não comportava o programa.`);
+    }
+  }
+
   const retanguloLocal: Retangulo = { x0, y0, x1: x0 + W, y1: y0 + D };
   const cantosLocais = [
     { x: retanguloLocal.x0, y: retanguloLocal.y0 },
@@ -355,12 +537,12 @@ export function implantacaoDaCasa(
     { x: retanguloLocal.x1, y: retanguloLocal.y1 },
     { x: retanguloLocal.x0, y: retanguloLocal.y1 },
   ];
-  // Dentro do envelope por construção: é um pedaço do maior retângulo inscrito nele.
-  const anelNoMundo = cantosLocais.map((p) => paraMundo(quadro, p));
+  // Dentro do envelope por construção: é um pedaço do maior retângulo inscrito nele (e o anexo, da faixa dele).
+  const anelNoMundo = (contornoLocal ?? cantosLocais).map((p) => paraMundo(quadro, p));
 
-  const projecaoM2 = projecao(W, D);
+  const projecaoM2 = projecaoDoL ?? projecao(W, D);
   if (limitante !== 'PROGRAMA') {
-    avisos.push(`O programa pede ${f2(projecaoPedidaM2)} m² de projeção; ${ROTULO_DO_LIMITANTE[limitante]} permite ${f2(projecaoM2)} m² — as áreas dos ambientes serão reduzidas.`);
+    avisos.push(`O programa pede ${f2(projecaoPedidaM2)} m² de projeção; ${ROTULO_DO_LIMITANTE[limitante]} ${/^(os|as) /.test(ROTULO_DO_LIMITANTE[limitante]) ? 'permitem' : 'permite'} ${f2(projecaoM2)} m² — as áreas dos ambientes serão reduzidas.`);
   }
   if (legal.faltam.length) avisos.push(`Sem dado da zona: ${legal.faltam.join(', ')} — esse limite não foi aplicado.`);
 
@@ -375,6 +557,8 @@ export function implantacaoDaCasa(
       alinhadaAoDesenho,
       limitante,
       pavimentos: pav,
+      vagasDescobertas: vagasDescobertasLocal,
+      contornoLocal,
       medidas: {
         loteM2: m2(loteM2),
         projecaoPedidaM2,
@@ -1096,16 +1280,39 @@ export const problemasDoPlano = (p: PlanoDaCasa): number =>
       ((ps) => ps.filter((x) => x.grupo === 'SEM_SOLUCAO' || x.grupo === 'CONFLITO').length * 3 + ps.filter((x) => x.grupo === 'VERIFICACAO').length)(p.pendencias.filter((x) => !/^Pavimentos/.test(x.texto))) +
       (terreaNaoComporta(p) ? 2 : 0);
 
+/**
+ * F24 (decisão do usuário, 17/10/2026): a térrea em retângulo e, se ele não comporta (limitado pelos recuos, ou ambiente
+ * abaixo da medida mínima, ou acima da TO), a mesma casa em L — fica a de menos problemas (empate: a de mais área).
+ */
+function planejarTerrea(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa>, opcoes: OpcoesDoPlanoDaCasa): PlanoDaCasa {
+  const ret = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: 1 }, opcoes);
+  if ((hipParcial.implantacao?.forma ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.forma) !== 'AUTOMATICA') return ret;
+  const porque = terreaNaoComporta(ret) ?? (ret.implantacao?.limitante === 'ENVELOPE' ? 'os recuos limitam o retângulo' : null);
+  if (!porque) return ret;
+  const emL = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: 1, implantacao: { ...(hipParcial.implantacao ?? {}), forma: 'L' } }, opcoes);
+  if (!emL.implantacao?.contornoLocal) return ret;
+  const [pR, pL] = [problemasDoPlano(ret), problemasDoPlano(emL)];
+  const area = (x: PlanoDaCasa) => x.implantacao?.medidas.projecaoM2 ?? 0;
+  const fica = pL < pR || (pL === pR && area(emL) > area(ret) + 1) ? emL : ret;
+  const texto =
+    fica === emL
+      ? `Forma da casa: em L — o retângulo não comportava o programa (${porque}).`
+      : `Forma da casa: retângulo — não comporta o programa (${porque}), mas em L a casa tinha mais problemas.`;
+  fica.decisoes.push(texto);
+  fica.pendencias.push({ grupo: 'CONFERIR', texto });
+  return fica;
+}
+
 export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> = {}, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const pav = hipParcial.pavimentos ?? HIPOTESES_DA_CASA_PADRAO.pavimentos;
   if (pav !== 'AUTOMATICO') {
-    const p = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: pav }, opcoes);
+    const p = pav === 1 ? planejarTerrea(original, entrada, hipParcial, opcoes) : planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: pav }, opcoes);
     // A térrea pedida que não comporta: dito, com a saída (a escolha da pessoa fica).
     const motivo = pav === 1 ? terreaNaoComporta(p) : null;
     if (motivo) p.pendencias.push({ grupo: 'VERIFICACAO', texto: `Pavimentos: a térrea não comporta o programa (${motivo}) — em "Automático" ou "Sobrado", a casa sobe um pavimento.` });
     return p;
   }
-  const terrea = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: 1 }, opcoes);
+  const terrea = planejarTerrea(original, entrada, hipParcial, opcoes);
   const motivo = terreaNaoComporta(terrea);
   if (!motivo) {
     terrea.decisoes.push('Pavimentos automático: térrea (o programa cabe nela).');
@@ -1205,7 +1412,12 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   }
   const implantacao = imp.implantacao;
   etapa('IMPLANTACAO', ROTULO_DA_ETAPA_DA_CASA.IMPLANTACAO, 'CALCULOU', 0, resumoDaImplantacao(implantacao));
-  for (const a of implantacao.avisos) pendencias.push({ grupo: 'PREMISSA', texto: a });
+  // F24: onde as vagas descobertas foram e a casa em L são DECISÕES da implantação — para conferir.
+  for (const a of implantacao.avisos) {
+    const decisao = /^(Vagas descobertas|Casa em L):/.test(a);
+    if (decisao) decisoes.push(a);
+    pendencias.push({ grupo: decisao ? 'CONFERIR' : 'PREMISSA', texto: a });
+  }
 
   // ── ARQUITETURA ───────────────────────────────────────────────────────────
   const q = implantacao.quadro;
@@ -1241,7 +1453,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   };
   const entradaDoGerador: EntradaDoGerador = {
     programa,
-    envelope: [point(rl.x0, rl.y0), point(rl.x1, rl.y0), point(rl.x1, rl.y1), point(rl.x0, rl.y1)],
+    envelope: implantacao.contornoLocal ?? [point(rl.x0, rl.y0), point(rl.x1, rl.y0), point(rl.x1, rl.y1), point(rl.x0, rl.y1)],
     direcaoDaFrente: null, // no quadro da frente, a rua é o sul (−y)
     rotacaoNorteDeg: norteNoQuadro(q, entrada.rotacaoNorteDeg),
     latitudeGraus: entrada.latitudeGraus,
@@ -1352,21 +1564,32 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   // Duas águas (ou uma) por extrusão sobre o retângulo da arquitetura, no quadro da frente. A parede termina
   // no pé-direito; com laje lançada, o telhado começa em cima dela. No sobrado, sobre o pavimento de cima.
   let telhado: ResumoDoTelhado | null = null;
-  const etapaDoTelhado = (levelId: ObjectId, ret: Retangulo, anexos: number, comLaje: boolean) => {
+  const etapaDoTelhado = (levelId: ObjectId, ret: Retangulo, anexos: readonly Retangulo[], comLaje: boolean) => {
     if (!hip.telhado.lancar) {
       etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
       return;
     }
     const espessuraExterna = hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm;
-    const t = comandosDoTelhado(levelId, ret, q, peDireitoMm + (comLaje ? hip.estrutura.lajes.espessuraMm : 0), espessuraExterna / 2, hip.telhado);
+    const topo = peDireitoMm + (comLaje ? hip.estrutura.lajes.espessuraMm : 0);
+    const t = comandosDoTelhado(levelId, ret, q, topo, espessuraExterna / 2, hip.telhado);
     if (!t.ok) {
       etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_RODOU', 0, t.motivo);
       pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Telhado: ${t.motivo}` });
       return;
     }
+    // F24: o anexo da casa em L ganha UMA água caindo para fora do principal (atrás → fundos, à frente → frente, ao
+    // lado → para aquele lado). O que não encosta em nenhum lado do principal fica para cobrir à mão.
+    const dosAnexos: Command[] = [];
+    let anexosSemCobertura = 0;
+    for (const a of anexos) {
+      const caimento = a.y0 >= ret.y1 - 1 ? 'FUNDOS' : a.y1 <= ret.y0 + 1 ? 'FRENTE' : a.x0 >= ret.x1 - 1 ? 'DIREITA' : a.x1 <= ret.x0 + 1 ? 'ESQUERDA' : null;
+      const ta = caimento ? comandosDoTelhado(levelId, a, q, topo, espessuraExterna / 2, { ...hip.telhado, tipo: 'UMA_AGUA', caimentoUmaAgua: caimento }) : null;
+      if (ta?.ok) dosAnexos.push(...ta.comandos);
+      else anexosSemCobertura++;
+    }
     try {
       const antes = new Set((m.roofs ?? []).map((r) => r.id));
-      const n = aplicar(t.comandos);
+      const n = aplicar([...t.comandos, ...dosAnexos]);
       // F19 da casa automática: a COMPOSIÇÃO do teto nas águas (de cima para baixo) — sem ela a carga térmica não avaliava
       // o teto ("cobertura sem camadas declaradas") em todo cômodo. O ático como câmara de ar, a laje e o forro de gesso;
       // a telha fica fora (sem condutividade na biblioteca, anularia a conta). Presumida: dita.
@@ -1383,7 +1606,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       telhado = t.resumo;
       const tr = t.resumo;
       etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'LANCOU', n, `${tr.aguas === 2 ? 'duas águas' : 'uma água'} a ${String(hip.telhado.inclinacaoPct).replace('.', ',')} %, cumeeira ${tr.direcao} (${String(tr.cumeeiraM).replace('.', ',')} m), beiral de ${String(hip.telhado.beiralMm / 1000).replace('.', ',')} m — ${String(tr.projecaoM2).replace('.', ',')} m² de projeção`);
-      if (anexos) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Telhado: ${anexos} anexo(s) da planta ficaram sem cobertura — cubra à mão (Telhado › Extrusão).` });
+      if (dosAnexos.length) pendencias.push({ grupo: 'CONFERIR', texto: `Telhado: ${dosAnexos.length} anexo(s) em uma água caindo para fora do principal — confira o encontro das águas (rufo/calha).` });
+      if (anexosSemCobertura) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Telhado: ${anexosSemCobertura} anexo(s) da planta ficaram sem cobertura — cubra à mão (Telhado › Extrusão).` });
     } catch (e) {
       const motivo = e instanceof Error ? e.message : String(e);
       etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_RODOU', 0, motivo);
@@ -1414,6 +1638,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           quadro: q,
           retanguloLocal: ret,
           anelDoLote: terreno?.anel ?? null,
+          vagasDescobertas: implantacao.vagasDescobertas,
           reservatorio: (entrada.hidro ?? HIPOTESES_HIDRO_PADRAO).reservatorio,
         };
         const terreo = niveis[0];
@@ -2343,7 +2568,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         return { nota: `${p.novos} eixo(s)` };
       },
     );
-    etapaDoTelhado(S, es.r.retangulo, es.r.anexos.length, (m.structures ?? []).some((x) => x.levelId === S && x.kind === 'LAJE'));
+    etapaDoTelhado(S, es.r.retangulo, es.r.anexos, (m.structures ?? []).some((x) => x.levelId === S && x.kind === 'LAJE'));
 
     // ── INSTALAÇÕES DO SOBRADO (F12c) ──
     // O SHAFT junto de cada banheiro de cima, antes de tudo: o tubo de queda e as colunas de água descem por ele
@@ -2461,7 +2686,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   );
 
   // ── TELHADO (F5) ──────────────────────────────────────────────────────────
-  etapaDoTelhado(entrada.levelId, r.retangulo, r.anexos.length, estrutura.lajes > 0);
+  etapaDoTelhado(entrada.levelId, r.retangulo, r.anexos, estrutura.lajes > 0);
 
   // ── INSTALAÇÕES (F6–F9) ───────────────────────────────────────────────────
   const inst = instalacoes([entrada.levelId], r.retangulo);

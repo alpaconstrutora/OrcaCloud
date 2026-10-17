@@ -63,6 +63,15 @@ describe('comandosDoTelhado', () => {
     expect(beiral(frente[0]).every((p) => p.y === -700)).toBe(true);
   });
 
+  it('F24 — uma água caindo para o LADO (o anexo ao lado na casa em L): o beiral na lateral, a cumeeira na outra', () => {
+    const direita = telhado({ x0: 0, y0: 0, x1: 9000, y1: 12000 }, { tipo: 'UMA_AGUA', caimentoUmaAgua: 'DIREITA' }).aguas;
+    const esquerda = telhado({ x0: 0, y0: 0, x1: 9000, y1: 12000 }, { tipo: 'UMA_AGUA', caimentoUmaAgua: 'ESQUERDA' }).aguas;
+    expect(direita).toHaveLength(1);
+    expect(esquerda).toHaveLength(1);
+    expect(beiral(direita[0]).every((p) => p.x === 9700)).toBe(true);
+    expect(beiral(esquerda[0]).every((p) => p.x === -700)).toBe(true);
+  });
+
   it('quadro girado 30°: as mesmas águas, giradas — a área de cada uma não muda', () => {
     const c = Math.cos(Math.PI / 6);
     const s = Math.sin(Math.PI / 6);

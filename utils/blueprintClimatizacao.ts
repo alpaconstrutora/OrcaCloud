@@ -399,9 +399,15 @@ export interface HipotesesDaLinha {
    * por dentro) quando não há ponto livre perto — a janela larga atrás dela com a viga logo acima, mm. Ausente = 2500.
    */
   saidaAoLadoAteMm?: number;
+  /**
+   * F24 da casa automática: o dreno com BOMBA (cômodo sem parede externa) corre pelas paredes sem declividade logo abaixo
+   * da evaporadora — quando o caminho passa por uma janela que alcança essa cota, ele corre acima do topo dela com esta
+   * folga entre a geratriz e o topo, mm. Ausente = 25.
+   */
+  folgaDoDrenoSobreAberturaMm?: number;
 }
 
-export const HIPOTESES_DA_LINHA_PADRAO: Required<HipotesesDaLinha> = { cotaDaLinhaMm: 2500, raioDeEncaixeMm: 600, preCargaM: 5, declividadeDrenoPct: 1, isolamentoAte24kMm: 9, isolamentoAcimaMm: 13, dnDrenoMm: 25, raioDoShaftMm: 3000, condensadoLhPorKbtu: 0.2, distanciaDoSifaoMm: 300, raioDaCurvaEmDiametros: 4, folgaSobAVigaNaSaidaMm: 20, folgaEntreLinhaEDrenoNaSaidaMm: 20, saidaAoLadoAteMm: 2500 };
+export const HIPOTESES_DA_LINHA_PADRAO: Required<HipotesesDaLinha> = { cotaDaLinhaMm: 2500, raioDeEncaixeMm: 600, preCargaM: 5, declividadeDrenoPct: 1, isolamentoAte24kMm: 9, isolamentoAcimaMm: 13, dnDrenoMm: 25, raioDoShaftMm: 3000, condensadoLhPorKbtu: 0.2, distanciaDoSifaoMm: 300, raioDaCurvaEmDiametros: 4, folgaSobAVigaNaSaidaMm: 20, folgaEntreLinhaEDrenoNaSaidaMm: 20, saidaAoLadoAteMm: 2500, folgaDoDrenoSobreAberturaMm: 25 };
 
 export const LIMITES_DA_LINHA: Record<keyof HipotesesDaLinha, { min: number; max: number }> = {
   cotaDaLinhaMm: { min: 300, max: 6000 },
@@ -418,6 +424,7 @@ export const LIMITES_DA_LINHA: Record<keyof HipotesesDaLinha, { min: number; max
   folgaSobAVigaNaSaidaMm: { min: 0, max: 300 },
   folgaEntreLinhaEDrenoNaSaidaMm: { min: 0, max: 300 },
   saidaAoLadoAteMm: { min: 400, max: 10000 },
+  folgaDoDrenoSobreAberturaMm: { min: 0, max: 300 },
 };
 
 export function hipotesesDaLinhaDaColuna(raw: unknown): HipotesesDaLinha {

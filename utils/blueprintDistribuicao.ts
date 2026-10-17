@@ -27,6 +27,7 @@
 import {
   anelRecuado,
   interiorPoint,
+  point,
   pointInPolygon,
   polygonArea,
   type BlueprintModel,
@@ -127,11 +128,28 @@ export function ladosDePiso(space: Space, walls: readonly Wall[]): LadoDoAmbient
   const recuos = paredes.map((w) => (w ? w.thicknessMm / 2 : 0));
   const anel = anelRecuado(contorno, recuos);
   if (anel.length !== n) return [];
-  return anel.map((p, i) => ({
+  const lados = anel.map((p, i) => ({
     a: p,
     b: anel[(i + 1) % n],
     wallId: paredes[i]?.id ?? null,
   }));
+  // F24 da casa automática (17/10/2026): no vértice COLINEAR entre lados de recuos diferentes (a mesma linha muda de
+  // espessura — a externa de 20 cm vira a interna de 15 no encontro do anexo da casa em L), `anelRecuado` põe o vértice
+  // no recuo do lado SEGUINTE e o lado anterior saía em diagonal (0,8°): a evaporadora girava 359° e entrava na parede.
+  // O lado anterior termina na própria face, diante do vértice.
+  for (let i = 0; i < n; i++) {
+    const k = (i + n - 1) % n;
+    const ant = contorno[k];
+    const at = contorno[i];
+    const prox = contorno[(i + 1) % n];
+    if ((at.x - ant.x) * (prox.y - at.y) - (at.y - ant.y) * (prox.x - at.x) !== 0 || recuos[k] === recuos[i]) continue;
+    const L = Math.hypot(at.x - ant.x, at.y - ant.y);
+    if (L === 0) continue;
+    const u = { x: (at.x - ant.x) / L, y: (at.y - ant.y) / L };
+    const t = (at.x - lados[k].a.x) * u.x + (at.y - lados[k].a.y) * u.y;
+    lados[k] = { ...lados[k], b: point(Math.round(lados[k].a.x + u.x * t), Math.round(lados[k].a.y + u.y * t)) };
+  }
+  return lados;
 }
 
 /** Um intervalo [de, ate] em mm ao longo de um lado, medido de `a`. */

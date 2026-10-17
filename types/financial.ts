@@ -785,6 +785,13 @@ export interface FinancialReceipt {
     /** Nº do contrato de origem (`contracts.number`), congelado na emissão
      *  (aplicar_20270927000120). NULL = título sem contrato. */
     contract_number: string | null;
+    /** Título / Objeto do contrato de origem (`contracts.title`), congelado na
+     *  emissão (aplicar_20271017970000). NULL = sem contrato. Ausente em registro
+     *  lido antes da migration. */
+    contract_title?: string | null;
+    /** Itens do contrato de origem (aba Itens do Contrato), congelados na emissão.
+     *  NULL = sem contrato ou contrato sem itens. */
+    contract_items?: ReciboItemContrato[] | null;
     /** RECEBIMENTO (Contas a Receber) ou PAGAMENTO (Contas a Pagar — o credor
      *  assina). Numeração própria por tipo (aplicar_20270928000110). Ausente
      *  em registro lido antes da migration = RECEBIMENTO. */
@@ -796,6 +803,16 @@ export interface FinancialReceipt {
 }
 
 export type FinancialReceiptKind = 'RECEBIMENTO' | 'PAGAMENTO';
+
+/** Item do contrato congelado no recibo (`contract_items` de `financial_receipts`).
+ *  Números podem chegar como string (JSON do `db query`, script de regerar). */
+export interface ReciboItemContrato {
+    description: string | null;
+    unit: string | null;
+    quantity: number | string | null;
+    unit_price: number | string | null;
+    total_price: number | string | null;
+}
 
 // ────────────────────────────────────────────────────────────
 // Contas a Pagar (parcelas de Suprimentos — Pedidos e Contratos)

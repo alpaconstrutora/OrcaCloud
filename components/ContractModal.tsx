@@ -841,7 +841,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 setFormData({ ...formData, number: e.target.value });
                                             }}
                                             onBlur={handleNumberBlur}
-                                            className={`w-full px-3 h-9 bg-gray-50 border rounded-[6px] text-sm font-semibold font-mono focus:outline-none focus:ring-2 transition-all ${useNewNumbering ? 'text-gray-400' : ''} ${numberError ? 'border-red-400 focus:ring-red-500/10 focus:border-red-500' : 'border-gray-100 focus:ring-blue-500/10 focus:border-blue-500'}`}
+                                            // Valor sempre escuro, mesmo automático/só-leitura: cinza-claro
+                                            // lê como placeholder vazio (guia §32). Quem diz que é
+                                            // automático é o botão de regerar e o motivo da trava.
+                                            className={`w-full px-3 h-9 bg-gray-50 border rounded-[6px] text-sm font-semibold font-mono text-gray-900 focus:outline-none focus:ring-2 transition-all ${numberError ? 'border-red-400 focus:ring-red-500/10 focus:border-red-500' : 'border-gray-100 focus:ring-blue-500/10 focus:border-blue-500'}`}
                                         />
                                         {isCheckingNumber && (
                                             <div className="absolute right-4 top-1/2 -translate-y-1/2">

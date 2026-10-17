@@ -21,11 +21,16 @@
  * "invoice" — logo + RECIBO, metadados, valor em destaque + contato, tabela de
  * uma linha, declaração + barra TOTAL, assinatura, rodapé. Cor de destaque =
  * coral dos portais (`PortalKit.accent`). Só helvetica: não há fonte embutida.
+ *
+ * Recibo de contrato (17/10/2026, docs/planos/2026-10-17-recibo-contrato-objeto-itens.md):
+ * a linha da tabela leva "Contrato: <nº>" e "Objeto: <título>", a declaração cita o
+ * objeto e, entre a tabela e a declaração, entra "ITENS DO CONTRATO" (congelados em
+ * `contract_items`). Recibo sem contrato sai com o desenho de antes.
  */
 import { jsPDF } from 'jspdf';
 import { valorPorExtenso } from '../services/docxFieldCatalog';
 import { FORMAS_PAGAMENTO } from './baixaRecebivel';
-import type { FinancialReceipt, FinancialReceiptKind } from '../types/financial';
+import type { FinancialReceipt, FinancialReceiptKind, ReciboItemContrato } from '../types/financial';
 
 const FORMA_LABEL: Record<string, string> = Object.fromEntries(FORMAS_PAGAMENTO.map(f => [f.value, f.label]));
 
@@ -80,12 +85,25 @@ export function verboDoCredor(documento?: string | null): string {
     return 'Recebi(emos)';
 }
 
+/**
+ * "referente a …" da declaração: a descrição do título e, quando o título vem de
+ * contrato, o OBJETO do contrato (pedido de 17/10/2026: "para identificar do que
+ * se trata o recibo"). Objeto já contido na descrição não se repete.
+ */
+function referenteDoRecibo(r: Pick<FinancialReceipt, 'description' | 'contract_title'>): string {
+    const descricao = (r.description ?? '').trim();
+    const objeto = (r.contract_title ?? '').trim();
+    const objetoNovo = objeto && !descricao.toLowerCase().includes(objeto.toLowerCase()) ? objeto : '';
+    if (descricao && objetoNovo) return `, referente a ${descricao} — objeto: ${objetoNovo}`;
+    if (descricao) return `, referente a ${descricao}`;
+    return objeto ? `, referente a ${objeto}` : '';
+}
+
 /** A frase do corpo do recibo. Pura, para teste. */
 export function textoRecibo(
-    r: Pick<FinancialReceipt, 'amount' | 'payer_name' | 'payer_document' | 'description' | 'kind' | 'issuer_name' | 'issuer_document' | 'payee_document'>,
+    r: Pick<FinancialReceipt, 'amount' | 'payer_name' | 'payer_document' | 'description' | 'kind' | 'issuer_name' | 'issuer_document' | 'payee_document' | 'contract_title'>,
 ): string {
-    const descricao = (r.description ?? '').trim();
-    const referente = descricao ? `, referente a ${descricao}` : '';
+    const referente = referenteDoRecibo(r);
     const valor = `${brl(r.amount)} (${valorPorExtenso(r.amount)})`;
 
     if (ehPagamento(r)) {
@@ -189,18 +207,71 @@ export function assinanteDoRecibo(
     return { nome: (r.issuer_name ?? '').trim() || 'Emitente', documento: documentoRotulado(r.issuer_document), papel: 'Emitente' };
 }
 
-/** A única linha da tabela: o título pago. */
+/** A única linha da tabela: o título pago (+ nº e objeto do contrato, quando há). */
 export function linhaTabelaRecibo(
-    r: Pick<FinancialReceipt, 'description' | 'contract_number' | 'payment_date' | 'payment_type' | 'amount'>,
-): { descricao: string; contrato: string | null; data: string; forma: string; valor: string } {
+    r: Pick<FinancialReceipt, 'description' | 'contract_number' | 'contract_title' | 'payment_date' | 'payment_type' | 'amount'>,
+): { descricao: string; contrato: string | null; objeto: string | null; data: string; forma: string; valor: string } {
     const contrato = (r.contract_number ?? '').trim();
+    const objeto = (r.contract_title ?? '').trim();
     return {
         descricao: (r.description ?? '').trim() || '—',
         contrato: contrato ? `Contrato: ${contrato}` : null,
+        objeto: objeto ? `Objeto: ${objeto}` : null,
         data: dataBR(r.payment_date),
         forma: rotuloFormaPagamento(r.payment_type) ?? '—',
         valor: brl(r.amount),
     };
+}
+
+/** Número do JSON congelado (pode vir string); inválido → null. */
+function numeroDoItem(v: number | string | null | undefined): number | null {
+    if (v === null || v === undefined || v === '') return null;
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
+const qtdBR = (n: number) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(n);
+
+export interface LinhaItemContrato {
+    item: string;
+    unid: string;
+    qtd: string;
+    unitario: string;
+    total: string;
+}
+
+/**
+ * Linhas da seção "ITENS DO CONTRATO" (tabela completa, decisão do usuário em
+ * 17/10/2026). Cabem `maxLinhas`; se não couberem todos, a última vira o resumo
+ * "+ N itens — ver contrato <nº>". Sem itens → nada (a seção não aparece).
+ */
+export function linhasItensContrato(
+    itens: ReciboItemContrato[] | null | undefined,
+    maxLinhas: number,
+    numeroContrato?: string | null,
+): { linhas: LinhaItemContrato[]; resto: string | null } {
+    const lista = Array.isArray(itens) ? itens : [];
+    if (!lista.length) return { linhas: [], resto: null };
+    const max = Math.max(1, Math.floor(maxLinhas));
+    const cabem = lista.length <= max ? lista.length : max - 1;
+    const linhas = lista.slice(0, cabem).map((i) => {
+        const qtd = numeroDoItem(i.quantity);
+        const unit = numeroDoItem(i.unit_price);
+        const total = numeroDoItem(i.total_price);
+        return {
+            item: (i.description ?? '').trim() || '—',
+            unid: (i.unit ?? '').trim() || '—',
+            qtd: qtd === null ? '—' : qtdBR(qtd),
+            unitario: unit === null ? '—' : brl(unit),
+            total: total === null ? '—' : brl(total),
+        };
+    });
+    const faltam = lista.length - cabem;
+    const contrato = (numeroContrato ?? '').trim();
+    const resto = faltam > 0
+        ? `+ ${faltam} ${faltam === 1 ? 'item' : 'itens'}${contrato ? ` — ver contrato ${contrato}` : ''}`
+        : null;
+    return { linhas, resto };
 }
 
 /** Corta em `max` linhas; a última ganha reticências. */
@@ -414,15 +485,21 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
     const linha = linhaTabelaRecibo(r);
     fonte('bold', 9.5, COR.ink);
     const descLinhas = limitarLinhas(doc.splitTextToSize(linha.descricao, W_DESC) as string[], 3);
+    // Abaixo da descrição, em cinza: nº do contrato e objeto (até 2 linhas).
+    fonte('normal', 8, COR.muted);
+    const notas = [
+        ...(linha.contrato ? [linha.contrato] : []),
+        ...(linha.objeto ? limitarLinhas(doc.splitTextToSize(linha.objeto, W_DESC) as string[], 2) : []),
+    ];
     const yL = yT + 9;
-    const hL = Math.max(12, 5 + 4.6 * descLinhas.length + (linha.contrato ? 4.2 : 0) + 3);
+    const hL = Math.max(12, 5 + 4.6 * descLinhas.length + 4.2 * notas.length + 3);
     preencher(COR.zebra);
     doc.rect(M, yL, R - M, hL, 'F');
     fonte('bold', 9.5, COR.ink);
     descLinhas.forEach((l, i) => doc.text(l, X_DESC, yL + 6.5 + i * 4.6));
-    if (linha.contrato) {
+    if (notas.length) {
         fonte('normal', 8, COR.muted);
-        doc.text(linha.contrato, X_DESC, yL + 6.5 + descLinhas.length * 4.6);
+        notas.forEach((l, i) => doc.text(l, X_DESC, yL + 6.5 + descLinhas.length * 4.6 + i * 4.2));
     }
     fonte('normal', 9.5, COR.ink);
     doc.text(linha.data, X_DATA, yL + 6.5);
@@ -434,8 +511,65 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
     doc.line(M, yL + hL, R, yL + hL);
     const yFimTabela = yL + hL;
 
+    // A declaração é medida ANTES dos itens: o espaço dos itens é o que sobra entre a
+    // tabela e a declaração, para a assinatura não passar do rodapé.
+    const declaracao = textoRecibo(r);
+    const FATOR = 1.45, PT_DECL = 9.5;
+    fonte('normal', PT_DECL, COR.ink);
+    let linhasDecl = doc.splitTextToSize(declaracao, 98) as string[];
+    const declAbaixo = arranjoDeclaracao(linhasDecl.length) === 'abaixo';
+    const nDecl = declAbaixo
+        ? limitarLinhas(doc.splitTextToSize(declaracao, R - M) as string[], 16).length
+        : linhasDecl.length;
+    const alturaDecl = (declAbaixo ? 20 : 5) + (nDecl - 1) * alturaLinhaMm(PT_DECL, FATOR);
+
+    // ── 4b. Itens do contrato (só quando o recibo vem de contrato com itens) ──
+    let yFimItens = yFimTabela;
+    if (r.contract_items?.length) {
+        const H_ITEM = 5.5;
+        const X_UNID = 112, X_QTD = 132, X_UNIT = 160;
+        const yRotulo = yFimTabela + 10;
+        const yCab = yRotulo + 6.5;          // base do texto do cabeçalho
+        const yPrimeira = yCab + 7;          // base do texto da 1ª linha
+        // Fim da declaração ≤ 214 mm → assinatura (≥ +32) termina antes do aviso de
+        // CANCELADO (258) e do rodapé (266).
+        const yFimItensMax = 214 - alturaDecl - 14;
+        const maxLinhas = Math.floor((yFimItensMax - (yPrimeira - 4) - 2) / H_ITEM);
+        const { linhas, resto } = linhasItensContrato(r.contract_items, maxLinhas, r.contract_number);
+
+        rotulo('ITENS DO CONTRATO', M, yRotulo, 8);
+        // Cabeçalho: fundo branco, texto na cor das células (guia §6.11 — nunca cinza).
+        fonte('bold', 8, COR.ink);
+        doc.text('Item', X_DESC, yCab);
+        doc.text('Unid.', X_UNID, yCab);
+        doc.text('Qtd.', X_QTD, yCab, { align: 'right' });
+        doc.text('Valor unit.', X_UNIT, yCab, { align: 'right' });
+        doc.text('Total', X_VALOR, yCab, { align: 'right' });
+        tracar(COR.line);
+        doc.line(M, yCab + 2.5, R, yCab + 2.5);
+
+        let y = yPrimeira;
+        for (const l of linhas) {
+            fonte('normal', 9, COR.ink);
+            doc.text(limitarLinhas(doc.splitTextToSize(l.item, X_UNID - X_DESC - 4) as string[], 1)[0], X_DESC, y);
+            doc.text(limitarLinhas(doc.splitTextToSize(l.unid, X_QTD - X_UNID - 12) as string[], 1)[0], X_UNID, y);
+            doc.text(l.qtd, X_QTD, y, { align: 'right' });
+            doc.text(l.unitario, X_UNIT, y, { align: 'right' });
+            doc.text(l.total, X_VALOR, y, { align: 'right' });
+            y += H_ITEM;
+        }
+        if (resto) {
+            fonte('normal', 8, COR.muted);
+            doc.text(resto, X_DESC, y);
+            y += H_ITEM;
+        }
+        yFimItens = y - H_ITEM + 3;
+        tracar(COR.line);
+        doc.line(M, yFimItens, R, yFimItens);
+    }
+
     // ── 5. Declaração + barra TOTAL ──────────────────────────────────────────
-    const yD = yFimTabela + 14;
+    const yD = yFimItens + 14;
     preencher(COR.accent);
     doc.roundedRect(126, yD - 6, R - 126, 11, 1.5, 1.5, 'F');
     fonte('bold', 9, COR.branco);
@@ -443,12 +577,9 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
     fonte('bold', 11.5, COR.branco);
     doc.text(brl(r.amount), X_VALOR, yD + 1.2, { align: 'right' });
 
-    const declaracao = textoRecibo(r);
-    const FATOR = 1.45, PT_DECL = 9.5;
     fonte('normal', PT_DECL, COR.ink);
-    let linhasDecl = doc.splitTextToSize(declaracao, 98) as string[];
     let yDecl: number;
-    if (arranjoDeclaracao(linhasDecl.length) === 'abaixo') {
+    if (declAbaixo) {
         linhasDecl = limitarLinhas(doc.splitTextToSize(declaracao, R - M) as string[], 16);
         rotulo('DECLARAÇÃO', M, yD + 14, 8);
         yDecl = yD + 20;

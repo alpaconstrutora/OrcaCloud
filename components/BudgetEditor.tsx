@@ -2039,7 +2039,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           {/* Grupo 1: Visualização & Configurações */}
           <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 rounded-[10px] border border-gray-100 pr-4">
             <div className="flex items-center gap-2 pl-1">
-              <label className="text-xs font-bold text-gray-400 uppercase whitespace-nowrap">BDI (%):</label>
+              <label className="text-xs font-semibold text-slate-500 whitespace-nowrap">BDI (%):</label>
               <input
                 type="number"
                 value={settings.bdi}
@@ -2772,10 +2772,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   </td>
                   <td colSpan={7} className="px-3 py-2.5 border-r border-gray-700"></td>
                   <td className="px-3 py-2.5 border-r border-gray-700 last:border-r-0 relative">
-                    <div className="flex items-center justify-end">
+                    <div className="flex flex-col items-end gap-1">
                       <span className="font-medium text-sm whitespace-nowrap">R$ {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                      <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-600 pl-2 absolute right-3 bg-gray-800 rounded-[6px] shadow-sm z-20">
-                        <div className="flex flex-col mr-1">
+                      <div className="flex gap-1 items-center">
+                        <div className="flex items-center">
                           {gIndex > 0 && (
                             <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'UP')} className="text-gray-400 hover:text-white p-1" title="Mover para Cima">
                               <ArrowUp className="w-3 h-3" />
@@ -2832,10 +2832,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         </td>
                         <td colSpan={7} className="px-3 py-2.5 border-r border-gray-200"></td>
                         <td className="px-3 py-2.5 border-r border-gray-200 last:border-r-0 relative">
-                          <div className="flex items-center justify-end">
+                          <div className="flex flex-col items-end gap-1">
                             <span className="font-medium text-gray-800 text-sm whitespace-nowrap">R$ {phaseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-300 pl-2 absolute right-3 bg-gray-100/95 rounded-[6px] shadow-sm z-20">
-                              <div className="flex flex-col mr-1">
+                            <div className="flex gap-1 items-center">
+                              <div className="flex items-center">
                                 {pIndex > 0 && (
                                   <button type="button" onClick={(e) => handleMovePhase(e, gIndex, pIndex, 'UP')} className="text-gray-500 hover:text-blue-600 p-1" title="Mover para Cima">
                                     <ArrowUp className="w-3 h-3" />
@@ -2895,10 +2895,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                               </td>
                               <td colSpan={7} className="px-3 py-2.5 border-r border-gray-100"></td>
                               <td className="px-3 py-2.5 border-r border-gray-100 last:border-r-0 relative">
-                                <div className="flex items-center justify-end">
+                                <div className="flex flex-col items-end gap-1">
                                   <span className="font-medium text-gray-700 text-sm whitespace-nowrap">R$ {subTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                  <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-200 pl-2 absolute right-3 bg-gray-50/95 rounded-[6px] shadow-sm z-20">
-                                    <div className="flex flex-col mr-1">
+                                  <div className="flex gap-1 items-center">
+                                    <div className="flex items-center">
                                       {spIndex > 0 && (
                                         <button type="button" onClick={(e) => handleMoveSubPhase(e, gIndex, pIndex, spIndex, 'UP')} className="text-gray-400 hover:text-blue-600 p-1" title="Mover para Cima">
                                           <ArrowUp className="w-3 h-3" />
@@ -3118,7 +3118,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
                   <div className="grid grid-cols-12 gap-4">
                     <div className="col-span-3">
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo</label>
                       <select
                         className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
                         value={newItem.type}
@@ -3130,7 +3130,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       </select>
                     </div>
                     <div className="col-span-6">
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Descrição do Item</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição do Item</label>
                       <input
                         type="text"
                         placeholder="Ex: Cimento Portland CP-III-40 ensacado"
@@ -3140,7 +3140,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       />
                     </div>
                     <div className="col-span-1">
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Unid.</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Unid.</label>
                       <input
                         type="text"
                         placeholder="kg"
@@ -3150,7 +3150,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Preço Base (R$)</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Preço Base (R$)</label>
                       <MoneyCentsInput
                         className="w-full rounded-[6px] border border-gray-200 p-2 text-sm text-right focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                         value={newItem.price}
@@ -3158,7 +3158,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       />
                     </div>
                     <div className="col-span-9">
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Grupo (Categoria)</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Grupo (Categoria)</label>
                       <select
                         className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
                         value={newItem.category}
@@ -3189,7 +3189,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <div className="p-2 border-b border-gray-100 bg-white">
                 <div className="grid grid-cols-12 gap-3 mb-4">
                   <div className="col-span-1">
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Código</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Código</label>
                     <input
                       type="text"
                       placeholder="Ex: 98546"
@@ -3199,7 +3199,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo</label>
                     <select
                       className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                       value={searchType}
@@ -3211,7 +3211,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </select>
                   </div>
                   <div className="col-span-3">
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Grupo</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Grupo</label>
                     <select
                       className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                       value={searchGroupFilter}
@@ -3224,7 +3224,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </select>
                   </div>
                   <div className="col-span-6">
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Descrição</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição</label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -3264,7 +3264,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 {/* Filtros de Base/Configuração */}
                 <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-50 rounded-[10px] border border-gray-100 transition-all">
                   <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-gray-400 uppercase">Base:</label>
+                    <label className="text-xs font-semibold text-slate-500">Base:</label>
                     <select
                       className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer max-w-[150px]"
                       value={searchDatabase}
@@ -3286,7 +3286,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="h-4 w-[1px] bg-gray-200" />
 
                   <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-gray-400 uppercase">Referência:</label>
+                    <label className="text-xs font-semibold text-slate-500">Referência:</label>
                     <select
                       className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                       value={searchReference}
@@ -3304,7 +3304,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="h-4 w-[1px] bg-gray-200" />
 
                   <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-gray-400 uppercase">Estado:</label>
+                    <label className="text-xs font-semibold text-slate-500">Estado:</label>
                     <select
                       className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                       value={searchLocation}
@@ -3323,7 +3323,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="h-4 w-[1px] bg-gray-200" />
 
                   <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-gray-400 uppercase">Encargos:</label>
+                    <label className="text-xs font-semibold text-slate-500">Encargos:</label>
                     <select
                       className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                       value={searchCharges}
@@ -3535,7 +3535,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Classe de precisão</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Classe de precisão</label>
                     <select
                       value={selectedDetailsItem.precisionClass || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, precisionClass: e.target.value ? e.target.value as BudgetEntry['precisionClass'] : undefined } : prev)}
@@ -3550,7 +3550,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Status do item</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Status do item</label>
                     <select
                       value={selectedDetailsItem.status || 'Rascunho'}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, status: e.target.value as BudgetEntry['status'] } : prev)}
@@ -3560,7 +3560,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Disciplina</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Disciplina</label>
                     <input
                       value={selectedDetailsItem.discipline || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, discipline: e.target.value } : prev)}
@@ -3569,7 +3569,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Responsável</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Responsável</label>
                     <input
                       value={selectedDetailsItem.responsible || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, responsible: e.target.value } : prev)}
@@ -3587,7 +3587,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     ['room', 'Ambiente']
                   ].map(([key, label]) => (
                     <div key={key}>
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">{label}</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">{label}</label>
                       <input
                         value={(selectedDetailsItem.location as any)?.[key] || ''}
                         onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, location: { ...(prev.location || {}), [key]: e.target.value } } : prev)}
@@ -3599,7 +3599,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Fórmula / memória de cálculo</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Fórmula / memória de cálculo</label>
                     <textarea
                       rows={4}
                       value={selectedDetailsItem.calculationMemory?.formula || ''}
@@ -3609,7 +3609,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Resultado calculado</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Resultado calculado</label>
                     <input
                       type="number"
                       step="0.0001"
@@ -3631,7 +3631,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Justificativa / premissas</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Justificativa / premissas</label>
                   <textarea
                     rows={4}
                     value={selectedDetailsItem.calculationMemory?.justification || ''}
@@ -3642,7 +3642,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Observações internas</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Observações internas</label>
                   <textarea
                     rows={3}
                     value={selectedDetailsItem.notes || ''}

@@ -25,8 +25,23 @@
 | 0 — painel Asaas (usuário) | 0 de 6 — ⚠️ a chave atual é RECUSADA pela Asaas (HTTP 401), ver item 0.0 |
 | 1 — correções da integração existente | **12 de 14 publicados em 17/10/2026** (`bb5c6d2a`); 1.8 já estava resolvido; 1.14 fora do plano |
 | 2 — conta Asaas como Conta de Pagamento | **5 de 5 publicados em 17/10/2026** (`c55b4558` + `071b77b8`); falta só o USO: cadastrar a conta Asaas com chave válida (depende do item 0.0) |
-| 3 — PIX | não iniciada |
-| 4 — governança | não iniciada |
+| 3 — PIX | código pronto na frente `asaas-pix` (17/10), **não publicado** — ver "Andamento da Fase 3" |
+| 4 — governança | portão de DISPARO antecipado para a Fase 3 (papel, alçada, tetos, piloto, competência); faltam `supplier_payments_auditoria` e RLS de escrita por papel |
+
+## Andamento da Fase 3 (17/10/2026)
+
+Contrato da Asaas conferido na documentação oficial (17/10): `POST /v3/transfers` { value, operationType: PIX, pixAddressKey, pixAddressKeyType CPF|CNPJ|EMAIL|PHONE|EVP, description, scheduleDate, externalReference } → { id, status PENDING|BANK_PROCESSING|DONE|CANCELLED|FAILED, transferFee, effectiveDate, authorized, failReason, transactionReceiptUrl }; cancelar = `DELETE /v3/transfers/{id}/cancel` (só antes de concluir). `authorized=false` = a conta exige token (validação de eventos críticos) — item novo da Fase 0.
+
+| # | Situação | Prova |
+|---|---|---|
+| 3.1 favorecido do título | código | Medido: `party_id` NUNCA é preenchido. `utils/pixDestino.ts`: fornecedor por `supplier_id`; colaborador pelo `reference_id` da folha (`labor-<folha>-indiv-<RUBRICA>-<colab>` e `labor-<folha>-<obra>-<colab>-salario`); folha AGRUPADA (`unallocated-salario`, `<obra>-salario`) não vira PIX para uma pessoa; sócio pelo item do pró-labore (`reference_id` = `prolabore_payroll_items.id` → `partner_id`). 9 testes com referências reais. `_shared/pixFavorecido.ts` lê as chaves do cadastro. |
+| 3.2 `utils/pixKey.ts` | código | valida por tipo (DV de CPF/CNPJ reusando `lib/validators.ts`, DDD real, EVP), normaliza no formato da Asaas, deduz tipo de chave antiga sem tipo, mascara. Chave fictícia do Bacen para sandbox (999.911.111-40) passa. Aplicada nos cadastros: fornecedor, colaborador, sócio (campos NOVOS — não havia tela) e conta bancária da empresa. 10 testes. |
+| 3.3 `pix_quote` / `pix_pay` / cancelar | código + migration `aplicar_20271017400000` | servidor relê a chave pela `ref` (a chave do cadastro nunca vai ao navegador); avulso exige nome + CPF/CNPJ válido e tem teto próprio; `externalReference` = id do `supplier_payments`; DONE na resposta → mesmo processador do webhook. Colunas novas: `pix_key_type`, `beneficiary_document`, `favorecido_origem`, `asaas_authorized`; `company_partners.pix_tipo`. |
+| 3.4 TRANSFER_* | já na Fase 1 | `decidirSaida('transfer', …)` + processador; baixa grava `payment_type='PIX'` e a conta Asaas. |
+| 3.5 tela | código | Contas a Pagar › Parcelas: ação "PIX" (ou "Asaas" para boleto) só nas linhas cuja org tem conta Asaas; selo "Pagamento enviado / Agendado / Aguardando token"; ícone de alerta quando a última tentativa falhou. `components/financeiro/PagarPixSheet.tsx`: chaves mascaradas do cadastro ou digitada, agendamento, lista de bloqueios, confirmação obrigatória, botão desabilitado sempre com o motivo. Ação da visão Notas removida (nunca baixava o título). |
+| Portão (Fase 4, disparo) | código | `utils/asaasGovernanca.ts` (10 testes) + `_shared/asaasDisparo.ts`: só owner/admin; alçada APROVADO, ou RASCUNHO sem faixa (`fn_resolve_approval_levels`); tetos por pagamento/dia (dia de Brasília)/avulso; piloto; competência fechada; pagamento em curso; e conta Asaas CADASTRADA (a chave global não paga). Vale para boleto e PIX; o modal de boleto mostra os bloqueios. |
+
+Fora do escopo, registrado: violações de padrão de UI pré-existentes em `CompanyPartnersTab`, `SupplierBankAccountsTab`, `CompanyBankAccountsTab` (pílula uppercase, `confirm()` nativo) — mesma contagem antes e depois desta mudança.
 
 ## Andamento da Fase 2 (17/10/2026)
 

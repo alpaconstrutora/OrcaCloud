@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown, Download, FileText, Loader2, MoveHorizontal, Receipt, RefreshCw, Search, Tag, Undo2, X,
+    AlertCircle, Building2, Check, ChevronDown, Download, FileText, Landmark, Loader2, MoveHorizontal, Receipt, RefreshCw, Search, Tag, Undo2, X,
 } from 'lucide-react';
 import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financial';
 import { payableService, payableParty } from '../services/payableService';
@@ -19,6 +19,10 @@ import { mensagemResultadoBaixa } from '../utils/baixaRecebivel';
 import { numeroRecibo } from '../utils/reciboRecebimento';
 import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, contarLinhasDaTela, entradasDaPagina, linhasDaTela, type ChaveDeGrupo } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
+import PagarPixSheet from './financeiro/PagarPixSheet';
+import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
+import { asaasContaService } from '../services/asaasContaService';
+import { supplierPaymentService, type SupplierPayment } from '../services/supplierPaymentService';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { idsComAlcadaPendente, MOTIVO_ALCADA_PENDENTE } from '../services/alcadaDaBaixa';
 
@@ -466,6 +470,32 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             .then(ids => { if (seq === alcadaSeq.current) setAlcadaPendente(ids); })
             .catch(err => console.error('[ContasPagarParcelas] Erro ao conferir a alçada:', err));
     }, [organizationId, loading]);
+
+    // ─── Pagar pela Asaas (Fase 3 — docs/planos/2026-10-16-asaas-pendencias-e-pix.md)
+    // A ação só aparece nas linhas cuja organização tem conta Asaas ativa
+    // (`fn_conta_asaas_da_org`); o portão de verdade (papel, alçada, tetos,
+    // piloto, competência) é do servidor e aparece no drawer com o motivo.
+    const [pagandoAsaas, setPagandoAsaas] = useState<Payable | null>(null);
+    const [orgsComAsaas, setOrgsComAsaas] = useState<Set<string>>(new Set());
+    const [pagamentosAsaas, setPagamentosAsaas] = useState<Record<string, SupplierPayment>>({});
+    const orgsDasLinhas = useMemo(() => [...new Set(rows.map(r => r.organization_id))].sort().join(','), [rows]);
+    useEffect(() => {
+        let vivo = true;
+        const orgs = orgsDasLinhas ? orgsDasLinhas.split(',') : [];
+        Promise.all(orgs.map(o => asaasContaService.contaDaOrg(o).then(id => (id ? o : null)).catch(() => null)))
+            .then(l => { if (vivo) setOrgsComAsaas(new Set(l.filter((o): o is string => !!o))); });
+        return () => { vivo = false; };
+    }, [orgsDasLinhas]);
+    const pagamentosSeq = useRef(0);
+    const recarregarPagamentosAsaas = React.useCallback(() => {
+        if (orgsComAsaas.size === 0) { setPagamentosAsaas({}); return; }
+        const ids = rows.filter(r => orgsComAsaas.has(r.organization_id)).map(r => r.id);
+        const seq = ++pagamentosSeq.current;
+        supplierPaymentService.byTransactions(ids)
+            .then(m => { if (seq === pagamentosSeq.current) setPagamentosAsaas(m); })
+            .catch(err => console.error('[ContasPagarParcelas] Erro ao carregar pagamentos Asaas:', err));
+    }, [rows, orgsComAsaas]);
+    useEffect(() => { recarregarPagamentosAsaas(); }, [recarregarPagamentosAsaas]);
 
     /* Origens realmente presentes nos dados, ordenadas pelo rótulo. Se o filtro
        persistido apontar para uma origem que sumiu do recorte atual, ele é
@@ -1124,6 +1154,35 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                             Pago
                                                         </button>
                                                     )}
+                                                    {!quitado && orgsComAsaas.has(row.organization_id) && (() => {
+                                                        const sp = pagamentosAsaas[row.id];
+                                                        if (sp && ['APPROVED', 'PENDING', 'SCHEDULED'].includes(sp.status)) {
+                                                            const rotulo = sp.asaas_authorized === false ? 'Aguardando token'
+                                                                : sp.status === 'SCHEDULED' ? `Agendado ${formatDateBR(sp.scheduled_date)}`
+                                                                : 'Pagamento enviado';
+                                                            return (
+                                                                <span className="flex items-center gap-1 text-sm font-normal text-blue-700"
+                                                                    title={sp.asaas_authorized === false
+                                                                        ? 'A Asaas está esperando a autorização por token no app/SMS da conta.'
+                                                                        : 'A baixa acontece sozinha quando a Asaas confirmar.'}>
+                                                                    <Landmark className="w-3.5 h-3.5" /> {rotulo}
+                                                                </span>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <button
+                                                                onClick={() => setPagandoAsaas(row)}
+                                                                className="text-blue-700 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all flex items-center gap-1"
+                                                                title={sp?.status === 'FAILED'
+                                                                    ? `A última tentativa falhou: ${sp.failure_reason ?? 'sem motivo informado'}. Clique para tentar de novo.`
+                                                                    : row.source_system === 'BOLETO' ? 'Pagar o boleto pela conta Asaas' : 'Pagar por PIX pela conta Asaas'}
+                                                            >
+                                                                <Landmark className="w-3.5 h-3.5" />
+                                                                {row.source_system === 'BOLETO' ? 'Asaas' : 'PIX'}
+                                                                {sp?.status === 'FAILED' && <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
+                                                            </button>
+                                                        );
+                                                    })()}
                                                     {row.effective_status === 'PAGO' && (
                                                         <>
                                                             <span className="flex items-center gap-1 text-sm font-normal text-green-700">
@@ -1282,6 +1341,40 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             onConfirm={confirmarBaixa}
             progresso={baixaProgresso}
         />
+
+        {pagandoAsaas && pagandoAsaas.source_system !== 'BOLETO' && (
+            <PagarPixSheet
+                organizationId={pagandoAsaas.organization_id}
+                transactionId={pagandoAsaas.id}
+                onClose={() => setPagandoAsaas(null)}
+                onDone={r => {
+                    setPagandoAsaas(null);
+                    // Só o selo da linha muda agora; a baixa vem do webhook (§22).
+                    recarregarPagamentosAsaas();
+                    notify(r.aguardando_autorizacao
+                        ? 'PIX criado na Asaas, aguardando autorização por token no app da Asaas.'
+                        : r.status === 'DONE'
+                            ? `PIX enviado e título baixado (${r.beneficiary_name ?? 'favorecido'}).`
+                            : `PIX enviado para ${r.beneficiary_name ?? 'o favorecido'}. A baixa acontece quando a Asaas confirmar.`);
+                    if (r.status === 'DONE') onReload();
+                }}
+            />
+        )}
+        {pagandoAsaas && pagandoAsaas.source_system === 'BOLETO' && pagandoAsaas.reference_id && (
+            <PagarBoletoAsaasModal
+                organizationId={pagandoAsaas.organization_id}
+                boletoId={pagandoAsaas.reference_id}
+                supplierName={pagandoAsaas.credor_display ?? pagandoAsaas.party_name}
+                amount={pagandoAsaas.amount}
+                dueDate={pagandoAsaas.due_date}
+                onClose={() => setPagandoAsaas(null)}
+                onPaid={() => {
+                    setPagandoAsaas(null);
+                    recarregarPagamentosAsaas();
+                    notify('Pagamento enviado à Asaas. A baixa acontece quando o banco confirmar.');
+                }}
+            />
+        )}
 
         {apropriando && (
             <ApropriarImovelSheet

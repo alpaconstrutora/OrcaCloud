@@ -7,6 +7,7 @@ import {
     ACCOUNT_TYPE_LABELS, PIX_KEY_TYPE_LABELS, EmployeeBankAccount, EmployeeBankAccountType, EmployeePixKeyType,
     describeBankAccount, emptyBankAccount, isBlankBankAccount, setPrimaryBankAccount,
 } from '../utils/employeeBankAccounts';
+import { validarChavePix } from '../utils/pixKey';
 
 /** Conta na lista da tela — `_key` identifica a linha antes de ela ter `id`. */
 export type EmployeeBankAccountDraft = EmployeeBankAccount & { _key: string };
@@ -59,13 +60,16 @@ const LaborEmployeeBankAccounts: React.FC<Props> = ({ accounts, onChange, loadin
     const set = <K extends keyof EmployeeBankAccount>(k: K, v: EmployeeBankAccount[K]) => setDraft(prev => ({ ...prev, [k]: v }));
 
     const aplicar = () => {
-        if (isBlankBankAccount(draft)) return;
+        if (isBlankBankAccount(draft) || pixInvalido) return;
+        // Chave guardada no formato que a Asaas aceita (CPF só dígitos, telefone +55…).
+        const chave = draft.pix_key?.trim() ? validarChavePix(draft.pix_key_type, draft.pix_key).chave : draft.pix_key;
+        const conta = { ...draft, pix_key: chave };
         if (editingKey === 'nova') {
             // A primeira conta já nasce principal; as demais não roubam a principal.
-            const nova: EmployeeBankAccountDraft = { ...draft, is_primary: accounts.length === 0, _key: crypto.randomUUID() };
+            const nova: EmployeeBankAccountDraft = { ...conta, is_primary: accounts.length === 0, _key: crypto.randomUUID() };
             onChange([...accounts, nova]);
         } else {
-            onChange(accounts.map(a => (a._key === editingKey ? { ...a, ...draft, is_primary: a.is_primary } : a)));
+            onChange(accounts.map(a => (a._key === editingKey ? { ...a, ...conta, is_primary: a.is_primary } : a)));
         }
         fechar();
     };
@@ -89,6 +93,9 @@ const LaborEmployeeBankAccounts: React.FC<Props> = ({ accounts, onChange, loadin
     };
 
     const blank = isBlankBankAccount(draft);
+    // Chave PIX que não confere com o tipo — antes só apareceria na Asaas, no
+    // momento de pagar. Vazia não é erro (a conta pode ser só bancária).
+    const pixInvalido = draft.pix_key?.trim() ? validarChavePix(draft.pix_key_type, draft.pix_key).motivo : null;
 
     return (
         <div className="space-y-4">
@@ -211,6 +218,7 @@ const LaborEmployeeBankAccounts: React.FC<Props> = ({ accounts, onChange, loadin
                         </Field>
                         <Field label="Chave PIX" className="md:col-span-2">
                             <input value={draft.pix_key ?? ''} onChange={e => set('pix_key', e.target.value)} className={inputCls} placeholder="CPF, e-mail, telefone ou chave aleatória" />
+                            {pixInvalido && <p className="mt-1 text-xs text-red-600">{pixInvalido}</p>}
                         </Field>
                         <Field label="Titular (se não for o colaborador)" className="md:col-span-3">
                             <input value={draft.holder_name ?? ''} onChange={e => set('holder_name', e.target.value)} className={inputCls} placeholder="Deixe em branco quando a conta é do próprio colaborador" />
@@ -224,8 +232,8 @@ const LaborEmployeeBankAccounts: React.FC<Props> = ({ accounts, onChange, loadin
                         <button
                             type="button"
                             onClick={aplicar}
-                            disabled={blank}
-                            title={blank ? 'Preencha banco, agência, conta ou chave PIX' : undefined}
+                            disabled={blank || !!pixInvalido}
+                            title={blank ? 'Preencha banco, agência, conta ou chave PIX' : (pixInvalido ?? undefined)}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {editingKey === 'nova' ? 'Adicionar à lista' : 'Atualizar conta'}

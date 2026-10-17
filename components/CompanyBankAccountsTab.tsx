@@ -11,6 +11,7 @@ import {
     TIPO_CONTA_LABELS, TIPO_PIX_LABELS,
 } from '../types';
 import { companyService } from '../services/companyService';
+import { validarChavePix } from '../utils/pixKey';
 import { masterDataService, MasterBank } from '../services/masterDataService';
 import Button from './ui/Button';
 
@@ -112,6 +113,13 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.banco_codigo.trim()) { setError('Código do banco é obrigatório.'); return; }
+        // Chave PIX validada contra o tipo (é a que paga o sócio pela Asaas).
+        let pixChave: string | undefined;
+        if (form.pix_chave.trim()) {
+            const r = validarChavePix(form.pix_tipo || null, form.pix_chave);
+            if (!r.ok) { setError(`Chave PIX: ${r.motivo}`); return; }
+            pixChave = r.chave;
+        }
         setSaving(true);
         setError(null);
         try {
@@ -122,7 +130,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
                 agencia: form.agencia.trim() || undefined,
                 conta: form.conta.trim() || undefined,
                 tipo_conta: (form.tipo_conta as TipoConta) || undefined,
-                pix_chave: form.pix_chave.trim() || undefined,
+                pix_chave: pixChave,
                 pix_tipo: (form.pix_tipo as TipoPix) || undefined,
                 favorecido: form.favorecido.trim() || undefined,
                 limite_credito: form.limite_credito ? parseFloat(form.limite_credito) : undefined,

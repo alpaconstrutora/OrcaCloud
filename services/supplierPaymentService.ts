@@ -23,6 +23,9 @@ export interface SupplierPayment {
     status: SupplierPaymentStatus;
     failure_reason?: string;
     receipt_url?: string;
+    pix_key_type?: string;
+    favorecido_origem?: 'fornecedor' | 'colaborador' | 'socio' | 'avulso';
+    asaas_authorized?: boolean | null;
     created_at?: string;
 }
 
@@ -37,6 +40,48 @@ export interface QuoteResult {
     real_value: number | null;
     captured_value: number | null;
     value_mismatch: boolean;
+    /** Por que o pagamento não pode ser disparado agora (portão de disparo). Vazio = pode. */
+    bloqueios?: string[];
+}
+
+/** Opção de chave do cadastro do favorecido — a chave crua não vem ao navegador. */
+export interface OpcaoChavePix {
+    ref: string;
+    rotulo: string;
+    tipo: 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria' | null;
+    chaveMascarada: string;
+    titular: string | null;
+    documento: string | null;
+    principal: boolean;
+    invalida: string | null;
+}
+
+export interface PixQuote {
+    ok: boolean;
+    titulo: { id: string; valor: number; vencimento: string | null; descricao: string | null; credor: string | null };
+    favorecido: {
+        origem: 'fornecedor' | 'colaborador' | 'socio' | 'avulso';
+        motivo: string | null;
+        nome: string | null;
+        documento: string | null;
+    };
+    opcoes: OpcaoChavePix[];
+    bloqueios: string[];
+    bloqueios_avulso: string[];
+    conta: { env: 'sandbox' | 'production'; cadastrada: boolean } | null;
+}
+
+export type DestinoPix =
+    | { ref: string }
+    | { avulso: { tipo: string; chave: string; nome: string; documento: string } };
+
+export interface PixPayResult {
+    ok: boolean;
+    supplier_payment_id: string;
+    asaas_transfer_id: string;
+    status: string | null;
+    aguardando_autorizacao: boolean;
+    beneficiary_name: string | null;
 }
 
 export interface PayResult {
@@ -47,7 +92,7 @@ export interface PayResult {
     beneficiary_name: string | null;
 }
 
-const COLS = 'id,organization_id,transaction_id,boleto_id,supplier_id,provider,payment_type,asaas_bill_id,asaas_transfer_id,identification_field,beneficiary_name,value,fee,scheduled_date,status,failure_reason,receipt_url,created_at';
+const COLS = 'id,organization_id,transaction_id,boleto_id,supplier_id,provider,payment_type,asaas_bill_id,asaas_transfer_id,identification_field,beneficiary_name,value,fee,scheduled_date,status,failure_reason,receipt_url,pix_key_type,favorecido_origem,asaas_authorized,created_at';
 
 async function invokeAsaasPayment<T>(body: Record<string, unknown>): Promise<T> {
     const { data, error } = await supabase.functions.invoke('asaas-payment', { body });
@@ -88,6 +133,26 @@ export const supplierPaymentService = {
         });
     },
 
+    /** Favorecido, chaves PIX cadastradas e bloqueios do portão de disparo. */
+    async pixQuote(organizationId: string, transactionId: string): Promise<PixQuote> {
+        return invokeAsaasPayment<PixQuote>({
+            organization_id: organizationId,
+            transaction_id: transactionId,
+            action: 'pix_quote',
+        });
+    },
+
+    /** Dispara o PIX. O servidor relê a chave do cadastro pela `ref` e reaplica o portão. */
+    async pixPay(organizationId: string, transactionId: string, destino: DestinoPix, scheduleDate?: string): Promise<PixPayResult> {
+        return invokeAsaasPayment<PixPayResult>({
+            organization_id: organizationId,
+            transaction_id: transactionId,
+            action: 'pix_pay',
+            destino,
+            schedule_date: scheduleDate,
+        });
+    },
+
     /** Cancela uma ordem de pagamento ainda não concluída. */
     async cancel(organizationId: string, supplierPaymentId: string): Promise<{ ok: boolean }> {
         return invokeAsaasPayment<{ ok: boolean }>({
@@ -109,6 +174,26 @@ export const supplierPaymentService = {
         const { data, error } = await q;
         if (error) throw error;
         return (data || []) as SupplierPayment[];
+    },
+
+    /**
+     * Última ordem de pagamento por título (badge na visão Parcelas). Lê só os
+     * títulos pedidos — a lista de Contas a Pagar chega a milhares de linhas.
+     */
+    async byTransactions(transactionIds: string[]): Promise<Record<string, SupplierPayment>> {
+        const mapa: Record<string, SupplierPayment> = {};
+        for (let i = 0; i < transactionIds.length; i += 200) {
+            const { data, error } = await supabase
+                .from('supplier_payments')
+                .select(COLS)
+                .in('transaction_id', transactionIds.slice(i, i + 200))
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            for (const r of (data || []) as SupplierPayment[]) {
+                if (r.transaction_id && !mapa[r.transaction_id]) mapa[r.transaction_id] = r;
+            }
+        }
+        return mapa;
     },
 
     /** Última ordem de pagamento de um boleto (para exibir status na UI). */

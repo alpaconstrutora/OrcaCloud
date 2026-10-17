@@ -2,11 +2,30 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { exigirMembro, respostaDeErro } from "../_shared/auth.ts"
-import { STATUS_SAIDA_OCUPANDO } from "../../../utils/asaasEventos.ts"
+import { exigirMembro, respostaDeErro, PAPEIS_GESTORES } from "../_shared/auth.ts"
 import { resolverContaAsaas, contaDoRegistro, cabecalhosAsaas, type ContaAsaas } from "../_shared/asaasConta.ts"
+import { lerTitulo, avaliarDisparo } from "../_shared/asaasDisparo.ts"
+import { destinoDoTitulo, opcaoEscolhida, opcoesPublicas } from "../_shared/pixFavorecido.ts"
+import { processarEventoAsaas } from "../_shared/asaasProcessar.ts"
+import { validarChavePix, tipoParaAsaas, type TipoChavePix } from "../../../utils/pixKey.ts"
+import { validateCpfCnpj } from "../../../lib/validators.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
+
+// asaas-payment — dinheiro SAINDO pela Asaas.
+//
+// Plano: docs/planos/2026-10-16-asaas-pendencias-e-pix.md (Fases 1, 3 e 4).
+//   quote / pay      — boleto de terceiro (POST /v3/bill/simulate, /v3/bill)
+//   pix_quote / pix_pay — PIX (POST /v3/transfers — contrato conferido na doc
+//                      oficial em 17/10/2026)
+//   cancel           — boleto (POST /v3/bill/{id}/cancel) ou PIX
+//                      (DELETE /v3/transfers/{id}/cancel), só antes de concluir
+//
+// Portão de disparo único (`avaliarDisparo` → `bloqueiosDoDisparo`, testado):
+// só owner/admin; título aprovado na alçada (ou sem faixa); tetos da conta
+// Asaas (por pagamento, por dia, avulso); piloto; competência aberta; nenhum
+// pagamento em curso; e CONTA ASAAS CADASTRADA — a chave global de reserva
+// não paga nada. Os *_quote devolvem a mesma lista de bloqueios para a tela.
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -45,15 +64,25 @@ interface BillResponse {
     transactionReceiptUrl?: string;
     canBeCancelled?: boolean;
 }
+interface TransferResponse {
+    id?: string;
+    status?: string;            // PENDING | BANK_PROCESSING | DONE | CANCELLED | FAILED
+    value?: number;
+    transferFee?: number;
+    effectiveDate?: string;
+    scheduleDate?: string;
+    authorized?: boolean;
+    failReason?: string;
+    transactionReceiptUrl?: string;
+}
+
+const hojeBRT = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
 
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-    // A validação de sessão E de vínculo com a organização vive em
-    // `exigirMembro`, depois que o corpo é lido (precisa do organization_id).
     const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-
     const admin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -61,34 +90,43 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({})) as {
         organization_id?: string;
         boleto_id?: string;
+        transaction_id?: string;
         supplier_payment_id?: string;
-        action?: 'quote' | 'pay' | 'cancel';
+        action?: 'quote' | 'pay' | 'cancel' | 'pix_quote' | 'pix_pay';
         schedule_date?: string;
+        destino?: {
+            ref?: string;
+            avulso?: { tipo?: string; chave?: string; nome?: string; documento?: string };
+        };
     };
 
     const { organization_id, boleto_id } = body;
     const action = body.action ?? 'quote';
 
-    // Achado C2-03: o organization_id vinha do corpo e nunca era conferido
-    // contra o chamador — e aqui o efeito é dinheiro SAINDO, porque `pay`
-    // dispara pagamento de boleto real na Asaas. O cliente abaixo é
-    // service_role, então a RLS não está no caminho para servir de rede.
+    // Achado C2-03: organization_id do corpo SEMPRE conferido contra o chamador.
     const vinculo = await exigirMembro(req, organization_id);
     if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
     const userEmail = vinculo.email;
+    const ehGestor = PAPEIS_GESTORES.includes(vinculo.papel);
+    const soGestor = () => json({ error: 'Só proprietário ou administrador da organização dispara ou cancela pagamento pela Asaas.' }, 403);
 
     const semConta = () => json({
         error: 'Nenhuma conta Asaas configurada para esta organização. Cadastre em Minha Organização › Contas.',
     }, 503);
 
-    // ─── action: cancel ───────────────────────────────────────
+    if (body.schedule_date && (!/^\d{4}-\d{2}-\d{2}$/.test(body.schedule_date) || body.schedule_date < hojeBRT())) {
+        return json({ error: 'Data de agendamento inválida (use uma data de hoje em diante).' }, 400);
+    }
+
+    // ─── action: cancel (boleto ou PIX) ───────────────────────
     if (action === 'cancel') {
+        if (!ehGestor) return soGestor();
         const paymentId = body.supplier_payment_id;
         if (!paymentId) return json({ error: 'supplier_payment_id é obrigatório para cancel.' }, 400);
 
         const { data: sp } = await admin
             .from('supplier_payments')
-            .select('id,asaas_bill_id,status,boleto_id,payment_account_id')
+            .select('id,asaas_bill_id,asaas_transfer_id,status,boleto_id,payment_account_id')
             .eq('id', paymentId)
             .eq('organization_id', organization_id)
             .maybeSingle();
@@ -96,14 +134,17 @@ serve(async (req: Request) => {
         if (sp.status === 'CANCELLED') return json({ ok: true, already_cancelled: true });
         if (sp.status === 'DONE') return json({ error: 'Pagamento já concluído — não pode ser cancelado.' }, 422);
 
-        if (sp.asaas_bill_id) {
+        if (sp.asaas_bill_id || sp.asaas_transfer_id) {
             // Cancela na conta que DISPAROU o pagamento, não na conta atual da org.
             let contaDoPagamento: ContaAsaas | null;
             try { contaDoPagamento = await contaDoRegistro(admin, sp.payment_account_id); }
             catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 503); }
             if (!contaDoPagamento) return semConta();
-            const cancelRes = await fetch(`${contaDoPagamento.base}/bill/${sp.asaas_bill_id}/cancel`, {
-                method: 'POST',
+            const url = sp.asaas_bill_id
+                ? `${contaDoPagamento.base}/bill/${sp.asaas_bill_id}/cancel`
+                : `${contaDoPagamento.base}/transfers/${sp.asaas_transfer_id}/cancel`;
+            const cancelRes = await fetch(url, {
+                method: sp.asaas_bill_id ? 'POST' : 'DELETE',
                 headers: cabecalhosAsaas(contaDoPagamento.apiKey),
             });
             if (!cancelRes.ok && cancelRes.status !== 404) {
@@ -113,7 +154,7 @@ serve(async (req: Request) => {
             }
         }
 
-        await admin.from('supplier_payments').update({ status: 'CANCELLED' }).eq('id', sp.id);
+        await admin.from('supplier_payments').update({ status: 'CANCELLED', updated_at: new Date().toISOString() }).eq('id', sp.id);
         if (sp.boleto_id) {
             await admin.from('boletos').update({ status: 'aprovado' }).eq('id', sp.boleto_id)
                 .eq('status', 'programado'); // só reverte se ainda estava programado (não sobrescreve 'pago')
@@ -121,12 +162,151 @@ serve(async (req: Request) => {
         return json({ ok: true });
     }
 
-    // ─── quote / pay compartilham a resolução do boleto ────────
-    if (!boleto_id) return json({ error: 'boleto_id é obrigatório.' }, 400);
-
+    // Conta Asaas da organização (dona → atende também → reserva global).
     let conta: ContaAsaas | null;
     try { conta = await resolverContaAsaas(admin, organization_id!); }
     catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 503); }
+
+    // ─── PIX ──────────────────────────────────────────────────
+    if (action === 'pix_quote' || action === 'pix_pay') {
+        if (!body.transaction_id) return json({ error: 'transaction_id é obrigatório.' }, 400);
+        const titulo = await lerTitulo(admin, body.transaction_id, organization_id!);
+        if (!titulo) return json({ error: 'Título a pagar não encontrado nesta organização.' }, 404);
+        if (titulo.source_system === 'BOLETO') {
+            return json({ error: 'Título de boleto se paga pelo boleto (Pagar via Asaas › boleto), não por PIX.' }, 422);
+        }
+
+        const destino = await destinoDoTitulo(admin, titulo);
+        const cadastro = await avaliarDisparo(admin, { titulo, conta, ehGestor, avulso: false });
+        const avulso = await avaliarDisparo(admin, { titulo, conta, ehGestor, avulso: true });
+
+        if (action === 'pix_quote') {
+            return json({
+                ok: true,
+                titulo: {
+                    id: titulo.id, valor: titulo.amount, vencimento: titulo.due_date ?? titulo.transaction_date,
+                    descricao: titulo.description, credor: titulo.party_name,
+                },
+                favorecido: {
+                    origem: destino.favorecido.origem, motivo: destino.favorecido.motivo,
+                    nome: destino.nome, documento: destino.documento,
+                },
+                opcoes: opcoesPublicas(destino),
+                bloqueios: cadastro.bloqueios,
+                bloqueios_avulso: avulso.bloqueios,
+                conta: conta ? { env: conta.env, cadastrada: !!conta.paymentAccountId } : null,
+            });
+        }
+
+        // ── pix_pay ──
+        if (!ehGestor) return soGestor();
+        if (!conta?.paymentAccountId) return semConta();
+
+        let chave: string;
+        let tipo: TipoChavePix;
+        let nome: string | null;
+        let documento: string | null;
+        let origem: string;
+        let bloqueios: string[];
+
+        if (body.destino?.ref) {
+            const op = opcaoEscolhida(destino, body.destino.ref);
+            if (!op) return json({ error: 'A chave escolhida não pertence ao favorecido deste título.' }, 422);
+            if (op.invalida || !op.tipo) return json({ error: `Chave do cadastro inválida: ${op.invalida ?? 'sem tipo'}` }, 422);
+            chave = op.chave; tipo = op.tipo; nome = op.titular ?? destino.nome; documento = op.documento ?? destino.documento;
+            origem = destino.favorecido.origem;
+            bloqueios = cadastro.bloqueios;
+        } else if (body.destino?.avulso) {
+            const a = body.destino.avulso;
+            const r = validarChavePix(a.tipo, a.chave);
+            if (!r.ok) return json({ error: r.motivo }, 422);
+            if (!a.nome?.trim()) return json({ error: 'Informe o nome do favorecido da chave digitada.' }, 422);
+            if (!a.documento || !validateCpfCnpj(a.documento)) return json({ error: 'Informe o CPF/CNPJ válido do favorecido da chave digitada.' }, 422);
+            chave = r.chave; tipo = a.tipo as TipoChavePix; nome = a.nome.trim(); documento = a.documento.replace(/\D/g, '');
+            origem = 'avulso';
+            bloqueios = avulso.bloqueios;
+        } else {
+            return json({ error: 'Escolha uma chave do cadastro ou digite uma chave PIX.' }, 400);
+        }
+        if (bloqueios.length) return json({ error: bloqueios[0], bloqueios }, 422);
+
+        const agendado = !!body.schedule_date && body.schedule_date > hojeBRT();
+        const { data: spRow, error: spErr } = await admin.from('supplier_payments').insert({
+            organization_id: titulo.organization_id,
+            transaction_id: titulo.id,
+            payment_account_id: conta.paymentAccountId,
+            supplier_id: titulo.supplier_id,
+            provider: 'asaas',
+            payment_type: 'PIX_TRANSFER',
+            pix_key: chave,
+            pix_key_type: tipo,
+            beneficiary_name: nome,
+            beneficiary_document: documento,
+            favorecido_origem: origem,
+            value: titulo.amount,
+            scheduled_date: agendado ? body.schedule_date : null,
+            status: 'APPROVED',
+            approved_by_email: userEmail,
+            approved_at: new Date().toISOString(),
+            created_by_email: userEmail,
+        }).select('id').single();
+        if (spErr) {
+            if ((spErr as { code?: string }).code === '23505') {
+                return json({ error: 'Já existe um pagamento deste título em andamento.' }, 409);
+            }
+            return json({ error: 'Falha ao registrar a ordem de pagamento', detail: spErr.message }, 500);
+        }
+
+        const pedido: Record<string, unknown> = {
+            value: titulo.amount,
+            operationType: 'PIX',
+            pixAddressKey: chave,
+            pixAddressKeyType: tipoParaAsaas(tipo),
+            description: (titulo.description ?? 'Pagamento').slice(0, 140),
+            externalReference: spRow.id,
+        };
+        if (agendado) pedido.scheduleDate = body.schedule_date;
+
+        const res = await fetch(`${conta.base}/transfers`, {
+            method: 'POST', headers: cabecalhosAsaas(conta.apiKey), body: JSON.stringify(pedido),
+        });
+        const t = await res.json().catch(() => ({})) as TransferResponse;
+        if (!res.ok || !t.id) {
+            const msg = (t as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${res.status}`;
+            await admin.from('supplier_payments').update({
+                status: 'FAILED', failure_reason: msg, raw_response: t, updated_at: new Date().toISOString(),
+            }).eq('id', spRow.id);
+            return json({ error: `Asaas (PIX): ${msg}`, detail: t }, 502);
+        }
+
+        // Fica em andamento; a conclusão (título PAGO + taxa) é do processador
+        // de eventos — o mesmo do webhook. PIX pode voltar DONE já na resposta.
+        await admin.from('supplier_payments').update({
+            asaas_transfer_id: t.id,
+            status: t.status === 'FAILED' ? 'FAILED' : t.status === 'CANCELLED' ? 'CANCELLED' : (agendado ? 'SCHEDULED' : 'PENDING'),
+            failure_reason: t.status === 'FAILED' ? (t.failReason ?? 'Recusado pela Asaas') : null,
+            fee: t.transferFee ?? null,
+            asaas_authorized: t.authorized ?? null,
+            raw_response: t,
+            updated_at: new Date().toISOString(),
+        }).eq('id', spRow.id);
+
+        if (t.status === 'DONE') {
+            await processarEventoAsaas(admin, { event: 'TRANSFER_DONE', transfer: { ...t, id: t.id } });
+        }
+
+        return json({
+            ok: true,
+            supplier_payment_id: spRow.id,
+            asaas_transfer_id: t.id,
+            status: t.status ?? null,
+            aguardando_autorizacao: t.authorized === false,
+            beneficiary_name: nome,
+        });
+    }
+
+    // ─── Boleto: quote / pay ──────────────────────────────────
+    if (!boleto_id) return json({ error: 'boleto_id é obrigatório.' }, 400);
     if (!conta) return semConta();
     const asaasBase = conta.base;
     const asaasHeaders = cabecalhosAsaas(conta.apiKey);
@@ -143,6 +323,23 @@ serve(async (req: Request) => {
         return json({ error: `Boleto precisa estar aprovado para ser pago (status atual: ${boleto.status}).` }, 422);
     }
 
+    // Título do boleto no razão — o portão de disparo avalia o TÍTULO (alçada,
+    // competência, tetos). Sem ele, `supplier_payments.transaction_id` ficava
+    // nulo e a trava de `boletoService.desfazerLancamento` nunca achava nada.
+    const { data: tituloRef } = await admin
+        .from('internal_transactions')
+        .select('id')
+        .eq('organization_id', organization_id)
+        .eq('source_system', 'BOLETO')
+        .eq('reference_id', boleto.id)
+        .neq('status', 'CANCELLED')
+        .limit(1)
+        .maybeSingle();
+    const titulo = tituloRef ? await lerTitulo(admin, tituloRef.id, organization_id!) : null;
+    const portao = titulo
+        ? await avaliarDisparo(admin, { titulo, conta, ehGestor, avulso: false, boletoId: boleto.id })
+        : { bloqueios: ['O boleto não tem título no Contas a Pagar — aprove o boleto para gerar o título antes de pagar.'] };
+
     // ─── action: quote ──────────────────────────────────────────
     // Simula o pagamento na Asaas — retorna valor/beneficiário reais para confirmação
     // do usuário ANTES de disparar o pagamento de verdade (mitigação de boleto adulterado).
@@ -154,7 +351,7 @@ serve(async (req: Request) => {
         });
         const simData = await simRes.json().catch(() => ({})) as BillSimulateResponse;
         if (!simRes.ok) {
-            const msg = (simData as any)?.errors?.[0]?.description ?? `HTTP ${simRes.status}`;
+            const msg = (simData as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${simRes.status}`;
             return json({ error: `Asaas (simulação): ${msg}`, detail: simData }, 502);
         }
 
@@ -179,77 +376,21 @@ serve(async (req: Request) => {
             real_value: realValue,
             captured_value: capturedValue,
             value_mismatch: valueMismatch,
+            bloqueios: portao.bloqueios,
         });
     }
 
     // ─── action: pay ────────────────────────────────────────────
+    if (!ehGestor) return soGestor();
     if (!boleto.supplier_id) return json({ error: 'Boleto sem fornecedor vinculado.' }, 422);
+    if (portao.bloqueios.length) return json({ error: portao.bloqueios[0], bloqueios: portao.bloqueios }, 422);
 
-    // Pagamento em curso ou concluído para este boleto = não dispara outro.
-    // Antes, dois cliques (ou duas abas) pagavam o mesmo boleto duas vezes.
-    // O índice único parcial `uq_supplier_payments_boleto_ativo` é a trava no
-    // banco; esta checagem só devolve a mensagem certa antes de chegar nele.
-    const { data: emCurso } = await admin
-        .from('supplier_payments')
-        .select('id,status')
-        .eq('boleto_id', boleto.id)
-        .in('status', [...STATUS_SAIDA_OCUPANDO])
-        .limit(1)
-        .maybeSingle();
-    if (emCurso) {
-        return json({
-            error: emCurso.status === 'DONE'
-                ? 'Este boleto já foi pago pela Asaas.'
-                : `Já existe um pagamento deste boleto em andamento (${emCurso.status}). Cancele-o antes de tentar de novo.`,
-            supplier_payment_id: emCurso.id,
-        }, 409);
-    }
-
-    // Título do boleto no razão. Sem ele, `supplier_payments.transaction_id`
-    // ficava sempre nulo — e a trava de `boletoService.desfazerLancamento`,
-    // que procura pagamento por `transaction_id`, nunca achava nada.
-    const { data: titulo } = await admin
-        .from('internal_transactions')
-        .select('id,due_date,transaction_date')
-        .eq('organization_id', organization_id)
-        .eq('source_system', 'BOLETO')
-        .eq('reference_id', boleto.id)
-        .neq('status', 'CANCELLED')
-        .limit(1)
-        .maybeSingle();
-
-    // Competência fechada em Contas a Pagar recusa QUALQUER alteração do
-    // título (gatilho `fn_payable_bloqueia_competencia_fechada`, que vale até
-    // para service_role). Se o dinheiro saísse, a baixa do webhook seria
-    // recusada e o título ficaria aberto com o boleto pago. Recusa ANTES.
-    const dataDoTitulo = (titulo?.due_date ?? titulo?.transaction_date) as string | null | undefined;
-    if (dataDoTitulo) {
-        const competencia = `${dataDoTitulo.slice(0, 7)}-01`;
-        const { data: fechada } = await admin
-            .from('cost_center_closings')
-            .select('competencia')
-            .eq('organization_id', organization_id)
-            .eq('competencia', competencia)
-            .eq('status', 'FECHADO')
-            .limit(1)
-            .maybeSingle();
-        if (fechada) {
-            return json({
-                error: `A competência ${competencia.slice(5, 7)}/${competencia.slice(0, 4)} está fechada em Contas a Pagar. `
-                    + 'Reabra o fechamento antes de pagar — senão o boleto seria pago e o título não poderia ser baixado.',
-            }, 422);
-        }
-    }
-
-    // Cria a linha em AWAITING_APPROVAL/APPROVED antes de chamar a Asaas — garante rastro
-    // mesmo se a chamada falhar no meio. Gate mínimo (Fase 1): exige boleto já 'aprovado'
-    // no fluxo existente (== is_financial_approved implícito). Motor de alçada é Fase 3.
     const { data: spRow, error: spErr } = await admin
         .from('supplier_payments')
         .insert({
             organization_id,
             boleto_id: boleto.id,
-            transaction_id: titulo?.id ?? null,
+            transaction_id: titulo!.id,
             payment_account_id: conta.paymentAccountId,
             supplier_id: boleto.supplier_id,
             provider: 'asaas',
@@ -266,7 +407,7 @@ serve(async (req: Request) => {
         .single();
     if (spErr) {
         // 23505 = índice único parcial: outra chamada registrou o pagamento
-        // entre a checagem acima e este INSERT.
+        // entre a checagem do portão e este INSERT.
         if ((spErr as { code?: string }).code === '23505') {
             return json({ error: 'Já existe um pagamento deste boleto em andamento.' }, 409);
         }
@@ -291,7 +432,7 @@ serve(async (req: Request) => {
     const payData = await payRes.json().catch(() => ({})) as BillResponse;
 
     if (!payRes.ok) {
-        const msg = (payData as any)?.errors?.[0]?.description ?? `HTTP ${payRes.status}`;
+        const msg = (payData as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${payRes.status}`;
         await admin.from('supplier_payments').update({
             status: 'FAILED',
             failure_reason: msg,

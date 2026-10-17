@@ -453,3 +453,9 @@ verify_jwt = false
 # pg_cron com o CRON_SECRET (`chamadaDeCron`). Sem header → 401.
 [functions.asaas-conta]
 verify_jwt = false
+
+# Validação de saque (Asaas › Integrações › Mecanismos de segurança): a Asaas
+# chama antes de cada saque via API. Sem JWT: o gate é o header
+# `asaas-access-token` comparado com ASAAS_SAQUE_TOKEN (falha fechado).
+[functions.asaas-saque-validacao]
+verify_jwt = false

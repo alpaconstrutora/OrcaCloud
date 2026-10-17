@@ -40,6 +40,8 @@ export interface ProcessTemplate {
     trigger_type: ProcessTriggerType;
     /** Chave do evento que dispara a instância (ex.: 'purchase_order.received'). Só usada quando trigger_type='EVENTO'. */
     trigger_event_key?: string | null;
+    /** Valor mínimo para o evento abrir processo (16/10/2026). Nulo = todo evento abre. */
+    trigger_min_amount?: number | null;
     created_at: string;
     updated_at: string;
     archived_at?: string | null;
@@ -103,6 +105,10 @@ export interface ProcessInstance {
     client_id?: string | null;
     contract_id?: string | null;
     purchase_order_id?: string | null;
+    /** Título financeiro de origem (eventos do Financeiro — `aplicar_20271016400000`). */
+    internal_transaction_id?: string | null;
+    /** Boleto de origem (evento `boleto.approved`). */
+    boleto_id?: string | null;
     started_at: string;
     due_at?: string | null;
     completed_at?: string | null;
@@ -240,7 +246,11 @@ export type ProcessEventKey =
     /** `payableService` (baixa manual), `boletoService.marcarPago` e a conciliação no app — título DEBIT baixado (nasce no nó Pagamento). */
     | 'payable.settled'
     /** `receivableService` (baixa manual) e a conciliação no app — título CREDIT recebido (nasce no nó Cobrança). */
-    | 'receivable.settled';
+    | 'receivable.settled'
+    /** Varredura de vencidos (Edge `process-overdue-sweep`, de hora em hora) — título DEBIT aberto com vencimento passado; UMA vez por título (nasce no nó Contas a Pagar). */
+    | 'payable.overdue'
+    /** Idem para título CREDIT — leva à cobrança (nasce no nó Contas a Receber). */
+    | 'receivable.overdue';
 
 /** Rótulo de cada evento para a tela do modelo ("Dispara quando…"). */
 export const PROCESS_EVENT_LABEL: Record<ProcessEventKey, string> = {
@@ -254,6 +264,8 @@ export const PROCESS_EVENT_LABEL: Record<ProcessEventKey, string> = {
     'payable.approved':            'Título a pagar aprovado na alçada',
     'payable.settled':             'Título a pagar baixado',
     'receivable.settled':          'Título a receber recebido',
+    'payable.overdue':             'Título a pagar vencido',
+    'receivable.overdue':          'Título a receber vencido',
 };
 
 /** Cabeçalho do modelo que a tela cria/edita. */
@@ -261,6 +273,8 @@ export type ProcessTemplateHeader = Pick<ProcessTemplate, 'name' | 'trigger_type
     category?: string | null;
     owner_user_id?: string | null;
     trigger_event_key?: string | null;
+    /** Só dispara a partir deste valor (modelo automático). Nulo = todo evento. */
+    trigger_min_amount?: number | null;
 };
 
 /** Etapa do modelo como a tela envia ao salvar: com `id` = já existe (atualiza); sem `id` = nova. */

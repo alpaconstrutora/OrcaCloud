@@ -45,6 +45,9 @@ export function problemaDoModelo(h: ProcessTemplateHeader, etapas: ProcessTempla
     if (h.trigger_type === 'EVENTO') {
         if (!h.trigger_event_key) return 'Modelo automático: escolha o evento que dispara o processo.';
         if (!h.owner_user_id) return 'Modelo automático: escolha o dono. Ele recebe o aviso quando uma etapa vence sem responsável.';
+        if (h.trigger_min_amount != null && (!Number.isFinite(h.trigger_min_amount) || h.trigger_min_amount <= 0)) {
+            return 'Valor mínimo: informe um valor maior que zero, ou deixe vazio para todo evento abrir processo.';
+        }
     }
     return null;
 }
@@ -135,6 +138,8 @@ export const processService = {
                 owner_user_id: header.owner_user_id || null,
                 trigger_type: header.trigger_type,
                 trigger_event_key: header.trigger_type === 'EVENTO' ? header.trigger_event_key : null,
+                // Valor mínimo só faz sentido em modelo automático; manual não tem evento com valor.
+                trigger_min_amount: header.trigger_type === 'EVENTO' ? (header.trigger_min_amount ?? null) : null,
                 criticality: 'MEDIA',
                 status: 'ATIVO',
             })
@@ -209,6 +214,8 @@ export const processService = {
                 owner_user_id: header.owner_user_id || null,
                 trigger_type: header.trigger_type,
                 trigger_event_key: header.trigger_type === 'EVENTO' ? header.trigger_event_key : null,
+                // Valor mínimo só faz sentido em modelo automático; manual não tem evento com valor.
+                trigger_min_amount: header.trigger_type === 'EVENTO' ? (header.trigger_min_amount ?? null) : null,
                 version: Number((atual as { version: number }).version ?? 1) + 1,
                 updated_at: new Date().toISOString(),
             })
@@ -243,6 +250,50 @@ export const processService = {
             throw new Error(`Erro ao carregar processos: ${error.message}`);
         }
         return (data ?? []).map((r: any) => ({ ...r, template_name: r.process_templates?.name }));
+    },
+
+    /**
+     * De onde a instância veio, para o detalhe mostrar "Origem" com link (17/10/2026,
+     * item H.3 do plano 2026-10-16). Título → Contas a Pagar ou a Receber pela
+     * DIREÇÃO (a mesma regra do motor); só boleto → Boletos a Pagar. Os destinos
+     * já atendem `navigateToFocus` (CONTA_PAGAR / CONTA_RECEBER / BOLETO).
+     * Nulo quando não há vínculo financeiro ou o registro não está visível (RLS).
+     */
+    async getOrigemFinanceira(inst: Pick<ProcessInstance, 'internal_transaction_id' | 'boleto_id'>): Promise<{
+        rotulo: string; detalhe: string; view: string; ref: string; source: string;
+    } | null> {
+        const fmtValor = (v: unknown) => (v == null ? '' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        const fmtData = (d: unknown) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '');
+        if (inst.internal_transaction_id) {
+            const { data: tx } = await supabase
+                .from('internal_transactions')
+                .select('id, direction, description, amount, due_date')
+                .eq('id', inst.internal_transaction_id)
+                .maybeSingle();
+            if (!tx) return null;
+            const pagar = tx.direction === 'DEBIT';
+            return {
+                rotulo: pagar ? 'Título a pagar' : 'Título a receber',
+                detalhe: [tx.description, fmtValor(tx.amount), tx.due_date ? `venc. ${fmtData(tx.due_date)}` : ''].filter(Boolean).join(' · '),
+                view: pagar ? 'contas-a-pagar' : 'contas-a-receber',
+                ref: tx.id,
+                source: pagar ? 'CONTA_PAGAR' : 'CONTA_RECEBER',
+            };
+        }
+        if (inst.boleto_id) {
+            const { data: b } = await supabase
+                .from('boletos')
+                .select('id, beneficiario_nome, valor, vencimento')
+                .eq('id', inst.boleto_id)
+                .maybeSingle();
+            if (!b) return null;
+            return {
+                rotulo: 'Boleto',
+                detalhe: [b.beneficiario_nome, fmtValor(b.valor), b.vencimento ? `venc. ${fmtData(b.vencimento)}` : ''].filter(Boolean).join(' · '),
+                view: 'boletos-pagar', ref: b.id, source: 'BOLETO',
+            };
+        }
+        return null;
     },
 
     async getInstance(id: string): Promise<ProcessInstanceWithSteps> {

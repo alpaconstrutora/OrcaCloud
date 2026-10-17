@@ -68,6 +68,31 @@ export const WAITING_STATUS_BY_STEP_TYPE: Record<ProcessInstanceStep['step_type'
     manual:     'EM_ANDAMENTO',
 };
 
+/**
+ * Eventos que abrem UM processo por título, para sempre — não "um vivo por
+ * vez". O vencido é reavaliado a cada varredura: com a regra dos outros
+ * eventos, concluir o processo de cobrança faria a próxima varredura abrir
+ * outro para o mesmo título ainda vencido, todo dia (plano 2026-10-16, item H.4).
+ */
+export const EVENTOS_UMA_VEZ_POR_TITULO: ReadonlyArray<ProcessEventKey> = ['payable.overdue', 'receivable.overdue'];
+
+/**
+ * O modelo abre processo para este valor? `trigger_min_amount` nulo = todo
+ * evento abre. Valor desconhecido (evento sem valor) também abre — a regra da
+ * casa é nunca pular por falta de dado (`utils/processCondition.ts`).
+ */
+export function passaNoValorMinimo(minimo: number | null | undefined, valor: number | null | undefined): boolean {
+    if (minimo == null) return true;
+    if (valor == null || !Number.isFinite(Number(valor))) return true;
+    return Number(valor) >= Number(minimo);
+}
+
+const dataBR = (iso?: string | null) => {
+    if (!iso) return '';
+    const [y, m, d] = String(iso).slice(0, 10).split('-');
+    return `${d}/${m}/${y}`;
+};
+
 export function criarMotor(db: ClienteDoBanco) {
 
     async function logAction(
@@ -98,7 +123,7 @@ export function criarMotor(db: ClienteDoBanco) {
     async function contextoDaInstancia(instanceId: string): Promise<ProcessConditionContext> {
         const { data: inst } = await db
             .from('process_instances')
-            .select('project_id, supplier_id, purchase_order_id')
+            .select('project_id, supplier_id, purchase_order_id, internal_transaction_id')
             .eq('id', instanceId)
             .maybeSingle();
         let amount: number | null = null;
@@ -110,6 +135,16 @@ export function criarMotor(db: ClienteDoBanco) {
                 .maybeSingle();
             const items = (po?.items as PurchaseOrderItem[] | null) ?? null;
             if (items) amount = items.reduce((s, i) => s + valorEfetivoDoItem(i), 0);
+        }
+        // Sem pedido, o valor é o do TÍTULO de origem (eventos do Financeiro, 16/10/2026) —
+        // antes a condição "valor > X" de uma etapa nunca via valor fora do P2P.
+        if (amount == null && inst?.internal_transaction_id) {
+            const { data: tx } = await db
+                .from('internal_transactions')
+                .select('amount')
+                .eq('id', inst.internal_transaction_id)
+                .maybeSingle();
+            if (tx?.amount != null) amount = Number(tx.amount);
         }
         return { project_id: inst?.project_id ?? null, supplier_id: inst?.supplier_id ?? null, amount };
     }
@@ -318,11 +353,13 @@ export function criarMotor(db: ClienteDoBanco) {
             ctx: {
                 title: string; purchaseOrderId?: string; supplierId?: string; projectId?: string; contractId?: string; clientId?: string;
                 internalTransactionId?: string; boletoId?: string;
+                /** Valor do evento (título, boleto, pedido) — é o que o valor mínimo do modelo compara. */
+                amount?: number | null;
             },
         ): Promise<void> {
             const { data: templates, error } = await db
                 .from('process_templates')
-                .select('id')
+                .select('id, trigger_min_amount')
                 .eq('organization_id', organizationId)
                 .eq('trigger_type', 'EVENTO')
                 .eq('trigger_event_key', eventKey)
@@ -332,8 +369,11 @@ export function criarMotor(db: ClienteDoBanco) {
                 return; // best-effort — não derruba o fluxo que disparou o evento
             }
 
-            for (const template of (templates ?? []) as { id: string }[]) {
+            const umaVezPorTitulo = EVENTOS_UMA_VEZ_POR_TITULO.includes(eventKey);
+            for (const template of (templates ?? []) as { id: string; trigger_min_amount: number | null }[]) {
                 try {
+                    // Valor mínimo do modelo (16/10/2026): abaixo dele o evento não abre processo.
+                    if (!passaNoValorMinimo(template.trigger_min_amount, ctx.amount)) continue;
                     if (ctx.purchaseOrderId) {
                         const { data: existing } = await db
                             .from('process_instances')
@@ -341,6 +381,7 @@ export function criarMotor(db: ClienteDoBanco) {
                             .eq('process_template_id', template.id)
                             .eq('purchase_order_id', ctx.purchaseOrderId)
                             .not('status', 'in', '(CONCLUIDO,CANCELADO)')
+                            .limit(1)
                             .maybeSingle();
                         if (existing) continue; // já existe instância ativa para este pedido
                     } else if (ctx.internalTransactionId || ctx.boletoId) {
@@ -349,13 +390,16 @@ export function criarMotor(db: ClienteDoBanco) {
                         const [coluna, valor] = ctx.internalTransactionId
                             ? ['internal_transaction_id', ctx.internalTransactionId]
                             : ['boleto_id', ctx.boletoId!];
-                        const { data: existing } = await db
+                        // `.limit(1)` antes do `maybeSingle`: com duas linhas ele devolve
+                        // erro, e erro aqui lia como "não existe" — abriria a 3ª.
+                        let q = db
                             .from('process_instances')
                             .select('id')
                             .eq('process_template_id', template.id)
-                            .eq(coluna, valor)
-                            .not('status', 'in', '(CONCLUIDO,CANCELADO)')
-                            .maybeSingle();
+                            .eq(coluna, valor);
+                        // Vencido: uma vez por título, viva ou não (ver EVENTOS_UMA_VEZ_POR_TITULO).
+                        if (!umaVezPorTitulo) q = q.not('status', 'in', '(CONCLUIDO,CANCELADO)');
+                        const { data: existing } = await q.limit(1).maybeSingle();
                         if (existing) continue;
                     }
                     await this.startInstance({
@@ -394,7 +438,7 @@ export function criarMotor(db: ClienteDoBanco) {
             try {
                 const { data: po, error } = await db
                     .from('purchase_orders')
-                    .select('id, number, organization_id, empresa_id, project_id, supplier_id')
+                    .select('id, number, organization_id, empresa_id, project_id, supplier_id, items')
                     .eq('id', purchaseOrderId)
                     .maybeSingle();
                 if (error || !po) {
@@ -406,8 +450,10 @@ export function criarMotor(db: ClienteDoBanco) {
                         ? (await db.from('companies').select('org_id').eq('id', po.empresa_id).maybeSingle()).data?.org_id
                         : null);
                 if (!orgId) return;
+                const itens = (po.items as PurchaseOrderItem[] | null) ?? null;
                 await this.triggerEvent(orgId, eventKey, {
                     title: `Pedido ${po.number}${opts.titleSuffix ? ` — ${opts.titleSuffix}` : ''}`,
+                    amount: itens ? itens.reduce((s, i) => s + valorEfetivoDoItem(i), 0) : null,
                     purchaseOrderId: po.id,
                     supplierId: po.supplier_id ?? undefined,
                     projectId: po.project_id ?? undefined,
@@ -447,12 +493,12 @@ export function criarMotor(db: ClienteDoBanco) {
          */
         async triggerForFinancialTitle(
             internalTransactionId: string,
-            eventKey: Extract<ProcessEventKey, 'payable.approved' | 'payable.settled' | 'receivable.settled'>,
+            eventKey: Extract<ProcessEventKey, 'payable.approved' | 'payable.settled' | 'receivable.settled' | 'payable.overdue' | 'receivable.overdue'>,
         ): Promise<void> {
             try {
                 const { data: tx, error } = await db
                     .from('internal_transactions')
-                    .select('id, direction, organization_id, project_id, supplier_id, description')
+                    .select('id, direction, organization_id, project_id, supplier_id, description, amount, due_date')
                     .eq('id', internalTransactionId)
                     .maybeSingle();
                 if (error || !tx) {
@@ -461,8 +507,10 @@ export function criarMotor(db: ClienteDoBanco) {
                 }
                 const direcaoEsperada = eventKey.startsWith('receivable.') ? 'CREDIT' : 'DEBIT';
                 if (tx.direction !== direcaoEsperada || !tx.organization_id) return;
+                const nome = tx.description || `Título ${String(tx.id).slice(0, 8)}`;
                 await this.triggerEvent(tx.organization_id, eventKey, {
-                    title: tx.description || `Título ${String(tx.id).slice(0, 8)}`,
+                    title: eventKey.endsWith('.overdue') && tx.due_date ? `${nome} — vencido em ${dataBR(tx.due_date)}` : nome,
+                    amount: tx.amount ?? null,
                     internalTransactionId: tx.id,
                     projectId: tx.project_id ?? undefined,
                     supplierId: tx.supplier_id ?? undefined,
@@ -502,7 +550,7 @@ export function criarMotor(db: ClienteDoBanco) {
             try {
                 const { data: tx, error } = await db
                     .from('internal_transactions')
-                    .select('id, organization_id, project_id, supplier_id, description')
+                    .select('id, organization_id, project_id, supplier_id, description, amount')
                     .eq('id', internalTransactionId)
                     .maybeSingle();
                 if (error || !tx) {
@@ -512,6 +560,7 @@ export function criarMotor(db: ClienteDoBanco) {
                 if (!tx.organization_id) return;
                 await this.triggerEvent(tx.organization_id, 'boleto.approved', {
                     title: tx.description ? `Boleto — ${tx.description}` : `Boleto ${boletoId.slice(0, 8)}`,
+                    amount: tx.amount ?? null,
                     internalTransactionId: tx.id,
                     boletoId,
                     projectId: tx.project_id ?? undefined,

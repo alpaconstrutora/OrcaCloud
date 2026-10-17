@@ -6,6 +6,7 @@ import type { Payable, PayableBusinessStatus, ReceivablePaymentType } from '../t
 export type PayablePaymentType = ReceivablePaymentType;
 import { propertyExpenseService } from './propertyExpenseService';
 import { processService } from './processService';
+import { exigirAlcadaLiberada } from './alcadaDaBaixa';
 
 export interface PayableFilters {
     search?: string;
@@ -102,6 +103,8 @@ export const payableService = {
     },
 
     async updateStatus(id: string, newStatus: PayableBusinessStatus): Promise<void> {
+        // Baixa manual não passa por cima da alçada pendente (item H.1 do plano 2026-10-16).
+        if (newStatus === 'PAGO') await exigirAlcadaLiberada(id);
         const updates: Record<string, unknown> = {
             business_status: newStatus,
             updated_at: new Date().toISOString(),
@@ -153,6 +156,8 @@ export const payableService = {
         id: string,
         pagamento: { paymentDate: string; paymentType: PayablePaymentType | null },
     ): Promise<void> {
+        // Baixa manual não passa por cima da alçada pendente (item H.1 do plano 2026-10-16).
+        await exigirAlcadaLiberada(id);
         const { error } = await supabase
             .from('internal_transactions')
             .update({

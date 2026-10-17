@@ -8,6 +8,7 @@ import { inssBracketsService } from './inssBracketsService';
 import { numerarParcelas, descricaoTributo } from '../utils/tributoDescricao';
 import { irrfDoAluguel } from '../utils/retencaoIrrfLocacao';
 import { fiscalService, type IRRFBracket } from './fiscalService';
+import { exigirAlcadaLiberada } from './alcadaDaBaixa';
 import {
     categoriaDoTributo, resolverCategoriaPorNomes,
     CATEGORIA_IMPOSTO_SOBRE_RECEITA, CATEGORIA_IMPOSTO_SOBRE_RESULTADO,
@@ -325,6 +326,8 @@ export const taxPayableService = {
 
     /** Baixa (PAGO) ou reclassificação de status do tributo. */
     async updateStatus(id: string, newStatus: TaxPayableBusinessStatus): Promise<void> {
+        // Tributo raramente vai à alçada; quando foi e está pendente, a baixa manual espera (item H.1).
+        if (newStatus === 'PAGO') await exigirAlcadaLiberada(id);
         const updates: Record<string, unknown> = {
             business_status: newStatus,
             updated_at: new Date().toISOString(),

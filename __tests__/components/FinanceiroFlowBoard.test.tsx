@@ -7,7 +7,7 @@
  *   2. a biblioteca lista só os eventos do Financeiro — nenhum do P2P;
  *   3. "Novo gatilho" → escolher Alçada → Pagamento abre o editor com
  *      `payable.approved`, perguntando a organização em modo 'single' (REGRA #5);
- *   4. a transição da baixa mostra no painel a lacuna conhecida (não confere a alçada);
+ *   4. a transição da baixa mostra no painel a regra da alçada ("pago sem aprovação");
  *   5. o painel de métricas carrega os processos pelo serviço DO FLUXO.
  */
 import React from 'react';
@@ -114,7 +114,7 @@ describe('FinanceiroFlowBoard', () => {
     const c = await canvas();
     fireEvent.click(within(c.querySelector('[data-edge-label="pagamento->baixado"]') as HTMLElement).getByRole('button', { name: 'Semi-manual' }));
     const detalhe = await waitFor(() => document.querySelector('[data-detalhe="aresta"]') as HTMLElement);
-    expect(within(detalhe).getByText(/não confere a alçada/)).toBeTruthy();
+    expect(within(detalhe).getByText(/pago sem aprovação/)).toBeTruthy();
     await waitFor(() => expect(fin.getStageProcesses).toHaveBeenCalledWith('pagamento', null, undefined));
   });
 });

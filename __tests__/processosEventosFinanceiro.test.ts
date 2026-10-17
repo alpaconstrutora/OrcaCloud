@@ -124,7 +124,7 @@ describe('processService — resolvedor do título', () => {
         await processService.triggerForFinancialTitle('t-pagar', 'payable.settled');
         expect(disparos).toEqual([{
             orgId: 'org-do-titulo', eventKey: 'payable.settled',
-            ctx: { title: 'Aluguel do galpão', internalTransactionId: 't-pagar', projectId: 'obra1', supplierId: 'sup1' },
+            ctx: { title: 'Aluguel do galpão', internalTransactionId: 't-pagar', projectId: 'obra1', supplierId: 'sup1', amount: 100 },
         }]);
     });
 
@@ -265,12 +265,42 @@ describe('motor: idempotência por título e INSERT sem as colunas novas', () =>
     });
 });
 
+describe('baixa manual × alçada (17/10/2026, item H.1)', () => {
+    beforeEach(() => { zerar(); espiarMotor(); });
+
+    it('título PENDENTE na alçada: darBaixa, updateStatus(PAGO) e boleto marcado pago são recusados com o motivo e nada é gravado', async () => {
+        db.internal_transactions = [{ ...TITULO_PAGAR, approval_status: 'PENDENTE', source_system: 'BOLETO', reference_id: 'bol1' }];
+        db.boletos = [{ id: 'bol1', organization_id: 'org-do-titulo', status: 'aprovado', invoice_id: null }];
+        await expect(payableService.darBaixa('t-pagar', { paymentDate: '2026-10-17', paymentType: null })).rejects.toThrow(/aguardando aprovação na alçada/i);
+        await expect(payableService.updateStatus('t-pagar', 'PAGO')).rejects.toThrow(/aguardando aprovação na alçada/i);
+        await expect(boletoService.marcarPago('bol1', 'org-do-titulo')).rejects.toThrow(/aguardando aprovação na alçada/i);
+        expect(db.internal_transactions[0].status).toBeUndefined();
+        expect(db.boletos[0].status).toBe('aprovado');
+        expect(disparos).toHaveLength(0);
+    });
+
+    it('título sem alçada pendente (aprovado, rascunho ou nunca enviado) baixa normalmente', async () => {
+        db.internal_transactions = [{ ...TITULO_PAGAR, approval_status: 'RASCUNHO' }];
+        await expect(payableService.darBaixa('t-pagar', { paymentDate: '2026-10-17', paymentType: null })).resolves.toBeUndefined();
+        expect(db.internal_transactions[0].status).toBe('CONCILIATED');
+    });
+
+    it('conciliação NÃO é barrada pela alçada (o dinheiro já saiu do banco)', async () => {
+        db.internal_transactions = [{ ...TITULO_PAGAR, approval_status: 'PENDENTE' }];
+        await expect(bankReconciliationService.createMatch('b1', 't-pagar', 'MANUAL' as never, 1)).resolves.toMatchObject({ match_id: 'm1' });
+    });
+});
+
 describe('motor fora não derruba a origem', () => {
     beforeEach(() => { zerar(); espiarMotor(); motorFalha = true; });
 
     it('baixas, alçada e conciliação resolvem com o motor lançando', async () => {
-        db.internal_transactions = [{ ...TITULO_PAGAR, approval_status: 'PENDENTE', approval_required_levels: 1, approval_chain: [] }, { ...TITULO_RECEBER }];
-        await expect(payableService.updateStatus('t-pagar', 'PAGO')).resolves.toBeUndefined();
+        db.internal_transactions = [
+            { ...TITULO_PAGAR, approval_status: 'PENDENTE', approval_required_levels: 1, approval_chain: [] },
+            { ...TITULO_PAGAR, id: 't-pagar-livre', approval_status: 'APROVADO' },
+            { ...TITULO_RECEBER },
+        ];
+        await expect(payableService.updateStatus('t-pagar-livre', 'PAGO')).resolves.toBeUndefined();
         await expect(receivableService.darBaixa('t-receber', { paymentDate: '2026-10-16', paymentType: null })).resolves.toBeUndefined();
         await expect(financialApprovalService.approve('t-pagar', 1, 'g', { level1_label: 'G' })).resolves.toBeUndefined();
         await expect(bankReconciliationService.createMatch('b1', 't-receber', 'MANUAL' as never, 1)).resolves.toMatchObject({ match_id: 'm1' });

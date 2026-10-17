@@ -69,7 +69,7 @@ removido nesta sessão, com aval do usuário: backup em
 - **Como sei que terminou:** depois de aplicar, 0 linhas com `</` em `external_id`,
   `description_raw` e 0 com `MEMO`/`REFNUM` no `description_normalized` vindas da tag;
   teste do parser verde.
-- **Status:** ⏳ código/teste ✅ (2 casos novos em `bankReconciliation.parsers.test.ts`); migration `aplicar_20271017988000_extrato_limpar_tags_ofx.sql` escrita, AGUARDANDO aplicação pelo usuário
+- **Status:** ✅ código/teste ✅ (2 casos novos em `bankReconciliation.parsers.test.ts`); migration `aplicar_20271017988000_extrato_limpar_tags_ofx.sql` escrita, aplicada pelo usuário em 17/10 e conferida (ver Publicação)
 
 ### 3. Apelido não se aprende de movimento sem nome
 - **O que muda:** `tokenDeAliasAprendivel` (`utils/reconciliationRules.ts`) = token de
@@ -81,7 +81,7 @@ removido nesta sessão, com aval do usuário: backup em
 - **Como sei que terminou:** teste: saque ("SAQUE DINHEIRO ATM-CE0230099 …", "Saque terminal")
   dá token vazio; PIX com nome continua dando o nome. No banco: 0 saques com contraparte
   Débora e o apelido apagado.
-- **Status:** ⏳ código + 3 testes ✅; dados na migration `aplicar_20271017988100_debora_saques_e_parcelas.sql` (seleção conferida a seco: 1 apelido, 47 saques), AGUARDANDO aplicação pelo usuário
+- **Status:** ✅ código + 3 testes ✅; dados na migration `aplicar_20271017988100_debora_saques_e_parcelas.sql` (seleção conferida a seco: 1 apelido, 47 saques), aplicada pelo usuário em 17/10 e conferida (ver Publicação)
 
 ### 4. Contrato da Débora e recibo nº 000001 (dados)
 - **O que muda:** estornar a baixa manual da parcela (1) ago/2021 com a mesma gravação de
@@ -90,7 +90,7 @@ removido nesta sessão, com aval do usuário: backup em
   R$ 600: fev/2022, mar/2022, nov/2024, dez/2024, mai/2026.
 - **Como sei que terminou:** recibo 000001 com `cancelled_at`; parcela ago/2021 em
   PREVISTO/PENDING; as 5 parcelas CONCILIATED com 1 vínculo cada.
-- **Status:** ⏳ migration `aplicar_20271017988100` escrita; seleção conferida a seco: fev/22↔14/02, mar/22↔14/03, nov/24↔11/11, dez/24↔11/12, mai/26↔19/05; AGUARDANDO aplicação pelo usuário
+- **Status:** ✅ migration `aplicar_20271017988100` escrita; seleção conferida a seco: fev/22↔14/02, mar/22↔14/03, nov/24↔11/11, dez/24↔11/12, mai/26↔19/05; aplicada pelo usuário em 17/10 e conferida (ver Publicação)
 
 ### 5. Recibo: contato do emitente fora do lado do destinatário
 - **O que muda:** `montarReciboPdf` deixa de desenhar o bloco de contato do emitente na
@@ -115,3 +115,8 @@ removido nesta sessão, com aval do usuário: backup em
   rc=139, Node 24).
 - Migrations `aplicar_20271017988000` e `aplicar_20271017988100`: **não aplicadas** — a
   aplicação pelo agente é barrada pela permissão automática; ficam com o usuário.
+- 17/10/2026: as duas migrations foram aplicadas pelo usuário. Conferido de fora: 0 linhas
+  com tag de OFX (4.907 no backup); apelido do saque apagado e 0 saques com a Débora;
+  parcela ago/2021 em PREVISTO/PENDING sem data e recibo 000001 cancelado (`estorno`);
+  fev/22, mar/22, nov/24, dez/24 e mai/26 CONCILIATED com 1 vínculo e a data do PIX;
+  RLS ligada nas 5 tabelas de reversão. **Plano concluído: 6 de 6.**

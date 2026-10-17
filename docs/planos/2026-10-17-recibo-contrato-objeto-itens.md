@@ -95,3 +95,28 @@
 - PDF do recibo 000001 (pagamento): "Objeto: Serviço de Faxina", declaração com o objeto,
   tabela "Faxina · svç · 4 · R$ 150,00 · R$ 600,00".
 - `npm run typecheck`, suíte completa, CI verde, produção conferida.
+
+## Pedido posterior (17/10/2026)
+> Duas falhas antigas que o verificador de padrão de UI acusou, em linhas que não mexi. Não corrigi nenhuma:
+> 1. BudgetRow: negrito e fonte mono dentro de células da tabela: Corrigir
+> 2. DatabaseExplorer: a busca não fica guardada ao sair e voltar da tela: Corrigir
+
+### Decisões
+| Data | Pergunta | Resposta |
+|---|---|---|
+| 17/10/2026 | BudgetRow: mono/negrito/pílulas eram exceção DOCUMENTADA (§7.3), mas a tela já é `<table>` e falha o critério 1. Manter, aplicar o §7 inteiro, ou só código e total? | **Aplicar o §7 inteiro** |
+
+### Itens
+- [x] 11 — `components/BudgetRow.tsx`: código sem `font-mono` (`text-sm font-normal text-gray-600`),
+  total em `font-medium text-gray-800`, origem Própria/SINAPI e tipo Serviço/Insumo como texto
+  colorido (sem pílula, sem caixa alta); nas linhas de composição, código sem mono e
+  Composição/Insumo em texto. O botão-ícone de composição (abre a CPU) continua — é ação, não badge.
+  *Pronto:* `check-ui-standard.sh` limpo; 48 testes de orçamento/banco verdes.
+- [x] 12 — `docs/ui_ux_guia_unificado.md` §7.3: parte tipográfica revogada; sobra a exceção de
+  largura (`px-3`, `divide-x`).
+- [x] 13 — `components/DatabaseExplorer.tsx`: a busca acusada era a do modal **Gerenciar Grupos**
+  (não a da tela, que já persistia). Não é seletor que fecha ao escolher → §3.1 não se aplica →
+  `usePersistedState('databaseExplorerGroupManager:search')`. *Pronto:* checador limpo.
+- Fora do pedido, só registrado: `BudgetEditor.tsx` tem violações próprias (§7 negrito em
+  `<td>` l.2576/2762/2775/2822/2835; §3 `useState` em location/charges/reference l.181–183).
+- Conferência visual no navegador: NÃO feita (mudança de classe; testes de componente verdes).

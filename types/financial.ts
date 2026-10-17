@@ -141,6 +141,9 @@ export interface PaymentAccount {
      *  docs/planos/2026-09-15-conta-atende-outras-organizacoes.md. */
     serves_all_organizations?: boolean;
     served_organization_ids?: string[];
+    /** false = conta desativada: some dos seletores de uso novo, o histórico segue apontando
+     *  para ela. Ausente = ativa (coluna nasceu com DEFAULT true). */
+    is_active?: boolean;
     created_at?: string;
 }
 

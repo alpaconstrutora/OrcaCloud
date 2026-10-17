@@ -304,7 +304,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
         const targetOrgId = registryOrgId;
         try {
             const [accs, charts] = await Promise.all([
-                financialRegistryService.listPaymentAccounts(targetOrgId || undefined),
+                // Cadastro lista TODAS (inclusive inativas) — senão não há como reativar.
+                financialRegistryService.listPaymentAccounts(targetOrgId || undefined, undefined, { incluirInativas: true }),
                 financialRegistryService.listChartOfAccounts(targetOrgId || undefined)
             ]);
             setPaymentAccounts(accs);
@@ -785,6 +786,10 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             }
                             loadRegistries();
                         }}
+                        onToggleActive={activeTab === 'accounts' ? async (id, active) => {
+                            await financialRegistryService.updatePaymentAccount(id, { is_active: active });
+                            await loadRegistries();
+                        } : undefined}
                         onDelete={async (id) => {
                             if (activeTab === 'accounts') await financialRegistryService.deletePaymentAccount(id);
                             else await financialRegistryService.deleteChartOfAccount(id);

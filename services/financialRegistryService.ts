@@ -3,10 +3,15 @@ import { PaymentAccount, CostCenter, ChartOfAccount } from '../types';
 
 export const financialRegistryService = {
     // Payment Accounts
-    async listPaymentAccounts(organizationId?: string, empresaId?: string): Promise<PaymentAccount[]> {
+    /** Por padrão devolve só as contas ATIVAS — é o que os seletores de uso novo (pedido,
+     *  contrato, alocação) devem oferecer. A tela de cadastro (Minha Organização › Contas de
+     *  Pagamento) passa `incluirInativas` para listar todas e poder reativar. */
+    async listPaymentAccounts(organizationId?: string, empresaId?: string, opts: { incluirInativas?: boolean } = {}): Promise<PaymentAccount[]> {
         let query = supabase
             .from('payment_accounts')
-            .select('id, code, organization_id, empresa_id, name, description, bank, branch, account_number, serves_all_organizations, kind, created_at, payment_account_organizations(organization_id)');
+            .select('id, code, organization_id, empresa_id, name, description, bank, branch, account_number, serves_all_organizations, kind, is_active, created_at, payment_account_organizations(organization_id)');
+
+        if (!opts.incluirInativas) query = query.eq('is_active', true);
 
         if (empresaId) {
             query = query.eq('empresa_id', empresaId);

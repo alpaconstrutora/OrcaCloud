@@ -6,6 +6,7 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { useConfirm } from './ui/confirm';
 import { KpiCard } from './ui/KpiCard';
+import TableSwitch from './ui/TableSwitch';
 
 interface RegistryItem {
     id: string;
@@ -19,6 +20,8 @@ interface RegistryItem {
     accounting_nature?: 'CREDORA' | 'DEVEDORA';
     // Conta de pagamento: "atende também" (ver docs/planos/2026-09-15-conta-atende-outras-organizacoes.md)
     serves_all_organizations?: boolean;
+    /** Conta de pagamento desativada (false). Ausente = ativa. */
+    is_active?: boolean;
     served_organization_ids?: string[];
     /** Conta de pagamento: 'banco' | 'caixa' | 'gateway' (Asaas). */
     kind?: string;
@@ -129,6 +132,9 @@ interface FinancialRegistryManagerProps {
     items: RegistryItem[];
     onSave: (item: any) => Promise<void>;
     onDelete: (id: string) => Promise<void>;
+    /** Conta de pagamento: liga/desliga o interruptor Ativa/Inativa na coluna Ações. Sem esta
+     *  prop (Plano de Contas) o interruptor não aparece. A tela pai grava e recarrega. */
+    onToggleActive?: (id: string, active: boolean) => Promise<void>;
     onExport?: () => void;
     onDownloadTemplate?: () => void;
     onImport?: () => void;
@@ -166,6 +172,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     items,
     onSave,
     onDelete,
+    onToggleActive,
     onExport,
     onDownloadTemplate,
     onImport,
@@ -290,6 +297,23 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
             notify('Erro ao salvar o registro.', 'error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Ativar/desativar é reversível e não apaga nada — por isso grava direto, sem confirm().
+    const [togglingId, setTogglingId] = useState<string | null>(null);
+    const handleToggleActive = async (item: RegistryItem) => {
+        if (!onToggleActive) return;
+        const next = item.is_active === false; // inativa -> ativa; ativa/ausente -> inativa
+        setTogglingId(item.id);
+        try {
+            await onToggleActive(item.id, next);
+            notify(next ? 'Conta ativada.' : 'Conta desativada.', 'success');
+        } catch (error) {
+            console.error('Error toggling active:', error);
+            notify('Erro ao alterar o status da conta.', 'error');
+        } finally {
+            setTogglingId(null);
         }
     };
 
@@ -611,6 +635,18 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                             {/* Editar = clique na linha (ação dominante, §9.1); ação sempre visível
                                                 (nunca opacity-0 group-hover, proibido pelo §9). Kebab só tem Excluir. */}
                                             <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                                                {onToggleActive && (
+                                                    <TableSwitch
+                                                        checked={item.is_active !== false}
+                                                        onChange={() => handleToggleActive(item)}
+                                                        disabled={togglingId === item.id}
+                                                        onLabel="Ativa"
+                                                        offLabel="Inativa"
+                                                        title={item.is_active !== false
+                                                            ? 'Desativar: a conta some dos seletores de uso novo. O histórico não muda.'
+                                                            : 'Ativar: a conta volta a aparecer nos seletores.'}
+                                                    />
+                                                )}
                                                 <button
                                                     onClick={() => handleEdit(item)}
                                                     className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"

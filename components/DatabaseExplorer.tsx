@@ -1485,7 +1485,9 @@ interface GroupManagerModalProps {
 const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
     isOpen, onClose, categories, customCategories, onRename, onDelete, onDuplicate, onCreate
 }) => {
-    const [searchTerm, setSearchTerm] = React.useState('');
+    // Persistida (§3): é a lista de grupos que o usuário opera, não um seletor que fecha ao
+    // escolher — a exceção do §3.1 não se aplica.
+    const [searchTerm, setSearchTerm] = usePersistedState('databaseExplorerGroupManager:search', '');
     const [newGroupName, setNewGroupName] = React.useState('');
     const [editingGroup, setEditingGroup] = React.useState<string | null>(null);
     const [newName, setNewName] = React.useState('');

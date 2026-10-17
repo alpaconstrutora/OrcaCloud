@@ -1541,13 +1541,17 @@ tela **piora** a leitura em vez de padronizar — instrumentos de takeoff
 (Excel, AutoCAD QTO) usam exatamente as convenções que o §7 proíbe, e por bom
 motivo: é o vocabulário que profissional de orçamento já lê.
 
+> ⚠️ **Revogado em 17/10/2026 (decisão do usuário):** a exceção TIPOGRÁFICA — código em
+> `font-mono`, total em `font-black`, pílulas de tipo (Composição/Serviço/Insumo) e de origem
+> (Própria/SINAPI). O `BudgetRow.tsx` já era `<table>`/`<td>` e não cumpria mais o critério 1;
+> perguntado, o usuário escolheu aplicar o §7/§8 inteiro: código `text-sm font-normal
+> text-gray-600`, total `font-medium`, tipo e origem como texto colorido sem fundo. Sobrou
+> como exceção só a LARGURA (padding/separador) abaixo.
+
 **O que continua diferente do padrão de lista, e por quê:**
 
 | Item | Nesta planilha | §6/§7/§8 pediria | Por quê foge |
 |---|---|---|---|
-| Código do item/insumo | `font-mono` | proibido em TD comum | dígitos/pontos alinham em coluna só em fonte monoespaçada — sem isso, código de 6 dígitos "dança" entre linhas |
-| Total da linha | `font-black` | só `font-medium` | é o único valor que a linha existe pra mostrar; description column (`7fr`) já domina a largura, o total precisa competir visualmente na coluna estreita ao lado |
-| Badge de tipo (COMPOSIÇÃO/SERVIÇO/INSUMO) e origem (PRÓPRIA/SINAPI) | pílula com fundo | texto colorido simples | com 12-15 colunas na mesma linha, texto solto sem contraste se perde no ruído — a pílula é o que dá ao olho um ponto de ancoragem pra achar "que tipo de item é esse" em 0,5s |
 | Separador entre colunas | `divide-x divide-gray-100` no container do grid | `border-r` + `px-6` por `<td>` | `px-6` (24px de cada lado) é maior que várias colunas inteiras (a de drag-handle tem 20px) — a mesma sobra de espaço que o `px-6` cria numa lista normal aqui estouraria a largura fixa. `divide-x` cumpre a mesma função visual (linha entre colunas) sem exigir padding incompatível com a largura da coluna. |
 
 **Critério (os três, juntos) — mesmo molde do §8.1:**
@@ -1568,8 +1572,8 @@ motivo: é o vocabulário que profissional de orçamento já lê.
 > ℹ️ `scripts/check-ui-standard.sh` e a verificação estrutural **continuam
 > acusando** essas linhas — o checador é textual/heurístico. A saída correta é
 > apontar para esta seção, não silenciar o check nem reverter a exceção.
-> Ocorrências: `BudgetRow.tsx` (código do item/insumo, total da linha, badges
-> de tipo/origem/composição, `divide-x` no lugar de `border-r`/`px-6`).
+> Ocorrências: `BudgetRow.tsx` (`px-3` em vez de `px-6` nas células; `divide-x` no
+> grid das linhas de composição).
 
 ---
 

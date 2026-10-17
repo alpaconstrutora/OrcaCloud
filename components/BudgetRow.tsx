@@ -34,7 +34,8 @@ interface BudgetRowProps {
 }
 
 /** Classe base de toda célula de dado — separador vertical + altura de linha (§6.6/§7.2).
- *  `px-3` (não `px-6`) por §7.3: com 12-15 colunas, 24px de cada lado estouraria a largura. */
+ *  `px-3` (não `px-6`) por §7.3: com 12-15 colunas, 24px de cada lado estouraria a largura.
+ *  (A tipografia/pílulas da antiga exceção §7.3 foi revogada em 17/10/2026 — vale o §7/§8.) */
 const TD = 'px-3 py-2.5 border-r border-gray-100 last:border-r-0';
 
 const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void) => {
@@ -50,18 +51,19 @@ const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void)
             </button>
         );
     }
+    // Tipo = texto colorido simples (§8): sem pílula, fundo nem caixa alta.
     if (type === SinapiType.SERVICE) {
         return (
-            <span className="flex items-center gap-1 bg-purple-100 text-purple-700 text-xs px-1.5 py-0.5 rounded-[6px] font-semibold border border-purple-200">
+            <span className="flex items-center gap-1 shrink-0 text-sm font-normal text-purple-700">
                 <Loader2 className="w-3 h-3" />
-                SERVIÇO
+                Serviço
             </span>
         );
     }
     return (
-        <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded-[6px] font-semibold border border-amber-200">
+        <span className="flex items-center gap-1 shrink-0 text-sm font-normal text-amber-700">
             <Box className="w-3 h-3" />
-            INSUMO
+            Insumo
         </span>
     );
 };
@@ -174,15 +176,13 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                     </div>
                 </td>
 
-                {/* Origem — pílula por §7.3 (exceção da planilha densa) */}
-                <td className={`${TD} text-center`}>
-                    <span className={`inline-block px-1.5 py-0.5 rounded-[6px] text-[9px] font-bold border ${item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                        {item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'PRÓPRIA' : 'SINAPI'}
-                    </span>
+                {/* Origem — texto colorido simples (§8) */}
+                <td className={`${TD} text-center text-sm font-normal ${item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'text-emerald-700' : 'text-blue-700'}`}>
+                    {item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'Própria' : 'SINAPI'}
                 </td>
 
-                {/* Código — font-mono por §7.3 (alinhamento de dígitos entre linhas) */}
-                <td className={`${TD} text-center text-sm font-mono text-gray-600`}>{item.sinapiItem?.code || '---'}</td>
+                {/* Código — texto atenuado (§7) */}
+                <td className={`${TD} text-center text-sm font-normal text-gray-600`}>{item.sinapiItem?.code || '---'}</td>
 
                 <td className={`${TD} text-sm text-gray-600 leading-tight`}>
                     <div className="flex items-center gap-2">
@@ -256,10 +256,10 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 {/* Espaçador (§6.1.1) — casa com o <col /> sem largura do colgroup */}
                 <td aria-hidden="true" className="border-r border-gray-100"></td>
 
-                {/* Preço total + ações. Total em font-black por §7.3; ações sempre visíveis (§9). */}
+                {/* Preço total + ações. Total = valor financeiro (§7, font-medium); ações sempre visíveis (§9). */}
                 <td className={TD}>
                     <div className="flex flex-col items-end gap-1">
-                        <span className="text-sm font-black text-gray-900 whitespace-nowrap">R$ {((item.quantity * (item.sinapiItem?.price || 0)) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="text-sm font-medium text-gray-800 whitespace-nowrap">R$ {((item.quantity * (item.sinapiItem?.price || 0)) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         <div className="flex items-center gap-1.5">
                             {onMoveItem && (
                                 <div className="flex items-center border-r border-gray-100 pr-1.5 mr-0.5 gap-1.5">
@@ -352,10 +352,10 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                 return (
                                     <div key={`${item.id}-comp-${idx}`} className="grid grid-cols-12 gap-2 divide-x divide-gray-100 items-center text-sm text-gray-600 hover:bg-gray-100 py-2.5 px-4 rounded-[6px]">
                                         <div className="col-span-1"></div>
-                                        <div className="col-span-1 text-center font-mono text-sm text-gray-500">{comp.code}</div>
+                                        <div className="col-span-1 text-center text-sm font-normal text-gray-600">{comp.code}</div>
                                         <div className="col-span-4 flex items-center gap-2">
-                                            <span className={`shrink-0 px-1.5 py-0.5 rounded-[6px] text-[9px] font-semibold border ${comp.type === SinapiType.COMPOSITION ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                                                {comp.type === SinapiType.COMPOSITION ? 'COMP' : 'INS'}
+                                            <span className={`shrink-0 text-sm font-normal ${comp.type === SinapiType.COMPOSITION ? 'text-blue-700' : 'text-amber-700'}`}>
+                                                {comp.type === SinapiType.COMPOSITION ? 'Composição' : 'Insumo'}
                                             </span>
                                             <span className="leading-tight text-sm" title={comp.description || ''}>{comp.description || 'Pendente de carga...'}</span>
                                         </div>

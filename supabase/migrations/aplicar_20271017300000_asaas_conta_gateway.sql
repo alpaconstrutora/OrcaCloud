@@ -81,7 +81,9 @@ CREATE POLICY pag_select ON public.payment_account_gateway
          WHERE pa.id = payment_account_gateway.payment_account_id
            AND public.is_org_member(pa.organization_id)
     ));
-REVOKE INSERT, UPDATE, DELETE ON public.payment_account_gateway FROM anon, authenticated;
+-- TRUNCATE/REFERENCES/TRIGGER vêm dos grants padrão do Supabase; TRUNCATE
+-- passa por cima da RLS. Aqui só leitura (achado na prova pós-aplicação).
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.payment_account_gateway FROM anon, authenticated;
 REVOKE ALL ON public.payment_account_gateway FROM anon;
 GRANT SELECT ON public.payment_account_gateway TO authenticated;
 

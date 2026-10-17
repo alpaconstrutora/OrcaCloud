@@ -26,7 +26,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { chamadaDeCron, exigirGestor, respostaDeErro } from "../_shared/auth.ts"
+import { chamadaDeCron, exigirGestor, exigirUsuario, respostaDeErro } from "../_shared/auth.ts"
 import { cabecalhosAsaas, contaPorId, type ContaAsaas } from "../_shared/asaasConta.ts"
 import {
     baseDaAsaas, linhaDoExtrato, vinculoDoExtrato, janelaDoExtrato, valoresIguais,
@@ -76,6 +76,11 @@ serve(async (req: Request) => {
     }
 
     // ─── Usuário ────────────────────────────────────────────────────────
+    // Sessão válida ANTES de qualquer consulta: sem isso, um id inexistente
+    // respondia 400 e um existente 401 — o anônimo descobria quais contas existem.
+    const usuario = await exigirUsuario(req);
+    if (!usuario.ok) return respostaDeErro(usuario, corsHeaders);
+
     const body = await req.json().catch(() => ({})) as {
         acao?: 'salvar_chave' | 'testar' | 'sincronizar';
         payment_account_id?: string;

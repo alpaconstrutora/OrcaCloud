@@ -110,5 +110,6 @@ Decisões de execução (não perguntadas, registradas):
 - [x] 3. Corretor — Playwright no link da Geleia, desktop e celular, sem erro de console/HTTP:
       Prevista R$ 5.200, A liberar R$ 4.500, Liberada R$ 700, Paga R$ 0; abas 21/15/6/0
 - [x] 4. Tipo · [x] 5. Ajuda/tour · [x] 6. Exceção · [x] 7. Testes (48 passed nos relacionados)
-- [ ] Suíte inteira e build
+- [x] Suíte inteira e build — `npm run build` rc=0 (0 erros TS); suíte 10.080 passed, 2 falhas só em
+      `PainelVersoes.test.tsx` (Planta, timeout sob carga — 26/26 isolado, igual à 1ª rodada; sem relação)
 - [ ] Publicação

@@ -887,6 +887,10 @@ export interface Payable {
      *  `property_expense_allocations` — NÃO de `vw_payables.property_id`, que
      *  a RPC de rateio nunca preenche. Ver propertyExpenseService.allocationSummary. */
     imovel_label?: string;
+    /** Pagamento avulso (MANUAL): anexo no bucket `financeiro-anexos`
+     *  (aplicar_20271018300000). Outras origens resolvem o documento pela origem. */
+    documento_path?: string | null;
+    documento_nome?: string | null;
     created_at?: string;
     updated_at?: string;
 }

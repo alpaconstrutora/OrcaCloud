@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown, Download, FileText, Landmark, Loader2, MoveHorizontal, Receipt, RefreshCw, Search, Tag, Undo2, X,
+    AlertCircle, Building2, Check, ChevronDown, Download, FileText, Landmark, Loader2, MoveHorizontal, Paperclip, Plus, Receipt, RefreshCw, Search, Tag, Undo2, X,
 } from 'lucide-react';
 import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financial';
 import { payableService, payableParty } from '../services/payableService';
@@ -48,7 +48,9 @@ export const ORIGEM_PT: Record<string, string> = {
     // cronograma; aqui chega UMA LINHA POR COMPONENTE (amortização, juros,
     // correção, IOF, seguro, tarifa) — ver docs/planos/2026-08-29-gestao-dividas-financiamentos.md
     DEBT_INSTALLMENT: 'Financiamento',
-    MANUAL: 'Manual',
+    // Título gerado à mão — "Novo pagamento avulso" (plano 2026-10-17); a
+    // conciliação também cria MANUAL ao lançar uma saída sem título.
+    MANUAL: 'Avulso',
 };
 
 /**
@@ -145,7 +147,7 @@ const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 150, recibo: 130, status: 120,
-    centro_custo: 180, plano_contas: 180, imovel: 190, actions: 200,
+    centro_custo: 180, plano_contas: 180, imovel: 190, actions: 250,
 };
 
 const STATUS_FILTROS = ['all', 'AGUARDANDO_APROVACAO', 'PREVISTO', 'VENCIDO', 'PAGO'] as const;
@@ -305,6 +307,17 @@ interface Props {
     /** Logo da organização dona do título, para o PDF do recibo. `undefined` =
      *  o serviço busca a da organização DONA do recibo (não a do topo). */
     logoDaOrg?: (organizationId: string) => string | null | undefined;
+    /** Abre o painel de edição do pagamento avulso (linha MANUAL em aberto). */
+    onEditarAvulso?: (row: Payable) => void;
+    /** "Novo pagamento avulso" no estado vazio — o mesmo botão da barra do pai. */
+    onNovoAvulso?: () => void;
+}
+
+/** Por que a linha avulsa não pode ser editada — `null` quando pode. */
+function motivoNaoEditar(row: Payable): string | null {
+    if (row.effective_status === 'PAGO') return 'Título pago: estorne a baixa para editar.';
+    if (row.effective_status === 'CANCELADO') return 'Título cancelado não se edita.';
+    return null;
 }
 
 // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
@@ -340,7 +353,7 @@ function chaveDoGrupo(campo: CampoAgrupar, r: ParcelaRow): ChaveDeGrupo {
     }
 }
 
-export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg }: Props) {
+export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg, onEditarAvulso, onNovoAvulso }: Props) {
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('contasPagarParcelas:search', '');
     const [statusFiltro, setStatusFiltro] = usePersistedState<StatusFiltro>('contasPagarParcelas:status', 'all');
@@ -929,6 +942,16 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     const baixaComFolha = !!baixando?.some(semReciboPorOrigem);
     const baixaSoBoleto = !!baixando?.length && baixando.every(r => r.source_system === 'BOLETO');
 
+    /** Anexo do avulso: URL assinada no CLIQUE (15 min), nunca ao carregar a lista. */
+    async function verDocumento(row: Payable) {
+        if (!row.documento_path) return;
+        try {
+            window.open(await payableService.urlDoAnexo(row.documento_path), '_blank', 'noopener');
+        } catch (e: unknown) {
+            notify('Erro: ' + ((e as Error).message ?? 'Não foi possível abrir o documento'), 'error');
+        }
+    }
+
     async function excluir(row: Payable) {
         const ok = await confirm({
             title: 'Excluir título?',
@@ -1070,8 +1093,18 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                         <FileText className="w-12 h-12 mx-auto mb-4 opacity-30" />
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma parcela encontrada</h3>
                         <p className="text-sm text-gray-500">
-                            Parcelas aparecem aqui quando um pedido é recebido ou um contrato de suprimentos é parcelado.
+                            Parcelas aparecem aqui quando um pedido é recebido ou um contrato de suprimentos é parcelado
+                            {onNovoAvulso ? ' — ou crie um pagamento avulso.' : '.'}
                         </p>
+                        {onNovoAvulso && rows.length === 0 && (
+                            <button
+                                onClick={onNovoAvulso}
+                                className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                            >
+                                <Plus className="w-[15px] h-[15px]" />
+                                Novo pagamento avulso
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <>
@@ -1276,6 +1309,26 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                     )}
                                                     {/* Só título manual é excluível aqui: parcela de Pedido ou
                                                         Contrato é espelho da origem (payableService.remove). */}
+                                                    {row.documento_path && (
+                                                        <ActionIconButton
+                                                            kind="view"
+                                                            title={`Ver documento${row.documento_nome ? ` — ${row.documento_nome}` : ''}`}
+                                                            icon={<Paperclip className="w-4 h-4" />}
+                                                            onClick={() => verDocumento(row)}
+                                                        />
+                                                    )}
+                                                    {row.source_system === 'MANUAL' && onEditarAvulso && (
+                                                        // O span carrega o motivo: botão desligado tem
+                                                        // pointer-events-none e não mostraria o próprio title.
+                                                        <span className="inline-flex" title={motivoNaoEditar(row) ?? undefined}>
+                                                            <ActionIconButton
+                                                                kind="edit"
+                                                                title={motivoNaoEditar(row) ?? 'Editar pagamento avulso'}
+                                                                disabled={!!motivoNaoEditar(row)}
+                                                                onClick={() => onEditarAvulso(row)}
+                                                            />
+                                                        </span>
+                                                    )}
                                                     {row.source_system === 'MANUAL' && (
                                                         <ActionIconButton kind="delete" onClick={() => excluir(row)} />
                                                     )}

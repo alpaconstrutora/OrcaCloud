@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check,
     Clock, ExternalLink, FileDown, FileText, Loader2, RefreshCw,
-    Search, X, DollarSign, AlertTriangle, MoveHorizontal, Layers,
+    Search, X, DollarSign, AlertTriangle, MoveHorizontal, Layers, Plus,
 } from 'lucide-react';
+import PagamentoAvulsoSheet from './financeiro/PagamentoAvulsoSheet';
 import { invoiceService } from '../services/invoiceService';
 import { payableService, payableParty } from '../services/payableService';
 import { exportService } from '../services/exportService';
@@ -17,7 +18,7 @@ import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilter
 import { Money, formatMoney, formatDateBR } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
-import { useOrgContext } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
 import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
@@ -296,6 +297,27 @@ export default function ContasPagarManager({ organizations }: Props) {
     // e a RLS recorta.
     const { orgId: contextOrgId } = useOrgContext();
     const effectiveOrgId = contextOrgId ?? undefined;
+
+    /* Pagamento avulso (plano 2026-10-17-contas-a-pagar-pagamento-avulso).
+       Criar: a organização é a do topo; em "Todas", o modal pergunta (REGRA #5,
+       modo 'single' — título é de UMA organização). Editar: a do próprio título. */
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    const [avulso, setAvulso] = useState<{ orgId: string; editId: string | null } | null>(null);
+
+    async function novoPagamentoAvulso() {
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        setAvulso({ orgId: target.orgId, editId: null });
+    }
+
+    async function handleAvulsoSalvo(r: { ids: string[]; mensagem: string; aviso: string | null }) {
+        setAvulso(null);
+        notify(r.aviso ? `${r.mensagem} ${r.aviso}` : r.mensagem, r.aviso ? 'error' : 'success');
+        // Recarrega (o título nasce/muda com colunas derivadas na view — obra,
+        // status efetivo) e leva a tabela até ele pelo mesmo deep-link de sempre.
+        await carregar(effectiveOrgId);
+        if (r.ids[0]) setViewFocus({ ref: r.ids[0], source: 'CONTA_PAGAR' });
+    }
 
     /**
      * Deep-link vindo de outro módulo (hoje: aba Financeiro do Portal do
@@ -946,6 +968,17 @@ export default function ContasPagarManager({ organizations }: Props) {
                                         : `${filtered.length} de ${invoices.length} nota${invoices.length !== 1 ? 's' : ''}`}
                             </span>
                             {exportButtons}
+                            {/* Ação primária (§17) — só na visão de títulos: nota fiscal e
+                                fechamento não se criam à mão. */}
+                            {visao === 'parcelas' && (
+                                <button
+                                    onClick={novoPagamentoAvulso}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" />
+                                    Novo pagamento avulso
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -981,6 +1014,8 @@ export default function ContasPagarManager({ organizations }: Props) {
                             // Sem a organização na lista, `undefined` faz o serviço
                             // buscar a logo da organização dona do recibo.
                             logoDaOrg={orgId => organizations?.find(o => o.id === orgId)?.logoUrl}
+                            onEditarAvulso={row => setAvulso({ orgId: row.organization_id, editId: row.id })}
+                            onNovoAvulso={novoPagamentoAvulso}
                         />
                     ) : (
                     /* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
@@ -1267,6 +1302,17 @@ export default function ContasPagarManager({ organizations }: Props) {
                     </button>
                 </div>
             )}
+
+            {avulso && (
+                <PagamentoAvulsoSheet
+                    open
+                    organizationId={avulso.orgId}
+                    editId={avulso.editId}
+                    onClose={() => setAvulso(null)}
+                    onSaved={handleAvulsoSalvo}
+                />
+            )}
+            {orgTargetModal}
 
             {/* Toast de Notificação — padrão guia seção 13 */}
             {notification && (

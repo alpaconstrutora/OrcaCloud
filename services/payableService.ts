@@ -6,7 +6,78 @@ import type { Payable, PayableBusinessStatus, ReceivablePaymentType } from '../t
 export type PayablePaymentType = ReceivablePaymentType;
 import { propertyExpenseService } from './propertyExpenseService';
 import { processService } from './processService';
-import { exigirAlcadaLiberada } from './alcadaDaBaixa';
+import { exigirAlcadaLiberada, MOTIVO_ALCADA_PENDENTE } from './alcadaDaBaixa';
+import { financialApprovalService } from './financialApprovalService';
+import { resolverCategoriaPorId } from './financialCategoryResolver';
+import { storageService } from './storageService';
+import {
+    caminhoDoAnexo,
+    montarTitulosAvulsos,
+    type FormPagamentoAvulso,
+    type FormaPagamentoAvulso,
+} from '../utils/pagamentoAvulso';
+
+/** Bucket privado do anexo do pagamento avulso (migration aplicar_20271018300000). */
+export const BUCKET_ANEXOS_AVULSO = 'financeiro-anexos';
+
+/** O que o formulário de edição precisa reabrir de um título avulso. */
+export interface PagamentoAvulsoGravado {
+    id: string;
+    organization_id: string;
+    reference_id: string | null;
+    description: string | null;
+    amount: number;
+    due_date: string | null;
+    competencia_date: string | null;
+    supplier_id: string | null;
+    party_name: string | null;
+    project_id: string | null;
+    cost_center_id: string | null;
+    plano_de_contas_id: string | null;
+    category_id: string | null;
+    category: string | null;
+    payment_type: FormaPagamentoAvulso | null;
+    payment_account_id: string | null;
+    status: string;
+    business_status: string | null;
+    approval_status: string | null;
+    documento_path: string | null;
+    documento_nome: string | null;
+}
+
+/** Resultado de criar um avulso: os títulos gravados e, se a baixa de "Já pago" não saiu, por quê. */
+export interface ResultadoAvulso {
+    ids: string[];
+    /** Preenchido quando o título foi criado mas a baixa não foi gravada (alçada pendente ou erro). */
+    avisoBaixa: string | null;
+}
+
+/** O grupo das parcelas é o prefixo de `reference_id` (`<grupo>:p<k>`). */
+function grupoDaReferencia(referenceId: string | null | undefined): string | null {
+    const m = /^([0-9a-f-]{36}):p\d+$/i.exec(referenceId ?? '');
+    return m ? m[1] : null;
+}
+
+async function usuarioAtualId(): Promise<string | null> {
+    const { data } = await supabase.auth.getUser();
+    return data.user?.id ?? null;
+}
+
+/** Apaga o arquivo do bucket só quando nenhum título aponta mais para ele (as parcelas compartilham o anexo). */
+async function removerAnexoSeOrfao(path: string | null | undefined): Promise<void> {
+    if (!path) return;
+    try {
+        const { count, error } = await supabase
+            .from('internal_transactions')
+            .select('id', { count: 'exact', head: true })
+            .eq('documento_path', path);
+        if (error || (count ?? 0) > 0) return;
+        await storageService.remove(BUCKET_ANEXOS_AVULSO, [path]);
+    } catch (e) {
+        // Arquivo órfão no bucket não é dado errado na tela — só espaço. Não derruba a operação.
+        console.warn('[payableService] anexo órfão não removido:', path, e);
+    }
+}
 
 export interface PayableFilters {
     search?: string;
@@ -69,7 +140,7 @@ export const payableService = {
         const { data: todas, error } = await fetchAllPagesParallel<Payable>(
             () => comFiltros(supabase
                 .from('vw_payables')
-                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,obra_id,obra_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
+                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,obra_id,obra_name,cost_center_id,plano_de_contas_id,documento_path,documento_nome,created_at,updated_at')
                 .order('due_date', { ascending: true, nullsFirst: false })
                 .order('id', { ascending: true }) as unknown as FiltravelPorColuna) as unknown as RangeableQuery<Payable>,
             () => comFiltros(supabase
@@ -253,6 +324,178 @@ export const payableService = {
         return { ...row, direction: 'DEBIT', effective_status: 'PREVISTO' } as Payable;
     },
 
+    /**
+     * Pagamento avulso (Contas a Pagar › "Novo pagamento avulso"). Plano
+     * docs/planos/2026-10-17-contas-a-pagar-pagamento-avulso.md.
+     *
+     * 1. sobe o anexo (se houver) — antes das linhas, para todas nascerem com ele;
+     * 2. insere as N parcelas num INSERT só (tudo ou nada);
+     * 3. submete cada título à alçada, como o boleto (abaixo do piso nasce liberado);
+     * 4. "Já pago": dá baixa pelo MESMO caminho da baixa manual (`darBaixa`), que
+     *    recusa título pendente na alçada. O título fica criado e a recusa volta
+     *    em `avisoBaixa` — relançar por cima duplicaria o título.
+     */
+    async createAvulso(organizationId: string, form: FormPagamentoAvulso, arquivo?: File | null): Promise<ResultadoAvulso> {
+        const grupoId = crypto.randomUUID();
+        const linhas = montarTitulosAvulsos(form, grupoId);
+        if (linhas.length === 0) throw new Error('Informe valor e vencimento.');
+
+        // O nome da Conta Financeira vem do banco, não do que a tela mostrou.
+        const categoria = await resolverCategoriaPorId(form.categoryId);
+
+        let documentoPath: string | null = null;
+        if (arquivo) {
+            documentoPath = caminhoDoAnexo(organizationId, grupoId, arquivo.name);
+            await storageService.uploadFile(BUCKET_ANEXOS_AVULSO, documentoPath, arquivo);
+        }
+
+        const createdBy = await usuarioAtualId();
+        const { data, error } = await supabase
+            .from('internal_transactions')
+            .insert(linhas.map(l => ({
+                ...l,
+                organization_id: organizationId,
+                category_id: categoria?.category_id ?? null,
+                category: categoria?.category ?? null,
+                documento_path: documentoPath,
+                documento_nome: arquivo ? arquivo.name : null,
+                created_by: createdBy,
+            })))
+            .select('id, due_date')
+            .order('due_date', { ascending: true });
+        if (error) {
+            // Nenhum título nasceu: o arquivo enviado ficaria órfão.
+            if (documentoPath) await storageService.remove(BUCKET_ANEXOS_AVULSO, [documentoPath]).catch(() => undefined);
+            // As travas de período (mês fechado, competência do CC fechada) chegam
+            // aqui com a frase do banco — é ela que diz ao usuário o que fazer.
+            throw new Error(error.message);
+        }
+        const ids = ((data ?? []) as { id: string }[]).map(r => r.id);
+
+        for (const id of ids) {
+            try {
+                await financialApprovalService.submitForApproval(id, organizationId);
+            } catch (e) {
+                // Mesma escolha do boleto: o título existe e pode ser submetido pela
+                // tela de Aprovações; perder o lançamento seria pior.
+                console.error('[payableService] submeter avulso à alçada:', e);
+            }
+        }
+
+        let avisoBaixa: string | null = null;
+        if (form.jaPago && ids.length === 1) {
+            try {
+                await this.darBaixa(ids[0], {
+                    paymentDate: form.dataPagamento,
+                    paymentType: form.formaPagamento,
+                });
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                avisoBaixa = msg === MOTIVO_ALCADA_PENDENTE
+                    ? 'O título foi criado, mas caiu na alçada de aprovação: a baixa fica para depois de aprovado em Financeiro › Aprovações.'
+                    : `O título foi criado, mas a baixa não foi gravada: ${msg}`;
+            }
+        }
+        return { ids, avisoBaixa };
+    },
+
+    /** Lê o título avulso inteiro para o formulário de edição. */
+    async getAvulso(id: string): Promise<PagamentoAvulsoGravado> {
+        const { data, error } = await supabase
+            .from('internal_transactions')
+            .select('id, organization_id, reference_id, description, amount, due_date, competencia_date, supplier_id, party_name, project_id, cost_center_id, plano_de_contas_id, category_id, category, payment_type, payment_account_id, status, business_status, approval_status, documento_path, documento_nome')
+            .eq('id', id)
+            .eq('source_system', 'MANUAL')
+            .single();
+        if (error) throw new Error(error.message);
+        return data as PagamentoAvulsoGravado;
+    },
+
+    /**
+     * Edita UM título avulso (as parcelas são títulos independentes depois de
+     * criadas). Não mexe em `reference_id`, tipo da parcela nem situação — a
+     * baixa e o estorno continuam sendo ações da linha.
+     *
+     * Valor mudou num título em aberto → volta para a alçada: aprovação dada
+     * para R$ 1.000 não vale para R$ 10.000.
+     */
+    async updateAvulso(
+        atual: PagamentoAvulsoGravado,
+        form: FormPagamentoAvulso,
+        anexo: { novo?: File | null; remover?: boolean } = {},
+    ): Promise<void> {
+        const [l] = montarTitulosAvulsos({ ...form, parcelas: 1, jaPago: false }, 'edicao');
+        if (!l) throw new Error('Informe valor e vencimento.');
+        const categoria = await resolverCategoriaPorId(form.categoryId);
+
+        const updates: Record<string, unknown> = {
+            transaction_date: l.transaction_date,
+            due_date: l.due_date,
+            competencia_date: l.competencia_date,
+            amount: l.amount,
+            description: l.description,
+            supplier_id: l.supplier_id,
+            party_name: l.party_name,
+            entity_name: l.entity_name,
+            project_id: l.project_id,
+            cost_center_id: l.cost_center_id,
+            plano_de_contas_id: l.plano_de_contas_id,
+            category_id: categoria?.category_id ?? null,
+            category: categoria?.category ?? null,
+            payment_type: l.payment_type,
+            payment_account_id: l.payment_account_id,
+            updated_at: new Date().toISOString(),
+        };
+
+        const valorMudou = Math.abs(Number(atual.amount) - l.amount) >= 0.005;
+        const emAberto = atual.status !== 'CONCILIATED';
+        if (valorMudou && emAberto) {
+            updates.approval_status = 'RASCUNHO';
+            updates.approval_chain = [];
+            if (atual.business_status === 'AGUARDANDO_APROVACAO' || atual.business_status === 'APROVADO') {
+                updates.business_status = 'PREVISTO';
+            }
+        }
+
+        let novoPath: string | null = null;
+        if (anexo.novo) {
+            const grupo = grupoDaReferencia(atual.reference_id) ?? crypto.randomUUID();
+            novoPath = caminhoDoAnexo(atual.organization_id, grupo, `${Date.now()}-${anexo.novo.name}`);
+            await storageService.uploadFile(BUCKET_ANEXOS_AVULSO, novoPath, anexo.novo);
+            updates.documento_path = novoPath;
+            updates.documento_nome = anexo.novo.name;
+        } else if (anexo.remover) {
+            updates.documento_path = null;
+            updates.documento_nome = null;
+        }
+
+        const { error } = await supabase
+            .from('internal_transactions')
+            .update(updates)
+            .eq('id', atual.id)
+            .eq('source_system', 'MANUAL');
+        if (error) {
+            if (novoPath) await storageService.remove(BUCKET_ANEXOS_AVULSO, [novoPath]).catch(() => undefined);
+            throw new Error(error.message);
+        }
+
+        if ((anexo.novo || anexo.remover) && atual.documento_path) {
+            await removerAnexoSeOrfao(atual.documento_path);
+        }
+        if (valorMudou && emAberto) {
+            try {
+                await financialApprovalService.submitForApproval(atual.id, atual.organization_id);
+            } catch (e) {
+                console.error('[payableService] resubmeter avulso à alçada:', e);
+            }
+        }
+    },
+
+    /** URL assinada do anexo do avulso — gerada no CLIQUE (15 min), nunca ao carregar a lista. */
+    async urlDoAnexo(path: string): Promise<string> {
+        return storageService.createSignedUrl(BUCKET_ANEXOS_AVULSO, path, 15 * 60);
+    },
+
     /** Corrige dados de negócio do título (valor, vencimento, descrição, contraparte). */
     async update(
         id: string,
@@ -296,7 +539,7 @@ export const payableService = {
             .delete()
             .eq('id', id)
             .eq('source_system', 'MANUAL')
-            .select('id');
+            .select('id, documento_path');
 
         if (error) {
             // reconciliation_matches tem FK RESTRICT: título casado com uma linha
@@ -309,5 +552,7 @@ export const payableService = {
         if (!data || data.length === 0) {
             throw new Error('Só lançamentos manuais podem ser excluídos aqui. Este veio de Pedidos ou Contratos — exclua na origem.');
         }
+        // O anexo é compartilhado pelas parcelas: só some com a última que apontava para ele.
+        await removerAnexoSeOrfao((data[0] as { documento_path?: string | null }).documento_path);
     },
 };

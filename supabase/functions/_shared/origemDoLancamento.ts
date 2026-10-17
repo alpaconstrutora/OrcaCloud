@@ -25,6 +25,8 @@ export type ClienteDeLeitura = { from(tabela: string): any };
 export const BUCKET_BOLETOS = 'boletos';
 export const BUCKET_FISCAL = 'fiscal-documents';
 export const BUCKET_DOCUMENTOS = 'documents';
+/** Anexo do pagamento avulso (MANUAL) — mora na própria linha (aplicar_20271018300000). */
+export const BUCKET_ANEXOS_AVULSO = 'financeiro-anexos';
 
 /** Origens cujo documento é a minuta do contrato. */
 export const ORIGENS_DE_CONTRATO = [
@@ -267,6 +269,32 @@ export async function dadosDeContrato(db: ClienteDeLeitura, refs: string[]): Pro
 }
 
 /**
+ * Lançamento MANUAL (pagamento avulso) → o anexo gravado na própria linha.
+ *
+ * Diferente das outras origens, a chave aqui é o ID do lançamento, não o
+ * `reference_id`: o documento não mora numa tabela de origem, e lançamento
+ * manual antigo nem tem referência. Sem anexo, `documento` fica nulo.
+ */
+export async function dadosDoAvulso(db: ClienteDeLeitura, transacaoIds: string[]): Promise<Map<string, OrigemResolvida>> {
+    const mapa = new Map<string, OrigemResolvida>();
+    if (transacaoIds.length === 0) return mapa;
+    const { data, error } = await db
+        .from('internal_transactions')
+        .select('id, documento_path, documento_nome')
+        .in('id', transacaoIds);
+    if (error) throw error;
+    for (const t of (data || []) as { id: string; documento_path: string | null; documento_nome: string | null }[]) {
+        const caminho = String(t.documento_path ?? '').trim();
+        if (!caminho) continue;
+        mapa.set(t.id, {
+            codigo: null,
+            documento: { bucket: BUCKET_ANEXOS_AVULSO, path: caminho, nome: String(t.documento_nome ?? '').trim() || nomeDoArquivo(caminho) },
+        });
+    }
+    return mapa;
+}
+
+/**
  * Código e documento de cada lançamento, UMA entrada por `source_system`.
  *
  * É aqui que uma origem nova entra: um ramo que sabe ler o
@@ -280,8 +308,11 @@ export async function resolverOrigens(
 ): Promise<Map<string, OrigemResolvida>> {
     const porTransacao = new Map<string, OrigemResolvida>();
     const refsPorOrigem = new Map<string, Map<string, string[]>>();
+    // MANUAL resolve pelo id da linha (o anexo é dela), com ou sem referência.
+    const avulsos: string[] = [];
     for (const l of linhas) {
         const origem = l.source_system || '';
+        if (origem === 'MANUAL') { avulsos.push(l.id); continue; }
         const ref = l.reference_id || '';
         if (!origem || !ref) continue;
         if (!refsPorOrigem.has(origem)) refsPorOrigem.set(origem, new Map());
@@ -329,6 +360,15 @@ export async function resolverOrigens(
             for (const [ref, valor] of dados) aplicar(refsDeContrato, ref, valor);
         } catch {
             // Idem, para as linhas de contrato.
+        }
+    }
+
+    if (avulsos.length > 0) {
+        try {
+            const dados = await dadosDoAvulso(db, avulsos);
+            for (const [txId, valor] of dados) porTransacao.set(txId, valor);
+        } catch {
+            // Idem, para as linhas de pagamento avulso.
         }
     }
 

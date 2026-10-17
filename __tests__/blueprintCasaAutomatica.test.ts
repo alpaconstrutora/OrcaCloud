@@ -1045,3 +1045,22 @@ describe('F21 — nenhuma sobra de cômodo (lote 14 × 28, R1-A)', () => {
     expect(plano.pendencias.filter((p) => /Ambiente \d+|menos de 0,5 m²/.test(p.texto)).map((p) => p.texto)).toEqual([]);
   });
 });
+
+/**
+ * F22 (17/10/2026): com a garagem num canto da frente, a varanda de entrada é uma COLUNA na profundidade da linha da rua —
+ * encosta na rua e na sala, atrás. No treemap ela ficava na 1ª linha e o serviço atrás dela: "Varanda de entrada × Sala —
+ * deviam ter porta direta" em 4 das 8 casas (lote 15 × 25 entre elas).
+ */
+describe('F22 — a varanda de entrada encosta na sala (lote 15 × 25)', () => {
+  it('relação obrigatória varanda × sala cumprida; a varanda na rua; sem pendência "sem solução"', () => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = base.levels[0].id;
+    const d = (a: Point, b: Point, papel: Papel): Command => ({ type: 'AddBoundary', levelId, a, b, kind: 'TERRENO', papel });
+    const m = applyBatch(base, [d(point(0, 0), point(15000, 0), 'FRENTE'), d(point(15000, 0), point(15000, 25000), 'LATERAL_DIREITA'), d(point(15000, 25000), point(0, 25000), 'FUNDOS'), d(point(0, 25000), point(0, 0), 'LATERAL_ESQUERDA')]).model;
+    const plano = planejarCasa(m, entrada(m));
+    expect(plano.pendencias.filter((p) => /Varanda de entrada × Sala/.test(p.texto)).map((p) => p.texto)).toEqual([]);
+    expect(plano.pendencias.filter((p) => p.grupo === 'SEM_SOLUCAO').map((p) => p.texto)).toEqual([]);
+    const varanda = plano.resultado.spaces.find((s) => /Varanda/.test(s.name ?? ''))!;
+    expect(Math.min(...varanda.ring.map((p) => p.y))).toBeLessThanOrEqual(3100);
+  });
+});

@@ -545,7 +545,20 @@ function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, p
         soma += t.areaAlvoMm2;
       }
       const atras = daFrente.filter((t) => !aoLado.includes(t));
-      if (aoLado.length) for (const [k, v] of treemapEmFaixas(aoLado, W - x0, caixaDaGaragem.y1, 0, false, hip)) out.set(k, { x0: v.x0 + x0, y0: v.y0, x1: v.x1 + x0, y1: v.y1 });
+      // F22 da casa automática (17/10/2026): a VARANDA (a entrada) é uma COLUNA na profundidade toda da linha da rua, junto
+      // da garagem — encosta na rua e na linha de trás, onde está a sala. No treemap ela ficava na 1ª linha e o serviço na 2ª,
+      // atrás dela: a varanda não tocava a sala (relação obrigatória sem porta direta em 4 das 8 casas).
+      const varanda = aoLado.find((t) => t.item.uso === 'VARANDA') ?? null;
+      let xAoLado = x0;
+      if (varanda && aoLado.length > 1) {
+        const wv = Math.max(eixoMinMm(varanda.item, hip), Math.ceil(varanda.areaAlvoMm2 / caixaDaGaragem.y1 / hip.malhaMm) * hip.malhaMm);
+        if (W - x0 - wv >= Math.max(...aoLado.filter((t) => t !== varanda).map((t) => eixoMinMm(t.item, hip)))) {
+          out.set(varanda, { x0, y0: 0, x1: x0 + wv, y1: caixaDaGaragem.y1 });
+          aoLado.splice(aoLado.indexOf(varanda), 1);
+          xAoLado = x0 + wv;
+        }
+      }
+      if (aoLado.length) for (const [k, v] of treemapEmFaixas(aoLado, W - xAoLado, caixaDaGaragem.y1, 0, false, hip)) out.set(k, { x0: v.x0 + xAoLado, y0: v.y0, x1: v.x1 + xAoLado, y1: v.y1 });
       else caixaDaGaragem.x1 = W; // nada coube ao lado: a garagem fica com a linha da rua inteira
       if (atras.length) for (const [k, v] of fatiar(atras, W, dFrente - caixaDaGaragem.y1, caixaDaGaragem.y1, !!plano.frenteEmColunas, hip)) out.set(k, v);
       else caixaDaGaragem.y1 = dFrente;
@@ -1223,7 +1236,8 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
       faltaMm2 -= largura * alturaDaJanela;
       algumaJanela = true;
     }
-    if (!algumaJanela) avisos.push(`${a.nome}: não coube janela na parede externa (a porta ocupa o trecho).`);
+    // F22: a VARANDA é aberta — sem janela não é falta (estreita, junto da garagem, a porta de entrada ocupa a frente dela).
+    if (!algumaJanela && a.item.uso !== 'VARANDA') avisos.push(`${a.nome}: não coube janela na parede externa (a porta ocupa o trecho).`);
   }
   aplicar(aberturas);
   if (janelas.length) decisoes.push(`Janelas na fachada de quem exige, preferindo o norte: ${janelas.join(', ')}.`);

@@ -530,17 +530,27 @@ export function descidaDoForro(
       const B = { x: naParede.x, y: naParede.y, z: e0 + o.cotaDoAlvoMm };
       return outros.every((t) => distanciaEntreEixos3D(A, B, t.A, t.B) > o.raioMm + t.r + FOLGA_DA_DESCIDA_MM);
     };
-    const lateral = laterais.find(corridaLivre) ?? laterais[0] ?? null;
-    const abaixo = lateral ? !foraDoVao(model, levelId, o.naParede, o.cotaDoAlvoMm - o.raioMm, o.cotaDoAlvoMm + o.raioMm, o.raioMm) : false;
-    if (lateral && abaixo && (lateral.x !== o.naParede.x || lateral.y !== o.naParede.y)) {
+    const comLateral = (lateral: P2): PedacoDaDescida[] | null => {
+      const abaixo = !foraDoVao(model, levelId, naParede, o.cotaDoAlvoMm - o.raioMm, o.cotaDoAlvoMm + o.raioMm, o.raioMm);
+      if (!abaixo || (lateral.x === naParede.x && lateral.y === naParede.y)) return null;
       // O nó do forro anda junto, no forro (a faixa), para descer já ao lado da janela.
-      const q2 = { x: Math.round(o.q.x + lateral.x - o.naParede.x), y: Math.round(o.q.y + lateral.y - o.naParede.y) };
+      const q2 = { x: Math.round(o.q.x + lateral.x - naParede.x), y: Math.round(o.q.y + lateral.y - naParede.y) };
       const ate = descidaDoForro(model, levelId, { ...o, q: q2, naParede: lateral, alvo: lateral });
       const inicio: PedacoDaDescida[] = q2.x !== o.q.x || q2.y !== o.q.y ? [{ a: { ...o.q }, b: q2, cotaAMm: o.cotaDaFaixaMm, cotaBMm: o.cotaDaFaixaMm }] : [];
-      const fim: PedacoDaDescida[] = [{ a: lateral, b: { ...o.naParede }, cotaAMm: o.cotaDoAlvoMm, cotaBMm: o.cotaDoAlvoMm }];
-      if (o.alvo.x !== o.naParede.x || o.alvo.y !== o.naParede.y) fim.push({ a: { ...o.naParede }, b: { ...o.alvo }, cotaAMm: o.cotaDoAlvoMm, cotaBMm: o.cotaDoAlvoMm });
+      const fim: PedacoDaDescida[] = [{ a: lateral, b: { ...naParede }, cotaAMm: o.cotaDoAlvoMm, cotaBMm: o.cotaDoAlvoMm }];
+      if (o.alvo.x !== naParede.x || o.alvo.y !== naParede.y) fim.push({ a: { ...naParede }, b: { ...o.alvo }, cotaAMm: o.cotaDoAlvoMm, cotaBMm: o.cotaDoAlvoMm });
       return [...inicio, ...ate, ...fim];
-    }
+    };
+    // F22: a descida INTEIRA pelo batente (o deslocamento no forro, a descida e a corrida por baixo) livre dos tubos de
+    // verdade — o nó do forro, andando junto, caía sobre a linha da fria no forro, e a quente descia através dela.
+    const semEncontro = (ps: PedacoDaDescida[]) => {
+      if (!o.disciplina) return true;
+      const { e0, outros } = obstaculosDaDescida(model, levelId, o, naParede, paredeQueContem(model, levelId, naParede));
+      return ps.every((pd) => outros.filter((t) => !t.futura).every((t) => distanciaEntreEixos3D({ x: pd.a.x, y: pd.a.y, z: e0 + pd.cotaAMm }, { x: pd.b.x, y: pd.b.y, z: e0 + pd.cotaBMm }, t.A, t.B) > o.raioMm + t.r + FOLGA_DA_DESCIDA_MM));
+    };
+    const opcoes = [...laterais.filter(corridaLivre), ...laterais.filter((l) => !corridaLivre(l))].map(comLateral).filter((x): x is PedacoDaDescida[] => !!x);
+    const escolhida = opcoes.find(semEncontro) ?? opcoes[0] ?? null;
+    if (escolhida) return escolhida;
   }
   const w = o.naParede;
   const parede = w ? paredeQueContem(model, levelId, w) : null;

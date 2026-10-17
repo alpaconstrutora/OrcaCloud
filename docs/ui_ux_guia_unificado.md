@@ -287,6 +287,23 @@ Falhou um → §3 se aplica inteiro.
 > arquivos (o checador é textual). A saída correta é apontar para esta seção,
 > não silenciar o check nem trocar por `usePersistedState`.
 
+### 3.2 Exceção — contexto do registro aberto já é gravado no próprio registro
+
+Registrado em 2026-10-17 (Orçamento Analítico, `BudgetEditor.tsx`). Estado,
+Encargos, Referência e Base do orçamento parecem filtros de busca (o checador
+os acusa pelo nome `search*`), mas são **configuração do orçamento aberto**:
+nascem de `settings` e cada troca chama `onUpdateSettings`, que grava no próprio
+orçamento. Eles já "sobrevivem a navegação/reload" — no banco, por orçamento. Em
+`usePersistedState` (localStorage, por navegador) o valor do orçamento A
+vazaria para o orçamento B ao abri-lo.
+
+**Critério (os dois, juntos):** o valor inicial vem do registro aberto **e** a
+troca é gravada no registro. Falhou um → §3 se aplica.
+
+> ℹ️ O checador também acusa estado que não é filtro (`searchResults`,
+> `selectedSearchItems`, `isSearching`) só pelo prefixo do nome. Mesma saída:
+> apontar para esta seção, não renomear nem silenciar.
+
 ---
 
 ## 4. KPI CARDS (Dashboards)

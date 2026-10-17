@@ -4142,8 +4142,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                         </div>
                                         <div className="text-right shrink-0">
-                                            <span className="text-xs font-semibold text-slate-500 block">Comissão inicial</span>
-                                            <span className="text-sm font-medium text-gray-800">0%</span>
+                                            {/* O % atual da negociação — era "Comissão inicial 0%" fixo, que
+                                                contradizia o campo logo abaixo (17/10/2026). */}
+                                            <span className="text-xs font-semibold text-slate-500 block">
+                                                {comissaoPorParcela ? 'Comissão por parcela' : 'Comissão'}
+                                            </span>
+                                            <span className="text-sm font-medium text-gray-800">
+                                                {(formData.broker_commission_pct || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%
+                                            </span>
                                         </div>
                                     </div>
                                 )}
@@ -4222,9 +4228,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <label className="text-xs font-semibold text-slate-500">Forma de Pagto.</label>
                                             <select
                                                 value={formData.broker_payment_method || ''}
-                                                onChange={(e) => setFormData({ ...formData, broker_payment_method: e.target.value })}
+                                                onChange={(e) => setFormData({ ...formData, broker_payment_method: e.target.value || undefined })}
                                                 className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
                                             >
+                                                {/* Sem esta opção, campo vazio no banco aparecia como PIX
+                                                    (1ª opção) sem nunca ter sido gravado (17/10/2026). */}
+                                                <option value="">Não informada</option>
                                                 <option value="PIX">PIX</option>
                                                 <option value="BOLETO">Boleto Bancário</option>
                                                 <option value="TRANSFERENCIA">Transferência Bancária</option>

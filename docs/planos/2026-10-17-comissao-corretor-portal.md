@@ -184,3 +184,21 @@ de aluguel não recebido.
   leitura falhar, não grava nada. Teste `__tests__/tributoPagoNaoVoltaAPendente.test.ts` — falhou nos 2
   casos no código antigo (reprodução) e passa no novo. Em produção ainda não tinha acontecido: os 7 tributos
   conciliados seguem conciliados e nenhum pendente tem sinal de pagamento (payment_date, conciliação).
+
+---
+
+# Fase 4 — ajustes vistos na aba Partes e Comissões
+
+## Pedido original (17/10/2026, mesma sessão ec9dc1ab)
+
+> sim
+
+(resposta a: "Quer que eu corrija esses dois?" — o cartão do corretor dizia "Comissão inicial 0%" ao lado do
+10%; "Forma de Pagto." exibia PIX com o campo vazio no banco.)
+
+## Estado
+
+- [x] `components/DealModal.tsx`: o cartão do corretor mostra o % atual da negociação ("Comissão" / "Comissão
+  por parcela" em locação) em vez do "Comissão inicial 0%" fixo.
+- [x] `components/DealModal.tsx`: "Forma de Pagto." ganhou a opção "Não informada" — vazio aparece vazio (antes
+  a 1ª opção, PIX, era exibida sem nunca ter sido gravada); escolher "Não informada" grava vazio.

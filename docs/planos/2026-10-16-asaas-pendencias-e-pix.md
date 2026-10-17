@@ -22,11 +22,32 @@
 
 | Fase | Situação |
 |---|---|
-| 0 — painel Asaas (usuário) | 0 de 6 — ⚠️ a chave atual é RECUSADA pela Asaas (HTTP 401), ver item 0.0 |
+| 0 — painel Asaas (usuário) | **SANDBOX concluído e provado de ponta a ponta em 17/10/2026** — ver "Fase 0 no sandbox"; produção pendente |
 | 1 — correções da integração existente | **12 de 14 publicados em 17/10/2026** (`bb5c6d2a`); 1.8 já estava resolvido; 1.14 fora do plano |
 | 2 — conta Asaas como Conta de Pagamento | **5 de 5 publicados em 17/10/2026** (`c55b4558` + `071b77b8`); falta só o USO: cadastrar a conta Asaas com chave válida (depende do item 0.0) |
 | 3 — PIX | **publicada em 17/10/2026** (`7b965915`); uso real depende da Fase 0 (chave válida + saída de PIX habilitada na conta Asaas) |
 | 4 — governança | portão de DISPARO antecipado para a Fase 3 (papel, alçada, tetos, piloto, competência); faltam `supplier_payments_auditoria` e RLS de escrita por papel |
+
+## Fase 0 no sandbox (17/10/2026, feito junto com o usuário)
+
+| Passo | Resultado |
+|---|---|
+| 1 conta sandbox + chave | conta "Asaas Sandbox" (Alpa), chave aceita pela Asaas e no Vault; regra "Repasse Gateway (Asaas)" desligada sozinha |
+| 2 webhook | token NOVO do webhook (ASAAS_WEBHOOK_TOKEN regravado — o de 06/2026 era ilegível); ⚠️ a Asaas trata cada GRUPO de eventos como uma configuração ("Webhook para cobranças"): Transferências/Pagamento de contas tiveram de ser incluídos à parte |
+| 3 saldo de teste | sandbox › cobrança › "Ações de Sandbox › Confirmar pagamento" (NÃO "receber em dinheiro", que não credita saldo); webhook 200 "ignorado"; extrato importado pelo cron |
+| 4 PIX | 1ª tentativa: "A chave de API fornecida não possui permissão para realizar operações de saque via API" → pagamento FAILED com o motivo, título intacto |
+| 5 liberar saque | (a) na chave: "Permitir que esta chave execute operações de saque via API (Pix, Ted, Pague Contas e Recarga de celular)"; (b) Integrações › Segurança › "Validação de saque via Webhook" → Edge NOVA `asaas-saque-validacao` (token ASAAS_SAQUE_TOKEN), caixas "via interface", "Splits" e "estornos Pix" DESMARCADAS |
+
+Provas de ponta a ponta:
+- PIX 1 (R$ 1,00): disparado 14:32, saque **aprovado** pela validação (Logs das autorizações), DONE na Asaas 14:34; o webhook de transferência ainda não existia → **baixado pela consulta automática das 15:00** (rede de segurança da Fase 1).
+- PIX 2 (R$ 2,00): disparado 14:45:19, aprovado, **TRANSFER_DONE pelo webhook às 14:45:36** → título PAGO/CONCILIATED, data 17/10, forma PIX, conta Asaas Sandbox, comprovante.
+- Extrato das 15:07: as duas transferências importadas e **conciliadas sozinhas** com os títulos (MATCHED, `bank_reconciled_at`); saldo 48,02 = Asaas.
+- Histórico: criado → enviado (altair.rosa@) → concluído (Asaas), nos dois.
+
+Mudanças de acesso feitas para o teste: `desenvolvedor@alpaconstrutora.com.br` promovido de `member` a `admin` na Alpa (pedido do usuário).
+Dados de teste a limpar: 2 títulos MANUAL "TESTE PIX SANDBOX…", 3 `supplier_payments` (1 FAILED + 2 DONE), 4 linhas de extrato da conta Asaas Sandbox, 2 vínculos de conciliação. O histórico (`supplier_payments_auditoria`) fica.
+
+Melhoria anotada: "Sincronizar extrato" mostra "0 movimento(s) novo(s)" quando o cron já importou — dizer também quantos já estavam no período.
 
 ## Andamento da Fase 3 (17/10/2026)
 

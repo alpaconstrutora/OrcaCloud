@@ -56,7 +56,8 @@ Decisões de execução (não perguntadas, registradas):
 - [x] Verificação visual — Playwright no link público, local × produção, sem erro de console/HTTP:
       parceiro com 73 parcelas, Recebido R$ 15.600, Em aberto R$ 28.200, Vencido R$ 22.200
       (mesmos números da produção), chips 73/10/37/26; `check-ui-standard` limpo nos 3 `.tsx`; `tsc` 0 erros
-- [ ] Suíte inteira
+- [x] Suíte inteira — após rebase em e3ec3f0b: 10.130 passed / 0 failed; `npm run build` rc=0, 0 erros TS
+      (1ª rodada: `PainelVersoes` caiu por timeout sob carga — 26/26 isolado — e a colisão de prefixo, corrigida)
 - [ ] Publicação
 
 ## Verificação

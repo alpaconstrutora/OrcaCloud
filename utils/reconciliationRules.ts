@@ -122,6 +122,33 @@ export function extractAliasToken(text: string): string {
     return words.slice(0, 4).join(' ').trim();
 }
 
+/**
+ * Token que pode virar APELIDO aprendido — ou '' quando o movimento não nomeia ninguém.
+ *
+ * Em 01/10/2026 um saque no caixa ("SAQUE DINHEIRO ATM-CE0230099 … MEMO REF …") foi
+ * conciliado à mão com a parcela de um fornecedor, e o aprendizado gravou o apelido
+ * "DINHEIRO ATM CE0230099 MEMO" → fornecedor. Dali em diante o motor carimbou aquele
+ * nome em todo saque do mesmo terminal (47 linhas). Saque não tem destinatário: o que
+ * sobra do texto é jargão (DINHEIRO, ATM, TERMINAL), o código do terminal e resto de tag
+ * de OFX (MEMO, REFNUM).
+ *
+ * Fica separado de `extractAliasToken` de propósito: aquela também alimenta
+ * `contrapartesDiscordam`, que a Edge Function `reconciliation-engine` usa para pontuar,
+ * e mudá-la mudaria a pontuação do servidor até a função ser republicada.
+ */
+export function tokenDeAliasAprendivel(text: string): string {
+    // Saque nunca tem destinatário, qualquer que seja o resto do texto.
+    if (/\bSAQUE\b/.test(normalizeText(text))) return '';
+    const SEM_NOME = new Set(['DINHEIRO', 'ATM', 'TERMINAL', 'AUTOATENDIMENTO', 'BANCO24HORAS', 'MEMO', 'REFNUM', 'FITID', 'CHECKNUM']);
+    // Filtra ANTES do corte de 4 palavras de `extractAliasToken`, senão o código do
+    // terminal ocupa uma das 4 vagas e o nome sai cortado.
+    const semCodigo = normalizeText(text)
+        .split(' ')
+        .filter(w => w && !/\d/.test(w) && !SEM_NOME.has(w))
+        .join(' ');
+    return extractAliasToken(semCodigo);
+}
+
 export function calculateSimilarity(str1: string, str2: string): number {
     const s1 = str1.toUpperCase().replace(/[^A-Z0-9]/g, '');
     const s2 = str2.toUpperCase().replace(/[^A-Z0-9]/g, '');

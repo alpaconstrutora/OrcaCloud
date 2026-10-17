@@ -29,10 +29,17 @@ export function hojeLocal(agora: Date = new Date()): string {
  * Por que o botão "Confirmar recebimento" está desligado — `null` quando pode
  * confirmar. Botão desligado sem motivo é lido como defeito.
  */
-export function motivoBaixaBloqueada(dataPagamento: string, hoje: string): string | null {
+export function motivoBaixaBloqueada(
+    dataPagamento: string,
+    hoje: string,
+    recibo?: { emitindo: boolean; forma: string | null | undefined },
+): string | null {
     if (!dataPagamento) return 'Informe a data do pagamento.';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dataPagamento)) return 'Data do pagamento inválida.';
     if (dataPagamento > hoje) return 'A data do pagamento não pode ser futura.';
+    // A forma sai impressa no recibo. Sem ela, o recibo nº 000001 de pagamento saiu
+    // com "—" na coluna FORMA (17/10/2026). Sem recibo, a forma segue opcional.
+    if (recibo?.emitindo && !recibo.forma) return 'Escolha a forma de pagamento: ela sai impressa no recibo.';
     return null;
 }
 

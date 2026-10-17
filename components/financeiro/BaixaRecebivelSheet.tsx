@@ -109,7 +109,8 @@ export default function BaixaRecebivelSheet({
     }, [aberto, chaveDosTitulos, emitirReciboPadrao]);
 
     const hoje = hojeLocal();
-    const motivo = motivoBaixaBloqueada(dataPagamento, hoje);
+    const vaiEmitirRecibo = emitirRecibo && !reciboIndisponivel;
+    const motivo = motivoBaixaBloqueada(dataPagamento, hoje, { emitindo: vaiEmitirRecibo, forma });
     const total = useMemo(() => lista.reduce((s, r) => s + (Number(r.valor) || 0), 0), [lista]);
 
     const fechar = () => { if (!salvando) onClose(); };
@@ -118,7 +119,7 @@ export default function BaixaRecebivelSheet({
         if (motivo || salvando) return;
         setSalvando(true);
         try {
-            await onConfirm({ paymentDate: dataPagamento, paymentType: forma || null, emitirRecibo: emitirRecibo && !reciboIndisponivel });
+            await onConfirm({ paymentDate: dataPagamento, paymentType: forma || null, emitirRecibo: vaiEmitirRecibo });
         } finally {
             setSalvando(false);
         }
@@ -197,7 +198,9 @@ export default function BaixaRecebivelSheet({
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label htmlFor="baixa-forma" className="text-xs font-semibold text-slate-500">Forma de pagamento</label>
+                            <label htmlFor="baixa-forma" className="text-xs font-semibold text-slate-500">
+                                Forma de pagamento{vaiEmitirRecibo && <span className="text-red-500 ml-1">*</span>}
+                            </label>
                             <div className="relative">
                                 <select
                                     id="baixa-forma"
@@ -206,7 +209,7 @@ export default function BaixaRecebivelSheet({
                                     onChange={e => setForma(e.target.value as ReceivablePaymentType | '')}
                                     className={`${inputCls} appearance-none pr-8 cursor-pointer`}
                                 >
-                                    <option value="">Não informada</option>
+                                    <option value="">{vaiEmitirRecibo ? 'Selecione…' : 'Não informada'}</option>
                                     {FORMAS_PAGAMENTO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                                 </select>
                                 <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />

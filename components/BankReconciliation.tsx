@@ -2390,12 +2390,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             }
             if (result.skipped > 0) avisos.push(`${result.skipped} linha(s) de saldo/total do extrato ignorada(s) — não são movimentos.`);
 
+            // Cópia em outro formato (o mesmo período já importado por OFX e agora por
+            // planilha, ou o contrário) é dita com nome: é o que explica "por que não entrou".
+            const outroFormato = result.duplicatesOtherFormat > 0
+                ? ` ${result.duplicatesOtherFormat} delas já estava(m) gravada(s) a partir de outro formato de arquivo (mesma data, valor e direção).`
+                : '';
             if (result.inserted === 0 && result.duplicates > 0) {
-                alert([`Este extrato já foi importado anteriormente.\n${result.duplicates} transação(ões) duplicada(s) ignorada(s).`, ...avisos].join('\n\n'));
+                alert([`Este extrato já foi importado anteriormente.\n${result.duplicates} transação(ões) duplicada(s) ignorada(s).${outroFormato}`, ...avisos].join('\n\n'));
             } else if (result.inserted === 0) {
                 alert(['Nenhuma transação encontrada no arquivo. Verifique se é um extrato válido (OFX, CSV, CNAB ou Excel).', ...avisos].join('\n\n'));
             } else {
-                const dup = result.duplicates > 0 ? ` ${result.duplicates} já existia(m) e foi(ram) ignorada(s).` : '';
+                const dup = result.duplicates > 0 ? ` ${result.duplicates} já existia(m) e foi(ram) ignorada(s).${outroFormato}` : '';
                 const auto = run.autoApplied > 0 ? ` ${run.autoApplied} conciliada(s) automaticamente.` : '';
                 setActionFeedback({ message: `${result.inserted} transação(ões) importada(s) com sucesso!${dup}${auto}`, type: 'success' });
                 setTimeout(() => setActionFeedback(null), 5000);

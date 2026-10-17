@@ -46,7 +46,7 @@ interface Props {
 // 06/09/2026, quando o item 2.4 passou a gravar o arquivo num bucket privado e um
 // registro por importação.
 const IMPORT_RULES = [
-    ['Idempotência', 'Lançamento duplicado é reconhecido por conta, data, valor, direção e descrição — reimportar o mesmo extrato não duplica nada'],
+    ['Idempotência', 'Reimportar o mesmo extrato não duplica nada — nem em outro formato: o movimento que a conta já tem com a mesma data, valor e direção (OFX × planilha) é reconhecido e ignorado'],
     ['Conta certa', 'OFX de outra conta (número diferente do cadastrado) é recusado com aviso'],
     ['Linhas de saldo', '"Saldo do dia", "saldo anterior" e totais da planilha são descartados — não são movimentos'],
     ['Formatos aceitos', 'OFX (1.x e 2.x), CSV (; ou ,), Excel (XLSX/XLS) e CNAB 240. CNAB 400 ainda não foi verificado com arquivo real'],

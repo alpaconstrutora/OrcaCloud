@@ -201,6 +201,15 @@ describe('montarReciboPdf', () => {
         expect(pdf).not.toContain('(null)');
     });
 
+    it('contato do emitente sai UMA vez, no rodapé — nunca embaixo do credor/pagador', () => {
+        for (const kind of ['RECEBIMENTO', 'PAGAMENTO'] as const) {
+            const pdf = montarReciboPdf(recibo({ kind, issuer_address: 'Rua Ângelo Bernardo Faccio, 90' }),
+                { contato: { phone: '35999055003', email: 'x@y.com' } }).output();
+            expect(pdf.split('99905-5003').length - 1).toBe(1);
+            expect(pdf.split('x@y.com').length - 1).toBe(1);
+        }
+    });
+
     it('logo inválida não impede o recibo; logo válida entra (mais bytes, ainda 1 página)', () => {
         expect(() => montarReciboPdf(recibo(), { logoDataUrl: 'data:image/png;base64,naoebase64' })).not.toThrow();
         const semLogo = montarReciboPdf(recibo()).output('arraybuffer').byteLength;

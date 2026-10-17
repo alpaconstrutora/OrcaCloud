@@ -447,28 +447,14 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
         doc.text(destinatario.documento, R, 66.5, { align: 'right' });
     }
 
-    // ── 3. Valor em destaque + contato do emitente ───────────────────────────
+    // ── 3. Valor em destaque ─────────────────────────────────────────────────
+    // Até 17/10/2026 o endereço, telefone e e-mail do EMITENTE ficavam aqui, à direita,
+    // logo abaixo de "Pago a:"/"Recebemos de:" — e quem lia entendia que eram do credor
+    // ou do pagador (recibo nº 000001 da Débora mostrava o endereço da Alpa embaixo do
+    // nome dela). O contato do emitente fica só no rodapé "CONTATO".
     rotulo(rotulos.valor, M, 80);
     fonte('bold', 24, COR.ink);
     doc.text(brl(r.amount), M, 91);
-
-    {
-        const entradas: string[][] = [];
-        const endereco = (r.issuer_address ?? '').trim();
-        fonte('normal', 8.5, COR.muted);
-        if (endereco) entradas.push(limitarLinhas(doc.splitTextToSize(endereco, 74) as string[], 2));
-        // Telefone e e-mail; o site vai no rodapé.
-        for (const linha of linhasContatoEmitente(extras.contato).slice(0, 2)) entradas.push([linha]);
-        let y = 80;
-        for (const linhas of entradas.slice(0, 3)) {
-            preencher(COR.accent);
-            doc.circle(113.2, y - 1.1, 0.9, 'F');
-            for (const linha of linhas) {
-                doc.text(linha, 116.5, y);
-                y += 4.6;
-            }
-        }
-    }
 
     // ── 4. Tabela de uma linha ───────────────────────────────────────────────
     const yT = 106;

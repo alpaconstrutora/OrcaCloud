@@ -8,6 +8,7 @@ const MOTOR_TIMEOUT_MS = 180_000;
 // cuida do banco; `utils/reconciliationRules` cuida do julgamento.
 import * as regras from '../utils/reconciliationRules';
 import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
+import { separarGemeasDeOutroFormato, type LinhaDeExtrato } from '../utils/extratoDuplicidade';
 import { processService } from './processService';
 import {
     parseStatementFile,
@@ -72,7 +73,10 @@ export interface MatchingRunResult {
 
 export interface ImportResult {
     inserted: number;
+    /** Total recusado por já existir — inclui `duplicatesOtherFormat`. */
     duplicates: number;
+    /** Parte de `duplicates`: o mesmo movimento já gravado em OUTRO formato de arquivo. */
+    duplicatesOtherFormat: number;
     /** Linhas de saldo/total reconhecidas e descartadas de propósito. */
     skipped: number;
     /** Arquivos que não entraram, com o motivo (formato, conta errada, erro de leitura). */
@@ -182,6 +186,8 @@ export const bankReconciliationService = {
      */
     async ingestMultipleFiles(files: File[], bankAccountId: string, organizationId: string): Promise<ImportResult> {
         const allNormalizedTxs: NormalizedBankTx[] = [];
+        /** Por arquivo, na ordem de envio: a duplicidade entre formatos conta por arquivo. */
+        const linhasPorArquivo: NormalizedBankTx[][] = [];
         const rejected: ImportResult['rejected'] = [];
         const headers: ImportResult['headers'] = [];
         let skipped = 0;
@@ -232,6 +238,7 @@ export const bankReconciliationService = {
                 skipped += parsed.skipped;
                 const linhas = await this.toNormalizedRows(parsed.transactions, bankAccountId, organizationId);
                 allNormalizedTxs.push(...linhas);
+                linhasPorArquivo.push(linhas);
 
                 // O arquivo original vai para um bucket privado, com a organização na
                 // primeira pasta — é o que as policies conferem. Falha aqui não derruba a
@@ -272,32 +279,38 @@ export const bankReconciliationService = {
 
         if (allNormalizedTxs.length === 0) {
             await this.registrarImportacoes(registros, new Set());
-            return { inserted: 0, duplicates: 0, skipped, rejected, headers, data: [] };
+            return { inserted: 0, duplicates: 0, duplicatesOtherFormat: 0, skipped, rejected, headers, data: [] };
         }
 
-        // Remover duplicatas dentro do próprio lote (mesmo fingerprint)
-        const uniqueInBatch = Array.from(new Map(allNormalizedTxs.map(tx => [tx.fingerprint, tx])).values());
+        // Duplicidade em duas camadas (utils/extratoDuplicidade.ts): o fingerprint pega o
+        // MESMO arquivo de novo; conta + data + valor + direção, por quantidade, pega o
+        // mesmo movimento em OUTRO formato — o fingerprint inclui a descrição, e cada
+        // formato a escreve de um jeito. Até 17/10/2026 só existia a primeira camada, e o
+        // Sicredi de jan–jun/2024 entrou em dobro (OFX + planilha). Carrega o que a conta
+        // já tem no período do lote, paginado: o `.in(fingerprints)` de antes passava do
+        // limite de URL/1000 linhas num extrato grande.
+        const datas = allNormalizedTxs.map(tx => tx.transaction_date).sort();
+        const { data: existentes, error: erroExistentes } = await fetchAllPages<LinhaDeExtrato>(() =>
+            supabase
+                .from('bank_transactions')
+                .select('transaction_date, amount, direction, fingerprint, external_id')
+                .eq('bank_account_id', bankAccountId)
+                .gte('transaction_date', datas[0])
+                .lte('transaction_date', datas[datas.length - 1])
+                .order('id', { ascending: true }) as unknown as RangeableQuery<LinhaDeExtrato>,
+        );
+        if (erroExistentes) throw erroExistentes;
 
-        // Estabilização: Filtrar transações já existentes pelo fingerprint e bank_account_id
-        const fingerprints = uniqueInBatch.map(tx => tx.fingerprint);
-
-        const { data: existingTxs } = await supabase
-            .from('bank_transactions')
-            .select('fingerprint')
-            .eq('bank_account_id', bankAccountId)
-            .in('fingerprint', fingerprints);
-
-        const existingFingerprints = new Set(existingTxs?.map(tx => tx.fingerprint) || []);
-        const newTxs = uniqueInBatch.filter(tx => !existingFingerprints.has(tx.fingerprint));
-        const duplicateCount = uniqueInBatch.length - newTxs.length;
+        const { novas: newTxs, jaExistiam, gemeas } = separarGemeasDeOutroFormato(linhasPorArquivo, existentes ?? []);
+        const duplicateCount = jaExistiam.length + gemeas.length;
 
         if (newTxs.length === 0) {
             await this.registrarImportacoes(registros, new Set());
-            return { inserted: 0, duplicates: duplicateCount, skipped, rejected, headers, data: [] };
+            return { inserted: 0, duplicates: duplicateCount, duplicatesOtherFormat: gemeas.length, skipped, rejected, headers, data: [] };
         }
 
         // INSERT puro: com external_id NULL o onConflict nunca disparava, e a dedupe real
-        // já aconteceu acima pelo fingerprint (há índice único em (bank_account_id, fingerprint)).
+        // já aconteceu acima (há índice único em (bank_account_id, fingerprint)).
         const { data, error } = await supabase
             .from('bank_transactions')
             .insert(newTxs)
@@ -313,7 +326,7 @@ export const bankReconciliationService = {
         await this.normalizeTransactions(bankAccountId);
         await this.applyCustomRules(bankAccountId, organizationId);
 
-        return { inserted: data?.length ?? newTxs.length, duplicates: duplicateCount, skipped, rejected, headers, data: data ?? [] };
+        return { inserted: data?.length ?? newTxs.length, duplicates: duplicateCount, duplicatesOtherFormat: gemeas.length, skipped, rejected, headers, data: data ?? [] };
     },
 
     /**
@@ -866,7 +879,8 @@ export const bankReconciliationService = {
             const partyName = it.party_name || it.entity_name || null;
             if (!it.party_id && !partyName) return;
 
-            const token = regras.extractAliasToken(bt.counterparty_name || bt.description_normalized || bt.description_raw || '');
+            // Movimento que não nomeia ninguém (saque no caixa, tarifa) não ensina apelido.
+            const token = regras.tokenDeAliasAprendivel(bt.counterparty_name || bt.description_normalized || bt.description_raw || '');
             if (!token || token.length < 3) return;
             const partyType: 'SUPPLIER' | 'CLIENT' = it.party_type === 'CLIENT' ? 'CLIENT' : 'SUPPLIER';
 

@@ -16,6 +16,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
 import { bankReconciliationService, type ReconciliationEngineSettings } from '../services/bankReconciliationService';
 import { findSubset, partyMatchesText } from '../services/reconciliationGroupService';
+import { tokenDeAliasAprendivel } from '../utils/reconciliationRules';
 
 const S: ReconciliationEngineSettings = {
     fine_percent: 2, interest_percent_month: 1,
@@ -67,6 +68,22 @@ describe('extractAliasToken', () => {
     it('tira ruído bancário e números, mantém até 4 palavras da contraparte', () => {
         expect(svc.extractAliasToken('PIX ENVIADO 11866633000101 EMPORIUM DOS PAES LTDA')).toBe('EMPORIUM PAES');
         expect(svc.extractAliasToken('PAGAMENTO BOLETO CONSTRUTORA ALPA ENGENHARIA E COMERCIO')).toBe('CONSTRUTORA ALPA ENGENHARIA COMERCIO');
+    });
+});
+
+describe('tokenDeAliasAprendivel (o que pode virar apelido aprendido)', () => {
+    it('saque no caixa não nomeia ninguém: o caso real de 01/10/2026 dá token vazio', () => {
+        expect(tokenDeAliasAprendivel('SAQUE DINHEIRO ATM CE0230099 MEMO REF 13831410766')).toBe('');
+        expect(tokenDeAliasAprendivel('SAQUE DINHEIRO ATM-CE0230099 (Ref: 13831410766</REFNUM>)')).toBe('');
+        expect(tokenDeAliasAprendivel('Saque terminal')).toBe('');
+    });
+    it('código de terminal e resto de tag de OFX não entram no apelido', () => {
+        expect(tokenDeAliasAprendivel('DEBITO TED IB I00895 03853394612 ALTAIR PEREIRA DA ROSA MEMO REF 12449295057 REFNUM'))
+            .toBe('IB ALTAIR PEREIRA ROSA');
+    });
+    it('PIX com nome continua ensinando o nome', () => {
+        expect(tokenDeAliasAprendivel('PAGAMENTO PIX-PIX_DEB   32195297808 Débora Cristina Duarte')).toBe('DEBORA CRISTINA DUARTE');
+        expect(tokenDeAliasAprendivel('PIX ENVIADO 11866633000101 EMPORIUM DOS PAES LTDA')).toBe('EMPORIUM PAES');
     });
 });
 

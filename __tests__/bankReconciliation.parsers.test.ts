@@ -151,6 +151,28 @@ describe('parseOFX — XML (OFX 2.x, fechamento na mesma linha)', () => {
         expect(r.transactions[2].amount).toBe(16);
     });
 
+    it('FITID e REFNUM saem sem a tag de fechamento (o parser antigo gravava "13247103932</FITID>")', () => {
+        for (const t of r.transactions) expect(t.fitid ?? '').not.toMatch(/</);
+        expect(r.transactions[0].fitid).toBe('20921891190');
+        expect(r.transactions[0].memo).not.toMatch(/<\/REFNUM>/);
+    });
+
+    it('Sicredi: uma tag por linha, cada uma com fechamento — nada de tag no id nem na descrição', () => {
+        const sicredi = parseOFX(`<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
+<STMTTRN>
+<TRNTYPE>DEBIT</TRNTYPE>
+<DTPOSTED>20240312000000[-3:BRT]</DTPOSTED>
+<TRNAMT>-600.00</TRNAMT>
+<FITID>13247103932</FITID>
+<REFNUM>13247103932</REFNUM>
+<MEMO>PAGAMENTO PIX-PIX_DEB   32195297808 Debora Cristina Duarte</MEMO>
+</STMTTRN>
+</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`);
+        expect(sicredi.transactions).toHaveLength(1);
+        expect(sicredi.transactions[0].fitid).toBe('13247103932');
+        expect(sicredi.transactions[0].memo).toBe('PAGAMENTO PIX-PIX_DEB   32195297808 Debora Cristina Duarte (Ref: 13247103932)');
+    });
+
     it('lê saldo negativo e ACCTID sem máscara', () => {
         expect(r.header.acctId).toBe('07101234567');
         expect(r.header.ledgerBalance).toBe(-1200.1);

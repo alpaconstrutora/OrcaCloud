@@ -16,6 +16,14 @@ describe('motivoBaixaBloqueada — todo bloqueio diz o porquê', () => {
         expect(motivoBaixaBloqueada('26/09/2026', HOJE)).toBe('Data do pagamento inválida.');
         expect(motivoBaixaBloqueada('2026-09-27', HOJE)).toBe('A data do pagamento não pode ser futura.');
     });
+    it('emitindo recibo, a forma é obrigatória; sem recibo, segue opcional', () => {
+        expect(motivoBaixaBloqueada(HOJE, HOJE, { emitindo: true, forma: '' }))
+            .toBe('Escolha a forma de pagamento: ela sai impressa no recibo.');
+        expect(motivoBaixaBloqueada(HOJE, HOJE, { emitindo: true, forma: 'PIX' })).toBeNull();
+        expect(motivoBaixaBloqueada(HOJE, HOJE, { emitindo: false, forma: '' })).toBeNull();
+        // a data errada continua sendo o primeiro motivo
+        expect(motivoBaixaBloqueada('', HOJE, { emitindo: true, forma: '' })).toBe('Informe a data do pagamento.');
+    });
     it('hoje e passado liberam', () => {
         expect(motivoBaixaBloqueada(HOJE, HOJE)).toBeNull();
         expect(motivoBaixaBloqueada('2025-12-31', HOJE)).toBeNull();

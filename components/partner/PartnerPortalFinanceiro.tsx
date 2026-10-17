@@ -17,7 +17,7 @@ export interface ParcelaParceiro {
     status: string;
     business_status: string | null;
     recibo_numero?: number | null;
-    /** Contrato dono da parcela (prefixo do `reference_id`, desde aplicar_20271017700000). */
+    /** Contrato dono da parcela (prefixo do `reference_id`, desde aplicar_20271017900000). */
     contract_id?: string | null;
 }
 

@@ -18,8 +18,9 @@
 -- Reescrita a partir da versão VIVA (pg_get_functiondef em 17/10/2026 =
 -- aplicar_20270928000120, conferido por diff).
 --
--- ⚠️ Nasceu como aplicar_20271017500000_… e foi renomeada: o prefixo colidia com
---    20271017500000_comissao_corretor_titulo_e_portal.sql (outra frente, chegou antes).
+-- ⚠️ Nasceu como aplicar_20271017500000_… e foi renomeada DUAS vezes: o prefixo
+--    colidia com 20271017500000_comissao_corretor_titulo_e_portal.sql e depois com
+--    aplicar_20271017700000_asaas_auditoria_pagamentos.sql (outras frentes, chegaram antes).
 --    JÁ APLICADA no banco em 17/10/2026 com o nome antigo — é idempotente
 --    (CREATE OR REPLACE + REVOKE), reaplicar não estraga nada.
 --

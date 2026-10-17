@@ -26,7 +26,7 @@ Decisões de execução (não perguntadas, registradas):
 
 ## Plano
 
-1. **Banco** — `supabase/migrations/aplicar_20271017700000_partner_ws_financials_contract_id.sql`:
+1. **Banco** — `supabase/migrations/aplicar_20271017900000_partner_ws_financials_contract_id.sql`:
    `partner_ws_financials` devolve `installments[].contract_id` (o EXISTS do filtro vira
    CROSS JOIN LATERAL com o mesmo predicado). Reescrita a partir da versão viva.
    *Terminou quando:* ws da Débora = 73 parcelas, 73 com `contract_id`, `anon` sem EXECUTE.
@@ -46,7 +46,7 @@ Decisões de execução (não perguntadas, registradas):
 
 ## Estado
 - [x] 1. Banco — aplicado em 17/10/2026; conferido: 73/73 com `contract_id`, `anon_exec=false`.
-      Renomeada de `…500000` para `…700000` (prefixo colidia com outra frente; `migrationsPrefixo.test.ts`)
+      Renomeada `…500000` → `…700000` → `…900000` (prefixo colidiu com duas frentes; `migrationsPrefixo.test.ts`)
 - [x] 2. Kit
 - [x] 3. Corretor (refatoração) — print local × produção: **0 pixels diferentes** (desktop 1600×1000 e celular 390×844)
 - [x] 4. Parceiro

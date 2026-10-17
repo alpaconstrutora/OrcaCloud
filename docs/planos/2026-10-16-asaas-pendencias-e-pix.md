@@ -22,8 +22,8 @@
 
 | Fase | Situação |
 |---|---|
-| 0 — painel Asaas (usuário) | 0 de 5 |
-| 1 — correções da integração existente | 12 de 14 no código (frente `asaas-pix`), **nada publicado** — ver "Andamento da Fase 1" |
+| 0 — painel Asaas (usuário) | 0 de 6 — ⚠️ a chave atual é RECUSADA pela Asaas (HTTP 401), ver item 0.0 |
+| 1 — correções da integração existente | **12 de 14 publicados em 17/10/2026** (`bb5c6d2a`); 1.8 já estava resolvido; 1.14 fora do plano |
 | 2 — conta Asaas como Conta de Pagamento | não iniciada |
 | 3 — PIX | não iniciada |
 | 4 — governança | não iniciada |
@@ -56,7 +56,16 @@ Achados novos durante a Fase 1:
 - Contagens do lote do condomínio ("N de M emitidas") contavam cobrança cancelada como emitida — mesmo defeito do `byTransaction`, corrigido junto.
 - Prova de tipos: `tsc` cai sempre nesta máquina (V8, -1073741819); checador por arquivo (`tsc_por_arquivo.cjs`) fechou `FIM erros=0` na 2ª rodada. `deno check` das 4 functions: ok.
 
-Falta para fechar a Fase 1 (ordem): aplicar `aplicar_20271017200000` → publicar `asaas-webhook` (`--no-verify-jwt`), `asaas-charge`, `asaas-payment`, `asaas-status-sync` → aplicar `aplicar_20271017200100` (cron) → push em `main` (front) → provas: curl de `TRANSFER_CREATED` com token = 200; status-sync sem header = 401.
+Publicação (17/10/2026, ~01h30 UTC) — feita nesta ordem, cada passo provado:
+
+1. `aplicar_20271017200000` aplicada — prova: 3 colunas em `client_charges`, `asaas_checked_at` em `supplier_payments`, 4 índices, 0 policy de DELETE em `client_charges`, `acc_update` com WITH CHECK.
+2. Functions publicadas: `asaas-webhook` v12 e `asaas-status-sync` v1 (`verify_jwt=false`), `asaas-charge` v14 e `asaas-payment` v5 (`verify_jwt=true`). Provas de fora: webhook sem token → 401, token errado → 401; status-sync sem header → 401, com chave anon → 401; charge/payment com chave anon → 401 "Token inválido".
+3. `aplicar_20271017200100` aplicada — job `asaas-status-sync` `*/15 * * * *` ativo. Disparo manual pelo mesmo caminho do cron (pg_net + `fn_cron_secret`): HTTP 200, `cobrancas: 1` consultada e carimbada em `asaas_checked_at`.
+4. Push `bb5c6d2a` em main; `conferir-producao.sh "QR Code indisponível para esta cobrança"` → domínio serve bb5c6d2 com o texto no bundle.
+
+⚠️ **Achado da publicação:** a consulta à Asaas voltou **HTTP 401** — a `ASAAS_API_KEY` configurada (19/06/2026) é recusada pela própria Asaas (revogada, expirada, ou de ambiente diferente do `ASAAS_ENV`). Hoje NENHUMA chamada à Asaas funciona: emitir, pagar, consultar. Não é efeito desta fase (o código trata 401 como erro de consulta e não mexe na cobrança). Virou o item 0.0 da Fase 0.
+
+Roteiro original de publicação (mantido para referência): aplicar `aplicar_20271017200000` → publicar `asaas-webhook` (`--no-verify-jwt`), `asaas-charge`, `asaas-payment`, `asaas-status-sync` → aplicar `aplicar_20271017200100` (cron) → push em `main` (front) → provas: curl de `TRANSFER_CREATED` com token = 200; status-sync sem header = 401.
 
 ## Contexto
 
@@ -89,6 +98,7 @@ Plano versionado: `docs/planos/2026-10-16-asaas-pendencias-e-pix.md` (com o pedi
 
 ## Fase 0 — Do usuário, no painel Asaas (sem código, paralela à Fase 1)
 
+- [ ] **0.0 — Chave de API válida.** A atual é recusada (HTTP 401 em 17/10/2026). Gerar nova chave no painel Asaas (Integrações → Chave de API) do MESMO ambiente que `ASAAS_ENV` e regravar com `npx supabase secrets set ASAAS_API_KEY=… ASAAS_ENV=sandbox|production`. Prova: o próximo ciclo do `asaas-status-sync` não registra mais `HTTP 401` (`SELECT content FROM net._http_response ORDER BY id DESC LIMIT 5`).
 - [ ] Conta Asaas tem **`BILL:WRITE`** (pagar boleto) e **transferências PIX** habilitadas? (KYC de saída é mais rigoroso que o de recebimento.)
 - [ ] Gerar **chave de API de sandbox** e **de produção** separadas (a de produção só entra na Fase 2, no Vault).
 - [ ] Webhook cadastrado com URL `https://<ref>.supabase.co/functions/v1/asaas-webhook`, token = `ASAAS_WEBHOOK_TOKEN`, eventos: `PAYMENT_*`, `BILL_*`, `TRANSFER_*` (sandbox e produção).

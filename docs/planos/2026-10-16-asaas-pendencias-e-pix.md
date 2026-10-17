@@ -55,10 +55,11 @@ Testes adicionais no sandbox (17/10/2026, tarde):
 
 Limpeza (17/10/2026, ~16:50 BRT, autorizada): cópia em JSON local; transação com contagem conferida por passo — 6 lançamentos, 4 vínculos, 4 `supplier_payments`, 1 cobrança, 2 processos, 1 boleto + 1 nota, 1 cliente e 1 fornecedor de teste APAGADOS; 6 linhas do extrato da conta Asaas Sandbox marcadas IGNORED (apagar faria o cron reimportar). Mantidos: histórico (`supplier_payments_auditoria`, 15 linhas, com as 4 exclusões), conta Asaas Sandbox ativa, desenvolvedor@ admin.
 
-Ajustes pequenos revelados pelos testes (a fazer):
-1. Botão "Cancelar" no OrçaCloud para pagamento agendado/enviado (hoje só pelo painel da Asaas).
-2. Motivo legível no cancelamento vindo da Asaas ("Cancelado na Asaas" em vez de `TRANSFER_CANCELLED`).
-3. Melhoria anotada: "Sincronizar extrato" mostra "0 movimento(s) novo(s)" quando o cron já importou — dizer também quantos já estavam no período.
+Ajustes pequenos revelados pelos testes — FEITOS (17/10/2026):
+1. Botão "Cancelar" no OrçaCloud para pagamento agendado/enviado (antes só pelo painel da Asaas) — push `78d17e99`. Testado pelo usuário no sandbox ("TESTE PIX SANDBOX 4", R$ 4: agendado → cancelado pelo botão, autor = o usuário).
+2. Motivo legível no cancelamento vindo da Asaas ("Cancelado na Asaas" em vez de `TRANSFER_CANCELLED`; idem bloqueado/falhou/estornado) — `motivoDaFalha` em `utils/asaasEventos.ts`, push `78d17e99`.
+3. "Sincronizar extrato" passa a dizer quantos movimentos já estavam no período (`no_periodo`) — push `78d17e99`.
+4. Pedido do usuário ao testar o item 1 ("aonde vejo o histórico?" — não havia tela): Contas a Pagar › Parcelas ganha o ícone de histórico em toda linha com pagamento pela Asaas; `components/financeiro/HistoricoPagamentoAsaasSheet.tsx` mostra as tentativas do título (PIX/boleto, valor, favorecido, status, comprovante) e, em cada uma, a linha do tempo — quando, o quê, quem e motivo — lida de `supplier_payments_auditoria` (policy `spa_select` para autenticado; filtro `detalhe->>transaction_id`) — push `ce237685`.
 
 ## Andamento da Fase 3 (17/10/2026)
 

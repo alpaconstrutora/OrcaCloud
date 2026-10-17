@@ -42,7 +42,7 @@
 - [x] Ofícios — Ofícios (Destinatário, Modelo, Situação, Resposta até), Recebidos (Remetente, Situação, Recebido em, Responder até), Modelos (Categoria, Departamento, Status) — testes
 - [x] guia §6.12
 - [x] conferência visual — preview local, login de leitura, dados reais: 8 tabelas; colSpan = células da linha em todas; botão "recolher todos" desligado sem agrupar; recolher/expandir todos ok; 0 escritas, 0 erros. Ofícios sem registros para o usuário de leitura → coberto só por teste. Script `c:/tmp/pwtest/cadastros-agrupar.js`
-- [ ] publicado e conferido
+- [x] publicado em `c5980c36`; domínio carimbado com o commit e os 9 seletores ("Agrupar os fornecedores" … "Agrupar os modelos") nos chunks servidos; CI `ci` success
 
 ## Observado nos dados (fora do escopo)
 - Ativos Patrimoniais: "Valor aquisição" está R$ 0,00 em todos os bens visíveis ao usuário de leitura — os totais do grupo saem R$ 0,00 por isso.

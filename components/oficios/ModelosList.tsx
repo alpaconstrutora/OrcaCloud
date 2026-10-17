@@ -4,6 +4,7 @@ import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import type { DocGenModelo } from '../../types/docGen';
 import { CATEGORIA_GED_LABEL, STATUS_MODELO, formatarDataHora } from './rotulos';
+import { chavePorNome } from '../../utils/agruparLinhas';
 
 /**
  * Documentos › Ofícios › Modelos — tabela (§6.10 StandardTable). Clicar na
@@ -31,6 +32,28 @@ interface Props {
 }
 
 export default function ModelosList({ modelos, loading, nomeDepartamento, onAbrir, onDuplicar, onAlternarStatus, onExcluir }: Props) {
+    // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+    const agrupamento = React.useMemo(() => {
+        const SEM: Record<string, string> = { categoria: 'Sem categoria', departamento: 'Sem departamento', status: 'Sem status' };
+        return {
+            opcoes: [
+                { value: 'categoria', label: 'Categoria no GED' },
+                { value: 'departamento', label: 'Departamento' },
+                { value: 'status', label: 'Status' },
+            ],
+            chave: (campo: string, mo: DocGenModelo) => {
+                switch (campo) {
+                    case 'categoria': return chavePorNome(CATEGORIA_GED_LABEL[mo.categoria_ged]);
+                    case 'departamento': return chavePorNome(nomeDepartamento(mo.department_id));
+                    case 'status': return chavePorNome(STATUS_MODELO[mo.status]?.label);
+                    default: return null;
+                }
+            },
+            semRotulo: (campo: string) => SEM[campo] ?? 'Sem valor',
+            title: 'Agrupar os modelos',
+        };
+    }, [nomeDepartamento]);
+
     return (
         <StandardTable<DocGenModelo>
             storageKey="oficios:modelos"
@@ -38,6 +61,7 @@ export default function ModelosList({ modelos, loading, nomeDepartamento, onAbri
             rows={modelos}
             rowKey={m => m.id}
             loading={loading}
+            agrupamento={agrupamento}
             searchText={m => `${m.nome} ${m.descricao ?? ''} ${CATEGORIA_GED_LABEL[m.categoria_ged]} ${nomeDepartamento(m.department_id)}`}
             searchPlaceholder="Buscar por nome, descrição, categoria ou departamento..."
             sortValue={(key, m) => {

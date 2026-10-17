@@ -75,10 +75,12 @@ interface LinhaProps<T> {
     onAlternar: (key: string) => void;
     /** `title` do total — diz o que foi somado. */
     tituloTotal?: string;
+    /** Tela sem valor em dinheiro (fornecedores, documentos): só a contagem, sem "R$ 0,00". */
+    semTotal?: boolean;
 }
 
 /** Cabeçalho de grupo dentro do `<tbody>`: chevron, rótulo, contagem e total do grupo INTEIRO. */
-export function LinhaDeGrupo<T>({ grupo, recolhido, continua, colSpan, onAlternar, tituloTotal = 'Soma do valor das linhas do grupo' }: LinhaProps<T>) {
+export function LinhaDeGrupo<T>({ grupo, recolhido, continua, colSpan, onAlternar, tituloTotal = 'Soma do valor das linhas do grupo', semTotal }: LinhaProps<T>) {
     return (
         <tr>
             <td colSpan={colSpan} className="p-0">
@@ -93,7 +95,7 @@ export function LinhaDeGrupo<T>({ grupo, recolhido, continua, colSpan, onAlterna
                     {continua && <span className="text-xs font-normal text-slate-500">(continua)</span>}
                     <span className="text-xs font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">{grupo.itens.length}</span>
                     {/* Total logo após a contagem: no fim da linha ele caía fora da tela (tabela larga). */}
-                    <span className="text-sm font-medium text-gray-800 whitespace-nowrap" title={tituloTotal}>{formatMoney(grupo.total)}</span>
+                    {!semTotal && <span className="text-sm font-medium text-gray-800 whitespace-nowrap" title={tituloTotal}>{formatMoney(grupo.total)}</span>}
                     <div className="flex-1 h-px bg-slate-200" />
                 </div>
             </td>

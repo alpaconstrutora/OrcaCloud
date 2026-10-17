@@ -25,6 +25,9 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { isObra } from '../utils/projectClassification';
+import { agruparLinhas, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 interface ClientListProps {
     onClientsChange?: () => void;
@@ -196,6 +199,27 @@ const CategoryLabel: React.FC<{ category?: string }> = ({ category }) => (
     </span>
 );
 
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+// "Empreendimento Vinculado" fica fora: um cliente pode ter vários, e o grupo
+// precisa de UM valor por linha.
+type CampoAgrupar = 'tipo' | 'status' | 'organizacao' | 'portal';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'tipo', label: 'Tipo' },
+    { value: 'status', label: 'Status' },
+    { value: 'organizacao', label: 'Organização' },
+    { value: 'portal', label: 'Portal do Cliente' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = { tipo: 'Não definido', status: 'Sem status', organizacao: 'Sem organização', portal: 'Sem portal' };
+function chaveDoGrupo(campo: CampoAgrupar, c: Client): ChaveDeGrupo {
+    switch (campo) {
+        case 'tipo': return chavePorNome(c.category);
+        // Mesmo critério do interruptor da coluna: só "Inativo" é inativo.
+        case 'status': return c.status === 'Inativo' ? { key: 'inativo', label: 'Inativo' } : { key: 'ativo', label: 'Ativo' };
+        case 'organizacao': return chavePorNome(c.organization_name);
+        case 'portal': return c.portal === 'Portal do Cliente' ? { key: 'ativo', label: 'Portal ativo' } : { key: 'inativo', label: 'Portal inativo' };
+    }
+}
+
 // Conteúdo de cada célula (TD) por coluna — extraído para função pura para que o corpo da tabela
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
@@ -329,6 +353,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     // posicao antes de trocar e restauramos depois.
     const savedScrollTopRef = React.useRef(0);
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('clientListFilters:viewMode', 'list');
+    const agrupamento = useAgrupamento<CampoAgrupar>('clientListFilters:groupBy');
     const [categoryFilter, setCategoryFilter] = usePersistedState<string>('clientListFilters:category', 'all');
     const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
     // `:v2` (23/09/2026) — a coluna "Apelido" nasceu `defaultHidden` e, uma vez
@@ -612,6 +637,19 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 return a.name.localeCompare(b.name);
             });
     }, [clients, portalContext, searchTerm, categoryFilter, advancedFilters.rules, advancedFilterFields, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    // Agrupamento só no modo lista (a grade não tem linha de grupo).
+    const groupBy = agrupamento.campo;
+    const agrupando = viewMode === 'list' && groupBy !== 'none';
+    const grupos = React.useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filteredClients, {
+        chave: c => chaveDoGrupo(groupBy, c),
+        semRotulo: SEM_GRUPO[groupBy],
+        ordem: groupBy === 'status' || groupBy === 'portal' ? ['ativo', 'inativo'] : 'aparicao',
+    })), [filteredClients, groupBy]);
+    const entradas: EntradaDaTela<Client>[] = React.useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredClients.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, filteredClients],
+    );
 
     const handleSendComunicado = async () => {
         if (!comunicadoModal || !comunicadoForm.title.trim()) return;
@@ -990,6 +1028,19 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                     <AdvancedFilterPanel fields={advancedFilterFields} state={advancedFilters} />
                 </div>
 
+                {/* Agrupar — guia de UI §6.12. Só no modo lista. */}
+                {viewMode === 'list' && (
+                    <AgruparControles
+                        opcoes={OPCOES_AGRUPAR}
+                        campo={groupBy}
+                        onCampo={agrupamento.setCampo}
+                        chavesDosGrupos={grupos.map(g => g.key)}
+                        algumRecolhido={agrupamento.recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar os clientes"
+                    />
+                )}
+
                 <button
                     onClick={loadData}
                     className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
@@ -1112,7 +1163,13 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredClients.map(client => {
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={tableColumns.orderedVisibleColumns.filter(k => CLIENT_COLUMN_HEADERS[k]).length + 2}
+                                            onAlternar={agrupamento.alternar} semTotal />
+                                    );
+                                    const client = e.item;
                                     const clientEmpreendimentos = getClientEmpreendimentos(client.id);
                                     return (
                                         <tr key={client.id} className="hover:bg-blue-50/50 transition-colors group">

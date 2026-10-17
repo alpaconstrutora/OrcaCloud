@@ -3,6 +3,8 @@ import { FileText, FileSpreadsheet, Image as ImageIcon, Briefcase, Lock } from '
 import { SortableHeader, useTableColumns, useResizableColumns } from '../ui/TableUtils';
 import { OpuraDocument } from '../../types';
 import { NORMA_SITUACOES } from '../../utils/gedNormas';
+import { entradasDaPagina, type EntradaDaTela, type Grupo } from '../../utils/agruparLinhas';
+import { LinhaDeGrupo } from '../ui/Agrupamento';
 
 /** Subconjunto do retorno de `useTableColumns` que a tabela precisa — cada tela
  * cria seu próprio hook (chave de persistência própria) e repassa aqui.
@@ -178,6 +180,13 @@ export interface DocumentsTableProps {
    * tabela sem redimensionamento/autofit (comportamento anterior, ainda usado por
    * quem não migrou). */
   cols?: ResizableColumnsState;
+
+  // ─── "Agrupar" (guia de UI §6.12, opt-in — omitir mantém a lista plana; o
+  // Portal do Parceiro e os lotes não passam nada) ───
+  /** Grupos já calculados pela tela sobre `documents` (`utils/agruparLinhas`). */
+  grupos?: Grupo<OpuraDocument>[];
+  gruposRecolhidos?: Set<string>;
+  onAlternarGrupo?: (key: string) => void;
 }
 
 const DEFAULT_EMPTY_STATE = (
@@ -338,6 +347,9 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   allSelectableSelected = false,
   onToggleAll,
   cols,
+  grupos,
+  gruposRecolhidos,
+  onAlternarGrupo,
 }) => {
   const { visibleColumns, sortColumn, sortDirection, handleColumnSort, orderedVisibleColumns, moveColumn } = tableColumns;
 
@@ -425,7 +437,18 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                 </td>
               </tr>
             ) : (
-              documents.map((doc, rowIndex) => {
+              (grupos
+                ? entradasDaPagina(grupos, gruposRecolhidos ?? new Set<string>())
+                : documents.map((item, indice): EntradaDaTela<OpuraDocument> => ({ tipo: 'linha', item, indice }))
+              ).map(e => {
+                if (e.tipo === 'grupo') return (
+                  <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                    colSpan={dataColKeys.length + (selectable ? 1 : 0) + (cols ? 1 : 0) + (visibleColumns.includes('actions') ? 1 : 0)}
+                    onAlternar={k => onAlternarGrupo?.(k)} semTotal />
+                );
+                const doc = e.item;
+                // Posição na lista da TELA (sem grupos recolhidos) — o intervalo do Shift+clique.
+                const rowIndex = e.indice;
                 const rowSelectable = !selectable || !isRowSelectable || isRowSelectable(doc);
                 const renderCoreTd = (key: string) => (
                   <td key={key} className={DOCUMENTS_TABLE_CELL_CLASS[key] ?? 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600'}

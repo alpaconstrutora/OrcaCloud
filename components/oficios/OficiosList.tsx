@@ -10,6 +10,7 @@ import { ROTULO_TIPO } from '../../services/docGen/destinatario';
 import { dataCurta, hojeIso } from '../../services/docGen/dataExtenso';
 import { formatarDataHora } from './rotulos';
 import { SITUACOES_EM_CURSO } from '../../services/docGenDocumentoService';
+import { chavePorMes, chavePorNome } from '../../utils/agruparLinhas';
 import { ROTULO_SITUACAO } from '../../services/docGen/tramitacao';
 import { useStore } from '../../store/useStore';
 import { nomesPorIds } from '../../services/docGen/resolverContexto';
@@ -170,6 +171,31 @@ export default function OficiosList({ documentos, modelos, nomeDepartamento, loa
         return aplicarFiltros(porSituacao, filtros);
     }, [documentos, situacao, filtros]);
 
+    // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+    const agrupamento = React.useMemo(() => {
+        const SEM: Record<string, string> = { destinatario: 'Sem destinatário', modelo: 'Sem modelo', situacao: 'Sem situação', resposta: 'Sem prazo de resposta' };
+        return {
+            opcoes: [
+                { value: 'destinatario', label: 'Destinatário' },
+                { value: 'modelo', label: 'Modelo' },
+                { value: 'situacao', label: 'Situação' },
+                { value: 'resposta', label: 'Resposta até (mês)' },
+            ],
+            chave: (campo: string, d: DocGenDocumento) => {
+                switch (campo) {
+                    case 'destinatario': return chavePorNome(d.destinatario_snapshot?.razao_social);
+                    case 'modelo': return chavePorNome(nomeModelo[d.modelo_id]);
+                    case 'situacao': return chavePorNome(situacaoDe(d).label);
+                    case 'resposta': return chavePorMes(d.resposta_esperada_ate);
+                    default: return null;
+                }
+            },
+            semRotulo: (campo: string) => SEM[campo] ?? 'Sem valor',
+            ordem: (campo: string) => (campo === 'resposta' ? 'chave' as const : 'aparicao' as const),
+            title: 'Agrupar os ofícios',
+        };
+    }, [nomeModelo]);
+
     return (
         <div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
@@ -185,6 +211,7 @@ export default function OficiosList({ documentos, modelos, nomeDepartamento, loa
                 rows={linhas}
                 rowKey={d => d.id}
                 loading={loading}
+                agrupamento={agrupamento}
                 searchText={d => `${d.numero ?? ''} ${d.assunto} ${d.destinatario_snapshot?.razao_social ?? ''} ${nomeModelo[d.modelo_id] ?? ''}`}
                 searchPlaceholder="Buscar por número, assunto, destinatário ou modelo..."
                 filters={<>

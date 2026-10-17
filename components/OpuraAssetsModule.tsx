@@ -71,6 +71,9 @@ import { itemTypeDaCategoria, type BrandModelValue, type ProductItemType, type P
 import { aplicarPadroesDoModelo, origemInicial, type OrigemCampo } from '../utils/catalogoAutopreencher';
 import { ASSET_CATEGORIES, ASSET_CATEGORY_LABELS } from '../utils/assetToStockItemRow';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela, type Grupo } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 interface OpuraAssetsModuleProps {
   activeOrganizationId: string | null;
@@ -126,6 +129,37 @@ const ASSET_COL_WIDTHS: Record<string, number> = {
   code: 160, name: 165, category: 100, status: 85, brand_model: 125, allocation: 135, warehouse: 135,
   purchase_value: 115, useful_life: 100, last_movement: 140, documents: 120, value: 110, actions: 250,
 };
+
+// "Agrupar" das três listas — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+// Custos & Rateio fica fora: já é um relatório agregado por obra.
+type CampoAgruparBens = 'categoria' | 'status' | 'alocacao' | 'almoxarifado' | 'marca';
+const OPCOES_AGRUPAR_BENS: { value: CampoAgruparBens; label: string }[] = [
+  { value: 'categoria', label: 'Categoria' },
+  { value: 'status', label: 'Status' },
+  { value: 'alocacao', label: 'Alocação atual' },
+  { value: 'almoxarifado', label: 'Almoxarifado' },
+  { value: 'marca', label: 'Marca' },
+];
+const SEM_GRUPO_BENS: Record<CampoAgruparBens, string> = { categoria: 'Sem categoria', status: 'Sem status', alocacao: 'Sede / Central', almoxarifado: 'Sem almoxarifado', marca: 'Sem marca' };
+type CampoAgruparReservas = 'ativo' | 'obra' | 'responsavel' | 'solicitante' | 'status';
+const OPCOES_AGRUPAR_RESERVAS: { value: CampoAgruparReservas; label: string }[] = [
+  { value: 'ativo', label: 'Ativo' },
+  { value: 'obra', label: 'Obra solicitante' },
+  { value: 'responsavel', label: 'Responsável' },
+  { value: 'solicitante', label: 'Solicitante' },
+  { value: 'status', label: 'Status' },
+];
+const SEM_GRUPO_RESERVAS: Record<CampoAgruparReservas, string> = { ativo: 'Sem ativo', obra: 'Sem obra', responsavel: 'Central', solicitante: 'Sem solicitante', status: 'Sem status' };
+type CampoAgruparManutencoes = 'ativo' | 'tipo' | 'centro_custo' | 'mes' | 'status';
+const OPCOES_AGRUPAR_MANUTENCOES: { value: CampoAgruparManutencoes; label: string }[] = [
+  { value: 'ativo', label: 'Ativo' },
+  { value: 'tipo', label: 'Tipo' },
+  { value: 'centro_custo', label: 'Centro de custo' },
+  { value: 'mes', label: 'Data programada (mês)' },
+  { value: 'status', label: 'Status' },
+];
+const SEM_GRUPO_MANUTENCOES: Record<CampoAgruparManutencoes, string> = { ativo: 'Sem ativo', tipo: 'Sem tipo', centro_custo: 'Sem centro de custo', mes: 'Sem data', status: 'Sem status' };
+const MAINT_TYPE_LABELS: Record<string, string> = { preventiva: 'Preventiva', corretiva: 'Corretiva', preditiva: 'Preditiva' };
 
 // Tabela da aba "Retirada" (antes "Reservas & Locação") — guia §1/§2
 const RESERVATION_COLUMNS: ColumnConfig[] = [
@@ -621,6 +655,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   const maintenanceTableColumns = useTableColumns(MAINTENANCE_COLUMNS, 'opuraMaintenanceColumns');
   const maintenanceCols = useResizableColumns(MAINTENANCE_COL_WIDTHS, 'opuraMaintenanceColWidths');
   const rateioTableColumns = useTableColumns(RATEIO_COLUMNS, 'opuraRateioColumns');
+  const agruparBens = useAgrupamento<CampoAgruparBens>('opuraAssets:bens:groupBy');
+  const agruparReservas = useAgrupamento<CampoAgruparReservas>('opuraAssets:reservas:groupBy');
+  const agruparManutencoes = useAgrupamento<CampoAgruparManutencoes>('opuraAssets:manutencoes:groupBy');
   const rateioCols = useResizableColumns(RATEIO_COL_WIDTHS, 'opuraRateioColWidths');
 
   // Carregar dados
@@ -1551,6 +1588,57 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     return (a as unknown as Record<string, unknown>)[key];
   });
 
+  // ── "Agrupar" (§6.12) — chaves com o MESMO texto das células ─────────────
+  const chaveDoBem = (campo: CampoAgruparBens, a: OpuraAsset): ChaveDeGrupo => {
+    switch (campo) {
+      case 'categoria': return chavePorRotulo(a.category, ASSET_CATEGORY_LABELS);
+      case 'status': return a.status ? { key: a.status, label: a.status === 'em_uso' ? 'Em Obra' : a.status } : null;
+      case 'alocacao': return chavePorNome(projects.find(p => p.id === a.current_project_id)?.name);
+      case 'almoxarifado': return a.warehouse_id ? chavePorNome(warehouseName(a.warehouse_id) ?? 'Outro almoxarifado') : null;
+      case 'marca': return chavePorNome(a.brand);
+    }
+  };
+  const chaveDaReserva = (campo: CampoAgruparReservas, r: OpuraAssetReservation): ChaveDeGrupo => {
+    switch (campo) {
+      case 'ativo': return chavePorNome(assets.find(a => a.id === r.asset_id)?.name);
+      case 'obra': return chavePorNome(projects.find(p => p.id === r.project_id)?.name);
+      case 'responsavel': return chavePorNome(employees.find(e => e.id === r.responsible_employee_id)?.name);
+      case 'solicitante': return chavePorNome(r.requested_by_email);
+      case 'status': return r.status ? { key: r.status, label: r.status === 'ativa' ? 'Em Uso' : r.status } : null;
+    }
+  };
+  const chaveDaManutencao = (campo: CampoAgruparManutencoes, m: OpuraAssetMaintenance): ChaveDeGrupo => {
+    switch (campo) {
+      case 'ativo': return chavePorNome(assets.find(a => a.id === m.asset_id)?.name);
+      case 'tipo': return chavePorRotulo(m.type, MAINT_TYPE_LABELS);
+      case 'centro_custo': return chavePorNome(costCenterName(m.cost_center_id));
+      case 'mes': return chavePorMes(m.scheduled_date);
+      case 'status': return m.status ? { key: m.status, label: m.status === 'em_execucao' ? 'Em Oficina' : m.status } : null;
+    }
+  };
+  const gruposDeBens = (lista: OpuraAsset[]): Grupo<OpuraAsset>[] => (agruparBens.campo === 'none' ? [] : agruparLinhas(lista, {
+    chave: a => chaveDoBem(agruparBens.campo as CampoAgruparBens, a),
+    semRotulo: SEM_GRUPO_BENS[agruparBens.campo as CampoAgruparBens],
+    valor: a => a.purchase_value,
+  }));
+  const gruposDeReservas = (lista: OpuraAssetReservation[]): Grupo<OpuraAssetReservation>[] => (agruparReservas.campo === 'none' ? [] : agruparLinhas(lista, {
+    chave: r => chaveDaReserva(agruparReservas.campo as CampoAgruparReservas, r),
+    semRotulo: SEM_GRUPO_RESERVAS[agruparReservas.campo as CampoAgruparReservas],
+  }));
+  const gruposDeManutencoes = (lista: OpuraAssetMaintenance[]): Grupo<OpuraAssetMaintenance>[] => (agruparManutencoes.campo === 'none' ? [] : agruparLinhas(lista, {
+    chave: m => chaveDaManutencao(agruparManutencoes.campo as CampoAgruparManutencoes, m),
+    semRotulo: SEM_GRUPO_MANUTENCOES[agruparManutencoes.campo as CampoAgruparManutencoes],
+    valor: m => m.cost,
+    ordem: agruparManutencoes.campo === 'mes' ? 'chave' : 'aparicao',
+  }));
+  /** Cabeçalhos + linhas; sem agrupamento, só as linhas. */
+  function entradasAgrupadas<T>(lista: T[], grupos: Grupo<T>[], agrupando: boolean, recolhidos: Set<string>): EntradaDaTela<T>[] {
+    return agrupando ? entradasDaPagina(grupos, recolhidos) : lista.map((item, indice) => ({ tipo: 'linha' as const, item, indice }));
+  }
+  // Bens: só no modo lista (a grade não tem linha de grupo).
+  const agrupandoBens = viewMode === 'list' && agruparBens.agrupando;
+  const gruposBens = gruposDeBens(sortedAssets);
+
   // Métricas para o Dashboard
   const totalPatrimony = assets.reduce((acc, a) => acc + a.purchase_value, 0);
   const totalDepreciated = assets.reduce((acc, a) => acc + calculateDepreciation(a).depreciated, 0);
@@ -1762,6 +1850,19 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     <option value="baixado">Baixado</option>
                   </select>
 
+                  {/* Agrupar — guia de UI §6.12. Só no modo lista. */}
+                  {viewMode === 'list' && (
+                    <AgruparControles
+                      opcoes={OPCOES_AGRUPAR_BENS}
+                      campo={agruparBens.campo}
+                      onCampo={agruparBens.setCampo}
+                      chavesDosGrupos={gruposBens.map(g => g.key)}
+                      algumRecolhido={agruparBens.recolhidos.size > 0}
+                      onAlternarTodos={agruparBens.alternarTodos}
+                      title="Agrupar os bens"
+                    />
+                  )}
+
                   {/* Separador entre o grupo "filtrar" e o grupo "visualizar" (§5.1) */}
                   <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
@@ -1903,7 +2004,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                              {sortedAssets.map(asset => {
+                              {entradasAgrupadas(sortedAssets, gruposBens, agrupandoBens, agruparBens.recolhidos).map(e => {
+                                if (e.tipo === 'grupo') return (
+                                  <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                    colSpan={orderedVisibleKeys.length + 2} onAlternar={agruparBens.alternar}
+                                    tituloTotal="Soma do valor de aquisição dos bens do grupo" />
+                                );
+                                const asset = e.item;
                                 return (
                                   <tr
                                     key={asset.id}
@@ -1996,6 +2103,17 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                       />
                     </div>
+                    {/* Agrupar — guia de UI §6.12. "Recolher todos" recebe as chaves da lista
+                        inteira (a filtrada é calculada lá embaixo): chave sem grupo na tela não pesa. */}
+                    <AgruparControles
+                      opcoes={OPCOES_AGRUPAR_RESERVAS}
+                      campo={agruparReservas.campo}
+                      onCampo={agruparReservas.setCampo}
+                      chavesDosGrupos={gruposDeReservas(reservations).map(g => g.key)}
+                      algumRecolhido={agruparReservas.recolhidos.size > 0}
+                      onAlternarTodos={agruparReservas.alternarTodos}
+                      title="Agrupar as reservas"
+                    />
                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                       <ColumnConfigButton
                         columns={RESERVATION_COLUMNS.filter(c => c.key !== 'actions')}
@@ -2085,7 +2203,12 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {sortedReservations.map(res => {
+                          {entradasAgrupadas(sortedReservations, gruposDeReservas(sortedReservations), agruparReservas.agrupando, agruparReservas.recolhidos).map(e => {
+                            if (e.tipo === 'grupo') return (
+                              <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                colSpan={orderedVisibleKeys.length + 2} onAlternar={agruparReservas.alternar} semTotal />
+                            );
+                            const res = e.item;
                             const asset = assets.find(a => a.id === res.asset_id);
                             const proj = projects.find(p => p.id === res.project_id);
                             return (
@@ -2183,6 +2306,16 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       <option value="cancelada">Cancelada</option>
                     </select>
 
+                    {/* Agrupar — guia de UI §6.12 (chaves da lista inteira, como em Reservas). */}
+                    <AgruparControles
+                      opcoes={OPCOES_AGRUPAR_MANUTENCOES}
+                      campo={agruparManutencoes.campo}
+                      onCampo={agruparManutencoes.setCampo}
+                      chavesDosGrupos={gruposDeManutencoes(maintenances).map(g => g.key)}
+                      algumRecolhido={agruparManutencoes.recolhidos.size > 0}
+                      onAlternarTodos={agruparManutencoes.alternarTodos}
+                      title="Agrupar as manutenções"
+                    />
                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                       <ColumnConfigButton
                         columns={MAINTENANCE_COLUMNS.filter(c => c.key !== 'actions')}
@@ -2279,7 +2412,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
-                            {sortedMaint.map(m => {
+                            {entradasAgrupadas(sortedMaint, gruposDeManutencoes(sortedMaint), agruparManutencoes.agrupando, agruparManutencoes.recolhidos).map(e => {
+                              if (e.tipo === 'grupo') return (
+                                <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                  colSpan={orderedVisibleKeys.length + 2} onAlternar={agruparManutencoes.alternar}
+                                  tituloTotal="Soma do custo das manutenções do grupo" />
+                              );
+                              const m = e.item;
                               const asset = assets.find(a => a.id === m.asset_id);
                               return (
                                 <tr key={m.id} className="hover:bg-blue-50/50 transition-colors">

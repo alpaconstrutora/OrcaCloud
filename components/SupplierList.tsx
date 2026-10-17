@@ -11,6 +11,9 @@ import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
 import Button from './ui/Button';
+import { agruparLinhas, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 // Erros do Supabase/Postgrest não são instâncias de Error — são objetos
 // planos ({code, message, details, hint}). String(error) nesses casos vira
@@ -79,6 +82,25 @@ const SUPPLIER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
     contact: { label: 'Contato', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     document: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
+
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+type CampoAgrupar = 'tipo' | 'categoria' | 'organizacao' | 'portal';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'tipo', label: 'Tipo' },
+    { value: 'categoria', label: 'Categoria' },
+    { value: 'organizacao', label: 'Organização' },
+    { value: 'portal', label: 'Portais' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = { tipo: 'Sem tipo', categoria: 'Sem categoria', organizacao: 'Sem organização', portal: 'Nenhum' };
+function chaveDoGrupo(campo: CampoAgrupar, s: Supplier): ChaveDeGrupo {
+    switch (campo) {
+        case 'tipo': return s.type ? chavePorNome(s.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física') : null;
+        case 'categoria': return chavePorNome(s.category);
+        case 'organizacao': return chavePorNome(s.organization_name);
+        // A célula mostra "Nenhum" para portal vazio — mesmo grupo.
+        case 'portal': return chavePorNome(s.portal && s.portal !== 'Nenhum' ? s.portal : null);
+    }
+}
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
@@ -175,6 +197,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
 
     const clearSelection = () => setSelectedIds(new Set());
     const [lastCheckedIndex, setLastCheckedIndex] = React.useState<number | null>(null);
+    const zerarAncora = React.useCallback(() => setLastCheckedIndex(null), []);
+    const agrupamento = useAgrupamento<CampoAgrupar>('supplierListFilters:groupBy', zerarAncora);
 
     const toggleSelected = (id: string) => {
         setSelectedIds(prev => {
@@ -374,6 +398,23 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             });
     }, [suppliers, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules, advancedFields]);
 
+    // Agrupamento só no modo lista (a grade não tem linha de grupo).
+    const groupBy = agrupamento.campo;
+    const agrupando = viewMode === 'list' && groupBy !== 'none';
+    const grupos = React.useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filteredSuppliers, {
+        chave: s => chaveDoGrupo(groupBy, s),
+        semRotulo: SEM_GRUPO[groupBy],
+    })), [filteredSuppliers, groupBy]);
+    /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
+    const linhasNaTela = React.useMemo(
+        () => (agrupando ? linhasDaTela(grupos, agrupamento.recolhidos) : filteredSuppliers),
+        [agrupando, grupos, agrupamento.recolhidos, filteredSuppliers],
+    );
+    const entradas: EntradaDaTela<Supplier>[] = React.useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredSuppliers.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, filteredSuppliers],
+    );
+
     const kpis = React.useMemo(() => ({
         total: suppliers.length,
         pj: suppliers.filter(s => s.type === 'PJ').length,
@@ -381,7 +422,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
         categorias: distinctCategories.length,
     }), [suppliers, distinctCategories]);
 
-    const visibleIds = filteredSuppliers.map(s => s.id);
+    const visibleIds = linhasNaTela.map(s => s.id);
     const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
     const toggleAllVisible = () => {
         setSelectedIds(prev => {
@@ -494,6 +535,19 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 <div className="flex items-center h-9">
                     <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
+
+                {/* Agrupar — guia de UI §6.12. Só no modo lista. */}
+                {viewMode === 'list' && (
+                    <AgruparControles
+                        opcoes={OPCOES_AGRUPAR}
+                        campo={groupBy}
+                        onCampo={agrupamento.setCampo}
+                        chavesDosGrupos={grupos.map(g => g.key)}
+                        algumRecolhido={agrupamento.recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar os fornecedores"
+                    />
+                )}
 
                 <button
                     onClick={loadSuppliers}
@@ -609,7 +663,14 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {filteredSuppliers.length > 0 ? (
-                                    filteredSuppliers.map((supplier, rowIndex) => (
+                                    entradas.map(e => {
+                                        if (e.tipo === 'grupo') return (
+                                            <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                                colSpan={tableColumns.orderedVisibleColumns.length + 3} onAlternar={agrupamento.alternar} semTotal />
+                                        );
+                                        const supplier = e.item;
+                                        const rowIndex = e.indice;
+                                        return (
                                         <tr
                                             key={supplier.id}
                                             onClick={() => handleOpenForm(supplier)}
@@ -621,7 +682,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                     title="Dica: segure Shift e clique para selecionar um intervalo"
                                                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                     checked={selectedIds.has(supplier.id)}
-                                                    onChange={(e) => handleRowCheck(supplier.id, rowIndex, (e.nativeEvent as MouseEvent).shiftKey, filteredSuppliers)}
+                                                    onChange={(ev) => handleRowCheck(supplier.id, rowIndex, (ev.nativeEvent as MouseEvent).shiftKey, linhasNaTela)}
                                                 />
                                             </td>
                                             {tableColumns.orderedVisibleColumns.map(key => (
@@ -641,7 +702,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))
+                                        );
+                                    })
                                 ) : (
                                     <tr>
                                         <td colSpan={tableColumns.visibleColumns.length + 3} className="px-6 py-20 text-center">

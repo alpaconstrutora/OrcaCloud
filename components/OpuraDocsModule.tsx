@@ -43,7 +43,10 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import { DocumentsTable, sortDocumentsForTable } from './documents/DocumentsTable';
+import { DocumentsTable, sortDocumentsForTable, getDocumentExtension, getDocumentStatusPresentation } from './documents/DocumentsTable';
+import { agruparLinhas, chavePorMes, chavePorNome, linhasDaTela, type ChaveDeGrupo } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles } from './ui/Agrupamento';
 import { FilterPopover } from './ui/FilterPopover';
 import { NORMA_ORGAOS_SUGERIDOS, NORMA_SITUACOES, NORMA_SITUACAO_PADRAO, formatarReferenciaNorma, opcoesEdicaoNorma } from '../utils/gedNormas';
 import { DocumentQrLabelModal } from './documents/DocumentQrLabelModal';
@@ -85,6 +88,27 @@ import { useStore } from '../store/useStore';
 import { creditRoomService } from '../services/creditRoomService';
 import { useOrgWriteTarget, forEachTargetOrg, targetOrgIds, partialFailureNote } from '../hooks/useOrgContext';
 import { isObra } from '../utils/projectClassification';
+
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+type CampoAgruparDocs = 'tipo' | 'disciplina' | 'obra' | 'autor' | 'extensao' | 'status' | 'emissao' | 'norma_orgao' | 'norma_situacao';
+const OPCOES_AGRUPAR_DOCS: { value: CampoAgruparDocs; label: string }[] = [
+  { value: 'tipo', label: 'Tipo / Categoria' },
+  { value: 'disciplina', label: 'Disciplina' },
+  { value: 'obra', label: 'Obra vinculada' },
+  { value: 'autor', label: 'Autor' },
+  { value: 'extensao', label: 'Extensão' },
+  { value: 'status', label: 'Status' },
+  { value: 'emissao', label: 'Emissão (mês)' },
+];
+// Só na aba Normas, onde as colunas existem.
+const OPCOES_AGRUPAR_NORMAS: { value: CampoAgruparDocs; label: string }[] = [
+  { value: 'norma_orgao', label: 'Órgão' },
+  { value: 'norma_situacao', label: 'Situação' },
+];
+const SEM_GRUPO_DOCS: Record<CampoAgruparDocs, string> = {
+  tipo: 'Sem tipo', disciplina: 'Sem disciplina', obra: 'Sem obra', autor: 'Sem autor', extensao: 'Sem extensão',
+  status: 'Sem status', emissao: 'Sem data de emissão', norma_orgao: 'Sem órgão', norma_situacao: 'Sem situação',
+};
 
 const COLUMNS: ColumnConfig[] = [
   { key: 'nome', label: 'Documento', sortable: true },
@@ -256,6 +280,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Seleção para edição em lote (§10/§10.1 do guia) — checkbox por linha + intervalo Shift+clique.
   const [selectedDocIds, setSelectedDocIds] = React.useState<Set<string>>(new Set());
   const [lastCheckedDocIndex, setLastCheckedDocIndex] = React.useState<number | null>(null);
+  const zerarAncoraDoc = React.useCallback(() => setLastCheckedDocIndex(null), []);
+  const agruparDocs = useAgrupamento<CampoAgruparDocs>('opuraDocs:groupBy', zerarAncoraDoc);
   const [batchEditOpen, setBatchEditOpen] = React.useState(false);
   const [selectedDocForVersions, setSelectedDocForVersions] = React.useState<OpuraDocument | null>(null);
   const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
@@ -1777,6 +1803,33 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }),
     [filteredDocuments, tableColumns.sortColumn, tableColumns.sortDirection, resolveGedProjectName, resolveDisciplineLabel],
   );
+  // "Agrupar" (§6.12). Opção de norma fora da aba Normas não agrupa (as colunas nem existem lá).
+  const opcoesAgruparDocs = activeTab === 'normas' ? [...OPCOES_AGRUPAR_DOCS, ...OPCOES_AGRUPAR_NORMAS] : OPCOES_AGRUPAR_DOCS;
+  const campoDocs = agruparDocs.campo !== 'none' && opcoesAgruparDocs.some(o => o.value === agruparDocs.campo) ? agruparDocs.campo : 'none';
+  const agrupandoDocs = campoDocs !== 'none';
+  const gruposDocs = React.useMemo(() => {
+    if (campoDocs === 'none') return [];
+    const chave = (d: OpuraDocument): ChaveDeGrupo => {
+      switch (campoDocs) {
+        case 'tipo': return chavePorNome(d.tipo_documento);
+        case 'disciplina': return chavePorNome(resolveDisciplineLabel(d));
+        case 'obra': { const n = resolveGedProjectName(d); return chavePorNome(n === '-' ? null : n); }
+        case 'autor': return chavePorNome(d.autor);
+        case 'extensao': return chavePorNome(getDocumentExtension(d.active_version?.storage_path));
+        case 'status': return chavePorNome(getDocumentStatusPresentation(d.status).statusLabel);
+        case 'emissao': return chavePorMes(d.data_emissao);
+        case 'norma_orgao': return chavePorNome(d.norma_orgao);
+        case 'norma_situacao': return d.norma_situacao ? chavePorNome(NORMA_SITUACOES[d.norma_situacao]?.label ?? d.norma_situacao) : null;
+      }
+    };
+    return agruparLinhas(sortedDocuments, { chave, semRotulo: SEM_GRUPO_DOCS[campoDocs], ordem: campoDocs === 'emissao' ? 'chave' : 'aparicao' });
+  }, [campoDocs, sortedDocuments, resolveDisciplineLabel, resolveGedProjectName]);
+  /** Linhas na ordem da tela, sem os grupos recolhidos — base do Shift+clique e do "selecionar todos". */
+  const docsNaTela = React.useMemo(
+    () => (agrupandoDocs ? linhasDaTela(gruposDocs, agruparDocs.recolhidos) : sortedDocuments),
+    [agrupandoDocs, gruposDocs, agruparDocs.recolhidos, sortedDocuments],
+  );
+
   // Trocar a ordenação muda o que está em cada posição: a âncora do Shift+clique
   // apontaria para outra linha.
   React.useEffect(() => {
@@ -2236,7 +2289,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const handleToggleDocRow = (doc: OpuraDocument, index: number, shiftKey: boolean) => {
     if (shiftKey && lastCheckedDocIndex !== null) {
       const [start, end] = lastCheckedDocIndex < index ? [lastCheckedDocIndex, index] : [index, lastCheckedDocIndex];
-      const rangeIds = sortedDocuments
+      const rangeIds = docsNaTela
         .slice(start, end + 1)
         .filter(isDocSelectableForBatch)
         .map((d) => d.id);
@@ -2252,9 +2305,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  // Agrupado, "selecionar todos" não marca o que está escondido num grupo recolhido.
   const selectableFilteredDocuments = React.useMemo(
-    () => filteredDocuments.filter(isDocSelectableForBatch),
-    [filteredDocuments]
+    () => docsNaTela.filter(isDocSelectableForBatch),
+    [docsNaTela]
   );
 
   const allDocsSelected =
@@ -2822,6 +2876,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               )}
             </button>
 
+            {/* Agrupar — guia de UI §6.12 */}
+            <AgruparControles
+              opcoes={opcoesAgruparDocs}
+              campo={campoDocs}
+              onCampo={agruparDocs.setCampo}
+              chavesDosGrupos={gruposDocs.map(gr => gr.key)}
+              algumRecolhido={agruparDocs.recolhidos.size > 0}
+              onAlternarTodos={agruparDocs.alternarTodos}
+              title="Agrupar os documentos"
+            />
+
             <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
             <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
@@ -3075,6 +3140,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               documents={sortedDocuments}
               tableColumns={tableColumns}
               cols={gedDocCols}
+              grupos={agrupandoDocs ? gruposDocs : undefined}
+              gruposRecolhidos={agruparDocs.recolhidos}
+              onAlternarGrupo={agruparDocs.alternar}
               selectable={canAccessTab(activeTab)}
               selectedIds={selectedDocIds}
               isRowSelectable={isDocSelectableForBatch}

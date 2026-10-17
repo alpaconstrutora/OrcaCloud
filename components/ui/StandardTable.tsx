@@ -117,7 +117,7 @@ interface StandardTableProps<T> {
         semRotulo: (campo: string) => string;
         /** Ordem dos grupos por campo (padrão: 1ª aparição). */
         ordem?: (campo: string) => OpcoesAgrupar<T>['ordem'];
-        /** Valor somado no total do grupo. */
+        /** Valor somado no total do grupo. Sem ele, o cabeçalho mostra só a contagem. */
         valor?: (row: T) => number | null | undefined;
         /** `title` do seletor — "Agrupar os títulos". */
         title?: string;
@@ -349,7 +349,7 @@ export function StandardTable<T>({
                             {entradas.map(e => {
                                 if (e.tipo === 'grupo') return (
                                     <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
-                                        colSpan={visibleCount} onAlternar={grupoEstado.alternar} tituloTotal={agrupar?.tituloTotal} />
+                                        colSpan={visibleCount} onAlternar={grupoEstado.alternar} tituloTotal={agrupar?.tituloTotal} semTotal={!agrupar?.valor} />
                                 );
                                 const row = e.item;
                                 return (

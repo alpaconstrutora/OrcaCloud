@@ -5,6 +5,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import type { DocGenDocumento, DocGenVinculo } from '../../types/docGen';
 import { respostaDoRecebido, type OficioRecebido } from '../../services/docGen/tramitacao';
 import { dataCurta, hojeIso } from '../../services/docGen/dataExtenso';
+import { chavePorMes, chavePorNome } from '../../utils/agruparLinhas';
 
 /**
  * Documentos › Ofícios › aba Recebidos (F4): ofícios que chegaram de terceiros,
@@ -48,6 +49,31 @@ export default function RecebidosList({ recebidos, vinculos, documentos, loading
         return { texto: 'Aguardando resposta', className: 'text-amber-700', doc: null, podeResponder: true };
     }, [vinculos, documentos, hoje]);
 
+    // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+    const agrupamento = React.useMemo(() => {
+        const SEM: Record<string, string> = { remetente: 'Sem remetente', situacao: 'Sem situação', recebido: 'Sem data', prazo: 'Sem prazo de resposta' };
+        return {
+            opcoes: [
+                { value: 'remetente', label: 'Remetente' },
+                { value: 'situacao', label: 'Situação' },
+                { value: 'recebido', label: 'Recebido em (mês)' },
+                { value: 'prazo', label: 'Responder até (mês)' },
+            ],
+            chave: (campo: string, rec: OficioRecebido) => {
+                switch (campo) {
+                    case 'remetente': return chavePorNome(rec.meta.remetente);
+                    case 'situacao': return chavePorNome(situacao(rec).texto);
+                    case 'recebido': return chavePorMes(rec.meta.recebido_em);
+                    case 'prazo': return chavePorMes(rec.meta.responder_ate);
+                    default: return null;
+                }
+            },
+            semRotulo: (campo: string) => SEM[campo] ?? 'Sem valor',
+            ordem: (campo: string) => (campo === 'recebido' || campo === 'prazo' ? 'chave' as const : 'aparicao' as const),
+            title: 'Agrupar os recebidos',
+        };
+    }, [situacao]);
+
     return (
         <StandardTable<OficioRecebido>
             storageKey="oficios:recebidos"
@@ -55,6 +81,7 @@ export default function RecebidosList({ recebidos, vinculos, documentos, loading
             rows={recebidos}
             rowKey={r => r.documento.id}
             loading={loading}
+            agrupamento={agrupamento}
             searchText={r => `${r.meta.numero ?? ''} ${r.meta.assunto} ${r.meta.remetente}`}
             searchPlaceholder="Buscar por número, assunto ou remetente..."
             sortValue={(key, r) => {

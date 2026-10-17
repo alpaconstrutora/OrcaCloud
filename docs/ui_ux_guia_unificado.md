@@ -1282,7 +1282,20 @@ ja usada nas tabelas"*. **Antes de dizer que o app "já usa" uma cor, abrir a oc
 aplicada em financeiro > boletos a pagar"*). Origem do desenho: Minhas Tarefas
 (`TasksList.tsx`). Propagado no mesmo dia para Tributos a Pagar, Cobranças, Contas
 a Pagar (Parcelas e Notas) e a fila de Aprovação Financeira
-(`docs/planos/2026-10-15-financeiro-agrupar-propagacao.md`).
+(`docs/planos/2026-10-15-financeiro-agrupar-propagacao.md`). Em 17/10/2026 para Meus
+Fornecedores, Meus Clientes, Gestão de Ativos (Ativos Patrimoniais, Retirada,
+Manutenções), Gestão de Documentos e Ofícios (Ofícios, Recebidos, Modelos)
+(`docs/planos/2026-10-17-agrupar-cadastros-ativos-documentos.md`).
+
+**Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
+clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com
+`semTotal`; no `StandardTable`, basta não passar `agrupamento.valor`. "R$ 0,00" num
+grupo de fornecedores lê como dado errado.
+
+**Fora das opções de propósito:** coluna com vários valores por linha (ex.:
+"Empreendimento Vinculado" em Clientes — um cliente pode ter vários) e coluna que é
+relatório agregado (Custos & Rateio, Fechamento por CC). O grupo precisa de UM valor
+por linha.
 
 **Peças compartilhadas — tela nova usa estas, não copia o markup:**
 
@@ -1292,6 +1305,7 @@ a Pagar (Parcelas e Notas) e a fila de Aprovação Financeira
 | `hooks/useAgrupamento.ts` | campo persistido, grupos recolhidos em memória, alternar/alternar todos/expandir; `onReorganizar` zera a âncora do Shift+clique |
 | `components/ui/Agrupamento.tsx` | `AgruparControles` (seletor + recolher/expandir todos) e `LinhaDeGrupo` |
 | `StandardTable` prop `agrupamento` | tudo acima embutido (§6.10) — a tela passa só opções, `chave`, `semRotulo`, `ordem`, `valor` |
+| `DocumentsTable` props `grupos`/`gruposRecolhidos`/`onAlternarGrupo` | opt-in; a tela calcula os grupos sobre a lista ordenada. Sem elas (Portal do Parceiro, lotes) nada muda. O `index` de `onToggleRow` passa a ser a posição na lista DA TELA |
 
 Em tabela feita à mão, o `<tbody>` itera as entradas e o corpo da linha não muda:
 `{entradas.map(e => { if (e.tipo === 'grupo') return <LinhaDeGrupo …/>; const r = e.item; … })}`.

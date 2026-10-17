@@ -39,7 +39,7 @@
 - [x] testes: `__tests__/components/SuprimentosAgrupar.test.tsx` (7)
 - [x] guia §6.12
 - [x] conferência visual — preview local, login de leitura, dados reais: Contratos, Cotações, Pedidos, Recebimento e Almoxarifado › Itens com colSpan = células da linha; recolher/expandir todos ok; 0 escritas, 0 erros. Saldos e Movimentos vazios para o usuário de leitura → cobertos por teste. Script `c:/tmp/pwtest/suprimentos-agrupar.js`
-- [ ] publicado e conferido
+- [x] publicado em `17c1f728`; domínio carimbado com o commit e os 7 seletores nos chunks servidos; CI `ci` success (o `blueprintCasaAutomatica.test.ts` que caiu na suíte local — frente da Planta, worker do Node instável — passou na CI)
 
 ## Verificação
 1. Testes de tela + `check-ui-standard.sh` em cada arquivo.

@@ -170,6 +170,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [expandedSubPhases, setExpandedSubPhases] = React.useState<string[]>([]);
   const [addingTo, setAddingTo] = React.useState<AddingTarget | null>(null);
   // §3 — preferência de busca (o que o usuário digita/alterna) sobrevive a navegação/reload.
+  // Exceção documentada no guia §3.2 (o check-ui-standard acusa as linhas abaixo):
   // searchLocation/searchCharges/searchReference/searchDatabase ficam de fora de propósito:
   // são o CONTEXTO do orçamento (região/desoneração/competência/base SINAPI), derivado de
   // `settings` — persistir em localStorage vazaria o valor de um orçamento para o próximo
@@ -2573,7 +2574,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                               </div>
                             </td>
                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
-                              <button onClick={() => handleOpenTechnicalItem(row.item)} className="px-3 py-1.5 rounded-[6px] bg-gray-900 text-white text-xs font-bold hover:bg-gray-800">Abrir</button>
+                              <button onClick={() => handleOpenTechnicalItem(row.item)} className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all">Abrir</button>
                             </td>
                           </tr>
                         ))}
@@ -2759,20 +2760,20 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <tr className="bg-gray-800 hover:bg-gray-700 transition-colors text-white group">
                   <td className="px-3 py-2.5 border-r border-gray-700"></td>
                   <td className="px-3 py-2.5 border-r border-gray-700">
-                    <div className="flex items-center gap-1 cursor-pointer font-bold text-sm" onClick={() => toggleGroup(group.id)}>
+                    <div className="flex items-center gap-1 cursor-pointer font-semibold text-sm" onClick={() => toggleGroup(group.id)}>
                       {isGroupExpanded ? <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
                       {group.id}
                     </div>
                   </td>
                   <td colSpan={3} className="px-3 py-2.5 border-r border-gray-700">
-                    <div className="font-bold text-sm uppercase leading-tight tracking-wide truncate" title={groupNameDisplay}>
+                    <div className="font-semibold text-sm leading-tight truncate" title={groupNameDisplay}>
                       {groupNameDisplay}
                     </div>
                   </td>
                   <td colSpan={7} className="px-3 py-2.5 border-r border-gray-700"></td>
                   <td className="px-3 py-2.5 border-r border-gray-700 last:border-r-0 relative">
                     <div className="flex items-center justify-end">
-                      <span className="font-bold text-base whitespace-nowrap">R$ {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span className="font-medium text-sm whitespace-nowrap">R$ {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-600 pl-2 absolute right-3 bg-gray-800 rounded-[6px] shadow-sm z-20">
                         <div className="flex flex-col mr-1">
                           {gIndex > 0 && (
@@ -2819,20 +2820,20 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <tr className="bg-gray-100 hover:bg-gray-200 border-b border-gray-200 group">
                         <td className="px-3 py-2.5 border-r border-gray-200"></td>
                         <td className="px-3 py-2.5 border-r border-gray-200">
-                          <div className="flex items-center gap-1 cursor-pointer font-bold text-gray-800 text-sm" onClick={() => togglePhase(phase.id)}>
+                          <div className="flex items-center gap-1 cursor-pointer font-semibold text-gray-800 text-sm" onClick={() => togglePhase(phase.id)}>
                             {isPhaseExpanded ? <ChevronDown className="w-4 h-4 text-gray-600 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />}
                             {phaseIdDisplay}
                           </div>
                         </td>
                         <td colSpan={3} className="px-3 py-2.5 border-r border-gray-200">
-                          <div className="font-bold text-gray-800 text-sm uppercase leading-tight truncate" title={phaseNameDisplay}>
+                          <div className="font-semibold text-gray-800 text-sm leading-tight truncate" title={phaseNameDisplay}>
                             {phaseNameDisplay}
                           </div>
                         </td>
                         <td colSpan={7} className="px-3 py-2.5 border-r border-gray-200"></td>
                         <td className="px-3 py-2.5 border-r border-gray-200 last:border-r-0 relative">
                           <div className="flex items-center justify-end">
-                            <span className="font-bold text-gray-900 text-sm whitespace-nowrap">R$ {phaseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="font-medium text-gray-800 text-sm whitespace-nowrap">R$ {phaseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-300 pl-2 absolute right-3 bg-gray-100/95 rounded-[6px] shadow-sm z-20">
                               <div className="flex flex-col mr-1">
                                 {pIndex > 0 && (

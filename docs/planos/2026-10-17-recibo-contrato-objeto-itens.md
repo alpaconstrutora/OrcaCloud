@@ -117,6 +117,16 @@
 - [x] 13 — `components/DatabaseExplorer.tsx`: a busca acusada era a do modal **Gerenciar Grupos**
   (não a da tela, que já persistia). Não é seletor que fecha ao escolher → §3.1 não se aplica →
   `usePersistedState('databaseExplorerGroupManager:search')`. *Pronto:* checador limpo.
-- Fora do pedido, só registrado: `BudgetEditor.tsx` tem violações próprias (§7 negrito em
-  `<td>` l.2576/2762/2775/2822/2835; §3 `useState` em location/charges/reference l.181–183).
+- Pedido seguinte ("sim" a corrigir o BudgetEditor também):
+- [x] 14 — `components/BudgetEditor.tsx` §7: botão "Abrir" da coluna de ações no formato do §9
+  (texto azul `font-medium`); linhas de grupo e fase no formato do §6.12 (rótulo
+  `font-semibold text-sm` sem caixa alta, total `text-sm font-medium`). *Pronto:* §7 limpo no
+  checador; 42 testes do orçamento verdes.
+- [x] 15 — §3 do BudgetEditor NÃO trocado: Estado/Encargos/Referência/Base já são gravados no
+  próprio orçamento (`onUpdateSettings`); `usePersistedState` vazaria o valor de um orçamento
+  para outro (o comentário no código já dizia isso). Registrado como guia §3.2; o checador
+  segue acusando por ser textual (também acusa `searchResults`/`isSearching`, que nem são filtro).
+- Visto e NÃO mexido: ações das linhas de grupo/fase só aparecem no hover (`opacity-0
+  group-hover`), o que o §9 proíbe; rótulos "Referência/Estado/Encargos" em `font-bold
+  text-gray-400 uppercase` (§21).
 - Conferência visual no navegador: NÃO feita (mudança de classe; testes de componente verdes).

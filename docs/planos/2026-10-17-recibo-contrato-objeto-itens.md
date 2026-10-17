@@ -126,7 +126,14 @@
   próprio orçamento (`onUpdateSettings`); `usePersistedState` vazaria o valor de um orçamento
   para outro (o comentário no código já dizia isso). Registrado como guia §3.2; o checador
   segue acusando por ser textual (também acusa `searchResults`/`isSearching`, que nem são filtro).
-- Visto e NÃO mexido: ações das linhas de grupo/fase só aparecem no hover (`opacity-0
-  group-hover`), o que o §9 proíbe; rótulos "Referência/Estado/Encargos" em `font-bold
-  text-gray-400 uppercase` (§21).
+- Pedido seguinte ("sim" a corrigir as ações no hover e os rótulos):
+- [x] 16 — ações das linhas de grupo, fase e subfase sempre visíveis (§9): saíram do
+  `absolute` + `opacity-0 group-hover`, ficam abaixo do total como no BudgetRow; setas de
+  mover lado a lado.
+- [x] 17 — os 23 `<label>` do BudgetEditor em `text-xs font-bold text-gray-400 uppercase`
+  (Base/Referência/Estado/Encargos, BDI e os dos modais de item) → §21 `text-xs
+  font-semibold text-slate-500`. *Pronto:* checador só com o §3 da exceção §3.2; 52 testes verdes.
+- Visto e NÃO mexido: hover-only em renomear versão (l.2362) e em 2 botões da lista de
+  resultados (l.3432/3439); `<p>` de cartões em `text-gray-400 uppercase` (l.2431/2527/2629);
+  cabeçalho em grade `bg-gray-50 text-gray-400` das composições (l.3716).
 - Conferência visual no navegador: NÃO feita (mudança de classe; testes de componente verdes).

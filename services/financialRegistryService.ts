@@ -6,7 +6,7 @@ export const financialRegistryService = {
     async listPaymentAccounts(organizationId?: string, empresaId?: string): Promise<PaymentAccount[]> {
         let query = supabase
             .from('payment_accounts')
-            .select('id, code, organization_id, empresa_id, name, description, bank, branch, account_number, serves_all_organizations, created_at, payment_account_organizations(organization_id)');
+            .select('id, code, organization_id, empresa_id, name, description, bank, branch, account_number, serves_all_organizations, kind, created_at, payment_account_organizations(organization_id)');
 
         if (empresaId) {
             query = query.eq('empresa_id', empresaId);
@@ -59,7 +59,10 @@ export const financialRegistryService = {
     },
 
     async createPaymentAccount(account: Omit<PaymentAccount, 'id' | 'created_at'>): Promise<PaymentAccount> {
-        const { served_organization_ids, ...resto } = account;
+        // `kind` é só leitura aqui: vira 'gateway' pela configuração Asaas
+        // (asaas_conta_salvar / Edge asaas-conta), nunca pelo formulário.
+        const { served_organization_ids, kind: _kind, ...resto } = account;
+        void _kind;
         const payload: Record<string, unknown> = { ...resto };
         // Código sequencial 001/002/003... único por organização (§ui_ux_guia_unificado.md).
         if (!payload.code) {
@@ -78,7 +81,11 @@ export const financialRegistryService = {
     },
 
     async updatePaymentAccount(id: string, account: Partial<PaymentAccount>): Promise<PaymentAccount> {
-        const { served_organization_ids, ...resto } = account;
+        // `kind` fora do UPDATE: o formulário regrava todos os campos que
+        // carregou, e o drawer aberto antes de ativar a conta Asaas (seção do
+        // mesmo drawer) devolveria 'banco' por cima de 'gateway'.
+        const { served_organization_ids, kind: _kind, ...resto } = account;
+        void _kind;
         const { data, error } = await supabase
             .from('payment_accounts')
             .update(resto)

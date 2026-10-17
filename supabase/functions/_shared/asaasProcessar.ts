@@ -70,7 +70,7 @@ async function processarCobranca(admin: Admin, evento: string, p: PayloadAsaas):
 
     const { data: charge } = await admin
         .from('client_charges')
-        .select('id,transaction_id,organization_id,status')
+        .select('id,transaction_id,organization_id,status,payment_account_id')
         .eq('asaas_payment_id', paymentId)
         .maybeSingle();
     // Não é cobrança nossa (ou ainda não persistida): ack para a Asaas não reenviar.
@@ -102,6 +102,9 @@ async function processarCobranca(admin: Admin, evento: string, p: PayloadAsaas):
                     business_status: 'RECEBIDO',
                     status: 'CONCILIATED',
                     payment_date: data,
+                    // Conta Asaas por onde o dinheiro entrou (Fase 2). Sem ela a
+                    // baixa não tinha conta e o caixa da Asaas não existia.
+                    ...(charge.payment_account_id ? { payment_account_id: charge.payment_account_id } : {}),
                     updated_at: agora(),
                 }).eq('id', charge.transaction_id)
                   .eq('organization_id', charge.organization_id));
@@ -110,6 +113,7 @@ async function processarCobranca(admin: Admin, evento: string, p: PayloadAsaas):
                 if (fee > 0) {
                     await lancarTaxa(admin, {
                         organizationId: charge.organization_id,
+                        contaId: charge.payment_account_id ?? null,
                         tituloId: charge.transaction_id,
                         asaasId: paymentId,
                         valor: fee,
@@ -143,10 +147,12 @@ async function processarCobranca(admin: Admin, evento: string, p: PayloadAsaas):
             // caminho não está em RECEBIDO por causa desta cobrança e não é tocado
             // se já saiu desse estado.
             if (charge.transaction_id) {
+                await exigirSemConciliacaoBancaria(admin, [charge.transaction_id]);
                 gravou(await admin.from('internal_transactions').update({
                     business_status: 'PREVISTO',
                     status: 'PENDING',
                     payment_date: null,
+                    ...(charge.payment_account_id ? { payment_account_id: null } : {}),
                     updated_at: agora(),
                 }).eq('id', charge.transaction_id)
                   .eq('organization_id', charge.organization_id)
@@ -215,7 +221,7 @@ async function processarSaida(
 
     const { data: sp } = await admin
         .from('supplier_payments')
-        .select('id,boleto_id,transaction_id,organization_id,status,payment_type')
+        .select('id,boleto_id,transaction_id,organization_id,status,payment_type,payment_account_id')
         .eq(coluna, asaasId)
         .maybeSingle();
     if (!sp) return { ok: true, acao: 'ignorado', detalhe: 'pagamento_desconhecido' };
@@ -253,6 +259,7 @@ async function processarSaida(
                     updated_at: agora(),
                 };
                 if (tipo === 'transfer') baixa.payment_type = 'PIX';
+                if (sp.payment_account_id) baixa.payment_account_id = sp.payment_account_id;
                 gravou(await admin.from('internal_transactions').update(baixa).in('id', titulos));
             } else if (sp.boleto_id) {
                 // Boleto sem título no razão: o gatilho não tem por onde agir.
@@ -263,6 +270,7 @@ async function processarSaida(
             if (fee > 0) {
                 await lancarTaxa(admin, {
                     organizationId: sp.organization_id,
+                    contaId: sp.payment_account_id ?? null,
                     tituloId: titulos[0] ?? null,
                     boletoId: sp.boleto_id ?? null,
                     asaasId,
@@ -323,12 +331,14 @@ async function processarSaida(
     const pendencia = await comPendencia(async () => {
         const titulos = await idsDosTitulos(admin, sp);
         if (titulos.length) {
+            await exigirSemConciliacaoBancaria(admin, titulos);
             // Volta a APROVADO: houve disparo, logo o título tinha passado pela
             // aprovação. O gatilho desfaz boleto 'pago' → 'aprovado' e nota.
             gravou(await admin.from('internal_transactions').update({
                 business_status: 'APROVADO',
                 status: 'PENDING',
                 payment_date: null,
+                ...(sp.payment_account_id ? { payment_account_id: null } : {}),
                 updated_at: agora(),
             }).in('id', titulos)
               .eq('business_status', 'PAGO'));
@@ -374,6 +384,20 @@ async function anotarPendencia(admin: Admin, alvo: 'saida' | 'cobranca', id: str
 }
 
 /**
+ * Estorno não desfaz título que a Conciliação já casou com o extrato: o
+ * vínculo em `reconciliation_matches` ficaria órfão apontando para um título
+ * "a receber/pagar". Vira pendência ("Baixa pendente: …") — quem resolve
+ * desfaz o vínculo na Conciliação e estorna à mão.
+ */
+async function exigirSemConciliacaoBancaria(admin: Admin, ids: string[]): Promise<void> {
+    const { data } = await admin.from('internal_transactions')
+        .select('id').in('id', ids).not('bank_reconciled_at', 'is', null).limit(1);
+    if (data?.length) {
+        throw new Error('o título já está conciliado com o extrato — desfaça o vínculo na Conciliação Bancária e estorne à mão');
+    }
+}
+
+/**
  * Títulos que este pagamento baixa. `transaction_id` é o vínculo direto (PIX,
  * e boleto pago depois da Fase 1). Para boleto antigo cai no par
  * `source_system='BOLETO' + reference_id=boleto_id`, que era o único caminho.
@@ -397,6 +421,8 @@ async function idsDosTitulos(
 
 async function lancarTaxa(admin: Admin, t: {
     organizationId: string;
+    /** Conta Asaas de onde a taxa saiu (null = chave global antiga). */
+    contaId: string | null;
     tituloId: string | null;
     boletoId?: string | null;
     asaasId: string;
@@ -433,6 +459,7 @@ async function lancarTaxa(admin: Admin, t: {
         project_id:       dims?.project_id ?? null,
         cost_center_id:   dims?.cost_center_id ?? null,
         party_name:       'Asaas Tecnologia',
+        payment_account_id: t.contaId,
     }));
 }
 

@@ -133,6 +133,8 @@ export interface PaymentAccount {
     account_number?: string;
     opening_balance?: number;
     opening_balance_date?: string;
+    /** 'banco' | 'caixa' | 'gateway' (conta Asaas). Só leitura no front. */
+    kind?: 'banco' | 'caixa' | 'gateway';
     /** A conta tem UMA org dona (organization_id) e pode ATENDER outras: todas as do
      *  usuário (`serves_all_organizations`) ou uma lista (`served_organization_ids`,
      *  tabela payment_account_organizations). Regra de produto de 2026-09-15 — ver

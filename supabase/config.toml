@@ -447,3 +447,9 @@ verify_jwt = false
 
 [functions.asaas-status-sync]
 verify_jwt = false
+
+# Conta Asaas como Conta de Pagamento (Fase 2): ações do usuário com o JWT
+# (gate `exigirGestor` pela org DONA da conta) e importação do extrato pelo
+# pg_cron com o CRON_SECRET (`chamadaDeCron`). Sem header → 401.
+[functions.asaas-conta]
+verify_jwt = false

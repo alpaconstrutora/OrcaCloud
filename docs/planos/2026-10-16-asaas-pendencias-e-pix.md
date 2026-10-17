@@ -24,9 +24,26 @@
 |---|---|
 | 0 — painel Asaas (usuário) | 0 de 6 — ⚠️ a chave atual é RECUSADA pela Asaas (HTTP 401), ver item 0.0 |
 | 1 — correções da integração existente | **12 de 14 publicados em 17/10/2026** (`bb5c6d2a`); 1.8 já estava resolvido; 1.14 fora do plano |
-| 2 — conta Asaas como Conta de Pagamento | não iniciada |
+| 2 — conta Asaas como Conta de Pagamento | código pronto na frente `asaas-pix` (17/10), **não publicado** — ver "Andamento da Fase 2" |
 | 3 — PIX | não iniciada |
 | 4 — governança | não iniciada |
+
+## Andamento da Fase 2 (17/10/2026)
+
+| # | Situação | Prova |
+|---|---|---|
+| 2.1 modelo | migration `aplicar_20271017300000` | `payment_accounts.kind`; `payment_account_gateway` (SELECT só membro da dona, sem policy de escrita); `client_charges`/`supplier_payments.payment_account_id`; `clients.asaas_customer_ids`; RPCs `asaas_conta_salvar` (gestor), `asaas_conta_guardar_chave`/`ler_chave` (só service_role, Vault `asaas_api_key:<id>`), `fn_conta_asaas_da_org`. Ensaio no banco real com ROLLBACK: passou. |
+| 2.2 Edge resolvem a conta | código | `_shared/asaasConta.ts`: `resolverContaAsaas` (dona → "atende também" → chave global de RESERVA) e `contaDoRegistro` (reenvio, cancelamento e polling usam a conta que CRIOU o registro). charge, payment e status-sync migrados. |
+| 2.3 baixa grava a conta | código | processador grava `payment_account_id` no título e na taxa; estorno não desfaz título já conciliado com extrato (vira "Baixa pendente"). |
+| 2.4 extrato | código + migration `aplicar_20271017300100` (cron de hora em hora) | Edge `asaas-conta` importa `/v3/financialTransactions` (campos conferidos na doc oficial em 17/10) em `bank_transactions` NORMALIZED; vínculo determinístico por `paymentId/billId/transferId` via `fn_reconcile_match` (só valor igual e só o que o evento já baixou). Regras puras em `utils/asaasExtrato.ts` + 10 testes. |
+| 2.5 tela | código | Minha Organização › Contas › editar conta › seção "Conta Asaas" (`components/financeiro/ContaAsaasSecao.tsx`): chave testada antes de guardar, ambiente, ativo, piloto, 3 tetos, testar conexão, sincronizar extrato; selo "Asaas" na lista. |
+
+Decisões tomadas no caminho (não estavam no plano):
+- **Chave só é guardada depois de aceita pela Asaas** (`GET /finance/balance`). A chave global de 06/2026 é recusada (401) e ninguém sabia.
+- **Id do cliente na Asaas é por conta**: `clients.asaas_customer_ids` (jsonb por conta). O `asaas_customer_id` antigo só vale para a chave global — numa conta nova ele não existe e a emissão falharia.
+- **Ativar a conta Asaas desliga a regra "Repasse Gateway (Asaas)" da org dona** (não apaga): ela confirmava sozinha o crédito do repasse no banco, e linha confirmada não entra no pareamento de transferências — o débito do mesmo repasse no extrato Asaas ficaria solto.
+- `kind` é só leitura no formulário de contas: `updatePaymentAccount` regrava todos os campos carregados e devolveria 'banco' por cima de 'gateway'.
+- No lugar do "campo Tipo" do plano: botão "Usar como conta Asaas" na seção — a conta vira gateway ao salvar a configuração ou a chave.
 
 ## Andamento da Fase 1 (17/10/2026)
 

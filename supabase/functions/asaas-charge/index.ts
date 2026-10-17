@@ -4,6 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { exigirMembro, respostaDeErro } from "../_shared/auth.ts"
 import { STATUS_COBRANCA_ENCERRADA } from "../../../utils/asaasEventos.ts"
+import { resolverContaAsaas, contaDoRegistro, cabecalhosAsaas, type ContaAsaas } from "../_shared/asaasConta.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -29,16 +30,6 @@ serve(async (req: Request) => {
 
     const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const asaasApiKey    = Deno.env.get('ASAAS_API_KEY') ?? '';
-    const asaasEnv       = (Deno.env.get('ASAAS_ENV') ?? 'sandbox').toLowerCase();
-
-    if (!asaasApiKey) {
-        return json({ error: 'Integração de cobrança não configurada. Defina ASAAS_API_KEY nas variáveis de ambiente do Supabase.' }, 503);
-    }
-
-    const asaasBase = asaasEnv === 'production'
-        ? 'https://api.asaas.com/v3'
-        : 'https://api-sandbox.asaas.com/v3';
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
@@ -69,11 +60,12 @@ serve(async (req: Request) => {
     const vinculo = await exigirMembro(req, organization_id);
     if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
 
-    const asaasHeadersBase = {
-        'Content-Type': 'application/json',
-        'access_token': asaasApiKey,
-        'User-Agent': 'OrcaCloud',
-    };
+    // Conta Asaas (Fase 2): reenvio e cancelamento usam a conta do REGISTRO —
+    // a cobrança vive na conta que a emitiu, mesmo que a org troque de conta
+    // depois; a emissão usa a conta da organização (`resolverContaAsaas`).
+    const semConta = () => json({
+        error: 'Nenhuma conta Asaas configurada para esta organização. Cadastre em Minha Organização › Contas.',
+    }, 503);
 
     // ─── action: resend ───────────────────────────────────────
     // Reenvia o boleto por e-mail via Asaas (segunda via).
@@ -83,13 +75,17 @@ serve(async (req: Request) => {
 
         const { data: ch } = await admin
             .from('client_charges')
-            .select('asaas_payment_id,billing_type,party_email,status')
+            .select('asaas_payment_id,billing_type,party_email,status,payment_account_id')
             .eq('id', chargeId)
             .eq('organization_id', organization_id)
             .maybeSingle();
 
         if (!ch?.asaas_payment_id) return json({ error: 'Cobrança não encontrada ou sem ID Asaas.' }, 404);
         if (ch.status === 'CANCELLED') return json({ error: 'Cobrança cancelada — não é possível reenviar.' }, 422);
+        let contaDoReenvio: ContaAsaas | null;
+        try { contaDoReenvio = await contaDoRegistro(admin, ch.payment_account_id); }
+        catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 503); }
+        if (!contaDoReenvio) return semConta();
 
         // Achado C3-05: `body.email` sobrepunha o destinatário sem nenhuma
         // validação — a segunda via do boleto (valor, vencimento, sacado, linha
@@ -129,9 +125,9 @@ serve(async (req: Request) => {
 
         if (emailOverride) sendBody.emails = [emailOverride];
 
-        const res = await fetch(`${asaasBase}/payments/${ch.asaas_payment_id}/sendByMail`, {
+        const res = await fetch(`${contaDoReenvio.base}/payments/${ch.asaas_payment_id}/sendByMail`, {
             method: 'POST',
-            headers: asaasHeadersBase,
+            headers: cabecalhosAsaas(contaDoReenvio.apiKey),
             body: JSON.stringify(sendBody),
         });
         if (!res.ok) {
@@ -155,7 +151,7 @@ serve(async (req: Request) => {
     if (action === 'cancel') {
         const { data: charges, error: chListErr } = await admin
             .from('client_charges')
-            .select('id,asaas_payment_id,status')
+            .select('id,asaas_payment_id,status,payment_account_id')
             .eq('organization_id', organization_id)
             .eq('transaction_id', transaction_id)
             .neq('status', 'CANCELLED');
@@ -163,9 +159,13 @@ serve(async (req: Request) => {
 
         for (const ch of charges ?? []) {
             if (ch.asaas_payment_id) {
-                const delRes = await fetch(`${asaasBase}/payments/${ch.asaas_payment_id}`, {
+                let contaDaCobranca: ContaAsaas | null;
+                try { contaDaCobranca = await contaDoRegistro(admin, ch.payment_account_id); }
+                catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 503); }
+                if (!contaDaCobranca) return semConta();
+                const delRes = await fetch(`${contaDaCobranca.base}/payments/${ch.asaas_payment_id}`, {
                     method: 'DELETE',
-                    headers: asaasHeadersBase,
+                    headers: cabecalhosAsaas(contaDaCobranca.apiKey),
                 });
                 // 404 = já removido no Asaas; trata como sucesso idempotente
                 if (!delRes.ok && delRes.status !== 404) {
@@ -221,9 +221,9 @@ serve(async (req: Request) => {
 
     // 2. Resolve o cliente (document/email/phone):
     //    (a) por party_id (vínculo direto) → (b) por nome exato → (c) por nome normalizado
-    type ClientRow = { id?: string; name?: string; email?: string; document?: string; phone?: string; asaas_customer_id?: string };
+    type ClientRow = { id?: string; name?: string; email?: string; document?: string; phone?: string; asaas_customer_id?: string; asaas_customer_ids?: Record<string, string> };
     let client: ClientRow | null = null;
-    const clientCols = 'id,name,email,document,phone,asaas_customer_id';
+    const clientCols = 'id,name,email,document,phone,asaas_customer_id,asaas_customer_ids';
 
     if (tx.party_id) {
         const { data: c } = await admin
@@ -261,10 +261,19 @@ serve(async (req: Request) => {
         return json({ error: `Cliente "${client.name ?? tx.party_name ?? '—'}" sem CPF/CNPJ cadastrado. O Asaas exige documento para emitir cobrança.` }, 422);
     }
 
-    const asaasHeaders = asaasHeadersBase;
+    let conta: ContaAsaas | null;
+    try { conta = await resolverContaAsaas(admin, organization_id!); }
+    catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 503); }
+    if (!conta) return semConta();
+    const asaasBase = conta.base;
+    const asaasHeaders = cabecalhosAsaas(conta.apiKey);
 
-    // 3. Garante o customer no Asaas (cache em clients.asaas_customer_id)
-    let customerId = client?.asaas_customer_id ?? null;
+    // 3. Garante o customer NA CONTA Asaas usada (cache por conta em
+    //    clients.asaas_customer_ids). A coluna antiga só vale para a chave
+    //    global de reserva — numa conta nova esse id não existe.
+    const chaveDoCache = conta.paymentAccountId ?? `global:${conta.env}`;
+    let customerId = client?.asaas_customer_ids?.[chaveDoCache]
+        ?? (conta.paymentAccountId ? null : client?.asaas_customer_id ?? null);
     if (!customerId) {
         const custRes = await fetch(`${asaasBase}/customers`, {
             method: 'POST',
@@ -284,7 +293,9 @@ serve(async (req: Request) => {
         }
         customerId = custData.id;
         if (client?.id && customerId) {
-            await admin.from('clients').update({ asaas_customer_id: customerId }).eq('id', client.id);
+            await admin.from('clients').update({
+                asaas_customer_ids: { ...(client.asaas_customer_ids ?? {}), [chaveDoCache]: customerId },
+            }).eq('id', client.id);
         }
     }
 
@@ -352,6 +363,7 @@ serve(async (req: Request) => {
             transaction_id: tx.id,
             client_id: client?.id ?? null,
             provider: 'asaas',
+            payment_account_id: conta.paymentAccountId,
             asaas_customer_id: customerId,
             asaas_payment_id: payData.id,
             billing_type: billingType,

@@ -20,6 +20,8 @@ interface RegistryItem {
     // Conta de pagamento: "atende também" (ver docs/planos/2026-09-15-conta-atende-outras-organizacoes.md)
     serves_all_organizations?: boolean;
     served_organization_ids?: string[];
+    /** Conta de pagamento: 'banco' | 'caixa' | 'gateway' (Asaas). */
+    kind?: string;
 }
 
 const NATURE_LABELS: Record<'CREDORA' | 'DEVEDORA', string> = {
@@ -91,6 +93,9 @@ function renderRegistryCell(
         case 'details':
             return (
                 <div className="flex items-center gap-3 text-sm">
+                    {item.kind === 'gateway' && (
+                        <span className="whitespace-nowrap text-xs font-medium text-blue-700" title="Conta Asaas — saldo e extrato importados da Asaas">Asaas</span>
+                    )}
                     {item.description && <p className="text-sm font-normal text-gray-600 line-clamp-1 flex-1">{item.description}</p>}
                     {showBankDetails && (item.bank || item.branch || item.account_number) && (
                         <div className="flex items-center gap-2 whitespace-nowrap text-xs font-normal text-gray-500">
@@ -148,6 +153,10 @@ interface FinancialRegistryManagerProps {
      *  a coluna é o que os distingue, e a árvore passa a ser por org + código. */
     showOrganization?: boolean;
     organizationNameById?: Map<string, string>;
+    /** Seção extra no drawer ao EDITAR um registro existente (ex.: "Conta Asaas"
+     *  em Contas de Pagamento). Os controles dela devem ser type="button": ela
+     *  grava por conta própria e não participa do "Salvar" do drawer. */
+    renderEditExtra?: (item: Partial<RegistryItem> & { id: string }) => React.ReactNode;
 }
 
 const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
@@ -170,6 +179,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     organizationNameById,
     sheetLabels = { create: 'Novo registro', edit: 'Editar registro' },
     servedOrgOptions,
+    renderEditExtra,
 }) => {
     const orgNameOf = (item: RegistryItem) => (item.organization_id ? organizationNameById?.get(item.organization_id) : undefined);
     const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -804,6 +814,8 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                 })()}
                             </>
                         )}
+
+                        {isEditing && renderEditExtra?.({ ...formData, id: isEditing })}
                     </SheetPanel>
                     <SheetFooter>
                         <button type="button" onClick={handleCancel} className="h-9 px-3.5 text-gray-500 hover:text-gray-700 font-medium text-[13px] transition-all">

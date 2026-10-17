@@ -22,6 +22,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { chamadaDeCron } from "../_shared/auth.ts"
 import { processarEventoAsaas } from "../_shared/asaasProcessar.ts"
+import { contaDoRegistro, cabecalhosAsaas, type ContaAsaas } from "../_shared/asaasConta.ts"
 import { eventoDoStatus, type PayloadAsaas } from "../../../utils/asaasEventos.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
@@ -40,14 +41,6 @@ serve(async (req: Request) => {
 
     const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const asaasApiKey    = Deno.env.get('ASAAS_API_KEY') ?? '';
-    const asaasEnv       = (Deno.env.get('ASAAS_ENV') ?? 'sandbox').toLowerCase();
-    if (!asaasApiKey) return json({ ok: true, skipped: 'ASAAS_API_KEY ausente' });
-
-    const asaasBase = asaasEnv === 'production'
-        ? 'https://api.asaas.com/v3'
-        : 'https://api-sandbox.asaas.com/v3';
-    const headers = { 'access_token': asaasApiKey, 'User-Agent': 'OrcaCloud' };
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
@@ -56,8 +49,22 @@ serve(async (req: Request) => {
     const limite = new Date(Date.now() - CARENCIA_MIN * 60_000).toISOString();
     const resumo = { cobrancas: 0, pagamentos: 0, eventos: 0, erros: [] as string[] };
 
-    async function consultar(caminho: string): Promise<Record<string, unknown> | null> {
-        const r = await fetch(`${asaasBase}${caminho}`, { headers });
+    // Cada registro é consultado na conta Asaas que o CRIOU (Fase 2). Sem
+    // conta (emitido pela chave global antiga) → chave de reserva.
+    const contas = new Map<string, ContaAsaas | null>();
+    async function contaDe(paymentAccountId: string | null): Promise<ContaAsaas | null> {
+        const k = paymentAccountId ?? '__reserva__';
+        if (!contas.has(k)) {
+            try { contas.set(k, await contaDoRegistro(admin, paymentAccountId)); }
+            catch (e) { resumo.erros.push(`conta ${k}: ${e instanceof Error ? e.message : String(e)}`); contas.set(k, null); }
+        }
+        return contas.get(k)!;
+    }
+
+    async function consultar(paymentAccountId: string | null, caminho: string): Promise<Record<string, unknown> | null> {
+        const conta = await contaDe(paymentAccountId);
+        if (!conta) return null;
+        const r = await fetch(`${conta.base}${caminho}`, { headers: cabecalhosAsaas(conta.apiKey) });
         if (r.status === 404) return { __naoExiste: true };
         if (!r.ok) {
             resumo.erros.push(`${caminho}: HTTP ${r.status}`);
@@ -78,7 +85,7 @@ serve(async (req: Request) => {
     // ─── Cobranças ao cliente ainda abertas ─────────────────────────────
     const { data: cobrancas, error: e1 } = await admin
         .from('client_charges')
-        .select('id,asaas_payment_id')
+        .select('id,asaas_payment_id,payment_account_id')
         .in('status', ['PENDING', 'OVERDUE', 'AWAITING_RISK_ANALYSIS'])
         .not('asaas_payment_id', 'is', null)
         .lt('updated_at', limite)
@@ -88,7 +95,7 @@ serve(async (req: Request) => {
 
     for (const c of cobrancas ?? []) {
         resumo.cobrancas++;
-        const p = await consultar(`/payments/${c.asaas_payment_id}`);
+        const p = await consultar(c.payment_account_id, `/payments/${c.asaas_payment_id}`);
         if (p) {
             const removida = p.__naoExiste === true || p.deleted === true;
             const evento = eventoDoStatus('payment', p.status as string | undefined, removida);
@@ -105,7 +112,7 @@ serve(async (req: Request) => {
     // ─── Pagamentos de saída em andamento (boleto e PIX) ────────────────
     const { data: saidas, error: e2 } = await admin
         .from('supplier_payments')
-        .select('id,asaas_bill_id,asaas_transfer_id')
+        .select('id,asaas_bill_id,asaas_transfer_id,payment_account_id')
         .in('status', ['PENDING', 'SCHEDULED'])
         .lt('updated_at', limite)
         .order('asaas_checked_at', { ascending: true, nullsFirst: true })
@@ -115,7 +122,7 @@ serve(async (req: Request) => {
     for (const s of saidas ?? []) {
         resumo.pagamentos++;
         if (s.asaas_bill_id) {
-            const b = await consultar(`/bill/${s.asaas_bill_id}`);
+            const b = await consultar(s.payment_account_id, `/bill/${s.asaas_bill_id}`);
             if (b && !b.__naoExiste) {
                 const evento = eventoDoStatus('bill', b.status as string | undefined);
                 if (evento) {
@@ -126,7 +133,7 @@ serve(async (req: Request) => {
                 }
             }
         } else if (s.asaas_transfer_id) {
-            const t = await consultar(`/transfers/${s.asaas_transfer_id}`);
+            const t = await consultar(s.payment_account_id, `/transfers/${s.asaas_transfer_id}`);
             if (t && !t.__naoExiste) {
                 const evento = eventoDoStatus('transfer', t.status as string | undefined);
                 if (evento) {

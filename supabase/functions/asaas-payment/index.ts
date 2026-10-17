@@ -4,6 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { exigirMembro, respostaDeErro } from "../_shared/auth.ts"
 import { STATUS_SAIDA_OCUPANDO } from "../../../utils/asaasEventos.ts"
+import { resolverContaAsaas, contaDoRegistro, cabecalhosAsaas, type ContaAsaas } from "../_shared/asaasConta.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -52,16 +53,6 @@ serve(async (req: Request) => {
     // `exigirMembro`, depois que o corpo é lido (precisa do organization_id).
     const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const asaasApiKey    = Deno.env.get('ASAAS_API_KEY') ?? '';
-    const asaasEnv       = (Deno.env.get('ASAAS_ENV') ?? 'sandbox').toLowerCase();
-
-    if (!asaasApiKey) {
-        return json({ error: 'Integração de pagamento não configurada. Defina ASAAS_API_KEY nas variáveis de ambiente do Supabase.' }, 503);
-    }
-
-    const asaasBase = asaasEnv === 'production'
-        ? 'https://api.asaas.com/v3'
-        : 'https://api-sandbox.asaas.com/v3';
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
@@ -86,11 +77,9 @@ serve(async (req: Request) => {
     if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
     const userEmail = vinculo.email;
 
-    const asaasHeaders = {
-        'Content-Type': 'application/json',
-        'access_token': asaasApiKey,
-        'User-Agent': 'OrcaCloud',
-    };
+    const semConta = () => json({
+        error: 'Nenhuma conta Asaas configurada para esta organização. Cadastre em Minha Organização › Contas.',
+    }, 503);
 
     // ─── action: cancel ───────────────────────────────────────
     if (action === 'cancel') {
@@ -99,7 +88,7 @@ serve(async (req: Request) => {
 
         const { data: sp } = await admin
             .from('supplier_payments')
-            .select('id,asaas_bill_id,status,boleto_id')
+            .select('id,asaas_bill_id,status,boleto_id,payment_account_id')
             .eq('id', paymentId)
             .eq('organization_id', organization_id)
             .maybeSingle();
@@ -108,9 +97,14 @@ serve(async (req: Request) => {
         if (sp.status === 'DONE') return json({ error: 'Pagamento já concluído — não pode ser cancelado.' }, 422);
 
         if (sp.asaas_bill_id) {
-            const cancelRes = await fetch(`${asaasBase}/bill/${sp.asaas_bill_id}/cancel`, {
+            // Cancela na conta que DISPAROU o pagamento, não na conta atual da org.
+            let contaDoPagamento: ContaAsaas | null;
+            try { contaDoPagamento = await contaDoRegistro(admin, sp.payment_account_id); }
+            catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 503); }
+            if (!contaDoPagamento) return semConta();
+            const cancelRes = await fetch(`${contaDoPagamento.base}/bill/${sp.asaas_bill_id}/cancel`, {
                 method: 'POST',
-                headers: asaasHeaders,
+                headers: cabecalhosAsaas(contaDoPagamento.apiKey),
             });
             if (!cancelRes.ok && cancelRes.status !== 404) {
                 const d = await cancelRes.json().catch(() => ({}));
@@ -129,6 +123,13 @@ serve(async (req: Request) => {
 
     // ─── quote / pay compartilham a resolução do boleto ────────
     if (!boleto_id) return json({ error: 'boleto_id é obrigatório.' }, 400);
+
+    let conta: ContaAsaas | null;
+    try { conta = await resolverContaAsaas(admin, organization_id!); }
+    catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 503); }
+    if (!conta) return semConta();
+    const asaasBase = conta.base;
+    const asaasHeaders = cabecalhosAsaas(conta.apiKey);
 
     const { data: boleto, error: bErr } = await admin
         .from('boletos')
@@ -249,6 +250,7 @@ serve(async (req: Request) => {
             organization_id,
             boleto_id: boleto.id,
             transaction_id: titulo?.id ?? null,
+            payment_account_id: conta.paymentAccountId,
             supplier_id: boleto.supplier_id,
             provider: 'asaas',
             payment_type: 'BILL',

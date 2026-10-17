@@ -160,6 +160,7 @@ import ClientList from './ClientList';
 import InvestorList from './InvestorList';
 import { SupplierList } from './SupplierList';
 import FinancialRegistryManager from './FinancialRegistryManager';
+import ContaAsaasSecao from './financeiro/ContaAsaasSecao';
 import CostCenterModule from './CostCenterModule';
 import PlanoDeContasModule from './PlanoDeContasModule';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -755,6 +756,9 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         showBankDetails={activeTab === 'accounts'}
                         sheetLabels={activeTab === 'accounts' ? { create: 'Nova conta de pagamento', edit: 'Editar conta de pagamento' } : { create: 'Nova conta', edit: 'Editar conta' }}
                         servedOrgOptions={activeTab === 'accounts' ? registryOrgOptions : undefined}
+                        // Conta Asaas (Fase 2 — docs/planos/2026-10-16-asaas-pendencias-e-pix.md):
+                        // só ao EDITAR uma conta de pagamento já gravada (precisa do id).
+                        renderEditExtra={activeTab === 'accounts' ? (item) => <ContaAsaasSecao paymentAccountId={item.id} /> : undefined}
                         showCode={true}
                         showNature={activeTab === 'chart_of_accounts'}
                         onSave={async (item) => {

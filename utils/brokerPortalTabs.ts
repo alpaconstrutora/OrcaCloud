@@ -20,9 +20,10 @@ export type BrokerPortalTabId = typeof BROKER_PORTAL_TAB_IDS[number];
  * O código das abas fica; ao ligar uma delas ao banco, tirá-la daqui.
  */
 export const ABAS_DE_DEMONSTRACAO: readonly BrokerPortalTabId[] = [
-  'chat', 'treinamento',
-  // saíram em 17/10/2026 (plano 2026-10-17): 'ranking' (F2, propostas aprovadas reais),
-  // 'leads' (F3, funil do corretor pelas RPCs do token), 'agenda' (F4, eventos do gestor)
+  // Vazia desde 17/10/2026 (plano 2026-10-17-portal-corretor-pendencias): as cinco
+  // ganharam dado real — 'ranking' (F2), 'leads' (F3), 'agenda' (F4), 'chat' (F5) e
+  // 'treinamento' (F6, pela Academia). A regra fica para a próxima aba que nascer
+  // sem banco: ela entra aqui até ter dado de verdade.
 ];
 export const ehAbaDeDemonstracao = (id: string): boolean =>
   (ABAS_DE_DEMONSTRACAO as readonly string[]).includes(id);
@@ -47,7 +48,7 @@ export const abasHabilitadas = (
  * de demonstração também (D9).
  */
 export const ORDEM_DO_CELULAR: readonly BrokerPortalTabId[] = [
-  'empreendimentos', 'estoque', 'propostas', 'comissoes', 'leads', 'materiais', 'agenda', 'ranking', 'analytics',
+  'empreendimentos', 'estoque', 'propostas', 'comissoes', 'leads', 'chat', 'materiais', 'agenda', 'treinamento', 'ranking', 'analytics',
 ];
 
 /** Quantas abas a barra inferior comporta (4 + "Mais", ou 5 sem "Mais"). */

@@ -780,7 +780,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
             )}
 
             {currentTab === 'treinamento' && (
-                <BrokerTraining brokerEmail={effectiveBrokerEmail || ''} />
+                <BrokerTraining brokerEmail={effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={initialOrgId || selectedOrgId} visao={isAdmin ? 'gestor' : 'corretor'} corretor={effectiveBroker} />
             )}
 
             {currentTab === 'agenda' && (
@@ -788,7 +788,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
             )}
 
             {currentTab === 'chat' && (
-                <BrokerChat brokerEmail={effectiveBrokerEmail || ''} />
+                <BrokerChat brokerEmail={effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={initialOrgId || selectedOrgId} visao={isAdmin ? 'gestor' : 'corretor'} />
             )}
 
             {/* O miolo do Analytics (BrokerAnalytics) é DEMONSTRAÇÃO — gerador fixo no

@@ -1,186 +1,251 @@
-import React, { useState } from 'react';
-import { BookOpen, Video, FileText, Award, CheckCircle2, Clock, Lock, ChevronRight, Play, Star } from 'lucide-react';
-import type { BrokerTrainingModule } from '../../types';
+import React, { useCallback, useEffect, useState } from 'react';
+import { GraduationCap, ExternalLink, Loader2, Mail, UserPlus, Clock, CheckCircle2, Info } from 'lucide-react';
+import { brokerPortalService } from '../../services/brokerPortalService';
+import { brokerService } from '../../services/brokerService';
+import { academyPortalUsersService } from '../../services/academyPortalUsersService';
+
+/**
+ * Treinamento do Portal do Corretor — pela ACADEMIA desde 17/10/2026 (antes, um
+ * gerador fixo no componente). Plano: docs/planos/2026-10-17-portal-corretor-pendencias.md
+ * (F6, decisão P1: reusar a Academia).
+ *
+ * O corretor é aluno externo da Academia, como o terceirizado. O gestor libera o
+ * acesso aqui (academy_portal_users_create, tipo TERCEIRO) e manda o convite; a
+ * atribuição de cursos continua em Portais › Portal de Treinamentos. O corretor vê
+ * os cursos atribuídos e abre a sala de aula no Portal de Treinamentos.
+ */
+
+interface Matricula {
+    id: string;
+    curso: string;
+    nr_referencia?: string | null;
+    status: string;
+    percentual?: number | null;
+    data_limite?: string | null;
+    data_conclusao?: string | null;
+    carga_horaria?: number | null;
+}
+interface Situacao {
+    acesso: boolean;
+    acesso_id?: string | null;
+    bloqueado: boolean;
+    convidado_em?: string | null;
+    ultimo_acesso?: string | null;
+    matriculas: Matricula[];
+    email?: string;
+}
+interface CorretorBasico { name?: string | null; email?: string | null; phone?: string | null; cpf?: string | null; agency_name?: string | null }
 
 interface BrokerTrainingProps {
     brokerEmail: string;
+    portalToken?: string;
+    organizationId?: string;
+    visao?: 'corretor' | 'gestor';
+    /** gestor: o corretor aberto (para liberar o acesso com nome/telefone/CPF dele) */
+    corretor?: CorretorBasico | null;
+    compacto?: boolean;
 }
 
-const TYPE_CONFIG: Record<BrokerTrainingModule['type'], { icon: React.ElementType; color: string; bg: string; label: string }> = {
-    VIDEO: { icon: Video, color: 'text-red-600', bg: 'bg-red-50', label: 'Vídeo' },
-    DOCUMENTO: { icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50', label: 'Documento' },
-    QUIZ: { icon: Star, color: 'text-amber-600', bg: 'bg-amber-50', label: 'Quiz' },
+// Os mesmos rótulos do Portal de Treinamentos (training/portal/TraineeEnrollmentsTab).
+export const STATUS_MATRICULA: Record<string, { label: string; cor: string }> = {
+    NAO_INICIADO: { label: 'Não iniciado', cor: 'text-gray-600' },
+    EM_ANDAMENTO: { label: 'Em andamento', cor: 'text-teal-700' },
+    AGUARDANDO_AVALIACAO: { label: 'Aguardando avaliação', cor: 'text-amber-700' },
+    REPROVADO: { label: 'Reprovado', cor: 'text-rose-700' },
+    CONCLUIDO: { label: 'Concluído', cor: 'text-emerald-700' },
+    EXPIRADO: { label: 'Prazo vencido', cor: 'text-rose-700' },
 };
 
-const generateDemoModules = (): BrokerTrainingModule[] => [
-    { id: 't1', organization_id: 'demo', project_name: 'Residencial Parque Verde', title: 'Apresentação do Empreendimento', description: 'Conheça em detalhes o Residencial Parque Verde, suas diferenciais e argumentos de venda.', type: 'VIDEO', duration_minutes: 15, is_required: true, progress_pct: 100, is_completed: true, completed_at: '2026-02-15', certificate_url: '#', questions: [] },
-    { id: 't2', organization_id: 'demo', project_name: 'Residencial Parque Verde', title: 'Tipologias e Plantas Baixas', description: 'Estudo detalhado de cada tipologia: metragem, configurações e pontos fortes.', type: 'DOCUMENTO', duration_minutes: 20, is_required: true, progress_pct: 100, is_completed: true, completed_at: '2026-02-18', questions: [] },
-    {
-        id: 't3', organization_id: 'demo', project_name: 'Residencial Parque Verde', title: 'Quiz: Argumentação de Vendas', description: 'Teste seus conhecimentos sobre o empreendimento e técnicas de vendas.', type: 'QUIZ', duration_minutes: 10, is_required: true, progress_pct: 60, is_completed: false, questions: [
-            { question: 'Qual a metragem da tipologia 3Q Suite?', options: ['82m²', '95m²', '68m²', '58m²'], correct_index: 1 },
-            { question: 'Quantas torres tem o empreendimento?', options: ['1', '2', '3', '4'], correct_index: 1 },
-            { question: 'Qual o índice de reajuste?', options: ['IPCA', 'INCC', 'IGP-M', 'SELIC'], correct_index: 1 },
-        ]
-    },
-    { id: 't4', organization_id: 'demo', project_name: 'Residencial Parque Verde', title: 'Técnicas de Negociação Imobiliária', description: 'Aprenda as melhores práticas para conduzir negociações e fechar vendas.', type: 'VIDEO', duration_minutes: 25, is_required: false, progress_pct: 0, is_completed: false, questions: [] },
-    { id: 't5', organization_id: 'demo', project_name: 'Residencial Parque Verde', title: 'Legislação e Documentação', description: 'Entenda os aspectos legais e documentais de uma venda imobiliária.', type: 'DOCUMENTO', duration_minutes: 30, is_required: false, progress_pct: 0, is_completed: false, questions: [] },
-];
+const data = (d?: string | null) => (d ? new Date(d + (d.length === 10 ? 'T12:00:00' : '')).toLocaleDateString('pt-BR') : '');
+const msg = (e: unknown) => (e as { message?: string })?.message || 'Não foi possível concluir. Tente de novo.';
 
-const BrokerTraining: React.FC<BrokerTrainingProps> = ({ brokerEmail }) => {
-    const [modules, setModules] = useState<BrokerTrainingModule[]>(generateDemoModules);
-    const [activeQuiz, setActiveQuiz] = useState<string | null>(null);
-    const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
-    const [quizSubmitted, setQuizSubmitted] = useState(false);
-
-    const completedCount = modules.filter(m => m.is_completed).length;
-    const requiredCount = modules.filter(m => m.is_required).length;
-    const requiredCompleted = modules.filter(m => m.is_required && m.is_completed).length;
-    const isCertified = requiredCompleted === requiredCount;
-    const overallProgress = modules.length > 0 ? Math.round(modules.reduce((a, m) => a + m.progress_pct, 0) / modules.length) : 0;
-
-    const handleStartModule = (mod: BrokerTrainingModule) => {
-        if (mod.type === 'QUIZ') {
-            setActiveQuiz(mod.id);
-            setQuizAnswers({});
-            setQuizSubmitted(false);
-        } else {
-            setModules(prev => prev.map(m => m.id === mod.id ? { ...m, progress_pct: 100, is_completed: true, completed_at: new Date().toISOString() } : m));
-        }
-    };
-
-    const handleSubmitQuiz = (modId: string) => {
-        const mod = modules.find(m => m.id === modId);
-        if (!mod?.questions) return;
-        const correct = mod.questions.filter((q, i) => quizAnswers[i] === q.correct_index).length;
-        const passed = correct / mod.questions.length >= 0.7;
-        setQuizSubmitted(true);
-        if (passed) {
-            setModules(prev => prev.map(m => m.id === modId ? { ...m, progress_pct: 100, is_completed: true, completed_at: new Date().toISOString() } : m));
-        }
-    };
-
-    return (
-        <div className="space-y-6">
-            {/* Progress Header */}
-            <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-2xl p-6 text-white shadow-xl shadow-purple-500/20">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <p className="text-purple-200 text-xs font-bold uppercase tracking-widest">Progresso Geral</p>
-                        <p className="text-4xl font-black mt-1">{overallProgress}%</p>
+const Matriculas: React.FC<{ itens: Matricula[] }> = ({ itens }) => (
+    <ul className="space-y-2">
+        {itens.map(m => {
+            const st = STATUS_MATRICULA[m.status] || { label: m.status, cor: 'text-gray-600' };
+            const pct = Math.max(0, Math.min(100, Number(m.percentual) || 0));
+            return (
+                <li key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                    <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-bold text-gray-900">{m.curso}</p>
+                        <span className={`text-xs shrink-0 ${st.cor}`}>{st.label}</span>
                     </div>
-                    <div className={`p-4 rounded-2xl ${isCertified ? 'bg-emerald-500/20' : 'bg-white/10'}`}>
-                        {isCertified ? <Award className="w-8 h-8 text-emerald-300" /> : <BookOpen className="w-8 h-8 text-purple-200" />}
-                    </div>
-                </div>
-                <div className="bg-white/20 rounded-full h-3 mb-3">
-                    <div className="bg-white rounded-full h-3 transition-all" style={{ width: `${overallProgress}%` }} />
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                    <span className="text-purple-200 font-medium">{completedCount} de {modules.length} módulos concluídos</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-black ${isCertified ? 'bg-emerald-500/30 text-emerald-200' : 'bg-amber-500/30 text-amber-200'}`}>
-                        {isCertified ? '✓ Certificado' : `${requiredCompleted}/${requiredCount} obrigatórios`}
-                    </span>
-                </div>
-            </div>
-
-            {/* Module List */}
-            <div className="space-y-3">
-                {modules.map(mod => {
-                    const cfg = TYPE_CONFIG[mod.type];
-                    const Icon = cfg.icon;
-                    const isQuizActive = activeQuiz === mod.id;
-
-                    return (
-                        <div key={mod.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                            <div className={`flex items-center justify-between p-5 ${isQuizActive ? 'border-b border-gray-100' : ''}`}>
-                                <div className="flex items-center gap-4">
-                                    <div className={`p-3 rounded-xl ${cfg.bg}`}>
-                                        <Icon className={`w-5 h-5 ${cfg.color}`} />
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <h4 className="text-sm font-bold text-gray-900">{mod.title}</h4>
-                                            {mod.is_required && <span className="px-2 py-0.5 bg-red-50 text-red-500 text-[9px] font-black uppercase tracking-wider rounded-full">Obrigatório</span>}
-                                        </div>
-                                        <p className="text-xs text-gray-400 mt-0.5">{mod.description}</p>
-                                        <div className="flex items-center gap-3 mt-1.5">
-                                            <span className="text-xs text-gray-400 font-bold flex items-center gap-1"><Clock className="w-3 h-3" />{mod.duration_minutes} min</span>
-                                            <span className={`text-xs font-bold flex items-center gap-1 ${cfg.color}`}><Icon className="w-3 h-3" />{cfg.label}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    {mod.is_completed ? (
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                                            <span className="text-xs font-bold text-emerald-600">Concluído</span>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {mod.progress_pct > 0 && mod.progress_pct < 100 && (
-                                                <div className="w-20 bg-gray-100 rounded-full h-2">
-                                                    <div className="bg-indigo-500 rounded-full h-2" style={{ width: `${mod.progress_pct}%` }} />
-                                                </div>
-                                            )}
-                                            <button onClick={() => handleStartModule(mod)}
-                                                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
-                                                {mod.type === 'QUIZ' ? <Star className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                                                {mod.progress_pct > 0 ? 'Continuar' : 'Iniciar'}
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Inline Quiz */}
-                            {isQuizActive && mod.questions && (
-                                <div className="p-5 bg-gray-50 space-y-4 animate-in slide-in-from-top-2 duration-200">
-                                    {mod.questions.map((q, qi) => (
-                                        <div key={qi} className="bg-white rounded-xl p-4 border border-gray-100">
-                                            <p className="text-sm font-bold text-gray-900 mb-3">{qi + 1}. {q.question}</p>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {q.options.map((opt, oi) => {
-                                                    const selected = quizAnswers[qi] === oi;
-                                                    const isCorrect = quizSubmitted && oi === q.correct_index;
-                                                    const isWrong = quizSubmitted && selected && oi !== q.correct_index;
-                                                    return (
-                                                        <button key={oi} onClick={() => !quizSubmitted && setQuizAnswers(p => ({ ...p, [qi]: oi }))}
-                                                            disabled={quizSubmitted}
-                                                            className={`p-3 rounded-lg text-button font-bold text-left border-2 transition-all ${isCorrect ? 'border-emerald-400 bg-emerald-50 text-emerald-700' :
-                                                                isWrong ? 'border-red-400 bg-red-50 text-red-700' :
-                                                                    selected ? 'border-indigo-400 bg-indigo-50 text-indigo-700' :
-                                                                        'border-gray-200 hover:border-gray-300 text-gray-700'}`}>
-                                                            {opt}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    <div className="flex justify-end gap-3">
-                                        <button onClick={() => { setActiveQuiz(null); setQuizSubmitted(false); }}
-                                            className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-button font-bold hover:bg-gray-200 transition-all">
-                                            Fechar
-                                        </button>
-                                        {!quizSubmitted && (
-                                            <button onClick={() => handleSubmitQuiz(mod.id)}
-                                                disabled={Object.keys(quizAnswers).length < (mod.questions?.length || 0)}
-                                                className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-wider hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-500/20">
-                                                Enviar Respostas
-                                            </button>
-                                        )}
-                                        {quizSubmitted && (
-                                            <span className={`px-4 py-2 rounded-xl text-button font-black ${modules.find(m => m.id === mod.id)?.is_completed ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                                                {modules.find(m => m.id === mod.id)?.is_completed ? '✓ Aprovado!' : '✗ Tente novamente (mínimo 70%)'}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        {[m.nr_referencia, m.carga_horaria ? `${m.carga_horaria} h` : null,
+                          m.status === 'CONCLUIDO' && m.data_conclusao ? `Concluído em ${data(m.data_conclusao)}` : m.data_limite ? `Prazo: ${data(m.data_limite)}` : null]
+                          .filter(Boolean).join(' · ')}
+                    </p>
+                    {m.status !== 'CONCLUIDO' && (
+                        <div className="mt-2 bg-gray-100 rounded-full h-1.5" title={`${pct}% concluído`}>
+                            <div className="bg-teal-600 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
                         </div>
-                    );
-                })}
+                    )}
+                </li>
+            );
+        })}
+    </ul>
+);
+
+const BrokerTraining: React.FC<BrokerTrainingProps> = ({ brokerEmail, portalToken, organizationId, visao = 'corretor', corretor, compacto = false }) => {
+    const ehGestor = visao === 'gestor' && !portalToken;
+    // Gestor: SÓ o corretor aberto — sem ele, `brokerEmail` é o e-mail do próprio
+    // administrador, e a tela ofereceria liberar treinamento para ele.
+    const email = (portalToken ? '' : ehGestor ? (corretor?.email || '') : (corretor?.email || brokerEmail || '')).toLowerCase();
+
+    const [sit, setSit] = useState<Situacao | null>(null);
+    const [carregando, setCarregando] = useState(true);
+    const [erro, setErro] = useState<string | null>(null);
+    const [ocupado, setOcupado] = useState(false);
+    const [aviso, setAviso] = useState<string | null>(null);
+
+    const carregar = useCallback(async () => {
+        setErro(null);
+        try {
+            if (portalToken) setSit(await brokerPortalService.getTreinamentosByToken(portalToken));
+            else if (organizationId && email) setSit(await brokerService.treinamentosDoCorretor(organizationId, email));
+            else setSit(null);
+        } catch (e) {
+            console.error('[BrokerTraining]', e);
+            setErro('Não foi possível carregar os treinamentos agora.');
+        } finally {
+            setCarregando(false);
+        }
+    }, [portalToken, organizationId, email]);
+
+    useEffect(() => { setCarregando(true); carregar(); }, [carregar]);
+
+    const liberar = async () => {
+        if (!organizationId || !email) return;
+        setOcupado(true); setAviso(null);
+        try {
+            await academyPortalUsersService.create({
+                orgId: organizationId,
+                tipo: 'TERCEIRO',
+                name: corretor?.name || email,
+                email,
+                phone: corretor?.phone || undefined,
+                cpf: corretor?.cpf || undefined,
+                empresaTerceira: corretor?.agency_name || 'Corretor de imóveis',
+                funcao: 'Corretor',
+            });
+            setAviso('Acesso liberado. Agora envie o convite para ele criar a senha.');
+            await carregar();
+        } catch (e) {
+            setAviso(msg(e));
+        } finally {
+            setOcupado(false);
+        }
+    };
+
+    const convidar = async () => {
+        if (!sit?.acesso_id) return;
+        setOcupado(true); setAviso(null);
+        try {
+            const r = await academyPortalUsersService.invite(sit.acesso_id);
+            setAviso(r.kind === 'recovery' ? `E-mail para redefinir a senha enviado para ${email}.` : `Convite enviado para ${email}.`);
+            await carregar();
+        } catch (e) {
+            setAviso(msg(e));
+        } finally {
+            setOcupado(false);
+        }
+    };
+
+    if (carregando) return <div className="py-16 text-center"><Loader2 className="w-7 h-7 animate-spin text-teal-600 mx-auto" /></div>;
+    if (erro) return <p className="text-sm text-gray-500 bg-white rounded-2xl border border-gray-100 p-6 text-center">{erro}</p>;
+
+    const vazio = (titulo: string, texto?: string) => (
+        <div className="bg-white rounded-2xl border border-gray-100 text-center px-6 py-12">
+            <GraduationCap className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-gray-600">{titulo}</p>
+            {texto && <p className="text-xs text-gray-400 mt-1">{texto}</p>}
+        </div>
+    );
+
+    // ── Gestor ──────────────────────────────────────────────────────────────
+    if (ehGestor) {
+        if (!email) return vazio('Abra o portal de um corretor para cuidar do treinamento dele.', 'Em Comercial › Corretores, escolha o corretor e volte a esta aba.');
+        return (
+            <div className={compacto ? 'space-y-4' : 'space-y-6'}>
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3" data-tour="treinamento-acesso">
+                    <div className="flex items-start gap-3">
+                        <span className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0"><GraduationCap className="w-5 h-5" /></span>
+                        <div className="min-w-0">
+                            <p className="text-sm font-bold text-gray-900">Portal de Treinamentos</p>
+                            <p className="text-xs text-gray-500 truncate">{email}</p>
+                            <p className="text-xs mt-1">
+                                {sit?.acesso
+                                    ? <span className="text-emerald-700">Acesso liberado{sit.ultimo_acesso ? ` · último acesso em ${data(sit.ultimo_acesso)}` : sit.convidado_em ? ` · convite enviado em ${data(sit.convidado_em)}` : ' · convite ainda não enviado'}</span>
+                                    : sit?.bloqueado
+                                        ? <span className="text-rose-700">Acesso bloqueado — reative em Portais › Portal de Treinamentos</span>
+                                        : <span className="text-gray-500">Ainda sem acesso aos treinamentos</span>}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {!sit?.acesso && !sit?.bloqueado && (
+                            <button type="button" onClick={liberar} disabled={ocupado} className="h-10 px-4 inline-flex items-center gap-1.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
+                                <UserPlus className="w-4 h-4" /> Liberar Portal de Treinamentos
+                            </button>
+                        )}
+                        {sit?.acesso && (
+                            <button type="button" onClick={convidar} disabled={ocupado} className="h-10 px-4 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                                <Mail className="w-4 h-4" /> {sit.convidado_em ? 'Reenviar convite' : 'Enviar convite por e-mail'}
+                            </button>
+                        )}
+                    </div>
+                    {aviso && <p className="text-sm text-teal-800 bg-teal-50 rounded-xl px-3 py-2">{aviso}</p>}
+                    <p className="text-xs text-gray-500 flex items-start gap-1.5">
+                        <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
+                        Os cursos são atribuídos em Portais › Portal de Treinamentos › Atribuições — o corretor aparece lá como terceiro.
+                    </p>
+                </div>
+                {sit?.acesso && (sit.matriculas.length ? <Matriculas itens={sit.matriculas} /> : vazio('Nenhum curso atribuído a este corretor ainda.'))}
             </div>
+        );
+    }
+
+    // ── Corretor ────────────────────────────────────────────────────────────
+    if (!sit?.acesso) {
+        return sit?.bloqueado
+            ? vazio('Seu acesso aos treinamentos está bloqueado.', 'Fale com a incorporadora.')
+            : vazio('A incorporadora ainda não liberou treinamentos para você.', 'Quando liberar, você recebe um convite por e-mail e os cursos aparecem aqui.');
+    }
+    const meuEmail = sit.email || email;
+    return (
+        <div className={compacto ? 'space-y-4' : 'space-y-6'}>
+            <div className="bg-gradient-to-br from-teal-600 to-teal-700 rounded-2xl p-5 text-white">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-widest text-teal-100">Seus treinamentos</p>
+                        <p className="text-2xl font-black mt-1">
+                            {sit.matriculas.filter(m => m.status === 'CONCLUIDO').length} de {sit.matriculas.length}
+                            <span className="text-sm font-semibold text-teal-100"> concluídos</span>
+                        </p>
+                    </div>
+                    <GraduationCap className="w-10 h-10 text-white/40 shrink-0" />
+                </div>
+                {portalToken ? (
+                    <a
+                        href={`${window.location.origin}/portal-treinamentos`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-4 h-10 px-4 inline-flex items-center gap-1.5 rounded-xl bg-white text-teal-800 text-sm font-semibold"
+                    >
+                        <ExternalLink className="w-4 h-4" /> Abrir sala de aula
+                    </a>
+                ) : (
+                    <p className="mt-3 text-xs text-teal-100">Prévia: o corretor abre a sala de aula por aqui.</p>
+                )}
+                <p className="mt-3 text-xs text-teal-100 flex items-start gap-1.5">
+                    <Clock className="w-3.5 h-3.5 shrink-0 mt-px" />
+                    Entre com {meuEmail} e a senha criada pelo convite. Não recebeu? Peça à incorporadora para reenviar.
+                </p>
+            </div>
+            {sit.matriculas.length ? <Matriculas itens={sit.matriculas} /> : vazio('Nenhum curso atribuído ainda.', 'Quando a incorporadora atribuir um curso, ele aparece aqui.')}
+            {sit.matriculas.some(m => m.status === 'CONCLUIDO') && (
+                <p className="text-xs text-gray-500 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />Os certificados ficam no Portal de Treinamentos, aba Certificados.</p>
+            )}
         </div>
     );
 };

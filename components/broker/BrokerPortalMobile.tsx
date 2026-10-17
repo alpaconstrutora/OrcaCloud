@@ -281,9 +281,9 @@ const BrokerPortalMobile: React.FC<Props> = ({ profile, organizationId, portalTo
                             <div data-tour="materiais-grade"><BrokerMaterials organizationId={h.orgIdEfetivo || 'demo'} portalToken={portalToken} compacto /></div>
                         )}
                         {h.currentTab === 'ranking' && <BrokerRanking brokerEmail={h.effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={h.orgIdEfetivo} compacto />}
-                        {h.currentTab === 'treinamento' && <BrokerTraining brokerEmail={h.effectiveBrokerEmail || ''} />}
+                        {h.currentTab === 'treinamento' && <BrokerTraining brokerEmail={h.effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={h.orgIdEfetivo} compacto />}
                         {h.currentTab === 'agenda' && <BrokerEvents brokerEmail={h.effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={h.orgIdEfetivo} compacto />}
-                        {h.currentTab === 'chat' && <BrokerChat brokerEmail={h.effectiveBrokerEmail || ''} />}
+                        {h.currentTab === 'chat' && <BrokerChat brokerEmail={h.effectiveBrokerEmail || ''} portalToken={portalToken} organizationId={h.orgIdEfetivo} compacto />}
                     </div>
                 )}
             </main>

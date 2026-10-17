@@ -48,6 +48,7 @@ vi.mock('../../services/brokerPortalService', () => ({
         })),
         getRentalPriceTableByToken: vi.fn(async () => ({ table: null, items: [] })),
         getSalesPlansByToken: vi.fn(async () => []),
+        getChatCanaisByToken: vi.fn(async () => []),
         getRankingByToken: vi.fn(async () => ({ posicao: 2, posicao_anterior: 1, total_corretores: 3, com_venda: 2, vendas: 2, volume: 1000000, enviadas: 3, vendas_do_lider: 3 })),
         getMaterialsByToken: vi.fn(async () => [{ id: 'm-1', title: 'Book do Garden', type: 'BOOK', file_url: 'https://exemplo/book.pdf', version: 2, views_count: 0 }]),
         validateSalesSimulationByToken: vi.fn(async () => null),
@@ -88,8 +89,8 @@ describe('BrokerPortalMobile', () => {
         montar(['empreendimentos', 'propostas', 'comissoes', 'materiais', 'chat']);
         expect(screen.getByRole('heading', { level: 1, name: 'Olá, Geleia' })).toBeInTheDocument();
         const botoes = within(barra()).getAllByRole('button');
-        // Chat estava ligado para o Geleia, mas é demonstração (D9): sai
-        expect(botoes.map(b => b.textContent)).toEqual(['Empreend.', 'Propostas', 'Comissões', 'Materiais']);
+        // Chat voltou com dado real (plano 2026-10-17, F5)
+        expect(botoes.map(b => b.textContent)).toEqual(['Empreend.', 'Propostas', 'Comissões', 'Chat', 'Materiais']);
         expect(within(barra()).getByRole('button', { name: /empreend/i })).toHaveAttribute('aria-current', 'page');
         expect(within(barra()).queryByRole('button', { name: /mais/i })).toBeNull();
         expect(await screen.findByText('010 - Galeria Altavista')).toBeInTheDocument();
@@ -103,8 +104,7 @@ describe('BrokerPortalMobile', () => {
         await user.click(within(barra()).getByRole('button', { name: /mais/i }));
         const folha = screen.getByRole('dialog', { name: 'Mais seções' });
         const rotulos = within(folha).getAllByRole('button').map(b => b.textContent);
-        expect(rotulos).toEqual(['Leads', 'Materiais', 'Agenda', 'Ranking', 'Analytics']);
-        for (const demo of ['Chat', 'Treinamento']) expect(screen.queryByText(demo)).toBeNull();
+        expect(rotulos).toEqual(['Leads', 'Chat', 'Materiais', 'Agenda', 'Treinamento', 'Ranking', 'Analytics']);
         expect(screen.queryByText('Saúde')).toBeNull();
     });
 

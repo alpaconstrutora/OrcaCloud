@@ -51,7 +51,7 @@ apaga e regrava tudo — ficaria para outro plano.
 - **Como sei que terminou:** migration aplicada; `select valor_variavel(t)` responde;
   `segurancaMigrations.test` verde; ADJUST_VALUE em parcela variável passa e em parcela
   fixa continua recusado (prova por DO + RAISE com ROLLBACK, sem gravar).
-- **Status:** ⏳ migration `aplicar_20271018050000_contrato_valor_variavel.sql` escrita (corpo de fn_reconcile_group copiado do arquivo, conferido igual ao banco); aplicação barrada pela permissão automática — AGUARDANDO o usuário
+- **Status:** ✅ aplicada em 17/10 (a pedido do usuário) e conferida: coluna com padrão FIXO nos 43 contratos, `valor_variavel` e `fn_reconcile_group` com ACL sem anon, exceção do ADJUST_VALUE no corpo
 
 ### 2. Sincronização não regrava parcela paga
 - **O que muda:** `syncRecurringToFinance` e `generateRecurringInstallmentsForPeriod`
@@ -67,7 +67,7 @@ apaga e regrava tudo — ficaria para outro plano.
   valor vira "Valor estimado por ciclo". Tipo, create/update e leitura do contrato.
 - **Como sei que terminou:** typecheck; `check-ui-standard.sh` nos arquivos; conferido na
   tela (gravar e reabrir mantém a escolha).
-- **Status:** ✅ código; `check-ui-standard.sh` sem violação; typecheck limpo — conferência na tela depois da migration
+- **Status:** ✅ conferido em PRODUÇÃO (Playwright, usuário de leitura, escritas bloqueadas): contrato da Débora em Financeiro › Dados Gerais mostra "Variável (por medição)" marcado e "Valor Estimado por Ciclo"; sem erro de console
 
 ### 4. Baixa manual com valor pago
 - **O que muda:** no painel de baixa, título único e variável mostra "Valor pago"
@@ -86,7 +86,7 @@ apaga e regrava tudo — ficaria para outro plano.
 - **Como sei que terminou:** testes do motor (variável R$ 600 × PIX R$ 750 do mesmo
   fornecedor = sugestão, nunca automático; fornecedor diferente = nada; fixo = como antes);
   teste da regra do dock.
-- **Status:** ✅ código + testes (motor, dock); a janela à frente da parcela variável virou o ciclo (31 d) — o teste pegou PIX de 03/07 para vencimento 10/07. Falta republicar a Edge Function depois da migration
+- **Status:** ✅ código + testes; Edge Function `reconciliation-engine` republicada e sonda 401 (sem header e com a chave anon)
 
 ### 6. Contrato da Débora
 - **O que muda:** contrato `5e415c72…` vira VARIAVEL; meses com PIX livre do CPF dela
@@ -94,7 +94,7 @@ apaga e regrava tudo — ficaria para outro plano.
   sem PIX e ago/2021 seguem em aberto. Backup em tabela de reversão.
 - **Como sei que terminou:** seleção conferida a seco antes; depois, as parcelas
   CONCILIATED com o valor do PIX.
-- **Status:** ⏳ `aplicar_20271018050100_debora_contrato_variavel.sql` escrita; seleção a seco = 15 meses (14 × R$ 750 + 06/2025). Ficam em aberto: ago/21 (R$ 300), abr/24 e ago/24 (R$ 150). AGUARDANDO o usuário (depois da 050000)
+- **Status:** ✅ aplicada e conferida: contrato VARIAVEL; 14 parcelas = R$ 750 e 06/2025 = R$ 600 (2 vínculos), todas CONCILIATED; 14 ADJUST_VALUE na auditoria com antes = 600. Em aberto até jul/26: 15 (ago/21, abr/24, ago/24 parciais + 12 meses sem PIX)
 
 ## Ordem de publicação (importante)
 
@@ -103,3 +103,10 @@ O código pede o campo computado `valor_variavel` nas consultas da conciliação
 de conciliação e a leitura de contrato**. Ordem: (1) usuário aplica 050000; (2) push do
 código + republicar a Edge Function `reconciliation-engine` e a sonda 401; (3) usuário
 aplica 050100 (dados da Débora).
+
+## Publicação
+
+- 17/10/2026: migration 050000 aplicada → push `7ebe7d8f` → Edge `reconciliation-engine`
+  republicada (sonda 401) → migration 050100 aplicada. Produção conferida servindo
+  `7ebe7d8` com o texto novo. Suíte completa antes: 1 falha (`PainelVersoes`, tempo
+  esgotado na rodada cheia; passa sozinho 26/26). **Plano: 6 de 6.**

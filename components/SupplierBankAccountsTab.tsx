@@ -9,6 +9,7 @@ import {
     ACCOUNT_TYPE_LABELS, PIX_KEY_TYPE_LABELS
 } from '../types';
 import { supplierBankAccountService } from '../services/supplierBankAccountService';
+import { validarChavePix } from '../utils/pixKey';
 import { masterDataService, MasterBank } from '../services/masterDataService';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
@@ -157,10 +158,22 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
             setError('Informe ao menos um banco/agência/conta ou uma chave PIX.');
             return;
         }
+        // Chave que não confere com o tipo só aparecia na Asaas, na hora de
+        // pagar. Guardada já no formato que a Asaas aceita.
+        let pixKey = form.pix_key;
+        if (form.pix_key?.trim()) {
+            const r = validarChavePix(form.pix_key_type, form.pix_key);
+            if (!r.ok) {
+                setError(`Chave PIX: ${r.motivo}`);
+                return;
+            }
+            pixKey = r.chave;
+        }
         setSaving(true);
         try {
             const payload = {
                 ...form,
+                pix_key: pixKey,
                 created_by: userId,
                 updated_by: userId,
             };

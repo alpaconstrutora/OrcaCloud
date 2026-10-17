@@ -103,7 +103,7 @@ export const companyService = {
     async listPartners(companyId: string): Promise<CompanyPartner[]> {
         const { data, error } = await supabase
             .from('company_partners')
-            .select('id, company_id, tipo_pessoa, nome, documento, participacao_pct, is_administrador, is_assinante_legal, pj_company_id, data_entrada, data_saida, created_at')
+            .select('id, company_id, tipo_pessoa, nome, documento, participacao_pct, is_administrador, is_assinante_legal, pj_company_id, data_entrada, data_saida, pix_chave, pix_tipo, created_at')
             .eq('company_id', companyId)
             .order('participacao_pct', { ascending: false });
         if (error) throw error;

@@ -155,7 +155,9 @@ export interface CompanyPartner {
   beneficiario_tipo?: 'pf_residente' | 'pj_residente' | 'exterior';
   dependentes_ir?: number;
   bank_account_id?: string;
-  pix_chave?: string;
+  /** Chave PIX do sócio — usada para pagar o pró-labore pela conta Asaas. */
+  pix_chave?: string | null;
+  pix_tipo?: TipoPix | null;
   regime_remuneracao?: 'prolabore' | 'dividendos' | 'ambos' | 'nenhum';
 }
 

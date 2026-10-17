@@ -56,6 +56,8 @@ export default function PagarBoletoAsaasModal({ organizationId, boletoId, suppli
         }
     }
 
+    const bloqueios = quote?.bloqueios ?? [];
+
     return (
         <Modal open onClose={onClose} size="md" dismissable={!paying}>
             <ModalHeader
@@ -129,6 +131,17 @@ export default function PagarBoletoAsaasModal({ organizationId, boletoId, suppli
                             </p>
                         )}
 
+                        {/* Portão de disparo (papel, alçada, tetos, piloto, competência) — a
+                            mesma lista que o servidor aplica no "pay". */}
+                        {bloqueios.length > 0 && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800 space-y-1">
+                                <p className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="w-4 h-4" /> Não é possível pagar agora</p>
+                                <ul className="list-disc pl-5 space-y-0.5 text-xs">
+                                    {bloqueios.map(b => <li key={b}>{b}</li>)}
+                                </ul>
+                            </div>
+                        )}
+
                         {error && (
                             <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
                                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -148,7 +161,8 @@ export default function PagarBoletoAsaasModal({ organizationId, boletoId, suppli
                 </button>
                 <button
                     onClick={handleConfirm}
-                    disabled={loading || paying || !quote}
+                    disabled={loading || paying || !quote || bloqueios.length > 0}
+                    title={bloqueios[0] ?? (loading ? 'Consultando o boleto na Asaas…' : !quote ? 'Não foi possível consultar o boleto.' : undefined)}
                     className="flex items-center gap-2 px-6 py-2 text-white font-bold rounded-lg text-sm transition-all bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
                 >
                     {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}

@@ -8,6 +8,7 @@ import {
     Company, CompanyPartner, CompanyPartnerInsert,
 } from '../types';
 import { companyService } from '../services/companyService';
+import { validarChavePix, deduzirTipoChave, TIPOS_CHAVE_PIX, type TipoChavePix } from '../utils/pixKey';
 import Button from './ui/Button';
 
 interface Props {
@@ -25,12 +26,15 @@ type FormData = {
     pj_company_id: string;
     data_entrada: string;
     data_saida: string;
+    pix_tipo: TipoChavePix | '';
+    pix_chave: string;
 };
 
 const EMPTY: FormData = {
     tipo_pessoa: 'pf', nome: '', documento: '', participacao_pct: '',
     is_administrador: false, is_assinante_legal: false,
     pj_company_id: '', data_entrada: '', data_saida: '',
+    pix_tipo: '', pix_chave: '',
 };
 
 const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
@@ -80,6 +84,9 @@ const CompanyPartnersTab: React.FC<Props> = ({ companyId, companies }) => {
             pj_company_id: p.pj_company_id ?? '',
             data_entrada: p.data_entrada ?? '',
             data_saida: p.data_saida ?? '',
+            // Chave antiga sem tipo: deduz quando não há dúvida (o usuário confere).
+            pix_tipo: p.pix_tipo ?? deduzirTipoChave(p.pix_chave) ?? '',
+            pix_chave: p.pix_chave ?? '',
         });
         setShowForm(true);
         setError(null);
@@ -102,6 +109,13 @@ const CompanyPartnersTab: React.FC<Props> = ({ companyId, companies }) => {
             setError('Participação deve ser entre 0 e 100.');
             return;
         }
+        // Chave PIX (pró-labore pela Asaas): validada e guardada no formato da Asaas.
+        let pixChave: string | null = null;
+        if (form.pix_chave.trim()) {
+            const r = validarChavePix(form.pix_tipo || null, form.pix_chave);
+            if (!r.ok) { setError(`Chave PIX: ${r.motivo}`); return; }
+            pixChave = r.chave;
+        }
         setSaving(true);
         setError(null);
         try {
@@ -116,6 +130,9 @@ const CompanyPartnersTab: React.FC<Props> = ({ companyId, companies }) => {
                 pj_company_id: form.pj_company_id || undefined,
                 data_entrada: form.data_entrada || undefined,
                 data_saida: form.data_saida || undefined,
+                // null (não undefined) para APAGAR a chave: undefined some do JSON.
+                pix_chave: pixChave,
+                pix_tipo: pixChave ? (form.pix_tipo || null) : null,
             };
             if (editingId) {
                 await companyService.updatePartner(editingId, payload);
@@ -227,6 +244,21 @@ const CompanyPartnersTab: React.FC<Props> = ({ companyId, companies }) => {
                                 </select>
                             </Field>
                         )}
+                        <Field label="Tipo da chave PIX">
+                            <select className={cls} value={form.pix_tipo}
+                                onChange={e => set('pix_tipo', e.target.value)}>
+                                <option value="">— sem PIX —</option>
+                                {TIPOS_CHAVE_PIX.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                        </Field>
+                        <Field label="Chave PIX">
+                            <input className={cls} value={form.pix_chave}
+                                onChange={e => set('pix_chave', e.target.value)}
+                                placeholder="Usada para pagar o pró-labore por PIX" />
+                            {form.pix_chave.trim() && !validarChavePix(form.pix_tipo || null, form.pix_chave).ok && (
+                                <p className="mt-1 text-xs text-red-600">{validarChavePix(form.pix_tipo || null, form.pix_chave).motivo}</p>
+                            )}
+                        </Field>
                         <div className="flex flex-col gap-2 justify-end pb-1">
                             <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                                 <input type="checkbox" checked={form.is_administrador}

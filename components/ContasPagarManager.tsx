@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check,
-    Clock, ExternalLink, FileDown, FileText, Landmark, Loader2, RefreshCw,
+    Clock, ExternalLink, FileDown, FileText, Loader2, RefreshCw,
     Search, X, DollarSign, AlertTriangle, MoveHorizontal, Layers,
 } from 'lucide-react';
 import { invoiceService } from '../services/invoiceService';
@@ -15,7 +15,6 @@ import type { CostCenterClosing } from '../services/costCenterClosingService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
-import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useOrgContext } from '../hooks/useOrgContext';
@@ -26,11 +25,6 @@ import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 type InvoiceRow = Invoice & { supplierName?: string; supplierOrganizationId?: string; organizationId?: string };
 
-/** Extrai o boleto_id da marcação `[boleto:{id}]` gravada em invoices.notes (ver boletoService.aprovarECriarInvoice). */
-function extractBoletoId(notes: string | undefined): string | null {
-    const m = (notes ?? '').match(/\[boleto:([0-9a-f-]{36})\]/i);
-    return m ? m[1] : null;
-}
 type StatusFilter = 'all' | 'pending' | 'approved' | 'paid' | 'rejected' | 'overdue';
 
 const STATUS_PT: Record<string, string> = {
@@ -258,7 +252,6 @@ export default function ContasPagarManager({ organizations }: Props) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [marcandoPago, setMarcandoPago] = useState<string | null>(null);
-    const [pagandoAsaas, setPagandoAsaas] = useState<InvoiceRow | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkLoading, setBulkLoading] = useState(false);
 
@@ -1204,18 +1197,6 @@ export default function ContasPagarManager({ organizations }: Props) {
                                                             />
                                                         )}
 
-                                                        {/* Pagar via Asaas — só para invoices originados de boleto com linha digitável.
-                                                            Link de texto, padrão §9/ui_ux_guia_unificado.md (mesmo tratamento do "Baixar"/"Emitir" de ContasReceberManager.tsx). */}
-                                                        {!['paid', 'rejected'].includes(inv.status) && fromBoleto && inv.organizationId && (
-                                                            <button
-                                                                onClick={() => setPagandoAsaas(inv)}
-                                                                className="text-emerald-700 hover:text-emerald-800 text-sm font-medium p-1.5 hover:bg-emerald-50 rounded-[6px] transition-all flex items-center gap-1"
-                                                                title="Pagar via Asaas"
-                                                            >
-                                                                <Landmark className="w-3.5 h-3.5" /> Pagar via Asaas
-                                                            </button>
-                                                        )}
-
                                                         {/* Marcar como pago — ação primária/frequente da linha (§8) */}
                                                         {!['paid', 'rejected'].includes(inv.status) && (
                                                             <button
@@ -1286,30 +1267,6 @@ export default function ContasPagarManager({ organizations }: Props) {
                     </button>
                 </div>
             )}
-
-            {pagandoAsaas && (() => {
-                const boletoId = extractBoletoId(pagandoAsaas.notes);
-                // Org da NOTA (= do boleto), não do fornecedor: o fornecedor pode
-                // ser cadastro de outra organização, e a asaas-payment procura o
-                // boleto com `.eq('organization_id', …)` — com a org do
-                // fornecedor ela não achava o boleto, ou pagava pela org errada.
-                if (!boletoId || !pagandoAsaas.organizationId) return null;
-                return (
-                    <PagarBoletoAsaasModal
-                        organizationId={pagandoAsaas.organizationId}
-                        boletoId={boletoId}
-                        supplierName={pagandoAsaas.supplierName}
-                        amount={pagandoAsaas.amount}
-                        dueDate={pagandoAsaas.dueDate}
-                        onClose={() => setPagandoAsaas(null)}
-                        onPaid={() => {
-                            setPagandoAsaas(null);
-                            notify('Pagamento enviado à Asaas. O status será atualizado automaticamente assim que o banco confirmar.');
-                            carregar(effectiveOrgId);
-                        }}
-                    />
-                );
-            })()}
 
             {/* Toast de Notificação — padrão guia seção 13 */}
             {notification && (

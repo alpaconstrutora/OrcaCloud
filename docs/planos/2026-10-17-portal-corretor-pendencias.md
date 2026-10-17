@@ -87,6 +87,14 @@ gerador `generateDemo*` correspondente é apagado na mesma fase.
 
 ## Estado
 
+- [x] **Publicado (17/10/2026)** em dois passos, cada um com PR de rascunho (#25), CI verde no PR e de novo
+  no commit da `main`, e `conferir-producao.sh` provando de fora:
+  - F1–F4: `main` em `4667b119` (CI PR 18min26s); domínio serviu `071b77b` (outra sessão publicou por
+    cima, `4667b119` contido nele) com "Ainda sem venda neste período" e "Nenhum lead ainda.".
+  - F5–F6: `main` em `c1af2bf5` (CI PR 17min36s); domínio serve `c1af2bf` com "Você ainda não está
+    habilitado em nenhum empreendimento." e "A incorporadora ainda não liberou treinamentos para você.".
+  - Migrations `aplicar_20271017000300` a `…000800` aplicadas no banco antes do push, todas sem PUBLIC.
+
 - [x] **F1 — 2 de 2** (17/10/2026). 1.1: migration `…000300` aplicada — proacl das 3 RPCs sem `=X`;
   políticas de `broker_portal_leads` sem a perna do e-mail; link do zoio abre (35 unidades).
   1.2: `utils/statusEfetivoDaUnidade.ts` + teste (8 casos); espelho e Empreendimentos usam a mesma

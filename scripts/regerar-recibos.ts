@@ -7,7 +7,7 @@
  *
  *   npx supabase db query --linked -o json "select r.*, o.logo_url, o.phone, o.email, o.website
  *     from financial_receipts r join organizations o on o.id = r.organization_id
- *     where r.cancelled_at is null and r.file_path is not null" > recibos.json
+ *     where r.file_path is not null" > recibos.json
  *   npx tsx scripts/regerar-recibos.ts recibos.json ./saida
  *
  * Saída: `<saida>/<file_path>` para cada recibo (o mesmo caminho do bucket) e
@@ -49,10 +49,8 @@ for (const l of linhas) {
         console.error(`file_path fora do padrão em ${l.id}: ${l.file_path} (esperado ${esperado}) — abortando.`);
         process.exit(1);
     }
-    if (l.cancelled_at) {
-        console.error(`recibo ${l.id} está cancelado — abortando (só os ativos são regerados).`);
-        process.exit(1);
-    }
+    // Cancelado também é regerado (18/10/2026): o PDF guardado antes do estorno não
+    // tinha a marca CANCELADO, e é ele que o bucket entrega.
 
     // contract_items (jsonb, aplicar_20271017970000) pode vir como texto JSON conforme o
     // formato do export; os números dentro dele o gerador já aceita como string.

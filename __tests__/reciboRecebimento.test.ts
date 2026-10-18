@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
     textoRecibo, nomeArquivoRecibo, numeroRecibo, montarReciboPdf, caberNaCaixa, verboDoCredor,
     formatarTelefoneBR, semProtocolo, linhasContatoEmitente, rotulosRecibo, destinatarioDoRecibo,
-    assinanteDoRecibo, linhaTabelaRecibo, linhasItensContrato, limitarLinhas, tamanhoQueCabe, arranjoDeclaracao, rodapeRecibo, dataBR, idDoArquivoPdf,
+    assinanteDoRecibo, linhaTabelaRecibo, linhasItensContrato, limitarLinhas, tamanhoQueCabe, rodapeRecibo, dataBR, idDoArquivoPdf,
+    descricaoDoRecibo, avisoValorDoContrato, cidadeDoEndereco, localEDataDoRecibo, mascararDocumento,
 } from '../utils/reciboRecebimento';
 import type { FinancialReceipt } from '../types/financial';
 
@@ -40,11 +41,22 @@ describe('textoRecibo — corpo do recibo', () => {
         expect(t).toContain('Recebemos de Ivana Braga (CPF 005.871.088-43)');
         expect(t).toMatch(/R\$\s?1\.234,50/);
         expect(t).toContain('mil e duzentos e trinta e quatro reais e cinquenta centavos');
-        expect(t).toContain('referente a Parcela 3/12 — Lote 7.');
+        expect(t).toContain('referente a Parcela 3/12 — Lote 7, dando plena quitação deste valor.');
     });
 
     it('CNPJ é rotulado como CNPJ', () => {
         expect(textoRecibo(recibo({ payer_document: '12.345.678/0001-90' }))).toContain('(CNPJ 12.345.678/0001-90)');
+    });
+
+    it('documento gravado só com dígitos ganha máscara (texto, destinatário e assinante)', () => {
+        expect(mascararDocumento('05559094000180')).toBe('05.559.094/0001-80');
+        expect(mascararDocumento('32195297808')).toBe('321.952.978-08');
+        expect(mascararDocumento('12.345.678/0001-90')).toBe('12.345.678/0001-90');
+        expect(mascararDocumento('123')).toBe('123');
+        expect(textoRecibo(recibo({ payer_document: '05559094000180' }))).toContain('(CNPJ 05.559.094/0001-80)');
+        expect(destinatarioDoRecibo(recibo({ payer_document: '05559094000180' })).documento).toBe('CNPJ 05.559.094/0001-80');
+        expect(textoRecibo(recibo({ kind: 'PAGAMENTO', issuer_document: '09264396000159', payee_document: '32195297808' })))
+            .toContain('(CNPJ 09.264.396/0001-59)');
     });
 
     it('pagador sem documento não imprime "()"', () => {
@@ -55,7 +67,7 @@ describe('textoRecibo — corpo do recibo', () => {
 
     it('sem pagador e sem descrição continua uma frase válida', () => {
         const t = textoRecibo(recibo({ payer_name: null, payer_document: null, description: '  ' }));
-        expect(t).toMatch(/^Recebemos a importância de R\$\s?1\.234,50 \(.+\)\.$/);
+        expect(t).toMatch(/^Recebemos a importância de R\$\s?1\.234,50 \(.+\), dando plena quitação deste valor\.$/);
         expect(t).not.toContain('referente');
     });
 });
@@ -70,11 +82,17 @@ describe('linhaTabelaRecibo — a única linha da tabela', () => {
         expect(l.valor).toMatch(/R\$\s?1\.234,50/);
     });
 
-    it('contrato vira "Contrato: X"; forma e descrição vazias viram travessão', () => {
+    it('contrato vira "Contrato: X"; descrição vazia vira travessão; sem forma, forma = null (coluna some)', () => {
         const l = linhaTabelaRecibo(recibo({ contract_number: 'CTV-007-007-0001', payment_type: null, description: ' ' }));
         expect(l.contrato).toBe('Contrato: CTV-007-007-0001');
-        expect(l.forma).toBe('—');
+        expect(l.forma).toBeNull();
         expect(l.descricao).toBe('—');
+    });
+
+    it('nº do contrato já presente na descrição não vira nota repetida', () => {
+        const l = linhaTabelaRecibo(recibo({ contract_number: 'CTL-010-0002', description: 'Aluguel CTL-010-0002 — parcela 8/60' }));
+        expect(l.contrato).toBeNull();
+        expect(l.descricao).toBe('Aluguel CTL-010-0002 — parcela 8/60');
     });
 
     it('dataBR não usa Date (dia não recua em Brasília)', () => {
@@ -113,8 +131,8 @@ describe('contato do emitente — lido da organização, não congelado', () => 
 
 describe('papéis por tipo de recibo', () => {
     it('rotulosRecibo: recebimento, pagamento e kind ausente (= recebimento)', () => {
-        expect(rotulosRecibo('RECEBIMENTO')).toEqual({ destinatario: 'Recebemos de:', valor: 'VALOR RECEBIDO', papelAssinante: 'Emitente' });
-        expect(rotulosRecibo('PAGAMENTO')).toEqual({ destinatario: 'Pago a:', valor: 'VALOR PAGO', papelAssinante: 'Credor' });
+        expect(rotulosRecibo('RECEBIMENTO')).toEqual({ destinatario: 'Recebemos de:', valor: 'VALOR RECEBIDO', papelAssinante: 'Emitente', subtitulo: 'DE RECEBIMENTO', nome: 'Recibo de recebimento' });
+        expect(rotulosRecibo('PAGAMENTO')).toEqual({ destinatario: 'Pago a:', valor: 'VALOR PAGO', papelAssinante: 'Credor', subtitulo: 'DE PAGAMENTO', nome: 'Recibo de pagamento' });
         expect(rotulosRecibo(undefined)).toEqual(rotulosRecibo('RECEBIMENTO'));
     });
 
@@ -145,21 +163,31 @@ describe('ajustes de caixa', () => {
         expect(tamanhoQueCabe(medir, 10, 13, 8)).toBe(8);
     });
 
-    it('arranjoDeclaracao: até 9 linhas ao lado da barra TOTAL, depois abaixo', () => {
-        expect(arranjoDeclaracao(9)).toBe('lado');
-        expect(arranjoDeclaracao(10)).toBe('abaixo');
-    });
-
     it('idDoArquivoPdf: 32 hex do UUID do recibo; id curto é completado com zeros', () => {
         expect(idDoArquivoPdf('286048b5-a84d-420d-8d45-b3726a952066')).toBe('286048B5A84D420D8D45B3726A952066');
         expect(idDoArquivoPdf('r1')).toBe('10000000000000000000000000000000');
     });
 
-    it('rodapeRecibo traz número e data de emissão em Brasília', () => {
+    it('rodapeRecibo traz o TIPO, o número e a data de emissão em Brasília', () => {
         expect(rodapeRecibo(recibo())).toEqual([
-            'Recibo Nº 000123 · emitido em 26/09/2026',
+            'Recibo de recebimento Nº 000123 · emitido em 26/09/2026',
             'Gerado eletronicamente via Opura Suite',
         ]);
+        expect(rodapeRecibo(recibo({ kind: 'PAGAMENTO', receipt_number: 1 }))[0])
+            .toBe('Recibo de pagamento Nº 000001 · emitido em 26/09/2026');
+    });
+
+    it('cidadeDoEndereco: a última "Cidade/UF" do endereço; hífen só dentro do nome', () => {
+        expect(cidadeDoEndereco('Rua Ângelo Bernardo Faccio, 90 – Centro – Cambuí/MG – CEP 37600-000')).toBe('Cambuí/MG');
+        expect(cidadeDoEndereco('Av. Brasil, 10 - Centro - São João del-Rei/MG')).toBe('São João del-Rei/MG');
+        expect(cidadeDoEndereco('Rua A, 1 - Pouso Alegre / MG')).toBe('Pouso Alegre/MG');
+        expect(cidadeDoEndereco('Rua A, 1 - Centro')).toBeNull();
+        expect(cidadeDoEndereco(null)).toBeNull();
+    });
+
+    it('localEDataDoRecibo: cidade do emitente + data de emissão por extenso; sem cidade, linha em branco', () => {
+        expect(localEDataDoRecibo(recibo())).toBe('Cambuí/MG, 26 de setembro de 2026');
+        expect(localEDataDoRecibo(recibo({ issuer_address: null }))).toBe('____________________, 26 de setembro de 2026');
     });
 });
 
@@ -188,15 +216,20 @@ describe('montarReciboPdf', () => {
         expect(ativo.output()).not.toContain('CANCELADO');
     });
 
-    it('recebimento: VALOR RECEBIDO, barra TOTAL, rodape; sem "Local e data"', () => {
+    it('recebimento: VALOR RECEBIDO, DE RECEBIMENTO, Emissão, barra TOTAL, rodapé e local/data preenchidos', () => {
         const pdf = montarReciboPdf(recibo(), { contato: { phone: '35999055003', email: 'x@y.com', website: 'https://z.com/' } }).output();
         expect(pdf).toContain('VALOR RECEBIDO');
+        expect(pdf).toContain('(DE RECEBIMENTO)');
+        expect(pdf).toContain('(Emiss');
+        expect(pdf).not.toContain('(Data)');
+        expect(pdf).toContain('26 de setembro de 2026');
         expect(pdf).toContain('TOTAL');
         expect(pdf).toContain('Opura Suite');
         expect(pdf).toContain('99905-5003');
         expect(pdf).toContain('x@y.com');
         expect(pdf).toContain('z.com');
         expect(pdf).not.toContain('Local e data');
+        expect(pdf).toContain('(FORMA)');
         expect(pdf).not.toContain('(undefined)');
         expect(pdf).not.toContain('(null)');
     });
@@ -236,6 +269,21 @@ describe('montarReciboPdf', () => {
         }));
         expect(pdf.getNumberOfPages()).toBe(1);
         expect(pdf.output()).not.toContain('(null)');
+    });
+
+    it('sem forma de pagamento a coluna FORMA não é desenhada (nada de "—" solto)', () => {
+        const pdf = montarReciboPdf(recibo({ payment_type: null })).output();
+        expect(pdf).not.toContain('(FORMA)');
+    });
+
+    it('DECLARAÇÃO fica ABAIXO da barra TOTAL, nunca na mesma linha (pedido de 18/10/2026)', () => {
+        for (const r of [recibo(), reciboDeContrato(), reciboDeContrato({ contract_items: null })]) {
+            const pdf = montarReciboPdf(r).output();
+            const total = yDoTexto(pdf, 'TOTAL');
+            const declaracao = yDoTexto(pdf, 'DECLARA');
+            // y do PDF cresce para cima: "abaixo" = y menor, com folga de mais de 2 linhas.
+            expect(total - declaracao).toBeGreaterThan(20);
+        }
     });
 
     it('o mesmo registro gera os mesmos bytes (CreationDate = issued_at)', () => {
@@ -280,7 +328,7 @@ describe('recibo de PAGAMENTO — o credor declara que recebeu da organização'
     it('credor PJ: "Recebemos de <organização> (CNPJ …)", sem citar o credor no corpo', () => {
         const t = textoRecibo(reciboPagamento());
         expect(t).toContain('Recebemos de Alpa Construtora (CNPJ 09.264.396/0001-59) a importância de');
-        expect(t).toContain('referente a Pedido de compra 42 — tintas.');
+        expect(t).toContain('referente a Pedido de compra 42 — tintas, dando plena quitação deste valor.');
         expect(t).not.toContain('R N Tintas');
     });
 
@@ -300,11 +348,13 @@ describe('recibo de PAGAMENTO — o credor declara que recebeu da organização'
         expect(nomeArquivoRecibo(recibo())).toBe('Recibo_000123_Ivana_Braga.pdf');
     });
 
-    it('PDF de uma página, com VALOR PAGO e "Local e data" para o credor assinar', () => {
+    it('PDF de uma página, com VALOR PAGO, DE PAGAMENTO e local/data já preenchidos para o credor assinar', () => {
         const pdf = montarReciboPdf(reciboPagamento());
         expect(pdf.getNumberOfPages()).toBe(1);
         expect(pdf.output()).toContain('VALOR PAGO');
-        expect(pdf.output()).toContain('Local e data');
+        expect(pdf.output()).toContain('(DE PAGAMENTO)');
+        expect(pdf.output()).toContain('26 de setembro de 2026');
+        expect(pdf.output()).not.toContain('Local e data: ____');
         expect(pdf.output()).toContain('Pago a:');
         expect(montarReciboPdf(reciboPagamento({ cancelled_at: '2026-09-28T12:00:00Z' })).getNumberOfPages()).toBe(1);
     });
@@ -332,25 +382,37 @@ function reciboDeContrato(over: Partial<FinancialReceipt> = {}): FinancialReceip
 }
 
 describe('recibo de CONTRATO — objeto e itens', () => {
-    it('linha da tabela: "Contrato: X" e "Objeto: Y"; sem título, objeto nulo', () => {
+    it('linha da tabela: "Parcela N — competência", "Contrato: X" e "Objeto: Y"; sem título, objeto nulo', () => {
         const l = linhaTabelaRecibo(reciboDeContrato());
+        expect(l.descricao).toBe('Parcela 1 — agosto de 2021');
         expect(l.contrato).toBe('Contrato: CTS-010-036-0001');
         expect(l.objeto).toBe('Objeto: Serviço de Faxina');
         expect(linhaTabelaRecibo(recibo()).objeto).toBeNull();
         expect(linhaTabelaRecibo(recibo({ contract_title: '  ' })).objeto).toBeNull();
     });
 
-    it('declaração cita o objeto depois da descrição', () => {
+    it('fatura recorrente: declaração diz parcela, competência, contrato e objeto, e dá quitação', () => {
         const t = textoRecibo(reciboDeContrato());
-        expect(t).toContain('referente a Fatura Contrato CTS-010-036-0001 (1) - agosto de 2021 — objeto: Serviço de Faxina.');
+        expect(t).toContain('referente à parcela 1 (agosto de 2021) do contrato CTS-010-036-0001 — objeto: Serviço de Faxina, dando plena quitação deste valor.');
+        expect(t).not.toContain('Fatura Contrato');
         expect(t).toMatch(/^Recebi de Alpa/);
+    });
+
+    it('descricaoDoRecibo: só a fatura recorrente é reescrita; o resto sai como está', () => {
+        expect(descricaoDoRecibo(reciboDeContrato())).toEqual({
+            texto: 'Parcela 1 — agosto de 2021', parcela: '1', competencia: 'agosto de 2021', contrato: 'CTS-010-036-0001',
+        });
+        // sem contract_number congelado, vale o número escrito na fatura
+        expect(descricaoDoRecibo({ description: 'Fatura Contrato 005 (12) - junho de 2026', contract_number: null }).contrato).toBe('005');
+        expect(descricaoDoRecibo({ description: 'Contrato CL-2026-004 — parcela 8/60 (15/06/2021)', contract_number: 'CTL-010-0002' }))
+            .toEqual({ texto: 'Contrato CL-2026-004 — parcela 8/60 (15/06/2021)', parcela: null, competencia: null, contrato: 'CTL-010-0002' });
     });
 
     it('objeto já contido na descrição não se repete; sem descrição, o objeto é a referência', () => {
         expect(textoRecibo(reciboDeContrato({ description: 'Parcela 1 — serviço de faxina' })))
-            .toContain('referente a Parcela 1 — serviço de faxina.');
-        expect(textoRecibo(reciboDeContrato({ description: null }))).toContain('referente a Serviço de Faxina.');
-        expect(textoRecibo(recibo())).toContain('referente a Parcela 3/12 — Lote 7.');
+            .toContain('referente a Parcela 1 — serviço de faxina, dando plena quitação deste valor.');
+        expect(textoRecibo(reciboDeContrato({ description: null }))).toContain('referente a Serviço de Faxina, dando plena quitação deste valor.');
+        expect(textoRecibo(recibo())).toContain('referente a Parcela 3/12 — Lote 7, dando plena quitação deste valor.');
     });
 
     it('linhasItensContrato: formata qtd. sem zeros, valores em BRL, números vindos como texto', () => {
@@ -389,6 +451,19 @@ describe('recibo de CONTRATO — objeto e itens', () => {
         expect(pdf).not.toContain('(undefined)');
     });
 
+    it('avisoValorDoContrato: só quando os itens somam diferente do recibo (contrato parcelado)', () => {
+        expect(avisoValorDoContrato(ITENS_FAXINA, 600)).toBeNull();
+        expect(avisoValorDoContrato(ITENS_FAXINA, 50)).toMatch(/^Valores do contrato inteiro \(R\$\s?600,00\)\. Este recibo corresponde a R\$\s?50,00\.$/);
+        expect(avisoValorDoContrato([{ ...ITENS_FAXINA[0], total_price: null }], 50)).toBeNull();
+        expect(avisoValorDoContrato([], 50)).toBeNull();
+        expect(avisoValorDoContrato(null, 50)).toBeNull();
+    });
+
+    it('PDF de contrato parcelado traz o aviso; o de valor igual não', () => {
+        expect(montarReciboPdf(reciboDeContrato({ amount: 50 })).output()).toContain('Valores do contrato inteiro');
+        expect(montarReciboPdf(reciboDeContrato()).output()).not.toContain('Valores do contrato inteiro');
+    });
+
     it('sem itens (contrato de venda/locação) não desenha a seção', () => {
         const pdf = montarReciboPdf(reciboDeContrato({ contract_items: null })).output();
         expect(pdf).not.toContain('ITENS DO CONTRATO');
@@ -410,3 +485,13 @@ describe('recibo de CONTRATO — objeto e itens', () => {
         expect(montarReciboPdf(reciboDeContrato()).output()).toBe(montarReciboPdf(reciboDeContrato()).output());
     });
 });
+
+/**
+ * y (em pt, a partir do PÉ da página) do texto que começa com `inicio` no stream do
+ * jsPDF — ele grava "x y Td" na linha anterior a "(texto) Tj".
+ */
+function yDoTexto(pdf: string, inicio: string): number {
+    const m = new RegExp(`([\\d.]+) ([\\d.]+) Td\\n\\(${inicio}[^)]*\\) Tj`).exec(pdf);
+    if (!m) throw new Error(`texto "${inicio}" não encontrado no PDF`);
+    return Number(m[2]);
+}

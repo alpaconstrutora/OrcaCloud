@@ -26,6 +26,12 @@
  * a linha da tabela leva "Contrato: <nº>" e "Objeto: <título>", a declaração cita o
  * objeto e, entre a tabela e a declaração, entra "ITENS DO CONTRATO" (congelados em
  * `contract_items`). Recibo sem contrato sai com o desenho de antes.
+ *
+ * Revisão de UI/UX (18/10/2026, docs/planos/2026-10-18-recibo-ux-revisao.md): subtítulo
+ * DE PAGAMENTO/DE RECEBIMENTO, "Emissão" no topo, coluna FORMA só com forma, descrição
+ * legível da fatura recorrente, aviso quando os itens somam o contrato inteiro, barra
+ * TOTAL com a DECLARAÇÃO embaixo (largura total), quitação na declaração e local/data
+ * preenchidos acima da assinatura.
  */
 import { jsPDF } from 'jspdf';
 import { valorPorExtenso } from '../services/docxFieldCatalog';
@@ -66,9 +72,20 @@ function rotuloDocumento(doc: string): string {
     return 'documento';
 }
 
+/**
+ * Máscara de CPF/CNPJ quando o documento foi gravado só com dígitos
+ * ('05559094000180' → '05.559.094/0001-80'); qualquer outro formato sai como veio.
+ */
+export function mascararDocumento(doc: string): string {
+    if (!/^\d+$/.test(doc)) return doc;
+    if (doc.length === 11) return doc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+    if (doc.length === 14) return doc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    return doc;
+}
+
 /** 'CPF 005.871.088-43' / 'CNPJ …' / 'documento …'; vazio → null. */
 function documentoRotulado(doc?: string | null): string | null {
-    const d = (doc ?? '').trim();
+    const d = mascararDocumento((doc ?? '').trim());
     return d ? `${rotuloDocumento(d)} ${d}` : null;
 }
 
@@ -86,22 +103,70 @@ export function verboDoCredor(documento?: string | null): string {
 }
 
 /**
+ * Fatura recorrente de contrato, como `services/contractService.ts` a escreve:
+ * "Fatura Contrato CTS-010-036-0001 (1) - agosto de 2021".
+ */
+const FATURA_DE_CONTRATO = /^Fatura Contrato\s*(\S*)\s*\((\d+)\)\s*-\s*(.+)$/i;
+
+export interface DescricaoDoRecibo {
+    /** Texto da célula DESCRIÇÃO. */
+    texto: string;
+    /** Nº da parcela e competência, quando a descrição é a fatura recorrente de contrato. */
+    parcela: string | null;
+    competencia: string | null;
+    /** Nº do contrato para a nota "Contrato: X"; null quando já está no texto (ou não há). */
+    contrato: string | null;
+}
+
+/**
+ * Descrição como o leitor do recibo a entende (revisão de 18/10/2026,
+ * docs/planos/2026-10-18-recibo-ux-revisao.md). Só o padrão da fatura recorrente é
+ * reescrito — "Parcela 1 — agosto de 2021", com o contrato na nota; qualquer outra
+ * descrição sai como está, e a nota do contrato some quando o número já aparece nela.
+ */
+export function descricaoDoRecibo(r: Pick<FinancialReceipt, 'description' | 'contract_number'>): DescricaoDoRecibo {
+    const bruta = (r.description ?? '').trim();
+    const numero = (r.contract_number ?? '').trim();
+    const fatura = FATURA_DE_CONTRATO.exec(bruta);
+    if (fatura) {
+        const competencia = fatura[3].trim();
+        return {
+            texto: `Parcela ${fatura[2]} — ${competencia}`,
+            parcela: fatura[2],
+            competencia,
+            contrato: numero || fatura[1].trim() || null,
+        };
+    }
+    const jaNaDescricao = !!numero && bruta.toLowerCase().includes(numero.toLowerCase());
+    return { texto: bruta || '—', parcela: null, competencia: null, contrato: numero && !jaNaDescricao ? numero : null };
+}
+
+/**
  * "referente a …" da declaração: a descrição do título e, quando o título vem de
  * contrato, o OBJETO do contrato (pedido de 17/10/2026: "para identificar do que
- * se trata o recibo"). Objeto já contido na descrição não se repete.
+ * se trata o recibo"). Objeto já contido na descrição não se repete. Fatura
+ * recorrente vira "à parcela N (competência) do contrato X".
  */
-function referenteDoRecibo(r: Pick<FinancialReceipt, 'description' | 'contract_title'>): string {
-    const descricao = (r.description ?? '').trim();
+function referenteDoRecibo(r: Pick<FinancialReceipt, 'description' | 'contract_title' | 'contract_number'>): string {
     const objeto = (r.contract_title ?? '').trim();
+    const legivel = descricaoDoRecibo(r);
+    if (legivel.parcela) {
+        const contrato = legivel.contrato ? ` do contrato ${legivel.contrato}` : '';
+        return `, referente à parcela ${legivel.parcela} (${legivel.competencia})${contrato}${objeto ? ` — objeto: ${objeto}` : ''}`;
+    }
+    const descricao = (r.description ?? '').trim();
     const objetoNovo = objeto && !descricao.toLowerCase().includes(objeto.toLowerCase()) ? objeto : '';
     if (descricao && objetoNovo) return `, referente a ${descricao} — objeto: ${objetoNovo}`;
     if (descricao) return `, referente a ${descricao}`;
     return objeto ? `, referente a ${objeto}` : '';
 }
 
+/** Fecho da declaração: sem ele o papel declara o recebimento mas não dá quitação. */
+const QUITACAO = ', dando plena quitação deste valor.';
+
 /** A frase do corpo do recibo. Pura, para teste. */
 export function textoRecibo(
-    r: Pick<FinancialReceipt, 'amount' | 'payer_name' | 'payer_document' | 'description' | 'kind' | 'issuer_name' | 'issuer_document' | 'payee_document' | 'contract_title'>,
+    r: Pick<FinancialReceipt, 'amount' | 'payer_name' | 'payer_document' | 'description' | 'kind' | 'issuer_name' | 'issuer_document' | 'payee_document' | 'contract_title' | 'contract_number'>,
 ): string {
     const referente = referenteDoRecibo(r);
     const valor = `${brl(r.amount)} (${valorPorExtenso(r.amount)})`;
@@ -110,17 +175,17 @@ export function textoRecibo(
         // O credor fala: quem pagou é a organização emitente do documento.
         const verbo = verboDoCredor(r.payee_document);
         const org = (r.issuer_name ?? '').trim();
-        const cnpj = (r.issuer_document ?? '').trim();
+        const cnpj = mascararDocumento((r.issuer_document ?? '').trim());
         const de = org ? ` de ${org}${cnpj ? ` (${rotuloDocumento(cnpj)} ${cnpj})` : ''}` : '';
-        return `${verbo}${de} a importância de ${valor}${referente}.`;
+        return `${verbo}${de} a importância de ${valor}${referente}${QUITACAO}`;
     }
 
     const pagador = (r.payer_name ?? '').trim();
-    const doc = (r.payer_document ?? '').trim();
+    const doc = mascararDocumento((r.payer_document ?? '').trim());
     const quem = pagador
         ? `Recebemos de ${pagador}${doc ? ` (${rotuloDocumento(doc)} ${doc})` : ''} a importância de`
         : 'Recebemos a importância de';
-    return `${quem} ${valor}${referente}.`;
+    return `${quem} ${valor}${referente}${QUITACAO}`;
 }
 
 export function nomeArquivoRecibo(r: Pick<FinancialReceipt, 'receipt_number' | 'payer_name' | 'kind' | 'payee_name'>): string {
@@ -179,13 +244,17 @@ export interface RotulosRecibo {
     destinatario: 'Recebemos de:' | 'Pago a:';
     valor: 'VALOR RECEBIDO' | 'VALOR PAGO';
     papelAssinante: 'Emitente' | 'Credor';
+    /** Subtítulo sob "RECIBO": as duas séries numeram do 1, e o papel precisa dizer qual é. */
+    subtitulo: 'DE RECEBIMENTO' | 'DE PAGAMENTO';
+    /** Nome do documento no rodapé. */
+    nome: 'Recibo de recebimento' | 'Recibo de pagamento';
 }
 
 /** Rótulos que mudam com o tipo; `kind` ausente = RECEBIMENTO. */
 export function rotulosRecibo(kind?: FinancialReceiptKind): RotulosRecibo {
     return kind === 'PAGAMENTO'
-        ? { destinatario: 'Pago a:', valor: 'VALOR PAGO', papelAssinante: 'Credor' }
-        : { destinatario: 'Recebemos de:', valor: 'VALOR RECEBIDO', papelAssinante: 'Emitente' };
+        ? { destinatario: 'Pago a:', valor: 'VALOR PAGO', papelAssinante: 'Credor', subtitulo: 'DE PAGAMENTO', nome: 'Recibo de pagamento' }
+        : { destinatario: 'Recebemos de:', valor: 'VALOR RECEBIDO', papelAssinante: 'Emitente', subtitulo: 'DE RECEBIMENTO', nome: 'Recibo de recebimento' };
 }
 
 /** Quem está do outro lado: o pagador (recebimento) ou o credor (pagamento). */
@@ -207,18 +276,22 @@ export function assinanteDoRecibo(
     return { nome: (r.issuer_name ?? '').trim() || 'Emitente', documento: documentoRotulado(r.issuer_document), papel: 'Emitente' };
 }
 
-/** A única linha da tabela: o título pago (+ nº e objeto do contrato, quando há). */
+/**
+ * A única linha da tabela: o título pago (+ nº e objeto do contrato, quando há).
+ * `forma` null = sem forma registrada: a coluna FORMA não é desenhada (um "—" num
+ * papel que o credor assina levanta dúvida em vez de informar).
+ */
 export function linhaTabelaRecibo(
     r: Pick<FinancialReceipt, 'description' | 'contract_number' | 'contract_title' | 'payment_date' | 'payment_type' | 'amount'>,
-): { descricao: string; contrato: string | null; objeto: string | null; data: string; forma: string; valor: string } {
-    const contrato = (r.contract_number ?? '').trim();
+): { descricao: string; contrato: string | null; objeto: string | null; data: string; forma: string | null; valor: string } {
+    const legivel = descricaoDoRecibo(r);
     const objeto = (r.contract_title ?? '').trim();
     return {
-        descricao: (r.description ?? '').trim() || '—',
-        contrato: contrato ? `Contrato: ${contrato}` : null,
+        descricao: legivel.texto,
+        contrato: legivel.contrato ? `Contrato: ${legivel.contrato}` : null,
         objeto: objeto ? `Objeto: ${objeto}` : null,
         data: dataBR(r.payment_date),
-        forma: rotuloFormaPagamento(r.payment_type) ?? '—',
+        forma: rotuloFormaPagamento(r.payment_type),
         valor: brl(r.amount),
     };
 }
@@ -274,6 +347,50 @@ export function linhasItensContrato(
     return { linhas, resto };
 }
 
+/**
+ * Contrato parcelado: os itens somam o contrato INTEIRO, não o valor deste recibo.
+ * Quando as somas diferem, a seção ganha esta linha para ninguém ler os itens como
+ * o que foi pago. Total de item ilegível → não dá para afirmar nada → null.
+ */
+export function avisoValorDoContrato(
+    itens: ReciboItemContrato[] | null | undefined,
+    valorDoRecibo: number,
+): string | null {
+    const lista = Array.isArray(itens) ? itens : [];
+    if (!lista.length) return null;
+    const totais = lista.map((i) => numeroDoItem(i.total_price));
+    if (totais.some((t) => t === null)) return null;
+    const soma = (totais as number[]).reduce((a, b) => a + b, 0);
+    if (Math.abs(soma - valorDoRecibo) < 0.005) return null;
+    return `Valores do contrato inteiro (${brl(soma)}). Este recibo corresponde a ${brl(valorDoRecibo)}.`;
+}
+
+/** "… – Cambuí/MG – CEP …" → a última "Cidade/UF" do texto; hífen só entre letras ("del-Rei"). */
+const CIDADE_UF = /([A-Za-zÀ-ÖØ-öø-ÿ'](?:[A-Za-zÀ-ÖØ-öø-ÿ' .]|-(?=[A-Za-zÀ-ÖØ-öø-ÿ]))*?)\s*\/\s*([A-Z]{2})\b/g;
+
+/** Cidade/UF do endereço congelado do emitente; sem o padrão "Cidade/UF" → null. */
+export function cidadeDoEndereco(endereco?: string | null): string | null {
+    const achados = [...(endereco ?? '').matchAll(CIDADE_UF)];
+    const ultimo = achados[achados.length - 1];
+    return ultimo ? `${ultimo[1].trim()}/${ultimo[2]}` : null;
+}
+
+/** timestamptz → "29 de setembro de 2026", no fuso de Brasília. */
+function dataPorExtensoBR(ts: string): string {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return dataBR(ts);
+    return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+/**
+ * "Cambuí/MG, 29 de setembro de 2026" — acima da assinatura, já preenchido: o app
+ * sabe a cidade do emitente e a data de emissão. Sem cidade, fica a linha em branco
+ * para escrever à mão. Sai do registro congelado: reimprimir dá o mesmo texto.
+ */
+export function localEDataDoRecibo(r: Pick<FinancialReceipt, 'issuer_address' | 'issued_at'>): string {
+    return `${cidadeDoEndereco(r.issuer_address) ?? '____________________'}, ${dataPorExtensoBR(r.issued_at)}`;
+}
+
 /** Corta em `max` linhas; a última ganha reticências. */
 export function limitarLinhas(linhas: string[], max: number): string[] {
     if (linhas.length <= max) return linhas;
@@ -289,15 +406,10 @@ export function tamanhoQueCabe(medir: (pt: number) => number, maxW: number, pt: 
     return Math.max(atual, min);
 }
 
-/** Declaração ao lado da barra TOTAL (98 mm) ou abaixo dela (170 mm) quando é longa. */
-export function arranjoDeclaracao(nLinhas: number): 'lado' | 'abaixo' {
-    return nLinhas > 9 ? 'abaixo' : 'lado';
-}
-
 /** As duas linhas do canto inferior direito. */
-export function rodapeRecibo(r: Pick<FinancialReceipt, 'receipt_number' | 'issued_at'>): [string, string] {
+export function rodapeRecibo(r: Pick<FinancialReceipt, 'receipt_number' | 'issued_at' | 'kind'>): [string, string] {
     return [
-        `Recibo Nº ${numeroRecibo(r.receipt_number)} · emitido em ${dataDeTimestampBR(r.issued_at)}`,
+        `${rotulosRecibo(r.kind).nome} Nº ${numeroRecibo(r.receipt_number)} · emitido em ${dataDeTimestampBR(r.issued_at)}`,
         'Gerado eletronicamente via Opura Suite',
     ];
 }
@@ -355,7 +467,6 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
     const H = doc.internal.pageSize.getHeight();
     const M = 20;
     const R = W - M;
-    const pagamento = ehPagamento(r);
     const rotulos = rotulosRecibo(r.kind);
 
     // Hash estável: o PDF regerado do mesmo registro sai byte a byte igual
@@ -417,7 +528,7 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
     doc.text(nomeEmitente, xTexto, 27);
     if (r.issuer_document) {
         fonte('normal', 9, COR.muted);
-        doc.text(`CNPJ ${r.issuer_document}`, xTexto, 32.5);
+        doc.text(`CNPJ ${mascararDocumento(r.issuer_document.trim())}`, xTexto, 32.5);
     }
     fonte('bold', 30, COR.accent);
     doc.text('RECIBO', R, 31, { align: 'right' });
@@ -426,16 +537,21 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
     doc.rect(128, 35.5, 55, 2.2, 'F');
     preencher(COR.accent);
     doc.lines([[7, 0], [-2.2, 2.2], [-7, 0]], 183, 35.5, [1, 1], 'F', true);
+    // Qual das duas séries é: recebimento e pagamento numeram, cada um, a partir do 1.
+    fonte('bold', 8.5, COR.muted);
+    doc.text(rotulos.subtitulo, R, 42.5, { align: 'right' });
     tracar(COR.line);
     doc.line(M, 46, R, 46);
 
     // ── 2. Metadados ─────────────────────────────────────────────────────────
     fonte('normal', 8.5, COR.muted);
+    // "Data" sozinha não dizia se era a do pagamento ou a da emissão. A do pagamento
+    // está na tabela; aqui fica a do documento.
     doc.text('Recibo nº', M, 55);
-    doc.text('Data', M, 61.5);
+    doc.text('Emissão', M, 61.5);
     fonte('bold', 10.5, COR.ink);
     doc.text(numeroRecibo(r.receipt_number), 46, 55);
-    doc.text(dataBR(r.payment_date), 46, 61.5);
+    doc.text(dataDeTimestampBR(r.issued_at), 46, 61.5);
 
     const destinatario = destinatarioDoRecibo(r);
     fonte('normal', 8.5, COR.muted);
@@ -465,10 +581,10 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
     fonte('bold', 8, COR.branco);
     doc.text('DESCRIÇÃO', X_DESC, yT + 5.8);
     doc.text('DATA DO PAGAMENTO', X_DATA, yT + 5.8);
-    doc.text('FORMA', X_FORMA, yT + 5.8);
+    const linha = linhaTabelaRecibo(r);
+    if (linha.forma) doc.text('FORMA', X_FORMA, yT + 5.8);
     doc.text('VALOR', X_VALOR, yT + 5.8, { align: 'right' });
 
-    const linha = linhaTabelaRecibo(r);
     fonte('bold', 9.5, COR.ink);
     const descLinhas = limitarLinhas(doc.splitTextToSize(linha.descricao, W_DESC) as string[], 3);
     // Abaixo da descrição, em cinza: nº do contrato e objeto (até 2 linhas).
@@ -489,8 +605,10 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
     }
     fonte('normal', 9.5, COR.ink);
     doc.text(linha.data, X_DATA, yL + 6.5);
-    fonte('normal', corpoQueCabe(linha.forma, W_FORMA, 9.5, 7.5, 'normal'), COR.ink);
-    doc.text(linha.forma, X_FORMA, yL + 6.5);
+    if (linha.forma) {
+        fonte('normal', corpoQueCabe(linha.forma, W_FORMA, 9.5, 7.5, 'normal'), COR.ink);
+        doc.text(linha.forma, X_FORMA, yL + 6.5);
+    }
     fonte('bold', 9.5, COR.ink);
     doc.text(linha.valor, X_VALOR, yL + 6.5, { align: 'right' });
     tracar(COR.line);
@@ -499,15 +617,18 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
 
     // A declaração é medida ANTES dos itens: o espaço dos itens é o que sobra entre a
     // tabela e a declaração, para a assinatura não passar do rodapé.
+    // Desde 18/10/2026 ela fica SEMPRE abaixo da barra TOTAL, em largura total — ao lado
+    // da barra, o rótulo DECLARAÇÃO ficava na mesma linha do TOTAL (pedido do usuário).
+    // Do fim da tabela/itens: 8 até a barra + 11 de barra + 11 até o rótulo + 6 até o texto.
+    const DA_TABELA_AO_TEXTO = 36;
+    const Y_FIM_DECL_MAX = 214;            // assinatura (+30, +9,5) termina antes do aviso de CANCELADO (258)
     const declaracao = textoRecibo(r);
     const FATOR = 1.45, PT_DECL = 9.5;
+    const LH_DECL = alturaLinhaMm(PT_DECL, FATOR);
     fonte('normal', PT_DECL, COR.ink);
-    let linhasDecl = doc.splitTextToSize(declaracao, 98) as string[];
-    const declAbaixo = arranjoDeclaracao(linhasDecl.length) === 'abaixo';
-    const nDecl = declAbaixo
-        ? limitarLinhas(doc.splitTextToSize(declaracao, R - M) as string[], 16).length
-        : linhasDecl.length;
-    const alturaDecl = (declAbaixo ? 20 : 5) + (nDecl - 1) * alturaLinhaMm(PT_DECL, FATOR);
+    const maxLinhasDecl = Math.max(3, Math.min(16, Math.floor((Y_FIM_DECL_MAX - yFimTabela - DA_TABELA_AO_TEXTO) / LH_DECL) + 1));
+    const linhasDecl = limitarLinhas(doc.splitTextToSize(declaracao, R - M) as string[], maxLinhasDecl);
+    const alturaDecl = DA_TABELA_AO_TEXTO + (linhasDecl.length - 1) * LH_DECL;
 
     // ── 4b. Itens do contrato (só quando o recibo vem de contrato com itens) ──
     let yFimItens = yFimTabela;
@@ -517,10 +638,12 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
         const yRotulo = yFimTabela + 10;
         const yCab = yRotulo + 6.5;          // base do texto do cabeçalho
         const yPrimeira = yCab + 7;          // base do texto da 1ª linha
-        // Fim da declaração ≤ 214 mm → assinatura (≥ +32) termina antes do aviso de
-        // CANCELADO (258) e do rodapé (266).
-        const yFimItensMax = 214 - alturaDecl - 14;
-        const maxLinhas = Math.floor((yFimItensMax - (yPrimeira - 4) - 2) / H_ITEM);
+        // Fim da declaração ≤ Y_FIM_DECL_MAX → assinatura termina antes do aviso de
+        // CANCELADO (258) e do rodapé (266). Com N linhas, a seção termina em
+        // yPrimeira + (N-1)·H_ITEM + 3.
+        const yFimItensMax = Y_FIM_DECL_MAX - alturaDecl;
+        const aviso = avisoValorDoContrato(r.contract_items, r.amount);
+        const maxLinhas = Math.floor((yFimItensMax - yPrimeira + H_ITEM - 3) / H_ITEM) - (aviso ? 1 : 0);
         const { linhas, resto } = linhasItensContrato(r.contract_items, maxLinhas, r.contract_number);
 
         rotulo('ITENS DO CONTRATO', M, yRotulo, 8);
@@ -549,49 +672,47 @@ export function montarReciboPdf(r: FinancialReceipt, extras: ReciboExtras = {}):
             doc.text(resto, X_DESC, y);
             y += H_ITEM;
         }
+        if (aviso) {
+            // Contrato parcelado: os itens são do contrato inteiro, não deste pagamento.
+            fonte('normal', 8, COR.muted);
+            doc.text(limitarLinhas(doc.splitTextToSize(aviso, R - M - 8) as string[], 1)[0], X_DESC, y);
+            y += H_ITEM;
+        }
         yFimItens = y - H_ITEM + 3;
         tracar(COR.line);
         doc.line(M, yFimItens, R, yFimItens);
     }
 
-    // ── 5. Declaração + barra TOTAL ──────────────────────────────────────────
-    const yD = yFimItens + 14;
+    // ── 5. Barra TOTAL e, abaixo dela, a declaração em largura total ─────────
+    const yBarra = yFimItens + 8;
     preencher(COR.accent);
-    doc.roundedRect(126, yD - 6, R - 126, 11, 1.5, 1.5, 'F');
+    doc.roundedRect(126, yBarra, R - 126, 11, 1.5, 1.5, 'F');
     fonte('bold', 9, COR.branco);
-    doc.text('TOTAL', 130, yD + 1.2);
+    doc.text('TOTAL', 130, yBarra + 7.2);
     fonte('bold', 11.5, COR.branco);
-    doc.text(brl(r.amount), X_VALOR, yD + 1.2, { align: 'right' });
+    doc.text(brl(r.amount), X_VALOR, yBarra + 7.2, { align: 'right' });
 
-    fonte('normal', PT_DECL, COR.ink);
-    let yDecl: number;
-    if (declAbaixo) {
-        linhasDecl = limitarLinhas(doc.splitTextToSize(declaracao, R - M) as string[], 16);
-        rotulo('DECLARAÇÃO', M, yD + 14, 8);
-        yDecl = yD + 20;
-    } else {
-        rotulo('DECLARAÇÃO', M, yD - 1, 8);
-        yDecl = yD + 5;
-    }
+    const yRotuloDecl = yBarra + 11 + 11;
+    rotulo('DECLARAÇÃO', M, yRotuloDecl, 8);
+    const yDecl = yRotuloDecl + 6;
     fonte('normal', PT_DECL, COR.ink);
     doc.text(linhasDecl, M, yDecl, { lineHeightFactor: FATOR });
-    const yFimDecl = yDecl + (linhasDecl.length - 1) * alturaLinhaMm(PT_DECL, FATOR);
+    const yFimDecl = yDecl + (linhasDecl.length - 1) * LH_DECL;
 
-    // ── 6. Assinatura — de quem RECEBEU: a organização ou o credor ───────────
-    const ySig = Math.max(yFimDecl + 32, 220);
+    // ── 6. Local e data + assinatura — de quem RECEBEU: a organização ou o credor ──
+    // Logo depois da declaração (até 18/10/2026 ficava presa em 220 mm, deixando um
+    // vão branco). Local e data já preenchidos: o app sabe a cidade e a data.
+    const ySig = yFimDecl + 30;
     const assinante = assinanteDoRecibo(r);
+    const xSig = (112 + R) / 2;
+    fonte('normal', 9.5, COR.ink);
+    doc.text(localEDataDoRecibo(r), xSig, ySig - 13, { align: 'center' });
     tracar(COR.muted);
     doc.line(112, ySig, R, ySig);
-    const xSig = (112 + R) / 2;
     fonte('bold', corpoQueCabe(assinante.nome, 78, 9.5, 7.5, 'bold'), COR.ink);
     doc.text(assinante.nome, xSig, ySig + 5, { align: 'center' });
     fonte('normal', 8, COR.muted);
     doc.text([assinante.documento, assinante.papel].filter(Boolean).join(' · '), xSig, ySig + 9.5, { align: 'center' });
-    if (pagamento) {
-        // O papel é preparado para colher a assinatura do credor: leva local e data.
-        fonte('normal', 9, COR.ink);
-        doc.text('Local e data: ______________________________', M, ySig);
-    }
 
     // ── 8. Cancelado (desenhado antes do rodapé, que é texto fixo) ───────────
     if (r.cancelled_at) {

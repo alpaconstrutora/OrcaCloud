@@ -39,6 +39,7 @@ import {
   DEFAULT_TOLERANCE_MM,
   alturaNaAgua,
   cantosDaParede,
+  baseDaEscadaMm,
   fatiasDaEscada,
   contornoEmPlanta,
   contornoExternoDoNivel,
@@ -564,12 +565,14 @@ export function projetarElevacao(
     // outras famílias — uma escada é uma peça só na ordenação, mesmo sendo
     // vários prismas no desenho.
     for (const e of (model.stairs ?? []).filter((x) => x.levelId === level.id)) {
+      // A escada de acesso (0.103.0) começa na calçada, abaixo do piso quando ela está abaixo.
+      const pe = level.elevationMm + baseDaEscadaMm(model, e);
       const fatias = fatiasDaEscada(model, e).map((f) => {
         const pontos: { u: number; v: number }[] = [];
         f.cantos.forEach((c, k) => {
           const u = Math.round(projU(c));
-          pontos.push({ u, v: level.elevationMm });
-          pontos.push({ u, v: Math.round(level.elevationMm + f.cotasMm[k]) });
+          pontos.push({ u, v: pe });
+          pontos.push({ u, v: Math.round(pe + f.cotasMm[k]) });
         });
         return fechoConvexo(pontos);
       });

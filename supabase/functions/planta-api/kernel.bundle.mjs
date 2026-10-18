@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.102.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.103.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1139,6 +1139,7 @@ var RAMPA_INCLINACAO_MAX_PCT = 8.33;
 function nivelDeChegada(model, escada) {
   const partida = model.levels.find((l) => l.id === escada.levelId);
   if (!partida) return null;
+  if (ehEscadaDeAcesso(escada)) return partida;
   if (escada.ateLevelId) {
     const declarada = model.levels.find((l) => l.id === escada.ateLevelId);
     if (declarada && declarada.elevationMm > partida.elevationMm) return declarada;
@@ -1153,8 +1154,18 @@ function nivelDeChegada(model, escada) {
 function desnivelDaEscada(model, escada) {
   const partida = model.levels.find((l) => l.id === escada.levelId);
   if (!partida) return 0;
+  if (ehEscadaDeAcesso(escada)) return Math.abs(partida.elevationMm - escada.desdeCotaMm);
   const chegada = nivelDeChegada(model, escada);
   return chegada ? chegada.elevationMm - partida.elevationMm : partida.defaultHeightMm;
+}
+function ehEscadaDeAcesso(escada) {
+  return escada.desdeCotaMm !== void 0 && escada.desdeCotaMm !== null;
+}
+function baseDaEscadaMm(model, escada) {
+  if (!ehEscadaDeAcesso(escada)) return 0;
+  const piso = model.levels.find((l) => l.id === escada.levelId);
+  if (!piso) return 0;
+  return Math.min(0, escada.desdeCotaMm - piso.elevationMm);
 }
 function comprimentoDoPercurso(pontos) {
   let total = 0;
@@ -1303,6 +1314,7 @@ function furosDaEscada(model) {
   const cotaDoNivel = (levelId) => model.levels.find((l) => l.id === levelId)?.elevationMm ?? null;
   const saida = [];
   for (const escada of model.stairs ?? []) {
+    if (ehEscadaDeAcesso(escada)) continue;
     const partida = cotaDoNivel(escada.levelId);
     if (partida === null) continue;
     const chegada = partida + desnivelDaEscada(model, escada);
@@ -2076,7 +2088,9 @@ function projetar(model) {
       // Escada multiandares (0.39.0): chegada por índice; ausente = próximo acima.
       ate: e.ateLevelId && model.levels.some((l) => l.id === e.ateLevelId) ? nivel(e.ateLevelId) : void 0,
       // INCÊNDIO (0.84.0): a proteção, só quando declarada.
-      protecao: e.protecao
+      protecao: e.protecao,
+      // ESCADA DE ACESSO (0.103.0): a cota da calçada, só na escada de acesso (ausente não muda o hash de antes).
+      desdeCotaMm: e.desdeCotaMm
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y
   );
@@ -2937,7 +2951,8 @@ function modelFromCanonicalPayload(payload) {
       rotulo: e.rotulo,
       ...e.parametros && Object.keys(e.parametros).length > 0 ? { parametros: { ...e.parametros } } : {},
       ...e.ate !== void 0 && levelIds[e.ate] ? { ateLevelId: levelIds[e.ate] } : {},
-      ...e.protecao ? { protecao: e.protecao } : {}
+      ...e.protecao ? { protecao: e.protecao } : {},
+      ...typeof e.desdeCotaMm === "number" ? { desdeCotaMm: e.desdeCotaMm } : {}
     });
   });
   const vagas = payload.vagas ?? [];
@@ -6602,7 +6617,7 @@ function emitirEscada(model, e, ctx, localNivel) {
     const pontos = perfil.map((q) => emitir(`IFCCARTESIANPOINT((${n(q.x)},${n(q.y)}))`));
     const contorno = emitir(`IFCPOLYLINE((${pontos.join(",")},${pontos[0]}))`);
     const perfilDef = emitir(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${contorno})`);
-    const origem = emitir(`IFCCARTESIANPOINT((${n(p0.x)},${n(p0.y)},0.))`);
+    const origem = emitir(`IFCCARTESIANPOINT((${n(p0.x)},${n(p0.y)},${n(baseDaEscadaMm(model, e))}))`);
     const eixoZ = emitir(`IFCDIRECTION((${n(nrm.x)},${n(nrm.y)},0.))`);
     const eixoX = emitir(`IFCDIRECTION((${n(dir.x)},${n(dir.y)},0.))`);
     const placement = emitir(`IFCAXIS2PLACEMENT3D(${origem},${eixoZ},${eixoX})`);

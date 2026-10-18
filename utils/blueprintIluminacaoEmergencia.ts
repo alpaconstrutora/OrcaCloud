@@ -83,7 +83,8 @@ function bocasDasEscadas(model: BlueprintModel): { levelId: ObjectId; at: Point 
   for (const e of (model.stairs ?? []) as Escada[]) {
     const i = niveis.findIndex((l) => l.id === e.levelId);
     if (i < 0) continue;
-    const j = e.ateLevelId ? niveis.findIndex((l) => l.id === e.ateLevelId) : i + 1;
+    // A escada de acesso (0.103.0) liga o terreno ao próprio pavimento — não há boca em outro.
+    const j = e.desdeCotaMm != null ? i : e.ateLevelId ? niveis.findIndex((l) => l.id === e.ateLevelId) : i + 1;
     bocas.push({ levelId: e.levelId, at: e.pontos[0] });
     for (let k = i + 1; k <= Math.min(j, niveis.length - 1); k++) bocas.push({ levelId: niveis[k].id, at: e.pontos[e.pontos.length - 1] });
   }

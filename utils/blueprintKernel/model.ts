@@ -2017,6 +2017,14 @@ export interface Escada {
   ateLevelId?: ObjectId | null;
   /** INCÊNDIO (0.84.0): a proteção da escada de emergência. Ver `PROTECOES_DE_ESCADA`. */
   protecao?: ProtecaoDaEscada;
+  /**
+   * ESCADA DE ACESSO (0.103.0, F25 da casa automática): a escada ou rampa que liga o TERRENO (a calçada, nesta cota em mm
+   * relativa ao zero do desenho — a mesma régua de `Level.elevationMm`) ao piso de `levelId`. Pode subir (calçada
+   * abaixo do piso) ou descer (acima). Os `pontos` vão do lado BAIXO para o ALTO, como em toda escada; o desnível é a
+   * diferença entre a calçada e o piso, e a base do lance é a mais baixa das duas. Não fura laje, não liga pavimentos
+   * (as rotas de fuga a ignoram) e não convive com `ateLevelId`. Ausente = escada entre pavimentos (como sempre).
+   */
+  desdeCotaMm?: number;
 }
 
 /**
@@ -6403,6 +6411,14 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (o.emergencia === undefined) continue;
     const ordem = o.emergencia.map((x) => (MARCAS_DE_EMERGENCIA as readonly string[]).indexOf(x));
     if (o.emergencia.length === 0 || ordem.some((k, i) => k < 0 || (i > 0 && k <= ordem[i - 1]))) throw new KernelError('BAD_EMERGENCY_MARKS', `Abertura ${o.id}: marcas de emergência inválidas ${JSON.stringify(o.emergencia)}`);
+  }
+  // Escada de acesso (0.103.0): cota inteira, diferente do piso, e sem chegada declarada.
+  for (const e of model.stairs ?? []) {
+    if (e.desdeCotaMm === undefined) continue;
+    if (!Number.isInteger(e.desdeCotaMm)) throw new KernelError('BAD_STAIR_LEVELS', `Escada ${e.id}: a cota da calçada tem de ser mm inteiro`);
+    if (e.ateLevelId) throw new KernelError('BAD_STAIR_LEVELS', `Escada ${e.id}: a escada de acesso não tem pavimento de chegada`);
+    const piso = model.levels.find((l) => l.id === e.levelId);
+    if (piso && piso.elevationMm === e.desdeCotaMm) throw new KernelError('BAD_STAIR_LEVELS', `Escada ${e.id}: a calçada está na cota do piso — não há desnível`);
   }
   // Escada multiandares: a chegada declarada existe e está ACIMA da partida.
   for (const e of model.stairs ?? []) {

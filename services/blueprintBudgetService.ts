@@ -10,6 +10,14 @@
 import { listarComposicoes } from './blueprintComposicaoService';
 import { coberturaDoOrcamento, type Cobertura } from '../utils/blueprintCoberturaOrcamento';
 import { medirSubRegioes } from '../utils/blueprintSubRegioes';
+import { blueprintTerraplenagemService } from './blueprintTerraplenagemService';
+import { blueprintTopografiaService } from './blueprintTopografiaService';
+import { blueprintSnapshotTopografiaService } from './blueprintSnapshotTopografiaService';
+import { anelDaColuna, inclinacaoDaLinha, parametrosDaLinha } from '../hooks/useBlueprintTerraplenagem';
+import { cotaDeEquilibrio, terraplenagemComTalude } from '../utils/blueprintTopografiaAnalises';
+import { medirTerreno } from '../utils/blueprintTerreno';
+import type { BlueprintModel } from '../utils/blueprintKernel';
+import type { TerraplenagemDoOrcamento } from '../utils/blueprintBudget';
 import { supabase } from '../lib/supabase';
 import { sinapiService } from './sinapiService';
 import { getSnapshot, getStudy, recordAudit } from './blueprintService';
@@ -187,6 +195,41 @@ export interface PreviaOrcamento extends ResultadoGeracao {
  * tipo de ação que não se desfaz com um clique, e ninguém deveria descobrir uma
  * divergência de unidade depois que ela já entrou.
  */
+/**
+ * F25: os volumes da terraplenagem do estudo para o orçamento — a premissa do estudo (base, cota, taludes, muros, o
+ * anel gravado) contra a topografia publicada junto do snapshot. Sem anel gravado, a base LOTE usa o lote do modelo; a
+ * ENVELOPE sem anel gravado (premissa de antes da F25) fica de fora até a próxima mudança da premissa.
+ */
+async function terraplenagemDoSnapshot(snapshotId: string, studyId: string, model: BlueprintModel): Promise<TerraplenagemDoOrcamento | null> {
+  try {
+    const row = await blueprintTerraplenagemService.get(studyId);
+    if (!row) return null;
+    const vinculo = (await blueprintSnapshotTopografiaService.porEstudo(studyId))[snapshotId];
+    if (!vinculo) return null;
+    const topografia = (await blueprintTopografiaService.listar(studyId)).find((t) => t.id === vinculo.topografia_id);
+    if (!topografia) return null;
+    const anel = anelDaColuna(row.anel_plato) ?? (row.base === 'LOTE' ? medirTerreno(model.boundaries)?.anel ?? null : null);
+    if (!anel || anel.length < 3) {
+      console.warn('[terraplenagem] orçamento sem terraplenagem: a premissa não tem o anel do platô gravado (mude a premissa na aba para gravá-lo).');
+      return null;
+    }
+    const cota = row.cota_plato_m ?? cotaDeEquilibrio(topografia.grade, anel);
+    if (cota == null) return null;
+    const t = terraplenagemComTalude(topografia.grade, anel, cota, parametrosDaLinha(row), inclinacaoDaLinha(row));
+    return {
+      base: row.base,
+      cotaPlatoM: Math.round(cota * 1000) / 1000,
+      versaoDaTopografia: topografia.versao,
+      corteM3: Math.round(t.corteTotalM3 * 100) / 100,
+      aterroM3: Math.round(t.aterroTotalM3 * 100) / 100,
+      muros: t.muros.map((m) => ({ aresta: m.aresta, comprimentoM: Math.round(m.comprimentoM * 100) / 100, alturaMaxM: Math.round(Math.max(m.alturaMaxCorteM, m.alturaMaxAterroM) * 100) / 100, areaDeFaceM2: Math.round(m.areaDeFaceM2 * 100) / 100 })),
+    };
+  } catch (e) {
+    console.warn('[terraplenagem] orçamento sem terraplenagem (persistência indisponível):', e);
+    return null;
+  }
+}
+
 export async function preverLancamentos(
   snapshotId: string,
   policy: QuantityPolicy = POLITICA_PADRAO,
@@ -246,8 +289,11 @@ export async function preverLancamentos(
     console.warn('[armadura] orçamento com as hipóteses padrão (persistência indisponível):', e);
   }
   const armadura = armaduraDoModelo(model, quant, hipotesesDeArmadura);
+  // F25: a terraplenagem do estudo contra a topografia PUBLICADA no snapshot (o vínculo do snapshot); sem a premissa,
+  // a topografia ou o anel, o orçamento segue sem ela — dito no console.
+  const terraplenagem = await terraplenagemDoSnapshot(snapshotId, snapshot.study_id, model);
 
-  const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura, subRegioes: medirSubRegioes(model) });
+  const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura, subRegioes: medirSubRegioes(model), terraplenagem });
   const dasCamadas = gerarLancamentosDeCamadas(quant, itens, contexto);
   const dosAcabamentos = gerarLancamentosDeAcabamentos(quant, itens, contexto);
   const dosGuardaCorpos = gerarLancamentosDeGuardaCorpos(quant, itens, contexto);
@@ -282,7 +328,7 @@ export async function preverLancamentos(
 
   // COBERTURA (P2.55): o que a planta mede, cruzado com o de-para e o catálogo.
   const cobertura = coberturaDoOrcamento(
-    resumoDasMedidas(quant, { armadura, subRegioes: medirSubRegioes(model) }),
+    resumoDasMedidas(quant, { armadura, subRegioes: medirSubRegioes(model), terraplenagem }),
     mapeamentos,
     itens,
   );

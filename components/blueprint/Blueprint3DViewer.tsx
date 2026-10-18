@@ -24,6 +24,7 @@ import {
   contornoExternoDoNivel,
   DEFAULT_TOLERANCE_MM,
   FORMA_ESTRUTURAL,
+  baseDaEscadaMm,
   fatiasDaEscada,
   furosDaEscada,
   furosDoNucleo,
@@ -1310,7 +1311,8 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         .filter((e) => idsVisiveis.has(e.levelId) && !escondida(e.id))
         .map((e) => {
           const nivel = model.levels.find((l) => l.id === e.levelId);
-          return geometriaDaEscada(model, e, nivel?.elevationMm ?? 0);
+          // A escada de acesso (0.103.0) começa na calçada, abaixo do piso quando ela está abaixo.
+          return geometriaDaEscada(model, e, (nivel?.elevationMm ?? 0) + baseDaEscadaMm(model, e));
         })
         .filter((g): g is THREE.BufferGeometry => g !== null),
     // eslint-disable-next-line react-hooks/exhaustive-deps

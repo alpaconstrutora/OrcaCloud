@@ -77,7 +77,13 @@ export interface BlueprintTerraplenagemRow {
   id: string;
   study_id: string;
   organization_id: string;
-  base: 'ENVELOPE' | 'LOTE';
+  /** F25 (migration `aplicar_20271018310000`): 'CASA' = o platô sob a casa que a casa automática lançou. */
+  base: 'ENVELOPE' | 'LOTE' | 'CASA';
+  /**
+   * F25: o anel do platô em uso, mm do desenho — o da casa, ou o do envelope/lote gravado junto da última mudança da
+   * premissa. `null` = derivado da base (como antes). O orçamento recalcula os volumes a partir dele.
+   */
+  anel_plato: { x: number; y: number }[] | null;
   /** Cota do platô em metro; `null` = usar a cota de equilíbrio. */
   cota_plato_m: number | null;
   /**

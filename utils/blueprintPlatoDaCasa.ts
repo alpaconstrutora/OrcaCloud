@@ -71,6 +71,8 @@ export interface EntradaDoPlato {
   espelhoMm: number;
   /** O recuo de frente comporta. */
   cabe: boolean;
+  /** A cota da calçada diante da entrada, mm do zero do desenho (a partida da escada de acesso); `null` sem terreno ali. */
+  cotaDaCalcadaMm: number | null;
 }
 
 export interface ResumoDaTerraplenagem {
@@ -170,14 +172,15 @@ export function platoDaCasa(
   const rua = pontoDaRua ? terreno(pontoDaRua) : null;
   const desnivelMm = rua == null ? 0 : Math.round((piso - rua) * 1000);
   const d = Math.abs(desnivelMm);
-  let entrada: EntradaDoPlato = { tipo: 'NENHUMA', desnivelMm, comprimentoMm: 0, degraus: 0, espelhoMm: 0, cabe: true };
+  const cotaDaCalcadaMm = rua == null ? null : Math.round((rua - cotaZeroM) * 1000);
+  let entrada: EntradaDoPlato = { tipo: 'NENHUMA', desnivelMm, comprimentoMm: 0, degraus: 0, espelhoMm: 0, cabe: true, cotaDaCalcadaMm };
   if (d > hip.desnivelSemDegrauMm) {
     const rampa = Math.ceil(d / (hip.rampaMaximaPct / 100));
-    if (rampa <= recuoDeFrenteMm) entrada = { tipo: 'RAMPA', desnivelMm, comprimentoMm: rampa, degraus: 0, espelhoMm: 0, cabe: true };
+    if (rampa <= recuoDeFrenteMm) entrada = { tipo: 'RAMPA', desnivelMm, comprimentoMm: rampa, degraus: 0, espelhoMm: 0, cabe: true, cotaDaCalcadaMm };
     else {
       const degraus = Math.ceil(d / hip.espelhoMaximoMm);
       const comprimento = degraus * hip.pisoDoDegrauMm;
-      entrada = { tipo: 'ESCADA', desnivelMm, comprimentoMm: comprimento, degraus, espelhoMm: Math.round(d / degraus), cabe: comprimento <= recuoDeFrenteMm };
+      entrada = { tipo: 'ESCADA', desnivelMm, comprimentoMm: comprimento, degraus, espelhoMm: Math.round(d / degraus), cabe: comprimento <= recuoDeFrenteMm, cotaDaCalcadaMm };
     }
   }
 

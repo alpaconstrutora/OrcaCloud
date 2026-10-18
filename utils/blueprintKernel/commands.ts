@@ -549,6 +549,8 @@ export type Command =
       rotulo?: string | null;
       /** INCÊNDIO (0.84.0). */
       protecao?: ProtecaoDaEscada | null;
+      /** ESCADA DE ACESSO (0.103.0): a cota da calçada, mm do zero do desenho. Ver `Escada.desdeCotaMm`. */
+      desdeCotaMm?: number | null;
     }
   | {
       type: 'SetEscadaProps';
@@ -561,6 +563,8 @@ export type Command =
       ateLevelId?: ObjectId | null;
       /** INCÊNDIO (0.84.0): `null` = não declarada. */
       protecao?: ProtecaoDaEscada | null;
+      /** ESCADA DE ACESSO (0.103.0): a cota da calçada; `null` volta a escada entre pavimentos. */
+      desdeCotaMm?: number | null;
     }
   /** INCÊNDIO (0.84.0): as marcas de emergência da porta; `[]` = nenhuma. A ordem e a repetição não importam. */
   | { type: 'SetOpeningEmergencia'; openingId: ObjectId; marcas: MarcaDeEmergencia[] }
@@ -3697,6 +3701,7 @@ function aplicarSemHash(
           alvoEspelhoMm: assertIntegerMm(roundToMm(command.alvoEspelhoMm ?? 175), 'alvoEspelhoMm'),
           rotulo: command.rotulo?.trim() || null,
           ...(command.protecao != null ? { protecao: protecaoValida(command.protecao) } : {}),
+          ...(command.desdeCotaMm != null ? { desdeCotaMm: assertIntegerMm(roundToMm(command.desdeCotaMm), 'desdeCotaMm') } : {}),
         },
       ];
       diff.created.push(id);
@@ -4165,6 +4170,10 @@ function aplicarSemHash(
       if (command.protecao !== undefined) {
         if (command.protecao === null) delete escada.protecao;
         else escada.protecao = protecaoValida(command.protecao);
+      }
+      if (command.desdeCotaMm !== undefined) {
+        if (command.desdeCotaMm === null) delete escada.desdeCotaMm;
+        else escada.desdeCotaMm = assertIntegerMm(roundToMm(command.desdeCotaMm), 'desdeCotaMm');
       }
       diff.updated.push(escada.id);
       break;

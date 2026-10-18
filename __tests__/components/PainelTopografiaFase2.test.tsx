@@ -4,7 +4,7 @@
  * declividade, corte e aterro, e os botões KML/DXF.
  */
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import PainelTopografia, { type TerraplenagemNoPainel } from '../../components/blueprint/PainelTopografia';
 import type { Topografia } from '../../hooks/useBlueprintTopografia';
@@ -116,6 +116,16 @@ describe('PainelTopografia · fase 2', () => {
     expect(screen.getByText('Empréstimo')).toBeTruthy();
     expect(screen.getByText('13,8 m³')).toBeTruthy();
     expect(screen.getByText(/pré-dimensionamento com hipóteses declaradas/)).toBeTruthy();
+  });
+
+  it('F25: "Sob a casa" só aparece com o platô da casa lançado; escolher chama onBase(CASA)', () => {
+    render(<PainelTopografia topografia={hook()} temLoteFechado temGeorreferencia terraplenagem={terraplenagem()} />);
+    expect(screen.queryByRole('button', { name: 'Sob a casa' })).toBeNull();
+    cleanup();
+    const t = terraplenagem({ temPlatoDaCasa: true });
+    render(<PainelTopografia topografia={hook()} temLoteFechado temGeorreferencia terraplenagem={t} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sob a casa' }));
+    expect(t.onBase).toHaveBeenCalledWith('CASA');
   });
 
   it('sem envelope válido, avisa que o platô usa o lote', () => {

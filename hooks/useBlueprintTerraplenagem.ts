@@ -18,7 +18,16 @@ import {
   type ParametrosHidraulicos,
 } from '../utils/blueprintTopografiaDimensionamento';
 
-export type BaseDoPlato = 'ENVELOPE' | 'LOTE';
+/** F25: 'CASA' = o platô sob a casa, que a casa automática lança (o anel vem gravado). */
+export type BaseDoPlato = 'ENVELOPE' | 'LOTE' | 'CASA';
+
+/** F25: o platô que a casa automática lança na aba de terraplenagem. */
+export interface PlatoDaCasaParaGravar {
+  anel: Point[];
+  cotaPlatoM: number;
+  /** Os muros por aresta do anel (o resto herda o talude dos parâmetros). */
+  taludePorAresta: ParametrosDeTerraplenagem['taludePorAresta'];
+}
 
 /**
  * A premissa de terraplenagem do estudo: base e cota do platô; talude,
@@ -61,6 +70,15 @@ export interface Terraplenagem {
   setEstrutura: (patch: Partial<ParametrosEstruturais>) => void;
   carregando: boolean;
   persistenciaIndisponivel: boolean;
+  /** F25: o anel gravado (o da casa, na base CASA); `null` = derivado da base. */
+  anelPlato: Point[] | null;
+  /**
+   * F25: o anel do platô EM USO na tela (envelope ou lote) — só guardado aqui; vai ao banco junto da próxima mudança
+   * explícita da premissa (nunca por abrir a tela).
+   */
+  definirAnelEmUso: (anel: Point[] | null) => void;
+  /** F25: o "Lançar" da casa automática grava o platô dela (base CASA, cota, anel, muros) de uma vez. */
+  aplicarPlatoDaCasa: (p: PlatoDaCasaParaGravar) => void;
 }
 
 /** O JSON parcial gravado, completado com o padrão (e sem chaves estranhas). */
@@ -103,7 +121,7 @@ export function estruturaDaColuna(raw: unknown): ParametrosEstruturais {
 }
 
 /** Linha anterior às fases 3/4/6 vem sem as colunas: caem nos padrões. */
-function parametrosDaLinha(row: {
+export function parametrosDaLinha(row: {
   talude_corte_h?: number | null;
   talude_aterro_h?: number | null;
   empolamento_pct?: number | null;
@@ -175,7 +193,7 @@ export function novoIdDeDrenagem(): string {
 }
 
 /** C1: a inclinação gravada; linha sem as colunas (ou tudo zero) = platô horizontal. */
-function inclinacaoDaLinha(row: {
+export function inclinacaoDaLinha(row: {
   inclinacao_long_pct?: number | null;
   inclinacao_transv_pct?: number | null;
   inclinacao_azimute_deg?: number | null;
@@ -184,6 +202,13 @@ function inclinacaoDaLinha(row: {
   const T = Number(row.inclinacao_transv_pct ?? 0);
   if (!Number.isFinite(L) || !Number.isFinite(T) || (L === 0 && T === 0)) return null;
   return { declividadeLongPct: L, declividadeTransvPct: T, azimuteDeg: Number(row.inclinacao_azimute_deg ?? 0) || 0 };
+}
+
+/** F25: a coluna `anel_plato` (JSON) → o anel, ou `null` (ausente, curto ou com ponto inválido). */
+export function anelDaColuna(raw: unknown): Point[] | null {
+  if (!Array.isArray(raw) || raw.length < 3) return null;
+  const pts = raw.map((p) => (p && typeof p === 'object' ? { x: Number((p as { x: unknown }).x), y: Number((p as { y: unknown }).y) } : null));
+  return pts.every((p): p is Point => !!p && Number.isFinite(p.x) && Number.isFinite(p.y)) ? (pts as Point[]) : null;
 }
 
 export function useBlueprintTerraplenagem(studyId: string, organizationId: string): Terraplenagem {
@@ -198,6 +223,9 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
   const [carregando, setCarregando] = useState(true);
   const [persistenciaIndisponivel, setPersistencia] = useState(false);
   const gravacao = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // F25: o anel gravado (base CASA) e o anel em uso na tela (vai junto da próxima gravação explícita).
+  const [anelPlato, setAnelPlato] = useState<Point[] | null>(null);
+  const anelEmUsoRef = useRef<Point[] | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -207,6 +235,7 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
         if (!vivo) return;
         if (row) {
           setBaseLocal(row.base);
+          setAnelPlato(anelDaColuna(row.anel_plato));
           setCotaLocal(row.cota_plato_m);
           setInclinacaoLocal(inclinacaoDaLinha(row));
           setParametrosLocal(parametrosDaLinha(row));
@@ -253,6 +282,9 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
   // parâmetro de `premissa` faria todos os setters mudarem de assinatura.
   const inclinacaoRef = useRef(inclinacao);
   inclinacaoRef.current = inclinacao;
+  // F25: o anel da casa gravado vai por ref para o `premissa` (a base CASA o regrava a cada mudança da premissa).
+  const anelCasaRef = useRef(anelPlato);
+  anelCasaRef.current = anelPlato;
 
   const premissa = useCallback(
     (
@@ -265,6 +297,8 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
       hidraulica: hidraulicaRef.current,
       estrutura: estruturaRef.current,
       base: b,
+      // F25: na base CASA, o anel gravado da casa; senão, o anel em uso na tela (envelope ou lote).
+      anel_plato: b === 'CASA' ? anelCasaRef.current : anelEmUsoRef.current,
       cota_plato_m: cota,
       inclinacao_long_pct: inclinacaoRef.current?.declividadeLongPct ?? null,
       inclinacao_transv_pct: inclinacaoRef.current?.declividadeTransvPct ?? null,
@@ -404,7 +438,30 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
     [gravarDrenagem, drenagem],
   );
 
+  const definirAnelEmUso = useCallback((anel: Point[] | null) => {
+    anelEmUsoRef.current = anel && anel.length >= 3 ? anel.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) : null;
+  }, []);
+
+  const aplicarPlatoDaCasa = useCallback(
+    (p: PlatoDaCasaParaGravar) => {
+      const anel = p.anel.map((q) => ({ x: Math.round(q.x), y: Math.round(q.y) }));
+      const parametrosNovos = { ...parametros, taludePorAresta: p.taludePorAresta ?? [] };
+      anelCasaRef.current = anel;
+      setAnelPlato(anel);
+      setBaseLocal('CASA');
+      setCotaLocal(p.cotaPlatoM);
+      setInclinacaoLocal(null);
+      inclinacaoRef.current = null;
+      setParametrosLocal(parametrosNovos);
+      persistir(premissa('CASA', p.cotaPlatoM, parametrosNovos, linhasDoPerfil, drenagem));
+    },
+    [persistir, premissa, parametros, linhasDoPerfil, drenagem],
+  );
+
   return {
+    anelPlato,
+    definirAnelEmUso,
+    aplicarPlatoDaCasa,
     base,
     setBase,
     cotaPlatoM,

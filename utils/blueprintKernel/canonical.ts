@@ -546,6 +546,8 @@ function projetar(model: BlueprintModel): {
       ate: e.ateLevelId && model.levels.some((l) => l.id === e.ateLevelId) ? nivel(e.ateLevelId) : undefined,
       // INCÊNDIO (0.84.0): a proteção, só quando declarada.
       protecao: e.protecao,
+      // ESCADA DE ACESSO (0.103.0): a cota da calçada, só na escada de acesso (ausente não muda o hash de antes).
+      desdeCotaMm: e.desdeCotaMm,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
@@ -1631,6 +1633,8 @@ export interface CanonicalPayload {
     ate?: number;
     /** INCÊNDIO. Ausente sob kernel < 0.84.0 e em escada sem proteção declarada. */
     protecao?: 'NE' | 'EP' | 'PF' | 'PRESSURIZADA';
+    /** ESCADA DE ACESSO: a cota da calçada (mm). Ausente sob kernel < 0.103.0 e na escada entre pavimentos. */
+    desdeCotaMm?: number;
   }[];
   /** Vagas de garagem. Ausente sob kernel < 0.40.0 e em desenho sem nenhuma. */
   vagas?: {
@@ -2242,6 +2246,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ...(e.parametros && Object.keys(e.parametros).length > 0 ? { parametros: { ...e.parametros } } : {}),
       ...(e.ate !== undefined && levelIds[e.ate] ? { ateLevelId: levelIds[e.ate] } : {}),
       ...(e.protecao ? { protecao: e.protecao } : {}),
+      ...(typeof e.desdeCotaMm === 'number' ? { desdeCotaMm: e.desdeCotaMm } : {}),
     });
   });
 

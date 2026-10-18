@@ -69,6 +69,7 @@ import {
   nomeDaEsquadria,
   medirAgua,
   medirEscada,
+  baseDaEscadaMm,
   fatiasDaEscada,
   nomeDoTipoDeAbertura,
   nomeDoTipoEstrutural,
@@ -1646,7 +1647,8 @@ function emitirEscada(model: ModeloIfc, e: Escada, ctx: Ctx, localNivel: string)
     const pontos = perfil.map((q) => emitir(`IFCCARTESIANPOINT((${n(q.x)},${n(q.y)}))`));
     const contorno = emitir(`IFCPOLYLINE((${pontos.join(',')},${pontos[0]}))`);
     const perfilDef = emitir(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${contorno})`);
-    const origem = emitir(`IFCCARTESIANPOINT((${n(p0.x)},${n(p0.y)},0.))`);
+    // A escada de acesso (0.103.0) começa na calçada, abaixo do piso quando ela está abaixo.
+    const origem = emitir(`IFCCARTESIANPOINT((${n(p0.x)},${n(p0.y)},${n(baseDaEscadaMm(model, e))}))`);
     const eixoZ = emitir(`IFCDIRECTION((${n(nrm.x)},${n(nrm.y)},0.))`);
     const eixoX = emitir(`IFCDIRECTION((${n(dir.x)},${n(dir.y)},0.))`);
     const placement = emitir(`IFCAXIS2PLACEMENT3D(${origem},${eixoZ},${eixoX})`);

@@ -20,12 +20,16 @@ import { describe, expect, it } from 'vitest';
 import {
   applyBatch,
   applyCommand,
+  baseDaEscadaMm,
   canonicalPayload,
   degrausDaEscada,
+  desnivelDaEscada,
+  ehEscadaDeAcesso,
   emptyModel,
   furosDaEscada,
   medirEscada,
   modelFromCanonicalPayload,
+  nivelDeChegada,
   parseCanonicalPayload,
   payloadDoHash,
   point,
@@ -580,5 +584,94 @@ describe('escada · 7. os invariantes', () => {
         }),
       'LEVEL_NOT_FOUND',
     );
+  });
+});
+
+describe('escada · 8. a escada de ACESSO (0.103.0, F25 da casa automática)', () => {
+  const esperaCodigo = (fn: () => unknown, codigo: string) => {
+    try {
+      fn();
+    } catch (e) {
+      expect((e as { code?: string }).code).toBe(codigo);
+      return;
+    }
+    throw new Error(`esperava ${codigo}, e nada foi lançado`);
+  };
+  /** Térreo no platô a 1300 mm do zero; a calçada no zero. */
+  function terreoNoPlato(): { model: BlueprintModel; terreo: string } {
+    const a = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 1300, defaultHeightMm: PE_DIREITO });
+    return { model: a.model, terreo: a.model.levels[0].id };
+  }
+  /**
+   * Da calçada (0) ao piso (1300), 2,24 m de percurso, alvo 163 mm:
+   *   n       = round(1300 / 163) = round(7,975) = 8 espelhos
+   *   espelho = 1300 / 8          = 162,5 mm
+   *   base    = min(0, 0 − 1300)  = −1300 (o lance começa na calçada, abaixo do piso)
+   */
+  function acesso(desdeCotaMm = 0): { model: BlueprintModel; escada: Escada } {
+    const { model, terreo } = terreoNoPlato();
+    const r = applyCommand(model, { type: 'AddEscada', levelId: terreo, pontos: [point(0, 0), point(0, 2240)], larguraMm: 1200, alvoEspelhoMm: 163, desdeCotaMm });
+    return { model: r.model, escada: r.model.stairs[0] };
+  }
+
+  it('o desnível é da calçada ao piso, e a base fica na calçada', () => {
+    const { model, escada } = acesso();
+    expect(escada.desdeCotaMm).toBe(0);
+    expect(ehEscadaDeAcesso(escada)).toBe(true);
+    expect(desnivelDaEscada(model, escada)).toBe(1300);
+    expect(baseDaEscadaMm(model, escada)).toBe(-1300);
+    const m = medirEscada(model, escada);
+    expect(m.degraus).toBe(8);
+    expect(m.espelhoMm).toBeCloseTo(162.5, 6);
+    // Ela chega ao PRÓPRIO pavimento, vinda do terreno — não a outro.
+    expect(nivelDeChegada(model, escada)?.id).toBe(escada.levelId);
+  });
+
+  it('com a calçada ACIMA do piso, desce até ele: a base é o piso', () => {
+    // Calçada a 1300 + 700 = 2000: desnível 700, o lance sobe do piso (base 0) até a calçada.
+    const { model, escada } = acesso(2000);
+    expect(desnivelDaEscada(model, escada)).toBe(700);
+    expect(baseDaEscadaMm(model, escada)).toBe(0);
+  });
+
+  it('escada entre pavimentos segue igual: não é de acesso, base 0', () => {
+    const { model, escada } = lanceReto();
+    expect(ehEscadaDeAcesso(escada)).toBe(false);
+    expect(baseDaEscadaMm(model, escada)).toBe(0);
+    expect(desnivelDaEscada(model, escada)).toBe(COTA_PAV1);
+  });
+
+  it('não fura laje — a escada de acesso fica no terreno', () => {
+    // A mesma laje de teto que o lance entre pavimentos fura (caso 5): a de acesso passa ao largo.
+    const { model, terreo } = doisPavimentos();
+    const laje: Command = { type: 'AddStructural', levelId: terreo, kind: 'LAJE', pontos: [point(-1000, -1000), point(6000, -1000), point(6000, 2000), point(-1000, 2000)], alturaMm: 120, baseMm: 2800 };
+    const comLaje = applyCommand(model, laje).model;
+    const entre = applyCommand(comLaje, { type: 'AddEscada', levelId: terreo, pontos: [point(0, 0), point(4600, 0)], larguraMm: 1200 }).model;
+    expect(furosDaEscada(entre)).toHaveLength(1);
+    const deAcesso = applyCommand(comLaje, { type: 'AddEscada', levelId: terreo, pontos: [point(0, 0), point(4600, 0)], larguraMm: 1200, desdeCotaMm: -1300 }).model;
+    expect(furosDaEscada(deAcesso)).toHaveLength(0);
+  });
+
+  it('o canônico guarda a cota da calçada, e só quando ela existe', () => {
+    const { model, escada } = acesso();
+    const payload = canonicalPayload(model);
+    expect(payloadDoHash(model)).toContain('"desdeCotaMm":0');
+    const devolta = modelFromCanonicalPayload(parseCanonicalPayload(payload));
+    expect(devolta.stairs[0].desdeCotaMm).toBe(0);
+    expect(payloadDoHash(devolta)).toBe(payloadDoHash(model));
+    // A guarda do acervo: escada sem o campo não ganha a chave (o hash de todo desenho publicado fica igual).
+    expect(payloadDoHash(lanceReto().model)).not.toContain('desdeCotaMm');
+    // E tirar a cota volta à escada entre pavimentos.
+    const sem = applyCommand(model, { type: 'SetEscadaProps', escadaId: escada.id, desdeCotaMm: null }).model;
+    expect(sem.stairs[0].desdeCotaMm).toBeUndefined();
+    expect(payloadDoHash(sem)).not.toContain('desdeCotaMm');
+  });
+
+  it('os invariantes: calçada na cota do piso e chegada declarada são recusadas', () => {
+    const { model, terreo } = terreoNoPlato();
+    esperaCodigo(() => applyCommand(model, { type: 'AddEscada', levelId: terreo, pontos: [point(0, 0), point(0, 2000)], desdeCotaMm: 1300 }), 'BAD_STAIR_LEVELS');
+    const { model: dois, terreo: t0, pav1 } = doisPavimentos();
+    const comAcesso = applyCommand(dois, { type: 'AddEscada', levelId: t0, pontos: [point(0, 0), point(0, 2000)], desdeCotaMm: -800 }).model;
+    esperaCodigo(() => applyCommand(comAcesso, { type: 'SetEscadaProps', escadaId: comAcesso.stairs[0].id, ateLevelId: pav1 }), 'BAD_STAIR_LEVELS');
   });
 });

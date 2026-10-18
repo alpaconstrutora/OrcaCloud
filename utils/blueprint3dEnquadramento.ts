@@ -21,6 +21,7 @@ import {
   contornoDaEscada,
   contornoEmPlanta,
   medirAgua,
+  baseDaEscadaMm,
   medirEscada,
   type BlueprintModel,
 } from './blueprintKernel';
@@ -164,7 +165,7 @@ export function enquadramentoDoModelo(
       xs.push(q.x * S);
       zs.push(q.y * S);
     }
-    topo = Math.max(topo, (cotaDo(e.levelId) + medirEscada(model, e).desnivelMm) * S);
+    topo = Math.max(topo, (cotaDo(e.levelId) + baseDaEscadaMm(model, e) + medirEscada(model, e).desnivelMm) * S);
   }
 
   if (mostrarTerreno) {

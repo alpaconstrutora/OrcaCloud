@@ -708,8 +708,18 @@
  * reclassifica. A cópia de grupo leva o uso. Omitido do canônico quando ausente: desenho antigo
  * só muda pela string da versão. Provado antes do bump: com a string em 0.101.0 e tudo no
  * lugar, 4.563 testes de blueprint/planta passaram (4.588 = 4.563 + 25 pulados).
+ *
+ * ─── 0.102.0 → 0.103.0 (18/10/2026) — A ESCADA DE ACESSO ──────────────────
+ *
+ * F25 da casa automática (decisão do usuário: "escada partindo do terreno"): `Escada.desdeCotaMm?` — a escada ou rampa
+ * que liga o TERRENO (a calçada, nessa cota do zero do desenho) ao piso do pavimento. Desnível = |piso − calçada|; a
+ * base do lance é a mais baixa das duas (`baseDaEscadaMm`, que o 3D, o corte, a elevação e o IFC somam ao piso); os
+ * pontos vão do baixo para o alto, como em toda escada. Não fura laje, chega ao próprio pavimento (`nivelDeChegada`) e
+ * as rotas de fuga/extintores/iluminação de emergência não a contam como ligação entre pavimentos. Não convive com
+ * `ateLevelId`; a calçada na cota do piso é recusada (sem desnível). `AddEscada`/`SetEscadaProps` aceitam o campo
+ * (`null` volta à escada entre pavimentos). Omitido do canônico quando ausente: desenho antigo só muda pela string.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.102.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.103.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

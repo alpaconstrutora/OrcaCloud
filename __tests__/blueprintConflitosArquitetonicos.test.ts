@@ -82,4 +82,18 @@ describe('escada × estrutura', () => {
     }).model;
     expect(conflitosArquitetonicos(fundacao)).toHaveLength(0);
   });
+
+  it('escada de ACESSO (0.103.0): o degrau conta a partir da calçada, abaixo do piso', () => {
+    // Térreo no platô a 1300; a calçada no zero; 8 espelhos de 162,5 em 2,24 m. A viga a y=2000 pega o 8º degrau, 1300
+    // acima da calçada = o próprio piso. Face inferior a 2400 do piso → livre 2400 ≥ 2100 → nada; contado do piso (o
+    // erro) seria 2400 − 1300 = 1100 < 2100 → cabeçada falsa. Com a face a 1800: livre 1800 < 2100 → conflito.
+    const a = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 1300, defaultHeightMm: 2800 });
+    const t = a.model.levels[0].id;
+    const m = applyCommand(a.model, { type: 'AddEscada', levelId: t, pontos: [point(0, 0), point(0, 2240)], larguraMm: 1200, alvoEspelhoMm: 163, desdeCotaMm: 0 }).model;
+    const viga = (baseMm: number): Command => ({ type: 'AddStructural', levelId: t, kind: 'VIGA', pontos: [point(-1000, 2000), point(1000, 2000)], larguraMm: 150, profundidadeMm: 0, alturaMm: 400, baseMm });
+    expect(conflitosArquitetonicos(applyCommand(m, viga(2400)).model)).toHaveLength(0);
+    const c = conflitosArquitetonicos(applyCommand(m, viga(1800)).model);
+    expect(c).toHaveLength(1);
+    expect(c[0].classe).toBe('ESCADA_X_ALTURA_LIVRE');
+  });
 });

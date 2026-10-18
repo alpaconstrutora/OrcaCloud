@@ -370,6 +370,29 @@ export const MEDIDAS: DefinicaoMedida[] = [
     dimensao: 'M',
     descricao: 'Metros de eletroduto, uma linha por bitola.',
   },
+  // F25 da casa automática: a TERRAPLENAGEM do estudo (o platô, os taludes e os muros de arrimo) vem pelos extras —
+  // recalculada da topografia publicada no snapshot e da premissa do estudo; não está no quantitativo.
+  {
+    id: 'VOLUME_CORTE',
+    rotulo: 'Corte (terraplenagem)',
+    escopo: 'TERRENO',
+    dimensao: 'M3',
+    descricao: 'Volume de corte em banco do platô e dos taludes (a premissa de terraplenagem do estudo contra a topografia publicada).',
+  },
+  {
+    id: 'VOLUME_ATERRO',
+    rotulo: 'Aterro (terraplenagem)',
+    escopo: 'TERRENO',
+    dimensao: 'M3',
+    descricao: 'Volume de aterro compactado do platô e dos taludes (a premissa de terraplenagem do estudo contra a topografia publicada).',
+  },
+  {
+    id: 'AREA_MURO_ARRIMO',
+    rotulo: 'Muro de arrimo (face)',
+    escopo: 'TERRENO',
+    dimensao: 'M2',
+    descricao: 'Área de face de cada muro de arrimo das bordas do platô (∫ |terreno − platô| ao longo dele), uma linha por muro.',
+  },
   // SUB-REGIÕES DO TERRENO (P2.19): as áreas externas por material vêm pelos extras (não estão no quantitativo).
   {
     id: 'AREA_SUBREGIAO',
@@ -688,6 +711,19 @@ export interface ExtrasDaGeracao {
   armadura?: ArmaduraQuantificada;
   /** SUB-REGIÕES DO TERRENO (P2.19): `medirSubRegioes(model)`. */
   subRegioes?: { uid: string; nome: string; rotuloDoMaterial: string; material: string; permeavel: boolean; areaM2: number }[];
+  /** F25: a terraplenagem do estudo, recalculada da topografia do snapshot (`terraplenagemDoOrcamento`). */
+  terraplenagem?: TerraplenagemDoOrcamento | null;
+}
+
+/** F25: o que o orçamento lê da terraplenagem do estudo. */
+export interface TerraplenagemDoOrcamento {
+  base: string;
+  cotaPlatoM: number;
+  /** A versão da topografia (a publicada no snapshot) que deu os volumes. */
+  versaoDaTopografia: number | null;
+  corteM3: number;
+  aterroM3: number;
+  muros: { aresta: number; comprimentoM: number; alturaMaxM: number; areaDeFaceM2: number }[];
 }
 
 /** Extrai da leitura do quantitativo os valores de uma medida, elemento a elemento. */
@@ -956,6 +992,42 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           areaRealM2: a.areaRealM2,
         },
       }));
+    }
+
+    case 'VOLUME_CORTE':
+    case 'VOLUME_ATERRO': {
+      const t = extras.terraplenagem;
+      if (!t) return [];
+      const corte = medidaId === 'VOLUME_CORTE';
+      const valor = corte ? t.corteM3 : t.aterroM3;
+      if (!(valor > 0)) return [];
+      const rotulo = `${corte ? 'Corte' : 'Aterro'} do platô a ${t.cotaPlatoM.toLocaleString('pt-BR')} m${t.versaoDaTopografia != null ? ` (topografia v${t.versaoDaTopografia})` : ''}`;
+      if (!combina(rotulo)) return [];
+      return [
+        {
+          ref: `terraplenagem-${corte ? 'corte' : 'aterro'}`,
+          rotulo,
+          valor,
+          formula: corte ? 'Σ (terreno − platô) das células acima do platô, com os taludes de corte' : 'Σ (platô − terreno) das células abaixo do platô, com os taludes de aterro',
+          variaveis: { base: t.base, cotaPlatoM: t.cotaPlatoM, ...(t.versaoDaTopografia != null ? { versaoDaTopografia: t.versaoDaTopografia } : {}) },
+        },
+      ];
+    }
+
+    case 'AREA_MURO_ARRIMO': {
+      const t = extras.terraplenagem;
+      if (!t) return [];
+      return t.muros
+        .filter((m) => m.areaDeFaceM2 > 0)
+        .map((m) => ({ m, rotulo: `Muro de arrimo da borda ${m.aresta + 1} · ${m.comprimentoM.toLocaleString('pt-BR')} m, até ${m.alturaMaxM.toLocaleString('pt-BR')} m` }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ m, rotulo }) => ({
+          ref: `terraplenagem-muro-${m.aresta}`,
+          rotulo,
+          valor: m.areaDeFaceM2,
+          formula: '∫ |terreno − platô| ao longo da borda',
+          variaveis: { comprimentoM: m.comprimentoM, alturaMaxM: m.alturaMaxM, areaDeFaceM2: m.areaDeFaceM2 },
+        }));
     }
 
     case 'AREA_SUBREGIAO': {

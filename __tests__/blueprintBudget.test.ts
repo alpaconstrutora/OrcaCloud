@@ -28,6 +28,7 @@ import {
   gerarLancamentos,
   gerarLancamentosDeCamadas,
   prefixoDoEstudo,
+  resumoDasMedidas,
   type MapeamentoOrcamento,
   type MapeamentoResolvido,
 } from '../utils/blueprintBudget';
@@ -899,5 +900,29 @@ describe('camadas de parede · geração direta', () => {
     const r = gerarLancamentosDeCamadas(quantSala(), new Map(), CTX);
     expect(r.entries).toHaveLength(0);
     expect(r.divergencias).toHaveLength(0);
+  });
+});
+
+/**
+ * F25 da casa automática (18/10/2026): a terraplenagem do estudo no orçamento — corte, aterro e a face de cada muro de
+ * arrimo, vindos pelos extras (recalculados da topografia publicada no snapshot).
+ */
+describe('medidas da terraplenagem (F25)', () => {
+  const vazio = computeQuantities(applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model);
+  const terraplenagem = {
+    base: 'CASA', cotaPlatoM: 100.942, versaoDaTopografia: 3, corteM3: 59.1, aterroM3: 61.2,
+    muros: [{ aresta: 1, comprimentoM: 19.05, alturaMaxM: 0.96, areaDeFaceM2: 9.4 }, { aresta: 3, comprimentoM: 19.05, alturaMaxM: 0.96, areaDeFaceM2: 9.1 }],
+  };
+
+  it('corte, aterro e muros entram no resumo das medidas; sem a terraplenagem, zero', () => {
+    const com = resumoDasMedidas(vazio, { terraplenagem });
+    const de = (id: string) => com.find((x) => x.medidaId === id)!;
+    expect(de('VOLUME_CORTE')).toMatchObject({ dimensao: 'M3', quantidade: 59.1, elementos: 1 });
+    expect(de('VOLUME_ATERRO')).toMatchObject({ dimensao: 'M3', quantidade: 61.2, elementos: 1 });
+    expect(de('AREA_MURO_ARRIMO')).toMatchObject({ dimensao: 'M2', elementos: 2 });
+    expect(de('AREA_MURO_ARRIMO').quantidade).toBeCloseTo(18.5, 6);
+    const sem = resumoDasMedidas(vazio, {});
+    for (const id of ['VOLUME_CORTE', 'VOLUME_ATERRO', 'AREA_MURO_ARRIMO']) expect(sem.find((x) => x.medidaId === id)!.quantidade).toBe(0);
+    expect(MEDIDAS.filter((m) => ['VOLUME_CORTE', 'VOLUME_ATERRO', 'AREA_MURO_ARRIMO'].includes(m.id)).every((m) => m.escopo === 'TERRENO')).toBe(true);
   });
 });

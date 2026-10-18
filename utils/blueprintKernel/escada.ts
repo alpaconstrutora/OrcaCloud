@@ -98,6 +98,8 @@ export interface MedidaEscada {
 export function nivelDeChegada(model: BlueprintModel, escada: Escada): Level | null {
   const partida = model.levels.find((l) => l.id === escada.levelId);
   if (!partida) return null;
+  // Escada de acesso (0.103.0): ela CHEGA ao próprio pavimento, vinda do terreno.
+  if (ehEscadaDeAcesso(escada)) return partida;
   // Escada multiandares (E2.4): chegada declarada, se existir e estiver acima.
   if (escada.ateLevelId) {
     const declarada = model.levels.find((l) => l.id === escada.ateLevelId);
@@ -123,8 +125,26 @@ export function nivelDeChegada(model: BlueprintModel, escada: Escada): Level | n
 export function desnivelDaEscada(model: BlueprintModel, escada: Escada): number {
   const partida = model.levels.find((l) => l.id === escada.levelId);
   if (!partida) return 0;
+  if (ehEscadaDeAcesso(escada)) return Math.abs(partida.elevationMm - escada.desdeCotaMm!);
   const chegada = nivelDeChegada(model, escada);
   return chegada ? chegada.elevationMm - partida.elevationMm : partida.defaultHeightMm;
+}
+
+/** Escada de ACESSO (0.103.0): liga o terreno (`desdeCotaMm`) ao piso do pavimento — não liga pavimentos. */
+export function ehEscadaDeAcesso(escada: Pick<Escada, 'desdeCotaMm'>): boolean {
+  return escada.desdeCotaMm !== undefined && escada.desdeCotaMm !== null;
+}
+
+/**
+ * Onde o lance COMEÇA, relativo ao piso do pavimento da escada, mm: 0 numa escada entre pavimentos (sobe do piso); na de
+ * acesso com a calçada abaixo do piso, negativo (sobe da calçada até o piso); com a calçada acima, 0 (sobe do piso até
+ * a calçada — os pontos vão do baixo para o alto). Quem põe a escada em cota absoluta soma isto ao piso.
+ */
+export function baseDaEscadaMm(model: BlueprintModel, escada: Escada): number {
+  if (!ehEscadaDeAcesso(escada)) return 0;
+  const piso = model.levels.find((l) => l.id === escada.levelId);
+  if (!piso) return 0;
+  return Math.min(0, escada.desdeCotaMm! - piso.elevationMm);
 }
 
 /** Comprimento do percurso em planta. */
@@ -387,6 +407,8 @@ export function furosDaEscada(model: BlueprintModel): FuroDaEscada[] {
 
   const saida: FuroDaEscada[] = [];
   for (const escada of model.stairs ?? []) {
+    // A escada de acesso (0.103.0) fica no terreno: não atravessa laje.
+    if (ehEscadaDeAcesso(escada)) continue;
     const partida = cotaDoNivel(escada.levelId);
     if (partida === null) continue;
     const chegada = partida + desnivelDaEscada(model, escada);

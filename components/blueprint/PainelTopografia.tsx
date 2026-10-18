@@ -89,10 +89,12 @@ export interface InundacaoNoPainel {
 }
 
 export interface TerraplenagemNoPainel {
-  base: 'ENVELOPE' | 'LOTE';
-  onBase: (b: 'ENVELOPE' | 'LOTE') => void;
+  base: 'ENVELOPE' | 'LOTE' | 'CASA';
+  onBase: (b: 'ENVELOPE' | 'LOTE' | 'CASA') => void;
   /** Há envelope válido (recuos que cabem)? Sem ele, ENVELOPE cai no lote. */
   temEnvelope: boolean;
+  /** F25: há o platô sob a casa (lançado pela casa automática) para escolher? */
+  temPlatoDaCasa?: boolean;
   /** `null` = usando a cota de equilíbrio. */
   cotaPlatoM: number | null;
   onCotaPlatoM: (v: number | null) => void;
@@ -1956,7 +1958,9 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
           [
             ['ENVELOPE', 'No envelope'],
             ['LOTE', 'No lote inteiro'],
-          ] as ['ENVELOPE' | 'LOTE', string][]
+            // F25: o platô sob a casa só existe depois de a casa automática lançá-lo.
+            ...(t.temPlatoDaCasa || t.base === 'CASA' ? [['CASA', 'Sob a casa']] : []),
+          ] as ['ENVELOPE' | 'LOTE' | 'CASA', string][]
         ).map(([valor, rotulo]) => (
           <button
             key={valor}

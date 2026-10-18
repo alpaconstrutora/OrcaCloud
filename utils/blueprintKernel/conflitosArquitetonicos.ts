@@ -67,7 +67,7 @@
  * Determinístico: ordenado por id da peça e do outro, como `conflitosDoModelo`.
  */
 import { pointInPolygon, polygonArea, type Point } from './geom';
-import { fatiasDaEscada } from './escada';
+import { baseDaEscadaMm, fatiasDaEscada } from './escada';
 import type { BlueprintModel, Componente, ObjectId, Structural } from './model';
 import type { VolumeDePeca } from './conflitos';
 import { CATALOGO_DE_COMPONENTES, FORMA_ESTRUTURAL, contornoDoComponente, pavimentosDoNucleo } from './model';
@@ -199,7 +199,8 @@ export function conflitosArquitetonicos(model: BlueprintModel, opcoes: { pecas?:
       for (const f of fatias) {
         const comum = recorteComum(f.cantos, pegada);
         if (comum.length < 3 || areaDe(comum) <= 0) continue;
-        const topoDoDegrau = Math.max(...f.cotasMm);
+        // A escada de acesso (0.103.0) começa abaixo do piso quando a calçada está abaixo.
+        const topoDoDegrau = baseDaEscadaMm(model, e) + Math.max(...f.cotasMm);
         const livre = s.baseMm - topoDoDegrau;
         // Peça abaixo do degrau (fundação, viga do piso) não é cabeçada.
         if (s.baseMm + s.alturaMm <= topoDoDegrau) continue;

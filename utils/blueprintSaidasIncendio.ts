@@ -176,7 +176,8 @@ function pavimentosDaEscada(model: BlueprintModel, e: Escada): ObjectId[] {
   const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm || a.id.localeCompare(b.id));
   const i = niveis.findIndex((l) => l.id === e.levelId);
   if (i < 0) return [];
-  const j = e.ateLevelId ? niveis.findIndex((l) => l.id === e.ateLevelId) : i + 1;
+  // A escada de acesso (0.103.0) liga o terreno ao próprio pavimento — não serve outro.
+  const j = e.desdeCotaMm != null ? i : e.ateLevelId ? niveis.findIndex((l) => l.id === e.ateLevelId) : i + 1;
   return niveis.slice(i, Math.max(i, Math.min(j, niveis.length - 1)) + 1).map((l) => l.id);
 }
 

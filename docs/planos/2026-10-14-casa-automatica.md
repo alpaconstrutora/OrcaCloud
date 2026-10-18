@@ -2422,3 +2422,43 @@ topografia (`blueprintPlatoDaCasa`); a casa no terreno de 10 % (o térreo no pla
 sobrado (o superior um andar acima do térreo novo) e sem topografia (`blueprintCasaAutomatica`); o condutor por baixo do
 cruzamento (`blueprintCondutoresPluviais`); as premissas (`blueprintPremissasDaCasa`) e a seção na tela
 (`TelaCasaAutomatica`).
+
+### Registro da F25 — parte 2 (18/10/2026): o platô gravado, a terraplenagem no orçamento, a escada de acesso
+
+Decisão do usuário (18/10/2026, sobre como desenhar a entrada): **"Escada partindo do terreno"** — campo novo no kernel,
+não um degrau falso no pavimento nem só a pendência.
+
+O que entrou:
+
+- **(a) o "Lançar" grava a terraplenagem do estudo.** A premissa de terraplenagem (`blueprint_study_terraplenagem`) ganha a
+  base `CASA` e a coluna `anel_plato` (migration `aplicar_20271018310000_terraplenagem_base_casa`): o anel do platô sob a
+  projeção, a cota e o muro por aresta que a casa calculou. O hook (`aplicarPlatoDaCasa`) grava UMA vez, no clique; o
+  anel em uso na tela (`definirAnelEmUso`) só vai junto da próxima mudança explícita — abrir a tela não grava. A aba
+  Topografia mostra o botão "Sob a casa" quando há platô da casa.
+- **(b) corte, aterro e face de muro no orçamento.** Três medidas de terreno (`VOLUME_CORTE`, `VOLUME_ATERRO` em m³,
+  `AREA_MURO_ARRIMO` em m², uma linha por muro): o orçamento recalcula a terraplenagem da topografia PUBLICADA no
+  snapshot (`blueprint_snapshot_topografia`) com a premissa do estudo — o mesmo cálculo da aba, a versão da topografia no
+  rótulo.
+- **(c) a escada de acesso** — kernel 0.103.0, `Escada.desdeCotaMm`: a escada (ou rampa) que liga a CALÇADA, nesta cota
+  do zero do desenho, ao piso do pavimento. Sobe ou desce; os pontos do baixo para o alto; o desnível é calçada ↔ piso e
+  o lance começa na mais baixa (`baseDaEscadaMm`) — 3D, corte, elevação, enquadramento, IFC e a conferência escada ×
+  estrutura somam a base; não fura laje; as rotas de fuga, extintores e iluminação de emergência a tratam como do
+  próprio pavimento; sem `ateLevelId`; a calçada na cota do piso é recusada; o canônico só leva o campo quando existe (o
+  hash do acervo não muda). A casa a lança logo depois da arquitetura (térrea e sobrado): diante da porta de entrada na
+  fachada da frente, da face rumo à rua, os degraus do platô (espelho ≤ 18 cm, piso 28 cm) ou a rampa a 8,33 %, 1,20 m
+  de largura no mínimo — só quando cabe no recuo de frente; não cabendo, ou sem porta na frente, a pendência diz e o
+  acesso fica à mão.
+
+Medido (sonda, 12 × 30 a 10 %): térrea — térreo a 1,30 m, escada de 8 degraus de 163 mm (2,24 m) da calçada à varanda,
+nenhum conflito; sobrado — térreo a 1,075 m, 6 degraus de 179 mm, a escada interna à parte; a 20 % a escada não cabe e é
+dita.
+
+**Achado para a F26** (a frente do lote): no terreno que sobe, a GARAGEM fica no platô — 1,3 m acima da calçada a 10 % — e
+a rampa de veículos não cabe no recuo de frente de 3 m. Entra com o muro, o portão e a calçada: rampa de veículos com
+inclinação máxima como hipótese, ou a garagem na cota da rua.
+
+Testes novos (reprovam sem a correção): a escada de acesso no kernel — desnível, base, chegada, calçada acima, sem furo,
+canônico e guarda do acervo, invariantes (`blueprintEscada`); a altura livre contada da calçada
+(`blueprintConflitosArquitetonicos`); a casa a 10 % com a escada lançada e sem conflito, o sobrado com as duas escadas, a
+20 % sem escada e com a pendência (`blueprintCasaAutomatica`); as medidas de terraplenagem (`blueprintBudget`); o botão
+"Sob a casa" (`PainelTopografiaFase2`); o platô da casa no hook (`useBlueprintTerraplenagemCasa`).

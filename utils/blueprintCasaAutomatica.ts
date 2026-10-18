@@ -1483,18 +1483,6 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         };
         for (const b of muros)
           pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: muro de arrimo na borda ${ladoDaBorda(b)}, de ${b.comprimentoM.toLocaleString('pt-BR')} m e até ${b.alturaMaxM.toLocaleString('pt-BR')} m de altura (${b.lado === 'CORTE' ? 'segura o corte' : 'segura o aterro'}; ${b.motivo}) — dimensione com o calculista.` });
-        const e = tr.entrada;
-        if (e.tipo !== 'NENHUMA') {
-          const sentido = e.desnivelMm > 0 ? 'sobe' : 'desce';
-          const desc =
-            e.tipo === 'RAMPA'
-              ? `rampa de ${(e.comprimentoMm / 1000).toLocaleString('pt-BR')} m a ${hip.terraplenagem.rampaMaximaPct.toLocaleString('pt-BR')} %`
-              : `escada de ${e.degraus} degrau(s) de ${e.espelhoMm} mm (${(e.comprimentoMm / 1000).toLocaleString('pt-BR')} m)`;
-          pendencias.push({
-            grupo: e.cabe ? 'CONFERIR' : 'VERIFICACAO',
-            texto: `Terraplenagem: a entrada ${sentido} ${(Math.abs(e.desnivelMm) / 1000).toLocaleString('pt-BR')} m da calçada ao piso — ${desc}${e.cabe ? ' no recuo de frente' : ', que não cabe no recuo de frente'}; desenhe-a na entrada.`,
-          });
-        }
       }
     } catch (e) {
       const motivo = e instanceof Error ? e.message : String(e);
@@ -1502,6 +1490,68 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Terraplenagem: ${motivo}` });
     }
   }
+
+  // F25 (decisão do usuário, 18/10/2026: "escada partindo do terreno"): a ESCADA (ou rampa) DE ACESSO, da calçada à
+  // porta de entrada — `Escada.desdeCotaMm` (kernel 0.103.0). Sai da face da fachada diante da porta, rumo à rua, com os
+  // pontos do lado baixo para o alto; só quando cabe no recuo de frente (senão a pendência diz, e ela fica à mão).
+  const lancarEscadaDeAcesso = () => {
+    const tr = terraplenagemDaCasa;
+    if (!tr || tr.entrada.tipo === 'NENHUMA') return;
+    const e = tr.entrada;
+    const sentido = e.desnivelMm > 0 ? 'sobe' : 'desce';
+    const desc =
+      e.tipo === 'RAMPA'
+        ? `rampa de ${(e.comprimentoMm / 1000).toLocaleString('pt-BR')} m a ${hip.terraplenagem.rampaMaximaPct.toLocaleString('pt-BR')} %`
+        : `escada de ${e.degraus} degrau(s) de ${e.espelhoMm} mm (${(e.comprimentoMm / 1000).toLocaleString('pt-BR')} m)`;
+    const desnivel = `${(Math.abs(e.desnivelMm) / 1000).toLocaleString('pt-BR')} m`;
+    if (!e.cabe || e.cotaDaCalcadaMm == null) {
+      pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}, que não cabe no recuo de frente; desenhe o acesso à mão.` });
+      return;
+    }
+    const qd = implantacao.quadro;
+    const rlE = implantacao.retanguloLocal;
+    const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
+    // A porta de entrada: a mais larga na parede da fachada da frente do térreo.
+    const portas = m.openings
+      .filter((o) => o.kind === 'door')
+      .map((o) => ({ o, w: m.walls.find((x) => x.id === o.wallId) }))
+      .filter((x): x is { o: (typeof m.openings)[number]; w: (typeof m.walls)[number] } => !!x.w && x.w.levelId === entrada.levelId)
+      .map(({ o, w }) => {
+        const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+        const t = o.offsetMm + o.widthMm / 2;
+        const meioDaPorta = { x: w.a.x + ((w.b.x - w.a.x) / L) * t, y: w.a.y + ((w.b.y - w.a.y) / L) * t };
+        return { o, meioDaPorta, local: paraLocal(qd, meioDaPorta) };
+      })
+      .filter((x) => Math.abs(x.local.y - rlE.y0) <= meia + 1)
+      .sort((p, q2) => q2.o.widthMm - p.o.widthMm);
+    const porta = portas[0];
+    if (!porta) {
+      pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}; a porta de entrada não está na fachada da frente: desenhe o acesso à mão.` });
+      return;
+    }
+    const naFace = paraMundo(qd, { x: porta.local.x, y: rlE.y0 - meia });
+    const naRua = paraMundo(qd, { x: porta.local.x, y: rlE.y0 - meia - e.comprimentoMm });
+    const inteiro = (p: Point): Point => ({ x: Math.round(p.x), y: Math.round(p.y) });
+    // Do baixo para o alto: a calçada abaixo do piso → começa na rua; acima → começa na porta.
+    const pontos = e.desnivelMm > 0 ? [inteiro(naRua), inteiro(naFace)] : [inteiro(naFace), inteiro(naRua)];
+    try {
+      aplicar([
+        {
+          type: 'AddEscada',
+          levelId: entrada.levelId,
+          pontos,
+          tipo: e.tipo === 'RAMPA' ? 'RAMPA' : 'ESCADA',
+          larguraMm: Math.max(1200, porta.o.widthMm + 300),
+          alvoEspelhoMm: e.tipo === 'ESCADA' ? Math.min(hip.terraplenagem.espelhoMaximoMm, Math.max(1, e.espelhoMm)) : 175,
+          rotulo: 'Acesso',
+          desdeCotaMm: e.cotaDaCalcadaMm,
+        },
+      ]);
+      pendencias.push({ grupo: 'CONFERIR', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}, lançada diante da porta de entrada.` });
+    } catch (x) {
+      pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: a escada de acesso não entrou (${x instanceof Error ? x.message : String(x)}) — desenhe-a à mão.` });
+    }
+  };
 
   // ── ARQUITETURA ───────────────────────────────────────────────────────────
   const q = implantacao.quadro;
@@ -2507,6 +2557,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       `sobrado: ${paredes} paredes; térreo com ${et.r.ambientes.length} e superior com ${es.r.ambientes.length} ambientes; escada em U de ${sobrado.escada.degraus} degraus (${sobrado.escada.espelhoMm} × ${sobrado.escada.pisoMm} mm) no núcleo à ${lado} — térreo: ${et.texto}; superior: ${es.texto}`,
     );
 
+    lancarEscadaDeAcesso();
+
     // ── ESTRUTURA E TELHADO DO SOBRADO (F12b) ──
     // Pilares em prumada (ver `pilaresDoSobrado`); vigas e lajes em cada pavimento — a laje do térreo é o piso de
     // cima, e o furo da escada nela é derivado pelo kernel (`furosDaEscada`); fundação só no térreo; eixos do térreo;
@@ -2727,6 +2779,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   const paredes = m.walls.filter((w) => w.levelId === entrada.levelId).length;
   const aberturas = m.openings.filter((o) => m.walls.some((w) => w.id === o.wallId && w.levelId === entrada.levelId)).length;
   etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'LANCOU', n, `${paredes} paredes, ${aberturas} portas e janelas, ${r.ambientes.length} ambientes — ${escolha}`);
+  lancarEscadaDeAcesso();
   // F21: "sem porta direta" já sai na CONFERÊNCIA do programa (com a distância em portas) — aqui só pesa na escolha.
   for (const a of r.avisos) if (!/sem porta direta \(relação obrigatória\)/.test(a)) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura: ${a}` });
 

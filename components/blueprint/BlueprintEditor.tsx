@@ -5471,9 +5471,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   const anelDoPlato = useMemo(
     () =>
-      terraplenagem.base === 'ENVELOPE' && envelope?.valido ? envelope.anel : anelDoLoteFechado,
+      // F25: na base CASA, o platô que a casa automática lançou (gravado com o anel).
+      terraplenagem.base === 'CASA' && terraplenagem.anelPlato ? terraplenagem.anelPlato : terraplenagem.base === 'ENVELOPE' && envelope?.valido ? envelope.anel : anelDoLoteFechado,
     [terraplenagem.base, envelope, anelDoLoteFechado],
   );
+  // F25: o anel em uso fica com a premissa (só em memória — vai ao banco na próxima mudança explícita dela) para o
+  // orçamento recalcular os volumes a partir dele.
+  useEffect(() => {
+    terraplenagem.definirAnelEmUso(anelDoPlato ?? null);
+  }, [anelDoPlato, terraplenagem.definirAnelEmUso]);
   const cotaDeEquilibrioM = useMemo(() => {
     const v = topografia.selecionada;
     return v && anelDoPlato ? cotaDeEquilibrio(v.grade, anelDoPlato) : null;
@@ -10145,6 +10151,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             base: terraplenagem.base,
             onBase: terraplenagem.setBase,
             temEnvelope: !!envelope?.valido,
+            temPlatoDaCasa: !!terraplenagem.anelPlato,
             cotaPlatoM: terraplenagem.cotaPlatoM,
             onCotaPlatoM: terraplenagem.setCotaPlatoM,
             inclinacao: terraplenagem.inclinacao,
@@ -11512,6 +11519,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               const prova = conferirPlanoDaCasa(editor.model, plano);
               if (!prova.ok) throw new Error(prova.motivo);
               const criados = editor.runBatch(plano.comandos);
+              // F25: o platô da casa vai para a aba de terraplenagem (base "sob a casa", a cota, os muros por borda).
+              const plato = plano.resumo.terraplenagem;
+              if (plato) terraplenagem.aplicarPlatoDaCasa({ anel: plato.platoNoMundo, cotaPlatoM: plato.cotaDoPlatoM, taludePorAresta: plato.parametros.taludePorAresta });
               setLancadoCasa(`${criados.length} elemento(s) lançados num lote só${plano.sobrado ? ', no térreo e no pavimento superior (criado agora)' : ''} — Ctrl+Z desfaz tudo. Volte ao editor para ver a casa.`);
             }}
             onCriarAlternativa={async () => {

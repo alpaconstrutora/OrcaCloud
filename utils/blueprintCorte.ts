@@ -50,6 +50,7 @@ import {
   contornoDaEscada,
   contornoEmPlanta,
   extensaoDeCanto,
+  baseDaEscadaMm,
   fatiasDaEscada,
   normalDaAgua,
   wallLength,
@@ -544,7 +545,8 @@ export function projetarCorte(
       const dest = classificarNoCorte(pegada, base, origem);
       destino.set(e.id, dest);
       if (dest !== 'CORTADO') continue;
-      cortados.push(...faceCortadaDaEscada(model, e, level.elevationMm, base, origem, projU));
+      // A escada de acesso (0.103.0) começa na calçada, abaixo do piso quando ela está abaixo.
+      cortados.push(...faceCortadaDaEscada(model, e, level.elevationMm + baseDaEscadaMm(model, e), base, origem, projU));
     }
 
     // ── Instalações ─────────────────────────────────────────────────────────

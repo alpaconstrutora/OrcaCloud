@@ -314,7 +314,8 @@ export function entradasDoPavimento(model: BlueprintModel, levelId: ObjectId, re
   const out: { ponto: Point; space: Space }[] = [];
   for (const e of model.stairs ?? []) {
     const i = niveis.findIndex((l) => l.id === e.levelId);
-    const j = e.ateLevelId ? niveis.findIndex((l) => l.id === e.ateLevelId) : i + 1;
+    // A escada de acesso (0.103.0) liga o terreno ao próprio pavimento — não serve outro.
+    const j = e.desdeCotaMm != null ? i : e.ateLevelId ? niveis.findIndex((l) => l.id === e.ateLevelId) : i + 1;
     const servidos = niveis.slice(i, Math.max(i, Math.min(j, niveis.length - 1)) + 1).map((l) => l.id);
     if (!servidos.includes(levelId)) continue;
     const boca = levelId === e.levelId ? e.pontos[0] : e.pontos[e.pontos.length - 1];

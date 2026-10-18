@@ -4,6 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 import { processarEventoAsaas } from "../_shared/asaasProcessar.ts"
+import { confirmarNaAsaas } from "../_shared/asaasConfirmar.ts"
 import type { PayloadAsaas } from "../../../utils/asaasEventos.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
@@ -75,9 +76,24 @@ serve(async (req: Request) => {
     // (TRANSFER_* antes da Fase 3, eventos de conta): a Asaas trata 4xx/5xx
     // como falha, reenvia e, depois de várias, PAUSA a fila de webhooks da
     // conta inteira. Antes, payload sem `payment.id` devolvia 400.
+    // O corpo do aviso NÃO é confiável (token vazado = aviso forjado): só o id vale. O
+    // objeto é conferido na Asaas e o evento sai do status real (item 5 da segurança,
+    // docs/planos/2026-10-18-asaas-seguranca-chaves-pix.md).
     try {
-        const r = await processarEventoAsaas(admin, payload);
-        return json({ ok: true, action: r.acao, detail: r.detalhe ?? null });
+        const c = await confirmarNaAsaas(admin, payload);
+        if (c.tipo === 'desconhecido') return json({ ok: true, action: 'ignorado', detail: 'evento_ou_registro_desconhecido' });
+        if (c.tipo === 'sem_mudanca') return json({ ok: true, action: 'sem_mudanca', detail: c.status });
+        if (c.tipo === 'nao_confirmado') {
+            console.error('[asaas-webhook] não confirmado na Asaas:', payload.event, c.motivo);
+            // Transitório (Asaas fora do ar): 503 para reenviar. Permanente (chave
+            // recusada, registro sem conta): 200 — reenviar não resolve e várias falhas
+            // seguidas pausariam a fila de webhooks da conta. A consulta automática cobre.
+            return c.transitorio
+                ? json({ error: 'Não foi possível confirmar na Asaas agora.' }, 503)
+                : json({ ok: true, action: 'nao_confirmado', detail: c.motivo });
+        }
+        const r = await processarEventoAsaas(admin, c.payload);
+        return json({ ok: true, action: r.acao, detail: r.detalhe ?? null, confirmado: c.payload.event });
     } catch (e) {
         // Erro de gravação de verdade: 500 de propósito, para a Asaas reenviar.
         console.error('[asaas-webhook] falha ao processar', payload.event, e);

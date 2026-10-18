@@ -162,3 +162,12 @@ describe('motivoDaFalha', () => {
         expect(motivoDaFalha('EVENTO_NOVO', {})).toBe('EVENTO_NOVO');
     });
 });
+
+
+describe('eventoDoStatus — chargeback (webhook confirma pelo status real)', () => {
+    it('chargeback pedido ou em disputa desfaz; aguardando reversão, não', () => {
+        expect(eventoDoStatus('payment', 'CHARGEBACK_REQUESTED')).toBe('PAYMENT_CHARGEBACK_REQUESTED');
+        expect(eventoDoStatus('payment', 'CHARGEBACK_DISPUTE')).toBe('PAYMENT_CHARGEBACK_REQUESTED');
+        expect(eventoDoStatus('payment', 'AWAITING_CHARGEBACK_REVERSAL')).toBeNull();
+    });
+});

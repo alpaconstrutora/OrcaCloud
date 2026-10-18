@@ -233,6 +233,9 @@ export function eventoDoStatus(
         if (s === 'CONFIRMED') return 'PAYMENT_CONFIRMED';
         if (s === 'RECEIVED_IN_CASH') return 'PAYMENT_RECEIVED_IN_CASH';
         if (s === 'REFUNDED') return 'PAYMENT_REFUNDED';
+        // Chargeback pedido ou em disputa desfaz a baixa (o webhook passou a depender
+        // do status real — item 5 da segurança, 18/10/2026).
+        if (s === 'CHARGEBACK_REQUESTED' || s === 'CHARGEBACK_DISPUTE') return 'PAYMENT_CHARGEBACK_REQUESTED';
         if (s === 'OVERDUE') return 'PAYMENT_OVERDUE';
         return null;
     }

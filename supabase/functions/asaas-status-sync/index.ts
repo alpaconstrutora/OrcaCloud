@@ -50,7 +50,7 @@ serve(async (req: Request) => {
     const resumo = { cobrancas: 0, pagamentos: 0, eventos: 0, erros: [] as string[] };
 
     // Cada registro é consultado na conta Asaas que o CRIOU (Fase 2). Sem
-    // conta (emitido pela chave global antiga) → chave de reserva.
+    // conta (emitido pela chave global antiga, que saiu em 18/10/2026) → pula.
     const contas = new Map<string, ContaAsaas | null>();
     async function contaDe(paymentAccountId: string | null): Promise<ContaAsaas | null> {
         const k = paymentAccountId ?? '__reserva__';

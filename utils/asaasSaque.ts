@@ -20,7 +20,7 @@ export interface PedidoDeSaque {
         id?: string;
         value?: number;
         operationType?: string;
-        bankAccount?: { pixAddressKey?: string | null; cpfCnpj?: string | null } | null;
+        bankAccount?: { pixAddressKey?: string | null; cpfCnpj?: string | null; ownerName?: string | null } | null;
     };
     bill?: { id?: number | string; value?: number; identificationField?: string };
 }
@@ -32,6 +32,8 @@ export interface PagamentoRegistrado {
     value: number;
     pix_key: string | null;
     identification_field: string | null;
+    /** CPF/CNPJ do favorecido: o do cadastro ao disparar; o resolvido pela Asaas depois da resposta. */
+    beneficiary_document?: string | null;
 }
 
 export interface DecisaoDeSaque {
@@ -61,6 +63,34 @@ export function idDoPedido(p: PedidoDeSaque): { coluna: 'asaas_transfer_id' | 'a
     if (p.type === 'TRANSFER' && p.transfer?.id) return { coluna: 'asaas_transfer_id', id: String(p.transfer.id) };
     if (p.type === 'BILL' && p.bill?.id != null) return { coluna: 'asaas_bill_id', id: String(p.bill.id) };
     return null;
+}
+
+/** Mesmo CPF/CNPJ (só dígitos, 11 ou 14). Vazio em qualquer lado = não confere. */
+export function mesmoDocumento(a: string | null | undefined, b: string | null | undefined): boolean {
+    const da = so(a), db = so(b);
+    return (da.length === 11 || da.length === 14) && da === db;
+}
+
+/**
+ * Busca de RESERVA (18/10/2026, conferida contra a doc oficial): a Asaas pergunta
+ * ~5 s depois de criar o saque; se o OrçaCloud ainda não gravou o id da Asaas,
+ * procura o registro recém-criado. O exemplo oficial do pedido de PIX vem com
+ * `pixAddressKey: null` — conferir "a chave quando vier" deixava a reserva aprovar
+ * SÓ PELO VALOR. Agora: PIX exige valor E CPF/CNPJ do favorecido iguais; boleto
+ * exige a linha digitável igual. Mais de uma candidata = ambíguo = nenhuma.
+ */
+export function escolherReserva<T extends PagamentoRegistrado>(p: PedidoDeSaque, candidatos: T[]): T | null {
+    let ok: T[] = [];
+    if (p.type === 'TRANSFER') {
+        const doc = p.transfer?.bankAccount?.cpfCnpj;
+        ok = candidatos.filter(c => c.payment_type === 'PIX_TRANSFER'
+            && Math.abs(Number(p.transfer?.value ?? NaN) - Number(c.value)) < 0.005
+            && mesmoDocumento(doc, c.beneficiary_document));
+    } else if (p.type === 'BILL') {
+        const linha = so(p.bill?.identificationField);
+        ok = candidatos.filter(c => c.payment_type === 'BILL' && linha.length >= 44 && so(c.identification_field) === linha);
+    }
+    return ok.length === 1 ? ok[0] : null;
 }
 
 export function decidirSaque(p: PedidoDeSaque, registro: PagamentoRegistrado | null): DecisaoDeSaque {

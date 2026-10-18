@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decidirSaque, idDoPedido, type PagamentoRegistrado } from '../utils/asaasSaque';
+import { decidirSaque, idDoPedido, escolherReserva, mesmoDocumento, type PagamentoRegistrado } from '../utils/asaasSaque';
 
 const pix: PagamentoRegistrado = { payment_type: 'PIX_TRANSFER', status: 'APPROVED', value: 1, pix_key: '99991111140', identification_field: null };
 const boleto: PagamentoRegistrado = { payment_type: 'BILL', status: 'PENDING', value: 20, pix_key: null, identification_field: '23793381286001234107143000012345890460000002000' };
@@ -44,5 +44,42 @@ describe('decidirSaque', () => {
         for (const type of ['PIX_QR_CODE', 'MOBILE_PHONE_RECHARGE', 'PIX_REFUND', 'PAYMENT_SPLIT', undefined]) {
             expect(decidirSaque({ type }, pix).status).toBe('REFUSED');
         }
+    });
+});
+
+describe('escolherReserva (pedido chegou antes de o OrçaCloud gravar o id da Asaas)', () => {
+    const doc = '60.897.254/0001-86';
+    const reg = { ...pix, value: 100, beneficiary_document: doc, id: 'r1' };
+    // O exemplo oficial do pedido de PIX traz pixAddressKey null e o cpfCnpj preenchido.
+    const pedido = { type: 'TRANSFER', transfer: { id: 't1', value: 100, bankAccount: { pixAddressKey: null, cpfCnpj: '60897254000186' } } };
+
+    it('PIX: valor e CPF/CNPJ do favorecido iguais → acha', () => {
+        expect(escolherReserva(pedido, [reg])).toBe(reg);
+    });
+
+    it('PIX: mesmo valor, OUTRO favorecido → não acha (antes aprovava só pelo valor)', () => {
+        const outro = { ...pedido, transfer: { ...pedido.transfer, bankAccount: { pixAddressKey: null, cpfCnpj: '11222333000181' } } };
+        expect(escolherReserva(outro, [reg])).toBeNull();
+    });
+
+    it('PIX: sem documento de um dos lados → não acha (falha fechada)', () => {
+        expect(escolherReserva(pedido, [{ ...reg, beneficiary_document: null }])).toBeNull();
+        expect(escolherReserva({ ...pedido, transfer: { ...pedido.transfer, bankAccount: { pixAddressKey: null, cpfCnpj: null } } }, [reg])).toBeNull();
+    });
+
+    it('PIX: duas candidatas iguais → ambíguo, nenhuma', () => {
+        expect(escolherReserva(pedido, [reg, { ...reg, id: 'r2' }])).toBeNull();
+    });
+
+    it('boleto: linha digitável igual → acha; diferente → não', () => {
+        const b = { ...boleto, status: 'APPROVED', id: 'b1' };
+        expect(escolherReserva({ type: 'BILL', bill: { id: 1, identificationField: boleto.identification_field! } }, [b])).toBe(b);
+        expect(escolherReserva({ type: 'BILL', bill: { id: 1, identificationField: '1'.repeat(47) } }, [b])).toBeNull();
+    });
+
+    it('mesmoDocumento: só dígitos, 11 ou 14', () => {
+        expect(mesmoDocumento('999.911.111-40', '99991111140')).toBe(true);
+        expect(mesmoDocumento('', '')).toBe(false);
+        expect(mesmoDocumento('123', '123')).toBe(false);
     });
 });

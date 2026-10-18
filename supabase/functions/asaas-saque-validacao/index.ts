@@ -9,7 +9,14 @@
 //
 // Só aprova o que o OrçaCloud disparou: supplier_payments em andamento com o
 // mesmo id da Asaas, valor e chave PIX (ou linha digitável). Decisão em
-// utils/asaasSaque.ts (testada). Cada decisão vai para o log da função.
+// utils/asaasSaque.ts (testada). Cada decisão fica em `asaas_saque_decisoes`
+// (18/10/2026 — a doc pede "mantenha logs das decisões").
+//
+// Reserva (pedido chegou antes de o OrçaCloud gravar o id da Asaas), endurecida
+// em 18/10/2026: o pedido oficial de PIX vem com `pixAddressKey: null`, e a
+// reserva aprovava só pelo valor. Agora exige CPF/CNPJ do favorecido (PIX) ou a
+// linha digitável (boleto), e AMARRA o id da Asaas ao registro na aprovação —
+// um registro nunca aprova duas operações diferentes.
 //
 // REGRA #7, pergunta 3: gate no código — header `asaas-access-token` comparado
 // em tempo constante com ASAAS_SAQUE_TOKEN; sem o segredo configurado, recusa
@@ -19,7 +26,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { decidirSaque, idDoPedido, type PedidoDeSaque, type PagamentoRegistrado } from "../../../utils/asaasSaque.ts"
+import { decidirSaque, idDoPedido, escolherReserva, type PedidoDeSaque, type PagamentoRegistrado, type DecisaoDeSaque } from "../../../utils/asaasSaque.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -34,7 +41,9 @@ function comparaSegredo(a: string, b: string): boolean {
 }
 
 const espera = (ms: number) => new Promise(r => setTimeout(r, ms));
-const COLS = 'id,payment_type,status,value,pix_key,identification_field';
+const COLS = 'id,organization_id,payment_type,status,value,pix_key,identification_field,beneficiary_document,asaas_transfer_id,asaas_bill_id';
+
+type Registro = PagamentoRegistrado & { id: string; organization_id: string | null; asaas_transfer_id: string | null; asaas_bill_id: string | null };
 
 serve(async (req: Request) => {
     if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -57,29 +66,61 @@ serve(async (req: Request) => {
     });
 
     const alvo = idDoPedido(pedido);
-    let registro: PagamentoRegistrado | null = null;
+    let registro: Registro | null = null;
+    let viaReserva = false;
     if (alvo) {
         // A asaas-payment grava o id da Asaas logo DEPOIS da resposta do POST.
         // Se a pergunta chegar antes dessa gravação, tenta de novo em seguida.
         for (let tentativa = 0; tentativa < 3 && !registro; tentativa++) {
             if (tentativa > 0) await espera(1500);
             const { data } = await admin.from('supplier_payments').select(COLS).eq(alvo.coluna, alvo.id).maybeSingle();
-            registro = data ?? null;
+            registro = (data as Registro | null) ?? null;
         }
-        // Última chance para PIX: a ordem APPROVED recém-criada, ainda sem o id
-        // da Asaas, com o mesmo valor (a chave é conferida na decisão).
-        if (!registro && pedido.type === 'TRANSFER') {
+        // Reserva: a ordem APPROVED recém-criada, ainda sem o id da Asaas, que bate
+        // em CPF/CNPJ + valor (PIX) ou linha digitável (boleto). Ambíguo = nenhuma.
+        if (!registro) {
             const dezMin = new Date(Date.now() - 10 * 60_000).toISOString();
             const { data } = await admin.from('supplier_payments').select(COLS)
-                .eq('payment_type', 'PIX_TRANSFER').eq('status', 'APPROVED')
-                .is('asaas_transfer_id', null).eq('value', Number(pedido.transfer?.value ?? -1))
-                .gte('created_at', dezMin).order('created_at', { ascending: false }).limit(2);
-            // Duas candidatas iguais = ambíguo: melhor recusar do que aprovar a errada.
-            if (data?.length === 1) registro = data[0];
+                .eq('payment_type', pedido.type === 'TRANSFER' ? 'PIX_TRANSFER' : 'BILL')
+                .eq('status', 'APPROVED').is(alvo.coluna, null)
+                .gte('created_at', dezMin).order('created_at', { ascending: false }).limit(20);
+            registro = escolherReserva(pedido, (data ?? []) as Registro[]);
+            viaReserva = !!registro;
         }
     }
 
-    const decisao = decidirSaque(pedido, registro);
-    console.log('[asaas-saque-validacao]', pedido.type, alvo?.id ?? '-', '→', decisao.status, decisao.refuseReason ?? '');
+    let decisao: DecisaoDeSaque = decidirSaque(pedido, registro);
+
+    // Aprovou pela reserva: amarra o id da Asaas ao registro AGORA (só se ainda vazio).
+    // Se outro pedido já o amarrou a outra operação, recusa.
+    if (decisao.status === 'APPROVED' && viaReserva && registro && alvo) {
+        const { data: amarrou } = await admin.from('supplier_payments')
+            .update({ [alvo.coluna]: alvo.id }).eq('id', registro.id).is(alvo.coluna, null).select('id');
+        if (!amarrou?.length) {
+            const { data: atual } = await admin.from('supplier_payments').select(alvo.coluna).eq('id', registro.id).maybeSingle();
+            if ((atual as Record<string, string | null> | null)?.[alvo.coluna] !== alvo.id) {
+                decisao = { status: 'REFUSED', refuseReason: 'Pagamento do OrçaCloud já ligado a outra operação da Asaas.' };
+            }
+        }
+    }
+
+    console.log('[asaas-saque-validacao]', pedido.type, alvo?.id ?? '-', viaReserva ? '(reserva)' : '', '→', decisao.status, decisao.refuseReason ?? '');
+
+    // Registro durável da decisão. Falhar aqui não muda a resposta à Asaas.
+    const valor = pedido.type === 'TRANSFER' ? pedido.transfer?.value : pedido.type === 'BILL' ? pedido.bill?.value : null;
+    const { error: erroRegistro } = await admin.from('asaas_saque_decisoes').insert({
+        organization_id: registro?.organization_id ?? null,
+        supplier_payment_id: registro?.id ?? null,
+        tipo: pedido.type,
+        asaas_id: alvo?.id ?? null,
+        valor: valor == null ? null : Number(valor),
+        decisao: decisao.status,
+        motivo: decisao.refuseReason ?? null,
+        via_reserva: viaReserva,
+        favorecido_documento: pedido.transfer?.bankAccount?.cpfCnpj ?? null,
+        payload: pedido,
+    });
+    if (erroRegistro) console.error('[asaas-saque-validacao] falha ao registrar a decisão:', erroRegistro.message);
+
     return json(decisao);
 });

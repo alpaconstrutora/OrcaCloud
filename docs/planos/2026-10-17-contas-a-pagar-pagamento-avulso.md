@@ -59,7 +59,8 @@ Pedido, Contrato, Boleto, Folha, Tributo etc. `payableService.create` já gravav
 | 5 | `components/financeiro/PagamentoAvulsoSheet.tsx` (criar/editar) | `check-ui-standard.sh` exit 0 | ✅ |
 | 6 | `ContasPagarManager`/`ContasPagarParcelas`: botão "Novo pagamento avulso", Editar/Ver documento na linha MANUAL, rótulo "Avulso", estado vazio | `check-ui-standard`, `check-system-projects`, `check-project-classification`, `orgContextGuard` verdes | ✅ todos exit 0 |
 | 7 | Verificação no app de verdade (Playwright) + linhas conferidas no banco | roteiro abaixo executado | ✅ ver resultado abaixo |
-| 8 | Republicar a Edge Function `client-portal-rateio-comprovantes` (usa o resolvedor compartilhado) — autorizado pelo usuário | sonda sem credencial continua recusada | ⏳ |
+| 8 | Republicar a Edge Function `client-portal-rateio-comprovantes` (usa o resolvedor compartilhado) — autorizado pelo usuário | sonda sem credencial continua recusada | ✅ v3 → v4, `verify_jwt` segue ligado; sem header = 401, anon + token falso = 403 |
+| 9 | Publicação (push em main) | `conferir-producao.sh "Novo pagamento avulso"` acha o texto no bundle servido | ✅ domínio serve `fa95739` (carimbado) e o texto está no bundle |
 
 ## Roteiro de verificação (item 7)
 

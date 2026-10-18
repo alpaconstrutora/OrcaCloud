@@ -107,6 +107,7 @@ import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
 import {
   comandoDaEscada,
   comUidsDoPavimento,
+  alinharSegundoAoPatamar,
   dividirEmTres,
   dividirPrograma,
   escolherNucleo,
@@ -116,6 +117,7 @@ import {
   zonasMolhadasDoBanheiro,
   HIPOTESES_DO_SOBRADO_PADRAO,
   pavimentoComNucleo,
+  retanguloDoSegundo,
   pilaresDoSobrado,
   semPortaDeEntrada,
   prumadasPeloMeioDoComodo,
@@ -1083,6 +1085,11 @@ export interface ResumoDoSobrado {
   escada: { degraus: number; espelhoMm: number; pisoMm: number; blondelMm: number };
   /** O ambiente para o qual o núcleo abre em cada pavimento (`null` = sem porta — vira pendência). */
   portas: { terreo: string | null; superior: string | null };
+  /**
+   * F27-D2: na casa de 3 pavimentos, o 2º — o nível, o retângulo recuado (no quadro da casa), o ambiente para o qual o
+   * núcleo abre e a área do terraço (a laje do 1º descoberta). Ausente/null = sobrado.
+   */
+  segundo?: { nivelId: ObjectId; retangulo: Retangulo; porta: string | null; terracoM2: number } | null;
 }
 
 /** F9: o resumo da elétrica. */
@@ -1382,8 +1389,8 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   return fica;
 }
 
-/** F27-D1: o que a casa de 3 pavimentos diz enquanto a arquitetura dela não existe (a D2 tira). */
-export const MOTIVO_TRES_PAVIMENTOS_EM_OBRA = 'A casa de 3 pavimentos ainda não gera a arquitetura (só a implantação) — gere o sobrado, ou deixe em "Automático".';
+/** F27-D2: o que a casa de 3 pavimentos diz enquanto a estrutura e as instalações dela não existem (a D3 e a D4 tiram). */
+export const MOTIVO_TRES_PAVIMENTOS_EM_OBRA = 'A casa de 3 pavimentos ainda não lança a estrutura nem as instalações (só a arquitetura dos três pavimentos) — gere o sobrado, ou deixe em "Automático".';
 
 function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> & { pavimentos: 1 | 2 | 3 }, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const hip: HipotesesDaCasa = {
@@ -1470,8 +1477,14 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   const peDireitoMm = hipGerador.peDireitoMm ?? HIPOTESES_DO_GERADOR_PADRAO.peDireitoMm;
   const andarMm = peDireitoMm + hip.sobrado.lajeEntrePavimentosMm;
   // F27-D: em 3, o pavimento maior é o térreo ou o 1º (o 2º é recuado, com o terraço) — o retângulo é o dele.
-  const divididos = hip.pavimentos === 2 ? dividirPrograma(programa) : null;
-  const pavimentosDoPrograma = divididos ? [divididos.terreo, divididos.superior] : hip.pavimentos === 3 ? Object.values(dividirEmTres(programa)) : null;
+  // F27-D: em 3, o `superior` é o 1º pavimento e o `segundo`, o de cima (recuado, com o terraço).
+  const divididos: { terreo: Programa; superior: Programa; segundo: Programa | null } | null =
+    hip.pavimentos === 2
+      ? { ...dividirPrograma(programa), segundo: null }
+      : hip.pavimentos === 3
+        ? (({ terreo, primeiro, segundo }) => ({ terreo, superior: primeiro, segundo }))(dividirEmTres(programa))
+        : null;
+  const pavimentosDoPrograma = divididos ? [divididos.terreo, divididos.superior, ...(divididos.segundo ? [divididos.segundo] : [])] : null;
   const implantar = (h: Partial<HipotesesDaImplantacao>) => implantacaoDaCasa(
     entrada.ctx,
     programa,
@@ -1532,11 +1545,6 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   }
   const implantacao = imp.implantacao;
   etapa('IMPLANTACAO', ROTULO_DA_ETAPA_DA_CASA.IMPLANTACAO, 'CALCULOU', 0, resumoDaImplantacao(implantacao));
-  // F27-D1: a casa de 3 pavimentos já se implanta (gabarito, altura, CA); a arquitetura dos três planos é a D2.
-  if (hip.pavimentos === 3) {
-    pendencias.push({ grupo: 'PREMISSA', texto: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
-    return vazio(MOTIVO_TRES_PAVIMENTOS_EM_OBRA, implantacao);
-  }
   // F24: onde as vagas descobertas foram e a casa em L são DECISÕES da implantação — para conferir.
   for (const a of implantacao.avisos) {
     const decisao = /^(Vagas descobertas|Casa em L|Garagem):/.test(a);
@@ -2772,33 +2780,91 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     const et = t.resultados.length ? escolherSemente(t.resultados) : null;
     const es = comCorredor.length ? escolherSemente(comCorredor) : null;
     const corredor = es?.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? null;
-    const nucleo = et && es ? escolherNucleo(rl, corredor, et.r.ambientes, es.r.ambientes, hip.sobrado) : null;
+    // F27-D2: em 3 pavimentos a escada sobe de preferência para os fundos — o patamar na frente do núcleo, o 2º atrás dele.
+    const nucleo = et && es ? (divididos.segundo ? escolherNucleo(rl, corredor, et.r.ambientes, es.r.ambientes, hip.sobrado, [true]) : null) ?? escolherNucleo(rl, corredor, et.r.ambientes, es.r.ambientes, hip.sobrado) : null;
     if (semPlanta || !nucleo || !et || !es) {
       const texto = semPlanta ?? `não cabe o núcleo da escada (${f2(hip.sobrado.nucleoLarguraMm / 1000)} × ${f2(hip.sobrado.nucleoProfundidadeMm / 1000)} m) na ponta do corredor de cima`;
       etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, texto);
       pendencias.push({ grupo: 'SEM_SOLUCAO', texto });
       return vazio(texto, implantacao);
     }
-    for (const [pav, x] of [['Térreo', et.r], ['Superior', es.r]] as const) decisoes.push(...x.decisoes.map((d) => `${pav}: ${d}`));
+    // F27-D2 (decisão do usuário, 18/10/2026: "recuado com terraço"): o 2º pavimento num retângulo menor, nos fundos e
+    // do lado do núcleo (o terraço na frente, sobre a laje do 1º), com o corredor no patamar da escada.
+    let eg: { r: ResultadoDoGerador; texto: string } | null = null;
+    let retDoSegundo: Retangulo | null = null;
+    if (divididos.segundo) {
+      const seg = divididos.segundo;
+      const malha = hipGerador.malhaMm ?? HIPOTESES_DO_GERADOR_PADRAO.malhaMm;
+      const areaM2 = (resumoDoPrograma(seg).areaIdealComCirculacaoM2 + (hip.sobrado.nucleoLarguraMm * hip.sobrado.nucleoProfundidadeMm) / 1e6) * (hipImplantacao.fatorDoRetanguloSobreUtil ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.fatorDoRetanguloSobreUtil);
+      const inicial = retanguloDoSegundo(rl, nucleo, areaM2, hipImplantacao.proporcaoFrenteFundo ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.proporcaoFrenteFundo, hip.sobrado, malha);
+      const anel = (r: Retangulo) => [point(r.x0, r.y0), point(r.x1, r.y0), point(r.x1, r.y1), point(r.x0, r.y1)];
+      const alinhados = (hip.sementes.length ? hip.sementes : [1]).flatMap((semente) => {
+        const a = alinharSegundoAoPatamar(
+          (r, invertida) => {
+            try {
+              return gerar({ ...entradaDoGerador, programa: seg, envelope: anel(r), direcaoDaFrente: invertida ? point(0, 1) : null }, semente, hipGerador);
+            } catch {
+              return null;
+            }
+          },
+          rl,
+          inicial,
+          nucleo,
+          hip.sobrado,
+          malha,
+        );
+        return a ? [a] : [];
+      });
+      if (!alinhados.length) {
+        const texto = 'o 2º pavimento não fechou com o corredor no patamar da escada (nenhuma alternativa do gerador) — gere o sobrado';
+        etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, texto);
+        pendencias.push({ grupo: 'SEM_SOLUCAO', texto });
+        return vazio(texto, implantacao);
+      }
+      eg = escolherSemente(alinhados.map((a) => a.r));
+      const escolhido = alinhados.find((a) => a.r === eg!.r)!;
+      retDoSegundo = escolhido.ret;
+      if (escolhido.invertida) decisoes.push('2º pavimento: o íntimo à frente do corredor (a planta invertida) — atrás do patamar da escada não cabia.');
+    }
+    const pavimentosGerados: [string, ResultadoDoGerador][] = [['Térreo', et.r], [eg ? '1º pavimento' : 'Superior', es.r], ...(eg ? [['2º pavimento', eg.r] as [string, ResultadoDoGerador]] : [])];
+    for (const [pav, x] of pavimentosGerados) decisoes.push(...x.decisoes.map((d) => `${pav}: ${d}`));
     const T = entrada.levelId;
     // F25: a cota do térreo JÁ no platô (a terraplenagem o move antes) — do original, o superior ficava a 1,8 m dele.
     const nivel = m.levels.find((l) => l.id === T)!;
     let sobrado: ResumoDoSobrado;
     let n = 0;
     try {
-      n += aplicar([{ type: 'AddLevel', name: 'Pavimento superior', elevationMm: nivel.elevationMm + andarMm, defaultHeightMm: nivel.defaultHeightMm, uid: uidDeterministico(`casa-automatica:superior:${T}`) }]);
+      n += aplicar([{ type: 'AddLevel', name: eg ? '1º pavimento' : 'Pavimento superior', elevationMm: nivel.elevationMm + andarMm, defaultHeightMm: nivel.defaultHeightMm, uid: uidDeterministico(`casa-automatica:superior:${T}`) }]);
       const S = m.levels.find((l) => !original.levels.some((o) => o.id === l.id))!.id;
+      let G: ObjectId | null = null;
+      if (eg) {
+        n += aplicar([{ type: 'AddLevel', name: '2º pavimento', elevationMm: nivel.elevationMm + 2 * andarMm, defaultHeightMm: nivel.defaultHeightMm, uid: uidDeterministico(`casa-automatica:segundo:${T}`) }]);
+        G = m.levels.find((l) => l.id !== S && !original.levels.some((o) => o.id === l.id))!.id;
+      }
       const pt = pavimentoComNucleo(comUidsDoPavimento(comandosDeAplicacao(et.r, T), 'T'), T, nucleo, et.r.ambientes, 'T', peDireitoMm, hip.sobrado);
       // O superior não tem porta para a rua: a porta de entrada que o gerador pôs na fachada sai antes.
       const ps = pavimentoComNucleo(comUidsDoPavimento(semPortaDeEntrada(comandosDeAplicacao(es.r, S), rl), 'S'), S, nucleo, es.r.ambientes, 'S', peDireitoMm, hip.sobrado, corredor);
+      // F27-D2: o 2º sem as portas para FORA da casa (fundos e laterais); a do terraço (a "entrada" do gerador na frente
+      // do retângulo recuado) fica. A segunda escada, empilhada no mesmo núcleo, sai do 1º.
+      const corredorDoSegundo = eg?.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? null;
+      const pg = eg && G ? pavimentoComNucleo(comUidsDoPavimento(semPortaDeEntrada(comandosDeAplicacao(eg.r, G), rl), 'G'), G, nucleo, eg.r.ambientes, 'G', peDireitoMm, hip.sobrado, corredorDoSegundo) : null;
       const exata = implantacao.alinhadaAoDesenho;
-      n += aplicar([...comandosLocaisNoMundo(pt.comandos, q, exata), ...comandosLocaisNoMundo(ps.comandos, q, exata), ...comandosLocaisNoMundo([comandoDaEscada(T, nucleo, hip.sobrado)], q, exata)]);
+      n += aplicar([
+        ...comandosLocaisNoMundo(pt.comandos, q, exata),
+        ...comandosLocaisNoMundo(ps.comandos, q, exata),
+        ...(pg ? comandosLocaisNoMundo(pg.comandos, q, exata) : []),
+        ...comandosLocaisNoMundo([comandoDaEscada(T, nucleo, hip.sobrado), ...(G ? [comandoDaEscada(S, nucleo, hip.sobrado)] : [])], q, exata),
+      ]);
       const med = medirEscada(m, m.stairs[m.stairs.length - 1]);
       sobrado = {
         nivelSuperiorId: S,
         nucleo,
         escada: { degraus: med.degraus, espelhoMm: Math.round(med.espelhoMm), pisoMm: Math.round(med.pisoMm), blondelMm: Math.round(med.blondelMm) },
         portas: { terreo: pt.porta?.vizinho ?? null, superior: ps.porta?.vizinho ?? null },
+        segundo:
+          G && pg && retDoSegundo
+            ? { nivelId: G, retangulo: retDoSegundo, porta: pg.porta?.vizinho ?? null, terracoM2: Math.round(((rl.x1 - rl.x0) * (rl.y1 - rl.y0) - (retDoSegundo.x1 - retDoSegundo.x0) * (retDoSegundo.y1 - retDoSegundo.y0)) / 1e4) / 100 }
+            : null,
       };
       for (const a of med.avisos) pendencias.push({ grupo: 'VERIFICACAO', texto: `Escada: ${a}` });
     } catch (e) {
@@ -2809,7 +2875,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     }
     const lado = nucleo.lado === 'DIREITA' ? 'direita' : 'esquerda';
     if (!sobrado.portas.terreo) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Escada: nenhum ambiente do térreo encosta no patamar — abra a porta do núcleo à mão.' });
-    if (!sobrado.portas.superior) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Escada: o patamar de cima não encosta no corredor — abra a porta do núcleo à mão.' });
+    if (!sobrado.portas.superior) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o patamar ${eg ? 'do 1º pavimento' : 'de cima'} não encosta no corredor — abra a porta do núcleo à mão.` });
+    if (sobrado.segundo && !sobrado.segundo.porta) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Escada: o patamar do 2º pavimento não encosta no corredor — abra a porta do núcleo à mão.' });
     // O que o núcleo comeu, medido no DESENHO: abaixo do mínimo do programa é sem solução; acima, conferir.
     for (const a of nucleo.perdidos) {
       const amb = [...et.r.ambientes, ...es.r.ambientes].find((x) => x.nome === a);
@@ -2821,15 +2888,28 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo deixa ${a} ${ficouM2 != null ? `com ${f2(ficouM2)} m²` : 'sem área'}${minimoM2 != null ? `, abaixo do mínimo de ${f2(minimoM2)} m²` : ''} — mude a escada de lugar.` });
     }
     for (const a of nucleo.partidos) pendencias.push({ grupo: 'VERIFICACAO', texto: `Escada: o núcleo parte ${a} em dois — o pedaço menor fica sem nome.` });
+    // F27-D2: o 2º não entrou na escolha do núcleo — o que ele comeu lá, medido no desenho.
+    if (eg && sobrado.segundo) {
+      const G = sobrado.segundo.nivelId;
+      for (const a of eg.r.ambientes) {
+        if (a.item.uso === 'CIRCULACAO' || !(a.ret.x0 < nucleo.ret.x1 && a.ret.x1 > nucleo.ret.x0 && a.ret.y0 < nucleo.ret.y1 && a.ret.y1 > nucleo.ret.y0)) continue;
+        const sp = m.spaces.find((x) => x.levelId === G && x.name === a.nome);
+        const ficouM2 = sp ? Math.round(sp.areaMm2 / 1e4) / 100 : null;
+        if (ficouM2 != null && ficouM2 >= a.item.areaMinM2) pendencias.push({ grupo: 'CONFERIR', texto: `Escada: o núcleo come parte de ${a.nome} no 2º pavimento — fica com ${f2(ficouM2)} m² (mínimo do programa ${f2(a.item.areaMinM2)} m²).` });
+        else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo deixa ${a.nome} no 2º pavimento ${ficouM2 != null ? `com ${f2(ficouM2)} m²` : 'sem área'}, abaixo do mínimo de ${f2(a.item.areaMinM2)} m².` });
+      }
+    }
     // F22: "sem porta direta" já sai na CONFERÊNCIA do programa — aqui só pesa na escolha (como na térrea).
-    for (const [pav, x] of [['térreo', et.r], ['superior', es.r]] as const) for (const a of x.avisos) if (!/sem porta direta \(relação obrigatória\)/.test(a)) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura (${pav}): ${a}` });
-    const paredes = m.walls.filter((w) => w.levelId === T || w.levelId === sobrado.nivelSuperiorId).length;
+    for (const [pav, x] of pavimentosGerados) for (const a of x.avisos) if (!/sem porta direta \(relação obrigatória\)/.test(a)) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura (${pav.toLowerCase()}): ${a}` });
+    const paredes = m.walls.filter((w) => w.levelId === T || w.levelId === sobrado.nivelSuperiorId || w.levelId === sobrado.segundo?.nivelId).length;
     etapa(
       'ARQUITETURA',
       ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA,
       'LANCOU',
       n,
-      `sobrado: ${paredes} paredes; térreo com ${et.r.ambientes.length} e superior com ${es.r.ambientes.length} ambientes; escada em U de ${sobrado.escada.degraus} degraus (${sobrado.escada.espelhoMm} × ${sobrado.escada.pisoMm} mm) no núcleo à ${lado} — térreo: ${et.texto}; superior: ${es.texto}`,
+      eg && sobrado.segundo
+        ? `3 pavimentos: ${paredes} paredes; térreo com ${et.r.ambientes.length}, 1º com ${es.r.ambientes.length} e 2º com ${eg.r.ambientes.length} ambientes; o 2º recuado em ${f2((sobrado.segundo.retangulo.x1 - sobrado.segundo.retangulo.x0) / 1000)} × ${f2((sobrado.segundo.retangulo.y1 - sobrado.segundo.retangulo.y0) / 1000)} m (terraço de ${f2(sobrado.segundo.terracoM2)} m²); duas escadas em U de ${sobrado.escada.degraus} degraus (${sobrado.escada.espelhoMm} × ${sobrado.escada.pisoMm} mm) empilhadas no núcleo à ${lado} — térreo: ${et.texto}; 1º: ${es.texto}; 2º: ${eg.texto}`
+        : `sobrado: ${paredes} paredes; térreo com ${et.r.ambientes.length} e superior com ${es.r.ambientes.length} ambientes; escada em U de ${sobrado.escada.degraus} degraus (${sobrado.escada.espelhoMm} × ${sobrado.escada.pisoMm} mm) no núcleo à ${lado} — térreo: ${et.texto}; superior: ${es.texto}`,
     );
 
     // F27: as janelas de cima alinhadas com as de baixo, antes dos pilares (o intermediário do térreo sobe entre elas).
@@ -2837,8 +2917,28 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       const alinhadas = alinharJanelasDoSuperior(m, T, sobrado.nivelSuperiorId);
       if (alinhadas.length) {
         aplicar(alinhadas);
-        decisoes.push(`Sobrado: ${alinhadas.length} janela(s) do superior alinhada(s) com as do térreo, na mesma fachada.`);
+        decisoes.push(`Sobrado: ${alinhadas.length} janela(s) do ${eg ? '1º pavimento' : 'superior'} alinhada(s) com as do térreo, na mesma fachada.`);
       }
+      // F27-D2: par a par — as do 2º com as do 1º.
+      const doSegundo = sobrado.segundo ? alinharJanelasDoSuperior(m, sobrado.nivelSuperiorId, sobrado.segundo.nivelId) : [];
+      if (doSegundo.length) {
+        aplicar(doSegundo);
+        decisoes.push(`3 pavimentos: ${doSegundo.length} janela(s) do 2º alinhada(s) com as do 1º, na mesma fachada.`);
+      }
+    }
+    // F27-D2: a casa de 3 pavimentos fecha aqui — a arquitetura dos três; a estrutura (D3) e as instalações (D4) ainda não.
+    if (eg && sobrado.segundo) {
+      for (const id of ORDEM_DAS_ETAPAS) if (id !== 'CONFERENCIA' && !(id === 'TERRAPLENAGEM' && !temTerreno) && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, MOTIVO_TRES_PAVIMENTOS_EM_OBRA);
+      pendencias.push({ grupo: 'PREMISSA', texto: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
+      return fechar({
+        projecaoM2: et.r.resumo.areaConstruidaM2,
+        areaConstruidaM2: et.r.resumo.areaConstruidaM2 + es.r.resumo.areaConstruidaM2 + eg.r.resumo.areaConstruidaM2,
+        alturaM: (3 * andarMm) / 1000,
+        semente: et.r.semente,
+        escolha: `térreo: ${et.texto}; 1º: ${es.texto}; 2º: ${eg.texto}`,
+        sobrado,
+        disciplinas: { estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA(), forro: null, furos: null },
+      });
     }
     lancarEscadaDeAcesso();
     lancarRampaDaGaragem();

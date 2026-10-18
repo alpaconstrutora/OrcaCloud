@@ -10,12 +10,15 @@ import type { AmbienteGerado, Retangulo } from '../utils/blueprintGerador';
 import { HIPOTESES_PILARES_PADRAO } from '../utils/blueprintPilaresAutomaticos';
 import {
   alinharJanelasDoSuperior,
+  alinharSegundoAoPatamar,
   comandoDaEscada,
   dividirEmTres,
   dividirPrograma,
   escolherNucleo,
   HIPOTESES_DO_SOBRADO_PADRAO,
   paredeSobOPonto,
+  pavimentoComNucleo,
+  retanguloDoSegundo,
   prumadasPeloMeioDoComodo,
   pedacosFora,
   shaftDoGrupo,
@@ -90,8 +93,70 @@ describe('dividirEmTres (F27-D: social embaixo, íntimo em cima)', () => {
     const d = dividirEmTres(p0);
     const qtd = (p: typeof p0) => p.itens.filter((i) => i.uso === 'DORMITORIO').reduce((s, i) => s + i.quantidade, 0);
     expect(qtd(d.segundo)).toBe(1);
+    // No 2º, atrás do corredor (íntimo); no 1º, na faixa da frente como no sobrado.
+    expect(d.segundo.itens.find((i) => i.uso === 'DORMITORIO')?.privacidade).toBe('INTIMO');
+    expect(d.primeiro.itens.find((i) => i.uso === 'DORMITORIO')?.privacidade).toBe('SOCIAL');
     expect(qtd(d.primeiro)).toBe(qtd(p0) - 1);
     expect(d.primeiro.itens.some((i) => i.uso === 'BANHEIRO')).toBe(true);
+  });
+});
+
+describe('F27-D2: o 2º pavimento recuado', () => {
+  const casa: Retangulo = { x0: 0, y0: 0, x1: 9000, y1: 14000 };
+  const hip = HIPOTESES_DO_SOBRADO_PADRAO;
+
+  it('retanguloDoSegundo: nos fundos, do lado do núcleo, com a área pedida; a sobra menor que a faixa mínima o 2º toma', () => {
+    const r = retanguloDoSegundo(casa, { lado: 'DIREITA' }, 40, 0.7);
+    expect(r.x1).toBe(casa.x1);
+    expect(r.y1).toBe(casa.y1);
+    expect(r.x1 - r.x0).toBe(5400); // o mínimo: o núcleo (2,40 m) + 3 m
+    expect(((r.x1 - r.x0) * (r.y1 - r.y0)) / 1e6).toBeGreaterThanOrEqual(39.5);
+    expect(retanguloDoSegundo(casa, { lado: 'ESQUERDA' }, 40, 0.7).x0).toBe(casa.x0);
+    // Casa de 6,6 m: sobrariam 1,2 m ao lado — o 2º toma a largura inteira.
+    expect(retanguloDoSegundo({ ...casa, x1: 6600 }, { lado: 'DIREITA' }, 40, 0.7)).toMatchObject({ x0: 0, x1: 6600 });
+  });
+
+  // Um "gerador" de mentira: o corredor a 2 m da frente do retângulo (invertido, encostado nos fundos), de lado a lado.
+  const falso = (ret: Retangulo, invertida: boolean) => {
+    const y = invertida ? ret.y1 - 1000 : ret.y0 + 2000;
+    return { ambientes: [{ item: { uso: 'CIRCULACAO' }, ret: { x0: ret.x0, y0: y, x1: ret.x1, y1: y + 1000 } } as unknown as AmbienteGerado] };
+  };
+  const nucleo = { ret: { x0: 6600, y0: 6000, x1: 9000, y1: 9600 }, paraOsFundos: true };
+
+  it('alinharSegundoAoPatamar: o retângulo anda até o corredor cair no meio do patamar — sem encolher', () => {
+    const inicial: Retangulo = { x0: 3600, y0: 7000, x1: 9000, y1: 12000 };
+    const a = alinharSegundoAoPatamar(falso, casa, inicial, nucleo, hip)!;
+    expect(a.invertida).toBe(false);
+    expect(a.ret.y0 + 2000 < 6500 && 6500 < a.ret.y0 + 3000).toBe(true);
+    expect(a.ret.y1 - a.ret.y0).toBe(5000);
+  });
+
+  it('o que sairia da casa troca o sentido da planta; a sobra estreita nos fundos o 2º toma', () => {
+    // Patamar nos fundos (a escada sobe para a frente): o íntimo atrás do corredor sairia da casa — invertido, cabe.
+    const fundo = { ret: { x0: 6600, y0: 10400, x1: 9000, y1: 14000 }, paraOsFundos: false };
+    const a = alinharSegundoAoPatamar(falso, casa, { x0: 3600, y0: 7000, x1: 9000, y1: 12000 }, fundo, hip)!;
+    expect(a.invertida).toBe(true);
+    expect(a.ret).toMatchObject({ y0: 9000, y1: casa.y1 });
+    // Patamar a 0,6 m dos fundos com o corredor no meio: andando, a sobra de trás (< 1,5 m) o 2º toma — e gera de novo.
+    const b = alinharSegundoAoPatamar(falso, casa, { x0: 3600, y0: 2000, x1: 9000, y1: 7000 }, { ret: { x0: 6600, y0: 9900, x1: 9000, y1: 13500 }, paraOsFundos: true }, hip)!;
+    expect(b).toMatchObject({ invertida: false, ret: { y0: 7900, y1: casa.y1 } });
+    // Nenhum sentido cabe: null.
+    expect(alinharSegundoAoPatamar(falso, { ...casa, y1: 5000 }, { x0: 3600, y0: 0, x1: 9000, y1: 5000 }, { ret: { x0: 6600, y0: 1400, x1: 9000, y1: 5000 }, paraOsFundos: true }, hip)).toBeNull();
+  });
+
+  it('pavimentoComNucleo: o núcleo que sobra fora do retângulo ganha a parede da fachada (no térreo, a externa a cobre)', () => {
+    const parede = (a: Point, b: Point, uid: string) => ({ levelId: 'L', a, b, thicknessMm: 200, heightMm: 2800, uid });
+    const cmds = [
+      { type: 'AddWalls', walls: [parede(point(0, 0), point(6000, 0), 'f'), parede(point(6000, 0), point(6000, 4000), 'd'), parede(point(6000, 4000), point(0, 4000), 't'), parede(point(0, 4000), point(0, 0), 'e')] },
+      { type: 'AddOpenings', openings: [] },
+      { type: 'PlaceSpaceLabels', labels: [] },
+    ] as unknown as Command[];
+    const n: NucleoDaEscada = { ret: { x0: 3600, y0: 2000, x1: 6000, y1: 5600 }, lado: 'DIREITA', paraOsFundos: true, partidos: [], perdidos: [], custo: 0 };
+    const out = pavimentoComNucleo(cmds, 'L', n, [], 'G', 2800, hip, { x0: 0, y0: 2000, x1: 6000, y1: 3000 });
+    const paredes = out.comandos.flatMap((c) => (c.type === 'AddWalls' ? c.walls : []));
+    expect(paredes.some((w) => w.a.x === 6000 && w.b.x === 6000 && Math.min(w.a.y, w.b.y) === 4000 && Math.max(w.a.y, w.b.y) === 5600)).toBe(true);
+    const dentroDoRetangulo = pavimentoComNucleo(cmds, 'L', { ...n, ret: { ...n.ret, y1: 3900 } }, [], 'T', 2800, hip);
+    expect(dentroDoRetangulo.comandos.flatMap((c) => (c.type === 'AddWalls' ? c.walls : [])).filter((w) => w.a.x === 6000 && w.b.x === 6000)).toHaveLength(1);
   });
 });
 

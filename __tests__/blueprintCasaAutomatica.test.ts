@@ -660,19 +660,48 @@ describe('planejarCasa — F12a: o sobrado (arquitetura dos dois pavimentos e a 
   });
 });
 
-describe('planejarCasa — F27-D1: a casa de 3 pavimentos (a base)', () => {
+describe('planejarCasa — F27-D1/D2: a casa de 3 pavimentos (implantação e arquitetura)', () => {
   const m = lote();
   const z3 = (gabaritoPavimentos: number | null, gabaritoAlturaMaxM: number | null = null) => entrada(m, { ctx: { ...entrada(m).ctx, zona: { ...ZONA, gabaritoPavimentos, gabaritoAlturaMaxM, coeficienteMax: null } } });
+  const alto = { ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, suites: 2, banheiros: 3, padrao: 'R1-A' as const };
+  const plano = planejarCasa(m, { ...z3(3), curto: alto }, { pavimentos: 3 });
+  const r = plano.resultado;
 
-  it('se implanta em 3 (a altura de três andares, o CA contando três) e para na arquitetura com o motivo dito — nada lançado', () => {
-    const p = planejarCasa(m, z3(3), { pavimentos: 3 });
-    expect(p.comandos).toEqual([]);
-    expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'CALCULOU' });
-    expect(p.implantacao?.pavimentos).toBe(3);
-    const md = p.implantacao!.medidas;
+  it('se implanta em 3 (o CA contando três andares)', () => {
+    expect(plano.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'CALCULOU' });
+    expect(plano.implantacao?.pavimentos).toBe(3);
+    const md = plano.implantacao!.medidas;
     expect(md.coeficiente).toBeCloseTo(Math.round(((md.projecaoM2 * 3) / md.loteM2) * 100) / 100, 2);
-    expect(p.etapas.find((e) => e.id === 'ARQUITETURA')).toMatchObject({ situacao: 'NAO_RODOU', nota: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
-    expect(p.pendencias.some((x) => x.texto === MOTIVO_TRES_PAVIMENTOS_EM_OBRA)).toBe(true);
+  });
+
+  it('a arquitetura sai em três níveis empilhados, com duas escadas no mesmo núcleo — e para antes da estrutura, com o motivo dito', () => {
+    expect(plano.etapas.find((e) => e.id === 'ARQUITETURA')).toMatchObject({ situacao: 'LANCOU' });
+    expect(r.levels).toHaveLength(3);
+    const [t, p1, p2] = [...r.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+    expect(p2.elevationMm - p1.elevationMm).toBe(p1.elevationMm - t.elevationMm);
+    expect(r.stairs.map((e) => e.levelId).sort()).toEqual([t.id, p1.id].sort());
+    expect(r.stairs[0].pontos).toEqual(r.stairs[1].pontos);
+    expect(plano.etapas.find((e) => e.id === 'PILARES')).toMatchObject({ situacao: 'NAO_RODOU', nota: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
+    expect(plano.pendencias.some((x) => x.texto === MOTIVO_TRES_PAVIMENTOS_EM_OBRA)).toBe(true);
+  });
+
+  it('o 2º recuado nos fundos, com o terraço na frente; o núcleo abre para o corredor nos três', () => {
+    const seg = plano.sobrado!.segundo!;
+    const rl = plano.implantacao!.retanguloLocal;
+    expect(seg.retangulo.y1).toBe(rl.y1);
+    expect(seg.retangulo.y0).toBeGreaterThan(rl.y0);
+    expect(seg.terracoM2).toBeGreaterThan(0);
+    expect(plano.sobrado!.portas.superior).toMatch(/Circula/);
+    expect(seg.porta).toMatch(/Circula/);
+    const s2 = r.spaces.filter((x) => x.levelId === seg.nivelId).map((x) => x.name);
+    expect(s2).toEqual(expect.arrayContaining(['Escritório']));
+    expect(s2.some((n) => /^Suíte/.test(n))).toBe(true);
+  });
+
+  it('o programa inteiro no desenho e a trava: reaplicado no original, o mesmo modelo', () => {
+    expect(plano.resumo.ambientesAtendidos).toBe(plano.resumo.ambientesPedidos);
+    expect(conferirPlanoDaCasa(m, plano)).toEqual({ ok: true });
+    expect(snapshotHash(applyBatch(m, plano.comandos).model)).toBe(snapshotHash(r));
   });
 
   it('a zona que só deixa 2 pavimentos (ou a altura de 2) recusa a de 3 e aponta o sobrado', () => {

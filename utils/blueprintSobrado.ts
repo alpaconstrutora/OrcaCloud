@@ -74,6 +74,11 @@ export interface HipotesesDoSobrado {
    * antes, o tubo de queda descia no vaso, pelo meio da cozinha de baixo.
    */
   tuboDeQuedaAteOShaftMm: number;
+  /**
+   * F27-D2 (decisão do usuário, 18/10/2026: "recuado com terraço"): a faixa de terraço mais estreita que vale a pena —
+   * o 2º pavimento que deixaria uma sobra menor que isto (na frente ou ao lado) ocupa a laje inteira naquele sentido, mm.
+   */
+  faixaMinimaDoTerracoMm: number;
 }
 
 export const HIPOTESES_DO_SOBRADO_PADRAO: HipotesesDoSobrado = {
@@ -94,6 +99,7 @@ export const HIPOTESES_DO_SOBRADO_PADRAO: HipotesesDoSobrado = {
   rebaixoDaLajeDoBanheiroMm: 220,
   margemDoRebaixoMm: 600,
   tuboDeQuedaAteOShaftMm: 4000,
+  faixaMinimaDoTerracoMm: 1500,
 };
 
 /** O programa repartido pelos pavimentos (as relações ficam só entre itens do mesmo pavimento). */
@@ -114,8 +120,8 @@ export function dividirPrograma(p: Programa): { terreo: Programa; superior: Prog
  * pavimentos — o térreo com o social e o serviço (sem o escritório); o 2º com a suíte PRINCIPAL (a maior), o banheiro
  * dela (a relação obrigatória) e o escritório; o 1º com o resto (os dormitórios, as outras suítes, os banheiros). Sem
  * suíte, UM dormitório vai ao 2º (o item de quantidade N fica com N − 1 no 1º). A CIRCULAÇÃO existe nos dois de cima (a escada chega no corredor de cada um): no
- * 2º, uma cópia com id próprio (e as relações dela copiadas). Os dormitórios de cima na faixa da frente, como no
- * sobrado (só o zoneamento muda).
+ * 2º, uma cópia com id próprio (e as relações dela copiadas). Os dormitórios do 1º na faixa da frente, como no
+ * sobrado (só o zoneamento muda); o do 2º fica no íntimo, atrás do corredor.
  */
 export function dividirEmTres(p: Programa): { terreo: Programa; primeiro: Programa; segundo: Programa } {
   const noTerreo = (i: Programa['itens'][number]) => USOS_DO_TERREO.has(i.uso) && i.uso !== 'ESCRITORIO';
@@ -132,7 +138,13 @@ export function dividirEmTres(p: Programa): { terreo: Programa; primeiro: Progra
   const circulacoes = cima.filter((i) => i.uso === 'CIRCULACAO');
   const umaUnidade = principal && !sobeInteiro(principal) ? principal : undefined;
   const copiadas = new Set([...circulacoes, ...(umaUnidade ? [umaUnidade] : [])].map((c) => c.id));
-  const segundo = [...cima.filter((i) => doSegundo.has(i.id)), ...(umaUnidade ? [{ ...umaUnidade, id: `${umaUnidade.id}:2`, quantidade: 1 }] : []), ...circulacoes.map((c) => ({ ...c, id: `${c.id}:2` }))];
+  // No 2º o dormitório volta ao íntimo (atrás do corredor, como a suíte): a faixa da frente é a do escritório — e do terraço.
+  const doOriginal = (i: Programa['itens'][number]) => p.itens.find((o) => o.id === i.id) ?? i;
+  const segundo = [
+    ...cima.filter((i) => doSegundo.has(i.id)).map(doOriginal),
+    ...(umaUnidade ? [{ ...doOriginal(umaUnidade), id: `${umaUnidade.id}:2`, quantidade: 1 }] : []),
+    ...circulacoes.map((c) => ({ ...c, id: `${c.id}:2` })),
+  ];
   const primeiro = cima.filter((i) => !doSegundo.has(i.id)).map((i) => (i === umaUnidade ? { ...i, quantidade: i.quantidade - 1 } : i));
   // As relações dos itens de cada pavimento; no 2º, as da circulação (e do dormitório que subiu) passam para a cópia.
   const so = (itens: typeof p.itens, renomear: (id: string) => string = (id) => id) => {
@@ -178,7 +190,9 @@ export function pedacosFora(a: Retangulo, n: Retangulo): Retangulo[] {
  * Onde o núcleo fica: encostado numa fachada lateral (direita ou esquerda) do retângulo da casa, com o patamar sobre o
  * corredor de cima; cresce para os fundos ou para a frente. Das 4 opções, a que menos estraga os DOIS pavimentos: um
  * ambiente que fica abaixo da área mínima pesa 100; um partido em dois, 10; o resto, a fração comida (empate: direita, fundos).
- * `null` sem corredor no superior ou sem espaço.
+ * `null` sem corredor no superior ou sem espaço. F27-D2: `sentidos` restringe para onde a escada sobe — na casa de 3
+ * pavimentos, só para os fundos: o patamar fica na FRENTE do núcleo, onde o corredor do 2º (na frente do retângulo
+ * recuado, quando não há escritório) o encontra; subindo para a frente, o núcleo ficava à frente do corredor de cima.
  */
 export function escolherNucleo(
   casa: Retangulo,
@@ -186,6 +200,7 @@ export function escolherNucleo(
   terreo: readonly AmbienteGerado[],
   superior: readonly AmbienteGerado[],
   hip: HipotesesDoSobrado = HIPOTESES_DO_SOBRADO_PADRAO,
+  sentidos: readonly boolean[] = [true, false],
 ): NucleoDaEscada | null {
   if (!corredor) return null;
   const cw = hip.nucleoLarguraMm;
@@ -194,7 +209,7 @@ export function escolherNucleo(
   const opcoes: NucleoDaEscada[] = [];
   for (const lado of ['DIREITA', 'ESQUERDA'] as const) {
     const x0 = lado === 'DIREITA' ? casa.x1 - cw : casa.x0;
-    for (const paraOsFundos of [true, false]) {
+    for (const paraOsFundos of sentidos) {
       const y0 = paraOsFundos ? corredor.y0 : corredor.y1 - cd;
       const ret = { x0, y0, x1: x0 + cw, y1: y0 + cd };
       if (ret.y0 < casa.y0 || ret.y1 > casa.y1) continue;
@@ -247,6 +262,65 @@ function dentro(a: Point, b: Point, r: Retangulo): [number, number] | null {
   }
   const L = Math.hypot(d.x, d.y);
   return (t1 - t0) * L > 1 ? [t0, t1] : null;
+}
+
+/**
+ * F27-D2 (decisão do usuário, 18/10/2026: "recuado com terraço"): o retângulo do 2º pavimento, no quadro da casa — nos
+ * FUNDOS (o terraço fica na frente, para a rua) e encostado na fachada lateral do núcleo da escada (a sobra ao lado
+ * também é terraço). A área é a do programa do 2º com o núcleo; a proporção, a da casa. Nunca mais estreito que o núcleo
+ * mais 3 m (o mínimo de `escolherNucleo`), nem mais raso que o núcleo; a sobra menor que `faixaMinimaDoTerracoMm` não
+ * vira terraço — o 2º toma a laje inteira naquele sentido.
+ */
+export function retanguloDoSegundo(casa: Retangulo, n: Pick<NucleoDaEscada, 'lado'>, areaM2: number, proporcaoFrenteFundo: number, hip: HipotesesDoSobrado = HIPOTESES_DO_SOBRADO_PADRAO, malhaMm = 50): Retangulo {
+  const naMalha = (v: number) => Math.round(v / malhaMm) * malhaMm;
+  const W = casa.x1 - casa.x0;
+  const D = casa.y1 - casa.y0;
+  const A = areaM2 * 1e6;
+  let w = Math.min(W, Math.max(hip.nucleoLarguraMm + 3000, naMalha(Math.sqrt(A * proporcaoFrenteFundo))));
+  if (W - w < hip.faixaMinimaDoTerracoMm) w = W;
+  let d = Math.min(D, Math.max(hip.nucleoProfundidadeMm, naMalha(A / w)));
+  if (D - d < hip.faixaMinimaDoTerracoMm) d = D;
+  const x0 = n.lado === 'DIREITA' ? casa.x1 - w : casa.x0;
+  return { x0, y0: casa.y1 - d, x1: x0 + w, y1: casa.y1 };
+}
+
+/**
+ * F27-D2: o 2º pavimento com o CORREDOR no patamar da escada. O gerador põe o corredor numa faixa de lado a lado do
+ * retângulo e a planta só se desloca com ele (a malha é a mesma): gerado no lugar inicial, o retângulo ANDA até o meio
+ * do patamar cair no corredor; a sobra menor que `faixaMinimaDoTerracoMm` (na frente ou nos fundos) o 2º toma, o que
+ * muda a planta — aí gera de novo. Nunca encolhe (a área é a do programa): o que sairia da casa troca o sentido da
+ * planta (`invertida` — o íntimo à frente do corredor, o que o gerador chama de frente nos fundos). O núcleo pode sobrar
+ * fora do retângulo: `pavimentoComNucleo` fecha os lados dele que nenhuma parede cobre, a fachada inclusive.
+ * `null` = nenhum dos dois sentidos fechou em `voltas`.
+ */
+export function alinharSegundoAoPatamar<R extends { ambientes: readonly AmbienteGerado[] }>(
+  gerarEm: (ret: Retangulo, invertida: boolean) => R | null,
+  casa: Retangulo,
+  inicial: Retangulo,
+  n: Pick<NucleoDaEscada, 'ret' | 'paraOsFundos'>,
+  hip: HipotesesDoSobrado = HIPOTESES_DO_SOBRADO_PADRAO,
+  malhaMm = 50,
+  voltas = 4,
+): { r: R; ret: Retangulo; invertida: boolean } | null {
+  const meio = n.paraOsFundos ? n.ret.y0 + hip.patamarMm / 2 : n.ret.y1 - hip.patamarMm / 2;
+  for (const invertida of [false, true]) {
+    let ret = inicial;
+    for (let v = 0; v < voltas; v++) {
+      const r = gerarEm(ret, invertida);
+      const cor = r?.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret;
+      if (!r || !cor) break;
+      if (cor.y0 < meio && meio < cor.y1) return { r, ret, invertida };
+      const desloca = Math.round((meio - (cor.y0 + cor.y1) / 2) / malhaMm) * malhaMm;
+      let y0 = ret.y0 + desloca;
+      let y1 = ret.y1 + desloca;
+      if (y0 < casa.y0 || y1 > casa.y1) break;
+      // A sobra que não chega a terraço (frente ou fundos) o 2º toma — como em `retanguloDoSegundo`.
+      if (casa.y1 - y1 < hip.faixaMinimaDoTerracoMm) y1 = casa.y1;
+      if (y0 - casa.y0 < hip.faixaMinimaDoTerracoMm) y0 = casa.y0;
+      ret = { ...ret, y0, y1 };
+    }
+  }
+  return null;
 }
 
 /**
@@ -380,10 +454,14 @@ export function pavimentoComNucleo(
   });
   const recortado = recortarNucleo(realocadas, r);
   const existentes = recortado.flatMap((c) => (c.type === 'AddWalls' ? c.walls : []));
-  // Os lados do núcleo (a fachada lateral já é a parede externa): o de dentro, frente e fundos — só o que falta.
+  // Os lados do núcleo: o de dentro, frente e fundos — só o que falta.
   const xDentro = n.lado === 'DIREITA' ? r.x0 : r.x1;
   const novas: ParedeLocal[] = [];
+  // F27-D2: a fachada também — no 2º recuado o núcleo pode sobrar fora do retângulo; no térreo e no 1º a parede externa
+  // a cobre inteira e nada nasce ali.
+  const xFora = n.lado === 'DIREITA' ? r.x1 : r.x0;
   const lados: { fixo: 'x' | 'y'; valor: number; de: number; ate: number; nome: string }[] = [
+    { fixo: 'x', valor: xFora, de: r.y0, ate: r.y1, nome: 'fac' },
     { fixo: 'x', valor: xDentro, de: r.y0, ate: r.y1, nome: 'esq' },
     { fixo: 'y', valor: r.y0, de: r.x0, ate: r.x1, nome: 'fre' },
     { fixo: 'y', valor: r.y1, de: r.x0, ate: r.x1, nome: 'fun' },

@@ -2644,3 +2644,29 @@ Subfases:
   na ARQUITETURA com `MOTIVO_TRES_PAVIMENTOS_EM_OBRA` (nada lançado) — a D2 tira.
 - As premissas **continuam** lendo 3 como Automático (nada na tela grava 3 até a D4; ler 3 agora deixaria o seletor da
   tela num valor sem opção).
+
+#### Registro da D2 (18/10/2026)
+
+- O ramo do sobrado gera o 3º nível: `AddLevel` "1º pavimento" e "2º pavimento" (a 2 andares), as três plantas com o
+  núcleo recortado (`pavimentoComNucleo` × 3) e **duas escadas em U empilhadas** no mesmo núcleo (a de baixo sai do
+  térreo, a de cima do 1º — o U volta ao lado da partida, o patamar do 1º serve às duas). Janelas alinhadas par a par
+  (o 1º com o térreo, o 2º com o 1º). O plano fecha depois da arquitetura: as etapas seguintes `NAO_RODOU` com
+  `MOTIVO_TRES_PAVIMENTOS_EM_OBRA` (a D3/D4 tiram); a trava (reaplicar no original = o mesmo modelo) vale.
+- **O 2º recuado** (`retanguloDoSegundo`): nos fundos, encostado na fachada lateral do núcleo, com a área do programa
+  do 2º mais o núcleo × o fator da implantação, na proporção da casa; nunca mais estreito que o núcleo + 3 m; a sobra
+  menor que `faixaMinimaDoTerracoMm` (hipótese do sobrado, 1,5 m) o 2º toma. O resto da laje do 1º é o terraço.
+- **O corredor do 2º no patamar** (`alinharSegundoAoPatamar`): o gerador põe o corredor numa faixa de lado a lado e a
+  planta só se desloca com o retângulo (provado na sonda: mesmas medidas relativas em Y = 0 e Y = 3,25 m). O retângulo
+  anda até o meio do patamar cair no corredor; nunca encolhe; o que sairia da casa gera a planta **invertida** (o
+  íntimo à frente do corredor — `direcaoDaFrente` +Y). O núcleo pode sobrar fora do retângulo do 2º: o
+  `pavimentoComNucleo` passou a fechar também a FACHADA do núcleo quando nenhuma parede a cobre (no térreo e no 1º a
+  externa cobre e nada nasce — o teste prova que falha sem isso).
+- O dormitório que sobe ao 2º (sem suíte) fica íntimo, atrás do corredor. A escada da casa de 3 sobe de preferência
+  para os fundos; não cabendo, nos dois sentidos.
+- Medido em 6 lotes/programas (sonda `c:/tmp/f27d`): os 6 lançam, trava ok, programa inteiro; o 2º com 2–4 ambientes
+  (suíte de 13,7–22,7 m²), terraço de 55–85 m²; a planta invertida em 3 deles. Antes (alinhamento que exigia o núcleo
+  dentro do 2º e encolhia o retângulo): 1 de 6, depois 4 de 6 com suíte de 4–5 m².
+- Ficam: o gerador põe cada ambiente do 2º numa linha de lado a lado (banheiro de 5,40 × 1,40 m); com programa pequeno
+  (1 dormitório no 1º) o 1º preenche a laje inteira (dormitório de 59 m²) — o Automático só escolherá 3 pavimentos
+  quando o sobrado não comporta (D4); a porta para o terraço sai da "entrada" do gerador, que na planta invertida fica
+  nos fundos — a D5 confere o acesso ao terraço da frente.

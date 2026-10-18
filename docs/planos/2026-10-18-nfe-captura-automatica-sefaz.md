@@ -54,6 +54,8 @@ estar fechado (REGRA #7, pergunta 1). Corrigir ANTES de guardar a senha (item 1.
 | 18/10/2026 | D2 — Duplicidade por organização (`organization_id, access_key`)? | **Sim.** |
 | 18/10/2026 | D3 — Certificado e senha só por owner/admin? | **Sim.** |
 | 18/10/2026 | D4 — Primeira entrega só NF-e de entrada; CT-e e NFS-e depois? | **Sim.** |
+| 18/10/2026 | D5 — Onde roda a chamada à SEFAZ? (a Vercel da conta é Hobby, que proíbe uso comercial) | **GitHub Actions**: workflow agendado de hora em hora, em Node; gratuito porque o repositório é público. ⚠️ Os logs das execuções são públicos: o código **nunca** imprime chave, CNPJ, fornecedor nem valor de nota. Os itens 2.4 e 2.5 passam a ser o script Node + o workflow, no lugar da Edge Function + `cron.schedule`. |
+| 18/10/2026 | Aplicar o item 1.1 antes do cadastro do certificado? | **Sim, aplicar agora.** O usuário vai cadastrar o A1 em seguida. |
 
 ## Plano
 
@@ -103,7 +105,12 @@ Este é o maior risco técnico. Se ele falhar, o desenho muda, então vem antes 
 
 ### Fase 1 — Certificado e senha guardados com segurança
 
-- [ ] **1.1 Migration: fechar `cert_select_org_member`** para owner/admin, ou tirar
+- [x] **1.1 Migration: fechar `cert_select_org_member`** — feito em 18/10/2026,
+  `aplicar_20271018950000_certificado_digital_so_gestor.sql`, aplicada no banco.
+  Leitura e troca (UPDATE, que faltava para o `upsert`) só com `is_org_manager`.
+  Prova numa transação desfeita, com um objeto fictício no bucket: membro comum vê 0,
+  owner/admin vê 1, anon vê 0; nada sobrou no bucket. `segurancaMigrations` e
+  `migrationsPrefixo` passam. Texto original: fechar para owner/admin, ou tirar
   a leitura do navegador de vez, se só a Edge Function precisar do arquivo.
   **Terminou quando** um membro comum recebe 403 ao pedir URL assinada do `.pfx`
   (prova com o usuário de leitura) e `check-rls-postura.sh` passa.
@@ -182,7 +189,7 @@ Este é o maior risco técnico. Se ele falhar, o desenho muda, então vem antes 
 - [x] Decisões D1–D4 com o usuário — 18/10/2026, as quatro aprovadas como recomendado
 - [ ] Fase 0 — 0 de 3 concluídos; 0.1 e 0.3 parciais (ver itens); 0.2 não iniciado.
   Bloqueado por D5 e por um certificado A1 real para a prova final.
-- [ ] Fase 1 — 0 de 4
+- [ ] Fase 1 — 1 de 4 (1.1 feito)
 - [ ] Fase 2 — 0 de 5
 - [ ] Fase 3 — 0 de 2
 - [ ] Fase 4 — 0 de 2

@@ -46,10 +46,14 @@ estar fechado (REGRA #7, pergunta 1). Corrigir ANTES de guardar a senha (item 1.
 | D2 | `UNIQUE (access_key)` global: mudar para `(organization_id, access_key)`? | Mudar. Num SaaS, uma organização não pode impedir outra de importar a mesma nota. Hoje há só 1 organização com notas, então a troca é barata. |
 | D3 | Quem pode enviar o certificado e a senha? | Só owner/admin da organização dona da empresa. |
 | D4 | Escopo da Fase 1 | Só NF-e de entrada (empresa como destinatária). CT-e, NFS-e e e-mail na Fase 5. |
+| D5 | (nova, 18/10, depois do spike) Onde roda a chamada à SEFAZ, já que a Edge Function não serve? | Pendente. Opções: Function Node na Vercel (`api/`, o projeto já publica lá; conferir se o plano da Vercel permite uso comercial e o tempo máximo de execução) ou um servidor Node próprio. O resto do desenho (Storage → `raw_documents` → `processing_jobs`) não muda. |
 
 | Data | Pergunta | Resposta |
 |---|---|---|
-| — | — | — |
+| 18/10/2026 | D1 — Ciência automática para nota que chega só como resumo? | **Sim.** |
+| 18/10/2026 | D2 — Duplicidade por organização (`organization_id, access_key`)? | **Sim.** |
+| 18/10/2026 | D3 — Certificado e senha só por owner/admin? | **Sim.** |
+| 18/10/2026 | D4 — Primeira entrega só NF-e de entrada; CT-e e NFS-e depois? | **Sim.** |
 
 ## Plano
 
@@ -57,7 +61,17 @@ estar fechado (REGRA #7, pergunta 1). Corrigir ANTES de guardar a senha (item 1.
 
 Este é o maior risco técnico. Se ele falhar, o desenho muda, então vem antes de tudo.
 
-- [ ] **0.1 `docs/spikes/sefaz-dfe/` — mTLS no runtime do Supabase.** Uma função
+> **Resultado 18/10/2026 — Edge Function do Supabase NÃO serve.** A SEFAZ pede o
+> certificado do cliente por renegociação TLS, e o Deno (rustls) não renegocia:
+> a conexão é derrubada. Em Node (OpenSSL) a renegociação acontece. Detalhes e
+> medições em `docs/spikes/sefaz-dfe/README.md`. Pendente: decisão D5 (onde roda) e
+> a prova final com um A1 real.
+
+- [~] **0.1 `docs/spikes/sefaz-dfe/` — mTLS no runtime do Supabase.** ❌ No Supabase
+  não funciona (rustls sem renegociação). ✅ Em Node 24 a renegociação acontece, com o
+  certificado passado como PEM via `node-forge` (o OpenSSL 3 recusa PFX antigo) e
+  HTTP/1.1. **Falta:** resposta 200 com `cStat`, que só sai com certificado A1 ICP-Brasil real.
+  Texto original do item: uma função
   descartável abre um `.pfx` de teste (`node-forge` via esm.sh), gera PEM e chama
   `NFeDistribuicaoDFe` com `Deno.createHttpClient({ cert, key })`.
   **Terminou quando** a função publicada recebe um `retDistDFeInt` com `cStat`
@@ -68,10 +82,24 @@ Este é o maior risco técnico. Se ele falhar, o desenho muda, então vem antes 
   210210 precisa ser assinado (RSA-SHA1 + C14N).
   **Terminou quando** um evento assinado no spike é aceito pela SEFAZ
   (`cStat` 135/136), ou recusado por regra de negócio e não por assinatura.
-- [ ] **0.3 Confirmar endpoints e limites na Nota Técnica vigente** (Portal da NF-e):
+- [~] **0.3 Confirmar endpoints e limites na Nota Técnica vigente** (Portal da NF-e):
   URL de distribuição e de RecepcaoEvento do Ambiente Nacional, janela de 90 dias,
   regra de consumo indevido (656), e se o e-CNPJ da matriz consulta as filiais
   (CNPJ raiz). **Terminou quando** os quatro pontos estão escritos aqui, com a fonte.
+  Levantado em 18/10/2026, por fontes secundárias (a NT oficial ainda precisa ser lida):
+  - **Distribuição:** `https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx`
+    respondeu no spike (TLS ok, cadeia SERPRO). RecepcaoEvento do AN: ainda não conferido.
+  - **Janela:** documentos ficam disponíveis por até 3 meses após a recepção no AN
+    (Focus NFe, resumo da NT 2014.002). Relato da comunidade ACBr: CNPJ que passa
+    mais de 60 dias sem consultar tem a distribuição interrompida.
+  - **656 (consumo indevido):** depois de `cStat` 137, ou com `ultNSU = maxNSU`, esperar
+    1 hora. Consultar antes bloqueia o CNPJ por 1 hora. `consChNFe`/`consNSU`: no
+    máximo 20 por hora (Focus NFe, NT 2014.002, vigência 10/03/2022).
+  - **Filiais:** relatos da comunidade dizem que cada CNPJ precisa do próprio
+    certificado e do próprio `ultNSU`; também há relato de 656 ao alternar CNPJs de
+    mesma raiz. **Não confirmado em fonte oficial**; o desenho guarda o NSU por CNPJ.
+  - Fontes: focusnfe.com.br/notas-tecnicas/nfe/2014-002/ ·
+    focusnfe.com.br/blog/rejeicao-656/ · projetoacbr.com.br/forum (tópicos de distribuição DF-e).
 
 ### Fase 1 — Certificado e senha guardados com segurança
 
@@ -151,8 +179,9 @@ Este é o maior risco técnico. Se ele falhar, o desenho muda, então vem antes 
 ## Estado
 
 - [x] Levantamento do que existe — 18/10/2026
-- [ ] Decisões D1–D4 com o usuário
-- [ ] Fase 0 — 0 de 3
+- [x] Decisões D1–D4 com o usuário — 18/10/2026, as quatro aprovadas como recomendado
+- [ ] Fase 0 — 0 de 3 concluídos; 0.1 e 0.3 parciais (ver itens); 0.2 não iniciado.
+  Bloqueado por D5 e por um certificado A1 real para a prova final.
 - [ ] Fase 1 — 0 de 4
 - [ ] Fase 2 — 0 de 5
 - [ ] Fase 3 — 0 de 2

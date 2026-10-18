@@ -14,6 +14,7 @@ import { JournalEntryCard } from './JournalEntryCard';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '../ui/modal';
 import { useConfirm } from '../ui/confirm';
+import { fmtCnpj } from '../../utils/format';
 
 interface Props {
   organizationId: string | null;
@@ -89,14 +90,14 @@ const COLUMNS: ColumnConfig[] = [
 // São chute inicial; o botão de auto-ajuste da toolbar (§6.1.2) mede o conteúdo real.
 // A soma (1285px) cabe no container real da tela (~1290px com a sidebar aberta),
 // para "Ações" não nascer cortada exigindo scroll lateral logo ao abrir. Três
-// larguras são medidas, não chute: 'cnpj' 165px (14 dígitos + o px-6 da célula,
-// senão o número sai cortado), 'payable' 130px (o cabeçalho "Contas a Pagar"
+// larguras são medidas, não chute: 'cnpj' 185px (18 caracteres da máscara
+// XX.XXX.XXX/XXXX-XX + o px-6 da célula, senão o número sai cortado), 'payable' 130px (o cabeçalho "Contas a Pagar"
 // inteiro) e o par 'order'/'actions' 125/165px — o botão de gerar pedido mudou de
 // coluna, então 'order' precisa caber "#PO-755400" numa linha e 'actions' encolhe
 // para "Ver detalhes" + o ícone de excluir.
 const COL_WIDTHS: Record<string, number> = {
-  code: 75, nf_number: 80, status: 100, issuer: 150, cnpj: 155, issue_date: 95,
-  value: 105, link: 80, order: 140, payable: 130, actions: 175,
+  code: 75, nf_number: 80, status: 100, issuer: 130, cnpj: 185, issue_date: 95,
+  value: 105, link: 80, order: 125, payable: 130, actions: 175,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -146,7 +147,7 @@ function renderDocumentCell(
         <span className="block truncate text-sm font-normal text-gray-700" title={inv.issuer_name}>{inv.issuer_name}</span>
       );
     case 'cnpj':
-      return <span className="block truncate text-sm font-normal text-gray-600">{inv.issuer_cnpj || '—'}</span>;
+      return <span className="block truncate text-sm font-normal text-gray-600">{fmtCnpj(inv.issuer_cnpj)}</span>;
     case 'issue_date':
       return <span className="text-sm font-normal text-gray-600">{fmtDate(inv.issue_date)}</span>;
     case 'value':
@@ -714,7 +715,7 @@ function DocumentDetail({
           <div className="grid grid-cols-2 gap-5">
             {([
               ['Emitente', invoice.issuer_name],
-              ['CNPJ emitente', invoice.issuer_cnpj],
+              ['CNPJ emitente', fmtCnpj(invoice.issuer_cnpj)],
               ['Data de emissão', fmtDate(invoice.issue_date)],
               ['Valor total', fmt(invoice.total_value)],
               ['Status documento', 'Concluído'],
@@ -935,10 +936,13 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
   ];
 
   const term = searchTerm.trim().toLowerCase();
+  const termDigits = term.replace(/\D/g, '');
   const filtered = invoices.filter(i => {
     if (filter === 'linked' && !i.linked_transaction_id) return false;
     if (filter === 'pendente' && i.linked_transaction_id) return false;
-    if (term && !i.issuer_name.toLowerCase().includes(term) && !i.issuer_cnpj.includes(term)) return false;
+    // O CNPJ é guardado só com dígitos mas exibido mascarado — busca por qualquer dos dois.
+    if (term && !i.issuer_name.toLowerCase().includes(term) && !i.issuer_cnpj.includes(term)
+      && !(termDigits && i.issuer_cnpj.replace(/\D/g, '').includes(termDigits))) return false;
     return true;
   });
 

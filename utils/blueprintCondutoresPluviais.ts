@@ -180,6 +180,31 @@ export interface PlanoDeCondutores {
 
 export const MOTIVO_SEM_FRENTE_PARA_A_SAIDA_PLUVIAL = 'Marque a divisa da frente do lote (a que dá para a rua): a saída pluvial vai nela.';
 
+/** F25: onde `a`–`b` cruza `c`–`d` (as frações ao longo de cada um), ou `null`. */
+function cruzamentoDe(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }, d: { x: number; y: number }): { u: number; v: number } | null {
+  if (!segmentosSeCruzam(a, b, c, d)) return null;
+  const r = { x: b.x - a.x, y: b.y - a.y };
+  const q = { x: d.x - c.x, y: d.y - c.y };
+  const den = r.x * q.y - r.y * q.x;
+  if (Math.abs(den) < 1e-9) return null;
+  const u = ((c.x - a.x) * q.y - (c.y - a.y) * q.x) / den;
+  const v = ((c.x - a.x) * r.y - (c.y - a.y) * r.x) / den;
+  return { u, v };
+}
+
+/** F25: entre as geratrizes do condutor e do tubo de outra rede que ele cruza por baixo, mm. */
+const FOLGA_DO_CRUZAMENTO_ENTERRADO_MM = 100;
+
+/** F25: os segmentos `a`–`b` e `c`–`d` se cruzam (no meio dos dois, não só nas pontas). */
+function segmentosSeCruzam(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }, d: { x: number; y: number }): boolean {
+  const o = (p: { x: number; y: number }, q: { x: number; y: number }, r: { x: number; y: number }) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  const d1 = o(c, d, a);
+  const d2 = o(c, d, b);
+  const d3 = o(a, b, c);
+  const d4 = o(a, b, d);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
 /** F24: os obstáculos do horizontal enterrado — os cômodos do pavimento crescidos até o afastamento além da face, e os pilares. */
 function obstaculosDoCondutor(model: BlueprintModel, levelId: ObjectId, hip: HipotesesPluviais): { x: number; y: number }[][] {
   const meia = Math.max(0, ...model.walls.filter((w) => w.levelId === levelId).map((w) => w.thicknessMm / 2));
@@ -230,21 +255,33 @@ function comSaidaProposta(model: BlueprintModel, hip: HipotesesPluviais, fontes:
     ...(model.terminais ?? []).filter((t) => t.disciplina !== 'PLUVIAL').map((t) => t.at),
     ...(model.trechos ?? []).filter((t) => t.disciplina !== 'PLUVIAL' && t.a.x === t.b.x && t.a.y === t.b.y && Math.min(t.cotaAMm, t.cotaBMm) < 0).map((t) => t.a),
   ];
-  const longe = (p: { x: number; y: number }) => ocupados.every((o) => Math.hypot(o.x - p.x, o.y - p.y) >= SAIDA_LONGE_DAS_OUTRAS_REDES_MM);
+  const longeDasOutras = (p: { x: number; y: number }) => ocupados.every((o) => Math.hypot(o.x - p.x, o.y - p.y) >= SAIDA_LONGE_DAS_OUTRAS_REDES_MM);
+  // F25: e o caminho de cada descida até ela não CRUZA um trecho enterrado de outra rede (o coletor predial que desce à
+  // ligação na frente) — no terreno inclinado os dois correm na mesma profundidade e se encontravam.
+  const nivelDaSaida = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0]?.id ?? '';
+  const enterrados = (model.trechos ?? []).filter((t) => t.disciplina !== 'PLUVIAL' && Math.min(t.cotaAMm, t.cotaBMm) < 0 && (t.a.x !== t.b.x || t.a.y !== t.b.y));
+  const cruza = (p: { x: number; y: number }) =>
+    fontes.some((f) => {
+      const pts = [f.at, ...(desvioDoPilar(f.at, p, obstaculosDoCondutor(model, nivelDaSaida, hip)) ?? []), p];
+      return pts.slice(1).some((q, k) => enterrados.some((t) => segmentosSeCruzam(pts[k], q, t.a, t.b)));
+    });
+  const longe = (p: { x: number; y: number }) => longeDasOutras(p) && !cruza(p);
   if (!longe(frente.ponto)) {
     const nx = frente.ponto.x - frente.naDivisa.x;
     const ny = frente.ponto.y - frente.naDivisa.y;
     const nl = Math.hypot(nx, ny) || 1;
     const u = { x: -ny / nl, y: nx / nl };
-    achou: for (let k = 1; k <= 60; k++)
-      for (const sentido of [1, -1]) {
-        const q = { x: Math.round(frente.ponto.x + u.x * sentido * k * 250), y: Math.round(frente.ponto.y + u.y * sentido * k * 250) };
-        const pn = pontoNaFrente(model, q);
-        if (pn && Math.hypot(pn.ponto.x - q.x, pn.ponto.y - q.y) < 2 && longe(pn.ponto)) {
-          frente = pn;
-          break achou;
+    // Primeiro o ponto longe das outras redes E sem cruzar; sem nenhum (descidas dos dois lados do coletor), só longe.
+    const procurar = (serve: (p: { x: number; y: number }) => boolean) => {
+      for (let k = 1; k <= 60; k++)
+        for (const sentido of [1, -1]) {
+          const q = { x: Math.round(frente.ponto.x + u.x * sentido * k * 250), y: Math.round(frente.ponto.y + u.y * sentido * k * 250) };
+          const pn = pontoNaFrente(model, q);
+          if (pn && Math.hypot(pn.ponto.x - q.x, pn.ponto.y - q.y) < 2 && serve(pn.ponto)) return pn;
         }
-      }
+      return null;
+    };
+    frente = procurar(longe) ?? (longeDasOutras(frente.ponto) ? frente : procurar(longeDasOutras) ?? frente);
   }
   const terreo = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0];
   // A cota: o condutor MAIS LONGO chega com a declividade da premissa (todos os outros, com mais).
@@ -301,19 +338,47 @@ export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais
   // afastamento além da face, e os pilares) — em reta, do pé da descida dos fundos à saída da frente, ele cruzava a casa
   // em L inteira por baixo: pilar, esgoto e alimentador no caminho. A queda se reparte pelo comprimento do contorno.
   const obstaculosDe = (levelId: ObjectId) => obstaculosDoCondutor(model, levelId, hip);
+  // F25: os tubos enterrados das OUTRAS redes que o horizontal pode cruzar (o coletor predial que desce fundo até a rua).
+  const outrosEnterrados = (model.trechos ?? []).filter((t) => t.disciplina !== 'PLUVIAL' && Math.min(t.cotaAMm, t.cotaBMm) < 0 && (t.a.x !== t.b.x || t.a.y !== t.b.y));
   const horizontal = (levelId: ObjectId, a: { x: number; y: number }, cotaA: number, b: { x: number; y: number }, cotaB: number, dn: number) => {
     const desvio = desvioDoPilar(a, b, obstaculosDe(levelId)) ?? [];
-    const pts = [a, ...desvio.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), b].filter((p, k, arr) => k === 0 || p.x !== arr[k - 1].x || p.y !== arr[k - 1].y);
+    const base = [a, ...desvio.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), b].filter((p, k, arr) => k === 0 || p.x !== arr[k - 1].x || p.y !== arr[k - 1].y);
+    // F25: o cruzamento com outra rede vira VÉRTICE do perfil, na cota que passa por baixo dela com a folga — o perfil
+    // reto do pé à saída cruzava rente quando a saída é funda (terreno inclinado). Só quando ainda chega à saída com a
+    // declividade mínima; o perfil só desce.
+    const pts: { x: number; y: number; teto?: number }[] = [base[0]];
+    for (let k = 1; k < base.length; k++) {
+      const cruzamentos = outrosEnterrados
+        .filter((t) => t.levelId === levelId)
+        .map((t) => ({ t, c: cruzamentoDe(base[k - 1], base[k], t.a, t.b) }))
+        .filter((x): x is { t: (typeof outrosEnterrados)[number]; c: { u: number; v: number } } => !!x.c && x.c.u > 0.001 && x.c.u < 0.999)
+        .sort((p, q) => p.c.u - q.c.u);
+      for (const { t, c } of cruzamentos) {
+        const p = { x: Math.round(base[k - 1].x + (base[k].x - base[k - 1].x) * c.u), y: Math.round(base[k - 1].y + (base[k].y - base[k - 1].y) * c.u) };
+        const ultimo = pts[pts.length - 1];
+        if (p.x === ultimo.x && p.y === ultimo.y) continue;
+        pts.push({ ...p, teto: Math.floor(t.cotaAMm + (t.cotaBMm - t.cotaAMm) * c.v - t.bitolaMm / 2 - dn / 2 - FOLGA_DO_CRUZAMENTO_ENTERRADO_MM) });
+      }
+      pts.push(base[k]);
+    }
     const comp = pts.slice(1).map((p, k) => Math.hypot(p.x - pts[k].x, p.y - pts[k].y));
     const total = comp.reduce((s, x) => s + x, 0) || 1;
-    let feito = 0;
-    let cota = cotaA;
-    for (let k = 1; k < pts.length; k++) {
-      feito += comp[k - 1];
-      const prox = k === pts.length - 1 ? cotaB : Math.round(cotaA + ((cotaB - cotaA) * feito) / total);
-      add(levelId, pts[k - 1], cota, pts[k], prox, dn, ROTULO_DO_CONDUTOR_HORIZONTAL);
-      cota = prox;
+    // O perfil: reto, e abaixo do teto de cada cruzamento quando ainda chega à saída com a declividade mínima dali.
+    const acum = comp.reduce<number[]>((acc, x) => [...acc, acc[acc.length - 1] + x], [0]);
+    const cotas = pts.map((_, k) => (k === pts.length - 1 ? cotaB : Math.round(cotaA + ((cotaB - cotaA) * acum[k]) / total)));
+    for (let k = 1; k < pts.length - 1; k++) {
+      const teto = pts[k].teto;
+      if (teto == null || cotas[k] <= teto) continue;
+      const resto = total - acum[k];
+      if (teto - cotaB < Math.ceil((resto * DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT) / 100)) continue;
+      cotas[k] = teto;
+      // Os vértices antes descem até ele (reto a partir do anterior fixo); os depois, reto até a saída.
+      let j0 = k - 1;
+      while (j0 > 0 && pts[j0].teto == null) j0--;
+      for (let j = j0 + 1; j < k; j++) cotas[j] = Math.min(cotas[j], Math.round(cotas[j0] + ((teto - cotas[j0]) * (acum[j] - acum[j0])) / (acum[k] - acum[j0] || 1)));
+      for (let j = k + 1; j < pts.length - 1; j++) cotas[j] = Math.min(cotas[j], Math.round(teto + ((cotaB - teto) * (acum[j] - acum[k])) / (resto || 1)));
     }
+    for (let k = 1; k < pts.length; k++) add(levelId, pts[k - 1], k === 1 ? cotaA : cotas[k - 1], pts[k], cotas[k], dn, ROTULO_DO_CONDUTOR_HORIZONTAL);
     return total;
   };
 

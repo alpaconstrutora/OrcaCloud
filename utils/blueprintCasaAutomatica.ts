@@ -29,6 +29,8 @@
  * mão direita de quem olha da rua —, e a `transformacao` leva ao mundo. Com a
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
+import { HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO, platoDaCasa, type HipotesesDaTerraplenagemDaCasa, type ResumoDaTerraplenagem } from './blueprintPlatoDaCasa';
+import type { GradeDeElevacao } from './blueprintTopografia';
 import { DIMENSAO_DA_VAGA, TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, distanciaEntreEixos3D, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type CamadaParede, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
@@ -609,6 +611,7 @@ export function resumoDaImplantacao(i: ImplantacaoDaCasa): string {
 
 export type EtapaDaCasaId =
   | 'IMPLANTACAO'
+  | 'TERRAPLENAGEM'
   | 'ARQUITETURA'
   | 'PILARES'
   | 'VIGAS'
@@ -635,6 +638,7 @@ export type EtapaDaCasaId =
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
   IMPLANTACAO: 'Implantação pela lei',
+  TERRAPLENAGEM: 'Terraplenagem (o platô da casa no terreno inclinado)',
   ARQUITETURA: 'Arquitetura (gerador E6.2)',
   PILARES: 'Pilares',
   VIGAS: 'Vigas',
@@ -711,6 +715,11 @@ export interface EntradaDaCasa {
    * passa a grade ao worker e monta o leitor lá.)
    */
   leitorDoTerreno?: LeitorDoTerreno | null;
+  /**
+   * F25: a GRADE da topografia do estudo (o leitor acima é feito dela) — a terraplenagem do platô precisa dela inteira.
+   * Ausente = a casa fica na cota zero do desenho (sem a etapa de terraplenagem).
+   */
+  gradeDoTerreno?: GradeDeElevacao | null;
   /** F9: as hipóteses de circuitos do estudo (a gaveta de circuitos). Ausente = `HIPOTESES_CIRCUITOS_PADRAO`. */
   circuitos?: HipotesesDeCircuitos | null;
   /** F9: as hipóteses elétricas do estudo (`blueprint_study_eletrica`). Ausente = o padrão. */
@@ -738,6 +747,8 @@ export interface HipotesesDaCasa {
   sobrado: HipotesesDoSobrado;
   programa: HipotesesDoProgramaDaCasa;
   implantacao: Partial<HipotesesDaImplantacao>;
+  /** F25: o platô no terreno inclinado (decisão do usuário: platô único). */
+  terraplenagem: HipotesesDaTerraplenagemDaCasa;
   gerador: Partial<HipotesesDoGerador>;
   /** As sementes que o E6.2 tenta; fica a de menos problemas graves. */
   sementes: number[];
@@ -940,6 +951,7 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   sobrado: HIPOTESES_DO_SOBRADO_PADRAO,
   programa: HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO,
   implantacao: {},
+  terraplenagem: HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO,
   gerador: {},
   sementes: [1, 2, 3, 4, 5, 6, 7, 8],
   estrutura: HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO,
@@ -1015,6 +1027,8 @@ export interface PlanoDaCasa {
      * pelos critérios (NBR 6118, 13.2.5.1, hipóteses) e quantos ficam para verificar; em baldrame e em laje.
      */
     furos: { emViga: number; dispensa: number; verificar: number; emBaldrame: number; emLaje: number; lista: FuroPrevisto[] } | null;
+    /** F25: o platô no terreno inclinado; `null` sem topografia (a casa na cota zero). */
+    terraplenagem: ResumoDaTerraplenagem | null;
   };
 }
 
@@ -1332,6 +1346,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     ...hipParcial,
     sobrado: { ...HIPOTESES_DO_SOBRADO_PADRAO, ...(hipParcial.sobrado ?? {}) },
     estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, ...(hipParcial.estrutura ?? {}) },
+    terraplenagem: { ...HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO, ...(hipParcial.terraplenagem ?? {}) },
     telhado: { ...HIPOTESES_DO_TELHADO_PADRAO, ...(hipParcial.telhado ?? {}) },
     ancoras: { ...HIPOTESES_DAS_ANCORAS_PADRAO, ...(hipParcial.ancoras ?? {}) },
     mobiliario: { ...HIPOTESES_MOBILIARIO_PADRAO, lancar: true, ...(hipParcial.mobiliario ?? {}) },
@@ -1360,9 +1375,12 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   const comandos: Command[] = [];
   const criados: ObjectId[] = [];
   let m = original;
+  // F25: a etapa de terraplenagem só existe com a topografia do estudo.
+  const temTerreno = !!entrada.gradeDoTerreno && !!entrada.leitorDoTerreno && hip.terraplenagem.lancar;
+  let terraplenagemDaCasa: ResumoDaTerraplenagem | null = null;
   const etapa = (id: EtapaDaCasaId, rotulo: string, situacao: SituacaoDaEtapa, n: number, nota: string | null = null) => {
     etapas.push({ id, rotulo, situacao: situacao === 'LANCOU' && n === 0 ? 'NADA_A_FAZER' : situacao, comandos: n, nota });
-    opcoes.aoConcluirEtapa?.(etapas[etapas.length - 1], etapas.length, ORDEM_DAS_ETAPAS.length);
+    opcoes.aoConcluirEtapa?.(etapas[etapas.length - 1], etapas.length, ORDEM_DAS_ETAPAS.length - (temTerreno ? 0 : 1));
   };
   const aplicar = (lote: Command[]): number => {
     if (!lote.length) return 0;
@@ -1378,8 +1396,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   if (!entrada.programa) for (const a of doCurto.avisos) pendencias.push({ grupo: 'PREMISSA', texto: `Programa: ${a}` });
   const pedidos = programa.itens.filter((i) => i.uso !== 'CIRCULACAO').reduce((s, i) => s + i.quantidade, 0);
   const vazio = (motivo: string, implantacao: ImplantacaoDaCasa | null = null): PlanoDaCasa => {
-    for (const id of ORDEM_DAS_ETAPAS) if (id !== 'IMPLANTACAO' && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
-    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, sobrado: null, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA(), forro: null, furos: null } };
+    for (const id of ORDEM_DAS_ETAPAS) if (id !== 'IMPLANTACAO' && !(id === 'TERRAPLENAGEM' && !temTerreno) && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, id === 'ARQUITETURA' ? motivo : 'sem arquitetura');
+    return { levelId: entrada.levelId, comandos: [], criados: [], etapas, pendencias, resultado: original, programa, implantacao, semente: null, escolha: null, decisoes, sobrado: null, resumo: { areaConstruidaM2: null, ambientesPedidos: pedidos, ambientesAtendidos: 0, regrasVioladas: 0, estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA(), forro: null, furos: null, terraplenagem: null } };
   };
 
   const impedimento = motivoParaNaoGerar(original, entrada.levelId);
@@ -1417,6 +1435,73 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     const decisao = /^(Vagas descobertas|Casa em L):/.test(a);
     if (decisao) decisoes.push(a);
     pendencias.push({ grupo: decisao ? 'CONFERIR' : 'PREMISSA', texto: a });
+  }
+
+  // ── TERRAPLENAGEM (F25) ─────────────────────────────────────────────────
+  // O platô único sob a projeção, na cota de equilíbrio do corte e do aterro; o térreo assenta nele (o lote inteiro
+  // segue relativo à cota zero do desenho — a hidráulica lê o terreno contra essa cota). Talude ou muro por borda; a
+  // entrada, rampa ou escada da calçada ao piso.
+  if (temTerreno) {
+    try {
+      const qd = implantacao.quadro;
+      const anelDoLote = entrada.ctx.terreno?.anel ?? null;
+      const loteLocal = anelDoLote?.map((p) => paraLocal(qd, p)) ?? null;
+      const rlT = implantacao.retanguloLocal;
+      const yFrente = loteLocal ? Math.min(...loteLocal.map((p) => p.y)) : rlT.y0;
+      const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
+      const pontoDaRua = paraMundo(qd, { x: (rlT.x0 + rlT.x1) / 2, y: yFrente });
+      const t = platoDaCasa(entrada.gradeDoTerreno!, entrada.leitorDoTerreno!.cotaZeroM, implantacao.anelNoMundo, meia, anelDoLote, pontoDaRua, Math.max(0, rlT.y0 - meia - yFrente), hip.terraplenagem);
+      if (!t.ok) {
+        etapa('TERRAPLENAGEM', ROTULO_DA_ETAPA_DA_CASA.TERRAPLENAGEM, 'NAO_RODOU', 0, t.motivo);
+        pendencias.push({ grupo: 'PREMISSA', texto: `Terraplenagem: ${t.motivo} — a casa fica na cota zero do desenho.` });
+      } else {
+        const tr = t.resumo;
+        terraplenagemDaCasa = tr;
+        const nivel = m.levels.find((l) => l.id === entrada.levelId);
+        const n = nivel && nivel.elevationMm !== tr.elevacaoDoTerreoMm ? aplicar([{ type: 'SetLevelProps', levelId: entrada.levelId, elevationMm: tr.elevacaoDoTerreoMm }]) : 0;
+        const m3 = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+        const muros = tr.bordas.filter((b) => b.solucao === 'MURO');
+        etapa(
+          'TERRAPLENAGEM',
+          ROTULO_DA_ETAPA_DA_CASA.TERRAPLENAGEM,
+          'LANCOU',
+          Math.max(n, 1),
+          `platô a ${tr.cotaDoPlatoM.toLocaleString('pt-BR')} m (${m3(tr.areaPlatoM2)} m²), térreo a ${(tr.elevacaoDoTerreoMm / 1000).toLocaleString('pt-BR')} m do zero; corte ${m3(tr.corteM3)} m³, aterro ${m3(tr.aterroM3)} m³${muros.length ? `; ${muros.length} muro(s) de arrimo (${m3(tr.murosComprimentoM)} m)` : ''}`,
+        );
+        decisoes.push(`Terraplenagem: platô único na cota de equilíbrio sob a projeção (${tr.cotaDoPlatoM.toLocaleString('pt-BR')} m); o térreo ${hip.terraplenagem.pisoAcimaDoPlatoMm} mm acima.`);
+        pendencias.push({
+          grupo: 'CONFERIR',
+          texto: `Terraplenagem: corte ${m3(tr.corteM3)} m³ e aterro ${m3(tr.aterroM3)} m³ (${tr.botaForaM3 > 0 ? `bota-fora ${m3(tr.botaForaM3)} m³` : tr.emprestimoM3 > 0 ? `empréstimo ${m3(tr.emprestimoM3)} m³` : 'equilibrado'}), taludes de ${m3(tr.areaTaludeM2)} m² — estimativa da topografia do estudo; confira com o levantamento.`,
+        });
+        // O lado de cada borda, de quem olha da rua (no quadro da frente).
+        const cx = (rlT.x0 + rlT.x1) / 2;
+        const cy = (rlT.y0 + rlT.y1) / 2;
+        const ladoDaBorda = (b: (typeof muros)[number]) => {
+          const mL = paraLocal(qd, { x: (b.a.x + b.b.x) / 2, y: (b.a.y + b.b.y) / 2 });
+          const dx = mL.x - cx;
+          const dy = mL.y - cy;
+          return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'da frente' : 'dos fundos') : dx < 0 ? 'da esquerda' : 'da direita';
+        };
+        for (const b of muros)
+          pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: muro de arrimo na borda ${ladoDaBorda(b)}, de ${b.comprimentoM.toLocaleString('pt-BR')} m e até ${b.alturaMaxM.toLocaleString('pt-BR')} m de altura (${b.lado === 'CORTE' ? 'segura o corte' : 'segura o aterro'}; ${b.motivo}) — dimensione com o calculista.` });
+        const e = tr.entrada;
+        if (e.tipo !== 'NENHUMA') {
+          const sentido = e.desnivelMm > 0 ? 'sobe' : 'desce';
+          const desc =
+            e.tipo === 'RAMPA'
+              ? `rampa de ${(e.comprimentoMm / 1000).toLocaleString('pt-BR')} m a ${hip.terraplenagem.rampaMaximaPct.toLocaleString('pt-BR')} %`
+              : `escada de ${e.degraus} degrau(s) de ${e.espelhoMm} mm (${(e.comprimentoMm / 1000).toLocaleString('pt-BR')} m)`;
+          pendencias.push({
+            grupo: e.cabe ? 'CONFERIR' : 'VERIFICACAO',
+            texto: `Terraplenagem: a entrada ${sentido} ${(Math.abs(e.desnivelMm) / 1000).toLocaleString('pt-BR')} m da calçada ao piso — ${desc}${e.cabe ? ' no recuo de frente' : ', que não cabe no recuo de frente'}; desenhe-a na entrada.`,
+          });
+        }
+      }
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      etapa('TERRAPLENAGEM', ROTULO_DA_ETAPA_DA_CASA.TERRAPLENAGEM, 'NAO_RODOU', 0, motivo);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Terraplenagem: ${motivo}` });
+    }
   }
 
   // ── ARQUITETURA ───────────────────────────────────────────────────────────
@@ -1506,7 +1591,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       escolha: f.escolha,
       decisoes,
       sobrado: f.sobrado,
-      resumo: { areaConstruidaM2: f.areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, ...f.disciplinas },
+      resumo: { areaConstruidaM2: f.areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, ...f.disciplinas, terraplenagem: terraplenagemDaCasa },
     };
   };
 
@@ -1857,13 +1942,26 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     if (hip.hidraulica.lancar && hidraulica.pluvial.tubos > 0 && pluvialRenteAoEsgoto(m) > 0) {
       let prof = hidro.pluvial.profundidadeDoCondutorMm;
       const minimo = hidro.alimentacao.recobrimentoMinimoMm ?? 150;
-      for (let volta = 0; volta < 4 && pluvialRenteAoEsgoto(m) > 0; volta++) {
-        const nova = prof - PASSO_DO_PLUVIAL_SOBRE_O_ESGOTO_MM;
+      // F25: cada passo planejado a partir do MESMO desenho e fica o de menos encontros (o inicial, se nenhum melhora) —
+      // parar no primeiro passo que não melhora perdia o que livrava dois passos adiante; aceitar todos estragava o
+      // cruzamento por baixo perto da saída (o coletor fundo no terreno inclinado).
+      let melhor: { prof: number; comandos: Command[]; encontros: number } | null = null;
+      let encontros = pluvialRenteAoEsgoto(m);
+      for (let volta = 1; volta <= 4; volta++) {
+        const nova = hidro.pluvial.profundidadeDoCondutorMm - volta * PASSO_DO_PLUVIAL_SOBRE_O_ESGOTO_MM;
         if (nova < minimo) break;
         const cond = planejarCondutores(m, { ...hidro.pluvial, profundidadeDoCondutorMm: nova }, terrenoHidro);
         if (cond.motivo || !cond.comandos.length) break;
-        prof = nova;
-        aplicar(cond.comandos);
+        const n = pluvialRenteAoEsgoto(applyBatch(m, cond.comandos).model);
+        if (n < encontros) {
+          melhor = { prof: nova, comandos: cond.comandos, encontros: n };
+          encontros = n;
+          if (n === 0) break;
+        }
+      }
+      if (melhor) {
+        prof = melhor.prof;
+        aplicar(melhor.comandos);
       }
       if (pluvialRenteAoEsgoto(m) > 0) pendencias.push({ grupo: 'VERIFICACAO', texto: `Águas pluviais: o condutor horizontal passa rente ao esgoto mesmo começando a ${f2(-prof / 1000)} m — confira o cruzamento (ou mude a saída).` });
       else pendencias.push({ grupo: 'CONFERIR', texto: `Águas pluviais: o condutor horizontal começa a ${f2(-prof / 1000)} m para passar por cima do esgoto.` });
@@ -2359,7 +2457,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     }
     for (const [pav, x] of [['Térreo', et.r], ['Superior', es.r]] as const) decisoes.push(...x.decisoes.map((d) => `${pav}: ${d}`));
     const T = entrada.levelId;
-    const nivel = original.levels.find((l) => l.id === T)!;
+    // F25: a cota do térreo JÁ no platô (a terraplenagem o move antes) — do original, o superior ficava a 1,8 m dele.
+    const nivel = m.levels.find((l) => l.id === T)!;
     let sobrado: ResumoDoSobrado;
     let n = 0;
     try {
@@ -2734,6 +2833,6 @@ export interface PedidoDaCasa {
 /** O pedido → o plano. O mesmo no worker e no fio principal (sem `Worker`, nos testes): o motor é determinístico. */
 export function planejarCasaDoPedido(pedido: PedidoDaCasa, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const leitorDoTerreno = pedido.terreno ? { cotaEmM: amostradorDaGrade(pedido.terreno.grade), cotaZeroM: pedido.terreno.cotaZeroM } : null;
-  return planejarCasa(pedido.original, { ...pedido.entrada, leitorDoTerreno }, pedido.hip, opcoes);
+  return planejarCasa(pedido.original, { ...pedido.entrada, leitorDoTerreno, gradeDoTerreno: pedido.terreno?.grade ?? null }, pedido.hip, opcoes);
 }
 

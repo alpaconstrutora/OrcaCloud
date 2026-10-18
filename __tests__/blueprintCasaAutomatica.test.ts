@@ -10,6 +10,7 @@ import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
 import { conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
+import { amostradorDaGrade, type GradeDeElevacao } from '../utils/blueprintTopografia';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
 import { PROGRAMA_CURTO_PADRAO } from '../utils/blueprintPrograma';
 import { HIPOTESES_DO_TELHADO_PADRAO } from '../utils/blueprintTelhadoAutomatico';
@@ -1212,4 +1213,70 @@ describe('F24 — vagas descobertas e casa em L', () => {
     expect(p.pendencias.filter((x) => /atravessando pilar|rente ao esgoto|POR BAIXO de/.test(x.texto)).map((x) => x.texto)).toEqual([]);
     expect(conflitos(p.resultado, 'REDE')).toEqual([]);
   }, 240_000);
+});
+
+/**
+ * F25 (decisão do usuário, 16/10/2026: "platô único"): no terreno inclinado a casa assenta no platô da cota de equilíbrio
+ * sob a projeção — o térreo sobe (ou desce) com ele, talude ou muro nas bordas, e a entrada da calçada ao piso.
+ */
+describe('F25 — terreno inclinado: o platô único', () => {
+  const modelos = modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades })));
+  /** 10 % subindo da frente (100 m) para os fundos, a grade cobrindo o lote com folga. */
+  const rampa = (): GradeDeElevacao => {
+    const esp = 500;
+    const origem = point(-5000, -5000);
+    const colunas = 45;
+    const linhas = 81;
+    const cotasM: number[] = [];
+    for (let l = 0; l < linhas; l++) for (let c = 0; c < colunas; c++) cotasM.push(100 + 0.1 * ((origem.y + l * esp) / 1000));
+    return { origem, espacamentoMm: esp, colunas, linhas, cotasM };
+  };
+  const comTerreno = (m: BlueprintModel): EntradaDaCasa => {
+    const grade = rampa();
+    return entrada(m, {
+      hidro: { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } },
+      modelosDeClimatizacao: modelos,
+      climatizacao: { ...HIPOTESES_CLIMATIZACAO_PADRAO, clima: { cidade: null, tbsExternaC: 34, tbuExternaC: 25, altitudeM: 0 } },
+      leitorDoTerreno: { cotaEmM: amostradorDaGrade(grade), cotaZeroM: 100 },
+      gradeDoTerreno: grade,
+    });
+  };
+  const encontrosDeRede = (r: BlueprintModel) => {
+    const porId = new Map((r.trechos ?? []).map((t) => [t.id, t]));
+    return conflitosDoModelo(r).filter((c) => c.classe === 'REDE' && porId.has(c.trechoId)).map((c) => `${porId.get(c.trechoId)!.disciplina} × ${c.outroId}`);
+  };
+
+  it('térrea: o térreo assenta no platô (primeiro comando do lote), volumes e bordas no resumo, a entrada dita; nenhum tubo × tubo; a trava aprova', () => {
+    const m = lote();
+    const p = planejarCasa(m, comTerreno(m), { pavimentos: 1 });
+    const t = p.resumo.terraplenagem!;
+    expect(t).not.toBeNull();
+    expect(p.etapas.find((e) => e.id === 'TERRAPLENAGEM')?.situacao).toBe('LANCOU');
+    expect(p.comandos[0]).toMatchObject({ type: 'SetLevelProps', elevationMm: t.elevacaoDoTerreoMm });
+    expect(t.elevacaoDoTerreoMm).toBeGreaterThan(500);
+    expect(p.resultado.levels[0].elevationMm).toBe(t.elevacaoDoTerreoMm);
+    expect(t.corteM3).toBeGreaterThan(0);
+    expect(t.aterroM3).toBeGreaterThan(0);
+    expect(p.pendencias.some((x) => /^Terraplenagem: a entrada sobe/.test(x.texto))).toBe(true);
+    expect(p.pendencias.filter((x) => /^Terraplenagem: muro/.test(x.texto)).every((x) => /na borda (da frente|dos fundos|da esquerda|da direita)/.test(x.texto))).toBe(true);
+    expect(encontrosDeRede(p.resultado)).toEqual([]);
+    expect(p.pendencias.filter((x) => /rente ao esgoto/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  }, 240_000);
+
+  it('sobrado: o superior fica um andar acima do térreo NOVO', () => {
+    const m = lote();
+    const p = planejarCasa(m, comTerreno(m), { pavimentos: 2 });
+    const [t, s] = [...p.resultado.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+    expect(t.elevationMm).toBe(p.resumo.terraplenagem!.elevacaoDoTerreoMm);
+    expect(s.elevationMm - t.elevationMm).toBeGreaterThanOrEqual(2800);
+  }, 240_000);
+
+  it('sem a topografia: nenhuma etapa de terraplenagem e o térreo na cota zero (como antes)', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m), { pavimentos: 1 });
+    expect(p.etapas.some((e) => e.id === 'TERRAPLENAGEM')).toBe(false);
+    expect(p.resumo.terraplenagem).toBeNull();
+    expect(p.resultado.levels[0].elevationMm).toBe(0);
+  });
 });

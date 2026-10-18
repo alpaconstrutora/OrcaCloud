@@ -231,4 +231,24 @@ describe('TelaCasaAutomatica (F10)', () => {
     tela({ casa: casa({ plano }) });
     expect(screen.queryByTestId('furos-da-casa')).toBeNull();
   });
+  it('F25: o platô no terreno inclinado — a cota, os volumes, os muros e a entrada; e os campos das premissas', () => {
+    const terraplenagem = {
+      cotaDoPlatoM: 100.942, elevacaoDoTerreoMm: 1092, platoNoMundo: [], areaPlatoM2: 211.6, corteM3: 59.1, aterroM3: 61.2, botaForaM3: 0, emprestimoM3: 11.2,
+      alturaMaxCorteM: 0.7, alturaMaxAterroM: 0.96, areaTaludeM2: 47, bordas: [], murosComprimentoM: 38.1, murosAreaDeFaceM2: 18.3,
+      entrada: { tipo: 'ESCADA', desnivelMm: 1092, comprimentoMm: 1960, degraus: 7, espelhoMm: 156, cabe: true }, parametros: {},
+    };
+    tela({ casa: casa({ plano: { ...plano, resumo: { ...plano.resumo, terraplenagem } } as unknown as PlanoDaCasa }) });
+    const sec = screen.getByTestId('terraplenagem-do-plano');
+    expect(sec.textContent).toContain('Platô a 100,942 m');
+    expect(sec.textContent).toContain('corte 59,1 m³');
+    expect(sec.textContent).toContain('empréstimo 11,2 m³');
+    expect(sec.textContent).toContain('muros de arrimo 38,1 m');
+    expect(sec.textContent).toContain('escada de 7 degrau(s) de 156 mm');
+    // as premissas: ligada mostra os campos; desligada, esconde
+    expect(screen.getByLabelText('Talude até (m de altura; acima, muro)')).toBeTruthy();
+    cleanup();
+    tela({ casa: casa({ plano }), premissas: { ...PREMISSAS_DA_CASA_PADRAO, terraplenagem: { ...PREMISSAS_DA_CASA_PADRAO.terraplenagem, lancar: false } } });
+    expect(screen.queryByTestId('terraplenagem-do-plano')).toBeNull();
+    expect(screen.queryByLabelText('Talude até (m de altura; acima, muro)')).toBeNull();
+  });
 });

@@ -97,3 +97,14 @@ describe('F23 — a estrutura nas premissas', () => {
     expect(h.estrutura?.pilares).toMatchObject({ deslizeSobreAberturaMm: 800, vaoMaximoMm: 5000 });
   });
 });
+
+describe('F25 — a terraplenagem nas premissas', () => {
+  it('completa como os outros grupos e chega ao motor sobre o padrão dele (os parâmetros de talude do padrão)', () => {
+    expect(premissasDaCasaDaColuna({}).terraplenagem).toEqual({ lancar: true, margemDoPlatoMm: 1000, pisoAcimaDoPlatoMm: 150, alturaMaximaDoTaludeM: 1.5 });
+    const p = premissasDaCasaDaColuna({ terraplenagem: { lancar: false, alturaMaximaDoTaludeM: 2.5, margemDoPlatoMm: 'x' } });
+    expect(p.terraplenagem).toEqual({ lancar: false, margemDoPlatoMm: 1000, pisoAcimaDoPlatoMm: 150, alturaMaximaDoTaludeM: 2.5 });
+    const h = hipotesesDasPremissas(p);
+    expect(h.terraplenagem).toMatchObject({ lancar: false, alturaMaximaDoTaludeM: 2.5, rampaMaximaPct: 8.33 });
+    expect(h.terraplenagem?.parametros).toBeDefined();
+  });
+});

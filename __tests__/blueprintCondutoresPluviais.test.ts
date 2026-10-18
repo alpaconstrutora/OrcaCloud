@@ -165,3 +165,31 @@ describe('condutor horizontal por fora da casa (F24)', () => {
     for (const x of h) for (let k = 0; k <= 10; k++) expect(pointInPolygon(anel, point(x.a.x + ((x.b.x - x.a.x) * k) / 10, x.a.y + ((x.b.y - x.a.y) * k) / 10))).toBe(false);
   });
 });
+
+/**
+ * F25 da casa automática (17/10/2026): o cruzamento com um tubo enterrado de outra rede vira VÉRTICE do perfil do
+ * horizontal, na cota que passa POR BAIXO dele com os raios e a folga — o perfil reto do pé à saída funda (terreno
+ * inclinado) cruzava o coletor predial rente.
+ */
+describe('condutor horizontal por baixo do cruzamento (F25)', () => {
+  it('o esgoto a −0,5 m cruzando o caminho no começo: o condutor passa por baixo dele com a folga e segue só descendo até a saída', () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    const p = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 200, heightMm: 2800 });
+    m = applyBatch(m, [
+      p(0, 0, 10000, 0), p(10000, 0, 10000, 8000), p(10000, 8000, 0, 8000), p(0, 8000, 0, 0),
+      { type: 'AddTerminal', levelId: t, disciplina: 'PLUVIAL', tipo: 'Ralo', tipoHidraulico: 'RALO_PLUVIAL', at: point(5000, 8700), cotaMm: 0 } as Command,
+      // a saída mais à direita: o contorno pela direita é o mais curto e cruza o esgoto
+      { type: 'AddTerminal', levelId: t, disciplina: 'PLUVIAL', tipo: 'Saída', tipoHidraulico: 'LIGACAO_PLUVIAL', at: point(7000, -3000), cotaMm: -1500 } as Command,
+      { type: 'AddTrecho', levelId: t, disciplina: 'ESGOTO', a: point(8000, 8100), b: point(8000, 12000), cotaAMm: -500, cotaBMm: -500, bitolaMm: 100 } as Command,
+    ]).model;
+    const h = (lancar(m).trechos ?? []).filter((x) => x.rotulo === ROTULO_DO_CONDUTOR_HORIZONTAL);
+    const noCruzamento = h.find((x) => x.a.x === 8000 || x.b.x === 8000);
+    expect(noCruzamento).toBeDefined();
+    const cota = noCruzamento!.a.x === 8000 ? noCruzamento!.cotaAMm : noCruzamento!.cotaBMm;
+    // abaixo do esgoto (−500) por meio Ø dele, meio Ø do condutor e 10 cm
+    expect(cota).toBeLessThanOrEqual(-500 - 50 - noCruzamento!.bitolaMm / 2 - 100);
+    for (const x of h) expect(x.cotaBMm).toBeLessThanOrEqual(x.cotaAMm);
+    expect(h[h.length - 1].cotaBMm).toBe(-1500);
+  });
+});

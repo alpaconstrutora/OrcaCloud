@@ -289,6 +289,17 @@ export default function TelaCasaAutomatica(props: Props) {
                 <Numero rotulo="Piso acabado (cm)" valor={p.forro.pisoAcabadoMm / 10} min={0} max={15} passo={0.5} onValor={(v) => v != null && set('forro', { pisoAcabadoMm: Math.round(v * 10) })} />
               </>
             )}
+            <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700" title="Só com a topografia do estudo: a casa assenta num platô na cota que equilibra corte e aterro sob a projeção">
+              <input type="checkbox" checked={p.terraplenagem.lancar} onChange={(e) => set('terraplenagem', { lancar: e.target.checked })} className="h-4 w-4 rounded border-gray-300" data-testid="terraplenagem-da-casa" />
+              Platô no terreno inclinado
+            </label>
+            {p.terraplenagem.lancar && (
+              <>
+                <Numero rotulo="Platô além da casa (m)" valor={p.terraplenagem.margemDoPlatoMm / 1000} min={0} max={5} passo={0.1} onValor={(v) => v != null && set('terraplenagem', { margemDoPlatoMm: Math.round(v * 1000) })} />
+                <Numero rotulo="Piso acima do platô (cm)" valor={p.terraplenagem.pisoAcimaDoPlatoMm / 10} min={0} max={100} passo={1} onValor={(v) => v != null && set('terraplenagem', { pisoAcimaDoPlatoMm: Math.round(v * 10) })} />
+                <Numero rotulo="Talude até (m de altura; acima, muro)" valor={p.terraplenagem.alturaMaximaDoTaludeM} min={0} max={10} passo={0.1} onValor={(v) => v != null && set('terraplenagem', { alturaMaximaDoTaludeM: Math.round(v * 100) / 100 })} />
+              </>
+            )}
             {p.disciplinas.estrutura && (
               <Numero rotulo="Montante entre folhas de janela (cm)" valor={p.estrutura.montanteEntreJanelasMm / 10} min={20} max={100} passo={5} onValor={(v) => v != null && set('estrutura', { montanteEntreJanelasMm: Math.round(v * 10) })} />
             )}
@@ -476,6 +487,29 @@ export default function TelaCasaAutomatica(props: Props) {
                   {plano.resumo.furos.verificar} a verificar com o calculista; {plano.resumo.furos.emBaldrame} em baldrame; {plano.resumo.furos.emLaje} passagem(ns) em laje.
                 </p>
                 <TabelaFurosPrevistos furos={plano.resumo.furos.lista} pavimentos={new Map(plano.resultado.levels.map((l) => [l.id, l.name]))} />
+              </section>
+            )}
+
+            {plano.resumo.terraplenagem && (
+              <section className="space-y-2" data-testid="terraplenagem-do-plano">
+                <h4 className={rotuloCls}>Terraplenagem (platô único)</h4>
+                <p className="text-xs text-slate-600">
+                  Platô a {plano.resumo.terraplenagem.cotaDoPlatoM.toLocaleString('pt-BR')} m ({f1(plano.resumo.terraplenagem.areaPlatoM2)} m²), térreo a{' '}
+                  {(plano.resumo.terraplenagem.elevacaoDoTerreoMm / 1000).toLocaleString('pt-BR')} m da cota zero · corte {f1(plano.resumo.terraplenagem.corteM3)} m³ · aterro{' '}
+                  {f1(plano.resumo.terraplenagem.aterroM3)} m³
+                  {plano.resumo.terraplenagem.botaForaM3 > 0 ? ` · bota-fora ${f1(plano.resumo.terraplenagem.botaForaM3)} m³` : plano.resumo.terraplenagem.emprestimoM3 > 0 ? ` · empréstimo ${f1(plano.resumo.terraplenagem.emprestimoM3)} m³` : ''}
+                  {plano.resumo.terraplenagem.murosComprimentoM > 0 ? ` · muros de arrimo ${f1(plano.resumo.terraplenagem.murosComprimentoM)} m (${f1(plano.resumo.terraplenagem.murosAreaDeFaceM2)} m² de face)` : ''}
+                  {plano.resumo.terraplenagem.areaTaludeM2 > 0 ? ` · taludes ${f1(plano.resumo.terraplenagem.areaTaludeM2)} m²` : ''}
+                </p>
+                {plano.resumo.terraplenagem.entrada.tipo !== 'NENHUMA' && (
+                  <p className="text-xs text-slate-600">
+                    Entrada: {plano.resumo.terraplenagem.entrada.desnivelMm > 0 ? 'sobe' : 'desce'} {(Math.abs(plano.resumo.terraplenagem.entrada.desnivelMm) / 1000).toLocaleString('pt-BR')} m da calçada ao piso —{' '}
+                    {plano.resumo.terraplenagem.entrada.tipo === 'RAMPA'
+                      ? `rampa de ${(plano.resumo.terraplenagem.entrada.comprimentoMm / 1000).toLocaleString('pt-BR')} m`
+                      : `escada de ${plano.resumo.terraplenagem.entrada.degraus} degrau(s) de ${plano.resumo.terraplenagem.entrada.espelhoMm} mm`}
+                    {plano.resumo.terraplenagem.entrada.cabe ? '' : ' (não cabe no recuo de frente)'}.
+                  </p>
+                )}
               </section>
             )}
 

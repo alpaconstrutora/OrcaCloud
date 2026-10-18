@@ -2011,7 +2011,7 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO; e (da F21) o arranjo em faixas: varanda de entrada junto da sala, serviço junto da cozinha, serviço e escritório com fachada; e (da F20) a suíte que não cabe o armário/a cama — **partes 1, 2 e 3 feitas** (ver "Registro da F22"); a frente do R1-B e o sobrado no lote estreito vão com a F27
 - [x] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo (ver "Registro da F23"; os 2 pilares do sobrado sobre janela do térreo vão com a F27 — as janelas dos dois pavimentos desalinhadas)
 - [x] F24 — implantação não retangular (L) e vaga descoberta com recuo curto — partes 1 e 2 (ver "Registro da F24"); o serviço sem fachada nas casas largas e rasas vai com a F27 (o mesmo arranjo da cozinha × serviço do R1-B)
-- [ ] F25 — terreno inclinado: platô único
+- [ ] F25 — terreno inclinado: platô único — **parte 1 feita** (ver "Registro da F25"); falta a parte 2: o "Lançar" grava a terraplenagem do estudo (base = projeção da casa), corte/aterro/muro no orçamento e a escada/rampa da entrada desenhada
 - [ ] F26 — muro, portão e calçada
 - [ ] F27 — 3 pavimentos; e (da F24) o serviço com fachada nas casas largas e rasas (L e L de fundo largo, 3 dorm.); e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
 - [ ] F28 — tela e prancha: a chuva de projeto na tela da casa; bolhas dos eixos sem sobrepor
@@ -2382,3 +2382,43 @@ Testes novos (reprovam sem a correção): o desvio por dois pilares (`blueprintO
 da casa e longe da caixa de gordura (`blueprintCondutoresPluviais`); na casa, o 12 × 30 sem garagem (a sala com 1/6, nada
 tubo × tubo), o L de 4 dormitórios (nenhum CONFLITO, nada por pilar nem rente) e os dois L de 3 dormitórios em
 retângulo (o esgoto sem pilar; o pluvial sem rente, sem o alimentador por baixo) (`blueprintCasaAutomatica`).
+
+### Registro da F25 (17/10/2026) — terreno inclinado: o platô único (parte 1, o motor)
+
+Retrato (sonda nova com a grade do terreno: o 12 × 30 subindo 10 % e 25 % para os fundos, descendo 10 %, caindo 15 % de
+lado; o sobrado e o L de 4 dormitórios): a casa ficava na cota zero do desenho, a da rua — num lote que sobe 3 m, de 0,3 a
+1,6 m ABAIXO do chão, sem corte, sem talude, sem nada dito. O terreno só entrava nas cotas da hidráulica.
+
+O que entrou (`utils/blueprintPlatoDaCasa.ts`, etapa TERRAPLENAGEM depois da implantação, só com a topografia do estudo):
+
+- a cota do platô = a de EQUILÍBRIO sob a projeção (face externa das paredes, `cotaDeEquilibrio`); o platô = a projeção
+  com a margem (`margemDoPlatoMm`, 1 m); o térreo assenta `pisoAcimaDoPlatoMm` (15 cm) acima — `SetLevelProps`, o
+  primeiro comando do lote; o superior do sobrado sobe com ele;
+- cada borda: TALUDE (os do padrão da topografia) ou MURO DE ARRIMO quando a altura passa de `alturaMaximaDoTaludeM`
+  (1,5 m) ou o talude sai do lote (as laterais a 0,5 m da divisa); volumes, bota-fora/empréstimo, taludes e muros pela
+  `terraplenagemComTalude`; o muro sai em VERIFICACAO ("dimensione com o calculista"), com a borda (frente, fundos,
+  esquerda, direita);
+- a entrada: da calçada ao piso, rampa até 8,33 % se cabe no recuo de frente, senão escada (espelho ≤ 18 cm, piso 28 cm);
+  não cabendo, VERIFICACAO;
+- as hipóteses nas premissas da casa (ligar, margem, piso, altura do talude) e o platô no resumo da tela.
+
+Efeitos tratados no pluvial (o coletor predial desce fundo até a rua no terreno inclinado): o condutor horizontal ganha um
+VÉRTICE no cruzamento com um tubo enterrado de outra rede, por baixo dele com a folga, quando ainda chega à saída com a
+declividade mínima; a saída proposta procura a frente sem cruzar as outras redes (senão, só longe delas, como na F24); o
+laço que sobe o início do condutor fica com o passo de MENOS encontros (aceitar todos estragava o cruzamento por baixo).
+Tentado e desfeito: baixar a saída pelo cruzamento — no terreno plano o condutor ia fundo e emparelhava com o coletor.
+
+Medido: as 8 casas 2× iguais à F23; os lotes da F24 0 / 0 / 0; nos terrenos inclinados (12 × 30 térrea e sobrado, L de 4
+dormitórios, a 10 %, −10 %, 15 % de lado e 25 %): 0 em vão, 0 rede × rede, 0 pilar; a 25 % a escada da entrada (2,2 a
+3 m de desnível) não cabe no recuo de frente e é dita.
+
+**Falta (parte 2):** o "Lançar" gravar a terraplenagem do estudo (hoje a aba de terraplenagem só conhece a base
+ENVELOPE/LOTE — a projeção da casa pede base nova, migration); corte, aterro e face de muro no orçamento (medidas de
+terreno alimentadas pela terraplenagem); a escada/rampa da entrada desenhada (o kernel não tem escada a partir do
+terreno).
+
+Testes novos (reprovam sem a correção): o platô no plano, a 10 %, talude × muro, terreno abaixo da rua e íngreme, sem
+topografia (`blueprintPlatoDaCasa`); a casa no terreno de 10 % (o térreo no platô, a trava aprova, nada tubo × tubo), o
+sobrado (o superior um andar acima do térreo novo) e sem topografia (`blueprintCasaAutomatica`); o condutor por baixo do
+cruzamento (`blueprintCondutoresPluviais`); as premissas (`blueprintPremissasDaCasa`) e a seção na tela
+(`TelaCasaAutomatica`).

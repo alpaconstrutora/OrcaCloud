@@ -14,6 +14,7 @@ import type { AguaQuenteDaCasa } from './blueprintAncorasDaCasa';
 import { PADROES_DA_CASA, PROGRAMA_CURTO_PADRAO, type ProgramaCurtoDaCasa } from './blueprintPrograma';
 import { HIPOTESES_DO_GERADOR_PADRAO } from './blueprintGerador';
 import { HIPOTESES_PILARES_PADRAO } from './blueprintPilaresAutomaticos';
+import { HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO } from './blueprintPlatoDaCasa';
 
 export interface PremissasDaCasa {
   curto: ProgramaCurtoDaCasa;
@@ -42,6 +43,11 @@ export interface PremissasDaCasa {
    * intermediário cabe) e até onde o pilar do superior escorrega para fugir de uma porta ou janela do térreo.
    */
   estrutura: { montanteEntreJanelasMm: number; deslizeSobreAberturaMm: number };
+  /**
+   * F25: o platô no terreno inclinado (só com a topografia do estudo) — ligar/desligar, a margem dele em volta da casa,
+   * o piso do térreo acima dele e a altura acima da qual a borda leva muro de arrimo em vez de talude.
+   */
+  terraplenagem: { lancar: boolean; margemDoPlatoMm: number; pisoAcimaDoPlatoMm: number; alturaMaximaDoTaludeM: number };
   /** F13: a pressão por caso — até quanto a caixa sobe; acima disso, o pressurizador (e a potência dele). */
   pressao: { caixaElevadaAteMm: number; potenciaDoPressurizadorW: number };
   /**
@@ -67,6 +73,7 @@ export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
   pavimentos: 'AUTOMATICO',
   sobrado: { lajeEntrePavimentosMm: 100, shaftMm: 400 },
   estrutura: { montanteEntreJanelasMm: 400, deslizeSobreAberturaMm: 1200 },
+  terraplenagem: { lancar: true, margemDoPlatoMm: 1000, pisoAcimaDoPlatoMm: 150, alturaMaximaDoTaludeM: 1.5 },
   pressao: { caixaElevadaAteMm: 2000, potenciaDoPressurizadorW: 370 },
   forro: { lancar: true, peDireitoLivrePermanenciaMm: 2500, peDireitoLivreDemaisMm: 2300, pisoAcabadoMm: 50 },
   unidadeId: null,
@@ -122,6 +129,7 @@ export function premissasDaCasaDaColuna(raw: unknown): PremissasDaCasa {
     pavimentos: r.pavimentos === 2 ? 2 : r.pavimentos === 1 ? 1 : 'AUTOMATICO',
     sobrado: completar(r.sobrado, PREMISSAS_DA_CASA_PADRAO.sobrado),
     estrutura: completar(r.estrutura, PREMISSAS_DA_CASA_PADRAO.estrutura),
+    terraplenagem: completar(r.terraplenagem, PREMISSAS_DA_CASA_PADRAO.terraplenagem),
     pressao: completar(r.pressao, PREMISSAS_DA_CASA_PADRAO.pressao),
     forro: completar(r.forro, PREMISSAS_DA_CASA_PADRAO.forro),
     unidadeId: typeof r.unidadeId === 'string' && r.unidadeId.trim() ? r.unidadeId : null,
@@ -144,6 +152,7 @@ export function hipotesesDasPremissas(p: PremissasDaCasa): Partial<HipotesesDaCa
     eletrica: { lancar: d.eletrica, chuveiroEletricoVA: p.eletrica.chuveiroEletricoVA, medidor: p.eletrica.medidor } as HipotesesDaCasa['eletrica'],
     climatizacao: { lancar: d.climatizacao } as HipotesesDaCasa['climatizacao'],
     pavimentos: p.pavimentos,
+    terraplenagem: { ...HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO, ...p.terraplenagem },
     sobrado: { lajeEntrePavimentosMm: p.sobrado.lajeEntrePavimentosMm, shaftMm: p.sobrado.shaftMm } as HipotesesDaCasa['sobrado'],
     pressao: { resolver: true, caixaElevadaAteMm: p.pressao.caixaElevadaAteMm, potenciaDoPressurizadorW: p.pressao.potenciaDoPressurizadorW },
     // O motor completa o resto do grupo (as faixas) com o padrão dele.

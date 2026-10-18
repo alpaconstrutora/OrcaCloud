@@ -551,7 +551,7 @@ function projetar(model: BlueprintModel): {
       // ESCADA DE ACESSO (0.103.0): a cota da calçada, só na escada de acesso (ausente não muda o hash de antes).
       desdeCotaMm: e.desdeCotaMm,
       // RAMPA DE VEÍCULOS (0.104.0): só quando marcada.
-      veicular: e.veicular ? true : undefined,
+      veicular: e.veicular ? (true as const) : undefined,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||

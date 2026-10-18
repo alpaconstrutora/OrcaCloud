@@ -284,7 +284,8 @@ describe('planejarCasa — F4: a estrutura no mesmo lote', () => {
     const m = lote();
     const p = planejarCasa(m, entrada(m), { estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, lancar: false } });
     expect(p.etapas.filter((e) => ['PILARES', 'VIGAS', 'LAJES', 'FUNDACOES', 'EIXOS'].includes(e.id)).map((e) => e.situacao)).toEqual(Array(5).fill('NAO_EXIGIDA'));
-    expect(p.comandos.slice(0, 4).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels', 'AddRoofByExtrusion']);
+    // F26: o muro, os portões e as calçadas entram logo depois da arquitetura — fora da conta.
+    expect(p.comandos.filter((c) => c.type !== 'AddMuro' && c.type !== 'AddSubRegiao').slice(0, 4).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels', 'AddRoofByExtrusion']);
     expect(p.comandos.some((c) => c.type === 'AddStructural')).toBe(false);
   });
 });

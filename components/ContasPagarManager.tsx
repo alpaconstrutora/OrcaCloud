@@ -261,14 +261,14 @@ export default function ContasPagarManager({ organizations }: Props) {
     const [statusFilter, setStatusFilter] = usePersistedState<StatusFilter>('contasPagarManagerFilters:status', 'all');
     const [vencDe, setVencDe] = usePersistedState('contasPagarManagerFilters:vencDe', '');
     const [vencAte, setVencAte] = usePersistedState('contasPagarManagerFilters:vencAte', '');
-    // Competência mensal (vencimento) — atalho de 1 campo para o range vencDe/vencAte;
-    // os dois ficam mutuamente exclusivos (mesmo padrão de ContasReceberManager.tsx/BankReconciliation.tsx).
-    const [competencia, setCompetencia] = usePersistedState('contasPagarManagerFilters:competencia', '');
     // Ano e Mês do vencimento — independentes ENTRE SI (15/10/2026, mesmo recurso de
     // Boletos a Pagar): só o ano = o ano inteiro; só o mês = aquele mês em todos os anos;
-    // os dois = aquele mês daquele ano. Somam-se aos filtros acima (não substituem).
+    // os dois = aquele mês daquele ano. Somam-se ao período (não substituem).
     const [vencAno, setVencAno] = usePersistedState('contasPagarManagerFilters:vencAno', '');
     const [vencMes, setVencMes] = usePersistedState('contasPagarManagerFilters:vencMes', '');
+    // Competência ('YYYY-MM') do Fechamento por CC = Ano + Mês escolhidos. Não há mais
+    // seletor de competência próprio: Ano/Mês já dizem qual mês é (18/10/2026).
+    const competencia = vencAno && vencMes ? `${vencAno}-${vencMes}` : '';
     const tableColumns = useTableColumns(CONTAS_COLUMNS, 'contasPagarManagerColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'contasPagarManagerColWidths');
     // Largura total = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
@@ -345,7 +345,6 @@ export default function ContasPagarManager({ organizations }: Props) {
     const handleClearPeriod = React.useCallback(() => {
         setVencDe('');
         setVencAte('');
-        setCompetencia('');
         // Ano/Mês também escondem parcelas: sem limpá-los o foco num título ficaria preso.
         setVencAno('');
         setVencMes('');
@@ -388,30 +387,15 @@ export default function ContasPagarManager({ organizations }: Props) {
     const fonteDeDados = visao === 'notas' ? 'notas' : 'parcelas';
     useEffect(() => { carregar(effectiveOrgId); }, [effectiveOrgId, fonteDeDados]);
 
-    /** competência 'YYYY-MM' → { from: 'YYYY-MM-01', to: 'YYYY-MM-<último dia>' } */
-    function competenciaToRange(comp: string): { from: string; to: string } {
-        const [y, m] = comp.split('-').map(Number);
-        const lastDay = new Date(y, m, 0).getDate();
-        return { from: `${comp}-01`, to: `${comp}-${String(lastDay).padStart(2, '0')}` };
-    }
-
-    /** Competência e range manual (vencDe/vencAte) são mutuamente exclusivos —
-     *  mesmo padrão de ContasReceberManager.tsx/BankReconciliation.tsx: escolher
-     *  a competência preenche vencDe/vencAte; editar o range manual limpa a competência. */
+    /** Fechamento por CC pede um mês ('YYYY-MM', ou '' para limpar): grava em Ano/Mês. */
     function handleCompetenciaChange(value: string) {
-        setCompetencia(value);
-        if (value) {
-            const { from, to } = competenciaToRange(value);
-            setVencDe(from);
-            setVencAte(to);
-        } else {
-            setVencDe('');
-            setVencAte('');
-        }
+        const [ano = '', mes = ''] = value.split('-');
+        setVencAno(ano);
+        setVencMes(mes);
     }
-    function handleVencDeChange(value: string) { setVencDe(value); setCompetencia(''); }
-    function handleVencAteChange(value: string) { setVencAte(value); setCompetencia(''); }
-    function clearVencRange() { setVencDe(''); setVencAte(''); setCompetencia(''); }
+    function handleVencDeChange(value: string) { setVencDe(value); }
+    function handleVencAteChange(value: string) { setVencAte(value); }
+    function clearVencRange() { setVencDe(''); setVencAte(''); }
     // Anos com vencimento na FONTE da visão ativa (notas → invoices; parcelas e
     // fechamento → payables), mais recente primeiro. Antes só olhava `invoices`,
     // que nem é carregado fora da aba Notas: o seletor ficava vazio em Parcelas.
@@ -425,14 +409,6 @@ export default function ContasPagarManager({ organizations }: Props) {
         if (vencAno) anos.add(vencAno);
         return [...anos].sort().reverse();
     }, [visao, invoices, payables, vencAno]);
-    // Fechamento consolida a lista de parcelas no cliente: Ano/Mês recortam o que entra.
-    const payablesFechamento = useMemo(
-        () => (vencAno || vencMes)
-            ? payables.filter(p => (!vencAno || (p.due_date ?? '').slice(0, 4) === vencAno)
-                && (!vencMes || (p.due_date ?? '').slice(5, 7) === vencMes))
-            : payables,
-        [payables, vencAno, vencMes],
-    );
 
     async function handleMarcarPago(inv: InvoiceRow) {
         setMarcandoPago(inv.id);
@@ -858,7 +834,7 @@ export default function ContasPagarManager({ organizations }: Props) {
                             sub={`${summary.qtdVenc7} conta${summary.qtdVenc7 !== 1 ? 's' : ''} próximas`}
                             icon={<Clock className="w-5 h-5" />}
                             color="amber"
-                            onClick={() => { setStatusFilter('all'); setCompetencia(''); const d = new Date(); d.setDate(d.getDate() + 7); setVencAte(d.toISOString().slice(0, 10)); setVencDe(new Date().toISOString().slice(0, 10)); }}
+                            onClick={() => { setStatusFilter('all'); const d = new Date(); d.setDate(d.getDate() + 7); setVencAte(d.toISOString().slice(0, 10)); setVencDe(new Date().toISOString().slice(0, 10)); }}
                         />
                         <KpiCard
                             label="Em Atraso"
@@ -906,19 +882,6 @@ export default function ContasPagarManager({ organizations }: Props) {
                             </div>
 
                             {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
-
-                            {/* Competência mensal — atalho de 1 campo para o range vencDe/vencAte
-                                logo ao lado (mutuamente exclusivo com ele, mesmo padrão de
-                                TributosAPagarManager.tsx/BankReconciliation.tsx). */}
-                            <span className="text-sm font-medium text-gray-400 pl-1">Competência</span>
-                            <input
-                                type="month"
-                                value={competencia}
-                                onChange={e => handleCompetenciaChange(e.target.value)}
-                                className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
-                            />
-
-                            <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
                             <span className="text-sm font-medium text-gray-400">Vencimento</span>
                             <input
@@ -1003,7 +966,7 @@ export default function ContasPagarManager({ organizations }: Props) {
 
                     {visao === 'fechamento' ? (
                         <FechamentoCentroCusto
-                            rows={payablesFechamento}
+                            rows={payables}
                             organizationId={effectiveOrgId}
                             competencia={competencia}
                             onCompetenciaChange={handleCompetenciaChange}

@@ -442,7 +442,7 @@ export default function FechamentoCentroCusto({
      *  qualquer jeito; só a AÇÃO fica indisponível em "Todas". */
     const podeFechar = !!organizationId && !!competencia;
     const motivoBloqueio = !competencia
-        ? 'Escolha uma competência na barra acima para fechar o mês.'
+        ? 'Escolha o Ano e o Mês na barra acima para fechar o mês.'
         : !organizationId
             ? 'Selecione uma organização específica no seletor do topo — cada organização fecha o próprio caixa.'
             : undefined;
@@ -684,9 +684,9 @@ export default function FechamentoCentroCusto({
                        e "nenhum resultado" mentiria sobre a causa (§12). */
                     <div className="text-center py-12 text-gray-400">
                         <CalendarDays className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">Escolha uma competência</h3>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Escolha o ano e o mês</h3>
                         <p className="text-sm text-gray-500 mb-4">
-                            O fechamento é de um mês. Selecione a competência na barra acima.
+                            O fechamento é de um mês. Selecione o Ano e o Mês na barra acima.
                         </p>
                         <button
                             onClick={() => onCompetenciaChange(new Date().toISOString().slice(0, 7))}

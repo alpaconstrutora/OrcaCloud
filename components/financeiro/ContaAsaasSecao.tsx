@@ -1,11 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Landmark, Loader2, KeyRound, RefreshCw, PlugZap, AlertTriangle, Check } from 'lucide-react';
 import { asaasContaService, CONTA_ASAAS_PADRAO, type AmbienteAsaas, type ContaAsaasConfig } from '../../services/asaasContaService';
 import { formatMoney, formatDateBR } from '../ui/Format';
 
 interface Props {
     paymentAccountId: string;
+    /** Do drawer: a configuração (ativo, piloto, tetos) grava no "Salvar" dele.
+     *  Sem isto (uso avulso da seção), aparece o botão próprio de salvar. */
+    registrarAoSalvar?: (fn: (() => Promise<void>) | null) => void;
 }
+
+type CamposConfig = Pick<ContaAsaasConfig, 'ativo' | 'piloto' | 'teto_por_pagamento' | 'teto_por_dia' | 'teto_avulso'>;
+const CAMPOS_CONFIG: (keyof CamposConfig)[] = ['ativo', 'piloto', 'teto_por_pagamento', 'teto_por_dia', 'teto_avulso'];
+const mudou = (a: CamposConfig, b: CamposConfig | null) => !b || CAMPOS_CONFIG.some(k => a[k] !== b[k]);
 
 const INPUT = 'mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
 const BOTAO = 'flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all disabled:opacity-50 disabled:cursor-not-allowed';
@@ -20,11 +27,13 @@ function dataHora(iso: string | null): string {
  * Seção "Conta Asaas" do drawer de Conta de Pagamento (Minha Organização ›
  * Contas). Fase 2 de docs/planos/2026-10-16-asaas-pendencias-e-pix.md.
  *
- * Os botões ficam FORA do submit do formulário de conta (todos type="button"):
- * a configuração Asaas grava por conta própria, na hora, e não depende do
- * "Salvar" do drawer.
+ * Os botões ficam FORA do submit do formulário de conta (todos type="button").
+ * Chave, teste e extrato agem na hora; a configuração (ativo, piloto, tetos)
+ * grava no "Salvar" do drawer, via `registrarAoSalvar` — 18/10/2026: com um
+ * botão próprio de salvar ao lado do Salvar do drawer, o usuário desmarcou o
+ * modo piloto, clicou no Salvar do drawer e a mudança se perdeu sem aviso.
  */
-export default function ContaAsaasSecao({ paymentAccountId }: Props) {
+export default function ContaAsaasSecao({ paymentAccountId, registrarAoSalvar }: Props) {
     const [carregando, setCarregando] = useState(true);
     const [cfg, setCfg] = useState<ContaAsaasConfig | null>(null);
     const [ativando, setAtivando] = useState(false);
@@ -32,17 +41,54 @@ export default function ContaAsaasSecao({ paymentAccountId }: Props) {
     const [chave, setChave] = useState('');
     const [ocupado, setOcupado] = useState<null | 'chave' | 'config' | 'testar' | 'extrato'>(null);
     const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+    /** O que está gravado — para saber se há mudança a salvar. */
+    const [salvo, setSalvo] = useState<CamposConfig | null>(null);
 
-    async function recarregar() {
-        const c = await asaasContaService.get(paymentAccountId);
+    const editando = cfg ?? (ativando ? { payment_account_id: paymentAccountId, ...CONTA_ASAAS_PADRAO } : null);
+    const pendente = !!editando && mudou(editando, salvo);
+    const editandoRef = useRef(editando);
+    editandoRef.current = editando;
+    const salvoRef = useRef(salvo);
+    salvoRef.current = salvo;
+
+    function aplicar(c: ContaAsaasConfig | null) {
         setCfg(c);
+        setSalvo(c);
         if (c) setEnv(c.env);
     }
+
+    /** Depois de testar/guardar chave/sincronizar: atualiza saldo, chave e erros,
+     *  mas mantém o que o usuário mexeu e ainda não salvou (piloto, tetos…). */
+    async function recarregar() {
+        const c = await asaasContaService.get(paymentAccountId);
+        const ed = editandoRef.current;
+        const emEdicao = ed && mudou(ed, salvoRef.current);
+        setSalvo(c);
+        if (c) setEnv(c.env);
+        setCfg(c && ed && emEdicao
+            ? { ...c, ...Object.fromEntries(CAMPOS_CONFIG.map(k => [k, ed[k]])) } as ContaAsaasConfig
+            : c);
+    }
+
+    // Entra no "Salvar" do drawer: grava só se a configuração mudou.
+    useEffect(() => {
+        if (!registrarAoSalvar) return;
+        registrarAoSalvar(async () => {
+            const e = editandoRef.current;
+            if (!e || !mudou(e, salvoRef.current)) return;
+            try {
+                await asaasContaService.salvar(e);
+            } catch (err) {
+                throw new Error(`a configuração da conta Asaas não: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        });
+        return () => registrarAoSalvar(null);
+    }, [registrarAoSalvar]);
 
     useEffect(() => {
         let vivo = true;
         asaasContaService.get(paymentAccountId)
-            .then(c => { if (vivo) { setCfg(c); if (c) setEnv(c.env); } })
+            .then(c => { if (vivo) aplicar(c); })
             .catch(e => { if (vivo) setMsg({ tipo: 'erro', texto: e instanceof Error ? e.message : String(e) }); })
             .finally(() => { if (vivo) setCarregando(false); });
         return () => { vivo = false; };
@@ -72,7 +118,6 @@ export default function ContaAsaasSecao({ paymentAccountId }: Props) {
     }
 
     // Conta comum: oferece transformar em conta Asaas.
-    const editando = cfg ?? (ativando ? { payment_account_id: paymentAccountId, ...CONTA_ASAAS_PADRAO } : null);
     if (!editando) {
         return (
             <div className="pt-4 border-t border-gray-100">
@@ -192,19 +237,28 @@ export default function ContaAsaasSecao({ paymentAccountId }: Props) {
                 </div>
             </div>
 
+            {registrarAoSalvar && pendente && (
+                <p className="flex items-center gap-1.5 text-xs text-amber-700">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    {cfg ? 'Configuração da conta Asaas alterada — grava ao clicar em Salvar.' : 'A conta Asaas é criada ao clicar em Salvar.'}
+                </p>
+            )}
+
             <div className="flex flex-wrap gap-2">
-                <button
-                    type="button"
-                    disabled={ocupado !== null}
-                    onClick={() => executar('config', async () => {
-                        await asaasContaService.salvar(editando);
-                        return 'Configuração da conta Asaas salva.';
-                    })}
-                    className={`${BOTAO} border border-gray-200 bg-white text-gray-700 hover:bg-gray-50`}
-                >
-                    {ocupado === 'config' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                    Salvar configuração Asaas
-                </button>
+                {!registrarAoSalvar && (
+                    <button
+                        type="button"
+                        disabled={ocupado !== null}
+                        onClick={() => executar('config', async () => {
+                            await asaasContaService.salvar(editando);
+                            return 'Configuração da conta Asaas salva.';
+                        })}
+                        className={`${BOTAO} border border-gray-200 bg-white text-gray-700 hover:bg-gray-50`}
+                    >
+                        {ocupado === 'config' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        Salvar configuração Asaas
+                    </button>
+                )}
                 <button
                     type="button"
                     disabled={!temChave || ocupado !== null}

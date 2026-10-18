@@ -759,7 +759,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         servedOrgOptions={activeTab === 'accounts' ? registryOrgOptions : undefined}
                         // Conta Asaas (Fase 2 — docs/planos/2026-10-16-asaas-pendencias-e-pix.md):
                         // só ao EDITAR uma conta de pagamento já gravada (precisa do id).
-                        renderEditExtra={activeTab === 'accounts' ? (item) => <ContaAsaasSecao paymentAccountId={item.id} /> : undefined}
+                        renderEditExtra={activeTab === 'accounts' ? (item, registrarAoSalvar) => <ContaAsaasSecao paymentAccountId={item.id} registrarAoSalvar={registrarAoSalvar} /> : undefined}
                         showCode={true}
                         showNature={activeTab === 'chart_of_accounts'}
                         onSave={async (item) => {

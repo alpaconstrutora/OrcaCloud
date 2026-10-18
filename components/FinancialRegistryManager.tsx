@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Plus, Search, AlertCircle, Download, FileDown, Upload, Hash, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, MoveHorizontal } from 'lucide-react';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
@@ -160,9 +160,14 @@ interface FinancialRegistryManagerProps {
     showOrganization?: boolean;
     organizationNameById?: Map<string, string>;
     /** Seção extra no drawer ao EDITAR um registro existente (ex.: "Conta Asaas"
-     *  em Contas de Pagamento). Os controles dela devem ser type="button": ela
-     *  grava por conta própria e não participa do "Salvar" do drawer. */
-    renderEditExtra?: (item: Partial<RegistryItem> & { id: string }) => React.ReactNode;
+     *  em Contas de Pagamento). Os controles dela devem ser type="button". O que
+     *  ela tiver para gravar entra no "Salvar" do drawer por `registrarAoSalvar`
+     *  (18/10/2026: com dois botões de salvar, desmarcar o modo piloto e clicar no
+     *  Salvar do drawer não gravava nada — e sem aviso). */
+    renderEditExtra?: (
+        item: Partial<RegistryItem> & { id: string },
+        registrarAoSalvar: (fn: (() => Promise<void>) | null) => void,
+    ) => React.ReactNode;
 }
 
 const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
@@ -277,6 +282,10 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         setIsEditing(null);
     };
 
+    // Gravação da seção extra, rodada pelo "Salvar" do drawer depois do registro.
+    const salvarExtraRef = useRef<(() => Promise<void>) | null>(null);
+    const registrarAoSalvar = useCallback((fn: (() => Promise<void>) | null) => { salvarExtraRef.current = fn; }, []);
+
     const handleCancel = () => {
         setIsAdding(false);
         setIsEditing(null);
@@ -290,11 +299,19 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         setLoading(true);
         try {
             await onSave(formData);
-            handleCancel();
-            notify('Registro salvo com sucesso.', 'success');
         } catch (error) {
             console.error('Error saving item:', error);
             notify('Erro ao salvar o registro.', 'error');
+            setLoading(false);
+            return;
+        }
+        try {
+            if (isEditing && salvarExtraRef.current) await salvarExtraRef.current();
+            handleCancel();
+            notify('Registro salvo com sucesso.', 'success');
+        } catch (error) {
+            // O registro já gravou; a seção extra, não. O drawer fica aberto com o motivo.
+            notify(`Registro salvo, mas ${error instanceof Error ? error.message : 'a seção extra não gravou.'}`, 'error');
         } finally {
             setLoading(false);
         }
@@ -851,7 +868,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                             </>
                         )}
 
-                        {isEditing && renderEditExtra?.({ ...formData, id: isEditing })}
+                        {isEditing && renderEditExtra?.({ ...formData, id: isEditing }, registrarAoSalvar)}
                     </SheetPanel>
                     <SheetFooter>
                         <button type="button" onClick={handleCancel} className="h-9 px-3.5 text-gray-500 hover:text-gray-700 font-medium text-[13px] transition-all">

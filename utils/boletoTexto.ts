@@ -41,6 +41,12 @@ export const ERRO_SEM_LINHA = 'Linha digitável não encontrada no texto extraí
  */
 export const ERRO_PDF_COM_SENHA = 'PDF protegido por senha — cadastre a senha no remetente monitorado ou informe a linha digitável manualmente';
 
+/**
+ * A linha veio do DESENHO do código de barras, não do texto (18/10/2026 — reaviso
+ * Energisa #1486 não imprime a linha). Aviso, não erro: o DV conferiu.
+ */
+export const AVISO_LINHA_DO_CODIGO_DE_BARRAS = 'Linha digitável lida do código de barras do PDF (o texto do documento não a traz) — confira com o documento.';
+
 /** pdf.js / unpdf sinalizam senha ausente ou errada com este nome de erro. */
 export function ehErroDeSenha(e: unknown): boolean {
     const nome = (e as { name?: string } | null)?.name ?? '';
@@ -457,9 +463,12 @@ export function extractFromPdfText(
     text: string,
     paginas: number,
     referenceDate = new Date(),
+    /** Linha lida do código de barras desenhado (só o navegador renderiza o PDF —
+     *  `boletoParser.lerCodigoDeBarrasDoPdf`). Vale só quando o texto não traz a linha. */
+    linhaDoCodigo?: string | null,
 ): BoletoExtractionResult {
     text = limparTextoDoPdf(text || '');
-    if (text.length < MIN_TEXTO_UTIL) {
+    if (text.length < MIN_TEXTO_UTIL && !linhaDoCodigo) {
         return {
             metodo: 'pdf_text',
             confidence_score: 0,
@@ -470,7 +479,8 @@ export function extractFromPdfText(
         };
     }
 
-    const linha = findLinhaDigitavelInText(text, referenceDate);
+    const linhaDoTexto = text.length < MIN_TEXTO_UTIL ? null : findLinhaDigitavelInText(text, referenceDate);
+    const linha = linhaDoTexto ?? linhaDoCodigo ?? null;
     if (!linha) {
         // Sem linha, a revisão ao menos já abre com o vencimento impresso.
         const campos = emptyFields();
@@ -486,7 +496,8 @@ export function extractFromPdfText(
         };
     }
 
-    const base = buildExtractionFromLinhaDigitavel(linha, 'pdf_text', referenceDate);
+    const base = buildExtractionFromLinhaDigitavel(linha, linhaDoTexto ? 'pdf_text' : 'ocr_local', referenceDate);
+    if (!linhaDoTexto) base.avisos = [...(base.avisos ?? []), AVISO_LINHA_DO_CODIGO_DE_BARRAS];
 
     // Linha sem data (arrecadação/concessionária): vencimento pelo texto impresso.
     if (!base.campos.vencimento.valor) {

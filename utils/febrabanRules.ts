@@ -334,6 +334,49 @@ export function linhaDigitavelToCodigoBarras48(ld48: string): string {
 }
 
 /**
+ * Arrecadação (concessionária, tributo — 1º dígito 8): código de barras de 44 →
+ * linha digitável de 48. Quatro blocos de 11 dígitos, cada um seguido do seu DV
+ * (mod10 se o 3º dígito é 6/7, mod11 de arrecadação se é 8/9). Inverso de
+ * `linhaDigitavelToCodigoBarras48`.
+ */
+export function codigoBarrasArrecadacaoToLinha48(codBarras44: string): string {
+    if (codBarras44.length !== 44 || codBarras44[0] !== '8') return '';
+    const calc = codBarras44[2] === '6' || codBarras44[2] === '7' ? mod10 : mod11Arrecadacao;
+    let linha = '';
+    for (let i = 0; i < 44; i += 11) {
+        const bloco = codBarras44.slice(i, i + 11);
+        linha += bloco + String(calc(bloco));
+    }
+    return linha;
+}
+
+/**
+ * O DV GERAL do código de barras de 44 confere? Bancário: posição 5 (mod11 do
+ * resto). Arrecadação: posição 4 (mod10 se o 3º dígito é 6/7, mod11 se 8/9).
+ * `parseLinhaDigitavel` com 44 de arrecadação não confere nada — quem lê o código
+ * das barras (`codigoBarrasI25`) precisa desta conferência para não aceitar
+ * leitura torta.
+ */
+export function dvDoCodigoDeBarrasConfere(codBarras44: string): boolean {
+    if (!/^\d{44}$/.test(codBarras44)) return false;
+    if (codBarras44[0] === '8') {
+        const terceiro = codBarras44[2];
+        if (!'6789'.includes(terceiro)) return false;
+        const calc = terceiro === '6' || terceiro === '7' ? mod10 : mod11Arrecadacao;
+        return calc(codBarras44.slice(0, 3) + codBarras44.slice(4)) === Number(codBarras44[3]);
+    }
+    return mod11(codBarras44.slice(0, 4) + codBarras44.slice(5)) === Number(codBarras44[4]);
+}
+
+/** Código de barras de 44 → linha digitável (47 bancário, 48 arrecadação). */
+export function linhaDoCodigoDeBarras(codBarras44: string): string {
+    if (codBarras44.length !== 44) return '';
+    return codBarras44[0] === '8'
+        ? codigoBarrasArrecadacaoToLinha48(codBarras44)
+        : codigoBarrasToLinhaDigitavel(codBarras44);
+}
+
+/**
  * Valida e parseia uma linha digitável (47 ou 48 dígitos) ou código de barras (44).
  */
 export function parseLinhaDigitavel(

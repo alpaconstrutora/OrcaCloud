@@ -11,6 +11,7 @@ import {
     findVencimentoNoTexto,
     ERRO_SEM_TEXTO,
     ERRO_SEM_LINHA,
+    AVISO_LINHA_DO_CODIGO_DE_BARRAS,
 } from '../utils/boletoTexto';
 import * as parser from '../utils/boletoParser';
 import { mod10, mod11, codigoBarrasToLinhaDigitavel } from '../utils/febrabanRules';
@@ -244,5 +245,32 @@ describe('vencimento com o mês escrito (fatura de cartão)', () => {
         expect(findVencimentoNoTexto('no valor de R$ 415,42 Data de vencimento: 27 JUL 2026 Período vigente')).toBe('2026-07-27');
         expect(findVencimentoNoTexto('Vencimento: 5 de agosto de 2026')).toBe('2026-08-05');
         expect(findVencimentoNoTexto('Vencimento: 31 FEV 2026')).toBeNull();
+    });
+});
+
+describe('extractFromPdfText — linha lida do código de barras (18/10/2026)', () => {
+    // Reaviso Energisa #1486: o texto não traz a linha; as barras, sim.
+    const LINHA_DAS_BARRAS = '836500000002616500010007509643020266097030080192';
+    const textoReaviso = 'Informamos que em nossos registros permanece(m) sem pagamento a(s) fatura(s) abaixo. ' +
+        'Fatura: 5096430 - Mês/Ano: 09/2026 - Venc. 02/10/2026 - Valor R$61,65';
+
+    it('texto sem linha + linha das barras → lê, marca ocr_local e avisa', () => {
+        const r = extractFromPdfText(textoReaviso, 1, new Date('2026-10-18'), LINHA_DAS_BARRAS);
+        expect(r.metodo).toBe('ocr_local');
+        expect(r.erros).toEqual([]);
+        expect(r.campos.linha_digitavel.valor).toBe(LINHA_DAS_BARRAS);
+        expect(r.campos.valor.valor).toBe(61.65);
+        expect(r.avisos).toContain(AVISO_LINHA_DO_CODIGO_DE_BARRAS);
+    });
+
+    it('sem a linha das barras, continua o erro de sempre', () => {
+        const r = extractFromPdfText(textoReaviso, 1, new Date('2026-10-18'));
+        expect(r.erros).toEqual([ERRO_SEM_LINHA]);
+    });
+
+    it('PDF sem texto (imagem) também aproveita a linha das barras', () => {
+        const r = extractFromPdfText('', 1, new Date('2026-10-18'), LINHA_DAS_BARRAS);
+        expect(r.erros).toEqual([]);
+        expect(r.metodo).toBe('ocr_local');
     });
 });

@@ -6,6 +6,7 @@ import { sanitizeFileName } from '../utils/storageUtils';
 import { renomearDocumentoDoBoleto, renomearDocumentosDosBoletos } from './boletoNomeDocumentoService';
 import { sha256File, extractFromPdfFile, buildExtractionFromLinhaDigitavel } from '../utils/boletoParser';
 import { colunasDaExtracao } from '../utils/boletoTexto';
+import { decidirLinhaManual, colunasParaGravar } from '../utils/boletoLinhaManual';
 import { parseLinhaDigitavel, onlyDigits, nomeBanco, vencimentoPlausivel } from '../utils/febrabanRules';
 import { financialApprovalService } from './financialApprovalService';
 import { processService } from './processService';
@@ -338,15 +339,39 @@ export const boletoService = {
      * Aplica entrada manual de linha digitável a um boleto existente.
      * Reprocessa validação FEBRABAN e atualiza os campos extraídos.
      */
-    async aplicarLinhaDigitavelManual(boletoId: string, organizationId: string, linha: string, userEmail?: string): Promise<Boleto> {
+    /**
+     * Linha digitável digitada (ou lida do código de barras pelo botão do cadastro —
+     * `metodo='ocr_local'`). Regra em `utils/boletoLinhaManual.ts` (18/10/2026): DV
+     * errado, programado/pago/cancelado recusam; aprovado só troca as colunas da
+     * linha e recusa valor diferente (o título já existe); rascunho/revisão
+     * completam sem apagar o que já estava lido.
+     */
+    async aplicarLinhaDigitavelManual(
+        boletoId: string,
+        organizationId: string,
+        linha: string,
+        userEmail?: string,
+        metodo: 'manual' | 'ocr_local' = 'manual',
+    ): Promise<Boleto> {
         const limpa = onlyDigits(linha);
         const parsed = parseLinhaDigitavel(limpa);
-        const extraction = buildExtractionFromLinhaDigitavel(limpa, 'manual');
 
-        const updates = {
+        const { data: atual, error: erroAtual } = await supabase
+            .from(TABLE).select('status, valor, linha_digitavel').eq('id', boletoId).single();
+        if (erroAtual) throw erroAtual;
+        const decisao = decidirLinhaManual({
+            status: atual.status as BoletoStatus,
+            valorBoleto: atual.valor == null ? null : Number(atual.valor),
+            valorDaLinha: parsed.valor,
+            errosDaLinha: parsed.erros,
+        });
+        if ('recusa' in decisao) throw new Error(decisao.recusa);
+
+        const extraction = buildExtractionFromLinhaDigitavel(limpa, metodo);
+        const updates = colunasParaGravar({
             ...extractionToColumns(extraction),
             banco_nome: nomeBanco(parsed.bancoCodigo) ?? null,
-        };
+        }, decisao);
 
         const { data, error } = await supabase
             .from(TABLE)
@@ -355,13 +380,19 @@ export const boletoService = {
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            if ((error as { code?: string }).code === '23505') {
+                throw new Error('Outro boleto desta organização já tem essa linha digitável.');
+            }
+            throw error;
+        }
 
         await registrarAuditoria(boletoId, organizationId, 'extracao_manual', {
             metodo: 'usuario',
             usuario_email: userEmail,
             campo: 'linha_digitavel',
-            valor_depois: { linha_digitavel: limpa, confidence: extraction.confidence_score },
+            valor_antes: { linha_digitavel: atual.linha_digitavel ?? null },
+            valor_depois: { linha_digitavel: limpa, confidence: extraction.confidence_score, origem: metodo === 'ocr_local' ? 'codigo_de_barras_do_pdf' : 'digitada' },
         });
 
         return mapRowToBoleto(data);

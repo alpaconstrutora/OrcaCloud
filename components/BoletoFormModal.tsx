@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     Upload, Loader2, ArrowLeft, FileText, AlertCircle, CheckCircle2,
     Building2, Calendar, DollarSign, Hash, Eye, Save,
-    ThumbsUp, Ban, Trash2, UserPlus, Undo2, Receipt, Tag, StickyNote, Pencil, History, Mail,
+    ThumbsUp, Ban, Trash2, UserPlus, Undo2, Receipt, Tag, StickyNote, Pencil, History, Mail, ScanLine,
 } from 'lucide-react';
 import PlanoContasSelect from './PlanoContasSelect';
 import HierarchicalSelect from './HierarchicalSelect';
@@ -14,7 +14,7 @@ import { MOTIVO_ALCADA_PENDENTE } from '../services/alcadaDaBaixa';
 import { supplierService } from '../services/supplierService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
-import { extractFromPdfFile } from '../utils/boletoParser';
+import { extractFromPdfFile, lerCodigoDeBarrasDoPdf, ehErroDeSenha } from '../utils/boletoParser';
 import { onlyDigits } from '../utils/febrabanRules';
 import { formatMoney, formatDateTimeBR } from './ui/Format';
 import { useConfirm } from './ui/confirm';
@@ -171,6 +171,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const [info, setInfo] = useState<string | null>(null);
 
     const [linhaManual, setLinhaManual] = useState('');
+    /** A linha do campo veio do código de barras do PDF (botão), e não foi digitada. */
+    const [linhaDoCodigo, setLinhaDoCodigo] = useState(false);
+    const [lendoCodigo, setLendoCodigo] = useState(false);
     // Captura por e-mail (15/10/2026): de onde veio, e o histórico do boleto.
     const [origemEmail, setOrigemEmail] = useState<MensagemCaptura | null>(null);
     const [auditoria, setAuditoria] = useState<BoletoAuditoria[] | null>(null);
@@ -499,7 +502,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         setBusy(true);
         try {
             const updated = await boletoService.aplicarLinhaDigitavelManual(
-                boleto.id, organizationId, digits, userEmail,
+                boleto.id, organizationId, digits, userEmail, linhaDoCodigo ? 'ocr_local' : 'manual',
             );
             setBoleto(updated);
             setValor(updated.valor != null ? String(updated.valor) : '');
@@ -509,12 +512,45 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setJurosDia(updated.juros_dia != null ? String(updated.juros_dia) : '');
             if (updated.juros_dia_tipo) setJurosDiaTipo(updated.juros_dia_tipo);
             setLinhaManual('');
+            setLinhaDoCodigo(false);
             setInfo('Linha digitável processada com sucesso.');
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             setError(error.message || 'Falha ao processar linha digitável');
         } finally {
             setBusy(false);
+        }
+    }
+
+    /**
+     * Lê a linha do código de barras DESENHADO no PDF guardado (18/10/2026): reaviso
+     * de concessionária não imprime a linha, e a captura por e-mail (servidor) não
+     * renderiza PDF. Só preenche o campo — o usuário confere e valida.
+     */
+    async function handleLerCodigoDeBarras() {
+        if (!documentoUrl) return;
+        setError(null);
+        setInfo(null);
+        setLendoCodigo(true);
+        try {
+            const resp = await fetch(documentoUrl);
+            if (!resp.ok) throw new Error('Não foi possível baixar o PDF do boleto.');
+            const lido = await lerCodigoDeBarrasDoPdf(await resp.arrayBuffer());
+            if (lido.linha === null) {
+                setError(lido.motivo === 'mais_de_um_codigo'
+                    ? 'O PDF tem mais de um código de barras — cole a linha digitável do boleto certo.'
+                    : 'Não foi possível ler o código de barras deste PDF — cole a linha digitável.');
+                return;
+            }
+            setLinhaManual(lido.linha);
+            setLinhaDoCodigo(true);
+            setInfo('Linha lida do código de barras do PDF. Confira com o documento e clique em "Validar linha digitável".');
+        } catch (err: unknown) {
+            setError(ehErroDeSenha(err)
+                ? 'PDF protegido por senha — não dá para ler o código de barras. Cole a linha digitável.'
+                : (err instanceof Error ? err.message : 'Falha ao ler o código de barras do PDF.'));
+        } finally {
+            setLendoCodigo(false);
         }
     }
 
@@ -1143,29 +1179,48 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </div>
                                 </Painel>
 
-                                {/* Linha digitável manual (quando confidence baixo) */}
-                                {boleto.confidence_score !== undefined && boleto.confidence_score < 80 && (
+                                {/* Linha digitável manual (quando confidence baixo). Some em
+                                    boleto programado/pago/cancelado: ali a linha não muda
+                                    (utils/boletoLinhaManual.ts). */}
+                                {boleto.confidence_score !== undefined && boleto.confidence_score < 80
+                                    && !['programado', 'pago', 'cancelado'].includes(boleto.status) && (
                                     <div className="bg-amber-50 border border-amber-200 rounded-[10px] p-4">
                                         <p className="text-xs font-semibold text-amber-700 mb-2">
                                             Extração com baixa confiança
                                         </p>
                                         <p className="text-xs text-amber-700 mb-3">
-                                            Cole abaixo a linha digitável (47 ou 48 dígitos) impressa no boleto:
+                                            Cole abaixo a linha digitável (47 ou 48 dígitos) impressa no boleto
+                                            {boleto.documento_mime === 'application/pdf' ? ' — ou leia do código de barras do PDF' : ''}:
                                         </p>
                                         <input
                                             type="text"
                                             value={linhaManual}
-                                            onChange={(e) => setLinhaManual(e.target.value)}
+                                            onChange={(e) => { setLinhaManual(e.target.value); setLinhaDoCodigo(false); }}
                                             placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000"
                                             className="w-full px-3 h-9 rounded-[6px] border border-amber-300 bg-white text-sm font-mono outline-none focus:border-amber-500"
                                         />
-                                        <button
-                                            onClick={handleAplicarLinhaManual}
-                                            disabled={busy || !linhaManual}
-                                            className="mt-2 px-4 py-2 bg-amber-600 text-white rounded-[6px] text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
-                                        >
-                                            Validar linha digitável
-                                        </button>
+                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                            <button
+                                                onClick={handleAplicarLinhaManual}
+                                                disabled={busy || !linhaManual}
+                                                title={!linhaManual ? 'Cole ou leia a linha digitável primeiro' : undefined}
+                                                className="px-4 py-2 bg-amber-600 text-white rounded-[6px] text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+                                            >
+                                                Validar linha digitável
+                                            </button>
+                                            {boleto.documento_mime === 'application/pdf' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleLerCodigoDeBarras}
+                                                    disabled={busy || lendoCodigo || !documentoUrl}
+                                                    title={!documentoUrl ? 'Carregando o PDF do boleto…' : 'Lê as barras desenhadas no PDF e preenche o campo para você conferir'}
+                                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-amber-300 text-amber-700 rounded-[6px] hover:bg-amber-100 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                                >
+                                                    {lendoCodigo ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <ScanLine className="w-[15px] h-[15px]" />}
+                                                    Ler do código de barras do PDF
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>

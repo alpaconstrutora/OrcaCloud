@@ -2541,3 +2541,44 @@ nenhum medidor no vão, nenhum muro cruzando a casa, permeabilidade desenhada de
 travaram na 10 × 30 de 4 dormitórios por horas: a thread não atendia ao pedido de pausa do inspetor (girando no código
 nativo do V8 — a mesma casa já derrubara o V8 num `Array.sort`); sozinha, a casa termina em segundos — é a máquina.
 
+## F27 — o sobrado bom e os 3 pavimentos (18/10/2026, "sim" para seguir)
+
+### Decisões do usuário (18/10/2026)
+
+| Pergunta | Resposta |
+|---|---|
+| Na casa de 3 pavimentos, o que vai em cada andar? | **Social embaixo, íntimo em cima** — térreo: garagem, sala, cozinha, serviço e lavabo; 1º: dormitórios e banheiros; 2º: a suíte principal e o que sobrar (escritório, terraço) |
+| Quando o Automático usa 3 pavimentos? | **Só quando o sobrado não comporta** — térrea, sobrado e então 3 pavimentos (se o gabarito da zona deixa); fica o de menos problemas |
+| Em que ordem? | **Sobrado primeiro, 3 pavimentos depois** — A (a qualidade do sobrado), B (as janelas do superior alinhadas com as do térreo) e C (o serviço com fachada nas casas largas e rasas), publicados; depois D (3 pavimentos) |
+
+### Registro da F27 — parte 1 (18/10/2026): o sobrado do lote estreito
+
+Retrato (o sobrado forçado no 10 × 30 de 4 dormitórios, rodadas limpas): a varanda × sala sem porta direta (a sala na
+linha de trás), uma sobra de cômodo no superior (laje < 0,5 m², "Ambiente 8" sem interruptor), o armário de um quarto, e
+— só a sonda via — o esgoto suspenso do banheiro de cima cruzando os eletrodutos e a água quente do forro do térreo. O
+"eletrodutos: Cannot create property…" do primeiro retrato e um "[…].sort(…).map is not a function" na água eram a
+máquina (corrupção do V8: não se repetem nas rodadas limpas).
+
+O que entrou:
+
+- **Gerador** (`caixasDoPlano`): com a garagem em FILA a linha da rua fica funda (10 m) e a varanda não vira coluna até
+  a sala; aí a faixa ao lado da garagem é a ENTRADA — a varanda na rua e a sala logo atrás; cozinha, serviço e lavabo
+  na linha de trás (com a fachada dos fundos). Só quando as duas cabem pelos mínimos. Resolveu a varanda × sala, a
+  sobra de cômodo e o armário.
+- **Laje rebaixada**: a previsão das peças de cima roda com os shafts do F12c (sem eles escolhia outro shaft e a laje
+  descia até ele, enquanto o esgoto ia ao do F12c); e o banheiro em L (a escada entra nele) recorta a área molhada em
+  retângulos (`recortadaPeloBanheiro`) — o recorte pelos lados, de convexo, deixava só o braço estreito e a laje parava a
+  20 cm do shaft.
+- **Encontros à vista**: rede × rede (por par de redes) e tubo atravessando pilar viram pendência CONFLITO — antes só a
+  sonda contava; a tela não dizia e o Automático (que pesa as pendências) não os via.
+
+Medido: as 8 casas iguais à F26 (0 / 0 / 0, as mesmas pendências). O sobrado 10 × 30: a varanda encosta na sala, sem
+sobra de cômodo nem armário; os encontros caíram de 5 para 4 e agora são ditos (3 eletroduto × esgoto, 1 fria × quente)
+— no Automático a térrea fica (empate em 7), sem encontro. **Falta** (fase própria): a luz de teto do cômodo sob dois
+banheiros de cima liga-se em reta sob a laje rebaixada (área em L) — as ligações retas do forro precisam contornar área
+não retangular; três tentativas (penalidade na árvore, faixa do tubo suspenso, caixas juntadas) só mudaram o problema
+de lugar e foram desfeitas.
+
+Testes novos (reprovam sem a correção): o banheiro em L (`blueprintSobrado`); o sobrado no lote de 10 m com a varanda
+junto da sala e os encontros nas pendências (`blueprintCasaAutomatica`).
+

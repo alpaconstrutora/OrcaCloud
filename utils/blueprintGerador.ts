@@ -590,12 +590,26 @@ function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, p
       // o que mais couber INTEIRO; o resto vai à linha de trás, na largura toda.
       const areaAoLado = (W - x0) * caixaDaGaragem.y1;
       const preferencia = (t: ItemPlanejado) => (t.item.uso === 'VARANDA' ? 0 : t.item.uso === 'LAVABO' ? 1 : t.zona === 'SOCIAL' && t.item.uso !== 'SALA' ? 2 : 3);
-      const aoLado: ItemPlanejado[] = [];
+      let aoLado: ItemPlanejado[] = [];
       let soma = 0;
       for (const t of [...daFrente].sort((a, b) => preferencia(a) - preferencia(b) || a.areaAlvoMm2 - b.areaAlvoMm2)) {
         if (t.item.uso === 'SALA' || soma + t.areaAlvoMm2 > areaAoLado) continue;
         aoLado.push(t);
         soma += t.areaAlvoMm2;
+      }
+      // F27 da casa automática (18/10/2026): a garagem em FILA (o lote estreito) faz a linha da rua FUNDA (10 m) — a varanda
+      // não vira coluna até a sala (seria uma tira), e a sala, atrás, ficava a 2 portas da entrada (sobrado 10 × 30). Aí a
+      // faixa ao lado da garagem é a ENTRADA: a varanda na rua e a sala logo atrás dela; cozinha, serviço e lavabo vão à
+      // linha de trás (na largura toda, com a fachada dos fundos). Só quando as duas cabem na faixa pelos mínimos.
+      const varandaDaRua = daFrente.find((t) => t.item.uso === 'VARANDA');
+      const salaDaFrente = daFrente.find((t) => t.item.uso === 'SALA');
+      if (varandaDaRua && salaDaFrente && caixaDaGaragem.y1 > VARANDA_EM_COLUNA_ATE_MM) {
+        const larguraAoLado = W - x0;
+        const cabeNaFaixa = [varandaDaRua, salaDaFrente].every((t) => eixoMinMm(t.item, hip) <= larguraAoLado) && varandaDaRua.areaAlvoMm2 + salaDaFrente.areaAlvoMm2 <= areaAoLado;
+        if (cabeNaFaixa) {
+          aoLado = [varandaDaRua, salaDaFrente];
+          soma = varandaDaRua.areaAlvoMm2 + salaDaFrente.areaAlvoMm2;
+        }
       }
       const atras = daFrente.filter((t) => !aoLado.includes(t));
       // F22 da casa automática (17/10/2026): a VARANDA (a entrada) é uma COLUNA na profundidade toda da linha da rua, junto

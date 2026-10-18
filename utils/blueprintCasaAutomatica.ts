@@ -2713,6 +2713,25 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       }
       const nome: Record<string, string> = { ...ROTULO_DA_DISCIPLINA_DA_REDE, ...ROTULO_DA_DISCIPLINA_DO_AR, ELETRICA: 'eletroduto' };
       for (const [d, n] of Object.entries(redesEmAberturas)) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rede de ${nome[d] ?? d.toLowerCase()}: ${n} trecho(s) passando por porta ou janela` });
+      // F27 da casa automática (18/10/2026): os ENCONTROS de uma rede com outra, e o tubo que atravessa pilar, também
+      // ficam à vista — por par de redes. Até aqui só a sonda os contava: a tela não dizia, e o Automático, que pesa as
+      // pendências, escolhia o sobrado com o esgoto suspenso cruzando os eletrodutos do forro do térreo contra uma térrea
+      // sem encontro nenhum.
+      const est = new Map((m.structures ?? []).map((x) => [x.id, x]));
+      const pares: Record<string, number> = {};
+      let emPilar = 0;
+      for (const c of conflitosDoModelo(m)) {
+        const t = porId.get(c.trechoId);
+        if (!t) continue;
+        if (c.classe === 'REDE') {
+          const o = porId.get(c.outroId);
+          if (!o) continue;
+          const chave = [nome[t.disciplina] ?? t.disciplina.toLowerCase(), nome[o.disciplina] ?? o.disciplina.toLowerCase()].sort().join(' × ');
+          pares[chave] = (pares[chave] ?? 0) + 1;
+        } else if (c.classe === 'ESTRUTURA' && est.get(c.outroId)?.kind === 'PILAR' && c.comprimentoDentroMm > 0) emPilar++;
+      }
+      for (const [par, n] of Object.entries(pares)) pendencias.push({ grupo: 'CONFLITO', texto: `Redes: ${n} encontro(s) de ${par}` });
+      if (emPilar) pendencias.push({ grupo: 'CONFLITO', texto: `Redes: ${emPilar} trecho(s) atravessando pilar` });
     }
     return { ancoras, mobiliario, hidraulica, eletrica, climatizacao, redesEmAberturas, forro, furos };
   };
@@ -2856,11 +2875,23 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     const zonasMolhadasDeCima = (x: BlueprintModel, T0: ObjectId, S0: ObjectId): Point[][] => {
       if (!hip.mobiliario.lancar || hip.sobrado.rebaixoDaLajeDoBanheiroMm <= 0) return [];
       try {
+        // F27 da casa automática (18/10/2026): primeiro os shafts do F12c, como nas instalações — sem eles a previsão
+        // escolhia OUTRO shaft para o grupo (o do F12c ainda não existia), a laje descia até ele, e o passo do shaft,
+        // adiante, reaproveitava o do F12c: o esgoto corria do rebaixo até lá pelo forro do térreo, cruzando os
+        // eletrodutos (sobrado 10 × 30).
+        const nucleoNoMundo = [
+          { x: sobrado.nucleo.ret.x0, y: sobrado.nucleo.ret.y0 },
+          { x: sobrado.nucleo.ret.x1, y: sobrado.nucleo.ret.y0 },
+          { x: sobrado.nucleo.ret.x1, y: sobrado.nucleo.ret.y1 },
+          { x: sobrado.nucleo.ret.x0, y: sobrado.nucleo.ret.y1 },
+        ].map((p) => paraMundo(q, p));
+        const doF12c = hip.hidraulica.lancar ? shaftsDoSobrado(x, T0, S0, nucleoNoMundo, hip.sobrado.shaftMm) : [];
+        const x0 = doF12c.length ? applyBatch(x, doF12c.map((sh): Command => ({ type: 'AddNucleo', levelId: T0, ateLevelId: S0, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' }))).model : x;
         // Os DOIS pavimentos, como as etapas de lá: o shaft previsto não pode cair em cima de uma peça do térreo.
-        const porNivel = [T0, S0].map((L) => ({ L, lista: mobiliarNivel(x, L, hip.mobiliario) }));
-        const mob = porNivel.flatMap((p) => comandosDeMobiliario(p.lista, p.L, x));
-        const r1 = mob.length ? applyBatch(x, mob) : null;
-        const m1 = r1?.model ?? x;
+        const porNivel = [T0, S0].map((L) => ({ L, lista: mobiliarNivel(x0, L, hip.mobiliario) }));
+        const mob = porNivel.flatMap((p) => comandosDeMobiliario(p.lista, p.L, x0));
+        const r1 = mob.length ? applyBatch(x0, mob) : null;
+        const m1 = r1?.model ?? x0;
         const louc = pontosDasLoucasCriadas(m1, r1?.diff.created ?? [], hip.pontos, { sugerida: true });
         const m2 = louc.length ? applyBatch(m1, louc).model : m1;
         const kit = coletoresForaDoShaft(m2, [T0, S0].flatMap((L) => planejarPontosDoNivel(m2, L, hip.pontos)).flatMap((pl) => pl.comandos));

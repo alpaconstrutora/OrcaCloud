@@ -1098,6 +1098,19 @@ describe('F22 — pavimentos automático', () => {
     // Quatro casas inteiras (a automática faz térrea e sobrado; e as duas de conferência).
   }, 120_000);
 
+  it('F27 — o sobrado no lote de 10 m: a varanda (na rua) encosta na sala; os encontros de rede viram pendência', () => {
+    // A garagem em fila toma a linha da rua (10 m de fundo): a faixa ao lado dela é a entrada — a sala logo atrás da
+    // varanda. Antes, a sala ia para a linha de trás, a 2 portas da varanda (SEM_SOLUCAO).
+    const m = lote10x30();
+    const p = planejarCasa(m, entrada(m, { curto: quatro }), { pavimentos: 2 });
+    expect(p.pendencias.filter((x) => /Varanda de entrada × Sala/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+    // Todo encontro rede × rede da conferência está nas pendências (o Automático pesa só o que está nelas).
+    const porId = new Map((p.resultado.trechos ?? []).map((t) => [t.id, t]));
+    const encontros = conflitosDoModelo(p.resultado).filter((c) => c.classe === 'REDE' && porId.has(c.trechoId) && porId.has(c.outroId)).length;
+    const ditos = p.pendencias.filter((x) => x.grupo === 'CONFLITO' && /^Redes: \d+ encontro/.test(x.texto)).reduce((n, x) => n + Number(/^Redes: (\d+)/.exec(x.texto)![1]), 0);
+    expect(ditos).toBe(encontros);
+  }, 240_000);
+
   it('a mesma casa com "Térrea" escolhida: fica térrea, e a pendência diz que o sobrado resolve', () => {
     const m = lote10x30();
     const p = planejarCasa(m, entrada(m, { curto: quatro }), { pavimentos: 1 });

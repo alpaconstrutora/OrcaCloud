@@ -341,6 +341,24 @@ describe('F14c — a laje rebaixada e o shaft de cada banheiro de cima', () => {
     }
   });
 
+  it('F27 — banheiro em L (a escada entra nele): a área cobre o braço LARGO até a face do shaft, não só o estreito', () => {
+    // O banheiro 1,6 × 6,45 m com a escada no canto de cima à direita (x 0,75–1,6, y 0–2,6): um L. O shaft logo abaixo
+    // da escada (x 0,95–1,35, y 2,675–3,075); o vaso e o lavatório no braço estreito, a caixa sifonada no largo.
+    const emL = [point(0, 0), point(750, 0), point(750, 2600), point(1600, 2600), point(1600, 6450), point(0, 6450)];
+    const sh = caixa([950, 2675], [1350, 3075]);
+    const zonas = zonasMolhadasDoBanheiro(emL, [point(400, 3820), point(300, 4270), point(1350, 5620)], 600, sh);
+    const cobre = (x: number, y: number) => zonas.some((z) => { const [x0, y0, x1, y1] = extremos(z)!; return x > x0 && x < x1 && y > y0 && y < y1; });
+    // O braço largo (x > 0,75 m) entra — antes o recorte pelos lados parava em 0,75 m.
+    expect(cobre(1350, 5620)).toBe(true);
+    expect(cobre(1150, 3200)).toBe(true); // logo abaixo da face do shaft, do lado das peças
+    // E nada sai do banheiro nem entra na escada.
+    expect(cobre(1150, 1300)).toBe(false);
+    for (const z of zonas) {
+      const [x0, y0, x1, y1] = extremos(z)!;
+      expect(x0 >= 0 && x1 <= 1600 && y0 >= 0 && y1 <= 6450).toBe(true);
+    }
+  });
+
   describe('shaftDoGrupo (modelo sintético 8 × 6 m: o banheiro em cima, de x = 4 a 8 m e y = 0 a 3 m)', () => {
     const base = applyBatch(emptyModel(), [
       { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 },

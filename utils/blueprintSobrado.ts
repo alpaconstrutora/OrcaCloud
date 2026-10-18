@@ -896,6 +896,65 @@ export function shaftJuntoDasPecas(model: BlueprintModel, T: ObjectId, S: Object
 }
 
 /**
+ * F27 da casa automática (18/10/2026): a área molhada recortada pelo banheiro em L (a escada entra nele — sobrado
+ * 10 × 30): recortar pelos lados, como num convexo, deixava só o braço estreito (os lados da quina interna cortavam o
+ * largo), e a laje parava a 20 cm da face do shaft — o esgoto corria dali pelo forro do térreo, cruzando os eletrodutos.
+ * Banheiro ortogonal e não convexo: em retângulos (faixas no quadro dele, as vizinhas de mesma largura juntas), e a área
+ * vira a parte dela em cada um. Convexo, ou com lado oblíquo: a área como veio (o recorte de sempre).
+ */
+function recortadaPeloBanheiro(zona: Point[], banheiro: readonly Point[]): Point[][] {
+  const b = anelLimpo(banheiro as Point[]);
+  // O recorte de sempre (pelos lados): certo no convexo.
+  const peloContorno = (): Point[][] => {
+    let r = zona;
+    for (let i = 0; i < b.length && r.length >= 3; i++) r = recortarNoSemiplano(r, b[i], b[(i + 1) % b.length], true);
+    const v = r.length >= 3 ? pecaValida(r, AREA_MINIMA_DA_PECA_DE_LAJE_MM2) : null;
+    return v ? [v] : [];
+  };
+  if (b.length <= 4) return peloContorno();
+  const L = Math.hypot(b[1].x - b[0].x, b[1].y - b[0].y) || 1;
+  const u = { x: (b[1].x - b[0].x) / L, y: (b[1].y - b[0].y) / L };
+  const n = { x: -u.y, y: u.x };
+  const em = (p: { x: number; y: number }) => ({ s: p.x * u.x + p.y * u.y, t: p.x * n.x + p.y * n.y });
+  const de = (s0: number, t0: number) => ({ x: Math.round(s0 * u.x + t0 * n.x), y: Math.round(s0 * u.y + t0 * n.y) }) as Point;
+  const bs = b.map(em);
+  const ortogonal = bs.every((q, k) => {
+    const r = bs[(k + 1) % bs.length];
+    return Math.abs(q.s - r.s) < 1 || Math.abs(q.t - r.t) < 1;
+  });
+  if (!ortogonal) return peloContorno();
+  const zs = zona.map(em);
+  const [zs0, zs1, zt0, zt1] = [Math.min(...zs.map((q) => q.s)), Math.max(...zs.map((q) => q.s)), Math.min(...zs.map((q) => q.t)), Math.max(...zs.map((q) => q.t))];
+  const ts = [...new Set(bs.map((q) => Math.round(q.t)))].sort((a, c) => a - c);
+  const partes: { s0: number; s1: number; t0: number; t1: number }[] = [];
+  for (let k = 0; k + 1 < ts.length; k++) {
+    const tm = (ts[k] + ts[k + 1]) / 2;
+    const xs: number[] = [];
+    for (let i = 0; i < bs.length; i++) {
+      const a = bs[i];
+      const c = bs[(i + 1) % bs.length];
+      if ((a.t <= tm && c.t > tm) || (c.t <= tm && a.t > tm)) xs.push(a.s + ((tm - a.t) / (c.t - a.t)) * (c.s - a.s));
+    }
+    xs.sort((a, c) => a - c);
+    for (let m = 0; m + 1 < xs.length; m += 2) {
+      const ant = partes.find((p) => Math.abs(p.s0 - xs[m]) < 1 && Math.abs(p.s1 - xs[m + 1]) < 1 && Math.abs(p.t1 - ts[k]) < 1);
+      if (ant) ant.t1 = ts[k + 1];
+      else partes.push({ s0: xs[m], s1: xs[m + 1], t0: ts[k], t1: ts[k + 1] });
+    }
+  }
+  const saida: Point[][] = [];
+  for (const p of partes) {
+    const [s0, s1, t0, t1] = [Math.max(zs0, p.s0), Math.min(zs1, p.s1), Math.max(zt0, p.t0), Math.min(zt1, p.t1)];
+    if (s1 - s0 < 1 || t1 - t0 < 1) continue;
+    let r: Point[] = [de(s0, t0), de(s1, t0), de(s1, t1), de(s0, t1)];
+    if (signedArea(r) < 0) r = r.reverse();
+    const v = pecaValida(r, AREA_MINIMA_DA_PECA_DE_LAJE_MM2);
+    if (v) saida.push(v);
+  }
+  return saida;
+}
+
+/**
  * F14c: as ÁREAS MOLHADAS de um grupo num banheiro — `zonaMolhadaDoBanheiro`, mas com as peças em volta do shaft
  * repartidas pela FACE dele que cada uma enxerga (a de maior afastamento): uma área por face, cada uma parando nela.
  * No banheiro da suíte do sobrado a 30°, o vaso e o lavatório ficam de um lado e a caixa sifonada de outro, em "L":
@@ -910,8 +969,8 @@ export function zonasMolhadasDoBanheiro(
   caminho: readonly { x: number; y: number }[] = [],
 ): Point[][] {
   const uma = () => {
-    const z = zonaMolhadaDoBanheiro(banheiro, pontos, margemMm, shaft ? [shaft] : [], caminho);
-    return z ? [z] : [];
+    const z = zonaMolhadaDoBanheiro(banheiro, pontos, margemMm, shaft ? [shaft] : [], caminho, true);
+    return z ? recortadaPeloBanheiro(z, banheiro) : [];
   };
   const b = anelLimpo(banheiro as Point[]);
   if (!shaft || b.length < 3 || pontos.length < 2) return uma();
@@ -934,8 +993,8 @@ export function zonasMolhadasDoBanheiro(
   if (faces.length <= 1) return uma();
   const zonas: Point[][] = [];
   for (const f of faces.sort()) {
-    const z = zonaMolhadaDoBanheiro(banheiro, fora.filter((p) => face(p) === f), margemMm, [shaft], caminho.filter((p) => face(p) === f));
-    if (z) zonas.push(z);
+    const z = zonaMolhadaDoBanheiro(banheiro, fora.filter((p) => face(p) === f), margemMm, [shaft], caminho.filter((p) => face(p) === f), true);
+    if (z) zonas.push(...recortadaPeloBanheiro(z, banheiro));
   }
   return zonas;
 }
@@ -1137,6 +1196,8 @@ export function zonaMolhadaDoBanheiro(
   margemMm: number,
   shafts: readonly (readonly Point[])[] = [],
   caminho: readonly { x: number; y: number }[] = [],
+  /** F27: o retângulo antes do recorte pelo banheiro (quem recorta é `recortadaPeloBanheiro`). */
+  semRecorte = false,
 ): Point[] | null {
   const b = anelLimpo(banheiro as Point[]);
   if (pontos.length === 0) [pontos, caminho] = [caminho, []];
@@ -1174,6 +1235,7 @@ export function zonaMolhadaDoBanheiro(
   const de = (s: number, t: number) => ({ x: s * u.x + t * n.x, y: s * u.y + t * n.y }) as Point;
   let r: Point[] = [de(s0, t0), de(s1, t0), de(s1, t1), de(s0, t1)];
   if (signedArea(r) < 0) r = r.reverse();
+  if (semRecorte) return r;
   for (let i = 0; i < b.length && r.length >= 3; i++) r = recortarNoSemiplano(r, b[i], b[(i + 1) % b.length], true);
   return r.length >= 3 ? pecaValida(r, AREA_MINIMA_DA_PECA_DE_LAJE_MM2) : null;
 }

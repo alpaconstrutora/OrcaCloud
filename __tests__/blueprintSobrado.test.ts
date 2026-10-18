@@ -11,6 +11,7 @@ import { HIPOTESES_PILARES_PADRAO } from '../utils/blueprintPilaresAutomaticos';
 import {
   alinharJanelasDoSuperior,
   comandoDaEscada,
+  dividirEmTres,
   dividirPrograma,
   escolherNucleo,
   HIPOTESES_DO_SOBRADO_PADRAO,
@@ -51,6 +52,46 @@ describe('dividirPrograma', () => {
       const ids = new Set(p.itens.map((i) => i.id));
       expect(p.relacoes.every((r) => ids.has(r.a) && ids.has(r.b))).toBe(true);
     }
+  });
+});
+
+describe('dividirEmTres (F27-D: social embaixo, íntimo em cima)', () => {
+  const curto = { ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, suites: 2, banheiros: 3, padrao: 'R1-A' as const };
+  const { programa } = programaDaCasa(curto);
+  const { terreo, primeiro, segundo } = dividirEmTres(programa);
+  const usos = (p: typeof programa) => p.itens.map((i) => i.uso);
+
+  it('térreo social e serviço SEM o escritório; o 2º com a suíte principal, o banheiro dela e o escritório', () => {
+    expect(usos(terreo)).not.toContain('ESCRITORIO');
+    expect(terreo.itens.every((i) => USOS_DO_TERREO.has(i.uso))).toBe(true);
+    expect(segundo.itens.map((i) => i.id).sort()).toEqual(['bsuite1', 'circ:2', 'esc', 'suite1']);
+    expect(usos(primeiro)).toContain('SUITE');
+    expect(usos(primeiro)).toContain('DORMITORIO');
+  });
+
+  it('nada some: só a circulação existe em dois pavimentos (a cópia do 2º tem id próprio)', () => {
+    const ids = [...terreo.itens, ...primeiro.itens, ...segundo.itens].map((i) => i.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.filter((id) => !id.endsWith(':2')).sort()).toEqual(programa.itens.map((i) => i.id).sort());
+    expect(usos(primeiro)).toContain('CIRCULACAO');
+  });
+
+  it('as relações ficam no pavimento; as da circulação valem para a cópia no 2º', () => {
+    for (const p of [terreo, primeiro, segundo]) {
+      const ids = new Set(p.itens.map((i) => i.id));
+      expect(p.relacoes.every((r) => ids.has(r.a) && ids.has(r.b))).toBe(true);
+    }
+    expect(segundo.relacoes.some((r) => r.a === 'circ:2' || r.b === 'circ:2')).toBe(true);
+    expect(segundo.relacoes.some((r) => r.tipo === 'OBRIGATORIA' && [r.a, r.b].sort().join() === 'bsuite1,suite1')).toBe(true);
+  });
+
+  it('sem suíte, UM dormitório sobe ao 2º — os outros ficam no 1º (a quantidade se divide, não se perde)', () => {
+    const { programa: p0 } = programaDaCasa({ ...PROGRAMA_CURTO_PADRAO, suites: 0 });
+    const d = dividirEmTres(p0);
+    const qtd = (p: typeof p0) => p.itens.filter((i) => i.uso === 'DORMITORIO').reduce((s, i) => s + i.quantidade, 0);
+    expect(qtd(d.segundo)).toBe(1);
+    expect(qtd(d.primeiro)).toBe(qtd(p0) - 1);
+    expect(d.primeiro.itens.some((i) => i.uso === 'BANHEIRO')).toBe(true);
   });
 });
 

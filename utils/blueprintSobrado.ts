@@ -109,6 +109,40 @@ export function dividirPrograma(p: Programa): { terreo: Programa; superior: Prog
   return { terreo: so(embaixo), superior: so(emCima) };
 }
 
+/**
+ * F27-D da casa automática (decisão do usuário, 18/10/2026: "social embaixo, íntimo em cima"): o programa em TRÊS
+ * pavimentos — o térreo com o social e o serviço (sem o escritório); o 2º com a suíte PRINCIPAL (a maior), o banheiro
+ * dela (a relação obrigatória) e o escritório; o 1º com o resto (os dormitórios, as outras suítes, os banheiros). Sem
+ * suíte, UM dormitório vai ao 2º (o item de quantidade N fica com N − 1 no 1º). A CIRCULAÇÃO existe nos dois de cima (a escada chega no corredor de cada um): no
+ * 2º, uma cópia com id próprio (e as relações dela copiadas). Os dormitórios de cima na faixa da frente, como no
+ * sobrado (só o zoneamento muda).
+ */
+export function dividirEmTres(p: Programa): { terreo: Programa; primeiro: Programa; segundo: Programa } {
+  const noTerreo = (i: Programa['itens'][number]) => USOS_DO_TERREO.has(i.uso) && i.uso !== 'ESCRITORIO';
+  const embaixo = p.itens.filter(noTerreo);
+  const cima = p.itens.filter((i) => !noTerreo(i)).map((i) => (i.uso === 'DORMITORIO' ? { ...i, privacidade: 'SOCIAL' as const } : i));
+  const area = (i: Programa['itens'][number]) => i.areaIdealM2 * Math.max(1, i.quantidade);
+  const obrigatoria = (a: string, b: string) => p.relacoes.some((r) => r.tipo === 'OBRIGATORIA' && ((r.a === a && r.b === b) || (r.a === b && r.b === a)));
+  const suite = [...cima.filter((i) => i.uso === 'SUITE')].sort((a, b) => area(b) - area(a))[0];
+  const principal = suite ?? [...cima.filter((i) => i.uso === 'DORMITORIO')].sort((a, b) => area(b) - area(a))[0];
+  const banhoDela = principal ? cima.find((i) => i.uso === 'BANHEIRO' && obrigatoria(i.id, principal.id)) : undefined;
+  // Um item com quantidade > 1 (os dormitórios simples) sobe com UMA unidade: no 2º, uma cópia de quantidade 1.
+  const sobeInteiro = (i: Programa['itens'][number] | undefined) => !!i && Math.max(1, i.quantidade) === 1;
+  const doSegundo = new Set([principal, banhoDela, ...cima.filter((i) => i.uso === 'ESCRITORIO')].filter(sobeInteiro).map((i) => i!.id));
+  const circulacoes = cima.filter((i) => i.uso === 'CIRCULACAO');
+  const umaUnidade = principal && !sobeInteiro(principal) ? principal : undefined;
+  const copiadas = new Set([...circulacoes, ...(umaUnidade ? [umaUnidade] : [])].map((c) => c.id));
+  const segundo = [...cima.filter((i) => doSegundo.has(i.id)), ...(umaUnidade ? [{ ...umaUnidade, id: `${umaUnidade.id}:2`, quantidade: 1 }] : []), ...circulacoes.map((c) => ({ ...c, id: `${c.id}:2` }))];
+  const primeiro = cima.filter((i) => !doSegundo.has(i.id)).map((i) => (i === umaUnidade ? { ...i, quantidade: i.quantidade - 1 } : i));
+  // As relações dos itens de cada pavimento; no 2º, as da circulação (e do dormitório que subiu) passam para a cópia.
+  const so = (itens: typeof p.itens, renomear: (id: string) => string = (id) => id) => {
+    const ids = new Set(itens.map((i) => i.id));
+    const relacoes = p.relacoes.map((r) => ({ ...r, a: renomear(r.a), b: renomear(r.b) })).filter((r) => ids.has(r.a) && ids.has(r.b));
+    return { ...p, itens, relacoes };
+  };
+  return { terreo: so(embaixo), primeiro: so(primeiro), segundo: so(segundo, (id) => (copiadas.has(id) ? `${id}:2` : id)) };
+}
+
 export interface NucleoDaEscada {
   ret: Retangulo;
   /** Em que fachada lateral o núcleo encosta. */

@@ -2600,3 +2600,47 @@ Medido: as 8 casas iguais (planta e pendências) à rodada anterior; o L e o L d
 o 12 × 30 e o trapézio da F24 iguais. Testes novos (reprovam sem a correção): o alinhamento — centro, encontro com
 parede interna, longe demais (`blueprintSobrado`); o serviço com fachada nos dois L (`blueprintCasaAutomatica`).
 
+### F27-D — os 3 pavimentos: decisões e subfases (18/10/2026)
+
+| Pergunta | Resposta |
+|---|---|
+| O 2º pavimento tem o tamanho dos de baixo? | **Recuado com terraço** — o 2º menor, sobre o 1º; o resto da laje do 1º vira terraço descoberto (impermeabilizado, com guarda-corpo); o telhado cobre só o 2º |
+| Como entregar? | **Em subfases publicadas** — cada uma medida e no ar; a opção "3 pavimentos" só aparece na tela quando as instalações fecharem |
+
+Inventário (o que supõe "térreo + superior"): os tipos (`pavimentos: 1 | 2`), `ResumoDoSobrado` (um nível de cima, uma
+escada), a implantação (`pav = sobrado ? 2 : 1`, a altura de 2 andares), `dividirPrograma` (binário, a circulação só em
+cima, o escritório no térreo), o ramo do sobrado (2 plantas, 1 corredor, 1 escada, 1 nível novo), os pilares
+(`pilaresDoSobrado` em par — em 3 o pilar de cima tem de descer até o térreo), os shafts (`shaftsDoSobrado`,
+`shaftDoGrupo`, a previsão da laje rebaixada: em par — o shaft do 2º atravessa o 1º), o guarda-corpo do furo no
+intermediário, o telhado (um retângulo só) e o Automático (térrea → sobrado). Par a par sem redesenho: a escada
+empilhada (o U volta ao lado da partida), as janelas alinhadas, a transição, a laje rebaixada, quase todas as
+instalações, as premissas e a tela.
+
+Subfases:
+
+1. **D1 — a base**: `pavimentos` 1/2/3 nos tipos, nas premissas e no motor (a tela ainda sem a opção); a implantação
+   em N pavimentos (gabarito, altura, CA); o programa em 3 (`dividirEmTres`: térreo social e serviço; o 1º os
+   dormitórios e banheiros; o 2º a suíte principal, o banheiro dela e o escritório; a circulação nos dois de cima).
+2. **D2 — a arquitetura**: os 3 níveis, o núcleo da escada coerente nas 3 plantas (o corredor do 1º e o do 2º no
+   patamar), as escadas empilhadas, as janelas alinhadas par a par; o 2º no seu retângulo recuado.
+3. **D3 — a estrutura em prumada**: os pilares de cima descem até o térreo (ou nascem em transição do nível certo), vigas
+   e lajes por nível, o guarda-corpo do furo do intermediário.
+4. **D4 — as instalações**: o shaft que atravessa os níveis de baixo (parede e cômodo aceitáveis em todos), a laje
+   rebaixada por par, o passo do shaft em N; a opção "3 pavimentos" na tela e no Automático (só quando o sobrado não
+   comporta e o gabarito deixa).
+5. **D5 — o terraço**: o telhado só sobre o 2º, a laje do 1º como cobertura (impermeabilização), o guarda-corpo do
+   terraço, o uso TERRAÇO.
+
+
+#### Registro da D1 (18/10/2026)
+
+- `dividirEmTres` (`utils/blueprintSobrado.ts`): o térreo com o social e o serviço **sem o escritório**; o 2º com a
+  suíte principal (a maior), o banheiro dela (pela relação obrigatória) e o escritório; o 1º com o resto. Sem suíte,
+  **um** dormitório sobe (o item "Dormitório × 3" fica × 2 no 1º e ganha uma cópia × 1 no 2º — subir o item inteiro
+  levaria os três). A circulação existe nos dois de cima (no 2º, uma cópia `circ:2`, com as relações dela).
+- A implantação em N (`ImplantacaoDoSobrado.pavimentos`): gabarito em pavimentos e em altura (3 andares), CA dividindo o
+  potencial por N, os recuos pela altura de 3; as mensagens dizem "gere o sobrado (2 pavimentos)".
+- O motor aceita `pavimentos: 3`: calcula a implantação (o pavimento maior entre o térreo e o 1º, mais o núcleo) e para
+  na ARQUITETURA com `MOTIVO_TRES_PAVIMENTOS_EM_OBRA` (nada lançado) — a D2 tira.
+- As premissas **continuam** lendo 3 como Automático (nada na tela grava 3 até a D4; ler 3 agora deixaria o seletor da
+  tela num valor sem opção).

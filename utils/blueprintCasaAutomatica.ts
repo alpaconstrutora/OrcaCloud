@@ -107,6 +107,7 @@ import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
 import {
   comandoDaEscada,
   comUidsDoPavimento,
+  dividirEmTres,
   dividirPrograma,
   escolherNucleo,
   guardaCorpoDaEscada,
@@ -351,13 +352,15 @@ export function anelDoL(a: Retangulo, b: Retangulo): Point[] {
 export interface ImplantacaoDoSobrado {
   utilPorPavimentoM2: number;
   alturaM: number;
+  /** F27-D: quantos pavimentos sobre o mesmo retângulo (2 = sobrado; 3 = o 2º recuado sobre o 1º). Ausente = 2. */
+  pavimentos?: 2 | 3;
 }
 
 /**
  * O retângulo da casa no lote, pela lei. `ctx` é o mesmo do estudo de massa
- * (terreno, divisas com papel, recuos da zona, índices da zona). Com `sobrado`, o retângulo serve aos DOIS
- * pavimentos: o programa é o do pavimento maior, o CA divide o potencial por dois, os recuos são os da altura
- * do sobrado e o gabarito da zona precisa deixar dois pavimentos.
+ * (terreno, divisas com papel, recuos da zona, índices da zona). Com `sobrado`, o retângulo serve aos N
+ * pavimentos (2, ou 3 na F27-D): o programa é o do pavimento maior, o CA divide o potencial por N, os recuos são os
+ * da altura da casa e o gabarito da zona precisa deixar N pavimentos.
  */
 export function implantacaoDaCasa(
   ctx: ContextoDaMassa,
@@ -372,9 +375,12 @@ export function implantacaoDaCasa(
   const quadro = quadroDaFrente(ctx.limites, terreno.anel);
   if (!quadro) return { ok: false, motivo: 'Marque a divisa da FRENTE do lote — a casa se implanta a partir dela.' };
 
-  const pav = sobrado ? 2 : 1;
-  if (sobrado && ctx.zona.gabaritoPavimentos != null && ctx.zona.gabaritoPavimentos < 2) return { ok: false, motivo: `A zona permite ${ctx.zona.gabaritoPavimentos} pavimento — o sobrado não cabe; gere a casa térrea.` };
-  if (sobrado && ctx.zona.gabaritoAlturaMaxM != null && ctx.zona.gabaritoAlturaMaxM < sobrado.alturaM) return { ok: false, motivo: `O gabarito da zona (${f2(ctx.zona.gabaritoAlturaMaxM)} m) é menor que a altura do sobrado (${f2(sobrado.alturaM)} m) — gere a casa térrea.` };
+  const pav = sobrado ? (sobrado.pavimentos ?? 2) : 1;
+  // O nome da casa e o que gerar no lugar, para as mensagens do gabarito.
+  const casa = pav === 3 ? 'a casa de 3 pavimentos' : 'o sobrado';
+  const noLugar = pav === 3 ? 'gere o sobrado (2 pavimentos)' : 'gere a casa térrea';
+  if (sobrado && ctx.zona.gabaritoPavimentos != null && ctx.zona.gabaritoPavimentos < pav) return { ok: false, motivo: `A zona permite ${ctx.zona.gabaritoPavimentos} ${ctx.zona.gabaritoPavimentos === 1 ? 'pavimento' : 'pavimentos'} — ${casa} não cabe; ${noLugar}.` };
+  if (sobrado && ctx.zona.gabaritoAlturaMaxM != null && ctx.zona.gabaritoAlturaMaxM < sobrado.alturaM) return { ok: false, motivo: `O gabarito da zona (${f2(ctx.zona.gabaritoAlturaMaxM)} m) é menor que a altura d${pav === 3 ? 'a casa de 3 pavimentos' : 'o sobrado'} (${f2(sobrado.alturaM)} m) — ${noLugar}.` };
   const legal = envelopeLegal(ctx);
   const ef = recuosEfetivos(ctx.recuosBase, { afastamentoProgressivo: ctx.zona.afastamentoProgressivo, recuoFrenteEscalonado: ctx.zona.recuoFrenteEscalonado ?? null }, sobrado ? sobrado.alturaM : 3, pav);
   const env = envelopeConstrutivo(terreno, ctx.limites, ef.recuos);
@@ -770,9 +776,10 @@ export interface HipotesesDaCasa {
   /**
    * F12: 1 = térrea; 2 = sobrado. F22 (decisão do usuário, 17/10/2026: "opção Automático"): 'AUTOMATICO' gera a térrea e,
    * se ela não comporta o programa (medida mínima de ambiente violada ou o programa acima da TO), também o sobrado — e fica
-   * com o de menos problemas.
+   * com o de menos problemas. F27-D (decisão do usuário, 18/10/2026): 3 = térreo social, 1º íntimo, 2º recuado com a
+   * suíte principal, o escritório e o terraço — em subfases; até a D2 o 3 só calcula a implantação.
    */
-  pavimentos: 1 | 2 | 'AUTOMATICO';
+  pavimentos: 1 | 2 | 3 | 'AUTOMATICO';
   /** F12: o núcleo da escada, a laje entre os pavimentos e a escada. */
   sobrado: HipotesesDoSobrado;
   programa: HipotesesDoProgramaDaCasa;
@@ -1375,7 +1382,10 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   return fica;
 }
 
-function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> & { pavimentos: 1 | 2 }, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
+/** F27-D1: o que a casa de 3 pavimentos diz enquanto a arquitetura dela não existe (a D2 tira). */
+export const MOTIVO_TRES_PAVIMENTOS_EM_OBRA = 'A casa de 3 pavimentos ainda não gera a arquitetura (só a implantação) — gere o sobrado, ou deixe em "Automático".';
+
+function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> & { pavimentos: 1 | 2 | 3 }, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const hip: HipotesesDaCasa = {
     ...HIPOTESES_DA_CASA_PADRAO,
     ...hipParcial,
@@ -1459,16 +1469,19 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   // F12: no sobrado, o retângulo é o do pavimento MAIOR mais o núcleo da escada; a altura conta os dois pés-direitos.
   const peDireitoMm = hipGerador.peDireitoMm ?? HIPOTESES_DO_GERADOR_PADRAO.peDireitoMm;
   const andarMm = peDireitoMm + hip.sobrado.lajeEntrePavimentosMm;
+  // F27-D: em 3, o pavimento maior é o térreo ou o 1º (o 2º é recuado, com o terraço) — o retângulo é o dele.
   const divididos = hip.pavimentos === 2 ? dividirPrograma(programa) : null;
+  const pavimentosDoPrograma = divididos ? [divididos.terreo, divididos.superior] : hip.pavimentos === 3 ? Object.values(dividirEmTres(programa)) : null;
   const implantar = (h: Partial<HipotesesDaImplantacao>) => implantacaoDaCasa(
     entrada.ctx,
     programa,
     doCurto.curto,
     h,
-    divididos
+    pavimentosDoPrograma
       ? {
-          utilPorPavimentoM2: Math.max(resumoDoPrograma(divididos.terreo).areaIdealComCirculacaoM2, resumoDoPrograma(divididos.superior).areaIdealComCirculacaoM2) + (hip.sobrado.nucleoLarguraMm * hip.sobrado.nucleoProfundidadeMm) / 1e6,
-          alturaM: (2 * andarMm) / 1000,
+          utilPorPavimentoM2: Math.max(...pavimentosDoPrograma.map((x) => resumoDoPrograma(x).areaIdealComCirculacaoM2)) + (hip.sobrado.nucleoLarguraMm * hip.sobrado.nucleoProfundidadeMm) / 1e6,
+          alturaM: (pavimentosDoPrograma.length * andarMm) / 1000,
+          pavimentos: pavimentosDoPrograma.length === 3 ? 3 : 2,
         }
       : null,
   );
@@ -1519,6 +1532,11 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   }
   const implantacao = imp.implantacao;
   etapa('IMPLANTACAO', ROTULO_DA_ETAPA_DA_CASA.IMPLANTACAO, 'CALCULOU', 0, resumoDaImplantacao(implantacao));
+  // F27-D1: a casa de 3 pavimentos já se implanta (gabarito, altura, CA); a arquitetura dos três planos é a D2.
+  if (hip.pavimentos === 3) {
+    pendencias.push({ grupo: 'PREMISSA', texto: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
+    return vazio(MOTIVO_TRES_PAVIMENTOS_EM_OBRA, implantacao);
+  }
   // F24: onde as vagas descobertas foram e a casa em L são DECISÕES da implantação — para conferir.
   for (const a of implantacao.avisos) {
     const decisao = /^(Vagas descobertas|Casa em L|Garagem):/.test(a);

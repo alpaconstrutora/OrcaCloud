@@ -8,7 +8,7 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, MOTIVO_TRES_PAVIMENTOS_EM_OBRA, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { amostradorDaGrade, type GradeDeElevacao } from '../utils/blueprintTopografia';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
@@ -657,6 +657,30 @@ describe('planejarCasa — F12a: o sobrado (arquitetura dos dois pavimentos e a 
     expect(p.comandos).toEqual([]);
     expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
     expect(p.etapas[0].nota).toMatch(/1 pavimento.*térrea/);
+  });
+});
+
+describe('planejarCasa — F27-D1: a casa de 3 pavimentos (a base)', () => {
+  const m = lote();
+  const z3 = (gabaritoPavimentos: number | null, gabaritoAlturaMaxM: number | null = null) => entrada(m, { ctx: { ...entrada(m).ctx, zona: { ...ZONA, gabaritoPavimentos, gabaritoAlturaMaxM, coeficienteMax: null } } });
+
+  it('se implanta em 3 (a altura de três andares, o CA contando três) e para na arquitetura com o motivo dito — nada lançado', () => {
+    const p = planejarCasa(m, z3(3), { pavimentos: 3 });
+    expect(p.comandos).toEqual([]);
+    expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'CALCULOU' });
+    expect(p.implantacao?.pavimentos).toBe(3);
+    const md = p.implantacao!.medidas;
+    expect(md.coeficiente).toBeCloseTo(Math.round(((md.projecaoM2 * 3) / md.loteM2) * 100) / 100, 2);
+    expect(p.etapas.find((e) => e.id === 'ARQUITETURA')).toMatchObject({ situacao: 'NAO_RODOU', nota: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
+    expect(p.pendencias.some((x) => x.texto === MOTIVO_TRES_PAVIMENTOS_EM_OBRA)).toBe(true);
+  });
+
+  it('a zona que só deixa 2 pavimentos (ou a altura de 2) recusa a de 3 e aponta o sobrado', () => {
+    for (const e of [z3(2), z3(null, 6)]) {
+      const p = planejarCasa(m, e, { pavimentos: 3 });
+      expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
+      expect(p.etapas[0].nota).toMatch(/3 pavimentos.*gere o sobrado/);
+    }
   });
 });
 

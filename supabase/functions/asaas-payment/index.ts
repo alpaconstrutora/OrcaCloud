@@ -439,7 +439,24 @@ serve(async (req: Request) => {
         identificationField: boleto.linha_digitavel,
         externalReference: boleto.id,
     };
-    if (body.schedule_date) payBody.scheduleDate = body.schedule_date;
+    // Conta de ARRECADAÇÃO (concessionária, tributo — linha começa com 8): o código
+    // de barras não traz vencimento, e a Asaas recusa sem `dueDate` ("Informe uma
+    // data de vencimento válida", code invalid_dueDate — 1º boleto real, Energisa
+    // #1486, 18/10/2026). A doc: dueDate é "a data de vencimento da conta caso seja
+    // do tipo que não possui essa informação". Vai o vencimento impresso do boleto.
+    if (String(boleto.linha_digitavel).replace(/\D/g, '').startsWith('8')) {
+        if (!boleto.vencimento) {
+            await admin.from('supplier_payments').update({
+                status: 'FAILED', failure_reason: 'Conta de concessionária sem vencimento cadastrado.',
+            }).eq('id', spRow.id);
+            return json({ error: 'Conta de concessionária sem vencimento: preencha o vencimento do boleto — o código de barras não traz a data e a Asaas exige.' }, 422);
+        }
+        payBody.dueDate = boleto.vencimento;
+    }
+    // Conta vencida não se agenda (doc da Asaas: "Contas vencidas não podem ser
+    // agendadas" — vencido é pagamento imediato).
+    const vencida = !!boleto.vencimento && boleto.vencimento < hojeBRT();
+    if (body.schedule_date && !vencida) payBody.scheduleDate = body.schedule_date;
 
     const payRes = await fetch(`${asaasBase}/bill`, {
         method: 'POST',
@@ -464,7 +481,8 @@ serve(async (req: Request) => {
 
     await admin.from('supplier_payments').update({
         asaas_bill_id: asaasBillId,
-        status: body.schedule_date ? 'SCHEDULED' : 'PENDING',
+        status: payBody.scheduleDate ? 'SCHEDULED' : 'PENDING',
+        scheduled_date: (payBody.scheduleDate as string | undefined) ?? null,
         beneficiary_name: beneficiaryName,
         value: payData.value ?? boleto.valor, // sobrescreve pelo valor real confirmado pela Asaas
         fee: payData.fee ?? null,

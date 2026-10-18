@@ -87,3 +87,35 @@ export function inicioDoDiaBrasilia(agora: Date): string {
     const brt = new Date(agora.getTime() - 3 * 3600_000);
     return `${brt.toISOString().slice(0, 10)}T03:00:00.000Z`;
 }
+
+
+/** Quarentena da chave (item 3 da segurança, 18/10/2026 — plano 2026-10-18-asaas-seguranca-chaves-pix). */
+export const HORAS_QUARENTENA = 24;
+
+export interface Quarentena {
+    alteradaEm: string;
+    por: string;
+    liberaEm: string;
+    /** Quem quer enviar é quem alterou a chave: precisa de OUTRO administrador (ou esperar). */
+    bloqueiaVoce: boolean;
+}
+
+/**
+ * Chave PIX criada/alterada há menos de 24 h: quem fez a alteração não envia o PIX —
+ * outro administrador envia, e é a confirmação dele ("quatro olhos"). Sem outro, espera
+ * as 24 h. A alteração vem de `conta_bancaria_auditoria` (a mais recente da conta).
+ * Alteração do sistema (autor 'sistema') não bloqueia ninguém, mas avisa.
+ */
+export function quarentenaDaChave(
+    alteracao: { em: string; por: string } | null,
+    agoraMs: number,
+    quemEnvia: string | null,
+): Quarentena | null {
+    if (!alteracao) return null;
+    const em = Date.parse(alteracao.em);
+    if (!Number.isFinite(em)) return null;
+    const libera = em + HORAS_QUARENTENA * 3600_000;
+    if (agoraMs >= libera) return null;
+    const mesmo = !!quemEnvia && alteracao.por.trim().toLowerCase() === quemEnvia.trim().toLowerCase();
+    return { alteradaEm: alteracao.em, por: alteracao.por, liberaEm: new Date(libera).toISOString(), bloqueiaVoce: mesmo };
+}

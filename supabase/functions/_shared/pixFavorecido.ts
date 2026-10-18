@@ -6,6 +6,7 @@
 // ("fornecedor:<id da conta>"), e o servidor relê a chave aqui no momento do
 // disparo. Só a chave digitada (avulso) vem do navegador — e tem teto próprio.
 
+import type { Quarentena } from '../../../utils/asaasGovernanca.ts';
 import { favorecidoDoTitulo, type Favorecido, type TituloParaPix } from "../../../utils/pixDestino.ts";
 import { validarChavePix, deduzirTipoChave, mascararChave, type TipoChavePix } from "../../../utils/pixKey.ts";
 
@@ -25,6 +26,8 @@ export interface OpcaoChave {
     principal: boolean;
     /** Conta marcada por gestor: o titular da chave pode ser outra pessoa/empresa. */
     titularDiferente: boolean;
+    /** Chave criada/alterada há menos de 24 h (preenchido por quem dispara, que sabe quem é). */
+    quarentena?: Quarentena | null;
     /** Por que esta chave não serve (formato inválido, tipo ambíguo) — a tela mostra. */
     invalida: string | null;
 }
@@ -120,4 +123,10 @@ export function opcaoEscolhida(destino: DestinoPix, ref: string | null | undefin
 /** O que pode ir para o navegador (sem a chave crua). */
 export function opcoesPublicas(destino: DestinoPix) {
     return destino.opcoes.map(({ chave: _c, ...resto }) => resto);
+}
+
+/** Id da conta bancária auditada por trás da opção (fornecedor/colaborador), ou null. */
+export function contaDaOpcao(ref: string): string | null {
+    const [origem, id] = ref.split(':');
+    return (origem === 'fornecedor' || origem === 'colaborador') && id ? id : null;
 }

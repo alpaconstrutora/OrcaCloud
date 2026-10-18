@@ -31,6 +31,8 @@ const hoje = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10
  * obrigatórios. O servidor reaplica o portão (papel, alçada, tetos, piloto,
  * competência) — a lista que aparece aqui é a mesma que ele usa.
  */
+const dataHoraBR = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
 export default function PagarPixSheet({ organizationId, transactionId, onClose, onDone }: Props) {
     const [quote, setQuote] = useState<PixQuote | null>(null);
     const [erroQuote, setErroQuote] = useState<string | null>(null);
@@ -74,6 +76,9 @@ export default function PagarPixSheet({ organizationId, transactionId, onClose, 
         if (bloqueios.length) return bloqueios[0];
         if (!escolha) return 'Escolha a chave PIX.';
         if (opcao?.invalida) return `Chave do cadastro inválida: ${opcao.invalida}`;
+        if (opcao?.quarentena?.bloqueiaVoce) {
+            return `Você alterou esta chave há menos de 24 h: outro administrador precisa enviar este PIX (ou aguarde até ${dataHoraBR(opcao.quarentena.liberaEm)}).`;
+        }
         if (avulso) {
             if (!chaveDigitada?.ok) return chaveDigitada?.motivo ?? 'Informe a chave PIX.';
             if (!nome.trim()) return 'Informe o nome do favorecido.';
@@ -143,6 +148,14 @@ export default function PagarPixSheet({ organizationId, transactionId, onClose, 
                                             <span className="block text-gray-800">{o.chaveMascarada} <span className="text-xs text-gray-400">{o.tipo ? TIPOS_CHAVE_PIX.find(t => t.value === o.tipo)?.label : 'tipo desconhecido'}</span></span>
                                             <span className="block text-xs text-gray-500">{o.rotulo}{o.titular ? ` · ${o.titular}` : ''}</span>
                                             {o.invalida && <span className="block text-xs text-red-600">{o.invalida}</span>}
+                                            {o.titularDiferente && <span className="block text-xs text-amber-700">Titular diferente autorizado no cadastro</span>}
+                                            {o.quarentena && (
+                                                <span className={`block text-xs ${o.quarentena.bloqueiaVoce ? 'text-red-600' : 'text-amber-700'}`}>
+                                                    {o.quarentena.bloqueiaVoce
+                                                        ? `Você alterou esta chave em ${dataHoraBR(o.quarentena.alteradaEm)}: outro administrador precisa enviar (ou aguarde até ${dataHoraBR(o.quarentena.liberaEm)}).`
+                                                        : `Chave alterada em ${dataHoraBR(o.quarentena.alteradaEm)} por ${o.quarentena.por} — confira com o favorecido antes de pagar.`}
+                                                </span>
+                                            )}
                                         </span>
                                     </label>
                                 ))}

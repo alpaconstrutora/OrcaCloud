@@ -54,6 +54,10 @@ export interface OpcaoChavePix {
     documento: string | null;
     principal: boolean;
     invalida: string | null;
+    /** Conta marcada por gestor: titular diferente autorizado. */
+    titularDiferente?: boolean;
+    /** Chave criada/alterada há menos de 24 h (item 3 da segurança). */
+    quarentena?: { alteradaEm: string; por: string; liberaEm: string; bloqueiaVoce: boolean } | null;
 }
 
 export interface PixQuote {

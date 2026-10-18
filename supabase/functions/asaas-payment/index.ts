@@ -5,10 +5,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { exigirMembro, respostaDeErro, PAPEIS_GESTORES } from "../_shared/auth.ts"
 import { resolverContaAsaas, contaDoRegistro, cabecalhosAsaas, type ContaAsaas } from "../_shared/asaasConta.ts"
 import { lerTitulo, avaliarDisparo } from "../_shared/asaasDisparo.ts"
-import { destinoDoTitulo, opcaoEscolhida, opcoesPublicas } from "../_shared/pixFavorecido.ts"
+import { destinoDoTitulo, opcaoEscolhida, opcoesPublicas, contaDaOpcao } from "../_shared/pixFavorecido.ts"
 import { processarEventoAsaas } from "../_shared/asaasProcessar.ts"
 import { validarChavePix, tipoParaAsaas, type TipoChavePix } from "../../../utils/pixKey.ts"
 import { validateCpfCnpj } from "../../../lib/validators.ts"
+import { quarentenaDaChave, HORAS_QUARENTENA } from "../../../utils/asaasGovernanca.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -186,6 +187,25 @@ serve(async (req: Request) => {
         }
 
         const destino = await destinoDoTitulo(admin, titulo);
+
+        // Quarentena (item 3 da segurança): chave criada/alterada há menos de 24 h não é
+        // enviada por quem a alterou — outro administrador envia (e confirma) ou espera.
+        const contas = destino.opcoes.map(o => contaDaOpcao(o.ref)).filter((x): x is string => !!x);
+        if (contas.length) {
+            const desde = new Date(Date.now() - HORAS_QUARENTENA * 3600_000).toISOString();
+            const { data: alteracoes } = await admin.from('conta_bancaria_auditoria')
+                .select('registro_id,autor,created_at')
+                .in('registro_id', contas).in('acao', ['criada', 'alterada']).gte('created_at', desde)
+                .order('created_at', { ascending: false });
+            const ultima = new Map<string, { em: string; por: string }>();
+            for (const a of (alteracoes ?? []) as { registro_id: string; autor: string; created_at: string }[]) {
+                if (!ultima.has(a.registro_id)) ultima.set(a.registro_id, { em: a.created_at, por: a.autor });
+            }
+            for (const o of destino.opcoes) {
+                const id = contaDaOpcao(o.ref);
+                o.quarentena = quarentenaDaChave(id ? ultima.get(id) ?? null : null, Date.now(), userEmail);
+            }
+        }
         const cadastro = await avaliarDisparo(admin, { titulo, conta, ehGestor, avulso: false });
         const avulso = await avaliarDisparo(admin, { titulo, conta, ehGestor, avulso: true });
 
@@ -234,6 +254,10 @@ serve(async (req: Request) => {
             const op = opcaoEscolhida(destino, body.destino.ref);
             if (!op) return json({ error: 'A chave escolhida não pertence ao favorecido deste título.' }, 422);
             if (op.invalida || !op.tipo) return json({ error: `Chave do cadastro inválida: ${op.invalida ?? 'sem tipo'}` }, 422);
+            if (op.quarentena?.bloqueiaVoce) {
+                const libera = new Date(op.quarentena.liberaEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                return json({ error: `Você criou ou alterou esta chave há menos de ${HORAS_QUARENTENA} h. Para proteger contra desvio, outro administrador precisa enviar este PIX — ou aguarde até ${libera}.` }, 422);
+            }
             chave = op.chave; tipo = op.tipo; nome = op.titular ?? destino.nome; documento = op.documento ?? destino.documento;
             origem = destino.favorecido.origem;
             bloqueios = cadastro.bloqueios.filter(b => !(op.titularDiferente && b === MOTIVO_SEM_DOC));

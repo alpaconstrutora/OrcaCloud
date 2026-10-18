@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bloqueiosDoDisparo, inicioDoDiaBrasilia, type FatosDoDisparo } from '../utils/asaasGovernanca';
+import { bloqueiosDoDisparo, inicioDoDiaBrasilia, quarentenaDaChave, type FatosDoDisparo } from '../utils/asaasGovernanca';
 
 const ok: FatosDoDisparo = {
     temConta: true, ehGestor: true,
@@ -70,5 +70,32 @@ describe('inicioDoDiaBrasilia', () => {
         expect(inicioDoDiaBrasilia(new Date('2026-10-18T01:00:00Z'))).toBe('2026-10-17T03:00:00.000Z');
         expect(inicioDoDiaBrasilia(new Date('2026-10-17T12:00:00Z'))).toBe('2026-10-17T03:00:00.000Z');
         expect(inicioDoDiaBrasilia(new Date('2026-10-17T02:59:00Z'))).toBe('2026-10-16T03:00:00.000Z');
+    });
+});
+
+
+describe('quarentenaDaChave (chave alterada há menos de 24 h)', () => {
+    const agora = Date.parse('2026-10-18T15:00:00Z');
+    const alt = (horasAtras: number, por = 'ana@alpa.com') => ({ em: new Date(agora - horasAtras * 3600_000).toISOString(), por });
+
+    it('sem alteração recente: nada', () => {
+        expect(quarentenaDaChave(null, agora, 'ana@alpa.com')).toBeNull();
+        expect(quarentenaDaChave(alt(25), agora, 'ana@alpa.com')).toBeNull();
+    });
+
+    it('quem alterou não envia (quatro olhos), e sabe quando libera', () => {
+        const q = quarentenaDaChave(alt(2), agora, 'ANA@alpa.com');
+        expect(q?.bloqueiaVoce).toBe(true);
+        expect(q?.liberaEm).toBe('2026-10-19T13:00:00.000Z');
+    });
+
+    it('outro administrador envia (confirma), com aviso', () => {
+        const q = quarentenaDaChave(alt(2), agora, 'bruno@alpa.com');
+        expect(q).not.toBeNull();
+        expect(q?.bloqueiaVoce).toBe(false);
+    });
+
+    it("alteração do sistema avisa, mas não bloqueia", () => {
+        expect(quarentenaDaChave(alt(1, 'sistema'), agora, 'ana@alpa.com')?.bloqueiaVoce).toBe(false);
     });
 });

@@ -30,7 +30,6 @@
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
 import { HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO, platoDaCasa, type HipotesesDaTerraplenagemDaCasa, type ResumoDaTerraplenagem } from './blueprintPlatoDaCasa';
-import type { GradeDeElevacao } from './blueprintTopografia';
 import { DIMENSAO_DA_VAGA, TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, distanciaEntreEixos3D, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type CamadaParede, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
@@ -1546,7 +1545,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   };
 
   // A CONFERÊNCIA e o plano — o fim comum da térrea e do sobrado. TO pela projeção; CA pela soma dos pavimentos.
-  type ResumoDasDisciplinas = Omit<PlanoDaCasa['resumo'], 'areaConstruidaM2' | 'ambientesPedidos' | 'ambientesAtendidos' | 'regrasVioladas'>;
+  type ResumoDasDisciplinas = Omit<PlanoDaCasa['resumo'], 'areaConstruidaM2' | 'ambientesPedidos' | 'ambientesAtendidos' | 'regrasVioladas' | 'terraplenagem'>;
   const fechar = (f: { projecaoM2: number; areaConstruidaM2: number; alturaM: number; semente: number; escolha: string; sobrado: ResumoDoSobrado | null; disciplinas: ResumoDasDisciplinas }): PlanoDaCasa => {
     // F21: o molhado sem lado externo que ganhou EXAUSTOR (a climatização lança onde não há janela) está resolvido pela
     // ventilação mecânica — fica para conferir no código de obras, não "sem solução".

@@ -540,7 +540,7 @@ function trocarVarandaSemRua(caixas: Map<ItemPlanejado, CaixaCanonica>, programa
   }
 }
 
-function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, programa: Programa, hip: HipotesesDoGerador): Map<ItemPlanejado, CaixaCanonica> {
+function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, programa: Programa, hip: HipotesesDoGerador, final = false): Map<ItemPlanejado, CaixaCanonica> {
   const areaFrente = plano.frente.reduce((s, i) => s + i.areaAlvoMm2, 0);
   const areaFundo = plano.fundo.reduce((s, i) => s + i.areaAlvoMm2, 0);
   const dCorredor = plano.corredor ? corredorMm : 0;
@@ -633,7 +633,48 @@ function caixasDoPlano(plano: Plano, W: number, D: number, corredorMm: number, p
       else caixaDaGaragem.y1 = dFrente;
     } else {
       // O resto da frente ao lado da garagem, na mesma profundidade da faixa.
-      for (const [k, v] of fatiar(daFrente, W - x0, dFrente, 0, !!plano.frenteEmColunas, hip)) out.set(k, { x0: v.x0 + x0, y0: v.y0, x1: v.x1 + x0, y1: v.y1 });
+      const noMundo = (m: Map<ItemPlanejado, CaixaCanonica>, t: ItemPlanejado) => {
+        const v = m.get(t);
+        return v ? { x0: v.x0 + x0, y0: v.y0, x1: v.x1 + x0, y1: v.y1 } : null;
+      };
+      let faixa = fatiar(daFrente, W - x0, dFrente, 0, !!plano.frenteEmColunas, hip);
+      // F27 da casa automática (18/10/2026): na casa LARGA e RASA a faixa ao lado da garagem tem duas linhas, e a de trás só
+      // tem fachada na ponta — o serviço ficava no miolo dela, sem lado externo (o L e o L de fundo largo, 3 dormitórios).
+      // Tenta: na linha da rua os que pedem fachada (a varanda, a sala, a cozinha na ponta), atrás o lavabo e o SERVIÇO na
+      // ponta, embaixo da cozinha. Fica só se o serviço ganha fachada e a cozinha, e quem pedia fachada não a perde.
+      const servico = daFrente.find((t) => t.item.uso === 'AREA_DE_SERVICO');
+      const cozinha = daFrente.find((t) => t.item.uso === 'COZINHA');
+      const comFachada = (m: Map<ItemPlanejado, CaixaCanonica>, t: ItemPlanejado) => {
+        const c = noMundo(m, t);
+        return !!c && ladosExternosDe(c, W, D).length > 0;
+      };
+      // Só no arranjo FINAL (depois do recozimento): dentro da função objetivo, ela mudava qual plano ganhava — e o
+      // vencedor novo deixava a cozinha sem fachada (12 × 30, trapézio). Fora dela, a casa em que o serviço já tem
+      // fachada não muda.
+      if (final && servico && cozinha && !comFachada(faixa, servico)) {
+        const lavabos = daFrente.filter((t) => t.item.uso === 'LAVABO');
+        const resto = daFrente.filter((t) => t !== servico && t !== cozinha && !lavabos.includes(t));
+        // As duas linhas à força (o treemap escolheria quantos cabem em cada): a da rua com os que pedem fachada e a
+        // cozinha na ponta; a de trás com o lavabo e o serviço na ponta. A profundidade de cada uma pela área, nunca
+        // abaixo do maior mínimo dela.
+        const linhaDaRua = [...resto, cozinha];
+        const linhaDeTras = [...lavabos, servico];
+        const areaDe = (ls: ItemPlanejado[]) => ls.reduce((a, t) => a + t.areaAlvoMm2, 0);
+        const minDe = (ls: ItemPlanejado[]) => Math.max(...ls.map((t) => eixoMinMm(t.item, hip)));
+        const hRua = Math.round(Math.min(dFrente - minDe(linhaDeTras), Math.max(minDe(linhaDaRua), (dFrente * areaDe(linhaDaRua)) / (areaDe(linhaDaRua) + areaDe(linhaDeTras) || 1))));
+        const alt = new Map<ItemPlanejado, CaixaCanonica>();
+        if (hRua >= minDe(linhaDaRua) && dFrente - hRua >= minDe(linhaDeTras)) {
+          for (const [k, v] of treemapEmFaixas(linhaDaRua, W - x0, hRua, 0, true, hip)) alt.set(k, v);
+          for (const [k, v] of treemapEmFaixas(linhaDeTras, W - x0, dFrente - hRua, hRua, true, hip)) alt.set(k, v);
+        }
+        const cs = noMundo(alt, servico);
+        const cc = noMundo(alt, cozinha);
+        const pedemFachada = [cozinha, ...resto.filter((t) => t.item.exigeFachada || t.item.exigeIluminacao)];
+        // Todos os que pedem fachada a têm na alternativa (não basta "ninguém perde": a cozinha sem fachada no arranjo
+        // bruto, que o resto do gerador resolvia, ficava sem — o 12 × 30 e o trapézio).
+        if (cs && cc && comFachada(alt, servico) && adjacentes(cs, cc) && pedemFachada.every((t) => comFachada(alt, t))) faixa = alt;
+      }
+      for (const [k, v] of faixa) out.set(k, { x0: v.x0 + x0, y0: v.y0, x1: v.x1 + x0, y1: v.y1 });
     }
   } else if (daFrente.length) for (const [k, v] of fatiar(daFrente, W, dFrente, 0, !!plano.frenteEmColunas, hip)) out.set(k, v);
   if (plano.corredor) out.set(plano.corredor, { x0: 0, y0: dFrente, x1: W, y1: dFrente + dCorredor });
@@ -1016,9 +1057,17 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   };
   const { plano, inicial, final } = recozer(inicialDoPlano, W, D, programa, frente, entrada.rotacaoNorteDeg, hip.larguraCorredorMm, hip.iteracoes, rnd, hip);
   decisoes.push(`Recozimento simulado: ${hip.iteracoes} iterações com a semente ${semente}; função objetivo ${f2(inicial)} → ${f2(final)} (largura mínima, proporção, fachada e sol de quem exige, matriz de proximidade, privacidade).`);
-  const caixas = caixasDoPlano(plano, W, D, hip.larguraCorredorMm, programa, hip);
+  let caixas = caixasDoPlano(plano, W, D, hip.larguraCorredorMm, programa, hip);
   trocarServicoSemFachada(caixas, W, D, programa, hip);
   trocarVarandaSemRua(caixas, programa, hip);
+  // F27: o serviço que nem a troca pôs na fachada (a casa larga e rasa) — o arranjo com ele na ponta, embaixo da cozinha
+  // (`caixasDoPlano(…, final)`); fica se nele o serviço ganha a fachada. Onde a troca resolvia, nada muda.
+  const servicoSemFachada = (cs: Map<ItemPlanejado, CaixaCanonica>) => [...cs].some(([t, c]) => t.item.uso === 'AREA_DE_SERVICO' && ladosExternosDe(c, W, D).length === 0);
+  if (servicoSemFachada(caixas)) {
+    const alt = caixasDoPlano(plano, W, D, hip.larguraCorredorMm, programa, hip, true);
+    trocarVarandaSemRua(alt, programa, hip);
+    if (!servicoSemFachada(alt)) caixas = alt;
+  }
 
   // Malha: arredonda as coordenadas cumulativas (mantém adjacência).
   const snapC = (c: CaixaCanonica): CaixaCanonica => ({ x0: snap(c.x0, hip.malhaMm), y0: snap(c.y0, hip.malhaMm), x1: snap(c.x1, hip.malhaMm), y1: snap(c.y1, hip.malhaMm) });

@@ -1235,6 +1235,21 @@ describe('F24 — vagas descobertas e casa em L', () => {
   }, 240_000);
 });
 
+describe('F27 — o serviço com fachada na casa larga e rasa', () => {
+  it.each([
+    ['L de frente larga, 3 dormitórios', [[0, 0, 'FRENTE'], [20000, 0, 'LATERAL_DIREITA'], [20000, 15000, 'LATERAL_DIREITA'], [10000, 15000, 'LATERAL_DIREITA'], [10000, 30000, 'FUNDOS'], [0, 30000, 'LATERAL_ESQUERDA']]],
+    ['L de fundo largo, 3 dormitórios', [[0, 0, 'FRENTE'], [10000, 0, 'LATERAL_DIREITA'], [10000, 15000, 'LATERAL_DIREITA'], [20000, 15000, 'LATERAL_DIREITA'], [20000, 30000, 'FUNDOS'], [0, 30000, 'LATERAL_ESQUERDA']]],
+  ] as [string, [number, number, Papel][]][])('%s: a área de serviço na fachada lateral, embaixo da cozinha — nenhum cômodo sem o lado externo que pede', (_, v) => {
+    // Antes: a faixa ao lado da garagem em duas linhas, e o serviço no miolo da de trás (só a ponta dela tem fachada).
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = base.levels[0].id;
+    const m = applyBatch(base, v.map(([x, y, papel], i): Command => ({ type: 'AddBoundary', levelId, a: point(x, y), b: point(v[(i + 1) % v.length][0], v[(i + 1) % v.length][1]), kind: 'TERRENO', papel }))).model;
+    const p = planejarCasa(m, entrada(m), { pavimentos: 1 });
+    expect(p.pendencias.filter((x) => /ficou sem lado externo/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  }, 240_000);
+});
+
 /**
  * F25 (decisão do usuário, 16/10/2026: "platô único"): no terreno inclinado a casa assenta no platô da cota de equilíbrio
  * sob a projeção — o térreo sobe (ou desce) com ele, talude ou muro nas bordas, e a entrada da calçada ao piso.

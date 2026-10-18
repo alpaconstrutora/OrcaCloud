@@ -2582,3 +2582,21 @@ de lugar e foram desfeitas.
 Testes novos (reprovam sem a correção): o banheiro em L (`blueprintSobrado`); o sobrado no lote de 10 m com a varanda
 junto da sala e os encontros nas pendências (`blueprintCasaAutomatica`).
 
+### Registro da F27 — parte 2 (18/10/2026): as janelas alinhadas e o serviço com fachada
+
+- **As janelas do superior alinhadas com as do térreo** (`alinharJanelasDoSuperior`, logo depois da arquitetura do
+  sobrado, antes dos pilares): cada janela de cima vai ao centro da de baixo mais perto, na mesma fachada (até 1,5 m),
+  se ali ela fica inteira na parede, a 30 cm das pontas e das outras aberturas, e sem atravessar o encontro com uma
+  parede interna (o mesmo cômodo — a iluminação de 1/6 não muda). O pilar intermediário do térreo sobe entre elas: o
+  sobrado 12 × 30 (2 pilares fora) e o R1-B (1) ficaram sem a pendência.
+- **O serviço com fachada na casa larga e rasa**: a faixa ao lado da garagem em duas linhas, e o serviço no miolo da de
+  trás (só a ponta dela tem fachada — o L e o L de fundo largo, 3 dormitórios). Quando nem a troca da F22 o põe na
+  fachada, o arranjo FINAL (depois do recozimento) tenta as duas linhas à força: na da rua os que pedem fachada e a
+  cozinha na ponta; na de trás o lavabo e o serviço na ponta, embaixo da cozinha — fica se o serviço ganha fachada, encosta
+  na cozinha e todos os que pedem fachada a têm. Tentado e desfeito (medido): a mesma coisa dentro da função objetivo
+  (mudava qual plano vencia — a cozinha ou a varanda sem fachada no 12 × 30 e no trapézio).
+
+Medido: as 8 casas iguais (planta e pendências) à rodada anterior; o L e o L de fundo largo sem SEM_SOLUCAO (0 / 0 / 0);
+o 12 × 30 e o trapézio da F24 iguais. Testes novos (reprovam sem a correção): o alinhamento — centro, encontro com
+parede interna, longe demais (`blueprintSobrado`); o serviço com fachada nos dois L (`blueprintCasaAutomatica`).
+

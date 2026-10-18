@@ -61,6 +61,8 @@ function renderTela(rows: Payable[], props: Partial<React.ComponentProps<typeof 
             organizationId="org1"
             vencDe=""
             vencAte=""
+            vencAno=""
+            vencMes=""
             loading={false}
             error={null}
             onReload={() => {}}

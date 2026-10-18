@@ -346,6 +346,9 @@ export default function ContasPagarManager({ organizations }: Props) {
         setVencDe('');
         setVencAte('');
         setCompetencia('');
+        // Ano/Mês também escondem parcelas: sem limpá-los o foco num título ficaria preso.
+        setVencAno('');
+        setVencMes('');
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -409,10 +412,26 @@ export default function ContasPagarManager({ organizations }: Props) {
     function handleVencDeChange(value: string) { setVencDe(value); setCompetencia(''); }
     function handleVencAteChange(value: string) { setVencAte(value); setCompetencia(''); }
     function clearVencRange() { setVencDe(''); setVencAte(''); setCompetencia(''); }
-    // Anos com vencimento nas notas carregadas, mais recente primeiro.
-    const anosVencimento = useMemo(
-        () => [...new Set(invoices.map(i => (i.dueDate ?? '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))].sort().reverse(),
-        [invoices],
+    // Anos com vencimento na FONTE da visão ativa (notas → invoices; parcelas e
+    // fechamento → payables), mais recente primeiro. Antes só olhava `invoices`,
+    // que nem é carregado fora da aba Notas: o seletor ficava vazio em Parcelas.
+    // O ano já escolhido (persistido) entra na lista mesmo sem linha na fonte,
+    // para o <select> nunca exibir um valor que não existe nas opções.
+    const anosVencimento = useMemo(() => {
+        const datas = visao === 'notas'
+            ? invoices.map(i => i.dueDate)
+            : payables.map(p => p.due_date);
+        const anos = new Set(datas.map(d => (d ?? '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)));
+        if (vencAno) anos.add(vencAno);
+        return [...anos].sort().reverse();
+    }, [visao, invoices, payables, vencAno]);
+    // Fechamento consolida a lista de parcelas no cliente: Ano/Mês recortam o que entra.
+    const payablesFechamento = useMemo(
+        () => (vencAno || vencMes)
+            ? payables.filter(p => (!vencAno || (p.due_date ?? '').slice(0, 4) === vencAno)
+                && (!vencMes || (p.due_date ?? '').slice(5, 7) === vencMes))
+            : payables,
+        [payables, vencAno, vencMes],
     );
 
     async function handleMarcarPago(inv: InvoiceRow) {
@@ -984,7 +1003,7 @@ export default function ContasPagarManager({ organizations }: Props) {
 
                     {visao === 'fechamento' ? (
                         <FechamentoCentroCusto
-                            rows={payables}
+                            rows={payablesFechamento}
                             organizationId={effectiveOrgId}
                             competencia={competencia}
                             onCompetenciaChange={handleCompetenciaChange}
@@ -1001,6 +1020,8 @@ export default function ContasPagarManager({ organizations }: Props) {
                             organizationId={effectiveOrgId}
                             vencDe={vencDe}
                             vencAte={vencAte}
+                            vencAno={vencAno}
+                            vencMes={vencMes}
                             loading={loading}
                             error={error}
                             onReload={() => carregar(effectiveOrgId)}

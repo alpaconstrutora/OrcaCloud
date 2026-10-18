@@ -61,6 +61,8 @@ function renderTela(props: Partial<React.ComponentProps<typeof ContasPagarParcel
             organizationId="org1"
             vencDe=""
             vencAte=""
+            vencAno=""
+            vencMes=""
             loading={false}
             error={null}
             onReload={() => {}}
@@ -124,7 +126,7 @@ describe('ContasPagarParcelas — Agrupar com paginação', () => {
         expect(screen.queryByText('Parcela Alfa 110')).toBeNull();
 
         rerender(
-            <ContasPagarParcelas rows={ROWS} organizationId="org1" vencDe="" vencAte="" loading={false} error={null}
+            <ContasPagarParcelas rows={ROWS} organizationId="org1" vencDe="" vencAte="" vencAno="" vencMes="" loading={false} error={null}
                 onReload={() => {}} onRowChanged={() => {}} onRowRemoved={() => {}} notify={() => {}}
                 focusId="a110" onFocusConsumed={onFocusConsumed} />,
         );

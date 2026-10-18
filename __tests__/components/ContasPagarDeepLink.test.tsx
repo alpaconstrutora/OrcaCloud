@@ -63,6 +63,8 @@ function renderTela(props: Partial<React.ComponentProps<typeof ContasPagarParcel
             organizationId="org1"
             vencDe=""
             vencAte=""
+            vencAno=""
+            vencMes=""
             loading={false}
             error={null}
             onReload={() => {}}
@@ -157,7 +159,7 @@ describe('ContasPagarParcelas — paginação da exibição', () => {
 
     it('linha que muda de status não joga o usuário de volta para a página 1 (§22)', () => {
         const props = {
-            organizationId: 'org1', vencDe: '', vencAte: '', loading: false, error: null,
+            organizationId: 'org1', vencDe: '', vencAte: '', vencAno: '', vencMes: '', loading: false, error: null,
             onReload: () => {}, onRowChanged: () => {}, onRowRemoved: () => {}, notify: () => {},
         };
         const { rerender } = render(<ContasPagarParcelas rows={MUITAS} {...props} />);

@@ -275,6 +275,10 @@ interface Props {
      */
     vencDe: string;
     vencAte: string;
+    /** Ano ('YYYY') e mês ('MM') do vencimento — independentes entre si; '' = sem filtro.
+     *  Diferente do período, parcela SEM vencimento não passa quando um deles está ativo. */
+    vencAno: string;
+    vencMes: string;
     loading: boolean;
     error: string | null;
     onReload: () => void;
@@ -363,7 +367,7 @@ function chaveDoGrupo(campo: CampoAgrupar, r: ParcelaRow): ChaveDeGrupo {
     }
 }
 
-export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg, onEditarAvulso, onNovoAvulso }: Props) {
+export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, vencAno, vencMes, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg, onEditarAvulso, onNovoAvulso }: Props) {
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('contasPagarParcelas:search', '');
     const [statusFiltro, setStatusFiltro] = usePersistedState<StatusFiltro>('contasPagarParcelas:status', 'all');
@@ -573,6 +577,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             // notas): esconder o que não tem data é pior do que mostrar fora do filtro.
             if (vencDe && r.due_date && r.due_date < vencDe) return false;
             if (vencAte && r.due_date && r.due_date > vencAte) return false;
+            if (vencAno && (r.due_date ?? '').slice(0, 4) !== vencAno) return false;
+            if (vencMes && (r.due_date ?? '').slice(5, 7) !== vencMes) return false;
             if (search) {
                 const termo = search.toLowerCase();
                 const hit = (r.credor_display || payableParty(r)).toLowerCase().includes(termo)
@@ -620,7 +626,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         // custo, plano de contas, imóvel apropriado) chegam por consulta assíncrona
         // depois das linhas. Com `rows` na lista, o memo não recalculava quando eles
         // chegavam e as colunas ficavam em branco para sempre.
-    }, [rowsWithNames, search, statusFiltro, origemFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [rowsWithNames, search, statusFiltro, origemFiltro, vencDe, vencAte, vencAno, vencMes, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     useEffect(() => { onVisibleRowsChange?.(filtered); }, [filtered, onVisibleRowsChange]);
 
@@ -651,7 +657,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     // a página no novo total.
     // Trocar o agrupamento reordena tudo: também volta para a 1. Recolher um grupo
     // não — só encurta a lista, e `currentPage` prende a página no novo total.
-    useEffect(() => { setPage(1); }, [search, statusFiltro, origemFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection, pageSize, organizationId, groupBy]);
+    useEffect(() => { setPage(1); }, [search, statusFiltro, origemFiltro, vencDe, vencAte, vencAno, vencMes, tableColumns.sortColumn, tableColumns.sortDirection, pageSize, organizationId, groupBy]);
     // Agrupado, a página continua contando LINHAS DE DADO; os cabeçalhos de grupo
     // entram por cima (e repetem com "continua" quando o grupo vem da página anterior).
     const totalPages = Math.max(1, Math.ceil(totalLinhas / pageSize));

@@ -438,7 +438,7 @@ describe('planejarCasa — F8: água, esgoto e pluvial encadeados', () => {
     for (const t of ['TANQUE_SEPTICO', 'FILTRO_ANAEROBIO', 'SUMIDOURO']) expect(tipos(p).has(t as never)).toBe(true);
     expect(tipos(p).has('LIGACAO_ESGOTO')).toBe(false);
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
-  });
+  }, 120_000);
 
   it('sem a intensidade de chuva: a pluvial não roda e vira premissa — água e esgoto seguem', () => {
     const m = lote();

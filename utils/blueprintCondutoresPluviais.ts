@@ -205,8 +205,33 @@ function segmentosSeCruzam(a: { x: number; y: number }, b: { x: number; y: numbe
   return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
 }
 
+/**
+ * F25: o desvio por fora guardado por OBSTÁCULOS (a mesma lista para o mesmo modelo, pavimento e afastamento) e trecho
+ * — o laço que sobe o início do condutor e a procura da saída refaziam o mesmo grafo de visibilidade dezenas de vezes.
+ */
+const desviosJaFeitos = new WeakMap<object, Map<string, { x: number; y: number }[] | null>>();
+function desvioPorFora(a: { x: number; y: number }, b: { x: number; y: number }, obstaculos: { x: number; y: number }[][]): { x: number; y: number }[] | null {
+  let porTrecho = desviosJaFeitos.get(obstaculos);
+  if (!porTrecho) desviosJaFeitos.set(obstaculos, (porTrecho = new Map()));
+  const chave = `${a.x},${a.y}|${b.x},${b.y}`;
+  if (!porTrecho.has(chave)) porTrecho.set(chave, desvioDoPilar(a, b, obstaculos));
+  return porTrecho.get(chave)!;
+}
+const obstaculosJaFeitos = new WeakMap<BlueprintModel, Map<string, { x: number; y: number }[][]>>();
+
 /** F24: os obstáculos do horizontal enterrado — os cômodos do pavimento crescidos até o afastamento além da face, e os pilares. */
 function obstaculosDoCondutor(model: BlueprintModel, levelId: ObjectId, hip: HipotesesPluviais): { x: number; y: number }[][] {
+  let doModelo = obstaculosJaFeitos.get(model);
+  if (!doModelo) obstaculosJaFeitos.set(model, (doModelo = new Map()));
+  const chave = `${levelId}|${hip.afastamentoDoCondutorDaCasaMm ?? 300}`;
+  const feito = doModelo.get(chave);
+  if (feito) return feito;
+  const novo = obstaculosDoCondutorSemGuardar(model, levelId, hip);
+  doModelo.set(chave, novo);
+  return novo;
+}
+
+function obstaculosDoCondutorSemGuardar(model: BlueprintModel, levelId: ObjectId, hip: HipotesesPluviais): { x: number; y: number }[][] {
   const meia = Math.max(0, ...model.walls.filter((w) => w.levelId === levelId).map((w) => w.thicknessMm / 2));
   const g = meia + (hip.afastamentoDoCondutorDaCasaMm ?? 300);
   const comodos = model.spaces
@@ -235,7 +260,7 @@ const SAIDA_LONGE_DAS_OUTRAS_REDES_MM = 800;
 
 /** F24: o comprimento de `a` a `b` contornando os obstáculos (o caminho que o tubo faz). */
 function comprimentoPorFora(a: { x: number; y: number }, b: { x: number; y: number }, obstaculos: { x: number; y: number }[][]): number {
-  const pts = [a, ...(desvioDoPilar(a, b, obstaculos) ?? []), b];
+  const pts = [a, ...(desvioPorFora(a, b, obstaculos) ?? []), b];
   return pts.slice(1).reduce((s, p, k) => s + Math.hypot(p.x - pts[k].x, p.y - pts[k].y), 0);
 }
 
@@ -262,7 +287,7 @@ function comSaidaProposta(model: BlueprintModel, hip: HipotesesPluviais, fontes:
   const enterrados = (model.trechos ?? []).filter((t) => t.disciplina !== 'PLUVIAL' && Math.min(t.cotaAMm, t.cotaBMm) < 0 && (t.a.x !== t.b.x || t.a.y !== t.b.y));
   const cruza = (p: { x: number; y: number }) =>
     fontes.some((f) => {
-      const pts = [f.at, ...(desvioDoPilar(f.at, p, obstaculosDoCondutor(model, nivelDaSaida, hip)) ?? []), p];
+      const pts = [f.at, ...(desvioPorFora(f.at, p, obstaculosDoCondutor(model, nivelDaSaida, hip)) ?? []), p];
       return pts.slice(1).some((q, k) => enterrados.some((t) => segmentosSeCruzam(pts[k], q, t.a, t.b)));
     });
   const longe = (p: { x: number; y: number }) => longeDasOutras(p) && !cruza(p);
@@ -272,8 +297,8 @@ function comSaidaProposta(model: BlueprintModel, hip: HipotesesPluviais, fontes:
     const nl = Math.hypot(nx, ny) || 1;
     const u = { x: -ny / nl, y: nx / nl };
     // Primeiro o ponto longe das outras redes E sem cruzar; sem nenhum (descidas dos dois lados do coletor), só longe.
-    const procurar = (serve: (p: { x: number; y: number }) => boolean) => {
-      for (let k = 1; k <= 60; k++)
+    const procurar = (serve: (p: { x: number; y: number }) => boolean, passos: number) => {
+      for (let k = 1; k <= passos; k++)
         for (const sentido of [1, -1]) {
           const q = { x: Math.round(frente.ponto.x + u.x * sentido * k * 250), y: Math.round(frente.ponto.y + u.y * sentido * k * 250) };
           const pn = pontoNaFrente(model, q);
@@ -281,7 +306,8 @@ function comSaidaProposta(model: BlueprintModel, hip: HipotesesPluviais, fontes:
         }
       return null;
     };
-    frente = procurar(longe) ?? (longeDasOutras(frente.ponto) ? frente : procurar(longeDasOutras) ?? frente);
+    // Sem cruzar, só por perto (±4 m — cada ponto refaz o caminho de cada descida); só longe, a frente toda (±15 m).
+    frente = procurar(longe, 16) ?? (longeDasOutras(frente.ponto) ? frente : procurar(longeDasOutras, 60) ?? frente);
   }
   const terreo = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0];
   // A cota: o condutor MAIS LONGO chega com a declividade da premissa (todos os outros, com mais).
@@ -341,7 +367,7 @@ export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais
   // F25: os tubos enterrados das OUTRAS redes que o horizontal pode cruzar (o coletor predial que desce fundo até a rua).
   const outrosEnterrados = (model.trechos ?? []).filter((t) => t.disciplina !== 'PLUVIAL' && Math.min(t.cotaAMm, t.cotaBMm) < 0 && (t.a.x !== t.b.x || t.a.y !== t.b.y));
   const horizontal = (levelId: ObjectId, a: { x: number; y: number }, cotaA: number, b: { x: number; y: number }, cotaB: number, dn: number) => {
-    const desvio = desvioDoPilar(a, b, obstaculosDe(levelId)) ?? [];
+    const desvio = desvioPorFora(a, b, obstaculosDe(levelId)) ?? [];
     const base = [a, ...desvio.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), b].filter((p, k, arr) => k === 0 || p.x !== arr[k - 1].x || p.y !== arr[k - 1].y);
     // F25: o cruzamento com outra rede vira VÉRTICE do perfil, na cota que passa por baixo dela com a folga — o perfil
     // reto do pé à saída cruzava rente quando a saída é funda (terreno inclinado). Só quando ainda chega à saída com a

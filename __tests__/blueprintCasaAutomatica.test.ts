@@ -26,7 +26,10 @@ import { pontosElegiveis } from '../utils/blueprintCircuitosAutomaticos';
 // Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
 // ~0,5–0,8 s nesta máquina, e a CI, disputando CPU com a suíte toda, chegou a passar dos 5 s do padrão
 // (15/10/2026, run 38725612771). O limite é do arquivo, não um teste lento escondido.
-vi.setConfig({ testTimeout: 30_000 });
+// 18/10/2026: com as redes, a climatização e o forro, uma dúzia de casas leva 15–30 s na CI, e um runner lento (run
+// 39102863222: transform, import e setup 1,8× mais lentos que no run anterior, em código não tocado) passou o F9 de
+// 30 s — antes, 15,6 s. Os mais pesados seguem com prazo próprio (240 s).
+vi.setConfig({ testTimeout: 120_000 });
 
 type Papel = 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA';
 

@@ -223,7 +223,22 @@ const LaborEmployeeBankAccounts: React.FC<Props> = ({ accounts, onChange, loadin
                         <Field label="Titular (se não for o colaborador)" className="md:col-span-3">
                             <input value={draft.holder_name ?? ''} onChange={e => set('holder_name', e.target.value)} className={inputCls} placeholder="Deixe em branco quando a conta é do próprio colaborador" />
                         </Field>
+                        <label className="md:col-span-3 flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={!!draft.titular_diferente_autorizado}
+                                onChange={e => set('titular_diferente_autorizado', e.target.checked)}
+                                className="w-4 h-4 mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                            />
+                            <span>
+                                Titular diferente autorizado
+                                <span className="block text-xs text-gray-400">Marque só se a chave/conta está em nome de outra pessoa e isso foi conferido. Sem a marca, o PIX pela Asaas é recusado quando o titular da chave não é o colaborador.</span>
+                            </span>
+                        </label>
                     </div>
+                    <p className="text-xs text-gray-500">
+                        Chave PIX, banco, agência, conta, titular e a marca acima só são alterados por proprietário ou administrador da organização — e cada troca fica registrada.
+                    </p>
                     <div className="flex items-center justify-end gap-2">
                         <span className="text-xs text-gray-500 mr-auto">A lista é gravada ao salvar o colaborador.</span>
                         <button type="button" onClick={fechar} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all">

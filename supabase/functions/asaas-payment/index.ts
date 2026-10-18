@@ -189,6 +189,16 @@ serve(async (req: Request) => {
         const cadastro = await avaliarDisparo(admin, { titulo, conta, ehGestor, avulso: false });
         const avulso = await avaliarDisparo(admin, { titulo, conta, ehGestor, avulso: true });
 
+        // Titular da chave é conferido na validação de saque pelo CPF/CNPJ da ENTIDADE
+        // (plano 2026-10-18-asaas-seguranca-chaves-pix). Sem ele, só paga chave de conta
+        // marcada por gestor como titular diferente autorizado.
+        const docEntidade = String(destino.documento ?? '').replace(/\D/g, '');
+        const temDocEntidade = docEntidade.length === 11 || docEntidade.length === 14;
+        const MOTIVO_SEM_DOC = 'Favorecido sem CPF/CNPJ no cadastro: preencha o documento — é por ele que o titular da chave PIX é conferido antes de o dinheiro sair.';
+        if (!temDocEntidade && destino.opcoes.length && !destino.opcoes.some(o => o.titularDiferente)) {
+            cadastro.bloqueios.push(MOTIVO_SEM_DOC);
+        }
+
         if (action === 'pix_quote') {
             return json({
                 ok: true,
@@ -217,6 +227,8 @@ serve(async (req: Request) => {
         let documento: string | null;
         let origem: string;
         let bloqueios: string[];
+        let esperado: string | null;
+        let titularDiferente = false;
 
         if (body.destino?.ref) {
             const op = opcaoEscolhida(destino, body.destino.ref);
@@ -224,7 +236,9 @@ serve(async (req: Request) => {
             if (op.invalida || !op.tipo) return json({ error: `Chave do cadastro inválida: ${op.invalida ?? 'sem tipo'}` }, 422);
             chave = op.chave; tipo = op.tipo; nome = op.titular ?? destino.nome; documento = op.documento ?? destino.documento;
             origem = destino.favorecido.origem;
-            bloqueios = cadastro.bloqueios;
+            bloqueios = cadastro.bloqueios.filter(b => !(op.titularDiferente && b === MOTIVO_SEM_DOC));
+            esperado = temDocEntidade ? docEntidade : null;
+            titularDiferente = op.titularDiferente;
         } else if (body.destino?.avulso) {
             const a = body.destino.avulso;
             const r = validarChavePix(a.tipo, a.chave);
@@ -234,6 +248,7 @@ serve(async (req: Request) => {
             chave = r.chave; tipo = a.tipo as TipoChavePix; nome = a.nome.trim(); documento = a.documento.replace(/\D/g, '');
             origem = 'avulso';
             bloqueios = avulso.bloqueios;
+            esperado = documento;
         } else {
             return json({ error: 'Escolha uma chave do cadastro ou digite uma chave PIX.' }, 400);
         }
@@ -252,6 +267,8 @@ serve(async (req: Request) => {
             beneficiary_name: nome,
             beneficiary_document: documento,
             favorecido_origem: origem,
+            favorecido_documento_esperado: esperado,
+            titular_diferente_autorizado: titularDiferente,
             value: titulo.amount,
             scheduled_date: agendado ? body.schedule_date : null,
             status: 'APPROVED',

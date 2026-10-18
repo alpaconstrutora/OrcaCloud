@@ -23,6 +23,8 @@ export interface OpcaoChave {
     titular: string | null;
     documento: string | null;
     principal: boolean;
+    /** Conta marcada por gestor: o titular da chave pode ser outra pessoa/empresa. */
+    titularDiferente: boolean;
     /** Por que esta chave não serve (formato inválido, tipo ambíguo) — a tela mostra. */
     invalida: string | null;
 }
@@ -38,13 +40,13 @@ export interface DestinoPix {
  *  18/10/2026 saiu com favorecido em branco ("PIX enviado para ."). */
 const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
-function opcao(ref: string, rotulo: string, tipoGuardado: string | null, chaveBruta: string, titular: string | null, documento: string | null, principal: boolean): OpcaoChave {
+function opcao(ref: string, rotulo: string, tipoGuardado: string | null, chaveBruta: string, titular: string | null, documento: string | null, principal: boolean, titularDiferente = false): OpcaoChave {
     const tipo = (tipoGuardado as TipoChavePix | null) || deduzirTipoChave(chaveBruta);
     const r = validarChavePix(tipo, chaveBruta);
     return {
         ref, rotulo, tipo, chave: r.chave,
         chaveMascarada: mascararChave(tipo, r.ok ? r.chave : chaveBruta),
-        titular, documento, principal,
+        titular, documento, principal, titularDiferente,
         invalida: r.ok ? null : (tipo ? r.motivo : 'Chave sem tipo e o tipo não pôde ser deduzido — corrija no cadastro.'),
     };
 }
@@ -56,7 +58,7 @@ export async function destinoDoTitulo(admin: Admin, titulo: TituloParaPix): Prom
     if (favorecido.origem === 'fornecedor') {
         const { data: s } = await admin.from('suppliers').select('name,nickname,document').eq('id', favorecido.id).maybeSingle();
         const { data: contas } = await admin.from('supplier_bank_accounts')
-            .select('id,bank_name,pix_key,pix_key_type,beneficiary_name,beneficiary_document,is_pix_primary')
+            .select('id,bank_name,pix_key,pix_key_type,beneficiary_name,beneficiary_document,is_pix_primary,titular_diferente_autorizado')
             .eq('supplier_id', favorecido.id).eq('status', 'ativo').not('pix_key', 'is', null);
         return {
             favorecido, nome: s?.name ?? null, documento: s?.document ?? null,
@@ -64,7 +66,7 @@ export async function destinoDoTitulo(admin: Admin, titulo: TituloParaPix): Prom
                 `fornecedor:${c.id}`, `Cadastro do fornecedor${c.bank_name ? ` · ${c.bank_name}` : ''}`,
                 c.pix_key_type as string | null, String(c.pix_key),
                 texto(c.beneficiary_name) ?? texto(s?.name), texto(c.beneficiary_document) ?? texto(s?.document),
-                !!c.is_pix_primary,
+                !!c.is_pix_primary, !!c.titular_diferente_autorizado,
             )),
         };
     }
@@ -72,14 +74,14 @@ export async function destinoDoTitulo(admin: Admin, titulo: TituloParaPix): Prom
     if (favorecido.origem === 'colaborador') {
         const { data: e } = await admin.from('employees').select('name,cpf').eq('id', favorecido.id).maybeSingle();
         const { data: contas } = await admin.from('employee_bank_accounts')
-            .select('id,bank_name,pix_key,pix_key_type,holder_name,is_primary')
+            .select('id,bank_name,pix_key,pix_key_type,holder_name,is_primary,titular_diferente_autorizado')
             .eq('employee_id', favorecido.id).not('pix_key', 'is', null);
         return {
             favorecido, nome: e?.name ?? null, documento: e?.cpf ?? null,
             opcoes: (contas ?? []).map((c: Record<string, unknown>) => opcao(
                 `colaborador:${c.id}`, `Cadastro do colaborador${c.bank_name ? ` · ${c.bank_name}` : ''}`,
                 c.pix_key_type as string | null, String(c.pix_key),
-                texto(c.holder_name) ?? texto(e?.name), texto(e?.cpf), !!c.is_primary,
+                texto(c.holder_name) ?? texto(e?.name), texto(e?.cpf), !!c.is_primary, !!c.titular_diferente_autorizado,
             )),
         };
     }

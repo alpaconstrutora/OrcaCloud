@@ -37,6 +37,7 @@ export const employeeBankAccountService = {
             pix_key: a.pix_key,
             pix_key_type: a.pix_key_type,
             holder_name: a.holder_name,
+            titular_diferente_autorizado: a.titular_diferente_autorizado ?? false,
             is_primary: a.is_primary,
         }));
         const { data, error } = await supabase.rpc('save_employee_bank_accounts', {

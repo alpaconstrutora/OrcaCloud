@@ -22,6 +22,8 @@ export interface EmployeeBankAccount {
     pix_key: string | null;
     pix_key_type: EmployeePixKeyType | null;
     holder_name: string | null;
+    /** Chave/conta em nome de outra pessoa, autorizado por gestor (validação de saque, 18/10/2026). */
+    titular_diferente_autorizado?: boolean;
     is_primary: boolean;
     created_at?: string;
     updated_at?: string;
@@ -44,7 +46,7 @@ export const PIX_KEY_TYPE_LABELS: Record<EmployeePixKeyType, string> = {
 export function emptyBankAccount(): EmployeeBankAccount {
     return {
         bank_code: '', bank_name: '', agency: '', account: '', account_type: 'corrente',
-        pix_key: '', pix_key_type: null, holder_name: '', is_primary: false,
+        pix_key: '', pix_key_type: null, holder_name: '', titular_diferente_autorizado: false, is_primary: false,
     };
 }
 

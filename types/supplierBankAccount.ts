@@ -27,6 +27,9 @@ export interface SupplierBankAccount {
   pix_key?: string;
   pix_key_type?: PixKeyType;
   is_pix_primary: boolean;
+  /** Chave/conta em nome de outra pessoa ou empresa, autorizado por gestor. Sem a marca, a
+   *  validação de saque recusa PIX cujo titular não é o fornecedor (18/10/2026). */
+  titular_diferente_autorizado?: boolean;
 
   // Controle
   is_primary: boolean;

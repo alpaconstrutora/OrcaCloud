@@ -41,7 +41,7 @@ function comparaSegredo(a: string, b: string): boolean {
 }
 
 const espera = (ms: number) => new Promise(r => setTimeout(r, ms));
-const COLS = 'id,organization_id,payment_type,status,value,pix_key,identification_field,beneficiary_document,asaas_transfer_id,asaas_bill_id';
+const COLS = 'id,organization_id,payment_type,status,value,pix_key,identification_field,beneficiary_document,favorecido_documento_esperado,titular_diferente_autorizado,asaas_transfer_id,asaas_bill_id';
 
 type Registro = PagamentoRegistrado & { id: string; organization_id: string | null; asaas_transfer_id: string | null; asaas_bill_id: string | null };
 

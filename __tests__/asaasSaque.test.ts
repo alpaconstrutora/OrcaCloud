@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { decidirSaque, idDoPedido, escolherReserva, mesmoDocumento, type PagamentoRegistrado } from '../utils/asaasSaque';
 
-const pix: PagamentoRegistrado = { payment_type: 'PIX_TRANSFER', status: 'APPROVED', value: 1, pix_key: '99991111140', identification_field: null };
+const pix: PagamentoRegistrado = { payment_type: 'PIX_TRANSFER', status: 'APPROVED', value: 1, pix_key: '99991111140', identification_field: null, favorecido_documento_esperado: '99991111140' };
+const TITULAR = '999.911.111-40';
 const boleto: PagamentoRegistrado = { payment_type: 'BILL', status: 'PENDING', value: 20, pix_key: null, identification_field: '23793381286001234107143000012345890460000002000' };
 
 describe('idDoPedido', () => {
@@ -14,12 +15,12 @@ describe('idDoPedido', () => {
 
 describe('decidirSaque', () => {
     it('aprova o PIX que o OrçaCloud disparou (valor e chave conferem)', () => {
-        expect(decidirSaque({ type: 'TRANSFER', transfer: { id: 'x', value: 1, operationType: 'PIX', bankAccount: { pixAddressKey: '999.911.111-40' } } }, pix))
+        expect(decidirSaque({ type: 'TRANSFER', transfer: { id: 'x', value: 1, operationType: 'PIX', bankAccount: { pixAddressKey: '999.911.111-40', cpfCnpj: TITULAR } } }, pix))
             .toEqual({ status: 'APPROVED' });
     });
 
     it('aprova quando a Asaas não manda a chave no pedido', () => {
-        expect(decidirSaque({ type: 'TRANSFER', transfer: { id: 'x', value: 1, bankAccount: { pixAddressKey: null } } }, pix).status).toBe('APPROVED');
+        expect(decidirSaque({ type: 'TRANSFER', transfer: { id: 'x', value: 1, bankAccount: { pixAddressKey: null, cpfCnpj: TITULAR } } }, pix).status).toBe('APPROVED');
     });
 
     it('recusa saque que não é nosso, de outro valor, de outra chave ou já encerrado', () => {
@@ -32,7 +33,7 @@ describe('decidirSaque', () => {
 
     it('telefone com e sem +55 é a mesma chave', () => {
         const tel = { ...pix, pix_key: '+5511912345678' };
-        expect(decidirSaque({ type: 'TRANSFER', transfer: { id: 'x', value: 1, bankAccount: { pixAddressKey: '11912345678' } } }, tel).status).toBe('APPROVED');
+        expect(decidirSaque({ type: 'TRANSFER', transfer: { id: 'x', value: 1, bankAccount: { pixAddressKey: '11912345678', cpfCnpj: TITULAR } } }, tel).status).toBe('APPROVED');
     });
 
     it('boleto: linha digitável tem de bater', () => {
@@ -44,6 +45,29 @@ describe('decidirSaque', () => {
         for (const type of ['PIX_QR_CODE', 'MOBILE_PHONE_RECHARGE', 'PIX_REFUND', 'PAYMENT_SPLIT', undefined]) {
             expect(decidirSaque({ type }, pix).status).toBe('REFUSED');
         }
+    });
+});
+
+describe('decidirSaque — titular da chave (desvio por troca de chave no cadastro)', () => {
+    const pedido = (cpfCnpj: string | null) => ({ type: 'TRANSFER', transfer: { id: 'x', value: 1, bankAccount: { pixAddressKey: null, cpfCnpj } } });
+
+    it('titular igual ao favorecido: aprova', () => {
+        expect(decidirSaque(pedido('99991111140'), pix).status).toBe('APPROVED');
+    });
+
+    it('chave trocada para a de outra pessoa: recusa, mesmo com a chave igual ao cadastro', () => {
+        const r = decidirSaque(pedido('123.456.789-09'), pix);
+        expect(r.status).toBe('REFUSED');
+        expect(r.refuseReason).toMatch(/terminado em 8909/);
+    });
+
+    it('conta marcada "titular diferente autorizado": aprova outro titular', () => {
+        expect(decidirSaque(pedido('12345678909'), { ...pix, titular_diferente_autorizado: true }).status).toBe('APPROVED');
+    });
+
+    it('sem documento esperado, ou a Asaas sem titular: recusa (falha fechada)', () => {
+        expect(decidirSaque(pedido('99991111140'), { ...pix, favorecido_documento_esperado: null }).refuseReason).toMatch(/sem CPF\/CNPJ/);
+        expect(decidirSaque(pedido(null), pix).refuseReason).toMatch(/não informou o titular/);
     });
 });
 

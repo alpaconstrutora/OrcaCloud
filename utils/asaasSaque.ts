@@ -34,6 +34,11 @@ export interface PagamentoRegistrado {
     identification_field: string | null;
     /** CPF/CNPJ do favorecido: o do cadastro ao disparar; o resolvido pela Asaas depois da resposta. */
     beneficiary_document?: string | null;
+    /** CPF/CNPJ da ENTIDADE (fornecedor, colaborador, sócio; no avulso, o digitado), gravado no
+     *  disparo e nunca regravado — a referência para conferir o titular da chave. */
+    favorecido_documento_esperado?: string | null;
+    /** Conta marcada por gestor como "titular diferente autorizado" (cópia no disparo). */
+    titular_diferente_autorizado?: boolean | null;
 }
 
 export interface DecisaoDeSaque {
@@ -111,6 +116,21 @@ export function decidirSaque(p: PedidoDeSaque, registro: PagamentoRegistrado | n
         // A Asaas nem sempre manda a chave no pedido de validação; quando manda, tem de bater.
         if (chaveAsaas && !mesmaChave(chaveAsaas, registro.pix_key)) {
             return recusa('Chave PIX diferente da registrada no OrçaCloud.');
+        }
+        // Titular da chave (18/10/2026, plano 2026-10-18-asaas-seguranca-chaves-pix): a chave
+        // pode ter sido TROCADA no cadastro por quem quer desviar o pagamento — conferir a chave
+        // com o cadastro não pega isso. A Asaas informa o CPF/CNPJ do dono da chave; ele tem de
+        // ser o da entidade, salvo conta marcada por gestor como titular diferente autorizado.
+        if (!registro.titular_diferente_autorizado) {
+            const esperado = so(registro.favorecido_documento_esperado);
+            const titular = so(p.transfer?.bankAccount?.cpfCnpj);
+            if (esperado.length !== 11 && esperado.length !== 14) {
+                return recusa('Favorecido sem CPF/CNPJ registrado no OrçaCloud para conferir o titular da chave.');
+            }
+            if (!titular) return recusa('A Asaas não informou o titular da chave — sem como conferir.');
+            if (titular !== esperado) {
+                return recusa(`O titular da chave (CPF/CNPJ terminado em ${titular.slice(-4)}) não é o favorecido cadastrado.`);
+            }
         }
         return { status: 'APPROVED' };
     }

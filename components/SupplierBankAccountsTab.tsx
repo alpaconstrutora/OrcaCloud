@@ -13,6 +13,7 @@ import { validarChavePix } from '../utils/pixKey';
 import { masterDataService, MasterBank } from '../services/masterDataService';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 
 // ─── Estilos reutilizáveis (consistentes com SupplierModal) ───────────────────
 const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all bg-white';
@@ -34,6 +35,7 @@ const emptyAccount = (supplierId: string, organizationId: string | null): Omit<S
     pix_key: '',
     pix_key_type: undefined,
     is_pix_primary: false,
+    titular_diferente_autorizado: false,
     is_primary: false,
     status: 'ativo',
     notes: '',
@@ -67,6 +69,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
 }) => {
     const { session } = useStore();
     const userId = session?.user?.id;
+    const confirmar = useConfirm();
 
     const [accounts, setAccounts] = React.useState<SupplierBankAccount[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -119,6 +122,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
             pix_key: account.pix_key ?? '',
             pix_key_type: account.pix_key_type,
             is_pix_primary: account.is_pix_primary,
+            titular_diferente_autorizado: account.titular_diferente_autorizado ?? false,
             is_primary: account.is_primary,
             status: account.status,
             notes: account.notes ?? '',
@@ -194,7 +198,13 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
 
     // ─── Remover (soft delete) ─────────────────────────────────────────────────
     const handleRemove = async (id: string) => {
-        if (!confirm('Desativar esta conta bancária?')) return;
+        const ok = await confirmar({
+            title: 'Desativar conta bancária?',
+            message: 'A conta deixa de aparecer para pagamentos. Dá para reativar depois, editando a situação.',
+            variant: 'danger',
+            confirmLabel: 'Desativar',
+        });
+        if (!ok) return;
         try {
             await supplierBankAccountService.remove(id);
             await loadAccounts();
@@ -280,6 +290,11 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                         PIX {acc.pix_key_type ? `(${PIX_KEY_TYPE_LABELS[acc.pix_key_type]})` : ''}
                     </span>
                     <span className="text-xs text-gray-500 font-mono truncate">{acc.pix_key}</span>
+                    {acc.titular_diferente_autorizado && (
+                        <span className="text-xs font-medium text-amber-700" title="A chave/conta está em nome de outra pessoa ou empresa, autorizado por gestor">
+                            Titular diferente autorizado
+                        </span>
+                    )}
                     {acc.is_pix_primary && (
                         <span className="text-[9px] font-black text-green-600 bg-green-50 px-1.5 py-0.5 rounded-md uppercase shrink-0">
                             Principal
@@ -497,7 +512,28 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                         <span className="text-xs text-gray-400">(sugerido antes de TED/DOC)</span>
                     </label>
                 )}
+
+                <label className="flex items-start gap-2.5 cursor-pointer group">
+                    <input
+                        type="checkbox"
+                        className="w-4 h-4 mt-0.5 rounded accent-amber-600 cursor-pointer"
+                        checked={!!form.titular_diferente_autorizado}
+                        onChange={e => set({ titular_diferente_autorizado: e.target.checked })}
+                    />
+                    <span>
+                        <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900 transition-colors">
+                            Titular diferente autorizado
+                        </span>
+                        <span className="block text-xs text-gray-400">
+                            Marque só se a chave/conta está em nome de outra pessoa ou empresa e isso foi conferido. Sem a marca, o PIX pela Asaas é recusado quando o titular da chave não é este fornecedor.
+                        </span>
+                    </span>
+                </label>
             </div>
+
+            <p className="text-xs text-gray-500">
+                Chave PIX, banco, agência, conta, titular e a marca acima só são alterados por proprietário ou administrador da organização — e cada troca fica registrada.
+            </p>
 
             {/* Observações */}
             <div>

@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { resumoDasMedidas } from '../utils/blueprintBudget';
 import { gerarIfc } from '../utils/blueprintIfc';
+import { gerarDxf } from '../utils/blueprintDxf';
 import {
   applyBatch,
   applyCommand,
@@ -274,5 +275,23 @@ describe('muro · IFC', () => {
     expect(grade).not.toBeNull();
     expect(mureta![1]).not.toBe(grade![1]);
     expect(ifc).toContain("'Pset_OpuraMuro'");
+  });
+});
+
+describe('muro · DXF', () => {
+  it('cada trecho cheio vira contorno na camada PLANTA-MUROS; cada portão, a linha do vão e o rótulo', () => {
+    const { model, t } = terreo();
+    const m = applyCommand(model, { type: 'AddMuro', levelId: t, tipo: 'MURETA_COM_GRADE', pontos: [point(0, 0), point(12000, 0)], portoes: [{ tipo: 'PEDESTRE', offsetMm: 2000, larguraMm: 1000 }, { tipo: 'GARAGEM', offsetMm: 6000, larguraMm: 3000 }] }).model;
+    const dxf = gerarDxf(m, { titulo: 'T', revisao: 1, hash: 'h' });
+    const ls = dxf.split(/\r?\n/).map((x) => x.trim());
+    // A entidade e a camada dela: o "8" logo depois do tipo.
+    const camadas: string[] = [];
+    for (let i = 0; i + 1 < ls.length; i++) if (ls[i] === '0' && (ls[i + 1] === 'POLYLINE' || ls[i + 1] === 'LINE')) { const k = ls.indexOf('8', i + 2); camadas.push(`${ls[i + 1]} ${ls[k + 1]}`); }
+    // 3 trechos cheios (0–2, 3–6, 9–12) → 3 contornos; 2 portões → 2 linhas de vão.
+    expect(camadas.filter((c) => c === 'POLYLINE PLANTA-MUROS')).toHaveLength(3);
+    expect(camadas.filter((c) => c === 'LINE PLANTA-MUROS')).toHaveLength(2);
+    expect(dxf).toContain('PORTAO PEDESTRE');
+    expect(dxf).toContain('PORTAO GARAGEM');
+    expect(dxf).toContain('MURETA C/ GRADE h=1.80');
   });
 });

@@ -668,6 +668,7 @@ export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
   IMPLANTACAO: 'Implantação pela lei',
   TERRAPLENAGEM: 'Terraplenagem (o platô da casa no terreno inclinado)',
   ARQUITETURA: 'Arquitetura (gerador E6.2)',
+  MURO: 'Muro, portões e calçadas',
   PILARES: 'Pilares',
   VIGAS: 'Vigas',
   LAJES: 'Lajes',
@@ -688,7 +689,6 @@ export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
   DR_DPS: 'Proteção (DR e DPS) e ligação da entrada',
   ELETRODUTOS: 'Eletrodutos',
   FORRO: 'Forro dos cômodos (as redes nas faixas do plenum)',
-  MURO: 'Muro, portões e calçadas',
   CONFERENCIA: 'Conferência (programa e legislação)',
 };
 const ORDEM_DAS_ETAPAS = Object.keys(ROTULO_DA_ETAPA_DA_CASA) as EtapaDaCasaId[];
@@ -1711,6 +1711,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   // F26 (decisões do usuário: "muro + portão + calçada", "família nova no kernel"): o muro do lote (kernel 0.104.0), o
   // portão de pedestre diante da porta, o de garagem diante da garagem e as calçadas — depois da casa inteira, que é
   // de onde saem a porta, a garagem e a escada de acesso.
+  let resumoDoMuro: PlanoDoMuroDaCasa['resumo'] | null = null;
   const lancarMuroDaCasa = (): PlanoDoMuroDaCasa['resumo'] | null => {
     if (!hip.muro.lancar) {
       etapa('MURO', ROTULO_DA_ETAPA_DA_CASA.MURO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
@@ -1832,8 +1833,6 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   // A CONFERÊNCIA e o plano — o fim comum da térrea e do sobrado. TO pela projeção; CA pela soma dos pavimentos.
   type ResumoDasDisciplinas = Omit<PlanoDaCasa['resumo'], 'areaConstruidaM2' | 'ambientesPedidos' | 'ambientesAtendidos' | 'regrasVioladas' | 'terraplenagem' | 'muro'>;
   const fechar = (f: { projecaoM2: number; areaConstruidaM2: number; alturaM: number; semente: number; escolha: string; sobrado: ResumoDoSobrado | null; disciplinas: ResumoDasDisciplinas }): PlanoDaCasa => {
-    // ── MURO, PORTÕES E CALÇADAS (F26) ──
-    const resumoDoMuro = lancarMuroDaCasa();
     // F21: o molhado sem lado externo que ganhou EXAUSTOR (a climatização lança onde não há janela) está resolvido pela
     // ventilação mecânica — fica para conferir no código de obras, não "sem solução".
     for (const pd of pendencias) {
@@ -2523,7 +2522,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         eletrica.quadro = quadro?.nome ?? null;
         let nota = quadro ? `${quadro.nome} no centro de cargas` : 'sem quadro';
         if (quadro && hip.eletrica.medidor) {
-          const frente = pontoNaFrente(m, quadro.at);
+          // F26: o medidor fica no muro, fora do vão dos portões.
+          const frente = pontoNaFrente(m, quadro.at, { foraDosPortoes: true });
           if (frente) {
             const infra = (tipoEletrico: 'ENTRADA_SERVICO' | 'MEDIDOR'): Command => ({
               type: 'AddTerminal', levelId: niveis[0], disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO[tipoEletrico], at: { ...frente.ponto },
@@ -2796,6 +2796,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
 
     lancarEscadaDeAcesso();
     lancarRampaDaGaragem();
+    // F26: o muro logo depois da casa — antes da água e da elétrica, que põem o hidrômetro e o medidor nele.
+    resumoDoMuro = lancarMuroDaCasa();
 
     // ── ESTRUTURA E TELHADO DO SOBRADO (F12b) ──
     // Pilares em prumada (ver `pilaresDoSobrado`); vigas e lajes em cada pavimento — a laje do térreo é o piso de
@@ -3019,6 +3021,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'LANCOU', n, `${paredes} paredes, ${aberturas} portas e janelas, ${r.ambientes.length} ambientes — ${escolha}`);
   lancarEscadaDeAcesso();
   lancarRampaDaGaragem();
+  // F26: o muro logo depois da casa — antes da água e da elétrica, que põem o hidrômetro e o medidor nele.
+  resumoDoMuro = lancarMuroDaCasa();
   // F21: "sem porta direta" já sai na CONFERÊNCIA do programa (com a distância em portas) — aqui só pesa na escolha.
   for (const a of r.avisos) if (!/sem porta direta \(relação obrigatória\)/.test(a)) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura: ${a}` });
 

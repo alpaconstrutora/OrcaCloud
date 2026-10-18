@@ -2507,9 +2507,11 @@ leva os do pavimento; canônico omitido sem muro (os 6 goldens só mudaram pela 
 hachurada, grade com montantes, portão de pedestre com a folha e o arco, o de garagem tracejado), 3D, prancha, forro,
 camadas; o painel do muro (tipo, alturas, espessura, rótulo, portões — acrescentar com o motivo quando não cabe) e a
 ferramenta "Muro / grade" (dois cliques) no menu de componentes. E `Escada.veicular` — a rampa da garagem, sem o aviso
-da NBR 9050 (a inclinação é a do código de obras). Fica de fora: o muro no DXF.
+da NBR 9050 (a inclinação é a do código de obras). No DXF, a camada PLANTA-MUROS (o contorno de cada trecho cheio, a
+linha de cada portão, o tipo e a altura em texto).
 
-**A casa** (`utils/blueprintMuroDaCasa.ts`, etapa MURO antes da conferência): o muro corre dentro do lote, o eixo à meia
+**A casa** (`utils/blueprintMuroDaCasa.ts`, etapa MURO logo depois da arquitetura — antes da água e da elétrica, que
+põem o hidrômetro e o medidor no muro): o muro corre dentro do lote, o eixo à meia
 espessura da divisa; a frente (as divisas FRENTE) em mureta com grade, laterais e fundos em alvenaria, 1,80 m; o portão
 de garagem diante da garagem (ou das vagas descobertas), o de pedestre diante da porta — encostando no de garagem, vai
 para o lado que tem lugar; no terreno, um vértice a cada 3 m com a cota dele. As calçadas: o acesso da garagem
@@ -2528,4 +2530,14 @@ Medido (12 × 30, R1-N): plano — muro 11,85 + 71,55 m, 2 portões, calçadas 1
 10 % — a casa recua 7,5 m, térreo a 2,03 m, rampa de 10,1 m a 20 %, escada de pedestre de 12 degraus; sobrado a 10 % —
 recua 5,4 m; a −10 % — rampa descendo 1,45 m; a 25 % — a casa fica no recuo da zona e a pendência diz que a rampa (15 m)
 não cabe nos 2,75 m.
+
+Remedido com o relatório do muro nas 8 casas de referência (a pedido do usuário): o hidrômetro e o medidor caíam no VÃO
+de um portão em 5 das 8 — `pontoNaFrente(…, { foraDosPortoes: true })` os põe no muro a 30 cm dos portões (os vãos vizinhos
+juntos num intervalo só), e por isso a etapa MURO foi para logo depois da arquitetura. Com isso a coluna de água fria do
+sobrado 12 × 30 mudou de lugar e o split foi pendurado em cima dela — defeito antigo: `lugarDaEvaporadora` ignorava a
+PRUMADA dentro da parede (só via a travessia em planta); agora ela ocupa o trecho (sem a correção, a evaporadora a 25 mm
+da coluna; com ela, ≥ 822 mm). Final: as 8 casas iguais à F25 (0 em vão, 0 rede × rede, 0 pilar, as mesmas pendências),
+nenhum medidor no vão, nenhum muro cruzando a casa, permeabilidade desenhada de 35 a 64 % (zona: 20 %). Duas rodadas
+travaram na 10 × 30 de 4 dormitórios por horas: a thread não atendia ao pedido de pausa do inspetor (girando no código
+nativo do V8 — a mesma casa já derrubara o V8 num `Array.sort`); sozinha, a casa termina em segundos — é a máquina.
 

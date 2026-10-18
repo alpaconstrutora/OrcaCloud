@@ -220,7 +220,20 @@ function ocupadosPorTravessias(model: BlueprintModel, lado: LadoDoAmbiente, leve
   const saida: { de: number; ate: number }[] = [];
   for (const t of model.trechos ?? []) {
     if (t.levelId !== levelId || t.disciplina === 'FRIGORIGENA' || t.disciplina === 'DRENO_AC') continue;
-    if (Math.max(t.cotaAMm, t.cotaBMm) < acimaDeMm || (t.a.x === t.b.x && t.a.y === t.b.y)) continue;
+    if (Math.max(t.cotaAMm, t.cotaBMm) < acimaDeMm) continue;
+    if (t.a.x === t.b.x && t.a.y === t.b.y) {
+      // F26 da casa automática (18/10/2026): a PRUMADA dentro da parede (a coluna de água que desce pela fachada) na
+      // altura da evaporadora — vertical, não cruza o eixo em planta, e o aparelho era pendurado em cima dela (o sobrado
+      // 12 × 30, quando o hidrômetro saiu do vão do portão e a coluna mudou de lugar).
+      const Lw = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+      const perpAoEixo = Math.abs(((t.a.x - w.a.x) * (w.b.y - w.a.y) - (t.a.y - w.a.y) * (w.b.x - w.a.x)) / Lw);
+      if (perpAoEixo > w.thicknessMm / 2 + (t.bitolaMm ?? 25) / 2 + 50) continue;
+      const aoP = (t.a.x - lado.a.x) * ux + (t.a.y - lado.a.y) * uy;
+      const meioP = (t.bitolaMm ?? 25) / 2 + AFASTAMENTO_DA_TRAVESSIA_MM;
+      if (aoP + meioP < 0 || aoP - meioP > L) continue;
+      saida.push({ de: Math.max(0, aoP - meioP - FOLGA_DA_EVAPORADORA_MM), ate: Math.min(L, aoP + meioP + FOLGA_DA_EVAPORADORA_MM) });
+      continue;
+    }
     // O cruzamento do tubo com o eixo da parede (em planta).
     const d1 = { x: t.b.x - t.a.x, y: t.b.y - t.a.y };
     const d2 = { x: w.b.x - w.a.x, y: w.b.y - w.a.y };

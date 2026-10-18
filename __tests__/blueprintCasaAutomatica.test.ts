@@ -78,6 +78,7 @@ describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
     expect(plano.etapas.map((e) => [e.id, e.situacao])).toEqual([
       ['IMPLANTACAO', 'CALCULOU'],
       ['ARQUITETURA', 'LANCOU'],
+      ['MURO', 'LANCOU'],
       ['PILARES', 'LANCOU'],
       ['VIGAS', 'LANCOU'],
       ['LAJES', 'LANCOU'],
@@ -98,7 +99,6 @@ describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
       ['DR_DPS', 'LANCOU'],
       ['ELETRODUTOS', 'LANCOU'],
       ['FORRO', 'LANCOU'],
-      ['MURO', 'LANCOU'],
       ['CONFERENCIA', 'CALCULOU'],
     ]);
     expect(plano.comandos.slice(0, 3).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
@@ -158,7 +158,8 @@ describe('planejarCasa — o que falta vira motivo, nunca exceção', () => {
     expect(p.comandos).toEqual([]);
     expect(p.etapas[0]).toMatchObject({ id: 'IMPLANTACAO', situacao: 'NAO_RODOU' });
     expect(p.etapas[0].nota).toMatch(/FRENTE/);
-    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(23).fill('NAO_RODOU'));
+    // F26: + a etapa MURO.
+    expect(p.etapas.map((e) => e.situacao)).toEqual(Array(24).fill('NAO_RODOU'));
   });
 
   it('pavimento inexistente', () => {
@@ -1265,7 +1266,8 @@ describe('F25 — terreno inclinado: o platô único', () => {
     expect(p.pendencias.some((x) => /^Terraplenagem: a entrada sobe .*, lançada diante da porta de entrada\.$/.test(x.texto))).toBe(true);
     // A escada de acesso (kernel 0.103.0, decisão do usuário 18/10/2026: "escada partindo do terreno"): da calçada ao
     // térreo, os degraus que o platô calculou, terminando na face da fachada; nenhum conflito dela.
-    const acesso = p.resultado.stairs.filter((e) => e.desdeCotaMm != null);
+    // A escada de PEDESTRE (a rampa da garagem — F26 — também parte da calçada, mas é veicular).
+    const acesso = p.resultado.stairs.filter((e) => e.desdeCotaMm != null && !e.veicular);
     expect(acesso).toHaveLength(1);
     expect(acesso[0]).toMatchObject({ levelId: p.levelId, tipo: 'ESCADA', rotulo: 'Acesso', desdeCotaMm: t.entrada.cotaDaCalcadaMm });
     expect(medirEscada(p.resultado, acesso[0]).desnivelMm).toBe(t.elevacaoDoTerreoMm - t.entrada.cotaDaCalcadaMm!);
@@ -1287,14 +1289,14 @@ describe('F25 — terreno inclinado: o platô único', () => {
     expect(s.elevationMm - t.elevationMm).toBeGreaterThanOrEqual(2800);
     // A escada interna liga os dois pavimentos; a de acesso, a calçada ao térreo.
     expect(p.resultado.stairs.filter((e) => e.desdeCotaMm == null && e.levelId === t.id)).toHaveLength(1);
-    expect(p.resultado.stairs.filter((e) => e.desdeCotaMm != null).map((e) => e.levelId)).toEqual([t.id]);
+    expect(p.resultado.stairs.filter((e) => e.desdeCotaMm != null && !e.veicular).map((e) => e.levelId)).toEqual([t.id]);
   }, 240_000);
 
   it('terreno de 20 %: a escada não cabe no recuo de frente — nenhuma escada de acesso, e a pendência diz', () => {
     const m = lote();
     const p = planejarCasa(m, comTerreno(m, 20), { pavimentos: 1 });
     expect(p.resumo.terraplenagem!.entrada.cabe).toBe(false);
-    expect(p.resultado.stairs.filter((e) => e.desdeCotaMm != null)).toEqual([]);
+    expect(p.resultado.stairs.filter((e) => e.desdeCotaMm != null && !e.veicular)).toEqual([]);
     expect(p.pendencias.some((x) => x.grupo === 'VERIFICACAO' && /^Terraplenagem: a entrada sobe .*não cabe no recuo de frente; desenhe o acesso à mão\.$/.test(x.texto))).toBe(true);
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
   }, 240_000);

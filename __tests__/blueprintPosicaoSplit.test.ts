@@ -197,6 +197,19 @@ describe('climatização E4.2/E4.3 · posição automática do split', () => {
     if (evap.at.y > 3700) expect(Math.abs(evap.at.x - 2000), JSON.stringify(evap.at)).toBeGreaterThanOrEqual(750);
   });
 
+  it('F26 (sobrado 12 × 30): na parede externa, a evaporadora não fica sobre uma PRUMADA de água dentro da parede', () => {
+    const { m, t } = casa();
+    // Uma coluna de água fria descendo dentro de cada parede externa sem porta (oeste e norte), do forro ao piso.
+    const prumada = (x: number, y: number): Command => ({ type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(x, y), b: point(x, y), cotaAMm: 2800, cotaBMm: 0, bitolaMm: 25 });
+    const m2 = applyBatch(m, [prumada(0, 2000), prumada(2000, 4000)]).model;
+    const carga = cargaTermicaDoNivel(m2, hipClima, t);
+    const plano = planejarEquipamentosSplit(m2, selecaoDoNivel(m2, carga, hip, catalogo), carga, hip, { naParedeExterna: { topoMaximoMm: 2600 } });
+    const evap = terminais(applyBatch(m2, plano.comandos).model).find((x) => x.tipoHidraulico === 'EVAPORADORA_HI_WALL')!;
+    // Meia evaporadora (450) + meio tubo (12,5) + afastamento (60) + folga (300) = 822,5 longe da prumada.
+    if (evap.at.x < 300) expect(Math.abs(evap.at.y - 2000), JSON.stringify(evap.at)).toBeGreaterThanOrEqual(822);
+    if (evap.at.y > 3700) expect(Math.abs(evap.at.x - 2000), JSON.stringify(evap.at)).toBeGreaterThanOrEqual(822);
+  });
+
   it('o giro aponta as lâminas para dentro: normal interna +y (parede sul) → 180°; −y (norte) → 0°; +x (oeste) → 90°', () => {
     expect(giroParaSoprarParaDentro({ x: 0, y: 1 })).toBe(180);
     expect(giroParaSoprarParaDentro({ x: 0, y: -1 })).toBe(0);

@@ -48,6 +48,8 @@ import { type Anotacao,
   type Point,
   type Structural,
   type Wall,
+  trechosDoMuro,
+  vaosDosPortoes,
 } from './blueprintKernel';
 import {
   AFASTAMENTO_COTA,
@@ -175,6 +177,8 @@ export const CAMADAS = {
    * pedra com o concreto no mesmo traço.
    */
   ESCADA: 'PLANTA-ESCADA',
+  /** MURO (kernel 0.104.0): o contorno dos trechos cheios na espessura e a linha do vão de cada portão. */
+  MURO: 'PLANTA-MUROS',
   ELEV_ESCADA: 'ELEVACAO-ESCADA',
   CORTE_ESCADA: 'CORTE-ESCADA',
   /**
@@ -254,6 +258,7 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.CORTE_TELHADO]: 30,
   [CAMADAS.CORTE_ABERTURAS]: 5,
   [CAMADAS.ESCADA]: 9, // cinza claro — pedra, distinto do magenta do concreto
+  [CAMADAS.MURO]: 8, // cinza escuro — alvenaria de divisa, subordinada à parede da casa
   [CAMADAS.ELEV_ESCADA]: 9,
   [CAMADAS.CORTE_ESCADA]: 9,
   [CAMADAS.ELETRICA]: 2, // amarelo — a cor da elétrica no canvas
@@ -899,6 +904,41 @@ function entidadesDeEscada(model: BlueprintModel): string {
 }
 
 /**
+ * MURO (kernel 0.104.0): cada trecho cheio vira o contorno fechado na espessura (a alvenaria e a grade no mesmo
+ * desenho — o tipo vai no texto); cada portão, a linha do vão e o rótulo. A altura e o tipo vão no texto do muro, no
+ * meio do trecho mais longo.
+ */
+function entidadesDeMuro(model: BlueprintModel): string {
+  let saida = '';
+  for (const m of model.muros ?? []) {
+    const meia = m.espessuraMm / 2;
+    const trechos = trechosDoMuro(model, m);
+    for (const t of trechos) {
+      const L = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+      if (L < 1) continue;
+      const nx = (-(t.b.y - t.a.y) / L) * meia;
+      const ny = ((t.b.x - t.a.x) / L) * meia;
+      saida += polilinha(CAMADAS.MURO, [
+        { x: t.a.x + nx, y: t.a.y + ny },
+        { x: t.b.x + nx, y: t.b.y + ny },
+        { x: t.b.x - nx, y: t.b.y - ny },
+        { x: t.a.x - nx, y: t.a.y - ny },
+      ]);
+    }
+    for (const v of vaosDosPortoes(model, m)) {
+      saida += linha(CAMADAS.MURO, v.a, v.b);
+      saida += texto(CAMADAS.TEXTO, { x: (v.a.x + v.b.x) / 2 + 150, y: (v.a.y + v.b.y) / 2 + 150 }, v.portao.tipo === 'PEDESTRE' ? 'PORTAO PEDESTRE' : 'PORTAO GARAGEM', 120);
+    }
+    const maior = [...trechos].sort((p, q) => q.comprimentoMm - p.comprimentoMm)[0];
+    if (maior) {
+      const tipo = m.tipo === 'ALVENARIA' ? 'MURO' : m.tipo === 'GRADE' ? 'GRADE' : 'MURETA C/ GRADE';
+      saida += texto(CAMADAS.TEXTO, { x: (maior.a.x + maior.b.x) / 2 + 200, y: (maior.a.y + maior.b.y) / 2 + 200 }, `${tipo} h=${(m.alturaMm / 1000).toFixed(2)}`, 120);
+    }
+  }
+  return saida;
+}
+
+/**
  * A MARCA do corte na planta baixa: a linha, as setas e a letra nas duas pontas.
  *
  * Sem ela o DXF traria o desenho do corte sem dizer por onde ele passa — e onde
@@ -1046,6 +1086,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   // que esconde por onde o corte passa é uma planta incompleta.
   dxf += entidadesDeMarcaDeCorte(model);
   dxf += entidadesDeEscada(model);
+  dxf += entidadesDeMuro(model);
   if (o.eletrica) dxf += entidadesDeEletrica(model, o.hipotesesEletricas);
   for (const rede of o.redes ?? []) dxf += entidadesDaRedeHidro(model, rede);
   if (o.incendio) dxf += entidadesDeIncendio(model);

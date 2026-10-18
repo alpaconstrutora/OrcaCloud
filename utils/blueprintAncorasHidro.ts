@@ -28,7 +28,7 @@
  * peça na calçada — o erro que `papeisSugeridos` documenta. Sem polígono
  * fechado (contorno aberto), dentro é o lado do alvo.
  */
-import { pointInPolygon, projecaoNoSegmento, type BlueprintModel, type Point } from './blueprintKernel';
+import { pointInPolygon, projecaoNoSegmento, vaosDosPortoes, type BlueprintModel, type Point } from './blueprintKernel';
 import { medirTerreno } from './blueprintTerreno';
 
 /** A peça fica no lote, não na calçada: tanto para dentro da divisa, mm. */
@@ -164,9 +164,11 @@ export function frenteDoLote(model: BlueprintModel, alvo: Point | null = null): 
  * próximo, longe das pontas (canto do lote não é lugar de ligação) e recuado
  * para dentro. `null` sem frente.
  */
-export function pontoNaFrente(model: BlueprintModel, alvo: Point): PontoNaFrente | null {
+export function pontoNaFrente(model: BlueprintModel, alvo: Point, opcoes: { foraDosPortoes?: boolean } = {}): PontoNaFrente | null {
   const frente = frenteDoLote(model, alvo);
   if (!frente) return null;
+  // F26: o hidrômetro e o medidor vão NO muro da frente — nunca no vão de um portão (o kernel 0.104.0 os desenha).
+  const vaos = opcoes.foraDosPortoes ? (model.muros ?? []).flatMap((m) => vaosDosPortoes(model, m)) : [];
   let melhor: { pe: Point; s: SegmentoDaFrente; dist: number } | null = null;
   for (const s of frente.segmentos) {
     const comp = Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y);
@@ -174,7 +176,26 @@ export function pontoNaFrente(model: BlueprintModel, alvo: Point): PontoNaFrente
     if (!pr || comp === 0) continue;
     // Longe das pontas: o recuo da peça também ao longo da divisa (no máximo o meio do lado).
     const margem = Math.min(RECUO_DA_ANCORA_MM, comp / 2) / comp;
-    const u = Math.max(margem, Math.min(1 - margem, pr.u));
+    let u = Math.max(margem, Math.min(1 - margem, pr.u));
+    // Os vãos que correm sobre ESTE lado (a menos de 30 cm dele), em u, com 30 cm de folga de cada lado.
+    const proibidos = vaos
+      .map((v) => ({ pa: projecaoNoSegmento(v.a, s.a, s.b), pb: projecaoNoSegmento(v.b, s.a, s.b), v }))
+      .filter(({ pa, pb, v }) => pa && pb && Math.hypot(v.a.x - (s.a.x + (s.b.x - s.a.x) * pa.u), v.a.y - (s.a.y + (s.b.y - s.a.y) * pa.u)) < RECUO_DA_ANCORA_MM)
+      .map(({ pa, pb }) => [Math.min(pa!.u, pb!.u) - RECUO_DA_ANCORA_MM / comp, Math.max(pa!.u, pb!.u) + RECUO_DA_ANCORA_MM / comp] as [number, number])
+      .sort((x, y) => x[0] - y[0]);
+    // Vãos vizinhos cujas folgas se tocam viram um intervalo só (senão o ponto pula de um para o outro).
+    const juntos: [number, number][] = [];
+    for (const iv of proibidos) {
+      const ultimo = juntos[juntos.length - 1];
+      if (ultimo && iv[0] <= ultimo[1]) ultimo[1] = Math.max(ultimo[1], iv[1]);
+      else juntos.push([iv[0], iv[1]]);
+    }
+    const dentro = juntos.find(([u0, u1]) => u > u0 && u < u1);
+    if (dentro) {
+      // Para o lado mais perto do alvo que ainda cabe no lado do lote.
+      const opcoesU = [dentro[0], dentro[1]].filter((x) => x >= margem && x <= 1 - margem).sort((x, y) => Math.abs(x - pr.u) - Math.abs(y - pr.u));
+      if (opcoesU.length) u = opcoesU[0];
+    }
     const pe = { x: s.a.x + (s.b.x - s.a.x) * u, y: s.a.y + (s.b.y - s.a.y) * u };
     const dist = Math.hypot(pe.x - alvo.x, pe.y - alvo.y);
     if (!melhor || dist < melhor.dist) melhor = { pe, s, dist };

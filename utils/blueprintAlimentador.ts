@@ -317,7 +317,8 @@ function comHidrometroProposto(
   terreno: LeitorDoTerreno | null,
   destino: Terminal,
 ): PlanoDoAlimentador {
-  const frente = pontoNaFrente(model, destino.at);
+  // F26: o cavalete fica no muro, fora do vão dos portões.
+  const frente = pontoNaFrente(model, destino.at, { foraDosPortoes: true });
   if (!frente) return vazio(MOTIVO_SEM_FRENTE_PARA_O_HIDROMETRO);
   // O cavalete fica no pavimento mais baixo (é a rua), na altura da ficha acima do terreno.
   const terreo = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0];

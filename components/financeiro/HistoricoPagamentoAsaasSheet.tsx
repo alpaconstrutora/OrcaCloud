@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Loader2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
-import { supplierPaymentService, type EventoPagamento, type SupplierPayment } from '../../services/supplierPaymentService';
+import { supplierPaymentService, type DecisaoSaque, type EventoPagamento, type SupplierPayment } from '../../services/supplierPaymentService';
 import { formatMoney, formatDateBR } from '../ui/Format';
 
 interface Props {
@@ -34,6 +34,11 @@ function quando(iso: string): string {
     return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR')}`;
 }
 
+/** Linha da linha do tempo: um evento da auditoria ou uma resposta à validação de saque. */
+type Passo =
+    | { tipo: 'evento'; quando: string; e: EventoPagamento }
+    | { tipo: 'validacao'; quando: string; d: DecisaoSaque };
+
 function oQue(e: EventoPagamento): string {
     if (e.acao === 'criado') return 'Pagamento criado';
     if (e.acao === 'excluido') return 'Registro excluído';
@@ -49,7 +54,7 @@ function oQue(e: EventoPagamento): string {
  * Plano: docs/planos/2026-10-16-asaas-pendencias-e-pix.md (Fase 4).
  */
 export default function HistoricoPagamentoAsaasSheet({ transactionId, descricao, onClose }: Props) {
-    const [dados, setDados] = useState<{ pagamentos: SupplierPayment[]; eventos: EventoPagamento[] } | null>(null);
+    const [dados, setDados] = useState<{ pagamentos: SupplierPayment[]; eventos: EventoPagamento[]; decisoes: DecisaoSaque[] } | null>(null);
     const [erro, setErro] = useState<string | null>(null);
 
     useEffect(() => {
@@ -73,9 +78,14 @@ export default function HistoricoPagamentoAsaasSheet({ transactionId, descricao,
             const atual = dados.pagamentos.find(p => p.id === id) ?? null;
             const ultimo = eventos[eventos.length - 1];
             const det = Object.assign({}, ...eventos.map(e => e.detalhe ?? {})) as EventoPagamento['detalhe'];
+            const passos: Passo[] = [
+                ...eventos.map(e => ({ tipo: 'evento' as const, quando: e.created_at, e })),
+                ...dados.decisoes.filter(d => d.supplier_payment_id === id)
+                    .map(d => ({ tipo: 'validacao' as const, quando: d.created_at, d })),
+            ].sort((a, b) => a.quando.localeCompare(b.quando));
             return {
                 id,
-                eventos,
+                passos,
                 tipo: atual?.payment_type ?? det.tipo,
                 valor: atual?.value ?? ultimo.valor,
                 favorecido: atual?.beneficiary_name ?? det.favorecido,
@@ -127,15 +137,27 @@ export default function HistoricoPagamentoAsaasSheet({ transactionId, descricao,
                         </div>
 
                         <ol className="border-l border-gray-200 ml-1.5 space-y-3">
-                            {t.eventos.map(e => (
-                                <li key={e.id} className="pl-4 relative">
+                            {t.passos.map(p => p.tipo === 'evento' ? (
+                                <li key={p.e.id} className="pl-4 relative">
                                     <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-white border-2 border-gray-300" aria-hidden="true" />
-                                    <p className="text-sm text-gray-800">{oQue(e)}</p>
+                                    <p className="text-sm text-gray-800">{oQue(p.e)}</p>
                                     <p className="text-xs text-gray-500">
-                                        {quando(e.created_at)} · por <span className="text-gray-700">{e.autor}</span>
+                                        {quando(p.e.created_at)} · por <span className="text-gray-700">{p.e.autor}</span>
                                     </p>
-                                    {e.detalhe?.motivo && <p className="text-xs text-gray-600 mt-0.5">Motivo: {e.detalhe.motivo}</p>}
-                                    {e.detalhe?.aguardando_token && <p className="text-xs text-amber-700 mt-0.5">A Asaas aguarda autorização por token.</p>}
+                                    {p.e.detalhe?.motivo && <p className="text-xs text-gray-600 mt-0.5">Motivo: {p.e.detalhe.motivo}</p>}
+                                    {p.e.detalhe?.aguardando_token && <p className="text-xs text-amber-700 mt-0.5">A Asaas aguarda autorização por token.</p>}
+                                </li>
+                            ) : (
+                                <li key={p.d.id} className="pl-4 relative">
+                                    <span className={`absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-white border-2 ${p.d.decisao === 'APPROVED' ? 'border-emerald-500' : 'border-red-500'}`} aria-hidden="true" />
+                                    <p className="text-sm text-gray-800">
+                                        Validação de saque: {p.d.decisao === 'APPROVED' ? 'aprovado' : 'recusado'} pelo OrçaCloud
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        {quando(p.d.created_at)} · a Asaas perguntou antes de efetivar
+                                        {p.d.via_reserva ? ' · achado pela conferência de CPF/CNPJ ou linha' : ''}
+                                    </p>
+                                    {p.d.motivo && <p className="text-xs text-red-700 mt-0.5">Motivo: {p.d.motivo}</p>}
                                 </li>
                             ))}
                         </ol>

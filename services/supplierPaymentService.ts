@@ -71,6 +71,17 @@ export interface PixQuote {
     conta: { env: 'sandbox' | 'production'; cadastrada: boolean } | null;
 }
 
+/** Uma pergunta da Asaas à validação de saque e a resposta do OrçaCloud
+ *  (asaas_saque_decisoes — só gestor da organização lê; para os demais, vazio). */
+export interface DecisaoSaque {
+    id: string;
+    supplier_payment_id: string;
+    decisao: 'APPROVED' | 'REFUSED';
+    motivo: string | null;
+    via_reserva: boolean;
+    created_at: string;
+}
+
 /** Uma linha de supplier_payments_auditoria (gravada por gatilho, imutável). */
 export interface EventoPagamento {
     id: string;
@@ -224,7 +235,7 @@ export const supplierPaymentService = {
      * registro foi apagado depois (a auditoria guarda o transaction_id no
      * `detalhe` e não tem FK, de propósito).
      */
-    async historicoDoTitulo(transactionId: string): Promise<{ pagamentos: SupplierPayment[]; eventos: EventoPagamento[] }> {
+    async historicoDoTitulo(transactionId: string): Promise<{ pagamentos: SupplierPayment[]; eventos: EventoPagamento[]; decisoes: DecisaoSaque[] }> {
         const [pag, ev] = await Promise.all([
             supabase.from('supplier_payments').select(COLS)
                 .eq('transaction_id', transactionId).order('created_at', { ascending: true }),
@@ -234,10 +245,19 @@ export const supplierPaymentService = {
         ]);
         if (pag.error) throw pag.error;
         if (ev.error) throw ev.error;
-        return {
-            pagamentos: (pag.data || []) as SupplierPayment[],
-            eventos: (ev.data || []) as unknown as EventoPagamento[],
-        };
+        const pagamentos = (pag.data || []) as SupplierPayment[];
+        const eventos = (ev.data || []) as unknown as EventoPagamento[];
+        // Validação de saque: das tentativas deste título (as excluídas também,
+        // pelo id que ficou na auditoria). RLS deixa só gestor ler — sem erro.
+        const ids = [...new Set([...pagamentos.map(p => p.id), ...eventos.map(e => e.supplier_payment_id)])];
+        let decisoes: DecisaoSaque[] = [];
+        if (ids.length) {
+            const { data, error } = await supabase.from('asaas_saque_decisoes')
+                .select('id,supplier_payment_id,decisao,motivo,via_reserva,created_at')
+                .in('supplier_payment_id', ids).order('created_at', { ascending: true });
+            if (!error) decisoes = (data || []) as DecisaoSaque[];
+        }
+        return { pagamentos, eventos, decisoes };
     },
 
     /** Última ordem de pagamento de um boleto (para exibir status na UI). */

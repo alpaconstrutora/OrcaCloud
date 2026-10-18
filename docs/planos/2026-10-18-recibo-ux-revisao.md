@@ -42,13 +42,13 @@ Sessão 9d2f4ac3 · 18/10/2026. A análise listou os problemas abaixo; em seguid
 4. **Migration `aplicar_20271018880000_recibo_issuer_name_incorporadora.sql`** — guarda o nome antigo e corrige. **Pronto quando:** consulta mostra 0 linhas com "Incoporadora".
 5. **Bucket `financial-receipts`** — backup dos 8 PDFs, upload dos regerados. **Pronto quando:** o PDF baixado do bucket é igual ao gerado (sha256).
 
-## Estado (18/10/2026) — 3 de 5
+## Estado (18/10/2026) — 4 de 5
 
 - [x] 1 · gerador revisado; extra: CPF/CNPJ gravado só com dígitos ganha máscara (a Defensoria saía "05559094000180")
 - [x] 2 · 59 testes verdes, inclusive posição: o y da DECLARAÇÃO fica > 20 pt abaixo do TOTAL (no desenho antigo eram ~6 pt)
 - [x] 3 · `regerar-recibos.ts` aceita cancelado; os 8 PDFs gerados em disco e conferidos em PNG
-- [ ] 4 · **barrado**: aplicar no banco de produção foi recusado pelo modo automático da sessão. O arquivo da migration não foi criado. SQL pronto: tabela `recibo_issuer_name_reversao_20271018` (id, issuer_name_antes; RLS ligada, REVOKE de anon/authenticated) + `UPDATE financial_receipts SET issuer_name = 'Alpa Construtora e Incorporadora' WHERE issuer_name = 'Alpa Construtora e Incoporadora'` (8 linhas; organizations e companies já estão certos).
-- [ ] 5 · **aguardando o usuário**: é escrita no bucket de produção, mesma categoria do item 4. Ordem: item 4 → exportar → `regerar-recibos.ts` → backup (`storage cp` de cada `file_path`) → `storage rm` + `storage cp` no mesmo caminho → sha256.
+- [x] 4 · aplicada em 18/10/2026 após o usuário autorizar escrita no banco ("autorizo escrita no banco"). Conferido: 8 na tabela de reversão, 8 corrigidos, 0 com "Incoporadora", RLS ligada, anon/authenticated sem SELECT.
+- [ ] 5 · **aguardando o usuário**: escrita no bucket de produção. A autorização de 18/10 cobriu o banco, não o Storage. Ordem: item 4 → exportar → `regerar-recibos.ts` → backup (`storage cp` de cada `file_path`) → `storage rm` + `storage cp` no mesmo caminho → sha256.
 
 Enquanto 5 não roda, o bucket continua entregando os PDFs antigos (contato da Alpa sob o credor, sem CANCELADO). Recibo NOVO já sai no desenho novo.
 

@@ -35,6 +35,8 @@ export interface HipotesesDaTerraplenagemDaCasa {
   pisoDoDegrauMm: number;
   /** Até este desnível da calçada ao piso, nada a fazer (soleira), mm. */
   desnivelSemDegrauMm: number;
+  /** F26: a rampa de veículos da garagem até esta inclinação, % (o código de obras; 20 % é o usual). */
+  rampaDeVeiculosMaxPct: number;
 }
 
 export const HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO: HipotesesDaTerraplenagemDaCasa = {
@@ -47,6 +49,7 @@ export const HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO: HipotesesDaTerraplenagem
   espelhoMaximoMm: 180,
   pisoDoDegrauMm: 280,
   desnivelSemDegrauMm: 20,
+  rampaDeVeiculosMaxPct: 20,
 };
 
 export interface BordaDoPlato {

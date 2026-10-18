@@ -142,6 +142,8 @@ export const PREFIXO_ROTULO_UID = {
   componente: 'M',
   /** Guarda-corpo e corrimão — B de balaustrada (G já é o grupo). */
   guardaCorpo: 'B',
+  /** Muro (0.104.0) — MU: as 26 letras já têm dono, e "M" sozinho é o componente. */
+  muro: 'MU',
   /** Anotação — A. */
   anotacao: 'A',
   /** Vista dependente — D (recorte nomeado de planta). */

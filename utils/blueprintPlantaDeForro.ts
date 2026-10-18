@@ -75,6 +75,7 @@ export function idsOcultosNaPlantaDeForro(model: BlueprintModel, level: Level): 
   for (const e of doNivel(model.stairs)) ocultos.add(e.id);
   for (const v of doNivel(model.vagas)) ocultos.add(v.id);
   for (const g of doNivel(model.guardaCorpos)) ocultos.add(g.id);
+  for (const m of doNivel(model.muros)) ocultos.add(m.id);
   for (const c of model.sections ?? []) ocultos.add(c.id);
   return ocultos;
 }

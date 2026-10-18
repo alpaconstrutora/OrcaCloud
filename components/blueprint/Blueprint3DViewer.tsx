@@ -25,6 +25,7 @@ import {
   DEFAULT_TOLERANCE_MM,
   FORMA_ESTRUTURAL,
   baseDaEscadaMm,
+  trechosDoMuro,
   fatiasDaEscada,
   furosDaEscada,
   furosDoNucleo,
@@ -73,7 +74,7 @@ import { uvNaCaixa, type PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaD
 import { doDesenhoParaMundo, ESCALA_DO_DESENHO_NO_MUNDO, planoNoMundo } from '../../utils/blueprint3dEspelho';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 import { ehTransversal, segmentosDaArmaduraDoModelo } from '../../utils/blueprintArmaduraGeometria';
-import { paineisDaPolilinha, pecaNoMundo } from '../../utils/blueprint3dPecas';
+import { paineisDaPolilinha, paineisDoMuro, pecaNoMundo } from '../../utils/blueprint3dPecas';
 import { pecas3dDasFolhas, type MaterialDaPecaDaEsquadria } from '../../utils/blueprintFolhas';
 import { encaixeDoModelo, modeloDoTipo } from '../../utils/blueprintModelos3d';
 import { fovVerticalGraus } from '../../utils/blueprintCamera';
@@ -1648,6 +1649,20 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model.guardaCorpos, model.levels, levelIds, ocultos]);
 
+  // MURO (0.104.0): a alvenaria e a grade por trecho cheio, a base no terreno (os portões são vãos).
+  const paineisDeMuro = useMemo(() => {
+    const out: { id: string; chave: string; geom: THREE.BufferGeometry; pos: [number, number, number]; rot: number; parte: 'ALVENARIA' | 'GRADE' }[] = [];
+    for (const m of model.muros ?? []) {
+      if (!levelIds || !levelIds.includes(m.levelId)) continue;
+      if (ocultos?.has(m.id)) continue;
+      for (const p of paineisDoMuro(trechosDoMuro(model, m), m)) {
+        out.push({ id: m.id, chave: `${m.id}-${p.trecho}-${p.parte}`, geom: new THREE.BoxGeometry(p.comprimentoM, p.alturaM, p.espessuraM), pos: p.pos, rot: p.rot, parte: p.parte });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.muros, model.levels, levelIds, ocultos]);
+
   /**
    * ESQUADRIA CONFIGURÁVEL (F8, 0.98.0): na abertura com folhas declaradas, o caixilho, os
    * montantes, a travessa da bandeira e o pano de cada folha (vidro; na porta, folha opaca) —
@@ -1748,6 +1763,11 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       {paineisDeGuardaCorpo.map((g) => (
         <mesh key={`guarda-corpo-${g.chave}`} geometry={g.geom} position={g.pos} rotation={[0, g.rot, 0]} castShadow receiveShadow {...cliqueDe(g.id)}>
           <meshStandardMaterial color={selecionados?.has(g.id) ? '#2563eb' : g.material === 'VIDRO' ? '#bae6fd' : g.material === 'MADEIRA' ? '#a16207' : g.material === 'ALVENARIA' ? '#e7e5e4' : '#334155'} transparent={g.material === 'VIDRO' || g.sugerido} opacity={g.sugerido ? 0.45 : g.material === 'VIDRO' ? 0.4 : 1} roughness={g.material === 'INOX' ? 0.2 : 0.7} metalness={g.material === 'INOX' || g.material === 'METALICO' ? 0.6 : 0} />
+        </mesh>
+      ))}
+      {paineisDeMuro.map((m) => (
+        <mesh key={`muro-${m.chave}`} geometry={m.geom} position={m.pos} rotation={[0, m.rot, 0]} castShadow receiveShadow {...cliqueDe(m.id)}>
+          <meshStandardMaterial color={selecionados?.has(m.id) ? '#2563eb' : m.parte === 'GRADE' ? '#334155' : '#d6d3d1'} transparent={m.parte === 'GRADE'} opacity={m.parte === 'GRADE' ? 0.55 : 1} roughness={0.8} metalness={m.parte === 'GRADE' ? 0.5 : 0} />
         </mesh>
       ))}
       {pecasDeEsquadria.map((p) => (

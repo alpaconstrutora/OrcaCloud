@@ -718,8 +718,18 @@
  * as rotas de fuga/extintores/iluminação de emergência não a contam como ligação entre pavimentos. Não convive com
  * `ateLevelId`; a calçada na cota do piso é recusada (sem desnível). `AddEscada`/`SetEscadaProps` aceitam o campo
  * (`null` volta à escada entre pavimentos). Omitido do canônico quando ausente: desenho antigo só muda pela string.
+ *
+ * ─── 0.103.0 → 0.104.0 (18/10/2026) — O MURO E A RAMPA DE VEÍCULOS ───────
+ *
+ * F26 da casa automática (decisão do usuário: "família nova no kernel"): `muros?: Muro[]` — muro de divisa, grade ou
+ * mureta com grade, com os PORTÕES (pedestre, garagem) como vãos ao longo do percurso. Fora do arranjo planar (não
+ * fecha ambiente, não entra na TO); a base acompanha o terreno (`cotasDaBaseMm`, por vértice, do zero do desenho).
+ * `AddMuro`/`SetMuroProps`/`DeleteMuro`, `TranslateEntities.muroIds`, `RemoveLevel` leva os muros do pavimento; a
+ * geometria derivada em `muro.ts` (`trechosDoMuro`, `vaosDosPortoes`, `areasDoMuro`). E `Escada.veicular?` — a rampa
+ * da garagem, só em `RAMPA`, sem o aviso da NBR 9050 (a inclinação é a do código de obras). Os dois omitidos do
+ * canônico quando ausentes: desenho antigo só muda pela string.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.103.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.104.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

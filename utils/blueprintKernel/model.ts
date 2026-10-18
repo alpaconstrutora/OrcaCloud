@@ -2025,6 +2025,12 @@ export interface Escada {
    * (as rotas de fuga a ignoram) e não convive com `ateLevelId`. Ausente = escada entre pavimentos (como sempre).
    */
   desdeCotaMm?: number;
+  /**
+   * RAMPA DE VEÍCULOS (0.104.0, F26 da casa automática): a rampa da garagem — só em `tipo: 'RAMPA'`. A inclinação
+   * dela é a do código de obras (a hipótese do estudo, até 20–25 %), não a da NBR 9050 (8,33 %, para pedestre): o
+   * aviso da NBR não vale. Ausente = rampa de pedestre.
+   */
+  veicular?: boolean;
 }
 
 /**
@@ -2412,6 +2418,96 @@ export function assertCamera(c: Camera): void {
   if (!Number.isInteger(c.alturaOlhoMm) || c.alturaOlhoMm < ALTURA_DO_OLHO_MIN_MM || c.alturaOlhoMm > ALTURA_DO_OLHO_MAX_MM) throw new KernelError('BAD_CAMERA', `${onde}: altura do olho fora de [${ALTURA_DO_OLHO_MIN_MM}, ${ALTURA_DO_OLHO_MAX_MM}] mm`);
   if (!Number.isInteger(c.focalMm) || c.focalMm < FOCAL_MIN_MM || c.focalMm > FOCAL_MAX_MM) throw new KernelError('BAD_CAMERA', `${onde}: focal fora de [${FOCAL_MIN_MM}, ${FOCAL_MAX_MM}] mm`);
   if (typeof c.nome !== 'string' || c.nome.trim() !== c.nome || c.nome.length === 0 || c.nome.length > MAX_NOME_DE_CAMERA) throw new KernelError('BAD_CAMERA', `${onde}: nome vazio, com espaço nas pontas ou maior que ${MAX_NOME_DE_CAMERA}`);
+}
+
+/**
+ * MURO (18/10/2026, kernel 0.104.0 — F26 do plano `2026-10-14-casa-automatica.md`, decisão do usuário: "família nova
+ * no kernel"): o muro de divisa, a grade e a mureta com grade, com os PORTÕES (de pedestre e de garagem) como vãos.
+ *
+ * Como o guarda-corpo, fica FORA do arranjo planar: não fecha ambiente (o anel de muros do lote não vira um cômodo),
+ * não é parede, não entra na taxa de ocupação. É do PAVIMENTO (o térreo), mas a BASE acompanha o TERRENO: `cotasDaBaseMm`
+ * dá, por vértice, a cota do pé do muro em mm do zero do desenho (a mesma régua de `Level.elevationMm`); entre dois
+ * vértices, a base é linear. Ausente = o pé no piso do pavimento. A altura conta da base.
+ *
+ * O portão é um VÃO ao longo da polilinha: `offsetMm` do primeiro vértice ao começo do vão, medido sobre o percurso, e
+ * a largura; em ordem, sem se sobrepor, dentro do muro. O que o quantitativo compra sai dos TRECHOS entre os vãos
+ * (`trechosDoMuro`): alvenaria (m² de face, da mureta no caso misto), grade (m²) e portões (un, por tipo).
+ */
+export type TipoDeMuro = 'ALVENARIA' | 'GRADE' | 'MURETA_COM_GRADE';
+export const TIPOS_DE_MURO: readonly TipoDeMuro[] = ['ALVENARIA', 'GRADE', 'MURETA_COM_GRADE'];
+export const ROTULO_DO_TIPO_DE_MURO: Record<TipoDeMuro, string> = { ALVENARIA: 'Muro de alvenaria', GRADE: 'Grade', MURETA_COM_GRADE: 'Mureta com grade' };
+export type TipoDePortao = 'PEDESTRE' | 'GARAGEM';
+export const TIPOS_DE_PORTAO: readonly TipoDePortao[] = ['PEDESTRE', 'GARAGEM'];
+export const ROTULO_DO_TIPO_DE_PORTAO: Record<TipoDePortao, string> = { PEDESTRE: 'Portão de pedestre', GARAGEM: 'Portão de garagem' };
+export const ALTURA_PADRAO_DO_MURO_MM = 1800;
+export const ESPESSURA_PADRAO_DO_MURO_MM = 150;
+export const ALTURA_PADRAO_DA_MURETA_MM = 600;
+export const LARGURA_PADRAO_DO_PORTAO_MM: Record<TipoDePortao, number> = { PEDESTRE: 1000, GARAGEM: 3000 };
+export const MAX_ROTULO_DE_MURO = 40;
+export interface PortaoDoMuro {
+  tipo: TipoDePortao;
+  /** Do primeiro vértice ao começo do vão, ao longo do percurso; mm inteiro ≥ 0. */
+  offsetMm: number;
+  /** Largura do vão, mm inteiro > 0. */
+  larguraMm: number;
+}
+export interface Muro {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  tipo: TipoDeMuro;
+  /** Polilinha em planta (o eixo do muro), mm inteiros, ≥ 2 vértices, sem trecho nulo. */
+  pontos: Point[];
+  /** Altura acima da base, mm inteiro > 0. */
+  alturaMm: number;
+  /** Espessura da alvenaria (ou da grade), mm inteiro > 0. */
+  espessuraMm: number;
+  /** Só em `MURETA_COM_GRADE`: a altura da mureta, mm inteiro em ]0, alturaMm[; a grade vai dela ao topo. */
+  alturaDaMuretaMm?: number;
+  /** A cota da base em cada vértice, mm inteiros do zero do desenho (o terreno); ausente = o piso do pavimento. */
+  cotasDaBaseMm?: number[];
+  /** Os vãos dos portões, em ordem de `offsetMm`. */
+  portoes: PortaoDoMuro[];
+  rotulo?: string | null;
+}
+/** Comprimento do percurso do muro, mm. */
+export function comprimentoDoMuro(m: Pick<Muro, 'pontos'>): number {
+  let s = 0;
+  for (let i = 1; i < m.pontos.length; i++) s += Math.hypot(m.pontos[i].x - m.pontos[i - 1].x, m.pontos[i].y - m.pontos[i - 1].y);
+  return s;
+}
+/** Confere um muro; o mesmo critério do invariante e dos comandos. */
+export function assertMuro(m: Muro): void {
+  const onde = `Muro ${m.id}`;
+  if (!TIPOS_DE_MURO.includes(m.tipo)) throw new KernelError('BAD_MURO', `${onde}: tipo desconhecido ${String(m.tipo)}`);
+  if (!Array.isArray(m.pontos) || m.pontos.length < 2) throw new KernelError('BAD_MURO', `${onde}: precisa de 2 vértices ou mais`);
+  for (const [i, p] of m.pontos.entries()) {
+    assertIntegerMm(p.x, `${m.id}.pontos[${i}].x`);
+    assertIntegerMm(p.y, `${m.id}.pontos[${i}].y`);
+    if (i > 0 && p.x === m.pontos[i - 1].x && p.y === m.pontos[i - 1].y) throw new KernelError('BAD_MURO', `${onde}: trecho ${i} de comprimento zero`);
+  }
+  if (!Number.isInteger(m.alturaMm) || m.alturaMm <= 0) throw new KernelError('BAD_MURO', `${onde}: altura tem de ser inteira e positiva`);
+  if (!Number.isInteger(m.espessuraMm) || m.espessuraMm <= 0) throw new KernelError('BAD_MURO', `${onde}: espessura tem de ser inteira e positiva`);
+  if (m.tipo === 'MURETA_COM_GRADE') {
+    if (!Number.isInteger(m.alturaDaMuretaMm) || m.alturaDaMuretaMm! <= 0 || m.alturaDaMuretaMm! >= m.alturaMm) throw new KernelError('BAD_MURO', `${onde}: a mureta tem de ter altura inteira, positiva e menor que a do muro`);
+  } else if (m.alturaDaMuretaMm !== undefined) throw new KernelError('BAD_MURO', `${onde}: só a mureta com grade tem altura de mureta`);
+  if (m.cotasDaBaseMm !== undefined) {
+    if (!Array.isArray(m.cotasDaBaseMm) || m.cotasDaBaseMm.length !== m.pontos.length) throw new KernelError('BAD_MURO', `${onde}: uma cota de base por vértice`);
+    for (const [i, c] of m.cotasDaBaseMm.entries()) if (!Number.isInteger(c)) throw new KernelError('BAD_MURO', `${onde}: a cota da base no vértice ${i} tem de ser mm inteiro`);
+  }
+  if (!Array.isArray(m.portoes)) throw new KernelError('BAD_MURO', `${onde}: lista de portões ausente`);
+  const L = comprimentoDoMuro(m);
+  let fim = -1;
+  for (const [i, g] of m.portoes.entries()) {
+    if (!TIPOS_DE_PORTAO.includes(g.tipo)) throw new KernelError('BAD_MURO', `${onde}: portão ${i} de tipo desconhecido ${String(g.tipo)}`);
+    if (!Number.isInteger(g.offsetMm) || g.offsetMm < 0) throw new KernelError('BAD_MURO', `${onde}: portão ${i} com posição inválida`);
+    if (!Number.isInteger(g.larguraMm) || g.larguraMm <= 0) throw new KernelError('BAD_MURO', `${onde}: portão ${i} com largura inválida`);
+    if (g.offsetMm + g.larguraMm > L + 0.5) throw new KernelError('BAD_MURO', `${onde}: portão ${i} passa do fim do muro`);
+    if (g.offsetMm < fim) throw new KernelError('BAD_MURO', `${onde}: portão ${i} fora de ordem ou sobre o anterior`);
+    fim = g.offsetMm + g.larguraMm;
+  }
+  if (m.rotulo != null && (typeof m.rotulo !== 'string' || m.rotulo.length > MAX_ROTULO_DE_MURO)) throw new KernelError('BAD_MURO', `${onde}: rótulo maior que ${MAX_ROTULO_DE_MURO} caracteres`);
 }
 
 /**
@@ -2978,6 +3074,12 @@ export function findBloco(model: BlueprintModel, id: ObjectId): Bloco {
   if (!b) throw new KernelError('MASS_NOT_FOUND', `Bloco de massa inexistente: ${id}`);
   return b;
 }
+export function findMuro(model: BlueprintModel, id: ObjectId): Muro {
+  const m = (model.muros ?? []).find((x) => x.id === id);
+  if (!m) throw new KernelError('MURO_NOT_FOUND', `Muro inexistente: ${id}`);
+  return m;
+}
+
 export function findCamera(model: BlueprintModel, id: ObjectId): Camera {
   const c = (model.cameras ?? []).find((x) => x.id === id);
   if (!c) throw new KernelError('CAMERA_NOT_FOUND', `Câmera inexistente: ${id}`);
@@ -4238,6 +4340,8 @@ export interface BlueprintModel {
   blocos?: Bloco[];
   /** CÂMERAS (0.99.0) — pontos de vista salvos. Ver `Camera`. */
   cameras?: Camera[];
+  /** MUROS (0.104.0) — muro de divisa, grade, mureta com grade e os portões. Ver `Muro`. */
+  muros?: Muro[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -4368,6 +4472,7 @@ export function emptyModel(): BlueprintModel {
     areasDeOperacao: [],
     blocos: [],
     cameras: [],
+    muros: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -4453,6 +4558,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     areasDeOperacao: (model.areasDeOperacao ?? []).map((a) => ({ ...a, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}) })),
     blocos: (model.blocos ?? []).map((b) => ({ ...b, pontos: b.pontos.map((p) => ({ ...p })), ...(b.parametros ? { parametros: { ...b.parametros } } : {}) })),
     cameras: (model.cameras ?? []).map((c) => ({ ...c, posicao: { ...c.posicao }, alvo: { ...c.alvo } })),
+    muros: (model.muros ?? []).map((m) => ({ ...m, pontos: m.pontos.map((p) => ({ ...p })), portoes: m.portoes.map((g) => ({ ...g })), ...(m.cotasDaBaseMm ? { cotasDaBaseMm: [...m.cotasDaBaseMm] } : {}), ...(m.parametros ? { parametros: { ...m.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -5755,6 +5861,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Área de operação', model.areasDeOperacao ?? []],
     ['Bloco de massa', model.blocos ?? []],
     ['Câmera', model.cameras ?? []],
+    ['Muro', model.muros ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -6412,6 +6519,10 @@ export function assertModelInvariants(model: BlueprintModel): void {
     const ordem = o.emergencia.map((x) => (MARCAS_DE_EMERGENCIA as readonly string[]).indexOf(x));
     if (o.emergencia.length === 0 || ordem.some((k, i) => k < 0 || (i > 0 && k <= ordem[i - 1]))) throw new KernelError('BAD_EMERGENCY_MARKS', `Abertura ${o.id}: marcas de emergência inválidas ${JSON.stringify(o.emergencia)}`);
   }
+  // Rampa de veículos (0.104.0): só rampa.
+  for (const e of model.stairs ?? []) {
+    if (e.veicular !== undefined && (e.veicular !== true || e.tipo !== 'RAMPA')) throw new KernelError('BAD_STAIR_TYPE', `Escada ${e.id}: só a rampa pode ser de veículos`);
+  }
   // Escada de acesso (0.103.0): cota inteira, diferente do piso, e sem chegada declarada.
   for (const e of model.stairs ?? []) {
     if (e.desdeCotaMm === undefined) continue;
@@ -6640,6 +6751,11 @@ export function assertModelInvariants(model: BlueprintModel): void {
   for (const c of model.cameras ?? []) {
     if (!model.levels.some((l) => l.id === c.levelId)) throw new KernelError('BAD_CAMERA', `Câmera ${c.id}: pavimento inexistente`);
     assertCamera(c);
+  }
+  // MURO (0.104.0): pavimento vivo e o resto por `assertMuro`.
+  for (const m of model.muros ?? []) {
+    if (!model.levels.some((l) => l.id === m.levelId)) throw new KernelError('BAD_MURO', `Muro ${m.id}: pavimento inexistente`);
+    assertMuro(m);
   }
   for (const b of model.blocos ?? []) {
     if (!model.levels.some((l) => l.id === b.levelId)) throw new KernelError('BAD_MASS', `Bloco ${b.id}: pavimento inexistente`);

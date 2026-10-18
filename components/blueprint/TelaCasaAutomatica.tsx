@@ -298,6 +298,28 @@ export default function TelaCasaAutomatica(props: Props) {
                 <Numero rotulo="Platô além da casa (m)" valor={p.terraplenagem.margemDoPlatoMm / 1000} min={0} max={5} passo={0.1} onValor={(v) => v != null && set('terraplenagem', { margemDoPlatoMm: Math.round(v * 1000) })} />
                 <Numero rotulo="Piso acima do platô (cm)" valor={p.terraplenagem.pisoAcimaDoPlatoMm / 10} min={0} max={100} passo={1} onValor={(v) => v != null && set('terraplenagem', { pisoAcimaDoPlatoMm: Math.round(v * 10) })} />
                 <Numero rotulo="Talude até (m de altura; acima, muro)" valor={p.terraplenagem.alturaMaximaDoTaludeM} min={0} max={10} passo={0.1} onValor={(v) => v != null && set('terraplenagem', { alturaMaximaDoTaludeM: Math.round(v * 100) / 100 })} />
+                <Numero rotulo="Rampa da garagem até (%)" valor={p.terraplenagem.rampaDeVeiculosMaxPct} min={5} max={30} passo={0.5} onValor={(v) => v != null && set('terraplenagem', { rampaDeVeiculosMaxPct: Math.round(v * 10) / 10 })} />
+              </>
+            )}
+            <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700" title="O muro na divisa do lote (kernel 0.104.0), com o portão de pedestre diante da porta e o de garagem diante da garagem">
+              <input type="checkbox" checked={p.muro.lancar} onChange={(e) => set('muro', { lancar: e.target.checked })} className="h-4 w-4 rounded border-gray-300" data-testid="muro-da-casa" />
+              Muro, portões e calçadas
+            </label>
+            {p.muro.lancar && (
+              <>
+                <Campo rotulo="Muro da frente">
+                  <select aria-label="Muro da frente" className={campoCls} value={p.muro.tipoDaFrente} onChange={(e) => set('muro', { tipoDaFrente: e.target.value as PremissasDaCasa['muro']['tipoDaFrente'] })} data-testid="muro-da-frente">
+                    <option value="MURETA_COM_GRADE">Mureta com grade</option>
+                    <option value="GRADE">Grade</option>
+                    <option value="ALVENARIA">Alvenaria</option>
+                  </select>
+                </Campo>
+                <Numero rotulo="Altura da frente (m)" valor={p.muro.alturaDaFrenteMm / 1000} min={0.5} max={4} passo={0.05} onValor={(v) => v != null && set('muro', { alturaDaFrenteMm: Math.round(v * 1000) })} />
+                <Numero rotulo="Altura das divisas (m)" valor={p.muro.alturaDasDivisasMm / 1000} min={0.5} max={4} passo={0.05} onValor={(v) => v != null && set('muro', { alturaDasDivisasMm: Math.round(v * 1000) })} />
+                <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={p.muro.calcadas} onChange={(e) => set('muro', { calcadas: e.target.checked })} className="h-4 w-4 rounded border-gray-300" data-testid="calcadas-da-casa" />
+                  Calçadas da entrada e da garagem
+                </label>
               </>
             )}
             {p.disciplinas.estrutura && (

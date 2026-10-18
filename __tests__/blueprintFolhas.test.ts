@@ -1,6 +1,6 @@
 /**
  * F8 do plano `2026-10-11-planta-recursos-video-synaps.md` — ESQUADRIA CONFIGURÁVEL
- * (kernel 0.98.0, quant-1.28.0): folhas com mecanismo e largura, bandeira, o símbolo
+ * (kernel 0.98.0, quant-1.29.0): folhas com mecanismo e largura, bandeira, o símbolo
  * de planta (canvas/PDF/DXF), as peças do 3D, o quadro de esquadrias e as regras do
  * painel.
  */
@@ -128,7 +128,7 @@ describe('esquadria configurável — o kernel 0.98.0 (F8)', () => {
   });
 });
 
-describe('esquadria configurável — a assinatura e o quadro (quant-1.28.0)', () => {
+describe('esquadria configurável — a assinatura e o quadro (quant-1.29.0)', () => {
   it('sem configuração a assinatura é a de antes, byte a byte (id de linha de orçamento)', () => {
     const o = planta([{ kind: 'door', widthMm: 800 }]).openings[0];
     expect(assinaturaDaEsquadria(o)).toBe('door|800|2100||');
@@ -142,7 +142,7 @@ describe('esquadria configurável — a assinatura e o quadro (quant-1.28.0)', (
     expect(quadro).toHaveLength(2);
     const porCfg = Object.fromEntries(quadro.map((l) => [l.configuracao, l.quantidade]));
     expect(porCfg).toEqual({ '2 folhas: de correr · de correr': 2, '3 folhas: fixa · de abrir · de correr + bandeira basculante': 1 });
-    expect(POLITICA_PADRAO.version).toBe('quant-1.28.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.29.0');
   });
 
   it('a descrição é vazia sem configuração', () => {

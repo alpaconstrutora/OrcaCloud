@@ -366,6 +366,7 @@ export function modeloDoPavimento(model: BlueprintModel, levelId: ObjectId): Blu
     vagas: doNivel(model.vagas),
     componentes: doNivel(model.componentes),
     guardaCorpos: doNivel(model.guardaCorpos),
+    muros: doNivel(model.muros),
     anotacoes: (model.anotacoes ?? []).filter((a) => a.vista.tipo !== 'PLANTA' || a.vista.levelId === levelId),
     trechos: doNivel(model.trechos),
     terminais: doNivel(model.terminais),

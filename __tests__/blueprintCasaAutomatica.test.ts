@@ -22,6 +22,7 @@ import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
 import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
 import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
 import { pontosElegiveis } from '../utils/blueprintCircuitosAutomaticos';
+import { HIPOTESES_DO_MURO_DA_CASA_PADRAO } from '../utils/blueprintMuroDaCasa';
 
 // Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
 // ~0,5–0,8 s nesta máquina, e a CI, disputando CPU com a suíte toda, chegou a passar dos 5 s do padrão
@@ -97,6 +98,7 @@ describe('planejarCasa — lote 12 × 30, frente ao sul', () => {
       ['DR_DPS', 'LANCOU'],
       ['ELETRODUTOS', 'LANCOU'],
       ['FORRO', 'LANCOU'],
+      ['MURO', 'LANCOU'],
       ['CONFERENCIA', 'CALCULOU'],
     ]);
     expect(plano.comandos.slice(0, 3).map((c) => c.type)).toEqual(['AddWalls', 'AddOpenings', 'PlaceSpaceLabels']);
@@ -1304,4 +1306,66 @@ describe('F25 — terreno inclinado: o platô único', () => {
     expect(p.resumo.terraplenagem).toBeNull();
     expect(p.resultado.levels[0].elevationMm).toBe(0);
   });
+
+  // F26 (decisão do usuário, 18/10/2026: "Automático: rampa, recuando a casa"): a garagem no platô e a rampa de veículos.
+  it('F26 — terreno de 10 %: a casa recua até a rampa da garagem caber; a rampa (veicular) sai da rua à garagem', () => {
+    const m = lote();
+    const p = planejarCasa(m, comTerreno(m), { pavimentos: 1 });
+    const t = p.resumo.terraplenagem!;
+    const rampa = p.resultado.stairs.filter((e) => e.veicular);
+    expect(rampa).toHaveLength(1);
+    expect(rampa[0]).toMatchObject({ tipo: 'RAMPA', rotulo: 'Rampa da garagem', levelId: p.levelId });
+    const med = medirEscada(p.resultado, rampa[0]);
+    expect(med.desnivelMm).toBe(t.elevacaoDoTerreoMm - rampa[0].desdeCotaMm!);
+    expect(med.inclinacaoPct).toBeLessThanOrEqual(20 + 1e-6);
+    expect(med.avisos).toEqual([]);
+    // A casa saiu do recuo de 3 m da zona: a rampa pede mais de 10 m da frente à fachada.
+    expect(p.implantacao!.retanguloLocal.y0).toBeGreaterThan(10000);
+    expect(p.decisoes.some((d) => /^Garagem: a rampa de veículos pede .* a casa recua/.test(d))).toBe(true);
+    expect(conflitosDoModelo(p.resultado).filter((c) => (c as { pecaId?: string }).pecaId === rampa[0].id)).toEqual([]);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  }, 240_000);
+
+  it('F26 — terreno de 25 % (mais íngreme que a rampa): a casa não recua à toa; nenhuma rampa, e a pendência diz', () => {
+    const m = lote();
+    const p = planejarCasa(m, comTerreno(m, 25), { pavimentos: 1 });
+    expect(p.implantacao!.retanguloLocal.y0).toBe(3000);
+    expect(p.resultado.stairs.filter((e) => e.veicular)).toEqual([]);
+    expect(p.pendencias.some((x) => x.grupo === 'VERIFICACAO' && /^Garagem: a rampa de veículos sobe .* entre o muro e a fachada/.test(x.texto))).toBe(true);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  }, 240_000);
+});
+
+/**
+ * F26 (decisões do usuário, 16/10/2026: "muro + portão + calçada"; 18/10/2026: "família nova no kernel"): o muro do lote,
+ * os portões e as calçadas — e o jardim, que é a permeabilidade desenhada.
+ */
+describe('F26 — muro, portões e calçadas', () => {
+  it('o muro na divisa, os dois portões, as calçadas e o jardim; a taxa de permeabilidade desenhada passa', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m), { pavimentos: 1 });
+    expect(p.etapas.find((e) => e.id === 'MURO')?.situacao).toBe('LANCOU');
+    const muros = p.resultado.muros ?? [];
+    expect(muros.map((x) => [x.rotulo, x.tipo])).toEqual([
+      ['Muro da frente', 'MURETA_COM_GRADE'],
+      ['Muro de divisa', 'ALVENARIA'],
+    ]);
+    expect(muros[0].portoes.map((g) => g.tipo).sort()).toEqual(['GARAGEM', 'PEDESTRE']);
+    const regioes = p.resultado.subRegioes ?? [];
+    expect(regioes.some((r) => r.nome === 'Acesso da garagem')).toBe(true);
+    expect(regioes.some((r) => r.nome === 'Calçada da entrada')).toBe(true);
+    expect(regioes.filter((r) => r.nome === 'Jardim').every((r) => r.material === 'GRAMA')).toBe(true);
+    expect(p.resumo.muro!.jardimM2).toBeGreaterThan(150);
+    // Sem o jardim, a permeabilidade desenhada seria só a das calçadas (zero) e a regra da zona acusaria em falso.
+    expect(p.pendencias.filter((x) => /Taxa de permeabilidade|permeabilidade cai/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+  }, 240_000);
+
+  it('desligado nas hipóteses: a etapa NAO_EXIGIDA, nenhum muro nem sub-região', () => {
+    const m = lote();
+    const p = planejarCasa(m, entrada(m), { pavimentos: 1, muro: { ...HIPOTESES_DO_MURO_DA_CASA_PADRAO, lancar: false } });
+    expect(p.etapas.find((e) => e.id === 'MURO')?.situacao).toBe('NAO_EXIGIDA');
+    expect(p.resultado.muros ?? []).toEqual([]);
+    expect(p.resultado.subRegioes ?? []).toEqual([]);
+  }, 240_000);
 });

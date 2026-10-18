@@ -668,6 +668,7 @@ import TelaGeradorDeMassa from './TelaGeradorDeMassa';
 import PainelMobiliario from './PainelMobiliario';
 import PainelAcabamentos, { type AmbienteComAcabamento } from './PainelAcabamentos';
 import PainelGuardaCorpoSelecionado from './PainelGuardaCorpoSelecionado';
+import PainelMuroSelecionado from './PainelMuroSelecionado';
 import PainelAnotacaoSelecionada from './PainelAnotacaoSelecionada';
 import MenuVista from './MenuVista';
 import { coresDaVista, type ModoDeCor } from '../../utils/blueprintPaletas';
@@ -4585,6 +4586,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const blocoSel = (editor.model.blocos ?? []).find((b) => b.id === editor.selectedId) ?? null;
   const componenteSel = (editor.model.componentes ?? []).find((c) => c.id === editor.selectedId) ?? null;
   const guardaCorpoSel = (editor.model.guardaCorpos ?? []).find((g) => g.id === editor.selectedId) ?? null;
+  const muroSel = (editor.model.muros ?? []).find((m) => m.id === editor.selectedId) ?? null;
   const anotacaoSel = (editor.model.anotacoes ?? []).find((a) => a.id === editor.selectedId) ?? null;
   /** F12: a câmera selecionada e a câmera que o 3D está usando como ponto de vista (`null` = órbita livre). */
   const cameraSel = (editor.model.cameras ?? []).find((c) => c.id === editor.selectedId) ?? null;
@@ -7375,6 +7377,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const criados = editor.run({ type: 'AddGuardaCorpo', levelId, tipo: tipoDeGuardaCorpo, pontos });
     if (criados.length > 0) selecionar(criados);
   }
+  /** MURO (0.104.0): um trecho reto de alvenaria (o padrão); tipo, altura e portões no painel. */
+  function adicionarMuro(a: Point, b: Point) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddMuro', levelId, pontos: [a, b] });
+    if (criados.length > 0) selecionar(criados);
+  }
   /** O componente nasce com as medidas do catálogo, de pé; o painel gira e ajusta. */
   function adicionarComponente(at: Point, tipo: TipoDeComponente = tipoDeComponente) {
     if (!levelId) return;
@@ -8253,6 +8261,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const camerasSel = ids.filter((id) => (editor.model.cameras ?? []).some((c) => c.id === id));
     const componentesSel = ids.filter((id) => (editor.model.componentes ?? []).some((c) => c.id === id));
     const guardaCorposSel = ids.filter((id) => (editor.model.guardaCorpos ?? []).some((g) => g.id === id));
+    const murosSel = ids.filter((id) => (editor.model.muros ?? []).some((m) => m.id === id));
     const rodapesSel = ids.filter((id) => (editor.model.rodapes ?? []).some((r) => r.id === id));
     const anotacoesSel = ids.filter((id) => (editor.model.anotacoes ?? []).some((a) => a.id === id));
     // Instalações. ⚠️ O QUADRO sai por último no lote e leva os circuitos dele
@@ -8285,6 +8294,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       ...camerasSel.map((cameraId) => ({ type: 'DeleteCamera', cameraId }) as const),
       ...componentesSel.map((componenteId) => ({ type: 'DeleteComponente', componenteId }) as const),
       ...guardaCorposSel.map((guardaCorpoId) => ({ type: 'DeleteGuardaCorpo', guardaCorpoId }) as const),
+      ...murosSel.map((muroId) => ({ type: 'DeleteMuro', muroId }) as const),
       ...rodapesSel.map((rodapeId) => ({ type: 'DeleteRodape', rodapeId }) as const),
       ...anotacoesSel.map((anotacaoId) => ({ type: 'DeleteAnotacao', anotacaoId }) as const),
       ...trechos.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as const),
@@ -10706,6 +10716,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         onProps={(campos) => guardaCorpoSel && editor.run({ type: 'SetGuardaCorpoProps', guardaCorpoId: guardaCorpoSel.id, ...campos })}
         onExcluir={removerSelecionada}
         materiais={biblioteca.materiais}
+      />
+
+      <PainelMuroSelecionado
+        model={editor.model}
+        muro={muroSel}
+        onProps={(campos) => muroSel && editor.run({ type: 'SetMuroProps', muroId: muroSel.id, ...campos })}
+        onExcluir={removerSelecionada}
       />
 
       <PainelEixoSelecionado
@@ -15943,6 +15960,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   onAddComponente={adicionarComponente}
                   tipoDeGuardaCorpo={tipoDeGuardaCorpo}
                   onAddGuardaCorpo={adicionarGuardaCorpo}
+                  onAddMuro={adicionarMuro}
                   onAddParedeCurva={adicionarParedeCurva}
                   onAddCoberturaExtrusao={adicionarCoberturaExtrusao}
                   vaoDaExtrusaoMm={perfilDaExtrusao.vaoMm}

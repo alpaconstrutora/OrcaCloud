@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.103.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.104.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -364,6 +364,8 @@ var PREFIXO_ROTULO_UID = {
   componente: "M",
   /** Guarda-corpo e corrimão — B de balaustrada (G já é o grupo). */
   guardaCorpo: "B",
+  /** Muro (0.104.0) — MU: as 26 letras já têm dono, e "M" sozinho é o componente. */
+  muro: "MU",
   /** Anotação — A. */
   anotacao: "A",
   /** Vista dependente — D (recorte nomeado de planta). */
@@ -615,6 +617,11 @@ var CONJUNTOS_DE_COMPONENTES = {
   ]
 };
 var ehConjunto = (tipoId) => CONJUNTOS_DE_COMPONENTES[tipoId] !== void 0;
+function comprimentoDoMuro(m) {
+  let s2 = 0;
+  for (let i = 1; i < m.pontos.length; i++) s2 += Math.hypot(m.pontos[i].x - m.pontos[i - 1].x, m.pontos[i].y - m.pontos[i - 1].y);
+  return s2;
+}
 function comprimentoDoGuardaCorpo(g) {
   let s2 = 0;
   for (let i = 1; i < g.pontos.length; i++) s2 += Math.hypot(g.pontos[i].x - g.pontos[i - 1].x, g.pontos[i].y - g.pontos[i - 1].y);
@@ -899,6 +906,7 @@ function emptyModel() {
     areasDeOperacao: [],
     blocos: [],
     cameras: [],
+    muros: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -979,6 +987,62 @@ function extensaoDeCanto(walls, wall, end) {
   const tg = Math.tan(Math.acos(cos) / 2);
   if (!Number.isFinite(tg) || tg <= 1e-9) return meia * AVANCO_MAX;
   return Math.min(meia / tg, meia * AVANCO_MAX);
+}
+
+// utils/blueprintKernel/muro.ts
+function pisoDoMuro(model, muro) {
+  return model.levels.find((l) => l.id === muro.levelId)?.elevationMm ?? 0;
+}
+function acumulados(muro) {
+  const s2 = [0];
+  for (let i = 1; i < muro.pontos.length; i++) s2.push(s2[i - 1] + Math.hypot(muro.pontos[i].x - muro.pontos[i - 1].x, muro.pontos[i].y - muro.pontos[i - 1].y));
+  return s2;
+}
+function noPercursoDoMuro(model, muro, d) {
+  const s2 = acumulados(muro);
+  const piso = pisoDoMuro(model, muro);
+  const base = (i2) => muro.cotasDaBaseMm?.[i2] ?? piso;
+  const L = s2[s2.length - 1];
+  const t = Math.max(0, Math.min(L, d));
+  let i = 1;
+  while (i < s2.length - 1 && s2[i] < t) i++;
+  const seg = s2[i] - s2[i - 1] || 1;
+  const f = (t - s2[i - 1]) / seg;
+  const a = muro.pontos[i - 1];
+  const b = muro.pontos[i];
+  return { p: { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f }, baseMm: base(i - 1) + (base(i) - base(i - 1)) * f };
+}
+function pedacos(model, muro, d0, d1) {
+  if (d1 - d0 < 1e-6) return [];
+  const s2 = acumulados(muro);
+  const cortes = [d0, ...s2.filter((x) => x > d0 + 1e-6 && x < d1 - 1e-6), d1];
+  const saida = [];
+  for (let k = 1; k < cortes.length; k++) {
+    const A = noPercursoDoMuro(model, muro, cortes[k - 1]);
+    const B = noPercursoDoMuro(model, muro, cortes[k]);
+    saida.push({ a: A.p, b: B.p, baseAMm: A.baseMm, baseBMm: B.baseMm, comprimentoMm: cortes[k] - cortes[k - 1] });
+  }
+  return saida;
+}
+function trechosDoMuro(model, muro) {
+  const L = comprimentoDoMuro(muro);
+  const saida = [];
+  let d = 0;
+  for (const g of muro.portoes) {
+    saida.push(...pedacos(model, muro, d, Math.min(L, g.offsetMm)));
+    d = Math.max(d, g.offsetMm + g.larguraMm);
+  }
+  saida.push(...pedacos(model, muro, d, L));
+  return saida;
+}
+function areasDoMuro(model, muro) {
+  const cheio = trechosDoMuro(model, muro).reduce((s2, t) => s2 + t.comprimentoMm, 0) / 1e3;
+  const h = muro.alturaMm / 1e3;
+  const mureta = (muro.alturaDaMuretaMm ?? 0) / 1e3;
+  const r = (v) => Math.round(v * 100) / 100;
+  if (muro.tipo === "ALVENARIA") return { alvenariaM2: r(cheio * h), gradeM2: 0, comprimentoCheioM: r(cheio) };
+  if (muro.tipo === "GRADE") return { alvenariaM2: 0, gradeM2: r(cheio * h), comprimentoCheioM: r(cheio) };
+  return { alvenariaM2: r(cheio * mureta), gradeM2: r(cheio * (h - mureta)), comprimentoCheioM: r(cheio) };
 }
 
 // utils/blueprintKernel/exterior.ts
@@ -1259,7 +1323,7 @@ function medirEscada(model, escada) {
   const comprimentoInclinadoMm = Math.hypot(comprimentoMm2, desnivelMm);
   const avisos = [];
   if (escada.tipo === "RAMPA") {
-    if (inclinacaoPct > RAMPA_INCLINACAO_MAX_PCT) {
+    if (!escada.veicular && inclinacaoPct > RAMPA_INCLINACAO_MAX_PCT) {
       avisos.push(
         `Inclina\xE7\xE3o de ${inclinacaoPct.toFixed(1).replace(".", ",")}% passa dos ${String(RAMPA_INCLINACAO_MAX_PCT).replace(".", ",")}% que a NBR 9050 admite \u2014 alongue a rampa ou acrescente patamar.`
       );
@@ -2090,7 +2154,9 @@ function projetar(model) {
       // INCÊNDIO (0.84.0): a proteção, só quando declarada.
       protecao: e.protecao,
       // ESCADA DE ACESSO (0.103.0): a cota da calçada, só na escada de acesso (ausente não muda o hash de antes).
-      desdeCotaMm: e.desdeCotaMm
+      desdeCotaMm: e.desdeCotaMm,
+      // RAMPA DE VEÍCULOS (0.104.0): só quando marcada.
+      veicular: e.veicular ? true : void 0
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y
   );
@@ -2291,6 +2357,22 @@ function projetar(model) {
       nome: c.nome
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.posicao.x - y.posicao.x || x.posicao.y - y.posicao.y || x.alvo.x - y.alvo.x || x.alvo.y - y.alvo.y || cmpStr(x.nome, y.nome)
+  );
+  const muros = ordenar(
+    model.muros ?? [],
+    (m) => ({
+      level: nivel(m.levelId),
+      tipo: m.tipo,
+      pontos: m.pontos.map((p) => ({ x: p.x, y: p.y })),
+      alturaMm: m.alturaMm,
+      espessuraMm: m.espessuraMm,
+      alturaDaMuretaMm: m.alturaDaMuretaMm,
+      cotasDaBaseMm: m.cotasDaBaseMm ? [...m.cotasDaBaseMm] : void 0,
+      portoes: m.portoes.map((g) => ({ tipo: g.tipo, offsetMm: g.offsetMm, larguraMm: g.larguraMm })),
+      rotulo: m.rotulo ?? null,
+      parametros: parametrosCanonicos(m.parametros)
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo)
   );
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
@@ -2666,6 +2748,7 @@ function projetar(model) {
     areasDeOperacao: areasDeOperacao.length ? areasDeOperacao.map((a) => a.geom) : void 0,
     blocos: blocos.length ? blocos.map((b) => b.geom) : void 0,
     cameras: cameras.length ? cameras.map((c) => c.geom) : void 0,
+    muros: muros.length ? muros.map((m) => m.geom) : void 0,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : void 0,
     trechos: trechos.length ? trechos.map((t) => t.geom) : void 0,
     terminais: terminais.length ? terminais.map((t) => t.geom) : void 0,
@@ -2706,6 +2789,7 @@ function projetar(model) {
     ...areasDeOperacao.length ? { areasDeOperacao: areasDeOperacao.map((a) => a.item.uid ?? null) } : {},
     ...blocos.length ? { blocos: blocos.map((b) => b.item.uid ?? null) } : {},
     ...cameras.length ? { cameras: cameras.map((c) => c.item.uid ?? null) } : {},
+    ...muros.length ? { muros: muros.map((m) => m.item.uid ?? null) } : {},
     rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -2952,7 +3036,8 @@ function modelFromCanonicalPayload(payload) {
       ...e.parametros && Object.keys(e.parametros).length > 0 ? { parametros: { ...e.parametros } } : {},
       ...e.ate !== void 0 && levelIds[e.ate] ? { ateLevelId: levelIds[e.ate] } : {},
       ...e.protecao ? { protecao: e.protecao } : {},
-      ...typeof e.desdeCotaMm === "number" ? { desdeCotaMm: e.desdeCotaMm } : {}
+      ...typeof e.desdeCotaMm === "number" ? { desdeCotaMm: e.desdeCotaMm } : {},
+      ...e.veicular === true && e.tipo === "RAMPA" ? { veicular: true } : {}
     });
   });
   const vagas = payload.vagas ?? [];
@@ -3142,6 +3227,24 @@ function modelFromCanonicalPayload(payload) {
       alturaOlhoMm: c.alturaOlhoMm,
       focalMm: c.focalMm,
       nome: c.nome
+    });
+  });
+  const murosPayload = payload.muros ?? [];
+  murosPayload.forEach((m, i) => {
+    if (!levelIds[m.level]) return;
+    (model.muros ??= []).push({
+      id: nextId(model, "mur"),
+      uid: uidDe("muros", i, murosPayload.length),
+      levelId: levelIds[m.level],
+      tipo: m.tipo,
+      pontos: m.pontos.map((p) => ({ x: p.x, y: p.y })),
+      alturaMm: m.alturaMm,
+      espessuraMm: m.espessuraMm,
+      ...typeof m.alturaDaMuretaMm === "number" ? { alturaDaMuretaMm: m.alturaDaMuretaMm } : {},
+      ...Array.isArray(m.cotasDaBaseMm) ? { cotasDaBaseMm: [...m.cotasDaBaseMm] } : {},
+      portoes: (m.portoes ?? []).map((g) => ({ tipo: g.tipo, offsetMm: g.offsetMm, larguraMm: g.larguraMm })),
+      rotulo: m.rotulo ?? null,
+      ...m.parametros && Object.keys(m.parametros).length > 0 ? { parametros: { ...m.parametros } } : {}
     });
   });
   const vistasDependentes = payload.vistasDependentes ?? [];
@@ -4141,7 +4244,10 @@ var POLITICA_PADRAO = {
   // fixa · de abrir · de correr + bandeira basculante"), e duas janelas de mesma
   // medida com folhas diferentes viram DUAS linhas (a configuração entra na
   // assinatura). Esquadria sem folhas declaradas: linha e chave de antes.
-  version: "quant-1.28.0",
+  // quant-1.29.0 (18/10/2026, F26 da casa automática, kernel 0.104.0): os MUROS — `muros` (um por muro: comprimento,
+  // alvenaria e grade em m² de face nos trechos cheios, portões por tipo) e os totais `comprimentoMuroM`,
+  // `areaMuroAlvenariaM2`, `areaMuroGradeM2`, `portoesDePedestre`, `portoesDeGaragem`. Desenho sem muro: tudo zero.
+  version: "quant-1.29.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -4785,6 +4891,25 @@ ${c.funcao}`;
       sugerido: !!g.sugerido
     };
   });
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const muros = (model.muros ?? []).map((m) => {
+    const a = areasDoMuro(model, m);
+    return {
+      muroId: m.id,
+      uid: m.uid,
+      tipo: m.tipo,
+      rotulo: m.rotulo ?? null,
+      comprimentoM: r2(comprimentoDoMuro(m) / 1e3),
+      comprimentoCheioM: a.comprimentoCheioM,
+      alturaM: m.alturaMm / 1e3,
+      areaAlvenariaM2: a.alvenariaM2,
+      areaGradeM2: a.gradeM2,
+      portoesDePedestre: m.portoes.filter((g) => g.tipo === "PEDESTRE").length,
+      portoesDeGaragem: m.portoes.filter((g) => g.tipo === "GARAGEM").length,
+      larguraDosPortoesM: r2(m.portoes.reduce((s2, g) => s2 + g.larguraMm, 0) / 1e3),
+      portoes: m.portoes.map((g) => ({ tipo: g.tipo, larguraM: g.larguraMm / 1e3 }))
+    };
+  });
   const rodapes = (model.rodapes ?? []).map((r) => {
     let compMm = 0;
     for (let i = 1; i < r.pontos.length; i++) compMm += Math.hypot(r.pontos[i].x - r.pontos[i - 1].x, r.pontos[i].y - r.pontos[i - 1].y);
@@ -4884,6 +5009,7 @@ ${c.funcao}`;
     telhados,
     escadas,
     guardaCorpos,
+    muros,
     rodapes,
     trechos,
     sobreposicoes,
@@ -4911,6 +5037,11 @@ ${c.funcao}`;
       comprimentoGuardaCorpoM: guardaCorpos.filter((g) => g.tipo === "GUARDA_CORPO").reduce((s2, g) => s2 + g.comprimentoM, 0),
       comprimentoCorrimaoM: guardaCorpos.filter((g) => g.tipo === "CORRIMAO").reduce((s2, g) => s2 + g.comprimentoM, 0),
       porGuardaCorpo,
+      comprimentoMuroM: r2(muros.reduce((s2, m) => s2 + m.comprimentoM, 0)),
+      areaMuroAlvenariaM2: r2(muros.reduce((s2, m) => s2 + m.areaAlvenariaM2, 0)),
+      areaMuroGradeM2: r2(muros.reduce((s2, m) => s2 + m.areaGradeM2, 0)),
+      portoesDePedestre: muros.reduce((s2, m) => s2 + m.portoesDePedestre, 0),
+      portoesDeGaragem: muros.reduce((s2, m) => s2 + m.portoesDeGaragem, 0),
       // P2.21: os trechos mandam quando existem; senão, o derivado de sempre.
       comprimentoRodapeM: rodapes.length > 0 ? rodapes.reduce((s2, r) => s2 + r.comprimentoM, 0) : ambientes.reduce((s2, a) => s2 + a.comprimentoRodapeM, 0),
       origemDoRodape: rodapes.length > 0 ? "TRECHOS" : "DERIVADO",
@@ -5826,6 +5957,7 @@ var COBERTURA_IFC = [
   "PAR\xC2METROS PERSONALIZADOS: a pe\xE7a que os carrega ganha Pset_OpuraPersonalizado com a chave de programa como nome da propriedade (n\xFAmero \u2192 IfcReal, sim/n\xE3o \u2192 IfcBoolean, texto \u2192 IfcLabel). O nome leg\xEDvel e a unidade s\xE3o da defini\xE7\xE3o na organiza\xE7\xE3o e N\xC3O viajam.",
   'APROVA\xC7\xC3O: quando a revis\xE3o foi aprovada no sistema, Pset_OpuraPlanta traz ApprovalStatus, ApprovedBy e ApprovedAt em cada elemento, ao lado do SnapshotHash \u2014 \xE9 o par (o que foi aprovado, quem aprovou) que vale. Revis\xE3o que n\xE3o passou por aprova\xE7\xE3o N\xC3O menciona o assunto: dizer "n\xE3o aprovado" afirmaria que algu\xE9m olhou e recusou.',
   "CONT\xC9M instala\xE7\xF5es: cada trecho sai na classe da sua rede (28/09/2026) \u2014 IfcPipeSegment .RIGIDSEGMENT. em \xE1gua fria, \xE1gua quente e esgoto, IfcCableCarrierSegment .CONDUITSEGMENT. no eletroduto e IfcDuctSegment .RIGIDSEGMENT. no duto \u2014, um cilindro na bitola declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (\xE9 o que distingue a prumada do trecho horizontal e o esgoto com caimento do sem) \u2014 e cada ponto como IfcFlowTerminal \u2014 e o ponto EL\xC9TRICO CLASSIFICADO sai na entidade que lhe cabe: IfcLightFixture para ilumina\xE7\xE3o (.USERDEFINED. com o ObjectType dizendo se \xE9 teto, arandela ou piso, porque o enum da norma fala de fotometria e o desenho n\xE3o a sabe) e IfcOutlet para tomadas e dados (.POWEROUTLET. para TUG e TUE, .TELEPHONEOUTLET., .AUDIOVISUALOUTLET. e .DATAOUTLET. para telefone, TV e rede). TUG e TUE s\xE3o distin\xE7\xE3o da NBR 5410 e N\xC3O do enum: a diferen\xE7a vive no ObjectType. Ponto sem classifica\xE7\xE3o, e ponto de outra disciplina, seguem como IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (el\xE9trica, \xE1gua fria, \xE1gua quente, esgoto, pluvial, inc\xEAndio, mec\xE2nica, linha frigor\xEDgena, dreno do ar-condicionado) agrupa a rede, e ele atravessa pavimentos: a coluna que desce tr\xEAs andares \xE9 UMA rede. As CONEX\xD5ES DERIVADAS dos encontros de trechos (joelho, t\xEA, jun\xE7\xE3o 45\xB0, cruzeta, luva, redu\xE7\xE3o \u2014 as mesmas do quantitativo) saem como IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca \u2014 no DUTO, IfcDuctFitting com a bolsa retangular do duto retangular; na linha frigor\xEDgena a curva N\xC3O sai (o cobre \xE9 curvado, n\xE3o leva joelho) \u2014, no pavimento do trecho e no sistema da rede; a conex\xE3o lan\xE7ada \xE0 m\xE3o continua saindo pelo ponto que a representa, e n\xE3o em dobro. Pset_OpuraInstalacao traz as duas cotas e, no esgoto, a declividade. O comprimento em Qto_PipeSegmentBaseQuantities (Qto_CableCarrierSegment\u2026/Qto_DuctSegment\u2026 nas outras redes) \xE9 o REAL do caminho em L: o eletroduto com desn\xEDvel SOBE pela parede e CORRE pela laje (um segmento com dois s\xF3lidos), e o comprimento \xE9 planta + prumada \u2014 nunca a diagonal, que eletroduto embutido n\xE3o faz. A prumada mede a altura que vence, n\xE3o zero. As MEDIDAS de quadro e de terminal s\xE3o as DECLARADAS no desenho. A pe\xE7a que ningu\xE9m mediu sai no padr\xE3o \u2014 quadro 400 \xD7 300 \xD7 200 mm, terminal 100 mm c\xFAbicos \u2014 e ali a caixa \xE9 MARCA DE LUGAR, n\xE3o forma: o desenho sabe onde a pe\xE7a est\xE1 e n\xE3o sabe o modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam por unidade. A COTA \xE9 o CENTRO da pe\xE7a, n\xE3o a base, e o quadro N\xC3O tem rota\xE7\xE3o \u2014 a caixa \xE9 girada pelo \xE2ngulo declarado (IfcAxis2Placement3D.RefDirection); sem giro declarado ela sai alinhada aos eixos e o arquivo N\xC3O menciona dire\xE7\xE3o nenhuma. CONT\xC9M o QUADRO de distribui\xE7\xE3o, tamb\xE9m como marca de lugar: no esquema IFC4 (o padr\xE3o) sai IfcFlowController \u2014 IfcDistributionBoard, o exato, n\xE3o existe no IFC4 e os leitores n\xE3o o leem \u2014; exportado em IFC4X3 (IFC 4.3 ADD2), sai IfcDistributionBoard (.DISTRIBUTIONBOARD., QGBT .SWITCHBOARD.). E os CIRCUITOS (IfcDistributionCircuit), com o quadro, os pontos e os ELETRODUTOS de cada circuito agrupados nele \u2014 \xE9 o que liga o disjuntor ao que ele protege \u2014, e os CABOS: um IfcCableSegment .CONDUCTORSEGMENT. por tipo (fase, neutro, retorno, terra) e se\xE7\xE3o de condutor do circuito, SEM geometria (o cabo corre dentro do eletroduto), com o comprimento total em Qto_CableSegmentBaseQuantities \u2014 o mesmo do quantitativo. Pset_OpuraEletrica separa pelo SUFIXO: _Declarado/_Declarada \xE9 o que o projetista escolheu (tens\xE3o, liga\xE7\xE3o, fase, disjuntor, curva, se\xE7\xE3o, DPS, Icn); _Calculada \xE9 conta do pr\xE9-dimensionamento com as hip\xF3teses do estudo (IB, demanda do quadro); _Derivados \xE9 o que o motor de fia\xE7\xE3o deriva (a composi\xE7\xE3o dos condutores). Nenhum deles sai em Pset normativo. Pset_ElectricalDeviceCommon (normativo) s\xF3 leva FATO: RatedVoltage = a tens\xE3o declarada do circuito, e HasProtectiveEarth nas tomadas de uso geral e espec\xEDfico. N\xC3O CONT\xC9M registro, nem dimensionamento hidr\xE1ulico: bitola e cota das redes de \xE1gua e esgoto s\xE3o o que algu\xE9m desenhou, e n\xE3o resultado de c\xE1lculo de perda de carga.",
+  "CONT\xC9M os muros (kernel 0.104.0): a alvenaria (o muro inteiro, ou a mureta no misto) como IfcWall e a grade como IfcRailing .BALUSTRADE., um s\xF3lido por trecho CHEIO (os port\xF5es s\xE3o v\xE3os), na espessura e na altura declaradas, a base na m\xE9dia do terreno das duas pontas do trecho; Qto_WallBaseQuantities.Length/NetSideArea e Pset_OpuraMuro (tipo, altura, mureta, port\xF5es). O port\xE3o n\xE3o \xE9 pe\xE7a no arquivo: \xE9 o v\xE3o.",
   "CONT\xC9M guarda-corpos e corrim\xE3os (IfcRailing .GUARDRAIL. / .HANDRAIL.): um s\xF3lido por trecho da polilinha \u2014 50 mm de espessura, na altura declarada, apoiado no piso do pavimento \u2014, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura \xE9 MARCA DE LUGAR, n\xE3o perfil: o desenho sabe onde a prote\xE7\xE3o est\xE1 e quanto mede, n\xE3o o desenho do gradil.",
   // ⚠️ E9.3 (01/10/2026): esta linha dizia "NÃO CONTÉM os preventivos" desde a E1 — falsa desde a
   // E7, que passou a emitir extintor, placa, luminária, detecção e alarme (achado 5 do roadmap).
@@ -6269,6 +6401,26 @@ function gerarIfc(model, o) {
         ["Sugerido", { tipo: "IFCBOOLEAN", v: !!g.sugerido }]
       ]);
       if (g.itemCode) produtosPorCodigo.set(g.itemCode, [...produtosPorCodigo.get(g.itemCode) ?? [], produto]);
+    }
+    for (const m of (model.muros ?? []).filter((x) => x.levelId === nivel.id)) {
+      const areas = areasDoMuro(model, m);
+      for (const { produto, parte, uid } of emitirMuro(model, m, nivel.elevationMm, ctx, localNivel)) {
+        produtos.push(produto);
+        psetOpura(produto, uid, rotuloCurto(m.uid, "muro"));
+        emitirQto(ctx, produto, uid, parte === "ALVENARIA" ? "Qto_WallBaseQuantities" : "Qto_RailingBaseQuantities", [
+          { classe: "IFCQUANTITYLENGTH", nome: "Length", valor: areas.comprimentoCheioM * 1e3, formula: "\u03A3 trechos cheios do percurso (sem os port\xF5es)" },
+          ...parte === "ALVENARIA" ? [{ classe: "IFCQUANTITYAREA", nome: "NetSideArea", valor: areas.alvenariaM2, formula: "\u03A3 trechos cheios \xD7 altura da alvenaria" }] : []
+        ]);
+        emitirPset(ctx, produto, uid, "Pset_OpuraMuro", [
+          ["Tipo", { tipo: "IFCLABEL", v: m.tipo }],
+          ["AlturaMm", { tipo: "IFCREAL", v: m.alturaMm }],
+          ["EspessuraMm", { tipo: "IFCREAL", v: m.espessuraMm }],
+          ["AlturaDaMuretaMm", { tipo: "IFCREAL", v: m.alturaDaMuretaMm ?? 0 }],
+          ["ComprimentoMm", { tipo: "IFCREAL", v: Math.round(comprimentoDoMuro(m)) }],
+          ["PortoesDePedestre", { tipo: "IFCINTEGER", v: m.portoes.filter((g) => g.tipo === "PEDESTRE").length }],
+          ["PortoesDeGaragem", { tipo: "IFCINTEGER", v: m.portoes.filter((g) => g.tipo === "GARAGEM").length }]
+        ]);
+      }
     }
     for (const t of (model.terminais ?? []).filter((x) => x.levelId === nivel.id)) {
       const produto = emitirTerminal(t, ctx, localNivel);
@@ -7275,6 +7427,37 @@ function emitirGuardaCorpo(g, ctx, localNivel) {
   const nome = g.rotulo || (g.tipo === "CORRIMAO" ? "Corrim\xE3o" : "Guarda-corpo");
   const predefinido = g.tipo === "CORRIMAO" ? ".HANDRAIL." : ".GUARDRAIL.";
   return emitir(`IFCRAILING(${guidDe(g.uid, `guarda-corpo-${g.id}`)},${historico},${s(nome)},$,${s(g.material)},${local},${produtoForma},${s(rotuloCurto(g.uid, "guardaCorpo"))},${predefinido})`);
+}
+function emitirMuro(model, m, pisoMm, ctx, localNivel) {
+  const { emitir, guidDe, historico } = ctx;
+  const trechos = trechosDoMuro(model, m).filter((t) => t.comprimentoMm >= 1);
+  const solidosDe = (z0, altura) => trechos.map((t) => {
+    const graus = Math.round(Math.atan2(t.b.y - t.a.y, t.b.x - t.a.x) * 180 / Math.PI * 1e6) / 1e6;
+    const centro = emitir(`IFCCARTESIANPOINT((${n((t.a.x + t.b.x) / 2)},${n((t.a.y + t.b.y) / 2)},${n(z0(t))}))`);
+    const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${emitir("IFCCARTESIANPOINT((0.,0.))")},$)`);
+    const perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.comprimentoMm)},${n(m.espessuraMm)})`);
+    const posicao = emitir(`IFCAXIS2PLACEMENT3D(${centro},$,${direcaoDaPeca(graus, ctx)})`);
+    return emitir(`IFCEXTRUDEDAREASOLID(${perfil},${posicao},${ctx.dirZ},${n(altura)})`);
+  });
+  const base = (t) => (t.baseAMm + t.baseBMm) / 2 - pisoMm;
+  const produto = (solidos, entidade, uid, nome2) => {
+    const origem = emitir("IFCCARTESIANPOINT((0.,0.,0.))");
+    const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`);
+    const forma = emitir(`IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solidos.join(",")}))`);
+    const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+    const predefinido = entidade === "IFCWALL" ? ".SOLIDWALL." : ".BALUSTRADE.";
+    return emitir(`${entidade}(${guidDe(uid, `muro-${m.id}-${entidade}`)},${historico},${s(nome2)},$,${s(m.tipo)},${local},${produtoForma},${s(rotuloCurto(m.uid, "muro"))},${predefinido})`);
+  };
+  if (!trechos.length) return [];
+  const nome = m.rotulo || "Muro";
+  if (m.tipo === "ALVENARIA") return [{ produto: produto(solidosDe(base, m.alturaMm), "IFCWALL", m.uid, nome), parte: "ALVENARIA", uid: m.uid }];
+  if (m.tipo === "GRADE") return [{ produto: produto(solidosDe(base, m.alturaMm), "IFCRAILING", m.uid, nome), parte: "GRADE", uid: m.uid }];
+  const mureta = m.alturaDaMuretaMm ?? 0;
+  const uidDaGrade = uidDeterministico(`${m.uid}:grade`);
+  return [
+    { produto: produto(solidosDe(base, mureta), "IFCWALL", m.uid, `${nome} - mureta`), parte: "ALVENARIA", uid: m.uid },
+    { produto: produto(solidosDe((t) => base(t) + mureta, m.alturaMm - mureta), "IFCRAILING", uidDaGrade, `${nome} - grade`), parte: "GRADE", uid: uidDaGrade }
+  ];
 }
 function emitirComponente(c, ctx, localNivel) {
   const { emitir, guidDe, historico } = ctx;

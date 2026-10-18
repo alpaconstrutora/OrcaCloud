@@ -60,6 +60,10 @@ import {
   type Componente,
   type GuardaCorpo,
   comprimentoDoGuardaCorpo,
+  type Muro,
+  comprimentoDoMuro,
+  trechosDoMuro,
+  areasDoMuro,
   FORMA_ESTRUTURAL,
   KERNEL_VERSION,
   POLITICA_PADRAO,
@@ -189,6 +193,7 @@ export const COBERTURA_IFC = [
     'nas tomadas de uso geral e específico. NÃO CONTÉM registro, nem dimensionamento ' +
     'hidráulico: bitola e cota das redes de água e esgoto são o que alguém desenhou, e ' +
     'não resultado de cálculo de perda de carga.',
+  'CONTÉM os muros (kernel 0.104.0): a alvenaria (o muro inteiro, ou a mureta no misto) como IfcWall e a grade como IfcRailing .BALUSTRADE., um sólido por trecho CHEIO (os portões são vãos), na espessura e na altura declaradas, a base na média do terreno das duas pontas do trecho; Qto_WallBaseQuantities.Length/NetSideArea e Pset_OpuraMuro (tipo, altura, mureta, portões). O portão não é peça no arquivo: é o vão.',
   'CONTÉM guarda-corpos e corrimãos (IfcRailing .GUARDRAIL. / .HANDRAIL.): um sólido por trecho da polilinha — 50 mm de espessura, na altura declarada, apoiado no piso do pavimento —, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura é MARCA DE LUGAR, não perfil: o desenho sabe onde a proteção está e quanto mede, não o desenho do gradil.',
   // ⚠️ E9.3 (01/10/2026): esta linha dizia "NÃO CONTÉM os preventivos" desde a E1 — falsa desde a
   // E7, que passou a emitir extintor, placa, luminária, detecção e alarme (achado 5 do roadmap).
@@ -1084,6 +1089,26 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
         ['Sugerido', { tipo: 'IFCBOOLEAN', v: !!g.sugerido }],
       ]);
       if (g.itemCode) produtosPorCodigo.set(g.itemCode, [...(produtosPorCodigo.get(g.itemCode) ?? []), produto]);
+    }
+    for (const m of (model.muros ?? []).filter((x) => x.levelId === nivel.id)) {
+      const areas = areasDoMuro(model, m);
+      for (const { produto, parte, uid } of emitirMuro(model, m, nivel.elevationMm, ctx, localNivel)) {
+        produtos.push(produto);
+        psetOpura(produto, uid, rotuloCurto(m.uid, 'muro'));
+        emitirQto(ctx, produto, uid, parte === 'ALVENARIA' ? 'Qto_WallBaseQuantities' : 'Qto_RailingBaseQuantities', [
+          { classe: 'IFCQUANTITYLENGTH', nome: 'Length', valor: areas.comprimentoCheioM * 1000, formula: 'Σ trechos cheios do percurso (sem os portões)' },
+          ...(parte === 'ALVENARIA' ? [{ classe: 'IFCQUANTITYAREA' as const, nome: 'NetSideArea', valor: areas.alvenariaM2, formula: 'Σ trechos cheios × altura da alvenaria' }] : []),
+        ]);
+        emitirPset(ctx, produto, uid, 'Pset_OpuraMuro', [
+          ['Tipo', { tipo: 'IFCLABEL', v: m.tipo }],
+          ['AlturaMm', { tipo: 'IFCREAL', v: m.alturaMm }],
+          ['EspessuraMm', { tipo: 'IFCREAL', v: m.espessuraMm }],
+          ['AlturaDaMuretaMm', { tipo: 'IFCREAL', v: m.alturaDaMuretaMm ?? 0 }],
+          ['ComprimentoMm', { tipo: 'IFCREAL', v: Math.round(comprimentoDoMuro(m)) }],
+          ['PortoesDePedestre', { tipo: 'IFCINTEGER', v: m.portoes.filter((g) => g.tipo === 'PEDESTRE').length }],
+          ['PortoesDeGaragem', { tipo: 'IFCINTEGER', v: m.portoes.filter((g) => g.tipo === 'GARAGEM').length }],
+        ]);
+      }
     }
     for (const t of (model.terminais ?? []).filter((x) => x.levelId === nivel.id)) {
       const produto = emitirTerminal(t, ctx, localNivel);
@@ -2775,6 +2800,45 @@ function emitirGuardaCorpo(g: GuardaCorpo, ctx: Ctx, localNivel: string): string
   const nome = g.rotulo || (g.tipo === 'CORRIMAO' ? 'Corrimão' : 'Guarda-corpo');
   const predefinido = g.tipo === 'CORRIMAO' ? '.HANDRAIL.' : '.GUARDRAIL.';
   return emitir(`IFCRAILING(${guidDe(g.uid, `guarda-corpo-${g.id}`)},${historico},${s(nome)},$,${s(g.material)},${local},${produtoForma},${s(rotuloCurto(g.uid, 'guardaCorpo'))},${predefinido})`);
+}
+
+/**
+ * MURO (0.104.0): a alvenaria (o muro, ou a mureta) como IfcWall e a grade como IfcRailing — um sólido por trecho
+ * cheio, na média do terreno das duas pontas (relativa ao piso do pavimento). O degrau do terreno ao longo de um
+ * trecho longo fica na média: o desenho sabe a base em cada vértice, e a casa automática já os põe a cada poucos metros.
+ */
+function emitirMuro(model: BlueprintModel, m: Muro, pisoMm: number, ctx: Ctx, localNivel: string): { produto: string; parte: 'ALVENARIA' | 'GRADE'; uid: string }[] {
+  const { emitir, guidDe, historico } = ctx;
+  const trechos = trechosDoMuro(model, m).filter((t) => t.comprimentoMm >= 1);
+  const solidosDe = (z0: (t: (typeof trechos)[number]) => number, altura: number) =>
+    trechos.map((t) => {
+      const graus = Math.round(((Math.atan2(t.b.y - t.a.y, t.b.x - t.a.x) * 180) / Math.PI) * 1e6) / 1e6;
+      const centro = emitir(`IFCCARTESIANPOINT((${n((t.a.x + t.b.x) / 2)},${n((t.a.y + t.b.y) / 2)},${n(z0(t))}))`);
+      const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${emitir('IFCCARTESIANPOINT((0.,0.))')},$)`);
+      const perfil = emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.comprimentoMm)},${n(m.espessuraMm)})`);
+      const posicao = emitir(`IFCAXIS2PLACEMENT3D(${centro},$,${direcaoDaPeca(graus, ctx)})`);
+      return emitir(`IFCEXTRUDEDAREASOLID(${perfil},${posicao},${ctx.dirZ},${n(altura)})`);
+    });
+  const base = (t: (typeof trechos)[number]) => (t.baseAMm + t.baseBMm) / 2 - pisoMm;
+  // A peça principal leva o uid do muro; a grade do misto, um derivado (dois produtos não dividem GUID nem Pset).
+  const produto = (solidos: string[], entidade: 'IFCWALL' | 'IFCRAILING', uid: string, nome: string) => {
+    const origem = emitir('IFCCARTESIANPOINT((0.,0.,0.))');
+    const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`);
+    const forma = emitir(`IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solidos.join(',')}))`);
+    const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+    const predefinido = entidade === 'IFCWALL' ? '.SOLIDWALL.' : '.BALUSTRADE.';
+    return emitir(`${entidade}(${guidDe(uid, `muro-${m.id}-${entidade}`)},${historico},${s(nome)},$,${s(m.tipo)},${local},${produtoForma},${s(rotuloCurto(m.uid, 'muro'))},${predefinido})`);
+  };
+  if (!trechos.length) return [];
+  const nome = m.rotulo || 'Muro';
+  if (m.tipo === 'ALVENARIA') return [{ produto: produto(solidosDe(base, m.alturaMm), 'IFCWALL', m.uid, nome), parte: 'ALVENARIA', uid: m.uid }];
+  if (m.tipo === 'GRADE') return [{ produto: produto(solidosDe(base, m.alturaMm), 'IFCRAILING', m.uid, nome), parte: 'GRADE', uid: m.uid }];
+  const mureta = m.alturaDaMuretaMm ?? 0;
+  const uidDaGrade = uidDeterministico(`${m.uid}:grade`);
+  return [
+    { produto: produto(solidosDe(base, mureta), 'IFCWALL', m.uid, `${nome} - mureta`), parte: 'ALVENARIA', uid: m.uid },
+    { produto: produto(solidosDe((t) => base(t) + mureta, m.alturaMm - mureta), 'IFCRAILING', uidDaGrade, `${nome} - grade`), parte: 'GRADE', uid: uidDaGrade },
+  ];
 }
 
 function emitirComponente(c: Componente, ctx: Ctx, localNivel: string): string {

@@ -30,7 +30,7 @@ import {
 function modelo(): BlueprintModel {
   const m = emptyModel() as unknown as Record<string, unknown[]>;
   const um = (k: string, extra: Record<string, unknown> = {}) => m[k].push({ id: k, levelId: 'L1', ...extra });
-  for (const k of ['walls', 'spaces', 'labels', 'roofs', 'stairs', 'guardaCorpos', 'rodapes', 'vagas', 'structures', 'boundaries', 'quadras', 'lotes', 'vias', 'areasPublicas', 'blocos', 'subRegioes', 'areasDeOperacao']) um(k);
+  for (const k of ['walls', 'spaces', 'labels', 'roofs', 'stairs', 'guardaCorpos', 'muros', 'rodapes', 'vagas', 'structures', 'boundaries', 'quadras', 'lotes', 'vias', 'areasPublicas', 'blocos', 'subRegioes', 'areasDeOperacao']) um(k);
   m.openings.push({ id: 'openings', wallId: 'walls' });
   m.componentes.push({ id: 'cama', levelId: 'L1', familia: 'MOBILIARIO' }, { id: 'condensadora', levelId: 'L1', familia: 'CLIMATIZACAO' });
   m.nucleos.push(
@@ -78,6 +78,7 @@ describe('classificação peça → camada', () => {
     ['roofs', 'ARQUITETURA'],
     ['stairs', 'ARQUITETURA'],
     ['guardaCorpos', 'ARQUITETURA'],
+    ['muros', 'ARQUITETURA'],
     ['rodapes', 'ARQUITETURA'],
     ['vagas', 'ARQUITETURA'],
     ['cama', 'ARQUITETURA'],
@@ -225,7 +226,7 @@ describe('contagem', () => {
     expect(l1.ESGOTO).toBe(1); // ralo (o tubo é do L2)
     expect(l1.ELETRICA_FORCA).toBe(0); // tug e soTug no L2
     expect(l1.ELETRICA_COMUM).toBe(5); // cp + tronco + qdc + 2 circuitos (sem pavimento)
-    expect(l1.ARQUITETURA).toBe(12);
+    expect(l1.ARQUITETURA).toBe(13); // + o muro (0.104.0)
     const tudo = contagemPorCamada(m, c, null);
     expect(tudo.ESGOTO).toBe(2);
     expect(contagemDoGrupo('ELETRICA', tudo)).toBe(9);

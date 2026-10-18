@@ -207,7 +207,7 @@ describe('F2 · a transição e o colarinho do duto', () => {
     const porConexao = computeQuantities(m, POLITICA_PADRAO).totais.porConexao ?? [];
     expect(porConexao.some((c) => c.tipo === 'TRANSICAO')).toBe(true);
     expect(porConexao.some((c) => c.tipo === 'COLARINHO')).toBe(true);
-    expect(POLITICA_PADRAO.version).toBe('quant-1.28.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.29.0');
   });
 });
 

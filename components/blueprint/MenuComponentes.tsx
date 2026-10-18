@@ -10,6 +10,7 @@ import {
   Layers,
   Minus,
   Fence,
+  BrickWall,
   MoveHorizontal,
   RectangleHorizontal,
   RectangleVertical,
@@ -144,6 +145,7 @@ export type EscolhaComponente =
   | { tool: 'escada'; circulacao: TipoCirculacao }
   | { tool: 'guardacorpo'; guardaCorpo: TipoDeGuardaCorpo }
   | { tool: 'rodape' }
+  | { tool: 'muro' }
   | { tool: 'nucleo'; nucleo: TipoDeNucleo; /** Só SHAFT (E11.1): `MECANICA` = shaft de dutos/condensação. */ disciplina?: DisciplinaDeRede | null }
   | { tool: 'vaga'; vaga: TipoDeVaga }
   | { tool: 'componente'; componente: TipoDeComponente }
@@ -643,6 +645,14 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
         ajuda: 'Dois cliques ao pé da parede. Com trechos no desenho, o quantitativo de rodapé passa a ser a soma deles. Gerador por ambiente: Arquitetura › Rodapés.',
         escolha: { tool: 'rodape' },
       },
+      // MURO (kernel 0.104.0): o muro de divisa, a grade ou a mureta com grade; fora do arranjo (não fecha ambiente).
+      {
+        chave: 'muro',
+        rotulo: 'Muro / grade',
+        icone: BrickWall,
+        ajuda: 'Dois cliques ao longo da divisa. Alvenaria de 1,80 m por padrão; tipo (grade, mureta com grade), altura e portões no painel. Não fecha ambiente nem entra na taxa de ocupação.',
+        escolha: { tool: 'muro' },
+      },
     ],
   },
   // VAGAS (E2.5): demarcação de piso, um clique no centro. O lançamento
@@ -930,6 +940,7 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
   'escada',
   'nucleo',
   'guardacorpo',
+  'muro',
   'rodape',
   'vaga',
   'componente',

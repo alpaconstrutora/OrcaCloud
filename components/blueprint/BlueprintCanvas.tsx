@@ -46,6 +46,9 @@ import {
   type TipoDeComponente,
   type GuardaCorpo,
   type TipoDeGuardaCorpo,
+  type Muro,
+  trechosDoMuro,
+  vaosDosPortoes,
   type Anotacao,
   type TipoDeAnotacao,
   PONTOS_MINIMOS_DA_ANOTACAO,
@@ -461,6 +464,9 @@ const COR_CAMERA = '#7c3aed';
 const COR_EIXO = '#64748b';
 /** Guarda-corpo (E7.3): linha dupla com balaústres; corrimão linha simples grossa. */
 const COR_GUARDA_CORPO = '#0f766e';
+/** MURO (0.104.0): a alvenaria em cinza-pedra, a grade em ardósia; o portão, o vão com a folha em arco. */
+const COR_MURO_DE_DIVISA = '#57534e';
+const COR_GRADE_DO_MURO = '#334155';
 const COR_RODAPE = '#92400e';
 /** Anotação (E8.1): âmbar escuro — nem parede nem instalação. */
 const COR_ANOTACAO = '#b45309';
@@ -1584,6 +1590,8 @@ interface Props {
   /** GUARDA-CORPO (E7.3): dois cliques; o tipo ativo vem da barra. */
   tipoDeGuardaCorpo?: TipoDeGuardaCorpo;
   onAddGuardaCorpo?: (a: Point, b: Point) => void;
+  /** MURO (0.104.0): dois cliques — um trecho reto; os portões e o tipo saem no painel. */
+  onAddMuro?: (a: Point, b: Point) => void;
   /** PAREDE CURVA (P2.12): início, fim e o ponto por onde o arco passa. */
   onAddParedeCurva?: (a: Point, b: Point, passandoPor: Point) => void;
   /** NÚCLEO VERTICAL (E2.4): os que atravessam este pavimento, já filtrados pelo editor. */
@@ -1791,6 +1799,7 @@ export default function BlueprintCanvas({
   onAddEixo,
   tipoDeGuardaCorpo = 'GUARDA_CORPO',
   onAddGuardaCorpo,
+  onAddMuro,
   onAddParedeCurva,
   anotacoes = SEM_ANOTACOES,
   tipoDeAnotacao = 'TEXTO',
@@ -1969,6 +1978,7 @@ export default function BlueprintCanvas({
   /** Primeiro clique do EIXO em curso (E1.4). */
   const [pontoEixo, setPontoEixo] = useState<Point | null>(null);
   const [pontoGuardaCorpo, setPontoGuardaCorpo] = useState<Point | null>(null);
+  const [pontoMuro, setPontoMuro] = useState<Point | null>(null);
   const [pontoRodape, setPontoRodape] = useState<Point | null>(null);
   /** PAREDE CURVA em curso: [início] ou [início, fim]; o 3º clique fecha. */
   const [arcoEmCurso, setArcoEmCurso] = useState<Point[]>([]);
@@ -2173,6 +2183,8 @@ export default function BlueprintCanvas({
   const eixos = useMemo(() => (mostrarEixos ? (model.eixos ?? []).filter((e) => !ocultos.has(e.id)) : []), [model.eixos, ocultos, mostrarEixos]);
   /** GUARDA-CORPOS (E7.3) do pavimento. */
   const guardaCorpos = useMemo(() => (model.guardaCorpos ?? []).filter((g) => (!levelId || g.levelId === levelId) && !ocultos.has(g.id)), [model.guardaCorpos, levelId, ocultos]);
+  /** MUROS (0.104.0) do pavimento. */
+  const muros = useMemo(() => (model.muros ?? []).filter((m) => (!levelId || m.levelId === levelId) && !ocultos.has(m.id)), [model.muros, levelId, ocultos]);
   /** F12: as CÂMERAS do pavimento ativo. */
   const cameras = useMemo(() => (model.cameras ?? []).filter((c) => (!levelId || c.levelId === levelId) && !ocultos.has(c.id)), [model.cameras, levelId, ocultos]);
   const rodapes = useMemo(() => rodapesReais.filter((r) => (!levelId || r.levelId === levelId) && !ocultos.has(r.id)), [rodapesReais, levelId, ocultos]);
@@ -3325,6 +3337,22 @@ export default function BlueprintCanvas({
       return null;
     },
     [guardaCorpos, vista.escala, atenuados],
+  );
+
+  /** MURO (0.104.0): sob o cursor pelo eixo, com a meia espessura de folga além do toque. */
+  const muroSob = useCallback(
+    (mundo: { x: number; y: number }): Muro | null => {
+      const folga = HIT_PX / vista.escala;
+      for (let i = muros.length - 1; i >= 0; i--) {
+        const m = muros[i];
+        if (atenuados.has(m.id)) continue;
+        for (let k = 1; k < m.pontos.length; k++) {
+          if (distanciaAoSegmento(m.pontos[k - 1], m.pontos[k], mundo) <= folga + m.espessuraMm / 2) return m;
+        }
+      }
+      return null;
+    },
+    [muros, vista.escala, atenuados],
   );
 
   /** F12: qual CÂMERA está sob o cursor — pelo corpo (a posição), símbolo de tamanho fixo na tela. */
@@ -8242,6 +8270,99 @@ export default function BlueprintCanvas({
     if (tool === 'guardacorpo' && pontoGuardaCorpo && cursor) {
       desenharGuardaCorpo([pontoGuardaCorpo, cursor], tipoDeGuardaCorpo, COR_GUARDA_CORPO, true, 1.4);
     }
+    if (tool === 'muro' && pontoMuro && cursor) {
+      const a = paraTela(pontoMuro);
+      const b = paraTela(cursor);
+      ctx.strokeStyle = COR_MURO_DE_DIVISA;
+      ctx.lineWidth = Math.max(2, 150 * vista.escala);
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // ── MUROS (0.104.0): a alvenaria como faixa hachurada na espessura; a grade como linha com montantes; o misto, os
+    // dois juntos. O portão é o vão: a folha (pedestre em arco de giro, garagem em linha tracejada de correr). ──
+    for (const m of muros) {
+      meioTom(atenuados.has(m.id));
+      const selecionado = selecao.has(m.id);
+      const cor = selecionado ? COR_SELECIONADA : m.tipo === 'GRADE' ? COR_GRADE_DO_MURO : COR_MURO_DE_DIVISA;
+      const meia = (m.espessuraMm / 2) * vista.escala;
+      for (const t of trechosDoMuro(model, m)) {
+        const a = paraTela(t.a);
+        const b = paraTela(t.b);
+        const L = Math.hypot(b.x - a.x, b.y - a.y);
+        if (L < 0.5) continue;
+        const nx = (-(b.y - a.y) / L) * Math.max(meia, 1.5);
+        const ny = ((b.x - a.x) / L) * Math.max(meia, 1.5);
+        ctx.strokeStyle = cor;
+        ctx.lineWidth = selecionado ? 2.2 : 1.2;
+        if (m.tipo !== 'GRADE') {
+          ctx.fillStyle = selecionado ? 'rgba(37, 99, 235, 0.18)' : 'rgba(120, 113, 108, 0.28)';
+          ctx.beginPath();
+          ctx.moveTo(a.x + nx, a.y + ny);
+          ctx.lineTo(b.x + nx, b.y + ny);
+          ctx.lineTo(b.x - nx, b.y - ny);
+          ctx.lineTo(a.x - nx, a.y - ny);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+        if (m.tipo !== 'ALVENARIA') {
+          // a grade: o eixo e os montantes a cada 15 cm (no misto, por cima da mureta)
+          ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_GRADE_DO_MURO;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+          const passo = Math.max(5, 150 * vista.escala);
+          ctx.lineWidth = 1;
+          for (let d = passo / 2; d < L; d += passo) {
+            const px = a.x + ((b.x - a.x) * d) / L;
+            const py = a.y + ((b.y - a.y) * d) / L;
+            ctx.beginPath();
+            ctx.arc(px, py, 1.2, 0, Math.PI * 2);
+            ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_GRADE_DO_MURO;
+            ctx.fill();
+          }
+        }
+      }
+      for (const v of vaosDosPortoes(model, m)) {
+        const a = paraTela(v.a);
+        const b = paraTela(v.b);
+        const L = Math.hypot(b.x - a.x, b.y - a.y);
+        if (L < 0.5) continue;
+        ctx.strokeStyle = selecionado ? COR_SELECIONADA : cor;
+        ctx.lineWidth = 1;
+        if (v.portao.tipo === 'PEDESTRE') {
+          // a folha aberta a 90° para dentro do lote e o arco do giro
+          const ux = (b.x - a.x) / L;
+          const uy = (b.y - a.y) / L;
+          const fx = a.x - uy * L;
+          const fy = a.y + ux * L;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(fx, fy);
+          ctx.stroke();
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          const ang0 = Math.atan2(b.y - a.y, b.x - a.x);
+          const ang1 = Math.atan2(fy - a.y, fx - a.x);
+          ctx.arc(a.x, a.y, L, Math.min(ang0, ang1), Math.max(ang0, ang1));
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          ctx.setLineDash([8, 4]);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+    }
+    meioTom(false);
     // TRECHOS DE RODAPÉ (P2.21): linha fina castanha ao pé da parede; sugerido tracejado.
     const desenharRodape = (pontos: Point[], cor: string, tracejado: boolean, largura: number) => {
       if (pontos.length < 2) return;
@@ -9527,6 +9648,7 @@ export default function BlueprintCanvas({
         tool === 'camera' ||
         tool === 'eixo' ||
         tool === 'guardacorpo' ||
+        tool === 'muro' ||
         tool === 'rodape' ||
         tool === 'anotacao' ||
         tool === 'nucleo' ||
@@ -9745,9 +9867,11 @@ export default function BlueprintCanvas({
     pontoCamera,
     movendoCorte,
     guardaCorpos,
+    muros,
     rodapes,
     pontoRodape,
     pontoGuardaCorpo,
+    pontoMuro,
     tipoDeGuardaCorpo,
     anotacoes,
     caminhoAnotacao,
@@ -10245,6 +10369,12 @@ export default function BlueprintCanvas({
       setCursor(alvo);
       return;
     }
+    if (tool === 'muro') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (pontoMuro && ortoAtivo(e)) alvo = travarOrtogonal(pontoMuro, alvo);
+      setCursor(alvo);
+      return;
+    }
     if (tool === 'rodape') {
       let alvo = capturarTracado(paraMundo(px, py));
       if (pontoRodape && ortoAtivo(e)) alvo = travarOrtogonal(pontoRodape, alvo);
@@ -10681,6 +10811,20 @@ export default function BlueprintCanvas({
       return;
     }
 
+    // MURO (0.104.0): dois cliques, como o guarda-corpo.
+    if (tool === 'muro') {
+      const ponto = capturarTracado(mundo);
+      if (!pontoMuro) {
+        setPontoMuro(ponto);
+        return;
+      }
+      const fim = ortoAtivo(e) ? travarOrtogonal(pontoMuro, ponto) : ponto;
+      if (fim.x === pontoMuro.x && fim.y === pontoMuro.y) return;
+      onAddMuro?.(pontoMuro, fim);
+      setPontoMuro(null);
+      return;
+    }
+
     // COMPONENTE (E7.1): um clique no centro.
     if (tool === 'componente') {
       onAddComponente?.(capturarTracado(mundo));
@@ -11023,6 +11167,8 @@ export default function BlueprintCanvas({
         aberturaClicada?.id ??
         guardaCorpoClicado?.id ??
         rodapeSob(mundo)?.id ??
+        // MURO (0.104.0): a linha da divisa — depois do que fica sobre ela e antes das peças de corpo.
+        muroSob(mundo)?.id ??
         quadroClicado?.id ??
         terminalClicado?.id ??
         limiteClicado?.id ??
@@ -11608,6 +11754,7 @@ export default function BlueprintCanvas({
       setPontoCamera(null);
       setPontoEixo(null);
       setPontoGuardaCorpo(null);
+      setPontoMuro(null);
       setPontoRodape(null);
       setArcoEmCurso([]);
       setPontoExtrusao(null);

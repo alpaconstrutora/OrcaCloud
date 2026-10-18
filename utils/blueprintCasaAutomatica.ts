@@ -30,6 +30,7 @@
  * frente num eixo do desenho a transformação é exata (cos/sin 0 ou ±1).
  */
 import { HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO, platoDaCasa, type HipotesesDaTerraplenagemDaCasa, type ResumoDaTerraplenagem } from './blueprintPlatoDaCasa';
+import { HIPOTESES_DO_MURO_DA_CASA_PADRAO, planejarMuroDaCasa, type HipotesesDoMuroDaCasa, type PlanoDoMuroDaCasa } from './blueprintMuroDaCasa';
 import { DIMENSAO_DA_VAGA, TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, distanciaEntreEixos3D, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type CamadaParede, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
@@ -156,6 +157,11 @@ export interface HipotesesDaImplantacao {
    * o de menos problemas; RETANGULO = nunca L; L = o retângulo da frente (mais raso) e um anexo colado atrás dele.
    */
   forma: 'AUTOMATICA' | 'RETANGULO' | 'L';
+  /**
+   * F26 (decisão do usuário, 18/10/2026: "Automático: rampa, recuando a casa"): da frente do lote à FACE da fachada, no
+   * mínimo — o que a rampa de veículos da garagem pede no terreno inclinado. 0 = só os recuos da zona.
+   */
+  recuoMinimoDeFrenteMm: number;
 }
 
 export const HIPOTESES_DA_IMPLANTACAO_PADRAO: HipotesesDaImplantacao = {
@@ -169,6 +175,7 @@ export const HIPOTESES_DA_IMPLANTACAO_PADRAO: HipotesesDaImplantacao = {
   malhaMm: 50,
   vagaDescoberta: 'AUTOMATICO',
   forma: 'AUTOMATICA',
+  recuoMinimoDeFrenteMm: 0,
 };
 
 // ─── O quadro da frente ─────────────────────────────────────────────────────
@@ -201,7 +208,7 @@ export const paraMundo = (q: QuadroDaFrente, p: Point): Point => ({ x: p.x * q.e
 
 // ─── Implantação ────────────────────────────────────────────────────────────
 
-export type LimitanteDaImplantacao = 'PROGRAMA' | 'TO' | 'ENVELOPE' | 'CA' | 'PERMEABILIDADE' | 'VAGAS';
+export type LimitanteDaImplantacao = 'PROGRAMA' | 'TO' | 'ENVELOPE' | 'CA' | 'PERMEABILIDADE' | 'VAGAS' | 'RAMPA';
 
 export const ROTULO_DO_LIMITANTE: Record<LimitanteDaImplantacao, string> = {
   PROGRAMA: 'o programa',
@@ -210,6 +217,7 @@ export const ROTULO_DO_LIMITANTE: Record<LimitanteDaImplantacao, string> = {
   CA: 'o coeficiente de aproveitamento',
   PERMEABILIDADE: 'a taxa de permeabilidade',
   VAGAS: 'as vagas descobertas',
+  RAMPA: 'a rampa da garagem',
 };
 
 /** Com a preposição contraída — "limitada pelo programa", "pela taxa de ocupação". */
@@ -220,6 +228,7 @@ export const LIMITADA_POR: Record<LimitanteDaImplantacao, string> = {
   CA: 'pelo coeficiente de aproveitamento',
   PERMEABILIDADE: 'pela taxa de permeabilidade',
   VAGAS: 'pelas vagas descobertas',
+  RAMPA: 'pela rampa da garagem',
 };
 
 export interface ImplantacaoDaCasa {
@@ -428,6 +437,25 @@ export function implantacaoDaCasa(
   let x0 = xNaDivisa(W);
   let y0 = rmax.y0;
 
+  // F26: a rampa de veículos pede recuo de frente — a casa vai para trás (aprofundando menos, alargando o que a frente
+  // deixa); sem profundidade para isso, fica onde estava e quem chama diz por quê.
+  if (hip.recuoMinimoDeFrenteMm > 0) {
+    const yF = Math.min(...terreno.anel.map((p) => paraLocal(quadro, p).y));
+    const yMin = Math.ceil((yF + hip.recuoMinimoDeFrenteMm + e / 2) / hip.malhaMm - 1e-9) * hip.malhaMm;
+    if (yMin > y0) {
+      const Dr = Math.min(D, piso(rmax.y1 - yMin, hip.malhaMm));
+      const Wr = Dr < D ? Math.min(Wmax, piso((teto.m2 * 1e6) / (Dr + e) - e, hip.malhaMm)) : W;
+      if (Dr >= 3000 && Wr >= 3000) {
+        if (projecao(Wr, Dr) < projecao(W, D) - 0.5) limitante = 'RAMPA';
+        avisos.push(`Garagem: a rampa de veículos pede ${f2(hip.recuoMinimoDeFrenteMm / 1000)} m da frente à fachada — a casa recua ${f2((yMin - y0) / 1000)} m.`);
+        W = Wr;
+        D = Dr;
+        y0 = yMin;
+        x0 = xNaDivisa(W);
+      }
+    }
+  }
+
   // F24: as vagas descobertas. Cabem no recuo de frente diante da casa → ficam ali. Senão: recuar a casa (as fileiras
   // de vagas à frente dela) ou abrir a faixa ao lado (a casa estreita e aprofunda para não perder área).
   let vagasDescobertasLocal: ImplantacaoDaCasa['vagasDescobertas'] = null;
@@ -632,6 +660,7 @@ export type EtapaDaCasaId =
   | 'DR_DPS'
   | 'ELETRODUTOS'
   | 'FORRO'
+  | 'MURO'
   | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
@@ -659,6 +688,7 @@ export const ROTULO_DA_ETAPA_DA_CASA: Record<EtapaDaCasaId, string> = {
   DR_DPS: 'Proteção (DR e DPS) e ligação da entrada',
   ELETRODUTOS: 'Eletrodutos',
   FORRO: 'Forro dos cômodos (as redes nas faixas do plenum)',
+  MURO: 'Muro, portões e calçadas',
   CONFERENCIA: 'Conferência (programa e legislação)',
 };
 const ORDEM_DAS_ETAPAS = Object.keys(ROTULO_DA_ETAPA_DA_CASA) as EtapaDaCasaId[];
@@ -748,6 +778,8 @@ export interface HipotesesDaCasa {
   implantacao: Partial<HipotesesDaImplantacao>;
   /** F25: o platô no terreno inclinado (decisão do usuário: platô único). */
   terraplenagem: HipotesesDaTerraplenagemDaCasa;
+  /** F26: o muro, os portões e as calçadas (decisão do usuário: muro + portão + calçada; família nova no kernel). */
+  muro: HipotesesDoMuroDaCasa;
   gerador: Partial<HipotesesDoGerador>;
   /** As sementes que o E6.2 tenta; fica a de menos problemas graves. */
   sementes: number[];
@@ -951,6 +983,7 @@ export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
   programa: HIPOTESES_DO_PROGRAMA_DA_CASA_PADRAO,
   implantacao: {},
   terraplenagem: HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO,
+  muro: HIPOTESES_DO_MURO_DA_CASA_PADRAO,
   gerador: {},
   sementes: [1, 2, 3, 4, 5, 6, 7, 8],
   estrutura: HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO,
@@ -1028,6 +1061,8 @@ export interface PlanoDaCasa {
     furos: { emViga: number; dispensa: number; verificar: number; emBaldrame: number; emLaje: number; lista: FuroPrevisto[] } | null;
     /** F25: o platô no terreno inclinado; `null` sem topografia (a casa na cota zero). */
     terraplenagem: ResumoDaTerraplenagem | null;
+    /** F26: o muro, os portões e as calçadas; `null` sem muro (desligado ou não rodou). */
+    muro?: PlanoDoMuroDaCasa['resumo'] | null;
   };
 }
 
@@ -1346,6 +1381,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     sobrado: { ...HIPOTESES_DO_SOBRADO_PADRAO, ...(hipParcial.sobrado ?? {}) },
     estrutura: { ...HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, ...(hipParcial.estrutura ?? {}) },
     terraplenagem: { ...HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO, ...(hipParcial.terraplenagem ?? {}) },
+    muro: { ...HIPOTESES_DO_MURO_DA_CASA_PADRAO, ...(hipParcial.muro ?? {}) },
     telhado: { ...HIPOTESES_DO_TELHADO_PADRAO, ...(hipParcial.telhado ?? {}) },
     ancoras: { ...HIPOTESES_DAS_ANCORAS_PADRAO, ...(hipParcial.ancoras ?? {}) },
     mobiliario: { ...HIPOTESES_MOBILIARIO_PADRAO, lancar: true, ...(hipParcial.mobiliario ?? {}) },
@@ -1405,16 +1441,29 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     return vazio(impedimento);
   }
 
+  // F25/F26: o platô de uma implantação — o mesmo cálculo da etapa TERRAPLENAGEM (lá aplicado; aqui, também para
+  // medir a rampa da garagem antes de fixar a implantação).
+  const platoDe = (impl: ImplantacaoDaCasa, meia: number) => {
+    if (!temTerreno) return null;
+    const qd = impl.quadro;
+    const anelDoLote = entrada.ctx.terreno?.anel ?? null;
+    const loteLocal = anelDoLote?.map((p) => paraLocal(qd, p)) ?? null;
+    const rlT = impl.retanguloLocal;
+    const yFrente = loteLocal ? Math.min(...loteLocal.map((p) => p.y)) : rlT.y0;
+    const pontoDaRua = paraMundo(qd, { x: (rlT.x0 + rlT.x1) / 2, y: yFrente });
+    return platoDaCasa(entrada.gradeDoTerreno!, entrada.leitorDoTerreno!.cotaZeroM, impl.anelNoMundo, meia, anelDoLote, pontoDaRua, Math.max(0, rlT.y0 - meia - yFrente), hip.terraplenagem);
+  };
+
   // ── IMPLANTACAO ───────────────────────────────────────────────────────────
   // F12: no sobrado, o retângulo é o do pavimento MAIOR mais o núcleo da escada; a altura conta os dois pés-direitos.
   const peDireitoMm = hipGerador.peDireitoMm ?? HIPOTESES_DO_GERADOR_PADRAO.peDireitoMm;
   const andarMm = peDireitoMm + hip.sobrado.lajeEntrePavimentosMm;
   const divididos = hip.pavimentos === 2 ? dividirPrograma(programa) : null;
-  const imp = implantacaoDaCasa(
+  const implantar = (h: Partial<HipotesesDaImplantacao>) => implantacaoDaCasa(
     entrada.ctx,
     programa,
     doCurto.curto,
-    hipImplantacao,
+    h,
     divididos
       ? {
           utilPorPavimentoM2: Math.max(resumoDoPrograma(divididos.terreo).areaIdealComCirculacaoM2, resumoDoPrograma(divididos.superior).areaIdealComCirculacaoM2) + (hip.sobrado.nucleoLarguraMm * hip.sobrado.nucleoProfundidadeMm) / 1e6,
@@ -1422,6 +1471,46 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         }
       : null,
   );
+  let imp = implantar(hipImplantacao);
+  // F26 (decisão do usuário, 18/10/2026: "Automático: rampa, recuando a casa"): no terreno inclinado a garagem fica no
+  // platô; a rampa de veículos até `rampaDeVeiculosMaxPct` tem de caber entre o muro e a fachada. Não cabendo, a casa
+  // recua — e o platô muda com ela (no aclive, sobe): implantação e platô de novo, até fechar (4 voltas no máximo).
+  // A rua é lida no meio da frente da casa (a garagem ainda não tem lugar); o lançamento da rampa confere no lugar dela.
+  if (imp.ok && temTerreno && doCurto.curto.garagemCoberta && doCurto.curto.vagas > 0) {
+    const meiaP = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
+    const pede = (impl: ImplantacaoDaCasa): { comprimentoMm: number; disponivelMm: number } | null => {
+      const t = platoDe(impl, meiaP);
+      if (!t || !t.ok || t.resumo.entrada.cotaDaCalcadaMm == null) return null;
+      const delta = Math.abs(t.resumo.elevacaoDoTerreoMm - t.resumo.entrada.cotaDaCalcadaMm);
+      if (delta <= hip.terraplenagem.desnivelSemDegrauMm) return null;
+      const yF = Math.min(...(entrada.ctx.terreno?.anel ?? []).map((p) => paraLocal(impl.quadro, p).y));
+      return { comprimentoMm: Math.ceil(delta / (hip.terraplenagem.rampaDeVeiculosMaxPct / 100)), disponivelMm: impl.retanguloLocal.y0 - meiaP - (yF + hip.muro.espessuraMm) };
+    };
+    // O que falta (a rampa − o que há entre o muro e a fachada) cresce com o recuo no aclive (o platô sobe junto): a
+    // SECANTE sobre ele acerta na segunda volta num terreno de declive constante; a primeira é o passo simples.
+    let anterior: { recuo: number; falta: number } | null = null;
+    const semRecuo = imp;
+    for (let volta = 0; volta < 6 && imp.ok; volta++) {
+      const r = pede(imp.implantacao);
+      if (!r || r.comprimentoMm <= r.disponivelMm) break;
+      const recuoAtual = r.disponivelMm + hip.muro.espessuraMm;
+      const falta = r.comprimentoMm - r.disponivelMm;
+      const secante = anterior && Math.abs(falta - anterior.falta) > 1 && recuoAtual !== anterior.recuo ? recuoAtual - (falta * (recuoAtual - anterior.recuo)) / (falta - anterior.falta) : null;
+      const recuo = Math.ceil(Math.max(recuoAtual + falta, secante ?? 0) + 50);
+      anterior = { recuo: recuoAtual, falta };
+      const prox = implantar({ ...hipImplantacao, recuoMinimoDeFrenteMm: recuo });
+      if (!prox.ok || prox.implantacao.retanguloLocal.y0 <= imp.implantacao.retanguloLocal.y0) break;
+      hipImplantacao.recuoMinimoDeFrenteMm = recuo;
+      imp = prox;
+    }
+    // Recuar e não caber (o terreno mais íngreme que a rampa: cada metro de recuo sobe mais do que a rampa vence) só
+    // estragaria a casa — ela volta para onde estava, e o lançamento da rampa diz por que não.
+    const depois = imp.ok ? pede(imp.implantacao) : null;
+    if (imp !== semRecuo && depois && depois.comprimentoMm > depois.disponivelMm) {
+      imp = semRecuo;
+      hipImplantacao.recuoMinimoDeFrenteMm = 0;
+    }
+  }
   if (!imp.ok) {
     etapa('IMPLANTACAO', ROTULO_DA_ETAPA_DA_CASA.IMPLANTACAO, 'NAO_RODOU', 0, imp.motivo);
     pendencias.push({ grupo: 'PREMISSA', texto: imp.motivo });
@@ -1431,7 +1520,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   etapa('IMPLANTACAO', ROTULO_DA_ETAPA_DA_CASA.IMPLANTACAO, 'CALCULOU', 0, resumoDaImplantacao(implantacao));
   // F24: onde as vagas descobertas foram e a casa em L são DECISÕES da implantação — para conferir.
   for (const a of implantacao.avisos) {
-    const decisao = /^(Vagas descobertas|Casa em L):/.test(a);
+    const decisao = /^(Vagas descobertas|Casa em L|Garagem):/.test(a);
     if (decisao) decisoes.push(a);
     pendencias.push({ grupo: decisao ? 'CONFERIR' : 'PREMISSA', texto: a });
   }
@@ -1494,6 +1583,26 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   // F25 (decisão do usuário, 18/10/2026: "escada partindo do terreno"): a ESCADA (ou rampa) DE ACESSO, da calçada à
   // porta de entrada — `Escada.desdeCotaMm` (kernel 0.103.0). Sai da face da fachada diante da porta, rumo à rua, com os
   // pontos do lado baixo para o alto; só quando cabe no recuo de frente (senão a pendência diz, e ela fica à mão).
+  // A porta de entrada: a mais larga na parede da fachada da frente do térreo (no quadro da frente, `local`).
+  const portaDaFrente = () => {
+    const qd = implantacao.quadro;
+    const rlE = implantacao.retanguloLocal;
+    const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
+    return (
+      m.openings
+        .filter((o) => o.kind === 'door')
+        .map((o) => ({ o, w: m.walls.find((x) => x.id === o.wallId) }))
+        .filter((x): x is { o: (typeof m.openings)[number]; w: (typeof m.walls)[number] } => !!x.w && x.w.levelId === entrada.levelId)
+        .map(({ o, w }) => {
+          const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+          const t = o.offsetMm + o.widthMm / 2;
+          const meioDaPorta = { x: w.a.x + ((w.b.x - w.a.x) / L) * t, y: w.a.y + ((w.b.y - w.a.y) / L) * t };
+          return { o, meioDaPorta, local: paraLocal(qd, meioDaPorta) };
+        })
+        .filter((x) => Math.abs(x.local.y - rlE.y0) <= meia + 1)
+        .sort((p, q2) => q2.o.widthMm - p.o.widthMm)[0] ?? null
+    );
+  };
   const lancarEscadaDeAcesso = () => {
     const tr = terraplenagemDaCasa;
     if (!tr || tr.entrada.tipo === 'NENHUMA') return;
@@ -1511,20 +1620,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     const qd = implantacao.quadro;
     const rlE = implantacao.retanguloLocal;
     const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
-    // A porta de entrada: a mais larga na parede da fachada da frente do térreo.
-    const portas = m.openings
-      .filter((o) => o.kind === 'door')
-      .map((o) => ({ o, w: m.walls.find((x) => x.id === o.wallId) }))
-      .filter((x): x is { o: (typeof m.openings)[number]; w: (typeof m.walls)[number] } => !!x.w && x.w.levelId === entrada.levelId)
-      .map(({ o, w }) => {
-        const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
-        const t = o.offsetMm + o.widthMm / 2;
-        const meioDaPorta = { x: w.a.x + ((w.b.x - w.a.x) / L) * t, y: w.a.y + ((w.b.y - w.a.y) / L) * t };
-        return { o, meioDaPorta, local: paraLocal(qd, meioDaPorta) };
-      })
-      .filter((x) => Math.abs(x.local.y - rlE.y0) <= meia + 1)
-      .sort((p, q2) => q2.o.widthMm - p.o.widthMm);
-    const porta = portas[0];
+    const porta = portaDaFrente();
     if (!porta) {
       pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}; a porta de entrada não está na fachada da frente: desenhe o acesso à mão.` });
       return;
@@ -1550,6 +1646,145 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       pendencias.push({ grupo: 'CONFERIR', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}, lançada diante da porta de entrada.` });
     } catch (x) {
       pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: a escada de acesso não entrou (${x instanceof Error ? x.message : String(x)}) — desenhe-a à mão.` });
+    }
+  };
+
+  // A garagem coberta no quadro da frente: o ambiente de uso GARAGEM no térreo (caixa do anel).
+  const garagemNoQuadro = () => {
+    const qd = implantacao.quadro;
+    const et = m.labels.find((l) => l.levelId === entrada.levelId && l.uso === 'GARAGEM');
+    const sp = et ? m.spaces.find((x) => x.levelId === entrada.levelId && pointInPolygon(x.ring, et.at)) : undefined;
+    if (!sp) return null;
+    const pts = sp.ring.map((p) => paraLocal(qd, p));
+    return { x0: Math.min(...pts.map((p) => p.x)), x1: Math.max(...pts.map((p) => p.x)) };
+  };
+  // F26 (decisão do usuário, 18/10/2026: "Automático: rampa, recuando a casa"): a RAMPA DE VEÍCULOS (escada de acesso
+  // tipo RAMPA, `veicular`, kernel 0.104.0) da calçada diante da garagem até a fachada — a implantação já recuou a casa
+  // para ela caber; aqui, no lugar real da garagem, ela é lançada ou a pendência diz por que não.
+  const lancarRampaDaGaragem = () => {
+    const tr = terraplenagemDaCasa;
+    const leitor = entrada.leitorDoTerreno;
+    if (!tr || !leitor) return;
+    const g = garagemNoQuadro();
+    if (!g) return;
+    const qd = implantacao.quadro;
+    const rlG = implantacao.retanguloLocal;
+    const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
+    const yF = Math.min(...(entrada.ctx.terreno?.anel ?? []).map((p) => paraLocal(qd, p).y));
+    const xm = (g.x0 + g.x1) / 2;
+    const rua = leitor.cotaEmM(paraMundo(qd, { x: xm, y: yF }));
+    if (rua == null || !Number.isFinite(rua)) return;
+    const calcadaMm = Math.round((rua - leitor.cotaZeroM) * 1000);
+    const delta = tr.elevacaoDoTerreoMm - calcadaMm;
+    if (Math.abs(delta) <= hip.terraplenagem.desnivelSemDegrauMm) return;
+    const pct = hip.terraplenagem.rampaDeVeiculosMaxPct;
+    const comprimento = Math.ceil(Math.abs(delta) / (pct / 100));
+    const face = rlG.y0 - meia;
+    const disponivel = face - (yF + hip.muro.espessuraMm);
+    const sentido = delta > 0 ? 'sobe' : 'desce';
+    if (comprimento > disponivel) {
+      pendencias.push({ grupo: 'VERIFICACAO', texto: `Garagem: a rampa de veículos ${sentido} ${f2(Math.abs(delta) / 1000)} m da rua ao piso — a ${f2(pct)} %, ${f2(comprimento / 1000)} m, e só há ${f2(Math.max(0, disponivel) / 1000)} m entre o muro e a fachada; desenhe a garagem na cota da rua ou a rampa mais inclinada, à mão.` });
+      return;
+    }
+    const naFace = paraMundo(qd, { x: xm, y: face });
+    const naRua = paraMundo(qd, { x: xm, y: face - comprimento });
+    const inteiro = (p: Point): Point => ({ x: Math.round(p.x), y: Math.round(p.y) });
+    try {
+      aplicar([
+        {
+          type: 'AddEscada',
+          levelId: entrada.levelId,
+          pontos: delta > 0 ? [inteiro(naRua), inteiro(naFace)] : [inteiro(naFace), inteiro(naRua)],
+          tipo: 'RAMPA',
+          veicular: true,
+          larguraMm: Math.max(2500, Math.round(g.x1 - g.x0)),
+          rotulo: 'Rampa da garagem',
+          desdeCotaMm: calcadaMm,
+        },
+      ]);
+      pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: rampa de veículos ${sentido === 'sobe' ? 'subindo' : 'descendo'} ${f2(Math.abs(delta) / 1000)} m em ${f2(comprimento / 1000)} m (${f2(pct)} %), da rua à garagem — confira a inclinação no código de obras.` });
+    } catch (x) {
+      pendencias.push({ grupo: 'VERIFICACAO', texto: `Garagem: a rampa de veículos não entrou (${x instanceof Error ? x.message : String(x)}) — desenhe-a à mão.` });
+    }
+  };
+
+  // F26 (decisões do usuário: "muro + portão + calçada", "família nova no kernel"): o muro do lote (kernel 0.104.0), o
+  // portão de pedestre diante da porta, o de garagem diante da garagem e as calçadas — depois da casa inteira, que é
+  // de onde saem a porta, a garagem e a escada de acesso.
+  const lancarMuroDaCasa = (): PlanoDoMuroDaCasa['resumo'] | null => {
+    if (!hip.muro.lancar) {
+      etapa('MURO', ROTULO_DA_ETAPA_DA_CASA.MURO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
+      return null;
+    }
+    try {
+      const qd = implantacao.quadro;
+      const rlM = implantacao.retanguloLocal;
+      const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
+      const local = (p: Point) => paraLocal(qd, p);
+      const porta = portaDaFrente();
+      const acesso = (m.stairs ?? []).find((x) => x.levelId === entrada.levelId && x.desdeCotaMm != null && !x.veicular);
+      // A garagem coberta: o ambiente de uso GARAGEM no térreo — a largura dela e até a fachada.
+      const garagemLocal = garagemNoQuadro();
+      const leitor = entrada.leitorDoTerreno;
+      const plano = planejarMuroDaCasa(
+        {
+          levelId: entrada.levelId,
+          anelDoLote: entrada.ctx.terreno?.anel ?? [],
+          limites: entrada.ctx.limites,
+          quadro: qd,
+          portaX: porta ? porta.local.x : null,
+          faceDaFachadaY: rlM.y0 - meia,
+          inicioDaEscadaY: acesso ? Math.min(...acesso.pontos.map((p) => local(p).y)) : null,
+          casaNoMundo: implantacao.anelNoMundo,
+          meiaParedeMm: meia,
+          // A escada de acesso no chão: a faixa dela no quadro (o percurso ± meia largura).
+          obstaculos: (m.stairs ?? [])
+            .filter((x) => x.levelId === entrada.levelId && x.desdeCotaMm != null)
+            .map((x) => {
+              const pts = x.pontos.map(local);
+              const xs = pts.map((p) => p.x);
+              const ys = pts.map((p) => p.y);
+              const dx = Math.max(...xs) - Math.min(...xs);
+              const dy = Math.max(...ys) - Math.min(...ys);
+              const w = x.larguraMm / 2;
+              return dy >= dx ? { x0: Math.min(...xs) - w, x1: Math.max(...xs) + w, y0: Math.min(...ys), y1: Math.max(...ys) } : { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys) - w, y1: Math.max(...ys) + w };
+            }),
+          garagem: garagemLocal ? { x0: garagemLocal.x0, x1: garagemLocal.x1, yFim: rlM.y0 - meia } : null,
+          vagasDescobertas: !garagemLocal && implantacao.vagasDescobertas ? implantacao.vagasDescobertas.caixa : null,
+          cotaDoTerreno:
+            temTerreno && leitor
+              ? (p: Point) => {
+                  const c = leitor.cotaEmM(p);
+                  return c == null || !Number.isFinite(c) ? null : (c - leitor.cotaZeroM) * 1000;
+                }
+              : null,
+        },
+        hip.muro,
+      );
+      for (const pd of plano.pendencias) pendencias.push(pd);
+      const n = aplicar(plano.comandos);
+      const r = plano.resumo;
+      etapa(
+        'MURO',
+        ROTULO_DA_ETAPA_DA_CASA.MURO,
+        'LANCOU',
+        n,
+        `frente ${f2(r.frenteM)} m e divisas ${f2(r.divisasM)} m; ${r.portoesDePedestre} portão(ões) de pedestre e ${r.portoesDeGaragem} de garagem; calçadas ${f2(r.calcadasM2)} m²`,
+      );
+      // A permeabilidade com as calçadas desenhadas: a projeção + o impermeável delas contra o mínimo da zona.
+      const lote = entrada.ctx.terreno?.areaMm2 ? entrada.ctx.terreno.areaMm2 / 1e6 : null;
+      const minimo = entrada.ctx.zona.taxaPermeabilidadeMinPct;
+      if (lote && minimo != null) {
+        const permeavel = ((lote - implantacao.medidas.projecaoM2 - r.impermeavelM2) / lote) * 100;
+        if (permeavel < minimo)
+          pendencias.push({ grupo: 'VERIFICACAO', texto: `Muro: com as calçadas, a permeabilidade cai a ${f2(permeavel)} % (a zona pede ${f2(minimo)} %) — troque o piso do acesso por drenante ou encurte as calçadas.` });
+      }
+      return r;
+    } catch (x) {
+      const motivo = x instanceof Error ? x.message : String(x);
+      etapa('MURO', ROTULO_DA_ETAPA_DA_CASA.MURO, 'NAO_RODOU', 0, motivo);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Muro: ${motivo}` });
+      return null;
     }
   };
 
@@ -1595,8 +1830,10 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   };
 
   // A CONFERÊNCIA e o plano — o fim comum da térrea e do sobrado. TO pela projeção; CA pela soma dos pavimentos.
-  type ResumoDasDisciplinas = Omit<PlanoDaCasa['resumo'], 'areaConstruidaM2' | 'ambientesPedidos' | 'ambientesAtendidos' | 'regrasVioladas' | 'terraplenagem'>;
+  type ResumoDasDisciplinas = Omit<PlanoDaCasa['resumo'], 'areaConstruidaM2' | 'ambientesPedidos' | 'ambientesAtendidos' | 'regrasVioladas' | 'terraplenagem' | 'muro'>;
   const fechar = (f: { projecaoM2: number; areaConstruidaM2: number; alturaM: number; semente: number; escolha: string; sobrado: ResumoDoSobrado | null; disciplinas: ResumoDasDisciplinas }): PlanoDaCasa => {
+    // ── MURO, PORTÕES E CALÇADAS (F26) ──
+    const resumoDoMuro = lancarMuroDaCasa();
     // F21: o molhado sem lado externo que ganhou EXAUSTOR (a climatização lança onde não há janela) está resolvido pela
     // ventilação mecânica — fica para conferir no código de obras, não "sem solução".
     for (const pd of pendencias) {
@@ -1640,7 +1877,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       escolha: f.escolha,
       decisoes,
       sobrado: f.sobrado,
-      resumo: { areaConstruidaM2: f.areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, ...f.disciplinas, terraplenagem: terraplenagemDaCasa },
+      resumo: { areaConstruidaM2: f.areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, ...f.disciplinas, terraplenagem: terraplenagemDaCasa, muro: resumoDoMuro },
     };
   };
 
@@ -2558,6 +2795,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     );
 
     lancarEscadaDeAcesso();
+    lancarRampaDaGaragem();
 
     // ── ESTRUTURA E TELHADO DO SOBRADO (F12b) ──
     // Pilares em prumada (ver `pilaresDoSobrado`); vigas e lajes em cada pavimento — a laje do térreo é o piso de
@@ -2780,6 +3018,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
   const aberturas = m.openings.filter((o) => m.walls.some((w) => w.id === o.wallId && w.levelId === entrada.levelId)).length;
   etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'LANCOU', n, `${paredes} paredes, ${aberturas} portas e janelas, ${r.ambientes.length} ambientes — ${escolha}`);
   lancarEscadaDeAcesso();
+  lancarRampaDaGaragem();
   // F21: "sem porta direta" já sai na CONFERÊNCIA do programa (com a distância em portas) — aqui só pesa na escolha.
   for (const a of r.avisos) if (!/sem porta direta \(relação obrigatória\)/.test(a)) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura: ${a}` });
 

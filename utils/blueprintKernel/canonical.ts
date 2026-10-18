@@ -88,6 +88,8 @@ import {
   type FamiliaDeComponente,
   type TipoDeGuardaCorpo,
   type MaterialDeGuardaCorpo,
+  type TipoDeMuro,
+  type TipoDePortao,
   type TipoDeAnotacao,
   type VistaDaAnotacao,
   type TracoDaAnotacao,
@@ -548,6 +550,8 @@ function projetar(model: BlueprintModel): {
       protecao: e.protecao,
       // ESCADA DE ACESSO (0.103.0): a cota da calçada, só na escada de acesso (ausente não muda o hash de antes).
       desdeCotaMm: e.desdeCotaMm,
+      // RAMPA DE VEÍCULOS (0.104.0): só quando marcada.
+      veicular: e.veicular ? true : undefined,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
@@ -795,6 +799,25 @@ function projetar(model: BlueprintModel): {
       nome: c.nome,
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.posicao.x - y.posicao.x || x.posicao.y - y.posicao.y || x.alvo.x - y.alvo.x || x.alvo.y - y.alvo.y || cmpStr(x.nome, y.nome),
+  );
+
+  // MUROS (0.104.0): pavimento por índice, percurso, tipo, alturas, espessura, base por vértice, portões. Omitidos
+  // quando não há — desenho sem muro não ganha chave nova (o hash dele só muda pela versão).
+  const muros = ordenar(
+    model.muros ?? [],
+    (m) => ({
+      level: nivel(m.levelId),
+      tipo: m.tipo,
+      pontos: m.pontos.map((p) => ({ x: p.x, y: p.y })),
+      alturaMm: m.alturaMm,
+      espessuraMm: m.espessuraMm,
+      alturaDaMuretaMm: m.alturaDaMuretaMm,
+      cotasDaBaseMm: m.cotasDaBaseMm ? [...m.cotasDaBaseMm] : undefined,
+      portoes: m.portoes.map((g) => ({ tipo: g.tipo, offsetMm: g.offsetMm, larguraMm: g.larguraMm })),
+      rotulo: m.rotulo ?? null,
+      parametros: parametrosCanonicos(m.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo),
   );
 
   // VISTAS DEPENDENTES (0.51.0): pavimento por índice, nome, recorte, escala. Omitidas quando não há.
@@ -1291,6 +1314,7 @@ function projetar(model: BlueprintModel): {
     areasDeOperacao: areasDeOperacao.length ? areasDeOperacao.map((a) => a.geom) : undefined,
     blocos: blocos.length ? blocos.map((b) => b.geom) : undefined,
     cameras: cameras.length ? cameras.map((c) => c.geom) : undefined,
+    muros: muros.length ? muros.map((m) => m.geom) : undefined,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
@@ -1336,6 +1360,7 @@ function projetar(model: BlueprintModel): {
     ...(areasDeOperacao.length ? { areasDeOperacao: areasDeOperacao.map((a) => a.item.uid ?? null) } : {}),
     ...(blocos.length ? { blocos: blocos.map((b) => b.item.uid ?? null) } : {}),
     ...(cameras.length ? { cameras: cameras.map((c) => c.item.uid ?? null) } : {}),
+    ...(muros.length ? { muros: muros.map((m) => m.item.uid ?? null) } : {}),
     rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -1437,6 +1462,8 @@ export interface IdentidadeCanonica {
   blocos?: (ElementUid | null)[];
   /** Ausente sob kernel < 0.99.0 e em desenho sem câmera. */
   cameras?: (ElementUid | null)[];
+  /** Ausente sob kernel < 0.104.0 e em desenho sem muro. */
+  muros?: (ElementUid | null)[];
   rodapes?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
@@ -1635,6 +1662,8 @@ export interface CanonicalPayload {
     protecao?: 'NE' | 'EP' | 'PF' | 'PRESSURIZADA';
     /** ESCADA DE ACESSO: a cota da calçada (mm). Ausente sob kernel < 0.103.0 e na escada entre pavimentos. */
     desdeCotaMm?: number;
+    /** RAMPA DE VEÍCULOS. Ausente sob kernel < 0.104.0 e na rampa de pedestre. */
+    veicular?: true;
   }[];
   /** Vagas de garagem. Ausente sob kernel < 0.40.0 e em desenho sem nenhuma. */
   vagas?: {
@@ -1703,6 +1732,19 @@ export interface CanonicalPayload {
   blocos?: { level: number; nome: string; pontos: { x: number; y: number }[]; cotaBaseMm: number; pavimentos: number; peDireitoMm: number; uso: UsoDoBloco; parametros?: Parametros }[];
   /** CÂMERAS. Ausente sob kernel < 0.99.0 e em desenho sem câmera. */
   cameras?: { level: number; posicao: { x: number; y: number }; alvo: { x: number; y: number }; alturaOlhoMm: number; focalMm: number; nome: string }[];
+  /** MUROS. Ausente sob kernel < 0.104.0 e em desenho sem muro. */
+  muros?: {
+    level: number;
+    tipo: TipoDeMuro;
+    pontos: { x: number; y: number }[];
+    alturaMm: number;
+    espessuraMm: number;
+    alturaDaMuretaMm?: number;
+    cotasDaBaseMm?: number[];
+    portoes: { tipo: TipoDePortao; offsetMm: number; larguraMm: number }[];
+    rotulo: string | null;
+    parametros?: Parametros;
+  }[];
   /** Vistas dependentes (recortes nomeados de planta). Ausente sob kernel < 0.51.0 e em desenho sem nenhuma. */
   vistasDependentes?: { level: number; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador: number }[];
   /** Anotações por vista. Ausente sob kernel < 0.45.0 e em desenho sem nenhuma. */
@@ -2247,6 +2289,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ...(e.ate !== undefined && levelIds[e.ate] ? { ateLevelId: levelIds[e.ate] } : {}),
       ...(e.protecao ? { protecao: e.protecao } : {}),
       ...(typeof e.desdeCotaMm === 'number' ? { desdeCotaMm: e.desdeCotaMm } : {}),
+      ...(e.veicular === true && e.tipo === 'RAMPA' ? { veicular: true } : {}),
     });
   });
 
@@ -2455,6 +2498,26 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       alturaOlhoMm: c.alturaOlhoMm,
       focalMm: c.focalMm,
       nome: c.nome,
+    });
+  });
+
+  // MUROS (0.104.0): depois dos pavimentos, que referenciam por índice.
+  const murosPayload = payload.muros ?? [];
+  murosPayload.forEach((m, i) => {
+    if (!levelIds[m.level]) return;
+    (model.muros ??= []).push({
+      id: nextId(model, 'mur'),
+      uid: uidDe('muros', i, murosPayload.length),
+      levelId: levelIds[m.level],
+      tipo: m.tipo,
+      pontos: m.pontos.map((p) => ({ x: p.x, y: p.y })),
+      alturaMm: m.alturaMm,
+      espessuraMm: m.espessuraMm,
+      ...(typeof m.alturaDaMuretaMm === 'number' ? { alturaDaMuretaMm: m.alturaDaMuretaMm } : {}),
+      ...(Array.isArray(m.cotasDaBaseMm) ? { cotasDaBaseMm: [...m.cotasDaBaseMm] } : {}),
+      portoes: (m.portoes ?? []).map((g) => ({ tipo: g.tipo, offsetMm: g.offsetMm, larguraMm: g.larguraMm })),
+      rotulo: m.rotulo ?? null,
+      ...(m.parametros && Object.keys(m.parametros).length > 0 ? { parametros: { ...m.parametros } } : {}),
     });
   });
 

@@ -143,6 +143,8 @@ export type BlueprintTool =
   | 'eixo'
   /** GUARDA-CORPO / CORRIMÃO (E7.3): dois cliques, como o eixo; o tipo é estado da barra. */
   | 'guardacorpo'
+  /** MURO (0.104.0): dois cliques. */
+  | 'muro'
   /** TRECHO DE RODAPÉ (P2.21): dois cliques ao pé da parede; altura e item na barra/painel. */
   | 'rodape'
   /** ANOTAÇÃO (E8.1): texto (1 clique), leader (2), cota angular (3), linha e hachura (duplo clique fecha). */

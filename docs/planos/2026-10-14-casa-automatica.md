@@ -2011,8 +2011,8 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F22 — gerador: larguras mínimas por padrão; 4 dormitórios em lote estreito; programa acima da TO; e (da F21) o arranjo em faixas: varanda de entrada junto da sala, serviço junto da cozinha, serviço e escritório com fachada; e (da F20) a suíte que não cabe o armário/a cama — **partes 1, 2 e 3 feitas** (ver "Registro da F22"); a frente do R1-B e o sobrado no lote estreito vão com a F27
 - [x] F23 — estrutura: pilares próximos, entre aberturas e sobre abertura do pavimento de baixo (ver "Registro da F23"; os 2 pilares do sobrado sobre janela do térreo vão com a F27 — as janelas dos dois pavimentos desalinhadas)
 - [x] F24 — implantação não retangular (L) e vaga descoberta com recuo curto — partes 1 e 2 (ver "Registro da F24"); o serviço sem fachada nas casas largas e rasas vai com a F27 (o mesmo arranjo da cozinha × serviço do R1-B)
-- [ ] F25 — terreno inclinado: platô único — **parte 1 feita** (ver "Registro da F25"); falta a parte 2: o "Lançar" grava a terraplenagem do estudo (base = projeção da casa), corte/aterro/muro no orçamento e a escada/rampa da entrada desenhada
-- [ ] F26 — muro, portão e calçada
+- [x] F25 — terreno inclinado: platô único — partes 1 e 2 (ver "Registro da F25" e "Registro da F25 — parte 2"; a rampa da garagem no terreno inclinado vai com a F26)
+- [x] F26 — muro, portão e calçada; e (da F25) a rampa da garagem no terreno inclinado (ver "Registro da F26")
 - [ ] F27 — 3 pavimentos; e (da F24) o serviço com fachada nas casas largas e rasas (L e L de fundo largo, 3 dorm.); e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
 - [ ] F28 — tela e prancha: a chuva de projeto na tela da casa; bolhas dos eixos sem sobrepor
 
@@ -2462,3 +2462,70 @@ canônico e guarda do acervo, invariantes (`blueprintEscada`); a altura livre co
 (`blueprintConflitosArquitetonicos`); a casa a 10 % com a escada lançada e sem conflito, o sobrado com as duas escadas, a
 20 % sem escada e com a pendência (`blueprintCasaAutomatica`); as medidas de terraplenagem (`blueprintBudget`); o botão
 "Sob a casa" (`PainelTopografiaFase2`); o platô da casa no hook (`useBlueprintTerraplenagemCasa`).
+
+## F26 — muro, portão, calçada e a rampa da garagem (18/10/2026, "sim" para seguir)
+
+### Retrato
+
+- O kernel não tem MURO: a feição `MURO` é do levantamento topográfico (o existente), não do projeto. Desenhado como
+  PAREDE, o anel de muros fecha o lote e o quintal vira um ambiente (TO, etiquetas, fachadas e redes leem paredes).
+- A calçada já existe: sub-região (`SubRegiao`, CONCRETO/INTERTRAVADO…), de onde sai a permeabilidade desenhada.
+- No terreno inclinado a garagem fica no platô (F25): a 10 %, 1,3 m acima da calçada — a rampa de veículos não cabe
+  no recuo de frente de 3 m.
+
+### Decisões do usuário (18/10/2026)
+
+| Pergunta | Resposta |
+|---|---|
+| Como o muro e o portão entram no desenho? | **Família nova no kernel** — `Muro` (alvenaria, grade ou mureta com grade), altura e espessura, portões de pedestre e de garagem como vãos; não delimita ambiente, não entra na TO; planta, 3D, IFC, quantitativo e orçamento (kernel 0.104.0, planta-api redeployada) |
+| A garagem no platô e a rampa de veículos que não cabe no recuo? | **Automático: rampa, recuando a casa** — rampa no recuo com inclinação máxima como hipótese (20 %); não cabendo, a casa recua até caber quando a profundidade deixa (como a vaga descoberta); sem espaço, a pendência diz por quê; terreno plano não muda |
+
+(De 16/10, valendo: muro nas laterais e fundos com altura como hipótese; muro/grade na frente com portão de pedestre e
+de garagem; calçada interna da entrada e da garagem, na permeabilidade.)
+
+### Partes
+
+1. **Kernel 0.104.0 — a família `Muro`**: modelo, comandos, canônico (chave omitida sem muro — o hash do acervo não
+   muda), invariantes, identidade, quantitativo, orçamento, IFC, planta 2D, 3D, prancha, painel de propriedades e a
+   ferramenta de desenhar; a base acompanha o terreno (cota por vértice).
+2. **A casa lança muro, portões e calçadas**: divisas laterais e fundos; a frente com o portão de pedestre diante da
+   entrada e o de garagem diante da garagem; a calçada da entrada (do portão à porta, com a escada de acesso) e a da
+   garagem; as hipóteses (alturas, tipo da frente, larguras dos portões, material da calçada) nas premissas.
+3. **A rampa da garagem**: a rampa de veículos (escada de acesso tipo RAMPA, kernel 0.103.0) do portão à garagem; o
+   recuo mínimo de frente que ela pede volta à implantação e o platô é recalculado até fechar.
+
+### Registro da F26 (18/10/2026)
+
+**Kernel 0.104.0 — a família `Muro`** (`utils/blueprintKernel/model.ts`, `muro.ts`): muro de divisa, grade ou mureta com
+grade; altura, espessura, mureta (só no misto); a base por vértice (`cotasDaBaseMm`, do zero do desenho — o terreno);
+os PORTÕES (pedestre, garagem) como vãos ao longo do percurso, em ordem e sem se sobrepor. Fora do arranjo planar (o anel
+de muros do lote não vira ambiente). `AddMuro`/`SetMuroProps`/`DeleteMuro`, `TranslateEntities.muroIds`, `RemoveLevel`
+leva os do pavimento; canônico omitido sem muro (os 6 goldens só mudaram pela string — provado com 0.103.0). Quantitativo
+`quant-1.29.0` (por muro e totais: metros, alvenaria e grade em m² nos trechos cheios, portões por tipo); orçamento
+`AREA_MURO_ALVENARIA`, `AREA_MURO_GRADE`, `COMPRIMENTO_MURO`, `PORTAO_PEDESTRE`, `PORTAO_GARAGEM` (escopo TERRENO); IFC
+(alvenaria `IfcWall .SOLIDWALL.`, grade `IfcRailing .BALUSTRADE.`, o misto com os dois, `Pset_OpuraMuro`); planta (faixa
+hachurada, grade com montantes, portão de pedestre com a folha e o arco, o de garagem tracejado), 3D, prancha, forro,
+camadas; o painel do muro (tipo, alturas, espessura, rótulo, portões — acrescentar com o motivo quando não cabe) e a
+ferramenta "Muro / grade" (dois cliques) no menu de componentes. E `Escada.veicular` — a rampa da garagem, sem o aviso
+da NBR 9050 (a inclinação é a do código de obras). Fica de fora: o muro no DXF.
+
+**A casa** (`utils/blueprintMuroDaCasa.ts`, etapa MURO antes da conferência): o muro corre dentro do lote, o eixo à meia
+espessura da divisa; a frente (as divisas FRENTE) em mureta com grade, laterais e fundos em alvenaria, 1,80 m; o portão
+de garagem diante da garagem (ou das vagas descobertas), o de pedestre diante da porta — encostando no de garagem, vai
+para o lado que tem lugar; no terreno, um vértice a cada 3 m com a cota dele. As calçadas: o acesso da garagem
+(intertravado), a calçada da entrada (concreto, do muro ao pé da escada de acesso ou à fachada) e o JARDIM (grama: o lote
+dentro do muro menos a casa, as calçadas e as escadas, em faixas) — sem o jardim, a permeabilidade desenhada seria zero
+e a regra da zona acusaria em falso. A permeabilidade com as calçadas desenhadas é conferida contra a da zona. As
+hipóteses nas premissas (ligar, tipo e altura da frente, altura das divisas, calçadas).
+
+**A rampa da garagem** (decisão do usuário, 18/10/2026: "Automático: rampa, recuando a casa"): no terreno inclinado, a
+rampa de veículos até `rampaDeVeiculosMaxPct` (20 %, nas premissas) tem de caber entre o muro e a fachada; não cabendo, a
+implantação ganha recuo mínimo de frente e o platô é recalculado com ela (no aclive o platô sobe junto — a SECANTE sobre
+o que falta fecha na segunda volta). Recuar e não caber (terreno mais íngreme que a rampa) volta a casa para onde
+estava; a pendência diz por quê. Lançada depois da arquitetura, no lugar real da garagem.
+
+Medido (12 × 30, R1-N): plano — muro 11,85 + 71,55 m, 2 portões, calçadas 10,7 m², jardim 179,9 m², nada muda na casa; a
+10 % — a casa recua 7,5 m, térreo a 2,03 m, rampa de 10,1 m a 20 %, escada de pedestre de 12 degraus; sobrado a 10 % —
+recua 5,4 m; a −10 % — rampa descendo 1,45 m; a 25 % — a casa fica no recuo da zona e a pendência diz que a rampa (15 m)
+não cabe nos 2,75 m.
+

@@ -575,6 +575,43 @@ export const MEDIDAS: DefinicaoMedida[] = [
     dimensao: 'M',
     descricao: 'Comprimento da polilinha de cada corrimão.',
   },
+  // MURO (kernel 0.104.0, F26 da casa automática): a alvenaria e a grade por m² de face nos trechos cheios, o percurso
+  // em metro (fundação, chapim) e os portões por peça. Escopo do TERRENO: o muro é do lote, não da edificação.
+  {
+    id: 'AREA_MURO_ALVENARIA',
+    rotulo: 'Muro — alvenaria (face)',
+    escopo: 'TERRENO',
+    dimensao: 'M2',
+    descricao: 'Face de alvenaria de cada muro nos trechos cheios (sem os portões): o muro inteiro, ou a mureta no misto.',
+  },
+  {
+    id: 'AREA_MURO_GRADE',
+    rotulo: 'Muro — grade (face)',
+    escopo: 'TERRENO',
+    dimensao: 'M2',
+    descricao: 'Face de grade de cada muro nos trechos cheios: a grade inteira, ou acima da mureta no misto.',
+  },
+  {
+    id: 'COMPRIMENTO_MURO',
+    rotulo: 'Muro — comprimento',
+    escopo: 'TERRENO',
+    dimensao: 'M',
+    descricao: 'Trechos cheios de cada muro (sem os portões) — a fundação corrida e o chapim.',
+  },
+  {
+    id: 'PORTAO_PEDESTRE',
+    rotulo: 'Portão de pedestre',
+    escopo: 'TERRENO',
+    dimensao: 'UN',
+    descricao: 'Cada portão de pedestre dos muros, com a largura do vão.',
+  },
+  {
+    id: 'PORTAO_GARAGEM',
+    rotulo: 'Portão de garagem',
+    escopo: 'TERRENO',
+    dimensao: 'UN',
+    descricao: 'Cada portão de garagem dos muros, com a largura do vão.',
+  },
   // DEMOLIÇÃO (E10.2): o que está marcado A DEMOLIR. Sai por peça, como as
   // medidas de construção, e NÃO entra nas medidas acima — parede a demolir não
   // é parede que se compra. A existente (que fica) não sai em lugar nenhum.
@@ -937,6 +974,32 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           formula: medidaId === 'AREA_GUARDA_CORPO' ? 'Σ comprimento dos trechos × altura' : 'Σ comprimento dos trechos da polilinha',
           variaveis: { comprimentoM: g.comprimentoM, alturaM: g.alturaM, areaM2: g.areaM2, trechos: g.trechos, material: g.material },
         }));
+
+    case 'AREA_MURO_ALVENARIA':
+    case 'AREA_MURO_GRADE':
+    case 'COMPRIMENTO_MURO':
+      return (quant.muros ?? [])
+        .map((m, i) => ({ m, rotulo: `${m.rotulo || `Muro ${i + 1}`} · ${m.tipo === 'ALVENARIA' ? 'alvenaria' : m.tipo === 'GRADE' ? 'grade' : 'mureta com grade'} · h ${Math.round(m.alturaM * 100)} cm` }))
+        .map(({ m, rotulo }) => ({ m, rotulo, valor: medidaId === 'AREA_MURO_ALVENARIA' ? m.areaAlvenariaM2 : medidaId === 'AREA_MURO_GRADE' ? m.areaGradeM2 : m.comprimentoCheioM }))
+        .filter(({ valor, rotulo }) => valor > 0 && combina(rotulo))
+        .map(({ m, rotulo, valor }) => ({
+          ref: m.uid,
+          rotulo,
+          valor,
+          formula: medidaId === 'COMPRIMENTO_MURO' ? 'Σ trechos cheios do percurso (sem os portões)' : 'Σ trechos cheios × altura da parte',
+          variaveis: { comprimentoCheioM: m.comprimentoCheioM, alturaM: m.alturaM, tipo: m.tipo },
+        }));
+
+    case 'PORTAO_PEDESTRE':
+    case 'PORTAO_GARAGEM': {
+      const tipo = medidaId === 'PORTAO_PEDESTRE' ? 'PEDESTRE' : 'GARAGEM';
+      return (quant.muros ?? []).flatMap((m, i) =>
+        m.portoes
+          .map((g, k) => ({ g, k, rotulo: `${tipo === 'PEDESTRE' ? 'Portão de pedestre' : 'Portão de garagem'} ${g.larguraM.toLocaleString('pt-BR')} m · ${m.rotulo || `Muro ${i + 1}`}` }))
+          .filter(({ g, rotulo }) => g.tipo === tipo && combina(rotulo))
+          .map(({ g, k, rotulo }) => ({ ref: `${m.uid}:portao-${k}`, rotulo, valor: 1, formula: '1 por portão', variaveis: { larguraM: g.larguraM } })),
+      );
+    }
 
     case 'DEMOLICAO_AREA_PAREDE':
     case 'DEMOLICAO_VOLUME_ALVENARIA':

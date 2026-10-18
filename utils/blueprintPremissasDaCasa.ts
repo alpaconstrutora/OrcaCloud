@@ -15,6 +15,8 @@ import { PADROES_DA_CASA, PROGRAMA_CURTO_PADRAO, type ProgramaCurtoDaCasa } from
 import { HIPOTESES_DO_GERADOR_PADRAO } from './blueprintGerador';
 import { HIPOTESES_PILARES_PADRAO } from './blueprintPilaresAutomaticos';
 import { HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO } from './blueprintPlatoDaCasa';
+import { HIPOTESES_DO_MURO_DA_CASA_PADRAO } from './blueprintMuroDaCasa';
+import type { TipoDeMuro } from './blueprintKernel';
 
 export interface PremissasDaCasa {
   curto: ProgramaCurtoDaCasa;
@@ -47,7 +49,12 @@ export interface PremissasDaCasa {
    * F25: o platô no terreno inclinado (só com a topografia do estudo) — ligar/desligar, a margem dele em volta da casa,
    * o piso do térreo acima dele e a altura acima da qual a borda leva muro de arrimo em vez de talude.
    */
-  terraplenagem: { lancar: boolean; margemDoPlatoMm: number; pisoAcimaDoPlatoMm: number; alturaMaximaDoTaludeM: number };
+  terraplenagem: { lancar: boolean; margemDoPlatoMm: number; pisoAcimaDoPlatoMm: number; alturaMaximaDoTaludeM: number; rampaDeVeiculosMaxPct: number };
+  /**
+   * F26: o muro do lote — ligar/desligar, o tipo e a altura da frente, a altura das divisas e as calçadas. Portões,
+   * espessura e materiais seguem o padrão do motor (`HIPOTESES_DO_MURO_DA_CASA_PADRAO`); o painel do muro ajusta cada um.
+   */
+  muro: { lancar: boolean; tipoDaFrente: TipoDeMuro; alturaDaFrenteMm: number; alturaDasDivisasMm: number; calcadas: boolean };
   /** F13: a pressão por caso — até quanto a caixa sobe; acima disso, o pressurizador (e a potência dele). */
   pressao: { caixaElevadaAteMm: number; potenciaDoPressurizadorW: number };
   /**
@@ -73,7 +80,8 @@ export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
   pavimentos: 'AUTOMATICO',
   sobrado: { lajeEntrePavimentosMm: 100, shaftMm: 400 },
   estrutura: { montanteEntreJanelasMm: 400, deslizeSobreAberturaMm: 1200 },
-  terraplenagem: { lancar: true, margemDoPlatoMm: 1000, pisoAcimaDoPlatoMm: 150, alturaMaximaDoTaludeM: 1.5 },
+  terraplenagem: { lancar: true, margemDoPlatoMm: 1000, pisoAcimaDoPlatoMm: 150, alturaMaximaDoTaludeM: 1.5, rampaDeVeiculosMaxPct: 20 },
+  muro: { lancar: true, tipoDaFrente: 'MURETA_COM_GRADE', alturaDaFrenteMm: 1800, alturaDasDivisasMm: 1800, calcadas: true },
   pressao: { caixaElevadaAteMm: 2000, potenciaDoPressurizadorW: 370 },
   forro: { lancar: true, peDireitoLivrePermanenciaMm: 2500, peDireitoLivreDemaisMm: 2300, pisoAcabadoMm: 50 },
   unidadeId: null,
@@ -85,6 +93,7 @@ const ENUMERADOS: Record<string, readonly string[]> = {
   tipo: ['DUAS_AGUAS', 'UMA_AGUA'],
   encostarNaDivisa: ['ESQUERDA', 'DIREITA', 'CENTRO'],
   aguaQuente: ['PELO_PADRAO', 'AQUECEDOR_PASSAGEM', 'CHUVEIRO_ELETRICO', 'NENHUM'],
+  tipoDaFrente: ['ALVENARIA', 'GRADE', 'MURETA_COM_GRADE'],
 };
 /** As chaves que aceitam `null` (o "deixe o motor decidir"). */
 const ANULAVEIS = new Set(['areaAlvoM2']);
@@ -130,6 +139,7 @@ export function premissasDaCasaDaColuna(raw: unknown): PremissasDaCasa {
     sobrado: completar(r.sobrado, PREMISSAS_DA_CASA_PADRAO.sobrado),
     estrutura: completar(r.estrutura, PREMISSAS_DA_CASA_PADRAO.estrutura),
     terraplenagem: completar(r.terraplenagem, PREMISSAS_DA_CASA_PADRAO.terraplenagem),
+    muro: completar(r.muro, PREMISSAS_DA_CASA_PADRAO.muro),
     pressao: completar(r.pressao, PREMISSAS_DA_CASA_PADRAO.pressao),
     forro: completar(r.forro, PREMISSAS_DA_CASA_PADRAO.forro),
     unidadeId: typeof r.unidadeId === 'string' && r.unidadeId.trim() ? r.unidadeId : null,
@@ -153,6 +163,7 @@ export function hipotesesDasPremissas(p: PremissasDaCasa): Partial<HipotesesDaCa
     climatizacao: { lancar: d.climatizacao } as HipotesesDaCasa['climatizacao'],
     pavimentos: p.pavimentos,
     terraplenagem: { ...HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO, ...p.terraplenagem },
+    muro: { ...HIPOTESES_DO_MURO_DA_CASA_PADRAO, ...p.muro },
     sobrado: { lajeEntrePavimentosMm: p.sobrado.lajeEntrePavimentosMm, shaftMm: p.sobrado.shaftMm } as HipotesesDaCasa['sobrado'],
     pressao: { resolver: true, caixaElevadaAteMm: p.pressao.caixaElevadaAteMm, potenciaDoPressurizadorW: p.pressao.potenciaDoPressurizadorW },
     // O motor completa o resto do grupo (as faixas) com o padrão dele.

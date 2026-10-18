@@ -297,7 +297,8 @@ export function medirEscada(model: BlueprintModel, escada: Escada): MedidaEscada
   const avisos: string[] = [];
 
   if (escada.tipo === 'RAMPA') {
-    if (inclinacaoPct > RAMPA_INCLINACAO_MAX_PCT) {
+    // A rampa de veículos (0.104.0) segue o código de obras, não a NBR 9050 — a conferência é da casa/do estudo.
+    if (!escada.veicular && inclinacaoPct > RAMPA_INCLINACAO_MAX_PCT) {
       avisos.push(
         `Inclinação de ${inclinacaoPct.toFixed(1).replace('.', ',')}% passa dos ` +
           `${String(RAMPA_INCLINACAO_MAX_PCT).replace('.', ',')}% que a NBR 9050 admite — ` +

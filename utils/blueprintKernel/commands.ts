@@ -66,6 +66,15 @@ import {
   findBloco,
   findCamera,
   assertCamera,
+  findMuro,
+  assertMuro,
+  ALTURA_PADRAO_DO_MURO_MM,
+  ESPESSURA_PADRAO_DO_MURO_MM,
+  ALTURA_PADRAO_DA_MURETA_MM,
+  MAX_ROTULO_DE_MURO,
+  type Muro,
+  type PortaoDoMuro,
+  type TipoDeMuro,
   ALTURA_DO_OLHO_PADRAO_MM,
   FOCAL_PADRAO_MM,
   MAX_NOME_DE_CAMERA,
@@ -477,6 +486,14 @@ export type Command =
   | { type: 'SetCameraProps'; cameraId: ObjectId; posicao?: Point; alvo?: Point; alturaOlhoMm?: number; focalMm?: number; nome?: string }
   | { type: 'DeleteCamera'; cameraId: ObjectId }
   /**
+   * MURO (0.104.0): muro de divisa, grade ou mureta com grade, com os portões como vãos. Omitidos: alvenaria, 1,80 m
+   * de altura, 15 cm de espessura, mureta de 60 cm no misto, a base no piso do pavimento, sem portão. `cotasDaBaseMm`
+   * dá a base por vértice (o terreno); `null` no Set volta a base ao piso.
+   */
+  | { type: 'AddMuro'; levelId: ObjectId; pontos: Point[]; tipo?: TipoDeMuro; alturaMm?: number; espessuraMm?: number; alturaDaMuretaMm?: number; cotasDaBaseMm?: number[] | null; portoes?: PortaoDoMuro[]; rotulo?: string | null }
+  | { type: 'SetMuroProps'; muroId: ObjectId; pontos?: Point[]; tipo?: TipoDeMuro; alturaMm?: number; espessuraMm?: number; alturaDaMuretaMm?: number; cotasDaBaseMm?: number[] | null; portoes?: PortaoDoMuro[]; rotulo?: string | null }
+  | { type: 'DeleteMuro'; muroId: ObjectId }
+  /**
    * EIXO da malha (E1.4). `nome` omitido = palpite pela direção: horizontal
    * (|dx| ≥ |dy|) ganha a próxima LETRA, vertical o próximo NÚMERO — a
    * convenção de prancha. `nome: ''` explícito = linha de referência sem bolha.
@@ -551,6 +568,8 @@ export type Command =
       protecao?: ProtecaoDaEscada | null;
       /** ESCADA DE ACESSO (0.103.0): a cota da calçada, mm do zero do desenho. Ver `Escada.desdeCotaMm`. */
       desdeCotaMm?: number | null;
+      /** RAMPA DE VEÍCULOS (0.104.0), só com `tipo: 'RAMPA'`. Ver `Escada.veicular`. */
+      veicular?: boolean;
     }
   | {
       type: 'SetEscadaProps';
@@ -565,6 +584,8 @@ export type Command =
       protecao?: ProtecaoDaEscada | null;
       /** ESCADA DE ACESSO (0.103.0): a cota da calçada; `null` volta a escada entre pavimentos. */
       desdeCotaMm?: number | null;
+      /** RAMPA DE VEÍCULOS (0.104.0): `false`/`null` volta à rampa de pedestre. */
+      veicular?: boolean | null;
     }
   /** INCÊNDIO (0.84.0): as marcas de emergência da porta; `[]` = nenhuma. A ordem e a repetição não importam. */
   | { type: 'SetOpeningEmergencia'; openingId: ObjectId; marcas: MarcaDeEmergencia[] }
@@ -1273,6 +1294,8 @@ export type Command =
       blocoIds?: ObjectId[];
       /** CÂMERA (0.99.0): posição e alvo andam juntos. */
       cameraIds?: ObjectId[];
+      /** MURO (0.104.0): o percurso anda rígido (a base do terreno fica — confira depois). */
+      muroIds?: ObjectId[];
       delta: Point;
       manterJuncoes: boolean;
     }
@@ -2326,6 +2349,59 @@ function aplicarSemHash(
       const c = findCamera(next, command.cameraId);
       next.cameras = (next.cameras ?? []).filter((x) => x.id !== c.id);
       diff.deleted.push(c.id);
+      break;
+    }
+
+    // ── Muro (0.104.0) ───────────────────────────────────────────────────────
+
+    case 'AddMuro': {
+      findLevel(next, command.levelId);
+      const id = nextId(next, 'mur');
+      const tipo = command.tipo ?? 'ALVENARIA';
+      const muro: Muro = {
+        id,
+        uid: novoUid(),
+        levelId: command.levelId,
+        tipo,
+        pontos: command.pontos.map((p, i) => paraPontoMm(p, i)),
+        alturaMm: assertIntegerMm(roundToMm(command.alturaMm ?? ALTURA_PADRAO_DO_MURO_MM), 'alturaMm'),
+        espessuraMm: assertIntegerMm(roundToMm(command.espessuraMm ?? ESPESSURA_PADRAO_DO_MURO_MM), 'espessuraMm'),
+        ...(tipo === 'MURETA_COM_GRADE' ? { alturaDaMuretaMm: assertIntegerMm(roundToMm(command.alturaDaMuretaMm ?? ALTURA_PADRAO_DA_MURETA_MM), 'alturaDaMuretaMm') } : {}),
+        ...(command.cotasDaBaseMm ? { cotasDaBaseMm: command.cotasDaBaseMm.map((c, i) => assertIntegerMm(roundToMm(c), `cotasDaBaseMm[${i}]`)) } : {}),
+        portoes: portoesDoComando(command.portoes ?? []),
+        rotulo: command.rotulo?.trim().slice(0, MAX_ROTULO_DE_MURO) || null,
+      };
+      assertMuro(muro);
+      next.muros = [...(next.muros ?? []), muro];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetMuroProps': {
+      const m = findMuro(next, command.muroId);
+      if (command.pontos !== undefined) m.pontos = command.pontos.map((p, i) => paraPontoMm(p, i));
+      if (command.tipo !== undefined) m.tipo = command.tipo;
+      if (command.alturaMm !== undefined) m.alturaMm = assertIntegerMm(roundToMm(command.alturaMm), 'alturaMm');
+      if (command.espessuraMm !== undefined) m.espessuraMm = assertIntegerMm(roundToMm(command.espessuraMm), 'espessuraMm');
+      if (command.alturaDaMuretaMm !== undefined) m.alturaDaMuretaMm = assertIntegerMm(roundToMm(command.alturaDaMuretaMm), 'alturaDaMuretaMm');
+      // A mureta é só do misto: virou outro tipo, cai; virou misto sem ela, nasce com a padrão (ou a metade do muro).
+      if (m.tipo !== 'MURETA_COM_GRADE') delete m.alturaDaMuretaMm;
+      else if (m.alturaDaMuretaMm === undefined) m.alturaDaMuretaMm = Math.min(ALTURA_PADRAO_DA_MURETA_MM, Math.round(m.alturaMm / 2));
+      if (command.cotasDaBaseMm !== undefined) {
+        if (command.cotasDaBaseMm === null) delete m.cotasDaBaseMm;
+        else m.cotasDaBaseMm = command.cotasDaBaseMm.map((c, i) => assertIntegerMm(roundToMm(c), `cotasDaBaseMm[${i}]`));
+      }
+      if (command.portoes !== undefined) m.portoes = portoesDoComando(command.portoes);
+      if (command.rotulo !== undefined) m.rotulo = command.rotulo?.trim().slice(0, MAX_ROTULO_DE_MURO) || null;
+      assertMuro(m);
+      diff.updated.push(m.id);
+      break;
+    }
+
+    case 'DeleteMuro': {
+      const m = findMuro(next, command.muroId);
+      next.muros = (next.muros ?? []).filter((x) => x.id !== m.id);
+      diff.deleted.push(m.id);
       break;
     }
 
@@ -3702,6 +3778,7 @@ function aplicarSemHash(
           rotulo: command.rotulo?.trim() || null,
           ...(command.protecao != null ? { protecao: protecaoValida(command.protecao) } : {}),
           ...(command.desdeCotaMm != null ? { desdeCotaMm: assertIntegerMm(roundToMm(command.desdeCotaMm), 'desdeCotaMm') } : {}),
+          ...(command.veicular ? { veicular: true } : {}),
         },
       ];
       diff.created.push(id);
@@ -4175,6 +4252,12 @@ function aplicarSemHash(
         if (command.desdeCotaMm === null) delete escada.desdeCotaMm;
         else escada.desdeCotaMm = assertIntegerMm(roundToMm(command.desdeCotaMm), 'desdeCotaMm');
       }
+      if (command.veicular !== undefined) {
+        if (command.veicular) escada.veicular = true;
+        else delete escada.veicular;
+      }
+      // Virou escada: a marca de veículos (só de rampa) cai junto — o clique de ida e volta a pede de novo.
+      if (escada.tipo !== 'RAMPA') delete escada.veicular;
       diff.updated.push(escada.id);
       break;
     }
@@ -4483,6 +4566,7 @@ function aplicarSemHash(
       const componenteIds = command.componenteIds ?? [];
       const blocoIds = command.blocoIds ?? [];
       const cameraIds = command.cameraIds ?? [];
+      const muroIds = command.muroIds ?? [];
       if (
         command.wallIds.length === 0 &&
         command.boundaryIds.length === 0 &&
@@ -4495,7 +4579,8 @@ function aplicarSemHash(
         vagaIds.length === 0 &&
         componenteIds.length === 0 &&
         blocoIds.length === 0 &&
-        cameraIds.length === 0
+        cameraIds.length === 0 &&
+        muroIds.length === 0
       ) {
         throw new KernelError('EMPTY_SELECTION', 'Nada para deslocar');
       }
@@ -4659,6 +4744,11 @@ function aplicarSemHash(
         c.posicao = { x: inteiro(c.posicao.x + dx), y: inteiro(c.posicao.y + dy) };
         c.alvo = { x: inteiro(c.alvo.x + dx), y: inteiro(c.alvo.y + dy) };
         diff.updated.push(c.id);
+      }
+      for (const id of muroIds) {
+        const m = findMuro(next, id);
+        m.pontos = m.pontos.map((p) => ({ x: inteiro(p.x + dx), y: inteiro(p.y + dy) }));
+        diff.updated.push(m.id);
       }
       // FAMÍLIAS ANINHADAS: os filhos dos conjuntos selecionados vão junto (uma vez só).
       const idsDeComponente = new Set(componenteIds);
@@ -5455,6 +5545,10 @@ function aplicarSemHash(
       const camerasDoNivel = (next.cameras ?? []).filter((c) => c.levelId === level.id);
       next.cameras = (next.cameras ?? []).filter((c) => c.levelId !== level.id);
       diff.deleted.push(...camerasDoNivel.map((c) => c.id));
+      // MUROS (0.104.0): são do pavimento — vão junto.
+      const murosDoNivel = (next.muros ?? []).filter((m) => m.levelId === level.id);
+      next.muros = (next.muros ?? []).filter((m) => m.levelId !== level.id);
+      diff.deleted.push(...murosDoNivel.map((m) => m.id));
       // O LOTEAMENTO deste piso vai junto (quadras, lotes, vias, áreas públicas) — antes ficava, e o invariante
       // "pavimento inexistente" recusava a remoção inteira com um erro críptico. Lote de OUTRO piso que apontava para
       // uma quadra daqui fica sem quadra, como no `DeleteQuadra`.
@@ -6247,6 +6341,13 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
 function protecaoValida(p: ProtecaoDaEscada): ProtecaoDaEscada {
   if (!PROTECOES_DE_ESCADA.includes(p)) throw new KernelError('BAD_STAIR_PROTECTION', `Proteção de escada desconhecida: ${String(p)}`);
   return p;
+}
+
+/** MURO (0.104.0): os portões do comando em mm inteiros e em ordem de posição (a ordem é do percurso, não do clique). */
+function portoesDoComando(portoes: readonly PortaoDoMuro[]): PortaoDoMuro[] {
+  return portoes
+    .map((g, i) => ({ tipo: g.tipo, offsetMm: assertIntegerMm(roundToMm(g.offsetMm), `portoes[${i}].offsetMm`), larguraMm: assertIntegerMm(roundToMm(g.larguraMm), `portoes[${i}].larguraMm`) }))
+    .sort((a, b) => a.offsetMm - b.offsetMm);
 }
 
 function paraPontoMm(p: Point, i: number): Point {

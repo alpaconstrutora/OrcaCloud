@@ -134,6 +134,7 @@ export function classificarPecas(model: BlueprintModel): Map<ObjectId, Pertenca>
   por(model.roofs, 'ARQUITETURA');
   por(model.stairs, 'ARQUITETURA');
   por(model.guardaCorpos, 'ARQUITETURA');
+  por(model.muros, 'ARQUITETURA');
   por(model.rodapes, 'ARQUITETURA');
   por(model.vagas, 'ARQUITETURA');
   // A reserva de climatização é o LUGAR do equipamento mecânico (E11.1) — o

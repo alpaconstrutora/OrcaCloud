@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'ac28b26828b3279f22697f5e4c94f9b18c18d1000359d64e9e0e277169e5428f',
+    hash: '66a2272cd9e523ebaf7a3670161e00de606619f4f44d8c2683642c224183b629',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '4f288e740aa0b0617242e1d756dba73a1ade24b129ee238410c3b707d88ee13f',
+    hash: 'c1e72f5dd2f5450f4229148225b25aec29a8fcf36639f41b50acb323909a2301',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'a2349ee27f8babec650fd3ff2ea073ae356a3eba5f17a88cdc80615d06fbcafa',
+    hash: 'c4cc555eb417069eb8f96f12e8d1921edcae4a3f005a94df7d2a04d945de59e2',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'e20022f2776152f22d8bb71fbb8f4cc24c28ca4b418fc522d44e73d86c059770',
+    hash: '50e1ab99c0a974f6a5854cfa32f6266178864c4b8f5362883a1eb3af74336f61',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '983925f002e8e10aaf1550e6c0b2c809302f7d121f7ba9cbcbc74d4796d3d13a',
+    hash: '291cad020eec58a65c6754f6c192e9cec60a30e200d5b41db2b5f5ff164f92f2',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,7 +895,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'cc524637c47b55350ed8d7ac2d5c586f7e45caa582e982e0cc86160d8237fda0',
+    hash: '1b32790b3aa8439f6c9e0f625472f39c1204f466f777693a0114ca926dd74c74',
   },
 };
 
@@ -985,6 +985,11 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
  *   — F25 da casa automática), omitido quando ausente — nenhum dos seis casos tem escada. Mesma
  *   prova, ANTES de tocar num hash: com a string em 0.102.0, os 7 goldens passaram; depois do bump
  *   as seis falhas foram todas de hash (cada uma UMA vez), contagens idênticas.
+ *
+ *   0.103.0 → 0.104.0 (18/10/2026): `muros?` (o muro, a grade e os portões — F26 da casa
+ *   automática) e `Escada.veicular?`, omitidos quando ausentes — nenhum dos seis casos tem muro
+ *   nem rampa. Mesma prova, ANTES de tocar num hash: com a string em 0.103.0, os 7 goldens
+ *   passaram; depois do bump as seis falhas foram todas de hash, contagens idênticas.
  */
 describe('kernel geométrico · golden files', () => {
   it.each(Object.entries(CASES))('%s mantém o payload canônico', (_name, expected) => {

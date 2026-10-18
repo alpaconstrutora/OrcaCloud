@@ -100,11 +100,22 @@ describe('F23 — a estrutura nas premissas', () => {
 
 describe('F25 — a terraplenagem nas premissas', () => {
   it('completa como os outros grupos e chega ao motor sobre o padrão dele (os parâmetros de talude do padrão)', () => {
-    expect(premissasDaCasaDaColuna({}).terraplenagem).toEqual({ lancar: true, margemDoPlatoMm: 1000, pisoAcimaDoPlatoMm: 150, alturaMaximaDoTaludeM: 1.5 });
+    expect(premissasDaCasaDaColuna({}).terraplenagem).toEqual({ lancar: true, margemDoPlatoMm: 1000, pisoAcimaDoPlatoMm: 150, alturaMaximaDoTaludeM: 1.5, rampaDeVeiculosMaxPct: 20 });
     const p = premissasDaCasaDaColuna({ terraplenagem: { lancar: false, alturaMaximaDoTaludeM: 2.5, margemDoPlatoMm: 'x' } });
-    expect(p.terraplenagem).toEqual({ lancar: false, margemDoPlatoMm: 1000, pisoAcimaDoPlatoMm: 150, alturaMaximaDoTaludeM: 2.5 });
+    expect(p.terraplenagem).toEqual({ lancar: false, margemDoPlatoMm: 1000, pisoAcimaDoPlatoMm: 150, alturaMaximaDoTaludeM: 2.5, rampaDeVeiculosMaxPct: 20 });
     const h = hipotesesDasPremissas(p);
     expect(h.terraplenagem).toMatchObject({ lancar: false, alturaMaximaDoTaludeM: 2.5, rampaMaximaPct: 8.33 });
     expect(h.terraplenagem?.parametros).toBeDefined();
+  });
+});
+
+describe('F26 — o muro nas premissas', () => {
+  it('completa com o padrão (mureta com grade, 1,80 m, calçadas); tipo desconhecido cai no padrão; chega ao motor inteiro', () => {
+    expect(premissasDaCasaDaColuna({}).muro).toEqual({ lancar: true, tipoDaFrente: 'MURETA_COM_GRADE', alturaDaFrenteMm: 1800, alturaDasDivisasMm: 1800, calcadas: true });
+    const p = premissasDaCasaDaColuna({ muro: { tipoDaFrente: 'PORTA', alturaDasDivisasMm: 2200, calcadas: false }, terraplenagem: { rampaDeVeiculosMaxPct: 25 } });
+    expect(p.muro).toEqual({ lancar: true, tipoDaFrente: 'MURETA_COM_GRADE', alturaDaFrenteMm: 1800, alturaDasDivisasMm: 2200, calcadas: false });
+    const h = hipotesesDasPremissas(p);
+    expect(h.muro).toMatchObject({ lancar: true, alturaDasDivisasMm: 2200, calcadas: false, espessuraMm: 150, materialDoJardim: 'GRAMA' });
+    expect(h.terraplenagem).toMatchObject({ rampaDeVeiculosMaxPct: 25 });
   });
 });

@@ -18,9 +18,10 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { AcabamentosDoAmbiente, BlueprintModel, Boundary, Circuito, LigacaoDoCircuito, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, Terminal, TipoDeGuardaCorpo, Wall } from './model';
+import type { AcabamentosDoAmbiente, BlueprintModel, Boundary, Circuito, LigacaoDoCircuito, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, Terminal, TipoDeGuardaCorpo, TipoDeMuro, TipoDePortao, Wall } from './model';
 import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
-import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe, materialDoTrecho, TIPOS_DE_TERMINAL_DE_AR } from './model';
+import { areasDoMuro } from './muro';
+import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, comprimentoDoMuro, faseDe, materialDoTrecho, TIPOS_DE_TERMINAL_DE_AR } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
 import { assinaturaDaEsquadria, descricaoDaConfiguracao, nomeDaEsquadria } from './model';
@@ -220,7 +221,10 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // fixa · de abrir · de correr + bandeira basculante"), e duas janelas de mesma
   // medida com folhas diferentes viram DUAS linhas (a configuração entra na
   // assinatura). Esquadria sem folhas declaradas: linha e chave de antes.
-  version: 'quant-1.28.0',
+  // quant-1.29.0 (18/10/2026, F26 da casa automática, kernel 0.104.0): os MUROS — `muros` (um por muro: comprimento,
+  // alvenaria e grade em m² de face nos trechos cheios, portões por tipo) e os totais `comprimentoMuroM`,
+  // `areaMuroAlvenariaM2`, `areaMuroGradeM2`, `portoesDePedestre`, `portoesDeGaragem`. Desenho sem muro: tudo zero.
+  version: 'quant-1.29.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -607,6 +611,29 @@ export interface QuantidadeGuardaCorpo {
   sugerido: boolean;
 }
 
+/** MURO (0.104.0): um por muro — o que se compra dele. */
+export interface QuantidadeMuro {
+  muroId: string;
+  uid: string;
+  tipo: TipoDeMuro;
+  rotulo: string | null;
+  /** O percurso inteiro, m. */
+  comprimentoM: number;
+  /** Os trechos cheios (sem os vãos dos portões), m. */
+  comprimentoCheioM: number;
+  alturaM: number;
+  /** Face de alvenaria (o muro, ou a mureta no misto), m². */
+  areaAlvenariaM2: number;
+  /** Face de grade, m². */
+  areaGradeM2: number;
+  portoesDePedestre: number;
+  portoesDeGaragem: number;
+  /** Largura somada dos portões, m (o portão se compra por m² ou por peça — a largura dá o tamanho). */
+  larguraDosPortoesM: number;
+  /** Os portões, na ordem do percurso. */
+  portoes: { tipo: TipoDePortao; larguraM: number }[];
+}
+
 /** Guarda-corpos somados por tipo × material × código — a lista de compras. */
 export interface QuantidadePorGuardaCorpo {
   tipo: TipoDeGuardaCorpo;
@@ -843,6 +870,8 @@ export interface Quantitativos {
   escadas: QuantidadeEscada[];
   /** Guarda-corpos e corrimãos (E7.3). */
   guardaCorpos: QuantidadeGuardaCorpo[];
+  /** MUROS (quant-1.29.0). Vazio sem muro desenhado. */
+  muros?: QuantidadeMuro[];
   /** TRECHOS DE RODAPÉ (quant-1.16.0). Vazio sem trecho desenhado. */
   rodapes: QuantidadeRodape[];
   /** Trechos de instalação, um a um, com o comprimento REAL de cada. */
@@ -900,6 +929,12 @@ export interface Quantitativos {
     comprimentoGuardaCorpoM: number;
     comprimentoCorrimaoM: number;
     porGuardaCorpo: QuantidadePorGuardaCorpo[];
+    /** MUROS (quant-1.29.0): o percurso, as faces e os portões. Zero sem muro. */
+    comprimentoMuroM?: number;
+    areaMuroAlvenariaM2?: number;
+    areaMuroGradeM2?: number;
+    portoesDePedestre?: number;
+    portoesDeGaragem?: number;
     /** Soma dos TRECHOS desenhados quando há algum; senão, o derivado por ambiente (perímetro − portas). */
     comprimentoRodapeM: number;
     /** `TRECHOS` quando o total vem dos elementos, `DERIVADO` quando vem dos ambientes (quant-1.16.0). */
@@ -2011,6 +2046,26 @@ export function computeQuantities(
       sugerido: !!g.sugerido,
     };
   });
+  // ── Muros (quant-1.29.0) ───────────────────────────────────────────────────
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const muros: QuantidadeMuro[] = (model.muros ?? []).map((m) => {
+    const a = areasDoMuro(model, m);
+    return {
+      muroId: m.id,
+      uid: m.uid,
+      tipo: m.tipo,
+      rotulo: m.rotulo ?? null,
+      comprimentoM: r2(comprimentoDoMuro(m) / 1000),
+      comprimentoCheioM: a.comprimentoCheioM,
+      alturaM: m.alturaMm / 1000,
+      areaAlvenariaM2: a.alvenariaM2,
+      areaGradeM2: a.gradeM2,
+      portoesDePedestre: m.portoes.filter((g) => g.tipo === 'PEDESTRE').length,
+      portoesDeGaragem: m.portoes.filter((g) => g.tipo === 'GARAGEM').length,
+      larguraDosPortoesM: r2(m.portoes.reduce((s, g) => s + g.larguraMm, 0) / 1000),
+      portoes: m.portoes.map((g) => ({ tipo: g.tipo, larguraM: g.larguraMm / 1000 })),
+    };
+  });
   // TRECHOS DE RODAPÉ (P2.21): um por trecho; agrupados por item × altura.
   const rodapes: QuantidadeRodape[] = (model.rodapes ?? []).map((r) => {
     let compMm = 0;
@@ -2146,6 +2201,7 @@ export function computeQuantities(
     telhados,
     escadas,
     guardaCorpos,
+    muros,
     rodapes,
     trechos,
     sobreposicoes,
@@ -2175,6 +2231,11 @@ export function computeQuantities(
       comprimentoGuardaCorpoM: guardaCorpos.filter((g) => g.tipo === 'GUARDA_CORPO').reduce((s, g) => s + g.comprimentoM, 0),
       comprimentoCorrimaoM: guardaCorpos.filter((g) => g.tipo === 'CORRIMAO').reduce((s, g) => s + g.comprimentoM, 0),
       porGuardaCorpo,
+      comprimentoMuroM: r2(muros.reduce((s, m) => s + m.comprimentoM, 0)),
+      areaMuroAlvenariaM2: r2(muros.reduce((s, m) => s + m.areaAlvenariaM2, 0)),
+      areaMuroGradeM2: r2(muros.reduce((s, m) => s + m.areaGradeM2, 0)),
+      portoesDePedestre: muros.reduce((s, m) => s + m.portoesDePedestre, 0),
+      portoesDeGaragem: muros.reduce((s, m) => s + m.portoesDeGaragem, 0),
       // P2.21: os trechos mandam quando existem; senão, o derivado de sempre.
       comprimentoRodapeM: rodapes.length > 0 ? rodapes.reduce((s, r) => s + r.comprimentoM, 0) : (ambientes.reduce((s, a) => s + a.comprimentoRodapeM, 0)),
       origemDoRodape: rodapes.length > 0 ? 'TRECHOS' : 'DERIVADO',

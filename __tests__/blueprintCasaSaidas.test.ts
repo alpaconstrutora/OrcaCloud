@@ -106,7 +106,9 @@ describe('a casa automática nas saídas do app (F11)', () => {
       'IFCUNITARYEQUIPMENT',
     ];
     expect(devemSair.filter((t) => !(tipos[t] > 0))).toEqual([]);
-    expect(tipos.IFCWALL).toBe(casa.walls.length);
+    // F26: o muro sai como IfcWall também (a alvenaria, ou a mureta do misto) — as paredes mais os muros que têm alvenaria.
+    expect(tipos.IFCWALL).toBe(casa.walls.length + (casa.muros ?? []).filter((m) => m.tipo !== 'GRADE').length);
+    expect((casa.muros ?? []).length).toBeGreaterThan(0);
     expect(tipos.IFCCOLUMN).toBe(casa.structures.filter((s) => s.kind === 'PILAR').length);
   });
 

@@ -95,3 +95,48 @@ export function paineisDaPolilinha(
   }
   return saida;
 }
+
+/** MURO (0.104.0): um painel por trecho cheio e por PARTE (a alvenaria e a grade do misto). */
+export interface PainelDeMuro extends PainelNoMundo {
+  parte: 'ALVENARIA' | 'GRADE';
+  alturaM: number;
+  espessuraM: number;
+}
+
+/**
+ * Os painéis de um muro no mundo: cada trecho cheio (`trechosDoMuro`, com a base do terreno nas pontas) vira uma caixa
+ * na MÉDIA da base das duas pontas — a casa automática põe vértice a cada poucos metros, e o degrau que sobra é menor
+ * que a régua do 3D. No misto, a mureta embaixo e a grade em cima.
+ */
+export function paineisDoMuro(
+  trechos: readonly { a: Ponto2D; b: Ponto2D; baseAMm: number; baseBMm: number; comprimentoMm: number }[],
+  muro: { tipo: 'ALVENARIA' | 'GRADE' | 'MURETA_COM_GRADE'; alturaMm: number; espessuraMm: number; alturaDaMuretaMm?: number },
+): PainelDeMuro[] {
+  const saida: PainelDeMuro[] = [];
+  const partes: { parte: 'ALVENARIA' | 'GRADE'; z0: number; h: number }[] =
+    muro.tipo === 'ALVENARIA'
+      ? [{ parte: 'ALVENARIA', z0: 0, h: muro.alturaMm }]
+      : muro.tipo === 'GRADE'
+        ? [{ parte: 'GRADE', z0: 0, h: muro.alturaMm }]
+        : [
+            { parte: 'ALVENARIA', z0: 0, h: muro.alturaDaMuretaMm ?? 0 },
+            { parte: 'GRADE', z0: muro.alturaDaMuretaMm ?? 0, h: muro.alturaMm - (muro.alturaDaMuretaMm ?? 0) },
+          ];
+  trechos.forEach((t, i) => {
+    if (t.comprimentoMm < 1) return;
+    const base = (t.baseAMm + t.baseBMm) / 2;
+    for (const p of partes) {
+      if (p.h <= 0) continue;
+      saida.push({
+        parte: p.parte,
+        comprimentoM: t.comprimentoMm * S_3D,
+        alturaM: p.h * S_3D,
+        espessuraM: muro.espessuraMm * S_3D,
+        pos: [((t.a.x + t.b.x) / 2) * S_3D, (base + p.z0 + p.h / 2) * S_3D, ((t.a.y + t.b.y) / 2) * S_3D],
+        rot: -Math.atan2(t.b.y - t.a.y, t.b.x - t.a.x),
+        trecho: i + 1,
+      });
+    }
+  });
+  return saida;
+}

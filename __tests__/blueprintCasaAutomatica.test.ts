@@ -1244,8 +1244,16 @@ describe('F27 — o serviço com fachada na casa larga e rasa', () => {
     const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
     const levelId = base.levels[0].id;
     const m = applyBatch(base, v.map(([x, y, papel], i): Command => ({ type: 'AddBoundary', levelId, a: point(x, y), b: point(v[(i + 1) % v.length][0], v[(i + 1) % v.length][1]), kind: 'TERRENO', papel }))).model;
-    const p = planejarCasa(m, entrada(m), { pavimentos: 1 });
+    // Com o catálogo de climatização: o lavabo que fica no miolo ganha o exaustor (F21) — vira CONFERIR, não "sem lado".
+    const modelos = modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s2, i) => ({ id: `t${i}`, nome: s2.nome, familia: s2.propriedades.familia, active: true, propriedades: s2.propriedades })));
+    const p = planejarCasa(
+      m,
+      entrada(m, { modelosDeClimatizacao: modelos, climatizacao: { ...HIPOTESES_CLIMATIZACAO_PADRAO, clima: { cidade: null, tbsExternaC: 34, tbuExternaC: 25, altitudeM: 0 } } }),
+      { pavimentos: 1 },
+    );
     expect(p.pendencias.filter((x) => /ficou sem lado externo/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+    // E a área de serviço tem parede externa (o aquecedor a gás, a roupa).
+    expect(p.pendencias.some((x) => /^Arquitetura: Área de serviço/.test(x.texto))).toBe(false);
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
   }, 240_000);
 });

@@ -21,6 +21,10 @@ import {
 export const BUCKET_ANEXOS_AVULSO = 'financeiro-anexos';
 
 /** O que o formulário de edição precisa reabrir de um título avulso. */
+/** Estados de supplier_payments em que o título não se edita nem se exclui: o dinheiro
+ *  está saindo ou já saiu pela Asaas. FAILED e CANCELLED não travam. */
+export const STATUS_ASAAS_TRAVA_TITULO = ['APPROVED', 'PENDING', 'SCHEDULED', 'DONE'];
+
 export interface PagamentoAvulsoGravado {
     id: string;
     organization_id: string;
@@ -426,6 +430,16 @@ export const payableService = {
     ): Promise<void> {
         const [l] = montarTitulosAvulsos({ ...form, parcelas: 1, jaPago: false }, 'edicao');
         if (!l) throw new Error('Informe valor e vencimento.');
+        // Título sendo pago pela Asaas não muda valor nem credor no meio do caminho
+        // (o PIX já saiu com o valor e a chave de antes). Mesmos estados da trava de
+        // exclusão no banco (aplicar_20271018420000).
+        const { data: emCurso } = await supabase.from('supplier_payments').select('status')
+            .eq('transaction_id', atual.id).in('status', STATUS_ASAAS_TRAVA_TITULO).limit(1);
+        if (emCurso && emCurso.length > 0) {
+            throw new Error(emCurso[0].status === 'DONE'
+                ? 'Este título foi pago pela Asaas e não pode ser editado.'
+                : 'Este título tem pagamento pela Asaas em andamento. Cancele o pagamento antes de editar.');
+        }
         const categoria = await resolverCategoriaPorId(form.categoryId);
 
         const updates: Record<string, unknown> = {
@@ -547,6 +561,8 @@ export const payableService = {
             if (error.code === '23503') {
                 throw new Error('Este título está conciliado com o extrato bancário. Desfaça a conciliação antes de excluir.');
             }
+            // Trava do banco: pagamento pela Asaas em andamento ou concluído (aplicar_20271018420000).
+            if (error.code === 'P0001') throw new Error(error.message);
             throw error;
         }
         if (!data || data.length === 0) {

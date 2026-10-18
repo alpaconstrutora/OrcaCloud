@@ -3,7 +3,7 @@ import {
     AlertCircle, Building2, Check, ChevronDown, Download, FileText, Landmark, Loader2, MoveHorizontal, Paperclip, Plus, Receipt, RefreshCw, Search, Tag, Undo2, X,
 } from 'lucide-react';
 import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financial';
-import { payableService, payableParty } from '../services/payableService';
+import { payableService, payableParty, STATUS_ASAAS_TRAVA_TITULO } from '../services/payableService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { propertyExpenseService } from '../services/propertyExpenseService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
@@ -314,10 +314,20 @@ interface Props {
 }
 
 /** Por que a linha avulsa não pode ser editada — `null` quando pode. */
-function motivoNaoEditar(row: Payable): string | null {
+/** Pagamento pela Asaas em andamento ou concluído trava editar e excluir o título:
+ *  o PIX/boleto saiu com o valor e o favorecido de antes. O banco também recusa a
+ *  exclusão (aplicar_20271018420000). */
+function motivoTravaAsaas(sp: SupplierPayment | undefined, acao: 'editar' | 'excluir'): string | null {
+    if (!sp || !STATUS_ASAAS_TRAVA_TITULO.includes(sp.status)) return null;
+    return sp.status === 'DONE'
+        ? `Pago pela Asaas: não dá para ${acao}.`
+        : `Pagamento pela Asaas em andamento: cancele o pagamento antes de ${acao}.`;
+}
+
+function motivoNaoEditar(row: Payable, sp?: SupplierPayment): string | null {
     if (row.effective_status === 'PAGO') return 'Título pago: estorne a baixa para editar.';
     if (row.effective_status === 'CANCELADO') return 'Título cancelado não se edita.';
-    return null;
+    return motivoTravaAsaas(sp, 'editar');
 }
 
 // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
@@ -1320,17 +1330,24 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                     {row.source_system === 'MANUAL' && onEditarAvulso && (
                                                         // O span carrega o motivo: botão desligado tem
                                                         // pointer-events-none e não mostraria o próprio title.
-                                                        <span className="inline-flex" title={motivoNaoEditar(row) ?? undefined}>
+                                                        <span className="inline-flex" title={motivoNaoEditar(row, pagamentosAsaas[row.id]) ?? undefined}>
                                                             <ActionIconButton
                                                                 kind="edit"
-                                                                title={motivoNaoEditar(row) ?? 'Editar pagamento avulso'}
-                                                                disabled={!!motivoNaoEditar(row)}
+                                                                title={motivoNaoEditar(row, pagamentosAsaas[row.id]) ?? 'Editar pagamento avulso'}
+                                                                disabled={!!motivoNaoEditar(row, pagamentosAsaas[row.id])}
                                                                 onClick={() => onEditarAvulso(row)}
                                                             />
                                                         </span>
                                                     )}
                                                     {row.source_system === 'MANUAL' && (
-                                                        <ActionIconButton kind="delete" onClick={() => excluir(row)} />
+                                                        <span className="inline-flex" title={motivoTravaAsaas(pagamentosAsaas[row.id], 'excluir') ?? undefined}>
+                                                            <ActionIconButton
+                                                                kind="delete"
+                                                                title={motivoTravaAsaas(pagamentosAsaas[row.id], 'excluir') ?? 'Excluir'}
+                                                                disabled={!!motivoTravaAsaas(pagamentosAsaas[row.id], 'excluir')}
+                                                                onClick={() => excluir(row)}
+                                                            />
+                                                        </span>
                                                     )}
                                                 </div>
                                             </td>

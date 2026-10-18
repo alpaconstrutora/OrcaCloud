@@ -34,6 +34,10 @@ export interface DestinoPix {
     opcoes: OpcaoChave[];
 }
 
+/** Texto vazio do cadastro conta como ausente: `''` passava pelo `??` e o PIX real de
+ *  18/10/2026 saiu com favorecido em branco ("PIX enviado para ."). */
+const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
+
 function opcao(ref: string, rotulo: string, tipoGuardado: string | null, chaveBruta: string, titular: string | null, documento: string | null, principal: boolean): OpcaoChave {
     const tipo = (tipoGuardado as TipoChavePix | null) || deduzirTipoChave(chaveBruta);
     const r = validarChavePix(tipo, chaveBruta);
@@ -59,7 +63,7 @@ export async function destinoDoTitulo(admin: Admin, titulo: TituloParaPix): Prom
             opcoes: (contas ?? []).map((c: Record<string, unknown>) => opcao(
                 `fornecedor:${c.id}`, `Cadastro do fornecedor${c.bank_name ? ` · ${c.bank_name}` : ''}`,
                 c.pix_key_type as string | null, String(c.pix_key),
-                (c.beneficiary_name as string) ?? s?.name ?? null, (c.beneficiary_document as string) ?? s?.document ?? null,
+                texto(c.beneficiary_name) ?? texto(s?.name), texto(c.beneficiary_document) ?? texto(s?.document),
                 !!c.is_pix_primary,
             )),
         };
@@ -75,7 +79,7 @@ export async function destinoDoTitulo(admin: Admin, titulo: TituloParaPix): Prom
             opcoes: (contas ?? []).map((c: Record<string, unknown>) => opcao(
                 `colaborador:${c.id}`, `Cadastro do colaborador${c.bank_name ? ` · ${c.bank_name}` : ''}`,
                 c.pix_key_type as string | null, String(c.pix_key),
-                (c.holder_name as string) ?? e?.name ?? null, e?.cpf ?? null, !!c.is_primary,
+                texto(c.holder_name) ?? texto(e?.name), texto(e?.cpf), !!c.is_primary,
             )),
         };
     }
@@ -96,7 +100,7 @@ export async function destinoDoTitulo(admin: Admin, titulo: TituloParaPix): Prom
                 .select('id,banco_nome,pix_chave,pix_tipo,favorecido').eq('id', p.bank_account_id).maybeSingle();
             if (cba?.pix_chave) {
                 opcoes.push(opcao(`socio-conta:${cba.id}`, `Conta do sócio${cba.banco_nome ? ` · ${cba.banco_nome}` : ''}`,
-                    cba.pix_tipo, cba.pix_chave, cba.favorecido ?? p?.nome ?? null, p?.documento ?? null, !p?.pix_chave));
+                    cba.pix_tipo, cba.pix_chave, texto(cba.favorecido) ?? texto(p?.nome), texto(p?.documento), !p?.pix_chave));
             }
         }
         return { favorecido: { ...favorecido, id: p?.id ?? favorecido.id }, nome: p?.nome ?? null, documento: p?.documento ?? null, opcoes };

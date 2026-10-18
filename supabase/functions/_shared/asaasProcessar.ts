@@ -15,6 +15,7 @@
 // `trg_sync_boleto_baixa` leva boleto→'pago'/invoice→'paid' na baixa do título
 // e desfaz no estorno. Só o boleto SEM título (sequela antiga) é gravado aqui.
 
+import { criarMotor } from '../../../services/processMotor.ts';
 import {
     type PayloadAsaas,
     ramoDoEvento,
@@ -33,6 +34,19 @@ import {
 
 // deno-lint-ignore no-explicit-any
 type Admin = any;
+
+// Processos da baixa (Motor de Processos — o MESMO módulo do navegador, como na
+// reconciliation-engine). A baixa manual dispara pelo payableService.darBaixa no
+// navegador; a baixa pela Asaas acontece aqui, sem navegador, e não disparava nada
+// (visto no 1º PIX real, 18/10/2026). Best-effort: o motor nunca lança, e a
+// instância é idempotente pelo título.
+async function dispararProcessosDaBaixa(admin: Admin, titulos: string[]): Promise<void> {
+    const motor = criarMotor(admin);
+    for (const id of titulos) {
+        await motor.triggerForTransaction(id, 'internal_transaction.paid');
+        await motor.triggerSettlement(id);
+    }
+}
 
 export interface ResultadoProcessamento {
     ok: boolean;
@@ -124,6 +138,7 @@ async function processarCobranca(admin: Admin, evento: string, p: PayloadAsaas):
             }
         }, (m) => anotarPendencia(admin, 'cobranca', charge.id, m));
         if (pendencia) return { ok: true, acao: 'pendencia', detalhe: pendencia };
+        if (charge.transaction_id) await dispararProcessosDaBaixa(admin, [charge.transaction_id]);
         return { ok: true, acao: 'recebido' };
     }
 
@@ -249,6 +264,7 @@ async function processarSaida(
         // a Pagar, período fechado) não pode virar 500: a Asaas reenviaria,
         // encontraria o evento já reivindicado, e depois de várias falhas pausaria
         // a fila de webhooks da conta inteira. Vira pendência anotada no registro.
+        let baixados: string[] = [];
         const pendencia = await comPendencia(async () => {
             const titulos = await idsDosTitulos(admin, sp);
             if (titulos.length) {
@@ -261,6 +277,7 @@ async function processarSaida(
                 if (tipo === 'transfer') baixa.payment_type = 'PIX';
                 if (sp.payment_account_id) baixa.payment_account_id = sp.payment_account_id;
                 gravou(await admin.from('internal_transactions').update(baixa).in('id', titulos));
+                baixados = titulos;
             } else if (sp.boleto_id) {
                 // Boleto sem título no razão: o gatilho não tem por onde agir.
                 gravou(await admin.from('boletos').update({ status: 'pago' }).eq('id', sp.boleto_id)
@@ -283,6 +300,7 @@ async function processarSaida(
             }
         }, (m) => anotarPendencia(admin, 'saida', sp.id, m));
         if (pendencia) return { ok: true, acao: 'pendencia', detalhe: pendencia };
+        await dispararProcessosDaBaixa(admin, baixados);
         return { ok: true, acao: tipo === 'bill' ? 'boleto_pago' : 'pix_enviado' };
     }
 

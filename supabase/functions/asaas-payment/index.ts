@@ -74,6 +74,8 @@ interface TransferResponse {
     authorized?: boolean;
     failReason?: string;
     transactionReceiptUrl?: string;
+    /** Titular que a Asaas resolveu pela chave PIX (DICT) — o nome real de quem recebe. */
+    bankAccount?: { ownerName?: string; cpfCnpj?: string };
 }
 
 const hojeBRT = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
@@ -286,10 +288,18 @@ serve(async (req: Request) => {
             return json({ error: `Asaas (PIX): ${msg}`, detail: t }, 502);
         }
 
+        // Titular resolvido pela Asaas vale mais que o do cadastro (que pode estar
+        // vazio — 1º PIX real, 18/10/2026, saiu "PIX enviado para .").
+        const titularAsaas = t.bankAccount?.ownerName?.trim() || null;
+        const docAsaas = (t.bankAccount?.cpfCnpj ?? '').replace(/\D/g, '') || null;
+        const favorecidoFinal = titularAsaas ?? nome;
+
         // Fica em andamento; a conclusão (título PAGO + taxa) é do processador
         // de eventos — o mesmo do webhook. PIX pode voltar DONE já na resposta.
         await admin.from('supplier_payments').update({
             asaas_transfer_id: t.id,
+            beneficiary_name: favorecidoFinal,
+            beneficiary_document: docAsaas ?? documento,
             status: t.status === 'FAILED' ? 'FAILED' : t.status === 'CANCELLED' ? 'CANCELLED' : (agendado ? 'SCHEDULED' : 'PENDING'),
             failure_reason: t.status === 'FAILED' ? (t.failReason ?? 'Recusado pela Asaas') : null,
             fee: t.transferFee ?? null,
@@ -308,7 +318,7 @@ serve(async (req: Request) => {
             asaas_transfer_id: t.id,
             status: t.status ?? null,
             aguardando_autorizacao: t.authorized === false,
-            beneficiary_name: nome,
+            beneficiary_name: favorecidoFinal,
         });
     }
 

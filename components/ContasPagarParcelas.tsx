@@ -1480,7 +1480,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                         ? 'PIX criado na Asaas, aguardando autorização por token no app da Asaas.'
                         : r.status === 'DONE'
                             ? `PIX enviado e título baixado (${r.beneficiary_name ?? 'favorecido'}).`
-                            : `PIX enviado para ${r.beneficiary_name ?? 'o favorecido'}. A baixa acontece quando a Asaas confirmar.`);
+                            : `PIX enviado para ${r.beneficiary_name?.trim() || 'o favorecido'}. A baixa acontece quando a Asaas confirmar.`);
                     if (r.status === 'DONE') onReload();
                 }}
             />

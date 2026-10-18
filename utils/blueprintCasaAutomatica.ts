@@ -119,6 +119,7 @@ import {
   semPortaDeEntrada,
   prumadasPeloMeioDoComodo,
   shaftsDoSobrado,
+  alinharJanelasDoSuperior,
   trechosDeTransicao,
   vigasDeTransicao,
   type HipotesesDoSobrado,
@@ -2813,6 +2814,14 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       `sobrado: ${paredes} paredes; térreo com ${et.r.ambientes.length} e superior com ${es.r.ambientes.length} ambientes; escada em U de ${sobrado.escada.degraus} degraus (${sobrado.escada.espelhoMm} × ${sobrado.escada.pisoMm} mm) no núcleo à ${lado} — térreo: ${et.texto}; superior: ${es.texto}`,
     );
 
+    // F27: as janelas de cima alinhadas com as de baixo, antes dos pilares (o intermediário do térreo sobe entre elas).
+    {
+      const alinhadas = alinharJanelasDoSuperior(m, T, sobrado.nivelSuperiorId);
+      if (alinhadas.length) {
+        aplicar(alinhadas);
+        decisoes.push(`Sobrado: ${alinhadas.length} janela(s) do superior alinhada(s) com as do térreo, na mesma fachada.`);
+      }
+    }
     lancarEscadaDeAcesso();
     lancarRampaDaGaragem();
     // F26: o muro logo depois da casa — antes da água e da elétrica, que põem o hidrômetro e o medidor nele.

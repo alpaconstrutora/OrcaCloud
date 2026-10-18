@@ -9,6 +9,7 @@ import { programaDaCasa, PROGRAMA_CURTO_PADRAO } from '../utils/blueprintProgram
 import type { AmbienteGerado, Retangulo } from '../utils/blueprintGerador';
 import { HIPOTESES_PILARES_PADRAO } from '../utils/blueprintPilaresAutomaticos';
 import {
+  alinharJanelasDoSuperior,
   comandoDaEscada,
   dividirPrograma,
   escolherNucleo,
@@ -401,5 +402,49 @@ describe('F14c — a laje rebaixada e o shaft de cada banheiro de cima', () => {
         expect(dentro).toBe(false);
       }
     });
+  });
+});
+
+describe('F27 — alinharJanelasDoSuperior (as janelas de cima nas de baixo, na mesma fachada)', () => {
+  /** Térreo e superior com a mesma fachada de 10 m em y = 0; janelas de baixo em 1,0–2,0 m e 5,0–6,0 m (centros 1,5 e 5,5). */
+  const sobradoSintetico = (janelasDeCima: [number, number][], encontroEm: number | null = null) => {
+    let m = applyBatch(emptyModel(), [
+      { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 },
+      { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 },
+    ] as Command[]).model;
+    const [T, S] = m.levels.map((l) => l.id);
+    m = applyBatch(m, [
+      { type: 'AddWall', levelId: T, a: point(0, 0), b: point(10000, 0), thicknessMm: 150, heightMm: 2800 },
+      { type: 'AddWall', levelId: S, a: point(0, 0), b: point(10000, 0), thicknessMm: 150, heightMm: 2800 },
+      ...(encontroEm != null ? [{ type: 'AddWall', levelId: S, a: point(encontroEm, 0), b: point(encontroEm, 4000), thicknessMm: 150, heightMm: 2800 } as Command] : []),
+    ] as Command[]).model;
+    const wT = m.walls.find((w) => w.levelId === T)!;
+    const wS = m.walls.find((w) => w.levelId === S && w.a.y === 0 && w.b.y === 0)!;
+    m = applyBatch(m, [
+      { type: 'AddOpening', wallId: wT.id, kind: 'window', offsetMm: 1000, widthMm: 1000, heightMm: 1200, sillMm: 1000 },
+      { type: 'AddOpening', wallId: wT.id, kind: 'window', offsetMm: 5000, widthMm: 1000, heightMm: 1200, sillMm: 1000 },
+      ...janelasDeCima.map(([o, w]) => ({ type: 'AddOpening', wallId: wS.id, kind: 'window', offsetMm: o, widthMm: w, heightMm: 1200, sillMm: 1000 })),
+    ] as Command[]).model;
+    return { m, T, S, wS };
+  };
+
+  it('cada janela de cima vai ao centro da de baixo mais perto', () => {
+    // Em cima: 1,7–3,2 (centro 2,45 → 1,5: offset 0,75) e 4,0–5,5 (centro 4,75 → 5,5: offset 4,75).
+    const { m, T, S, wS } = sobradoSintetico([[1700, 1500], [4000, 1500]]);
+    const cmds = alinharJanelasDoSuperior(m, T, S);
+    const depois = applyBatch(m, cmds).model.openings.filter((o) => o.wallId === wS.id).map((o) => o.offsetMm).sort((a, b) => a - b);
+    expect(depois).toEqual([750, 4750]);
+  });
+
+  it('não atravessa o encontro com uma parede interna (a janela fica no seu cômodo)', () => {
+    // Um encontro em x = 6 m: a 2ª janela (4,0–5,5) iria a 4,75–6,25 e passaria por ele — fica onde estava.
+    const { m, T, S, wS } = sobradoSintetico([[1700, 1500], [4000, 1500]], 6000);
+    const depois = applyBatch(m, alinharJanelasDoSuperior(m, T, S)).model.openings.filter((o) => o.wallId === wS.id).map((o) => o.offsetMm).sort((a, b) => a - b);
+    expect(depois).toEqual([750, 4000]);
+  });
+
+  it('longe demais (além de 1,5 m) ou sem janela embaixo: nada se move', () => {
+    const { m, T, S } = sobradoSintetico([[8000, 1200]]);
+    expect(alinharJanelasDoSuperior(m, T, S)).toEqual([]);
   });
 });

@@ -1240,3 +1240,66 @@ export function zonaMolhadaDoBanheiro(
   return r.length >= 3 ? pecaValida(r, AREA_MINIMA_DA_PECA_DE_LAJE_MM2) : null;
 }
 
+
+/**
+ * F27 da casa automática (18/10/2026): as JANELAS do superior alinhadas com as do térreo, na mesma fachada. Os dois
+ * pavimentos saem do gerador cada um com o seu arranjo, e as janelas de cima ficavam desencontradas das de baixo — o
+ * pilar intermediário do térreo (entre duas janelas) caía, em cima, no meio de uma janela, e ficava fora (sobrado
+ * 12 × 30: 2 pilares; "a viga do superior vence o vão maior"). Cada janela de cima vai para o centro da janela de baixo
+ * mais perto (até `alcanceMm`, uma de baixo para cada de cima), se ali ela continua inteira na parede, a `folgaMm` das
+ * pontas e das outras aberturas, e sem atravessar o encontro com uma parede interna (fica no mesmo cômodo — a
+ * iluminação de 1/6 dele não muda). Devolve os `MoveOpening`.
+ */
+export function alinharJanelasDoSuperior(model: BlueprintModel, T: ObjectId, S: ObjectId, alcanceMm = 1500, folgaMm = 300): Command[] {
+  const doNivel = (L: ObjectId) => model.walls.filter((w) => w.levelId === L);
+  const paredesT = doNivel(T);
+  const paredesS = doNivel(S);
+  const comandos: Command[] = [];
+  for (const ws of paredesS) {
+    const L = Math.hypot(ws.b.x - ws.a.x, ws.b.y - ws.a.y);
+    if (L < 1) continue;
+    const u = { x: (ws.b.x - ws.a.x) / L, y: (ws.b.y - ws.a.y) / L };
+    const ao = (p: Point) => (p.x - ws.a.x) * u.x + (p.y - ws.a.y) * u.y;
+    const perp = (p: Point) => Math.abs((p.x - ws.a.x) * u.y - (p.y - ws.a.y) * u.x);
+    const janelas = model.openings.filter((o) => o.wallId === ws.id && o.kind === 'window').sort((a, b) => a.offsetMm - b.offsetMm);
+    if (!janelas.length) continue;
+    // As janelas de baixo na MESMA linha (paredes do térreo colineares): o centro de cada uma, ao longo desta parede.
+    const centros: number[] = [];
+    for (const wt of paredesT) {
+      if (perp(wt.a) > 5 || perp(wt.b) > 5) continue;
+      const Lt = Math.hypot(wt.b.x - wt.a.x, wt.b.y - wt.a.y) || 1;
+      for (const o of model.openings.filter((x) => x.wallId === wt.id && x.kind === 'window')) {
+        const t = o.offsetMm + o.widthMm / 2;
+        centros.push(ao({ x: wt.a.x + ((wt.b.x - wt.a.x) / Lt) * t, y: wt.a.y + ((wt.b.y - wt.a.y) / Lt) * t } as Point));
+      }
+    }
+    if (!centros.length) continue;
+    // Os encontros com paredes internas ao longo desta (a ponta de outra parede de cima sobre ela): não atravessar.
+    const encontros = paredesS
+      .filter((w) => w.id !== ws.id)
+      .flatMap((w) => [w.a, w.b])
+      .filter((p) => perp(p) < 1 && ao(p) > 1 && ao(p) < L - 1)
+      .map((p) => ao(p));
+    const meia = ws.thicknessMm / 2;
+    const ocupados = model.openings.filter((o) => o.wallId === ws.id).map((o) => ({ id: o.id, de: o.offsetMm, ate: o.offsetMm + o.widthMm }));
+    const usados = new Set<number>();
+    for (const j of janelas) {
+      const atual = j.offsetMm + j.widthMm / 2;
+      const k = centros.map((c, i) => ({ c, i })).filter(({ i }) => !usados.has(i)).sort((p, q) => Math.abs(p.c - atual) - Math.abs(q.c - atual))[0];
+      if (!k || Math.abs(k.c - atual) > alcanceMm || Math.abs(k.c - atual) < 1) continue;
+      const de = Math.round(k.c - j.widthMm / 2);
+      const ate = de + j.widthMm;
+      if (de < folgaMm || ate > L - folgaMm) continue;
+      // O cômodo: entre os mesmos encontros de antes (nenhum encontro entre a posição velha e a nova, nem dentro dela).
+      const [lo, hi] = [Math.min(de, j.offsetMm), Math.max(ate, j.offsetMm + j.widthMm)];
+      if (encontros.some((e) => e > lo - meia - folgaMm && e < hi + meia + folgaMm)) continue;
+      if (ocupados.some((o) => o.id !== j.id && de < o.ate + folgaMm && ate > o.de - folgaMm)) continue;
+      const eu = ocupados.find((o) => o.id === j.id)!;
+      eu.de = de;
+      eu.ate = ate;
+      usados.add(k.i);
+      comandos.push({ type: 'MoveOpening', openingId: j.id, offsetMm: de });
+    }
+  }
+  return comandos;
+}

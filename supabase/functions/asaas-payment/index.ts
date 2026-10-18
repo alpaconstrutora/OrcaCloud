@@ -466,7 +466,14 @@ serve(async (req: Request) => {
     const payData = await payRes.json().catch(() => ({})) as BillResponse;
 
     if (!payRes.ok) {
-        const msg = (payData as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${payRes.status}`;
+        let msg = (payData as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${payRes.status}`;
+        // Conta de serviço vencida em dia não útil: a Asaas responde "só até às 22
+        // horas" mesmo de manhã (ela tentaria agendar para o próximo dia útil, e
+        // conta vencida não se agenda) — visto no domingo 18/10/2026, 10:55.
+        const diaSemana = new Date(`${hojeBRT()}T12:00:00Z`).getUTCDay();
+        if (/22 horas/.test(msg) && (diaSemana === 0 || diaSemana === 6)) {
+            msg = 'Conta de serviço vencida só pode ser paga em dia útil, até as 22h (regra da Asaas). Hoje é fim de semana — tente no próximo dia útil.';
+        }
         await admin.from('supplier_payments').update({
             status: 'FAILED',
             failure_reason: msg,

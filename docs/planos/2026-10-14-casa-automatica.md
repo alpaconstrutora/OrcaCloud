@@ -2777,3 +2777,23 @@ Subfases:
   tem parede embaixo nos três, e ali há janelas do 1º e do térreo. Daí o tubo de queda e as colunas pelo meio do
   dormitório do 1º, e boa parte dos encontros de rede (0–8). Também: a água quente do chuveiro do 2º a 2 kPa (logo
   abaixo da caixa d'água) em 2 lotes.
+
+#### Registro da D4 — parte 2b (19/10/2026): o banheiro do 2º colado na escada
+
+Decisão do usuário (19/10/2026), à pergunta "o banheiro da suíte do 2º cai sobre os dormitórios do 1º, sem parede
+embaixo para o tubo de queda — como resolver?": **"Colado na escada"** (o shaft desce pelas paredes do núcleo, que
+existem iguais nos três pavimentos e não têm janela).
+
+- `banheiroAlemDoNucleo` (`utils/blueprintSobrado.ts`): o banheiro da suíte vai além da PONTA do núcleo, na largura dele
+  (encostado na fachada), da parede de topo até o fim da faixa da suíte; a suíte fica com a faixa ao lado, na
+  profundidade toda, encostada no corredor. Só quando suíte e banheiro formam um retângulo do lado para onde o núcleo
+  avança e os dois ficam acima das medidas mínimas — senão nada muda.
+- O gerador ganhou `EntradaDoGerador.rearranjar` (o ajuste dos ambientes já arranjados, antes das paredes; os lados
+  externos recalculados pela borda) — ausente, o gerador é o de sempre (8 casas idênticas).
+- O 2º gera do lado certo: de frente quando a escada sobe para os fundos, invertido quando sobe para a frente (o outro
+  sentido só se este não fechar) — a suíte fica sempre do lado para onde o núcleo avança.
+- Medido nos 6 lotes: o shaft térreo → 2º nasce em todos com suíte no 2º (5 de 5), encostado na parede de topo do
+  núcleo; sumiram "Shaft: Banheiro da suíte não tem lugar" e a pressão da água quente do 2º; banheiro 6,0–9,2 m²,
+  suíte 15,3–21,8 m². Encontros de rede por lote: 1 / 6 / 6 / 1 / 0 / 1 (antes 3 / 5 / 8 / 5 / 0 / 5).
+- Ainda: prumadas pelo meio do dormitório do 1º (condutor vertical, ventilação, alimentador, água fria) e 0–3 tubos
+  atravessando pilar.

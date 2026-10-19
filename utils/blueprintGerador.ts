@@ -160,6 +160,12 @@ export interface EntradaDoGerador {
    * altura do pé-direito. Ausente = como antes: regras avaliadas sem zona (ficam NAO_AVALIADAS).
    */
   contextoDeRegras?: Pick<ContextoDeRegras, 'lote' | 'zona'> | null;
+  /**
+   * F27-D4 da casa automática (19/10/2026): um ajuste dos ambientes JÁ arranjados (retângulos no mundo), antes das paredes
+   * nascerem — a casa de 3 põe o banheiro do 2º colado no núcleo da escada. Devolve `true` se mudou algo (os lados
+   * externos são recalculados pela borda do contorno). Ausente = o arranjo do gerador, como sempre.
+   */
+  rearranjar?: ((ambientes: AmbienteGerado[]) => boolean) | null;
 }
 
 export interface Retangulo {
@@ -1116,6 +1122,10 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   // Com anexo, "lado externo" é o que cai na borda do CONTORNO — o lado do principal que encosta no
   // anexo não é fachada (no desenho: S/N/L/O pela normal externa da borda).
   if (anexos.length) for (const a of ambientes) a.ladosExternos = [...new Set(ladosNaBorda(a.ret).map((x) => x.lado as LadoDaFrente))];
+  if (entrada.rearranjar?.(ambientes)) {
+    for (const a of ambientes) a.ladosExternos = [...new Set(ladosNaBorda(a.ret).map((x) => x.lado as LadoDaFrente))];
+    decisoes.push('Arranjo ajustado depois do recozimento (casa de 3 pavimentos: o banheiro da suíte colado no núcleo da escada).');
+  }
 
   // F21 da casa automática (17/10/2026): bordas a menos de uma espessura de parede uma da outra viram UMA coordenada —
   // duas paredes que se encontram desalinhadas em 5 cm (uma de cada lado de uma terceira) sobrepõem as faces, e o kernel

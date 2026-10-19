@@ -11,6 +11,7 @@ import { HIPOTESES_PILARES_PADRAO } from '../utils/blueprintPilaresAutomaticos';
 import {
   alinharJanelasDoSuperior,
   alinharSegundoAoPatamar,
+  banheiroAlemDoNucleo,
   comandoDaEscada,
   dividirEmTres,
   dividirPrograma,
@@ -142,6 +143,22 @@ describe('F27-D2: o 2º pavimento recuado', () => {
     expect(b).toMatchObject({ invertida: false, ret: { y0: 7900, y1: casa.y1 } });
     // Nenhum sentido cabe: null.
     expect(alinharSegundoAoPatamar(falso, { ...casa, y1: 5000 }, { x0: 3600, y0: 0, x1: 9000, y1: 5000 }, { ret: { x0: 6600, y0: 1400, x1: 9000, y1: 5000 }, paraOsFundos: true }, hip)).toBeNull();
+  });
+
+  it('banheiroAlemDoNucleo (F27-D4, "colado na escada"): o banheiro da suíte vai além da ponta do núcleo, na largura dele; a suíte fica ao lado, na profundidade toda', () => {
+    const item = (uso: string, larguraMinMm: number, areaMinM2: number) => ({ uso, larguraMinMm, areaMinM2 });
+    const amb = (nome: string, uso: string, ret: Retangulo, l: number, a: number) => ({ nome, ret, item: item(uso, l, a), areaM2: 0, larguraMinM: 0 }) as unknown as AmbienteGerado;
+    // Faixa da suíte atrás do corredor (y 3000…8100), largura 5,40 m; o núcleo à direita avança dos 2500 aos 6100.
+    const ambientes = [amb('Suíte', 'SUITE', { x0: 0, y0: 3000, x1: 5400, y1: 6700 }, 2500, 9), amb('Banheiro da suíte', 'BANHEIRO', { x0: 0, y0: 6700, x1: 5400, y1: 8100 }, 1100, 2.5)];
+    const n = { ret: { x0: 3000, y0: 2500, x1: 5400, y1: 6100 }, lado: 'DIREITA' as const, paraOsFundos: true };
+    expect(banheiroAlemDoNucleo(ambientes, n)).toBe(true);
+    expect(ambientes[1].ret).toEqual({ x0: 3000, x1: 5400, y0: 6100, y1: 8100 });
+    expect(ambientes[0].ret).toEqual({ x0: 0, x1: 3000, y0: 3000, y1: 8100 });
+    // Nada a fazer: o núcleo avança para o outro lado do corredor, ou a suíte ficaria abaixo da largura mínima.
+    const outro = [amb('Suíte', 'SUITE', { x0: 0, y0: 3000, x1: 5400, y1: 6700 }, 2500, 9), amb('Banheiro da suíte', 'BANHEIRO', { x0: 0, y0: 6700, x1: 5400, y1: 8100 }, 1100, 2.5)];
+    expect(banheiroAlemDoNucleo(outro, { ...n, ret: { x0: 3000, y0: -1100, x1: 5400, y1: 2500 }, paraOsFundos: false })).toBe(false);
+    expect(banheiroAlemDoNucleo(outro, { ...n, ret: { ...n.ret, x0: 1000 } })).toBe(false);
+    expect(outro[1].ret).toEqual({ x0: 0, y0: 6700, x1: 5400, y1: 8100 });
   });
 
   it('pavimentoComNucleo: o núcleo que sobra fora do retângulo ganha a parede da fachada (no térreo, a externa a cobre)', () => {

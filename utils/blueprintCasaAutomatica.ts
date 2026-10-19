@@ -108,6 +108,7 @@ import {
   comandoDaEscada,
   comUidsDoPavimento,
   alinharSegundoAoPatamar,
+  banheiroAlemDoNucleo,
   dividirEmTres,
   dividirPrograma,
   escolherNucleo,
@@ -2806,7 +2807,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const a = alinharSegundoAoPatamar(
           (r, invertida) => {
             try {
-              return gerar({ ...entradaDoGerador, programa: seg, envelope: anel(r), direcaoDaFrente: invertida ? point(0, 1) : null }, semente, hipGerador);
+              return gerar({ ...entradaDoGerador, programa: seg, envelope: anel(r), direcaoDaFrente: invertida ? point(0, 1) : null, rearranjar: (amb) => banheiroAlemDoNucleo(amb, nucleo) }, semente, hipGerador);
             } catch {
               return null;
             }
@@ -2816,6 +2817,10 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           nucleo,
           hip.sobrado,
           malha,
+          4,
+          // F27-D4: a suíte do lado para onde o núcleo avança (o banheiro vai além da ponta dele): de frente quando a escada
+          // sobe para os fundos, invertida quando sobe para a frente; o outro sentido só se este não fechar.
+          nucleo.paraOsFundos ? [false, true] : [true, false],
         );
         return a ? [a] : [];
       });
@@ -2828,7 +2833,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       eg = escolherSemente(alinhados.map((a) => a.r));
       const escolhido = alinhados.find((a) => a.r === eg!.r)!;
       retDoSegundo = escolhido.ret;
-      if (escolhido.invertida) decisoes.push('2º pavimento: o íntimo à frente do corredor (a planta invertida) — atrás do patamar da escada não cabia.');
+      if (escolhido.invertida) decisoes.push(`2º pavimento: o íntimo à frente do corredor (a planta invertida) — ${nucleo.paraOsFundos ? 'atrás do patamar da escada não cabia' : 'do lado para onde a escada avança, com o banheiro além da ponta do núcleo'}.`);
     }
     const pavimentosGerados: [string, ResultadoDoGerador][] = [['Térreo', et.r], [eg ? '1º pavimento' : 'Superior', es.r], ...(eg ? [['2º pavimento', eg.r] as [string, ResultadoDoGerador]] : [])];
     for (const [pav, x] of pavimentosGerados) decisoes.push(...x.decisoes.map((d) => `${pav}: ${d}`));

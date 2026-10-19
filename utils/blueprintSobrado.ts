@@ -285,6 +285,40 @@ export function retanguloDoSegundo(casa: Retangulo, n: Pick<NucleoDaEscada, 'lad
 }
 
 /**
+ * F27-D4 (decisão do usuário, 19/10/2026: "colado na escada"): o banheiro da suíte do 2º além da PONTA do núcleo — na
+ * faixa do núcleo (a largura dele, encostada na fachada), da parede de topo dele até o fim da faixa da suíte. O shaft
+ * desce encostado nessa parede de topo, que existe igual nos três pavimentos e não tem janela (a porta do núcleo é na
+ * parede de dentro). A suíte fica com a faixa ao lado, na profundidade toda, encostada no corredor. Só quando a suíte e o
+ * banheiro formam um retângulo (um atrás do outro, na largura toda) do lado do corredor para onde o núcleo avança, e
+ * os dois ficam acima das medidas mínimas; senão nada muda (`false`).
+ */
+export function banheiroAlemDoNucleo(ambientes: AmbienteGerado[], n: Pick<NucleoDaEscada, 'ret' | 'lado' | 'paraOsFundos'>): boolean {
+  const suite = ambientes.find((a) => a.item.uso === 'SUITE');
+  const banho = ambientes.find((a) => a.item.uso === 'BANHEIRO');
+  if (!suite || !banho) return false;
+  const [s, b] = [suite.ret, banho.ret];
+  if (s.x0 !== b.x0 || s.x1 !== b.x1 || (s.y1 !== b.y0 && b.y1 !== s.y0)) return false;
+  const z: Retangulo = { x0: s.x0, x1: s.x1, y0: Math.min(s.y0, b.y0), y1: Math.max(s.y1, b.y1) };
+  const r = n.ret;
+  // O núcleo na beirada da faixa, do lado da fachada dele, e avançando para dentro dela.
+  if (n.lado === 'DIREITA' ? r.x1 !== z.x1 : r.x0 !== z.x0) return false;
+  const ponta = n.paraOsFundos ? r.y1 : r.y0;
+  if (!(ponta > z.y0 && ponta < z.y1)) return false;
+  const novoBanho: Retangulo = { x0: r.x0, x1: r.x1, y0: n.paraOsFundos ? ponta : z.y0, y1: n.paraOsFundos ? z.y1 : ponta };
+  const novaSuite: Retangulo = n.lado === 'DIREITA' ? { x0: z.x0, x1: r.x0, y0: z.y0, y1: z.y1 } : { x0: r.x1, x1: z.x1, y0: z.y0, y1: z.y1 };
+  const lado = (q: Retangulo) => Math.min(q.x1 - q.x0, q.y1 - q.y0);
+  const area = (q: Retangulo) => ((q.x1 - q.x0) * (q.y1 - q.y0)) / 1e6;
+  if (lado(novoBanho) < banho.item.larguraMinMm || area(novoBanho) < banho.item.areaMinM2) return false;
+  if (lado(novaSuite) < suite.item.larguraMinMm || area(novaSuite) < suite.item.areaMinM2) return false;
+  for (const [a, q] of [[banho, novoBanho], [suite, novaSuite]] as const) {
+    a.ret = q;
+    a.areaM2 = Math.round(area(q) * 100) / 100;
+    a.larguraMinM = lado(q) / 1000;
+  }
+  return true;
+}
+
+/**
  * F27-D2: o 2º pavimento com o CORREDOR no patamar da escada. O gerador põe o corredor numa faixa de lado a lado do
  * retângulo e a planta só se desloca com ele (a malha é a mesma): gerado no lugar inicial, o retângulo ANDA até o meio
  * do patamar cair no corredor; a sobra menor que `faixaMinimaDoTerracoMm` (na frente ou nos fundos) o 2º toma, o que
@@ -301,9 +335,10 @@ export function alinharSegundoAoPatamar<R extends { ambientes: readonly Ambiente
   hip: HipotesesDoSobrado = HIPOTESES_DO_SOBRADO_PADRAO,
   malhaMm = 50,
   voltas = 4,
+  sentidos: readonly boolean[] = [false, true],
 ): { r: R; ret: Retangulo; invertida: boolean } | null {
   const meio = n.paraOsFundos ? n.ret.y0 + hip.patamarMm / 2 : n.ret.y1 - hip.patamarMm / 2;
-  for (const invertida of [false, true]) {
+  for (const invertida of sentidos) {
     let ret = inicial;
     for (let v = 0; v < voltas; v++) {
       const r = gerarEm(ret, invertida);

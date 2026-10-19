@@ -53,9 +53,15 @@ A entrega do FOB É a retirada — por isso `Entregue` ≡ Retirado, e a data de
 - [x] **`SupplierDashboard`** (logística do fornecedor) — trilho FOB, opções do select de
   status, "Previsão de Retirada", "Pronto para Retirada em", "Data da Retirada".
   **Pronto quando:** idem. ✅
-- [ ] **Conferência na tela de verdade** (pedido FOB, aba Recebimento e logística do
-  fornecedor). **Pronto quando:** print do trilho sem rótulos sobrepostos e sem erro de
-  console/HTTP. Depende da senha do agente-leitura.
+- [x] **Conferência na tela de verdade** (pedido FOB, aba Recebimento).
+  **Pronto quando:** print do trilho sem rótulos sobrepostos e sem erro de
+  console/HTTP. ✅ 19/10, Playwright no vite da frente, pedido FOB PO-054827 (Alpa
+  Construtora) com status real (Enviado) e simulados só na resposta do navegador
+  (Em Trânsito → cabeçalho e status "Pronto para retirada", passo "Para retirar"
+  aceso; Entregue → "Retirado"); 0 rótulos sobrepostos, 0 erros de console/HTTP;
+  select de Dados gerais com exatamente CIF e FOB. A logística do portal do
+  fornecedor (`SupplierDashboard`) não foi aberta — a conta de teste não é
+  fornecedor; coberta por `tsc` e pelo teste do `OrderLifeline`.
 
 ## Fora do escopo (anotado)
 

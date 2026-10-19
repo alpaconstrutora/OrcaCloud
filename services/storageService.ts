@@ -52,6 +52,12 @@ export const storageService = {
         return data.signedUrl;
     },
 
+    /** Copia um arquivo dentro do mesmo bucket (exige leitura na origem e gravação no destino). */
+    async copy(bucket: string, fromPath: string, toPath: string) {
+        const { error } = await supabase.storage.from(bucket).copy(fromPath, toPath);
+        if (error) throw error;
+    },
+
     async remove(bucket: string, paths: string[]) {
         const { error } = await supabase.storage.from(bucket).remove(paths);
         if (error) throw error;

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    FileText, Upload, Plus, Loader2, Save, AlertCircle, Link2, Search, MoveHorizontal, ArrowLeft,
+    FileText, Upload, Plus, Loader2, Save, AlertCircle, Link2, Search, MoveHorizontal, ArrowLeft, Copy,
 } from 'lucide-react';
 import {
     documentTemplateService, DocumentTemplate,
@@ -38,13 +38,38 @@ type Draft = {
     id: string | null;
     name: string;
     description: string;
-    file: File | null;          // arquivo novo (obrigatório ao criar)
+    file: File | null;          // arquivo novo (obrigatório ao criar do zero)
     detectedTokens: string[];
     tokenMap: TokenMap;
+    /** Organização do registro (editar) ou do original (duplicar). Ausente = modelo
+     *  novo do zero, que cai na org da tela. */
+    organizationId?: string;
+    /** Duplicar: o .docx do modelo de origem, usado se nenhum arquivo novo for enviado. */
+    sourceFile?: { path: string; name: string };
+    /** Nome do modelo de origem — só para o aviso no topo do formulário. */
+    duplicatedFrom?: string;
+    /** Marcadores e mapeamento como estavam ao abrir o formulário. É a base do
+     *  "o que mudou" ao trocar o arquivo, e de onde o mapeamento volta se uma
+     *  segunda troca de arquivo trouxer de volta um marcador que a primeira tirou. */
+    origem?: { tokens: string[]; tokenMap: TokenMap };
 };
 
 const EMPTY_DRAFT: Draft = {
     id: null, name: '', description: '', file: null, detectedTokens: [], tokenMap: {},
+};
+
+/** Marcadores do arquivo novo comparados aos do formulário ao abrir. `null` quando
+ *  não há o que comparar (arquivo não trocado, ou modelo criado do zero). */
+const compararMarcadores =(draft: Pick<Draft, 'file' | 'detectedTokens' | 'origem'>) => {
+    const antes = draft.origem?.tokens ?? [];
+    if (!draft.file || antes.length === 0) return null;
+    const depois = new Set(draft.detectedTokens);
+    const anteriores = new Set(antes);
+    return {
+        mantidos: draft.detectedTokens.filter(tk => anteriores.has(tk)),
+        novos: draft.detectedTokens.filter(tk => !anteriores.has(tk)),
+        removidos: antes.filter(tk => !depois.has(tk)),
+    };
 };
 
 // §2 — colunas de dado. "Ações" não entra aqui: é estrutural e sempre visível
@@ -247,6 +272,31 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
             file: null,
             detectedTokens: t.detected_tokens,
             tokenMap: t.token_map ?? {},
+            organizationId: t.organization_id,
+            origem: { tokens: t.detected_tokens, tokenMap: t.token_map ?? {} },
+        });
+    };
+
+    /** Duplicar = criar um modelo novo já com o mapeamento do original — para a
+     *  revisão de um documento não exigir mapear tudo de novo. O original não é
+     *  tocado (versões já emitidas apontam para ele por `template_id`). A cópia
+     *  mora na organização do original, não na do topo: é o mesmo documento. */
+    const startDuplicate = (t: DocumentTemplate) => {
+        setError(null);
+        setSavedAt(null);
+        markSaved();
+        const tokenMap = { ...(t.token_map ?? {}) };
+        setDraft({
+            id: null,
+            name: `${t.name} (cópia)`,
+            description: t.description ?? '',
+            file: null,
+            detectedTokens: [...t.detected_tokens],
+            tokenMap,
+            organizationId: t.organization_id,
+            sourceFile: { path: t.file_path, name: t.file_name ?? 'modelo.docx' },
+            duplicatedFrom: t.name,
+            origem: { tokens: [...t.detected_tokens], tokenMap },
         });
     };
 
@@ -273,9 +323,14 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
             const tokens = await detectTokens(file);
             setDraft(d => {
                 const base = d ?? { ...EMPTY_DRAFT };
-                // Preserva mapeamentos já feitos para marcadores que continuam existindo
+                // Preserva mapeamentos já feitos para marcadores que continuam existindo.
+                // Se uma troca anterior tirou o marcador e esta o traz de volta, o
+                // mapeamento volta do estado em que o formulário abriu.
                 const keptMap: TokenMap = {};
-                for (const tk of tokens) if (base.tokenMap[tk]) keptMap[tk] = base.tokenMap[tk];
+                for (const tk of tokens) {
+                    const m = base.tokenMap[tk] ?? base.origem?.tokenMap[tk];
+                    if (m) keptMap[tk] = m;
+                }
                 return {
                     ...base,
                     file,
@@ -310,11 +365,22 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
         markDirty();
     };
 
-    const canSave = !!draft && draft.name.trim() !== '' && (draft.id !== null || draft.file !== null);
+    // Botão desligado sempre diz por quê (o `title` do Salvar).
+    const motivoNaoSalvar = !draft ? null
+        : draft.name.trim() === '' ? 'Informe o nome do modelo.'
+        : draft.id === null && !draft.file && !draft.sourceFile ? 'Selecione o arquivo .docx do modelo.'
+        : parsing ? 'Aguarde a leitura do arquivo.'
+        : saving ? 'Salvando…'
+        : draft.id && !dirty ? 'Nada foi alterado desde o último salvamento.'
+        : null;
+    const canSave = !!draft && draft.name.trim() !== '' && (draft.id !== null || draft.file !== null || !!draft.sourceFile);
 
     const save = async () => {
         if (!draft || !canSave) return;
-        if (!orgId) {
+        // A org do registro (editar) ou do original (duplicar) manda; a da tela
+        // só vale para o modelo criado do zero.
+        const orgDoModelo = draft.organizationId || orgId;
+        if (!orgDoModelo) {
             setError('Organização não identificada. Recarregue a página e tente novamente.');
             return;
         }
@@ -327,9 +393,11 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                 detected_tokens: draft.detectedTokens,
                 token_map: draft.tokenMap,
             };
+            const origemDoArquivo = draft.file
+                ?? (draft.sourceFile ? { fromPath: draft.sourceFile.path, fileName: draft.sourceFile.name } : null);
             const salvo = draft.id
-                ? await documentTemplateService.update(draft.id, orgId, payload, draft.file ?? undefined)
-                : await documentTemplateService.create(orgId, draft.file!, payload);
+                ? await documentTemplateService.update(draft.id, orgDoModelo, payload, draft.file ?? undefined)
+                : await documentTemplateService.create(orgDoModelo, origemDoArquivo!, payload);
 
             // §22 — atualiza o array local em vez de recarregar a lista inteira;
             // o serviço já devolve o registro completo.
@@ -349,6 +417,8 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                     file: null,
                     detectedTokens: salvo.detected_tokens,
                     tokenMap: salvo.token_map ?? {},
+                    organizationId: salvo.organization_id,
+                    origem: { tokens: salvo.detected_tokens, tokenMap: salvo.token_map ?? {} },
                 });
             } else {
                 setDraft(null);
@@ -373,6 +443,8 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
     };
 
     const mappedCount = draft ? draft.detectedTokens.filter(tk => draft.tokenMap[tk]).length : 0;
+    const mudancas = draft ? compararMarcadores(draft) : null;
+    const novos = new Set(mudancas?.novos ?? []);
 
     const renderCell = (key: string, t: DocumentTemplate): React.ReactNode => {
         switch (key) {
@@ -445,6 +517,15 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                        formulário não. Sem o limite, cada select de marcador
                        esticava por ~1500px e a linha ficava ilegível. */
                     <div className="space-y-4 max-w-4xl">
+                        {draft.duplicatedFrom && (
+                            <div className="flex items-start gap-2 rounded-[10px] bg-blue-50 border border-blue-100 px-3 py-2 text-sm text-blue-800">
+                                <Copy className="w-4 h-4 mt-0.5 shrink-0" />
+                                <span>
+                                    Cópia de “{draft.duplicatedFrom}”, com o mesmo mapeamento. Envie a versão revisada do
+                                    .docx para mapear só os marcadores novos — ou salve assim para usar o mesmo arquivo.
+                                </span>
+                            </div>
+                        )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs font-semibold text-slate-500">Nome do modelo *</label>
@@ -469,12 +550,18 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                         {/* Upload / substituição do arquivo */}
                         <div className="flex flex-col gap-1">
                             <label className="text-xs font-semibold text-slate-500">
-                                Arquivo .docx {draft.id ? '(deixe em branco para manter o atual)' : '*'}
+                                Arquivo .docx {draft.id
+                                    ? '(deixe em branco para manter o atual)'
+                                    : draft.sourceFile ? '(deixe em branco para usar o do modelo de origem)' : '*'}
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer rounded-[6px] border border-dashed border-gray-300 px-3 py-3 text-sm text-gray-600 hover:border-blue-400 hover:bg-blue-50/40 transition-colors">
                                 {parsing ? <Loader2 className="w-4 h-4 animate-spin text-blue-600" /> : <Upload className="w-4 h-4 text-blue-600" />}
                                 <span className="truncate">
-                                    {parsing ? 'Lendo marcadores…' : draft.file ? draft.file.name : (draft.id ? 'Substituir arquivo (.docx)' : 'Selecionar arquivo (.docx)')}
+                                    {parsing ? 'Lendo marcadores…'
+                                        : draft.file ? draft.file.name
+                                        : draft.id ? 'Substituir arquivo (.docx)'
+                                        : draft.sourceFile ? 'Enviar versão revisada (.docx)'
+                                        : 'Selecionar arquivo (.docx)'}
                                 </span>
                                 <input
                                     type="file"
@@ -483,7 +570,33 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                                     onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.currentTarget.value = ''; }}
                                 />
                             </label>
+                            {draft.sourceFile && !draft.file && (
+                                <p className="text-xs text-gray-500">
+                                    Arquivo do modelo de origem: <span className="text-gray-700">{draft.sourceFile.name}</span>
+                                </p>
+                            )}
                         </div>
+
+                        {/* O que mudou entre o arquivo anterior e o novo — para remapear só
+                            o necessário. Só aparece depois de trocar o arquivo. */}
+                        {mudancas && (
+                            <div className="rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 space-y-1">
+                                <p>
+                                    Comparado ao arquivo anterior:{' '}
+                                    <span className="font-medium text-gray-900">{mudancas.mantidos.length}</span> continuam com o mapeamento ·{' '}
+                                    <span className={mudancas.novos.length ? 'font-medium text-blue-700' : 'font-medium text-gray-900'}>{mudancas.novos.length}</span>{' '}
+                                    {mudancas.novos.length === 1 ? 'novo' : 'novos'} para mapear ·{' '}
+                                    <span className={mudancas.removidos.length ? 'font-medium text-amber-700' : 'font-medium text-gray-900'}>{mudancas.removidos.length}</span>{' '}
+                                    não {mudancas.removidos.length === 1 ? 'existe' : 'existem'} mais
+                                </p>
+                                {mudancas.removidos.length > 0 && (
+                                    <p className="text-amber-700">
+                                        Saíram do documento (o mapeamento deles não é gravado):{' '}
+                                        {mudancas.removidos.map(tk => `{${tk}}`).join(', ')}
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         {/* Mapeamento de marcadores */}
                         {draft.detectedTokens.length > 0 && (
@@ -499,7 +612,11 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                                         <div key={tk} className="grid grid-cols-[80px_1fr] items-start gap-3 rounded-[10px] bg-gray-50 p-2.5">
                                             {/* `font-mono` fica: é o token literal do placeholder, exceção
                                                 explícita do §21 — e não está dentro de uma célula de tabela. */}
-                                            <span className="font-mono text-sm font-semibold text-blue-700 pt-1.5">{`{${tk}}`}</span>
+                                            <div className="flex flex-col pt-1.5">
+                                                <span className="font-mono text-sm font-semibold text-blue-700">{`{${tk}}`}</span>
+                                                {/* §8 — marcação em texto colorido, sem pílula. */}
+                                                {novos.has(tk) && <span className="text-sm font-normal text-blue-600">Novo</span>}
+                                            </div>
                                             <MappingSelect value={draft.tokenMap[tk]} onChange={m => setMapping(tk, m)} />
                                         </div>
                                     ))}
@@ -636,9 +753,15 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                                                 <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                 <td className="px-6 py-2.5 text-right">
                                                     {/* §9.1 — editar é o clique na linha (ação dominante); o kebab
-                                                        só tem Excluir, isolado de propósito. */}
+                                                        tem Duplicar e Excluir (§9 — ações terciárias). */}
                                                     <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
-                                                        <InlineDisclosureMenu showDelete onDelete={() => remove(t)} />
+                                                        <InlineDisclosureMenu
+                                                            menuItems={[
+                                                                { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar', onClick: () => startDuplicate(t) },
+                                                            ]}
+                                                            showDelete
+                                                            onDelete={() => remove(t)}
+                                                        />
                                                     </div>
                                                 </td>
                                             </tr>
@@ -671,6 +794,7 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                            novo. Na criação o botão depende só do `canSave`
                            (nome + arquivo), que já cobre o formulário vazio. */
                         disabled={!canSave || saving || parsing || (!!draft.id && !dirty)}
+                        title={motivoNaoSalvar ?? undefined}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {saving ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Save className="w-[15px] h-[15px]" />}

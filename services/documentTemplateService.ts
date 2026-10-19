@@ -22,6 +22,15 @@ export interface DocumentTemplate {
 const SELECT_COLS =
     'id, organization_id, name, description, file_path, file_name, detected_tokens, token_map, is_active, created_by, created_at, updated_at';
 
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/** Origem do .docx de um modelo novo: um arquivo enviado agora, ou o arquivo de
+ *  um modelo existente (Duplicar sem enviar versão revisada). */
+export type TemplateFileSource = File | { fromPath: string; fileName: string };
+
+const novoCaminho = (organizationId: string, fileName: string) =>
+    `${organizationId}/${Date.now()}_${fileName.replace(/[^\w.\-]+/g, '_')}`;
+
 export const documentTemplateService = {
     async list(organizationId?: string): Promise<DocumentTemplate[]> {
         let q = supabase
@@ -45,20 +54,21 @@ export const documentTemplateService = {
         return data as DocumentTemplate | null;
     },
 
-    /** Faz upload do .docx e cria o registro do modelo (mapeamento inicial vazio). */
+    /** Cria o registro do modelo. O .docx vem de um upload novo ou é COPIADO do
+     *  arquivo de outro modelo (Duplicar) — cópia, não o mesmo `file_path`: cada
+     *  modelo é dono do próprio arquivo, e limpar o de um nunca quebra o outro. */
     async create(
         organizationId: string,
-        file: File,
+        source: TemplateFileSource,
         payload: { name: string; description?: string; detected_tokens: string[]; token_map: TokenMap },
     ): Promise<DocumentTemplate> {
-        const safeName = file.name.replace(/[^\w.\-]+/g, '_');
-        const path = `${organizationId}/${Date.now()}_${safeName}`;
-        await storageService.upsertFile(
-            BUCKET,
-            path,
-            file,
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        );
+        const fileName = source instanceof File ? source.name : source.fileName;
+        const path = novoCaminho(organizationId, fileName);
+        if (source instanceof File) {
+            await storageService.upsertFile(BUCKET, path, source, DOCX_MIME);
+        } else {
+            await storageService.copy(BUCKET, source.fromPath, path);
+        }
 
         const { data, error } = await supabase
             .from('document_templates')
@@ -67,7 +77,7 @@ export const documentTemplateService = {
                 name: payload.name,
                 description: payload.description ?? null,
                 file_path: path,
-                file_name: file.name,
+                file_name: fileName,
                 detected_tokens: payload.detected_tokens,
                 token_map: payload.token_map,
             })
@@ -87,14 +97,8 @@ export const documentTemplateService = {
         const patch: Record<string, unknown> = { ...payload, updated_at: new Date().toISOString() };
 
         if (newFile) {
-            const safeName = newFile.name.replace(/[^\w.\-]+/g, '_');
-            const path = `${organizationId}/${Date.now()}_${safeName}`;
-            await storageService.upsertFile(
-                BUCKET,
-                path,
-                newFile,
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            );
+            const path = novoCaminho(organizationId, newFile.name);
+            await storageService.upsertFile(BUCKET, path, newFile, DOCX_MIME);
             patch.file_path = path;
             patch.file_name = newFile.name;
         }

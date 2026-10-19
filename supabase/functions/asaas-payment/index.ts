@@ -492,7 +492,20 @@ serve(async (req: Request) => {
             }).eq('id', spRow.id);
             return json({ error: 'Conta de concessionária sem vencimento: preencha o vencimento do boleto — o código de barras não traz a data e a Asaas exige.' }, 422);
         }
-        payBody.dueDate = boleto.vencimento;
+        // VENCIDA: a Asaas usa o dueDate como data do pagamento e recusa data passada
+        // ("Contas vencidas não podem ser agendadas" + "A data de agendamento não pode ser
+        // inferior à hoje" — #1486, 19/10/2026, dia útil, sem scheduleDate enviado). A
+        // simulação da Asaas trata essa conta como NÃO vencida (o código de barras não
+        // traz data). Vai a data de hoje; o valor está travado no código de barras e quem
+        // aceita ou não o atraso é a concessionária. O vencimento original vai na
+        // descrição. Decisão do usuário em 19/10/2026 ("Sim, mandar a data de hoje").
+        if (boleto.vencimento < hojeBRT()) {
+            payBody.dueDate = hojeBRT();
+            const [a, m, d] = String(boleto.vencimento).split('-');
+            payBody.description = `Conta vencida em ${d}/${m}/${a}`;
+        } else {
+            payBody.dueDate = boleto.vencimento;
+        }
     }
     // Conta vencida não se agenda (doc da Asaas: "Contas vencidas não podem ser
     // agendadas" — vencido é pagamento imediato).

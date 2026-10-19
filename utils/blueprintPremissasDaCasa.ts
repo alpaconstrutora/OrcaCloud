@@ -36,8 +36,11 @@ export interface PremissasDaCasa {
   eletrica: { chuveiroEletricoVA: number; medidor: boolean };
   /** Quantas alternativas do gerador E6.2 a casa tenta (fica a de menos problemas graves). */
   sementes: number;
-  /** F12d: 1 = térrea; 2 = sobrado. F22: 'AUTOMATICO' (o padrão) = a térrea, ou o sobrado quando ela não comporta. */
-  pavimentos: 1 | 2 | 'AUTOMATICO';
+  /**
+   * F12d: 1 = térrea; 2 = sobrado. F22: 'AUTOMATICO' (o padrão) = a térrea, ou o sobrado quando ela não comporta. F27-D4:
+   * 3 = o 2º recuado com terraço (no Automático, só quando o sobrado não comporta e o gabarito deixa).
+   */
+  pavimentos: 1 | 2 | 3 | 'AUTOMATICO';
   /** F12d: as hipóteses do sobrado que a tela expõe (o núcleo e a escada seguem o padrão do motor). */
   sobrado: { lajeEntrePavimentosMm: number; shaftMm: number };
   /**
@@ -135,7 +138,7 @@ export function premissasDaCasaDaColuna(raw: unknown): PremissasDaCasa {
     eletrica: completar(r.eletrica, PREMISSAS_DA_CASA_PADRAO.eletrica),
     sementes,
     // A premissa gravada vale (1 = a térrea escolhida); ausente, o padrão (Automático).
-    pavimentos: r.pavimentos === 2 ? 2 : r.pavimentos === 1 ? 1 : 'AUTOMATICO',
+    pavimentos: r.pavimentos === 3 ? 3 : r.pavimentos === 2 ? 2 : r.pavimentos === 1 ? 1 : 'AUTOMATICO',
     sobrado: completar(r.sobrado, PREMISSAS_DA_CASA_PADRAO.sobrado),
     estrutura: completar(r.estrutura, PREMISSAS_DA_CASA_PADRAO.estrutura),
     terraplenagem: completar(r.terraplenagem, PREMISSAS_DA_CASA_PADRAO.terraplenagem),

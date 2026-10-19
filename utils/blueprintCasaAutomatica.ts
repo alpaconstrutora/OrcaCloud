@@ -1368,13 +1368,17 @@ function planejarTerrea(original: BlueprintModel, entrada: EntradaDaCasa, hipPar
   return fica;
 }
 
+/** F27-D4: o gabarito da zona deixa 3 pavimentos (sem gabarito em pavimentos, deixa — a altura a implantação confere). */
+const cabemTres = (entrada: EntradaDaCasa) => entrada.ctx.zona.gabaritoPavimentos == null || entrada.ctx.zona.gabaritoPavimentos >= 3;
+
 export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> = {}, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const pav = hipParcial.pavimentos ?? HIPOTESES_DA_CASA_PADRAO.pavimentos;
   if (pav !== 'AUTOMATICO') {
     const p = pav === 1 ? planejarTerrea(original, entrada, hipParcial, opcoes) : planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: pav }, opcoes);
-    // A térrea pedida que não comporta: dito, com a saída (a escolha da pessoa fica).
-    const motivo = pav === 1 ? terreaNaoComporta(p) : null;
-    if (motivo) p.pendencias.push({ grupo: 'VERIFICACAO', texto: `Pavimentos: a térrea não comporta o programa (${motivo}) — em "Automático" ou "Sobrado", a casa sobe um pavimento.` });
+    // A térrea (ou o sobrado) pedida que não comporta: dito, com a saída (a escolha da pessoa fica).
+    const motivo = pav === 1 || pav === 2 ? terreaNaoComporta(p) : null;
+    if (motivo && pav === 1) p.pendencias.push({ grupo: 'VERIFICACAO', texto: `Pavimentos: a térrea não comporta o programa (${motivo}) — em "Automático" ou "Sobrado", a casa sobe um pavimento.` });
+    if (motivo && pav === 2 && cabemTres(entrada)) p.pendencias.push({ grupo: 'VERIFICACAO', texto: `Pavimentos: o sobrado não comporta o programa (${motivo}) — em "Automático" ou "3 pavimentos", a casa sobe mais um.` });
     return p;
   }
   const terrea = planejarTerrea(original, entrada, hipParcial, opcoes);
@@ -1384,8 +1388,17 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
     return terrea;
   }
   const sobrado = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: 2 }, opcoes);
-  const fica = problemasDoPlano(sobrado) < problemasDoPlano(terrea) ? sobrado : terrea;
-  const texto = fica === sobrado ? `Pavimentos automático: sobrado — a térrea não comportava o programa (${motivo}).` : `Pavimentos automático: térrea — não comporta o programa (${motivo}), mas o sobrado tinha mais problemas.`;
+  let fica = problemasDoPlano(sobrado) < problemasDoPlano(terrea) ? sobrado : terrea;
+  let texto = fica === sobrado ? `Pavimentos automático: sobrado — a térrea não comportava o programa (${motivo}).` : `Pavimentos automático: térrea — não comporta o programa (${motivo}), mas o sobrado tinha mais problemas.`;
+  // F27-D4 (decisão do usuário, 18/10/2026: "só quando o sobrado não comporta"): e o gabarito da zona deixa 3.
+  const motivoDoSobrado = terreaNaoComporta(sobrado);
+  if (motivoDoSobrado && cabemTres(entrada)) {
+    const tres = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: 3 }, opcoes);
+    if (problemasDoPlano(tres) < problemasDoPlano(fica)) {
+      fica = tres;
+      texto = `Pavimentos automático: 3 pavimentos — nem a térrea (${motivo}) nem o sobrado (${motivoDoSobrado}) comportavam o programa.`;
+    } else texto += ` A de 3 pavimentos (o sobrado também não comporta: ${motivoDoSobrado}) tinha mais problemas.`;
+  }
   fica.decisoes.push(texto);
   fica.pendencias.push({ grupo: 'CONFERIR', texto });
   return fica;

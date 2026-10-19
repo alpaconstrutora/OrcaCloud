@@ -200,10 +200,11 @@ export default function TelaCasaAutomatica(props: Props) {
           )}
           <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
             <Campo rotulo="Pavimentos">
-              <select aria-label="Pavimentos" className={campoCls} value={p.pavimentos} onChange={(e) => onPremissas({ ...p, pavimentos: e.target.value === '2' ? 2 : e.target.value === '1' ? 1 : 'AUTOMATICO' })} data-testid="pavimentos-da-casa">
-                <option value="AUTOMATICO">Automático (térrea; sobrado se não couber)</option>
+              <select aria-label="Pavimentos" className={campoCls} value={p.pavimentos} onChange={(e) => onPremissas({ ...p, pavimentos: e.target.value === '3' ? 3 : e.target.value === '2' ? 2 : e.target.value === '1' ? 1 : 'AUTOMATICO' })} data-testid="pavimentos-da-casa">
+                <option value="AUTOMATICO">Automático (térrea; sobe um pavimento quando não couber)</option>
                 <option value={1}>Térrea</option>
                 <option value={2}>Sobrado (2 pavimentos)</option>
+                <option value={3}>3 pavimentos (o 2º recuado, com terraço)</option>
               </select>
             </Campo>
             <Campo rotulo="Padrão (CUB)">
@@ -418,11 +419,14 @@ export default function TelaCasaAutomatica(props: Props) {
               </div>
               {plano.sobrado && (
                 <div className="space-y-1" data-testid="sobrado-da-casa">
-                  <dt className={rotuloCls}>Sobrado</dt>
+                  <dt className={rotuloCls}>{plano.sobrado.segundo ? '3 pavimentos' : 'Sobrado'}</dt>
                   <dd className="text-sm text-gray-900 tabular-nums">
-                    escada em U, {plano.sobrado.escada.degraus} degraus de {plano.sobrado.escada.espelhoMm} × {plano.sobrado.escada.pisoMm} mm
+                    {plano.sobrado.segundo ? 'duas escadas em U' : 'escada em U'}, {plano.sobrado.escada.degraus} degraus de {plano.sobrado.escada.espelhoMm} × {plano.sobrado.escada.pisoMm} mm
                   </dd>
-                  <dd className="text-xs text-slate-500">núcleo à {plano.sobrado.nucleo.lado === 'DIREITA' ? 'direita' : 'esquerda'}</dd>
+                  <dd className="text-xs text-slate-500">
+                    núcleo à {plano.sobrado.nucleo.lado === 'DIREITA' ? 'direita' : 'esquerda'}
+                    {plano.sobrado.segundo ? ` · terraço de ${f1(plano.sobrado.segundo.terracoM2)} m² na laje do 1º` : ''}
+                  </dd>
                 </div>
               )}
               <div className="space-y-1">
@@ -541,7 +545,7 @@ export default function TelaCasaAutomatica(props: Props) {
                 {ocupado === 'criar' ? 'Criando…' : 'Criar alternativa com a casa'}
               </Button>
               <Button onClick={() => agir('lancar', props.onLancar)} disabled={!!motivoDeLancar} title={motivoDeLancar} data-testid="lancar-casa">
-                {ocupado === 'lancar' ? 'Lançando…' : plano.sobrado ? 'Lançar os dois pavimentos' : 'Lançar no pavimento'}
+                {ocupado === 'lancar' ? 'Lançando…' : plano.sobrado?.segundo ? 'Lançar os três pavimentos' : plano.sobrado ? 'Lançar os dois pavimentos' : 'Lançar no pavimento'}
               </Button>
             </div>
           </>

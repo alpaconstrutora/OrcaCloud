@@ -2063,7 +2063,7 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F25 — terreno inclinado: platô único — partes 1 e 2 (ver "Registro da F25" e "Registro da F25 — parte 2"; a rampa da garagem no terreno inclinado vai com a F26)
 - [x] F26 — muro, portão e calçada; e (da F25) a rampa da garagem no terreno inclinado (ver "Registro da F26")
 - [ ] F27 — **partes 1 e 2 feitas** (ver "Registro da F27"); **3 pavimentos (F27-D): [x] D1 a base (no ar, 1a1a8934)
-  · [x] D2 a arquitetura (PR #46, CI) · [ ] D3 estrutura · [ ] D4 instalações e a opção na tela · [ ] D5 terraço**; e (da F24) o serviço com fachada nas casas largas e rasas (L e L de fundo largo, 3 dorm.); e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
+  · [x] D2 a arquitetura · [x] D3 estrutura · [x] D4 instalações e a opção na tela (19/10) · [ ] D5 terraço**; e (da F24) o serviço com fachada nas casas largas e rasas (L e L de fundo largo, 3 dorm.); e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
 - [ ] F28 — tela e prancha: a chuva de projeto na tela da casa; bolhas dos eixos sem sobrepor
 
 
@@ -2797,3 +2797,20 @@ existem iguais nos três pavimentos e não têm janela).
   suíte 15,3–21,8 m². Encontros de rede por lote: 1 / 6 / 6 / 1 / 0 / 1 (antes 3 / 5 / 8 / 5 / 0 / 5).
 - Ainda: prumadas pelo meio do dormitório do 1º (condutor vertical, ventilação, alimentador, água fria) e 0–3 tubos
   atravessando pilar.
+
+#### Registro da D4 — parte 2c e o fechamento (19/10/2026)
+
+- **O alimentador pelo shaft** (`rotaPelasParedesAte`): a subida que ficaria sem parede em algum pavimento de cima (a
+  fachada do 2º recuada: "a fachada não tem parede no 2º") subia pelo meio da suíte do 1º — agora sobe pelo shaft que
+  liga a entrada à caixa (`raioDoShaftDaSubidaMm`, padrão 4 m, hipótese). Teste novo (falha sem a correção).
+- **A opção "3 pavimentos" na tela** (decisão: "só quando as instalações fecharem" — fecharam: toda rede ligada, sem
+  ponta aberta nem trecho sem destino, o shaft do 2º pela parede de topo do núcleo, a pressão atendida): o seletor
+  grava 3 (as premissas leem 3), o resumo diz as duas escadas e o terraço, o botão "Lançar os três pavimentos".
+- **O Automático** (decisão: "só quando o sobrado não comporta"): térrea; não comportando, o sobrado; e só se o sobrado
+  também não comporta (`terreaNaoComporta` sobre ele) E o gabarito da zona deixa 3, a de 3 — fica a de menos
+  problemas. O sobrado escolhido à mão que não comporta ganha a pendência "em Automático ou 3 pavimentos, a casa sobe
+  mais um". Medido: R1-B 15 × 30 → sobrado (comporta); 10 × 30 4 dorm. → térrea (o sobrado comporta, mas tem mais
+  problemas); 12 × 30 → térrea (comporta) — a de 3 não foi tentada em nenhum.
+- **Fica para a D5 (terraço) e o item 5 (qualidade)**: na faixa da frente do 1º, sob o terraço, ainda atravessam o
+  cômodo o condutor do telhado do 2º (o beiral cai sobre o terraço), uma coluna de água fria e uma ventilação de peças do
+  térreo; encontros de rede 0–7 por lote (sobrado: 0); 0–3 tubos atravessando pilar.

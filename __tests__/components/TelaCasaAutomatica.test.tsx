@@ -189,6 +189,22 @@ describe('TelaCasaAutomatica (F10)', () => {
     expect(screen.getByTestId('lancar-casa').textContent).toBe('Lançar os dois pavimentos');
   });
 
+  it('F27-D4: 3 pavimentos — o seletor grava 3; o resumo diz as duas escadas e o terraço; o botão, os três pavimentos', () => {
+    const onPremissas = vi.fn();
+    tela({ onPremissas, premissas: { ...PREMISSAS_DA_CASA_PADRAO, pavimentos: 1 } });
+    fireEvent.change(screen.getByLabelText('Pavimentos'), { target: { value: '3' } });
+    expect(onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ pavimentos: 3 }));
+    cleanup();
+    const deTres = {
+      ...plano,
+      sobrado: { nivelSuperiorId: 'lvl_0002', nucleo: { lado: 'DIREITA' }, escada: { degraus: 17, espelhoMm: 171, pisoMm: 306, blondelMm: 647 }, portas: { terreo: 'Sala', superior: 'Circulação' }, segundo: { nivelId: 'lvl_0003', retangulo: { x0: 0, y0: 0, x1: 5400, y1: 6000 }, porta: 'Circulação', terracoM2: 64.08 } },
+    } as unknown as PlanoDaCasa;
+    tela({ premissas: { ...PREMISSAS_DA_CASA_PADRAO, pavimentos: 3 }, casa: casa({ plano: deTres }) });
+    expect((screen.getByLabelText('Pavimentos') as HTMLSelectElement).value).toBe('3');
+    expect(screen.getByTestId('sobrado-da-casa').textContent).toMatch(/duas escadas em U.*terraço de 64,1 m²/s);
+    expect(screen.getByTestId('lancar-casa').textContent).toBe('Lançar os três pavimentos');
+  });
+
   it('F14b: o forro — ligado mostra o pé-direito livre de cada uso e o piso; desligar muda a premissa e esconde os campos', () => {
     const onPremissas = vi.fn();
     tela({ onPremissas });

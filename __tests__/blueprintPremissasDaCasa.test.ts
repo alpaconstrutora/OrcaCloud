@@ -48,7 +48,10 @@ describe('hipotesesDasPremissas', () => {
 describe('F12d — o sobrado nas premissas', () => {
   it('pavimentos 1, 2 ou Automático (ausente ou outro valor = Automático, F22); a térrea gravada vale; o grupo do sobrado completa; vira hipótese do motor', () => {
     expect(premissasDaCasaDaColuna({}).pavimentos).toBe('AUTOMATICO');
-    expect(premissasDaCasaDaColuna({ pavimentos: 3 }).pavimentos).toBe('AUTOMATICO');
+    expect(premissasDaCasaDaColuna({ pavimentos: 4 }).pavimentos).toBe('AUTOMATICO');
+    // F27-D4: a casa de 3 pavimentos gravada vale.
+    expect(premissasDaCasaDaColuna({ pavimentos: 3 }).pavimentos).toBe(3);
+    expect(hipotesesDasPremissas(premissasDaCasaDaColuna({ pavimentos: 3 })).pavimentos).toBe(3);
     expect(premissasDaCasaDaColuna({ pavimentos: 1 }).pavimentos).toBe(1);
     expect(hipotesesDasPremissas(premissasDaCasaDaColuna({})).pavimentos).toBe('AUTOMATICO');
     const p = premissasDaCasaDaColuna({ pavimentos: 2, sobrado: { lajeEntrePavimentosMm: 120, shaftMm: 'x' } });

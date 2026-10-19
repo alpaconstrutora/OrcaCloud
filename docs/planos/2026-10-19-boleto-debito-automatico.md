@@ -49,12 +49,14 @@ de débito automático em `erros_validacao`, e nenhum outro campo preenchido foi
 **Pronto quando:** o relato existe com contagem por mês e o uso de cada lado.
 
 ## Estado
-- [ ] 1: código pronto (`86f441e4`, PR #58 rascunho). 40/40 testes do leitor, os 14 PDFs
-  reais dão o valor certo em Deno, `tsc` rc=0, `deno check` rc=0. **Falta publicar:** o
-  `functions deploy email-capture-sync` e o merge foram barrados pelo auto mode
-  ("Production Deploy") e ficam com o usuário.
-- [ ] 2: SQL pronto (zera `reprocessado_em` dos 14; o cron relê). Só pode rodar DEPOIS do
-  deploy da function.
+- [x] 1: `86f441e4`, PR #58 (CI verde no `a01b9390`). 40/40 testes do leitor, os 14 PDFs
+  reais dão o valor certo em Deno, `tsc` rc=0, `deno check` rc=0. Edge Function publicada
+  pelo usuário em 19/10/2026 (o auto mode barrou o deploy); conferido de fora: 401 sem
+  header. **Falta o merge do PR** (front/upload manual), que fica com o usuário.
+- [x] 2: `reprocessado_em` zerado nos 14 (19/10/2026, depois do deploy); o cron releu em
+  2 rodadas (21:15 e 21:30 UTC). Conferido no banco: os 14 com `valor` = "TOTAL A PAGAR"
+  do PDF, campo preenchido só `valor` (auditoria `reprocessamento`), vencimento intacto,
+  status `revisao`, aviso de débito automático em `erros_validacao`.
 - [x] 3: investigado (abaixo). Nada alterado no banco.
 
 ## Item 3: extrato repetido nas duas contas Sicredi (19/10/2026)

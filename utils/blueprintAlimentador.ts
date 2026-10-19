@@ -30,7 +30,8 @@ import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { FICHA_DO_MATERIAL, KPA_POR_MCA, comprimentoEquivalenteM, perdaDistribuida, perdaNoHidrometroKpa } from './blueprintHidraulicaPressao';
 import { arvorePelasParedes, encaixarNaParede } from './blueprintRotaPelasParedes';
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, foraDaViga, foraDoPilar, fracaoDentro, pegadasDePilares } from './blueprintObstaculosEstruturais';
-import { cantosDaParede, pegadaEmPlanta, pointInPolygon } from './blueprintKernel';
+import { cantosDaParede, pavimentosDoNucleo, pegadaEmPlanta, pointInPolygon } from './blueprintKernel';
+import { centroDoNucleo, lugarNoShaft } from './blueprintNucleoVertical';
 import { dimensionarReservacao, type HipotesesDeReservatorio } from './blueprintReservacao';
 import { applyBatch } from './blueprintKernel';
 import { cotaDoTerrenoEm, pontoNaFrente, type LeitorDoTerreno, type OrigemDaFrente } from './blueprintAncorasHidro';
@@ -62,6 +63,12 @@ export interface HipotesesDeAlimentacao {
    * sob a caixa, com o percurso enterrado por baixo da casa (o de antes). Ausente = 'SOB_A_CAIXA'.
    */
   subida?: 'FACHADA' | 'SOB_A_CAIXA';
+  /**
+   * F27-D4 da casa automática (19/10/2026): a subida que ficaria sem parede em algum pavimento de cima (no meio de um
+   * cômodo — a casa de 3, com a fachada do 2º recuada) sobe pelo SHAFT que vai da entrada até a caixa, se houver um a
+   * até isto da caixa, mm. Ausente = `RAIO_DO_SHAFT_DA_SUBIDA_MM` (4000).
+   */
+  raioDoShaftDaSubidaMm?: number;
   /**
    * F18 da casa automática (16/10/2026): onde o trecho enterrado cruza esgoto ou pluvial, a água passa POR CIMA (NBR
    * 5626) — com este afastamento entre as geratrizes, mm. Ausente = `AFASTAMENTO_ACIMA_DO_ESGOTO_MM` (50).
@@ -117,6 +124,8 @@ export function cotaEnterradaAcimaDasRedes(model: BlueprintModel, hip: Hipoteses
 export const FOLGA_DO_BALDRAME_MM = 50;
 /** F17: até esta distância do ponto da subida, a parede do pavimento de cima conta como a mesma (a subida pela fachada). */
 const PAREDE_DA_SUBIDA_EM_CIMA_MM = 60;
+/** F27-D4: o padrão de `HipotesesDeAlimentacao.raioDoShaftDaSubidaMm`. */
+export const RAIO_DO_SHAFT_DA_SUBIDA_MM = 4000;
 /** F14d: a folga entre a subida do alimentador e o batente do vão, mm. */
 const FOLGA_DA_SUBIDA_AO_VAO_MM = 50;
 /** F8c: a subida entra na parede a isto acima do topo do baldrame. */
@@ -188,7 +197,7 @@ export function rotaPelasParedesAte(
   origem: { levelId: ObjectId; at: P; cotaMm: number },
   cotaDoPercurso: number,
   alvo: { levelId: ObjectId; at: P; cotaMm: number },
-  opcoes: Pick<HipotesesDeAlimentacao, 'folgaDoBaldrameMm' | 'entradaNaParedeMm' | 'subida'> = {},
+  opcoes: Pick<HipotesesDeAlimentacao, 'folgaDoBaldrameMm' | 'entradaNaParedeMm' | 'subida' | 'raioDoShaftDaSubidaMm'> = {},
   avisos: string[] = [],
 ): PontaDeRota[] | null {
   const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
@@ -240,7 +249,22 @@ export function rotaPelasParedesAte(
     return q;
   })();
   const chegada = encaixarNaParede(alvo.at, paredes0, 3000);
-  const sobAChegada = naFachada ?? (chegada ? foraDoPilar(chegada.q, chegada.parede, [...aneis0, ...vaos]) : { ...alvo.at });
+  let sobAChegada = naFachada ?? (chegada ? foraDoPilar(chegada.q, chegada.parede, [...aneis0, ...vaos]) : { ...alvo.at });
+  // F27-D4: sem parede em cima em algum pavimento, a subida atravessaria o cômodo pelo meio — vai pelo shaft que liga a
+  // entrada à caixa (o mais perto da caixa, ao alcance), na posição da água fria nele.
+  if (!naFachada && id > i0 && niveis.slice(i0 + 1, id + 1).some((l) => !encaixarNaParede(sobAChegada, model.walls.filter((w) => w.levelId === l.id), PAREDE_DA_SUBIDA_EM_CIMA_MM))) {
+    const alcance = opcoes.raioDoShaftDaSubidaMm ?? RAIO_DO_SHAFT_DA_SUBIDA_MM;
+    const shaft = (model.nucleos ?? [])
+      .filter((n) => n.tipo === 'SHAFT' && [n0.id, nd.id].every((L) => pavimentosDoNucleo(model, n).some((l) => l.id === L)))
+      .map((n) => ({ n, c: centroDoNucleo(n), d: 0 }))
+      .map((x) => ({ ...x, d: Math.hypot(x.c.x - alvo.at.x, x.c.y - alvo.at.y) }))
+      .filter((x) => x.d <= alcance)
+      .sort((a, b) => a.d - b.d)[0];
+    if (shaft) {
+      sobAChegada = lugarNoShaft(model, shaft.c as Point, null, 'AGUA_FRIA', 0, [...atravessados]);
+      avisos.push('O alimentador sobe pelo shaft: na parede sob a caixa não há parede em cima em todos os pavimentos.');
+    }
+  }
   let zPe = cotaDoPercurso;
   const baldrames = (model.structures ?? []).filter((s) => s.kind === 'VIGA_FUNDACAO' && s.levelId === n0.id && s.baseMm < cotaDoPercurso && s.baseMm + s.alturaMm > cotaDoPercurso);
   const naParede = baldrames.length > 0 ? null : naParedeDe(origem.at, 1e9);

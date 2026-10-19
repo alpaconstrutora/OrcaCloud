@@ -164,6 +164,32 @@ describe('F17 da casa automática: o alimentador sobe pela FACHADA ("sobe pela f
   });
 });
 
+describe('F27-D4 da casa automática: a subida sem parede em cima vai pelo SHAFT (casa de 3, 19/10/2026)', () => {
+  // Térreo com a sala 4 × 3 m; o 1º SEM parede sobre ela (o terraço da casa de 3 tem o 2º recuado); a caixa no 2º.
+  const casa = (comShaft: boolean) => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    m = applyCommand(m, { type: 'AddLevel', name: '1', elevationMm: 2900, defaultHeightMm: 2800 }).model;
+    m = applyCommand(m, { type: 'AddLevel', name: '2', elevationMm: 5800, defaultHeightMm: 2800 }).model;
+    const [t, , dois] = [...m.levels].sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
+    const lados = [[0, 0, 4000, 0], [4000, 0, 4000, 3000], [4000, 3000, 0, 3000], [0, 3000, 0, 0]];
+    m = applyBatch(m, lados.map(([ax, ay, bx, by]): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }))).model;
+    if (comShaft) m = applyCommand(m, { type: 'AddNucleo', levelId: t, ateLevelId: dois, tipo: 'SHAFT', ring: [point(3500, 2000), point(3900, 2000), point(3900, 2400), point(3500, 2400)], rotulo: 'Shaft' } as Command).model;
+    return { m, t, dois };
+  };
+  const rota = (m: BlueprintModel, t: string, dois: string) =>
+    rotaPelasParedesAte(m, { levelId: t, at: { x: 1000, y: -2000 }, cotaMm: 600 }, -300, { levelId: dois, at: { x: 3000, y: 2700 }, cotaMm: 900 }, {})!;
+
+  it('com o shaft térreo → 2º ao alcance, o pedaço que atravessa o 1º passa DENTRO dele; sem shaft, como antes (na parede do térreo)', () => {
+    const c = casa(true);
+    const primeiro = c.m.levels.find((l) => l.name === '1')!.id;
+    const vertical = rota(c.m, c.t, c.dois).find((x) => x.levelId === primeiro && x.a.x === x.b.x && x.a.y === x.b.y)!;
+    expect(vertical.a.x >= 3500 && vertical.a.x <= 3900 && vertical.a.y >= 2000 && vertical.a.y <= 2400, JSON.stringify(vertical)).toBe(true);
+    const s = casa(false);
+    const semShaft = rota(s.m, s.t, s.dois).find((x) => x.levelId === primeiro && x.a.x === x.b.x && x.a.y === x.b.y)!;
+    expect(Math.abs(semShaft.a.y - 3000)).toBeLessThanOrEqual(100);
+  });
+});
+
 describe('F18 da casa automática: o alimentador enterrado por CIMA do esgoto e do pluvial que cruza (NBR 5626)', () => {
   const comCruzamento = (cotaDoEsgoto: number) => {
     let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;

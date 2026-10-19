@@ -8,7 +8,7 @@ import {
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown,
     Package, Pencil, Settings, Search,
-    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal
+    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal, PencilLine
 } from 'lucide-react';
 import { ContractModal, ContractFormSection } from './ContractModal';
 import {
@@ -20,7 +20,9 @@ import {
     DocumentRequirementPhase, ContractAcceptance, ContractTechnicalResponsibility, ContractEvaluation,
     AcceptanceKind, ArtType, ContractSupplyMatrixItem, ContractInterface
 } from '../types';
-import { contractService } from '../services/contractService';
+import { contractService, type ParcelaDoContrato } from '../services/contractService';
+import AlterarValorParcelaSheet, { descreverAlteracaoManual } from './contracts/AlterarValorParcelaSheet';
+import { parcelaBaixada } from '../utils/contratoParcelaVariavel';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
 import { contractGuaranteeService } from '../services/contractGuaranteeService';
 import { contractPenaltyService } from '../services/contractPenaltyService';
@@ -80,11 +82,15 @@ const FINANCE_COLUMNS: ColumnConfig[] = [
     { key: 'source', label: 'Origem', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'amount', label: 'Valor', sortable: true },
+    // Alterar valor da parcela (19/10/2026) — estrutural, não ordena (§2/§6.3).
+    { key: 'actions', label: 'Ações', sortable: false },
 ];
+const FINANCE_DATA_COLUMNS = FINANCE_COLUMNS.filter(c => c.key !== 'actions');
 // Larguras iniciais da tabela de Parcelas (Financeiro › Parcelas). Descrição é o
-// texto livre — o resto é vocabulário curto.
+// texto livre — o resto é vocabulário curto. Valor leva a 2ª linha "Alterado
+// manualmente" quando a parcela foi editada à mão.
 const FINANCE_COL_WIDTHS: Record<string, number> = {
-    date: 130, description: 480, source: 150, status: 140, amount: 150,
+    date: 130, description: 460, source: 150, status: 140, amount: 190, actions: 90,
 };
 
 // Só as modalidades de OBRA/suprimentos. As de locação (seguro-fiança, cessão
@@ -272,12 +278,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [rejectModal, setRejectModal] = React.useState<{ measurementId: string } | null>(null);
     const [rejectReason, setRejectReason] = React.useState('');
     const [measurementActionBusy, setMeasurementActionBusy] = React.useState<string | null>(null);
-    const [financialEntries, setFinancialEntries] = React.useState<{
-        id: string; source_system: string; reference_id: string | null;
-        transaction_date: string; amount: number; direction: 'CREDIT' | 'DEBIT';
-        description: string | null; category: string | null; status: string;
-    }[]>([]);
+    const [financialEntries, setFinancialEntries] = React.useState<ParcelaDoContrato[]>([]);
     const [loadingFinancialEntries, setLoadingFinancialEntries] = React.useState(false);
+    // Parcela aberta no painel "Alterar valor da parcela".
+    const [parcelaEmEdicao, setParcelaEmEdicao] = React.useState<ParcelaDoContrato | null>(null);
     const financeColumns = useTableColumns(FINANCE_COLUMNS, 'contractFinanceEntriesColumns');
     // §6.1 — largura arrastável pelo divisor do cabeçalho + auto-ajuste sob comando.
     const financeWidths = useResizableColumns(FINANCE_COL_WIDTHS, 'contractFinanceEntriesColWidths');
@@ -1051,11 +1055,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             }
             // A aba Financeiro lista o que acabou de ser gerado — sem recarregar,
             // ela seguia no empty state até reabrir o contrato.
-            if (count > 0) {
-                contractService.listFinancialEntries(contract)
-                    .then(setFinancialEntries)
-                    .catch(err => console.error('Erro ao recarregar lançamentos financeiros:', err));
-            }
+            if (count > 0) await recarregarParcelas(contract);
         } catch (e) {
             // Mensagem do serviço quando existe (ex: locação faturada pela
             // negociação) — "tente novamente" ali seria enganoso, porque repetir
@@ -1063,6 +1063,85 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             notify(e instanceof Error && e.message ? e.message : "Erro ao lançar no financeiro. Tente novamente.", "error");
         } finally {
             setSyncingFinance(false);
+        }
+    };
+
+    /**
+     * Relê as parcelas SEM o spinner (§22): a tabela continua na tela, com a
+     * rolagem onde estava, e só os valores mudam. Usada depois de alterar valor,
+     * de Lançar Financeiro e de salvar os Dados Gerais — os dois últimos
+     * re-sincronizam a série e a lista ficava velha até reabrir o contrato.
+     */
+    const recarregarParcelas = async (c: Contract = contract!): Promise<ParcelaDoContrato[]> => {
+        if (!c) return financialEntries;
+        try {
+            const lista = await contractService.listFinancialEntries(c);
+            setFinancialEntries(lista);
+            return lista;
+        } catch (err) {
+            console.error('Erro ao recarregar lançamentos financeiros:', err);
+            return financialEntries;
+        }
+    };
+
+    /**
+     * Financeiro › Parcelas › Alterar valor (19/10/2026). Grava o valor da parcela
+     * (marcada como alterada à mão — os syncs do contrato a preservam) e, em
+     * contrato À Vista ou Parcelado, pergunta se o valor do contrato acompanha:
+     * mesma pergunta da Negociação (DealModal.perguntarCorrigirTotalContrato).
+     * Recorrente e medição não têm "total" a casar — a parcela muda sozinha.
+     * Plano: docs/planos/2026-10-19-contrato-alterar-valor-da-parcela.md.
+     */
+    const handleSalvarValorParcela = async (parcela: ParcelaDoContrato, novoValor: number) => {
+        if (!contract) return;
+        await contractService.updateFinancialEntry(parcela.id, { amount: novoValor });
+        const lista = await recarregarParcelas(contract);
+        notify('Valor da parcela alterado.', 'success');
+
+        const fmtR = (n: number) => `R$ ${fmt(n)}`;
+        const atual = Number(contract.original_value) || 0;
+        const ativas = lista.filter(e => e.status !== 'CANCELLED');
+        let proposto: number | null = null;
+        let updates: Partial<Contract> | null = null;
+
+        if (parcela.source_system === 'CONTRACT_PARCELADO' && !contract.is_recurring) {
+            // Total do contrato = soma BRUTA das parcelas (o desconto não muda o acordado).
+            proposto = Number(ativas
+                .filter(e => e.source_system === 'CONTRACT_PARCELADO')
+                .reduce((s, e) => s + Number(e.original_amount ?? e.amount ?? 0), 0)
+                .toFixed(2));
+            // O cronograma dos Dados Gerais acompanha: `:p<n>` é a n-ésima parcela.
+            const n = Number(/:p(\d+)$/.exec(parcela.reference_id ?? '')?.[1]);
+            const cronograma = [...(contract.payment_schedule ?? [])];
+            if (n >= 1 && n <= cronograma.length) cronograma[n - 1] = { ...cronograma[n - 1], value: novoValor };
+            updates = { original_value: proposto, payment_schedule: cronograma };
+        } else if (parcela.source_system === 'CONTRACT_AVISTA' && !contract.is_recurring) {
+            proposto = novoValor;
+            updates = { original_value: novoValor };
+        }
+        if (proposto == null || !updates || !(atual > 0) || Math.abs(proposto - atual) < 0.01) return;
+
+        const ok = await confirm({
+            title: 'Ajustar o valor do contrato?',
+            message: parcela.source_system === 'CONTRACT_AVISTA'
+                ? `A cobrança à vista passou a ser ${fmtR(proposto)}, e o valor do contrato é ${fmtR(atual)}. `
+                    + `Atualizar o valor do contrato para ${fmtR(proposto)}? `
+                    + 'Mantenha como está se a alteração for pontual e o valor acordado não mudou.'
+                : `Com a alteração, a soma das parcelas passa a ser ${fmtR(proposto)}, e o valor do contrato é ${fmtR(atual)}. `
+                    + `Atualizar o valor do contrato (e a parcela no cronograma dos Dados Gerais) para ${fmtR(proposto)}? `
+                    + 'Mantenha como está se a alteração for pontual e o valor acordado não mudou.',
+            variant: 'default',
+            confirmLabel: 'Atualizar valor do contrato',
+            cancelLabel: 'Manter valor',
+        });
+        if (!ok) return;
+        try {
+            const updated = await contractService.updateContract(contract.id, updates);
+            setContract(updated);
+            await recarregarParcelas(updated);
+            notify(`Valor do contrato atualizado para ${fmtR(proposto)}.`, 'success');
+        } catch (e) {
+            notify(e instanceof Error && e.message ? e.message : 'Não foi possível atualizar o valor do contrato.', 'error');
         }
     };
 
@@ -2838,6 +2917,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             onSubmit={async (data) => {
                                 const updated = await contractService.updateContract(contract.id, data);
                                 setContract(updated);
+                                // Salvar re-sincroniza as parcelas (À Vista/Parcelado) —
+                                // a sub-aba Parcelas mostra o resultado sem reabrir.
+                                await recarregarParcelas(updated);
                             }}
                         />
                         )}
@@ -2939,7 +3021,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                     <ColumnConfigButton
-                                        columns={FINANCE_COLUMNS}
+                                        columns={FINANCE_DATA_COLUMNS}
                                         visibleColumns={financeColumns.visibleColumns}
                                         showColumnConfig={financeColumns.showColumnConfig}
                                         onToggleShow={() => financeColumns.setShowColumnConfig(!financeColumns.showColumnConfig)}
@@ -2983,18 +3065,22 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         className="text-left border-collapse"
                                         style={{
                                             tableLayout: 'fixed',
-                                            width: FINANCE_COLUMNS.filter(c => visibleFinCols.includes(c.key)).reduce((t, c) => t + financeWidths.getWidth(c.key), 0),
+                                            width: FINANCE_DATA_COLUMNS.filter(c => visibleFinCols.includes(c.key)).reduce((t, c) => t + financeWidths.getWidth(c.key), 0)
+                                                + financeWidths.getWidth('actions'),
                                             minWidth: '100%',
                                         }}
                                     >
+                                        {/* §6.1.1 — espaçador ANTES de "Ações": a folga do minWidth fica no meio. */}
                                         <colgroup>
-                                            {FINANCE_COLUMNS.filter(c => visibleFinCols.includes(c.key)).map(c => (
+                                            {FINANCE_DATA_COLUMNS.filter(c => visibleFinCols.includes(c.key)).map(c => (
                                                 <col key={c.key} data-col-key={c.key} style={{ width: `${financeWidths.getWidth(c.key)}px` }} />
                                             ))}
+                                            <col />
+                                            <col data-col-key="actions" style={{ width: `${financeWidths.getWidth('actions')}px` }} />
                                         </colgroup>
                                         <thead>
                                             <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                                {FINANCE_COLUMNS.filter(c => visibleFinCols.includes(c.key)).map(c => (
+                                                {FINANCE_DATA_COLUMNS.filter(c => visibleFinCols.includes(c.key)).map(c => (
                                                     <SortableHeader
                                                         key={c.key}
                                                         colKey={c.key}
@@ -3008,10 +3094,21 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         <financeWidths.ResizeHandle colKey={c.key} />
                                                     </SortableHeader>
                                                 ))}
+                                                <th aria-hidden="true" className="border-r border-gray-100"></th>
+                                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-700">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
-                                            {sortedEntries.map((e) => (
+                                            {sortedEntries.map((e) => {
+                                                const alteracao = descreverAlteracaoManual(e);
+                                                // Botão desligado sempre diz o motivo (span: o ActionIconButton
+                                                // desligado tem pointer-events-none e esconderia o title).
+                                                const motivoTravado = parcelaBaixada(e)
+                                                    ? 'Parcela já paga ou conciliada — estorne no financeiro antes de alterar o valor.'
+                                                    : e.status !== 'PENDING'
+                                                        ? 'Parcela cancelada — não há valor a alterar.'
+                                                        : null;
+                                                return (
                                                 <tr key={e.id} className="hover:bg-blue-50/50 transition-colors group">
                                                     {visibleFinCols.includes('date') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
@@ -3036,10 +3133,31 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     {visibleFinCols.includes('amount') && (
                                                         <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium ${e.direction === 'CREDIT' ? 'text-emerald-600' : 'text-gray-800'}`}>
                                                             {e.direction === 'DEBIT' ? '- ' : ''}R$ {fmt(e.amount)}
+                                                            {/* Identificação da parcela alterada à mão (pedido de 19/10/2026):
+                                                                quem, quando e o valor que o contrato tinha gerado, no hover. */}
+                                                            {alteracao && (
+                                                                <span className="flex items-center justify-end gap-1 text-xs font-normal text-amber-700 mt-0.5" title={alteracao}>
+                                                                    <PencilLine className="w-3 h-3 shrink-0" />
+                                                                    Alterado manualmente
+                                                                </span>
+                                                            )}
                                                         </td>
                                                     )}
+                                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                                    <td className="px-6 py-2.5 text-right">
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            {motivoTravado ? (
+                                                                <span className="inline-flex" title={motivoTravado}>
+                                                                    <ActionIconButton kind="edit" title={motivoTravado} disabled />
+                                                                </span>
+                                                            ) : (
+                                                                <ActionIconButton kind="edit" title="Alterar valor" onClick={() => setParcelaEmEdicao(e)} />
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                 </tr>
-                                            ))}
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
@@ -3378,6 +3496,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     onSuccess={loadContractData}
                 />
             )}
+
+            {/* Financeiro › Parcelas › Alterar valor (19/10/2026). */}
+            <AlterarValorParcelaSheet
+                parcela={parcelaEmEdicao}
+                onClose={() => setParcelaEmEdicao(null)}
+                onSalvar={handleSalvarValorParcela}
+            />
 
             {contract && (
                 <ContractRiskModal

@@ -9,7 +9,9 @@ import { generateUnitSaleContractNumber } from './unitSaleContractNumberingServi
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 import { BudgetEntry } from '../types/budget';
 import { resolverCategoriaDoContrato } from './financialCategoryResolver';
-import { semParcelasBaixadas } from '../utils/contratoParcelaVariavel';
+import {
+    planejarSyncParcelas, parcelaBaixada, marcaDeValorManual, COLUNAS_PARCELA_EXISTENTE, type ParcelaExistente,
+} from '../utils/contratoParcelaVariavel';
 import {
     Contract,
     ContractItem,
@@ -525,18 +527,17 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
         // ── 2. internal_transactions (aba Conciliação) ─────────────────────────
         // reference_id uses contract.id:pN pattern to satisfy the (org, reference) unique constraint
         if (contract.organization_id) {
-            // Remove old entries: use LIKE 'contract.id%' to catch all installment keys
+            // Parcelas que já existem (LIKE 'contract.id%' pega todas as chaves).
+            // Até 19/10/2026 TODAS eram apagadas e recriadas como PENDING — inclusive
+            // pagas e conciliadas (o vínculo da conciliação ia junto, por CASCADE),
+            // e a cada "Salvar" dos Dados Gerais. Agora planejarSyncParcelas decide:
+            // baixada fica intocada; valor alterado à mão é preservado.
             const { data: oldRows } = await supabase
                 .from('internal_transactions')
-                .select('id')
+                .select(COLUNAS_PARCELA_EXISTENTE)
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_PARCELADO')
                 .like('reference_id', `${contract.id}%`);
-            if (oldRows?.length) {
-                await supabase.from('internal_transactions')
-                    .delete()
-                    .in('id', oldRows.map((r: any) => r.id));
-            }
 
             // O contrato virou PARCELADO: a cobrança em parcela única que o
             // caminho "À Vista" tinha lançado antes está errada por definição, e
@@ -568,11 +569,17 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             // id da medição, formato que o produtor nunca gravou e que o UNIQUE
             // de internal_transactions nem permitiria. Apagava zero linhas e
             // devolvia sucesso.
-            await supabase.from('internal_transactions')
-                .delete()
+            // Medição já paga/conciliada fica (mesma regra das parcelas).
+            const { data: medicoes } = await supabase
+                .from('internal_transactions')
+                .select('id, status, business_status')
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_MEASUREMENT')
                 .like('reference_id', `${contract.id}%`);
+            const medicoesApagaveis = (medicoes ?? []).filter(m => !parcelaBaixada(m)).map(m => m.id as string);
+            if (medicoesApagaveis.length) {
+                await supabase.from('internal_transactions').delete().in('id', medicoesApagaveis);
+            }
 
             // Insert one row per installment with unique reference_id
             const party = await resolveContractParty(contract, supplierName);
@@ -615,11 +622,23 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 installment_type: tx.installment_type,
                 payment_type: tx.payment_type,
             }));
+            const plano = planejarSyncParcelas(internalRows, (oldRows ?? []) as unknown as ParcelaExistente[]);
+            if (plano.idsApagar.length) {
+                await supabase.from('internal_transactions').delete().in('id', plano.idsApagar);
+            }
             // UPSERT: reference_id embute a parcela e o vencimento é editável —
             // ver nota em generateRecurringInstallmentsForPeriod (erro 23505).
-            await supabase.from('internal_transactions')
-                .upsert(internalRows, { onConflict: 'organization_id,reference_id,entry_type' });
-            console.log(`[CONTRACTS] Synced ${internalRows.length} parcelado txs to internal_transactions`);
+            // Dois lotes: as manuais levam colunas a mais (valor/desconto da linha), e
+            // um upsert só gravaria NULL nessas colunas das normais.
+            if (plano.normais.length) {
+                await supabase.from('internal_transactions')
+                    .upsert(plano.normais, { onConflict: 'organization_id,reference_id,entry_type' });
+            }
+            if (plano.manuais.length) {
+                await supabase.from('internal_transactions')
+                    .upsert(plano.manuais, { onConflict: 'organization_id,reference_id,entry_type' });
+            }
+            console.log(`[CONTRACTS] Synced ${plano.normais.length + plano.manuais.length} parcelado txs to internal_transactions (${plano.manuais.length} com valor manual; ${internalRows.length - plano.normais.length - plano.manuais.length} já baixadas, intocadas)`);
         }
     } catch (e) {
         console.error('[CONTRACTS] Error syncing parcelado schedule to finance:', e);
@@ -816,19 +835,14 @@ async function syncRecurringToFinance(contract: Contract) {
             // Parcela já BAIXADA fica fora do upsert (utils/contratoParcelaVariavel.ts):
             // até 17/10/2026 ele regravava amount/status/business_status da série toda, e
             // "Lançar Financeiro" de novo devolvia parcela paga e conciliada para PENDING.
+            // Parcela com valor alterado à mão (19/10/2026) vai com o valor DELA.
             const { data: existentes } = await supabase
                 .from('internal_transactions')
-                .select('reference_id, status, business_status')
+                .select(COLUNAS_PARCELA_EXISTENTE)
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_RECURRING')
                 .like('reference_id', `${contract.id}-p%`);
-            const lote = semParcelasBaixadas(
-                transactions.map(tx => ({ ...tx, reference_id: `${contract.id}-p${tx.date.split('T')[0]}` })),
-                existentes ?? [],
-            );
-            if (lote.length === 0) return;
-            // UPSERT — mesma razão de generateRecurringInstallmentsForPeriod (23505).
-            await supabase.from('internal_transactions').upsert(lote.map(tx => ({
+            const linhas = transactions.map(tx => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_RECURRING',
                 contract_id: contract.id,
@@ -839,7 +853,7 @@ async function syncRecurringToFinance(contract: Contract) {
                 // negociação (tx-{dealId}-custom-pN). Os filtros usam
                 // `like('{contractId}%')`, então as linhas legadas (reference_id =
                 // id puro) continuam sendo encontradas.
-                reference_id: tx.reference_id,
+                reference_id: `${contract.id}-p${tx.date.split('T')[0]}`,
                 project_id: contract.project_id ?? null,
                 transaction_date: tx.date.split('T')[0],
                 // Vencimento da parcela — Contas a Receber exibe due_date e a view
@@ -866,7 +880,20 @@ async function syncRecurringToFinance(contract: Contract) {
                 // de Contas / Centro de Custo). Antes só o parcelado copiava.
                 cost_center_id: contract.cost_center_id ?? null,
                 plano_de_contas_id: contract.plano_de_contas_id ?? null,
-            })), { onConflict: 'organization_id,reference_id,entry_type' });
+            }));
+            // Este sync não apaga (upsert por data): `idsApagar` não se aplica.
+            const { normais, manuais } = planejarSyncParcelas(linhas, (existentes ?? []) as unknown as ParcelaExistente[]);
+            if (normais.length === 0 && manuais.length === 0) return;
+            // UPSERT — mesma razão de generateRecurringInstallmentsForPeriod (23505).
+            // Dois lotes: as manuais levam colunas a mais (ver syncParceladoScheduleToFinance).
+            if (normais.length) {
+                await supabase.from('internal_transactions')
+                    .upsert(normais, { onConflict: 'organization_id,reference_id,entry_type' });
+            }
+            if (manuais.length) {
+                await supabase.from('internal_transactions')
+                    .upsert(manuais, { onConflict: 'organization_id,reference_id,entry_type' });
+            }
         }
         console.log(`[CONTRACTS] Generated ${transactions.length} recurring entries for contract ${contract.id} (from current month)`);
     } catch (e) {
@@ -1077,7 +1104,7 @@ export async function generateRecurringInstallmentsForPeriod(
     // ── Contrato org-level: internal_transactions
     const { data: jaExistem } = await supabase
         .from('internal_transactions')
-        .select('id, due_date, status, reference_id')
+        .select('id, due_date, status, reference_id, valor_manual')
         .eq('organization_id', contract.organization_id)
         .eq('source_system', 'CONTRACT_RECURRING')
         .like('reference_id', `${contract.id}%`)
@@ -1090,11 +1117,13 @@ export async function generateRecurringInstallmentsForPeriod(
     // com o valor antigo, produzindo uma série com dois valores misturados.
     // Parcela já paga/conciliada NUNCA é tocada: o dinheiro já entrou, refazer
     // a cobrança seria falsear o histórico. Ela é preservada e reportada.
+    // Parcela com valor alterado à mão (valor_manual) também fica: o usuário
+    // escolheu aquele valor na aba Financeiro do contrato.
     let removed = 0;
     let existing: Set<string>;
     if (replaceExisting) {
-        const pagas = (jaExistem || []).filter(r => r.status !== 'PENDING');
-        const previstas = (jaExistem || []).filter(r => r.status === 'PENDING');
+        const pagas = (jaExistem || []).filter(r => r.status !== 'PENDING' || r.valor_manual);
+        const previstas = (jaExistem || []).filter(r => r.status === 'PENDING' && !r.valor_manual);
         if (previstas.length > 0) {
             const { error: delErr } = await supabase
                 .from('internal_transactions')
@@ -1216,8 +1245,13 @@ async function syncAVistaToFinance(contract: Contract) {
 
         // internal_transactions mirror
         if (contract.organization_id) {
-            await supabase.from('internal_transactions')
-                .delete()
+            // A cobrança À Vista que já existe: paga/conciliada nunca é apagada nem
+            // regravada, e a de valor alterado à mão mantém o valor
+            // (planejarSyncParcelas). Até 19/10/2026 esta linha era apagada sem olhar
+            // o status e reinserida como PENDING.
+            const { data: avistaExistente } = await supabase
+                .from('internal_transactions')
+                .select(COLUNAS_PARCELA_EXISTENTE)
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_AVISTA')
                 .eq('reference_id', contract.id);
@@ -1241,11 +1275,11 @@ async function syncAVistaToFinance(contract: Contract) {
 
             const party = await resolveContractParty(contract, supplierName);
             const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';
-            await supabase.from('internal_transactions').insert({
+            const linha = {
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_AVISTA',
                 contract_id: contract.id,
-                reference_id: contract.id,
+                reference_id: contract.id as string,
                 project_id: contract.project_id ?? null,
                 transaction_date: dueDate,
                 // Vencimento — ver comentário nas outras duas funções de sync.
@@ -1267,7 +1301,18 @@ async function syncAVistaToFinance(contract: Contract) {
                 // Classificação do contrato desce para o título (ver syncRecurringToFinance).
                 cost_center_id: contract.cost_center_id ?? null,
                 plano_de_contas_id: contract.plano_de_contas_id ?? null,
-            });
+            };
+            const plano = planejarSyncParcelas([linha], (avistaExistente ?? []) as unknown as ParcelaExistente[]);
+            if (plano.idsApagar.length) {
+                await supabase.from('internal_transactions').delete().in('id', plano.idsApagar);
+            }
+            if (plano.normais.length) {
+                await supabase.from('internal_transactions').insert(plano.normais);
+            }
+            if (plano.manuais.length) {
+                await supabase.from('internal_transactions')
+                    .upsert(plano.manuais, { onConflict: 'organization_id,reference_id,entry_type' });
+            }
         }
         console.log(`[CONTRACTS] Synced À Vista contract ${contract.id} to finance`);
     } catch (e) {
@@ -2362,7 +2407,7 @@ export const contractService = {
         if (mexeuValor) {
             const { data: atual } = await supabase
                 .from('internal_transactions')
-                .select('amount, original_amount, discount_type, discount_amount')
+                .select('amount, original_amount, discount_type, discount_amount, valor_manual, valor_manual_anterior')
                 .eq('id', entryId)
                 .maybeSingle();
 
@@ -2382,6 +2427,17 @@ export const contractService = {
             payload.discount_type = tipo || null;
             payload.discount_amount = tipo ? (valorDesc ?? 0) : null;
             payload.amount = Math.max(0, parseFloat((bruto - desconto).toFixed(2)));
+
+            // Valor alterado à mão: os syncs do contrato preservam esta linha
+            // (planejarSyncParcelas) e a aba Financeiro a identifica — quem, quando e
+            // o valor que o contrato tinha gerado.
+            if (Number(payload.amount) !== Number(atual?.amount ?? NaN)) {
+                const { data: { user } } = await supabase.auth.getUser();
+                Object.assign(payload, marcaDeValorManual(
+                    atual as { amount?: number | null; valor_manual?: boolean | null; valor_manual_anterior?: number | null } ?? {},
+                    user?.id ?? null,
+                ));
+            }
         }
         if (Object.keys(payload).length === 0) return;
 
@@ -2421,6 +2477,12 @@ export const contractService = {
         /** Dimensões contábeis DA LINHA — são estas que Contas a Receber mostra e
          *  filtra (vw_receivables), não as do cabeçalho do negócio/contrato. */
         cost_center_id?: string | null; plano_de_contas_id?: string | null;
+        business_status?: string | null;
+        /** Valor alterado à mão (aba Financeiro do contrato) — o sync não o regrava. */
+        valor_manual?: boolean | null; valor_manual_anterior?: number | null;
+        valor_manual_em?: string | null; valor_manual_por?: string | null;
+        /** Nome de quem alterou o valor (organization_members; e-mail se não houver nome). */
+        valor_manual_por_nome?: string | null;
     }[]> => {
         if (!contract.organization_id) return [];
 
@@ -2433,7 +2495,7 @@ export const contractService = {
         const measurementSources = ['CONTRACT_AVISTA', 'CONTRACT_PARCELADO', 'CONTRACT_RECURRING', 'CONTRACT_MEASUREMENT'];
         const { data: byContract, error: e1 } = await supabase
             .from('internal_transactions')
-            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, original_amount, discount_type, discount_amount, installment_type, payment_type, cost_center_id, plano_de_contas_id')
+            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, business_status, original_amount, discount_type, discount_amount, installment_type, payment_type, cost_center_id, plano_de_contas_id, valor_manual, valor_manual_anterior, valor_manual_em, valor_manual_por')
             .eq('organization_id', contract.organization_id)
             .in('source_system', measurementSources)
             .like('reference_id', `${contract.id}%`);
@@ -2442,8 +2504,25 @@ export const contractService = {
         // A segunda consulta que existia aqui (igualdade contra os ids de
         // medição) saiu: o prefixo do contrato acima já pega tudo, e ela era
         // morta por construção — ver comentário de `measurementSources`.
-        return (byContract ?? [])
+        const linhas = (byContract ?? [])
             .sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime());
+
+        // Quem alterou o valor à mão — a aba Financeiro identifica a parcela com o
+        // nome. Lido de organization_members (a RLS já limita aos colegas); falha
+        // aqui não segura a lista: sem nome, a tela diz "usuário".
+        const autores = [...new Set(linhas.map(l => l.valor_manual_por).filter((id): id is string => !!id))];
+        const nomes = new Map<string, string>();
+        if (autores.length) {
+            const { data: membros } = await supabase
+                .from('organization_members')
+                .select('user_id, name, email')
+                .in('user_id', autores);
+            for (const m of (membros ?? []) as { user_id: string; name: string | null; email: string | null }[]) {
+                const nome = m.name?.trim() || m.email?.trim();
+                if (nome && !nomes.has(m.user_id)) nomes.set(m.user_id, nome);
+            }
+        }
+        return linhas.map(l => ({ ...l, valor_manual_por_nome: l.valor_manual_por ? nomes.get(l.valor_manual_por) ?? null : null }));
     },
 
     // Medições (Measurements)
@@ -3027,6 +3106,8 @@ export const contractService = {
                     .eq('source_system', 'CONTRACT_RECURRING')
                     .like('reference_id', `${updated.id}%`)
                     .eq('status', 'PENDING')
+                    // Valor alterado à mão na aba Financeiro não é sobrescrito pelo reajuste.
+                    .eq('valor_manual', false)
                     .gte('transaction_date', hoje);
             } catch (e) {
                 console.error('[CONTRACTS] Erro ao re-sincronizar recorrente após reajuste:', e);
@@ -3201,3 +3282,6 @@ export const contractService = {
         return data ?? [];
     },
 };
+
+/** Uma parcela da aba Financeiro do contrato, como `listFinancialEntries` devolve. */
+export type ParcelaDoContrato = Awaited<ReturnType<typeof contractService.listFinancialEntries>>[number];

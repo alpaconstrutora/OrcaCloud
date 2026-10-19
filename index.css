@@ -2,6 +2,14 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 @import "tailwindcss";
 
+/* `dark:` SÓ POR CLASSE (19/10/2026; guia §33; plano docs/planos/2026-10-19-dark-so-por-classe.md).
+   Sem esta linha o Tailwind v4 gera `dark:` como `@media (prefers-color-scheme: dark)`, ou seja, segue o
+   modo escuro do Windows/navegador do usuário. O app não liga nenhuma classe `dark` (o "Escuro Total" é
+   `.theme-midnight`, por sobrescritas globais abaixo, e não usa `dark:`), então quem usava o sistema em modo
+   escuro via texto branco sobre fundo branco em todo componente com `dark:` — a gaveta "Gerar pelo modelo",
+   as telas de CRM Serviços e o agendador do BI. Com a linha, `dark:` fica inerte até alguém ligar a classe. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Tailwind v4 exige o namespace --text-* (não --font-size-*) pra gerar as
      classes text-{nome}. Com --font-size-*, essas 9 classes nunca geraram CSS

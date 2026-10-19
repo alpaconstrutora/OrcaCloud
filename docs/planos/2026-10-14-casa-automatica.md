@@ -2939,3 +2939,38 @@ do `escolherNucleo` só trocava um estrago por outro. Pergunta ao usuário (19/1
   e zero pilares no lote; trava ok; 6 lotes sem regressão; 8 casas de referência idênticas.
 - ⚠️ A porta do lavabo dá para a área de serviço (o gerador escolhe o vizinho), e a do núcleo no térreo, para a
   cozinha — funciona, mas o lavabo social pelo serviço não é o ideal. Anotado.
+
+#### 5.3 — o 1º pavimento recuado (19/10/2026, decisão do usuário: "recuar o 1º também")
+
+Medido nos 6 lotes de 3 pavimentos: o 1º herda a pegada inteira do térreo (dimensionada pela garagem e pelo social) e
+fica com dormitórios de 27–53 m² e banheiros de 14–22 m², enquanto o 2º recuado tem uma suíte de 15 m². Pergunta ao
+usuário (19/10): recuar o 1º também — a casa escalonada, térreo > 1º > 2º.
+
+| Subfase | O que muda | Pronto quando |
+|---|---|---|
+| 5.3a arquitetura | o 1º num retângulo com a área do programa dele (`retanguloDoSegundo`, a mesma regra do 2º: nos fundos, encostado na fachada do núcleo, faixa mínima de terraço), alinhado ao patamar (`alinharSegundoAoPatamar`); o 2º recua DENTRO do 1º; o excedente do térreo é o terraço do 1º: guarda-corpo no contorno (`contornoDoTerraco`) e porta para ele (`portaParaOTerraco`). Só na casa de 3 (o sobrado não muda) | dormitórios do 1º perto da área ideal; 6 lotes com trava ok; 8 casas idênticas |
+| 5.3b estrutura e redes | pilares/vigas de transição sob a fachada do 1º recuado; o pluvial do terraço do térreo (`lajesDescobertas` já é genérico); redes medidas de novo | sem regressão de encontros, pilares e pendências nos 6 lotes |
+
+Pode seguir: 5.3a → 5.3b, cada uma publicada.
+
+##### 5.3a — feito (19/10/2026)
+
+- O 1º recuado: área = o MAIOR programa entre o 1º e o 2º (o 2º recua dentro do 1º), mais o núcleo, vezes o fator do
+  retângulo; tenta primeiro na largura toda do térreo (`retanguloDoSegundo(..., larguraToda)`, hipótese
+  `HipotesesDoSobrado.primeiroRecuaSoNaProfundidade`, padrão sim — as fachadas laterais sobre as do térreo) e depois
+  pela proporção; fica o primeiro em que o 2º também fecha com o corredor no patamar; nenhum → a pegada do térreo
+  (decisão dita). Guarda-corpo no contorno do terraço do 1º (no piso do 1º) e porta para ele; o 2º passa a tratar o
+  1º como a "casa" (porta de entrada, porta do terraço, contorno do terraço dele).
+- `ramaisDaLajeDeCima` também devolve o PÉ das verticais de cima que desce na laje (a coluna de ventilação que nasce no
+  ramal).
+- Medido nos 6 lotes: recuam 12 × 30 (dormitórios do 1º 41,3/34,6 → 19,4/12,1 m²), 15 × 25 (idem), 12 × 30 sem suíte
+  (35,7/29,5 → 19,8/12,7) e R1-A (27–28 → 22 m²; os 2 encontros do shaft do térreo somem). Trava ok nos 6; 8 casas de
+  referência idênticas.
+- ⏳ Não recuam: 10 × 30 4 dorm. (o 1º de 7 m de largura não alinha o corredor ao patamar — dormitórios de 26,6 m²) e
+  10 × 30 2 dorm. (o 2º não fecha dentro do 1º — dormitório de 52,9 m²). ⏳ 12 × 30 sem suíte: 3 encontros novos — os
+  dois tubos de queda dos banheiros do 1º descem lado a lado na cozinha (sem shaft) e o eletroduto do forro passa entre
+  eles. ⏳ R1-A, 2º: escritório 7,40 × 1,70 m e banheiro da suíte 3,36 m². Ficam para a 5.3b.
+- Testes: o da D2 ("o 2º nos fundos") passa a exigir o 2º DENTRO do 1º (o alinhamento ao patamar o move — nos fundos
+  deixou de ser garantido); o da D5 separa o guarda-corpo do 2º ("Terraço · …") do do 1º ("Terraço do 1º · …").
+  `ResumoDoSobrado.primeiro` expõe o retângulo do 1º recuado. Novos: o 1º recuado no R1-A e no 12 × 30 padrão
+  (dormitórios < 25 m²), e `retanguloDoSegundo` com a largura toda.

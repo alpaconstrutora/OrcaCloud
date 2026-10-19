@@ -79,6 +79,12 @@ export interface HipotesesDoSobrado {
    * o 2º pavimento que deixaria uma sobra menor que isto (na frente ou ao lado) ocupa a laje inteira naquele sentido, mm.
    */
   faixaMinimaDoTerracoMm: number;
+  /**
+   * F27 item 5.3 (decisão do usuário, 19/10/2026: "recuar o 1º também"): o 1º da casa de 3 recua só em PROFUNDIDADE
+   * (a largura toda do térreo — as fachadas laterais sobre as dele, sem viga de transição nelas); `false` = como o 2º
+   * (a proporção da casa). Ausente = true.
+   */
+  primeiroRecuaSoNaProfundidade?: boolean;
 }
 
 export const HIPOTESES_DO_SOBRADO_PADRAO: HipotesesDoSobrado = {
@@ -271,12 +277,13 @@ function dentro(a: Point, b: Point, r: Retangulo): [number, number] | null {
  * mais 3 m (o mínimo de `escolherNucleo`), nem mais raso que o núcleo; a sobra menor que `faixaMinimaDoTerracoMm` não
  * vira terraço — o 2º toma a laje inteira naquele sentido.
  */
-export function retanguloDoSegundo(casa: Retangulo, n: Pick<NucleoDaEscada, 'lado'>, areaM2: number, proporcaoFrenteFundo: number, hip: HipotesesDoSobrado = HIPOTESES_DO_SOBRADO_PADRAO, malhaMm = 50): Retangulo {
+export function retanguloDoSegundo(casa: Retangulo, n: Pick<NucleoDaEscada, 'lado'>, areaM2: number, proporcaoFrenteFundo: number, hip: HipotesesDoSobrado = HIPOTESES_DO_SOBRADO_PADRAO, malhaMm = 50, larguraToda = false): Retangulo {
   const naMalha = (v: number) => Math.round(v / malhaMm) * malhaMm;
   const W = casa.x1 - casa.x0;
   const D = casa.y1 - casa.y0;
   const A = areaM2 * 1e6;
-  let w = Math.min(W, Math.max(hip.nucleoLarguraMm + 3000, naMalha(Math.sqrt(A * proporcaoFrenteFundo))));
+  // F27 item 5.3: `larguraToda` — o 1º recuado só em profundidade.
+  let w = larguraToda ? W : Math.min(W, Math.max(hip.nucleoLarguraMm + 3000, naMalha(Math.sqrt(A * proporcaoFrenteFundo))));
   if (W - w < hip.faixaMinimaDoTerracoMm) w = W;
   let d = Math.min(D, Math.max(hip.nucleoProfundidadeMm, naMalha(A / w)));
   if (D - d < hip.faixaMinimaDoTerracoMm) d = D;

@@ -2874,3 +2874,18 @@ de admissão de ar"**.
 - `verificarVentilacao`: a coluna que termina numa válvula está acima da cobertura (não é estendida).
 - Medido: nenhuma ventilação pelo dormitório do 1º nos 4 lotes; o encontro ventilação × fria sumiu (12 × 30, 15 × 25).
   Teste novo (falha sem a correção). 8 casas de referência idênticas.
+
+#### 5.1c — o grupo C: a régua de cotas entre os pavimentos (19/10/2026, "siga pelo grupo C")
+
+Causa comum: a régua das chaves (`fazerChave`) põe a cota 0 de um pavimento no TETO do de baixo, mas o andar real tem
+10 cm a mais (a laje). O que corre na laje do pavimento de cima (cota negativa) fica, no espaço, colado na faixa do
+eletroduto do de baixo (a 4,5 cm do teto) — e o traçado do eletroduto não o via.
+
+- O condutor sob o terraço: `cotaNoTerracoMm` 80 → 40 (hipótese) — inteiro na faixa da laje, acima do eletroduto do
+  1º, mesmo com o caimento. 12 × 30 e 15 × 25: 0 encontros.
+- `ramaisDaLajeDeCima` (`utils/blueprintRotaPeloForro.ts`): os horizontais de outra rede na laje do pavimento de cima
+  cuja cota REAL (pelas elevações) encosta na faixa viram obstáculo; o eletroduto os contorna como contorna pilar (os
+  dois pontos de desvio do `planejarEletrodutos`). O ramal do banheiro do 1º entre a parede dele e o shaft colado (fora
+  da laje rebaixada) cruzava o eletroduto rente àquela parede — 10 × 30 4 dorm.: 0 encontros. Testes novos.
+- Medido: 19 → 10 encontros nos 6 lotes (R1-A 7, 12 × 30 sem suíte 1, 10 × 30 2 dorm. 2; os outros 3, zero). 8 casas de
+  referência idênticas.

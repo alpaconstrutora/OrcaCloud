@@ -370,6 +370,36 @@ export function paredesDoForro(model: BlueprintModel, levelId: ObjectId, afastam
 }
 
 /**
+ * F27 item 5 da casa automática (19/10/2026): os RAMAIS que correm na laje do pavimento de CIMA (horizontais de outra
+ * rede, abaixo do piso dele — o esgoto do banheiro do 1º entre a parede dele e o shaft colado, fora da laje rebaixada)
+ * cuja cota REAL encosta na faixa (`cotaMm` + `raioMm` + `folgaMm`, pelas elevações dos pavimentos): viram obstáculo, a
+ * faixa de baixo os contorna como contorna pilar. Pela régua das chaves a cota 0 de cima é o teto de baixo, e o ramal a
+ * −16 cm parecia 115 mm acima do eletroduto; no espaço, os 10 cm da laje o põem colado nele.
+ */
+export function ramaisDaLajeDeCima(model: BlueprintModel, levelId: ObjectId, cotaMm: number, disciplina: DisciplinaDeRede, raioMm: number, folgaMm = 10): Point[][] {
+  const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+  const i = niveis.findIndex((l) => l.id === levelId);
+  const deCima = i >= 0 ? niveis[i + 1] : undefined;
+  if (!deCima) return [];
+  const zFaixa = niveis[i].elevationMm + cotaMm;
+  const saida: Point[][] = [];
+  for (const t of model.trechos ?? []) {
+    if (t.levelId !== deCima.id || t.disciplina === disciplina || (t.a.x === t.b.x && t.a.y === t.b.y) || Math.max(t.cotaAMm, t.cotaBMm) > 0) continue;
+    const env = envelopeDoTrecho(t);
+    const r = Math.max(env.raioPlantaMm, env.raioVerticalMm);
+    const zTubo = deCima.elevationMm + Math.min(t.cotaAMm, t.cotaBMm);
+    if (zTubo - r >= zFaixa + raioMm + folgaMm) continue;
+    const h = Math.ceil(r + raioMm + folgaMm);
+    const L = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) || 1;
+    const u = { x: (t.b.x - t.a.x) / L, y: (t.b.y - t.a.y) / L };
+    const n = { x: -u.y, y: u.x };
+    const c = (p: { x: number; y: number }, su: number, sn: number) => ({ x: Math.round(p.x + u.x * su * h + n.x * sn * h), y: Math.round(p.y + u.y * su * h + n.y * sn * h) });
+    saida.push([c(t.a, -1, -1), c(t.b, 1, -1), c(t.b, 1, 1), c(t.a, -1, 1)] as Point[]);
+  }
+  return saida;
+}
+
+/**
  * As PRUMADAS de outras redes que atravessam a cota da faixa no pavimento — a coluna da água fria descendo da laje até
  * a faixa dela cruza as faixas de cima. Viram obstáculo (um quadrado com o raio das duas e folga) para quem traça
  * DEPOIS: a árvore contorna como contorna pilar. Quem traçou antes não as vê — por isso a ordem conta.

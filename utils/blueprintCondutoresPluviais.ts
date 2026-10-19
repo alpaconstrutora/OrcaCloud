@@ -470,7 +470,7 @@ export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais
     let pe: { x: number; y: number } = f.at;
     const descida = idx > idxDestino ? descidaDoTerraco(model, niveis.slice(idxDestino, idx), f, dnV) : null;
     if (descida) {
-      const zLaje = -Math.abs(hip.cotaNoTerracoMm ?? 80);
+      const zLaje = -Math.abs(hip.cotaNoTerracoMm ?? 40);
       const L = Math.hypot(descida.x - f.at.x, descida.y - f.at.y);
       const zFim = zLaje - Math.ceil((L * i) / 100);
       add(f.levelId, f.at, f.cotaMm, f.at, zLaje, dnV, ROTULO_DO_CONDUTOR_VERTICAL);

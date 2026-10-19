@@ -57,7 +57,7 @@ export interface HipotesesPluviais {
   /**
    * F27-D5 da casa automática (19/10/2026): o condutor que nasce sobre o TERRAÇO (a laje de um pavimento de baixo, fora
    * dos cômodos do seu) corre no enchimento do contrapiso dele, com o eixo a isto abaixo do piso, até a fachada — e desce
-   * rente à parede externa. Ausente = 80.
+   * rente à parede externa. Ausente = 40.
    */
   cotaNoTerracoMm?: number;
 }
@@ -72,7 +72,7 @@ export const HIPOTESES_PLUVIAIS_PADRAO: HipotesesPluviais = {
   declividadeDoCondutorPct: 1,
   profundidadeDoCondutorMm: 300,
   afastamentoDoCondutorDaCasaMm: 300,
-  cotaNoTerracoMm: 80,
+  cotaNoTerracoMm: 40,
 };
 
 /**

@@ -196,6 +196,16 @@ describe('F27-D2: o 2º pavimento recuado', () => {
     expect(outro[1].ret).toEqual({ x0: 0, y0: 6700, x1: 5400, y1: 8100 });
   });
 
+  it('retanguloDoSegundo com a largura toda (F27 item 5.3, o 1º recuado só em profundidade)', () => {
+    const casa = { x0: 0, y0: 0, x1: 9000, y1: 15000 };
+    const r = retanguloDoSegundo(casa, { lado: 'DIREITA' }, 60, 0.7, HIPOTESES_DO_SOBRADO_PADRAO, 50, true);
+    // 60 m² na largura toda (9 m): 6,65 m de fundo, encostado nos fundos.
+    expect(r).toEqual({ x0: 0, x1: 9000, y0: 15000 - 6650, y1: 15000 });
+    // Pela proporção (o 2º), mais estreito.
+    const p = retanguloDoSegundo(casa, { lado: 'DIREITA' }, 60, 0.7, HIPOTESES_DO_SOBRADO_PADRAO, 50);
+    expect(p.x1 - p.x0).toBeLessThan(9000);
+  });
+
   it('lavaboForaDoNucleo (F27 item 5, "mover o lavabo"): o núcleo que espremia o lavabo — a cozinha leva a tira, o serviço fica do lado do núcleo e o lavabo vai para a outra ponta', () => {
     const item = (uso: string, larguraMinMm: number, areaMinM2: number, areaIdealM2 = areaMinM2) => ({ uso, larguraMinMm, areaMinM2, areaIdealM2 });
     const amb = (nome: string, uso: string, ret: Retangulo, it: ReturnType<typeof item>) => ({ nome, ret, item: { ...it, uso }, areaM2: 0, larguraMinM: 0 }) as unknown as AmbienteGerado;

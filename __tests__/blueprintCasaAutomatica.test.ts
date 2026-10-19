@@ -686,11 +686,16 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
 
   });
 
-  it('o 2º recuado nos fundos, com o terraço na frente; o núcleo abre para o corredor nos três', () => {
+  it('o 2º recuado dentro do 1º (recuado ou não — F27 item 5.3), com o terraço; o núcleo abre para o corredor nos três', () => {
     const seg = plano.sobrado!.segundo!;
     const rl = plano.implantacao!.retanguloLocal;
-    expect(seg.retangulo.y1).toBe(rl.y1);
-    expect(seg.retangulo.y0).toBeGreaterThan(rl.y0);
+    const casa = plano.sobrado!.primeiro?.retangulo ?? rl;
+    type R = { x0: number; y0: number; x1: number; y1: number };
+    const dentro = (a: R, b: R) => a.x0 >= b.x0 && a.x1 <= b.x1 && a.y0 >= b.y0 && a.y1 <= b.y1;
+    expect(dentro(casa, rl)).toBe(true);
+    // O 2º anda até o corredor cair no patamar da escada (nunca encolhe): dentro do 1º, não necessariamente nos fundos.
+    expect(dentro(seg.retangulo, casa)).toBe(true);
+    expect(seg.retangulo.y0).toBeGreaterThan(casa.y0);
     expect(seg.terracoM2).toBeGreaterThan(0);
     expect(plano.sobrado!.portas.superior).toMatch(/Circula/);
     expect(seg.porta).toMatch(/Circula/);
@@ -739,7 +744,8 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
 
   it('F27-D5: o terraço — guarda-corpo no contorno dele, no piso do 2º; o 2º com porta para o terraço', () => {
     const [, , p2] = [...r.levels].sort((a, b) => a.elevationMm - b.elevationMm);
-    const doTerraco = (r.guardaCorpos ?? []).filter((g) => /^Terraço/.test(g.rotulo ?? ''));
+    // F27 item 5.3: "Terraço do 1º · …" é o do terraço do 1º (no piso do 1º); o do 2º é "Terraço · …".
+    const doTerraco = (r.guardaCorpos ?? []).filter((g) => /^Terraço ·/.test(g.rotulo ?? ''));
     expect(doTerraco.length).toBeGreaterThan(0);
     expect(doTerraco.every((g) => g.levelId === p2.id && g.pontos.length >= 2)).toBe(true);
     // Uma porta (ou de correr) do 2º em parede que não fica na borda da casa: a que dá para o terraço.
@@ -752,6 +758,29 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
     const portas = r.openings.filter((o) => externasDo2.has(o.wallId) && (o.kind === 'door' || o.kind === 'sliding'));
     expect(portas.length).toBeGreaterThan(0);
     expect(rl.x1 - rl.x0).toBeGreaterThan(seg.retangulo.x1 - seg.retangulo.x0 - 1);
+  });
+
+  /** O maior dormitório (ou suíte) do 1º, m² livres. */
+  const maiorDormitorioDoPrimeiro = (x: BlueprintModel) => {
+    const [, p1] = [...x.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+    return Math.max(...x.spaces.filter((s) => s.levelId === p1.id && /Dormit|Suíte/.test(s.name ?? '')).map((s) => s.areaMm2 / 1e6));
+  };
+
+  it('F27 item 5.3 ("recuar o 1º também"): o 1º recuado, com o terraço dele — guarda-corpo no piso do 1º; os dormitórios do tamanho do programa', () => {
+    expect(plano.decisoes.some((d) => /o 1º recuado em/.test(d))).toBe(true);
+    const [, p1] = [...r.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+    const doTerraco = (r.guardaCorpos ?? []).filter((g) => /^Terraço do 1º/.test(g.rotulo ?? ''));
+    expect(doTerraco.length).toBeGreaterThan(0);
+    expect(doTerraco.every((g) => g.levelId === p1.id)).toBe(true);
+    // Com a pegada do térreo, 27 a 28 m².
+    expect(maiorDormitorioDoPrimeiro(r)).toBeLessThan(25);
+  });
+
+  it('F27 item 5.3: 12 × 30 com o programa padrão — os dormitórios do 1º deixam de ter 41 m²', () => {
+    const p = planejarCasa(m, { ...z3(3), hidro: chuva }, { pavimentos: 3 });
+    expect(p.etapas.find((x) => x.id === 'ARQUITETURA')?.situacao).toBe('LANCOU');
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+    expect(maiorDormitorioDoPrimeiro(p.resultado)).toBeLessThan(25);
   });
 
   it('o programa inteiro no desenho e a trava: reaplicado no original, o mesmo modelo', () => {

@@ -384,7 +384,19 @@ export function ramaisDaLajeDeCima(model: BlueprintModel, levelId: ObjectId, cot
   const zFaixa = niveis[i].elevationMm + cotaMm;
   const saida: Point[][] = [];
   for (const t of model.trechos ?? []) {
-    if (t.levelId !== deCima.id || t.disciplina === disciplina || (t.a.x === t.b.x && t.a.y === t.b.y) || Math.max(t.cotaAMm, t.cotaBMm) > 0) continue;
+    if (t.levelId !== deCima.id || t.disciplina === disciplina) continue;
+    // F27 item 5.3: e o PÉ das verticais de cima que desce na laje (a coluna de ventilação que nasce no ramal, a −17 cm).
+    if (t.a.x === t.b.x && t.a.y === t.b.y) {
+      const zPe = deCima.elevationMm + Math.min(t.cotaAMm, t.cotaBMm);
+      if (Math.min(t.cotaAMm, t.cotaBMm) >= 0) continue;
+      const env = envelopeDoTrecho(t);
+      const r = Math.max(env.raioPlantaMm, env.raioVerticalMm);
+      if (zPe >= zFaixa + raioMm + folgaMm) continue;
+      const h = Math.ceil(r + raioMm + folgaMm);
+      saida.push([{ x: t.a.x - h, y: t.a.y - h }, { x: t.a.x + h, y: t.a.y - h }, { x: t.a.x + h, y: t.a.y + h }, { x: t.a.x - h, y: t.a.y + h }] as Point[]);
+      continue;
+    }
+    if (Math.max(t.cotaAMm, t.cotaBMm) > 0) continue;
     const env = envelopeDoTrecho(t);
     const r = Math.max(env.raioPlantaMm, env.raioVerticalMm);
     const zTubo = deCima.elevationMm + Math.min(t.cotaAMm, t.cotaBMm);

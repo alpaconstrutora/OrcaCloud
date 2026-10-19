@@ -1097,6 +1097,8 @@ export interface ResumoDoSobrado {
    * núcleo abre e a área do terraço (a laje do 1º descoberta). Ausente/null = sobrado.
    */
   segundo?: { nivelId: ObjectId; retangulo: Retangulo; porta: string | null; terracoM2: number } | null;
+  /** F27 item 5.3: o 1º recuado (o excedente do térreo é o terraço dele); ausente/null = o 1º na pegada do térreo. */
+  primeiro?: { retangulo: Retangulo; terracoM2: number } | null;
 }
 
 /** F9: o resumo da elétrica. */
@@ -2799,8 +2801,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         ? `nenhuma alternativa do pavimento superior saiu com corredor para a escada chegar (${sup.resultados.length} tentada(s)${sup.falhas.length ? `; ${sup.falhas.join('; ')}` : ''})`
         : null;
     let et = t.resultados.length ? escolherSemente(t.resultados) : null;
-    const es = comCorredor.length ? escolherSemente(comCorredor) : null;
-    const corredor = es?.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? null;
+    let es = comCorredor.length ? escolherSemente(comCorredor) : null;
+    let corredor = es?.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? null;
     // F27-D4: em 3 pavimentos, como no sobrado — o 2º se alinha ao patamar nos dois sentidos da escada (o núcleo pode sobrar
     // fora dele). A preferência pelos fundos da D2 fazia o núcleo comer o banheiro do 1º (10 × 30: 3,38 m², a caixa
     // sifonada dentro da escada).
@@ -2822,6 +2824,60 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         }
       }
     }
+    // F27 item 5.3 (decisão do usuário, 19/10/2026: "recuar o 1º também"): na casa de 3, o 1º num retângulo com a área do
+    // programa dele — a mesma regra do 2º (nos fundos, encostado na fachada do núcleo, alinhado ao patamar); o excedente do
+    // térreo vira o terraço do 1º. Herdando a pegada inteira do térreo, os dormitórios do 1º chegavam a 53 m².
+    let retDoPrimeiro: Retangulo | null = null;
+    // O 1º na pegada do térreo — volta a ser ele se o 2º não fechar dentro do 1º recuado.
+    const primeiroNaPegada = { es, corredor };
+    let decisaoDoPrimeiro: string | null = null;
+    /** Os 1º recuados que fecharam (largura toda, proporção) — fica o primeiro em que o 2º também fecha. */
+    const primeirosRecuados: { es: NonNullable<typeof es>; corredor: Retangulo | null; ret: Retangulo; decisao: string }[] = [];
+    if (divididos.segundo && nucleo && es && !semPlanta) {
+      const malha = hipGerador.malhaMm ?? HIPOTESES_DO_GERADOR_PADRAO.malhaMm;
+      // A área do maior programa entre o 1º e o 2º — o 2º recua DENTRO do 1º (com 2 dormitórios, o 1º leva um dormitório e
+      // o banho, e o 2º, a suíte: menor que o 2º, o 1º não o continha).
+      const programaM2 = Math.max(resumoDoPrograma(divididos.superior).areaIdealComCirculacaoM2, resumoDoPrograma(divididos.segundo).areaIdealComCirculacaoM2);
+      const areaM2 = (programaM2 + (hip.sobrado.nucleoLarguraMm * hip.sobrado.nucleoProfundidadeMm) / 1e6) * (hipImplantacao.fatorDoRetanguloSobreUtil ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.fatorDoRetanguloSobreUtil);
+      const anelDoRet = (r: Retangulo) => [point(r.x0, r.y0), point(r.x1, r.y0), point(r.x1, r.y1), point(r.x0, r.y1)];
+      // Primeiro só em profundidade (as fachadas laterais sobre as do térreo), depois pela proporção, como o 2º.
+      const modos = (hip.sobrado.primeiroRecuaSoNaProfundidade ?? true) ? [true, false] : [false];
+      for (const larguraToda of modos) {
+        const proposto = retanguloDoSegundo(rl, nucleo, areaM2, hipImplantacao.proporcaoFrenteFundo ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.proporcaoFrenteFundo, hip.sobrado, malha, larguraToda);
+        if ((proposto.x1 - proposto.x0) * (proposto.y1 - proposto.y0) >= (rl.x1 - rl.x0) * (rl.y1 - rl.y0)) continue;
+        const alinhados = (hip.sementes.length ? hip.sementes : [1]).flatMap((semente) => {
+          const a = alinharSegundoAoPatamar(
+            (r, invertida) => {
+              try {
+                const x = gerar({ ...entradaDoGerador, programa: divididos.superior, envelope: anelDoRet(r), direcaoDaFrente: invertida ? point(0, 1) : null }, semente, hipGerador);
+                return x.ambientes.some((amb) => amb.item.uso === 'CIRCULACAO') ? x : null;
+              } catch {
+                return null;
+              }
+            },
+            rl,
+            proposto,
+            nucleo,
+            hip.sobrado,
+            malha,
+            4,
+            nucleo.paraOsFundos ? [false, true] : [true, false],
+          );
+          return a ? [a] : [];
+        });
+        if (!alinhados.length) continue;
+        const e1 = escolherSemente(alinhados.map((a) => a.r));
+        const escolhido = alinhados.find((a) => a.r === e1.r)!;
+        const ret = escolhido.ret;
+        primeirosRecuados.push({
+          es: e1,
+          ret,
+          corredor: e1.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? corredor,
+          decisao: `3 pavimentos: o 1º recuado em ${f2((ret.x1 - ret.x0) / 1000)} × ${f2((ret.y1 - ret.y0) / 1000)} m (a área do programa dele${larguraToda ? ', na largura toda do térreo' : ''}) — o excedente do térreo é o terraço do 1º${escolhido.invertida ? '; o íntimo à frente do corredor (a planta invertida)' : ''}.`,
+        });
+      }
+      if (!primeirosRecuados.length) decisaoDoPrimeiro = '3 pavimentos: o 1º recuado não fechou com o corredor no patamar da escada — o 1º fica com a pegada do térreo.';
+    }
     if (semPlanta || !nucleo || !et || !es) {
       const texto = semPlanta ?? `não cabe o núcleo da escada (${f2(hip.sobrado.nucleoLarguraMm / 1000)} × ${f2(hip.sobrado.nucleoProfundidadeMm / 1000)} m) na ponta do corredor de cima`;
       etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, texto);
@@ -2836,29 +2892,48 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       const seg = divididos.segundo;
       const malha = hipGerador.malhaMm ?? HIPOTESES_DO_GERADOR_PADRAO.malhaMm;
       const areaM2 = (resumoDoPrograma(seg).areaIdealComCirculacaoM2 + (hip.sobrado.nucleoLarguraMm * hip.sobrado.nucleoProfundidadeMm) / 1e6) * (hipImplantacao.fatorDoRetanguloSobreUtil ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.fatorDoRetanguloSobreUtil);
-      const inicial = retanguloDoSegundo(rl, nucleo, areaM2, hipImplantacao.proporcaoFrenteFundo ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.proporcaoFrenteFundo, hip.sobrado, malha);
+      // F27 item 5.3: o 2º recua dentro do 1º (recuado ou não).
       const anel = (r: Retangulo) => [point(r.x0, r.y0), point(r.x1, r.y0), point(r.x1, r.y1), point(r.x0, r.y1)];
-      const alinhados = (hip.sementes.length ? hip.sementes : [1]).flatMap((semente) => {
-        const a = alinharSegundoAoPatamar(
-          (r, invertida) => {
-            try {
-              return gerar({ ...entradaDoGerador, programa: seg, envelope: anel(r), direcaoDaFrente: invertida ? point(0, 1) : null, rearranjar: (amb) => banheiroAlemDoNucleo(amb, nucleo) }, semente, hipGerador);
-            } catch {
-              return null;
-            }
-          },
-          rl,
-          inicial,
-          nucleo,
-          hip.sobrado,
-          malha,
-          4,
-          // F27-D4: a suíte do lado para onde o núcleo avança (o banheiro vai além da ponta dele): de frente quando a escada
-          // sobe para os fundos, invertida quando sobe para a frente; o outro sentido só se este não fechar.
-          nucleo.paraOsFundos ? [false, true] : [true, false],
-        );
-        return a ? [a] : [];
-      });
+      const alinharDentroDe = (casaDoSegundo: Retangulo) => {
+        const inicial = retanguloDoSegundo(casaDoSegundo, nucleo, areaM2, hipImplantacao.proporcaoFrenteFundo ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.proporcaoFrenteFundo, hip.sobrado, malha);
+        return (hip.sementes.length ? hip.sementes : [1]).flatMap((semente) => {
+          const a = alinharSegundoAoPatamar(
+            (r, invertida) => {
+              try {
+                return gerar({ ...entradaDoGerador, programa: seg, envelope: anel(r), direcaoDaFrente: invertida ? point(0, 1) : null, rearranjar: (amb) => banheiroAlemDoNucleo(amb, nucleo) }, semente, hipGerador);
+              } catch {
+                return null;
+              }
+            },
+            casaDoSegundo,
+            inicial,
+            nucleo,
+            hip.sobrado,
+            malha,
+            4,
+            // F27-D4: a suíte do lado para onde o núcleo avança (o banheiro vai além da ponta dele): de frente quando a escada
+            // sobe para os fundos, invertida quando sobe para a frente; o outro sentido só se este não fechar.
+            nucleo.paraOsFundos ? [false, true] : [true, false],
+          );
+          return a ? [a] : [];
+        });
+      };
+      // F27 item 5.3: o primeiro 1º recuado em que o 2º fecha; nenhum — o 1º com a pegada do térreo.
+      let alinhados: ReturnType<typeof alinharDentroDe> = [];
+      for (const c of primeirosRecuados) {
+        alinhados = alinharDentroDe(c.ret);
+        if (!alinhados.length) continue;
+        ({ es, corredor } = c);
+        retDoPrimeiro = c.ret;
+        decisaoDoPrimeiro = c.decisao;
+        break;
+      }
+      if (!alinhados.length) {
+        ({ es, corredor } = primeiroNaPegada);
+        retDoPrimeiro = null;
+        if (primeirosRecuados.length) decisaoDoPrimeiro = '3 pavimentos: o 2º não fechou dentro do 1º recuado (o corredor no patamar da escada) — o 1º fica com a pegada do térreo.';
+        alinhados = alinharDentroDe(rl);
+      }
       if (!alinhados.length) {
         const texto = 'o 2º pavimento não fechou com o corredor no patamar da escada (nenhuma alternativa do gerador) — gere o sobrado';
         etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, texto);
@@ -2870,6 +2945,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       retDoSegundo = escolhido.ret;
       if (escolhido.invertida) decisoes.push(`2º pavimento: o íntimo à frente do corredor (a planta invertida) — ${nucleo.paraOsFundos ? 'atrás do patamar da escada não cabia' : 'do lado para onde a escada avança, com o banheiro além da ponta do núcleo'}.`);
     }
+    if (decisaoDoPrimeiro) decisoes.push(decisaoDoPrimeiro);
+    if (!es) return vazio('sem o 1º pavimento', implantacao);
     const pavimentosGerados: [string, ResultadoDoGerador][] = [['Térreo', et.r], [eg ? '1º pavimento' : 'Superior', es.r], ...(eg ? [['2º pavimento', eg.r] as [string, ResultadoDoGerador]] : [])];
     for (const [pav, x] of pavimentosGerados) decisoes.push(...x.decisoes.map((d) => `${pav}: ${d}`));
     const T = entrada.levelId;
@@ -2887,13 +2964,17 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       }
       const pt = pavimentoComNucleo(comUidsDoPavimento(comandosDeAplicacao(et.r, T), 'T'), T, nucleo, et.r.ambientes, 'T', peDireitoMm, hip.sobrado);
       // O superior não tem porta para a rua: a porta de entrada que o gerador pôs na fachada sai antes.
-      const ps = pavimentoComNucleo(comUidsDoPavimento(semPortaDeEntrada(comandosDeAplicacao(es.r, S), rl), 'S'), S, nucleo, es.r.ambientes, 'S', peDireitoMm, hip.sobrado, corredor);
+      const psBase = pavimentoComNucleo(comUidsDoPavimento(semPortaDeEntrada(comandosDeAplicacao(es.r, S), rl), 'S'), S, nucleo, es.r.ambientes, 'S', peDireitoMm, hip.sobrado, corredor);
+      // F27 item 5.3: o 1º recuado abre para o terraço dele (na planta invertida a "entrada" ficava nos fundos).
+      const terracoDoPrimeiro = retDoPrimeiro ? portaParaOTerraco(psBase.comandos, rl, es.r.ambientes, hip.sobrado.alturaDaPortaMm) : null;
+      const ps = terracoDoPrimeiro ? { ...psBase, comandos: terracoDoPrimeiro.comandos } : psBase;
+      if (terracoDoPrimeiro?.comodo) decisoes.push(`3 pavimentos: a janela de ${terracoDoPrimeiro.comodo} para o terraço do 1º virou porta de correr (o 1º sem porta para o terraço).`);
       // F27-D2: o 2º sem as portas para FORA da casa (fundos e laterais); a do terraço (a "entrada" do gerador na frente
       // do retângulo recuado) fica. A segunda escada, empilhada no mesmo núcleo, sai do 1º.
       const corredorDoSegundo = eg?.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? null;
-      const pgBase = eg && G ? pavimentoComNucleo(comUidsDoPavimento(semPortaDeEntrada(comandosDeAplicacao(eg.r, G), rl), 'G'), G, nucleo, eg.r.ambientes, 'G', peDireitoMm, hip.sobrado, corredorDoSegundo) : null;
+      const pgBase = eg && G ? pavimentoComNucleo(comUidsDoPavimento(semPortaDeEntrada(comandosDeAplicacao(eg.r, G), retDoPrimeiro ?? rl), 'G'), G, nucleo, eg.r.ambientes, 'G', peDireitoMm, hip.sobrado, corredorDoSegundo) : null;
       // F27-D5: o 2º abre para o terraço (na planta invertida a "entrada" ficava nos fundos).
-      const terraco = pgBase && eg ? portaParaOTerraco(pgBase.comandos, rl, eg.r.ambientes, hip.sobrado.alturaDaPortaMm) : null;
+      const terraco = pgBase && eg ? portaParaOTerraco(pgBase.comandos, retDoPrimeiro ?? rl, eg.r.ambientes, hip.sobrado.alturaDaPortaMm) : null;
       const pg = pgBase && terraco ? { ...pgBase, comandos: terraco.comandos } : pgBase;
       if (terraco?.comodo) decisoes.push(`3 pavimentos: a janela de ${terraco.comodo} para o terraço virou porta de correr (o 2º sem porta para o terraço).`);
       const exata = implantacao.alinhadaAoDesenho;
@@ -2909,9 +2990,10 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         nucleo,
         escada: { degraus: med.degraus, espelhoMm: Math.round(med.espelhoMm), pisoMm: Math.round(med.pisoMm), blondelMm: Math.round(med.blondelMm) },
         portas: { terreo: pt.porta?.vizinho ?? null, superior: ps.porta?.vizinho ?? null },
+        primeiro: retDoPrimeiro ? { retangulo: retDoPrimeiro, terracoM2: Math.round(((rl.x1 - rl.x0) * (rl.y1 - rl.y0) - (retDoPrimeiro.x1 - retDoPrimeiro.x0) * (retDoPrimeiro.y1 - retDoPrimeiro.y0)) / 1e4) / 100 } : null,
         segundo:
           G && pg && retDoSegundo
-            ? { nivelId: G, retangulo: retDoSegundo, porta: pg.porta?.vizinho ?? null, terracoM2: Math.round(((rl.x1 - rl.x0) * (rl.y1 - rl.y0) - (retDoSegundo.x1 - retDoSegundo.x0) * (retDoSegundo.y1 - retDoSegundo.y0)) / 1e4) / 100 }
+            ? { nivelId: G, retangulo: retDoSegundo, porta: pg.porta?.vizinho ?? null, terracoM2: Math.round((((retDoPrimeiro ?? rl).x1 - (retDoPrimeiro ?? rl).x0) * ((retDoPrimeiro ?? rl).y1 - (retDoPrimeiro ?? rl).y0) - (retDoSegundo.x1 - retDoSegundo.x0) * (retDoSegundo.y1 - retDoSegundo.y0)) / 1e4) / 100 }
             : null,
       };
       for (const a of med.avisos) pendencias.push({ grupo: 'VERIFICACAO', texto: `Escada: ${a}` });
@@ -3219,7 +3301,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       etapaDoTelhado(G, eg.r.retangulo, [...eg.r.anexos, ...fora], (m.structures ?? []).some((x) => x.levelId === G && x.kind === 'LAJE'));
       // F27-D5: o guarda-corpo no contorno do terraço (a borda da laje do 1º que o 2º não cobre), no piso do 2º.
       const alturaDoGuardaCorpo = HIPOTESES_DE_GUARDA_CORPO_PADRAO.alturaGuardaCorpoMm;
-      const linhas = contornoDoTerraco(rl, sg, r);
+      const linhas = contornoDoTerraco(retDoPrimeiro ?? rl, sg, r);
       if (linhas.length) {
         const noMundo = (p: Point) => {
           const w = paraMundo(q, p);
@@ -3228,6 +3310,17 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         aplicar(linhas.map((l, k): Command => ({ type: 'AddGuardaCorpo', levelId: G, tipo: 'GUARDA_CORPO', pontos: l.map(noMundo), alturaMm: alturaDoGuardaCorpo, material: 'METALICO', rotulo: `Terraço · guarda-corpo${linhas.length > 1 ? ` ${k + 1}` : ''}`, sugerido: true })));
         const metros = linhas.reduce((s, l) => s + l.slice(1).reduce((t, p, i) => t + Math.hypot(p.x - l[i].x, p.y - l[i].y), 0), 0) / 1000;
         decisoes.push(`3 pavimentos: guarda-corpo de ${f2(alturaDoGuardaCorpo / 1000)} m no contorno do terraço (${f2(metros)} m).`);
+      }
+      // F27 item 5.3: e o do terraço do 1º (a borda da laje do térreo que o 1º recuado não cobre), no piso do 1º.
+      const doPrimeiro = retDoPrimeiro ? contornoDoTerraco(rl, retDoPrimeiro, r) : [];
+      if (doPrimeiro.length) {
+        const noMundo = (p: Point) => {
+          const w = paraMundo(q, p);
+          return point(Math.round(w.x), Math.round(w.y));
+        };
+        aplicar(doPrimeiro.map((l, k): Command => ({ type: 'AddGuardaCorpo', levelId: S, tipo: 'GUARDA_CORPO', pontos: l.map(noMundo), alturaMm: alturaDoGuardaCorpo, material: 'METALICO', rotulo: `Terraço do 1º · guarda-corpo${doPrimeiro.length > 1 ? ` ${k + 1}` : ''}`, sugerido: true })));
+        const metros = doPrimeiro.reduce((s, l) => s + l.slice(1).reduce((t, p, i) => t + Math.hypot(p.x - l[i].x, p.y - l[i].y), 0), 0) / 1000;
+        decisoes.push(`3 pavimentos: guarda-corpo de ${f2(alturaDoGuardaCorpo / 1000)} m no contorno do terraço do 1º (${f2(metros)} m).`);
       }
     }
     else etapaDoTelhado(S, es.r.retangulo, es.r.anexos, (m.structures ?? []).some((x) => x.levelId === S && x.kind === 'LAJE'));
@@ -3253,7 +3346,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       if (shafts.length) notaDoShaft = `${shafts.length} shaft(s) de ${hip.sobrado.shaftMm / 10} cm: ${shafts.map((x) => `junto do ${x.banheiro}${x.noTerreo ? `, descendo na ${x.noTerreo}` : ''}`).join('; ')}.`;
       else pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Shaft: nenhuma parede dos banheiros de cima tem parede embaixo livre de porta, janela e pilar — o tubo de queda desce no ponto do vaso; ponha o shaft à mão (Núcleo vertical).' });
     }
-    const inst = instalacoes(G ? [T, S, G] : [T, S], es.r.retangulo, notaDoShaft);
+    // F27 item 5.3: as âncoras do térreo (vagas, medidor) pelo retângulo do térreo — o do 1º pode ser o recuado.
+    const inst = instalacoes(G ? [T, S, G] : [T, S], retDoPrimeiro ? rl : es.r.retangulo, notaDoShaft);
     const soltas = prumadasPeloMeioDoComodo(m);
     if (soltas.length) {
       const nome: Record<string, string> = { ...ROTULO_DA_DISCIPLINA_DA_REDE, ...ROTULO_DA_DISCIPLINA_DO_AR, ELETRICA: 'eletroduto' };

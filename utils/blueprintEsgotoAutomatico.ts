@@ -755,8 +755,20 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
       // A chegada no pavimento de baixo: o TQ começa onde o ramal do andar termina
       // (sob o piso dele = teto do de baixo + cotaRaiz, negativa) e desce até o
       // ramal do térreo — a árvore do térreo o recebe como fonte na posição do TQ.
-      const abaixo = niveis[(indice.get(nivel.id) ?? 1) - 1];
-      chegadasDeCima.push({ pos: tq, uhc, dnMinimo: Math.max(dnMinimo, hip.dnTuboQuedaMm), topoNoTerreoMm: abaixo.defaultHeightMm + cotaRaiz });
+      // F27-D4 (casa automática, 19/10/2026): do 2º pavimento para cima, o TQ ATRAVESSA os pavimentos do meio — um trecho
+      // em cada um, do teto (ou da chegada do ramal, no logo abaixo da fonte) ao piso; a cota 0 é o teto do de baixo
+      // (`fazerChave`). Sem eles a prumada saltava o 1º: a ponta de cima do TQ do térreo ficava aberta e o esgoto do 2º,
+      // sem destino.
+      const i = indice.get(nivel.id) ?? 1;
+      for (let j = i - 1; j > idxDestino; j--) {
+        const Lj = niveis[j];
+        const de = j === i - 1 ? Lj.defaultHeightMm + cotaRaiz : Lj.defaultHeightMm;
+        novos.push({ type: 'AddTrecho', levelId: Lj.id, disciplina: 'ESGOTO', a: { ...tq }, b: { ...tq }, cotaAMm: de, cotaBMm: 0, bitolaMm: Math.max(dnMinimo, hip.dnTuboQuedaMm), sugerido: true, rotulo: 'TQ' });
+        arestas.push({ ref: { novo: novos.length - 1 }, de: chave(Lj.id, tq.x, tq.y, 0), para: chave(Lj.id, tq.x, tq.y, de), mm: de });
+      }
+      const abaixo = niveis[i - 1];
+      const topoNoTerreoMm = i - 1 > idxDestino ? niveis[idxDestino].defaultHeightMm : abaixo.defaultHeightMm + cotaRaiz;
+      chegadasDeCima.push({ pos: tq, uhc, dnMinimo: Math.max(dnMinimo, hip.dnTuboQuedaMm), topoNoTerreoMm });
     }
     pavimentos.push({ levelId: nivel.id, nome: nivel.name, fontes: todasDoNivel.length, ligadas: todasDoNivel.length - doNivel.length, aLigar: doNivel.length, tuboDeQueda: true });
   }

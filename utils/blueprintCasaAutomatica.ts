@@ -2782,8 +2782,10 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     const et = t.resultados.length ? escolherSemente(t.resultados) : null;
     const es = comCorredor.length ? escolherSemente(comCorredor) : null;
     const corredor = es?.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? null;
-    // F27-D2: em 3 pavimentos a escada sobe de preferência para os fundos — o patamar na frente do núcleo, o 2º atrás dele.
-    const nucleo = et && es ? (divididos.segundo ? escolherNucleo(rl, corredor, et.r.ambientes, es.r.ambientes, hip.sobrado, [true]) : null) ?? escolherNucleo(rl, corredor, et.r.ambientes, es.r.ambientes, hip.sobrado) : null;
+    // F27-D4: em 3 pavimentos, como no sobrado — o 2º se alinha ao patamar nos dois sentidos da escada (o núcleo pode sobrar
+    // fora dele). A preferência pelos fundos da D2 fazia o núcleo comer o banheiro do 1º (10 × 30: 3,38 m², a caixa
+    // sifonada dentro da escada).
+    const nucleo = et && es ? escolherNucleo(rl, corredor, et.r.ambientes, es.r.ambientes, hip.sobrado) : null;
     if (semPlanta || !nucleo || !et || !es) {
       const texto = semPlanta ?? `não cabe o núcleo da escada (${f2(hip.sobrado.nucleoLarguraMm / 1000)} × ${f2(hip.sobrado.nucleoProfundidadeMm / 1000)} m) na ponta do corredor de cima`;
       etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, texto);

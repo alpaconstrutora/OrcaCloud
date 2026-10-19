@@ -212,6 +212,32 @@ describe('planejarEsgoto — sobrado', () => {
   });
 });
 
+describe('planejarEsgoto — 3 pavimentos (F27-D4 da casa automática)', () => {
+  it('o banheiro do 2º: o TQ ATRAVESSA o 1º (um trecho do ramal ao piso dele) e chega à CI — sem ponta aberta além do topo da ventilação', () => {
+    let { m } = nivel();
+    m = applyCommand(m, { type: 'AddLevel', name: '1º', elevationMm: 2800, defaultHeightMm: 2800 }).model;
+    m = applyCommand(m, { type: 'AddLevel', name: '2º', elevationMm: 5600, defaultHeightMm: 2800 }).model;
+    const [terreo, primeiro, segundo] = [...m.levels].sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
+    m = applyBatch(m, [
+      w(segundo, 0, 0, 2000, 0), w(segundo, 2000, 0, 2000, 3000), w(segundo, 2000, 3000, 0, 3000), w(segundo, 0, 3000, 0, 0),
+      esg(segundo, 'LAVATORIO', 600, 2500, 500),
+      esg(segundo, 'VASO_SANITARIO', 600, 800, 0),
+      esg(terreo, 'CAIXA_INSPECAO', 5000, -1500, -700),
+    ]).model;
+    const p = planejarEsgoto(m);
+    expect(p.motivo).toBeNull();
+    const tqs = novos(p).filter((c) => c.rotulo === 'TQ');
+    expect(tqs.map((c) => c.levelId).sort()).toEqual([terreo, primeiro].sort());
+    const doPrimeiro = tqs.find((c) => c.levelId === primeiro)!;
+    expect(doPrimeiro.cotaBMm).toBe(0);
+    expect(doPrimeiro.cotaAMm).toBeGreaterThan(2000);
+    const aplicado = applyBatch(m, p.comandos).model;
+    const abertas = conexoesDerivadas(aplicado).pontasAbertas;
+    expect(abertas).toHaveLength(1);
+    expect(abertas[0]).toMatchObject({ levelId: segundo, cotaMm: 2800 });
+  });
+});
+
 describe('planejarEsgoto — um tubo de queda por banheiro de cima (F14c)', () => {
   it('dois banheiros vizinhos, vasos a 1,5 m: com o agrupamento por proximidade, um TQ para cada um — o grupo não passa a parede', () => {
     let { m } = nivel();

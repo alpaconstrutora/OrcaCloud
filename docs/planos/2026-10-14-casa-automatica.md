@@ -2760,3 +2760,20 @@ Subfases:
   chuveiro do 2º a 2 kPa (logo abaixo da caixa d'água), prumadas de alimentador e condutor pelo meio de cômodo. A tela,
   as premissas e o 3º passo do Automático estão prontos e guardados (`c:/tmp/f27d/d4_opcao_tela.patch` e os pares do
   motor em `c:/tmp/f27d/patch_d4_tela.py`).
+
+#### Registro da D4 — parte 2a (19/10/2026): o tubo de queda que atravessa o 1º
+
+- **Esgoto do 2º sem destino** (2 pontas abertas e 4–6 trechos sem destino em TODOS os lotes de 3): o planejador de
+  esgoto puxava o TQ de cada pavimento de cima direto para o térreo, com a cota do pavimento logo abaixo da origem — no
+  sobrado é o térreo; no 2º é o 1º, e o trecho que atravessa o 1º não nascia (a ponta de cima do TQ do térreo ficava
+  aberta). Agora um trecho do TQ em cada pavimento do meio (do teto, ou da chegada do ramal, ao piso — a cota 0 é o
+  teto do de baixo, `fazerChave`) e o do térreo nasce no teto dele. Teste novo de 3 pavimentos no
+  `blueprintEsgotoAutomatico.test.ts` (falha sem a correção). Medido: 0 ponta aberta, 0 sem destino nos 6 lotes.
+- **Núcleo**: a preferência da D2 pela escada subindo para os fundos fazia o núcleo comer o banheiro do 1º (10 × 30:
+  3,38 m², a caixa sifonada dentro da escada) — com o 2º alinhando nos dois sentidos, a escolha volta ao critério do
+  sobrado (o que menos estraga os ambientes). Num lote o núcleo passa a comer o lavabo do térreo (1,33 m²) — dito.
+- **O que falta para fechar** (sonda dos 6 lotes): o banheiro da suíte do 2º sem shaft junto das peças em 4 de 6 —
+  na planta invertida ele fica na frente do retângulo recuado, sobre os dormitórios do 1º: só a parede da fachada lateral
+  tem parede embaixo nos três, e ali há janelas do 1º e do térreo. Daí o tubo de queda e as colunas pelo meio do
+  dormitório do 1º, e boa parte dos encontros de rede (0–8). Também: a água quente do chuveiro do 2º a 2 kPa (logo
+  abaixo da caixa d'água) em 2 lotes.

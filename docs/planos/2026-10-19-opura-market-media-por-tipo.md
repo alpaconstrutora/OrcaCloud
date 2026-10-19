@@ -17,6 +17,20 @@ mesma sessão:
 
 > sim
 
+### Pedido posterior (19/10/2026, mesma sessão)
+
+O relatório da frente terminou com três pendências: (1) conferência na tela, que precisa
+da senha do agente-leitura; (2) publicar; (3) *"O campo novo do estudo usa o mesmo estilo
+de rótulo antigo (caixa alta) do resto do cartão, de propósito, para não misturar estilos
+no mesmo cartão. Migrar o cartão inteiro para o padrão novo do guia (§21) fica para outra
+frente."* Resposta do usuário, literal (a senha foi omitida aqui):
+
+> Pendências:
+> 1. [senha]
+> 3. Implementar
+
+Vira o item 8 abaixo.
+
 ## O defeito, medido no banco em 19/10/2026
 
 As quatro RPCs que calculam R$/m² fazem `AVG(price_per_m2)` sobre todos os anúncios,
@@ -92,6 +106,15 @@ O mesmo vale para o lado do bairro: `get_market_neighborhood_stats` (DNA e cor d
    conferir: ela lê `stats.pricePerM2Avg`).
    **Pronto quando:** PDF gerado mostra a linha dos tipos.
 
+8. **`components/market/MarketEstudosPanel.tsx`** (pedido posterior) — a aba Estudos
+   inteira (os dois cartões, para não misturar escalas na mesma vista, §16) no
+   vocabulário do guia: cartão `rounded-[10px]`, título `SecaoTitulo` (§30), rótulo §21
+   em sentence case, malha §30 (rótulo→campo 6 px, área e raio lado a lado), campos `h-9
+   rounded-[6px]` com valor escuro (§32), botões §17 (`Button`; só "Calcular vocação" em
+   azul sólido), excluir estudo por `ActionIconButton` (§9.2), vazio/carregando §11/§12.
+   **Pronto quando:** `check-ui-standard.sh` limpo e o print da aba sem caixa alta nem
+   `rounded-2xl`.
+
 ## Estado
 
 - [x] 1 migration — **aplicada no remoto em 19/10/2026**. Provado: `pg_proc` só com as
@@ -105,10 +128,29 @@ O mesmo vale para o lado do bairro: `get_market_neighborhood_stats` (DNA e cor d
   (5 testes) verde; `tsc` limpo nos 11 outros usos. O item que não pode ser desmarcado usa
   `aria-disabled` (não `disabled`) para o `title` com o motivo aparecer no hover.
 - [x] 4 service — `tsc` limpo (os quatro métodos EXIGEM `tipos`; o compilador aponta todo chamador).
-- [ ] 5 estudo de vocação — código feito, `tsc` limpo; **falta a conferência na tela**.
-- [ ] 6 mapa / DNA / indicadores — código feito, `tsc` limpo; **falta a conferência na tela**.
+- [x] 5 estudo de vocação — **conferido na tela** (Playwright, dev server da frente,
+  agente-leitura, toda escrita REST abortada — nenhuma tentada). Ponto marcado no Centro
+  (-22.611951, -46.058049), raio 3 km: padrão "Sem terreno" = 124 anúncios, R$ 4.931,98;
+  marcando Terreno = 149, R$ 4.181,92; só Casa = 48, R$ 3.358,86 — os três iguais ao SQL no
+  mesmo ponto. Último marcado travado com o motivo no `title`. Reabrir estudo (dois estudos
+  falsos injetados só na resposta de leitura): "só Terreno" volta com o seletor em "Só
+  Terreno"; estudo sem `tipos` volta neutro com "todos os tipos (estudo salvo antes de
+  19/10/2026)". `c:/tmp/pwtest/market_media_por_tipo.js` e `market_tipos_reabrir.js`.
+  ⚠️ **Achado no navegador e corrigido:** cada troca de tipos refaz a consulta e, com
+  cliques seguidos, uma resposta antiga chegava depois — seletor em "Só Casa", resultado
+  de "Casa e Outro". Guarda de consulta mais recente em `analisar` (`consultaAtual`);
+  reconferido: após 4 cliques rápidos a tela mostra "Só Casa" e a base "Casa".
+  Salvar estudo e gerar PDF NÃO foram exercitados na tela (escrita bloqueada; o PDF só
+  ganhou uma linha).
+- [x] 6 mapa / DNA / indicadores — **conferido na tela**: gatilho "Tipos · Sem terreno";
+  DNA do Centro R$ 6.291/m² e 71 ativos (= SQL); marcando Terreno, R$ 5.982 e 75; a escolha
+  persiste em `opuraMarket:tiposDoMercado`; "Restaurar padrão" volta a "Sem terreno". As
+  RPCs de DNA, dinâmica e série saem com `p_tipos`.
+- [x] 8 aba Estudos no padrão do guia — `check-ui-standard.sh` limpo, travas de cinza
+  verdes, prints `c:/tmp/pwtest/market_tipos/3_*.png` e `6_*.png`. Raio com rótulo curto
+  ("3 km · influência"): o longo cortava na meia largura.
 - [x] 7 PDF / IMOVIB — PDF ganha a linha "Tipos de Imóvel Comparados"; IMOVIB lê
-  `stats.pricePerM2Avg`, que já vem recortado (sem mudança). PDF não gerado na tela ainda.
+  `stats.pricePerM2Avg`, que já vem recortado (sem mudança). PDF não gerado na tela.
 
 `tsc` do projeto inteiro caiu 2× com 0xC0000005 (instabilidade conhecida da máquina, sem
 erro de TS); a prova de tipos foi por `tsconfig` restrito aos arquivos tocados e aos 11

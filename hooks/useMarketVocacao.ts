@@ -63,6 +63,10 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
   // Padrão sem terreno: o terreno anuncia a uma fração do R$/m² do construído e
   // derrubava o VGV. Vão gravados no estudo, dentro de radius_stats.
   const [tiposComparados, setTiposComparados] = React.useState<TipoDeImovel[]>(() => [...TIPOS_PADRAO]);
+  // Cada troca de tipos refaz a consulta; com cliques seguidos as respostas podem
+  // voltar fora de ordem. Só a da consulta mais recente vale (visto no navegador
+  // em 19/10/2026: seletor em "Só Casa", resultado de "Casa e Outro").
+  const consultaAtual = React.useRef(0);
 
   const [savedStudies, setSavedStudies] = React.useState<OpuraMarketTerrainStudy[]>([]);
   const [loadingStudies, setLoadingStudies] = React.useState(false);
@@ -167,9 +171,11 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
       showToast('Informe a área do terreno.', 'error');
       return;
     }
+    const minha = ++consultaAtual.current;
     try {
       setAnalyzing(true);
       const stats = await opuraMarketService.getTerrainRadiusStats(terrainPin.lat, terrainPin.lng, parseInt(analysisRadius), tipos);
+      if (minha !== consultaAtual.current) return;
       if (!stats || stats.totalListings === 0 || stats.pricePerM2Avg <= 0) {
         showToast(`Nenhum anúncio com preço de ${descricaoDosTipos(tipos)} neste raio. Aumente o raio, inclua outros tipos em "Tipos comparados" ou importe anúncios para esta área.`, 'error');
         setAnalysisResult(null);
@@ -177,10 +183,11 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
       }
       setAnalysisResult(calcularVocacao(stats, areaTerreno, regrasDaPraca, hipoteses));
     } catch (err: any) {
+      if (minha !== consultaAtual.current) return;
       console.error(err);
       showToast('Erro ao realizar análise espacial: ' + err.message, 'error');
     } finally {
-      setAnalyzing(false);
+      if (minha === consultaAtual.current) setAnalyzing(false);
     }
   };
 

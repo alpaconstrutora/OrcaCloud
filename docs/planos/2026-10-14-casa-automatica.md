@@ -143,6 +143,55 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F13 — pressão da água por caso: caixa elevada ou pressurizador (ver "Registro da F13")
 - [x] F14 — compatibilização das redes: [x] F14a pontos e faixas na parede (ver "Registro da F14a") · [x] F14b forro e plenum (ver "Registro da F14b") · [x] F14c furos, laje rebaixada e um tubo de queda por banheiro (ver "Registro da F14c"; f95aa616 no ar em 16/10) · [x] F14d linha do ar e dreno lado a lado (ver "Registro da F14d")
 - [x] F15 — a casa na unidade do Empreendimento (ver "Registro da F15")
+- [x] F16 — louça diante da porta (ver "Registro da F16")
+- [x] F17 — o aquecedor do sobrado a 30° e o alimentador × esgoto nas térreas (ver "Registro da F17")
+- [ ] F18–F28 — programa "todas as pendências": F18–F26 feitas; F27 em andamento; F28 a fazer (ver o programa abaixo e
+  "Pendências em aberto")
+
+### Pendências em aberto (atualizado em 18/10/2026)
+
+**No ar:** `main` com a F27-D1 (1a1a8934, 18/10). **Em CI:** a F27-D2 (PR #46, rascunho).
+
+As 8 casas de referência (medição de 18/10, idêntica às anteriores desde a F26): nenhuma rede em porta/janela,
+nenhum encontro rede × rede, nenhum tubo atravessando pilar. O que elas ainda mostram (fora os "confira" de rotina):
+
+| Casa | Pendências que sobram |
+|---|---|
+| 12 × 30 R1-N térrea | aquecedor a 0,20 m do vão (pedido 0,40); serviço sem parede externa → conferir a ventilação do aquecedor |
+| 15 × 25 R1-N | — |
+| 10 × 30 R1-N 2 dorm. | aquecedor a 0,20 m do vão |
+| 15 × 30 R1-N 4 dorm. | aquecedor a 0,20 m do vão |
+| 15 × 30 R1-B (pedida térrea) | cozinha × serviço sem porta direta; serviço com 1,40 m e dormitório com 2,33 m de largura; armário da suíte; "a térrea não comporta" (o sobrado tem mais problemas — Automático fica térrea) |
+| 14 × 28 R1-A | serviço sem parede externa → conferir a ventilação do aquecedor |
+| 12 × 30 R1-N sobrado | aquecedor a 0,20 m do vão; serviço sem parede externa |
+| 10 × 30 R1-N 4 dorm. (pedida térrea) | programa acima da TO (175,5 × 171 m²); 4 dormitórios com 1,5–1,8 m de largura; cama da suíte; "a térrea não comporta" — o sobrado nesse lote ainda tem 4 encontros de rede sob a laje rebaixada, por isso o Automático fica térreo |
+
+A fazer, em ordem:
+
+1. **F27-D2** — publicar quando o CI do PR #46 passar (`main` → `conferir-producao.sh`).
+2. **F27-D3 — estrutura em prumada (3 pav.)**: os pilares do 2º descem até o térreo (ou nascem em transição no nível
+   certo), vigas e lajes por nível, o guarda-corpo do furo da escada no 1º; o núcleo que sobra fora do 2º com laje e
+   pilares próprios.
+3. **F27-D4 — instalações (3 pav.)**: o shaft que atravessa os dois níveis de baixo, a laje rebaixada por par, o passo
+   do shaft em N; **a opção "3 pavimentos" na tela e no Automático** (só quando o sobrado não comporta e o gabarito
+   deixa); as premissas passam a gravar 3.
+4. **F27-D5 — o terraço**: o telhado só sobre o 2º (e sobre o núcleo que sobra fora dele), a laje do 1º como cobertura
+   (impermeabilização no orçamento), o guarda-corpo do terraço, o uso TERRAÇO; a porta para o terraço da frente quando
+   o 2º sai com a planta invertida (hoje a "entrada" do gerador fica nos fundos).
+5. **Qualidade do 2º/1º na casa de 3** (vistos na sonda da D2): o gerador põe cada ambiente do 2º numa faixa de lado a
+   lado (banheiro de 5,40 × 1,40 m); com programa pequeno o 1º toma a laje inteira (dormitório de 59 m²); num lote o
+   núcleo deixa um banheiro do 1º com 2,39 m².
+6. **Sobrado 10 × 30 (4 dorm.)**: os 4 encontros de rede sob a laje rebaixada — os eletrodutos retos do forro precisam
+   desviar de zona não retangular (fase própria; 3 tentativas revertidas na F27 parte 2).
+7. **Luz de teto sob dois banheiros de cima** (laje rebaixada em L).
+8. **Aquecedor** a 0,15–0,20 m do vão (pedido 0,40) e serviço sem parede externa (ventilação do aquecedor a conferir)
+   em 6 das 8 casas — hoje NAO_DECIDIDO com o motivo dito.
+9. **R1-B térreo**: cozinha × serviço sem porta direta; larguras de serviço e dormitório abaixo do mínimo.
+10. **F28** — a chuva de projeto na tela da casa; as bolhas dos eixos na prancha sem sobrepor.
+
+Ambiente: a máquina de desenvolvimento derruba o Node (segfault, worker que cai, processo que trava por horas) —
+toda medição roda com repetição e `timeout 900`; resultado só vale quando se repete. Não é defeito do código (o CI roda
+a suíte inteira sem isso).
 
 ## Registro da F1 (14/10/2026)
 
@@ -2013,7 +2062,8 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F24 — implantação não retangular (L) e vaga descoberta com recuo curto — partes 1 e 2 (ver "Registro da F24"); o serviço sem fachada nas casas largas e rasas vai com a F27 (o mesmo arranjo da cozinha × serviço do R1-B)
 - [x] F25 — terreno inclinado: platô único — partes 1 e 2 (ver "Registro da F25" e "Registro da F25 — parte 2"; a rampa da garagem no terreno inclinado vai com a F26)
 - [x] F26 — muro, portão e calçada; e (da F25) a rampa da garagem no terreno inclinado (ver "Registro da F26")
-- [ ] F27 — 3 pavimentos; e (da F24) o serviço com fachada nas casas largas e rasas (L e L de fundo largo, 3 dorm.); e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
+- [ ] F27 — **partes 1 e 2 feitas** (ver "Registro da F27"); **3 pavimentos (F27-D): [x] D1 a base (no ar, 1a1a8934)
+  · [x] D2 a arquitetura (PR #46, CI) · [ ] D3 estrutura · [ ] D4 instalações e a opção na tela · [ ] D5 terraço**; e (da F24) o serviço com fachada nas casas largas e rasas (L e L de fundo largo, 3 dorm.); e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
 - [ ] F28 — tela e prancha: a chuva de projeto na tela da casa; bolhas dos eixos sem sobrepor
 
 

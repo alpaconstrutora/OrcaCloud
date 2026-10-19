@@ -456,6 +456,26 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         );
     };
 
+    // Pedido já retirado: informa/corrige SÓ quem retirou (sem status, data,
+    // aviso ou financeiro). `updateOrder` sem status não dispara nada disso.
+    const handleInformarRetiradoPor = async (employeeId: string) => {
+        if (!order || !employeeId || employeeId === retirada?.retiradoPor?.id) return;
+        setRegistrandoRetirada(true);
+        try {
+            await orderService.updateOrder(orderId, { retiradoPorEmployeeId: employeeId }, order.version);
+            await loadOrderData();
+            setRetirada(await retiradaPedidoService.get(orderId));
+            notify('Quem retirou foi registrado.');
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            notify(error.message?.startsWith('CONFLICT')
+                ? 'Pedido foi modificado por outro usuário. Recarregue a página.'
+                : `Erro ao registrar quem retirou: ${error.message}`, 'error');
+        } finally {
+            setRegistrandoRetirada(false);
+        }
+    };
+
     const handleAdicionarAutorizado = async (employeeId: string) => {
         if (!employeeId) return;   // linha de "limpar" do seletor
         setSalvandoAutorizado(true);
@@ -1815,7 +1835,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                         <p className="text-xs font-semibold text-gray-500">Autorizados a retirar</p>
                                         {autorizados.length === 0 ? (
                                             <p className="text-sm font-normal text-gray-500">
-                                                Nenhum colaborador autorizado ainda. O fornecedor vê o nome e o CPF de quem estiver nesta lista.
+                                                {jaRetirado
+                                                    ? 'Nenhum colaborador foi autorizado. Depois da retirada a lista de autorizados não muda mais.'
+                                                    : 'Nenhum colaborador autorizado ainda. O fornecedor vê o nome e o CPF de quem estiver nesta lista.'}
                                             </p>
                                         ) : (
                                             <ul className="divide-y divide-gray-100 rounded-[6px] border border-gray-100">
@@ -1838,6 +1860,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                 ))}
                                             </ul>
                                         )}
+                                        {jaRetirado && autorizados.length > 0 && (
+                                            <p className="text-sm font-normal text-gray-500">Pedido já retirado — a lista de autorizados não muda mais.</p>
+                                        )}
                                         {podeEditarAutorizados && (
                                             <div className="pt-1 sm:w-96">
                                                 <HierarchicalSelect
@@ -1857,16 +1882,39 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                     </div>
 
                                     {jaRetirado ? (
+                                        // Já retirado: "Retirado por" continua editável — pedido
+                                        // retirado antes deste campo existir (ou registrado sem ele)
+                                        // precisa poder dizer quem foi, e erro de digitação se
+                                        // corrige. Grava SÓ a coluna: sem status, sem data, sem
+                                        // aviso ao fornecedor, sem financeiro (pedido do usuário em
+                                        // 2026-10-19, PCO-011-017-0002 já Recebido).
                                         <div className="space-y-1.5">
                                             <p className="text-xs font-semibold text-gray-500">Retirado por</p>
-                                            <p className="text-sm font-normal text-gray-900">
-                                                {retirada?.retiradoPor
-                                                    ? <>{retirada.retiradoPor.nome}{retirada.retiradoPor.cpf && <span className="text-gray-500"> · CPF {formatarCpf(retirada.retiradoPor.cpf)}</span>}</>
-                                                    : 'Não informado'}
-                                                {order.actualDeliveryDate && (
-                                                    <span className="text-gray-500"> · em {new Date(order.actualDeliveryDate.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                                                )}
-                                            </p>
+                                            <div className="flex flex-col lg:flex-row lg:items-center gap-x-6 gap-y-2">
+                                                <div className="lg:w-96">
+                                                    <HierarchicalSelect
+                                                        items={itensRetiradoPor(autorizados, colaboradoresRetirada)}
+                                                        value={retirada?.retiradoPor?.id ?? ''}
+                                                        onChange={handleInformarRetiradoPor}
+                                                        placeholder="Informar quem retirou..."
+                                                        panelVariant="drawer"
+                                                        drawerTitle="Quem retirou"
+                                                        drawerDescription="Os autorizados aparecem primeiro. Busque pelo nome ou CPF."
+                                                        searchPlaceholder="Buscar por nome ou CPF..."
+                                                        size="sm"
+                                                        disabled={registrandoRetirada}
+                                                        fallbackLabel={retirada?.retiradoPor?.nome}
+                                                    />
+                                                </div>
+                                                <p className="text-sm font-normal text-gray-500">
+                                                    {order.actualDeliveryDate
+                                                        ? `Retirado em ${new Date(order.actualDeliveryDate.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR')}. `
+                                                        : ''}
+                                                    {registrandoRetirada
+                                                        ? 'Gravando…'
+                                                        : retirada?.retiradoPor ? 'Pode corrigir: grava na hora.' : 'Ainda não informado: escolha para gravar.'}
+                                                </p>
+                                            </div>
                                         </div>
                                     ) : (situacao.pode || situacao.motivo) && (
                                         <div className="flex flex-col lg:flex-row lg:items-end gap-x-6 gap-y-4">

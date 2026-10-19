@@ -156,6 +156,26 @@ SELECT — o caminho direto na tabela já estava fechado. As duas RPCs eram o ú
   bundle servido). Falta o teste na tela: autorizar colaborador, registrar retirada com
   "Retirado por", e conferir no portal do fornecedor que aparecem só nome e CPF.
 
+## Pedido de 19/10/2026 (depois da publicação `9f0f674`)
+
+> #PCO-011-017-0002: esta com status recebido, entao acredito que seja por isso que o campo,
+> Autorizados a retirar esta bloqueado (Nenhum colaborador autorizado ainda. O fornecedor vê o nome e o CPF de quem estiver nesta lista).
+> Mas precisamos ter uma campo para informar quem retirou (talvez um novo campo)
+
+**Verificação:** pedido já retirado/recebido mostrava "Retirado por" só como texto ("Não
+informado"), sem como preencher — pedido retirado antes do campo existir ficava sem saída. A
+lista de autorizados travava sem dizer por quê, com texto de "ainda".
+
+- [x] **`SupplyChainOrderDetails`** — FOB em Entregue/Recebido/Divergência: "Retirado por"
+  vira seletor (autorizados primeiro; `fallbackLabel` para colaborador inativo) que grava SÓ
+  `retirado_por_employee_id` (`updateOrder` sem status: sem aviso ao fornecedor, sem
+  financeiro); corrigível. Autorizados: "Pedido já retirado — a lista de autorizados não muda
+  mais" / vazio "Nenhum colaborador foi autorizado…".
+  **Pronto quando:** `tsc` limpo, `check-ui-standard` sem achado e a gravação provada no
+  banco. ✅ prova em transação desfeita no próprio PCO-011-017-0002 (Recebido): comprador
+  grava 1 linha, embed devolve o nome; banco conferido sem rastro.
+- [ ] **Conferência na tela** — pelo usuário, no PCO-011-017-0002, depois de publicado.
+
 ## Fora do escopo (anotado)
 
 - Listas (Suprimentos › Pedidos, Recebimentos, portal do fornecedor) continuam mostrando

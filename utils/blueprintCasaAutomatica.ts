@@ -117,6 +117,7 @@ import {
   zonasMolhadasDoBanheiro,
   HIPOTESES_DO_SOBRADO_PADRAO,
   pavimentoComNucleo,
+  pilaresDoTerceiro,
   retanguloDoSegundo,
   pilaresDoSobrado,
   semPortaDeEntrada,
@@ -1389,8 +1390,8 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   return fica;
 }
 
-/** F27-D2: o que a casa de 3 pavimentos diz enquanto a estrutura e as instalações dela não existem (a D3 e a D4 tiram). */
-export const MOTIVO_TRES_PAVIMENTOS_EM_OBRA = 'A casa de 3 pavimentos ainda não lança a estrutura nem as instalações (só a arquitetura dos três pavimentos) — gere o sobrado, ou deixe em "Automático".';
+/** F27-D2/D3: o que a casa de 3 pavimentos diz enquanto as instalações dela não existem (a D4 tira). */
+export const MOTIVO_TRES_PAVIMENTOS_EM_OBRA = 'A casa de 3 pavimentos ainda não lança as instalações (a arquitetura e a estrutura dos três pavimentos estão lançadas) — gere o sobrado, ou deixe em "Automático".';
 
 function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> & { pavimentos: 1 | 2 | 3 }, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const hip: HipotesesDaCasa = {
@@ -2926,20 +2927,6 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         decisoes.push(`3 pavimentos: ${doSegundo.length} janela(s) do 2º alinhada(s) com as do 1º, na mesma fachada.`);
       }
     }
-    // F27-D2: a casa de 3 pavimentos fecha aqui — a arquitetura dos três; a estrutura (D3) e as instalações (D4) ainda não.
-    if (eg && sobrado.segundo) {
-      for (const id of ORDEM_DAS_ETAPAS) if (id !== 'CONFERENCIA' && !(id === 'TERRAPLENAGEM' && !temTerreno) && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, MOTIVO_TRES_PAVIMENTOS_EM_OBRA);
-      pendencias.push({ grupo: 'PREMISSA', texto: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
-      return fechar({
-        projecaoM2: et.r.resumo.areaConstruidaM2,
-        areaConstruidaM2: et.r.resumo.areaConstruidaM2 + es.r.resumo.areaConstruidaM2 + eg.r.resumo.areaConstruidaM2,
-        alturaM: (3 * andarMm) / 1000,
-        semente: et.r.semente,
-        escolha: `térreo: ${et.texto}; 1º: ${es.texto}; 2º: ${eg.texto}`,
-        sobrado,
-        disciplinas: { estrutura: { ...ESTRUTURA_ZERADA }, telhado: null, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA(), forro: null, furos: null },
-      });
-    }
     lancarEscadaDeAcesso();
     lancarRampaDaGaragem();
     // F26: o muro logo depois da casa — antes da água e da elétrica, que põem o hidrômetro e o medidor nele.
@@ -2950,6 +2937,9 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     // cima, e o furo da escada nela é derivado pelo kernel (`furosDaEscada`); fundação só no térreo; eixos do térreo;
     // telhado sobre o superior; corrimãos dos lances e guarda-corpo na borda do furo.
     const S = sobrado.nivelSuperiorId;
+    // F27-D3: na casa de 3, o 2º pavimento — os pilares descem a prumada inteira, vigas e lajes por nível, a viga de
+    // transição do 1º sob as paredes do 2º sem parede embaixo, o telhado sobre o 2º.
+    const G = sobrado.segundo?.nivelId ?? null;
     type PlanoEstrutural = { comandos: Command[]; motivo: string | null; avisos?: string[]; foraDoPlano: { motivo: string }[] };
     const emDois = <A extends PlanoEstrutural, B extends PlanoEstrutural>(x: BlueprintModel, fa: (y: BlueprintModel) => A, fb: (y: BlueprintModel) => B) => {
       const a = fa(x);
@@ -2966,34 +2956,57 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     // Onde a parede do superior não tem parede embaixo, a viga de transição do térreo a sustenta — e o pilar do
     // superior que cai sobre ela nasce nela.
     const transicao = trechosDeTransicao(m, T, S);
+    const transicaoDeCima = G ? trechosDeTransicao(m, S, G) : [];
     let nascemEmViga = 0;
     etapaEstrutural(
       'PILARES',
-      (x) => pilaresDoSobrado(x, T, S, hip.estrutura.pilares, transicao),
+      (x) => {
+        const a = pilaresDoSobrado(x, T, S, hip.estrutura.pilares, transicao);
+        if (!G) return { ...a, de3: null };
+        const de3 = pilaresDoTerceiro(a.comandos.length ? applyBatch(x, a.comandos).model : x, T, S, G, hip.estrutura.pilares, transicao, transicaoDeCima);
+        return { ...a, de3, comandos: [...a.comandos, ...de3.comandos], motivo: a.comandos.length || de3.comandos.length ? null : a.motivo, avisos: [...a.avisos, ...de3.avisos], foraDoPlano: [...a.foraDoPlano, ...de3.foraDoPlano] };
+      },
       (p) => {
-        estrutura.pilares = p.terreo + p.superior;
-        nascemEmViga = p.nascemEmViga;
-        return {
-          nota: `${p.terreo} pilar(es) no térreo e ${p.superior} no superior — ${p.sobem} sobem do térreo, ${p.descem} descem do superior${p.nascemEmViga ? `, ${p.nascemEmViga} nascem em viga de transição` : ''}${p.semApoio ? `, ${p.semApoio} sem apoio embaixo ficaram fora` : ''}`,
-          foraDoPlano: p.foraDoPlano,
-        };
+        const d = p.de3;
+        estrutura.pilares = p.terreo + p.superior + (d ? d.segundo + d.descemAoPrimeiro + d.descemAoTerreo : 0);
+        nascemEmViga = p.nascemEmViga + (d?.nascemEmViga ?? 0);
+        const de2 = `${p.terreo} pilar(es) no térreo e ${p.superior} no ${d ? '1º' : 'superior'} — ${p.sobem} sobem do térreo, ${p.descem} descem do ${d ? '1º' : 'superior'}${p.nascemEmViga ? `, ${p.nascemEmViga} nascem em viga de transição` : ''}${p.semApoio ? `, ${p.semApoio} sem apoio embaixo ficaram fora` : ''}`;
+        const doSegundo = d ? `; ${d.segundo} no 2º — ${d.sobem} sobem do 1º, ${d.descemAoPrimeiro} descem ao 1º e ${d.descemAoTerreo} até o térreo${d.nascemEmViga ? `, ${d.nascemEmViga} nascem em viga de transição` : ''}${d.semApoio ? `, ${d.semApoio} sem prumada até o chão ficaram fora` : ''}` : '';
+        return { nota: de2 + doSegundo, foraDoPlano: p.foraDoPlano };
       },
     );
     etapaEstrutural(
       'VIGAS',
       (x) => {
         const d = emDois(x, (y) => planejarVigas(y, T, hip.estrutura.vigas), (y) => planejarVigas(y, S, hip.estrutura.vigas));
-        const vt = vigasDeTransicao(d.comandos.length ? applyBatch(x, d.comandos).model : x, T, transicao, hip.estrutura.vigas);
-        return { ...d, vt, comandos: [...d.comandos, ...vt.comandos], motivo: d.comandos.length || vt.comandos.length ? null : d.motivo };
+        const x1 = d.comandos.length ? applyBatch(x, d.comandos).model : x;
+        const vt = vigasDeTransicao(x1, T, transicao, hip.estrutura.vigas);
+        // F27-D3: as vigas do 2º e as de transição do 1º (sob as paredes do 2º sem parede do 1º embaixo).
+        const x2 = vt.comandos.length ? applyBatch(x1, vt.comandos).model : x1;
+        const vG = G ? planejarVigas(x2, G, hip.estrutura.vigas) : null;
+        const x3 = vG?.comandos.length ? applyBatch(x2, vG.comandos).model : x2;
+        const vtG = G ? vigasDeTransicao(x3, S, transicaoDeCima, hip.estrutura.vigas) : null;
+        const comandos = [...d.comandos, ...vt.comandos, ...(vG?.comandos ?? []), ...(vtG?.comandos ?? [])];
+        return { ...d, vt, vG, vtG, comandos, motivo: comandos.length ? null : d.motivo, foraDoPlano: [...d.foraDoPlano, ...(vG?.foraDoPlano ?? []).map((f) => `2º pavimento: ${f.motivo}`)] };
       },
       (p) => {
-        estrutura.vigas = p.a.vigas.length + p.b.vigas.length + p.vt.vigas;
+        estrutura.vigas = p.a.vigas.length + p.b.vigas.length + p.vt.vigas + (p.vG?.vigas.length ?? 0) + (p.vtG?.vigas ?? 0);
+        if (p.vtG?.vigas)
+          pendencias.push({
+            grupo: 'CONFERIR',
+            texto: `Estrutura: ${p.vtG.vigas} viga(s) de transição no 1º pavimento sustentam ${String(p.vtG.metros).replace('.', ',')} m de parede do 2º sem parede embaixo (maior vão ${String(Math.round(p.vtG.maiorVaoMm / 100) / 10).replace('.', ',')} m) — confira com o calculista.`,
+          });
         if (p.vt.vigas)
           pendencias.push({
             grupo: 'CONFERIR',
             texto: `Estrutura: ${p.vt.vigas} viga(s) de transição no térreo sustentam ${String(p.vt.metros).replace('.', ',')} m de parede do superior sem parede embaixo (maior vão ${String(Math.round(p.vt.maiorVaoMm / 100) / 10).replace('.', ',')} m)${nascemEmViga ? ` e ${nascemEmViga} pilar(es) que nascem nelas` : ''} — confira com o calculista.`,
           });
-        return { nota: `${p.a.vigas.length} viga(s) no térreo (sob o piso de cima), ${p.vt.vigas} de transição sob paredes do superior e ${p.b.vigas.length} no superior`, foraDoPlano: p.foraDoPlano };
+        return {
+          nota: p.vG
+            ? `${p.a.vigas.length} viga(s) no térreo, ${p.vt.vigas} de transição sob paredes do 1º, ${p.b.vigas.length} no 1º, ${p.vtG?.vigas ?? 0} de transição sob paredes do 2º e ${p.vG.vigas.length} no 2º`
+            : `${p.a.vigas.length} viga(s) no térreo (sob o piso de cima), ${p.vt.vigas} de transição sob paredes do superior e ${p.b.vigas.length} no superior`,
+          foraDoPlano: p.foraDoPlano,
+        };
       },
     );
     let guardas = 0;
@@ -3082,15 +3095,20 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const zonas = zonasMolhadasDeCima(x, T, S);
         const comRebaixo = lajesComRebaixo(d.a.comandos, T, zonas, hip.sobrado.rebaixoDaLajeDoBanheiroMm);
         lajesRebaixadas = comRebaixo.rebaixadas;
-        const g = guardaCorpoDaEscada(x, T, S);
+        // F27-D3: na casa de 3, o guarda-corpo do furo só no 2º (no 1º, o lance que sobe sai da borda do furo de baixo).
+        const g = [...guardaCorpoDaEscada(x, T, S, !G), ...(G ? guardaCorpoDaEscada(x, S, G) : [])];
         guardas = g.length;
-        const comandos = [...comRebaixo.comandos, ...d.b.comandos, ...g];
-        return { ...d, comandos, motivo: comandos.length ? null : d.motivo };
+        const lG = G ? planejarLajes(d.comandos.length ? applyBatch(x, d.comandos).model : x, G, hip.estrutura.lajes) : null;
+        const comandos = [...comRebaixo.comandos, ...d.b.comandos, ...(lG?.comandos ?? []), ...g];
+        return { ...d, lG, comandos, motivo: comandos.length ? null : d.motivo, foraDoPlano: [...d.foraDoPlano, ...(lG?.foraDoPlano ?? []).map((f) => `2º pavimento: ${f.motivo}`)] };
       },
       (p) => {
-        estrutura.lajes = p.a.lajes.length + p.b.lajes.length;
+        estrutura.lajes = p.a.lajes.length + p.b.lajes.length + (p.lG?.lajes.length ?? 0);
+        const guardaDoFuro = guardas ? `; ${guardas - 1} corrimão(s) nos lances e guarda-corpo na borda do furo${p.lG ? ' do 2º' : ''}` : '';
         return {
-          nota: `${p.a.lajes.length} laje(s) no térreo (o piso de cima, com o furo da escada) e ${p.b.lajes.length} no superior, de ${hip.estrutura.lajes.espessuraMm} mm${lajesRebaixadas ? `; rebaixada ${f2(hip.sobrado.rebaixoDaLajeDoBanheiroMm / 1000)} m sob ${lajesRebaixadas} trecho(s) de banheiro de cima` : ''}${guardas ? `; ${guardas - 1} corrimão(s) nos lances e guarda-corpo na borda do furo` : ''}`,
+          nota: p.lG
+            ? `${p.a.lajes.length} laje(s) no térreo, ${p.b.lajes.length} no 1º (o piso do 2º e o terraço) e ${p.lG.lajes.length} no 2º, de ${hip.estrutura.lajes.espessuraMm} mm${lajesRebaixadas ? `; a do térreo rebaixada ${f2(hip.sobrado.rebaixoDaLajeDoBanheiroMm / 1000)} m sob ${lajesRebaixadas} trecho(s) de banheiro do 1º` : ''}${guardaDoFuro}`
+            : `${p.a.lajes.length} laje(s) no térreo (o piso de cima, com o furo da escada) e ${p.b.lajes.length} no superior, de ${hip.estrutura.lajes.espessuraMm} mm${lajesRebaixadas ? `; rebaixada ${f2(hip.sobrado.rebaixoDaLajeDoBanheiroMm / 1000)} m sob ${lajesRebaixadas} trecho(s) de banheiro de cima` : ''}${guardaDoFuro}`,
           foraDoPlano: p.foraDoPlano,
         };
       },
@@ -3116,7 +3134,23 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         return { nota: `${p.novos} eixo(s)` };
       },
     );
-    etapaDoTelhado(S, es.r.retangulo, es.r.anexos, (m.structures ?? []).some((x) => x.levelId === S && x.kind === 'LAJE'));
+    // F27-D3: na casa de 3, o telhado sobre o 2º (o retângulo recuado); o terraço e o núcleo que sobra fora são a D5.
+    if (G && eg) etapaDoTelhado(G, eg.r.retangulo, eg.r.anexos, (m.structures ?? []).some((x) => x.levelId === G && x.kind === 'LAJE'));
+    else etapaDoTelhado(S, es.r.retangulo, es.r.anexos, (m.structures ?? []).some((x) => x.levelId === S && x.kind === 'LAJE'));
+    // F27-D2/D3: a casa de 3 pavimentos fecha aqui — a arquitetura e a estrutura dos três; as instalações (D4) ainda não.
+    if (eg && sobrado.segundo) {
+      for (const id of ORDEM_DAS_ETAPAS) if (id !== 'CONFERENCIA' && !(id === 'TERRAPLENAGEM' && !temTerreno) && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, MOTIVO_TRES_PAVIMENTOS_EM_OBRA);
+      pendencias.push({ grupo: 'PREMISSA', texto: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
+      return fechar({
+        projecaoM2: et.r.resumo.areaConstruidaM2,
+        areaConstruidaM2: et.r.resumo.areaConstruidaM2 + es.r.resumo.areaConstruidaM2 + eg.r.resumo.areaConstruidaM2,
+        alturaM: (3 * andarMm) / 1000,
+        semente: et.r.semente,
+        escolha: `térreo: ${et.texto}; 1º: ${es.texto}; 2º: ${eg.texto}`,
+        sobrado,
+        disciplinas: { estrutura, telhado, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA(), forro: null, furos: null },
+      });
+    }
 
     // ── INSTALAÇÕES DO SOBRADO (F12c) ──
     // O SHAFT junto de cada banheiro de cima, antes de tudo: o tubo de queda e as colunas de água descem por ele

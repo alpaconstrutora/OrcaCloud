@@ -2720,3 +2720,23 @@ Subfases:
   (1 dormitório no 1º) o 1º preenche a laje inteira (dormitório de 59 m²) — o Automático só escolherá 3 pavimentos
   quando o sobrado não comporta (D4); a porta para o terraço sai da "entrada" do gerador, que na planta invertida fica
   nos fundos — a D5 confere o acesso ao terraço da frente.
+
+#### Registro da D3 (18/10/2026) — a estrutura em prumada
+
+- `pilaresDoTerceiro` (`utils/blueprintSobrado.ts`), depois do `pilaresDoSobrado` intocado (térreo e 1º): os pilares
+  do 1º com parede do 2º em cima continuam; o planejador do 2º completa e cada pilar novo desce a PRUMADA inteira — ao
+  1º (parede embaixo, ou nasce na viga de transição do 1º) e ao térreo (parede, ou nasce na viga de transição do
+  térreo). A prumada que não chega ao chão sai, dita na pendência. A escorregada da F23 sobre porta/janela, contra as
+  paredes dos dois de baixo.
+- Vigas: as do 2º e as de TRANSIÇÃO do 1º (`trechosDeTransicao(m, S, G)` + `vigasDeTransicao(…, S, …)`), com a
+  pendência "confira com o calculista". Lajes do 2º. Fundação e eixos só no térreo. Telhado sobre o 2º (o retângulo
+  recuado).
+- Guarda-corpo do furo da escada só no 2º (`guardaCorpoDaEscada(…, comGuardaDoFuro)`): no 1º o lance que sobe ao 2º
+  sai justamente da borda do furo de baixo — o do sobrado bloquearia a subida. Corrimãos nos lances dos dois lances.
+- O plano da casa de 3 fecha depois do telhado (as instalações são a D4; `MOTIVO_TRES_PAVIMENTOS_EM_OBRA` agora diz
+  isso). Teste: todo pilar do 2º com pilar (ou viga) embaixo no 1º e no térreo; vigas, lajes e telhado só no 2º; o
+  guarda-corpo do furo só no 2º.
+- Medido nos 6 lotes da sonda: os 6 lançam a estrutura (13–18 pilares no 2º; 4–8 vigas de transição no 1º; 1 pilar
+  sem prumada num lote, dito). Ficam para a D5: o telhado não cobre o núcleo que sobra fora do 2º; a laje do 1º no
+  terraço sem impermeabilização nem guarda-corpo. Fica para conferir: as fundações não pesam os 3 pavimentos (o
+  pré-dimensionamento é o do bloco por pilar de sempre).

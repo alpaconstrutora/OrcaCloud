@@ -660,7 +660,7 @@ describe('planejarCasa — F12a: o sobrado (arquitetura dos dois pavimentos e a 
   });
 });
 
-describe('planejarCasa — F27-D1/D2: a casa de 3 pavimentos (implantação e arquitetura)', () => {
+describe('planejarCasa — F27-D1/D2/D3: a casa de 3 pavimentos (implantação, arquitetura e estrutura)', () => {
   const m = lote();
   const z3 = (gabaritoPavimentos: number | null, gabaritoAlturaMaxM: number | null = null) => entrada(m, { ctx: { ...entrada(m).ctx, zona: { ...ZONA, gabaritoPavimentos, gabaritoAlturaMaxM, coeficienteMax: null } } });
   const alto = { ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, suites: 2, banheiros: 3, padrao: 'R1-A' as const };
@@ -674,14 +674,14 @@ describe('planejarCasa — F27-D1/D2: a casa de 3 pavimentos (implantação e ar
     expect(md.coeficiente).toBeCloseTo(Math.round(((md.projecaoM2 * 3) / md.loteM2) * 100) / 100, 2);
   });
 
-  it('a arquitetura sai em três níveis empilhados, com duas escadas no mesmo núcleo — e para antes da estrutura, com o motivo dito', () => {
+  it('a arquitetura sai em três níveis empilhados, com duas escadas no mesmo núcleo — e para antes das instalações, com o motivo dito', () => {
     expect(plano.etapas.find((e) => e.id === 'ARQUITETURA')).toMatchObject({ situacao: 'LANCOU' });
     expect(r.levels).toHaveLength(3);
     const [t, p1, p2] = [...r.levels].sort((a, b) => a.elevationMm - b.elevationMm);
     expect(p2.elevationMm - p1.elevationMm).toBe(p1.elevationMm - t.elevationMm);
     expect(r.stairs.map((e) => e.levelId).sort()).toEqual([t.id, p1.id].sort());
     expect(r.stairs[0].pontos).toEqual(r.stairs[1].pontos);
-    expect(plano.etapas.find((e) => e.id === 'PILARES')).toMatchObject({ situacao: 'NAO_RODOU', nota: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
+    expect(plano.etapas.find((e) => e.id === 'MOBILIARIO')).toMatchObject({ situacao: 'NAO_RODOU', nota: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
     expect(plano.pendencias.some((x) => x.texto === MOTIVO_TRES_PAVIMENTOS_EM_OBRA)).toBe(true);
   });
 
@@ -696,6 +696,31 @@ describe('planejarCasa — F27-D1/D2: a casa de 3 pavimentos (implantação e ar
     const s2 = r.spaces.filter((x) => x.levelId === seg.nivelId).map((x) => x.name);
     expect(s2).toEqual(expect.arrayContaining(['Escritório']));
     expect(s2.some((n) => /^Suíte/.test(n))).toBe(true);
+  });
+
+  it('a estrutura em prumada: todo pilar do 2º desce ao 1º e ao térreo (ou nasce em viga de transição); vigas, lajes e telhado no 2º', () => {
+    for (const id of ['PILARES', 'VIGAS', 'LAJES', 'FUNDACOES', 'TELHADO']) expect(plano.etapas.find((e) => e.id === id)?.situacao).toBe('LANCOU');
+    const [t, p1, p2] = [...r.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+    const pilares = (l: string) => r.structures.filter((x) => x.levelId === l && x.kind === 'PILAR');
+    const vigaEm = (l: string, at: { x: number; y: number }) =>
+      r.structures.some((v) => v.levelId === l && v.kind === 'VIGA' && v.pontos.length === 2 && Math.abs((v.pontos[1].x - v.pontos[0].x) * (at.y - v.pontos[0].y) - (v.pontos[1].y - v.pontos[0].y) * (at.x - v.pontos[0].x)) / (Math.hypot(v.pontos[1].x - v.pontos[0].x, v.pontos[1].y - v.pontos[0].y) || 1) < v.larguraMm);
+    const embaixo = (l: string, at: { x: number; y: number }) => pilares(l).some((x) => Math.hypot(x.pontos[0].x - at.x, x.pontos[0].y - at.y) < 300);
+    expect(pilares(p2.id).length).toBeGreaterThan(0);
+    for (const x of pilares(p2.id)) {
+      const at = x.pontos[0];
+      expect(embaixo(p1.id, at) || vigaEm(p1.id, at)).toBe(true);
+      if (embaixo(p1.id, at)) expect(embaixo(t.id, at) || vigaEm(t.id, at)).toBe(true);
+    }
+    for (const k of ['VIGA', 'LAJE'] as const) expect(r.structures.some((x) => x.levelId === p2.id && x.kind === k)).toBe(true);
+    expect((r.roofs ?? []).every((x) => x.levelId === p2.id)).toBe(true);
+    expect((r.roofs ?? []).length).toBeGreaterThan(0);
+  });
+
+  it('o guarda-corpo do furo da escada só no 2º — no 1º o lance que sobe sai da borda do furo de baixo', () => {
+    const [, p1, p2] = [...r.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+    const doFuro = (r.guardaCorpos ?? []).filter((g) => /guarda-corpo do furo/.test(g.rotulo ?? ''));
+    expect(doFuro.map((g) => g.levelId)).toEqual([p2.id]);
+    expect(doFuro.some((g) => g.levelId === p1.id)).toBe(false);
   });
 
   it('o programa inteiro no desenho e a trava: reaplicado no original, o mesmo modelo', () => {

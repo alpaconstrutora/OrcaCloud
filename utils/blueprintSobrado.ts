@@ -754,6 +754,150 @@ export function pilaresDoSobrado(
   };
 }
 
+export interface PilaresDoTerceiro {
+  comandos: Command[];
+  avisos: string[];
+  foraDoPlano: string[];
+  /** Pilares novos no 2º (os que sobem do 1º + os do planejador que têm apoio). */
+  segundo: number;
+  /** Do 1º que continuam no 2º. */
+  sobem: number;
+  /** Cópias novas embaixo dos pilares do 2º: no 1º e no térreo. */
+  descemAoPrimeiro: number;
+  descemAoTerreo: number;
+  /** Do 2º (ou da cópia dele no 1º) que nascem numa viga de transição. */
+  nascemEmViga: number;
+  /** Do 2º que ficaram fora: a prumada não chegava ao chão (sem parede nem viga embaixo, em algum nível). */
+  semApoio: number;
+}
+
+/**
+ * F27-D2/D3 (decisão do usuário, 18/10/2026: 3 pavimentos): o 2º pavimento sobre o sobrado já em prumada
+ * (`pilaresDoSobrado` no térreo e no 1º). Cada pilar do 1º com parede do 2º em cima CONTINUA; o planejador do 2º
+ * completa, e cada pilar novo DESCE a prumada inteira — ao 1º (parede embaixo, ou nasce na viga de transição do 1º) e ao
+ * térreo (parede embaixo, ou nasce na viga de transição do térreo). A prumada que não chega ao chão sai: um pilar não
+ * nasce no meio do cômodo de baixo. A mesma escorregada da F23 sobre porta ou janela, contra as paredes dos dois de baixo.
+ */
+export function pilaresDoTerceiro(
+  model: BlueprintModel,
+  T: ObjectId,
+  S: ObjectId,
+  G: ObjectId,
+  hip: HipotesesDePilares = HIPOTESES_PILARES_PADRAO,
+  transicaoDoTerreo: readonly TrechoDeTransicao[] = [],
+  transicaoDoPrimeiro: readonly TrechoDeTransicao[] = [],
+): PilaresDoTerceiro {
+  const comandos: Command[] = [];
+  const cedem = new Set<ObjectId>();
+  let m = model;
+  const lancar = (lote: Command[]) => {
+    if (!lote.length) return;
+    m = applyBatch(m, lote).model;
+    comandos.push(...lote);
+  };
+  const ceder = (w: Wall | null, lote: Command[]) => {
+    if (!w || w.cedeSobreposicao === true || cedem.has(w.id)) return;
+    cedem.add(w.id);
+    lote.push({ type: 'SetCedeSobreposicao', id: w.id, cede: true });
+  };
+  const altura = (id: ObjectId) => m.levels.find((l) => l.id === id)?.defaultHeightMm ?? 2800;
+  const copia = (x: { at: Point; larguraMm: number; profundidadeMm: number; circular: boolean; rotacaoDeg: number; rotulo: string | null }, levelId: ObjectId): Command => ({
+    type: 'AddStructural',
+    levelId,
+    kind: 'PILAR',
+    pontos: [x.at],
+    larguraMm: x.larguraMm,
+    profundidadeMm: x.profundidadeMm,
+    alturaMm: altura(levelId),
+    baseMm: 0,
+    circular: x.circular,
+    rotacaoDeg: x.rotacaoDeg,
+    rotulo: x.rotulo,
+  });
+  const meio = (x: { larguraMm: number; profundidadeMm: number }) => Math.max(x.larguraMm, x.profundidadeMm) / 2;
+
+  // 1. Os do 1º que sobem ao 2º.
+  const sobem: Command[] = [];
+  for (const x of pilaresExistentesNoNivel(m, S)) {
+    const at = x.pontos[0];
+    const w = paredeSobOPonto(m, G, at, meio(x));
+    if (!w || pilarPerto(m, G, at, meio(x))) continue;
+    sobem.push(copia({ at, larguraMm: x.larguraMm, profundidadeMm: x.profundidadeMm, circular: x.circular, rotacaoDeg: x.rotacaoDeg, rotulo: x.rotulo ?? null }, G));
+    ceder(w, sobem);
+  }
+  lancar(sobem);
+  const nSobem = sobem.filter((c) => c.type === 'AddStructural').length;
+
+  // 2. O 2º completa; cada novo desce a prumada ou sai.
+  const pG = planejarPilares(m, G, hip);
+  const manter: Command[] = [];
+  const descer: Command[] = [];
+  let semApoio = 0;
+  let nascemEmViga = 0;
+  let aoPrimeiro = 0;
+  let aoTerreo = 0;
+  let n = proximoNumeroDePilar(m);
+  /** Até onde a prumada desce de `at`: 'CHAO' (parede no 1º e no térreo), 'VIGA_1' / 'VIGA_T' (nasce na transição), ou null. */
+  const prumada = (at: Point, r: number): 'CHAO' | 'VIGA_1' | 'VIGA_T' | null => {
+    if (!paredeSobOPonto(m, S, at, r)) return sobreAlgumTrecho(transicaoDoPrimeiro, at) ? 'VIGA_1' : null;
+    if (!paredeSobOPonto(m, T, at, r)) return sobreAlgumTrecho(transicaoDoTerreo, at) ? 'VIGA_T' : null;
+    return 'CHAO';
+  };
+  for (const x0 of pG.pilares) {
+    let x = x0;
+    if (!prumada(x.at, meio(x)) && paredeSobOPonto(m, S, x.at, 0, true)) {
+      const sentidos = x.wallIds.flatMap((id) => {
+        const w = m.walls.find((y) => y.id === id);
+        const L = w ? Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) : 0;
+        return w && L > 1 ? [{ x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L }] : [];
+      });
+      const alcance = hip.deslizeSobreAberturaMm ?? DESLIZE_SOBRE_ABERTURA_MM;
+      for (let d = 50; d <= alcance; d += 50) {
+        const q = sentidos
+          .flatMap((u) => [d, -d].map((k) => point(Math.round(x.at.x + u.x * k), Math.round(x.at.y + u.y * k))))
+          .find((q) => paredeSobOPonto(m, G, q, meio(x)) && prumada(q, meio(x)) === 'CHAO');
+        if (q) {
+          x = { ...x, at: q };
+          break;
+        }
+      }
+    }
+    const ate = prumada(x.at, meio(x));
+    if (!ate) {
+      semApoio++;
+      continue;
+    }
+    const rotulo = `P${n++}`;
+    const pilar = { at: x.at, larguraMm: x.larguraMm, profundidadeMm: x.profundidadeMm, circular: false, rotacaoDeg: x.rotacaoDeg, rotulo };
+    manter.push(copia(pilar, G));
+    for (const id of x.wallIds) ceder(m.walls.find((y) => y.id === id) ?? null, manter);
+    if (ate === 'VIGA_1') {
+      nascemEmViga++;
+      continue;
+    }
+    if (!pilarPerto(m, S, x.at, meio(x))) {
+      descer.push(copia(pilar, S));
+      ceder(paredeSobOPonto(m, S, x.at, meio(x)), descer);
+      aoPrimeiro++;
+    }
+    if (ate === 'VIGA_T') {
+      nascemEmViga++;
+      continue;
+    }
+    if (!pilarPerto(m, T, x.at, meio(x))) {
+      descer.push(copia(pilar, T));
+      ceder(paredeSobOPonto(m, T, x.at, meio(x)), descer);
+      aoTerreo++;
+    }
+  }
+  lancar(manter);
+  lancar(descer);
+  const nManter = manter.filter((c) => c.type === 'AddStructural').length;
+  const foraDoPlano = pG.foraDoPlano.map((f) => `2º pavimento: ${f.motivo}`);
+  if (semApoio) foraDoPlano.push(`${semApoio} pilar(es) do 2º pavimento sem prumada até o chão ficaram fora (sem parede nem viga embaixo em algum nível) — a viga do 2º vence o vão maior; confira com o calculista`);
+  return { comandos, avisos: pG.avisos.map((a) => `2º pavimento: ${a}`), foraDoPlano, segundo: nSobem + nManter, sobem: nSobem, descemAoPrimeiro: aoPrimeiro, descemAoTerreo: aoTerreo, nascemEmViga, semApoio };
+}
+
 /** Um trecho de parede do superior sem parede embaixo: onde a viga de transição do térreo passa. */
 export interface TrechoDeTransicao {
   a: Point;
@@ -855,9 +999,10 @@ export function vigasDeTransicao(
 /**
  * O guarda-corpo e os corrimãos da escada em U do núcleo. Corrimão dos dois lados dos LANCES (o sugeridor do app;
  * o segmento da virada fica de fora — o corrimão dele atravessaria os lances). Guarda-corpo no superior, na borda do
- * furo sobre o primeiro lance: quem chega ao patamar de cima tem o vão do lance que sai do térreo ao lado.
+ * furo sobre o primeiro lance: quem chega ao patamar de cima tem o vão do lance que sai do térreo ao lado. F27-D3: sem
+ * `comGuardaDoFuro` no pavimento do meio da casa de 3 — ali o lance que sobe ao 2º sai justamente da borda do furo.
  */
-export function guardaCorpoDaEscada(model: BlueprintModel, T: ObjectId, S: ObjectId): Command[] {
+export function guardaCorpoDaEscada(model: BlueprintModel, T: ObjectId, S: ObjectId, comGuardaDoFuro = true): Command[] {
   const e = (model.stairs ?? []).find((x) => x.levelId === T && x.pontos.length === 4);
   if (!e) return [];
   const corrimaos = sugerirGuardaCorpos(model, T, HIPOTESES_DE_GUARDA_CORPO_PADRAO)
@@ -868,6 +1013,7 @@ export function guardaCorpoDaEscada(model: BlueprintModel, T: ObjectId, S: Objec
   const u = { x: (p0.x - p3.x) / L, y: (p0.y - p3.y) / L };
   const meio = point(Math.round((p0.x + p3.x) / 2), Math.round((p0.y + p3.y) / 2));
   const fora = point(Math.round(p0.x + (u.x * e.larguraMm) / 2), Math.round(p0.y + (u.y * e.larguraMm) / 2));
+  if (!comGuardaDoFuro) return corrimaos;
   return [
     ...corrimaos,
     { type: 'AddGuardaCorpo', levelId: S, tipo: 'GUARDA_CORPO', pontos: [meio, fora], alturaMm: HIPOTESES_DE_GUARDA_CORPO_PADRAO.alturaGuardaCorpoMm, material: 'METALICO', rotulo: `${e.rotulo || 'Escada'} · guarda-corpo do furo`, sugerido: true },

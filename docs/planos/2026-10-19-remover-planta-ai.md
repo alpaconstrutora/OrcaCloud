@@ -56,7 +56,7 @@ varredura `git grep`; os itens abaixo seguem ele.
 
 ### Fase 1: código (uma publicação)
 
-- [ ] **Apagar o módulo**:
+- [x] **Apagar o módulo**:
   - `components/planta_ai/**`
   - `services/plantaAiEngine.ts`, `plantaAiMaterializeService.ts`, `plantaAiFromTowersService.ts`,
     `plantaAiIntegration.ts`, `plantaEmpreendimentoSync.ts`, `blueprintUnidadesPlantaAiService.ts`
@@ -70,25 +70,25 @@ varredura `git grep`; os itens abaixo seguem ele.
 
   *Pronto quando:* `git grep -n "planta_ai\|plantaAi\|PlantaAi\|planta-ai\|plant_"` em
   código (fora de migrations e planos) só acha comentário histórico ou o rótulo `sync_planta`.
-- [ ] **Rota e menu**: sai o `case 'planta-ai'` do `AppRouter`, e `'planta-ai'` sai do
+- [x] **Rota e menu**: sai o `case 'planta-ai'` do `AppRouter`, e `'planta-ai'` sai do
   `hasActiveChild` do `Layout`. *Pronto quando:* `#/planta-ai` cai no padrão do roteador.
-- [ ] **Estudo de Viabilidade**: saem "Modificar/Gerar arquitetura (Planta AI)" do topo.
+- [x] **Estudo de Viabilidade**: saem "Modificar/Gerar arquitetura (Planta AI)" do topo.
   *Pronto quando:* o cabeçalho do Bruninho e do Davi mostra só "Editar".
-- [ ] **Empreendimento**: saem o card "Planta IA (legado)" e a aresta direta
+- [x] **Empreendimento**: saem o card "Planta IA (legado)" e a aresta direta
   Arquitetura↔Viabilidade da Central de Sync, o vínculo Planta IA das Vinculações, e o
   campo e a linha legados do Formulário e do Detalhe.
-- [ ] **Comercial**: saem o selo "Ver Projeto Origem" (`CommercialModule`) e o botão
+- [x] **Comercial**: saem o selo "Ver Projeto Origem" (`CommercialModule`) e o botão
   "Gerado via Planta AI" (`PropertyModal`).
-- [ ] **Planta Inteligente › Unidades**: saem o botão "Importar do Planta AI", a coluna
+- [x] **Planta Inteligente › Unidades**: saem o botão "Importar do Planta AI", a coluna
   "Planta AI (m²)" e as funções de ponte em `utils/blueprintUnidades.ts`.
-- [ ] **Permissões**: `canViewPlantaAi`/`canEditPlantaAi` saem de `types/users.ts`, dos
+- [x] **Permissões**: `canViewPlantaAi`/`canEditPlantaAi` saem de `types/users.ts`, dos
   padrões e da matriz em `OrganizationUsers`.
-- [ ] **Sync**: `SyncOrigin` perde `'planta_ai'` (em `types`, `fieldRegistry`, `PROVENANCE` e
+- [x] **Sync**: `SyncOrigin` perde `'planta_ai'` (em `types`, `fieldRegistry`, `PROVENANCE` e
   `ORIGIN_LABEL`). `PlantaAiSyncReport` vira `ArquiteturaSyncReport`.
-- [ ] **Colunas lidas**: `planta_ai_*` saem dos tipos e de `EMPREENDIMENTO_COLS`,
+- [x] **Colunas lidas**: `planta_ai_*` saem dos tipos e de `EMPREENDIMENTO_COLS`,
   `TOWER_COLS` e `UNIT_COLS`. **Isto tem de ir ao ar ANTES do DROP**, senão o site em produção
   pede uma coluna que não existe (42703).
-- [ ] **Testes ajustados**: `SyncCenterTabArquitetura`, `blueprintUnidades`,
+- [x] **Testes ajustados**: `SyncCenterTabArquitetura`, `blueprintUnidades`,
   `TelaAreasNbr12721`, `syncPlantaInteligenteTravas`, `syncPlanner`, `proposalHash`.
 
 *Pronto quando (fase):* `tsc` limpo, suíte inteira com a conta fechando, push, e
@@ -113,3 +113,19 @@ varredura `git grep`; os itens abaixo seguem ele.
 ## Andamento
 
 - 2026-10-19: inventário de banco e código feito; plano escrito na frente `remover-planta-ai`.
+- 2026-10-19 (noite): Fase 1 com 10 de 10 itens feitos na frente (`d71d936f`), sobre `origin/main`
+  a2e1233d.
+  - `tsc` limpo.
+  - Suíte inteira: 1.037 arquivos e 10.482 testes, com 10.448 passados, 0 falhas e 34 pulados
+    (a conta fecha).
+  - `check-ui-standard` limpo nas 9 telas; `check-system-projects` e
+    `check-project-classification` limpos.
+  - Um teste a mais precisou de ajuste: `BlueprintEditor.test.tsx` "grupo com origem" casava o
+    "—" da coluna "Planta AI (m²)".
+  - Rodado SOZINHO, esse arquivo para por volta do teste 108 sem falha nenhuma ("Some tests are
+    still running"): é o worker que morre calado. Na suíte com `--maxWorkers=4` ele vai até o fim.
+  - Fase 2: migration `aplicar_20271019950000_remover_planta_ai.sql` escrita e ENSAIADA no banco
+    real com ROLLBACK. As cópias batem com a origem (2 estudos, 41 cenários, 88 unidades,
+    78 validações, 5 vínculos, 2 permissões), e depois do DROP sobram 0 tabelas, 0 colunas e 0
+    chaves. O ensaio achou a FK circular `plant_studies ↔ plant_scenarios`, por isso o DROP é
+    um só. **Não aplicada**: espera o deploy da Fase 1.

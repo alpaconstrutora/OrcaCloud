@@ -3,7 +3,7 @@
 -- Plano: docs/planos/2026-10-19-remover-planta-ai.md (Fase 2).
 --
 -- PRÉ-REQUISITO: o código que não lê mais planta_ai_* tem de estar NO AR antes
--- (commit a4e704be). As listas EMPREENDIMENTO_COLS/TOWER_COLS/UNIT_COLS pediam
+-- (commit d71d936f). As listas EMPREENDIMENTO_COLS/TOWER_COLS/UNIT_COLS pediam
 -- essas colunas; aplicar isto antes do deploy faria o site responder 42703.
 --
 -- Aplicar com `npx supabase db query --linked -f <este arquivo>` — nunca db push.

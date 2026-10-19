@@ -8,6 +8,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { CompanyTarget, CompanyTargetUpsert } from '../types';
 import { companyService } from '../services/companyService';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 
 interface Props {
     companyId: string;
@@ -29,11 +30,11 @@ const EMPTY: FormData = {
     ticket_medio_alvo: '', qtd_obras_meta: '', limite_endividamento_pct: '',
 };
 
-const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+const cls = "w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder-gray-400";
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div>
-        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">{label}</label>
+        <label className="block text-xs font-semibold text-slate-500 mb-1.5">{label}</label>
         {children}
     </div>
 );
@@ -44,6 +45,7 @@ const brl = (v?: number | null) =>
 const pct = (v?: number | null) => v != null ? `${v.toFixed(1)}%` : '—';
 
 const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
+    const confirmar = useConfirm();
     const [targets, setTargets] = useState<CompanyTarget[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -101,7 +103,8 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
     };
 
     const handleDelete = async (id: string, ano: number) => {
-        if (!confirm(`Excluir metas de ${ano}?`)) return;
+        // §14 — confirmação do app, não o `confirm()` nativo.
+        if (!await confirmar({ title: 'Excluir metas?', message: `Excluir metas de ${ano}?`, variant: 'danger', confirmLabel: 'Excluir' })) return;
         try { await companyService.removeTarget(id); setTargets(prev => prev.filter(t => t.id !== id)); }
         catch (e: unknown) { setError((e as Error).message); }
     };
@@ -109,7 +112,7 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <p className="text-xs font-black uppercase tracking-widest text-gray-500">Metas e Indicadores Anuais</p>
+                <p className="text-sm font-semibold text-gray-900">Metas e Indicadores Anuais</p>
                 {!showForm && (
                     <Button onClick={openNew}>
                         <Plus className="w-3.5 h-3.5" /> Definir Metas
@@ -118,15 +121,15 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
             </div>
 
             {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
                 </div>
             )}
 
             {showForm && (
-                <form onSubmit={handleSubmit} className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-4">
+                <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-[10px] p-4 space-y-4">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-black uppercase tracking-widest text-blue-600">
+                        <p className="text-sm font-semibold text-gray-900">
                             {editingId ? 'Editar Metas' : 'Novas Metas'}
                         </p>
                         <button type="button" onClick={cancel} className="text-gray-400 hover:text-gray-600">
@@ -170,7 +173,7 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
 
                     <div className="flex justify-end gap-2 pt-1 border-t border-gray-200">
                         <button type="button" onClick={cancel}
-                            className="px-4 py-2 text-button font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
+                            className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors">
                             Cancelar
                         </button>
                         <Button type="submit" disabled={saving}>
@@ -192,15 +195,15 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
             ) : (
                 <div className="space-y-3">
                     {targets.map(t => (
-                        <div key={t.id} className="bg-white border border-gray-200 rounded-2xl p-4">
+                        <div key={t.id} className="bg-white border border-gray-200 rounded-[10px] p-4">
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                                    <div className="w-10 h-10 rounded-[6px] bg-blue-50 flex items-center justify-center">
                                         <TrendingUp className="w-5 h-5 text-blue-600" />
                                     </div>
                                     <div>
-                                        <p className="font-black text-gray-900">{t.ano}</p>
-                                        <p className="text-xs font-black uppercase tracking-widest text-gray-400">Metas</p>
+                                        <p className="font-semibold text-gray-900">{t.ano}</p>
+                                        <p className="text-xs font-semibold text-slate-500">Metas</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1.5">
@@ -217,9 +220,9 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
                                     { label: 'Obras (meta)', value: t.qtd_obras_meta != null ? String(t.qtd_obras_meta) : '—' },
                                     { label: 'Lim. Endividamento', value: pct(t.limite_endividamento_pct) },
                                 ].map(kpi => (
-                                    <div key={kpi.label} className="bg-gray-50 rounded-xl p-3">
-                                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">{kpi.label}</p>
-                                        <p className="text-sm font-black text-gray-900">{kpi.value}</p>
+                                    <div key={kpi.label} className="bg-gray-50 rounded-[6px] p-3">
+                                        <p className="text-xs font-semibold text-slate-500 mb-1">{kpi.label}</p>
+                                        <p className="text-sm font-semibold text-gray-900">{kpi.value}</p>
                                     </div>
                                 ))}
                             </div>

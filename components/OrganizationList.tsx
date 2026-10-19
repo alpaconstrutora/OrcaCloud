@@ -86,11 +86,11 @@ function renderOrgListCell(key: string, org: Organization | null, ctx: { isActiv
                             <Activity className="w-4 h-4" />
                         </div>
                         <div>
-                            <p className="text-sm font-normal text-gray-900 flex items-center gap-2">
+                            <p className="text-sm font-normal text-gray-700 flex items-center gap-2">
                                 Todas as organizações
                                 {ctx.isActive && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
                             </p>
-                            <p className="text-xs font-medium text-gray-400">Visão consolidada do grupo</p>
+                            <p className="text-xs font-normal text-gray-400">Visão consolidada do grupo</p>
                         </div>
                     </div>
                 );
@@ -111,7 +111,7 @@ function renderOrgListCell(key: string, org: Organization | null, ctx: { isActiv
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${ctx.isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
                         <Building2 className="w-4 h-4" />
                     </div>
-                    <span className="text-sm font-normal text-gray-900 flex items-center gap-2">
+                    <span className="text-sm font-normal text-gray-700 flex items-center gap-2">
                         {org.name}
                         {ctx.isActive && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
                     </span>
@@ -400,7 +400,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
             {activeTab === 'organizations' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div>
-                        <h2 className="text-3xl font-black text-gray-900 tracking-tight">Organizações</h2>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Organizações</h1>
                         <p className="text-gray-400 text-sm mt-1.5 font-medium">Clique numa organização para torná-la ativa; em Detalhes ficam a empresa matriz e as empresas do grupo.</p>
                     </div>
 
@@ -823,7 +823,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         // por-empresa (REGRA #5, caso 3) — pede a seleção explicitamente.
                         <div className="flex flex-col items-center justify-center py-20 gap-4 text-gray-400">
                             <Building2 className="w-10 h-10 opacity-30" />
-                            <p className="text-sm font-black uppercase tracking-wide">Nenhuma organização selecionada</p>
+                            <p className="text-sm font-semibold text-gray-500">Nenhuma organização selecionada</p>
                             <p className="text-xs text-center max-w-xs">
                                 O detalhe é de uma empresa específica. Volte para a aba{' '}
                                 <strong className="text-gray-600">Organização</strong> e use{' '}

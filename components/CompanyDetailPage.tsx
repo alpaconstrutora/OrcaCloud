@@ -23,6 +23,7 @@ import CompanyTargetsTab from './CompanyTargetsTab';
 import CompanyDepartmentsTab from './CompanyDepartmentsTab';
 import Button from './ui/Button';
 import { fmtCnpj } from '../utils/format';
+import { TabsBar } from './ui/TabsBar';
 
 interface Props {
     company: Company;
@@ -265,13 +266,18 @@ function sugestaoRetencao(regime: RegimeTributario | ''): RetencaoSugestao | nul
 
 // ─── Helpers de estilo ────────────────────────────────────────
 
-const inputCls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+// Mesma régua da aba vizinha "Organização" (OrganizationPage.tsx): §16/§21/§30.
+// Até 19/10/2026 estas abas usavam o vocabulário antigo — rótulo `font-black
+// uppercase tracking-widest`, seção em caixa alta azul, `rounded-xl/3xl` — e,
+// lado a lado na mesma barra de abas, pareciam outro produto.
+const inputCls = "w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder-gray-400";
+const labelCls = "block text-xs font-semibold text-slate-500 mb-1.5";
 const selectCls = inputCls + " cursor-pointer";
 const checkboxRowCls = "flex items-center gap-2 text-sm text-gray-700 cursor-pointer";
 
 const Field: React.FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({ label, children, required }) => (
     <div>
-        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">
+        <label className={labelCls}>
             {label}{required && <span className="text-red-500 ml-1">*</span>}
         </label>
         {children}
@@ -280,7 +286,7 @@ const Field: React.FC<{ label: string; children: React.ReactNode; required?: boo
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div>
-        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">{title}</p>
+        <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-4">{title}</h3>
         {children}
     </div>
 );
@@ -448,8 +454,8 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
 
     const SaveButton: React.FC = () => (
         <div className="flex justify-end pt-2 border-t border-gray-100">
-            <Button type="submit" disabled={saving || loadingFull} size="lg" className="gap-2">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <Button type="submit" disabled={saving || loadingFull}>
+                {saving ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Save className="w-[15px] h-[15px]" />}
                 Salvar
             </Button>
         </div>
@@ -458,55 +464,43 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
             {!embedded && (<>
-            {/* Cabeçalho */}
-            <div className="flex items-start gap-4">
-                <button onClick={onBack}
-                    className="mt-0.5 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors flex-shrink-0">
+            {/* Cabeçalho — sentence case, sem itálico/caixa alta (§20/§21) */}
+            <div className="flex items-start gap-3">
+                <button onClick={onBack} title="Voltar"
+                    className="mt-0.5 p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-[6px] transition-colors flex-shrink-0">
                     <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: company.cor_sistema }} />
-                        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight italic border-l-4 border-blue-600 pl-4">
+                        <h2 className="text-xl font-semibold text-gray-900 tracking-tight truncate">
                             {company.razao_social}
                         </h2>
-                        {/* §8 — status/classificação é texto colorido simples, sem pílula/fundo/uppercase */}
-                        <span className="text-xs font-normal text-gray-500">
-                            {COMPANY_TIPO_LABELS[company.tipo]}
-                        </span>
-                        {company.cnpj && <span className="text-xs text-gray-400">{company.cnpj}</span>}
                     </div>
+                    {/* §8 — status/classificação é texto colorido simples, sem pílula/fundo/uppercase */}
+                    <p className="text-sm text-gray-500 mt-1.5">
+                        {COMPANY_TIPO_LABELS[company.tipo]}{company.cnpj ? ` · CNPJ ${company.cnpj}` : ''}
+                    </p>
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-1 bg-gray-100 rounded-2xl p-1 overflow-x-auto">
-                {TABS.map(t => (
-                    <button key={t.id} onClick={() => setTab(t.id)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-form-label uppercase tracking-wide transition-all whitespace-nowrap flex-shrink-0 ${
-                            tab === t.id
-                                ? 'bg-white text-blue-600 shadow-sm'
-                                : 'text-gray-500 hover:text-gray-700'
-                        }`}>
-                        {t.icon}{t.label}
-                    </button>
-                ))}
-            </div>
+            {/* Abas — o componente canônico do §19.1, o mesmo da ficha da organização */}
+            <TabsBar<Tab> tabs={TABS.map(t => ({ id: t.id, label: t.label }))} value={tab} onChange={setTab} />
             </>)}
 
             {/* Feedback */}
             {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
                 </div>
             )}
             {success && (
-                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-[6px] text-green-700 text-sm">
                     <CheckCircle2 className="w-4 h-4 flex-shrink-0" />{success}
                 </div>
             )}
             {loadingFull && (
-                <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-[6px] text-blue-700 text-sm">
                     <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
                     Carregando dados completos da empresa... o botão Salvar fica bloqueado até terminar.
                 </div>
@@ -514,7 +508,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
 
             {/* ── Tab: Identificação ────────────────────────────────── */}
             {tab === 'identificacao' && (
-                <form onSubmit={handleSave} className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-6">
+                <form onSubmit={handleSave} className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm space-y-8">
                     <Section title="Identificação">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <Field label="Código">
@@ -599,6 +593,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                     cidade_fiscal: cityName ?? '',
                                 }))}
                                 inputCls={inputCls}
+                                labelCls={labelCls}
                             />
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div className="col-span-2">
@@ -695,7 +690,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                 <Field label="Cor no Sistema">
                                     <div className="flex items-center gap-2">
                                         <input type="color"
-                                            className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer"
+                                            className="w-9 h-9 shrink-0 rounded-[6px] border border-gray-200 cursor-pointer"
                                             value={form.cor_sistema}
                                             onChange={e => set('cor_sistema', e.target.value)} />
                                         <input className={inputCls} value={form.cor_sistema}
@@ -712,21 +707,21 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
 
             {/* ── Tab: Sócios ───────────────────────────────────────── */}
             {tab === 'socios' && (
-                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm">
                     <CompanyPartnersTab companyId={company.id} companies={companies} />
                 </div>
             )}
 
             {/* ── Tab: Contas Bancárias ─────────────────────────────── */}
             {tab === 'bancos' && (
-                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm">
                     <CompanyBankAccountsTab companyId={company.id} />
                 </div>
             )}
 
             {/* ── Tab: Financeiro ───────────────────────────────────── */}
             {tab === 'financeiro' && (
-                <form onSubmit={handleSave} className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-6">
+                <form onSubmit={handleSave} className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm space-y-8">
                     <Section title="Regime Contábil e Limites">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <Field label="Regime Contábil">
@@ -752,7 +747,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                             </Field>
                         </div>
                         {(form.limite_aprovacao_compras || form.limite_aprovacao_pagamentos) && (
-                            <p className="mt-2 text-form-input text-gray-400">
+                            <p className="mt-2 text-xs text-gray-500">
                                 Valores acima desses limites exigirão aprovação de nível superior no workflow de compras/pagamentos.
                             </p>
                         )}
@@ -770,7 +765,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                 </select>
                             </Field>
                         </div>
-                        <p className="mt-2 text-form-input text-gray-400">
+                        <p className="mt-2 text-xs text-gray-500">
                             Define qual empresa agrega os relatórios financeiros desta no DRE e fluxo de caixa consolidado.
                         </p>
                     </Section>
@@ -802,8 +797,8 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                         </div>
                     </Section>
 
-                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-form-input text-blue-600">
-                        <p className="font-black uppercase tracking-wide mb-1">Plano de Contas Padrão</p>
+                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-[6px] text-sm text-blue-700">
+                        <p className="font-semibold mb-1">Plano de contas padrão</p>
                         <p>Configuração disponível após o módulo Financeiro ser ativado para esta empresa.</p>
                     </div>
 
@@ -813,13 +808,13 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
 
             {/* ── Tab: Tributário Avançado ──────────────────────────── */}
             {tab === 'tributario' && (
-                <form onSubmit={handleSave} className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-6">
+                <form onSubmit={handleSave} className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm space-y-8">
 
                     {/* Sugestão por regime */}
                     {form.regime_tributario && (
-                        <div className="flex items-start justify-between gap-4 p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+                        <div className="flex items-start justify-between gap-4 p-4 bg-blue-50 border border-blue-200 rounded-[6px]">
                             <div>
-                                <p className="text-xs font-black uppercase tracking-widest text-blue-700 mb-1">
+                                <p className="text-sm font-semibold text-blue-700 mb-1">
                                     Regime: {REGIME_TRIBUTARIO_LABELS[form.regime_tributario as RegimeTributario]}
                                 </p>
                                 <p className="text-xs text-blue-600">
@@ -866,7 +861,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                 ['retencao_inss',   'INSS'],
                             ] as [keyof FormData, string][]).map(([field, label]) => (
                                 <label key={field}
-                                    className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                                    className={`flex flex-col items-center justify-center gap-1 p-3 rounded-[6px] border-2 cursor-pointer transition-all ${
                                         form[field]
                                             ? 'border-blue-500 bg-blue-50 text-blue-700'
                                             : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
@@ -874,8 +869,8 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                     <input type="checkbox" className="hidden"
                                         checked={form[field] as boolean}
                                         onChange={e => set(field, e.target.checked)} />
-                                    <span className="text-sm font-black">{label}</span>
-                                    <span className="text-xs uppercase font-black">
+                                    <span className="text-sm font-semibold">{label}</span>
+                                    <span className="text-xs font-normal">
                                         {form[field] ? 'Retém' : 'Não retém'}
                                     </span>
                                 </label>
@@ -892,7 +887,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                 ['cprb',                           'Contrib. Prev. sobre Rec. Bruta', 'CPRB'],
                             ] as [keyof FormData, string, string][]).map(([field, title, badge]) => (
                                 <label key={field}
-                                    className={`flex flex-col gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                                    className={`flex flex-col gap-1 p-3 rounded-[6px] border-2 cursor-pointer transition-all ${
                                         form[field]
                                             ? 'border-orange-400 bg-orange-50 text-orange-700'
                                             : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
@@ -900,7 +895,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                     <input type="checkbox" className="hidden"
                                         checked={form[field] as boolean}
                                         onChange={e => set(field, e.target.checked)} />
-                                    <span className="text-xs font-black uppercase tracking-wide">{badge}</span>
+                                    <span className="text-sm font-semibold">{badge}</span>
                                     <span className="text-xs text-current opacity-70">{title}</span>
                                 </label>
                             ))}
@@ -929,13 +924,13 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                         disabled={uploadingCert}
                                         title={uploadingCert ? 'Enviando o certificado…' : undefined}
                                         onClick={() => certInputRef.current?.click()}
-                                        className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 text-gray-500 rounded-xl font-black text-button uppercase tracking-wide hover:border-blue-400 hover:text-blue-600 transition-all disabled:opacity-60">
+                                        className="flex items-center gap-1.5 h-9 px-3.5 border border-dashed border-gray-300 text-gray-600 rounded-[6px] font-medium text-[13px] hover:border-blue-400 hover:text-blue-600 transition-all disabled:opacity-60">
                                         <Upload className="w-4 h-4" />
                                         {certUrl ? 'Substituir cert.' : 'Selecionar cert.'}
                                     </button>
                                     {certUrl && (
                                         <button type="button" onClick={handleCertDownload}
-                                            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl font-black text-button uppercase tracking-wide hover:bg-gray-50 transition-all">
+                                            className="flex items-center gap-1.5 h-9 px-3.5 border border-gray-200 text-gray-600 rounded-[6px] font-medium text-[13px] hover:bg-gray-50 transition-all">
                                             <Download className="w-4 h-4" />
                                             Baixar
                                         </button>
@@ -944,7 +939,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                             </div>
 
                             {certArquivo && (
-                                <div className="flex items-end gap-3 flex-wrap rounded-xl border border-blue-100 bg-blue-50/40 p-3">
+                                <div className="flex items-end gap-3 flex-wrap rounded-[6px] border border-blue-100 bg-blue-50/40 p-3">
                                     <div className="flex items-center gap-2 text-sm text-gray-700 min-w-0 self-center">
                                         <FileKey className="w-4 h-4 shrink-0" />
                                         <span className="truncate" title={certArquivo.name}>{certArquivo.name}</span>
@@ -966,7 +961,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                             disabled={!!motivoCertDesligado}
                                             title={motivoCertDesligado ?? 'Confere senha, validade e CNPJ antes de gravar'}
                                             onClick={() => void handleCertEnviar()}
-                                            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all disabled:opacity-60">
+                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                                             {uploadingCert
                                                 ? <Loader2 className="w-4 h-4 animate-spin" />
                                                 : <ShieldCheck className="w-4 h-4" />}
@@ -976,7 +971,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                             disabled={uploadingCert}
                                             title={uploadingCert ? 'Enviando o certificado…' : undefined}
                                             onClick={() => { setCertArquivo(null); setCertSenha(''); }}
-                                            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl font-black text-button uppercase tracking-wide hover:bg-gray-50 transition-all disabled:opacity-60">
+                                            className="h-9 px-3.5 border border-gray-200 text-gray-600 rounded-[6px] font-medium text-[13px] hover:bg-gray-50 transition-all disabled:opacity-60">
                                             Cancelar
                                         </button>
                                     </div>
@@ -1011,7 +1006,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                     onChange={e => set('prefeitura_integrada', e.target.value)} />
                             </Field>
                             <Field label="SEFAZ">
-                                <div className="flex items-center gap-3 h-10">
+                                <div className="flex items-center gap-3 h-9">
                                     <label className={checkboxRowCls}>
                                         <input type="checkbox" checked={form.sefaz_integrada}
                                             onChange={e => set('sefaz_integrada', e.target.checked)} />
@@ -1028,7 +1023,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
 
             {/* ── Tab: Obras ───────────────────────────────────────── */}
             {tab === 'obras' && (
-                <form onSubmit={handleSave} className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-6">
+                <form onSubmit={handleSave} className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm space-y-8">
                     <Section title="Empresas Padrão por Obra">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Field label="Empresa Executora Padrão">
@@ -1050,7 +1045,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                 </select>
                             </Field>
                         </div>
-                        <p className="mt-2 text-form-input text-gray-400">
+                        <p className="mt-2 text-xs text-gray-500">
                             Define os defaults ao criar novas obras vinculadas a esta empresa.
                         </p>
                     </Section>
@@ -1077,7 +1072,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                 </select>
                             </Field>
                         </div>
-                        <p className="mt-2 text-form-input text-gray-400">
+                        <p className="mt-2 text-xs text-gray-500">
                             Valores pré-preenchidos ao criar orçamentos. Podem ser ajustados por obra.
                         </p>
                     </Section>
@@ -1088,42 +1083,42 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
 
             {/* ── Tab: Incorporação / SPE ───────────────────────────── */}
             {tab === 'incorporacao' && (
-                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm">
                     <CompanyIncorporacaoTab companyId={company.id} orgId={company.org_id} />
                 </div>
             )}
 
             {/* ── Tab: Filiais ──────────────────────────────────────── */}
             {tab === 'filiais' && (
-                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm">
                     <CompanyBranchesTab companyId={company.id} />
                 </div>
             )}
 
             {/* ── Tab: Documentos ──────────────────────────────────── */}
             {tab === 'documentos' && (
-                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm">
                     <CompanyDocumentsTab companyId={company.id} />
                 </div>
             )}
 
             {/* ── Tab: Metas ───────────────────────────────────────── */}
             {tab === 'metas' && (
-                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm">
                     <CompanyTargetsTab companyId={company.id} />
                 </div>
             )}
 
             {/* ── Tab: Departamentos ───────────────────────────────── */}
             {tab === 'departamentos' && (
-                <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm">
                     <CompanyDepartmentsTab companyId={company.id} />
                 </div>
             )}
 
             {/* ── Tab: Responsáveis ─────────────────────────────────── */}
             {tab === 'responsaveis' && (
-                <form onSubmit={handleSave} className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-6">
+                <form onSubmit={handleSave} className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm space-y-8">
                     <Section title="Responsáveis da Empresa">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Field label="Responsável Legal">

@@ -14,6 +14,7 @@ import { companyService } from '../services/companyService';
 import { validarChavePix } from '../utils/pixKey';
 import { masterDataService, MasterBank } from '../services/masterDataService';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 
 interface Props {
     companyId: string;
@@ -39,11 +40,11 @@ const EMPTY: FormData = {
     limite_credito: '', is_principal: false, ativa: true,
 };
 
-const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+const cls = "w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder-gray-400";
 
 const Field: React.FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({ label, children, required }) => (
     <div>
-        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">
+        <label className="block text-xs font-semibold text-slate-500 mb-1.5">
             {label}{required && <span className="text-red-500 ml-1">*</span>}
         </label>
         {children}
@@ -51,6 +52,7 @@ const Field: React.FC<{ label: string; children: React.ReactNode; required?: boo
 );
 
 const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
+    const confirmar = useConfirm();
     const [accounts, setAccounts] = useState<CompanyBankAccount[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -152,7 +154,8 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Remover esta conta bancária?')) return;
+        // §14 — confirmação do app, não o `confirm()` nativo.
+        if (!await confirmar({ title: 'Remover conta bancária?', message: 'Remover esta conta bancária?', variant: 'danger', confirmLabel: 'Remover' })) return;
         try {
             await companyService.removeBankAccount(id);
             setAccounts(prev => prev.filter(a => a.id !== id));
@@ -165,7 +168,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
         <div className="space-y-4">
             {/* Cabeçalho */}
             <div className="flex items-center justify-between">
-                <p className="text-xs font-black uppercase tracking-widest text-gray-500">
+                <p className="text-sm font-semibold text-gray-900">
                     Contas Bancárias
                 </p>
                 {!showForm && (
@@ -177,7 +180,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
             </div>
 
             {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     {error}
                 </div>
@@ -186,9 +189,9 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
             {/* Formulário */}
             {showForm && (
                 <form onSubmit={handleSubmit}
-                    className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-4">
+                    className="bg-white border border-gray-200 rounded-[10px] p-4 space-y-4">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-black uppercase tracking-widest text-blue-600">
+                        <p className="text-sm font-semibold text-gray-900">
                             {editingId ? 'Editar Conta' : 'Nova Conta'}
                         </p>
                         <button type="button" onClick={cancel} className="text-gray-400 hover:text-gray-600">
@@ -198,7 +201,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
 
                     {/* Banco */}
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
+                        <p className="text-sm font-semibold text-gray-900 mb-3">
                             Banco
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -225,7 +228,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
 
                     {/* Dados da conta */}
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
+                        <p className="text-sm font-semibold text-gray-900 mb-3">
                             Dados da Conta
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -262,7 +265,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
 
                     {/* PIX */}
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
+                        <p className="text-sm font-semibold text-gray-900 mb-3">
                             PIX
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -300,7 +303,7 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
 
                     <div className="flex justify-end gap-2 pt-1 border-t border-gray-200">
                         <button type="button" onClick={cancel}
-                            className="px-4 py-2 text-button font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
+                            className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors">
                             Cancelar
                         </button>
                         <Button type="submit" disabled={saving} className="gap-1.5">
@@ -325,33 +328,33 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
                 <div className="space-y-2">
                     {accounts.map(a => (
                         <div key={a.id}
-                            className={`flex items-center gap-4 bg-white border rounded-xl px-4 py-3 ${
+                            className={`flex items-center gap-4 bg-white border rounded-[6px] px-4 py-3 ${
                                 !a.ativa ? 'border-gray-100 opacity-60' :
                                 a.is_principal ? 'border-blue-200 bg-blue-50/30' :
                                 'border-gray-200'
                             }`}>
                             {/* Ícone banco */}
-                            <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 rounded-[6px] bg-gray-100 flex items-center justify-center flex-shrink-0">
                                 <Landmark className="w-5 h-5 text-gray-400" />
                             </div>
 
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-black text-gray-900 text-sm">
+                                    <span className="text-sm font-semibold text-gray-900">
                                         {a.banco_nome ?? a.banco_codigo}
                                     </span>
                                     {a.is_principal && (
-                                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                                        <span className="flex items-center gap-1 text-sm font-normal text-blue-700">
                                             <Star className="w-3 h-3" /> Principal
                                         </span>
                                     )}
                                     {a.tipo_conta && (
-                                        <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                                        <span className="text-sm font-normal text-gray-500">
                                             {TIPO_CONTA_LABELS[a.tipo_conta]}
                                         </span>
                                     )}
                                     {!a.ativa && (
-                                        <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">
+                                        <span className="text-sm font-normal text-gray-500">
                                             Inativa
                                         </span>
                                     )}
@@ -372,8 +375,8 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
 
                             {a.limite_credito != null && (
                                 <div className="text-right flex-shrink-0 mr-2">
-                                    <p className="text-xs font-black uppercase tracking-widest text-gray-400">Limite</p>
-                                    <p className="text-sm font-black text-gray-700">
+                                    <p className="text-xs font-semibold text-slate-500">Limite</p>
+                                    <p className="text-sm font-semibold text-gray-700">
                                         {a.limite_credito.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                     </p>
                                 </div>

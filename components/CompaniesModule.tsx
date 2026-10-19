@@ -167,14 +167,15 @@ const Field: React.FC<{
     required?: boolean;
 }> = ({ label, children, required }) => (
     <div>
-        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">
+        <label className="block text-xs font-semibold text-slate-500 mb-1.5">
             {label}{required && <span className="text-red-500 ml-1">*</span>}
         </label>
         {children}
     </div>
 );
 
-const inputCls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+// Mesma régua da ficha da organização (OrganizationPage.tsx / CompanyDetailPage.tsx): §16/§21/§30.
+const inputCls = "w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder-gray-400";
 const selectCls = inputCls + " cursor-pointer";
 const checkboxRowCls = "flex items-center gap-2 text-sm text-gray-700 cursor-pointer";
 
@@ -347,7 +348,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = fal
         return (
             <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
                 <Building2 className="w-10 h-10 opacity-30" />
-                <p className="text-sm font-black uppercase tracking-wide">Nenhuma organização selecionada</p>
+                <p className="text-sm font-semibold text-gray-500">Nenhuma organização selecionada</p>
                 <p className="text-xs">Selecione uma organização na aba "Organização" para gerenciar as empresas do grupo.</p>
             </div>
         );
@@ -423,11 +424,9 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = fal
 
             {/* Form */}
             {showForm && (
-                <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-6">
+                <form onSubmit={handleSubmit} className="bg-white border border-gray-100 rounded-[10px] p-6 shadow-sm space-y-8">
                     <div className="flex items-center justify-between">
-                        <h3 className="font-black text-gray-900 uppercase tracking-wide text-sm">
-                            Nova Empresa
-                        </h3>
+                        <h3 className="font-black text-slate-800 text-lg">Nova empresa</h3>
                         <button type="button" onClick={cancel} className="text-gray-400 hover:text-gray-600">
                             <X className="w-5 h-5" />
                         </button>
@@ -435,7 +434,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = fal
 
                     {/* Seção 1 — Identificação */}
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">Identificação</p>
+                        <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-4">Identificação</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <Field label="Razão Social" required>
                                 <input className={inputCls} value={form.razao_social}
@@ -504,7 +503,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = fal
 
                     {/* Seção 2 — Endereço Fiscal */}
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">Endereço Fiscal</p>
+                        <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-4">Endereço Fiscal</h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <Field label="CEP">
                                 <input className={inputCls} placeholder="00000-000" value={form.cep_fiscal}
@@ -541,7 +540,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = fal
 
                     {/* Seção 3 — Contatos */}
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">Contatos</p>
+                        <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-4">Contatos</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <Field label="Telefone">
                                 <input className={inputCls} value={form.telefone}
@@ -568,7 +567,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = fal
 
                     {/* Seção 4 — Tributário */}
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">Tributário</p>
+                        <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-4">Tributário</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Field label="CRT">
                                 <select className={selectCls} value={form.crt}
@@ -603,7 +602,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = fal
                     {/* Seção 5 — Grupo Econômico */}
                     {holdingOptions.length > 0 && (
                         <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">Grupo Econômico</p>
+                            <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3 mb-4">Grupo Econômico</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Field label="Empresa Controladora (Holding)">
                                     <select className={selectCls} value={form.holding_id}
@@ -616,7 +615,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = fal
                                 </Field>
                                 <Field label="Cor no Sistema">
                                     <div className="flex items-center gap-2">
-                                        <input type="color" className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer"
+                                        <input type="color" className="w-9 h-9 shrink-0 rounded-[6px] border border-gray-200 cursor-pointer"
                                             value={form.cor_sistema} onChange={e => set('cor_sistema', e.target.value)} />
                                         <input className={inputCls} value={form.cor_sistema}
                                             onChange={e => set('cor_sistema', e.target.value)} />
@@ -629,7 +628,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = fal
                     {/* Actions */}
                     <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
                         <button type="button" onClick={cancel}
-                            className="px-5 py-2 text-sm font-black uppercase tracking-wide text-gray-500 hover:text-gray-700 transition-colors">
+                            className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 transition-colors">
                             Cancelar
                         </button>
                         <button type="submit" disabled={saving}

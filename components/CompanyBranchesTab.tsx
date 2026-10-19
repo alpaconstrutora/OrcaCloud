@@ -8,6 +8,7 @@ import { CompanyBranch, CompanyBranchInsert } from '../types';
 import CityStateSelect from './CityStateSelect';
 import { companyService } from '../services/companyService';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 
 interface Props {
     companyId: string;
@@ -34,11 +35,11 @@ const EMPTY: FormData = {
     bairro: '', cidade: '', uf: '', estoque_proprio: false, ativa: true,
 };
 
-const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+const cls = "w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder-gray-400";
 
 const Field: React.FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({ label, children, required }) => (
     <div>
-        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">
+        <label className="block text-xs font-semibold text-slate-500 mb-1.5">
             {label}{required && <span className="text-red-500 ml-1">*</span>}
         </label>
         {children}
@@ -46,6 +47,7 @@ const Field: React.FC<{ label: string; children: React.ReactNode; required?: boo
 );
 
 const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
+    const confirmar = useConfirm();
     const [branches, setBranches] = useState<CompanyBranch[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -124,7 +126,8 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
     };
 
     const handleDelete = async (id: string, nome: string) => {
-        if (!confirm(`Excluir filial "${nome}"?`)) return;
+        // §14 — confirmação do app, não o `confirm()` nativo.
+        if (!await confirmar({ title: 'Excluir filial?', message: `Excluir filial "${nome}"?`, variant: 'danger', confirmLabel: 'Excluir' })) return;
         try {
             await companyService.removeBranch(id);
             setBranches(prev => prev.filter(b => b.id !== id));
@@ -136,7 +139,7 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <p className="text-xs font-black uppercase tracking-widest text-gray-500">Filiais</p>
+                <p className="text-sm font-semibold text-gray-900">Filiais</p>
                 {!showForm && (
                     <Button onClick={openNew} className="gap-1.5">
                         <Plus className="w-3.5 h-3.5" /> Adicionar Filial
@@ -145,15 +148,15 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
             </div>
 
             {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
                 </div>
             )}
 
             {showForm && (
-                <form onSubmit={handleSubmit} className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-4">
+                <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-[10px] p-4 space-y-4">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-black uppercase tracking-widest text-blue-600">
+                        <p className="text-sm font-semibold text-gray-900">
                             {editingId ? 'Editar Filial' : 'Nova Filial'}
                         </p>
                         <button type="button" onClick={cancel} className="text-gray-400 hover:text-gray-600">
@@ -162,7 +165,7 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
                     </div>
 
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Identificação</p>
+                        <p className="text-sm font-semibold text-gray-900 mb-3">Identificação</p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <Field label="Código" required>
                                 <input className={cls} placeholder="ex: 0001" value={form.codigo}
@@ -183,7 +186,7 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
                     </div>
 
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Endereço</p>
+                        <p className="text-sm font-semibold text-gray-900 mb-3">Endereço</p>
                         <CityStateSelect
                             cep={form.cep}
                             stateCode={form.uf}
@@ -195,6 +198,7 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
                                 cidade: cityName ?? '',
                             }))}
                             inputCls={cls}
+                            labelCls="block text-xs font-semibold text-slate-500 mb-1.5"
                         />
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
                             <div className="col-span-2">
@@ -229,7 +233,7 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
 
                     <div className="flex justify-end gap-2 pt-1 border-t border-gray-200">
                         <button type="button" onClick={cancel}
-                            className="px-4 py-2 text-button font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
+                            className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors">
                             Cancelar
                         </button>
                         <Button type="submit" disabled={saving} className="gap-1.5">
@@ -251,23 +255,23 @@ const CompanyBranchesTab: React.FC<Props> = ({ companyId }) => {
                 <div className="space-y-2">
                     {branches.map(b => (
                         <div key={b.id}
-                            className={`flex items-center gap-4 bg-white border rounded-xl px-4 py-3 ${!b.ativa ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
-                            <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                <span className="text-xs font-black text-gray-500">{b.codigo}</span>
+                            className={`flex items-center gap-4 bg-white border rounded-[6px] px-4 py-3 ${!b.ativa ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
+                            <div className="w-10 h-10 rounded-[6px] bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                <span className="text-xs font-semibold text-gray-600">{b.codigo}</span>
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-black text-gray-900 text-sm">{b.nome}</span>
+                                    <span className="text-sm font-semibold text-gray-900">{b.nome}</span>
                                     {!b.ativa && (
-                                        <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Inativa</span>
+                                        <span className="text-sm font-normal text-gray-500">Inativa</span>
                                     )}
                                     {b.estoque_proprio && (
-                                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">
+                                        <span className="flex items-center gap-1 text-sm font-normal text-blue-600">
                                             <Package className="w-3 h-3" /> Estoque
                                         </span>
                                     )}
                                     {b.cnpj_proprio && (
-                                        <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">CNPJ próprio</span>
+                                        <span className="text-sm font-normal text-gray-500">CNPJ próprio</span>
                                     )}
                                 </div>
                                 {(b.endereco?.cidade || b.endereco?.uf) && (

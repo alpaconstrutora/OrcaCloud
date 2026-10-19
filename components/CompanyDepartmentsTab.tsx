@@ -48,7 +48,7 @@ function buildTree(depts: CompanyDepartment[]): DeptNode[] {
 type FormData = { nome: string; sigla: string; descricao: string; responsavel_nome: string; cor: string };
 const EMPTY_FORM: FormData = { nome: '', sigla: '', descricao: '', responsavel_nome: '', cor: '#374151' };
 
-const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+const cls = "w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder-gray-400";
 
 interface InlineFormProps {
     initial?: FormData;
@@ -63,8 +63,8 @@ const InlineForm: React.FC<InlineFormProps> = ({ initial = EMPTY_FORM, onSave, o
     const set = (k: keyof FormData, v: string) => setForm(p => ({ ...p, [k]: v }));
 
     return (
-        <div className="mt-2 ml-6 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
-            <p className="text-xs font-black uppercase tracking-widest text-blue-600">{title}</p>
+        <div className="mt-2 ml-6 bg-white border border-gray-200 rounded-[6px] p-3 space-y-2">
+            <p className="text-sm font-semibold text-gray-900">{title}</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input className={cls} placeholder="Nome do departamento *"
                     value={form.nome} onChange={e => set('nome', e.target.value)} />
@@ -86,7 +86,7 @@ const InlineForm: React.FC<InlineFormProps> = ({ initial = EMPTY_FORM, onSave, o
             </div>
             <div className="flex items-center justify-end gap-2 pt-1">
                 <button type="button" onClick={onCancel}
-                    className="px-3 py-1.5 text-button font-black uppercase text-gray-500 hover:text-gray-700">
+                    className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors">
                     Cancelar
                 </button>
                 <Button type="button" size="sm" disabled={saving || !form.nome.trim()}
@@ -133,7 +133,7 @@ const DeptNode: React.FC<NodeProps> = ({
 
     return (
         <div>
-            <div className={`flex items-center gap-2 py-2 px-3 rounded-xl hover:bg-gray-50 group transition-colors ${!node.ativo ? 'opacity-50' : ''}`}
+            <div className={`flex items-center gap-2 py-2 px-3 rounded-[6px] hover:bg-gray-50 group transition-colors ${!node.ativo ? 'opacity-50' : ''}`}
                 style={{ paddingLeft: `${indent + 12}px` }}>
                 {/* Toggle */}
                 <button onClick={() => toggleExpand(node.id)}
@@ -149,12 +149,12 @@ const DeptNode: React.FC<NodeProps> = ({
 
                 {/* Nome + responsável */}
                 <div className="flex-1 min-w-0">
-                    <span className={`text-sm font-black text-gray-900 ${depth === 0 ? 'text-base' : depth === 1 ? 'text-sm' : 'text-xs'}`}>
+                    <span className={`font-semibold text-gray-900 ${depth === 0 ? 'text-base' : depth === 1 ? 'text-sm' : 'text-xs'}`}>
                         {node.nome}
                         {node.sigla && <span className="ml-1.5 text-xs font-normal text-gray-400" title="Sigla usada no número dos ofícios">{node.sigla}</span>}
                     </span>
                     {node.responsavel_nome && (
-                        <span className="ml-2 text-xs font-black uppercase tracking-wide text-gray-400">
+                        <span className="ml-2 text-xs font-normal text-gray-500">
                             {node.responsavel_nome}
                         </span>
                     )}
@@ -166,7 +166,7 @@ const DeptNode: React.FC<NodeProps> = ({
                 {/* Ações — visíveis no hover */}
                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                     <button onClick={() => onAddChild(node.id)} title="Adicionar subdepartamento"
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-[6px] transition-colors">
                         <Plus className="w-3.5 h-3.5" />
                     </button>
                     <ActionIconButton kind="edit" size="sm" onClick={() => onEdit(node)} />
@@ -333,15 +333,15 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
             {/* Cabeçalho */}
             <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-500">Organograma</p>
-                    <span className="text-xs font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                    <p className="text-sm font-semibold text-gray-900">Organograma</p>
+                    <span className="text-xs text-gray-400">
                         {depts.length} departamento{depts.length !== 1 ? 's' : ''}
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
                     {depts.length === 0 && (
                         <button onClick={handleSeed} disabled={seeding}
-                            className="flex items-center gap-1.5 px-4 py-2 border border-blue-200 bg-blue-50 text-blue-600 rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-60">
+                            className="flex items-center gap-1.5 h-9 px-3.5 border border-blue-200 bg-blue-50 text-blue-600 rounded-[6px] font-medium text-[13px] hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-60">
                             {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                             Pré-carregar estrutura
                         </button>
@@ -353,7 +353,7 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
             </div>
 
             {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
                 </div>
             )}
@@ -375,13 +375,13 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
                     <Layers className="w-10 h-10 opacity-30" />
                     <p className="text-sm font-medium">Nenhum departamento cadastrado.</p>
                     <button onClick={handleSeed} disabled={seeding}
-                        className="flex items-center gap-2 px-5 py-2.5 border border-blue-200 bg-blue-50 text-blue-600 rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-60">
+                        className="flex items-center gap-2 h-9 px-3.5 border border-blue-200 bg-blue-50 text-blue-600 rounded-[6px] font-medium text-[13px] hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-60">
                         {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                         Pré-carregar estrutura padrão
                     </button>
                 </div>
             ) : (
-                <div className="border border-gray-200 rounded-2xl overflow-hidden divide-y divide-gray-100">
+                <div className="border border-gray-200 rounded-[10px] overflow-hidden divide-y divide-gray-100">
                     {tree.map(node => (
                         <DeptNode key={node.id} node={node} depth={0} {...nodeProps} />
                     ))}
@@ -391,14 +391,14 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
             {/* Legenda de cores */}
             {depts.length > 0 && (
                 <div className="flex items-center gap-4 flex-wrap pt-2">
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-400">Legenda</p>
+                    <p className="text-xs font-semibold text-slate-500">Legenda</p>
                     {[...new Set(depts.map(d => d.cor))].map(cor => {
                         const first = depts.find(d => d.cor === cor && !d.parent_id);
                         if (!first) return null;
                         return (
                             <div key={cor} className="flex items-center gap-1.5">
                                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cor }} />
-                                <span className="text-xs text-gray-500 font-black">{first.nome}</span>
+                                <span className="text-xs text-gray-600 font-medium">{first.nome}</span>
                             </div>
                         );
                     })}

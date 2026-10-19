@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { companyService } from '../services/companyService';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 
 interface Props {
     companyId: string;
@@ -20,7 +21,7 @@ interface Props {
 
 const ExpiryBadge: React.FC<{ validade?: string; diasAlerta?: number }> = ({ validade, diasAlerta = 30 }) => {
     if (!validade) return (
-        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">
+        <span className="flex items-center gap-1 text-sm font-normal text-gray-500">
             <Shield className="w-3 h-3" /> Sem validade
         </span>
     );
@@ -28,22 +29,22 @@ const ExpiryBadge: React.FC<{ validade?: string; diasAlerta?: number }> = ({ val
     const data = new Date(validade + 'T00:00:00').toLocaleDateString('pt-BR');
 
     if (diff < 0) return (
-        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+        <span className="flex items-center gap-1 text-sm font-normal text-red-600">
             <CalendarX className="w-3 h-3" /> Vencido {data}
         </span>
     );
     if (diff <= diasAlerta) return (
-        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+        <span className="flex items-center gap-1 text-sm font-normal text-red-600">
             <CalendarClock className="w-3 h-3" /> Vence {diff}d
         </span>
     );
     if (diff <= diasAlerta * 2) return (
-        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+        <span className="flex items-center gap-1 text-sm font-normal text-amber-700">
             <CalendarClock className="w-3 h-3" /> Vence {diff}d
         </span>
     );
     return (
-        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+        <span className="flex items-center gap-1 text-sm font-normal text-green-700">
             <CalendarCheck className="w-3 h-3" /> Válido {data}
         </span>
     );
@@ -66,11 +67,11 @@ const EMPTY: FormData = {
     data_validade: '', observacoes: '', alerta_dias_antecedencia: '30',
 };
 
-const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+const cls = "w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder-gray-400";
 
 const Field: React.FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({ label, children, required }) => (
     <div>
-        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">
+        <label className="block text-xs font-semibold text-slate-500 mb-1.5">
             {label}{required && <span className="text-red-500 ml-1">*</span>}
         </label>
         {children}
@@ -80,6 +81,7 @@ const Field: React.FC<{ label: string; children: React.ReactNode; required?: boo
 // ─── Componente ───────────────────────────────────────────────
 
 const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
+    const confirmar = useConfirm();
     const [documents, setDocuments] = useState<CompanyDocument[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -162,7 +164,8 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
     };
 
     const handleDelete = async (id: string, tipo: string) => {
-        if (!confirm(`Excluir documento "${TIPO_DOCUMENTO_LABELS[tipo as TipoDocumento]}"?`)) return;
+        // §14 — confirmação do app, não o `confirm()` nativo.
+        if (!await confirmar({ title: 'Excluir documento?', message: `Excluir documento "${TIPO_DOCUMENTO_LABELS[tipo as TipoDocumento]}"?`, variant: 'danger', confirmLabel: 'Excluir' })) return;
         try {
             await companyService.removeDocument(id);
             setDocuments(prev => prev.filter(d => d.id !== id));
@@ -203,14 +206,14 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
             {/* Cabeçalho */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-500">Documentos</p>
+                    <p className="text-sm font-semibold text-gray-900">Documentos</p>
                     {vencidos.length > 0 && (
-                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                        <span className="flex items-center gap-1 text-sm font-normal text-red-600">
                             <CalendarX className="w-3 h-3" /> {vencidos.length} vencido{vencidos.length > 1 ? 's' : ''}
                         </span>
                     )}
                     {vencendoEm30.length > 0 && (
-                        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                        <span className="flex items-center gap-1 text-sm font-normal text-amber-700">
                             <CalendarClock className="w-3 h-3" /> {vencendoEm30.length} vencendo
                         </span>
                     )}
@@ -223,16 +226,16 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
             </div>
 
             {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
                 </div>
             )}
 
             {/* Formulário */}
             {showForm && (
-                <form onSubmit={handleSubmit} className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-4">
+                <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-[10px] p-4 space-y-4">
                     <div className="flex items-center justify-between">
-                        <p className="text-xs font-black uppercase tracking-widest text-blue-600">
+                        <p className="text-sm font-semibold text-gray-900">
                             {editingId ? 'Editar Documento' : 'Novo Documento'}
                         </p>
                         <button type="button" onClick={cancel} className="text-gray-400 hover:text-gray-600">
@@ -282,14 +285,14 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
 
                     {/* Upload */}
                     <div>
-                        <p className="text-form-input font-black uppercase tracking-widest text-gray-500 mb-2">Arquivo</p>
+                        <p className="text-sm font-semibold text-gray-900 mb-3">Arquivo</p>
                         <div className="flex items-center gap-3">
                             <input ref={fileInputRef} type="file"
                                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                                 className="hidden" onChange={handleFileChange} />
                             <button type="button"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 text-gray-500 rounded-xl font-black text-button uppercase tracking-wide hover:border-blue-400 hover:text-blue-600 transition-all">
+                                className="flex items-center gap-2 h-9 px-3.5 border-2 border-dashed border-gray-300 text-gray-500 rounded-[6px] font-medium text-[13px] hover:border-blue-400 hover:text-blue-600 transition-all">
                                 <Upload className="w-4 h-4" />
                                 {pendingFile ? pendingFile.name : 'Selecionar arquivo'}
                             </button>
@@ -305,7 +308,7 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
 
                     <div className="flex justify-end gap-2 pt-1 border-t border-gray-200">
                         <button type="button" onClick={cancel}
-                            className="px-4 py-2 text-button font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
+                            className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors">
                             Cancelar
                         </button>
                         <Button type="submit" disabled={saving || uploading} className="gap-1.5">
@@ -328,18 +331,18 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
                 <div className="space-y-4">
                     {Object.entries(grouped).map(([tipo, docs]) => (
                         <div key={tipo}>
-                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
+                            <p className="text-sm font-semibold text-gray-900 mb-3">
                                 {TIPO_DOCUMENTO_LABELS[tipo as TipoDocumento]}
                             </p>
                             <div className="space-y-2">
                                 {docs.map(d => (
                                     <div key={d.id}
-                                        className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
+                                        className="flex items-center gap-3 bg-white border border-gray-200 rounded-[6px] px-4 py-3">
                                         <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 {d.numero && (
-                                                    <span className="font-black text-gray-900 text-sm">{d.numero}</span>
+                                                    <span className="text-sm font-semibold text-gray-900">{d.numero}</span>
                                                 )}
                                                 <ExpiryBadge validade={d.data_validade} diasAlerta={d.alerta_dias_antecedencia} />
                                             </div>

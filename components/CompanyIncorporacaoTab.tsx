@@ -24,25 +24,25 @@ const AlvaraWarning: React.FC<{ validade?: string; label: string }> = ({ validad
     const data = new Date(validade + 'T00:00:00').toLocaleDateString('pt-BR');
 
     if (diffDias < 0) return (
-        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-black">
+        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm font-medium">
             <CalendarX className="w-4 h-4 flex-shrink-0" />
             {label} vencido em {data} (há {Math.abs(diffDias)} dias)
         </div>
     );
     if (diffDias <= 30) return (
-        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-black">
+        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm font-medium">
             <CalendarClock className="w-4 h-4 flex-shrink-0" />
             {label} vence em {diffDias} dia{diffDias !== 1 ? 's' : ''} ({data})
         </div>
     );
     if (diffDias <= 60) return (
-        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-black">
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-[6px] text-amber-700 text-sm font-medium">
             <CalendarClock className="w-4 h-4 flex-shrink-0" />
             {label} vence em {diffDias} dias ({data})
         </div>
     );
     return (
-        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-xl text-green-700 text-xs font-black">
+        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-[6px] text-green-700 text-sm font-medium">
             <CalendarCheck className="w-4 h-4 flex-shrink-0" />
             {label} válido até {data}
         </div>
@@ -71,11 +71,11 @@ const EMPTY: FormData = {
     rep_numero: '', conta_segregada_id: '', empreendimento_id: '',
 };
 
-const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+const cls = "w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder-gray-400";
 
 const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({ label, children, hint }) => (
     <div>
-        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">{label}</label>
+        <label className="block text-xs font-semibold text-slate-500 mb-1.5">{label}</label>
         {children}
         {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
     </div>
@@ -83,7 +83,7 @@ const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string 
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div>
-        <p className="text-xs font-black uppercase tracking-widest text-blue-600 mb-3">{title}</p>
+        <p className="text-sm font-semibold text-gray-900 mb-3">{title}</p>
         {children}
     </div>
 );
@@ -179,12 +179,12 @@ const CompanyIncorporacaoTab: React.FC<Props> = ({ companyId, orgId }) => {
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
                 </div>
             )}
             {success && (
-                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-[6px] text-green-700 text-sm">
                     <CheckCircle2 className="w-4 h-4 flex-shrink-0" />{success}
                 </div>
             )}
@@ -283,7 +283,7 @@ const CompanyIncorporacaoTab: React.FC<Props> = ({ companyId, orgId }) => {
                         </Field>
                     )}
                     {bankAccounts.length === 0 && (
-                        <p className="text-form-input text-gray-400 col-span-2">
+                        <p className="text-xs text-gray-500 col-span-2">
                             Cadastre contas bancárias na aba <strong>Contas Bancárias</strong> para vincular uma conta segregada.
                         </p>
                     )}

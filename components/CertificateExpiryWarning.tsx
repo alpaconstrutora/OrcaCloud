@@ -18,7 +18,7 @@ const CertificateExpiryWarning: React.FC<Props> = ({ validade, className = '' })
 
     if (diffDias < 0) {
         return (
-            <div className={`flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-black ${className}`}>
+            <div className={`flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm font-medium ${className}`}>
                 <ShieldX className="w-4 h-4 flex-shrink-0" />
                 Certificado vencido em {dataFormatada} (há {Math.abs(diffDias)} dias)
             </div>
@@ -27,7 +27,7 @@ const CertificateExpiryWarning: React.FC<Props> = ({ validade, className = '' })
 
     if (diffDias <= 30) {
         return (
-            <div className={`flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-black ${className}`}>
+            <div className={`flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm font-medium ${className}`}>
                 <ShieldAlert className="w-4 h-4 flex-shrink-0" />
                 Certificado vence em {diffDias} dia{diffDias !== 1 ? 's' : ''} ({dataFormatada}) — renove urgente
             </div>
@@ -36,7 +36,7 @@ const CertificateExpiryWarning: React.FC<Props> = ({ validade, className = '' })
 
     if (diffDias <= 60) {
         return (
-            <div className={`flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-black ${className}`}>
+            <div className={`flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-[6px] text-amber-700 text-sm font-medium ${className}`}>
                 <ShieldAlert className="w-4 h-4 flex-shrink-0" />
                 Certificado vence em {diffDias} dias ({dataFormatada})
             </div>
@@ -44,7 +44,7 @@ const CertificateExpiryWarning: React.FC<Props> = ({ validade, className = '' })
     }
 
     return (
-        <div className={`flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-xl text-green-700 text-xs font-black ${className}`}>
+        <div className={`flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-[6px] text-green-700 text-sm font-medium ${className}`}>
             <ShieldCheck className="w-4 h-4 flex-shrink-0" />
             Certificado válido até {dataFormatada} ({diffDias} dias)
         </div>
@@ -53,10 +53,10 @@ const CertificateExpiryWarning: React.FC<Props> = ({ validade, className = '' })
 
 export default CertificateExpiryWarning;
 
-// Versão badge inline (para usar em cards da lista)
+// Versão badge inline (para usar em cards da lista) — §8: texto colorido, sem pílula
 export const CertificateBadge: React.FC<{ validade?: string }> = ({ validade }) => {
     if (!validade) return (
-        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">
+        <span className="flex items-center gap-1 text-sm font-normal text-gray-500">
             <Shield className="w-3 h-3" /> Sem cert.
         </span>
     );
@@ -64,25 +64,25 @@ export const CertificateBadge: React.FC<{ validade?: string }> = ({ validade }) 
     const diffDias = Math.ceil((new Date(validade + 'T00:00:00').getTime() - Date.now()) / 86400000);
 
     if (diffDias < 0) return (
-        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+        <span className="flex items-center gap-1 text-sm font-normal text-red-600">
             <ShieldX className="w-3 h-3" /> Cert. vencido
         </span>
     );
 
     if (diffDias <= 30) return (
-        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+        <span className="flex items-center gap-1 text-sm font-normal text-red-600">
             <ShieldAlert className="w-3 h-3" /> Vence em {diffDias}d
         </span>
     );
 
     if (diffDias <= 60) return (
-        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+        <span className="flex items-center gap-1 text-sm font-normal text-amber-700">
             <ShieldAlert className="w-3 h-3" /> Vence em {diffDias}d
         </span>
     );
 
     return (
-        <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+        <span className="flex items-center gap-1 text-sm font-normal text-green-700">
             <ShieldCheck className="w-3 h-3" /> Cert. OK
         </span>
     );

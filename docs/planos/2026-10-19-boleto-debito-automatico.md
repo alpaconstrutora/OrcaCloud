@@ -49,9 +49,44 @@ de débito automático em `erros_validacao`, e nenhum outro campo preenchido foi
 **Pronto quando:** o relato existe com contagem por mês e o uso de cada lado.
 
 ## Estado
-- [ ] 1
-- [ ] 2
-- [ ] 3
+- [ ] 1: código pronto (`86f441e4`, PR #58 rascunho). 40/40 testes do leitor, os 14 PDFs
+  reais dão o valor certo em Deno, `tsc` rc=0, `deno check` rc=0. **Falta publicar:** o
+  `functions deploy email-capture-sync` e o merge foram barrados pelo auto mode
+  ("Production Deploy") e ficam com o usuário.
+- [ ] 2: SQL pronto (zera `reprocessado_em` dos 14; o cron relê). Só pode rodar DEPOIS do
+  deploy da function.
+- [x] 3: investigado (abaixo). Nada alterado no banco.
+
+## Item 3: extrato repetido nas duas contas Sicredi (19/10/2026)
+
+Contas: `Sicredi` (3fba3210, org Alpa, nº cadastrado "1234") e `Sicredi - Garden`
+(91853f74, org Construção do Edifício Garden Cambuhy SPE, nº 99019-2).
+
+- São duas contas bancárias reais: no mesmo dia (02/02/2026) cada uma tem o próprio IOF e
+  os próprios juros de cheque especial, com referências diferentes.
+- 153 linhas idênticas (mesmo `external_id`, data, valor e direção), em 3 meses:
+
+  | mês | linhas Garden | linhas Alpa | iguais | lote Garden | lote Alpa |
+  |---|---|---|---|---|---|
+  | 12/2025 | 5 | 63 | 5 (todas as da Garden) | 25/05 | 13/03 |
+  | 01/2026 | 79 | 64 | 64 (todas as da Alpa) | 23/05 | 14/07 |
+  | 06/2026 | 84 | 84 | 84 (o mês inteiro) | 11/08 | 16/07 |
+
+  Junho/2026 soma R$ 66.402,29 de débitos e R$ 62.223,00 de créditos lançados em dobro.
+- Os dois lados estão em uso: classificados por regra, centros de custo, e 1 vínculo em
+  cada lado em 06/2026, **o mesmo título** (adiantamento LABOR de Rogério da Silva Santos,
+  R$ 648,40, org Garden) casado com as duas cópias.
+- Contradição que impede decidir só pelo banco: as 14 faturas Energisa trazem o mesmo
+  domicílio de débito (Sicredi 0230 / 55883-5), mas os débitos aparecem ora numa conta do
+  app (fev, abr), ora na outra (mar, abr, mai). Ou seja, além das cópias exatas, pode haver
+  meses inteiros importados na conta errada. Nenhuma das duas contas tem 55883-5 cadastrado.
+- Os lotes antigos são anteriores ao registro em `bank_statement_imports` (sem `acct_id`
+  do OFX) — a conta de origem de cada arquivo não está gravada.
+
+**Para decidir (usuário):** qual conta do app é a 0230 / 55883-5, e de que conta vieram
+os extratos de dez/2025, jan/2026 e jun/2026. Com isso: apagar o lado errado com tabela
+de reversão, passando classificação e vínculo para o lado que fica, como em
+o extrato Sicredi 2024 em dobro (`extrato_duplicado_*_reversao_20261017`).
 
 ## Verificação
 `npx vitest run __tests__/boletoTexto.test.ts`; script Deno com os PDFs reais

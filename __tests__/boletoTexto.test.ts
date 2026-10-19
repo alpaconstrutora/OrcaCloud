@@ -12,6 +12,9 @@ import {
     ERRO_SEM_TEXTO,
     ERRO_SEM_LINHA,
     AVISO_LINHA_DO_CODIGO_DE_BARRAS,
+    AVISO_DEBITO_AUTOMATICO,
+    ehFaturaEmDebitoAutomatico,
+    findTotalAPagarNoTexto,
 } from '../utils/boletoTexto';
 import * as parser from '../utils/boletoParser';
 import { mod10, mod11, codigoBarrasToLinhaDigitavel } from '../utils/febrabanRules';
@@ -225,7 +228,9 @@ describe('fatura em débito automático (DANF3E da concessionária)', () => {
         const r = extractFromPdfText(t, 2);
         expect(r.campos.linha_digitavel.valor).toBeNull();
         expect(r.campos.codigo_barras.valor).toBeNull();
-        expect(r.campos.valor.valor).toBeNull();
+        // Desde 19/10/2026 o valor vem do "TOTAL A PAGAR" (débito automático) —
+        // nunca o da chave de acesso tomada por linha.
+        expect(r.campos.valor.valor).toBe(150.52);
         expect(r.erros).toEqual([ERRO_SEM_LINHA]);
     });
 
@@ -272,5 +277,63 @@ describe('extractFromPdfText — linha lida do código de barras (18/10/2026)', 
         const r = extractFromPdfText('', 1, new Date('2026-10-18'), LINHA_DAS_BARRAS);
         expect(r.erros).toEqual([]);
         expect(r.metodo).toBe('ocr_local');
+    });
+});
+
+describe('extractFromPdfText — fatura em débito automático (19/10/2026)', () => {
+    // DANF3E Energisa (#1461 e mais 13 da caixa real): sem boleto, o banco debita.
+    // Trecho do texto como o unpdf o extrai, com o anúncio "Cadastre…" no meio.
+    const DANF3E =
+        'DANF3E - DOCUMENTO AUXILIAR DA NOTA FISCAL DE ENERGIA ELÉTRICA ELETRÔNICA ENERGISA SUL-SUDESTE ' +
+        'DOM. BANC.: 00748 00230 558835 MATRÍCULA: 2307695-2026-1-4 Janeiro / 2026 21/02/2026 R$ 102,46 ' +
+        '17,32TOTAL: 102,46 15/01/2026 00023076953 Cadastre sua Fatura em Débito Automático. ' +
+        'chave de acesso: 3126 0107 2823 7700 8104 6600 2001 6445 9020 1558 0939 ' +
+        'NOTA FISCAL/CONTA DE ENERGIA ELÉTRICA TOTAL A PAGAR R$ 102,46 Nº FATURA 164459021/02/2026 ' +
+        'VENCIMENTOMATRÍCULA 2307695-2026-1-4 FATURA A SER QUITADA ATRAVÉS DE DÉBITO AUTOMÁTICO ' +
+        'CONSIDERAR ESTA NOTA FISCAL QUITADA SOMENTE APÓS O EFETIVO DÉBITO NO BANCO 0748 .';
+
+    it('lê o valor do TOTAL A PAGAR, o vencimento, e avisa que é débito automático', () => {
+        const r = extractFromPdfText(DANF3E, 2, new Date('2026-10-19'));
+        expect(r.campos.valor.valor).toBe(102.46);
+        expect(r.campos.valor.confidence).toBe(60);
+        expect(r.campos.vencimento.valor).toBe('2026-02-21');
+        expect(r.campos.linha_digitavel.valor).toBeNull();
+        // Continua sem linha: o boleto segue em revisão, e o navegador ainda tenta as barras.
+        expect(r.erros).toEqual([ERRO_SEM_LINHA]);
+        expect(r.avisos).toEqual([AVISO_DEBITO_AUTOMATICO]);
+        expect(r.raw.debitoAutomatico).toBe(true);
+    });
+
+    it('o anúncio "Cadastre sua fatura em Débito Automático" sozinho não é débito automático', () => {
+        const t = 'Conta de energia. Cadastre sua Fatura em Débito Automático. TOTAL A PAGAR R$ 88,10 Vencimento: 10/11/2026';
+        expect(ehFaturaEmDebitoAutomatico(t)).toBe(false);
+        const r = extractFromPdfText(t, 1);
+        expect(r.campos.valor.valor).toBeNull();
+        expect(r.avisos).toBeUndefined();
+    });
+
+    it('reaviso com "Valor R$" e sem a frase de quitação continua sem valor', () => {
+        const t = 'Informamos que em nossos registros permanece(m) sem pagamento a(s) fatura(s) abaixo. ' +
+            'Fatura: 5096430 - Mês/Ano: 09/2026 - Venc. 02/10/2026 - Valor R$61,65';
+        expect(extractFromPdfText(t, 1).campos.valor.valor).toBeNull();
+    });
+
+    it('TOTAL A PAGAR com milhar, sem "R$" e repetido com o mesmo valor', () => {
+        expect(findTotalAPagarNoTexto('TOTAL A PAGAR R$ 1.234,56')).toBe(1234.56);
+        expect(findTotalAPagarNoTexto('Total a pagar: 980,00')).toBe(980);
+        expect(findTotalAPagarNoTexto('TOTAL A PAGAR R$ 50,13 … TOTAL A PAGAR R$50,13')).toBe(50.13);
+    });
+
+    it('dois TOTAL A PAGAR diferentes, ou zero, não escolhe', () => {
+        expect(findTotalAPagarNoTexto('TOTAL A PAGAR R$ 50,13 … TOTAL A PAGAR R$ 63,28')).toBeNull();
+        expect(findTotalAPagarNoTexto('TOTAL A PAGAR R$ 0,00')).toBeNull();
+        expect(findTotalAPagarNoTexto('sem total nenhum')).toBeNull();
+    });
+
+    it('débito automático sem TOTAL A PAGAR legível: avisa, mas não inventa valor', () => {
+        const t = 'Nota fiscal de energia elétrica, fatura a ser quitada através de débito automático. Vencimento: 02/03/2026';
+        const r = extractFromPdfText(t, 1);
+        expect(r.campos.valor.valor).toBeNull();
+        expect(r.avisos).toEqual([AVISO_DEBITO_AUTOMATICO]);
     });
 });

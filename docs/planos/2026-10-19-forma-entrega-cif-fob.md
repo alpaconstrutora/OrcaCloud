@@ -151,7 +151,10 @@ SELECT — o caminho direto na tabela já estava fechado. As duas RPCs eram o ú
   fornecedor no detalhe e na logística do portal (`SupplierDashboard`); erro dito como erro.
   **Pronto quando:** `tsc` limpo; `check-ui-standard.sh` e `orgContextGuard` sem achado.
 - [ ] **Conferência na tela** — depende de login (senha do agente-leitura recusada desde
-  17:45) ou do teste do usuário depois de publicado.
+  17:45) ou do teste do usuário depois de publicado. **Publicado em `9f0f674`** e provado
+  de fora (`conferir-producao.sh`: "Autorizados a retirar" e "Informe quem retirou." no
+  bundle servido). Falta o teste na tela: autorizar colaborador, registrar retirada com
+  "Retirado por", e conferir no portal do fornecedor que aparecem só nome e CPF.
 
 ## Fora do escopo (anotado)
 

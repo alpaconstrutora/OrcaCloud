@@ -821,6 +821,9 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
     const lavabo = p.resultado.spaces.find((x) => x.levelId === T && x.name === 'Lavabo')!;
     expect(lavabo.areaMm2 / 1e6).toBeGreaterThanOrEqual(1.5);
     expect(p.decisoes.some((d) => /o lavabo foi para a outra ponta/.test(d))).toBe(true);
+    // F27 item 5.3b: o 1º recua também no lote de 10 m (com 4 voltas atrás do patamar não alinhava: dormitórios de 26,6 m²).
+    expect(p.decisoes.some((d) => /o 1º recuado em/.test(d))).toBe(true);
+    expect(maiorDormitorioDoPrimeiro(p.resultado)).toBeLessThan(25);
   });
 
   it('F27 item 5: 10 × 30, 2 dorm. — o ramal sob o piso contorna a coluna que atravessa o piso (a quente que sobe do térreo, o alimentador): nenhum encontro de rede', () => {

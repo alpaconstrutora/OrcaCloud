@@ -2974,3 +2974,23 @@ Pode seguir: 5.3a → 5.3b, cada uma publicada.
   deixou de ser garantido); o da D5 separa o guarda-corpo do 2º ("Terraço · …") do do 1º ("Terraço do 1º · …").
   `ResumoDoSobrado.primeiro` expõe o retângulo do 1º recuado. Novos: o 1º recuado no R1-A e no 12 × 30 padrão
   (dormitórios < 25 m²), e `retanguloDoSegundo` com a largura toda.
+
+##### 5.3b — feito em parte (19/10/2026, "iniciar 5.3b")
+
+- O 1º recuado anda/cresce até 8 voltas atrás do patamar (`VOLTAS_DO_PRIMEIRO_RECUADO`; o 2º dentro do 1º recuado
+  também): no 10 × 30 de 4 dorm. o corredor se aproximava do patamar 15,7 → 15,1 m em 4 voltas (patamar a 14,9) e o
+  `alinhar` desistia. Agora recua: 7,00 × 12,85 m, dormitórios 26,6 → 22,2 / 15,1 / 22,2 m².
+- A escolha do 1º: de TODOS os recuados em que o 2º fecha, o de menos problemas graves no 1º e no 2º (somando os cômodos
+  abaixo da largura mínima do uso, que o gerador não conta), e entre esses o de menor área. O primeiro que fechava
+  podia ser o maior (12 × 30 voltava a dormitórios de 31 m²).
+- Medido: recuam 5 dos 6 lotes; trava ok nos 6; 8 casas de referência idênticas.
+- ⏳ Fica anotado (não resolvido):
+  - 10 × 30, 2 dorm.: o 2º (suíte + banho) tem o programa do tamanho do 1º (1 dorm. + banho) e o ocupa inteiro; o
+    corredor dele fica a 10 cm de cruzar o patamar e não há para onde andar. Casa de 3 com 2 dormitórios é caso-limite
+    (o Automático escolhe o sobrado). O 1º fica na pegada do térreo (dormitório de 52,9 m²).
+  - R1-A, 2º: o escritório sai com 1,70 m de largura (mínimo 2,20) — o 2º do R1-A ocupa a largura toda do 1º (7,40 m)
+    e o gerador o arranja assim; só um 1º recuado fecha, então a pontuação não tem o que escolher.
+  - 12 × 30 sem suíte: 3 encontros — o eletroduto do forro do térreo passa sob o shaft dos dois banheiros do 1º (costas
+    com costas, os dois tubos de queda a 18 cm) e sob os ramais deles; a árvore pelas paredes do forro só PENALIZA
+    atravessar obstáculo, e não há caminho pelas paredes em volta. Pede rota do forro com obstáculo proibido (afeta as
+    8 casas) — próxima rodada.

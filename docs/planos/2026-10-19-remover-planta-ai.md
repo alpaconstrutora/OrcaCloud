@@ -96,10 +96,10 @@ varredura `git grep`; os itens abaixo seguem ele.
 
 ### Fase 2: banco (só depois da Fase 1 no ar)
 
-- [ ] **Cópia antes de apagar**: o schema `arquivo_planta_ai` recebe `CREATE TABLE … AS`
+- [x] **Cópia antes de apagar**: o schema `arquivo_planta_ai` recebe `CREATE TABLE … AS`
   das 8 tabelas e das 5 colunas de vínculo (id + valor). Fica até o usuário decidir apagar.
   *Pronto quando:* as contagens da cópia batem com as de origem.
-- [ ] **Migration `aplicar_<prefixo>_remover_planta_ai.sql`**, aplicada por
+- [x] **Migration `aplicar_<prefixo>_remover_planta_ai.sql`**, aplicada por
   `db query -f`, nunca `db push`:
   - `DROP COLUMN` das 5 colunas (as FKs e os índices parciais caem junto);
   - `DROP TABLE` das 8 tabelas;
@@ -129,3 +129,17 @@ varredura `git grep`; os itens abaixo seguem ele.
     78 validações, 5 vínculos, 2 permissões), e depois do DROP sobram 0 tabelas, 0 colunas e 0
     chaves. O ensaio achou a FK circular `plant_studies ↔ plant_scenarios`, por isso o DROP é
     um só. **Não aplicada**: espera o deploy da Fase 1.
+- 2026-10-19 (noite, com autorização do usuário: "autorizado publicar e depois, aplicar o DROP"):
+  - Fase 1 publicada: push `36472d66`. O domínio passou a servir `0d7cb2f`, que contém esse
+    commit (conferido por `git merge-base --is-ancestor` contra o carimbo do bundle).
+  - Fase 2: SÓ DEPOIS disso foi aplicada `aplicar_20271019950000_remover_planta_ai.sql`.
+  - Conferido no banco:
+    - 0 tabelas `plant_*`, 0 colunas `planta_ai_*`, 0 chaves de permissão.
+    - Cópia em `arquivo_planta_ai`: 2 estudos, 41 cenários, 88 unidades, 5 vínculos e 2 permissões.
+    - O CHECK de origem ficou `imovib | blueprint | massa`.
+    - `anon` e `authenticated` sem USAGE no schema de arquivo.
+  - Conferido na API publicada, com a chave pública: as listas `EMPREENDIMENTO_COLS`, `TOWER_COLS`
+    e `UNIT_COLS`, e `imovib_studies`, `commercial_properties` e `empreendimento_field_proposals`,
+    respondem HTTP 200. A contraprova, pedir `empreendimentos.planta_ai_study_id`, devolve 42703.
+  - **Fica para o usuário decidir:** apagar o schema `arquivo_planta_ai` (`DROP SCHEMA
+    arquivo_planta_ai CASCADE`) quando não quiser mais a cópia.

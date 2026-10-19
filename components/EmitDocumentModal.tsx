@@ -1,17 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FileText, FileDown, Loader2, AlertCircle, Settings, File, AlertTriangle } from 'lucide-react';
 import { saveAs } from 'file-saver';
-import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
 import ClientSelect from './ClientSelect';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
 import { clientService } from '../services/clientService';
+import { supplierService } from '../services/supplierService';
 import { organizationService } from '../services/organizationService';
 import { projectService } from '../services/projectService';
 import { fillDocx, docxBlobToPdf } from '../services/docxRenderService';
-import { resolveFields, describeMapping, ResolveContext } from '../services/docxFieldCatalog';
+import { resolveFields, describeMapping, ResolveContext, fornecedorComoCliente } from '../services/docxFieldCatalog';
 import { contractDocumentVersionService } from '../services/contractDocumentVersionService';
 import { Contract } from '../types/contracts';
-import { Client, Organization } from '../types/users';
+import { Client, Organization, Supplier } from '../types/users';
 import { ProjectSettings } from '../types/project';
 import Button from './ui/Button';
 import { isChunkLoadError, reloadOnceForChunkError } from '../utils/chunkLoadError';
@@ -56,6 +57,9 @@ const EmitDocumentModal: React.FC<Props> = ({
     const [loading, setLoading] = useState(true);
     const [templateId, setTemplateId] = useState<string>('');
     const [clientId, setClientId] = useState<string>(contract.client_id ?? '');
+    // Credor de contrato de Suprimentos: o fornecedor de Dados Gerais › Fornecedor.
+    // `undefined` = ainda carregando; `null` = não achou (sem permissão / excluído).
+    const [supplier, setSupplier] = useState<Supplier | null | undefined>(contract.supplier_id ? undefined : null);
     const [busy, setBusy] = useState<null | 'docx' | 'pdf'>(null);
     const [error, setError] = useState<string | null>(null);
     const [extra, setExtra] = useState<Partial<ResolveContext> | null>(contextExtra ?? null);
@@ -99,8 +103,8 @@ const EmitDocumentModal: React.FC<Props> = ({
                 .catch(() => {});
         }
 
-        // Clientes opcionais
-        if (organizationId) {
+        // Clientes opcionais — contrato de fornecedor não tem cliente (Suprimentos).
+        if (organizationId && !contract.supplier_id) {
             clientService.listClients(organizationId)
                 .then(setClients)
                 .catch(() => {});
@@ -112,10 +116,25 @@ const EmitDocumentModal: React.FC<Props> = ({
                 .then(data => { if (data) setProject((data as any).settings as ProjectSettings ?? null); })
                 .catch(() => {});
         }
-    }, [organizationId, organizationProp, contract.project_id]);
+    }, [organizationId, organizationProp, contract.project_id, contract.supplier_id]);
+
+    // O contrato já sabe quem é o credor — não se pergunta de novo (19/10/2026).
+    useEffect(() => {
+        if (!contract.supplier_id) { setSupplier(null); return; }
+        let active = true;
+        setSupplier(undefined);
+        supplierService.getById(contract.supplier_id)
+            .then(s => { if (active) setSupplier(s); })
+            .catch(() => { if (active) setSupplier(null); });
+        return () => { active = false; };
+    }, [contract.supplier_id]);
 
     const template = useMemo(() => templates.find(t => t.id === templateId) ?? null, [templates, templateId]);
     const client = useMemo(() => clients.find(c => c.id === clientId) ?? null, [clients, clientId]);
+    // Parte do contrato: fornecedor (Suprimentos — nunca tem cliente) ou cliente. Só sem
+    // nenhuma das duas o usuário escolhe um cliente.
+    const temFornecedor = !!contract.supplier_id;
+    const temCliente = !temFornecedor && (lockClient || !!contract.client_id);
 
     /**
      * Contexto de resolução. `extra` vem por último de propósito: quando a
@@ -127,8 +146,15 @@ const EmitDocumentModal: React.FC<Props> = ({
      * não recalculava e todo token do grupo "Obra" saía vazio no documento.
      */
     const ctx = useMemo<ResolveContext>(
-        () => ({ organization, client, contract, project, ...(extra ?? {}) }),
-        [organization, client, contract, project, extra],
+        () => ({
+            organization,
+            // Sem cliente, o fornecedor ocupa o lugar dele: os modelos que mapearam a parte
+            // contratada por "Cliente"/"Compradores" preenchem com o credor sem remapear.
+            client: client ?? (temFornecedor ? fornecedorComoCliente(supplier) : null),
+            supplier: supplier ?? null,
+            contract, project, ...(extra ?? {}),
+        }),
+        [organization, client, temFornecedor, supplier, contract, project, extra],
     );
 
     const resolved = useMemo(
@@ -222,23 +248,41 @@ const EmitDocumentModal: React.FC<Props> = ({
 
     // Botão desligado SEMPRE diz o motivo — o <button> desligado não recebe o hover, então o
     // `title` mora no <span> que o envolve (mesmo desenho do Editar do avulso em Contas a Pagar).
-    const motivoDesligado = busy ? 'Gerando o documento…' : !template ? 'Escolha um modelo para continuar.' : undefined;
+    const carregandoCredor = temFornecedor && supplier === undefined;
+    const motivoDesligado = busy ? 'Gerando o documento…'
+        : !template ? 'Escolha um modelo para continuar.'
+        : carregandoCredor ? 'Carregando os dados do credor…'
+        : undefined;
+    const desligado = !template || busy !== null || carregandoCredor;
+
+    // Rótulo + valor só-leitura da parte do contrato (§32: valor escuro; o "não editável"
+    // se diz pelo fundo e pelo texto de apoio, nunca apagando o valor).
+    const parteSoLeitura = (rotulo: string, valor: string, apoio: string) => (
+        <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-500">{rotulo}</label>
+            <p className="w-full h-9 flex items-center rounded-[6px] border border-gray-200 bg-gray-50 px-3 text-sm font-normal text-gray-900 truncate" title={valor}>
+                {valor}
+            </p>
+            <p className="text-xs text-gray-500">{apoio}</p>
+        </div>
+    );
 
     // O app só tem tema claro: nada da variante `dark` do Tailwind aqui. No v4, sem `@custom-variant dark`,
     // ela segue o modo escuro do SISTEMA, e quem usa o Windows escuro via valor branco sobre gaveta branca
     // (19/10/2026; guia §33). Plano: docs/planos/2026-10-19-gerar-pelo-modelo-padrao.md
     return (
-        <Sheet open onClose={onClose} size="2xl">
-            <SheetHeader onClose={onClose}>
-                <SheetTitle>{persistVersion ? 'Gerar pelo modelo' : 'Emitir documento'} — {contract.number}</SheetTitle>
-                <SheetDescription>
-                    {persistVersion
-                        ? 'O PDF gerado entra como rascunho na tabela de documentos; o portal só mostra depois de emitido.'
-                        : 'Escolha o modelo e o cliente para gerar o documento.'}
-                </SheetDescription>
-            </SheetHeader>
+        /* Modal, não gaveta (19/10/2026): a única escolha é o modelo — a parte vem do
+           contrato. UI_PATTERNS §5.2. */
+        <Modal open onClose={onClose} size="2xl">
+            <ModalHeader
+                onClose={onClose}
+                title={<>{persistVersion ? 'Gerar pelo modelo' : 'Emitir documento'} — {contract.number}</>}
+                description={persistVersion
+                    ? 'O PDF gerado entra como rascunho na tabela de documentos; o portal só mostra depois de emitido.'
+                    : 'Escolha o modelo para gerar o documento.'}
+            />
 
-            <SheetPanel className="px-6 py-6">
+            <ModalBody>
                 <div className="space-y-6">
                     {loading ? (
                         <div className="space-y-2">
@@ -280,17 +324,20 @@ const EmitDocumentModal: React.FC<Props> = ({
                                         {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                     </select>
                                 </div>
-                                {lockClient ? (
+                                {temFornecedor ? (
+                                    /* Suprimentos: o credor é o fornecedor de Dados Gerais, com os
+                                       dados do cadastro de Fornecedores. Não se pergunta de novo. */
+                                    parteSoLeitura(
+                                        'Credor',
+                                        supplier === undefined ? 'Carregando…' : (supplier?.name || 'Fornecedor não encontrado no cadastro'),
+                                        'Vem de Dados Gerais › Fornecedor. Os dados são os do cadastro em Minha Organização › Fornecedores.',
+                                    )
+                                ) : temCliente ? (
                                     /* O cliente é o do contrato e vem pronto no contexto — o
                                        seletor só atrapalharia: ele carrega dentro de
                                        `if (organizationId)`, então com "Todas as organizações"
                                        ficaria vazio e sem ninguém para escolher. */
-                                    <div className="space-y-1.5">
-                                        <label className="block text-xs font-semibold text-slate-500">Cliente</label>
-                                        <p className="w-full h-9 flex items-center rounded-[6px] border border-gray-200 bg-gray-50 px-3 text-sm font-normal text-gray-900 truncate">
-                                            {ctx.client?.name || '—'}
-                                        </p>
-                                    </div>
+                                    parteSoLeitura('Cliente', ctx.client?.name || '—', 'Vem do contrato.')
                                 ) : (
                                     <div className="space-y-1.5">
                                         <label className="block text-xs font-semibold text-slate-500">Cliente</label>
@@ -371,16 +418,16 @@ const EmitDocumentModal: React.FC<Props> = ({
                         </div>
                     )}
                 </div>
-            </SheetPanel>
+            </ModalBody>
 
             {templates.length > 0 && (
-                <SheetFooter>
+                <ModalFooter>
                     <Button variant="secondary" onClick={onClose}>Cancelar</Button>
                     <span className="inline-flex" title={motivoDesligado}>
                         <Button
                             variant="secondary"
                             onClick={() => emit('docx')}
-                            disabled={!template || busy !== null}
+                            disabled={desligado}
                         >
                             {busy === 'docx' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <File className="w-[15px] h-[15px]" />}
                             {busy === 'docx' ? 'Gerando…' : persistVersion ? 'Baixar .docx para editar' : 'Baixar .docx'}
@@ -389,15 +436,15 @@ const EmitDocumentModal: React.FC<Props> = ({
                     <span className="inline-flex" title={motivoDesligado}>
                         <Button
                             onClick={() => emit('pdf')}
-                            disabled={!template || busy !== null}
+                            disabled={desligado}
                         >
                             {busy === 'pdf' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FileDown className="w-[15px] h-[15px]" />}
                             {busy === 'pdf' ? 'Gerando PDF…' : persistVersion ? 'Gerar versão (PDF)' : 'Baixar PDF'}
                         </Button>
                     </span>
-                </SheetFooter>
+                </ModalFooter>
             )}
-        </Sheet>
+        </Modal>
     );
 };
 

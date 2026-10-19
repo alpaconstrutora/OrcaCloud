@@ -1,5 +1,5 @@
 import { Contract, ContractAddendum, ContractGuarantee, ContractGuarantor } from '../types/contracts';
-import { Client, Organization } from '../types/users';
+import { Client, Organization, Supplier } from '../types/users';
 import { ProjectSettings } from '../types/project';
 import { Property } from '../types/imovib';
 import { Company } from '../types/company';
@@ -17,7 +17,9 @@ export type FieldSource =
     // Locação (2026-07-31)
     | 'landlord' | 'unit' | 'rent' | 'guarantee' | 'guarantor'
     // Compradores com o mesmo peso (2026-09-12)
-    | 'buyers';
+    | 'buyers'
+    // Credor = fornecedor do contrato de Suprimentos (2026-10-19)
+    | 'supplier';
 
 /** Mapeamento de um marcador {NNN} para uma origem de dado (ou texto fixo). */
 export interface TokenMapping {
@@ -65,6 +67,10 @@ export interface ResolveContext {
      *  `rentalDocumentContextService.buildRentalResolveContext`; ausente,
      *  cai em `[client]`. */
     buyers?: Client[] | null;
+    /** O credor de um contrato de Suprimentos: o fornecedor de `contracts.supplier_id`
+     *  (Dados Gerais › Fornecedor), com o cadastro completo de Minha Organização ›
+     *  Fornecedores. Suprimentos nunca tem cliente. */
+    supplier?: Supplier | null;
     contract?: Contract | null;
     project?: ProjectSettings | null;
     /** Preenchido só na emissão a partir de um aditivo. */
@@ -338,6 +344,35 @@ const spouseQualification = (c?: Client | null): string => {
     ]);
 };
 
+/**
+ * O fornecedor no formato de `Client`. Contrato de Suprimentos não tem cliente: a outra
+ * parte é o fornecedor. Quem emite põe isto em `ctx.client` quando o contrato tem
+ * fornecedor e não tem cliente — assim os modelos já mapeados pelas origens `client` e
+ * `buyers` (a "parte contratada") preenchem sem remapear. Modelo novo usa a origem
+ * `supplier` ("Credor (fornecedor)"), que diz o que é.
+ */
+export const fornecedorComoCliente = (s?: Supplier | null): Client | null => {
+    if (!s?.name) return null;
+    return {
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        document: s.document,
+        email: s.email,
+        phone: s.phone,
+        category: s.category,
+        // `street` é o campo atual; `address` é o legado de antes do endereço por partes.
+        address: s.street || s.address,
+        address_number: s.number,
+        neighborhood: s.neighborhood,
+        city: s.city,
+        state: s.state,
+        zip_code: s.zip_code,
+        // `contact_name` NÃO vira representante legal: contato não é quem assina, e a
+        // qualificação escreveria "neste ato representada por" alguém sem poderes.
+    } as Client;
+};
+
 /** Lista de compradores do contexto — sem a origem `buyers`, é o `client` só. */
 const buyersOf = (c: ResolveContext): Client[] => {
     const list = (c.buyers || []).filter(b => !!b?.name);
@@ -538,6 +573,39 @@ export const FIELD_GROUPS: FieldGroup[] = [
             { field: 'legal_rep_nationality', label: 'Representante — Nacionalidade', get: c => c.client?.legal_rep_nationality ?? '' },
             { field: 'legal_rep_role',       label: 'Representante — Cargo/Qualificação', get: c => c.client?.legal_rep_role ?? '' },
             { field: 'legal_rep_qualificacao', label: 'Representante — Cláusula (parágrafo)', get: c => legalRepQualification(c.client) },
+        ],
+    },
+    {
+        // Credor de contrato de Suprimentos = o fornecedor de Dados Gerais › Fornecedor,
+        // lido do cadastro (Minha Organização › Fornecedores). 2026-10-19.
+        source: 'supplier',
+        label: 'Credor (fornecedor)',
+        fields: [
+            { field: 'name',         label: 'Nome / Razão social', get: c => c.supplier?.name ?? '' },
+            { field: 'nickname',     label: 'Nome fantasia',       get: c => c.supplier?.nickname ?? '' },
+            { field: 'document',     label: 'CPF / CNPJ',          get: c => c.supplier?.document ?? '' },
+            { field: 'type',         label: 'Tipo (PF/PJ)',        get: c => c.supplier?.type ?? '' },
+            { field: 'contact_name', label: 'Contato',             get: c => c.supplier?.contact_name ?? '' },
+            { field: 'email',        label: 'E-mail',              get: c => c.supplier?.email ?? '' },
+            { field: 'phone',        label: 'Telefone',            get: c => c.supplier?.phone ?? '' },
+            { field: 'street',       label: 'Logradouro',          get: c => c.supplier?.street || c.supplier?.address || '' },
+            { field: 'number',       label: 'Número',              get: c => c.supplier?.number ?? '' },
+            { field: 'neighborhood', label: 'Bairro',              get: c => c.supplier?.neighborhood ?? '' },
+            { field: 'city',         label: 'Cidade',              get: c => c.supplier?.city ?? '' },
+            { field: 'state',        label: 'Estado (UF)',         get: c => c.supplier?.state ?? '' },
+            { field: 'zip_code',     label: 'CEP',                 get: c => c.supplier?.zip_code ?? '' },
+            { field: 'category',     label: 'Categoria',           get: c => c.supplier?.category ?? '' },
+            { field: 'address_full', label: 'Endereço completo',   get: c => {
+                const s = c.supplier;
+                if (!s) return '';
+                return [
+                    [s.street || s.address, s.number].filter(Boolean).join(', '),
+                    s.neighborhood,
+                    s.city && s.state ? `${s.city}/${s.state}` : (s.city || s.state),
+                    s.zip_code ? `CEP ${s.zip_code}` : '',
+                ].filter(Boolean).join(' - ');
+            } },
+            { field: 'qualificacao', label: 'Qualificação completa (parágrafo)', get: c => clientQualification(fornecedorComoCliente(c.supplier)) },
         ],
     },
     {

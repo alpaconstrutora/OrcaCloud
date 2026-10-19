@@ -48,7 +48,7 @@ nunca valiam. Depois da mudança todos passam a ter o mesmo comportamento desses
 ## Andamento
 - [x] 1. Teste de regressão `__tests__/darkSoPorClasse.test.ts` — 2 dos 4 testes FALHAM sem a linha (os outros dois são o controle negativo e a checagem de que nada liga a classe `dark`) e os 4 passam com ela
 - [x] 2. `index.css`: `@custom-variant dark (&:where(.dark, .dark *));` logo depois do `@import "tailwindcss"`
-- [ ] 3. Guia §33 corrigido (empilhado na branch do PR da gaveta, que cria a §33)
+- [x] 3. Guia §33 reescrito (título, o que é verdade sobre o Escuro Total, dívida resolvida, contagem real: 210 classes em 10 arquivos) — empilhado na branch do PR da gaveta, que cria a §33
 - [ ] 4. Verificação — 4 de 5:
   - [x] CSS do build real: publicado hoje tem 1 bloco `@media (prefers-color-scheme: dark)` (todas as regras `dark:`); o build novo tem **0**, e as 57 regras `dark:` passam a depender de `:where(.dark, .dark *)`.
   - [x] Tela de detalhe da oportunidade (CRM Serviços; a de mais `dark:`), sistema claro × escuro, só leitura: publicado = **159.013 pixels diferentes (9,94%)** (título invisível, painéis azul-marinho soltos); código novo = **0**. (Antes eu tinha medido outras duas telas que deram 0 nos DOIS lados — controle sem sensibilidade, descartado.)

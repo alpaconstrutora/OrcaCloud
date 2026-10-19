@@ -10,6 +10,15 @@ import App from './App';
 import { queryClient } from './lib/queryClient';
 import { ConfirmProvider } from './components/ui/confirm';
 import { ToastProvider } from './components/ui/toast';
+import { reloadOnceForChunkError } from './utils/chunkLoadError';
+
+// Chunk de um deploy anterior sumiu do servidor (aba aberta durante a publicação):
+// o Vite avisa por este evento em QUALQUER import dinâmico — inclusive os que não
+// passam por um ErrorBoundary (ex.: import dentro de um onClick). Recarregar pega o
+// index.html novo; a trava por janela de tempo impede loop.
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadOnceForChunkError()) event.preventDefault();
+});
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

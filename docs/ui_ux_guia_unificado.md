@@ -142,7 +142,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **Drawer (§26)** — painel lateral vem do `Sheet` (já flutua, com respiro nos 4 lados e `rounded-[10px]`); painel feito à mão precisa das 3 peças da §26
 - [ ] **Identificador técnico só-leitura (§27)** — uid/hash/código exibido como rótulo curto + `title` com o valor inteiro + `<ActionIconButton>` de copiar; nunca `<input readOnly>`, nunca o valor de 36 caracteres cru na tela
 - [ ] **Valor de campo (§32)** — valor sempre escuro (`text-gray-900`), inclusive automático/só-leitura; cinza-claro só no `placeholder:`
-- [ ] **Sem `dark:` (§33)** — nenhuma classe `dark:`; o app não tem tema escuro e `dark:` segue o modo escuro do sistema
+- [ ] **`dark:` só por classe (§33)** — sem `dark:` em código novo; conferir a tela com o sistema em modo escuro (tem de ficar igual à do modo claro)
 - [ ] **Malha do formulário (§30)** — rótulo→campo `space-y-1.5`, campos `gap-x-6 gap-y-4`, seção `space-y-4` com título `pb-3`, seções `space-y-8` no card; campo curto (data/select/valor) nunca em coluna única; sem `pb-10` morto
 - [ ] **Gráficos (§28)** — card `ChartCard` (título §21 + subtítulo com a base do dado), grade hairline sólida, marcas finas com ponta arredondada, rótulo direto só na ponta em cor de TEXTO, legenda HTML quando há 2+ séries, paleta validada, estado vazio próprio, `—`/vazio em vez de zero quando não medido
 
@@ -221,7 +221,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §30 Malha do formulário — se a tela tem formulário: rótulo 6px / campo 16px / seção 32px / card 24px; seções do mesmo formulário no mesmo card; campos curtos em grade
 - [ ] §31 Diagrama de processo (canvas) — se a tela desenha um fluxo de nós: fundo pontilhado por `style`, cartão-nó, linha 2px com seta por costura, rótulo de aresta em chip `rounded-[6px]` sem caixa alta, caixa de grupo tracejada, controles de zoom; drawers/modais FORA da camada com `transform`
 - [ ] §32 Valor de campo — nenhum `<input>`/`<textarea>` com o valor em cinza-claro (automático/só-leitura incluído)
-- [ ] §33 Sem `dark:` — nenhuma classe `dark:` na tela (o app só tem tema claro; no Tailwind v4 `dark:` segue o modo escuro do SISTEMA)
+- [ ] §33 `dark:` só por classe — a tela fica IDÊNTICA com o sistema em modo escuro e em modo claro; não escrever `dark:` em código novo (a variante é por classe e nada liga a classe)
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -3326,40 +3326,62 @@ linguagem do **placeholder** — o olho lê "vazio", e o usuário não enxerga o
 
 ---
 
-## 33. O APP NÃO TEM TEMA ESCURO — nada de `dark:`
+## 33. `dark:` SÓ POR CLASSE — o modo escuro do sistema não pode mexer na tela
 
 **Criado em 2026-10-19 (Contratos › Emissão › Gerar pelo modelo), a pedido do usuário** — *"A gaveta
 (Gerar pelo modelo) não está no design padrão do app"*, com print: aviso de marcadores em fundo rosado com
 texto amarelo, título "Pré-visualização" quase invisível, valores dos campos ausentes e bordas escuras.
-Plano: `docs/planos/2026-10-19-gerar-pelo-modelo-padrao.md`.
+Depois, a pedido dele ("aplicar a linha global"), a regra virou configuração. Planos:
+`docs/planos/2026-10-19-gerar-pelo-modelo-padrao.md` e `docs/planos/2026-10-19-dark-so-por-classe.md`.
 
-O app só tem tema claro e **não declara `@custom-variant dark`**. No Tailwind v4 isso significa que `dark:`
-é a media query `prefers-color-scheme: dark` — ou seja, **segue o modo escuro do Windows/navegador do
-usuário**, e não um tema do app. A gaveta tinha 10 classes `dark:` (`dark:text-white`, `dark:text-gray-200`,
+**O defeito.** Sem `@custom-variant dark`, o Tailwind v4 gera `dark:` como
+`@media (prefers-color-scheme: dark)` — **segue o modo escuro do Windows/navegador do usuário**, não um
+tema do app. A gaveta tinha 10 classes `dark:` (`dark:text-white`, `dark:text-gray-200`,
 `dark:bg-amber-900/20`…) sobre uma gaveta BRANCA: com o sistema em modo escuro o valor de cada campo saía
 **branco sobre branco** (medido no Chrome com `colorScheme: 'dark'`: `rgb(255,255,255)`; no modo claro,
-`oklch(0.21 …)`). Em quem usa o sistema claro nada aparecia — por isso o defeito passou: nunca foi visto
-por quem escreveu nem por quem revisou.
+`oklch(0.21 …)`). Outros 10 arquivos tinham o mesmo (CRM Serviços, agendador do BI, status de solicitação de
+compra): a tela de detalhe da oportunidade diferia em **9,94% dos pixels** entre o sistema claro e o escuro —
+título invisível, painéis azul-marinho soltos numa página clara. Quem usa o sistema claro nunca viu nada: por
+isso o defeito passou despercebido por quem escreveu e por quem revisou.
+
+**A regra, agora no `index.css`:**
+
+```css
+@custom-variant dark (&:where(.dark, .dark *));
+```
+
+`dark:` só vale **dentro de um elemento com a classe `dark`** — e nada no app liga essa classe. Resultado:
+as classes `dark:` ficaram inertes (o CSS publicado passou de 1 bloco `@media (prefers-color-scheme: dark)`
+para 0). Nada muda para quem usa o sistema claro (0 pixel de diferença, medido).
+
+**O modo escuro do app é outro mecanismo.** O "Escuro Total" (botão de lua da barra lateral,
+`Layout.tsx`) liga `.theme-midnight` na raiz do documento e é feito por **sobrescritas globais de classes
+neutras** no `index.css` (`.theme-midnight .bg-white { … }`, 84 regras) — **não usa `dark:`**. Os modos
+"claro/escuro" da barra lateral só trocam a própria barra. Não confundir: tela nova NÃO precisa de `dark:` para
+funcionar no Escuro Total; as sobrescritas globais cuidam das cores neutras.
 
 ```tsx
-// ✅ uma cor só, a do tema claro
+// ✅ uma cor só, a do tema claro; o Escuro Total é resolvido pelas sobrescritas globais
 <p className="text-sm font-semibold text-gray-700">Pré-visualização</p>
-// ❌ a variante dark vira branco-sobre-branco quando o SISTEMA do usuário está em modo escuro
+// ❌ sem efeito (inerte) e engana quem lê: parece que a tela tem um tema escuro próprio
 <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">Pré-visualização</p>
 ```
 
-> ✅ Para conferir uma tela: abrir no Chrome com o sistema em modo escuro (DevTools › Rendering ›
-> *Emulate CSS media feature prefers-color-scheme: dark*), ou `colorScheme: 'dark'` no Playwright — a tela
-> tem que ficar IDÊNTICA à do modo claro.
-> ✅ Se um dia o app ganhar tema escuro, o caminho é declarar `@custom-variant dark (&:where(.dark, .dark *))`
-> em `index.css` e ligar a classe `dark` no `<html>` por escolha do usuário — e só então migrar as telas.
-> ❌ "É só uma classe a mais, no claro não muda nada" — não muda para quem NÃO usa o sistema em modo escuro.
-> ⚠️ **Dívida conhecida (19/10/2026):** `dark:` ainda existe em `services/ServicesOpportunityDetail` (63),
-> `ServicesProposal` (28), `ServicesVisit` (23), `ServicesBudget` (23), `BIReportScheduler` (16),
-> `ServicesPipelineConfigModal` (15), `ServicesWonModal` (14), `ServicesOpportunityModal` (11) e
-> `ServicesEngineeringPicker` (10). Uma linha em `index.css` (`@custom-variant dark` por classe) desligaria
-> todos de uma vez — decisão do usuário, porque muda a aparência dessas telas para quem usa o sistema escuro.
-> 🔒 Trava: `__tests__/components/EmitDocumentModalPadrao.test.tsx` (só esta gaveta).
+> ✅ Para conferir uma tela: abrir com o sistema em modo escuro (DevTools › Rendering › *Emulate CSS media
+> feature prefers-color-scheme: dark*) ou `colorScheme: 'dark'` no Playwright — tem que ficar IDÊNTICA à do
+> modo claro. Foi assim que o defeito foi medido; uma tela sem nenhuma classe `dark:` visível no estado
+> aberto (lista vazia, por exemplo) dá 0 nos dois lados e NÃO prova nada — abra um registro.
+> ❌ Escrever `dark:` em código novo: não faz mal, mas não faz nada, e o próximo leitor acha que o tema escuro
+> do app passa por ali. Use as cores do tema claro.
+> ✅ Se um dia o app ganhar um tema escuro por `dark:`, é uma decisão de produto: ligar a classe `dark` na raiz
+> (ou apontar a variante para `.theme-midnight`) e então migrar as telas — aí as classes `dark:` que já existem
+> (210 em 10 arquivos) passam a valer de uma vez, sem revisão. Ninguém as revisou nesse modo.
+> ℹ️ Arquivos que ainda têm `dark:` (inertes): `services/ServicesOpportunityDetail`, `ServicesProposal`,
+> `ServicesVisit`, `ServicesBudget`, `ServicesPipelineConfigModal`, `ServicesWonModal`,
+> `ServicesOpportunityModal`, `ServicesEngineeringPicker`, `BIReportScheduler` e `utils/solicitacaoCompra.ts`.
+> 🔒 Trava: `__tests__/darkSoPorClasse.test.ts` — compila o Tailwind com o `index.css` real e confere que o
+> CSS gerado não tem `prefers-color-scheme` (com controle negativo) e que nada liga a classe `dark`;
+> `__tests__/components/EmitDocumentModalPadrao.test.tsx` — a gaveta não tem `dark:`.
 
 ---
 

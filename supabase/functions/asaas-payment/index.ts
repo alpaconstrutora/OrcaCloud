@@ -521,12 +521,20 @@ serve(async (req: Request) => {
 
     if (!payRes.ok) {
         let msg = (payData as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${payRes.status}`;
-        // Conta de serviço vencida em dia não útil: a Asaas responde "só até às 22
-        // horas" mesmo de manhã (ela tentaria agendar para o próximo dia útil, e
-        // conta vencida não se agenda) — visto no domingo 18/10/2026, 10:55.
+        // Janelas do mesmo dia (doc "Regras importantes" da Asaas, conferida em
+        // 19/10/2026): boleto de cobrança até 23h, conta de consumo até 20h, boleto
+        // acima de R$ 250 mil até 16h — sempre em dia útil. A doc pede para não fixar
+        // um horário único na integração; aqui só se explica a recusa.
+        const JANELAS = 'conta de consumo até 20h, boleto de cobrança até 23h, acima de R$ 250 mil até 16h';
         const diaSemana = new Date(`${hojeBRT()}T12:00:00Z`).getUTCDay();
-        if (/22 horas/.test(msg) && (diaSemana === 0 || diaSemana === 6)) {
-            msg = 'Conta de serviço vencida só pode ser paga em dia útil, até as 22h (regra da Asaas). Hoje é fim de semana — tente no próximo dia útil.';
+        const fimDeSemana = diaSemana === 0 || diaSemana === 6;
+        // Conta vencida em dia não útil: a Asaas responde "só até às 22 horas" mesmo de
+        // manhã (tentaria agendar para o próximo dia útil, e vencida não se agenda) —
+        // domingo 18/10/2026, 10:55.
+        if (/22 horas/.test(msg) && fimDeSemana) {
+            msg = `Conta vencida só pode ser paga em dia útil, dentro da janela do dia (${JANELAS} — regras da Asaas). Hoje é fim de semana: tente no próximo dia útil.`;
+        } else if (/fora do hor[aá]rio limite/i.test(msg)) {
+            msg = `Pagamento fora do horário limite do dia (${JANELAS} — regras da Asaas). Tente no próximo dia útil, dentro da janela.`;
         }
         await admin.from('supplier_payments').update({
             status: 'FAILED',

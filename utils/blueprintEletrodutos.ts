@@ -84,7 +84,7 @@ import type {
   Trecho,
 } from './blueprintKernel';
 import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, composicaoDaRede } from './blueprintKernel';
-import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, type FaixaDoForro } from './blueprintRotaPeloForro';
+import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, ramaisDaLajeDeCima, type FaixaDoForro } from './blueprintRotaPeloForro';
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
 import { REGRA_DE_CAIXAS_PADRAO, caixasDaRede, type RegraDeCaixas, type SegmentoDaRede } from './blueprintCaixasDePassagem';
@@ -353,7 +353,8 @@ export function planejarEletrodutos(
   const sobrePonto = new Map<string, number>();
   const ligarNaRede = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): void => {
     // F14b: no forro, a reta desvia também das prumadas das outras redes (a coluna da fria cruzando a faixa).
-    const desvio = desvioDoPilar(a, b, hip.noForro ? [...pegadas(levelId), ...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false)] : pegadas(levelId));
+    // F27 item 5: e dos ramais que correm na laje do pavimento de cima, colados na faixa pela cota real.
+    const desvio = desvioDoPilar(a, b, hip.noForro ? [...pegadas(levelId), ...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(levelId));
     if (desvio == null) {
       semContorno++;
       addTrecho(levelId, a, cota, b, cota);
@@ -453,7 +454,7 @@ export function planejarEletrodutos(
     const deParede = pendentes.filter((p) => p.cotaMm < teto && !(hip.noForro && p.tipoEletrico === 'ILUMINACAO_TETO'));
     const paredesDaRota = hip.noForro ? paredesDoForro(model, nivel.id, hip.noForro.faixa.afastamentoDaFaceMm) : paredesDoNivel;
     const pelas = (hip.rotaPelaParede || !!hip.noForro) && paredesDaRota.length > 0 && deParede.length > 0
-      ? arvorePelasParedes({ paredes: paredesDaRota, raiz: quadro.at, ...(hip.noForro ? { contornoDoPilarMm: CONTORNO_DO_PILAR_MM, penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}), pendentes: deParede.map((p) => p.at), raioDeEncaixeMm: RAIO_DE_ENCAIXE_ELETRICO_MM, encaixarEm: encaixaNoAnel, obstaculos: hip.noForro ? [...pegadas(nivel.id), ...prumadasQueCruzam(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(nivel.id) })
+      ? arvorePelasParedes({ paredes: paredesDaRota, raiz: quadro.at, ...(hip.noForro ? { contornoDoPilarMm: CONTORNO_DO_PILAR_MM, penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}), pendentes: deParede.map((p) => p.at), raioDeEncaixeMm: RAIO_DE_ENCAIXE_ELETRICO_MM, encaixarEm: encaixaNoAnel, obstaculos: hip.noForro ? [...pegadas(nivel.id), ...prumadasQueCruzam(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2), ...ramaisDaLajeDeCima(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(nivel.id) })
       : null;
     const naParede = new Set<ObjectId>();
     if (pelas?.raiz) {

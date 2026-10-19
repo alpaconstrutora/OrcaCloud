@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { cotaDaFaixa, descidaDoForro, fundoDaVigaSobre, paredesDoForro, semDedosEstreitos } from '../utils/blueprintRotaPeloForro';
+import { cotaDaFaixa, descidaDoForro, fundoDaVigaSobre, paredesDoForro, ramaisDaLajeDeCima, semDedosEstreitos } from '../utils/blueprintRotaPeloForro';
+import { pointInPolygon } from '../utils/blueprintKernel';
 import { arvorePelasParedes } from '../utils/blueprintRotaPelasParedes';
 
 /** Dois cômodos de 3 × 4 m lado a lado (paredes de 15 cm), vigas de 40 cm sobre todas as paredes; janela opcional na do meio. */
@@ -241,5 +242,31 @@ describe('F18 da casa automática', () => {
     }
     const ultimo = pedacos[pedacos.length - 1];
     expect([ultimo.b, ultimo.cotaBMm]).toEqual([alvo, 900]);
+  });
+});
+
+describe('ramaisDaLajeDeCima (F27 item 5): o ramal que corre na laje do pavimento de cima vira obstáculo pela cota REAL', () => {
+  // Térreo a 0 com 2,80 m; o 1º a 2,90 m (a laje de 10 cm); o esgoto do 1º a −16 cm, de (1000, 500) a (1000, 1500).
+  const casa = () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    m = applyCommand(m, { type: 'AddLevel', name: '1º', elevationMm: 2900, defaultHeightMm: 2800 }).model;
+    const [t, s] = [...m.levels].sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
+    m = applyBatch(m, [{ type: 'AddTrecho', levelId: s, disciplina: 'ESGOTO', a: point(1000, 500), b: point(1000, 1500), cotaAMm: -160, cotaBMm: -165, bitolaMm: 100 } as Command]).model;
+    return { m, t, s };
+  };
+
+  it('o eletroduto do térreo a 2,755 m (o ramal fica a 2,735 m no espaço): um obstáculo em volta do ramal', () => {
+    const { m, t } = casa();
+    const obst = ramaisDaLajeDeCima(m, t, 2755, 'ELETRICA', 12.5);
+    expect(obst).toHaveLength(1);
+    expect(pointInPolygon(obst[0], point(1000, 1000))).toBe(true);
+    expect(pointInPolygon(obst[0], point(1300, 1000))).toBe(false);
+  });
+
+  it('a faixa bem abaixo (2,40 m), a própria rede e o pavimento de cima sem nada na laje: nenhum', () => {
+    const { m, t, s } = casa();
+    expect(ramaisDaLajeDeCima(m, t, 2400, 'ELETRICA', 12.5)).toEqual([]);
+    expect(ramaisDaLajeDeCima(m, t, 2755, 'ESGOTO', 50)).toEqual([]);
+    expect(ramaisDaLajeDeCima(m, s, 2755, 'ELETRICA', 12.5)).toEqual([]);
   });
 });

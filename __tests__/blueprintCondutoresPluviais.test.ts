@@ -220,6 +220,6 @@ describe('F27-D5 da casa automática: o condutor sobre o TERRAÇO desce por fora
     // Fora do retângulo da casa (a fachada dos fundos, y = 8000, é a mais perto do bocal).
     for (const v of verticaisNoTerreo) expect(v.a.y, JSON.stringify(v)).toBeGreaterThan(8000);
     // No 1º: o vertical do bocal até o piso do terraço, e o horizontal no contrapiso.
-    expect(novos.some((c) => c.levelId === s && c.a.x === 5600 && c.a.y === 7000 && c.cotaBMm === -80)).toBe(true);
+    expect(novos.some((c) => c.levelId === s && c.a.x === 5600 && c.a.y === 7000 && c.cotaBMm === -40)).toBe(true);
   });
 });

@@ -80,7 +80,10 @@ policy ou função nova (REGRA #7 não se aplica).
       `__tests__/documentTemplateServiceDuplicar.test.ts` (3), verdes
 - [x] 5. Portões — `check-ui-standard` = 0; `tsc` exit 0 sem `error TS`; `orgContextGuard`,
       `valorDeCampoSemCinzaGuard`, `darkSoPorClasse`, `cabecalhoSemCinzaGuard` verdes
-- [ ] 6. Interface ✅ (abaixo) · publicação pendente
+- [x] 6. Interface (abaixo) e publicação — `67b90a56` em `main`; `conferir-producao.sh` viu o
+      domínio servindo `67b90a5` com "Enviar versão revisada" no bundle. Suíte: 10.464 passaram
+      + 34 puladas = 10.498, 0 falhas (os 9 de `blueprintExtintores` que o JSON deixou "pending"
+      passam isolados — instabilidade conhecida do Node nesta máquina)
 
 ### Verificação na tela (19/10/2026, Playwright, conta de leitura, org Alpa)
 

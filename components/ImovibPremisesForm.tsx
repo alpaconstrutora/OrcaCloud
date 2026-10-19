@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { Building, FileText, PieChart, Activity, Save, Loader2, Map, Layers } from 'lucide-react';
-import EstudoMapaRegulatorio from './EstudoMapaRegulatorio';
-import ImovibBlocksTypologyTab from './ImovibBlocksTypologyTab';
-import EstudoTorresUnidades from './torres/EstudoTorresUnidades';
+import { FileText, PieChart, Activity, Save, Loader2 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -21,10 +18,10 @@ interface ImovibPremisesFormProps {
     onDirtyChange?: (dirty: boolean) => void;
 }
 
-type SubAba = 'identificacao' | 'mercado' | 'blocos' | 'torres' | 'regulatorio';
-// Só estas duas sub-abas editam o formulário local e são gravadas por "Salvar Premissas".
-// Blocos, Torres e Mapa Regulatório gravam sozinhos (cada um com o seu salvar).
-const SUB_ABAS_DO_FORMULARIO: SubAba[] = ['identificacao', 'mercado'];
+// As duas sub-abas editam o mesmo formulário local, gravado por "Salvar Premissas".
+// Blocos e Tipologia, Torres & Unidades e Mapa Regulatório saíram daqui em 2026-10-19:
+// eles moram na Planta Inteligente (docs/planos/2026-10-19-imovib-premissas-planta-inteligente.md).
+type SubAba = 'identificacao' | 'mercado';
 
 // Item 5.2: CNPJ, incorporadora e gestor são editados nas colunas canônicas
 // (`cnpj`/`developer`/`manager`, as mesmas da criação e da listagem). O valor
@@ -46,7 +43,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     // §25: Identificação e Mercado ficam em estado local até "Salvar Premissas".
     // guardarNavegacao: trocar de módulo pelo menu / voltar do navegador / fechar
     // a aba também perguntam (lib/guardaDeSaida.ts) — Premissas desmonta ao sair.
-    const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges({ guardarNavegacao: true });
+    const { dirty, markDirty, markSaved } = useUnsavedChanges({ guardarNavegacao: true });
     const onDirtyChangeRef = useRef(onDirtyChange);
     onDirtyChangeRef.current = onDirtyChange;
     useEffect(() => { onDirtyChangeRef.current?.(dirty); }, [dirty]);
@@ -60,19 +57,6 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     const setCampo = (field: keyof ImovibStudy, valor: unknown) => {
         setFormData(prev => ({ ...prev, [field]: valor }));
         markDirty();
-    };
-
-    // Sair de Identificação/Mercado para uma sub-aba que não é do formulário
-    // descartaria a edição sem aviso (e o salvar de Blocos recarrega o estudo).
-    const trocarSubAba = async (destino: SubAba) => {
-        if (destino === activeTab) return;
-        const saiDoFormulario = SUB_ABAS_DO_FORMULARIO.includes(activeTab) && !SUB_ABAS_DO_FORMULARIO.includes(destino);
-        if (saiDoFormulario && dirty) {
-            if (!(await confirmDiscard())) return;
-            setFormData(comCanonicas(study));
-            markSaved();
-        }
-        setActiveTab(destino);
     };
 
     const handleSaveAllForm = async () => {
@@ -147,13 +131,10 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                 {[
                     { id: 'identificacao', label: '0. Identificação', icon: <FileText className="w-4 h-4" /> },
                     { id: 'mercado', label: '1. Mercado', icon: <PieChart className="w-4 h-4" /> },
-                    { id: 'blocos', label: '2. Blocos e Tipologia', icon: <Building className="w-4 h-4" /> },
-                    { id: 'torres', label: '3. Torres & Unidades', icon: <Layers className="w-4 h-4" /> },
-                    { id: 'regulatorio', label: '4. Mapa Regulatório', icon: <Map className="w-4 h-4" /> },
                 ].map((tab) => (
                     <button
                         key={tab.id}
-                        onClick={() => trocarSubAba(tab.id as SubAba)}
+                        onClick={() => setActiveTab(tab.id as SubAba)}
                         className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all ${activeTab === tab.id
                             ? 'bg-indigo-600 text-white'
                             : 'bg-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'
@@ -164,18 +145,15 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     </button>
                 ))}
                 </div>
-                {/* Só onde ele salva alguma coisa: 0. Identificação e 1. Mercado (item 5.4). */}
-                {SUB_ABAS_DO_FORMULARIO.includes(activeTab) && (
-                    <button
-                        onClick={handleSaveAllForm}
-                        disabled={isSaving || !pode || !dirty}
-                        title={!pode ? motivo : isSaving ? 'Salvando...' : !dirty ? 'Nada foi alterado em Identificação ou Mercado.' : undefined}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        {isSaving ? 'Salvando...' : 'Salvar Premissas'}
-                    </button>
-                )}
+                <button
+                    onClick={handleSaveAllForm}
+                    disabled={isSaving || !pode || !dirty}
+                    title={!pode ? motivo : isSaving ? 'Salvando...' : !dirty ? 'Nada foi alterado em Identificação ou Mercado.' : undefined}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {isSaving ? 'Salvando...' : 'Salvar Premissas'}
+                </button>
             </div>
 
             {/* TAB: IDENTIFICAÇÃO */}
@@ -241,23 +219,6 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     </div>
                 </div>
             )}
-
-            {/* TAB: BLOCOS & TIPOLOGIAS */}
-            {activeTab === 'blocos' && (
-                <ImovibBlocksTypologyTab study={study} onDataChanged={onDataChanged} />
-            )}
-            {/* TAB: TORRES & UNIDADES — as MESMAS do empreendimento vinculado (fonte única).
-                Torres e Mapa Regulatório gravam no EMPREENDIMENTO, mas por dentro do estudo
-                seguem a permissão do estudo (decisão de 2026-10-12: "Travar também pela
-                permissão de estudo"). */}
-            {activeTab === 'torres' && (
-                <EstudoTorresUnidades studyId={study.id} origin="imovib" somenteLeitura={!pode ? motivo : undefined} />
-            )}
-            {/* TAB: MAPA REGULATÓRIO */}
-            {activeTab === 'regulatorio' && (
-                <EstudoMapaRegulatorio studyId={study.id} origin="imovib" somenteLeitura={!pode ? motivo : undefined} />
-            )}
-
         </div>
     );
 };

@@ -18,7 +18,7 @@ import {
  * docs/planos/2026-10-12-imovib-viabilidade-correcoes.md, item 5.1.
  *
  * Só identificação e classificação. Zoneamento/CA/TO saíram daqui: o Mapa
- * Regulatório mora no empreendimento (Premissas › 4. Mapa Regulatório), e as
+ * Regulatório mora no empreendimento (editado na Planta Inteligente › Zona), e as
  * colunas `zoning`/`ca_basic`/`ca_max`/`occupancy_rate`/`needs_eiv` do estudo
  * não entram em nenhum cálculo (conferido por grep em 2026-10-12: só este
  * formulário as gravava; a listagem só EXIBE `zoning`, coluna oculta por padrão).
@@ -232,7 +232,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ open, study, onClose, onSaved }
                                     </div>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                    Zoneamento, coeficientes e taxa de ocupação ficam em Premissas › 4. Mapa Regulatório (do empreendimento vinculado).
+                                    Zoneamento, coeficientes e taxa de ocupação vêm do Mapa Regulatório do empreendimento vinculado (editado na Planta Inteligente › Zona).
                                 </p>
                             </div>
                         </fieldset>

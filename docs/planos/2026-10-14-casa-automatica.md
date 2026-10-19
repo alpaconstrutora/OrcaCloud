@@ -2908,3 +2908,17 @@ Quatro casos nos 6 lotes, três causas:
 - Medido: 4 → 0 redes em pilar nos 6 lotes; encontros de rede seguem 10; trava ok nos 6. 8 casas de referência
   idênticas. Testes novos (falham sem a correção): interruptor com pilar (`blueprintNbr5410Iluminacao`), "nenhuma rede
   atravessa pilar" na casa de 3 do R1-A e no 10 × 30 4 dorm. (`blueprintCasaAutomatica`).
+
+#### 5.1e — o ramal sob o piso contorna a coluna que atravessa o piso (19/10/2026)
+
+Causa de 8 dos 10 encontros que sobravam: o ramal de esgoto do pavimento de cima (sob o piso) chega ao tubo de queda
+pelo lado oposto do shaft e corta as colunas de água que sobem do de baixo; no térreo, o ramal enterrado cortava o pé
+do alimentador. `obstaculosDoRamal` (`utils/blueprintEsgotoAutomatico.ts`): além dos pilares, as COLUNAS de outra rede
+que atravessam o piso do pavimento (verticais dele que vêm de baixo de 0, e as do de baixo que chegam ao teto dele),
+num quadrado com o raio delas, o do tubo e 10 mm — na queda da árvore e no contorno (`contornarPilar`), como pilar.
+
+- Medido: 10 → 2 encontros nos 6 lotes (12 × 30 sem suíte e 10 × 30 2 dorm.: zero). 8 casas de referência idênticas.
+  Teste novo (falha sem a correção): 10 × 30 2 dorm. de 3 pavimentos sem encontro de rede.
+- ⏳ Sobram 2, no R1-A: o shaft está cheio (fria no centro, quente num canto, tubo de queda no outro) e a ligação da
+  quente a 2,63 m, vindo do sul até o canto norte, passa a 5 cm do tubo de queda; nenhuma das 4 posições do tubo de queda
+  fica livre. Pede outro arranjo das colunas no shaft (a quente do lado de onde vem a alimentação dela) — fica anotado.

@@ -47,7 +47,7 @@
  */
 import { dnDoRamalDeEsgoto, dnDoSubcoletor, dnDoTuboDeQueda, type PapelNoEsgoto } from './blueprintNbr8160';
 import type { BlueprintModel, Command, ObjectId, Point, Space, Terminal, TipoDePontoHidraulico } from './blueprintKernel';
-import { CATALOGO_DE_COMPONENTES, applyBatch, pointInPolygon } from './blueprintKernel';
+import { CATALOGO_DE_COMPONENTES, applyBatch, envelopeDoTrecho, pointInPolygon } from './blueprintKernel';
 import {
   arvoreComRotaLimitada,
   comprimentoMm,
@@ -673,12 +673,11 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
     const total = acumular(raizKey);
 
     // 4) Cotas das folhas para a raiz: cada trecho desce com o caimento do seu DN.
-    const pilaresDoNivel = pegadasDePilares(model, levelId);
     // O tubo, não só o eixo: a pegada do pilar crescida pelo raio dele (o DN 100 encostava no pilar com o eixo fora).
     // F20: a queda pedaço a pedaço (cada um para cima, nos vértices já em mm) — a MESMA que `contornarPilar` distribui.
     // Pelo comprimento total, com um arredondamento só, um pedaço do contorno ficava com 0,97 % (12 × 30 a 0°).
     const quedaComContorno = (a: Ponto2, b: Ponto2, dn: number): number => {
-      const desvio = a.x === b.x && a.y === b.y ? null : desvioDoPilar(a, b, pilaresDoNivel.map((g) => anelDoPilar(g, dn / 2) as Point[]));
+      const desvio = a.x === b.x && a.y === b.y ? null : desvioDoPilar(a, b, obstaculosDoRamal(model, levelId, dn / 2));
       return quedasDoCaminho(caminhoDoContorno(a, b, desvio), caimentoPct(dn, hip)).reduce((s, q) => s + q, 0);
     };
     const dnDaAresta = (d: (typeof dirigidas)[number]) => Math.max(dnPorUhc(uhcPorNo.get(d.paraKey) ?? 0), dnMinPorNo.get(d.paraKey) ?? 40);
@@ -837,10 +836,55 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
 const RAIO_DO_MAIOR_RAMAL_MM = 50;
 const FOLGA_DA_JUNCAO_AO_PILAR_MM = 20;
 
+/** F27 item 5: a folga do ramal à coluna de outra rede que atravessa o piso, mm. */
+const FOLGA_DO_RAMAL_A_COLUNA_MM = 10;
+
+/**
+ * O que o ramal sob o piso contorna: os PILARES (crescidos pelo raio do tubo) e — F27 item 5 da casa automática
+ * (19/10/2026) — as COLUNAS de outra rede que atravessam o piso do pavimento (a fria e a quente que sobem do de baixo
+ * pelo shaft, o alimentador): um quadrado com o raio delas, o do tubo e a folga. O ramal do banheiro de cima que chega ao
+ * tubo de queda pelo lado oposto do shaft cortava as colunas de água no meio dele (R1-A de 3 pavimentos: 7 encontros).
+ */
+const obstaculosDoRamalJaFeitos = new WeakMap<BlueprintModel, Map<string, Point[][]>>();
+function obstaculosDoRamal(model: BlueprintModel, levelId: ObjectId, raioMm: number): Point[][] {
+  let doModelo = obstaculosDoRamalJaFeitos.get(model);
+  if (!doModelo) obstaculosDoRamalJaFeitos.set(model, (doModelo = new Map()));
+  const chave = `${levelId}|${raioMm}`;
+  const feito = doModelo.get(chave);
+  if (feito) return feito;
+  const novo = obstaculosDoRamalSemGuardar(model, levelId, raioMm);
+  doModelo.set(chave, novo);
+  return novo;
+}
+
+function obstaculosDoRamalSemGuardar(model: BlueprintModel, levelId: ObjectId, raioMm: number): Point[][] {
+  const pilares = pegadasDePilares(model, levelId).map((g) => anelDoPilar(g, raioMm) as Point[]);
+  const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+  const i = niveis.findIndex((l) => l.id === levelId);
+  const deBaixo = i > 0 ? niveis[i - 1] : null;
+  const colunas = (model.trechos ?? []).filter((t) => {
+    if (t.disciplina === 'ESGOTO' || t.a.x !== t.b.x || t.a.y !== t.b.y) return false;
+    if (t.levelId === levelId) return Math.min(t.cotaAMm, t.cotaBMm) <= 0 && Math.max(t.cotaAMm, t.cotaBMm) > 0;
+    return !!deBaixo && t.levelId === deBaixo.id && Math.max(t.cotaAMm, t.cotaBMm) >= deBaixo.defaultHeightMm;
+  });
+  const vistos = new Set<string>();
+  const quadrados: Point[][] = [];
+  for (const t of colunas) {
+    const env = envelopeDoTrecho(t);
+    const h = Math.ceil(Math.max(env.raioPlantaMm, env.raioVerticalMm) + raioMm + FOLGA_DO_RAMAL_A_COLUNA_MM);
+    const k = `${t.a.x},${t.a.y},${h}`;
+    if (vistos.has(k)) continue;
+    vistos.add(k);
+    const { x, y } = t.a;
+    quadrados.push([{ x: x - h, y: y - h }, { x: x + h, y: y - h }, { x: x + h, y: y + h }, { x: x - h, y: y + h }] as Point[]);
+  }
+  return [...pilares, ...quadrados];
+}
+
 function contornarPilar(model: BlueprintModel, c: Extract<Command, { type: 'AddTrecho' }>, hip: HipotesesDeEsgoto): Extract<Command, { type: 'AddTrecho' }>[] {
   if (c.a.x === c.b.x && c.a.y === c.b.y) return [c];
-  // F18: com a pegada crescida pelo raio do tubo (o mesmo da queda, na árvore).
-  const desvio = desvioDoPilar(c.a, c.b, pegadasDePilares(model, c.levelId).map((g) => anelDoPilar(g, c.bitolaMm / 2) as Point[]));
+  // F18: com a pegada crescida pelo raio do tubo (o mesmo da queda, na árvore). F27 item 5: e as colunas que atravessam o piso.
+  const desvio = desvioDoPilar(c.a, c.b, obstaculosDoRamal(model, c.levelId, c.bitolaMm / 2));
   if (!desvio || desvio.length === 0) return [c];
   const pts = caminhoDoContorno(c.a, c.b, desvio);
   const comp = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));

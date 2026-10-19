@@ -47,6 +47,13 @@ export const ERRO_PDF_COM_SENHA = 'PDF protegido por senha — cadastre a senha 
  */
 export const AVISO_LINHA_DO_CODIGO_DE_BARRAS = 'Linha digitável lida do código de barras do PDF (o texto do documento não a traz) — confira com o documento.';
 
+/**
+ * Fatura quitada por DÉBITO AUTOMÁTICO (19/10/2026): 14 DANF3E da Energisa da
+ * caixa real (#1455–#1471) entraram sem valor — não há boleto, o banco debita, e
+ * o valor só nascia da linha digitável. Aviso, não erro: continua sem linha.
+ */
+export const AVISO_DEBITO_AUTOMATICO = 'Fatura em débito automático — não há boleto: o banco debita na conta. Valor lido do "Total a pagar"; confira com o documento e concilie o título com o débito do extrato. Não pague por boleto nem por PIX.';
+
 /** pdf.js / unpdf sinalizam senha ausente ou errada com este nome de erro. */
 export function ehErroDeSenha(e: unknown): boolean {
     const nome = (e as { name?: string } | null)?.name ?? '';
@@ -395,6 +402,30 @@ export function findVencimentoNoTexto(text: string): string | null {
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
+/**
+ * A fatura diz que será QUITADA por débito automático ("FATURA A SER QUITADA
+ * ATRAVÉS DE DÉBITO AUTOMÁTICO", na DANF3E da Energisa). Só a frase de quitação
+ * conta: o anúncio "Cadastre sua Fatura em Débito Automático", que a mesma
+ * concessionária imprime em conta paga por boleto, não.
+ */
+export function ehFaturaEmDebitoAutomatico(text: string): boolean {
+    return /\b(?:quitada|paga|debitada)\s+(?:atrav[ée]s\s+d[eo]|por(?:\s+meio\s+d[eo])?|via|em)\s+d[ée]bito\s+autom[áa]tico/i.test(text);
+}
+
+/**
+ * Valor de "TOTAL A PAGAR R$ 102,46". Só um valor: se o texto traz dois totais
+ * diferentes, não escolhe (null). Usado apenas para fatura em débito automático,
+ * que não tem linha digitável de onde tirar o valor.
+ */
+export function findTotalAPagarNoTexto(text: string): number | null {
+    const valores = new Set<number>();
+    for (const m of text.matchAll(/TOTAL\s+A\s+PAGAR\s*[:\-–]?\s*(?:R\$)?\s*(\d{1,3}(?:\.\d{3})*,\d{2})(?!\d)/gi)) {
+        const v = Number(m[1].replace(/\./g, '').replace(',', '.'));
+        if (v > 0) valores.add(v);
+    }
+    return valores.size === 1 ? [...valores][0] : null;
+}
+
 function dataExiste(ano: number, mes: number, dia: number): boolean {
     if (mes < 1 || mes > 12 || dia < 1) return false;
     return dia <= new Date(Date.UTC(ano, mes, 0)).getUTCDate();
@@ -486,13 +517,18 @@ export function extractFromPdfText(
         const campos = emptyFields();
         const vencTexto = findVencimentoNoTexto(text);
         if (vencTexto) campos.vencimento = { valor: vencTexto, confidence: 60 };
+        // Débito automático: sem boleto, o valor vem do "Total a pagar" impresso.
+        const debitoAutomatico = ehFaturaEmDebitoAutomatico(text);
+        const total = debitoAutomatico ? findTotalAPagarNoTexto(text) : null;
+        if (total !== null) campos.valor = { valor: total, confidence: 60 };
         return {
             metodo: 'pdf_text',
             confidence_score: 0,
             engine_versao: ENGINE_VERSAO,
             campos,
-            raw: { paginas, pdfText: previaDoTexto(text) },
+            raw: { paginas, pdfText: previaDoTexto(text), ...(debitoAutomatico ? { debitoAutomatico: true } : {}) },
             erros: [ERRO_SEM_LINHA],
+            ...(debitoAutomatico ? { avisos: [AVISO_DEBITO_AUTOMATICO] } : {}),
         };
     }
 

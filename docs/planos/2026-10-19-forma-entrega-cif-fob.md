@@ -100,8 +100,11 @@ Trilho FOB: Lances → Confirmado → Retirado → Recebido → Divergência.
 - [x] **`SupplierDashboard`** — FOB: sem "Editar Logística", com aviso "a retirada é
   registrada pelo comprador"; trilho não editável.
   **Pronto quando:** idem.
-- [ ] **Conferência na tela** — pedido FOB do comprador mostra o botão e o trilho de 5
-  passos. **Pronto quando:** print sem rótulos sobrepostos e sem erro de console/HTTP.
+- [x] **Conferência na tela** — pedido FOB do comprador mostra o botão e o trilho de 5
+  passos. **Pronto quando:** testado no app publicado. ✅ 19/10: o usuário testou em
+  produção no pedido PCO-011-017-0002 — "esta ok". (A conferência por Playwright não
+  rodou: a senha do agente-leitura foi trocada às 17:45 e a informada foi recusada.)
+  Publicado em `a2e1233d`.
 
 ## Fora do escopo (anotado)
 

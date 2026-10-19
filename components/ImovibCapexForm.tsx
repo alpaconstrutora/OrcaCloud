@@ -412,9 +412,12 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                             />
                                             <span className="text-slate-500">/m²</span>
                                         </label>
+                                        {/* No simplificado o custo é área única × custo/m² (motor): o da torre não entra — mostrar o produto seria um número fora do cálculo. */}
                                         <span className="text-sm text-slate-500">
-                                            {area.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m² × custo = {(custo * area)
-                                                .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                                            {area.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m²
+                                            {study.capex_mode === 'simplified' && study.capex_simplified_cost_sqm
+                                                ? ' · custo por torre fora do cálculo (CAPEX simplificado)'
+                                                : ` × custo = ${(custo * area).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}`}
                                         </span>
                                     </div>
                                 );

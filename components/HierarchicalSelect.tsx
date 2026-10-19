@@ -47,6 +47,7 @@ function linhasHierarquicas(
     casa: (i: HierarchicalSelectItem) => boolean,
     filtrando: boolean,
     expandidos: Record<string, boolean>,
+    ordenar: (lista: HierarchicalSelectItem[]) => HierarchicalSelectItem[] = sortByCode,
 ): LinhaHierarquica[] {
     const ids = new Set(items.map(i => i.id));
     const raizes: HierarchicalSelectItem[] = [];
@@ -61,7 +62,7 @@ function linhasHierarquicas(
     }
     const saida: LinhaHierarquica[] = [];
     const visita = (item: HierarchicalSelectItem, depth: number) => {
-        const filhos = sortByCode(filhosDe.get(item.id) ?? []);
+        const filhos = ordenar(filhosDe.get(item.id) ?? []);
         if (filtrando) {
             if (casa(item) && item.selecionavel !== false) saida.push({ item, hasChildren: false, depth: 0 });
             for (const f of filhos) visita(f, depth + 1);
@@ -70,8 +71,8 @@ function linhasHierarquicas(
         saida.push({ item, hasChildren: filhos.length > 0, depth });
         if (filhos.length > 0 && expandidos[item.id]) for (const f of filhos) visita(f, depth + 1);
     };
-    for (const r of sortByCode(raizes)) visita(r, 0);
-    for (const o of sortByCode(orfaos)) visita(o, 0);
+    for (const r of ordenar(raizes)) visita(r, 0);
+    for (const o of ordenar(orfaos)) visita(o, 0);
     return saida;
 }
 
@@ -119,6 +120,10 @@ interface Props {
     clearLabel?: string;
     /** Valor gravado ao clicar na linha de "limpar" (padrão `''`). */
     clearValue?: string;
+    /** Mantém a ordem em que `items` chegou, em vez de ordenar por código/nome. Para
+     *  catálogo sem código cuja ordem tem sentido (campos do .docx: Nome, CPF/CNPJ,
+     *  endereço… — em ordem alfabética virariam "Bairro, CEP, CNPJ"). 19/10/2026. */
+    manterOrdem?: boolean;
 }
 
 const HierarchicalSelect: React.FC<Props> = ({
@@ -140,6 +145,7 @@ const HierarchicalSelect: React.FC<Props> = ({
     fallbackLabel,
     clearLabel,
     clearValue = '',
+    manterOrdem = false,
 }) => {
     const [open, setOpen] = useState(false);
     // Busca transitória de propósito (exceção ao §3 do guia, que é para filtro
@@ -219,7 +225,7 @@ const HierarchicalSelect: React.FC<Props> = ({
     const casaComGrupo = (item: HierarchicalSelectItem) =>
         casa(item) || (!!q && !!item.parentName?.toLowerCase().includes(q));
     const linhas: LinhaHierarquica[] = hierarquiaExplicita
-        ? linhasHierarquicas(items, casaComGrupo, filtrando, expandidos)
+        ? linhasHierarquicas(items, casaComGrupo, filtrando, expandidos, manterOrdem ? (l => l) : sortByCode)
         : [];
     const filtered = hierarquiaExplicita
         ? []

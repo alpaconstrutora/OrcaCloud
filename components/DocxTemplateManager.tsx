@@ -16,6 +16,7 @@ import {
     ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from './ui/TableUtils';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import HierarchicalSelect, { HierarchicalSelectItem } from './HierarchicalSelect';
 import SaveStatus from './ui/SaveStatus';
 
 /**
@@ -117,18 +118,33 @@ const contarMapeados = (t: DocumentTemplate) => t.detected_tokens.filter(tk => t
 const formatarData = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
 
 // ─── Seletor de mapeamento de um marcador ─────────────────────────────────────────
+/** Itens da gaveta de campos: "Texto fixo" solto no topo e, abaixo, um grupo por
+ *  origem (sanfona) com os campos na ordem do catálogo. O id é o valor gravado
+ *  (`origem.campo`), então nada muda no `token_map` já salvo. */
+const ITENS_DE_CAMPO: HierarchicalSelectItem[] = [
+    { id: 'fixed', name: '✎ Texto fixo (digitar o valor)' },
+    ...FIELD_GROUPS.flatMap(g => [
+        { id: `grupo:${g.source}`, name: g.label, selecionavel: false },
+        ...g.fields.map(f => ({ id: `${g.source}.${f.field}`, name: f.label, parentId: `grupo:${g.source}`, parentName: g.label })),
+    ]),
+];
+
+/** Gaveta com grupos e busca, no lugar do `<select>` de 277 opções (19/10/2026):
+ *  sem busca, e fechado mostrava só "Número" — do contrato ou do endereço? O
+ *  gatilho agora diz "Grupo › Campo". */
 const MappingSelect: React.FC<{
+    token: string;
     value?: TokenMapping;
     onChange: (m: TokenMapping | undefined) => void;
-}> = ({ value, onChange }) => {
+}> = ({ token, value, onChange }) => {
     const selectValue = !value ? '' : value.source === 'fixed' ? 'fixed' : `${value.source}.${value.field}`;
 
     return (
         <div className="flex flex-col gap-1.5">
-            <select
+            <HierarchicalSelect
+                items={ITENS_DE_CAMPO}
                 value={selectValue}
-                onChange={(e) => {
-                    const v = e.target.value;
+                onChange={(v) => {
                     if (v === '') return onChange(undefined);
                     if (v === 'fixed') return onChange({ source: 'fixed', fixed: value?.fixed ?? '' });
                     const [source, field] = v.split('.');
@@ -136,20 +152,17 @@ const MappingSelect: React.FC<{
                     const f = group?.fields.find(x => x.field === field);
                     onChange({ source: source as TokenMapping['source'], field, label: f?.label });
                 }}
-                className="w-full rounded-[6px] border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-            >
-                <option value="">— não mapeado —</option>
-                <option value="fixed">✎ Texto fixo…</option>
-                {FIELD_GROUPS.map(g => (
-                    <optgroup key={g.source} label={g.label}>
-                        {g.fields.map(f => (
-                            <option key={`${g.source}.${f.field}`} value={`${g.source}.${f.field}`}>
-                                {f.label}
-                            </option>
-                        ))}
-                    </optgroup>
-                ))}
-            </select>
+                panelVariant="drawer"
+                manterOrdem
+                placeholder="— não mapeado —"
+                drawerTitle={`Campo do marcador {${token}}`}
+                drawerDescription="Escolha o dado do sistema que entra no lugar do marcador. Busque pelo campo ou pelo grupo."
+                searchPlaceholder="Buscar campo ou grupo (ex.: CPF, endereço, fiador)…"
+                size="sm"
+                // Campo que saiu do catálogo: mostra o rótulo gravado em vez de "não mapeado".
+                fallbackLabel={value?.label}
+                triggerClassName="h-9 w-full rounded-[6px] border border-gray-200 bg-white pl-2.5 pr-2 hover:border-blue-300"
+            />
             {value?.source === 'fixed' && (
                 <input
                     value={value.fixed ?? ''}
@@ -617,7 +630,7 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                                                 {/* §8 — marcação em texto colorido, sem pílula. */}
                                                 {novos.has(tk) && <span className="text-sm font-normal text-blue-600">Novo</span>}
                                             </div>
-                                            <MappingSelect value={draft.tokenMap[tk]} onChange={m => setMapping(tk, m)} />
+                                            <MappingSelect token={tk} value={draft.tokenMap[tk]} onChange={m => setMapping(tk, m)} />
                                         </div>
                                     ))}
                                 </div>

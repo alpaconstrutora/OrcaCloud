@@ -13,12 +13,14 @@ import {
   alinharSegundoAoPatamar,
   banheiroAlemDoNucleo,
   comandoDaEscada,
+  contornoDoTerraco,
   dividirEmTres,
   dividirPrograma,
   escolherNucleo,
   HIPOTESES_DO_SOBRADO_PADRAO,
   paredeSobOPonto,
   pavimentoComNucleo,
+  portaParaOTerraco,
   retanguloDoSegundo,
   prumadasPeloMeioDoComodo,
   pedacosFora,
@@ -143,6 +145,38 @@ describe('F27-D2: o 2º pavimento recuado', () => {
     expect(b).toMatchObject({ invertida: false, ret: { y0: 7900, y1: casa.y1 } });
     // Nenhum sentido cabe: null.
     expect(alinharSegundoAoPatamar(falso, { ...casa, y1: 5000 }, { x0: 3600, y0: 0, x1: 9000, y1: 5000 }, { ret: { x0: 6600, y0: 1400, x1: 9000, y1: 5000 }, paraOsFundos: true }, hip)).toBeNull();
+  });
+
+  it('contornoDoTerraco (F27-D5): o perímetro da casa menos os lados do 2º e o núcleo na fachada — numa polilinha só, na ordem', () => {
+    // 2º nos fundos e à direita (x 3600…9000, y 7000…14000); terraço na frente e na faixa da esquerda.
+    const linhas = contornoDoTerraco(casa, { x0: 3600, y0: 7000, x1: 9000, y1: 14000 });
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0]).toEqual([point(3600, 14000), point(0, 14000), point(0, 0), point(9000, 0), point(9000, 7000)]);
+    // O núcleo na fachada da direita, abaixo do 2º, tira o pedaço dele.
+    const comNucleo = contornoDoTerraco(casa, { x0: 3600, y0: 7000, x1: 9000, y1: 14000 }, { x0: 6600, y0: 4000, x1: 9000, y1: 7600 });
+    expect(comNucleo.flat().some((p) => p.x === 9000 && p.y === 4000)).toBe(true);
+    expect(comNucleo.flat().some((p) => p.x === 9000 && p.y === 7000)).toBe(false);
+    // O 2º na laje inteira: sem terraço.
+    expect(contornoDoTerraco(casa, casa)).toEqual([]);
+  });
+
+  it('portaParaOTerraco (F27-D5): sem porta do 2º para o terraço, a maior janela de cômodo seco que dá para ele vira porta de correr', () => {
+    const parede = (a: Point, b: Point, uid: string) => ({ levelId: 'G', a, b, thicknessMm: 200, heightMm: 2800, uid });
+    // O 2º em x 3600…9000, y 7000…14000; a frente dele (y 7000) dá para o terraço; a lateral x 9000 e os fundos são a borda.
+    const cmds = [
+      { type: 'AddWalls', walls: [parede(point(3600, 7000), point(9000, 7000), 'f'), parede(point(9000, 7000), point(9000, 14000), 'd'), parede(point(9000, 14000), point(3600, 14000), 't'), parede(point(3600, 14000), point(3600, 7000), 'e')] },
+      { type: 'AddOpenings', openings: [{ wallUid: 'f', kind: 'window', offsetMm: 800, widthMm: 1200, heightMm: 1200, sillMm: 1000 }, { wallUid: 'f', kind: 'window', offsetMm: 3600, widthMm: 600, heightMm: 600, sillMm: 1500 }, { wallUid: 't', kind: 'door', offsetMm: 1000, widthMm: 800, heightMm: 2100, sillMm: 0 }] },
+    ] as unknown as Command[];
+    const amb = (nome: string, uso: string, ret: Retangulo) => ({ nome, ret, item: { uso } }) as unknown as AmbienteGerado;
+    const ambientes = [amb('Suíte', 'SUITE', { x0: 3600, y0: 7000, x1: 6600, y1: 12000 }), amb('Banheiro da suíte', 'BANHEIRO', { x0: 6600, y0: 7000, x1: 9000, y1: 9500 })];
+    const r = portaParaOTerraco(cmds, casa, ambientes, 2100);
+    expect(r.comodo).toBe('Suíte');
+    const ops = r.comandos.flatMap((c) => (c.type === 'AddOpenings' ? c.openings : []));
+    expect(ops.find((o) => o.offsetMm === 800)).toMatchObject({ kind: 'sliding', sillMm: 0, heightMm: 2100, widthMm: 1200 });
+    // A do banheiro fica janela; com porta já dando para o terraço, nada muda.
+    expect(ops.find((o) => o.offsetMm === 3600)?.kind).toBe('window');
+    const jaTem = portaParaOTerraco(r.comandos, casa, ambientes, 2100);
+    expect(jaTem.comodo).toBeNull();
   });
 
   it('banheiroAlemDoNucleo (F27-D4, "colado na escada"): o banheiro da suíte vai além da ponta do núcleo, na largura dele; a suíte fica ao lado, na profundidade toda', () => {

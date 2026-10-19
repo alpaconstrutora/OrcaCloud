@@ -193,3 +193,33 @@ describe('condutor horizontal por baixo do cruzamento (F25)', () => {
     expect(h[h.length - 1].cotaBMm).toBe(-1500);
   });
 });
+
+describe('F27-D5 da casa automática: o condutor sobre o TERRAÇO desce por fora da fachada, não pelo meio do cômodo de baixo', () => {
+  // Térreo 10 × 8 m (paredes, laje que é o piso do 1º); o 1º só na metade da esquerda; o bocal do telhado do 1º sobre o terraço.
+  const comTerraco = () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    m = applyCommand(m, { type: 'AddLevel', name: '1º', elevationMm: 2900, defaultHeightMm: 2800 }).model;
+    const [t, s] = [...m.levels].sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
+    const w = (l: string, ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: l, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    m = applyBatch(m, [
+      w(t, 0, 0, 10000, 0), w(t, 10000, 0, 10000, 8000), w(t, 10000, 8000, 0, 8000), w(t, 0, 8000, 0, 0),
+      { type: 'AddStructural', levelId: t, kind: 'LAJE', pontos: [point(0, 0), point(10000, 0), point(10000, 8000), point(0, 8000)], larguraMm: 0, alturaMm: 100, baseMm: 2700 } as Command,
+      w(s, 0, 0, 5000, 0), w(s, 5000, 0, 5000, 8000), w(s, 5000, 8000, 0, 8000), w(s, 0, 8000, 0, 0),
+      { type: 'AddTerminal', levelId: s, disciplina: 'PLUVIAL', tipo: 'Bocal', tipoHidraulico: 'RALO_PLUVIAL', at: point(5600, 7000), cotaMm: 2700 } as Command,
+      { type: 'AddTerminal', levelId: t, disciplina: 'PLUVIAL', tipo: 'CA', at: point(12000, 9000), cotaMm: -600, tipoHidraulico: 'CAIXA_AREIA' } as Command,
+    ]).model;
+    return { m, t, s };
+  };
+
+  it('desce ao piso do terraço, corre no contrapiso até a fachada mais perto e desce por fora dela — nada vertical no térreo dentro da casa', () => {
+    const { m, t, s } = comTerraco();
+    const p = planejarCondutores(m, hip);
+    const novos = p.comandos.filter((c): c is Extract<Command, { type: 'AddTrecho' }> => c.type === 'AddTrecho');
+    const verticaisNoTerreo = novos.filter((c) => c.levelId === t && c.a.x === c.b.x && c.a.y === c.b.y);
+    expect(verticaisNoTerreo.length).toBeGreaterThan(0);
+    // Fora do retângulo da casa (a fachada dos fundos, y = 8000, é a mais perto do bocal).
+    for (const v of verticaisNoTerreo) expect(v.a.y, JSON.stringify(v)).toBeGreaterThan(8000);
+    // No 1º: o vertical do bocal até o piso do terraço, e o horizontal no contrapiso.
+    expect(novos.some((c) => c.levelId === s && c.a.x === 5600 && c.a.y === 7000 && c.cotaBMm === -80)).toBe(true);
+  });
+});

@@ -21,8 +21,8 @@
  *
  * Os coeficientes de rugosidade são os da Tabela 2 da norma.
  */
-import type { BlueprintModel, Command, ObjectId, SecaoDeCalha, Trecho } from './blueprintKernel';
-import { pointInPolygon } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point, SecaoDeCalha, Trecho } from './blueprintKernel';
+import { pegadaEmPlanta, pointInPolygon } from './blueprintKernel';
 import { contribuicaoPluvial, type HipotesesPluviais } from './blueprintPluvial';
 
 export const ROTULO_DA_CALHA = 'Calha';
@@ -194,6 +194,13 @@ export interface PlanoDeCalhas {
   comandos: Command[];
 }
 
+/** F27-D5: `p` cai sobre a laje de algum pavimento abaixo de `levelId` (o condutor dali desceria por dentro dele). */
+function sobreLajeDeBaixo(model: BlueprintModel, levelId: ObjectId, p: P): boolean {
+  const elev = model.levels.find((l) => l.id === levelId)?.elevationMm ?? 0;
+  const abaixo = new Set(model.levels.filter((l) => l.elevationMm < elev).map((l) => l.id));
+  return (model.structures ?? []).some((x) => x.kind === 'LAJE' && abaixo.has(x.levelId) && pointInPolygon(pegadaEmPlanta(x), p as Point));
+}
+
 export function planejarCalhas(model: BlueprintModel, hip: HipotesesPluviais): PlanoDeCalhas {
   const c = contribuicaoPluvial(model, hip);
   const vazio = (motivo: string): PlanoDeCalhas => ({ motivo, calhas: [], jaTemCalha: 0, apagados: 0, avisos: [], comandos: [] });
@@ -234,8 +241,13 @@ export function planejarCalhas(model: BlueprintModel, hip: HipotesesPluviais): P
       continue;
     }
     const { a, b } = livre;
-    // O bocal na ponta mais perto do destino (empate, ou sem destino: a segunda ponta do beiral).
-    const [alto, bocal] = pertoDeDestino(a) < pertoDeDestino(b) ? [b, a] : [a, b];
+    // O bocal na ponta mais perto do destino (empate, ou sem destino: a segunda ponta do beiral). F27-D5 da casa
+    // automática (19/10/2026): antes, a ponta que NÃO cai sobre laje de pavimento de baixo — o telhado do 2º recuado tem
+    // beiral sobre o terraço, e o condutor dali descia pelo meio do cômodo do 1º; da outra ponta (fora da casa) desce por
+    // fora. Com as duas (ou nenhuma) sobre laje, a regra de sempre.
+    const sobreLaje = (p: P) => sobreLajeDeBaixo(model, s.levelId, p);
+    const [sa, sb] = [sobreLaje(a), sobreLaje(b)];
+    const [alto, bocal] = sa !== sb ? (sa ? [a, b] : [b, a]) : pertoDeDestino(a) < pertoDeDestino(b) ? [b, a] : [a, b];
     const Q = s.vazaoLMin!;
     let secao = secaoComercial(hip.secaoDaCalha, Q, n, i);
     if (!secao) {

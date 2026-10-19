@@ -5,15 +5,17 @@
  * intensidade (informada > tabela > 150 mm/h até 100 m²) e Q = I·A/60.
  */
 import { describe, expect, it } from 'vitest';
-import { applyBatch, applyCommand, conexoesDerivadas, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import { applyBatch, applyCommand, computeQuantities, conexoesDerivadas, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import {
   HIPOTESES_PLUVIAIS_PADRAO,
   INTENSIDADE_ATE_100M2_MMH,
   areaDeContribuicaoM2,
   contribuicaoPluvial,
   intensidadeDeProjeto,
+  lajesDescobertas,
   vazaoDeProjetoLMin,
 } from '../utils/blueprintPluvial';
+import { resumoDasMedidas } from '../utils/blueprintBudget';
 import { hipotesesHidroDaColuna } from '../hooks/useBlueprintHidro';
 import { DISCIPLINAS_DA_REDE } from '../utils/blueprintPranchaHidro';
 import { COR_DA_DISCIPLINA } from '../utils/blueprintRede';
@@ -81,6 +83,43 @@ describe('E6.1 — a contribuição do desenho', () => {
   it('sem telhado nem laje: diz que não há chuva a captar', () => {
     const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
     expect(contribuicaoPluvial(m, HIPOTESES_PLUVIAIS_PADRAO).pendencias[0]).toMatch(/Nenhuma água de telhado/);
+  });
+});
+
+describe('F27-D5 — o terraço: a laje de pavimento intermediário fora do de cima é descoberta', () => {
+  // Térreo com a laje (o teto dele = o piso do 1º) de 10 × 8 m; o 1º só na metade da esquerda (5 × 8 m) — o resto é terraço.
+  const casaComTerraco = (comPrimeiro: boolean) => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    m = applyCommand(m, { type: 'AddLevel', name: '1º', elevationMm: 2900, defaultHeightMm: 2800 }).model;
+    const [t, s] = [...m.levels].sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
+    const w = (l: string, ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: l, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    m = applyBatch(m, [{ type: 'AddStructural', levelId: t, kind: 'LAJE', pontos: [point(0, 0), point(10000, 0), point(10000, 8000), point(0, 8000)], larguraMm: 0, alturaMm: 100, baseMm: 2700 } as Command]).model;
+    if (comPrimeiro) m = applyBatch(m, [w(s, 0, 0, 5000, 0), w(s, 5000, 0, 5000, 8000), w(s, 5000, 8000, 0, 8000), w(s, 0, 8000, 0, 0)]).model;
+    return m;
+  };
+
+  it('a metade sob o 1º fica coberta; a outra é o terraço (por amostragem); entra na contribuição como laje', () => {
+    const l = lajesDescobertas(casaComTerraco(true));
+    expect(l).toHaveLength(1);
+    expect(l[0].areaM2).toBeGreaterThan(38);
+    expect(l[0].areaM2).toBeLessThan(42);
+    const c = contribuicaoPluvial(casaComTerraco(true), { ...HIPOTESES_PLUVIAIS_PADRAO, intensidadeMmH: 150 });
+    expect(c.superficies.find((x) => x.tipo === 'LAJE')?.areaProjecaoM2).toBe(l[0].areaM2);
+    // Sem nada em cima: a laje inteira é descoberta.
+    expect(lajesDescobertas(casaComTerraco(false))[0].areaM2).toBeCloseTo(80, 0);
+    // O 1º inteiro em cima, em dois cômodos (o cômodo do kernel cobre a parede — a do meio não vira terraço): nada descoberto.
+    let inteiro = casaComTerraco(false);
+    const s = [...inteiro.levels].sort((a, b) => a.elevationMm - b.elevationMm)[1].id;
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: s, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    inteiro = applyBatch(inteiro, [w(0, 0, 10000, 0), w(10000, 0, 10000, 8000), w(10000, 8000, 0, 8000), w(0, 8000, 0, 0), w(5100, 0, 5100, 8000)]).model;
+    expect(lajesDescobertas(inteiro)).toEqual([]);
+  });
+
+  it('o orçamento mede a área a impermeabilizar pelo extra das lajes descobertas', () => {
+    const r = resumoDasMedidas(computeQuantities(casaComTerraco(true)), { lajesDescobertas: lajesDescobertas(casaComTerraco(true)) });
+    const d = r.find((x) => x.medidaId === 'AREA_LAJE_DESCOBERTA')!;
+    expect(d).toMatchObject({ dimensao: 'M2', elementos: 1 });
+    expect(d.quantidade).toBeGreaterThan(38);
   });
 });
 

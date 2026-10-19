@@ -10,6 +10,7 @@
 import { listarComposicoes } from './blueprintComposicaoService';
 import { coberturaDoOrcamento, type Cobertura } from '../utils/blueprintCoberturaOrcamento';
 import { medirSubRegioes } from '../utils/blueprintSubRegioes';
+import { lajesDescobertas } from '../utils/blueprintPluvial';
 import { blueprintTerraplenagemService } from './blueprintTerraplenagemService';
 import { blueprintTopografiaService } from './blueprintTopografiaService';
 import { blueprintSnapshotTopografiaService } from './blueprintSnapshotTopografiaService';
@@ -293,7 +294,7 @@ export async function preverLancamentos(
   // a topografia ou o anel, o orçamento segue sem ela — dito no console.
   const terraplenagem = await terraplenagemDoSnapshot(snapshotId, snapshot.study_id, model);
 
-  const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura, subRegioes: medirSubRegioes(model), terraplenagem });
+  const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura, subRegioes: medirSubRegioes(model), terraplenagem, lajesDescobertas: lajesDescobertas(model) });
   const dasCamadas = gerarLancamentosDeCamadas(quant, itens, contexto);
   const dosAcabamentos = gerarLancamentosDeAcabamentos(quant, itens, contexto);
   const dosGuardaCorpos = gerarLancamentosDeGuardaCorpos(quant, itens, contexto);
@@ -328,7 +329,7 @@ export async function preverLancamentos(
 
   // COBERTURA (P2.55): o que a planta mede, cruzado com o de-para e o catálogo.
   const cobertura = coberturaDoOrcamento(
-    resumoDasMedidas(quant, { armadura, subRegioes: medirSubRegioes(model), terraplenagem }),
+    resumoDasMedidas(quant, { armadura, subRegioes: medirSubRegioes(model), terraplenagem, lajesDescobertas: lajesDescobertas(model) }),
     mapeamentos,
     itens,
   );

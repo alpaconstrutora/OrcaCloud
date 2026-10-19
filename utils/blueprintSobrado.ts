@@ -285,6 +285,100 @@ export function retanguloDoSegundo(casa: Retangulo, n: Pick<NucleoDaEscada, 'lad
 }
 
 /**
+ * F27-D5 (decisão do usuário, 18/10/2026: "recuado com terraço"): o CONTORNO do terraço que leva guarda-corpo — o
+ * perímetro da casa (a laje do 1º) menos o que o 2º cobre com as paredes dele (os lados do retângulo recuado na borda da
+ * casa) e menos o núcleo da escada encostado na fachada (as paredes dele sobem ao 2º). Polilinhas no quadro da casa, na
+ * ordem do perímetro; vazio quando o 2º cobre a laje inteira.
+ */
+export function contornoDoTerraco(casa: Retangulo, segundo: Retangulo, nucleo: Retangulo | null = null): Point[][] {
+  const cantos = [point(casa.x0, casa.y0), point(casa.x1, casa.y0), point(casa.x1, casa.y1), point(casa.x0, casa.y1)];
+  const cobre = (r: Retangulo) => [
+    { fixo: 'y' as const, valor: r.y0, de: r.x0, ate: r.x1 },
+    { fixo: 'x' as const, valor: r.x1, de: r.y0, ate: r.y1 },
+    { fixo: 'y' as const, valor: r.y1, de: r.x0, ate: r.x1 },
+    { fixo: 'x' as const, valor: r.x0, de: r.y0, ate: r.y1 },
+  ];
+  const cobertos = [...cobre(segundo), ...(nucleo ? cobre(nucleo) : [])];
+  const trechos: [Point, Point][] = [];
+  for (let i = 0; i < 4; i++) {
+    const a = cantos[i];
+    const b = cantos[(i + 1) % 4];
+    const fixo = a.y === b.y ? 'y' : 'x';
+    const valor = fixo === 'y' ? a.y : a.x;
+    const [p0, p1] = fixo === 'y' ? [a.x, b.x] : [a.y, b.y];
+    const lo = Math.min(p0, p1);
+    const hi = Math.max(p0, p1);
+    const tirar = cobertos.filter((c) => c.fixo === fixo && Math.abs(c.valor - valor) < 1).map((c) => [Math.max(lo, c.de), Math.min(hi, c.ate)] as [number, number]).filter(([x, y]) => y > x).sort((u, v) => u[0] - v[0]);
+    let ini = lo;
+    const livres: [number, number][] = [];
+    for (const [x, y] of tirar) {
+      if (x > ini) livres.push([ini, x]);
+      ini = Math.max(ini, y);
+    }
+    if (hi > ini) livres.push([ini, hi]);
+    const crescente = p1 >= p0;
+    for (const [x, y] of crescente ? livres : [...livres].reverse()) {
+      const [s, e] = crescente ? [x, y] : [y, x];
+      trechos.push(fixo === 'y' ? [point(s, valor), point(e, valor)] : [point(valor, s), point(valor, e)]);
+    }
+  }
+  // Os trechos que se encontram (a quina do perímetro) viram uma polilinha só; a última pode emendar na primeira.
+  const linhas: Point[][] = [];
+  for (const [a, b] of trechos) {
+    const ult = linhas[linhas.length - 1];
+    if (ult && ult[ult.length - 1].x === a.x && ult[ult.length - 1].y === a.y) ult.push(b);
+    else linhas.push([a, b]);
+  }
+  if (linhas.length > 1) {
+    const [pri, ult] = [linhas[0], linhas[linhas.length - 1]];
+    if (ult[ult.length - 1].x === pri[0].x && ult[ult.length - 1].y === pri[0].y) {
+      linhas[0] = [...ult, ...pri.slice(1)];
+      linhas.pop();
+    }
+  }
+  return linhas.filter((l) => l.length >= 2);
+}
+
+/**
+ * F27-D5: o 2º abre para o terraço — se nenhuma porta dele dá para o terraço (as paredes do retângulo recuado que não
+ * ficam na borda da casa), a maior janela de cômodo seco nessas paredes vira PORTA DE CORRER (a mesma largura, do piso
+ * à altura da porta). Na planta invertida a "entrada" do gerador fica nos fundos e a frente só tinha janelas. Devolve os
+ * comandos (no quadro da casa) e o cômodo que ganhou a porta (`null` = já havia porta, ou não há janela que sirva).
+ */
+export function portaParaOTerraco(
+  cmds: readonly Command[],
+  casa: Retangulo,
+  ambientes: readonly AmbienteGerado[],
+  alturaDaPortaMm: number,
+): { comandos: Command[]; comodo: string | null } {
+  const paredes = cmds.flatMap((c) => (c.type === 'AddWalls' ? c.walls : []));
+  const naBorda = (w: ParedeLocal) => (w.a.x === w.b.x && (w.a.x === casa.x0 || w.a.x === casa.x1)) || (w.a.y === w.b.y && (w.a.y === casa.y0 || w.a.y === casa.y1));
+  // As paredes externas do 2º (as do retângulo dele) que dão para o terraço: no contorno do 2º e fora da borda da casa.
+  const xs = paredes.flatMap((w) => [w.a.x, w.b.x]);
+  const ys = paredes.flatMap((w) => [w.a.y, w.b.y]);
+  const doContorno = (w: ParedeLocal) => (w.a.x === w.b.x && (w.a.x === Math.min(...xs) || w.a.x === Math.max(...xs))) || (w.a.y === w.b.y && (w.a.y === Math.min(...ys) || w.a.y === Math.max(...ys)));
+  const paraOTerraco = new Map(paredes.filter((w) => doContorno(w) && !naBorda(w)).map((w) => [w.uid, w]));
+  const aberturas = cmds.flatMap((c) => (c.type === 'AddOpenings' ? c.openings : []));
+  if (aberturas.some((o) => (o.kind === 'door' || o.kind === 'sliding') && paraOTerraco.has(o.wallUid ?? ''))) return { comandos: [...cmds], comodo: null };
+  const ondeFica = (o: AberturaLocal) => {
+    const w = paraOTerraco.get(o.wallUid ?? '')!;
+    const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+    const t = o.offsetMm + o.widthMm / 2;
+    return { x: w.a.x + ((w.b.x - w.a.x) * t) / L, y: w.a.y + ((w.b.y - w.a.y) * t) / L };
+  };
+  const seco = (o: AberturaLocal) => {
+    const p = ondeFica(o);
+    const a = ambientes.find((x) => p.x >= x.ret.x0 - 200 && p.x <= x.ret.x1 + 200 && p.y >= x.ret.y0 - 200 && p.y <= x.ret.y1 + 200);
+    return a && !['BANHEIRO', 'LAVABO', 'AREA_DE_SERVICO', 'COZINHA'].includes(a.item.uso) ? a : null;
+  };
+  const janela = aberturas.filter((o) => o.kind === 'window' && paraOTerraco.has(o.wallUid ?? '') && seco(o)).sort((p, q) => q.widthMm - p.widthMm)[0];
+  if (!janela) return { comandos: [...cmds], comodo: null };
+  const comodo = seco(janela)!.nome;
+  const comandos = cmds.map((c) => (c.type === 'AddOpenings' ? { ...c, openings: c.openings.map((o) => (o === janela ? { ...o, kind: 'sliding', sillMm: 0, heightMm: alturaDaPortaMm } : o)) } : c)) as Command[];
+  return { comandos, comodo };
+}
+
+/**
  * F27-D4 (decisão do usuário, 19/10/2026: "colado na escada"): o banheiro da suíte do 2º além da PONTA do núcleo — na
  * faixa do núcleo (a largura dele, encostada na fachada), da parede de topo dele até o fim da faixa da suíte. O shaft
  * desce encostado nessa parede de topo, que existe igual nos três pavimentos e não tem janela (a porta do núcleo é na

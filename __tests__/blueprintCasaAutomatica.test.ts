@@ -664,7 +664,9 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
   const m = lote();
   const z3 = (gabaritoPavimentos: number | null, gabaritoAlturaMaxM: number | null = null) => entrada(m, { ctx: { ...entrada(m).ctx, zona: { ...ZONA, gabaritoPavimentos, gabaritoAlturaMaxM, coeficienteMax: null } } });
   const alto = { ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, suites: 2, banheiros: 3, padrao: 'R1-A' as const };
-  const plano = planejarCasa(m, { ...z3(3), curto: alto }, { pavimentos: 3 });
+  // F27-D5: com o terraço, a projeção passa de 100 m² — a intensidade da chuva tem de ser informada (NBR 10844, 5.1.4).
+  const chuva = { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } };
+  const plano = planejarCasa(m, { ...z3(3), curto: alto, hidro: chuva }, { pavimentos: 3 });
   const r = plano.resultado;
 
   it('se implanta em 3 (o CA contando três andares)', () => {
@@ -733,6 +735,23 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
     expect(plano.etapas.find((e) => e.id === 'LAJES')?.nota).toMatch(/a do 1º sob [1-9]/);
     expect(new Set(r.structures.filter((x) => x.levelId === p1.id && x.kind === 'LAJE').map((x) => x.baseMm)).size).toBeGreaterThan(1);
     for (const L of [t.id, p1.id, p2.id]) expect((r.terminais ?? []).some((x) => x.levelId === L && x.disciplina === 'ELETRICA')).toBe(true);
+  });
+
+  it('F27-D5: o terraço — guarda-corpo no contorno dele, no piso do 2º; o 2º com porta para o terraço', () => {
+    const [, , p2] = [...r.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+    const doTerraco = (r.guardaCorpos ?? []).filter((g) => /^Terraço/.test(g.rotulo ?? ''));
+    expect(doTerraco.length).toBeGreaterThan(0);
+    expect(doTerraco.every((g) => g.levelId === p2.id && g.pontos.length >= 2)).toBe(true);
+    // Uma porta (ou de correr) do 2º em parede que não fica na borda da casa: a que dá para o terraço.
+    const seg = plano.sobrado!.segundo!;
+    const rl = plano.implantacao!.retanguloLocal;
+    expect(seg.terracoM2).toBeGreaterThan(0);
+    // As externas do 2º (200 mm) na borda da casa perdem a porta (`semPortaDeEntrada`): a porta que sobra numa externa
+    // dá para o terraço. A do núcleo é de parede de 150 mm.
+    const externasDo2 = new Set(r.walls.filter((w) => w.levelId === p2.id && w.thicknessMm >= 200).map((w) => w.id));
+    const portas = r.openings.filter((o) => externasDo2.has(o.wallId) && (o.kind === 'door' || o.kind === 'sliding'));
+    expect(portas.length).toBeGreaterThan(0);
+    expect(rl.x1 - rl.x0).toBeGreaterThan(seg.retangulo.x1 - seg.retangulo.x0 - 1);
   });
 
   it('o programa inteiro no desenho e a trava: reaplicado no original, o mesmo modelo', () => {

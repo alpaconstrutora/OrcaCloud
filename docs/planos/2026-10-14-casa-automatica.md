@@ -2063,7 +2063,7 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F25 — terreno inclinado: platô único — partes 1 e 2 (ver "Registro da F25" e "Registro da F25 — parte 2"; a rampa da garagem no terreno inclinado vai com a F26)
 - [x] F26 — muro, portão e calçada; e (da F25) a rampa da garagem no terreno inclinado (ver "Registro da F26")
 - [ ] F27 — **partes 1 e 2 feitas** (ver "Registro da F27"); **3 pavimentos (F27-D): [x] D1 a base (no ar, 1a1a8934)
-  · [x] D2 a arquitetura · [x] D3 estrutura · [x] D4 instalações e a opção na tela (19/10) · [ ] D5 terraço**; e (da F24) o serviço com fachada nas casas largas e rasas (L e L de fundo largo, 3 dorm.); e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
+  · [x] D2 a arquitetura · [x] D3 estrutura · [x] D4 instalações e a opção na tela (19/10) · [x] D5 terraço (19/10)**; e (da F24) o serviço com fachada nas casas largas e rasas (L e L de fundo largo, 3 dorm.); e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
 - [ ] F28 — tela e prancha: a chuva de projeto na tela da casa; bolhas dos eixos sem sobrepor
 
 
@@ -2814,3 +2814,29 @@ existem iguais nos três pavimentos e não têm janela).
 - **Fica para a D5 (terraço) e o item 5 (qualidade)**: na faixa da frente do 1º, sob o terraço, ainda atravessam o
   cômodo o condutor do telhado do 2º (o beiral cai sobre o terraço), uma coluna de água fria e uma ventilação de peças do
   térreo; encontros de rede 0–7 por lote (sobrado: 0); 0–3 tubos atravessando pilar.
+
+#### Registro da D5 (19/10/2026) — o terraço
+
+- **Guarda-corpo** (`contornoDoTerraco`): no perímetro da laje do 1º que o 2º não cobre (menos os lados do retângulo
+  recuado na borda da casa e o núcleo na fachada), no piso do 2º, 1,10 m (a altura do padrão de guarda-corpo do app). Medido:
+  29–38 m por lote.
+- **Porta para o terraço** (`portaParaOTerraco`): sem porta do 2º para o terraço, a maior janela de cômodo seco numa parede
+  que dá para ele vira porta de correr (a mesma largura, do piso à altura da porta).
+- **Telhado sobre o núcleo que sobra fora do 2º**: entra como anexo (uma água caindo para fora) na etapa do telhado.
+- **A água do telhado do 2º** (antes descia pelo meio do dormitório do 1º em todos os lotes):
+  - `planejarCalhas`: o bocal prefere a ponta do beiral que NÃO cai sobre laje de pavimento de baixo (desce por fora da
+    casa); com as duas (ou nenhuma) sobre laje, a regra de sempre;
+  - `planejarCondutores` (`descidaDoTerraco`): a fonte sobre o terraço desce ao piso dele, corre no enchimento do
+    contrapiso (`HipotesesPluviais.cotaNoTerracoMm`, 80 mm, hipótese) até a fachada mais perto que tem parede em todo
+    pavimento até o destino (fora de pilar) e desce POR FORA, rente à face externa — por dentro dividia a faixa com o
+    eletroduto do 1º. Teste novo (falha sem a correção). Medido: nenhum condutor pelo meio de cômodo nos 6 lotes.
+  - a 120 mm o horizontal cruzava o eletroduto em 4 lotes (a 80 mm, em 2): no modelo de cotas o piso do terraço e o teto
+    do 1º são o mesmo plano, e o eletroduto do 1º corre rente à fachada logo abaixo dele — fica para o item 5 (o
+    eletroduto, traçado depois, desviar dos tubos já lançados).
+- **Impermeabilização no orçamento**: `lajesDescobertas` (o último pavimento pelo centro, como antes; a laje de pavimento
+  intermediário na parte fora do telhado e dos cômodos de cima, por amostragem de 25 cm) alimenta a medida nova
+  `AREA_LAJE_DESCOBERTA` ("Laje descoberta (terraço) — área a impermeabilizar", escopo telhado) e a contribuição pluvial
+  (o terraço entra na chuva — com ele a projeção de uma casa de 3 passa de 100 m² e a intensidade tem de ser informada,
+  NBR 10844 5.1.4). O sobrado inteiro coberto dá zero (teste).
+- 8 casas de referência idênticas. Fica: a ventilação e uma coluna de água fria de peças do térreo sob o terraço ainda
+  sobem pelo dormitório do 1º (item 5); o uso TERRAÇO como ambiente (o kernel não tem — o terraço não é cômodo fechado).

@@ -525,6 +525,15 @@ export const MEDIDAS: DefinicaoMedida[] = [
     descricao: 'Superfície inclinada de cada água: área projetada × √(1 + inclinação²). É a área que compra telha.',
   },
   {
+    // F27-D5 da casa automática (19/10/2026): a laje que fica ao tempo — o terraço do 2º recuado, a laje sem telhado —
+    // leva impermeabilização, proteção mecânica e caimento; é por esta área que se cotam.
+    id: 'AREA_LAJE_DESCOBERTA',
+    rotulo: 'Laje descoberta (terraço) — área a impermeabilizar',
+    escopo: 'TELHADO',
+    dimensao: 'M2',
+    descricao: 'A parte de cada laje que não fica sob telhado nem sob cômodo do pavimento de cima: o terraço e a laje ao tempo. É a área da impermeabilização.',
+  },
+  {
     id: 'AREA_TELHADO_PROJETADA',
     rotulo: 'Telhado — área projetada (em planta)',
     escopo: 'TELHADO',
@@ -750,6 +759,8 @@ export interface ExtrasDaGeracao {
   subRegioes?: { uid: string; nome: string; rotuloDoMaterial: string; material: string; permeavel: boolean; areaM2: number }[];
   /** F25: a terraplenagem do estudo, recalculada da topografia do snapshot (`terraplenagemDoOrcamento`). */
   terraplenagem?: TerraplenagemDoOrcamento | null;
+  /** F27-D5: as lajes descobertas (o terraço e a laje sem telhado do último pavimento) — `lajesDescobertas(model)`. */
+  lajesDescobertas?: { uid: string; rotulo: string; areaM2: number }[];
 }
 
 /** F25: o que o orçamento lê da terraplenagem do estudo. */
@@ -1039,6 +1050,11 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
         },
       }));
     }
+
+    case 'AREA_LAJE_DESCOBERTA':
+      return (extras.lajesDescobertas ?? [])
+        .filter((l) => l.areaM2 > 0 && combina(l.rotulo))
+        .map((l) => ({ ref: l.uid, rotulo: l.rotulo, valor: l.areaM2, formula: 'área da laje fora do telhado e dos cômodos de cima', variaveis: { areaM2: l.areaM2 } }));
 
     case 'AREA_TELHADO':
     case 'AREA_TELHADO_PROJETADA': {

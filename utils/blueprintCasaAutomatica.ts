@@ -104,6 +104,7 @@ import type { ModeloDoCatalogo } from './blueprintSelecaoClimatizacao';
 import { COTA_USUAL_DO_PONTO_ELETRICO, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
 import { entradaDoQuadro, padraoDeEntrada } from './blueprintEntradaDeEnergia';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
+import { HIPOTESES_DE_GUARDA_CORPO_PADRAO } from './blueprintGuardaCorpo';
 import {
   comandoDaEscada,
   comUidsDoPavimento,
@@ -118,6 +119,8 @@ import {
   zonasMolhadasDoBanheiro,
   HIPOTESES_DO_SOBRADO_PADRAO,
   pavimentoComNucleo,
+  portaParaOTerraco,
+  contornoDoTerraco,
   pilaresDoTerceiro,
   retanguloDoSegundo,
   pilaresDoSobrado,
@@ -2869,7 +2872,11 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       // F27-D2: o 2º sem as portas para FORA da casa (fundos e laterais); a do terraço (a "entrada" do gerador na frente
       // do retângulo recuado) fica. A segunda escada, empilhada no mesmo núcleo, sai do 1º.
       const corredorDoSegundo = eg?.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? null;
-      const pg = eg && G ? pavimentoComNucleo(comUidsDoPavimento(semPortaDeEntrada(comandosDeAplicacao(eg.r, G), rl), 'G'), G, nucleo, eg.r.ambientes, 'G', peDireitoMm, hip.sobrado, corredorDoSegundo) : null;
+      const pgBase = eg && G ? pavimentoComNucleo(comUidsDoPavimento(semPortaDeEntrada(comandosDeAplicacao(eg.r, G), rl), 'G'), G, nucleo, eg.r.ambientes, 'G', peDireitoMm, hip.sobrado, corredorDoSegundo) : null;
+      // F27-D5: o 2º abre para o terraço (na planta invertida a "entrada" ficava nos fundos).
+      const terraco = pgBase && eg ? portaParaOTerraco(pgBase.comandos, rl, eg.r.ambientes, hip.sobrado.alturaDaPortaMm) : null;
+      const pg = pgBase && terraco ? { ...pgBase, comandos: terraco.comandos } : pgBase;
+      if (terraco?.comodo) decisoes.push(`3 pavimentos: a janela de ${terraco.comodo} para o terraço virou porta de correr (o 2º sem porta para o terraço).`);
       const exata = implantacao.alinhadaAoDesenho;
       n += aplicar([
         ...comandosLocaisNoMundo(pt.comandos, q, exata),
@@ -3181,8 +3188,29 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         return { nota: `${p.novos} eixo(s)` };
       },
     );
-    // F27-D3: na casa de 3, o telhado sobre o 2º (o retângulo recuado); o terraço e o núcleo que sobra fora são a D5.
-    if (G && eg) etapaDoTelhado(G, eg.r.retangulo, eg.r.anexos, (m.structures ?? []).some((x) => x.levelId === G && x.kind === 'LAJE'));
+    // F27-D3: na casa de 3, o telhado sobre o 2º (o retângulo recuado). F27-D5: o núcleo que sobra fora dele entra como
+    // anexo (uma água caindo para fora) — sem isso a escada ficava descoberta.
+    if (G && eg) {
+      const sg = sobrado.segundo!.retangulo;
+      const r = nucleo.ret;
+      const fora: Retangulo[] = [
+        ...(r.y0 < sg.y0 ? [{ x0: r.x0, x1: r.x1, y0: r.y0, y1: Math.min(r.y1, sg.y0) }] : []),
+        ...(r.y1 > sg.y1 ? [{ x0: r.x0, x1: r.x1, y0: Math.max(r.y0, sg.y1), y1: r.y1 }] : []),
+      ];
+      etapaDoTelhado(G, eg.r.retangulo, [...eg.r.anexos, ...fora], (m.structures ?? []).some((x) => x.levelId === G && x.kind === 'LAJE'));
+      // F27-D5: o guarda-corpo no contorno do terraço (a borda da laje do 1º que o 2º não cobre), no piso do 2º.
+      const alturaDoGuardaCorpo = HIPOTESES_DE_GUARDA_CORPO_PADRAO.alturaGuardaCorpoMm;
+      const linhas = contornoDoTerraco(rl, sg, r);
+      if (linhas.length) {
+        const noMundo = (p: Point) => {
+          const w = paraMundo(q, p);
+          return point(Math.round(w.x), Math.round(w.y));
+        };
+        aplicar(linhas.map((l, k): Command => ({ type: 'AddGuardaCorpo', levelId: G, tipo: 'GUARDA_CORPO', pontos: l.map(noMundo), alturaMm: alturaDoGuardaCorpo, material: 'METALICO', rotulo: `Terraço · guarda-corpo${linhas.length > 1 ? ` ${k + 1}` : ''}`, sugerido: true })));
+        const metros = linhas.reduce((s, l) => s + l.slice(1).reduce((t, p, i) => t + Math.hypot(p.x - l[i].x, p.y - l[i].y), 0), 0) / 1000;
+        decisoes.push(`3 pavimentos: guarda-corpo de ${f2(alturaDoGuardaCorpo / 1000)} m no contorno do terraço (${f2(metros)} m).`);
+      }
+    }
     else etapaDoTelhado(S, es.r.retangulo, es.r.anexos, (m.structures ?? []).some((x) => x.levelId === S && x.kind === 'LAJE'));
     // ── INSTALAÇÕES DO SOBRADO (F12c) ──
     // O SHAFT junto de cada banheiro de cima, antes de tudo: o tubo de queda e as colunas de água descem por ele

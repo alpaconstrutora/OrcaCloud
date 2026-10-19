@@ -35,9 +35,10 @@
  * chega com a declividade da premissa — o nível real da sarjeta é do mundo,
  * e o aviso manda conferir. A caixa de areia continua opcional.
  */
-import type { BlueprintModel, Command, ObjectId, Terminal, Trecho } from './blueprintKernel';
-import { applyBatch, extensaoVerticalDaCaixa } from './blueprintKernel';
-import { desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho, Wall } from './blueprintKernel';
+import { applyBatch, extensaoVerticalDaCaixa, pegadaEmPlanta, pointInPolygon } from './blueprintKernel';
+import { desvioDoPilar, foraDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { encaixarNaParede } from './blueprintRotaPelasParedes';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { cotaDoTerrenoEm, pontoNaFrente, type LeitorDoTerreno, type OrigemDaFrente } from './blueprintAncorasHidro';
 import { fazerChave, type No } from './blueprintGrafoDeRede';
@@ -332,6 +333,42 @@ function comSaidaProposta(model: BlueprintModel, hip: HipotesesPluviais, fontes:
   };
 }
 
+/**
+ * F27-D5: onde desce o condutor de uma fonte sobre o terraço — `null` se ela não está sobre laje do pavimento de baixo
+ * (ou cai dentro de um cômodo do seu), ou se não há fachada que sirva. A fachada: a parede externa (a da borda dos
+ * cômodos do pavimento de baixo) mais perto da fonte, com parede na mesma linha em todo pavimento até o destino
+ * (`abaixo`, do destino ao de baixo da fonte); o ponto fora de pilar e afastado da face EXTERNA (o condutor aparente).
+ */
+function descidaDoTerraco(model: BlueprintModel, abaixo: readonly BlueprintModel['levels'][number][], f: Terminal, dnMm: number): { x: number; y: number } | null {
+  const deBaixo = abaixo[abaixo.length - 1];
+  if (!deBaixo) return null;
+  const naLaje = (model.structures ?? []).some((x) => x.kind === 'LAJE' && x.levelId === deBaixo.id && pointInPolygon(pegadaEmPlanta(x), f.at as Point));
+  if (!naLaje || model.spaces.some((sp) => sp.levelId === f.levelId && pointInPolygon(sp.ring, f.at as Point))) return null;
+  // As externas do de baixo: a parede com um lado fora de todo cômodo dele.
+  const comodos = model.spaces.filter((sp) => sp.levelId === deBaixo.id);
+  const dentro = (p: { x: number; y: number }) => comodos.some((sp) => pointInPolygon(sp.ring, p as Point));
+  const externa = (w: Wall) => {
+    const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+    const n = { x: -(w.b.y - w.a.y) / L, y: (w.b.x - w.a.x) / L };
+    const m = { x: (w.a.x + w.b.x) / 2, y: (w.a.y + w.b.y) / 2 };
+    const d = w.thicknessMm / 2 + 100;
+    return dentro({ x: m.x + n.x * d, y: m.y + n.y * d }) !== dentro({ x: m.x - n.x * d, y: m.y - n.y * d });
+  };
+  const externas = model.walls.filter((w) => w.levelId === deBaixo.id && externa(w));
+  const e = encaixarNaParede(f.at, externas, 1e9);
+  if (!e) return null;
+  const pegadas = abaixo.flatMap((l) => pegadasDePilares(model, l.id));
+  const q = foraDoPilar(e.q, e.parede, pegadas);
+  if (!abaixo.every((l) => encaixarNaParede(q, model.walls.filter((w) => w.levelId === l.id), 60))) return null;
+  // Para FORA (o lado oposto ao da fonte, que vem de cima do terraço), rente à face externa: o condutor aparente na
+  // fachada. Por dentro ele dividia a faixa rente à parede com o eletroduto do 1º (encontro eletroduto × pluvial).
+  const vx = q.x - f.at.x;
+  const vy = q.y - f.at.y;
+  const Lv = Math.hypot(vx, vy) || 1;
+  const afasta = e.parede.thicknessMm / 2 + dnMm / 2 + 10;
+  return { x: Math.round(q.x + (vx / Lv) * afasta), y: Math.round(q.y + (vy / Lv) * afasta) };
+}
+
 /** `terreno`: a topografia exibida, quando há — a cota do terreno na frente para a saída PROPOSTA. */
 export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais, terreno: LeitorDoTerreno | null = null): PlanoDeCondutores {
   const vazio = (motivo: string): PlanoDeCondutores => ({ motivo, fontes: 0, verticais: 0, horizontais: 0, apagados: 0, avisos: [], comandos: [] });
@@ -426,8 +463,25 @@ export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais
     }
     const q = porBocal.get(f.id) ?? 0;
     const dnV = dnDoVertical(q);
-    // ── O vertical: do bocal ao pé, enterrado, no pavimento do destino ──
-    if (idx === idxDestino) {
+    // F27-D5 da casa automática (19/10/2026): a fonte sobre o TERRAÇO (a laje de um pavimento de baixo, fora dos cômodos do
+    // seu — o beiral do 2º recuado) não desce pelo meio do cômodo de baixo: desce ao piso do terraço, corre no enchimento
+    // do contrapiso até a fachada mais perto (a parede externa que existe em todo pavimento até o destino, fora de pilar) e
+    // desce rente a ela. O pé (e o horizontal até a caixa) fica lá.
+    let pe: { x: number; y: number } = f.at;
+    const descida = idx > idxDestino ? descidaDoTerraco(model, niveis.slice(idxDestino, idx), f, dnV) : null;
+    if (descida) {
+      const zLaje = -Math.abs(hip.cotaNoTerracoMm ?? 80);
+      const L = Math.hypot(descida.x - f.at.x, descida.y - f.at.y);
+      const zFim = zLaje - Math.ceil((L * i) / 100);
+      add(f.levelId, f.at, f.cotaMm, f.at, zLaje, dnV, ROTULO_DO_CONDUTOR_VERTICAL);
+      add(f.levelId, f.at, zLaje, descida, zFim, dnV, ROTULO_DO_CONDUTOR_HORIZONTAL);
+      const abaixo = niveis[idx - 1];
+      add(abaixo.id, descida, abaixo.defaultHeightMm + zFim, descida, idx - 1 === idxDestino ? enterrado : 0, dnV, ROTULO_DO_CONDUTOR_VERTICAL);
+      for (let k = idx - 2; k > idxDestino; k--) add(niveis[k].id, descida, niveis[k].defaultHeightMm, descida, 0, dnV, ROTULO_DO_CONDUTOR_VERTICAL);
+      if (idx - 1 > idxDestino) add(destinoNivel, descida, niveis[idxDestino].defaultHeightMm, descida, enterrado, dnV, ROTULO_DO_CONDUTOR_VERTICAL);
+      avisos.push(`${f.rotulo || 'Bocal'} sobre o terraço: o condutor corre no contrapiso dele (${m1(L)} m) até a borda e desce por fora, rente à fachada — confira a impermeabilização e a passagem na borda da laje`);
+      pe = descida;
+    } else if (idx === idxDestino) {
       add(f.levelId, f.at, f.cotaMm, f.at, enterrado, dnV, ROTULO_DO_CONDUTOR_VERTICAL);
     } else {
       add(f.levelId, f.at, f.cotaMm, f.at, 0, dnV, ROTULO_DO_CONDUTOR_VERTICAL);
@@ -437,21 +491,21 @@ export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais
     verticais++;
     // ── O horizontal: do pé à caixa de areia mais perto (sem caixa, à saída mais perto) ──
     const alvos = caixasDeAreia.length > 0 ? caixasDeAreia : saidas;
-    const alvo = [...alvos].sort((a, b) => Math.hypot(a.at.x - f.at.x, a.at.y - f.at.y) - Math.hypot(b.at.x - f.at.x, b.at.y - f.at.y) || a.id.localeCompare(b.id))[0];
+    const alvo = [...alvos].sort((a, b) => Math.hypot(a.at.x - pe.x, a.at.y - pe.y) - Math.hypot(b.at.x - pe.x, b.at.y - pe.y) || a.id.localeCompare(b.id))[0];
     // O comprimento PELO CONTORNO (o caminho que o tubo faz) — a chegada e a declividade contam com ele.
-    const L = comprimentoPorFora(f.at, alvo.at, obstaculosDe(destinoNivel));
+    const L = comprimentoPorFora(pe, alvo.at, obstaculosDe(destinoNivel));
     const dnH = dnDoHorizontal(q, n, i, dnV);
     if (alvo.tipoHidraulico === 'CAIXA_AREIA') {
       const chegada = enterrado - Math.ceil((L * i) / 100);
       const ext = extensaoVerticalDaCaixa(alvo)!;
       if (chegada < ext.fundoMm) avisos.push(`o condutor chega a ${m1(chegada)} m, abaixo do fundo da caixa de areia (${m1(ext.fundoMm)} m) — aprofunde a caixa`);
-      if (L > 0) horizontal(destinoNivel, f.at, enterrado, alvo.at, Math.max(chegada, ext.fundoMm), dnH);
+      if (L > 0) horizontal(destinoNivel, pe, enterrado, alvo.at, Math.max(chegada, ext.fundoMm), dnH);
       const atual = naCaixa.get(alvo.id) ?? { q: 0, dn: 0 };
       naCaixa.set(alvo.id, { q: atual.q + q, dn: Math.max(atual.dn, dnH) });
     } else {
       const decl = L > 0 ? ((enterrado - alvo.cotaMm) / L) * 100 : 0;
       if (decl + 1e-9 < DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT) avisos.push(`a saída pluvial está alta demais para o condutor chegar por gravidade (${decl.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} %)`);
-      if (L > 0) horizontal(destinoNivel, f.at, enterrado, alvo.at, alvo.cotaMm, dnH);
+      if (L > 0) horizontal(destinoNivel, pe, enterrado, alvo.at, alvo.cotaMm, dnH);
     }
     horizontais++;
     ligadas++;

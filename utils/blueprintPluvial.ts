@@ -18,8 +18,10 @@
  *   - VAZÃO (5.3): Q = I·A/60, em L/min (I em mm/h, A em m²).
  *
  * LAJE DESCOBERTA: a laje do último pavimento que não está sob nenhuma água do
- * telhado (o terraço, a laje impermeabilizada). A de pavimento intermediário
- * não entra — sem saber o que há em cima, o sistema não inventa terraço.
+ * telhado (o terraço, a laje impermeabilizada). F27-D5 da casa automática
+ * (19/10/2026): a de pavimento intermediário entra na parte que não fica sob
+ * água nem sob cômodo do pavimento de cima — o terraço do 2º recuado
+ * (`lajesDescobertas`).
  *
  * Tudo derivado do modelo e das premissas do estudo; nada gravado.
  */
@@ -52,6 +54,12 @@ export interface HipotesesPluviais {
    * paredes (e dos pilares), mm. Ausente = 300.
    */
   afastamentoDoCondutorDaCasaMm?: number;
+  /**
+   * F27-D5 da casa automática (19/10/2026): o condutor que nasce sobre o TERRAÇO (a laje de um pavimento de baixo, fora
+   * dos cômodos do seu) corre no enchimento do contrapiso dele, com o eixo a isto abaixo do piso, até a fachada — e desce
+   * rente à parede externa. Ausente = 80.
+   */
+  cotaNoTerracoMm?: number;
 }
 
 export const HIPOTESES_PLUVIAIS_PADRAO: HipotesesPluviais = {
@@ -64,6 +72,7 @@ export const HIPOTESES_PLUVIAIS_PADRAO: HipotesesPluviais = {
   declividadeDoCondutorPct: 1,
   profundidadeDoCondutorMm: 300,
   afastamentoDoCondutorDaCasaMm: 300,
+  cotaNoTerracoMm: 80,
 };
 
 /**
@@ -149,7 +158,51 @@ export function intensidadeDeProjeto(hip: HipotesesPluviais, areaProjecaoTotalM2
 
 const beiralDa = (a: Agua) => ({ a: a.pontos[a.beiralIndex], b: a.pontos[(a.beiralIndex + 1) % a.pontos.length] });
 
-/** As águas do telhado e as lajes descobertas do último pavimento, com a área e a vazão de cada uma. */
+/** F27-D5: o passo da amostragem da laje de pavimento intermediário (a parte fora do pavimento de cima), mm. */
+const PASSO_DA_LAJE_DESCOBERTA_MM = 250;
+
+/**
+ * As LAJES DESCOBERTAS: a do último pavimento que não está sob nenhuma água (pelo centro, como sempre) e, F27-D5, a parte
+ * da de pavimento intermediário fora das águas e dos cômodos do pavimento logo acima (a laje é o teto do pavimento dela —
+ * o piso do de cima) — o terraço. Área em m², por peça.
+ */
+export function lajesDescobertas(model: BlueprintModel): { id: ObjectId; uid: string; levelId: ObjectId; rotulo: string; areaM2: number }[] {
+  const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+  const aguas = model.roofs ?? [];
+  const sobTelhado = (p: { x: number; y: number }) => aguas.some((a) => pointInPolygon(a.pontos, p as Point));
+  const saida: { id: ObjectId; uid: string; levelId: ObjectId; rotulo: string; areaM2: number }[] = [];
+  niveis.forEach((nivel, k) => {
+    const deCima = niveis[k + 1];
+    const comodosDeCima = deCima ? model.spaces.filter((sp) => sp.levelId === deCima.id) : [];
+    const lajes = (model.structures ?? []).filter((s) => s.kind === 'LAJE' && s.levelId === nivel.id).sort((a, b) => a.id.localeCompare(b.id));
+    lajes.forEach((l, i) => {
+      const contorno = pegadaEmPlanta(l);
+      const area = mm2ParaM2(polygonArea(contorno));
+      let descoberta = 0;
+      if (!deCima) {
+        const c = contorno.reduce((s, p) => ({ x: s.x + p.x / contorno.length, y: s.y + p.y / contorno.length }), { x: 0, y: 0 });
+        descoberta = sobTelhado(c) ? 0 : area;
+      } else {
+        const xs = contorno.map((p) => p.x);
+        const ys = contorno.map((p) => p.y);
+        let dentro = 0;
+        let fora = 0;
+        for (let x = Math.min(...xs) + PASSO_DA_LAJE_DESCOBERTA_MM / 2; x < Math.max(...xs); x += PASSO_DA_LAJE_DESCOBERTA_MM)
+          for (let y = Math.min(...ys) + PASSO_DA_LAJE_DESCOBERTA_MM / 2; y < Math.max(...ys); y += PASSO_DA_LAJE_DESCOBERTA_MM) {
+            const p = { x, y } as Point;
+            if (!pointInPolygon(contorno, p)) continue;
+            dentro++;
+            if (!sobTelhado(p) && !comodosDeCima.some((sp) => pointInPolygon(sp.ring, p))) fora++;
+          }
+        descoberta = dentro ? Math.round(((area * fora) / dentro) * 100) / 100 : 0;
+      }
+      if (descoberta > 0) saida.push({ id: l.id, uid: l.uid ?? l.id, levelId: nivel.id, rotulo: `Laje descoberta ${i + 1} · ${nivel.name}`, areaM2: descoberta });
+    });
+  });
+  return saida;
+}
+
+/** As águas do telhado e as lajes descobertas (o último pavimento e, F27-D5, o terraço), com a área e a vazão de cada uma. */
 export function contribuicaoPluvial(model: BlueprintModel, hip: HipotesesPluviais): ContribuicaoPluvial {
   const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
   const nomeDoNivel = new Map(niveis.map((l) => [l.id, l.name]));
@@ -161,18 +214,7 @@ export function contribuicaoPluvial(model: BlueprintModel, hip: HipotesesPluviai
       areaProjecaoM2: ap, inclinacaoPct: a.inclinacaoPct, areaContribuicaoM2: areaDeContribuicaoM2(ap, a.inclinacaoPct), beiral: beiralDa(a),
     };
   });
-  const ultimo = niveis[niveis.length - 1];
-  if (ultimo) {
-    const sobTelhado = (p: { x: number; y: number }) => aguas.some((a) => pointInPolygon(a.pontos, p as Point));
-    const lajes = (model.structures ?? []).filter((s) => s.kind === 'LAJE' && s.levelId === ultimo.id).sort((a, b) => a.id.localeCompare(b.id));
-    lajes.forEach((l, i) => {
-      const contorno = pegadaEmPlanta(l);
-      const c = contorno.reduce((s, p) => ({ x: s.x + p.x / contorno.length, y: s.y + p.y / contorno.length }), { x: 0, y: 0 });
-      if (sobTelhado(c)) return;
-      const ap = mm2ParaM2(polygonArea(contorno));
-      sup.push({ tipo: 'LAJE', id: l.id, levelId: l.levelId, rotulo: `Laje descoberta ${i + 1} · ${ultimo.name}`, areaProjecaoM2: ap, inclinacaoPct: 0, areaContribuicaoM2: ap, beiral: null });
-    });
-  }
+  for (const l of lajesDescobertas(model)) sup.push({ tipo: 'LAJE', id: l.id, levelId: l.levelId, rotulo: l.rotulo, areaProjecaoM2: l.areaM2, inclinacaoPct: 0, areaContribuicaoM2: l.areaM2, beiral: null });
   const areaProjecaoTotalM2 = sup.reduce((s, x) => s + x.areaProjecaoM2, 0);
   const areaContribuicaoTotalM2 = sup.reduce((s, x) => s + x.areaContribuicaoM2, 0);
   const I = intensidadeDeProjeto(hip, areaProjecaoTotalM2);

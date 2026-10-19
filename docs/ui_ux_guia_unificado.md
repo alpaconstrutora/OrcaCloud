@@ -2879,6 +2879,27 @@ sm:translate-x-[calc(100%_+_2rem)]       estado FECHADO: o deslocamento tem de
 Ocorrências vivas: `FinancialCalendar.tsx` (títulos do dia) e `OfficesAI.tsx`
 (assistente). Ao criar painel novo, use o `Sheet` — estas duas são legado.
 
+### Painel fechado NÃO projeta sombra
+
+**Criado em 2026-10-19, a pedido do usuário** — *"parece que existe uma camada cinza em cima da
+barra de rolagem"*. O painel solto fechado é só empurrado para fora da tela (`translate-x`), e o
+desfoque de `shadow-2xl` (50px) vazava ~20px para DENTRO da tela, por cima da barra de rolagem do
+`<main>`. Cada painel montado fechado soma a sua sombra: a tela de contrato monta 13, e a borda
+ficou de 255 a 183 (de 0 a 100% de cinza) — medido no Chrome com o código antigo × o novo.
+
+```tsx
+// ✅ a sombra acompanha o estado, e a transição cobre `box-shadow` (some junto com o deslizar)
+className={`fixed bg-white transition-[transform,box-shadow] duration-300 ${open ? 'shadow-2xl' : 'shadow-none'}`}
+// ❌ sombra fixa: o painel fechado, fora da tela, ainda a projeta sobre a borda
+className="fixed bg-white shadow-2xl transition-transform duration-300"
+```
+
+> ✅ O `Sheet` já faz isso (`ui/sheet.tsx`) — quem usa `Sheet` não precisa fazer nada.
+> ✅ Vale para o painel feito à mão acima: sombra só no ramo aberto do ternário.
+> ❌ Esconder o painel fechado com `translate` e deixar a sombra fixa. Conferir com
+> `getComputedStyle(painel).boxShadow` nos painéis fechados, e olhar a borda direita da janela.
+> 🔒 Trava: `__tests__/components/SheetSombraFechado.test.tsx`.
+
 ---
 
 ## 27. IDENTIFICADOR TÉCNICO SÓ-LEITURA (copiável)

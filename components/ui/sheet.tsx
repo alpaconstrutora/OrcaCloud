@@ -177,7 +177,13 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
       <div
         style={topPx != null ? ({ '--sheet-top': `${Math.max(0, topPx) + (floating ? 16 : 0)}px` } as React.CSSProperties) : undefined}
         className={[
-          'fixed bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out',
+          // A sombra só existe ABERTO. Fechado o painel só é empurrado para fora da tela
+          // (translate), e o desfoque de `shadow-2xl` (50px) vazava ~20px para DENTRO da
+          // tela, por cima da barra de rolagem do <main> — e cada Sheet montado fechado
+          // somava a sua (19/10/2026). A transição cobre `box-shadow` para ela sumir
+          // junto com o deslizar de saída, em vez de estalar.
+          'fixed bg-white flex flex-col transition-[transform,box-shadow] duration-300 ease-in-out',
+          open ? 'shadow-2xl' : 'shadow-none',
           // Sem véu o painel precisa reativar o ponteiro por conta própria.
           modal ? '' : 'pointer-events-auto',
           // mobile: bottom sheet

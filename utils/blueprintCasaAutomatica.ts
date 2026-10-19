@@ -1390,8 +1390,6 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   return fica;
 }
 
-/** F27-D2/D3: o que a casa de 3 pavimentos diz enquanto as instalações dela não existem (a D4 tira). */
-export const MOTIVO_TRES_PAVIMENTOS_EM_OBRA = 'A casa de 3 pavimentos ainda não lança as instalações (a arquitetura e a estrutura dos três pavimentos estão lançadas) — gere o sobrado, ou deixe em "Automático".';
 
 function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> & { pavimentos: 1 | 2 | 3 }, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const hip: HipotesesDaCasa = {
@@ -2125,8 +2123,11 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     // F14c: no sobrado, cada grupo de peças de cima (o banheiro) com o shaft a até `shaftAteAsPecasMm` do centro delas —
     // o shaft do F12c nasce antes do mobiliário e, no banheiro comprido, ficava a 5 m das peças; sem um perto, ganha um
     // junto delas (o tubo de queda desce ali e o esgoto cabe no enchimento da laje rebaixada).
-    if (niveis.length > 1) {
-      const [T0, S0] = niveis;
+    // F27-D4: em cada pavimento de cima — na casa de 3, o shaft do banheiro do 2º desce até o térreo atravessando o 1º.
+    const T0 = niveis[0];
+    for (let k = 1; k < niveis.length; k++) {
+      const S0 = niveis[k];
+      const meio = niveis.slice(1, k);
       const pecas = (m.terminais ?? []).filter((t) => t.levelId === S0 && t.disciplina === 'ESGOTO');
       const grupos = gruposDoTuboDeQueda(m, S0, pecas, hip.sobrado.grupoDoTuboDeQuedaMm);
       const escada = m.spaces.find((sp) => sp.levelId === S0 && /escada/i.test(sp.name ?? ''))?.ring ?? null;
@@ -2135,7 +2136,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const alvo = { x: g.reduce((a, t) => a + t.at.x, 0) / g.length, y: g.reduce((a, t) => a + t.at.y, 0) / g.length };
         const ban = m.spaces.find((sp) => sp.levelId === S0 && g.filter((t) => pointInPolygon(sp.ring, t.at)).length * 2 >= g.length);
         if (!ban) continue;
-        const sh = shaftDoGrupo(m, T0, S0, ban.ring, alvo, escada, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm);
+        const sh = shaftDoGrupo(m, T0, S0, ban.ring, alvo, escada, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm, meio);
         if (sh && !sh.novo) continue;
         if (!sh) {
           pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Shaft: ${ban.name} não tem lugar junto das peças para o shaft (parede com parede embaixo, ou cômodo de baixo que aceite a caixa) — o tubo de queda desce longe delas; ponha o shaft à mão.` });
@@ -2583,7 +2584,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           circuitos += plano.circuitos.length;
           n += aplicar(plano.comandos);
           motivo ??= plano.comandos.length ? null : plano.motivo;
-          if (niveis.length > 1) porPavimento.push(`${plano.circuitos.length} ${L === niveis[0] ? 'no térreo' : 'no superior'}`);
+          if (niveis.length > 1) porPavimento.push(`${plano.circuitos.length} ${L === niveis[0] ? 'no térreo' : niveis.length > 2 ? `no ${niveis.indexOf(L)}º` : 'no superior'}`);
         }
         eletrica.circuitos = circuitos;
         etapa('CIRCUITOS', ROTULO_DA_ETAPA_DA_CASA.CIRCUITOS, n ? 'LANCOU' : 'NADA_A_FAZER', n, n ? `${circuitos} circuito(s)${porPavimento.length ? ` (${porPavimento.join(', ')})` : ''}` : motivo);
@@ -3011,8 +3012,14 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     );
     let guardas = 0;
     let lajesRebaixadas = 0;
+    let lajesRebaixadasDoPrimeiro = 0;
     /** F14c: as áreas molhadas dos banheiros de cima, pelas peças de esgoto PREVISTAS (simulação de mobiliário, louças e kit). */
-    const zonasMolhadasDeCima = (x: BlueprintModel, T0: ObjectId, S0: ObjectId): Point[][] => {
+    // F27-D4: `niveis` de baixo para cima e `k` o pavimento dos banheiros (a laje rebaixada é a do pavimento de baixo
+    // dele). A previsão repete a sequência das instalações: os shafts do F12c de cada pavimento de cima (o do 2º descendo
+    // pelo 1º), o mobiliário de todos, e os shafts junto das peças pavimento a pavimento até o `k`.
+    const zonasMolhadasDeCima = (x: BlueprintModel, niveis: ObjectId[], k: number): Point[][] => {
+      const T0 = niveis[0];
+      const S0 = niveis[k];
       if (!hip.mobiliario.lancar || hip.sobrado.rebaixoDaLajeDoBanheiroMm <= 0) return [];
       try {
         // F27 da casa automática (18/10/2026): primeiro os shafts do F12c, como nas instalações — sem eles a previsão
@@ -3025,17 +3032,34 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           { x: sobrado.nucleo.ret.x1, y: sobrado.nucleo.ret.y1 },
           { x: sobrado.nucleo.ret.x0, y: sobrado.nucleo.ret.y1 },
         ].map((p) => paraMundo(q, p));
-        const doF12c = hip.hidraulica.lancar ? shaftsDoSobrado(x, T0, S0, nucleoNoMundo, hip.sobrado.shaftMm) : [];
-        const x0 = doF12c.length ? applyBatch(x, doF12c.map((sh): Command => ({ type: 'AddNucleo', levelId: T0, ateLevelId: S0, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' }))).model : x;
-        // Os DOIS pavimentos, como as etapas de lá: o shaft previsto não pode cair em cima de uma peça do térreo.
-        const porNivel = [T0, S0].map((L) => ({ L, lista: mobiliarNivel(x0, L, hip.mobiliario) }));
+        let x0 = x;
+        for (let j = 1; j < niveis.length && hip.hidraulica.lancar; j++) {
+          const doF12c = shaftsDoSobrado(x0, T0, niveis[j], nucleoNoMundo, hip.sobrado.shaftMm, 2500, niveis.slice(1, j));
+          if (doF12c.length) x0 = applyBatch(x0, doF12c.map((sh): Command => ({ type: 'AddNucleo', levelId: T0, ateLevelId: niveis[j], tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' }))).model;
+        }
+        // Todos os pavimentos, como as etapas de lá: o shaft previsto não pode cair em cima de uma peça de baixo.
+        const porNivel = niveis.map((L) => ({ L, lista: mobiliarNivel(x0, L, hip.mobiliario) }));
         const mob = porNivel.flatMap((p) => comandosDeMobiliario(p.lista, p.L, x0));
         const r1 = mob.length ? applyBatch(x0, mob) : null;
         const m1 = r1?.model ?? x0;
         const louc = pontosDasLoucasCriadas(m1, r1?.diff.created ?? [], hip.pontos, { sugerida: true });
         const m2 = louc.length ? applyBatch(m1, louc).model : m1;
-        const kit = coletoresForaDoShaft(m2, [T0, S0].flatMap((L) => planejarPontosDoNivel(m2, L, hip.pontos)).flatMap((pl) => pl.comandos));
-        const m3 = kit.length ? applyBatch(m2, kit).model : m2;
+        const kit = coletoresForaDoShaft(m2, niveis.flatMap((L) => planejarPontosDoNivel(m2, L, hip.pontos)).flatMap((pl) => pl.comandos));
+        let m3 = kit.length ? applyBatch(m2, kit).model : m2;
+        // Os pavimentos de baixo do `k` ganham os shafts junto das peças antes (como no passo do shaft, que anda de baixo
+        // para cima): o do 2º não cai em cima de um do 1º.
+        for (let j = 1; j < k; j++) {
+          const Lj = niveis[j];
+          const pj = (m3.terminais ?? []).filter((t) => t.levelId === Lj && t.disciplina === 'ESGOTO');
+          const esc = m3.spaces.find((sp) => sp.levelId === Lj && /escada/i.test(sp.name ?? ''))?.ring ?? null;
+          for (const g of gruposDoTuboDeQueda(m3, Lj, pj, hip.sobrado.grupoDoTuboDeQuedaMm)) {
+            const ban = m3.spaces.find((sp) => sp.levelId === Lj && g.filter((t) => pointInPolygon(sp.ring, t.at)).length * 2 >= g.length);
+            if (!ban) continue;
+            const alvo = { x: g.reduce((a, t) => a + t.at.x, 0) / g.length, y: g.reduce((a, t) => a + t.at.y, 0) / g.length };
+            const sh = shaftDoGrupo(m3, T0, Lj, ban.ring, alvo, esc, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm, niveis.slice(1, j));
+            if (sh?.novo) m3 = applyBatch(m3, [{ type: 'AddNucleo', levelId: T0, ateLevelId: Lj, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' } as Command]).model;
+          }
+        }
         const pecas = (m3.terminais ?? []).filter((t) => t.levelId === S0 && t.disciplina === 'ESGOTO');
         const grupos = gruposDoTuboDeQueda(m3, S0, pecas, hip.sobrado.grupoDoTuboDeQuedaMm);
         const zonas: Point[][] = [];
@@ -3049,7 +3073,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           const ban = banheiros.find((sp) => g.filter((t) => pointInPolygon(sp.ring, t.at)).length * 2 >= g.length);
           if (!ban) continue;
           const alvo = { x: g.reduce((a, t) => a + t.at.x, 0) / g.length, y: g.reduce((a, t) => a + t.at.y, 0) / g.length };
-          const sh = shaftDoGrupo(m4, T0, S0, ban.ring, alvo, escada, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm);
+          const sh = shaftDoGrupo(m4, T0, S0, ban.ring, alvo, escada, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm, niveis.slice(1, k));
           if (!sh) continue;
           shaftDo.set(g, sh.ring);
           if (sh.novo) m4 = applyBatch(m4, [{ type: 'AddNucleo', levelId: T0, ateLevelId: S0, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' } as Command]).model;
@@ -3092,14 +3116,17 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         // F14c ("laje rebaixada"): a laje do térreo — o piso de cima — desce sob a ÁREA MOLHADA de cada banheiro de cima.
         // As peças ainda não existem aqui (a laje vem antes do mobiliário): são PREVISTAS rodando mobiliário, louças e kit
         // numa cópia — determinísticos, dão as posições que as etapas de lá vão lançar.
-        const zonas = zonasMolhadasDeCima(x, T, S);
+        const zonas = zonasMolhadasDeCima(x, G ? [T, S, G] : [T, S], 1);
         const comRebaixo = lajesComRebaixo(d.a.comandos, T, zonas, hip.sobrado.rebaixoDaLajeDoBanheiroMm);
         lajesRebaixadas = comRebaixo.rebaixadas;
         // F27-D3: na casa de 3, o guarda-corpo do furo só no 2º (no 1º, o lance que sobe sai da borda do furo de baixo).
         const g = [...guardaCorpoDaEscada(x, T, S, !G), ...(G ? guardaCorpoDaEscada(x, S, G) : [])];
         guardas = g.length;
         const lG = G ? planejarLajes(d.comandos.length ? applyBatch(x, d.comandos).model : x, G, hip.estrutura.lajes) : null;
-        const comandos = [...comRebaixo.comandos, ...d.b.comandos, ...(lG?.comandos ?? []), ...g];
+        // F27-D4: na casa de 3, a laje do 1º (o piso do 2º) desce sob a área molhada de cada banheiro do 2º.
+        const doPrimeiro = G ? lajesComRebaixo(d.b.comandos, S, zonasMolhadasDeCima(x, [T, S, G], 2), hip.sobrado.rebaixoDaLajeDoBanheiroMm) : null;
+        lajesRebaixadasDoPrimeiro = doPrimeiro?.rebaixadas ?? 0;
+        const comandos = [...comRebaixo.comandos, ...(doPrimeiro?.comandos ?? d.b.comandos), ...(lG?.comandos ?? []), ...g];
         return { ...d, lG, comandos, motivo: comandos.length ? null : d.motivo, foraDoPlano: [...d.foraDoPlano, ...(lG?.foraDoPlano ?? []).map((f) => `2º pavimento: ${f.motivo}`)] };
       },
       (p) => {
@@ -3107,7 +3134,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const guardaDoFuro = guardas ? `; ${guardas - 1} corrimão(s) nos lances e guarda-corpo na borda do furo${p.lG ? ' do 2º' : ''}` : '';
         return {
           nota: p.lG
-            ? `${p.a.lajes.length} laje(s) no térreo, ${p.b.lajes.length} no 1º (o piso do 2º e o terraço) e ${p.lG.lajes.length} no 2º, de ${hip.estrutura.lajes.espessuraMm} mm${lajesRebaixadas ? `; a do térreo rebaixada ${f2(hip.sobrado.rebaixoDaLajeDoBanheiroMm / 1000)} m sob ${lajesRebaixadas} trecho(s) de banheiro do 1º` : ''}${guardaDoFuro}`
+            ? `${p.a.lajes.length} laje(s) no térreo, ${p.b.lajes.length} no 1º (o piso do 2º e o terraço) e ${p.lG.lajes.length} no 2º, de ${hip.estrutura.lajes.espessuraMm} mm${lajesRebaixadas ? `; a do térreo rebaixada ${f2(hip.sobrado.rebaixoDaLajeDoBanheiroMm / 1000)} m sob ${lajesRebaixadas} trecho(s) de banheiro do 1º` : ''}${lajesRebaixadasDoPrimeiro ? `; a do 1º sob ${lajesRebaixadasDoPrimeiro} trecho(s) de banheiro do 2º` : ''}${guardaDoFuro}`
             : `${p.a.lajes.length} laje(s) no térreo (o piso de cima, com o furo da escada) e ${p.b.lajes.length} no superior, de ${hip.estrutura.lajes.espessuraMm} mm${lajesRebaixadas ? `; rebaixada ${f2(hip.sobrado.rebaixoDaLajeDoBanheiroMm / 1000)} m sob ${lajesRebaixadas} trecho(s) de banheiro de cima` : ''}${guardaDoFuro}`,
           foraDoPlano: p.foraDoPlano,
         };
@@ -3137,21 +3164,6 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     // F27-D3: na casa de 3, o telhado sobre o 2º (o retângulo recuado); o terraço e o núcleo que sobra fora são a D5.
     if (G && eg) etapaDoTelhado(G, eg.r.retangulo, eg.r.anexos, (m.structures ?? []).some((x) => x.levelId === G && x.kind === 'LAJE'));
     else etapaDoTelhado(S, es.r.retangulo, es.r.anexos, (m.structures ?? []).some((x) => x.levelId === S && x.kind === 'LAJE'));
-    // F27-D2/D3: a casa de 3 pavimentos fecha aqui — a arquitetura e a estrutura dos três; as instalações (D4) ainda não.
-    if (eg && sobrado.segundo) {
-      for (const id of ORDEM_DAS_ETAPAS) if (id !== 'CONFERENCIA' && !(id === 'TERRAPLENAGEM' && !temTerreno) && !etapas.some((e) => e.id === id)) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, MOTIVO_TRES_PAVIMENTOS_EM_OBRA);
-      pendencias.push({ grupo: 'PREMISSA', texto: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
-      return fechar({
-        projecaoM2: et.r.resumo.areaConstruidaM2,
-        areaConstruidaM2: et.r.resumo.areaConstruidaM2 + es.r.resumo.areaConstruidaM2 + eg.r.resumo.areaConstruidaM2,
-        alturaM: (3 * andarMm) / 1000,
-        semente: et.r.semente,
-        escolha: `térreo: ${et.texto}; 1º: ${es.texto}; 2º: ${eg.texto}`,
-        sobrado,
-        disciplinas: { estrutura, telhado, ancoras: null, mobiliario: { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 }, hidraulica: HIDRAULICA_ZERADA(), eletrica: ELETRICA_ZERADA(), aberturas: {}, climatizacao: CLIMATIZACAO_ZERADA(), forro: null, furos: null },
-      });
-    }
-
     // ── INSTALAÇÕES DO SOBRADO (F12c) ──
     // O SHAFT junto de cada banheiro de cima, antes de tudo: o tubo de queda e as colunas de água descem por ele
     // (sem ele, desciam no ponto do vaso — no meio da garagem ou da cozinha de baixo).
@@ -3165,10 +3177,16 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       ].map((p) => paraMundo(q, p));
       const shafts = shaftsDoSobrado(m, T, S, nucleoNoMundo, hip.sobrado.shaftMm);
       aplicar(shafts.map((x): Command => ({ type: 'AddNucleo', levelId: T, ateLevelId: S, tipo: 'SHAFT', ring: x.ring, rotulo: 'Shaft' })));
+      // F27-D4: na casa de 3, o shaft de cada banheiro do 2º — desce até o térreo atravessando o 1º.
+      if (G) {
+        const doSegundo = shaftsDoSobrado(m, T, G, nucleoNoMundo, hip.sobrado.shaftMm, 2500, [S]);
+        aplicar(doSegundo.map((x): Command => ({ type: 'AddNucleo', levelId: T, ateLevelId: G, tipo: 'SHAFT', ring: x.ring, rotulo: 'Shaft' })));
+        shafts.push(...doSegundo.map((x) => ({ ...x, banheiro: `${x.banheiro} (2º pavimento)` })));
+      }
       if (shafts.length) notaDoShaft = `${shafts.length} shaft(s) de ${hip.sobrado.shaftMm / 10} cm: ${shafts.map((x) => `junto do ${x.banheiro}${x.noTerreo ? `, descendo na ${x.noTerreo}` : ''}`).join('; ')}.`;
       else pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Shaft: nenhuma parede dos banheiros de cima tem parede embaixo livre de porta, janela e pilar — o tubo de queda desce no ponto do vaso; ponha o shaft à mão (Núcleo vertical).' });
     }
-    const inst = instalacoes([T, S], es.r.retangulo, notaDoShaft);
+    const inst = instalacoes(G ? [T, S, G] : [T, S], es.r.retangulo, notaDoShaft);
     const soltas = prumadasPeloMeioDoComodo(m);
     if (soltas.length) {
       const nome: Record<string, string> = { ...ROTULO_DA_DISCIPLINA_DA_REDE, ...ROTULO_DA_DISCIPLINA_DO_AR, ELETRICA: 'eletroduto' };
@@ -3181,10 +3199,10 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     }
     return fechar({
       projecaoM2: et.r.resumo.areaConstruidaM2,
-      areaConstruidaM2: et.r.resumo.areaConstruidaM2 + es.r.resumo.areaConstruidaM2,
-      alturaM: (2 * andarMm) / 1000,
+      areaConstruidaM2: et.r.resumo.areaConstruidaM2 + es.r.resumo.areaConstruidaM2 + (eg?.r.resumo.areaConstruidaM2 ?? 0),
+      alturaM: ((eg ? 3 : 2) * andarMm) / 1000,
       semente: et.r.semente,
-      escolha: `térreo: ${et.texto}; superior: ${es.texto}`,
+      escolha: eg ? `térreo: ${et.texto}; 1º: ${es.texto}; 2º: ${eg.texto}` : `térreo: ${et.texto}; superior: ${es.texto}`,
       sobrado,
       disciplinas: { estrutura, telhado, ancoras: inst.ancoras, mobiliario: inst.mobiliario, hidraulica: inst.hidraulica, eletrica: inst.eletrica, aberturas: inst.redesEmAberturas, climatizacao: inst.climatizacao, forro: inst.forro, furos: inst.furos },
     });

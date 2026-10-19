@@ -1041,7 +1041,7 @@ export interface ShaftDoSobrado {
  * térreo ele vira um enchimento junto da mesma parede — no cômodo de serviço antes da sala. Um shaft a até
  * `raioMm` de outro banheiro já o atende.
  */
-export function shaftsDoSobrado(model: BlueprintModel, T: ObjectId, S: ObjectId, nucleo: Point[] | null, ladoMm = 400, raioMm = 2500): ShaftDoSobrado[] {
+export function shaftsDoSobrado(model: BlueprintModel, T: ObjectId, S: ObjectId, nucleo: Point[] | null, ladoMm = 400, raioMm = 2500, intermediarios: readonly ObjectId[] = []): ShaftDoSobrado[] {
   const banheiros = model.spaces
     .filter((x) => x.levelId === S && usoDoNome(x.name) === 'BANHEIRO' && x.ring.length >= 3)
     .sort((a, b) => b.areaMm2 - a.areaMm2);
@@ -1049,10 +1049,19 @@ export function shaftsDoSobrado(model: BlueprintModel, T: ObjectId, S: ObjectId,
   for (const ban of banheiros) {
     const cb = centroDoAnel(ban.ring);
     if (saida.some((x) => Math.hypot(centroDoAnel(x.ring).x - cb.x, centroDoAnel(x.ring).y - cb.y) <= raioMm)) continue;
-    const melhor = lugarDoShaft(model, T, S, ban.ring, nucleo, ladoMm, (c, embaixo) => {
-      const pref = embaixo ? PREFERENCIA_DO_SHAFT_NO_TERREO.indexOf(usoDoNome(embaixo.name) ?? '') : -1;
-      return (pref < 0 ? 50 : pref * 5) + Math.hypot(c.x - cb.x, c.y - cb.y) / 1000;
-    });
+    const melhor = lugarDoShaft(
+      model,
+      T,
+      S,
+      ban.ring,
+      nucleo,
+      ladoMm,
+      (c, embaixo) => {
+        const pref = embaixo ? PREFERENCIA_DO_SHAFT_NO_TERREO.indexOf(usoDoNome(embaixo.name) ?? '') : -1;
+        return (pref < 0 ? 50 : pref * 5) + Math.hypot(c.x - cb.x, c.y - cb.y) / 1000;
+      },
+      intermediarios,
+    );
     if (melhor) saida.push({ ring: melhor.ring, banheiro: ban.name ?? 'Banheiro', noTerreo: melhor.noTerreo });
   }
   return saida;
@@ -1073,6 +1082,9 @@ const centroDoAnel = (r: readonly Point[]) => ({ x: r.reduce((a, p) => a + p.x, 
  * pelo `custo` (menor ganha). Duas passadas (F14c, 16/10/2026): a 1ª exige parede do térreo embaixo da face; sem lugar
  * assim (o banheiro da suíte sobre a área de serviço ficava SEM shaft e despejava a 7 m), a 2ª aceita o shaft como
  * CAIXA no canto do cômodo de baixo, se ele não for de permanência (garagem, serviço, circulação, banheiro, depósito).
+ * F27-D4: `intermediarios` são os pavimentos entre T e S (casa de 3: o 1º, para o shaft do 2º) — o shaft os atravessa e
+ * vale ali o mesmo que no térreo: parede embaixo da face (1ª passada) ou caixa em cômodo que aceita (2ª), sem pilar nem
+ * peça.
  */
 function lugarDoShaft(
   model: BlueprintModel,
@@ -1082,15 +1094,18 @@ function lugarDoShaft(
   nucleo: Point[] | null,
   ladoMm: number,
   custo: (c: { x: number; y: number }, embaixo: BlueprintModel['spaces'][number] | null) => number,
+  intermediarios: readonly ObjectId[] = [],
 ): { ring: Point[]; custo: number; noTerreo: string | null } | null {
-  const pilares = (model.structures ?? []).filter((x) => x.kind === 'PILAR' && (x.levelId === T || x.levelId === S));
+  const debaixo = [T, ...intermediarios];
+  const atravessados = new Set<ObjectId>([...debaixo, S]);
+  const pilares = (model.structures ?? []).filter((x) => x.kind === 'PILAR' && atravessados.has(x.levelId));
   const shafts = (model.nucleos ?? []).filter((n) => n.tipo === 'SHAFT');
   // F14c: as peças já postas nos dois pavimentos (louças, aquecedor, caixa sifonada, móveis) — o shaft junto das peças,
   // que nasce depois delas, cobria o aquecedor do térreo e a caixa sifonada de cima (sobrado a 30°). Só a peça DENTRO
   // do shaft o recusa: encostada do lado de fora é o bom, o vaso despeja direto no tubo de queda (com 2 cm de folga, o
   // ralo do vaso a 5 mm da face deixava o banheiro da suíte sem shaft e o tubo de queda descia no meio da cozinha).
-  const pecas = (model.terminais ?? []).filter((x) => x.levelId === T || x.levelId === S).map((x) => x.at);
-  const moveis = (model.componentes ?? []).filter((x) => x.levelId === T || x.levelId === S).map((x) => contornoDoComponente(x));
+  const pecas = (model.terminais ?? []).filter((x) => atravessados.has(x.levelId)).map((x) => x.at);
+  const moveis = (model.componentes ?? []).filter((x) => atravessados.has(x.levelId)).map((x) => contornoDoComponente(x));
   const cobrePeca = (ring: Point[]) => {
     if (pecas.some((p) => pointInPolygon(ring, p))) return true;
     const c = centroDoAnel(ring) as Point;
@@ -1117,8 +1132,8 @@ function lugarDoShaft(
         const p1 = { x: a.x + u.x * (t + ladoMm), y: a.y + u.y * (t + ladoMm) };
         const pm = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
         // Parede do térreo embaixo em toda a face, e nenhuma porta ou janela no trecho — nos dois pavimentos.
-        if (exigente && ![p0, pm, p1].every((q) => paredeSobOPonto(model, T, q, 0, true))) continue;
-        if ((exigente && !paredeSobOPonto(model, T, pm, ladoMm / 2)) || !paredeSobOPonto(model, S, pm, ladoMm / 2)) continue;
+        if (exigente && !debaixo.every((L) => [p0, pm, p1].every((q) => paredeSobOPonto(model, L, q, 0, true)))) continue;
+        if ((exigente && !debaixo.every((L) => paredeSobOPonto(model, L, pm, ladoMm / 2))) || !paredeSobOPonto(model, S, pm, ladoMm / 2)) continue;
         const ring = [
           { x: p0.x + n.x * recuo, y: p0.y + n.y * recuo },
           { x: p1.x + n.x * recuo, y: p1.y + n.y * recuo },
@@ -1133,8 +1148,13 @@ function lugarDoShaft(
         if (shafts.some((sh) => pointInPolygon(sh.ring, c as Point) || ring.some((q) => pointInPolygon(sh.ring, q)))) continue;
         if (cobrePeca(ring)) continue;
         const embaixo = model.spaces.find((x) => x.levelId === T && pointInPolygon(x.ring, c as Point)) ?? null;
-        // Na 2ª passada, o shaft é caixa no cômodo de baixo: todo o anel dentro dele, e ele não é de permanência.
-        if (!exigente && (!embaixo || !USOS_QUE_ACEITAM_CAIXA_DE_SHAFT.has(usoDoNome(embaixo.name) ?? '') || !ring.every((q) => pointInPolygon(embaixo.ring, q)))) continue;
+        // Na 2ª passada, o shaft é caixa no cômodo de baixo: todo o anel dentro dele, e ele não é de permanência — em cada
+        // pavimento que ele atravessa.
+        const aceitaCaixa = (L: ObjectId) => {
+          const sp = model.spaces.find((x) => x.levelId === L && pointInPolygon(x.ring, c as Point));
+          return !!sp && USOS_QUE_ACEITAM_CAIXA_DE_SHAFT.has(usoDoNome(sp.name) ?? '') && ring.every((q) => pointInPolygon(sp.ring, q));
+        };
+        if (!exigente && !debaixo.every(aceitaCaixa)) continue;
         const k = custo(c, embaixo);
         if (!melhor || k < melhor.custo) melhor = { ring, custo: k, noTerreo: embaixo?.name ?? null };
       }
@@ -1148,8 +1168,8 @@ function lugarDoShaft(
  * nele). O shaft do F12c nasce antes do mobiliário e vai para a ponta preferida do banheiro; no banheiro comprido (o
  * da suíte, 6,5 × 1,4 m) as peças ficavam a 5 m dele. `null` = sem lugar.
  */
-export function shaftJuntoDasPecas(model: BlueprintModel, T: ObjectId, S: ObjectId, banheiro: readonly Point[], alvo: { x: number; y: number }, nucleo: Point[] | null, ladoMm = 400): ShaftDoSobrado | null {
-  const melhor = lugarDoShaft(model, T, S, banheiro, nucleo, ladoMm, (c) => Math.hypot(c.x - alvo.x, c.y - alvo.y));
+export function shaftJuntoDasPecas(model: BlueprintModel, T: ObjectId, S: ObjectId, banheiro: readonly Point[], alvo: { x: number; y: number }, nucleo: Point[] | null, ladoMm = 400, intermediarios: readonly ObjectId[] = []): ShaftDoSobrado | null {
+  const melhor = lugarDoShaft(model, T, S, banheiro, nucleo, ladoMm, (c) => Math.hypot(c.x - alvo.x, c.y - alvo.y), intermediarios);
   return melhor ? { ring: melhor.ring, banheiro: '', noTerreo: melhor.noTerreo } : null;
 }
 
@@ -1273,6 +1293,7 @@ export function shaftDoGrupo(
   nucleo: Point[] | null,
   ladoMm: number,
   ateMm: number,
+  intermediarios: readonly ObjectId[] = [],
 ): { ring: Point[]; novo: boolean; noTerreo: string | null } | null {
   const doBanheiro = (n: { ring: Point[] }) =>
     n.ring.some((q) => pointInPolygon(banheiro as Point[], q) || banheiro.some((b, i) => distanciaAoLado(q, banheiro[(i + banheiro.length - 1) % banheiro.length], b) <= 50));
@@ -1282,7 +1303,7 @@ export function shaftDoGrupo(
     .filter((x) => x.d <= ateMm)
     .sort((a, b) => a.d - b.d)[0];
   if (existente) return { ring: existente.n.ring, novo: false, noTerreo: null };
-  const sh = shaftJuntoDasPecas(model, T, S, banheiro, alvo, nucleo, ladoMm);
+  const sh = shaftJuntoDasPecas(model, T, S, banheiro, alvo, nucleo, ladoMm, intermediarios);
   return sh ? { ring: sh.ring, novo: true, noTerreo: sh.noTerreo } : null;
 }
 

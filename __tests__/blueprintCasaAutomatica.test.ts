@@ -8,7 +8,7 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, MOTIVO_TRES_PAVIMENTOS_EM_OBRA, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { amostradorDaGrade, type GradeDeElevacao } from '../utils/blueprintTopografia';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
@@ -660,7 +660,7 @@ describe('planejarCasa — F12a: o sobrado (arquitetura dos dois pavimentos e a 
   });
 });
 
-describe('planejarCasa — F27-D1/D2/D3: a casa de 3 pavimentos (implantação, arquitetura e estrutura)', () => {
+describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquitetura, estrutura e instalações)', () => {
   const m = lote();
   const z3 = (gabaritoPavimentos: number | null, gabaritoAlturaMaxM: number | null = null) => entrada(m, { ctx: { ...entrada(m).ctx, zona: { ...ZONA, gabaritoPavimentos, gabaritoAlturaMaxM, coeficienteMax: null } } });
   const alto = { ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, suites: 2, banheiros: 3, padrao: 'R1-A' as const };
@@ -674,15 +674,14 @@ describe('planejarCasa — F27-D1/D2/D3: a casa de 3 pavimentos (implantação, 
     expect(md.coeficiente).toBeCloseTo(Math.round(((md.projecaoM2 * 3) / md.loteM2) * 100) / 100, 2);
   });
 
-  it('a arquitetura sai em três níveis empilhados, com duas escadas no mesmo núcleo — e para antes das instalações, com o motivo dito', () => {
+  it('a arquitetura sai em três níveis empilhados, com duas escadas no mesmo núcleo', () => {
     expect(plano.etapas.find((e) => e.id === 'ARQUITETURA')).toMatchObject({ situacao: 'LANCOU' });
     expect(r.levels).toHaveLength(3);
     const [t, p1, p2] = [...r.levels].sort((a, b) => a.elevationMm - b.elevationMm);
     expect(p2.elevationMm - p1.elevationMm).toBe(p1.elevationMm - t.elevationMm);
     expect(r.stairs.map((e) => e.levelId).sort()).toEqual([t.id, p1.id].sort());
     expect(r.stairs[0].pontos).toEqual(r.stairs[1].pontos);
-    expect(plano.etapas.find((e) => e.id === 'MOBILIARIO')).toMatchObject({ situacao: 'NAO_RODOU', nota: MOTIVO_TRES_PAVIMENTOS_EM_OBRA });
-    expect(plano.pendencias.some((x) => x.texto === MOTIVO_TRES_PAVIMENTOS_EM_OBRA)).toBe(true);
+
   });
 
   it('o 2º recuado nos fundos, com o terraço na frente; o núcleo abre para o corredor nos três', () => {
@@ -721,6 +720,19 @@ describe('planejarCasa — F27-D1/D2/D3: a casa de 3 pavimentos (implantação, 
     const doFuro = (r.guardaCorpos ?? []).filter((g) => /guarda-corpo do furo/.test(g.rotulo ?? ''));
     expect(doFuro.map((g) => g.levelId)).toEqual([p2.id]);
     expect(doFuro.some((g) => g.levelId === p1.id)).toBe(false);
+  });
+
+  it('as instalações nos três: todas as etapas rodam; o banheiro do 2º com shaft que desce ao térreo atravessando o 1º; a laje do 1º rebaixada sob ele', () => {
+    const [t, p1, p2] = [...r.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+    // Sem catálogo de evaporadoras no lote de teste, a climatização não roda (dito); o resto, todo.
+    expect(plano.etapas.filter((e) => e.situacao === 'NAO_RODOU' && e.id !== 'CLIMATIZACAO').map((e) => `${e.id}: ${e.nota}`)).toEqual([]);
+    const ate2 = (r.nucleos ?? []).filter((n) => n.tipo === 'SHAFT' && n.levelId === t.id && n.ateLevelId === p2.id);
+    expect(ate2.length).toBeGreaterThan(0);
+    const banheirosDo2 = r.spaces.filter((sp) => sp.levelId === p2.id && /^Banheiro/.test(sp.name ?? ''));
+    for (const b of banheirosDo2) expect((r.terminais ?? []).some((x) => x.levelId === p2.id && x.disciplina === 'ESGOTO' && pointInPolygon(b.ring, x.at))).toBe(true);
+    expect(plano.etapas.find((e) => e.id === 'LAJES')?.nota).toMatch(/a do 1º sob [1-9]/);
+    expect(new Set(r.structures.filter((x) => x.levelId === p1.id && x.kind === 'LAJE').map((x) => x.baseMm)).size).toBeGreaterThan(1);
+    for (const L of [t.id, p1.id, p2.id]) expect((r.terminais ?? []).some((x) => x.levelId === L && x.disciplina === 'ELETRICA')).toBe(true);
   });
 
   it('o programa inteiro no desenho e a trava: reaplicado no original, o mesmo modelo', () => {

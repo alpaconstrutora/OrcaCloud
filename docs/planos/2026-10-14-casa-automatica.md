@@ -2740,3 +2740,23 @@ Subfases:
   sem prumada num lote, dito). Ficam para a D5: o telhado não cobre o núcleo que sobra fora do 2º; a laje do 1º no
   terraço sem impermeabilização nem guarda-corpo. Fica para conferir: as fundações não pesam os 3 pavimentos (o
   pré-dimensionamento é o do bloco por pilar de sempre).
+
+#### Registro da D4 — parte 1 (19/10/2026): as instalações rodam nos três
+
+- O shaft atravessa os pavimentos do meio: `lugarDoShaft`/`shaftsDoSobrado`/`shaftJuntoDasPecas`/`shaftDoGrupo`
+  ganharam `intermediarios` — o shaft de um banheiro do 2º precisa, também no 1º, de parede embaixo da face (1ª
+  passada) ou de caixa em cômodo que aceite (2ª), sem pilar nem peça; desce do térreo ao 2º (`AddNucleo` T → G).
+- O passo do shaft junto das peças anda pavimento a pavimento (no sobrado, uma volta só — igual).
+- A previsão da laje rebaixada (`zonasMolhadasDeCima(x, niveis, k)`) repete a sequência das instalações (shafts do
+  F12c de cada pavimento de cima, mobiliário de todos, shafts junto das peças de baixo para cima até o `k`); a laje do
+  1º desce sob a área molhada dos banheiros do 2º.
+- `instalacoes([T, S, G])`: âncoras, mobiliário, louças, hidráulica, elétrica, climatização, eletrodutos e forro nos
+  três (os circuitos contados "no 1º/no 2º"). O plano da casa de 3 não para mais antes das instalações.
+- 8 casas de referência idênticas; teste: as etapas rodam (a climatização sem catálogo, dita), shaft T → 2º, esgoto em
+  todo banheiro do 2º, a laje do 1º em duas cotas, pontos elétricos nos três.
+- **A opção "3 pavimentos" segue escondida** (decisão: só quando as instalações fecharem). A sonda dos 6 lotes mostra
+  o que falta (D4 parte 2): encontros de rede (1–9 por casa), banheiro do 2º sem lugar de shaft junto das peças, um
+  grupo de esgoto procurando shaft no "Escada", esgoto com 2 pontas abertas e 4 trechos sem destino, a água quente do
+  chuveiro do 2º a 2 kPa (logo abaixo da caixa d'água), prumadas de alimentador e condutor pelo meio de cômodo. A tela,
+  as premissas e o 3º passo do Automático estão prontos e guardados (`c:/tmp/f27d/d4_opcao_tela.patch` e os pares do
+  motor em `c:/tmp/f27d/patch_d4_tela.py`).

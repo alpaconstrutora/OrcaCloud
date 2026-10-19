@@ -38,11 +38,12 @@ Modelo espremido em meia largura com nomes longos.
 - [x] 3. Avisos `rounded-[10px]`, campos em coluna única (§30), "Cancelar" `secondary` h-9 (§17), estado vazio §12
 - [x] 4. Botões desligados dizem o motivo ("Escolha um modelo…" / "Gerando…") no `title` do wrapper
 - [x] 5. Teste novo `EmitDocumentModalPadrao.test.tsx` (4 testes, os 4 FALHAM no código antigo e passam no novo) + guia §33
-- [ ] 6. Verificação — 4 de 5:
+- [ ] 6. Verificação — 5 de 6 (falta só a CI em Linux do PR #54):
   - [x] Chrome, contrato 010 (Alpa), só leitura: ANTES (site publicado, sistema escuro) valor com luminância 255 = branco sobre branco; DEPOIS (código novo) 19 = escuro, IGUAL nos modos claro e escuro do sistema; 0 erros de JS/HTTP. Capturas dos dois modos idênticas.
   - [x] `check-ui-standard.sh` exit 0; tipos de `EmitDocumentModal` + `ContractDetailView` + `DealModal` + teste exit 0 (2ª tentativa; a 1ª caiu por segfault da máquina).
   - [x] Testes da gaveta (14: os 4 novos + `GerarPeloModeloVersaoPdf` + `ContractEmissaoDocumentoUnico`) passam.
-  - [ ] Suíte inteira e CI em Linux.
+  - [x] Suíte inteira local: 10.437 = 10.403 passaram + 34 pulados, 1.030 arquivos, 0 falhas, 0 pendentes, exit 0; os 4 testes novos passam.
+  - [ ] CI em Linux (PR #54).
   - [x] Servidor local derrubado.
 
 ## Plano

@@ -10,6 +10,7 @@ import {
     CompanyTarget, CompanyTargetUpsert,
     CompanyConsolidated,
     CompanyDepartment, CompanyDepartmentInsert, CompanyDepartmentUpdate,
+    CertificadoEnviado,
 } from '../types';
 
 export const companyService = {
@@ -183,14 +184,30 @@ export const companyService = {
 
     // ─── Certificado Digital ──────────────────────────────────
 
-    async uploadCertificado(companyId: string, file: File): Promise<string> {
-        const ext = file.name.split('.').pop() ?? 'pfx';
-        const path = `${companyId}/certificado_digital.${ext}`;
-        const { error } = await supabase.storage
-            .from('company-certificates')
-            .upload(path, file, { upsert: true });
-        if (error) throw error;
-        return path;
+    /**
+     * Envia o A1 com a senha para a Edge Function `fiscal-certificado`, que abre o
+     * arquivo, confere validade e CNPJ e só então grava o arquivo, a senha (no
+     * Vault) e a validade. Não há mais upload direto ao bucket: um .pfx sem senha
+     * conferida não serve para consultar a SEFAZ.
+     * Plano: docs/planos/2026-10-18-nfe-captura-automatica-sefaz.md, item 1.4.
+     */
+    async enviarCertificado(companyId: string, file: File, senha: string): Promise<CertificadoEnviado> {
+        const arquivoBase64 = await new Promise<string>((resolve, reject) => {
+            const leitor = new FileReader();
+            leitor.onload = () => resolve(String(leitor.result).split(',')[1] ?? '');
+            leitor.onerror = () => reject(new Error('Não consegui ler o arquivo do certificado.'));
+            leitor.readAsDataURL(file);
+        });
+        const { data, error } = await supabase.functions.invoke('fiscal-certificado', {
+            body: { companyId, arquivoBase64, senha },
+        });
+        if (error) {
+            // A resposta 4xx chega como erro com a Response em `context`.
+            const ctx = (error as { context?: Response }).context;
+            const corpo = await ctx?.json?.().catch(() => null) as { error?: string } | null;
+            throw new Error(corpo?.error ?? 'Não consegui enviar o certificado.');
+        }
+        return data as CertificadoEnviado;
     },
 
     async getCertificadoSignedUrl(path: string): Promise<string> {

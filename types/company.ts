@@ -125,11 +125,23 @@ export interface Company {
   cprb: boolean;
   certificado_digital_url?: string;
   certificado_validade?: string;
+  /** CNPJ lido de dentro do certificado (só dígitos); gravado só pela Edge Function fiscal-certificado. */
+  certificado_cnpj?: string;
   prefeitura_integrada?: string;
   sefaz_integrada: boolean;
 
   created_at: string;
   updated_at: string;
+}
+
+/** Resposta da Edge Function fiscal-certificado depois de conferir e gravar o A1. */
+export interface CertificadoEnviado {
+  ok: true;
+  caminho: string;
+  /** AAAA-MM-DD, lida do certificado. */
+  validade: string;
+  cnpj: string;
+  titular: string;
 }
 
 export type CompanyInsert = Omit<Company, 'id' | 'created_at' | 'updated_at'>;

@@ -114,18 +114,35 @@ Este é o maior risco técnico. Se ele falhar, o desenho muda, então vem antes 
   a leitura do navegador de vez, se só a Edge Function precisar do arquivo.
   **Terminou quando** um membro comum recebe 403 ao pedir URL assinada do `.pfx`
   (prova com o usuário de leitura) e `check-rls-postura.sh` passa.
-- [ ] **1.2 Migration: senha no Vault** — `fiscal_cert_guardar_senha(company_id, senha)`
+> 19/10/2026 — pedido do usuário: "como guardar a senha no cofre?" → itens 1.2–1.4 feitos.
+
+- [x] **1.2 Migration: senha no Vault** — 19/10/2026, `aplicar_20271019300000_certificado_senha_no_vault.sql`,
+  aplicada. Colunas `companies.certificado_vault_secret_id` e `certificado_cnpj`;
+  funções `fiscal_cert_guardar_senha` / `_ler_` / `_apagar_` (ACL só postgres e
+  service_role); gatilho `trg_companies_certificado_so_servico` impede quem edita a
+  empresa de trocar o vínculo com o cofre ou forjar o CNPJ lido. Prova em transação
+  desfeita: authenticated 42501, anon 42501, gestor forjando CNPJ 42501, serviço
+  guarda e lê igual; cofre vazio depois. Texto original: — `fiscal_cert_guardar_senha(company_id, senha)`
   e `fiscal_cert_ler_senha(company_id)`, no molde de `email_capture_*_segredo`.
   `REVOKE … FROM PUBLIC, anon, authenticated`; execução só por `service_role`.
   **Terminou quando** `segurancaMigrations.test.ts` passa e uma chamada com a
   chave anon/authenticated é recusada.
-- [ ] **1.3 Edge Function `fiscal-certificado`** (gate `exigirGestor`). Recebe `.pfx` + senha,
+- [~] **1.3 Edge Function `fiscal-certificado`** — 19/10/2026 publicada (`--no-verify-jwt`).
+  Sem header: 401; com a chave pública: 401 "Token inválido" (a função sobe e o gate
+  funciona). Leitura do CNPJ em `_shared/certificadoA1.ts`, 8 testes em
+  `__tests__/certificadoA1.test.ts`. **Falta:** ver os três caminhos com um owner/admin
+  (o cadastro do A1 real pelo usuário). Texto original: (gate `exigirGestor`). Recebe `.pfx` + senha,
   abre o certificado, lê CNPJ e validade, **confere que o CNPJ bate com o da
   empresa**, grava o arquivo, a senha no cofre e `certificado_validade`.
   Senha errada ou CNPJ divergente = erro claro, nada gravado.
   **Terminou quando** os três caminhos (ok, senha errada, CNPJ de outra empresa)
   respondem como descrito, e a sonda sem Authorization dá 401.
-- [ ] **1.4 `components/CompanyDetailPage.tsx`** — campo de senha junto do upload;
+- [~] **1.4 `components/CompanyDetailPage.tsx`** — 19/10/2026: escolher arquivo → senha →
+  "Enviar certificado" (desligado diz o motivo; Enter não salva a empresa);
+  `companyService.uploadCertificado` substituído por `enviarCertificado` (não há mais
+  upload sem senha); validade preenchida a partir do certificado; linha "Conferido:
+  CNPJ … · senha no cofre". `tsc`, `check-ui-standard` e `orgContextGuard` passam.
+  **Falta:** ver a tela no navegador. Texto original: — campo de senha junto do upload;
   mostrar CNPJ e validade **lidos do certificado** (o formulário preenche sozinho).
   **Terminou quando** `check-ui-standard.sh` passa e a tela foi vista no navegador.
 
@@ -189,7 +206,7 @@ Este é o maior risco técnico. Se ele falhar, o desenho muda, então vem antes 
 - [x] Decisões D1–D4 com o usuário — 18/10/2026, as quatro aprovadas como recomendado
 - [ ] Fase 0 — 0 de 3 concluídos; 0.1 e 0.3 parciais (ver itens); 0.2 não iniciado.
   Bloqueado por D5 e por um certificado A1 real para a prova final.
-- [ ] Fase 1 — 1 de 4 (1.1 feito)
+- [ ] Fase 1 — 2 de 4 concluídos (1.1, 1.2); 1.3 e 1.4 com código no ar, falta a prova com o A1 real
 - [ ] Fase 2 — 0 de 5
 - [ ] Fase 3 — 0 de 2
 - [ ] Fase 4 — 0 de 2

@@ -4,7 +4,7 @@ import {
     ArrowLeft, Save, Loader2, AlertCircle, CheckCircle2,
     Building2, Users, Landmark, UserCheck, TrendingUp, Receipt,
     Upload, Download, FileKey, HardHat, GitBranch, Landmark as LandmarkIcon,
-    FolderOpen, Target, Layers,
+    FolderOpen, Target, Layers, ShieldCheck,
 } from 'lucide-react';
 import {
     Company, CompanyUpdate, CompanyTipo, CompanyStatus, RegimeTributario,
@@ -22,6 +22,7 @@ import CompanyDocumentsTab from './CompanyDocumentsTab';
 import CompanyTargetsTab from './CompanyTargetsTab';
 import CompanyDepartmentsTab from './CompanyDepartmentsTab';
 import Button from './ui/Button';
+import { fmtCnpj } from '../utils/format';
 
 interface Props {
     company: Company;
@@ -336,6 +337,10 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
     const certInputRef = useRef<HTMLInputElement>(null);
     const [uploadingCert, setUploadingCert] = useState(false);
     const [certUrl, setCertUrl] = useState<string | null>(companyFromList.certificado_digital_url ?? null);
+    // O A1 só é gravado junto com a senha: a Edge Function abre o arquivo com ela,
+    // confere validade e CNPJ, e guarda a senha no cofre (plano NF-e SEFAZ, 1.4).
+    const [certArquivo, setCertArquivo] = useState<File | null>(null);
+    const [certSenha, setCertSenha] = useState('');
 
     useEffect(() => {
         let alive = true;
@@ -386,21 +391,34 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
         }
     };
 
-    const handleCertUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const handleCertEscolher = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setCertArquivo(e.target.files?.[0] ?? null);
+        setError(null);
+        if (certInputRef.current) certInputRef.current.value = '';
+    };
+
+    const motivoCertDesligado = uploadingCert ? 'Enviando o certificado…'
+        : !certArquivo ? 'Selecione o arquivo do certificado (.pfx ou .p12).'
+        : !certSenha ? 'Informe a senha do certificado.'
+        : null;
+
+    const handleCertEnviar = async () => {
+        if (!certArquivo || !certSenha || uploadingCert) return;
         setUploadingCert(true);
         setError(null);
         try {
-            const path = await companyService.uploadCertificado(company.id, file);
-            await companyService.update(company.id, { certificado_digital_url: path });
-            setCertUrl(path);
-            showSuccess('Certificado enviado com sucesso.');
+            const r = await companyService.enviarCertificado(company.id, certArquivo, certSenha);
+            setCertUrl(r.caminho);
+            setCompany(prev => ({ ...prev, certificado_digital_url: r.caminho, certificado_validade: r.validade, certificado_cnpj: r.cnpj }));
+            setForm(prev => ({ ...prev, certificado_validade: r.validade }));
+            setCertArquivo(null);
+            setCertSenha('');
+            const [a, m, d] = r.validade.split('-');
+            showSuccess(`Certificado conferido e guardado (CNPJ ${fmtCnpj(r.cnpj)}, válido até ${d}/${m}/${a}).`);
         } catch (e: unknown) {
             setError((e as Error).message);
         } finally {
             setUploadingCert(false);
-            if (certInputRef.current) certInputRef.current.value = '';
         }
     };
 
@@ -904,17 +922,16 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
 
                                 <div className="flex gap-2">
                                     <input ref={certInputRef} type="file"
-                                        accept=".pfx,.p12,.cer,.crt"
+                                        accept=".pfx,.p12"
                                         className="hidden"
-                                        onChange={handleCertUpload} />
+                                        onChange={handleCertEscolher} />
                                     <button type="button"
                                         disabled={uploadingCert}
+                                        title={uploadingCert ? 'Enviando o certificado…' : undefined}
                                         onClick={() => certInputRef.current?.click()}
                                         className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 text-gray-500 rounded-xl font-black text-button uppercase tracking-wide hover:border-blue-400 hover:text-blue-600 transition-all disabled:opacity-60">
-                                        {uploadingCert
-                                            ? <Loader2 className="w-4 h-4 animate-spin" />
-                                            : <Upload className="w-4 h-4" />}
-                                        {certUrl ? 'Substituir cert.' : 'Enviar cert.'}
+                                        <Upload className="w-4 h-4" />
+                                        {certUrl ? 'Substituir cert.' : 'Selecionar cert.'}
                                     </button>
                                     {certUrl && (
                                         <button type="button" onClick={handleCertDownload}
@@ -926,10 +943,61 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                 </div>
                             </div>
 
+                            {certArquivo && (
+                                <div className="flex items-end gap-3 flex-wrap rounded-xl border border-blue-100 bg-blue-50/40 p-3">
+                                    <div className="flex items-center gap-2 text-sm text-gray-700 min-w-0 self-center">
+                                        <FileKey className="w-4 h-4 shrink-0" />
+                                        <span className="truncate" title={certArquivo.name}>{certArquivo.name}</span>
+                                    </div>
+                                    <div className="flex-1 min-w-48">
+                                        <Field label="Senha do certificado">
+                                            <input type="password" className={inputCls}
+                                                autoComplete="new-password"
+                                                value={certSenha}
+                                                onChange={e => setCertSenha(e.target.value)}
+                                                onKeyDown={e => {
+                                                    // Enter aqui não pode salvar o formulário da empresa.
+                                                    if (e.key === 'Enter') { e.preventDefault(); void handleCertEnviar(); }
+                                                }} />
+                                        </Field>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button type="button"
+                                            disabled={!!motivoCertDesligado}
+                                            title={motivoCertDesligado ?? 'Confere senha, validade e CNPJ antes de gravar'}
+                                            onClick={() => void handleCertEnviar()}
+                                            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all disabled:opacity-60">
+                                            {uploadingCert
+                                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                : <ShieldCheck className="w-4 h-4" />}
+                                            Enviar certificado
+                                        </button>
+                                        <button type="button"
+                                            disabled={uploadingCert}
+                                            title={uploadingCert ? 'Enviando o certificado…' : undefined}
+                                            onClick={() => { setCertArquivo(null); setCertSenha(''); }}
+                                            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl font-black text-button uppercase tracking-wide hover:bg-gray-50 transition-all disabled:opacity-60">
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                    <p className="basis-full text-xs text-gray-500">
+                                        A senha abre o arquivo para conferir validade e CNPJ e fica guardada no cofre do sistema. Ela não é exibida de novo.
+                                    </p>
+                                </div>
+                            )}
+
                             {certUrl && (
-                                <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
                                     <FileKey className="w-3.5 h-3.5" />
                                     Arquivo: {certUrl.split('/').pop()}
+                                    {company.certificado_cnpj
+                                        ? <span className="flex items-center gap-1 text-emerald-700">
+                                            <ShieldCheck className="w-3.5 h-3.5" />
+                                            Conferido: CNPJ {fmtCnpj(company.certificado_cnpj)} · senha no cofre
+                                          </span>
+                                        : <span className="text-amber-700">
+                                            Enviado sem senha conferida — substitua o certificado informando a senha.
+                                          </span>}
                                 </div>
                             )}
                         </div>

@@ -35,14 +35,19 @@ interface TabsBarProps<T extends string> {
      *  barra (ex.: a de escopo §5.3), que já é o card. `children` é ignorado. */
     bare?: boolean;
     /** Cor da aba ativa. 'blue' é o app (§19.1); 'orange' é o Portal do Parceiro,
-     *  cuja casca inteira é laranja — mesmo racional do `accent` da §24. */
-    accent?: 'blue' | 'orange';
+     *  cuja casca inteira é laranja — mesmo racional do `accent` da §24.
+     *  'indigo' / 'portal' (coral) são os dois acentos do detalhe do pedido de
+     *  compra (`SupplyChainOrderDetails`): sub-aba tem de ter a MESMA cor da barra
+     *  principal logo acima — e no link do fornecedor (§24) ela é coral. */
+    accent?: 'blue' | 'orange' | 'indigo' | 'portal';
 }
 
 /* Classes por extenso — o JIT do Tailwind não enxerga classe montada em runtime. */
 const ACCENTS = {
     blue: { ativa: 'bg-white text-blue-600 shadow-sm', contador: 'text-blue-400', novo: 'font-semibold text-blue-600' },
     orange: { ativa: 'bg-white text-orange-600 shadow-sm', contador: 'text-orange-400', novo: 'font-semibold text-orange-600' },
+    indigo: { ativa: 'bg-white text-indigo-600 shadow-sm', contador: 'text-indigo-400', novo: 'font-semibold text-indigo-600' },
+    portal: { ativa: 'bg-white text-[#C24428] shadow-sm', contador: 'text-[#E1553C]', novo: 'font-semibold text-[#C24428]' },
 };
 
 export function TabsBar<T extends string>({ tabs, value, onChange, children, className = '', bare, accent = 'blue' }: TabsBarProps<T>) {

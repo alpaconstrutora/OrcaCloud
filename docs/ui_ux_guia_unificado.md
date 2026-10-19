@@ -2028,6 +2028,11 @@ tela, não navegação de módulo), esta é a forma canônica. **Referência:
 > ativo, foco, abas do contrato) é laranja. Padrão `blue` = o app; mesmo racional
 > do `accent` de componente compartilhado da §24, com as classes por extenso num
 > mapa `ACCENTS`. Primeiro uso: Documentos › Recebidos/Enviados (`PartnerPortal.tsx`).
+> ✅ **`accent="indigo"` / `accent="portal"`** (2026-10-19) — os dois acentos do
+> detalhe do pedido de compra (`SupplyChainOrderDetails`), cuja barra principal é
+> índigo no app e coral no link do fornecedor (§24). Sub-aba usa o MESMO acento da
+> barra logo acima; azul embaixo de índigo parece outra tela. Primeiro uso:
+> Recebimento › Rastreamento logístico / Conferência de entrega / 3-way match.
 > ✅ **`badgeTom: 'novo'`** pinta o contador na cor de destaque, em `font-semibold`
 > — novidade ainda não vista (ex.: "1 atualizado" em Enviados). Vermelho
 > (`'alerta'`) fica para o que pede ação/erro.

@@ -1,6 +1,7 @@
 import React from 'react';
-import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw, MoveHorizontal } from 'lucide-react';
+import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw, MoveHorizontal, ClipboardCheck, Scale } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { TabsBar, type TabsBarItem } from './ui/TabsBar';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch, useResizableColumns } from './ui/TableUtils';
 import { PurchaseOrder, PurchaseOrderComprador, PurchaseOrderItem, PedidoFinanceiro } from '../types';
@@ -220,6 +221,12 @@ const getStatusStyles = (status: string) => {
     }
 };
 
+// Sub-abas da aba Recebimento (pedido do usuário em 2026-10-19: a aba ficava
+// longa mesmo com poucos itens — rastreamento, 3-way match, conferências e
+// divergências empilhados). Divergências moram em Conferência: nascem dela e o
+// fornecedor responde ali. 3-way match é só do comprador.
+type SubAbaRecebimento = 'rastreamento' | 'conferencia' | 'match';
+
 const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ orderId, onBack, initialView = 'details', currentUser: propUser, portalToken, perfil, accent = 'indigo' }) => {
     const A = ACCENTS[accent];
     // A regra e o porquê dela vivem em `utils/pedidoPerfil.ts` — função pura
@@ -254,6 +261,13 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // tela já na aba Recebimento, que é onde o rastreamento passou a morar.
     const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'financeiro' | 'recebimento' | 'comunicacao'>(
         initialView === 'logistics' ? 'recebimento' : 'dados'
+    );
+    // `null` = ainda não decidido: na 1ª carga do pedido vira a sub-aba do
+    // momento (ver efeito abaixo). Não persiste entre pedidos de propósito — um
+    // pedido recém-enviado abriria numa conferência vazia só porque o anterior
+    // estava lá. O atalho de logística (`initialView`) já abre no rastreamento.
+    const [subAbaRecebimentoEscolhida, setSubAbaRecebimento] = React.useState<SubAbaRecebimento | null>(
+        initialView === 'logistics' ? 'rastreamento' : null
     );
     // §3 — colunas visíveis, ordem e ordenação da tabela de itens, persistidas.
     const tableColumns = useTableColumns(ITEM_COLUMNS, 'pedidoItensColumns');
@@ -615,6 +629,15 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         }, { titulo: 'Excluir item do pedido', rotulo: 'Excluir' });
     };
 
+    // Sub-aba inicial de Recebimento pelo status, decidida UMA vez (na 1ª carga):
+    // até a entrega/retirada, Rastreamento; depois, Conferência. Mudança de
+    // status com a tela aberta (ex.: registrar a retirada) não troca a sub-aba
+    // debaixo do usuário.
+    React.useEffect(() => {
+        if (!order || subAbaRecebimentoEscolhida) return;
+        setSubAbaRecebimento(['Entregue', 'Recebido', 'Divergência'].includes(order.status) ? 'conferencia' : 'rastreamento');
+    }, [order, subAbaRecebimentoEscolhida]);
+
     // FOB — retirada, visão do comprador. Só carrega para pedido FOB; erro vira
     // aviso, nunca lista vazia calada (vazia aqui diria "ninguém autorizado").
     const pedidoFobCarregado = ehFob(order?.deliveryMethod);
@@ -961,6 +984,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
     // Frete FOB muda como o rastreamento e o status se leem (utils/formaEntrega).
     const pedidoFob = ehFob(order.deliveryMethod);
+    // 3-way match é só do comprador: se a escolha for ela e quem vê é o
+    // fornecedor, cai na Conferência.
+    const subAbaRecebimento: SubAbaRecebimento =
+        subAbaRecebimentoEscolhida === 'match' && !ehComprador ? 'conferencia' : (subAbaRecebimentoEscolhida ?? 'rastreamento');
 
     const canDeleteOrder = (status: string) =>
         !['Entregue', 'Recebido', 'Divergência'].includes(status);
@@ -1758,13 +1785,34 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                 {/* ── Aba "Recebimento" ── */}
 
+                {/* Sub-abas (§19.1, `TabsBar` com o acento desta tela — índigo no
+                    app, coral no link do fornecedor). Conferência conta os
+                    recebimentos; com divergência pendente, conta ELAS, em vermelho. */}
+                {abaDetalhe === 'recebimento' && (() => {
+                    const pendentes = discrepancies.filter(d => d.status === 'Pendente').length;
+                    const tabs: TabsBarItem<SubAbaRecebimento>[] = [
+                        { id: 'rastreamento', label: 'Rastreamento logístico', icon: <Truck className="w-4 h-4" /> },
+                        {
+                            id: 'conferencia',
+                            label: 'Conferência de entrega',
+                            icon: <ClipboardCheck className="w-4 h-4" />,
+                            badge: pendentes > 0 ? pendentes : receipts.length,
+                            badgeTom: pendentes > 0 ? 'alerta' : undefined,
+                            badgeTitulo: pendentes > 0
+                                ? `${pendentes} divergência${pendentes > 1 ? 's' : ''} pendente${pendentes > 1 ? 's' : ''}`
+                                : `${receipts.length} recebimento${receipts.length === 1 ? '' : 's'} registrado${receipts.length === 1 ? '' : 's'}`,
+                        },
+                    ];
+                    if (ehComprador) tabs.push({ id: 'match', label: '3-way match', icon: <Scale className="w-4 h-4" /> });
+                    return <TabsBar<SubAbaRecebimento> tabs={tabs} value={subAbaRecebimento} onChange={setSubAbaRecebimento} accent={accent} />;
+                })()}
+
                 {/* Rastreamento logístico. Era uma TELA à parte ("Rastreamento
                     Logístico"), alcançada pelo botão Rastreio e pelos atalhos de
                     logística da lista e do portal do fornecedor. Virou o topo desta
-                    aba a pedido do usuário em 2026-09-04: quem abre Recebimento quer
-                    saber exatamente onde a carga está. Escala compacta do §16, como
-                    o resto do cromo desta tela. */}
-                {abaDetalhe === 'recebimento' && (
+                    aba a pedido do usuário em 2026-09-04, e sub-aba própria em
+                    2026-10-19. Escala compacta do §16, como o resto do cromo. */}
+                {abaDetalhe === 'recebimento' && subAbaRecebimento === 'rastreamento' && (
                     <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
                         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
                             <Truck className={`w-4 h-4 ${A.icon}`} />
@@ -1976,10 +2024,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                 {/* 3-Way Match — ferramenta interna de conferência (compra × NFe × recebimento),
                     fora do escopo do link público */}
-                {abaDetalhe === 'recebimento' && ehComprador && <ThreeWayMatchPanel orderId={order.id} />}
+                {abaDetalhe === 'recebimento' && subAbaRecebimento === 'match' && ehComprador && <ThreeWayMatchPanel orderId={order.id} />}
 
                 {/* Receipts from purchase_receipts table */}
-                {abaDetalhe === 'recebimento' && receipts.length > 0 && (
+                {abaDetalhe === 'recebimento' && subAbaRecebimento === 'conferencia' && receipts.length > 0 && (
                     <div className="space-y-4">
                         {receipts.map((receipt, rIdx) => (
                             <div key={receipt.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
@@ -2075,16 +2123,22 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     ⚠️ Este empty state aparecia SEMPRE no link público, mesmo com
                     comprovante gravado, porque as duas listas nunca eram
                     carregadas — o que fazia a tela mentir em vez de informar. */}
-                {abaDetalhe === 'recebimento' && !ehComprador && receipts.length === 0 && discrepancies.length === 0 && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 text-center py-12">
-                        <Truck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                {/* Com sub-abas, o estado vazio vale para os DOIS perfis: a
+                    Conferência sozinha, sem nada, ficaria em branco. */}
+                {abaDetalhe === 'recebimento' && subAbaRecebimento === 'conferencia' && receipts.length === 0 && discrepancies.length === 0 && (
+                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 text-center py-12">
+                        <ClipboardCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nada recebido ainda</h3>
-                        <p className="text-sm text-gray-500">Os comprovantes de entrega e as divergências aparecem aqui assim que o recebimento for registrado.</p>
+                        <p className="text-sm text-gray-500">
+                            {ehComprador
+                                ? 'A conferência aparece aqui quando você usar Receber, depois da entrega (no FOB, depois da retirada).'
+                                : 'Os comprovantes de entrega e as divergências aparecem aqui assim que o recebimento for registrado.'}
+                        </p>
                     </div>
                 )}
 
                 {/* Discrepancy Workflow — divergência é sempre sobre item recebido */}
-                {abaDetalhe === 'recebimento' && discrepancies.length > 0 && (
+                {abaDetalhe === 'recebimento' && subAbaRecebimento === 'conferencia' && discrepancies.length > 0 && (
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                         <div className="flex items-center gap-2">
                             <AlertTriangle className="w-4 h-4 text-amber-500" />

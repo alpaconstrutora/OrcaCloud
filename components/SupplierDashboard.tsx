@@ -712,8 +712,9 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
             if (orderViewMode === 'logistics') {
                 const order = orders.find(o => o.id === activeOrderId);
-                // FOB: o comprador retira aqui. Mesmos status gravados, lidos como
-                // "Pronto para retirada" e "Retirado" (utils/formaEntrega).
+                // FOB: o comprador retira aqui e registra a retirada ele mesmo —
+                // o fornecedor só acompanha, sem "Editar Logística"
+                // (utils/formaEntrega; pedido do usuário em 2026-10-19).
                 const pedidoFob = ehFob(order?.deliveryMethod);
 
                 // Helper to map order status to Lifeline status
@@ -757,7 +758,11 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 Voltar para Pedidos
                             </button>
                             <div className="flex items-center gap-4">
-                                {!isEditingLogistics ? (
+                                {pedidoFob ? (
+                                    <p className="max-w-xs text-sm font-normal text-gray-500 text-right">
+                                        Frete FOB — a retirada é registrada pelo comprador.
+                                    </p>
+                                ) : !isEditingLogistics ? (
                                     <button
                                         onClick={() => setIsEditingLogistics(true)}
                                         className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 ${drillSoftBtn}`}
@@ -795,7 +800,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 separationDate={isEditingLogistics ? editingSeparationDate : order?.separationDate}
                                 shippedDate={isEditingLogistics ? editingShippedDate : order?.shippedDate}
                                 deliveredDate={isEditingLogistics ? editingActualDeliveryDate : order?.actualDeliveryDate}
-                                isEditable={isEditingLogistics}
+                                isEditable={isEditingLogistics && !pedidoFob}
                                 onStatusChange={(newStatus) => setEditingStatus(getOrderStatusFromLifeline(newStatus))}
                                 maxSelectableStatus="DELIVERED"
                                 accent={isPublicExperience ? 'portal' : 'indigo'}
@@ -835,8 +840,8 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     >
                                         <option value="Confirmado">Confirmado</option>
                                         <option value="Separação">Separação</option>
-                                        <option value="Em Trânsito">{rotuloStatusLogistico('Em Trânsito', pedidoFob)}</option>
-                                        <option value="Entregue">{rotuloStatusLogistico('Entregue', pedidoFob)}</option>
+                                        <option value="Em Trânsito">Em Trânsito</option>
+                                        <option value="Entregue">Entregue</option>
                                     </select>
                                 ) : (
                                     <p className="text-sm font-medium text-gray-900">{rotuloStatusLogistico(order?.status, pedidoFob)}</p>
@@ -858,7 +863,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className={`text-xs font-semibold uppercase tracking-wider block ${drillPanelLabel}`}>{pedidoFob ? 'Pronto para Retirada em' : 'Data de Saída (Trânsito)'}</label>
+                                        <label className={`text-xs font-semibold uppercase tracking-wider block ${drillPanelLabel}`}>Data de Saída (Trânsito)</label>
                                         <input
                                             type="date"
                                             value={editingShippedDate}
@@ -867,7 +872,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className={`text-xs font-semibold uppercase tracking-wider block ${drillPanelLabel}`}>{pedidoFob ? 'Data da Retirada' : 'Data de Entrega Efetiva'}</label>
+                                        <label className={`text-xs font-semibold uppercase tracking-wider block ${drillPanelLabel}`}>Data de Entrega Efetiva</label>
                                         <input
                                             type="date"
                                             value={editingActualDeliveryDate}

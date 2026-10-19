@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Package, PackageCheck, Truck, CheckCircle2, ShoppingBag, Clock, AlertTriangle } from 'lucide-react';
+import { Package, Truck, CheckCircle2, ShoppingBag, Clock, AlertTriangle } from 'lucide-react';
 
 export type OrderStatus = 'BIDDING' | 'CONFIRMED' | 'PREPARING' | 'SHIPPED' | 'DELIVERED' | 'RECEIVED' | 'DIVERTED';
 
@@ -20,9 +20,10 @@ interface OrderLifelineProps {
      */
     accent?: 'indigo' | 'portal';
     /**
-     * Frete FOB: o comprador retira no fornecedor. Os passos SHIPPED e
-     * DELIVERED viram "Para retirar" e "Retirado" — mesmos status gravados,
-     * outro significado (ver `rotuloStatusLogistico` em utils/formaEntrega).
+     * Frete FOB: o comprador retira no fornecedor e o fornecedor não tem ação
+     * no rastreamento. Saem Separação e Em Trânsito (etapas DELE) e DELIVERED
+     * vira "Retirado" — mesmo status gravado, outro significado (ver
+     * `rotuloStatusLogistico` em utils/formaEntrega).
      */
     fob?: boolean;
 }
@@ -52,26 +53,25 @@ const ACCENTS = {
 
 const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery, separationDate, shippedDate, deliveredDate, onStatusChange, isEditable, maxSelectableStatus, accent = 'indigo', fob = false }) => {
     const A = ACCENTS[accent];
-    // Rótulos curtos de propósito: o passo tem ~100 px e "PRONTO PARA
-    // RETIRADA" em caixa alta passaria por cima dos vizinhos.
-    const steps = [
+    const todosOsPassos = [
         { id: 'BIDDING' as OrderStatus, label: 'Lances', icon: <ShoppingBag className="w-5 h-5" /> },
         { id: 'CONFIRMED' as OrderStatus, label: 'Confirmado', icon: <CheckCircle2 className="w-5 h-5" />, date: undefined },
         { id: 'PREPARING' as OrderStatus, label: 'Separação', icon: <Package className="w-5 h-5" />, date: separationDate },
-        fob
-            ? { id: 'SHIPPED' as OrderStatus, label: 'Para retirar', icon: <PackageCheck className="w-5 h-5" />, date: shippedDate }
-            : { id: 'SHIPPED' as OrderStatus, label: 'Em Trânsito', icon: <Truck className="w-5 h-5" />, date: shippedDate },
+        { id: 'SHIPPED' as OrderStatus, label: 'Em Trânsito', icon: <Truck className="w-5 h-5" />, date: shippedDate },
         fob
             ? { id: 'DELIVERED' as OrderStatus, label: 'Retirado', icon: <Truck className="w-5 h-5" />, date: deliveredDate }
             : { id: 'DELIVERED' as OrderStatus, label: 'Entregue', icon: <CheckCircle2 className="w-5 h-5" />, date: deliveredDate },
         { id: 'RECEIVED' as OrderStatus, label: 'Recebido', icon: <CheckCircle2 className="w-5 h-5" /> },
         { id: 'DIVERTED' as OrderStatus, label: 'Divergência', icon: <AlertTriangle className="w-5 h-5" /> }
     ];
+    const steps = fob
+        ? todosOsPassos.filter(p => p.id !== 'PREPARING' && p.id !== 'SHIPPED')
+        : todosOsPassos;
 
-    // Redirect status if it's diverted or received to show proper progress
-    const effectiveStatus = status;
-
-    const currentStepIndex = steps.findIndex(s => s.id === status);
+    // FOB: pedido antigo que o fornecedor chegou a marcar Separação/Em Trânsito
+    // ainda espera a retirada — fica no passo Confirmado.
+    const statusNoTrilho: OrderStatus = fob && (status === 'PREPARING' || status === 'SHIPPED') ? 'CONFIRMED' : status;
+    const currentStepIndex = steps.findIndex(s => s.id === statusNoTrilho);
 
     return (
         // Abaixo de ~800px os rótulos ("EM TRÂNSITO", "DIVERGÊNCIA") são mais

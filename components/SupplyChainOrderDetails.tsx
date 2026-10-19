@@ -16,7 +16,8 @@ import { ThreeWayMatchPanel } from './ThreeWayMatchPanel';
 import OrderLifeline, { OrderStatus } from './OrderLifeline';
 import OrderChat from './OrderChat';
 import OrderReceiptModal from './OrderReceiptModal';
-import { ehFob, rotuloStatusLogistico } from '../utils/formaEntrega';
+import { ehFob, rotuloStatusLogistico, situacaoDaRetirada } from '../utils/formaEntrega';
+import { hojeLocal } from '../utils/baixaRecebivel';
 import { storageService } from '../services/storageService';
 import { profileService } from '../services/profileService';
 import NegotiationHub from './NegotiationHub';
@@ -224,6 +225,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // em jogo (`fornecedorPodeCotar`). Calculado mais abaixo, quando `order`
     // existe — ver `fornecedorPodeEditarCotacao`.
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
+    // FOB: o comprador registra a retirada no Rastreamento logístico (o
+    // fornecedor não tem ação na logística do FOB — utils/formaEntrega).
+    const [dataRetirada, setDataRetirada] = React.useState(() => hojeLocal());
+    const [registrandoRetirada, setRegistrandoRetirada] = React.useState(false);
     // Abas do pedido (§19.1). O pedido deixou de ter tela de edição separada: o
     // formulário vive DENTRO destas abas, abaixo dos cartões de leitura.
     //  · Dados Gerais  — formulário do pedido (as observações ficam na coluna
@@ -405,6 +410,36 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         } finally {
             setLoading(false);
         }
+    };
+
+    // FOB — "Retirado" é o status 'Entregue' com a data da retirada como data
+    // de entrega efetiva: é o que libera o botão Receber e serve de base para o
+    // vencimento das parcelas (financialService.syncOrderToFinance).
+    const handleRegistrarRetirada = () => {
+        if (!order || !dataRetirada) return;
+        const dataBr = new Date(dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR');
+        askConfirm(
+            `O pedido passa para "Retirado" com retirada em ${dataBr}. Depois disso, use Receber para conferir os itens.`,
+            () => {
+                (async () => {
+                    setRegistrandoRetirada(true);
+                    try {
+                        await orderService.updateOrder(orderId, { status: 'Entregue', actualDeliveryDate: dataRetirada }, order.version);
+                        await loadOrderData();
+                        notify('Retirada registrada.');
+                    } catch (err: unknown) {
+                        const error = err instanceof Error ? err : new Error(String(err));
+                        notify(error.message?.startsWith('CONFLICT')
+                            ? 'Pedido foi modificado por outro usuário. Recarregue a página.'
+                            : `Erro ao registrar a retirada: ${error.message}`, 'error');
+                        await loadOrderData();
+                    } finally {
+                        setRegistrandoRetirada(false);
+                    }
+                })();
+            },
+            { titulo: 'Registrar retirada', variante: 'warning', rotulo: 'Registrar' },
+        );
     };
 
     const handleStartEdit = (idx: number, item: PurchaseOrderItem) => {
@@ -1640,13 +1675,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             Rastreamento logístico
                         </h3>
 
-                        {/* FOB: o comprador retira no fornecedor. Mesmos status
-                            gravados, lidos como "Pronto para retirada" e
-                            "Retirado" (utils/formaEntrega). Pedido do usuário em
-                            2026-10-19. */}
+                        {/* FOB: o comprador retira no fornecedor e registra a
+                            retirada aqui — o fornecedor não tem ação na logística
+                            (utils/formaEntrega). Pedidos do usuário em 2026-10-19. */}
                         {pedidoFob && (
                             <p className="text-sm font-normal text-gray-500">
-                                Frete FOB — a retirada é por conta do comprador. O fornecedor avisa quando a carga está pronta para retirada e registra a retirada; a conferência acontece no recebimento.
+                                Frete FOB — a retirada é por conta do comprador, e é ele quem registra a retirada aqui. O fornecedor não tem ação nesta etapa.
                             </p>
                         )}
 
@@ -1686,6 +1720,46 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                 <p className="text-sm font-medium text-gray-900">{rotuloStatusLogistico(order.status, pedidoFob)}</p>
                             </div>
                         </div>
+
+                        {/* FOB — ação do comprador. Vira "Retirado" (status
+                            'Entregue'), que libera o botão Receber. Sem ação
+                            possível, o botão fica desligado dizendo por quê. */}
+                        {ehComprador && pedidoFob && (() => {
+                            const retirada = situacaoDaRetirada(order.status);
+                            if (!retirada.pode && !retirada.motivo) return null;
+                            const motivoDesligado = !retirada.pode
+                                ? retirada.motivo
+                                : !dataRetirada ? 'Informe a data da retirada.' : '';
+                            return (
+                                <div className="mt-4 flex flex-col sm:flex-row sm:items-end gap-x-6 gap-y-4">
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="data-retirada" className="block text-xs font-semibold text-gray-500">Data da retirada</label>
+                                        <input
+                                            id="data-retirada"
+                                            type="date"
+                                            value={dataRetirada}
+                                            max={hojeLocal()}
+                                            disabled={!retirada.pode || registrandoRetirada}
+                                            onChange={e => setDataRetirada(e.target.value)}
+                                            className={`h-9 w-full sm:w-48 rounded-[6px] border border-gray-200 bg-white px-3 text-sm font-normal text-gray-900 outline-none focus:ring-2 disabled:bg-gray-50 ${A.ring}`}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleRegistrarRetirada}
+                                        disabled={!!motivoDesligado || registrandoRetirada}
+                                        title={motivoDesligado || 'Marcar o pedido como retirado'}
+                                        className={`flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${A.solidBtn}`}
+                                    >
+                                        {registrandoRetirada ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Truck className="w-[15px] h-[15px]" />}
+                                        Registrar retirada
+                                    </button>
+                                    {motivoDesligado && (
+                                        <p className="text-sm font-normal text-gray-500 sm:pb-2">{motivoDesligado}</p>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
 
@@ -2003,7 +2077,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         <div>
                             <h3 className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-1">Status interno</h3>
                             <p className="text-sm font-medium leading-snug">
-                                Este pedido encontra-se no estágio de <span className="bg-white/20 px-2 py-0.5 rounded-md text-white">{order.status}</span>.
+                                Este pedido encontra-se no estágio de <span className="bg-white/20 px-2 py-0.5 rounded-md text-white">{rotuloStatusLogistico(order.status, pedidoFob)}</span>.
                             </p>
                         </div>
 
@@ -2039,7 +2113,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                 ) : (
                                     <div className="p-3 bg-white/10 rounded-[6px] border border-white/10 backdrop-blur-sm">
                                         <p className="text-xs text-white/80 font-medium">
-                                            Aguardando aceite do fornecedor…
+                                            {pedidoFob
+                                                ? 'Aguardando aceite do fornecedor… No frete FOB você já pode registrar a retirada na aba Recebimento.'
+                                                : 'Aguardando aceite do fornecedor…'}
                                         </p>
                                     </div>
                                 );
@@ -2070,7 +2146,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                         Confirmado
                                     </p>
                                     <p className="text-xs text-white/70 leading-relaxed font-medium">
-                                        O fornecedor aceitou o pedido. Aguarde a atualização das etapas de logística.
+                                        {pedidoFob
+                                            ? 'O fornecedor aceitou o pedido. Frete FOB: registre a retirada na aba Recebimento.'
+                                            : 'O fornecedor aceitou o pedido. Aguarde a atualização das etapas de logística.'}
                                     </p>
                                 </div>
                             )}

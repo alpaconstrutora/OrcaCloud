@@ -63,9 +63,50 @@ A entrega do FOB É a retirada — por isso `Entregue` ≡ Retirado, e a data de
   fornecedor (`SupplierDashboard`) não foi aberta — a conta de teste não é
   fornecedor; coberta por `tsc` e pelo teste do `OrderLifeline`.
 
+## Pedido de 19/10/2026 (mesma sessão, depois da 1ª publicação `9daddbc`)
+
+Com print do pedido PCO-011-017-0002 (FOB, Rascunho), aba Recebimento:
+
+> quando a retirada FOB o Rastreamento logístico deve deixar de ter acão por parte do fornecedor.
+> Atualmente fica bloqueado aguardando acao do fornecedor. verificar
+
+**Verificação:** o comprador não tinha NENHUM controle de etapa logística. Separação,
+Em Trânsito e Entregue só mudavam pela tela de logística do fornecedor
+(`SupplierDashboard`, "Editar Logística"), e o botão Receber só aparece em `Entregue`
+— então o pedido FOB parava esperando o fornecedor. (O print ainda mostrava "Em
+Trânsito/Entregue" porque a 1ª publicação não tinha chegado ao domínio.)
+
+**Decisão (revisa a da 1ª entrega):** no FOB a logística é toda do comprador.
+
+| status gravado | FOB, antes | FOB, agora |
+|---|---|---|
+| `Separação` | Separação (fornecedor marcava) | fora do trilho; lido "Aguardando retirada" |
+| `Em Trânsito` | Pronto para retirada (fornecedor marcava) | fora do trilho; lido "Aguardando retirada" |
+| `Entregue` | Retirado (fornecedor marcava) | Retirado — **o comprador registra** |
+
+Trilho FOB: Lances → Confirmado → Retirado → Recebido → Divergência.
+
+- [x] **`utils/formaEntrega.ts`** — `rotuloStatusLogistico` novo mapeamento;
+  `situacaoDaRetirada(status)` (pode a partir de Enviado; Rascunho/Em Negociação =
+  desligado com motivo; Entregue em diante = sem botão).
+  **Pronto quando:** `__tests__/formaEntrega.test.ts` verde. ✅ 12 casos.
+- [x] **`OrderLifeline`** — FOB sem Separação/Em Trânsito; pedido antigo nesses status
+  fica no passo Confirmado. **Pronto quando:** `OrderLifelineFob.test.tsx` verde. ✅ 3 casos.
+- [x] **`SupplyChainOrderDetails`** — no cartão de rastreamento, para o comprador em
+  FOB: "Data da retirada" (padrão hoje, máx. hoje) + **Registrar retirada** (confirma,
+  grava `status='Entregue'` + `actual_delivery_date`, que libera Receber e é a base de
+  vencimento das parcelas). Textos do cartão de status (Dados Gerais) ajustados.
+  **Pronto quando:** `tsc` limpo, `check-ui-standard.sh` sem achado.
+- [x] **`SupplierDashboard`** — FOB: sem "Editar Logística", com aviso "a retirada é
+  registrada pelo comprador"; trilho não editável.
+  **Pronto quando:** idem.
+- [ ] **Conferência na tela** — pedido FOB do comprador mostra o botão e o trilho de 5
+  passos. **Pronto quando:** print sem rótulos sobrepostos e sem erro de console/HTTP.
+
 ## Fora do escopo (anotado)
 
 - Listas (Suprimentos › Pedidos, Recebimentos, portal do fornecedor) continuam mostrando
-  o status cru ("Em Trânsito") para pedido FOB.
-- No FOB o comprador ainda depende do fornecedor marcar "Retirado" para ver o botão
-  Receber.
+  o status cru para pedido FOB.
+- A trava do fornecedor no FOB é só de tela: as RPCs `supplier_portal_update_order_logistics`
+  e `purchase_order_update_as_supplier` ainda aceitam mudança de status. Fechar no banco
+  exige migration — não feito sem combinar.

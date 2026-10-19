@@ -40,6 +40,7 @@ import {
   gerar,
   HIPOTESES_DO_GERADOR_PADRAO,
   maiorRetanguloInscrito,
+  type AmbienteGerado,
   type EntradaDoGerador,
   type HipotesesDoGerador,
   type Retangulo,
@@ -110,6 +111,7 @@ import {
   comUidsDoPavimento,
   alinharSegundoAoPatamar,
   banheiroAlemDoNucleo,
+  lavaboForaDoNucleo,
   dividirEmTres,
   dividirPrograma,
   escolherNucleo,
@@ -2796,13 +2798,30 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       : !comCorredor.length
         ? `nenhuma alternativa do pavimento superior saiu com corredor para a escada chegar (${sup.resultados.length} tentada(s)${sup.falhas.length ? `; ${sup.falhas.join('; ')}` : ''})`
         : null;
-    const et = t.resultados.length ? escolherSemente(t.resultados) : null;
+    let et = t.resultados.length ? escolherSemente(t.resultados) : null;
     const es = comCorredor.length ? escolherSemente(comCorredor) : null;
     const corredor = es?.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? null;
     // F27-D4: em 3 pavimentos, como no sobrado — o 2º se alinha ao patamar nos dois sentidos da escada (o núcleo pode sobrar
     // fora dele). A preferência pelos fundos da D2 fazia o núcleo comer o banheiro do 1º (10 × 30: 3,38 m², a caixa
     // sifonada dentro da escada).
     const nucleo = et && es ? escolherNucleo(rl, corredor, et.r.ambientes, es.r.ambientes, hip.sobrado) : null;
+    // F27 item 5 (decisão do usuário, 19/10/2026: "mover o lavabo"): o núcleo que espreme o lavabo do térreo — o térreo é
+    // gerado de novo, na mesma semente, com o lavabo na outra ponta do par (`lavaboForaDoNucleo`).
+    if (et && nucleo) {
+      const malha = hipGerador.malhaMm ?? HIPOTESES_DO_GERADOR_PADRAO.malhaMm;
+      const mover = (amb: AmbienteGerado[]) => lavaboForaDoNucleo(amb, nucleo, hip.sobrado, malha);
+      if (mover(et.r.ambientes.map((a) => ({ ...a, ret: { ...a.ret } })))) {
+        try {
+          const novo = gerar({ ...entradaDoGerador, programa: divididos.terreo, rearranjar: mover, motivoDoRearranjo: 'o lavabo na outra ponta, fora do núcleo da escada' }, et.r.semente, hipGerador);
+          if (novo.decisoes.some((d) => d.startsWith('Arranjo ajustado'))) {
+            et = { r: novo, texto: et.texto };
+            decisoes.push('Térreo: o núcleo da escada espremia o lavabo — o lavabo foi para a outra ponta do par, fora do núcleo.');
+          }
+        } catch {
+          // O gerador não fechou com o lavabo movido: fica o arranjo de antes.
+        }
+      }
+    }
     if (semPlanta || !nucleo || !et || !es) {
       const texto = semPlanta ?? `não cabe o núcleo da escada (${f2(hip.sobrado.nucleoLarguraMm / 1000)} × ${f2(hip.sobrado.nucleoProfundidadeMm / 1000)} m) na ponta do corredor de cima`;
       etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, texto);

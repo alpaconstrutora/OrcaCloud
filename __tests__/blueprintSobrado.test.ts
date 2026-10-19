@@ -12,6 +12,7 @@ import {
   alinharJanelasDoSuperior,
   alinharSegundoAoPatamar,
   banheiroAlemDoNucleo,
+  lavaboForaDoNucleo,
   comandoDaEscada,
   contornoDoTerraco,
   dividirEmTres,
@@ -193,6 +194,39 @@ describe('F27-D2: o 2º pavimento recuado', () => {
     expect(banheiroAlemDoNucleo(outro, { ...n, ret: { x0: 3000, y0: -1100, x1: 5400, y1: 2500 }, paraOsFundos: false })).toBe(false);
     expect(banheiroAlemDoNucleo(outro, { ...n, ret: { ...n.ret, x0: 1000 } })).toBe(false);
     expect(outro[1].ret).toEqual({ x0: 0, y0: 6700, x1: 5400, y1: 8100 });
+  });
+
+  it('lavaboForaDoNucleo (F27 item 5, "mover o lavabo"): o núcleo que espremia o lavabo — a cozinha leva a tira, o serviço fica do lado do núcleo e o lavabo vai para a outra ponta', () => {
+    const item = (uso: string, larguraMinMm: number, areaMinM2: number, areaIdealM2 = areaMinM2) => ({ uso, larguraMinMm, areaMinM2, areaIdealM2 });
+    const amb = (nome: string, uso: string, ret: Retangulo, it: ReturnType<typeof item>) => ({ nome, ret, item: { ...it, uso }, areaM2: 0, larguraMinM: 0 }) as unknown as AmbienteGerado;
+    // O térreo do 10 × 30 com 4 dormitórios (3 pavimentos): o núcleo à direita, de 11,8 a 15,4 m, deixava 0,65 m do lavabo.
+    const monta = () => [
+      amb('Cozinha', 'COZINHA', { x0: 1500, y0: 13200, x1: 5450, y1: 18150 }, item('COZINHA', 1800, 6, 9)),
+      amb('Lavabo', 'LAVABO', { x0: 5450, y0: 13200, x1: 8500, y1: 15250 }, item('LAVABO', 900, 1.5, 2.2)),
+      amb('Área de serviço', 'AREA_DE_SERVICO', { x0: 5450, y0: 15250, x1: 8500, y1: 18150 }, item('AREA_DE_SERVICO', 1200, 3, 4.5)),
+      amb('Sala', 'SALA', { x0: 4200, y0: 5050, x1: 8500, y1: 13200 }, item('SALA', 2700, 12, 18)),
+    ];
+    const n = { ret: { x0: 6100, y0: 11800, x1: 8500, y1: 15400 } };
+    const a = monta();
+    expect(lavaboForaDoNucleo(a, n)).toBe(true);
+    expect(a[0].ret).toEqual({ x0: 1500, y0: 13200, x1: 6100, y1: 18150 });
+    expect(a[2].ret).toEqual({ x0: 6100, y0: 13200, x1: 8500, y1: 17100 });
+    // 2,2 m² ÷ 2,40 m = 0,92 m → a largura mínima mais a parede (1,05 m) manda.
+    expect(a[1].ret).toEqual({ x0: 6100, y0: 17100, x1: 8500, y1: 18150 });
+    expect(pedacosFora(a[1].ret, n.ret)).toEqual([a[1].ret]);
+    // A sala, que o núcleo também come, não muda.
+    expect(a[3].ret).toEqual({ x0: 4200, y0: 5050, x1: 8500, y1: 13200 });
+    // O mesmo par transposto (empilhado em x) dá o mesmo arranjo, transposto.
+    const tr = (q: Retangulo): Retangulo => ({ x0: q.y0, y0: q.x0, x1: q.y1, y1: q.x1 });
+    const b = monta().map((x) => ({ ...x, ret: tr(x.ret) }));
+    expect(lavaboForaDoNucleo(b, { ret: tr(n.ret) })).toBe(true);
+    expect(b.map((x) => tr(x.ret))).toEqual(a.map((x) => x.ret));
+    // Nada a fazer: o lavabo que sobra largo, ou sem quem leve a tira.
+    const c = monta();
+    expect(lavaboForaDoNucleo(c, { ret: { x0: 7400, y0: 11800, x1: 8500, y1: 15400 } })).toBe(false);
+    const d = monta().filter((x) => x.nome !== 'Cozinha');
+    expect(lavaboForaDoNucleo(d, n)).toBe(false);
+    expect(d[0].ret).toEqual({ x0: 5450, y0: 13200, x1: 8500, y1: 15250 });
   });
 
   it('pavimentoComNucleo: o núcleo que sobra fora do retângulo ganha a parede da fachada (no térreo, a externa a cobre)', () => {

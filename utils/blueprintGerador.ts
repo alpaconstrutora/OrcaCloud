@@ -166,6 +166,8 @@ export interface EntradaDoGerador {
    * externos são recalculados pela borda do contorno). Ausente = o arranjo do gerador, como sempre.
    */
   rearranjar?: ((ambientes: AmbienteGerado[]) => boolean) | null;
+  /** F27 item 5: o que o rearranjo fez, para a decisão (ausente = o banheiro da suíte colado no núcleo). */
+  motivoDoRearranjo?: string | null;
 }
 
 export interface Retangulo {
@@ -1124,7 +1126,7 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   if (anexos.length) for (const a of ambientes) a.ladosExternos = [...new Set(ladosNaBorda(a.ret).map((x) => x.lado as LadoDaFrente))];
   if (entrada.rearranjar?.(ambientes)) {
     for (const a of ambientes) a.ladosExternos = [...new Set(ladosNaBorda(a.ret).map((x) => x.lado as LadoDaFrente))];
-    decisoes.push('Arranjo ajustado depois do recozimento (casa de 3 pavimentos: o banheiro da suíte colado no núcleo da escada).');
+    decisoes.push(`Arranjo ajustado depois do recozimento (${entrada.motivoDoRearranjo ?? 'casa de 3 pavimentos: o banheiro da suíte colado no núcleo da escada'}).`);
   }
 
   // F21 da casa automática (17/10/2026): bordas a menos de uma espessura de parede uma da outra viram UMA coordenada —

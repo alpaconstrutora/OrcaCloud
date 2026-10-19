@@ -1175,7 +1175,7 @@ describe('BlueprintEditor · quantitativos', () => {
     const linhas = () => within(tela).getAllByRole('row').map((r) => (r.textContent ?? '').replace(/\s+/g, ' '));
     expect(within(tela).getByLabelText('Número da unidade 102')).toBeInTheDocument();
     expect(linhas().filter((l) => /Sala.*25,20.*500,0000 ‰/.test(l))).toHaveLength(2); // as duas, geminadas entre si (fração do Quadro IV-B)
-    expect(linhas().some((l) => /Sala.*500,0000 ‰.*—101/.test(l))).toBe(true);
+    expect(linhas().some((l) => /Sala.*500,0000 ‰\s*101/.test(l))).toBe(true); // geminada com a 101 (a coluna "Planta AI (m²)", com o seu "—", saiu em 19/10/2026)
     expect(linhas().some((l) => /Térreo.*2/.test(l))).toBe(true);
     // Gaveta Grupo: selecionar a origem lista o grupo "Unidade 101" com 1 instância; remover a instância tira a cópia; desagrupar.
     await user.click(within(tela).getByRole('button', { name: /^voltar ao editor$/i }));

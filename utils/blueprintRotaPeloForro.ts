@@ -693,18 +693,26 @@ export function descidaDoForro(
   if (livre(inicial) || !parede) return semCruzarNaParede(inicial);
   // O caminho do escorregão, no forro, não entra em parede, viga, pilar, shaft nem laje rebaixada.
   const barreiras = [...pegadasDePilares(model, levelId), ...prumadasQueCruzam(model, levelId, o.cotaDaFaixaMm, o.disciplina, o.raioMm, 2, true)];
+  // F27 item 5: sem o SHAFT — o último recurso desce dentro dele (as colunas de verdade nele, o `livre` confere).
+  const barreirasSemShaft = [...pegadasDePilares(model, levelId), ...prumadasQueCruzam(model, levelId, o.cotaDaFaixaMm, o.disciplina, o.raioMm, 2, false)];
   const paredesDoNivel = model.walls.filter((x) => x.levelId === levelId);
-  const passa = (p: P2) =>
+  const passa = (p: P2, semShaft = false) =>
     fundoDaVigaSobre(model, levelId, p, o.raioMm) == null &&
-    !barreiras.some((g) => pointInPolygon(g, p as Point)) &&
+    !(semShaft ? barreirasSemShaft : barreiras).some((g) => pointInPolygon(g, p as Point)) &&
     paredesDoNivel.every((x) => distanciaAoEixo(x, p) > x.thicknessMm / 2 + o.raioMm);
-  const buscar = (comFuturas: boolean): ReturnType<typeof cabeca> | null => {
+  /**
+   * `atravessa` (F27 item 5 da casa automática, 19/10/2026): o caminho no forro pode passar sobre parede e viga (a faixa
+   * corre na laje, como a própria árvore) e o ponto da descida pode cair no SHAFT — o nó do forro caía do outro lado
+   * da parede do ponto, e a corrida na face atravessava a parede e o pilar do encontro (10 × 30 4 dorm., 2º pavimento);
+   * a fria que sai do shaft corria na parede pelo pilar até a máquina de lavar (R1-A, térreo).
+   */
+  const buscar = (comFuturas: boolean, atravessa = false): ReturnType<typeof cabeca> | null => {
     for (let s = PASSO_DO_DESLIZE_MM; s <= DESLIZE_DA_DESCIDA_MM; s += PASSO_DO_DESLIZE_MM) {
       for (const k of [1, -1]) {
         const q = { x: Math.round(o.q.x + parede.u.x * s * k), y: Math.round(o.q.y + parede.u.y * s * k) };
         let ok = true;
-        for (let d = 25; d <= s && ok; d += 25) ok = passa({ x: o.q.x + parede.u.x * d * k, y: o.q.y + parede.u.y * d * k });
-        if (!ok || !passa(q)) continue;
+        for (let d = 25; d <= s && ok && !atravessa; d += 25) ok = passa({ x: o.q.x + parede.u.x * d * k, y: o.q.y + parede.u.y * d * k });
+        if (!ok || !passa(q, atravessa)) continue;
         const c = cabeca(q, true);
         if (livre(c, comFuturas)) return c;
       }
@@ -717,7 +725,9 @@ export function descidaDoForro(
   // último recurso (o nó inicial, como está) atravessava o pilar da parede (R1-A, 15 × 30 4 dorm.).
   if (livre(inicial, false)) return semCruzarNaParede(inicial);
   const semFuturas = buscar(false);
-  return semCruzarNaParede(semFuturas ?? inicial);
+  if (semFuturas) return semCruzarNaParede(semFuturas);
+  // F27 item 5: por último, o nó que passa sobre a parede no forro e desce do lado do ponto.
+  return semCruzarNaParede(buscar(true, true) ?? buscar(false, true) ?? inicial);
 }
 
 /** F18: o ponto cai no comprimento da parede (o deslize na parede não sai pela ponta dela). */

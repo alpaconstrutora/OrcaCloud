@@ -15,6 +15,7 @@ import type { BlueprintModel, Command, ObjectId, Point, Space } from './blueprin
 import { areaRecuada } from './blueprintKernel';
 import { comandosDeIluminacao, comandosParaCompletar, conferirIluminacao, conferirTomadas, distribuirAoLongo, etiquetaDoAmbiente, ladosDePiso } from './blueprintDistribuicao';
 import { aplicarPotenciaPadrao } from './blueprintPotenciaPadrao';
+import { pegadasDePilares } from './blueprintObstaculosEstruturais';
 
 export interface OpcoesDosPontosEletricos {
   /** O pé-direito do pavimento (a luz de teto). */
@@ -41,7 +42,7 @@ export function comandosDePontosDoAmbiente(model: BlueprintModel, levelId: Objec
     const pontos = distribuirAoLongo(ladosDePiso(space, paredes), Math.max(conferencia.deficit, conferencia.deficitMedias), model.walls, model.openings, 150, [...(op.ocupados ?? []), ...pilares]);
     comandos.push(...comandosParaCompletar(levelId, pontos, conferencia));
   }
-  comandos.push(...comandosDeIluminacao(levelId, space, model.walls, model.openings, op.peDireitoMm, conferirIluminacao(space, terminais, areaM2, tipo), terminais, op.areaPorLuminariaM2 ?? null));
+  comandos.push(...comandosDeIluminacao(levelId, space, model.walls, model.openings, op.peDireitoMm, conferirIluminacao(space, terminais, areaM2, tipo), terminais, op.areaPorLuminariaM2 ?? null, pegadasDePilares(model, space.levelId)));
   return comandos;
 }
 

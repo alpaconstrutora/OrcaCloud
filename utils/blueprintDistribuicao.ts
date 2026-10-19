@@ -802,12 +802,15 @@ export function conferirIluminacao(
  * O ponto da FACE junto à primeira porta do ambiente — 200 mm além da folha,
  * do lado em que há parede —, ou `null` se o ambiente não tem porta.
  * É onde o interruptor vai por hábito; ainda assim nasce sugerido.
+ * F27 item 5 da casa automática (19/10/2026): `pilares` (as pegadas) — o ponto não cai na face de um pilar; anda para
+ * além dele, do mesmo lado da porta (o interruptor nascia na borda do pilar e o eletroduto descia rente ao concreto).
  */
 export function pontoJuntoAPorta(
   space: Space,
   walls: readonly Wall[],
   openings: readonly Opening[],
   afastamentoMm = 200,
+  pilares: readonly (readonly Point[])[] = [],
 ): Point | null {
   for (const lado of ladosDePiso(space, walls)) {
     if (!lado.wallId) continue;
@@ -842,8 +845,25 @@ export function pontoJuntoAPorta(
         const [a, b] = [paraLado(o.offsetMm), paraLado(o.offsetMm + o.widthMm)].sort((x, y) => x - y);
         return d > a - MARGEM_DO_PONTO_AO_VAO_MM && d < b + MARGEM_DO_PONTO_AO_VAO_MM;
       });
+    // F27 item 5: os pilares que encostam neste lado, como intervalos na régua do lado (com a margem do vão).
+    const [lx, ly] = [(lado.b.x - lado.a.x) / (compLado || 1), (lado.b.y - lado.a.y) / (compLado || 1)];
+    const noPilar = pilares.flatMap((g) => {
+      const ns = g.map((p) => (p.x - lado.a.x) * -ly + (p.y - lado.a.y) * lx);
+      if (Math.min(...ns) > MARGEM_DO_PONTO_AO_VAO_MM || Math.max(...ns) < -MARGEM_DO_PONTO_AO_VAO_MM) return [];
+      const ds = g.map((p) => (p.x - lado.a.x) * lx + (p.y - lado.a.y) * ly);
+      return [[Math.min(...ds) - MARGEM_DO_PONTO_AO_VAO_MM, Math.max(...ds) + MARGEM_DO_PONTO_AO_VAO_MM] as const];
+    });
+    /** Fora dos pilares, andando no sentido `k` (para longe da porta). */
+    const alemDoPilar = (d: number, k: 1 | -1) => {
+      for (let i = 0; i <= noPilar.length; i++) {
+        const em = noPilar.find(([a, b]) => d > a && d < b);
+        if (!em) return d;
+        d = k > 0 ? em[1] + 1 : em[0] - 1;
+      }
+      return d;
+    };
     // Do lado em que sobra parede; prefere depois da porta.
-    const candidatos = [ombreiraB + afastamentoMm, ombreiraA - afastamentoMm].filter(
+    const candidatos = [alemDoPilar(ombreiraB + afastamentoMm, 1), alemDoPilar(ombreiraA - afastamentoMm, -1)].filter(
       (d) => d > 0 && d < compLado && !emVao(d),
     );
     if (candidatos.length === 0) continue;
@@ -935,6 +955,8 @@ export function comandosDeIluminacao(
   terminais: readonly Terminal[],
   /** E6.3: luz de teto em MALHA — uma a cada tantos m² (hipótese); `null`/ausente = uma só, no ponto interior. */
   areaPorLuminariaM2: number | null = null,
+  /** F27 item 5: as pegadas dos pilares do pavimento — o interruptor junto à porta não cai neles. */
+  pilares: readonly (readonly Point[])[] = [],
 ): Command[] {
   const cmds: Command[] = [];
   const dentro = terminaisDoAmbiente(space, terminais);
@@ -993,7 +1015,7 @@ export function comandosDeIluminacao(
   const grupos: string[][] = [];
   for (let i = 0; i < pendentes.length; i += 3) grupos.push(pendentes.slice(i, i + 3));
   const paredes = walls.filter((w) => w.levelId === space.levelId);
-  const junto = pontoJuntoAPorta(space, paredes, openings);
+  const junto = pontoJuntoAPorta(space, paredes, openings, 200, pilares);
   const espalhados = distribuirAoLongo(ladosDePiso(space, paredes), grupos.length, walls, openings).map(
     (p) => p.at,
   );

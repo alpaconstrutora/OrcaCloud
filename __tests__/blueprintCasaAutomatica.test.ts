@@ -760,6 +760,30 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
     expect(snapshotHash(applyBatch(m, plano.comandos).model)).toBe(snapshotHash(r));
   });
 
+  /** As redes que atravessam pilar: `disciplina × rótulo do pilar`. */
+  const redesNoPilar = (x: BlueprintModel) => {
+    const est = new Map(x.structures.map((s) => [s.id, s]));
+    const porId = new Map((x.trechos ?? []).map((t) => [t.id, t]));
+    return conflitosDoModelo(x)
+      .filter((c) => c.classe === 'ESTRUTURA' && porId.has(c.trechoId) && est.get(c.outroId)?.kind === 'PILAR' && ((c as { comprimentoDentroMm?: number }).comprimentoDentroMm ?? 0) > 0)
+      .map((c) => `${porId.get(c.trechoId)!.disciplina} × ${est.get(c.outroId)!.rotulo}`);
+  };
+
+  it('F27 item 5: nenhuma rede atravessa pilar — o interruptor não nasce na face dele; a fria que sai do shaft não corre na parede por ele', () => {
+    expect(redesNoPilar(r)).toEqual([]);
+  });
+
+  it('F27 item 5: 10 × 30, 4 dorm. — nem o eletroduto do 2º (o nó do forro do outro lado da parede) nem o condutor do terraço (o pé no afastamento)', () => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const L = base.levels[0].id;
+    const d = (a: Point, b: Point, papel: Papel): Command => ({ type: 'AddBoundary', levelId: L, a, b, kind: 'TERRENO', papel });
+    const m10 = applyBatch(base, [d(point(0, 0), point(10000, 0), 'FRENTE'), d(point(10000, 0), point(10000, 30000), 'LATERAL_DIREITA'), d(point(10000, 30000), point(0, 30000), 'FUNDOS'), d(point(0, 30000), point(0, 0), 'LATERAL_ESQUERDA')]).model;
+    const e = entrada(m10, { ctx: { ...entrada(m10).ctx, zona: { ...ZONA, gabaritoPavimentos: 3, coeficienteMax: null } } });
+    const p = planejarCasa(m10, { ...e, curto: { ...PROGRAMA_CURTO_PADRAO, dormitorios: 4, suites: 1, banheiros: 3, vagas: 2 }, hidro: chuva }, { pavimentos: 3 });
+    expect(p.etapas.find((x) => x.id === 'ARQUITETURA')?.situacao).toBe('LANCOU');
+    expect(redesNoPilar(p.resultado)).toEqual([]);
+  });
+
   it('a zona que só deixa 2 pavimentos (ou a altura de 2) recusa a de 3 e aponta o sobrado', () => {
     for (const e of [z3(2), z3(null, 6)]) {
       const p = planejarCasa(m, e, { pavimentos: 3 });

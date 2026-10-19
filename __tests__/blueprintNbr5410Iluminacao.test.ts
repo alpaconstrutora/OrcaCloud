@@ -24,6 +24,7 @@ import {
   point,
   type BlueprintModel,
   type Command,
+  type Point,
   type TipoDePontoEletrico,
 } from '../utils/blueprintKernel';
 import {
@@ -172,6 +173,19 @@ describe('completar a iluminação', () => {
     // Janela ALTA (peitoril 1,60 m), acima do interruptor: o lado de depois da porta continua valendo.
     const alta = applyCommand(base, { type: 'AddOpening', wallId: base.walls[0].id, kind: 'window', offsetMm: 1950, widthMm: 1200, heightMm: 600, sillMm: 1600 }).model;
     expect(pontoJuntoAPorta(alta.spaces[0], alta.walls, alta.openings)!.x).toBe(2000);
+  });
+
+  it('F27 item 5: com um PILAR onde ele cairia, o interruptor anda para além do pilar (do mesmo lado da porta)', () => {
+    const m = sala();
+    // Pilar 19 × 19 no eixo da parede de baixo, centrado em x = 2000: de 1905 a 2095.
+    const pilar = [point(1905, -95), point(2095, -95), point(2095, 95), point(1905, 95)];
+    const at = pontoJuntoAPorta(m.spaces[0], m.walls, m.openings, 200, [pilar])!;
+    expect(at.y).toBe(75);
+    expect(at.x).toBe(2156);
+    // E pelo comandosDeIluminacao, que recebe as pegadas.
+    const c = conferirIluminacao(m.spaces[0], m.terminais, AREA);
+    const inter = comandosDeIluminacao(m.levels[0].id, m.spaces[0], m.walls, m.openings, 2800, c, m.terminais, null, [pilar]).find((x) => (x as { tipoEletrico?: string }).tipoEletrico === 'INTERRUPTOR') as { at: Point };
+    expect(inter.at).toEqual({ x: 2156, y: 75 });
   });
 
   it('sem porta, o interruptor vem com o rótulo "Posicione junto à porta"', () => {

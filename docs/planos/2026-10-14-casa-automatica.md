@@ -2889,3 +2889,22 @@ eletroduto do de baixo (a 4,5 cm do teto) — e o traçado do eletroduto não o 
   da laje rebaixada) cruzava o eletroduto rente àquela parede — 10 × 30 4 dorm.: 0 encontros. Testes novos.
 - Medido: 19 → 10 encontros nos 6 lotes (R1-A 7, 12 × 30 sem suíte 1, 10 × 30 2 dorm. 2; os outros 3, zero). 8 casas de
   referência idênticas.
+
+#### 5.1d — o grupo D: rede atravessando pilar (19/10/2026, "vamos em frente")
+
+Quatro casos nos 6 lotes, três causas:
+
+- **O interruptor na face do pilar** (R1-A, 2º): o ponto junto à porta caía na borda do pilar do encontro, e o eletroduto
+  descia rente ao concreto. `pontoJuntoAPorta` (e `comandosDeIluminacao`) recebem as pegadas dos pilares: o ponto anda
+  para além do pilar, do mesmo lado da porta (com a margem do vão, 60 mm). As tomadas já faziam isso (F9).
+- **O nó do forro do lado errado da parede** (10 × 30 4 dorm., 2º) e **a fria que sai do shaft** (R1-A, térreo, a
+  máquina de lavar): a descida corria na parede, abaixo da viga, pelo pilar do encontro; o escorregão do nó não achava
+  lugar porque o caminho no forro cruzava parede/viga, ou o ponto da descida caía no shaft. Último recurso novo em
+  `descidaDoForro`: o nó passa sobre a parede no forro (como a própria árvore) e pode descer dentro do shaft — as colunas
+  de verdade nele seguem conferidas pelo `livre`.
+- **O pé do condutor do terraço dentro do afastamento** (10 × 30 4 dorm.): de dentro, o contorno por fora não achava
+  caminho e o horizontal enterrado saía em reta por baixo do pilar da fachada. `saidaDoAfastamento`: o pé sai em reta,
+  pelo lado mais curto que não entra em outro obstáculo (até 2 m), antes do contorno.
+- Medido: 4 → 0 redes em pilar nos 6 lotes; encontros de rede seguem 10; trava ok nos 6. 8 casas de referência
+  idênticas. Testes novos (falham sem a correção): interruptor com pilar (`blueprintNbr5410Iluminacao`), "nenhuma rede
+  atravessa pilar" na casa de 3 do R1-A e no 10 × 30 4 dorm. (`blueprintCasaAutomatica`).

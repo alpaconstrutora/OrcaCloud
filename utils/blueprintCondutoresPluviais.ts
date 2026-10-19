@@ -259,9 +259,37 @@ const MEIA_CAIXA_ENTERRADA_MM = 300;
 /** F24: a saída pluvial PROPOSTA longe de onde outra rede já desce ou sai na frente (o alimentador, a ligação), mm. */
 const SAIDA_LONGE_DAS_OUTRAS_REDES_MM = 800;
 
-/** F24: o comprimento de `a` a `b` contornando os obstáculos (o caminho que o tubo faz). */
+/** F27 item 5: até onde o pé dentro do afastamento anda, em reta, procurando sair dele, mm. */
+const SAIDA_DO_AFASTAMENTO_ATE_MM = 2000;
+
+/**
+ * F27 item 5 da casa automática (19/10/2026): o pé que nasce DENTRO do afastamento (a descida do terraço, rente à
+ * fachada) sai dele em reta — pelo lado mais curto que não entra em outro obstáculo (pilar, caixa) — antes do contorno:
+ * de dentro, o contorno não acha caminho e o horizontal saía em reta, por baixo do pilar da fachada (10 × 30 4 dorm.).
+ * `null` com o pé já fora.
+ */
+function saidaDoAfastamento(a: { x: number; y: number }, obstaculos: { x: number; y: number }[][]): { x: number; y: number } | null {
+  const contem = obstaculos.filter((g) => pointInPolygon(g as Point[], a as Point));
+  if (contem.length === 0) return null;
+  let melhor: { p: { x: number; y: number }; s: number } | null = null;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    for (let s = 25; s <= SAIDA_DO_AFASTAMENTO_ATE_MM && (!melhor || s < melhor.s); s += 25) {
+      const p = { x: Math.round(a.x + dx * s), y: Math.round(a.y + dy * s) };
+      const em = obstaculos.filter((g) => pointInPolygon(g as Point[], p as Point));
+      if (em.some((g) => !contem.includes(g))) break;
+      if (em.length === 0) {
+        melhor = { p, s };
+        break;
+      }
+    }
+  }
+  return melhor?.p ?? null;
+}
+
+/** F24: o comprimento de `a` a `b` contornando os obstáculos (o caminho que o tubo faz). F27: saindo antes do afastamento. */
 function comprimentoPorFora(a: { x: number; y: number }, b: { x: number; y: number }, obstaculos: { x: number; y: number }[][]): number {
-  const pts = [a, ...(desvioPorFora(a, b, obstaculos) ?? []), b];
+  const sai = saidaDoAfastamento(a, obstaculos);
+  const pts = sai ? [a, sai, ...(desvioPorFora(sai, b, obstaculos) ?? []), b] : [a, ...(desvioPorFora(a, b, obstaculos) ?? []), b];
   return pts.slice(1).reduce((s, p, k) => s + Math.hypot(p.x - pts[k].x, p.y - pts[k].y), 0);
 }
 
@@ -404,7 +432,9 @@ export function planejarCondutores(model: BlueprintModel, hip: HipotesesPluviais
   // F25: os tubos enterrados das OUTRAS redes que o horizontal pode cruzar (o coletor predial que desce fundo até a rua).
   const outrosEnterrados = (model.trechos ?? []).filter((t) => t.disciplina !== 'PLUVIAL' && Math.min(t.cotaAMm, t.cotaBMm) < 0 && (t.a.x !== t.b.x || t.a.y !== t.b.y));
   const horizontal = (levelId: ObjectId, a: { x: number; y: number }, cotaA: number, b: { x: number; y: number }, cotaB: number, dn: number) => {
-    const desvio = desvioPorFora(a, b, obstaculosDe(levelId)) ?? [];
+    // F27 item 5: o pé dentro do afastamento sai dele antes do contorno.
+    const sai = saidaDoAfastamento(a, obstaculosDe(levelId));
+    const desvio = [...(sai ? [sai] : []), ...(desvioPorFora(sai ?? a, b, obstaculosDe(levelId)) ?? [])];
     const base = [a, ...desvio.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), b].filter((p, k, arr) => k === 0 || p.x !== arr[k - 1].x || p.y !== arr[k - 1].y);
     // F25: o cruzamento com outra rede vira VÉRTICE do perfil, na cota que passa por baixo dela com a folga — o perfil
     // reto do pé à saída cruzava rente quando a saída é funda (terreno inclinado). Só quando ainda chega à saída com a

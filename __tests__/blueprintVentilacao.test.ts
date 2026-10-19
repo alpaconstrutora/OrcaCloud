@@ -11,6 +11,7 @@ import {
   distanciaMaximaAoVentiladorM,
   dnDaColunaDeVentilacao,
   planejarVentilacao,
+  TIPO_DA_VALVULA_DE_ADMISSAO_DE_AR,
   verificarVentilacao,
 } from '../utils/blueprintVentilacao';
 import { esgotoTrechoATrecho, HIPOTESES_ESGOTO_PADRAO } from '../utils/blueprintEsgotoAutomatico';
@@ -118,6 +119,25 @@ describe('E5.4 — o lançamento', () => {
     const depois = planejarVentilacao(comAgua).comandos.filter((c): c is Extract<typeof c, { type: 'AddTrecho' }> => c.type === 'AddTrecho' && c.a.x === c.b.x && c.a.y === c.b.y);
     for (const c of depois) expect(Math.hypot(c.a.x - alvo.x, c.a.y - alvo.y)).toBeGreaterThanOrEqual(25 + 12.5 + 20);
     expect(verificarVentilacao(applyBatch(comAgua, planejarVentilacao(comAgua).comandos).model).desconectores.every((d) => d.ventilado)).toBe(true);
+  });
+
+  it('F27 item 5 ("válvula de admissão de ar"): a peça do térreo sem parede em cima até o telhado é ventilada por VAA — a coluna fica no térreo', () => {
+    // O sobrado sem as paredes do superior (como o térreo sob o terraço da casa de 3): nenhuma parede comum até o telhado.
+    const m0 = sobrado(true);
+    const [t, sup] = [...m0.levels].sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
+    const m = { ...m0, walls: m0.walls.filter((w) => w.levelId !== sup) };
+    const p = planejarVentilacao(m);
+    const valvulas = p.comandos.filter((c): c is Extract<typeof c, { type: 'AddTerminal' }> => c.type === 'AddTerminal' && c.tipo === TIPO_DA_VALVULA_DE_ADMISSAO_DE_AR);
+    expect(valvulas.length).toBeGreaterThan(0);
+    expect(valvulas.every((v) => v.levelId === t)).toBe(true);
+    // Nenhuma coluna de ventilação do térreo atravessa o superior na posição de uma válvula.
+    const novos = p.comandos.filter((c): c is Extract<typeof c, { type: 'AddTrecho' }> => c.type === 'AddTrecho');
+    for (const v of valvulas) expect(novos.some((c) => c.levelId === sup && c.a.x === v.at.x && c.a.y === v.at.y)).toBe(false);
+    expect(p.avisos.some((a) => /válvula de admissão de ar/.test(a))).toBe(true);
+    // E a verificação dá o térreo por ventilado, sem pedir a coluna acima da cobertura.
+    const v = verificarVentilacao(applyBatch(m, p.comandos).model);
+    expect(v.desconectores.filter((d) => d.levelId === t).every((d) => d.ventilado)).toBe(true);
+    for (const c of v.colunas.filter((c) => valvulas.some((x) => x.at.x === c.x && x.at.y === c.y))) expect(c.acimaDaCobertura).toBe(true);
   });
 
   it('ventilacaoAteAParedeMm 0: a coluna sobe na posição da peça, como antes', () => {

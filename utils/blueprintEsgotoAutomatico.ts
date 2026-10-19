@@ -81,6 +81,15 @@ export interface HipotesesDeEsgoto {
    */
   ventilacaoAteAParedeMm?: number;
   /**
+   * F27 item 5 da casa automática (decisão do usuário, 19/10/2026: "válvula de admissão de ar"): a peça cuja coluna
+   * não acha parede que exista em todos os pavimentos de cima (a do térreo sob o TERRAÇO da casa de 3 — a coluna mais
+   * perto ficava a 7–12 m) é ventilada por uma VÁLVULA DE ADMISSÃO DE AR: a ventilação sobe rente à parede só no
+   * pavimento dela até a válvula. `false` = sobe no ponto, como antes. Ausente = true.
+   */
+  valvulaDeAdmissaoDeAr?: boolean;
+  /** F27 item 5: a válvula de admissão de ar abaixo do teto do pavimento (acima do transbordamento da peça), mm. Ausente = 300. */
+  valvulaAbaixoDoTetoMm?: number;
+  /**
    * F14a da casa automática ("forro com faixas"): a FAIXA do esgoto — deslocamento (no mundo, mm) do tubo de queda e
    * das colunas de ventilação em relação ao ponto que eles teriam (o centro do shaft, o eixo da parede), para não
    * dividirem o lugar com as colunas de água. Ausente = sem deslocamento.

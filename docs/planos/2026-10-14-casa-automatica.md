@@ -2856,3 +2856,21 @@ rebaixada, e o do 1º × o condutor sob o terraço (4); (D) tubo atravessando pi
 - Testado e descartado: a quente fugindo das peças de ESGOTO em volta do shaft — o sobrado de referência ganhava 2
   encontros. Medido: 19 → 16 encontros (10 × 30 4 dorm. 6 → 2; 12 × 30 sem suíte 0 → 1); 8 casas de referência
   idênticas. Resta no R1-A: a peça de esgoto a 6 cm da coluna da quente dentro do shaft — nenhum canto resolve.
+
+#### 5.1b — a ventilação do térreo sob o terraço: válvula de admissão de ar (19/10/2026)
+
+Retrato: o vaso do lavabo da frente (12 × 30 e 15 × 25) — a coluna de ventilação procura a parede que existe em TODOS
+os pavimentos de cima; sob o terraço o 2º não tem parede, e ela subia na saída do vaso (a 20 cm da parede), cruzando a
+água fria que desce para ele e atravessando o dormitório do 1º.
+
+Decisões do usuário (19/10/2026): primeiro **"liga no tubo de ventilação"**; medido, a coluna de ventilação mais perto
+no térreo não existe (as colunas começam no 1º e no 2º, nos shafts, a 7,5–12 m) — perguntado de novo com o número: **"Válvula
+de admissão de ar"**.
+
+- `planejarVentilacao`: a peça sem parede comum até o telhado mas com parede no pavimento dela ganha a ventilação
+  rente à parede só até a VÁLVULA DE ADMISSÃO DE AR (peça `TIPO_DA_VALVULA_DE_ADMISSAO_DE_AR`, sem ficha — não é fonte
+  de esgoto), a `HipotesesDeEsgoto.valvulaAbaixoDoTetoMm` (300) do teto; aviso "confira a aceitação local e o acesso".
+  `valvulaDeAdmissaoDeAr: false` volta ao de antes. `ondeAColunaSobe(…, soEstePavimento)`.
+- `verificarVentilacao`: a coluna que termina numa válvula está acima da cobertura (não é estendida).
+- Medido: nenhuma ventilação pelo dormitório do 1º nos 4 lotes; o encontro ventilação × fria sumiu (12 × 30, 15 × 25).
+  Teste novo (falha sem a correção). 8 casas de referência idênticas.

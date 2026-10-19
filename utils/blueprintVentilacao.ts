@@ -201,9 +201,11 @@ export function verificarVentilacao(model: BlueprintModel, hip?: HipotesesDeEsgo
     const comBacia = base.some((c) => c.dnAtualMm >= 100) || dnDoTubo >= 100;
     const dnNecessarioMm = dnDaColunaDeVentilacao(dnDoTubo, uhc, comprimentoM, comBacia);
     const coberturaMm = coberturaNoPontoMm(model, { x, y });
+    // F27 item 5: a coluna que termina numa VÁLVULA DE ADMISSÃO DE AR não sobe à cobertura (a válvula é a saída dela).
+    const naValvula = (model.terminais ?? []).some((v) => v.tipo === TIPO_DA_VALVULA_DE_ADMISSAO_DE_AR && v.at.x === x && v.at.y === y && ts.some((t) => t.levelId === v.levelId));
     colunas.push({
       x, y, trechoIds: ts.map((t) => t.id).sort(), comprimentoM, dnAtualMm: Math.min(...ts.map((t) => t.bitolaMm)), dnNecessarioMm,
-      topoMm, coberturaMm, acimaDaCobertura: topoMm >= coberturaMm + ACIMA_DA_COBERTURA_MM,
+      topoMm, coberturaMm, acimaDaCobertura: naValvula || topoMm >= coberturaMm + ACIMA_DA_COBERTURA_MM,
     });
   }
   colunas.sort((a, b) => a.x - b.x || a.y - b.y);
@@ -222,11 +224,12 @@ const FOLGA_DA_ABERTURA_MM = 75;
  * TODOS os pavimentos que a coluna atravessa (do dela até o último), fora de porta e janela em cada um, escorregada
  * para fora do pilar e rente à viga. `null` = nenhuma a até `raioMm` (ou `raioMm` 0): sobe no ponto.
  */
-export function ondeAColunaSobe(model: BlueprintModel, levelId: ObjectId, p: { x: number; y: number }, raioMm: number, faixa: { x: number; y: number } | null = null): Point | null {
+export function ondeAColunaSobe(model: BlueprintModel, levelId: ObjectId, p: { x: number; y: number }, raioMm: number, faixa: { x: number; y: number } | null = null, soEstePavimento = false): Point | null {
   if (raioMm <= 0) return null;
   const nivel = model.levels.find((l) => l.id === levelId);
   if (!nivel) return null;
-  const acima = model.levels.filter((l) => l.elevationMm >= nivel.elevationMm).sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
+  // F27 item 5: `soEstePavimento` — a parede só do pavimento da peça (a ventilação que corre no forro até uma coluna).
+  const acima = soEstePavimento ? [levelId] : model.levels.filter((l) => l.elevationMm >= nivel.elevationMm).sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.id);
   const fx = faixa?.x ?? 0;
   const fy = faixa?.y ?? 0;
   // F14c: no pavimento de cima, a perna sob o piso corre no enchimento da laje REBAIXADA do banheiro; fora dela,
@@ -297,6 +300,10 @@ export function ondeAColunaSobe(model: BlueprintModel, levelId: ObjectId, p: { x
   return null;
 }
 
+/** F27 item 5: o padrão de `HipotesesDeEsgoto.valvulaAbaixoDoTetoMm`, mm, e o tipo da peça da válvula (sem ficha: não é fonte). */
+export const VALVULA_ABAIXO_DO_TETO_MM = 300;
+export const TIPO_DA_VALVULA_DE_ADMISSAO_DE_AR = 'Válvula de admissão de ar';
+
 /** O raio da coluna de ventilação na conta de folga (DN 50), e a folga entre redes, mm. */
 const RAIO_DA_COLUNA_MM = 25;
 const FOLGA_ENTRE_REDES_MM = 20;
@@ -365,6 +372,29 @@ export function planejarVentilacao(model: BlueprintModel, hip?: HipotesesDeEsgot
   const faltam = v.desconectores.filter((d) => !d.ventilado).sort((a, b) => b.dnMm - a.dnMm || a.terminalId.localeCompare(b.terminalId));
   const terminal = new Map((model.terminais ?? []).map((t) => [t.id, t]));
   const colunasNovas: { x: number; y: number }[] = [];
+  const raioDaParede = hip?.ventilacaoAteAParedeMm ?? VENTILACAO_ATE_A_PAREDE_MM;
+  const comValvula = hip?.valvulaDeAdmissaoDeAr ?? true;
+  /**
+   * F27 item 5: a ventilação da peça `t` por VÁLVULA DE ADMISSÃO DE AR — a perna sob o piso até a parede do pavimento
+   * dela, a coluna rente à parede até a válvula. `null` sem parede ao alcance (sobe no ponto, como antes).
+   */
+  const porValvula = (d: (typeof faltam)[number], t: Terminal, base: number): Command[] | null => {
+    const nivel = model.levels.find((l) => l.id === t.levelId);
+    if (!nivel) return null;
+    const naParede = ondeAColunaSobe(model, t.levelId, t.at, raioDaParede, hip?.faixa ?? null, true);
+    if (!naParede) return null;
+    const cotaDaValvula = nivel.defaultHeightMm - (hip?.valvulaAbaixoDoTetoMm ?? VALVULA_ABAIXO_DO_TETO_MM);
+    const perna = Math.hypot(naParede.x - t.at.x, naParede.y - t.at.y);
+    const cotaDaPerna = perna > 0 ? base + Math.max(1, Math.ceil(perna * ACLIVE_DA_VENTILACAO)) : base;
+    if (cotaDaValvula <= cotaDaPerna) return null;
+    const dn = dnDaColunaDeVentilacao(d.dnMm, FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico!].uhcNbr8160 ?? 1, (perna + cotaDaValvula - base) / 1000, d.dnMm >= 100);
+    const tr = (a: { x: number; y: number }, ca: number, b: { x: number; y: number }, cb: number): Command => ({ type: 'AddTrecho', levelId: t.levelId, disciplina: 'ESGOTO', a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y }, cotaAMm: ca, cotaBMm: cb, bitolaMm: dn, rotulo: ROTULO_DA_VENTILACAO, sugerido: true });
+    return [
+      ...(perna > 0 ? [tr(t.at, base, naParede, cotaDaPerna)] : []),
+      tr(naParede, cotaDaPerna, naParede, cotaDaValvula),
+      { type: 'AddTerminal', levelId: t.levelId, disciplina: 'ESGOTO', tipo: TIPO_DA_VALVULA_DE_ADMISSAO_DE_AR, at: { x: naParede.x, y: naParede.y }, cotaMm: cotaDaValvula, rotulo: 'VAA', sugerida: true } as Command,
+    ];
+  };
   const ventilar = (d: (typeof faltam)[number], poupar: boolean) => {
     if (cobertos.has(d.terminalId)) return;
     const t = terminal.get(d.terminalId) as Terminal;
@@ -379,7 +409,18 @@ export function planejarVentilacao(model: BlueprintModel, hip?: HipotesesDeEsgot
     if (poupar && colunasNovas.some((c) => Math.hypot(c.x - t.at.x, c.y - t.at.y) / 1000 <= d.maximaM)) return;
     const base = Math.min(prumada.cotaAMm, prumada.cotaBMm);
     // Onde ela sobe: na parede (ou no shaft) a até `ventilacaoAteAParedeMm`; a perna sob o piso em aclive de 1 %.
-    const sobe = ondeAColunaSobe(model, t.levelId, t.at, hip?.ventilacaoAteAParedeMm ?? VENTILACAO_ATE_A_PAREDE_MM, hip?.faixa ?? null) ?? { x: t.at.x, y: t.at.y };
+    const achada = ondeAColunaSobe(model, t.levelId, t.at, raioDaParede, hip?.faixa ?? null);
+    // F27 item 5: sem parede comum até o telhado (o térreo sob o terraço), a válvula de admissão de ar.
+    const valvula = !achada && comValvula ? porValvula(d, t, base) : null;
+    if (valvula) {
+      comandos.push(...valvula);
+      cobertos.add(d.terminalId);
+      colunasNovas.push({ x: t.at.x, y: t.at.y });
+      avisos.push(`${d.sigla}: ventilada por válvula de admissão de ar (nenhuma parede sobe com ela até o telhado) — confira a aceitação local e o acesso para manutenção.`);
+      novas++;
+      return;
+    }
+    const sobe = achada ?? { x: t.at.x, y: t.at.y };
     const perna = Math.hypot(sobe.x - t.at.x, sobe.y - t.at.y);
     const cotaDaPerna = perna > 0 ? base + Math.max(1, Math.ceil(perna * ACLIVE_DA_VENTILACAO)) : base;
     const topoAbs = coberturaNoPontoMm(model, sobe) + ACIMA_DA_COBERTURA_MM;

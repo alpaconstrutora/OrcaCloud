@@ -5,6 +5,10 @@ import {
     ImovibUnit, ImovibUnitInsert, ImovibUnitUpdate,
     ImovibCapexItem, ImovibCapexItemInsert, ImovibUnitInstance,
 } from '../types';
+import { fetchAllPages } from '../lib/supabasePaginate';
+import {
+    derivarEstruturaDoEmpreendimento, blocoSemLinha, TorreDaEstrutura, UnidadeDaEstrutura,
+} from '../utils/imovibEstrutura';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
@@ -12,6 +16,104 @@ const CAPEX_COLS = 'id, study_id, category, subcategory, name, value_type, value
 
 // Só o que o motor lê do espelho para o VGV (computeImovibMath).
 const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, private_area, position_type, sun_orientation, price, status, created_at, updated_at';
+
+// ── Estrutura lida do Empreendimento (plano 2026-10-19-imovib-premissas-planta-inteligente.md)
+
+interface EmpreendimentoDaEstrutura {
+    id: string;
+    name: string;
+    organization_id: string;
+    imovib_study_id: string;
+    blueprint_study_id: string | null;
+    terreno_area: number | null;
+}
+
+interface VinculoDaEstrutura {
+    empreendimento: EmpreendimentoDaEstrutura;
+    torres: TorreDaEstrutura[];
+    unidades: UnidadeDaEstrutura[];
+}
+
+/**
+ * Empreendimento vinculado de cada estudo (`empreendimentos.imovib_study_id`), com
+ * as torres e unidades — o que a Planta Inteligente envia ao empreendimento.
+ * Custo fixo de 3 consultas, qualquer que seja o número de estudos. Falha PROPAGA:
+ * cair para a estrutura antiga em silêncio mostraria outro VGV sem aviso.
+ *
+ * Empreendimento de OUTRA organização não vale como vínculo — a mesma blindagem do
+ * imovibAdapter e do writeBackImovib.
+ */
+async function carregarVinculos(studies: { id: string; organization_id?: string | null }[]): Promise<Map<string, VinculoDaEstrutura>> {
+    const out = new Map<string, VinculoDaEstrutura>();
+    if (studies.length === 0) return out;
+    const orgDoEstudo = new Map(studies.map(s => [s.id, s.organization_id ?? null]));
+
+    const { data: emps, error: empError } = await supabase
+        .from('empreendimentos')
+        .select('id, name, organization_id, imovib_study_id, blueprint_study_id, terreno_area')
+        .in('imovib_study_id', studies.map(s => s.id))
+        .order('created_at', { ascending: true });
+    if (empError) throw new Error(`Failed to fetch linked empreendimentos: ${empError.message}`);
+
+    // Sem UNIQUE na coluna: com dois apontando para o mesmo estudo, vale o mais antigo.
+    const empPorEstudo = new Map<string, EmpreendimentoDaEstrutura>();
+    for (const e of (emps || []) as EmpreendimentoDaEstrutura[]) {
+        if (empPorEstudo.has(e.imovib_study_id)) continue;
+        if (e.organization_id !== orgDoEstudo.get(e.imovib_study_id)) continue;
+        empPorEstudo.set(e.imovib_study_id, e);
+    }
+    if (empPorEstudo.size === 0) return out;
+
+    const empIds = [...empPorEstudo.values()].map(e => e.id);
+    const { data: torres, error: torreError } = await fetchAllPages<TorreDaEstrutura & { empreendimento_id: string }>(() =>
+        supabase
+            .from('empreendimento_towers')
+            .select('id, empreendimento_id, name, imovib_block_id, construction_cost_sqm, sales_price_sqm, sort_order')
+            .in('empreendimento_id', empIds)
+            .order('id', { ascending: true }) as any);
+    if (torreError) throw new Error(`Failed to fetch empreendimento towers: ${(torreError as Error).message}`);
+
+    const torreIds = torres.map(t => t.id);
+    let unidades: UnidadeDaEstrutura[] = [];
+    if (torreIds.length > 0) {
+        const r = await fetchAllPages<UnidadeDaEstrutura>(() =>
+            supabase
+                .from('empreendimento_units')
+                .select('id, tower_id, typology, private_area, common_area, price, is_vendavel')
+                .in('tower_id', torreIds)
+                .order('id', { ascending: true }) as any);
+        if (r.error) throw new Error(`Failed to fetch empreendimento units: ${(r.error as Error).message}`);
+        unidades = r.data;
+    }
+
+    for (const [studyId, empreendimento] of empPorEstudo) {
+        const daObra = torres.filter(t => t.empreendimento_id === empreendimento.id);
+        const ids = new Set(daObra.map(t => t.id));
+        out.set(studyId, { empreendimento, torres: daObra, unidades: unidades.filter(u => ids.has(u.tower_id)) });
+    }
+    return out;
+}
+
+/** Põe no estudo a estrutura que o motor lê: a do empreendimento vinculado, ou a antiga do estudo. */
+function aplicarEstrutura(study: ImovibStudy, blocosDoEstudo: ImovibBlock[], vinculo: VinculoDaEstrutura | undefined): void {
+    if (!vinculo) {
+        study.blocks = blocosDoEstudo;
+        study.estrutura = { origem: 'estudo', torres: 0, unidades: 0, blocos_fora_do_calculo: [] };
+        return;
+    }
+    const d = derivarEstruturaDoEmpreendimento(study.id, vinculo.torres, vinculo.unidades, blocosDoEstudo);
+    study.blocks = d.blocos;
+    study.estrutura = {
+        origem: 'empreendimento',
+        empreendimento_id: vinculo.empreendimento.id,
+        empreendimento_nome: vinculo.empreendimento.name,
+        blueprint_study_id: vinculo.empreendimento.blueprint_study_id,
+        terreno_area: vinculo.empreendimento.terreno_area,
+        torres: vinculo.torres.length,
+        unidades: d.unidades,
+        blocos_fora_do_calculo: d.blocosForaDoCalculo.map(b => b.name),
+    };
+}
 
 export const imovibService = {
     async getStudies(organizationId?: string): Promise<ImovibStudy[]> {
@@ -140,12 +242,17 @@ export const imovibService = {
             instByStudy.set(i.study_id, arr);
         });
 
-        return studies.map(s => ({
-            ...s,
-            blocks: blocksByStudy.get(s.id) || [],
-            capex_items: capexByStudy.get(s.id) || [],
-            unit_instances: instByStudy.get(s.id) || [],
-        }));
+        const vinculos = await carregarVinculos(studies);
+
+        return studies.map(s => {
+            const study = {
+                ...s,
+                capex_items: capexByStudy.get(s.id) || [],
+                unit_instances: instByStudy.get(s.id) || [],
+            } as ImovibStudy;
+            aplicarEstrutura(study, blocksByStudy.get(s.id) || [], vinculos.get(s.id));
+            return study;
+        });
     },
 
     async getStudyById(id: string, includeDetails: boolean = false): Promise<ImovibStudy | null> {
@@ -197,6 +304,10 @@ export const imovibService = {
             } else {
                 study.blocks = [];
             }
+
+            // A estrutura do empreendimento vinculado substitui a do estudo (Planta Inteligente).
+            const vinculos = await carregarVinculos([study]);
+            aplicarEstrutura(study, study.blocks || [], vinculos.get(study.id));
 
             // Fetch CAPEX Items
             const { data: capex, error: capexError } = await supabase
@@ -285,6 +396,82 @@ export const imovibService = {
         const { data, error } = await supabase.from('imovib_blocks').update(updates).eq('id', id).select().single();
         if (error) throw new Error(`Failed to update IMOVIB block: ${error.message}`);
         return data;
+    },
+
+    /**
+     * Custo/m² e preço/m² de um bloco — o que o estudo guarda por torre.
+     *
+     * Bloco lido de uma torre ainda sem linha em `imovib_blocks` (id `torre:…`): a
+     * linha nasce AQUI, no salvar — nunca na leitura —, levando os valores que a tela
+     * mostrava, e a torre ganha `imovib_block_id` (a mesma ligação do espelho).
+     */
+    async salvarEconomiaDoBloco(
+        block: ImovibBlock,
+        patch: Pick<ImovibBlockUpdate, 'construction_cost_sqm' | 'sales_price_sqm'>,
+    ): Promise<ImovibBlock> {
+        if (!blocoSemLinha(block)) return this.updateBlock(block.id, patch);
+        if (!block.tower_id) throw new Error('Bloco sem torre de origem: recarregue o estudo.');
+
+        // Outro salvar (ou o espelho) pode ter ligado a torre depois da leitura.
+        const { data: torre, error: torreError } = await supabase
+            .from('empreendimento_towers').select('id, imovib_block_id').eq('id', block.tower_id).single();
+        if (torreError) throw new Error(`Failed to read tower: ${torreError.message}`);
+        if (torre.imovib_block_id) return this.updateBlock(torre.imovib_block_id, patch);
+
+        const novo = await this.createBlock({
+            study_id: block.study_id,
+            name: block.name,
+            construction_cost_sqm: block.construction_cost_sqm,
+            sales_price_sqm: block.sales_price_sqm,
+            ...patch,
+        });
+        // .select() confere que a escrita passou: RLS que recusa UPDATE devolve 0 linhas, sem erro.
+        const { data: ligada, error: linkError } = await supabase
+            .from('empreendimento_towers').update({ imovib_block_id: novo.id }).eq('id', block.tower_id).select('id');
+        if (linkError || !ligada?.length) {
+            await this.deleteBlock(novo.id).catch(() => undefined);
+            throw new Error(`Não consegui ligar a torre "${block.name}" ao estudo${linkError ? `: ${linkError.message}` : ' (sem permissão para editar o empreendimento)'}.`);
+        }
+        return novo;
+    },
+
+    /** Empreendimentos da organização do estudo, para o campo "Empreendimento vinculado". */
+    async listarEmpreendimentosParaVincular(organizationId: string): Promise<{ id: string; name: string; imovib_study_id: string | null }[]> {
+        const { data, error } = await supabase
+            .from('empreendimentos')
+            .select('id, name, imovib_study_id')
+            .eq('organization_id', organizationId)
+            .order('name', { ascending: true });
+        if (error) throw new Error(`Failed to list empreendimentos: ${error.message}`);
+        return data || [];
+    },
+
+    /**
+     * Liga o estudo a um empreendimento (`empreendimentos.imovib_study_id`), ou
+     * desliga com `null`. Um estudo, um empreendimento: o vínculo anterior sai na
+     * mesma operação (a coluna não tem UNIQUE e todo leitor usa `.maybeSingle()`).
+     * Empreendimento já ligado a OUTRO estudo é recusado — tirar o vínculo de lá é
+     * decisão de quem cuida daquele estudo.
+     */
+    async vincularEmpreendimento(studyId: string, empreendimentoId: string | null): Promise<void> {
+        if (empreendimentoId) {
+            const { data: alvo, error } = await supabase
+                .from('empreendimentos').select('id, name, imovib_study_id').eq('id', empreendimentoId).single();
+            if (error) throw new Error(`Failed to read empreendimento: ${error.message}`);
+            if (alvo.imovib_study_id && alvo.imovib_study_id !== studyId) {
+                throw new Error(`"${alvo.name}" já está vinculado a outro estudo de viabilidade.`);
+            }
+        }
+        let desfaz = supabase.from('empreendimentos').update({ imovib_study_id: null }).eq('imovib_study_id', studyId);
+        if (empreendimentoId) desfaz = desfaz.neq('id', empreendimentoId);
+        const { error: desfazError } = await desfaz;
+        if (desfazError) throw new Error(`Failed to unlink empreendimento: ${desfazError.message}`);
+        if (!empreendimentoId) return;
+
+        const { data: ligado, error: ligaError } = await supabase
+            .from('empreendimentos').update({ imovib_study_id: studyId }).eq('id', empreendimentoId).select('id');
+        if (ligaError) throw new Error(`Failed to link empreendimento: ${ligaError.message}`);
+        if (!ligado?.length) throw new Error('Sem permissão para editar este empreendimento.');
     },
 
     async deleteBlock(id: string): Promise<void> {

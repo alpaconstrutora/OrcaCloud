@@ -37,7 +37,7 @@ export type ImovibAba = 'premises' | 'capex' | 'funding' | 'viability_dynamic';
  * (com o padrão, ou com o valor como veio) e AVISA — nunca troca em silêncio.
  */
 export interface ImovibAviso {
-    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla';
+    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -274,6 +274,7 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         const vgvPorBloco: ImovibMathResult['vgvPorBloco'] = {};
         const instancias = study.unit_instances || [];
         let espelhoTemPermutada = false;
+        const blocosSemPreco: string[] = [];
 
         study.blocks?.forEach(block => {
             let blockPrivateArea = 0;
@@ -305,6 +306,7 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
                 vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'preco_m2' };
             }
 
+            if (blockVendavelArea > 0 && blockVgv <= 0) blocosSemPreco.push(block.name);
             baseVgvTotal += blockVgv;
             baseConstCostTotal += (blockPrivateArea + blockCommonArea) * (block.construction_cost_sqm || 0);
             totalBlockArea += blockPrivateArea + blockCommonArea;
@@ -312,16 +314,41 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
             totalCommonArea += blockCommonArea;
         });
 
+        // A estrutura vem do empreendimento vinculado (Planta Inteligente) ou, sem
+        // vínculo, das tabelas antigas do estudo — ver utils/imovibEstrutura.ts.
+        const estrutura = study.estrutura;
         if (totalBlockArea <= 0) {
             avisos.push({
                 codigo: 'sem_area',
-                mensagem: 'Nenhuma tipologia com área cadastrada: VGV e custo de obra ficam zerados.',
+                mensagem: estrutura?.origem === 'empreendimento'
+                    ? `O empreendimento "${estrutura.empreendimento_nome}" ainda não tem unidades com área: publique o estudo na Planta Inteligente e envie ao empreendimento. VGV e custo de obra ficam zerados.`
+                    : 'Nenhuma tipologia com área: vincule um empreendimento em Premissas › Identificação — blocos e tipologias vêm da Planta Inteligente. VGV e custo de obra ficam zerados.',
                 aba: 'premises',
             });
         } else if (baseVgvTotal <= 0) {
             avisos.push({
                 codigo: 'sem_preco',
-                mensagem: 'Nenhum bloco tem preço de venda por m²: o VGV fica zerado.',
+                mensagem: 'Nenhum bloco tem preço de venda por m²: o VGV fica zerado. Informe em Orçamento › Por torre.',
+                aba: 'capex',
+            });
+        } else if (blocosSemPreco.length > 0) {
+            avisos.push({
+                codigo: 'bloco_sem_preco',
+                mensagem: `Sem preço de venda por m², fora do VGV: ${blocosSemPreco.join(', ')}. Informe em Orçamento › Por torre.`,
+                aba: 'capex',
+            });
+        }
+        if (estrutura?.origem === 'estudo' && totalBlockArea > 0) {
+            avisos.push({
+                codigo: 'estrutura_do_estudo',
+                mensagem: 'Blocos e tipologias deste estudo são a estrutura antiga, só leitura. Vincule um empreendimento em Premissas › Identificação para editá-los na Planta Inteligente.',
+                aba: 'premises',
+            });
+        }
+        if (estrutura?.origem === 'empreendimento' && estrutura.blocos_fora_do_calculo.length > 0) {
+            avisos.push({
+                codigo: 'blocos_fora_do_calculo',
+                mensagem: `Bloco(s) antigo(s) do estudo sem torre no empreendimento, fora do cálculo: ${estrutura.blocos_fora_do_calculo.join(', ')}.`,
                 aba: 'premises',
             });
         }

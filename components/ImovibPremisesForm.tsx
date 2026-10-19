@@ -3,6 +3,7 @@ import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { FileText, PieChart, Activity, Save, Loader2 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
+import ImovibVinculoEmpreendimento from './ImovibVinculoEmpreendimento';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import {
@@ -64,8 +65,8 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             setIsSaving(true);
             // capex_seeded_at é do CAPEX: gravar o valor de quando a tela abriu poderia
             // devolver null e fazer o template de rubricas voltar.
-            // unit_instances (espelho) vem montado em memória, não é coluna.
-            const { id, created_at, updated_at, blocks, capex_items, unit_instances, organization_id, capex_seeded_at, ...cleanData } = formData as any;
+            // unit_instances (espelho) e estrutura vêm montados em memória, não são colunas.
+            const { id, created_at, updated_at, blocks, capex_items, unit_instances, estrutura, organization_id, capex_seeded_at, ...cleanData } = formData as any;
             await imovibService.updateStudy(study.id, {
                 ...cleanData,
                 ...imovibIdentificacaoParaGravar({
@@ -187,6 +188,10 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                             </div>
                         </fieldset>
 
+                        {/* Daqui a Viabilidade lê a estrutura que a Planta Inteligente envia ao empreendimento. */}
+                        <div className="pt-6 border-t border-slate-100">
+                            <ImovibVinculoEmpreendimento study={study} onDataChanged={onDataChanged} />
+                        </div>
                     </div>
                 </div>
             )}

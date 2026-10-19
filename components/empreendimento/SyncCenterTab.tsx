@@ -19,19 +19,17 @@ import {
   Download, Send, LandPlot
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { empreendimentoService } from '../../services/empreendimentoService';
 import { plantaEmpreendimentoSync } from '../../services/plantaEmpreendimentoSync';
 import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendimentoSync';
 import { massaEmpreendimentoSync } from '../../services/massaEmpreendimentoSync';
 import { PlantaAiIntegration } from '../../services/plantaAiIntegration';
 import { previewWriteBackImovib, applyWriteBackImovib, WriteBackItem } from '../../services/sync/writeBackImovib';
-import { Empreendimento, EmpreendimentoSyncReport, PlantaAiSyncReport, PlantaAiWriteBackReport } from '../../types';
+import { Empreendimento, PlantaAiSyncReport, PlantaAiWriteBackReport } from '../../types';
 import { useConfirm } from '../ui/confirm';
 import WriteBackPreviewSheet from './WriteBackPreviewSheet';
 
 interface Props {
   empreendimento: Empreendimento;
-  onOpenStudySync: () => void;
 }
 
 const fmtDate = (iso?: string | null) => {
@@ -40,11 +38,9 @@ const fmtDate = (iso?: string | null) => {
   catch { return iso; }
 };
 
-export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudySync }) => {
+export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e }) => {
   const confirm = useConfirm();
   const [loading, setLoading] = React.useState(true);
-  const [studyReport, setStudyReport] = React.useState<EmpreendimentoSyncReport | null>(null);
-  const [studyError, setStudyError] = React.useState<string | null>(null);
   const [writeBackItems, setWriteBackItems] = React.useState<WriteBackItem[] | null>(null);
   const [writeBackError, setWriteBackError] = React.useState<string | null>(null);
   const [writingBack, setWritingBack] = React.useState(false);
@@ -80,27 +76,21 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
 
   const load = React.useCallback(async () => {
     setLoading(true);
-    setStudyError(null);
     setWriteBackError(null);
     setPlantaError(null);
     setLoteamentoError(null);
     setMassaError(null);
     const tasks: Promise<void>[] = [];
 
-    // Viabilidade — só roda o dry-run se houver estudo vinculado
+    // Viabilidade — só o espelho (empreendimento → estudo). A estrutura o estudo LÊ
+    // daqui desde 19/10/2026 (utils/imovibEstrutura.ts): não há mais o que puxar dele.
     if (e.imovib_study_id) {
-      tasks.push(
-        empreendimentoService.previewSync(e.id)
-          .then(r => setStudyReport(r))
-          .catch(err => { setStudyError(err.message); setStudyReport(null); })
-      );
       tasks.push(
         previewWriteBackImovib(e.id)
           .then(r => setWriteBackItems(r))
           .catch(err => { setWriteBackError(err.message); setWriteBackItems(null); })
       );
     } else {
-      setStudyReport(null);
       setWriteBackItems(null);
     }
 
@@ -324,14 +314,6 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
   const wbCreates = writeBackItems?.filter(i => i.kind === 'create').length ?? 0;
   const wbUpdates = writeBackItems?.filter(i => i.kind === 'update').length ?? 0;
 
-  // Divergências de Viabilidade = itens que o sync criaria/atualizaria
-  const studyDiverge = studyReport
-    ? studyReport.towersCreated + studyReport.towersUpdated + studyReport.unitsCreated + studyReport.unitsUpdated
-    : 0;
-  const studyOrphans = studyReport
-    ? studyReport.orphanTowers.length + studyReport.orphanUnits.length
-    : 0;
-
   const plantaDiverge = plantaReport
     ? plantaReport.towersCreated + plantaReport.towersUpdated + plantaReport.unitsCreated + plantaReport.unitsUpdated
     : 0;
@@ -448,9 +430,9 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
             subtitle="Estudo Imovib"
             linked={!!e.imovib_study_id}
             unlinkedLabel="Nenhum estudo vinculado"
-            error={studyError}
-            divergences={studyDiverge}
-            extraOrphans={studyOrphans}
+            error={writeBackError}
+            divergences={wbTotal}
+            extraOrphans={0}
             footer={e.last_synced_at ? `Última sync: ${fmtDate(e.last_synced_at)}` : 'Nunca sincronizado'}
           />
 
@@ -462,12 +444,6 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
             activeTitle="Viabilidade ↔ Empreendimento"
             inactiveTitle="Nenhum estudo de viabilidade vinculado — vincule pelo botão Editar"
             actions={e.imovib_study_id ? [
-              {
-                label: 'Sincronizar do estudo', icon: Download, direction: 'in',
-                onClick: onOpenStudySync,
-                disabled: studyDiverge === 0, busy: false,
-                title: studyDiverge === 0 ? 'Nada a sincronizar' : 'Abrir a sincronização do estudo (permite escolher o que sobrescrever)',
-              },
               {
                 label: 'Enviar ao estudo', icon: Upload, direction: 'out',
                 onClick: handleWriteBack,
@@ -553,21 +529,14 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
         >
           {!e.imovib_study_id ? (
             <EmptyHint icon={Link2Off} text="Este empreendimento não está vinculado a um estudo de viabilidade. Vincule pelo botão Editar." />
-          ) : studyError ? (
-            <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
-              <AlertTriangle className="w-4 h-4 shrink-0" /> {studyError}
-            </div>
-          ) : studyReport ? (
+          ) : (
             <>
-              <p className="text-[10px] font-semibold text-gray-400 pt-1">Do estudo para o empreendimento</p>
-              <DiffRow label="Torres a criar" value={studyReport.towersCreated} />
-              <DiffRow label="Torres a atualizar" value={studyReport.towersUpdated} />
-              <DiffRow label="Unidades a criar" value={studyReport.unitsCreated} />
-              <DiffRow label="Unidades a atualizar" value={studyReport.unitsUpdated} />
-              <DiffRow label="Estado comercial preservado" value={studyReport.skippedDueToLocalChanges.length} muted />
-              {studyOrphans > 0 && <DiffRow label="Itens órfãos (mantidos)" value={studyOrphans} warn />}
+              <p className="text-xs text-gray-600 pt-1">
+                Torres, unidades e áreas: o estudo lê direto deste empreendimento. O que a Planta
+                Inteligente enviar aqui aparece na Viabilidade na próxima abertura.
+              </p>
 
-              <p className="text-[10px] font-semibold text-gray-400 pt-3 border-t border-gray-100 mt-1">Do empreendimento para o estudo</p>
+              <p className="text-[10px] font-semibold text-gray-400 pt-3 border-t border-gray-100 mt-1">Espelho de vendas do estudo</p>
               {writeBackError ? (
                 <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
                   <AlertTriangle className="w-4 h-4 shrink-0" /> {writeBackError}
@@ -582,7 +551,7 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
                 </>
               ) : null}
             </>
-          ) : null}
+          )}
         </RelationCard>
 
         {/* Sem estudo vinculado: um card só, genérico — não faz sentido chamar de "loteamento" o que ainda não existe. */}

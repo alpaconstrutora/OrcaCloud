@@ -85,16 +85,22 @@ Planta Inteligente ─► Empreendimento (torres, unidades, terreno, zona)
               CAPEX · Estática · Espelho · motor (um formato só)
 ```
 
-## Decisões em aberto (do usuário)
+## Decisões do usuário
 
-- **D1 — ler × copiar.** Recomendado: **ler** (acima). A alternativa é estender o
+2026-10-19, mesma sessão:
+
+> Decisões suas
+> 1. Ler ou copiar? Ler.
+> 2. de acordo
+
+- **D1 — ler × copiar → LER.** Recomendado: **ler** (acima). A alternativa é estender o
   `writeBackImovib` para criar as tipologias e levar o terreno, disparado ao publicar na
   Planta. É mais rápido de fazer, mas mantém duas verdades.
 - **D2 — estudo sem empreendimento** (Davi Bueno, Córrego do Bom Jesus, Bruninho).
   Recomendado: continua lendo os blocos e tipologias que já tem, **só leitura**, com o
   aviso "vincule um empreendimento para editar a estrutura na Planta Inteligente". Nada é
   apagado. A alternativa é criar um empreendimento para cada um com a estrutura atual, o
-  que gera cadastros reais que talvez ninguém queira.
+  que gera cadastros reais que talvez ninguém queira. → **De acordo (só leitura).**
 
 ## Itens
 
@@ -114,23 +120,36 @@ Planta Inteligente ─► Empreendimento (torres, unidades, terreno, zona)
   empreendimento vinculado)".
   *Pronto quando:* `grep "4. Mapa Regulatório" components` não acha nada.
 
-### Fase 1 — vínculo visível (depende de D1)
+### Fase 1 — vínculo visível
 
-- [ ] **`ImovibPremisesForm.tsx` › Identificação**: novo campo **Empreendimento
+- [x] **`ImovibPremisesForm.tsx` › Identificação** (componente `ImovibVinculoEmpreendimento.tsx`): novo campo **Empreendimento
   vinculado**.
   - O seletor lista os empreendimentos da organização do estudo e grava `empreendimentos.imovib_study_id`.
-  - Recusa empreendimento de outra organização (a mesma trava do `imovibAdapter`).
+  - Recusa empreendimento de outra organização: a lista só traz os da org do estudo, e a leitura ignora vínculo cruzado.
+  - Empreendimento já ligado a outro estudo não aparece na lista, e o serviço também o recusa.
   - Com o empreendimento vinculado, mostra o link **Abrir na Planta Inteligente** (`blueprint_study_id`).
 
   *Pronto quando:* vincular Davi Bueno a um empreendimento de teste grava a coluna, e o
-  link abre o estudo da Planta certo.
-- [ ] **`services/imovibService.ts`**: `vincularEmpreendimento(studyId, empreendimentoId | null)`.
+  link abre o estudo da Planta certo. → Gravação coberta em `__tests__/imovibVinculo.test.ts`
+  (banco falso). **Falta a prova na tela** (roteiro `c:/tmp/pwtest/imovib_estrutura_planta.js`).
+- [x] **`services/imovibService.ts`**: `vincularEmpreendimento(studyId, empreendimentoId | null)`.
   Desvincula o anterior na mesma operação, porque a coluna não tem UNIQUE e todos os leitores usam `.maybeSingle()`.
   *Pronto quando:* há um teste que cobre "trocar de empreendimento não deixa dois apontando para o estudo".
+  → `imovibVinculo.test.ts`: troca, recusa de empreendimento de outro estudo, desvincular,
+  e UPDATE recusado em silêncio pela RLS virando erro.
 
-### Fase 2 — a leitura (depende de D1 = ler)
+### Fase 2 — a leitura
 
-- [ ] **`services/imovibEstrutura.ts`** (novo, função pura com teste) recebe o estudo, o
+**Mudança em relação à proposta:** a função devolve o `ImovibBlock[]` que o motor JÁ lê, e
+não um formato novo. Com `quantity` = total de unidades e `pavimentos` = 1, a conta do motor
+(quantidade × pavimentos × área) dá exatamente a soma das unidades. Assim os consumidores não
+precisaram ser reescritos: a troca acontece num ponto só, nos dois carregadores do
+`imovibService` (`getStudyById` e `getStudiesWithMetrics`). O terreno do empreendimento
+**não** sobrescreve `study.terreno_area` em memória, porque o "Salvar Premissas" espalha o
+estudo no UPDATE e gravaria o valor na coluna sem ninguém pedir. Ele aparece só no cartão do
+vínculo, e o motor não usa terreno.
+
+- [x] **`utils/imovibEstrutura.ts`** (novo, função pura com teste) recebe o estudo, o
   empreendimento, as torres e as unidades, e devolve um formato só:
   `{ origem: 'empreendimento' | 'estudo', terrenoM2, blocos: [{ torreId, blocoId?, nome, custoM2, precoM2, pavimentos, tipologias: [{ nome, unidades, privativaMedia, comumMedia, vendavel }] }] }`.
   - Tipologia = unidades da torre agrupadas por `typology`.
@@ -139,36 +158,77 @@ Planta Inteligente ─► Empreendimento (torres, unidades, terreno, zona)
   - Sem empreendimento: devolve a forma atual de `imovib_blocks`/`imovib_units` com `origem: 'estudo'`.
 
   *Pronto quando:* existe um teste com o Garden Cambuhy (2 torres, 41 unidades, 8 tipologias) e um com o caso sem empreendimento.
-- [ ] **`ImovibCapexForm.tsx`, `ImovibStaticViability.tsx`, `ImovibSalesMapTab.tsx`,
+  → `__tests__/imovibEstrutura.test.ts` (6 testes) usa o FORMATO do Garden: Torre A ligada
+  ao bloco, Torre B sem bloco, unidade sem tipologia, vendável e não vendável. Não usa os 41
+  números reais. O caso sem empreendimento está em `imovibVinculo.test.ts`. Os números reais
+  do Garden ficam para a prova na tela.
+- [x] **`ImovibCapexForm.tsx`, `ImovibStaticViability.tsx`, `ImovibSalesMapTab.tsx`,
   `hooks/useImovibMath.ts`**: os quatro passam a consumir `estruturaDoEstudo`. A área
   construída fica a mesma nos quatro: Σ (privativa + comum) das unidades. Isso também
   fecha o achado "Estática, espelho e motor calculam diferente" (avaliação de 12/10).
   *Pronto quando:* VGV, custo e área do Garden batem nas quatro telas, com teste em `computeImovibMath`.
-- [ ] **Custo/m² e preço/m² por torre**:
+  → Estática, Resumo, Espelho e listagem já liam do motor (fase de 12/10). O CAPEX tinha
+  conta própria, "Área Total = T.O. × terreno × pavimentos", que saiu. No lugar entrou a
+  área construída do motor, e o custo de cada torre agora é a área dela × custo/m². O teste
+  do motor sobre a estrutura derivada está em `imovibEstrutura.test.ts`. **Falta conferir na tela.**
+- [x] **Custo/m² e preço/m² por torre** (CAPEX › "Por torre"; o preço/m² editado na aba Blocos veio para cá):
   - Gravados em `imovib_blocks`, ligados pela `empreendimento_towers.imovib_block_id` que já existe.
   - A linha nasce no **primeiro salvar**, nunca na leitura.
   - O preço/m² abre pré-preenchido com Σ preço ÷ Σ privativa das unidades da torre (vindo do produto da Planta), sem sobrescrever o que já foi digitado.
 
   *Pronto quando:* abrir o estudo não escreve nada (conferido no Network) e salvar o custo de uma torre cria exatamente uma linha.
+  → "Uma linha" e "desfaz se a torre não ligar" estão em `imovibVinculo.test.ts`. Sair do
+  campo sem mudar o valor não grava. **"Abrir não escreve" falta provar na tela** (o roteiro
+  lista toda escrita).
+- [x] **Avisos do motor** (`hooks/useImovibMath.ts`):
+  - `bloco_sem_preco`: torre com área vendável e VGV zero.
+  - `estrutura_do_estudo`: estudo sem vínculo.
+  - `blocos_fora_do_calculo`: bloco antigo que nenhuma torre reivindica.
+  - `sem_area` e `sem_preco` agora dizem onde corrigir (Planta, ou Orçamento › Por torre).
+- [x] **Espelho de vendas** (`ImovibSalesMapTab.tsx`): num estudo vinculado, Gerar e Alinhar
+  trazem as unidades REAIS do empreendimento pelo `writeBackImovib`, em vez de multiplicar
+  tipologias. Atualiza só estrutura, nunca preço nem status, e nunca apaga.
 
-### Fase 3 — estudo sem empreendimento (depende de D2)
+### Fase 3 — estudo sem empreendimento
 
-- [ ] Em CAPEX, Estática e Espelho, um aviso com `origem: 'estudo'`: "estrutura antiga
+- [x] Em CAPEX, Estática e Espelho, um aviso com `origem: 'estudo'`: "estrutura antiga
   deste estudo, só leitura — vincule um empreendimento para editar na Planta Inteligente".
   *Pronto quando:* Davi Bueno mostra os mesmos números de antes da mudança, mais o aviso.
+  → O aviso `estrutura_do_estudo` aparece no banner (Estática, Resumo, Fluxo, Sensibilidade).
+  O CAPEX diz "tipologias antigas do estudo" e o Espelho manda vincular. **Falta comparar os
+  números antes e depois na tela.**
 
-### Fase 4 — aposentar as cópias (depois da Fase 2 no ar)
+### Fase 4 — aposentar as cópias
 
-- [ ] **`services/sync/imovibAdapter.ts`** (Imovib → Empreendimento): com a leitura, ele vira
-  circular. Desligar para estudo com `origem: 'empreendimento'`.
-- [ ] **`services/sync/writeBackImovib.ts`** e **`plantaAiIntegration.sendToViabilidade`**:
-  deixam de criar ou apagar blocos para estudo vinculado. O `sendToViabilidade` apaga
-  todos os blocos hoje.
-  *Pronto quando:* a Central de Sync do Garden não oferece mais "Enviar ao estudo"
-  estrutural, e reenviar da Planta IA não apaga custo/preço digitados.
+**Mudança em relação à proposta:** feita junto com a Fase 2, não depois. Publicar a leitura
+com o sync Imovib → Empreendimento ainda ativo deixaria um botão capaz de empurrar blocos
+antigos de volta como torres.
+
+- [x] **`services/sync/imovibAdapter.ts`** (Imovib → Empreendimento): **apagado**, em vez de
+  desligado. Saíram junto `empreendimentoService.previewSync`/`syncFromStudy`, o
+  `SyncFromStudyModal.tsx` e o botão "Sincronizar do estudo" da Central de Sync.
+  Ninguém mais chamava esse código.
+- [x] **`services/sync/writeBackImovib.ts`** **fica**: virou o caminho do Espelho. Ele cria o
+  bloco de uma torre sem bloco, que é a linha de custo/preço daquela torre, sem duplicar a
+  estrutura. "Enviar ao estudo" na Central de Sync continua, rotulado "Espelho de vendas do estudo".
+- [x] **`plantaAiIntegration.sendToViabilidade`**: com o estudo ligado a um empreendimento,
+  não apaga nem recria blocos; só atualiza os campos escalares.
+  *Pronto quando:* reenviar da Planta IA não apaga custo/preço digitados. → Pelo código; não
+  testado contra o banco.
 
 ## Andamento
 
 - 2026-10-19: Fase 0 com 3 de 3 itens feitos na frente `imovib-premissas-abas` (`tsc` limpo,
   `check-ui-standard` sem violação, `orgContextGuard` 14/14). Proposta das Fases 1–4
   apresentada; D1 e D2 aguardam o usuário.
+- 2026-10-19 (tarde): D1 = ler, D2 = de acordo. Fases 1–4 implementadas na frente. `tsc` limpo.
+  - Testes: 11 arquivos, 125 testes (`imovibEstrutura` 6 e `imovibVinculo` 10 novos, mais
+    `imovibMath`, `imovibEspelho`, `writeBackImovib`, `syncPlanner`, `syncPlantaInteligenteTravas`,
+    `blueprintEmpreendimentoSync`, `empreendimentoTipos`, `imovibEdicao`, `orgContextGuard`).
+  - `check-ui-standard` sem violação nas 7 telas tocadas.
+  - **Pendente:** a prova na tela, antes e depois, com o roteiro
+    `c:/tmp/pwtest/imovib_estrutura_planta.js`. Ele precisa da senha do agente-leitura.
+  - Números que vão mudar no Garden Cambuhy. Hoje: 1 bloco digitado, 4.800 m² × R$ 8.000 = VGV
+    R$ 38,4 mi. Lendo do empreendimento:
+    - Torre A: 1.456 m² privativos, VGV R$ 11,65 mi.
+    - Torre B: 2.616 m², sem preço/m², VGV 0 até alguém informar o preço.

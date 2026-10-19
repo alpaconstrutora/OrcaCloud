@@ -543,9 +543,11 @@ export interface ImovibStudy {
      * privativa vendável × preço/m² do bloco — ver computeImovibMath.
      */
     unit_instances?: ImovibUnitInstance[];
+    /** Origem da estrutura (em memória, não é coluna) — ver ImovibEstrutura. */
+    estrutura?: ImovibEstrutura;
 }
 
-export type ImovibStudyInsert = Omit<ImovibStudy, 'id' | 'created_at' | 'updated_at' | 'blocks'>;
+export type ImovibStudyInsert = Omit<ImovibStudy, 'id' | 'created_at' | 'updated_at' | 'blocks' | 'estrutura'>;
 export type ImovibStudyUpdate = Partial<ImovibStudyInsert>;
 
 export interface ImovibBlock {
@@ -557,9 +559,34 @@ export interface ImovibBlock {
     created_at?: string;
     updated_at?: string;
     units?: ImovibUnit[];
+    /**
+     * Torre do empreendimento de onde a estrutura deste bloco é LIDA (só em memória,
+     * não é coluna). Ver utils/imovibEstrutura.ts.
+     */
+    tower_id?: string | null;
 }
 
-export type ImovibBlockInsert = Omit<ImovibBlock, 'id' | 'created_at' | 'updated_at' | 'units'>;
+/**
+ * De onde veio a estrutura (blocos/tipologias) do estudo — montado em memória por
+ * imovibService, não é coluna. `empreendimento`: lida do empreendimento vinculado
+ * (que a recebe da Planta Inteligente). `estudo`: estudo sem vínculo, estrutura
+ * antiga das tabelas do próprio estudo, só leitura (decisão de 2026-10-19).
+ */
+export interface ImovibEstrutura {
+    origem: 'empreendimento' | 'estudo';
+    empreendimento_id?: string;
+    empreendimento_nome?: string;
+    /** Planta Inteligente do empreendimento (link direto `#/blueprint?studyId=`). */
+    blueprint_study_id?: string | null;
+    /** Área do terreno do empreendimento (a que a Planta grava). */
+    terreno_area?: number | null;
+    torres: number;
+    unidades: number;
+    /** Nomes dos blocos antigos do estudo que nenhuma torre reivindica — fora do cálculo. */
+    blocos_fora_do_calculo: string[];
+}
+
+export type ImovibBlockInsert = Omit<ImovibBlock, 'id' | 'created_at' | 'updated_at' | 'units' | 'tower_id'>;
 export type ImovibBlockUpdate = Partial<ImovibBlockInsert>;
 
 export interface ImovibUnit {

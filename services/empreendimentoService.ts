@@ -6,7 +6,7 @@ import {
     EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoTowerUpdate,
     EmpreendimentoFloor, EmpreendimentoFloorInsert, EmpreendimentoFloorUpdate,
     EmpreendimentoUnit, EmpreendimentoUnitInsert, EmpreendimentoUnitUpdate,
-    EmpreendimentoCommonArea, EmpreendimentoCommonAreaInsert, EmpreendimentoSyncReport,
+    EmpreendimentoCommonArea, EmpreendimentoCommonAreaInsert,
     EmpreendimentoRegulatoryZone, EmpreendimentoRegulatoryZoneInsert, EmpreendimentoRegulatoryZoneUpdate,
     UnitStatus,
 } from '../types';
@@ -15,10 +15,7 @@ import {
     mapRentalToEmpr, UNMAPPABLE_RENTAL_STATUSES,
     mapPositionToCommercial, mapViewToCommercial, mapSunToCommercial,
 } from '../utils/empreendimentoComercial';
-import { buildPlan, PlanOptions } from './sync/planner';
-import { applyPlan } from './sync/applier';
-import { loadImovibSide } from './sync/imovibAdapter';
-import { SyncPlan, TargetState } from './sync/types';
+import { TargetState } from './sync/types';
 import { empreendimentoProposalService } from './empreendimentoProposalService';
 import { empreendimentoAuditService } from './empreendimentoAuditService';
 
@@ -1833,61 +1830,13 @@ export const empreendimentoService = {
         }
     },
 
-    // ── Sincronização com o estudo Imovib (vínculo vivo) ─────────────────────
+    // ── Viabilidade (Imovib) ─────────────────────────────────────────────────
+    // Desde 19/10/2026 a Viabilidade LÊ a estrutura deste empreendimento (torres,
+    // unidades — o que a Planta Inteligente envia): utils/imovibEstrutura.ts. Por isso
+    // saiu a sincronização Imovib → Empreendimento (previewSync/syncFromStudy e o
+    // imovibAdapter), que ficaria circular. Plano 2026-10-19-imovib-premissas-planta-inteligente.md.
     //
-    // O motor vive em services/sync/ e é compartilhado com o Planta IA. Aqui ficam só os
-    // wrappers que preservam a assinatura pública destes métodos.
-
-    /** Dry-run: calcula o que seria criado/atualizado sem escrever no banco. */
-    async previewSync(empreendimentoId: string): Promise<EmpreendimentoSyncReport> {
-        const { plan } = await planImovibSync(empreendimentoId, { overwriteCommercialState: false });
-        return planToReport(plan);
-    },
-
-    /**
-     * Aplica a sincronização: cria torres/unidades/áreas, preenche vazios e adota vínculos.
-     * Conflitos NÃO sobrescrevem o Empreendimento — viram propostas de curadoria.
-     */
-    async syncFromStudy(
-        empreendimentoId: string,
-        opts?: { overwriteCommercialState?: boolean },
-    ): Promise<EmpreendimentoSyncReport> {
-        const { plan, organizationId } = await planImovibSync(empreendimentoId, {
-            overwriteCommercialState: !!opts?.overwriteCommercialState,
-        });
-        // Materializa antes de aplicar: se a curadoria não estiver disponível (migration não
-        // aplicada), falha aqui, sem ter escrito creates/fills parciais.
-        await empreendimentoProposalService.materializeConflicts(empreendimentoId, organizationId, plan.conflicts);
-        await applyPlan(plan);
-        const report = planToReport(plan);
-
-        // Sync mexe em centenas de linhas: UM evento resumo com os contadores.
-        // As escritas de unidade em si passam por bulkUpsertUnits, que já resume.
-        await empreendimentoAuditService.record({
-            empreendimentoId,
-            organizationId,
-            entityType: 'study_link',
-            entityId: null,
-            entityLabel: 'Estudo de Viabilidade (Imovib)',
-            action: 'sync',
-            source: 'sync_imovib',
-            metadata: {
-                torresCriadas: report.towersCreated,
-                torresAtualizadas: report.towersUpdated,
-                unidadesCriadas: report.unitsCreated,
-                unidadesAtualizadas: report.unitsUpdated,
-                areasComuns: report.commonAreasUpserted,
-                torresOrfas: report.orphanTowers.length,
-                unidadesOrfas: report.orphanUnits.length,
-                conflitosParaCuradoria: plan.conflicts.length,
-                avisos: report.warnings.length,
-            },
-        });
-
-        return report;
-    },
-
-    // ── Escrita reversa: Empreendimento → Viabilidade (Imovib) ───────────────
+    // Escrita reversa: Empreendimento → Viabilidade (Imovib)
     // Vive em services/sync/writeBackImovib.ts: previewWriteBackImovib / applyWriteBackImovib.
     // Além de atualizar instâncias vinculadas, CRIA no estudo bloco/instância que só existem
     // no empreendimento (o empreendimento é a fonte). Só estrutura — nunca preço/status.
@@ -1911,35 +1860,4 @@ export async function loadTargetState(empreendimentoId: string): Promise<TargetS
     return { towers, units, commonAreas };
 }
 
-async function planImovibSync(empreendimentoId: string, opts: PlanOptions): Promise<{ plan: SyncPlan; organizationId: string }> {
-    const empreendimento = await empreendimentoService.getById(empreendimentoId) as Empreendimento | null;
-    if (!empreendimento) throw new Error('Empreendimento não encontrado.');
-    const [side, target] = await Promise.all([
-        loadImovibSide(empreendimento),
-        loadTargetState(empreendimentoId),
-    ]);
-    return { plan: buildPlan(side, target, opts), organizationId: empreendimento.organization_id };
-}
-
-/** Traduz o plano para o relatório que a UI já conhece (contadores). */
-function planToReport(plan: SyncPlan): EmpreendimentoSyncReport {
-    const touched = new Set([...plan.fills, ...plan.conflicts].map(c => `${c.entity}|${c.entityId}`));
-    const countTouched = (entity: 'tower' | 'unit') =>
-        [...touched].filter(k => k.startsWith(`${entity}|`)).length;
-
-    return {
-        towersCreated: plan.towerCreates.length,
-        // "Atualizado" = tem pelo menos um campo divergindo de fato. Antes, toda unidade com
-        // proveniência entrava na conta, mesmo idêntica ao estudo — era a origem dos números
-        // inflados de divergência na tela.
-        towersUpdated: countTouched('tower'),
-        unitsCreated: plan.towerCreates.reduce((s, tc) => s + tc.units.length, 0) + plan.unitCreates.length,
-        unitsUpdated: countTouched('unit'),
-        commonAreasUpserted: plan.commonAreaCreates.length,
-        orphanTowers: plan.orphanTowers,
-        orphanUnits: plan.orphanUnits,
-        skippedDueToLocalChanges: plan.preservedUnitNames,
-        warnings: plan.warnings,
-    };
-}
 

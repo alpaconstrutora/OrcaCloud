@@ -72,6 +72,14 @@ export class PlantaAiIntegration {
         capex_simplified_cost_sqm: costPriceSqm
       };
 
+      // Estudo já ligado a um empreendimento LÊ a estrutura dele (utils/imovibEstrutura.ts,
+      // 19/10/2026): apagar e recriar os blocos aqui levaria junto o custo/preço por torre
+      // e o espelho, e o bloco único nem entraria no cálculo. Só os escalares seguem.
+      const { data: empDoEstudo } = imovibStudyId
+        ? await supabase.from('empreendimentos').select('id').eq('imovib_study_id', imovibStudyId).limit(1).maybeSingle()
+        : { data: null };
+      const estruturaDoEmpreendimento = !!empDoEstudo;
+
       if (imovibStudyId) {
         // UPDATE (Iteração rápida)
         const { error: updateErr } = await supabase
@@ -82,7 +90,7 @@ export class PlantaAiIntegration {
         if (updateErr) throw new Error(`Erro ao atualizar viabilidade: ${updateErr.message}`);
 
         // Deleta os blocos antigos para recriar com a nova volumetria
-        await supabase.from('imovib_blocks').delete().eq('study_id', imovibStudyId);
+        if (!estruturaDoEmpreendimento) await supabase.from('imovib_blocks').delete().eq('study_id', imovibStudyId);
       } else {
         // INSERT (Primeira vez)
         const { data: newImovib, error: insertErr } = await supabase
@@ -104,7 +112,8 @@ export class PlantaAiIntegration {
       }
 
       // Recria o Bloco e Tipologia de Unidade para preencher o VGV e Custos detalhados
-      const { data: block, error: blockErr } = await supabase
+      // (só para estudo SEM empreendimento — ver estruturaDoEmpreendimento acima).
+      const { data: block, error: blockErr } = estruturaDoEmpreendimento ? { data: null, error: null } : await supabase
         .from('imovib_blocks')
         .insert({
           study_id: imovibStudyId,

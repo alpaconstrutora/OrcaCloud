@@ -7,6 +7,7 @@ import PricingIntelligenceModal from './PricingIntelligenceModal';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { useConfirm } from './ui/confirm';
 import { planejarRegeneracao } from '../utils/imovibEspelho';
+import { previewWriteBackImovib, applyWriteBackImovib } from '../services/sync/writeBackImovib';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { KpiCard } from './ui/KpiCard';
@@ -66,10 +67,43 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
         loadInstances();
     }, [loadInstances]);
 
+    // Estudo vinculado a empreendimento (19/10/2026): o espelho nasce das UNIDADES
+    // REAIS do empreendimento — as que a Planta Inteligente envia —, não da expansão
+    // de tipologias. É o write-back que já existia na Central de Sync: cria o que
+    // falta, atualiza só estrutura (nome, pavimento, área, posição, sol), nunca
+    // preço nem status do espelho, e nunca apaga.
+    const empreendimentoId = study.estrutura?.origem === 'empreendimento' ? study.estrutura.empreendimento_id : undefined;
+    const alinharPeloEmpreendimento = async (empId: string) => {
+        setGenerating(true);
+        try {
+            const itens = await previewWriteBackImovib(empId);
+            if (!itens.length) {
+                showToast('O espelho já está de acordo com as unidades do empreendimento. Nada a fazer.', 'success');
+                return;
+            }
+            const criar = itens.filter(i => i.kind === 'create').length;
+            const ok = await confirm({
+                title: 'Alinhar o espelho às unidades do empreendimento?',
+                message: `De "${study.estrutura?.empreendimento_nome}": ${criar} unidade(s) a criar e ${itens.length - criar} a atualizar (nome, pavimento, área, posição ou orientação). Preço e status do espelho são mantidos; nada é apagado.`,
+                confirmLabel: 'Alinhar',
+            });
+            if (!ok) return;
+            await applyWriteBackImovib(empId, itens.map(i => i.unitId));
+            await loadInstances();
+            onDataChanged();
+        } catch (err) {
+            console.error('Error aligning instances with empreendimento:', err);
+            showToast(`Erro ao alinhar o espelho ao empreendimento: ${(err as Error).message}`, 'error');
+        } finally {
+            setGenerating(false);
+        }
+    };
+
     // Gerar: cria SÓ o que falta, lendo o espelho do banco na hora. Antes, se o
     // carregamento tinha falhado, a tela mostrava "não gerado" e Gerar inseria
     // tudo de novo (duplicava).
     const generateInstances = async () => {
+        if (empreendimentoId) return alinharPeloEmpreendimento(empreendimentoId);
         setGenerating(true);
         try {
             const atuais = await imovibService.getUnitInstances(study.id);
@@ -89,6 +123,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     // continua existindo mantém id, preço, status, posição e sol (o vínculo com o
     // empreendimento sobrevive); sobrando só sai com confirmação própria.
     const handleRegenerate = async () => {
+        if (empreendimentoId) return alinharPeloEmpreendimento(empreendimentoId);
         setGenerating(true);
         try {
             const atuais = await imovibService.getUnitInstances(study.id);
@@ -307,12 +342,16 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                     <div>
                         <p className="text-lg font-semibold text-gray-900">Vendas de Ativos não gerado</p>
                         <p className="text-slate-500 text-sm mt-1">
-                            Clique no botão abaixo para expandir as tipologias e gerar as unidades individuais.
+                            {empreendimentoId
+                                ? 'Clique no botão abaixo para trazer as unidades do empreendimento vinculado.'
+                                : 'Clique no botão abaixo para expandir as tipologias e gerar as unidades individuais.'}
                         </p>
                     </div>
                     {blocks.length === 0 ? (
                         <p className="text-amber-600 text-sm font-medium">
-                            Adicione blocos e tipologias primeiro na aba de Tipologias.
+                            {empreendimentoId
+                                ? 'O empreendimento vinculado ainda não tem torres: envie o estudo de massa a ele na Planta Inteligente.'
+                                : 'Este estudo não tem blocos: vincule um empreendimento em Premissas › Identificação.'}
                         </p>
                     ) : (
                         <button

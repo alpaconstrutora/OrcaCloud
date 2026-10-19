@@ -3,7 +3,6 @@ import React from 'react';
 import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks, Scale } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, EmpreendimentoUnitCharacteristic } from '../../types';
 import TowerEditor from './TowerEditor';
-import SyncFromStudyModal from './SyncFromStudyModal';
 import { EspelhoVendasTab } from './EspelhoVendasTab';
 import { EspelhoLocacoesTab } from './EspelhoLocacoesTab';
 import { SyncCenterTab } from './SyncCenterTab';
@@ -72,7 +71,6 @@ type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'caracteristicas' | 'regu
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced, onOpenProject, onChangeView }) => {
   const { projects } = useStore(); // já vem só OBRA e sem projeto de sistema (CLAUDE.md regras #2/#3)
   const [tab, setTab] = React.useState<Tab>('visao');
-  const [syncOpen, setSyncOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [generatingMemorial, setGeneratingMemorial] = React.useState(false);
   // ÁREAS NBR 12721 NA PLANTA (14/10/2026, Fase 6b): o quadro de áreas mora no estudo da
@@ -467,7 +465,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         <SyncCenterTab
           key={refreshKey}
           empreendimento={e}
-          onOpenStudySync={() => setSyncOpen(true)}
         />
       )}
       {tab === 'curadoria' && (
@@ -485,19 +482,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       )}
       {tab === 'historico' && (
         <HistoricoTab key={refreshKey} empreendimentoId={e.id} organizationId={organizationId} />
-      )}
-
-      {syncOpen && (
-        <SyncFromStudyModal
-          empreendimentoId={e.id}
-          onClose={() => setSyncOpen(false)}
-          onSynced={() => {
-            setSyncOpen(false);
-            setRefreshKey(k => k + 1);
-            setTab('torres');
-            onSynced?.();
-          }}
-        />
       )}
 
       {notification && (

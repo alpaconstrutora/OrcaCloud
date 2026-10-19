@@ -43,4 +43,4 @@ Sessão: Claude Code (VS Code) · 19/10/2026.
       passaram + 34 puladas = 10.537, 0 falhas. Tela real (Playwright, só leitura,
       `c:/tmp/pwtest/verificar-mapeamento-gaveta.cjs`): sem `<select>`; {002} fechado = "Contrato de Serviço ›
       Número"; gaveta "Campo do marcador {010}" abre com o grupo do valor atual expandido; busca "cpf" lista 10
-      campos com o grupo ao lado; nada gravado. Publicação: abaixo.
+      campos com o grupo ao lado; nada gravado. Publicação: `4e71e480`; `conferir-producao.sh` = domínio serve exatamente origin/main (4e71e48) com "Campo do marcador"; o mesmo roteiro passou em https://orcacloud.vercel.app.

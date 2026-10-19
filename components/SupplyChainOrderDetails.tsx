@@ -30,6 +30,7 @@ import SupplyChainOrderForm from './SupplyChainOrderForm';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 import { pedidoCompradorService } from '../services/pedidoCompradorService';
 import { pedidoFinanceiroService } from '../services/pedidoFinanceiroService';
+import PedidoParcelasComprador from './PedidoParcelasComprador';
 import { PAYABLE_STATUS } from './supplier/portal/status';
 import { fmtDate } from './portal/PortalKit';
 import { reciboPagamentoPortalService, rotuloRecibo } from '../services/reciboPagamentoPortalService';
@@ -1530,6 +1531,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         />
                     </div>
                 )}
+
+                {/* Aba Financeiro, comprador: as parcelas que o pedido gerou no
+                    Contas a Pagar, abaixo das condições (pedido do usuário em
+                    2026-10-19). Montado só com a aba aberta — recarrega a cada
+                    visita. Mesma fonte da tabela do fornecedor, logo abaixo. */}
+                {ehComprador && abaDetalhe === 'financeiro' && <PedidoParcelasComprador orderId={order.id} />}
 
                 {/* ── Aba "Dados Gerais", visão do fornecedor ──
                     Os MESMOS campos que o comprador vê no painel "Dados Gerais"

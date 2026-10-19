@@ -131,7 +131,11 @@ Planta Inteligente ─► Empreendimento (torres, unidades, terreno, zona)
 
   *Pronto quando:* vincular Davi Bueno a um empreendimento de teste grava a coluna, e o
   link abre o estudo da Planta certo. → Gravação coberta em `__tests__/imovibVinculo.test.ts`
-  (banco falso). **Falta a prova na tela** (roteiro `c:/tmp/pwtest/imovib_estrutura_planta.js`).
+  (banco falso). Na tela (19/10): o seletor lista os empreendimentos da org, e o Garden mostra
+  "2 torre(s) · 41 unidade(s) · Terreno 1.229 m²" e "Ainda sem planta" (o empreendimento não
+  tem `blueprint_study_id`). **O link para a Planta não foi exercitado**: nenhum
+  empreendimento vinculado tem planta ainda. A gravação do vínculo pela tela também não,
+  porque a prova roda com as escritas bloqueadas.
 - [x] **`services/imovibService.ts`**: `vincularEmpreendimento(studyId, empreendimentoId | null)`.
   Desvincula o anterior na mesma operação, porque a coluna não tem UNIQUE e todos os leitores usam `.maybeSingle()`.
   *Pronto quando:* há um teste que cobre "trocar de empreendimento não deixa dois apontando para o estudo".
@@ -170,7 +174,10 @@ vínculo, e o motor não usa terreno.
   → Estática, Resumo, Espelho e listagem já liam do motor (fase de 12/10). O CAPEX tinha
   conta própria, "Área Total = T.O. × terreno × pavimentos", que saiu. No lugar entrou a
   área construída do motor, e o custo de cada torre agora é a área dela × custo/m². O teste
-  do motor sobre a estrutura derivada está em `imovibEstrutura.test.ts`. **Falta conferir na tela.**
+  do motor sobre a estrutura derivada está em `imovibEstrutura.test.ts`. Na tela, o Garden mostra
+  VGV R$ 11.648.000 e custo R$ 4.518.000 no Resumo e na Estática, e área de 4.122 m² no CAPEX.
+  Isso é 1.506 + 2.616 m² de 41 unidades. A listagem não foi conferida na tela; ela usa o
+  mesmo carregador (`getStudiesWithMetrics` → `aplicarEstrutura`).
 - [x] **Custo/m² e preço/m² por torre** (CAPEX › "Por torre"; o preço/m² editado na aba Blocos veio para cá):
   - Gravados em `imovib_blocks`, ligados pela `empreendimento_towers.imovib_block_id` que já existe.
   - A linha nasce no **primeiro salvar**, nunca na leitura.
@@ -178,8 +185,9 @@ vínculo, e o motor não usa terreno.
 
   *Pronto quando:* abrir o estudo não escreve nada (conferido no Network) e salvar o custo de uma torre cria exatamente uma linha.
   → "Uma linha" e "desfaz se a torre não ligar" estão em `imovibVinculo.test.ts`. Sair do
-  campo sem mudar o valor não grava. **"Abrir não escreve" falta provar na tela** (o roteiro
-  lista toda escrita).
+  campo sem mudar o valor não grava. "Abrir não escreve": a prova abriu Garden, Davi e Bruninho
+  em Resumo, Estática, CAPEX, Premissas e Receitas & Capital com as escritas interceptadas, e
+  foram **0 tentativas**.
 - [x] **Avisos do motor** (`hooks/useImovibMath.ts`):
   - `bloco_sem_preco`: torre com área vendável e VGV zero.
   - `estrutura_do_estudo`: estudo sem vínculo.
@@ -195,8 +203,9 @@ vínculo, e o motor não usa terreno.
   deste estudo, só leitura — vincule um empreendimento para editar na Planta Inteligente".
   *Pronto quando:* Davi Bueno mostra os mesmos números de antes da mudança, mais o aviso.
   → O aviso `estrutura_do_estudo` aparece no banner (Estática, Resumo, Fluxo, Sensibilidade).
-  O CAPEX diz "tipologias antigas do estudo" e o Espelho manda vincular. **Falta comparar os
-  números antes e depois na tela.**
+  O CAPEX diz "tipologias antigas do estudo" e o Espelho manda vincular. Antes × depois na
+  tela: Davi R$ 0 → R$ 0; Bruninho VGV R$ 9.999.998 e custo R$ 5.390.000 nos dois. Os números
+  são iguais e só o aviso é novo. O Córrego do Bom Jesus foi **apagado pelo usuário** em 19/10.
 
 ### Fase 4 — aposentar as cópias
 
@@ -226,8 +235,16 @@ antigos de volta como torres.
     `imovibMath`, `imovibEspelho`, `writeBackImovib`, `syncPlanner`, `syncPlantaInteligenteTravas`,
     `blueprintEmpreendimentoSync`, `empreendimentoTipos`, `imovibEdicao`, `orgContextGuard`).
   - `check-ui-standard` sem violação nas 7 telas tocadas.
-  - **Pendente:** a prova na tela, antes e depois, com o roteiro
-    `c:/tmp/pwtest/imovib_estrutura_planta.js`. Ele precisa da senha do agente-leitura.
+  - Prova na tela, antes (produção) e depois (frente), com `c:/tmp/pwtest/imovib_estrutura_planta.js`:
+    - Os números batem com o esperado.
+    - 0 escritas ao abrir.
+    - 1 erro de console `ERR_NO_BUFFER_SPACE`, da rede local, não do app.
+    - **Achado e corrigido:** no CAPEX simplificado (Bruninho), a linha por torre mostrava
+      "2.173,5 m² × custo = R$ 7.607.250", um valor que não entra no cálculo. Agora diz que,
+      nesse modo, o custo por torre fica fora (`acef29c5`).
+  - Refeito sobre `origin/main` 4b44ddf9: `tsc` limpo; 13 arquivos e 130 testes, incluindo
+    `orgContextGuard`, `segurancaMigrations` e `migrationsPrefixo`. A suíte inteira, antes do
+    rebase: 1.033 arquivos, 10.461 testes, 0 falhas, 34 pulados.
   - Números que vão mudar no Garden Cambuhy. Hoje: 1 bloco digitado, 4.800 m² × R$ 8.000 = VGV
     R$ 38,4 mi. Lendo do empreendimento:
     - Torre A: 1.456 m² privativos, VGV R$ 11,65 mi.

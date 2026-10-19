@@ -136,6 +136,7 @@ import { Organization } from '../types';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
 import { TabsBar } from './ui/TabsBar';
+import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 
 // ─── Avulso helpers ────────────────────────────────────────────────────────────
 interface AvulsoItem { code: string; description: string; unit: string; quantity: number; unitPrice: number; }
@@ -204,6 +205,29 @@ const FINANCEIRO_FORM_SECTIONS: ContractFormSection[] = [
 const EMISSAO_FORM_SECTIONS: ContractFormSection[] = ['status_documento'];
 
 type FinanceSubTab = 'dados' | 'parcelas';
+// Sub-abas de "Itens do Contrato" (19/10/2026): as matrizes ficavam abaixo dos
+// itens e, com muitos itens, sumiam no fim da página.
+// Plano: docs/planos/2026-10-19-contrato-itens-subabas-matrizes.md
+type ItemsSubTab = 'itens' | 'fornecimento' | 'interfaces';
+const ITEMS_SUB_TABS: ItemsSubTab[] = ['itens', 'fornecimento', 'interfaces'];
+
+// Matriz de fornecimento (Anexo II) — quem fornece, transporta, guarda e instala cada item.
+const SUPPLY_MATRIX_COLUMNS: StandardTableColumn[] = [
+    { key: 'item', label: 'Item', sortable: true, width: 260 },
+    { key: 'supplies', label: 'Fornece', sortable: true, width: 170 },
+    { key: 'transports', label: 'Transporta', sortable: true, width: 170 },
+    { key: 'stores', label: 'Guarda', sortable: true, width: 170 },
+    { key: 'installs', label: 'Instala', sortable: true, width: 170 },
+    { key: 'admissible_loss', label: 'Perda admissível', sortable: true, width: 160 },
+];
+// Matriz de interfaces (Anexo I) — eventos que dependem de mais de uma parte.
+const INTERFACE_COLUMNS: StandardTableColumn[] = [
+    { key: 'interface_event', label: 'Evento', sortable: true, width: 300 },
+    { key: 'primary_responsible', label: 'Responsável principal', sortable: true, width: 200 },
+    { key: 'support', label: 'Apoio', sortable: true, width: 180 },
+    { key: 'deadline_trigger', label: 'Prazo / gatilho', sortable: true, width: 180 },
+    { key: 'evidence', label: 'Evidência', sortable: true, width: 200 },
+];
 
 const OVERVIEW_TABS = [
     { id: 'overview_resumo', label: 'Resumo', icon: Layers },
@@ -292,6 +316,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     // Valor persistido fora do vocabulário cai em "Dados Gerais" — senão a aba abriria vazia.
     const financeSubTab: FinanceSubTab = financeSubTabSalva === 'parcelas' ? 'parcelas' : 'dados';
     const itemsColumns = useTableColumns(ITEMS_COLUMNS, 'contractItemsColumns');
+    // Sub-aba de "Itens do Contrato". Valor persistido fora do vocabulário cai em "Itens".
+    const [itemsSubTabSalva, setItemsSubTab] = usePersistedState<ItemsSubTab>('contractItems:subTab', 'itens');
+    const itemsSubTab: ItemsSubTab = ITEMS_SUB_TABS.includes(itemsSubTabSalva) ? itemsSubTabSalva : 'itens';
     // §3 — busca persistida (nunca useState simples para termo de busca)
     const [itemsSearch, setItemsSearch] = usePersistedState<string>('contractItems:search', '');
 
@@ -835,6 +862,48 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     // §22 — remove do array local em vez de recarregar o contrato inteiro; os
     // totais da aba (orçado/contratado/economia) derivam de `items`, e
     // `deleteContractItem` é um DELETE puro, sem trigger que recalcule o contrato.
+    /**
+     * Matrizes de fornecimento e interfaces (sub-abas de Itens do Contrato): salvar
+     * no modal relê SÓ as duas matrizes (§22) — antes recarregava o contrato inteiro.
+     */
+    const recarregarMatrizes = async () => {
+        if (!contractId) return;
+        try {
+            const [itens, interfaces] = await Promise.all([
+                contractSupplyMatrixService.listItems(contractId),
+                contractSupplyMatrixService.listInterfaces(contractId),
+            ]);
+            setSupplyMatrixItems(itens);
+            setContractInterfaces(interfaces);
+        } catch (err) {
+            console.error('Erro ao recarregar as matrizes do contrato:', err);
+        }
+    };
+
+    const handleDeleteSupplyMatrixItem = async (row: ContractSupplyMatrixItem) => {
+        const ok = await confirm({ title: 'Excluir item da matriz?', message: row.item, variant: 'danger', confirmLabel: 'Excluir' });
+        if (!ok) return;
+        try {
+            await contractSupplyMatrixService.removeItem(row.id);
+            setSupplyMatrixItems(prev => prev.filter(i => i.id !== row.id));
+            notify('Item excluído da matriz de fornecimento.', 'success');
+        } catch (err) {
+            notify(err instanceof Error && err.message ? err.message : 'Não foi possível excluir o item.', 'error');
+        }
+    };
+
+    const handleDeleteInterface = async (row: ContractInterface) => {
+        const ok = await confirm({ title: 'Excluir interface?', message: row.interface_event, variant: 'danger', confirmLabel: 'Excluir' });
+        if (!ok) return;
+        try {
+            await contractSupplyMatrixService.removeInterface(row.id);
+            setContractInterfaces(prev => prev.filter(i => i.id !== row.id));
+            notify('Interface excluída.', 'success');
+        } catch (err) {
+            notify(err instanceof Error && err.message ? err.message : 'Não foi possível excluir a interface.', 'error');
+        }
+    };
+
     const handleDeleteItem = async (itemId: string) => {
         const ok = await confirm({
             title: 'Remover item do contrato?',
@@ -1342,12 +1411,41 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     {/* Ações da planilha de itens — escopo da aba ativa (§5.3) */}
                     {activeTab === 'items' && (
                         <>
-                            <button
-                                onClick={() => setIsBudgetPickerOpen(true)}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-700 rounded-[6px] hover:bg-blue-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
-                            >
-                                <PlusCircle className="w-[15px] h-[15px]" /> Importar do orçamento
-                            </button>
+                            {/* Sub-abas — trilho `bare` dentro desta barra, como no Financeiro. */}
+                            <TabsBar<ItemsSubTab>
+                                bare
+                                tabs={[
+                                    { id: 'itens', label: 'Itens', badge: items.length },
+                                    { id: 'fornecimento', label: 'Matriz de fornecimento', badge: supplyMatrixItems.length },
+                                    { id: 'interfaces', label: 'Matriz de interfaces', badge: contractInterfaces.length },
+                                ]}
+                                value={itemsSubTab}
+                                onChange={setItemsSubTab}
+                            />
+                            {itemsSubTab === 'itens' && (
+                                <button
+                                    onClick={() => setIsBudgetPickerOpen(true)}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-700 rounded-[6px] hover:bg-blue-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                                >
+                                    <PlusCircle className="w-[15px] h-[15px]" /> Importar do orçamento
+                                </button>
+                            )}
+                            {itemsSubTab === 'fornecimento' && (
+                                <button
+                                    onClick={() => setSupplyMatrixModal({ open: true, editing: null })}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-700 rounded-[6px] hover:bg-blue-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" /> Adicionar item
+                                </button>
+                            )}
+                            {itemsSubTab === 'interfaces' && (
+                                <button
+                                    onClick={() => setInterfaceModal({ open: true, editing: null })}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-700 rounded-[6px] hover:bg-blue-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" /> Adicionar interface
+                                </button>
+                            )}
                         </>
                     )}
                     {/* Ações de emissão — escopo da aba Emissão (§5.3) */}
@@ -2213,6 +2311,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Tab: Itens do Contrato */}
             {activeTab === 'items' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                    {itemsSubTab === 'itens' && (<>
                     {/* §4 — KpiCard canônico, uma cor semântica por métrica.
                         Antes eram três cards reimplementados à mão. */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
@@ -2509,73 +2608,79 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
                     </div>
 
-                    {/* Matriz de Fornecimento (Fase 8.1 — Anexo II, Cl.11) */}
-                    {contract && (
-                        <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                                    <Package className="w-4 h-4 text-blue-600" /> Matriz de fornecimento
-                                </h3>
-                                <button type="button" onClick={() => setSupplyMatrixModal({ open: true, editing: null })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
-                                    + Adicionar
-                                </button>
-                            </div>
-                            {supplyMatrixItems.length === 0 ? (
-                                <p className="text-xs text-gray-400">Nenhum item cadastrado (Anexo II).</p>
-                            ) : (
-                                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                                <th className="px-6 py-2 border-r border-gray-100">Item</th>
-                                                <th className="px-6 py-2 border-r border-gray-100">Fornece</th>
-                                                <th className="px-6 py-2 border-r border-gray-100">Transporta</th>
-                                                <th className="px-6 py-2 border-r border-gray-100">Guarda</th>
-                                                <th className="px-6 py-2">Instala</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-200">
-                                            {supplyMatrixItems.map(row => (
-                                                <tr key={row.id} className="hover:bg-blue-50/50 cursor-pointer transition-colors" onClick={() => setSupplyMatrixModal({ open: true, editing: row })}>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{row.item}</td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{row.supplies || '—'}</td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{row.transports || '—'}</td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{row.stores || '—'}</td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{row.installs || '—'}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
+                    </>)}
+
+                    {/* Matriz de fornecimento (Fase 8.1 — Anexo II, Cl.11) — sub-aba própria. */}
+                    {itemsSubTab === 'fornecimento' && (
+                        <StandardTable<ContractSupplyMatrixItem>
+                            storageKey="contract:supplyMatrix"
+                            searchScope={contract?.id}
+                            columns={SUPPLY_MATRIX_COLUMNS}
+                            rows={supplyMatrixItems}
+                            rowKey={r => r.id}
+                            searchText={r => [r.item, r.supplies, r.transports, r.stores, r.installs, r.admissible_loss].filter(Boolean).join(' ')}
+                            searchPlaceholder="Buscar por item ou responsável..."
+                            sortValue={(key, r) => ((r as unknown as Record<string, string | undefined>)[key] ?? '').toLowerCase()}
+                            renderCell={(key, r) => {
+                                const v = (r as unknown as Record<string, string | undefined>)[key];
+                                return (
+                                    <span className={`block truncate text-sm font-normal ${key === 'item' ? 'text-gray-700' : 'text-gray-600'}`} title={v || undefined}>
+                                        {v || '—'}
+                                    </span>
+                                );
+                            }}
+                            actions={{
+                                width: 110,
+                                render: r => (
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        <ActionIconButton kind="edit" title="Editar item da matriz" onClick={() => setSupplyMatrixModal({ open: true, editing: r })} />
+                                        <ActionIconButton kind="delete" title="Excluir item da matriz" onClick={() => handleDeleteSupplyMatrixItem(r)} />
+                                    </div>
+                                ),
+                            }}
+                            empty={{
+                                icon: <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                                title: 'Nenhum item na matriz de fornecimento',
+                                subtitle: 'Use "Adicionar item" para registrar quem fornece, transporta, guarda e instala cada item (Anexo II).',
+                            }}
+                        />
                     )}
 
-                    {/* Matriz de Interfaces (Fase 8.1 — Anexo I) */}
-                    {contract && (
-                        <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                                    <ArrowUpRight className="w-4 h-4 text-blue-600" /> Matriz de interfaces
-                                </h3>
-                                <button type="button" onClick={() => setInterfaceModal({ open: true, editing: null })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
-                                    + Adicionar
-                                </button>
-                            </div>
-                            {contractInterfaces.length === 0 ? (
-                                <p className="text-xs text-gray-400">Nenhuma interface cadastrada (Anexo I).</p>
-                            ) : (
-                                <div className="space-y-1.5">
-                                    {contractInterfaces.map(row => (
-                                        <button key={row.id} type="button" onClick={() => setInterfaceModal({ open: true, editing: row })}
-                                            className="w-full text-left flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-[6px] transition-colors">
-                                            <span className="text-sm text-gray-700">{row.interface_event}</span>
-                                            <span className="text-xs text-gray-400">{row.primary_responsible || '—'}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                    {/* Matriz de interfaces (Fase 8.1 — Anexo I) — sub-aba própria. Era uma
+                        lista de botões cinza; agora é tabela, como a matriz de fornecimento. */}
+                    {itemsSubTab === 'interfaces' && (
+                        <StandardTable<ContractInterface>
+                            storageKey="contract:interfaces"
+                            searchScope={contract?.id}
+                            columns={INTERFACE_COLUMNS}
+                            rows={contractInterfaces}
+                            rowKey={r => r.id}
+                            searchText={r => [r.interface_event, r.primary_responsible, r.support, r.deadline_trigger, r.evidence].filter(Boolean).join(' ')}
+                            searchPlaceholder="Buscar por evento ou responsável..."
+                            sortValue={(key, r) => ((r as unknown as Record<string, string | undefined>)[key] ?? '').toLowerCase()}
+                            renderCell={(key, r) => {
+                                const v = (r as unknown as Record<string, string | undefined>)[key];
+                                return (
+                                    <span className={`block truncate text-sm font-normal ${key === 'interface_event' ? 'text-gray-700' : 'text-gray-600'}`} title={v || undefined}>
+                                        {v || '—'}
+                                    </span>
+                                );
+                            }}
+                            actions={{
+                                width: 110,
+                                render: r => (
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        <ActionIconButton kind="edit" title="Editar interface" onClick={() => setInterfaceModal({ open: true, editing: r })} />
+                                        <ActionIconButton kind="delete" title="Excluir interface" onClick={() => handleDeleteInterface(r)} />
+                                    </div>
+                                ),
+                            }}
+                            empty={{
+                                icon: <ArrowUpRight className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                                title: 'Nenhuma interface cadastrada',
+                                subtitle: 'Use "Adicionar interface" para registrar os eventos que dependem de mais de uma parte e quem responde por eles (Anexo I).',
+                            }}
+                        />
                     )}
                 </div>
             )}
@@ -3569,7 +3674,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     isOpen={supplyMatrixModal.open}
                     onClose={() => setSupplyMatrixModal({ open: false, editing: null })}
                     contract={contract}
-                    onSuccess={loadContractData}
+                    onSuccess={recarregarMatrizes}
                     initialData={supplyMatrixModal.editing}
                 />
             )}
@@ -3579,7 +3684,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     isOpen={interfaceModal.open}
                     onClose={() => setInterfaceModal({ open: false, editing: null })}
                     contract={contract}
-                    onSuccess={loadContractData}
+                    onSuccess={recarregarMatrizes}
                     initialData={interfaceModal.editing}
                 />
             )}

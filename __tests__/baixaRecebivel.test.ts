@@ -61,7 +61,7 @@ describe('mensagemResultadoBaixa', () => {
 });
 
 describe('FORMAS_PAGAMENTO', () => {
-    it('as 6 formas do vocabulário de internal_transactions.payment_type', () => {
-        expect(FORMAS_PAGAMENTO.map(f => f.value)).toEqual(['PIX', 'TED', 'DOC', 'DINHEIRO', 'CHEQUE', 'PERMUTA']);
+    it('as 7 formas do vocabulário de internal_transactions.payment_type (Boleto desde 19/10/2026)', () => {
+        expect(FORMAS_PAGAMENTO.map(f => f.value)).toEqual(['PIX', 'BOLETO', 'TED', 'DOC', 'DINHEIRO', 'CHEQUE', 'PERMUTA']);
     });
 });

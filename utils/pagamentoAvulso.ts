@@ -20,7 +20,7 @@ export { PERIODICIDADES_CONTRATO };
 export type { PeriodicidadeContrato };
 
 /** Mesmo vocabulário de `internal_transactions.payment_type` (ver `utils/baixaRecebivel.ts`). */
-export type FormaPagamentoAvulso = 'PIX' | 'TED' | 'DOC' | 'DINHEIRO' | 'CHEQUE' | 'PERMUTA';
+export type FormaPagamentoAvulso = 'PIX' | 'BOLETO' | 'TED' | 'DOC' | 'DINHEIRO' | 'CHEQUE' | 'PERMUTA';
 
 /** Código do Tipo de Pagamento (`constants/paymentTypes.ts`) de um avulso de uma parcela só. */
 export const TIPO_PARCELA_UNICA = 'UNICA';

@@ -9,6 +9,7 @@ import type { ReceivablePaymentType } from '../types/financial';
  *  plano de pagamento (DealModal). */
 export const FORMAS_PAGAMENTO: { value: ReceivablePaymentType; label: string }[] = [
     { value: 'PIX', label: 'PIX' },
+    { value: 'BOLETO', label: 'Boleto' },
     { value: 'TED', label: 'TED' },
     { value: 'DOC', label: 'DOC' },
     { value: 'DINHEIRO', label: 'Dinheiro' },

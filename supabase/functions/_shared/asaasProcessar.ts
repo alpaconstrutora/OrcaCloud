@@ -274,7 +274,9 @@ async function processarSaida(
                     payment_date: data,
                     updated_at: agora(),
                 };
-                if (tipo === 'transfer') baixa.payment_type = 'PIX';
+                // Forma de pagamento: PIX para transferência, Boleto para conta paga (o 1º
+                // boleto real, #1486 em 19/10/2026, ficou sem forma).
+                baixa.payment_type = tipo === 'transfer' ? 'PIX' : 'BOLETO';
                 if (sp.payment_account_id) baixa.payment_account_id = sp.payment_account_id;
                 gravou(await admin.from('internal_transactions').update(baixa).in('id', titulos));
                 baixados = titulos;

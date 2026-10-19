@@ -7,7 +7,7 @@ import { Property, PropertyDeal, Client, Organization, PaymentInstallment } from
 // porque aquele mapa vive dentro de um componente, e este service não deve
 // depender de componentes.
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
-    PIX: 'PIX', TED: 'TED', DOC: 'DOC', DINHEIRO: 'Dinheiro', CHEQUE: 'Cheque', PERMUTA: 'Permuta',
+    PIX: 'PIX', BOLETO: 'Boleto', TED: 'TED', DOC: 'DOC', DINHEIRO: 'Dinheiro', CHEQUE: 'Cheque', PERMUTA: 'Permuta',
 };
 const INSTALLMENT_TYPE_LABELS: Record<string, string> = {
     SINAL: 'Sinal', MENSAL: 'Mensal', BIMESTRAL: 'Bimestral', TRIMESTRAL: 'Trimestral', SEMESTRAL: 'Semestral', ANUAL: 'Anual', UNICA: 'Única', AVULSA: 'Avulsa',

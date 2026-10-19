@@ -57,7 +57,7 @@ export interface PaymentInstallment {
      * `description` (que é o rótulo autogerado "Parcela i/N") — é anotação
      * livre do usuário, ex: "cheque pré-datado do sócio".
      */
-    paymentType?: 'PIX' | 'TED' | 'DOC' | 'DINHEIRO' | 'CHEQUE' | 'PERMUTA';
+    paymentType?: 'PIX' | 'BOLETO' | 'TED' | 'DOC' | 'DINHEIRO' | 'CHEQUE' | 'PERMUTA';
     notes?: string;
     /**
      * Classificação da parcela dentro do cronograma (Plano de Pagamento) — o QUE

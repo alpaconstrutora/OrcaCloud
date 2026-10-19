@@ -220,6 +220,13 @@ const EmitDocumentModal: React.FC<Props> = ({
         }
     };
 
+    // Botão desligado SEMPRE diz o motivo — o <button> desligado não recebe o hover, então o
+    // `title` mora no <span> que o envolve (mesmo desenho do Editar do avulso em Contas a Pagar).
+    const motivoDesligado = busy ? 'Gerando o documento…' : !template ? 'Escolha um modelo para continuar.' : undefined;
+
+    // O app só tem tema claro: nada da variante `dark` do Tailwind aqui. No v4, sem `@custom-variant dark`,
+    // ela segue o modo escuro do SISTEMA, e quem usa o Windows escuro via valor branco sobre gaveta branca
+    // (19/10/2026; guia §33). Plano: docs/planos/2026-10-19-gerar-pelo-modelo-padrao.md
     return (
         <Sheet open onClose={onClose} size="2xl">
             <SheetHeader onClose={onClose}>
@@ -231,35 +238,40 @@ const EmitDocumentModal: React.FC<Props> = ({
                 </SheetDescription>
             </SheetHeader>
 
-            <SheetPanel className="px-6 py-4">
-                <div className="space-y-4">
+            <SheetPanel className="px-6 py-6">
+                <div className="space-y-6">
                     {loading ? (
                         <div className="space-y-2">
-                            {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-50 dark:bg-gray-700/50 rounded-lg animate-pulse" />)}
+                            {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-50 rounded-[6px] animate-pulse" />)}
                         </div>
                     ) : templates.length === 0 ? (
-                        <div className="flex flex-col items-center gap-3 py-10 text-center text-gray-400">
-                            <FileText size={32} strokeWidth={1} />
-                            <p className="text-sm max-w-xs">Nenhum modelo de documento cadastrado. Suba um .docx em "Modelos de Documento" para emitir contratos personalizados.</p>
-                            <div className="flex flex-wrap gap-2 justify-center">
+                        /* §12 — estado vazio: ícone grande + título + frase */
+                        <div className="text-center py-12">
+                            <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" strokeWidth={1.5} />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum modelo de documento cadastrado</h3>
+                            <p className="text-sm text-gray-500 max-w-sm mx-auto">Suba um .docx em "Modelos de Documento" para emitir contratos personalizados.</p>
+                            <div className="flex flex-wrap gap-2 justify-center mt-4">
                                 {onManageTemplates && (
                                     <Button onClick={onManageTemplates} className="gap-2">
                                         <Settings className="w-4 h-4" /> Cadastrar modelo
                                     </Button>
                                 )}
                                 {onFallbackPdf && (
-                                    <button onClick={onFallbackPdf} className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] text-[13px] font-medium hover:bg-gray-50 transition-all active:scale-95">
+                                    <Button variant="secondary" onClick={onFallbackPdf}>
                                         <FileDown className="w-[15px] h-[15px]" /> Gerar PDF do sistema
-                                    </button>
+                                    </Button>
                                 )}
                             </div>
                         </div>
                     ) : (
                         <>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 mb-1.5">Modelo *</label>
+                            {/* §30 — rótulo→campo 6px, campo→campo 16px. Coluna única: o nome do modelo
+                                é longo e truncava na meia largura. */}
+                            <div className="grid grid-cols-1 gap-y-4">
+                                <div className="space-y-1.5">
+                                    <label htmlFor="emit-modelo" className="block text-xs font-semibold text-slate-500">Modelo *</label>
                                     <select
+                                        id="emit-modelo"
                                         value={templateId}
                                         onChange={e => setTemplateId(e.target.value)}
                                         className="w-full h-9 rounded-[6px] border border-gray-200 bg-white px-3 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
@@ -273,15 +285,15 @@ const EmitDocumentModal: React.FC<Props> = ({
                                        seletor só atrapalharia: ele carrega dentro de
                                        `if (organizationId)`, então com "Todas as organizações"
                                        ficaria vazio e sem ninguém para escolher. */
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 mb-1.5">Cliente</label>
-                                        <p className="w-full h-9 flex items-center rounded-[6px] border border-gray-200 bg-gray-50 px-3 text-sm font-normal text-gray-700 truncate">
+                                    <div className="space-y-1.5">
+                                        <label className="block text-xs font-semibold text-slate-500">Cliente</label>
+                                        <p className="w-full h-9 flex items-center rounded-[6px] border border-gray-200 bg-gray-50 px-3 text-sm font-normal text-gray-900 truncate">
                                             {ctx.client?.name || '—'}
                                         </p>
                                     </div>
                                 ) : (
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 mb-1.5">Cliente</label>
+                                    <div className="space-y-1.5">
+                                        <label className="block text-xs font-semibold text-slate-500">Cliente</label>
                                         <ClientSelect
                                             clients={clients}
                                             value={clientId}
@@ -295,12 +307,12 @@ const EmitDocumentModal: React.FC<Props> = ({
                             </div>
 
                             {allUnmapped && (
-                                <div className="flex flex-col gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-300 px-4 py-3">
-                                    <div className="flex items-start gap-2 text-red-700 dark:text-red-300">
+                                <div className="flex flex-col gap-2 rounded-[10px] bg-red-50 border border-red-200 px-4 py-3">
+                                    <div className="flex items-start gap-2 text-red-700">
                                         <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
                                         <div>
                                             <p className="text-sm font-semibold">Os marcadores deste modelo não estão mapeados</p>
-                                            <p className="text-xs mt-0.5">Edite o modelo e associe cada marcador a um campo do contrato.</p>
+                                            <p className="text-sm mt-0.5">Edite o modelo e associe cada marcador a um campo do contrato.</p>
                                         </div>
                                     </div>
                                     {onManageTemplates && (
@@ -312,30 +324,41 @@ const EmitDocumentModal: React.FC<Props> = ({
                             )}
 
                             {!allUnmapped && unmappedTokens.length > 0 && (
-                                <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                                <div className="flex items-start gap-2 rounded-[10px] bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
                                     <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                                     {unmappedTokens.length} marcador(es) sem mapeamento ({unmappedTokens.map(t => `{${t}}`).join(', ')}) ficarão em branco.
                                 </div>
                             )}
 
                             {template && template.detected_tokens.length > 0 && (
-                                <div>
-                                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-semibold text-gray-700">
                                         Pré-visualização · {mappedTokens.length}/{template.detected_tokens.length} campos mapeados
-                                        {organization && <span className="ml-2 text-xs font-normal text-green-600">· org: {organization.name}</span>}
+                                        {organization && <span className="ml-2 text-xs font-normal text-green-700">· org: {organization.name}</span>}
                                     </h3>
-                                    <div className="rounded-lg border border-gray-100 dark:border-gray-700 divide-y divide-gray-50 dark:divide-gray-700/50 max-h-64 overflow-auto">
-                                        {template.detected_tokens.map(tk => (
-                                            <div key={tk} className="grid grid-cols-[64px_1fr] gap-2 px-3 py-2 text-sm">
-                                                <span className="font-mono text-xs font-semibold text-blue-700 dark:text-blue-400">{`{${tk}}`}</span>
-                                                <div className="min-w-0">
-                                                    <p className="text-xs text-gray-400 truncate">{describeMapping(template.token_map?.[tk])}</p>
-                                                    <p className={`truncate ${resolved[tk] ? 'text-gray-900 dark:text-white' : 'text-red-400 italic'}`}>
-                                                        {resolved[tk] || '(vazio — não mapeado ou sem dados)'}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        ))}
+                                    {/* §6.9 — tabela dentro de Sheet: px-3, py-2.5, separador vertical, cabeçalho
+                                        branco em sentence case (§6.2/§6.11) fixo ao rolar (§6.5). */}
+                                    <div className="rounded-[10px] border border-gray-100 overflow-auto max-h-[45vh]">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                                                    <th className="px-3 py-2 border-r border-gray-100 w-24">Marcador</th>
+                                                    <th className="px-3 py-2 border-r border-gray-100">Campo do sistema</th>
+                                                    <th className="px-3 py-2">Valor</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-200">
+                                                {template.detected_tokens.map(tk => (
+                                                    <tr key={tk}>
+                                                        <td className="px-3 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600 whitespace-nowrap">{`{${tk}}`}</td>
+                                                        <td className="px-3 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{describeMapping(template.token_map?.[tk])}</td>
+                                                        <td className={`px-3 py-2.5 last:border-r-0 text-sm font-normal break-words ${resolved[tk] ? 'text-gray-900' : 'text-red-600'}`}>
+                                                            {resolved[tk] || '(vazio — não mapeado ou sem dados)'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             )}
@@ -343,7 +366,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                     )}
 
                     {error && (
-                        <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                        <div className="flex items-start gap-2 rounded-[10px] bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
                             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {error}
                         </div>
                     )}
@@ -352,23 +375,26 @@ const EmitDocumentModal: React.FC<Props> = ({
 
             {templates.length > 0 && (
                 <SheetFooter>
-                    <Button variant="ghost" size="lg" onClick={onClose}>Cancelar</Button>
-                    <button
-                        onClick={() => emit('docx')}
-                        disabled={!template || busy !== null}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
-                    >
-                        {busy === 'docx' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <File className="w-[15px] h-[15px]" />}
-                        {busy === 'docx' ? 'Gerando…' : persistVersion ? 'Baixar .docx para editar' : 'Baixar .docx'}
-                    </button>
-                    <button
-                        onClick={() => emit('pdf')}
-                        disabled={!template || busy !== null}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
-                    >
-                        {busy === 'pdf' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FileDown className="w-[15px] h-[15px]" />}
-                        {busy === 'pdf' ? 'Gerando PDF…' : persistVersion ? 'Gerar versão (PDF)' : 'Baixar PDF'}
-                    </button>
+                    <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+                    <span className="inline-flex" title={motivoDesligado}>
+                        <Button
+                            variant="secondary"
+                            onClick={() => emit('docx')}
+                            disabled={!template || busy !== null}
+                        >
+                            {busy === 'docx' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <File className="w-[15px] h-[15px]" />}
+                            {busy === 'docx' ? 'Gerando…' : persistVersion ? 'Baixar .docx para editar' : 'Baixar .docx'}
+                        </Button>
+                    </span>
+                    <span className="inline-flex" title={motivoDesligado}>
+                        <Button
+                            onClick={() => emit('pdf')}
+                            disabled={!template || busy !== null}
+                        >
+                            {busy === 'pdf' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FileDown className="w-[15px] h-[15px]" />}
+                            {busy === 'pdf' ? 'Gerando PDF…' : persistVersion ? 'Gerar versão (PDF)' : 'Baixar PDF'}
+                        </Button>
+                    </span>
                 </SheetFooter>
             )}
         </Sheet>

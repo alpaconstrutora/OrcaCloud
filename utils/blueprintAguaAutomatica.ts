@@ -503,7 +503,17 @@ export function planejarAgua(
     // F21: nem o shaft do outro lado de um PILAR — a descida voltava do shaft ao ponto por dentro da parede, atravessando
     // o pilar (R1-A, 15 × 30 4 dorm., 10 × 30 4 dorm.).
     const shaft = shaftAchado && fracaoDentro(shaftAchado, base, pilaresDaPrumada) > 0 ? null : shaftAchado;
-    if (shaft && !sobRebaixo(shaft)) return faixa ? { x: Math.round(shaft.x + faixa.x * FAIXA_NO_SHAFT), y: Math.round(shaft.y + faixa.y * FAIXA_NO_SHAFT) } : shaft;
+    // F27 item 5 da casa automática (19/10/2026): no shaft, a coluna com faixa vai à rotação dela MAIS LONGE das peças do
+    // grupo — o canto virado para o banheiro é do tubo de queda (o ramal de esgoto entra por ali; com a quente nele, o
+    // ramal a cortava). Das 4 rotações da faixa, como no `lugarNoShaft`.
+    if (shaft && !sobRebaixo(shaft)) {
+      if (!faixa) return shaft;
+      const gx = grupo.reduce((s, p) => s + p.at.x, 0) / grupo.length;
+      const gy = grupo.reduce((s, p) => s + p.at.y, 0) / grupo.length;
+      const [fx, fy] = [faixa.x * FAIXA_NO_SHAFT, faixa.y * FAIXA_NO_SHAFT];
+      const rotacoes = [{ x: fx, y: fy }, { x: -fy, y: fx }, { x: -fx, y: -fy }, { x: fy, y: -fx }].map((d) => ({ x: Math.round(shaft.x + d.x), y: Math.round(shaft.y + d.y) }));
+      return rotacoes.map((p, k) => ({ p, k, d: Math.hypot(p.x - gx, p.y - gy) })).sort((a, b) => b.d - a.d || a.k - b.k)[0].p;
+    }
     // PELAS PAREDES: a coluna desce no EIXO da parede mais próxima, não na face. A que ATRAVESSA pavimentos
     // (a caixa num, o ponto noutro) procura antes a parede que existe em todos eles — senão sobe pelo meio do
     // cômodo do outro pavimento (F12c, sobrado); sem uma a até 2× o raio, fica a de sempre.

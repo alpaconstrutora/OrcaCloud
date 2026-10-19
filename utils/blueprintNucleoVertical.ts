@@ -78,9 +78,12 @@ export function shaftPreferido(model: BlueprintModel, ponto: Point, levelId: Obj
  * F14c da casa automática: o lugar da prumada de `disciplina` no shaft (centro `centro`) — a faixa dela (× 1,5); se
  * já passa tubo de OUTRA rede ali (em qualquer cota dos pavimentos `levelIds`: a prumada atravessa todos), as outras
  * três posições, girando a faixa de 90°. O barrilete da fria chega ao centro do shaft por cima do telhado e passava
- * justo sobre o tubo de queda e a ventilação (sobrado, 0° e 30°). Nenhuma livre: a de maior folga.
+ * justo sobre o tubo de queda e a ventilação (sobrado, 0° e 30°). Nenhuma livre: a de maior folga. F27 item 5 da casa
+ * automática (19/10/2026): com `pertoDe` (as peças que despejam ali), das livres a que o caminho reto do ramal (das peças
+ * ao canto) não passa colado numa prumada de outra rede, e entre elas a mais perto das peças — com o tubo de queda no
+ * canto oposto, o ramal atravessava o shaft cortando as colunas de água (casa de 3: 8 encontros em 3 lotes).
  */
-export function lugarNoShaft(model: BlueprintModel, centro: Point, faixa: { x: number; y: number } | null, disciplina: DisciplinaDeRede, raioMm: number, levelIds: readonly ObjectId[]): Point {
+export function lugarNoShaft(model: BlueprintModel, centro: Point, faixa: { x: number; y: number } | null, disciplina: DisciplinaDeRede, raioMm: number, levelIds: readonly ObjectId[], pertoDe: Point | null = null): Point {
   const fx = (faixa?.x ?? 0) * FAIXA_NO_SHAFT;
   const fy = (faixa?.y ?? 0) * FAIXA_NO_SHAFT;
   const posicoes = [{ x: fx, y: fy }, { x: -fy, y: fx }, { x: -fx, y: -fy }, { x: fy, y: -fx }].map((d) => ({ x: Math.round(centro.x + d.x), y: Math.round(centro.y + d.y) }) as Point);
@@ -101,6 +104,22 @@ export function lugarNoShaft(model: BlueprintModel, centro: Point, faixa: { x: n
       }),
     );
   const folgas = posicoes.map(folga);
+  const livres = posicoes.map((p, k) => ({ p, k })).filter(({ k }) => folgas[k] > FOLGA_NO_SHAFT_MM);
+  if (pertoDe && livres.length) {
+    // O CAMINHO do ramal (reto, das peças ao canto) não pode passar colado numa prumada de outra rede no shaft: o canto com
+    // o caminho livre vence; entre eles, o mais perto das peças.
+    const prumadas = outros.filter((t) => t.a.x === t.b.x && t.a.y === t.b.y);
+    const caminhoLivre = (q: Point) =>
+      prumadas.every((t) => {
+        const dx = q.x - pertoDe.x;
+        const dy = q.y - pertoDe.y;
+        const L2 = dx * dx + dy * dy;
+        const u = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((t.a.x - pertoDe.x) * dx + (t.a.y - pertoDe.y) * dy) / L2));
+        return Math.hypot(t.a.x - (pertoDe.x + u * dx), t.a.y - (pertoDe.y + u * dy)) - raioMm - t.bitolaMm / 2 > FOLGA_NO_SHAFT_MM;
+      });
+    const d = (q: Point) => Math.hypot(q.x - pertoDe.x, q.y - pertoDe.y);
+    return livres.sort((a, b) => Number(caminhoLivre(b.p)) - Number(caminhoLivre(a.p)) || d(a.p) - d(b.p) || a.k - b.k)[0].p;
+  }
   const i = folgas.findIndex((f) => f > FOLGA_NO_SHAFT_MM);
   // Nenhuma livre: a de MAIOR folga (o shaft cheio de tubos — a menos ruim).
   return posicoes[i >= 0 ? i : folgas.indexOf(Math.max(...folgas))];

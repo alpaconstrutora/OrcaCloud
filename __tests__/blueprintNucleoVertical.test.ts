@@ -171,6 +171,16 @@ describe('lugarNoShaft (F14c): a prumada de uma rede no shaft, livre dos tubos d
     expect(lugarNoShaft(m, point(1000, 1000), faixa, 'AGUA_FRIA', 50, [d.t, d.s])).toEqual({ x: 910, y: 910 });
   });
 
+  it('F27 item 5: com as peças (pertoDe), o canto livre virado para elas; com uma coluna de outra rede no caminho do ramal, outro canto livre', () => {
+    const d = doisPavimentos();
+    // As peças a nordeste: o canto (1090, 1090).
+    expect(lugarNoShaft(d.m, point(1000, 1000), faixa, 'ESGOTO', 50, [d.t, d.s], point(1600, 1600))).toEqual({ x: 1090, y: 1090 });
+    // A quente sobe em (1200, 1300), entre as peças e o canto nordeste: o ramal até ele (e até dois outros) a corta — vale o
+    // único canto com o caminho livre, (1090, 910).
+    const m = applyBatch(d.m, [{ type: 'AddTrecho', levelId: d.t, disciplina: 'AGUA_QUENTE', a: point(1200, 1300), b: point(1200, 1300), cotaAMm: 2630, cotaBMm: 2800, bitolaMm: 22 } as Command]).model;
+    expect(lugarNoShaft(m, point(1000, 1000), faixa, 'ESGOTO', 50, [d.t, d.s], point(1600, 1600))).toEqual({ x: 1090, y: 910 });
+  });
+
   it('nenhuma livre: a de maior folga', () => {
     const d = doisPavimentos();
     // Um tubo em cada diagonal do shaft (as quatro posições caem neles) e um eletroduto rente a uma delas.

@@ -741,7 +741,9 @@ function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): P
       const noShaft = shaftPreferido(model, { x: maior.terminal.at.x, y: maior.terminal.at.y }, nivel.id, hip.raioDoShaftMm ?? 3000);
       // F14a: no shaft, o TQ na faixa do esgoto (as colunas de água ficam no centro e na faixa delas). F14c: girada, se
       // um tubo de outra rede já passa ali (o barrilete da fria sobre o shaft).
-      const tq = noShaft ? lugarNoShaft(model, noShaft as Point, hip.faixa ?? null, 'ESGOTO', hip.dnTuboQuedaMm / 2, model.levels.map((l) => l.id)) : { x: maior.terminal.at.x, y: maior.terminal.at.y };
+      // F27 item 5: no canto do shaft virado para as peças do grupo (o ramal não atravessa o shaft).
+      const centroDoGrupo = { x: Math.round(grupo.reduce((s, f) => s + f.terminal.at.x, 0) / grupo.length), y: Math.round(grupo.reduce((s, f) => s + f.terminal.at.y, 0) / grupo.length) } as Point;
+      const tq = noShaft ? lugarNoShaft(model, noShaft as Point, hip.faixa ?? null, 'ESGOTO', hip.dnTuboQuedaMm / 2, model.levels.map((l) => l.id), centroDoGrupo) : { x: maior.terminal.at.x, y: maior.terminal.at.y };
       const chaveDoTq = `${tq.x},${tq.y}`;
       const ja = porTq.get(chaveDoTq);
       if (ja) ja.grupo = [...ja.grupo, ...grupo];

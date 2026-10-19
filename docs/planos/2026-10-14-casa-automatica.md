@@ -2840,3 +2840,19 @@ existem iguais nos três pavimentos e não têm janela).
   NBR 10844 5.1.4). O sobrado inteiro coberto dá zero (teste).
 - 8 casas de referência idênticas. Fica: a ventilação e uma coluna de água fria de peças do térreo sob o terraço ainda
   sobem pelo dormitório do 1º (item 5); o uso TERRAÇO como ambiente (o kernel não tem — o terraço não é cômodo fechado).
+
+### Item 5 — qualidade da casa de 3 pavimentos (19/10/2026, "sim" para começar pelos encontros de rede)
+
+Retrato (6 lotes de 3 pavimentos, com a chuva informada): 19 encontros de rede ao todo. Causas: (A) dentro do shaft — o
+tubo de queda no canto oposto ao banheiro, o ramal atravessava o shaft cortando as colunas de água (8); (B) a
+ventilação × a fria na faixa rente à fachada da frente (2); (C) o eletroduto do teto do térreo × o esgoto na laje
+rebaixada, e o do 1º × o condutor sob o terraço (4); (D) tubo atravessando pilar (4).
+
+#### 5.1a — o tubo de queda no canto do banheiro
+
+- `lugarNoShaft(…, pertoDe)`: das posições livres do shaft, a que o caminho reto do ramal (das peças ao canto) não passa
+  colado numa prumada de outra rede; entre elas, a mais perto das peças. O esgoto passa o centro do grupo.
+- A coluna da água com faixa (a quente), no shaft, vai à rotação mais longe das peças do grupo dela.
+- Testado e descartado: a quente fugindo das peças de ESGOTO em volta do shaft — o sobrado de referência ganhava 2
+  encontros. Medido: 19 → 16 encontros (10 × 30 4 dorm. 6 → 2; 12 × 30 sem suíte 0 → 1); 8 casas de referência
+  idênticas. Resta no R1-A: a peça de esgoto a 6 cm da coluna da quente dentro do shaft — nenhum canto resolve.

@@ -117,6 +117,9 @@ export interface PurchaseOrder {
     paymentInstallments?: number;
     isFinancialApproved?: boolean;
     deliveryMethod?: string;
+    /** FOB: colaborador (RH) que retirou. Só gravação (`updateOrder`); a leitura
+     *  é por `retiradaPedidoService`, porque a coluna é interna ao comprador. */
+    retiradoPorEmployeeId?: string | null;
     deliveryLocation?: string;
     receivedAt?: string;
     receiptPhotoPath?: string;

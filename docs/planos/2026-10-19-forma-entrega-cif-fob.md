@@ -106,10 +106,54 @@ Trilho FOB: Lances → Confirmado → Retirado → Recebido → Divergência.
   rodou: a senha do agente-leitura foi trocada às 17:45 e a informada foi recusada.)
   Publicado em `a2e1233d`.
 
+## Pedido de 19/10/2026 (mesma sessão, depois da 2ª publicação `a2e1233`)
+
+> 1. O fornecedor só está impedido de mexer na logística do FOB pela tela. As funções do banco que o portal usa ainda aceitam mudança de status vinda dele; fechar isso exige uma migration, que eu faço se você quiser. Pode fazer
+> 2. criar campo para informar quem esta autorizado retirar e quem retirou. Conectar com o recursos humanos < colaboradores
+
+Respostas às perguntas feitas antes de criar (AskUserQuestion):
+- Quantos autorizados por pedido? → **Vários**.
+- O que o fornecedor vê? → **Nome e CPF** (conferência no balcão), nada mais do RH.
+
+Achado no caminho: a policy `po_update_org_or_supplier` ainda tem a perna do fornecedor,
+mas desde `aplicar_20270921000027` ele não passa no SELECT, e UPDATE com WHERE exige
+SELECT — o caminho direto na tabela já estava fechado. As duas RPCs eram o único caminho.
+
+- [x] **Migration `aplicar_20271019987000_pedido_fob_retirada_autorizada.sql`** (aplicada
+  com `db query -f` em 19/10):
+  `fn_pedido_eh_fob`; as duas RPCs de escrita do fornecedor recusam status logístico
+  (Separação/Em Trânsito/Entregue/Recebido/Divergência) e datas no FOB com
+  `reason: 'fob'` (aceitar/negociar/cotar seguem); a do token deixa de devolver as colunas
+  internas; `purchase_orders.retirado_por_employee_id` (FK employees, interna);
+  tabela `purchase_order_retirada_autorizados` (PK pedido+colaborador, RLS = enxergar o
+  pedido; INSERT também exige enxergar o colaborador; anon sem grant); RPC
+  `purchase_order_retirada_autorizados_fornecedor(order, token)` → só nome/CPF, só FOB,
+  só do fornecedor do pedido.
+  **Pronto quando:** prova por perfil em transação desfeita. ✅ comprador insere/lê/grava
+  retirado_por e recebe `[]` da RPC do fornecedor; fornecedor lê 0 linhas da tabela, INSERT
+  recusado (42501), RPC devolve `[{nome, cpf}]`; FOB: Entregue/Em Trânsito/previsão →
+  `fob`, Confirmar → ok e sem `retirado_por_employee_id` na resposta; CIF Separação → ok
+  (controle); anon: RPC `[]`, tabela 42501. Banco conferido limpo depois; ACL sem PUBLIC;
+  sem mojibake; `segurancaMigrations` + `migrationsPrefixo` verdes.
+- [x] **`services/retiradaPedidoService.ts`** (novo) — get/adicionar/remover autorizado,
+  colaboradores ATIVOS da org do pedido (reusa `laborService.listEmployees`, com
+  compartilhados), visão do fornecedor pela RPC. `orderService.updateOrder` grava
+  `retiradoPorEmployeeId`; `reason 'fob'` vira mensagem nos dois serviços do fornecedor.
+- [x] **`utils/retiradaPedido.ts`** (novo) — itens dos seletores (autorizados primeiro;
+  CPF no nome, não no `code`, que ordenaria por CPF), motivo do botão desligado (status →
+  data → quem retirou), `formatarCpf`.
+  **Pronto quando:** `__tests__/retiradaPedido.test.ts` verde. ✅ 11 casos.
+- [x] **`SupplyChainOrderDetails`** — comprador, FOB: lista "Autorizados a retirar"
+  (nome · CPF · cargo, remover com confirmação) + "Adicionar colaborador autorizado"
+  (drawer, busca nome/CPF) até a retirada; "Retirado por" (obrigatório) + data +
+  Registrar; depois de retirado mostra quem e quando. Fornecedor: lista só leitura.
+- [x] **`components/supplier/AutorizadosRetiradaFornecedor.tsx`** (novo) — visão do
+  fornecedor no detalhe e na logística do portal (`SupplierDashboard`); erro dito como erro.
+  **Pronto quando:** `tsc` limpo; `check-ui-standard.sh` e `orgContextGuard` sem achado.
+- [ ] **Conferência na tela** — depende de login (senha do agente-leitura recusada desde
+  17:45) ou do teste do usuário depois de publicado.
+
 ## Fora do escopo (anotado)
 
 - Listas (Suprimentos › Pedidos, Recebimentos, portal do fornecedor) continuam mostrando
   o status cru para pedido FOB.
-- A trava do fornecedor no FOB é só de tela: as RPCs `supplier_portal_update_order_logistics`
-  e `purchase_order_update_as_supplier` ainda aceitam mudança de status. Fechar no banco
-  exige migration — não feito sem combinar.

@@ -283,6 +283,8 @@ export const orderService = {
         if (res?.valid && res.data) return this.mapDbOrderToType(res.data, {});
         if (res?.reason === 'conflict') throw new Error('Este pedido foi alterado por outra pessoa. Recarregue e tente de novo.');
         if (res?.reason === 'status') throw new Error('O valor cotado não pode mais ser alterado neste estágio do pedido.');
+        // FOB (aplicar_20271019987000): a logística é do comprador.
+        if (res?.reason === 'fob') throw new Error('Pedido FOB: a retirada e as datas de logística são registradas pelo comprador.');
         if (res?.reason === 'forbidden') {
             const { quotes, ...resto } = updates;
             const comCotacao = quotes && quotes.length > 0
@@ -343,6 +345,7 @@ export const orderService = {
                 ...(updates.paymentInstallments !== undefined && { payment_installments: updates.paymentInstallments }),
                 ...(updates.isFinancialApproved !== undefined && { is_financial_approved: updates.isFinancialApproved }),
                 ...(updates.deliveryMethod !== undefined && { delivery_method: updates.deliveryMethod }),
+                ...(updates.retiradoPorEmployeeId !== undefined && { retirado_por_employee_id: updates.retiradoPorEmployeeId }),
                 ...(updates.deliveryLocation !== undefined && { delivery_location: updates.deliveryLocation }),
                 ...(updates.receivedAt !== undefined && { received_at: updates.receivedAt }),
                 ...(updates.receiptPhotoPath !== undefined && { receipt_photo_path: updates.receiptPhotoPath }),

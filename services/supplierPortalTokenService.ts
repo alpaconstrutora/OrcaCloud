@@ -238,6 +238,8 @@ export const supplierPortalTokenService = {
     });
     if (error) throw error;
     const res = data as any;
+    // FOB (aplicar_20271019987000): a logística é do comprador.
+    if (res?.reason === 'fob') throw new Error('Pedido FOB: a retirada e as datas de logística são registradas pelo comprador.');
     return res?.valid ? mapOrderRow(res.data) : null;
   },
 

@@ -73,6 +73,7 @@ import { SupplierBankAccount } from '../types/supplierBankAccount';
 import { supabase } from '../lib/supabase';
 import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 import { ehFob, rotuloStatusLogistico } from '../utils/formaEntrega';
+import AutorizadosRetiradaFornecedor from './supplier/AutorizadosRetiradaFornecedor';
 
 /**
  * As abas do Portal do Fornecedor. Uma definição só: a união literal estava
@@ -848,6 +849,13 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 )}
                             </div>
                         </div>
+
+                        {/* FOB: quem o comprador autorizou a retirar (nome e CPF). */}
+                        {pedidoFob && order && (
+                            <div className={`mt-6 p-6 rounded-[10px] border ${drillPanel}`}>
+                                <AutorizadosRetiradaFornecedor orderId={order.id} portalToken={portalToken} />
+                            </div>
+                        )}
 
                         {isEditingLogistics && (
                             <div className={`mt-6 p-6 rounded-[10px] border animate-in fade-in slide-in-from-top-4 duration-500 ${drillPanel}`}>

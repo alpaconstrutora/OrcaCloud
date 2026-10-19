@@ -18,6 +18,10 @@ import OrderChat from './OrderChat';
 import OrderReceiptModal from './OrderReceiptModal';
 import { ehFob, rotuloStatusLogistico, situacaoDaRetirada } from '../utils/formaEntrega';
 import { hojeLocal } from '../utils/baixaRecebivel';
+import { retiradaPedidoService, type ColaboradorRetirada, type RetiradaDoPedido } from '../services/retiradaPedidoService';
+import AutorizadosRetiradaFornecedor from './supplier/AutorizadosRetiradaFornecedor';
+import { formatarCpf, itensParaAutorizar, itensRetiradoPor, motivoRetiradaDesligada } from '../utils/retiradaPedido';
+import HierarchicalSelect from './HierarchicalSelect';
 import { storageService } from '../services/storageService';
 import { profileService } from '../services/profileService';
 import NegotiationHub from './NegotiationHub';
@@ -229,6 +233,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // fornecedor não tem ação na logística do FOB — utils/formaEntrega).
     const [dataRetirada, setDataRetirada] = React.useState(() => hojeLocal());
     const [registrandoRetirada, setRegistrandoRetirada] = React.useState(false);
+    // Quem pode retirar (vários, de RH › Colaboradores) e quem retirou.
+    // Comprador: lista completa + seletor. Fornecedor: `AutorizadosRetiradaFornecedor`.
+    const [retirada, setRetirada] = React.useState<RetiradaDoPedido | null>(null);
+    const [colaboradoresRetirada, setColaboradoresRetirada] = React.useState<ColaboradorRetirada[]>([]);
+    const [retiradoPorId, setRetiradoPorId] = React.useState('');
+    const [salvandoAutorizado, setSalvandoAutorizado] = React.useState(false);
     // Abas do pedido (§19.1). O pedido deixou de ter tela de edição separada: o
     // formulário vive DENTRO destas abas, abaixo dos cartões de leitura.
     //  · Dados Gerais  — formulário do pedido (as observações ficam na coluna
@@ -416,16 +426,20 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // de entrega efetiva: é o que libera o botão Receber e serve de base para o
     // vencimento das parcelas (financialService.syncOrderToFinance).
     const handleRegistrarRetirada = () => {
-        if (!order || !dataRetirada) return;
+        if (!order || !dataRetirada || !retiradoPorId) return;
         const dataBr = new Date(dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR');
+        const quem = colaboradoresRetirada.find(c => c.id === retiradoPorId)?.nome
+            ?? retirada?.autorizados.find(a => a.id === retiradoPorId)?.nome
+            ?? 'o colaborador escolhido';
         askConfirm(
-            `O pedido passa para "Retirado" com retirada em ${dataBr}. Depois disso, use Receber para conferir os itens.`,
+            `O pedido passa para "Retirado", retirado por ${quem} em ${dataBr}. Depois disso, use Receber para conferir os itens.`,
             () => {
                 (async () => {
                     setRegistrandoRetirada(true);
                     try {
-                        await orderService.updateOrder(orderId, { status: 'Entregue', actualDeliveryDate: dataRetirada }, order.version);
+                        await orderService.updateOrder(orderId, { status: 'Entregue', actualDeliveryDate: dataRetirada, retiradoPorEmployeeId: retiradoPorId }, order.version);
                         await loadOrderData();
+                        setRetirada(await retiradaPedidoService.get(orderId));
                         notify('Retirada registrada.');
                     } catch (err: unknown) {
                         const error = err instanceof Error ? err : new Error(String(err));
@@ -439,6 +453,44 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 })();
             },
             { titulo: 'Registrar retirada', variante: 'warning', rotulo: 'Registrar' },
+        );
+    };
+
+    const handleAdicionarAutorizado = async (employeeId: string) => {
+        if (!employeeId) return;   // linha de "limpar" do seletor
+        setSalvandoAutorizado(true);
+        try {
+            await retiradaPedidoService.adicionarAutorizado(orderId, employeeId);
+            const r = await retiradaPedidoService.get(orderId);
+            setRetirada(r);
+            setRetiradoPorId(prev => prev || (r.autorizados.length === 1 ? r.autorizados[0].id : ''));
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            notify(`Erro ao autorizar o colaborador: ${error.message}`, 'error');
+        } finally {
+            setSalvandoAutorizado(false);
+        }
+    };
+
+    const handleRemoverAutorizado = (c: ColaboradorRetirada) => {
+        askConfirm(
+            `${c.nome} deixa de estar autorizado a retirar este pedido. O fornecedor deixa de ver o nome e o CPF.`,
+            () => {
+                (async () => {
+                    setSalvandoAutorizado(true);
+                    try {
+                        await retiradaPedidoService.removerAutorizado(orderId, c.id);
+                        setRetirada(await retiradaPedidoService.get(orderId));
+                        setRetiradoPorId(prev => (prev === c.id ? '' : prev));
+                    } catch (err: unknown) {
+                        const error = err instanceof Error ? err : new Error(String(err));
+                        notify(`Erro ao remover o autorizado: ${error.message}`, 'error');
+                    } finally {
+                        setSalvandoAutorizado(false);
+                    }
+                })();
+            },
+            { titulo: 'Remover autorizado', variante: 'warning', rotulo: 'Remover' },
         );
     };
 
@@ -542,6 +594,30 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             }
         }, { titulo: 'Excluir item do pedido', rotulo: 'Excluir' });
     };
+
+    // FOB — retirada, visão do comprador. Só carrega para pedido FOB; erro vira
+    // aviso, nunca lista vazia calada (vazia aqui diria "ninguém autorizado").
+    const pedidoFobCarregado = ehFob(order?.deliveryMethod);
+    React.useEffect(() => {
+        if (!order?.id || !pedidoFobCarregado || !ehComprador) return;
+        let cancelado = false;
+        (async () => {
+            try {
+                const r = await retiradaPedidoService.get(order.id);
+                if (cancelado) return;
+                setRetirada(r);
+                // Padrão de "Retirado por": quem já retirou; senão, o único autorizado.
+                setRetiradoPorId(prev => prev || r.retiradoPor?.id || (r.autorizados.length === 1 ? r.autorizados[0].id : ''));
+                const cols = await retiradaPedidoService.listarColaboradores(r.organizationId);
+                if (!cancelado) setColaboradoresRetirada(cols);
+            } catch (err: unknown) {
+                console.error('[RETIRADA] Falha ao carregar:', err);
+                if (!cancelado) notify('Não foi possível carregar os autorizados a retirar.', 'error');
+            }
+        })();
+        return () => { cancelado = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [order?.id, pedidoFobCarregado, ehComprador]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -1721,45 +1797,132 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             </div>
                         </div>
 
-                        {/* FOB — ação do comprador. Vira "Retirado" (status
-                            'Entregue'), que libera o botão Receber. Sem ação
-                            possível, o botão fica desligado dizendo por quê. */}
+                        {/* FOB — retirada. Pedidos do usuário em 2026-10-19: o
+                            comprador registra a retirada (vira "Retirado" = status
+                            'Entregue', que libera Receber) e informa quem, de RH ›
+                            Colaboradores, pode retirar (vários) e quem retirou. O
+                            fornecedor vê só nome e CPF dos autorizados, para
+                            conferir no balcão. Botão desligado sempre diz por quê. */}
                         {ehComprador && pedidoFob && (() => {
-                            const retirada = situacaoDaRetirada(order.status);
-                            if (!retirada.pode && !retirada.motivo) return null;
-                            const motivoDesligado = !retirada.pode
-                                ? retirada.motivo
-                                : !dataRetirada ? 'Informe a data da retirada.' : '';
+                            const situacao = situacaoDaRetirada(order.status);
+                            const jaRetirado = ['Entregue', 'Recebido', 'Divergência'].includes(order.status);
+                            const podeEditarAutorizados = order.status !== 'Cancelado' && !jaRetirado;
+                            const autorizados = retirada?.autorizados ?? [];
+                            const motivoDesligado = motivoRetiradaDesligada({ status: order.status, dataRetirada, retiradoPorId });
                             return (
-                                <div className="mt-4 flex flex-col sm:flex-row sm:items-end gap-x-6 gap-y-4">
+                                <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
                                     <div className="space-y-1.5">
-                                        <label htmlFor="data-retirada" className="block text-xs font-semibold text-gray-500">Data da retirada</label>
-                                        <input
-                                            id="data-retirada"
-                                            type="date"
-                                            value={dataRetirada}
-                                            max={hojeLocal()}
-                                            disabled={!retirada.pode || registrandoRetirada}
-                                            onChange={e => setDataRetirada(e.target.value)}
-                                            className={`h-9 w-full sm:w-48 rounded-[6px] border border-gray-200 bg-white px-3 text-sm font-normal text-gray-900 outline-none focus:ring-2 disabled:bg-gray-50 ${A.ring}`}
-                                        />
+                                        <p className="text-xs font-semibold text-gray-500">Autorizados a retirar</p>
+                                        {autorizados.length === 0 ? (
+                                            <p className="text-sm font-normal text-gray-500">
+                                                Nenhum colaborador autorizado ainda. O fornecedor vê o nome e o CPF de quem estiver nesta lista.
+                                            </p>
+                                        ) : (
+                                            <ul className="divide-y divide-gray-100 rounded-[6px] border border-gray-100">
+                                                {autorizados.map(a => (
+                                                    <li key={a.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                                                        <span className="text-sm font-normal text-gray-900">
+                                                            {a.nome}
+                                                            {a.cpf && <span className="text-gray-500"> · CPF {formatarCpf(a.cpf)}</span>}
+                                                            {a.cargo && <span className="text-gray-500"> · {a.cargo}</span>}
+                                                        </span>
+                                                        {podeEditarAutorizados && (
+                                                            <ActionIconButton
+                                                                kind="delete"
+                                                                title={`Remover ${a.nome} dos autorizados`}
+                                                                disabled={salvandoAutorizado}
+                                                                onClick={() => handleRemoverAutorizado(a)}
+                                                            />
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                        {podeEditarAutorizados && (
+                                            <div className="pt-1 sm:w-96">
+                                                <HierarchicalSelect
+                                                    items={itensParaAutorizar(autorizados, colaboradoresRetirada)}
+                                                    value=""
+                                                    onChange={handleAdicionarAutorizado}
+                                                    placeholder="Adicionar colaborador autorizado..."
+                                                    panelVariant="drawer"
+                                                    drawerTitle="Autorizar a retirar"
+                                                    drawerDescription="Colaboradores ativos de RH › Colaboradores. Busque pelo nome ou CPF."
+                                                    searchPlaceholder="Buscar por nome ou CPF..."
+                                                    size="sm"
+                                                    disabled={salvandoAutorizado}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleRegistrarRetirada}
-                                        disabled={!!motivoDesligado || registrandoRetirada}
-                                        title={motivoDesligado || 'Marcar o pedido como retirado'}
-                                        className={`flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${A.solidBtn}`}
-                                    >
-                                        {registrandoRetirada ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Truck className="w-[15px] h-[15px]" />}
-                                        Registrar retirada
-                                    </button>
-                                    {motivoDesligado && (
-                                        <p className="text-sm font-normal text-gray-500 sm:pb-2">{motivoDesligado}</p>
+
+                                    {jaRetirado ? (
+                                        <div className="space-y-1.5">
+                                            <p className="text-xs font-semibold text-gray-500">Retirado por</p>
+                                            <p className="text-sm font-normal text-gray-900">
+                                                {retirada?.retiradoPor
+                                                    ? <>{retirada.retiradoPor.nome}{retirada.retiradoPor.cpf && <span className="text-gray-500"> · CPF {formatarCpf(retirada.retiradoPor.cpf)}</span>}</>
+                                                    : 'Não informado'}
+                                                {order.actualDeliveryDate && (
+                                                    <span className="text-gray-500"> · em {new Date(order.actualDeliveryDate.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                                )}
+                                            </p>
+                                        </div>
+                                    ) : (situacao.pode || situacao.motivo) && (
+                                        <div className="flex flex-col lg:flex-row lg:items-end gap-x-6 gap-y-4">
+                                            <div className="space-y-1.5 lg:w-96">
+                                                <p className="text-xs font-semibold text-gray-500">Retirado por</p>
+                                                <HierarchicalSelect
+                                                    items={itensRetiradoPor(autorizados, colaboradoresRetirada)}
+                                                    value={retiradoPorId}
+                                                    onChange={setRetiradoPorId}
+                                                    placeholder="Quem retirou..."
+                                                    panelVariant="drawer"
+                                                    drawerTitle="Quem retirou"
+                                                    drawerDescription="Os autorizados aparecem primeiro. Busque pelo nome ou CPF."
+                                                    searchPlaceholder="Buscar por nome ou CPF..."
+                                                    size="sm"
+                                                    disabled={!situacao.pode || registrandoRetirada}
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label htmlFor="data-retirada" className="block text-xs font-semibold text-gray-500">Data da retirada</label>
+                                                <input
+                                                    id="data-retirada"
+                                                    type="date"
+                                                    value={dataRetirada}
+                                                    max={hojeLocal()}
+                                                    disabled={!situacao.pode || registrandoRetirada}
+                                                    onChange={e => setDataRetirada(e.target.value)}
+                                                    className={`h-9 w-full lg:w-48 rounded-[6px] border border-gray-200 bg-white px-3 text-sm font-normal text-gray-900 outline-none focus:ring-2 disabled:bg-gray-50 ${A.ring}`}
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleRegistrarRetirada}
+                                                disabled={!!motivoDesligado || registrandoRetirada}
+                                                title={motivoDesligado || 'Marcar o pedido como retirado'}
+                                                className={`flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${A.solidBtn}`}
+                                            >
+                                                {registrandoRetirada ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Truck className="w-[15px] h-[15px]" />}
+                                                Registrar retirada
+                                            </button>
+                                            {motivoDesligado && (
+                                                <p className="text-sm font-normal text-gray-500 lg:pb-2">{motivoDesligado}</p>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             );
                         })()}
+
+                        {/* Fornecedor (FOB): quem o comprador autorizou — nome e CPF,
+                            para conferir no balcão. Sem ação: a retirada é do comprador. */}
+                        {!ehComprador && pedidoFob && (
+                            <div className="mt-6 pt-6 border-t border-gray-100">
+                                <AutorizadosRetiradaFornecedor orderId={order.id} portalToken={portalToken} />
+                            </div>
+                        )}
                     </div>
                 )}
 

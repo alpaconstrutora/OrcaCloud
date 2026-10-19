@@ -413,6 +413,70 @@ export function banheiroAlemDoNucleo(ambientes: AmbienteGerado[], n: Pick<Nucleo
 }
 
 /**
+ * F27 item 5 da casa automática (decisão do usuário, 19/10/2026: "mover o lavabo"): o lavabo do térreo que o núcleo da
+ * escada espreme (o que sobra dele fica abaixo da largura ou da área mínima — 10 × 30, 4 dorm., 3 pavimentos: 0,65 m e
+ * 1,33 m² livres) troca de ponta com o vizinho com quem forma um retângulo (a área de serviço, um atrás do outro): o
+ * vizinho fica do lado do núcleo, que come só o começo dele, e o lavabo vai para a outra ponta, com a área ideal (nunca
+ * menos que a largura mínima mais a parede). A tira ao lado do núcleo, estreita demais para qualquer um dos dois, vai
+ * para o cômodo que encosta nela na altura toda do par (a cozinha). Só com o núcleo cobrindo o par de lado a lado a
+ * partir de uma ponta, e com os três acima das medidas mínimas; senão nada muda (`false`).
+ */
+export function lavaboForaDoNucleo(ambientes: AmbienteGerado[], n: Pick<NucleoDaEscada, 'ret'>, hip: HipotesesDoSobrado = HIPOTESES_DO_SOBRADO_PADRAO, malhaMm = 50): boolean {
+  const lav = ambientes.find((a) => a.item.uso === 'LAVABO');
+  if (!lav || sobreposicao(n.ret, lav.ret) <= 0) return false;
+  const f = hip.paredeDoNucleoMm;
+  const lado = (q: Retangulo) => Math.min(q.x1 - q.x0, q.y1 - q.y0);
+  const cabe = (a: AmbienteGerado, q: Retangulo) => lado(q) - f >= a.item.larguraMinMm && areaDe(q) >= a.item.areaMinM2 * 1e6;
+  const sobra = pedacosFora(lav.ret, n.ret)[0];
+  if (sobra && cabe(lav, sobra)) return false;
+  // Tudo no quadro em que o par se empilha em y (o outro, transposto).
+  const tr = (q: Retangulo): Retangulo => ({ x0: q.y0, y0: q.x0, x1: q.y1, y1: q.x1 });
+  for (const viz of ambientes) {
+    if (viz === lav || viz.item.uso === 'CIRCULACAO') continue;
+    for (const transposto of [false, true]) {
+      const t = (q: Retangulo) => (transposto ? tr(q) : q);
+      const [L, X, N] = [t(lav.ret), t(viz.ret), t(n.ret)];
+      if (L.x0 !== X.x0 || L.x1 !== X.x1 || (L.y1 !== X.y0 && X.y1 !== L.y0)) continue;
+      const Z: Retangulo = { x0: L.x0, x1: L.x1, y0: Math.min(L.y0, X.y0), y1: Math.max(L.y1, X.y1) };
+      // O núcleo encosta num lado do par (em x) e cobre uma ponta dele (em y).
+      const encostaNoFim = N.x1 >= Z.x1 && N.x0 > Z.x0;
+      const encostaNoInicio = N.x0 <= Z.x0 && N.x1 < Z.x1;
+      const cobreTudoEmX = N.x0 <= Z.x0 && N.x1 >= Z.x1;
+      if (!encostaNoFim && !encostaNoInicio && !cobreTudoEmX) continue;
+      const pontaDeCima = N.y0 <= Z.y0 && N.y1 > Z.y0 && N.y1 < Z.y1;
+      const pontaDeBaixo = N.y1 >= Z.y1 && N.y0 < Z.y1 && N.y0 > Z.y0;
+      if (!pontaDeCima && !pontaDeBaixo) continue;
+      // A tira ao lado do núcleo e quem a absorve: o cômodo que encosta nela na altura toda do par.
+      const tira: Retangulo | null = cobreTudoEmX ? null : encostaNoFim ? { x0: Z.x0, x1: N.x0, y0: Z.y0, y1: Z.y1 } : { x0: N.x1, x1: Z.x1, y0: Z.y0, y1: Z.y1 };
+      const dono = tira
+        ? ambientes.find((c) => {
+            if (c === lav || c === viz || c.item.uso === 'CIRCULACAO') return false;
+            const C = t(c.ret);
+            return C.y0 === Z.y0 && C.y1 === Z.y1 && (encostaNoFim ? C.x1 === Z.x0 : C.x0 === Z.x1);
+          })
+        : null;
+      if (tira && !dono) continue;
+      const col: Retangulo = tira ? (encostaNoFim ? { ...Z, x0: N.x0 } : { ...Z, x1: N.x1 }) : Z;
+      const largura = col.x1 - col.x0;
+      const prof = Math.ceil(Math.max(lav.item.areaIdealM2 * 1e6 / largura, lav.item.larguraMinMm + f) / malhaMm) * malhaMm;
+      const novoLav: Retangulo = pontaDeCima ? { ...col, y0: col.y1 - prof } : { ...col, y1: col.y0 + prof };
+      const novoViz: Retangulo = pontaDeCima ? { ...col, y1: novoLav.y0 } : { ...col, y0: novoLav.y1 };
+      const restoDoViz: Retangulo = pontaDeCima ? { ...novoViz, y0: Math.max(novoViz.y0, N.y1) } : { ...novoViz, y1: Math.min(novoViz.y1, N.y0) };
+      if (sobreposicao(N, novoLav) > 0 || restoDoViz.y1 <= restoDoViz.y0) continue;
+      if (!cabe(lav, novoLav) || !cabe(viz, restoDoViz)) continue;
+      const novoDono: Retangulo | null = dono && tira ? (encostaNoFim ? { ...t(dono.ret), x1: tira.x1 } : { ...t(dono.ret), x0: tira.x0 }) : null;
+      for (const [a, q] of [[lav, novoLav], [viz, novoViz], ...(dono && novoDono ? [[dono, novoDono]] : [])] as [AmbienteGerado, Retangulo][]) {
+        a.ret = t(q);
+        a.areaM2 = Math.round(areaDe(q) / 1e4) / 100;
+        a.larguraMinM = lado(q) / 1000;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * F27-D2: o 2º pavimento com o CORREDOR no patamar da escada. O gerador põe o corredor numa faixa de lado a lado do
  * retângulo e a planta só se desloca com ele (a malha é a mesma): gerado no lugar inicial, o retângulo ANDA até o meio
  * do patamar cair no corredor; a sobra menor que `faixaMinimaDoTerracoMm` (na frente ou nos fundos) o 2º toma, o que

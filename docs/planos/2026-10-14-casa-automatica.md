@@ -2922,3 +2922,20 @@ num quadrado com o raio delas, o do tubo e 10 mm — na queda da árvore e no co
 - ⏳ Sobram 2, no R1-A: o shaft está cheio (fria no centro, quente num canto, tubo de queda no outro) e a ligação da
   quente a 2,63 m, vindo do sul até o canto norte, passa a 5 cm do tubo de queda; nenhuma das 4 posições do tubo de queda
   fica livre. Pede outro arranjo das colunas no shaft (a quente do lado de onde vem a alimentação dela) — fica anotado.
+
+#### 5.2 — o núcleo comia o lavabo (19/10/2026, decisão do usuário: "mover o lavabo")
+
+10 × 30, 4 dorm., 3 pavimentos: o núcleo da escada (à direita, subindo para a frente) deixava do lavabo do térreo uma
+tira de 0,65 m (1,33 m² livres). Do outro lado ele comia 2/3 do banheiro social 1 do 1º (3,38 m², em L) — o critério
+do `escolherNucleo` só trocava um estrago por outro. Pergunta ao usuário (19/10): mover o lavabo.
+
+- `lavaboForaDoNucleo` (`utils/blueprintSobrado.ts`), no gancho `rearranjar` do gerador (o mesmo do banheiro do 2º):
+  o lavabo espremido troca de ponta com o vizinho com quem forma retângulo (a área de serviço) — o vizinho fica do lado
+  do núcleo, que come só o começo dele, e o lavabo vai para a outra ponta, com a área ideal (nunca menos que a largura
+  mínima mais a parede); a tira ao lado do núcleo vai para o cômodo que encosta nela na altura toda do par (a cozinha).
+  Só se os três ficam acima das medidas mínimas; senão nada muda. A casa regera o térreo na MESMA semente com o gancho
+  quando o rearranjo mudaria algo (`EntradaDoGerador.motivoDoRearranjo` para a decisão).
+- Resultado: lavabo 2,40 × 1,05 m (2,52 m²), serviço 4,08 m² livres além do núcleo, cozinha 22,77 m². Zero encontros
+  e zero pilares no lote; trava ok; 6 lotes sem regressão; 8 casas de referência idênticas.
+- ⚠️ A porta do lavabo dá para a área de serviço (o gerador escolhe o vizinho), e a do núcleo no térreo, para a
+  cozinha — funciona, mas o lavabo social pelo serviço não é o ideal. Anotado.

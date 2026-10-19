@@ -156,6 +156,21 @@ O mesmo vale para o lado do bairro: `get_market_neighborhood_stats` (DNA e cor d
 erro de TS); a prova de tipos foi por `tsconfig` restrito aos arquivos tocados e aos 11
 usos do `FilterPopover` (com dependências), exit 0 nos dois. A CI do PR é a prova completa.
 
+### Publicação — 19/10/2026
+
+- [x] **Publicado.** Push em `main` feito pelo usuário (`313a978c..e243c4cc`, commits
+  `0e7ea2b4` + `e243c4cc`); PR #53 marcado como merged pelo GitHub às 19:27 UTC.
+- [x] Domínio provado de fora: `scripts/conferir-producao.sh "Tipos comparados" "Pelo
+  menos uma opção precisa ficar marcada"` → bundle carimbado `e243c4c`, os dois textos
+  encontrados.
+- [x] CI do `main` no commit publicado: Type check, Sinks de XSS, Tests e Build verdes.
+- [x] Frente `market-raio-por-tipo` fechada (`fechar-frente.sh`: contida em `origin/main`).
+- O 1º push do usuário foi recusado (`non-fast-forward`: o `main` andou 4 commits — #56,
+  #54 e dois da casa automática — entre o rebase e o push). Rebase limpo, sem arquivo em
+  comum, travas de migration e sinks de XSS rodados de novo antes do 2º push.
+
+Plano concluído: 8 de 8 itens + publicação.
+
 ## Verificação
 
 - `npx vitest run __tests__/opuraMarketTipos.test.ts __tests__/opuraMarketVocacao.test.ts __tests__/opuraMarketIndicadores.test.ts __tests__/segurancaMigrations.test.ts __tests__/migrationsPrefixo.test.ts` + o teste do `FilterPopover`.

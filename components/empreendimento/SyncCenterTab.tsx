@@ -1,9 +1,9 @@
 // components/empreendimento/SyncCenterTab.tsx
 // Centro de Sincronização dos ESTUDOS — mapa vivo das ligações do Empreendimento com a
-// Viabilidade (Imovib) e a Arquitetura (Planta IA), e o lugar de onde esses syncs são
-// disparados. O desenho é um triângulo: além das duas arestas com o hub, Arquitetura e
-// Viabilidade falam DIRETO entre si (imovib_studies.planta_ai_study_id) — a aresta mais
-// antiga das três, que ficava invisível e dava a impressão de que tudo passava pelo hub.
+// Arquitetura (Planta Inteligente: massa e loteamento) e a Viabilidade (Imovib), e o lugar
+// de onde esses syncs são disparados. Tudo passa pelo hub: a aresta direta Arquitetura ↔
+// Viabilidade era do Planta AI v1, removido em 19/10/2026
+// (docs/planos/2026-10-19-remover-planta-ai.md).
 //
 // As pontes com Comercial (Venda de Ativos) e Locações NÃO moram mais aqui: elas viviam
 // duplicadas com as abas Espelho de Vendas / Espelho de Locações, que fazem o mesmo
@@ -16,15 +16,12 @@ import React from 'react';
 import {
   Loader2, RefreshCw, BarChart3, Building2, ArrowLeftRight,
   CheckCircle2, AlertTriangle, Link2Off, Clock, Upload, Ruler,
-  Download, Send, LandPlot
+  Download, LandPlot
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { plantaEmpreendimentoSync } from '../../services/plantaEmpreendimentoSync';
 import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendimentoSync';
 import { massaEmpreendimentoSync } from '../../services/massaEmpreendimentoSync';
-import { PlantaAiIntegration } from '../../services/plantaAiIntegration';
 import { previewWriteBackImovib, applyWriteBackImovib, WriteBackItem } from '../../services/sync/writeBackImovib';
-import { Empreendimento, PlantaAiSyncReport, PlantaAiWriteBackReport } from '../../types';
+import { Empreendimento, ArquiteturaSyncReport } from '../../types';
 import { useConfirm } from '../ui/confirm';
 import WriteBackPreviewSheet from './WriteBackPreviewSheet';
 
@@ -46,38 +43,23 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e }) => {
   const [writingBack, setWritingBack] = React.useState(false);
   const [writeBackSheetOpen, setWriteBackSheetOpen] = React.useState(false);
 
-  // Planta IA (vínculo direto)
-  const [plantaReport, setPlantaReport] = React.useState<PlantaAiSyncReport | null>(null);
-  const [plantaError, setPlantaError] = React.useState<string | null>(null);
-  const [plantaWriteBack, setPlantaWriteBack] = React.useState<PlantaAiWriteBackReport[] | null>(null);
-  const [plantaSyncing, setPlantaSyncing] = React.useState(false);
-  const [plantaWritingBack, setPlantaWritingBack] = React.useState(false);
-
   // ESTUDO DE MASSA — Planta Inteligente (M3). Mão única, como o loteamento: a
   // massa publicada é a origem das torres e unidades; preço e status são do
   // empreendimento. Desde 02/10/2026 a ARQUITETURA do empreendimento é a Planta
-  // Inteligente (massa + loteamento); o Planta IA v1 virou card de legado.
-  const [massaReport, setMassaReport] = React.useState<PlantaAiSyncReport | null>(null);
+  // Inteligente (massa + loteamento).
+  const [massaReport, setMassaReport] = React.useState<ArquiteturaSyncReport | null>(null);
   const [massaError, setMassaError] = React.useState<string | null>(null);
   const [massaSyncing, setMassaSyncing] = React.useState(false);
 
   // Loteamento — Planta Inteligente (B3). Não tem write-back: o desenho é a
   // origem, e reconstruir geometria a partir de uma área não tem solução única.
-  const [loteamentoReport, setLoteamentoReport] = React.useState<PlantaAiSyncReport | null>(null);
+  const [loteamentoReport, setLoteamentoReport] = React.useState<ArquiteturaSyncReport | null>(null);
   const [loteamentoError, setLoteamentoError] = React.useState<string | null>(null);
   const [loteamentoSyncing, setLoteamentoSyncing] = React.useState(false);
-
-  // Aresta direta Arquitetura ↔ Viabilidade. Só existe para ESTE empreendimento se os dois
-  // estudos que ele referencia apontarem um para o outro (imovib_studies.planta_ai_study_id).
-  // Os dois vínculos do empreendimento são independentes: dá para ter um Imovib e um Planta IA
-  // que nunca se falaram.
-  const [axStudy, setAxStudy] = React.useState<{ selectedScenarioId: string | null; pairedWithImovib: boolean } | null>(null);
-  const [axBusy, setAxBusy] = React.useState<'toImovib' | 'fromImovib' | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setWriteBackError(null);
-    setPlantaError(null);
     setLoteamentoError(null);
     setMassaError(null);
     const tasks: Promise<void>[] = [];
@@ -94,8 +76,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e }) => {
       setWriteBackItems(null);
     }
 
-    // Planta IA — só roda o dry-run se houver estudo de arquitetura vinculado
-    // LOTEAMENTO (B3): a terceira aresta. So roda o dry-run com estudo vinculado.
+    // Planta Inteligente — massa e LOTEAMENTO (B3): a terceira aresta. So roda o dry-run com estudo vinculado.
     if (e.blueprint_study_id) {
       tasks.push(
         blueprintEmpreendimentoSync.previewSync(e.id)
@@ -112,43 +93,9 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e }) => {
       setMassaReport(null);
     }
 
-    if (e.planta_ai_study_id) {
-      tasks.push(
-        plantaEmpreendimentoSync.previewSync(e.id)
-          .then(r => setPlantaReport(r))
-          .catch(err => { setPlantaError(err.message); setPlantaReport(null); })
-      );
-      tasks.push(
-        plantaEmpreendimentoSync.previewWriteBack(e.id)
-          .then(r => setPlantaWriteBack(r))
-          .catch(() => setPlantaWriteBack(null))
-      );
-    } else {
-      setPlantaReport(null);
-      setPlantaWriteBack(null);
-    }
-
-    // Aresta Arquitetura ↔ Viabilidade
-    if (e.planta_ai_study_id) {
-      tasks.push((async () => {
-        const [{ data: ps }, { data: im }] = await Promise.all([
-          supabase.from('plant_studies').select('selected_scenario_id').eq('id', e.planta_ai_study_id!).maybeSingle(),
-          e.imovib_study_id
-            ? supabase.from('imovib_studies').select('planta_ai_study_id').eq('id', e.imovib_study_id).maybeSingle()
-            : Promise.resolve({ data: null }),
-        ]);
-        setAxStudy({
-          selectedScenarioId: ps?.selected_scenario_id ?? null,
-          pairedWithImovib: !!im && (im as any).planta_ai_study_id === e.planta_ai_study_id,
-        });
-      })().catch(() => setAxStudy(null)));
-    } else {
-      setAxStudy(null);
-    }
-
     await Promise.all(tasks);
     setLoading(false);
-  }, [e.id, e.imovib_study_id, e.planta_ai_study_id, e.blueprint_study_id]);
+  }, [e.id, e.imovib_study_id, e.blueprint_study_id]);
 
   React.useEffect(() => { load(); }, [load]);
 
@@ -175,29 +122,6 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e }) => {
   const loteamentoTotal = loteamentoReport
     ? loteamentoReport.towersCreated + loteamentoReport.towersUpdated + loteamentoReport.unitsCreated + loteamentoReport.unitsUpdated
     : 0;
-
-  const handlePlantaSync = async () => {
-    if (!plantaReport) return;
-    const total = plantaReport.towersCreated + plantaReport.towersUpdated
-      + plantaReport.unitsCreated + plantaReport.unitsUpdated;
-    if (total === 0) return;
-    const ok = await confirm({
-      title: 'Sincronizar do Planta IA?',
-      message: `Serão criadas/atualizadas ${plantaReport.towersCreated + plantaReport.towersUpdated} torre(s) e ${plantaReport.unitsCreated + plantaReport.unitsUpdated} unidade(s) a partir do cenário escolhido no estudo de arquitetura.\n\nSó dados estruturais (nome, pavimento, áreas, dormitórios) são sincronizados — preço e status de venda das unidades já existentes não são tocados.`,
-      confirmLabel: 'Sincronizar',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    setPlantaSyncing(true);
-    try {
-      await plantaEmpreendimentoSync.syncToEmpreendimento(e.id);
-      await load();
-    } catch (err: any) {
-      setPlantaError(err.message);
-    } finally {
-      setPlantaSyncing(false);
-    }
-  };
 
   /** LOTEAMENTO (B3): traz as quadras e os lotes da versão PUBLICADA do desenho. */
   const handleLoteamentoSync = async () => {
@@ -249,81 +173,14 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
     }
   };
 
-  const handlePlantaWriteBack = async () => {
-    const changes = (plantaWriteBack || []).reduce((s, r) => s + r.changes.length, 0);
-    if (!plantaWriteBack || changes === 0) return;
-    const ok = await confirm({
-      title: 'Enviar ao Estudo de Arquitetura?',
-      message: `${changes} agregado(s) do cenário serão recalculados a partir das torres/unidades reais (pavimentos, unidades por andar, total de unidades e áreas).\n\nVGV, custo estimado e status de venda nunca são propagados — o cenário permanece uma simulação independente do realizado.`,
-      confirmLabel: 'Enviar',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    setPlantaWritingBack(true);
-    try {
-      await plantaEmpreendimentoSync.writeBackToPlantaScenario(e.id);
-      await load();
-    } catch (err: any) {
-      setPlantaError(err.message);
-    } finally {
-      setPlantaWritingBack(false);
-    }
-  };
-
-  // ── Aresta direta Arquitetura ⇄ Viabilidade ───────────────────────────────
-  const handleAxToImovib = async () => {
-    if (!e.planta_ai_study_id || !axStudy?.selectedScenarioId) return;
-    const ok = await confirm({
-      title: 'Testar viabilidade do cenário?',
-      message: 'O cenário escolhido no Planta IA (terreno, regras, áreas e custos) será enviado ao estudo de viabilidade, recriando a volumetria lá. Não passa pelo Empreendimento.',
-      confirmLabel: 'Enviar',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    setAxBusy('toImovib');
-    try {
-      const r = await PlantaAiIntegration.sendToViabilidade(e.planta_ai_study_id, axStudy.selectedScenarioId);
-      if (!r.success) throw new Error(r.error || 'Falha ao enviar para viabilidade.');
-      await load();
-    } catch (err: any) {
-      setPlantaError(err.message);
-    } finally { setAxBusy(null); }
-  };
-
-  const handleAxFromImovib = async () => {
-    if (!e.planta_ai_study_id || !e.imovib_study_id) return;
-    const ok = await confirm({
-      title: 'Atualizar arquitetura a partir do Imovib?',
-      message: 'Terreno, regras urbanísticas e briefing do estudo de arquitetura serão sobrescritos com os dados atuais da viabilidade. Os cenários já gerados não são alterados — regere-os depois se quiser refletir a mudança.',
-      confirmLabel: 'Atualizar',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    setAxBusy('fromImovib');
-    try {
-      const r = await PlantaAiIntegration.updatePlantaAiFromImovib(e.imovib_study_id, e.planta_ai_study_id);
-      if (!r.success) throw new Error(r.error || 'Falha ao atualizar a partir do Imovib.');
-      await load();
-    } catch (err: any) {
-      setPlantaError(err.message);
-    } finally { setAxBusy(null); }
-  };
-
   // Write-back Emp→Viabilidade: quantas unidades seriam atualizadas e quantas criadas no estudo.
   const wbTotal = writeBackItems?.length ?? 0;
   const wbCreates = writeBackItems?.filter(i => i.kind === 'create').length ?? 0;
   const wbUpdates = writeBackItems?.filter(i => i.kind === 'update').length ?? 0;
 
-  const plantaDiverge = plantaReport
-    ? plantaReport.towersCreated + plantaReport.towersUpdated + plantaReport.unitsCreated + plantaReport.unitsUpdated
-    : 0;
-  const plantaOrphans = plantaReport
-    ? plantaReport.orphanTowers.length + plantaReport.orphanUnits.length
-    : 0;
-  const plantaChanges = (plantaWriteBack || []).reduce((s, r) => s + r.changes.length, 0);
   // Planta Inteligente: um estudo é de massa OU de loteamento (ou ainda nenhum dos dois).
-  const totalDe = (r: PlantaAiSyncReport | null) => (r ? r.towersCreated + r.towersUpdated + r.unitsCreated + r.unitsUpdated : 0);
-  const orfaosDe = (r: PlantaAiSyncReport | null) => (r ? r.orphanTowers.length + r.orphanUnits.length : 0);
+  const totalDe = (r: ArquiteturaSyncReport | null) => (r ? r.towersCreated + r.towersUpdated + r.unitsCreated + r.unitsUpdated : 0);
+  const orfaosDe = (r: ArquiteturaSyncReport | null) => (r ? r.orphanTowers.length + r.orphanUnits.length : 0);
   const massaTotal = totalDe(massaReport);
   const loteamentoTotalArq = totalDe(loteamentoReport);
   const temMassa = !!massaReport && (massaReport.scenarioUnits > 0 || massaTotal > 0 || orfaosDe(massaReport) > 0);
@@ -331,7 +188,6 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
   // Sem nenhum dos dois, os dois cards aparecem — cada um diz o que falta.
   const mostrarMassa = !!e.blueprint_study_id && (temMassa || !temLote);
   const mostrarLote = !!e.blueprint_study_id && (temLote || !temMassa);
-  const plantaUnitsWithoutOrigin = (plantaWriteBack || []).reduce((s, r) => s + r.unitsWithoutPlantaOrigin, 0);
 
   if (loading) return (
     <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
@@ -353,12 +209,10 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
           </button>
         </div>
 
-        {/* Triângulo dos estudos: Arquitetura tem DUAS arestas — uma com o hub e outra
-            direta com a Viabilidade (imovib_studies.planta_ai_study_id). Desenhar só os raios
-            do hub escondia a ligação mais antiga das três.
+        {/* Os estudos em volta do hub.
 
             Layout (desktop):                     [ARQUITETURA]
-                                             ↙(direto)      ↕
+                                                            ↕
                                  [VIABILIDADE] ↔ [HUB]
 
             Cada aresta é um <EdgeConnector> com seus 2 botões — o conector É a ação. Ter os
@@ -383,14 +237,11 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
                 ? `${massaReport!.scenarioUnits} unidade(s) na massa publicada`
                 : temLote
                   ? `${loteamentoReport!.scenarioUnits} lote(s) no desenho publicado`
-                  : e.planta_ai_study_id
-                    ? 'Planta IA (legado) também vinculado'
-                    : null
+                  : null
             }
           />
 
-          {/* Linha 2 — aresta Arquitetura ↔ Hub. A aresta direta Arquitetura↔Viabilidade
-              NÃO mora aqui: ver a faixa abaixo do grid. */}
+          {/* Linha 2 — aresta Arquitetura ↔ Hub. */}
           <div className="hidden md:block" />
           <div className="hidden md:block" />
           <EdgeConnector
@@ -461,62 +312,6 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
           </div>
         </div>
 
-        {/* Aresta direta Arquitetura ↔ Viabilidade — em faixa própria, de propósito.
-            Ela liga dois VÉRTICES (Arquitetura no topo, Viabilidade na ponta esquerda) sem
-            passar pelo hub, então não existe coluna do grid que seja "dela": quando morava na
-            coluna 2, caía embaixo da aresta Viabilidade↔Hub e os 4 botões liam como um menu
-            único da Viabilidade — a seta girada -45° era a única pista do contrário
-            (feedback real, 2026-07-16). Aqui ela tem nome, explicação e espaço próprios. */}
-        <div className="mt-5 pt-5 border-t border-dashed border-gray-200">
-          <div className="rounded-[10px] border border-indigo-100 bg-indigo-50/40 p-3 flex flex-col md:flex-row md:items-center gap-3">
-            <div className="flex items-start gap-2 flex-1 min-w-0">
-              <ArrowLeftRight className={`w-4 h-4 -rotate-45 shrink-0 mt-0.5 ${axStudy?.pairedWithImovib ? 'text-indigo-600' : 'text-gray-300'}`} />
-              <div className="min-w-0">
-                <p className={`text-[10px] font-bold uppercase tracking-widest ${axStudy?.pairedWithImovib ? 'text-indigo-700' : 'text-gray-400'}`}>
-                  {e.planta_ai_study_id ? 'Planta IA (legado) ↔ Viabilidade' : 'Arquitetura → Viabilidade'}
-                </p>
-                <p className="text-[10px] text-gray-500 font-medium leading-relaxed mt-0.5">
-                  {e.planta_ai_study_id
-                    ? 'Ligação direta entre o estudo do Planta IA e a Viabilidade — não passa pelo Empreendimento.'
-                    : 'A Planta Inteligente chega à Viabilidade PELO Empreendimento: traga a massa para cá e use "Enviar ao estudo" na aresta Viabilidade ↔ Empreendimento.'}
-                </p>
-              </div>
-            </div>
-            {axStudy?.pairedWithImovib ? (
-              <EdgeActions
-                tint="indigo"
-                layout="row"
-                actions={[
-                  {
-                    label: 'Testar viabilidade', icon: Send, direction: 'out',
-                    onClick: handleAxToImovib,
-                    disabled: !axStudy.selectedScenarioId, busy: axBusy === 'toImovib',
-                    title: axStudy.selectedScenarioId ? 'Enviar o cenário escolhido ao estudo de viabilidade' : 'Escolha um cenário no Planta IA primeiro',
-                  },
-                  {
-                    label: 'Atualizar do Imovib', icon: Download, direction: 'in',
-                    onClick: handleAxFromImovib,
-                    disabled: false, busy: axBusy === 'fromImovib',
-                    title: 'Trazer terreno, regras e briefing da viabilidade para a arquitetura',
-                  },
-                ]}
-              />
-            ) : (
-              <span
-                className="text-[10px] text-gray-400 font-medium shrink-0"
-                title={
-                  !e.planta_ai_study_id
-                    ? 'Sem ligação direta: o caminho da Planta Inteligente até a Viabilidade passa pelo Empreendimento'
-                    : !e.imovib_study_id
-                    ? 'Requer os dois estudos vinculados ao empreendimento'
-                    : 'Os dois estudos vinculados não apontam um para o outro — use "Testar viabilidade" no Planta IA para criar o par'
-                }
-              >
-                Sem vínculo direto
-              </span>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* Detalhamento + ações */}
@@ -598,53 +393,6 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
               </>
             ) : null}
           </RelationCard>
-        )}
-
-        {/* Planta IA v1 — LEGADO (02/10/2026: a arquitetura é a Planta Inteligente). Só aparece com vínculo antigo. */}
-        {e.planta_ai_study_id && (
-        <RelationCard
-          title="Planta IA (legado) ↔ Empreendimento"
-          icon={Ruler}
-          tint="indigo"
-        >
-          {plantaError ? (
-            <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
-              <AlertTriangle className="w-4 h-4 shrink-0" /> {plantaError}
-            </div>
-          ) : plantaReport ? (
-            <>
-              <p className="text-[10px] font-semibold text-gray-400 pt-1">Do cenário para o empreendimento</p>
-              <DiffRow label="Torres a criar" value={plantaReport.towersCreated} />
-              <DiffRow label="Torres a atualizar" value={plantaReport.towersUpdated} />
-              <DiffRow label="Unidades a criar" value={plantaReport.unitsCreated} />
-              <DiffRow label="Unidades a atualizar" value={plantaReport.unitsUpdated} />
-              {plantaOrphans > 0 && <DiffRow label="Itens órfãos (mantidos)" value={plantaOrphans} warn />}
-              {plantaReport.warnings.map((w, i) => (
-                <p key={i} className="text-[10px] text-amber-600 font-medium flex items-start gap-1.5 leading-relaxed pt-1">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" /> {w}
-                </p>
-              ))}
-
-              <p className="text-[10px] font-semibold text-gray-400 pt-3 border-t border-gray-100 mt-1">Do empreendimento para o cenário</p>
-              <DiffRow label="Agregados a recalcular" value={plantaChanges} warn={plantaChanges > 0} />
-              <DiffRow label="Sem origem no Planta IA" value={plantaUnitsWithoutOrigin} muted />
-              <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
-                Envia pavimentos, unidades por andar, total de unidades e áreas. VGV, custo e status de venda nunca voltam ao cenário.
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button type="button" onClick={handlePlantaSync} disabled={plantaSyncing || plantaDiverge === 0} title={plantaDiverge === 0 ? 'Nada a sincronizar — cenário e torres alinhados' : 'Criar/atualizar torres e unidades a partir do cenário'} className="rounded-[8px] border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
-                  {plantaSyncing ? 'Sincronizando…' : 'Sincronizar do cenário'}
-                </button>
-                <button type="button" onClick={handlePlantaWriteBack} disabled={plantaWritingBack || plantaChanges === 0} title={plantaChanges === 0 ? 'Nada a enviar — cenário já reflete o realizado' : 'Recalcular os agregados do cenário a partir das torres reais'} className="rounded-[8px] border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">
-                  {plantaWritingBack ? 'Enviando…' : 'Enviar ao cenário'}
-                </button>
-              </div>
-              <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
-                O Planta IA saiu do menu: novos estudos são feitos na Planta Inteligente. Este vínculo antigo continua funcionando até você tirá-lo (Editar).
-              </p>
-            </>
-          ) : null}
-        </RelationCard>
         )}
 
         {/* LOTEAMENTO ↔ EMPREENDIMENTO (B3). Aresta de MÃO ÚNICA, e de propósito:

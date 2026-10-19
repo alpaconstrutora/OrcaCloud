@@ -16,7 +16,6 @@ import { situacaoDasAprovacoes, versaoDoMemorial } from '../utils/nbr12721/docum
  *   - Áreas NBR:     a versão publicada do estudo da Planta (`empreendimentos.blueprint_study_id`
  *                    → `blueprint_snapshot_nbr12721`) — desde 14/10/2026 (Fase 9 do plano
  *                    docs/planos/2026-10-13-areas-nbr12721-na-planta.md); antes, o Motor de Áreas
- *   - Planta IA:     `empreendimentos.planta_ai_study_id`
  *   - Viabilidade:   `empreendimentos.imovib_study_id`
  *   - Centro custo:  `cost_centers_v2.empreendimento_id` (N:1 desde 20270919000030;
  *                    era 1:1 pelo índice `uidx_cost_center_por_empreendimento`)
@@ -32,7 +31,7 @@ import { situacaoDasAprovacoes, versaoDoMemorial } from '../utils/nbr12721/docum
 
 export type EmpreendimentoLinkKind =
     | 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'AREAS_NBR'
-    | 'PLANTA_IA' | 'PLANTA_INTELIGENTE' | 'ESTUDO_VIABILIDADE' | 'CONTRATO' | 'FINANCEIRO'
+    | 'PLANTA_INTELIGENTE' | 'ESTUDO_VIABILIDADE' | 'CONTRATO' | 'FINANCEIRO'
     | 'CENTRO_CUSTO';
 
 export interface EmpreendimentoLink {
@@ -64,8 +63,6 @@ export interface EmpreendimentoLinksSnapshot {
     orcamentos: EmpreendimentoLink[];
     planejamentos: EmpreendimentoLink[];
     areas: EmpreendimentoLink[];
-    /** O Planta IA v1 — LEGADO desde 02/10/2026: a arquitetura do empreendimento é a Planta Inteligente. */
-    plantaIA: EmpreendimentoLink[];
     /** A Planta Inteligente (`blueprint_study_id`): massa, loteamento, planta. */
     plantaInteligente: EmpreendimentoLink[];
     viabilidade: EmpreendimentoLink[];
@@ -190,9 +187,6 @@ export const empreendimentoLinksService = {
             this.loadCostCenters(emp.id),
         ]);
 
-        const plantaIA: EmpreendimentoLink[] = emp.planta_ai_study_id
-            ? [await this.loadPlantaStudy(emp.planta_ai_study_id, towers.length)]
-            : [];
         const plantaInteligente: EmpreendimentoLink[] = emp.blueprint_study_id
             ? [await this.loadBlueprintStudy(emp.blueprint_study_id)]
             : [];
@@ -202,7 +196,7 @@ export const empreendimentoLinksService = {
 
         const all = [
             ...obras, ...children.orcamentos, ...children.planejamentos,
-            ...areaProject, ...plantaIA, ...plantaInteligente, ...viabilidade,
+            ...areaProject, ...plantaInteligente, ...viabilidade,
         ];
 
         return {
@@ -210,7 +204,6 @@ export const empreendimentoLinksService = {
             orcamentos: children.orcamentos,
             planejamentos: children.planejamentos,
             areas: areaProject,
-            plantaIA,
             plantaInteligente,
             viabilidade,
             contratos,
@@ -288,25 +281,6 @@ export const empreendimentoLinksService = {
             }];
         } catch {
             return []; // as áreas indisponíveis não podem derrubar a aba
-        }
-    },
-
-    async loadPlantaStudy(studyId: string, towerCount: number): Promise<EmpreendimentoLink> {
-        try {
-            const { data } = await supabase
-                .from('plant_studies')
-                .select('id, name')
-                .eq('id', studyId)
-                .maybeSingle();
-            return {
-                kind: 'PLANTA_IA',
-                id: studyId,
-                label: (data as any)?.name || 'Estudo da Planta IA',
-                sublabel: `${towerCount} torre(s) materializada(s)`,
-                missing: !data,
-            };
-        } catch {
-            return { kind: 'PLANTA_IA', id: studyId, label: 'Estudo da Planta IA', missing: true };
         }
     },
 
@@ -652,11 +626,6 @@ export const empreendimentoLinksService = {
         await empreendimentoService.linkTowerToObra(towerId, projectId);
     },
 
-    /** Vincula/desvincula o estudo da Planta IA. */
-    async linkPlantaStudy(studyId: string | null, ctx: LinkContext): Promise<void> {
-        await this.updateStudyLink(ctx, 'planta_ai_study_id', studyId, 'Estudo da Planta IA', 'sync_planta');
-    },
-
     /** Vincula/desvincula o estudo da Planta Inteligente (a arquitetura do empreendimento desde 02/10/2026). */
     async linkBlueprintStudy(studyId: string | null, ctx: LinkContext): Promise<void> {
         await this.updateStudyLink(ctx, 'blueprint_study_id', studyId, 'Estudo da Planta Inteligente', 'sync_blueprint');
@@ -686,10 +655,10 @@ export const empreendimentoLinksService = {
 
     async updateStudyLink(
         ctx: LinkContext,
-        column: 'planta_ai_study_id' | 'imovib_study_id' | 'blueprint_study_id',
+        column: 'imovib_study_id' | 'blueprint_study_id',
         studyId: string | null,
         label: string,
-        source: 'sync_planta' | 'sync_imovib' | 'sync_blueprint',
+        source: 'sync_imovib' | 'sync_blueprint',
     ): Promise<void> {
         const { error } = await supabase
             .from('empreendimentos')

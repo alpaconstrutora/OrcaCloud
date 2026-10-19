@@ -41,8 +41,6 @@ export interface Empreendimento {
     imovib_study_id?: string | null;
     last_synced_at?: string | null;
 
-    // Vínculo vivo com o estudo de arquitetura (Planta IA) — direto, sem passar pelo Imovib
-    planta_ai_study_id?: string | null;
     /** LOTEAMENTO (B3): o estudo da Planta Inteligente que originou este empreendimento. */
     blueprint_study_id?: string | null;
 
@@ -126,7 +124,6 @@ export interface EmpreendimentoTower {
     empreendimento_id: string;
     project_id?: string | null;
     imovib_block_id?: string | null;
-    planta_ai_scenario_id?: string | null;
     /** LOTEAMENTO (B3): o `uid` da Quadra no payload canônico — uid, nunca id. */
     blueprint_quadra_uid?: string | null;
     /** Estudo de Massa (M3): uid do Bloco que originou esta torre. */
@@ -169,7 +166,6 @@ export interface EmpreendimentoUnit {
     floor_tipo?: FloorTipo | null;
     imovib_unit_id?: string | null;
     imovib_instance_id?: string | null;
-    planta_ai_unit_id?: string | null;
     /** LOTEAMENTO (B3): o `uid` do Lote no payload canônico — uid, nunca id. */
     blueprint_lote_uid?: string | null;
     /** Estudo de Massa (M3): "<uid do bloco>:<pavimento>:<posição>" — unidade derivada, placeholder. */
@@ -396,47 +392,24 @@ export type EmpreendimentoWithChildren = Empreendimento & {
     common_areas: EmpreendimentoCommonArea[];
 };
 
-// Relatório de sincronização com o estudo Imovib (Fase 2)
-export interface EmpreendimentoSyncReport {
+/**
+ * Arquitetura → Empreendimento: o relatório dos syncs da Planta Inteligente (estudo de
+ * massa e loteamento). Nasceu como "ArquiteturaSyncReport" na ponte do Planta AI v1, removida
+ * em 19/10/2026 (docs/planos/2026-10-19-remover-planta-ai.md); o formato ficou.
+ */
+export interface ArquiteturaSyncReport {
     towersCreated: number;
     towersUpdated: number;
     unitsCreated: number;
     unitsUpdated: number;
-    commonAreasUpserted: number;
-    orphanTowers: EmpreendimentoTower[];
-    orphanUnits: EmpreendimentoUnit[];
-    skippedDueToLocalChanges: string[];
-    warnings: string[];
-}
-
-// ── Ponte direta com o Planta IA ────────────────────────────────────────────
-// Espelha EmpreendimentoSyncReport (Imovib), mas a proveniência aqui é
-// plant_scenarios → torre e plant_units → unidade.
-
-/** Planta IA → Empreendimento. */
-export interface PlantaAiSyncReport {
-    towersCreated: number;
-    towersUpdated: number;
-    unitsCreated: number;
-    unitsUpdated: number;
-    /** Unidades materializadas no cenário escolhido — o tamanho do lado "Planta IA".
-     *  Distinto de unitsCreated/unitsUpdated, que contam só o que o sync mudaria. */
+    /** Unidades do lado da arquitetura — distinto de unitsCreated/unitsUpdated, que contam
+     *  só o que o sync mudaria. */
     scenarioUnits: number;
-    /** Torres cujo cenário de origem sumiu do estudo — nunca auto-deletadas. */
+    /** Torres cuja origem sumiu da arquitetura — nunca auto-deletadas. */
     orphanTowers: EmpreendimentoTower[];
-    /** Unidades cuja plant_unit de origem sumiu — nunca auto-deletadas. */
+    /** Unidades cuja origem sumiu — nunca auto-deletadas. */
     orphanUnits: EmpreendimentoUnit[];
     warnings: string[];
-}
-
-/** Empreendimento → Planta IA (só agregados estruturais; nunca preço/VGV/status). */
-export interface PlantaAiWriteBackReport {
-    scenarioId: string;
-    scenarioName: string;
-    /** Campos que divergem hoje: { campo, de, para }. Vazio = cenário já reflete o real. */
-    changes: { field: string; from: number | null; to: number }[];
-    /** Unidades reais sem proveniência no Planta IA (criadas à mão ou vindas do Imovib). */
-    unitsWithoutPlantaOrigin: number;
 }
 
 // ── Histórico / trilha de auditoria ─────────────────────────────────────────

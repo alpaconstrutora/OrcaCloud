@@ -70,24 +70,6 @@ export const SYNC_FIELDS: Record<SyncOrigin, FieldSpec[]> = {
         { entity: 'unit', field: 'status', label: 'Status de venda', group: 'comercial', compare: 'exact' },
     ],
 
-    // ── Arquitetura (Planta IA) ──────────────────────────────────────────────
-    // Traz dormitórios/banheiros/vagas (que o Imovib não tem), mas NÃO tem posição nem
-    // orientação — plant_units não possui essas colunas. As duas arestas são complementares.
-    planta_ai: [
-        // `name` da torre fica FORA de propósito: o nome do cenário ("Cenário Equilibrado") é
-        // rótulo de análise, não nome de torre. Quem renomeia para "Torre C" continua com
-        // "Torre C" no sync seguinte. Na criação o nome vem do createOnly (nextTowerName).
-        { entity: 'tower', field: 'floors_count', label: 'Pavimentos', group: 'estrutura', compare: 'exact' },
-        { entity: 'tower', field: 'units_per_floor', label: 'Unidades por pavimento', group: 'estrutura', compare: 'exact' },
-        { entity: 'tower', field: 'construction_cost_sqm', label: 'Custo de obra por m²', group: 'comercial', compare: 'numeric', tolerance: CENT },
-        { entity: 'tower', field: 'sales_price_sqm', label: 'Preço de venda por m²', group: 'comercial', compare: 'numeric', tolerance: CENT },
-
-        ...UNIT_SHARED,
-        { entity: 'unit', field: 'bedrooms', label: 'Dormitórios', group: 'estrutura', compare: 'exact' },
-        { entity: 'unit', field: 'bathrooms', label: 'Banheiros', group: 'estrutura', compare: 'exact' },
-        { entity: 'unit', field: 'parking_spaces', label: 'Vagas', group: 'estrutura', compare: 'exact' },
-    ],
-
     // ── Loteamento (Planta Inteligente) ──────────────────────────────────────
     // A quadra vira torre e o lote vira unidade. O que o desenho SABE é a
     // geometria: número, área e testada. O que ele NÃO sabe é comercial —

@@ -31,9 +31,9 @@ const lista = (nome: string) => {
 
 describe('travas do envio da Planta Inteligente ao Empreendimento', () => {
   it('as colunas de proveniência estão nas listas explícitas de leitura', () => {
-    expect(lista('EMPREENDIMENTO_COLS')).toEqual(expect.arrayContaining(['imovib_study_id', 'planta_ai_study_id', 'blueprint_study_id']));
-    expect(lista('TOWER_COLS')).toEqual(expect.arrayContaining(['imovib_block_id', 'planta_ai_scenario_id', 'blueprint_quadra_uid', 'blueprint_bloco_uid']));
-    expect(lista('UNIT_COLS')).toEqual(expect.arrayContaining(['imovib_instance_id', 'planta_ai_unit_id', 'blueprint_lote_uid', 'blueprint_massa_chave', 'blueprint_unidade_chave', 'nbr12721_snapshot_id']));
+    expect(lista('EMPREENDIMENTO_COLS')).toEqual(expect.arrayContaining(['imovib_study_id', 'blueprint_study_id']));
+    expect(lista('TOWER_COLS')).toEqual(expect.arrayContaining(['imovib_block_id', 'blueprint_quadra_uid', 'blueprint_bloco_uid']));
+    expect(lista('UNIT_COLS')).toEqual(expect.arrayContaining(['imovib_instance_id', 'blueprint_lote_uid', 'blueprint_massa_chave', 'blueprint_unidade_chave', 'nbr12721_snapshot_id']));
   });
 
   it('o modelo publicado é lido de OBJETO (como o banco devolve) e de texto', () => {

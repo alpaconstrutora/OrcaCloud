@@ -317,10 +317,9 @@ export const VinculacoesTab: React.FC<Props> = ({
     }
   };
 
-  const handleUnlinkStudy = async (kind: 'PLANTA_IA' | 'PLANTA_INTELIGENTE' | 'ESTUDO_VIABILIDADE') => {
-    const isPlanta = kind === 'PLANTA_IA';
+  const handleUnlinkStudy = async (kind: 'PLANTA_INTELIGENTE' | 'ESTUDO_VIABILIDADE') => {
     const ok = await confirm({
-      title: kind === 'PLANTA_INTELIGENTE' ? 'Desvincular o estudo da Planta Inteligente?' : isPlanta ? 'Desvincular o estudo da Planta IA (legado)?' : 'Desvincular o estudo de viabilidade?',
+      title: kind === 'PLANTA_INTELIGENTE' ? 'Desvincular o estudo da Planta Inteligente?' : 'Desvincular o estudo de viabilidade?',
       message: 'As torres e unidades já materializadas continuam no empreendimento. O que para é a sincronização com o estudo.',
       variant: 'warning',
       confirmLabel: 'Desvincular',
@@ -331,7 +330,6 @@ export const VinculacoesTab: React.FC<Props> = ({
     try {
       const ctx = { empreendimentoId: emp.id, organizationId: effectiveOrgId };
       if (kind === 'PLANTA_INTELIGENTE') await empreendimentoLinksService.linkBlueprintStudy(null, ctx);
-      else if (isPlanta) await empreendimentoLinksService.linkPlantaStudy(null, ctx);
       else await empreendimentoLinksService.linkImovibStudy(null, ctx);
       notify('Vínculo removido.');
       await load();
@@ -631,11 +629,11 @@ export const VinculacoesTab: React.FC<Props> = ({
         ))}
       </LinkSection>
 
-      {/* Planta Inteligente e Viabilidade (o Planta IA v1 aparece só se ainda houver vínculo — legado) */}
+      {/* Planta Inteligente e Viabilidade */}
       <LinkSection
         title="Planta Inteligente e Viabilidade"
         icon={<LayoutGrid className="w-4 h-4" />}
-        count={snapshot.plantaInteligente.length + snapshot.plantaIA.length + snapshot.viabilidade.length}
+        count={snapshot.plantaInteligente.length + snapshot.viabilidade.length}
         emptyIcon={<LayoutGrid className="w-12 h-12" />}
         emptyTitle="Nenhum estudo vinculado"
         emptyHint="Vincule um estudo da Planta Inteligente ou da Viabilidade na edição do empreendimento — ou envie desde a própria planta."
@@ -648,15 +646,6 @@ export const VinculacoesTab: React.FC<Props> = ({
             // Abre O estudo, não a lista: a Planta Inteligente lê `?studyId=` do hash.
             onOpen={() => { window.location.hash = `#/blueprint?studyId=${s.id}`; }}
             onUnlink={() => handleUnlinkStudy('PLANTA_INTELIGENTE')}
-          />
-        ))}
-        {snapshot.plantaIA.map(s => (
-          <LinkRow
-            key={s.id}
-            link={{ ...s, label: `${s.label} (Planta IA — legado)` }}
-            busy={busyId === 'PLANTA_IA'}
-            onOpen={() => { window.location.hash = `#/planta-ai?studyId=${s.id}`; }}
-            onUnlink={() => handleUnlinkStudy('PLANTA_IA')}
           />
         ))}
         {snapshot.viabilidade.map(s => (

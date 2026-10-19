@@ -201,7 +201,6 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         canViewDevelopments: true, canEditDevelopments: false,
         canViewRegulatoryMap: true, canEditRegulatoryMap: false,
         canViewOpportunities: true, canEditOpportunities: false,
-        canViewPlantaAi: true, canEditPlantaAi: false,
         canEditImovib: false,
         canViewAppraisal: true, canEditAppraisal: false,
         canViewPartnerPortal: true, canEditPartnerPortal: false,
@@ -256,7 +255,6 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
                 canEditServiceContracts: true,
                 canEditServicesCrm: true,
                 canEditDevelopments: true,
-                canEditPlantaAi: true,
                 canEditImovib: true,
                 canEditAppraisal: true,
                 canEditDocs: true,
@@ -421,7 +419,6 @@ const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?:
     { group: 'Incorporação', title: 'Áreas NBR 12721 (Planta)', view: 'canViewAreaEngine', edit: 'canEditAreaEngine' },
     { group: 'Incorporação', title: 'Mapa Regulatório', view: 'canViewRegulatoryMap', edit: 'canEditRegulatoryMap' },
     { group: 'Incorporação', title: 'Oportunidades', view: 'canViewOpportunities', edit: 'canEditOpportunities' },
-    { group: 'Incorporação', title: 'Planta AI v1 (legado, fora do menu)', view: 'canViewPlantaAi', edit: 'canEditPlantaAi' },
     { group: 'Incorporação', title: 'Estudos de Viabilidade (Imovib)', view: 'canViewImovib', edit: 'canEditImovib' },
     { group: 'Incorporação', title: 'Laudo de Avaliação', view: 'canViewAppraisal', edit: 'canEditAppraisal' },
 

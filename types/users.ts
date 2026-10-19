@@ -478,8 +478,6 @@ export interface UserPermissions {
     canEditRegulatoryMap?: boolean;
     canViewOpportunities?: boolean;
     canEditOpportunities?: boolean;
-    canViewPlantaAi?: boolean;
-    canEditPlantaAi?: boolean;
     canEditImovib?: boolean;
     canViewAppraisal?: boolean;
     canEditAppraisal?: boolean;

@@ -24,7 +24,7 @@
 // vértice na planta, não editar um número no cadastro. Escrever de volta exigiria
 // reconstruir geometria a partir de uma área — o que não tem solução única.
 
-import { Empreendimento, PlantaAiSyncReport } from '../types/empreendimento';
+import { Empreendimento, ArquiteturaSyncReport } from '../types/empreendimento';
 import { empreendimentoService, loadTargetState } from './empreendimentoService';
 import { empreendimentoProposalService } from './empreendimentoProposalService';
 import { empreendimentoAuditService } from './empreendimentoAuditService';
@@ -55,7 +55,7 @@ async function planBlueprintSync(empreendimentoId: string): Promise<BlueprintSyn
  * campos: dizer "12 unidades a atualizar" quando são 3 unidades com 4 campos
  * cada faria o usuário conferir doze coisas que não existem.
  */
-function planToReport(sync: BlueprintSync): PlantaAiSyncReport {
+function planToReport(sync: BlueprintSync): ArquiteturaSyncReport {
   const tocadas = new Set<string>();
   for (const c of [...sync.plan.fills, ...sync.plan.conflicts]) tocadas.add(`${c.entity}|${c.entityId}`);
   const contar = (entidade: 'tower' | 'unit') =>
@@ -81,7 +81,7 @@ export const blueprintEmpreendimentoSync = {
   },
 
   /** Ensaio: monta o plano e conta, sem escrever nada. */
-  async previewSync(empreendimentoId: string): Promise<PlantaAiSyncReport> {
+  async previewSync(empreendimentoId: string): Promise<ArquiteturaSyncReport> {
     return planToReport(await planBlueprintSync(empreendimentoId));
   },
 
@@ -89,7 +89,7 @@ export const blueprintEmpreendimentoSync = {
    * Aplica. Os conflitos NÃO são escritos: viram propostas na Curadoria, onde
    * alguém decide. Quem escreve é `applyPlan`, e só os `fills`.
    */
-  async syncToEmpreendimento(empreendimentoId: string): Promise<PlantaAiSyncReport> {
+  async syncToEmpreendimento(empreendimentoId: string): Promise<ArquiteturaSyncReport> {
     const sync = await planBlueprintSync(empreendimentoId);
 
     if (sync.plan.conflicts.length > 0) {

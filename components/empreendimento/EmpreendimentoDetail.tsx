@@ -85,7 +85,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   const [orgName, setOrgName] = React.useState<string | undefined>(undefined);
   const [companyLabel, setCompanyLabel] = React.useState<string | undefined>(undefined);
   const [imovibStudyName, setImovibStudyName] = React.useState<string | undefined>(undefined);
-  const [plantaStudyName, setPlantaStudyName] = React.useState<string | undefined>(undefined);
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -141,7 +140,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       .catch(() => setImovibStudyName(undefined));
   }, [e.imovib_study_id, effectiveOrgId]);
 
-  // A arquitetura do empreendimento é a Planta Inteligente (02/10/2026); o Planta IA fica como legado.
+  // A arquitetura do empreendimento é a Planta Inteligente (02/10/2026).
   const [blueprintStudyName, setBlueprintStudyName] = React.useState<string | undefined>(undefined);
   React.useEffect(() => {
     if (!e.blueprint_study_id) { setBlueprintStudyName(undefined); return; }
@@ -152,16 +151,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       .maybeSingle()
       .then(({ data }) => setBlueprintStudyName((data as any)?.name));
   }, [e.blueprint_study_id]);
-
-  React.useEffect(() => {
-    if (!e.planta_ai_study_id) { setPlantaStudyName(undefined); return; }
-    supabase
-      .from('plant_studies')
-      .select('id, name')
-      .eq('id', e.planta_ai_study_id)
-      .maybeSingle()
-      .then(({ data }) => setPlantaStudyName((data as any)?.name));
-  }, [e.planta_ai_study_id]);
 
   // Aba "Características Adicionais" (só existe quando há ao menos 1 característica
   // do catálogo aplicável ao tipo deste empreendimento — ver services/empreendimentoUnitCharacteristicService.ts).
@@ -413,7 +402,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             <dl className="space-y-3 text-sm">
               <Row label="Estudo de Viabilidade" value={e.imovib_study_id ? (imovibStudyName || 'Estudo não encontrado') : undefined} />
               <Row label="Estudo de Arquitetura" value={e.blueprint_study_id ? (blueprintStudyName || 'Estudo não encontrado') : undefined} />
-              {e.planta_ai_study_id && <Row label="Planta IA (legado)" value={plantaStudyName || 'Estudo não encontrado'} />}
               <Row label="Obra Vinculada" value={e.project_id ? (obraVinculada?.name || 'Obra não encontrada') : undefined} />
             </dl>
             <p className="text-[11px] text-gray-400 font-medium mt-4">

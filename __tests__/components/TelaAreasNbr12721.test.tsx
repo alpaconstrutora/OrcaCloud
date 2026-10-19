@@ -111,7 +111,7 @@ describe('TelaAreasNbr12721', () => {
 describe('TelaUnidades — a coluna de fração diz QUAL fração', () => {
   const base = (fracoesNbr12721: React.ComponentProps<typeof TelaUnidades>['fracoesNbr12721']) => {
     const m = predio();
-    render(<TelaUnidades model={m} quadro={quadroDeUnidades(m)} onRun={vi.fn()} onRunBatch={vi.fn()} erro={null} carregarDoPlantaAi={null} fracoesNbr12721={fracoesNbr12721} />);
+    render(<TelaUnidades model={m} quadro={quadroDeUnidades(m)} onRun={vi.fn()} onRunBatch={vi.fn()} erro={null} fracoesNbr12721={fracoesNbr12721} />);
   };
 
   it('com o Quadro IV-B: "Fração ideal (NBR 12721)" em milésimos', () => {

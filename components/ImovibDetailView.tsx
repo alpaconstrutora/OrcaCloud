@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { PlantaAiIntegration } from '../services/plantaAiIntegration';
-import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Award, Layers, PlusCircle, Pencil, FileBarChart } from 'lucide-react';
+import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Award, Pencil, FileBarChart } from 'lucide-react';
 import ImovibPremisesForm from './ImovibPremisesForm';
 import ImovibStaticViability from './ImovibStaticViability';
 import ImovibDynamicForm from './ImovibDynamicForm';
@@ -151,45 +150,6 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         <Pencil className="w-[15px] h-[15px]" />
                         Editar
                     </button>
-                    {study.planta_ai_study_id ? (
-                        <button
-                            type="button"
-                            disabled={!edicao.pode}
-                            title={!edicao.pode ? edicao.motivo : 'Abrir a arquitetura deste estudo na Planta AI'}
-                            onClick={async () => {
-                                if (!(await podeSair())) return;
-                                const res = await PlantaAiIntegration.updatePlantaAiFromImovib(study.id, study.planta_ai_study_id!);
-                                if (!res.success) {
-                                    showToast("Erro ao atualizar o Planta AI: " + res.error, 'error');
-                                }
-                                window.location.hash = `#/planta-ai?studyId=${study.planta_ai_study_id}`;
-                            }}
-                            className={`${botaoSecundario} text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100`}
-                        >
-                            <Layers className="w-[15px] h-[15px]" />
-                            Modificar arquitetura (Planta AI)
-                        </button>
-                    ) : (
-                        <button
-                            type="button"
-                            disabled={!edicao.pode}
-                            title={!edicao.pode ? edicao.motivo : 'Criar a arquitetura deste estudo na Planta AI'}
-                            onClick={async () => {
-                                if (!study.organization_id) return;
-                                if (!(await podeSair())) return;
-                                const res = await PlantaAiIntegration.createPlantaAiFromImovib(study.id, study.organization_id, study.name);
-                                if (res.success && res.plantaAiStudyId) {
-                                    window.location.hash = `#/planta-ai?studyId=${res.plantaAiStudyId}`;
-                                } else {
-                                    showToast("Erro ao criar estudo na Planta AI: " + res.error, 'error');
-                                }
-                            }}
-                            className={`${botaoSecundario} text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100`}
-                        >
-                            <PlusCircle className="w-[15px] h-[15px]" />
-                            Gerar arquitetura (Planta AI)
-                        </button>
-                    )}
                 </div>
             </div>
 

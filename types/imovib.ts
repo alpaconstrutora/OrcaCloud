@@ -20,7 +20,6 @@ export interface Property {
     address: string;
     street?: string;
     number?: string;
-    planta_ai_study_id?: string;
     complement?: string;
     neighborhood?: string;
     city?: string;
@@ -460,7 +459,6 @@ export interface ImovibStudy {
     organization_id: string;
     name: string;
     cnpj?: string;
-    planta_ai_study_id?: string;
     developer?: string;
     manager?: string;
     version: string;

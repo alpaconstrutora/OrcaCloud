@@ -30,7 +30,6 @@ export * from "./organizationGovernance";
 export * from "./assets";
 export * from "./partner";
 
-export * from './plantaAi';
 export * from './process';
 export * from './debt';
 export * from './creditRoom';

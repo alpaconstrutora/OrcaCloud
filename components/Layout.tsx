@@ -1171,17 +1171,16 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={Building2}
                     isOpen={isDesenvolvimentoImobOpen}
                     onToggle={() => setIsDesenvolvimentoImobOpen(o => !o)}
-                    hasActiveChild={['opportunities','opura-market','planta-ai','blueprint','bim-viewer','imovib','empreendimentos','laudo-avaliacao'].includes(activeView)}
+                    hasActiveChild={['opportunities','opura-market','blueprint','bim-viewer','imovib','empreendimentos','laudo-avaliacao'].includes(activeView)}
                   >
                     <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
                     <DropdownItem id="blueprint" label="Planta Inteligente" icon={PencilRuler} />
                     <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
                     <DropdownItem id="opportunities" label="Oportunidades" icon={Building2} />
                     <DropdownItem id="opura-market" label="Inteligência de Mercado" icon={Search} />
-                    {/* ESTUDO DE MASSA (01/10/2026): saiu daqui o Planta AI v1 (lote retangular,
-                        VGV/custo fixos no código). O estudo de massa agora mora DENTRO da
-                        Planta Inteligente (aba Terreno › Massa). A rota `planta-ai` continua
-                        viva para os links internos do Empreendimento — só o item de menu saiu. */}
+                    {/* ESTUDO DE MASSA: mora DENTRO da Planta Inteligente (aba Terreno › Massa).
+                        O Planta AI v1 saiu do menu em 01/10/2026 e do app inteiro (rota, telas e
+                        tabelas) em 19/10/2026 — docs/planos/2026-10-19-remover-planta-ai.md. */}
                     <DropdownItem id="bim-viewer" label="Modelo 3D (IFC)" icon={Boxes} />
                     <DropdownItem id="laudo-avaliacao" label="Laudo de Avaliação" icon={FileSpreadsheet} />
                     {/* ÁREAS NBR 12721 (14/10/2026): o Motor de Áreas saiu do menu — os quadros moram na

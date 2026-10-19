@@ -8,22 +8,17 @@
  * unidade) se faz no cartão do ambiente, no Navegador: é lá que o ambiente
  * está; a tela só diz o que falta compor.
  *
- * A ponte com o Planta AI é um botão: lê as `plant_units` dos cenários do
- * empreendimento do estudo e cria as unidades que faltam (por número), sem
- * ambientes — o gerador de massa não desenha cômodos. Quando a leitura
- * existe, a coluna "Planta AI (m²)" mostra a privativa prevista lá ao lado da
- * medida aqui.
+ * (A ponte "Importar do Planta AI" saiu com o Planta AI v1 em 19/10/2026 —
+ * docs/planos/2026-10-19-remover-planta-ai.md.)
  */
 import React, { useMemo, useState } from 'react';
-import { Download, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type { BlueprintModel, Command } from '../../utils/blueprintKernel';
 import {
-  comandosDeImportacaoDoPlantaAi,
   formatarFracao,
   mm2ParaM2,
   type MedidaDaUnidade,
   type QuadroDeUnidades,
-  type UnidadeExterna,
 } from '../../utils/blueprintUnidades';
 import { numeroSugerido, planoDeRepeticaoDaUnidade, ROTULO_DO_MODO, type ModoDeRepeticao } from '../../utils/blueprintGrupos';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -43,7 +38,6 @@ interface Props {
    */
   fracoesNbr12721?: { porNumero: Map<string, { decimal: number; milesimos: number }> | null; motivo: string | null } | null;
   /** `null` = o estudo não está ligado a um empreendimento — o botão explica. */
-  carregarDoPlantaAi: (() => Promise<{ unidades: UnidadeExterna[]; cenarios: number }>) | null;
 }
 
 type Linha = QuadroDeUnidades['unidades'][number];
@@ -56,7 +50,6 @@ const COLUNAS: StandardTableColumn[] = [
   { key: 'ambientes', label: 'Ambientes', width: 300, sortable: false },
   { key: 'areaPrivativaM2', label: 'Privativa (m²)', width: 130, align: 'right' },
   { key: 'fracaoIdeal', label: 'Fração ideal', width: 150, align: 'right' },
-  { key: 'plantaAi', label: 'Planta AI (m²)', width: 130, align: 'right' },
   { key: 'geminadaCom', label: 'Geminada com', width: 150, sortable: false },
 ];
 
@@ -70,7 +63,7 @@ const COLUNAS_PAVIMENTO: StandardTableColumn[] = [
 
 const fmt = (m2: number) => m2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carregarDoPlantaAi, erro, fracoesNbr12721 }: Props) {
+export default function TelaUnidades({ model, quadro, onRun, onRunBatch, erro, fracoesNbr12721 }: Props) {
   const fracaoNbr = fracoesNbr12721?.porNumero ?? null;
   // O rótulo diz QUAL fração: a do Quadro IV-B (com coeficiente) ou a estimada — nunca "Fração ideal" sem qualificação.
   const colunas = useMemo(
@@ -78,8 +71,6 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
     [fracaoNbr],
   );
   const [novoNumero, setNovoNumero] = useState('');
-  const [externas, setExternas] = useState<UnidadeExterna[] | null>(null);
-  const [importando, setImportando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   /** REPETIR UNIDADE (E2.3): a linha escolhida, o lado e o número da cópia. */
   const [repetindo, setRepetindo] = useState<string | null>(null);
@@ -91,7 +82,6 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
 
   const nomeDoNivel = (id: string) => model.levels.find((l) => l.id === id)?.name ?? '?';
   const numeroDe = (id: string) => quadro.unidades.find((u) => u.id === id)?.numero ?? '?';
-  const externaPorNumero = useMemo(() => new Map((externas ?? []).map((e) => [e.codigo.trim(), e])), [externas]);
   const semAmbiente = quadro.unidades.filter((u) => u.ambientes.length === 0).length;
   const semUnidade = model.spaces.filter((s) => !s.labelUid || !quadro.unidades.some((u) => u.ambientes.some((a) => a.id === s.id))).length;
 
@@ -120,31 +110,6 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
     if (!numero) return;
     tentar({ type: 'AddUnidade', numero });
     setNovoNumero('');
-  };
-
-  const importar = async () => {
-    if (!carregarDoPlantaAi) return;
-    setImportando(true);
-    setAviso(null);
-    try {
-      const { unidades, cenarios } = await carregarDoPlantaAi();
-      setExternas(unidades);
-      if (cenarios === 0) {
-        setAviso('O empreendimento deste estudo não tem torre ligada a um cenário do Planta AI.');
-        return;
-      }
-      const { comandos, jaExistiam } = comandosDeImportacaoDoPlantaAi(model, unidades);
-      if (comandos.length > 0) onRunBatch(comandos);
-      setAviso(
-        `${cenarios} cenário(s), ${unidades.length} unidade(s) lida(s): ${comandos.length} criada(s)` +
-          (jaExistiam.length ? `, ${jaExistiam.length} já existia(m)` : '') +
-          '. As criadas nascem sem ambientes — componha no cartão do ambiente. A coluna "Planta AI (m²)" mostra a privativa prevista lá.',
-      );
-    } catch (e) {
-      setAviso(`Não foi possível ler o Planta AI: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setImportando(false);
-    }
   };
 
   const celula = (key: string, u: Linha): React.ReactNode => {
@@ -211,10 +176,6 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
             {u.ambientes.length ? f.milesimos : '—'}
           </span>
         );
-      }
-      case 'plantaAi': {
-        const e = externaPorNumero.get(u.numero);
-        return <span className="block text-right text-sm tabular-nums text-gray-500">{e?.areaPrivativaM2 != null ? fmt(e.areaPrivativaM2) : '—'}</span>;
       }
       case 'geminadaCom':
         return <span className="text-sm text-gray-600">{u.geminadaCom.length ? u.geminadaCom.map(numeroDe).join(', ') : '—'}</span>;
@@ -303,7 +264,6 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
           if (key === 'areaPrivativaM2') return u.areaPrivativaMm2;
           if (key === 'fracaoIdeal') return fracaoNbr ? (fracaoNbr.get(u.numero)?.decimal ?? -1) : u.fracaoIdeal;
           if (key === 'pavimentos') return u.levelIds.map(nomeDoNivel).join(' + ');
-          if (key === 'plantaAi') return externaPorNumero.get(u.numero)?.areaPrivativaM2 ?? -1;
           return (u as unknown as Record<string, string | number | boolean | null>)[key];
         }}
         searchText={(u) => `${u.numero} ${u.tipologia ?? ''} ${u.ambientes.map((s) => s.name ?? '').join(' ')}`}
@@ -330,18 +290,9 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, carrega
             <button type="button" onClick={criar} disabled={!novoNumero.trim()} className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3 text-sm font-medium text-white disabled:bg-slate-300">
               <Plus className="h-4 w-4" /> Nova unidade
             </button>
-            <button
-              type="button"
-              onClick={() => void importar()}
-              disabled={importando || !carregarDoPlantaAi}
-              title={carregarDoPlantaAi ? 'Cria as unidades que faltam a partir das plant_units do Planta AI do empreendimento' : 'Ligue o estudo a um empreendimento (Terreno › Zona urbanística) para importar do Planta AI'}
-              className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              <Download className="h-4 w-4" /> {importando ? 'Lendo…' : 'Importar do Planta AI'}
-            </button>
           </div>
         }
-        empty={{ title: 'Nenhuma unidade ainda', subtitle: 'Crie pelo número ou importe do Planta AI; depois escolha a unidade no cartão de cada ambiente.' }}
+        empty={{ title: 'Nenhuma unidade ainda', subtitle: 'Crie pelo número; depois escolha a unidade no cartão de cada ambiente.' }}
         footer={
           erro || aviso ? (
             <div className="px-5 py-2 text-xs">

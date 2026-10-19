@@ -32,7 +32,7 @@ describe('proposalHash', () => {
         const h = proposalHash(base);
         expect(proposalHash({ ...base, field: 'common_area' })).not.toBe(h);
         expect(proposalHash({ ...base, entityId: 'unit-2' })).not.toBe(h);
-        expect(proposalHash({ ...base, origin: 'planta_ai' })).not.toBe(h);
+        expect(proposalHash({ ...base, origin: 'massa' })).not.toBe(h);
         expect(proposalHash({ ...base, empreendimentoId: 'emp-2' })).not.toBe(h);
     });
 

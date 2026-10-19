@@ -234,16 +234,6 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                         {emprOrigin.unitName}
                                     </span>
                                 )}
-                                {initialData?.planta_ai_study_id && (
-                                    <button
-                                        type="button"
-                                        onClick={() => { window.location.hash = `#/planta-ai?studyId=${initialData.planta_ai_study_id}`; }}
-                                        className="flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
-                                    >
-                                        <Layers className="w-3 h-3 shrink-0" />
-                                        Gerado via Planta AI
-                                    </button>
-                                )}
                             </div>
                         </div>
                     </div>

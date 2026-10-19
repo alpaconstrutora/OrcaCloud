@@ -20,7 +20,7 @@
 // Regras herdadas: órfão é reportado e NUNCA apagado; o sync é estrutural (preço
 // e status são do Empreendimento, escritos só na criação); sem write-back.
 
-import { Empreendimento, PlantaAiSyncReport } from '../types/empreendimento';
+import { Empreendimento, ArquiteturaSyncReport } from '../types/empreendimento';
 import { empreendimentoService, loadTargetState } from './empreendimentoService';
 import { empreendimentoProposalService } from './empreendimentoProposalService';
 import { empreendimentoAuditService } from './empreendimentoAuditService';
@@ -43,7 +43,7 @@ async function planMassaSync(empreendimentoId: string): Promise<MassaSync> {
 }
 
 /** "Atualizado" é a ENTIDADE com campo divergente, não a soma dos campos. */
-export function relatorioDoPlano(side: CanonicalSide, plan: SyncPlan): PlantaAiSyncReport {
+export function relatorioDoPlano(side: CanonicalSide, plan: SyncPlan): ArquiteturaSyncReport {
   const tocadas = new Set<string>();
   for (const c of [...plan.fills, ...plan.conflicts]) tocadas.add(`${c.entity}|${c.entityId}`);
   const contar = (e: 'tower' | 'unit') => [...tocadas].filter((k) => k.startsWith(`${e}|`)).length;
@@ -67,13 +67,13 @@ export const massaEmpreendimentoSync = {
   },
 
   /** Ensaio: monta o plano e conta, sem escrever nada. */
-  async previewSync(empreendimentoId: string): Promise<PlantaAiSyncReport> {
+  async previewSync(empreendimentoId: string): Promise<ArquiteturaSyncReport> {
     const s = await planMassaSync(empreendimentoId);
     return relatorioDoPlano(s.side, s.plan);
   },
 
   /** Aplica: `fills` escritos; conflitos viram propostas na Curadoria. */
-  async syncToEmpreendimento(empreendimentoId: string): Promise<PlantaAiSyncReport> {
+  async syncToEmpreendimento(empreendimentoId: string): Promise<ArquiteturaSyncReport> {
     const s = await planMassaSync(empreendimentoId);
     if (s.plan.conflicts.length > 0) {
       await empreendimentoProposalService.materializeConflicts(empreendimentoId, s.side.empreendimento.organization_id, s.plan.conflicts);

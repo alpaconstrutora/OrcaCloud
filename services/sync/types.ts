@@ -17,7 +17,7 @@ import {
     EmpreendimentoTowerInsert, EmpreendimentoUnitInsert, EmpreendimentoCommonAreaInsert,
 } from '../../types/empreendimento';
 
-export type SyncOrigin = 'imovib' | 'planta_ai' | 'blueprint' | 'massa';
+export type SyncOrigin = 'imovib' | 'blueprint' | 'massa';
 export type SyncEntity = 'empreendimento' | 'tower' | 'unit' | 'common_area';
 export type FieldGroup = 'identidade' | 'estrutura' | 'area' | 'comercial';
 
@@ -178,15 +178,14 @@ export interface TargetState {
 
 /**
  * Colunas de proveniência por origem. São as mesmas que já existem no schema desde
- * 20261228000000 (imovib_*) e 20270209000000 (planta_ai_*) — todas sem FK, de propósito
+ * 20261228000000 (imovib_*) e das migrations da Planta Inteligente (blueprint_*) — todas sem FK, de propósito
  * (evita cascade delete e permite órfão).
  */
 export const PROVENANCE: Record<SyncOrigin, {
-    towerKey: 'imovib_block_id' | 'planta_ai_scenario_id' | 'blueprint_quadra_uid' | 'blueprint_bloco_uid';
-    unitKey: 'imovib_instance_id' | 'planta_ai_unit_id' | 'blueprint_lote_uid' | 'blueprint_massa_chave';
+    towerKey: 'imovib_block_id' | 'blueprint_quadra_uid' | 'blueprint_bloco_uid';
+    unitKey: 'imovib_instance_id' | 'blueprint_lote_uid' | 'blueprint_massa_chave';
 }> = {
     imovib: { towerKey: 'imovib_block_id', unitKey: 'imovib_instance_id' },
-    planta_ai: { towerKey: 'planta_ai_scenario_id', unitKey: 'planta_ai_unit_id' },
     // LOTEAMENTO (B3, 25/09/2026): quadra → torre, lote → unidade. A chave é o
     // `uid` do payload canônico, NUNCA o id do kernel: `modelFromCanonicalPayload`
     // reatribui os ids a cada carregamento, e um vínculo por id trocaria de dono
@@ -199,7 +198,6 @@ export const PROVENANCE: Record<SyncOrigin, {
 
 export const ORIGIN_LABEL: Record<SyncOrigin, string> = {
     imovib: 'Viabilidade',
-    planta_ai: 'Arquitetura',
     blueprint: 'Loteamento',
     massa: 'Estudo de massa',
 };

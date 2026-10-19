@@ -113,13 +113,13 @@ export const buildCommercialAddressFields = (emp: Empreendimento): CommercialAdd
 // gravado, mas `getById` não o devolvia, e todo envio da Planta Inteligente
 // (loteamento e estudo de massa) parava em "não está vinculado". Lista
 // explícita: coluna nova de proveniência entra AQUI também (como TOWER_COLS).
-const EMPREENDIMENTO_COLS = 'id, organization_id, company_id, name, code, status, tipo, imovib_study_id, planta_ai_study_id, blueprint_study_id, project_id, last_synced_at, matricula, construtora, responsavel_tecnico, crea_cau, numero_processo, endereco_street, endereco_number, endereco_complement, endereco_neighborhood, endereco_city, endereco_state, endereco_zip_code, spe_razao_social, spe_cnpj, spe_nome_fantasia, condominio_cnpj, condominio_razao_social, condominio_instalado_em, sindico_client_id, sindico_mandato_inicio, sindico_mandato_fim, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_tipo, terreno_frente, terreno_fundos, terreno_profundidade, terreno_lateral_direita, terreno_lateral_esquerda, vgv_total, commercial_building_id, commercial_rental_building_id, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
+const EMPREENDIMENTO_COLS = 'id, organization_id, company_id, name, code, status, tipo, imovib_study_id, blueprint_study_id, project_id, last_synced_at, matricula, construtora, responsavel_tecnico, crea_cau, numero_processo, endereco_street, endereco_number, endereco_complement, endereco_neighborhood, endereco_city, endereco_state, endereco_zip_code, spe_razao_social, spe_cnpj, spe_nome_fantasia, condominio_cnpj, condominio_razao_social, condominio_instalado_em, sindico_client_id, sindico_mandato_inicio, sindico_mandato_fim, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_tipo, terreno_frente, terreno_fundos, terreno_profundidade, terreno_lateral_direita, terreno_lateral_esquerda, vgv_total, commercial_building_id, commercial_rental_building_id, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
 
-const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, planta_ai_scenario_id, blueprint_quadra_uid, blueprint_bloco_uid, name, floors_count, units_per_floor, construction_cost_sqm, sales_price_sqm, sort_order, created_at, updated_at';
+const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, blueprint_quadra_uid, blueprint_bloco_uid, name, floors_count, units_per_floor, construction_cost_sqm, sales_price_sqm, sort_order, created_at, updated_at';
 
 const FLOOR_COLS = 'id, tower_id, name, tipo, floor_number, repeat_count, units_per_floor, prefix, sort_order, created_at, updated_at';
 
-const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, planta_ai_unit_id, blueprint_lote_uid, blueprint_massa_chave, quadra, lote, testada_m, confrontantes, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, suites, parking_spaces, position_type, sun_orientation, view_type, price, status, rental_price, rental_status, is_vendavel, commercial_property_id, rental_property_id, sort_order, fracao_ideal_decimal, fracao_ideal_thousandths, fracao_ideal_origem, fracao_ideal_fonte, fracao_ideal_transcrita_em, area_real_total_m2, area_engine_synced_at, nbr12721_snapshot_id, blueprint_unidade_chave, created_at, updated_at';
+const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, blueprint_lote_uid, blueprint_massa_chave, quadra, lote, testada_m, confrontantes, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, suites, parking_spaces, position_type, sun_orientation, view_type, price, status, rental_price, rental_status, is_vendavel, commercial_property_id, rental_property_id, sort_order, fracao_ideal_decimal, fracao_ideal_thousandths, fracao_ideal_origem, fracao_ideal_fonte, fracao_ideal_transcrita_em, area_real_total_m2, area_engine_synced_at, nbr12721_snapshot_id, blueprint_unidade_chave, created_at, updated_at';
 
 const COMMON_AREA_COLS = 'id, empreendimento_id, tower_id, name, category, area, floor, description, is_vendavel, sort_order, created_at, updated_at';
 
@@ -1742,17 +1742,6 @@ export const empreendimentoService = {
     async listRegulatoryZonesByImovibStudy(imovibStudyId: string): Promise<EmpreendimentoRegulatoryZone[]> {
         const { data: emp, error: empErr } = await supabase
             .from('empreendimentos').select('id').eq('imovib_study_id', imovibStudyId).maybeSingle();
-        if (empErr) throw new Error(`Falha ao resolver empreendimento do estudo: ${empErr.message}`);
-        if (!emp) return [];
-        return this.listRegulatoryZones(emp.id);
-    },
-
-    /** Mesma coisa, pelo vínculo com um estudo da Planta IA — usado pelo motor de geração de
-     *  cenários (aba "Regras" foi removida: os campos eram 100% duplicados do Mapa Regulatório,
-     *  achado do usuário em 2026-07-17). Sem empreendimento vinculado, [] — sem regras, sem gerar. */
-    async listRegulatoryZonesByPlantaStudy(plantaAiStudyId: string): Promise<EmpreendimentoRegulatoryZone[]> {
-        const { data: emp, error: empErr } = await supabase
-            .from('empreendimentos').select('id').eq('planta_ai_study_id', plantaAiStudyId).maybeSingle();
         if (empErr) throw new Error(`Falha ao resolver empreendimento do estudo: ${empErr.message}`);
         if (!emp) return [];
         return this.listRegulatoryZones(emp.id);

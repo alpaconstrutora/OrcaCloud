@@ -16,7 +16,7 @@ import {
   type BlueprintModel,
   type Command,
 } from '../utils/blueprintKernel';
-import { comandosDeImportacaoDoPlantaAi, medirUnidade, quadroDeUnidades, rotuloDaUnidade, unidadeExternaDoPlantaAi } from '../utils/blueprintUnidades';
+import { medirUnidade, quadroDeUnidades, rotuloDaUnidade } from '../utils/blueprintUnidades';
 
 /**
  * Dois apartamentos lado a lado (6 × 6 m de eixo cada) sobre um hall comum
@@ -139,22 +139,5 @@ describe('medidas', () => {
     expect(med.levelIds).toHaveLength(1);
     expect(rotuloDaUnidade({ numero: '101', tipologia: '3 dorm.', pcd: true })).toBe('Un. 101 · 3 dorm. · PCD');
     expect(rotuloDaUnidade({ numero: '101', tipologia: '3 dorm.', pcd: false }, true)).toBe('Un. 101');
-  });
-
-  it('ponte com o Planta AI: cria só as que faltam, idempotente, e converte a linha do plant_units', () => {
-    const { m } = predio();
-    const x = applyCommand(m, { type: 'AddUnidade', numero: '101' }).model;
-    const externas = [
-      unidadeExternaDoPlantaAi({ unit_code: '101', unit_type: '2 dorm.', private_area: 62.5, _floor_number: 1 })!,
-      unidadeExternaDoPlantaAi({ unit_code: '102', bedrooms: 3, private_area: 80, _floor_number: 1 })!,
-      unidadeExternaDoPlantaAi({ unit_code: '102', bedrooms: 3 })!,
-    ];
-    expect(unidadeExternaDoPlantaAi({})).toBeNull();
-    expect(externas[1].tipologia).toBe('3 dorm.');
-    const r = comandosDeImportacaoDoPlantaAi(x, externas);
-    expect(r.jaExistiam).toEqual(['101']);
-    expect(r.comandos).toEqual([{ type: 'AddUnidade', numero: '102', tipologia: '3 dorm.', pcd: false }]);
-    const y = applyBatch(x, r.comandos).model;
-    expect(comandosDeImportacaoDoPlantaAi(y, externas).comandos).toEqual([]);
   });
 });

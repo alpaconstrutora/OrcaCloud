@@ -121,7 +121,6 @@ const FinanceiroFlowBoard   = React.lazy(() => import('./FinanceiroFlowBoard').t
 const PartnerPortal         = React.lazy(() => import('./partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 const PartnerWorkspaceManager = React.lazy(() => import('./partner/PartnerWorkspaceManager').then(m => ({ default: m.PartnerWorkspaceManager })));
 const SupplierPortalManager = React.lazy(() => import('./supplier/SupplierPortalManager').then(m => ({ default: m.SupplierPortalManager })));
-const PlantaAiDashboard     = React.lazy(() => import('./planta_ai/PlantaAiDashboard'));
 const BlueprintModule       = React.lazy(() => import('./blueprint/BlueprintModule'));
 const BimViewerModule       = React.lazy(() => import('./bim/BimViewerModule'));
 const DataTablePrototype    = React.lazy(() => import('./DataTablePrototype'));
@@ -569,13 +568,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             // exige o projeto CARREGADO — setActiveView sozinho não basta.
             onLoadProject={handleLoadProject}
           />
-        </React.Suspense>
-      );
-
-    case 'planta-ai':
-      return (
-        <React.Suspense fallback={<Spinner />}>
-          <PlantaAiDashboard />
         </React.Suspense>
       );
 

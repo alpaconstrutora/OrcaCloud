@@ -18,7 +18,7 @@ import {
 
 const EMP: Empreendimento = {
     id: 'emp-1', organization_id: 'org-1', name: 'Garden Teste', status: 'EM_OBRAS',
-    imovib_study_id: 'study-1', planta_ai_study_id: 'plant-1',
+    imovib_study_id: 'study-1', blueprint_study_id: 'blp-1',
     created_at: '2026-01-01', updated_at: '2026-01-01',
 };
 
@@ -234,10 +234,10 @@ describe('buildPlan — adoção por nome', () => {
     });
 
     it('não adota torre que já tem vínculo com outra origem sem casar por nome à toa', () => {
-        // Torre vinculada ao Planta, sincronizando do Imovib: nomes iguais não devem casar,
+        // Torre vinculada à massa da Planta, sincronizando do Imovib: nomes iguais não devem casar,
         // porque ela não está "sem vínculo" — só sem vínculo COM O IMOVIB. Mas o nome bate,
         // então adota (adotar aqui é o certo: é a mesma torre física ganhando 2ª proveniência).
-        const doPlanta = tower({ id: 'tower-planta', name: 'Torre A', imovib_block_id: undefined, planta_ai_scenario_id: 'sc-1' });
+        const doPlanta = tower({ id: 'tower-planta', name: 'Torre A', imovib_block_id: undefined, blueprint_bloco_uid: 'bloco-1' });
         const plan = buildPlan(
             side([cTower([], { name: 'Torre A' })]),
             target({ towers: [doPlanta], units: [] }),

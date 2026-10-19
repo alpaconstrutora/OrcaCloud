@@ -887,7 +887,6 @@ import { avaliarRegras, loteParaRegras, REGRAS_SEMENTE, zonaParaRegras, type Reg
 import { blueprintRuleSetService, type ConjuntoDeRegras } from '../../services/blueprintRuleSetService';
 import PainelGrupo from './PainelGrupo';
 import { quadroDeUnidades, rotuloDaUnidade, unidadePorEtiqueta } from '../../utils/blueprintUnidades';
-import { blueprintUnidadesPlantaAiService } from '../../services/blueprintUnidadesPlantaAiService';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
 import { memorialDeCalculoEletrico, memorialDescritivoEletrico, memorialExecutivoEletrico } from '../../utils/blueprintMemorialEletrico';
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
@@ -12213,11 +12212,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               onRunBatch={(cs) => editor.runBatch(cs)}
               erro={editor.lastError}
               fracoesNbr12721={fracoesNbr12721}
-              carregarDoPlantaAi={
-                zona.empreendimentoId || empreendimentoSugerido
-                  ? () => blueprintUnidadesPlantaAiService.listar((zona.empreendimentoId || empreendimentoSugerido)!)
-                  : null
-              }
             />
           </div>
         </div>

@@ -2013,10 +2013,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
-                                                {receipt.items.map(item => {
+                                                {receipt.items.map((item, iIdx) => {
                                                     const isShort = item.quantityReceived < item.quantityOrdered;
                                                     return (
-                                                        <tr key={item.orderItemCode} className={isShort ? 'bg-amber-50/50' : ''}>
+                                                        <tr key={`${item.orderItemCode}-${iIdx}`} className={isShort ? 'bg-amber-50/50' : ''}>
                                                             <td className="px-6 py-2.5 border-r border-gray-100">
                                                                 <p className="text-sm font-normal text-gray-700">{item.description}</p>
                                                                 {item.issue && (

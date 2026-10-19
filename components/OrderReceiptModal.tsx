@@ -155,10 +155,10 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                                     {rows.map((row, idx) => {
                                         const isShort = row.quantityReceived < row.quantityOrdered;
                                         return (
-                                            <tr key={row.code} className={`transition-colors ${isShort ? 'bg-amber-50/40' : 'hover:bg-gray-50/40'}`}>
+                                            <tr key={`${row.code}-${idx}`} className={`transition-colors ${isShort ? 'bg-amber-50/40' : 'hover:bg-gray-50/40'}`}>
                                                 <td className="px-5 py-4">
                                                     <p className="font-bold text-gray-900 text-sm">{row.description}</p>
-                                                    <p className="font-mono text-xs text-gray-400 mt-0.5">{row.code} · {row.unit}</p>
+                                                    <p className="font-mono text-xs text-gray-400 mt-0.5">{[row.code, row.unit].filter(Boolean).join(' · ')}</p>
                                                 </td>
                                                 <td className="px-5 py-4 text-right font-black text-gray-500">
                                                     {row.quantityOrdered} <span className="text-xs font-bold text-gray-400">{row.unit}</span>

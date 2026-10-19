@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { PurchaseOrderItem } from '../types/supplyChain';
 import { unitarioEfetivoDoItem, valorEfetivoDoItem } from '../utils/pedidoItemValor';
+import { recebidoPorItem } from '../utils/recebidoPorItem';
 
 // ── Tipos do 3-Way Match ──────────────────────────────────────────────────────
 
@@ -91,7 +92,7 @@ export const matchService = {
     // 2. Recebimentos
     const { data: receipts } = await supabase
       .from('purchase_receipts')
-      .select('id, status, purchase_receipt_items(order_item_code, quantity_received)')
+      .select('id, status, purchase_receipt_items(order_item_code, description, unit, quantity_received)')
       .eq('order_id', orderId);
 
     // 3. NF-es vinculadas a este pedido
@@ -100,16 +101,22 @@ export const matchService = {
       .select('id, issuer_name, total_value, approved_at')
       .eq('purchase_order_id', orderId);
 
-    // ── Agregar recebimentos por código ────────────────────────────────────
-    const receivedByCode: Record<string, number> = {};
-    for (const r of receipts ?? []) {
-      for (const item of (r.purchase_receipt_items as { order_item_code: string; quantity_received: number }[] | null) ?? []) {
-        receivedByCode[item.order_item_code] =
-          (receivedByCode[item.order_item_code] ?? 0) + Number(item.quantity_received);
-      }
-    }
-
     const orderItems: PurchaseOrderItem[] = order.items ?? [];
+
+    // ── Recebido por item ──────────────────────────────────────────────────
+    // Por código E, sem código, por descrição + unidade (utils/recebidoPorItem).
+    // Só por código, todo item avulso (code '') caía na mesma chave e cada
+    // linha mostrava a soma do pedido inteiro — PCO-011-017-0002, 19/10/2026.
+    type LinhaRecebida = { order_item_code: string | null; description: string | null; unit: string | null; quantity_received: number };
+    const recebidos = (receipts ?? []).flatMap(r =>
+      ((r.purchase_receipt_items as LinhaRecebida[] | null) ?? []).map(i => ({
+        code: i.order_item_code,
+        description: i.description,
+        unit: i.unit,
+        quantityReceived: Number(i.quantity_received),
+      })),
+    );
+    const recebidoDoItem = recebidoPorItem(orderItems, recebidos);
     // Valor do item = cotado quando houver, senão referência (utils/pedidoItemValor);
     // item sem total gravado cai no produto qty × unitário efetivo.
     const valorDoItem = (i: PurchaseOrderItem) => valorEfetivoDoItem(i) || i.quantity * unitarioEfetivoDoItem(i);
@@ -117,8 +124,8 @@ export const matchService = {
     const invoiceTotal = (invoices ?? []).reduce((s, i) => s + Number(i.total_value), 0);
 
     // ── Construir linhas ───────────────────────────────────────────────────
-    const lines: MatchLine[] = orderItems.map(item => {
-      const rcvd    = receivedByCode[item.code] ?? 0;
+    const lines: MatchLine[] = orderItems.map((item, idx) => {
+      const rcvd    = recebidoDoItem[idx] ?? 0;
       const weight  = orderTotal > 0 ? valorDoItem(item) / orderTotal : 0;
       const invPart = invoiceTotal * weight;
 

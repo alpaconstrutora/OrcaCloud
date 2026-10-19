@@ -20,7 +20,7 @@ Sessão c7448b3f · 19/10/2026
 - [x] 2. Regra pura + teste — `planejarSyncParcelas` / `marcaDeValorManual` em `utils/contratoParcelaVariavel.ts`; `__tests__/contratoParcelaManual.test.ts` (7 testes). `parcelaBaixada` passou a reconhecer também `status = 'PAID'`.
 - [x] 3. Syncs do contrato + `updateFinancialEntry` — `__tests__/contractSyncPreservaParcelas.test.ts` (4 testes) FALHA nos 4 com o `contractService.ts` antigo e passa com o novo.
 - [x] 4. UI — coluna Ações (com espaçador §6.1.1), painel `components/contracts/AlterarValorParcelaSheet.tsx` (`size="md"`, não `sm`: o `sm` tem 384px e o UI_PATTERNS exige ≥ 420px), selo "Alterado manualmente" com quem/quando/valor anterior no hover, pergunta do total. Salvar os Dados Gerais e Lançar Financeiro agora recarregam a sub-aba Parcelas sem spinner. `check-ui-standard.sh` exit 0 nos dois arquivos; `__tests__/components/AlterarValorParcelaSheet.test.tsx` (3 testes).
-- [ ] 5. Verificação — 5 de 6:
+- [x] 5. Verificação — 6 de 6:
   - [x] Tipos: `tsc` do projeto inteiro achou 3 TS2352 (cast do `select` concatenado), corrigidos. Depois disso o `tsc` inteiro caiu 3× com segfault (exit 139, instabilidade da máquina, sem `error TS`); o subconjunto dos arquivos tocados + tudo que eles importam (inclusive `DealModal`) deu exit 0.
   - [x] Suíte inteira: 10.415 = 10.380 passaram + 34 pulados + 1 pendente (`ContasPagarParcelasAgrupar`, "ainda rodando" ao gerar o JSON; isolado passa 5/5). 0 falhas.
   - [x] Interface, SÓ LEITURA (contrato 010, Alpa Construtora; escritas em `internal_transactions`/`contracts` bloqueadas no navegador): coluna Ações; 21 botões ativos = 21 pendentes; 3 travados com o motivo = 3 baixadas; painel abre com "Salvar valor" desligado e o motivo; digitar habilita; Esc com alteração pede confirmação; 0 erros de JS/console/HTTP.
@@ -32,7 +32,8 @@ Sessão c7448b3f · 19/10/2026
     - parcela 3 → R$ 1.200 → "Atualizar valor do contrato": original/current = 3.550, cronograma[3] = 1.200;
     - limpeza: parcelas, entradas do cofre "Gestão Comercial" e o contrato removidos (0/0; cofre voltou a 1 transação, a que já existia).
     - Aviso de console nas duas fases: `select` com `value` nulo no formulário dos Dados Gerais (`ContractModal`, não tocado) — o contrato de teste foi criado por SQL com campos nulos; não aparece na leitura sem abrir Dados Gerais.
-  - [ ] Typecheck do projeto inteiro: fica com o CI (Linux) no push.
+  - [x] Typecheck do projeto inteiro + suíte + build em Linux: CI do PR #49 (run 39261424685) `success`, e o build de preview da Vercel (`verificar:build`) passou.
+- [ ] 6. Publicação — PENDENTE: o push em `main` e o merge do PR #49 foram barrados pelo controle de permissões da sessão (19/10/2026); aguardando o usuário publicar ou liberar.
 
 ## Contexto
 - A tabela fica em `components/ContractDetailView.tsx`, `activeTab === 'financeiro'`, sub-aba `parcelas` (~2913–3047 em origin/main). Hoje é **só leitura**: não tem coluna de ações.

@@ -72,6 +72,7 @@ import { SUPPLIER_PORTAL_TAB_IDS } from '../utils/supplierPortalTabs';
 import { SupplierBankAccount } from '../types/supplierBankAccount';
 import { supabase } from '../lib/supabase';
 import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
+import { ehFob, rotuloStatusLogistico } from '../utils/formaEntrega';
 
 /**
  * As abas do Portal do Fornecedor. Uma definição só: a união literal estava
@@ -711,6 +712,9 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
             if (orderViewMode === 'logistics') {
                 const order = orders.find(o => o.id === activeOrderId);
+                // FOB: o comprador retira aqui. Mesmos status gravados, lidos como
+                // "Pronto para retirada" e "Retirado" (utils/formaEntrega).
+                const pedidoFob = ehFob(order?.deliveryMethod);
 
                 // Helper to map order status to Lifeline status
                 const getLifelineStatus = (status: string): string => {
@@ -795,12 +799,13 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 onStatusChange={(newStatus) => setEditingStatus(getOrderStatusFromLifeline(newStatus))}
                                 maxSelectableStatus="DELIVERED"
                                 accent={isPublicExperience ? 'portal' : 'indigo'}
+                                fob={pedidoFob}
                             />
                         </div>
 
                         <div className={`mt-8 p-6 rounded-[10px] border grid grid-cols-1 md:grid-cols-3 gap-6 ${drillPanel}`}>
                             <div>
-                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1.5 ${drillPanelLabel}`}>Previsão de Entrega</p>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1.5 ${drillPanelLabel}`}>{pedidoFob ? 'Previsão de Retirada' : 'Previsão de Entrega'}</p>
                                 {isEditingLogistics ? (
                                     <input
                                         type="date"
@@ -830,11 +835,11 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     >
                                         <option value="Confirmado">Confirmado</option>
                                         <option value="Separação">Separação</option>
-                                        <option value="Em Trânsito">Em Trânsito</option>
-                                        <option value="Entregue">Entregue</option>
+                                        <option value="Em Trânsito">{rotuloStatusLogistico('Em Trânsito', pedidoFob)}</option>
+                                        <option value="Entregue">{rotuloStatusLogistico('Entregue', pedidoFob)}</option>
                                     </select>
                                 ) : (
-                                    <p className="text-sm font-medium text-gray-900">{order?.status}</p>
+                                    <p className="text-sm font-medium text-gray-900">{rotuloStatusLogistico(order?.status, pedidoFob)}</p>
                                 )}
                             </div>
                         </div>
@@ -853,7 +858,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className={`text-xs font-semibold uppercase tracking-wider block ${drillPanelLabel}`}>Data de Saída (Trânsito)</label>
+                                        <label className={`text-xs font-semibold uppercase tracking-wider block ${drillPanelLabel}`}>{pedidoFob ? 'Pronto para Retirada em' : 'Data de Saída (Trânsito)'}</label>
                                         <input
                                             type="date"
                                             value={editingShippedDate}
@@ -862,7 +867,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className={`text-xs font-semibold uppercase tracking-wider block ${drillPanelLabel}`}>Data de Entrega Efetiva</label>
+                                        <label className={`text-xs font-semibold uppercase tracking-wider block ${drillPanelLabel}`}>{pedidoFob ? 'Data da Retirada' : 'Data de Entrega Efetiva'}</label>
                                         <input
                                             type="date"
                                             value={editingActualDeliveryDate}

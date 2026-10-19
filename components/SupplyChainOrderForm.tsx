@@ -32,6 +32,7 @@ import {
 import { round2 } from '../utils/financialMath';
 import { formatCurrency } from '../utils/financialMath';
 import { temCotacao, totalEfetivoDoPedido, totalReferenciaDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
+import { FORMA_ENTREGA_PADRAO, FORMAS_DE_ENTREGA } from '../utils/formaEntrega';
 
 interface AvulsoItem {
     code: string; description: string; unit: string; quantity: number; unitPrice: number;
@@ -217,7 +218,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     // chartOfAccounts (texto legado) não tem estado próprio no formulário —
     // é derivado do nome do item selecionado em planoDeContasId, só no submit.
     const [planoDeContasId, setPlanoDeContasId] = React.useState('');
-    const [deliveryMethod, setDeliveryMethod] = React.useState('CIF - Entrega por conta do fornecedor');
+    const [deliveryMethod, setDeliveryMethod] = React.useState(FORMA_ENTREGA_PADRAO);
     const [deliveryLocation, setDeliveryLocation] = React.useState('Canteiro de Obras');
 
     const [projectData, setProjectData] = React.useState<ProjectData | null>(null);
@@ -346,7 +347,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                         });
                         return next;
                     });
-                    setDeliveryMethod(existingOrder.deliveryMethod || 'CIF - Entrega por conta do fornecedor');
+                    setDeliveryMethod(existingOrder.deliveryMethod || FORMA_ENTREGA_PADRAO);
                     setDeliveryLocation(existingOrder.deliveryLocation || 'Canteiro de Obras');
                     setEditingVersion(existingOrder.version);
                 }
@@ -1391,11 +1392,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             onChange={(e) => setDeliveryMethod(e.target.value)}
                                             className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                         >
-                                            <option value="CIF - Entrega por conta do fornecedor">CIF - Entrega por conta do fornecedor</option>
-                                            <option value="FOB - Retirada por conta do comprador">FOB - Retirada por conta do comprador</option>
-                                            <option value="Entrega Própria Fornecedor">Entrega Própria Fornecedor</option>
-                                            <option value="Transportadora Terceirizada">Transportadora Terceirizada</option>
-                                            <option value="Retirada em Mãos">Retirada em Mãos</option>
+                                            {FORMAS_DE_ENTREGA.map(forma => <option key={forma} value={forma}>{forma}</option>)}
                                         </select>
                                     </div>
 

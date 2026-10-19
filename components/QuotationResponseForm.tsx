@@ -1,5 +1,6 @@
 import React from 'react';
 import { avisarAcaoDoPortal } from '../utils/portalEventos';
+import { FORMA_ENTREGA_PADRAO, FORMAS_DE_ENTREGA } from '../utils/formaEntrega';
 import {
     ArrowLeft, Send, Calendar, Clock, HandCoins, CheckCircle2, TrendingDown, XCircle,
     FileText, Package, Building2,
@@ -112,7 +113,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
             notes: ''
         })),
         deliveryDate: request.deliveryDate || '',
-        deliveryMethod: request.deliveryMethod || 'CIF - Entrega por conta do fornecedor',
+        deliveryMethod: request.deliveryMethod || FORMA_ENTREGA_PADRAO,
         deliveryLocation: request.deliveryLocation || 'Canteiro de Obras',
         paymentMethod: request.paymentMethod || 'Boleto',
         paymentTermType: request.paymentTermType || 'Vista',
@@ -547,11 +548,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                     onChange={e => setCampo('deliveryMethod', e.target.value)}
                                     className={`${inputClass(divFormaEntrega)} cursor-pointer`}
                                 >
-                                    <option value="CIF - Entrega por conta do fornecedor">CIF - Entrega por conta do fornecedor</option>
-                                    <option value="FOB - Retirada por conta do comprador">FOB - Retirada por conta do comprador</option>
-                                    <option value="Entrega Própria Fornecedor">Entrega Própria Fornecedor</option>
-                                    <option value="Transportadora Terceirizada">Transportadora Terceirizada</option>
-                                    <option value="Retirada em Mãos">Retirada em Mãos</option>
+                                    {FORMAS_DE_ENTREGA.map(forma => <option key={forma} value={forma}>{forma}</option>)}
                                 </select>
                                 {divFormaEntrega && cp?.deliveryMethod && sugestao(cp.deliveryMethod)}
                             </div>

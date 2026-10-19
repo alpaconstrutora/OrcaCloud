@@ -16,6 +16,7 @@ import { ThreeWayMatchPanel } from './ThreeWayMatchPanel';
 import OrderLifeline, { OrderStatus } from './OrderLifeline';
 import OrderChat from './OrderChat';
 import OrderReceiptModal from './OrderReceiptModal';
+import { ehFob, rotuloStatusLogistico } from '../utils/formaEntrega';
 import { storageService } from '../services/storageService';
 import { profileService } from '../services/profileService';
 import NegotiationHub from './NegotiationHub';
@@ -827,6 +828,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         );
     }
 
+    // Frete FOB muda como o rastreamento e o status se leem (utils/formaEntrega).
+    const pedidoFob = ehFob(order.deliveryMethod);
+
     const canDeleteOrder = (status: string) =>
         !['Entregue', 'Recebido', 'Divergência'].includes(status);
 
@@ -978,7 +982,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                 />
                             )}
                             <span className={`text-sm font-normal ${getStatusStyles(order.status)} animate-in fade-in duration-700`}>
-                                {order.status}
+                                {rotuloStatusLogistico(order.status, pedidoFob)}
                             </span>
                         </div>
                         <p className="text-gray-400 text-sm mt-1.5 font-medium flex items-center gap-2 flex-wrap">
@@ -1636,9 +1640,20 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             Rastreamento logístico
                         </h3>
 
+                        {/* FOB: o comprador retira no fornecedor. Mesmos status
+                            gravados, lidos como "Pronto para retirada" e
+                            "Retirado" (utils/formaEntrega). Pedido do usuário em
+                            2026-10-19. */}
+                        {pedidoFob && (
+                            <p className="text-sm font-normal text-gray-500">
+                                Frete FOB — a retirada é por conta do comprador. O fornecedor avisa quando a carga está pronta para retirada e registra a retirada; a conferência acontece no recebimento.
+                            </p>
+                        )}
+
                         <div className="py-8">
                             <OrderLifeline
                                 accent={accent}
+                                fob={pedidoFob}
                                 status={(() => {
                                     switch (order.status) {
                                         case 'Confirmado': return 'CONFIRMED';
@@ -1659,16 +1674,16 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                         <div className={`p-5 rounded-[10px] border grid grid-cols-1 md:grid-cols-3 gap-6 ${A.panel}`}>
                             <div>
-                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${A.text}`}>Previsão de entrega</p>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${A.text}`}>{pedidoFob ? 'Previsão de retirada' : 'Previsão de entrega'}</p>
                                 <p className="text-sm font-medium text-gray-900">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}</p>
                             </div>
                             <div>
-                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${A.text}`}>Fornecedor</p>
+                                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${A.text}`}>{pedidoFob ? 'Retirar em' : 'Fornecedor'}</p>
                                 <p className="text-sm font-medium text-gray-900">{supplierName}</p>
                             </div>
                             <div>
                                 <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${A.text}`}>Status atual</p>
-                                <p className="text-sm font-medium text-gray-900">{order.status}</p>
+                                <p className="text-sm font-medium text-gray-900">{rotuloStatusLogistico(order.status, pedidoFob)}</p>
                             </div>
                         </div>
                     </div>

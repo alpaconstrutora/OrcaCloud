@@ -11,6 +11,7 @@ import { supplierService, getSupplierDisplayName } from '../services/supplierSer
 import { appSettingsService } from '../services/appSettingsService';
 import { sinapiService } from '../services/sinapiService';
 import MaterialSelectionModal from './MaterialSelectionModal';
+import { FORMA_ENTREGA_PADRAO, FORMAS_DE_ENTREGA } from '../utils/formaEntrega';
 
 interface SupplyChainQuotationFormProps {
     onBack: () => void;
@@ -41,7 +42,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
         items: [],
         invitedSupplierIds: [],
         deliveryDate: '',
-        deliveryMethod: 'CIF - Entrega por conta do fornecedor',
+        deliveryMethod: FORMA_ENTREGA_PADRAO,
         deliveryLocation: 'Canteiro de Obras',
         paymentMethod: 'Boleto',
         paymentTermType: 'Vista',
@@ -142,7 +143,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                         items: [], // Will separate manual from budget items below
                         invitedSupplierIds: quote.invitedSupplierIds,
                         deliveryDate: quote.deliveryDate || '',
-                        deliveryMethod: quote.deliveryMethod || 'CIF - Entrega por conta do fornecedor',
+                        deliveryMethod: quote.deliveryMethod || FORMA_ENTREGA_PADRAO,
                         deliveryLocation: quote.deliveryLocation || '',
                         paymentMethod: quote.paymentMethod || 'Boleto',
                         paymentTermType: quote.paymentTermType || 'Vista',
@@ -664,11 +665,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                             onChange={e => setFormData(prev => ({ ...prev, deliveryMethod: e.target.value }))}
                                             className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-bold"
                                         >
-                                            <option value="CIF - Entrega por conta do fornecedor">CIF - Entrega por conta do fornecedor</option>
-                                            <option value="FOB - Retirada por conta do comprador">FOB - Retirada por conta do comprador</option>
-                                            <option value="Entrega Própria Fornecedor">Entrega Própria Fornecedor</option>
-                                            <option value="Transportadora Terceirizada">Transportadora Terceirizada</option>
-                                            <option value="Retirada em Mãos">Retirada em Mãos</option>
+                                            {FORMAS_DE_ENTREGA.map(forma => <option key={forma} value={forma}>{forma}</option>)}
                                         </select>
                                     </div>
 

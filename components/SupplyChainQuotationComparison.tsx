@@ -28,6 +28,7 @@ import { appSettingsService } from '../services/appSettingsService';
 import ActionIconButton from './ui/ActionIconButton';
 import { getQuotationNumberLockReason, regenerateQuotationNumber } from '../services/quotationNumberRegenService';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { FORMAS_DE_ENTREGA } from '../utils/formaEntrega';
 
 interface SupplyChainQuotationComparisonProps {
     requestId: string;
@@ -637,8 +638,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                     onChange={(e) => setCounterFormData(prev => ({ ...prev, deliveryMethod: e.target.value }))}
                                                     className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
                                                 >
-                                                    <option value="FOB - Retirada por conta do comprador">FOB - Retirada por conta do comprador</option>
-                                                    <option value="CIF - Entrega por conta do fornecedor">CIF - Entrega por conta do fornecedor</option>
+                                                    {FORMAS_DE_ENTREGA.map(forma => <option key={forma} value={forma}>{forma}</option>)}
                                                 </select>
                                             </div>
                                             <div>

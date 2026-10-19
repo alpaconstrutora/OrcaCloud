@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Package, Truck, CheckCircle2, ShoppingBag, Clock, AlertTriangle } from 'lucide-react';
+import { Package, PackageCheck, Truck, CheckCircle2, ShoppingBag, Clock, AlertTriangle } from 'lucide-react';
 
 export type OrderStatus = 'BIDDING' | 'CONFIRMED' | 'PREPARING' | 'SHIPPED' | 'DELIVERED' | 'RECEIVED' | 'DIVERTED';
 
@@ -19,6 +19,12 @@ interface OrderLifelineProps {
      * no link público, para o trilho não brigar com a casca coral.
      */
     accent?: 'indigo' | 'portal';
+    /**
+     * Frete FOB: o comprador retira no fornecedor. Os passos SHIPPED e
+     * DELIVERED viram "Para retirar" e "Retirado" — mesmos status gravados,
+     * outro significado (ver `rotuloStatusLogistico` em utils/formaEntrega).
+     */
+    fob?: boolean;
 }
 
 // Classes por acento — não dá para interpolar cor em Tailwind (o JIT não vê a
@@ -44,14 +50,20 @@ const ACCENTS = {
     },
 } as const;
 
-const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery, separationDate, shippedDate, deliveredDate, onStatusChange, isEditable, maxSelectableStatus, accent = 'indigo' }) => {
+const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery, separationDate, shippedDate, deliveredDate, onStatusChange, isEditable, maxSelectableStatus, accent = 'indigo', fob = false }) => {
     const A = ACCENTS[accent];
+    // Rótulos curtos de propósito: o passo tem ~100 px e "PRONTO PARA
+    // RETIRADA" em caixa alta passaria por cima dos vizinhos.
     const steps = [
         { id: 'BIDDING' as OrderStatus, label: 'Lances', icon: <ShoppingBag className="w-5 h-5" /> },
         { id: 'CONFIRMED' as OrderStatus, label: 'Confirmado', icon: <CheckCircle2 className="w-5 h-5" />, date: undefined },
         { id: 'PREPARING' as OrderStatus, label: 'Separação', icon: <Package className="w-5 h-5" />, date: separationDate },
-        { id: 'SHIPPED' as OrderStatus, label: 'Em Trânsito', icon: <Truck className="w-5 h-5" />, date: shippedDate },
-        { id: 'DELIVERED' as OrderStatus, label: 'Entregue', icon: <CheckCircle2 className="w-5 h-5" />, date: deliveredDate },
+        fob
+            ? { id: 'SHIPPED' as OrderStatus, label: 'Para retirar', icon: <PackageCheck className="w-5 h-5" />, date: shippedDate }
+            : { id: 'SHIPPED' as OrderStatus, label: 'Em Trânsito', icon: <Truck className="w-5 h-5" />, date: shippedDate },
+        fob
+            ? { id: 'DELIVERED' as OrderStatus, label: 'Retirado', icon: <Truck className="w-5 h-5" />, date: deliveredDate }
+            : { id: 'DELIVERED' as OrderStatus, label: 'Entregue', icon: <CheckCircle2 className="w-5 h-5" />, date: deliveredDate },
         { id: 'RECEIVED' as OrderStatus, label: 'Recebido', icon: <CheckCircle2 className="w-5 h-5" /> },
         { id: 'DIVERTED' as OrderStatus, label: 'Divergência', icon: <AlertTriangle className="w-5 h-5" /> }
     ];

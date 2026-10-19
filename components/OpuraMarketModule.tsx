@@ -9,6 +9,8 @@ import { useMarketLeaflet, type CamadaMercado } from '../hooks/useMarketLeaflet'
 import { useMarketIndicadores } from '../hooks/useMarketIndicadores';
 import { gerarRelatorioVocacaoPdf } from '../utils/opuraMarketRelatorioPdf';
 import { pacoteDoHash, type CapturaDoNavegador } from '../utils/opuraMarketCaptura';
+import { TIPOS_DE_IMOVEL, TIPOS_PADRAO, normalizarTipos, resumoDosTipos, type TipoDeImovel } from '../utils/opuraMarketTipos';
+import { FilterPopover } from './ui/FilterPopover';
 import type {
   OpuraMarketCity,
   OpuraMarketNeighborhood,
@@ -114,6 +116,12 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
   const [camada, setCamada] = React.useState<CamadaMercado>('preco');
   // Mesmo termo na tabela e no painel de ofertas; sobrevive à navegação (§3).
   const [busca, setBusca] = usePersistedState<string>('opuraMarket:busca', '');
+  // Tipos de imóvel nas médias do bairro: DNA, cor do mapa, Saturação/Score e
+  // série (plano 2026-10-19-opura-market-media-por-tipo). Padrão sem terreno. O
+  // estudo de vocação tem o seletor dele, gravado no próprio estudo.
+  const [tiposGuardados, setTiposGuardados] = usePersistedState<string[]>('opuraMarket:tiposDoMercado', [...TIPOS_PADRAO]);
+  const chaveTipos = normalizarTipos(tiposGuardados).join('|');
+  const tiposDoMercado = React.useMemo(() => chaveTipos.split('|') as TipoDeImovel[], [chaveTipos]);
   const [filterSource, setFilterSource] = React.useState('Todos');
   const [detalhe, setDetalhe] = React.useState<OpuraMarketListing | null>(null);
   // Anúncio esperando o clique no mapa para ganhar posição manual (plano 2026-10-10, item 2).
@@ -126,7 +134,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
 
   const v = useMarketVocacao(organizationId, cityConfig?.rules);
   const ind = useMarketIndicadores({
-    organizationId, cityId: selectedCityId, cityConfig, onConfigSalva: setCityConfig, listings, motivoSemOrg: SEM_ORG,
+    organizationId, cityId: selectedCityId, cityConfig, onConfigSalva: setCityConfig, listings, tipos: tiposDoMercado, motivoSemOrg: SEM_ORG,
   });
 
   const cidadeAtual = cities.find(c => c.id === selectedCityId) ?? null;
@@ -137,16 +145,23 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
   // ── Carga ────────────────────────────────────────────────────────────────
   const loadListings = React.useCallback(async (cityId: string) => {
     try {
-      const [data, stats] = await Promise.all([
-        opuraMarketService.listListings(cityId),
-        opuraMarketService.getNeighborhoodStats(cityId),
-      ]);
-      setListings(data);
-      setStatsPorBairro(Object.fromEntries(stats.map(s => [s.neighborhoodId, s])));
+      setListings(await opuraMarketService.listListings(cityId));
     } catch (err) {
       console.error('Erro ao buscar anúncios:', err);
     }
   }, []);
+
+  // DNA dos bairros: relê quando muda a praça, os tipos ou a lista de anúncios
+  // (importar, excluir, posicionar). Fora do loadListings para trocar os tipos
+  // não recarregar a praça inteira.
+  React.useEffect(() => {
+    if (!selectedCityId) return;
+    let vivo = true;
+    opuraMarketService.getNeighborhoodStats(selectedCityId, tiposDoMercado)
+      .then(stats => { if (vivo) setStatsPorBairro(Object.fromEntries(stats.map(s => [s.neighborhoodId, s]))); })
+      .catch(err => console.error('Erro ao calcular o DNA dos bairros:', err));
+    return () => { vivo = false; };
+  }, [selectedCityId, tiposDoMercado, listings]);
 
   const loadNeighborhoods = React.useCallback(async (cityId: string) => {
     try {
@@ -480,9 +495,21 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
                   onCancelar: () => setPosicionando(null),
                 } : null}
                 onIrParaEstudo={() => setAba('studies')}
+                seletorDeTipos={
+                  <FilterPopover<TipoDeImovel>
+                    multiple
+                    label="Tipos"
+                    options={TIPOS_DE_IMOVEL.map(t => ({ value: t, label: t }))}
+                    value={tiposDoMercado}
+                    onChange={(t) => setTiposGuardados(normalizarTipos(t))}
+                    resumo={resumoDosTipos}
+                    padrao={TIPOS_PADRAO}
+                  />
+                }
               />
               {selectedNeighborhood && (
                 <MarketBairroDna
+                  tipos={tiposDoMercado}
                   bairro={selectedNeighborhood}
                   stats={statsPorBairro[selectedNeighborhood.id]}
                   indicadores={ind.indicadores[selectedNeighborhood.id] ?? null}

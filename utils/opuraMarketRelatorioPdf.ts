@@ -1,5 +1,6 @@
 import { DESCRICAO_HIPOTESES, HIPOTESES_PADRAO, type HipotesesVocacao } from './opuraMarketVocacao';
 import type { ResultadoNaTela } from '../hooks/useMarketVocacao';
+import { descricaoDosTipos, tiposDoEstudo } from './opuraMarketTipos';
 
 /**
  * Relatório de vocação do ÒPURA Market em PDF. Saiu de OpuraMarketModule.tsx na
@@ -92,6 +93,8 @@ export async function gerarRelatorioVocacaoPdf(d: DadosRelatorioVocacao): Promis
     doc.text(`Ticket Médio Geral de Vendas: R$ ${r.stats.ticketAvg.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 15, 110);
     doc.text(`Metragem Média Privativa: ${r.stats.areaAvg.toFixed(1)} m²`, 15, 115);
     doc.text(`Média de Dormitórios: ${r.stats.bedroomsAvg.toFixed(1)} quartos`, 15, 120);
+    const tipos = tiposDoEstudo(r.stats);
+    doc.text(`Tipos de Imóvel Comparados: ${tipos ? descricaoDosTipos(tipos) : 'todos os tipos (estudo salvo antes de 19/10/2026)'}`, 15, 125);
   } else {
     doc.text('Estatísticas do entorno não guardadas: estudo salvo antes de 07/10/2026.', 15, 100);
     doc.text('Recalcule a vocação territorial para obter os números medidos.', 15, 105);

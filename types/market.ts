@@ -98,6 +98,11 @@ export interface OpuraMarketRadiusStats {
   areaAvg: number;
   bedroomsAvg: number;
   suitesAvg: number;
+  /**
+   * Tipos de imóvel que entraram nas médias (plano 2026-10-19-opura-market-media-por-tipo).
+   * Ausente = estudo salvo antes de 19/10/2026, medido com todos os tipos.
+   */
+  tipos?: string[];
 }
 
 export interface OpuraMarketTerrainStudy {

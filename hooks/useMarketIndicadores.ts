@@ -26,6 +26,8 @@ export function useMarketIndicadores(p: {
   onConfigSalva: (c: OpuraMarketCityConfig) => void;
   /** Muda quando os anúncios são recarregados: relê a dinâmica. */
   listings: OpuraMarketListing[];
+  /** Tipos de imóvel na dinâmica (plano 2026-10-19-opura-market-media-por-tipo). Referência estável. */
+  tipos: readonly string[];
   motivoSemOrg: string;
 }) {
   const { showToast } = useToast();
@@ -41,11 +43,11 @@ export function useMarketIndicadores(p: {
   React.useEffect(() => {
     if (!p.cityId || janela == null) return;
     let vivo = true;
-    opuraMarketService.getDinamicaDosBairros(p.cityId, janela)
+    opuraMarketService.getDinamicaDosBairros(p.cityId, janela, p.tipos)
       .then((d) => { if (vivo) setDinamica(d); })
       .catch((err) => console.error('Falha ao ler a dinâmica dos bairros:', err));
     return () => { vivo = false; };
-  }, [p.cityId, janela, p.listings]);
+  }, [p.cityId, janela, p.listings, p.tipos]);
 
   const indicadores = React.useMemo<Record<string, IndicadoresDoBairro>>(() => {
     if (erros.length > 0) return {};

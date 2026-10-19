@@ -10,7 +10,8 @@ import {
   OpuraMarketMonitoredCompetitor,
   OpuraMarketNeighborhoodStats,
   OpuraMarketNeighborhoodSerie,
-  OpuraMarketCityConfig
+  OpuraMarketCityConfig,
+  OpuraMarketRadiusStats
 } from '../types';
 
 const numOuNulo = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
@@ -319,8 +320,9 @@ export const opuraMarketService = {
 
   // ── DNA do bairro na leitura (Fase 4.5) ───────────────────────────────────
   // SECURITY INVOKER: cada organização vê a média do que ela enxerga.
-  async getNeighborhoodStats(cityId: string): Promise<OpuraMarketNeighborhoodStats[]> {
-    const { data, error } = await supabase.rpc('get_market_neighborhood_stats', { p_city_id: cityId });
+  // `tipos`: só esses tipos de imóvel entram nas médias (plano 2026-10-19-opura-market-media-por-tipo).
+  async getNeighborhoodStats(cityId: string, tipos: readonly string[]): Promise<OpuraMarketNeighborhoodStats[]> {
+    const { data, error } = await supabase.rpc('get_market_neighborhood_stats', { p_city_id: cityId, p_tipos: tipos });
     if (error) throw new Error(`Falha ao calcular o DNA dos bairros: ${error.message}`);
     return (data || []).map((r: any) => ({
       neighborhoodId: r.neighborhood_id,
@@ -337,9 +339,9 @@ export const opuraMarketService = {
    * janela, e o início do histórico de feed salvo na cidade (plano 2026-10-10,
    * item 3). RPC SECURITY INVOKER.
    */
-  async getDinamicaDosBairros(cityId: string, meses: number): Promise<Record<string, DinamicaDoBairro>> {
+  async getDinamicaDosBairros(cityId: string, meses: number, tipos: readonly string[]): Promise<Record<string, DinamicaDoBairro>> {
     if (!cityId) return {};
-    const { data, error } = await supabase.rpc('get_market_neighborhood_dinamica', { p_city_id: cityId, p_meses: meses });
+    const { data, error } = await supabase.rpc('get_market_neighborhood_dinamica', { p_city_id: cityId, p_meses: meses, p_tipos: tipos });
     if (error) throw new Error(`Falha ao ler a dinâmica dos bairros: ${error.message}`);
     const num = (v: unknown) => (v == null ? null : Number(v));
     return Object.fromEntries((data ?? []).map((r: any) => [r.neighborhood_id, {
@@ -351,8 +353,8 @@ export const opuraMarketService = {
     } as DinamicaDoBairro]));
   },
 
-  async getNeighborhoodSeries(neighborhoodId: string): Promise<OpuraMarketNeighborhoodSerie[]> {
-    const { data, error } = await supabase.rpc('get_market_neighborhood_series', { p_neighborhood_id: neighborhoodId });
+  async getNeighborhoodSeries(neighborhoodId: string, tipos: readonly string[]): Promise<OpuraMarketNeighborhoodSerie[]> {
+    const { data, error } = await supabase.rpc('get_market_neighborhood_series', { p_neighborhood_id: neighborhoodId, p_tipos: tipos });
     if (error) throw new Error(`Falha ao buscar a evolução do bairro: ${error.message}`);
     return (data || []).map((r: any) => ({
       mes: r.mes,
@@ -469,23 +471,20 @@ export const opuraMarketService = {
     }));
   },
 
-  // RPC - Estatísticas de Raio PostGIS
+  // RPC - Estatísticas de Raio PostGIS. Só os `tipos` de imóvel pedidos entram
+  // nas médias (plano 2026-10-19-opura-market-media-por-tipo); eles voltam no
+  // resultado para o estudo salvo saber com que recorte foi medido.
   async getTerrainRadiusStats(
     latitude: number,
     longitude: number,
-    radiusMeters: number
-  ): Promise<{
-    totalListings: number;
-    pricePerM2Avg: number;
-    ticketAvg: number;
-    areaAvg: number;
-    bedroomsAvg: number;
-    suitesAvg: number;
-  }> {
+    radiusMeters: number,
+    tipos: readonly string[]
+  ): Promise<OpuraMarketRadiusStats> {
     const { data, error } = await supabase.rpc('get_terrain_radius_statistics', {
       p_latitude: latitude,
       p_longitude: longitude,
-      p_radius_meters: radiusMeters
+      p_radius_meters: radiusMeters,
+      p_tipos: tipos
     });
 
     if (error) {
@@ -502,7 +501,8 @@ export const opuraMarketService = {
       ticketAvg: stats ? Number(stats.ticket_avg || 0) : 0,
       areaAvg: stats ? Number(stats.area_avg || 0) : 0,
       bedroomsAvg: stats ? Number(stats.bedrooms_avg || 0) : 0,
-      suitesAvg: stats ? Number(stats.suites_avg || 0) : 0
+      suitesAvg: stats ? Number(stats.suites_avg || 0) : 0,
+      tipos: [...tipos]
     };
   },
 

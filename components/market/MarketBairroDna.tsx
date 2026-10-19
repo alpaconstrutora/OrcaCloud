@@ -3,6 +3,7 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianG
 import { opuraMarketService } from '../../services/opuraMarketService';
 import type { OpuraMarketNeighborhood, OpuraMarketNeighborhoodSerie, OpuraMarketNeighborhoodStats } from '../../types';
 import type { IndicadoresDoBairro } from '../../utils/opuraMarketIndicadores';
+import { descricaoDosTipos } from '../../utils/opuraMarketTipos';
 
 /**
  * DNA do bairro (Fase 4.5): números calculados na leitura, só com o que a RLS
@@ -10,6 +11,8 @@ import type { IndicadoresDoBairro } from '../../utils/opuraMarketIndicadores';
  */
 interface Props {
   bairro: OpuraMarketNeighborhood;
+  /** Tipos de imóvel nas médias e na série (plano 2026-10-19-opura-market-media-por-tipo). Referência estável. */
+  tipos: readonly string[];
   stats: OpuraMarketNeighborhoodStats | undefined;
   /** Saturação e Score Potencial (plano 2026-10-10, item 3). Ausente = ainda lendo. */
   indicadores?: IndicadoresDoBairro | null;
@@ -40,19 +43,19 @@ function Celula({ rotulo, valor, titulo }: { rotulo: string; valor: React.ReactN
   );
 }
 
-export default function MarketBairroDna({ bairro, stats: st, indicadores: ind, children }: Props) {
+export default function MarketBairroDna({ bairro, tipos, stats: st, indicadores: ind, children }: Props) {
   const [serie, setSerie] = React.useState<OpuraMarketNeighborhoodSerie[]>([]);
   const [carregando, setCarregando] = React.useState(false);
 
   React.useEffect(() => {
     let vivo = true;
     setCarregando(true);
-    opuraMarketService.getNeighborhoodSeries(bairro.id)
+    opuraMarketService.getNeighborhoodSeries(bairro.id, tipos)
       .then(s => { if (vivo) setSerie(s); })
       .catch(err => console.error('Erro ao buscar histórico do bairro:', err))
       .finally(() => { if (vivo) setCarregando(false); });
     return () => { vivo = false; };
-  }, [bairro.id]);
+  }, [bairro.id, tipos]);
 
   return (
     <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-sm space-y-4">
@@ -60,6 +63,7 @@ export default function MarketBairroDna({ bairro, stats: st, indicadores: ind, c
         <div>
           <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">DNA do Bairro™</h3>
           <h2 className="text-base font-black text-slate-900 tracking-tight">🏢 Bairro: {bairro.name}</h2>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">Médias de {descricaoDosTipos(tipos)} — troque em "Tipos", no mapa.</p>
         </div>
         {/* Bairro Score não é exibido: não tem regra de cálculo (decisão D3). Até
             10/10/2026 aparecia "0 / 100" em todo bairro cadastrado pela gaveta, porque
@@ -68,7 +72,7 @@ export default function MarketBairroDna({ bairro, stats: st, indicadores: ind, c
 
       {!st ? (
         <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-600 font-semibold leading-relaxed">
-          Nenhum anúncio ativo vinculado a este bairro. Os anúncios se vinculam pelo nome do bairro de origem quando ele está cadastrado na praça.
+          Nenhum anúncio ativo de {descricaoDosTipos(tipos)} vinculado a este bairro. Os anúncios se vinculam pelo nome do bairro de origem quando ele está cadastrado na praça; outros tipos aparecem trocando "Tipos", no mapa.
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">

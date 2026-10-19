@@ -4,6 +4,16 @@ import MoneyCentsInput from '../ui/MoneyCentsInput';
 import type { OpuraMarketTerrainStudy } from '../../types';
 import type { MarketVocacao } from '../../hooks/useMarketVocacao';
 import { DESCRICAO_HIPOTESES, HIPOTESES_PADRAO } from '../../utils/opuraMarketVocacao';
+import { TIPOS_DE_IMOVEL, TIPOS_PADRAO, descricaoDosTipos, resumoDosTipos, tiposDoEstudo, type TipoDeImovel } from '../../utils/opuraMarketTipos';
+import { FilterPopover } from '../ui/FilterPopover';
+
+const OPCOES_DE_TIPO = TIPOS_DE_IMOVEL.map((t) => ({ value: t, label: t }));
+
+/** Recorte com que a estatística foi medida, por extenso. Estudo antigo: todos os tipos. */
+const tiposMedidos = (stats: { tipos?: unknown }) => {
+  const tipos = tiposDoEstudo(stats);
+  return tipos ? descricaoDosTipos(tipos) : 'todos os tipos (estudo salvo antes de 19/10/2026)';
+};
 
 /**
  * Aba "Estudos & Análise": vocação do lote à esquerda (com as hipóteses da
@@ -105,6 +115,11 @@ function Resultado({ v, motivoSemOrg, onSalvar, onExportarPdf, onCriarViabilidad
           )}
         </div>
       </div>
+      {r.stats && (
+        <p className="text-[11px] text-slate-500 font-semibold">
+          Base: {r.stats.totalListings.toLocaleString('pt-BR')} anúncio(s) no raio · {tiposMedidos(r.stats)}
+        </p>
+      )}
 
       <div className="space-y-1">
         <span className="block text-[9px] text-slate-400 font-bold uppercase">Mix de Tipologias Recomendadas</span>
@@ -222,11 +237,24 @@ export default function MarketEstudosPanel(props: Props) {
                   <option value="5000">5km (Macro Região)</option>
                 </select>
               </div>
+              <div className="space-y-1" title="Só estes tipos entram no preço médio, no ticket e na contagem de concorrentes do raio. Terreno fica de fora por padrão: anuncia a uma fração do R$/m² do construído.">
+                <span className={rotulo}>Tipos comparados</span>
+                <FilterPopover<TipoDeImovel>
+                  multiple
+                  label="Tipos"
+                  options={OPCOES_DE_TIPO}
+                  value={v.tiposComparados}
+                  onChange={v.alterarTiposComparados}
+                  resumo={resumoDosTipos}
+                  padrao={TIPOS_PADRAO}
+                  className="w-full"
+                />
+              </div>
 
               <Hipoteses v={v} />
 
               <button
-                onClick={v.analisar}
+                onClick={() => v.analisar()}
                 disabled={v.analyzing || v.errosHipoteses.length > 0}
                 title={v.errosHipoteses.length > 0 ? 'Corrija as hipóteses do cálculo antes de calcular.' : v.analyzing ? 'Aguarde a operação em andamento.' : undefined}
                 className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
@@ -272,6 +300,10 @@ export default function MarketEstudosPanel(props: Props) {
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-600 font-semibold">
                     <span>Área: <strong className="text-slate-800">{study.terrainArea.toLocaleString('pt-BR')}m²</strong></span>
                     <span>Raio: <strong className="text-slate-800">{study.analysisRadiusMeters}m</strong></span>
+                    <span className="col-span-2">Tipos: <strong className="text-slate-800">{(() => {
+                      const tipos = tiposDoEstudo(study.radiusStats);
+                      return tipos ? resumoDosTipos(tipos) : 'Todos (antes de 19/10/2026)';
+                    })()}</strong></span>
                     {study.estimatedVgv && (
                       <span className="col-span-2 text-emerald-600 font-black">
                         VGV: R$ {study.estimatedVgv.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}

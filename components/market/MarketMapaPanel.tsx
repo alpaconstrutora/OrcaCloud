@@ -16,6 +16,8 @@ interface Props {
   onIrParaEstudo: () => void;
   /** Modo "clique no mapa para posicionar" (posição manual de anúncio, plano 2026-10-10 item 2). */
   avisoDeClique?: { texto: string; onCancelar: () => void } | null;
+  /** Seletor dos tipos de imóvel que entram nas médias do mapa e do DNA. */
+  seletorDeTipos?: React.ReactNode;
 }
 
 const ROTULO: Record<CamadaMercado, string> = {
@@ -26,7 +28,7 @@ const ROTULO: Record<CamadaMercado, string> = {
 };
 
 export default function MarketMapaPanel({
-  containerRef, camada, onCamada, desenhando, vertices, ocupado, onConcluirDesenho, onCancelarDesenho, temTerreno, onIrParaEstudo, avisoDeClique,
+  containerRef, camada, onCamada, desenhando, vertices, ocupado, onConcluirDesenho, onCancelarDesenho, temTerreno, onIrParaEstudo, avisoDeClique, seletorDeTipos,
 }: Props) {
   return (
     <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-sm space-y-4">
@@ -36,52 +38,55 @@ export default function MarketMapaPanel({
           <span className="text-xs text-slate-500 font-semibold">Selecione uma camada e clique no mapa para analisar a vocação imobiliária</span>
         </div>
 
-        <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
-          {desenhando ? (
-            <div className="flex items-center gap-3 px-2">
-              <span className="text-[11px] font-black text-indigo-600 uppercase tracking-wider flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
+        <div className="flex items-center gap-2 flex-wrap">
+        {!desenhando && seletorDeTipos}
+          <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
+            {desenhando ? (
+              <div className="flex items-center gap-3 px-2">
+                <span className="text-[11px] font-black text-indigo-600 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
+                  </span>
+                  Desenho Ativo
                 </span>
-                Desenho Ativo
-              </span>
-              <div className="flex items-center gap-2 bg-white px-2 py-0.5 rounded border border-slate-200">
-                <span className="text-[10px] font-bold text-slate-500">Vértices:</span>
-                <span className="text-xs font-extrabold text-indigo-600">{vertices}</span>
+                <div className="flex items-center gap-2 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-500">Vértices:</span>
+                  <span className="text-xs font-extrabold text-indigo-600">{vertices}</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={onConcluirDesenho}
+                    disabled={vertices < 3 || ocupado}
+                    title={vertices < 3 ? 'Clique pelo menos 3 pontos no mapa para fechar o lote.' : ocupado ? 'Aguarde o cálculo em andamento.' : undefined}
+                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white rounded text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm"
+                  >
+                    {ocupado ? '...' : 'Concluir'}
+                  </button>
+                  <button
+                    onClick={onCancelarDesenho}
+                    disabled={ocupado}
+                    title={ocupado ? 'Aguarde o cálculo em andamento.' : undefined}
+                    className="px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm disabled:cursor-not-allowed"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-1.5">
+            ) : (
+              (Object.keys(ROTULO) as CamadaMercado[]).map(c => (
                 <button
-                  onClick={onConcluirDesenho}
-                  disabled={vertices < 3 || ocupado}
-                  title={vertices < 3 ? 'Clique pelo menos 3 pontos no mapa para fechar o lote.' : ocupado ? 'Aguarde o cálculo em andamento.' : undefined}
-                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white rounded text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm"
+                  key={c}
+                  onClick={() => onCamada(c)}
+                  className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                    camada === c ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
                 >
-                  {ocupado ? '...' : 'Concluir'}
+                  {ROTULO[c]}
                 </button>
-                <button
-                  onClick={onCancelarDesenho}
-                  disabled={ocupado}
-                  title={ocupado ? 'Aguarde o cálculo em andamento.' : undefined}
-                  className="px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm disabled:cursor-not-allowed"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          ) : (
-            (Object.keys(ROTULO) as CamadaMercado[]).map(c => (
-              <button
-                key={c}
-                onClick={() => onCamada(c)}
-                className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
-                  camada === c ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {ROTULO[c]}
-              </button>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
 

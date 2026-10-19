@@ -13,6 +13,14 @@ import {
   type HipotesesVocacao,
   type ResultadoVocacao,
 } from '../utils/opuraMarketVocacao';
+import {
+  TIPOS_DE_IMOVEL,
+  TIPOS_PADRAO,
+  descricaoDosTipos,
+  normalizarTipos,
+  tiposDoEstudo,
+  type TipoDeImovel,
+} from '../utils/opuraMarketTipos';
 
 /**
  * Resultado exibido no painel de estudo. `stats` é null só para estudo salvo
@@ -50,6 +58,11 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
   const [hipoteses, setHipoteses] = React.useState<HipotesesVocacao>(HIPOTESES_PADRAO);
   const errosHipoteses = validarHipoteses(hipoteses);
   const hipotesesAlteradas = DESCRICAO_HIPOTESES.filter(d => hipoteses[d.chave] !== HIPOTESES_PADRAO[d.chave]).length;
+
+  // Tipos de imóvel que entram nas médias do raio (plano 2026-10-19-opura-market-media-por-tipo).
+  // Padrão sem terreno: o terreno anuncia a uma fração do R$/m² do construído e
+  // derrubava o VGV. Vão gravados no estudo, dentro de radius_stats.
+  const [tiposComparados, setTiposComparados] = React.useState<TipoDeImovel[]>(() => [...TIPOS_PADRAO]);
 
   const [savedStudies, setSavedStudies] = React.useState<OpuraMarketTerrainStudy[]>([]);
   const [loadingStudies, setLoadingStudies] = React.useState(false);
@@ -135,8 +148,12 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
     }
   };
 
-  /** Análise de raio no PostGIS + cálculo de vocação com as hipóteses da tela. */
-  const analisar = async () => {
+  /**
+   * Análise de raio no PostGIS + cálculo de vocação com as hipóteses da tela.
+   * `tipos` só quando a troca dos tipos acabou de acontecer (o estado ainda não
+   * chegou aqui).
+   */
+  const analisar = async (tipos: TipoDeImovel[] = tiposComparados) => {
     if (!terrainPin) {
       showToast('Selecione uma área no mapa primeiro clicando em qualquer ponto.', 'error');
       return;
@@ -152,9 +169,9 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
     }
     try {
       setAnalyzing(true);
-      const stats = await opuraMarketService.getTerrainRadiusStats(terrainPin.lat, terrainPin.lng, parseInt(analysisRadius));
+      const stats = await opuraMarketService.getTerrainRadiusStats(terrainPin.lat, terrainPin.lng, parseInt(analysisRadius), tipos);
       if (!stats || stats.totalListings === 0 || stats.pricePerM2Avg <= 0) {
-        showToast('Não foram encontrados anúncios concorrentes nesta região para o raio selecionado. Importe anúncios para esta área ou aumente o raio de busca.', 'error');
+        showToast(`Nenhum anúncio com preço de ${descricaoDosTipos(tipos)} neste raio. Aumente o raio, inclua outros tipos em "Tipos comparados" ou importe anúncios para esta área.`, 'error');
         setAnalysisResult(null);
         return;
       }
@@ -165,6 +182,16 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  /**
+   * Troca os tipos comparados. Com resultado na tela, refaz a consulta: a média
+   * do raio depende dos tipos e não pode ficar de pé com o recorte antigo.
+   */
+  const alterarTiposComparados = (novos: string[]) => {
+    const tipos = normalizarTipos(novos);
+    setTiposComparados(tipos);
+    if (analysisResult && terrainPin) analisar(tipos);
   };
 
   const salvar = async (endereco: string | null) => {
@@ -235,6 +262,9 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
     // no estudo (estudo antigo: só CA e TO).
     const hEstudo = hipotesesDoEstudo(study.coefficientsZone);
     setHipoteses(hEstudo);
+    // Tipos com que o estudo foi medido. Estudo anterior a 19/10/2026 não os
+    // guardou e foi medido com todos: o seletor mostra "Todos", que é a verdade.
+    setTiposComparados(tiposDoEstudo(study.radiusStats) ?? [...TIPOS_DE_IMOVEL]);
     setAnalysisResult(study.radiusStats
       ? calcularVocacao(study.radiusStats, study.terrainArea, regrasDaPraca, hEstudo)
       : {
@@ -255,6 +285,7 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
     studyName, setStudyName, terrainArea, setTerrainArea, analysisRadius, setAnalysisRadius,
     analyzing, setAnalyzing, analysisResult, setAnalysisResult,
     hipoteses, setHipoteses, errosHipoteses, hipotesesAlteradas,
+    tiposComparados, alterarTiposComparados,
     savedStudies, loadingStudies,
     marcarPonto, iniciarDesenho, cancelarDesenho, adicionarVertice, concluirDesenho,
     analisar, salvar, excluirEstudo, abrirEstudo,

@@ -2860,7 +2860,9 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
             nucleo,
             hip.sobrado,
             malha,
-            4,
+            // 5.3b: o 1º cresce para a frente a cada volta e o corredor se aproxima do patamar devagar (10 × 30, 4 dorm.:
+            // 15,7 → 15,1 m em 4 voltas, com o patamar em 14,9) — mais voltas que o 2º.
+            VOLTAS_DO_PRIMEIRO_RECUADO,
             nucleo.paraOsFundos ? [false, true] : [true, false],
           );
           return a ? [a] : [];
@@ -2910,7 +2912,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
             nucleo,
             hip.sobrado,
             malha,
-            4,
+            // 5.3b: dentro do 1º recuado, as mesmas voltas dele.
+            casaDoSegundo === rl ? 4 : VOLTAS_DO_PRIMEIRO_RECUADO,
             // F27-D4: a suíte do lado para onde o núcleo avança (o banheiro vai além da ponta dele): de frente quando a escada
             // sobe para os fundos, invertida quando sobe para a frente; o outro sentido só se este não fechar.
             nucleo.paraOsFundos ? [false, true] : [true, false],
@@ -2920,13 +2923,26 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       };
       // F27 item 5.3: o primeiro 1º recuado em que o 2º fecha; nenhum — o 1º com a pegada do térreo.
       let alinhados: ReturnType<typeof alinharDentroDe> = [];
+      // 5.3b: de todos os 1º recuados em que o 2º fecha, o de menos problemas graves no 1º e no 2º juntos, e entre esses o
+      // de MENOR área (o objetivo é o 1º do tamanho do programa). O primeiro que fechava podia ser o maior (12 × 30: os
+      // dormitórios de 31 m² em vez de 19) ou deixar o 2º com um cômodo abaixo da largura mínima (R1-A: o escritório de
+      // 1,70 m).
+      const area = (r: Retangulo) => (r.x1 - r.x0) * (r.y1 - r.y0);
+      let melhor: { c: (typeof primeirosRecuados)[number]; alinhados: ReturnType<typeof alinharDentroDe>; graves: number } | null = null;
       for (const c of primeirosRecuados) {
-        alinhados = alinharDentroDe(c.ret);
-        if (!alinhados.length) continue;
-        ({ es, corredor } = c);
-        retDoPrimeiro = c.ret;
-        decisaoDoPrimeiro = c.decisao;
-        break;
+        const al = alinharDentroDe(c.ret);
+        if (!al.length) continue;
+        // E os cômodos abaixo da largura mínima do uso deles (o gerador não os conta como graves).
+        const estreitos = (x: ResultadoDoGerador) => x.ambientes.filter((amb) => amb.item.uso !== 'CIRCULACAO' && Math.min(amb.ret.x1 - amb.ret.x0, amb.ret.y1 - amb.ret.y0) < amb.item.larguraMinMm).length;
+        const doSegundo = escolherSemente(al.map((x) => x.r)).r;
+        const graves = problemasGraves(c.es.r) + problemasGraves(doSegundo) + estreitos(c.es.r) + estreitos(doSegundo);
+        if (!melhor || graves < melhor.graves || (graves === melhor.graves && area(c.ret) < area(melhor.c.ret))) melhor = { c, alinhados: al, graves };
+      }
+      if (melhor) {
+        alinhados = melhor.alinhados;
+        ({ es, corredor } = melhor.c);
+        retDoPrimeiro = melhor.c.ret;
+        decisaoDoPrimeiro = melhor.c.decisao;
       }
       if (!alinhados.length) {
         ({ es, corredor } = primeiroNaPegada);
@@ -3482,6 +3498,9 @@ export function conferirPlanoDaCasa(original: BlueprintModel, plano: PlanoDaCasa
     return { ok: false, motivo: `O desenho mudou desde a prévia — gere de novo (${e instanceof Error ? e.message : String(e)}).` };
   }
 }
+
+/** F27 item 5.3b: quantas vezes o 1º recuado anda/cresce atrás do patamar da escada antes de desistir. */
+const VOLTAS_DO_PRIMEIRO_RECUADO = 8;
 
 // ─── F10: o pedido que atravessa o Web Worker ───────────────────────────────
 

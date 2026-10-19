@@ -69,7 +69,7 @@ Sessão: Claude Code (VS Code) · 19/10/2026.
 - [x] 3. Testes `__tests__/docxFieldCatalogCredor.test.ts` (6) e
       `__tests__/components/GerarPeloModeloCredor.test.tsx` (4) verdes, com os antigos da gaveta;
       `check-ui-standard` = 0; `tsc` exit 0; suíte 10.491 + 34 puladas = 10.525, 0 falhas
-- [ ] 4. Tela real ✅ · publicação pendente
+- [x] 4. Tela real e publicação — `86f553bc`; `conferir-producao.sh`: domínio serve exatamente origin/main (86f553b) com "Vem de Dados Gerais" no bundle
 
 ### Tela real (19/10/2026, Playwright, `c:/tmp/pwtest/verificar-gerar-credor.cjs`, só leitura)
 

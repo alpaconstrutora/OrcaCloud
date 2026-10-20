@@ -145,28 +145,27 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F15 — a casa na unidade do Empreendimento (ver "Registro da F15")
 - [x] F16 — louça diante da porta (ver "Registro da F16")
 - [x] F17 — o aquecedor do sobrado a 30° e o alimentador × esgoto nas térreas (ver "Registro da F17")
-- [ ] F18–F28 — programa "todas as pendências": F18–F26 feitas; F27 em andamento; F28 a fazer (ver o programa abaixo e
-  "Pendências em aberto")
+- [x] F18–F28 — programa "todas as pendências": F18–F28 feitas; a F27 (3 pavimentos e a qualidade do sobrado) e a F28
+  (a chuva de projeto na tela) fechadas em 20/10/2026 (ver o programa abaixo e "Pendências em aberto")
 
-### Pendências em aberto (atualizado em 18/10/2026)
+### Pendências em aberto (atualizado em 20/10/2026)
 
-**No ar:** `main` com a F27-D1 (1a1a8934, 18/10). **Em CI:** a F27-D2 (PR #46, rascunho).
+**No ar:** `main` em 26bb69c9 (20/10/2026) — o domínio serve exatamente esse commit; CI verde. Nada em PR.
 
-As 8 casas de referência (medição de 18/10, idêntica às anteriores desde a F26): nenhuma rede em porta/janela,
-nenhum encontro rede × rede, nenhum tubo atravessando pilar. O que elas ainda mostram (fora os "confira" de rotina):
+As 8 casas de referência (marco de 20/10, `/c/tmp/f28/a.txt`, mais a R1-B depois do item 9): nenhuma rede em
+porta/janela, nenhum encontro rede × rede, nenhum tubo atravessando pilar, e nenhuma pendência NAO_DECIDIDO. O que
+sobra (fora os "confira" de rotina):
 
 | Casa | Pendências que sobram |
 |---|---|
-| 12 × 30 R1-N térrea | aquecedor a 0,20 m do vão (pedido 0,40); serviço sem parede externa → conferir a ventilação do aquecedor |
+| 12 × 30 R1-N térrea | — (o aquecedor na parede interna do serviço, com duto: CONFERIR) |
 | 15 × 25 R1-N | — |
-| 10 × 30 R1-N 2 dorm. | aquecedor a 0,20 m do vão |
-| 15 × 30 R1-N 4 dorm. | aquecedor a 0,20 m do vão |
-| 15 × 30 R1-B (pedida térrea) | cozinha × serviço sem porta direta; serviço com 1,40 m e dormitório com 2,33 m de largura; armário da suíte; "a térrea não comporta" (o sobrado tem mais problemas — Automático fica térrea) |
-| 14 × 28 R1-A | serviço sem parede externa → conferir a ventilação do aquecedor |
-| 12 × 30 R1-N sobrado | aquecedor a 0,20 m do vão; serviço sem parede externa |
-| 10 × 30 R1-N 4 dorm. (pedida térrea) | programa acima da TO (175,5 × 171 m²); 4 dormitórios com 1,5–1,8 m de largura; cama da suíte; "a térrea não comporta" — o sobrado nesse lote ainda tem 4 encontros de rede sob a laje rebaixada, por isso o Automático fica térreo |
-
-A fazer, em ordem:
+| 10 × 30 R1-N 2 dorm. | — |
+| 15 × 30 R1-N 4 dorm. | — |
+| 15 × 30 R1-B (pedida térrea) | — (a casa 0,40 m mais larga; cozinha e serviço juntos) |
+| 14 × 28 R1-A | — |
+| 12 × 30 R1-N sobrado | — |
+| 10 × 30 R1-N 4 dorm. (pedida térrea) | programa acima da TO; dormitórios estreitos; "a térrea não comporta" (1 PREMISSA + 6 VERIFICACAO) — o sobrado nesse lote não tem mais encontro de rede (item 6) |
 
 Lista do usuário (14–20/10/2026), todos os itens fechados — o detalhe de cada um nos registros abaixo:
 
@@ -183,9 +182,14 @@ coluna no shaft, 1–2 por lote); o pilar atravessado pela ligação da quente a
 não recua no 10 × 30 de 2 dorm. (3 pavimentos); o escritório de 1,70 m no 2º do R1-A; a porta do lavabo pelo serviço
 (10 × 30 de 4 dorm.).
 
-Ambiente: a máquina de desenvolvimento derruba o Node (segfault, worker que cai, processo que trava por horas) —
-toda medição roda com repetição e `timeout 900`; resultado só vale quando se repete. Não é defeito do código (o CI roda
-a suíte inteira sem isso).
+Ambiente: a máquina de desenvolvimento derruba o Node (segfault, worker que cai, erro absurdo que não se repete, índice
+do git corrompido) — toda medição roda com repetição e `timeout 900`; resultado só vale quando se repete; o CI é o
+portão (roda a suíte inteira sem isso). **Diagnóstico de 20/10/2026:** não é o código, nem o Node (o 22 cai igual; o
+`node.exe` confere com o hash oficial), nem o TypeScript — o Visualizador de Eventos tem 23 erros WHEA "Internal parity
+error" em 14 dias, todos no MESMO núcleo da CPU (APIC 16). A CPU é um Intel Core i9-14900K com BIOS ASUS 1661
+(06/2024) e microcódigo 0x125 — a instabilidade conhecida da 13ª/14ª geração; a correção da Intel começa no 0x129.
+Indicado ao usuário: atualizar o BIOS (microcódigo 0x12B/0x12F), "Intel Default Settings", acompanhar os WHEA; se
+persistirem no mesmo núcleo, garantia da Intel (5 anos nesses modelos).
 
 ## Registro da F1 (14/10/2026)
 
@@ -2056,9 +2060,10 @@ Casos: 12 × 30 R1-N 3/1/2/2 (térrea e sobrado), 15 × 25 R1-N, 10 × 30 R1-N 2
 - [x] F24 — implantação não retangular (L) e vaga descoberta com recuo curto — partes 1 e 2 (ver "Registro da F24"); o serviço sem fachada nas casas largas e rasas vai com a F27 (o mesmo arranjo da cozinha × serviço do R1-B)
 - [x] F25 — terreno inclinado: platô único — partes 1 e 2 (ver "Registro da F25" e "Registro da F25 — parte 2"; a rampa da garagem no terreno inclinado vai com a F26)
 - [x] F26 — muro, portão e calçada; e (da F25) a rampa da garagem no terreno inclinado (ver "Registro da F26")
-- [ ] F27 — **partes 1 e 2 feitas** (ver "Registro da F27"); **3 pavimentos (F27-D): [x] D1 a base (no ar, 1a1a8934)
+- [x] F27 — **partes 1 e 2 feitas** (ver "Registro da F27"); **3 pavimentos (F27-D): [x] D1 a base (no ar, 1a1a8934)
   · [x] D2 a arquitetura · [x] D3 estrutura · [x] D4 instalações e a opção na tela (19/10) · [x] D5 terraço (19/10)**; e (da F24) o serviço com fachada nas casas largas e rasas (L e L de fundo largo, 3 dorm.); e (da F22) a qualidade do SOBRADO para o Automático escolhê-lo no lote estreito (10 × 30 4 dorm.) e no R1-B: varanda × sala no térreo, esgoto suspenso cruzando as faixas do forro, sobra de cômodo no superior, os encontros de rede; e (da F23) as janelas do superior alinhadas com as do térreo (pilar do superior sobre janela de baixo)
-- [ ] F28 — tela e prancha: a chuva de projeto na tela da casa; bolhas dos eixos sem sobrepor
+- [x] F28 — tela e prancha: a chuva de projeto na tela da casa (20/10); bolhas dos eixos — não reproduz em folha que
+  cabe (ver o registro do item 10)
 
 
 ### Registro da F18 (16/10/2026) — as redes nas 8 casas

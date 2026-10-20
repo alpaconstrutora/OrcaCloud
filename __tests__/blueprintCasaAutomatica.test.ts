@@ -1304,6 +1304,17 @@ describe('F22 — pavimentos automático', () => {
       .filter((c) => c.classe === 'REDE' && porId.has(c.trechoId) && porId.has(c.outroId))
       .map((c) => `${porId.get(c.trechoId)!.disciplina} × ${porId.get(c.outroId)!.disciplina}`);
     expect(encontros).toEqual([]);
+    // S2 (20/10/2026): nenhuma rede atravessando pilar (a quente ia em diagonal pelo pilar junto do shaft).
+    const est = new Map(p.resultado.structures.map((x) => [x.id, x]));
+    const noPilar = conflitosDoModelo(p.resultado).filter((c) => c.classe === 'ESTRUTURA' && porId.has(c.trechoId) && est.get(c.outroId)?.kind === 'PILAR' && ((c as { comprimentoDentroMm?: number }).comprimentoDentroMm ?? 0) > 0);
+    expect(noPilar.map((c) => porId.get(c.trechoId)!.disciplina)).toEqual([]);
+    // S1 (20/10/2026): nenhum tubo horizontal na faixa do forro DENTRO da laje rebaixada (a base dela abaixo do tubo).
+    const sobRebaixo = (p.resultado.trechos ?? []).filter((t) => {
+      if (t.a.x === t.b.x && t.a.y === t.b.y) return false;
+      const nv = p.resultado.levels.find((l) => l.id === t.levelId)!;
+      return p.resultado.structures.some((x) => x.kind === 'LAJE' && x.levelId === t.levelId && x.baseMm < nv.defaultHeightMm - 1 && Math.min(t.cotaAMm, t.cotaBMm) + t.bitolaMm / 2 > x.baseMm && [0.25, 0.5, 0.75].some((f) => pointInPolygon(x.pontos as Point[], { x: t.a.x + (t.b.x - t.a.x) * f, y: t.a.y + (t.b.y - t.a.y) * f } as Point)));
+    });
+    expect(sobRebaixo.map((t) => `${t.disciplina} ${t.a.x},${t.a.y}→${t.b.x},${t.b.y}@${t.cotaAMm}`)).toEqual([]);
   }, 240_000);
 
   it('a mesma casa com "Térrea" escolhida: fica térrea, e a pendência diz que o sobrado resolve', () => {

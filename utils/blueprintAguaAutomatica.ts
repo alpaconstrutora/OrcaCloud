@@ -64,7 +64,7 @@ import {
 import { FICHA_DO_PONTO_HIDRAULICO, ehPontoDeConsumo } from './blueprintHidraulica';
 import { FAIXA_NO_SHAFT, shaftPreferido } from './blueprintNucleoVertical';
 import { arvorePelasParedes, chaveP, encaixarNaParede, faceDaParede, paredesEmComum } from './blueprintRotaPelasParedes';
-import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, type FaixaDoForro } from './blueprintRotaPeloForro';
+import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, saidaDoRebaixoPelaParede, type FaixaDoForro } from './blueprintRotaPeloForro';
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, SOBRE_A_LAJE_MM, VAO_MINIMO_ABAIXO_DA_VIGA_MM, anelDoPilar, desvioDoPilar, fracaoDentro, foraDaViga, foraDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares, topoDaLajeDoTetoMm } from './blueprintObstaculosEstruturais';
 
 /**
@@ -324,7 +324,36 @@ export function planejarAgua(
   const temAresta = (de: No, para: No) => arestas.some((a) => (a.de === de && a.para === para) || (a.de === para && a.para === de));
   const novos: Extract<Command, { type: 'AddTrecho' }>[] = [];
   let mmNovos = 0;
+  // S1 da casa automática (20/10/2026): o trecho HORIZONTAL que atravessaria uma laje REBAIXADA do pavimento (a base dela
+  // abaixo do tubo — o rebaixo do banheiro de cima desce até o forro) contorna o rebaixo (e os pilares) — num ponto só,
+  // porque vinha de quatro caminhos (as arestas e as retas do barrilete, a ligação da coluna ao anel, as retas dos ramais):
+  // a quente e a fria corriam na faixa do forro DENTRO da laje (1–2 trechos por lote). Sem contorno, fica a reta.
+  const rebaixosPorNivel = new Map<ObjectId, { anel: Point[]; base: number }[]>();
+  const rebaixosDe = (levelId: ObjectId) => {
+    let r = rebaixosPorNivel.get(levelId);
+    if (!r) {
+      const nv = model.levels.find((l) => l.id === levelId);
+      r = nv ? (model.structures ?? []).filter((x) => x.kind === 'LAJE' && x.levelId === levelId && x.baseMm < nv.defaultHeightMm - 1).map((x) => ({ anel: anelDoPilar(x.pontos as Point[], RAIO_NA_DESCIDA_MM) as Point[], base: x.baseMm })) : [];
+      rebaixosPorNivel.set(levelId, r);
+    }
+    return r;
+  };
   const addTrecho = (levelId: ObjectId, a: Ponto2, cotaA: number, b: Ponto2, cotaB: number) => {
+    if (cotaA === cotaB && (a.x !== b.x || a.y !== b.y)) {
+      const rebaixos = rebaixosDe(levelId).filter((r) => r.base < cotaA + RAIO_NA_DESCIDA_MM).map((r) => r.anel);
+      if (rebaixos.length && fracaoDentro(a, b, rebaixos) > 0) {
+        // E das prumadas das outras redes que atravessam a faixa (a descida do eletroduto da tomada, traçada antes).
+        const desvio = desvioDoPilar(a, b, [...rebaixos, ...pegadasDePilares(model, levelId).map((g) => anelDoPilar(g, RAIO_NA_DESCIDA_MM) as Point[]), ...prumadasQueCruzam(model, levelId, cotaA, disciplina, RAIO_NA_DESCIDA_MM, 2, false)]);
+        if (desvio && desvio.length) {
+          const pts = [a, ...desvio.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), b];
+          for (let i = 1; i < pts.length; i++) addTrechoReto(levelId, pts[i - 1], cotaA, pts[i], cotaB);
+          return;
+        }
+      }
+    }
+    addTrechoReto(levelId, a, cotaA, b, cotaB);
+  };
+  const addTrechoReto = (levelId: ObjectId, a: Ponto2, cotaA: number, b: Ponto2, cotaB: number) => {
     const de = chave(levelId, a.x, a.y, cotaA);
     const para = chave(levelId, b.x, b.y, cotaB);
     if (de === para || temAresta(de, para)) return;
@@ -632,7 +661,14 @@ export function planejarAgua(
     pendentes: cabecas,
     retaAteRaiz: (p) => Math.hypot(p.x - origem.at.x, p.y - origem.at.y),
     limite: hip.rotaMaximaVezes,
-    ligar: (de, para) => addTrecho(origem.levelId, de.pos, tetoO, para.pos, tetoO),
+    // S2 da casa automática (20/10/2026): no forro, a reta da cabeça de coluna à árvore do barrilete desvia dos pilares e
+    // das prumadas das outras redes (sem os shafts: a cabeça nasce dentro dele) — a quente ia em diagonal de 5 m pelo
+    // pilar junto do shaft (sobrado 10 × 30). Os pontos elétricos, postos depois, fogem do tubo (S1).
+    ligar: (de, para) => {
+      const desvio = origemNoForro ? (desvioDoPilar(de.pos, para.pos, [...pegadasDePilares(model, origem.levelId).map((g) => anelDoPilar(g, RAIO_NA_DESCIDA_MM) as Point[]), ...prumadasQueCruzam(model, origem.levelId, tetoO, disciplina, RAIO_NA_DESCIDA_MM, 2, false)]) ?? []) : [];
+      const pts = [de.pos, ...desvio.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), para.pos];
+      for (let i = 1; i < pts.length; i++) addTrecho(origem.levelId, pts[i - 1], tetoO, pts[i], tetoO);
+    },
   });
 
   // ── Cada coluna desce (ou sobe) até o ramal de cada pavimento com pontos ─
@@ -729,6 +765,17 @@ export function planejarAgua(
           continue;
         }
         if (pelas) foraDaParede++;
+        // S1 da casa automática (20/10/2026): o ponto SOB a laje rebaixada (a peça do térreo sob o banheiro de cima) chega
+        // pela parede, de fora do rebaixo — como o eletroduto no item 6; reto pela faixa, a fria corria dentro da laje.
+        const saida = noForro ? saidaDoRebaixoPelaParede(model, nivel.id, p.at, p.cotaMm, RAIO_NA_DESCIDA_MM, hip.noForro!.folgaSobAVigaMm) : null;
+        if (saida) {
+          addTrecho(nivel.id, saida.s, cotaRamal, saida.s, saida.cotaMm);
+          addTrecho(nivel.id, saida.s, saida.cotaMm, p.at, saida.cotaMm);
+          addTrecho(nivel.id, p.at, saida.cotaMm, p.at, p.cotaMm);
+          const ks = chave(nivel.id, saida.s.x, saida.s.y, cotaRamal);
+          if (!alcancados.has(ks)) pendentesDoNivel.set(ks, { x: saida.s.x, y: saida.s.y });
+          continue;
+        }
         // Do ramal à cota do ponto, na posição dele.
         if (p.cotaMm !== cotaRamal) addTrecho(nivel.id, p.at, cotaRamal, p.at, p.cotaMm);
         const k = chave(nivel.id, p.at.x, p.at.y, cotaRamal);

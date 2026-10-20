@@ -3073,3 +3073,39 @@ serviço para o FUNDO (a frente, ao lado da garagem, não o comportava), e lá a
   exportação já recusa a escala (`EscalaNaoCabe`, "a partir de 1:125"). Uma faixa reservada para as bolhas no
   `enquadrar` (tentada) não resolvia nada e tirava a casa de 12 × 30 do 1:100 no A3 (o teste das saídas da F11
   acusou no CI) — revertida.
+
+## Sobras S1–S5 (20/10/2026)
+
+Pedido original do usuário (20/10/2026):
+
+> Corrigir Sobras para depois:
+> 1. tubos de água passando dentro da laje rebaixada (1 a 2 por lote);
+> 2. um pilar atravessado no sobrado 10×30;
+> 3. o 1º pavimento que não recua no 10×30 com 2 dormitórios;
+> 4. o escritório estreito no 2º pavimento do R1-A;
+> 5. a porta do lavabo dando para a área de serviço.
+
+| Sobra | Onde | Pronto quando |
+|---|---|---|
+| S1 | ligações retas da coluna (no shaft) ao anel/barrilete, na faixa do forro DENTRO da laje rebaixada | 0 trechos de água sob rebaixo nos 6 lotes e nos sobrados; sem encontro novo |
+| S2 | a ligação diagonal da quente ao barrilete atravessa o pilar P13 (sobrado 10 × 30, 4 dorm.) | 0 pilares no sobrado; sem encontro novo |
+| S3 | o 2º não fecha dentro do 1º recuado (10 × 30, 2 dorm., 3 pavimentos) | o 1º recua; dormitório do 1º perto da área ideal |
+| S4 | escritório de 1,70 m de largura no 2º do R1-A (mínimo 2,20) | nenhum cômodo abaixo da largura mínima no 2º |
+| S5 | a porta do lavabo abre para a área de serviço (10 × 30, 4 dorm., o térreo da casa de 3 pavimentos) | o lavabo com porta para a cozinha ou o social |
+
+Cada uma: medir → corrigir → 8 casas e 6 lotes medidos → teste que falha sem a correção → PR → CI → main.
+
+### Registro S1 + S2 (20/10/2026)
+
+- **S1 — água dentro da laje rebaixada.** Todo trecho horizontal de água no forro que atravessaria uma laje rebaixada
+  (base abaixo da faixa do tubo) contorna-a por fora (`desvioDoPilar` com o anel do rebaixo, os pilares e as prumadas
+  como obstáculos); o ponto solto que fica sob o rebaixo chega pela parede (`saidaDoRebaixoPelaParede`, a regra do
+  item 6). Efeito colateral medido e corrigido: como a água é traçada ANTES dos pontos elétricos, o contorno passa rente
+  à face das paredes — a tomada e o interruptor agora fogem do tubo do forro colado na face (o anel normal, a ~10 cm,
+  não conta: bloqueá-lo deixava serviço, cozinha e lavabo sem tomada), a luz de teto sai de baixo do tubo (andando
+  para o lado dele, até 40 cm, dentro do cômodo) e o QDC não nasce junto de uma descida vertical de água.
+- **S2 — pilar atravessado.** A ligação da árvore do barrilete no forro contorna os pilares (e as prumadas).
+- Medido: 8 casas idênticas ao marco (a R1-B só pelo item 9); 6 lotes de 3 pavimentos com 0 encontros, 0 pilares e 0
+  trechos sob rebaixo; sobrado 10 × 30 de 4 dorm. de 4 sob rebaixo + o P13 para 0; sobrado 12 × 30 limpo.
+- Testes que falham sem a correção: o do item 6 (sobrado 10 × 30) ganhou "nenhum trecho sob rebaixo" e "nenhum
+  pilar atravessado"; `blueprintPontosEletricosDoNivel.test.ts` ganhou a tomada fora do tubo rente e a luz fora do tubo.

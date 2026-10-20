@@ -54,6 +54,38 @@ describe('comandosDePontosDoNivel', () => {
   });
 });
 
+describe('S1 da casa automática: os pontos elétricos fogem do tubo do forro (a água é traçada antes deles)', () => {
+  const pontos = (m: BlueprintModel, L: string) => comandosDePontosDoNivel(m, L, { peDireitoMm: 2800 }).filter((c): c is Extract<Command, { type: 'AddTerminal' }> => c.type === 'AddTerminal');
+  const tubo = (L: string, a: { x: number; y: number }, b: { x: number; y: number }): Command => ({ type: 'AddTrecho', levelId: L, disciplina: 'AGUA_QUENTE', a: point(a.x, a.y), b: point(b.x, b.y), cotaAMm: 2630, cotaBMm: 2630, bitolaMm: 22 } as Command);
+
+  it('a tomada não fica sob o tubo que corre COLADO na face da parede; o anel normal do forro (a 10 cm) não a impede', () => {
+    const { m: base, L } = duasSalas(0);
+    const onde = pontos(base, L).find((c) => c.tipoEletrico === 'TUG')!.at;
+    // Colado na face onde a 1ª tomada cairia, ao longo da parede (a de y constante ou a de x constante).
+    const naHorizontal = base.walls.some((w) => w.a.y === w.b.y && Math.abs(onde.y - w.a.y) <= 100);
+    const [a, b] = naHorizontal ? [{ x: onde.x - 1500, y: onde.y }, { x: onde.x + 1500, y: onde.y }] : [{ x: onde.x, y: onde.y - 1500 }, { x: onde.x, y: onde.y + 1500 }];
+    const m = applyCommand(base, tubo(L, a, b)).model;
+    const tomadas = pontos(m, L).filter((c) => c.tipoEletrico === 'TUG');
+    const dist = (p: { x: number; y: number }) => (naHorizontal ? (p.x >= a.x && p.x <= b.x ? Math.abs(p.y - a.y) : Infinity) : p.y >= a.y && p.y <= b.y ? Math.abs(p.x - a.x) : Infinity);
+    for (const t of tomadas) expect(dist(t.at)).toBeGreaterThan(11 + 12.5 + 20);
+    // A norma continua fechando.
+    expect(conferirNbr5410(applyBatch(m, pontos(m, L)).model, L).regras.find((x) => x.codigo === '9.5.2.2.1')!.achados).toEqual([]);
+    // O anel do forro a 10 cm da face não bloqueia: as tomadas continuam onde estavam.
+    const longe = applyCommand(base, tubo(L, naHorizontal ? { x: a.x, y: a.y + (onde.y < 2000 ? 100 : -100) } : { x: a.x + (onde.x < 4000 ? 100 : -100), y: a.y }, naHorizontal ? { x: b.x, y: b.y + (onde.y < 2000 ? 100 : -100) } : { x: b.x + (onde.x < 4000 ? 100 : -100), y: b.y })).model;
+    expect(pontos(longe, L).find((c) => c.tipoEletrico === 'TUG')!.at).toEqual(onde);
+  });
+
+  it('a luz de teto sai de baixo do tubo que passaria por cima dela', () => {
+    const { m: base, L } = duasSalas(0);
+    const luz = pontos(base, L).find((c) => c.tipoEletrico === 'ILUMINACAO_TETO')!.at;
+    const m = applyCommand(base, tubo(L, { x: luz.x - 1500, y: luz.y }, { x: luz.x + 1500, y: luz.y })).model;
+    const nova = pontos(m, L).find((c) => c.tipoEletrico === 'ILUMINACAO_TETO')!.at;
+    // Sai para o LADO do tubo (andar ao longo dele não adianta).
+    expect(Math.abs(nova.y - luz.y)).toBeGreaterThan(11 + 12.5 + 20);
+    expect(nova.x).toBe(luz.x);
+  });
+});
+
 describe('o lado do ambiente no desenho girado', () => {
   it('a espícula (P, Q, P) e o vértice repetido saem do anel', () => {
     const anel = [point(0, 0), point(4000, 0), point(4000, 1000), point(4010, 1018), point(4000, 1000), point(4000, 3000), point(0, 3000), point(0, 3000)];

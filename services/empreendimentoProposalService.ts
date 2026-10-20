@@ -33,7 +33,7 @@ export interface FieldProposal {
     decided_at: string | null;
     decided_by: string | null;
     decision_reason: string | null;
-    // Da view empreendimento_proposal_queue (só em pending):
+    // Resolvidos no cliente por resolveNames (pendentes e decididas):
     tower_name?: string | null;
     unit_name?: string | null;
 }
@@ -119,17 +119,21 @@ export const empreendimentoProposalService = {
         return resolveNames((data ?? []) as FieldProposal[]);
     },
 
-    /** Propostas já decididas (applied/rejected/superseded) — o "Arquivados". */
-    async listDecided(empreendimentoId: string): Promise<FieldProposal[]> {
+    /** Propostas já decididas com UM status (applied/rejected/superseded) — o "Arquivados".
+     *  O status vai na consulta, não num filtro no cliente: com o limite de 200 aplicado sobre
+     *  todos os decididos, uma aba (ex.: Rejeitadas) perdia as linhas mais antigas em silêncio. */
+    async listDecided(empreendimentoId: string, status: Exclude<ProposalStatus, 'pending'>): Promise<FieldProposal[]> {
         const { data, error } = await supabase
             .from('empreendimento_field_proposals')
             .select(COLS)
             .eq('empreendimento_id', empreendimentoId)
-            .neq('status', 'pending')
+            .eq('status', status)
             .order('decided_at', { ascending: false })
             .limit(200);
         if (error) throw new Error(`Falha ao listar histórico: ${error.message}`);
-        return (data ?? []) as FieldProposal[];
+        // Mesmos nomes de torre/unidade da inbox — sem eles o histórico dizia só
+        // "Dormitórios: 2 → 3", sem dizer de qual unidade.
+        return resolveNames((data ?? []) as FieldProposal[]);
     },
 
     async countPending(empreendimentoId: string): Promise<number> {

@@ -8,24 +8,30 @@
 // Estrutura herdada de FiscalJobs (dead letter): predicado único de "pendente", filtro
 // Pendentes/decididas como abas, nada é apagado ao rejeitar.
 import React from 'react';
-import { Loader2, Building, CheckCircle2, XCircle, ArrowRight, Inbox, AlertCircle, Clock } from 'lucide-react';
+import { Loader2, Building, CheckCircle2, XCircle, ArrowRight, Inbox, AlertCircle, Clock, X, ListFilter } from 'lucide-react';
 import { empreendimentoProposalService, FieldProposal, ProposalStatus } from '../../services/empreendimentoProposalService';
 import { ORIGIN_LABEL } from '../../services/sync/types';
 import { useConfirm } from '../ui/confirm';
+import { FilterPopover } from '../ui/FilterPopover';
+import { usePersistedState } from '../ui/TableUtils';
 
 interface Props {
     empreendimentoId: string;
     onChanged?: () => void;
 }
 
-type Filter = 'pending' | 'applied' | 'rejected' | 'superseded';
+type Filter = ProposalStatus;
 
-const FILTERS: { id: Filter; label: string }[] = [
-    { id: 'pending', label: 'Pendentes' },
-    { id: 'applied', label: 'Aplicadas' },
-    { id: 'rejected', label: 'Rejeitadas' },
-    { id: 'superseded', label: 'Obsoletas' },
+// Escolha única em popover (ui_ux_guia_unificado.md §5.4), não fileira de pílulas.
+const FILTERS: { value: Filter; label: string }[] = [
+    { value: 'pending', label: 'Pendentes' },
+    { value: 'applied', label: 'Aplicadas' },
+    { value: 'rejected', label: 'Rejeitadas' },
+    { value: 'superseded', label: 'Obsoletas' },
 ];
+
+/** "Torre A · Apto 101" — de qual torre/unidade é o campo. */
+const whereLabel = (p: FieldProposal) => [p.tower_name, p.unit_name].filter(Boolean).join(' · ');
 
 const GROUP_LABEL: Record<string, string> = {
     identidade: 'Identidade', estrutura: 'Estrutura', area: 'Áreas', comercial: 'Comercial',
@@ -56,7 +62,9 @@ const StatusText: React.FC<{ status: ProposalStatus }> = ({ status }) => {
 
 export const CuradoriaTab: React.FC<Props> = ({ empreendimentoId, onChanged }) => {
     const confirm = useConfirm();
-    const [filter, setFilter] = React.useState<Filter>('pending');
+    const [storedFilter, setFilter] = usePersistedState<Filter>('curadoria:filter', 'pending');
+    // Valor guardado de versão antiga/corrompido não pode deixar a aba sem consulta válida.
+    const filter: Filter = FILTERS.some(f => f.value === storedFilter) ? storedFilter : 'pending';
     const [proposals, setProposals] = React.useState<FieldProposal[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -74,7 +82,7 @@ export const CuradoriaTab: React.FC<Props> = ({ empreendimentoId, onChanged }) =
         try {
             const all = filter === 'pending'
                 ? await empreendimentoProposalService.listPending(empreendimentoId)
-                : (await empreendimentoProposalService.listDecided(empreendimentoId)).filter(p => p.status === filter);
+                : await empreendimentoProposalService.listDecided(empreendimentoId, filter);
             setProposals(all);
         } catch (err: any) {
             notify(err.message, 'error');
@@ -88,7 +96,7 @@ export const CuradoriaTab: React.FC<Props> = ({ empreendimentoId, onChanged }) =
 
     const isPending = filter === 'pending';
 
-    // Agrupa pendentes por torre → grupo de campo, para o "aprovar toda a área da Torre A".
+    // Agrupa pendentes por torre (quadra, no loteamento), para o "aprovar toda a Torre A" de uma vez.
     const groups = React.useMemo(() => {
         const byTower = new Map<string, { towerName: string; items: FieldProposal[] }>();
         for (const p of proposals) {
@@ -149,16 +157,16 @@ export const CuradoriaTab: React.FC<Props> = ({ empreendimentoId, onChanged }) =
 
     return (
         <div className="space-y-4">
-            {/* Filtros */}
-            <div className="flex items-center gap-1.5">
-                {FILTERS.map(f => (
-                    <button key={f.id} onClick={() => setFilter(f.id)}
-                        className={`h-9 px-3.5 rounded-[6px] text-sm font-medium transition-all ${
-                            filter === f.id ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-                        }`}>
-                        {f.label}
-                    </button>
-                ))}
+            {/* Filtro de situação (§5.4). "Pendentes" é a inbox — gatilho neutro; histórico pinta de azul. */}
+            <div className="flex items-center gap-2">
+                <FilterPopover<Filter>
+                    label="Situação"
+                    icon={<ListFilter className="w-3.5 h-3.5" />}
+                    value={filter}
+                    onChange={setFilter}
+                    options={FILTERS}
+                    allValue="pending"
+                />
             </div>
 
             {loading ? (
@@ -215,6 +223,7 @@ export const CuradoriaTab: React.FC<Props> = ({ empreendimentoId, onChanged }) =
                         <div key={p.id} className="flex items-start justify-between gap-3 px-3 py-2.5">
                             <div className="min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
+                                    {whereLabel(p) && <span className="text-sm font-medium text-gray-800">{whereLabel(p)}</span>}
                                     <span className="text-sm text-gray-700">{p.label}</span>
                                     <span className="text-xs font-medium text-gray-400">{ORIGIN_LABEL[p.origin]}</span>
                                 </div>
@@ -246,6 +255,10 @@ export const CuradoriaTab: React.FC<Props> = ({ empreendimentoId, onChanged }) =
                     <button onClick={doReject} disabled={busy}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] font-medium text-[13px] hover:bg-blue-400 disabled:opacity-60 transition-all active:scale-95">
                         <XCircle className="w-3.5 h-3.5" /> Rejeitar
+                    </button>
+                    <button onClick={() => setSelected(new Set())} disabled={busy}
+                        className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] font-medium text-[13px] text-blue-100 hover:bg-blue-500 hover:text-white disabled:opacity-60 transition-all">
+                        <X className="w-3.5 h-3.5" /> Desmarcar
                     </button>
                 </div>
             )}

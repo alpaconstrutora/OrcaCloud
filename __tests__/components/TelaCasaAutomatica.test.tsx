@@ -12,6 +12,7 @@ import { emptyModel } from '../../utils/blueprintKernel';
 import { PREMISSAS_DA_CASA_PADRAO } from '../../utils/blueprintPremissasDaCasa';
 import type { EstadoDaCasaAutomatica } from '../../hooks/useCasaAutomatica';
 import type { PlanoDaCasa } from '../../utils/blueprintCasaAutomatica';
+import { HIPOTESES_PLUVIAIS_PADRAO, INTENSIDADE_POR_CIDADE } from '../../utils/blueprintPluvial';
 
 const plano = {
   levelId: 'lvl_0001',
@@ -67,6 +68,21 @@ function tela(extra: Partial<React.ComponentProps<typeof TelaCasaAutomatica>> = 
 }
 
 describe('TelaCasaAutomatica (F10)', () => {
+  it('F28: a chuva de projeto na tela — sem cidade nem intensidade, diz que acima de 100 m² o pluvial não roda; a cidade e a intensidade mexem nas hipóteses do estudo', () => {
+    const props = tela({ chuva: { ...HIPOTESES_PLUVIAIS_PADRAO, cidade: null, intensidadeMmH: null }, onChuva: vi.fn() });
+    expect(screen.getByTestId('chuva-da-casa').textContent).toMatch(/acima disso o pluvial não roda/);
+    const cidade = Object.keys(INTENSIDADE_POR_CIDADE)[0];
+    fireEvent.change(screen.getByTestId('chuva-cidade'), { target: { value: cidade } });
+    expect(props.onChuva).toHaveBeenCalledWith(expect.objectContaining({ cidade }));
+    cleanup();
+    tela({ chuva: { ...HIPOTESES_PLUVIAIS_PADRAO, intensidadeMmH: 150 }, onChuva: vi.fn() });
+    expect(screen.getByTestId('chuva-da-casa').textContent).toMatch(/150 mm\/h, informada no estudo/);
+    cleanup();
+    // Sem as hipóteses pluviais (a tela fora do editor), a seção não aparece.
+    tela();
+    expect(screen.queryByTestId('chuva-da-casa')).toBeNull();
+  });
+
   it('sem prévia: gerar chama o motor; não há o que lançar ainda', () => {
     const p = tela();
     fireEvent.click(screen.getByTestId('gerar-casa'));

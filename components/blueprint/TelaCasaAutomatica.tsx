@@ -17,6 +17,7 @@ import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type SituacaoDaEtapa } from
 import { PADROES_DA_CASA, ROTULO_DO_PADRAO_DA_CASA, type PadraoDaCasa } from '../../utils/blueprintPrograma';
 import { PREMISSAS_DA_CASA_PADRAO, type PremissasDaCasa } from '../../utils/blueprintPremissasDaCasa';
 import type { EstadoDaCasaAutomatica } from '../../hooks/useCasaAutomatica';
+import { AREA_DA_INTENSIDADE_PADRAO_M2, INTENSIDADE_ATE_100M2_MMH, INTENSIDADE_POR_CIDADE, PERIODOS_DE_RETORNO, type HipotesesPluviais, type PeriodoDeRetorno } from '../../utils/blueprintPluvial';
 
 const COR_DA_SITUACAO: Record<SituacaoDaEtapa, string> = {
   LANCOU: 'text-emerald-700',
@@ -71,6 +72,26 @@ interface Props {
    * ela); `null` desfaz o vínculo sem mexer no programa.
    */
   onUnidade: (id: string | null) => void;
+  /**
+   * F28 (item 10 da casa automática): a CHUVA DE PROJETO — as hipóteses pluviais do estudo (as mesmas do painel Pluvial).
+   * Sem ela, a casa com mais de 100 m² de projeção (o sobrado, a de 3 pavimentos com terraço) ficava com o pluvial sem
+   * rodar e ninguém via por quê. Ausente = a seção não aparece.
+   */
+  chuva?: HipotesesPluviais;
+  onChuva?: (h: HipotesesPluviais) => void;
+}
+
+const PERIODO_DA_CHUVA: Record<PeriodoDeRetorno, string> = { 1: '1 ano', 5: '5 anos (coberturas e terraços)', 25: '25 anos' };
+
+/** F28: a intensidade que vale para a casa, e de onde vem — antes de gerar (a projeção ainda não se sabe). */
+export function chuvaDaCasa(h: HipotesesPluviais): { texto: string; falta: boolean } {
+  if (h.intensidadeMmH != null && h.intensidadeMmH > 0) return { texto: `${h.intensidadeMmH} mm/h, informada no estudo`, falta: false };
+  const linha = h.cidade ? INTENSIDADE_POR_CIDADE[h.cidade] : undefined;
+  if (linha) return { texto: `${linha[h.periodoDeRetornoAnos]} mm/h — tabela da NBR 10844 para ${h.cidade}, ${h.periodoDeRetornoAnos} ano(s); confira na norma`, falta: false };
+  return {
+    texto: `sem cidade nem intensidade: até ${AREA_DA_INTENSIDADE_PADRAO_M2} m² de projeção vale ${INTENSIDADE_ATE_100M2_MMH} mm/h (NBR 10844, 5.1.4); acima disso o pluvial não roda — escolha a cidade ou informe a intensidade`,
+    falta: true,
+  };
 }
 
 const rotuloCls = 'text-xs font-semibold text-slate-500';
@@ -325,6 +346,35 @@ export default function TelaCasaAutomatica(props: Props) {
             )}
             {p.disciplinas.estrutura && (
               <Numero rotulo="Montante entre folhas de janela (cm)" valor={p.estrutura.montanteEntreJanelasMm / 10} min={20} max={100} passo={5} onValor={(v) => v != null && set('estrutura', { montanteEntreJanelasMm: Math.round(v * 10) })} />
+            )}
+            {p.disciplinas.hidraulica && props.chuva && props.onChuva && (
+              <>
+                <Campo rotulo="Chuva: cidade (NBR 10844)">
+                  <select aria-label="Cidade da tabela de chuvas" className={campoCls} value={props.chuva.cidade ?? ''} onChange={(e) => props.onChuva!({ ...props.chuva!, cidade: e.target.value || null })} data-testid="chuva-cidade">
+                    <option value="">— nenhuma —</option>
+                    {Object.keys(INTENSIDADE_POR_CIDADE)
+                      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+                      .map((x) => (
+                        <option key={x} value={x}>
+                          {x}
+                        </option>
+                      ))}
+                  </select>
+                </Campo>
+                <Campo rotulo="Chuva: período de retorno">
+                  <select aria-label="Período de retorno da chuva" className={campoCls} value={props.chuva.periodoDeRetornoAnos} onChange={(e) => props.onChuva!({ ...props.chuva!, periodoDeRetornoAnos: Number(e.target.value) as PeriodoDeRetorno })} data-testid="chuva-periodo">
+                    {PERIODOS_DE_RETORNO.map((t) => (
+                      <option key={t} value={t}>
+                        {PERIODO_DA_CHUVA[t]}
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+                <Numero rotulo="Chuva: intensidade (mm/h)" valor={props.chuva.intensidadeMmH} min={1} max={500} anulavel placeholder="da tabela" onValor={(v) => props.onChuva!({ ...props.chuva!, intensidadeMmH: v })} />
+                <p className={`col-span-2 self-end pb-2 text-xs md:col-span-1 ${chuvaDaCasa(props.chuva).falta ? 'text-amber-700' : 'text-slate-600'}`} data-testid="chuva-da-casa">
+                  Chuva de projeto: {chuvaDaCasa(props.chuva).texto}.
+                </p>
+              </>
             )}
             {p.pavimentos !== 1 && (
               <>

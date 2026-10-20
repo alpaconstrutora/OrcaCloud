@@ -24,6 +24,7 @@ import {
   CARIMBO_MM,
   DesenhistaDeProva,
   ESCALAS,
+  FAIXA_DAS_BOLHAS_MM,
   MARGEM_MM,
   PAPEIS,
   boundingBox,
@@ -116,6 +117,18 @@ describe('exportação · a escala é entrada, não resultado', () => {
     // A4 retrato: 210 − 2×12 = 186 de largura; 297 − 2×12 − 26 = 247 de altura.
     expect(enq.utilLarguraMm).toBe(A4.larguraMm - 2 * MARGEM_MM);
     expect(enq.utilAlturaMm).toBe(A4.alturaMm - 2 * MARGEM_MM - CARIMBO_MM);
+  });
+
+  it('F28: com eixo NOMEADO, a faixa das bolhas em volta do desenho (a de baixo caía no carimbo, sobre o aviso)', () => {
+    const base = planta(4, 3);
+    const comEixo = { ...base, eixos: [{ id: 'e1', a: point(0, -1000), b: point(0, 4000), nome: 'A' }] } as unknown as BlueprintModel;
+    const enq = enquadrar(comEixo, 100, A4);
+    expect(enq.utilLarguraMm).toBe(A4.larguraMm - 2 * MARGEM_MM - 2 * FAIXA_DAS_BOLHAS_MM);
+    expect(enq.utilAlturaMm).toBe(A4.alturaMm - 2 * MARGEM_MM - CARIMBO_MM - 2 * FAIXA_DAS_BOLHAS_MM);
+    expect(enq.offsetYMm).toBeGreaterThanOrEqual(MARGEM_MM + FAIXA_DAS_BOLHAS_MM);
+    // Sem nome, o eixo não tem bolha: nada muda.
+    const semNome = { ...base, eixos: [{ id: 'e1', a: point(0, -1000), b: point(0, 4000), nome: '' }] } as unknown as BlueprintModel;
+    expect(enquadrar(semNome, 100, A4).utilAlturaMm).toBe(A4.alturaMm - 2 * MARGEM_MM - CARIMBO_MM);
   });
 
   it('RECUSA quando não cabe, e diz a escala que caberia', () => {

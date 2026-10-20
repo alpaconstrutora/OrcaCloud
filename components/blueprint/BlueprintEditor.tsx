@@ -11524,6 +11524,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             casa={casa}
             premissas={casaDoEstudo.premissas}
             onPremissas={casaDoEstudo.setPremissas}
+            chuva={hipotesesHidro.pluvial}
+            onChuva={(pluvial) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pluvial })}
             persistenciaIndisponivel={casaDoEstudo.persistenciaIndisponivel}
             motivoParaNaoGerar={motivoParaNaoGerarCasa}
             onGerar={gerarCasa}

@@ -3059,3 +3059,16 @@ serviço para o FUNDO (a frente, ao lado da garagem, não o comportava), e lá a
 - Resultado: R1-B a 9,80 m (+0,40): cozinha e serviço empilhados na frente, banheiro social 1,40 × 4,60 m no fundo,
   dormitórios 2,70 m — 0 pendências (eram 1 + 4). As outras 7 casas idênticas ao marco de 20/10 (`/c/tmp/f28/a.txt`);
   os 6 lotes de 3 pavimentos sem mudança.
+
+#### Item 10 — F28: a chuva de projeto na tela e as bolhas dos eixos na prancha (20/10/2026)
+
+- **Chuva de projeto na tela da casa**: a casa com mais de 100 m² de projeção (o sobrado, a de 3 pavimentos com
+  terraço) precisa da intensidade (NBR 10844, 5.1.4) — sem cidade nem intensidade, o pluvial não rodava e a tela não
+  dizia. A tela ganhou, nas Hipóteses (com a hidráulica marcada), a cidade da tabela, o período de retorno e a
+  intensidade informada — as MESMAS hipóteses pluviais do estudo que o painel Pluvial edita — e a linha "Chuva de
+  projeto" com o valor que vale e de onde vem (`chuvaDaCasa`), em âmbar quando falta.
+- **Bolhas dos eixos na prancha**: reproduzido com uma prancha de verdade (A3, 1:100, cotas e eixos — um `Desenhista` que
+  registra círculos e textos): a bolha da borda de baixo, empurrada para além das cotas, caía 1,2 mm sobre o aviso do
+  carimbo ("ESTUDO PRELIMINAR…"); entre si as bolhas não se tocavam (o escalonamento de 08/10 já resolvia). O
+  `enquadrar` reserva agora, com eixo nomeado, a faixa das bolhas em volta do desenho (`FAIXA_DAS_BOLHAS_MM` = 8,5:
+  uma fileira) — sem sobreposição a 1:75 e 1:100 nas casas medidas. As 33 suítes que usam o enquadramento passam.

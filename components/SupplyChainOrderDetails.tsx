@@ -1536,7 +1536,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     Contas a Pagar, abaixo das condições (pedido do usuário em
                     2026-10-19). Montado só com a aba aberta — recarrega a cada
                     visita. Mesma fonte da tabela do fornecedor, logo abaixo. */}
-                {ehComprador && abaDetalhe === 'financeiro' && <PedidoParcelasComprador orderId={order.id} />}
+                {ehComprador && abaDetalhe === 'financeiro' && <PedidoParcelasComprador pedido={order} />}
 
                 {/* ── Aba "Dados Gerais", visão do fornecedor ──
                     Os MESMOS campos que o comprador vê no painel "Dados Gerais"

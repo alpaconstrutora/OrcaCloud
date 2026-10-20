@@ -83,6 +83,19 @@ export function transacoesAindaNaoGravadas<T extends { date?: string; descriptio
     return saida;
 }
 
+/**
+ * Início das `notes` de parcela de pedido gerada SEM nota fiscal (botão
+ * "Gerar título a pagar"). É por ela que o sync automático reconhece e mantém
+ * essas parcelas quando a nota chega depois. Não mude o texto sem migrar as
+ * parcelas existentes.
+ */
+export const MARCA_PARCELA_SEM_NOTA = 'Gerado sem nota fiscal';
+
+/** O que `syncOrderToFinance` fez: gerou N parcelas, ou por que não gerou. */
+export type ResultadoSyncPedido =
+    | { gerou: number }
+    | { pulou: 'pedido-nao-encontrado' | 'status' | 'sem-nota' | 'sem-obra' | 'ja-pago' | 'gerado-sem-nota'; motivo: string };
+
 export const financialService = {
     /**
      * Adds a transaction to a project's financial settings.
@@ -275,7 +288,22 @@ export const financialService = {
      * Synchronizes an order with the financial module.
      * Generates a payment forecast if the order is delivered and has an invoice.
      */
-    async syncOrderToFinance(orderId: string) {
+    /**
+     * Gera as parcelas do pedido no Contas a Pagar (JSON da obra + razão).
+     *
+     * Regra de sempre: pedido Entregue/Recebido/Divergência COM nota fiscal
+     * vinculada — é chamada sozinha na mudança de status e no vínculo da nota.
+     *
+     * `permitirSemNota` (19/10/2026, botão "Gerar título a pagar" da aba
+     * Financeiro do pedido): existe compra sem nota fiscal. Gera mesmo sem nota
+     * e carimba a parcela com `MARCA_PARCELA_SEM_NOTA`. Se a nota for vinculada
+     * DEPOIS, o sync automático vê a marca e MANTÉM as parcelas — sem apagar e
+     * regerar, que trocaria os ids e soltaria vínculo de boleto/conciliação.
+     *
+     * Devolve o que aconteceu: quem chama por botão precisa poder dizer por
+     * que nada foi gerado.
+     */
+    async syncOrderToFinance(orderId: string, opcoes: { permitirSemNota?: boolean } = {}): Promise<ResultadoSyncPedido> {
         // 1. Fetch Order and Supplier separately (Joins on suppliers can fail due to schema caching)
         const { data: orderRaw, error: orderError } = await supabase
             .from('purchase_orders')
@@ -285,7 +313,7 @@ export const financialService = {
 
         if (orderError || !orderRaw) {
             console.error("[FINANCIAL] Order not found for sync:", orderId);
-            return;
+            return { pulou: 'pedido-nao-encontrado', motivo: 'Pedido não encontrado.' };
         }
 
         type DbOrder = { id: string; number: string; status: string; supplier_id?: string; project_id?: string; items: PurchaseOrderItem[]; actual_delivery_date?: string; delivery_date?: string; payment_method?: string; payment_term_type?: string; payment_installments?: number; payment_days?: number; bank_account?: string; cost_center?: string; chart_of_accounts?: string; };
@@ -306,21 +334,21 @@ export const financialService = {
         const allowedStatuses = ['Entregue', 'Recebido', 'Divergência'];
         if (!allowedStatuses.includes(order.status)) {
             console.log(`[FINANCIAL] Order ${order.number} status is ${order.status}. Skipping forecast.`);
-            return;
+            return { pulou: 'status', motivo: `O pedido está "${order.status}". As parcelas são geradas depois da entrega (no FOB, da retirada).` };
         }
 
         // 3. Check for Invoices
         const invoices = await invoiceService.listInvoicesByOrder(orderId);
-        if (invoices.length === 0) {
+        if (invoices.length === 0 && !opcoes.permitirSemNota) {
             console.log(`[FINANCIAL] Order ${order.number} has no invoices. Skipping forecast.`);
-            return;
+            return { pulou: 'sem-nota', motivo: 'O pedido não tem nota fiscal vinculada.' };
         }
 
         // 4. Project loading
-        if (!order.project_id) return;
+        if (!order.project_id) return { pulou: 'sem-obra', motivo: 'O pedido não tem obra — as parcelas moram no financeiro da obra.' };
         const projectId = order.project_id;
         const project = await projectService.loadProject(projectId);
-        if (!project) return;
+        if (!project) return { pulou: 'sem-obra', motivo: 'Não foi possível abrir a obra do pedido.' };
 
         const settings = project.settings as ProjectSettings;
         const info = settings.financialInfo;
@@ -331,7 +359,15 @@ export const financialService = {
             const hasStartedPayment = orderTransactions.some(t => t.status !== 'PENDING' && t.status !== 'CANCELLED');
             if (hasStartedPayment) {
                 console.log(`[FINANCIAL] Order ${order.number} has non-pending transactions. Skipping sync.`);
-                return;
+                return { pulou: 'ja-pago', motivo: 'O pedido já tem parcela paga ou em pagamento; nada foi regerado.' };
+            }
+
+            // Geradas sem nota pelo botão: o sync automático (nota vinculada
+            // depois, mudança de status) as mantém. Só o próprio botão regera.
+            const geradasSemNota = orderTransactions.some(t => String(t.notes ?? '').startsWith(MARCA_PARCELA_SEM_NOTA));
+            if (geradasSemNota && !opcoes.permitirSemNota) {
+                console.log(`[FINANCIAL] Order ${order.number} has parcels generated without invoice. Keeping them.`);
+                return { pulou: 'gerado-sem-nota', motivo: 'As parcelas foram geradas sem nota fiscal e foram mantidas.' };
             }
 
             // Clean up existing pending transactions to allow recreation with fresh data
@@ -403,7 +439,9 @@ export const financialService = {
                 bankAccount: order.bank_account,
                 costCenter: order.cost_center,
                 chartOfAccounts: order.chart_of_accounts,
-                notes: `Gerado da entrega. Método: ${paymentMethod}. NFe: ${invoices[0].fileName}`
+                notes: invoices.length > 0
+                    ? `Gerado da entrega. Método: ${paymentMethod}. NFe: ${invoices[0].fileName}`
+                    : `${MARCA_PARCELA_SEM_NOTA} (Suprimentos › Pedido). Método: ${paymentMethod}.`
             }, {
                 sourceSystem: 'PURCHASE_ORDER',
                 partyType: 'SUPPLIER',
@@ -415,6 +453,7 @@ export const financialService = {
 
 
         console.log(`[FINANCIAL] Generated ${installmentsCount} forecast(s) for Order ${order.number}`);
+        return { gerou: installmentsCount };
     },
 
     /**

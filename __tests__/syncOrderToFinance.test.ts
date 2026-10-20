@@ -84,12 +84,14 @@ vi.mock('../services/projectService', () => ({
     },
 }));
 
+/** Notas vinculadas ao pedido quando o sync roda (vazio = compra sem nota). */
+let notasDoPedido: { id: string; fileName: string }[] = [{ id: 'nf1', fileName: 'nfe.xml' }];
 vi.mock('../services/invoiceService', () => ({
-    invoiceService: { listInvoicesByOrder: async () => [{ id: 'nf1', fileName: 'nfe.xml' }] },
+    invoiceService: { listInvoicesByOrder: async () => notasDoPedido },
 }));
 vi.mock('../utils/systemProjects', () => ({ isSystemProject: () => false }));
 
-import { financialService } from '../services/financialService';
+import { financialService, MARCA_PARCELA_SEM_NOTA } from '../services/financialService';
 
 describe('syncOrderToFinance · a parcela precisa ser ACHÁVEL pelo pedido', () => {
     beforeEach(() => {
@@ -97,6 +99,7 @@ describe('syncOrderToFinance · a parcela precisa ser ACHÁVEL pelo pedido', () 
         apagados.length = 0;
         projetoSalvo = null;
         transacoesExistentes = [];
+        notasDoPedido = [{ id: 'nf1', fileName: 'nfe.xml' }];
     });
 
     it('gera uma linha por parcela, com purchase_order_id em todas', async () => {
@@ -158,5 +161,62 @@ describe('syncOrderToFinance · a parcela precisa ser ACHÁVEL pelo pedido', () 
         await financialService.syncOrderToFinance(PEDIDO);
         expect(apagados).toHaveLength(0);
         expect(inseridos).toHaveLength(0);
+    });
+});
+
+describe('syncOrderToFinance · compra SEM nota fiscal (botão "Gerar título a pagar", 19/10/2026)', () => {
+    beforeEach(() => {
+        inseridos.length = 0;
+        apagados.length = 0;
+        projetoSalvo = null;
+        transacoesExistentes = [];
+        notasDoPedido = [];
+    });
+
+    it('sem nota e sem permissão (sync automático): não gera e diz por quê', async () => {
+        const r = await financialService.syncOrderToFinance(PEDIDO);
+        expect(r).toEqual({ pulou: 'sem-nota', motivo: expect.any(String) });
+        expect(inseridos).toHaveLength(0);
+    });
+
+    it('sem nota, pelo botão: gera as parcelas, marcadas como sem nota', async () => {
+        const r = await financialService.syncOrderToFinance(PEDIDO, { permitirSemNota: true });
+        expect(r).toEqual({ gerou: 3 });
+        expect(inseridos).toHaveLength(3);
+        const noJson = projetoSalvo!.settings.financialInfo.transactions;
+        noJson.forEach(t => expect(String(t.notes)).toMatch(new RegExp('^' + MARCA_PARCELA_SEM_NOTA)));
+    });
+
+    it('nota vinculada DEPOIS: o sync automático mantém as parcelas geradas sem nota', async () => {
+        transacoesExistentes = [
+            { id: 't1', orderId: PEDIDO, status: 'PENDING', notes: `${MARCA_PARCELA_SEM_NOTA} (Suprimentos › Pedido). Método: Pix.` },
+        ];
+        notasDoPedido = [{ id: 'nf1', fileName: 'nfe.xml' }];
+        const r = await financialService.syncOrderToFinance(PEDIDO);
+        expect(r).toEqual({ pulou: 'gerado-sem-nota', motivo: expect.any(String) });
+        expect(apagados).toHaveLength(0);
+        expect(inseridos).toHaveLength(0);
+    });
+
+    it('o próprio botão, de novo, regera (limpa as pendentes antes)', async () => {
+        transacoesExistentes = [
+            { id: 't1', orderId: PEDIDO, status: 'PENDING', notes: `${MARCA_PARCELA_SEM_NOTA} (Suprimentos › Pedido).` },
+        ];
+        const r = await financialService.syncOrderToFinance(PEDIDO, { permitirSemNota: true });
+        expect(r).toEqual({ gerou: 3 });
+        expect(apagados).toHaveLength(1);
+        expect(inseridos).toHaveLength(3);
+    });
+
+    it('status antes da entrega: não gera, mesmo pelo botão', async () => {
+        const original = pedido.status;
+        pedido.status = 'Confirmado';
+        try {
+            const r = await financialService.syncOrderToFinance(PEDIDO, { permitirSemNota: true });
+            expect(r).toEqual({ pulou: 'status', motivo: expect.stringContaining('Confirmado') });
+            expect(inseridos).toHaveLength(0);
+        } finally {
+            pedido.status = original;
+        }
     });
 });

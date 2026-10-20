@@ -28,6 +28,8 @@ const apagados: { tabela: string; filtros: Record<string, unknown> }[] = [];
 let projetoSalvo: { settings: { financialInfo: { transactions: Record<string, unknown>[] } } } | null = null;
 /** Transações que já existem no JSON da obra quando o sync roda. */
 let transacoesExistentes: Record<string, unknown>[] = [];
+/** Títulos lançados pela NOTA (source_system NFE) para o pedido. */
+let titulosDaNota: { id: string }[] = [];
 
 const pedido = {
     id: PEDIDO, number: 'PO-551252', status: 'Recebido',
@@ -42,15 +44,22 @@ const pedido = {
 vi.mock('../lib/supabase', () => ({
     supabase: {
         from: (tabela: string) => ({
-            select: () => ({
-                eq: () => ({
+            select: () => {
+                // Cadeia genérica: .eq/.neq encadeiam; .single e .limit resolvem.
+                const cadeia = {
+                    eq: () => cadeia,
+                    neq: () => cadeia,
                     single: async () => {
                         if (tabela === 'purchase_orders') return { data: { ...pedido }, error: null };
                         if (tabela === 'suppliers') return { data: { name: 'MCC' }, error: null };
                         return { data: null, error: null };
                     },
-                }),
-            }),
+                    limit: async () => (tabela === 'internal_transactions'
+                        ? { data: titulosDaNota, error: null }
+                        : { data: [], error: null }),
+                };
+                return cadeia;
+            },
             insert: async (linha: Record<string, unknown>) => {
                 if (tabela === 'internal_transactions') inseridos.push(linha);
                 return { error: null };
@@ -100,6 +109,7 @@ describe('syncOrderToFinance · a parcela precisa ser ACHÁVEL pelo pedido', () 
         projetoSalvo = null;
         transacoesExistentes = [];
         notasDoPedido = [{ id: 'nf1', fileName: 'nfe.xml' }];
+        titulosDaNota = [];
     });
 
     it('gera uma linha por parcela, com purchase_order_id em todas', async () => {
@@ -171,6 +181,7 @@ describe('syncOrderToFinance · compra SEM nota fiscal (botão "Gerar título a 
         projetoSalvo = null;
         transacoesExistentes = [];
         notasDoPedido = [];
+        titulosDaNota = [];
     });
 
     it('sem nota e sem permissão (sync automático): não gera e diz por quê', async () => {
@@ -218,5 +229,36 @@ describe('syncOrderToFinance · compra SEM nota fiscal (botão "Gerar título a 
         } finally {
             pedido.status = original;
         }
+    });
+});
+
+describe('syncOrderToFinance · trava contra cobrança em dobro (19/10/2026)', () => {
+    beforeEach(() => {
+        inseridos.length = 0;
+        apagados.length = 0;
+        projetoSalvo = null;
+        transacoesExistentes = [];
+        notasDoPedido = [{ id: 'nf1', fileName: 'nfe.xml' }];
+        titulosDaNota = [];
+    });
+
+    it('a nota já lançou o título (Fiscal › Criar título): o pedido NÃO gera parcelas por cima', async () => {
+        titulosDaNota = [{ id: 'tx-nfe' }];
+        const r = await financialService.syncOrderToFinance(PEDIDO);
+        expect(r).toEqual({ pulou: 'titulo-da-nota', motivo: expect.any(String) });
+        expect(inseridos).toHaveLength(0);
+        expect(apagados).toHaveLength(0);
+    });
+
+    it('nem pelo botão "Gerar título a pagar"', async () => {
+        titulosDaNota = [{ id: 'tx-nfe' }];
+        const r = await financialService.syncOrderToFinance(PEDIDO, { permitirSemNota: true });
+        expect(r).toEqual({ pulou: 'titulo-da-nota', motivo: expect.any(String) });
+        expect(inseridos).toHaveLength(0);
+    });
+
+    it('sem título da nota, gera normalmente (controle)', async () => {
+        const r = await financialService.syncOrderToFinance(PEDIDO);
+        expect(r).toEqual({ gerou: 3 });
     });
 });

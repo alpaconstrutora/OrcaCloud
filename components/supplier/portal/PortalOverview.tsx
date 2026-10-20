@@ -8,6 +8,7 @@ import {
     SoftButton, StatusPill, Td, Th,
 } from '../../portal/PortalKit';
 import { INVOICE_STATUS, ORDER_TONE, QUOTATION_TONE, isNegotiating, isOpenOrder, orderTotal } from './status';
+import { ehFob, rotuloStatusLogistico } from '../../../utils/formaEntrega';
 
 interface Props {
     orders: PurchaseOrder[];
@@ -107,7 +108,7 @@ const PortalOverview: React.FC<Props> = ({
                                         <Td className="text-[#8A8F9A] whitespace-nowrap">{fmtDate(o.created_at)}</Td>
                                         <Td className="text-[#4A505C]">{o.projectName || '—'}</Td>
                                         <Td className="text-[#1F2430] font-medium tabular-nums">{fmtBRL(orderTotal(o))}</Td>
-                                        <Td><StatusPill tone={ORDER_TONE[o.status] ?? 'muted'}>{o.status}</StatusPill></Td>
+                                        <Td><StatusPill tone={ORDER_TONE[o.status] ?? 'muted'}>{rotuloStatusLogistico(o.status, ehFob(o.deliveryMethod))}</StatusPill></Td>
                                     </tr>
                                 ))
                             )}

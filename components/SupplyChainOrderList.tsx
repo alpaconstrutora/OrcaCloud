@@ -107,7 +107,9 @@ const ORDER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; 
 
 // Badge de status — sem estado próprio, movida para escopo de módulo para poder
 // ser usada dentro de renderOrderCell (função pura, fora do componente).
-const StatusBadge = ({ status }: { status: string }) => {
+// FOB: o texto segue `rotuloStatusLogistico` (Entregue = "Retirado" etc.); a cor
+// continua pelo status gravado.
+const StatusBadge = ({ status, fob = false }: { status: string; fob?: boolean }) => {
     const colors: Record<string, string> = {
         'Confirmado': 'text-gray-800',
         'Separação': 'text-blue-700',
@@ -121,7 +123,7 @@ const StatusBadge = ({ status }: { status: string }) => {
     };
     return (
         <span className={`text-sm font-normal ${colors[status] || 'text-gray-600'}`}>
-            {status}
+            {rotuloStatusLogistico(status, fob)}
         </span>
     );
 };
@@ -154,7 +156,7 @@ function renderOrderCell(
         case 'supplier':
             return <span className="text-sm font-normal text-gray-700">{order.supplierName || '-'}</span>;
         case 'status':
-            return <StatusBadge status={order.status} />;
+            return <StatusBadge status={order.status} fob={ehFob(order.deliveryMethod)} />;
         case 'nfe': {
             const numbers = ctx.nfeNumbersByOrderId[order.id];
             if (!numbers?.length) return <span className="text-sm font-normal text-gray-400">-</span>;
@@ -201,6 +203,7 @@ import { kpiService } from '../services/kpiService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { PurchaseOrder } from '../types';
+import { ehFob, rotuloStatusLogistico } from '../utils/formaEntrega';
 
 interface SupplyChainOrderListProps {
     onCreateNew: () => void;
@@ -859,7 +862,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                                 <FileCheck className="w-4 h-4 shrink-0" />NF-e: {nfeNumbersByOrderId[order.id].join(', ')}
                                             </span>
                                         )}
-                                        <StatusBadge status={order.status} />
+                                        <StatusBadge status={order.status} fob={ehFob(order.deliveryMethod)} />
                                     </div>
                                 </div>
 

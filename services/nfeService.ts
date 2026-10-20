@@ -321,6 +321,36 @@ export async function toggleClassificationRule(
 }
 
 // ============================================================
+// Títulos que um pedido já tem no Contas a Pagar
+// ============================================================
+
+/**
+ * Títulos a pagar (DEBIT/PRINCIPAL, não cancelados) já lançados para o pedido —
+ * as parcelas do próprio pedido (`PURCHASE_ORDER`) ou o título de uma nota
+ * (`NFE`). É a trava contra cobrança em dobro (19/10/2026): com título já
+ * lançado, a nota do pedido se VINCULA a ele, não gera outro.
+ * Erro de leitura sobe — liberar "criar título" por falha de consulta seria
+ * justamente o dobro que a trava existe para impedir.
+ */
+export async function titulosDoPedido(purchaseOrderId: string): Promise<{
+  id: string; description: string | null; amount: number; due_date: string | null; source_system: string | null;
+}[]> {
+  const { data, error } = await supabase
+    .from('internal_transactions')
+    .select('id, description, amount, due_date, source_system')
+    .eq('purchase_order_id', purchaseOrderId)
+    .eq('direction', 'DEBIT')
+    .eq('entry_type', 'PRINCIPAL')
+    .neq('status', 'CANCELLED')
+    .order('due_date', { ascending: true });
+  if (error) throw new Error(`Não foi possível conferir os títulos do pedido: ${error.message}`);
+  return (data ?? []).map(t => ({ ...t, amount: Number(t.amount) }));
+}
+
+export const ERRO_PEDIDO_JA_TEM_TITULO =
+  'Este pedido já tem título no Contas a Pagar. Use "Vincular existente" e escolha a parcela — criar outro título cobraria em dobro.';
+
+// ============================================================
 // F1 — APROVAR NF-e E GERAR TÍTULO FINANCEIRO
 // Cria internal_transaction (DEBIT/PENDING) e vincula à nota.
 // ============================================================
@@ -345,6 +375,14 @@ export async function approveAndLink(params: {
   if (fetchErr || !invoice) throw new Error('NF-e não encontrada');
   if (invoice.linked_transaction_id) throw new Error('NF-e já possui título financeiro vinculado');
   if (invoice.document_status !== 'active') throw new Error('NF-e ainda não foi processada com sucesso');
+
+  // 1b. Pedido com título já lançado (parcelas do pedido, ou título de outra
+  // nota): esta nota se vincula a ele — gerar outro cobraria em dobro. Vale o
+  // pedido escolhido agora OU o que a nota já tinha.
+  const pedidoDaNota = purchaseOrderId ?? invoice.purchase_order_id ?? null;
+  if (pedidoDaNota && (await titulosDoPedido(pedidoDaNota)).length > 0) {
+    throw new Error(ERRO_PEDIDO_JA_TEM_TITULO);
+  }
 
   // 2. ID único para o par de partidas (D/C)
   const journalEntryId = crypto.randomUUID();

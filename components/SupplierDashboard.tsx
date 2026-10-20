@@ -247,7 +247,17 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     supplierPortalTokenService.getQuotations(portalToken)
                 ])
                 : await Promise.all([
-                    orderService.listOrders(undefined, effectiveSupplier.id, effectiveSupplier.email),
+                    // "Impersonar Fornecedor" (admin sem perfil de fornecedor): a
+                    // leitura "como fornecedor" (`pedidos_do_fornecedor`) filtra
+                    // pelo e-mail da SESSÃO — a do admin —, então a lista vinha
+                    // vazia para qualquer fornecedor (medido em 19/10/2026:
+                    // PCO-011-017-0002 sumido do portal na impersonação). O admin
+                    // é comprador: lê pela tabela (RLS da org) e recorta pelo
+                    // fornecedor escolhido, sem rascunho — o que o fornecedor veria.
+                    isAdmin && !supplierProfile
+                        ? orderService.listOrders().then(todos =>
+                            todos.filter(o => o.supplierId === effectiveSupplier.id && o.status !== 'Rascunho'))
+                        : orderService.listOrders(undefined, effectiveSupplier.id, effectiveSupplier.email),
                     invoiceService.listInvoices(effectiveSupplier.id),
                     quotationService.listRequestsForSupplier(effectiveSupplier.id)
                 ]);
@@ -1035,7 +1045,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                 </td>
                                                 <td className="px-6 py-2.5 border-r border-gray-100">
                                                     <span className={`text-sm font-normal ${order.status === 'Confirmado' ? 'text-emerald-800' : 'text-amber-800'}`}>
-                                                        {order.status}
+                                                        {rotuloStatusLogistico(order.status, ehFob(order.deliveryMethod))}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-2.5 text-right">

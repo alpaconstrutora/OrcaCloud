@@ -3,7 +3,7 @@ import {
   FileText, Search, RefreshCw, CheckCircle2, ArrowLeft, Plus, ShoppingCart, MoveHorizontal, UploadCloud, AlertCircle,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
-import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe, deleteNfeInvoice } from '../../services/nfeService';
+import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe, deleteNfeInvoice, titulosDoPedido } from '../../services/nfeService';
 import { projectService } from '../../services/projectService';
 import { MissingCodeError } from '../../services/orderNumberingService';
 import type { NfeInvoice, NfeInvoiceWithItems, PipelineHealth } from '../../types/fiscal';
@@ -227,6 +227,33 @@ function ApproveModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Trava contra cobrança em dobro (19/10/2026): se o pedido desta nota já tem
+  // título no Contas a Pagar (parcelas do pedido — inclusive as geradas sem
+  // nota — ou título de outra nota), a nota se VINCULA a ele. "Criar título"
+  // fica desligado dizendo por quê, e a aba Vincular lista essas parcelas
+  // primeiro. O serviço (`approveAndLink`) recusa do mesmo jeito.
+  const pedidoEfetivo = orderMode === 'existing' ? purchaseOrderId : orderMode === 'none' ? (invoice.purchase_order_id ?? '') : '';
+  const [titulosDoPedidoSel, setTitulosDoPedidoSel] = useState<Awaited<ReturnType<typeof titulosDoPedido>>>([]);
+  const [abriuNoVincular, setAbriuNoVincular] = useState(false);
+  useEffect(() => {
+    if (!pedidoEfetivo) { setTitulosDoPedidoSel([]); return; }
+    let cancelado = false;
+    titulosDoPedido(pedidoEfetivo)
+      .then(t => {
+        if (cancelado) return;
+        setTitulosDoPedidoSel(t);
+        // Na 1ª carga, nota de pedido com título já abre em "Vincular existente".
+        if (t.length > 0 && !abriuNoVincular) { setTab('existing'); setAbriuNoVincular(true); }
+      })
+      .catch(e => { if (!cancelado) setError(e instanceof Error ? e.message : String(e)); });
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoEfetivo]);
+  const pedidoTemTitulo = titulosDoPedidoSel.length > 0;
+  const motivoSemCriar = pedidoTemTitulo
+    ? `Este pedido já tem ${titulosDoPedidoSel.length} título${titulosDoPedidoSel.length > 1 ? 's' : ''} no Contas a Pagar (${fmt(titulosDoPedidoSel.reduce((s, t) => s + t.amount, 0))}). Vincule a nota em "Vincular existente" — criar outro título cobraria em dobro.`
+    : '';
+
   useEffect(() => {
     if (!projectId) { setOrders([]); setPurchaseOrderId(''); return; }
     supabase
@@ -247,9 +274,18 @@ function ApproveModal({
         .eq('status', 'PENDING')
         .ilike('entity_name', `%${invoice.issuer_name.split(' ')[0]}%`)
         .order('transaction_date', { ascending: true })
-        .then(({ data }) => setExistingTxs(data ?? []));
+        .then(({ data }) => {
+          // Parcelas do PRÓPRIO pedido primeiro (a busca pelo 1º nome do
+          // emissor sozinha não as acha quando o cadastro difere da nota).
+          const doPedido = titulosDoPedidoSel.map(t => ({
+            id: t.id, description: t.description ?? 'Parcela do pedido', amount: t.amount,
+            transaction_date: t.due_date ?? '', entity_name: '',
+          }));
+          const ids = new Set(doPedido.map(t => t.id));
+          setExistingTxs([...doPedido, ...(data ?? []).filter(t => !ids.has(t.id))]);
+        });
     }
-  }, [tab, organizationId, invoice.issuer_name]);
+  }, [tab, organizationId, invoice.issuer_name, titulosDoPedidoSel]);
 
   async function handleCreateNew() {
     if (!projectId) { setError('Selecione uma obra.'); return; }
@@ -356,6 +392,11 @@ function ApproveModal({
 
         {tab === 'new' && (
           <div className="flex flex-col gap-4">
+            {pedidoTemTitulo && (
+              <div className="text-sm font-normal text-amber-800 bg-amber-50 border border-amber-200 rounded-[6px] p-3">
+                {motivoSemCriar}
+              </div>
+            )}
             <div>
               <label className={labelCls}>Obra / Projeto *</label>
               <select value={projectId} onChange={e => setProjectId(e.target.value)} className={inputCls}>
@@ -439,7 +480,8 @@ function ApproveModal({
         <button
           className="h-9 px-4 rounded-[6px] text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-all disabled:opacity-50"
           onClick={tab === 'new' ? handleCreateNew : handleLinkExisting}
-          disabled={saving || (tab === 'existing' && !selectedTxId)}
+          disabled={saving || (tab === 'existing' && !selectedTxId) || (tab === 'new' && pedidoTemTitulo)}
+          title={tab === 'new' && pedidoTemTitulo ? motivoSemCriar : undefined}
         >
           {saving ? 'Processando…' : (tab === 'new' ? 'Aprovar e gerar título' : 'Vincular título')}
         </button>

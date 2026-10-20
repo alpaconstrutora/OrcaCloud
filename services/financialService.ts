@@ -94,7 +94,7 @@ export const MARCA_PARCELA_SEM_NOTA = 'Gerado sem nota fiscal';
 /** O que `syncOrderToFinance` fez: gerou N parcelas, ou por que não gerou. */
 export type ResultadoSyncPedido =
     | { gerou: number }
-    | { pulou: 'pedido-nao-encontrado' | 'status' | 'sem-nota' | 'sem-obra' | 'ja-pago' | 'gerado-sem-nota'; motivo: string };
+    | { pulou: 'pedido-nao-encontrado' | 'status' | 'sem-nota' | 'titulo-da-nota' | 'sem-obra' | 'ja-pago' | 'gerado-sem-nota'; motivo: string };
 
 export const financialService = {
     /**
@@ -342,6 +342,23 @@ export const financialService = {
         if (invoices.length === 0 && !opcoes.permitirSemNota) {
             console.log(`[FINANCIAL] Order ${order.number} has no invoices. Skipping forecast.`);
             return { pulou: 'sem-nota', motivo: 'O pedido não tem nota fiscal vinculada.' };
+        }
+
+        // 3b. A NOTA já lançou o título (Fiscal › "Criar título" com este pedido):
+        // gerar as parcelas do pedido por cima cobraria em dobro (19/10/2026).
+        // Erro de leitura sobe — seguir às cegas seria o próprio dobro.
+        const { data: tituloDaNota, error: tituloErr } = await supabase
+            .from('internal_transactions')
+            .select('id')
+            .eq('purchase_order_id', orderId)
+            .eq('source_system', 'NFE')
+            .eq('direction', 'DEBIT')
+            .neq('status', 'CANCELLED')
+            .limit(1);
+        if (tituloErr) throw tituloErr;
+        if (tituloDaNota && tituloDaNota.length > 0) {
+            console.log(`[FINANCIAL] Order ${order.number} already has an invoice-generated payable. Skipping.`);
+            return { pulou: 'titulo-da-nota', motivo: 'A nota fiscal deste pedido já lançou o título a pagar; as parcelas do pedido não são geradas por cima.' };
         }
 
         // 4. Project loading

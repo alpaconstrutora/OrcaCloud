@@ -14,6 +14,7 @@ import { useToast } from '../hooks/useToast';
 import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 import { agruparLinhas, chavePorMes, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
+import { ehFob, rotuloStatusLogistico } from '../utils/formaEntrega';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 const COLUMNS: ColumnConfig[] = [
@@ -66,7 +67,8 @@ const ORDEM_STATUS_LOGISTICO = ['confirmado', 'separação', 'em trânsito', 'en
 
 // Badge de status — sem estado próprio, movida para escopo de módulo para poder
 // ser usada dentro de renderReceiptCell (função pura, fora do componente).
-const ReceiptStatusBadge = ({ status }: { status: string }) => {
+// FOB: texto pelo `rotuloStatusLogistico`, cor pelo status gravado.
+const ReceiptStatusBadge = ({ status, fob = false }: { status: string; fob?: boolean }) => {
     const colors: Record<string, string> = {
         'Confirmado': 'text-gray-800',
         'Separação': 'text-blue-700',
@@ -77,7 +79,7 @@ const ReceiptStatusBadge = ({ status }: { status: string }) => {
     };
     return (
         <span className={`text-sm font-normal ${colors[status] || 'text-gray-600'}`}>
-            {status}
+            {rotuloStatusLogistico(status, fob)}
         </span>
     );
 };
@@ -106,7 +108,7 @@ function renderReceiptCell(
         case 'supplier':
             return <span className="text-gray-700 text-sm font-normal">{order.supplierName}</span>;
         case 'status':
-            return <ReceiptStatusBadge status={order.status} />;
+            return <ReceiptStatusBadge status={order.status} fob={ehFob(order.deliveryMethod)} />;
         case 'date':
             return (
                 <div className="flex items-center gap-2">

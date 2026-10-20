@@ -7,6 +7,7 @@ import {
     PortalLoading, StatusPill, Td, Th,
 } from '../../portal/PortalKit';
 import { ORDER_TONE, isOpenOrder, orderTotal } from './status';
+import { ehFob, rotuloStatusLogistico } from '../../../utils/formaEntrega';
 
 interface Props {
     orders: PurchaseOrder[];
@@ -172,7 +173,7 @@ const PortalOrders: React.FC<Props> = ({ orders, invoices, loading, onOpenOrder 
                                                 <Td className="text-[#1F2430] font-medium tabular-nums">{fmtBRL(orderTotal(o))}</Td>
                                                 <Td>
                                                     <span className="inline-flex items-center gap-2">
-                                                        <StatusPill tone={ORDER_TONE[o.status] ?? 'muted'}>{o.status}</StatusPill>
+                                                        <StatusPill tone={ORDER_TONE[o.status] ?? 'muted'}>{rotuloStatusLogistico(o.status, ehFob(o.deliveryMethod))}</StatusPill>
                                                         {nf && <FileCheck className="w-3.5 h-3.5 text-emerald-500" aria-label="Nota fiscal vinculada" />}
                                                     </span>
                                                 </Td>
@@ -215,7 +216,7 @@ const PortalOrders: React.FC<Props> = ({ orders, invoices, loading, onOpenOrder 
                                             <p className="text-sm font-semibold text-[#1F2430] truncate">{o.number || o.id.slice(0, 8)}</p>
                                             <p className="text-[12px] text-[#A0A4AD] mt-0.5 truncate">{o.projectName || 'Obra não informada'}</p>
                                         </div>
-                                        <StatusPill tone={ORDER_TONE[o.status] ?? 'muted'}>{o.status}</StatusPill>
+                                        <StatusPill tone={ORDER_TONE[o.status] ?? 'muted'}>{rotuloStatusLogistico(o.status, ehFob(o.deliveryMethod))}</StatusPill>
                                     </div>
                                     <div className="flex items-center justify-between gap-3 mt-3">
                                         <span className="text-[12px] text-[#8A8F9A]">

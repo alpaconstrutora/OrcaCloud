@@ -168,26 +168,20 @@ nenhum encontro rede × rede, nenhum tubo atravessando pilar. O que elas ainda m
 
 A fazer, em ordem:
 
-1. **F27-D2** — publicar quando o CI do PR #46 passar (`main` → `conferir-producao.sh`).
-2. **F27-D3 — estrutura em prumada (3 pav.)**: os pilares do 2º descem até o térreo (ou nascem em transição no nível
-   certo), vigas e lajes por nível, o guarda-corpo do furo da escada no 1º; o núcleo que sobra fora do 2º com laje e
-   pilares próprios.
-3. **F27-D4 — instalações (3 pav.)**: o shaft que atravessa os dois níveis de baixo, a laje rebaixada por par, o passo
-   do shaft em N; **a opção "3 pavimentos" na tela e no Automático** (só quando o sobrado não comporta e o gabarito
-   deixa); as premissas passam a gravar 3.
-4. **F27-D5 — o terraço**: o telhado só sobre o 2º (e sobre o núcleo que sobra fora dele), a laje do 1º como cobertura
-   (impermeabilização no orçamento), o guarda-corpo do terraço, o uso TERRAÇO; a porta para o terraço da frente quando
-   o 2º sai com a planta invertida (hoje a "entrada" do gerador fica nos fundos).
-5. **Qualidade do 2º/1º na casa de 3** (vistos na sonda da D2): o gerador põe cada ambiente do 2º numa faixa de lado a
-   lado (banheiro de 5,40 × 1,40 m); com programa pequeno o 1º toma a laje inteira (dormitório de 59 m²); num lote o
-   núcleo deixa um banheiro do 1º com 2,39 m².
-6. **Sobrado 10 × 30 (4 dorm.)**: os 4 encontros de rede sob a laje rebaixada — os eletrodutos retos do forro precisam
-   desviar de zona não retangular (fase própria; 3 tentativas revertidas na F27 parte 2).
-7. **Luz de teto sob dois banheiros de cima** (laje rebaixada em L).
-8. **Aquecedor** a 0,15–0,20 m do vão (pedido 0,40) e serviço sem parede externa (ventilação do aquecedor a conferir)
-   em 6 das 8 casas — hoje NAO_DECIDIDO com o motivo dito.
-9. **R1-B térreo**: cozinha × serviço sem porta direta; larguras de serviço e dormitório abaixo do mínimo.
-10. **F28** — a chuva de projeto na tela da casa; as bolhas dos eixos na prancha sem sobrepor.
+Lista do usuário (14–20/10/2026), todos os itens fechados — o detalhe de cada um nos registros abaixo:
+
+1. ✅ F27-D2 publicada. 2. ✅ F27-D3 estrutura. 3. ✅ F27-D4 instalações e a opção "3 pavimentos". 4. ✅ F27-D5 terraço.
+5. ✅ Qualidade da casa de 3: 5.1a–e (encontros 19 → 0, pilares 4 → 0), 5.2 (lavabo), 5.3a–b (o 1º recuado).
+6. ✅ Sobrado 10 × 30: o ponto sob a laje rebaixada chega pela parede (0 encontros).
+7. ✅ Luz de teto sob dois banheiros de cima: não reproduz mais.
+8. ✅ Aquecedor: todas as paredes com a folga inteira; parede interna + duto (0 NAO_DECIDIDO nas 8 casas).
+9. ✅ R1-B: cozinha + serviço juntos e a casa alargada só o mínimo (0 pendências).
+10. ✅ F28: a chuva de projeto na tela; as bolhas não se sobrepõem em folha que cabe (não reproduz).
+
+⏳ Sobras anotadas (fase própria quando o usuário pedir): a ÁGUA na faixa dentro da laje rebaixada (ligações retas da
+coluna no shaft, 1–2 por lote); o pilar atravessado pela ligação da quente ao barrilete no sobrado 10 × 30; o 1º que
+não recua no 10 × 30 de 2 dorm. (3 pavimentos); o escritório de 1,70 m no 2º do R1-A; a porta do lavabo pelo serviço
+(10 × 30 de 4 dorm.).
 
 Ambiente: a máquina de desenvolvimento derruba o Node (segfault, worker que cai, processo que trava por horas) —
 toda medição roda com repetição e `timeout 900`; resultado só vale quando se repete. Não é defeito do código (o CI roda

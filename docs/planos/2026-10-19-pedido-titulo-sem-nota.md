@@ -34,7 +34,8 @@ sempre com confirmação; se a nota chegar depois, o título já gerado é manti
   parcelas, total e condição; recusa do serviço aparece no card; sucesso recarrega a tabela.
   **Pronto quando:** `__tests__/components/PedidoParcelasComprador.test.tsx` verde. ✅ 8.
 - [x] `tsc` limpo; `check-ui-standard.sh` sem achado; `orgContextGuard` verde.
-- [ ] **Conferência na tela** — pelo usuário no PCO-011-017-0002 depois de publicado.
+- [x] **Conferência na tela** — publicado em `69b2ff11`. ✅ 19/10: o usuário gerou o título no
+  PCO-011-017-0002 pelo botão — "funcionou e verifiquei o titulo no financeiro tambem!".
 
 ## Atenção (não muda nesta entrega)
 

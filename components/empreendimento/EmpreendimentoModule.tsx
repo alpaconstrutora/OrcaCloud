@@ -1,7 +1,8 @@
 // components/empreendimento/EmpreendimentoModule.tsx
 import React from 'react';
-import { Plus, Building2, Search, RefreshCw, AlertCircle, MoveHorizontal, HardHat } from 'lucide-react';
+import { Plus, Building2, Search, RefreshCw, AlertCircle, MoveHorizontal, HardHat, Layers, ChevronDown, ChevronRight } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
+import { FilterPopover } from '../ui/FilterPopover';
 import { InlineActionTray } from '../ui/InlineActionTray';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
@@ -38,6 +39,17 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   EM_OPERACAO: 'text-teal-600',
   ENCERRADO: 'text-slate-500',
 };
+
+// Agrupamento da lista (filtro "Agrupar" da toolbar, §5.4). Só dimensões que já são
+// colunas da tabela — agrupar por algo que o usuário não vê não ajuda a ler.
+type GroupByField = '' | 'tipo' | 'status' | 'organization';
+
+const GROUP_BY_OPTIONS: { value: GroupByField; label: string }[] = [
+  { value: '', label: 'Sem agrupamento' },
+  { value: 'tipo', label: 'Tipo' },
+  { value: 'status', label: 'Status' },
+  { value: 'organization', label: 'Organização' },
+];
 
 const COLUMNS: ColumnConfig[] = [
   { key: 'code', label: 'Código', sortable: true },
@@ -138,6 +150,15 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   const [items, setItems] = React.useState<Empreendimento[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = usePersistedState<string>('empreendimentoList:search', '');
+  const [groupBy, setGroupBy] = usePersistedState<GroupByField>('empreendimentoList:groupBy', '');
+  // Grupos recolhidos — transitório de propósito: ao reabrir a tela todos voltam abertos.
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) =>
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   const tableColumns = useTableColumns(COLUMNS, 'empreendimentoListColumns');
   const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'empreendimentoListColWidths');
   // table-layout:fixed + largura total explícita — mesma razão do padrão em SupplierList
@@ -291,6 +312,32 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
     });
   }, [items, search, tableColumns.sortColumn, tableColumns.sortDirection, tipoLabel, orgName]);
 
+  // Divide a lista já filtrada/ordenada em grupos. A ordem dentro de cada grupo é a da
+  // coluna clicada; a ordem dos grupos é fixa (status = ciclo de vida; resto = A-Z, e o
+  // "sem valor" por último).
+  const groups = React.useMemo(() => {
+    if (!groupBy) return [{ key: '__all__', label: '', items: filtered }];
+    const keyOf = (i: Empreendimento) =>
+      groupBy === 'tipo' ? (i.tipo || '') : groupBy === 'status' ? i.status : (i.organization_id || '');
+    const labelOf = (i: Empreendimento) =>
+      groupBy === 'tipo' ? tipoLabel(i.tipo) : groupBy === 'status' ? STATUS_LABELS[i.status] : orgName(i.organization_id);
+    const map = new Map<string, { key: string; label: string; items: Empreendimento[] }>();
+    for (const i of filtered) {
+      const key = keyOf(i) || '__none__';
+      const g = map.get(key) ?? { key, label: key === '__none__' ? 'Sem informação' : labelOf(i), items: [] };
+      g.items.push(i);
+      map.set(key, g);
+    }
+    const list = [...map.values()];
+    const statusOrder = Object.keys(STATUS_LABELS);
+    return list.sort((a, b) => {
+      if (a.key === '__none__') return 1;
+      if (b.key === '__none__') return -1;
+      if (groupBy === 'status') return statusOrder.indexOf(a.key) - statusOrder.indexOf(b.key);
+      return a.label.localeCompare(b.label);
+    });
+  }, [filtered, groupBy, tipoLabel, orgName]);
+
   // ── Detalhe ────────────────────────────────────────────────────────────────
   if (selected) {
     return (
@@ -378,6 +425,15 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
               />
             </div>
+
+            {/* Filtro rápido de escolha única (§5.4) — entre a busca e o agrupador de colunas */}
+            <FilterPopover<GroupByField>
+              label="Agrupar"
+              icon={<Layers className="w-3.5 h-3.5" />}
+              value={groupBy}
+              onChange={v => { setGroupBy(v); setCollapsedGroups(new Set()); }}
+              options={GROUP_BY_OPTIONS}
+            />
 
             <button
               onClick={load}
@@ -473,7 +529,33 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filtered.map(item => (
+                {groups.map(group => (
+                  <React.Fragment key={group.key}>
+                    {/* Cabeçalho do grupo — só com agrupamento ativo. Clique recolhe/abre. */}
+                    {groupBy && (
+                      <tr
+                        onClick={() => toggleGroup(group.key)}
+                        className="bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+                      >
+                        <td colSpan={tableColumns.visibleColumns.filter(k => k !== 'actions').length + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0)} className="px-6 py-2">
+                          <div className="flex items-center gap-2 text-sm text-gray-700">
+                            {collapsedGroups.has(group.key)
+                              ? <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+                              : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+                            <span className="font-semibold">{group.label}</span>
+                            <span className="text-gray-400">
+                              {group.items.length} empreendimento{group.items.length !== 1 ? 's' : ''}
+                            </span>
+                            {tableColumns.visibleColumns.includes('vgv') && (
+                              <span className="text-gray-400">
+                                · VGV R$ {group.items.reduce((s, i) => s + (i.vgv_total || 0), 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {!collapsedGroups.has(group.key) && group.items.map(item => (
                   <tr
                     key={item.id}
                     onClick={() => setSelected(item)}
@@ -506,6 +588,8 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                       </td>
                     )}
                   </tr>
+                    ))}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

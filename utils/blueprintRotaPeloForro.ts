@@ -19,9 +19,10 @@
  * Com afastamentos diferentes, a descida de uma disciplina não cruza o ramal de outra; com cotas diferentes, as
  * travessias não se encontram. Um afastamento ≥ raio + raio do vizinho é responsabilidade das hipóteses.
  */
-import { anelRecuado, distanciaEntreEixos3D, envelopeDoTrecho, envelopeValido, pavimentosDoNucleo, pointInPolygon, type BlueprintModel, type DisciplinaDeRede, type ObjectId, type Point, type Wall } from './blueprintKernel';
+import { anelRecuado, distanciaEntreEixos3D, envelopeDoTrecho, envelopeValido, pavimentosDoNucleo, pegadaEmPlanta, pointInPolygon, type BlueprintModel, type DisciplinaDeRede, type ObjectId, type Point, type Wall } from './blueprintKernel';
 import { semEspiculas } from './blueprintDistribuicao';
 import { anelDoPilar, fracaoDentro, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { encaixarNaParede } from './blueprintRotaPelasParedes';
 import { TOLERANCIA_DO_LADO_MM, paredeContemLado, paredeDoLado } from './blueprintLadoDaParede';
 
 type P2 = { x: number; y: number };
@@ -483,6 +484,77 @@ export function fundoDaVigaSobre(model: BlueprintModel, levelId: ObjectId, p: P2
     }
   }
   return fundo;
+}
+
+/** Item 6: a folga entre a borda da laje rebaixada e a descida que sai dela pela parede, mm. */
+export const SAIDA_DO_REBAIXO_FOLGA_MM = 20;
+
+/**
+ * Item 6 da casa automática (19/10/2026): o ponto de parede SOB uma laje rebaixada (o rebaixo do banheiro de cima desce
+ * até o forro do de baixo, e o ramal de esgoto corre nele). A faixa não passa sobre o rebaixo: a rede chega por fora,
+ * pela própria parede — o ponto de saída `s` na face da parede, fora do rebaixo (a borda mais perto, andando pelo eixo),
+ * de onde a descida vem da faixa até `cotaMm` (abaixo do rebaixo e da viga da parede, com a folga e o raio), corre na
+ * parede até o ponto e desce. `null` quando o ponto não está sob rebaixo, não tem parede, não acha saída ao alcance ou a
+ * corrida cruzaria porta ou janela — fica o de antes. Sem isso, o eletroduto ia reto pela faixa até o ponto, por dentro
+ * do rebaixo, e descia nele cruzando o ramal (sobrado 10 × 30, 4 dorm.).
+ */
+export function saidaDoRebaixoPelaParede(
+  model: BlueprintModel,
+  levelId: ObjectId,
+  at: P2,
+  cotaDoPontoMm: number,
+  raioMm: number,
+  folgaSobAVigaMm: number,
+  alcanceMm = 3000,
+  passoMm = 50,
+): { s: P2; cotaMm: number } | null {
+  const nivel = model.levels.find((l) => l.id === levelId);
+  if (!nivel) return null;
+  const rebaixos = (model.structures ?? [])
+    .filter((x) => x.kind === 'LAJE' && x.levelId === levelId && x.baseMm < nivel.defaultHeightMm - 1)
+    .map((x) => ({ anel: pegadaEmPlanta(x) as Point[], base: x.baseMm }));
+  const sobre = (p: P2) => rebaixos.filter((r) => pointInPolygon(r.anel, p as Point));
+  if (!sobre(at).length) return null;
+  const e = encaixarNaParede(at, model.walls.filter((w) => w.levelId === levelId), 600);
+  if (!e) return null;
+  const w = e.parede;
+  const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+  if (L < 1) return null;
+  const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+  const off = { x: at.x - e.q.x, y: at.y - e.q.y };
+  const t0 = (e.q.x - w.a.x) * u.x + (e.q.y - w.a.y) * u.y;
+  const naFace = (t: number): P2 => ({ x: Math.round(w.a.x + u.x * t + off.x), y: Math.round(w.a.y + u.y * t + off.y) });
+  const margem = raioMm + SAIDA_DO_REBAIXO_FOLGA_MM;
+  const fora = (t: number) => [t - margem, t, t + margem].every((x) => !sobre(naFace(x)).length);
+  let tS: number | null = null;
+  for (let d = passoMm; d <= alcanceMm && tS == null; d += passoMm)
+    for (const k of [1, -1]) {
+      const t = t0 + k * d;
+      if (t < margem || t > L - margem) continue;
+      if (fora(t)) {
+        tS = t;
+        break;
+      }
+    }
+  if (tS == null) return null;
+  // A cota da corrida: abaixo do rebaixo e da viga sobre a parede em todo o caminho.
+  let cota = nivel.defaultHeightMm;
+  const [lo, hi] = [Math.min(t0, tS), Math.max(t0, tS)];
+  for (let t = lo; t <= hi + 1; t += passoMm) {
+    const p = naFace(Math.min(t, hi));
+    for (const r of sobre(p)) cota = Math.min(cota, r.base - folgaSobAVigaMm - raioMm);
+    const viga = fundoDaVigaSobre(model, levelId, { x: w.a.x + u.x * Math.min(t, hi), y: w.a.y + u.y * Math.min(t, hi) }, raioMm);
+    if (viga != null) cota = Math.min(cota, viga - folgaSobAVigaMm - raioMm);
+  }
+  cota = Math.floor(cota);
+  if (cota <= cotaDoPontoMm) return null;
+  // Nem porta nem janela no caminho, na altura da corrida.
+  for (const o of model.openings) {
+    if (o.wallId !== w.id) continue;
+    if (o.offsetMm + o.widthMm < lo - raioMm || o.offsetMm > hi + raioMm) continue;
+    if (cota + raioMm > o.sillMm && cota - raioMm < o.sillMm + o.heightMm) return null;
+  }
+  return { s: naFace(tS), cotaMm: cota };
 }
 
 export interface PedacoDaDescida {

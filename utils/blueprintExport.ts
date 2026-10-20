@@ -117,8 +117,6 @@ export const MARGEM_MM = 12;
 export const CARIMBO_MM = 26;
 /** Faixa reservada para a cadeia de cotas, em milímetro de PAPEL. */
 export const FAIXA_COTA_MM = 14;
-/** F28: faixa das bolhas dos eixos em volta do desenho (uma fileira: o diâmetro de 7 mm e 1,5 de respiro), mm de papel. */
-export const FAIXA_DAS_BOLHAS_MM = 8.5;
 
 export interface Enquadramento {
   cabe: boolean;
@@ -196,12 +194,9 @@ export function enquadrar(
   // tem o mesmo tamanho em 1:50 e em 1:200. Por isso ela ENCOLHE a área útil,
   // em vez de crescer junto com o desenho.
   const faixa = comCotas ? FAIXA_COTA_MM : 0;
-  // F28 da casa automática (20/10/2026): as BOLHAS dos eixos vão para além das cotas (`bolhasDoEixo`) — sem faixa
-  // própria, a de baixo caía no carimbo, sobre o aviso (1:100, A3). Com eixo nomeado, uma fileira de bolhas em volta.
-  const bolhas = (model.eixos ?? []).some((e) => !!e.nome) ? FAIXA_DAS_BOLHAS_MM : 0;
 
-  const utilLarguraMm = papel.larguraMm - 2 * MARGEM_MM - faixa - 2 * bolhas;
-  const utilAlturaMm = papel.alturaMm - 2 * MARGEM_MM - CARIMBO_MM - faixa - 2 * bolhas;
+  const utilLarguraMm = papel.larguraMm - 2 * MARGEM_MM - faixa;
+  const utilAlturaMm = papel.alturaMm - 2 * MARGEM_MM - CARIMBO_MM - faixa;
 
   const bb = recorte ?? boundingBox(model);
   // No recorte a folga já está no retângulo pedido.
@@ -247,8 +242,8 @@ export function enquadrar(
     // onde o desenho começa.
     // A cadeia vertical fica à ESQUERDA e a horizontal ABAIXO, então o desenho
     // desloca para a direita e a faixa de baixo sai do espaço já descontado.
-    offsetXMm: MARGEM_MM + faixa + bolhas + Math.max(0, (utilLarguraMm - desenhoLarguraMm) / 2),
-    offsetYMm: MARGEM_MM + bolhas + Math.max(0, (utilAlturaMm - desenhoAlturaMm) / 2),
+    offsetXMm: MARGEM_MM + faixa + Math.max(0, (utilLarguraMm - desenhoLarguraMm) / 2),
+    offsetYMm: MARGEM_MM + Math.max(0, (utilAlturaMm - desenhoAlturaMm) / 2),
     escalaSugerida,
   };
 }

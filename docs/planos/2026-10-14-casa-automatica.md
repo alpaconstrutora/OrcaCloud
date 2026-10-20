@@ -3067,8 +3067,10 @@ serviço para o FUNDO (a frente, ao lado da garagem, não o comportava), e lá a
   dizia. A tela ganhou, nas Hipóteses (com a hidráulica marcada), a cidade da tabela, o período de retorno e a
   intensidade informada — as MESMAS hipóteses pluviais do estudo que o painel Pluvial edita — e a linha "Chuva de
   projeto" com o valor que vale e de onde vem (`chuvaDaCasa`), em âmbar quando falta.
-- **Bolhas dos eixos na prancha**: reproduzido com uma prancha de verdade (A3, 1:100, cotas e eixos — um `Desenhista` que
-  registra círculos e textos): a bolha da borda de baixo, empurrada para além das cotas, caía 1,2 mm sobre o aviso do
-  carimbo ("ESTUDO PRELIMINAR…"); entre si as bolhas não se tocavam (o escalonamento de 08/10 já resolvia). O
-  `enquadrar` reserva agora, com eixo nomeado, a faixa das bolhas em volta do desenho (`FAIXA_DAS_BOLHAS_MM` = 8,5:
-  uma fileira) — sem sobreposição a 1:75 e 1:100 nas casas medidas. As 33 suítes que usam o enquadramento passam.
+- **Bolhas dos eixos na prancha: não reproduz.** Medido com uma prancha de verdade (um `Desenhista` que registra
+  círculos e textos; bolha × bolha, bolha × texto e bolha fora da folha): nas configurações em que a casa CABE na
+  folha (A3 em pé a 1:100 sem cotas; 1:125 com cotas), nenhuma sobreposição — o escalonamento de 08/10
+  (`bolhasDosEixos`) já resolvia. A bolha "sobre o aviso do carimbo" só aparece quando o desenho NÃO cabe, e aí a
+  exportação já recusa a escala (`EscalaNaoCabe`, "a partir de 1:125"). Uma faixa reservada para as bolhas no
+  `enquadrar` (tentada) não resolvia nada e tirava a casa de 12 × 30 do 1:100 no A3 (o teste das saídas da F11
+  acusou no CI) — revertida.

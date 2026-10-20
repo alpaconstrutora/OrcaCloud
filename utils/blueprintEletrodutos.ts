@@ -84,7 +84,7 @@ import type {
   Trecho,
 } from './blueprintKernel';
 import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, composicaoDaRede } from './blueprintKernel';
-import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, ramaisDaLajeDeCima, type FaixaDoForro } from './blueprintRotaPeloForro';
+import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, type FaixaDoForro } from './blueprintRotaPeloForro';
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
 import { REGRA_DE_CAIXAS_PADRAO, caixasDaRede, type RegraDeCaixas, type SegmentoDaRede } from './blueprintCaixasDePassagem';
@@ -492,6 +492,17 @@ export function planejarEletrodutos(
     const pendentesNoTeto = new Map<No, { x: number; y: number }>();
     for (const p of pendentes) {
       if (naParede.has(p.id)) continue;
+      // Item 6 da casa automática: o ponto de parede SOB a laje rebaixada chega pela parede, de fora do rebaixo — a faixa
+      // não passa sobre ele (o ramal do banheiro de cima corre ali).
+      const saida = hip.noForro && p.cotaMm < teto && p.tipoEletrico !== 'ILUMINACAO_TETO' ? saidaDoRebaixoPelaParede(model, nivel.id, p.at, p.cotaMm, hip.bitolaMm / 2, hip.noForro.folgaSobAVigaMm) : null;
+      if (saida) {
+        addTrecho(nivel.id, saida.s, teto, saida.s, saida.cotaMm);
+        addTrecho(nivel.id, saida.s, saida.cotaMm, p.at, saida.cotaMm);
+        addTrecho(nivel.id, p.at, saida.cotaMm, p.at, p.cotaMm);
+        const k = chave(nivel.id, saida.s.x, saida.s.y, teto);
+        if (!alcancados.has(k)) pendentesNoTeto.set(k, { x: saida.s.x, y: saida.s.y });
+        continue;
+      }
       if (p.cotaMm !== teto) addTrecho(nivel.id, p.at, p.cotaMm, p.at, teto);
       const k = chave(nivel.id, p.at.x, p.at.y, teto);
       if (!alcancados.has(k)) pendentesNoTeto.set(k, { x: p.at.x, y: p.at.y });

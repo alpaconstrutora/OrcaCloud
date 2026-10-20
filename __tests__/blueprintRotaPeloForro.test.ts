@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { cotaDaFaixa, descidaDoForro, fundoDaVigaSobre, paredesDoForro, ramaisDaLajeDeCima, semDedosEstreitos } from '../utils/blueprintRotaPeloForro';
+import { cotaDaFaixa, descidaDoForro, fundoDaVigaSobre, paredesDoForro, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, semDedosEstreitos } from '../utils/blueprintRotaPeloForro';
 import { pointInPolygon } from '../utils/blueprintKernel';
 import { arvorePelasParedes } from '../utils/blueprintRotaPelasParedes';
 
@@ -268,5 +268,35 @@ describe('ramaisDaLajeDeCima (F27 item 5): o ramal que corre na laje do paviment
     expect(ramaisDaLajeDeCima(m, t, 2400, 'ELETRICA', 12.5)).toEqual([]);
     expect(ramaisDaLajeDeCima(m, t, 2755, 'ESGOTO', 50)).toEqual([]);
     expect(ramaisDaLajeDeCima(m, s, 2755, 'ELETRICA', 12.5)).toEqual([]);
+  });
+});
+
+describe('saidaDoRebaixoPelaParede (item 6): o ponto de parede sob a laje rebaixada chega pela parede, de fora do rebaixo', () => {
+  const comRebaixo = () => {
+    const { m, L } = casinha();
+    // O rebaixo do banheiro de cima sobre o canto da sala (x 0–2 m, y 3–4 m), com a base a 2,50 m.
+    const laje: Command = { type: 'AddStructural', levelId: L, kind: 'LAJE', pontos: [{ x: 0, y: 3000 }, { x: 2000, y: 3000 }, { x: 2000, y: 4000 }, { x: 0, y: 4000 }], alturaMm: 100, baseMm: 2500, rotulo: 'L1' } as Command;
+    return { m: applyCommand(m, laje).model, L };
+  };
+
+  it('sai pela parede até fora do rebaixo (com a folga e o raio), e corre abaixo do rebaixo e da viga', () => {
+    const { m, L } = comRebaixo();
+    // O interruptor na face da parede de cima (y = 3925), sob o rebaixo.
+    const r = saidaDoRebaixoPelaParede(m, L, { x: 1000, y: 3925 }, 1100, 12.5, 50)!;
+    // A borda do rebaixo em x = 2000; + 12,5 + 20 → o primeiro passo de 50 fora: x = 2050, na face.
+    expect(r.s).toEqual({ x: 2050, y: 3925 });
+    // A viga da parede (base 2,40 m) manda: 2400 − 50 − 12,5.
+    expect(r.cotaMm).toBe(2337);
+  });
+
+  it('fora do rebaixo, ou com a corrida cruzando uma janela, nada muda (null)', () => {
+    const { m, L } = comRebaixo();
+    expect(saidaDoRebaixoPelaParede(m, L, { x: 4000, y: 3925 }, 1100, 12.5, 50)).toBeNull();
+    // A parede de cima que passa em x = 1000 (o kernel pode tê-la partido no encontro com a do meio).
+    const cima = m.walls.find((w) => w.a.y === 4000 && w.b.y === 4000 && Math.min(w.a.x, w.b.x) <= 1000 && Math.max(w.a.x, w.b.x) >= 1000)!;
+    // Janela de x 1500 a 500 (peitoril 1,00 m, até 2,40 m), no caminho da corrida (x 1000 → 2050, a 2,337 m).
+    const offset = cima.a.x > cima.b.x ? cima.a.x - 1500 : 500 - cima.a.x;
+    const comJanela = applyCommand(m, { type: 'AddOpening', wallId: cima.id, kind: 'window', offsetMm: offset, widthMm: 1000, heightMm: 1400, sillMm: 1000 }).model;
+    expect(saidaDoRebaixoPelaParede(comJanela, L, { x: 1000, y: 3925 }, 1100, 12.5, 50)).toBeNull();
   });
 });

@@ -1296,6 +1296,16 @@ describe('F22 — pavimentos automático', () => {
     expect(ditos).toBe(encontros);
   }, 240_000);
 
+  it('item 6: o sobrado no lote de 10 m, 4 dorm. — nenhum encontro de rede (o ponto sob a laje rebaixada chega pela parede)', () => {
+    const m = lote10x30();
+    const p = planejarCasa(m, entrada(m, { curto: quatro }), { pavimentos: 2 });
+    const porId = new Map((p.resultado.trechos ?? []).map((t) => [t.id, t]));
+    const encontros = conflitosDoModelo(p.resultado)
+      .filter((c) => c.classe === 'REDE' && porId.has(c.trechoId) && porId.has(c.outroId))
+      .map((c) => `${porId.get(c.trechoId)!.disciplina} × ${porId.get(c.outroId)!.disciplina}`);
+    expect(encontros).toEqual([]);
+  }, 240_000);
+
   it('a mesma casa com "Térrea" escolhida: fica térrea, e a pendência diz que o sobrado resolve', () => {
     const m = lote10x30();
     const p = planejarCasa(m, entrada(m, { curto: quatro }), { pavimentos: 1 });

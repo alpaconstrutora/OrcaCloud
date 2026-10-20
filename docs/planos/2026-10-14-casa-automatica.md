@@ -2994,3 +2994,20 @@ Pode seguir: 5.3a → 5.3b, cada uma publicada.
     com costas, os dois tubos de queda a 18 cm) e sob os ramais deles; a árvore pelas paredes do forro só PENALIZA
     atravessar obstáculo, e não há caminho pelas paredes em volta. Pede rota do forro com obstáculo proibido (afeta as
     8 casas) — próxima rodada.
+
+#### Item 6 — sobrado 10 × 30, 4 dorm.: os encontros sob a laje rebaixada (19/10/2026)
+
+Medido no início: 1 encontro e 1 pilar (eram 4 encontros antes da série 5.1). O encontro: o interruptor do térreo fica
+numa parede SOB a laje rebaixada do banheiro de cima (o rebaixo desce a 2,58 m e o ramal de esgoto corre nele); o
+eletroduto ia em diagonal pela faixa do forro (2,755 m) por dentro do rebaixo e descia no ponto, cruzando o ramal.
+
+- `saidaDoRebaixoPelaParede` (`utils/blueprintRotaPeloForro.ts`): o ponto de parede sob rebaixo chega pela PRÓPRIA
+  parede — anda pelo eixo até sair do rebaixo (com o raio e 20 mm), desce da faixa ali até abaixo do rebaixo e da viga
+  da parede (com a folga sob a viga e o raio), corre na parede até o ponto e desce; nunca através de porta ou janela
+  (aí `null` e fica o de antes). Ligado em `planejarEletrodutos` no ponto que não encaixou na árvore das paredes.
+- Resultado: 0 encontros no sobrado 10 × 30 de 4 dorm.; 6 lotes de 3 pavimentos sem regressão; 8 casas idênticas.
+  Testes novos (falham sem a correção).
+- ⏳ Fica o PILAR: a ligação diagonal (5 m) da cabeça da coluna da quente, que nasce dentro do shaft, ao barrilete do
+  forro atravessa o pilar P13. Tentado: desviar no `ligar` do barrilete (sem os shafts, que contêm a ponta) — o pilar
+  sai, mas o contorno cruza duas descidas de eletroduto (tomada e luz de teto), traçadas depois. Revertido; pede a
+  cabeça da coluna encaixada na árvore das paredes do barrilete, não ligada em reta.

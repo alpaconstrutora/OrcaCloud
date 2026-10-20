@@ -3011,3 +3011,34 @@ eletroduto ia em diagonal pela faixa do forro (2,755 m) por dentro do rebaixo e 
   forro atravessa o pilar P13. Tentado: desviar no `ligar` do barrilete (sem os shafts, que contêm a ponta) — o pilar
   sai, mas o contorno cruza duas descidas de eletroduto (tomada e luz de teto), traçadas depois. Revertido; pede a
   cabeça da coluna encaixada na árvore das paredes do barrilete, não ligada em reta.
+
+#### Item 7 — a luz de teto sob dois banheiros de cima (19/10/2026): não reproduz mais
+
+Medido com uma contagem nova na sonda (trecho horizontal de rede na faixa do forro DENTRO de laje rebaixada do mesmo
+pavimento): nenhum eletroduto sob rebaixo no sobrado 10 × 30 de 4 dorm. nem no 12 × 30 — a luz que saía 30 cm além da
+borda e a chegada pela parede do item 6 resolveram. O único eletroduto sob rebaixo que sobra é o do 12 × 30 sem suíte
+de 3 pavimentos (o mesmo ponto dos 3 encontros sob o shaft, anotado na 5.3b).
+
+⏳ Achado pela mesma contagem: a ÁGUA (quente, às vezes fria) corre na faixa dentro da laje rebaixada — 1 ou 2 trechos
+por lote, nos 6 lotes de 3 pavimentos e nos sobrados (o 12 × 30, uma das 8 casas de referência, inclusive). São as
+ligações RETAS da coluna que nasce no shaft (encostado no rebaixo) ao anel ou ao barrilete. A conferência de conflitos
+não acusa tubo dentro de laje. Desviar a reta (tentado no item 6) tira o tubo do rebaixo, mas o contorno cruza descidas
+de eletroduto traçadas depois — pede compatibilização própria (a coluna sair do shaft pelo lado sem rebaixo; o
+eletroduto ver a água ao descer). Fase própria.
+
+#### Item 8 — o aquecedor longe do vão e o serviço sem parede externa (19/10/2026, decisão: "parede interna + duto")
+
+Medido: 9 pendências NAO_DECIDIDO de aquecedor em 6 das 8 casas — "a 0,15–0,20 m do vão (pedido 0,40)" e "Área de
+serviço não tem parede externa" (este, falso: o serviço TINHA parede externa, só sem trecho livre).
+
+- `ladosExternos` (`utils/blueprintAncorasDaCasa.ts`): o aquecedor procura em TODOS os lados externos da área de
+  serviço e da cozinha, primeiro com a folga INTEIRA do vão (antes, um só lado — o maior — e a folga caía pela metade
+  nele). Na cozinha porque o serviço não tem trecho a 0,40 m: dito em nota, não como "sem parede externa".
+- Decisão do usuário (19/10/2026): sem nenhuma parede externa com a folga inteira, a PAREDE INTERNA do cômodo (com
+  fachada, para o duto de exaustão chegar a ela) vem antes de reduzir a folga; a pendência vai para CONFERIR (o duto).
+- O toco do barrilete (do encaixe na árvore das paredes à cabeça da coluna) desvia das prumadas das outras redes e dos
+  pilares: com o aquecedor na outra parede, o da quente passava a 7 cm da coluna da fria do 1º (sobrado 12 × 30). De
+  quebra, os 3 encontros do 12 × 30 sem suíte de 3 pavimentos (5.3b) sumiram.
+- Medido: 8 casas com 0 encontros, 0 vãos, 0 pilares e NENHUMA pendência NAO_DECIDIDO de aquecedor (eram 9) — nas 3
+  sem parede externa livre, o aquecedor na parede interna (CONFERIR); 6 lotes de 3 pavimentos com 0 encontros e trava
+  ok. As 8 casas mudam DE PROPÓSITO (novo marco de referência).

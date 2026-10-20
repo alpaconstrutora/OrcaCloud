@@ -116,6 +116,11 @@ const inteiro = (p: Point): Point => ({ x: Math.round(p.x), y: Math.round(p.y) }
  * longo; com a normal EXTERNA unitária. `null` = ambiente interno.
  */
 function ladoExterno(s: Space, espacos: readonly Space[], sonda: number): { a: Point; b: Point; n: Point; comprimento: number } | null {
+  return ladosExternos(s, espacos, sonda)[0] ?? null;
+}
+
+/** Item 8 da casa automática: TODOS os lados externos do cômodo (≥ 60 cm), do maior ao menor, com a normal para fora. */
+function ladosExternos(s: Space, espacos: readonly Space[], sonda: number): { a: Point; b: Point; n: Point; comprimento: number }[] {
   const c = centroide(s.ring);
   const lados: { a: Point; b: Point; n: Point; comprimento: number }[] = [];
   for (let i = 0; i < s.ring.length; i++) {
@@ -130,7 +135,7 @@ function ladoExterno(s: Space, espacos: readonly Space[], sonda: number): { a: P
     if (espacos.some((o) => o.id !== s.id && pointInPolygon(o.ring, fora))) continue;
     lados.push({ a, b, n, comprimento: L });
   }
-  return lados.sort((p, q) => q.comprimento - p.comprimento)[0] ?? null;
+  return lados.sort((p, q) => q.comprimento - p.comprimento);
 }
 
 /** F14d: os lados do cômodo (≥ 60 cm), do maior ao menor, com a normal para FORA dele. */
@@ -257,20 +262,42 @@ export function comandosDasAncoras(model: BlueprintModel, cx: ContextoDasAncoras
       // F14d: o primeiro cômodo com parede externa E trecho livre de vão (fora da laje rebaixada e do shaft); só sem
       // nenhum assim, o primeiro com parede externa (e o aquecedor fica diante do vão, dito) — na área de serviço do
       // sobrado, a parede externa é quase toda janela e as ligações dele corriam pelo vão.
-      const comLados = candidatos.map((sp) => ({ sp, lado: ladoExterno(sp, espacos, sonda) })).filter((x) => x.lado);
-      const comLado =
-        comLados.find((x) => posicaoForaDosVaos(model, cx.levelId, x.lado!, AQUECEDOR_FORA_DO_BATENTE_MM + hip.aquecedorFriaQuenteMm / 2) != null) ?? comLados[0];
+      // Item 8 (19/10/2026): TODOS os lados externos dos dois cômodos, e primeiro com a folga INTEIRA do vão — a área de
+      // serviço com o maior lado todo janela ficava a 0,20 m dele, com outra parede externa livre ao lado (6 das 8 casas).
+      const comLados = candidatos.flatMap((sp) => ladosExternos(sp, espacos, sonda).map((lado) => ({ sp, lado })));
+      const livreCom = (folga: number) => comLados.find((x) => posicaoForaDosVaos(model, cx.levelId, x.lado, folga + hip.aquecedorFriaQuenteMm / 2) != null);
+      const cheio = livreCom(hip.aquecedorLongeDoVaoMm);
+      // Item 8 (decisão do usuário, 19/10/2026: "parede interna + duto"): sem parede externa com a folga inteira, a parede
+      // INTERNA do cômodo (fora do vão; o cômodo com fachada, para o duto de exaustão chegar a ela) vem ANTES de reduzir a
+      // folga do vão — a 0,15–0,20 m da janela ficava em 3 das 8 casas.
+      const mesmoLado = (p: { a: Point; b: Point }, q: { a: Point; b: Point }) =>
+        (Math.hypot(p.a.x - q.a.x, p.a.y - q.a.y) < 1 && Math.hypot(p.b.x - q.b.x, p.b.y - q.b.y) < 1) || (Math.hypot(p.a.x - q.b.x, p.a.y - q.b.y) < 1 && Math.hypot(p.b.x - q.a.x, p.b.y - q.a.y) < 1);
+      const pelaInterna = cheio
+        ? null
+        : (candidatos
+            .flatMap((sp) => {
+              const ext = ladosExternos(sp, espacos, sonda);
+              if (!ext.length) return [];
+              return ladosDoComodo(sp)
+                .filter((x) => !ext.some((e) => mesmoLado(e, x)))
+                .map((x) => ({ sp, lado: x, t: posicaoForaDosVaos(model, cx.levelId, x, AQUECEDOR_FORA_DO_BATENTE_MM + hip.aquecedorFriaQuenteMm / 2) }));
+            })
+            .find((x) => x.t != null) ?? null);
+      const comLado = cheio ?? pelaInterna ?? livreCom(AQUECEDOR_FORA_DO_BATENTE_MM) ?? comLados[0];
       const serv = comLado?.sp ?? null;
       let lado = comLado?.lado ?? null;
       if (!serv || !lado) pendencias.push(`Aquecedor: ${candidatos.length ? `${candidatos.map((x) => x.name).join(' e ')} sem parede externa` : 'sem área de serviço nem cozinha'} — o aquecedor a gás pede ventilação; ponha à mão.`);
       else {
-        if (serv !== candidatos[0]) pendencias.push(`Aquecedor na ${serv.name}: ${candidatos[0].name} não tem parede externa — confira a ventilação permanente (NBR 13103).`);
+        const primeiroTemExterna = !!candidatos[0] && ladosExternos(candidatos[0], espacos, sonda).length > 0;
+        if (serv !== candidatos[0] && !primeiroTemExterna) pendencias.push(`Aquecedor na ${serv.name}: ${candidatos[0].name} não tem parede externa — confira a ventilação permanente (NBR 13103).`);
+        else if (serv !== candidatos[0]) notas.push(`Aquecedor na ${serv.name}: a parede externa da ${candidatos[0].name} não tem trecho a ${f2(hip.aquecedorLongeDoVaoMm / 1000)} m do vão.`);
         // O ponto do lado mais perto do meio que fica longe dos vãos da parede e dos cantos (a fria e a quente juntas).
         // A folga do vão cai à metade até o mínimo (o aparelho fora do batente) — a parede externa da área de serviço é
         // quase toda janela; sem lugar nem assim, fica no meio, dito.
         let folgaUsada = hip.aquecedorLongeDoVaoMm;
-        let t = posicaoForaDosVaos(model, cx.levelId, lado, folgaUsada + hip.aquecedorFriaQuenteMm / 2);
-        while (t == null && folgaUsada > AQUECEDOR_FORA_DO_BATENTE_MM) {
+        let t = pelaInterna ? pelaInterna.t : posicaoForaDosVaos(model, cx.levelId, lado, folgaUsada + hip.aquecedorFriaQuenteMm / 2);
+        if (pelaInterna) pendencias.push(`Aquecedor na ${serv.name}: nenhuma parede externa tem trecho a ${f2(hip.aquecedorLongeDoVaoMm / 1000)} m do vão — ficou numa parede interna; o duto de exaustão atravessa até a fachada: confira (NBR 13103).`);
+        while (!pelaInterna && t == null && folgaUsada > AQUECEDOR_FORA_DO_BATENTE_MM) {
           folgaUsada = Math.max(AQUECEDOR_FORA_DO_BATENTE_MM, folgaUsada / 2);
           t = posicaoForaDosVaos(model, cx.levelId, lado, folgaUsada + hip.aquecedorFriaQuenteMm / 2);
         }

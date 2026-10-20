@@ -2075,7 +2075,9 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         ancoras = resumo;
         if (notaDoShaft) notas.unshift(notaDoShaft);
       etapa('ANCORAS', ROTULO_DA_ETAPA_DA_CASA.ANCORAS, 'LANCOU', n, notas.join(' ') || null);
-        for (const x of pend) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: x });
+        // Item 8 (decisão do usuário, 19/10/2026: "parede interna + duto"): o aquecedor na parede interna é a solução
+        // escolhida — fica para CONFERIR (o duto), não para decidir.
+        for (const x of pend) pendencias.push({ grupo: /ficou numa parede interna/.test(x) ? 'CONFERIR' : 'NAO_DECIDIDO', texto: x });
       } catch (e) {
         const motivo = e instanceof Error ? e.message : String(e);
         etapa('ANCORAS', ROTULO_DA_ETAPA_DA_CASA.ANCORAS, 'NAO_RODOU', 0, motivo);

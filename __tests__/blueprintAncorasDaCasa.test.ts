@@ -63,19 +63,53 @@ describe('comandosDasAncoras', () => {
     expect(r.resumo.aquecedor).toBe(true);
   });
 
-  it('aquecedor fora da janela: com o vão no meio da fachada, vai para o lado dele (a folga cai até caber) e diz a quanto ficou', () => {
+  it('aquecedor fora da janela: sem parede externa com a folga inteira nos dois cômodos, vai para a parede interna do serviço (item 8) e diz', () => {
     // F14b: no meio do lado, o aquecedor caía diante da janela da área de serviço e a água descia pelo vão.
+    const { m: m0, L } = casinha();
+    const frente = m0.walls.find((w) => w.a.y === 0 && w.b.y === 0)!;
+    const fundos = m0.walls.find((w) => w.a.y === 3000 && w.b.y === 3000)!;
+    const janela = (wallId: string, offsetMm: number): Command => ({ type: 'AddOpening', wallId, kind: 'window', offsetMm, widthMm: 800, heightMm: 1200, sillMm: 1000 });
+    // Item 8 (19/10/2026): com a cozinha também tomada por janelas — sem lugar com a folga inteira em nenhum dos dois.
+    const largas = (wallId: string, offsetMm: number): Command => ({ type: 'AddOpening', wallId, kind: 'window', offsetMm, widthMm: 2600, heightMm: 1200, sillMm: 1000 });
+    const lateral = m0.walls.find((w) => w.a.x === 0 && w.b.x === 0)!;
+    const m = applyBatch(m0, [janela(frente.id, 3600), janela(fundos.id, 4600), largas(frente.id, 200), largas(fundos.id, 6200), largas(lateral.id, 200)]).model;
+    const r = comandosDasAncoras(m, ctxDe(L));
+    const aq = applyBatch(m, r.comandos).model.terminais.filter((t) => t.tipoHidraulico === 'AQUECEDOR');
+    expect(aq).toHaveLength(2);
+    // As duas janelas vão de x = 3,60 a 4,40 m: nenhum dos dois terminais diante delas.
+    for (const t of aq) expect(t.at.x <= 3600 - 150 || t.at.x >= 4400 + 150).toBe(true);
+    // Decisão do usuário (19/10/2026, "parede interna + duto"): antes de reduzir a folga, a parede INTERNA do serviço.
+    expect(r.pendencias.join(' ')).toMatch(/Aquecedor na Área de serviço: nenhuma parede externa tem trecho a 0,40 m do vão — ficou numa parede interna/);
+    for (const t of aq) expect(Math.abs(t.at.x - 3000) <= 251 || Math.abs(t.at.x - 5000) <= 251).toBe(true);
+  });
+
+  it('item 8: as duas fachadas do serviço com janela e a cozinha livre — o aquecedor vai para a cozinha com a folga inteira (dito em nota)', () => {
     const { m: m0, L } = casinha();
     const frente = m0.walls.find((w) => w.a.y === 0 && w.b.y === 0)!;
     const fundos = m0.walls.find((w) => w.a.y === 3000 && w.b.y === 3000)!;
     const janela = (wallId: string, offsetMm: number): Command => ({ type: 'AddOpening', wallId, kind: 'window', offsetMm, widthMm: 800, heightMm: 1200, sillMm: 1000 });
     const m = applyBatch(m0, [janela(frente.id, 3600), janela(fundos.id, 4600)]).model;
     const r = comandosDasAncoras(m, ctxDe(L));
+    const depois = applyBatch(m, r.comandos).model;
+    const aq = depois.terminais.filter((t) => t.tipoHidraulico === 'AQUECEDOR');
+    for (const t of aq) expect(pointInPolygon(depois.spaces.find((s) => s.name === 'Cozinha')!.ring, t.at)).toBe(true);
+    expect(r.pendencias.filter((x) => /Aquecedor/.test(x))).toEqual([]);
+    expect(r.notas.join(' ')).toMatch(/Aquecedor na Cozinha: a parede externa da Área de serviço não tem trecho a 0,40 m do vão/);
+  });
+
+  it('item 8: a janela toma uma fachada do serviço — o aquecedor vai para a OUTRA parede externa, com a folga inteira (sem pendência)', () => {
+    const { m: m0, L } = casinha();
+    const frente = m0.walls.find((w) => w.a.y === 0 && w.b.y === 0)!;
+    const m = applyCommand(m0, { type: 'AddOpening', wallId: frente.id, kind: 'window', offsetMm: 3600, widthMm: 800, heightMm: 1200, sillMm: 1000 }).model;
+    const r = comandosDasAncoras(m, ctxDe(L));
     const aq = applyBatch(m, r.comandos).model.terminais.filter((t) => t.tipoHidraulico === 'AQUECEDOR');
     expect(aq).toHaveLength(2);
-    // As duas janelas vão de x = 3,60 a 4,40 m: nenhum dos dois terminais diante delas.
-    for (const t of aq) expect(t.at.x <= 3600 - 150 || t.at.x >= 4400 + 150).toBe(true);
-    expect(r.pendencias.join(' ')).toMatch(/Aquecedor na Área de serviço: a 0,20 m do vão \(pedido: 0,40 m\)/);
+    // Nos fundos (y = 3000), dentro da área de serviço; nenhuma pendência de folga reduzida.
+    for (const t of aq) {
+      expect(Math.abs(t.at.y - 3000)).toBeLessThanOrEqual(100 + 150 + 1);
+      expect(t.at.x > 3000 && t.at.x < 5000).toBe(true);
+    }
+    expect(r.pendencias.filter((x) => /Aquecedor/.test(x))).toEqual([]);
   });
 
   it('R1-B: chuveiro elétrico — sem aquecedor, e dito', () => {

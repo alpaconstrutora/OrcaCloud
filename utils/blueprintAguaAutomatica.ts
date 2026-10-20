@@ -613,8 +613,14 @@ export function planejarAgua(
         cabecas.delete(k);
         continue;
       }
-      // A cabeça já está no eixo (a coluna foi posta nele); se não, um toco no teto.
-      if (chaveP(q) !== chaveP(pos)) addTrecho(origem.levelId, q, tetoO, pos, tetoO);
+      // A cabeça já está no eixo (a coluna foi posta nele); se não, um toco no teto. Item 8 da casa automática
+      // (19/10/2026): no forro, o toco desvia das prumadas das outras redes e dos pilares — o da quente passava a 7 cm da
+      // coluna da fria que desce do 1º (sobrado 12 × 30, com o aquecedor na outra parede).
+      if (chaveP(q) !== chaveP(pos)) {
+        const desvio = origemNoForro ? (desvioDoPilar(q, pos, [...pegadasDePilares(model, origem.levelId).map((g) => anelDoPilar(g, RAIO_NA_DESCIDA_MM) as Point[]), ...prumadasQueCruzam(model, origem.levelId, tetoO, disciplina, RAIO_NA_DESCIDA_MM, 2, false)]) ?? []) : [];
+        const pts = [q, ...desvio.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), pos];
+        for (let i = 1; i < pts.length; i++) addTrecho(origem.levelId, pts[i - 1], tetoO, pts[i], tetoO);
+      }
       alcancadosNoBarrilete.set(k, pos);
       rota.set(k, 0);
       cabecas.delete(k);

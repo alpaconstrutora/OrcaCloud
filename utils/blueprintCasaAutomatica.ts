@@ -141,6 +141,14 @@ import {
 export type DivisaDeEncosto = 'ESQUERDA' | 'DIREITA' | 'CENTRO';
 
 export interface HipotesesDaImplantacao {
+  /**
+   * Item 9 da casa automática (decisão do usuário, 19/10/2026: "alargar só o mínimo"): a largura (eixos) abaixo da qual a
+   * casa não fica — o retângulo alarga até ela mantendo a profundidade (cede só o que a TO pedir). Ausente = a da forma.
+   */
+  larguraMinimaMm?: number | null;
+  /** Item 9: o passo e o máximo do alargamento quando a térrea sai com cômodo abaixo da largura mínima, mm. Ausentes = 200 e 600. */
+  alargarPassoMm?: number;
+  alargarAteMm?: number;
   /** Fica esta porcentagem ABAIXO da TO máxima (folga para beiral, ajuste de obra). */
   folgaDaTOPct: number;
   encostarNaDivisa: DivisaDeEncosto;
@@ -444,6 +452,13 @@ export function implantacaoDaCasa(
     W = Math.min(Wmax, (teto.m2 * 1e6) / (D + e) - e);
   }
   if (projecao(W, D) < teto.m2 - 0.5) limitante = 'ENVELOPE';
+  // Item 9: a largura mínima pedida (os mínimos do programa não cabiam) — alarga, a profundidade fica; passando da TO,
+  // a profundidade cede só o necessário.
+  if (hip.larguraMinimaMm != null && W < hip.larguraMinimaMm) {
+    W = Math.min(Wmax, hip.larguraMinimaMm);
+    const toMax = legal.implantacaoMaxM2 != null ? legal.implantacaoMaxM2 * (1 - hip.folgaDaTOPct / 100) : null;
+    if (toMax != null && projecao(W, D) > toMax) D = (toMax * 1e6) / (W + e) - e;
+  }
   W = piso(W, hip.malhaMm);
   D = piso(D, hip.malhaMm);
   if (W < 3000 || D < 3000) return { ok: false, motivo: `Sobra só ${f2(W / 1000)} × ${f2(D / 1000)} m para a casa — ${ROTULO_DO_LIMITANTE[limitante]} aperta demais.` };
@@ -1361,6 +1376,24 @@ function planejarTerrea(original: BlueprintModel, entrada: EntradaDaCasa, hipPar
   if ((hipParcial.implantacao?.forma ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.forma) !== 'AUTOMATICA') return ret;
   const porque = terreaNaoComporta(ret) ?? (ret.implantacao?.limitante === 'ENVELOPE' ? 'os recuos limitam o retângulo' : null);
   if (!porque) return ret;
+  // Item 9 (decisão do usuário, 19/10/2026: "alargar só o mínimo"): o cômodo abaixo da LARGURA mínima — a casa um passo
+  // mais larga de cada vez, até caber (antes da casa em L). No R1-B 15 × 30, o programa mínimo pedia 9,60 m em 9,40.
+  const rlDe = (x: PlanoDaCasa) => x.implantacao?.retanguloLocal ?? null;
+  const r0 = rlDe(ret);
+  if (r0 && /largura mínima/.test(terreaNaoComporta(ret) ?? '')) {
+    const w0 = r0.x1 - r0.x0;
+    const passo = hipParcial.implantacao?.alargarPassoMm ?? 200;
+    const ate = hipParcial.implantacao?.alargarAteMm ?? 600;
+    for (let extra = passo; extra <= ate; extra += passo) {
+      const tent = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: 1, implantacao: { ...(hipParcial.implantacao ?? {}), larguraMinimaMm: w0 + extra } }, opcoes);
+      const r = rlDe(tent);
+      if (!r || r.x1 - r.x0 < w0 + extra) break; // o envelope não deixa alargar mais
+      if (!terreaNaoComporta(tent)) {
+        tent.decisoes.push(`Implantação: a casa ${f2(extra / 1000)} m mais larga (${f2(w0 / 1000)} → ${f2((r.x1 - r.x0) / 1000)} m) — os mínimos do programa não cabiam.`);
+        return tent;
+      }
+    }
+  }
   const emL = planejarComPavimentos(original, entrada, { ...hipParcial, pavimentos: 1, implantacao: { ...(hipParcial.implantacao ?? {}), forma: 'L' } }, opcoes);
   if (!emL.implantacao?.contornoLocal) return ret;
   const [pR, pL] = [problemasDoPlano(ret), problemasDoPlano(emL)];
@@ -1435,7 +1468,9 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       ...Object.fromEntries(FAIXAS_DO_FORRO.map((k) => [k, { ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO[k], ...(hipParcial.forro?.[k] ?? {}) }])),
     },
   };
-  const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, automaticos: false };
+  // Item 9 (decisão do usuário, 19/10/2026: "cozinha + serviço juntos"): no R1-B a área de serviço fica na frente, com a
+  // cozinha (hipótese do gerador; a do estudo, se dada, vale).
+  const hipGerador: Partial<HipotesesDoGerador> = { ...hip.gerador, servicoPodeIrAoFundo: hip.gerador?.servicoPodeIrAoFundo ?? entrada.curto?.padrao !== 'R1-B', automaticos: false };
   // A implantação usa a mesma parede externa e a mesma malha do gerador.
   const hipImplantacao: Partial<HipotesesDaImplantacao> = {
     espessuraExternaMm: hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm,

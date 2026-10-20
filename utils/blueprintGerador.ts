@@ -96,6 +96,12 @@ export interface HipotesesDoGerador {
   iluminacaoMinima: { habitavel: number; servico: number };
   /** F6: área de garagem por vaga, m² — conta as vagas do item Garagem pela área (a mesma do programa da casa). */
   areaPorVagaM2: number;
+  /**
+   * Item 9 da casa automática (decisão do usuário, 19/10/2026: "cozinha + serviço juntos"): o recozimento pode levar a
+   * área de serviço para o fundo (atrás do corredor)? `false` = ela fica na faixa da frente, com a cozinha — no R1-B o
+   * serviço no fundo ficava a 2 portas da cozinha e espremia os dormitórios abaixo do mínimo. Ausente = true.
+   */
+  servicoPodeIrAoFundo?: boolean;
 }
 
 export const HIPOTESES_DO_GERADOR_PADRAO: HipotesesDoGerador = {
@@ -828,6 +834,8 @@ function recozer(plano: Plano, W: number, D: number, programa: Programa, frente:
       const j = Math.floor(rnd() * cand.fundo.length);
       [cand.fundo[i], cand.fundo[j]] = [cand.fundo[j], cand.fundo[i]];
     } else if (cand.frente.length > 1 && cand.fundo.length > 0) {
+      // Item 9: com a área de serviço presa à frente (junto da cozinha), este movimento não vale.
+      if (hip.servicoPodeIrAoFundo === false) continue;
       // Um serviço pode ir para o fundo (área de serviço atrás) e voltar.
       const i = cand.frente.findIndex((x) => x.zona === 'SERVICO');
       if (i >= 0 && rnd() < 0.5) cand.fundo.push(...cand.frente.splice(i, 1));

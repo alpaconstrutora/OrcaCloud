@@ -3042,3 +3042,20 @@ serviço não tem parede externa" (este, falso: o serviço TINHA parede externa,
 - Medido: 8 casas com 0 encontros, 0 vãos, 0 pilares e NENHUMA pendência NAO_DECIDIDO de aquecedor (eram 9) — nas 3
   sem parede externa livre, o aquecedor na parede interna (CONFERIR); 6 lotes de 3 pavimentos com 0 encontros e trava
   ok. As 8 casas mudam DE PROPÓSITO (novo marco de referência).
+
+#### Item 9 — R1-B: cozinha × serviço e as larguras mínimas (19/10–20/10/2026)
+
+Medido (R1-B 15 × 30, 3 dorm., térrea): 1 SEM_SOLUCAO (cozinha × serviço sem porta direta, 2 portas) e 4 VERIFICACAO
+(serviço 1,55 m e dormitório 2,50 m abaixo da largura mínima; armário da suíte). Causa comum: o recozimento mandava o
+serviço para o FUNDO (a frente, ao lado da garagem, não o comportava), e lá as colunas somavam 9,90 m de mínimos em 9,40.
+
+- Decisão do usuário (19/10): "cozinha + serviço juntos" — `HipotesesDoGerador.servicoPodeIrAoFundo` (a casa a desliga
+  no R1-B; a hipótese do estudo, se dada, vale): o recozimento não leva o serviço ao fundo.
+- Só isso espremia o banheiro social (0,56 m): a casa tinha 9,40 m e os mínimos pediam 9,60. Decisão do usuário (20/10):
+  "alargar só o mínimo" — `HipotesesDaImplantacao.larguraMinimaMm` (alarga mantendo a profundidade; passando da TO, a
+  profundidade cede só o necessário) e `planejarTerrea` tenta a casa um passo mais larga de cada vez (`alargarPassoMm`
+  200, até `alargarAteMm` 600) quando a térrea sai com cômodo abaixo da largura mínima, antes da casa em L; dito na
+  decisão.
+- Resultado: R1-B a 9,80 m (+0,40): cozinha e serviço empilhados na frente, banheiro social 1,40 × 4,60 m no fundo,
+  dormitórios 2,70 m — 0 pendências (eram 1 + 4). As outras 7 casas idênticas ao marco de 20/10 (`/c/tmp/f28/a.txt`);
+  os 6 lotes de 3 pavimentos sem mudança.

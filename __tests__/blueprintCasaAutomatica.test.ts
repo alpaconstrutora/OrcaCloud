@@ -1603,3 +1603,16 @@ describe('F26 — muro, portões e calçadas', () => {
     expect(p.resultado.subRegioes ?? []).toEqual([]);
   }, 240_000);
 });
+
+describe('item 9 — R1-B: cozinha e serviço juntos, com os mínimos (decisões do usuário, 19/10/2026)', () => {
+  it('15 × 30, 3 dorm. R1-B: o serviço fica na frente com a cozinha (porta direta) e a casa alarga só o necessário para os mínimos', () => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const L = base.levels[0].id;
+    const d = (a: Point, b: Point, papel: Papel): Command => ({ type: 'AddBoundary', levelId: L, a, b, kind: 'TERRENO', papel });
+    const m = applyBatch(base, [d(point(0, 0), point(15000, 0), 'FRENTE'), d(point(15000, 0), point(15000, 30000), 'LATERAL_DIREITA'), d(point(15000, 30000), point(0, 30000), 'FUNDOS'), d(point(0, 30000), point(0, 0), 'LATERAL_ESQUERDA')]).model;
+    const p = planejarCasa(m, entrada(m, { curto: { ...PROGRAMA_CURTO_PADRAO, dormitorios: 3, suites: 1, banheiros: 2, vagas: 2, padrao: 'R1-B' } }), { pavimentos: 1 });
+    expect(p.pendencias.filter((x) => /Cozinha × Área de serviço/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+    expect(p.pendencias.filter((x) => /^Legislação: .*largura mínima/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+    expect(p.pendencias.filter((x) => x.grupo === 'SEM_SOLUCAO').map((x) => x.texto)).toEqual([]);
+  }, 600_000);
+});

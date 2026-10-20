@@ -2559,12 +2559,16 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
             return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
           };
           const noForro = (m.trechos ?? []).filter((t) => t.levelId === L0 && t.disciplina !== 'ELETRICA' && t.cotaAMm === t.cotaBMm && t.cotaAMm > teto - rebaixoDoForro && t.cotaAMm < teto);
+          // S1 (20/10/2026): e as VERTICAIS de outra rede na altura da subida do quadro (de 1,60 m ao teto) — a descida da
+          // fria do vaso ficava a 3 cm do eletroduto que sobe do quadro (10 × 30, 4 dorm.).
+          const verticais = (m.trechos ?? []).filter((t) => t.levelId === L0 && t.disciplina !== 'ELETRICA' && t.a.x === t.b.x && t.a.y === t.b.y && Math.max(t.cotaAMm, t.cotaBMm) > 1600 && Math.min(t.cotaAMm, t.cotaBMm) < teto);
           const pilares = pegadasDePilares(m, L0);
           // No sobrado, só dentro do trecho de parede que tem parede em cima (a prumada do eletroduto sobe ali).
           const emComum = niveis.length > 1 ? paredesEmComum(m.walls.filter((w) => w.levelId === L0), niveis.slice(1).map((L) => m.walls.filter((w) => w.levelId === L))) : null;
           const livre = (p: Point) =>
             (!emComum || !!encaixarNaParede(p, emComum, 5)) &&
             noForro.every((t) => dSeg(p, t.a, t.b) > SUBIDA_DO_QUADRO_MM + envelopeDoTrecho(t).raioPlantaMm + 20) &&
+            verticais.every((t) => Math.hypot(p.x - t.a.x, p.y - t.a.y) > SUBIDA_DO_QUADRO_MM + envelopeDoTrecho(t).raioPlantaMm + 20) &&
             !pilares.some((g) => pointInPolygon(g as Point[], p)) &&
             !(parede && m.openings.some((o) => {
               if (o.wallId !== parede.id) return false;

@@ -12,7 +12,7 @@
  * modelo de ANTES — a contagem das 3 primeiras de 600 VA é sequencial). Por pavimento, já com a potência.
  */
 import type { BlueprintModel, Command, ObjectId, Point, Space } from './blueprintKernel';
-import { areaRecuada } from './blueprintKernel';
+import { areaRecuada, envelopeDoTrecho, pointInPolygon } from './blueprintKernel';
 import { comandosDeIluminacao, comandosParaCompletar, conferirIluminacao, conferirTomadas, distribuirAoLongo, etiquetaDoAmbiente, ladosDePiso } from './blueprintDistribuicao';
 import { aplicarPotenciaPadrao } from './blueprintPotenciaPadrao';
 import { pegadasDePilares } from './blueprintObstaculosEstruturais';
@@ -26,6 +26,46 @@ export interface OpcoesDosPontosEletricos {
   ocupados?: readonly Point[];
 }
 
+/** S1 da casa automática: a cota a partir da qual um tubo horizontal é "do forro" (acima da altura dos pontos), mm. */
+const TUBO_DO_FORRO_ACIMA_DE_MM = 2000;
+/** S1: o passo da amostra dos tubos do forro e a folga do eletroduto a eles, mm. */
+const PASSO_DA_AMOSTRA_DO_TUBO_MM = 100;
+const FOLGA_DO_PONTO_AO_TUBO_MM = 20;
+/** S1: o raio do eletroduto que sobe do ponto (DN 25), mm. */
+const RAIO_DO_ELETRODUTO_DO_PONTO_MM = 12.5;
+
+/**
+ * S1 da casa automática (20/10/2026): os TUBOS de outra rede que correm no forro do pavimento (horizontais acima de
+ * `TUBO_DO_FORRO_ACIMA_DE_MM`), amostrados a cada `PASSO_DA_AMOSTRA_DO_TUBO_MM`, com o raio de cada um. A água é traçada
+ * antes dos pontos elétricos: a tomada e o interruptor postos sob um tubo que corre rente à parede, ou a luz de teto
+ * sob um tubo, faziam o eletroduto que sobe deles cruzá-lo (sobrado 10 × 30: a quente contornando a laje rebaixada).
+ */
+function tubosDoForro(model: BlueprintModel, levelId: ObjectId): { p: Point; r: number }[] {
+  const saida: { p: Point; r: number }[] = [];
+  for (const t of model.trechos ?? []) {
+    if (t.levelId !== levelId || t.disciplina === 'ELETRICA' || (t.a.x === t.b.x && t.a.y === t.b.y) || Math.min(t.cotaAMm, t.cotaBMm) < TUBO_DO_FORRO_ACIMA_DE_MM) continue;
+    const env = envelopeDoTrecho(t);
+    const r = Math.max(env.raioPlantaMm, env.raioVerticalMm);
+    const L = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+    const n = Math.max(1, Math.ceil(L / PASSO_DA_AMOSTRA_DO_TUBO_MM));
+    for (let k = 0; k <= n; k++) saida.push({ p: { x: Math.round(t.a.x + ((t.b.x - t.a.x) * k) / n), y: Math.round(t.a.y + ((t.b.y - t.a.y) * k) / n) } as Point, r });
+  }
+  return saida;
+}
+
+/** S1: a luz de teto que cairia sob um tubo do forro anda para o lado (perpendicular a ele, até 40 cm), dentro do cômodo. */
+function luzForaDosTubos(at: Point, tubos: readonly { p: Point; r: number }[], space: Space): Point {
+  // Meio passo a mais: o tubo corre ENTRE as amostras (andar ao longo dele caía entre duas e "escapava").
+  const perto = (q: Point) => tubos.find((t) => Math.hypot(t.p.x - q.x, t.p.y - q.y) < t.r + RAIO_DO_ELETRODUTO_DO_PONTO_MM + FOLGA_DO_PONTO_AO_TUBO_MM + PASSO_DA_AMOSTRA_DO_TUBO_MM / 2);
+  if (!perto(at)) return at;
+  for (let d = 50; d <= 400; d += 50)
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const q = { x: at.x + dx * d, y: at.y + dy * d } as Point;
+      if (!perto(q) && pointInPolygon(space.ring, q) && !space.holes.some((h) => pointInPolygon(h, q))) return q;
+    }
+  return at;
+}
+
 /** Os comandos que completam um ambiente pela norma — sem potência. */
 export function comandosDePontosDoAmbiente(model: BlueprintModel, levelId: ObjectId, space: Space, op: OpcoesDosPontosEletricos): Command[] {
   const paredes = model.walls.filter((w) => w.levelId === space.levelId);
@@ -33,16 +73,37 @@ export function comandosDePontosDoAmbiente(model: BlueprintModel, levelId: Objec
   const tipo = etiquetaDoAmbiente(space, model.labels)?.tipoDeAmbiente ?? null;
   const areaM2 = areaRecuada(space.ring, paredes).areaMm2 / 1e6;
   const comandos: Command[] = [];
+  const tubos = tubosDoForro(model, space.levelId);
+  // Rente à face de uma parede do cômodo (o anel normal do forro corre a ~10 cm dela e não conta: bloqueá-lo deixava o
+  // serviço, a cozinha e o lavabo sem tomada).
+  const lados = ladosDePiso(space, paredes);
+  const rentes = tubos.filter(({ p, r }) =>
+    lados.some((l) => {
+      const dx = l.b.x - l.a.x;
+      const dy = l.b.y - l.a.y;
+      const L2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((p.x - l.a.x) * dx + (p.y - l.a.y) * dy) / L2));
+      return Math.hypot(p.x - (l.a.x + t * dx), p.y - (l.a.y + t * dy)) < r + RAIO_DO_ELETRODUTO_DO_PONTO_MM + FOLGA_DO_PONTO_AO_TUBO_MM;
+    }),
+  );
   const conferencia = conferirTomadas(space, tipo, paredes, terminais, areaM2);
   if (conferencia) {
     // O PILAR também ocupa a parede: a tomada não vai no concreto (casa automática F9, 15/10/2026 — a tomada caía
     // dentro do pilar do encontro e o eletroduto descia por ele). O centro dele bloqueia o trecho em volta, como
     // a tomada que já existe.
     const pilares = (model.structures ?? []).filter((x) => x.kind === 'PILAR' && x.levelId === space.levelId).map((x) => x.pontos[0]);
-    const pontos = distribuirAoLongo(ladosDePiso(space, paredes), Math.max(conferencia.deficit, conferencia.deficitMedias), model.walls, model.openings, 150, [...(op.ocupados ?? []), ...pilares]);
+    // S1: e o tubo do forro colado na face da parede (bloqueia o trecho em volta).
+    const pontos = distribuirAoLongo(lados, Math.max(conferencia.deficit, conferencia.deficitMedias), model.walls, model.openings, 150, [...(op.ocupados ?? []), ...pilares, ...rentes.map((t) => t.p)]);
     comandos.push(...comandosParaCompletar(levelId, pontos, conferencia));
   }
-  comandos.push(...comandosDeIluminacao(levelId, space, model.walls, model.openings, op.peDireitoMm, conferirIluminacao(space, terminais, areaM2, tipo), terminais, op.areaPorLuminariaM2 ?? null, pegadasDePilares(model, space.levelId)));
+  // S1: o interruptor também foge do tubo do forro rente à parede (um quadrado em volta de cada amostra, como o pilar).
+  const quadrados = rentes.map(({ p, r }) => {
+    const h = r + RAIO_DO_ELETRODUTO_DO_PONTO_MM + FOLGA_DO_PONTO_AO_TUBO_MM;
+    return [{ x: p.x - h, y: p.y - h }, { x: p.x + h, y: p.y - h }, { x: p.x + h, y: p.y + h }, { x: p.x - h, y: p.y + h }] as Point[];
+  });
+  const luzes = comandosDeIluminacao(levelId, space, model.walls, model.openings, op.peDireitoMm, conferirIluminacao(space, terminais, areaM2, tipo), terminais, op.areaPorLuminariaM2 ?? null, [...pegadasDePilares(model, space.levelId), ...quadrados]);
+  // S1: e a luz de teto sai de baixo do tubo.
+  comandos.push(...luzes.map((c) => (c.type === 'AddTerminal' && (c as { tipoEletrico?: string }).tipoEletrico === 'ILUMINACAO_TETO' && tubos.length ? ({ ...c, at: luzForaDosTubos((c as { at: Point }).at, tubos, space) } as Command) : c)));
   return comandos;
 }
 

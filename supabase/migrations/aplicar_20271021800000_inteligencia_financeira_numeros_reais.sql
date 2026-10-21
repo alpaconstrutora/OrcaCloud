@@ -5,6 +5,12 @@
 -- APLICAR À MÃO:  npx supabase db query --linked -f <este arquivo>
 --                 (NUNCA `supabase db push` — ver CLAUDE.md)
 --
+-- ⚠️ JÁ APLICADA em 21/10/2026, com o nome antigo
+--    aplicar_20271021300000_inteligencia_financeira_numeros_reais.sql
+--    (renomeada porque o prefixo colidiu com aplicar_20271021300000_darf_agrupar_tributos.sql,
+--    que chegou antes à main). Rodar de novo não causa dano — só CREATE OR REPLACE,
+--    DROP IF EXISTS + CREATE e REVOKE/GRANT —, mas não é necessário.
+--
 -- O que estava errado (medido em 21/10/2026, RPCs rodadas no JWT do usuário):
 --   D1 projeção começava em ZERO e ignorava todo título vencido
 --      (R$ 3,1 mi a receber e R$ 2,1 mi a pagar fora da conta);

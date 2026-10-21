@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 // Todas as RPCs abaixo leem o mesmo livro (fn_fi_ledger) — ver a migration
-// aplicar_20271021300000_inteligencia_financeira_numeros_reais.sql. Por isso os
+// aplicar_20271021800000_inteligencia_financeira_numeros_reais.sql. Por isso os
 // números de uma aba fecham com os da outra.
 
 export interface FinancialAlert {

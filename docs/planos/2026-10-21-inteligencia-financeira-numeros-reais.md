@@ -137,6 +137,9 @@ formulário que grava `commercial_properties` raiz) + `services/commercialServic
 
 **21/10/2026 — Fase 1 escrita e ensaiada, NÃO aplicada.**
 Arquivo: `supabase/migrations/aplicar_20271021300000_inteligencia_financeira_numeros_reais.sql`.
+→ **Renomeado em 21/10/2026 para `aplicar_20271021800000_…`**: o prefixo colidiu com
+`aplicar_20271021300000_darf_agrupar_tributos.sql`, que chegou antes à main (pego pelo
+`migrationsPrefixo.test` depois do rebase). O cabeçalho do arquivo registra o nome antigo e que já foi aplicado.
 
 Mudanças em relação ao texto do plano (registradas, não apagadas):
 - 1.1: os vencidos e o saldo de partida saem numa RPC própria, `fn_cashflow_position`,
@@ -208,7 +211,15 @@ Consequências:
   ao ensaio (Bella Vista R$ 300 mil; 2 alertas HIGH; saldo de partida −R$ 31.996,72, 90d −R$ 11.120,84).
 - [x] ~~Fase 2~~ — CANCELADA em 21/10: o vínculo já existe em Empreendimento › Vinculações
 - [ ] Fase 3 — 0 de 2
-- [ ] Fase 4 — 0 de 4
+- [ ] Fase 4 — 4 de 4 escritos; **falta a conferência na tela** (o critério 4.x pede "conferido na tela").
+  Feito: tela refeita no guia (h1 por aba, TabsBar, KPIs por aba, StandardTable, gráficos §28, Sheet no
+  agendamento); aba "Locação e sem obra"; vencidos e saldo de partida na Projeção; gráfico por semana/mês
+  (soma, sem amostrar); margem ponderada; `useOrgContext` (AppRouter 30 → 29 no orgContextGuard);
+  "Enviar agora" desligado com motivo até a Fase 3.
+  Verificado: check-ui-standard, system-projects, classification = 0; travas orgContext/cabeçalho/
+  valor-cinza/dark/segurança/prefixo verdes; `tsc` completo exit=0 (3ª tentativa — Node cai nesta
+  máquina); suíte 10.598 = 10.554 + 34 pulados + 10 do ifcLerParedes (worker morto; 10/10 isolado);
+  `vite build` caiu 3/3 com segfault → prova do build pela CI (PR de rascunho).
 
 ## Verificação
 

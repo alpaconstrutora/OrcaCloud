@@ -60,6 +60,16 @@ Sessão de 21/10/2026 (Claude Code, VS Code), mensagem do usuário, literal:
   `blueprintModuleColWidths:v2` (a antiga podia ter "Ações" com 100px de um autoajuste).
   `__tests__/components/BlueprintModuleEditarEmpreendimento.test.tsx` 5/5; os testes antigos do
   módulo (link direto, aba Mapa Regulatório, atalho) seguem verdes. `check-ui-standard.sh` limpo
-  nos dois arquivos. **Falta:** ver a tela no navegador (precisa da senha do usuário de leitura).
+  nos dois arquivos.
+- 21/10 — item 3 conferido na tela (dev server da frente, login do usuário de leitura, topo em
+  "Todas"): `c:/tmp/pwtest/conferencia-planta-lista.cjs`, 14/14 portões, zero erro de console/HTTP.
+  Coluna e "—" sem vínculo; lápis abre o drawer e a lista continua atrás; o select traz exatamente
+  os 11 empreendimentos da organização da planta; Salvar desligado diz "Nada foi alterado.";
+  renomear grava no banco e a linha muda sem recarregar; "Abrir" entra no editor. Planta
+  descartável arquivada no fim. **Não** foi vinculado nenhum empreendimento real (o vínculo está
+  provado pelos testes com banco falso).
+- 21/10 — item 4: suíte 10.583 + 34 pendentes = 10.617, 0 falhas; `tsc` completo caiu 4× pelo
+  crash do Node 24 local (sem `error TS`); typecheck parcial dos arquivos alterados limpo; o
+  completo fica com a CI da PR #79.
 - Decisão registrada: empreendimento já ligado a OUTRA planta aparece **desligado** no select,
   com "— vinculado a «nome da planta»" (o Imovib o esconde; aqui mostrar diz por que não dá).

@@ -147,14 +147,19 @@ Ordem: F0→F1→F2→F3 (já entrega "gerar casa dentro da lei") →F4→F5→F
 - [x] F17 — o aquecedor do sobrado a 30° e o alimentador × esgoto nas térreas (ver "Registro da F17")
 - [x] F18–F28 — programa "todas as pendências": F18–F28 feitas; a F27 (3 pavimentos e a qualidade do sobrado) e a F28
   (a chuva de projeto na tela) fechadas em 20/10/2026 (ver o programa abaixo e "Pendências em aberto")
+- [x] Sobras S1–S5 (21/10/2026): água fora da laje rebaixada, pilar contornado, o 1º recuado no 10 × 30 de 2 dorm., o
+  escritório do R1-A ao lado da suíte, o lavabo com porta para a cozinha (ver "Sobras S1–S5")
+- [x] Porta cozinha × serviço fora da lateral do núcleo da escada (21/10/2026; ver "Registro da porta cozinha × serviço")
 
-### Pendências em aberto (atualizado em 20/10/2026)
+### Pendências em aberto (atualizado em 21/10/2026)
 
-**No ar:** `main` em 26bb69c9 (20/10/2026) — o domínio serve exatamente esse commit; CI verde. Nada em PR.
+**No ar:** `main` em 564434a2 (21/10/2026) — a casa automática inteira, com as Sobras S1–S5 e a porta cozinha × serviço;
+CI verde. Nada em PR.
 
-As 8 casas de referência (marco de 20/10, `/c/tmp/f28/a.txt`, mais a R1-B depois do item 9): nenhuma rede em
-porta/janela, nenhum encontro rede × rede, nenhum tubo atravessando pilar, e nenhuma pendência NAO_DECIDIDO. O que
-sobra (fora os "confira" de rotina):
+Medição de 21/10 (as 8 casas de referência contra o marco `/c/tmp/f29/a.txt`, os 6 lotes de 3 pavimentos e o sobrado
+10 × 30 de 4 dorm.): nenhuma rede em porta/janela, nenhum encontro rede × rede, nenhum tubo atravessando pilar, nenhum
+trecho dentro de laje rebaixada, nenhuma ponta aberta e nenhuma pendência NAO_DECIDIDO ou SEM_SOLUCAO. O que sobra nas
+8 casas (fora os "confira" de rotina):
 
 | Casa | Pendências que sobram |
 |---|---|
@@ -165,7 +170,15 @@ sobra (fora os "confira" de rotina):
 | 15 × 30 R1-B (pedida térrea) | — (a casa 0,40 m mais larga; cozinha e serviço juntos) |
 | 14 × 28 R1-A | — |
 | 12 × 30 R1-N sobrado | — |
-| 10 × 30 R1-N 4 dorm. (pedida térrea) | programa acima da TO; dormitórios estreitos; "a térrea não comporta" (1 PREMISSA + 6 VERIFICACAO) — o sobrado nesse lote não tem mais encontro de rede (item 6) |
+| 10 × 30 R1-N 4 dorm. (pedida térrea) | programa acima da TO; dormitórios estreitos; "a térrea não comporta" (1 PREMISSA + 6 VERIFICACAO) — é limite do lote, não defeito: o Automático escolhe o sobrado, que está limpo |
+
+Nos 6 lotes de 3 pavimentos e no sobrado 10 × 30 sobram só VERIFICACAO/PREMISSA de rotina (o coeficiente da zona sem
+dado, a climatização sem catálogo de evaporadoras, o alimentador por baixo dos cruzamentos com luva, armário que não
+coube em dormitório pequeno, a largura/área mínima da legislação no lavabo e no serviço do térreo da casa de 3).
+
+Não há pendência anotada para fase própria. Medição: `/c/tmp/f22/roda.sh <rótulo>` (8 casas) e `/c/tmp/f27d/seis2.sh`
+(6 lotes); um caso só com `/c/tmp/f22/roda1.sh` e `/c/tmp/f27d/seis1.sh` (`CASOS=…`); o sobrado 10 × 30 com a sonda
+`zzS3` (`PAV=2 CASO=10000,30000,4,1,3,2,R1-N`).
 
 Lista do usuário (14–20/10/2026), todos os itens fechados — o detalhe de cada um nos registros abaixo:
 

@@ -1512,7 +1512,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                             {linha}
                                             <tr className="bg-gray-50/50">
                                                 <td colSpan={totalColunas} className="px-6 py-3">
-                                                    <div className="overflow-x-auto rounded-[10px] border border-gray-100 bg-white max-w-3xl">
+                                                    {/* `sticky left-6`: a tabela é larga e o chevron fica em Ações, na
+                                                        ponta direita — sem isso a composição abria fora da vista. */}
+                                                    <div className="sticky left-6 overflow-x-auto rounded-[10px] border border-gray-100 bg-white max-w-3xl">
                                                         <table className="w-full text-left border-collapse">
                                                             <thead>
                                                                 <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">

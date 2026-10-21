@@ -410,9 +410,8 @@ const DarfSheet: React.FC<Props> = ({ open, onClose, organizationId, organizacao
                         </p>
                     ) : (
                         <p className="mr-auto text-sm text-gray-500">
-                            {formatMoney(principal)}
-                            {multa + juros > 0 ? ` + ${formatMoney(multa + juros)} de encargos` : ''}
-                            {' = '}<span className="font-medium text-gray-900">{formatMoney(total)}</span>
+                            {multa + juros > 0 && <>{formatMoney(principal)} + {formatMoney(multa + juros)} de encargos = </>}
+                            <span className="font-medium text-gray-900">{formatMoney(total)}</span>
                         </p>
                     )}
                     <button

@@ -28,17 +28,18 @@ const STATUS_DARF: Record<DarfStatus, { rotulo: string; cor: string }> = {
     PARCIAL:  { rotulo: 'Inconsistente', cor: 'text-red-600' },
 };
 
+// Soma ≈ 1180 + Ações 300: cabe numa tela de 1800px com o menu lateral aberto.
 const COLUNAS: StandardTableColumn[] = [
-    { key: 'competencia', label: 'Competência', sortable: true, width: 130 },
-    { key: 'due_date', label: 'Vencimento', sortable: true, width: 130 },
-    { key: 'tributos', label: 'Tributos', sortable: true, width: 220 },
-    { key: 'qtd', label: 'Qtde', sortable: true, width: 90, align: 'right' },
-    { key: 'principal', label: 'Principal', sortable: true, width: 140, align: 'right' },
-    { key: 'multa', label: 'Multa', sortable: true, width: 120, align: 'right' },
-    { key: 'juros', label: 'Juros', sortable: true, width: 120, align: 'right' },
-    { key: 'total', label: 'Total', sortable: true, width: 140, align: 'right' },
-    { key: 'numero', label: 'Nº documento', sortable: true, width: 160 },
-    { key: 'status', label: 'Status', sortable: true, width: 130 },
+    { key: 'competencia', label: 'Competência', sortable: true, width: 120 },
+    { key: 'due_date', label: 'Vencimento', sortable: true, width: 120 },
+    { key: 'tributos', label: 'Tributos', sortable: true, width: 180 },
+    { key: 'qtd', label: 'Qtde', sortable: true, width: 70, align: 'right' },
+    { key: 'principal', label: 'Principal', sortable: true, width: 130, align: 'right' },
+    { key: 'multa', label: 'Multa', sortable: true, width: 100, align: 'right' },
+    { key: 'juros', label: 'Juros', sortable: true, width: 100, align: 'right' },
+    { key: 'total', label: 'Total', sortable: true, width: 130, align: 'right' },
+    { key: 'numero', label: 'Nº documento', sortable: true, width: 120 },
+    { key: 'status', label: 'Status', sortable: true, width: 110 },
 ];
 
 /** Por que não dá para desagrupar — `null` quando dá. Mesmas recusas de `fn_darf_desagrupar`. */
@@ -337,7 +338,7 @@ export default function DarfsTab({ organizationId, nomeDaOrganizacao, focoDarfId
                 sortValue={sortValue}
                 searchText={d => [competenciaBR(d.competencia), d.tributos_nomes, d.numero_documento, d.observacao, (tributosPorDarf.get(d.id) ?? []).map(t => t.description).join(' ')].filter(Boolean).join(' ')}
                 searchPlaceholder="Buscar por tributo, competência, nº do documento ou descrição..."
-                actions={{ render: renderAcoes, width: 340 }}
+                actions={{ render: renderAcoes, width: 300 }}
                 renderExpanded={renderExpanded}
                 rowClassName={d => (d.status_efetivo === 'VENCIDO' ? 'bg-red-50/30' : '')}
                 loading={loading}

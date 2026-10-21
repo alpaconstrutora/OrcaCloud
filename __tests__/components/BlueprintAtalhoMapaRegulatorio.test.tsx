@@ -18,6 +18,8 @@ vi.mock('../../services/blueprintService', () => ({
   archiveStudy: vi.fn(),
 }));
 const MAPA = { id: 'm1', name: 'Plano Diretor Campinas', city_name: 'Campinas', state_code: 'SP', status: 'ATIVO', lei_referencia: 'LC 208/2018', organization_id: 'o1' };
+// O módulo lista empreendimentos (coluna + drawer de vínculo): sem o mock, a chamada real falha depois do teste e derruba a suíte.
+vi.mock('../../services/empreendimentoService', () => ({ empreendimentoService: { list: vi.fn(async () => []) } }));
 vi.mock('../../services/regulatoryMapService', () => ({
   regulatoryMapService: {
     list: vi.fn(async () => [MAPA]),

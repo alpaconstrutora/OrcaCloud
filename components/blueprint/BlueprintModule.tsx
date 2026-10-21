@@ -112,20 +112,26 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
   }, [carregar]);
 
   // Mesmo recorte da lista: org do topo, ou "Todas" sem filtro (a RLS recorta).
-  const carregarEmpreendimentos = useCallback(async () => {
-    setErroEmpreendimentos(null);
-    try {
-      setEmpreendimentos(await empreendimentoService.list(orgId ?? undefined));
-    } catch (e) {
-      console.warn('[planta] empreendimentos indisponíveis para a coluna e o vínculo:', e);
-      setEmpreendimentos([]);
-      setErroEmpreendimentos(`Não foi possível listar os empreendimentos: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }, [orgId]);
-
+  // `vivo`: a resposta que chega depois de sair da tela (ou de trocar a org) não grava estado —
+  // na CI de 21/10/2026 ela chegava com o teste já desmontado e derrubava a suíte.
   useEffect(() => {
-    carregarEmpreendimentos();
-  }, [carregarEmpreendimentos]);
+    let vivo = true;
+    setErroEmpreendimentos(null);
+    empreendimentoService
+      .list(orgId ?? undefined)
+      .then((lista) => {
+        if (vivo) setEmpreendimentos(lista);
+      })
+      .catch((e) => {
+        if (!vivo) return;
+        console.warn('[planta] empreendimentos indisponíveis para a coluna e o vínculo:', e);
+        setEmpreendimentos([]);
+        setErroEmpreendimentos(`Não foi possível listar os empreendimentos: ${e instanceof Error ? e.message : String(e)}`);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [orgId]);
 
   // Planta → nome(s) do empreendimento que aponta para ela (`empreendimentos.blueprint_study_id`).
   // Sem UNIQUE no banco, mais de um pode apontar: a célula mostra todos.

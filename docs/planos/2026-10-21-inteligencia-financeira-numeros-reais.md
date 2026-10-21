@@ -53,6 +53,8 @@ Nenhum dos 8 empreendimentos raiz tem `commercial_properties.project_id` preench
 | 21/10/2026 | Como ligar empreendimento e obra? | **Gravar no cadastro** do empreendimento; preencher 007 Bella Vista→"Bella Vista", 011 Garden Cambuhy→"Garden Cambuhy", 010 Galeria Altavista→"Galeria", 006 Coronel Lambert→"Coronel Lambert 345"; usuário confere na tela. |
 | 21/10/2026 | Custo sem obra e obras "Condomínio - Bella Vista" / "Bella Vista - Assistência Técnica"? | **Separar, sem somar** — custo sem obra vira "Despesa da empresa" fora da margem; condomínio e assistência seguem obras próprias. |
 
+| 21/10/2026 | (informado pelo usuário) | **"Nem todo empreendimento terá obra, a exemplo do empreendimento 494."** Venda de empreendimento sem obra é caso legítimo, não cadastro incompleto: aparece por empreendimento em `fn_entries_without_project` (que ganhou `empreendimento_id/nome`), e a tela não trata como pendência. O campo "Obra" do empreendimento é opcional. |
+
 Decisão técnica (minha, registrada para conferência): a obra da receita é
 **deduzida na leitura**, dentro das RPCs, na ordem
 `it.project_id` → `contracts.project_id` → `commercial_deals.linked_project_id` →

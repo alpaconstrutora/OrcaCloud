@@ -26,6 +26,8 @@
 --     lançamento é regravado (as sincronizações que regravam títulos ficam
 --     intocadas) — o vínculo empreendimento→obra mora no cadastro do
 --     empreendimento (commercial_properties.project_id).
+--   • Nem todo empreendimento tem obra (ex.: 016 - Galeria Avenida 494): a
+--     venda dele fica sem obra, por empreendimento, em fn_entries_without_project.
 --   • Decisões do usuário (21/10/2026): venda conta na obra; LOCAÇÃO fica fora
 --     da margem da obra (fn_rental_income); custo sem obra fica fora da margem
 --     (fn_entries_without_project).
@@ -424,18 +426,22 @@ BEGIN
 END;
 $fn$;
 
--- ── 6. Lançamentos sem obra (despesa da empresa, venda sem obra vinculada…) ─
--- natureza = 'VENDA' aqui significa: venda de empreendimento ainda SEM obra
--- vinculada no cadastro — é o sinal para completar o vínculo.
+-- ── 6. Lançamentos sem obra (despesa da empresa, venda sem obra…) ───────────
+-- Nem todo empreendimento tem obra (ex.: 016 - Galeria Avenida 494 — decisão
+-- do usuário em 21/10/2026). natureza = 'VENDA' aqui é venda de empreendimento
+-- SEM obra: caso legítimo, não cadastro incompleto. Por isso o empreendimento
+-- vem junto — a tela mostra a venda pelo empreendimento, não por categoria.
 CREATE OR REPLACE FUNCTION public.fn_entries_without_project(p_organization_id uuid)
 RETURNS TABLE(
-  direction    text,
-  natureza     text,
-  categoria    text,
-  realizado    numeric,
-  a_vencer_90d numeric,
-  vencido      numeric,
-  qtd          int
+  direction           text,
+  natureza            text,
+  empreendimento_id   uuid,
+  empreendimento_nome text,
+  categoria           text,
+  realizado           numeric,
+  a_vencer_90d        numeric,
+  vencido             numeric,
+  qtd                 int
 )
 LANGUAGE plpgsql
 STABLE
@@ -447,6 +453,8 @@ BEGIN
   SELECT
     x.direction,
     x.natureza,
+    x.empreendimento_id,
+    x.empreendimento_nome,
     x.categoria,
     COALESCE(SUM(x.amount) FILTER (WHERE x.realizado), 0),
     COALESCE(SUM(x.amount) FILTER (WHERE x.em_aberto
@@ -456,8 +464,8 @@ BEGIN
   FROM public.fn_fi_ledger(public.fn_fi_targets(p_organization_id)) x
   WHERE x.obra_id IS NULL
     AND x.natureza IS DISTINCT FROM 'LOCACAO'
-  GROUP BY x.direction, x.natureza, x.categoria
-  ORDER BY x.direction, 4 DESC;
+  GROUP BY x.direction, x.natureza, x.empreendimento_id, x.empreendimento_nome, x.categoria
+  ORDER BY x.direction, 6 DESC;
 END;
 $fn$;
 

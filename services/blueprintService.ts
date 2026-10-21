@@ -535,6 +535,91 @@ export async function setStudyProject(
   return data as BlueprintStudy;
 }
 
+/** Renomeia o estudo (lista › Editar). Nome vazio é recusado antes de ir ao banco. */
+export async function renameStudy(studyId: string, nome: string): Promise<BlueprintStudy> {
+  const name = nome.trim();
+  if (!name) throw new Error('blueprint/renameStudy: o nome da planta não pode ficar vazio.');
+
+  // `.single()` transforma o UPDATE barrado pela RLS (sucesso com zero linhas) em erro.
+  const { data, error } = await supabase
+    .from('blueprint_studies')
+    .update({ name })
+    .eq('id', studyId)
+    .select(STUDY_COLS)
+    .single();
+  if (error) fail('renameStudy', error);
+
+  await recordAudit({
+    organizationId: (data as BlueprintStudy).organization_id,
+    studyId,
+    action: 'ESTUDO_RENOMEADO',
+    metadata: { name },
+  });
+
+  return data as BlueprintStudy;
+}
+
+/**
+ * Vincula o estudo a um empreendimento (`empreendimentos.blueprint_study_id`) — ou
+ * desvincula, com `null`. É o mesmo vínculo que o formulário do Empreendimento grava e
+ * que o editor lê primeiro; aqui ele é feito do lado da planta (lista › Editar).
+ *
+ * Um estudo, um empreendimento (a mesma regra de `imovibService.vincularEmpreendimento`):
+ * - empreendimento de OUTRA organização é recusado — o estudo e o empreendimento têm dono;
+ * - empreendimento já ligado a OUTRA planta é recusado: tomar o vínculo de lá quebraria
+ *   o envio da massa/loteamento daquela planta sem ninguém ver (mesmo motivo de
+ *   `blueprintEstudoDoEmpreendimento`). Desvincular de lá é de quem cuida daquela planta;
+ * - o vínculo antigo desta planta é desfeito, para nunca haver dois apontando para ela.
+ */
+export async function vincularEmpreendimento(studyId: string, empreendimentoId: string | null): Promise<void> {
+  const { data: study, error: studyError } = await supabase
+    .from('blueprint_studies')
+    .select('id, organization_id')
+    .eq('id', studyId)
+    .single();
+  if (studyError) fail('vincularEmpreendimento', studyError);
+  const organizationId = (study as { organization_id: string }).organization_id;
+
+  if (empreendimentoId) {
+    const { data: alvo, error } = await supabase
+      .from('empreendimentos')
+      .select('id, name, organization_id, blueprint_study_id')
+      .eq('id', empreendimentoId)
+      .single();
+    if (error) fail('vincularEmpreendimento', error);
+    const emp = alvo as { name: string; organization_id: string; blueprint_study_id: string | null };
+    if (emp.organization_id !== organizationId) {
+      throw new Error(`"${emp.name}" é de outra organização — a planta só se vincula a empreendimento da mesma organização.`);
+    }
+    if (emp.blueprint_study_id && emp.blueprint_study_id !== studyId) {
+      throw new Error(`"${emp.name}" já está vinculado a outra planta — desvincule lá antes.`);
+    }
+  }
+
+  let desfaz = supabase.from('empreendimentos').update({ blueprint_study_id: null }).eq('blueprint_study_id', studyId);
+  if (empreendimentoId) desfaz = desfaz.neq('id', empreendimentoId);
+  const { error: desfazError } = await desfaz;
+  if (desfazError) fail('vincularEmpreendimento', desfazError);
+
+  if (empreendimentoId) {
+    const { data: ligado, error: ligaError } = await supabase
+      .from('empreendimentos')
+      .update({ blueprint_study_id: studyId })
+      .eq('id', empreendimentoId)
+      .select('id');
+    if (ligaError) fail('vincularEmpreendimento', ligaError);
+    if (!ligado?.length) throw new Error('Sem permissão para editar este empreendimento.');
+  }
+
+  await recordAudit({
+    organizationId,
+    studyId,
+    action: empreendimentoId ? 'ESTUDO_VINCULADO_A_EMPREENDIMENTO' : 'ESTUDO_DESVINCULADO_DE_EMPREENDIMENTO',
+    targetType: 'EMPREENDIMENTO',
+    targetId: empreendimentoId ?? undefined,
+  });
+}
+
 /** Obras da organização, para o seletor de vínculo. Só id e nome. */
 export async function listObrasDaOrganizacao(
   organizationId: string,

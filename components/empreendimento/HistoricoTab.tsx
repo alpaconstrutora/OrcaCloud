@@ -123,6 +123,13 @@ const FIELD_LABELS: Record<string, string> = {
   spe_razao_social: 'SPE — razão social',
   spe_cnpj: 'SPE — CNPJ',
   terreno_area: 'Área do terreno',
+  // 21/10/2026: a Planta passou a levar estes à ficha ("Levar à ficha" / vazio preenchido sozinho).
+  terreno_tipo: 'Tipo de terreno',
+  terreno_frente: 'Testada / frente do terreno',
+  terreno_fundos: 'Fundos do terreno',
+  terreno_profundidade: 'Profundidade do terreno',
+  terreno_lateral_direita: 'Lateral direita do terreno',
+  terreno_lateral_esquerda: 'Lateral esquerda do terreno',
 };
 
 const auditEntityLabel = (e: EmpreendimentoAuditEntity): string => ENTITY_LABELS[e] ?? e;

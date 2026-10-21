@@ -3,8 +3,11 @@ import { Plus, PencilRuler, Loader2, AlertCircle, Search, MoveHorizontal } from 
 import { useStore } from '../../store/useStore';
 import { useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
 import { archiveStudy, createStudy, duplicateStudy, listBranches, listStudies, ramoPrincipal } from '../../services/blueprintService';
+import { empreendimentoService } from '../../services/empreendimentoService';
 import type { BlueprintStudy } from '../../types/blueprint';
+import type { Empreendimento } from '../../types/empreendimento';
 import BlueprintEditor from './BlueprintEditor';
+import BlueprintEditarSheet from './BlueprintEditarSheet';
 import { TELAS_DO_LINK_DIRETO, type TelaDoLinkDireto } from './telasDoLinkDireto';
 import ActionIconButton from '../ui/ActionIconButton';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
@@ -21,12 +24,14 @@ import {
 
 const COLUMNS: ColumnConfig[] = [
   { key: 'name', label: 'Nome', sortable: true },
+  { key: 'empreendimento', label: 'Empreendimento', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'updated_at', label: 'Atualizada em', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
-const DEFAULT_COL_WIDTHS: Record<string, number> = { name: 340, status: 140, updated_at: 160, actions: 100 };
+// Soma alvo ~1030px; o espaçador (§6.1.1) fica com o resto. "Ações" leva o "Abrir" (§9) + 3 ícones.
+const DEFAULT_COL_WIDTHS: Record<string, number> = { name: 320, empreendimento: 240, status: 140, updated_at: 160, actions: 170 };
 
 type Aba = 'plantas' | 'mapa-regulatorio';
 
@@ -77,9 +82,18 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
   const [mapaParaAbrir, setMapaParaAbrir] = useState<string | null>(null);
   const consumirMapaParaAbrir = useCallback(() => setMapaParaAbrir(null), []);
   const [searchTerm, setSearchTerm] = usePersistedState<string>('blueprintModule:search', '');
+  // Lista › Editar (21/10/2026): o lápis abre o drawer de nome + empreendimento; abrir a
+  // planta ficou no clique da linha e no "Abrir". Guarda o id: o drawer lê o estudo da
+  // lista, então um nome gravado aparece nele sem reabrir.
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  // Empreendimentos para a coluna e para o drawer. `null` = carregando; a coluna não
+  // segura a lista (§22, corolário) — a tabela aparece e ela preenche depois.
+  const [empreendimentos, setEmpreendimentos] = useState<Empreendimento[] | null>(null);
+  const [erroEmpreendimentos, setErroEmpreendimentos] = useState<string | null>(null);
 
   const tableColumns = useTableColumns(COLUMNS, 'blueprintModuleColumns');
-  const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'blueprintModuleColWidths');
+  // Chave nova em 21/10/2026: a anterior podia guardar "Ações" com 100px de um autoajuste, e o "Abrir" não cabe.
+  const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'blueprintModuleColWidths:v2');
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -96,6 +110,54 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // Mesmo recorte da lista: org do topo, ou "Todas" sem filtro (a RLS recorta).
+  const carregarEmpreendimentos = useCallback(async () => {
+    setErroEmpreendimentos(null);
+    try {
+      setEmpreendimentos(await empreendimentoService.list(orgId ?? undefined));
+    } catch (e) {
+      console.warn('[planta] empreendimentos indisponíveis para a coluna e o vínculo:', e);
+      setEmpreendimentos([]);
+      setErroEmpreendimentos(`Não foi possível listar os empreendimentos: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [orgId]);
+
+  useEffect(() => {
+    carregarEmpreendimentos();
+  }, [carregarEmpreendimentos]);
+
+  // Planta → nome(s) do empreendimento que aponta para ela (`empreendimentos.blueprint_study_id`).
+  // Sem UNIQUE no banco, mais de um pode apontar: a célula mostra todos.
+  const empreendimentoDaPlanta = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const e of empreendimentos ?? []) {
+      if (!e.blueprint_study_id) continue;
+      const atual = mapa.get(e.blueprint_study_id);
+      mapa.set(e.blueprint_study_id, atual ? `${atual}, ${e.name}` : e.name);
+    }
+    return mapa;
+  }, [empreendimentos]);
+
+  const nomeDaPlanta = useCallback((id: string) => studies.find((s) => s.id === id)?.name, [studies]);
+  const editando = editandoId ? (studies.find((s) => s.id === editandoId) ?? null) : null;
+
+  // §22: o que o drawer gravou entra nos arrays locais, sem recarregar a tabela.
+  const aoSalvarEdicao = useCallback((salvo: BlueprintStudy, empreendimentoId: string | null | undefined) => {
+    setStudies((atual) => atual.map((s) => (s.id === salvo.id ? salvo : s)));
+    if (empreendimentoId === undefined) return;
+    setEmpreendimentos((atual) =>
+      atual
+        ? atual.map((e) =>
+            e.id === empreendimentoId
+              ? { ...e, blueprint_study_id: salvo.id }
+              : e.blueprint_study_id === salvo.id
+                ? { ...e, blueprint_study_id: null }
+                : e,
+          )
+        : atual,
+    );
+  }, []);
 
   // LINK DIRETO (02/10/2026): `#/blueprint?studyId=…` abre o estudo — é como o
   // Empreendimento (Vinculações, Central de Sincronização) leva à planta dele.
@@ -206,7 +268,11 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
 
   const filteredStudies = useMemo(() => {
     const termo = searchTerm.trim().toLowerCase();
-    const base = termo ? studies.filter((s) => s.name.toLowerCase().includes(termo)) : studies;
+    const base = termo
+      ? studies.filter(
+          (s) => s.name.toLowerCase().includes(termo) || (empreendimentoDaPlanta.get(s.id) ?? '').toLowerCase().includes(termo),
+        )
+      : studies;
 
     if (!tableColumns.sortColumn) return base;
     const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -214,6 +280,8 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
       switch (tableColumns.sortColumn) {
         case 'name':
           return a.name.localeCompare(b.name) * dir;
+        case 'empreendimento':
+          return (empreendimentoDaPlanta.get(a.id) ?? '').localeCompare(empreendimentoDaPlanta.get(b.id) ?? '') * dir;
         case 'status':
           return a.status.localeCompare(b.status) * dir;
         case 'updated_at':
@@ -222,7 +290,7 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
           return 0;
       }
     });
-  }, [studies, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+  }, [studies, searchTerm, empreendimentoDaPlanta, tableColumns.sortColumn, tableColumns.sortDirection]);
 
   const tableTotalWidth = COLUMNS.reduce(
     (sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0),
@@ -353,7 +421,7 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Buscar por nome da planta..."
+                placeholder="Buscar por planta ou empreendimento..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -422,6 +490,19 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
                           <cols.ResizeHandle colKey="name" />
                         </SortableHeader>
                       )}
+                      {tableColumns.visibleColumns.includes('empreendimento') && (
+                        <SortableHeader
+                          colKey="empreendimento"
+                          label="Empreendimento"
+                          uppercase={false}
+                          sortColumn={tableColumns.sortColumn}
+                          sortDirection={tableColumns.sortDirection}
+                          onSort={tableColumns.handleColumnSort}
+                          className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                        >
+                          <cols.ResizeHandle colKey="empreendimento" />
+                        </SortableHeader>
+                      )}
                       {tableColumns.visibleColumns.includes('status') && (
                         <SortableHeader
                           colKey="status"
@@ -469,6 +550,22 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
                             </div>
                           </td>
                         )}
+                        {tableColumns.visibleColumns.includes('empreendimento') && (
+                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                            {empreendimentoDaPlanta.has(s.id) ? (
+                              <span className="block truncate" title={empreendimentoDaPlanta.get(s.id)}>
+                                {empreendimentoDaPlanta.get(s.id)}
+                              </span>
+                            ) : (
+                              <span
+                                className="text-gray-400"
+                                title={empreendimentos === null ? 'Carregando os empreendimentos…' : 'Sem empreendimento vinculado'}
+                              >
+                                —
+                              </span>
+                            )}
+                          </td>
+                        )}
                         {tableColumns.visibleColumns.includes('status') && (
                           <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                             <StatusBadge status={s.status} />
@@ -483,7 +580,14 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
                         {tableColumns.visibleColumns.includes('actions') && (
                           <td className="px-6 py-2.5 text-right">
                             <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                              <ActionIconButton kind="edit" onClick={() => abrir(s)} />
+                              <button
+                                type="button"
+                                onClick={() => abrir(s)}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
+                              >
+                                Abrir
+                              </button>
+                              <ActionIconButton kind="edit" title="Editar nome e empreendimento" onClick={() => setEditandoId(s.id)} />
                               <ActionIconButton kind="duplicate" onClick={() => duplicar(s)} />
                               <InlineDisclosureMenu showDelete onDelete={() => excluir(s)} />
                             </div>
@@ -498,6 +602,15 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
           )}
         </div>
       )}
+
+      <BlueprintEditarSheet
+        study={editando}
+        empreendimentos={empreendimentos}
+        erroEmpreendimentos={erroEmpreendimentos}
+        nomeDaPlanta={nomeDaPlanta}
+        onClose={() => setEditandoId(null)}
+        onSalvo={aoSalvarEdicao}
+      />
 
       {orgTargetModal}
     </div>

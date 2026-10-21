@@ -40,4 +40,23 @@ Decisões do usuário (perguntadas no plan mode, mesma sessão):
 
 ## Andamento
 
-- (preenchido conforme o trabalho anda)
+- 21/10 — item 1 feito: `utils/blueprintTerrenoDaFicha.ts` (`medidasDaPlantaParaFicha`, `compararComFicha`,
+  `patchDaPlantaParaFicha` SO_VAZIOS|TUDO, `ROTULO_DA_COLUNA`); teste 7/7.
+- 21/10 — item 2 feito: `components/blueprint/FichaDoTerrenoNaPlanta.tsx` no `PainelTerreno` (também sem
+  lote); `gravarAreaNoEmpreendimento` reescrita sobre o patch (agora com profundidade), alvo = vinculado
+  (sem vínculo, o da zona); preenchimento do vazio só para o VINCULADO e só na abertura (contorno fechado
+  no meio do desenho não vira número da ficha). `PainelTerrenoFicha.test.tsx` 3/3; 4 testes antigos do
+  painel verdes. Sem empreendimento nenhum, sobra o bloco antigo ("Escolha o empreendimento acima").
+- 21/10 — item 3 feito: `services/blueprintTerrenoDaPlanta.ts` (rascunho do ramo principal, 1º pavimento
+  com lote, blindagem de org, motivo dito) 2/2; `TowerEditor` com "Planta: …", vazio no FORM sem gravar,
+  "Usar valores da Planta", grade `items-start`; efeito com `vivo` (lição da CI da #81) e comparação
+  amarrada aos VALORES salvos (campo apagado de propósito não volta). `TowerEditorTerrenoDaPlanta` 3/3.
+  `HistoricoTab` com rótulos.
+- 21/10 — conferido na tela (`c:/tmp/pwtest/conferencia-terreno-ficha.cjs`, 11/11, zero erro): planta
+  Garden (sem lote) mostra a ficha 1.229 / 18 / 11 / 71 como "Só na ficha" e "Levar à ficha" desligado com
+  o motivo; Empreendimento 011 › Terreno diz "A planta Garden ainda não tem desenho."; planta descartável
+  12 × 30 com 004 - Alcino Salomon escolhido na zona: 360,00 m² / 12 / 12 / 30 "Só na planta", botão
+  ligado (não clicado), nada preenchido sozinho (sem vínculo). Nenhuma escrita em `empreendimentos`
+  (conferido no banco: as duas fichas com o mesmo `updated_at`). Descartável arquivada.
+  Não visto na tela: a linha "Planta: …" do TowerEditor com lote real (exigiria vincular uma planta com
+  lote a um empreendimento real) — coberto pelo teste de componente.

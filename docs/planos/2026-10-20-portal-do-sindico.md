@@ -168,7 +168,7 @@ depois do push em `main` (ainda não feito quando esta linha foi escrita).
   por e-mail, publicar aviso, responder chamado, aprovar. Grava em produção — combinar
   com o usuário antes.
 - [x] Suíte inteira (21/10): 10.596 testes = 10.562 passaram + 0 falharam + 34 pendentes, exit 0.
-- [ ] Push em `main` (publicação do frontend).
+- [x] Push em `main`: commit `c30c1b5`, provado de fora com `conferir-producao.sh` (bundle carimbado c30c1b5, texto "Portal do Síndico" servido) em 21/10/2026.
 
 Fato medido em 20/10/2026, antes de começar: `fn_condominio_payload_for_client`
 no banco é idêntica ao arquivo `aplicar_20271012000020` (diff vazio do

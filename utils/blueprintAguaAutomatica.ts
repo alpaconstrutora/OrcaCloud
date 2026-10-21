@@ -820,9 +820,33 @@ export function planejarAgua(
       pontosPorAresta.set(i, [...(pontosPorAresta.get(i) ?? []), p]);
     }
   }
+  // S4 da casa automática (20/10/2026): os TOCOS — trecho novo que não leva água a ponto nenhum (fora de todo caminho
+  // da origem às peças) com uma ponta solta (nem peça nem origem) — saem, um atrás do outro. A cabeça de coluna no
+  // mesmo pavimento do barrilete, com a raiz do ramal já no barrilete, deixava uma ida e volta pelo mesmo segmento com a
+  // ponta solta (ponta aberta, R1-A de 3 pavimentos).
+  const naPonta = new Set<No>([noDaOrigem, ...pontos.map(naPosicao).map((p) => chave(p.levelId, p.at.x, p.at.y, p.cotaMm))]);
+  const tocos = new Set<number>();
+  for (let mudou = true; mudou; ) {
+    mudou = false;
+    const g = new Map<No, number>();
+    arestas.forEach((ar, i) => {
+      if (tocos.has(i)) return;
+      g.set(ar.de, (g.get(ar.de) ?? 0) + 1);
+      g.set(ar.para, (g.get(ar.para) ?? 0) + 1);
+    });
+    const solta = (k: No) => (g.get(k) ?? 0) === 1 && !naPonta.has(k);
+    arestas.forEach((ar, i) => {
+      if (tocos.has(i) || !('novo' in ar.ref) || pesoPorAresta.has(i) || !(solta(ar.de) || solta(ar.para))) return;
+      tocos.add(i);
+      mmNovos -= ar.mm;
+      mudou = true;
+    });
+  }
+  const novosTocos = new Set([...tocos].map((i) => arestas[i].ref).filter((r): r is { novo: number } => 'novo' in r).map((r) => r.novo));
   let dnMaximoMm = 0;
   const atualizacoes: Command[] = [];
   arestas.forEach((ar, i) => {
+    if (tocos.has(i)) return;
     const peso = pesoPorAresta.get(i);
     if (peso == null) return;
     // O sub-ramal de UM aparelho nunca abaixo do DN mínimo da ficha dele.
@@ -853,14 +877,15 @@ export function planejarAgua(
   // dois trechos colineares que o quantitativo contaria como uma luva que a
   // obra não compra. Emendam-se quando o nó do meio tem grau 2 e o DN é o mesmo.
   const grau = new Map<No, number>();
-  for (const ar of arestas) {
+  for (const [i, ar] of arestas.entries()) {
+    if (tocos.has(i)) continue;
     grau.set(ar.de, (grau.get(ar.de) ?? 0) + 1);
     grau.set(ar.para, (grau.get(ar.para) ?? 0) + 1);
   }
   const emendados: Extract<Command, { type: 'AddTrecho' }>[] = [];
   const consumidos = new Set<number>();
   novos.forEach((c, i) => {
-    if (consumidos.has(i)) return;
+    if (consumidos.has(i) || novosTocos.has(i)) return;
     let atual = c;
     const vertical = (x: typeof c) => x.a.x === x.b.x && x.a.y === x.b.y;
     if (vertical(atual)) {
@@ -868,7 +893,7 @@ export function planejarAgua(
       while (mudou) {
         mudou = false;
         for (let j = 0; j < novos.length; j++) {
-          if (j === i || consumidos.has(j)) continue;
+          if (j === i || consumidos.has(j) || novosTocos.has(j)) continue;
           const o = novos[j];
           if (!vertical(o) || o.levelId !== atual.levelId || o.a.x !== atual.a.x || o.a.y !== atual.a.y || o.bitolaMm !== atual.bitolaMm) continue;
           const meio = o.cotaAMm === atual.cotaBMm ? atual.cotaBMm : o.cotaBMm === atual.cotaAMm ? atual.cotaAMm : null;

@@ -3157,14 +3157,24 @@ Cada uma: medir → corrigir → 8 casas e 6 lotes medidos → teste que falha s
 - Teste (falha sem cada uma das 3 partes): `blueprintCasaAutomatica.test.ts` › "F27 item 5: 10 × 30, 4 dorm." — a
   porta do lavabo dá para a cozinha; nenhum encontro de rede.
 
-### S4 — em andamento (20/10/2026)
+### Registro S4 (20–21/10/2026)
 
 - A causa: no 2º do R1-A, o escritório é o ÚNICO item social; sozinho na faixa da frente, recebe a largura toda e a
   profundidade da área (7,40 × 1,70 m, mínimo 2,20). Tentado e revertido: a faixa da frente nunca mais rasa que o
   mínimo dos itens (no gerador) — o fundo encolheu e o núcleo comeu o banheiro da suíte (1,47 m²).
-- Caminho escolhido: o item social sozinho no 2º vai ao fundo, ao lado da suíte (escritório 3,10 × 6,45 m; some também
-  a SEM_SOLUCAO antiga "Suíte 1 × Banheiro sem porta direta"). A planta nova expõe defeitos antigos da água/esgoto
-  dessa casa — corrigidos: o shaft reaproveitado pelo banheiro de cima precisa chegar ao pavimento dele (o esgoto saía
-  da laje rebaixada para o do F12c, a 3 m). Pendentes: a coluna da quente no shaft colada à fria (a escolha da rotação
-  pela contagem de horizontais regride o sobrado 12 × 30 — revertida), 1 ponta aberta da quente no térreo e 1 trecho
-  da quente sob o rebaixo do térreo. Guardado no ramo local `wip/s4-escritorio`.
+- Correção: o item social sozinho no 2º vai ao fundo, ao lado da suíte (escritório 3,10 × 6,45 m; some também a
+  SEM_SOLUCAO antiga "Suíte 1 × Banheiro sem porta direta" e a do escritório estreito).
+- A planta nova expôs defeitos antigos das redes dessa casa (decisão do usuário, 21/10: "corrigir as redes agora"):
+  1. `shaftDoGrupo` reaproveitava o shaft térreo → 1º sob o banheiro do 2º; o esgoto só desce por shaft que atravessa
+     o pavimento das peças e ia ao do F12c, a 3 m, fora da laje rebaixada (esgoto × eletroduto no forro do 1º). Exigir
+     shaft que chegue ao pavimento criava um shaft NOVO — três shafts no banheiro do 1º partiam o anel da água e a
+     quente cruzava o banheiro pelo ar (fria × quente). Agora o shaft de baixo é ESTENDIDO até o banheiro de cima
+     (`SetNucleoProps.ateLevelId`), na previsão da laje rebaixada e no passo do shaft.
+  2. Ponta aberta da quente no térreo: a cabeça de coluna no pavimento do barrilete, com a raiz do ramal já nele —
+     ida e volta pelo mesmo segmento. No fim do traçado da água, os TOCOS (trecho novo fora de todo caminho da origem
+     às peças, com ponta solta) saem; a rede existente não é tocada.
+  - Tentada e revertida: a quente escolhendo a rotação no shaft pela contagem de horizontais da fria (regredia o
+    sobrado 12 × 30).
+- Medido: R1-A de 3 pav. com 0 encontros, 0 sob rebaixo, 0 pontas abertas (pendências 5 → 4); 8 casas idênticas ao
+  marco; 6 lotes com 0 encontros; sobrado 10 × 30 limpo.
+- Teste (falha sem cada uma das 3 partes): `blueprintCasaAutomatica.test.ts` › "S4: no 2º do R1-A".

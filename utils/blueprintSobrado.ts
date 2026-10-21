@@ -20,7 +20,7 @@
  * Tudo no QUADRO LOCAL da frente (o mesmo do gerador): quem chama leva ao mundo com `comandosNoMundoDe`.
  */
 import type { BlueprintModel, Command, ObjectId, Point, Wall } from './blueprintKernel';
-import { applyBatch, contornoDoComponente, point, pointInPolygon, signedArea, uidDeterministico } from './blueprintKernel';
+import { applyBatch, contornoDoComponente, pavimentosDoNucleo, point, pointInPolygon, signedArea, uidDeterministico } from './blueprintKernel';
 import { semEspiculas } from './blueprintDistribuicao';
 import { HIPOTESES_PILARES_PADRAO, idsPrevistosDeEstrutura, pilaresExistentesNoNivel, planejarPilares, proximoNumeroDePilar, proximoNumeroDoRotulo, type HipotesesDePilares } from './blueprintPilaresAutomaticos';
 import { alturaDaViga, HIPOTESES_VIGAS_PADRAO, type HipotesesDeVigas } from './blueprintVigasLajesAutomaticas';
@@ -1503,7 +1503,7 @@ export function shaftDoGrupo(
   ladoMm: number,
   ateMm: number,
   intermediarios: readonly ObjectId[] = [],
-): { ring: Point[]; novo: boolean; noTerreo: string | null } | null {
+): { ring: Point[]; novo: boolean; noTerreo: string | null; estender?: ObjectId } | null {
   const doBanheiro = (n: { ring: Point[] }) =>
     n.ring.some((q) => pointInPolygon(banheiro as Point[], q) || banheiro.some((b, i) => distanciaAoLado(q, banheiro[(i + banheiro.length - 1) % banheiro.length], b) <= 50));
   const existente = (model.nucleos ?? [])
@@ -1511,7 +1511,10 @@ export function shaftDoGrupo(
     .map((n) => ({ n, d: Math.hypot(centroDoAnel(n.ring).x - alvo.x, centroDoAnel(n.ring).y - alvo.y) }))
     .filter((x) => x.d <= ateMm)
     .sort((a, b) => a.d - b.d)[0];
-  if (existente) return { ring: existente.n.ring, novo: false, noTerreo: null };
+  // S4 (20/10/2026): o shaft que não chega ao pavimento do banheiro (o térreo → 1º sob o banheiro do 2º) é ESTENDIDO até
+  // ele — o esgoto só desce por shaft que atravessa o pavimento das peças: ia buscar outro a 3 m, fora da laje rebaixada,
+  // e o ramal cruzava o eletroduto no forro do 1º (R1-A de 3 pavimentos). Um shaft novo ao lado enchia o banheiro do 1º.
+  if (existente) return { ring: existente.n.ring, novo: false, noTerreo: null, ...(pavimentosDoNucleo(model, existente.n).some((l) => l.id === S) ? {} : { estender: existente.n.id }) };
   const sh = shaftJuntoDasPecas(model, T, S, banheiro, alvo, nucleo, ladoMm, intermediarios);
   return sh ? { ring: sh.ring, novo: true, noTerreo: sh.noTerreo } : null;
 }

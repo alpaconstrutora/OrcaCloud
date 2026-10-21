@@ -2202,6 +2202,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const ban = m.spaces.find((sp) => sp.levelId === S0 && g.filter((t) => pointInPolygon(sp.ring, t.at)).length * 2 >= g.length);
         if (!ban) continue;
         const sh = shaftDoGrupo(m, T0, S0, ban.ring, alvo, escada, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm, meio);
+        // S4: o shaft de baixo sob o banheiro sobe até ele.
+        if (sh?.estender) aplicar([{ type: 'SetNucleoProps', nucleoId: sh.estender, ateLevelId: S0 } as Command]);
         if (sh && !sh.novo) continue;
         if (!sh) {
           pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Shaft: ${ban.name} não tem lugar junto das peças para o shaft (parede com parede embaixo, ou cômodo de baixo que aceite a caixa) — o tubo de queda desce longe delas; ponha o shaft à mão.` });
@@ -2940,7 +2942,11 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     let eg: { r: ResultadoDoGerador; texto: string } | null = null;
     let retDoSegundo: Retangulo | null = null;
     if (divididos.segundo) {
-      const seg = divididos.segundo;
+      // S4 (20/10/2026): o item social SOZINHO no 2º (o escritório do R1-A — o resto é a suíte e o banho dela) vai ao fundo,
+      // ao lado da suíte: sozinho na frente, a faixa dele tinha a largura toda e a profundidade da área (7,40 × 1,70 m,
+      // mínimo 2,20).
+      const naoIntimos = divididos.segundo.itens.filter((i) => i.privacidade !== 'INTIMO' && i.uso !== 'CIRCULACAO');
+      const seg = naoIntimos.length === 1 ? { ...divididos.segundo, itens: divididos.segundo.itens.map((i) => (i === naoIntimos[0] ? { ...i, privacidade: 'INTIMO' as const } : i)) } : divididos.segundo;
       const malha = hipGerador.malhaMm ?? HIPOTESES_DO_GERADOR_PADRAO.malhaMm;
       const areaM2 = (resumoDoPrograma(seg).areaIdealComCirculacaoM2 + (hip.sobrado.nucleoLarguraMm * hip.sobrado.nucleoProfundidadeMm) / 1e6) * (hipImplantacao.fatorDoRetanguloSobreUtil ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.fatorDoRetanguloSobreUtil);
       // F27 item 5.3: o 2º recua dentro do 1º (recuado ou não).
@@ -3307,6 +3313,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
             const alvo = { x: g.reduce((a, t) => a + t.at.x, 0) / g.length, y: g.reduce((a, t) => a + t.at.y, 0) / g.length };
             const sh = shaftDoGrupo(m3, T0, Lj, ban.ring, alvo, esc, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm, niveis.slice(1, j));
             if (sh?.novo) m3 = applyBatch(m3, [{ type: 'AddNucleo', levelId: T0, ateLevelId: Lj, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' } as Command]).model;
+            if (sh?.estender) m3 = applyBatch(m3, [{ type: 'SetNucleoProps', nucleoId: sh.estender, ateLevelId: Lj } as Command]).model;
           }
         }
         const pecas = (m3.terminais ?? []).filter((t) => t.levelId === S0 && t.disciplina === 'ESGOTO');
@@ -3326,6 +3333,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           if (!sh) continue;
           shaftDo.set(g, sh.ring);
           if (sh.novo) m4 = applyBatch(m4, [{ type: 'AddNucleo', levelId: T0, ateLevelId: S0, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' } as Command]).model;
+          if (sh.estender) m4 = applyBatch(m4, [{ type: 'SetNucleoProps', nucleoId: sh.estender, ateLevelId: S0 } as Command]).model;
         }
         // Uma zona por GRUPO e por banheiro que ele toca: as peças do grupo nele e o caminho delas até o shaft (a reta de
         // cada peça ao centro dele), até a face do shaft. Por grupo: no banheiro comprido da suíte, a caixa sifonada de

@@ -776,6 +776,21 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
     expect(maiorDormitorioDoPrimeiro(r)).toBeLessThan(25);
   });
 
+  it('S4: no 2º do R1-A, o escritório vai ao lado da suíte (acima da largura mínima) — e as redes sem encontro nem ponta aberta', () => {
+    // Sozinho na faixa da frente, o escritório tinha a largura toda e a profundidade da área: 7,40 × 1,70 m (mín. 2,20).
+    const p2 = [...r.levels].sort((a, b) => a.elevationMm - b.elevationMm)[2];
+    const esc = r.spaces.find((x) => x.levelId === p2.id && x.name === 'Escritório')!;
+    const [xs, ys] = [esc.ring.map((q) => q.x), esc.ring.map((q) => q.y)];
+    expect(Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys))).toBeGreaterThanOrEqual(2200);
+    // A planta nova expunha: o shaft de baixo (térreo → 1º) reaproveitado sem chegar ao 2º — o esgoto descia por outro,
+    // fora da laje rebaixada, e cruzava o eletroduto do forro do 1º (agora o shaft sobe até o 2º); e o toco da quente que
+    // ia e voltava pelo barrilete (agora podado).
+    const porId = new Map((r.trechos ?? []).map((t) => [t.id, t]));
+    const encontros = conflitosDoModelo(r).filter((c) => c.classe === 'REDE' && porId.has(c.trechoId) && porId.has(c.outroId)).map((c) => `${porId.get(c.trechoId)!.disciplina} × ${porId.get(c.outroId)!.disciplina}`);
+    expect(encontros).toEqual([]);
+    expect(plano.pendencias.filter((x) => /ponta\(s\) aberta/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+  });
+
   it('F27 item 5.3: 12 × 30 com o programa padrão — os dormitórios do 1º deixam de ter 41 m²', () => {
     const p = planejarCasa(m, { ...z3(3), hidro: chuva }, { pavimentos: 3 });
     expect(p.etapas.find((x) => x.id === 'ARQUITETURA')?.situacao).toBe('LANCOU');

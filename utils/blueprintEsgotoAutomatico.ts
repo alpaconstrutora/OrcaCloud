@@ -105,6 +105,12 @@ export interface HipotesesDeEsgoto {
   /** Quanto a caixa de inspeção AUTOMÁTICA fica para fora da fachada, mm (13/10/2026). Ausente = 1000. */
   afastamentoDaCiMm?: number;
   /**
+   * S5 da casa automática (20/10/2026): a distância mínima do centro da caixa proposta a um tubo de água ENTERRADO (o
+   * alimentador), mm — a caixa anda paralela à frente até ter. Na mesma reta, a caixa e o coletor corriam a 2 cm do
+   * alimentador até a rua (10 × 30, 4 dorm., 3 pavimentos). Ausente = 600.
+   */
+  afastamentoDaCiAAguaMm?: number;
+  /**
    * Profundidade presumida da rede pública (geratriz inferior) abaixo do terreno
    * na frente, mm (13/10/2026): a cota ESTIMADA da ligação posta pelo esgoto
    * automático, até alguém confirmar com a concessionária. Ausente = 1500.
@@ -432,7 +438,7 @@ export function posicaoDaCaixaProposta(model: BlueprintModel, hip: HipotesesDeEs
     const fachada = saidaDasParedes(model, nivelId, saida, u, ate) ?? 0;
     // Cabe o afastamento antes da divisa? Senão, o meio do caminho entre a fachada e ela.
     const d = fachada + afastamento <= ate ? fachada + afastamento : (fachada + ate) / 2;
-    return { levelId: nivelId, at: no(u, d), rumo: frente.origem };
+    return { levelId: nivelId, at: longeDaAguaEnterrada(model, nivelId, no(u, d), { x: -u.y, y: u.x }, hip.afastamentoDaCiAAguaMm ?? 600), rumo: frente.origem };
   }
   let melhor: { u: Ponto2; d: number } | null = null;
   for (const u of OITO_RUMOS) {
@@ -442,6 +448,29 @@ export function posicaoDaCaixaProposta(model: BlueprintModel, hip: HipotesesDeEs
   // Sem parede nenhuma no pavimento: ao lado da saída, para o sul.
   const r = melhor ?? { u: { x: 0, y: -1 }, d: 0 };
   return { levelId: nivelId, at: no(r.u, r.d + afastamento), rumo: 'FACHADA' };
+}
+
+/**
+ * S5: a caixa proposta que cairia a menos de `folgaMm` de um tubo de água enterrado do pavimento (o alimentador, traçado
+ * antes) anda ao longo de `n` (paralela à frente), de 10 em 10 cm até 2 m, para o lado mais perto que fica livre — e
+ * ainda com a frente do lote diante dela. Nenhum livre: fica onde estava.
+ */
+function longeDaAguaEnterrada(model: BlueprintModel, levelId: ObjectId, p: Ponto2, n: Ponto2, folgaMm: number): Ponto2 {
+  const enterrados = (model.trechos ?? []).filter((t) => t.levelId === levelId && t.disciplina === 'AGUA_FRIA' && Math.max(t.cotaAMm, t.cotaBMm) < 0 && (t.a.x !== t.b.x || t.a.y !== t.b.y));
+  const dSeg = (q: Ponto2, a: Ponto2, b: Ponto2) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(q.x - (a.x + t * dx), q.y - (a.y + t * dy));
+  };
+  const livre = (q: Ponto2) => enterrados.every((t) => dSeg(q, t.a, t.b) >= folgaMm);
+  if (livre(p)) return p;
+  for (let d = 100; d <= 2000; d += 100)
+    for (const s of [1, -1]) {
+      const q = { x: Math.round(p.x + n.x * d * s), y: Math.round(p.y + n.y * d * s) };
+      if (livre(q) && pontoNaFrente(model, q as Point)) return q;
+    }
+  return p;
 }
 
 /** O plano com a caixa PROPOSTA: traça sobre um rascunho que já a tem, e a caixa vai à frente no lote de comandos. */

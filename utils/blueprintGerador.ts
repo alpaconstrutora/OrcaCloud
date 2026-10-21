@@ -1276,6 +1276,10 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
       if (alcancados.has(v)) continue;
       const par = parDoMolhado(v);
       if (par && par !== atual) continue;
+      // S5 da casa automática (20/10/2026): o molhado não abre para a área de serviço quando encosta noutro cômodo seco
+      // (a cozinha, o social) — ele o alcança depois. O lavabo do térreo da casa de 3 (10 × 30), trocado de ponta com o
+      // serviço, abria para ele. Sem outro, a busca de reserva abre pelo serviço, como antes.
+      if (!par && ehMolhado(v.item) && atual.item.uso === 'AREA_DE_SERVICO' && ambientes.some((x) => x !== atual && x !== v && !ehMolhado(x.item) && x.item.uso !== 'AREA_DE_SERVICO' && !!ladoComum(v.ret, x.ret))) continue;
       if (abrirPorta(v, atual)) {
         alcancados.add(v);
         if (!ehMolhado(v.item)) fila.push(v);

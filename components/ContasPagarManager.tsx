@@ -7,8 +7,10 @@ import {
 import PagamentoAvulsoSheet from './financeiro/PagamentoAvulsoSheet';
 import { invoiceService } from '../services/invoiceService';
 import { payableService, payableParty } from '../services/payableService';
+import { darfService } from '../services/darfService';
+import { colapsarDarfs } from '../utils/darf';
 import { exportService } from '../services/exportService';
-import { Invoice, Payable } from '../types/financial';
+import { Invoice, Payable, type Darf } from '../types/financial';
 import type { Organization } from '../types';
 import ContasPagarParcelas, { origemLabel as payableOrigemLabel, STATUS_PT as PAYABLE_STATUS_PT } from './ContasPagarParcelas';
 import FechamentoCentroCusto, { type LinhaFechamento } from './financeiro/FechamentoCentroCusto';
@@ -241,6 +243,11 @@ export default function ContasPagarManager({ organizations }: Props) {
     const zerarAncora = useCallback(() => setLastCheckedIndex(null), []);
     const agrupamento = useAgrupamento<CampoAgruparNotas>('contasPagarManager:notas:groupBy', zerarAncora);
     const [payables, setPayables] = useState<Payable[]>([]);
+    // DARFs (Tributos a Pagar › DARFs): os tributos de um DARF viram UMA linha
+    // na tabela de parcelas (`colapsarDarfs`). `payables` continua cru, porque o
+    // Fechamento por CC é contábil e lê os tributos um a um.
+    const [darfs, setDarfs] = useState<Darf[]>([]);
+    const linhas = useMemo(() => colapsarDarfs(payables, darfs), [payables, darfs]);
     // Recorte de PARCELAS após busca/status/período — reportado pelo filho, para
     // o export (abaixo) sair igual ao que a tabela mostra, não a lista inteira.
     const [payablesVisible, setPayablesVisible] = useState<Payable[]>([]);
@@ -366,8 +373,13 @@ export default function ContasPagarManager({ organizations }: Props) {
                 // sempre filtrou data no cliente tolerando nulo
                 // (`if (vencDe && inv.dueDate && ...)`); a de parcelas faz igual,
                 // em ContasPagarParcelas.
-                const data = await payableService.list(orgId);
+                // DARF que não carregou só deixa os tributos soltos — não derruba a tela.
+                const [data, ds] = await Promise.all([
+                    payableService.list(orgId),
+                    darfService.list(orgId ?? null).catch(err => { console.error('[ContasPagar] DARFs não carregados:', err); return [] as Darf[]; }),
+                ]);
                 setPayables(data);
+                setDarfs(ds);
             } else {
                 const data = await invoiceService.listAll(orgId);
                 setInvoices(data);
@@ -584,7 +596,8 @@ export default function ContasPagarManager({ organizations }: Props) {
 
         let aPagar = 0, venc7 = 0, atrasado = 0, pagoMes = 0;
         let qtdAPagar = 0, qtdVenc7 = 0, qtdAtrasado = 0, qtdPagoMes = 0;
-        payables.forEach(p => {
+        // Sobre as LINHAS da tabela: o DARF conta como 1 título; o valor é o mesmo.
+        linhas.forEach(p => {
             const valor = p.amount ?? 0;
             const due = p.due_date ? new Date(p.due_date + 'T00:00:00') : null;
             if (p.effective_status === 'PAGO') {
@@ -600,7 +613,7 @@ export default function ContasPagarManager({ organizations }: Props) {
             else if (due && due <= em7) { venc7 += valor; qtdVenc7++; }
         });
         return { aPagar, venc7, atrasado, pagoMes, qtdAPagar, qtdVenc7, qtdAtrasado, qtdPagoMes };
-    }, [payables]);
+    }, [linhas]);
 
     const summaryNotas = useMemo(() => {
         const now = today();
@@ -961,7 +974,7 @@ export default function ContasPagarManager({ organizations }: Props) {
                         <div className="flex items-center gap-3 shrink-0">
                             <span className="text-sm font-normal text-gray-400">
                                 {visao === 'parcelas'
-                                    ? `${payables.length} parcela${payables.length !== 1 ? 's' : ''}`
+                                    ? `${linhas.length} parcela${linhas.length !== 1 ? 's' : ''}`
                                     : visao === 'fechamento'
                                         ? `${consolidado.length} centro${consolidado.length !== 1 ? 's' : ''} de custo`
                                         : `${filtered.length} de ${invoices.length} nota${invoices.length !== 1 ? 's' : ''}`}
@@ -984,7 +997,7 @@ export default function ContasPagarManager({ organizations }: Props) {
                         />
                     ) : visao === 'parcelas' ? (
                         <ContasPagarParcelas
-                            rows={payables}
+                            rows={linhas}
                             organizationId={effectiveOrgId}
                             vencDe={vencDe}
                             vencAte={vencAte}
@@ -996,6 +1009,10 @@ export default function ContasPagarManager({ organizations }: Props) {
                             onRowChanged={row => setPayables(prev => prev.map(p => p.id === row.id ? row : p))}
                             onRowRemoved={id => setPayables(prev => prev.filter(p => p.id !== id))}
                             onVisibleRowsChange={setPayablesVisible}
+                            onComponentesChanged={(ids, patch) => {
+                                const alvo = new Set(ids);
+                                setPayables(prev => prev.map(p => (alvo.has(p.id) ? { ...p, ...patch } : p)));
+                            }}
                             notify={notify}
                             focusId={focusPayableId}
                             onFocusConsumed={handleFocusConsumed}

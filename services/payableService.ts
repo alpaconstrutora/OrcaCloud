@@ -144,7 +144,7 @@ export const payableService = {
         const { data: todas, error } = await fetchAllPagesParallel<Payable>(
             () => comFiltros(supabase
                 .from('vw_payables')
-                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,obra_id,obra_name,cost_center_id,plano_de_contas_id,documento_path,documento_nome,created_at,updated_at')
+                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,obra_id,obra_name,cost_center_id,plano_de_contas_id,documento_path,documento_nome,darf_id,payment_date,payment_type,created_at,updated_at')
                 .order('due_date', { ascending: true, nullsFirst: false })
                 .order('id', { ascending: true }) as unknown as FiltravelPorColuna) as unknown as RangeableQuery<Payable>,
             () => comFiltros(supabase

@@ -922,6 +922,24 @@ export const commercialService = {
             .single();
 
         if (deal) {
+            // 1b. Tributo do negócio agrupado em DARF: a guia é do usuário — apagar
+            // o negócio deixaria o tributo órfão no DARF (e o banco recusa o
+            // delete do membro). Recusa ANTES de mexer em qualquer coisa.
+            const { data: emDarf } = await supabase
+                .from('internal_transactions')
+                .select('due_date')
+                .eq('organization_id', deal.organization_id)
+                .like('reference_id', `tax-${id}-%`)
+                .not('darf_id', 'is', null)
+                .limit(1);
+            if (emDarf && emDarf.length > 0) {
+                const venc = (emDarf[0] as { due_date?: string | null }).due_date;
+                const vencBR = venc ? venc.split('-').reverse().join('/') : '';
+                throw new Error(
+                    `Há tributos deste negócio agrupados no DARF${vencBR ? ` de venc. ${vencBR}` : ''} — ` +
+                    'desagrupe em Financeiro › Tributos a Pagar › DARFs antes de excluir.');
+            }
+
             // 2. Cleanup installments (this will throw if any are PAID)
             await commercialFinanceService.deleteDealInstallments(id, deal.organization_id);
 

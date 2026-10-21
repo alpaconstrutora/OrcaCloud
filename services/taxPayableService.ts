@@ -64,6 +64,16 @@ const TAX_PARTY_TYPE = 'TAX';
 /** Tributo com dinheiro já saído: conciliado ou baixado como pago. Nunca é apagado nem regravado. */
 const tributoJaPago = (r: { status?: string; business_status?: string }) =>
     r.status === 'CONCILIATED' || r.business_status === 'PAGO';
+
+/**
+ * Tributo que a regeração não toca: pago, ou agrupado num DARF
+ * (docs/planos/2026-10-21-agrupar-tributos-em-darf.md). O agrupado é a guia
+ * que o usuário montou — apagar e recriar com outro id o tiraria do DARF (e o
+ * banco recusa: trava `trg_darf_membro_trava`). Valor congelado como o pago:
+ * para recalcular, desagrupe.
+ */
+export const tributoPreservado = (r: { status?: string; business_status?: string; darf_id?: string | null }) =>
+    tributoJaPago(r) || !!r.darf_id;
 const TAX_SOURCE_SYSTEM = 'COMMERCIAL'; // isenta o hard-lock de período
 
 // Regime de reconhecimento dos tributos comerciais (organizations.settings).
@@ -183,7 +193,7 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
         // linhas que a RLS liberou, então o `in(...)` sozinho já é o recorte.
         let dealsQuery = supabase
             .from('commercial_deals')
-            .select('id, property_id, client_id')
+            .select('id, property_id, client_id, status')
             .in('id', dealIds);
         if (organizationId) dealsQuery = dealsQuery.eq('organization_id', organizationId);
         const { data: deals } = await dealsQuery;
@@ -193,9 +203,13 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
         // client_id da negociação e é substituído pela lista de
         // commercial_deal_buyers quando ela existe.
         const clientIdsByDeal = new Map<string, string[]>();
-        (deals || []).forEach((d: { id: string; property_id?: string | null; client_id?: string | null }) => {
+        // Status do negócio: tributo agrupado em DARF de negócio distratado é
+        // preservado (como o pago) e a tela avisa antes de pagar.
+        const statusByDeal = new Map<string, string>();
+        (deals || []).forEach((d: { id: string; property_id?: string | null; client_id?: string | null; status?: string | null }) => {
             if (d.property_id) propertyByDeal.set(d.id, d.property_id);
             if (d.client_id)   clientIdsByDeal.set(d.id, [d.client_id]);
+            if (d.status)      statusByDeal.set(d.id, d.status);
         });
         try {
             const { data: buyerRows } = await supabase
@@ -230,8 +244,10 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
         };
         const withClient = (r: TaxPayable): TaxPayable => {
             const clientName = clientNameForRow(r);
-            if (!clientName) return r;
-            return { ...r, client_name: clientName };
+            const dealId = dealIdFromReference(r.reference_id);
+            const dealStatus = dealId ? statusByDeal.get(dealId) ?? null : null;
+            if (!clientName && !dealStatus) return r;
+            return { ...r, ...(clientName ? { client_name: clientName } : {}), deal_status: dealStatus };
         };
 
         const propertyIds = [...new Set(propertyByDeal.values())];
@@ -291,7 +307,7 @@ export const taxPayableService = {
     async list(organizationId: string | null, filters?: TaxPayableFilters): Promise<TaxPayable[]> {
         let q = supabase
             .from('vw_commercial_tax_payables')
-            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,project_id,project_name,created_at,updated_at')
+            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,project_id,project_name,darf_id,due_date_antes_darf,created_at,updated_at')
             .order('due_date', { ascending: true, nullsFirst: false });
 
         if (organizationId) q = q.eq('organization_id', organizationId);
@@ -613,20 +629,20 @@ export const taxPayableService = {
         // Sem conseguir ler, não grava: gravar às cegas é o próprio defeito.
         const { data: existentes, error: exErr } = await supabase
             .from('internal_transactions')
-            .select('reference_id, status, business_status')
+            .select('reference_id, status, business_status, darf_id')
             .eq('organization_id', organizationId)
             .eq('party_type', TAX_PARTY_TYPE)
             .like('reference_id', `tax-${deal.id}-%`);
         if (exErr) { console.error('[TAX-PAYABLE] Falha ao ler tributos pagos do negócio — nada regerado:', exErr); return; }
-        const refsPagas = new Set(
+        const refsPreservadas = new Set(
             (existentes || [])
-                .filter((r: { status?: string; business_status?: string }) => tributoJaPago(r))
+                .filter((r: { status?: string; business_status?: string; darf_id?: string | null }) => tributoPreservado(r))
                 .map((r: { reference_id: string }) => r.reference_id),
         );
 
         // Sempre limpa os automáticos PENDENTES deste negócio antes de regerar
         // (parcela cancelada, mudança de valor, alíquota desativada). Preserva os
-        // já PAGOS/conciliados (dinheiro que saiu).
+        // já PAGOS/conciliados (dinheiro que saiu) e os agrupados em DARF.
         await this.removeForDeal(deal.id, organizationId);
 
         // Parcelas do negócio — duas origens possíveis:
@@ -786,7 +802,7 @@ export const taxPayableService = {
             }
         }
 
-        const aGravar = rows.filter(r => !refsPagas.has(r.reference_id as string));
+        const aGravar = rows.filter(r => !refsPreservadas.has(r.reference_id as string));
         if (aGravar.length === 0) return;
 
         const { error } = await supabase
@@ -830,24 +846,33 @@ export const taxPayableService = {
         return count;
     },
 
-    /** Remove os tributos PENDENTES de um negócio (distrato/cancelamento). */
-    async removeForDeal(dealId: string, organizationId: string): Promise<void> {
-        if (!dealId || !organizationId) return;
+    /**
+     * Remove os tributos PENDENTES de um negócio (distrato/cancelamento). Pagos e
+     * agrupados em DARF ficam (`tributoPreservado`); devolve quantos ficaram num
+     * DARF, para quem chamou poder avisar.
+     */
+    async removeForDeal(dealId: string, organizationId: string): Promise<{ preservadosEmDarf: number }> {
+        if (!dealId || !organizationId) return { preservadosEmDarf: 0 };
         try {
             const { data: existing } = await supabase
                 .from('internal_transactions')
-                .select('id, status, business_status')
+                .select('id, status, business_status, darf_id')
                 .eq('organization_id', organizationId)
                 .eq('party_type', TAX_PARTY_TYPE)
                 .like('reference_id', `tax-${dealId}-%`);
-            const toDelete = (existing || [])
-                .filter((r: { status?: string; business_status?: string }) => !tributoJaPago(r))
-                .map((r: { id: string }) => r.id);
+            type Linha = { id: string; status?: string; business_status?: string; darf_id?: string | null };
+            const linhas = (existing || []) as Linha[];
+            const toDelete = linhas.filter(r => !tributoPreservado(r)).map(r => r.id);
             if (toDelete.length) {
-                await supabase.from('internal_transactions').delete().in('id', toDelete);
+                // O erro do delete era ignorado: uma trava do banco (mês fechado,
+                // Asaas em curso, DARF) falhava o lote inteiro em silêncio.
+                const { error } = await supabase.from('internal_transactions').delete().in('id', toDelete);
+                if (error) console.error('[TAX-PAYABLE] Tributos pendentes do negócio não removidos:', error.message);
             }
+            return { preservadosEmDarf: linhas.filter(r => !!r.darf_id).length };
         } catch (e) {
             console.error('[TAX-PAYABLE] Falha ao remover tributos do negócio:', e);
+            return { preservadosEmDarf: 0 };
         }
     },
 };

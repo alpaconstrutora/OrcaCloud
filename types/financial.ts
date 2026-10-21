@@ -893,8 +893,65 @@ export interface Payable {
      *  (aplicar_20271018300000). Outras origens resolvem o documento pela origem. */
     documento_path?: string | null;
     documento_nome?: string | null;
+    /** DARF que agrupa este lançamento (tributo, ou multa/juros do DARF) — aplicar_20271021300000. */
+    darf_id?: string | null;
+    payment_date?: string | null;
+    payment_type?: string | null;
+    /** Só na linha SINTÉTICA do DARF em Contas a Pagar (`colapsarDarfs`): os membros recolhidos. */
+    darf?: DarfNaLinha;
     created_at?: string;
     updated_at?: string;
+}
+
+// ────────────────────────────────────────────────────────────
+// DARF — guia que agrupa tributos (aplicar_20271021300000)
+// ────────────────────────────────────────────────────────────
+
+/** Situação derivada dos membros (`vw_darfs.status_efetivo`). PARCIAL = membros
+ *  em estados diferentes — só com dado anterior à trava ou escrita fora do app. */
+export type DarfStatus = 'PREVISTO' | 'VENCIDO' | 'PAGO' | 'PARCIAL';
+
+/** Uma linha de `vw_darfs`: cabeçalho + agregados dos membros. */
+export interface Darf {
+    id: string;
+    organization_id: string;
+    /** Dia 1 do mês da competência (YYYY-MM-01). */
+    competencia: string;
+    due_date: string;
+    codigo_barras: string | null;
+    numero_documento: string | null;
+    observacao: string | null;
+    documento_path: string | null;
+    documento_nome: string | null;
+    created_at?: string;
+    updated_at?: string;
+    principal: number;
+    multa: number;
+    juros: number;
+    total: number;
+    qtd_tributos: number;
+    tributos_nomes: string | null;
+    n_membros: number;
+    n_pagos: number;
+    payment_date: string | null;
+    payment_type: string | null;
+    conciliado_no_extrato: boolean;
+    alcada_pendente: boolean;
+    asaas_em_curso: boolean;
+    status_efetivo: DarfStatus;
+}
+
+/** O que a linha sintética do DARF carrega em Contas a Pagar. */
+export interface DarfNaLinha {
+    id: string;
+    competencia: string;
+    componentes: Payable[];
+    conciliado_no_extrato: boolean;
+    alcada_pendente: boolean;
+    numero_documento: string | null;
+    codigo_barras: string | null;
+    /** Texto dos componentes para a busca da tela ("PIS" acha o DARF). */
+    busca: string;
 }
 
 export interface InadimplenciaFaixa {
@@ -945,6 +1002,11 @@ export interface TaxPayable {
     empreendimento_name?: string | null;
     /** Cliente do negócio de origem — usado na coluna Descrição. Derivado, não é coluna da view. */
     client_name?: string | null;
+    /** Status do negócio de origem (ex.: CANCELLED = distratado). Derivado, não é coluna da view. */
+    deal_status?: string | null;
+    /** DARF que agrupa o tributo; `due_date` passa a ser o do DARF e o original fica em `due_date_antes_darf`. */
+    darf_id?: string | null;
+    due_date_antes_darf?: string | null;
     created_at?: string;
     updated_at?: string;
 }

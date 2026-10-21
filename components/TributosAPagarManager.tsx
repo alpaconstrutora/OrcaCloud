@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     AlertCircle, Check, ChevronDown,
     Loader2, Plus, RefreshCw, Search, X, Filter,
-    DollarSign, AlertTriangle, Landmark, MoveHorizontal,
+    DollarSign, AlertTriangle, Landmark, MoveHorizontal, Layers,
 } from 'lucide-react';
 import { taxPayableService } from '../services/taxPayableService';
 import { taxSettingsService } from '../services/taxSettingsService';
@@ -17,7 +17,10 @@ import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
 import ActionIconButton from './ui/ActionIconButton';
 import MoneyCentsInput from './ui/MoneyCentsInput';
-import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
+import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
+import { dataBR, motivoNaoAgrupavel, validarSelecaoParaDarf } from '../utils/darf';
+import DarfSheet from './financeiro/DarfSheet';
+import DarfsTab from './financeiro/DarfsTab';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
@@ -50,13 +53,14 @@ const TRIBUTO_COLUMNS: ColumnConfig[] = [
     { key: 'due_date', label: 'Vencimento', sortable: true },
     { key: 'amount', label: 'Valor', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
+    { key: 'darf', label: 'DARF', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     party_name: 200, category: 150, client_name: 200, empreendimento_name: 220,
-    description: 240, competencia: 140, due_date: 150, amount: 130, status: 130, actions: 340,
+    description: 240, competencia: 140, due_date: 150, amount: 130, status: 130, darf: 190, actions: 340,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -73,6 +77,7 @@ const TRIBUTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
     due_date: { label: 'Vencimento', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     amount: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    darf: { label: 'DARF', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
 };
 
 // Guia §5.5: Tributo, Origem, Cliente e Empreendimento são LISTA COM BUSCA — vêm
@@ -128,7 +133,7 @@ function fmtCompetencia(iso?: string | null): string {
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
-function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean): React.ReactNode {
+function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean, onAbrirDarf: (darfId: string) => void): React.ReactNode {
     switch (key) {
         case 'party_name':
             return (
@@ -155,11 +160,25 @@ function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean): Reac
         case 'competencia':
             return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{fmtCompetencia(r.transaction_date) || '—'}</span>;
         case 'due_date':
-            return <span className={`text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>{fmtDate(r.due_date)}</span>;
+            return (
+                <span className={`text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}
+                    title={r.darf_id && r.due_date_antes_darf ? `Vencimento original ${dataBR(r.due_date_antes_darf)} (antes do DARF)` : undefined}>
+                    {fmtDate(r.due_date)}
+                </span>
+            );
         case 'amount':
             return <span className="text-sm font-medium text-gray-900 whitespace-nowrap">{fmt(r.amount)}</span>;
         case 'status':
             return <StatusBadge status={r.effective_status} />;
+        case 'darf':
+            // Link para a guia na aba DARFs (§7: item relacionado em azul).
+            return r.darf_id ? (
+                <button type="button" onClick={() => onAbrirDarf(r.darf_id!)}
+                    className="text-sm font-normal text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap"
+                    title="Abrir o DARF na aba DARFs">
+                    DARF · venc. {dataBR(r.due_date)}
+                </button>
+            ) : <span className="text-sm font-normal text-gray-400">—</span>;
         default:
             return null;
     }
@@ -195,16 +214,18 @@ function chaveDoGrupo(campo: CampoAgrupar, r: TaxPayable): ChaveDeGrupo {
 // ─── types ──────────────────────────────────────────────────
 
 type StatusFilter = 'all' | TaxPayableEffectiveStatus;
-type ViewId = 'tributos' | 'fechamento';
+type ViewId = 'tributos' | 'fechamento' | 'darfs';
 
 // Título/subtítulo mudam com a aba ativa (§19.1/§20)
 const VIEW_HEADERS: Record<ViewId, { title: string; subtitle: string }> = {
     tributos:   { title: 'Tributos a Pagar', subtitle: 'Gestão dos tributos (IRRF, PIS, COFINS, CSLL…) sobre Vendas de Ativos e Locações. O pagamento é feito em Contas a Pagar.' },
     fechamento: { title: 'Fechamento',       subtitle: 'Conferência e fechamento dos tributos apurados sobre Vendas de Ativos e Locações.' },
+    darfs:      { title: 'DARFs',            subtitle: 'Guias que agrupam tributos da mesma competência. O pagamento é feito em Contas a Pagar, como um título só.' },
 };
 const VIEWS: { id: ViewId; label: string }[] = [
     { id: 'tributos',   label: 'Tributos a Pagar' },
     { id: 'fechamento', label: 'Fechamento' },
+    { id: 'darfs',      label: 'DARFs' },
 ];
 
 // ─── NovoLancamentoModal ─────────────────────────────────────
@@ -395,7 +416,24 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     const [vencMes, setVencMes] = usePersistedState('tributosPagarManagerFilters:vencMes', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [activeView, setActiveView] = usePersistedState<ViewId>('tributosPagarManager:view', 'tributos');
-    const agrupamento = useAgrupamento<CampoAgrupar>('tributosPagarManagerFilters:groupBy');
+    // Seleção (§10) — só para agrupar em DARF. Pagar é em Contas a Pagar (PR #74).
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    // Âncora do Shift+clique (§10.1) — o "Agrupar" a zera quando as linhas mudam de lugar.
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+    const zerarAncora = useCallback(() => setLastCheckedIndex(null), []);
+    const agrupamento = useAgrupamento<CampoAgrupar>('tributosPagarManagerFilters:groupBy', zerarAncora);
+    const [darfSheetAberto, setDarfSheetAberto] = useState(false);
+    const [focoDarfId, setFocoDarfId] = useState<string | null>(null);
+    const abrirDarf = useCallback((darfId: string) => { setFocoDarfId(darfId); setActiveView('darfs'); }, [setActiveView]);
+    const consumirFocoDarf = useCallback(() => setFocoDarfId(null), []);
+    // Deep-link de Contas a Pagar ("Abrir em Tributos a Pagar › DARFs" na linha do DARF).
+    const viewFocus = useStore(s => s.viewFocus);
+    const setViewFocus = useStore(s => s.setViewFocus);
+    useEffect(() => {
+        if (viewFocus?.source !== 'DARF' || !viewFocus.ref) return;
+        abrirDarf(viewFocus.ref);
+        setViewFocus(null);
+    }, [viewFocus, abrirDarf, setViewFocus]);
 
     // Filtro de status — dropdown dentro da toolbar acoplada. Antes eram 5 pílulas
     // lado a lado, que não cabiam junto dos outros grupos da barra; virou um único
@@ -429,7 +467,8 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'tributosPagarManagerColWidths');
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
     // table-layout:fixed (§6.1).
-    const tableTotalWidth = (['party_name', 'category', 'client_name', 'empreendimento_name', 'description', 'competencia', 'due_date', 'amount', 'status'] as const)
+    const tableTotalWidth = 40 // checkbox
+        + (['party_name', 'category', 'client_name', 'empreendimento_name', 'description', 'competencia', 'due_date', 'amount', 'status', 'darf'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + cols.getWidth('actions');
     const advancedFields = useMemo(() => buildAdvancedFilterFields(rows), [rows]);
@@ -481,6 +520,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         try {
             const data = await taxPayableService.list(effectiveOrgId, { search, status: statusFilter, dueFrom: dueFrom || undefined, dueTo: dueTo || undefined });
             setRows(data);
+            setSelectedIds(new Set());
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar');
         } finally {
@@ -532,7 +572,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                 <>
                     Recalcula os tributos de <b>todas as Vendas de Ativos e Locações</b> desta organização,
                     a partir das alíquotas ativas em Configurações › Tributos e Impostos.
-                    <p className="mt-3 text-xs text-gray-500">Idempotente: preserva os tributos já pagos e apenas atualiza/gera os pendentes.</p>
+                    <p className="mt-3 text-xs text-gray-500">Idempotente: preserva os tributos já pagos ou agrupados em DARF e apenas atualiza/gera os pendentes.</p>
                 </>
             ),
             variant: 'default',
@@ -586,6 +626,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                     case 'due_date':      va = a.due_date ?? '';                      vb = b.due_date ?? '';                      break;
                     case 'amount':        va = a.amount ?? 0;                         vb = b.amount ?? 0;                         break;
                     case 'status':        va = a.effective_status;                    vb = b.effective_status;                    break;
+                    case 'darf':          va = a.darf_id ? a.due_date ?? '' : '';     vb = b.darf_id ? b.due_date ?? '' : '';     break;
                     default:              return 0;
                 }
                 if (va < vb) return tableColumns.sortDirection === 'asc' ? -1 : 1;
@@ -612,8 +653,63 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         () => (agrupando ? entradasDaPagina(grupos, recolhidos) : sorted.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
         [agrupando, grupos, recolhidos, sorted],
     );
-    /** Células de uma linha: colunas de dado + espaçador + Ações. */
-    const colunasDaLinha = tableColumns.orderedVisibleColumns.filter(k => k !== 'actions' && TRIBUTO_COLUMN_HEADERS[k]).length
+    /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
+    const linhasNaTela = useMemo(() => (agrupando ? linhasDaTela(grupos, recolhidos) : sorted), [agrupando, grupos, recolhidos, sorted]);
+    /** Selecionável = pode entrar num DARF (em aberto, sem DARF). Os outros dizem o motivo no checkbox. */
+    const selectableVisible = useMemo(() => linhasNaTela.filter(r => !motivoNaoAgrupavel(r)), [linhasNaTela]);
+    const selectableIndexById = useMemo(() => new Map(selectableVisible.map((r, i) => [r.id, i])), [selectableVisible]);
+    /** Selecionados do recorte inteiro (inclui grupo recolhido depois de marcado). */
+    const selecionados = useMemo(() => sorted.filter(r => selectedIds.has(r.id) && !motivoNaoAgrupavel(r)), [sorted, selectedIds]);
+    const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every(r => selectedIds.has(r.id));
+    // Com 1 tributo o DARF ainda vale (com multa/juros): o painel cobra isso; a barra só barra org/competência.
+    const validacaoDarf = validarSelecaoParaDarf(selecionados, true);
+
+    function handleRowCheck(id: string, index: number, shiftKey: boolean) {
+        if (shiftKey && lastCheckedIndex !== null) {
+            const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
+            const rangeIds = selectableVisible.slice(start, end + 1).map(r => r.id);
+            setSelectedIds(prev => new Set([...prev, ...rangeIds]));
+        } else {
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id); else next.add(id);
+                return next;
+            });
+            setLastCheckedIndex(index);
+        }
+    }
+    function toggleAllVisible() {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (allVisibleSelected) selectableVisible.forEach(r => next.delete(r.id));
+            else selectableVisible.forEach(r => next.add(r.id));
+            return next;
+        });
+    }
+
+    /** DARF criado: os tributos ficam no DARF e passam a vencer na data dele (§22: estado local). */
+    function aplicarDarfCriado(darfId: string, dueDate: string, ids: string[]) {
+        const alvo = new Set(ids);
+        const hoje = today();
+        setRows(prev => prev.map(r => !alvo.has(r.id) ? r : {
+            ...r,
+            darf_id: darfId,
+            due_date_antes_darf: r.due_date ?? null,
+            due_date: dueDate,
+            effective_status: r.business_status === 'PREVISTO' ? (dueDate < hoje ? 'VENCIDO' : 'PREVISTO') : r.effective_status,
+        }));
+        setSelectedIds(new Set());
+    }
+
+    /** Nome da organização — o painel e a aba DARFs dizem de qual org é a guia quando o topo está em "Todas". */
+    const nomeDaOrganizacao = useCallback(
+        (orgId: string) => organizations?.find(o => o.id === orgId)?.name ?? null,
+        [organizations],
+    );
+
+    /** Células de uma linha: checkbox + colunas de dado + espaçador + Ações. */
+    const colunasDaLinha = 1
+        + tableColumns.orderedVisibleColumns.filter(k => k !== 'actions' && TRIBUTO_COLUMN_HEADERS[k]).length
         + 1
         + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
 
@@ -695,7 +791,17 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                 <div className="p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700 font-semibold">{error}</div>
             )}
 
-            {/* Toolbar acoplada à tabela (§5.2) */}
+            {activeView === 'darfs' ? (
+                <DarfsTab
+                    organizationId={effectiveOrgId}
+                    nomeDaOrganizacao={nomeDaOrganizacao}
+                    focoDarfId={focoDarfId}
+                    onFocoConsumido={consumirFocoDarf}
+                    onDarfsChanged={load}
+                    notify={notify}
+                />
+            ) : (
+            /* Toolbar acoplada à tabela (§5.2) */
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="flex flex-col gap-2.5 p-2 border-b border-gray-100 bg-white">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -912,6 +1018,8 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                         <div className="overflow-auto max-h-[70vh]">
                         <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
+                                {/* checkbox */}
+                                <col style={{ width: '40px' }} />
                                 {/* 'actions' está em TRIBUTO_COLUMNS só para reservar a chave no
                                     ColumnConfigButton/useTableColumns — a célula em si é fixa (fora do
                                     map), então é excluída aqui da lista arrastável/dinâmica. */}
@@ -925,6 +1033,16 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                             </colgroup>
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                            checked={allVisibleSelected}
+                                            disabled={selectableVisible.length === 0}
+                                            onChange={toggleAllVisible}
+                                            title="Selecionar todos os tributos em aberto (para agrupar em DARF)"
+                                        />
+                                    </th>
                                     {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
                                         const def = TRIBUTO_COLUMN_HEADERS[key];
                                         if (!def) return null;
@@ -963,11 +1081,26 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                     const isRetido = r.effective_status === 'RETIDO';
                                     // Só lançamento manual (sem reference_id) é editável/excluível.
                                     const isManual = !r.reference_id;
+                                    // No DARF: valor/vencimento/status mudam só desagrupando (trava no banco).
+                                    const motivoDarf = r.darf_id ? `Agrupado no DARF de venc. ${dataBR(r.due_date)} — desagrupe em DARFs para alterar` : null;
+                                    const motivoSelecao = motivoNaoAgrupavel(r);
                                     return (
-                                        <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${isVencido ? 'bg-red-50/30' : ''}`}>
+                                        <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
+                                            <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center">
+                                                {/* Desligado não mostra `title` em todo navegador: o motivo vai no span. */}
+                                                <span title={motivoSelecao ?? 'Marque para agrupar em DARF (Shift+clique seleciona um intervalo)'} className="inline-flex">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        checked={!motivoSelecao && selectedIds.has(r.id)}
+                                                        disabled={!!motivoSelecao}
+                                                        onChange={e => handleRowCheck(r.id, selectableIndexById.get(r.id) ?? 0, (e.nativeEvent as MouseEvent).shiftKey)}
+                                                    />
+                                                </span>
+                                            </td>
                                             {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {renderTributoCell(key, r, isVencido)}
+                                                    {renderTributoCell(key, r, isVencido, abrirDarf)}
                                                 </td>
                                             ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -989,29 +1122,37 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                                         </button>
                                                     )}
                                                     {!isPago && !isRetido && (
-                                                        <select
-                                                            value={r.business_status}
-                                                            disabled={changingStatus === r.id}
-                                                            onChange={e => handleChangeStatus(r.id, e.target.value)}
-                                                            className="text-sm font-normal border border-gray-200 rounded-[6px] px-2 py-1 bg-white focus:outline-none cursor-pointer"
-                                                        >
-                                                            {(['PREVISTO','CANCELADO'] as const).map(s => (
-                                                                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-                                                            ))}
-                                                        </select>
+                                                        <span title={motivoDarf ?? undefined} className="inline-flex">
+                                                            <select
+                                                                value={r.business_status}
+                                                                disabled={changingStatus === r.id || !!motivoDarf}
+                                                                onChange={e => handleChangeStatus(r.id, e.target.value)}
+                                                                className="text-sm font-normal border border-gray-200 rounded-[6px] px-2 py-1 bg-white focus:outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                                                            >
+                                                                {(['PREVISTO','CANCELADO'] as const).map(s => (
+                                                                    <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                                                                ))}
+                                                            </select>
+                                                        </span>
                                                     )}
                                                     {isManual && (
                                                         <>
-                                                            <ActionIconButton
-                                                                kind="edit"
-                                                                title="Editar tributo"
-                                                                onClick={() => setEditando(r)}
-                                                            />
-                                                            <ActionIconButton
-                                                                kind="delete"
-                                                                title="Excluir tributo"
-                                                                onClick={() => handleDelete(r)}
-                                                            />
+                                                            <span title={motivoDarf ?? undefined} className="inline-flex">
+                                                                <ActionIconButton
+                                                                    kind="edit"
+                                                                    title="Editar tributo"
+                                                                    disabled={!!motivoDarf}
+                                                                    onClick={() => setEditando(r)}
+                                                                />
+                                                            </span>
+                                                            <span title={motivoDarf ?? undefined} className="inline-flex">
+                                                                <ActionIconButton
+                                                                    kind="delete"
+                                                                    title="Excluir tributo"
+                                                                    disabled={!!motivoDarf}
+                                                                    onClick={() => handleDelete(r)}
+                                                                />
+                                                            </span>
                                                         </>
                                                     )}
                                                 </div>
@@ -1032,6 +1173,49 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                     )}
                 </div>
             </div>
+            )}
+
+            {/* Barra de lote (§10) — só "Agrupar em DARF": pagar é em Contas a Pagar. */}
+            {activeView !== 'darfs' && selecionados.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                        {selecionados.length} selecionado{selecionados.length !== 1 ? 's' : ''}
+                        <span className="ml-2 font-normal opacity-75">· {fmt(validacaoDarf.total)}</span>
+                    </span>
+                    <span title={validacaoDarf.motivo ?? (selecionados.length === 1 ? 'Com 1 tributo, o DARF precisa de multa ou juros' : undefined)} className="inline-flex">
+                        <button
+                            onClick={() => setDarfSheetAberto(true)}
+                            disabled={!validacaoDarf.ok}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-white text-blue-700 rounded-xl text-sm font-semibold hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <Layers className="w-3.5 h-3.5" />
+                            Agrupar em DARF
+                        </button>
+                    </span>
+                    <button
+                        onClick={() => setSelectedIds(new Set())}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-sm hover:bg-blue-400 transition-colors"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                        Desmarcar
+                    </button>
+                </div>
+            )}
+
+            {darfSheetAberto && validacaoDarf.ok && validacaoDarf.orgId && (
+                <DarfSheet
+                    open
+                    organizationId={validacaoDarf.orgId}
+                    organizacaoNome={effectiveOrgId ? null : nomeDaOrganizacao(validacaoDarf.orgId)}
+                    tributos={selecionados}
+                    onClose={() => setDarfSheetAberto(false)}
+                    onSaved={({ darfId, dueDate, mensagem }) => {
+                        aplicarDarfCriado(darfId, dueDate, selecionados.map(r => r.id));
+                        setDarfSheetAberto(false);
+                        notify(mensagem);
+                    }}
+                />
+            )}
 
             {/* Modals */}
             {showNovo && novoOrgId && (

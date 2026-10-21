@@ -74,9 +74,8 @@ describe.each([
         primeiraLinha: 'Tributo t1',
         seletor: 'Agrupar os tributos', campo: 'tributo',
         grupo: 'IRRF', esperado: /^IRRF 2 R\$\s?150,00$/, linhasDoGrupo: ['Tributo t1', 'Tributo t3'], fora: 'Tributo t2',
-        // Sem seleção desde 21/10/2026: o lote só servia para pagar, e o pagamento
-        // mudou para Contas a Pagar (TributosSemPagamento.test.tsx).
-        marcarTodos: undefined, selecionados: undefined,
+        // A seleção de Tributos serve só para "Agrupar em DARF" (21/10/2026).
+        marcarTodos: 'Selecionar todos os tributos em aberto (para agrupar em DARF)', selecionados: /^1 selecionado$/,
     },
     {
         tela: 'Cobranças',

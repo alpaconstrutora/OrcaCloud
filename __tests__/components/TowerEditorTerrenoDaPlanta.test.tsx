@@ -58,8 +58,10 @@ describe('Torres & Unidades › Terreno × Planta vinculada', () => {
     expect(screen.getByTestId('planta-terreno_fundos')).toHaveTextContent('Planta: 12,00 m · diferente');
     // Fundos tem valor na ficha: não é trocado sozinho.
     expect(campo('Fundos (m)').value).toBe('11');
-    // Profundidade estava vazia: vem da Planta, avisando — e nada foi gravado.
-    expect(campo('Profundidade (m)').value).toBe('71');
+    // Profundidade estava vazia: vem da Planta, avisando — e nada foi gravado. O preenchimento é um
+    // efeito que roda DEPOIS de a mensagem aparecer: esperar o campo, não supor a ordem (a CI da #84,
+    // mais lenta, leu o campo nesse intervalo).
+    await waitFor(() => expect(campo('Profundidade (m)').value).toBe('71'));
     expect(screen.getByTestId('planta-terreno_profundidade')).toHaveTextContent('Da Planta — confira e salve');
     expect(svc.update).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /Salvar terreno/ })).not.toBeDisabled();

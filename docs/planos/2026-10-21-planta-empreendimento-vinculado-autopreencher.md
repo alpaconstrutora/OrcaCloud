@@ -81,3 +81,8 @@ Fora, com o motivo: "Onde fica" (lat/long) — o empreendimento não guarda coor
   centrado lá. Única escrita: a zona aplicada sozinha — **apagada em seguida por SQL** (a planta
   voltou a 0 contexto, rascunho nulo, 3 auditorias, vínculo mantido); depois de publicado, ela se
   aplica na primeira abertura.
+- 21/10 — CI da PR #81 (0aa8fcb3): todos os testes passaram (10.575 + 76 pulados = 10.651,
+  `BlueprintEditor` e `blueprintCasaAutomatica` inclusos), mas caiu com 2 "Unhandled Rejection"
+  (`window is not defined`) vindas do código da PR #79: `BlueprintModule` gravava estado com a
+  resposta dos empreendimentos chegando depois de o teste desmontar. Corrigido em 33d0975b (o
+  efeito ignora resposta tardia; os 3 testes que montam o módulo simulam o serviço).

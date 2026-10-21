@@ -82,8 +82,14 @@ export const STATUS_PT: Record<string, string> = {
     PAGO: 'Pago',
     PARCIAL: 'Parcial',
     RENEGOCIADO: 'Renegociado',
+    /* Tributo que o cliente recolhe na fonte (Tributos a Pagar › negociação):
+       o dinheiro não sai da nossa conta, então não há o que pagar aqui. */
+    RETIDO: 'Retido pelo cliente',
     CANCELADO: 'Cancelado',
 };
+
+/** Situações em que não há pagamento a fazer: já pago, cancelado ou retido pelo cliente. */
+const SEM_PAGAMENTO_A_FAZER = ['PAGO', 'CANCELADO', 'RETIDO'];
 
 const STATUS_COLORS: Record<string, string> = {
     PAGO: 'text-green-700',
@@ -94,6 +100,7 @@ const STATUS_COLORS: Record<string, string> = {
     VENCIDO: 'text-red-600',
     PARCIAL: 'text-amber-700',
     RENEGOCIADO: 'text-indigo-700',
+    RETIDO: 'text-gray-600',
     CANCELADO: 'text-gray-500',
 };
 
@@ -779,7 +786,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     const totalColunas = PARCELAS_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key)).length + 3;
 
     const totalAberto = filtered
-        .filter(r => !['PAGO', 'CANCELADO'].includes(r.effective_status))
+        .filter(r => !SEM_PAGAMENTO_A_FAZER.includes(r.effective_status))
         .reduce((s, r) => s + (r.amount ?? 0), 0);
 
     async function marcarStatus(row: Payable, novo: PayableBusinessStatus) {
@@ -921,7 +928,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     /** Pagamento pela Asaas já disparado e ainda não concluído (nem pago, nem
      *  cancelado) — enquanto existir, a linha não oferece um PIX novo. */
     function pagamentoAsaasEmCurso(row: ParcelaRow): SupplierPayment | null {
-        if (['PAGO', 'CANCELADO'].includes(row.effective_status) || !orgsComAsaas.has(row.organization_id)) return null;
+        if (SEM_PAGAMENTO_A_FAZER.includes(row.effective_status) || !orgsComAsaas.has(row.organization_id)) return null;
         const sp = pagamentosAsaas[row.id];
         return sp && ['APPROVED', 'PENDING', 'SCHEDULED'].includes(sp.status) ? sp : null;
     }
@@ -972,7 +979,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     }
 
     // Títulos em aberto da seleção — os que a baixa em lote alcança.
-    const selecionadasNaoQuitadas = selectedVisible.filter(r => !['PAGO', 'CANCELADO'].includes(r.effective_status));
+    const selecionadasNaoQuitadas = selectedVisible.filter(r => !SEM_PAGAMENTO_A_FAZER.includes(r.effective_status));
     // Pendente na alçada não entra no lote (item H.1) — o título do botão diz quantas ficaram de fora.
     const selecionadasEmAberto = selecionadasNaoQuitadas.filter(r => !alcadaPendente.has(r.id));
     const presasNaAlcada = selecionadasNaoQuitadas.length - selecionadasEmAberto.length;
@@ -1223,7 +1230,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                     const row = e.item;
                                     const idx = e.indice;
                                     const vencido = row.effective_status === 'VENCIDO';
-                                    const quitado = ['PAGO', 'CANCELADO'].includes(row.effective_status);
+                                    const quitado = SEM_PAGAMENTO_A_FAZER.includes(row.effective_status);
                                     const selecionada = selectedIds.has(row.id);
                                     return (
                                         <tr

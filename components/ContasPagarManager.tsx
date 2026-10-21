@@ -592,7 +592,8 @@ export default function ContasPagarManager({ organizations }: Props) {
                 if (ref >= inicioMes && ref <= fimMes) { pagoMes += valor; qtdPagoMes++; }
                 return;
             }
-            if (p.effective_status === 'CANCELADO') return;
+            // Retido: tributo que o cliente recolhe — não sai da nossa conta.
+            if (p.effective_status === 'CANCELADO' || p.effective_status === 'RETIDO') return;
             aPagar += valor;
             qtdAPagar++;
             if (p.effective_status === 'VENCIDO') { atrasado += valor; qtdAtrasado++; }

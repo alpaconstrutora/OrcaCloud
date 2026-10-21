@@ -133,6 +133,9 @@ describe('Contas a Pagar — baixa com painel e recibo de pagamento', () => {
         renderTela([paga]);
         expect(await screen.findByText('Nº 000007')).toBeInTheDocument();
         expect(svc.listarAtivosDaOrg).toHaveBeenCalledWith('org1', 'PAGAMENTO');
+        // Status mora só na coluna Status: Ações não repete "Quitado" nem oferece baixa de novo.
+        expect(screen.queryByText('Quitado')).toBeNull();
+        expect(screen.queryByTitle('Dar baixa: data, forma de pagamento e recibo')).toBeNull();
 
         fireEvent.click(screen.getByTitle('Estornar baixa'));
         await waitFor(() => expect(svc.updateStatus).toHaveBeenCalledWith('p1', 'PREVISTO'));
@@ -142,7 +145,8 @@ describe('Contas a Pagar — baixa com painel e recibo de pagamento', () => {
     it('lote: "Dar baixa" abre o painel com as selecionadas em aberto', async () => {
         renderTela([linha({ id: 'a1', description: 'Parcela A' }), linha({ id: 'a2', description: 'Parcela B' })]);
         fireEvent.click(screen.getByTitle('Selecionar todas as parcelas desta página'));
-        fireEvent.click(screen.getByRole('button', { name: /^Dar baixa/ }));
+        // Pelo title: o botão de cada linha também se chama "Dar baixa" (antes era "Pago").
+        fireEvent.click(screen.getByTitle(/^Dar baixa nas parcelas em aberto da seleção/));
         expect(await screen.findByText('Confirmar pagamento de 2 títulos')).toBeInTheDocument();
     });
 });

@@ -918,6 +918,38 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
 
     /** Célula da coluna Recibo: "Nº 000001" baixa o PDF guardado; "Emitir" no
      *  pago sem recibo; "—" em aberto e em Folha (sem credor único). */
+    /** Pagamento pela Asaas já disparado e ainda não concluído (nem pago, nem
+     *  cancelado) — enquanto existir, a linha não oferece um PIX novo. */
+    function pagamentoAsaasEmCurso(row: ParcelaRow): SupplierPayment | null {
+        if (['PAGO', 'CANCELADO'].includes(row.effective_status) || !orgsComAsaas.has(row.organization_id)) return null;
+        const sp = pagamentosAsaas[row.id];
+        return sp && ['APPROVED', 'PENDING', 'SCHEDULED'].includes(sp.status) ? sp : null;
+    }
+
+    /* Status mora numa coluna só (20/10/2026). Antes a coluna Ações repetia
+       "Quitado" ao lado do "Pago" daqui e escrevia o andamento da Asaas lá — o
+       usuário via dois status por linha. O andamento da Asaas é status do
+       título, então entra aqui como segunda linha; Ações fica só com ações. */
+    function renderStatusCell(row: ParcelaRow): React.ReactNode {
+        const sp = pagamentoAsaasEmCurso(row);
+        const asaas = sp && (sp.asaas_authorized === false ? 'Aguardando token'
+            : sp.status === 'SCHEDULED' ? `Agendado ${formatDateBR(sp.scheduled_date)}`
+            : 'Pagamento enviado');
+        return (
+            <div className="text-center">
+                <StatusBadge status={row.effective_status} />
+                {asaas && (
+                    <div className="flex items-center justify-center gap-1 text-xs font-normal text-blue-700"
+                        title={sp?.asaas_authorized === false
+                            ? 'A Asaas está esperando a autorização por token no app/SMS da conta.'
+                            : 'A baixa acontece sozinha quando a Asaas confirmar.'}>
+                        <Landmark className="w-3 h-3" /> {asaas}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     function renderReciboCell(row: ParcelaRow): React.ReactNode {
         if (row.effective_status !== 'PAGO' || semReciboPorOrigem(row)) {
             return <span className="text-sm font-normal text-gray-400">—</span>;
@@ -1216,7 +1248,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                             </td>
                                             {tableColumns.orderedVisibleColumns.map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {key === 'recibo' ? renderReciboCell(row) : renderParcelaCell(key, row, alocacoes)}
+                                                    {key === 'recibo' ? renderReciboCell(row)
+                                                        : key === 'status' ? renderStatusCell(row)
+                                                        : renderParcelaCell(key, row, alocacoes)}
                                                 </td>
                                             ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -1233,35 +1267,28 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                             {salvando === row.id
                                                                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                                                 : <Check className="w-3.5 h-3.5" />}
-                                                            Pago
+                                                            {/* "Dar baixa", não "Pago": com o rótulo de status, o
+                                                                botão parecia um segundo Status da linha. */}
+                                                            Dar baixa
                                                         </button>
                                                     )}
                                                     {!quitado && orgsComAsaas.has(row.organization_id) && (() => {
                                                         const sp = pagamentosAsaas[row.id];
-                                                        if (sp && ['APPROVED', 'PENDING', 'SCHEDULED'].includes(sp.status)) {
-                                                            const rotulo = sp.asaas_authorized === false ? 'Aguardando token'
-                                                                : sp.status === 'SCHEDULED' ? `Agendado ${formatDateBR(sp.scheduled_date)}`
-                                                                : 'Pagamento enviado';
+                                                        const emCurso = pagamentoAsaasEmCurso(row);
+                                                        if (emCurso) {
+                                                            /* O andamento ("Aguardando token", "Agendado…") está na
+                                                               coluna Status; aqui só a ação. Antes só dava para cancelar
+                                                               pelo painel da Asaas (visto no teste do sandbox, 17/10). A
+                                                               Asaas só aceita cancelar antes de concluir — PIX imediato
+                                                               costuma concluir em segundos; agendado, até o dia. */
                                                             return (
-                                                                <>
-                                                                    <span className="flex items-center gap-1 text-sm font-normal text-blue-700"
-                                                                        title={sp.asaas_authorized === false
-                                                                            ? 'A Asaas está esperando a autorização por token no app/SMS da conta.'
-                                                                            : 'A baixa acontece sozinha quando a Asaas confirmar.'}>
-                                                                        <Landmark className="w-3.5 h-3.5" /> {rotulo}
-                                                                    </span>
-                                                                    {/* Antes só dava para cancelar pelo painel da Asaas (visto
-                                                                        no teste do sandbox, 17/10). A Asaas só aceita cancelar
-                                                                        antes de concluir — PIX imediato costuma concluir em
-                                                                        segundos; agendado, até o dia. */}
-                                                                    <ActionIconButton
-                                                                        kind="delete"
-                                                                        title={cancelandoAsaas === sp.id ? 'Cancelando…' : 'Cancelar este pagamento na Asaas'}
-                                                                        icon={cancelandoAsaas === sp.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                                                                        disabled={cancelandoAsaas === sp.id}
-                                                                        onClick={() => cancelarPagamentoAsaas(row, sp)}
-                                                                    />
-                                                                </>
+                                                                <ActionIconButton
+                                                                    kind="delete"
+                                                                    title={cancelandoAsaas === emCurso.id ? 'Cancelando…' : 'Cancelar este pagamento na Asaas'}
+                                                                    icon={cancelandoAsaas === emCurso.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                                                                    disabled={cancelandoAsaas === emCurso.id}
+                                                                    onClick={() => cancelarPagamentoAsaas(row, emCurso)}
+                                                                />
                                                             );
                                                         }
                                                         return (
@@ -1280,9 +1307,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                     })()}
                                                     {row.effective_status === 'PAGO' && (
                                                         <>
-                                                            <span className="flex items-center gap-1 text-sm font-normal text-green-700">
-                                                                <Check className="w-4 h-4" /> Quitado
-                                                            </span>
+                                                            {/* Sem "Quitado" aqui: a coluna Status já diz "Pago". */}
                                                             {/* O caminho de volta. Sem ele, "Pago" era mão única. */}
                                                             {!semReciboPorOrigem(row) && (
                                                                 <ActionIconButton

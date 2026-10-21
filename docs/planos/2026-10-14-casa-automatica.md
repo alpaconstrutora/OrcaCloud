@@ -177,10 +177,14 @@ Lista do usuário (14–20/10/2026), todos os itens fechados — o detalhe de ca
 9. ✅ R1-B: cozinha + serviço juntos e a casa alargada só o mínimo (0 pendências).
 10. ✅ F28: a chuva de projeto na tela; as bolhas não se sobrepõem em folha que cabe (não reproduz).
 
-⏳ Sobras anotadas (fase própria quando o usuário pedir): a ÁGUA na faixa dentro da laje rebaixada (ligações retas da
-coluna no shaft, 1–2 por lote); o pilar atravessado pela ligação da quente ao barrilete no sobrado 10 × 30; o 1º que
-não recua no 10 × 30 de 2 dorm. (3 pavimentos); o escritório de 1,70 m no 2º do R1-A; a porta do lavabo pelo serviço
-(10 × 30 de 4 dorm.).
+✅ Sobras S1–S5 (pedido de 20/10/2026), todas em produção — o detalhe na seção "Sobras S1–S5":
+S1+S2 1733b08d (água fora da laje rebaixada; pilar contornado) · S3 51921ef0 (o 1º recua em volta do 2º) · S5 83b9cfd5
+(lavabo com porta para a cozinha) · S4 ea64a47f (escritório ao lado da suíte; shaft estendido; tocos podados).
+Marco das 8 casas refeito em 21/10: /c/tmp/f29/a.txt (a R1-B com 0 pendências); medir também o sobrado 10 × 30 de 4 dorm.
+(o teste do item 6), que não está no marco.
+
+Fica anotado (já existia antes das sobras; fase própria só se o usuário pedir): a SEM_SOLUCAO "Cozinha × Área de
+serviço sem porta direta" no térreo da casa de 3 do 10 × 30 de 4 dorm.
 
 Ambiente: a máquina de desenvolvimento derruba o Node (segfault, worker que cai, erro absurdo que não se repete, índice
 do git corrompido) — toda medição roda com repetição e `timeout 900`; resultado só vale quando se repete; o CI é o
@@ -3094,6 +3098,9 @@ Pedido original do usuário (20/10/2026):
 | S5 | a porta do lavabo abre para a área de serviço (10 × 30, 4 dorm., o térreo da casa de 3 pavimentos) | o lavabo com porta para a cozinha ou o social |
 
 Cada uma: medir → corrigir → 8 casas e 6 lotes medidos → teste que falha sem a correção → PR → CI → main.
+
+**Estado (21/10/2026): ✅ S1–S5 fechadas e em produção** — S1+S2 em 1733b08d (#67), S3 em 51921ef0 (#69), S5 em
+83b9cfd5 (#70), S4 em ea64a47f (#72).
 
 ### Registro S1 + S2 (20/10/2026)
 

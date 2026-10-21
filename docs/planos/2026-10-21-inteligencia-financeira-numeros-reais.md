@@ -202,7 +202,10 @@ Consequências:
 
 - [x] Diagnóstico — 21/10/2026
 - [x] Decisões de negócio com o usuário — 21/10/2026
-- [ ] Fase 1 — 5 de 5 escritos e ensaiados; **0 aplicados**
+- [x] Fase 1 — 5 de 5 **APLICADOS em 21/10/2026** (usuário rodou o arquivo; verificado de fora):
+  8 funções presentes, sem mojibake, `fn_fi_ledger` lê `vw_unit_property_map`; ACL sem PUBLIC/anon;
+  sonda anon nas 6 RPCs = 401 "permission denied for function"; números no JWT do usuário iguais
+  ao ensaio (Bella Vista R$ 300 mil; 2 alertas HIGH; saldo de partida −R$ 31.996,72, 90d −R$ 11.120,84).
 - [x] ~~Fase 2~~ — CANCELADA em 21/10: o vínculo já existe em Empreendimento › Vinculações
 - [ ] Fase 3 — 0 de 2
 - [ ] Fase 4 — 0 de 4

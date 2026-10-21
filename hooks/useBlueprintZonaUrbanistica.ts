@@ -61,6 +61,10 @@ export interface ZonaUrbanistica {
   /** Empreendimento escolhido — serve à zona E ao write-back de área. */
   empreendimentoId: string;
   setEmpreendimentoId: (id: string) => void;
+  /** O empreendimento em uso veio da sugestão (vínculo da planta, ou obra) — ninguém escolheu nem salvou. */
+  empreendimentoAutomatico: boolean;
+  /** A zona em vigor foi aplicada sozinha nesta abertura: era a única do empreendimento. */
+  zonaAplicadaAutomaticamente: boolean;
 
   /** Caminho do catálogo: cidade → mapa → zona. */
   cidade: CitySearchValue | null;
@@ -223,7 +227,10 @@ const ESCOLHA_EM_ANDAMENTO = new Map<string, { origem: OrigemDaZona; cidade: Cit
 export function useBlueprintZonaUrbanistica(
   studyId: string,
   organizationId: string,
-  /** Sugestão vinda da obra do estudo. Só vale enquanto ninguém escolheu nada. */
+  /**
+   * Sugestão: o empreendimento VINCULADO à planta (`empreendimentos.blueprint_study_id`) e,
+   * sem ele, o da obra do estudo. Só vale enquanto ninguém escolheu nem salvou nada.
+   */
   empreendimentoSugerido: string | null,
   /** Contexto do topo. `null` = "Todas" — o catálogo então não filtra por org. */
   orgId: string | null,
@@ -240,6 +247,14 @@ export function useBlueprintZonaUrbanistica(
 
   const [zonas, setZonas] = useState<ZonaRegulatoria[]>([]);
   const [carregandoZonas, setCarregandoZonas] = useState(false);
+  /** De onde vieram as `zonas` na tela (`EMPREENDIMENTO:<id>` | `CATALOGO:<mapa>`): a lista antiga não pode ser aplicada no lugar da nova. */
+  const [zonasDe, setZonasDe] = useState('');
+  /** A leitura do contexto salvo terminou (com ou sem linha) — antes disso, nada é aplicado sozinho. */
+  const [contextoLido, setContextoLido] = useState(false);
+  const [empreendimentoAutomatico, setEmpreendimentoAutomatico] = useState(false);
+  const [zonaAplicadaAutomaticamente, setZonaAplicadaAutomaticamente] = useState(false);
+  /** Aplicar sozinho acontece no máximo uma vez por abertura — desligar a zona não a traz de volta. */
+  const jaAplicouSozinho = useRef(false);
 
   const [recuos, setRecuos] = useState<Recuos>(RECUOS_ZERO);
   const [limites, setLimites] = useState<Omit<ValoresDaZona, 'recuoMm'>>(SEM_LIMITES);
@@ -292,10 +307,13 @@ export function useBlueprintZonaUrbanistica(
         if (ctx.empreendimento_id) {
           escolheuAMao.current = true;
           setEmpreendimentoIdBruto(ctx.empreendimento_id);
+          setEmpreendimentoAutomatico(false);
         }
       } catch (e) {
         if (vivo) setPersistencia(true);
         console.warn('[zona urbanística] persistência indisponível:', e);
+      } finally {
+        if (vivo) setContextoLido(true);
       }
     })();
     return () => {
@@ -303,10 +321,11 @@ export function useBlueprintZonaUrbanistica(
     };
   }, [studyId]);
 
-  // A sugestão da obra só entra enquanto ninguém escolheu e nada foi salvo.
+  // A sugestão (vínculo, ou obra) só entra enquanto ninguém escolheu e nada foi salvo.
   useEffect(() => {
     if (escolheuAMao.current || empreendimentoId || !empreendimentoSugerido) return;
     setEmpreendimentoIdBruto(empreendimentoSugerido);
+    setEmpreendimentoAutomatico(true);
   }, [empreendimentoSugerido, empreendimentoId]);
 
   // Só guarda depois que a PESSOA mexeu: gravar na montagem guardaria os valores
@@ -351,14 +370,21 @@ export function useBlueprintZonaUrbanistica(
           ? () => regulatoryMapService.listZones(mapaId)
           : null;
 
+    const chave = origemDaZona === 'EMPREENDIMENTO' ? `EMPREENDIMENTO:${empreendimentoId}` : `CATALOGO:${mapaId}`;
     if (!buscar) {
       setZonas([]);
+      setZonasDe('');
       return;
     }
     let vivo = true;
     setCarregandoZonas(true);
+    setZonasDe('');
     buscar()
-      .then((z) => vivo && setZonas(z as ZonaRegulatoria[]))
+      .then((z) => {
+        if (!vivo) return;
+        setZonas(z as ZonaRegulatoria[]);
+        setZonasDe(chave);
+      })
       .catch((e) => {
         if (vivo) setZonas([]);
         console.warn('[zona urbanística] não deu para listar as zonas:', e);
@@ -372,6 +398,7 @@ export function useBlueprintZonaUrbanistica(
   const setEmpreendimentoId = useCallback((id: string) => {
     escolheuAMao.current = true;
     setEmpreendimentoIdBruto(id);
+    setEmpreendimentoAutomatico(false);
   }, []);
 
   /** Grava o contexto. Falha só desliga a persistência — nunca quebra a tela. */
@@ -454,7 +481,32 @@ export function useBlueprintZonaUrbanistica(
     [zonas, empreendimentoId, mapaId, origemDaZona, persistir],
   );
 
+  // ── A zona única do empreendimento entra sozinha ─────────────────────────
+  // Pedido de 21/10/2026: o app já sabe — não obrigar a pessoa a escolher. Só quando é
+  // inequívoco e não apaga nada: caminho do empreendimento, NENHUM contexto salvo para o
+  // estudo (nem zona aplicada, nem ajuste à mão), uma única zona, e a lista na tela é a
+  // DESTE empreendimento. Duas ou mais zonas: não chuta. Uma vez por abertura.
+  useEffect(() => {
+    if (jaAplicouSozinho.current || !contextoLido || contexto || persistenciaIndisponivel) return;
+    if (origemDaZona !== 'EMPREENDIMENTO' || !empreendimentoId) return;
+    if (zonasDe !== `EMPREENDIMENTO:${empreendimentoId}` || zonas.length !== 1) return;
+    jaAplicouSozinho.current = true;
+    aplicarZona(zonas[0].id);
+    setZonaAplicadaAutomaticamente(true);
+  }, [contextoLido, contexto, persistenciaIndisponivel, origemDaZona, empreendimentoId, zonasDe, zonas, aplicarZona]);
+
+  const aplicarZonaAMao = useCallback(
+    (zonaId: string) => {
+      jaAplicouSozinho.current = true;
+      setZonaAplicadaAutomaticamente(false);
+      aplicarZona(zonaId);
+    },
+    [aplicarZona],
+  );
+
   const desligar = useCallback(() => {
+    jaAplicouSozinho.current = true;
+    setZonaAplicadaAutomaticamente(false);
     setContexto(null);
     setOrigemDosValores({});
     setRecuos(RECUOS_ZERO);
@@ -554,6 +606,8 @@ export function useBlueprintZonaUrbanistica(
     setOrigemDaZona: escolherOrigem,
     empreendimentoId,
     setEmpreendimentoId,
+    empreendimentoAutomatico,
+    zonaAplicadaAutomaticamente,
     cidade,
     setCidade: escolherCidade,
     mapas,
@@ -570,7 +624,8 @@ export function useBlueprintZonaUrbanistica(
     ajustarCoeficienteBasico,
     ajustarCoeficienteMin,
     ajustarVocabulario,
-    aplicarZona,
+    // Aplicar à mão é escolha da pessoa: a marca de "aplicada sozinha" sai.
+    aplicarZona: aplicarZonaAMao,
     desligar,
     zonaAplicadaId,
     zonaRotuloSalvo: contexto?.zona_rotulo ?? null,

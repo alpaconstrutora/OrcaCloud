@@ -102,11 +102,18 @@ interface Props {
   buscar?: (texto: string) => Promise<ResultadoDaBusca[]>;
   /** Injetável para o teste: o Leaflet de verdade não desenha no jsdom. */
   carregarLeaflet?: () => Promise<typeof Leaflet>;
+  /**
+   * Endereço do terreno da FICHA do empreendimento (vínculo da planta, ou obra) — 21/10/2026,
+   * "o app ja pode preencher automaticamente". Entra no campo e é procurado uma vez quando o
+   * mapa fica pronto, se o desenho ainda não tem "Onde fica" (com ele, o mapa já abre no lugar).
+   */
+  buscaInicial?: { texto: string; origem: string } | null;
 }
 
 export default function PainelMapaDoLote({
   georreferencia,
   onUsar,
+  buscaInicial = null,
   buscar = buscarNoNominatim,
   carregarLeaflet = async () => {
     const L = await import('leaflet');
@@ -118,7 +125,8 @@ export default function PainelMapaDoLote({
   const [fundo, setFundo] = React.useState<Fundo>('RUAS');
   const [vertices, setVertices] = React.useState<LatLon[]>([]);
   const [cantoInicial, setCantoInicial] = React.useState<LatLon | null>(null);
-  const [busca, setBusca] = React.useState('');
+  const [busca, setBusca] = React.useState(buscaInicial?.texto ?? '');
+  const jaBuscouSozinho = React.useRef(false);
   const [buscando, setBuscando] = React.useState(false);
   const [resultados, setResultados] = React.useState<ResultadoDaBusca[] | null>(null);
   const [erroDaBusca, setErroDaBusca] = React.useState<string | null>(null);
@@ -254,6 +262,14 @@ export default function PainelMapaDoLote({
     }
   };
 
+  // O endereço da ficha é procurado sozinho, uma vez, quando o mapa já pode ir até ele.
+  React.useEffect(() => {
+    if (jaBuscouSozinho.current || !mapaPronto || !buscaInicial?.texto.trim() || georreferencia) return;
+    jaBuscouSozinho.current = true;
+    void procurar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapaPronto, buscaInicial, georreferencia]);
+
   const trocarModo = (m: Modo) => {
     setModo(m);
     setVertices([]);
@@ -310,6 +326,11 @@ export default function PainelMapaDoLote({
             Procurar
           </button>
         </div>
+        {buscaInicial && busca === buscaInicial.texto && (
+          <p className="text-xs text-slate-500" data-testid="busca-da-ficha">
+            Endereço preenchido automaticamente pela ficha de {buscaInicial.origem}.
+          </p>
+        )}
         {erroDaBusca && <p className="text-xs text-red-600">{erroDaBusca}</p>}
         {resultados && resultados.length > 1 && (
           <ul className="divide-y divide-gray-100 rounded-[6px] border border-gray-100" data-testid="resultados-da-busca">

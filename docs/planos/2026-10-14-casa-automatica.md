@@ -183,8 +183,8 @@ S1+S2 1733b08d (água fora da laje rebaixada; pilar contornado) · S3 51921ef0 (
 Marco das 8 casas refeito em 21/10: /c/tmp/f29/a.txt (a R1-B com 0 pendências); medir também o sobrado 10 × 30 de 4 dorm.
 (o teste do item 6), que não está no marco.
 
-Fica anotado (já existia antes das sobras; fase própria só se o usuário pedir): a SEM_SOLUCAO "Cozinha × Área de
-serviço sem porta direta" no térreo da casa de 3 do 10 × 30 de 4 dorm.
+✅ Pendência "Cozinha × Área de serviço sem porta direta" (pedido do usuário, 21/10/2026: "corrija esta pendência") —
+ver "Registro da porta cozinha × serviço" no fim do plano.
 
 Ambiente: a máquina de desenvolvimento derruba o Node (segfault, worker que cai, erro absurdo que não se repete, índice
 do git corrompido) — toda medição roda com repetição e `timeout 900`; resultado só vale quando se repete; o CI é o
@@ -3185,3 +3185,23 @@ Cada uma: medir → corrigir → 8 casas e 6 lotes medidos → teste que falha s
 - Medido: R1-A de 3 pav. com 0 encontros, 0 sob rebaixo, 0 pontas abertas (pendências 5 → 4); 8 casas idênticas ao
   marco; 6 lotes com 0 encontros; sobrado 10 × 30 limpo.
 - Teste (falha sem cada uma das 3 partes): `blueprintCasaAutomatica.test.ts` › "S4: no 2º do R1-A".
+
+### Registro da porta cozinha × serviço (21/10/2026)
+
+Pedido do usuário (21/10/2026), sobre a pendência anotada: *"corrija esta pendencia"*.
+
+- Medido (10 × 30, 4 dorm., o térreo da casa de 3): o gerador põe a porta cozinha ↔ serviço na parede x = 6100 perto
+  do começo do serviço — o trecho que o núcleo da escada toma depois. Recortado o núcleo, a parede vira a LATERAL dele
+  e a porta passa a abrir para a escada: a relação obrigatória fica sem porta direta (SEM_SOLUCAO). No sobrado 10 × 30
+  era pior: o serviço ficava SEM porta (as duas davam na escada).
+- Correção (`recortarNucleo` → `naLateralDoNucleo`): a porta na lateral do núcleo, no trecho dele, anda pela mesma
+  parede para fora do núcleo, onde o cômodo continua — junto das outras portas da parede (a regra F20 do gerador), sem
+  encostar noutra abertura nem atravessar o encontro com outra parede (a primeira versão abria em parte para o lavabo).
+- Efeito colateral medido e corrigido (sobrado 10 × 30): com a parede da cozinha ocupada pela porta, a máquina de lavar
+  vai para a parede do núcleo, num canto entre o pilar da viga de transição e a faixa da laje rebaixada — o anel do
+  forro não passa por nenhum dos dois e a fria corria na parede pelo pilar. Agora a descida do nó mais perto que
+  atravessaria pilar desce de outro nó da árvore (o mais perto que não atravessa, até 2,5 m). Tentado e revertido: o
+  mobiliário evitando a pegada do pilar (não resolvia sozinho e mexia em todas as casas).
+- Medido: 8 casas idênticas ao marco (/c/tmp/f29/a.txt); 6 lotes com 0 encontros e 0 pilares; sobrado 10 × 30 limpo.
+- Testes (falham sem cada parte): `blueprintCasaAutomatica.test.ts` › "F27 item 5: 10 × 30, 4 dorm." (porta cozinha ↔
+  serviço, nenhuma pendência de porta direta) e › "item 6" (sem a parte da água, a fria atravessa o pilar).

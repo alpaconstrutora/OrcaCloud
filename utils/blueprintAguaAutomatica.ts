@@ -286,6 +286,8 @@ function colunasDe(pontos: readonly Terminal[], raioMm: number): Terminal[][] {
  */
 /** Até onde a coluna que atravessa pavimentos procura a parede que existe em todos eles, mm. */
 const ALCANCE_DA_PAREDE_EM_COMUM_MM = 3000;
+/** Pendência antiga (21/10/2026): até onde se procura outro nó da árvore quando a descida do mais perto atravessa pilar, mm. */
+const OUTRO_NO_DA_DESCIDA_ATE_MM = 2500;
 
 export function planejarAgua(
   model: BlueprintModel,
@@ -441,10 +443,17 @@ export function planejarAgua(
     return doForro.get(levelId)!;
   };
   /** F14b: do nó no forro à peça (ou à origem) embutida na parede — os pedaços da descida. */
-  const descer = (levelId: ObjectId, q: Ponto2, cota: number, alvo: Ponto2, cotaDoAlvo: number) => {
+  const pedacosDaDescida = (levelId: ObjectId, q: Ponto2, cota: number, alvo: Ponto2, cotaDoAlvo: number) => {
     const w = encaixarNaParede(alvo, paredesDe(levelId), raioDeEncaixe)?.q ?? null;
-    for (const s of descidaDoForro(model, levelId, { q, cotaDaFaixaMm: cota, alvo, cotaDoAlvoMm: cotaDoAlvo, naParede: w, raioMm: RAIO_NA_DESCIDA_MM, folgaSobAVigaMm: hip.noForro!.folgaSobAVigaMm + (noForro?.degrauNaParedeMm ?? 0), disciplina }))
-      addTrecho(levelId, s.a, s.cotaAMm, s.b, s.cotaBMm);
+    return descidaDoForro(model, levelId, { q, cotaDaFaixaMm: cota, alvo, cotaDoAlvoMm: cotaDoAlvo, naParede: w, raioMm: RAIO_NA_DESCIDA_MM, folgaSobAVigaMm: hip.noForro!.folgaSobAVigaMm + (noForro?.degrauNaParedeMm ?? 0), disciplina });
+  };
+  const descer = (levelId: ObjectId, q: Ponto2, cota: number, alvo: Ponto2, cotaDoAlvo: number) => {
+    for (const s of pedacosDaDescida(levelId, q, cota, alvo, cotaDoAlvo)) addTrecho(levelId, s.a, s.cotaAMm, s.b, s.cotaBMm);
+  };
+  /** A descida atravessa pilar (na planta: o trecho horizontal pela pegada, ou o vertical dentro dela)? */
+  const descidaPeloPilar = (levelId: ObjectId, ps: readonly { a: Ponto2; b: Ponto2 }[]) => {
+    const aneis = pegadasDePilares(model, levelId).map((g) => anelDoPilar(g, RAIO_NA_DESCIDA_MM) as Point[]);
+    return ps.some((x) => (x.a.x === x.b.x && x.a.y === x.b.y ? aneis.some((g) => pointInPolygon(g, x.a as Point)) : fracaoDentro(x.a, x.b, aneis) > 0));
   };
   // O ponto SOLTO no cômodo vai para a FACE da parede antes de traçar.
   const encostos: Command[] = [];
@@ -761,7 +770,23 @@ export function planejarAgua(
         const q = pelas?.raiz ? pelas.encaixe.get(chaveP(p.at)) : undefined;
         if (q && noForro) {
           // F14b: do anel no forro, junto da viga, entra na parede abaixo dela e desce na alvenaria até a peça.
-          descer(nivel.id, q, cotaRamal, p.at, p.cotaMm);
+          // Pendência antiga da casa automática (21/10/2026): a descida do nó mais perto que atravessaria PILAR (a máquina
+          // de lavar entre o pilar da viga de transição e a laje rebaixada, sobrado 10 × 30: o anel não passa nem por uma
+          // nem pela outra) desce de outro nó da árvore, o mais perto cuja descida não atravessa — a fria vem pelo lado de lá.
+          let pedacos = pedacosDaDescida(nivel.id, q, cotaRamal, p.at, p.cotaMm);
+          if (descidaPeloPilar(nivel.id, pedacos) && pelas) {
+            const nos = [...new Map(pelas.arestas.flatMap((x) => [x.de, x.para]).map((v) => [chaveP(v), v])).values()]
+              .filter((v) => chaveP(v) !== chaveP(q) && Math.hypot(v.x - p.at.x, v.y - p.at.y) <= OUTRO_NO_DA_DESCIDA_ATE_MM)
+              .sort((u, v) => Math.hypot(u.x - p.at.x, u.y - p.at.y) - Math.hypot(v.x - p.at.x, v.y - p.at.y));
+            for (const v of nos) {
+              const outros = pedacosDaDescida(nivel.id, v, cotaRamal, p.at, p.cotaMm);
+              if (!descidaPeloPilar(nivel.id, outros)) {
+                pedacos = outros;
+                break;
+              }
+            }
+          }
+          for (const x of pedacos) addTrecho(nivel.id, x.a, x.cotaAMm, x.b, x.cotaBMm);
           continue;
         }
         if (q) {

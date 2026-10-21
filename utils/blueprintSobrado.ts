@@ -532,6 +532,52 @@ export function alinharSegundoAoPatamar<R extends { ambientes: readonly Ambiente
   return null;
 }
 
+/** Folga entre a porta que anda na lateral do núcleo e o núcleo ou outra abertura da parede, mm. */
+const FOLGA_DA_PORTA_NA_LATERAL_MM = 150;
+
+/**
+ * Pendência antiga da casa automática (21/10/2026): a PORTA que caiu na lateral do núcleo, no trecho dele, passa a abrir
+ * para a escada — e o cômodo que o núcleo comeu perde a porta (a cozinha e o serviço do 10 × 30 de 4 dorm., 3 pav.: a
+ * relação obrigatória sem porta direta). Ela anda pela mesma parede para fora do trecho do núcleo, onde o cômodo continua,
+ * sem encostar noutra abertura; sem lugar, fica.
+ */
+function naLateralDoNucleo(o: AberturaLocal, paredes: readonly ParedeLocal[], todas: readonly AberturaLocal[], n: Retangulo): AberturaLocal {
+  if (o.kind !== 'door') return o;
+  const w = paredes.find((x) => x.uid && x.uid === o.wallUid);
+  if (!w) return o;
+  const vertical = Math.abs(w.a.x - w.b.x) < 1;
+  const horizontal = Math.abs(w.a.y - w.b.y) < 1;
+  const naLateral = (vertical && (Math.abs(w.a.x - n.x0) < 1 || Math.abs(w.a.x - n.x1) < 1)) || (horizontal && (Math.abs(w.a.y - n.y0) < 1 || Math.abs(w.a.y - n.y1) < 1));
+  if (!naLateral) return o;
+  const ao = vertical ? 'y' : 'x';
+  const crescente = w.b[ao] >= w.a[ao];
+  const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+  // O trecho do núcleo na régua da parede (offset a partir de `a`).
+  const naRegua = (v: number) => (crescente ? v - w.a[ao] : w.a[ao] - v);
+  const [n0, n1] = [naRegua(vertical ? n.y0 : n.x0), naRegua(vertical ? n.y1 : n.x1)].sort((x, y) => x - y);
+  if (o.offsetMm + o.widthMm <= n0 || o.offsetMm >= n1) return o;
+  const f = FOLGA_DA_PORTA_NA_LATERAL_MM;
+  const daParede = todas.filter((x) => x !== o && x.wallUid === o.wallUid);
+  const outras = daParede.map((x) => [x.offsetMm - f, x.offsetMm + x.widthMm + f] as const);
+  // E sem atravessar o encontro com outra parede (o começo de outro cômodo: a porta do serviço abria também para o lavabo).
+  const encontros = paredes
+    .filter((x) => x !== w)
+    .flatMap((x) => [x.a, x.b])
+    .filter((p) => (vertical ? Math.abs(p.x - w.a.x) < 1 : Math.abs(p.y - w.a.y) < 1))
+    .map((p) => naRegua(p[ao]))
+    .filter((d) => d > 1 && d < L - 1);
+  const cabe = (off: number) =>
+    off >= f && off + o.widthMm <= L - f && !(off < n1 + f && off + o.widthMm > n0 - f) && !outras.some(([a, b]) => off < b && off + o.widthMm > a) && !encontros.some((d) => d > off - f && d < off + o.widthMm + f);
+  // Como no gerador (F20), junto das outras PORTAS da parede — o resto dela fica livre para as peças do cômodo (o tanque
+  // e a máquina do serviço iam para a parede do núcleo, sob a viga de transição, e a fria passava pelo pilar dela). Sem
+  // outra porta, o mais perto de onde estava.
+  const portas = daParede.filter((x) => x.kind === 'door').map((x) => x.offsetMm + x.widthMm / 2);
+  const custo = (off: number) => (portas.length ? Math.min(...portas.map((m) => Math.abs(off + o.widthMm / 2 - m))) : Math.abs(off - o.offsetMm));
+  let melhor: number | null = null;
+  for (let off = 0; off + o.widthMm <= L; off += 50) if (cabe(off) && (melhor == null || custo(off) < custo(melhor))) melhor = off;
+  return melhor != null ? { ...o, offsetMm: Math.round(melhor) } : o;
+}
+
 /**
  * As paredes e aberturas do pavimento com o núcleo recortado: a parede que o atravessa vira um ou dois pedaços (o
  * segundo com uid novo, derivado do antigo); a abertura que caía no trecho cortado sai; a do segundo pedaço é
@@ -564,12 +610,13 @@ export function recortarNucleo(cmds: readonly Command[], nucleo: Retangulo): Com
     }
   }
   const novasAberturas: AberturaLocal[] = [];
+  const todasAsAberturas = cmds.flatMap((c) => (c.type === 'AddOpenings' ? c.openings : []));
   for (const c of cmds) {
     if (c.type !== 'AddOpenings') continue;
     for (const o of c.openings) {
       const pedacos = o.wallUid ? reancora.get(o.wallUid) : undefined;
       if (!pedacos) {
-        novasAberturas.push(o);
+        novasAberturas.push(naLateralDoNucleo(o, novasParedes, todasAsAberturas, nucleo));
         continue;
       }
       const p = pedacos.find((x) => o.offsetMm >= x.inicio - 0.5 && o.offsetMm + o.widthMm <= x.fim + 0.5);

@@ -847,6 +847,11 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
     };
     const portasDoLavabo = p.resultado.openings.filter((o) => o.kind === 'door').map(ladosDaPorta).filter((l) => l.includes('Lavabo'));
     expect(portasDoLavabo.map((l) => l.find((n) => n !== 'Lavabo'))).toEqual(['Cozinha']);
+    // Pendência antiga (21/10/2026): a porta cozinha ↔ serviço caía na parede que vira a lateral do núcleo da escada e
+    // passava a abrir para ela — a relação obrigatória ficava sem porta direta (SEM_SOLUCAO). Ela anda para além do núcleo.
+    const portas = p.resultado.openings.filter((o) => o.kind === 'door').map(ladosDaPorta);
+    expect(portas.some((l) => l.includes('Cozinha') && l.includes('Área de serviço'))).toBe(true);
+    expect(p.pendencias.filter((x) => /sem porta|porta direta/i.test(x.texto)).map((x) => x.texto)).toEqual([]);
     // E nenhum encontro de rede: com o lavabo mais fundo, a caixa de inspeção (na reta do vaso dele até a frente) caía a
     // 2 cm do alimentador, e o coletor corria colado nele até a rua — a caixa se afasta da água enterrada.
     const porIdS5 = new Map((p.resultado.trechos ?? []).map((t) => [t.id, t]));

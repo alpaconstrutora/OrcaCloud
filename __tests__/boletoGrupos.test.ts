@@ -21,12 +21,19 @@ describe('agruparBoletos', () => {
         expect(g[0].itens.map(x => x.id)).toEqual(['1', '2']);
     });
 
-    it('fornecedor: grupos na ordem de 1ª aparição, com contagem e total; "Sem fornecedor" por último', () => {
+    it('fornecedor: grupos em ordem alfabética (Crescente), com contagem e total; "Sem fornecedor" por último', () => {
         const lista = [b('1', { supplier_id: 'f2', valor: 5 }), b('2'), b('3', { supplier_id: 'f1', valor: 7 }), b('4', { supplier_id: 'f2', valor: 1.5 })];
         const g = agruparBoletos(lista, 'fornecedor', r);
-        expect(g.map(x => x.label)).toEqual(['Receita Federal', 'Energisa', 'Sem fornecedor']);
-        expect(g[0].itens.map(x => x.id)).toEqual(['1', '4']);
-        expect(g[0].total).toBe(6.5);
+        expect(g.map(x => x.label)).toEqual(['Energisa', 'Receita Federal', 'Sem fornecedor']);
+        expect(g[1].itens.map(x => x.id)).toEqual(['1', '4']);
+        expect(g[1].total).toBe(6.5);
+    });
+
+    it('Decrescente inverte os grupos (nome, status, mês); "Sem fornecedor" continua por último', () => {
+        const lista = [b('1', { supplier_id: 'f2' }), b('2'), b('3', { supplier_id: 'f1' })];
+        expect(agruparBoletos(lista, 'fornecedor', r, 'desc').map(x => x.label)).toEqual(['Receita Federal', 'Energisa', 'Sem fornecedor']);
+        const asc = agruparBoletos(lista, 'status', r).map(x => x.label);
+        expect(agruparBoletos(lista, 'status', r, 'desc').map(x => x.label)).toEqual([...asc].reverse());
     });
 
     it('vencimento: um grupo por mês, em ordem cronológica, rótulo "Mês/AAAA"', () => {

@@ -224,7 +224,8 @@ export default function ClientChargesModule({ organizationId }: Props) {
         semRotulo: SEM_GRUPO[groupBy],
         valor: c => c.value,
         ordem: groupBy === 'status' ? Object.keys(STATUS_META) : groupBy === 'vencimento' ? 'chave' : 'aparicao',
-    })), [filtered, groupBy]);
+        direcao: agrupamento.direcao,
+    })), [filtered, groupBy, agrupamento.direcao]);
     /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
     const linhasNaTela = useMemo(() => (agrupando ? linhasDaTela(grupos, recolhidos) : filtered), [agrupando, grupos, recolhidos, filtered]);
     const entradas: EntradaDaTela<ClientCharge>[] = useMemo(
@@ -462,6 +463,8 @@ export default function ClientChargesModule({ organizationId }: Props) {
                             opcoes={OPCOES_AGRUPAR}
                             campo={groupBy}
                             onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
                             chavesDosGrupos={grupos.map(g => g.key)}
                             algumRecolhido={recolhidos.size > 0}
                             onAlternarTodos={agrupamento.alternarTodos}

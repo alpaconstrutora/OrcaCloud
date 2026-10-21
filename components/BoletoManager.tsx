@@ -18,6 +18,7 @@ import type { Boleto, BoletoStatus, BoletoFilters, BoletoStats, Organization, Co
 import type { SupplierOption } from './SupplierSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
 import { agruparBoletos, OPCOES_AGRUPAR, type CampoAgrupar } from '../utils/boletoGrupos';
+import type { DirecaoGrupos } from '../utils/agruparLinhas';
 import { AgruparControles } from './ui/Agrupamento';
 import { onlyObras } from '../utils/projectClassification';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
@@ -563,6 +564,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     // "Agrupar" — o mesmo recurso de Minhas Tarefas (TasksModule/TasksList). Persistido;
     // os grupos recolhidos ficam só em memória, como lá.
     const [groupBy, setGroupBy] = usePersistedState<CampoAgrupar>('boletoManagerFilters:groupBy', 'none');
+    // Ordem dos grupos (Crescente/Decrescente) — mesma chave que `useAgrupamento` usaria.
+    const [direcaoGuardada, setDirecaoGrupos] = usePersistedState<DirecaoGrupos>('boletoManagerFilters:groupBy:direcao', 'asc');
+    const direcaoGrupos: DirecaoGrupos = direcaoGuardada === 'desc' ? 'desc' : 'asc';
     const [gruposRecolhidos, setGruposRecolhidos] = useState<Set<string>>(new Set());
     const toggleGrupo = useCallback((key: string) => {
         setGruposRecolhidos(prev => {
@@ -871,7 +875,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         obra: b => (b.project_id ? projectMap[b.project_id] : null),
         centroCusto: b => (b.cost_center_id ? ccMap[b.cost_center_id] : null),
         capturadoPor: b => (b.created_by_email ? nomeCapturador(b, userNameMap) : null),
-    }), [filtered, agrupando, groupBy, supplierMap, projectMap, ccMap, userNameMap]);
+    }, direcaoGrupos), [filtered, agrupando, groupBy, direcaoGrupos, supplierMap, projectMap, ccMap, userNameMap]);
 
     // As linhas NA ORDEM DA TELA (grupos recolhidos ficam de fora). É sobre esta lista que
     // o índice da linha e o Shift+clique trabalham — com `filtered`, agrupado, o intervalo
@@ -1239,6 +1243,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         opcoes={OPCOES_AGRUPAR}
                         campo={groupBy}
                         onCampo={c => { setGroupBy(c); setGruposRecolhidos(new Set()); lastSelectedIndexRef.current = null; }}
+                        direcao={direcaoGrupos}
+                        onDirecao={d => { setDirecaoGrupos(d); lastSelectedIndexRef.current = null; }}
                         chavesDosGrupos={grupos.map(g => g.key)}
                         algumRecolhido={gruposRecolhidos.size > 0}
                         onAlternarTodos={keys => setGruposRecolhidos(prev => (prev.size ? new Set() : new Set(keys)))}

@@ -37,6 +37,15 @@ describe('agruparLinhas', () => {
         expect(meses.map(x => x.label)).toEqual(['Setembro/2026', 'Dezembro/2025', 'Sem vencimento']);
     });
 
+    it('com direcao, "aparicao" (ou ordem ausente) vira alfabética; lista e "chave" não mudam', () => {
+        const lista = [l('1', { nome: 'Maria' }), l('2', { nome: 'Ana' })];
+        expect(agruparLinhas(lista, { ...porNome, direcao: 'asc' }).map(x => x.label)).toEqual(['Ana', 'Maria']);
+        expect(agruparLinhas(lista, { ...porNome, ordem: 'aparicao', direcao: 'desc' }).map(x => x.label)).toEqual(['Maria', 'Ana']);
+        expect(agruparLinhas(lista, { ...porNome, ordem: ['maria', 'ana'], direcao: 'asc' }).map(x => x.label)).toEqual(['Maria', 'Ana']);
+        // Sem direcao, continua a 1ª aparição (telas que não ligaram o seletor).
+        expect(agruparLinhas(lista, porNome).map(x => x.label)).toEqual(['Maria', 'Ana']);
+    });
+
     it('ordem "chave" deixa o mês cronológico', () => {
         const g = agruparLinhas([l('1', { data: '2026-09-01' }), l('2', { data: '2025-12-31' }), l('3')],
             { chave: x => chavePorMes(x.data), semRotulo: 'Sem vencimento', ordem: 'chave' });

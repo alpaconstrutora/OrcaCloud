@@ -419,8 +419,9 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             semRotulo: SEM_GRUPO[groupBy],
             valor: o => totalEfetivoDoPedido(o.items),
             ordem: groupBy === 'status' ? Object.keys(ORDER_STATUS_KEYS).map(s => s.toLowerCase()) : groupBy === 'data' ? 'chave' : 'aparicao',
+            direcao: agrupamento.direcao,
         });
-    }, [groupBy, filteredOrders, empreendimentoByProject]);
+    }, [groupBy, agrupamento.direcao, filteredOrders, empreendimentoByProject]);
     /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
     const linhasNaTela = React.useMemo(
         () => (agrupando ? linhasDaTela(grupos, agrupamento.recolhidos) : filteredOrders),
@@ -622,6 +623,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                         opcoes={OPCOES_AGRUPAR}
                         campo={groupBy}
                         onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
                         chavesDosGrupos={grupos.map(g => g.key)}
                         algumRecolhido={agrupamento.recolhidos.size > 0}
                         onAlternarTodos={agrupamento.alternarTodos}

@@ -1621,16 +1621,19 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     chave: a => chaveDoBem(agruparBens.campo as CampoAgruparBens, a),
     semRotulo: SEM_GRUPO_BENS[agruparBens.campo as CampoAgruparBens],
     valor: a => a.purchase_value,
+    direcao: agruparBens.direcao,
   }));
   const gruposDeReservas = (lista: OpuraAssetReservation[]): Grupo<OpuraAssetReservation>[] => (agruparReservas.campo === 'none' ? [] : agruparLinhas(lista, {
     chave: r => chaveDaReserva(agruparReservas.campo as CampoAgruparReservas, r),
     semRotulo: SEM_GRUPO_RESERVAS[agruparReservas.campo as CampoAgruparReservas],
+    direcao: agruparReservas.direcao,
   }));
   const gruposDeManutencoes = (lista: OpuraAssetMaintenance[]): Grupo<OpuraAssetMaintenance>[] => (agruparManutencoes.campo === 'none' ? [] : agruparLinhas(lista, {
     chave: m => chaveDaManutencao(agruparManutencoes.campo as CampoAgruparManutencoes, m),
     semRotulo: SEM_GRUPO_MANUTENCOES[agruparManutencoes.campo as CampoAgruparManutencoes],
     valor: m => m.cost,
     ordem: agruparManutencoes.campo === 'mes' ? 'chave' : 'aparicao',
+    direcao: agruparManutencoes.direcao,
   }));
   /** Cabeçalhos + linhas; sem agrupamento, só as linhas. */
   function entradasAgrupadas<T>(lista: T[], grupos: Grupo<T>[], agrupando: boolean, recolhidos: Set<string>): EntradaDaTela<T>[] {
@@ -1855,6 +1858,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       opcoes={OPCOES_AGRUPAR_BENS}
                       campo={agruparBens.campo}
                       onCampo={agruparBens.setCampo}
+                      direcao={agruparBens.direcao}
+                      onDirecao={agruparBens.setDirecao}
                       chavesDosGrupos={gruposBens.map(g => g.key)}
                       algumRecolhido={agruparBens.recolhidos.size > 0}
                       onAlternarTodos={agruparBens.alternarTodos}
@@ -2108,6 +2113,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       opcoes={OPCOES_AGRUPAR_RESERVAS}
                       campo={agruparReservas.campo}
                       onCampo={agruparReservas.setCampo}
+                      direcao={agruparReservas.direcao}
+                      onDirecao={agruparReservas.setDirecao}
                       chavesDosGrupos={gruposDeReservas(reservations).map(g => g.key)}
                       algumRecolhido={agruparReservas.recolhidos.size > 0}
                       onAlternarTodos={agruparReservas.alternarTodos}
@@ -2309,6 +2316,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       opcoes={OPCOES_AGRUPAR_MANUTENCOES}
                       campo={agruparManutencoes.campo}
                       onCampo={agruparManutencoes.setCampo}
+                      direcao={agruparManutencoes.direcao}
+                      onDirecao={agruparManutencoes.setDirecao}
                       chavesDosGrupos={gruposDeManutencoes(maintenances).map(g => g.key)}
                       algumRecolhido={agruparManutencoes.recolhidos.size > 0}
                       onAlternarTodos={agruparManutencoes.alternarTodos}

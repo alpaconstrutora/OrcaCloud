@@ -1822,8 +1822,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         case 'norma_situacao': return d.norma_situacao ? chavePorNome(NORMA_SITUACOES[d.norma_situacao]?.label ?? d.norma_situacao) : null;
       }
     };
-    return agruparLinhas(sortedDocuments, { chave, semRotulo: SEM_GRUPO_DOCS[campoDocs], ordem: campoDocs === 'emissao' ? 'chave' : 'aparicao' });
-  }, [campoDocs, sortedDocuments, resolveDisciplineLabel, resolveGedProjectName]);
+    return agruparLinhas(sortedDocuments, { chave, semRotulo: SEM_GRUPO_DOCS[campoDocs], ordem: campoDocs === 'emissao' ? 'chave' : 'aparicao', direcao: agruparDocs.direcao });
+  }, [campoDocs, agruparDocs.direcao, sortedDocuments, resolveDisciplineLabel, resolveGedProjectName]);
   /** Linhas na ordem da tela, sem os grupos recolhidos — base do Shift+clique e do "selecionar todos". */
   const docsNaTela = React.useMemo(
     () => (agrupandoDocs ? linhasDaTela(gruposDocs, agruparDocs.recolhidos) : sortedDocuments),
@@ -2881,6 +2881,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               opcoes={opcoesAgruparDocs}
               campo={campoDocs}
               onCampo={agruparDocs.setCampo}
+              direcao={agruparDocs.direcao}
+              onDirecao={agruparDocs.setDirecao}
               chavesDosGrupos={gruposDocs.map(gr => gr.key)}
               algumRecolhido={agruparDocs.recolhidos.size > 0}
               onAlternarTodos={agruparDocs.alternarTodos}

@@ -109,6 +109,25 @@ describe('StandardTable — agrupamento', () => {
         expect([...selecionados].every(id => id.startsWith('b'))).toBe(true);
     });
 
+    it('Crescente/Decrescente ordena os grupos e persiste; "Sem obra" fica no fim', () => {
+        const { unmount } = render(<Tela />);
+        const ordem = () => screen.getByRole('combobox', { name: 'Ordem dos grupos' }) as HTMLSelectElement;
+        expect(ordem().disabled).toBe(true);
+        fireEvent.change(screen.getByTitle('Agrupar os itens'), { target: { value: 'obra' } });
+        expect(ordem().disabled).toBe(false);
+        fireEvent.change(ordem(), { target: { value: 'desc' } });
+        // Página 1 (50 linhas): Obra B inteira; Obra A começa na página 2.
+        expect(cabecalhos()).toEqual(['Obra B 50 R$ 50,00']);
+        unmount();
+        render(<Tela />);
+        expect(ordem().value).toBe('desc');
+        // Página 2: Obra A (60 linhas) a enche; página 3: o resto de A e o "Sem obra", por último.
+        fireEvent.click(screen.getByText('Próxima'));
+        expect(cabecalhos().map(c => c.split(' ').slice(0, 2).join(' '))).toEqual(['Obra A']);
+        fireEvent.click(screen.getByText('Próxima'));
+        expect(cabecalhos().map(c => c.split(' ').slice(0, 2).join(' '))).toEqual(['Obra A', 'Sem obra']);
+    });
+
     it('o campo escolhido persiste e "Agrupar" volta ao normal', () => {
         const { unmount } = render(<Tela />);
         fireEvent.change(screen.getByTitle('Agrupar os itens'), { target: { value: 'obra' } });

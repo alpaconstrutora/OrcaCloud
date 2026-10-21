@@ -133,6 +133,9 @@ describe('Meus Clientes', () => {
         const rotulos = Array.from(document.querySelectorAll('tbody span.font-semibold')).map(e => e.textContent);
         expect(rotulos).toEqual(['Ativo', 'Inativo']);
         expect(pedacos('Ativo')).toBe('Ativo 2');
+        // Decrescente (molde ClickUp) inverte a ordem do fluxo.
+        fireEvent.change(screen.getByRole('combobox', { name: 'Ordem dos grupos' }), { target: { value: 'desc' } });
+        expect(Array.from(document.querySelectorAll('tbody span.font-semibold')).map(e => e.textContent)).toEqual(['Inativo', 'Ativo']);
     });
 });
 

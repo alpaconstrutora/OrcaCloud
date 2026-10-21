@@ -648,7 +648,8 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         semRotulo: SEM_GRUPO[groupBy],
         valor: r => r.amount,
         ordem: groupBy === 'status' ? Object.keys(STATUS_LABEL) : groupBy === 'competencia' || groupBy === 'vencimento' ? 'chave' : 'aparicao',
-    })), [sorted, groupBy]);
+        direcao: agrupamento.direcao,
+    })), [sorted, groupBy, agrupamento.direcao]);
     const entradas: EntradaDaTela<TaxPayable>[] = useMemo(
         () => (agrupando ? entradasDaPagina(grupos, recolhidos) : sorted.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
         [agrupando, grupos, recolhidos, sorted],
@@ -885,6 +886,8 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                             opcoes={OPCOES_AGRUPAR}
                             campo={groupBy}
                             onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
                             chavesDosGrupos={grupos.map(g => g.key)}
                             algumRecolhido={recolhidos.size > 0}
                             onAlternarTodos={agrupamento.alternarTodos}

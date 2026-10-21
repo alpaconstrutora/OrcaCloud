@@ -398,8 +398,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             semRotulo: SEM_GRUPO[groupBy],
             valor: c => c.current_value,
             ordem: groupBy === 'status' ? ORDEM_STATUS_CONTRATO.map(s => s.toLowerCase()) : groupBy === 'inicio' ? 'chave' : 'aparicao',
+            direcao: agrupamento.direcao,
         });
-    }, [groupBy, filteredContracts, direction, projectMap, empreendimentoById, empreendimentoByProject, clientMap, supplierMap, costCenterMap, planoContasMap]);
+    }, [groupBy, agrupamento.direcao, filteredContracts, direction, projectMap, empreendimentoById, empreendimentoByProject, clientMap, supplierMap, costCenterMap, planoContasMap]);
     const entradas: EntradaDaTela<Contract>[] = React.useMemo(
         () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredContracts.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
         [agrupando, grupos, agrupamento.recolhidos, filteredContracts],
@@ -510,6 +511,8 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         opcoes={opcoesAgrupar}
                         campo={groupBy}
                         onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
                         chavesDosGrupos={grupos.map(g => g.key)}
                         algumRecolhido={agrupamento.recolhidos.size > 0}
                         onAlternarTodos={agrupamento.alternarTodos}

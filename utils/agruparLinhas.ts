@@ -32,7 +32,8 @@ export interface OpcoesAgrupar<T> {
      * desejada (status na ordem do fluxo; chave fora da lista vai ao fim).
      */
     ordem?: 'aparicao' | 'chave' | 'rotulo' | string[];
-    /** 'desc' inverte a ordem dos grupos (Crescente/Decrescente, molde ClickUp). O "Sem …" fica no fim nos dois. */
+    /** 'desc' inverte a ordem dos grupos (Crescente/Decrescente, molde ClickUp). O "Sem …" fica no fim nos dois.
+     *  Informada, `ordem: 'aparicao'` (ou ausente) passa a valer como 'rotulo'. */
     direcao?: DirecaoGrupos;
 }
 
@@ -78,7 +79,9 @@ export function agruparLinhas<T>(linhas: T[], o: OpcoesAgrupar<T>): Grupo<T>[] {
         g.total += Number(o.valor?.(linha)) || 0;
     }
     const grupos = [...mapa.values()];
-    const ordem = o.ordem ?? 'aparicao';
+    // Com o seletor Crescente/Decrescente na tela, "ordem de 1ª aparição" não tem sentido:
+    // vale a alfabética. Status (lista) e datas ('chave') têm ordem própria e não mudam.
+    const ordem = o.direcao && (o.ordem ?? 'aparicao') === 'aparicao' ? 'rotulo' : (o.ordem ?? 'aparicao');
     if (ordem === 'chave') {
         grupos.sort((a, b) => a.key.localeCompare(b.key));
     } else if (ordem === 'rotulo') {

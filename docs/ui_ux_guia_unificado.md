@@ -1346,10 +1346,12 @@ Em tabela feita à mão, o `<tbody>` itera as entradas e o corpo da linha não m
   campo em "Agrupar"…" (pedido de 15/10/2026: até então só aparecia ao agrupar, e não
   se descobria que existia). Escolha em `usePersistedState`; grupos recolhidos só em
   memória.
-- **Ordem dos grupos — Crescente/Decrescente (molde ClickUp, 21/10/2026, Contas a
-  Receber; `docs/planos/2026-10-21-receber-agrupar-ordem-dos-grupos.md`).** Opt-in em
-  `AgruparControles` (`direcao`/`onDirecao`, estado em `useAgrupamento().direcao`,
-  persistido em `<storageKey>:direcao`). `<select>` logo depois do "Agrupar", mesmo
+- **Ordem dos grupos — Crescente/Decrescente (molde ClickUp, 21/10/2026; nasceu em Contas a
+  Receber e no mesmo dia foi para TODAS as telas com "Agrupar";
+  `docs/planos/2026-10-21-receber-agrupar-ordem-dos-grupos.md`).** Faz parte do controle:
+  toda tela passa `direcao`/`onDirecao` ao `AgruparControles` (estado em
+  `useAgrupamento().direcao`, persistido em `<storageKey>:direcao`) e `direcao` ao
+  `agruparLinhas`; o `StandardTable` já faz isso sozinho. `<select>` logo depois do "Agrupar", mesmo
   `h-9 pl-8 rounded-[6px] text-[13px] font-medium`, neutro (não fica azul — o azul é do
   "agrupando"), ícone `ArrowUpNarrowWide`/`ArrowDownWideNarrow`. Sempre visível; sem
   agrupamento, desligado com `MOTIVO_SEM_ORDEM_DOS_GRUPOS` no `title`. Ordena **os
@@ -1357,13 +1359,12 @@ Em tabela feita à mão, o `<tbody>` itera as entradas e o corpo da linha não m
   status na ordem do fluxo, mês cronológico; Decrescente inverte; o "Sem …" fica no fim
   nos dois. As linhas **dentro** do grupo seguem a coluna do `<thead>`. ⚠️ Não é o
   "Ordenar por" proibido no §6.4 — aquele reordena linhas, que o cabeçalho já ordena;
-  este reordena grupos, que não têm cabeçalho para clicar. Tela que liga o seletor troca
-  `ordem: 'aparicao'` por `'rotulo'` nos campos de nome (ordem de 1ª aparição não tem
-  sentido ao lado de "Crescente").
+  este reordena grupos, que não têm cabeçalho para clicar. Com `direcao` informada,
+  `agruparLinhas` trata `ordem: 'aparicao'` como `'rotulo'` (ordem de 1ª aparição não tem
+  sentido ao lado de "Crescente") — a tela não precisa trocar nada.
 - **Agrupamento é função pura em `utils/`** (`boletoGrupos.ts`, `recebivelGrupos.ts`):
   recebe a lista **já filtrada e ordenada** e devolve `{ key, label, itens, total }`.
-  Grupos na ordem da 1ª aparição (respeita a coluna ordenada) — ou alfabética, na tela
-  que tem o seletor Crescente/Decrescente (item acima); status na ordem do mapa
+  Grupos em ordem alfabética do rótulo (ou o inverso, pelo seletor do item acima); status na ordem do mapa
   de rótulos da tela; mês de vencimento cronológico ("Julho/2026"); o grupo "Sem …"
   sempre por último. Nomes que só diferem na caixa caem no mesmo grupo. O rótulo é o
   MESMO texto que a célula mostra (nome resolvido, não id).

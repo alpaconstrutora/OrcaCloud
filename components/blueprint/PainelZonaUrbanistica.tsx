@@ -56,6 +56,10 @@ interface Props {
   /** Escolhido — sobe para o editor, porque a caixa Terreno inteira usa um só. */
   empreendimentoId: string;
   onEmpreendimento: (id: string) => void;
+  /** Texto sob o seletor quando o empreendimento entrou sozinho (vínculo ou obra); `null` = escolhido/salvo. */
+  avisoDoEmpreendimento?: string | null;
+  /** A zona em vigor foi aplicada sozinha (era a única do empreendimento). */
+  zonaAplicadaAutomaticamente?: boolean;
 
   /** Caminho da cidade. */
   cidade: CitySearchValue | null;
@@ -92,6 +96,8 @@ export default function PainelZonaUrbanistica({
   empreendimentos,
   empreendimentoId,
   onEmpreendimento,
+  avisoDoEmpreendimento = null,
+  zonaAplicadaAutomaticamente = false,
   cidade,
   onCidade,
   mapas,
@@ -197,7 +203,13 @@ export default function PainelZonaUrbanistica({
               ))}
             </select>
           )
-        ) : (
+        ) : null}
+        {origemDaZona === 'EMPREENDIMENTO' && empreendimentos.length > 0 && avisoDoEmpreendimento && (
+          <p className="text-xs text-slate-500" data-testid="aviso-empreendimento-automatico">
+            {avisoDoEmpreendimento}
+          </p>
+        )}
+        {origemDaZona === 'CATALOGO' && (
           <>
             {/* O mesmo autocomplete do cadastro de mapas — devolve `city_id`
                 real de `master_cities`, não texto livre. */}
@@ -267,6 +279,11 @@ export default function PainelZonaUrbanistica({
               {salvando ? 'Aplicando…' : 'Aplicar'}
             </button>
           </div>
+        )}
+        {zonaAplicadaAutomaticamente && aplicada && (
+          <p className="text-xs text-slate-500" data-testid="aviso-zona-automatica">
+            Zona aplicada automaticamente: é a única cadastrada neste empreendimento.
+          </p>
         )}
       </div>
 

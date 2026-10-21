@@ -526,6 +526,7 @@ import { grupoDaSelecao, grupoDeFundacao, idsDoGrupo, planejarEstacasDoBloco } f
 import PainelGerarParedes from './PainelGerarParedes';
 import PainelTerreno from './PainelTerreno';
 import PainelZonaUrbanistica from './PainelZonaUrbanistica';
+import { dadosDoEmpreendimentoParaPlanta } from '../../utils/blueprintDadosDoEmpreendimento';
 import PainelTopografia from './PainelTopografia';
 import QuadroDeDivisas from './QuadroDeDivisas';
 import { useConfirm } from '../ui/confirm';
@@ -3139,17 +3140,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   }, [orgId]);
 
   /**
-   * O empreendimento sugerido pela OBRA do estudo.
+   * O empreendimento VINCULADO à planta: o que aponta para ela em
+   * `empreendimentos.blueprint_study_id` (lista › Editar, formulário do Empreendimento,
+   * envio da massa/loteamento). É a ligação explícita — vem antes de qualquer dedução.
+   */
+  const empreendimentoVinculado = useMemo(
+    () => empreendimentos.find((e) => e.blueprint_study_id === study.id) ?? null,
+    [empreendimentos, study.id],
+  );
+
+  /**
+   * O empreendimento sugerido: o VINCULADO e, sem ele, o da OBRA do estudo
+   * (`blueprint_studies.project_id` ↔ `empreendimentos.project_id`).
    *
-   * `blueprint_studies.project_id` aponta para a obra, e `empreendimentos`
-   * também guarda `project_id`. É por aí que se sugere — e é só sugestão: quem
-   * grava é o usuário, escolhendo na lista. Inferir e gravar calado poria a área
-   * do terreno na ficha errada, e isso só apareceria no memorial de incorporação.
+   * Até 21/10/2026 era só pela obra, e quem vinculava a planta ainda tinha de escolher o
+   * empreendimento à mão na zona, na área, no loteamento e na massa — pedido do usuário:
+   * "o app ja pode preencher automaticamente sem necessidade de acao manual" (plano
+   * docs/planos/2026-10-21-planta-empreendimento-vinculado-autopreencher.md). Continua sendo
+   * sugestão: escolha salva ou feita à mão não é desfeita.
    */
   const empreendimentoSugerido = useMemo(() => {
+    if (empreendimentoVinculado) return empreendimentoVinculado.id;
     if (!study.project_id) return null;
     return empreendimentos.find((e) => e.project_id === study.project_id)?.id ?? null;
-  }, [empreendimentos, study.project_id]);
+  }, [empreendimentoVinculado, empreendimentos, study.project_id]);
 
   /**
    * Recuos e limites — agora vindos do Mapa Regulatório, não mais digitados do zero.
@@ -3167,6 +3181,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     empreendimentoSugerido,
     orgId,
   );
+  /**
+   * A FICHA do empreendimento ligado (vinculado → o da zona → o da obra): frente × profundidade
+   * para "Criar o lote digitando", endereço para "Desenhar no mapa" e UF para o CUB da Casa.
+   * Pedido de 21/10/2026 — ver `utils/blueprintDadosDoEmpreendimento.ts`.
+   */
+  const dadosDaFicha = useMemo(() => {
+    const id = empreendimentoVinculado?.id || zona.empreendimentoId || empreendimentoSugerido;
+    return dadosDoEmpreendimentoParaPlanta(empreendimentos.find((e) => e.id === id) ?? null);
+  }, [empreendimentoVinculado, zona.empreendimentoId, empreendimentoSugerido, empreendimentos]);
   /** A ZONA PARA A EXPORTAÇÃO (10/10/2026): o envelope recuado é refeito sobre o modelo publicado (`envelopesParaExportacao`). */
   const zonaParaExportacao = useMemo(
     () => ({ recuos: zona.recuos, afastamentoProgressivo: zona.afastamentoProgressivo, recuoFrenteEscalonado: zona.recuoFrenteEscalonado }),
@@ -7536,7 +7559,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * enquanto alguém arrasta um vértice. Publicar é o ato que diz "este vale".
    */
   const [enviandoAoEmpreendimento, setEnviandoAoEmpreendimento] = useState(false);
-  const empreendimentoDoLoteamento = zona.empreendimentoId || empreendimentoSugerido;
+  // O vinculado manda: é para ele que o envio grava (`linkStudy`). A escolha da zona só vale
+  // para planta ainda sem vínculo.
+  const empreendimentoDoLoteamento = empreendimentoVinculado?.id || zona.empreendimentoId || empreendimentoSugerido;
 
   /**
    * M3 — enviar o ESTUDO DE MASSA ao Empreendimento: blocos da versão PUBLICADA
@@ -8844,7 +8869,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const provaDaCasa = useMemo(() => (telaAberta === 'casa' && casa.plano ? conferirPlanoDaCasa(editor.model, casa.plano) : null), [telaAberta, casa.plano, editor.model]);
   // O CUB do padrão escolhido, na UF do produto (ou da cidade da zona) — o custo da prévia.
   const [cubDaCasa, setCubDaCasa] = useState<CubDoPadrao | null>(null);
-  const ufDaCasa = ufDoProduto || zona.cidade?.state_code || 'MG';
+  // UF do CUB: a do produto, a da cidade da zona, a da ficha do empreendimento — e só então o padrão.
+  const ufDaCasa = ufDoProduto || zona.cidade?.state_code || dadosDaFicha.uf || 'MG';
   useEffect(() => {
     if (telaAberta !== 'casa') return;
     let vivo = true;
@@ -8857,7 +8883,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   }, [telaAberta, ufDaCasa, casaDoEstudo.premissas.curto.padrao]);
   // As unidades do Empreendimento ligado ao estudo — para preencher o programa pela unidade.
   const [unidadesDaCasa, setUnidadesDaCasa] = useState<{ opcoes: UnidadeParaOPrograma[]; porId: Map<string, EmpreendimentoUnit> }>({ opcoes: [], porId: new Map() });
-  const empreendimentoDaCasa = empreendimentos.find((e) => e.blueprint_study_id === study.id)?.id ?? zona.empreendimentoId ?? empreendimentoSugerido;
+  const empreendimentoDaCasa = empreendimentoVinculado?.id ?? zona.empreendimentoId ?? empreendimentoSugerido;
   useEffect(() => {
     if (telaAberta !== 'casa' || !empreendimentoDaCasa) return;
     let vivo = true;
@@ -10265,6 +10291,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           empreendimentos={empreendimentos.map((e) => ({ id: e.id, nome: e.name }))}
           empreendimentoId={zona.empreendimentoId}
           onEmpreendimento={zona.setEmpreendimentoId}
+          avisoDoEmpreendimento={
+            zona.empreendimentoAutomatico
+              ? empreendimentoVinculado && zona.empreendimentoId === empreendimentoVinculado.id
+                ? 'Preenchido automaticamente: é o empreendimento vinculado a esta planta.'
+                : 'Preenchido automaticamente pela obra desta planta.'
+              : null
+          }
+          zonaAplicadaAutomaticamente={zona.zonaAplicadaAutomaticamente}
           cidade={zona.cidade}
           onCidade={zona.setCidade}
           mapas={zona.mapas}
@@ -20299,6 +20333,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 key={`${abaDoLoteDigitado}|${(loteParaEditar?.anel ?? []).map((p) => `${p.x},${p.y}`).join(';')}`}
                 abaInicial={abaDoLoteDigitado}
                 existente={loteParaEditar}
+                sugestaoDaFicha={dadosDaFicha.lote}
                 rotacaoNorteDeg={rotacaoDoNorte(editor.model)}
                 georreferencia={editor.model.georreferencia ?? null}
                 temLote={(editor.model.boundaries ?? []).some((b) => b.kind === 'TERRENO')}
@@ -20342,6 +20377,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             <div className="px-6 py-4">
               <PainelMapaDoLote
                 georreferencia={editor.model.georreferencia ?? null}
+                buscaInicial={dadosDaFicha.endereco}
                 onUsar={(area) => {
                   if (!levelId) return 'Crie um pavimento antes: as divisas moram num pavimento.';
                   if ((editor.model.boundaries ?? []).some((b) => b.kind === 'TERRENO')) {

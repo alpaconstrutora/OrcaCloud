@@ -20,6 +20,8 @@ vi.mock('../../services/blueprintService', () => ({
   duplicateStudy: vi.fn(),
   archiveStudy: vi.fn(),
 }));
+// O módulo lista empreendimentos (coluna + drawer de vínculo): sem o mock, a chamada real falha depois do teste e derruba a suíte.
+vi.mock('../../services/empreendimentoService', () => ({ empreendimentoService: { list: vi.fn(async () => []) } }));
 vi.mock('../../services/regulatoryMapService', () => ({ regulatoryMapService: { list: vi.fn(async () => []), getById: vi.fn(), remove: vi.fn() } }));
 // O editor é pesado: no lugar dele, uma marca que diz QUAL estudo abriu.
 vi.mock('../../components/blueprint/BlueprintEditor', () => ({

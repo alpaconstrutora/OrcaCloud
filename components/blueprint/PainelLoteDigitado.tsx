@@ -65,6 +65,12 @@ interface Props {
   abaInicial?: ModoDoLoteDigitado;
   /** O lote fechado que o estudo já tem: as abas nascem com ele, para editar. */
   existente?: LoteExistente | null;
+  /**
+   * Frente e profundidade da FICHA do empreendimento (vínculo da planta, ou obra) — 21/10/2026,
+   * "o app ja pode preencher automaticamente". Só preenchem a aba Frente × fundo quando ainda
+   * não há lote; o que a pessoa digitar vale. `origem` nomeia de onde veio, para o aviso.
+   */
+  sugestaoDaFicha?: { frenteMm: number; profundidadeMm: number; origem: string } | null;
 }
 
 const ABAS: TabsBarItem<ModoDoLoteDigitado>[] = [
@@ -125,14 +131,18 @@ function colarNaTabela<T extends object>(texto: string, linhas: T[], linhaInicia
   return novo;
 }
 
-export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, temLote, onLancar, abaInicial, existente = null }: Props) {
+export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, temLote, onLancar, abaInicial, existente = null, sugestaoDaFicha = null }: Props) {
   const e = existente;
   const ret = e?.retangulo ?? null;
+  // A ficha só sugere para lote novo: editar parte do que já está desenhado.
+  const daFicha = e ? null : sugestaoDaFicha;
   // Editando: abre onde o lote se lê melhor — o retângulo na sua aba, o resto pelos azimutes (o que a escritura traz).
   const [aba, setAba] = useState<ModoDoLoteDigitado>(abaInicial ?? (e ? (ret ? 'RETANGULO' : 'AZIMUTES') : 'RETANGULO'));
   // Frente × fundo
-  const [frente, setFrente] = useState(ret ? metrosTexto(ret.frenteMm) : '');
-  const [profundidade, setProfundidade] = useState(ret ? metrosTexto(ret.profundidadeMm) : '');
+  const [frente, setFrente] = useState(ret ? metrosTexto(ret.frenteMm) : daFicha ? metrosTexto(daFicha.frenteMm) : '');
+  const [profundidade, setProfundidade] = useState(ret ? metrosTexto(ret.profundidadeMm) : daFicha ? metrosTexto(daFicha.profundidadeMm) : '');
+  // O aviso some quando a pessoa mexe nas medidas: deixam de ser as da ficha.
+  const fichaEmUso = !!daFicha && frente === metrosTexto(daFicha.frenteMm) && profundidade === metrosTexto(daFicha.profundidadeMm);
   const [voltadaPara, setVoltadaPara] = useState(ret ? anguloTexto(ret.frenteVoltadaPara) : '');
   const [confrontantesRet, setConfrontantesRet] = useState({
     FRENTE: ret?.lados.FRENTE.confrontante ?? '',
@@ -358,6 +368,11 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
               <input id="lote-voltada" value={voltadaPara} onChange={(e) => setVoltadaPara(e.target.value)} placeholder="ex.: 180° ou 30° SE" className={CAMPO} />
             </div>
           </div>
+          {fichaEmUso && daFicha && (
+            <p className="text-xs text-slate-500" data-testid="lote-da-ficha">
+              Frente e profundidade preenchidas automaticamente pela ficha de {daFicha.origem}. Confira com a escritura antes de lançar.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
             {([
               ['FRENTE', 'Confrontante da frente'],

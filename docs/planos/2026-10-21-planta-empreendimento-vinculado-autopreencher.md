@@ -73,3 +73,11 @@ Fora, com o motivo: "Onde fica" (lat/long) — o empreendimento não guarda coor
   V8 (`Check failed`) — inclusive no código SEM esta mudança (frente anterior, mesmo arquivo), em
   pontos diferentes a cada vez. Fica com a CI. `tsc` completo e parcial com segfault recorrente; a
   rodada parcial que terminou só acusou o `toHaveTextContent` sem o setup do jest-dom (falso).
+- 21/10 — conferido na tela (dev server da frente, usuário de leitura) com a planta REAL "Garden",
+  vinculada ao 011 - Garden Cambuhy (indicada pelo usuário): `c:/tmp/pwtest/conferencia-planta-ficha.cjs`,
+  8/8 portões, zero erro. Lista mostra o empreendimento; na zona, empreendimento e "ZEPEC 2 ·
+  Urbanização Consolidada" vieram sozinhos com os dois avisos; lote digitado 18,00 × 71,00
+  (1278 m²) com aviso; mapa com "Praça Coronel Justiniano, 120, Centro, Cambuí - MG" e já
+  centrado lá. Única escrita: a zona aplicada sozinha — **apagada em seguida por SQL** (a planta
+  voltou a 0 contexto, rascunho nulo, 3 auditorias, vínculo mantido); depois de publicado, ela se
+  aplica na primeira abertura.

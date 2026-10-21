@@ -834,6 +834,13 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
       .filter((c) => c.classe === 'REDE' && porId.has(c.trechoId) && porId.has(c.outroId))
       .map((c) => `${porId.get(c.trechoId)!.disciplina} × ${porId.get(c.outroId)!.disciplina}`);
     expect(encontros).toEqual([]);
+    // S3 (20/10/2026): o 2º (a suíte, maior que o programa do 1º) enchia o 1º recuado e não alinhava ao patamar — o 1º
+    // ficava com a pegada do térreo e o dormitório com 52,9 m². Agora o 1º recua em volta do 2º.
+    expect(p.decisoes.some((d) => /o 1º recuado em .* em volta do 2º/.test(d))).toBe(true);
+    expect(maiorDormitorioDoPrimeiro(p.resultado)).toBeLessThan(25);
+    // E o quadro não nasce no cruzamento com a fachada do 1º recuado (dentro da porta do térreo, a prumada pela janela de cima).
+    const noVao = conflitosDoModelo(p.resultado).filter((c) => c.classe === 'ABERTURA' && porId.has(c.trechoId) && ((c as { comprimentoDentroMm?: number }).comprimentoDentroMm ?? 0) > 0);
+    expect(noVao.map((c) => porId.get(c.trechoId)!.disciplina)).toEqual([]);
   });
 
   it('a zona que só deixa 2 pavimentos (ou a altura de 2) recusa a de 3 e aponta o sobrado', () => {

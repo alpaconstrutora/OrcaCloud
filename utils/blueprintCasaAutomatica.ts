@@ -1000,6 +1000,12 @@ export interface HipotesesDaEletricaDaCasa {
   chuveiroEletricoVA: number;
   /** Lançar a entrada de serviço e o medidor na frente do lote, ligados ao quadro. */
   medidor: boolean;
+  /**
+   * S3 (20/10/2026): no sobrado, o trecho de parede do térreo com parede em cima (por onde a prumada do eletroduto sobe)
+   * mais curto que aceita o quadro, mm. O cruzamento com uma parede perpendicular de cima (200 mm) não é parede para o
+   * quadro: ele caía ali, dentro da porta do térreo, e a prumada subia pela janela do 1º recuado. Ausente = o padrão.
+   */
+  paredeMinimaDoQuadroMm?: number;
 }
 
 export const HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO: HipotesesDaEletricaDaCasa = {
@@ -1007,6 +1013,7 @@ export const HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO: HipotesesDaEletricaDaCasa = {
   areaPorLuminariaM2: null,
   chuveiroEletricoVA: 5500,
   medidor: true,
+  paredeMinimaDoQuadroMm: 600,
 };
 
 export const HIPOTESES_DA_CASA_PADRAO: HipotesesDaCasa = {
@@ -2539,7 +2546,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const c0 = centroDeCargas(niveis.length > 1 ? { ...m, terminais: (m.terminais ?? []).filter((t) => t.disciplina !== 'ELETRICA' || t.levelId === niveis[0]) } : m, null);
       // E a prumada do eletroduto sobe na posição do quadro: no sobrado, o quadro vai para a parede do térreo que
       // tem parede em cima (a até 3 m do centro de cargas) — senão a prumada sobe pelo meio de um cômodo de cima.
-      const sobreParede = c0 && niveis.length > 1 ? encaixarNaParede(c0.posicaoSugerida, paredesEmComum(m.walls.filter((w) => w.levelId === niveis[0]), niveis.slice(1).map((L) => m.walls.filter((w) => w.levelId === L))), 3000) : null;
+      const paredeMinimaDoQuadro = hip.eletrica.paredeMinimaDoQuadroMm ?? HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO.paredeMinimaDoQuadroMm;
+      const sobreParede = c0 && niveis.length > 1 ? encaixarNaParede(c0.posicaoSugerida, paredesEmComum(m.walls.filter((w) => w.levelId === niveis[0]), niveis.slice(1).map((L) => m.walls.filter((w) => w.levelId === L)), 50, paredeMinimaDoQuadro), 3000) : null;
       const c = c0 && sobreParede ? { ...c0, posicaoSugerida: { x: Math.round(sobreParede.q.x), y: Math.round(sobreParede.q.y) }, paredeId: sobreParede.parede.id } : c0;
         if (!c) {
           etapa('QUADRO', ROTULO_DA_ETAPA_DA_CASA.QUADRO, 'NAO_RODOU', 0, 'nenhum ponto com potência — sem centro de cargas');
@@ -2564,7 +2572,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           const verticais = (m.trechos ?? []).filter((t) => t.levelId === L0 && t.disciplina !== 'ELETRICA' && t.a.x === t.b.x && t.a.y === t.b.y && Math.max(t.cotaAMm, t.cotaBMm) > 1600 && Math.min(t.cotaAMm, t.cotaBMm) < teto);
           const pilares = pegadasDePilares(m, L0);
           // No sobrado, só dentro do trecho de parede que tem parede em cima (a prumada do eletroduto sobe ali).
-          const emComum = niveis.length > 1 ? paredesEmComum(m.walls.filter((w) => w.levelId === L0), niveis.slice(1).map((L) => m.walls.filter((w) => w.levelId === L))) : null;
+          const emComum = niveis.length > 1 ? paredesEmComum(m.walls.filter((w) => w.levelId === L0), niveis.slice(1).map((L) => m.walls.filter((w) => w.levelId === L)), 50, paredeMinimaDoQuadro) : null;
           const livre = (p: Point) =>
             (!emComum || !!encaixarNaParede(p, emComum, 5)) &&
             noForro.every((t) => dSeg(p, t.a, t.b) > SUBIDA_DO_QUADRO_MM + envelopeDoTrecho(t).raioPlantaMm + 20) &&
@@ -2978,6 +2986,62 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const doSegundo = escolherSemente(al.map((x) => x.r)).r;
         const graves = problemasGraves(c.es.r) + problemasGraves(doSegundo) + estreitos(c.es.r) + estreitos(doSegundo);
         if (!melhor || graves < melhor.graves || (graves === melhor.graves && area(c.ret) < area(melhor.c.ret))) melhor = { c, alinhados: al, graves };
+      }
+      // S3 (20/10/2026): o 2º do tamanho do 1º recuado (2 dorm.: a suíte em cima, 24,9 m², maior que o programa do 1º)
+      // preenche-o inteiro e não tem para onde andar até o patamar (10 × 30: o corredor a 100 mm dele) — o 1º voltava à
+      // pegada do térreo, com o dormitório de 4 × a área ideal. Então o 1º EM VOLTA do 2º: o 2º alinhado na pegada, e o
+      // menor retângulo que o contém (a sobra além dele, de cada lado, zero ou ao menos a faixa do terraço) em que o
+      // corredor do 1º também cai no patamar.
+      if (!melhor && primeirosRecuados.length) {
+        const naPegada = alinharDentroDe(rl);
+        const seg = naPegada.length ? naPegada.find((a) => a.r === escolherSemente(naPegada.map((x) => x.r)).r)!.ret : null;
+        if (seg) {
+          const faixa = hip.sobrado.faixaMinimaDoTerracoMm;
+          const meio = nucleo.paraOsFundos ? nucleo.ret.y0 + hip.sobrado.patamarMm / 2 : nucleo.ret.y1 - hip.sobrado.patamarMm / 2;
+          const bordas = (de: number, ate: number) => {
+            const v = [de];
+            for (let d = faixa; d < Math.abs(ate - de); d += PASSO_DO_PRIMEIRO_EM_VOLTA_DO_SEGUNDO_MM) v.push(de + Math.sign(ate - de) * d);
+            if (ate !== de) v.push(ate);
+            return v;
+          };
+          const larguras = [...((hip.sobrado.primeiroRecuaSoNaProfundidade ?? true) ? [[rl.x0, rl.x1]] : []), [seg.x0, seg.x1]];
+          const rets = larguras
+            .flatMap(([x0, x1]) => bordas(seg.y0, rl.y0).flatMap((y0) => bordas(seg.y1, rl.y1).map((y1) => ({ x0, x1, y0, y1 }))))
+            .filter((r) => area(r) < area(rl))
+            .sort((p, q) => area(p) - area(q));
+          const sementes = hip.sementes.length ? hip.sementes : [1];
+          const anelDoRet = (r: Retangulo) => [point(r.x0, r.y0), point(r.x1, r.y0), point(r.x1, r.y1), point(r.x0, r.y1)];
+          const noPatamar = (r: Retangulo, semente: number, invertida: boolean) => {
+            try {
+              const x = gerar({ ...entradaDoGerador, programa: divididos.superior, envelope: anelDoRet(r), direcaoDaFrente: invertida ? point(0, 1) : null }, semente, hipGerador);
+              const cor = x.ambientes.find((amb) => amb.item.uso === 'CIRCULACAO')?.ret;
+              return cor && cor.y0 < meio && meio < cor.y1 ? x : null;
+            } catch {
+              return null;
+            }
+          };
+          for (const r of rets) {
+            // A 1ª semente filtra (o corredor cai no mesmo lugar em todas); as outras só no retângulo que passa.
+            const sentidos = [false, true].filter((inv) => noPatamar(r, sementes[0], inv));
+            if (!sentidos.length) continue;
+            const al = alinharDentroDe(r);
+            if (!al.length) continue;
+            const doPrimeiro = sentidos.flatMap((inv) => sementes.map((sm) => noPatamar(r, sm, inv)).filter((x): x is ResultadoDoGerador => !!x).map((x) => ({ x, inv })));
+            const e1 = escolherSemente(doPrimeiro.map((d) => d.x));
+            const invertida = doPrimeiro.find((d) => d.x === e1.r)!.inv;
+            melhor = {
+              c: {
+                es: e1,
+                ret: r,
+                corredor: e1.r.ambientes.find((amb) => amb.item.uso === 'CIRCULACAO')?.ret ?? corredor,
+                decisao: `3 pavimentos: o 1º recuado em ${f2((r.x1 - r.x0) / 1000)} × ${f2((r.y1 - r.y0) / 1000)} m, em volta do 2º (do tamanho do programa do 1º, o 2º não tinha para onde andar até o patamar) — o excedente do térreo é o terraço do 1º${invertida ? '; o íntimo à frente do corredor (a planta invertida)' : ''}.`,
+              },
+              alinhados: al,
+              graves: 0,
+            };
+            break;
+          }
+        }
       }
       if (melhor) {
         alinhados = melhor.alinhados;
@@ -3542,6 +3606,8 @@ export function conferirPlanoDaCasa(original: BlueprintModel, plano: PlanoDaCasa
 
 /** F27 item 5.3b: quantas vezes o 1º recuado anda/cresce atrás do patamar da escada antes de desistir. */
 const VOLTAS_DO_PRIMEIRO_RECUADO = 8;
+/** S3: o passo das bordas do 1º montado em volta do 2º, além da faixa mínima do terraço. */
+const PASSO_DO_PRIMEIRO_EM_VOLTA_DO_SEGUNDO_MM = 500;
 
 // ─── F10: o pedido que atravessa o Web Worker ───────────────────────────────
 

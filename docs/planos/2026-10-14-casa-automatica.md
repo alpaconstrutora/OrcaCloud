@@ -3109,3 +3109,24 @@ Cada uma: medir → corrigir → 8 casas e 6 lotes medidos → teste que falha s
   trechos sob rebaixo; sobrado 10 × 30 de 4 dorm. de 4 sob rebaixo + o P13 para 0; sobrado 12 × 30 limpo.
 - Testes que falham sem a correção: o do item 6 (sobrado 10 × 30) ganhou "nenhum trecho sob rebaixo" e "nenhum
   pilar atravessado"; `blueprintPontosEletricosDoNivel.test.ts` ganhou a tomada fora do tubo rente e a luz fora do tubo.
+- CI do PR #67: o teste "4 dormitórios num lote de 10 m" (4 casas inteiras) passou de 101 s para mais de 120 s. Medido
+  (perfil de CPU): o contorno do rebaixo alonga a água do sobrado (déficit de pressão 7,25 → 7,70 m) e o pressurizador
+  sozinho deixa de bastar — a pressão simula uma vez a mais (a caixa sobe 0,30 m junto). É física, não desperdício:
+  obstáculos em cache (o modelo não muda no traçado; mesmos resultados) e o teste com 240 s, como os vizinhos.
+
+### Registro S3 (20/10/2026)
+
+- Medido (10 × 30, 2 dorm., 3 pavimentos): o 2º (a suíte com banho, 24,9 m²) é maior que o programa do 1º (22 m²); o
+  1º recuado tem a área do maior dos dois, então o 2º o preenche inteiro e não tem para onde andar até o patamar (o
+  corredor a 100 mm dele). Crescer a área do 1º não resolve: no modo "proporção" o próprio 1º, ao buscar o patamar,
+  desliza até a frente e toma a profundidade inteira (5,45 × 12,55 m — tentado e revertido).
+- Correção: nenhum 1º recuado servindo, o 1º é montado EM VOLTA do 2º — o 2º alinhado na pegada, e o menor retângulo
+  que o contém (a sobra de cada lado zero ou ao menos a faixa do terraço, de 50 em 50 cm) em que o corredor do 1º também
+  cai no patamar. Resultado: 1º de 5,40 × 7,60 m (era a pegada de 7,00 × 12,55), dormitório de 20,55 m² (era 52,91).
+- Efeito colateral medido e corrigido: o "trecho de parede com parede em cima" onde o quadro se encaixa incluía o
+  CRUZAMENTO com a fachada do 1º recuado (200 mm) — o quadro caía nele, dentro da porta do térreo, e a prumada subia pela
+  janela do 1º. Agora o quadro exige `paredeMinimaDoQuadroMm` (hipótese, 600 mm) de parede corrida em comum.
+- Pendências do caso: 7 → 4 (saíram "prumada pelo meio do dormitório", "2 pontas abertas", 2 de pilares fora; entrou
+  "Mobiliário: Suíte: Armário" — verificação). 8 casas idênticas ao marco; 6 lotes com 0 encontros e 0 pilares.
+- Teste (falha sem cada parte): `blueprintCasaAutomatica.test.ts` › "10 × 30, 2 dorm." — o 1º recuado em volta do 2º,
+  dormitório do 1º < 25 m², nenhum trecho em vão de porta/janela.

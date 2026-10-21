@@ -191,6 +191,18 @@ function agruparPorPeriodo(pontos: CashflowProjectionPoint[], horizonte: number)
     return [...grupos.values()];
 }
 
+/** Valor na ponta da barra (§28.3), em cor de texto. Desenhado à mão porque o
+ *  rótulo do Recharts quebra o texto na largura da barra ("R$ / 9 / mil"). */
+const RotuloNaPonta = (props: { x?: number | string; y?: number | string; width?: number | string; value?: unknown }) => {
+    const v = Number(props.value);
+    if (!v) return <g />;
+    return (
+        <text x={Number(props.x) + Number(props.width) / 2} y={Number(props.y) - 6} textAnchor="middle" fontSize={11} fill="#64748b">
+            {compactBRL(v)}
+        </text>
+    );
+};
+
 /** §28 + memória do par de barras: série dupla usa barSize FIXO pela quantidade de pontos. */
 const barSizePara = (n: number) => (n <= 12 ? 24 : n <= 24 ? 14 : 10);
 
@@ -1028,12 +1040,14 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
                                     <ChartLegend items={[{ label: 'Entradas', color: SERIE_PRINCIPAL }, { label: 'Saídas', color: SERIE_CONTEXTO }]} />
                                     <div style={{ height: 200 }}>
                                         <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                                            <BarChart data={periodos} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barGap={2}>
+                                            <BarChart data={periodos} margin={{ top: 20, right: 8, bottom: 0, left: 0 }} barGap={2}>
                                                 <CartesianGrid vertical={false} stroke={GRID} />
                                                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={TICK} />
                                                 <YAxis axisLine={false} tickLine={false} tick={TICK} tickFormatter={compactBRL} width={88} />
                                                 <RechartsTooltip content={<PeriodoTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                                <Bar dataKey="entradas" fill={SERIE_PRINCIPAL} radius={[4, 4, 0, 0]} barSize={barSizePara(periodos.length)} isAnimationActive={false} />
+                                                {/* §28.3: com 2 séries, só a principal leva o valor na ponta, em cor de texto. */}
+                                                <Bar dataKey="entradas" fill={SERIE_PRINCIPAL} radius={[4, 4, 0, 0]} barSize={barSizePara(periodos.length)} isAnimationActive={false}
+                                                    label={RotuloNaPonta} />
                                                 <Bar dataKey="saidas" fill={SERIE_CONTEXTO} radius={[4, 4, 0, 0]} barSize={barSizePara(periodos.length)} isAnimationActive={false} />
                                             </BarChart>
                                         </ResponsiveContainer>
@@ -1186,7 +1200,7 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
                             }
                         }}
                         actions={{
-                            width: 190,
+                            width: 150,
                             render: s => (
                                 <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
                                     {/* desligado: o title vai no span, porque o botão desligado não recebe hover */}
@@ -1196,7 +1210,7 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
                                     <ActionIconButton kind="settings" title={s.is_active ? 'Pausar' : 'Ativar'}
                                         icon={s.is_active ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                                         onClick={() => alternarAgenda(s)} />
-                                    <ActionIconButton kind="edit" onClick={() => { setEditando(s); setSheetAberto(true); }} />
+                                    {/* Sem botão Editar: o clique na linha já edita (§9.1). */}
                                     <ActionIconButton kind="delete" onClick={() => excluirAgenda(s)} />
                                 </div>
                             ),

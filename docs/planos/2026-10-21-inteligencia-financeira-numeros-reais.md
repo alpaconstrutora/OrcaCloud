@@ -211,7 +211,14 @@ Consequências:
   ao ensaio (Bella Vista R$ 300 mil; 2 alertas HIGH; saldo de partida −R$ 31.996,72, 90d −R$ 11.120,84).
 - [x] ~~Fase 2~~ — CANCELADA em 21/10: o vínculo já existe em Empreendimento › Vinculações
 - [ ] Fase 3 — 0 de 2
-- [ ] Fase 4 — 4 de 4 escritos; **falta a conferência na tela** (o critério 4.x pede "conferido na tela").
+- [x] Fase 4 — 4 de 4, **conferida na tela em 21/10/2026** (Playwright, agente-leitura, 3 contextos:
+  Todas / Alpa / empresa da Alpa; 0 erro de console/HTTP; RPCs pedem `null` em Todas e o id da org nos
+  outros dois). A conferência achou e corrigiu: '' da Central de Controle virando 22P02 (serviço
+  voltou a `|| null`), resposta fora de ordem na projeção, scorecard largo demais (1.340 → 1.210 px),
+  área do saldo enchendo até o zero fora do gráfico (virou linha), botão Editar duplicando o clique na
+  linha (§9.1), rótulo da barra quebrando ("R$ / 9 / mil"). Prints: `c:/tmp/pwtest/fi_*.png`.
+  Publicação: PR #83 (rascunho) → push em main.
+- (histórico) Fase 4 — 4 de 4 escritos; faltava a conferência na tela (o critério 4.x pede "conferido na tela").
   Feito: tela refeita no guia (h1 por aba, TabsBar, KPIs por aba, StandardTable, gráficos §28, Sheet no
   agendamento); aba "Locação e sem obra"; vencidos e saldo de partida na Projeção; gráfico por semana/mês
   (soma, sem amostrar); margem ponderada; `useOrgContext` (AppRouter 30 → 29 no orgContextGuard);

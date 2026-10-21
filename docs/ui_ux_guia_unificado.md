@@ -188,6 +188,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §6.10 Tabela nova usa `StandardTable` (ou justifica hand-rolled)
 - [ ] §6.11 Cabeçalho de tabela com fundo branco
 - [ ] §6.12 Se a tela agrupa linhas: controle, linha de grupo com contagem+total, seleção sobre as linhas na tela
+- [ ] §6.13 Se a linha abre um detalhe embaixo numa tabela que rola na horizontal: bloco interno `sticky left-6`
 - [ ] §7 Tabela — `<tbody>` e TDs (tipografia por tipo de dado)
 - [ ] §7.1 Campos editáveis inline dentro de TD
 - [ ] §7.1.2 Se o formulário escolhe marca/modelo (catálogo criável): usa `BrandModelPicker`/`CreatableCombobox` com a org do registro, não `<select>` nem texto livre
@@ -1378,6 +1379,33 @@ Em tabela feita à mão, o `<tbody>` itera as entradas e o corpo da linha não m
 > grupo), `components/ContasReceberAgrupar.test.tsx`, `FinanceiroAgrupar.test.tsx`
 > (Tributos, Cobranças, Notas), `ContasPagarParcelasAgrupar.test.tsx` (paginação,
 > deep-link em grupo recolhido, Shift+clique) e `StandardTableAgrupar.test.tsx`.
+
+### 6.13 Linha de detalhe (composição) numa tabela larga — `sticky` à esquerda
+
+**Criado em 2026-10-21 (Contas a Pagar › linha do DARF,
+`docs/planos/2026-10-21-agrupar-tributos-em-darf.md`).** Quando uma linha abre um detalhe logo
+abaixo (`<tr>` extra com `colSpan` de todas as células — o `renderExpanded` do `StandardTable`, §6.10,
+ou o mesmo desenho em tabela feita à mão) e o botão que abre fica em **Ações, na ponta direita** de
+uma tabela que rola na horizontal, o clique deixa a rolagem à direita e o detalhe, ancorado à
+esquerda da `<td>`, abre **fora da vista**. Medido no Playwright: só a coluna "Valor" da composição
+aparecia.
+
+```tsx
+<tr className="bg-gray-50/50">
+  <td colSpan={totalColunas} className="px-6 py-3">
+    {/* acompanha a rolagem horizontal: fica sempre na borda visível */}
+    <div className="sticky left-6 max-w-3xl overflow-x-auto rounded-[10px] border border-gray-100 bg-white">
+      <table className="w-full text-left border-collapse">{/* tabela densa §6.9 (px-3/px-4) */}</table>
+    </div>
+  </td>
+</tr>
+```
+
+> ✅ `sticky left-6` no **bloco interno**, não na `<td>` (a célula ocupa a largura toda; o bloco é que
+> precisa ficar à vista). `max-w-*` para o bloco não esticar até a largura da tabela.
+> ✅ Tabela interna segue §6.9 (`px-3`/`px-4`, `py-2.5`, `border-r`, cabeçalho branco §6.11).
+> ℹ️ Em uso: `ContasPagarParcelas.tsx` (composição do DARF). A aba DARFs de Tributos usa o
+> `renderExpanded` do `StandardTable`, que cabe na tela e não precisou.
 
 ---
 

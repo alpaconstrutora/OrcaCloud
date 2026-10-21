@@ -142,11 +142,11 @@ Contas a Pagar.
 |---|---|---|---|
 | 0 | `bash scripts/nova-frente.sh darf-agrupar-tributos`; `docs/planos/2026-10-21-agrupar-tributos-em-darf.md` com o pedido literal, as 4 decisões e a ressalva ao PR #74 | arquivo commitado | ✅ |
 | 1 | Migration A (tabela, colunas, views, travas, RPCs) aplicada por `db query -f` | consultas de verificação no rodapé ok (views com `darf_id`, ACL sem `anon`/PUBLIC, triggers presentes); smoke `BEGIN … ROLLBACK` como authenticated: criar → mudar valor recusado → baixa → estorno → desagrupar → conciliar 1 componente recusado; `segurancaMigrations` + `migrationsPrefixo` verdes | ✅ |
-| 2 | `types/financial.ts`, `utils/darf.ts`, `services/darfService.ts`, regeração, `deleteDeal` | testes da seção Verificação verdes; `tsc` limpo | pendente |
-| 3 | Tributos: seleção, barra, `DarfSheet`, coluna, travas, aba DARFs | teste de componente verde; `check-ui-standard` exit 0; fluxo descartável no navegador com prints | pendente |
-| 4 | Contas a Pagar: linha sintética + todos os itens da seção 4 + deep-link | `ContasPagarDarf.test.tsx` e DeepLink verdes; card "A pagar" com o mesmo valor antes e depois de agrupar (só a contagem muda) | pendente |
-| 5 | Migration B, filtros do motor, sugestão de DARF, dock/desfazer | teste do group service verde; function redeployada com 401; conciliação real só se houver extrato descartável (senão, registrado como não verificado) | pendente |
-| 6 | Relatório com o checklist do guia item a item; PR; após o merge, `conferir-producao.sh` com textos novos | SHA e textos no bundle servido | pendente |
+| 2 | `types/financial.ts`, `utils/darf.ts`, `services/darfService.ts`, regeração, `deleteDeal` | testes da seção Verificação verdes; `tsc` limpo | ✅ |
+| 3 | Tributos: seleção, barra, `DarfSheet`, coluna, travas, aba DARFs | teste de componente verde; `check-ui-standard` exit 0; fluxo descartável no navegador com prints | ✅ |
+| 4 | Contas a Pagar: linha sintética + todos os itens da seção 4 + deep-link | `ContasPagarDarf.test.tsx` e DeepLink verdes; card "A pagar" com o mesmo valor antes e depois de agrupar (só a contagem muda) | ✅ |
+| 5 | Migration B, filtros do motor, sugestão de DARF, dock/desfazer | teste do group service verde; function redeployada com 401; conciliação real só se houver extrato descartável (senão, registrado como não verificado) | 4 de 5 (falta o redeploy da Edge Function, depois do merge) |
+| 6 | Relatório com o checklist do guia item a item; PR; após o merge, `conferir-producao.sh` com textos novos | SHA e textos no bundle servido | em andamento (PR #80) |
 
 ## Verificação
 - **Vitest:**
@@ -192,3 +192,40 @@ Contas a Pagar.
   banco: `darfs` = SELECT/INSERT/UPDATE/DELETE, `vw_darfs` = SELECT.
 - `scripts/check-rls-postura.sh`: itens 1–4 (policies e SECURITY DEFINER) ✅. A única reprovação é anterior e
   alheia (item 5: segredos de cron da captura de boleto por e-mail com placeholder no Vault).
+
+### Fases 2–5 — código (21/10/2026)
+
+- **Fase 2:** `types/financial.ts` (`Darf`, `DarfNaLinha`, vínculo em `Payable`/`TaxPayable`), `utils/darf.ts`
+  (regras puras), `services/darfService.ts`, `taxPayableService` (`tributoPreservado`: regeração não apaga nem
+  regrava tributo de DARF; `removeForDeal` passou a logar o erro do delete), `commercialService.deleteDeal`
+  (recusa com mensagem se houver tributo do negócio num DARF).
+- **Fase 3:** Tributos a Pagar — seleção só para agrupar (checkbox desligado com o motivo: pago, retido,
+  cancelado, conciliado, já em DARF), barra "Agrupar em DARF" (desligada com o motivo: org/competência misturadas),
+  `DarfSheet` (vencimento padrão = o menor; multa/juros; total só leitura; código de barras 44/48; nº; obs.; PDF),
+  coluna "DARF · venc." que abre a aba, travas por linha no tributo agrupado, aba **DARFs** (`StandardTable`,
+  composição expandida, aviso de negócio distratado, editar, desagrupar, ver em Contas a Pagar, PDF, copiar linha).
+  Sem KPI na aba DARFs (os totais estão na aba Tributos a Pagar).
+- **Fase 4:** Contas a Pagar — `colapsarDarfs` no Manager (Fechamento por CC segue vendo os tributos);
+  linha sintética: Dar baixa/estorno do DARF inteiro (RPCs), sem PIX/Asaas, sem apropriar a imóvel, sem recibo
+  (motivo no "—"), CC/Plano "Vários" quando divergem, busca pelos componentes, composição com chevron
+  (`sticky left-6` — guia §6.13 nova), "Abrir em Tributos a Pagar › DARFs"; deep-link por id de tributo cai na
+  linha do DARF e abre a composição.
+- **Fase 5:** migration B aplicada (`fn_darf_desfazer_conciliacao`); ensaio com ROLLBACK **7/7** (conciliar o DARF
+  inteiro por `fn_reconcile_group`; estorno/desagrupar/desfazer 1 vínculo recusados; desfazer o DARF inteiro volta
+  extrato e membros). Motor 1:1 ignora membros de DARF (cliente e Edge Function); `gruposDeDarf` sugere o débito do
+  DARF inteiro (sem limite de 3, janela venc. −5/+30 dias); dock marca a guia toda (busca os irmãos fora do
+  recorte) e "Desfazer" num membro desfaz o DARF. **Pendente:** `functions deploy reconciliation-engine
+  --no-verify-jwt` a partir da `main` depois do merge, com a sonda 401.
+
+### Verificação
+
+- Vitest: 33 arquivos / 349 testes (darf, darfService, tributoAgrupadoNaoRegerado, reconciliationGroupDarf,
+  ContasPagarDarf, TributosSemPagamento/FinanceiroAgrupar atualizados, suítes de conciliação e de Contas a Pagar,
+  orgContextGuard, segurancaMigrations, migrationsPrefixo, guardas de cinza).
+- `check-ui-standard.sh`: 0 violações em todos os `.tsx` tocados.
+- `tsc` local caindo com corrupção do V8 (sem nenhum erro TS); portão de tipos = CI do PR #80 — verde nos commits
+  das fases 2 e 3.
+- Navegador (`c:/tmp/pwtest/darf-fluxo.cjs`, usuário de leitura, Alpa, dado descartável "SMOKE-UI"): **20/20**,
+  0 erro de console/HTTP — criar 2 tributos, agrupar com multa (total 307,50), checkbox travado, aba DARFs com a
+  composição, Contas a Pagar com 1 linha e a composição, baixa → Pago, estorno → aberto, desagrupar → vencimento
+  original, excluir. Limpeza por SQL depois: 0 registros "SMOKE-UI", 0 DARFs.

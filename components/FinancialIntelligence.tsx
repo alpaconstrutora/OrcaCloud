@@ -108,9 +108,6 @@ const TABS_VALIDAS: Tab[] = ['alertas', 'obras', 'projecao', 'fora', 'agendament
 
 const HORIZONTES = [30, 60, 90, 180] as const;
 
-/** Motivo do "Enviar agora" desligado — Fase 3 do plano (Edge Function). */
-const ENVIO_SUSPENSO =
-    'Envio suspenso: o e-mail estava saindo sem dados. Volta a funcionar quando a correção do envio for publicada.';
 
 // ─── cromo de gráfico (§28) ─────────────────────────────────────────────────
 
@@ -567,6 +564,7 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
     const [sheetAberto, setSheetAberto] = useState(false);
     const [editando, setEditando] = useState<ReportSchedule | null>(null);
     const [orgNovaAgenda, setOrgNovaAgenda] = useState<string | null>(null);
+    const [enviandoId, setEnviandoId] = useState<string | null>(null);
 
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = useCallback((message: string, type: 'success' | 'error' = 'success') => {
@@ -737,6 +735,21 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
             notify('Agendamento excluído.');
         } catch (e) {
             notify(e instanceof Error ? e.message : 'Não foi possível excluir.', 'error');
+        }
+    };
+
+    // "Enviar agora" manda o agendamento mesmo pausado — quem clica está pedindo.
+    // A Edge confere que o usuário é membro da organização DO agendamento.
+    const enviarAgora = async (s: ReportSchedule) => {
+        setEnviandoId(s.id);
+        try {
+            const r = await reportScheduleService.sendNow(s.organization_id, s.id);
+            setAgendas(prev => prev.map(x => (x.id === s.id ? { ...x, last_sent_at: new Date().toISOString() } : x)));
+            notify(r.message);
+        } catch (e) {
+            notify(e instanceof Error ? e.message : 'Não foi possível enviar.', 'error');
+        } finally {
+            setEnviandoId(null);
         }
     };
 
@@ -1203,9 +1216,13 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
                             width: 150,
                             render: s => (
                                 <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
-                                    {/* desligado: o title vai no span, porque o botão desligado não recebe hover */}
-                                    <span className="inline-flex" title={ENVIO_SUSPENSO}>
-                                        <ActionIconButton kind="mail" title={ENVIO_SUSPENSO} disabled />
+                                    {/* desligado durante o envio: o title vai no span, porque o botão
+                                        desligado não recebe hover */}
+                                    <span className="inline-flex" title={enviandoId === s.id ? 'Enviando…' : 'Enviar agora'}>
+                                        <ActionIconButton kind="mail" title={enviandoId === s.id ? 'Enviando…' : 'Enviar agora'}
+                                            disabled={enviandoId !== null}
+                                            icon={enviandoId === s.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : undefined}
+                                            onClick={() => enviarAgora(s)} />
                                     </span>
                                     <ActionIconButton kind="settings" title={s.is_active ? 'Pausar' : 'Ativar'}
                                         icon={s.is_active ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
@@ -1221,11 +1238,6 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
                                 <Plus className="w-[15px] h-[15px]" />
                                 Novo agendamento
                             </button>
-                        }
-                        footer={
-                            <p className="px-6 py-2.5 border-t border-gray-100 text-xs text-amber-700">
-                                {ENVIO_SUSPENSO} Os agendamentos ficam salvos e passam a valer quando o envio voltar.
-                            </p>
                         }
                         empty={{
                             icon: <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />,

@@ -2,8 +2,23 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { chamadaDeCron, exigirMembro, exigirUsuario, respostaDeErro } from "../_shared/auth.ts"
+import { escapeHtml } from "../_shared/html.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
+
+// Relatório da Inteligência Financeira por e-mail.
+// Plano: docs/planos/2026-10-21-inteligencia-financeira-numeros-reais.md (Fase 3).
+//
+// DUAS portas, e nenhuma depende do gateway (publicada com --no-verify-jwt):
+//   • cron do banco  → `chamadaDeCron` (CRON_SECRET). Envia os agendamentos ATIVOS
+//                      cuja hora/dia em Brasília é agora e que ainda não saíram hoje.
+//   • "Enviar agora" → `exigirMembro` na organização DO AGENDAMENTO (não na que o
+//                      corpo diz). Envia aquele agendamento, ativo ou pausado.
+// Os dados vêm das mesmas RPCs da tela (fn_fi_ledger), chamadas como service_role
+// com a organização explícita — fn_fi_targets aceita isso desde
+// aplicar_20271021950000. Se QUALQUER consulta falhar, o e-mail NÃO sai: antes o
+// erro era engolido (`data ?? []`) e o relatório chegava dizendo que estava tudo bem.
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -16,197 +31,182 @@ const json = (body: unknown, status = 200) =>
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-// ─── formatting helpers ──────────────────────────────────────
+// ─── tipos (espelham services/financialIntelligenceService.ts) ───────────────
 
-function fmtBRL(n: number): string {
-    if (Math.abs(n) >= 1_000_000) return `R$ ${(n / 1_000_000).toFixed(1)}M`;
-    if (Math.abs(n) >= 1_000)     return `R$ ${(n / 1_000).toFixed(0)}k`;
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+interface Alerta { alert_type: string; severity: 'HIGH' | 'MEDIUM' | 'LOW'; title: string; description: string; amount: number | null }
+interface Obra {
+    project_name: string; receita_realizada: number; custo_realizado: number; margem_pct: number;
+    saldo_projetado: number; risco: 'HIGH' | 'MEDIUM' | 'OK'; ar_vencido: number; ap_vencido: number; tem_receita: boolean;
+}
+interface Ponto { data_ref: string; cr_previsto: number; db_previsto: number; saldo_acum: number }
+interface Posicao {
+    saldo_bancario: number; contas: number; contas_sem_saldo_inicial: number; extrato_ate: string | null;
+    vencido_receber: number; vencido_receber_qtd: number; vencido_pagar: number; vencido_pagar_qtd: number;
+}
+interface Locacao { empreendimento_nome: string; recebido: number; vencido: number }
+interface Agendamento {
+    id: string; organization_id: string; name: string; frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+    day_of_week: number | null; day_of_month: number | null; hour: number; recipients: string[] | null;
+    report_types: string[] | null; is_active: boolean; last_sent_at: string | null;
 }
 
-function fmtDate(iso: string): string {
-    const [y, m, d] = iso.split('-');
-    return `${d}/${m}/${y}`;
+// ─── formatação ─────────────────────────────────────────────────────────────
+
+const n = (v: unknown) => (v == null ? 0 : Number(v));
+const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+const dataBR = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+const plural = (q: number, um: string, muitos: string) => `${q.toLocaleString('pt-BR')} ${q === 1 ? um : muitos}`;
+
+/** Hora, dia e data em Brasília — por Intl, sem reconverter string em Date. */
+function emBrasilia(d: Date) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', hourCycle: 'h23', weekday: 'short',
+    }).formatToParts(d).map(x => [x.type, x.value]));
+    const semana: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    return { data: `${p.year}-${p.month}-${p.day}`, hora: Number(p.hour), diaSemana: semana[p.weekday], diaMes: Number(p.day) };
 }
 
-const SEV_COLOR: Record<string, string> = {
-    HIGH: '#dc2626', MEDIUM: '#d97706', LOW: '#2563eb',
+const COR_SEV: Record<string, string> = { HIGH: '#dc2626', MEDIUM: '#b45309', LOW: '#2563eb' };
+const ROTULO_SEV: Record<string, string> = { HIGH: 'Alto', MEDIUM: 'Médio', LOW: 'Baixo' };
+const TIPO_ALERTA: Record<string, string> = {
+    OVERDUE_HIGH: 'Inadimplência', PAYABLE_OVERDUE: 'Contas a pagar vencidas',
+    CASHFLOW_RISK: 'Risco de caixa', MARGIN_LOW: 'Margem baixa',
 };
-const SEV_LABEL: Record<string, string> = {
-    HIGH: 'Alto', MEDIUM: 'Médio', LOW: 'Baixo',
-};
-const ALERT_LABELS: Record<string, string> = {
-    CASHFLOW_RISK: 'Risco de Caixa', OVERDUE_HIGH: 'Inadimplência Crítica',
-    OVERDUE_AGING: 'Taxa de Inadimplência', MARGIN_LOW: 'Margem Baixa',
-    SUPPLIER_CONCENTRATION: 'Concentração de Fornecedor',
-};
+const RISCO: Record<string, [string, string]> = { HIGH: ['Alto', '#dc2626'], MEDIUM: ['Médio', '#b45309'], OK: ['Sem risco', '#15803d'] };
 
-// ─── HTML email builder ──────────────────────────────────────
+const H2 = 'font-size:15px;font-weight:600;color:#111827;margin:28px 0 10px';
+const TH = 'padding:8px 10px;text-align:left;font-size:12px;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap';
+const THR = TH.replace('text-align:left', 'text-align:right');
+const TD = 'padding:8px 10px;font-size:13px;color:#374151;border-top:1px solid #f3f4f6';
+const TDR = `${TD};text-align:right;white-space:nowrap`;
 
-function buildHtml(opts: {
-    orgName: string;
-    generatedAt: string;
-    alerts: { alert_type: string; severity: string; title: string; description: string; amount: number | null }[];
-    scorecards: { project_name: string; receita_realizada: number; custo_realizado: number; margem_pct: number; saldo_projetado: number; risco: string }[];
-    projection: { data_ref: string; cr_previsto: number; db_previsto: number; saldo_acum: number }[];
-    reportTypes: string[];
+/** Entradas e saídas somadas por semana — nunca amostra de dias (amostrar sumia com movimento). */
+function porSemana(pontos: Ponto[]) {
+    const semanas: { inicio: string; entradas: number; saidas: number; saldo: number }[] = [];
+    pontos.forEach((p, i) => {
+        const k = Math.floor(i / 7);
+        if (!semanas[k]) semanas[k] = { inicio: p.data_ref, entradas: 0, saidas: 0, saldo: 0 };
+        semanas[k].entradas += p.cr_previsto;
+        semanas[k].saidas += p.db_previsto;
+        semanas[k].saldo = p.saldo_acum;
+    });
+    return semanas;
+}
+
+function montarHtml(o: {
+    orgName: string; geradoEm: string; tipos: string[];
+    alertas: Alerta[]; obras: Obra[]; projecao: Ponto[]; posicao: Posicao | null; locacao: Locacao[];
 }): string {
-    const { orgName, generatedAt, alerts, scorecards, projection, reportTypes } = opts;
+    const { orgName, geradoEm, tipos, alertas, obras, projecao, posicao, locacao } = o;
+    const criticos = alertas.filter(a => a.severity === 'HIGH').length;
+    const saldo90 = projecao.length > 0 ? projecao[projecao.length - 1].saldo_acum : null;
 
-    const high   = alerts.filter(a => a.severity === 'HIGH').length;
-    const medium = alerts.filter(a => a.severity === 'MEDIUM').length;
-    const avgMargem = scorecards.length > 0
-        ? (scorecards.reduce((s, r) => s + r.margem_pct, 0) / scorecards.length).toFixed(1)
-        : '—';
-    const saldoFinal = projection.length > 0 ? projection[projection.length - 1].saldo_acum : null;
-    const obrasRisco = scorecards.filter(s => s.risco !== 'OK').length;
+    const kpis = [
+        { rotulo: 'Alertas críticos', valor: String(criticos), sub: plural(alertas.length, 'alerta no total', 'alertas no total'), cor: criticos > 0 ? '#dc2626' : '#111827' },
+        { rotulo: 'A receber vencido', valor: posicao ? brl(posicao.vencido_receber) : '—', sub: posicao ? plural(posicao.vencido_receber_qtd, 'título', 'títulos') : '', cor: '#c2410c' },
+        { rotulo: 'A pagar vencido', valor: posicao ? brl(posicao.vencido_pagar) : '—', sub: posicao ? plural(posicao.vencido_pagar_qtd, 'título', 'títulos') : '', cor: '#be123c' },
+        { rotulo: 'Saldo em 90 dias', valor: saldo90 == null ? '—' : brl(saldo90), sub: posicao ? `parte de ${brl(posicao.saldo_bancario)} nos bancos` : '', cor: (saldo90 ?? 0) < 0 ? '#dc2626' : '#15803d' },
+    ];
 
-    const kpiRow = `
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0">
-      <tr>
-        ${[
-            { label: 'Alertas Críticos', value: String(high), sub: `${medium} médios`, color: high > 0 ? '#dc2626' : '#111827' },
-            { label: 'Obras em Risco',   value: String(obrasRisco), sub: `de ${scorecards.length} obras`, color: obrasRisco > 0 ? '#d97706' : '#111827' },
-            { label: 'Margem Média',     value: `${avgMargem}%`, sub: 'obras ativas', color: Number(avgMargem) < 10 ? '#dc2626' : '#16a34a' },
-            { label: 'Saldo Projetado',  value: saldoFinal != null ? fmtBRL(saldoFinal) : '—', sub: '90 dias', color: (saldoFinal ?? 0) < 0 ? '#dc2626' : '#7c3aed' },
-        ].map(k => `
-          <td width="25%" style="padding:0 6px">
-            <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;text-align:center">
-              <p style="margin:0;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#6b7280">${k.label}</p>
-              <p style="margin:4px 0 0;font-size:20px;font-weight:900;color:${k.color}">${k.value}</p>
-              <p style="margin:2px 0 0;font-size:10px;color:#9ca3af">${k.sub}</p>
-            </div>
-          </td>
-        `).join('')}
-      </tr>
-    </table>`;
-
-    let alertsSection = '';
-    if (reportTypes.includes('ALERTS') && alerts.length > 0) {
-        alertsSection = `
-        <h2 style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#374151;margin:24px 0 10px">
-          Alertas (${alerts.length})
-        </h2>
-        ${alerts.map(a => `
-          <div style="border-left:3px solid ${SEV_COLOR[a.severity]};background:#f9fafb;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:8px">
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:9px;font-weight:900;text-transform:uppercase;color:${SEV_COLOR[a.severity]}">${SEV_LABEL[a.severity]}</span>
-              <span style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af">${ALERT_LABELS[a.alert_type] ?? a.alert_type}</span>
-            </div>
-            <p style="margin:4px 0 2px;font-size:13px;font-weight:700;color:#111827">${a.title}</p>
-            <p style="margin:0;font-size:11px;color:#6b7280">${a.description}</p>
-            ${a.amount != null ? `<p style="margin:4px 0 0;font-size:12px;font-weight:900;color:${SEV_COLOR[a.severity]}">${fmtBRL(Math.abs(a.amount))}</p>` : ''}
+    const linhaKpis = `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 8px"><tr>
+      ${kpis.map(k => `
+        <td width="25%" style="padding:0 4px;vertical-align:top">
+          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px">
+            <p style="margin:0;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">${escapeHtml(k.rotulo)}</p>
+            <p style="margin:4px 0 0;font-size:15px;font-weight:700;color:${k.cor}">${escapeHtml(k.valor)}</p>
+            <p style="margin:2px 0 0;font-size:11px;color:#9ca3af">${escapeHtml(k.sub)}</p>
           </div>
-        `).join('')}`;
+        </td>`).join('')}
+    </tr></table>`;
+
+    const avisos: string[] = [];
+    if (posicao) {
+        if (posicao.contas_sem_saldo_inicial > 0) avisos.push(`${plural(posicao.contas_sem_saldo_inicial, 'conta', 'contas')} sem saldo inicial cadastrado`);
+        if (posicao.extrato_ate) avisos.push(`extrato importado até ${dataBR(posicao.extrato_ate)}`);
+    }
+    const avisoBase = avisos.length
+        ? `<p style="margin:6px 4px 0;font-size:12px;color:#b45309">Saldo dos bancos: ${escapeHtml(avisos.join('; '))}.</p>`
+        : '';
+
+    let secAlertas = '';
+    if (tipos.includes('ALERTS')) {
+        secAlertas = `<h2 style="${H2}">Alertas</h2>` + (alertas.length === 0
+            ? `<p style="font-size:13px;color:#6b7280">Nenhum alerta: todos os indicadores dentro dos limites.</p>`
+            : alertas.map(a => `
+              <div style="border-left:3px solid ${COR_SEV[a.severity]};padding:8px 12px;margin-bottom:8px;background:#f9fafb">
+                <p style="margin:0;font-size:12px;color:${COR_SEV[a.severity]}">${escapeHtml(ROTULO_SEV[a.severity])} · ${escapeHtml(TIPO_ALERTA[a.alert_type] ?? a.alert_type)}</p>
+                <p style="margin:3px 0 2px;font-size:14px;color:#111827">${escapeHtml(a.title)}</p>
+                <p style="margin:0;font-size:12px;color:#6b7280">${escapeHtml(a.description)}</p>
+              </div>`).join(''));
     }
 
-    let scorecardSection = '';
-    if (reportTypes.includes('SCORECARD') && scorecards.length > 0) {
-        scorecardSection = `
-        <h2 style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#374151;margin:24px 0 10px">
-          Scorecard de Obras
-        </h2>
-        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;font-size:11px">
-          <thead>
-            <tr style="background:#f3f4f6">
-              ${['Obra','Receita Real.','Custo Real.','Margem','Saldo Proj.','Risco'].map(h =>
-                  `<th style="padding:8px 10px;text-align:left;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#6b7280;white-space:nowrap">${h}</th>`
-              ).join('')}
-            </tr>
-          </thead>
-          <tbody>
-            ${scorecards.map((s, i) => {
-                const margemColor = s.margem_pct < 0 ? '#dc2626' : s.margem_pct < 10 ? '#d97706' : '#16a34a';
-                const saldoColor  = s.saldo_projetado < 0 ? '#dc2626' : '#16a34a';
-                const riscoColor  = s.risco === 'HIGH' ? '#dc2626' : s.risco === 'MEDIUM' ? '#d97706' : '#16a34a';
-                return `
-                <tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};border-top:1px solid #f3f4f6">
-                  <td style="padding:8px 10px;font-weight:600;color:#111827;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.project_name}</td>
-                  <td style="padding:8px 10px;font-family:monospace;color:#374151">${fmtBRL(s.receita_realizada)}</td>
-                  <td style="padding:8px 10px;font-family:monospace;color:#374151">${fmtBRL(s.custo_realizado)}</td>
-                  <td style="padding:8px 10px;font-weight:900;color:${margemColor}">${s.margem_pct.toFixed(1)}%</td>
-                  <td style="padding:8px 10px;font-weight:700;color:${saldoColor}">${fmtBRL(s.saldo_projetado)}</td>
-                  <td style="padding:8px 10px">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${riscoColor}"></span>
-                  </td>
-                </tr>`;
-            }).join('')}
-          </tbody>
-        </table>`;
+    let secObras = '';
+    if (tipos.includes('SCORECARD')) {
+        secObras = `<h2 style="${H2}">Scorecard de obras</h2>` + (obras.length === 0
+            ? `<p style="font-size:13px;color:#6b7280">Nenhuma obra com movimento financeiro.</p>`
+            : `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px">
+                <tr>${['Obra'].map(h => `<th style="${TH}">${h}</th>`).join('')}${['Receita', 'Custo', 'Margem', 'Saldo 90d', 'Vencido a pagar'].map(h => `<th style="${THR}">${h}</th>`).join('')}<th style="${TH}">Risco</th></tr>
+                ${obras.map(s => `<tr>
+                  <td style="${TD}">${escapeHtml(s.project_name)}</td>
+                  <td style="${TDR}">${brl(s.receita_realizada)}</td>
+                  <td style="${TDR}">${brl(s.custo_realizado)}</td>
+                  <td style="${TDR}">${s.tem_receita ? `${s.margem_pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—'}</td>
+                  <td style="${TDR};color:${s.saldo_projetado < 0 ? '#dc2626' : '#374151'}">${brl(s.saldo_projetado)}</td>
+                  <td style="${TDR}">${brl(s.ap_vencido)}</td>
+                  <td style="${TD};color:${RISCO[s.risco][1]}">${RISCO[s.risco][0]}</td>
+                </tr>`).join('')}
+              </table>
+              <p style="margin:6px 4px 0;font-size:11px;color:#9ca3af">Venda de unidade conta na obra do empreendimento; aluguel fica fora da margem.</p>`);
+        if (locacao.length > 0) {
+            secObras += `<h2 style="${H2}">Renda de locação</h2>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px">
+                <tr><th style="${TH}">Empreendimento</th><th style="${THR}">Recebido</th><th style="${THR}">Vencido</th></tr>
+                ${locacao.map(r => `<tr><td style="${TD}">${escapeHtml(r.empreendimento_nome)}</td><td style="${TDR}">${brl(r.recebido)}</td><td style="${TDR}">${brl(r.vencido)}</td></tr>`).join('')}
+              </table>`;
+        }
     }
 
-    let cashflowSection = '';
-    if (reportTypes.includes('CASHFLOW') && projection.length > 0) {
-        // Amostra de até 10 pontos espaçados
-        const step = Math.max(1, Math.floor(projection.length / 10));
-        const sample = projection.filter((_, i) => i % step === 0 || i === projection.length - 1).slice(0, 10);
-        const totalIn  = projection.reduce((s, p) => s + p.cr_previsto, 0);
-        const totalOut = projection.reduce((s, p) => s + p.db_previsto, 0);
-
-        cashflowSection = `
-        <h2 style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#374151;margin:24px 0 10px">
-          Projeção de Caixa (90 dias)
-        </h2>
-        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px">
-          <tr>
-            ${[
-                { label: 'Total Previsto Entrar', value: fmtBRL(totalIn),  color: '#16a34a' },
-                { label: 'Total Previsto Sair',   value: fmtBRL(totalOut), color: '#ea580c' },
-                { label: 'Saldo Final',            value: saldoFinal != null ? fmtBRL(saldoFinal) : '—', color: (saldoFinal ?? 0) < 0 ? '#dc2626' : '#7c3aed' },
-            ].map(k => `
-              <td width="33%" style="padding:0 4px">
-                <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px;text-align:center">
-                  <p style="margin:0;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#6b7280">${k.label}</p>
-                  <p style="margin:4px 0 0;font-size:16px;font-weight:900;color:${k.color}">${k.value}</p>
-                </div>
-              </td>`).join('')}
-          </tr>
-        </table>
-        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;font-size:11px">
-          <thead>
-            <tr style="background:#f3f4f6">
-              ${['Data','Entradas','Saídas','Saldo Acum.'].map(h =>
-                  `<th style="padding:8px 10px;text-align:left;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#6b7280">${h}</th>`
-              ).join('')}
-            </tr>
-          </thead>
-          <tbody>
-            ${sample.map((p, i) => `
-              <tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};border-top:1px solid #f3f4f6">
-                <td style="padding:8px 10px;font-weight:600;color:#374151">${fmtDate(p.data_ref)}</td>
-                <td style="padding:8px 10px;font-family:monospace;color:#16a34a">${fmtBRL(p.cr_previsto)}</td>
-                <td style="padding:8px 10px;font-family:monospace;color:#ea580c">${fmtBRL(p.db_previsto)}</td>
-                <td style="padding:8px 10px;font-family:monospace;font-weight:700;color:${p.saldo_acum < 0 ? '#dc2626' : '#7c3aed'}">${fmtBRL(p.saldo_acum)}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>`;
+    let secCaixa = '';
+    if (tipos.includes('CASHFLOW')) {
+        const semanas = porSemana(projecao);
+        secCaixa = `<h2 style="${H2}">Projeção de caixa — próximos 90 dias</h2>
+          <p style="margin:0 0 8px;font-size:12px;color:#6b7280">${posicao
+              ? `Parte de ${escapeHtml(brl(posicao.saldo_bancario))} nos bancos. Não entram ${escapeHtml(brl(posicao.vencido_receber))} a receber e ${escapeHtml(brl(posicao.vencido_pagar))} a pagar já vencidos.`
+              : 'Parte do saldo dos bancos.'}</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px">
+            <tr><th style="${TH}">Semana de</th><th style="${THR}">Entradas</th><th style="${THR}">Saídas</th><th style="${THR}">Saldo no fim</th></tr>
+            ${semanas.map(w => `<tr>
+              <td style="${TD}">${dataBR(w.inicio)}</td>
+              <td style="${TDR}">${brl(w.entradas)}</td>
+              <td style="${TDR}">${brl(w.saidas)}</td>
+              <td style="${TDR};color:${w.saldo < 0 ? '#dc2626' : '#374151'}">${brl(w.saldo)}</td>
+            </tr>`).join('')}
+          </table>`;
     }
 
     return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:28px 0">
     <tr><td align="center">
-      <table width="620" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)">
-
-        <!-- Header -->
-        <tr><td style="background:#7c3aed;padding:24px 32px">
-          <p style="margin:0;font-size:18px;font-weight:900;color:#fff">Inteligência Financeira</p>
-          <p style="margin:4px 0 0;font-size:12px;color:#ddd6fe">${orgName} · Gerado em ${generatedAt}</p>
+      <table width="640" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;border:1px solid #e5e7eb">
+        <tr><td style="padding:22px 28px;border-bottom:1px solid #e5e7eb">
+          <p style="margin:0;font-size:18px;font-weight:700;color:#111827">Inteligência Financeira</p>
+          <p style="margin:4px 0 0;font-size:13px;color:#6b7280">${escapeHtml(orgName)} · ${escapeHtml(geradoEm)}</p>
         </td></tr>
-
-        <!-- Body -->
-        <tr><td style="padding:24px 32px">
-          ${kpiRow}
-          ${alertsSection}
-          ${scorecardSection}
-          ${cashflowSection}
-          <p style="margin:32px 0 0;font-size:10px;color:#9ca3af;text-align:center">
-            Relatório automático enviado pelo OrçaCloud · Para cancelar, acesse Inteligência Financeira → Agendamentos
+        <tr><td style="padding:18px 24px 26px">
+          ${linhaKpis}
+          ${avisoBase}
+          ${secAlertas}
+          ${secObras}
+          ${secCaixa}
+          <p style="margin:30px 0 0;font-size:11px;color:#9ca3af;text-align:center">
+            Relatório automático do OrçaCloud · Para pausar ou excluir: Financeiro › Inteligência Financeira › Agendamentos
           </p>
         </td></tr>
-
       </table>
     </td></tr>
   </table>
@@ -214,129 +214,138 @@ function buildHtml(opts: {
 </html>`;
 }
 
-// ─── main ────────────────────────────────────────────────────
+// ─── dados ──────────────────────────────────────────────────────────────────
+
+// deno-lint-ignore no-explicit-any
+async function lerDados(admin: any, orgId: string, tipos: string[]) {
+    const rpc = async <T>(nome: string, args: Record<string, unknown>): Promise<T> => {
+        const { data, error } = await admin.rpc(nome, args);
+        if (error) throw new Error(`${nome}: ${error.message}`);
+        return data as T;
+    };
+    const org = { p_organization_id: orgId };
+    const precisaPosicao = tipos.length > 0; // os KPIs do topo usam a posição em qualquer combinação
+    const [alertas, obras, projecao, posicao, locacao] = await Promise.all([
+        tipos.includes('ALERTS') ? rpc<Alerta[]>('fn_financial_alerts', org) : Promise.resolve([] as Alerta[]),
+        tipos.includes('SCORECARD') ? rpc<Obra[]>('fn_project_scorecard', org) : Promise.resolve([] as Obra[]),
+        rpc<Ponto[]>('fn_cashflow_projection', { ...org, p_days: 90 }),
+        precisaPosicao ? rpc<Posicao[]>('fn_cashflow_position', org) : Promise.resolve([] as Posicao[]),
+        tipos.includes('SCORECARD') ? rpc<Locacao[]>('fn_rental_income', org) : Promise.resolve([] as Locacao[]),
+    ]);
+    const p = (posicao ?? [])[0];
+    return {
+        alertas: (alertas ?? []).map(a => ({ ...a, amount: a.amount == null ? null : n(a.amount) })),
+        obras: (obras ?? []).map(s => ({
+            ...s, receita_realizada: n(s.receita_realizada), custo_realizado: n(s.custo_realizado), margem_pct: n(s.margem_pct),
+            saldo_projetado: n(s.saldo_projetado), ar_vencido: n(s.ar_vencido), ap_vencido: n(s.ap_vencido),
+        })),
+        projecao: (projecao ?? []).map(x => ({ data_ref: x.data_ref, cr_previsto: n(x.cr_previsto), db_previsto: n(x.db_previsto), saldo_acum: n(x.saldo_acum) })),
+        posicao: p ? { ...p, saldo_bancario: n(p.saldo_bancario), vencido_receber: n(p.vencido_receber), vencido_pagar: n(p.vencido_pagar) } : null,
+        locacao: (locacao ?? []).map(r => ({ empreendimento_nome: r.empreendimento_nome, recebido: n(r.recebido), vencido: n(r.vencido) })),
+    };
+}
+
+// ─── principal ──────────────────────────────────────────────────────────────
+
+const COLUNAS = 'id,organization_id,name,frequency,day_of_week,day_of_month,hour,recipients,report_types,is_active,last_sent_at';
 
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
     if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
+    const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const resendApiKey   = Deno.env.get('RESEND_API_KEY') ?? '';
     const fromEmail      = Deno.env.get('REPORT_FROM_EMAIL') ?? 'financeiro@opura.com.br';
-    const supabaseUrl    = Deno.env.get('SUPABASE_URL') ?? '';
-    const anonKey        = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
-    if (!resendApiKey) return json({ error: 'RESEND_API_KEY não configurada.' }, 503);
-
-    const authHeader = req.headers.get('Authorization') ?? '';
-    const isCron     = authHeader === `Bearer ${serviceRoleKey}`;
-
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-    });
-
-    let body: Record<string, string> = {};
+    let body: Record<string, unknown> = {};
     try { body = await req.json(); } catch { /* vazio */ }
 
-    // Validação JWT (modo manual)
-    if (!isCron) {
-        const userClient = createClient(supabaseUrl, anonKey, {
-            global: { headers: { Authorization: authHeader } },
+    const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
+    const agora = new Date();
+    const br = emBrasilia(agora);
+    const cron = chamadaDeCron(req);
+
+    let alvos: Agendamento[];
+    if (cron) {
+        const { data, error } = await admin.from('report_schedules').select(COLUNAS).eq('is_active', true);
+        if (error) return json({ error: error.message }, 500);
+        alvos = ((data ?? []) as Agendamento[]).filter(s => {
+            if (s.hour !== br.hora) return false;
+            if (s.frequency === 'WEEKLY' && s.day_of_week !== br.diaSemana) return false;
+            if (s.frequency === 'MONTHLY' && s.day_of_month !== br.diaMes) return false;
+            // Já saiu hoje (data de Brasília)? Não reenvia.
+            return !(s.last_sent_at && emBrasilia(new Date(s.last_sent_at)).data === br.data);
         });
-        const { data: { user }, error: authErr } = await userClient.auth.getUser();
-        if (authErr || !user) return json({ error: 'Unauthorized' }, 401);
-        if (!body.organization_id) return json({ error: 'organization_id obrigatório' }, 400);
+    } else {
+        const scheduleId = typeof body.schedule_id === 'string' ? body.schedule_id : '';
+        // Usuário de verdade ANTES de qualquer consulta: sem isto, um token qualquer
+        // descobriria se um id de agendamento existe (404 × 403). Sem cabeçalho = 401
+        // — é a prova da REGRA #7 depois do deploy com --no-verify-jwt.
+        const usuario = await exigirUsuario(req);
+        if (!usuario.ok) return respostaDeErro(usuario, corsHeaders);
+        if (!scheduleId) return json({ error: 'schedule_id obrigatório' }, 400);
+        const { data, error } = await admin.from('report_schedules').select(COLUNAS).eq('id', scheduleId).maybeSingle();
+        if (error) return json({ error: error.message }, 500);
+        if (!data) return json({ error: 'Agendamento não encontrado.' }, 404);
+        // Membro da organização DO AGENDAMENTO — não da que o corpo da requisição diz.
+        const auth = await exigirMembro(req, (data as Agendamento).organization_id);
+        if (!auth.ok) return respostaDeErro(auth, corsHeaders);
+        alvos = [data as Agendamento];
     }
 
-    const now      = new Date();
-    const nowBRT   = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-    const hourBRT  = isCron ? nowBRT.getHours() : -1;  // -1 = ignora no modo manual
-    const dowBRT   = nowBRT.getDay();    // 0=domingo
-    const domBRT   = nowBRT.getDate();   // 1-31
-    const todayBRT = nowBRT.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    if (alvos.length === 0) return json({ sent: 0, message: 'Nenhum agendamento para enviar agora.' });
+    if (!resendApiKey) return json({ error: 'RESEND_API_KEY não configurada.' }, 503);
 
-    // Carrega schedules
-    let schedulesQuery = admin
-        .from('report_schedules')
-        .select('id,organization_id,name,frequency,day_of_week,day_of_month,hour,recipients,report_types,last_sent_at')
-        .eq('is_active', true);
+    let enviados = 0;
+    const falhas: { agendamento: string; erro: string }[] = [];
 
-    if (body.schedule_id) schedulesQuery = schedulesQuery.eq('id', body.schedule_id);
-    else if (body.organization_id) schedulesQuery = schedulesQuery.eq('organization_id', body.organization_id);
+    for (const s of alvos) {
+        const destinatarios = (s.recipients ?? []).filter(Boolean);
+        if (destinatarios.length === 0) { falhas.push({ agendamento: s.name, erro: 'sem destinatários' }); continue; }
+        const tipos = s.report_types?.length ? s.report_types : ['ALERTS', 'SCORECARD', 'CASHFLOW'];
 
-    const { data: schedules, error: schErr } = await schedulesQuery;
-    if (schErr) return json({ error: schErr.message }, 500);
-    if (!schedules || schedules.length === 0) return json({ sent: 0, message: 'Nenhum agendamento ativo.' });
-
-    let totalSent = 0;
-
-    for (const sched of schedules) {
-        // Verifica se está na hora certa (cron mode)
-        if (hourBRT >= 0) {
-            if (sched.hour !== hourBRT) continue;
-            if (sched.frequency === 'WEEKLY'  && sched.day_of_week  !== dowBRT) continue;
-            if (sched.frequency === 'MONTHLY' && sched.day_of_month !== domBRT) continue;
-            // Evita reenvio no mesmo dia
-            if (sched.last_sent_at && sched.last_sent_at.startsWith(todayBRT)) continue;
+        let dados: Awaited<ReturnType<typeof lerDados>>;
+        try {
+            dados = await lerDados(admin, s.organization_id, tipos);
+        } catch (e) {
+            // Sem dados confiáveis, sem e-mail.
+            falhas.push({ agendamento: s.name, erro: e instanceof Error ? e.message : String(e) });
+            continue;
         }
 
-        if (!sched.recipients || sched.recipients.length === 0) continue;
+        const { data: org } = await admin.from('organizations').select('name').eq('id', s.organization_id).maybeSingle();
+        const orgName = (org as { name?: string } | null)?.name ?? 'Sua empresa';
+        const geradoEm = `${dataBR(br.data)} às ${String(br.hora).padStart(2, '0')}h`;
+        const html = montarHtml({ orgName, geradoEm, tipos, ...dados });
+        const criticos = dados.alertas.filter(a => a.severity === 'HIGH').length;
+        const assunto = `[${orgName}] Relatório financeiro ${dataBR(br.data)}${criticos > 0 ? ` — ${plural(criticos, 'alerta crítico', 'alertas críticos')}` : ''}`;
 
-        const reportTypes: string[] = sched.report_types ?? ['ALERTS', 'SCORECARD', 'CASHFLOW'];
-
-        // Busca nome da org
-        const { data: orgRow } = await admin
-            .from('organizations').select('name').eq('id', sched.organization_id).maybeSingle();
-        const orgName = orgRow?.name ?? 'Sua empresa';
-
-        // Chama as RPCs conforme report_types
-        const [alertsRes, scorecardsRes, projRes] = await Promise.all([
-            reportTypes.includes('ALERTS')
-                ? admin.rpc('fn_financial_alerts',    { p_organization_id: sched.organization_id })
-                : Promise.resolve({ data: [] }),
-            reportTypes.includes('SCORECARD')
-                ? admin.rpc('fn_project_scorecard',   { p_organization_id: sched.organization_id })
-                : Promise.resolve({ data: [] }),
-            reportTypes.includes('CASHFLOW')
-                ? admin.rpc('fn_cashflow_projection', { p_organization_id: sched.organization_id, p_horizon_days: 90 })
-                : Promise.resolve({ data: [] }),
-        ]);
-
-        const alerts     = (alertsRes.data     ?? []) as { alert_type: string; severity: string; title: string; description: string; amount: number | null }[];
-        const scorecards = (scorecardsRes.data  ?? []) as { project_name: string; receita_realizada: number; custo_realizado: number; margem_pct: number; saldo_projetado: number; risco: string }[];
-        const projection = (projRes.data        ?? []) as { data_ref: string; cr_previsto: number; db_previsto: number; saldo_acum: number }[];
-
-        const generatedAt = fmtDate(todayBRT);
-        const htmlBody    = buildHtml({ orgName, generatedAt, alerts, scorecards, projection, reportTypes });
-
-        const high = alerts.filter((a: { severity: string }) => a.severity === 'HIGH').length;
-        const subject = `[${orgName}] Relatório Financeiro ${generatedAt}${high > 0 ? ` — ${high} alerta${high > 1 ? 's' : ''} crítico${high > 1 ? 's' : ''}` : ''}`;
-
-        // Envia para cada destinatário
-        for (const to of sched.recipients) {
+        let enviadosAqui = 0;
+        for (const para of destinatarios) {
             try {
                 const res = await fetch('https://api.resend.com/emails', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ from: fromEmail, to: [to], subject, html: htmlBody }),
+                    body: JSON.stringify({ from: fromEmail, to: [para], subject: assunto, html }),
                 });
-                if (!res.ok) {
-                    const txt = await res.text();
-                    console.error(`[financial-report] Resend ${res.status}:`, txt);
-                } else {
-                    totalSent++;
-                }
-            } catch (err) {
-                console.error('[financial-report] fetch error:', err);
+                if (res.ok) enviadosAqui++;
+                else falhas.push({ agendamento: s.name, erro: `Resend ${res.status} para ${para}: ${(await res.text()).slice(0, 200)}` });
+            } catch (e) {
+                falhas.push({ agendamento: s.name, erro: `envio para ${para}: ${e instanceof Error ? e.message : String(e)}` });
             }
         }
-
-        // Atualiza last_sent_at
-        await admin
-            .from('report_schedules')
-            .update({ last_sent_at: now.toISOString(), updated_at: now.toISOString() })
-            .eq('id', sched.id);
+        enviados += enviadosAqui;
+        if (enviadosAqui > 0) {
+            await admin.from('report_schedules')
+                .update({ last_sent_at: agora.toISOString(), updated_at: agora.toISOString() })
+                .eq('id', s.id);
+        }
     }
 
-    return json({ sent: totalSent, message: `${totalSent} e-mail(s) enviado(s).` });
+    const message = `${plural(enviados, 'e-mail enviado', 'e-mails enviados')}.` +
+        (falhas.length ? ` ${plural(falhas.length, 'falha', 'falhas')}: ${falhas.map(f => `${f.agendamento} — ${f.erro}`).join(' | ')}` : '');
+    // "Enviar agora" sem nenhum envio é erro para quem clicou; no cron, o log basta.
+    if (!cron && enviados === 0) return json({ error: message, sent: 0, falhas }, 500);
+    return json({ sent: enviados, message, falhas });
 });

@@ -1,5 +1,5 @@
 import type { Receivable } from '../types/financial';
-import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, type ChaveDeGrupo, type Grupo } from './agruparLinhas';
+import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, type ChaveDeGrupo, type DirecaoGrupos, type Grupo } from './agruparLinhas';
 
 /**
  * "Agrupar" de Contas a Receber — o mesmo recurso de Boletos a Pagar
@@ -39,15 +39,17 @@ const SEM: Record<Exclude<CampoAgruparRecebivel, 'none'>, string> = {
 };
 
 /**
- * Agrupa mantendo a ordem da lista recebida (que já vem ordenada pela coluna escolhida):
- * grupos na ordem da 1ª aparição; status na ordem do mapa de rótulos da tela;
- * vencimento cronológico. O grupo "Sem …" vai sempre por último.
+ * Ordem dos grupos pelo seletor Crescente/Decrescente (molde ClickUp, 21/10/2026):
+ * nomes em ordem alfabética; status na ordem do mapa de rótulos da tela; vencimento
+ * cronológico — `direcao: 'desc'` inverte. O grupo "Sem …" vai sempre por último.
+ * Dentro do grupo, as linhas mantêm a ordem recebida (a coluna ordenada).
  * Casca de `agruparLinhas` (utils/agruparLinhas.ts) com as chaves desta tela.
  */
 export function agruparRecebiveis<T extends LinhaAgrupavel>(
     linhas: T[],
     campo: CampoAgruparRecebivel,
     rotulosStatus: Record<string, string>,
+    direcao: DirecaoGrupos = 'asc',
 ): GrupoRecebiveis<T>[] {
     if (campo === 'none') return [{ key: 'todos', label: '', itens: linhas, total: linhas.reduce((s, r) => s + (Number(r.amount) || 0), 0) }];
     const chave = (r: T): ChaveDeGrupo => {
@@ -65,6 +67,7 @@ export function agruparRecebiveis<T extends LinhaAgrupavel>(
         chave,
         semRotulo: SEM[campo],
         valor: r => r.amount,
-        ordem: campo === 'status' ? Object.keys(rotulosStatus) : campo === 'vencimento' ? 'chave' : 'aparicao',
+        ordem: campo === 'status' ? Object.keys(rotulosStatus) : campo === 'vencimento' ? 'chave' : 'rotulo',
+        direcao,
     });
 }

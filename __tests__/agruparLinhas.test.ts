@@ -22,6 +22,21 @@ describe('agruparLinhas', () => {
         expect(g[0].total).toBe(6.5);
     });
 
+    it('ordem "rotulo": alfabética pt-BR (acento e caixa não pesam, número em ordem natural)', () => {
+        const g = agruparLinhas([l('1', { nome: 'Obra 10' }), l('2', { nome: 'Ângela' }), l('3', { nome: 'obra 2' }), l('4', { nome: 'bruno' })],
+            { ...porNome, ordem: 'rotulo' });
+        expect(g.map(x => x.label)).toEqual(['Ângela', 'bruno', 'obra 2', 'Obra 10']);
+    });
+
+    it('direcao "desc" inverte os grupos, mas o "Sem …" continua por último', () => {
+        const lista = [l('1', { nome: 'Bruno' }), l('2'), l('3', { nome: 'Ana' }), l('4', { nome: 'Carla' })];
+        expect(agruparLinhas(lista, { ...porNome, ordem: 'rotulo', direcao: 'asc' }).map(x => x.label)).toEqual(['Ana', 'Bruno', 'Carla', 'Sem nome']);
+        expect(agruparLinhas(lista, { ...porNome, ordem: 'rotulo', direcao: 'desc' }).map(x => x.label)).toEqual(['Carla', 'Bruno', 'Ana', 'Sem nome']);
+        const meses = agruparLinhas([l('1', { data: '2026-09-01' }), l('2'), l('3', { data: '2025-12-31' })],
+            { chave: x => chavePorMes(x.data), semRotulo: 'Sem vencimento', ordem: 'chave', direcao: 'desc' });
+        expect(meses.map(x => x.label)).toEqual(['Setembro/2026', 'Dezembro/2025', 'Sem vencimento']);
+    });
+
     it('ordem "chave" deixa o mês cronológico', () => {
         const g = agruparLinhas([l('1', { data: '2026-09-01' }), l('2', { data: '2025-12-31' }), l('3')],
             { chave: x => chavePorMes(x.data), semRotulo: 'Sem vencimento', ordem: 'chave' });

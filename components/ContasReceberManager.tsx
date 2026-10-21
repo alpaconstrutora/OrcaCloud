@@ -782,7 +782,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const zerarAncora = useCallback(() => setLastCheckedIndex(null), []);
     // "Agrupar" — guia de UI §6.12 (peças compartilhadas com o resto do Financeiro).
     const agrupamento = useAgrupamento<Exclude<CampoAgruparRecebivel, 'none'>>('contasReceberManagerFilters:groupBy', zerarAncora);
-    const { campo: groupBy, agrupando, recolhidos: gruposRecolhidos } = agrupamento;
+    const { campo: groupBy, direcao: direcaoGrupos, agrupando, recolhidos: gruposRecolhidos } = agrupamento;
     // storageKey explícito — antes usava o default 'tableColumns' e colidia com
     // qualquer outro componente que também não passasse a chave.
     const tableColumns = useTableColumns(RECEBER_COLUMNS, 'contasReceberManagerColumns');
@@ -1222,7 +1222,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     // mais lenta das duas.
     }, [rowsWithNames, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection, recibos]);
 
-    const grupos = useMemo(() => agruparRecebiveis(sorted, groupBy, STATUS_LABEL), [sorted, groupBy]);
+    const grupos = useMemo(() => agruparRecebiveis(sorted, groupBy, STATUS_LABEL, direcaoGrupos), [sorted, groupBy, direcaoGrupos]);
 
     // As linhas NA ORDEM DA TELA (grupos recolhidos ficam de fora). É sobre esta lista que
     // o "selecionar todos" e o Shift+clique trabalham — com `sorted`, agrupado, o intervalo
@@ -1473,11 +1473,13 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                             <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                         </div>
 
-                        {/* Agrupar — guia de UI §6.12 */}
+                        {/* Agrupar + ordem dos grupos (Crescente/Decrescente) — guia de UI §6.12 */}
                         <AgruparControles
                             opcoes={OPCOES_AGRUPAR_RECEBIVEL}
                             campo={groupBy}
                             onCampo={agrupamento.setCampo}
+                            direcao={direcaoGrupos}
+                            onDirecao={agrupamento.setDirecao}
                             chavesDosGrupos={grupos.map(g => g.key)}
                             algumRecolhido={gruposRecolhidos.size > 0}
                             onAlternarTodos={agrupamento.alternarTodos}

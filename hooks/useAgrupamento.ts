@@ -1,17 +1,22 @@
 import { useCallback, useState } from 'react';
 import { usePersistedState } from '../components/ui/TableUtils';
+import type { DirecaoGrupos } from '../utils/agruparLinhas';
 
 /**
- * Estado do "Agrupar" de uma tabela (guia de UI §6.12): o campo escolhido
- * persiste (como os demais filtros da tela, §3); os grupos recolhidos ficam só
- * em memória e voltam a abrir ao trocar o campo.
+ * Estado do "Agrupar" de uma tabela (guia de UI §6.12): o campo escolhido e o
+ * sentido da ordem dos grupos (Crescente/Decrescente) persistem (como os demais
+ * filtros da tela, §3); os grupos recolhidos ficam só em memória e voltam a abrir
+ * ao trocar o campo.
  *
- * `onReorganizar` roda quando as linhas da tela mudam de lugar (trocar o campo,
- * recolher/expandir) — a tela zera ali a âncora do Shift+clique, cujo índice
- * passaria a apontar para outra linha.
+ * `onReorganizar` roda quando as linhas da tela mudam de lugar (trocar o campo
+ * ou o sentido, recolher/expandir) — a tela zera ali a âncora do Shift+clique,
+ * cujo índice passaria a apontar para outra linha.
  */
 export function useAgrupamento<C extends string>(storageKey: string, onReorganizar?: () => void) {
     const [campo, setCampoPersistido] = usePersistedState<C | 'none'>(storageKey, 'none');
+    const [direcaoGuardada, setDirecaoPersistida] = usePersistedState<DirecaoGrupos>(`${storageKey}:direcao`, 'asc');
+    // localStorage é texto livre: qualquer coisa que não seja 'desc' vale como o padrão.
+    const direcao: DirecaoGrupos = direcaoGuardada === 'desc' ? 'desc' : 'asc';
     const [recolhidos, setRecolhidos] = useState<Set<string>>(() => new Set());
 
     const setCampo = useCallback((c: C | 'none') => {
@@ -19,6 +24,12 @@ export function useAgrupamento<C extends string>(storageKey: string, onReorganiz
         setRecolhidos(new Set());
         onReorganizar?.();
     }, [setCampoPersistido, onReorganizar]);
+
+    /** Os grupos trocam de lugar, mas as chaves são as mesmas: os recolhidos continuam recolhidos. */
+    const setDirecao = useCallback((d: DirecaoGrupos) => {
+        setDirecaoPersistida(d);
+        onReorganizar?.();
+    }, [setDirecaoPersistida, onReorganizar]);
 
     const alternar = useCallback((key: string) => {
         setRecolhidos(prev => {
@@ -45,5 +56,5 @@ export function useAgrupamento<C extends string>(storageKey: string, onReorganiz
         });
     }, []);
 
-    return { campo, setCampo, agrupando: campo !== 'none', recolhidos, alternar, alternarTodos, expandir };
+    return { campo, setCampo, direcao, setDirecao, agrupando: campo !== 'none', recolhidos, alternar, alternarTodos, expandir };
 }

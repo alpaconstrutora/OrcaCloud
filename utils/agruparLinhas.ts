@@ -27,11 +27,17 @@ export interface OpcoesAgrupar<T> {
     valor?: (linha: T) => number | null | undefined;
     /**
      * Ordem dos grupos: 'aparicao' (padrão — respeita a coluna ordenada), 'chave'
-     * (crescente pela chave: mês 'AAAA-MM' sai cronológico) ou a lista de chaves
-     * na ordem desejada (status na ordem do fluxo; chave fora da lista vai ao fim).
+     * (crescente pela chave: mês 'AAAA-MM' sai cronológico), 'rotulo' (alfabética
+     * pt-BR pelo rótulo, números em ordem natural) ou a lista de chaves na ordem
+     * desejada (status na ordem do fluxo; chave fora da lista vai ao fim).
      */
-    ordem?: 'aparicao' | 'chave' | string[];
+    ordem?: 'aparicao' | 'chave' | 'rotulo' | string[];
+    /** 'desc' inverte a ordem dos grupos (Crescente/Decrescente, molde ClickUp). O "Sem …" fica no fim nos dois. */
+    direcao?: DirecaoGrupos;
 }
+
+/** Sentido da ordem dos GRUPOS — as linhas dentro do grupo seguem a coluna ordenada. */
+export type DirecaoGrupos = 'asc' | 'desc';
 
 export const CHAVE_VAZIA = '__vazio__';
 
@@ -75,11 +81,15 @@ export function agruparLinhas<T>(linhas: T[], o: OpcoesAgrupar<T>): Grupo<T>[] {
     const ordem = o.ordem ?? 'aparicao';
     if (ordem === 'chave') {
         grupos.sort((a, b) => a.key.localeCompare(b.key));
+    } else if (ordem === 'rotulo') {
+        grupos.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR', { numeric: true, sensitivity: 'base' }));
     } else if (Array.isArray(ordem)) {
         const pos = (k: string) => { const i = ordem.indexOf(k); return i === -1 ? Number.MAX_SAFE_INTEGER : i; };
         grupos.sort((a, b) => pos(a.key) - pos(b.key));
     }
-    return [...grupos.filter(g => g.key !== CHAVE_VAZIA), ...grupos.filter(g => g.key === CHAVE_VAZIA)];
+    const comValor = grupos.filter(g => g.key !== CHAVE_VAZIA);
+    if (o.direcao === 'desc') comValor.reverse();
+    return [...comValor, ...grupos.filter(g => g.key === CHAVE_VAZIA)];
 }
 
 /** As linhas NA ORDEM DA TELA, sem as dos grupos recolhidos — base do "selecionar

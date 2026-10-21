@@ -1,6 +1,6 @@
 import React from 'react';
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Layers } from 'lucide-react';
-import type { Grupo } from '../../utils/agruparLinhas';
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Layers } from 'lucide-react';
+import type { DirecaoGrupos, Grupo } from '../../utils/agruparLinhas';
 import { formatMoney } from './Format';
 
 /**
@@ -11,11 +11,17 @@ import { formatMoney } from './Format';
 
 /** Por que "recolher/expandir todos" está desligado — e o caminho para ligar. */
 export const MOTIVO_SEM_AGRUPAMENTO = 'Escolha um campo em "Agrupar" para recolher ou expandir os grupos';
+export const MOTIVO_SEM_ORDEM_DOS_GRUPOS = 'Escolha um campo em "Agrupar" para ordenar os grupos';
 
 interface ControlesProps<C extends string> {
     opcoes: { value: C; label: string }[];
     campo: C | 'none';
     onCampo: (c: C | 'none') => void;
+    /** Opt-in: com `onDirecao`, aparece o seletor Crescente/Decrescente da ordem DOS GRUPOS
+     *  (molde ClickUp). As linhas dentro do grupo seguem a coluna ordenada — não é o
+     *  "Ordenar por" que o §6.4 proíbe. */
+    direcao?: DirecaoGrupos;
+    onDirecao?: (d: DirecaoGrupos) => void;
     /** Chaves dos grupos atuais — para "recolher todos". */
     chavesDosGrupos: string[];
     algumRecolhido: boolean;
@@ -26,8 +32,9 @@ interface ControlesProps<C extends string> {
 
 /** Seletor "Agrupar" + recolher/expandir todos (sempre visível; desligado sem agrupamento).
  *  Vai na toolbar acoplada, depois do Filtro avançado. */
-export function AgruparControles<C extends string>({ opcoes, campo, onCampo, chavesDosGrupos, algumRecolhido, onAlternarTodos, title }: ControlesProps<C>) {
+export function AgruparControles<C extends string>({ opcoes, campo, onCampo, direcao = 'asc', onDirecao, chavesDosGrupos, algumRecolhido, onAlternarTodos, title }: ControlesProps<C>) {
     const ativo = campo !== 'none';
+    const IconeDirecao = direcao === 'desc' ? ArrowDownWideNarrow : ArrowUpNarrowWide;
     return (
         <>
             <div className="relative shrink-0">
@@ -46,6 +53,25 @@ export function AgruparControles<C extends string>({ opcoes, campo, onCampo, cha
                     {opcoes.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
             </div>
+            {/* Ordem dos grupos — sempre visível, como o "recolher todos": sem agrupamento
+                fica desligado e diz o porquê (o `title` no invólucro, pelo mesmo motivo). */}
+            {onDirecao && (
+                <span className="relative shrink-0" title={ativo ? undefined : MOTIVO_SEM_ORDEM_DOS_GRUPOS}>
+                    {/* O ícone fica fora do <select>: esmaece à mão junto com o `disabled:opacity-40`. */}
+                    <IconeDirecao className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 ${ativo ? '' : 'opacity-40'}`} />
+                    <select
+                        value={direcao}
+                        onChange={e => onDirecao(e.target.value === 'desc' ? 'desc' : 'asc')}
+                        disabled={!ativo}
+                        title={ativo ? 'Ordem dos grupos' : MOTIVO_SEM_ORDEM_DOS_GRUPOS}
+                        aria-label="Ordem dos grupos"
+                        className="h-9 pl-8 pr-3 rounded-[6px] text-[13px] font-medium border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 appearance-none cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                    >
+                        <option value="asc">Crescente</option>
+                        <option value="desc">Decrescente</option>
+                    </select>
+                </span>
+            )}
             {/* Sempre visível (pedido de 15/10/2026): sem agrupamento fica desligado e
                 DIZ O PORQUÊ — ícone cinza mudo é lido como defeito. O `title` vai também
                 no invólucro porque nem todo navegador mostra dica em botão desabilitado. */}

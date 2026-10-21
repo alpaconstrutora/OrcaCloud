@@ -1266,13 +1266,10 @@ export default function ContasPagarManager({ organizations }: Props) {
                                                                 ) : (
                                                                     <Check className="w-3.5 h-3.5" />
                                                                 )}
-                                                                Pago
+                                                                {/* "Dar baixa", não "Pago", e sem "Quitado" na nota paga:
+                                                                    status mora só na coluna Status (20/10/2026). */}
+                                                                Dar baixa
                                                             </button>
-                                                        )}
-                                                        {inv.status === 'paid' && (
-                                                            <span className="flex items-center gap-1 text-sm font-normal text-green-700">
-                                                                <Check className="w-4 h-4" /> Quitado
-                                                            </span>
                                                         )}
                                                     </div>
                                                 </td>

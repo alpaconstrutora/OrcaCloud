@@ -100,7 +100,9 @@ const RULES: Rule[] = [
             // 31 → 30 em 2026-09-08: o módulo de Projetos Elétricos foi
             // REMOVIDO (o desenho de instalações passou para a Planta
             // Inteligente), e as duas rotas dele saíram junto.
-            'components/AppRouter.tsx': 30,
+            // 30 → 29 em 2026-10-21: Inteligência Financeira passou a ler a
+            // organização do useOrgContext (com EMPRESA no topo ela mostrava todas).
+            'components/AppRouter.tsx': 29,
             'components/OpuraDocsModule.tsx': 1,
         },
     },

@@ -1467,10 +1467,10 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'financial-intelligence':
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" /></div>}>
-          <FinancialIntelligence
-            organizationId={activeOrganizationId || ''}
-            onNavigate={setActiveView}
-          />
+          {/* Sem prop de organização: lê do useOrgContext (REGRA #5). O
+              `activeOrganizationId` cru daqui fica null com uma EMPRESA no topo,
+              e a tela mostrava todas as organizações nesse caso. */}
+          <FinancialIntelligence onNavigate={setActiveView} />
         </React.Suspense>
       );
 

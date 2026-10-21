@@ -9,14 +9,7 @@
  */
 import type { Darf, DarfStatus, Payable, TaxPayable } from '../types/financial';
 import { nomeSeguroDeArquivo } from './pagamentoAvulso';
-
-/** Data local em YYYY-MM-DD (não `toISOString`, que vira o dia em UTC). */
-export function hojeLocal(agora: Date = new Date()): string {
-    const y = agora.getFullYear();
-    const m = String(agora.getMonth() + 1).padStart(2, '0');
-    const d = String(agora.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
+import { hojeLocal } from './baixaRecebivel';
 
 /** 'YYYY-MM-DD' → 'DD/MM/YYYY'. */
 export function dataBR(iso: string | null | undefined): string {
@@ -46,7 +39,7 @@ export function motivoNaoAgrupavel(t: TaxPayable): string | null {
         case 'RETIDO':    return 'Retido pelo cliente — não é pago pela empresa';
         case 'CANCELADO': return 'Cancelado';
     }
-    if (t.status !== 'PENDING') return 'Conciliado com o extrato';
+    if (t.status === 'CONCILIATED') return 'Conciliado com o extrato';
     if (!competenciaDoTributo(t)) return 'Sem competência (data do fato gerador)';
     return null;
 }

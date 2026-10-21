@@ -12,7 +12,7 @@
  * modelo de ANTES — a contagem das 3 primeiras de 600 VA é sequencial). Por pavimento, já com a potência.
  */
 import type { BlueprintModel, Command, ObjectId, Point, Space } from './blueprintKernel';
-import { areaRecuada, envelopeDoTrecho, pointInPolygon } from './blueprintKernel';
+import { areaRecuada, envelopeDoTrecho, pegadaEmPlanta, pointInPolygon } from './blueprintKernel';
 import { comandosDeIluminacao, comandosParaCompletar, conferirIluminacao, conferirTomadas, distribuirAoLongo, etiquetaDoAmbiente, ladosDePiso } from './blueprintDistribuicao';
 import { aplicarPotenciaPadrao } from './blueprintPotenciaPadrao';
 import { pegadasDePilares } from './blueprintObstaculosEstruturais';
@@ -66,6 +66,43 @@ function luzForaDosTubos(at: Point, tubos: readonly { p: Point; r: number }[], s
   return at;
 }
 
+/** O retângulo envolvente do anel, crescido de `mm`. */
+function anelCrescido(anel: readonly Point[], mm: number): Point[] {
+  const xs = anel.map((p) => p.x);
+  const ys = anel.map((p) => p.y);
+  const [x0, x1, y0, y1] = [Math.min(...xs) - mm, Math.max(...xs) + mm, Math.min(...ys) - mm, Math.max(...ys) + mm];
+  return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }] as Point[];
+}
+
+/** S5: o passo da busca do interruptor fora da laje rebaixada, mm. */
+const PASSO_DO_INTERRUPTOR_FORA_DO_REBAIXO_MM = 50;
+
+/**
+ * S5 (20/10/2026): o interruptor que cairia na parede SOB uma laje rebaixada vai ao ponto mais perto das paredes do
+ * cômodo fora dela (e fora de pilar e de vão) — o eletroduto que desce até ele não tinha saída: o pilar do canto de um
+ * lado, a saída da fria pela mesma parede do outro (o interruptor do serviço, sobrado 10 × 30). Nenhum livre: fica.
+ */
+function interruptorForaDoRebaixo(at: Point, rebaixos: readonly Point[][], space: Space, paredes: BlueprintModel['walls'], openings: BlueprintModel['openings'], pilares: readonly Point[][]): Point {
+  const sob = (q: Point) => rebaixos.some((g) => pointInPolygon(g, q));
+  if (!sob(at)) return at;
+  let melhor: { q: Point; d: number } | null = null;
+  for (const lado of ladosDePiso(space, paredes)) {
+    const w = lado.wallId ? paredes.find((x) => x.id === lado.wallId) : null;
+    if (!w) continue;
+    const L = Math.hypot(lado.b.x - lado.a.x, lado.b.y - lado.a.y);
+    const Lw = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
+    for (let d = 150; d <= L - 150; d += PASSO_DO_INTERRUPTOR_FORA_DO_REBAIXO_MM) {
+      const q = { x: Math.round(lado.a.x + ((lado.b.x - lado.a.x) * d) / L), y: Math.round(lado.a.y + ((lado.b.y - lado.a.y) * d) / L) } as Point;
+      if (sob(q) || pilares.some((g) => pointInPolygon(g, q))) continue;
+      const t = ((q.x - w.a.x) * (w.b.x - w.a.x) + (q.y - w.a.y) * (w.b.y - w.a.y)) / Lw;
+      if (openings.some((o) => o.wallId === w.id && t > o.offsetMm - 150 && t < o.offsetMm + o.widthMm + 150)) continue;
+      const dist = Math.hypot(q.x - at.x, q.y - at.y);
+      if (!melhor || dist < melhor.d) melhor = { q, d: dist };
+    }
+  }
+  return melhor?.q ?? at;
+}
+
 /** Os comandos que completam um ambiente pela norma — sem potência. */
 export function comandosDePontosDoAmbiente(model: BlueprintModel, levelId: ObjectId, space: Space, op: OpcoesDosPontosEletricos): Command[] {
   const paredes = model.walls.filter((w) => w.levelId === space.levelId);
@@ -102,8 +139,19 @@ export function comandosDePontosDoAmbiente(model: BlueprintModel, levelId: Objec
     return [{ x: p.x - h, y: p.y - h }, { x: p.x + h, y: p.y - h }, { x: p.x + h, y: p.y + h }, { x: p.x - h, y: p.y + h }] as Point[];
   });
   const luzes = comandosDeIluminacao(levelId, space, model.walls, model.openings, op.peDireitoMm, conferirIluminacao(space, terminais, areaM2, tipo), terminais, op.areaPorLuminariaM2 ?? null, [...pegadasDePilares(model, space.levelId), ...quadrados]);
-  // S1: e a luz de teto sai de baixo do tubo.
-  comandos.push(...luzes.map((c) => (c.type === 'AddTerminal' && (c as { tipoEletrico?: string }).tipoEletrico === 'ILUMINACAO_TETO' && tubos.length ? ({ ...c, at: luzForaDosTubos((c as { at: Point }).at, tubos, space) } as Command) : c)));
+  // S1: e a luz de teto sai de baixo do tubo; S5: e o interruptor, de baixo da laje rebaixada.
+  const nivel = model.levels.find((l) => l.id === space.levelId);
+  const rebaixos = nivel ? (model.structures ?? []).filter((x) => x.kind === 'LAJE' && x.levelId === space.levelId && x.baseMm < nivel.defaultHeightMm - 1).map((x) => pegadaEmPlanta(x) as Point[]) : [];
+  comandos.push(
+    ...luzes.map((c) => {
+      if (c.type === 'AddTerminal' && (c as { tipoEletrico?: string }).tipoEletrico === 'INTERRUPTOR' && rebaixos.length) {
+        const pegadas = pegadasDePilares(model, space.levelId).map((g) => anelCrescido(g as Point[], 60));
+        return { ...c, at: interruptorForaDoRebaixo((c as { at: Point }).at, rebaixos.map((g) => anelCrescido(g, RAIO_DO_ELETRODUTO_DO_PONTO_MM + FOLGA_DO_PONTO_AO_TUBO_MM)), space, model.walls.filter((w) => w.levelId === space.levelId), model.openings, pegadas) } as Command;
+      }
+      if (c.type !== 'AddTerminal' || (c as { tipoEletrico?: string }).tipoEletrico !== 'ILUMINACAO_TETO' || !tubos.length) return c;
+      return { ...c, at: luzForaDosTubos((c as { at: Point }).at, tubos, space) } as Command;
+    }),
+  );
   return comandos;
 }
 

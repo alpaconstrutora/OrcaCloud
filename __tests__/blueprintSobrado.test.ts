@@ -220,9 +220,10 @@ describe('F27-D2: o 2º pavimento recuado', () => {
     const a = monta();
     expect(lavaboForaDoNucleo(a, n)).toBe(true);
     expect(a[0].ret).toEqual({ x0: 1500, y0: 13200, x1: 6100, y1: 18150 });
-    expect(a[2].ret).toEqual({ x0: 6100, y0: 13200, x1: 8500, y1: 17100 });
-    // 2,2 m² ÷ 2,40 m = 0,92 m → a largura mínima mais a parede (1,05 m) manda.
-    expect(a[1].ret).toEqual({ x0: 6100, y0: 17100, x1: 8500, y1: 18150 });
+    expect(a[2].ret).toEqual({ x0: 6100, y0: 13200, x1: 8500, y1: 17000 });
+    // 2,2 m² ÷ 2,40 m = 0,92 m; a largura mínima mais a parede, 1,05 m; S5 (20/10/2026): o lado encostado na cozinha (quem
+    // leva a tira) comporta a porta — 1,15 m manda (com 1,05, a porta não cabia e o lavabo abria para o serviço).
+    expect(a[1].ret).toEqual({ x0: 6100, y0: 17000, x1: 8500, y1: 18150 });
     expect(pedacosFora(a[1].ret, n.ret)).toEqual([a[1].ret]);
     // A sala, que o núcleo também come, não muda.
     expect(a[3].ret).toEqual({ x0: 4200, y0: 5050, x1: 8500, y1: 13200 });

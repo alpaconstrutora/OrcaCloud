@@ -101,7 +101,9 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
                             <div key={chave} className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                                 <p className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 text-sm font-medium text-gray-700">
                                     <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                                    Um pagamento liquida vários títulos
+                                    {g.darfId
+                                        ? `Pagamento de DARF (venc. ${formatDate(g.titles[0]?.due_date || g.titles[0]?.transaction_date)}) — tributos e encargos juntos`
+                                        : 'Um pagamento liquida vários títulos'}
                                 </p>
                                 <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-x-6 gap-y-4">
                                     <div className="min-w-0">

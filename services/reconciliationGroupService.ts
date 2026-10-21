@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
 import { bankReconciliationService } from './bankReconciliationService';
-import { extratoForaDaConciliacao, comValorEsperado, COLUNA_VALOR_ESPERADO, FILTRO_SEM_TRIBUTO_RETIDO } from '../utils/reconciliationRules';
+import { extratoForaDaConciliacao, comValorEsperado, COLUNA_VALOR_ESPERADO, COLUNA_DARF, FILTRO_SEM_TRIBUTO_RETIDO } from '../utils/reconciliationRules';
 
 const DAY = 86_400_000;
 
@@ -28,6 +28,8 @@ interface TitleItem {
     party_name?: string;
     /** Bruto − tributos retidos pelo cliente (campo computado). Ver comValorEsperado. */
     valor_esperado?: number | null;
+    /** DARF que agrupa o lançamento: só casa junto com os demais membros. */
+    darf_id?: string | null;
 }
 
 export interface BankToTitlesGroup {
@@ -35,6 +37,8 @@ export interface BankToTitlesGroup {
     titles: TitleItem[];
     total: number;
     diff: number;
+    /** Grupo = um DARF inteiro (todos os membros; ver `gruposDeDarf`). */
+    darfId?: string;
 }
 export interface TitleToBanksGroup {
     title: TitleItem;
@@ -88,6 +92,40 @@ export function partyMatchesText(partyName: string | undefined, text: string): b
     return words.some(w => t.includes(w));
 }
 const bankText = (b: BankItem) => `${b.counterparty_name || ''} ${b.description_normalized || b.description_raw || ''}`;
+
+/**
+ * DARF ↔ extrato: um débito com o valor do DARF inteiro (tributos + multa/juros),
+ * do vencimento −5 a +30 dias, vira um grupo com TODOS os membros — sem o limite
+ * de 3 de `findSubset` e sem exigir o nome no extrato (débito de DARF raramente
+ * traz o nome do tributo). Cada débito e cada DARF entram em um grupo só.
+ */
+export function gruposDeDarf(banks: BankItem[], titulos: TitleItem[]): BankToTitlesGroup[] {
+    const porDarf = new Map<string, TitleItem[]>();
+    for (const t of titulos) {
+        if (!t.darf_id) continue;
+        const l = porDarf.get(t.darf_id) ?? [];
+        l.push(t);
+        porDarf.set(t.darf_id, l);
+    }
+    const usados = new Set<string>();
+    const grupos: BankToTitlesGroup[] = [];
+    for (const [darfId, membros] of porDarf) {
+        if (membros.some(m => m.direction !== 'DEBIT')) continue;
+        const total = Math.round(membros.reduce((s, m) => s + m.amount, 0) * 100) / 100;
+        const venc = new Date(membros[0].due_date ?? membros[0].transaction_date).getTime();
+        const candidatos = banks
+            .filter(b => !usados.has(b.id) && b.direction === 'DEBIT'
+                && Math.abs(b.amount - total) <= groupTol(total)
+                && (() => { const x = new Date(b.transaction_date).getTime(); return x >= venc - 5 * DAY && x <= venc + 30 * DAY; })())
+            .sort((a, c) => Math.abs(a.amount - total) - Math.abs(c.amount - total)
+                || Math.abs(new Date(a.transaction_date).getTime() - venc) - Math.abs(new Date(c.transaction_date).getTime() - venc));
+        const b = candidatos[0];
+        if (!b) continue;
+        usados.add(b.id);
+        grupos.push({ bank: b, titles: membros, total, diff: Math.round((b.amount - total) * 100) / 100, darfId });
+    }
+    return grupos;
+}
 const titleParty = (t: TitleItem) => t.entity_name || t.party_name;
 
 export const reconciliationGroupService = {
@@ -108,7 +146,7 @@ export const reconciliationGroupService = {
                 .order('transaction_date', { ascending: true })
                 .order('id', { ascending: true }) as unknown as RangeableQuery<BankItem & { category?: string | null }>),
             fetchAllPages<TitleItem>(() => supabase.from('internal_transactions')
-                .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, ${COLUNA_VALOR_ESPERADO}`)
+                .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, ${COLUNA_VALOR_ESPERADO}, ${COLUNA_DARF}`)
                 .in('organization_id', orgsDosTitulos)
                 .eq('status', 'PENDING')
                 .or(FILTRO_SEM_TRIBUTO_RETIDO)
@@ -128,14 +166,19 @@ export const reconciliationGroupService = {
         const banks = (bankTxs || []).filter(b => !extratoForaDaConciliacao(b, filtros));
         // Grupo soma o que o banco credita: líquido quando o cliente retém tributo
         // (mesma conta do fn_reconcile_group, que soma valor_esperado).
-        const allTitles = (titles || []).map(comValorEsperado);
+        const todosOsTitulos = (titles || []).map(comValorEsperado);
+        // Membro de DARF só casa com o DARF inteiro (abaixo), nunca solto nos grupos genéricos.
+        const allTitles = todosOsTitulos.filter(t => !t.darf_id);
 
-        const bankToTitles: BankToTitlesGroup[] = [];
+        // DARF primeiro: o débito que casa com um DARF não entra nos grupos genéricos.
+        const bankToTitles: BankToTitlesGroup[] = gruposDeDarf(banks, todosOsTitulos);
+        const debitosDosDarfs = new Set(bankToTitles.map(g => g.bank.id));
         const titleToBanks: TitleToBanksGroup[] = [];
 
         // 1 pagamento → N títulos
         // Afinidade: só agrupa títulos da MESMA contraparte cujo nome aparece no extrato.
         for (const b of banks) {
+            if (debitosDosDarfs.has(b.id)) continue;
             const bT = new Date(b.transaction_date).getTime();
             const bTxt = bankText(b);
             const pool = allTitles.filter(t =>

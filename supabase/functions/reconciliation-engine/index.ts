@@ -17,6 +17,7 @@ import {
     COLUNA_VALOR_ESPERADO,
     COLUNA_VALOR_VARIAVEL,
     FILTRO_SEM_TRIBUTO_RETIDO,
+    COLUNA_DARF,
     filtroOrgsOuGlobal,
     findInternalTransferPairs,
     janelaDeTitulos,
@@ -280,6 +281,8 @@ serve(async (req: Request) => {
                 .in('organization_id', orgs)
                 .eq('status', 'PENDING')
                 .or(FILTRO_SEM_TRIBUTO_RETIDO)
+                // Membro de DARF não casa 1:1 — o DARF inteiro casa pela sugestão de grupo.
+                .is(COLUNA_DARF, null)
                 .gte('transaction_date', janela.inicio)
                 .lte('transaction_date', janela.fim)
                 .order('transaction_date', { ascending: true }).order('id', { ascending: true })

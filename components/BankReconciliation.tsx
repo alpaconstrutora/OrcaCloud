@@ -55,6 +55,7 @@ import { originIdFromRef } from '../lib/receivableRef';
 // O PostgREST devolve no máximo 1000 linhas por requisição; `.limit(N)` fixo vira teto
 // silencioso (a tela sumia com janeiro–junho de uma conta movimentada). Paginamos até esgotar.
 import { fetchAllPages } from '../lib/supabasePaginate';
+import { darfService } from '../services/darfService';
 
 // Rótulo de texto do plano de contas ("1.1.1 · PIS") — célula, filtro e ordenação do Extrato.
 const rotuloPlanoContas = (pc: { name: string; code?: string | null }) => (pc.code ? `${pc.code} · ${pc.name}` : pc.name);
@@ -158,6 +159,44 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
     const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
     const [internalTransactions, setInternalTransactions] = useState<InternalTransaction[]>([]);
+
+    /**
+     * Marca/desmarca um lançamento no dock. Membro de DARF (aplicar_20271021300000)
+     * é conciliado inteiro — o banco recusa um tributo sozinho —, então marcar um
+     * marca TODOS, inclusive os que estão fora do recorte de data (eles entram na
+     * lista): sem isso a soma do dock não fecha com o débito do DARF.
+     */
+    const marcarLancamento = async (tx: InternalTransaction, marcar: boolean) => {
+        const alternar = (ids: string[]) => setSelectedInternalTxIds(prev => {
+            const n = new Set(prev);
+            ids.forEach(id => (marcar ? n.add(id) : n.delete(id)));
+            return n;
+        });
+        const darfId = (tx as InternalTransaction & { darf_id?: string | null }).darf_id;
+        if (!darfId) { alternar([tx.id]); return; }
+        try {
+            const { data, error } = await supabase
+                .from('internal_transactions')
+                .select(`*, ${COLUNA_VALOR_ESPERADO}, ${COLUNA_VALOR_VARIAVEL}`)
+                .eq('darf_id', darfId)
+                .eq('status', 'PENDING');
+            if (error) throw error;
+            const irmaos = (data ?? []) as InternalTransaction[];
+            setInternalTransactions(prev => {
+                const ja = new Set(prev.map(t => t.id));
+                return [...prev, ...irmaos.filter(t => !ja.has(t.id))];
+            });
+            alternar([tx.id, ...irmaos.map(t => t.id)]);
+            if (marcar && irmaos.length > 1) {
+                setActionFeedback({ message: `DARF: os ${irmaos.length} lançamentos da guia foram marcados juntos (ela é conciliada inteira).`, type: 'success' });
+                setTimeout(() => setActionFeedback(null), 5000);
+            }
+        } catch (err) {
+            alternar([tx.id]);
+            setActionFeedback({ message: 'Não foi possível marcar os demais lançamentos do DARF: ' + errorMessage(err, 'erro desconhecido'), type: 'error' });
+            setTimeout(() => setActionFeedback(null), 8000);
+        }
+    };
     // Tipos locais para dados do Supabase
     type ReconciliationSuggestion = {
         id: string;
@@ -1636,6 +1675,30 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     };
 
     const handleUndoMatch = async (matchId: string, bankTxId: string, internalTxId: string) => {
+        // DARF é conciliado inteiro: desfazer um membro desfaz o DARF todo (fn_darf_desfazer_conciliacao).
+        const darfId = (internalTransactions.find(t => t.id === internalTxId) as (InternalTransaction & { darf_id?: string | null }) | undefined)?.darf_id;
+        if (darfId) {
+            if (!await confirm({
+                title: 'Desfazer a conciliação do DARF inteiro?',
+                message: 'Este lançamento faz parte de um DARF, que é conciliado de uma vez: todos os tributos e encargos da guia (e o extrato) voltam para Pendentes.',
+                variant: 'warning',
+                confirmLabel: 'Desfazer DARF',
+            })) return;
+            setIsLoading(true);
+            try {
+                const n = await darfService.desfazerConciliacao(darfId);
+                await loadTransactions();
+                await loadStats();
+                setActionFeedback({ message: `Conciliação do DARF desfeita (${n} vínculo${n !== 1 ? 's' : ''}).`, type: 'success' });
+                setTimeout(() => setActionFeedback(null), 6000);
+            } catch (err: unknown) {
+                setActionFeedback({ message: 'Não foi possível desfazer: ' + errorMessage(err, 'erro desconhecido'), type: 'error' });
+                setTimeout(() => setActionFeedback(null), 8000);
+            } finally {
+                setIsLoading(false);
+            }
+            return;
+        }
         if (!await confirm({ title: 'Desfazer este vínculo?', message: 'Ambas as transações voltarão para a lista de Pendentes.', variant: 'warning', confirmLabel: 'Desfazer' })) return;
         
         setIsLoading(true);
@@ -4260,12 +4323,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     type="checkbox"
                                                     className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer shadow-sm transition-transform hover:scale-110"
                                                     checked={selectedInternalTxIds.has(tx.id)}
-                                                    onChange={(e) => {
-                                                        const next = new Set(selectedInternalTxIds);
-                                                        if (e.target.checked) next.add(tx.id);
-                                                        else next.delete(tx.id);
-                                                        setSelectedInternalTxIds(next);
-                                                    }}
+                                                    title={(tx as InternalTransaction & { darf_id?: string | null }).darf_id ? 'Lançamento de DARF: marca a guia inteira' : undefined}
+                                                    onChange={(e) => { void marcarLancamento(tx, e.target.checked); }}
                                                 />
                                             </div>
                                             <div className="flex justify-between items-start mb-4 pl-8">
@@ -4449,12 +4508,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     type="checkbox"
                                                                     className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                                                                     checked={selectedInternalTxIds.has(tx.id)}
-                                                                    onChange={(e) => {
-                                                                        const next = new Set(selectedInternalTxIds);
-                                                                        if (e.target.checked) next.add(tx.id);
-                                                                        else next.delete(tx.id);
-                                                                        setSelectedInternalTxIds(next);
-                                                                    }}
+                                                                    title={(tx as InternalTransaction & { darf_id?: string | null }).darf_id ? 'Lançamento de DARF: marca a guia inteira' : undefined}
+                                                                    onChange={(e) => { void marcarLancamento(tx, e.target.checked); }}
                                                                 />
                                                             </td>
                                                             {pendingInternalColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (

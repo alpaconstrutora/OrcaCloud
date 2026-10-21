@@ -560,6 +560,15 @@ export const COLUNA_VALOR_ESPERADO = 'valor_esperado';
 export const FILTRO_SEM_TRIBUTO_RETIDO = 'business_status.is.null,business_status.neq.RETIDO';
 
 /**
+ * Coluna do DARF que agrupa o lançamento (aplicar_20271021300000). O motor 1:1
+ * deixa os membros de DARF FORA dos candidatos (`.is(COLUNA_DARF, null)`): o DARF
+ * é pago de uma vez, num débito só do extrato, e o banco recusa conciliar um
+ * tributo sozinho (trava `trg_darf_pago_junto`). Quem casa o DARF é a sugestão de
+ * grupo (`reconciliationGroupService.findGroups`), com todos os membros juntos.
+ */
+export const COLUNA_DARF = 'darf_id';
+
+/**
  * As organizações cujos títulos uma conta pode conciliar: a dona, e as que ela ATENDE
  * (lista ou "todas"), vindas de `fn_orgs_atendidas_pela_conta`. Até 11/10/2026 o motor
  * buscava só a dona — a conta Itaú da org "Altair" atende todas, o aluguel que cai nela é

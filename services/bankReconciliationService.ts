@@ -1108,6 +1108,8 @@ export const bankReconciliationService = {
             .in('organization_id', orgsDosTitulos)
             .eq('status', 'PENDING')
             .or(regras.FILTRO_SEM_TRIBUTO_RETIDO)
+            // Membro de DARF não casa 1:1 — o DARF inteiro casa pela sugestão de grupo.
+            .is(regras.COLUNA_DARF, null)
             .gte('transaction_date', windowStart)
             .lte('transaction_date', windowEnd)
             .order('transaction_date', { ascending: true })

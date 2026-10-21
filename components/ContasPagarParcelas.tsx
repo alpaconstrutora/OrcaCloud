@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown, Download, FileText, Landmark, Loader2, MoveHorizontal, Paperclip, Plus, Receipt, RefreshCw, Search, Tag, Undo2, X,
+    AlertCircle, Building2, Check, ChevronDown, Download, FileText, Filter, Landmark, Loader2, MoveHorizontal, Paperclip, Plus, Receipt, RefreshCw, Search, Tag, Undo2, X,
 } from 'lucide-react';
 import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financial';
 import { payableService, payableParty, STATUS_ASAAS_TRAVA_TITULO } from '../services/payableService';
@@ -1039,27 +1039,22 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                         )}
                     </div>
 
-                    {/* Filtro rápido de status em controle segmentado (§5.2) */}
-                    <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                        {STATUS_FILTROS.map(s => {
-                            const activeColor = s === 'VENCIDO' ? 'text-red-600'
-                                : s === 'PAGO' ? 'text-emerald-600'
-                                : s === 'PREVISTO' ? 'text-amber-600'
-                                : s === 'AGUARDANDO_APROVACAO' ? 'text-orange-600'
-                                : 'text-gray-900';
-                            return (
-                                <button
-                                    key={s}
-                                    onClick={() => setStatusFiltro(s)}
-                                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${statusFiltro === s ? `bg-white shadow-sm ${activeColor}` : 'text-gray-700 hover:text-gray-900'}`}
-                                >
-                                    {/* "Aguardando aprovação" por extenso estoura o trilho
-                                        segmentado; a coluna Status da tabela mostra o rótulo
-                                        completo (STATUS_PT). */}
-                                    {s === 'all' ? 'Todos' : s === 'AGUARDANDO_APROVACAO' ? 'Aguardando' : STATUS_PT[s]}
-                                </button>
-                            );
-                        })}
+                    {/* Status — dropdown, mesmo desenho do de Origem logo abaixo. Eram
+                        cinco pílulas segmentadas; com o rótulo completo ("Aguardando
+                        aprovação", STATUS_PT) elas estouravam o trilho. */}
+                    <div className="relative flex items-center shrink-0">
+                        <Filter className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                        <select
+                            value={statusFiltro}
+                            onChange={e => setStatusFiltro(e.target.value as StatusFiltro)}
+                            title="Filtrar por status"
+                            className="h-9 pl-9 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none"
+                        >
+                            {STATUS_FILTROS.map(s => (
+                                <option key={s} value={s}>{s === 'all' ? 'Todos os status' : STATUS_PT[s]}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5" />
                     </div>
 
                     {/* Origem — filtro de FONTE do título (Pedido de compra, Contrato,

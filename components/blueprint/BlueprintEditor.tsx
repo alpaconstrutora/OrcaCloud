@@ -527,6 +527,8 @@ import PainelGerarParedes from './PainelGerarParedes';
 import PainelTerreno from './PainelTerreno';
 import PainelZonaUrbanistica from './PainelZonaUrbanistica';
 import { dadosDoEmpreendimentoParaPlanta } from '../../utils/blueprintDadosDoEmpreendimento';
+import { compararComFicha, medidasDaPlantaParaFicha, patchDaPlantaParaFicha, ROTULO_DA_COLUNA } from '../../utils/blueprintTerrenoDaFicha';
+import type { FichaNoPainel } from './FichaDoTerrenoNaPlanta';
 import PainelTopografia from './PainelTopografia';
 import QuadroDeDivisas from './QuadroDeDivisas';
 import { useConfirm } from '../ui/confirm';
@@ -4998,6 +5000,55 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     [editor.model.boundaries, levelId],
   );
   const terreno = useMemo(() => medirTerreno(limitesDoNivel), [limitesDoNivel]);
+
+  /**
+   * TERRENO × FICHA DO EMPREENDIMENTO (21/10/2026 — plano docs/planos/2026-10-21-terreno-ficha-planta.md).
+   * A ficha é a do VINCULADO; planta sem vínculo usa o escolhido na zona (como o antigo "Gravar
+   * área"). A Planta conta o desenhado; profundidade = média das laterais. Os dois lados mostram
+   * o número do outro e a pessoa escolhe — automático só preenche o que a ficha tem VAZIO.
+   */
+  const empreendimentoDoTerreno = useMemo(
+    () => empreendimentoVinculado ?? empreendimentos.find((e) => e.id === zona.empreendimentoId) ?? null,
+    [empreendimentoVinculado, empreendimentos, zona.empreendimentoId],
+  );
+  const medidasDaPlanta = useMemo(() => medidasDaPlantaParaFicha(terreno, limitesDoNivel), [terreno, limitesDoNivel]);
+  const [avisoFichaAutomatica, setAvisoFichaAutomatica] = useState<string | null>(null);
+  /** Empreendimentos cuja ficha já foi avaliada para o preenchimento automático nesta abertura. */
+  const fichaAvaliada = useRef<Set<string>>(new Set());
+  // Ao ABRIR a planta com o lote já fechado: o que a ficha do vinculado tem vazio entra sozinho.
+  // Só na abertura — um contorno fechado no meio do desenho não é número para a ficha; depois
+  // disso o caminho é "Levar à ficha", com confirmação. Nunca troca valor existente.
+  useEffect(() => {
+    const alvo = empreendimentoVinculado;
+    if (!alvo || editor.loading || !levelId || fichaAvaliada.current.has(alvo.id)) return;
+    fichaAvaliada.current.add(alvo.id);
+    if (!terreno?.fechado) return;
+    const patch = patchDaPlantaParaFicha(medidasDaPlanta, alvo, 'SO_VAZIOS');
+    const campos = Object.keys(patch) as (keyof typeof patch)[];
+    if (campos.length === 0) return;
+    empreendimentoService
+      .update(alvo.id, patch)
+      .then((salvo) => {
+        setEmpreendimentos((lista) => lista.map((e) => (e.id === salvo.id ? salvo : e)));
+        setAvisoFichaAutomatica(`Preenchido automaticamente na ficha (estava vazio): ${campos.map((c) => ROTULO_DA_COLUNA[c]).join(', ')}.`);
+      })
+      .catch((e) => console.warn('[terreno] não deu para preencher a ficha do empreendimento:', e));
+  }, [empreendimentoVinculado, editor.loading, levelId, terreno, medidasDaPlanta]);
+  const fichaNoPainel = useMemo<FichaNoPainel | null>(() => {
+    if (!empreendimentoDoTerreno) return null;
+    const diferencas = patchDaPlantaParaFicha(medidasDaPlanta, empreendimentoDoTerreno, 'TUDO');
+    return {
+      nome: empreendimentoDoTerreno.name,
+      vinculado: empreendimentoDoTerreno.id === empreendimentoVinculado?.id,
+      linhas: compararComFicha(medidasDaPlanta, empreendimentoDoTerreno),
+      motivoSemLevar: !terreno?.fechado
+        ? 'Feche o contorno do lote: a área de contorno aberto é estimativa e não vai para a ficha.'
+        : Object.keys(diferencas).length === 0
+          ? 'A ficha já tem os números do desenho.'
+          : null,
+      avisoAutomatico: empreendimentoDoTerreno.id === empreendimentoVinculado?.id ? avisoFichaAutomatica : null,
+    };
+  }, [empreendimentoDoTerreno, empreendimentoVinculado, medidasDaPlanta, terreno, avisoFichaAutomatica]);
   const prismasDoEntornoDoEstudo = useMemo(() => {
     return prismasDoEntorno(entornoDoEstudo.vizinhos, limitesDoNivel, terreno?.anel ?? null);
   }, [limitesDoNivel, terreno, entornoDoEstudo.vizinhos]);
@@ -8160,64 +8211,35 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   }
 
   /**
-   * Leva a área medida na planta para a ficha do empreendimento.
+   * "Levar à ficha": o lote desenhado vai para a ficha do empreendimento — área, frente, fundos,
+   * laterais e (desde 21/10/2026) a profundidade, média das laterais. Contas em
+   * `utils/blueprintTerrenoDaFicha.ts`, as mesmas que a ficha mostra do lado de lá.
    *
-   * Mostra o valor ATUAL antes de trocar. Substituir um número que alguém
-   * digitou, sem dizer qual era, é o tipo de gravação que só se descobre quando
-   * já não dá para voltar — a ficha não tem histórico.
-   */
-  /**
-   * Leva o lote desenhado para a ficha do empreendimento: área e as quatro medidas.
+   * Mostra o valor ATUAL antes de trocar: substituir um número que alguém digitou sem dizer qual
+   * era é gravação que só se descobre tarde (o histórico do empreendimento registra a troca).
    *
-   * ⚠️ Grava o DESENHADO, não o escriturado. É o que este botão sempre afirmou
-   * levar, e o quadro de divisas é onde se prova que os dois batem. Divergência
-   * **avisa e não bloqueia** — o dono do número é o usuário, e travar a gravação
-   * por causa de uma diferença de campo é o erro que já custou uma reversão.
+   * ⚠️ Grava o DESENHADO, não o escriturado — decisão do usuário reafirmada em 21/10/2026; o
+   * quadro de divisas é onde se prova que os dois batem. Divergência **avisa e não bloqueia**.
    *
-   * ⚠️ Papel sem nenhum lado fica FORA do update, não vai como zero: as colunas
-   * também são preenchidas à mão na ficha, e zero apagaria o que alguém digitou.
+   * ⚠️ Papel sem nenhum lado fica FORA do update, não vai como zero: as colunas também são
+   * preenchidas à mão na ficha, e zero apagaria o que alguém digitou.
    */
   async function gravarAreaNoEmpreendimento(empreendimentoId: string) {
     if (!terreno || !terreno.fechado) return;
     const alvo = empreendimentos.find((e) => e.id === empreendimentoId);
     if (!alvo) return;
 
-    const nova = Number(areaEmM2(terreno).toFixed(2));
-    const atual = alvo.terreno_area ?? null;
-    const emMetros = (mm: number) => Number((mm / 1000).toFixed(2));
-
-    const medidas = medidasPorPapel(terreno, limitesDoNivel);
-    const campoDoPapel = {
-      FRENTE: 'terreno_frente',
-      FUNDOS: 'terreno_fundos',
-      LATERAL_DIREITA: 'terreno_lateral_direita',
-      LATERAL_ESQUERDA: 'terreno_lateral_esquerda',
-    } as const;
-
-    const patch: Partial<Empreendimento> = { terreno_area: nova };
-    const linhasDaConfirmacao = [
-      atual === null
-        ? `Área: ${nova.toFixed(2).replace('.', ',')} m² (hoje sem registro)`
-        : `Área: ${Number(atual).toFixed(2).replace('.', ',')} → ${nova.toFixed(2).replace('.', ',')} m²`,
-    ];
-
-    for (const [papel, campo] of Object.entries(campoDoPapel) as [
-      keyof typeof campoDoPapel,
-      (typeof campoDoPapel)[keyof typeof campoDoPapel],
-    ][]) {
-      const mm = medidas[papel];
-      if (mm === undefined) continue;
-      const valor = emMetros(mm);
-      (patch as Record<string, unknown>)[campo] = valor;
+    const patch = patchDaPlantaParaFicha(medidasDaPlanta, alvo, 'TUDO');
+    const fmt = (v: number) => v.toFixed(2).replace('.', ',');
+    const linhasDaConfirmacao = (Object.keys(patch) as (keyof typeof patch)[]).map((campo) => {
+      const unidade = campo === 'terreno_area' ? 'm²' : 'm';
       const antes = alvo[campo] ?? null;
-      linhasDaConfirmacao.push(
-        antes === null
-          ? `${ROTULO_DO_PAPEL[papel]}: ${valor.toFixed(2).replace('.', ',')} m (hoje sem registro)`
-          : `${ROTULO_DO_PAPEL[papel]}: ${Number(antes).toFixed(2).replace('.', ',')} → ${valor
-              .toFixed(2)
-              .replace('.', ',')} m`,
-      );
-    }
+      return antes === null
+        ? `${ROTULO_DA_COLUNA[campo]}: ${fmt(patch[campo]!)} ${unidade} (hoje sem registro)`
+        : `${ROTULO_DA_COLUNA[campo]}: ${fmt(Number(antes))} → ${fmt(patch[campo]!)} ${unidade}`;
+    });
+    if (linhasDaConfirmacao.length === 0) return;
+    const atual = alvo.terreno_area ?? null;
 
     const semPapel = ladosSemPapel > 0 ? `\n\n${ladosSemPapel} lado(s) sem papel não entram.` : '';
     const divergem =
@@ -10144,6 +10166,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       empreendimentoId={zona.empreendimentoId}
       onEmpreendimento={zona.setEmpreendimentoId}
       onGravarArea={(id) => void gravarAreaNoEmpreendimento(id)}
+      ficha={fichaNoPainel}
+      onLevarAFicha={() => empreendimentoDoTerreno && void gravarAreaNoEmpreendimento(empreendimentoDoTerreno.id)}
       gravando={gravandoArea}
       erro={erroArea}
       onAbrirQuadro={() => setQuadroAberto(true)}

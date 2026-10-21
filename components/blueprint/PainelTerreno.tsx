@@ -13,6 +13,7 @@ import {
   gmsTexto,
 } from '../../utils/geo';
 import { AlertTriangle, Keyboard, LandPlot, MapPinned, Save, Table2 } from 'lucide-react';
+import FichaDoTerrenoNaPlanta, { type FichaNoPainel } from './FichaDoTerrenoNaPlanta';
 import type { Boundary, BoundaryPapel, Georreferencia } from '../../utils/blueprintKernel';
 import {
   areaEmM2,
@@ -217,6 +218,12 @@ interface Props {
   empreendimentoId: string;
   onEmpreendimento: (id: string) => void;
   onGravarArea: (empreendimentoId: string) => void;
+  /**
+   * A ficha do empreendimento lado a lado com o desenho (21/10/2026). Presente, ela substitui o
+   * antigo "Gravar área" e aparece também SEM lote — para ver o que a ficha diz antes de desenhar.
+   */
+  ficha?: FichaNoPainel | null;
+  onLevarAFicha?: () => void;
   gravando?: boolean;
   /** Falha da última gravação. Aparece onde a ação foi pedida, não no topo. */
   erro?: string | null;
@@ -287,6 +294,8 @@ export default function PainelTerreno({
   empreendimentoId,
   onEmpreendimento,
   onGravarArea,
+  ficha = null,
+  onLevarAFicha,
   gravando = false,
   erro = null,
   onAbrirQuadro,
@@ -316,7 +325,7 @@ export default function PainelTerreno({
   if (!terreno && !divisaSelecionada) {
     // A ZONA também vale sem lote (03/10/2026): escolher a lei — e com ela os recuos e o gabarito que o lote vai
     // receber — não depende de já haver divisa desenhada. Este retorno antecipado a deixava de fora.
-    if (!topografiaSlot && !zonaSlot && !onDigitarLote && !onDesenharNoMapa) return null;
+    if (!topografiaSlot && !zonaSlot && !onDigitarLote && !onDesenharNoMapa && !ficha) return null;
     return (
       <div className={raizDoPainel}>
         {!emDrawer && (
@@ -359,6 +368,7 @@ export default function PainelTerreno({
             </div>
           </div>
         )}
+        {ficha && <FichaDoTerrenoNaPlanta ficha={ficha} onLevar={() => onLevarAFicha?.()} gravando={gravando} erro={erro} />}
         <Georreferenciar valor={georreferencia} onMudar={onGeorreferencia} />
         {zonaSlot}
         {topografiaSlot}
@@ -558,7 +568,11 @@ export default function PainelTerreno({
         </div>
       )}
 
-      {terreno && terreno.fechado && empreendimentos.length > 0 && (
+      {ficha && <FichaDoTerrenoNaPlanta ficha={ficha} onLevar={() => onLevarAFicha?.()} gravando={gravando} erro={erro} />}
+
+      {/* Sem `ficha` = planta sem vínculo e sem empreendimento escolhido na zona: sobra o bloco
+          antigo, que diz para escolher o empreendimento acima. */}
+      {!ficha && terreno && terreno.fechado && empreendimentos.length > 0 && (
         <div className="mt-3 border-t border-slate-200 pt-3">
           <p className="text-xs font-medium text-slate-700">Gravar no empreendimento</p>
 

@@ -12,6 +12,8 @@
 import React from 'react';
 import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, MapPin } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
+import { terrenoDaPlantaVinculada, type TerrenoDaPlanta } from '../../services/blueprintTerrenoDaPlanta';
+import { compararComFicha, type SituacaoDoCampo } from '../../utils/blueprintTerrenoDaFicha';
 import ActionIconButton from '../ui/ActionIconButton';
 import Button from '../ui/Button';
 import SecaoTitulo from '../ui/SecaoTitulo';
@@ -57,6 +59,17 @@ const terrenoDe = (e?: Empreendimento) => ({
   terreno_profundidade: e?.terreno_profundidade?.toString() ?? '',
 });
 type TerrenoForm = ReturnType<typeof terrenoDe>;
+type CampoDoTerreno = Exclude<keyof TerrenoForm, 'terreno_tipo'>;
+
+/** Cor da linha "Planta: …" sob cada campo (§8: texto colorido, sem pílula). */
+const COR_DA_SITUACAO: Record<SituacaoDoCampo, string> = {
+  IGUAL: 'text-gray-500',
+  DIFERENTE: 'text-amber-700',
+  SO_PLANTA: 'text-blue-700',
+  SO_FICHA: 'text-gray-500',
+  NENHUM: 'text-gray-500',
+};
+const metros = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const emptyTorreForm = () => ({ name: '', floors_count: '', units_per_floor: '' });
 
 export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId, empreendimento, onTerrenoSaved, somenteLeitura }) => {
@@ -98,6 +111,50 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
   const [terrenoForm, setTerrenoForm] = React.useState<TerrenoForm>(terrenoSalvo);
   React.useEffect(() => { setTerrenoForm(terrenoSalvo); }, [terrenoSalvo]);
   const terrenoDirty = (Object.keys(terrenoSalvo) as (keyof TerrenoForm)[]).some(k => terrenoForm[k] !== terrenoSalvo[k]);
+
+  // ── Terreno × Planta vinculada (21/10/2026) ─────────────────────────────────
+  // Pedido: "devem ser sincronizadas com planta inteligente > terreno > dados do lote". Decisão do
+  // usuário: os dois lados mostram o número do outro e a pessoa escolhe — aqui o que está VAZIO
+  // na ficha já vem preenchido no formulário com o valor da Planta (não grava: confira e salve).
+  // Plano: docs/planos/2026-10-21-terreno-ficha-planta.md.
+  const [daPlanta, setDaPlanta] = React.useState<TerrenoDaPlanta | null>(null);
+  React.useEffect(() => {
+    if (!empreendimento) { setDaPlanta(null); return; }
+    let vivo = true;
+    terrenoDaPlantaVinculada(empreendimento)
+      .then(r => { if (vivo) setDaPlanta(r); })
+      .catch(err => { if (vivo) setDaPlanta({ ok: false, motivo: `Não foi possível ler a planta vinculada: ${err instanceof Error ? err.message : String(err)}` }); });
+    return () => { vivo = false; };
+  }, [empreendimento?.id, empreendimento?.organization_id, empreendimento?.blueprint_study_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Amarrada aos VALORES salvos, não à identidade do objeto: o efeito abaixo só pode repreencher
+  // quando a ficha gravada (ou a planta) muda — nunca um campo que a pessoa acabou de apagar.
+  const comparacao = React.useMemo(
+    () => (daPlanta?.ok ? compararComFicha(daPlanta.medidas, empreendimento ?? null) : null),
+    [daPlanta, empreendimento?.terreno_area, empreendimento?.terreno_frente, empreendimento?.terreno_fundos, empreendimento?.terreno_profundidade], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const valorDaPlanta = (key: CampoDoTerreno) => comparacao?.find(l => l.campo === key)?.planta ?? null;
+  /** Campos que entraram no formulário vindos da Planta (estavam vazios na ficha). */
+  const [veioDaPlanta, setVeioDaPlanta] = React.useState<Set<CampoDoTerreno>>(new Set());
+  React.useEffect(() => {
+    if (!comparacao || travado) { setVeioDaPlanta(new Set()); return; }
+    const vindos = new Set<CampoDoTerreno>();
+    for (const l of comparacao) if (l.planta !== null && terrenoSalvo[l.campo as CampoDoTerreno] === '') vindos.add(l.campo as CampoDoTerreno);
+    if (vindos.size === 0) { setVeioDaPlanta(vindos); return; }
+    setTerrenoForm(prev => {
+      const next = { ...prev };
+      for (const k of vindos) if (prev[k] === '') next[k] = String(valorDaPlanta(k));
+      return next;
+    });
+    setVeioDaPlanta(vindos);
+  }, [comparacao, terrenoSalvo, travado]); // eslint-disable-line react-hooks/exhaustive-deps
+  const diferentesDaPlanta = (comparacao ?? []).filter(l => l.planta !== null && terrenoForm[l.campo as CampoDoTerreno] !== String(l.planta));
+  const usarValoresDaPlanta = () => {
+    setTerrenoForm(prev => {
+      const next = { ...prev };
+      for (const l of comparacao ?? []) if (l.planta !== null) next[l.campo as CampoDoTerreno] = String(l.planta);
+      return next;
+    });
+  };
   const [savingTerreno, setSavingTerreno] = React.useState(false);
 
   const handleSaveTerreno = async (e: React.FormEvent) => {
@@ -244,7 +301,8 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
         <section className="space-y-4">
           <SecaoTitulo icon={MapPin} titulo="Terreno" />
           <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0">
-            <form onSubmit={handleSaveTerreno} className="grid grid-cols-2 md:grid-cols-6 gap-x-6 gap-y-4 items-end">
+            {/* items-start: a linha "Planta: …" sob alguns campos não pode desalinhar os campos entre si. */}
+            <form onSubmit={handleSaveTerreno} className="grid grid-cols-2 md:grid-cols-6 gap-x-6 gap-y-4 items-start">
               <div className="space-y-1.5">
                 <label htmlFor="terreno-tipo" className={rotuloCls}>Tipo de terreno</label>
                 <select id="terreno-tipo" className={inputCls} value={terrenoForm.terreno_tipo}
@@ -253,14 +311,28 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                   {TERRENO_TIPO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
-              {terrenoCampos.map(({ key, label }) => (
-                <div key={key} className="space-y-1.5">
-                  <label htmlFor={`terreno-${key}`} className={rotuloCls}>{label}</label>
-                  <input id={`terreno-${key}`} className={inputCls} type="number" step="0.01" min="0" value={terrenoForm[key]}
-                    onChange={e => setTerrenoForm(p => ({ ...p, [key]: e.target.value }))} />
-                </div>
-              ))}
-              <span title={!terrenoDirty && !travado ? 'Altere algum campo do terreno para salvar.' : undefined} className="col-span-2 md:col-span-1">
+              {terrenoCampos.map(({ key, label }) => {
+                const linha = comparacao?.find(l => l.campo === key) ?? null;
+                const unidade = key === 'terreno_area' ? 'm²' : 'm';
+                const daPlantaNoCampo = veioDaPlanta.has(key) && linha?.planta !== null && terrenoForm[key] === String(linha?.planta);
+                return (
+                  <div key={key} className="space-y-1.5">
+                    <label htmlFor={`terreno-${key}`} className={rotuloCls}>{label}</label>
+                    <input id={`terreno-${key}`} className={inputCls} type="number" step="0.01" min="0" value={terrenoForm[key]}
+                      onChange={e => setTerrenoForm(p => ({ ...p, [key]: e.target.value }))} />
+                    {linha && linha.planta !== null && (
+                      <p className={`text-xs ${daPlantaNoCampo ? 'text-blue-700' : COR_DA_SITUACAO[linha.situacao]}`} data-testid={`planta-${key}`}>
+                        {daPlantaNoCampo
+                          ? 'Da Planta — confira e salve'
+                          : `Planta: ${metros(linha.planta)} ${unidade}${linha.situacao === 'DIFERENTE' ? ' · diferente' : ''}`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+              <span title={!terrenoDirty && !travado ? 'Altere algum campo do terreno para salvar.' : undefined} className="col-span-2 md:col-span-1 space-y-1.5">
+                {/* Ocupa a altura do rótulo dos campos, para o botão ficar na linha deles. */}
+                <span aria-hidden="true" className={`${rotuloCls} hidden md:block invisible`}>.</span>
                 <Button type="submit" disabled={savingTerreno || !terrenoDirty} className="w-full">
                   {savingTerreno ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-[15px] h-[15px]" />}
                   Salvar terreno
@@ -268,6 +340,23 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
               </span>
             </form>
           </fieldset>
+          {/* A planta vinculada: de onde vêm os números "Planta: …", ou por que não há. */}
+          {daPlanta && (
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3" data-testid="terreno-da-planta">
+              <p className="text-xs text-gray-500">
+                {daPlanta.ok
+                  ? `Planta vinculada: ${daPlanta.plantaNome} — medidas do desenho; profundidade é a média das laterais.`
+                  : daPlanta.motivo}
+              </p>
+              {daPlanta.ok && !travado && (
+                <span title={diferentesDaPlanta.length === 0 ? 'O formulário já tem os números da Planta.' : undefined}>
+                  <Button type="button" variant="secondary" size="sm" disabled={diferentesDaPlanta.length === 0} onClick={usarValoresDaPlanta}>
+                    Usar valores da Planta
+                  </Button>
+                </span>
+              )}
+            </div>
+          )}
         </section>
       )}
 

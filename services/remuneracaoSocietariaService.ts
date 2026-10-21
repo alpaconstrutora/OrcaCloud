@@ -3,7 +3,7 @@ import { fiscalService } from './fiscalService';
 import { documentService } from './documentService';
 import { supplierService } from './supplierService';
 import { companyService } from './companyService';
-import { getOrgTerceirosTaxes } from './payrollService';
+import { payrollService } from './payrollService';
 import { calcularIrrfMensal } from '../lib/payrollCalc';
 import {
     PartnerCompensationSettings, PartnerCompensationSettingsUpsert,
@@ -73,7 +73,7 @@ export const remuneracaoSocietariaService = {
     // sócio — e só incide se a empresa NÃO for optante do Simples Nacional.
     // Contribuições de Terceiros (Sistema S) incidem sobre a MESMA base da
     // Cota Patronal, inclusive sobre pró-labore — reusa a config por
-    // organização já usada na folha CLT (payrollService.getOrgTerceirosTaxes),
+    // organização já usada na folha CLT (payrollService.getEncargosConfig),
     // sem duplicar a alíquota.
 
     async getProlaboreInssRule(competenceDate: string): Promise<ProlaboreInssRule> {
@@ -109,7 +109,7 @@ export const remuneracaoSocietariaService = {
         const isento = regimeTributario === 'simples' && !simplesAnexoIV;
         const patronal = isento ? 0 : baseInss * rule.patronal_rate;
         const terceiroTotalRate = organizationId
-            ? getOrgTerceirosTaxes(organizationId).reduce((s, t) => s + t.rate, 0)
+            ? (await payrollService.getEncargosConfig(organizationId)).terceiros.reduce((s, t) => s + t.rate, 0)
             : 0;
         const terceiros = isento ? 0 : baseInss * terceiroTotalRate;
 

@@ -3,7 +3,7 @@ import {
     Search, Plus, CheckCircle2,
     XCircle, AlertTriangle, Shield, X,
     Info, Calculator, AlertCircle, Save, Building2,
-    TrendingUp, Loader2, DollarSign, Users, Banknote, Calendar, MoveHorizontal
+    TrendingUp, Loader2, DollarSign, Users, Banknote, Calendar, MoveHorizontal, ArrowRightLeft
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { payrollService, PayrollRubric } from '../services/payrollService';
@@ -121,7 +121,8 @@ const LaborRubrics: React.FC = () => {
         calculation_config: {},
         active: true,
         lancamento_individualizado: false,
-        dia_lancamento: undefined
+        dia_lancamento: undefined,
+        repasse_terceiros: false,
     });
 
     const [validation, setValidation] = useState<ValidationResult>({ valid: true, errors: [], warnings: [] });
@@ -212,7 +213,8 @@ const LaborRubrics: React.FC = () => {
                 calculation_config: {},
                 active: true,
                 lancamento_individualizado: false,
-                dia_lancamento: undefined
+                dia_lancamento: undefined,
+                repasse_terceiros: false,
             });
             setIsUsed(false);
         }
@@ -611,6 +613,23 @@ const LaborRubrics: React.FC = () => {
                                                     <Banknote size={16} />
                                                     <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">Lançamento Individualizado</span>
                                                 </button>
+
+                                                {/* Só desconto pode ser repasse; nos outros tipos fica visível, desligado, com o motivo. */}
+                                                <span className="inline-flex flex-shrink-0" title={formData.type === 'desconto'
+                                                    ? 'Se ativado, o valor descontado vira um título próprio no financeiro da folha, a pagar à entidade (sindicato, pensão…). Desligado, o desconto só reduz o líquido (falta, VR, dedução).'
+                                                    : 'Só rubrica de DESCONTO pode ser repasse a terceiro'}>
+                                                <button
+                                                    type="button"
+                                                    disabled={formData.type !== 'desconto'}
+                                                    onClick={() => setFormData({ ...formData, repasse_terceiros: !formData.repasse_terceiros })}
+                                                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                        formData.repasse_terceiros && formData.type === 'desconto' ? 'bg-sky-50 text-sky-600 border-sky-100 shadow-sm' : 'bg-white text-slate-300 border-slate-100'
+                                                    }`}
+                                                >
+                                                    <ArrowRightLeft size={16} />
+                                                    <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">Repasse a Terceiro</span>
+                                                </button>
+                                                </span>
                                             </div>
 
                                             {formData.lancamento_individualizado && (

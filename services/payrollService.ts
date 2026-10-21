@@ -2,37 +2,18 @@ import { supabase } from '../lib/supabase';
 import { projectService } from './projectService';
 import { validateAllocationTotal } from '../lib/validators';
 import type { ProjectSettings } from '../types';
+import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
+import {
+    encargosPadrao, montarLinhasDaFolha, fatiasDoColaborador, custoPorDestino, formaDoTitulo,
+    tituloDaFolhaPreservado, chaveContabil, vencimentoDia20, diaDoMesSeguinte, distribuirCentavos,
+    type EncargosConfig, type EmpresaRegime, type ColaboradorDaFolha, type ItemDaFolha, type OpcoesDaFolha,
+    type TerceiroTax,
+} from '../utils/folhaFinanceiro';
 
-// Contribuições de Terceiros (taxas parafiscais) — alíquotas incidentes sobre a folha bruta
-export interface TerceiroTax { code: string; name: string; rate: number }
+// Alíquotas patronais (CPP, RAT×FAP, terceiros) moram em payroll_encargos_config
+// desde 21/10/2026 — antes os terceiros ficavam no localStorage de quem clicava.
+export type { TerceiroTax, EncargosConfig } from '../utils/folhaFinanceiro';
 
-export const TERCEIROS_TAXES_DEFAULT: TerceiroTax[] = [
-    { code: '1170', name: 'Salário Educação', rate: 0.025 },
-    { code: '1176', name: 'INCRA',            rate: 0.002 },
-    { code: '1191', name: 'SENAC',            rate: 0.010 },
-    { code: '1196', name: 'SESC',             rate: 0.015 },
-    { code: '1200', name: 'SEBRAE',           rate: 0.006 },
-];
-
-// orgId null = "Todas as organizações": devolve o default, sem chave de storage.
-export function getOrgTerceirosTaxes(orgId: string | null): TerceiroTax[] {
-    if (!orgId) return TERCEIROS_TAXES_DEFAULT.map(t => ({ ...t }));
-    try {
-        const raw = localStorage.getItem(`terceiros_taxes_${orgId}`);
-        if (raw) {
-            const parsed = JSON.parse(raw) as TerceiroTax[];
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-    } catch { /* ignore */ }
-    return TERCEIROS_TAXES_DEFAULT.map(t => ({ ...t }));
-}
-
-export function saveOrgTerceirosTaxes(orgId: string | null, taxes: TerceiroTax[]): void {
-    if (!orgId) return;   // sem org específica não há onde gravar (REGRA #5, exceção 4)
-    localStorage.setItem(`terceiros_taxes_${orgId}`, JSON.stringify(taxes));
-}
-
-const TERCEIROS_TAXES = TERCEIROS_TAXES_DEFAULT; // alias interno para uso em getWorksiteCostSummary (usa default)
 
 // ============================================================
 // TIPOS DE FOLHA
@@ -71,6 +52,8 @@ export interface PayrollRubric {
     active: boolean;
     lancamento_individualizado?: boolean; // gera parcela separada no financeiro por funcionário
     dia_lancamento?: number;              // dia do mês (1–28) para vencimento do lançamento individual
+    /** Desconto que o empregador repassa a outra entidade (sindicato, pensão): vira título na folha. */
+    repasse_terceiros?: boolean;
 }
 
 export interface PayrollRun {
@@ -145,24 +128,23 @@ export interface PayrollResultWithEmployee extends PayrollResult {
 // nem toda linha de folha tem o colaborador como credor:
 //
 //   • salário, adiantamento e rubricas individualizadas → o COLABORADOR;
-//   • encargos patronais → o órgão arrecadador (`CREDOR_ENCARGOS`);
-//   • contribuições de terceiros → a ENTIDADE da rubrica (SESI, SENAI,
-//     INCRA…), que já vem em `TerceiroTax.name`.
+//   • tributos (FGTS, INSS, IRRF, CPP, RAT, terceiros) → o NOME do tributo
+//     (`utils/folhaFinanceiro.formaDoTitulo`), desde 21/10/2026 — antes era um
+//     título só, "INSS/FGTS", com todos os descontos dentro;
+//   • repasses (contribuição assistencial…) → o nome da rubrica.
 //
 // ⚠️ NUNCA gravar `party_id` aqui: a coluna tem FK para `clients`
 // (`internal_txs_party_id_fkey`, migration 20261219000003) e um `employee_id`
 // ali estoura a constraint. O vínculo do colaborador fica só no `reference_id`.
 //
-// ⚠️ `party_type` NÃO pode ser 'TAX' nem para encargos: esse valor é o
-// discriminador exclusivo de `vw_commercial_tax_payables`
-// (migration 20270824000010, `WHERE it.party_type = 'TAX'`) e a folha inteira
-// vazaria para a tela de Tributos a Pagar.
+// `party_type = 'TAX'` é o discriminador de `vw_commercial_tax_payables`
+// (Tributos a Pagar). Desde 21/10/2026 os TRIBUTOS da folha o usam de propósito
+// (pedido do usuário: FGTS e INSS em Tributos, agrupáveis em DARF) — e SÓ eles:
+// salário e adiantamento são 'EMPLOYEE'; repasses e encargos de rubrica,
+// 'GOVERNMENT'. Plano: docs/planos/2026-10-21-folha-encargos-em-tributos-a-pagar.md
 
-/** Credor institucional dos encargos patronais (INSS + FGTS). */
-export const CREDOR_ENCARGOS = 'INSS/FGTS';
-
-/** Discriminador de contraparte das linhas de folha. Ver aviso sobre 'TAX'. */
-export type PayrollPartyType = 'EMPLOYEE' | 'GOVERNMENT';
+/** Discriminador de contraparte das linhas de folha. */
+export type PayrollPartyType = 'EMPLOYEE' | 'TAX' | 'GOVERNMENT';
 
 /**
  * Credor de uma linha AGREGADA (custo por obra, custo não alocado), que
@@ -190,7 +172,7 @@ interface InternalTransaction {
     category: string;
     status: 'PENDING' | 'PAID';
     business_status?: string;
-    project_id?: string;
+    project_id?: string | null;
     /* Credor exibido em Contas a Pagar. A coluna sai de
        `party_name || entity_name` (payableService.payableParty) — sem isto a
        célula Credor de TODA linha de folha cai no travessão. Ver a seção
@@ -223,10 +205,9 @@ interface InternalTransaction {
 //   • senão vale o ciclo de folha (`payroll_runs.*`);
 //   • nenhum dos dois → null, como antes.
 //
-// ⚠️ O override do colaborador só alcança linha que TEM um colaborador:
-// rubricas individualizadas e `syncEmployeeToFinance`. As linhas agregadas por
-// obra e as de "Custo Administrativo (Não Alocado)" somam vários colaboradores
-// numa transação só — nelas vale sempre a classificação do ciclo.
+// As linhas agregadas (por obra e "Não Alocado") somam vários colaboradores,
+// mas cada um entra pela SUA classificação: o custo é dividido por chave
+// contábil antes de agregar (`utils/folhaFinanceiro.montarLinhasDaFolha`).
 
 /** Classificação contábil resolvida para uma linha de folha. */
 export interface PayrollClassification {
@@ -317,32 +298,29 @@ export function resolvePayrollShares(
     return fatias;
 }
 
-/**
- * Custo de uma obra (ou do não alocado) sob UMA chave contábil. É o que vira um
- * lançamento em `internal_transactions`: com rateio, a mesma obra passa a ter
- * um balde por Centro de Custo × Plano de Contas.
- */
-export interface WorksiteClassBucket extends PayrollClassification {
-    cost: number;
-    netSalary: number;
-    encargos: number;
-    gross: number;
-    contribuicoes: number;
-    /** Nomes dos colaboradores — viram o Credor da linha agregada. */
-    employees: string[];
+/** Item da folha com o colaborador (payroll_items). */
+export interface ItemDaFolhaComColaborador {
+    id: string;
+    employee_id: string;
+    code: string;
+    type: string;
+    amount: number;
 }
 
-export interface WorksiteCostEntry {
-    id: string;
-    name: string;
-    cost: number;
-    netSalary: number;
-    encargos: number;
-    gross: number;
-    contribuicoes: number;
-    employees: string[];
-    /** Quebra contábil da obra. Sem rateio, tem exatamente uma entrada. */
-    byClass: Record<string, WorksiteClassBucket>;
+/** O que `syncPayrollToFinance` devolve — a tela de Ciclos mostra. */
+export interface ResultadoSyncFolha {
+    success: true;
+    /** Títulos gravados (novos ou regravados). */
+    count: number;
+    /** Títulos de cálculo antigo apagados. */
+    removidos: number;
+    /** Títulos não tocados: pagos, conciliados, cancelados, em DARF ou com Asaas. */
+    preservados: number;
+    avisos: string[];
+    /** Total por tributo (TAX) ou categoria. */
+    totais: Record<string, number>;
+    encargos: EncargosConfig;
+    rubricasIndividualizadas: string[];
 }
 
 /** Chave estável da classificação, para agrupar e compor `reference_id`. */
@@ -579,9 +557,9 @@ export const payrollService = {
     async cancelarTitulosDaFolha(runId: string): Promise<{ cancelados: number; conciliadosPreservados: number }> {
         const { data: titulos, error } = await supabase
             .from('internal_transactions')
-            .select('id, status')
-            .eq('source_system', 'LABOR')
-            .like('reference_id', `labor-${runId}%`);
+            .select('id, status, business_status, darf_id')
+            .in('source_system', ['LABOR', 'PROJECT'])
+            .like('reference_id', `labor-${runId}-%`);
         if (error) throw error;
         if (!titulos || titulos.length === 0) return { cancelados: 0, conciliadosPreservados: 0 };
 
@@ -592,7 +570,11 @@ export const payrollService = {
             .in('internal_transaction_id', ids);
         const conciliados = new Set((vinculados ?? []).map(v => v.internal_transaction_id));
 
-        const cancelaveis = titulos.filter(t => !conciliados.has(t.id) && t.status !== 'CANCELLED').map(t => t.id);
+        // Pago ou em DARF também fica: cancelar título pago sumiria com a saída de
+        // caixa, e o banco recusa mexer em membro de DARF (desagrupe antes).
+        const cancelaveis = titulos
+            .filter(t => !conciliados.has(t.id) && !tituloDaFolhaPreservado(t))
+            .map(t => t.id);
         if (cancelaveis.length > 0) {
             const { error: updErr } = await supabase
                 .from('internal_transactions')
@@ -634,7 +616,7 @@ export const payrollService = {
     async listRubrics(includeInactive: boolean = false) {
         let query = supabase
             .from('rubrics')
-            .select('code, name, type, incidence_inss, incidence_fgts, incidence_irrf, is_automatic, is_clt_mandatory, calculation_type, calculation_config, category, formula, active, lancamento_individualizado, dia_lancamento')
+            .select('code, name, type, incidence_inss, incidence_fgts, incidence_irrf, is_automatic, is_clt_mandatory, calculation_type, calculation_config, category, formula, active, lancamento_individualizado, dia_lancamento, repasse_terceiros')
             .order('code');
             
         if (!includeInactive) {
@@ -649,7 +631,7 @@ export const payrollService = {
     async getRubric(code: string) {
         const { data, error } = await supabase
             .from('rubrics')
-            .select('code, name, type, incidence_inss, incidence_fgts, incidence_irrf, is_automatic, is_clt_mandatory, calculation_type, calculation_config, category, formula, active, lancamento_individualizado, dia_lancamento')
+            .select('code, name, type, incidence_inss, incidence_fgts, incidence_irrf, is_automatic, is_clt_mandatory, calculation_type, calculation_config, category, formula, active, lancamento_individualizado, dia_lancamento, repasse_terceiros')
             .eq('code', code)
             .single();
 
@@ -1274,663 +1256,406 @@ export const payrollService = {
         return data as PayrollEvent;
     },
 
-    async getWorksiteCostSummary(runId: string) {
-        // 1. Obter detalhes da folha para saber o período
-        const run = await this.getRun(runId);
-        const period = run.start_date.slice(0, 7);
+    // ============================================================
+    // FINANCEIRO DA FOLHA
+    // ============================================================
+    // Plano: docs/planos/2026-10-21-folha-encargos-em-tributos-a-pagar.md
+    // O QUE vira título está em utils/folhaFinanceiro.ts (puro, testado). Aqui
+    // só se carrega a folha e se grava, preservando o que já tem dinheiro ou
+    // decisão do usuário em cima.
 
-        // 2. Obter todos os resultados da folha + nomes dos colaboradores
-        //    (com a classificação contábil de cada um — ver passo 3.b)
-        const results = await this.listResultsByRun(runId);
-        const empIds = results.map(r => r.employee_id).filter(Boolean);
-        const { data: empRows } = await supabase
-            .from('employees')
-            .select('id, name, cost_center_id, plano_de_contas_id')
-            .in('id', empIds);
-        type EmpClassRow = { id: string; name: string; cost_center_id?: string | null; plano_de_contas_id?: string | null };
-        const empNameMap: Record<string, string> = Object.fromEntries((empRows || []).map((e: EmpClassRow) => [e.id, e.name]));
-        const empClassMap: Record<string, EmpClassRow> = Object.fromEntries((empRows || []).map((e: EmpClassRow) => [e.id, e]));
-
-        // 2.b. Rateio contábil do mês (employee_cost_splits). Vazio para quem
-        // não rateia — aí `resolvePayrollShares` devolve uma fatia única com a
-        // herança colaborador → ciclo, e o resultado é idêntico ao de antes.
-        const splitsByEmployee = await this.listCostSplitsForEmployees(empIds, period).catch(() => ({} as Record<string, EmployeeCostSplit[]>));
-
-        // 3. Carregar TODAS as alocações do período em uma única query (resolve N+1)
-        const { data: allocRows } = await supabase
-            .from('employee_allocations')
-            .select('*, worksite:project_id(name)')
-            .in('employee_id', empIds)
-            .eq('reference_period', period);
-
-        const allocByEmployee: Record<string, EmployeeAllocation[]> = {};
-        (allocRows || []).forEach((a: EmployeeAllocation & { worksite?: { name: string } }) => {
-            if (!allocByEmployee[a.employee_id]) allocByEmployee[a.employee_id] = [];
-            allocByEmployee[a.employee_id].push({ ...a, worksite_name: a.worksite?.name });
-        });
-
-        // Cada obra guarda o total (como sempre) E a quebra por chave contábil
-        // (`byClass`), que é o que a sincronização financeira usa para gerar um
-        // lançamento por (obra × Centro de Custo × Plano de Contas). Sem rateio
-        // em lugar nenhum, `byClass` tem exatamente uma entrada e o resultado é
-        // o mesmo de antes.
-        const summary: Record<string, WorksiteCostEntry> = {};
-        const unallocatedByClass: Record<string, WorksiteClassBucket> = {};
-
-        const bucketDe = (alvo: Record<string, WorksiteClassBucket>, cls: PayrollClassification): WorksiteClassBucket => {
-            const chave = classificationKey(cls);
-            return (alvo[chave] ||= {
-                cost_center_id: cls.cost_center_id,
-                plano_de_contas_id: cls.plano_de_contas_id,
-                cost: 0, netSalary: 0, encargos: 0, gross: 0, contribuicoes: 0, employees: [],
-            });
-        };
-
-        let unallocatedCost = 0;
-        let unallocatedNetSalary = 0;
-        let unallocatedEncargos = 0;
-        let unallocatedGross = 0;
-        let unallocatedContribuicoes = 0;
-        /* Quem compõe o custo não alocado — mesma finalidade de
-           `summary[worksiteId].employees`: dar credor à linha agregada de
-           "Custo Administrativo (Não Alocado)" em Contas a Pagar. */
-        const unallocatedEmployees: string[] = [];
-
-        for (const res of results) {
-            const allocations = allocByEmployee[res.employee_id] ?? [];
-            const employerCost = res.employer_cost || 0;
-            const netSalary = res.net || 0;
-            const grossSalary = res.gross || 0;
-            const encargos = Math.max(0, employerCost - netSalary);
-            const contribuicoes = Math.round(grossSalary * 0.058 * 100) / 100;
-            const empName = empNameMap[res.employee_id] || '';
-
-            // Fatias contábeis DESTE colaborador no mês: rateio → colaborador →
-            // ciclo. Multiplicam-se com o rateio de obra logo abaixo.
-            const shares = resolvePayrollShares(run, empClassMap[res.employee_id], splitsByEmployee[res.employee_id]);
-
-            const acumular = (alvo: Record<string, WorksiteClassBucket>, pct: number) => {
-                for (const fatia of shares) {
-                    const b = bucketDe(alvo, fatia);
-                    const f = pct * fatia.share;
-                    b.cost          += employerCost  * f;
-                    b.netSalary     += netSalary     * f;
-                    b.encargos      += encargos      * f;
-                    b.gross         += grossSalary   * f;
-                    b.contribuicoes += contribuicoes * f;
-                    if (empName && !b.employees.includes(empName)) b.employees.push(empName);
-                }
-            };
-
-            if (allocations.length === 0) {
-                unallocatedCost += employerCost;
-                unallocatedNetSalary += netSalary;
-                unallocatedEncargos += encargos;
-                unallocatedGross += grossSalary;
-                unallocatedContribuicoes += contribuicoes;
-                acumular(unallocatedByClass, 1);
-                if (empName && !unallocatedEmployees.includes(empName)) unallocatedEmployees.push(empName);
-                continue;
-            }
-
-            let allocatedToWorksites = 0;
-            for (const alloc of allocations) {
-                const worksiteId = alloc.project_id;
-                const worksiteName = alloc.worksite_name || 'Obra Desconhecida';
-                const pct = alloc.allocation_percent / 100;
-
-                if (!summary[worksiteId]) summary[worksiteId] = { id: worksiteId, name: worksiteName, cost: 0, netSalary: 0, encargos: 0, gross: 0, contribuicoes: 0, employees: [], byClass: {} };
-                acumular(summary[worksiteId].byClass, pct);
-                summary[worksiteId].cost += employerCost * pct;
-                summary[worksiteId].netSalary += netSalary * pct;
-                summary[worksiteId].encargos += encargos * pct;
-                summary[worksiteId].gross += grossSalary * pct;
-                summary[worksiteId].contribuicoes += contribuicoes * pct;
-                if (empName && !summary[worksiteId].employees.includes(empName)) {
-                    summary[worksiteId].employees.push(empName);
-                }
-                allocatedToWorksites += alloc.allocation_percent;
-            }
-
-            if (allocatedToWorksites < 100) {
-                const unallocPct = (100 - allocatedToWorksites) / 100;
-                acumular(unallocatedByClass, unallocPct);
-                unallocatedCost += employerCost * unallocPct;
-                unallocatedNetSalary += netSalary * unallocPct;
-                unallocatedEncargos += encargos * unallocPct;
-                unallocatedGross += grossSalary * unallocPct;
-                unallocatedContribuicoes += contribuicoes * unallocPct;
-                if (empName && !unallocatedEmployees.includes(empName)) unallocatedEmployees.push(empName);
-            }
-        }
-
+    /**
+     * Alíquotas patronais da folha da organização (`payroll_encargos_config`).
+     * Sem linha gravada, o padrão vem do regime da empresa matriz.
+     */
+    async getEncargosConfig(orgId: string): Promise<EncargosConfig> {
+        const [cfgRes, empRes] = await Promise.all([
+            supabase.from('payroll_encargos_config')
+                .select('cpp_rate, rat_rate, fap, terceiros')
+                .eq('organization_id', orgId)
+                .maybeSingle(),
+            supabase.from('companies')
+                .select('regime_tributario, simples_anexo_iv, cprb')
+                .eq('org_id', orgId)
+                .eq('is_headquarters', true)
+                .limit(1)
+                .maybeSingle(),
+        ]);
+        if (cfgRes.error) throw cfgRes.error;
+        const padrao = encargosPadrao(empRes.data as EmpresaRegime | null);
+        const row = cfgRes.data as { cpp_rate: number; rat_rate: number; fap: number; terceiros: TerceiroTax[] | null } | null;
+        if (!row) return padrao;
         return {
-            byWorksite: Object.values(summary),
-            unallocated: unallocatedCost,
-            unallocatedNetSalary,
-            unallocatedEncargos,
-            unallocatedGross,
-            unallocatedContribuicoes,
-            unallocatedEmployees,
-            unallocatedByClass,
-            total: results.reduce((s: number, r: PayrollResultWithEmployee) => s + (r.employer_cost || 0), 0)
+            cppRate: Number(row.cpp_rate),
+            ratRate: Number(row.rat_rate),
+            fap: Number(row.fap),
+            terceiros: (row.terceiros ?? []).map(t => ({ code: String(t.code), name: String(t.name), rate: Number(t.rate) })),
+            origem: 'salvo',
+            motivo: null,
         };
     },
 
-    async syncPayrollToFinance(runId: string) {
-        console.log(`[PAYROLL-SYNC] Iniciando sincronização da folha ${runId} com financeiro`);
+    async saveEncargosConfig(orgId: string, cfg: Pick<EncargosConfig, 'cppRate' | 'ratRate' | 'fap' | 'terceiros'>) {
+        const { error } = await supabase.from('payroll_encargos_config').upsert({
+            organization_id: orgId,
+            cpp_rate: cfg.cppRate,
+            rat_rate: cfg.ratRate,
+            fap: cfg.fap,
+            terceiros: cfg.terceiros,
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'organization_id' });
+        if (error) throw error;
+    },
 
-        // 1. Obter detalhes da folha
+    /** Apaga a configuração gravada: a org volta ao padrão do regime. */
+    async resetEncargosConfig(orgId: string) {
+        const { error } = await supabase.from('payroll_encargos_config').delete().eq('organization_id', orgId);
+        if (error) throw error;
+    },
+
+    /** Itens da folha (todas as páginas — o PostgREST corta em 1000 em silêncio). */
+    async listItemsDaFolha(runId: string): Promise<ItemDaFolhaComColaborador[]> {
+        const { data, error } = await fetchAllPages<ItemDaFolhaComColaborador>(() =>
+            supabase.from('payroll_items')
+                .select('id, employee_id, code, type, amount')
+                .eq('payroll_run_id', runId)
+                .order('id') as unknown as RangeableQuery<ItemDaFolhaComColaborador>);
+        if (error) throw error;
+        return data;
+    },
+
+    /**
+     * Tudo que o financeiro da folha precisa, no formato do cálculo puro:
+     * colaboradores com itens, base do INSS e fatias (alocação em obra ×
+     * rateio contábil), alíquotas da organização e rubricas.
+     */
+    async carregarFolhaParaFinanceiro(runId: string) {
         const run = await this.getRun(runId);
-        const period = run.start_date.slice(0, 7); // YYYY-MM
+        const period = run.start_date.slice(0, 7);
+        const results = await this.listResultsByRun(runId);
+        const empIds = [...new Set(results.map(r => r.employee_id).filter(Boolean))] as string[];
+
+        const [empRes, splitsByEmployee, allocByEmployee, itens, rubRes, cfg] = await Promise.all([
+            empIds.length
+                ? supabase.from('employees').select('id, name, cost_center_id, plano_de_contas_id').in('id', empIds)
+                : Promise.resolve({ data: [], error: null }),
+            this.listCostSplitsForEmployees(empIds, period),
+            this.listAllocationsForEmployees(empIds, period),
+            this.listItemsDaFolha(runId),
+            supabase.from('rubrics').select('code, name, organization_id, lancamento_individualizado, dia_lancamento, repasse_terceiros'),
+            this.getEncargosConfig(run.org_id),
+        ]);
+        if (empRes.error) throw empRes.error;
+        if (rubRes.error) throw rubRes.error;
+
+        type EmpRow = { id: string; name: string; cost_center_id?: string | null; plano_de_contas_id?: string | null };
+        const empMap = new Map(((empRes.data || []) as EmpRow[]).map(e => [e.id, e]));
+
+        // Rubrica por código: a da organização da folha vence a global, que vence
+        // a de outra organização (mesma tolerância de antes, quando a busca não
+        // filtrava organização).
+        type RubRow = { code: string; name: string; organization_id: string | null; lancamento_individualizado: boolean | null; dia_lancamento: number | null; repasse_terceiros: boolean | null };
+        const prioridade = (r: RubRow) => (r.organization_id === run.org_id ? 0 : r.organization_id == null ? 1 : 2);
+        const rubricas = new Map<string, RubRow>();
+        for (const r of (rubRes.data || []) as RubRow[]) {
+            const atual = rubricas.get(r.code);
+            if (!atual || prioridade(r) < prioridade(atual)) rubricas.set(r.code, r);
+        }
+        const opcoes: OpcoesDaFolha = {
+            individualizados: new Set([...rubricas.values()].filter(r => r.lancamento_individualizado).map(r => r.code)),
+            repasses: Object.fromEntries([...rubricas.values()].filter(r => r.repasse_terceiros).map(r => [r.code, r.name])),
+            nomes: Object.fromEntries([...rubricas.values()].map(r => [r.code, r.name])),
+        };
+
+        const itensPorColab = new Map<string, ItemDaFolha[]>();
+        for (const it of itens) {
+            const lista = itensPorColab.get(it.employee_id) ?? [];
+            lista.push({ code: it.code, type: it.type, amount: Number(it.amount) || 0 });
+            itensPorColab.set(it.employee_id, lista);
+        }
+
+        const colabs: ColaboradorDaFolha[] = results.map(res => {
+            const emp = empMap.get(res.employee_id);
+            const alocacoes = (allocByEmployee[res.employee_id] || []).map(a => ({
+                project_id: a.project_id, allocation_percent: a.allocation_percent, nome: a.worksite_name,
+            }));
+            return {
+                employeeId: res.employee_id,
+                nome: emp?.name || res.employee?.name || '',
+                liquido: Number(res.net) || 0,
+                bruto: Number(res.gross) || 0,
+                baseInss: Number(res.base_inss ?? res.gross) || 0,
+                custoEmpregador: Number(res.employer_cost) || 0,
+                itens: itensPorColab.get(res.employee_id) ?? [],
+                fatias: fatiasDoColaborador(alocacoes, resolvePayrollShares(run, emp, splitsByEmployee[res.employee_id])),
+            };
+        });
+
+        return { run, period, colabs, cfg, rubricas, opcoes };
+    },
+
+    /**
+     * Custo do empregador por obra (painel de custo da folha): bruto + FGTS e
+     * encargos de rubrica + CPP + RAT + terceiros, pela alocação do mês.
+     */
+    async getWorksiteCostSummary(runId: string) {
+        const { colabs, cfg } = await this.carregarFolhaParaFinanceiro(runId);
+        const destinos = custoPorDestino(colabs, cfg);
+        const naoAlocado = destinos.find(d => !d.destino);
+        return {
+            byWorksite: destinos.filter(d => d.destino).map(d => ({
+                id: d.destino as string, name: d.destinoNome, cost: d.custo, employees: d.colaboradores,
+            })),
+            unallocated: naoAlocado?.custo ?? 0,
+            unallocatedEmployees: naoAlocado?.colaboradores ?? [],
+            total: Math.round(destinos.reduce((s, d) => s + d.custo, 0) * 100) / 100,
+            encargos: cfg,
+        };
+    },
+
+    /**
+     * Grava o financeiro de uma folha: um título por encargo/retenção (FGTS,
+     * INSS, IRRF, CPP, RAT, terceiros vão para Tributos a Pagar), salário,
+     * repasses e rubricas individualizadas — por obra × chave contábil.
+     *
+     * Título pago, conciliado, cancelado à mão, em DARF ou com pagamento Asaas
+     * NÃO é apagado nem regravado (`tituloDaFolhaPreservado`); se o novo
+     * cálculo diverge dele, o retorno avisa. O resto é regravado pelo mesmo
+     * `reference_id` (upsert) e o que sobrou de cálculo antigo é apagado.
+     */
+    async syncPayrollToFinance(runId: string): Promise<ResultadoSyncFolha> {
+        const { run, period, colabs, cfg, rubricas, opcoes } = await this.carregarFolhaParaFinanceiro(runId);
         const [year, month] = period.split('-');
         const formattedPeriod = `${month}/${year}`;
+        const venc20 = vencimentoDia20(period);
+        const venc05 = diaDoMesSeguinte(period, 5);
+        const prefixo = `labor-${runId}-`;
+        const refSeguro = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]/g, '_');
 
-        // Data de vencimento estimada para AP: dia 5 do mês seguinte à competência
-        const paymentDueDate = (() => {
-            const nextMonth = Number(month) === 12 ? 1 : Number(month) + 1;
-            const nextYear  = Number(month) === 12 ? Number(year) + 1 : Number(year);
-            return `${nextYear}-${String(nextMonth).padStart(2, '0')}-05`;
-        })();
+        const desejados = new Map<string, InternalTransaction>();
+        const guardar = (tx: InternalTransaction) => {
+            const ja = desejados.get(tx.reference_id);
+            if (ja) ja.amount = Math.round((ja.amount + tx.amount) * 100) / 100;
+            else desejados.set(tx.reference_id, tx);
+        };
 
-        // 1.b. Nomes dos dois cadastros contábeis, para o espelho dentro de
-        // `project.settings.financialInfo` (que guarda NOME, não id). A
-        // classificação em si não é mais resolvida aqui: cada linha vem com a
-        // sua, já rateada, de `getWorksiteCostSummary().byClass`.
-        // Ver "CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE FOLHA" e "RATEIO CONTÁBIL".
-        const [costCenterList, planoContasList] = await Promise.all([
+        // 1. Salário, tributos e repasses por destino × chave contábil. O sufixo
+        //    `-cls-` só aparece quando o destino tem mais de uma chave — quem não
+        //    rateia mantém o reference_id de sempre.
+        const linhas = montarLinhasDaFolha(colabs, cfg, opcoes);
+        const chavesPorDestino = new Map<string, Set<string>>();
+        for (const l of linhas) {
+            const d = l.destino ?? 'unallocated';
+            if (!chavesPorDestino.has(d)) chavesPorDestino.set(d, new Set());
+            chavesPorDestino.get(d)!.add(chaveContabil(l));
+        }
+        for (const l of linhas) {
+            const d = l.destino ?? 'unallocated';
+            const sufixo = chavesPorDestino.get(d)!.size > 1 ? `-cls-${chaveContabil(l)}` : '';
+            const forma = formaDoTitulo(l.tipo, opcoes.nomes);
+            const onde = l.destino ? l.destinoNome : 'Custo Administrativo (Não Alocado)';
+            guardar({
+                organization_id: run.org_id,
+                source_system: 'LABOR',
+                reference_id: `${prefixo}${d}-${refSeguro(l.tipo)}${sufixo}`,
+                transaction_date: run.end_date,
+                due_date: forma.vencimento === 'dia20' ? venc20 : venc05,
+                amount: l.valor,
+                direction: 'DEBIT',
+                description: `${forma.rotulo} - ${onde} - Folha ${formattedPeriod}`,
+                category: forma.category,
+                status: 'PENDING',
+                business_status: 'PREVISTO',
+                project_id: l.destino,
+                party_name: forma.party_type === 'EMPLOYEE' ? credorDeColaboradores(l.colaboradores) : forma.party_name,
+                party_type: forma.party_type,
+                cost_center_id: l.cost_center_id,
+                plano_de_contas_id: l.plano_de_contas_id,
+            });
+        }
+
+        // 2. Rubricas individualizadas (adiantamento…): um título por
+        //    colaborador e fatia, na data da rubrica — que é também o vencimento.
+        const ultimoDia = new Date(Number(year), Number(month), 0).getDate();
+        for (const c of colabs) {
+            const porCodigo = new Map<string, number>();
+            for (const it of c.itens) {
+                if (!rubricas.get(it.code)?.lancamento_individualizado) continue;
+                porCodigo.set(it.code, (porCodigo.get(it.code) || 0) + Math.abs(it.amount || 0));
+            }
+            const fatias = c.fatias.filter(f => f.share > 0);
+            for (const [code, valor] of porCodigo) {
+                if (valor <= 0 || fatias.length === 0) continue;
+                const rub = rubricas.get(code)!;
+                const data = rub.dia_lancamento
+                    ? `${year}-${month}-${String(Math.min(rub.dia_lancamento, ultimoDia)).padStart(2, '0')}`
+                    : run.end_date;
+                const centavos = distribuirCentavos(Math.round(valor * 100), fatias.map(f => f.share));
+                fatias.forEach((f, i) => {
+                    if (centavos[i] <= 0) return;
+                    const mesmoDestino = fatias.filter(g => g.destino === f.destino).length;
+                    const sufixo = mesmoDestino > 1 ? `-cls-${chaveContabil(f)}` : '';
+                    const onde = f.destino ? ` - ${f.destinoNome}` : ' (Não Alocado)';
+                    guardar({
+                        organization_id: run.org_id,
+                        source_system: 'LABOR',
+                        reference_id: `${prefixo}indiv-${code}-${c.employeeId}${f.destino ? `-${f.destino}` : ''}${sufixo}`,
+                        transaction_date: data,
+                        due_date: data,
+                        amount: centavos[i] / 100,
+                        direction: 'DEBIT',
+                        description: `${rub.name} - ${c.nome}${onde} - Folha ${formattedPeriod}`,
+                        category: rub.name,
+                        status: 'PENDING',
+                        business_status: 'PREVISTO',
+                        project_id: f.destino,
+                        party_name: c.nome,
+                        party_type: 'EMPLOYEE',
+                        cost_center_id: f.cost_center_id,
+                        plano_de_contas_id: f.plano_de_contas_id,
+                    });
+                });
+            }
+        }
+
+        // 3. O que já existe desta folha, e o que não pode ser tocado.
+        // 'PROJECT' também: o espelho da obra rebaixava título da folha para
+        // 'PROJECT' (financialSyncService, corrigido em 21/10/2026). O prefixo
+        // `labor-{folha}-` é só da folha, qualquer que seja a origem gravada.
+        const { data: existentesRaw, error: eEx } = await supabase
+            .from('internal_transactions')
+            .select('id, reference_id, description, amount, status, business_status, darf_id, project_id')
+            .eq('organization_id', run.org_id)
+            .in('source_system', ['LABOR', 'PROJECT'])
+            .like('reference_id', `${prefixo}%`);
+        if (eEx) throw new Error(`Não foi possível ler os títulos atuais da folha: ${eEx.message}`);
+        type Existente = { id: string; reference_id: string; description: string | null; amount: number; status: string | null; business_status: string | null; darf_id: string | null; project_id: string | null };
+        const existentes = (existentesRaw || []) as Existente[];
+        const conciliados = new Set<string>();
+        const comAsaas = new Set<string>();
+        for (let i = 0; i < existentes.length; i += 80) {
+            const ids = existentes.slice(i, i + 80).map(e => e.id);
+            const [conc, asaas] = await Promise.all([
+                supabase.from('reconciliation_matches').select('internal_transaction_id').in('internal_transaction_id', ids),
+                supabase.from('supplier_payments').select('transaction_id').in('transaction_id', ids),
+            ]);
+            if (conc.error) throw new Error(`Não foi possível conferir a conciliação dos títulos da folha: ${conc.error.message}`);
+            if (asaas.error) throw new Error(`Não foi possível conferir os pagamentos Asaas da folha: ${asaas.error.message}`);
+            (conc.data || []).forEach((m: { internal_transaction_id: string }) => conciliados.add(m.internal_transaction_id));
+            (asaas.data || []).forEach((p: { transaction_id: string }) => comAsaas.add(p.transaction_id));
+        }
+        const preservados = new Map<string, Existente>();
+        for (const e of existentes) {
+            if (tituloDaFolhaPreservado({ ...e, conciliado: conciliados.has(e.id), pagamentoAsaas: comAsaas.has(e.id) })) {
+                preservados.set(e.reference_id, e);
+            }
+        }
+
+        const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const avisos: string[] = [];
+        for (const [ref, tx] of desejados) {
+            const p = preservados.get(ref);
+            if (p && p.status !== 'CANCELLED' && Math.abs((p.amount || 0) - tx.amount) >= 0.01) {
+                avisos.push(`${tx.description}: mantido em ${brl(p.amount)} (pago, conciliado ou em DARF); o novo cálculo dá ${brl(tx.amount)}.`);
+            }
+        }
+        for (const [ref, p] of preservados) {
+            if (!desejados.has(ref) && p.status !== 'CANCELLED') {
+                avisos.push(`Título de cálculo antigo mantido por estar pago, conciliado ou em DARF: ${p.description ?? ref} (${brl(p.amount)}). Confira se não se soma aos títulos novos.`);
+            }
+        }
+
+        // 4. Grava (upsert pelo reference_id) e só DEPOIS apaga o que sobrou de
+        //    cálculo antigo: se a gravação falhar, nada some.
+        const aGravar = [...desejados.values()].filter(tx => !preservados.has(tx.reference_id));
+        if (aGravar.length > 0) {
+            const { error } = await supabase
+                .from('internal_transactions')
+                .upsert(aGravar, { onConflict: 'organization_id,reference_id,entry_type' });
+            if (error) throw new Error(`Erro ao gravar os títulos da folha: ${error.message}`);
+        }
+        const obsoletos = existentes.filter(e => !preservados.has(e.reference_id) && !desejados.has(e.reference_id));
+        for (let i = 0; i < obsoletos.length; i += 80) {
+            const { error } = await supabase
+                .from('internal_transactions')
+                .delete()
+                .in('id', obsoletos.slice(i, i + 80).map(e => e.id));
+            if (error) throw new Error(`Os títulos novos foram gravados, mas os antigos não puderam ser apagados: ${error.message}`);
+        }
+
+        // 5. Espelho dentro de `project.settings.financialInfo` de cada obra
+        //    (a conciliação ainda o lê). Falha aqui não desfaz o financeiro.
+        const obrasAntigas = existentes.map(e => e.project_id).filter((id): id is string => !!id);
+        await this.espelharFolhaNasObras(run, prefixo, [...desejados.values()], obrasAntigas).catch((err: unknown) => {
+            avisos.push(`Espelho nas obras não atualizado: ${err instanceof Error ? err.message : String(err)}`);
+        });
+
+        const totais: Record<string, number> = {};
+        for (const tx of desejados.values()) {
+            const chave = (tx.party_type === 'TAX' && tx.party_name) || tx.category;
+            totais[chave] = Math.round(((totais[chave] || 0) + tx.amount) * 100) / 100;
+        }
+        return {
+            success: true,
+            count: aGravar.length,
+            removidos: obsoletos.length,
+            preservados: preservados.size,
+            avisos,
+            totais,
+            encargos: cfg,
+            rubricasIndividualizadas: [...opcoes.individualizados],
+        };
+    },
+
+    /**
+     * Atualiza o espelho legado `settings.financialInfo.transactions` das obras da
+     * folha (só exibição: `financialSyncService` não o materializa mais). Obras que
+     * tinham linha desta folha e não têm mais também são limpas.
+     */
+    async espelharFolhaNasObras(run: PayrollRun, prefixo: string, txs: InternalTransaction[], obrasAntigas: string[] = []) {
+        const porObra = new Map<string, InternalTransaction[]>();
+        for (const obra of obrasAntigas) porObra.set(obra, []);
+        for (const tx of txs) {
+            if (!tx.project_id) continue;
+            porObra.set(tx.project_id, [...(porObra.get(tx.project_id) ?? []), tx]);
+        }
+        if (porObra.size === 0) return;
+        const [ccs, pcs] = await Promise.all([
             this.listCostCenters(run.org_id).catch(() => [] as { id: string; name: string }[]),
             this.listPlanoContas(run.org_id).catch(() => [] as { id: string; name: string }[]),
         ]);
-        const nomeDaClassificacao = (cls: PayrollClassification) => ({
-            costCenter:      costCenterList.find(c => c.id === cls.cost_center_id)?.name ?? '',
-            chartOfAccounts: planoContasList.find(p => p.id === cls.plano_de_contas_id)?.name ?? '',
-        });
-        // 2. Obter resumo de custos por obra
-        const summary = await this.getWorksiteCostSummary(runId);
-        const orgTerceirosTaxes = getOrgTerceirosTaxes(run.org_id);
-        console.log(`[PAYROLL-SYNC] Resumo: ${summary.byWorksite.length} obras, custo total=${summary.total}`);
-
-        // 2.1 Limpeza: remove lançamentos anteriores desta folha em internal_transactions.
-        // O worksite loop abaixo cuida do cleanup no project.settings por obra individualmente.
-        const laborPrefix = `labor-${runId}-`;
-        try {
-            await supabase
-                .from('internal_transactions')
-                .delete()
-                .eq('organization_id', run.org_id)
-                .eq('source_system', 'LABOR')
-                .like('reference_id', `${laborPrefix}%`);
-            console.log(`[PAYROLL-SYNC] Limpeza de internal_transactions concluída`);
-        } catch (cleanErr: unknown) {
-            const msg = cleanErr instanceof Error ? cleanErr.message : String(cleanErr);
-            console.warn(`[PAYROLL-SYNC] Aviso na limpeza: ${msg}`);
-        }
-
-        // Helper: busca itens de payroll com fallback V1(run_id) → V2(payroll_run_id)
-        const fetchPayrollItems = async (selectFields: string, codes: string[]): Promise<PayrollItem[]> => {
-            const { data: v2, error: e2 } = await supabase
-                .from('payroll_items')
-                .select(selectFields)
-                .eq('payroll_run_id', runId)
-                .in('code', codes);
-            if (!e2 && v2 && v2.length > 0) return v2 as unknown as PayrollItem[];
-            const { data: v1 } = await supabase
-                .from('payroll_items')
-                .select(selectFields)
-                .eq('run_id', runId)
-                .in('code', codes);
-            return (v1 || []) as unknown as PayrollItem[];
-        };
-
-        // Buscar rubricas com lançamento individualizado (filtro server-side)
-        const { data: rubricasIndivRaw } = await supabase
-            .from('rubrics')
-            .select('code, name, dia_lancamento')
-            .eq('lancamento_individualizado', true);
-        const rubricasIndiv = (rubricasIndivRaw || []) as Array<{ code: string; name: string; dia_lancamento: number | null }>;
-        console.log(`[PAYROLL-SYNC] Rubricas individualizadas: ${rubricasIndiv.map(r => r.code).join(', ') || 'nenhuma'}`);
-
-        const internalTxs: InternalTransaction[] = [];
-        const errors: string[] = [];
-
-        // Acumuladores de dedução — preenchidos no passo 4 e consumidos no passo 3
-        const deductionByWorksite: Record<string, number> = {};
-        let deductionUnallocated = 0;
-        // Com rateio contábil, a dedução do adiantamento tem de ser abatida da
-        // MESMA chave contábil onde ele foi lançado — senão o salário de um
-        // centro de custo pagaria o adiantamento de outro.
-        const deductionByWorksiteClass: Record<string, Record<string, number>> = {};
-        const deductionUnallocatedByClass: Record<string, number> = {};
-
-        // 4. Lançamentos individualizados (roda PRIMEIRO para acumular deduções)
-        if (rubricasIndiv.length > 0) {
-            const indivItems = await fetchPayrollItems('employee_id, code, amount', rubricasIndiv.map(r => r.code));
-            console.log(`[PAYROLL-SYNC] Itens individualizados encontrados: ${indivItems.length}`);
-
-            if (indivItems.length > 0) {
-                const empIds = [...new Set(indivItems.map(i => i.employee_id))];
-                const [{ data: empRows }, ...allocResults] = await Promise.all([
-                    // cost_center_id/plano_de_contas_id: o OVERRIDE do
-                    // colaborador sobre a classificação do ciclo — só vale aqui
-                    // e no syncEmployeeToFinance, onde a linha é de UM
-                    // colaborador.
-                    supabase.from('employees').select('id, name, cost_center_id, plano_de_contas_id').in('id', empIds as string[]),
-                    ...empIds.map(id => this.listAllocations(id, period)),
-                ]);
-                type EmpRow = { id: string; name: string; cost_center_id?: string | null; plano_de_contas_id?: string | null };
-                const empMap: Record<string, string> = Object.fromEntries(
-                    (empRows || []).map((e: EmpRow) => [e.id, e.name])
-                );
-                const empClassMap: Record<string, EmpRow> = Object.fromEntries(
-                    (empRows || []).map((e: EmpRow) => [e.id, e])
-                );
-                const allocByEmpId: Record<string, Awaited<ReturnType<typeof this.listAllocations>>> = {};
-                empIds.forEach((id, idx) => { allocByEmpId[id] = allocResults[idx] as Awaited<ReturnType<typeof this.listAllocations>>; });
-
-                // Rateio contábil do mês: a rubrica individualizada segue as
-                // mesmas fatias do colaborador (é custo dele).
-                const splitsIndiv = await this.listCostSplitsForEmployees(empIds as string[], period)
-                    .catch(() => ({} as Record<string, EmployeeCostSplit[]>));
-
-                const [runYear, runMonth] = run.start_date.slice(0, 7).split('-');
-
-                // Coleta updates de project.settings para executar em paralelo
-                type IndivProjectUpdate = { projectId: string; refId: string; txEntry: ProjectFinancialTx };
-                const indivProjectUpdates: IndivProjectUpdate[] = [];
-
-                for (const item of indivItems) {
-                    const rubric = rubricasIndiv.find(r => r.code === item.code);
-                    const absAmount = Math.abs(item.amount || 0);
-                    if (!rubric || absAmount <= 0) continue;
-
-                    const txDate = rubric.dia_lancamento
-                        ? `${runYear}-${runMonth}-${String(rubric.dia_lancamento).padStart(2, '0')}`
-                        : run.end_date;
-                    const empName = empMap[item.employee_id] || item.employee_id;
-                    const empAllocations = allocByEmpId[item.employee_id] || [];
-                    const itemShares = resolvePayrollShares(run, empClassMap[item.employee_id], splitsIndiv[item.employee_id]);
-
-                    if (empAllocations.length > 0) {
-                        for (const alloc of empAllocations) {
-                            if ((alloc.allocation_percent || 0) <= 0) continue;
-                            const allocAmount = Math.round((absAmount * (alloc.allocation_percent / 100)) * 100) / 100;
-                            if (allocAmount <= 0) continue;
-
-                            // Acumula dedução para ser usada no passo 3
-                            deductionByWorksite[alloc.project_id] = (deductionByWorksite[alloc.project_id] || 0) + allocAmount;
-
-                            const worksiteName = alloc.worksite_name || '';
-                            const description = worksiteName
-                                ? `${rubric.name} - ${empName} - ${worksiteName} - Folha ${formattedPeriod}`
-                                : `${rubric.name} - ${empName} - Folha ${formattedPeriod}`;
-
-                            // Uma linha por fatia contábil. Sem rateio é uma só,
-                            // com o reference_id de sempre.
-                            const valores = dividirValor(allocAmount, itemShares);
-                            itemShares.forEach((fatia, i) => {
-                                const valor = valores[i];
-                                if (valor <= 0) return;
-                                const refId = `labor-${runId}-indiv-${item.code}-${item.employee_id}-${alloc.project_id}${sufixoDaFatia(itemShares, fatia)}`;
-                                const chave = classificationKey(fatia);
-                                (deductionByWorksiteClass[alloc.project_id] ||= {});
-                                deductionByWorksiteClass[alloc.project_id][chave] =
-                                    (deductionByWorksiteClass[alloc.project_id][chave] || 0) + valor;
-
-                                indivProjectUpdates.push({
-                                    projectId: alloc.project_id,
-                                    refId,
-                                    txEntry: {
-                                        id: refId,
-                                        date: txDate,
-                                        type: 'EXPENSE',
-                                        category: 'Folha de Pagamento',
-                                        description,
-                                        value: valor,
-                                        status: 'PENDING',
-                                        notes: `Parcela individualizada — ${rubric.name}. Folha ID: ${runId}`,
-                                        ...nomeDaClassificacao(fatia),
-                                    },
-                                });
-
-                                internalTxs.push({
-                                    organization_id:  run.org_id,
-                                    source_system:    'LABOR',
-                                    reference_id:     refId,
-                                    transaction_date: txDate,
-                                    amount:           valor,
-                                    direction:        'DEBIT',
-                                    description,
-                                    category:         rubric.name,
-                                    status:           'PENDING',
-                                    project_id:       alloc.project_id,
-                                    party_name:       empName,
-                                    party_type:       'EMPLOYEE',
-                                    cost_center_id:     fatia.cost_center_id,
-                                    plano_de_contas_id: fatia.plano_de_contas_id,
-                                });
-                            });
-                        }
-                    } else {
-                        // Sem alocação — acumula como não-alocado
-                        deductionUnallocated += absAmount;
-                        const valores = dividirValor(absAmount, itemShares);
-                        itemShares.forEach((fatia, i) => {
-                            const valor = valores[i];
-                            if (valor <= 0) return;
-                            const chave = classificationKey(fatia);
-                            deductionUnallocatedByClass[chave] = (deductionUnallocatedByClass[chave] || 0) + valor;
-                            const refId = `labor-${runId}-indiv-${item.code}-${item.employee_id}${sufixoDaFatia(itemShares, fatia)}`;
-                            internalTxs.push({
-                                organization_id:  run.org_id,
-                                source_system:    'LABOR',
-                                reference_id:     refId,
-                                transaction_date: txDate,
-                                amount:           valor,
-                                direction:        'DEBIT',
-                                description:      `${rubric.name} - ${empName} (Não Alocado) - Folha ${formattedPeriod}`,
-                                category:         rubric.name,
-                                status:           'PENDING',
-                                party_name:       empName,
-                                party_type:       'EMPLOYEE',
-                                cost_center_id:     fatia.cost_center_id,
-                                plano_de_contas_id: fatia.plano_de_contas_id,
-                            });
-                        });
-                    }
-                }
-
-                // Aplica updates de project.settings em paralelo (1 load+save por projeto único)
-                if (indivProjectUpdates.length > 0) {
-                    const uniqueIndivProjectIds = [...new Set(indivProjectUpdates.map(u => u.projectId))];
-                    const indivProjects = await Promise.all(uniqueIndivProjectIds.map(id => projectService.loadProject(id)));
-                    const indivProjectMap: Record<string, typeof indivProjects[0]> = {};
-                    uniqueIndivProjectIds.forEach((id, idx) => { indivProjectMap[id] = indivProjects[idx]; });
-
-                    await Promise.all(uniqueIndivProjectIds.map(async (projectId) => {
-                        const project = indivProjectMap[projectId];
-                        if (!project) return;
-                        const settings = project.settings as ProjectSettings;
-                        const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
-                        const updatesForProject = indivProjectUpdates.filter(u => u.projectId === projectId);
-                        const refIdsToRemove = new Set(updatesForProject.map(u => u.refId));
-                        const filtered = (info.transactions as ProjectFinancialTx[] || []).filter(t => !refIdsToRemove.has(t.id as string));
-                        try {
-                            await projectService.saveProject({
-                                ...project,
-                                settings: {
-                                    ...settings,
-                                    financialInfo: { ...info, transactions: [...updatesForProject.map(u => u.txEntry), ...filtered] }
-                                }
-                            });
-                        } catch (projErr: unknown) {
-                            const errMsg = projErr instanceof Error ? projErr.message : String(projErr);
-                            errors.push(`Erro ao salvar lançamentos individualizados em ${projectId}: ${errMsg}`);
-                        }
-                    }));
-                }
-            }
-        }
-
-        console.log('[PAYROLL-SYNC] Deduções acumuladas por obra:', deductionByWorksite, '| Não alocado:', deductionUnallocated);
-
-        // 3. Processar custos por obra — gera três lançamentos separados: salário, encargos e contribuições de terceiros
-        // Filtra obras com custo > 0 e pré-carrega todos os projetos em paralelo
-        type WorksiteEntry = { worksite: typeof summary.byWorksite[0]; netSalaryCost: number; encargosCost: number };
-        const activeWorksites: WorksiteEntry[] = summary.byWorksite.map(worksite => {
-            const deduction = deductionByWorksite[worksite.id] || 0;
-            return {
-                worksite,
-                netSalaryCost: Math.max(0, Math.round((worksite.netSalary - deduction) * 100) / 100),
-                encargosCost:  Math.max(0, Math.round(worksite.encargos * 100) / 100),
-            };
-        }).filter(e => e.netSalaryCost > 0 || e.encargosCost > 0 ||
-            orgTerceirosTaxes.some(t => Math.round(e.worksite.gross * t.rate * 100) / 100 > 0));
-
-        // Carrega todos os projetos em paralelo
-        const worksiteProjects = await Promise.all(activeWorksites.map(e => projectService.loadProject(e.worksite.id)));
-
-        // Coleta internalTxs e newTransactions por projeto (síncrono)
-        type WorksiteSavePayload = { project: Awaited<ReturnType<typeof projectService.loadProject>>; newTransactions: ProjectFinancialTx[]; filteredTransactions: ProjectFinancialTx[] };
-        const worksiteSavePayloads: WorksiteSavePayload[] = [];
-
-        for (let wi = 0; wi < activeWorksites.length; wi++) {
-            const { worksite, netSalaryCost, encargosCost } = activeWorksites[wi];
-            const contribuicoesCost = Math.max(0, Math.round(worksite.contribuicoes * 100) / 100);
-            const project = worksiteProjects[wi];
-            if (!project) {
-                console.warn(`[PAYROLL-SYNC] Projeto ${worksite.id} não encontrado`);
-                continue;
-            }
-
+        const falhas: string[] = [];
+        await Promise.all([...porObra.entries()].map(async ([obraId, lista]) => {
+            const project = await projectService.loadProject(obraId);
+            if (!project) return;
             const settings = project.settings as ProjectSettings;
             const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
-            const empLabel = worksite.employees?.length ? worksite.employees.join(', ') : '';
-
-            const refIdSalario  = `labor-${runId}-${worksite.id}-salario`;
-            const refIdEncargos = `labor-${runId}-${worksite.id}-encargos`;
-            const oldRefId      = `labor-${runId}-${worksite.id}`;
-            const worksitePrefix = `labor-${runId}-${worksite.id}-`;
-            const filteredTransactions = (info.transactions as ProjectFinancialTx[] || []).filter(t =>
-                t.id !== oldRefId && !String(t.id || '').startsWith(worksitePrefix)
-            );
-
-            const newTransactions: ProjectFinancialTx[] = [];
-
-            // Uma passada por CHAVE CONTÁBIL da obra. Sem rateio em ninguém,
-            // `byClass` tem uma entrada só, `sufixoDoBucket` é vazio e os
-            // reference_id saem idênticos aos de antes desta feature.
-            const buckets = Object.values(worksite.byClass);
-            const multiplo = buckets.length > 1;
-            const sufixoDoBucket = (b: WorksiteClassBucket) => (multiplo ? `-cls-${classificationKey(b)}` : '');
-            const deducaoDaChave = deductionByWorksiteClass[worksite.id] || {};
-
-            for (const bucket of buckets) {
-                const bucketClass: PayrollClassification = {
-                    cost_center_id: bucket.cost_center_id,
-                    plano_de_contas_id: bucket.plano_de_contas_id,
-                };
-                const bucketNames = nomeDaClassificacao(bucketClass);
-                const sufixo = sufixoDoBucket(bucket);
-                const empLabelBucket = bucket.employees?.length ? bucket.employees.join(', ') : empLabel;
-
-                const bucketSalario = Math.max(0, Math.round(
-                    (bucket.netSalary - (deducaoDaChave[classificationKey(bucket)] || 0)) * 100) / 100);
-                const bucketEncargos = Math.max(0, Math.round(bucket.encargos * 100) / 100);
-
-                if (bucketSalario > 0) {
-                    const refId = `${refIdSalario}${sufixo}`;
-                    const descSalario = empLabelBucket
-                        ? `Salários - ${empLabelBucket} - ${worksite.name} - Folha ${formattedPeriod}`
-                        : `Salários - ${worksite.name} - Folha ${formattedPeriod}`;
-                    newTransactions.push({
-                        id: refId, date: run.end_date, type: 'EXPENSE',
-                        category: 'Folha de Pagamento', description: descSalario,
-                        value: bucketSalario, status: 'PENDING',
-                        notes: `Salário líquido dos colaboradores. Folha ID: ${runId}`,
-                        ...bucketNames,
-                    });
-                    internalTxs.push({
-                        organization_id: run.org_id, source_system: 'LABOR', reference_id: refId,
-                        transaction_date: run.end_date, amount: bucketSalario, direction: 'DEBIT',
-                        description: descSalario, category: 'Folha de Pagamento', status: 'PENDING',
-                        project_id: worksite.id,
-                        party_name: credorDeColaboradores(bucket.employees || []),
-                        party_type: 'EMPLOYEE',
-                        ...bucketClass,
-                    });
-                }
-
-                if (bucketEncargos > 0) {
-                    const refId = `${refIdEncargos}${sufixo}`;
-                    const descEncargos = `Encargos Patronais - ${worksite.name} - Folha ${formattedPeriod}`;
-                    newTransactions.push({
-                        id: refId, date: run.end_date, type: 'EXPENSE',
-                        category: 'Encargos Patronais', description: descEncargos,
-                        value: bucketEncargos, status: 'PENDING',
-                        notes: `Encargos patronais (FGTS e demais). Folha ID: ${runId}`,
-                        ...bucketNames,
-                    });
-                    internalTxs.push({
-                        organization_id: run.org_id, source_system: 'LABOR', reference_id: refId,
-                        transaction_date: run.end_date, amount: bucketEncargos, direction: 'DEBIT',
-                        description: descEncargos, category: 'Encargos Patronais', status: 'PENDING',
-                        project_id: worksite.id,
-                        party_name: CREDOR_ENCARGOS,
-                        party_type: 'GOVERNMENT',
-                        ...bucketClass,
-                    });
-                }
-
-                for (const tax of orgTerceirosTaxes) {
-                    const taxCost = Math.max(0, Math.round(bucket.gross * tax.rate * 100) / 100);
-                    if (taxCost <= 0) continue;
-                    const refIdTax = `labor-${runId}-${worksite.id}-terceiros-${tax.code}${sufixo}`;
-                    const descTax = `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - ${worksite.name} - Folha ${formattedPeriod}`;
-                    newTransactions.push({
-                        id: refIdTax, date: run.end_date, type: 'EXPENSE',
-                        category: 'Contribuições de Terceiros', description: descTax,
-                        value: taxCost, status: 'PENDING',
-                        notes: `Contribuição de terceiros — código ${tax.code}. Folha ID: ${runId}`,
-                        ...bucketNames,
-                    });
-                    internalTxs.push({
-                        organization_id: run.org_id, source_system: 'LABOR', reference_id: refIdTax,
-                        transaction_date: run.end_date, amount: taxCost, direction: 'DEBIT',
-                        description: descTax, category: 'Contribuições de Terceiros', status: 'PENDING',
-                        project_id: worksite.id,
-                        party_name: tax.name,
-                        party_type: 'GOVERNMENT',
-                        ...bucketClass,
-                    });
-                }
-            }
-            console.log(`[PAYROLL-SYNC] Obra ${worksite.name}: salário=${netSalaryCost} | encargos=${encargosCost} | contribuições=${contribuicoesCost}`);
-            worksiteSavePayloads.push({ project, newTransactions, filteredTransactions });
-        }
-
-        // Salva todos os projetos em paralelo
-        await Promise.all(worksiteSavePayloads.map(async ({ project, newTransactions, filteredTransactions }) => {
-            const settings = project!.settings as ProjectSettings;
-            const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
+            const mantidas = ((info.transactions as ProjectFinancialTx[]) || []).filter(t => {
+                const id = String(t.id || '');
+                return !(id.startsWith(prefixo) && id.includes(obraId));
+            });
+            const novas: ProjectFinancialTx[] = lista.map(tx => ({
+                id: tx.reference_id,
+                date: tx.transaction_date,
+                type: 'EXPENSE',
+                category: tx.category,
+                description: tx.description,
+                value: tx.amount,
+                status: 'PENDING',
+                notes: `Folha ID: ${run.id}`,
+                costCenter: ccs.find(c => c.id === tx.cost_center_id)?.name ?? '',
+                chartOfAccounts: pcs.find(p => p.id === tx.plano_de_contas_id)?.name ?? '',
+            }));
             try {
                 await projectService.saveProject({
-                    ...project!,
-                    settings: { ...settings, financialInfo: { ...info, transactions: [...newTransactions, ...filteredTransactions] } }
+                    ...project,
+                    settings: { ...settings, financialInfo: { ...info, transactions: [...novas, ...mantidas] } },
                 });
             } catch (err: unknown) {
-                const errMsg = err instanceof Error ? err.message : String(err);
-                errors.push(`Erro ao salvar projeto ${project!.id}: ${errMsg}`);
+                falhas.push(`${obraId}: ${err instanceof Error ? err.message : String(err)}`);
             }
         }));
-
-        // 3.b. Custos não alocados — mesma quebra por chave contábil da 3.
-        const unallocBuckets = Object.values(summary.unallocatedByClass || {});
-        const unallocMultiplo = unallocBuckets.length > 1;
-
-        for (const bucket of unallocBuckets) {
-            const bucketClass: PayrollClassification = {
-                cost_center_id: bucket.cost_center_id,
-                plano_de_contas_id: bucket.plano_de_contas_id,
-            };
-            const chave  = classificationKey(bucket);
-            const sufixo = unallocMultiplo ? `-cls-${chave}` : '';
-
-            const salarioUnalloc = Math.max(0, Math.round(
-                (bucket.netSalary - (deductionUnallocatedByClass[chave] || 0)) * 100) / 100);
-            const encargosUnalloc = Math.max(0, Math.round(bucket.encargos * 100) / 100);
-
-            if (salarioUnalloc > 0) {
-                internalTxs.push({
-                    organization_id: run.org_id,
-                    source_system: 'LABOR',
-                    reference_id: `labor-${runId}-unallocated-salario${sufixo}`,
-                    transaction_date: run.end_date,
-                    amount: salarioUnalloc,
-                    direction: 'DEBIT',
-                    description: `Salários - Custo Administrativo (Não Alocado) - Folha ${formattedPeriod}`,
-                    category: 'Folha de Pagamento',
-                    status: 'PENDING',
-                    party_name: credorDeColaboradores(bucket.employees?.length ? bucket.employees : (summary.unallocatedEmployees || [])),
-                    party_type: 'EMPLOYEE',
-                    ...bucketClass,
-                });
-            }
-            if (encargosUnalloc > 0) {
-                internalTxs.push({
-                    organization_id: run.org_id,
-                    source_system: 'LABOR',
-                    reference_id: `labor-${runId}-unallocated-encargos${sufixo}`,
-                    transaction_date: run.end_date,
-                    amount: encargosUnalloc,
-                    direction: 'DEBIT',
-                    description: `Encargos Patronais - Custo Administrativo (Não Alocado) - Folha ${formattedPeriod}`,
-                    category: 'Encargos Patronais',
-                    status: 'PENDING',
-                    party_name: CREDOR_ENCARGOS,
-                    party_type: 'GOVERNMENT',
-                    ...bucketClass,
-                });
-            }
-            for (const tax of orgTerceirosTaxes) {
-                const taxCostUnalloc = Math.max(0, Math.round(bucket.gross * tax.rate * 100) / 100);
-                if (taxCostUnalloc <= 0) continue;
-                internalTxs.push({
-                    organization_id: run.org_id,
-                    source_system: 'LABOR',
-                    reference_id: `labor-${runId}-unallocated-terceiros-${tax.code}${sufixo}`,
-                    transaction_date: run.end_date,
-                    amount: taxCostUnalloc,
-                    direction: 'DEBIT',
-                    description: `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - Custo Adm. (Não Alocado) - Folha ${formattedPeriod}`,
-                    category: 'Contribuições de Terceiros',
-                    status: 'PENDING',
-                    party_name: tax.name,
-                    party_type: 'GOVERNMENT',
-                    ...bucketClass,
-                });
-            }
-        }
-
-        // 5. Upsert na tabela centralizada internal_transactions
-        if (internalTxs.length > 0) {
-            // Enriquece com campos de AP: due_date e business_status
-            // cost_center_id/plano_de_contas_id entram SEMPRE, mesmo null: o
-            // PostgREST monta o upsert pela união das chaves do array, e uma
-            // linha sem a chave receberia o default em vez do valor pretendido.
-            const enrichedTxs = internalTxs.map(tx => ({
-                ...tx,
-                due_date:           tx.due_date        ?? paymentDueDate,
-                business_status:    tx.business_status ?? 'PREVISTO',
-                cost_center_id:     tx.cost_center_id     ?? null,
-                plano_de_contas_id: tx.plano_de_contas_id ?? null,
-            }));
-            const { error } = await supabase
-                .from('internal_transactions')
-                .upsert(enrichedTxs, { onConflict: 'organization_id,reference_id,entry_type' });
-            if (error) {
-                console.error('[PAYROLL-SYNC] Erro no upsert de internal_transactions:', error);
-                errors.push(`Erro interno_transactions: ${error.message}`);
-            } else {
-                console.log(`[PAYROLL-SYNC] Sincronizados ${enrichedTxs.length} registros (due_date=${paymentDueDate})`);
-            }
-        }
-
-        if (errors.length > 0) throw new Error(errors.join('\n'));
-        return {
-            success: true,
-            count: internalTxs.length,
-            deductions: deductionByWorksite,
-            rubricasEncontradas: rubricasIndiv.map(r => r.code),
-            worksites: summary.byWorksite.map(w => ({
-                name: w.name,
-                grossCost: w.cost,
-                deduction: deductionByWorksite[w.id] || 0,
-                netSalary: Math.max(0, Math.round((w.netSalary - (deductionByWorksite[w.id] || 0)) * 100) / 100),
-                encargos: Math.max(0, Math.round(w.encargos * 100) / 100),
-                contribuicoes: Math.max(0, Math.round(w.contribuicoes * 100) / 100)
-            }))
-        };
+        if (falhas.length) throw new Error(falhas.join('; '));
     },
 
     // --- AUDIT LOGS ---
@@ -2065,289 +1790,6 @@ export const payrollService = {
             .order('name');
         if (error) throw error;
         return (data || []) as { id: string; name: string; code?: string; type?: string }[];
-    },
-
-    /**
-     * Sincroniza manualmente o custo de UM funcionário para os projetos
-     * designados, classificando os lançamentos pelo rateio contábil do mês.
-     *
-     * Até 2026-08-23 esta função recebia SEIS nomes de Centro de Custo/Plano
-     * escolhidos na hora, na tela de Alocações, e guardados em `localStorage`.
-     * Eram uma fonte de verdade paralela: o mesmo colaborador podia ser lançado
-     * com classificações diferentes dependendo de quem clicou e de qual
-     * navegador. Agora a classificação sai de `resolvePayrollShares`
-     * (rateio do mês → colaborador → ciclo), que está no banco.
-     */
-    async syncEmployeeToFinance(
-        runId: string,
-        employeeId: string,
-        employeeName: string,
-        totalCost: number,
-        allocations: { project_id: string, allocation_percent: number }[],
-        individualizadoLancamentos?: { rubricCode: string; rubricName: string; amount: number; txDate: string }[],
-        netSalary?: number,
-        grossSalary?: number,
-    ) {
-        // 1. Obter meta-dados da folha
-        const run = await this.getRun(runId);
-        const period = run.start_date.slice(0, 7);
-        const [year, month] = period.split('-');
-        const formattedPeriod = `${month}/${year}`;
-
-        // Classificação contábil da linha: rateio do mês → colaborador → ciclo.
-        // Aqui TODA linha é de um colaborador só, então tanto o override quanto
-        // o rateio dele valem sempre. Ver "CLASSIFICAÇÃO CONTÁBIL DAS LINHAS DE
-        // FOLHA" e "RATEIO CONTÁBIL DO COLABORADOR".
-        const { data: empClassRow } = await supabase
-            .from('employees')
-            .select('cost_center_id, plano_de_contas_id')
-            .eq('id', employeeId)
-            .maybeSingle();
-        const empSplits = await this.listCostSplits(employeeId, period).catch(() => [] as EmployeeCostSplit[]);
-        const empShares = resolvePayrollShares(
-            run,
-            empClassRow as { cost_center_id?: string | null; plano_de_contas_id?: string | null } | null,
-            empSplits,
-        );
-        // Fatia principal — usada só para resolver o NOME no espelho do projeto,
-        // que tem um campo de texto só e não comporta rateio.
-        const empClass: PayrollClassification = {
-            cost_center_id: empShares[0]?.cost_center_id ?? null,
-            plano_de_contas_id: empShares[0]?.plano_de_contas_id ?? null,
-        };
-
-        // Nomes só para o espelho dentro de `project.settings.financialInfo`,
-        // que guarda TEXTO. O que a tela de Alocações mandou continua tendo
-        // precedência; a herança (e o rateio) só preenchem o que veio vazio.
-        const [ccListEmp, pcListEmp] = await Promise.all([
-            this.listCostCenters(run.org_id).catch(() => [] as { id: string; name: string }[]),
-            this.listPlanoContas(run.org_id).catch(() => [] as { id: string; name: string }[]),
-        ]);
-        const nomeDaFatia = (cls: PayrollClassification) => ({
-            costCenter:      ccListEmp.find(c => c.id === cls.cost_center_id)?.name ?? '',
-            chartOfAccounts: pcListEmp.find(p => p.id === cls.plano_de_contas_id)?.name ?? '',
-        });
-        const nomesPrincipais      = nomeDaFatia(empClass);
-        const costCenterLabel      = nomesPrincipais.costCenter;
-        const chartOfAccountsLabel = nomesPrincipais.chartOfAccounts;
-
-        const salaryTotal     = netSalary ?? totalCost;
-        const encargosTotal   = Math.max(0, totalCost - salaryTotal);
-        const orgTerceirosTaxes = getOrgTerceirosTaxes(run.org_id);
-        const terceiroTotalRate = orgTerceirosTaxes.reduce((s, t) => s + t.rate, 0);
-        const contribuicoesTotal = grossSalary ? Math.max(0, Math.round(grossSalary * terceiroTotalRate * 100) / 100) : 0;
-
-        const internalTxs: InternalTransaction[] = [];
-
-        // 2. Iterar sobre alocações — gera dois lançamentos por obra: salário e encargos
-        for (const alloc of allocations) {
-            const percent = alloc.allocation_percent || 0;
-            if (percent <= 0) continue;
-
-            const pct = percent / 100;
-            const salaryCost       = Math.round(salaryTotal      * pct * 100) / 100;
-            const encargosCost     = Math.round(encargosTotal    * pct * 100) / 100;
-            const contribuicoesCost = Math.round(contribuicoesTotal * pct * 100) / 100;
-            if (salaryCost <= 0 && encargosCost <= 0 && contribuicoesCost <= 0) continue;
-
-            try {
-                const project = await projectService.loadProject(alloc.project_id);
-                if (!project) continue;
-
-                const settings = project.settings as ProjectSettings;
-                const info = settings.financialInfo || { totalValue: 0, paymentMethod: 'Variavel', installments: [], transactions: [] };
-
-                const oldRefId         = `labor-${runId}-${alloc.project_id}-${employeeId}`;
-                const empPrefix        = `labor-${runId}-${alloc.project_id}-${employeeId}-`;
-                const refIdSalario     = `labor-${runId}-${alloc.project_id}-${employeeId}-salario`;
-                const refIdEncargos    = `labor-${runId}-${alloc.project_id}-${employeeId}-encargos`;
-
-                const filteredTransactions = (info.transactions as ProjectFinancialTx[] || []).filter(t =>
-                    t.id !== oldRefId && !String(t.id || '').startsWith(empPrefix)
-                );
-
-                const newTransactions: ProjectFinancialTx[] = [];
-
-                // Cada valor da obra é dividido pelas fatias contábeis do
-                // colaborador. Sem rateio há uma fatia só, o sufixo é vazio e
-                // os reference_id saem idênticos aos de antes.
-                if (salaryCost > 0) {
-                    const desc = `Salários - ${employeeName} - Folha ${formattedPeriod}`;
-                    const valores = dividirValor(salaryCost, empShares);
-                    empShares.forEach((fatia, i) => {
-                        const valor = valores[i];
-                        if (valor <= 0) return;
-                        const refId = `${refIdSalario}${sufixoDaFatia(empShares, fatia)}`;
-                        const nomes = nomeDaFatia(fatia);
-                        newTransactions.push({
-                            id: refId,
-                            date: run.end_date,
-                            type: 'EXPENSE',
-                            category: 'Folha de Pagamento',
-                            description: desc,
-                            value: valor,
-                            status: 'PENDING',
-                            notes: `Salário líquido. Funcionário: ${employeeName}`,
-                            costCenter: nomes.costCenter || costCenterLabel,
-                            chartOfAccounts: nomes.chartOfAccounts || chartOfAccountsLabel
-                        });
-                        internalTxs.push({
-                            organization_id: run.org_id,
-                            source_system: 'LABOR',
-                            reference_id: refId,
-                            transaction_date: run.end_date,
-                            amount: valor,
-                            direction: 'DEBIT',
-                            description: desc,
-                            category: 'Folha de Pagamento',
-                            status: 'PENDING',
-                            party_name: employeeName,
-                            party_type: 'EMPLOYEE',
-                            cost_center_id:     fatia.cost_center_id,
-                            plano_de_contas_id: fatia.plano_de_contas_id,
-                        });
-                    });
-                }
-
-                if (encargosCost > 0) {
-                    const desc = `Encargos Patronais - ${employeeName} - Folha ${formattedPeriod}`;
-                    const valores = dividirValor(encargosCost, empShares);
-                    empShares.forEach((fatia, i) => {
-                        const valor = valores[i];
-                        if (valor <= 0) return;
-                        const refId = `${refIdEncargos}${sufixoDaFatia(empShares, fatia)}`;
-                        const nomes = nomeDaFatia(fatia);
-                        newTransactions.push({
-                            id: refId,
-                            date: run.end_date,
-                            type: 'EXPENSE',
-                            category: 'Encargos Patronais',
-                            description: desc,
-                            value: valor,
-                            status: 'PENDING',
-                            notes: `Encargos patronais (FGTS e demais). Funcionário: ${employeeName}`,
-                            costCenter: nomes.costCenter || costCenterLabel,
-                            chartOfAccounts: nomes.chartOfAccounts || chartOfAccountsLabel
-                        });
-                        internalTxs.push({
-                            organization_id: run.org_id,
-                            source_system: 'LABOR',
-                            reference_id: refId,
-                            transaction_date: run.end_date,
-                            amount: valor,
-                            direction: 'DEBIT',
-                            description: desc,
-                            category: 'Encargos Patronais',
-                            status: 'PENDING',
-                            party_name: CREDOR_ENCARGOS,
-                            party_type: 'GOVERNMENT',
-                            cost_center_id:     fatia.cost_center_id,
-                            plano_de_contas_id: fatia.plano_de_contas_id,
-                        });
-                    });
-                }
-
-                for (const tax of orgTerceirosTaxes) {
-                    const grossPct = grossSalary ? Math.round(grossSalary * pct * 100) / 100 : 0;
-                    const taxCost = Math.max(0, Math.round(grossPct * tax.rate * 100) / 100);
-                    if (taxCost <= 0) continue;
-                    const desc = `${tax.name} (${(tax.rate * 100).toFixed(1)}%) - ${employeeName} - Folha ${formattedPeriod}`;
-                    const valores = dividirValor(taxCost, empShares);
-                    empShares.forEach((fatia, i) => {
-                        const valor = valores[i];
-                        if (valor <= 0) return;
-                        const refIdTax = `labor-${runId}-${alloc.project_id}-${employeeId}-terceiros-${tax.code}${sufixoDaFatia(empShares, fatia)}`;
-                        const nomes = nomeDaFatia(fatia);
-                        newTransactions.push({
-                            id: refIdTax,
-                            date: run.end_date,
-                            type: 'EXPENSE',
-                            category: 'Contribuições de Terceiros',
-                            description: desc,
-                            value: valor,
-                            status: 'PENDING',
-                            notes: `Contribuição de terceiros — código ${tax.code}. Funcionário: ${employeeName}`,
-                            costCenter: nomes.costCenter || costCenterLabel,
-                            chartOfAccounts: nomes.chartOfAccounts || chartOfAccountsLabel
-                        });
-                        internalTxs.push({
-                            organization_id: run.org_id,
-                            source_system: 'LABOR',
-                            reference_id: refIdTax,
-                            transaction_date: run.end_date,
-                            amount: valor,
-                            direction: 'DEBIT',
-                            description: desc,
-                            category: 'Contribuições de Terceiros',
-                            status: 'PENDING',
-                            party_name: tax.name,
-                            party_type: 'GOVERNMENT',
-                            cost_center_id:     fatia.cost_center_id,
-                            plano_de_contas_id: fatia.plano_de_contas_id,
-                        });
-                    });
-                }
-
-                await projectService.saveProject({
-                    ...project,
-                    settings: {
-                        ...settings,
-                        financialInfo: {
-                            ...info,
-                            transactions: [...newTransactions, ...filteredTransactions]
-                        }
-                    }
-                });
-
-            } catch (err) {
-                console.error(`[EMP-SYNC] Erro ao processar projeto ${alloc.project_id}:`, err);
-            }
-        }
-
-        // 3. Lançamentos individualizados (ex: ADIANTAMENTO) com data específica
-        if (individualizadoLancamentos && individualizadoLancamentos.length > 0) {
-            for (const lc of individualizadoLancamentos) {
-                if (lc.amount <= 0) continue;
-                const valores = dividirValor(lc.amount, empShares);
-                empShares.forEach((fatia, i) => {
-                    const valor = valores[i];
-                    if (valor <= 0) return;
-                    const refId = `labor-${runId}-indiv-${lc.rubricCode}-${employeeId}${sufixoDaFatia(empShares, fatia)}`;
-                    internalTxs.push({
-                        organization_id:  run.org_id,
-                        source_system:    'LABOR',
-                        reference_id:     refId,
-                        transaction_date: lc.txDate,
-                        amount:           valor,
-                        direction:        'DEBIT',
-                        description:      `${lc.rubricName} - ${employeeName} - Folha ${formattedPeriod}`,
-                        category:         'Folha de Pagamento',
-                        status:           'PENDING',
-                        party_name:       employeeName,
-                        party_type:       'EMPLOYEE',
-                        cost_center_id:     fatia.cost_center_id,
-                        plano_de_contas_id: fatia.plano_de_contas_id,
-                    });
-                });
-            }
-        }
-
-        // 4. Salvar na internal_transactions
-        if (internalTxs.length > 0) {
-            // As duas dimensões entram em todas as linhas, mesmo null — o
-            // upsert do PostgREST usa a união das chaves do array.
-            const classified = internalTxs.map(tx => ({
-                ...tx,
-                cost_center_id:     tx.cost_center_id     ?? null,
-                plano_de_contas_id: tx.plano_de_contas_id ?? null,
-            }));
-            const { error } = await supabase
-                .from('internal_transactions')
-                .upsert(classified, { onConflict: 'organization_id,reference_id,entry_type' });
-            if (error) console.error('[EMP-SYNC] Erro no upsert centralizado:', error);
-        }
-
-        return { success: true };
     },
 
     async listIndividualizadoItemsForEmployee(runId: string, employeeId: string): Promise<{ code: string; name: string; amount: number; dia_lancamento: number | null }[]> {

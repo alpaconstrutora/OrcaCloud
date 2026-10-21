@@ -51,6 +51,11 @@ describe('validarSelecaoParaDarf', () => {
         expect(validarSelecaoParaDarf([tributo('a'), tributo('b', { party_name: 'IRRF', effective_status: 'RETIDO' })]).motivo)
             .toBe('IRRF: Retido pelo cliente — não é pago pela empresa');
     });
+    it('FGTS (guia do FGTS Digital) não se mistura com INSS/IRRF; FGTS com FGTS pode', () => {
+        expect(validarSelecaoParaDarf([tributo('a', { party_name: 'FGTS' }), tributo('b', { party_name: 'INSS (segurados)' })]).motivo)
+            .toBe('O FGTS tem guia própria (FGTS Digital): agrupe o FGTS separado dos demais tributos');
+        expect(validarSelecaoParaDarf([tributo('a', { party_name: 'FGTS' }), tributo('b', { party_name: 'FGTS' })]).ok).toBe(true);
+    });
 });
 
 describe('linha digitável e datas', () => {

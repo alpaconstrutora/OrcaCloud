@@ -906,34 +906,22 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
     };
 
     // ── Lançamento financeiro ─────────────────────────────────────────────────
+    // Até 21/10/2026 este botão gravava títulos DESTE colaborador ao lado dos
+    // títulos agregados da folha, que já o incluíam: o custo dele saía em dobro
+    // (06/2026). Agora salva a alocação e recalcula a FOLHA inteira — a mesma
+    // conta de "Re-sincronizar financeiro" em Ciclos de folha.
     const launchFinance = async () => {
         if (!closedResult) return;
-        if (totalAlocado === 0) { setErro('Defina ao menos um percentual de alocação antes de lançar.'); return; }
+        if (totalAlocado > 100) { setErro(`A alocação soma ${totalAlocado.toFixed(0)}% — não pode passar de 100%.`); return; }
         try {
             setSaving('finance');
             setErro(null);
-            const [pAno, pMes] = period.split('-');
-            const ultimoDia = new Date(Number(pAno), Number(pMes), 0).toISOString().slice(0, 10);
-            const indiv = individualizadoItems.filter(i => i.amount > 0).map(i => ({
-                rubricCode: i.code,
-                rubricName: i.name,
-                amount: i.amount,
-                txDate: i.dia_lancamento ? `${pAno}-${pMes}-${String(i.dia_lancamento).padStart(2, '0')}` : ultimoDia,
-            }));
-
-            // A classificação NÃO vem mais da tela: sai do rateio contábil →
-            // colaborador → ciclo, resolvida no service.
-            await payrollService.syncEmployeeToFinance(
-                closedResult.run_id,
-                employee.id,
-                employee.name,
-                closedResult.employer_cost,
-                allocations,
-                indiv.length > 0 ? indiv : undefined,
-                closedResult.net,
-                closedResult.gross,
-            );
-            onNotify(`Custos de ${period} lançados no financeiro.`);
+            await payrollService.saveAllocations(employee.id, period, allocations);
+            await onSaved(employee.id);
+            const r = await payrollService.syncPayrollToFinance(closedResult.run_id);
+            onNotify(r.avisos.length
+                ? `Folha de ${period} recalculada no financeiro, com ${r.avisos.length} aviso(s): ${r.avisos[0]}`
+                : `Folha de ${period} recalculada no financeiro.`);
         } catch (err) {
             console.error(err);
             setErro(mensagemDeErro(err, 'Houve um erro ao registrar os lançamentos.'));
@@ -1213,9 +1201,10 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
                                     )}
 
                                     <p className="text-xs text-gray-500">
-                                        Serão gerados lançamentos de <strong>Salários</strong> ({formatMoney(closedResult.net || 0)}),
-                                        {' '}<strong>Encargos Patronais</strong> ({formatMoney(Math.max(0, (closedResult.employer_cost || 0) - (closedResult.net || 0)))})
-                                        {' '}e <strong>Contribuições de Terceiros</strong>, distribuídos pelas obras e pelo rateio contábil acima.
+                                        Salva a alocação acima e recalcula no financeiro a <strong>folha inteira</strong> de {period}:
+                                        {' '}salários, adiantamentos e cada tributo em título próprio (<strong>FGTS, INSS, IRRF,
+                                        INSS patronal, RAT e terceiros</strong>, que vão para Tributos a Pagar), distribuídos pelas
+                                        {' '}obras e pelo rateio contábil. Títulos pagos, conciliados ou em DARF não mudam.
                                     </p>
                                 </>
                             )}

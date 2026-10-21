@@ -87,8 +87,16 @@ export const financialSyncService = {
         }
 
         // 2. Processar Transações Manuais (Despesas)
+        //
+        // ⚠️ O espelho da FOLHA (`labor-{folha}-…`, gravado por
+        // payrollService.espelharFolhaNasObras) NÃO é materializado aqui: o dono
+        // dessas linhas é o sync da folha. Até 21/10/2026 este upsert, pelo mesmo
+        // reference_id, rebaixava o título da folha para 'PROJECT', tirava o credor
+        // e o tipo (o tributo sumia de Tributos a Pagar) e ressuscitava título que
+        // o sync da folha tinha apagado — a Conciliação chama isto para TODAS as
+        // obras. Foi assim que a folha 04/2026 virou 'PROJECT'.
         if (info.transactions && info.transactions.length > 0) {
-            info.transactions.forEach(tx => {
+            info.transactions.filter(tx => !String(tx.id ?? '').startsWith('labor-')).forEach(tx => {
                 internalTxs.push({
                     organization_id: organizationId,
                     // Parcela de pedido de compra continua sendo de pedido depois

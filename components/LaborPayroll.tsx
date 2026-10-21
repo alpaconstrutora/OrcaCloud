@@ -278,19 +278,21 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
             setExecuting(true);
             const result = await payrollService.syncPayrollToFinance(selectedRun.id);
             window.dispatchEvent(new CustomEvent('payroll-synced'));
+            const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             const lines: string[] = ['✅ Financeiro re-sincronizado!', ''];
-            if (result.rubricasEncontradas?.length) {
-                lines.push(`Rubricas individualizadas: ${result.rubricasEncontradas.join(', ')}`);
-            } else {
+            lines.push(`${result.count} título(s) gravado(s), ${result.removidos} de cálculo antigo removido(s), ${result.preservados} preservado(s) (pagos, conciliados, cancelados ou em DARF).`);
+            lines.push('');
+            lines.push('Totais da folha (os tributos ficam em Financeiro › Tributos a Pagar):');
+            for (const [nome, valor] of Object.entries(result.totais)) lines.push(`  ${nome}: ${brl(valor)}`);
+            if (!result.rubricasIndividualizadas.length) {
+                lines.push('');
                 lines.push('⚠️ Nenhuma rubrica com "Lançamento Individualizado" encontrada.');
                 lines.push('Vá em Gestão de Rubricas e ative o campo na rubrica ADIANTAMENTO.');
             }
-            if (result.worksites?.length) {
+            if (result.avisos.length) {
                 lines.push('');
-                lines.push('Obras atualizadas:');
-                for (const w of result.worksites) {
-                    lines.push(`  ${w.name}: Salários R$ ${w.netSalary.toFixed(2)} | Encargos R$ ${w.encargos.toFixed(2)} | Contrib. Terceiros R$ ${(w.contribuicoes || 0).toFixed(2)}`);
-                }
+                lines.push('Atenção:');
+                result.avisos.forEach(a => lines.push(`  • ${a}`));
             }
             alert(lines.join('\n'));
         } catch (err: unknown) {
@@ -313,6 +315,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
             // Sync financeiro em background — não bloqueia a UI
             payrollService.syncPayrollToFinance(selectedRun.id).catch(syncErr => {
                 console.error('[LaborPayroll] Erro na sincronização financeira:', syncErr);
+                notify(`A folha foi fechada, mas o financeiro não foi gerado: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}. Use "Re-sincronizar financeiro".`, 'error');
             });
             notify('Folha fechada! Os lançamentos financeiros serão sincronizados em instantes.');
         } catch (err) {

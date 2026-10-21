@@ -426,6 +426,14 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     const [focoDarfId, setFocoDarfId] = useState<string | null>(null);
     const abrirDarf = useCallback((darfId: string) => { setFocoDarfId(darfId); setActiveView('darfs'); }, [setActiveView]);
     const consumirFocoDarf = useCallback(() => setFocoDarfId(null), []);
+    // Deep-link de Contas a Pagar ("Abrir em Tributos a Pagar › DARFs" na linha do DARF).
+    const viewFocus = useStore(s => s.viewFocus);
+    const setViewFocus = useStore(s => s.setViewFocus);
+    useEffect(() => {
+        if (viewFocus?.source !== 'DARF' || !viewFocus.ref) return;
+        abrirDarf(viewFocus.ref);
+        setViewFocus(null);
+    }, [viewFocus, abrirDarf, setViewFocus]);
 
     // Filtro de status — dropdown dentro da toolbar acoplada. Antes eram 5 pílulas
     // lado a lado, que não cabiam junto dos outros grupos da barra; virou um único

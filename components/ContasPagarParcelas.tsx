@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown, Download, FileText, Filter, Landmark, Loader2, MoveHorizontal, Paperclip, Plus, Receipt, RefreshCw, Search, Tag, Undo2, X,
+    AlertCircle, Building2, Check, ChevronDown, ChevronRight, Download, ExternalLink, FileText, Filter, Landmark, Loader2, MoveHorizontal, Paperclip, Plus, Receipt, RefreshCw, Search, Tag, Undo2, X,
 } from 'lucide-react';
 import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financial';
 import { payableService, payableParty, STATUS_ASAAS_TRAVA_TITULO } from '../services/payableService';
@@ -26,6 +26,10 @@ import { asaasContaService } from '../services/asaasContaService';
 import { supplierPaymentService, type SupplierPayment } from '../services/supplierPaymentService';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { idsComAlcadaPendente, MOTIVO_ALCADA_PENDENTE } from '../services/alcadaDaBaixa';
+import { darfService } from '../services/darfService';
+import { competenciaBR, linhaContemId } from '../utils/darf';
+import { hojeLocal } from '../utils/baixaRecebivel';
+import { useStore } from '../store/useStore';
 
 /**
  * Rótulo de origem por `source_system`. É a coluna que responde "de onde essa
@@ -51,6 +55,9 @@ export const ORIGEM_PT: Record<string, string> = {
     // Título gerado à mão — "Novo pagamento avulso" (plano 2026-10-17); a
     // conciliação também cria MANUAL ao lançar uma saída sem título.
     MANUAL: 'Avulso',
+    // Guia que agrupa tributos (Tributos a Pagar › DARFs, 21/10/2026): os
+    // tributos do DARF saem da lista e entram como UMA linha (`colapsarDarfs`).
+    DARF: 'DARF',
 };
 
 /**
@@ -180,8 +187,12 @@ function diasAtraso(dueDate: string): number {
  *  dos UUIDs que `vw_payables` expõe. */
 type ParcelaRow = Payable & { cost_center_name: string; plano_de_contas_name: string; imovel_label: string; recibo_numero: number | null };
 
-/** Folha reúne vários colaboradores num título: não há um credor para assinar. */
-const semReciboPorOrigem = (row: Pick<Payable, 'source_system'>) => row.source_system === 'LABOR';
+/** Folha reúne vários colaboradores num título: não há um credor para assinar.
+ *  DARF é pago à Receita: o comprovante é a própria guia paga (anexo do DARF). */
+const semReciboPorOrigem = (row: Pick<Payable, 'source_system'>) => row.source_system === 'LABOR' || row.source_system === 'DARF';
+
+const MOTIVO_SEM_RECIBO_DARF = 'DARF não tem recibo de credor: o comprovante é a guia paga (anexe o PDF no DARF).';
+const MOTIVO_ESTORNO_DARF_CONCILIADO = 'Conciliado com o extrato — desfaça a conciliação em Conciliação Bancária.';
 
 // Conteúdo de cada célula por coluna — extraído para função pura para que o corpo
 // da tabela possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável)
@@ -249,10 +260,19 @@ function renderParcelaCell(
                 </div>
             );
         case 'centro_custo':
+            // DARF: o valor comum aos tributos; "Vários" quando divergem.
+            if (row.darf && !row.cost_center_id && row.darf.componentes.some(c => c.cost_center_id)) {
+                return <span className="text-sm font-normal text-gray-700" title="Os tributos do DARF têm centros de custo diferentes — veja a composição">Vários</span>;
+            }
             return <span className="block truncate text-sm font-normal text-gray-700" title={row.cost_center_name || undefined}>{row.cost_center_name || '—'}</span>;
         case 'plano_contas':
+            if (row.darf && !row.plano_de_contas_id && row.darf.componentes.some(c => c.plano_de_contas_id)) {
+                return <span className="text-sm font-normal text-gray-700" title="Os tributos do DARF têm planos de contas diferentes — veja a composição">Vários</span>;
+            }
             return <span className="block truncate text-sm font-normal text-gray-700" title={row.plano_de_contas_name || undefined}>{row.plano_de_contas_name || '—'}</span>;
         case 'imovel':
+            // DARF não se apropria a imóvel (é guia de tributos, não despesa do imóvel).
+            if (row.darf) return <span className="text-sm font-normal text-gray-400">—</span>;
             return (
                 <span className="block truncate text-sm font-normal text-gray-700">
                     {alocacoes === null ? (
@@ -322,6 +342,8 @@ interface Props {
     onEditarAvulso?: (row: Payable) => void;
     /** "Novo pagamento avulso" no estado vazio — o mesmo botão da barra do pai. */
     onNovoAvulso?: () => void;
+    /** Baixa/estorno do DARF mudam os MEMBROS (a linha DARF é derivada deles): §22. */
+    onComponentesChanged?: (ids: string[], patch: Partial<Payable>) => void;
 }
 
 /** Por que a linha avulsa não pode ser editada — `null` quando pode. */
@@ -374,8 +396,16 @@ function chaveDoGrupo(campo: CampoAgrupar, r: ParcelaRow): ChaveDeGrupo {
     }
 }
 
-export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, vencAno, vencMes, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg, onEditarAvulso, onNovoAvulso }: Props) {
+export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, vencAno, vencMes, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg, onEditarAvulso, onNovoAvulso, onComponentesChanged }: Props) {
     const confirm = useConfirm();
+    const navigateToFocus = useStore(s => s.navigateToFocus);
+    // Linhas DARF com a composição aberta (chevron "Ver composição").
+    const [darfsAbertos, setDarfsAbertos] = useState<Set<string>>(new Set());
+    const alternarDarf = (id: string) => setDarfsAbertos(prev => {
+        const n = new Set(prev);
+        if (n.has(id)) n.delete(id); else n.add(id);
+        return n;
+    });
     const [search, setSearch] = usePersistedState('contasPagarParcelas:search', '');
     const [statusFiltro, setStatusFiltro] = usePersistedState<StatusFiltro>('contasPagarParcelas:status', 'all');
     const [origemFiltro, setOrigemFiltro] = usePersistedState<OrigemFiltro>('contasPagarParcelas:origem', 'all');
@@ -445,7 +475,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
      * para tudo e sugerir que nada está apropriado.
      */
     const [alocacoes, setAlocacoes] = useState<Map<string, { propertyIds: string[]; names: string[] }> | null>(null);
-    const idsCarregados = useMemo(() => rows.map(r => r.id).join(','), [rows]);
+    // A linha DARF é sintética (id do DARF, não de internal_transactions): fica fora.
+    const idsCarregados = useMemo(() => rows.filter(r => !r.darf).map(r => r.id).join(','), [rows]);
 
     // Guarda de resposta fora de ordem: trocar de organização no topo com a
     // consulta anterior em voo não pode deixar a apropriação da org velha na tela.
@@ -524,7 +555,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     const pagamentosSeq = useRef(0);
     const recarregarPagamentosAsaas = React.useCallback(() => {
         if (orgsComAsaas.size === 0) { setPagamentosAsaas({}); return; }
-        const ids = rows.filter(r => orgsComAsaas.has(r.organization_id)).map(r => r.id);
+        const ids = rows.filter(r => !r.darf && orgsComAsaas.has(r.organization_id)).map(r => r.id);
         const seq = ++pagamentosSeq.current;
         supplierPaymentService.byTransactions(ids)
             .then(m => { if (seq === pagamentosSeq.current) setPagamentosAsaas(m); })
@@ -596,7 +627,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     || (r.project_name ?? '').toLowerCase().includes(termo)
                     || (r.cost_center_name ?? '').toLowerCase().includes(termo)
                     || (r.plano_de_contas_name ?? '').toLowerCase().includes(termo)
-                    || (r.imovel_label ?? '').toLowerCase().includes(termo);
+                    || (r.imovel_label ?? '').toLowerCase().includes(termo)
+                    // DARF: "PIS" ou o nº do documento acham a linha da guia.
+                    || (r.darf?.busca ?? '').toLowerCase().includes(termo);
                 if (!hit) return false;
             }
             return true;
@@ -697,11 +730,13 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
      */
     useEffect(() => {
         if (!focusId || loading) return;
-        if (!rows.some(r => r.id === focusId)) { onFocusConsumed?.(false, false); return; }
-        const indice = linhasNaTela.findIndex(r => r.id === focusId);
+        // Tributo agrupado em DARF (link "Ver em Contas a Pagar" de Tributos):
+        // o id é de um COMPONENTE, que mora dentro da linha do DARF.
+        if (!rows.some(r => linhaContemId(r, focusId))) { onFocusConsumed?.(false, false); return; }
+        const indice = linhasNaTela.findIndex(r => linhaContemId(r, focusId));
         if (indice < 0) {
             // Está num grupo recolhido: abre o grupo e espera a lista recalcular.
-            const grupoDoFoco = agrupando ? grupos.find(g => recolhidos.has(g.key) && g.itens.some(r => r.id === focusId)) : undefined;
+            const grupoDoFoco = agrupando ? grupos.find(g => recolhidos.has(g.key) && g.itens.some(r => linhaContemId(r, focusId))) : undefined;
             if (grupoDoFoco) { agrupamento.expandir(grupoDoFoco.key); return; }
             setSearch('');
             setStatusFiltro('all');
@@ -715,8 +750,11 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         // do título já renderizada.
         const paginaDoTitulo = Math.floor(indice / pageSize) + 1;
         if (paginaDoTitulo !== currentPage) { setPage(paginaDoTitulo); return; }
-        setHighlightId(focusId);
-        rowRefs.current.get(focusId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        const linhaDoFoco = linhasNaTela[indice];
+        // Chegou por um componente: abre a composição do DARF para mostrar o tributo.
+        if (linhaDoFoco.darf && linhaDoFoco.id !== focusId) setDarfsAbertos(prev => new Set(prev).add(linhaDoFoco.id));
+        setHighlightId(linhaDoFoco.id);
+        rowRefs.current.get(linhaDoFoco.id)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
         onFocusConsumed?.(true, limpouFiltrosRef.current);
         limpouFiltrosRef.current = false;
         const t = setTimeout(() => setHighlightId(null), 4000);
@@ -748,9 +786,12 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
      * apropriar: o seletor de imóveis da Sheet é de uma org só.
      */
     const orgDoLote = useMemo(() => {
-        const orgs = new Set(selectedVisible.map(r => r.organization_id));
+        const orgs = new Set(selectedVisible.filter(r => !r.darf).map(r => r.organization_id));
         return orgs.size === 1 ? [...orgs][0] : null;
     }, [selectedVisible]);
+    /** DARF não se apropria a imóvel: fica fora do lote de apropriação. */
+    const apropriaveisDoLote = selectedVisible.filter(r => !r.darf);
+    const darfsForaDaApropriacao = selectedVisible.length - apropriaveisDoLote.length;
 
     function toggleRow(id: string) {
         setSelectedIds(prev => {
@@ -831,6 +872,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
      * rótulo "Quitado". Dava para marcar como pago e não para desmarcar.
      */
     async function estornar(row: Payable) {
+        if (row.darf) { await estornarDarf(row); return; }
         const deBoleto = row.source_system === 'BOLETO';
         const ok = await confirm({
             title: 'Estornar a baixa deste título?',
@@ -841,6 +883,33 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         });
         if (!ok) return;
         await marcarStatus(row, 'PREVISTO');
+    }
+
+    /** Estorno do DARF inteiro: todos os componentes voltam a Previsto, juntos. */
+    async function estornarDarf(row: Payable) {
+        const darf = row.darf!;
+        const n = darf.componentes.length;
+        const ok = await confirm({
+            title: 'Estornar a baixa deste DARF?',
+            message: `Os ${n} lançamentos do DARF (tributos${darf.componentes.some(c => c.source_system === 'DARF') ? ' e multa/juros' : ''}) voltam para Previsto e a data de pagamento é apagada.`,
+            variant: 'warning',
+            confirmLabel: 'Estornar DARF',
+        });
+        if (!ok) return;
+        setSalvando(row.id);
+        try {
+            await darfService.estornar(darf.id);
+            const vencido = !!row.due_date && row.due_date < hojeLocal();
+            onComponentesChanged?.(darf.componentes.map(c => c.id), {
+                business_status: 'PREVISTO', status: 'PENDING', payment_date: null,
+                effective_status: vencido ? 'VENCIDO' : 'PREVISTO',
+            });
+            notify('Baixa do DARF estornada.');
+        } catch (e: unknown) {
+            notify('Erro: ' + ((e as Error).message ?? 'Falha ao estornar o DARF'), 'error');
+        } finally {
+            setSalvando(null);
+        }
     }
 
     /** Credor como o painel e o toast mostram (cadastro vivo, senão o texto). */
@@ -862,6 +931,21 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
 
         for (const [i, row] of alvos.entries()) {
             setBaixaProgresso(alvos.length > 1 ? `Baixando ${i + 1} de ${alvos.length}…` : null);
+            if (row.darf) {
+                // DARF: uma baixa só para todos os componentes (tributos + multa/juros),
+                // numa transação — `fn_darf_dar_baixa`. Sem recibo de credor.
+                try {
+                    const ids = await darfService.darBaixa(row.darf.id, { paymentDate: dados.paymentDate, paymentType: dados.paymentType });
+                    baixados++;
+                    onComponentesChanged?.(ids, {
+                        business_status: 'PAGO', effective_status: 'PAGO', status: 'CONCILIATED',
+                        payment_date: dados.paymentDate, payment_type: dados.paymentType,
+                    });
+                } catch {
+                    falhasBaixa.push(row.description || 'DARF');
+                }
+                continue;
+            }
             try {
                 await payableService.darBaixa(row.id, {
                     paymentDate: dados.paymentDate, paymentType: dados.paymentType,
@@ -942,6 +1026,13 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         const asaas = sp && (sp.asaas_authorized === false ? 'Aguardando token'
             : sp.status === 'SCHEDULED' ? `Agendado ${formatDateBR(sp.scheduled_date)}`
             : 'Pagamento enviado');
+        if (row.darf && row.effective_status === 'PARCIAL') {
+            return (
+                <div className="text-center">
+                    <span className="text-sm font-normal text-red-600" title="Lançamentos do DARF em estados diferentes (parte paga, parte em aberto)">Inconsistente</span>
+                </div>
+            );
+        }
         return (
             <div className="text-center">
                 <StatusBadge status={row.effective_status} />
@@ -959,7 +1050,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
 
     function renderReciboCell(row: ParcelaRow): React.ReactNode {
         if (row.effective_status !== 'PAGO' || semReciboPorOrigem(row)) {
-            return <span className="text-sm font-normal text-gray-400">—</span>;
+            return <span className="text-sm font-normal text-gray-400" title={row.darf ? MOTIVO_SEM_RECIBO_DARF : undefined}>—</span>;
         }
         const ocupado = gerandoRecibo === row.id;
         const rotulo = row.recibo_numero != null ? `Nº ${numeroRecibo(row.recibo_numero)}` : 'Emitir';
@@ -978,10 +1069,15 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         );
     }
 
+    /** Pendente na alçada? No DARF, basta um componente pendente (o banco recusa a baixa do DARF inteiro). */
+    const naAlcada = (row: Payable) => row.darf
+        ? row.darf.alcada_pendente || row.darf.componentes.some(c => alcadaPendente.has(c.id))
+        : alcadaPendente.has(row.id);
+
     // Títulos em aberto da seleção — os que a baixa em lote alcança.
     const selecionadasNaoQuitadas = selectedVisible.filter(r => !SEM_PAGAMENTO_A_FAZER.includes(r.effective_status));
     // Pendente na alçada não entra no lote (item H.1) — o título do botão diz quantas ficaram de fora.
-    const selecionadasEmAberto = selecionadasNaoQuitadas.filter(r => !alcadaPendente.has(r.id));
+    const selecionadasEmAberto = selecionadasNaoQuitadas.filter(r => !naAlcada(r));
     const presasNaAlcada = selecionadasNaoQuitadas.length - selecionadasEmAberto.length;
 
     /** Props do painel para os títulos em baixa: rótulos de Pagar, credor como
@@ -995,6 +1091,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     })) ?? null;
     const baixaSoFolha = !!baixando?.length && baixando.every(semReciboPorOrigem);
     const baixaComFolha = !!baixando?.some(semReciboPorOrigem);
+    const baixaSoDarf = !!baixando?.length && baixando.every(r => !!r.darf);
     const baixaSoBoleto = !!baixando?.length && baixando.every(r => r.source_system === 'BOLETO');
 
     /** Anexo do avulso: URL assinada no CLIQUE (15 min), nunca ao carregar a lista. */
@@ -1227,7 +1324,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                     const vencido = row.effective_status === 'VENCIDO';
                                     const quitado = SEM_PAGAMENTO_A_FAZER.includes(row.effective_status);
                                     const selecionada = selectedIds.has(row.id);
-                                    return (
+                                    const linha = (
                                         <tr
                                             key={row.id}
                                             ref={el => { if (el) rowRefs.current.set(row.id, el); else rowRefs.current.delete(row.id); }}
@@ -1262,9 +1359,11 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                     {!quitado && (
                                                         <button
                                                             onClick={() => setBaixando([row])}
-                                                            disabled={salvando === row.id || alcadaPendente.has(row.id)}
+                                                            disabled={salvando === row.id || naAlcada(row)}
                                                             className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                                            title={alcadaPendente.has(row.id) ? MOTIVO_ALCADA_PENDENTE : 'Dar baixa: data, forma de pagamento e recibo'}
+                                                            title={naAlcada(row) ? MOTIVO_ALCADA_PENDENTE
+                                                                : row.darf ? 'Dar baixa no DARF inteiro: todos os tributos e encargos, com a mesma data e forma'
+                                                                : 'Dar baixa: data, forma de pagamento e recibo'}
                                                         >
                                                             {salvando === row.id
                                                                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1274,7 +1373,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                             Dar baixa
                                                         </button>
                                                     )}
-                                                    {!quitado && orgsComAsaas.has(row.organization_id) && (() => {
+                                                    {/* DARF pela Asaas (guia de arrecadação) ainda não: fica para depois. */}
+                                                    {!quitado && !row.darf && orgsComAsaas.has(row.organization_id) && (() => {
                                                         const sp = pagamentosAsaas[row.id];
                                                         const emCurso = pagamentoAsaasEmCurso(row);
                                                         if (emCurso) {
@@ -1322,13 +1422,16 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                                     onClick={() => handleRecibo(row)}
                                                                 />
                                                             )}
-                                                            <ActionIconButton
-                                                                kind="settings"
-                                                                title="Estornar baixa"
-                                                                icon={<Undo2 className="w-4 h-4" />}
-                                                                disabled={salvando === row.id}
-                                                                onClick={() => estornar(row)}
-                                                            />
+                                                            {/* DARF conciliado: o estorno é desfazer a conciliação (o span carrega o motivo). */}
+                                                            <span className="inline-flex" title={row.darf?.conciliado_no_extrato ? MOTIVO_ESTORNO_DARF_CONCILIADO : undefined}>
+                                                                <ActionIconButton
+                                                                    kind="settings"
+                                                                    title={row.darf ? 'Estornar a baixa do DARF' : 'Estornar baixa'}
+                                                                    icon={<Undo2 className="w-4 h-4" />}
+                                                                    disabled={salvando === row.id || !!row.darf?.conciliado_no_extrato}
+                                                                    onClick={() => estornar(row)}
+                                                                />
+                                                            </span>
                                                         </>
                                                     )}
                                                     {/* Histórico dos pagamentos pela Asaas (quem disparou, quem
@@ -1342,7 +1445,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                     )}
                                                     {/* Apropriar a imóvel — a mesma Sheet do lote, com um
                                                         lançamento só. Cancelada não tem o que apropriar. */}
-                                                    {isSelectable(row) && (
+                                                    {isSelectable(row) && !row.darf && (
                                                         <ActionIconButton
                                                             kind="settings"
                                                             title="Apropriar a imóvel"
@@ -1350,12 +1453,29 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                             onClick={() => setApropriando({ organizationId: row.organization_id, payables: [row] })}
                                                         />
                                                     )}
+                                                    {row.darf && (
+                                                        <>
+                                                            <ActionIconButton
+                                                                kind="view"
+                                                                title={darfsAbertos.has(row.id) ? 'Esconder a composição do DARF' : 'Ver a composição do DARF'}
+                                                                icon={darfsAbertos.has(row.id) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                                                aria-expanded={darfsAbertos.has(row.id)}
+                                                                onClick={() => alternarDarf(row.id)}
+                                                            />
+                                                            <ActionIconButton
+                                                                kind="view"
+                                                                title="Abrir em Tributos a Pagar › DARFs (editar, desagrupar)"
+                                                                icon={<ExternalLink className="w-4 h-4" />}
+                                                                onClick={() => navigateToFocus('tributos-a-pagar', row.darf!.id, 'DARF')}
+                                                            />
+                                                        </>
+                                                    )}
                                                     {/* Só título manual é excluível aqui: parcela de Pedido ou
                                                         Contrato é espelho da origem (payableService.remove). */}
                                                     {row.documento_path && (
                                                         <ActionIconButton
                                                             kind="view"
-                                                            title={`Ver documento${row.documento_nome ? ` — ${row.documento_nome}` : ''}`}
+                                                            title={`${row.darf ? 'Ver o PDF do DARF' : 'Ver documento'}${row.documento_nome ? ` — ${row.documento_nome}` : ''}`}
                                                             icon={<Paperclip className="w-4 h-4" />}
                                                             onClick={() => verDocumento(row)}
                                                         />
@@ -1385,6 +1505,44 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                 </div>
                                             </td>
                                         </tr>
+                                    );
+                                    if (!row.darf || !darfsAbertos.has(row.id)) return linha;
+                                    return (
+                                        <React.Fragment key={row.id}>
+                                            {linha}
+                                            <tr className="bg-gray-50/50">
+                                                <td colSpan={totalColunas} className="px-6 py-3">
+                                                    <div className="overflow-x-auto rounded-[10px] border border-gray-100 bg-white max-w-3xl">
+                                                        <table className="w-full text-left border-collapse">
+                                                            <thead>
+                                                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                                                                    <th className="px-3 py-2 border-r border-gray-100">Lançamento</th>
+                                                                    <th className="px-4 py-2 border-r border-gray-100">Descrição</th>
+                                                                    <th className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">Competência</th>
+                                                                    <th className="px-3 py-2 text-right">Valor</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-gray-200">
+                                                                {row.darf.componentes.map(c => (
+                                                                    <tr key={c.id} className={c.id === focusId ? 'bg-amber-50' : ''}>
+                                                                        <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 whitespace-nowrap">
+                                                                            {c.source_system === 'DARF' ? 'Encargo' : (c.party_name || 'Tributo')}
+                                                                        </td>
+                                                                        <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                                                            <span className="block truncate" title={c.description ?? ''}>{c.description || '—'}</span>
+                                                                        </td>
+                                                                        <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                                            {c.source_system === 'DARF' ? '—' : competenciaBR(c.transaction_date)}
+                                                                        </td>
+                                                                        <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-800 whitespace-nowrap">{formatMoney(c.amount)}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
                                     );
                                 })}
                             </tbody>
@@ -1467,11 +1625,13 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     Dar baixa{selecionadasEmAberto.length && selecionadasEmAberto.length !== selectedVisible.length ? ` (${selecionadasEmAberto.length})` : ''}
                 </button>
                 <button
-                    onClick={() => orgDoLote && setApropriando({ organizationId: orgDoLote, payables: selectedVisible })}
+                    onClick={() => orgDoLote && setApropriando({ organizationId: orgDoLote, payables: apropriaveisDoLote })}
                     disabled={!orgDoLote}
-                    title={orgDoLote
-                        ? 'Apropriar as parcelas selecionadas a um imóvel'
-                        : 'A seleção mistura organizações. Filtre por uma organização para apropriar.'}
+                    title={apropriaveisDoLote.length === 0
+                        ? 'DARF não se apropria a imóvel.'
+                        : orgDoLote
+                            ? `Apropriar as parcelas selecionadas a um imóvel${darfsForaDaApropriacao ? ` — ${darfsForaDaApropriacao} DARF fica${darfsForaDaApropriacao === 1 ? '' : 'm'} de fora` : ''}`
+                            : 'A seleção mistura organizações. Filtre por uma organização para apropriar.'}
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 rounded-[6px] text-[13px] font-medium hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-95"
                 >
                     <Building2 className="w-3.5 h-3.5" />
@@ -1491,10 +1651,14 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             tipo="pagar"
             titulos={titulosDaBaixa}
             emitirReciboPadrao={!baixaSoBoleto}
-            reciboIndisponivel={baixaSoFolha
-                ? 'Título de folha reúne vários colaboradores: não há um credor único para assinar o recibo.'
-                : null}
-            avisoRecibo={baixaComFolha && !baixaSoFolha ? 'Os títulos de folha do lote não recebem recibo.' : null}
+            reciboIndisponivel={baixaSoDarf
+                ? MOTIVO_SEM_RECIBO_DARF
+                : baixaSoFolha
+                    ? (baixando!.every(r => r.source_system === 'LABOR')
+                        ? 'Título de folha reúne vários colaboradores: não há um credor único para assinar o recibo.'
+                        : 'Os títulos sem credor único (folha, DARF) não têm recibo para assinar.')
+                    : null}
+            avisoRecibo={baixaComFolha && !baixaSoFolha ? 'Os títulos de folha e DARF do lote não recebem recibo.' : null}
             onClose={() => setBaixando(null)}
             onConfirm={confirmarBaixa}
             progresso={baixaProgresso}

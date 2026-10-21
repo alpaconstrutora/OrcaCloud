@@ -9,6 +9,7 @@ import SupplierSelect, { SupplierOption } from './SupplierSelect';
 import HierarchicalSelect, { HierarchicalSelectItem } from './HierarchicalSelect';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { nomeDoBeneficiario } from '../utils/boletoBeneficiario';
+import { resumoDaAprovacaoEmLote } from '../utils/boletoAprovacaoLote';
 
 /** Valor da opção "— Sem vínculo —" da Obra: tira a obra dos boletos (grava null). */
 const SEM_VINCULO = '__sem_vinculo__';
@@ -125,6 +126,24 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     const allDone = result !== null && result.errors.length === 0;
     const noneChanged = !supplierId && !projectId && !costCenterId && !planoDeContasId && !categoryId && !descricao.trim();
 
+    /* "Aprovar e Lançar" sem exigir alteração (21/10/2026, pedido do usuário):
+       a MESMA regra do serviço diz quem está pronto — rascunho/revisão com
+       fornecedor (o escolhido aqui, o do boleto ou o sugerido), vencimento e valor. */
+    const resumo = resumoDaAprovacaoEmLote(boletos, buildFields());
+    const motivoParaNaoAprovar: string | null = resumo.prontos > 0
+        ? null
+        : resumo.pendencias.length === 1
+            ? resumo.pendencias[0].motivo
+            : `Nenhum dos ${boletos.length} boletos pode ser lançado — veja o motivo de cada um na lista.`;
+    const tituloDoAprovar = motivoParaNaoAprovar
+        ?? `Lança ${resumo.prontos} de ${boletos.length} em Contas a Pagar e os envia para a alçada.`
+            + (resumo.pendencias.length === 1 ? ' O outro fica como está.'
+                : resumo.pendencias.length > 1 ? ` Os outros ${resumo.pendencias.length} ficam como estão.` : '');
+    const numeroDoBoleto = (id: string) => {
+        const n = boletos.find(b => b.id === id)?.numero;
+        return n != null ? `#${String(n).padStart(4, '0')}` : `${id.slice(0, 8)}…`;
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
@@ -159,16 +178,37 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                         </div>
                     )}
 
-                    {/* Lista resumida */}
-                    <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-100 max-h-36 overflow-y-auto">
-                        {boletos.map(b => (
-                            <div key={b.id} className="flex items-center justify-between px-4 py-2 text-xs">
-                                <span className="text-gray-700 font-medium truncate max-w-[60%]">
-                                    {nomeDoBeneficiario(b, nomesFornecedor)}
-                                </span>
-                                <span className="text-gray-500 font-bold flex-shrink-0 ml-2">{formatBRL(b.valor)}</span>
-                            </div>
-                        ))}
+                    {/* Quantos o "Aprovar e Lançar" vai lançar (mesma regra do serviço) */}
+                    {!result && (
+                        <p className="text-xs text-gray-600">
+                            <span className="font-semibold text-gray-800">{resumo.prontos} de {boletos.length}</span> pronto{resumo.prontos !== 1 ? 's' : ''} para lançar
+                            {resumo.comSugestao > 0 && <> · {resumo.comSugestao} com o fornecedor sugerido</>}
+                        </p>
+                    )}
+
+                    {/* Lista resumida — com o que impede cada boleto de ser lançado */}
+                    <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                        {boletos.map(b => {
+                            const avaliacao = resumo.porId.get(b.id);
+                            return (
+                                <div key={b.id} className="flex items-start justify-between px-4 py-2 text-xs">
+                                    <span className="min-w-0 max-w-[70%]">
+                                        <span className="block text-gray-700 font-medium truncate" title={nomeDoBeneficiario(b, nomesFornecedor)}>
+                                            {nomeDoBeneficiario(b, nomesFornecedor)}
+                                        </span>
+                                        {!result && avaliacao && !avaliacao.pronto && (
+                                            <span className="block text-amber-700">{avaliacao.motivo}</span>
+                                        )}
+                                        {!result && avaliacao?.pronto && avaliacao.usaSugestao && (
+                                            <span className="block text-gray-500">
+                                                Fornecedor sugerido: {nomesFornecedor[avaliacao.fornecedor] ?? 'cadastrado'}
+                                            </span>
+                                        )}
+                                    </span>
+                                    <span className="text-gray-500 font-bold flex-shrink-0 ml-2">{formatBRL(b.valor)}</span>
+                                </div>
+                            );
+                        })}
                     </div>
 
                     {/* Resultado da operação (aparece após Aprovar e Lançar) */}
@@ -183,7 +223,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             {result.errors.map((e, i) => (
                                 <div key={i} className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
                                     <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                    <span>{e.id ? `Boleto ${e.id.slice(0, 8)}…: ` : ''}{e.error}</span>
+                                    <span>{e.id ? `Boleto ${numeroDoBoleto(e.id)}: ` : ''}{e.error}</span>
                                 </div>
                             ))}
                         </div>
@@ -304,6 +344,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             <button
                                 onClick={handleSalvarRascunho}
                                 disabled={saving || noneChanged}
+                                title={noneChanged ? 'Altere ao menos um campo para salvar o rascunho.' : undefined}
                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gray-900 text-white font-bold text-button uppercase tracking-widest hover:bg-gray-800 transition-colors disabled:opacity-40"
                             >
                                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
@@ -311,7 +352,8 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </button>
                             <button
                                 onClick={handleAprovarELancar}
-                                disabled={saving || noneChanged}
+                                disabled={saving || !!motivoParaNaoAprovar}
+                                title={tituloDoAprovar}
                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold text-button uppercase tracking-widest hover:bg-blue-700 transition-colors disabled:opacity-40 shadow-lg shadow-blue-900/20"
                             >
                                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}

@@ -12,6 +12,7 @@ import { financialApprovalService } from './financialApprovalService';
 import { processService } from './processService';
 import { MOTIVO_ALCADA_PENDENTE } from './alcadaDaBaixa';
 import { validateCpfCnpj } from '../lib/validators';
+import { avaliarAprovacaoEmLote, MOTIVO_SEM_VENCIMENTO, MOTIVO_SEM_FORNECEDOR } from '../utils/boletoAprovacaoLote';
 import type {
     Boleto,
     BoletoStatus,
@@ -21,8 +22,9 @@ import type {
     BoletoStats,
 } from '../types/boletos';
 
-/** Frase única: o service recusa com ela e o botão "Aprovar e Lançar" a mostra desabilitado. */
-export const MOTIVO_SEM_VENCIMENTO = 'Informe o vencimento antes de aprovar — é ele que define a competência do título.';
+/** Frase única: o service recusa com ela e o botão "Aprovar e Lançar" a mostra desabilitado.
+ *  Mora na regra pura do lote (21/10/2026), que a janela de Edição em Lote também usa. */
+export { MOTIVO_SEM_VENCIMENTO };
 
 const BUCKET = 'boletos';
 const TABLE = 'boletos';
@@ -521,7 +523,7 @@ export const boletoService = {
         if (berr) throw berr;
 
         if (!boletoRow.supplier_id) {
-            throw new Error('Selecione um fornecedor antes de aprovar.');
+            throw new Error(MOTIVO_SEM_FORNECEDOR);
         }
         // Nome do fornecedor para a descrição/contraparte do título quando o PDF não
         // trouxe beneficiário — antes caía no NOME DO ARQUIVO (16/10/2026).
@@ -1135,6 +1137,32 @@ export const boletoService = {
         const errors: Array<{ id: string; error: string }> = [];
         for (const id of ids) {
             try {
+                /* Mesma regra da janela (21/10/2026): só rascunho/revisão — um pago
+                   selecionado voltaria a "aprovado" —, e fornecedor vazio usa o
+                   sugerido, como a página do boleto. Quem não passa não grava nada. */
+                const { data: atual, error: lerErr } = await supabase
+                    .from(TABLE)
+                    .select('status, supplier_id, sugestao_supplier_id, vencimento, valor')
+                    .eq('id', id)
+                    .eq('organization_id', organizationId)
+                    .maybeSingle();
+                if (lerErr) throw lerErr;
+                if (!atual) throw new Error('Boleto não encontrado nesta organização.');
+                const avaliacao = avaliarAprovacaoEmLote(atual as Parameters<typeof avaliarAprovacaoEmLote>[0], fields);
+                if (!avaliacao.pronto) throw new Error(avaliacao.motivo);
+                if (avaliacao.usaSugestao) {
+                    const { error: supErr } = await supabase
+                        .from(TABLE)
+                        .update({ supplier_id: avaliacao.fornecedor })
+                        .eq('id', id)
+                        .eq('organization_id', organizationId);
+                    if (supErr) throw supErr;
+                    await registrarAuditoria(id, organizationId, 'associacao_lote', {
+                        metodo: 'usuario',
+                        usuario_email: userEmail,
+                        valor_depois: { supplier_id: avaliacao.fornecedor, origem: 'sugestao' },
+                    });
+                }
                 // Antes de aprovar: a invoice copia `documento_nome` na aprovação.
                 await renomearDocumentoDoBoleto(id);
                 await this.aprovarECriarInvoice(id, organizationId, userEmail);

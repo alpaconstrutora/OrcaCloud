@@ -1280,8 +1280,10 @@ describe('F22 — pavimentos automático', () => {
     expect(p.pendencias.some((x) => /^Pavimentos automático: (sobrado|térrea) — /.test(x.texto) && /não compor/.test(x.texto))).toBe(true);
     const fica = problemasDoPlano(sobrado) < problemasDoPlano(terrea) ? 'sobrado' : 'térrea';
     expect(p.sobrado ? 'sobrado' : 'térrea').toBe(fica);
-    // Quatro casas inteiras (a automática faz térrea e sobrado; e as duas de conferência).
-  }, 120_000);
+    // Quatro casas inteiras (a automática faz térrea e sobrado; e as duas de conferência). S1 (20/10/2026): o contorno
+    // da laje rebaixada alonga a água do sobrado e a pressão simula uma vez mais (o pressurizador e a caixa subindo) —
+    // 101 s no CI antes, acima de 120 depois.
+  }, 240_000);
 
   it('F27 — o sobrado no lote de 10 m: a varanda (na rua) encosta na sala; os encontros de rede viram pendência', () => {
     // A garagem em fila toma a linha da rua (10 m de fundo): a faixa ao lado dela é a entrada — a sala logo atrás da

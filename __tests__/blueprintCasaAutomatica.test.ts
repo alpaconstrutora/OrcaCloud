@@ -821,6 +821,22 @@ describe('planejarCasa — F27-D: a casa de 3 pavimentos (implantação, arquite
     const lavabo = p.resultado.spaces.find((x) => x.levelId === T && x.name === 'Lavabo')!;
     expect(lavabo.areaMm2 / 1e6).toBeGreaterThanOrEqual(1.5);
     expect(p.decisoes.some((d) => /o lavabo foi para a outra ponta/.test(d))).toBe(true);
+    // S5 (20/10/2026): e a porta dele abre para a cozinha, não para a área de serviço (trocado de ponta com o serviço, o
+    // lado dele na cozinha tinha 1,05 m — a porta não cabia — e a busca o abria pelo serviço).
+    const ladosDaPorta = (o: (typeof p.resultado.openings)[number]) => {
+      const w = p.resultado.walls.find((x) => x.id === o.wallId)!;
+      const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+      const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+      const c = { x: w.a.x + u.x * (o.offsetMm + o.widthMm / 2), y: w.a.y + u.y * (o.offsetMm + o.widthMm / 2) };
+      return [1, -1].map((sg) => p.resultado.spaces.find((x) => x.levelId === w.levelId && pointInPolygon(x.ring, point(c.x - u.y * 300 * sg, c.y + u.x * 300 * sg)))?.name ?? null);
+    };
+    const portasDoLavabo = p.resultado.openings.filter((o) => o.kind === 'door').map(ladosDaPorta).filter((l) => l.includes('Lavabo'));
+    expect(portasDoLavabo.map((l) => l.find((n) => n !== 'Lavabo'))).toEqual(['Cozinha']);
+    // E nenhum encontro de rede: com o lavabo mais fundo, a caixa de inspeção (na reta do vaso dele até a frente) caía a
+    // 2 cm do alimentador, e o coletor corria colado nele até a rua — a caixa se afasta da água enterrada.
+    const porIdS5 = new Map((p.resultado.trechos ?? []).map((t) => [t.id, t]));
+    const encontrosS5 = conflitosDoModelo(p.resultado).filter((c) => c.classe === 'REDE' && porIdS5.has(c.trechoId) && porIdS5.has(c.outroId)).map((c) => `${porIdS5.get(c.trechoId)!.disciplina} × ${porIdS5.get(c.outroId)!.disciplina}`);
+    expect(encontrosS5).toEqual([]);
     // F27 item 5.3b: o 1º recua também no lote de 10 m (com 4 voltas atrás do patamar não alinhava: dormitórios de 26,6 m²).
     expect(p.decisoes.some((d) => /o 1º recuado em/.test(d))).toBe(true);
     expect(maiorDormitorioDoPrimeiro(p.resultado)).toBeLessThan(25);

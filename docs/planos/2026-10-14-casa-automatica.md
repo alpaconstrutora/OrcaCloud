@@ -3130,3 +3130,34 @@ Cada uma: medir → corrigir → 8 casas e 6 lotes medidos → teste que falha s
   "Mobiliário: Suíte: Armário" — verificação). 8 casas idênticas ao marco; 6 lotes com 0 encontros e 0 pilares.
 - Teste (falha sem cada parte): `blueprintCasaAutomatica.test.ts` › "10 × 30, 2 dorm." — o 1º recuado em volta do 2º,
   dormitório do 1º < 25 m², nenhum trecho em vão de porta/janela.
+
+### Registro S5 (20/10/2026)
+
+- Medido (10 × 30, 4 dorm., o térreo da casa de 3): o lavabo, trocado de ponta com o serviço (item 5.2), ficava no
+  canto dos fundos com 2,40 × 1,05 m — o lado comprido no serviço, o curto (1,05 m) na cozinha; a porta interna pede
+  1,10 m (0,80 + 0,15 de folga em cada canto), e a busca em largura o abria pelo serviço.
+- Correção, em duas partes: (1) o lavabo movido ganha, no lado encostado no cômodo seco (a cozinha), ao menos
+  `ladoDoLavaboComAPortaMm` (hipótese do sobrado, 1,15 m) — o serviço cede 10 cm; (2) no gerador, o molhado sem par
+  obrigatório não abre para a área de serviço quando encosta noutro cômodo seco; sem outro, a busca de reserva abre pelo
+  serviço, como antes. Resultado: lavabo 2,40 × 1,15 m com porta para a cozinha.
+- Efeito colateral medido e corrigido: com o lavabo 5 cm mais fundo, o vaso dele (a saída do esgoto) foi para x = 7320
+  e a caixa de inspeção proposta, na reta dele até a frente, caiu a 2 cm do alimentador (x = 7300) — coletor e
+  alimentador correndo colados até a rua (2 encontros). A caixa proposta agora se afasta da água enterrada
+  (`afastamentoDaCiAAguaMm`, hipótese do esgoto, 600 mm do centro), andando paralela à frente. Observação: o
+  alimentador é refeito depois do esgoto (por baixo dos cruzamentos) e termina a 22 cm da caixa — sem encontro.
+- Fica como antes: a SEM_SOLUCAO "Cozinha × Área de serviço sem porta direta" dessa casa já existia antes da S5.
+- 8 casas idênticas ao marco; 6 lotes com 0 encontros e 0 pilares.
+- Teste (falha sem cada uma das 3 partes): `blueprintCasaAutomatica.test.ts` › "F27 item 5: 10 × 30, 4 dorm." — a
+  porta do lavabo dá para a cozinha; nenhum encontro de rede.
+
+### S4 — em andamento (20/10/2026)
+
+- A causa: no 2º do R1-A, o escritório é o ÚNICO item social; sozinho na faixa da frente, recebe a largura toda e a
+  profundidade da área (7,40 × 1,70 m, mínimo 2,20). Tentado e revertido: a faixa da frente nunca mais rasa que o
+  mínimo dos itens (no gerador) — o fundo encolheu e o núcleo comeu o banheiro da suíte (1,47 m²).
+- Caminho escolhido: o item social sozinho no 2º vai ao fundo, ao lado da suíte (escritório 3,10 × 6,45 m; some também
+  a SEM_SOLUCAO antiga "Suíte 1 × Banheiro sem porta direta"). A planta nova expõe defeitos antigos da água/esgoto
+  dessa casa — corrigidos: o shaft reaproveitado pelo banheiro de cima precisa chegar ao pavimento dele (o esgoto saía
+  da laje rebaixada para o do F12c, a 3 m). Pendentes: a coluna da quente no shaft colada à fria (a escolha da rotação
+  pela contagem de horizontais regride o sobrado 12 × 30 — revertida), 1 ponta aberta da quente no térreo e 1 trecho
+  da quente sob o rebaixo do térreo. Guardado no ramo local `wip/s4-escritorio`.

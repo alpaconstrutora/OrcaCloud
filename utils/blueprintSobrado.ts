@@ -85,6 +85,12 @@ export interface HipotesesDoSobrado {
    * (a proporção da casa). Ausente = true.
    */
   primeiroRecuaSoNaProfundidade?: boolean;
+  /**
+   * S5 da casa automática (20/10/2026): o lado do lavabo movido (`lavaboForaDoNucleo`) que encosta no cômodo seco ao
+   * lado (a cozinha) tem ao menos isto — a porta interna e as folgas dos cantos —, para a porta dele ir para lá e não
+   * para a área de serviço, mm. Ausente = o padrão.
+   */
+  ladoDoLavaboComAPortaMm?: number;
 }
 
 export const HIPOTESES_DO_SOBRADO_PADRAO: HipotesesDoSobrado = {
@@ -106,6 +112,7 @@ export const HIPOTESES_DO_SOBRADO_PADRAO: HipotesesDoSobrado = {
   margemDoRebaixoMm: 600,
   tuboDeQuedaAteOShaftMm: 4000,
   faixaMinimaDoTerracoMm: 1500,
+  ladoDoLavaboComAPortaMm: 1150,
 };
 
 /** O programa repartido pelos pavimentos (as relações ficam só entre itens do mesmo pavimento). */
@@ -465,7 +472,9 @@ export function lavaboForaDoNucleo(ambientes: AmbienteGerado[], n: Pick<NucleoDa
       if (tira && !dono) continue;
       const col: Retangulo = tira ? (encostaNoFim ? { ...Z, x0: N.x0 } : { ...Z, x1: N.x1 }) : Z;
       const largura = col.x1 - col.x0;
-      const prof = Math.ceil(Math.max(lav.item.areaIdealM2 * 1e6 / largura, lav.item.larguraMinMm + f) / malhaMm) * malhaMm;
+      // S5: com o cômodo seco ao lado (o dono da tira, a cozinha), o lado do lavabo encostado nele comporta a porta.
+      const ladoDaPorta = dono ? (hip.ladoDoLavaboComAPortaMm ?? HIPOTESES_DO_SOBRADO_PADRAO.ladoDoLavaboComAPortaMm ?? 0) : 0;
+      const prof = Math.ceil(Math.max(lav.item.areaIdealM2 * 1e6 / largura, lav.item.larguraMinMm + f, ladoDaPorta) / malhaMm) * malhaMm;
       const novoLav: Retangulo = pontaDeCima ? { ...col, y0: col.y1 - prof } : { ...col, y1: col.y0 + prof };
       const novoViz: Retangulo = pontaDeCima ? { ...col, y1: novoLav.y0 } : { ...col, y0: novoLav.y1 };
       const restoDoViz: Retangulo = pontaDeCima ? { ...novoViz, y0: Math.max(novoViz.y0, N.y1) } : { ...novoViz, y1: Math.min(novoViz.y1, N.y0) };

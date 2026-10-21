@@ -175,12 +175,35 @@ Achados de dado (não são defeito de código, entram no relatório ao usuário)
 - saldo de partida −R$ 32 mil: nenhuma das 4 contas tem saldo inicial; extrato mais
   atrasado em 29/05/2026.
 
+**21/10/2026 — correção apontada pelo usuário (print de Empreendimento › Vinculações):**
+
+> veja print que empreendimento 006 - Coronel Lambert 316 esta vinculado a obra Coronel Lambert 316.
+> verifique por que voce nao identificou
+
+Por que não identifiquei: tratei o imóvel-raiz de `commercial_properties` como se fosse
+o empreendimento e procurei o vínculo em `commercial_properties.project_id` (vazio).
+O empreendimento é a tabela `empreendimentos`; a obra mora em `empreendimentos.project_id`
+(ou `empreendimento_towers.project_id` em multi-torre), e a view oficial
+`vw_unit_property_map` (migration 20270842000000) liga unidade comercial → obra. Isso
+estava documentado na memória da hierarquia Empreendimento→Obra, que não abri antes de
+investigar.
+
+Consequências:
+- `fn_fi_ledger` passou a usar `vw_unit_property_map` (torre primeiro, LIMIT 1).
+  Reensaio só com o cadastro real: 14/14 contratos de receita resolvem; Bella Vista
+  R$ 300 mil; locação de 010 Galeria Altavista e 006 Coronel Lambert 316 no bloco próprio;
+  "Risco de caixa: Garden Cambuhy" deixou de ser falso positivo (parcelas a receber em 90d
+  agora entram); fechamento 666.388,00 / 566.036,20 ✅; 215 ms.
+- **Fase 2 CANCELADA.** O campo "Obra" já existe (Vinculações) e já está preenchido.
+  A pergunta de 21/10 "gravar no cadastro" e o mapeamento com o erro do Lambert 316/345
+  ficam sem efeito — nada foi gravado.
+
 ## Estado
 
 - [x] Diagnóstico — 21/10/2026
 - [x] Decisões de negócio com o usuário — 21/10/2026
 - [ ] Fase 1 — 5 de 5 escritos e ensaiados; **0 aplicados**
-- [ ] Fase 2 — 0 de 2
+- [x] ~~Fase 2~~ — CANCELADA em 21/10: o vínculo já existe em Empreendimento › Vinculações
 - [ ] Fase 3 — 0 de 2
 - [ ] Fase 4 — 0 de 4
 

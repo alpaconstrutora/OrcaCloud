@@ -21,11 +21,11 @@
 --     alertas e projeção não conseguem mais divergir entre si.
 --   • A obra da receita é DEDUZIDA na leitura, nesta ordem:
 --       lançamento.project_id → contrato.project_id → negociação.linked_project_id
---       → unidade.project_id → empreendimento (pai da unidade).project_id
+--       → obra da unidade pela vw_unit_property_map (torre → empreendimento)
 --     Só vale projeto de classificação OBRA que não seja de sistema. Nenhum
 --     lançamento é regravado (as sincronizações que regravam títulos ficam
---     intocadas) — o vínculo empreendimento→obra mora no cadastro do
---     empreendimento (commercial_properties.project_id).
+--     intocadas) — o vínculo empreendimento→obra é o que o usuário já cadastra
+--     em Empreendimento › Vinculações.
 --   • Nem todo empreendimento tem obra (ex.: 016 - Galeria Avenida 494): a
 --     venda dele fica sem obra, por empreendimento, em fn_entries_without_project.
 --   • Decisões do usuário (21/10/2026): venda conta na obra; LOCAÇÃO fica fora
@@ -132,16 +132,26 @@ AS $fn$
     o.id,
     o.name,
     CASE d.type WHEN 'SALE' THEN 'VENDA' WHEN 'RENTAL' THEN 'LOCACAO' END,
-    COALESCE(pai.id, u.id),
-    COALESCE(pai.name, u.name)
+    m.empreendimento_id,
+    m.empreendimento_name
   FROM base b
-  LEFT JOIN public.commercial_deals      d   ON d.id   = b.deal_ref
-  LEFT JOIN public.commercial_properties u   ON u.id   = d.property_id
-  LEFT JOIN public.commercial_properties pai ON pai.id = u.parent_id
+  LEFT JOIN public.commercial_deals d ON d.id = b.deal_ref
+  -- Unidade comercial → torre → empreendimento → obra: o vínculo que o usuário
+  -- cadastra em Empreendimento › Vinculações (empreendimentos.project_id, ou
+  -- empreendimento_towers.project_id em multi-torre). A view é o caminho
+  -- oficial (migration 20270842000000). É mapa N:1 — LIMIT 1, torre primeiro.
+  -- ⚠️ commercial_properties.project_id NÃO é esse vínculo (está vazio).
+  LEFT JOIN LATERAL (
+    SELECT v.empreendimento_id, v.empreendimento_name, v.project_id
+    FROM public.vw_unit_property_map v
+    WHERE v.property_id = d.property_id
+    ORDER BY (v.project_source = 'TOWER') DESC
+    LIMIT 1
+  ) m ON true
   LEFT JOIN LATERAL (
     SELECT ob.id, ob.name
     FROM (VALUES (1, b.project_id), (2, b.contrato_obra), (3, d.linked_project_id),
-                 (4, u.project_id), (5, pai.project_id)) AS cand(ordem, pid)
+                 (4, m.project_id)) AS cand(ordem, pid)
     JOIN obras ob ON ob.id = cand.pid
     ORDER BY cand.ordem
     LIMIT 1

@@ -3146,6 +3146,13 @@ Cada uma: medir → corrigir → 8 casas e 6 lotes medidos → teste que falha s
   (`afastamentoDaCiAAguaMm`, hipótese do esgoto, 600 mm do centro), andando paralela à frente. Observação: o
   alimentador é refeito depois do esgoto (por baixo dos cruzamentos) e termina a 22 cm da caixa — sem encontro.
 - Fica como antes: a SEM_SOLUCAO "Cozinha × Área de serviço sem porta direta" dessa casa já existia antes da S5.
+- CI do PR #70: o sobrado 10 × 30 de 4 dorm. (2 pavimentos — fora das 8 casas e dos 6 lotes da medição) também muda: a
+  porta do serviço vai para a parede da cozinha, toda sob a faixa rebaixada do esgoto do banheiro de cima, e o
+  interruptor dele nasce ali sem saída (o pilar do canto de um lado, a saída da fria do outro): o eletroduto atravessava
+  o pilar ou corria dentro do rebaixo. Correção: o interruptor que cairia sob a laje rebaixada vai ao ponto mais perto
+  das paredes do cômodo fora dela, de pilar e de vão. Tentadas e revertidas (sem efeito depois desta): a saída pela
+  parede evitando pilar e outras redes, a saída pela outra face da parede, a luz de teto fora do rebaixo. ⚠️ Medir
+  também o sobrado 10 × 30 (o teste do item 6) a cada mudança — ele não está no marco.
 - 8 casas idênticas ao marco; 6 lotes com 0 encontros e 0 pilares.
 - Teste (falha sem cada uma das 3 partes): `blueprintCasaAutomatica.test.ts` › "F27 item 5: 10 × 30, 4 dorm." — a
   porta do lavabo dá para a cozinha; nenhum encontro de rede.

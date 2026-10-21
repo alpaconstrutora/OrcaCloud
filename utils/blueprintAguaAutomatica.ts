@@ -338,12 +338,24 @@ export function planejarAgua(
     }
     return r;
   };
+  // Os pilares e as prumadas das outras redes, por nível e cota — o `model` não muda durante o traçado (os trechos novos
+  // vão para `novos`), e montá-los a cada reta custava +45 % no sobrado.
+  const obstaculosPorChave = new Map<string, Point[][]>();
+  const pilaresEPrumadas = (levelId: ObjectId, cota: number) => {
+    const k = `${levelId}|${cota}`;
+    let r = obstaculosPorChave.get(k);
+    if (!r) {
+      r = [...pegadasDePilares(model, levelId).map((g) => anelDoPilar(g, RAIO_NA_DESCIDA_MM) as Point[]), ...(prumadasQueCruzam(model, levelId, cota, disciplina, RAIO_NA_DESCIDA_MM, 2, false) as Point[][])];
+      obstaculosPorChave.set(k, r);
+    }
+    return r;
+  };
   const addTrecho = (levelId: ObjectId, a: Ponto2, cotaA: number, b: Ponto2, cotaB: number) => {
     if (cotaA === cotaB && (a.x !== b.x || a.y !== b.y)) {
       const rebaixos = rebaixosDe(levelId).filter((r) => r.base < cotaA + RAIO_NA_DESCIDA_MM).map((r) => r.anel);
       if (rebaixos.length && fracaoDentro(a, b, rebaixos) > 0) {
         // E das prumadas das outras redes que atravessam a faixa (a descida do eletroduto da tomada, traçada antes).
-        const desvio = desvioDoPilar(a, b, [...rebaixos, ...pegadasDePilares(model, levelId).map((g) => anelDoPilar(g, RAIO_NA_DESCIDA_MM) as Point[]), ...prumadasQueCruzam(model, levelId, cotaA, disciplina, RAIO_NA_DESCIDA_MM, 2, false)]);
+        const desvio = desvioDoPilar(a, b, [...rebaixos, ...pilaresEPrumadas(levelId, cotaA)]);
         if (desvio && desvio.length) {
           const pts = [a, ...desvio.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), b];
           for (let i = 1; i < pts.length; i++) addTrechoReto(levelId, pts[i - 1], cotaA, pts[i], cotaB);
@@ -665,7 +677,7 @@ export function planejarAgua(
     // das prumadas das outras redes (sem os shafts: a cabeça nasce dentro dele) — a quente ia em diagonal de 5 m pelo
     // pilar junto do shaft (sobrado 10 × 30). Os pontos elétricos, postos depois, fogem do tubo (S1).
     ligar: (de, para) => {
-      const desvio = origemNoForro ? (desvioDoPilar(de.pos, para.pos, [...pegadasDePilares(model, origem.levelId).map((g) => anelDoPilar(g, RAIO_NA_DESCIDA_MM) as Point[]), ...prumadasQueCruzam(model, origem.levelId, tetoO, disciplina, RAIO_NA_DESCIDA_MM, 2, false)]) ?? []) : [];
+      const desvio = origemNoForro ? (desvioDoPilar(de.pos, para.pos, pilaresEPrumadas(origem.levelId, tetoO)) ?? []) : [];
       const pts = [de.pos, ...desvio.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), para.pos];
       for (let i = 1; i < pts.length; i++) addTrecho(origem.levelId, pts[i - 1], tetoO, pts[i], tetoO);
     },
@@ -767,7 +779,8 @@ export function planejarAgua(
         if (pelas) foraDaParede++;
         // S1 da casa automática (20/10/2026): o ponto SOB a laje rebaixada (a peça do térreo sob o banheiro de cima) chega
         // pela parede, de fora do rebaixo — como o eletroduto no item 6; reto pela faixa, a fria corria dentro da laje.
-        const saida = noForro ? saidaDoRebaixoPelaParede(model, nivel.id, p.at, p.cotaMm, RAIO_NA_DESCIDA_MM, hip.noForro!.folgaSobAVigaMm) : null;
+        // (Só o ponto dentro de algum rebaixo — o anel com o raio contém a pegada — vale a busca pela parede.)
+        const saida = noForro && rebaixosDe(nivel.id).some((r) => pointInPolygon(r.anel, p.at as Point)) ? saidaDoRebaixoPelaParede(model, nivel.id, p.at, p.cotaMm, RAIO_NA_DESCIDA_MM, hip.noForro!.folgaSobAVigaMm) : null;
         if (saida) {
           addTrecho(nivel.id, saida.s, cotaRamal, saida.s, saida.cotaMm);
           addTrecho(nivel.id, saida.s, saida.cotaMm, p.at, saida.cotaMm);

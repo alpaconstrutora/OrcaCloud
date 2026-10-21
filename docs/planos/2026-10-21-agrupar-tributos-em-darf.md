@@ -141,7 +141,7 @@ Contas a Pagar.
 | Fase | Entrega | Pronto quando | Estado |
 |---|---|---|---|
 | 0 | `bash scripts/nova-frente.sh darf-agrupar-tributos`; `docs/planos/2026-10-21-agrupar-tributos-em-darf.md` com o pedido literal, as 4 decisões e a ressalva ao PR #74 | arquivo commitado | ✅ |
-| 1 | Migration A (tabela, colunas, views, travas, RPCs) aplicada por `db query -f` | consultas de verificação no rodapé ok (views com `darf_id`, ACL sem `anon`/PUBLIC, triggers presentes); smoke `BEGIN … ROLLBACK` como authenticated: criar → mudar valor recusado → baixa → estorno → desagrupar → conciliar 1 componente recusado; `segurancaMigrations` + `migrationsPrefixo` verdes | pendente |
+| 1 | Migration A (tabela, colunas, views, travas, RPCs) aplicada por `db query -f` | consultas de verificação no rodapé ok (views com `darf_id`, ACL sem `anon`/PUBLIC, triggers presentes); smoke `BEGIN … ROLLBACK` como authenticated: criar → mudar valor recusado → baixa → estorno → desagrupar → conciliar 1 componente recusado; `segurancaMigrations` + `migrationsPrefixo` verdes | ✅ |
 | 2 | `types/financial.ts`, `utils/darf.ts`, `services/darfService.ts`, regeração, `deleteDeal` | testes da seção Verificação verdes; `tsc` limpo | pendente |
 | 3 | Tributos: seleção, barra, `DarfSheet`, coluna, travas, aba DARFs | teste de componente verde; `check-ui-standard` exit 0; fluxo descartável no navegador com prints | pendente |
 | 4 | Contas a Pagar: linha sintética + todos os itens da seção 4 + deep-link | `ContasPagarDarf.test.tsx` e DeepLink verdes; card "A pagar" com o mesmo valor antes e depois de agrupar (só a contagem muda) | pendente |
@@ -171,3 +171,24 @@ Contas a Pagar.
 - **Recriar as views:** sempre a partir da definição viva (há histórico de drift).
 - **Bundle antigo:** o upsert da regeração falha inteiro no negócio com tributo agrupado. Não grava errado; regera quando o app recarregar.
 - **Pagar o DARF pela Asaas** (guia de arrecadação) fica fora do escopo.
+
+
+## Registro de execução
+
+### Fase 1 — banco (21/10/2026)
+
+- Ensaio antes de aplicar: migration + roteiro numa transação com `ROLLBACK`, como `authenticated` (usuário de
+  leitura, membro da Alpa), com 3 tributos descartáveis. **28/28 passos certos**: competência mista, 1 tributo sem
+  encargo, tributo já em DARF e RETIDO recusados; total 315 = 300 + multa 10 + juros 5; venc. dos tributos vira o
+  do DARF e o original fica guardado; 4 linhas em `vw_payables`, multa/juros fora de `vw_commercial_tax_payables`;
+  travas (a)/(b)/(c) recusam com a mensagem certa; reclassificar continua livre; editar propaga venc. e apaga a
+  linha de juros zerada; baixa → PAGO (trava c satisfeita); baixa dupla, estorno de 1 tributo, mudar multa e
+  desagrupar com o DARF pago recusados; estorno → PREVISTO; desagrupar restaura o venc. e apaga encargos e
+  cabeçalho. `to_regclass('public.darfs')` = NULL depois do ROLLBACK.
+- Aplicada com `db query --linked -f`. Antes/depois: `vw_payables` 2093/2093, `vw_commercial_tax_payables` 787/787.
+  Views com as colunas novas e `security_invoker=on`; ACL das 10 funções sem PUBLIC e sem anon; 5 gatilhos.
+- Achado na conferência: os privilégios padrão deram ALL (TRUNCATE/TRIGGER/REFERENCES) a `authenticated` em
+  `darfs` e escrita em `vw_darfs`. Corrigido (REVOKE de authenticated + GRANT só do necessário), no arquivo e no
+  banco: `darfs` = SELECT/INSERT/UPDATE/DELETE, `vw_darfs` = SELECT.
+- `scripts/check-rls-postura.sh`: itens 1–4 (policies e SECURITY DEFINER) ✅. A única reprovação é anterior e
+  alheia (item 5: segredos de cron da captura de boleto por e-mail com placeholder no Vault).

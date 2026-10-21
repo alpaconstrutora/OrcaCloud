@@ -131,11 +131,53 @@ formulário que grava `commercial_properties` raiz) + `services/commercialServic
   verde; `npx vitest run __tests__/orgContextGuard.test.ts` verde; conferido na tela
   (skill rodar-app) em "Todas" e numa organização.
 
+## Registro de execução
+
+**21/10/2026 — Fase 1 escrita e ensaiada, NÃO aplicada.**
+Arquivo: `supabase/migrations/aplicar_20271021300000_inteligencia_financeira_numeros_reais.sql`.
+
+Mudanças em relação ao texto do plano (registradas, não apagadas):
+- 1.1: os vencidos e o saldo de partida saem numa RPC própria, `fn_cashflow_position`,
+  em vez de colunas na projeção — assim `fn_cashflow_projection` mantém o retorno e a
+  tela publicada não quebra.
+- 1.4: `fn_company_expenses` virou `fn_entries_without_project` (os dois sentidos):
+  sem o lado crédito, a venda de empreendimento ainda sem obra vinculada sumiria e o
+  critério "soma das partes = total conciliado" não fechava.
+- Livro único `fn_fi_ledger` + `fn_fi_targets`, lidos pelas cinco RPCs.
+
+Ensaio (`BEGIN` sem `COMMIT`, com o JWT do usuário; antes, provado que a CLI desfaz a
+transação aberta):
+- scorecard × alerta: Garden Cambuhy −R$ 753,10 nos dois ✅; "Garden" (orçamento) fora ✅;
+  "Igreja Divino Espírito Santo" uma vez ✅.
+- com vínculo empreendimento→obra simulado: Bella Vista recebe R$ 300 mil de venda ✅;
+  locação vai para `fn_rental_income` (Galeria Altavista R$ 261,6 mil) ✅.
+- fechamento: crédito 666.388,00 = 666.388,00; débito 566.036,20 = 566.036,20 ✅.
+- `PAYABLE_OVERDUE`: 834 títulos, R$ 2.139.667,89 (as 842 do diagnóstico incluíam orgs de
+  que o usuário não é membro — o diagnóstico rodou como postgres) ✅.
+- tempo de `fn_financial_alerts`: 197 ms.
+- `segurancaMigrations` + `migrationsPrefixo`: verdes.
+
+Aplicação bloqueada pelo classificador de permissões do Claude Code; aguardando o
+usuário aplicar ou liberar.
+
+**⚠️ Erro na decisão de 21/10 sobre o vínculo (Fase 2.2) — reconfirmar antes de gravar.**
+A pergunta citou "006 Coronel Lambert → 'Coronel Lambert 345'", mas os empreendimentos
+reais são **006 - Coronel Lambert 316** e **014 - Coronel Lambert 345** (são dois). O
+aluguel do Salão é do 006 (316). Há também 016 - Galeria Avenida 494, 017 - Galeria
+Altavista 2 e 019 - Galeria Altavista Expansão, que a pergunta não mostrou.
+
+Achados de dado (não são defeito de código, entram no relatório ao usuário):
+- margem da Bella Vista daria 99,5%: R$ 300 mil de venda contra R$ 1,6 mil de custo — o
+  custo da construção não está lançado na obra (R$ 240 mil estão em "ALPA";
+  R$ 165,6 mil de "Mão de Obra / Serviço" estão sem obra).
+- saldo de partida −R$ 32 mil: nenhuma das 4 contas tem saldo inicial; extrato mais
+  atrasado em 29/05/2026.
+
 ## Estado
 
 - [x] Diagnóstico — 21/10/2026
 - [x] Decisões de negócio com o usuário — 21/10/2026
-- [ ] Fase 1 — 0 de 5
+- [ ] Fase 1 — 5 de 5 escritos e ensaiados; **0 aplicados**
 - [ ] Fase 2 — 0 de 2
 - [ ] Fase 3 — 0 de 2
 - [ ] Fase 4 — 0 de 4

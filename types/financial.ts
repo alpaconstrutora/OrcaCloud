@@ -833,8 +833,10 @@ export type PayableBusinessStatus =
     | 'RENEGOCIADO'
     | 'CANCELADO';
 
-// effective_status inclui 'VENCIDO' (computado na view vw_payables)
-export type PayableEffectiveStatus = PayableBusinessStatus | 'VENCIDO';
+// effective_status inclui 'VENCIDO' (computado na view vw_payables) e 'RETIDO':
+// tributo que o cliente recolhe (TaxPayableBusinessStatus) também passa pela view.
+// Contas a Pagar nunca grava RETIDO; só precisa reconhecê-lo para não oferecer baixa.
+export type PayableEffectiveStatus = PayableBusinessStatus | 'VENCIDO' | 'RETIDO';
 
 export interface Payable {
     id: string;

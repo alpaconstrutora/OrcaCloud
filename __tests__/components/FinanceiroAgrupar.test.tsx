@@ -74,7 +74,9 @@ describe.each([
         primeiraLinha: 'Tributo t1',
         seletor: 'Agrupar os tributos', campo: 'tributo',
         grupo: 'IRRF', esperado: /^IRRF 2 R\$\s?150,00$/, linhasDoGrupo: ['Tributo t1', 'Tributo t3'], fora: 'Tributo t2',
-        marcarTodos: 'Selecionar todos (não pagos)', selecionados: /^1 selecionado$/,
+        // Sem seleção desde 21/10/2026: o lote só servia para pagar, e o pagamento
+        // mudou para Contas a Pagar (TributosSemPagamento.test.tsx).
+        marcarTodos: undefined, selecionados: undefined,
     },
     {
         tela: 'Cobranças',
@@ -110,8 +112,10 @@ describe.each([
         linhasDoGrupo.forEach(t => expect(screen.queryByText(t)).toBeNull());
         expect(screen.getAllByText(fora).length).toBeGreaterThan(0);
 
-        fireEvent.click(screen.getByTitle(marcarTodos));
-        expect(screen.getByText(selecionados)).toBeTruthy();
+        if (marcarTodos && selecionados) {
+            fireEvent.click(screen.getByTitle(marcarTodos));
+            expect(screen.getByText(selecionados)).toBeTruthy();
+        }
 
         fireEvent.change(screen.getByTitle(seletor), { target: { value: 'none' } });
         expect(document.querySelectorAll('tbody span.font-semibold')).toHaveLength(0);

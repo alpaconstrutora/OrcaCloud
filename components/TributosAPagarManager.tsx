@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     AlertCircle, Check, ChevronDown,
     Loader2, Plus, RefreshCw, Search, X, Filter,
-    DollarSign, AlertTriangle, Landmark, MoveHorizontal, Undo2,
+    DollarSign, AlertTriangle, Landmark, MoveHorizontal,
 } from 'lucide-react';
 import { taxPayableService } from '../services/taxPayableService';
 import { taxSettingsService } from '../services/taxSettingsService';
@@ -14,9 +14,10 @@ import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useStore } from '../store/useStore';
 import ActionIconButton from './ui/ActionIconButton';
 import MoneyCentsInput from './ui/MoneyCentsInput';
-import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
+import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
@@ -55,7 +56,7 @@ const TRIBUTO_COLUMNS: ColumnConfig[] = [
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     party_name: 200, category: 150, client_name: 200, empreendimento_name: 220,
-    description: 240, competencia: 140, due_date: 150, amount: 130, status: 130, actions: 220,
+    description: 240, competencia: 140, due_date: 150, amount: 130, status: 130, actions: 340,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -198,7 +199,7 @@ type ViewId = 'tributos' | 'fechamento';
 
 // Título/subtítulo mudam com a aba ativa (§19.1/§20)
 const VIEW_HEADERS: Record<ViewId, { title: string; subtitle: string }> = {
-    tributos:   { title: 'Tributos a Pagar', subtitle: 'Tributos (IRRF, PIS, COFINS, CSLL…) sobre Vendas de Ativos e Locações.' },
+    tributos:   { title: 'Tributos a Pagar', subtitle: 'Gestão dos tributos (IRRF, PIS, COFINS, CSLL…) sobre Vendas de Ativos e Locações. O pagamento é feito em Contas a Pagar.' },
     fechamento: { title: 'Fechamento',       subtitle: 'Conferência e fechamento dos tributos apurados sobre Vendas de Ativos e Locações.' },
 };
 const VIEWS: { id: ViewId; label: string }[] = [
@@ -394,11 +395,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     const [vencMes, setVencMes] = usePersistedState('tributosPagarManagerFilters:vencMes', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [activeView, setActiveView] = usePersistedState<ViewId>('tributosPagarManager:view', 'tributos');
-    // Âncora do Shift+clique (§10.1) — aqui em cima porque o "Agrupar" a zera
-    // quando as linhas mudam de lugar.
-    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
-    const zerarAncora = useCallback(() => setLastCheckedIndex(null), []);
-    const agrupamento = useAgrupamento<CampoAgrupar>('tributosPagarManagerFilters:groupBy', zerarAncora);
+    const agrupamento = useAgrupamento<CampoAgrupar>('tributosPagarManagerFilters:groupBy');
 
     // Filtro de status — dropdown dentro da toolbar acoplada. Antes eram 5 pílulas
     // lado a lado, que não cabiam junto dos outros grupos da barra; virou um único
@@ -430,10 +427,9 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     const [regime, setRegime] = useState<'CAIXA' | 'COMPETENCIA'>('CAIXA');
     const tableColumns = useTableColumns(TRIBUTO_COLUMNS, 'tributosPagarManagerColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'tributosPagarManagerColWidths');
-    // Largura total = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
-    // w-full/100% junto com table-layout:fixed (§6.1).
-    const tableTotalWidth = 40
-        + (['party_name', 'category', 'client_name', 'empreendimento_name', 'description', 'competencia', 'due_date', 'amount', 'status'] as const)
+    // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
+    // table-layout:fixed (§6.1).
+    const tableTotalWidth = (['party_name', 'category', 'client_name', 'empreendimento_name', 'description', 'competencia', 'due_date', 'amount', 'status'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + cols.getWidth('actions');
     const advancedFields = useMemo(() => buildAdvancedFilterFields(rows), [rows]);
@@ -449,9 +445,9 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     const [showNovo, setShowNovo]         = useState(false);
     const [editando, setEditando]         = useState<TaxPayable | null>(null);
     const [changingStatus, setChangingStatus] = useState<string | null>(null);
-    const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
-    const [bulkLoading, setBulkLoading]   = useState(false);
     const [generating, setGenerating]     = useState(false);
+    // Pagamento mora em Contas a Pagar: daqui só se abre o título lá (deep-link).
+    const navigateToFocus = useStore(s => s.navigateToFocus);
 
     // LEITURA: organização do seletor do topo; `null` = "Todas as organizações"
     // (os services não aplicam `.eq`, a RLS recorta). NUNCA `organizations[0]`,
@@ -485,7 +481,6 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         try {
             const data = await taxPayableService.list(effectiveOrgId, { search, status: statusFilter, dueFrom: dueFrom || undefined, dueTo: dueTo || undefined });
             setRows(data);
-            setSelectedIds(new Set());
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar');
         } finally {
@@ -494,31 +489,6 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     }, [effectiveOrgId, search, statusFilter, dueFrom, dueTo]);
 
     useEffect(() => { load(); }, [load]);
-
-    async function handleBaixa(t: TaxPayable) {
-        const ok = await confirm({
-            title: 'Confirmar Pagamento',
-            message: (
-                <>
-                    Marcar <b>{t.description ?? '(sem descrição)'}</b> como <b className="text-green-700">PAGO</b>?
-                    <div className="bg-gray-50 rounded-xl p-3 mt-3 flex justify-between items-center">
-                        <span className="text-xs text-gray-500">Valor</span>
-                        <span className="font-bold text-gray-900">{fmt(t.amount)}</span>
-                    </div>
-                </>
-            ),
-            variant: 'default',
-            confirmLabel: 'Confirmar',
-        });
-        if (!ok) return;
-        try {
-            await taxPayableService.updateStatus(t.id, 'PAGO');
-            await load();
-            notify('Tributo baixado com sucesso.');
-        } catch (e) {
-            notify('Erro: ' + (e instanceof Error ? e.message : 'Falha ao baixar'), 'error');
-        }
-    }
 
     /**
      * Exclusão só de lançamento manual — os automáticos são espelho de um
@@ -581,25 +551,6 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         }
     }
 
-    /**
-     * Estorna a baixa: o tributo volta a Previsto. Confirma antes (§14) — é
-     * reversão financeira.
-     *
-     * Até 15/08/2026 não havia caminho de volta: o `<select>` de status só é
-     * renderizado quando `!isPago`. Mesmo buraco existia em Contas a Pagar e em
-     * Contas a Receber.
-     */
-    async function estornar(r: TaxPayable) {
-        const ok = await confirm({
-            title: 'Estornar a baixa deste tributo?',
-            message: 'O tributo volta para Previsto e a data de pagamento é apagada.',
-            variant: 'warning',
-            confirmLabel: 'Estornar',
-        });
-        if (!ok) return;
-        await handleChangeStatus(r.id, 'PREVISTO');
-    }
-
     async function handleChangeStatus(id: string, newStatus: string) {
         setChangingStatus(id);
         try {
@@ -657,89 +608,14 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         valor: r => r.amount,
         ordem: groupBy === 'status' ? Object.keys(STATUS_LABEL) : groupBy === 'competencia' || groupBy === 'vencimento' ? 'chave' : 'aparicao',
     })), [sorted, groupBy]);
-    /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
-    const linhasNaTela = useMemo(() => (agrupando ? linhasDaTela(grupos, recolhidos) : sorted), [agrupando, grupos, recolhidos, sorted]);
     const entradas: EntradaDaTela<TaxPayable>[] = useMemo(
         () => (agrupando ? entradasDaPagina(grupos, recolhidos) : sorted.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
         [agrupando, grupos, recolhidos, sorted],
     );
-    /** Células de uma linha: checkbox + colunas de dado + espaçador + Ações. */
-    const colunasDaLinha = 1
-        + tableColumns.orderedVisibleColumns.filter(k => k !== 'actions' && TRIBUTO_COLUMN_HEADERS[k]).length
+    /** Células de uma linha: colunas de dado + espaçador + Ações. */
+    const colunasDaLinha = tableColumns.orderedVisibleColumns.filter(k => k !== 'actions' && TRIBUTO_COLUMN_HEADERS[k]).length
         + 1
         + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
-
-    /** Só não-PAGO pode ser baixado. */
-    /** Retido o cliente recolhe — não entra em baixa por aqui. */
-    const isSelectable = (t: TaxPayable) => !['PAGO', 'CANCELADO', 'RETIDO'].includes(t.effective_status);
-    const selectableVisible = useMemo(() => linhasNaTela.filter(isSelectable), [linhasNaTela]);
-    const selectableIndexById = useMemo(
-        () => new Map(selectableVisible.map((r, i) => [r.id, i])),
-        [selectableVisible],
-    );
-    /** Selecionados do recorte inteiro (inclui grupo recolhido depois de marcado) — base do lote. */
-    const selectedVisible = useMemo(
-        () => sorted.filter(r => isSelectable(r) && selectedIds.has(r.id)),
-        [sorted, selectedIds],
-    );
-    const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every(r => selectedIds.has(r.id));
-    const selectedTotal = selectedVisible.reduce((s, r) => s + (r.amount ?? 0), 0);
-
-    function toggleRow(id: string) {
-        setSelectedIds(prev => {
-            const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
-            return next;
-        });
-    }
-
-    function handleRowCheck(id: string, index: number, shiftKey: boolean) {
-        if (shiftKey && lastCheckedIndex !== null) {
-            const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
-            const rangeIds = selectableVisible.slice(start, end + 1).map(r => r.id);
-            setSelectedIds(prev => new Set([...prev, ...rangeIds]));
-        } else {
-            toggleRow(id);
-            setLastCheckedIndex(index);
-        }
-    }
-    function toggleAllVisible() {
-        setSelectedIds(prev => {
-            if (allVisibleSelected) {
-                const next = new Set(prev);
-                selectableVisible.forEach(r => next.delete(r.id));
-                return next;
-            }
-            const next = new Set(prev);
-            selectableVisible.forEach(r => next.add(r.id));
-            return next;
-        });
-    }
-    const clearSelection = () => setSelectedIds(new Set());
-
-    async function handleBulkBaixa() {
-        const alvos = selectedVisible;
-        if (alvos.length === 0) return;
-        setBulkLoading(true);
-        const okIds: string[] = [];
-        const falhas: string[] = [];
-        for (const r of alvos) {
-            try {
-                await taxPayableService.updateStatus(r.id, 'PAGO');
-                okIds.push(r.id);
-            } catch {
-                falhas.push(r.party_name ?? r.description ?? r.id);
-            }
-        }
-        setSelectedIds(new Set());
-        setBulkLoading(false);
-        if (okIds.length) await load();
-        if (falhas.length) {
-            notify(`${okIds.length} pago(s). Falha em ${falhas.length}: ${falhas.join(', ')}`, 'error');
-        } else if (okIds.length) {
-            notify(`${okIds.length} ${okIds.length !== 1 ? 'tributos baixados' : 'tributo baixado'}.`);
-        }
-    }
 
     const summary = useMemo(() => {
         const todayStr = today();
@@ -790,7 +666,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                 <KpiCard
                     label="A Pagar"
                     value={fmt(summary.aPagar)}
-                    sub={`${rows.filter(r => !['CANCELADO','PAGO'].includes(r.effective_status)).length} tributos em aberto`}
+                    sub={`${rows.filter(r => !['CANCELADO','PAGO','RETIDO'].includes(r.effective_status)).length} tributos em aberto`}
                     icon={<DollarSign className="w-5 h-5" />}
                     color="rose"
                     onClick={() => setStatusFilter('all')}
@@ -1036,8 +912,6 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                         <div className="overflow-auto max-h-[70vh]">
                         <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
-                                {/* checkbox */}
-                                <col style={{ width: '40px' }} />
                                 {/* 'actions' está em TRIBUTO_COLUMNS só para reservar a chave no
                                     ColumnConfigButton/useTableColumns — a célula em si é fixa (fora do
                                     map), então é excluída aqui da lista arrastável/dinâmica. */}
@@ -1051,16 +925,6 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                             </colgroup>
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
-                                        <input
-                                            type="checkbox"
-                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
-                                            checked={allVisibleSelected}
-                                            disabled={selectableVisible.length === 0}
-                                            onChange={toggleAllVisible}
-                                            title="Selecionar todos (não pagos)"
-                                        />
-                                    </th>
                                     {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
                                         const def = TRIBUTO_COLUMN_HEADERS[key];
                                         if (!def) return null;
@@ -1100,18 +964,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                     // Só lançamento manual (sem reference_id) é editável/excluível.
                                     const isManual = !r.reference_id;
                                     return (
-                                        <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
-                                            <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center">
-                                                {isSelectable(r) ? (
-                                                    <input
-                                                        type="checkbox"
-                                                        title="Dica: segure Shift e clique para selecionar um intervalo"
-                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                        checked={selectedIds.has(r.id)}
-                                                        onChange={e => handleRowCheck(r.id, selectableIndexById.get(r.id) ?? 0, (e.nativeEvent as MouseEvent).shiftKey)}
-                                                    />
-                                                ) : null}
-                                            </td>
+                                        <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${isVencido ? 'bg-red-50/30' : ''}`}>
                                             {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     {renderTributoCell(key, r, isVencido)}
@@ -1122,22 +975,18 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                             {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 last:border-r-0">
                                                 <div className="flex items-center gap-1.5">
-                                                    {!isPago && !isCancelado && !isRetido && (
+                                                    {/* Pagar, dar baixa e estornar moram em Contas a Pagar (um só lugar para
+                                                        pagar): daqui só se abre o título lá. */}
+                                                    {!isCancelado && (
                                                         <button
-                                                            onClick={() => handleBaixa(r)}
-                                                            className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all flex items-center gap-1"
+                                                            onClick={() => navigateToFocus('contas-a-pagar', r.id, 'CONTA_PAGAR')}
+                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all whitespace-nowrap"
+                                                            title={isPago ? 'Abrir em Contas a Pagar (recibo e estorno da baixa)'
+                                                                : isRetido ? 'Abrir em Contas a Pagar'
+                                                                : 'Abrir em Contas a Pagar para dar baixa'}
                                                         >
-                                                            <Check className="w-3.5 h-3.5" /> Pagar
+                                                            Ver em Contas a Pagar
                                                         </button>
-                                                    )}
-                                                    {isPago && (
-                                                        <ActionIconButton
-                                                            kind="settings"
-                                                            title="Estornar baixa"
-                                                            icon={<Undo2 className="w-4 h-4" />}
-                                                            disabled={changingStatus === r.id}
-                                                            onClick={() => estornar(r)}
-                                                        />
                                                     )}
                                                     {!isPago && !isRetido && (
                                                         <select
@@ -1183,31 +1032,6 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                     )}
                 </div>
             </div>
-
-            {/* Barra de ação em massa (§10) */}
-            {selectedVisible.length > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
-                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
-                        {selectedVisible.length} selecionado{selectedVisible.length !== 1 ? 's' : ''}
-                        <span className="ml-2 font-normal opacity-75">· {fmt(selectedTotal)}</span>
-                    </span>
-                    <button
-                        onClick={handleBulkBaixa}
-                        disabled={bulkLoading}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-white text-green-700 rounded-xl text-sm font-semibold hover:bg-green-50 disabled:opacity-60 transition-colors"
-                    >
-                        {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        Pagar (Baixa)
-                    </button>
-                    <button
-                        onClick={clearSelection}
-                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-sm hover:bg-blue-400 transition-colors"
-                    >
-                        <X className="w-3.5 h-3.5" />
-                        Desmarcar
-                    </button>
-                </div>
-            )}
 
             {/* Modals */}
             {showNovo && novoOrgId && (

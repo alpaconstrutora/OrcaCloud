@@ -302,7 +302,12 @@ export const taxPayableService = {
         const { data, error } = await q;
         if (error) throw error;
 
-        let rows = (data || []) as TaxPayable[];
+        // A view só lê `business_status`; o pagamento agora entra por Contas a Pagar
+        // e pela conciliação bancária, que gravam `status = CONCILIATED`. Tributo
+        // conciliado com `business_status` ainda PREVISTO aparecia como Vencido aqui
+        // e como Pago lá (7 casos em 21/10/2026). Mesma leitura de `vw_payables`.
+        let rows = ((data || []) as TaxPayable[]).map(r =>
+            tributoJaPago(r) && r.effective_status !== 'PAGO' ? { ...r, effective_status: 'PAGO' as const } : r);
 
         if (filters?.status && filters.status !== 'all') {
             rows = rows.filter(r => r.effective_status === filters.status);

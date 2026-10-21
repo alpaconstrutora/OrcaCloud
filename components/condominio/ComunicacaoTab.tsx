@@ -27,6 +27,7 @@ import {
     type AvisoRow, type AvisoCategoria,
 } from '../../services/condominioComunicacaoService';
 import type { Empreendimento } from '../../types/empreendimento';
+import { orgDoCondominio } from '../../utils/orgDoCondominio';
 
 const CATEGORIA_AVISO: Record<AvisoCategoria, { rotulo: string; cor: string }> = {
     AVISO: { rotulo: 'Aviso', cor: 'text-gray-600' },
@@ -46,7 +47,8 @@ interface Props { empreendimento: Empreendimento }
 
 const ComunicacaoTab: React.FC<Props> = ({ empreendimento }) => {
     const confirm = useConfirm();
-    const orgId = empreendimento.organization_id;
+    // A org da OPERAÇÃO do condomínio (pode ser própria — 21/10/2026).
+    const orgId = orgDoCondominio(empreendimento);
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('condominio:comunicacao:search', '');
 

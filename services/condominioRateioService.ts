@@ -1320,8 +1320,9 @@ export const condominioRateioService = {
      * De quais condomínios são os centros de custo dados — usado pelo botão
      * "Lançamento" do Fechamento por Centro de Custo (Contas a Pagar) para
      * agrupar os títulos marcados por condomínio antes de abrir o rateio.
-     * A organização sai de `empreendimentos.organization_id` (mesmo caminho de
-     * `FinanceiroTab.tsx`), não do seletor do topo — quem manda aqui é o CC.
+     * A organização é a que OPERA o condomínio (`condominio_org_id`, ou a do
+     * empreendimento — mesma regra de `utils/orgDoCondominio`), não a do seletor
+     * do topo — quem manda aqui é o CC.
      */
     async listarPorCentrosDeCusto(costCenterIds: string[]): Promise<{
         costCenterId: string; empreendimentoId: string; empreendimentoNome: string; organizationId: string;
@@ -1338,7 +1339,7 @@ export const condominioRateioService = {
         if (empIds.length === 0) return [];
         const { data: emps, error: erroEmp } = await supabase
             .from('empreendimentos')
-            .select('id, name, organization_id')
+            .select('id, name, organization_id, condominio_org_id')
             .in('id', empIds);
         if (erroEmp) throw new Error(`Falha ao carregar os condomínios: ${erroEmp.message}`);
         const empById = new Map((emps || []).map((e: any) => [e.id, e]));
@@ -1350,7 +1351,7 @@ export const condominioRateioService = {
                     costCenterId: c.id as string,
                     empreendimentoId: emp.id as string,
                     empreendimentoNome: emp.name as string,
-                    organizationId: emp.organization_id as string,
+                    organizationId: (emp.condominio_org_id || emp.organization_id) as string,
                 } : null;
             })
             .filter((x): x is NonNullable<typeof x> => x !== null);

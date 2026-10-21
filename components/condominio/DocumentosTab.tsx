@@ -31,6 +31,7 @@ import {
     type CondominioDocumento, type DocumentoCategoria,
 } from '../../services/condominioComunicacaoService';
 import type { Empreendimento } from '../../types/empreendimento';
+import { orgDoCondominio } from '../../utils/orgDoCondominio';
 
 const CATEGORIA_DOC: Record<DocumentoCategoria, string> = {
     CONVENCAO: 'Convenção', REGULAMENTO: 'Regulamento', ATA: 'Ata',
@@ -73,7 +74,8 @@ interface Props { empreendimento: Empreendimento }
 
 const DocumentosTab: React.FC<Props> = ({ empreendimento }) => {
     const confirm = useConfirm();
-    const orgId = empreendimento.organization_id;
+    // A org da OPERAÇÃO do condomínio (pode ser própria — 21/10/2026).
+    const orgId = orgDoCondominio(empreendimento);
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('condominio:documentos:busca', '');
     const tableColumns = useTableColumns(COLUMNS, 'condominioDocumentosColumns');

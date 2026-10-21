@@ -47,6 +47,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
 import { podeFecharRateio, situacaoDaAprovacao, ROTULO_DA_APROVACAO, type SituacaoDaAprovacao } from '../../utils/aprovacaoRateio';
 import { mandatoVigente } from '../../utils/mandatoSindico';
+import { orgDoCondominio } from '../../utils/orgDoCondominio';
 
 // §8 — decisão do síndico em texto colorido (Portal do Síndico F3).
 const COR_APROVACAO: Record<SituacaoDaAprovacao, string> = {
@@ -563,7 +564,8 @@ interface Props {
 
 const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
     const confirm = useConfirm();
-    const orgId = empreendimento.organization_id;
+    // A org da OPERAÇÃO do condomínio (pode ser própria — 21/10/2026).
+    const orgId = orgDoCondominio(empreendimento);
 
     // A chave leva o id do condomínio: com uma chave única para todos, abrir o
     // condomínio B logo depois de buscar no A trazia a lista já filtrada por um

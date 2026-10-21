@@ -28,6 +28,7 @@ import type { Empreendimento } from '../../types/empreendimento';
 import { BrandModelPicker } from '../catalog/BrandModelPicker';
 import { brandModelService } from '../../services/brandModelService';
 import type { BrandModelValue, ProductItemType } from '../../types/brandModel';
+import { orgDoCondominio } from '../../utils/orgDoCondominio';
 
 // Equipamento instalado no prédio: o catálogo oferece equipamentos e componentes
 // (Configurações › Marcas e Modelos); material é estoque, não ativo do edifício.
@@ -117,7 +118,8 @@ interface Props { empreendimento: Empreendimento }
 
 const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
     const confirm = useConfirm();
-    const orgId = empreendimento.organization_id;
+    // A org da OPERAÇÃO do condomínio (pode ser própria — 21/10/2026).
+    const orgId = orgDoCondominio(empreendimento);
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('condominio:ativos:search', '');
     const tableColumns = useTableColumns(COLUMNS, 'ativosPrediaisColumns');

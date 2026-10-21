@@ -113,7 +113,7 @@ export const buildCommercialAddressFields = (emp: Empreendimento): CommercialAdd
 // gravado, mas `getById` não o devolvia, e todo envio da Planta Inteligente
 // (loteamento e estudo de massa) parava em "não está vinculado". Lista
 // explícita: coluna nova de proveniência entra AQUI também (como TOWER_COLS).
-const EMPREENDIMENTO_COLS = 'id, organization_id, company_id, name, code, status, tipo, imovib_study_id, blueprint_study_id, project_id, last_synced_at, matricula, construtora, responsavel_tecnico, crea_cau, numero_processo, endereco_street, endereco_number, endereco_complement, endereco_neighborhood, endereco_city, endereco_state, endereco_zip_code, spe_razao_social, spe_cnpj, spe_nome_fantasia, condominio_cnpj, condominio_razao_social, condominio_instalado_em, sindico_client_id, sindico_mandato_inicio, sindico_mandato_fim, rateio_exige_aprovacao_sindico, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_tipo, terreno_frente, terreno_fundos, terreno_profundidade, terreno_lateral_direita, terreno_lateral_esquerda, vgv_total, commercial_building_id, commercial_rental_building_id, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
+const EMPREENDIMENTO_COLS = 'id, organization_id, company_id, name, code, status, tipo, imovib_study_id, blueprint_study_id, project_id, last_synced_at, matricula, construtora, responsavel_tecnico, crea_cau, numero_processo, endereco_street, endereco_number, endereco_complement, endereco_neighborhood, endereco_city, endereco_state, endereco_zip_code, spe_razao_social, spe_cnpj, spe_nome_fantasia, condominio_cnpj, condominio_razao_social, condominio_instalado_em, sindico_client_id, sindico_mandato_inicio, sindico_mandato_fim, rateio_exige_aprovacao_sindico, condominio_org_id, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_tipo, terreno_frente, terreno_fundos, terreno_profundidade, terreno_lateral_direita, terreno_lateral_esquerda, vgv_total, commercial_building_id, commercial_rental_building_id, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
 
 const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, blueprint_quadra_uid, blueprint_bloco_uid, name, floors_count, units_per_floor, construction_cost_sqm, sales_price_sqm, sort_order, created_at, updated_at';
 
@@ -207,6 +207,37 @@ export const empreendimentoService = {
             query = query.eq('organization_id', organizationId);
         }
 
+        const { data, error } = await query;
+        if (error) throw new Error(`Failed to fetch empreendimentos: ${error.message}`);
+        return data || [];
+    },
+
+    /**
+     * Salva a Ficha do condomínio pela RPC `condominio_salvar_ficha` (21/10/2026):
+     * quem opera o condomínio numa org própria (o síndico) não tem escrita no
+     * empreendimento, que é da construtora. Síndico, mandato e a exigência de
+     * aprovação só quem é da org dona — a RPC recusa com o motivo.
+     */
+    async salvarFichaCondominio(id: string, campos: Record<string, unknown>): Promise<void> {
+        const { data, error } = await supabase.rpc('condominio_salvar_ficha', { p_empreendimento_id: id, p_campos: campos });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível salvar a ficha.');
+    },
+
+    /**
+     * Empreendimentos para as telas de Condomínio: os da organização E os que
+     * ela OPERA como condomínio (`condominio_org_id`, 21/10/2026). Com a org do
+     * condomínio no topo, `list()` voltaria vazio — o prédio é da construtora.
+     */
+    async listParaCondominios(organizationId?: string): Promise<Empreendimento[]> {
+        let query = supabase
+            .from('empreendimentos')
+            .select(EMPREENDIMENTO_COLS)
+            .order('created_at', { ascending: false });
+        if (organizationId) {
+            query = query.or(`organization_id.eq.${organizationId},condominio_org_id.eq.${organizationId}`);
+        }
         const { data, error } = await query;
         if (error) throw new Error(`Failed to fetch empreendimentos: ${error.message}`);
         return data || [];

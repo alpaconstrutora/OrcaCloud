@@ -46,6 +46,7 @@ import {
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
+import { orgDoCondominio } from '../../utils/orgDoCondominio';
 import type {
     Empreendimento,
     OccupancyRole,
@@ -442,7 +443,8 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
 
     // A org sai da entidade aberta, não do seletor do topo — "Todas as
     // organizações" não pode esconder esta tela (CLAUDE.md regra #5).
-    const orgId = empreendimento.organization_id;
+    // A org da OPERAÇÃO do condomínio (pode ser própria — 21/10/2026).
+    const orgId = orgDoCondominio(empreendimento);
 
     const carregar = React.useCallback(async () => {
         setLoading(true);

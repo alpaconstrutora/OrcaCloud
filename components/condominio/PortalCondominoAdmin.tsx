@@ -57,6 +57,7 @@ import { condominioAcessoService } from '../../services/condominioAcessoService'
 import { useStore } from '../../store/useStore';
 import { useScrollAoTopo } from '../../hooks/useScrollAoTopo';
 import type { Empreendimento } from '../../types/empreendimento';
+import { orgDoCondominio } from '../../utils/orgDoCondominio';
 
 const COLUNAS_LISTA: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
@@ -113,7 +114,7 @@ const PortalCondominoAdmin: React.FC = () => {
     // F0). A lista é a mesma de Comercial › Condomínios.
     React.useEffect(() => {
         setCarregandoLista(true);
-        empreendimentoService.list(orgId ?? undefined)
+        empreendimentoService.listParaCondominios(orgId ?? undefined)
             .then(es => setCondominios((es || []).filter(e => e.status === 'EM_OPERACAO')))
             .catch(() => setCondominios([]))
             .finally(() => setCarregandoLista(false));
@@ -686,7 +687,7 @@ const PreviaDoPortal: React.FC<{
                 open={ajudaAberta}
                 onClose={() => setAjudaAberta(false)}
                 portal="cliente"
-                orgId={condominio.organization_id}
+                orgId={orgDoCondominio(condominio)}
                 visibleSections={SECOES_DO_CONDOMINIO}
                 currentSection={secao}
                 onNavigate={(s) => { const { sub } = destinoDaSecao(s); if (sub) setAba(sub); }}

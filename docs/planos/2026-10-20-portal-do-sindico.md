@@ -184,3 +184,8 @@ Fato medido em 20/10/2026, antes de começar: `fn_condominio_payload_for_client`
 no banco é idêntica ao arquivo `aplicar_20271012000020` (diff vazio do
 `pg_get_functiondef`); só o `010` tem síndico cadastrado, sem datas de mandato
 (caso "início e fim vazios = vigente").
+
+## Continuação (21/10/2026)
+
+O pedido seguinte — o síndico como OPERADOR do sistema (organização própria por
+condomínio) — está em `docs/planos/2026-10-21-sindico-operador-org-condominio.md`.

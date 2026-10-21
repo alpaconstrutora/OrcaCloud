@@ -91,7 +91,8 @@ const CondominiosModule: React.FC = () => {
         try {
             // Carrega tudo: a tabela mostra só os condomínios, e o painel de
             // importação precisa dos demais para você escolher quais trazer.
-            const lista = await empreendimentoService.list(orgId || undefined);
+            // Inclui os condomínios que a org do topo OPERA (org própria, 21/10/2026).
+            const lista = await empreendimentoService.listParaCondominios(orgId || undefined);
             setTodos(lista);
             // A coluna Centro de custo NÃO segura a lista: a tabela aparece com
             // o que já veio e a coluna preenche depois (§22, corolário). Falhar

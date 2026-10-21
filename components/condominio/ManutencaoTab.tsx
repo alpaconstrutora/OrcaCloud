@@ -32,6 +32,7 @@ import type {
     MaintenancePlanItemRow, MaintenanceResponsibleType, PeriodicityUnit,
 } from '../../types/condominio';
 import type { Empreendimento } from '../../types/empreendimento';
+import { orgDoCondominio } from '../../utils/orgDoCondominio';
 
 // §6.1 — larguras iniciais das três tabelas; "Ajustar largura" mede o dado real.
 const LARGURAS_ITENS: Record<string, number> = {
@@ -153,7 +154,8 @@ interface Props { empreendimento: Empreendimento }
 
 const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
     const confirm = useConfirm();
-    const orgId = empreendimento.organization_id;
+    // A org da OPERAÇÃO do condomínio (pode ser própria — 21/10/2026).
+    const orgId = orgDoCondominio(empreendimento);
 
     const [aba, setAba] = usePersistedState<Aba>('condominio:manutencao:aba', 'plano');
     const [searchTerm, setSearchTerm] = usePersistedState<string>('condominio:manutencao:search', '');

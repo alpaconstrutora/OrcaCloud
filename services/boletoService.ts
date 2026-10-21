@@ -572,6 +572,12 @@ export const boletoService = {
             const { data: invoice, error: ierr } = await supabase
                 .from('invoices')
                 .insert({
+                    // A nota é da org do BOLETO. Sem isto o gatilho
+                    // fn_invoices_preenche_org usava a org do FORNECEDOR — com
+                    // fornecedor compartilhado (ex.: Energisa, da construtora), a
+                    // nota de um condomínio em org própria nascia na construtora
+                    // (2 notas do 010 estão na Garden por isso; 21/10/2026).
+                    organization_id:       boletoRow.organization_id,
                     supplier_id:           boletoRow.supplier_id,
                     file_path:             boletoRow.documento_path,
                     file_name:             boletoRow.documento_nome,

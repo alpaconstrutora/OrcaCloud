@@ -26,6 +26,8 @@ import { useConfirm } from '../ui/confirm';
 import { condominioRateioService, type CentroDeCustoDisponivel } from '../../services/condominioRateioService';
 import type { Empreendimento } from '../../types/empreendimento';
 import { mandatoVencido as mandatoJaVenceu } from '../../utils/mandatoSindico';
+import { orgDoCondominio } from '../../utils/orgDoCondominio';
+import { useStore } from '../../store/useStore';
 
 export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'documentos' | 'ativos' | 'manutencao' | 'financeiro' | 'comunicacao';
 
@@ -118,7 +120,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         try {
             const [vinculados, livres] = await Promise.all([
                 condominioRateioService.getCentrosDeCusto(e.id),
-                condominioRateioService.listarDisponiveis(e.organization_id),
+                condominioRateioService.listarDisponiveis(orgDoCondominio(e)),
             ]);
             setCentros(vinculados);
             setCcDisponiveis(livres);
@@ -127,7 +129,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
             setCentros([]);
             setCcDisponiveis([]);
         }
-    }, [e.id, e.organization_id]);
+    }, [e.id, e.organization_id, e.condominio_org_id]);
 
     React.useEffect(() => { carregarCentros(); }, [carregarCentros]);
 
@@ -173,7 +175,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
             // aqui devolveria um item órfão, que o componente desenharia como
             // raiz solta — o defeito que esta frente veio corrigir.
             try {
-                setCcDisponiveis(await condominioRateioService.listarDisponiveis(e.organization_id));
+                setCcDisponiveis(await condominioRateioService.listarDisponiveis(orgDoCondominio(e)));
             } catch { /* a lista se refaz no próximo carregamento */ }
             notify('Centro de custo desvinculado.');
         } catch (err: any) {
@@ -182,10 +184,10 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
     };
 
     React.useEffect(() => {
-        clientService.listClients(e.organization_id)
+        clientService.listClients(orgDoCondominio(e))
             .then(cs => setClientes((cs || []).map((c: any) => ({ id: c.id, name: c.name, document: c.document, email: c.email, city: c.city, state: c.state }))))
             .catch(() => setClientes([]));
-    }, [e.organization_id]);
+    }, [e.organization_id, e.condominio_org_id]);
 
     /** Mandato vencido não representa o condomínio — o aviso precisa existir na tela. */
     // Regra única de mandato (utils/mandatoSindico, espelho de fn_sindico_predios):
@@ -193,22 +195,35 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
     const mandatoVencido = React.useMemo(
         () => mandatoJaVenceu(ficha.sindico_mandato_fim), [ficha.sindico_mandato_fim]);
 
+    // Síndico, mandato e a exigência de aprovação são da construtora (org dona do
+    // prédio); quem só opera o condomínio (o síndico, numa org própria) não os muda.
+    const minhasOrgs = useStore(s => s.organizations);
+    const ehDaDona = minhasOrgs.some(o => o.id === e.organization_id);
+    const MOTIVO_SO_DONA = 'Definido pela administradora do empreendimento.';
+
     const salvarFicha = async () => {
         setSalvando(true);
         try {
-            const atualizado = await empreendimentoService.update(e.id, {
+            const campos: Record<string, unknown> = {
                 condominio_razao_social: ficha.condominio_razao_social || null,
                 condominio_cnpj: ficha.condominio_cnpj || null,
                 condominio_instalado_em: ficha.condominio_instalado_em || null,
-                sindico_client_id: ficha.sindico_client_id || null,
-                sindico_mandato_inicio: ficha.sindico_mandato_inicio || null,
-                sindico_mandato_fim: ficha.sindico_mandato_fim || null,
-                rateio_exige_aprovacao_sindico: ficha.rateio_exige_aprovacao_sindico,
                 // Vazio vira o default legal, não NULL: a coluna é NOT NULL, e
                 // "sem multa" tem de ser 0 digitado, não campo apagado.
                 cobranca_multa_percent: Number(ficha.cobranca_multa_percent.replace(',', '.')) || 0,
                 cobranca_juros_mes_percent: Number(ficha.cobranca_juros_mes_percent.replace(',', '.')) || 0,
-            } as any);
+            };
+            if (ehDaDona) {
+                Object.assign(campos, {
+                    sindico_client_id: ficha.sindico_client_id || null,
+                    sindico_mandato_inicio: ficha.sindico_mandato_inicio || null,
+                    sindico_mandato_fim: ficha.sindico_mandato_fim || null,
+                    rateio_exige_aprovacao_sindico: ficha.rateio_exige_aprovacao_sindico,
+                });
+            }
+            // RPC (21/10/2026): o síndico operador não tem escrita no empreendimento.
+            await empreendimentoService.salvarFichaCondominio(e.id, campos);
+            const atualizado = { ...e, ...campos } as Empreendimento;
             setE(atualizado);
             onChanged?.(atualizado);
             notify('Ficha do condomínio salva.');
@@ -382,9 +397,11 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                                     icon={null}
                                     title="Selecionar Síndico"
                                     placeholder="Não definido"
+                                    disabled={!ehDaDona}
                                     triggerClassName="w-full h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                                 />
                             </div>
+                            {!ehDaDona && <p className="text-xs text-gray-500 mt-1">{MOTIVO_SO_DONA}</p>}
                         </div>
                         <div>
                             <label className="text-xs font-semibold text-slate-500">Mandato — início</label>
@@ -392,7 +409,9 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                                 type="date"
                                 value={ficha.sindico_mandato_inicio?.slice(0, 10) || ''}
                                 onChange={ev => setFicha(f => ({ ...f, sindico_mandato_inicio: ev.target.value }))}
-                                className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                disabled={!ehDaDona}
+                                title={!ehDaDona ? MOTIVO_SO_DONA : undefined}
+                                className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 disabled:bg-gray-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                             />
                         </div>
                         <div>
@@ -401,7 +420,9 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                                 type="date"
                                 value={ficha.sindico_mandato_fim?.slice(0, 10) || ''}
                                 onChange={ev => setFicha(f => ({ ...f, sindico_mandato_fim: ev.target.value }))}
-                                className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                disabled={!ehDaDona}
+                                title={!ehDaDona ? MOTIVO_SO_DONA : undefined}
+                                className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 disabled:bg-gray-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                             />
                             {mandatoVencido && (
                                 <p className="text-xs text-red-600 mt-1">
@@ -413,10 +434,11 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                             o gatilho do banco recusa fechar rateio sem a aprovação do
                             síndico vigente. O acesso dele ao portal é gerado em
                             Portais › Portal do Condomínio. */}
-                        <label className="md:col-span-2 xl:col-span-3 flex items-start gap-2.5 cursor-pointer">
+                        <label className={`md:col-span-2 xl:col-span-3 flex items-start gap-2.5 ${ehDaDona ? 'cursor-pointer' : 'cursor-not-allowed'}`} title={!ehDaDona ? MOTIVO_SO_DONA : undefined}>
                             <input
                                 type="checkbox"
                                 checked={ficha.rateio_exige_aprovacao_sindico}
+                                disabled={!ehDaDona}
                                 onChange={ev => setFicha(f => ({ ...f, rateio_exige_aprovacao_sindico: ev.target.checked }))}
                                 className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                             />

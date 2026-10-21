@@ -82,11 +82,15 @@ export interface EntryWithoutProject {
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 
+/** `''` vira `null` ("Todas"): a Central de Controle ainda recebe `activeOrganizationId || ''`
+ *  do AppRouter, e `''` numa coluna uuid é 22P02 — a consulta inteira cai. */
+const orgOuTodas = (organizationId: string | null) => organizationId || null;
+
 export const financialIntelligenceService = {
 
     async getAlerts(organizationId: string | null): Promise<FinancialAlert[]> {
         const { data, error } = await supabase.rpc('fn_financial_alerts', {
-            p_organization_id: organizationId,
+            p_organization_id: orgOuTodas(organizationId),
         });
         if (error) throw error;
         return ((data || []) as FinancialAlert[]).map(a => ({ ...a, amount: a.amount == null ? null : Number(a.amount) }));
@@ -94,7 +98,7 @@ export const financialIntelligenceService = {
 
     async getProjectScorecards(organizationId: string | null): Promise<ProjectScorecard[]> {
         const { data, error } = await supabase.rpc('fn_project_scorecard', {
-            p_organization_id: organizationId,
+            p_organization_id: orgOuTodas(organizationId),
         });
         if (error) throw error;
         return ((data || []) as ProjectScorecard[]).map(s => ({
@@ -112,7 +116,7 @@ export const financialIntelligenceService = {
 
     async getCashflowProjection(organizationId: string | null, days = 90): Promise<CashflowProjectionPoint[]> {
         const { data, error } = await supabase.rpc('fn_cashflow_projection', {
-            p_organization_id: organizationId,
+            p_organization_id: orgOuTodas(organizationId),
             p_days: days,
         });
         if (error) throw error;
@@ -127,7 +131,7 @@ export const financialIntelligenceService = {
 
     async getCashflowPosition(organizationId: string | null): Promise<CashflowPosition | null> {
         const { data, error } = await supabase.rpc('fn_cashflow_position', {
-            p_organization_id: organizationId,
+            p_organization_id: orgOuTodas(organizationId),
         });
         if (error) throw error;
         const r = ((data || []) as CashflowPosition[])[0];
@@ -142,7 +146,7 @@ export const financialIntelligenceService = {
 
     async getRentalIncome(organizationId: string | null): Promise<RentalIncome[]> {
         const { data, error } = await supabase.rpc('fn_rental_income', {
-            p_organization_id: organizationId,
+            p_organization_id: orgOuTodas(organizationId),
         });
         if (error) throw error;
         return ((data || []) as RentalIncome[]).map(r => ({
@@ -156,7 +160,7 @@ export const financialIntelligenceService = {
 
     async getEntriesWithoutProject(organizationId: string | null): Promise<EntryWithoutProject[]> {
         const { data, error } = await supabase.rpc('fn_entries_without_project', {
-            p_organization_id: organizationId,
+            p_organization_id: orgOuTodas(organizationId),
         });
         if (error) throw error;
         return ((data || []) as EntryWithoutProject[]).map(e => ({

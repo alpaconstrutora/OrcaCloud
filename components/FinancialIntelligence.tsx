@@ -4,7 +4,7 @@ import {
     RefreshCw, ShieldAlert, TrendingDown, TrendingUp, Wallet, X,
 } from 'lucide-react';
 import {
-    Area, AreaChart, Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer,
+    Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer,
     Tooltip as RechartsTooltip, XAxis, YAxis,
 } from 'recharts';
 import { financialIntelligenceService } from '../services/financialIntelligenceService';
@@ -203,17 +203,20 @@ const ALERT_COLUMNS: StandardTableColumn[] = [
     { key: 'valor',      label: 'Valor',      sortable: true, width: 160, align: 'right' },
 ];
 
+// Visíveis somam 1.210 px (o teto é ~1.270, ou a última coluna sai da tela). Valor
+// em milhão precisa de ~150 px; por isso a decomposição do saldo de 90 dias
+// (a receber / a pagar) nasce escondida — o Saldo 90d já a resume.
 const OBRA_COLUMNS: StandardTableColumn[] = [
-    { key: 'obra',     label: 'Obra',              sortable: true, width: 200 },
-    { key: 'receita',  label: 'Receita realizada', sortable: true, width: 140, align: 'right' },
-    { key: 'custo',    label: 'Custo realizado',   sortable: true, width: 140, align: 'right' },
-    { key: 'margem',   label: 'Margem',            sortable: true, width: 90,  align: 'right' },
-    { key: 'ar90',     label: 'A receber 90d',     sortable: true, width: 130, align: 'right' },
-    { key: 'ap90',     label: 'A pagar 90d',       sortable: true, width: 130, align: 'right' },
-    { key: 'saldo90',  label: 'Saldo 90d',         sortable: true, width: 130, align: 'right' },
-    { key: 'risco',    label: 'Risco',             sortable: true, width: 100 },
-    { key: 'arv',      label: 'Vencido a receber', sortable: true, width: 140, align: 'right' },
-    { key: 'apv',      label: 'Vencido a pagar',   sortable: true, width: 140, align: 'right' },
+    { key: 'obra',     label: 'Obra',            sortable: true, width: 200 },
+    { key: 'receita',  label: 'Receita',         sortable: true, width: 150, align: 'right' },
+    { key: 'custo',    label: 'Custo',           sortable: true, width: 150, align: 'right' },
+    { key: 'margem',   label: 'Margem',          sortable: true, width: 110, align: 'right' },
+    { key: 'ar90',     label: 'A receber 90d',   sortable: true, width: 160, align: 'right', defaultHidden: true },
+    { key: 'ap90',     label: 'A pagar 90d',     sortable: true, width: 160, align: 'right', defaultHidden: true },
+    { key: 'saldo90',  label: 'Saldo 90d',       sortable: true, width: 150, align: 'right' },
+    { key: 'risco',    label: 'Risco',           sortable: true, width: 130 },
+    { key: 'arv',      label: 'Vencido receber', sortable: true, width: 160, align: 'right' },
+    { key: 'apv',      label: 'Vencido pagar',   sortable: true, width: 160, align: 'right' },
 ];
 
 const LOCACAO_COLUMNS: StandardTableColumn[] = [
@@ -221,7 +224,7 @@ const LOCACAO_COLUMNS: StandardTableColumn[] = [
     { key: 'recebido',       label: 'Recebido',       sortable: true, width: 150, align: 'right' },
     { key: 'custo',          label: 'Custo',          sortable: true, width: 140, align: 'right' },
     { key: 'liquido',        label: 'Líquido',        sortable: true, width: 150, align: 'right' },
-    { key: 'ar90',           label: 'A receber 90d',  sortable: true, width: 150, align: 'right' },
+    { key: 'ar90',           label: 'A receber 90d',  sortable: true, width: 170, align: 'right' },
     { key: 'vencido',        label: 'Vencido',        sortable: true, width: 150, align: 'right' },
 ];
 
@@ -230,7 +233,7 @@ const SEM_OBRA_COLUMNS: StandardTableColumn[] = [
     { key: 'empreendimento', label: 'Empreendimento',  sortable: true, width: 240 },
     { key: 'categoria',      label: 'Categoria',       sortable: true, width: 240 },
     { key: 'realizado',      label: 'Realizado',       sortable: true, width: 150, align: 'right' },
-    { key: 'avencer',        label: 'A vencer 90d',    sortable: true, width: 150, align: 'right' },
+    { key: 'avencer',        label: 'A vencer 90d',    sortable: true, width: 165, align: 'right' },
     { key: 'vencido',        label: 'Vencido',         sortable: true, width: 150, align: 'right' },
     { key: 'qtd',            label: 'Títulos',         sortable: true, width: 100, align: 'right' },
 ];
@@ -585,16 +588,22 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
 
     useEffect(() => { carregar(); }, [carregar]);
 
+    // Mesmo guarda de resposta fora de ordem: com EMPRESA no topo o contexto troca
+    // de null para a org durante o boot, e a resposta de null pode chegar depois.
+    const projecaoSeq = useRef(0);
     const carregarProjecao = useCallback(async () => {
+        const seq = ++projecaoSeq.current;
         setProjecaoLoading(true);
         setProjecaoErro(null);
         try {
-            setProjecao(await financialIntelligenceService.getCashflowProjection(orgId, horizonte));
+            const pontos = await financialIntelligenceService.getCashflowProjection(orgId, horizonte);
+            if (seq === projecaoSeq.current) setProjecao(pontos);
         } catch (e) {
+            if (seq !== projecaoSeq.current) return;
             setProjecao([]);
             setProjecaoErro(e instanceof Error ? e.message : 'Não foi possível carregar a projeção.');
         } finally {
-            setProjecaoLoading(false);
+            if (seq === projecaoSeq.current) setProjecaoLoading(false);
         }
     }, [orgId, horizonte]);
 
@@ -990,16 +999,18 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
                         >
                             <div style={{ height: 240 }}>
                                 <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                                    <AreaChart data={projecao} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                                    {/* Linha, não área: com saldo negativo a área preenchia até o zero,
+                                        fora do gráfico, e lia como uma faixa sem sentido. */}
+                                    <LineChart data={projecao} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                                         <CartesianGrid vertical={false} stroke={GRID} />
                                         <XAxis dataKey="data_ref" axisLine={false} tickLine={false} tick={TICK}
                                             tickFormatter={(v: string) => fmtDate(v).slice(0, 5)} interval="preserveStartEnd" minTickGap={24} />
-                                        <YAxis axisLine={false} tickLine={false} tick={TICK} tickFormatter={compactBRL} width={72} />
+                                        <YAxis axisLine={false} tickLine={false} tick={TICK} tickFormatter={compactBRL} width={88} />
                                         <ReferenceLine y={0} stroke="#cbd5e1" />
                                         <RechartsTooltip content={<SaldoTooltip />} cursor={{ stroke: '#cbd5e1' }} />
-                                        <Area type="monotone" dataKey="saldo_acum" stroke={SERIE_PRINCIPAL} strokeWidth={2}
-                                            fill={SERIE_PRINCIPAL} fillOpacity={0.08} dot={false} isAnimationActive={false} />
-                                    </AreaChart>
+                                        <Line type="stepAfter" dataKey="saldo_acum" stroke={SERIE_PRINCIPAL} strokeWidth={2}
+                                            dot={false} isAnimationActive={false} />
+                                    </LineChart>
                                 </ResponsiveContainer>
                             </div>
                         </ChartCard>
@@ -1020,7 +1031,7 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
                                             <BarChart data={periodos} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barGap={2}>
                                                 <CartesianGrid vertical={false} stroke={GRID} />
                                                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={TICK} />
-                                                <YAxis axisLine={false} tickLine={false} tick={TICK} tickFormatter={compactBRL} width={72} />
+                                                <YAxis axisLine={false} tickLine={false} tick={TICK} tickFormatter={compactBRL} width={88} />
                                                 <RechartsTooltip content={<PeriodoTooltip />} cursor={{ fill: '#f8fafc' }} />
                                                 <Bar dataKey="entradas" fill={SERIE_PRINCIPAL} radius={[4, 4, 0, 0]} barSize={barSizePara(periodos.length)} isAnimationActive={false} />
                                                 <Bar dataKey="saidas" fill={SERIE_CONTEXTO} radius={[4, 4, 0, 0]} barSize={barSizePara(periodos.length)} isAnimationActive={false} />

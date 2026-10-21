@@ -57,7 +57,9 @@ de débito automático em `erros_validacao`, e nenhum outro campo preenchido foi
   2 rodadas (21:15 e 21:30 UTC). Conferido no banco: os 14 com `valor` = "TOTAL A PAGAR"
   do PDF, campo preenchido só `valor` (auditoria `reprocessamento`), vencimento intacto,
   status `revisao`, aviso de débito automático em `erros_validacao`.
-- [x] 3: investigado (abaixo). Nada alterado no banco.
+- [x] 3: investigado (abaixo) e, com a decisão do usuário, corrigido: migration
+  `aplicar_20271019994000_extrato_garden_copias_da_001.sql` (`99fa4056`), aplicada pelo
+  usuário em 19/10/2026 e conferida no banco.
 
 ## Item 3: extrato repetido nas duas contas Sicredi (19/10/2026)
 
@@ -89,6 +91,37 @@ Contas: `Sicredi` (3fba3210, org Alpa, nº cadastrado "1234") e `Sicredi - Garde
 os extratos de dez/2025, jan/2026 e jun/2026. Com isso: apagar o lado errado com tabela
 de reversão, passando classificação e vínculo para o lado que fica, como em
 o extrato Sicredi 2024 em dobro (`extrato_duplicado_*_reversao_20261017`).
+
+### Decisão e correção (19/10/2026)
+
+> Conta código 001
+
+(`payment_accounts.code = '001'` = `Sicredi` da Alpa, que passou a ter o nº 55883-5
+cadastrado.) Depois: "sim", o adiantamento Folha 05/2026 do Rogério foi pago por outro PIX.
+
+Duas correções ao diagnóstico acima, feitas com mais dados:
+- **Não era o mesmo título.** O PIX de R$ 648,40 de 18/06/2026 baixava DOIS títulos: o
+  adiantamento Folha 04/2026 (pela linha da 001) e o Folha 05/2026 (pela cópia).
+- **A "contradição" Energisa não indica linha da 001 perdida.** Os arquivos próprios da
+  Garden trazem débitos das mesmas unidades consumidoras, e o extrato jan–mai/2026 da 001
+  veio de arquivos contínuos (importação de 14/07). Separado por minuto de importação, a
+  Garden tem 3 importações que são cópia INTEIRA da 001 (2026-05-23 15:10, 05-25 22:31,
+  08-11 18:27 UTC) e as demais com zero linha igual. Todo centro de custo das cópias é da
+  Alpa (Administrativo, 007 - Bella Vista, Galeria Altavista).
+
+Migration: classificação só da cópia → gêmea da 001 onde vazia (12 categorias, 17 CC);
+vínculo da cópia desfeito por `fn_reconcile_unmatch`; 153 cópias apagadas; Folha 05/2026
+conciliada por `fn_reconcile_match` com o PIX de 22/05/2026 da Garden (47682e75…, sem
+vínculo, de arquivo próprio). Backup em `extrato_garden_copias_*_reversao_20271019`
+(NÃO apagar). Simulada antes com rollback (Garden 547 → 394). O prefixo 20271019987000
+colidiu com a migration do pedido FOB, publicada no meio do caminho → 20271019994000.
+
+**Conferido no banco depois de aplicar:** Garden 394 linhas, 001 5.464; 0 pares iguais
+restantes; 0 classificação não passada; Folha 05 CONCILIATED em 22/05 na conta da Garden;
+backup 153 linhas / 1 vínculo / 2 sugestões, RLS ligada, `anon` sem leitura.
+
+**Em aberto (perguntado ao usuário):** o Folha 04/2026 segue casado com o PIX de 18/06; há
+um PIX de R$ 649,00 em 17/04/2026 na Garden, sem vínculo, R$ 0,60 acima do título.
 
 ## Verificação
 `npx vitest run __tests__/boletoTexto.test.ts`; script Deno com os PDFs reais

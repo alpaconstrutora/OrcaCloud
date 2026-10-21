@@ -1,7 +1,8 @@
 /**
  * Entradas próprias dos portais (16/10/2026): cada portal com página de login
  * exclusiva no seu endereço. Trava:
- *  1. o conjunto é exatamente Cliente, Fornecedor, Parceiro, Corretor e Treinamentos —
+ *  1. o conjunto é exatamente Cliente, Fornecedor, Parceiro, Corretor, Treinamentos e
+ *     Síndico (este desde 20/10/2026, decisão do usuário: "E-mail + senha e link") —
  *     incluir Investidor/Crédito/Colaborador/Desenvolvedor é decisão de produto;
  *  2. rota ↔ grupo nos dois sentidos;
  *  3. "primeiro acesso" (criar a própria conta) só onde não há convite obrigatório;
@@ -16,7 +17,7 @@ import { ProfileGroup } from '../types';
 describe('entradasDoPortal', () => {
     it('1. o conjunto de portais com entrada própria é fechado', () => {
         expect(Object.keys(ENTRADAS_DO_PORTAL).sort()).toEqual(
-            [ProfileGroup.CLIENT, ProfileGroup.SUPPLIER, ProfileGroup.PARTNER, ProfileGroup.BROKER, ProfileGroup.TRAINEE].sort(),
+            [ProfileGroup.CLIENT, ProfileGroup.SUPPLIER, ProfileGroup.PARTNER, ProfileGroup.BROKER, ProfileGroup.TRAINEE, ProfileGroup.SINDICO].sort(),
         );
         for (const g of [ProfileGroup.USER, ProfileGroup.INVESTOR, ProfileGroup.LENDER, ProfileGroup.DEVELOPER]) {
             expect(entradaDoPortal(g)).toBeNull();
@@ -33,6 +34,7 @@ describe('entradasDoPortal', () => {
             [ProfileGroup.PARTNER, '/portal-parceiro'],
             [ProfileGroup.BROKER, '/portal-corretor'],
             [ProfileGroup.TRAINEE, '/portal-treinamentos'],
+            [ProfileGroup.SINDICO, '/portal-sindico'],
         ];
         for (const [grupo, rota] of esperado) {
             expect(rotaDeEntradaDoPortal(grupo)).toBe(rota);
@@ -64,6 +66,7 @@ describe('entradasDoPortal', () => {
     it('5. "Sair" volta à página do portal; sem portal próprio, ao seletor', () => {
         expect(destinoAposSair(ProfileGroup.CLIENT)).toBe('/portal-cliente');
         expect(destinoAposSair(ProfileGroup.TRAINEE)).toBe('/portal-treinamentos');
+        expect(destinoAposSair(ProfileGroup.SINDICO)).toBe('/portal-sindico');
         expect(destinoAposSair(ProfileGroup.USER)).toBe('/');
         expect(destinoAposSair(null)).toBe('/');
     });

@@ -39,6 +39,11 @@ const json = (body: unknown, status = 200) =>
 //                    Authorization DO CHAMADOR repassado, para `auth.uid()` e a
 //                    checagem de e-mail/org valerem lá dentro. A service_role
 //                    NUNCA é usada para autorizar — só para assinar, no fim.
+//
+// Portal do Síndico (20/10/2026): `portal: 'sindico'` só troca QUAL RPC
+// autoriza — `sindico_portal_dados` (token ou clientId, mesma credencial do
+// chamador). O payload do síndico traz também os documentos internos, então é
+// ela, e não esta function, que decide que ele pode abri-los.
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -46,8 +51,8 @@ serve(async (req: Request) => {
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-    const { token, clientId, documentoId } = await req.json() as {
-        token?: string; clientId?: string; documentoId?: string;
+    const { token, clientId, documentoId, portal } = await req.json() as {
+        token?: string; clientId?: string; documentoId?: string; portal?: string;
     };
     if (!documentoId || (!token && !clientId)) {
         return json({ error: 'documentoId e (token ou clientId) são obrigatórios' }, 400);
@@ -58,9 +63,11 @@ serve(async (req: Request) => {
         global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
     });
 
-    const { data: payload, error: erroPayload } = token
-        ? await comoChamador.rpc('client_portal_get_condominio', { p_token: token })
-        : await comoChamador.rpc('client_portal_get_condominio_for_client', { p_client_id: clientId });
+    const { data: payload, error: erroPayload } = portal === 'sindico'
+        ? await comoChamador.rpc('sindico_portal_dados', { p_token: token ?? null, p_client_id: token ? null : clientId })
+        : token
+            ? await comoChamador.rpc('client_portal_get_condominio', { p_token: token })
+            : await comoChamador.rpc('client_portal_get_condominio_for_client', { p_client_id: clientId });
 
     if (erroPayload) {
         console.error('[client-portal-condominio-download] erro na RPC:', erroPayload);

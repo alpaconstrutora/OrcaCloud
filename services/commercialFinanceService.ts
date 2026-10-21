@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { PropertyDeal, ProjectSettings, PaymentInstallment, FinancialTransaction } from '../types';
 import { refPrefixOrFilter } from '../lib/receivableRef';
 import { projectService } from './projectService';
+import { tituloEstaPago } from '../utils/situacaoDaCota';
 
 // Supabase project row as returned by .select('id, name, settings') / .select('*')
 interface CommercialProjectRow {
@@ -34,8 +35,8 @@ export interface ReceivableRow {
 }
 
 export function mapReceivableRow(r: ReceivableRow, clientId: string): PaymentInstallment {
-    const pago = r.status === 'CONCILIATED'
-        || ['RECEBIDO', 'PAGO'].includes((r.business_status as string) || '');
+    // Regra única de "pago" — também a do Portal do Síndico (utils/situacaoDaCota).
+    const pago = tituloEstaPago(r.status as string, r.business_status as string);
     return {
         id: r.id,
         dueDate: (r.due_date as string) || (r.transaction_date as string),

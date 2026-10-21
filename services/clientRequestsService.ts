@@ -26,6 +26,9 @@ export interface ClientRequest {
     /** Nome do cliente, resolvido por `listByUnits` (a tela do condomínio lista
      *  chamados de várias pessoas, então precisa dizer de quem é cada um). */
     _client_name?: string | null;
+    /** Última resposta/troca de situação do histórico (`client_request_eventos`,
+     *  Portal do Síndico F2, 20/10/2026) — resolvida por `listByUnits`. */
+    _ultimo_evento?: { autor_tipo: string; autor_nome: string | null; mensagem: string | null; status_novo: string | null; created_at: string } | null;
 }
 
 export interface ClientServiceOrder {
@@ -144,19 +147,40 @@ export const clientRequestsService = {
      * ⚠️ Chamado SEM `unit_id` não entra: não há como dizer a que prédio ele
      * pertence. A tela diz isso em vez de fingir uma lista completa.
      */
+    /**
+     * Evento no histórico do chamado (`client_request_eventos`, 20/10/2026) —
+     * a equipe também aparece na conversa que o síndico vê no portal dele.
+     * Falhar aqui não desfaz a edição: o histórico é o acréscimo.
+     */
+    async registrarEventoDaEquipe(orgId: string, requestId: string, evento: {
+        autorNome: string; mensagem?: string | null; statusAnterior?: string | null; statusNovo?: string | null;
+    }): Promise<void> {
+        const { error } = await supabase.from('client_request_eventos').insert({
+            request_id: requestId,
+            organization_id: orgId,
+            autor_tipo: 'EQUIPE',
+            autor_nome: evento.autorNome,
+            mensagem: evento.mensagem || null,
+            status_anterior: evento.statusNovo ? (evento.statusAnterior ?? null) : null,
+            status_novo: evento.statusNovo || null,
+        });
+        if (error) console.error('[clientRequestsService] registrarEventoDaEquipe:', error.message);
+    },
+
     async listByUnits(unitIds: string[]): Promise<ClientRequest[]> {
         if (unitIds.length === 0) return [];
         const { data, error } = await supabase
             .from('client_requests')
-            .select('id,organization_id,client_id,unit_id,title,description,category,priority,status,assigned_to,admin_notes,photos,opened_at,resolved_at,created_at,updated_at,clients(name)')
+            .select('id,organization_id,client_id,unit_id,title,description,category,priority,status,assigned_to,admin_notes,photos,opened_at,resolved_at,created_at,updated_at,clients(name),client_request_eventos(autor_tipo,autor_nome,mensagem,status_novo,created_at)')
             .in('unit_id', unitIds)
             .order('opened_at', { ascending: false, nullsFirst: false })
             .order('created_at', { ascending: false });
         if (error) throw new Error(`Falha ao carregar os chamados: ${error.message}`);
-        return (data ?? []).map((r: any) => ({
-            ...r,
-            _client_name: r.clients?.name ?? null,
-        })) as ClientRequest[];
+        return (data ?? []).map((r: any) => {
+            const { client_request_eventos: eventos, ...resto } = r;
+            const ultimo = [...(eventos ?? [])].sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at)))[0] ?? null;
+            return { ...resto, _client_name: r.clients?.name ?? null, _ultimo_evento: ultimo };
+        }) as ClientRequest[];
     },
 
     async getRequestsByToken(token: string): Promise<ClientRequest[]> {

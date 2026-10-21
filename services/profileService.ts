@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { ProfileGroup } from '../types';
 
-export type PortalComToken = 'cliente' | 'fornecedor' | 'corretor';
+export type PortalComToken = 'cliente' | 'fornecedor' | 'corretor' | 'sindico';
 
 /**
  * Cliente, Fornecedor e Corretor (16/10/2026): a validação é a RPC
@@ -11,7 +11,11 @@ export type PortalComToken = 'cliente' | 'fornecedor' | 'corretor';
  * A RPC também devolve o token do portal, e o App abre a casca do link com ele.
  */
 async function validarPorTokenDoPortal(portal: PortalComToken, nomeDoPortal: string, papel: string): Promise<{ isValid: boolean; error?: string; portalToken?: string }> {
-    const { data, error } = await supabase.rpc('portal_token_para_mim', { p_portal: portal });
+    // O síndico tem RPC própria (20/10/2026): o cadastro que vale é o que É
+    // síndico com mandato vigente, e há a situação a mais `sem_mandato`.
+    const { data, error } = portal === 'sindico'
+        ? await supabase.rpc('sindico_portal_token_para_mim')
+        : await supabase.rpc('portal_token_para_mim', { p_portal: portal });
     if (error) {
         console.error(`[validateAccess] ${portal}:`, error.message);
         return { isValid: false, error: `Erro de validação do acesso ao ${nomeDoPortal}. Por favor, contate o suporte.` };
@@ -19,6 +23,7 @@ async function validarPorTokenDoPortal(portal: PortalComToken, nomeDoPortal: str
     const r = (data ?? {}) as { situacao?: string; token?: string };
     if (r.situacao === 'ok' && r.token) return { isValid: true, portalToken: r.token };
     if (r.situacao === 'revogado') return { isValid: false, error: `Seu acesso ao ${nomeDoPortal} foi desativado. Fale com a construtora.` };
+    if (r.situacao === 'sem_mandato') return { isValid: false, error: 'Seu mandato de síndico não está vigente em nenhum condomínio. Fale com a administradora.' };
     if (r.situacao === 'sem_organizacao') return { isValid: false, error: `Seu cadastro de ${papel} ainda não está ligado a uma construtora. Peça a ela o convite por e-mail.` };
     return { isValid: false, error: `Seu e-mail não está cadastrado como ${papel} autorizado.` };
 }
@@ -106,6 +111,8 @@ export const profileService = {
             if (group === ProfileGroup.SUPPLIER) return validarPorTokenDoPortal('fornecedor', 'Portal do Fornecedor', 'fornecedor');
 
             if (group === ProfileGroup.BROKER) return validarPorTokenDoPortal('corretor', 'Portal do Corretor', 'corretor');
+
+            if (group === ProfileGroup.SINDICO) return validarPorTokenDoPortal('sindico', 'Portal do Síndico', 'síndico');
 
             if (group === ProfileGroup.LENDER) {
                 // O credor não é membro de organização nenhuma: o vínculo dele é

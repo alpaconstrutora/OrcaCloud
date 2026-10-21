@@ -1,6 +1,7 @@
 // components/condominio/PortalCondominoAdmin.tsx
-// Portais › Portal do Condômino — a visão INTERNA do que o morador vê.
-// Plano: docs/planos/2026-08-31-portal-condomino-visao-interna.md
+// Portais › Portal do Condomínio — o síndico e os moradores de cada prédio.
+// Planos: docs/planos/2026-08-31-portal-condomino-visao-interna.md e
+// docs/planos/2026-10-20-portal-do-sindico.md (card Síndico, 20/10/2026).
 //
 // POR QUE ESTA TELA EXISTE: para ver o que o morador vê era preciso gerar um
 // link e abrir noutro navegador. Ela nasceu para o portal legado (rota por
@@ -19,9 +20,13 @@
 // marcados como lidos — e o número que diz ao síndico se a comunicação chegou
 // viraria ficção.
 //
-// NÃO administra nada: publicar aviso e documento segue na aba Comunicação,
-// conceder e revogar acesso segue em Ocupações (onde a ocupação mora). Duas
-// portas para o mesmo gesto é como nasce divergência.
+// MORADORES: não administra nada aqui — publicar aviso e documento segue na
+// aba Comunicação, conceder e revogar acesso segue em Ocupações (onde a
+// ocupação mora). Duas portas para o mesmo gesto é como nasce divergência.
+//
+// SÍNDICO (20/10/2026): o acesso dele ao Portal do Síndico nasce AQUI, e só
+// aqui (`SindicoAcessoCard`): gerar/copiar link, convidar por e-mail, revogar e
+// "Ver como o síndico". Quem é o síndico continua sendo escolhido na Ficha.
 //
 // ⚠️ O NOME É HERANÇA. Havia um "Portal do Condômino" de verdade — link por
 // ocupação, rota pública `/portal-condomino?token=` — aposentado em 23/09/2026
@@ -39,6 +44,8 @@ import {
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
+import SindicoAcessoCard from './SindicoAcessoCard';
+import SindicoPortal from '../sindico/SindicoPortal';
 import CondominioTab, { type AbaCondominio } from '../client/CondominioTab';
 import { CONDOMINIO_SECOES, secaoDoCondominio, destinoDaSecao } from '../../utils/clientPortalTabs';
 import { clientPortalService, CONDOMINIO_VAZIO, type PortalCondominio } from '../../services/clientPortalService';
@@ -177,9 +184,9 @@ const ListaCondominios: React.FC<{
     return (
         <div className="space-y-6 pb-20">
             <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal do Condômino</h1>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal do Condomínio</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    Veja o portal exatamente como o morador vê — sem gravar nada em nome dele.
+                    O acesso do síndico e dos moradores de cada prédio — e o portal exatamente como cada um vê.
                 </p>
             </div>
 
@@ -300,6 +307,7 @@ const AcessosDoCondominio: React.FC<{
     const [loading, setLoading] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
     const [previa, setPrevia] = React.useState<Linha | null>(null);
+    const [previaSindico, setPreviaSindico] = React.useState<string | null>(null);
     const [acessoCliente, setAcessoCliente] = React.useState<Record<string, AcessoClienteLite>>({});
     const acessoDa = React.useCallback(
         (l: Linha) => estadoDeAcesso(acessoCliente[l.clientId]),
@@ -313,6 +321,8 @@ const AcessosDoCondominio: React.FC<{
     const navigateToFocus = useStore(s => s.navigateToFocus);
     const irParaOcupacoes = () =>
         navigateToFocus('condominios', condominio.id, 'CONDOMINIO_OCUPACOES');
+    const irParaFicha = () =>
+        navigateToFocus('condominios', condominio.id, 'CONDOMINIO_FICHA');
 
     const carregar = React.useCallback(async () => {
         setLoading(true);
@@ -388,6 +398,30 @@ const AcessosDoCondominio: React.FC<{
     if (previa) {
         return <PreviaDoPortal previa={previa} condominio={condominio} onVoltar={() => setPrevia(null)} />;
     }
+    // Mesma doutrina da prévia do morador: o COMPONENTE do portal, em modo
+    // somente leitura (a RPC aceita membro da organização só para LER).
+    if (previaSindico) {
+        return (
+            <div className="space-y-6 pb-20">
+                <div>
+                    <button
+                        type="button"
+                        onClick={() => setPreviaSindico(null)}
+                        className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
+                    >
+                        <ArrowLeft className="w-4 h-4" /> Voltar
+                    </button>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Ver como o síndico</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                        {condominio.name} · o Portal do Síndico como ele vê, sem gravar nada
+                    </p>
+                </div>
+                <div className="h-[75vh] rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <SindicoPortal clientId={previaSindico} somenteLeitura embutido />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 pb-20">
@@ -405,9 +439,18 @@ const AcessosDoCondominio: React.FC<{
                 </button>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Acessos ao portal</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    {condominio.name} · quem já tem link, e como cada um vê o portal
+                    {condominio.name} · o síndico e os moradores, e como cada um vê o portal
                 </p>
             </div>
+
+            <SindicoAcessoCard
+                condominio={{ id: condominio.id, name: condominio.name }}
+                notify={notify}
+                onVerComoSindico={setPreviaSindico}
+                onDefinirNaFicha={irParaFicha}
+            />
+
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">Moradores</h2>
 
             {/* Quatro baldes, e a soma fecha por construção. Antes eram três,
                 com `sem = total - ativos` — o que jogava revogado, expirado e

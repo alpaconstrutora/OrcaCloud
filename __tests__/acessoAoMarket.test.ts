@@ -18,6 +18,8 @@ const ESPERADO: Record<ProfileGroup, boolean> = {
   [ProfileGroup.LENDER]: false,
   // Treinando do Portal de Treinamentos: não é membro de organização.
   [ProfileGroup.TRAINEE]: false,
+  // Síndico do Portal do Síndico: cliente de fora, não é membro de organização.
+  [ProfileGroup.SINDICO]: false,
 };
 
 describe('ÒPURA Market — quem entra', () => {

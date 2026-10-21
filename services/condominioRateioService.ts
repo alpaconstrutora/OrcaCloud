@@ -255,6 +255,12 @@ export interface Rateio {
      *  Não é status: cobrança é eixo próprio (ver migration 20270914000012). */
     cobranca_gerada_em?: string | null;
     fechado_em?: string | null;
+    /** Decisão do síndico no Portal do Síndico (F3, 20/10/2026). NULL = aguardando. */
+    aprovacao_status?: 'APROVADO' | 'DEVOLVIDO' | null;
+    aprovacao_em?: string | null;
+    aprovacao_por_client_id?: string | null;
+    aprovacao_por_nome?: string | null;
+    aprovacao_observacao?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -273,7 +279,7 @@ export interface Rateio {
 export type PagadorDaCota = 'RESPONSAVEL' | 'PROPRIETARIO';
 
 const RATEIO_COLS =
-    'id, empreendimento_id, organization_id, cost_center_id, competencia, tipo, criterio, status, total_despesas, total_rateado, observacoes, number, fechado_em, cobranca_gerada_em, created_at, updated_at';
+    'id, empreendimento_id, organization_id, cost_center_id, competencia, tipo, criterio, status, total_despesas, total_rateado, observacoes, number, fechado_em, cobranca_gerada_em, aprovacao_status, aprovacao_em, aprovacao_por_client_id, aprovacao_por_nome, aprovacao_observacao, created_at, updated_at';
 
 /** Centavos, para não somar float. */
 const paraCentavos = (v: number) => Math.round(v * 100);
@@ -983,6 +989,17 @@ export const condominioRateioService = {
         }
 
         return r;
+    },
+
+    /**
+     * Quais rateios mudaram DEPOIS da decisão do síndico (a assinatura gravada
+     * não bate mais). RPC invoker — a RLS de quem chama vale. Portal do Síndico F3.
+     */
+    async aprovacaoDesatualizada(ids: string[]): Promise<Record<string, boolean>> {
+        if (ids.length === 0) return {};
+        const { data, error } = await supabase.rpc('fn_rateio_aprovacao_desatualizada', { p_ids: ids });
+        if (error) throw new Error(error.message);
+        return Object.fromEntries(((data ?? []) as { rateio_id: string; desatualizada: boolean }[]).map(r => [r.rateio_id, r.desatualizada]));
     },
 
     async fechar(id: string): Promise<Rateio> {

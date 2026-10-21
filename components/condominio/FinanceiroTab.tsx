@@ -45,6 +45,16 @@ import {
 } from '../../services/condominioCobrancaService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
+import { podeFecharRateio, situacaoDaAprovacao, ROTULO_DA_APROVACAO, type SituacaoDaAprovacao } from '../../utils/aprovacaoRateio';
+import { mandatoVigente } from '../../utils/mandatoSindico';
+
+// §8 — decisão do síndico em texto colorido (Portal do Síndico F3).
+const COR_APROVACAO: Record<SituacaoDaAprovacao, string> = {
+    AGUARDANDO: 'text-gray-600',
+    APROVADO: 'text-emerald-600',
+    DEVOLVIDO: 'text-red-600',
+    DESATUALIZADA: 'text-amber-600',
+};
 
 const STATUS_COR: Record<string, string> = {
     RASCUNHO: 'text-amber-600', FECHADO: 'text-emerald-600', CANCELADO: 'text-gray-500',
@@ -63,7 +73,7 @@ const STATUS_LABEL: Record<string, string> = {
 // §6.1 — larguras iniciais da tabela de Rateios (soma 1260 ≈ contêiner de 1600px com a
 // barra lateral aberta, para "Ações" nascer visível); "Ajustar largura" mede o dado real.
 const LARGURAS_RATEIOS: Record<string, number> = {
-    number: 100, competencia: 130, tipo: 130, criterio: 160, status: 100,
+    number: 100, competencia: 130, tipo: 130, criterio: 160, status: 100, sindico: 190,
     despesas: 115, rateado: 115, diferenca: 105, cobranca: 125, actions: 180,
 };
 
@@ -73,6 +83,9 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'tipo', label: 'Tipo', sortable: true },
     { key: 'criterio', label: 'Critério', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
+    // A decisão do síndico no Portal do Síndico (20/10/2026). Eixo próprio,
+    // como Cobrança: aprovar não muda o status do rateio.
+    { key: 'sindico', label: 'Síndico', sortable: true },
     { key: 'despesas', label: 'Despesas', sortable: true },
     { key: 'rateado', label: 'Rateado', sortable: true },
     { key: 'diferenca', label: 'Diferença', sortable: true },
@@ -709,6 +722,16 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
     // interno e reversível, o segundo manda boleto para condômino e não se
     // desfaz. Juntá-los faria o síndico emitir sem nunca ter conferido.
     const [emissoes, setEmissoes] = React.useState<Record<string, { emitidas: number; total: number }>>({});
+    /** Rateios cuja decisão do síndico ficou desatualizada (mudaram depois). */
+    const [desatualizadas, setDesatualizadas] = React.useState<Record<string, boolean>>({});
+    // O que o gatilho `trg_rateio_exige_aprovacao` confere no condomínio.
+    const contextoAprovacao = React.useMemo(() => ({
+        exige: !!empreendimento.rateio_exige_aprovacao_sindico,
+        sindicoClientId: empreendimento.sindico_client_id ?? null,
+        sindicoVigente: !!empreendimento.sindico_client_id
+            && mandatoVigente(empreendimento.sindico_mandato_inicio, empreendimento.sindico_mandato_fim),
+    }), [empreendimento.rateio_exige_aprovacao_sindico, empreendimento.sindico_client_id,
+         empreendimento.sindico_mandato_inicio, empreendimento.sindico_mandato_fim]);
     const [emitindo, setEmitindo] = React.useState<string | null>(null);
     const [resultado, setResultado] = React.useState<{ rateio: Rateio; r: ResultadoEmissao } | null>(null);
 
@@ -862,6 +885,12 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
             setCentros(await condominioRateioService.getCentrosDeCusto(empreendimento.id));
             const lista = await condominioRateioService.listar(empreendimento.id);
             setRateios(lista);
+            // Aprovação desatualizada (o rateio mudou depois da decisão do síndico).
+            // Falhar aqui não derruba a aba: a coluna cai no status gravado.
+            try {
+                setDesatualizadas(await condominioRateioService.aprovacaoDesatualizada(
+                    lista.filter(r => r.aprovacao_status && r.status === 'RASCUNHO').map(r => r.id)));
+            } catch { setDesatualizadas({}); }
             // Contagem em LOTE (2 consultas), não uma por linha: a coluna
             // Cobrança mostra "N de M emitidas" e N cresce todo mês.
             // Falhar aqui não pode derrubar a aba — é uma coluna, não o assunto.
@@ -1158,6 +1187,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                 case 'tipo': return r.tipo;
                 case 'criterio': return CRITERIO_LABEL[r.criterio];
                 case 'status': return STATUS_LABEL[r.status];
+                case 'sindico': return ROTULO_DA_APROVACAO[situacaoDaAprovacao({ status: r.aprovacao_status ?? null, desatualizada: !!desatualizadas[r.id] })];
                 case 'despesas': return r.total_despesas;
                 case 'rateado': return r.total_rateado;
                 case 'diferenca': return r.total_despesas - r.total_rateado;
@@ -1447,7 +1477,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                         <table
                                 ref={colsRateios.tableRef}
                                 className="text-left border-collapse"
-                                style={{ tableLayout: 'fixed', width: larguraTabela(colsRateios, ['number', 'competencia', 'tipo', 'criterio', 'status', 'despesas', 'rateado', 'diferenca', 'cobranca', 'actions'], v), minWidth: '100%' }}
+                                style={{ tableLayout: 'fixed', width: larguraTabela(colsRateios, ['number', 'competencia', 'tipo', 'criterio', 'status', 'sindico', 'despesas', 'rateado', 'diferenca', 'cobranca', 'actions'], v), minWidth: '100%' }}
                             >
                             <colgroup>
                                     {v.includes('number') && <col data-col-key="number" style={{ width: `${colsRateios.getWidth('number')}px` }} />}
@@ -1455,6 +1485,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                     {v.includes('tipo') && <col data-col-key="tipo" style={{ width: `${colsRateios.getWidth('tipo')}px` }} />}
                                     {v.includes('criterio') && <col data-col-key="criterio" style={{ width: `${colsRateios.getWidth('criterio')}px` }} />}
                                     {v.includes('status') && <col data-col-key="status" style={{ width: `${colsRateios.getWidth('status')}px` }} />}
+                                    {v.includes('sindico') && <col data-col-key="sindico" style={{ width: `${colsRateios.getWidth('sindico')}px` }} />}
                                     {v.includes('despesas') && <col data-col-key="despesas" style={{ width: `${colsRateios.getWidth('despesas')}px` }} />}
                                     {v.includes('rateado') && <col data-col-key="rateado" style={{ width: `${colsRateios.getWidth('rateado')}px` }} />}
                                     {v.includes('diferenca') && <col data-col-key="diferenca" style={{ width: `${colsRateios.getWidth('diferenca')}px` }} />}
@@ -1470,6 +1501,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                     {v.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="tipo" /></SortableHeader>}
                                     {v.includes('criterio') && <SortableHeader colKey="criterio" label="Critério" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="criterio" /></SortableHeader>}
                                     {v.includes('status') && <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="status" /></SortableHeader>}
+                                    {v.includes('sindico') && <SortableHeader colKey="sindico" label="Síndico" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="sindico" /></SortableHeader>}
                                     {v.includes('despesas') && <SortableHeader colKey="despesas" label="Despesas" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="despesas" /></SortableHeader>}
                                     {v.includes('rateado') && <SortableHeader colKey="rateado" label="Rateado" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="rateado" /></SortableHeader>}
                                     {v.includes('diferenca') && <SortableHeader colKey="diferenca" label="Diferença" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="diferenca" /></SortableHeader>}
@@ -1535,6 +1567,26 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                                     {STATUS_LABEL[r.status]}
                                                 </td>
                                             )}
+                                            {v.includes('sindico') && (() => {
+                                                /* §8: texto colorido. Cancelado não tem pergunta a responder. */
+                                                const sit = situacaoDaAprovacao({ status: r.aprovacao_status ?? null, desatualizada: !!desatualizadas[r.id] });
+                                                const detalhe = [
+                                                    r.aprovacao_por_nome,
+                                                    r.aprovacao_em ? new Date(r.aprovacao_em).toLocaleDateString('pt-BR') : null,
+                                                    r.aprovacao_observacao,
+                                                ].filter(Boolean).join(' · ');
+                                                return (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap">
+                                                        {cancelado || (r.status === 'FECHADO' && !r.aprovacao_status) ? (
+                                                            <span className="text-gray-400">—</span>
+                                                        ) : (
+                                                            <span className={`block truncate ${COR_APROVACAO[sit]}`} title={detalhe || undefined}>
+                                                                {ROTULO_DA_APROVACAO[sit]}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                );
+                                            })()}
                                             {v.includes('despesas') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
                                                     {dinheiro(r.total_despesas)}
@@ -1592,14 +1644,26 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                                                 onClick={() => abrirRelatorio(r)}
                                                             />
                                                         )}
-                                                        {r.status === 'RASCUNHO' && (
-                                                            <ActionIconButton
-                                                                kind="edit"
-                                                                title="Fechar rateio"
-                                                                icon={<Lock className="w-4 h-4" />}
-                                                                onClick={() => fechar(r)}
-                                                            />
-                                                        )}
+                                                        {r.status === 'RASCUNHO' && (() => {
+                                                            // Exigência de aprovação (F3): o botão desligado diz o motivo.
+                                                            // O span carrega o title porque o ActionIconButton desligado
+                                                            // não recebe hover (disabled:pointer-events-none).
+                                                            const { motivo } = podeFecharRateio(
+                                                                { status: r.aprovacao_status ?? null, porClientId: r.aprovacao_por_client_id ?? null, desatualizada: !!desatualizadas[r.id] },
+                                                                contextoAprovacao,
+                                                            );
+                                                            return (
+                                                                <span className="inline-flex" title={motivo ?? undefined}>
+                                                                    <ActionIconButton
+                                                                        kind="edit"
+                                                                        title="Fechar rateio"
+                                                                        icon={<Lock className="w-4 h-4" />}
+                                                                        disabled={!!motivo}
+                                                                        onClick={() => fechar(r)}
+                                                                    />
+                                                                </span>
+                                                            );
+                                                        })()}
                                                         {/* Emitir só aparece depois de GERAR, e só enquanto houver
                                                             cota sem boleto. É a ação que sai do sistema: fica com o
                                                             tom `attention`, não o neutro das outras. */}

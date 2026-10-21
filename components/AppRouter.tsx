@@ -539,9 +539,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     // O nome ficou de quando havia um portal de condômino de verdade, com rota
     // pública `/portal-condomino?token=` — aposentado em 23/09/2026. Hoje esta
-    // view é a visão INTERNA de quem vê o condomínio e a prévia da aba
-    // Condomínio do Portal do Cliente. O id da view não mudou para não quebrar
-    // deep-link e preferência salva de quem já usa a tela.
+    // view é Portais › Portal do Condomínio: o acesso do síndico ao Portal do
+    // Síndico (20/10/2026) e a prévia da aba Condomínio do Portal do Cliente. O
+    // id da view não mudou para não quebrar deep-link e preferência salva.
     case 'condomino-portal':
       return (
         <React.Suspense fallback={<Spinner />}>

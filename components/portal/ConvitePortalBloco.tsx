@@ -5,9 +5,10 @@ import { ENTRADAS_DO_PORTAL } from '../../lib/entradasDoPortal';
 import { ProfileGroup } from '../../types';
 
 /**
- * "Acesso por e-mail e senha" — bloco do convite por e-mail, usado pelos três
+ * "Acesso por e-mail e senha" — bloco do convite por e-mail, usado pelos
  * modais de acesso ao portal (Cliente: `client/ClientPortalLinkModal`;
- * Fornecedor: `supplier/SupplierPortalManager`; Corretor: `BrokerList`).
+ * Fornecedor: `supplier/SupplierPortalManager`; Corretor: `BrokerList`) e pelo
+ * card Síndico de Portais › Portal do Condomínio (20/10/2026).
  * Pedido de 16/10/2026 (docs/planos/2026-10-16-portais-login-exclusivo-convite.md).
  *
  * Um bloco, três telas — nunca três cópias. Quem toasta é o pai (cada tela tem
@@ -15,7 +16,7 @@ import { ProfileGroup } from '../../types';
  */
 interface Props {
     portal: PortalComConvite;
-    /** id do cadastro (clients / suppliers / broker_profiles). */
+    /** id do cadastro (clients / suppliers / broker_profiles); no síndico, do CONDOMÍNIO. */
     id: string;
     email?: string | null;
     /** `portal_invited_at` do cadastro, se já houve convite. */
@@ -27,6 +28,7 @@ const GRUPO: Record<PortalComConvite, ProfileGroup> = {
     cliente: ProfileGroup.CLIENT,
     fornecedor: ProfileGroup.SUPPLIER,
     corretor: ProfileGroup.BROKER,
+    sindico: ProfileGroup.SINDICO,
 };
 
 const formatarDataHora = (iso: string) => {

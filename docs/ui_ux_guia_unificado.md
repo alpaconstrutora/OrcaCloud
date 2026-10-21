@@ -2686,6 +2686,7 @@ acesso por link público (`isPublicExperience` em `InvestorDashboard.tsx` e em
 | Fornecedor (desde 2026-08-19) | as 5 do módulo (Estatísticas, Lances, Cotações, Pedidos, Nota Fiscal) | `components/supplier/portal/*` + trechos de `SupplierDashboard.tsx` sob `isPublicExperience` |
 | Parceiro (desde 2026-09-30) | **só a aba Financeiro** — as demais abas do Portal do Parceiro seguem fora do §24 | `components/partner/PartnerPortalFinanceiro.tsx` (montado por `PartnerPortal.tsx`) |
 | Corretor (desde 2026-10-17) | **só a aba Comissões**, no desenho do Financeiro do Parceiro (faixa de KPIs, abas, tabela de parcelas) — as demais abas do Portal do Corretor seguem fora do §24 | `components/broker/BrokerCommissions.tsx` (desktop e `compacto` do celular) |
+| Síndico (desde 2026-10-20) | o portal inteiro (`/portal-sindico`) — decisão do usuário ao criar o portal: *"Sim, mesmo visual"*. Os painéis reusados da aba Condomínio do Portal do Cliente vêm como estão; o card "Síndico" da tela de gestão (Portais › Portal do Condomínio) é tela interna e segue o guia | `components/sindico/*` |
 
 O kit vive em **`components/portal/PortalKit.tsx`** (era
 `components/investor/portal/PortalKit.tsx` até virar de dois portais).

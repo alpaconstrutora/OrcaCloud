@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
     Award, BookOpen, Briefcase, Building2, ClipboardList, DollarSign, FileSignature, FileText,
-    FolderOpen, GraduationCap, HardHat, History, Package, Receipt, Truck, Users, Wallet,
+    Building, FolderOpen, GraduationCap, HardHat, History, Megaphone, Package, Receipt, Truck, Users, Wallet,
 } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
@@ -99,6 +99,12 @@ const TEAL: CoresDaEntrada = {
     link: 'text-teal-700 hover:text-teal-900', foco: 'focus:border-teal-500 focus:ring-teal-500/30',
 };
 
+const SKY: CoresDaEntrada = {
+    painel: 'bg-sky-700', painelTexto: 'text-sky-100', painelRodape: 'text-sky-200',
+    iconeMovel: 'bg-sky-600', botao: 'bg-sky-600 hover:bg-sky-700',
+    link: 'text-sky-700 hover:text-sky-900', foco: 'focus:border-sky-500 focus:ring-sky-500/30',
+};
+
 const RODAPE_CONVITE = 'Não recebeu o convite? Fale com a construtora.';
 
 export const ENTRADAS_DO_PORTAL: Readonly<Partial<Record<ProfileGroup, EntradaDoPortal>>> = {
@@ -186,6 +192,26 @@ export const ENTRADAS_DO_PORTAL: Readonly<Partial<Record<ProfileGroup, EntradaDo
         permitePrimeiroAcesso: false,
         rodape: 'Não recebeu o convite? Fale com o RH da sua empresa.',
         cores: TEAL,
+    },
+    // Portal do Síndico (20/10/2026, docs/planos/2026-10-20-portal-do-sindico.md).
+    // Só por convite: o síndico é escolhido na Ficha do condomínio, e quem já tem
+    // senha do Portal do Cliente entra com a mesma.
+    [ProfileGroup.SINDICO]: {
+        grupo: ProfileGroup.SINDICO,
+        rota: '/portal-sindico',
+        titulo: 'Portal do Síndico',
+        assinatura: 'ÒPURA',
+        descricao: 'O condomínio inteiro: unidades, prestação de contas, avisos e chamados.',
+        dica: 'Use o e-mail em que recebeu o convite.',
+        icone: Building,
+        destaques: [
+            { icone: Wallet, titulo: 'Prestação de contas', texto: 'Rateios, despesas e quem está em dia.' },
+            { icone: Megaphone, titulo: 'Avisos', texto: 'Publique comunicados para os moradores.' },
+            { icone: ClipboardList, titulo: 'Chamados', texto: 'Acompanhe e responda o que os moradores abrem.' },
+        ],
+        permitePrimeiroAcesso: false,
+        rodape: 'Não recebeu o convite? Fale com a administradora do condomínio.',
+        cores: SKY,
     },
 };
 

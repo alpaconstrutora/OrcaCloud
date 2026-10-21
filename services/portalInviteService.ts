@@ -11,7 +11,8 @@ import { supabase } from '../lib/supabase';
  * Devolve o tipo de link; em erro, a MENSAGEM da function (não o genérico
  * "Edge Function returned a non-2xx status code").
  */
-export type PortalComConvite = 'cliente' | 'fornecedor' | 'corretor';
+/** No síndico (20/10/2026) o `id` é do CONDOMÍNIO — a function acha o síndico e o mandato nele. */
+export type PortalComConvite = 'cliente' | 'fornecedor' | 'corretor' | 'sindico';
 
 export interface ResultadoDoConvite {
     kind: 'invite' | 'recovery';

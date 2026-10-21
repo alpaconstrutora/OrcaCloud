@@ -11,7 +11,8 @@ import {
     Briefcase,
     Users,
     Landmark,
-    GraduationCap
+    GraduationCap,
+    Building
 } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
@@ -92,6 +93,14 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onSelectGroup }) => {
             icon: GraduationCap,
             color: 'teal',
             theme: 'bg-teal-600'
+        },
+        {
+            id: ProfileGroup.SINDICO,
+            title: 'Portal do Síndico',
+            desc: 'Síndicos: prestação de contas, unidades, avisos e chamados do condomínio.',
+            icon: Building,
+            color: 'sky',
+            theme: 'bg-sky-600'
         }
     ];
 

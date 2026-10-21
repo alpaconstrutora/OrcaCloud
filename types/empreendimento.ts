@@ -77,6 +77,9 @@ export interface Empreendimento {
     condominio_razao_social?: string | null;
     condominio_instalado_em?: string | null;
     sindico_client_id?: string | null;
+    /** Fechar rateio exige a aprovação do síndico vigente (Portal do Síndico F3,
+     *  gatilho `trg_rateio_exige_aprovacao`). Desligado por padrão. */
+    rateio_exige_aprovacao_sindico?: boolean | null;
     sindico_mandato_inicio?: string | null;
     /** Mandato tem fim, e síndico vencido não representa o condomínio. */
     sindico_mandato_fim?: string | null;

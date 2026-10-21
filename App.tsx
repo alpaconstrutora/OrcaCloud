@@ -180,6 +180,8 @@ const SupplierDashboardPublic = React.lazy(() => import('./components/SupplierDa
 // Portal de Treinamentos — casca própria, fora do <Layout>: o treinando
 // (colaborador ou terceirizado) não é membro de organização; entra por e-mail.
 const TrainingPortal = React.lazy(() => import('./components/training/TrainingPortal'));
+// Portal do Síndico (20/10/2026): casca própria, carrega os dados por token.
+const SindicoPortal = React.lazy(() => import('./components/sindico/SindicoPortal'));
 
 // Portal do Investidor via token público
 const InvestorPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
@@ -651,6 +653,13 @@ const App: React.FC = () => {
     return null;
   }, []);
 
+  const sindicoPortalToken = React.useMemo(() => {
+    if (window.location.pathname === '/portal-sindico') {
+      return new URLSearchParams(window.location.search).get('token');
+    }
+    return null;
+  }, []);
+
   const orderShareToken = React.useMemo(() => {
     const match = window.location.pathname.match(/^\/pedido\/([0-9a-f-]{36})$/i);
     return match ? match[1] : null;
@@ -776,6 +785,11 @@ const App: React.FC = () => {
   if (investorPortalToken) return <InvestorPortalTokenGate token={investorPortalToken} />;
   if (partnerPortalToken) return <PartnerPortalTokenGate token={partnerPortalToken} />;
   if (supplierPortalToken) return <SupplierPortalTokenGate token={supplierPortalToken} />;
+  if (sindicoPortalToken) return (
+    <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+      <SindicoPortal token={sindicoPortalToken} />
+    </React.Suspense>
+  );
   if (orderShareToken) return <PublicOrderView token={orderShareToken} />;
   if (proposalShareToken) return <PublicProposalView token={proposalShareToken} />;
   if (officesShareProjectId) return <PublicEspecificacoesView projetoId={officesShareProjectId} />;
@@ -860,7 +874,8 @@ const App: React.FC = () => {
   // validação concluída não acontece (isValid implica token), mas o guard evita
   // abrir a casca com `token=""`.
   if (
-    (selectedLoginGroup === ProfileGroup.CLIENT || selectedLoginGroup === ProfileGroup.SUPPLIER || selectedLoginGroup === ProfileGroup.BROKER)
+    (selectedLoginGroup === ProfileGroup.CLIENT || selectedLoginGroup === ProfileGroup.SUPPLIER || selectedLoginGroup === ProfileGroup.BROKER
+      || selectedLoginGroup === ProfileGroup.SINDICO)
     && (!profileSynchronized || !portalTokenDoLogin)
   ) {
     return (
@@ -877,6 +892,13 @@ const App: React.FC = () => {
   }
   if (selectedLoginGroup === ProfileGroup.BROKER && portalTokenDoLogin) {
     return <BrokerPortalTokenGate token={portalTokenDoLogin} onLogout={sairDoPortal} />;
+  }
+  if (selectedLoginGroup === ProfileGroup.SINDICO && portalTokenDoLogin) {
+    return (
+      <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+        <SindicoPortal token={portalTokenDoLogin} onLogout={sairDoPortal} />
+      </React.Suspense>
+    );
   }
 
   // ── Portal de Crédito (instituição financeira) — antes do Layout ────────────

@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { exigirMembro, exigirUsuario, respostaDeErro } from '../_shared/auth.ts';
+import { exigirGestor, exigirMembro, exigirUsuario, respostaDeErro } from '../_shared/auth.ts';
 import { escapeHtml, urlSegura } from '../_shared/html.ts';
 
 declare const Deno: { env: { get(key: string): string | undefined } };
@@ -37,6 +37,15 @@ declare const Deno: { env: { get(key: string): string | undefined } };
  *
  * REGRA #7, pergunta 3: o gate está no código (exigirUsuario + exigirMembro),
  * não só no `verify_jwt`.
+ *
+ * Síndico (20/10/2026, docs/planos/2026-10-20-portal-do-sindico.md): corpo
+ * { portal: 'sindico', id: <empreendimento> } — o convite parte do CONDOMÍNIO,
+ * porque é nele que mora o síndico (`sindico_client_id`) e o mandato. Três
+ * desvios, só para ele: exige GESTOR (o acesso do síndico vê o prédio inteiro,
+ * com contato dos condôminos — mesma régua de `sindico_portal_gerar_token`);
+ * confere o mandato pela MESMA regra do banco (`fn_sindico_predios`); e grava o
+ * convite em `sindico_portal_tokens.convidado_em`, não em
+ * `clients.portal_invited_at` (que é do Portal do Cliente).
  */
 
 const corsHeaders = {
@@ -52,7 +61,7 @@ const json = (body: unknown, status = 200) =>
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Portal = 'cliente' | 'fornecedor' | 'corretor';
+type Portal = 'cliente' | 'fornecedor' | 'corretor' | 'sindico';
 
 interface DescricaoDoPortal {
     nome: string;
@@ -82,6 +91,11 @@ const PORTAIS: Record<Portal, DescricaoDoPortal> = {
         tabelaDeTokens: 'broker_portal_tokens', colunaDaPessoa: 'broker_id',
         cor: '#4f46e5', corLink: '#4338ca', papel: 'corretor',
     },
+    sindico: {
+        nome: 'Portal do Síndico', rota: '/portal-sindico', tabela: 'clients',
+        tabelaDeTokens: 'sindico_portal_tokens', colunaDaPessoa: 'client_id',
+        cor: '#0284c7', corLink: '#0369a1', papel: 'síndico',
+    },
 };
 
 serve(async (req: Request) => {
@@ -99,7 +113,7 @@ serve(async (req: Request) => {
     } catch {
         return json({ error: 'Corpo inválido.' }, 400);
     }
-    if (!portal || !(portal in PORTAIS)) return json({ error: 'portal deve ser cliente, fornecedor ou corretor.' }, 400);
+    if (!portal || !(portal in PORTAIS)) return json({ error: 'portal deve ser cliente, fornecedor, corretor ou sindico.' }, 400);
     if (!id || !UUID.test(id)) return json({ error: 'id é obrigatório.' }, 400);
     const d = PORTAIS[portal];
 
@@ -109,20 +123,38 @@ serve(async (req: Request) => {
         auth: { autoRefreshToken: false, persistSession: false },
     });
 
+    // Síndico: o `id` é do condomínio; dele saem a pessoa e a organização.
+    let idDaPessoa = id;
+    let orgDoCondominio: string | null = null;
+    if (portal === 'sindico') {
+        const { data: emp } = await admin.from('empreendimentos')
+            .select('id, organization_id, sindico_client_id').eq('id', id).maybeSingle();
+        if (!emp) return json({ error: 'Condomínio não encontrado.' }, 404);
+        const gestor = await exigirGestor(req, emp.organization_id);
+        if (!gestor.ok) return respostaDeErro(gestor, corsHeaders);
+        if (!emp.sindico_client_id) return json({ error: 'Defina o síndico na Ficha do condomínio.' }, 400);
+        const { data: predios, error: erroPredios } = await admin.rpc('fn_sindico_predios', { p_client_id: emp.sindico_client_id });
+        if (erroPredios) { console.error('[portal-invite-user] fn_sindico_predios', erroPredios.message); return json({ error: 'Não foi possível conferir o mandato.' }, 500); }
+        const vigente = (predios ?? []).some((p: unknown) => (typeof p === 'string' ? p : (p as { fn_sindico_predios?: string })?.fn_sindico_predios) === emp.id);
+        if (!vigente) return json({ error: 'O mandato do síndico não está vigente (confira as datas na Ficha).' }, 400);
+        idDaPessoa = emp.sindico_client_id;
+        orgDoCondominio = emp.organization_id;
+    }
+
     // Cadastro. Lido com service_role só para descobrir a organização dona; quem
-    // decide se o chamador pode agir é exigirMembro.
+    // decide se o chamador pode agir é exigirMembro (no síndico, exigirGestor acima).
     const colunas = portal === 'corretor'
         ? 'id, email, name, organization_id, is_active'
         : 'id, email, name, organization_id';
-    const { data: cad } = await admin.from(d.tabela).select(colunas).eq('id', id).maybeSingle();
+    const { data: cad } = await admin.from(d.tabela).select(colunas).eq('id', idDaPessoa).maybeSingle();
     if (!cad) return json({ error: `${d.nome}: cadastro não encontrado.` }, 404);
 
     // Cadastro com organização: o chamador tem de ser membro DELA. Cadastro
     // global: qualquer membro de organização pode convidar, e a org do token é a
     // dele (mesma regra de `supplier_portal_generate_token` para fornecedor global).
-    const vinculo = await exigirMembro(req, cad.organization_id ?? null);
+    const vinculo = await exigirMembro(req, orgDoCondominio ?? cad.organization_id ?? null);
     if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
-    const organizationId: string | null = cad.organization_id ?? (vinculo as { organizationId?: string }).organizationId ?? null;
+    const organizationId: string | null = orgDoCondominio ?? cad.organization_id ?? (vinculo as { organizationId?: string }).organizationId ?? null;
     if (!organizationId) {
         return json({ error: 'Não foi possível determinar a organização do convite.' }, 400);
     }
@@ -245,7 +277,9 @@ serve(async (req: Request) => {
     }
 
     const invitedAt = new Date().toISOString();
-    const { error: updErr } = await admin.from(d.tabela).update({ portal_invited_at: invitedAt }).eq('id', cad.id);
+    const { error: updErr } = portal === 'sindico'
+        ? await admin.from('sindico_portal_tokens').update({ convidado_em: invitedAt }).eq('client_id', cad.id)
+        : await admin.from(d.tabela).update({ portal_invited_at: invitedAt }).eq('id', cad.id);
     if (updErr) console.error('[portal-invite-user] portal_invited_at não gravado', updErr.message);
 
     console.log('[portal-invite-user] enviado', { portal, id: cad.id, kind, por: vinculo.email });

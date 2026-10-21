@@ -41,7 +41,7 @@ const LARGURAS_ORDENS: Record<string, number> = {
     sistema: 170, descricao: 300, tipo: 130, prioridade: 120, agendada: 130, executada: 130, situacao: 130, actions: 110,
 };
 const LARGURAS_CHAMADOS: Record<string, number> = {
-    unidade: 130, pessoa: 200, titulo: 300, categoria: 150, prioridade: 120, aberto: 130, situacao: 130,
+    unidade: 130, pessoa: 200, titulo: 300, categoria: 150, prioridade: 120, aberto: 130, situacao: 130, ultima: 260,
 };
 
 const ITEM_COLUMNS: ColumnConfig[] = [
@@ -129,6 +129,9 @@ const CHAMADO_COLUMNS: ColumnConfig[] = [
     { key: 'prioridade', label: 'Prioridade', sortable: true },
     { key: 'aberto', label: 'Aberto em', sortable: true },
     { key: 'situacao', label: 'Situação', sortable: true },
+    // Do histórico do chamado (20/10/2026): o síndico responde pelo Portal do
+    // Síndico, e a equipe precisa ver isso aqui sem abrir o chamado.
+    { key: 'ultima', label: 'Última resposta', sortable: true },
 ];
 
 // §8 — texto colorido, sem pílula.
@@ -281,6 +284,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                 case 'prioridade': return c.priority || '';
                 case 'aberto': return c.opened_at || c.created_at || '';
                 case 'situacao': return c.status || '';
+                case 'ultima': return c._ultimo_evento?.created_at || '';
                 default: return '';
             }
         };
@@ -698,7 +702,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                             <table
                                 ref={colsChamados.tableRef}
                                 className="text-left border-collapse"
-                                style={{ tableLayout: 'fixed', width: larguraTabela(colsChamados, ['unidade', 'pessoa', 'titulo', 'categoria', 'prioridade', 'aberto', 'situacao'], cv), minWidth: '100%' }}
+                                style={{ tableLayout: 'fixed', width: larguraTabela(colsChamados, ['unidade', 'pessoa', 'titulo', 'categoria', 'prioridade', 'aberto', 'situacao', 'ultima'], cv), minWidth: '100%' }}
                             >
                                 <colgroup>
                                     {cv.includes('unidade') && <col data-col-key="unidade" style={{ width: `${colsChamados.getWidth('unidade')}px` }} />}
@@ -708,6 +712,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                                     {cv.includes('prioridade') && <col data-col-key="prioridade" style={{ width: `${colsChamados.getWidth('prioridade')}px` }} />}
                                     {cv.includes('aberto') && <col data-col-key="aberto" style={{ width: `${colsChamados.getWidth('aberto')}px` }} />}
                                     {cv.includes('situacao') && <col data-col-key="situacao" style={{ width: `${colsChamados.getWidth('situacao')}px` }} />}
+                                    {cv.includes('ultima') && <col data-col-key="ultima" style={{ width: `${colsChamados.getWidth('ultima')}px` }} />}
                                     {/* §6.1.1 — espaçador ANTES de "Ações": absorve a folga */}
                                     <col />
                                 </colgroup>
@@ -760,6 +765,19 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                                             {cv.includes('situacao') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     <span className={`text-sm font-normal ${CHAMADO_STATUS_COLOR[c.status] || 'text-gray-600'}`}>{c.status}</span>
+                                                </td>
+                                            )}
+                                            {cv.includes('ultima') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                    {c._ultimo_evento ? (
+                                                        <span
+                                                            className="block truncate"
+                                                            title={[c._ultimo_evento.autor_nome, c._ultimo_evento.status_novo ? `→ ${c._ultimo_evento.status_novo}` : null, c._ultimo_evento.mensagem].filter(Boolean).join(' · ')}
+                                                        >
+                                                            {c._ultimo_evento.autor_nome || c._ultimo_evento.autor_tipo}
+                                                            <span className="text-gray-500"> · {new Date(c._ultimo_evento.created_at).toLocaleDateString('pt-BR')}</span>
+                                                        </span>
+                                                    ) : <span className="text-gray-500">—</span>}
                                                 </td>
                                             )}
                                             <td aria-hidden="true"></td>

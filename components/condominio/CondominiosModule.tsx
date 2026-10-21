@@ -111,9 +111,10 @@ const CondominiosModule: React.FC = () => {
     React.useEffect(() => { carregar(); }, [carregar]);
 
     /**
-     * Consome o deep-link vindo de Portais › Portal do Condômino ("Gerar link
-     * em Ocupações"): abre AQUELE condomínio já na aba Ocupações, em vez de
-     * largar o usuário na lista para procurar de novo.
+     * Consome o deep-link vindo de Portais › Portal do Condomínio ("Gerar link
+     * em Ocupações", e "Definir na Ficha" do card Síndico desde 20/10/2026):
+     * abre AQUELE condomínio já na aba certa, em vez de largar o usuário na
+     * lista para procurar de novo.
      *
      * Espera `loading` terminar de propósito — com a lista ainda vazia o
      * `find` falharia e o foco seria descartado sem nada acontecer, que é
@@ -121,10 +122,10 @@ const CondominiosModule: React.FC = () => {
      */
     React.useEffect(() => {
         if (!viewFocus?.ref || loading) return;
-        if (viewFocus.source !== 'CONDOMINIO_OCUPACOES') return;
+        if (viewFocus.source !== 'CONDOMINIO_OCUPACOES' && viewFocus.source !== 'CONDOMINIO_FICHA') return;
         const alvo = todos.find(x => x.id === viewFocus.ref);
         if (!alvo) return;
-        setAbaInicial('ocupacoes');
+        setAbaInicial(viewFocus.source === 'CONDOMINIO_FICHA' ? 'ficha' : 'ocupacoes');
         setAberto(alvo);
         setViewFocus(null);
     }, [viewFocus, loading, todos, setViewFocus]);

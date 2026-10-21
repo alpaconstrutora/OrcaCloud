@@ -36,6 +36,12 @@ const OS_STATUS_COLORS: Record<string, string> = {
     Cancelada: 'bg-gray-100 text-gray-400',
 };
 
+/** §8 do guia de UI — status em texto colorido, sem pílula: dos mapas acima só
+ *  a cor do TEXTO vale (o fundo era da pílula, removida em 21/10/2026 ao tocar
+ *  este arquivo para o histórico do chamado do Portal do Síndico). */
+const soTexto = (classes: string | undefined, padrao = 'text-gray-600') =>
+    (classes ?? '').split(' ').filter(c => c.startsWith('text-')).join(' ') || padrao;
+
 const NEW_REQUEST_BLANK = { title: '', description: '', category: 'Geral', priority: 'Média' as const };
 const NEW_OS_BLANK = { number: '', title: '', description: '', status: 'Aberta' as const, priority: 'Média' as const, scheduled_date: '', value: '' };
 
@@ -96,6 +102,20 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
         try {
             await clientRequestsService.updateRequest(id, editingReqData);
             const updated = requests.find(r => r.id === id);
+            // Histórico do chamado (20/10/2026): troca de situação ou nota nova
+            // vira evento da EQUIPE — é o que o síndico lê no Portal do Síndico.
+            if (updated) {
+                const mudouStatus = !!editingReqData.status && editingReqData.status !== updated.status;
+                const notaNova = (editingReqData.admin_notes ?? '') !== (updated.admin_notes ?? '') ? editingReqData.admin_notes : null;
+                if (mudouStatus || notaNova) {
+                    await clientRequestsService.registrarEventoDaEquipe(organizationId, id, {
+                        autorNome: 'Equipe',
+                        mensagem: notaNova,
+                        statusAnterior: updated.status,
+                        statusNovo: mudouStatus ? editingReqData.status : null,
+                    });
+                }
+            }
             if (notifyClient && editingReqData.status && updated) {
                 await clientMessagesService.sendMessage(organizationId, client.id, {
                     sender_name: 'Equipe',
@@ -211,7 +231,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                         <div className="flex items-center gap-2 mt-1">
                             <span className="text-sm font-bold text-gray-500">{client.name}</span>
                             {client.category && (
-                                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${CATEGORY_COLOR[client.category] ?? 'bg-gray-100 text-gray-500'}`}>
+                                <span className={`text-sm font-normal ${soTexto(CATEGORY_COLOR[client.category], 'text-gray-500')}`}>
                                     {client.category}
                                 </span>
                             )}
@@ -300,7 +320,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
-                                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLORS[req.priority]}`}>{req.priority}</span>
+                                            <span className={`text-sm font-normal ${soTexto(PRIORITY_COLORS[req.priority])}`}>{req.priority}</span>
                                             {editingReqId !== req.id && (
                                                 <button onClick={() => startEditReq(req)} className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
                                                     <ChevronDown className="w-4 h-4" />
@@ -343,7 +363,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-2">
-                                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${REQ_STATUS_COLORS[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span>
+                                            <span className={`text-sm font-normal ${soTexto(REQ_STATUS_COLORS[req.status], 'text-gray-500')}`}>{req.status}</span>
                                             {req.assigned_to && <span className="text-xs text-gray-400 font-bold">· {req.assigned_to}</span>}
                                         </div>
                                     )}
@@ -406,7 +426,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                             <p className="text-sm font-black text-gray-900 uppercase tracking-tight truncate">{os.title}</p>
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
-                                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLORS[os.priority]}`}>{os.priority}</span>
+                                            <span className={`text-sm font-normal ${soTexto(PRIORITY_COLORS[os.priority])}`}>{os.priority}</span>
                                             {editingOsId !== os.id && (
                                                 <button onClick={() => startEditOs(os)} className="p-1.5 text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="Editar">
                                                     <ChevronDown className="w-4 h-4" />
@@ -457,7 +477,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-2">
-                                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${OS_STATUS_COLORS[os.status] ?? 'bg-gray-100 text-gray-400'}`}>{os.status}</span>
+                                            <span className={`text-sm font-normal ${soTexto(OS_STATUS_COLORS[os.status], 'text-gray-500')}`}>{os.status}</span>
                                             {os.assigned_to && <span className="text-xs text-gray-400 font-bold">· {os.assigned_to}</span>}
                                         </div>
                                     )}

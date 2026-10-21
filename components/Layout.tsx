@@ -1202,10 +1202,10 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="investor-portal" label="Portal do Investidor" icon={TrendingUp} />
                     <DropdownItem id="supplier-area" label="Portal do Fornecedor" icon={Truck} />
                     <DropdownItem id="partner-workspaces-admin" label="Portal de Parceiros" icon={Users} />
-                    {/* O do condômino é o único sem tela de gestão própria: publicar
-                        aviso segue na aba Comunicação e gerar link em Ocupações.
-                        Aqui é só o espelho do que o morador vê. */}
-                    <DropdownItem id="condomino-portal" label="Portal do Condômino" icon={Home} />
+                    {/* Portal do Condomínio (20/10/2026): por prédio, o acesso do
+                        SÍNDICO (gerado e revogado aqui) e o espelho do que cada
+                        morador vê. O id da view é herança do portal do condômino. */}
+                    <DropdownItem id="condomino-portal" label="Portal do Condomínio" icon={Home} />
                     {(mod.broker_portal || isDev) && (
                       <DropdownItem id="broker-area" label="Portal do Corretor" icon={Briefcase} />
                     )}

@@ -51,6 +51,8 @@ const PAPEL_LABEL: Record<string, string> = {
     RESPONSAVEL_FINANCEIRO: 'Responsável financeiro',
 };
 const papel = (p: string) => PAPEL_LABEL[p] ?? p;
+/** Rótulo do papel na unidade — também o do Portal do Síndico. */
+export const rotuloDoPapel = papel;
 
 /** §8 — status como texto colorido, sem pílula. */
 const COR_CATEGORIA: Record<string, string> = {
@@ -207,7 +209,7 @@ type Grupo = ReturnType<typeof agruparPorCondominio>[number];
    atualiza os avisos lá no `ClientArea`. */
 
 // ── Dados Gerais ─────────────────────────────────────────────────────────────
-const PainelDadosGerais: React.FC<{ grupos: Grupo[] }> = ({ grupos }) => (
+export const PainelDadosGerais: React.FC<{ grupos: Grupo[] }> = ({ grupos }) => (
     <div className="space-y-6">
         {grupos.map((cond: Grupo) => (
             <div key={cond.id}>
@@ -285,8 +287,13 @@ const PainelDadosGerais: React.FC<{ grupos: Grupo[] }> = ({ grupos }) => (
     </div>
 );
 
+// Os seis painéis são exportados desde 20/10/2026: o Portal do Síndico
+// (components/sindico/SindicoPortal.tsx) os reusa com o payload dele, que tem o
+// mesmo formato. Acréscimo só do síndico entra por prop opcional, com o padrão
+// desligado — o morador continua vendo exatamente o que via.
+
 // ── Avisos ───────────────────────────────────────────────────────────────────
-const PainelAvisos: React.FC<{
+export const PainelAvisos: React.FC<{
     avisos: PortalAvisoCondominio[];
     multi: boolean;
     naoLidos: number;
@@ -350,11 +357,14 @@ const PainelAvisos: React.FC<{
 );
 
 // ── Documentos do condomínio ─────────────────────────────────────────────────
-const PainelDocumentos: React.FC<{
+export const PainelDocumentos: React.FC<{
     documentos: PortalCondominio['documentos'];
     multi: boolean;
     onResolverDocumento?: (documentoId: string) => Promise<string>;
-}> = ({ documentos, multi, onResolverDocumento }) => {
+    /** Portal do Síndico: ele vê também os documentos que o morador não vê
+     *  (`visivelPortal = false`), e a linha diz isso. */
+    marcarInternos?: boolean;
+}> = ({ documentos, multi, onResolverDocumento, marcarInternos = false }) => {
     const [erroDocumento, setErroDocumento] = React.useState<string | null>(null);
 
     /**
@@ -413,6 +423,8 @@ const PainelDocumentos: React.FC<{
                                     {CATEGORIA_DOC[d.categoria] ?? d.categoria}
                                     {d.descricao ? ` · ${d.descricao}` : ''}
                                     {multi ? ` · ${d.condominioNome}` : ''}
+                                    {marcarInternos && (d as { visivelPortal?: boolean }).visivelPortal === false
+                                        ? ' · interno (moradores não veem)' : ''}
                                 </p>
                             </div>
                             <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
@@ -583,11 +595,15 @@ export function competenciasDosRateios(rateios: Pick<PortalRateioCondominio, 'co
  *  rateio, para criá-lo. Aqui o condômino só tem o que ver onde há rateio
  *  publicado — um mês livre o levaria a uma tela vazia, achando que o sistema
  *  perdeu a cobrança dele. */
-const PainelFinanceiro: React.FC<{
+export const PainelFinanceiro: React.FC<{
     rateios: PortalRateioCondominio[];
     multi: boolean;
     onResolverComprovantes?: ResolverComprovantes;
-}> = ({ rateios, multi, onResolverComprovantes }) => {
+    /** Portal do Síndico: o destaque é o total rateado do prédio, não "Sua
+     *  cota" — o síndico olha a prestação de contas, não a própria conta
+     *  (com "Sua cota" ele via R$ 0,00 quando não mora no prédio). */
+    visaoDoSindico?: boolean;
+}> = ({ rateios, multi, onResolverComprovantes, visaoDoSindico = false }) => {
     const competencias = React.useMemo(() => competenciasDosRateios(rateios), [rateios]);
     const [escolhida, setEscolhida] = React.useState<string | null>(null);
     // Escolha que sumiu da lista (dados recarregados) cai na mais recente.
@@ -689,12 +705,19 @@ const PainelFinanceiro: React.FC<{
                                     <p className="text-xs text-gray-400">Despesas do mês</p>
                                     <p className="text-lg font-bold text-gray-900">{dinheiro(r.totalDespesas)}</p>
                                 </div>
-                                <div>
-                                    <p className="text-xs text-gray-400">Sua cota</p>
-                                    <p className="text-lg font-bold text-indigo-600">
-                                        {dinheiro(r.cotas.filter(c => c.minha).reduce((s2, c) => s2 + Number(c.valor || 0), 0))}
-                                    </p>
-                                </div>
+                                {visaoDoSindico ? (
+                                    <div>
+                                        <p className="text-xs text-gray-400">Total rateado</p>
+                                        <p className="text-lg font-bold text-indigo-600">{dinheiro(r.totalRateado)}</p>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <p className="text-xs text-gray-400">Sua cota</p>
+                                        <p className="text-lg font-bold text-indigo-600">
+                                            {dinheiro(r.cotas.filter(c => c.minha).reduce((s2, c) => s2 + Number(c.valor || 0), 0))}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             {r.despesas.length > 0 && (
@@ -749,11 +772,13 @@ const PainelFinanceiro: React.FC<{
 };
 
 // ── Manutenção do prédio ─────────────────────────────────────────────────────
-const PainelManutencao: React.FC<{
+export const PainelManutencao: React.FC<{
     manutencao: PortalCondominio['manutencao'];
     ordens: PortalCondominio['ordens'];
     multi: boolean;
-}> = ({ manutencao, ordens, multi }) => (
+    /** Portal do Síndico: o custo da OS (o morador não vê — ver o payload). */
+    mostrarCusto?: boolean;
+}> = ({ manutencao, ordens, multi, mostrarCusto = false }) => (
     <div>
         <Descricao icone={<Wrench className="w-4 h-4" />}>
             O plano da NBR 5674 e as ordens de serviço da administração
@@ -807,6 +832,9 @@ const PainelManutencao: React.FC<{
                                             {o.executadaEm
                                                 ? ` · executada em ${data(o.executadaEm)}`
                                                 : o.agendadaPara ? ` · agendada para ${data(o.agendadaPara)}` : ''}
+                                            {mostrarCusto && (o as { custo?: number | null }).custo != null
+                                                ? ` · ${Number((o as { custo?: number | null }).custo).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                                                : ''}
                                         </p>
                                     </div>
                                     <span data-tour="condominio-ordem-situacao" className={`text-sm font-normal shrink-0 ${COR_SITUACAO_ORDEM[o.situacao] ?? 'text-gray-600'}`}>
@@ -956,7 +984,7 @@ const FichaDoEquipamento: React.FC<{ ativo: PortalAtivoCondominio | null; multi:
     </Sheet>
 );
 
-const PainelEquipamentos: React.FC<{ ativos: PortalCondominio['ativos']; multi: boolean }> = ({ ativos, multi }) => {
+export const PainelEquipamentos: React.FC<{ ativos: PortalCondominio['ativos']; multi: boolean }> = ({ ativos, multi }) => {
     const [aberto, setAberto] = React.useState<PortalAtivoCondominio | null>(null);
 
     return (

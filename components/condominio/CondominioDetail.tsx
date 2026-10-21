@@ -25,6 +25,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import { condominioRateioService, type CentroDeCustoDisponivel } from '../../services/condominioRateioService';
 import type { Empreendimento } from '../../types/empreendimento';
+import { mandatoVencido as mandatoJaVenceu } from '../../utils/mandatoSindico';
 
 export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'documentos' | 'ativos' | 'manutencao' | 'financeiro' | 'comunicacao';
 
@@ -105,6 +106,8 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         sindico_client_id: e.sindico_client_id || '',
         sindico_mandato_inicio: e.sindico_mandato_inicio || '',
         sindico_mandato_fim: e.sindico_mandato_fim || '',
+        // Portal do Síndico F3 (20/10/2026): fechar rateio exige a aprovação dele.
+        rateio_exige_aprovacao_sindico: !!e.rateio_exige_aprovacao_sindico,
         // Parâmetros do boleto da cota (fatia 2). Quem calcula é o Asaas, a
         // partir do vencimento — aqui só se guarda a política do condomínio.
         cobranca_multa_percent: String((e as any).cobranca_multa_percent ?? 2),
@@ -185,10 +188,10 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
     }, [e.organization_id]);
 
     /** Mandato vencido não representa o condomínio — o aviso precisa existir na tela. */
-    const mandatoVencido = React.useMemo(() => {
-        if (!ficha.sindico_mandato_fim) return false;
-        return ficha.sindico_mandato_fim.slice(0, 10) < new Date().toISOString().slice(0, 10);
-    }, [ficha.sindico_mandato_fim]);
+    // Regra única de mandato (utils/mandatoSindico, espelho de fn_sindico_predios):
+    // "hoje" em Brasília — `toISOString()` é UTC e vencia o mandato às 21h da véspera.
+    const mandatoVencido = React.useMemo(
+        () => mandatoJaVenceu(ficha.sindico_mandato_fim), [ficha.sindico_mandato_fim]);
 
     const salvarFicha = async () => {
         setSalvando(true);
@@ -200,6 +203,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                 sindico_client_id: ficha.sindico_client_id || null,
                 sindico_mandato_inicio: ficha.sindico_mandato_inicio || null,
                 sindico_mandato_fim: ficha.sindico_mandato_fim || null,
+                rateio_exige_aprovacao_sindico: ficha.rateio_exige_aprovacao_sindico,
                 // Vazio vira o default legal, não NULL: a coluna é NOT NULL, e
                 // "sem multa" tem de ser 0 digitado, não campo apagado.
                 cobranca_multa_percent: Number(ficha.cobranca_multa_percent.replace(',', '.')) || 0,
@@ -405,6 +409,24 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                                 </p>
                             )}
                         </div>
+                        {/* Portal do Síndico F3 (20/10/2026). Desligado por padrão: ligado,
+                            o gatilho do banco recusa fechar rateio sem a aprovação do
+                            síndico vigente. O acesso dele ao portal é gerado em
+                            Portais › Portal do Condomínio. */}
+                        <label className="md:col-span-2 xl:col-span-3 flex items-start gap-2.5 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={ficha.rateio_exige_aprovacao_sindico}
+                                onChange={ev => setFicha(f => ({ ...f, rateio_exige_aprovacao_sindico: ev.target.checked }))}
+                                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span>
+                                <span className="text-sm text-gray-900">Exigir a aprovação do síndico para fechar o rateio</span>
+                                <span className="block text-xs text-gray-500 mt-0.5">
+                                    O síndico aprova ou devolve a prestação de contas no Portal do Síndico (acesso em Portais › Portal do Condomínio).
+                                </span>
+                            </span>
+                        </label>
                     </div>
 
                     {/* Centro de custo — a ÂNCORA da segregação do caixa.

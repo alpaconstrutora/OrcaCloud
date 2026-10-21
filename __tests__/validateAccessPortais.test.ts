@@ -9,7 +9,9 @@
  *  2. 'nao_cadastrado' → recusa com a mensagem do portal; 'revogado' → recusa
  *     dizendo que foi desativado; 'sem_organizacao' → pede o convite;
  *  3. erro da RPC → mensagem de suporte (nunca libera);
- *  4. a RPC recebe o nome do portal certo para cada grupo.
+ *  4. a RPC recebe o nome do portal certo para cada grupo;
+ *  5. o síndico (20/10/2026) usa a RPC própria `sindico_portal_token_para_mim`,
+ *     e `sem_mandato` recusa dizendo que o mandato não está vigente.
  */
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -59,5 +61,17 @@ describe('validateAccess — portais com token', () => {
             { p_portal: 'cliente' }, { p_portal: 'fornecedor' }, { p_portal: 'corretor' },
         ]);
         expect(rpc.mock.calls.every(c => c[0] === 'portal_token_para_mim')).toBe(true);
+    });
+
+    it('5. síndico: RPC própria, sem parâmetro; sem_mandato recusa', async () => {
+        rpc.mockResolvedValue({ data: { situacao: 'ok', token: 'tok-s' }, error: null });
+        expect(await profileService.validateAccess(EMAIL, ProfileGroup.SINDICO)).toEqual({ isValid: true, portalToken: 'tok-s' });
+        expect(rpc.mock.calls[0]).toEqual(['sindico_portal_token_para_mim']);
+
+        rpc.mockResolvedValue({ data: { situacao: 'sem_mandato', nome: 'Fulano' }, error: null });
+        expect((await profileService.validateAccess(EMAIL, ProfileGroup.SINDICO)).error).toMatch(/mandato de síndico não está vigente/);
+
+        rpc.mockResolvedValue({ data: { situacao: 'nao_cadastrado' }, error: null });
+        expect((await profileService.validateAccess(EMAIL, ProfileGroup.SINDICO)).error).toBe('Seu e-mail não está cadastrado como síndico autorizado.');
     });
 });

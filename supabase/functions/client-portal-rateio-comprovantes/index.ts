@@ -49,8 +49,10 @@ serve(async (req: Request) => {
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-    const { token, clientId, rateioId } = await req.json() as {
-        token?: string; clientId?: string; rateioId?: string;
+    // `portal: 'sindico'` (20/10/2026): autoriza pela RPC do Portal do Síndico,
+    // com a mesma credencial do chamador — mesma regra da function de documento.
+    const { token, clientId, rateioId, portal } = await req.json() as {
+        token?: string; clientId?: string; rateioId?: string; portal?: string;
     };
     if (!rateioId || (!token && !clientId)) {
         return json({ error: 'rateioId e (token ou clientId) são obrigatórios' }, 400);
@@ -61,9 +63,11 @@ serve(async (req: Request) => {
         global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
     });
 
-    const { data: payload, error: erroPayload } = token
-        ? await comoChamador.rpc('client_portal_get_condominio', { p_token: token })
-        : await comoChamador.rpc('client_portal_get_condominio_for_client', { p_client_id: clientId });
+    const { data: payload, error: erroPayload } = portal === 'sindico'
+        ? await comoChamador.rpc('sindico_portal_dados', { p_token: token ?? null, p_client_id: token ? null : clientId })
+        : token
+            ? await comoChamador.rpc('client_portal_get_condominio', { p_token: token })
+            : await comoChamador.rpc('client_portal_get_condominio_for_client', { p_client_id: clientId });
 
     if (erroPayload) {
         console.error('[client-portal-rateio-comprovantes] erro na RPC:', erroPayload);

@@ -13,7 +13,9 @@ import React from 'react';
  * mais os trechos recortados por `isPublicExperience` nos dois dashboards, mais
  * `components/partner/PartnerPortalFinanceiro.tsx`, e à aba Comissões do Portal do
  * Corretor em 2026-10-17 ("aplicar o design do portal do parceiro no portal do
- * corretor") — `components/broker/BrokerCommissions.tsx`.
+ * corretor") — `components/broker/BrokerCommissions.tsx`. E ao Portal do
+ * Síndico inteiro em 2026-10-20 (decisão do usuário: "Sim, mesmo visual") —
+ * `components/sindico/*`.
  * Nenhuma tela interna do app usa este arquivo.
  *
  * O que diverge do guia (e só aqui): pílula de status com fundo (§8), `<thead>`

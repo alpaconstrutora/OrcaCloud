@@ -246,6 +246,8 @@ const ComunicacaoTab: React.FC<Props> = ({ empreendimento }) => {
                                             <p className="text-xs text-gray-500 mt-0.5">
                                                 <span className={cat.cor}>{cat.rotulo}</span>
                                                 {' · '}{new Date(a.publicado_em).toLocaleDateString('pt-BR')}
+                                                {/* "Síndico — Fulano" quando veio do Portal do Síndico (20/10/2026). */}
+                                                {a.publicado_por ? ` · ${a.publicado_por}` : ''}
                                                 {a.valido_ate ? ` · até ${formatarData(a.valido_ate)}` : ''}
                                                 {vencido ? ' · vencido' : ''}
                                                 {' · '}

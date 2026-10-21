@@ -261,7 +261,14 @@ export enum ProfileGroup {
      * ou terceirizado cadastrado em `academy_portal_users`, entra por e-mail e
      * senha via convite. Não é membro da organização — lê tudo por RPC.
      */
-    TRAINEE = 'TREINANDO'
+    TRAINEE = 'TREINANDO',
+    /**
+     * Síndico no Portal do Síndico (/portal-sindico): o cliente apontado em
+     * `empreendimentos.sindico_client_id` com mandato vigente. Não é membro da
+     * organização — lê e age por RPC (`sindico_portal_*`). O mesmo e-mail pode
+     * entrar também como CLIENTE: o grupo vem da porta escolhida, não do cadastro.
+     */
+    SINDICO = 'SINDICO'
 }
 
 export enum UserProfile {
@@ -276,7 +283,8 @@ export enum UserProfile {
     BROKER = 'CORRETOR',
     PARTNER = 'PARCEIRO',
     LENDER = 'CREDOR',
-    TRAINEE = 'TREINANDO'
+    TRAINEE = 'TREINANDO',
+    SINDICO = 'SINDICO'
 }
 
 export interface UserPermissions {

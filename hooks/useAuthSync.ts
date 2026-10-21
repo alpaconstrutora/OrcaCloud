@@ -140,7 +140,7 @@ export const useAuthSync = ({
           const profile = await investorService.getByEmail(session.user.email);
           if (!cancelled && profile) setInvestorProfile(profile);
         }
-        // Cliente/Fornecedor/Corretor (16/10/2026): o login por e-mail abre a casca
+        // Cliente/Fornecedor/Corretor (16/10/2026) e Síndico (20/10/2026): o login por e-mail abre a casca
         // do LINK com o token que o validateAccess resolveu (RPC pela pessoa do
         // JWT). Os `getByEmail` em tabela direta que ficavam aqui saíram: a RLS só
         // os liberava para membro da organização, e a casca do link não os usa.
@@ -156,6 +156,7 @@ export const useAuthSync = ({
         else if (selectedLoginGroup === ProfileGroup.PARTNER) role = UserProfile.PARTNER;
         else if (selectedLoginGroup === ProfileGroup.LENDER) role = UserProfile.LENDER;
         else if (selectedLoginGroup === ProfileGroup.TRAINEE) role = UserProfile.TRAINEE;
+        else if (selectedLoginGroup === ProfileGroup.SINDICO) role = UserProfile.SINDICO;
 
         setCurrentProfile({ group: selectedLoginGroup, role, email: session.user.email });
         setProfileSynchronized(true);

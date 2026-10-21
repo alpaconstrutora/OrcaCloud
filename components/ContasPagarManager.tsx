@@ -796,10 +796,27 @@ export default function ContasPagarManager({ organizations }: Props) {
 
     return (
         <div className="space-y-6">
-            {/* Cabeçalho de tela — ui_ux_guia_unificado.md §20 */}
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{header.titulo}</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">{header.subtitulo}</p>
+            {/* Cabeçalho de tela — ui_ux_guia_unificado.md §20. Export (PDF/Excel) e a
+                ação primária (§17) moram na linha do título, à direita — mesmo
+                `flex … justify-between` do AppRouter (Gestão de Planejamento). */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{header.titulo}</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{header.subtitulo}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {exportButtons}
+                    {/* Só na visão de títulos: nota fiscal e fechamento não se criam à mão. */}
+                    {visao === 'parcelas' && (
+                        <button
+                            onClick={novoPagamentoAvulso}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                        >
+                            <Plus className="w-[15px] h-[15px]" />
+                            Novo pagamento avulso
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* KPI Cards — mb-3 (ritmo §20.1): próximo bloco é a toolbar acoplada (§5.2).
@@ -883,9 +900,8 @@ export default function ContasPagarManager({ organizations }: Props) {
                         dados a tela está olhando (visão, organização, período de vencimento).
                         Barra própria acima da busca, porque muda o escopo, não o filtro — a
                         §5.3 é explícita em não fundir escopo com busca ("qual organização/mês?"
-                        é pergunta diferente de "qual linha?"). Export (PDF/Excel) do módulo pai
-                        entra aqui via `actionsSlot`, não colado na barra de abas (§19.1) — abas
-                        são navegação, export é ação. */}
+                        é pergunta diferente de "qual linha?"). Export e "Novo pagamento
+                        avulso" ficam na linha do título (cabeçalho §20), não aqui. */}
                     <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                         <div className="flex flex-wrap items-center gap-2">
                             {/* Seletor de conjunto de dados — escopo, não filtro (§5.3):
@@ -986,18 +1002,6 @@ export default function ContasPagarManager({ organizations }: Props) {
                                         ? `${consolidado.length} centro${consolidado.length !== 1 ? 's' : ''} de custo`
                                         : `${filtered.length} de ${invoices.length} nota${invoices.length !== 1 ? 's' : ''}`}
                             </span>
-                            {exportButtons}
-                            {/* Ação primária (§17) — só na visão de títulos: nota fiscal e
-                                fechamento não se criam à mão. */}
-                            {visao === 'parcelas' && (
-                                <button
-                                    onClick={novoPagamentoAvulso}
-                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                                >
-                                    <Plus className="w-[15px] h-[15px]" />
-                                    Novo pagamento avulso
-                                </button>
-                            )}
                         </div>
                     </div>
 

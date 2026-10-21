@@ -162,9 +162,19 @@ depois do push em `main` (ainda não feito quando esta linha foi escrita).
   0 erro de JS/console/HTTP. Os prints acharam 2 defeitos, corrigidos: "Sua cota R$ 0,00"
   na prestação de contas do síndico (virou "Total rateado") e a mesma pessoa repetida por
   papel na aba Unidades.
-- [ ] Tela de admin (Portais › Portal do Condomínio › card Síndico, Ficha, FinanceiroTab)
-  no navegador — exige login (senha do usuário de leitura, pedida a cada sessão).
-- [ ] Caminho feliz com credencial real: gerar link e convite do síndico do 010, entrar
+- [x] Tela de admin no navegador (21/10, usuário de leitura — membro no 010, admin no 016;
+  escritas abortadas na rede, 0 gravadas): `c:\tmp\pwtest\admin_sindico_prova.cjs`, 16 de 16,
+  0 erro de JS/HTTP. Card Síndico do 010 com o síndico; "Copiar link" desligado para membro
+  com o motivo; "Ver como o síndico" abre a prévia com a RPC real; 016 sem síndico →
+  "Definir na Ficha" leva à Ficha; interruptor da exigência na Ficha, desligado.
+  **Defeito achado no print e corrigido:** a coluna "Síndico" (190px) empurrava "Ações"
+  para fora da tela no Financeiro. Agora ela só aparece quando o condomínio exige a
+  aprovação ou algum rateio já tem decisão (`mostrarSindico`), com rótulo curto
+  (Aguardando/Aprovado/Devolvido/Desatualizada, completo no `title`) e um jogo de larguras
+  próprio. Medido nos dois cenários (`medir_financeiro_sindico.cjs`, decisão simulada na
+  resposta da leitura): "Ações" cabe, 1282 de 1282. Perda aceita só com a coluna visível: o
+  ícone de ordenação de "Diferença" não cabe (a ordenação pelo clique continua).
+- [ ] Caminho feliz com credencial real (o USUÁRIO vai testar, combinado em 21/10): gerar link e convite do síndico do 010, entrar
   por e-mail, publicar aviso, responder chamado, aprovar. Grava em produção — combinar
   com o usuário antes.
 - [x] Suíte inteira (21/10): 10.596 testes = 10.562 passaram + 0 falharam + 34 pendentes, exit 0.

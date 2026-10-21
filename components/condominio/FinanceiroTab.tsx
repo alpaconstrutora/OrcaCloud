@@ -73,8 +73,24 @@ const STATUS_LABEL: Record<string, string> = {
 // §6.1 — larguras iniciais da tabela de Rateios (soma 1260 ≈ contêiner de 1600px com a
 // barra lateral aberta, para "Ações" nascer visível); "Ajustar largura" mede o dado real.
 const LARGURAS_RATEIOS: Record<string, number> = {
-    number: 100, competencia: 130, tipo: 130, criterio: 160, status: 100, sindico: 190,
+    number: 100, competencia: 130, tipo: 130, criterio: 160, status: 100, sindico: 130,
     despesas: 115, rateado: 115, diferenca: 105, cobranca: 125, actions: 180,
+};
+// Com a coluna "Síndico" visível (21/10/2026). Ela não cabe por cima das 1260: com 190px
+// empurrou "Ações" para fora da tela (visto no print). As vizinhas que já quebram em duas
+// linhas (critério, tipo) cedem; soma 1280, medida no navegador = largura útil do card.
+// Medir de novo ao mexer aqui.
+const LARGURAS_RATEIOS_COM_SINDICO: Record<string, number> = {
+    number: 100, competencia: 115, tipo: 110, criterio: 130, status: 100, sindico: 130,
+    despesas: 110, rateado: 110, diferenca: 85, cobranca: 110, actions: 180,
+};
+
+/** Rótulo curto da decisão do síndico na célula; o completo vai no `title`. */
+const ROTULO_CURTO_APROVACAO: Record<SituacaoDaAprovacao, string> = {
+    AGUARDANDO: 'Aguardando',
+    APROVADO: 'Aprovado',
+    DEVOLVIDO: 'Devolvido',
+    DESATUALIZADA: 'Desatualizada',
 };
 
 const COLUMNS: ColumnConfig[] = [
@@ -725,6 +741,11 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
     /** Rateios cuja decisão do síndico ficou desatualizada (mudaram depois). */
     const [desatualizadas, setDesatualizadas] = React.useState<Record<string, boolean>>({});
     // O que o gatilho `trg_rateio_exige_aprovacao` confere no condomínio.
+    // A coluna "Síndico" só aparece quando importa: o condomínio exige a aprovação, ou
+    // algum rateio já tem decisão dele. Fora disso ela só gastaria a largura que
+    // "Ações" precisa (ver LARGURAS_RATEIOS_COM_SINDICO).
+    const mostrarSindico = !!empreendimento.rateio_exige_aprovacao_sindico || rateios.some(r => !!r.aprovacao_status);
+    const vRateios = mostrarSindico ? v : v.filter(k => k !== 'sindico');
     const contextoAprovacao = React.useMemo(() => ({
         exige: !!empreendimento.rateio_exige_aprovacao_sindico,
         sindicoClientId: empreendimento.sindico_client_id ?? null,
@@ -1099,7 +1120,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
     // paga o próprio custo. A de Rateios também redimensiona (pedido de
     // 13/10/2026: botão de ajuste de largura em todas as tabelas do condomínio).
     const colsDespesas = useResizableColumns(LARGURAS_DESPESAS, `condominio:${empreendimento.id}:despesas:larguras`);
-    const colsRateios = useResizableColumns(LARGURAS_RATEIOS, `condominio:${empreendimento.id}:rateios:larguras`);
+    const colsRateios = useResizableColumns(mostrarSindico ? LARGURAS_RATEIOS_COM_SINDICO : LARGURAS_RATEIOS, `condominio:${empreendimento.id}:rateios:larguras`);
 
     const [lancamentos, setLancamentos] = React.useState<LancamentoDoCondominio[]>([]);
     const [carregandoLanc, setCarregandoLanc] = React.useState(false);
@@ -1411,7 +1432,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                 <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
                                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                     <ColumnConfigButton
-                                        columns={COLUMNS.filter(c => c.key !== 'actions')}
+                                        columns={COLUMNS.filter(c => c.key !== 'actions' && (mostrarSindico || c.key !== 'sindico'))}
                                         visibleColumns={tableColumns.visibleColumns}
                                         showColumnConfig={tableColumns.showColumnConfig}
                                         onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
@@ -1477,7 +1498,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                         <table
                                 ref={colsRateios.tableRef}
                                 className="text-left border-collapse"
-                                style={{ tableLayout: 'fixed', width: larguraTabela(colsRateios, ['number', 'competencia', 'tipo', 'criterio', 'status', 'sindico', 'despesas', 'rateado', 'diferenca', 'cobranca', 'actions'], v), minWidth: '100%' }}
+                                style={{ tableLayout: 'fixed', width: larguraTabela(colsRateios, ['number', 'competencia', 'tipo', 'criterio', 'status', 'sindico', 'despesas', 'rateado', 'diferenca', 'cobranca', 'actions'], vRateios), minWidth: '100%' }}
                             >
                             <colgroup>
                                     {v.includes('number') && <col data-col-key="number" style={{ width: `${colsRateios.getWidth('number')}px` }} />}
@@ -1485,7 +1506,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                     {v.includes('tipo') && <col data-col-key="tipo" style={{ width: `${colsRateios.getWidth('tipo')}px` }} />}
                                     {v.includes('criterio') && <col data-col-key="criterio" style={{ width: `${colsRateios.getWidth('criterio')}px` }} />}
                                     {v.includes('status') && <col data-col-key="status" style={{ width: `${colsRateios.getWidth('status')}px` }} />}
-                                    {v.includes('sindico') && <col data-col-key="sindico" style={{ width: `${colsRateios.getWidth('sindico')}px` }} />}
+                                    {vRateios.includes('sindico') && <col data-col-key="sindico" style={{ width: `${colsRateios.getWidth('sindico')}px` }} />}
                                     {v.includes('despesas') && <col data-col-key="despesas" style={{ width: `${colsRateios.getWidth('despesas')}px` }} />}
                                     {v.includes('rateado') && <col data-col-key="rateado" style={{ width: `${colsRateios.getWidth('rateado')}px` }} />}
                                     {v.includes('diferenca') && <col data-col-key="diferenca" style={{ width: `${colsRateios.getWidth('diferenca')}px` }} />}
@@ -1501,7 +1522,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                     {v.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="tipo" /></SortableHeader>}
                                     {v.includes('criterio') && <SortableHeader colKey="criterio" label="Critério" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="criterio" /></SortableHeader>}
                                     {v.includes('status') && <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="status" /></SortableHeader>}
-                                    {v.includes('sindico') && <SortableHeader colKey="sindico" label="Síndico" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="sindico" /></SortableHeader>}
+                                    {vRateios.includes('sindico') && <SortableHeader colKey="sindico" label="Síndico" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="sindico" /></SortableHeader>}
                                     {v.includes('despesas') && <SortableHeader colKey="despesas" label="Despesas" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="despesas" /></SortableHeader>}
                                     {v.includes('rateado') && <SortableHeader colKey="rateado" label="Rateado" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="rateado" /></SortableHeader>}
                                     {v.includes('diferenca') && <SortableHeader colKey="diferenca" label="Diferença" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><colsRateios.ResizeHandle colKey="diferenca" /></SortableHeader>}
@@ -1567,7 +1588,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                                     {STATUS_LABEL[r.status]}
                                                 </td>
                                             )}
-                                            {v.includes('sindico') && (() => {
+                                            {vRateios.includes('sindico') && (() => {
                                                 /* §8: texto colorido. Cancelado não tem pergunta a responder. */
                                                 const sit = situacaoDaAprovacao({ status: r.aprovacao_status ?? null, desatualizada: !!desatualizadas[r.id] });
                                                 const detalhe = [
@@ -1580,8 +1601,8 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                                         {cancelado || (r.status === 'FECHADO' && !r.aprovacao_status) ? (
                                                             <span className="text-gray-400">—</span>
                                                         ) : (
-                                                            <span className={`block truncate ${COR_APROVACAO[sit]}`} title={detalhe || undefined}>
-                                                                {ROTULO_DA_APROVACAO[sit]}
+                                                            <span className={`block truncate ${COR_APROVACAO[sit]}`} title={[ROTULO_DA_APROVACAO[sit], detalhe].filter(Boolean).join(' · ')}>
+                                                                {ROTULO_CURTO_APROVACAO[sit]}
                                                             </span>
                                                         )}
                                                     </td>

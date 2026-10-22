@@ -6,12 +6,16 @@
  * "Lançar no pavimento" (um lote, um Ctrl+Z — com a trava `conferirPlanoDaCasa` antes) e "Criar alternativa" (um
  * ramo novo com a casa, o desenho atual intacto). Molde: `TelaGerador` (tela in-flow do editor) e
  * `PainelGeradorPpci` (etapas e relatório).
+ *
+ * 22/10/2026: em abas — Programa · Hipóteses · Resultado · Relatório · Furos · Terraplenagem — com Gerar, Criar
+ * alternativa e Lançar na barra das abas (`docs/planos/2026-10-22-casa-automatica-abas.md`).
  */
-import React, { useEffect, useState } from 'react';
-import { Home, ListChecks, Play, SlidersHorizontal, Square, Wand2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { CircleDot, ClipboardList, Droplets, Home, Layers, ListChecks, Mountain, Play, Ruler, Square, Wand2 } from 'lucide-react';
 
 import Button from '../ui/Button';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
+import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import { TabelaFurosPrevistos } from './TabelaFurosPrevistos';
 import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type SituacaoDaEtapa } from '../../utils/blueprintGeradorPpci';
 import { PADROES_DA_CASA, ROTULO_DO_PADRAO_DA_CASA, type PadraoDaCasa } from '../../utils/blueprintPrograma';
@@ -149,14 +153,33 @@ function Numero({ rotulo, valor, onValor, min, max, passo = 1, anulavel = false,
   );
 }
 
+/**
+ * As abas da tela (22/10/2026, a pedido do usuário: "o resultado na tela fica bastante extensa"). Medido na Garden
+ * Cambuhy, a tela inteira tinha 3.603 px — Gerar abaixo da 1ª tela, Lançar depois de 64 linhas de furos. As do
+ * resultado só existem com a prévia, e Furos/Terraplenagem só quando há o que mostrar (aba vazia não aparece, §19.5).
+ */
+type Aba = 'programa' | 'hipoteses' | 'resultado' | 'relatorio' | 'furos' | 'terraplenagem';
+
+const cardCls = 'rounded-[10px] border border-gray-100 bg-white p-6 shadow-sm';
+const caixaCls = 'h-4 w-4 rounded border-gray-300';
+const marcaCls = 'flex items-center gap-2 self-end pb-2 text-sm text-gray-700';
+
 export default function TelaCasaAutomatica(props: Props) {
   const { casa, premissas: p, onPremissas, prova, cub } = props;
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState<GrupoDaPendencia | null>('VERIFICACAO');
   const plano = casa.plano;
+  const [aba, setAba] = useState<Aba>(plano ? 'resultado' : 'programa');
   const set = <K extends keyof PremissasDaCasa>(k: K, v: Partial<PremissasDaCasa[K]>) =>
     onPremissas({ ...p, [k]: typeof v === 'object' && v !== null ? { ...(p[k] as object), ...(v as object) } : v } as PremissasDaCasa);
+
+  // Ao terminar de gerar, o resultado — a menos que se esteja lendo outra aba dele (o relatório, os furos).
+  const rodava = useRef(casa.rodando);
+  useEffect(() => {
+    if (rodava.current && !casa.rodando && casa.plano) setAba((a) => (a === 'relatorio' || a === 'furos' || a === 'terraplenagem' ? a : 'resultado'));
+    rodava.current = casa.rodando;
+  }, [casa.rodando, casa.plano]);
 
   const motivoDeLancar = !plano
     ? 'Gere a prévia primeiro'
@@ -183,424 +206,490 @@ export default function TelaCasaAutomatica(props: Props) {
 
   const med = plano?.implantacao?.medidas ?? null;
   const area = plano?.resumo.areaConstruidaM2 ?? null;
+  const furos = plano?.resumo.furos && plano.resumo.furos.lista.length > 0 ? plano.resumo.furos : null;
+  const terra = plano?.resumo.terraplenagem ?? null;
+  const verificacoes = plano ? plano.pendencias.filter((x) => x.grupo === 'VERIFICACAO').length : 0;
+  const premissasFaltando = plano ? plano.pendencias.filter((x) => x.grupo === 'PREMISSA').length : 0;
+
+  const abas: TabsBarItem<Aba>[] = [
+    { id: 'programa', label: 'Programa' },
+    { id: 'hipoteses', label: 'Hipóteses' },
+    ...(plano
+      ? ([
+          { id: 'resultado', label: 'Resultado' },
+          {
+            id: 'relatorio',
+            label: 'Relatório',
+            badge: plano.pendencias.length,
+            badgeTom: verificacoes > 0 ? 'alerta' : undefined,
+            badgeTitulo: verificacoes > 0 ? `${plano.pendencias.length} item(ns), ${verificacoes} verificação(ões) em falta` : `${plano.pendencias.length} item(ns)`,
+          },
+        ] as TabsBarItem<Aba>[])
+      : []),
+    ...(furos ? ([{ id: 'furos', label: 'Furos', badge: furos.lista.length, badgeTitulo: 'furos previstos para o calculista' }] as TabsBarItem<Aba>[]) : []),
+    ...(terra ? ([{ id: 'terraplenagem', label: 'Terraplenagem' }] as TabsBarItem<Aba>[]) : []),
+  ];
+  // A aba escolhida que deixou de existir (gerou de novo sem furos, desligou o platô) cai no resultado.
+  const abaEfetiva: Aba = abas.some((a) => a.id === aba) ? aba : plano ? 'resultado' : 'programa';
+
+  const avisoDeLancar = plano && plano.comandos.length > 0 ? (motivoDeLancar ?? motivoDeCriar) : undefined;
 
   return (
     <div className="space-y-6" data-testid="tela-casa">
-      {/* ── Premissas: um formulário, um card, seções com título (§30) ── */}
-      <div className="space-y-8 rounded-[10px] border border-gray-100 bg-white p-6 shadow-sm" data-testid="premissas-da-casa">
-        <section className="space-y-4">
-          <SecaoTitulo
-            icon={Home}
-            titulo="Programa da casa"
-            resumo={props.persistenciaIndisponivel ? 'as premissas valem só nesta sessão (o estudo não as guarda)' : 'guardado no estudo'}
-            acoes={
-              <Button variant="secondary" onClick={() => onPremissas({ ...PREMISSAS_DA_CASA_PADRAO })}>
-                Voltar ao padrão
-              </Button>
-            }
-          />
-          {(props.unidades.length > 0 || p.unidadeId) && (
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
-              <div className="col-span-2 space-y-1.5">
-                <Campo rotulo="Unidade do Empreendimento desta casa">
-                  <select aria-label="Unidade do Empreendimento desta casa" data-testid="unidade-da-casa" className={campoCls} value={p.unidadeId ?? ''} onChange={(e) => props.onUnidade(e.target.value || null)}>
-                    <option value="">Nenhuma — o sincronismo cria a torre "Casa"</option>
-                    {p.unidadeId && !props.unidades.some((u) => u.id === p.unidadeId) && <option value={p.unidadeId}>Unidade não encontrada no Empreendimento</option>}
-                    {props.unidades.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.rotulo}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
-                <p className="text-xs text-slate-500">
-                  Escolher preenche o programa pela unidade; ao sincronizar o Empreendimento com a Planta, a casa publicada atualiza essa unidade (área, dormitórios, suítes, banheiros, vagas e tipologia).
-                </p>
-              </div>
-            </div>
+      {/* ── Abas + as ações da tela: Gerar, Criar alternativa e Lançar à vista em qualquer aba (§19.1, §17) ── */}
+      <div>
+        <TabsBar tabs={abas} value={abaEfetiva} onChange={setAba}>
+          {casa.rodando ? (
+            <Button variant="secondary" onClick={casa.cancelar} data-testid="parar-casa" className="border-red-200 text-red-700 hover:bg-red-50">
+              <Square className="h-4 w-4" /> Parar
+            </Button>
+          ) : (
+            <Button variant={plano ? 'secondary' : 'primary'} onClick={props.onGerar} disabled={!!props.motivoParaNaoGerar} title={props.motivoParaNaoGerar ?? undefined} data-testid="gerar-casa">
+              <Play className="h-4 w-4" /> {plano ? 'Gerar de novo' : 'Gerar prévia'}
+            </Button>
           )}
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
-            <Campo rotulo="Pavimentos">
-              <select aria-label="Pavimentos" className={campoCls} value={p.pavimentos} onChange={(e) => onPremissas({ ...p, pavimentos: e.target.value === '3' ? 3 : e.target.value === '2' ? 2 : e.target.value === '1' ? 1 : 'AUTOMATICO' })} data-testid="pavimentos-da-casa">
-                <option value="AUTOMATICO">Automático (térrea; sobe um pavimento quando não couber)</option>
-                <option value={1}>Térrea</option>
-                <option value={2}>Sobrado (2 pavimentos)</option>
-                <option value={3}>3 pavimentos (o 2º recuado, com terraço)</option>
-              </select>
-            </Campo>
-            <Campo rotulo="Padrão (CUB)">
-              <select aria-label="Padrão (CUB)" className={campoCls} value={p.curto.padrao} onChange={(e) => set('curto', { padrao: e.target.value as PadraoDaCasa })}>
-                {PADROES_DA_CASA.map((x) => (
-                  <option key={x} value={x}>
-                    {ROTULO_DO_PADRAO_DA_CASA[x]}
-                  </option>
-                ))}
-              </select>
-            </Campo>
-            <Numero rotulo="Dormitórios (com as suítes)" valor={p.curto.dormitorios} min={1} max={6} onValor={(v) => v != null && set('curto', { dormitorios: Math.round(v) })} />
-            <Numero rotulo="Suítes" valor={p.curto.suites} min={0} max={6} onValor={(v) => v != null && set('curto', { suites: Math.round(v) })} />
-            <Numero rotulo="Banheiros (com os das suítes)" valor={p.curto.banheiros} min={1} max={8} onValor={(v) => v != null && set('curto', { banheiros: Math.round(v) })} />
-            <Numero rotulo="Vagas" valor={p.curto.vagas} min={0} max={4} onValor={(v) => v != null && set('curto', { vagas: Math.round(v) })} />
-            <Numero rotulo="Área útil alvo (m²)" valor={p.curto.areaAlvoM2} min={30} max={600} passo={5} anulavel placeholder="a do padrão" onValor={(v) => set('curto', { areaAlvoM2: v })} />
-            <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700">
-              <input type="checkbox" checked={p.curto.garagemCoberta} onChange={(e) => set('curto', { garagemCoberta: e.target.checked })} className="h-4 w-4 rounded border-gray-300" />
-              Garagem coberta
-            </label>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <SecaoTitulo icon={ListChecks} titulo="O que a casa leva" resumo="a arquitetura vai sempre; o resto, como marcado" />
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
-            {DISCIPLINAS.map((d) => (
-              <label key={d.chave} className="flex items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" checked={p.disciplinas[d.chave]} onChange={(e) => set('disciplinas', { [d.chave]: e.target.checked } as Partial<PremissasDaCasa['disciplinas']>)} className="h-4 w-4 rounded border-gray-300" aria-label={d.rotulo} />
-                {d.rotulo}
-              </label>
-            ))}
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <SecaoTitulo icon={SlidersHorizontal} titulo="Hipóteses" resumo="telhado, implantação e instalações — o resto segue as premissas de cada disciplina" />
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
-            <Campo rotulo="Telhado">
-              <select aria-label="Tipo de telhado" className={campoCls} value={p.telhado.tipo} onChange={(e) => set('telhado', { tipo: e.target.value as PremissasDaCasa['telhado']['tipo'] })}>
-                <option value="DUAS_AGUAS">Duas águas</option>
-                <option value="UMA_AGUA">Uma água</option>
-              </select>
-            </Campo>
-            <Numero rotulo="Inclinação do telhado (%)" valor={p.telhado.inclinacaoPct} min={5} max={100} onValor={(v) => v != null && set('telhado', { inclinacaoPct: v })} />
-            <Numero rotulo="Beiral (m)" valor={p.telhado.beiralMm / 1000} min={0} max={1.5} passo={0.1} onValor={(v) => v != null && set('telhado', { beiralMm: Math.round(v * 1000) })} />
-            <Numero rotulo="Folga abaixo da TO (%)" valor={p.implantacao.folgaDaTOPct} min={0} max={50} onValor={(v) => v != null && set('implantacao', { folgaDaTOPct: v })} />
-            <Campo rotulo="Encostar na divisa">
-              <select aria-label="Encostar na divisa" className={campoCls} value={p.implantacao.encostarNaDivisa} onChange={(e) => set('implantacao', { encostarNaDivisa: e.target.value as PremissasDaCasa['implantacao']['encostarNaDivisa'] })}>
-                <option value="ESQUERDA">Esquerda</option>
-                <option value="DIREITA">Direita</option>
-                <option value="CENTRO">No centro</option>
-              </select>
-            </Campo>
-            <Campo rotulo="Água quente">
-              <select aria-label="Água quente" className={campoCls} value={p.ancoras.aguaQuente} onChange={(e) => set('ancoras', { aguaQuente: e.target.value as PremissasDaCasa['ancoras']['aguaQuente'] })}>
-                <option value="PELO_PADRAO">Pelo padrão (R1-B: chuveiro elétrico)</option>
-                <option value="AQUECEDOR_PASSAGEM">Aquecedor de passagem</option>
-                <option value="CHUVEIRO_ELETRICO">Chuveiro elétrico</option>
-                <option value="NENHUM">Sem água quente</option>
-              </select>
-            </Campo>
-            <Numero rotulo="Chuveiro elétrico (W)" valor={p.eletrica.chuveiroEletricoVA} min={2000} max={9000} passo={100} onValor={(v) => v != null && set('eletrica', { chuveiroEletricoVA: Math.round(v) })} />
-            <Numero rotulo="Alternativas tentadas" valor={p.sementes} min={1} max={8} onValor={(v) => v != null && onPremissas({ ...p, sementes: Math.round(v) })} />
-            <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700">
-              <input type="checkbox" checked={p.ancoras.caixaDeGordura} onChange={(e) => set('ancoras', { caixaDeGordura: e.target.checked })} className="h-4 w-4 rounded border-gray-300" />
-              Caixa de gordura
-            </label>
-            <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700">
-              <input type="checkbox" checked={p.eletrica.medidor} onChange={(e) => set('eletrica', { medidor: e.target.checked })} className="h-4 w-4 rounded border-gray-300" />
-              Medidor na frente do lote
-            </label>
-            <Numero rotulo="Elevar a caixa d'água até (m)" valor={p.pressao.caixaElevadaAteMm / 1000} min={0} max={15} passo={0.5} onValor={(v) => v != null && set('pressao', { caixaElevadaAteMm: Math.round(v * 1000) })} />
-            <Numero rotulo="Pressurizador (W)" valor={p.pressao.potenciaDoPressurizadorW} min={100} max={3000} passo={10} onValor={(v) => v != null && set('pressao', { potenciaDoPressurizadorW: Math.round(v) })} />
-            <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700">
-              <input type="checkbox" checked={p.forro.lancar} onChange={(e) => set('forro', { lancar: e.target.checked })} className="h-4 w-4 rounded border-gray-300" data-testid="forro-da-casa" />
-              Forro com as redes no plenum
-            </label>
-            {p.forro.lancar && (
-              <>
-                <Numero rotulo="Pé-direito livre: sala, dormitório, cozinha (m)" valor={p.forro.peDireitoLivrePermanenciaMm / 1000} min={2.2} max={3.5} passo={0.05} onValor={(v) => v != null && set('forro', { peDireitoLivrePermanenciaMm: Math.round(v * 1000) })} />
-                <Numero rotulo="Pé-direito livre: banheiro, serviço, circulação (m)" valor={p.forro.peDireitoLivreDemaisMm / 1000} min={2.1} max={3.5} passo={0.05} onValor={(v) => v != null && set('forro', { peDireitoLivreDemaisMm: Math.round(v * 1000) })} />
-                <Numero rotulo="Piso acabado (cm)" valor={p.forro.pisoAcabadoMm / 10} min={0} max={15} passo={0.5} onValor={(v) => v != null && set('forro', { pisoAcabadoMm: Math.round(v * 10) })} />
-              </>
-            )}
-            <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700" title="Só com a topografia do estudo: a casa assenta num platô na cota que equilibra corte e aterro sob a projeção">
-              <input type="checkbox" checked={p.terraplenagem.lancar} onChange={(e) => set('terraplenagem', { lancar: e.target.checked })} className="h-4 w-4 rounded border-gray-300" data-testid="terraplenagem-da-casa" />
-              Platô no terreno inclinado
-            </label>
-            {p.terraplenagem.lancar && (
-              <>
-                <Numero rotulo="Platô além da casa (m)" valor={p.terraplenagem.margemDoPlatoMm / 1000} min={0} max={5} passo={0.1} onValor={(v) => v != null && set('terraplenagem', { margemDoPlatoMm: Math.round(v * 1000) })} />
-                <Numero rotulo="Piso acima do platô (cm)" valor={p.terraplenagem.pisoAcimaDoPlatoMm / 10} min={0} max={100} passo={1} onValor={(v) => v != null && set('terraplenagem', { pisoAcimaDoPlatoMm: Math.round(v * 10) })} />
-                <Numero rotulo="Talude até (m de altura; acima, muro)" valor={p.terraplenagem.alturaMaximaDoTaludeM} min={0} max={10} passo={0.1} onValor={(v) => v != null && set('terraplenagem', { alturaMaximaDoTaludeM: Math.round(v * 100) / 100 })} />
-                <Numero rotulo="Rampa da garagem até (%)" valor={p.terraplenagem.rampaDeVeiculosMaxPct} min={5} max={30} passo={0.5} onValor={(v) => v != null && set('terraplenagem', { rampaDeVeiculosMaxPct: Math.round(v * 10) / 10 })} />
-              </>
-            )}
-            <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700" title="O muro na divisa do lote (kernel 0.104.0), com o portão de pedestre diante da porta e o de garagem diante da garagem">
-              <input type="checkbox" checked={p.muro.lancar} onChange={(e) => set('muro', { lancar: e.target.checked })} className="h-4 w-4 rounded border-gray-300" data-testid="muro-da-casa" />
-              Muro, portões e calçadas
-            </label>
-            {p.muro.lancar && (
-              <>
-                <Campo rotulo="Muro da frente">
-                  <select aria-label="Muro da frente" className={campoCls} value={p.muro.tipoDaFrente} onChange={(e) => set('muro', { tipoDaFrente: e.target.value as PremissasDaCasa['muro']['tipoDaFrente'] })} data-testid="muro-da-frente">
-                    <option value="MURETA_COM_GRADE">Mureta com grade</option>
-                    <option value="GRADE">Grade</option>
-                    <option value="ALVENARIA">Alvenaria</option>
-                  </select>
-                </Campo>
-                <Numero rotulo="Altura da frente (m)" valor={p.muro.alturaDaFrenteMm / 1000} min={0.5} max={4} passo={0.05} onValor={(v) => v != null && set('muro', { alturaDaFrenteMm: Math.round(v * 1000) })} />
-                <Numero rotulo="Altura das divisas (m)" valor={p.muro.alturaDasDivisasMm / 1000} min={0.5} max={4} passo={0.05} onValor={(v) => v != null && set('muro', { alturaDasDivisasMm: Math.round(v * 1000) })} />
-                <label className="flex items-center gap-2 self-end pb-2 text-sm text-gray-700">
-                  <input type="checkbox" checked={p.muro.calcadas} onChange={(e) => set('muro', { calcadas: e.target.checked })} className="h-4 w-4 rounded border-gray-300" data-testid="calcadas-da-casa" />
-                  Calçadas da entrada e da garagem
-                </label>
-              </>
-            )}
-            {p.disciplinas.estrutura && (
-              <Numero rotulo="Montante entre folhas de janela (cm)" valor={p.estrutura.montanteEntreJanelasMm / 10} min={20} max={100} passo={5} onValor={(v) => v != null && set('estrutura', { montanteEntreJanelasMm: Math.round(v * 10) })} />
-            )}
-            {p.disciplinas.hidraulica && props.chuva && props.onChuva && (
-              <>
-                <Campo rotulo="Chuva: cidade (NBR 10844)">
-                  <select aria-label="Cidade da tabela de chuvas" className={campoCls} value={props.chuva.cidade ?? ''} onChange={(e) => props.onChuva!({ ...props.chuva!, cidade: e.target.value || null })} data-testid="chuva-cidade">
-                    <option value="">— nenhuma —</option>
-                    {Object.keys(INTENSIDADE_POR_CIDADE)
-                      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-                      .map((x) => (
-                        <option key={x} value={x}>
-                          {x}
-                        </option>
-                      ))}
-                  </select>
-                </Campo>
-                <Campo rotulo="Chuva: período de retorno">
-                  <select aria-label="Período de retorno da chuva" className={campoCls} value={props.chuva.periodoDeRetornoAnos} onChange={(e) => props.onChuva!({ ...props.chuva!, periodoDeRetornoAnos: Number(e.target.value) as PeriodoDeRetorno })} data-testid="chuva-periodo">
-                    {PERIODOS_DE_RETORNO.map((t) => (
-                      <option key={t} value={t}>
-                        {PERIODO_DA_CHUVA[t]}
-                      </option>
-                    ))}
-                  </select>
-                </Campo>
-                <Numero rotulo="Chuva: intensidade (mm/h)" valor={props.chuva.intensidadeMmH} min={1} max={500} anulavel placeholder="da tabela" onValor={(v) => props.onChuva!({ ...props.chuva!, intensidadeMmH: v })} />
-                <p className={`col-span-2 self-end pb-2 text-xs md:col-span-1 ${chuvaDaCasa(props.chuva).falta ? 'text-amber-700' : 'text-slate-600'}`} data-testid="chuva-da-casa">
-                  Chuva de projeto: {chuvaDaCasa(props.chuva).texto}.
-                </p>
-              </>
-            )}
-            {p.pavimentos !== 1 && (
-              <>
-                <Numero rotulo="Laje entre os pavimentos (cm)" valor={p.sobrado.lajeEntrePavimentosMm / 10} min={8} max={30} onValor={(v) => v != null && set('sobrado', { lajeEntrePavimentosMm: Math.round(v * 10) })} />
-                <Numero rotulo="Shaft das instalações (cm)" valor={p.sobrado.shaftMm / 10} min={20} max={80} passo={5} onValor={(v) => v != null && set('sobrado', { shaftMm: Math.round(v * 10) })} />
-                {p.disciplinas.estrutura && (
-                  <Numero rotulo="Pilar de cima foge da abertura de baixo até (m)" valor={p.estrutura.deslizeSobreAberturaMm / 1000} min={0} max={3} passo={0.05} onValor={(v) => v != null && set('estrutura', { deslizeSobreAberturaMm: Math.round(v * 1000) })} />
-                )}
-              </>
-            )}
-          </div>
-        </section>
-      </div>
-
-      {/* ── A prévia: o estado e as ações dela (card próprio, §30) ── */}
-      <div className="space-y-6 rounded-[10px] border border-gray-100 bg-white p-6 shadow-sm" data-testid="previa-da-casa">
-        <SecaoTitulo
-          icon={Wand2}
-          titulo="Prévia"
-          resumo={plano ? `${plano.comandos.length} comando(s) num lote só` : 'nada gerado ainda'}
-          acoes={
-            casa.rodando ? (
-              <Button variant="secondary" onClick={casa.cancelar} data-testid="parar-casa" className="border-red-200 text-red-700 hover:bg-red-50">
-                <Square className="h-4 w-4" /> Parar
-              </Button>
-            ) : (
-              <Button onClick={props.onGerar} disabled={!!props.motivoParaNaoGerar} title={props.motivoParaNaoGerar ?? undefined} data-testid="gerar-casa">
-                <Play className="h-4 w-4" /> {plano ? 'Gerar a prévia de novo' : 'Gerar prévia'}
-              </Button>
-            )
-          }
-        />
-        {props.motivoParaNaoGerar && !casa.rodando && (
-          <p className="text-xs text-amber-700" data-testid="motivo-gerar-casa">
-            {props.motivoParaNaoGerar}
-          </p>
-        )}
-        {casa.rodando && (
-          <p className="text-sm text-slate-600" data-testid="progresso-casa">
-            {casa.progresso ? `Etapa ${casa.progresso.indice} de ${casa.progresso.total}: ${casa.progresso.rotulo}` : 'Gerando a casa…'}
-          </p>
-        )}
-        {(erro || casa.erro) && (
-          <p role="alert" className="text-sm text-red-700">
-            {erro ?? casa.erro}
-          </p>
-        )}
-        {props.lancado && <p className="rounded-[6px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{props.lancado}</p>}
-
-        {plano && (
-          <>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4" data-testid="resumo-da-casa">
-              <div className="space-y-1">
-                <dt className={rotuloCls}>Área construída</dt>
-                <dd className="text-lg font-semibold text-gray-900 tabular-nums">{area != null ? `${f2(area)} m²` : '—'}</dd>
-              </div>
-              <div className="space-y-1">
-                <dt className={rotuloCls}>Ambientes do programa</dt>
-                <dd className="text-lg font-semibold text-gray-900 tabular-nums">
-                  {plano.resumo.ambientesAtendidos} de {plano.resumo.ambientesPedidos}
-                </dd>
-              </div>
-              <div className="space-y-1">
-                <dt className={rotuloCls}>Taxa de ocupação</dt>
-                <dd className="text-lg font-semibold text-gray-900 tabular-nums">
-                  {med ? `${f1(med.toPct)} %` : '—'}
-                  {med?.toMaxPct != null && <span className="ml-1 text-xs font-normal text-slate-500">máx. {f1(med.toMaxPct)} %</span>}
-                </dd>
-              </div>
-              <div className="space-y-1">
-                <dt className={rotuloCls}>Custo pelo CUB</dt>
-                <dd className="text-lg font-semibold text-gray-900 tabular-nums" data-testid="custo-da-casa">
-                  {area != null && cub ? reais(area * cub.valorM2) : '—'}
-                </dd>
-                <dd className="text-xs text-slate-500">
-                  {cub ? `${reais(cub.valorM2)}/m² · ${p.curto.padrao}${cub.estimado ? ' · CUB estimado — confira' : cub.referencia ? ` · ${cub.referencia}` : ''}` : 'CUB indisponível'}
-                </dd>
-              </div>
-              <div className="space-y-1">
-                <dt className={rotuloCls}>Coeficiente de aproveitamento</dt>
-                <dd className="text-sm text-gray-900 tabular-nums">
-                  {med ? f2(med.coeficiente) : '—'}
-                  {med?.coeficienteMax != null && <span className="ml-1 text-xs text-slate-500">máx. {f2(med.coeficienteMax)}</span>}
-                </dd>
-              </div>
-              <div className="space-y-1">
-                <dt className={rotuloCls}>Permeabilidade</dt>
-                <dd className="text-sm text-gray-900 tabular-nums">
-                  {med ? `${f1(med.permeabilidadePct)} %` : '—'}
-                  {med?.permeabilidadeMinPct != null && <span className="ml-1 text-xs text-slate-500">mín. {f1(med.permeabilidadeMinPct)} %</span>}
-                </dd>
-              </div>
-              {plano.sobrado && (
-                <div className="space-y-1" data-testid="sobrado-da-casa">
-                  <dt className={rotuloCls}>{plano.sobrado.segundo ? '3 pavimentos' : 'Sobrado'}</dt>
-                  <dd className="text-sm text-gray-900 tabular-nums">
-                    {plano.sobrado.segundo ? 'duas escadas em U' : 'escada em U'}, {plano.sobrado.escada.degraus} degraus de {plano.sobrado.escada.espelhoMm} × {plano.sobrado.escada.pisoMm} mm
-                  </dd>
-                  <dd className="text-xs text-slate-500">
-                    núcleo à {plano.sobrado.nucleo.lado === 'DIREITA' ? 'direita' : 'esquerda'}
-                    {plano.sobrado.segundo ? ` · terraço de ${f1(plano.sobrado.segundo.terracoM2)} m² na laje do 1º` : ''}
-                  </dd>
-                </div>
-              )}
-              <div className="space-y-1">
-                <dt className={rotuloCls}>Elétrica</dt>
-                <dd className="text-sm text-gray-900">
-                  {plano.resumo.eletrica.circuitos} circuito(s)
-                  {plano.resumo.eletrica.entrada ? ` · entrada ${plano.resumo.eletrica.entrada.categoria}` : ''}
-                </dd>
-              </div>
-              <div className="space-y-1">
-                <dt className={rotuloCls}>Climatização</dt>
-                <dd className="text-sm text-gray-900">{plano.resumo.climatizacao.equipamentos} split(s)</dd>
-              </div>
-            </dl>
-            {plano.escolha && <p className="text-xs text-slate-500">{plano.escolha}</p>}
-
-            {/* Quando o gerador PARA numa premissa, o porquê em destaque (a lição do PPCI, 10/10/2026). */}
-            {plano.etapas.some((e) => e.situacao === 'NAO_RODOU') && plano.pendencias.some((x) => x.grupo === 'PREMISSA') && (
-              <div className="rounded-[6px] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="casa-parou">
-                <p className="font-medium">Faltam premissas para algumas etapas:</p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                  {plano.pendencias
-                    .filter((x) => x.grupo === 'PREMISSA')
-                    .map((x, i) => (
-                      <li key={i} className="break-words">
-                        {x.texto}
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <section className="space-y-2">
-                <h4 className={rotuloCls}>Etapas</h4>
-                <ul className="divide-y divide-gray-100" data-testid="etapas-da-casa">
-                  {plano.etapas.map((e) => (
-                    <li key={e.id} className="py-1.5 text-sm">
-                      <span className="flex items-baseline justify-between gap-3">
-                        <span className="min-w-0 text-gray-700">{e.rotulo}</span>
-                        <span className={`shrink-0 text-xs ${COR_DA_SITUACAO[e.situacao]}`}>
-                          {ROTULO_DA_SITUACAO[e.situacao]}
-                          {e.comandos > 0 ? ` · ${e.comandos}` : ''}
-                        </span>
-                      </span>
-                      {e.nota && <span className="block text-xs text-slate-500">{e.nota}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-              <section className="space-y-2" data-testid="pendencias-da-casa">
-                <h4 className={rotuloCls}>Relatório ({plano.pendencias.length})</h4>
-                {ORDEM.map((grupo) => {
-                  const lista = plano.pendencias.filter((x) => x.grupo === grupo);
-                  if (!lista.length) return null;
-                  return (
-                    <div key={grupo}>
-                      <button type="button" onClick={() => setAberto(aberto === grupo ? null : grupo)} className="w-full text-left text-sm font-medium text-gray-700 hover:text-gray-900">
-                        {aberto === grupo ? '▾' : '▸'} {ROTULO_DA_PENDENCIA[grupo]} ({lista.length})
-                      </button>
-                      {aberto === grupo && (
-                        <ul className="mt-1 space-y-1 pl-4">
-                          {lista.map((x, i) => (
-                            <li key={i} className={`break-words text-xs ${grupo === 'VERIFICACAO' || grupo === 'SEM_SOLUCAO' || grupo === 'CONFLITO' ? 'text-red-700' : 'text-slate-600'}`}>
-                              {x.texto}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
-                {!plano.pendencias.some((x) => x.grupo === 'VERIFICACAO') && !plano.etapas.some((e) => e.situacao === 'NAO_RODOU') && (
-                  <p className="text-xs text-emerald-700">Nenhuma verificação em falta no resultado.</p>
-                )}
-              </section>
-            </div>
-
-            {plano.resumo.furos && plano.resumo.furos.lista.length > 0 && (
-              <section className="space-y-2" data-testid="furos-da-casa">
-                <h4 className={rotuloCls}>Furos previstos para o calculista ({plano.resumo.furos.lista.length})</h4>
-                <p className="text-xs text-slate-500">
-                  {plano.resumo.furos.emViga} em viga — {plano.resumo.furos.dispensa} dispensam a verificação pelos critérios da NBR 6118 (13.2.5.1), tomados como hipóteses, e{' '}
-                  {plano.resumo.furos.verificar} a verificar com o calculista; {plano.resumo.furos.emBaldrame} em baldrame; {plano.resumo.furos.emLaje} passagem(ns) em laje.
-                </p>
-                <TabelaFurosPrevistos furos={plano.resumo.furos.lista} pavimentos={new Map(plano.resultado.levels.map((l) => [l.id, l.name]))} />
-              </section>
-            )}
-
-            {plano.resumo.terraplenagem && (
-              <section className="space-y-2" data-testid="terraplenagem-do-plano">
-                <h4 className={rotuloCls}>Terraplenagem (platô único)</h4>
-                <p className="text-xs text-slate-600">
-                  Platô a {plano.resumo.terraplenagem.cotaDoPlatoM.toLocaleString('pt-BR')} m ({f1(plano.resumo.terraplenagem.areaPlatoM2)} m²), térreo a{' '}
-                  {(plano.resumo.terraplenagem.elevacaoDoTerreoMm / 1000).toLocaleString('pt-BR')} m da cota zero · corte {f1(plano.resumo.terraplenagem.corteM3)} m³ · aterro{' '}
-                  {f1(plano.resumo.terraplenagem.aterroM3)} m³
-                  {plano.resumo.terraplenagem.botaForaM3 > 0 ? ` · bota-fora ${f1(plano.resumo.terraplenagem.botaForaM3)} m³` : plano.resumo.terraplenagem.emprestimoM3 > 0 ? ` · empréstimo ${f1(plano.resumo.terraplenagem.emprestimoM3)} m³` : ''}
-                  {plano.resumo.terraplenagem.murosComprimentoM > 0 ? ` · muros de arrimo ${f1(plano.resumo.terraplenagem.murosComprimentoM)} m (${f1(plano.resumo.terraplenagem.murosAreaDeFaceM2)} m² de face)` : ''}
-                  {plano.resumo.terraplenagem.areaTaludeM2 > 0 ? ` · taludes ${f1(plano.resumo.terraplenagem.areaTaludeM2)} m²` : ''}
-                </p>
-                {plano.resumo.terraplenagem.entrada.tipo !== 'NENHUMA' && (
-                  <p className="text-xs text-slate-600">
-                    Entrada: {plano.resumo.terraplenagem.entrada.desnivelMm > 0 ? 'sobe' : 'desce'} {(Math.abs(plano.resumo.terraplenagem.entrada.desnivelMm) / 1000).toLocaleString('pt-BR')} m da calçada ao piso —{' '}
-                    {plano.resumo.terraplenagem.entrada.tipo === 'RAMPA'
-                      ? `rampa de ${(plano.resumo.terraplenagem.entrada.comprimentoMm / 1000).toLocaleString('pt-BR')} m`
-                      : `escada de ${plano.resumo.terraplenagem.entrada.degraus} degrau(s) de ${plano.resumo.terraplenagem.entrada.espelhoMm} mm`}
-                    {plano.resumo.terraplenagem.entrada.cabe ? '' : ' (não cabe no recuo de frente)'}.
-                  </p>
-                )}
-              </section>
-            )}
-
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 pt-4">
-              {(motivoDeLancar || motivoDeCriar) && plano.comandos.length > 0 && <p className="mr-auto text-xs text-amber-700">{motivoDeLancar ?? motivoDeCriar}</p>}
+          {plano && (
+            <>
               <Button variant="secondary" onClick={() => agir('criar', props.onCriarAlternativa)} disabled={!!motivoDeCriar} title={motivoDeCriar} data-testid="criar-alternativa-casa">
-                {ocupado === 'criar' ? 'Criando…' : 'Criar alternativa com a casa'}
+                {ocupado === 'criar' ? 'Criando…' : 'Criar alternativa'}
               </Button>
               <Button onClick={() => agir('lancar', props.onLancar)} disabled={!!motivoDeLancar} title={motivoDeLancar} data-testid="lancar-casa">
                 {ocupado === 'lancar' ? 'Lançando…' : plano.sobrado?.segundo ? 'Lançar os três pavimentos' : plano.sobrado ? 'Lançar os dois pavimentos' : 'Lançar no pavimento'}
               </Button>
-            </div>
-          </>
+            </>
+          )}
+        </TabsBar>
+
+        {/* O estado das ações, logo abaixo delas — vale para todas as abas. */}
+        {((props.motivoParaNaoGerar && !casa.rodando) || casa.rodando || erro || casa.erro || props.lancado || avisoDeLancar) && (
+          <div className="mb-3 space-y-2">
+            {props.motivoParaNaoGerar && !casa.rodando && (
+              <p className="text-xs text-amber-700" data-testid="motivo-gerar-casa">
+                {props.motivoParaNaoGerar}
+              </p>
+            )}
+            {casa.rodando && (
+              <p className="text-sm text-slate-600" data-testid="progresso-casa">
+                {casa.progresso ? `Etapa ${casa.progresso.indice} de ${casa.progresso.total}: ${casa.progresso.rotulo}` : 'Gerando a casa…'}
+              </p>
+            )}
+            {(erro || casa.erro) && (
+              <p role="alert" className="text-sm text-red-700">
+                {erro ?? casa.erro}
+              </p>
+            )}
+            {props.lancado && <p className="rounded-[6px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{props.lancado}</p>}
+            {avisoDeLancar && <p className="text-xs text-amber-700">{avisoDeLancar}</p>}
+          </div>
         )}
       </div>
+
+      {/* ── Programa: o que a casa tem e o que ela leva (um formulário, um card, §30) ── */}
+      {abaEfetiva === 'programa' && (
+        <div role="tabpanel" aria-label="Programa" className={`space-y-8 ${cardCls}`} data-testid="programa-da-casa">
+          <section className="space-y-4">
+            <SecaoTitulo
+              icon={Home}
+              titulo="Programa da casa"
+              resumo={props.persistenciaIndisponivel ? 'as premissas valem só nesta sessão (o estudo não as guarda)' : 'guardado no estudo'}
+              acoes={
+                <Button variant="secondary" onClick={() => onPremissas({ ...PREMISSAS_DA_CASA_PADRAO })}>
+                  Voltar ao padrão
+                </Button>
+              }
+            />
+            {(props.unidades.length > 0 || p.unidadeId) && (
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+                <div className="col-span-2 space-y-1.5">
+                  <Campo rotulo="Unidade do Empreendimento desta casa">
+                    <select aria-label="Unidade do Empreendimento desta casa" data-testid="unidade-da-casa" className={campoCls} value={p.unidadeId ?? ''} onChange={(e) => props.onUnidade(e.target.value || null)}>
+                      <option value="">Nenhuma — o sincronismo cria a torre "Casa"</option>
+                      {p.unidadeId && !props.unidades.some((u) => u.id === p.unidadeId) && <option value={p.unidadeId}>Unidade não encontrada no Empreendimento</option>}
+                      {props.unidades.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.rotulo}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
+                  <p className="text-xs text-slate-500">
+                    Escolher preenche o programa pela unidade; ao sincronizar o Empreendimento com a Planta, a casa publicada atualiza essa unidade (área, dormitórios, suítes, banheiros, vagas e tipologia).
+                  </p>
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+              <Campo rotulo="Pavimentos">
+                <select aria-label="Pavimentos" className={campoCls} value={p.pavimentos} onChange={(e) => onPremissas({ ...p, pavimentos: e.target.value === '3' ? 3 : e.target.value === '2' ? 2 : e.target.value === '1' ? 1 : 'AUTOMATICO' })} data-testid="pavimentos-da-casa">
+                  <option value="AUTOMATICO">Automático (térrea; sobe um pavimento quando não couber)</option>
+                  <option value={1}>Térrea</option>
+                  <option value={2}>Sobrado (2 pavimentos)</option>
+                  <option value={3}>3 pavimentos (o 2º recuado, com terraço)</option>
+                </select>
+              </Campo>
+              <Campo rotulo="Padrão (CUB)">
+                <select aria-label="Padrão (CUB)" className={campoCls} value={p.curto.padrao} onChange={(e) => set('curto', { padrao: e.target.value as PadraoDaCasa })}>
+                  {PADROES_DA_CASA.map((x) => (
+                    <option key={x} value={x}>
+                      {ROTULO_DO_PADRAO_DA_CASA[x]}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+              <Numero rotulo="Dormitórios (com as suítes)" valor={p.curto.dormitorios} min={1} max={6} onValor={(v) => v != null && set('curto', { dormitorios: Math.round(v) })} />
+              <Numero rotulo="Suítes" valor={p.curto.suites} min={0} max={6} onValor={(v) => v != null && set('curto', { suites: Math.round(v) })} />
+              <Numero rotulo="Banheiros (com os das suítes)" valor={p.curto.banheiros} min={1} max={8} onValor={(v) => v != null && set('curto', { banheiros: Math.round(v) })} />
+              <Numero rotulo="Vagas" valor={p.curto.vagas} min={0} max={4} onValor={(v) => v != null && set('curto', { vagas: Math.round(v) })} />
+              <Numero rotulo="Área útil alvo (m²)" valor={p.curto.areaAlvoM2} min={30} max={600} passo={5} anulavel placeholder="a do padrão" onValor={(v) => set('curto', { areaAlvoM2: v })} />
+              <label className={marcaCls}>
+                <input type="checkbox" checked={p.curto.garagemCoberta} onChange={(e) => set('curto', { garagemCoberta: e.target.checked })} className={caixaCls} />
+                Garagem coberta
+              </label>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <SecaoTitulo icon={ListChecks} titulo="O que a casa leva" resumo="a arquitetura vai sempre; o resto, como marcado" />
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
+              {DISCIPLINAS.map((d) => (
+                <label key={d.chave} className="flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={p.disciplinas[d.chave]} onChange={(e) => set('disciplinas', { [d.chave]: e.target.checked } as Partial<PremissasDaCasa['disciplinas']>)} className={caixaCls} aria-label={d.rotulo} />
+                  {d.rotulo}
+                </label>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* ── Hipóteses: o mesmo formulário, separado por assunto (§30) — eram 12 a 35 campos numa grade só ── */}
+      {abaEfetiva === 'hipoteses' && (
+        <div role="tabpanel" aria-label="Hipóteses" className={`space-y-8 ${cardCls}`} data-testid="hipoteses-da-casa">
+          <section className="space-y-4">
+            <SecaoTitulo icon={Ruler} titulo="Implantação e telhado" resumo="o que não está aqui segue as premissas de cada disciplina" />
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+              <Numero rotulo="Folga abaixo da TO (%)" valor={p.implantacao.folgaDaTOPct} min={0} max={50} onValor={(v) => v != null && set('implantacao', { folgaDaTOPct: v })} />
+              <Campo rotulo="Encostar na divisa">
+                <select aria-label="Encostar na divisa" className={campoCls} value={p.implantacao.encostarNaDivisa} onChange={(e) => set('implantacao', { encostarNaDivisa: e.target.value as PremissasDaCasa['implantacao']['encostarNaDivisa'] })}>
+                  <option value="ESQUERDA">Esquerda</option>
+                  <option value="DIREITA">Direita</option>
+                  <option value="CENTRO">No centro</option>
+                </select>
+              </Campo>
+              <Numero rotulo="Alternativas tentadas" valor={p.sementes} min={1} max={8} onValor={(v) => v != null && onPremissas({ ...p, sementes: Math.round(v) })} />
+              <div className="hidden md:block" />
+              <Campo rotulo="Telhado">
+                <select aria-label="Tipo de telhado" className={campoCls} value={p.telhado.tipo} onChange={(e) => set('telhado', { tipo: e.target.value as PremissasDaCasa['telhado']['tipo'] })}>
+                  <option value="DUAS_AGUAS">Duas águas</option>
+                  <option value="UMA_AGUA">Uma água</option>
+                </select>
+              </Campo>
+              <Numero rotulo="Inclinação do telhado (%)" valor={p.telhado.inclinacaoPct} min={5} max={100} onValor={(v) => v != null && set('telhado', { inclinacaoPct: v })} />
+              <Numero rotulo="Beiral (m)" valor={p.telhado.beiralMm / 1000} min={0} max={1.5} passo={0.1} onValor={(v) => v != null && set('telhado', { beiralMm: Math.round(v * 1000) })} />
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <SecaoTitulo icon={Mountain} titulo="Terreno, muro e calçadas" />
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+              <label className={`${marcaCls} col-span-2 md:col-span-4`} title="Só com a topografia do estudo: a casa assenta num platô na cota que equilibra corte e aterro sob a projeção">
+                <input type="checkbox" checked={p.terraplenagem.lancar} onChange={(e) => set('terraplenagem', { lancar: e.target.checked })} className={caixaCls} data-testid="terraplenagem-da-casa" />
+                Platô no terreno inclinado
+              </label>
+              {p.terraplenagem.lancar && (
+                <>
+                  <Numero rotulo="Platô além da casa (m)" valor={p.terraplenagem.margemDoPlatoMm / 1000} min={0} max={5} passo={0.1} onValor={(v) => v != null && set('terraplenagem', { margemDoPlatoMm: Math.round(v * 1000) })} />
+                  <Numero rotulo="Piso acima do platô (cm)" valor={p.terraplenagem.pisoAcimaDoPlatoMm / 10} min={0} max={100} passo={1} onValor={(v) => v != null && set('terraplenagem', { pisoAcimaDoPlatoMm: Math.round(v * 10) })} />
+                  <Numero rotulo="Talude até (m de altura; acima, muro)" valor={p.terraplenagem.alturaMaximaDoTaludeM} min={0} max={10} passo={0.1} onValor={(v) => v != null && set('terraplenagem', { alturaMaximaDoTaludeM: Math.round(v * 100) / 100 })} />
+                  <Numero rotulo="Rampa da garagem até (%)" valor={p.terraplenagem.rampaDeVeiculosMaxPct} min={5} max={30} passo={0.5} onValor={(v) => v != null && set('terraplenagem', { rampaDeVeiculosMaxPct: Math.round(v * 10) / 10 })} />
+                </>
+              )}
+              <label className={`${marcaCls} col-span-2 md:col-span-4`} title="O muro na divisa do lote (kernel 0.104.0), com o portão de pedestre diante da porta e o de garagem diante da garagem">
+                <input type="checkbox" checked={p.muro.lancar} onChange={(e) => set('muro', { lancar: e.target.checked })} className={caixaCls} data-testid="muro-da-casa" />
+                Muro, portões e calçadas
+              </label>
+              {p.muro.lancar && (
+                <>
+                  <Campo rotulo="Muro da frente">
+                    <select aria-label="Muro da frente" className={campoCls} value={p.muro.tipoDaFrente} onChange={(e) => set('muro', { tipoDaFrente: e.target.value as PremissasDaCasa['muro']['tipoDaFrente'] })} data-testid="muro-da-frente">
+                      <option value="MURETA_COM_GRADE">Mureta com grade</option>
+                      <option value="GRADE">Grade</option>
+                      <option value="ALVENARIA">Alvenaria</option>
+                    </select>
+                  </Campo>
+                  <Numero rotulo="Altura da frente (m)" valor={p.muro.alturaDaFrenteMm / 1000} min={0.5} max={4} passo={0.05} onValor={(v) => v != null && set('muro', { alturaDaFrenteMm: Math.round(v * 1000) })} />
+                  <Numero rotulo="Altura das divisas (m)" valor={p.muro.alturaDasDivisasMm / 1000} min={0.5} max={4} passo={0.05} onValor={(v) => v != null && set('muro', { alturaDasDivisasMm: Math.round(v * 1000) })} />
+                  <label className={marcaCls}>
+                    <input type="checkbox" checked={p.muro.calcadas} onChange={(e) => set('muro', { calcadas: e.target.checked })} className={caixaCls} data-testid="calcadas-da-casa" />
+                    Calçadas da entrada e da garagem
+                  </label>
+                </>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <SecaoTitulo icon={Droplets} titulo="Instalações" resumo="água, esgoto, chuva e elétrica" />
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+              <Campo rotulo="Água quente">
+                <select aria-label="Água quente" className={campoCls} value={p.ancoras.aguaQuente} onChange={(e) => set('ancoras', { aguaQuente: e.target.value as PremissasDaCasa['ancoras']['aguaQuente'] })}>
+                  <option value="PELO_PADRAO">Pelo padrão (R1-B: chuveiro elétrico)</option>
+                  <option value="AQUECEDOR_PASSAGEM">Aquecedor de passagem</option>
+                  <option value="CHUVEIRO_ELETRICO">Chuveiro elétrico</option>
+                  <option value="NENHUM">Sem água quente</option>
+                </select>
+              </Campo>
+              <Numero rotulo="Chuveiro elétrico (W)" valor={p.eletrica.chuveiroEletricoVA} min={2000} max={9000} passo={100} onValor={(v) => v != null && set('eletrica', { chuveiroEletricoVA: Math.round(v) })} />
+              <Numero rotulo="Elevar a caixa d'água até (m)" valor={p.pressao.caixaElevadaAteMm / 1000} min={0} max={15} passo={0.5} onValor={(v) => v != null && set('pressao', { caixaElevadaAteMm: Math.round(v * 1000) })} />
+              <Numero rotulo="Pressurizador (W)" valor={p.pressao.potenciaDoPressurizadorW} min={100} max={3000} passo={10} onValor={(v) => v != null && set('pressao', { potenciaDoPressurizadorW: Math.round(v) })} />
+              <label className={marcaCls}>
+                <input type="checkbox" checked={p.ancoras.caixaDeGordura} onChange={(e) => set('ancoras', { caixaDeGordura: e.target.checked })} className={caixaCls} />
+                Caixa de gordura
+              </label>
+              <label className={marcaCls}>
+                <input type="checkbox" checked={p.eletrica.medidor} onChange={(e) => set('eletrica', { medidor: e.target.checked })} className={caixaCls} />
+                Medidor na frente do lote
+              </label>
+              {p.disciplinas.hidraulica && props.chuva && props.onChuva && (
+                <>
+                  <div className="hidden md:col-span-2 md:block" />
+                  <Campo rotulo="Chuva: cidade (NBR 10844)">
+                    <select aria-label="Cidade da tabela de chuvas" className={campoCls} value={props.chuva.cidade ?? ''} onChange={(e) => props.onChuva!({ ...props.chuva!, cidade: e.target.value || null })} data-testid="chuva-cidade">
+                      <option value="">— nenhuma —</option>
+                      {Object.keys(INTENSIDADE_POR_CIDADE)
+                        .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+                        .map((x) => (
+                          <option key={x} value={x}>
+                            {x}
+                          </option>
+                        ))}
+                    </select>
+                  </Campo>
+                  <Campo rotulo="Chuva: período de retorno">
+                    <select aria-label="Período de retorno da chuva" className={campoCls} value={props.chuva.periodoDeRetornoAnos} onChange={(e) => props.onChuva!({ ...props.chuva!, periodoDeRetornoAnos: Number(e.target.value) as PeriodoDeRetorno })} data-testid="chuva-periodo">
+                      {PERIODOS_DE_RETORNO.map((t) => (
+                        <option key={t} value={t}>
+                          {PERIODO_DA_CHUVA[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </Campo>
+                  <Numero rotulo="Chuva: intensidade (mm/h)" valor={props.chuva.intensidadeMmH} min={1} max={500} anulavel placeholder="da tabela" onValor={(v) => props.onChuva!({ ...props.chuva!, intensidadeMmH: v })} />
+                  <p className={`col-span-2 self-end pb-2 text-xs md:col-span-1 ${chuvaDaCasa(props.chuva).falta ? 'text-amber-700' : 'text-slate-600'}`} data-testid="chuva-da-casa">
+                    Chuva de projeto: {chuvaDaCasa(props.chuva).texto}.
+                  </p>
+                </>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <SecaoTitulo icon={Layers} titulo="Estrutura, pavimentos e forro" />
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+              {p.disciplinas.estrutura && (
+                <Numero rotulo="Montante entre folhas de janela (cm)" valor={p.estrutura.montanteEntreJanelasMm / 10} min={20} max={100} passo={5} onValor={(v) => v != null && set('estrutura', { montanteEntreJanelasMm: Math.round(v * 10) })} />
+              )}
+              {p.pavimentos !== 1 && (
+                <>
+                  <Numero rotulo="Laje entre os pavimentos (cm)" valor={p.sobrado.lajeEntrePavimentosMm / 10} min={8} max={30} onValor={(v) => v != null && set('sobrado', { lajeEntrePavimentosMm: Math.round(v * 10) })} />
+                  <Numero rotulo="Shaft das instalações (cm)" valor={p.sobrado.shaftMm / 10} min={20} max={80} passo={5} onValor={(v) => v != null && set('sobrado', { shaftMm: Math.round(v * 10) })} />
+                  {p.disciplinas.estrutura && (
+                    <Numero rotulo="Pilar de cima foge da abertura de baixo até (m)" valor={p.estrutura.deslizeSobreAberturaMm / 1000} min={0} max={3} passo={0.05} onValor={(v) => v != null && set('estrutura', { deslizeSobreAberturaMm: Math.round(v * 1000) })} />
+                  )}
+                </>
+              )}
+              <label className={`${marcaCls} col-span-2 md:col-span-4`}>
+                <input type="checkbox" checked={p.forro.lancar} onChange={(e) => set('forro', { lancar: e.target.checked })} className={caixaCls} data-testid="forro-da-casa" />
+                Forro com as redes no plenum
+              </label>
+              {p.forro.lancar && (
+                <>
+                  <Numero rotulo="Pé-direito livre: sala, dormitório, cozinha (m)" valor={p.forro.peDireitoLivrePermanenciaMm / 1000} min={2.2} max={3.5} passo={0.05} onValor={(v) => v != null && set('forro', { peDireitoLivrePermanenciaMm: Math.round(v * 1000) })} />
+                  <Numero rotulo="Pé-direito livre: banheiro, serviço, circulação (m)" valor={p.forro.peDireitoLivreDemaisMm / 1000} min={2.1} max={3.5} passo={0.05} onValor={(v) => v != null && set('forro', { peDireitoLivreDemaisMm: Math.round(v * 1000) })} />
+                  <Numero rotulo="Piso acabado (cm)" valor={p.forro.pisoAcabadoMm / 10} min={0} max={15} passo={0.5} onValor={(v) => v != null && set('forro', { pisoAcabadoMm: Math.round(v * 10) })} />
+                </>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* ── Resultado: o resumo e as etapas ── */}
+      {abaEfetiva === 'resultado' && plano && (
+        <div role="tabpanel" aria-label="Resultado" className={`space-y-6 ${cardCls}`} data-testid="previa-da-casa">
+          <SecaoTitulo icon={Wand2} titulo="Resultado" resumo={`${plano.comandos.length} comando(s) num lote só`} />
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4" data-testid="resumo-da-casa">
+            <div className="space-y-1">
+              <dt className={rotuloCls}>Área construída</dt>
+              <dd className="text-lg font-semibold text-gray-900 tabular-nums">{area != null ? `${f2(area)} m²` : '—'}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className={rotuloCls}>Ambientes do programa</dt>
+              <dd className="text-lg font-semibold text-gray-900 tabular-nums">
+                {plano.resumo.ambientesAtendidos} de {plano.resumo.ambientesPedidos}
+              </dd>
+            </div>
+            <div className="space-y-1">
+              <dt className={rotuloCls}>Taxa de ocupação</dt>
+              <dd className="text-lg font-semibold text-gray-900 tabular-nums">
+                {med ? `${f1(med.toPct)} %` : '—'}
+                {med?.toMaxPct != null && <span className="ml-1 text-xs font-normal text-slate-500">máx. {f1(med.toMaxPct)} %</span>}
+              </dd>
+            </div>
+            <div className="space-y-1">
+              <dt className={rotuloCls}>Custo pelo CUB</dt>
+              <dd className="text-lg font-semibold text-gray-900 tabular-nums" data-testid="custo-da-casa">
+                {area != null && cub ? reais(area * cub.valorM2) : '—'}
+              </dd>
+              <dd className="text-xs text-slate-500">
+                {cub ? `${reais(cub.valorM2)}/m² · ${p.curto.padrao}${cub.estimado ? ' · CUB estimado — confira' : cub.referencia ? ` · ${cub.referencia}` : ''}` : 'CUB indisponível'}
+              </dd>
+            </div>
+            <div className="space-y-1">
+              <dt className={rotuloCls}>Coeficiente de aproveitamento</dt>
+              <dd className="text-sm text-gray-900 tabular-nums">
+                {med ? f2(med.coeficiente) : '—'}
+                {med?.coeficienteMax != null && <span className="ml-1 text-xs text-slate-500">máx. {f2(med.coeficienteMax)}</span>}
+              </dd>
+            </div>
+            <div className="space-y-1">
+              <dt className={rotuloCls}>Permeabilidade</dt>
+              <dd className="text-sm text-gray-900 tabular-nums">
+                {med ? `${f1(med.permeabilidadePct)} %` : '—'}
+                {med?.permeabilidadeMinPct != null && <span className="ml-1 text-xs text-slate-500">mín. {f1(med.permeabilidadeMinPct)} %</span>}
+              </dd>
+            </div>
+            {plano.sobrado && (
+              <div className="space-y-1" data-testid="sobrado-da-casa">
+                <dt className={rotuloCls}>{plano.sobrado.segundo ? '3 pavimentos' : 'Sobrado'}</dt>
+                <dd className="text-sm text-gray-900 tabular-nums">
+                  {plano.sobrado.segundo ? 'duas escadas em U' : 'escada em U'}, {plano.sobrado.escada.degraus} degraus de {plano.sobrado.escada.espelhoMm} × {plano.sobrado.escada.pisoMm} mm
+                </dd>
+                <dd className="text-xs text-slate-500">
+                  núcleo à {plano.sobrado.nucleo.lado === 'DIREITA' ? 'direita' : 'esquerda'}
+                  {plano.sobrado.segundo ? ` · terraço de ${f1(plano.sobrado.segundo.terracoM2)} m² na laje do 1º` : ''}
+                </dd>
+              </div>
+            )}
+            <div className="space-y-1">
+              <dt className={rotuloCls}>Elétrica</dt>
+              <dd className="text-sm text-gray-900">
+                {plano.resumo.eletrica.circuitos} circuito(s)
+                {plano.resumo.eletrica.entrada ? ` · entrada ${plano.resumo.eletrica.entrada.categoria}` : ''}
+              </dd>
+            </div>
+            <div className="space-y-1">
+              <dt className={rotuloCls}>Climatização</dt>
+              <dd className="text-sm text-gray-900">{plano.resumo.climatizacao.equipamentos} split(s)</dd>
+            </div>
+          </dl>
+          {plano.escolha && <p className="text-xs text-slate-500">{plano.escolha}</p>}
+
+          {/* Quando o gerador PARA numa premissa, o porquê à vista (a lição do PPCI, 10/10/2026) — em uma linha: a lista
+              mora no Relatório, no grupo "Premissa faltando", e o botão abre lá. */}
+          {plano.etapas.some((e) => e.situacao === 'NAO_RODOU') && premissasFaltando > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-[6px] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="casa-parou">
+              <span>
+                Faltam {premissasFaltando} premissa(s): {plano.etapas.filter((e) => e.situacao === 'NAO_RODOU').length} etapa(s) não rodaram.
+              </span>
+              <button
+                type="button"
+                className="font-medium underline underline-offset-2 hover:text-amber-950"
+                onClick={() => {
+                  setAberto('PREMISSA');
+                  setAba('relatorio');
+                }}
+                data-testid="ver-premissas-faltando"
+              >
+                Ver no relatório
+              </button>
+            </div>
+          )}
+
+          <section className="space-y-2">
+            <h4 className={rotuloCls}>Etapas ({plano.etapas.length})</h4>
+            <ul className="grid grid-cols-1 gap-x-8 lg:grid-cols-2" data-testid="etapas-da-casa">
+              {plano.etapas.map((e) => (
+                <li key={e.id} className="border-b border-gray-100 py-1.5 text-sm">
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 text-gray-700">{e.rotulo}</span>
+                    <span className={`shrink-0 text-xs ${COR_DA_SITUACAO[e.situacao]}`}>
+                      {ROTULO_DA_SITUACAO[e.situacao]}
+                      {e.comandos > 0 ? ` · ${e.comandos}` : ''}
+                    </span>
+                  </span>
+                  {e.nota && <span className="block text-xs text-slate-500">{e.nota}</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      )}
+
+      {/* ── Relatório: as pendências por grupo ── */}
+      {abaEfetiva === 'relatorio' && plano && (
+        <div role="tabpanel" aria-label="Relatório" className={`space-y-4 ${cardCls}`} data-testid="pendencias-da-casa">
+          <SecaoTitulo icon={ClipboardList} titulo="Relatório" resumo={`${plano.pendencias.length} item(ns)`} />
+          <div className="space-y-2">
+            {ORDEM.map((grupo) => {
+              const lista = plano.pendencias.filter((x) => x.grupo === grupo);
+              if (!lista.length) return null;
+              return (
+                <div key={grupo}>
+                  <button type="button" onClick={() => setAberto(aberto === grupo ? null : grupo)} className="w-full text-left text-sm font-medium text-gray-700 hover:text-gray-900">
+                    {aberto === grupo ? '▾' : '▸'} {ROTULO_DA_PENDENCIA[grupo]} ({lista.length})
+                  </button>
+                  {aberto === grupo && (
+                    <ul className="mt-1 space-y-1 pl-4">
+                      {lista.map((x, i) => (
+                        <li key={i} className={`break-words text-sm ${grupo === 'VERIFICACAO' || grupo === 'SEM_SOLUCAO' || grupo === 'CONFLITO' ? 'text-red-700' : 'text-slate-600'}`}>
+                          {x.texto}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {!plano.pendencias.some((x) => x.grupo === 'VERIFICACAO') && !plano.etapas.some((e) => e.situacao === 'NAO_RODOU') && (
+            <p className="text-sm text-emerald-700">Nenhuma verificação em falta no resultado.</p>
+          )}
+        </div>
+      )}
+
+      {/* ── Furos previstos para o calculista (F14c) ── */}
+      {abaEfetiva === 'furos' && plano && furos && (
+        <div role="tabpanel" aria-label="Furos" className={`space-y-4 ${cardCls}`} data-testid="furos-da-casa">
+          <SecaoTitulo icon={CircleDot} titulo="Furos previstos para o calculista" resumo={`${furos.lista.length} furo(s)`} />
+          <p className="text-sm text-slate-600">
+            {furos.emViga} em viga — {furos.dispensa} dispensam a verificação pelos critérios da NBR 6118 (13.2.5.1), tomados como hipóteses, e {furos.verificar} a verificar com o calculista; {furos.emBaldrame} em baldrame;{' '}
+            {furos.emLaje} passagem(ns) em laje.
+          </p>
+          <TabelaFurosPrevistos furos={furos.lista} pavimentos={new Map(plano.resultado.levels.map((l) => [l.id, l.name]))} />
+        </div>
+      )}
+
+      {/* ── Terraplenagem (F25): o platô único ── */}
+      {abaEfetiva === 'terraplenagem' && terra && (
+        <div role="tabpanel" aria-label="Terraplenagem" className={`space-y-4 ${cardCls}`} data-testid="terraplenagem-do-plano">
+          <SecaoTitulo icon={Mountain} titulo="Terraplenagem" resumo="platô único" />
+          <p className="text-sm text-gray-700">
+            Platô a {terra.cotaDoPlatoM.toLocaleString('pt-BR')} m ({f1(terra.areaPlatoM2)} m²), térreo a {(terra.elevacaoDoTerreoMm / 1000).toLocaleString('pt-BR')} m da cota zero · corte {f1(terra.corteM3)} m³ · aterro{' '}
+            {f1(terra.aterroM3)} m³
+            {terra.botaForaM3 > 0 ? ` · bota-fora ${f1(terra.botaForaM3)} m³` : terra.emprestimoM3 > 0 ? ` · empréstimo ${f1(terra.emprestimoM3)} m³` : ''}
+            {terra.murosComprimentoM > 0 ? ` · muros de arrimo ${f1(terra.murosComprimentoM)} m (${f1(terra.murosAreaDeFaceM2)} m² de face)` : ''}
+            {terra.areaTaludeM2 > 0 ? ` · taludes ${f1(terra.areaTaludeM2)} m²` : ''}
+          </p>
+          {terra.entrada.tipo !== 'NENHUMA' && (
+            <p className="text-sm text-gray-700">
+              Entrada: {terra.entrada.desnivelMm > 0 ? 'sobe' : 'desce'} {(Math.abs(terra.entrada.desnivelMm) / 1000).toLocaleString('pt-BR')} m da calçada ao piso —{' '}
+              {terra.entrada.tipo === 'RAMPA' ? `rampa de ${(terra.entrada.comprimentoMm / 1000).toLocaleString('pt-BR')} m` : `escada de ${terra.entrada.degraus} degrau(s) de ${terra.entrada.espelhoMm} mm`}
+              {terra.entrada.cabe ? '' : ' (não cabe no recuo de frente)'}.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -45,7 +45,7 @@ export function TabelaFurosPrevistos({ furos, pavimentos }: Props) {
       rows={linhas}
       rowKey={(f) => f.chave}
       dense
-      maxHeight="24rem"
+      maxHeight="70vh"
       searchText={(f) => `${f.peca} ${TIPO_DA_PECA[f.tipoDaPeca]} ${pavimentos.get(f.levelId) ?? ''} ${ROTULO_DA_DISCIPLINA[f.disciplina]} ${situacao(f)} ${f.motivos.join(' ')}`}
       searchPlaceholder="Buscar peça, rede ou situação"
       sortValue={(key, f) => {

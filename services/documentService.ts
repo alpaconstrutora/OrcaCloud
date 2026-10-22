@@ -667,7 +667,7 @@ export const documentService = {
         (doc) =>
           doc.nome.toLowerCase().includes(searchLower) ||
           (doc.descricao && doc.descricao.toLowerCase().includes(searchLower)) ||
-          doc.tipo_documento.toLowerCase().includes(searchLower) ||
+          (doc.tipo_documento ?? '').toLowerCase().includes(searchLower) ||
           doc.tags.some((t) => t.toLowerCase().includes(searchLower))
       );
     }

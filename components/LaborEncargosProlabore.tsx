@@ -20,7 +20,6 @@ const PROLABORE_COLUMNS: StandardTableColumn[] = [
     { key: 'irrf', label: 'IRRF', sortable: true, width: 120, align: 'right' },
     { key: 'liquido', label: 'Líquido', sortable: true, width: 130, align: 'right' },
     { key: 'patronal', label: 'Cota patronal', sortable: true, width: 140, align: 'right' },
-    { key: 'terceiros', label: 'Contrib. terceiros', sortable: true, width: 150, align: 'right' },
 ];
 
 /**
@@ -101,16 +100,16 @@ const LaborEncargosProlabore: React.FC<Props> = ({ orgId, period }) => {
                         <KpiCard label="Pró-labore Bruto" value={BRL(payroll.gross_total)} icon={<Banknote />} color="gray" />
                         <KpiCard label="INSS Sócios (11%)" value={BRL(payroll.inss_total)} icon={<Banknote />} color="red" />
                         <KpiCard label="Cota Patronal" value={BRL(payroll.patronal_total)} icon={<Building2 />} color="orange" />
-                        <KpiCard label="Contrib. Terceiros" value={BRL(payroll.terceiros_total)} icon={<Building2 />} color="purple" />
+                        <KpiCard label="IRRF Retido" value={BRL(payroll.irrf_total)} icon={<Banknote />} color="purple" />
                     </div>
 
                     <div className="bg-indigo-600 rounded-3xl shadow-lg shadow-indigo-900/20 p-6 flex items-center justify-between flex-wrap gap-4">
                         <div>
                             <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">Custo Total da Empresa</p>
                             <p className="text-3xl font-black text-white tracking-tight">
-                                {BRL((payroll.gross_total || 0) + (payroll.patronal_total || 0) + (payroll.terceiros_total || 0))}
+                                {BRL((payroll.gross_total || 0) + (payroll.patronal_total || 0))}
                             </p>
-                            <p className="text-xs text-indigo-200 font-medium mt-1">Bruto + Cota Patronal + Contrib. Terceiros (não inclui FGTS — não incide sobre pró-labore)</p>
+                            <p className="text-xs text-indigo-200 font-medium mt-1">Bruto + Cota Patronal (FGTS e contribuições de terceiros não incidem sobre pró-labore). INSS, cota patronal e IRRF vão para Tributos a Pagar ao enviar ao financeiro.</p>
                         </div>
                         <span className="text-sm font-normal text-indigo-100">
                             {PROLABORE_STATUS_LABELS[payroll.status]}
@@ -133,7 +132,6 @@ const LaborEncargosProlabore: React.FC<Props> = ({ orgId, period }) => {
                                 case 'irrf': return i.irrf_amount;
                                 case 'liquido': return i.net_amount;
                                 case 'patronal': return i.patronal_amount;
-                                case 'terceiros': return i.terceiros_amount;
                                 default: return null;
                             }
                         }}
@@ -145,7 +143,6 @@ const LaborEncargosProlabore: React.FC<Props> = ({ orgId, period }) => {
                                 case 'irrf': return <span className="text-sm font-medium text-red-500">-{BRL(i.irrf_amount)}</span>;
                                 case 'liquido': return <span className="text-sm font-medium text-emerald-600">{BRL(i.net_amount)}</span>;
                                 case 'patronal': return <span className="text-sm font-medium text-orange-600">{i.patronal_amount > 0 ? BRL(i.patronal_amount) : '—'}</span>;
-                                case 'terceiros': return <span className="text-sm font-medium text-purple-600">{i.terceiros_amount > 0 ? BRL(i.terceiros_amount) : '—'}</span>;
                                 default: return null;
                             }
                         }}

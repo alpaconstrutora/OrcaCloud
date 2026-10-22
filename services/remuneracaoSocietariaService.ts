@@ -3,7 +3,7 @@ import { fiscalService } from './fiscalService';
 import { documentService } from './documentService';
 import { supplierService } from './supplierService';
 import { companyService } from './companyService';
-import { payrollService } from './payrollService';
+import { tributosDoProlabore, tituloDaFolhaPreservado } from '../utils/folhaFinanceiro';
 import { calcularIrrfMensal } from '../lib/payrollCalc';
 import {
     PartnerCompensationSettings, PartnerCompensationSettingsUpsert,
@@ -71,10 +71,10 @@ export const remuneracaoSocietariaService = {
     // de lib/payrollCalc › calcularIrrfMensal: desconto simplificado + redução 2026+).
     // Cota Patronal (20%) é despesa da empresa — não desconta do líquido do
     // sócio — e só incide se a empresa NÃO for optante do Simples Nacional.
-    // Contribuições de Terceiros (Sistema S) incidem sobre a MESMA base da
-    // Cota Patronal, inclusive sobre pró-labore — reusa a config por
-    // organização já usada na folha CLT (payrollService.getEncargosConfig),
-    // sem duplicar a alíquota.
+    // Contribuições de Terceiros (Sistema S, Sal.-Educação, INCRA, SEBRAE) NÃO
+    // incidem sobre pró-labore: a base delas é a remuneração de EMPREGADOS, e o
+    // sócio é contribuinte individual. Até 22/10/2026 eram calculadas aqui
+    // (5,8%); `terceiros_amount` fica sempre 0 (coluna mantida por histórico).
 
     async getProlaboreInssRule(competenceDate: string): Promise<ProlaboreInssRule> {
         const { data, error } = await supabase
@@ -108,10 +108,7 @@ export const remuneracaoSocietariaService = {
         // recolhe a CPP à parte, igual Lucro Presumido/Real.
         const isento = regimeTributario === 'simples' && !simplesAnexoIV;
         const patronal = isento ? 0 : baseInss * rule.patronal_rate;
-        const terceiroTotalRate = organizationId
-            ? (await payrollService.getEncargosConfig(organizationId)).terceiros.reduce((s, t) => s + t.rate, 0)
-            : 0;
-        const terceiros = isento ? 0 : baseInss * terceiroTotalRate;
+        void organizationId; // mantido na assinatura: os chamadores ainda passam
 
         return {
             partner_id: '',
@@ -120,7 +117,7 @@ export const remuneracaoSocietariaService = {
             irrf_amount: Math.round(irrf * 100) / 100,
             net_amount: Math.round((grossAmount - inss - irrf) * 100) / 100,
             patronal_amount: Math.round(patronal * 100) / 100,
-            terceiros_amount: Math.round(terceiros * 100) / 100,
+            terceiros_amount: 0,
         };
     },
 
@@ -493,49 +490,79 @@ export const remuneracaoSocietariaService = {
             if (itemError) throw itemError;
         }
 
-        // Cota Patronal + Contribuições de Terceiros: despesas da empresa
-        // perante o INSS/Sistema S (guia única, não é pagamento a um
-        // "fornecedor" — não gera invoice, só o lançamento contábil/DRE).
-        // Uma linha por folha para cada, cobrindo todos os sócios.
-        if (payroll.patronal_total > 0) {
-            const { error: patronalError } = await supabase
-                .from('internal_transactions')
-                .insert({
-                    organization_id: organizationId,
-                    source_system: 'PROLABORE',
-                    reference_id: payroll.id,
-                    transaction_date: payroll.competence_month,
-                    amount: payroll.patronal_total,
-                    direction: 'DEBIT',
-                    description: `INSS Patronal s/ Pró-labore ${payroll.competence_month.slice(0, 7)}`,
-                    category: 'INSS Patronal (Pró-labore)',
-                    status: 'PENDING',
-                });
-            if (patronalError) throw patronalError;
-        }
-
-        if (payroll.terceiros_total > 0) {
-            const { error: terceirosError } = await supabase
-                .from('internal_transactions')
-                .insert({
-                    organization_id: organizationId,
-                    source_system: 'PROLABORE',
-                    reference_id: payroll.id,
-                    transaction_date: payroll.competence_month,
-                    amount: payroll.terceiros_total,
-                    direction: 'DEBIT',
-                    description: `Contribuições de Terceiros s/ Pró-labore ${payroll.competence_month.slice(0, 7)}`,
-                    category: 'Contribuições de Terceiros (Pró-labore)',
-                    status: 'PENDING',
-                });
-            if (terceirosError) throw terceirosError;
-        }
+        // INSS do sócio, cota patronal e IRRF: tributos em Tributos a Pagar.
+        await this.syncTributosDoProlabore(organizationId, payroll);
 
         const { error } = await supabase
             .from('prolabore_payrolls')
             .update({ status: 'enviado_financeiro' })
             .eq('id', payroll.id);
         if (error) throw error;
+    },
+
+    /**
+     * Tributos do pró-labore (22/10/2026): INSS descontado do sócio, cota patronal e
+     * IRRF, um título por tipo somando os sócios, com party_type 'TAX' (aparecem em
+     * Tributos a Pagar e podem ir no mesmo DARF da folha) e vencimento no dia 20.
+     * Idempotente pelo reference_id `prolabore-{folha}-{tipo}`. Título pago,
+     * conciliado, cancelado ou em DARF não é regravado; as linhas do formato
+     * antigo (reference_id = id da folha, sem party_type) em aberto são apagadas.
+     */
+    async syncTributosDoProlabore(organizationId: string, payroll: ProlaborePayroll): Promise<void> {
+        const desejados = tributosDoProlabore(payroll);
+        const { data: existentesRaw, error: eEx } = await supabase
+            .from('internal_transactions')
+            .select('id, reference_id, status, business_status, darf_id')
+            .eq('organization_id', organizationId)
+            .eq('source_system', 'PROLABORE')
+            .or(`reference_id.like.prolabore-${payroll.id}-%,reference_id.eq.${payroll.id}`);
+        if (eEx) throw eEx;
+        type Existente = { id: string; reference_id: string; status: string | null; business_status: string | null; darf_id: string | null };
+        const existentes = (existentesRaw || []) as Existente[];
+
+        const conciliados = new Set<string>();
+        if (existentes.length > 0) {
+            const { data: m, error: eM } = await supabase
+                .from('reconciliation_matches')
+                .select('internal_transaction_id')
+                .in('internal_transaction_id', existentes.map(e => e.id));
+            if (eM) throw eM;
+            (m || []).forEach((r: { internal_transaction_id: string }) => conciliados.add(r.internal_transaction_id));
+        }
+        const preservados = new Set(existentes
+            .filter(e => tituloDaFolhaPreservado({ ...e, conciliado: conciliados.has(e.id) }))
+            .map(e => e.reference_id));
+
+        const aGravar = desejados
+            .filter(t => !preservados.has(t.reference_id))
+            .map(t => ({
+                organization_id: organizationId,
+                source_system: 'PROLABORE',
+                reference_id: t.reference_id,
+                transaction_date: t.transaction_date,
+                due_date: t.due_date,
+                amount: t.amount,
+                direction: 'DEBIT',
+                description: t.description,
+                category: t.category,
+                status: 'PENDING',
+                business_status: 'PREVISTO',
+                party_type: 'TAX',
+                party_name: t.party_name,
+            }));
+        if (aGravar.length > 0) {
+            const { error } = await supabase
+                .from('internal_transactions')
+                .upsert(aGravar, { onConflict: 'organization_id,reference_id,entry_type' });
+            if (error) throw new Error(`Erro ao gravar os tributos do pró-labore: ${error.message}`);
+        }
+
+        const refsDesejados = new Set(desejados.map(t => t.reference_id));
+        const obsoletos = existentes.filter(e => !preservados.has(e.reference_id) && !refsDesejados.has(e.reference_id));
+        if (obsoletos.length > 0) {
+            const { error } = await supabase.from('internal_transactions').delete().in('id', obsoletos.map(e => e.id));
+            if (error) throw new Error(`Os tributos novos foram gravados, mas os antigos não puderam ser apagados: ${error.message}`);
+        }
     },
 
     // ─── Distribuição de lucros e dividendos ────────────────────

@@ -344,3 +344,53 @@ export function tituloDaFolhaPreservado(r: {
     return r.status === 'CONCILIATED' || r.status === 'CANCELLED' || r.business_status === 'PAGO'
         || !!r.darf_id || !!r.conciliado || !!r.pagamentoAsaas;
 }
+
+// ── Pró-labore ───────────────────────────────────────────────────────────────
+// Pedido do usuário (22/10/2026): os tributos do pró-labore entram em Tributos a
+// Pagar como os da folha. Antes, o envio ao financeiro gravava só o líquido do
+// sócio; o INSS descontado dele nunca virava título, e a cota patronal entrava sem
+// party_type (fora de Tributos) e sem vencimento. Terceiros NÃO incidem sobre
+// pró-labore (contribuinte individual não é empregado) — saiu do cálculo.
+
+export interface ProlaboreParaTributos {
+    id: string;
+    competence_month: string;   // YYYY-MM-01
+    inss_total: number;
+    irrf_total: number;
+    patronal_total: number;
+}
+
+export interface TributoDoProlabore {
+    tipo: 'inss' | 'cpp' | 'irrf';
+    reference_id: string;
+    party_name: string;
+    category: string;
+    description: string;
+    amount: number;
+    transaction_date: string;
+    due_date: string;
+}
+
+/** Títulos de tributo de uma folha de pró-labore (um por tipo, somando os sócios). */
+export function tributosDoProlabore(p: ProlaboreParaTributos): TributoDoProlabore[] {
+    const comp = p.competence_month.slice(0, 7);
+    const [ano, mes] = comp.split('-');
+    const venc = vencimentoDia20(comp);
+    const linhas: [TributoDoProlabore['tipo'], number, string, string][] = [
+        ['inss', p.inss_total, 'INSS (pró-labore)', 'Pró-labore'],
+        ['cpp', p.patronal_total, 'INSS patronal (pró-labore)', 'INSS Patronal (Pró-labore)'],
+        ['irrf', p.irrf_total, 'IRRF (pró-labore)', 'Pró-labore'],
+    ];
+    return linhas
+        .map(([tipo, valor, nome, categoria]) => ({
+            tipo,
+            reference_id: `prolabore-${p.id}-${tipo}`,
+            party_name: nome,
+            category: categoria,
+            description: `${nome} - Pró-labore ${mes}/${ano}`,
+            amount: Math.round((Number(valor) || 0) * 100) / 100,
+            transaction_date: p.competence_month.slice(0, 10),
+            due_date: venc,
+        }))
+        .filter(l => l.amount > 0);
+}

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     montarLinhasDaFolha, fatiasDoColaborador, distribuirCentavos, vencimentoDia20, diaDoMesSeguinte,
-    encargosPadrao, formaDoTitulo, tituloDaFolhaPreservado, custoPorDestino,
+    encargosPadrao, formaDoTitulo, tituloDaFolhaPreservado, custoPorDestino, tributosDoProlabore,
     type ColaboradorDaFolha, type EncargosConfig, type OpcoesDaFolha,
 } from '../utils/folhaFinanceiro';
 
@@ -198,3 +198,29 @@ describe('custoPorDestino', () => {
         expect(d.custo).toBe(Math.round((5667 + 453.36 + 5667 * (0.2 + 0.03 + 0.058)) * 100) / 100);
     });
 });
+
+describe('tributosDoProlabore (22/10/2026)', () => {
+    // 07/2026 da Alpa recalculado: bruto 5.000, INSS 11% = 550, CPP 20% = 1.000, IRRF 0.
+    const p = { id: 'f1c50980', competence_month: '2026-07-01', inss_total: 550, irrf_total: 0, patronal_total: 1000 };
+
+    it('INSS do sócio e cota patronal viram tributos TAX-ready, vencendo no dia 20; IRRF zerado não gera linha', () => {
+        const t = tributosDoProlabore(p);
+        expect(t.map(l => [l.tipo, l.amount, l.due_date])).toEqual([
+            ['inss', 550, '2026-08-20'],
+            ['cpp', 1000, '2026-08-20'],
+        ]);
+        expect(t[0]).toMatchObject({ reference_id: 'prolabore-f1c50980-inss', party_name: 'INSS (pró-labore)', transaction_date: '2026-07-01' });
+        expect(t[1].description).toBe('INSS patronal (pró-labore) - Pró-labore 07/2026');
+    });
+
+    it('IRRF retido gera o seu título; competência igual à da folha do mês (pode ir no mesmo DARF)', () => {
+        const t = tributosDoProlabore({ ...p, irrf_total: 87.5 });
+        expect(t.find(l => l.tipo === 'irrf')).toMatchObject({ amount: 87.5, party_name: 'IRRF (pró-labore)' });
+        expect(t.every(l => l.transaction_date.startsWith('2026-07'))).toBe(true);
+    });
+
+    it('vencimento no fim de semana antecipa (20/06/2026 é sábado)', () => {
+        expect(tributosDoProlabore({ ...p, competence_month: '2026-05-01' })[0].due_date).toBe('2026-06-19');
+    });
+});
+

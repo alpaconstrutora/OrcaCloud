@@ -210,7 +210,18 @@ Consequências:
   sonda anon nas 6 RPCs = 401 "permission denied for function"; números no JWT do usuário iguais
   ao ensaio (Bella Vista R$ 300 mil; 2 alertas HIGH; saldo de partida −R$ 31.996,72, 90d −R$ 11.120,84).
 - [x] ~~Fase 2~~ — CANCELADA em 21/10: o vínculo já existe em Empreendimento › Vinculações
-- [ ] Fase 3 — 0 de 2
+- [ ] Fase 3 — escrita e ensaiada em 21/10/2026; e-mail de teste para alpaconstrutora@gmail.com
+  (endereço dado pelo usuário). Pedido: *"voce sobre precisa de um endereco de email? alpaconstrutora@gmail.com"*.
+  - DB `aplicar_20271021950000_…_envio_por_email`: `fn_fi_targets` aceita service_role COM org;
+    `fn_fi_saldo_bancario` (fórmula do dashboard — o dashboard recusa service_role). Ensaio: saldo
+    novo = dashboard (−31.996,72); service_role com org lê tudo; sem org devolve vazio.
+  - Edge reescrita: cron por `chamadaDeCron`; manual por `exigirUsuario` → agendamento →
+    `exigirMembro` na org DELE; falha de RPC = e-mail não sai; `p_days`; HTML com `escapeHtml`
+    (check-xss-sinks ok); hora de Brasília por Intl; deploy com `--no-verify-jwt`.
+  - Cron `aplicar_20271021960000_…_cron_relatorio` (só depois do deploy).
+  - Tela: "Enviar agora" religado; aviso de envio suspenso removido.
+  - Ordem de produção: migration 950000 → deploy da Edge → curl sem header = 401 → cron →
+    push do front → teste "Enviar agora" num agendamento PAUSADO de teste.
 - [x] Fase 4 — 4 de 4, **conferida na tela em 21/10/2026** (Playwright, agente-leitura, 3 contextos:
   Todas / Alpa / empresa da Alpa; 0 erro de console/HTTP; RPCs pedem `null` em Todas e o id da org nos
   outros dois). A conferência achou e corrigiu: '' da Central de Controle virando 22P02 (serviço

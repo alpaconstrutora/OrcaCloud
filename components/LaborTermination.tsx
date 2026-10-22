@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-    UserMinus, Plus, X, ChevronDown, Loader2, Search,
+    UserMinus, Plus, X, ChevronDown, Loader2,
     CheckSquare, Square, AlertTriangle, CheckCircle2,
     FileText, HardHat, Shield, MessageSquare,
-    ClipboardList, Lock, DollarSign, Eye
+    ClipboardList, Lock, DollarSign, Clock, Users
 } from 'lucide-react';
-import { KpiCard, kpiColorFromClass } from './ui/KpiCard';
+import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
+import TabsBar from './ui/TabsBar';
+import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import { SegmentedProgress } from './ui/SegmentedProgress';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee,
@@ -14,6 +17,8 @@ import {
 } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
+import { formatDate } from '../lib/payrollUIHelpers';
+import { chavePorMes, chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
@@ -58,6 +63,42 @@ const CHECKLIST_ITEMS = [
     { id: 'seguro_desemp',   icon: DollarSign,    label: 'Seguro-desemprego requerido (quando aplicável)' },
     { id: 'exame_demissional',icon: FileText,     label: 'Exame demissional (ASO) realizado' },
 ];
+
+// ── Tabela (guia de UI §6.10) ────────────────────────────────────────────────
+
+type Aba = 'andamento' | 'concluidos' | 'todos';
+type TerminationStatus = TerminationRecord['status'];
+
+const STATUS_LABELS: Record<TerminationStatus, string> = { RASCUNHO: 'Em andamento', CONCLUIDO: 'Concluído' };
+// Status = texto colorido, sem pílula (§8).
+const STATUS_TEXT: Record<TerminationStatus, string> = { RASCUNHO: 'text-amber-700', CONCLUIDO: 'text-gray-600' };
+const AVISO_LABELS: Record<AvisoPrevioTipo, string> = { TRABALHADO: 'Trabalhado', INDENIZADO: 'Indenizado', DISPENSADO: 'Dispensado' };
+
+// Soma das visíveis por padrão: 1070 + Ações 140 = 1210 px (cabe nos ~1290 úteis a 1600 px).
+// Em "Todas as organizações" entra Organização (+170) e a tabela rola na horizontal.
+const ORG_COLUMN: StandardTableColumn = { key: 'org', label: 'Organização', sortable: true, width: 170 };
+const COLUMNS: StandardTableColumn[] = [
+    { key: 'colaborador', label: 'Colaborador',  sortable: true, width: 210 },
+    { key: 'cargo',       label: 'Cargo',        sortable: true, width: 150 },
+    { key: 'tipo',        label: 'Tipo',         sortable: true, width: 190 },
+    { key: 'data',        label: 'Data',         sortable: true, width: 110 },
+    { key: 'aviso',       label: 'Aviso prévio', sortable: true, width: 120 },
+    { key: 'checklist',   label: 'Checklist',    sortable: true, width: 170 },
+    { key: 'entrevista',  label: 'Entrevista',   sortable: true, width: 120, defaultHidden: true },
+    { key: 'status',      label: 'Status',       sortable: true, width: 120 },
+];
+
+const SEM_GRUPO: Record<string, string> = { org: 'Sem organização', tipo: 'Sem tipo', mes: 'Sem data', status: 'Sem status' };
+
+const EMPTY_POR_ABA: Record<Aba, { title: string; subtitle: string }> = {
+    andamento:  { title: 'Nenhum desligamento em andamento', subtitle: 'Inicie um processo para um colaborador elegível.' },
+    concluidos: { title: 'Nenhum desligamento concluído',    subtitle: 'Os processos finalizados aparecem aqui.' },
+    todos:      { title: 'Nenhum processo de desligamento',  subtitle: 'Inicie um processo para um colaborador elegível.' },
+};
+
+const MOTIVO_SEM_ELEGIVEL = 'Nenhum colaborador ativo ou afastado sem processo de desligamento.';
+
+const checklistFeitos = (t: TerminationRecord) => (t.checklist || []).length;
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -492,7 +533,7 @@ interface LaborTerminationProps {
 const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, onRefresh, organizations }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
-    const [search, setSearch] = usePersistedState<string>('laborTermination:search', '');
+    const [aba, setAba] = usePersistedState<Aba>('laborTermination:aba', 'andamento');
     const [showWizard, setShowWizard] = useState(false);
     const [editingRecord, setEditingRecord] = useState<TerminationRecord | null>(null);
 
@@ -514,126 +555,176 @@ const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, o
 
     const deleteMutation = useMutation({
         mutationFn: (id: string) => laborService.deleteTermination(id),
-        onSuccess: invalidate,
+        // §22: tira só a linha do cache — excluir um processo não recarrega a lista inteira.
+        onSuccess: (_, id) => qc.setQueryData<TerminationRecord[]>(terminationsKey, prev => (prev ?? []).filter(t => t.id !== id)),
     });
 
-    const drafts    = terminations.filter(t => t.status === 'RASCUNHO');
-    const concluded = terminations.filter(t => t.status === 'CONCLUIDO');
-
-    const filtered = terminations.filter(t =>
-        !search ||
-        (t.employee_name || '').toLowerCase().includes(search.toLowerCase()) ||
-        TIPO_LABELS[t.tipo].toLowerCase().includes(search.toLowerCase())
-    );
+    const drafts    = useMemo(() => terminations.filter(t => t.status === 'RASCUNHO'), [terminations]);
+    const concluded = useMemo(() => terminations.filter(t => t.status === 'CONCLUIDO'), [terminations]);
+    // Array estável por aba — o StandardTable reage à identidade de `rows`.
+    const rows = aba === 'andamento' ? drafts : aba === 'concluidos' ? concluded : terminations;
 
     // Colaboradores elegíveis (ativos ou afastados sem processo em andamento)
     const terminatedIds = new Set(terminations.map(t => t.employee_id));
     const eligible = employees.filter(e => (e.status === 'ATIVO' || e.status === 'AFASTADO') && !terminatedIds.has(e.id));
 
+    // Organização só aparece (coluna e agrupamento) em "Todas as organizações".
+    const isAllOrgs = !orgId;
+    const orgName = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
+    const columns = useMemo(() => (isAllOrgs ? [ORG_COLUMN, ...COLUMNS] : COLUMNS), [isAllOrgs]);
+
+    // "Agrupar" (§6.12). Chave = o MESMO texto que a célula mostra; sem `valor` — não há dinheiro aqui.
+    const agrupamento = useMemo(() => ({
+        opcoes: [
+            ...(isAllOrgs ? [{ value: 'org', label: 'Organização' }] : []),
+            { value: 'tipo', label: 'Tipo' },
+            { value: 'mes', label: 'Mês do desligamento' },
+            { value: 'status', label: 'Status' },
+        ],
+        chave: (campo: string, t: TerminationRecord) => {
+            switch (campo) {
+                case 'org': return chavePorNome(orgName.get(t.org_id));
+                case 'tipo': return chavePorRotulo(t.tipo, TIPO_LABELS);
+                case 'mes': return chavePorMes(t.termination_date);
+                case 'status': return chavePorRotulo(t.status, STATUS_LABELS);
+                default: return null;
+            }
+        },
+        semRotulo: (campo: string) => SEM_GRUPO[campo] ?? 'Sem valor',
+        ordem: (campo: string) => (
+            campo === 'tipo' ? Object.keys(TIPO_LABELS)
+                : campo === 'status' ? Object.keys(STATUS_LABELS)
+                    : campo === 'mes' ? 'chave' as const
+                        : undefined
+        ),
+        title: 'Agrupar os desligamentos',
+    }), [isAllOrgs, orgName]);
+
+    const abrirWizard = (record: TerminationRecord | null) => { setEditingRecord(record); setShowWizard(true); };
+
+    const excluir = async (t: TerminationRecord) => {
+        const ok = await confirm({ title: 'Excluir processo?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' });
+        if (ok) deleteMutation.mutate(t.id);
+    };
+
+    const renderCell = (key: string, t: TerminationRecord) => {
+        switch (key) {
+            case 'org': {
+                const nome = orgName.get(t.org_id) ?? '—';
+                return <span className="block truncate text-sm font-normal text-gray-700" title={nome}>{nome}</span>;
+            }
+            case 'colaborador': return <span className="block truncate text-sm font-normal text-gray-700" title={t.employee_name}>{t.employee_name || '—'}</span>;
+            case 'cargo': return <span className="block truncate text-sm font-normal text-gray-600" title={t.employee_role}>{t.employee_role || '—'}</span>;
+            case 'tipo': return <span className={`block truncate text-sm font-normal ${TIPO_COLORS[t.tipo].text}`} title={TIPO_LABELS[t.tipo]}>{TIPO_LABELS[t.tipo]}</span>;
+            case 'data': return <span className="text-sm font-normal text-gray-600">{formatDate(t.termination_date) || '—'}</span>;
+            case 'aviso': return <span className="text-sm font-normal text-gray-600">{t.aviso_previo_tipo ? AVISO_LABELS[t.aviso_previo_tipo] : '—'}</span>;
+            case 'checklist': {
+                const feitos = checklistFeitos(t);
+                const pct = Math.round((feitos / CHECKLIST_ITEMS.length) * 100);
+                return (
+                    <SegmentedProgress
+                        percent={pct}
+                        tone={pct === 100 ? 'emerald' : 'amber'}
+                        hint={`${feitos}/${CHECKLIST_ITEMS.length}`}
+                        title={`${feitos} de ${CHECKLIST_ITEMS.length} itens do checklist concluídos`}
+                    />
+                );
+            }
+            case 'entrevista': return t.entrevista_realizada
+                ? <span className="text-sm font-normal text-emerald-700">Realizada</span>
+                : <span className="text-sm font-normal text-gray-600">Pendente</span>;
+            case 'status': return <span className={`text-sm font-normal ${STATUS_TEXT[t.status]}`}>{STATUS_LABELS[t.status]}</span>;
+            default: return null;
+        }
+    };
+
+    const sortValue = (key: string, t: TerminationRecord) => {
+        switch (key) {
+            case 'org': return orgName.get(t.org_id) ?? '';
+            case 'colaborador': return t.employee_name ?? '';
+            case 'cargo': return t.employee_role ?? '';
+            case 'tipo': return TIPO_LABELS[t.tipo];
+            case 'data': return t.termination_date;
+            case 'aviso': return t.aviso_previo_tipo ? AVISO_LABELS[t.aviso_previo_tipo] : '';
+            case 'checklist': return checklistFeitos(t);
+            case 'entrevista': return t.entrevista_realizada;
+            case 'status': return STATUS_LABELS[t.status];
+            default: return null;
+        }
+    };
+
+    const semElegivel = eligible.length === 0;
+
     return (
         <div className="space-y-6">
-            {/* 1. Título */}
+            {/* 1. Título (§20) */}
             <div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Desligamentos</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Checklist, entrevista de desligamento e encerramento de acessos.</p>
             </div>
 
-            {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                    { label: 'Em Andamento',   value: drafts.length,    bg: 'bg-amber-50',   text: 'text-amber-700' },
-                    { label: 'Concluídos',      value: concluded.length, bg: 'bg-slate-100',  text: 'text-slate-600' },
-                    { label: 'Elegíveis',       value: eligible.length,  bg: 'bg-indigo-50',  text: 'text-indigo-700' },
-                    { label: 'Total Processos', value: terminations.length, bg: 'bg-rose-50', text: 'text-rose-700' },
-                ].map(({ label, value, bg }) => (
-                    <KpiCard key={label} label={label} value={value} color={kpiColorFromClass(bg)} />
-                ))}
-            </div>
-
-            {/* Controls */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-                <div>
-                    <p className="text-sm font-black text-slate-800">Processos de Desligamento</p>
-                    <p className="text-xs text-slate-400 font-medium mt-0.5">Checklist completo: documentos, EPIs, acesso e entrevista</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-44" />
-                    </div>
+            {/* 2. Toolbar de abas (§19.1) — vem ANTES dos KPIs (ANATOMIA do guia); ação primária (§17) à direita */}
+            <TabsBar<Aba>
+                tabs={[
+                    { id: 'andamento',  label: 'Em andamento', icon: <Clock className="w-4 h-4" />,         badge: drafts.length,       badgeTitulo: 'Processos em andamento' },
+                    { id: 'concluidos', label: 'Concluídos',   icon: <CheckCircle2 className="w-4 h-4" />,  badge: concluded.length,    badgeTitulo: 'Processos concluídos' },
+                    { id: 'todos',      label: 'Todos',        icon: <ClipboardList className="w-4 h-4" />, badge: terminations.length, badgeTitulo: 'Todos os processos' },
+                ]}
+                value={aba}
+                onChange={setAba}
+            >
+                {/* Botão desligado não mostra dica em todo navegador — o motivo vai no invólucro também */}
+                <span className="inline-flex" title={semElegivel ? MOTIVO_SEM_ELEGIVEL : undefined}>
                     <button
-                        onClick={() => { setEditingRecord(null); setShowWizard(true); }}
-                        disabled={eligible.length === 0}
-                        className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-all font-bold text-button shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+                        onClick={() => abrirWizard(null)}
+                        disabled={semElegivel}
+                        title={semElegivel ? MOTIVO_SEM_ELEGIVEL : undefined}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
                     >
-                        <Plus className="w-3.5 h-3.5" />
-                        Iniciar Desligamento
+                        <Plus className="w-[15px] h-[15px]" />
+                        Iniciar desligamento
                     </button>
-                </div>
+                </span>
+            </TabsBar>
+
+            {/* 3. KPIs (§4) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <KpiCard label="Em andamento"    value={drafts.length}       icon={<Clock className="w-4 h-4" />}        color="amber" />
+                <KpiCard label="Concluídos"      value={concluded.length}    icon={<CheckCircle2 className="w-4 h-4" />} color="gray" />
+                <KpiCard label="Elegíveis"       value={eligible.length}     icon={<Users className="w-4 h-4" />}        color="indigo" />
+                <KpiCard label="Total processos" value={terminations.length} icon={<UserMinus className="w-4 h-4" />}    color="rose" />
             </div>
 
-            {/* Lista */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                {isLoading ? (
-                    <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-indigo-500 animate-spin" /></div>
-                ) : filtered.length === 0 ? (
-                    <div className="text-center py-16">
-                        <UserMinus className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                        <p className="text-sm font-black text-slate-400">Nenhum processo de desligamento</p>
-                        <p className="text-xs text-slate-400 mt-1">Inicie um processo para um colaborador elegível.</p>
-                    </div>
-                ) : (
-                    <div className="divide-y divide-slate-50">
-                        {filtered.map(t => {
-                            const tipoStyle = TIPO_COLORS[t.tipo];
-                            const checkedCount = (t.checklist || []).length;
-                            const pct = Math.round((checkedCount / CHECKLIST_ITEMS.length) * 100);
-                            return (
-                                <div key={t.id} className="p-5 hover:bg-slate-50/50 transition-colors">
-                                    <div className="flex items-start gap-4">
-                                        <div className={`p-2.5 rounded-xl ${t.status === 'CONCLUIDO' ? 'bg-slate-100' : 'bg-rose-100'} shrink-0`}>
-                                            <UserMinus className={`w-4 h-4 ${t.status === 'CONCLUIDO' ? 'text-slate-500' : 'text-rose-600'}`} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-3 flex-wrap">
-                                                <span className="text-sm font-black text-slate-900">{t.employee_name || '—'}</span>
-                                                {t.employee_role && <span className="text-xs text-slate-400 font-medium">{t.employee_role}</span>}
-                                                <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${tipoStyle.bg} ${tipoStyle.text}`}>
-                                                    {TIPO_LABELS[t.tipo]}
-                                                </span>
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${t.status === 'CONCLUIDO' ? 'bg-slate-100 text-slate-500' : 'bg-amber-100 text-amber-700'}`}>
-                                                    {t.status === 'CONCLUIDO' ? 'Concluído' : 'Em andamento'}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center gap-4 mt-1.5 flex-wrap">
-                                                <span className="text-xs text-slate-500 font-medium">Data: {t.termination_date}</span>
-                                                {t.aviso_previo_tipo && <span className="text-xs text-slate-400">Aviso: {t.aviso_previo_tipo.toLowerCase()}</span>}
-                                                <span className="text-xs font-bold text-slate-600">Checklist: {pct}%</span>
-                                            </div>
-                                            {/* Mini progress bar */}
-                                            <div className="h-1 bg-slate-100 rounded-full mt-2 max-w-[200px] overflow-hidden">
-                                                <div className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ width: `${pct}%` }} />
-                                            </div>
-                                        </div>
-                                        {/* Ações */}
-                                        <div className="flex items-center gap-2 shrink-0">
-                                            {t.status === 'RASCUNHO' && (
-                                                <button
-                                                    onClick={() => { setEditingRecord(t); setShowWizard(true); }}
-                                                    className="flex items-center gap-1 px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-xs font-black transition-all"
-                                                >
-                                                    <Eye className="w-3 h-3" /> Continuar
-                                                </button>
-                                            )}
-                                            <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir processo?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteMutation.mutate(t.id); }} />
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
+            {/* 4. Tabela padrão (§6.10) — busca, colunas, autofit e Agrupar na toolbar acoplada */}
+            <StandardTable<TerminationRecord>
+                storageKey="labor:desligamentos:tabela"
+                columns={columns}
+                rows={rows}
+                rowKey={t => t.id}
+                loading={isLoading}
+                searchText={t => `${t.employee_name ?? ''} ${t.employee_role ?? ''} ${TIPO_LABELS[t.tipo]} ${t.motivo ?? ''}`}
+                searchPlaceholder="Buscar colaborador, cargo ou tipo..."
+                agrupamento={agrupamento}
+                sortValue={sortValue}
+                renderCell={renderCell}
+                actions={{
+                    width: 140,
+                    render: t => (
+                        <>
+                            {t.status === 'RASCUNHO' && (
+                                <button
+                                    onClick={() => abrirWizard(t)}
+                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
+                                >
+                                    Continuar
+                                </button>
+                            )}
+                            <ActionIconButton kind="delete" size="sm" onClick={() => excluir(t)} />
+                        </>
+                    ),
+                }}
+                empty={{ icon: <UserMinus className="w-12 h-12 text-gray-300 mx-auto mb-4" />, ...EMPTY_POR_ABA[aba] }}
+            />
 
             {/* Wizard */}
             {showWizard && (
@@ -642,6 +733,7 @@ const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, o
                     employees={employees}
                     existing={editingRecord}
                     onClose={() => { setShowWizard(false); setEditingRecord(null); }}
+                    // O assistente não devolve o registro, e finalizar muda o status do colaborador — recarrega.
                     onSaved={() => { setShowWizard(false); setEditingRecord(null); invalidate(); }}
                 />
             )}

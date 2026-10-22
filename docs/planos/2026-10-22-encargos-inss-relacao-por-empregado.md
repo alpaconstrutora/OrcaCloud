@@ -91,4 +91,10 @@ code), `orgContextGuard.test.ts` verde, e as abas conferidas no navegador contra
   `relacoesDaFolha.test.ts` (12) e `components/LaborEncargosRelacoes.test.tsx` (6) verdes;
   suíte: 10.404 passaram + 34 ignorados + 329 pendentes + 2 falhas = 10.769 (conta fecha) — as 2
   falhas são `PainelVersoes.test.tsx` (Planta), que passa 26/26 isolado: carga da suíte, com
-  queda do V8 no log. **Falta:** conferir no navegador (precisa da senha do usuário de leitura).
+  queda do V8 no log.
+- 22/10/2026 — **item 6 concluído:** conferido no navegador (dev server da frente, usuário de
+  leitura, `c:/tmp/pwtest/encargos-inss-relacao-conferir.cjs`): Alpa 06 INSS guia 2.127,79 e
+  Relação com nomes/matrícula; Garden 05; "Todas" 05/2026 com um bloco por organização (Alpa
+  guia 2.249,02, Garden 2.188,29 — iguais aos títulos) e "Sem folha fechada: Condomínio Galeria
+  Altavista". 0 erro HTTP, 0 escrita REST. A Relação cortava a coluna FGTS a 1.700px: larguras
+  padrão reduzidas para 1.300px.

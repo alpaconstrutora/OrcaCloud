@@ -18,17 +18,18 @@ interface LaborFolhaEmpregadoProps {
 type Valor = 'salario' | 'outrosProventos' | 'salarioFamilia' | 'inss' | 'irrf' | 'outrosDescontos' | 'liquido' | 'fgts';
 const VALORES: Valor[] = ['salario', 'outrosProventos', 'salarioFamilia', 'inss', 'irrf', 'outrosDescontos', 'liquido', 'fgts'];
 
+// Soma 1.300px: cabe na área útil de uma tela de 1.700px com o menu aberto (~1.380px).
 const COLUMNS: StandardTableColumn[] = [
-    { key: 'matricula', label: 'Matrícula', sortable: true, width: 110 },
-    { key: 'nome', label: 'Empregado', sortable: true, width: 260 },
-    { key: 'salario', label: 'Salário', sortable: true, width: 130, align: 'right' },
-    { key: 'outrosProventos', label: 'Outros proventos', sortable: true, width: 150, align: 'right' },
-    { key: 'salarioFamilia', label: 'Salário-família', sortable: true, width: 140, align: 'right' },
-    { key: 'inss', label: 'INSS', sortable: true, width: 120, align: 'right' },
-    { key: 'irrf', label: 'IRRF', sortable: true, width: 120, align: 'right' },
-    { key: 'outrosDescontos', label: 'Outros descontos', sortable: true, width: 150, align: 'right' },
-    { key: 'liquido', label: 'Líquido', sortable: true, width: 130, align: 'right' },
-    { key: 'fgts', label: 'FGTS', sortable: true, width: 120, align: 'right' },
+    { key: 'matricula', label: 'Matrícula', sortable: true, width: 100 },
+    { key: 'nome', label: 'Empregado', sortable: true, width: 220 },
+    { key: 'salario', label: 'Salário', sortable: true, width: 120, align: 'right' },
+    { key: 'outrosProventos', label: 'Outros proventos', sortable: true, width: 140, align: 'right' },
+    { key: 'salarioFamilia', label: 'Salário-família', sortable: true, width: 130, align: 'right' },
+    { key: 'inss', label: 'INSS', sortable: true, width: 110, align: 'right' },
+    { key: 'irrf', label: 'IRRF', sortable: true, width: 110, align: 'right' },
+    { key: 'outrosDescontos', label: 'Outros descontos', sortable: true, width: 140, align: 'right' },
+    { key: 'liquido', label: 'Líquido', sortable: true, width: 120, align: 'right' },
+    { key: 'fgts', label: 'FGTS', sortable: true, width: 110, align: 'right' },
 ];
 
 const ehValor = (key: string): key is Valor => (VALORES as string[]).includes(key);

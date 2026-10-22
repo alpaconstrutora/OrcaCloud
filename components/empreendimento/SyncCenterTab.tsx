@@ -260,10 +260,17 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
   const mostrarMassa = !!e.blueprint_study_id && (temMassa || !temLote);
   const mostrarLote = !!e.blueprint_study_id && (temLote || !temMassa);
 
+  // Estudo vinculado que nunca foi publicado (o rascunho não é lido de propósito): não há com o
+  // que estar "Alinhado" — visto na tela real em 22/10/2026, Garden Cambuhy com estudo de 0 versões.
+  const semPublicacao = !!(massaReport?.semVersaoPublicada || loteamentoReport?.semVersaoPublicada);
+  const MOTIVO_SEM_PUBLICACAO = 'O estudo ainda não tem versão publicada: publique na Planta Inteligente (o rascunho não é trazido)';
+
   // Botão desligado sempre diz o PORQUÊ — e o motivo certo: "nada a trazer" não é o mesmo
   // que "o estudo não tem massa publicada".
   const motivoMassa = massaError
     ? 'Não foi possível verificar o estudo de massa — veja o erro no card abaixo'
+    : semPublicacao
+      ? MOTIVO_SEM_PUBLICACAO
     : !temMassa
       ? 'O estudo não tem massa publicada: desenhe os blocos (Terreno › Massa) e publique na Planta Inteligente'
       : massaTotal === 0
@@ -271,6 +278,8 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
         : null;
   const motivoLote = loteamentoError
     ? 'Não foi possível verificar o loteamento — veja o erro no card abaixo'
+    : semPublicacao
+      ? MOTIVO_SEM_PUBLICACAO
     : !temLote
       ? 'O estudo não tem lotes publicados: desenhe os lotes (Terreno › Lotear) e publique na Planta Inteligente'
       : loteamentoTotal === 0
@@ -319,6 +328,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
             unlinkedLabel="Nenhum estudo vinculado"
             error={massaError || loteamentoError}
             divergences={massaTotal + loteamentoTotal}
+            vazio={semPublicacao ? 'Nada publicado no estudo' : null}
             naCuradoria={naCuradoriaDe(massaReport) + naCuradoriaDe(loteamentoReport)}
             footer={
               temMassa
@@ -653,12 +663,14 @@ const VertexCard: React.FC<{
   icon: any; tint: string; title: string; subtitle: string;
   linked: boolean; unlinkedLabel: string; error: string | null;
   divergences: number;
+  /** Vinculado, mas sem nada com que comparar (estudo nunca publicado): diz isso em vez de "Alinhado". */
+  vazio?: string | null;
   /** Conflitos esperando decisão na Curadoria — não são divergência a trazer, mas não somem. */
   naCuradoria: number;
   footer: string | null;
   lastSent: string | null;
   className?: string;
-}> = ({ icon: Icon, tint, title, subtitle, linked, unlinkedLabel, error, divergences, naCuradoria, footer, lastSent, className = '' }) => {
+}> = ({ icon: Icon, tint, title, subtitle, linked, unlinkedLabel, error, divergences, vazio, naCuradoria, footer, lastSent, className = '' }) => {
   const t = TINTS[tint] ?? TINTS.violet;
   const aligned = linked && !error && divergences === 0;
   return (
@@ -675,6 +687,8 @@ const VertexCard: React.FC<{
         <span className="text-xs font-medium text-gray-500 flex items-center gap-1"><Link2Off className="w-3.5 h-3.5" /> {unlinkedLabel}</span>
       ) : error ? (
         <span className="text-xs font-medium text-rose-600 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Erro ao verificar</span>
+      ) : vazio ? (
+        <span className="text-xs font-medium text-gray-600 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {vazio}</span>
       ) : aligned ? (
         <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Alinhado</span>
       ) : (

@@ -167,6 +167,9 @@ export interface CanonicalSide {
     liveTowerSourceIds: Set<string>;
     liveUnitSourceIds: Set<string>;
     warnings: string[];
+    /** A origem ainda não tem versão publicada (o rascunho nunca é lido). A tela diz isso em vez
+     *  de "Alinhado" — sem publicação não há com o que estar alinhado. */
+    semVersaoPublicada?: boolean;
 }
 
 /** O estado atual do Empreendimento. */

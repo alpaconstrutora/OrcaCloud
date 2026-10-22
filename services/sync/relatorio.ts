@@ -38,6 +38,7 @@ export function relatorioDoPlano(
     orphanUnits: plan.orphanUnits,
     // `plan.warnings` já começa com os da origem (o planner os copia): somar de novo duplicava.
     warnings: plan.warnings,
+    semVersaoPublicada: side.semVersaoPublicada ?? false,
     conflitosNovos: curadoria.novos.length,
     conflitosNaCuradoria: curadoria.pendentes.length,
     conflitosRejeitados: curadoria.rejeitados.length,

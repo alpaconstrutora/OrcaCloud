@@ -127,6 +127,11 @@ describe('relatorioDoPlano', () => {
         expect(r.conflitosRejeitados).toBe(1);
     });
 
+    it('repassa "sem versão publicada" da origem', () => {
+        expect(relatorioDoPlano({ ...lado, semVersaoPublicada: true } as CanonicalSide, plano([])).semVersaoPublicada).toBe(true);
+        expect(relatorioDoPlano(lado, plano([])).semVersaoPublicada).toBe(false);
+    });
+
     it('conflito pendente ou rejeitado não é trabalho: com eles só, nada a trazer', () => {
         const c = [conflito('u1', 'bedrooms', 3)];
         const semFill = { ...plano(c), fills: [] } as SyncPlan;

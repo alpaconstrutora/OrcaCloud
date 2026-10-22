@@ -158,6 +158,19 @@ describe('Central de Sincronização — correções de 22/10/2026', () => {
     expect(screen.getByRole('button', { name: 'Abrir na planta' })).toBeInTheDocument();
   });
 
+  it('5b. estudo vinculado e NUNCA publicado: "Nada publicado no estudo", não "Alinhado" (visto na tela real, 22/10)', async () => {
+    previewMassa.mockResolvedValueOnce(relatorio({ semVersaoPublicada: true, warnings: ['O estudo ainda não tem versão publicada.'] }) as never);
+    previewLote.mockResolvedValueOnce(relatorio({ semVersaoPublicada: true, warnings: ['O estudo ainda não tem versão publicada.'] }) as never);
+    montar();
+    expect(await screen.findByText('Nada publicado no estudo')).toBeInTheDocument();
+    expect(screen.queryByText('Alinhado')).not.toBeInTheDocument();
+    for (const id of ['trazer-da-massa', 'trazer-o-loteamento']) {
+      const b = screen.getByTestId(id);
+      expect(b).toBeDisabled();
+      expect(b.parentElement?.getAttribute('title')).toMatch(/ainda não tem versão publicada/);
+    }
+  });
+
   it('5. estudo sem massa nem lotes: os dois botões aparecem, desligados, cada um com o seu motivo', async () => {
     previewMassa.mockResolvedValueOnce(relatorio({ warnings: ['A versão publicada não tem bloco de massa.'] }) as never);
     previewLote.mockResolvedValueOnce(relatorio({ warnings: ['A versão publicada não tem lote nenhum.'] }) as never);

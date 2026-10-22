@@ -416,6 +416,8 @@ export interface ArquiteturaSyncReport {
     /** Unidades cuja origem sumiu — nunca auto-deletadas. */
     orphanUnits: EmpreendimentoUnit[];
     warnings: string[];
+    /** O estudo vinculado ainda não tem versão publicada. Ausente = false. */
+    semVersaoPublicada?: boolean;
     /** Campos em conflito que o próximo envio manda à Curadoria (não são gravados). Ausente = 0.
      *  towersUpdated/unitsUpdated contam só o que é gravado. */
     conflitosNovos?: number;

@@ -60,6 +60,16 @@ proposta), então ganhou contagem própria em campos: `conflitosNovos` (este env
 - [x] `tsc --noEmit` — rc=0, 0 erros (1ª tentativa)
 - [x] testes da área: 4 arquivos, 26/26 (`sincronizacaoCuradoria` 5 novos, `writeBackImovib` 8 com 2 novos,
       `syncPlantaInteligenteTravas` 3, `SyncCenterTabArquitetura` 10 com 6 novos)
-- [ ] conferência na tela real (Garden Cambuhy, só leitura) — depende da senha do usuário de leitura
+- [x] conferência na tela real (22/10/2026) — servidor da frente (porta 3101), login `agente-leitura`, org Garden
+      Cambuhy SPE, 011 - Garden Cambuhy › Sincronização; escritas em `/rest/v1/` bloqueadas pelo script.
+      Script `c:/tmp/pwtest/sincronizacao-aba-conferir.cjs`; prints `c:/tmp/pwtest/sincronizacao-0*.png`.
+      **14/14 portões**, 0 escritas tentadas, 0 erros de JS/console/HTTP.
+
+### Achado na conferência real (22/10/2026) — corrigido no mesmo PR
+O Garden Cambuhy ganhou em 21/10 um estudo da Planta ("Garden") com **0 versões publicadas**. A Arquitetura
+dizia **"Alinhado"** — não há com o que estar alinhado. Os adaptadores passam a marcar `semVersaoPublicada`
+(sinal estruturado; não se procura a frase do aviso), o relatório o repassa, e a tela diz "Nada publicado no
+estudo", com os dois "Trazer" desligados pelo motivo "O estudo ainda não tem versão publicada". Testes: +1 na tela
+(5b), +1 no relatório — área 28/28; `tsc` rc=0 (2ª tentativa; 1ª segfault do Node 24); `check-ui-standard.sh` 0.
 - [x] PR rascunho + CI verde — PR #89; `ci` (typecheck + suíte + build, 23m33s), Vercel e Vercel Preview Comments verdes
 - [ ] publicação (pelo usuário) + `conferir-producao.sh`

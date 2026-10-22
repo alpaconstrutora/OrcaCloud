@@ -155,7 +155,7 @@ export async function loadMassaSide(empreendimento: Empreendimento): Promise<Can
 
   const snapshots = await listSnapshots(empreendimento.blueprint_study_id);
   if (snapshots.length === 0) {
-    return { origin: 'massa', empreendimento, towers: [], commonAreaCandidates: [], liveTowerSourceIds: new Set(), liveUnitSourceIds: new Set(), warnings: ['O estudo ainda não tem versão publicada. Publique na Planta Inteligente — o rascunho não é enviado de propósito.'] };
+    return { origin: 'massa', empreendimento, towers: [], commonAreaCandidates: [], liveTowerSourceIds: new Set(), liveUnitSourceIds: new Set(), warnings: ['O estudo ainda não tem versão publicada. Publique na Planta Inteligente — o rascunho não é enviado de propósito.'], semVersaoPublicada: true };
   }
   const maisRecente = snapshots.reduce((a, b) => (b.revision > a.revision ? b : a));
   const snapshot = await getSnapshot(maisRecente.id);

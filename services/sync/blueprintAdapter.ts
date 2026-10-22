@@ -138,6 +138,7 @@ export async function loadBlueprintSide(empreendimento: Empreendimento): Promise
       liveTowerSourceIds: new Set(),
       liveUnitSourceIds: new Set(),
       warnings: ['O estudo ainda não tem versão publicada. Abra a Planta Inteligente e publique — o rascunho não é sincronizado de propósito.'],
+      semVersaoPublicada: true,
     };
   }
 

@@ -206,6 +206,11 @@ Consequências:
 **Plano encerrado em 22/10/2026:** Fases 1, 3 e 4 publicadas e verificadas em produção; Fase 2 cancelada
 (o vínculo já existia). Achado fora do escopo, não tratado aqui: `check-rls-postura.sh` (verificação 5)
 acusa 3 credenciais placeholder no Vault da captura de boletos por e-mail (`email_capture*`).
+→ **22/10/2026: era FALSO POSITIVO da verificação, não credencial errada.** As três são senhas reais e
+curtas por natureza (senha de app do Gmail, 16 letras no formato do Google; duas senhas de PDF de 4 e 5
+dígitos), e a captura estava funcionando (caixa ativa, sync de 15 em 15 min sem erro). A regra
+`length < 40` da verificação 5 é para credencial de máquina; corrigida em `scripts/check-rls-postura.sh`
+para não valer para `email_capture*` (a regra do `<` continua) — PR "check-rls-postura: senhas da captura".
 
 - [x] Diagnóstico — 21/10/2026
 - [x] Decisões de negócio com o usuário — 21/10/2026

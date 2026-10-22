@@ -113,8 +113,16 @@ fi
 # tinha SAÍDO do comando e ENTRADO no Vault ('<cole_aqui…>'), então olhar só o
 # texto do job dava ✅ com todos os crons quebrados. Também pega GUC `app.*`,
 # que neste banco não existe — era o que derrubava o `fiscal-fallback-polling`.
+#
+# A regra de TAMANHO (< 40) é para credencial de máquina (CRON_SECRET, chaves de
+# API), que nunca é curta. Ela NÃO vale para senha de pessoa guardada no Vault:
+# a captura de boletos por e-mail guarda a senha de app do Gmail
+# (`email_capture:<conta>`, 16 letras) e a senha de PDF de concessionária
+# (`email_capture_pdf:<remetente>`, 4–5 dígitos). Em 22/10/2026 as três saíam
+# aqui como "placeholder" com a captura funcionando (caixa ativa, sync de 15 em
+# 15 min sem erro). Para essas, só a regra do `<` vale.
 secao "5. Placeholder de segredo (comando, Vault ou GUC inexistente)"
-R=$(consulta "SELECT jobname AS onde, 'comando' AS tipo FROM cron.job WHERE command LIKE '%SEU_PROJECT_REF%' OR command LIKE '%CONFIGURE_SERVICE_ROLE_KEY%' OR command LIKE '%INTERNAL_SECRET_HERE%' OR command LIKE '%current_setting(''app.%' UNION ALL SELECT name, 'vault' FROM vault.decrypted_secrets WHERE decrypted_secret LIKE '<%' OR length(decrypted_secret) < 40;")
+R=$(consulta "SELECT jobname AS onde, 'comando' AS tipo FROM cron.job WHERE command LIKE '%SEU_PROJECT_REF%' OR command LIKE '%CONFIGURE_SERVICE_ROLE_KEY%' OR command LIKE '%INTERNAL_SECRET_HERE%' OR command LIKE '%current_setting(''app.%' UNION ALL SELECT name, 'vault' FROM vault.decrypted_secrets WHERE decrypted_secret LIKE '<%' OR (length(decrypted_secret) < 40 AND name NOT LIKE 'email\_capture%');")
 if [ "$(tem_resultado "$R")" = "sim" ]; then
     echo "$R"; echo "❌ credencial de cron é placeholder — o job falha sem entregar nada."; FALHAS=$((FALHAS+1))
 else

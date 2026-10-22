@@ -13,7 +13,9 @@ import type { Empreendimento } from '../types/empreendimento';
 type Ficha = Pick<
   Empreendimento,
   | 'name'
+  | 'terreno_area'
   | 'terreno_frente'
+  | 'terreno_fundos'
   | 'terreno_profundidade'
   | 'terreno_lateral_direita'
   | 'terreno_lateral_esquerda'

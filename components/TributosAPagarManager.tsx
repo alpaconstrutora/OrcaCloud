@@ -47,6 +47,7 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
 
 const TRIBUTO_COLUMNS: ColumnConfig[] = [
     { key: 'party_name', label: 'Tributo', sortable: true },
+    { key: 'organization', label: 'Organização', sortable: true },
     { key: 'origem', label: 'Origem', sortable: true },
     { key: 'category', label: 'Categoria', sortable: true },
     { key: 'client_name', label: 'Cliente', sortable: true },
@@ -62,7 +63,7 @@ const TRIBUTO_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    party_name: 200, origem: 120, category: 170, client_name: 200, empreendimento_name: 220,
+    party_name: 200, organization: 260, origem: 120, category: 170, client_name: 200, empreendimento_name: 220,
     description: 240, competencia: 140, due_date: 150, amount: 130, status: 130, darf: 190, actions: 340,
 };
 
@@ -72,6 +73,7 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 // arraste (mesmo padrão de ClientChargesModule.tsx).
 const TRIBUTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     party_name: { label: 'Tributo', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     origem: { label: 'Origem', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     category: { label: 'Categoria', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     client_name: { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
@@ -87,10 +89,14 @@ const TRIBUTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
 // Guia §5.5: Tributo, Origem, Cliente e Empreendimento são LISTA COM BUSCA — vêm
 // como texto da view, sem cadastro carregado aqui → valores distintos das linhas
 // BASE (`rows`, antes do filtro avançado), pelo mesmo getValue da célula.
-function buildAdvancedFilterFields(rows: TaxPayable[]): FilterFieldConfig[] {
-    const dasLinhas = (key: string) => distinctOptions(rows, r => getAdvancedFilterValue(r, key));
+/** Nome da organização do tributo ('' quando a lista de organizações não o conhece). */
+type NomeOrg = (orgId: string) => string;
+
+function buildAdvancedFilterFields(rows: TaxPayable[], nomeOrg: NomeOrg): FilterFieldConfig[] {
+    const dasLinhas = (key: string) => distinctOptions(rows, r => getAdvancedFilterValue(r, key, nomeOrg));
     return [
         { key: 'party_name', label: 'Tributo', type: 'text', options: dasLinhas('party_name') },
+        { key: 'organization', label: 'Organização', type: 'text', options: dasLinhas('organization') },
         { key: 'origem', label: 'Origem', type: 'select', options: ORIGENS_TRIBUTO.map(value => ({ value, label: ORIGEM_TRIBUTO_LABEL[value] })) },
         { key: 'category', label: 'Categoria', type: 'text', options: dasLinhas('category') },
         { key: 'client_name', label: 'Cliente', type: 'text', options: dasLinhas('client_name') },
@@ -103,9 +109,10 @@ function buildAdvancedFilterFields(rows: TaxPayable[]): FilterFieldConfig[] {
     ];
 }
 
-function getAdvancedFilterValue(r: TaxPayable, key: string): unknown {
+function getAdvancedFilterValue(r: TaxPayable, key: string, nomeOrg: NomeOrg): unknown {
     switch (key) {
         case 'party_name': return r.party_name ?? '';
+        case 'organization': return nomeOrg(r.organization_id);
         case 'origem': return origemDoTributo(r);
         case 'category': return r.category ?? '';
         case 'client_name': return r.client_name ?? '';
@@ -139,8 +146,12 @@ function fmtCompetencia(iso?: string | null): string {
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
-function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean, onAbrirDarf: (darfId: string) => void): React.ReactNode {
+function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean, onAbrirDarf: (darfId: string) => void, nomeOrg: NomeOrg): React.ReactNode {
     switch (key) {
+        case 'organization': {
+            const nome = nomeOrg(r.organization_id);
+            return <span className="text-sm font-normal text-gray-600 truncate block" title={nome || undefined}>{nome || '—'}</span>;
+        }
         case 'party_name':
             return (
                 <span className="text-sm font-normal text-gray-900 truncate block" title={r.party_name ?? undefined}>
@@ -193,9 +204,10 @@ function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean, onAbr
 }
 
 // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
-type CampoAgrupar = 'tributo' | 'origem' | 'categoria' | 'cliente' | 'empreendimento' | 'competencia' | 'vencimento' | 'status';
+type CampoAgrupar = 'tributo' | 'organizacao' | 'origem' | 'categoria' | 'cliente' | 'empreendimento' | 'competencia' | 'vencimento' | 'status';
 const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
     { value: 'tributo', label: 'Tributo' },
+    { value: 'organizacao', label: 'Organização' },
     { value: 'origem', label: 'Origem' },
     { value: 'categoria', label: 'Categoria' },
     { value: 'cliente', label: 'Cliente' },
@@ -205,12 +217,13 @@ const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
     { value: 'status', label: 'Status' },
 ];
 const SEM_GRUPO: Record<CampoAgrupar, string> = {
-    tributo: 'Sem tributo', origem: 'Sem origem', categoria: 'Sem categoria', cliente: 'Sem cliente', empreendimento: 'Sem empreendimento',
+    tributo: 'Sem tributo', organizacao: 'Sem organização', origem: 'Sem origem', categoria: 'Sem categoria', cliente: 'Sem cliente', empreendimento: 'Sem empreendimento',
     competencia: 'Sem competência', vencimento: 'Sem vencimento', status: 'Sem status',
 };
-function chaveDoGrupo(campo: CampoAgrupar, r: TaxPayable): ChaveDeGrupo {
+function chaveDoGrupo(campo: CampoAgrupar, r: TaxPayable, nomeOrg: NomeOrg): ChaveDeGrupo {
     switch (campo) {
         case 'tributo': return chavePorNome(r.party_name);
+        case 'organizacao': return chavePorNome(nomeOrg(r.organization_id));
         case 'origem': return chavePorRotulo(origemDoTributo(r), ORIGEM_TRIBUTO_LABEL);
         case 'categoria': return chavePorNome(r.category);
         case 'cliente': return chavePorNome(r.client_name);
@@ -483,10 +496,16 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
     // table-layout:fixed (§6.1).
     const tableTotalWidth = 40 // checkbox
-        + (['party_name', 'origem', 'category', 'client_name', 'empreendimento_name', 'description', 'competencia', 'due_date', 'amount', 'status', 'darf'] as const)
+        + (['party_name', 'organization', 'origem', 'category', 'client_name', 'empreendimento_name', 'description', 'competencia', 'due_date', 'amount', 'status', 'darf'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + cols.getWidth('actions');
-    const advancedFields = useMemo(() => buildAdvancedFilterFields(rows), [rows]);
+    /** Nome da organização — a coluna Organização, o painel do DARF e a aba DARFs dizem de qual org é cada linha/guia. */
+    const nomeDaOrganizacao = useCallback(
+        (orgId: string) => organizations?.find(o => o.id === orgId)?.name ?? null,
+        [organizations],
+    );
+    const nomeOrg = useCallback<NomeOrg>(orgId => nomeDaOrganizacao(orgId) ?? '', [nomeDaOrganizacao]);
+    const advancedFields = useMemo(() => buildAdvancedFilterFields(rows, nomeOrg), [rows, nomeOrg]);
     const advancedFilters = useAdvancedFilters(advancedFields, 'tributosPagarManagerFilters:advanced');
 
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -619,7 +638,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     }
 
     const sorted = useMemo(() => {
-        let result = applyFilterRules(rows, advancedFilters.rules, advancedFields, getAdvancedFilterValue);
+        let result = applyFilterRules(rows, advancedFilters.rules, advancedFields, (r, k) => getAdvancedFilterValue(r, k, nomeOrg));
         if (vencAno) result = result.filter(r => (r.due_date ?? '').slice(0, 4) === vencAno);
         if (vencMes) result = result.filter(r => (r.due_date ?? '').slice(5, 7) === vencMes);
         // Fechamento: recorta pela competência (mês do fato gerador = transaction_date)
@@ -633,6 +652,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                 switch (tableColumns.sortColumn) {
                     case 'party_name':    va = (a.party_name ?? '').toLowerCase();    vb = (b.party_name ?? '').toLowerCase();    break;
                     case 'origem':        va = ORIGEM_TRIBUTO_LABEL[origemDoTributo(a)]; vb = ORIGEM_TRIBUTO_LABEL[origemDoTributo(b)]; break;
+                    case 'organization':  va = nomeOrg(a.organization_id).toLowerCase(); vb = nomeOrg(b.organization_id).toLowerCase(); break;
                     case 'category':      va = (a.category ?? '').toLowerCase();      vb = (b.category ?? '').toLowerCase();      break;
                     case 'client_name':   va = (a.client_name ?? '').toLowerCase();   vb = (b.client_name ?? '').toLowerCase();   break;
                     case 'empreendimento_name':
@@ -651,7 +671,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
             });
         }
         return result;
-    }, [rows, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection, activeView, competencia, vencAno, vencMes]);
+    }, [rows, advancedFilters.rules, advancedFields, nomeOrg, tableColumns.sortColumn, tableColumns.sortDirection, activeView, competencia, vencAno, vencMes]);
     // Anos com vencimento nos tributos carregados, mais recente primeiro.
     const anosVencimento = useMemo(
         () => [...new Set(rows.map(r => (r.due_date ?? '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))].sort().reverse(),
@@ -660,12 +680,12 @@ export default function TributosAPagarManager({ organizationId, organizations }:
 
     const { campo: groupBy, agrupando, recolhidos } = agrupamento;
     const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(sorted, {
-        chave: r => chaveDoGrupo(groupBy, r),
+        chave: r => chaveDoGrupo(groupBy, r, nomeOrg),
         semRotulo: SEM_GRUPO[groupBy],
         valor: r => r.amount,
         ordem: groupBy === 'status' ? Object.keys(STATUS_LABEL) : groupBy === 'competencia' || groupBy === 'vencimento' ? 'chave' : 'aparicao',
         direcao: agrupamento.direcao,
-    })), [sorted, groupBy, agrupamento.direcao]);
+    })), [sorted, groupBy, agrupamento.direcao, nomeOrg]);
     const entradas: EntradaDaTela<TaxPayable>[] = useMemo(
         () => (agrupando ? entradasDaPagina(grupos, recolhidos) : sorted.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
         [agrupando, grupos, recolhidos, sorted],
@@ -717,12 +737,6 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         }));
         setSelectedIds(new Set());
     }
-
-    /** Nome da organização — o painel e a aba DARFs dizem de qual org é a guia quando o topo está em "Todas". */
-    const nomeDaOrganizacao = useCallback(
-        (orgId: string) => organizations?.find(o => o.id === orgId)?.name ?? null,
-        [organizations],
-    );
 
     /** Células de uma linha: checkbox + colunas de dado + espaçador + Ações. */
     const colunasDaLinha = 1
@@ -1130,7 +1144,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                             </td>
                                             {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {renderTributoCell(key, r, isVencido, abrirDarf)}
+                                                    {renderTributoCell(key, r, isVencido, abrirDarf, nomeOrg)}
                                                 </td>
                                             ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}

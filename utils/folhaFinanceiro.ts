@@ -160,7 +160,7 @@ export interface CustoPorDestino {
     colaboradores: string[];
 }
 
-const ehFgts = (code: string) => /^FGTS/i.test(code);
+export const ehFgts = (code: string) => /^FGTS/i.test(code);
 
 /**
  * Fatias de um colaborador: alocação em obra × rateio contábil. O que a

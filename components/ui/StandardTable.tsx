@@ -96,6 +96,10 @@ interface StandardTableProps<T> {
     pagination?: { pageSizes?: number[]; defaultPageSize?: number };
     /** Linha extra no fim do `<tbody>` (totais). Recebe o número de colunas visíveis. */
     renderTotals?: (visibleCount: number) => React.ReactNode;
+    /** Linha de totais ALINHADA às colunas (uma célula por coluna visível, na ordem da tela).
+     *  Recebe a chave e as linhas que passaram pela busca — o total acompanha o que se vê.
+     *  Devolva `null` para célula vazia. */
+    totaisPorColuna?: (key: string, linhas: T[]) => React.ReactNode;
     /** Linha de detalhe logo abaixo da linha — só renderiza quando devolve algo. */
     renderExpanded?: (row: T, visibleCount: number) => React.ReactNode;
     maxHeight?: string;
@@ -129,7 +133,7 @@ interface StandardTableProps<T> {
 export function StandardTable<T>({
     columns, storageKey, rows, rowKey, renderCell, sortValue, searchText, searchPlaceholder = 'Buscar...',
     search: controlledSearch, onSearchChange, searchScope, actions, onRowClick, rowClassName, loading, empty, dense, filters, toolbarRight, filtersPanel, toolbarTop,
-    footer, renderTotals, renderExpanded, maxHeight = '70vh', bare, selection, pagination, agrupamento: agrupar,
+    footer, renderTotals, totaisPorColuna, renderExpanded, maxHeight = '70vh', bare, selection, pagination, agrupamento: agrupar,
 }: StandardTableProps<T>) {
     const allColumns: ColumnConfig[] = useMemo(
         () => (actions ? [...columns, { key: 'actions', label: actions.label ?? 'Ações', sortable: false }] : columns),
@@ -387,6 +391,18 @@ export function StandardTable<T>({
                                 );
                             })}
                             {renderTotals?.(visibleCount)}
+                            {totaisPorColuna && filtered.length > 0 && (
+                                <tr className="bg-gray-50 border-t-2 border-gray-200">
+                                    {selection && <td className="border-r border-gray-100"></td>}
+                                    {dataKeys.map(key => (
+                                        <td key={key} className={`${px} py-2.5 border-r border-gray-100 ${alignClass(key)}`}>
+                                            {totaisPorColuna(key, filtered)}
+                                        </td>
+                                    ))}
+                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                    {showActions && <td></td>}
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>

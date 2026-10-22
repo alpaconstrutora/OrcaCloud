@@ -1246,6 +1246,12 @@ const COLUMNS: StandardTableColumn[] = [                 // só colunas de DADO
 > ✅ **A tipografia da célula continua sendo da tela** (§7): `renderCell` devolve
 > `text-sm font-normal text-gray-700`; `font-medium` só em valor financeiro.
 > ✅ `bare` quando a tabela já vive dentro de um card do pai (o card é a moldura).
+> ✅ **Total por coluna: `totaisPorColuna(key, linhas)`** (22/10/2026, RH › Encargos Sociais ›
+> Encargos de INSS e Relação por Empregado). Linha `bg-gray-50 border-t-2` com UMA célula por
+> coluna visível, na ordem da tela — acompanha esconder/arrastar coluna, o que o `renderTotals`
+> (uma `<td colSpan>` só) não consegue. `linhas` são as que passaram pela busca: o total soma o
+> que está na tela. Tipografia da célula igual à do corpo (§7): valor `font-medium`, rótulo
+> "Total" `text-xs font-semibold text-gray-500`; `null` deixa a célula vazia.
 > ✅ Ação primária §17: na barra §5.3/§19.1 da tela, ou em `toolbarRight` quando
 > a tela não tem barra própria.
 > ❌ Não passe `rows` já ordenados "na mão" e depois ignore `sortValue` — a

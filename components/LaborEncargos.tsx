@@ -295,12 +295,12 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
 
             {/* ── ABA: ENCARGOS DE INSS ── */}
             {activeTab === 'inss' && (
-                <LaborEncargosINSS orgId={orgId} period={period} />
+                <LaborEncargosINSS orgId={orgId} organizations={organizations} period={period} />
             )}
 
             {/* ── ABA: RELAÇÃO POR EMPREGADO ── */}
             {activeTab === 'folha' && (
-                <LaborFolhaEmpregado orgId={orgId} period={period} />
+                <LaborFolhaEmpregado orgId={orgId} organizations={organizations} period={period} />
             )}
 
             {/* ── ABA: PRÓ-LABORE (Remuneração Societária) ── */}

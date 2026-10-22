@@ -84,7 +84,9 @@ describe('a planta elétrica no papel', () => {
     expect(textos).toContain('a');
     // 15/09/2026 (NBR 5444): o Ø sozinho; o número do circuito em cima do
     // grupo de condutores e a seção embaixo, como na prancha de referência.
-    expect(textos).toContain('Ø25');
+    // Desde 22/10/2026 o Ø PREDOMINANTE não se escreve na planta: a legenda diz "sem indicação = Ø25".
+    expect(textos).not.toContain('Ø25');
+    expect(linhasDaLegenda(m).some((l) => /^ELETRODUTO SEM INDICAÇÃO — Ø25/.test(l))).toBe(true);
     expect(textos).toContain('1');
     expect(textos).toContain('2,5');
     expect(textos.filter((t) => t === '600 VA')).toHaveLength(2);

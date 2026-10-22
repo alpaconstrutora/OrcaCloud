@@ -108,7 +108,8 @@ describe('a planta com recorte', () => {
     expect(forca).not.toContain('a');
     for (const t of [luz, forca]) {
       expect(t).toContain('QDC');
-      expect(t.filter((x) => x === 'Ø25').length).toBeGreaterThan(0);
+      // Desde 22/10/2026 o Ø predominante (25) não se escreve: está na legenda ("sem indicação").
+      expect(t).not.toContain('Ø25');
     }
     // Na unificada, os números de C1, C2 (tronco e ramais) e C3 (o eletroduto do AC); no recorte, os do outro tipo somem.
     const numeros = (t: string[]) => t.filter((x) => /^[123]$/.test(x));

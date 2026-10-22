@@ -142,6 +142,7 @@ import {
 } from '../../utils/blueprintCotas';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
 import { composicaoDaRede, trechosNumerados } from '../../utils/blueprintFiacao';
+import { diametrosAnotados } from '../../utils/blueprintDiametroDosEletrodutos';
 import { pegadaDaPecaPrevista, type PecaPrevista } from '../../utils/blueprintPilaresAutomaticos';
 import { bolhasDosEixos, crescerFaixa, faixaVazia, type BolhasDoEixo } from '../../utils/blueprintEixosAutomaticos';
 import { idsDoGrupo } from '../../utils/blueprintGrupoDeFundacao';
@@ -561,6 +562,12 @@ function fatorDeAnotacao(escalaPxPorMm: number): number {
 }
 /** A linha de chamada do texto que saiu de perto do símbolo: fina e cinza, para não competir com o traço. */
 const COR_DA_CHAMADA = '#94a3b8';
+/**
+ * Abaixo disto (1 m = 2 cm de tela — o lote inteiro na tela) não há papel para centenas de textos: as
+ * chamadas viravam uma estrela de linhas por cima do desenho (visto no harness com a planta Garden,
+ * 22/10/2026). Ali o texto fica colado ao símbolo, no melhor lugar que houver, sem chamada.
+ */
+const ESCALA_MINIMA_DA_CHAMADA_PX_MM = 0.02;
 /**
  * O símbolo da tomada (triângulo NBR 5444) é desenhado 1,5× a peça/piso de
  * 10 px — pedido de 14/09/2026. Só desenho: acerto e encaixe usam a peça.
@@ -2065,6 +2072,8 @@ export default function BlueprintCanvas({
   const fiacaoDaRede = useMemo(() => composicaoDaRede(model), [model]);
   // E2.4: eletrodutos com mais condutores do que se lê em traços levam um número (tabela na folha).
   const trechosNumeradosDaRede = useMemo(() => trechosNumerados(model, fiacaoDaRede), [model, fiacaoDaRede]);
+  // O Ø predominante não se escreve; o diferente, uma vez por trecho contínuo (ver `diametrosAnotados`).
+  const diametrosDaRede = useMemo(() => diametrosAnotados(model.trechos ?? []), [model.trechos]);
 
   /** Seção declarada por circuito — é ela que vira o `#2,5` ao lado do traço. */
   const secaoPorCircuito = useMemo(
@@ -6623,7 +6632,7 @@ export default function BlueprintCanvas({
         if (prumada || comp <= 24) {
           // Prumada (círculo) ou trecho curtíssimo: só o Ø, ao lado.
           const c = prumada ? p : curva.meio;
-          anotar({
+          if (diametrosDaRede.escrever.has(t.id)) anotar({
             id: `diametro:${t.id}`,
             donoId: t.id,
             ancora: caixaDoCirculo(c, Math.max(emTela(t.bitolaMm / 2), 3)),
@@ -6799,7 +6808,7 @@ export default function BlueprintCanvas({
               atenuada: atenuados.has(t.id),
             });
           }
-          if (cabeDiametro) {
+          if (cabeDiametro && diametrosDaRede.escrever.has(t.id)) {
             // O Ø à esquerda do conjunto, abaixo da linha — fora do caminho dos números.
             const ox = meio.x - ux * (total / 2 + 6 * fz) + nx * (MEIA + 4 * fz);
             const oy = meio.y - uy * (total / 2 + 6 * fz) + ny * (MEIA + 4 * fz);
@@ -7713,7 +7722,10 @@ export default function BlueprintCanvas({
     {
       // O texto das marcas da verificação (escrito logo depois, por cima) também é obstáculo.
       const marcas = textosDasMarcas.map((tm, i) => ({ id: `marca:${i}`, caixa: { x0: tm.x - 3, y0: tm.y - 9 * fz, x1: tm.x + tm.largura + 3, y1: tm.y + 3 * fz } }));
-      const postos = posicionarAnotacoes(anotacoesDaPlanta, [...obstaculosDasAnotacoes, ...marcas], { segmentos: segmentosDasAnotacoes });
+      const postos = posicionarAnotacoes(anotacoesDaPlanta, [...obstaculosDasAnotacoes, ...marcas], {
+        segmentos: segmentosDasAnotacoes,
+        ...(vista.escala < ESCALA_MINIMA_DA_CHAMADA_PX_MM ? { raioMaximo: 0 } : {}),
+      });
       anotacoesDaPlanta.forEach((a, i) => {
         const p = postos[i];
         meioTom(a.atenuada);

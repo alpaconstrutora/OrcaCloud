@@ -52,6 +52,7 @@ import { fatorDeDiversidade } from './blueprintEletricaDimensionamento';
 import { rotuloDaFase } from './blueprintFasesEletricas';
 import { PRIORIDADE_DA_ANOTACAO, posicionarAnotacoes, type AnotacaoAPosicionar, type CaixaNaTela, type ObstaculoNaTela, type PontoNaTela, type SegmentoNaTela } from './blueprintAnotacaoSemColisao';
 import { larguraEstimadaDoTexto } from './blueprintCotas';
+import { diametrosAnotados } from './blueprintDiametroDosEletrodutos';
 import { ROTULO_DO_RECORTE, categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos, entraNoRecorte, type CategoriaEletrica, type RecorteEletrico } from './blueprintRecorteEletrico';
 import {
   HIPOTESES_PADRAO,
@@ -304,6 +305,8 @@ export function desenharEletrica(
   const fiacao = composicaoDaRede(model);
   // E2.4: os trechos cheios levam número; a composição vai para a tabela da folha.
   const numerados = trechosNumerados(model, fiacao);
+  // O Ø predominante não se escreve (a legenda diz); o diferente, uma vez por trecho contínuo.
+  const diametros = diametrosAnotados(model.trechos ?? []);
   // Eletrodutos primeiro: ficam por baixo dos símbolos.
   for (const t of model.trechos ?? []) {
     if (t.disciplina !== 'ELETRICA') continue;
@@ -418,7 +421,7 @@ export function desenharEletrica(
       }
       cursor += larg + vao;
     }
-    anotar({
+    if (diametros.escrever.has(t.id)) anotar({
       id: `diametro:${t.id}`,
       donoId: `conjunto:${t.id}`,
       ancora: grupos.length > 0 ? caixaDosTracos(-total / 2, total / 2) : caixaEm(meio, 2.2 * k),
@@ -576,6 +579,8 @@ export function linhasDaLegenda(model: BlueprintModel): string[] {
   if (f.has('ENTRADA_SERVICO')) L.push('ES — entrada de serviço (círculo com a seta do ramal da concessionária; poste/mureta)');
   if (f.has('MEDIDOR')) L.push('kWh — medidor de energia (caixa de medição; um por unidade consumidora)');
   if (['DADOS_TELEFONE', 'DADOS_TV', 'DADOS_REDE', 'DADOS_USB'].some((x) => f.has(x))) L.push('DADOS — círculo pequeno com traço (telefone, TV, rede, USB)');
+  const padrao = diametrosAnotados(model.trechos ?? []).padraoMm;
+  if (padrao != null && (f.has('ELETRODUTO') || f.has('ELETRODUTO_PISO'))) L.push(`ELETRODUTO SEM INDICAÇÃO — Ø${padrao}; o Ø diferente vem escrito uma vez por trecho contínuo`);
   if (f.has('ELETRODUTO')) L.push('ELETRODUTO — linha contínua = embutido na parede ou teto; Ø nominal ao lado; condutores (NBR 5444): traço reto = fase, com pé = neutro, só de um lado = retorno, com barra = terra; número do circuito em cima, seção (mm²) embaixo');
   if (f.has('ELETRODUTO_PISO')) L.push('ELETRODUTO NO PISO — linha tracejada');
   if (trechosNumerados(model).size > 0) L.push('TRECHO NUMERADO — eletroduto com mais condutores do que se lê em traços: o número no círculo remete à tabela "Fiação dos trechos numerados"');

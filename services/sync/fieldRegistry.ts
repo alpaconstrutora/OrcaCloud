@@ -51,6 +51,24 @@ const UNIT_SHARED: FieldSpec[] = [
     AREA('total_area', 'Área total'),
 ];
 
+/**
+ * O TERRENO do empreendimento, medido no desenho (22/10/2026 — plano
+ * docs/planos/2026-10-22-planta-empreendimento-pendencias.md, item 5). Desenhado, nunca escritura;
+ * profundidade = média das laterais (decisões do usuário de 21/10). Só o adaptador do terreno
+ * (`services/terrenoEmpreendimentoSync.ts`) preenche `empreendimentoFields` — o loteamento não.
+ */
+const TERRENO = (field: string, label: string): FieldSpec =>
+    ({ entity: 'empreendimento', field, label, group: 'area', compare: 'numeric', tolerance: CENT });
+const TERRENO_DO_EMPREENDIMENTO: FieldSpec[] = [
+    { entity: 'empreendimento', field: 'terreno_tipo', label: 'Tipo de terreno', group: 'estrutura', compare: 'exact' },
+    TERRENO('terreno_area', 'Área total do terreno (m²)'),
+    TERRENO('terreno_frente', 'Testada / frente do terreno (m)'),
+    TERRENO('terreno_fundos', 'Fundos do terreno (m)'),
+    TERRENO('terreno_profundidade', 'Profundidade do terreno (m)'),
+    TERRENO('terreno_lateral_direita', 'Lateral direita do terreno (m)'),
+    TERRENO('terreno_lateral_esquerda', 'Lateral esquerda do terreno (m)'),
+];
+
 export const SYNC_FIELDS: Record<SyncOrigin, FieldSpec[]> = {
     // ── Viabilidade (Imovib) ─────────────────────────────────────────────────
     // Traz posição/orientação/preço/status (que o Planta IA não tem), mas NÃO tem
@@ -99,6 +117,8 @@ export const SYNC_FIELDS: Record<SyncOrigin, FieldSpec[]> = {
         { entity: 'unit', field: 'suites', label: 'Suítes', group: 'estrutura', compare: 'exact' },
         { entity: 'unit', field: 'bathrooms', label: 'Banheiros', group: 'estrutura', compare: 'exact' },
         { entity: 'unit', field: 'parking_spaces', label: 'Vagas', group: 'estrutura', compare: 'exact' },
+
+        ...TERRENO_DO_EMPREENDIMENTO,
     ],
 
     // ── Estudo de Massa (Planta Inteligente, M3) ─────────────────────────────

@@ -58,9 +58,9 @@ export async function applyPlan(plan: SyncPlan): Promise<SyncApplyResult> {
     // 3. Campos: só os `fills` (destino vazio). Conflitos não entram — viram propostas.
     const updates = changesToUpdates(plan.fills);
     for (const [entityId, { entity, fields }] of updates) {
-        const table = entity === 'tower' ? 'empreendimento_towers' : 'empreendimento_units';
+        const table = entity === 'empreendimento' ? 'empreendimentos' : entity === 'tower' ? 'empreendimento_towers' : 'empreendimento_units';
         const { error } = await supabase.from(table).update(fields).eq('id', entityId);
-        if (error) throw new Error(`Falha ao atualizar ${entity === 'tower' ? 'a torre' : 'a unidade'}: ${error.message}`);
+        if (error) throw new Error(`Falha ao atualizar ${entity === 'empreendimento' ? 'o empreendimento' : entity === 'tower' ? 'a torre' : 'a unidade'}: ${error.message}`);
         result.fieldsApplied += Object.keys(fields).length;
     }
 

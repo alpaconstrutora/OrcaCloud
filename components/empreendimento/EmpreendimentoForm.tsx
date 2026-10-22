@@ -69,6 +69,8 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
   const [saving, setSaving] = React.useState(false);
   const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
   const [blueprintStudies, setBlueprintStudies] = React.useState<{ id: string; name: string }[]>([]);
+  /** Planta → nome do OUTRO empreendimento que já a tem. */
+  const [plantaOcupadaPor, setPlantaOcupadaPor] = React.useState<Map<string, string>>(new Map());
   const [empreendimentoTypes, setEmpreendimentoTypes] = React.useState<EmpreendimentoTypeRecord[]>([]);
   // Torres do empreendimento — só existem depois de criado. O vínculo de obra por torre
   // (multi-torre) mora aqui no painel, junto do vínculo de obra principal (project_id).
@@ -161,7 +163,12 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
     imovibService.getStudies(orgId).then(setStudies).catch(() => setStudies([]));
     // Estudos da Planta Inteligente — a arquitetura do empreendimento (massa, loteamento, planta).
     listBlueprintStudies(orgId).then((xs) => setBlueprintStudies(xs.map((s) => ({ id: s.id, name: s.name })))).catch(() => setBlueprintStudies([]));
-  }, [orgId]);
+    // Um empreendimento por planta (índice único desde 22/10/2026): a planta já ligada a OUTRO
+    // empreendimento aparece desligada no select, dizendo a qual — em vez de o banco recusar ao salvar.
+    empreendimentoService.list(orgId)
+      .then((es) => setPlantaOcupadaPor(new Map(es.filter((x) => x.blueprint_study_id && x.id !== editing?.id).map((x) => [x.blueprint_study_id as string, x.name]))))
+      .catch(() => setPlantaOcupadaPor(new Map()));
+  }, [orgId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
     if (!editing) { setTowers([]); return; }
@@ -427,7 +434,14 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
               <select className={inputCls} value={form.blueprint_study_id} onChange={e => set('blueprint_study_id', e.target.value)} aria-label="Estudo da Planta Inteligente">
                 <option value="">— Sem vínculo —</option>
                 {form.blueprint_study_id && !blueprintStudies.some(s => s.id === form.blueprint_study_id) && <option value={form.blueprint_study_id}>Estudo não encontrado nesta organização</option>}
-                {blueprintStudies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {blueprintStudies.map(s => {
+                  const ocupadaPor = plantaOcupadaPor.get(s.id);
+                  return (
+                    <option key={s.id} value={s.id} disabled={!!ocupadaPor && s.id !== form.blueprint_study_id}>
+                      {ocupadaPor && s.id !== form.blueprint_study_id ? `${s.name} — vinculada a «${ocupadaPor}»` : s.name}
+                    </option>
+                  );
+                })}
               </select>
               <p className="text-[10px] text-gray-400 font-medium mt-1">
                 O estudo de massa e o loteamento da Planta Inteligente trazem torres e unidades (Central de Sincronização). Também vincula ao enviar desde a própria planta.

@@ -172,6 +172,17 @@ export function buildPlan(side: CanonicalSide, target: TargetState, opts: PlanOp
         }
     }
 
+    // Campos do próprio empreendimento (22/10/2026: o terreno da Planta).
+    if (side.empreendimentoFields) {
+        pushFieldChanges(plan, {
+            entity: 'empreendimento', entityId: side.empreendimento.id, origin: side.origin,
+            existing: side.empreendimento as unknown as Record<string, unknown>,
+            proposed: side.empreendimentoFields,
+            specs: specsFor(side.origin, 'empreendimento'),
+            sourceRef: { blueprint_study_id: side.empreendimento.blueprint_study_id ?? '' },
+        });
+    }
+
     // Áreas comuns: só as que ainda não existem (casadas por nome, como antes).
     const existingAreaNames = new Set(target.commonAreas.map(a => (a.name || '').toLowerCase()));
     for (const cand of side.commonAreaCandidates) {
@@ -296,7 +307,7 @@ function commercialWouldChange(existing: Record<string, unknown>, cu: CanonicalU
 }
 
 function pushFieldChanges(plan: SyncPlan, args: {
-    entity: 'tower' | 'unit';
+    entity: 'empreendimento' | 'tower' | 'unit';
     entityId: string;
     origin: CanonicalSide['origin'];
     existing: Record<string, unknown>;
@@ -326,10 +337,10 @@ function pushFieldChanges(plan: SyncPlan, args: {
 }
 
 /** Um objeto de update por entidade, a partir das mudanças escolhidas. */
-export function changesToUpdates(changes: FieldChange[]): Map<string, { entity: 'tower' | 'unit'; fields: Record<string, unknown> }> {
-    const byEntity = new Map<string, { entity: 'tower' | 'unit'; fields: Record<string, unknown> }>();
+export function changesToUpdates(changes: FieldChange[]): Map<string, { entity: 'empreendimento' | 'tower' | 'unit'; fields: Record<string, unknown> }> {
+    const byEntity = new Map<string, { entity: 'empreendimento' | 'tower' | 'unit'; fields: Record<string, unknown> }>();
     for (const c of changes) {
-        if (c.entity !== 'tower' && c.entity !== 'unit') continue;
+        if (c.entity !== 'tower' && c.entity !== 'unit' && c.entity !== 'empreendimento') continue;
         const cur = byEntity.get(c.entityId) ?? { entity: c.entity, fields: {} };
         cur.fields[c.field] = c.to;
         byEntity.set(c.entityId, cur);

@@ -10,24 +10,13 @@
 
 import { supabase } from '../lib/supabase';
 import { listBranches, loadBranchModel, ramoPrincipal } from './blueprintService';
-import { divisasDoLote, medirTerreno } from '../utils/blueprintTerreno';
-import { medidasDaPlantaParaFicha, type MedidasDaPlanta } from '../utils/blueprintTerrenoDaFicha';
-import type { Boundary } from '../utils/blueprintKernel';
+import { medirTerreno } from '../utils/blueprintTerreno';
+import { divisasDoLoteDoModelo, medidasDaPlantaParaFicha, type MedidasDaPlanta } from '../utils/blueprintTerrenoDaFicha';
 import type { Empreendimento } from '../types/empreendimento';
 
 export type TerrenoDaPlanta =
   | { ok: true; plantaNome: string; medidas: MedidasDaPlanta }
   | { ok: false; motivo: string };
-
-/** As divisas do lote do primeiro pavimento que tem lote — o editor mede por pavimento. */
-function divisasDoPrimeiroPavimentoComLote(boundaries: Boundary[], niveis: { id: string }[]): Boundary[] {
-  const doLote = divisasDoLote(boundaries);
-  for (const n of niveis) {
-    const doNivel = doLote.filter((b) => b.levelId === n.id);
-    if (doNivel.length > 0) return doNivel;
-  }
-  return doLote;
-}
 
 export async function terrenoDaPlantaVinculada(
   empreendimento: Pick<Empreendimento, 'id' | 'organization_id' | 'blueprint_study_id'>,
@@ -51,7 +40,7 @@ export async function terrenoDaPlantaVinculada(
   const model = principal ? await loadBranchModel(principal.id) : null;
   if (!model) return { ok: false, motivo: `A planta ${s.name} ainda não tem desenho.` };
 
-  const limites = divisasDoPrimeiroPavimentoComLote(model.boundaries ?? [], model.levels ?? []);
+  const limites = divisasDoLoteDoModelo(model.boundaries ?? [], model.levels ?? []);
   const terreno = medirTerreno(limites);
   if (!terreno?.fechado) return { ok: false, motivo: `A planta ${s.name} ainda não tem lote fechado.` };
   return { ok: true, plantaNome: s.name, medidas: medidasDaPlantaParaFicha(terreno, limites) };

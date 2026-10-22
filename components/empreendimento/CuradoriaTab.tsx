@@ -32,6 +32,8 @@ const FILTERS: { value: Filter; label: string }[] = [
 
 /** "Torre A · Apto 101" — de qual torre/unidade é o campo. */
 const whereLabel = (p: FieldProposal) => [p.tower_name, p.unit_name].filter(Boolean).join(' · ');
+/** O terreno da ficha vem da Planta (loteamento OU massa): "Loteamento" enganaria num estudo de massa (22/10/2026). */
+const rotuloDaOrigem = (p: FieldProposal) => (p.entity === 'empreendimento' ? 'Planta Inteligente' : ORIGIN_LABEL[p.origin]);
 
 const GROUP_LABEL: Record<string, string> = {
     identidade: 'Identidade', estrutura: 'Estrutura', area: 'Áreas', comercial: 'Comercial',
@@ -201,7 +203,7 @@ export const CuradoriaTab: React.FC<Props> = ({ empreendimentoId, onChanged }) =
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     {p.unit_name && <span className="text-sm font-medium text-gray-800">{p.unit_name}</span>}
                                                     <span className="text-sm text-gray-600">{p.label}</span>
-                                                    <span className="text-xs font-medium text-gray-400">{ORIGIN_LABEL[p.origin]} · {GROUP_LABEL[p.field_group]}</span>
+                                                    <span className="text-xs font-medium text-gray-400">{rotuloDaOrigem(p)} · {GROUP_LABEL[p.field_group]}</span>
                                                 </div>
                                                 <div className="mt-1 text-xs">
                                                     <span className="text-gray-400 line-through">{fmtVal(p.current_value)}</span>{' '}
@@ -225,7 +227,7 @@ export const CuradoriaTab: React.FC<Props> = ({ empreendimentoId, onChanged }) =
                                 <div className="flex items-center gap-2 flex-wrap">
                                     {whereLabel(p) && <span className="text-sm font-medium text-gray-800">{whereLabel(p)}</span>}
                                     <span className="text-sm text-gray-700">{p.label}</span>
-                                    <span className="text-xs font-medium text-gray-400">{ORIGIN_LABEL[p.origin]}</span>
+                                    <span className="text-xs font-medium text-gray-400">{rotuloDaOrigem(p)}</span>
                                 </div>
                                 <div className="mt-1 text-xs">
                                     <span className="text-gray-400 line-through">{fmtVal(p.current_value)}</span>{' '}

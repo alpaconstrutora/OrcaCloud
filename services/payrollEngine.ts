@@ -76,22 +76,38 @@ export interface PayrollContext {
 }
 
 /**
- * O colaborador entra na folha do período que começa em `startDate`?
+ * O colaborador entra na folha do período `startDate..endDate`?
  *
- * Decide pela DATA de desligamento, não só pelo status de hoje: o mês da
- * rescisão ainda é devido (desligado em 31/05 entra na folha de 05), e um
- * desligamento lançado com atraso tem de tirá-lo dos meses seguintes mesmo
- * que o cadastro ainda diga ATIVO. Caso real (22/10/2026): Clovis, desligado
- * em 31/05/2026, seguia nas folhas de 06, 07 e 09/2026.
+ * Decide pelas DATAS, não só pelo status de hoje: o mês da rescisão ainda é
+ * devido (desligado em 31/05 entra na folha de 05), e um desligamento lançado
+ * com atraso tem de tirá-lo dos meses seguintes mesmo que o cadastro ainda
+ * diga ATIVO. Caso real (22/10/2026): Clovis, desligado em 31/05/2026, seguia
+ * nas folhas de 06, 07 e 09/2026.
  *
- * A admissão (`hire_date`) NÃO entra no critério: no cadastro ela não é
- * confiável (há colaborador com folha meses antes da admissão gravada).
+ * Admissão depois do fim do período também tira (regra confirmada pelo
+ * usuário em 22/10/2026, caso Iago: admissão 01/11/2026 e folha desde 04/2026).
+ * Admissão vazia não tira ninguém.
  */
-export function participaDaFolha(emp: Employee, startDate: string): boolean {
+export function participaDaFolha(emp: Employee, startDate: string, endDate: string): boolean {
+    const admissao = emp.hire_date?.split('T')[0];
+    if (admissao && admissao > endDate.split('T')[0]) return false;
     const desligamento = emp.termination_date?.split('T')[0];
     if (desligamento && desligamento < startDate.split('T')[0]) return false;
     if (emp.status === 'ATIVO') return true;
     return emp.status === 'DESLIGADO' && !!desligamento;
+}
+
+/**
+ * Ao reprocessar, quem não participa da folha perde os itens calculados antes.
+ * Sem isto, `savePayrollData` só regrava quem é elegível e o inativado (ou
+ * desligado, ou ainda não admitido) seguia na folha com os valores antigos.
+ *
+ * AFASTADO fica de fora da limpeza: o motor nunca o calcula, mas o que já
+ * está lançado para ele (os 15 primeiros dias pagos pela empresa, por
+ * exemplo) é decisão de quem fecha a folha, não efeito colateral.
+ */
+export function saiDaFolha(emp: Employee, startDate: string, endDate: string): boolean {
+    return emp.status !== 'AFASTADO' && !participaDaFolha(emp, startDate, endDate);
 }
 
 export const payrollEngine = {
@@ -195,7 +211,12 @@ export const payrollEngine = {
         // compartilhamento. Incluí-los aqui punha o mesmo colaborador na folha
         // das duas orgs no mesmo mês. Quem está no período: `participaDaFolha`.
         const employees = await laborService.listEmployees(orgId);
-        const activeEmployees = employees.filter(e => e.org_id === orgId && participaDaFolha(e, startDate));
+        const activeEmployees = employees.filter(e => e.org_id === orgId && participaDaFolha(e, startDate, endDate));
+
+        if (existingRunId) {
+            const saem = employees.filter(e => e.org_id === orgId && saiDaFolha(e, startDate, endDate)).map(e => e.id);
+            if (saem.length > 0) await payrollService.removeEmployeesFromRun(run.id, saem);
+        }
 
         // 3. Processar em paralelo — allSettled para não abortar a folha se um colaborador falhar
         const results = await Promise.allSettled(

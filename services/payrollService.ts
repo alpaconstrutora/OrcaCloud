@@ -522,6 +522,21 @@ export const payrollService = {
         if (error) throw error;
     },
 
+    /**
+     * Tira colaboradores de uma folha: apaga os itens e o resultado calculados.
+     * Os eventos lançados à mão (`payroll_events`) ficam — são entrada do
+     * usuário, não cálculo. Ver `saiDaFolha` no payrollEngine.
+     */
+    async removeEmployeesFromRun(runId: string, employeeIds: string[]) {
+        if (employeeIds.length === 0) return;
+        const [items, results] = await Promise.all([
+            supabase.from('payroll_items').delete().eq('payroll_run_id', runId).in('employee_id', employeeIds),
+            supabase.from('payroll_results').delete().eq('payroll_run_id', runId).in('employee_id', employeeIds),
+        ]);
+        if (items.error) throw items.error;
+        if (results.error) throw results.error;
+    },
+
     async deleteRun(id: string) {
         // ⚠️ Os títulos financeiros da folha vêm ANTES: apagar a folha e deixar os
         // lançamentos em Contas a Pagar cria órfãos que ninguém mais consegue explicar,

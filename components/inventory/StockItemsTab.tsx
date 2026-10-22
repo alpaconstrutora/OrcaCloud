@@ -95,8 +95,8 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
                 case 'situacao': return i.isActive ? { key: 'ativo', label: 'Ativo' } : { key: 'inativo', label: 'Inativo' };
             }
         };
-        return agruparLinhas(sorted, { chave, semRotulo: SEM_GRUPO[groupBy], ordem: groupBy === 'situacao' ? ['ativo', 'inativo'] : 'aparicao' });
-    }, [groupBy, sorted, assetLinks]);
+        return agruparLinhas(sorted, { chave, semRotulo: SEM_GRUPO[groupBy], ordem: groupBy === 'situacao' ? ['ativo', 'inativo'] : 'aparicao', direcao: agrupamento.direcao });
+    }, [groupBy, agrupamento.direcao, sorted, assetLinks]);
     const entradas: EntradaDaTela<StockItem>[] = React.useMemo(
         () => (groupBy !== 'none' ? entradasDaPagina(grupos, agrupamento.recolhidos) : sorted.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
         [groupBy, grupos, agrupamento.recolhidos, sorted],
@@ -129,6 +129,8 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
                         opcoes={OPCOES_AGRUPAR}
                         campo={groupBy}
                         onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
                         chavesDosGrupos={grupos.map(g => g.key)}
                         algumRecolhido={agrupamento.recolhidos.size > 0}
                         onAlternarTodos={agrupamento.alternarTodos}

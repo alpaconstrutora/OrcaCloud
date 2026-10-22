@@ -404,7 +404,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     const grupos = React.useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filteredSuppliers, {
         chave: s => chaveDoGrupo(groupBy, s),
         semRotulo: SEM_GRUPO[groupBy],
-    })), [filteredSuppliers, groupBy]);
+        direcao: agrupamento.direcao,
+    })), [filteredSuppliers, groupBy, agrupamento.direcao]);
     /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
     const linhasNaTela = React.useMemo(
         () => (agrupando ? linhasDaTela(grupos, agrupamento.recolhidos) : filteredSuppliers),
@@ -542,6 +543,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         opcoes={OPCOES_AGRUPAR}
                         campo={groupBy}
                         onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
                         chavesDosGrupos={grupos.map(g => g.key)}
                         algumRecolhido={agrupamento.recolhidos.size > 0}
                         onAlternarTodos={agrupamento.alternarTodos}

@@ -50,7 +50,7 @@ const linha = (over: Partial<Payable>): Payable => ({
 // 120 de Alfa, 30 de Beta, 5 de Gama — página de 100 corta Alfa.
 const ROWS = [
     ...Array.from({ length: 120 }, (_, i) => linha({ id: `a${i}`, description: `Parcela Alfa ${i}`, party_name: 'Construtora Alfa' })),
-    ...Array.from({ length: 30 }, (_, i) => linha({ id: `b${i}`, description: `Parcela Beta ${i}`, party_name: 'Cimentos Beta', amount: 1 })),
+    ...Array.from({ length: 30 }, (_, i) => linha({ id: `b${i}`, description: `Parcela Beta ${i}`, party_name: 'Distribuidora Beta', amount: 1 })),
     ...Array.from({ length: 5 }, (_, i) => linha({ id: `g${i}`, description: `Parcela Gama ${i}`, party_name: 'Gama Ltda' })),
 ];
 
@@ -96,9 +96,17 @@ describe('ContasPagarParcelas — Agrupar com paginação', () => {
         fireEvent.click(screen.getByText('Próxima'));
         const p2 = cabecalhos();
         expect(p2[0]).toMatch(/^Construtora Alfa \(continua\) 120/);
-        expect(p2[1]).toMatch(/^Cimentos Beta 30 R\$\s?30,00$/);
+        expect(p2[1]).toMatch(/^Distribuidora Beta 30 R\$\s?30,00$/);
         expect(p2[2]).toMatch(/^Gama Ltda 5/);
         expect(linhasDeDado()).toBe(55);
+    });
+
+    it('Decrescente inverte os grupos (Z→A) e mantém "Sem credor" no fim', () => {
+        renderTela({ rows: [...ROWS.slice(150), linha({ id: 'x1', party_name: undefined, description: 'Sem ninguém' }), linha({ id: 'x2', party_name: 'Alfa Zero', description: 'Com Alfa' })] });
+        fireEvent.change(screen.getByTitle('Agrupar as parcelas'), { target: { value: 'credor' } });
+        expect(cabecalhos().map(c => c.split(' ')[0])).toEqual(['Alfa', 'Gama', 'Sem']);
+        fireEvent.change(screen.getByRole('combobox', { name: 'Ordem dos grupos' }), { target: { value: 'desc' } });
+        expect(cabecalhos().map(c => c.split(' ')[0])).toEqual(['Gama', 'Alfa', 'Sem']);
     });
 
     it('parcela sem credor (a célula mostra "—") cai em "Sem credor", por último', () => {
@@ -111,7 +119,7 @@ describe('ContasPagarParcelas — Agrupar com paginação', () => {
         renderTela();
         fireEvent.change(screen.getByTitle('Agrupar as parcelas'), { target: { value: 'credor' } });
         fireEvent.click(screen.getByText('Construtora Alfa', { selector: 'span.font-semibold' }));
-        expect(cabecalhos().map(c => c.split(' ')[0])).toEqual(['Construtora', 'Cimentos', 'Gama']);
+        expect(cabecalhos().map(c => c.split(' ')[0])).toEqual(['Construtora', 'Distribuidora', 'Gama']);
         expect(linhasDeDado()).toBe(35);
         expect(screen.getByText('1–35 de 35')).toBeTruthy();
     });

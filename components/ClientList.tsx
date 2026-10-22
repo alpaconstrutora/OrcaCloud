@@ -645,7 +645,8 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
         chave: c => chaveDoGrupo(groupBy, c),
         semRotulo: SEM_GRUPO[groupBy],
         ordem: groupBy === 'status' || groupBy === 'portal' ? ['ativo', 'inativo'] : 'aparicao',
-    })), [filteredClients, groupBy]);
+        direcao: agrupamento.direcao,
+    })), [filteredClients, groupBy, agrupamento.direcao]);
     const entradas: EntradaDaTela<Client>[] = React.useMemo(
         () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredClients.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
         [agrupando, grupos, agrupamento.recolhidos, filteredClients],
@@ -1034,6 +1035,8 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                         opcoes={OPCOES_AGRUPAR}
                         campo={groupBy}
                         onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
                         chavesDosGrupos={grupos.map(g => g.key)}
                         algumRecolhido={agrupamento.recolhidos.size > 0}
                         onAlternarTodos={agrupamento.alternarTodos}

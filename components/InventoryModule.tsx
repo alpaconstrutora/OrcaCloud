@@ -606,6 +606,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
         chave: b => chavePorNome(agruparSaldos.campo === 'almoxarifado' ? b.warehouseName : b.inputDescription),
         semRotulo: agruparSaldos.campo === 'almoxarifado' ? 'Sem almoxarifado' : 'Sem insumo',
         valor: b => b.totalValue,
+        direcao: agruparSaldos.direcao,
     });
     const gruposMovimentos = agruparMovimentos.campo === 'none' ? [] : agruparLinhas(filteredMovements, {
         chave: (m): ChaveDeGrupo => {
@@ -619,6 +620,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
         semRotulo: agruparMovimentos.campo === 'mes' ? 'Sem data' : agruparMovimentos.campo === 'tipo' ? 'Sem tipo' : agruparMovimentos.campo === 'almoxarifado' ? 'Sem almoxarifado' : 'Sem insumo',
         valor: m => m.totalCost,
         ordem: agruparMovimentos.campo === 'mes' ? 'chave' : agruparMovimentos.campo === 'tipo' ? Object.keys(TIPO_MOVIMENTO) : 'aparicao',
+        direcao: agruparMovimentos.direcao,
     });
     const filteredStockItems = stockItems.filter(i =>
         !searchTerm || i.inputDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -744,6 +746,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             opcoes={OPCOES_AGRUPAR_SALDOS}
                             campo={agruparSaldos.campo}
                             onCampo={agruparSaldos.setCampo}
+                            direcao={agruparSaldos.direcao}
+                            onDirecao={agruparSaldos.setDirecao}
                             chavesDosGrupos={gruposSaldos.map(g => g.key)}
                             algumRecolhido={agruparSaldos.recolhidos.size > 0}
                             onAlternarTodos={agruparSaldos.alternarTodos}
@@ -755,6 +759,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             opcoes={OPCOES_AGRUPAR_MOVIMENTOS}
                             campo={agruparMovimentos.campo}
                             onCampo={agruparMovimentos.setCampo}
+                            direcao={agruparMovimentos.direcao}
+                            onDirecao={agruparMovimentos.setDirecao}
                             chavesDosGrupos={gruposMovimentos.map(g => g.key)}
                             algumRecolhido={agruparMovimentos.recolhidos.size > 0}
                             onAlternarTodos={agruparMovimentos.alternarTodos}

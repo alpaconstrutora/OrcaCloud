@@ -267,8 +267,9 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
             chave,
             semRotulo: SEM_GRUPO[groupBy],
             ordem: groupBy === 'status' ? ORDEM_STATUS_COTACAO : groupBy === 'prazo' ? 'chave' : 'aparicao',
+            direcao: agrupamento.direcao,
         });
-    }, [groupBy, filteredRequests, empreendimentoByProject]);
+    }, [groupBy, agrupamento.direcao, filteredRequests, empreendimentoByProject]);
     const entradas: EntradaDaTela<QuotationRequest>[] = React.useMemo(
         () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredRequests.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
         [agrupando, grupos, agrupamento.recolhidos, filteredRequests],
@@ -335,6 +336,8 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                         opcoes={OPCOES_AGRUPAR}
                         campo={groupBy}
                         onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
                         chavesDosGrupos={grupos.map(g => g.key)}
                         algumRecolhido={agrupamento.recolhidos.size > 0}
                         onAlternarTodos={agrupamento.alternarTodos}

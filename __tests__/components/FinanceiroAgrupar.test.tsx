@@ -107,6 +107,16 @@ describe.each([
         expect(textoDoCabecalho(grupo)).toMatch(esperado);
         linhasDoGrupo.forEach(t => expect(screen.getAllByText(t).length).toBeGreaterThan(0));
 
+        // Decrescente (molde ClickUp) inverte os grupos; o "Sem …" continua no fim.
+        const rotulos = () => Array.from(document.querySelectorAll('tbody span.font-semibold')).map(e => e.textContent ?? '');
+        const ordem = screen.getByRole('combobox', { name: 'Ordem dos grupos' });
+        const asc = rotulos();
+        fireEvent.change(ordem, { target: { value: 'desc' } });
+        const comValor = asc.filter(r => !r.startsWith('Sem '));
+        expect(rotulos()).toEqual([...comValor.reverse(), ...asc.filter(r => r.startsWith('Sem '))]);
+        fireEvent.change(ordem, { target: { value: 'asc' } });
+        expect(rotulos()).toEqual(asc);
+
         fireEvent.click(cabecalho(grupo));
         linhasDoGrupo.forEach(t => expect(screen.queryByText(t)).toBeNull());
         expect(screen.getAllByText(fora).length).toBeGreaterThan(0);

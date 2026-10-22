@@ -70,13 +70,16 @@ const agruparPor = (valor: string) =>
 /** Linha de cabeçalho do grupo — o `<div>` clicável com o rótulo. */
 const cabecalho = (rotulo: string) => screen.getByText(rotulo, { selector: 'span.font-semibold' }).closest('div')!;
 
+/** Rótulos dos grupos, na ordem da tela. */
+const rotulosDosGrupos = () => Array.from(document.querySelectorAll('tbody span.font-semibold')).map(e => e.textContent);
+
 describe('ContasReceberManager — Agrupar', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         window.localStorage.clear();
     });
 
-    it('agrupa por cliente: cabeçalho com contagem e total bruto, na ordem da lista; "Sem cliente" por último', async () => {
+    it('agrupa por cliente: cabeçalho com contagem e total bruto, grupos A→Z (Crescente); "Sem cliente" por último', async () => {
         render(<ContasReceberManager organizationId="org1" />);
         await screen.findByText('Parcela M1');
 
@@ -86,10 +89,37 @@ describe('ContasReceberManager — Agrupar', () => {
         expect(within(maria).getByText('2')).toBeTruthy();
         expect(within(maria).getByText(/150,00/)).toBeTruthy();
         expect(within(cabecalho('João')).getByText(/250,00/)).toBeTruthy();
-        const rotulos = Array.from(document.querySelectorAll('tbody span.font-semibold')).map(e => e.textContent);
-        expect(rotulos).toEqual(['Maria', 'João', 'Sem cliente']);
+        expect(rotulosDosGrupos()).toEqual(['João', 'Maria', 'Sem cliente']);
         // A escolha persiste, como os demais filtros da tela.
         expect(window.localStorage.getItem('contasReceberManagerFilters:groupBy')).toContain('cliente');
+    });
+
+    it('Crescente/Decrescente (molde ClickUp) inverte os grupos, persiste e mantém "Sem cliente" no fim', async () => {
+        render(<ContasReceberManager organizationId="org1" />);
+        await screen.findByText('Parcela M1');
+        agruparPor('cliente');
+
+        const ordem = screen.getByRole('combobox', { name: 'Ordem dos grupos' }) as HTMLSelectElement;
+        expect(ordem.disabled).toBe(false);
+        expect(ordem.value).toBe('asc');
+
+        fireEvent.change(ordem, { target: { value: 'desc' } });
+        expect(rotulosDosGrupos()).toEqual(['Maria', 'João', 'Sem cliente']);
+        // Dentro do grupo, as linhas continuam na ordem da lista.
+        const linhas = Array.from(document.querySelectorAll('tbody tr')).map(tr => tr.textContent ?? '');
+        expect(linhas.findIndex(t => t.includes('Parcela M1'))).toBeLessThan(linhas.findIndex(t => t.includes('Parcela M2')));
+        expect(window.localStorage.getItem('contasReceberManagerFilters:groupBy:direcao')).toContain('desc');
+
+        fireEvent.change(ordem, { target: { value: 'asc' } });
+        expect(rotulosDosGrupos()).toEqual(['João', 'Maria', 'Sem cliente']);
+    });
+
+    it('a ordem escolhida volta ao reabrir a tela', async () => {
+        window.localStorage.setItem('contasReceberManagerFilters:groupBy', JSON.stringify('cliente'));
+        window.localStorage.setItem('contasReceberManagerFilters:groupBy:direcao', JSON.stringify('desc'));
+        render(<ContasReceberManager organizationId="org1" />);
+        await screen.findByText('Parcela M1');
+        expect(rotulosDosGrupos()).toEqual(['Maria', 'João', 'Sem cliente']);
     });
 
     it('clicar no cabeçalho recolhe o grupo e "recolher todos" esconde todas as linhas', async () => {
@@ -135,6 +165,10 @@ describe('ContasReceberManager — Agrupar', () => {
         const todos = screen.getByRole('button', { name: 'Recolher todos os grupos' }) as HTMLButtonElement;
         expect(todos.disabled).toBe(true);
         expect(todos.title).toMatch(/Escolha um campo em "Agrupar"/);
+        // O seletor Crescente/Decrescente também fica à vista, desligado e dizendo o porquê.
+        const ordem = screen.getByRole('combobox', { name: 'Ordem dos grupos' }) as HTMLSelectElement;
+        expect(ordem.disabled).toBe(true);
+        expect(ordem.title).toMatch(/Escolha um campo em "Agrupar" para ordenar os grupos/);
     });
 
     it('ao agrupar, "recolher todos" liga e alterna para "expandir todos"', async () => {

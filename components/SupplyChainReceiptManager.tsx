@@ -255,8 +255,9 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
             chave,
             semRotulo: SEM_GRUPO[groupBy],
             ordem: groupBy === 'status' ? ORDEM_STATUS_LOGISTICO : groupBy === 'previsao' ? 'chave' : 'aparicao',
+            direcao: agrupamento.direcao,
         });
-    }, [groupBy, filteredOrders, empreendimentoByProject]);
+    }, [groupBy, agrupamento.direcao, filteredOrders, empreendimentoByProject]);
     const entradas: EntradaDaTela<PurchaseOrder>[] = React.useMemo(
         () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredOrders.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
         [agrupando, grupos, agrupamento.recolhidos, filteredOrders],
@@ -320,6 +321,8 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                     opcoes={OPCOES_AGRUPAR}
                     campo={groupBy}
                     onCampo={agrupamento.setCampo}
+                    direcao={agrupamento.direcao}
+                    onDirecao={agrupamento.setDirecao}
                     chavesDosGrupos={grupos.map(g => g.key)}
                     algumRecolhido={agrupamento.recolhidos.size > 0}
                     onAlternarTodos={agrupamento.alternarTodos}

@@ -675,7 +675,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         semRotulo: SEM_GRUPO[groupBy],
         valor: r => r.amount,
         ordem: groupBy === 'status' ? Object.keys(STATUS_PT) : groupBy === 'vencimento' ? 'chave' : 'aparicao',
-    })), [filtered, groupBy]);
+        direcao: agrupamento.direcao,
+    })), [filtered, groupBy, agrupamento.direcao]);
     /** Linhas na ordem da tela, sem os grupos recolhidos — base da página, do Shift+clique e do deep-link. */
     const linhasNaTela = useMemo(() => (agrupando ? linhasDaTela(grupos, recolhidos) : filtered), [agrupando, grupos, recolhidos, filtered]);
     const totalLinhas = agrupando ? contarLinhasDaTela(grupos, recolhidos) : filtered.length;
@@ -1194,6 +1195,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                         opcoes={OPCOES_AGRUPAR}
                         campo={groupBy}
                         onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
                         chavesDosGrupos={grupos.map(g => g.key)}
                         algumRecolhido={recolhidos.size > 0}
                         onAlternarTodos={agrupamento.alternarTodos}

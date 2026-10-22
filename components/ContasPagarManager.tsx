@@ -497,7 +497,8 @@ export default function ContasPagarManager({ organizations }: Props) {
         semRotulo: SEM_GRUPO_NOTAS[groupBy],
         valor: inv => inv.amount,
         ordem: groupBy === 'status' ? ORDEM_STATUS_NOTAS : groupBy === 'vencimento' ? 'chave' : 'aparicao',
-    })), [filtered, groupBy]);
+        direcao: agrupamento.direcao,
+    })), [filtered, groupBy, agrupamento.direcao]);
     /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos" e do Shift+clique. */
     const linhasNaTela = useMemo(() => (agrupando ? linhasDaTela(grupos, recolhidos) : filtered), [agrupando, grupos, recolhidos, filtered]);
     const entradas: EntradaDaTela<InvoiceRow>[] = useMemo(
@@ -1073,6 +1074,8 @@ export default function ContasPagarManager({ organizations }: Props) {
                                 opcoes={OPCOES_AGRUPAR_NOTAS}
                                 campo={groupBy}
                                 onCampo={agrupamento.setCampo}
+                                direcao={agrupamento.direcao}
+                                onDirecao={agrupamento.setDirecao}
                                 chavesDosGrupos={grupos.map(g => g.key)}
                                 algumRecolhido={recolhidos.size > 0}
                                 onAlternarTodos={agrupamento.alternarTodos}

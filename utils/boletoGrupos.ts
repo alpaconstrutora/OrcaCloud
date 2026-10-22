@@ -1,5 +1,6 @@
 import type { Boleto, BoletoStatus } from '../types';
 import { STATUS_LABELS } from './boletoStatus';
+import type { DirecaoGrupos } from './agruparLinhas';
 
 /**
  * "Agrupar" de Boletos a Pagar — o mesmo recurso de Minhas Tarefas
@@ -71,11 +72,12 @@ function chaveERotulo(b: Boleto, campo: Exclude<CampoAgrupar, 'none'>, r: Resolv
 }
 
 /**
- * Agrupa mantendo a ordem da lista recebida (que já vem ordenada pela coluna escolhida):
- * grupos na ordem da 1ª aparição; status na ordem do fluxo; vencimento cronológico.
- * O grupo "Sem …" vai sempre por último.
+ * Ordem dos grupos pelo seletor Crescente/Decrescente (molde ClickUp, 21/10/2026):
+ * nomes em ordem alfabética; status na ordem do fluxo; vencimento cronológico —
+ * `direcao: 'desc'` inverte. O grupo "Sem …" vai sempre por último. Dentro do
+ * grupo, as linhas mantêm a ordem recebida (a coluna ordenada).
  */
-export function agruparBoletos(boletos: Boleto[], campo: CampoAgrupar, r: ResolvedoresGrupo): GrupoBoletos[] {
+export function agruparBoletos(boletos: Boleto[], campo: CampoAgrupar, r: ResolvedoresGrupo, direcao: DirecaoGrupos = 'asc'): GrupoBoletos[] {
     if (campo === 'none') return [{ key: 'todos', label: '', itens: boletos, total: soma(boletos) }];
 
     const mapa = new Map<string, GrupoBoletos>();
@@ -92,9 +94,13 @@ export function agruparBoletos(boletos: Boleto[], campo: CampoAgrupar, r: Resolv
         grupos.sort((a, b) => ordemStatus(a.key) - ordemStatus(b.key));
     } else if (campo === 'vencimento') {
         grupos.sort((a, b) => a.key.localeCompare(b.key));
+    } else {
+        grupos.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR', { numeric: true, sensitivity: 'base' }));
     }
     const semValor = grupos.filter(g => g.key === VAZIO);
-    return [...grupos.filter(g => g.key !== VAZIO), ...semValor];
+    const comValor = grupos.filter(g => g.key !== VAZIO);
+    if (direcao === 'desc') comValor.reverse();
+    return [...comValor, ...semValor];
 }
 
 function ordemStatus(key: string): number {

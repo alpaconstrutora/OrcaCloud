@@ -153,6 +153,9 @@ describe('Suprimentos › Almoxarifado', () => {
         await screen.findAllByText('Central');
         agrupar('Agrupar os saldos', 'insumo');
         expect(pedacos('Cimento')).toMatch(/^Cimento 2 R\$\s?450,00$/);
+        expect(rotulos()).toEqual(['Areia', 'Cimento']);
+        // Decrescente (molde ClickUp) inverte a ordem dos grupos.
+        fireEvent.change(screen.getAllByRole('combobox', { name: 'Ordem dos grupos' })[0], { target: { value: 'desc' } });
         expect(rotulos()).toEqual(['Cimento', 'Areia']);
     });
 

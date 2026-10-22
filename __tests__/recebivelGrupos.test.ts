@@ -20,7 +20,7 @@ describe('agruparRecebiveis', () => {
         expect(g[0].total).toBe(20);
     });
 
-    it('cliente: grupos na ordem de 1ª aparição, com contagem e total bruto; "Sem cliente" por último', () => {
+    it('cliente: grupos em ordem alfabética (Crescente), com contagem e total bruto; "Sem cliente" por último', () => {
         const lista = [
             r('1', { party_name: 'Maria', amount: 5 }),
             r('2'),
@@ -28,9 +28,19 @@ describe('agruparRecebiveis', () => {
             r('4', { party_name: 'Maria', amount: 1.5 }),
         ];
         const g = agruparRecebiveis(lista, 'cliente', ROTULOS);
-        expect(g.map(x => x.label)).toEqual(['Maria', 'João', 'Sem cliente']);
-        expect(g[0].itens.map(x => x.id)).toEqual(['1', '4']);
-        expect(g[0].total).toBe(6.5);
+        expect(g.map(x => x.label)).toEqual(['João', 'Maria', 'Sem cliente']);
+        // Dentro do grupo, a ordem da lista recebida (a coluna ordenada) não muda.
+        expect(g[1].itens.map(x => x.id)).toEqual(['1', '4']);
+        expect(g[1].total).toBe(6.5);
+    });
+
+    it('Decrescente inverte os grupos de cada campo; "Sem …" continua por último', () => {
+        const nomes = [r('1', { party_name: 'Maria' }), r('2'), r('3', { party_name: 'João' })];
+        expect(agruparRecebiveis(nomes, 'cliente', ROTULOS, 'desc').map(x => x.label)).toEqual(['Maria', 'João', 'Sem cliente']);
+        const status = [r('1', { effective_status: 'VENCIDO' }), r('2', { effective_status: 'PREVISTO' }), r('3', { effective_status: 'RECEBIDO' })];
+        expect(agruparRecebiveis(status, 'status', ROTULOS, 'desc').map(x => x.label)).toEqual(['Vencido', 'Recebido', 'Previsto']);
+        const meses = [r('1', { due_date: '2025-12-31' }), r('2', { due_date: undefined }), r('3', { due_date: '2026-09-01' })];
+        expect(agruparRecebiveis(meses, 'vencimento', ROTULOS, 'desc').map(x => x.label)).toEqual(['Setembro/2026', 'Dezembro/2025', 'Sem vencimento']);
     });
 
     it('vencimento: um grupo por mês, em ordem cronológica, rótulo "Mês/AAAA"', () => {

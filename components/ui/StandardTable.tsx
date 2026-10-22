@@ -182,7 +182,8 @@ export function StandardTable<T>({
         semRotulo: agrupar.semRotulo(campoAgrupar),
         valor: agrupar.valor,
         ordem: agrupar.ordem?.(campoAgrupar),
-    })), [agrupar, campoAgrupar, filtered]);
+        direcao: grupoEstado.direcao,
+    })), [agrupar, campoAgrupar, grupoEstado.direcao, filtered]);
     /** Linhas na ordem da tela, sem os grupos recolhidos. */
     const linhas = useMemo(() => (agrupando ? linhasDaTela(grupos, grupoEstado.recolhidos) : filtered), [agrupando, grupos, grupoEstado.recolhidos, filtered]);
     const totalLinhas = agrupando ? contarLinhasDaTela(grupos, grupoEstado.recolhidos) : filtered.length;
@@ -263,6 +264,8 @@ export function StandardTable<T>({
                                 opcoes={agrupar.opcoes}
                                 campo={grupoEstado.campo}
                                 onCampo={grupoEstado.setCampo}
+                                direcao={grupoEstado.direcao}
+                                onDirecao={grupoEstado.setDirecao}
                                 chavesDosGrupos={grupos.map(g => g.key)}
                                 algumRecolhido={grupoEstado.recolhidos.size > 0}
                                 onAlternarTodos={grupoEstado.alternarTodos}

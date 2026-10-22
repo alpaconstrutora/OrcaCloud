@@ -453,6 +453,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         <SyncCenterTab
           key={refreshKey}
           empreendimento={e}
+          // Sem bumpar o refreshKey: ele remontaria a aba e apagaria a mensagem do resultado.
+          // O contador da Curadoria recarrega direto; o empreendimento, pelo pai.
+          onChanged={() => { loadPendingCuradoria(); onSynced?.(); }}
         />
       )}
       {tab === 'curadoria' && (

@@ -45,7 +45,42 @@ export interface ApplyOutcome {
     failed: { id: string; error: string }[];
 }
 
+/** Os conflitos de um plano separados pelo que a Curadoria já sabe deles. */
+export interface ConflitosClassificados {
+    /** Sem proposta, ou com proposta aplicada/obsoleta (voltou a divergir): ainda a decidir. */
+    novos: FieldChange[];
+    /** Já na Curadoria, aguardando decisão. */
+    pendentes: FieldChange[];
+    /** Rejeitados na Curadoria: o valor do empreendimento fica, por decisão do usuário. */
+    rejeitados: FieldChange[];
+}
+
 const COLS = 'id, organization_id, empreendimento_id, origin, entity, entity_id, field, field_group, label, current_value, proposed_value, applied_value, source_ref, proposal_hash, status, detected_at, decided_at, decided_by, decision_reason';
+
+/** A mesma identidade do UNIQUE da tabela (empreendimento_id, origin, entity, entity_id, field, proposal_hash). */
+const hashDe = (empreendimentoId: string, c: FieldChange) => proposalHash({
+    empreendimentoId, origin: c.origin, entity: c.entity,
+    entityId: c.entityId, field: c.field, proposedValue: c.to,
+});
+const chave = (r: { origin: string; entity: string; entity_id: string; field: string; proposal_hash: string }) =>
+    `${r.origin}|${r.entity}|${r.entity_id}|${r.field}|${r.proposal_hash}`;
+
+type LinhaExistente = { id: string; origin: string; entity: string; entity_id: string; field: string; proposal_hash: string; status: ProposalStatus };
+
+/** Propostas já gravadas para estes conflitos, por identidade. */
+async function existentes(empreendimentoId: string, conflicts: FieldChange[]): Promise<Map<string, LinhaExistente>> {
+    const hashes = [...new Set(conflicts.map(c => hashDe(empreendimentoId, c)))];
+    const out = new Map<string, LinhaExistente>();
+    if (hashes.length === 0) return out;
+    const { data, error } = await supabase
+        .from('empreendimento_field_proposals')
+        .select('id, origin, entity, entity_id, field, proposal_hash, status')
+        .eq('empreendimento_id', empreendimentoId)
+        .in('proposal_hash', hashes);
+    if (error) throw error;
+    for (const r of (data ?? []) as LinhaExistente[]) out.set(chave(r), r);
+    return out;
+}
 
 /** Só torre e unidade são destinos escritos hoje (o registry não propõe campo de empreendimento/área). */
 const TABLE_BY_ENTITY: Partial<Record<SyncEntity, string>> = {
@@ -55,10 +90,41 @@ const TABLE_BY_ENTITY: Partial<Record<SyncEntity, string>> = {
 
 export const empreendimentoProposalService = {
     /**
+     * Separa os conflitos de um plano pelo que a Curadoria já sabe deles. Só leitura — o ensaio
+     * da aba Sincronização usa isto para não contar como "a trazer" o que já está esperando
+     * decisão (ou foi rejeitado), que era o que deixava a contagem presa para sempre.
+     * Sem a tabela (migration não aplicada) ou com erro de leitura, tudo conta como novo:
+     * o ensaio não pode cair por causa da Curadoria.
+     */
+    async classificarConflitos(empreendimentoId: string, conflicts: FieldChange[]): Promise<ConflitosClassificados> {
+        const out: ConflitosClassificados = { novos: [], pendentes: [], rejeitados: [] };
+        if (conflicts.length === 0) return out;
+        let porChave: Map<string, LinhaExistente>;
+        try {
+            porChave = await existentes(empreendimentoId, conflicts);
+        } catch (err) {
+            console.warn('[empreendimentoProposalService] Curadoria indisponível no ensaio:', err);
+            return { ...out, novos: [...conflicts] };
+        }
+        for (const c of conflicts) {
+            const r = porChave.get(chave({ origin: c.origin, entity: c.entity, entity_id: c.entityId, field: c.field, proposal_hash: hashDe(empreendimentoId, c) }));
+            if (r?.status === 'pending') out.pendentes.push(c);
+            else if (r?.status === 'rejected') out.rejeitados.push(c);
+            else out.novos.push(c);
+        }
+        return out;
+    },
+
+    /**
      * Materializa os conflitos de um sync como propostas pendentes. INSERT ... ON CONFLICT DO
      * NOTHING pela identidade: origem inalterada não recria (um 'rejected' segue rejeitado);
      * origem que mudou nasce como linha nova. Roda SÓ no apply do sync, nunca no preview —
      * senão abrir a tela viraria escrita.
+     *
+     * Proposta 'applied' ou 'superseded' com a MESMA identidade é reaberta como pendente: se o
+     * conflito está de volta, o empreendimento voltou a divergir depois daquela decisão. Sem isto
+     * o ON CONFLICT DO NOTHING a ignorava e o conflito nunca mais chegava à Curadoria. A decisão
+     * antiga continua registrada no Histórico (empreendimento_audit_logs).
      */
     async materializeConflicts(
         empreendimentoId: string,
@@ -66,6 +132,32 @@ export const empreendimentoProposalService = {
         conflicts: FieldChange[],
     ): Promise<number> {
         if (conflicts.length === 0) return 0;
+
+        let reabertas = 0;
+        try {
+            const porChave = await existentes(empreendimentoId, conflicts);
+            for (const c of conflicts) {
+                const r = porChave.get(chave({ origin: c.origin, entity: c.entity, entity_id: c.entityId, field: c.field, proposal_hash: hashDe(empreendimentoId, c) }));
+                if (r?.status !== 'applied' && r?.status !== 'superseded') continue;
+                const { error } = await supabase
+                    .from('empreendimento_field_proposals')
+                    .update({
+                        status: 'pending', current_value: c.from ?? null, applied_value: null,
+                        label: c.label, source_ref: c.sourceRef,
+                        detected_at: new Date().toISOString(), decided_at: null, decided_by: null, decision_reason: null,
+                    })
+                    .eq('id', r.id)
+                    .eq('status', r.status);
+                if (error) throw new Error(`Falha ao reabrir proposta de curadoria: ${error.message}`);
+                reabertas++;
+            }
+        } catch (err: any) {
+            if (err?.code === '42P01' || err?.code === 'PGRST205' || /schema cache|does not exist/i.test(err?.message ?? '')) {
+                throw new Error('Curadoria indisponível: aplique a migration 20270218000000_empreendimento_field_proposals no banco antes de sincronizar.');
+            }
+            throw err instanceof Error ? err : new Error(String(err?.message ?? err));
+        }
+
         const rows = conflicts.map(c => ({
             organization_id: organizationId,
             empreendimento_id: empreendimentoId,
@@ -78,10 +170,7 @@ export const empreendimentoProposalService = {
             current_value: c.from ?? null,
             proposed_value: c.to ?? null,
             source_ref: c.sourceRef,
-            proposal_hash: proposalHash({
-                empreendimentoId, origin: c.origin, entity: c.entity,
-                entityId: c.entityId, field: c.field, proposedValue: c.to,
-            }),
+            proposal_hash: hashDe(empreendimentoId, c),
             status: 'pending' as ProposalStatus,
         }));
 
@@ -98,7 +187,7 @@ export const empreendimentoProposalService = {
             }
             throw new Error(`Falha ao registrar propostas de curadoria: ${error.message}`);
         }
-        return data?.length ?? 0;
+        return (data?.length ?? 0) + reabertas;
     },
 
     /** Propostas pendentes. Os nomes de torre/unidade são resolvidos no cliente (não há view —

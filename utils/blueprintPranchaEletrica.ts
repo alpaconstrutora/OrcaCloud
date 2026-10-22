@@ -291,8 +291,8 @@ export function desenharEletrica(
     // E5.1: num eletroduto COMUM visto num recorte, só os condutores dos circuitos daquele recorte.
     const lista = recorte && catDoTrecho === 'COMUM' ? listaInteira.filter((c) => entraNoRecorte(c.circuitoId ? categoriaDoCircuito.get(c.circuitoId) ?? 'COMUM' : 'COMUM', recorte)) : listaInteira;
     const numerado = numerados.get(t.id) ?? null;
-    if (numerado) {
-      // Círculo branco com o rótulo no meio do trecho, no lugar dos traços.
+    if (numerado?.principal) {
+      // Círculo branco com o rótulo no meio do trecho, no lugar dos traços — um por TRONCO.
       circulo(d, meio, 2.2 * k, { traco: FINA, cheio: '#ffffff' });
       d.texto(meio.x - 0.7 * k * numerado.rotulo.length, meio.y + 0.7 * k, numerado.rotulo, TEXTO_MM * 0.9);
     }

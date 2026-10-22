@@ -6661,7 +6661,8 @@ export default function BlueprintCanvas({
           // círculo no lugar dos traços; a composição está na tabela da folha e
           // no painel do trecho. Nenhum grupo se desenha.
           const numerado = trechosNumeradosDaRede.get(t.id) ?? null;
-          if (numerado) {
+          // Um círculo por TRONCO: os outros pedaços do mesmo tronco ficam só com o traço.
+          if (numerado?.principal) {
             const r = 7 * fz;
             ctx.setLineDash([]);
             ctx.lineWidth = 1.25;

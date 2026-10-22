@@ -19,6 +19,8 @@ import ActionIconButton from './ui/ActionIconButton';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
 import { dataBR, motivoNaoAgrupavel, validarSelecaoParaDarf } from '../utils/darf';
+import { FilterPopover } from './ui/FilterPopover';
+import { filtrarPorOrigem, origemDoTributo, origensSelecionadas, ORIGENS_TRIBUTO, ORIGEM_TRIBUTO_LABEL, type OrigemTributo } from '../utils/tributoOrigem';
 import DarfSheet from './financeiro/DarfSheet';
 import DarfsTab from './financeiro/DarfsTab';
 import { useAgrupamento } from '../hooks/useAgrupamento';
@@ -45,7 +47,8 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
 
 const TRIBUTO_COLUMNS: ColumnConfig[] = [
     { key: 'party_name', label: 'Tributo', sortable: true },
-    { key: 'category', label: 'Origem', sortable: true },
+    { key: 'origem', label: 'Origem', sortable: true },
+    { key: 'category', label: 'Categoria', sortable: true },
     { key: 'client_name', label: 'Cliente', sortable: true },
     { key: 'empreendimento_name', label: 'Empreendimento', sortable: true },
     { key: 'description', label: 'Descrição', sortable: true },
@@ -59,7 +62,7 @@ const TRIBUTO_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    party_name: 200, category: 150, client_name: 200, empreendimento_name: 220,
+    party_name: 200, origem: 120, category: 170, client_name: 200, empreendimento_name: 220,
     description: 240, competencia: 140, due_date: 150, amount: 130, status: 130, darf: 190, actions: 340,
 };
 
@@ -69,7 +72,8 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 // arraste (mesmo padrão de ClientChargesModule.tsx).
 const TRIBUTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     party_name: { label: 'Tributo', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
-    category: { label: 'Origem', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    origem: { label: 'Origem', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    category: { label: 'Categoria', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     client_name: { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     empreendimento_name: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
@@ -87,7 +91,8 @@ function buildAdvancedFilterFields(rows: TaxPayable[]): FilterFieldConfig[] {
     const dasLinhas = (key: string) => distinctOptions(rows, r => getAdvancedFilterValue(r, key));
     return [
         { key: 'party_name', label: 'Tributo', type: 'text', options: dasLinhas('party_name') },
-        { key: 'category', label: 'Origem', type: 'text', options: dasLinhas('category') },
+        { key: 'origem', label: 'Origem', type: 'select', options: ORIGENS_TRIBUTO.map(value => ({ value, label: ORIGEM_TRIBUTO_LABEL[value] })) },
+        { key: 'category', label: 'Categoria', type: 'text', options: dasLinhas('category') },
         { key: 'client_name', label: 'Cliente', type: 'text', options: dasLinhas('client_name') },
         { key: 'empreendimento_name', label: 'Empreendimento', type: 'text', options: dasLinhas('empreendimento_name') },
         { key: 'description', label: 'Descrição', type: 'text' },
@@ -101,6 +106,7 @@ function buildAdvancedFilterFields(rows: TaxPayable[]): FilterFieldConfig[] {
 function getAdvancedFilterValue(r: TaxPayable, key: string): unknown {
     switch (key) {
         case 'party_name': return r.party_name ?? '';
+        case 'origem': return origemDoTributo(r);
         case 'category': return r.category ?? '';
         case 'client_name': return r.client_name ?? '';
         case 'empreendimento_name': return r.empreendimento_name ?? '';
@@ -141,6 +147,8 @@ function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean, onAbr
                     {r.party_name ?? <span className="text-gray-400 italic">—</span>}
                 </span>
             );
+        case 'origem':
+            return <span className="text-sm font-normal text-gray-600 truncate block">{ORIGEM_TRIBUTO_LABEL[origemDoTributo(r)]}</span>;
         case 'category':
             return <span className="text-sm font-normal text-gray-600 truncate block" title={r.category ?? undefined}>{r.category ?? '—'}</span>;
         case 'client_name':
@@ -185,10 +193,11 @@ function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean, onAbr
 }
 
 // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
-type CampoAgrupar = 'tributo' | 'origem' | 'cliente' | 'empreendimento' | 'competencia' | 'vencimento' | 'status';
+type CampoAgrupar = 'tributo' | 'origem' | 'categoria' | 'cliente' | 'empreendimento' | 'competencia' | 'vencimento' | 'status';
 const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
     { value: 'tributo', label: 'Tributo' },
     { value: 'origem', label: 'Origem' },
+    { value: 'categoria', label: 'Categoria' },
     { value: 'cliente', label: 'Cliente' },
     { value: 'empreendimento', label: 'Empreendimento' },
     { value: 'competencia', label: 'Competência' },
@@ -196,13 +205,14 @@ const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
     { value: 'status', label: 'Status' },
 ];
 const SEM_GRUPO: Record<CampoAgrupar, string> = {
-    tributo: 'Sem tributo', origem: 'Sem origem', cliente: 'Sem cliente', empreendimento: 'Sem empreendimento',
+    tributo: 'Sem tributo', origem: 'Sem origem', categoria: 'Sem categoria', cliente: 'Sem cliente', empreendimento: 'Sem empreendimento',
     competencia: 'Sem competência', vencimento: 'Sem vencimento', status: 'Sem status',
 };
 function chaveDoGrupo(campo: CampoAgrupar, r: TaxPayable): ChaveDeGrupo {
     switch (campo) {
         case 'tributo': return chavePorNome(r.party_name);
-        case 'origem': return chavePorNome(r.category);
+        case 'origem': return chavePorRotulo(origemDoTributo(r), ORIGEM_TRIBUTO_LABEL);
+        case 'categoria': return chavePorNome(r.category);
         case 'cliente': return chavePorNome(r.client_name);
         case 'empreendimento': return chavePorNome(r.empreendimento_name);
         case 'competencia': return chavePorMes(r.transaction_date);
@@ -401,12 +411,17 @@ interface Props {
 }
 
 export default function TributosAPagarManager({ organizationId, organizations }: Props) {
-    const [rows, setRows]       = useState<TaxPayable[]>([]);
+    // `linhas` = tudo que o servidor devolveu; `rows` = o que o filtro de Origem deixa ver. KPIs,
+    // filtro avançado, ordenação e agrupamento leem `rows`, então acompanham o recorte.
+    const [linhas, setRows] = useState<TaxPayable[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError]     = useState<string | null>(null);
 
     const [search, setSearch]           = usePersistedState('tributosPagarManagerFilters:search', '');
     const [statusFilter, setStatusFilter] = usePersistedState<StatusFilter>('tributosPagarManagerFilters:status', 'all');
+    const [origensSalvas, setOrigens] = usePersistedState<OrigemTributo[]>('tributosPagarManagerFilters:origens', [...ORIGENS_TRIBUTO]);
+    const origens = useMemo(() => origensSelecionadas(origensSalvas), [origensSalvas]);
+    const rows = useMemo(() => filtrarPorOrigem(linhas, origens), [linhas, origens]);
     const [dueFrom, setDueFrom]         = usePersistedState('tributosPagarManagerFilters:dueFrom', '');
     const [dueTo, setDueTo]             = usePersistedState('tributosPagarManagerFilters:dueTo', '');
     // Ano e Mês do vencimento — independentes ENTRE SI (15/10/2026, mesmo recurso de
@@ -468,7 +483,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
     // table-layout:fixed (§6.1).
     const tableTotalWidth = 40 // checkbox
-        + (['party_name', 'category', 'client_name', 'empreendimento_name', 'description', 'competencia', 'due_date', 'amount', 'status', 'darf'] as const)
+        + (['party_name', 'origem', 'category', 'client_name', 'empreendimento_name', 'description', 'competencia', 'due_date', 'amount', 'status', 'darf'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + cols.getWidth('actions');
     const advancedFields = useMemo(() => buildAdvancedFilterFields(rows), [rows]);
@@ -617,6 +632,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                 let va: string | number, vb: string | number;
                 switch (tableColumns.sortColumn) {
                     case 'party_name':    va = (a.party_name ?? '').toLowerCase();    vb = (b.party_name ?? '').toLowerCase();    break;
+                    case 'origem':        va = ORIGEM_TRIBUTO_LABEL[origemDoTributo(a)]; vb = ORIGEM_TRIBUTO_LABEL[origemDoTributo(b)]; break;
                     case 'category':      va = (a.category ?? '').toLowerCase();      vb = (b.category ?? '').toLowerCase();      break;
                     case 'client_name':   va = (a.client_name ?? '').toLowerCase();   vb = (b.client_name ?? '').toLowerCase();   break;
                     case 'empreendimento_name':
@@ -869,6 +885,17 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                 </div>
                             )}
                         </div>
+
+                        {/* Filtro de origem — Folha, Pró-labore, Comercial, Manual. Múltipla escolha: a guia do
+                            mês costuma levar folha + pró-labore juntas (§5.4). */}
+                        <FilterPopover<OrigemTributo>
+                            multiple
+                            label="Origem"
+                            value={origens}
+                            onChange={setOrigens}
+                            options={ORIGENS_TRIBUTO.map(value => ({ value, label: ORIGEM_TRIBUTO_LABEL[value] }))}
+                            padrao={ORIGENS_TRIBUTO}
+                        />
 
                         <button
                             onClick={() => setShowFilters(v => !v)}

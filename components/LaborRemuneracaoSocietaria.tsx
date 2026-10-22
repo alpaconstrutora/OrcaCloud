@@ -48,7 +48,6 @@ const PAYROLL_COLUMNS: StandardTableColumn[] = [
     { key: 'irrf', label: 'IRRF', sortable: true, width: 120, align: 'right' },
     { key: 'liquido', label: 'Líquido', sortable: true, width: 130, align: 'right' },
     { key: 'patronal', label: 'Cota patronal', sortable: true, width: 130, align: 'right' },
-    { key: 'terceiros', label: 'Contrib. terceiros', sortable: true, width: 140, align: 'right' },
     { key: 'status', label: 'Status', sortable: true, width: 110, align: 'right' },
 ];
 const BATCH_ITEM_COLUMNS: StandardTableColumn[] = [
@@ -450,7 +449,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
         const org = exigirOrg();
         if (!org) return;
         if (!payroll) { setError('A folha ainda não foi carregada.'); return; }
-        if (!await confirm({ title: 'Enviar ao financeiro?', message: 'Gera um lançamento (contas a pagar) por sócio.', variant: 'default' })) return;
+        if (!await confirm({ title: 'Enviar ao financeiro?', message: 'Gera o líquido de cada sócio em Contas a Pagar e os tributos (INSS do sócio, cota patronal e IRRF) em Tributos a Pagar, com vencimento no dia 20.', variant: 'default' })) return;
         setSaving(true);
         try {
             await remuneracaoSocietariaService.sendPayrollToFinancial(org, payroll, payrollItems);
@@ -689,7 +688,6 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
                                 case 'irrf': return i.irrf_amount;
                                 case 'liquido': return i.net_amount;
                                 case 'patronal': return i.patronal_amount;
-                                case 'terceiros': return i.terceiros_amount;
                                 case 'status': return i.status;
                                 default: return null;
                             }
@@ -702,7 +700,6 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
                                 case 'irrf': return <span className="text-sm font-medium text-red-500">-{BRL(i.irrf_amount)}</span>;
                                 case 'liquido': return <span className="text-sm font-medium text-emerald-600">{BRL(i.net_amount)}</span>;
                                 case 'patronal': return <span className="text-sm font-medium text-gray-600">{i.patronal_amount > 0 ? BRL(i.patronal_amount) : '—'}</span>;
-                                case 'terceiros': return <span className="text-sm font-medium text-gray-600">{i.terceiros_amount > 0 ? BRL(i.terceiros_amount) : '—'}</span>;
                                 case 'status': return <span className="text-sm font-normal text-gray-600">{i.status}</span>;
                                 default: return null;
                             }
@@ -719,7 +716,6 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
                                     <span className="text-gray-400 mx-2">·</span>
                                     <span className="font-medium text-emerald-600">Líquido {BRL(payroll.net_total)}</span>
                                     {payroll.patronal_total > 0 && <><span className="text-gray-400 mx-2">·</span><span className="font-medium text-gray-600">Patronal {BRL(payroll.patronal_total)}</span></>}
-                                    {payroll.terceiros_total > 0 && <><span className="text-gray-400 mx-2">·</span><span className="font-medium text-gray-600">Terceiros {BRL(payroll.terceiros_total)}</span></>}
                                 </td>
                             </tr>
                         )) : undefined}

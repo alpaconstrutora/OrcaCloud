@@ -112,3 +112,35 @@ Respostas do usuário às três perguntas que a verificação levantou:
 | 3 | `payrollService`: `getWorksiteCostSummary` e `syncPayrollToFinance` sobre o util; preservação; erros visíveis; sai `syncEmployeeToFinance` e o `localStorage` | `folhaSyncPreserva.test.ts` verde; `tsc` pela CI |
 | 4 | Telas: Encargos Sociais (config), Encargos de INSS (alíquotas da config), Rubricas ("Repasse a terceiro"), Alocações, Ciclos (alerta), Tributos (origem/obra/exclusão), DARF (FGTS) | `check-ui-standard` nos .tsx; teste de componente; prints no navegador |
 | 5 | Após o merge: backup + re-sincronização das 4 folhas + conferência por SQL (Σ tributos = Σ itens) | números no relatório |
+
+## Complemento (22/10/2026): pró-labore
+
+Pergunta do usuário (literal): *"falta incluir os tributo de recursos humanos > encargos sociais?"* Resposta: faltavam
+os do **pró-labore**. À proposta abaixo, o usuário respondeu *"sim"*.
+
+**Achados no banco (Alpa, um sócio):**
+- O envio ao financeiro gravava só o **líquido** do sócio. O INSS descontado dele nunca virava título. A cota patronal
+  entrava sem `party_type` (fora de Tributos) e sem vencimento, e os terceiros gravavam o mesmo `reference_id` da
+  patronal.
+- 06 (aprovado) e 07/2026 (enviado) foram calculados em 03–04/07, antes da regra do pró-labore:
+  - INSS de 501,51 pela tabela do empregado, em vez de 11% = 550,00;
+  - cota patronal 0, em vez de 20% = 1.000,00.
+- 05/2026 tinha terceiros de 190,00 (5,8%), mas terceiros não incidem sobre pró-labore: o sócio é contribuinte
+  individual.
+
+**Mudança:**
+- `utils/folhaFinanceiro.tributosDoProlabore` (puro): monta INSS (pró-labore), INSS patronal (pró-labore) e IRRF
+  (pró-labore). Os títulos são `party_type 'TAX'` com vencimento no dia 20, e a competência é a da folha do mês, então
+  podem ir no mesmo DARF.
+- `remuneracaoSocietariaService.syncTributosDoProlabore`, chamado no envio ao financeiro:
+  - upsert pelo `reference_id` `prolabore-{folha}-{tipo}`;
+  - preserva o que estiver pago, conciliado ou em DARF;
+  - apaga as linhas do formato antigo que estiverem em aberto.
+- `calculateProlabore` sem terceiros. Telas: sai a coluna "Contrib. terceiros", e o KPI passa a ser "IRRF Retido".
+
+**Dados:** o script `prolabore_tributos_recalculo_05_07.sql` é rodado pelo usuário, porque o modo automático bloqueia a
+gravação. Ele faz o seguinte:
+- 05/2026: terceiros zerados;
+- 06 e 07/2026: INSS 550,00, cota patronal 1.000,00, líquido 4.450,00;
+- 07/2026, já enviado: líquido ajustado no razão e em `invoices`, e criados os 2 tributos (vencimento 20/08/2026);
+- reversão em `bkp_prolabore_20271022_*`.

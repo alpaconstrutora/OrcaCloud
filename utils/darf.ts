@@ -59,6 +59,9 @@ export interface ValidacaoSelecaoDarf {
  * tributos (ou 1 com multa/juros — tributo atrasado sozinho também é DARF),
  * uma organização e uma competência.
  */
+/** Linha de FGTS (folha ou manual) — tem guia própria, não vai em DARF com os demais. */
+export const ehFgts = (t: Pick<TaxPayable, 'party_name'>) => /^FGTS\b/i.test((t.party_name ?? '').trim());
+
 export function validarSelecaoParaDarf(tributos: TaxPayable[], comEncargos = false): ValidacaoSelecaoDarf {
     const total = tributos.reduce((s, t) => s + (t.amount ?? 0), 0);
     const base = { orgId: null, competencia: null, total };
@@ -80,6 +83,12 @@ export function validarSelecaoParaDarf(tributos: TaxPayable[], comEncargos = fal
             ...base, ok: false,
             motivo: `Um DARF só junta tributos da mesma competência — a seleção tem ${comps.map(c => competenciaBR(c)).join(' e ')}`,
         };
+    }
+    // O FGTS é recolhido pela guia do FGTS Digital (GFD), não por DARF: pode ser
+    // agrupado só com outras linhas de FGTS (a guia do mês), nunca com INSS/IRRF.
+    const comFgts = tributos.filter(ehFgts).length;
+    if (comFgts > 0 && comFgts < tributos.length) {
+        return { ...base, ok: false, motivo: 'O FGTS tem guia própria (FGTS Digital): agrupe o FGTS separado dos demais tributos' };
     }
     return { ok: true, motivo: null, orgId: orgs[0] ?? null, competencia: comps[0] ?? null, total };
 }

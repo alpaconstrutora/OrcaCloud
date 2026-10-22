@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, AlertCircle, Printer, RefreshCw, Users, Building2 } from 'lucide-react';
 import { payrollService } from '../services/payrollService';
-import { getOrgTerceirosTaxes } from '../services/payrollService';
+import { encargosPadrao } from '../utils/folhaFinanceiro';
 import { supabase } from '../lib/supabase';
 
 interface LaborEncargosINSSProps {
@@ -35,6 +35,7 @@ interface INSSData {
     totalTerceiros: number;
     totalGeral: number;
     ratRate: number;
+    cppRate: number;
 }
 
 const fmtN = (v: number) =>
@@ -82,15 +83,12 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                      r.name.toUpperCase().includes('PREVIDÊNCIA') ||
                      r.name.toUpperCase().includes('PREVIDENCIA')))
                 .map(r => r.code);
-            const ratRubric = rubrics.find(
-                r => r.type === 'encargo' &&
-                     (r.name.toUpperCase().includes('RAT') ||
-                      r.name.toUpperCase().includes('ACIDENT') ||
-                      r.name.toUpperCase().includes('SAT'))
-            );
-            const ratRate = ratRubric?.calculation_config?.percentage
-                ? ratRubric.calculation_config.percentage / 100
-                : 0.03; // 3% padrão (risco médio)
+            // CPP, RAT×FAP e terceiros: as MESMAS alíquotas que geram os títulos da
+            // folha (RH › Encargos Sociais › Contribuições Sociais). Antes: 20% e 3%
+            // fixos aqui, sem nenhum título no financeiro.
+            const encargos = orgId ? await payrollService.getEncargosConfig(orgId) : encargosPadrao(null);
+            const ratRate = encargos.ratRate * encargos.fap;
+            const cppRate = encargos.cppRate;
 
             // 4. Agregar resultados e itens de todas as folhas
             const resultsByEmp: Record<string, { base_inss: number; gross: number; net: number; employer_cost: number }> = {};
@@ -156,8 +154,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
             );
 
             // 6. Montar lista de empregados
-            const orgTerceirosTaxes = getOrgTerceirosTaxes(orgId);
-            const terceiroRate = orgTerceirosTaxes.reduce((s, t) => s + t.rate, 0);
+            const terceiroRate = encargos.terceiros.reduce((s, t) => s + t.rate, 0);
 
             let seq = 1;
             let totalBase = 0, totalExcedente = 0, totalSegurados = 0, totalContribuintes = 0;
@@ -199,7 +196,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
             empregados.forEach((e, i) => { e.seq = i + 1; });
 
             totalRAT      = Math.round(totalBase * ratRate * 100) / 100;
-            totalEmpresa  = Math.round(totalBase * 0.20 * 100) / 100;
+            totalEmpresa  = Math.round(totalBase * cppRate * 100) / 100;
             // Terceiros: mesma base de cálculo dos encargos patronais (base INSS)
             totalTerceiros = Math.round(totalBase * terceiroRate * 100) / 100;
             const totalGeral = totalSegurados + totalContribuintes + totalRAT + totalEmpresa + totalDeducoes + totalTerceiros;
@@ -217,6 +214,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                 totalTerceiros,
                 totalGeral,
                 ratRate,
+                cppRate,
             });
         } catch (err: any) {
             console.error('[INSS]', err);
@@ -327,53 +325,53 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                                         </tr>
                                     ) : data.empregados.map((emp) => (
                                         <tr key={emp.seq} className="border-b border-slate-50 hover:bg-slate-50/50">
-                                            <td className="px-3 py-2 text-slate-500 font-mono font-bold">{emp.seq}</td>
+                                            <td className="px-3 py-2 text-slate-500 font-medium">{emp.seq}</td>
                                             <td className="px-3 py-2 font-medium text-slate-800">{emp.name}</td>
-                                            <td className="px-3 py-2 text-right font-mono text-slate-700">{fmtN(emp.base)}</td>
-                                            <td className="px-3 py-2 text-right font-mono text-slate-500">{fmtN(emp.excedente)}</td>
-                                            <td className="px-3 py-2 text-right font-mono text-slate-500">{fmtN(emp.dedSalMat13)}</td>
-                                            <td className="px-3 py-2 text-right font-mono text-slate-500">{fmtN(emp.deducoes)}</td>
-                                            <td className="px-3 py-2 text-right font-mono text-slate-700">
+                                            <td className="font-normal px-3 py-2 text-right text-slate-700">{fmtN(emp.base)}</td>
+                                            <td className="font-normal px-3 py-2 text-right text-slate-500">{fmtN(emp.excedente)}</td>
+                                            <td className="font-normal px-3 py-2 text-right text-slate-500">{fmtN(emp.dedSalMat13)}</td>
+                                            <td className="font-normal px-3 py-2 text-right text-slate-500">{fmtN(emp.deducoes)}</td>
+                                            <td className="font-normal px-3 py-2 text-right text-slate-700">
                                                 {emp.taxa > 0 ? fmtPct(emp.taxa) : '—'}
                                             </td>
-                                            <td className="px-3 py-2 text-right font-mono font-bold text-slate-900">{fmtN(emp.valor)}</td>
+                                            <td className="px-3 py-2 text-right font-medium text-slate-900">{fmtN(emp.valor)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                                 {/* Totais empregados */}
                                 <tfoot>
                                     <tr className="border-t border-slate-200 bg-slate-50">
-                                        <td colSpan={2} className="px-3 py-2 text-xs font-black text-slate-600 uppercase">
+                                        <td colSpan={2} className="px-3 py-2 text-xs font-medium text-slate-600 uppercase">
                                             Empregados: {data.empregados.length} &nbsp; Total:
                                         </td>
-                                        <td className="px-3 py-2 text-right font-mono font-black text-slate-800">{fmtN(data.totalBase)}</td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-500">{fmtN(data.totalExcedente)}</td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-500">0,00</td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-500">0,00</td>
+                                        <td className="px-3 py-2 text-right font-medium text-slate-800">{fmtN(data.totalBase)}</td>
+                                        <td className="font-normal px-3 py-2 text-right text-slate-500">{fmtN(data.totalExcedente)}</td>
+                                        <td className="font-normal px-3 py-2 text-right text-slate-500">0,00</td>
+                                        <td className="font-normal px-3 py-2 text-right text-slate-500">0,00</td>
                                         <td className="px-3 py-2"></td>
-                                        <td className="px-3 py-2 text-right font-mono font-black text-slate-800">{fmtN(data.totalSegurados)}</td>
+                                        <td className="px-3 py-2 text-right font-medium text-slate-800">{fmtN(data.totalSegurados)}</td>
                                     </tr>
                                     <tr className="border-t border-slate-100 bg-slate-50">
-                                        <td colSpan={2} className="px-3 py-2 text-xs font-black text-slate-500 uppercase">
+                                        <td colSpan={2} className="px-3 py-2 text-xs font-medium text-slate-500 uppercase">
                                             Contribuintes: {data.contribuintes.length} &nbsp; Total:
                                         </td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-400">0,00</td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-400">0,00</td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-400">0,00</td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-400">0,00</td>
+                                        <td className="font-normal px-3 py-2 text-right text-slate-400">0,00</td>
+                                        <td className="font-normal px-3 py-2 text-right text-slate-400">0,00</td>
+                                        <td className="font-normal px-3 py-2 text-right text-slate-400">0,00</td>
+                                        <td className="font-normal px-3 py-2 text-right text-slate-400">0,00</td>
                                         <td className="px-3 py-2"></td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-400">0,00</td>
+                                        <td className="font-normal px-3 py-2 text-right text-slate-400">0,00</td>
                                     </tr>
                                     <tr className="border-t-2 border-slate-300 bg-slate-100">
-                                        <td colSpan={2} className="px-3 py-2 text-xs font-black text-slate-700 uppercase">
+                                        <td colSpan={2} className="px-3 py-2 text-xs font-medium text-slate-700 uppercase">
                                             Total: {data.empregados.length + data.contribuintes.length} &nbsp; Total:
                                         </td>
-                                        <td className="px-3 py-2 text-right font-mono font-black text-slate-900">{fmtN(data.totalBase)}</td>
-                                        <td className="px-3 py-2 text-right font-mono font-black text-slate-700">{fmtN(data.totalExcedente)}</td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-500">0,00</td>
-                                        <td className="px-3 py-2 text-right font-mono text-slate-500">0,00</td>
+                                        <td className="px-3 py-2 text-right font-medium text-slate-900">{fmtN(data.totalBase)}</td>
+                                        <td className="px-3 py-2 text-right font-medium text-slate-700">{fmtN(data.totalExcedente)}</td>
+                                        <td className="font-normal px-3 py-2 text-right text-slate-500">0,00</td>
+                                        <td className="font-normal px-3 py-2 text-right text-slate-500">0,00</td>
                                         <td className="px-3 py-2"></td>
-                                        <td className="px-3 py-2 text-right font-mono font-black text-slate-900">{fmtN(data.totalSegurados)}</td>
+                                        <td className="px-3 py-2 text-right font-medium text-slate-900">{fmtN(data.totalSegurados)}</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -396,7 +394,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                                         <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">
                                             RAT ({fmtPct(data.ratRate * 100)}%)
                                         </th>
-                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Empresa (20%)</th>
+                                        <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Empresa ({fmtPct(data.cppRate * 100)}%)</th>
                                         <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Deduções</th>
                                         <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Terceiros</th>
                                         <th className="text-right px-3 py-2.5 font-black text-slate-600 uppercase tracking-wider text-xs">Total</th>
@@ -404,15 +402,15 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                                 </thead>
                                 <tbody>
                                     <tr className="border-b border-slate-100 bg-white hover:bg-slate-50/50">
-                                        <td className="px-3 py-3 text-right font-mono font-bold text-slate-800">{fmtN(data.totalBase)}</td>
-                                        <td className="px-3 py-3 text-right font-mono text-slate-500">{fmtN(data.totalExcedente)}</td>
-                                        <td className="px-3 py-3 text-right font-mono font-bold text-slate-800">{fmtN(data.totalSegurados)}</td>
-                                        <td className="px-3 py-3 text-right font-mono text-slate-500">{fmtN(data.totalContribuintes)}</td>
-                                        <td className="px-3 py-3 text-right font-mono font-bold text-orange-700">{fmtN(data.totalRAT)}</td>
-                                        <td className="px-3 py-3 text-right font-mono font-bold text-orange-700">{fmtN(data.totalEmpresa)}</td>
-                                        <td className="px-3 py-3 text-right font-mono text-slate-500">{fmtN(data.totalDeducoes)}</td>
-                                        <td className="px-3 py-3 text-right font-mono font-bold text-purple-700">{fmtN(data.totalTerceiros)}</td>
-                                        <td className="px-3 py-3 text-right font-mono font-black text-slate-900 text-sm">{fmtN(data.totalGeral)}</td>
+                                        <td className="px-3 py-3 text-right font-medium text-slate-800">{fmtN(data.totalBase)}</td>
+                                        <td className="font-normal px-3 py-3 text-right text-slate-500">{fmtN(data.totalExcedente)}</td>
+                                        <td className="px-3 py-3 text-right font-medium text-slate-800">{fmtN(data.totalSegurados)}</td>
+                                        <td className="font-normal px-3 py-3 text-right text-slate-500">{fmtN(data.totalContribuintes)}</td>
+                                        <td className="px-3 py-3 text-right font-medium text-orange-700">{fmtN(data.totalRAT)}</td>
+                                        <td className="px-3 py-3 text-right font-medium text-orange-700">{fmtN(data.totalEmpresa)}</td>
+                                        <td className="font-normal px-3 py-3 text-right text-slate-500">{fmtN(data.totalDeducoes)}</td>
+                                        <td className="px-3 py-3 text-right font-medium text-purple-700">{fmtN(data.totalTerceiros)}</td>
+                                        <td className="px-3 py-3 text-right font-medium text-slate-900 text-sm">{fmtN(data.totalGeral)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -423,7 +421,7 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                             {[
                                 { label: 'Segurados (empregados)', value: data.totalSegurados, color: 'bg-blue-50 border-blue-100', text: 'text-blue-800', icon: Users },
                                 { label: `RAT (${fmtPct(data.ratRate * 100)}%)`, value: data.totalRAT, color: 'bg-amber-50 border-amber-100', text: 'text-amber-800', icon: Building2 },
-                                { label: 'INSS Patronal (20%)', value: data.totalEmpresa, color: 'bg-orange-50 border-orange-100', text: 'text-orange-800', icon: Building2 },
+                                { label: `INSS Patronal (${fmtPct(data.cppRate * 100)}%)`, value: data.totalEmpresa, color: 'bg-orange-50 border-orange-100', text: 'text-orange-800', icon: Building2 },
                                 { label: 'Contribuições de Terceiros', value: data.totalTerceiros, color: 'bg-purple-50 border-purple-100', text: 'text-purple-800', icon: Building2 },
                             ].map(card => (
                                 <div key={card.label} className={`${card.color} border rounded-2xl p-4`}>
@@ -449,8 +447,8 @@ const LaborEncargosINSS: React.FC<LaborEncargosINSSProps> = ({ orgId, period }) 
                         {/* Legenda */}
                         <p className="text-xs text-slate-400 font-medium mt-4 italic">
                             * RAT, INSS Patronal e Terceiros calculados sobre a Base de Cálculo do INSS.
-                            RAT a {fmtPct(data.ratRate * 100)}% (risco médio) — ajuste via Rubricas.
-                            INSS Patronal fixo em 20% (Regime Geral).
+                            RAT×FAP a {fmtPct(data.ratRate * 100)}% e INSS Patronal a {fmtPct(data.cppRate * 100)}% —
+                            alíquotas da aba Contribuições Sociais, as mesmas dos títulos em Tributos a Pagar.
                         </p>
                     </div>
                 </div>

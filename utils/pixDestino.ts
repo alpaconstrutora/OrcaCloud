@@ -11,6 +11,8 @@
 //       labor-<folha>-<obra>-<colaborador>-(salario|encargos)  → colaborador
 //       labor-<folha>-<obra>-salario / -unallocated-salario   → AGRUPADO (várias
 //         pessoas — não pode virar um PIX para uma pessoa só)
+//       labor-<folha>-<obra>-(fgts|inss|irrf|cpp|rat|terceiros|rep-…) → tributo/
+//         repasse (desde 21/10/2026; antes um só "-encargos") — sem colaborador
 //   • reference_id do PRÓ-LABORE (source_system PROLABORE) = id do item da folha
 //     societária → sócio. Os encargos do pró-labore usam o id da FOLHA e não
 //     resolvem para item nenhum (são imposto, não pagamento ao sócio).

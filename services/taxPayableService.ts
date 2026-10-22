@@ -448,7 +448,7 @@ export const taxPayableService = {
             throw error;
         }
         if (!data || data.length === 0) {
-            throw new Error('Só tributos lançados manualmente podem ser excluídos aqui. Este veio de um negócio do Comercial — cancele o negócio na origem.');
+            throw new Error('Só tributos lançados manualmente podem ser excluídos aqui. Os automáticos vêm da origem — negócio do Comercial (cancele o negócio) ou folha de pagamento (reprocesse a folha em RH › Ciclos de folha).');
         }
     },
 

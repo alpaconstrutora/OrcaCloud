@@ -13,7 +13,7 @@ import { describe, it, expect, vi } from 'vitest';
 // funções puras do módulo.
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
-import { credorDeColaboradores, CREDOR_ENCARGOS } from '../services/payrollService';
+import { credorDeColaboradores } from '../services/payrollService';
 
 describe('credorDeColaboradores', () => {
     it('um colaborador vira o próprio nome', () => {
@@ -48,8 +48,5 @@ describe('credorDeColaboradores', () => {
     });
 });
 
-describe('CREDOR_ENCARGOS', () => {
-    it('encargos patronais têm credor institucional, não o colaborador', () => {
-        expect(CREDOR_ENCARGOS).toBe('INSS/FGTS');
-    });
-});
+// O credor "INSS/FGTS" saiu em 21/10/2026: cada tributo da folha é um título
+// próprio com o nome do tributo — coberto em folhaFinanceiro.test.ts › formaDoTitulo.

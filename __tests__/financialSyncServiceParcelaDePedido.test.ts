@@ -45,6 +45,9 @@ const obra = {
                   supplierId: 'sup1', orderId: PEDIDO, category: 'Material' },
                 { id: 'tx-manual', date: '2026-04-12', type: 'EXPENSE', value: 10, status: 'PAID',
                   description: 'Café', supplier: 'Padaria', category: 'Despesa de Obra' },
+                // espelho da folha (payrollService.espelharFolhaNasObras) — o dono é o sync da folha
+                { id: 'labor-11111111-1111-1111-1111-111111111111-proj1-fgts', date: '2026-04-30', type: 'EXPENSE',
+                  value: 480.55, status: 'PENDING', description: 'FGTS - Garden - Folha 04/2026', category: 'Encargos Patronais' },
             ],
         },
     },
@@ -73,5 +76,16 @@ describe('syncFinancialData · parcela de pedido continua sendo de pedido depois
         // fornecedor que outro produtor gravou.
         expect('party_name' in linha).toBe(true);
         expect(linha.party_name).toBe('Padaria');
+    });
+});
+
+describe('syncFinancialData · espelho da folha não é materializado (21/10/2026)', () => {
+    beforeEach(() => { upserts.length = 0; });
+
+    it('linha labor-… do JSON da obra não vai para o upsert (rebaixaria o tributo da folha para PROJECT)', async () => {
+        await financialSyncService.syncFinancialData(obra, 'org1');
+        const refs = upserts.flat().map(l => String(l.reference_id));
+        expect(refs.some(r => r.startsWith('labor-'))).toBe(false);
+        expect(refs).toContain('tx-manual');
     });
 });

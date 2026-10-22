@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { validateDocumentFile, validateImageFile } from '../lib/mimeValidation';
 import { trainingsService } from './trainingsService';
 import type { TrainingCategoria, TrainingCourse, EmployeeTraining } from '../types/academy';
+import type { SalarioLancamento } from '../lib/payrollSalarioCompetencia';
 
 // ============================================================
 // TIPOS LOCAIS
@@ -1325,6 +1326,21 @@ export const laborService = {
             // role_label é o snapshot da época; o join só entra se o cargo ainda existe
             org_role_name: r.org_role?.nome || r.role_label || null,
         }));
+    },
+
+    // Só o que o motor da folha precisa para achar o salário da competência
+    // (lib/payrollSalarioCompetencia). Erro sobe: folha calculada com o salário
+    // de hoje por falta do histórico é o defeito que isto corrige.
+    async listSalaryHistoryForPayroll(employeeId: string): Promise<SalarioLancamento[]> {
+        const { data, error } = await supabase
+            .from('employee_salary_history')
+            .select('effective_date, previous_salary, new_salary, created_at')
+            .eq('employee_id', employeeId)
+            .order('effective_date', { ascending: true })
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        return (data || []) as SalarioLancamento[];
     },
 
     // Faz o upload do anexo (se houver) e grava o registro pela RPC, que é quem

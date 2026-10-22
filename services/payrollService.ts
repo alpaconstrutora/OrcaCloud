@@ -387,6 +387,10 @@ export interface PayrollResult {
     base_inss?: number;
     base_fgts?: number;
     base_irrf?: number;
+    /** Salário contratual NA COMPETÊNCIA, pelo Histórico Salarial (gravado
+     *  pelo motor desde 22/10/2026). Nulo em resultado antigo não recalculado:
+     *  quem exibe cai para `employee.base_salary`. */
+    base_salary?: number | null;
 }
 
 export interface Worksite {
@@ -919,7 +923,8 @@ export const payrollService = {
             employer_cost: Math.round((result.employer_cost || 0) * 100) / 100,
             base_inss: result.base_inss ?? result.gross,
             base_fgts: result.base_fgts ?? result.gross,
-            base_irrf: result.base_irrf ?? result.gross
+            base_irrf: result.base_irrf ?? result.gross,
+            base_salary: result.base_salary ?? null,
         };
 
         const { error: resError } = await supabase

@@ -3,6 +3,7 @@ import { laborService, Employee, TimeEntry } from './laborService';
 import { payrollValidationService } from './payrollValidationService';
 import { fiscalService, INSSBracket, IRRFBracket, FGTSConfig } from './fiscalService';
 import { calculateINSS as calcINSS, calculateIRRF as calcIRRF, aplicarRedutorIRRF2026, calcularIrrfMensal } from '../lib/payrollCalc';
+import { salarioNaData, salarioDoPeriodo, type SalarioLancamento } from '../lib/payrollSalarioCompetencia';
 
 /**
  * Parser aritmético seguro — substitui new Function() / eval().
@@ -73,6 +74,10 @@ export interface PayrollContext {
     events: PayrollEvent[];
     allocations: EmployeeAllocation[];
     linkedRubricCodes: string[];
+    /** Histórico Salarial do colaborador — o salário da folha sai daqui pela
+     *  competência, não de `employee.base_salary` (que é o de hoje). Ausente
+     *  ou vazio: vale o cadastro. */
+    salaryHistory?: SalarioLancamento[];
 }
 
 /**
@@ -260,35 +265,19 @@ export const payrollEngine = {
      */
     async processMonthly(ctx: PayrollContext) {
         const { employee, timeEntries, events, rubrics, run } = ctx;
-        
-        let baseSalary = employee.base_salary || 0;
-        let referenceDays = 30; // Padrão comercial
-        
-        // Verifica se é o mês de admissão
-        if (employee.hire_date) {
-            const hireDate = new Date(employee.hire_date);
-            const runStartDate = new Date(run.start_date);
-            const runEndDate = new Date(run.end_date);
-            
-            // Usar apenas a data para a comparação, ignorando timezone
-            const hDate = new Date(hireDate.getUTCFullYear(), hireDate.getUTCMonth(), hireDate.getUTCDate());
-            const sDate = new Date(runStartDate.getUTCFullYear(), runStartDate.getUTCMonth(), runStartDate.getUTCDate());
-            const eDate = new Date(runEndDate.getUTCFullYear(), runEndDate.getUTCMonth(), runEndDate.getUTCDate());
-            
-            if (hDate > sDate && hDate <= eDate) {
-                // Cálculo de dias trabalhados no mês da admissão (padrão CLT: mês = 30 dias)
-                // CLT normaliza todos os meses para 30 dias; o dia 31 vale como dia 30.
-                const dayOfAdmission = hDate.getDate();
-                const dayOfAdmissionCLT = Math.min(dayOfAdmission, 30);
-                const workedDays = 30 - dayOfAdmissionCLT + 1; // Sempre ≤ 30
 
-                referenceDays = workedDays;
-                baseSalary = (baseSalary / 30) * referenceDays;
-            }
-        }
+        // Salário da COMPETÊNCIA pelo Histórico Salarial, dia a dia no mês CLT
+        // de 30 dias: reajuste no meio do mês é proporcional, e o mês da
+        // admissão conta só a partir dela.
+        const periodo = salarioDoPeriodo(
+            ctx.salaryHistory ?? [], employee.base_salary || 0,
+            run.start_date, run.end_date, employee.hire_date,
+        );
+        const baseSalary = periodo.valor;
+        const referenceDays = periodo.dias;
 
-        // O valor da hora extra continua sendo calculado sobre o salário integral
-        const hourly_rate = (employee.base_salary || 0) / 220;
+        // O valor da hora extra é calculado sobre o salário integral vigente no fim do período
+        const hourly_rate = periodo.vigenteNoFim / 220;
         const items: Omit<PayrollItem, 'payroll_run_id' | 'employee_id'>[] = [];
 
         // 1. Map of base values for calculations
@@ -479,10 +468,10 @@ export const payrollEngine = {
      * Sem INSS, IRRF ou FGTS — o adiantamento não tem incidência própria.
      */
     async processAdvance(ctx: PayrollContext) {
-        const { employee, rubrics } = ctx;
+        const { rubrics } = ctx;
         const items: Omit<PayrollItem, 'payroll_run_id' | 'employee_id'>[] = [];
 
-        const baseSalary = employee.base_salary || 0;
+        const baseSalary = this.salarioBase(ctx);
         const hourly_rate = baseSalary / 220;
         const baseValues: Record<string, number> = { SALARIO: baseSalary, SALARIO_REFERENCE: 30 };
 
@@ -508,10 +497,9 @@ export const payrollEngine = {
      * FOLHA DE FÉRIAS
      */
     async processVacation(ctx: PayrollContext) {
-        const { employee } = ctx;
         const items: Omit<PayrollItem, 'payroll_run_id' | 'employee_id'>[] = [];
 
-        const basicVacation = employee.base_salary || 0;
+        const basicVacation = this.salarioBase(ctx);
         const third = basicVacation / 3;
 
         items.push({ code: 'FERIAS', type: 'provento', amount: basicVacation, base_amount: basicVacation, reference: 30 });
@@ -528,7 +516,7 @@ export const payrollEngine = {
         const items: Omit<PayrollItem, 'payroll_run_id' | 'employee_id'>[] = [];
         const isFirstParcel = run.subtype === '1_parcela' || run.subtype === '1';
 
-        const fullAmount = employee.base_salary || 0;
+        const fullAmount = this.salarioBase(ctx);
 
         if (isFirstParcel) {
             const amount = Math.round(fullAmount * 0.5 * 100) / 100;
@@ -554,7 +542,7 @@ export const payrollEngine = {
     async processTermination(ctx: PayrollContext) {
         const { employee, run } = ctx;
         const items: Omit<PayrollItem, 'payroll_run_id' | 'employee_id'>[] = [];
-        const salary = employee.base_salary || 0;
+        const salary = this.salarioBase(ctx);
 
         // 13º proporcional: meses trabalhados no ANO da rescisão (CLT art. 3º Lei 4749/65)
         // Conta do início do ano (ou admissão se foi neste ano) até o mês da rescisão.
@@ -647,8 +635,20 @@ export const payrollEngine = {
         return this.persistResults(ctx, items, gross, discounts, charges, { base_inss, base_fgts, base_irrf });
     },
 
+    /**
+     * Salário contratual do colaborador NA COMPETÊNCIA da folha, pelo Histórico
+     * Salarial. Férias: o vigente no início (data da concessão); demais tipos:
+     * o vigente no fim do período. É também o que se grava em
+     * `payroll_results.base_salary` — folha fechada mantém o seu.
+     */
+    salarioBase(ctx: PayrollContext): number {
+        const data = ctx.run.type === 'ferias' ? ctx.run.start_date : ctx.run.end_date;
+        return salarioNaData(ctx.salaryHistory ?? [], ctx.employee.base_salary || 0, data);
+    },
+
     async persistResults(ctx: PayrollContext, items: Omit<PayrollItem, 'payroll_run_id' | 'employee_id'>[], gross: number, discounts: number, charges: number, bases: { base_inss: number, base_fgts: number, base_irrf: number }) {
         const result: Omit<PayrollResult, 'payroll_run_id' | 'employee_id'> = {
+            base_salary: Math.round(this.salarioBase(ctx) * 100) / 100,
             gross: Math.round(gross * 100) / 100,
             discounts: Math.round(discounts * 100) / 100,
             net: Math.round((gross - discounts) * 100) / 100,
@@ -666,7 +666,7 @@ export const payrollEngine = {
         const run = await payrollService.getRun(runId);
         const refDate = run.start_date; // Data de competência para buscar faixas fiscais
 
-        const [employee, inssBrackets, irrfBrackets, fgtsConfig, rubrics, timeEntries, allocations, linkedRubricCodes] = await Promise.all([
+        const [employee, inssBrackets, irrfBrackets, fgtsConfig, rubrics, timeEntries, allocations, linkedRubricCodes, salaryHistory] = await Promise.all([
             laborService.getEmployeeById(employeeId),
             fiscalService.getINSSBrackets(refDate),
             fiscalService.getIRRFBrackets(refDate),
@@ -679,7 +679,8 @@ export const payrollEngine = {
                 status: 'APROVADO'
             }),
             payrollService.listAllocations(employeeId),
-            payrollService.getEmployeeRecurringRubrics(employeeId)
+            payrollService.getEmployeeRecurringRubrics(employeeId),
+            laborService.listSalaryHistoryForPayroll(employeeId),
         ]);
 
         // Busca Ultra-Robusta: Prioriza RunID (Open Context) + Periodo Expandido
@@ -725,7 +726,8 @@ export const payrollEngine = {
             timeEntries,
             events: finalEvents,
             allocations,
-            linkedRubricCodes
+            linkedRubricCodes,
+            salaryHistory,
         };
     },
 

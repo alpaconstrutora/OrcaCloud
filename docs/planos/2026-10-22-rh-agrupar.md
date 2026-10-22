@@ -51,8 +51,8 @@ Fora do pedido mas no mesmo PR: item 4 de `docs/planos/2026-10-22-casa-automatic
 - [x] testes de tela: `RHAgruparStandardTable` 6, `RHAgruparPessoasFolha` 8, `RHAgruparVrTreinamentos` 8, `StandardTableAgrupar` 6; existentes verdes (`LaborAllocations` 6, `TrainingPortalMobile` 7, `laborService` 4, `payrollUIHelpers` 45, agrupar de Financeiro/Cadastros/Suprimentos, `orgContextGuard`, `cabecalhoSemCinzaGuard`)
 - [x] typecheck (rc=0, 0 erros; 1ª tentativa segfault do Node 24) + `check-ui-standard.sh` nos 21 `.tsx`: 0 violações
 - [x] conferência na tela real (login de leitura, 11 telas, script `c:/tmp/pwtest/rh-agrupar-telas.js`): seletor desligado sem agrupamento, Decrescente = Crescente invertido, "Sem …" no fim, toolbar sem estouro, 0 escritas, 0 erros. Com dados: Colaboradores (7 grupos), Folha › Ciclos (2), Alocações (8), VR Histórico (26 meses), Documentos (3, modo lista), Rubricas (4), Treinamentos Registros (1). Sem dados para o usuário de leitura (só o controle conferido): Ponto, EPIs › Entregas, eSocial › Eventos, Medições
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #104: `ci` 23m10s, Vercel e Vercel Preview Comments verdes
+- [x] publicação — mesclado por squash em 22/10/2026 (`cbb7f662`); `conferir-producao.sh` com "Agrupar os registros de ponto", "Agrupar os ciclos de folha" e "Agrupar o histórico" provou o domínio servindo cbb7f66; CI do main verde; frente fechada e branch apagada
 
 ## Verificação
 1. `npx vitest run __tests__/components/RHAgrupar.test.tsx` + suítes de agrupar existentes

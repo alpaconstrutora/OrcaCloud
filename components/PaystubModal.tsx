@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
+import { salarioBaseDoResultado } from '../lib/payrollSalarioCompetencia';
 import { jsPDF } from 'jspdf';
 import { payrollService, PayrollItem, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
 
@@ -320,7 +321,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 bg-white border-t border-slate-200 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                             <div>
                                 <p className="mb-1 text-slate-500">Salário Base</p>
-                                <p className="text-slate-900 font-black">R$ {result.employee?.base_salary?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-slate-900 font-black">R$ {salarioBaseDoResultado(result).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
                             <div>
                                 <p className="mb-1 text-slate-500">Base INSS</p>

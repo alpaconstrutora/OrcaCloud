@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { PayrollRun } from '../services/payrollService';
 import { formatDate } from '../lib/payrollUIHelpers';
+import { salarioBaseDoResultado } from '../lib/payrollSalarioCompetencia';
 import { formatMoney } from './ui/Format';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
@@ -94,7 +95,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
             switch (tableColumns.sortColumn) {
                 case 'org': return dir * (a.employee?.org_id || '').localeCompare(b.employee?.org_id || '');
                 case 'employee': return dir * (a.employee?.name || '').localeCompare(b.employee?.name || '');
-                case 'base_salary': return dir * ((a.employee?.base_salary || 0) - (b.employee?.base_salary || 0));
+                case 'base_salary': return dir * (salarioBaseDoResultado(a) - salarioBaseDoResultado(b));
                 case 'gross': return dir * ((a.gross || 0) - (b.gross || 0));
                 case 'discounts': return dir * ((a.discounts || 0) - (b.discounts || 0));
                 case 'net': return dir * ((a.net || 0) - (b.net || 0));
@@ -106,7 +107,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
 
     // Rodapé soma só o que está VISÍVEL na tabela (respeita a busca) — diferente
     // dos KPIs acima, que são o resumo da folha inteira.
-    const footerBaseSalary   = filteredResults.reduce((s, r) => s + (r.employee?.base_salary || 0), 0);
+    const footerBaseSalary   = filteredResults.reduce((s, r) => s + salarioBaseDoResultado(r), 0);
     const footerGross        = filteredResults.reduce((s, r) => s + (r.gross || 0), 0);
     const footerDiscounts    = filteredResults.reduce((s, r) => s + (r.discounts || 0), 0);
     const footerNet          = filteredResults.reduce((s, r) => s + (r.net || 0), 0);
@@ -392,7 +393,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                         )}
                                         {tableColumns.visibleColumns.includes('base_salary') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
-                                                {formatMoney(res.employee?.base_salary)}
+                                                {formatMoney(salarioBaseDoResultado(res))}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('gross') && (

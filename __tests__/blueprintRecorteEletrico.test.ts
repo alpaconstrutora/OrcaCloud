@@ -148,7 +148,8 @@ describe('no conjunto, no DXF e na vista', () => {
     const dxf = gerarDxf(m, { titulo: 'Casa', revisao: 1, hash: 'p'.repeat(64), eletrica: true, hipotesesEletricas: HIPOTESES_PADRAO });
     for (const c of ['PLANTA-ELETRICA-ILUMINACAO', 'PLANTA-ELETRICA-ILUMINACAO-TEXTO', 'PLANTA-ELETRICA-FORCA', 'PLANTA-ELETRICA-FORCA-TEXTO']) expect(dxf).toMatch(new RegExp(`LAYER[\\s\\S]*\\n${c}\\n`));
     expect(dxf).toMatch(/\n8\nPLANTA-ELETRICA-FORCA-TEXTO\n[\s\S]{0,200}?\n1\nTUG · C2\n/);
-    expect(dxf).toMatch(/\n8\nPLANTA-ELETRICA-ILUMINACAO-TEXTO\n[\s\S]{0,200}?\n1\nLuz teto · C1\n/);
+    // Desde 22/10/2026 a luminária escreve só o circuito ("C1"): o círculo já diz que é luz.
+    expect(dxf).toMatch(/\n8\nPLANTA-ELETRICA-ILUMINACAO-TEXTO\n[\s\S]{0,200}?\n1\nC1\n/);
     expect(dxf).toMatch(/\n8\nPLANTA-ELETRICA-TEXTO\n[\s\S]{0,200}?\n1\nQDC\n/);
   });
 

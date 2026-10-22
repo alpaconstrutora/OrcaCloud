@@ -198,6 +198,7 @@ import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import { proporcaoDoSimbolo, simboloDeClimatizacao, temSimboloDeClimatizacao } from '../../utils/blueprintSimbolosClimatizacao';
 import { numeracaoDeClimatizacao } from '../../utils/blueprintNumeracaoClimatizacao';
 import {
+  PRIORIDADE_DA_ANOTACAO,
   posicionarAnotacoes,
   type AnotacaoAPosicionar,
   type CaixaNaTela,
@@ -558,12 +559,6 @@ const ESCALA_DE_ANOTACAO_PX_MM = 0.08;
 function fatorDeAnotacao(escalaPxPorMm: number): number {
   return Math.min(3, Math.max(1, escalaPxPorMm / ESCALA_DE_ANOTACAO_PX_MM));
 }
-/**
- * A ordem em que os textos da planta escolhem lugar, menor primeiro (22/10/2026, ver
- * `posicionarAnotacoes`): a pendência "?" antes do circuito, o circuito antes da potência, e o
- * DETALHE (seção, "N cond.") e o Ø por último — e só de perto (ver `longeDemais`).
- */
-const PRIORIDADE_DA_ANOTACAO = { PENDENCIA: 0, CIRCUITO: 1, IDENTIFICACAO: 2, VALOR: 3, DETALHE: 4, DIAMETRO: 5 } as const;
 /** A linha de chamada do texto que saiu de perto do símbolo: fina e cinza, para não competir com o traço. */
 const COR_DA_CHAMADA = '#94a3b8';
 /**

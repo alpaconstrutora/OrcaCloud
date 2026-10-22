@@ -50,6 +50,8 @@ import { drDoCircuito, drsDoQuadro, rotuloDoDPS, rotuloDoDR } from './blueprintK
 import { entradaDoQuadro, rotuloDaEntrada } from './blueprintEntradaDeEnergia';
 import { fatorDeDiversidade } from './blueprintEletricaDimensionamento';
 import { rotuloDaFase } from './blueprintFasesEletricas';
+import { PRIORIDADE_DA_ANOTACAO, posicionarAnotacoes, type AnotacaoAPosicionar, type CaixaNaTela, type ObstaculoNaTela, type PontoNaTela, type SegmentoNaTela } from './blueprintAnotacaoSemColisao';
+import { larguraEstimadaDoTexto } from './blueprintCotas';
 import { ROTULO_DO_RECORTE, categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos, entraNoRecorte, type CategoriaEletrica, type RecorteEletrico } from './blueprintRecorteEletrico';
 import {
   HIPOTESES_PADRAO,
@@ -237,7 +239,13 @@ export function desenharEletrica(
 ): void {
   const { px, py } = proj;
   const recorte = opcoes.recorte ?? null;
-  const categoria = (c: CategoriaEletrica) => opcoes.aoMudarCategoria?.(c);
+  // A categoria em vigor vai junto de cada texto: ele é escrito no fim (ver `anotar`), e o DXF
+  // troca de camada pela categoria de quem escreve.
+  let categoriaAtual: CategoriaEletrica = 'COMUM';
+  const categoria = (c: CategoriaEletrica) => {
+    categoriaAtual = c;
+    opcoes.aoMudarCategoria?.(c);
+  };
   const categoriaDoCircuito = recorte || opcoes.aoMudarCategoria ? categoriasDosCircuitos(model) : new Map<string, CategoriaEletrica>();
   // Tamanhos de símbolo em unidades de SAÍDA: papel (fator 1) ou mm reais a 1:50 (DXF).
   const TOMADA_MM = TOMADA_PAPEL_MM * fator;
@@ -248,6 +256,47 @@ export function desenharEletrica(
   const FINA = FINA_PAPEL * fator;
   const MEDIA = MEDIA_PAPEL * fator;
   const k = fator;
+
+  // ── OS TEXTOS SEM COLISÃO (22/10/2026) ──────────────────────────────────────
+  //
+  // A mesma regra da tela (pedido com os prints da planta Garden: *"Veja a total confusão de
+  // sobreposicões de testos e componentes"*): os laços desenham os SÍMBOLOS na hora e ANOTAM os
+  // textos; no fim, `posicionarAnotacoes` põe todos juntos — prioridade, colado ao símbolo quando
+  // há lugar, linha de chamada quando não há — e só então eles são escritos.
+  const anotacoes: (AnotacaoAPosicionar & { linhas: { texto: string; altura: number; cor?: string; largura: number }[]; centrar: boolean; cat: CategoriaEletrica })[] = [];
+  const obstaculos: ObstaculoNaTela[] = [];
+  const segmentos: SegmentoNaTela[] = [];
+  /** Entre as linhas de um bloco; a linha de base fica a 85 % da altura da fonte a partir do topo. */
+  const ENTRELINHA = 1.15;
+  const BASE = 0.85;
+  /** O canto superior esquerdo de um texto escrito hoje em (x, linha de base y) com a fonte h. */
+  const topo = (x: number, y: number, h: number): PontoNaTela => ({ x, y: y - BASE * h });
+  const caixaEm = (c: { x: number; y: number }, rx: number, ry = rx): CaixaNaTela => ({ x0: c.x - rx, y0: c.y - ry, x1: c.x + rx, y1: c.y + ry });
+  const anotar = (a: {
+    id: string;
+    donoId: string;
+    ancora: CaixaNaTela;
+    prioridade: number;
+    linhas: { texto: string; altura: number; cor?: string }[];
+    preferidas?: (w: number, h: number) => PontoNaTela[];
+    centrar?: boolean;
+  }) => {
+    const linhas = a.linhas.map((l) => ({ ...l, largura: d.larguraDoTexto?.(l.texto, l.altura) ?? larguraEstimadaDoTexto(l.texto, l.altura) }));
+    const largura = Math.max(...linhas.map((l) => l.largura));
+    const altura = linhas.reduce((s, l) => s + l.altura * ENTRELINHA, 0);
+    anotacoes.push({
+      id: a.id,
+      donoId: a.donoId,
+      largura,
+      altura,
+      ancora: a.ancora,
+      prioridade: a.prioridade,
+      preferidas: a.preferidas?.(largura, altura),
+      linhas,
+      centrar: a.centrar ?? false,
+      cat: categoriaAtual,
+    });
+  };
   const circuitosPorId = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
   const paredes = model.walls;
 
@@ -267,11 +316,13 @@ export function desenharEletrica(
     if (prumada) {
       // Prumada: um círculo pequeno com a seta de sobe/desce como texto.
       circulo(d, a, 1.0 * k, { traco: FINA });
+      obstaculos.push({ id: t.id, caixa: caixaEm(a, 1.0 * k) });
       d.texto(a.x + 1.4 * k, a.y + 0.7 * k, t.cotaBMm > t.cotaAMm ? '↑' : '↓', TEXTO_MM, COR_FRACA);
       continue;
     }
     if (embutidoNoPiso(t)) tracejada(d, a, b, MEDIA, 1.5 * k);
     else d.linha(a.x, a.y, b.x, b.y, { espessuraMm: MEDIA, cor: COR });
+    segmentos.push({ id: t.id, a, b });
     const meio = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     const comp = Math.hypot(b.x - a.x, b.y - a.y);
     const nx = -(b.y - a.y) / comp;
@@ -294,6 +345,7 @@ export function desenharEletrica(
     if (numerado?.principal) {
       // Círculo branco com o rótulo no meio do trecho, no lugar dos traços — um por TRONCO.
       circulo(d, meio, 2.2 * k, { traco: FINA, cheio: '#ffffff' });
+      obstaculos.push({ id: `numero:${t.id}`, caixa: caixaEm(meio, 2.2 * k) });
       d.texto(meio.x - 0.7 * k * numerado.rotulo.length, meio.y + 0.7 * k, numerado.rotulo, TEXTO_MM * 0.9);
     }
     const grupos: { circuitoId: string | null; tipos: TipoDeCondutor[] }[] = [];
@@ -320,7 +372,12 @@ export function desenharEletrica(
       y: cy + uy * r.t * MEIA + ny * r.s * MEIA,
     });
     let cursor = -total / 2;
-    for (const g of grupos) {
+    /** A caixa dos traços entre `de` e `ate` ao longo do trecho. */
+    const caixaDosTracos = (de: number, ate: number): CaixaNaTela => {
+      const pts = [de - MEIA * 0.5, ate + MEIA * 0.5].flatMap((o) => [-1, 1].map((sn) => ({ x: meio.x + ux * o + nx * sn * MEIA, y: meio.y + uy * o + ny * sn * MEIA })));
+      return { x0: Math.min(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), x1: Math.max(...pts.map((p) => p.x)), y1: Math.max(...pts.map((p) => p.y)) };
+    };
+    for (const [gi, g] of grupos.entries()) {
       const larg = (g.tipos.length - 1) * passo;
       g.tipos.forEach((tipo, i) => {
         const off = cursor + i * passo;
@@ -336,11 +393,39 @@ export function desenharEletrica(
       const gx = meio.x + ux * centro;
       const gy = meio.y + uy * centro;
       const circuito = g.circuitoId ? circuitosPorId.get(g.circuitoId) : null;
-      d.texto(gx - nx * 2.4 * k - 0.8 * k, gy - ny * 2.4 * k + 0.6 * k, circuito ? numeroDoCircuito(circuito.nome) : 'r', TEXTO_MM * 0.9);
-      if (circuito?.secaoMm2 != null) d.texto(gx + nx * 2.4 * k - 0.8 * k, gy + ny * 2.4 * k + 1.4 * k, mm2(circuito.secaoMm2), TEXTO_MM * 0.9, COR_FRACA);
+      const idDoGrupo = `grupo:${t.id}:${gi}`;
+      const caixaDoGrupo = caixaDosTracos(cursor, cursor + larg);
+      obstaculos.push({ id: idDoGrupo, caixa: caixaDoGrupo });
+      const acima = topo(gx - nx * 2.4 * k - 0.8 * k, gy - ny * 2.4 * k + 0.6 * k, TEXTO_MM * 0.9);
+      const abaixo = topo(gx + nx * 2.4 * k - 0.8 * k, gy + ny * 2.4 * k + 1.4 * k, TEXTO_MM * 0.9);
+      anotar({
+        id: `circuito:${t.id}:${gi}`,
+        donoId: idDoGrupo,
+        ancora: caixaDoGrupo,
+        prioridade: PRIORIDADE_DA_ANOTACAO.IDENTIFICACAO,
+        linhas: [{ texto: circuito ? numeroDoCircuito(circuito.nome) : 'r', altura: TEXTO_MM * 0.9 }],
+        preferidas: () => [acima, abaixo],
+      });
+      if (circuito?.secaoMm2 != null) {
+        anotar({
+          id: `secao:${t.id}:${gi}`,
+          donoId: idDoGrupo,
+          ancora: caixaDoGrupo,
+          prioridade: PRIORIDADE_DA_ANOTACAO.DETALHE,
+          linhas: [{ texto: mm2(circuito.secaoMm2), altura: TEXTO_MM * 0.9, cor: COR_FRACA }],
+          preferidas: () => [abaixo, acima],
+        });
+      }
       cursor += larg + vao;
     }
-    d.texto(meio.x - ux * (total / 2 + 1.5 * k) + nx * 2.2 * k - 3.2 * k, meio.y - uy * (total / 2 + 1.5 * k) + ny * 2.2 * k + 0.6 * k, `Ø${t.bitolaMm}`, TEXTO_MM * 0.8, COR_FRACA);
+    anotar({
+      id: `diametro:${t.id}`,
+      donoId: `conjunto:${t.id}`,
+      ancora: grupos.length > 0 ? caixaDosTracos(-total / 2, total / 2) : caixaEm(meio, 2.2 * k),
+      prioridade: PRIORIDADE_DA_ANOTACAO.DIAMETRO,
+      linhas: [{ texto: `Ø${t.bitolaMm}`, altura: TEXTO_MM * 0.8, cor: COR_FRACA }],
+      preferidas: () => [topo(meio.x - ux * (total / 2 + 1.5 * k) + nx * 2.2 * k - 3.2 * k, meio.y - uy * (total / 2 + 1.5 * k) + ny * 2.2 * k + 0.6 * k, TEXTO_MM * 0.8)],
+    });
   }
 
   // Quadros: retângulo em escala (piso de 4 mm) com o nome. Comuns às duas plantas.
@@ -353,12 +438,16 @@ export function desenharEletrica(
       const c = { x: px(q.at.x), y: py(q.at.y) };
       d.retangulo(c.x - 2 * k, c.y - 1.5 * k, 4 * k, 3 * k, { espessuraMm: MEDIA, cor: COR });
       d.linha(c.x - 2 * k, c.y + 1.5 * k, c.x + 2 * k, c.y - 1.5 * k, { espessuraMm: FINA, cor: COR });
-      d.texto(c.x + 3 * k, c.y + 0.7 * k, q.nome, TEXTO_MM);
+      const caixa = caixaEm(c, 2 * k, 1.5 * k);
+      obstaculos.push({ id: q.id, caixa });
+      anotar({ id: `quadro:${q.id}`, donoId: q.id, ancora: caixa, prioridade: PRIORIDADE_DA_ANOTACAO.IDENTIFICACAO, linhas: [{ texto: q.nome, altura: TEXTO_MM }], preferidas: () => [topo(c.x + 3 * k, c.y + 0.7 * k, TEXTO_MM)] });
     } else {
       d.poligono(cantos, '#ffffff');
       contorno(d, cantos, MEDIA);
       d.linha(cantos[0].x, cantos[0].y, cantos[2].x, cantos[2].y, { espessuraMm: FINA, cor: COR });
-      d.texto(cantos[1].x + 1.5 * k, cantos[1].y + 0.7 * k, q.nome, TEXTO_MM);
+      const caixa = { x0: Math.min(...cantos.map((p) => p.x)), y0: Math.min(...cantos.map((p) => p.y)), x1: Math.max(...cantos.map((p) => p.x)), y1: Math.max(...cantos.map((p) => p.y)) };
+      obstaculos.push({ id: q.id, caixa });
+      anotar({ id: `quadro:${q.id}`, donoId: q.id, ancora: caixa, prioridade: PRIORIDADE_DA_ANOTACAO.IDENTIFICACAO, linhas: [{ texto: q.nome, altura: TEXTO_MM }], preferidas: () => [topo(cantos[1].x + 1.5 * k, cantos[1].y + 0.7 * k, TEXTO_MM)] });
     }
   }
 
@@ -386,6 +475,19 @@ export function desenharEletrica(
     const circuito = t.circuitoId ? circuitosPorId.get(t.circuitoId)?.nome : null;
     const sigla = t.tipoEletrico ? SIGLA_DO_PONTO_ELETRICO[t.tipoEletrico] : '?';
     const ehInt = t.tipoEletrico === 'INTERRUPTOR';
+    // O símbolo é a âncora dos textos dele e obstáculo dos outros. O interruptor leva as letras das
+    // seções em cima (e a 3ª embaixo), que ficam no lugar — são parte do símbolo.
+    const luminaria = t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
+    const caixaDoSimbolo: CaixaNaTela = ehInt
+      ? { x0: c.x - INT_R_MM - 1.6 * k, y0: c.y - INT_R_MM - 0.4 * k - TEXTO_MM * 0.9 * BASE, x1: c.x + INT_R_MM + 1.4 * k, y1: c.y + INT_R_MM + (secoesDoInterruptor(t) === 3 ? 2.2 * k : 0.2 * k) }
+      : ehTomadaAqui
+        ? caixaEm(c, TOMADA_MM * 0.6)
+        : luminaria
+          ? caixaEm(c, LUZ_R_MM)
+          : t.tipoEletrico === 'LIGACAO_DIRETA' || (!!t.tipoEletrico && TIPOS_DE_EQUIPAMENTO_ELETRICO.has(t.tipoEletrico))
+            ? caixaEm(c, LD_MM / 2)
+            : caixaEm(c, 1.0);
+    obstaculos.push({ id: t.id, caixa: caixaDoSimbolo });
     if (ehInt) {
       // Interruptor: as letras das seções em cima; o rótulo embaixo.
       const letras = (t.comando ?? '').split('');
@@ -395,16 +497,66 @@ export function desenharEletrica(
         const y = n === 3 && i === 2 ? c.y + INT_R_MM + 1.9 * k : c.y - INT_R_MM - 0.4 * k;
         d.texto(x, y, l, TEXTO_MM * 0.9);
       });
-      if (circuito) d.texto(c.x + INT_R_MM + 0.6 * k, c.y + INT_R_MM + 2.2 * k, circuito, TEXTO_MM * 0.8, COR_FRACA);
+      if (circuito) {
+        anotar({
+          id: `ponto:${t.id}`,
+          donoId: t.id,
+          ancora: caixaDoSimbolo,
+          prioridade: PRIORIDADE_DA_ANOTACAO.CIRCUITO,
+          linhas: [{ texto: circuito, altura: TEXTO_MM * 0.8, cor: COR_FRACA }],
+          preferidas: () => [topo(c.x + INT_R_MM + 0.6 * k, c.y + INT_R_MM + 2.2 * k, TEXTO_MM * 0.8)],
+        });
+      }
       continue;
     }
     const ehTomada = t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE';
     // Potência em cima; sigla · circuito embaixo — como na prancha.
-    if (t.potenciaW != null && !t.tipoEletrico?.startsWith('ILUMINACAO')) d.texto(c.x - 2 * k, c.y - TOMADA_MM - 0.8 * k, `${t.potenciaW} VA`, TEXTO_MM * 0.8);
-    if (t.potenciaW != null && t.tipoEletrico?.startsWith('ILUMINACAO')) d.texto(c.x - 1.4 * k, c.y + 0.6 * k, String(t.potenciaW), TEXTO_MM * 0.7);
-    d.texto(c.x - 2 * k, c.y + (ehTomada ? TOMADA_MM : LUZ_R_MM) + 2.2 * k, `${sigla}${circuito ? ` · ${circuito}` : ' · ?'}`, TEXTO_MM * 0.8, circuito && t.tipoEletrico ? COR_FRACA : '#b45309');
-    if (t.comando) d.texto(c.x + LUZ_R_MM + 0.8 * k, c.y + 0.6 * k, t.comando, TEXTO_MM * 0.9);
+    if (t.potenciaW != null && !luminaria) {
+      anotar({
+        id: `potencia:${t.id}`,
+        donoId: t.id,
+        ancora: caixaDoSimbolo,
+        prioridade: PRIORIDADE_DA_ANOTACAO.VALOR,
+        linhas: [{ texto: `${t.potenciaW} VA`, altura: TEXTO_MM * 0.8 }],
+        preferidas: () => [topo(c.x - 2 * k, c.y - TOMADA_MM - 0.8 * k, TEXTO_MM * 0.8)],
+      });
+    }
+    // A potência DENTRO do círculo da luminária é parte do símbolo: fica no lugar.
+    if (t.potenciaW != null && luminaria) d.texto(c.x - 1.4 * k, c.y + 0.6 * k, String(t.potenciaW), TEXTO_MM * 0.7);
+    // 22/10/2026 (decisão do usuário): na luminária só "C3" — o círculo já diz que é luz.
+    const alerta = !(circuito && t.tipoEletrico);
+    anotar({
+      id: `ponto:${t.id}`,
+      donoId: t.id,
+      ancora: caixaDoSimbolo,
+      prioridade: alerta ? PRIORIDADE_DA_ANOTACAO.PENDENCIA : PRIORIDADE_DA_ANOTACAO.CIRCUITO,
+      linhas: [{ texto: luminaria ? (circuito ? `C${numeroDoCircuito(circuito)}` : '?') : `${sigla}${circuito ? ` · ${circuito}` : ' · ?'}`, altura: TEXTO_MM * 0.8, cor: alerta ? '#b45309' : COR_FRACA }],
+      preferidas: () => [topo(c.x - 2 * k, c.y + (ehTomada ? TOMADA_MM : LUZ_R_MM) + 2.2 * k, TEXTO_MM * 0.8)],
+    });
+    if (t.comando) {
+      anotar({
+        id: `comando:${t.id}`,
+        donoId: t.id,
+        ancora: caixaDoSimbolo,
+        prioridade: PRIORIDADE_DA_ANOTACAO.IDENTIFICACAO,
+        linhas: [{ texto: t.comando, altura: TEXTO_MM * 0.9 }],
+        preferidas: () => [topo(c.x + LUZ_R_MM + 0.8 * k, c.y + 0.6 * k, TEXTO_MM * 0.9)],
+      });
+    }
   }
+
+  // Os textos, todos juntos e sem colisão; a chamada (fina, fraca) antes do texto que se afastou.
+  const postos = posicionarAnotacoes(anotacoes, obstaculos, { segmentos, folga: 0.4 * k });
+  anotacoes.forEach((a, i) => {
+    const p = postos[i];
+    categoria(a.cat);
+    if (p.chamada) d.linha(p.chamada.de.x, p.chamada.de.y, p.chamada.ate.x, p.chamada.ate.y, { espessuraMm: FINA, cor: COR_FRACA });
+    let y = p.y;
+    for (const l of a.linhas) {
+      d.texto(a.centrar ? p.x + (a.largura - l.largura) / 2 : p.x, y + BASE * l.altura, l.texto, l.altura, l.cor);
+      y += l.altura * ENTRELINHA;
+    }
+  });
 }
 
 /** As linhas da legenda — só as famílias PRESENTES no desenho. */

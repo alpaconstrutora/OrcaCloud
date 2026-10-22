@@ -24,6 +24,14 @@
  * Unidade livre: pixels de tela no canvas (y para baixo), milímetros de papel na prancha. Puro —
  * quem chama só desenha o que sai daqui.
  */
+/**
+ * A ordem em que os textos da planta escolhem lugar, menor primeiro — a mesma na tela e na prancha:
+ * a pendência "?" antes do circuito, o circuito antes da identificação (nº do circuito no grupo de
+ * condutores, letra do comando, sigla da peça), depois a potência, e o DETALHE (seção, "N cond.") e o
+ * Ø por último.
+ */
+export const PRIORIDADE_DA_ANOTACAO = { PENDENCIA: 0, CIRCUITO: 1, IDENTIFICACAO: 2, VALOR: 3, DETALHE: 4, DIAMETRO: 5 } as const;
+
 export interface CaixaNaTela {
   x0: number;
   y0: number;

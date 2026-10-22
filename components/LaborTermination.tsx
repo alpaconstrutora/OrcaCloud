@@ -121,11 +121,16 @@ interface TerminationWizardProps {
 const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees, existing, onClose, onSaved }) => {
     const confirm = useConfirm();
     const isEditing = !!existing;
+    // Desligamento já concluído: o assistente edita o registro e MANTÉM o status — "Salvar rascunho"
+    // o rebaixaria para RASCUNHO. O gatilho do banco atualiza o cadastro do colaborador (data/motivo).
+    const isConcluded = existing?.status === 'CONCLUIDO';
+    // Editar usa a organização DO REGISTRO (REGRA #5): em "Todas as organizações" o topo não tem org.
+    const writeOrgId = existing?.org_id ?? orgId;
     const [step, setStep] = useState(0);
     const [saving, setSaving] = useState(false);
 
     const [form, setForm] = useState<Partial<TerminationRecord>>({
-        org_id: orgId ?? undefined,
+        org_id: writeOrgId ?? undefined,
         employee_id:            existing?.employee_id || '',
         termination_date:       existing?.termination_date || new Date().toISOString().split('T')[0],
         tipo:                   existing?.tipo || 'DEMISSAO_SEM_JUSTA_CAUSA',
@@ -164,17 +169,17 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
     const handleSave = async (finalize = false) => {
         // Escrita exige organização específica (REGRA #5, exceção 4):
         // em "Todas as organizações" não há org para gravar.
-        if (!orgId) { alert('Selecione uma organização específica no seletor do topo para cadastrar.'); return; }
+        if (!writeOrgId) { alert('Selecione uma organização específica no seletor do topo para cadastrar.'); return; }
         if (!form.employee_id) { alert('Selecione um colaborador.'); return; }
         if (!form.termination_date) { alert('Informe a data de desligamento.'); return; }
         setSaving(true);
         try {
             let record: TerminationRecord;
-            const payload = { ...form, status: finalize ? 'CONCLUIDO' : 'RASCUNHO' } as any;
+            const payload = { ...form, status: finalize || isConcluded ? 'CONCLUIDO' : 'RASCUNHO' } as any;
 
             if (isEditing && existing?.id) {
                 record = await laborService.updateTermination(existing.id, payload);
-                if (finalize) {
+                if (finalize && !isConcluded) {
                     record = await laborService.finalizeTermination(existing.id, 'gestor');
                 }
             } else {
@@ -248,7 +253,8 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                                     >
                                         <option value="">Selecione...</option>
                                         {employees
-                                            .filter(e => e.status === 'ATIVO' || e.status === 'AFASTADO')
+                                            // Ao editar, o colaborador do registro entra mesmo DESLIGADO (o campo fica travado).
+                                            .filter(e => e.status === 'ATIVO' || e.status === 'AFASTADO' || e.id === existing?.employee_id)
                                             .map(e => (
                                                 <option key={e.id} value={e.id}>{e.name} — {e.role}</option>
                                             ))}
@@ -456,22 +462,38 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
                                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                                     <p className="text-xs font-bold text-amber-800">
-                                        O checklist não está 100% completo. Você pode salvar como rascunho e finalizar depois, ou finalizar agora mesmo assim.
+                                        {isConcluded
+                                            ? 'O checklist não está 100% completo.'
+                                            : 'O checklist não está 100% completo. Você pode salvar como rascunho e finalizar depois, ou finalizar agora mesmo assim.'}
                                     </p>
                                 </div>
                             )}
 
-                            <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
-                                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                                <div>
-                                    <p className="text-sm font-black text-rose-900">Ao Finalizar:</p>
-                                    <ul className="mt-1 space-y-0.5 text-xs font-bold text-rose-700">
-                                        <li>• Colaborador terá status alterado para DESLIGADO</li>
-                                        <li>• Todos os EPIs ativos serão marcados como devolvidos</li>
-                                        <li>• Ação irreversível</li>
-                                    </ul>
+                            {isConcluded ? (
+                                <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-3">
+                                    <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-black text-blue-900">Ao salvar as alterações:</p>
+                                        <ul className="mt-1 space-y-0.5 text-xs font-bold text-blue-800">
+                                            <li>• O desligamento continua concluído</li>
+                                            <li>• Data e motivo do desligamento são atualizados no cadastro do colaborador</li>
+                                            <li>• Folhas já processadas só mudam quando forem reprocessadas</li>
+                                        </ul>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
+                                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-black text-rose-900">Ao Finalizar:</p>
+                                        <ul className="mt-1 space-y-0.5 text-xs font-bold text-rose-700">
+                                            <li>• Colaborador terá status alterado para DESLIGADO</li>
+                                            <li>• Todos os EPIs ativos serão marcados como devolvidos</li>
+                                            <li>• Ação irreversível</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -489,15 +511,31 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                         <Button variant="ghost" onClick={onClose} className="text-slate-500">
                             Cancelar
                         </Button>
-                        <button
-                            onClick={() => handleSave(false)}
-                            disabled={saving}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-slate-600 text-white rounded-xl hover:bg-slate-700 font-bold text-sm transition-all disabled:opacity-50"
-                        >
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            Salvar Rascunho
-                        </button>
-                        {step < steps.length - 1 ? (
+                        {!isConcluded && (
+                            <button
+                                onClick={() => handleSave(false)}
+                                disabled={saving}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-slate-600 text-white rounded-xl hover:bg-slate-700 font-bold text-sm transition-all disabled:opacity-50"
+                            >
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                Salvar Rascunho
+                            </button>
+                        )}
+                        {isConcluded && step < steps.length - 1 && (
+                            <Button variant="ghost" onClick={() => setStep(s => s + 1)} className="text-slate-600 border border-slate-200">
+                                Próximo →
+                            </Button>
+                        )}
+                        {isConcluded ? (
+                            <button
+                                onClick={() => handleSave(false)}
+                                disabled={saving}
+                                className="flex items-center gap-2 px-5 py-2.5 bg-rose-600 text-white rounded-xl hover:bg-rose-700 font-bold text-sm transition-all shadow-lg disabled:opacity-50"
+                            >
+                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                Salvar alterações
+                            </button>
+                        ) : step < steps.length - 1 ? (
                             <button
                                 onClick={() => setStep(s => s + 1)}
                                 className="flex items-center gap-2 px-5 py-2.5 bg-rose-600 text-white rounded-xl hover:bg-rose-700 font-bold text-sm transition-all shadow-lg"
@@ -711,14 +749,13 @@ const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, o
                     width: 140,
                     render: t => (
                         <>
-                            {t.status === 'RASCUNHO' && (
-                                <button
-                                    onClick={() => abrirWizard(t)}
-                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
-                                >
-                                    Continuar
-                                </button>
-                            )}
+                            {/* Editar vale para qualquer situação; em andamento, o mesmo botão retoma o assistente (§9.1: uma ação, um botão) */}
+                            <ActionIconButton
+                                kind="edit"
+                                size="sm"
+                                title={t.status === 'RASCUNHO' ? 'Continuar editando' : 'Editar desligamento'}
+                                onClick={() => abrirWizard(t)}
+                            />
                             <ActionIconButton kind="delete" size="sm" onClick={() => excluir(t)} />
                         </>
                     ),

@@ -27,11 +27,15 @@ const PROCESSOS = [
 
 const listTerminations = vi.fn(async () => PROCESSOS);
 const deleteTermination = vi.fn(async () => undefined);
+const updateTermination = vi.fn(async (_id: string, u: unknown) => u);
+const finalizeTermination = vi.fn(async () => undefined);
 vi.mock('../../services/laborService', () => ({
     laborService: {
         listTerminations: (...a: unknown[]) => listTerminations(...(a as [])),
         deleteTermination: (...a: unknown[]) => deleteTermination(...(a as [])),
-        createTermination: vi.fn(), updateTermination: vi.fn(), finalizeTermination: vi.fn(),
+        createTermination: vi.fn(),
+        updateTermination: (...a: unknown[]) => updateTermination(...(a as [string, unknown])),
+        finalizeTermination: (...a: unknown[]) => finalizeTermination(...(a as [])),
     },
 }));
 
@@ -115,5 +119,69 @@ describe('RH › Desligamentos — tabela padrão', () => {
         expect(deleteTermination).toHaveBeenCalledWith('p3');
         expect(listTerminations).toHaveBeenCalledTimes(1);
         expect(aba(/Em andamento/).textContent).toContain('1');
+    });
+
+    it('toda linha tem o botão Editar; em andamento ele retoma o assistente', async () => {
+        montar();
+        await screen.findByText('Ana');
+        fireEvent.click(aba(/Todos/));
+        expect(screen.getAllByTitle(/^(Editar desligamento|Continuar editando)$/)).toHaveLength(3);
+        const ana = screen.getByText('Ana').closest('tr')!;
+        expect(within(ana).getByTitle('Continuar editando')).toBeInTheDocument();
+        const bruno = screen.getByText('Bruno').closest('tr')!;
+        expect(within(bruno).getByTitle('Editar desligamento')).toBeInTheDocument();
+    });
+
+    describe('editar um desligamento já concluído', () => {
+        const abrirBruno = async () => {
+            montar([{ id: 'e-p2', name: 'Bruno', role: 'Pedreiro', status: 'DESLIGADO' }]);
+            await screen.findByText('Ana');
+            fireEvent.click(aba(/Concluídos/));
+            const bruno = (await screen.findByText('Bruno')).closest('tr')!;
+            fireEvent.click(within(bruno).getByTitle('Editar desligamento'));
+            await screen.findByText('Editar Desligamento');
+        };
+
+        it('abre com o colaborador (mesmo DESLIGADO) e sem "Salvar Rascunho"', async () => {
+            await abrirBruno();
+            expect(screen.getByDisplayValue('Bruno — Pedreiro')).toHaveValue('e-p2');
+            expect(screen.queryByRole('button', { name: /Salvar Rascunho/ })).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: /Finalizar Desligamento/ })).not.toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /Salvar alterações/ })).toBeEnabled();
+        });
+
+        it('salvar mantém CONCLUIDO, usa a org do registro e NÃO refinaliza', async () => {
+            await abrirBruno();
+            fireEvent.change(document.querySelector('input[type="date"]')!, { target: { value: '2026-09-28' } });
+            fireEvent.click(screen.getByRole('button', { name: /Salvar alterações/ }));
+            await waitFor(() => expect(updateTermination).toHaveBeenCalledTimes(1));
+            expect(updateTermination).toHaveBeenCalledWith('p2', expect.objectContaining({ status: 'CONCLUIDO', termination_date: '2026-09-28', org_id: 'org1' }));
+            expect(finalizeTermination).not.toHaveBeenCalled();
+        });
+
+        it('em "Todas as organizações" (orgId nulo) ainda salva, pela org do registro', async () => {
+            const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+            render(
+                <QueryClientProvider client={qc}>
+                    <LaborTermination orgId={null} employees={[{ id: 'e-p2', name: 'Bruno', role: 'Pedreiro', status: 'DESLIGADO' } as any]} organizations={[{ id: 'org1', name: 'Alpa' }]} />
+                </QueryClientProvider>,
+            );
+            await screen.findByText('Ana');
+            fireEvent.click(aba(/Concluídos/));
+            fireEvent.click(within((await screen.findByText('Bruno')).closest('tr')!).getByTitle('Editar desligamento'));
+            await screen.findByText('Editar Desligamento');
+            fireEvent.click(screen.getByRole('button', { name: /Salvar alterações/ }));
+            await waitFor(() => expect(updateTermination).toHaveBeenCalledTimes(1));
+        });
+    });
+
+    it('editar um em andamento continua salvando como RASCUNHO', async () => {
+        montar([{ id: 'e-p1', name: 'Ana', role: 'Pedreiro', status: 'ATIVO' }]);
+        await screen.findByText('Ana');
+        fireEvent.click(within(screen.getByText('Ana').closest('tr')!).getByTitle('Continuar editando'));
+        await screen.findByText('Editar Desligamento');
+        fireEvent.click(screen.getByRole('button', { name: /Salvar Rascunho/ }));
+        await waitFor(() => expect(updateTermination).toHaveBeenCalledWith('p1', expect.objectContaining({ status: 'RASCUNHO' })));
+        expect(finalizeTermination).not.toHaveBeenCalled();
     });
 });

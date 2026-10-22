@@ -9,6 +9,9 @@ import { formatDate } from '../lib/payrollUIHelpers';
 import { formatMoney as fmtBRL } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useResizableColumns } from './ui/TableUtils';
+import { agruparLinhas, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 interface PayrollRunListProps {
     runs: PayrollRun[];
@@ -56,6 +59,36 @@ const STATUS_COLORS: Record<string, string> = {
     FECHADO: 'text-emerald-700',
     RASCUNHO: 'text-amber-700',
 };
+
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+type CampoAgrupar = 'organizacao' | 'tipo' | 'centro_custo' | 'plano_contas' | 'status';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'organizacao', label: 'Organização' },
+    { value: 'tipo', label: 'Tipo' },
+    { value: 'centro_custo', label: 'Centro de Custo' },
+    { value: 'plano_contas', label: 'Plano de Contas' },
+    { value: 'status', label: 'Status' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = {
+    organizacao: 'Sem organização', tipo: 'Sem tipo', centro_custo: 'Sem centro de custo',
+    plano_contas: 'Sem plano de contas', status: 'Sem status',
+};
+// A célula de Status só tem dois textos: FECHADO → "Fechado", o resto → "Rascunho".
+const STATUS_LABELS: Record<string, string> = { RASCUNHO: 'Rascunho', FECHADO: 'Fechado' };
+function chaveDoGrupo(
+    campo: CampoAgrupar,
+    run: PayrollRun,
+    ctx: { orgNome: (id: string) => string | undefined; costCenterName: (id?: string | null) => string; planoContasName: (id?: string | null) => string },
+): ChaveDeGrupo {
+    switch (campo) {
+        case 'organizacao': return chavePorNome(ctx.orgNome(run.org_id));
+        // Só o tipo principal: o subtipo ao lado na célula ("Mensal · …") explodiria os grupos.
+        case 'tipo': return chavePorRotulo(run.type, TYPE_LABELS);
+        case 'centro_custo': return chavePorNome(ctx.costCenterName(run.cost_center_id));
+        case 'plano_contas': return chavePorNome(ctx.planoContasName(run.plano_de_contas_id));
+        case 'status': return chavePorRotulo(run.status === 'FECHADO' ? 'FECHADO' : 'RASCUNHO', STATUS_LABELS);
+    }
+}
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'period', label: 'Período', sortable: true },
@@ -170,6 +203,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
 }) => {
     const tableColumns = useTableColumns(COLUMNS, 'payrollRunListColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'payrollRunListColWidths');
+    const agrupamento = useAgrupamento<CampoAgrupar>('payrollRunList:groupBy');
 
     const orgName = (id: string) => organizations.find(o => o.id === id)?.name ?? '—';
     const costCenterName  = (id?: string | null) => (id ? costCenters.find(c => c.id === id)?.name ?? '' : '');
@@ -202,6 +236,24 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
             }
         });
     }, [runs, search, tableColumns.sortColumn, tableColumns.sortDirection, runTotals, organizations, costCenters, planoContas]);
+
+    // "Agrupar" (§6.12) — recorte de exibição sobre a lista já filtrada e ordenada.
+    const groupBy = agrupamento.campo;
+    const agrupando = groupBy !== 'none';
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filteredRuns, {
+        chave: r => chaveDoGrupo(groupBy, r, { orgNome: id => organizations.find(o => o.id === id)?.name, costCenterName, planoContasName }),
+        semRotulo: SEM_GRUPO[groupBy],
+        valor: r => runTotals[r.id],
+        ordem: groupBy === 'status' ? Object.keys(STATUS_LABELS) : groupBy === 'tipo' ? Object.keys(TYPE_LABELS) : 'aparicao',
+        direcao: agrupamento.direcao,
+    })), [filteredRuns, groupBy, organizations, costCenters, planoContas, runTotals, agrupamento.direcao]);
+    const entradas: EntradaDaTela<PayrollRun>[] = useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredRuns.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, filteredRuns],
+    );
+    // Todas as células de uma linha: colunas de dado + espaçador (§6.1.1) + Ações.
+    const totalColunas = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').length
+        + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
 
     const totalValue = runs.reduce((s, r) => s + (runTotals[r.id] || 0), 0);
     const closedCount = runs.filter(r => r.status === 'FECHADO').length;
@@ -273,6 +325,20 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                             <option value="2026">2026</option>
                             <option value="2027">2027</option>
                         </select>
+
+                        {/* Agrupar — guia de UI §6.12. Sem Filtro avançado nesta tela:
+                            vai logo depois dos recortes, como nas demais. */}
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar os ciclos de folha"
+                        />
 
                         <button
                             onClick={onRefresh}
@@ -367,7 +433,12 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredRuns.map(run => {
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={totalColunas} onAlternar={agrupamento.alternar} tituloTotal="Soma do valor total dos ciclos do grupo" />
+                                    );
+                                    const run = e.item;
                                     return (
                                         <tr
                                             key={run.id}

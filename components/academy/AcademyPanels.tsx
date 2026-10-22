@@ -7,6 +7,9 @@ import {
 } from '../ui/TableUtils';
 import { academyService } from '../../services/academyService';
 import type { AcademyHrKpis, AcademyManagerRow } from '../../types/academy';
+import { agruparLinhas, chavePorNome, entradasDaPagina, type EntradaDaTela } from '../../utils/agruparLinhas';
+import { useAgrupamento } from '../../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from '../ui/Agrupamento';
 
 /**
  * Painéis de gestor e RH.
@@ -27,6 +30,11 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'atrasados',   label: 'Em atraso',   sortable: true },
     { key: 'aderencia',   label: 'Aderência',   sortable: true },
 ];
+
+// "Agrupar" dos colaboradores (guia de UI §6.12) — uma linha por pessoa, então o
+// único campo com o que agrupar é o Cargo. Só contagem.
+type CampoAgruparPainel = 'cargo';
+const OPCOES_AGRUPAR_PAINEL: { value: CampoAgruparPainel; label: string }[] = [{ value: 'cargo', label: 'Cargo' }];
 
 const PANELS_TH_CLASS = 'px-6 py-2 border-r border-gray-100';
 const PANELS_TD_CLASS = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
@@ -86,6 +94,7 @@ interface Props {
 const AcademyPanels: React.FC<Props> = ({ orgId }) => {
     const [visao, setVisao] = usePersistedState<Visao>('academyPanels:visao', 'gestor');
     const colunas = useTableColumns(COLUMNS, 'academyPanelsColumns');
+    const agrupamento = useAgrupamento<CampoAgruparPainel>('academyPanels:groupBy');
     // §6.1 — larguras iniciais; arrastar a borda e o autofit ajustam a partir daqui.
     const cols = useResizableColumns({ colaborador: 240, cargo: 180, total: 110, concluidos: 110, pendentes: 110, atrasados: 110, aderencia: 130 }, 'academyPanelsColWidths');
     // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout: fixed.
@@ -127,6 +136,18 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
             }
         });
     }, [linhas, colunas.sortColumn, colunas.sortDirection]);
+
+    const grupos = useMemo(() => (agrupamento.campo === 'none' ? [] : agruparLinhas(ordenadas, {
+        chave: r => chavePorNome(r.employee_role),
+        semRotulo: 'Sem cargo',
+        direcao: agrupamento.direcao,
+    })), [ordenadas, agrupamento.campo, agrupamento.direcao]);
+    const entradas: EntradaDaTela<AcademyManagerRow>[] = useMemo(
+        () => (agrupamento.agrupando
+            ? entradasDaPagina(grupos, agrupamento.recolhidos)
+            : ordenadas.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupamento.agrupando, grupos, agrupamento.recolhidos, ordenadas],
+    );
 
     if (carregando) {
         return (
@@ -189,23 +210,37 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
                             ? 'Aderência por colaborador — quem está em atraso aparece primeiro'
                             : 'Cobertura por colaborador na organização'}
                     </p>
-                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                        <ColumnConfigButton
-                            columns={COLUMNS}
-                            visibleColumns={colunas.visibleColumns}
-                            showColumnConfig={colunas.showColumnConfig}
-                            onToggleShow={() => colunas.setShowColumnConfig(!colunas.showColumnConfig)}
-                            onToggleColumn={colunas.toggleColumn}
-                            onReset={colunas.resetColumns}
+                    {/* Sem toolbar de filtros: o "Agrupar" fica junto dos outros controles da tabela (§5.2/§6.12). */}
+                    <div className="flex items-center gap-2.5">
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR_PAINEL}
+                            campo={agrupamento.campo}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar os colaboradores"
                         />
-                        {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
-                        <button
-                            onClick={() => cols.autoFit()}
-                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
-                            title="Ajustar largura das colunas ao conteúdo"
-                        >
-                            <MoveHorizontal className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={COLUMNS}
+                                visibleColumns={colunas.visibleColumns}
+                                showColumnConfig={colunas.showColumnConfig}
+                                onToggleShow={() => colunas.setShowColumnConfig(!colunas.showColumnConfig)}
+                                onToggleColumn={colunas.toggleColumn}
+                                onReset={colunas.resetColumns}
+                            />
+                            {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -246,7 +281,14 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {ordenadas.map(r => (
+                                {entradas.map(e => {
+                                    // dados + espaçador (sem checkbox nem Ações).
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={colunas.orderedVisibleColumns.length + 1} onAlternar={agrupamento.alternar} semTotal />
+                                    );
+                                    const r = e.item;
+                                    return (
                                     <tr key={r.employee_id} className="hover:bg-blue-50/50 transition-colors">
                                         {colunas.orderedVisibleColumns.map(key => (
                                             <td key={key} className={PANELS_TD_CLASS}>
@@ -255,7 +297,8 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
                                         ))}
                                         <td aria-hidden="true"></td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

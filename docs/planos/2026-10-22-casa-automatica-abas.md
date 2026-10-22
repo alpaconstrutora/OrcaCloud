@@ -62,7 +62,8 @@ Decisões de implementação (dentro do que foi aprovado):
 - [x] 2 — TabelaFurosPrevistos
 - [x] 3 — testes: `TelaCasaAutomatica.test.tsx` 19/19 (16 antigos ajustados às abas + 3 novos); "casa automática (F10)"
   do `BlueprintEditor.test.tsx` passa sem mudança
-- [ ] 4 — medição em produção
+- [x] 4 — publicado (#98, 4a18389, conferir-producao ✅); tela aprovada pelo usuário em 22/10/2026; medição por aba
+  não feita (Chrome desconectado)
 
 ## Verificação
 

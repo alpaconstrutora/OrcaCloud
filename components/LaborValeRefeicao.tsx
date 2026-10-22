@@ -14,6 +14,9 @@ import { vrService, VrRegra, VrFeriado, VrCalculo } from '../services/vrService'
 import { laborService, Employee } from '../services/laborService';
 import { supabase } from '../lib/supabase';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { agruparLinhas, chavePorNome, chavePorRotulo, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type DirecaoGrupos, type EntradaDaTela, type OpcoesAgrupar } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,6 +41,57 @@ const STATUS_CFG = {
     pago:      { label: 'Pago',      color: 'text-blue-700' },
     cancelado: { label: 'Cancelado', color: 'text-rose-700' },
 } as const;
+
+/** "Outubro de 2026" — o texto da coluna Mês do Histórico (e do grupo por mês). */
+function mesCapitalizado(iso: string) {
+    const label = mesLabel(iso);
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+// ─── "Agrupar" dos cálculos (guia de UI §6.12) ────────────────────────────────
+// Cálculo Mensal, Aprovados e Histórico. Chave = o MESMO texto que a célula mostra;
+// total = Líquido.
+type CampoAgruparCalculo = 'employee' | 'project' | 'status';
+type CampoAgruparHistorico = 'mes' | CampoAgruparCalculo;
+const OPCOES_AGRUPAR_CALCULO: { value: CampoAgruparCalculo; label: string }[] = [
+    { value: 'employee', label: 'Colaborador' },
+    { value: 'project', label: 'Obra' },
+    { value: 'status', label: 'Status' },
+];
+const OPCOES_AGRUPAR_HISTORICO: { value: CampoAgruparHistorico; label: string }[] = [
+    { value: 'mes', label: 'Mês' },
+    ...OPCOES_AGRUPAR_CALCULO,
+];
+const SEM_GRUPO_CALCULO: Record<CampoAgruparHistorico, string> = {
+    mes: 'Sem mês', employee: 'Sem colaborador', project: 'Sem obra', status: 'Sem status',
+};
+const STATUS_LABEL: Record<string, string> = Object.fromEntries(Object.entries(STATUS_CFG).map(([k, v]) => [k, v.label]));
+
+function chaveDoCalculo(campo: CampoAgruparHistorico, c: VrCalculo): ChaveDeGrupo {
+    switch (campo) {
+        case 'mes': {
+            const am = (c.mes_referencia ?? '').slice(0, 7);
+            return /^\d{4}-\d{2}$/.test(am) ? { key: am, label: mesCapitalizado(c.mes_referencia) } : null;
+        }
+        case 'employee': return chavePorNome(c.employee_name);
+        case 'project': return chavePorNome(c.project_name);
+        case 'status': return chavePorRotulo(c.status, STATUS_LABEL);
+    }
+}
+
+function opcoesDoGrupoCalculo(campo: CampoAgruparHistorico, direcao: DirecaoGrupos): OpcoesAgrupar<VrCalculo> {
+    return {
+        chave: c => chaveDoCalculo(campo, c),
+        semRotulo: SEM_GRUPO_CALCULO[campo],
+        valor: c => c.valor_liquido,
+        // Mês cronológico; status na ordem do fluxo; nomes A→Z (padrão com `direcao`).
+        ordem: campo === 'mes' ? 'chave' : campo === 'status' ? Object.keys(STATUS_CFG) : undefined,
+        direcao,
+    };
+}
+
+/** Linhas sem grupo, no formato do `<tbody>` agrupado. */
+const semGrupos = <T,>(linhas: T[]): EntradaDaTela<T>[] => linhas.map((item, indice) => ({ tipo: 'linha' as const, item, indice }));
 
 function useToast() {
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -470,6 +524,21 @@ const ESCOPO_CFG: Record<VrFeriado['escopo'], { label: string; color: string }> 
     obra:      { label: 'Obra',      color: 'text-orange-700' },
 };
 
+// "Agrupar" dos feriados (guia de UI §6.12) — só contagem. Chave = o texto da célula:
+// feriado sem obra mostra "Todas" e vira um grupo com esse nome.
+type CampoAgruparFeriado = 'escopo' | 'obra';
+const OPCOES_AGRUPAR_FERIADO: { value: CampoAgruparFeriado; label: string }[] = [
+    { value: 'escopo', label: 'Escopo' },
+    { value: 'obra', label: 'Obra' },
+];
+const SEM_GRUPO_FERIADO: Record<CampoAgruparFeriado, string> = { escopo: 'Sem escopo', obra: 'Sem obra' };
+const ESCOPO_LABEL: Record<string, string> = Object.fromEntries(Object.entries(ESCOPO_CFG).map(([k, v]) => [k, v.label]));
+
+function chaveDoFeriado(campo: CampoAgruparFeriado, f: VrFeriado, projects: { id: string; name: string }[]): ChaveDeGrupo {
+    if (campo === 'escopo') return chavePorRotulo(f.escopo, ESCOPO_LABEL);
+    return f.project_id ? chavePorNome(projects.find(p => p.id === f.project_id)?.name) : chavePorNome('Todas');
+}
+
 const FERIADOS_COLUMNS: ColumnConfig[] = [
     { key: 'data', label: 'Data', sortable: true },
     { key: 'descricao', label: 'Descrição', sortable: true },
@@ -523,6 +592,7 @@ const AbaCalendario: React.FC<{ orgId: string | null; organizations: { id: strin
     const [search, setSearch] = usePersistedState('vrFeriados:search', '');
     const tableColumns = useTableColumns(FERIADOS_COLUMNS, 'vrFeriadosColumns');
     const cols = useResizableColumns(DEFAULT_FERIADOS_COL_WIDTHS, 'vrFeriadosColWidths');
+    const agrupamento = useAgrupamento<CampoAgruparFeriado>('vrFeriados:groupBy');
 
     const del = useMutation({
         mutationFn: (id: string) => vrService.deleteFeriado(id),
@@ -587,6 +657,22 @@ const AbaCalendario: React.FC<{ orgId: string | null; organizations: { id: strin
             }
         });
     }, [feriados, search, projects, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    const groupBy = agrupamento.campo;
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filtered, {
+        chave: f => chaveDoFeriado(groupBy, f, projects),
+        semRotulo: SEM_GRUPO_FERIADO[groupBy],
+        // Escopo do mais amplo ao mais restrito (Nacional → Obra); obra A→Z.
+        ordem: groupBy === 'escopo' ? Object.keys(ESCOPO_CFG) : undefined,
+        direcao: agrupamento.direcao,
+    })), [filtered, groupBy, agrupamento.direcao, projects]);
+    const entradas = useMemo(
+        () => (agrupamento.agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : semGrupos(filtered)),
+        [agrupamento.agrupando, grupos, agrupamento.recolhidos, filtered],
+    );
+    // checkbox não há; dados + espaçador + Ações.
+    const colunasDaLinha = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').length + 1
+        + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
 
     // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout:fixed.
     const tableTotalWidth = FERIADOS_COLUMNS
@@ -659,6 +745,18 @@ const AbaCalendario: React.FC<{ orgId: string | null; organizations: { id: strin
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                             />
                         </div>
+                        {/* Agrupar — guia de UI §6.12 */}
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR_FERIADO}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar os feriados"
+                        />
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
                                 columns={FERIADOS_COLUMNS.filter(c => c.key !== 'actions')}
@@ -734,7 +832,13 @@ const AbaCalendario: React.FC<{ orgId: string | null; organizations: { id: strin
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filtered.map(f => (
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={colunasDaLinha} onAlternar={agrupamento.alternar} semTotal />
+                                    );
+                                    const f = e.item;
+                                    return (
                                     <tr key={f.id} className="hover:bg-orange-50/40 transition-colors">
                                         {tableColumns.orderedVisibleColumns
                                             .filter(key => key !== 'actions')
@@ -751,7 +855,8 @@ const AbaCalendario: React.FC<{ orgId: string | null; organizations: { id: strin
                                             </td>
                                         )}
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -871,6 +976,7 @@ const AbaCalculo: React.FC<{ orgId: string | null; employees: Employee[]; projec
     const [gerandoAll, setGerandoAll] = useState(false);
     const tableColumns = useTableColumns(CALCULO_COLUMNS, 'vrCalculoColumns');
     const cols = useResizableColumns(DEFAULT_CALCULO_COL_WIDTHS, 'vrCalculoColWidths');
+    const agrupamento = useAgrupamento<CampoAgruparCalculo>('vrCalculo:groupBy');
 
     const { data: regras = [] } = useQuery({ queryKey: ['vr_regras', orgId], queryFn: () => vrService.listRegras(orgId) });
     const { data: feriados = [] } = useQuery({ queryKey: ['vr_feriados', orgId, ano], queryFn: () => vrService.listFeriados(orgId, ano) });
@@ -906,6 +1012,24 @@ const AbaCalculo: React.FC<{ orgId: string | null; employees: Employee[]; projec
         });
     }, [calculos, search, tableColumns.sortColumn, tableColumns.sortDirection]);
 
+    const groupBy = agrupamento.campo;
+    const grupos = useMemo(
+        () => (groupBy === 'none' ? [] : agruparLinhas(filtered, opcoesDoGrupoCalculo(groupBy, agrupamento.direcao))),
+        [filtered, groupBy, agrupamento.direcao],
+    );
+    /** Linhas na ordem da tela, sem os grupos recolhidos — base do "selecionar todos". */
+    const linhasNaTela = useMemo(
+        () => (agrupamento.agrupando ? linhasDaTela(grupos, agrupamento.recolhidos) : filtered),
+        [agrupamento.agrupando, grupos, agrupamento.recolhidos, filtered],
+    );
+    const entradas = useMemo(
+        () => (agrupamento.agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : semGrupos(filtered)),
+        [agrupamento.agrupando, grupos, agrupamento.recolhidos, filtered],
+    );
+    // checkbox + dados + espaçador + Ações.
+    const colunasDaLinha = 1 + tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').length + 1
+        + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
+
     const toggleSel = (id: string) => {
         setSelectedIds(prev => {
             const next = new Set(prev);
@@ -915,7 +1039,7 @@ const AbaCalculo: React.FC<{ orgId: string | null; employees: Employee[]; projec
     };
 
     const toggleAll = () => {
-        const rascunhos = filtered.filter(c => c.status === 'rascunho').map(c => c.id);
+        const rascunhos = linhasNaTela.filter(c => c.status === 'rascunho').map(c => c.id);
         if (selectedIds.size === rascunhos.length) setSelectedIds(new Set());
         else setSelectedIds(new Set(rascunhos));
     };
@@ -988,7 +1112,7 @@ const AbaCalculo: React.FC<{ orgId: string | null; employees: Employee[]; projec
         }
     };
 
-    const rascunhos = filtered.filter(c => c.status === 'rascunho');
+    const rascunhos = linhasNaTela.filter(c => c.status === 'rascunho');
     const aprovadosOuPagos = calculos.filter(c => c.status === 'aprovado' || c.status === 'pago');
     const totalLiquido = aprovadosOuPagos.reduce((s, c) => s + c.valor_liquido, 0);
     const totalBruto = calculos.reduce((s, c) => s + c.valor_bruto, 0);
@@ -1051,6 +1175,18 @@ const AbaCalculo: React.FC<{ orgId: string | null; employees: Employee[]; projec
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                             />
                         </div>
+                        {/* Agrupar — guia de UI §6.12 */}
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR_CALCULO}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar os cálculos"
+                        />
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
                                 columns={CALCULO_COLUMNS.filter(c => c.key !== 'actions')}
@@ -1131,7 +1267,12 @@ const AbaCalculo: React.FC<{ orgId: string | null; employees: Employee[]; projec
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filtered.map(c => {
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={colunasDaLinha} onAlternar={agrupamento.alternar} tituloTotal="Soma do líquido das linhas do grupo" />
+                                    );
+                                    const c = e.item;
                                     const isEdit = editId === c.id;
                                     return (
                                         <tr key={c.id} className="hover:bg-orange-50/40 transition-colors">
@@ -1269,6 +1410,7 @@ const AbaAprovados: React.FC<{ orgId: string | null }> = ({ orgId }) => {
     const [search, setSearch] = usePersistedState('vrAprovados:search', '');
     const tableColumns = useTableColumns(APROVADOS_COLUMNS, 'vrAprovadosColumns');
     const cols = useResizableColumns(DEFAULT_APROVADOS_COL_WIDTHS, 'vrAprovadosColWidths');
+    const agrupamento = useAgrupamento<CampoAgruparCalculo>('vrAprovados:groupBy');
 
     const { data: calculos = [], isLoading } = useQuery({
         queryKey: ['vr_calculos', orgId, mesIso],
@@ -1320,6 +1462,16 @@ const AbaAprovados: React.FC<{ orgId: string | null }> = ({ orgId }) => {
             }
         });
     }, [aprovados, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    const groupBy = agrupamento.campo;
+    const grupos = useMemo(
+        () => (groupBy === 'none' ? [] : agruparLinhas(filtered, opcoesDoGrupoCalculo(groupBy, agrupamento.direcao))),
+        [filtered, groupBy, agrupamento.direcao],
+    );
+    const entradas = useMemo(
+        () => (agrupamento.agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : semGrupos(filtered)),
+        [agrupamento.agrupando, grupos, agrupamento.recolhidos, filtered],
+    );
 
     const totalLiquido = aprovados.reduce((s, c) => s + c.valor_liquido, 0);
     const totalBruto = aprovados.reduce((s, c) => s + c.valor_bruto, 0);
@@ -1377,6 +1529,18 @@ const AbaAprovados: React.FC<{ orgId: string | null }> = ({ orgId }) => {
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                             />
                         </div>
+                        {/* Agrupar — guia de UI §6.12 */}
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR_CALCULO}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar os aprovados"
+                        />
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
                                 columns={APROVADOS_COLUMNS}
@@ -1435,7 +1599,13 @@ const AbaAprovados: React.FC<{ orgId: string | null }> = ({ orgId }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filtered.map(c => {
+                                {entradas.map(e => {
+                                    // Sem checkbox, espaçador nem Ações: só as colunas de dado.
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={tableColumns.orderedVisibleColumns.length} onAlternar={agrupamento.alternar} tituloTotal="Soma do líquido das linhas do grupo" />
+                                    );
+                                    const c = e.item;
                                     return (
                                         <tr key={c.id} className="hover:bg-orange-50/40 transition-colors">
                                             {tableColumns.orderedVisibleColumns.map(key => (
@@ -1493,10 +1663,8 @@ const DEFAULT_HISTORICO_COL_WIDTHS: Record<string, number> = {
 // `tableColumns.orderedVisibleColumns` (ordem arrastável).
 function renderHistoricoCell(key: string, c: VrCalculo): React.ReactNode {
     switch (key) {
-        case 'mes': {
-            const label = mesLabel(c.mes_referencia);
-            return <span className="text-sm font-normal text-gray-900 whitespace-nowrap">{label.charAt(0).toUpperCase() + label.slice(1)}</span>;
-        }
+        case 'mes':
+            return <span className="text-sm font-normal text-gray-900 whitespace-nowrap">{mesCapitalizado(c.mes_referencia)}</span>;
         case 'employee':
             return <span className="text-sm font-normal text-gray-900 whitespace-nowrap">{c.employee_name}</span>;
         case 'project':
@@ -1516,6 +1684,7 @@ const AbaHistorico: React.FC<{ orgId: string | null }> = ({ orgId }) => {
     const [search, setSearch] = usePersistedState('vrHistorico:search', '');
     const tableColumns = useTableColumns(HISTORICO_COLUMNS, 'vrHistoricoColumns');
     const cols = useResizableColumns(DEFAULT_HISTORICO_COL_WIDTHS, 'vrHistoricoColWidths');
+    const agrupamento = useAgrupamento<CampoAgruparHistorico>('vrHistorico:groupBy');
     const { data: calculos = [], isLoading } = useQuery({
         queryKey: ['vr_calculos_hist', orgId],
         queryFn: () => vrService.listCalculos(orgId),
@@ -1538,6 +1707,16 @@ const AbaHistorico: React.FC<{ orgId: string | null }> = ({ orgId }) => {
             }
         });
     }, [calculos, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    const groupBy = agrupamento.campo;
+    const grupos = useMemo(
+        () => (groupBy === 'none' ? [] : agruparLinhas(filtered, opcoesDoGrupoCalculo(groupBy, agrupamento.direcao))),
+        [filtered, groupBy, agrupamento.direcao],
+    );
+    const entradas = useMemo(
+        () => (agrupamento.agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : semGrupos(filtered)),
+        [agrupamento.agrupando, grupos, agrupamento.recolhidos, filtered],
+    );
 
     // Largura = SOMA exata das colunas visíveis (§6.1) — esta tabela não tem coluna de ações.
     const tableTotalWidth = HISTORICO_COLUMNS
@@ -1564,6 +1743,18 @@ const AbaHistorico: React.FC<{ orgId: string | null }> = ({ orgId }) => {
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
                             />
                         </div>
+                        {/* Agrupar — guia de UI §6.12 */}
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR_HISTORICO}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar o histórico"
+                        />
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
                                 columns={HISTORICO_COLUMNS}
@@ -1621,7 +1812,14 @@ const AbaHistorico: React.FC<{ orgId: string | null }> = ({ orgId }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filtered.map(c => (
+                                {entradas.map(e => {
+                                    // Sem checkbox, espaçador nem Ações: só as colunas de dado.
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={tableColumns.orderedVisibleColumns.length} onAlternar={agrupamento.alternar} tituloTotal="Soma do líquido das linhas do grupo" />
+                                    );
+                                    const c = e.item;
+                                    return (
                                     <tr key={c.id} className="hover:bg-orange-50/40 transition-colors">
                                         {tableColumns.orderedVisibleColumns.map(key => (
                                             <td key={key} className={`px-3 py-2.5 border-r border-gray-100 last:border-r-0 ${key === 'mes' || key === 'status' ? 'px-4' : ''} ${key === 'elegiveis' ? 'text-center' : ''} ${key === 'liquido' ? 'text-right' : ''}`}>
@@ -1629,7 +1827,8 @@ const AbaHistorico: React.FC<{ orgId: string | null }> = ({ orgId }) => {
                                             </td>
                                         ))}
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

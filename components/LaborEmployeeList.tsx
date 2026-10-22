@@ -8,6 +8,9 @@ import { formatMoney } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
+import { agruparLinhas, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Colaborador', sortable: true },
@@ -153,6 +156,26 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'cost', label: 'Custo/Dia', type: 'number' },
 ];
 
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+type CampoAgrupar = 'funcao' | 'organizacao' | 'vinculo' | 'status';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'funcao', label: 'Função' },
+    { value: 'organizacao', label: 'Organização' },
+    { value: 'vinculo', label: 'Vínculo' },
+    { value: 'status', label: 'Status' },
+];
+// A célula de Organização mostra "Desconhecida" quando a org não está na lista —
+// o grupo das linhas sem organização usa o mesmo texto.
+const SEM_GRUPO: Record<CampoAgrupar, string> = { funcao: 'Sem função', organizacao: 'Desconhecida', vinculo: 'Sem vínculo', status: 'Sem status' };
+function chaveDoGrupo(campo: CampoAgrupar, e: Employee, orgNome: (id: string) => string | undefined): ChaveDeGrupo {
+    switch (campo) {
+        case 'funcao': return chavePorNome(e.role);
+        case 'organizacao': return chavePorNome(orgNome(e.org_id));
+        case 'vinculo': return chavePorRotulo(e.contract_type, CONTRACT_LABELS);
+        case 'status': return chavePorRotulo(e.status, STATUS_LABELS);
+    }
+}
+
 function getAdvancedFilterValue(e: Employee, key: string): unknown {
     switch (key) {
         case 'name': return e.name ?? '';
@@ -177,6 +200,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
     const tableColumns = useTableColumns(LABOR_EMPLOYEE_COLUMNS, 'laborEmployeeListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'laborEmployeeListFilters:advanced');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'laborEmployeeListColWidths');
+    const agrupamento = useAgrupamento<CampoAgrupar>('laborEmployeeListFilters:groupBy');
     const confirm = useConfirm();
 
     // Largura total = soma exata das colunas visíveis (nunca w-full — ver §6.1 do guia de UI).
@@ -226,6 +250,26 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
             else cmp = (a.daily_cost || 0) - (b.daily_cost || 0);
             return sortDir === 'asc' ? cmp : -cmp;
         }), [employees, organizations, filterStatus, filterContract, search, advancedFilters.rules, sortBy, sortDir, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    // "Agrupar" (§6.12). Organização só é opção quando a coluna aparece (mais de uma org).
+    const opcoesAgrupar = organizations.length > 1 ? OPCOES_AGRUPAR : OPCOES_AGRUPAR.filter(o => o.value !== 'organizacao');
+    const groupBy = agrupamento.campo === 'organizacao' && organizations.length <= 1 ? 'none' : agrupamento.campo;
+    const agrupando = groupBy !== 'none';
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filtered, {
+        chave: e => chaveDoGrupo(groupBy, e, id => organizations.find(o => o.id === id)?.name),
+        semRotulo: SEM_GRUPO[groupBy],
+        valor: e => e.base_salary,
+        ordem: groupBy === 'status' ? Object.keys(STATUS_LABELS) : 'aparicao',
+        direcao: agrupamento.direcao,
+    })), [filtered, groupBy, organizations, agrupamento.direcao]);
+    const entradas: EntradaDaTela<Employee>[] = useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filtered.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, filtered],
+    );
+    // Todas as células de uma linha: colunas de dado + espaçador (§6.1.1) + Ações.
+    const totalColunas = tableColumns.orderedVisibleColumns
+        .filter(key => key !== 'actions' && (key !== 'organization' || organizations.length > 1)).length
+        + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
 
     const handleToggleStatus = async (emp: Employee) => {
         try {
@@ -320,6 +364,19 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                             <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                         </div>
 
+                        {/* Agrupar — guia de UI §6.12 */}
+                        <AgruparControles
+                            opcoes={opcoesAgrupar}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar os colaboradores"
+                        />
+
                         <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
@@ -411,7 +468,13 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                     </td>
                                 </tr>
                             )}
-                            {filtered.map(emp => (
+                            {entradas.map(e => {
+                                if (e.tipo === 'grupo') return (
+                                    <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                        colSpan={totalColunas} onAlternar={agrupamento.alternar} tituloTotal="Soma do salário base dos colaboradores do grupo" />
+                                );
+                                const emp = e.item;
+                                return (
                                 <tr key={emp.id} className="hover:bg-blue-50/50 transition-colors group">
                                     {tableColumns.orderedVisibleColumns
                                         .filter(key => key !== 'actions' && (key !== 'organization' || organizations.length > 1))
@@ -446,7 +509,8 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                         </td>
                                     )}
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

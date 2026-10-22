@@ -128,6 +128,15 @@ describe('StandardTable — agrupamento', () => {
         expect(cabecalhos().map(c => c.split(' ').slice(0, 2).join(' '))).toEqual(['Obra A', 'Sem obra']);
     });
 
+    it('campo guardado que não está mais entre as opções vale como sem agrupamento', () => {
+        // Ex.: "Organização" só é opção em "Todas as organizações" (BI › Movimentações).
+        window.localStorage.setItem('teste:agrupar:groupBy', JSON.stringify('org'));
+        render(<Tela />);
+        expect(cabecalhos()).toEqual([]);
+        expect((screen.getByTitle('Agrupar os itens') as HTMLSelectElement).value).toBe('none');
+        expect(linhasDeDado()).toBe(50);
+    });
+
     it('o campo escolhido persiste e "Agrupar" volta ao normal', () => {
         const { unmount } = render(<Tela />);
         fireEvent.change(screen.getByTitle('Agrupar os itens'), { target: { value: 'obra' } });

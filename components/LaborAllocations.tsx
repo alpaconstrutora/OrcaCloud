@@ -18,6 +18,9 @@ import {
     ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton,
     SortableHeader, usePersistedState,
 } from './ui/TableUtils';
+import { agruparLinhas, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 // ── Local types ────────────────────────────────────────────────────────────────
 interface ClassificationItem {
@@ -92,6 +95,24 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     employee: 220, cargo: 170, obras: 100, percent: 130, centro_custo: 190, plano_contas: 190,
     rateio: 140, custo: 160, actions: 90,
 };
+
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra:
+// "Vários (N)" é grupo próprio; vazio cai em "Sem cargo" / "Da folha", que é o
+// que a célula escreve nesse caso.
+type CampoAgrupar = 'cargo' | 'centro_custo' | 'plano_contas';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'cargo', label: 'Cargo' },
+    { value: 'centro_custo', label: 'Centro de Custo' },
+    { value: 'plano_contas', label: 'Plano de Contas' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = { cargo: 'Sem cargo', centro_custo: 'Da folha', plano_contas: 'Da folha' };
+function chaveDoGrupo(campo: CampoAgrupar, r: AllocationRow): ChaveDeGrupo {
+    switch (campo) {
+        case 'cargo': return chavePorNome(r.cargo);
+        case 'centro_custo': return chavePorNome(r.centroCusto.texto);
+        case 'plano_contas': return chavePorNome(r.planoContas.texto);
+    }
+}
 
 const COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
     employee:     { label: 'Colaborador',     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -248,6 +269,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
     // a ordenação e as larguras que o usuário tenha ajustado nesta aba.
     const tableColumns = useTableColumns(COLUMNS, 'laborAllocationsColumns.v2');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'laborAllocationsColWidths.v2');
+    const agrupamento = useAgrupamento<CampoAgrupar>('laborAllocations:groupBy');
 
     // ── Loaders ───────────────────────────────────────────────────────────────
     const loadCatalogs = useCallback(async () => {
@@ -425,6 +447,23 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
         });
     }, [rows, search, tableColumns.sortColumn, tableColumns.sortDirection]);
 
+    // "Agrupar" (§6.12) — recorte de exibição sobre a lista já filtrada e ordenada.
+    const groupBy = agrupamento.campo;
+    const agrupando = groupBy !== 'none';
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filteredRows, {
+        chave: r => chaveDoGrupo(groupBy, r),
+        semRotulo: SEM_GRUPO[groupBy],
+        valor: r => r.custoFolha,
+        direcao: agrupamento.direcao,
+    })), [filteredRows, groupBy, agrupamento.direcao]);
+    const entradas: EntradaDaTela<AllocationRow>[] = useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredRows.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, filteredRows],
+    );
+    // Todas as células de uma linha: colunas de dado + espaçador (§6.1.1) + Ações.
+    const totalColunas = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').length
+        + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
+
     // §6.1: largura da tabela é a soma exata das colunas visíveis, nunca w-full.
     const tableTotalWidth = tableColumns.orderedVisibleColumns.reduce((sum, key) => sum + cols.getWidth(key), 0);
 
@@ -579,6 +618,20 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                             />
                         </div>
 
+                        {/* Agrupar — guia de UI §6.12. Sem Filtro avançado nesta tela:
+                            vai logo depois da busca, antes do Atualizar. */}
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar as alocações"
+                        />
+
                         <button
                             onClick={() => { loadMonth(); onRefresh(); }}
                             title="Atualizar"
@@ -663,7 +716,13 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredRows.map(row => (
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={totalColunas} onAlternar={agrupamento.alternar} tituloTotal="Soma do custo da folha dos colaboradores do grupo" />
+                                    );
+                                    const row = e.item;
+                                    return (
                                     <tr
                                         key={row.employee.id}
                                         onClick={() => setSheetEmployee(row.employee)}
@@ -685,7 +744,8 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                                             </td>
                                         )}
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     FileText, Plus, Search,
     AlertTriangle, Clock, User, Calendar,
@@ -13,6 +13,7 @@ import LaborDocumentModal from './LaborDocumentModal';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 
 // Colunas da tabela padrão (§6.10)
 const DOC_COLUMNS: StandardTableColumn[] = [
@@ -40,6 +41,11 @@ const CATEGORY_LABELS: Record<DocumentCategory, string> = {
     TREINAMENTO: 'Treinamento',
     OUTROS: 'Outros'
 };
+
+// "Agrupar" (guia de UI §6.12) — rótulos do Status = o MESMO texto do selo da célula,
+// na ordem da coluna (Vencido → Expira em breve → Vigente); sem vencimento cai no "Sem …".
+const ROTULO_STATUS_DOC: Record<string, string> = { vencido: 'Vencido', expira: 'Expira em breve', vigente: 'Vigente' };
+const SEM_GRUPO_DOC: Record<string, string> = { colaborador: 'Sem colaborador', categoria: 'Sem categoria', status: 'Sem vencimento' };
 
 const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRefresh, organizations }) => {
     const confirm = useConfirm();
@@ -177,6 +183,31 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
         );
     };
 
+    // Memoizado: o StandardTable memoiza os grupos pela identidade deste objeto.
+    // isExpired/isNearExpiry são puras (só dependem da data de hoje).
+    const agruparDocumentos = useMemo(() => ({
+        opcoes: [
+            { value: 'colaborador', label: 'Colaborador' },
+            { value: 'categoria', label: 'Categoria' },
+            { value: 'status', label: 'Status' },
+        ],
+        chave: (campo: string, d: EmployeeDocument) => {
+            switch (campo) {
+                case 'colaborador': return chavePorNome(d.employee_name);
+                case 'categoria': return chavePorRotulo(d.category, CATEGORY_LABELS);
+                case 'status': return chavePorRotulo(
+                    !d.expiry_date ? null : isExpired(d.expiry_date) ? 'vencido' : isNearExpiry(d.expiry_date) ? 'expira' : 'vigente',
+                    ROTULO_STATUS_DOC,
+                );
+                default: return null;
+            }
+        },
+        semRotulo: (campo: string) => SEM_GRUPO_DOC[campo] ?? 'Sem valor',
+        ordem: (campo: string) => (campo === 'categoria' ? Object.keys(CATEGORY_LABELS) : campo === 'status' ? Object.keys(ROTULO_STATUS_DOC) : undefined),
+        title: 'Agrupar os documentos',
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), []);
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* 1. Título */}
@@ -216,6 +247,7 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                     searchText={d => `${d.title} ${d.employee_name ?? ''}`}
                     searchPlaceholder="Buscar por título ou colaborador..."
                     filters={controles}
+                    agrupamento={agruparDocumentos}
                     sortValue={(key, d) => {
                         switch (key) {
                             case 'colaborador': return d.employee_name ?? '';

@@ -10,6 +10,9 @@ import AcademyCourseSheet, { CAT_CONFIG } from './AcademyCourseSheet';
 import { academyService } from '../../services/academyService';
 import { trainingsService } from '../../services/trainingsService';
 import type { TrainingCourse } from '../../types/academy';
+import { agruparLinhas, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../../utils/agruparLinhas';
+import { useAgrupamento } from '../../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from '../ui/Agrupamento';
 
 /**
  * Catálogo de treinamentos — a mesma tabela de sempre, agora com Modalidade,
@@ -31,6 +34,28 @@ const COLUMNS: ColumnConfig[] = [
 const MODALIDADE_LABEL: Record<string, string> = {
     PRESENCIAL: 'Presencial', EAD: 'EAD', HIBRIDO: 'Híbrido',
 };
+
+// "Agrupar" dos cursos (guia de UI §6.12) — só contagem. Chave = o MESMO texto que a célula mostra.
+type CampoAgruparCurso = 'categoria' | 'modalidade' | 'nr' | 'obrigatorio';
+const OPCOES_AGRUPAR_CURSO: { value: CampoAgruparCurso; label: string }[] = [
+    { value: 'categoria', label: 'Categoria' },
+    { value: 'modalidade', label: 'Modalidade' },
+    { value: 'nr', label: 'NR' },
+    { value: 'obrigatorio', label: 'Obrigatório' },
+];
+const SEM_GRUPO_CURSO: Record<CampoAgruparCurso, string> = {
+    categoria: 'Sem categoria', modalidade: 'Sem modalidade', nr: 'Sem NR', obrigatorio: 'Sem definição',
+};
+const CATEGORIA_LABEL: Record<string, string> = Object.fromEntries(Object.entries(CAT_CONFIG).map(([k, v]) => [k, v.label]));
+function chaveDoCurso(campo: CampoAgruparCurso, c: TrainingCourse): ChaveDeGrupo {
+    switch (campo) {
+        case 'categoria': return chavePorRotulo(c.categoria, CATEGORIA_LABEL);
+        // A célula mostra "Presencial" quando a modalidade não veio.
+        case 'modalidade': return chavePorRotulo(c.modalidade || 'PRESENCIAL', MODALIDADE_LABEL);
+        case 'nr': return chavePorNome(c.nr_referencia);
+        case 'obrigatorio': return chavePorNome(c.is_obrigatorio ? 'Sim' : 'Não');
+    }
+}
 
 const CATALOG_TH_CLASS = 'px-6 py-2 border-r border-gray-100';
 const CATALOG_TD_CLASS = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
@@ -115,6 +140,7 @@ const AcademyCatalogTab: React.FC<Props> = ({
     const [sheetOrgId, setSheetOrgId] = useState<string | null | undefined>(orgId);
     const [search, setSearch] = usePersistedState('academyCatalog:search', '');
     const colunas = useTableColumns(COLUMNS, 'academyCatalogColumns');
+    const agrupamento = useAgrupamento<CampoAgruparCurso>('academyCatalog:groupBy');
     // §6.1 — larguras iniciais; arrastar a borda e o autofit ajustam a partir daqui.
     const cols = useResizableColumns({ nome: 260, categoria: 150, modalidade: 120, nr: 90, carga: 100, validade: 110, conteudo: 140, obrigatorio: 110, actions: 260 }, 'academyCatalogColWidths');
     // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout: fixed.
@@ -227,6 +253,22 @@ const AcademyCatalogTab: React.FC<Props> = ({
         });
     }, [courses, search, colunas.sortColumn, colunas.sortDirection, versoes]);
 
+    const groupBy = agrupamento.campo;
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filtrados, {
+        chave: c => chaveDoCurso(groupBy, c),
+        semRotulo: SEM_GRUPO_CURSO[groupBy],
+        direcao: agrupamento.direcao,
+    })), [filtrados, groupBy, agrupamento.direcao]);
+    const entradas: EntradaDaTela<TrainingCourse>[] = useMemo(
+        () => (agrupamento.agrupando
+            ? entradasDaPagina(grupos, agrupamento.recolhidos)
+            : filtrados.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupamento.agrupando, grupos, agrupamento.recolhidos, filtrados],
+    );
+    // dados + espaçador + Ações (sem checkbox).
+    const colunasDaLinha = colunas.orderedVisibleColumns.filter(key => key !== 'actions').length + 1
+        + (colunas.visibleColumns.includes('actions') ? 1 : 0);
+
     return (
         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-2 border-b border-gray-100 bg-white">
@@ -240,6 +282,18 @@ const AcademyCatalogTab: React.FC<Props> = ({
                             className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                         />
                     </div>
+                    {/* Agrupar — guia de UI §6.12 */}
+                    <AgruparControles
+                        opcoes={OPCOES_AGRUPAR_CURSO}
+                        campo={groupBy}
+                        onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
+                        chavesDosGrupos={grupos.map(g => g.key)}
+                        algumRecolhido={agrupamento.recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar os cursos"
+                    />
                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                         <ColumnConfigButton
                             columns={COLUMNS.filter(c => c.key !== 'actions')}
@@ -319,7 +373,12 @@ const AcademyCatalogTab: React.FC<Props> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {filtrados.map(c => {
+                            {entradas.map(e => {
+                                if (e.tipo === 'grupo') return (
+                                    <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                        colSpan={colunasDaLinha} onAlternar={agrupamento.alternar} semTotal />
+                                );
+                                const c = e.item;
                                 return (
                                     <tr key={c.id} className="hover:bg-blue-50/50 transition-colors">
                                         {colunas.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (

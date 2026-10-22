@@ -1316,7 +1316,15 @@ Manutenções), Gestão de Documentos e Ofícios (Ofícios, Recebidos, Modelos)
 (`docs/planos/2026-10-17-agrupar-cadastros-ativos-documentos.md`). E em Suprimentos:
 Contratos (o mesmo `SupplyChainContractList` serve Serviços/Locação/Vendas — a
 escolha fica guardada por domínio), Cotações, Pedidos, Recebimento e Almoxarifado
-(Saldos, Movimentos, Itens) (`docs/planos/2026-10-17-suprimentos-agrupar.md`).
+(Saldos, Movimentos, Itens) (`docs/planos/2026-10-17-suprimentos-agrupar.md`). Em 22/10/2026 para
+Recursos Humanos (Colaboradores, Ponto, Folha › Ciclos e Alocações, VR › Cálculo/Aprovados/Histórico/Feriados,
+Empreiteiros › Medições, EPIs, Documentos, eSocial › Eventos e Lotes, SST › Checklists, BI › Movimentações,
+Avaliação, Produtividade, Incentivos › Habitualidade, Rubricas) e Treinamentos (Registros, Atribuições,
+Catálogo, Painéis, Portal) — `docs/planos/2026-10-22-rh-agrupar.md`. Ficaram de fora, de propósito, os relatórios
+agregados (BI Histórico/Coortes/Desvio, Custo por Obra, Custos, eSocial Painel), as tabelas de uma linha por pessoa
+sem outra categoria (Saldo de Férias, Banco de Horas, Encargos INSS, Relação por Empregado) e listas de configuração
+com poucas linhas. No `StandardTable`, campo guardado que deixou de ser opção (ex.: "Organização", que só existe em
+"Todas") vale como sem agrupamento.
 
 **Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
 clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com

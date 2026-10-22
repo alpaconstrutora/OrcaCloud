@@ -179,7 +179,9 @@ export function StandardTable<T>({
 
     // "Agrupar" §6.12 — o hook roda sempre (regra dos hooks); sem a prop, nada agrupa.
     const grupoEstado = useAgrupamento<string>(`${storageKey}:groupBy`);
-    const campoAgrupar = agrupar ? grupoEstado.campo : 'none';
+    // Campo guardado que não está mais entre as opções (ex.: "Organização" só existe em "Todas")
+    // vale como 'none' — senão a tabela seguiria agrupada com o seletor mostrando "Agrupar".
+    const campoAgrupar = agrupar && agrupar.opcoes.some(o => o.value === grupoEstado.campo) ? grupoEstado.campo : 'none';
     const agrupando = campoAgrupar !== 'none';
     const grupos = useMemo(() => (!agrupar || campoAgrupar === 'none' ? [] : agruparLinhas(filtered, {
         chave: r => agrupar.chave(campoAgrupar, r),
@@ -266,7 +268,7 @@ export function StandardTable<T>({
                         <div className="flex items-center gap-2 shrink-0">
                             <AgruparControles
                                 opcoes={agrupar.opcoes}
-                                campo={grupoEstado.campo}
+                                campo={campoAgrupar}
                                 onCampo={grupoEstado.setCampo}
                                 direcao={grupoEstado.direcao}
                                 onDirecao={grupoEstado.setDirecao}

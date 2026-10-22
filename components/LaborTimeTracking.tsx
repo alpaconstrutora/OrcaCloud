@@ -5,6 +5,7 @@ import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 
 // Colunas da tabela padrão (§6.10)
 const ENTRY_COLUMNS: StandardTableColumn[] = [
@@ -16,6 +17,33 @@ const ENTRY_COLUMNS: StandardTableColumn[] = [
     { key: 'custo', label: 'Custo', sortable: true, width: 130, align: 'right' },
     { key: 'status', label: 'Status', sortable: true, width: 120 },
 ];
+
+// "Agrupar" (guia de UI §6.12). Chave = o MESMO texto que a célula mostra (o status
+// aparece cru: PENDENTE). Constante de módulo: o StandardTable memoiza os grupos pela
+// identidade deste objeto.
+const STATUS_PONTO_FLUXO = ['PENDENTE', 'APROVADO', 'REJEITADO'];
+const SEM_GRUPO_PONTO: Record<string, string> = { colaborador: 'Sem colaborador', obra: 'Sem obra', status: 'Sem status' };
+const AGRUPAR_PONTO = {
+    opcoes: [
+        { value: 'colaborador', label: 'Colaborador' },
+        { value: 'obra', label: 'Obra' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, e: TimeEntry) => {
+        switch (campo) {
+            case 'colaborador': return chavePorNome(e.employee_name);
+            case 'obra': return chavePorNome(e.project_name);
+            case 'status': return chavePorRotulo(e.status, {});
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_PONTO[campo] ?? 'Sem valor',
+    // Status na ordem do fluxo (a mesma dos botões de filtro); nomes A→Z.
+    ordem: (campo: string) => (campo === 'status' ? STATUS_PONTO_FLUXO : undefined),
+    valor: (e: TimeEntry) => e.total_cost,
+    title: 'Agrupar os registros de ponto',
+    tituloTotal: 'Soma do custo dos registros do grupo',
+};
 
 interface LaborTimeTrackingProps {
     employees: Employee[];
@@ -219,6 +247,7 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                     </div>
                 }
                 selection={{ selected: selectedIds, onChange: setSelectedIds, canSelect: e => e.status === 'PENDENTE' }}
+                agrupamento={AGRUPAR_PONTO}
                 sortValue={(key, e) => {
                     switch (key) {
                         case 'colaborador': return e.employee_name ?? '';

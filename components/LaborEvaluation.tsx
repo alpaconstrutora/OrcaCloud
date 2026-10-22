@@ -9,6 +9,7 @@ import { KpiCard, type KpiColor } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     evaluationService,
@@ -85,6 +86,75 @@ const PDI_STATUS_CONFIG: Record<PdiStatus, { label: string; color: string; bg: s
 
 const RESP_TIPO_LABELS: Record<ResponseTipo, string> = {
     SELF: 'Autoavaliação', GESTOR: 'Gestor', PAR: 'Par', SUBORDINADO: 'Subordinado',
+};
+
+// ── "Agrupar" (guia de UI §6.12) ──────────────────────────────────────────────
+// Chave = o MESMO texto que a célula mostra; status/classificação na ordem dos mapas.
+// Constantes de módulo: o StandardTable memoiza os grupos pela identidade do objeto.
+const rotulosDe = (cfg: Record<string, { label: string }>): Record<string, string> =>
+    Object.fromEntries(Object.entries(cfg).map(([k, v]) => [k, v.label]));
+const ROTULO_RESP_STATUS = rotulosDe(RESP_STATUS_CONFIG);
+const ROTULO_CLASS = rotulosDe(CLASS_CONFIG);
+const ROTULO_PDI_STATUS = rotulosDe(PDI_STATUS_CONFIG);
+const SEM_GRUPO_AVALIACAO: Record<string, string> = {
+    evaluatee: 'Sem avaliado', evaluator: 'Sem avaliador', tipo: 'Sem tipo', status: 'Sem status',
+    cargo: 'Sem cargo', classificacao: 'Sem classificação', employee: 'Sem colaborador', competencia: 'Sem competência',
+};
+const semGrupoAvaliacao = (campo: string) => SEM_GRUPO_AVALIACAO[campo] ?? 'Sem valor';
+const AGRUPAR_RESPOSTAS = {
+    opcoes: [
+        { value: 'evaluatee', label: 'Avaliado' },
+        { value: 'evaluator', label: 'Avaliador' },
+        { value: 'tipo', label: 'Tipo' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, r: EvaluationResponse) => {
+        switch (campo) {
+            case 'evaluatee': return chavePorNome(r.evaluatee_nome);
+            // Sem avaliador a célula mostra "Auto" — o grupo também.
+            case 'evaluator': return chavePorNome(r.evaluator_nome || 'Auto');
+            case 'tipo': return chavePorRotulo(r.tipo, RESP_TIPO_LABELS);
+            case 'status': return chavePorRotulo(r.status, ROTULO_RESP_STATUS);
+            default: return null;
+        }
+    },
+    semRotulo: semGrupoAvaliacao,
+    ordem: (campo: string) => (campo === 'tipo' ? Object.keys(RESP_TIPO_LABELS) : campo === 'status' ? Object.keys(RESP_STATUS_CONFIG) : undefined),
+    title: 'Agrupar as avaliações',
+};
+const AGRUPAR_RESULTADOS = {
+    opcoes: [
+        { value: 'cargo', label: 'Cargo' },
+        { value: 'classificacao', label: 'Classificação' },
+    ],
+    chave: (campo: string, r: EvaluationResult) => {
+        switch (campo) {
+            case 'cargo': return chavePorNome(r.employee_cargo);
+            case 'classificacao': return chavePorRotulo(r.classificacao, ROTULO_CLASS);
+            default: return null;
+        }
+    },
+    semRotulo: semGrupoAvaliacao,
+    ordem: (campo: string) => (campo === 'classificacao' ? Object.keys(CLASS_CONFIG) : undefined),
+    title: 'Agrupar os resultados',
+};
+const AGRUPAR_PDI = {
+    opcoes: [
+        { value: 'employee', label: 'Colaborador' },
+        { value: 'competencia', label: 'Competência' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, p: PdiItem) => {
+        switch (campo) {
+            case 'employee': return chavePorNome(p.employee_nome);
+            case 'competencia': return chavePorNome(p.competencia);
+            case 'status': return chavePorRotulo(p.status, ROTULO_PDI_STATUS);
+            default: return null;
+        }
+    },
+    semRotulo: semGrupoAvaliacao,
+    ordem: (campo: string) => (campo === 'status' ? Object.keys(PDI_STATUS_CONFIG) : undefined),
+    title: 'Agrupar os itens do PDI',
 };
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-violet-100 focus:border-violet-300 transition-all';
@@ -700,6 +770,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                     loading={loadingResp}
                     searchText={r => `${r.evaluatee_nome ?? ''} ${r.evaluator_nome ?? ''} ${RESP_TIPO_LABELS[r.tipo]}`}
                     searchPlaceholder="Buscar avaliado ou avaliador..."
+                    agrupamento={AGRUPAR_RESPOSTAS}
                     sortValue={(key, r) => {
                         switch (key) {
                             case 'evaluatee': return r.evaluatee_nome ?? '';
@@ -755,6 +826,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                         loading={loadingRes}
                         searchText={r => `${r.employee_nome ?? ''} ${r.employee_cargo ?? ''}`}
                         searchPlaceholder="Buscar colaborador..."
+                        agrupamento={AGRUPAR_RESULTADOS}
                         sortValue={(key, r) => {
                             switch (key) {
                                 case 'pos': return r.pos;
@@ -985,6 +1057,7 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                     loading={loadingPdi}
                     searchText={p => `${p.employee_nome ?? ''} ${p.competencia} ${p.acao}`}
                     searchPlaceholder="Filtrar por colaborador, competência ou ação..."
+                    agrupamento={AGRUPAR_PDI}
                     sortValue={(key, p) => {
                         switch (key) {
                             case 'employee': return p.employee_nome ?? '';

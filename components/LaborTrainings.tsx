@@ -21,6 +21,9 @@ import { STALE } from '../lib/queryClient';
 import type {
     AcademyEnrollment, EmployeeTraining, TrainingCourse,
 } from '../types/academy';
+import { agruparLinhas, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 /**
  * Academia ÒPURA — container do submódulo Recursos Humanos › Treinamentos.
@@ -88,6 +91,28 @@ const RECORD_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
 const STATUS_COLORS: Record<string, string> = {
     ATIVO: 'text-emerald-700', VENCIDO: 'text-rose-700', PENDENTE: 'text-amber-700',
 };
+
+// "Agrupar" dos registros (guia de UI §6.12) — só contagem. Chave = o MESMO texto
+// que a célula mostra: o nome do treinamento (a NR é a 2ª linha da célula, não entra)
+// e o status como a coluna exibe (o código cru).
+type CampoAgruparRegistro = 'employee' | 'course' | 'origem' | 'status';
+const OPCOES_AGRUPAR_REGISTRO: { value: CampoAgruparRegistro; label: string }[] = [
+    { value: 'employee', label: 'Colaborador' },
+    { value: 'course', label: 'Treinamento' },
+    { value: 'origem', label: 'Origem' },
+    { value: 'status', label: 'Status' },
+];
+const SEM_GRUPO_REGISTRO: Record<CampoAgruparRegistro, string> = {
+    employee: 'Sem colaborador', course: 'Sem treinamento', origem: 'Sem origem', status: 'Sem status',
+};
+function chaveDoRegistro(campo: CampoAgruparRegistro, r: EmployeeTraining): ChaveDeGrupo {
+    switch (campo) {
+        case 'employee': return chavePorNome(r.employee_name);
+        case 'course': return chavePorNome(r.course_nome);
+        case 'origem': return chavePorNome(r.origem === 'ACADEMIA' ? 'Academia (EAD)' : 'Presencial');
+        case 'status': return chavePorRotulo(r.status, {});
+    }
+}
 
 /** Datas puras (YYYY-MM-DD) nunca podem passar por `new Date()`: viram o dia anterior. */
 const fmtData = (iso?: string) => {
@@ -187,6 +212,7 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
     const [filterEmployee, setFilterEmployee] = usePersistedState('laborTrainings:employee', '');
     const [filterStatus, setFilterStatus] = usePersistedState<EmployeeTraining['status'] | ''>('laborTrainings:status', '');
     const recordColumns = useTableColumns(RECORD_COLUMNS, 'laborTrainingsRecordColumns');
+    const agrupamento = useAgrupamento<CampoAgruparRegistro>('laborTrainings:groupBy');
     // §6.1 — larguras iniciais; arrastar a borda e o autofit ajustam a partir daqui.
     const cols = useResizableColumns({ employee: 220, course: 240, origem: 120, realizado: 130, validade: 130, nota: 90, status: 120, actions: 110 }, 'laborTrainingsRecordColWidths');
     // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout: fixed.
@@ -277,6 +303,24 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
             }
         });
     }, [records, search, recordColumns.sortColumn, recordColumns.sortDirection]);
+
+    const groupBy = agrupamento.campo;
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(registrosFiltrados, {
+        chave: r => chaveDoRegistro(groupBy, r),
+        semRotulo: SEM_GRUPO_REGISTRO[groupBy],
+        // Status na ordem do filtro/mapa de cores (Ativo → Vencido → Pendente); o resto A→Z.
+        ordem: groupBy === 'status' ? Object.keys(STATUS_COLORS) : undefined,
+        direcao: agrupamento.direcao,
+    })), [registrosFiltrados, groupBy, agrupamento.direcao]);
+    const entradas: EntradaDaTela<EmployeeTraining>[] = useMemo(
+        () => (agrupamento.agrupando
+            ? entradasDaPagina(grupos, agrupamento.recolhidos)
+            : registrosFiltrados.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupamento.agrupando, grupos, agrupamento.recolhidos, registrosFiltrados],
+    );
+    // dados + espaçador + Ações (sem checkbox).
+    const colunasDaLinha = recordColumns.orderedVisibleColumns.filter(key => key !== 'actions').length + 1
+        + (recordColumns.visibleColumns.includes('actions') ? 1 : 0);
 
     // ── TELAS (trocam o conteúdo in-flow) ───────────────────────────────
 
@@ -414,6 +458,18 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                                 <option value="VENCIDO">Vencido</option>
                                 <option value="PENDENTE">Pendente</option>
                             </select>
+                            {/* Agrupar — guia de UI §6.12 */}
+                            <AgruparControles
+                                opcoes={OPCOES_AGRUPAR_REGISTRO}
+                                campo={groupBy}
+                                onCampo={agrupamento.setCampo}
+                                direcao={agrupamento.direcao}
+                                onDirecao={agrupamento.setDirecao}
+                                chavesDosGrupos={grupos.map(g => g.key)}
+                                algumRecolhido={agrupamento.recolhidos.size > 0}
+                                onAlternarTodos={agrupamento.alternarTodos}
+                                title="Agrupar os registros"
+                            />
                             <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                 <ColumnConfigButton
                                     columns={RECORD_COLUMNS.filter(c => c.key !== 'actions')}
@@ -496,7 +552,12 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
-                                    {registrosFiltrados.map(r => {
+                                    {entradas.map(e => {
+                                        if (e.tipo === 'grupo') return (
+                                            <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                                colSpan={colunasDaLinha} onAlternar={agrupamento.alternar} semTotal />
+                                        );
+                                        const r = e.item;
                                         const vencendo = r.data_validade &&
                                             r.data_validade <= new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
                                         return (

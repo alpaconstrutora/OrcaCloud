@@ -13,6 +13,9 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { KpiCard } from './ui/KpiCard';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { agruparLinhas, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 const RUBRIC_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
@@ -41,6 +44,21 @@ const TYPE_LABELS: Record<string, string> = { provento: 'Provento', desconto: 'D
 const TYPE_TEXT_COLORS: Record<string, string> = {
     provento: 'text-emerald-700', desconto: 'text-rose-700', encargo: 'text-amber-700', informativa: 'text-slate-500',
 };
+// "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
+type CampoAgrupar = 'tipo' | 'status';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'tipo', label: 'Tipo' },
+    { value: 'status', label: 'Status' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = { tipo: 'Sem tipo', status: 'Sem status' };
+const STATUS_LABELS: Record<string, string> = { ATIVO: 'Ativo', INATIVO: 'Inativo' };
+function chaveDoGrupo(campo: CampoAgrupar, r: PayrollRubric): ChaveDeGrupo {
+    switch (campo) {
+        case 'tipo': return chavePorRotulo(r.type, TYPE_LABELS);
+        case 'status': return chavePorRotulo(r.active ? 'ATIVO' : 'INATIVO', STATUS_LABELS);
+    }
+}
+
 // Avatar decorativo (não é status badge — só identifica visualmente o tipo, como o avatar de LaborEmployeeList).
 const TYPE_AVATAR_COLORS: Record<string, string> = {
     provento: 'bg-emerald-50 text-emerald-600', desconto: 'bg-rose-50 text-rose-600',
@@ -104,6 +122,7 @@ const LaborRubrics: React.FC = () => {
     const [filterStatus, setFilterStatus] = usePersistedState<'ATIVO' | 'INATIVO' | 'ALL'>('laborRubrics:status', 'ATIVO');
     const tableColumns = useTableColumns(RUBRIC_COLUMNS, 'laborRubricsColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'laborRubricsColWidths');
+    const agrupamento = useAgrupamento<CampoAgrupar>('laborRubrics:groupBy');
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -180,6 +199,23 @@ const LaborRubrics: React.FC = () => {
             }
         });
     }, [rubrics, searchTerm, filterType, filterStatus, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    // "Agrupar" (§6.12) — tipo e status na ordem do fluxo (a do mapa de rótulos).
+    const groupBy = agrupamento.campo;
+    const agrupando = groupBy !== 'none';
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filteredRubrics, {
+        chave: r => chaveDoGrupo(groupBy, r),
+        semRotulo: SEM_GRUPO[groupBy],
+        ordem: groupBy === 'tipo' ? Object.keys(TYPE_LABELS) : Object.keys(STATUS_LABELS),
+        direcao: agrupamento.direcao,
+    })), [filteredRubrics, groupBy, agrupamento.direcao]);
+    const entradas: EntradaDaTela<PayrollRubric>[] = useMemo(
+        () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredRubrics.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, filteredRubrics],
+    );
+    // Todas as células de uma linha: colunas de dado + espaçador (§6.1.1) + Ações.
+    const totalColunas = tableColumns.orderedVisibleColumns.filter(k => k !== 'actions').length
+        + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0);
 
     const activeCount = rubrics.filter(r => r.active).length;
     const proventoCount = rubrics.filter(r => r.type === 'provento').length;
@@ -349,6 +385,20 @@ const LaborRubrics: React.FC = () => {
                             </select>
                         </div>
 
+                        {/* Agrupar — guia de UI §6.12. Sem Filtro avançado nesta tela:
+                            vai logo depois dos recortes de tipo/status. */}
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR}
+                            campo={groupBy}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar as rubricas"
+                        />
+
                         <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
@@ -428,7 +478,13 @@ const LaborRubrics: React.FC = () => {
                                     </td>
                                 </tr>
                             )}
-                            {filteredRubrics.map(r => (
+                            {entradas.map(e => {
+                                if (e.tipo === 'grupo') return (
+                                    <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                        colSpan={totalColunas} onAlternar={agrupamento.alternar} semTotal />
+                                );
+                                const r = e.item;
+                                return (
                                 <tr key={r.code} className="hover:bg-blue-50/50 transition-colors group">
                                     {tableColumns.orderedVisibleColumns.filter(k => k !== 'actions').map(key => (
                                         <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
@@ -446,7 +502,8 @@ const LaborRubrics: React.FC = () => {
                                         </td>
                                     )}
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

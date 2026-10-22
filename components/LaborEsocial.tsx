@@ -20,6 +20,7 @@ import { useConfirm } from './ui/confirm';
 import TabsBar from './ui/TabsBar';
 import ActionIconButton from './ui/ActionIconButton';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 
 // ── Colunas das tabelas padrão (§6.10) ────────────────────────────────────────
 
@@ -92,6 +93,54 @@ const CERT_STATUS_CFG: Record<CertStatus, { label: string; color: string; icon: 
     VALIDO:          { label: 'Válido',           color: 'text-emerald-600', icon: CheckCircle },
     EXPIRADO:        { label: 'Expirado',         color: 'text-red-600',    icon: AlertTriangle },
     INVALIDO:        { label: 'Inválido',         color: 'text-red-600',    icon: XCircle },
+};
+
+// ── "Agrupar" (guia de UI §6.12) ──────────────────────────────────────────────
+// Chave = o MESMO texto que a célula mostra; status e grupo na ordem dos mapas acima.
+// Constantes de módulo: o StandardTable memoiza os grupos pela identidade do objeto.
+const rotulosDe = (cfg: Record<string, { label: string }>): Record<string, string> =>
+    Object.fromEntries(Object.entries(cfg).map(([k, v]) => [k, v.label]));
+const ROTULO_STATUS = rotulosDe(STATUS_CFG);
+const ROTULO_GRUPO = rotulosDe(GRUPO_CFG);
+const ROTULO_STATUS_LOTE = rotulosDe(BATCH_STATUS_CFG);
+const SEM_GRUPO_ESOCIAL: Record<string, string> = { evento: 'Sem evento', grupo: 'Sem grupo', periodo: 'Sem período', status: 'Sem status' };
+const AGRUPAR_EVENTOS = {
+    opcoes: [
+        { value: 'evento', label: 'Evento' },
+        { value: 'grupo', label: 'Grupo' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, ev: EsocialEvent) => {
+        switch (campo) {
+            case 'evento': return chavePorNome(ev.tipo_evento);
+            case 'grupo': return chavePorRotulo(ev.grupo, ROTULO_GRUPO);
+            case 'status': return chavePorRotulo(ev.status, ROTULO_STATUS);
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_ESOCIAL[campo] ?? 'Sem valor',
+    // Evento: código A→Z (S-1000, S-1200…, ordem natural).
+    ordem: (campo: string) => (campo === 'grupo' ? Object.keys(GRUPO_CFG) : campo === 'status' ? Object.keys(STATUS_CFG) : undefined),
+    title: 'Agrupar os eventos',
+};
+const AGRUPAR_LOTES = {
+    opcoes: [
+        { value: 'grupo', label: 'Grupo' },
+        { value: 'periodo', label: 'Período' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, b: EsocialBatch) => {
+        switch (campo) {
+            case 'grupo': return chavePorRotulo(b.grupo, ROTULO_GRUPO);
+            // A célula mostra o período cru (2026-07); a chave igual ordena cronológico.
+            case 'periodo': return chavePorNome(b.per_apur);
+            case 'status': return chavePorRotulo(b.status, ROTULO_STATUS_LOTE);
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_ESOCIAL[campo] ?? 'Sem valor',
+    ordem: (campo: string) => (campo === 'grupo' ? Object.keys(GRUPO_CFG) : campo === 'periodo' ? 'chave' as const : campo === 'status' ? Object.keys(BATCH_STATUS_CFG) : undefined),
+    title: 'Agrupar os lotes',
 };
 
 const fmt = {
@@ -728,6 +777,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
                     loading={loadEvents}
                     searchText={ev => `${ev.tipo_evento} ${ESOCIAL_EVENTOS_CATALOG[ev.tipo_evento]?.desc ?? ''} ${ev.per_apur ?? ''} ${ev.entidade ?? ''} ${ev.protocolo ?? ''}`}
                     searchPlaceholder="Buscar evento, referência ou protocolo..."
+                    agrupamento={AGRUPAR_EVENTOS}
                     filters={
                         <>
                             <select className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
@@ -850,6 +900,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
                     loading={loadBatches}
                     searchText={b => `${GRUPO_CFG[b.grupo].label} ${b.per_apur ?? ''} ${b.protocolo_envio ?? ''} ${b.numero_lote ?? ''}`}
                     searchPlaceholder="Buscar lote, período ou protocolo..."
+                    agrupamento={AGRUPAR_LOTES}
                     sortValue={(key, b) => {
                         switch (key) {
                             case 'grupo': return GRUPO_CFG[b.grupo].label;

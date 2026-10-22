@@ -20,6 +20,7 @@ import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 
 // Colunas da tabela padrão (§6.10)
 const CHECKLIST_COLUMNS: StandardTableColumn[] = [
@@ -30,6 +31,32 @@ const CHECKLIST_COLUMNS: StandardTableColumn[] = [
     { key: 'conformidade', label: 'Conformidade', sortable: true, width: 130, align: 'right' },
     { key: 'status', label: 'Status', sortable: true, width: 130 },
 ];
+
+// "Agrupar" dos checklists (guia de UI §6.12). Chave = o MESMO texto que a célula mostra
+// (o status aparece cru: PENDENTE). Constante de módulo: o StandardTable memoiza os
+// grupos pela identidade deste objeto.
+const STATUS_CHECKLIST_FLUXO = ['PENDENTE', 'CONCLUIDO', 'REPROVADO'];
+const SEM_GRUPO_CHECKLIST: Record<string, string> = { checklist: 'Sem checklist', nr: 'Sem NR', obra: 'Sem obra', status: 'Sem status' };
+const AGRUPAR_CHECKLISTS = {
+    opcoes: [
+        { value: 'checklist', label: 'Checklist' },
+        { value: 'nr', label: 'NR' },
+        { value: 'obra', label: 'Obra' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, ck: SstChecklist) => {
+        switch (campo) {
+            case 'checklist': return chavePorNome(ck.nome_checklist);
+            case 'nr': return chavePorNome(ck.nr_referencia);
+            case 'obra': return chavePorNome(ck.project_name);
+            case 'status': return chavePorRotulo(ck.status, {});
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_CHECKLIST[campo] ?? 'Sem valor',
+    ordem: (campo: string) => (campo === 'status' ? STATUS_CHECKLIST_FLUXO : undefined),
+    title: 'Agrupar os checklists',
+};
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -584,6 +611,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], or
                     loading={loadingCkl}
                     searchText={ck => `${ck.nome_checklist} ${ck.nr_referencia ?? ''} ${ck.project_name ?? ''} ${ck.status}`}
                     searchPlaceholder="Buscar checklist, NR ou obra..."
+                    agrupamento={AGRUPAR_CHECKLISTS}
                     sortValue={(key, ck) => {
                         switch (key) {
                             case 'checklist': return ck.nome_checklist;

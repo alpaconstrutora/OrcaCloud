@@ -17,6 +17,7 @@ import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 
 // ─── Tipos de props ─────────────────────────────────────────
 interface EmployeeLite { id: string; name: string; status?: string }
@@ -132,6 +133,33 @@ const HABITUALITY_COLUMNS: StandardTableColumn[] = [
     { key: 'reflexo', label: 'Reflexo anual est.', sortable: true, width: 160, align: 'right' },
     { key: 'status', label: 'Status', sortable: true, width: 120, align: 'center' },
 ];
+
+// "Agrupar" da habitualidade (guia de UI §6.12). Chave = o MESMO texto que a célula
+// mostra. Total = reflexo anual estimado só dos HABITUAIS (a célula do eventual é "—"
+// e o card do topo soma do mesmo jeito). Constante de módulo: o StandardTable memoiza
+// os grupos pela identidade deste objeto.
+const ROTULO_HABITUALIDADE: Record<string, string> = { habitual: 'Habitual', eventual: 'Eventual' };
+const SEM_GRUPO_HABITUALIDADE: Record<string, string> = { colaborador: 'Sem colaborador', incentivo: 'Sem incentivo', status: 'Sem status' };
+const AGRUPAR_HABITUALIDADE = {
+    opcoes: [
+        { value: 'colaborador', label: 'Colaborador' },
+        { value: 'incentivo', label: 'Incentivo' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, f: HabitualityFlag) => {
+        switch (campo) {
+            case 'colaborador': return chavePorNome(f.employee_name);
+            case 'incentivo': return chavePorNome(f.rubric_name);
+            case 'status': return chavePorRotulo(f.is_habitual ? 'habitual' : 'eventual', ROTULO_HABITUALIDADE);
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_HABITUALIDADE[campo] ?? 'Sem valor',
+    ordem: (campo: string) => (campo === 'status' ? Object.keys(ROTULO_HABITUALIDADE) : undefined),
+    valor: (f: HabitualityFlag) => (f.is_habitual ? f.estimated_annual_reflexo : 0),
+    title: 'Agrupar os incentivos',
+    tituloTotal: 'Soma do reflexo anual estimado dos incentivos habituais do grupo',
+};
 
 // ─── Card wrapper ───────────────────────────────────────────
 const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
@@ -508,6 +536,7 @@ const HabitualityTab: React.FC<{ orgId: string | null }> = ({ orgId }) => {
                     loading={loading}
                     searchText={f => `${f.employee_name} ${f.rubric_name}`}
                     searchPlaceholder="Buscar colaborador ou incentivo..."
+                    agrupamento={AGRUPAR_HABITUALIDADE}
                     rowClassName={f => (f.is_habitual ? 'bg-rose-50/40' : '')}
                     sortValue={(key, f) => {
                         switch (key) {

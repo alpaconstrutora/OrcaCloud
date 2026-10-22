@@ -416,6 +416,17 @@ export interface ArquiteturaSyncReport {
     /** Unidades cuja origem sumiu — nunca auto-deletadas. */
     orphanUnits: EmpreendimentoUnit[];
     warnings: string[];
+    /** O estudo vinculado ainda não tem versão publicada. Ausente = false. */
+    semVersaoPublicada?: boolean;
+    /** Campos em conflito que o próximo envio manda à Curadoria (não são gravados). Ausente = 0.
+     *  towersUpdated/unitsUpdated contam só o que é gravado. */
+    conflitosNovos?: number;
+    /** Conflitos já na Curadoria, aguardando decisão. Ausente = 0. */
+    conflitosNaCuradoria?: number;
+    /** Conflitos rejeitados na Curadoria: o valor do empreendimento fica. Ausente = 0. */
+    conflitosRejeitados?: number;
+    /** Só no resultado do envio: conflitos novos que este envio mandou à Curadoria. */
+    conflitosEnviados?: number;
 }
 
 // ── Histórico / trilha de auditoria ─────────────────────────────────────────

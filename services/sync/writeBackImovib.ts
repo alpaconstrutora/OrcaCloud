@@ -15,6 +15,7 @@
 
 import { imovibService } from '../imovibService';
 import { empreendimentoService, loadTargetState } from '../empreendimentoService';
+import { empreendimentoAuditService } from '../empreendimentoAuditService';
 import { Empreendimento, EmpreendimentoTower, EmpreendimentoUnit } from '../../types/empreendimento';
 import { ImovibBlock, ImovibUnitInstance, ImovibUnitInstanceInsert } from '../../types/imovib';
 
@@ -145,7 +146,7 @@ export async function previewWriteBackImovib(empreendimentoId: string): Promise<
 
 /** Aplica o write-back só das unidades selecionadas, criando bloco/instância e gravando a proveniência. */
 export async function applyWriteBackImovib(empreendimentoId: string, selectedUnitIds: string[]): Promise<WriteBackResult> {
-    const { studyId, instanceById, blocks, towers, units } = await load(empreendimentoId);
+    const { empreendimento, studyId, instanceById, blocks, towers, units } = await load(empreendimentoId);
     const selected = new Set(selectedUnitIds);
     const towerById = new Map(towers.map(t => [t.id, t]));
     const result: WriteBackResult = { blocksCreated: 0, instancesCreated: 0, instancesUpdated: 0, blocksAdopted: 0, instancesAdopted: 0 };
@@ -229,6 +230,20 @@ export async function applyWriteBackImovib(empreendimentoId: string, selectedUni
             result.instancesCreated++;
         }
     }
+
+    // Histórico: um evento resumo por envio, como os syncs da Planta. É também daqui que a aba
+    // Sincronização tira o "Último envio ao estudo" — `last_synced_at` é carimbado só pelo
+    // sync da Planta (applier.ts) e não diz nada sobre a Viabilidade.
+    await empreendimentoAuditService.record({
+        empreendimentoId,
+        organizationId: empreendimento.organization_id,
+        entityType: 'study_link',
+        entityId: studyId,
+        entityLabel: 'Estudo de viabilidade (Imovib)',
+        action: 'publish',
+        source: 'sync_imovib',
+        metadata: { unidadesSelecionadas: selectedUnitIds.length, ...result },
+    });
 
     return result;
 }

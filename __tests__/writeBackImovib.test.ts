@@ -20,7 +20,10 @@ const emp = vi.hoisted(() => ({
     loadTargetState: vi.fn(),
 }));
 
+const audit = vi.hoisted(() => ({ record: vi.fn() }));
+
 vi.mock('../services/imovibService', () => ({ imovibService: imovib }));
+vi.mock('../services/empreendimentoAuditService', () => ({ empreendimentoAuditService: audit }));
 vi.mock('../services/empreendimentoService', () => ({
     empreendimentoService: { getById: emp.getById, updateTower: emp.updateTower, updateUnit: emp.updateUnit },
     loadTargetState: emp.loadTargetState,
@@ -64,6 +67,23 @@ describe('4.1 — estudo de outra organização bloqueia o envio', () => {
         expect(r).toMatchObject({ blocksCreated: 1, instancesCreated: 1, blocksAdopted: 0, instancesAdopted: 0 });
         expect(emp.updateTower).toHaveBeenCalledWith('t1', { imovib_block_id: 'bloco_novo' });
         expect(emp.updateUnit).toHaveBeenCalledWith('u1', { imovib_instance_id: 'inst_nova' });
+    });
+});
+
+describe('o envio entra no Histórico (a aba Sincronização tira dali o "Último envio ao estudo")', () => {
+    it('grava um evento publish/sync_imovib com o resultado', async () => {
+        await applyWriteBackImovib('emp1', ['u1']);
+        expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+            empreendimentoId: 'emp1', organizationId: 'org_spe', entityType: 'study_link', entityId: 'est1',
+            action: 'publish', source: 'sync_imovib',
+            metadata: expect.objectContaining({ unidadesSelecionadas: 1, blocksCreated: 1, instancesCreated: 1 }),
+        }));
+    });
+
+    it('envio recusado (outra organização) não registra nada', async () => {
+        imovib.getStudyById.mockResolvedValue({ id: 'est1', organization_id: 'org_alpa' });
+        await expect(applyWriteBackImovib('emp1', ['u1'])).rejects.toThrow();
+        expect(audit.record).not.toHaveBeenCalled();
     });
 });
 

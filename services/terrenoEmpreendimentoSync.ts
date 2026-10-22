@@ -28,8 +28,13 @@ import { divisasDoLoteDoModelo, medidasDaPlantaParaFicha } from '../utils/bluepr
 export interface TerrenoSyncReport {
   /** Preenchem campo vazio da ficha — aplicam direto. */
   fills: FieldChange[];
-  /** Divergem do que a ficha tem — viram propostas na Curadoria. */
+  /** Divergem do que a ficha tem e ainda não têm decisão — o próximo envio os manda à Curadoria.
+   *  No resultado do envio: os que ESTE envio mandou. */
   conflicts: FieldChange[];
+  /** Divergências já na Curadoria, esperando decisão — não são trabalho desta aba (ausente = []). */
+  naCuradoria?: FieldChange[];
+  /** Rejeitadas na Curadoria: a ficha fica como está, por decisão do usuário (ausente = []). */
+  rejeitados?: FieldChange[];
   /** Por que não há o que comparar (sem versão publicada, sem lote fechado); `null` = comparou. */
   motivo: string | null;
 }
@@ -90,16 +95,21 @@ async function planTerrenoSync(empreendimentoId: string): Promise<TerrenoSync> {
 }
 
 export const terrenoEmpreendimentoSync = {
-  /** Ensaio: o que preencheria e o que iria à Curadoria, sem escrever nada. */
+  /** Ensaio: o que preencheria e o que iria à Curadoria, sem escrever nada. O que já está na
+   *  Curadoria (ou foi rejeitado lá) sai de `conflicts` — senão seria contado para sempre
+   *  (docs/planos/2026-10-20-empreendimento-aba-sincronizacao.md, item 1). */
   async previewSync(empreendimentoId: string): Promise<TerrenoSyncReport> {
     const s = await planTerrenoSync(empreendimentoId);
-    return { fills: s.plan?.fills ?? [], conflicts: s.plan?.conflicts ?? [], motivo: s.motivo };
+    if (!s.plan) return { fills: [], conflicts: [], naCuradoria: [], rejeitados: [], motivo: s.motivo };
+    const c = await empreendimentoProposalService.classificarConflitos(empreendimentoId, s.plan.conflicts);
+    return { fills: s.plan.fills, conflicts: c.novos, naCuradoria: c.pendentes, rejeitados: c.rejeitados, motivo: s.motivo };
   },
 
   /** Aplica: vazios entram na ficha; divergências viram propostas na Curadoria. */
   async syncToEmpreendimento(empreendimentoId: string): Promise<TerrenoSyncReport> {
     const s = await planTerrenoSync(empreendimentoId);
-    if (!s.plan) return { fills: [], conflicts: [], motivo: s.motivo };
+    if (!s.plan) return { fills: [], conflicts: [], naCuradoria: [], rejeitados: [], motivo: s.motivo };
+    const c = await empreendimentoProposalService.classificarConflitos(empreendimentoId, s.plan.conflicts);
     if (s.plan.conflicts.length > 0) {
       await empreendimentoProposalService.materializeConflicts(empreendimentoId, s.empreendimento.organization_id, s.plan.conflicts);
     }
@@ -114,9 +124,11 @@ export const terrenoEmpreendimentoSync = {
       source: 'sync_blueprint',
       metadata: {
         camposPreenchidos: s.plan.fills.map((c) => c.field),
-        conflitosParaCuradoria: s.plan.conflicts.map((c) => c.field),
+        conflitosParaCuradoria: c.novos.map((x) => x.field),
+        conflitosJaNaCuradoria: c.pendentes.map((x) => x.field),
+        conflitosRejeitados: c.rejeitados.map((x) => x.field),
       },
     });
-    return { fills: s.plan.fills, conflicts: s.plan.conflicts, motivo: null };
+    return { fills: s.plan.fills, conflicts: c.novos, naCuradoria: [...c.pendentes, ...c.novos], rejeitados: c.rejeitados, motivo: null };
   },
 };

@@ -31,6 +31,7 @@ import { empreendimentoAuditService } from './empreendimentoAuditService';
 import { loadBlueprintSide } from './sync/blueprintAdapter';
 import { buildPlan } from './sync/planner';
 import { applyPlan } from './sync/applier';
+import { relatorioDoPlano } from './sync/relatorio';
 import { CanonicalSide, SyncPlan, TargetState } from './sync/types';
 
 interface BlueprintSync {
@@ -50,39 +51,17 @@ async function planBlueprintSync(empreendimentoId: string): Promise<BlueprintSyn
   return { side, target, plan: buildPlan(side, target) };
 }
 
-/**
- * "Atualizado" é a ENTIDADE com pelo menos um campo divergente, não a soma dos
- * campos: dizer "12 unidades a atualizar" quando são 3 unidades com 4 campos
- * cada faria o usuário conferir doze coisas que não existem.
- */
-function planToReport(sync: BlueprintSync): ArquiteturaSyncReport {
-  const tocadas = new Set<string>();
-  for (const c of [...sync.plan.fills, ...sync.plan.conflicts]) tocadas.add(`${c.entity}|${c.entityId}`);
-  const contar = (entidade: 'tower' | 'unit') =>
-    [...tocadas].filter((k) => k.startsWith(`${entidade}|`)).length;
-
-  return {
-    towersCreated: sync.plan.towerCreates.length,
-    towersUpdated: contar('tower'),
-    unitsCreated: sync.plan.unitCreates.length + sync.plan.towerCreates.reduce((s, t) => s + t.units.length, 0),
-    unitsUpdated: contar('unit'),
-    scenarioUnits: sync.side.towers.reduce((s, t) => s + t.units.length, 0),
-    orphanTowers: sync.plan.orphanTowers,
-    orphanUnits: sync.plan.orphanUnits,
-    // `plan.warnings` já começa com os da origem (o planner os copia): somar de novo duplicava.
-    warnings: sync.plan.warnings,
-  };
-}
-
 export const blueprintEmpreendimentoSync = {
   /** Vincula o empreendimento a um estudo da Planta Inteligente. */
   async linkStudy(empreendimentoId: string, blueprintStudyId: string): Promise<void> {
     await empreendimentoService.update(empreendimentoId, { blueprint_study_id: blueprintStudyId });
   },
 
-  /** Ensaio: monta o plano e conta, sem escrever nada. */
+  /** Ensaio: monta o plano e conta, sem escrever nada. O que já está na Curadoria não conta como "a trazer". */
   async previewSync(empreendimentoId: string): Promise<ArquiteturaSyncReport> {
-    return planToReport(await planBlueprintSync(empreendimentoId));
+    const sync = await planBlueprintSync(empreendimentoId);
+    const curadoria = await empreendimentoProposalService.classificarConflitos(empreendimentoId, sync.plan.conflicts);
+    return relatorioDoPlano(sync.side, sync.plan, curadoria);
   },
 
   /**
@@ -91,6 +70,7 @@ export const blueprintEmpreendimentoSync = {
    */
   async syncToEmpreendimento(empreendimentoId: string): Promise<ArquiteturaSyncReport> {
     const sync = await planBlueprintSync(empreendimentoId);
+    const curadoria = await empreendimentoProposalService.classificarConflitos(empreendimentoId, sync.plan.conflicts);
 
     if (sync.plan.conflicts.length > 0) {
       await empreendimentoProposalService.materializeConflicts(
@@ -101,7 +81,11 @@ export const blueprintEmpreendimentoSync = {
     }
 
     await applyPlan(sync.plan);
-    const report = planToReport(sync);
+    // O que este envio gravou: os `fills`. Os conflitos novos agora esperam na Curadoria.
+    const report: ArquiteturaSyncReport = {
+      ...relatorioDoPlano(sync.side, sync.plan, { novos: [], pendentes: [...curadoria.pendentes, ...curadoria.novos], rejeitados: curadoria.rejeitados }),
+      conflitosEnviados: curadoria.novos.length,
+    };
 
     await empreendimentoAuditService.record({
       empreendimentoId,
@@ -122,7 +106,9 @@ export const blueprintEmpreendimentoSync = {
         lotesNoDesenho: report.scenarioUnits,
         quadrasOrfas: report.orphanTowers.length,
         lotesOrfaos: report.orphanUnits.length,
-        conflitosParaCuradoria: sync.plan.conflicts.length,
+        conflitosParaCuradoria: curadoria.novos.length,
+        conflitosJaNaCuradoria: curadoria.pendentes.length,
+        conflitosRejeitados: curadoria.rejeitados.length,
       },
     });
 

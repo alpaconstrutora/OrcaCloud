@@ -13,7 +13,9 @@ import type { Empreendimento } from '../types/empreendimento';
 type Ficha = Pick<
   Empreendimento,
   | 'name'
+  | 'terreno_area'
   | 'terreno_frente'
+  | 'terreno_fundos'
   | 'terreno_profundidade'
   | 'terreno_lateral_direita'
   | 'terreno_lateral_esquerda'
@@ -30,8 +32,20 @@ type Ficha = Pick<
 >;
 
 export interface DadosDoEmpreendimentoParaPlanta {
-  /** Frente × profundidade (aba "Frente × fundo" de Criar o lote digitando). */
-  lote: { frenteMm: number; profundidadeMm: number; origem: string } | null;
+  /**
+   * Frente × fundo (aba de Criar o lote digitando). Desde 22/10/2026 traz os fundos (trapézio
+   * centralizado) e a profundidade que FECHARIA a Área total da ficha — quando as duas diferem, o
+   * painel pergunta qual usar (decisão do usuário). `profundidadeMm` é a da ficha (pode faltar).
+   */
+  lote: {
+    frenteMm: number;
+    fundosMm: number | null;
+    profundidadeMm: number | null;
+    /** A profundidade que, com frente e fundos, dá a Área total da ficha (arredondada ao cm). */
+    profundidadePelaAreaMm: number | null;
+    areaM2: number | null;
+    origem: string;
+  } | null;
   /** O que procurar em "Desenhar no mapa". */
   endereco: { texto: string; origem: string } | null;
   /** UF para o CUB da Casa automática. */
@@ -57,7 +71,21 @@ export function dadosDoEmpreendimentoParaPlanta(e: Partial<Ficha> | null | undef
   const ld = positivo(e.terreno_lateral_direita);
   const le = positivo(e.terreno_lateral_esquerda);
   const profundidade = positivo(e.terreno_profundidade) ?? (ld !== null && ld === le ? ld : null);
-  const lote = frente !== null && profundidade !== null ? { frenteMm: Math.round(frente * 1000), profundidadeMm: Math.round(profundidade * 1000), origem } : null;
+  const fundos = positivo(e.terreno_fundos);
+  const area = positivo(e.terreno_area);
+  // Trapézio (ou retângulo): área = (frente + fundos) / 2 × profundidade → profundidade = 2A / (f + b).
+  const pelaArea = frente !== null && area !== null ? Math.round((2 * area) / (frente + (fundos ?? frente)) * 100) / 100 : null;
+  const lote =
+    frente !== null && (profundidade !== null || pelaArea !== null)
+      ? {
+          frenteMm: Math.round(frente * 1000),
+          fundosMm: fundos !== null ? Math.round(fundos * 1000) : null,
+          profundidadeMm: profundidade !== null ? Math.round(profundidade * 1000) : null,
+          profundidadePelaAreaMm: pelaArea !== null ? Math.round(pelaArea * 1000) : null,
+          areaM2: area,
+          origem,
+        }
+      : null;
 
   const ufTerreno = texto(e.terreno_state).toUpperCase();
   const ufDivulgacao = texto(e.endereco_state).toUpperCase();

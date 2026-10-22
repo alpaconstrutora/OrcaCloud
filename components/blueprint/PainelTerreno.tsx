@@ -224,6 +224,8 @@ interface Props {
    */
   ficha?: FichaNoPainel | null;
   onLevarAFicha?: () => void;
+  /** Abre "Criar o lote digitando" já preenchido pela ficha (22/10/2026). */
+  onCriarLotePelaFicha?: () => void;
   gravando?: boolean;
   /** Falha da última gravação. Aparece onde a ação foi pedida, não no topo. */
   erro?: string | null;
@@ -296,6 +298,7 @@ export default function PainelTerreno({
   onGravarArea,
   ficha = null,
   onLevarAFicha,
+  onCriarLotePelaFicha,
   gravando = false,
   erro = null,
   onAbrirQuadro,
@@ -368,7 +371,7 @@ export default function PainelTerreno({
             </div>
           </div>
         )}
-        {ficha && <FichaDoTerrenoNaPlanta ficha={ficha} onLevar={() => onLevarAFicha?.()} gravando={gravando} erro={erro} />}
+        {ficha && <FichaDoTerrenoNaPlanta ficha={ficha} onLevar={() => onLevarAFicha?.()} onCriarLote={onCriarLotePelaFicha} gravando={gravando} erro={erro} />}
         <Georreferenciar valor={georreferencia} onMudar={onGeorreferencia} />
         {zonaSlot}
         {topografiaSlot}
@@ -568,7 +571,7 @@ export default function PainelTerreno({
         </div>
       )}
 
-      {ficha && <FichaDoTerrenoNaPlanta ficha={ficha} onLevar={() => onLevarAFicha?.()} gravando={gravando} erro={erro} />}
+      {ficha && <FichaDoTerrenoNaPlanta ficha={ficha} onLevar={() => onLevarAFicha?.()} onCriarLote={onCriarLotePelaFicha} gravando={gravando} erro={erro} />}
 
       {/* Sem `ficha` = planta sem vínculo e sem empreendimento escolhido na zona: sobra o bloco
           antigo, que diz para escolher o empreendimento acima. */}

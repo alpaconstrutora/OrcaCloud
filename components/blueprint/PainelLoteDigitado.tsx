@@ -44,6 +44,7 @@ import {
 import { restituirMemorial } from '../../utils/blueprintRoteiroPerimetrico';
 import { numeroBr } from '../../utils/blueprintMemorialLote';
 import { azimuteTexto } from '../../utils/geo';
+import type { DadosDoEmpreendimentoParaPlanta } from '../../utils/blueprintDadosDoEmpreendimento';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import ActionIconButton from '../ui/ActionIconButton';
 
@@ -70,7 +71,7 @@ interface Props {
    * "o app ja pode preencher automaticamente". Só preenchem a aba Frente × fundo quando ainda
    * não há lote; o que a pessoa digitar vale. `origem` nomeia de onde veio, para o aviso.
    */
-  sugestaoDaFicha?: { frenteMm: number; profundidadeMm: number; origem: string } | null;
+  sugestaoDaFicha?: DadosDoEmpreendimentoParaPlanta['lote'];
 }
 
 const ABAS: TabsBarItem<ModoDoLoteDigitado>[] = [
@@ -131,6 +132,9 @@ function colarNaTabela<T extends object>(texto: string, linhas: T[], linhaInicia
   return novo;
 }
 
+/** Diferença abaixo disto (mm) não é pergunta: as duas profundidades são a mesma. */
+const MESMA_PROFUNDIDADE_MM = 10;
+
 export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, temLote, onLancar, abaInicial, existente = null, sugestaoDaFicha = null }: Props) {
   const e = existente;
   const ret = e?.retangulo ?? null;
@@ -139,10 +143,28 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
   // Editando: abre onde o lote se lê melhor — o retângulo na sua aba, o resto pelos azimutes (o que a escritura traz).
   const [aba, setAba] = useState<ModoDoLoteDigitado>(abaInicial ?? (e ? (ret ? 'RETANGULO' : 'AZIMUTES') : 'RETANGULO'));
   // Frente × fundo
+  // A profundidade da ficha × a que fecha a Área total da ficha (22/10/2026). Quando divergem, a
+  // tela PERGUNTA qual usar (decisão do usuário) — a profundidade nasce vazia até a escolha.
+  const profFicha = daFicha?.profundidadeMm ?? null;
+  const profArea = daFicha?.profundidadePelaAreaMm ?? null;
+  const perguntaDaProfundidade = profFicha !== null && profArea !== null && Math.abs(profFicha - profArea) > MESMA_PROFUNDIDADE_MM;
+  const profInicial = perguntaDaProfundidade ? null : (profFicha ?? profArea);
   const [frente, setFrente] = useState(ret ? metrosTexto(ret.frenteMm) : daFicha ? metrosTexto(daFicha.frenteMm) : '');
-  const [profundidade, setProfundidade] = useState(ret ? metrosTexto(ret.profundidadeMm) : daFicha ? metrosTexto(daFicha.profundidadeMm) : '');
+  const [fundos, setFundos] = useState(!ret && daFicha?.fundosMm != null && daFicha.fundosMm !== daFicha.frenteMm ? metrosTexto(daFicha.fundosMm) : '');
+  const [profundidade, setProfundidade] = useState(ret ? metrosTexto(ret.profundidadeMm) : profInicial !== null ? metrosTexto(profInicial) : '');
+  /** A profundidade em uso veio da ÁREA (ajustada), não da matrícula: as laterais não viram escritura. */
+  const profundidadeDaArea = profArea !== null && profundidade === metrosTexto(profArea) && (profFicha === null || perguntaDaProfundidade);
+  const perguntaPendente = perguntaDaProfundidade && !profundidade.trim();
   // O aviso some quando a pessoa mexe nas medidas: deixam de ser as da ficha.
-  const fichaEmUso = !!daFicha && frente === metrosTexto(daFicha.frenteMm) && profundidade === metrosTexto(daFicha.profundidadeMm);
+  const fichaEmUso = !!daFicha && frente === metrosTexto(daFicha.frenteMm);
+  /** Área do lote (m²) com uma profundidade (mm), na frente e nos fundos atuais — para a pergunta. */
+  const areaComProfundidade = (pMm: number) => {
+    // `lerMedidaEmMetros` lê o texto em metros e devolve MILÍMETROS.
+    const fMm = lerMedidaEmMetros(frente) ?? 0;
+    const bMm = lerMedidaEmMetros(fundos) ?? fMm;
+    return (((fMm + bMm) / 2) * pMm) / 1_000_000;
+  };
+  const m2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const [voltadaPara, setVoltadaPara] = useState(ret ? anguloTexto(ret.frenteVoltadaPara) : '');
   const [confrontantesRet, setConfrontantesRet] = useState({
     FRENTE: ret?.lados.FRENTE.confrontante ?? '',
@@ -208,7 +230,11 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
     if (aba === 'RETANGULO') {
       const f = lerMedidaEmMetros(frente);
       const p = lerMedidaEmMetros(profundidade);
+      const b = fundos.trim() ? lerMedidaEmMetros(fundos) : null;
       if (!frente.trim() && !profundidade.trim()) return { lote: null, leitura, heranca: null };
+      // Com a pergunta da profundidade aberta, nada a medir ainda: o motivo do "Lançar" já diz o que fazer.
+      if (perguntaPendente) return { lote: null, leitura, heranca: null };
+      if (fundos.trim() && b === null) leitura.push('Fundos: não entendi a medida.');
       let az: number | null = null;
       if (voltadaPara.trim()) {
         const r = lerAzimuteOuRumo(voltadaPara);
@@ -216,7 +242,7 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
         az = r.azimute;
       }
       return {
-        lote: loteRetangular({ frenteMm: f ?? 0, profundidadeMm: p ?? 0, frenteVoltadaPara: az, rotacaoNorteDeg, confrontantes: confrontantesRet, origem: ret?.origem ?? origem }),
+        lote: loteRetangular({ frenteMm: f ?? 0, fundosMm: b, lateraisCalculadas: profundidadeDaArea, profundidadeMm: p ?? 0, frenteVoltadaPara: az, rotacaoNorteDeg, confrontantes: confrontantesRet, origem: ret?.origem ?? origem }),
         leitura,
         // Retângulo editado herda por PAPEL; os nomes dos vértices pelos cantos (a aba não tem coluna de nome).
         heranca: ret
@@ -284,7 +310,7 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
     const h = e ? herancaPorVertices(doMemorial.vertices, e) : null;
     const comNome = h && doMemorial.vertices.some((x) => x);
     return { lote: doMemorial, leitura, heranca: comNome ? { ...h, herdarConfrontante: true } : null };
-  }, [aba, frente, profundidade, voltadaPara, confrontantesRet, lados, azPrimeiro, azimutes, coordenadas, ordem, unidade, manterCoordenadas, restituicao, georreferencia, rotacaoNorteDeg, e, ret]);
+  }, [aba, frente, fundos, profundidade, perguntaPendente, profundidadeDaArea, voltadaPara, confrontantesRet, lados, azPrimeiro, azimutes, coordenadas, ordem, unidade, manterCoordenadas, restituicao, georreferencia, rotacaoNorteDeg, e, ret]);
 
   const tolerancia = lote ? toleranciaDeFechamentoMm(lote.perimetroMm) : 10;
   const precisaDecidir = !!lote && !lote.problema && lote.erroDeFechamentoMm > tolerancia;
@@ -296,7 +322,9 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
   const editando = !!e;
   const temMedidaDigitada = aba !== 'COORDENADAS';
 
-  const motivoDesligado = !lote
+  const motivoDesligado = aba === 'RETANGULO' && perguntaPendente
+    ? 'Escolha acima: manter a profundidade da ficha ou ajustar para fechar a área'
+    : !lote
     ? 'Digite as medidas do lote'
     : fechado?.problema
       ? fechado.problema
@@ -352,14 +380,20 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
 
       {aba === 'RETANGULO' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
             <div className="space-y-1.5">
               <label className={ROTULO} htmlFor="lote-frente">Frente (m)</label>
               <input id="lote-frente" inputMode="decimal" value={frente} onChange={(e) => setFrente(e.target.value)} placeholder="12,00" className={CAMPO} />
             </div>
             <div className="space-y-1.5">
+              <label className={ROTULO} htmlFor="lote-fundos" title="Diferente da frente: o lote vira trapézio, com os fundos centralizados sobre a frente.">
+                Fundos (m, opcional)
+              </label>
+              <input id="lote-fundos" inputMode="decimal" value={fundos} onChange={(e) => setFundos(e.target.value)} placeholder="igual à frente" className={CAMPO} />
+            </div>
+            <div className="space-y-1.5">
               <label className={ROTULO} htmlFor="lote-profundidade">Profundidade (m)</label>
-              <input id="lote-profundidade" inputMode="decimal" value={profundidade} onChange={(e) => setProfundidade(e.target.value)} placeholder="30,00" className={CAMPO} />
+              <input id="lote-profundidade" inputMode="decimal" value={profundidade} onChange={(e) => setProfundidade(e.target.value)} placeholder={perguntaPendente ? 'escolha abaixo' : '30,00'} className={CAMPO} />
             </div>
             <div className="space-y-1.5">
               <label className={ROTULO} htmlFor="lote-voltada" title="O azimute da direção do lote para a rua. Vazio: a frente fica embaixo, no desenho.">
@@ -368,9 +402,36 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
               <input id="lote-voltada" value={voltadaPara} onChange={(e) => setVoltadaPara(e.target.value)} placeholder="ex.: 180° ou 30° SE" className={CAMPO} />
             </div>
           </div>
+          {perguntaDaProfundidade && profFicha !== null && profArea !== null && (
+            // A pergunta (22/10/2026): os números da ficha não fecham entre si. Sem padrão — quem decide é a pessoa.
+            <fieldset className="space-y-2 rounded-[10px] border border-amber-200 bg-amber-50/60 px-3 py-2.5" data-testid="pergunta-profundidade">
+              <legend className="px-1 text-xs font-semibold text-amber-800">
+                A profundidade da ficha não fecha a Área total da ficha ({daFicha?.areaM2 != null ? m2(daFicha.areaM2) : '—'} m²)
+              </legend>
+              {(
+                [
+                  [profFicha, `Manter a profundidade da ficha: ${metrosTexto(profFicha)} m — o lote fica com ${m2(areaComProfundidade(profFicha))} m²`],
+                  [profArea, `Ajustar a profundidade para fechar a área: ${metrosTexto(profArea)} m — ${m2(areaComProfundidade(profArea))} m²`],
+                ] as const
+              ).map(([mm, texto]) => (
+                <label key={mm} className="flex cursor-pointer items-start gap-2 text-sm text-gray-800">
+                  <input
+                    type="radio"
+                    name="lote-profundidade-escolha"
+                    className="mt-0.5"
+                    checked={profundidade === metrosTexto(mm)}
+                    onChange={() => setProfundidade(metrosTexto(mm))}
+                  />
+                  {texto}
+                </label>
+              ))}
+            </fieldset>
+          )}
           {fichaEmUso && daFicha && (
             <p className="text-xs text-slate-500" data-testid="lote-da-ficha">
-              Frente e profundidade preenchidas automaticamente pela ficha de {daFicha.origem}. Confira com a escritura antes de lançar.
+              Preenchido automaticamente pela ficha de {daFicha.origem}
+              {daFicha.fundosMm != null && daFicha.fundosMm !== daFicha.frenteMm ? ' (fundos diferente da frente: trapézio, fundos centralizados)' : ''}.
+              {profundidadeDaArea ? ' A profundidade foi ajustada pela área: as laterais não entram como medida da escritura.' : ''} Confira com a escritura antes de lançar.
             </p>
           )}
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">

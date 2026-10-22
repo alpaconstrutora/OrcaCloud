@@ -13,7 +13,7 @@ import { compararComFicha } from '../../utils/blueprintTerrenoDaFicha';
 
 const FICHA_GARDEN = { terreno_area: 1229, terreno_frente: 18, terreno_fundos: 11, terreno_profundidade: 71 };
 
-function montar(ficha: FichaNoPainel, onLevarAFicha = vi.fn()) {
+function montar(ficha: FichaNoPainel, onLevarAFicha = vi.fn(), onCriarLotePelaFicha = vi.fn()) {
   render(
     <PainelTerreno
       emDrawer
@@ -35,6 +35,7 @@ function montar(ficha: FichaNoPainel, onLevarAFicha = vi.fn()) {
       onGravarArea={vi.fn()}
       ficha={ficha}
       onLevarAFicha={onLevarAFicha}
+      onCriarLotePelaFicha={onCriarLotePelaFicha}
       onAbrirQuadro={vi.fn()}
       ladosSemPapel={0}
       ladosDivergentes={0}
@@ -92,5 +93,26 @@ describe('Dados do lote › Ficha do empreendimento', () => {
   it('planta sem vínculo: diz que a ficha é a do empreendimento escolhido na zona', () => {
     montar({ nome: 'Outro', vinculado: false, linhas: compararComFicha(null, null), motivoSemLevar: 'x', avisoAutomatico: null });
     expect(screen.getByTestId('ficha-do-terreno')).toHaveTextContent('escolhido na zona urbanística');
+  });
+
+  it('sem lote: "Criar lote pela ficha" abre o painel; com dado faltando, desligado dizendo o quê (22/10/2026)', () => {
+    const criar = vi.fn();
+    const base = { nome: 'Garden', vinculado: true, linhas: compararComFicha(null, FICHA_GARDEN), motivoSemLevar: 'x', avisoAutomatico: null };
+    montar({ ...base, criarLote: { motivo: null } }, vi.fn(), criar);
+    fireEvent.click(screen.getByRole('button', { name: /Criar lote pela ficha/ }));
+    expect(criar).toHaveBeenCalledTimes(1);
+  });
+
+  it('ficha sem profundidade nem área: botão desligado com o motivo; com lote, o botão some', () => {
+    const base = { nome: 'Garden', vinculado: true, linhas: compararComFicha(null, null), motivoSemLevar: 'x', avisoAutomatico: null };
+    montar({ ...base, criarLote: { motivo: 'A ficha não tem profundidade nem área total — preencha uma das duas em Torres & Unidades › Terreno.' } });
+    const botao = screen.getByRole('button', { name: /Criar lote pela ficha/ });
+    expect(botao).toBeDisabled();
+    expect(botao).toHaveAttribute('title', expect.stringMatching(/não tem profundidade nem área/));
+  });
+
+  it('com lote (criarLote null): sem o botão', () => {
+    montar({ nome: 'Garden', vinculado: true, linhas: compararComFicha(null, null), motivoSemLevar: 'x', avisoAutomatico: null, criarLote: null });
+    expect(screen.queryByRole('button', { name: /Criar lote pela ficha/ })).toBeNull();
   });
 });

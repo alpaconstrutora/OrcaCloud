@@ -13,7 +13,7 @@ import PainelLoteDigitado from '../../components/blueprint/PainelLoteDigitado';
 import PainelMapaDoLote, { type ResultadoDaBusca } from '../../components/blueprint/PainelMapaDoLote';
 import PainelZonaUrbanistica from '../../components/blueprint/PainelZonaUrbanistica';
 
-const FICHA = { frenteMm: 18000, profundidadeMm: 71000, origem: '011 - Garden Cambuhy' };
+const FICHA = { frenteMm: 18000, fundosMm: null, profundidadeMm: 71000, profundidadePelaAreaMm: null, areaM2: null, origem: '011 - Garden Cambuhy' };
 
 describe('Criar o lote digitando — frente × profundidade da ficha', () => {
   const montar = (extra: Partial<React.ComponentProps<typeof PainelLoteDigitado>> = {}) =>
@@ -33,6 +33,63 @@ describe('Criar o lote digitando — frente × profundidade da ficha', () => {
     await user.clear(screen.getByLabelText('Frente (m)'));
     await user.type(screen.getByLabelText('Frente (m)'), '20');
     expect(screen.queryByTestId('lote-da-ficha')).toBeNull();
+  });
+});
+
+describe('Criar lote pela ficha — irregular e a pergunta da profundidade (22/10/2026)', () => {
+  const GARDEN = { frenteMm: 18000, fundosMm: 21000, profundidadeMm: 71000, profundidadePelaAreaMm: 63030, areaM2: 1229, origem: '011 - Garden Cambuhy' };
+  const lancar = () => screen.getByRole('button', { name: 'Lançar o lote' });
+
+  it('fundos vêm da ficha; a profundidade nasce vazia e a tela PERGUNTA; lançar só depois da escolha', async () => {
+    const onLancar = vi.fn(async () => null as string | null);
+    render(<PainelLoteDigitado rotacaoNorteDeg={0} georreferencia={null} temLote={false} onLancar={onLancar} sugestaoDaFicha={GARDEN} />);
+    expect((screen.getByLabelText('Fundos (m, opcional)') as HTMLInputElement).value).toBe('21,00');
+    expect((screen.getByLabelText('Profundidade (m)') as HTMLInputElement).value).toBe('');
+    const pergunta = screen.getByTestId('pergunta-profundidade');
+    expect(pergunta).toHaveTextContent('Manter a profundidade da ficha: 71,00 m — o lote fica com 1.384,50 m²');
+    expect(pergunta).toHaveTextContent('Ajustar a profundidade para fechar a área: 63,03 m — 1.229,09 m²');
+    expect(lancar()).toBeDisabled();
+    expect(lancar()).toHaveAttribute('title', 'Escolha acima: manter a profundidade da ficha ou ajustar para fechar a área');
+
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText(/Ajustar a profundidade/));
+    expect((screen.getByLabelText('Profundidade (m)') as HTMLInputElement).value).toBe('63,03');
+    expect(screen.getByTestId('lote-da-ficha')).toHaveTextContent('ajustada pela área');
+    expect(lancar()).not.toBeDisabled();
+    await user.click(lancar());
+    const [lote] = onLancar.mock.calls[0] as unknown as [{ areaMm2: number; lados: { papel: string; medidaMm: number | null }[] }];
+    expect(lote.areaMm2 / 1e6).toBeCloseTo(1229.085, 2);
+    // Frente e fundos são da matrícula; as laterais saíram da conta.
+    expect(lote.lados.map((l) => l.medidaMm)).toEqual([18000, null, 21000, null]);
+  });
+
+  it('manter a profundidade da ficha também é escolha válida (lote com a área que ela dá)', async () => {
+    const onLancar = vi.fn(async () => null as string | null);
+    render(<PainelLoteDigitado rotacaoNorteDeg={0} georreferencia={null} temLote={false} onLancar={onLancar} sugestaoDaFicha={GARDEN} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText(/Manter a profundidade da ficha/));
+    expect((screen.getByLabelText('Profundidade (m)') as HTMLInputElement).value).toBe('71,00');
+    expect(screen.getByTestId('lote-da-ficha')).not.toHaveTextContent('ajustada pela área');
+    await user.click(lancar());
+    const [lote] = onLancar.mock.calls[0] as unknown as [{ areaMm2: number }];
+    expect(lote.areaMm2 / 1e6).toBeCloseTo(1384.5, 1);
+  });
+
+  it('mudar os fundos refaz a prévia (área do trapézio); antes da escolha, nenhum aviso de "informe a profundidade"', async () => {
+    render(<PainelLoteDigitado rotacaoNorteDeg={0} georreferencia={null} temLote={false} onLancar={vi.fn(async () => null)} sugestaoDaFicha={GARDEN} />);
+    expect(screen.queryByText(/Informe a frente e a profundidade/)).toBeNull();
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText(/Manter a profundidade da ficha/));
+    expect(screen.getByTestId('resumo-do-lote')).toHaveTextContent(/área 1384,50 m²/);
+    await user.clear(screen.getByLabelText('Fundos (m, opcional)'));
+    await user.type(screen.getByLabelText('Fundos (m, opcional)'), '18');
+    expect(screen.getByTestId('resumo-do-lote')).toHaveTextContent(/área 1278,00 m²/);
+  });
+
+  it('profundidade e área concordando: sem pergunta', () => {
+    render(<PainelLoteDigitado rotacaoNorteDeg={0} georreferencia={null} temLote={false} onLancar={vi.fn(async () => null)} sugestaoDaFicha={{ ...GARDEN, profundidadeMm: 63030 }} />);
+    expect(screen.queryByTestId('pergunta-profundidade')).toBeNull();
+    expect((screen.getByLabelText('Profundidade (m)') as HTMLInputElement).value).toBe('63,03');
   });
 });
 

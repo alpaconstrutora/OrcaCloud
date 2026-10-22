@@ -101,6 +101,24 @@ describe('frente × fundo', () => {
     expect(semPapel.boundaries.map((b) => sugeridos.get(b.id))).toEqual(['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'LATERAL_ESQUERDA']);
   });
 
+  it('fundos diferente da frente (22/10/2026): trapézio CENTRALIZADO; laterais iguais e sem medida de escritura', () => {
+    // Garden Cambuhy: frente 18, fundos 21, profundidade 63,03 → (18 + 21) / 2 × 63,03 = 1.229,085 m².
+    const f = fecharLote(loteRetangular({ frenteMm: 18000, fundosMm: 21000, profundidadeMm: 63030 }));
+    expect(f.problema).toBeNull();
+    expect(f.areaMm2 / 1e6).toBeCloseTo(1229.085, 2);
+    expect(f.anel).toEqual([{ x: 0, y: 0 }, { x: 18000, y: 0 }, { x: 19500, y: 63030 }, { x: -1500, y: 63030 }]);
+    expect(f.lados.map((l) => l.papel)).toEqual(['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'LATERAL_ESQUERDA']);
+    // Frente e fundos são da matrícula; as laterais saem da conta — não viram escritura.
+    expect(f.lados.map((l) => l.medidaMm)).toEqual([18000, null, 21000, null]);
+    const m = base();
+    const escrituras = comandosDoLote(m, m.levels[0].id, f, { medidasDaEscritura: true }).filter((c) => c.type === 'SetBoundaryEscritura') as { medidaMm: number | null }[];
+    expect(escrituras.map((c) => c.medidaMm)).toEqual([18000, 21000]);
+  });
+
+  it('fundos igual à frente (ou ausente) continua retângulo', () => {
+    expect(fecharLote(loteRetangular({ frenteMm: 12000, fundosMm: 12000, profundidadeMm: 30000 })).lados.map((l) => l.medidaMm)).toEqual([12000, 30000, 12000, 30000]);
+  });
+
   it('com a frente voltada para o leste (90°), a frente fica na face leste', () => {
     const f = fecharLote(loteRetangular({ frenteMm: 10000, profundidadeMm: 25000, frenteVoltadaPara: 90 }));
     expect(f.problema).toBeNull();

@@ -33,7 +33,11 @@ Quer que eu trate isso?"* — o usuário respondeu:
 **Muda:** itens e resultado deles ficam no formato do Claudinei (só ADIANTAMENTO provento,
 bruto = líquido = custo, bases zeradas), com backup das linhas antigas.
 **Pronto quando:** consulta mostra as 3 linhas das duas folhas só com `ADIANTAMENTO:provento`.
-**Estado:** aguardando o usuário — o auto mode barrou a gravação no banco (22/10).
+**Estado:** feito em 22/10/2026 — o auto mode barrou a gravação; o usuário rodou o script
+(`npx supabase db query --linked -f adiantamento_05_2026_recalculo.sql`). Conferido: Claudinei
+1.618,40, Clovis 990,81, Rogério 648,40, só `ADIANTAMENTO:provento`; 0 item estranho em folha de
+adiantamento. Backup `bkp_folha_adiantamento_res_20271022` (2) e `bkp_folha_adiantamento_itens_20271022`
+(8) — **NÃO APAGAR**.
 
 ### 3. Publicar
 **Pronto quando:** CI verde no PR, mesclado, `conferir-producao.sh` prova o commit no domínio.

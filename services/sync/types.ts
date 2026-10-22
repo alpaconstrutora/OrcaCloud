@@ -167,6 +167,12 @@ export interface CanonicalSide {
     liveTowerSourceIds: Set<string>;
     liveUnitSourceIds: Set<string>;
     warnings: string[];
+    /**
+     * Campos do PRÓPRIO empreendimento que a origem propõe (22/10/2026: o terreno medido na
+     * Planta — área, testada, fundos, profundidade, laterais, tipo). Ausente = a origem não fala
+     * do empreendimento. Mesmas regras do resto: vazio preenche, divergente vai à Curadoria.
+     */
+    empreendimentoFields?: Record<string, unknown>;
 }
 
 /** O estado atual do Empreendimento. */

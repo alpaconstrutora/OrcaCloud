@@ -542,7 +542,13 @@ export const empreendimentoService = {
             .eq('id', id)
             .select(EMPREENDIMENTO_COLS)
             .single();
-        if (error) throw new Error(`Failed to update empreendimento: ${error.message}`);
+        if (error) {
+            // Um empreendimento por planta (índice único desde 22/10/2026): a recusa do banco vira frase.
+            if (error.code === '23505' && /blueprint_study/.test(error.message)) {
+                throw new Error('Esta planta já está vinculada a outro empreendimento. Desvincule lá antes.');
+            }
+            throw new Error(`Failed to update empreendimento: ${error.message}`);
+        }
 
         await empreendimentoAuditService.recordDiff(
             {

@@ -134,3 +134,27 @@ describe('renameStudy', () => {
         await expect(renameStudy('planta-1', 'Novo')).rejects.toThrow();
     });
 });
+
+describe('índice único de planta (22/10/2026)', () => {
+    it('a recusa do banco por unicidade vira frase, não "duplicate key"', async () => {
+        const original = db.supabase.from;
+        db.supabase.from = ((tabela: string) => {
+            const q = original(tabela);
+            if (tabela !== 'empreendimentos') return q;
+            const update = q.update.bind(q);
+            q.update = (p: any) => {
+                const r = update(p);
+                if (p.blueprint_study_id) {
+                    r.select = () => ({ then: (ok: any) => Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "empreendimentos_blueprint_study_unico"' } }).then(ok) });
+                }
+                return r;
+            };
+            return q;
+        }) as any;
+        try {
+            await expect(vincularEmpreendimento('planta-1', 'emp-b')).rejects.toThrow(/acabou de ser vinculada a outro empreendimento/);
+        } finally {
+            db.supabase.from = original;
+        }
+    });
+});

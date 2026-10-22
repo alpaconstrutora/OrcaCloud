@@ -22,6 +22,7 @@ describe('dadosDoEmpreendimentoParaPlanta', () => {
     expect(d.lote).toEqual({ frenteMm: 18000, profundidadeMm: 71000, origem: '011 - Garden Cambuhy' });
     expect(d.endereco).toEqual({ texto: 'Rua A, 10, Centro, Cambuí - MG', origem: '011 - Garden Cambuhy' });
     expect(d.uf).toBe('MG');
+    expect(d.cidade).toEqual({ nome: 'Cambuí', uf: 'MG' });
   });
 
   it('sem profundidade, laterais iguais servem; laterais diferentes não são chute', () => {
@@ -45,6 +46,13 @@ describe('dadosDoEmpreendimentoParaPlanta', () => {
   });
 
   it('sem empreendimento: nada', () => {
-    expect(dadosDoEmpreendimentoParaPlanta(null)).toEqual({ lote: null, endereco: null, uf: null });
+    expect(dadosDoEmpreendimentoParaPlanta(null)).toEqual({ lote: null, endereco: null, uf: null, cidade: null });
+  });
+});
+
+describe('cidade da ficha (22/10/2026)', () => {
+  it('terreno sem cidade usa a de divulgação, com a UF DELA', () => {
+    expect(dadosDoEmpreendimentoParaPlanta({ name: 'X', terreno_state: 'SP', endereco_city: 'Cambuí', endereco_state: 'mg' }).cidade).toEqual({ nome: 'Cambuí', uf: 'MG' });
+    expect(dadosDoEmpreendimentoParaPlanta({ name: 'X' }).cidade).toBeNull();
   });
 });

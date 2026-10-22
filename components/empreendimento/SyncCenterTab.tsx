@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendimentoSync';
 import { massaEmpreendimentoSync } from '../../services/massaEmpreendimentoSync';
+import { terrenoEmpreendimentoSync, type TerrenoSyncReport } from '../../services/terrenoEmpreendimentoSync';
 import { previewWriteBackImovib, applyWriteBackImovib, WriteBackItem } from '../../services/sync/writeBackImovib';
 import { Empreendimento, ArquiteturaSyncReport } from '../../types';
 import { useConfirm } from '../ui/confirm';
@@ -56,6 +57,10 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e }) => {
   const [loteamentoReport, setLoteamentoReport] = React.useState<ArquiteturaSyncReport | null>(null);
   const [loteamentoError, setLoteamentoError] = React.useState<string | null>(null);
   const [loteamentoSyncing, setLoteamentoSyncing] = React.useState(false);
+  // TERRENO da planta (22/10/2026): campos do próprio empreendimento — vazio preenche, diferente vai à Curadoria.
+  const [terrenoReport, setTerrenoReport] = React.useState<TerrenoSyncReport | null>(null);
+  const [terrenoError, setTerrenoError] = React.useState<string | null>(null);
+  const [terrenoSyncing, setTerrenoSyncing] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -88,9 +93,15 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e }) => {
           .then(r => setMassaReport(r))
           .catch(err => { setMassaError(err.message); setMassaReport(null); })
       );
+      tasks.push(
+        terrenoEmpreendimentoSync.previewSync(e.id)
+          .then(r => { setTerrenoError(null); setTerrenoReport(r); })
+          .catch(err => { setTerrenoError(err.message); setTerrenoReport(null); })
+      );
     } else {
       setLoteamentoReport(null);
       setMassaReport(null);
+      setTerrenoReport(null);
     }
 
     await Promise.all(tasks);
@@ -146,6 +157,32 @@ Só a geometria vem do desenho (quadra, número, área, testada e confrontantes)
       setLoteamentoError(err.message);
     } finally {
       setLoteamentoSyncing(false);
+    }
+  };
+
+  /** TERRENO: vazio entra na ficha; diferente vira proposta na Curadoria (nada é sobrescrito aqui). */
+  const terrenoTotal = (terrenoReport?.fills.length ?? 0) + (terrenoReport?.conflicts.length ?? 0);
+  const handleTerrenoSync = async () => {
+    if (!terrenoReport || terrenoTotal === 0) return;
+    const ok = await confirm({
+      title: 'Trazer o terreno da planta?',
+      message:
+        `${terrenoReport.fills.length} campo(s) vazio(s) da ficha serão preenchidos com o terreno da versão PUBLICADA da planta.` +
+        (terrenoReport.conflicts.length > 0
+          ? `\n\n${terrenoReport.conflicts.length} campo(s) com valor diferente NÃO são trocados: viram propostas na aba Curadoria, para você aprovar ou rejeitar um a um.`
+          : ''),
+      confirmLabel: 'Trazer',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setTerrenoSyncing(true);
+    try {
+      await terrenoEmpreendimentoSync.syncToEmpreendimento(e.id);
+      await load();
+    } catch (err: any) {
+      setTerrenoError(err.message);
+    } finally {
+      setTerrenoSyncing(false);
     }
   };
 
@@ -440,6 +477,49 @@ A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, stat
               </button>
               <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
                 Só a geometria vem do desenho: quadra, número, área, testada e confrontantes. Preço e status de venda são do empreendimento, e só nascem com o lote.
+              </p>
+            </>
+          ) : null}
+        </RelationCard>
+        )}
+
+        {/* TERRENO ↔ EMPREENDIMENTO (22/10/2026): área, testada, fundos, profundidade, laterais e tipo
+            medidos no lote da versão publicada. Mesmas regras de toda a sincronização: vazio
+            preenche, diferente vai à Curadoria. Card próprio porque o de Loteamento some em
+            estudo de massa, e o terreno existe nos dois. */}
+        {e.blueprint_study_id && (
+        <RelationCard
+          title="Terreno → Empreendimento"
+          icon={Ruler}
+          tint="emerald"
+        >
+          {terrenoError ? (
+            <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
+              <AlertTriangle className="w-4 h-4 shrink-0" /> {terrenoError}
+            </div>
+          ) : terrenoReport?.motivo ? (
+            <EmptyHint icon={Link2Off} text={terrenoReport.motivo} />
+          ) : terrenoReport ? (
+            <>
+              <p className="text-[10px] font-semibold text-gray-400 pt-1">Da versão publicada para a ficha (Torres & Unidades › Terreno)</p>
+              <DiffRow label="Campos vazios a preencher" value={terrenoReport.fills.length} />
+              <DiffRow label="Diferentes (vão à Curadoria)" value={terrenoReport.conflicts.length} warn={terrenoReport.conflicts.length > 0} />
+              {[...terrenoReport.fills, ...terrenoReport.conflicts].map(c => (
+                <p key={c.field} className="text-[10px] text-gray-500 font-medium leading-relaxed" data-testid={`terreno-sync-${c.field}`}>
+                  {c.label}: {c.from == null || c.from === '' ? '—' : String(c.from)} → {String(c.to)}
+                </p>
+              ))}
+              <button
+                type="button"
+                onClick={handleTerrenoSync}
+                disabled={terrenoSyncing || terrenoTotal === 0}
+                title={terrenoTotal === 0 ? 'Nada a trazer: a ficha já tem o terreno da versão publicada' : 'Preenche os vazios e manda as diferenças para a Curadoria'}
+                className="mt-3 w-full rounded-[8px] bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {terrenoSyncing ? 'Trazendo…' : terrenoTotal === 0 ? 'Nada a trazer' : 'Trazer o terreno'}
+              </button>
+              <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
+                Medidas do desenho; profundidade é a média das laterais. O que a ficha já tem nunca é trocado aqui — só pela Curadoria.
               </p>
             </>
           ) : null}

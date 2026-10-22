@@ -3,6 +3,7 @@ import type { BlueprintUrbanContext } from '../types/blueprint';
 import type { RegulatoryMapWithCity } from '../types/regulatoryMap';
 import type { CitySearchValue } from '../components/regulatoryMap/CitySearchSelect';
 import { empreendimentoService } from '../services/empreendimentoService';
+import { masterDataService } from '../services/masterDataService';
 import { regulatoryMapService } from '../services/regulatoryMapService';
 import {
   blueprintUrbanContextService,
@@ -63,6 +64,8 @@ export interface ZonaUrbanistica {
   setEmpreendimentoId: (id: string) => void;
   /** O empreendimento em uso veio da sugestão (vínculo da planta, ou obra) — ninguém escolheu nem salvou. */
   empreendimentoAutomatico: boolean;
+  /** A cidade do caminho do catálogo veio da ficha do empreendimento (22/10/2026). */
+  cidadeAutomatica: boolean;
   /** A zona em vigor foi aplicada sozinha nesta abertura: era a única do empreendimento. */
   zonaAplicadaAutomaticamente: boolean;
 
@@ -234,6 +237,11 @@ export function useBlueprintZonaUrbanistica(
   empreendimentoSugerido: string | null,
   /** Contexto do topo. `null` = "Todas" — o catálogo então não filtra por org. */
   orgId: string | null,
+  /**
+   * Cidade da ficha do empreendimento (vínculo, ou obra) para "Buscar por cidade" — 22/10/2026.
+   * Só entra com o catálogo aberto, sem cidade nem mapa, e se casar com UMA cidade do cadastro.
+   */
+  cidadeSugerida: { nome: string; uf: string | null } | null = null,
 ): ZonaUrbanistica {
   /** Retomada da escolha em andamento: lida UMA vez, na montagem. */
   const retomada = useRef(ESCOLHA_EM_ANDAMENTO.get(studyId) ?? null);
@@ -335,7 +343,36 @@ export function useBlueprintZonaUrbanistica(
     if (mexeuNaEscolha.current) ESCOLHA_EM_ANDAMENTO.set(studyId, { origem: origemDaZona, cidade, mapaId });
   }, [studyId, origemDaZona, cidade, mapaId]);
   const escolherOrigem = useCallback((o: OrigemDaZona) => { mexeuNaEscolha.current = true; setOrigemDaZona(o); }, []);
-  const escolherCidade = useCallback((c: CitySearchValue | null) => { mexeuNaEscolha.current = true; setCidade(c); }, []);
+  const escolherCidade = useCallback((c: CitySearchValue | null) => { mexeuNaEscolha.current = true; setCidadeAutomatica(false); setCidade(c); }, []);
+
+  // ── Cidade da ficha no caminho do catálogo (22/10/2026) ──────────────────
+  // "O app já tem a informação": a ficha sabe a cidade. Procura no cadastro (master_cities) e
+  // só preenche se nome (sem acento/caixa) e UF casarem com UMA cidade — ambíguo não chuta.
+  const [cidadeAutomatica, setCidadeAutomatica] = useState(false);
+  const cidadeTentada = useRef<string | null>(null);
+  useEffect(() => {
+    if (origemDaZona !== 'CATALOGO' || cidade || mapaId || !cidadeSugerida || !contextoLido) return;
+    const chave = `${cidadeSugerida.nome}|${cidadeSugerida.uf ?? ''}`;
+    if (cidadeTentada.current === chave) return;
+    cidadeTentada.current = chave;
+    const norm = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLowerCase();
+    let vivo = true;
+    masterDataService
+      .searchCities(cidadeSugerida.nome)
+      .then((lista) => {
+        if (!vivo) return;
+        const casam = lista.filter(
+          (c) => norm(c.name) === norm(cidadeSugerida.nome) && (!cidadeSugerida.uf || c.state_code === cidadeSugerida.uf),
+        );
+        if (casam.length !== 1) return;
+        setCidade({ id: casam[0].id, name: casam[0].name, state_code: casam[0].state_code });
+        setCidadeAutomatica(true);
+      })
+      .catch((e) => console.warn('[zona urbanística] não deu para achar a cidade da ficha:', e));
+    return () => {
+      vivo = false;
+    };
+  }, [origemDaZona, cidade, mapaId, cidadeSugerida?.nome, cidadeSugerida?.uf, contextoLido]); // eslint-disable-line react-hooks/exhaustive-deps
   const escolherMapa = useCallback((id: string) => { mexeuNaEscolha.current = true; setMapaId(id); }, []);
 
   // ── Mapas da cidade (só no caminho do catálogo) ───────────────────────────
@@ -476,6 +513,8 @@ export function useBlueprintZonaUrbanistica(
         ...colunasDoVocabulario(lidos),
         origem_valores: todosDaZona,
         aplicado_em: new Date().toISOString(),
+        // Aplicar desfaz um "desligar" anterior.
+        zona_desligada_em: null,
       });
     },
     [zonas, empreendimentoId, mapaId, origemDaZona, persistir],
@@ -507,15 +546,39 @@ export function useBlueprintZonaUrbanistica(
   const desligar = useCallback(() => {
     jaAplicouSozinho.current = true;
     setZonaAplicadaAutomaticamente(false);
-    setContexto(null);
     setOrigemDosValores({});
     setRecuos(RECUOS_ZERO);
     setLimites(SEM_LIMITES);
-    if (persistenciaIndisponivel) return;
-    blueprintUrbanContextService
-      .clear(studyId)
-      .catch((e) => console.warn('[zona urbanística] não deu para desligar:', e));
-  }, [studyId, persistenciaIndisponivel]);
+    if (persistenciaIndisponivel) {
+      setContexto(null);
+      return;
+    }
+    // A linha fica, ZERADA e com a data do desligamento (22/10/2026). Apagá-la — como era — fazia a
+    // planta vinculada a um empreendimento de zona única reaplicar a zona sozinha na próxima abertura.
+    void persistir({
+      zona_origem: origemDaZona,
+      empreendimento_id: empreendimentoId || null,
+      regulatory_map_id: null,
+      regulatory_zone_id: null,
+      zona_rotulo: null,
+      lei_referencia: null,
+      recuo_frente_mm: null,
+      recuo_fundos_mm: null,
+      recuo_lateral_direita_mm: null,
+      recuo_lateral_esquerda_mm: null,
+      taxa_ocupacao_max: null,
+      taxa_permeabilidade_min: null,
+      coeficiente_max: null,
+      coeficiente_basico: null,
+      coeficiente_minimo: null,
+      gabarito_altura_max_m: null,
+      gabarito_pavimentos: null,
+      ...colunasDoVocabulario(SEM_LIMITES),
+      origem_valores: {},
+      aplicado_em: null,
+      zona_desligada_em: new Date().toISOString(),
+    });
+  }, [persistir, persistenciaIndisponivel, origemDaZona, empreendimentoId]);
 
   // ── Ajuste manual ─────────────────────────────────────────────────────────
 
@@ -607,6 +670,7 @@ export function useBlueprintZonaUrbanistica(
     empreendimentoId,
     setEmpreendimentoId,
     empreendimentoAutomatico,
+    cidadeAutomatica,
     zonaAplicadaAutomaticamente,
     cidade,
     setCidade: escolherCidade,

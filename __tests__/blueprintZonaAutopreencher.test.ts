@@ -23,6 +23,10 @@ vi.mock('../services/blueprintUrbanContextService', () => ({
 vi.mock('../services/regulatoryMapService', () => ({
   regulatoryMapService: { list: vi.fn(async () => []), listZones: vi.fn(async () => []) },
 }));
+const cidades = { current: [] as { id: string; name: string; state_code: string }[] };
+vi.mock('../services/masterDataService', () => ({
+  masterDataService: { searchCities: vi.fn(async () => cidades.current) },
+}));
 vi.mock('../services/empreendimentoService', () => ({
   empreendimentoService: { listRegulatoryZones: vi.fn(async (id: string) => zonasDo.current[id] ?? []) },
 }));
@@ -86,6 +90,26 @@ describe('zona urbanística preenchida pelo empreendimento vinculado', () => {
     expect(h.result.current.empreendimentoAutomatico).toBe(false);
   });
 
+  it('desligar é lembrado: a linha fica zerada com a data, e reabrir NÃO reaplica a zona única (22/10/2026)', async () => {
+    const a = montar('estudo-7', 'emp-1');
+    await waitFor(() => expect(a.result.current.zonaAplicadaId).toBe('z1'));
+    act(() => a.result.current.desligar());
+    await waitFor(() => expect(blueprintUrbanContextService.save).toHaveBeenCalledTimes(2));
+    const gravado = vi.mocked(blueprintUrbanContextService.save).mock.calls[1][2] as Record<string, unknown>;
+    expect(gravado).toMatchObject({ regulatory_zone_id: null, recuo_frente_mm: null, origem_valores: {}, aplicado_em: null });
+    expect(typeof gravado.zona_desligada_em).toBe('string');
+    expect(blueprintUrbanContextService.clear).not.toHaveBeenCalled();
+    a.unmount();
+
+    ctxSalvo.current = gravado;
+    vi.mocked(blueprintUrbanContextService.save).mockClear();
+    const b = montar('estudo-7', 'emp-1');
+    await waitFor(() => expect(b.result.current.zonas).toHaveLength(1));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(b.result.current.zonaAplicadaId).toBeNull();
+    expect(blueprintUrbanContextService.save).not.toHaveBeenCalled();
+  });
+
   it('caminho do catálogo escolhido: a zona única do empreendimento não é aplicada por cima', async () => {
     const h = montar('estudo-6', null);
     await waitFor(() => expect(blueprintUrbanContextService.get).toHaveBeenCalled());
@@ -93,5 +117,38 @@ describe('zona urbanística preenchida pelo empreendimento vinculado', () => {
     h.rerender({ s: 'emp-1' });
     await new Promise((r) => setTimeout(r, 50));
     expect(blueprintUrbanContextService.save).not.toHaveBeenCalled();
+  });
+});
+
+describe('cidade da ficha no caminho do catálogo (22/10/2026)', () => {
+  beforeEach(() => {
+    ctxSalvo.current = null;
+    zonasDo.current = {};
+    cidades.current = [
+      { id: 'c-mg', name: 'Cambuí', state_code: 'MG' },
+      { id: 'c-sp', name: 'Cambuí', state_code: 'SP' },
+      { id: 'c-x', name: 'Cambuizinho', state_code: 'MG' },
+    ];
+  });
+  const comCidade = (studyId: string, cidade: { nome: string; uf: string | null }) =>
+    renderHook(() => useBlueprintZonaUrbanistica(studyId, 'o1', null, 'o1', cidade));
+
+  it('catálogo sem cidade: entra a cidade que casa nome (sem acento/caixa) e UF, marcada como automática', async () => {
+    const h = comCidade('estudo-c1', { nome: 'cambui', uf: 'MG' });
+    await waitFor(() => expect(blueprintUrbanContextService.get).toHaveBeenCalled());
+    act(() => h.result.current.setOrigemDaZona('CATALOGO'));
+    await waitFor(() => expect(h.result.current.cidade?.id).toBe('c-mg'));
+    expect(h.result.current.cidadeAutomatica).toBe(true);
+    act(() => h.result.current.setCidade({ id: 'outra', name: 'Outra' }));
+    expect(h.result.current.cidadeAutomatica).toBe(false);
+  });
+
+  it('sem UF e duas cidades com o nome: não chuta', async () => {
+    const h = comCidade('estudo-c2', { nome: 'Cambuí', uf: null });
+    await waitFor(() => expect(blueprintUrbanContextService.get).toHaveBeenCalled());
+    act(() => h.result.current.setOrigemDaZona('CATALOGO'));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(h.result.current.cidade).toBeNull();
+    expect(h.result.current.cidadeAutomatica).toBe(false);
   });
 });

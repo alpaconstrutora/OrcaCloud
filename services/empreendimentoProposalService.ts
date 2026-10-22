@@ -47,8 +47,9 @@ export interface ApplyOutcome {
 
 const COLS = 'id, organization_id, empreendimento_id, origin, entity, entity_id, field, field_group, label, current_value, proposed_value, applied_value, source_ref, proposal_hash, status, detected_at, decided_at, decided_by, decision_reason';
 
-/** Só torre e unidade são destinos escritos hoje (o registry não propõe campo de empreendimento/área). */
+/** Destinos escritos. O empreendimento entrou em 22/10/2026 com o terreno medido na Planta. */
 const TABLE_BY_ENTITY: Partial<Record<SyncEntity, string>> = {
+    empreendimento: 'empreendimentos',
     tower: 'empreendimento_towers',
     unit: 'empreendimento_units',
 };
@@ -279,6 +280,8 @@ async function resolveNames(proposals: FieldProposal[]): Promise<FieldProposal[]
             const u = unitById.get(p.entity_id);
             return { ...p, tower_name: u ? (towerName.get(u.tower_id) ?? null) : null, unit_name: u?.name ?? null };
         }
+        // Campo do próprio empreendimento: a inbox agrupa sob "Terreno" (único grupo hoje).
+        if (p.entity === 'empreendimento') return { ...p, tower_name: 'Terreno', unit_name: null };
         return p;
     });
 }

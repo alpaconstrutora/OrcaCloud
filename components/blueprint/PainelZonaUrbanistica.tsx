@@ -64,6 +64,8 @@ interface Props {
   /** Caminho da cidade. */
   cidade: CitySearchValue | null;
   onCidade: (c: CitySearchValue | null) => void;
+  /** Texto sob a cidade quando ela veio da ficha do empreendimento (22/10/2026); `null` = escolhida à mão. */
+  avisoDaCidade?: string | null;
   mapas: RegulatoryMapWithCity[];
   mapaId: string;
   onMapa: (id: string) => void;
@@ -100,6 +102,7 @@ export default function PainelZonaUrbanistica({
   zonaAplicadaAutomaticamente = false,
   cidade,
   onCidade,
+  avisoDaCidade = null,
   mapas,
   mapaId,
   onMapa,
@@ -222,6 +225,11 @@ export default function PainelZonaUrbanistica({
               }}
               className="text-xs"
             />
+            {avisoDaCidade && cidade && (
+              <p className="text-xs text-slate-500" data-testid="aviso-cidade-automatica">
+                {avisoDaCidade}
+              </p>
+            )}
 
             {cidade && (
               <select

@@ -36,6 +36,8 @@ export interface DadosDoEmpreendimentoParaPlanta {
   endereco: { texto: string; origem: string } | null;
   /** UF para o CUB da Casa automática. */
   uf: string | null;
+  /** Cidade (terreno, senão divulgação) para "Buscar por cidade" da zona — 22/10/2026. */
+  cidade: { nome: string; uf: string | null } | null;
 }
 
 const positivo = (v: number | null | undefined): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
@@ -48,7 +50,7 @@ function montarEndereco(rua: string, numero: string, bairro: string, cidade: str
 }
 
 export function dadosDoEmpreendimentoParaPlanta(e: Partial<Ficha> | null | undefined): DadosDoEmpreendimentoParaPlanta {
-  if (!e) return { lote: null, endereco: null, uf: null };
+  if (!e) return { lote: null, endereco: null, uf: null, cidade: null };
   const origem = texto(e.name) || 'empreendimento';
 
   const frente = positivo(e.terreno_frente);
@@ -67,5 +69,11 @@ export function dadosDoEmpreendimentoParaPlanta(e: Partial<Ficha> | null | undef
     lote,
     endereco: enderecoTexto ? { texto: enderecoTexto, origem } : null,
     uf: ufTerreno || ufDivulgacao || null,
+    // A cidade e a UF do MESMO endereço: misturar a cidade do terreno com a UF da divulgação casaria a cidade errada.
+    cidade: texto(e.terreno_city)
+      ? { nome: texto(e.terreno_city), uf: ufTerreno || null }
+      : texto(e.endereco_city)
+        ? { nome: texto(e.endereco_city), uf: ufDivulgacao || null }
+        : null,
   };
 }

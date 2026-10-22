@@ -69,6 +69,34 @@ describe('decidirSaque — titular da chave (desvio por troca de chave no cadast
         expect(decidirSaque(pedido('99991111140'), { ...pix, favorecido_documento_esperado: null }).refuseReason).toMatch(/sem CPF\/CNPJ/);
         expect(decidirSaque(pedido(null), pix).refuseReason).toMatch(/não informou o titular/);
     });
+
+    // 22/10/2026: 1º PIX para chave de pessoa física — a Asaas manda o CPF do titular
+    // MASCARADO (`***.533.946-**`); comparar só os dígitos recusava todo PIX para CPF.
+    describe('CPF do titular mascarado pela Asaas', () => {
+        const reg = { ...pix, favorecido_documento_esperado: '03853394612' };
+
+        it('dígitos visíveis batem na mesma posição: aprova', () => {
+            expect(decidirSaque(pedido('***.533.946-**'), reg)).toEqual({ status: 'APPROVED' });
+        });
+
+        it('dígitos visíveis de outra pessoa: recusa, mostrando o mascarado', () => {
+            const r = decidirSaque(pedido('***.533.947-**'), reg);
+            expect(r.status).toBe('REFUSED');
+            expect(r.refuseReason).toMatch(/\*\*\*\.533\.947-\*\*/);
+        });
+
+        it('mesmos dígitos em OUTRA posição não contam', () => {
+            expect(decidirSaque(pedido('533.946.***-**'), reg).status).toBe('REFUSED');
+        });
+
+        it('máscara que deixa menos de 6 dígitos visíveis: recusa (falha fechada)', () => {
+            expect(decidirSaque(pedido('***.***.946-**'), reg).refuseReason).toMatch(/mascarado demais/);
+        });
+
+        it('máscara de tamanho que não é CPF nem o CNPJ esperado: recusa', () => {
+            expect(decidirSaque(pedido('**.533.946/0001-**'), reg).status).toBe('REFUSED');
+        });
+    });
 });
 
 describe('escolherReserva (pedido chegou antes de o OrçaCloud gravar o id da Asaas)', () => {
@@ -101,9 +129,25 @@ describe('escolherReserva (pedido chegou antes de o OrçaCloud gravar o id da As
         expect(escolherReserva({ type: 'BILL', bill: { id: 1, identificationField: '1'.repeat(47) } }, [b])).toBeNull();
     });
 
+    it('PIX: CPF mascarado pela Asaas que bate com o cadastro → acha', () => {
+        const pf = { ...reg, beneficiary_document: '038.533.946-12' };
+        const p = { ...pedido, transfer: { ...pedido.transfer, bankAccount: { pixAddressKey: null, cpfCnpj: '***.533.946-**' } } };
+        expect(escolherReserva(p, [pf])).toBe(pf);
+        const outro = { ...p, transfer: { ...p.transfer, bankAccount: { pixAddressKey: null, cpfCnpj: '***.533.947-**' } } };
+        expect(escolherReserva(outro, [pf])).toBeNull();
+    });
+
     it('mesmoDocumento: só dígitos, 11 ou 14', () => {
         expect(mesmoDocumento('999.911.111-40', '99991111140')).toBe(true);
         expect(mesmoDocumento('', '')).toBe(false);
         expect(mesmoDocumento('123', '123')).toBe(false);
+    });
+
+    it('mesmoDocumento: mascarado confere os dígitos visíveis por posição (mín. 6)', () => {
+        expect(mesmoDocumento('***.533.946-**', '03853394612')).toBe(true);
+        expect(mesmoDocumento('***.533.946-**', '03853394712')).toBe(false);
+        expect(mesmoDocumento('***.***.946-**', '03853394612')).toBe(false);
+        expect(mesmoDocumento('***.533.946-**', null)).toBe(false);
+        expect(mesmoDocumento('***********', '03853394612')).toBe(false);
     });
 });

@@ -36,7 +36,7 @@ import {
   type UsoDoBloco,
 } from './blueprintKernel';
 import { centroDoAnel, type MedidaDaMassa, type MedidaDoBloco } from './blueprintMassa';
-import { HIPOTESES_VAGAS_PADRAO, planejarVagas, type ArranjoDasVagas } from './blueprintVagasAutomaticas';
+import { geometriaDoArranjo, HIPOTESES_VAGAS_PADRAO, planejarVagas, type ArranjoDasVagas, type HipotesesDeVagas, type PlanoDeVagas } from './blueprintVagasAutomaticas';
 import { FICHA_DO_ELEVADOR } from './blueprintNucleoVertical';
 
 // ─── Vocabulário ─────────────────────────────────────────────────────────────
@@ -403,6 +403,8 @@ function alinharAoLadoMaisLongo(anel: Point[]): Point[] {
   return anel.map((p) => ({ x: Math.round(p.x * c - p.y * sn), y: Math.round(p.x * sn + p.y * c) }));
 }
 
+type FolgasDaGaragem = { recuoDasVagasMm?: number; folgaDaFilaMm?: number };
+
 /**
  * Quantas vagas cabem num pavimento de garagem com este contorno — pelo
  * lançador da E2.5, num modelo PROVISÓRIO (paredes de 20 cm no contorno do
@@ -412,9 +414,30 @@ export function vagasQueCabem(
   anelOriginal: Point[],
   arranjo: ArranjoDasVagas,
   /** As folgas da garagem (hipóteses do produto); ausentes = as do lançador. */
-  folgas: { recuoDasVagasMm?: number; folgaDaFilaMm?: number } = {},
+  folgas: FolgasDaGaragem = {},
 ): number {
-  if (anelOriginal.length < 3) return 0;
+  return planoDaGaragem(anelOriginal, arranjo, folgas)?.plano.vagas.length ?? 0;
+}
+
+/**
+ * Por que a garagem não comporta vaga NENHUMA: a largura útil (o contorno menos o afastamento das vagas, no lado
+ * que as bandas atravessam) é menor que a fileira com a circulação. `null` quando cabe alguma vaga, ou quando o
+ * motivo é outro. 22/10/2026: num lote de 10 m de frente o gerador só dizia "faltam vagas".
+ */
+export function vagasQueNaoCabem(anelOriginal: Point[], arranjo: ArranjoDasVagas, folgas: FolgasDaGaragem = {}): { larguraUtilMm: number; fileiraPedeMm: number } | null {
+  const r = planoDaGaragem(anelOriginal, arranjo, folgas);
+  if (!r || r.plano.vagas.length > 0 || !r.plano.regiao) return null;
+  const xs = r.plano.regiao.anel.map((p) => p.x);
+  const ys = r.plano.regiao.anel.map((p) => p.y);
+  // Orientação AUTO do lançador: as fileiras correm no lado maior, as bandas atravessam o menor.
+  const larguraUtilMm = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) - 2 * r.hip.recuoMm;
+  const fileiraPedeMm = geometriaDoArranjo(r.hip).profundidadeMm(r.hip.larguraMm, r.hip.comprimentoMm) + r.hip.circulacaoMm;
+  return larguraUtilMm < fileiraPedeMm ? { larguraUtilMm, fileiraPedeMm } : null;
+}
+
+/** O planejamento do lançador no modelo provisório; null = o contorno nem vira parede. */
+function planoDaGaragem(anelOriginal: Point[], arranjo: ArranjoDasVagas, folgas: FolgasDaGaragem): { plano: PlanoDeVagas; hip: HipotesesDeVagas } | null {
+  if (anelOriginal.length < 3) return null;
   // O lançador corre as fileiras nos eixos do desenho: a garagem girada (lote
   // fora do norte do desenho, M5) perderia vagas que existem. Gira-se o anel
   // para o lado mais longo ficar no eixo x — a contagem não depende da rotação.
@@ -425,25 +448,20 @@ export function vagasQueCabem(
   try {
     m = applyBatch(m, paredes).model;
   } catch {
-    return 0;
+    return null;
   }
-  const plano = planejarVagas(
-    m,
-    lv,
-    {
-      ...HIPOTESES_VAGAS_PADRAO,
-      arranjo,
-      recuoMm: folgas.recuoDasVagasMm == null ? HIPOTESES_VAGAS_PADRAO.recuoMm : Math.max(100, folgas.recuoDasVagasMm),
-      folgaDaFilaMm: folgas.folgaDaFilaMm,
-      pcdPct: 2,
-      idosoPct: 5,
-      motoPct: 0,
-      exigenciaManual: null,
-      vagasPorUnidade: null,
-    },
-    { tipo: 'PAVIMENTO' },
-  );
-  return plano.vagas.length;
+  const hip: HipotesesDeVagas = {
+    ...HIPOTESES_VAGAS_PADRAO,
+    arranjo,
+    recuoMm: folgas.recuoDasVagasMm == null ? HIPOTESES_VAGAS_PADRAO.recuoMm : Math.max(100, folgas.recuoDasVagasMm),
+    folgaDaFilaMm: folgas.folgaDaFilaMm,
+    pcdPct: 2,
+    idosoPct: 5,
+    motoPct: 0,
+    exigenciaManual: null,
+    vagasPorUnidade: null,
+  };
+  return { plano: planejarVagas(m, lv, hip, { tipo: 'PAVIMENTO' }), hip };
 }
 
 // ─── A distribuição ──────────────────────────────────────────────────────────

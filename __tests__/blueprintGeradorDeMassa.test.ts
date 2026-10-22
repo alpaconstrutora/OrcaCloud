@@ -7,7 +7,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { applyBatch, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { ZONA_DA_MASSA_VAZIA } from '../utils/blueprintMassa';
-import { produtoSemente, vagasQueCabem } from '../utils/blueprintProduto';
+import { produtoDaColuna, produtoSemente, vagasQueCabem } from '../utils/blueprintProduto';
 import { cenarioDeMassa, type CenarioDeMassa } from '../utils/blueprintComparadorDeMassa';
 import {
   compararCandidatos,
@@ -306,5 +306,59 @@ describe('gerador de massa · folga na TO e piso do sol', () => {
     expect(comPiso(50).decisoes.join(' ')).toMatch(/\(50 % do máximo da varredura/);
     expect(comPiso(80).decisoes.join(' ')).toMatch(/\(80 % do máximo da varredura/);
     expect(comPiso(0).decisoes.join(' ')).not.toMatch(/mantendo pelo menos/);
+  });
+});
+
+// 22/10/2026, o caso real ("Planta 15/10/2026"): lote 10 × 30 m, laterais sem recuo, produto de 1 vaga por unidade
+// com vagas de ré. Nenhuma vaga cabe no subsolo (a fileira de ré com circulação pede 10 m), e o gerador dizia só
+// "faltam vagas (393)"; o rótulo dizia "Embasamento + torre · 19 × 18 m" num lote de 10 m de largura.
+describe('gerador de massa · lote estreito', () => {
+  const ESTREITO = lote(10, 30);
+  const produto = produtoDaColuna({
+    nome: 'Produto',
+    padrao: 'R8-N',
+    tipologias: [{ id: '2q', nome: '2 dorm.', uso: 'RESIDENCIAL', dormitorios: 2, areaPrivativaM2: 58, vagasPorUnidade: 1, proporcaoPct: 50, precoM2: 8500 }],
+    hipoteses: { arranjoDasVagas: 'PERPENDICULAR', recuoDasVagasMm: 200, folgaDaFilaMm: 1000 },
+  });
+  const regua: EntradaDoGeradorDeMassa['regua'] = {
+    zona: { ...ZONA_DA_MASSA_VAZIA, taxaOcupacaoMaxPct: 70, coeficienteMax: 4, gabaritoAlturaMaxM: 18, taxaPermeabilidadeMinPct: 5 },
+    recuosBase: { FRENTE: 1500, FUNDOS: 1500, LATERAL_DIREITA: 0, LATERAL_ESQUERDA: 0 },
+    produto,
+    cub: { valorM2: 2500, fonte: 'TABELA', referencia: 'teste' },
+    vagasPorUnidadeDaZona: null,
+  };
+
+  it('nenhuma vaga cabe na garagem: diz as medidas, o arranjo que cabe e o que fazer', () => {
+    const r = gerarMassa({ model: ESTREITO, regua, objetivo: 'RESULTADO', restricoes: RESTRICOES_PADRAO }, 1);
+    expect(r.viaveis).toBe(0);
+    expect(r.descartes[0].motivo).toBe('faltam vagas');
+    const ultimo = r.avisos[r.avisos.length - 1];
+    expect(ultimo).toMatch(/^Nenhuma vaga cabe na garagem: a largura útil é \d+,\d m e a fileira de ré \(90°\) com a circulação pede 10,0 m/);
+    expect(ultimo).toMatch(/pede 10,0 m \(em fila cabem 4 vagas por subsolo\)\./);
+    expect(ultimo).toMatch(/Produto › Hipóteses/);
+    expect(ultimo).toMatch(/Atender às vagas exigidas/);
+
+    // Com um arranjo que cabe, o aviso não aparece.
+    const emFila = gerarMassa({ model: ESTREITO, regua: { ...regua, produto: { ...produto, hipoteses: { ...produto.hipoteses, arranjoDasVagas: 'PARALELA' } } }, objetivo: 'RESULTADO', restricoes: RESTRICOES_PADRAO }, 1);
+    expect(emFila.viaveis).toBeGreaterThan(0);
+    expect(emFila.avisos.join(' ')).not.toMatch(/Nenhuma vaga cabe/);
+  });
+
+  it('o rótulo diz a medida do bloco, não a da varredura', () => {
+    const r = gerarMassa({ model: ESTREITO, regua, objetivo: 'RESULTADO', restricoes: { ...RESTRICOES_PADRAO, atenderVagas: false } }, 1);
+    expect(r.melhores.length).toBeGreaterThan(2);
+    const lados = (pts: { x: number; y: number }[]) => pts.map((p, i) => Math.hypot(pts[(i + 1) % pts.length].x - p.x, pts[(i + 1) % pts.length].y - p.y) / 1000);
+    const num = (s: string) => Number(s.replace(',', '.'));
+    for (const c of r.melhores) {
+      const unidades = c.blocos.filter((b) => b.uso !== 'GARAGEM' && b.nome !== 'Embasamento');
+      const ls = unidades.flatMap((b) => lados(b.pontos));
+      const medidas = c.rotulo.match(/(\d+(?:,\d)?) × (\d+(?:,\d)?) m/) ?? c.rotulo.match(/lâmina (\d+(?:,\d)?) m/);
+      expect(medidas, c.rotulo).not.toBeNull();
+      for (const m of medidas!.slice(1)) {
+        const v = num(m);
+        expect(v, c.rotulo).toBeLessThanOrEqual(30);
+        expect(ls.some((l) => Math.abs(l - v) <= 0.1), `${c.rotulo} · lados ${ls.map((l) => l.toFixed(2)).join(' ')}`).toBe(true);
+      }
+    }
   });
 });

@@ -247,14 +247,16 @@ const SEM_OBRA_COLUMNS: StandardTableColumn[] = [
     { key: 'qtd',            label: 'Títulos',         sortable: true, width: 100, align: 'right' },
 ];
 
+// Soma com Ações (140) = 1.220 px. Com 1.320 a coluna Ações saía cortada à
+// direita (visto na conferência de 22/10 com o primeiro agendamento real).
 const AGENDA_COLUMNS: StandardTableColumn[] = [
-    { key: 'nome',          label: 'Nome',          sortable: true, width: 240 },
-    { key: 'frequencia',    label: 'Frequência',    sortable: true, width: 190 },
-    { key: 'conteudo',      label: 'Conteúdo',      sortable: true, width: 220 },
+    { key: 'nome',          label: 'Nome',          sortable: true, width: 220 },
+    { key: 'frequencia',    label: 'Frequência',    sortable: true, width: 170 },
+    { key: 'conteudo',      label: 'Conteúdo',      sortable: true, width: 200 },
     // Destinatários = lista de e-mails — sem valor único para ordenar.
-    { key: 'destinatarios', label: 'Destinatários', sortable: false, width: 260 },
-    { key: 'ultimo',        label: 'Último envio',  sortable: true, width: 150 },
-    { key: 'situacao',      label: 'Situação',      sortable: true, width: 110 },
+    { key: 'destinatarios', label: 'Destinatários', sortable: false, width: 220 },
+    { key: 'ultimo',        label: 'Último envio',  sortable: true, width: 170 },
+    { key: 'situacao',      label: 'Situação',      sortable: true, width: 100 },
 ];
 
 type TipoSemObra = '' | 'DESPESA' | 'RECEITA' | 'VENDA';
@@ -1213,7 +1215,7 @@ export default function FinancialIntelligence({ onNavigate }: Props) {
                             }
                         }}
                         actions={{
-                            width: 150,
+                            width: 140,
                             render: s => (
                                 <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
                                     {/* desligado durante o envio: o title vai no span, porque o botão

@@ -63,10 +63,10 @@ Fase 2 (todas as telas):
 - [x] guia §6.12 (o seletor faz parte do controle padrão)
 - [x] `check-ui-standard.sh` nos 17 `.tsx` tocados: 0 violações
 - [x] tela real, login de leitura, 6 telas (Parcelas 18 grupos, Boletos 51, Tributos 4, Fornecedores 18, Pedidos 11, Aprovação Financeira 38): Crescente A→Z, Decrescente invertido, "Sem …" no fim, toolbar sem estouro, 0 escritas, 0 erros. Script `c:/tmp/pwtest/agrupar-ordem-todas.js`; prints `c:/tmp/pwtest/agrupar-ordem-*.png`. Uma queda do navegador headless em Fornecedores não se reproduziu (sonda `sonda-fornecedores-agrupar.js`, produção e frente)
-- [ ] typecheck da fase 2
-- [ ] suíte inteira
-- [ ] PR rascunho + CI verde
-- [ ] publicação (o usuário mescla)
+- [x] typecheck da fase 2 — `tsc --noEmit` rc=0, 0 erros (2ª tentativa; a 1ª caiu com segfault do Node 24), repetido após o rebase
+- [x] suíte inteira — localmente 10.471 aprovados e 0 falhas, mas não fechou: o worker do Vitest morre nesta máquina em `BlueprintEditor.test.tsx` e `blueprintCasaAutomatica.test.ts` (este nem carrega nada desta mudança). A CI do PR rodou a suíte inteira e passou
+- [x] PR rascunho + CI verde — PR #85: `ci` (29m27s), Vercel e Vercel Preview Comments verdes
+- [x] publicação — o usuário mesclou por squash em 22/10/2026 (`0a9a5b6`); `conferir-producao.sh "Ordem dos grupos" "para ordenar os grupos"` provou o domínio servindo 0a9a5b6 com os dois textos; CI do main verde; frente fechada e branch apagada
 
 ## Verificação
 1. `npx vitest run __tests__/agruparLinhas.test.ts __tests__/recebivelGrupos.test.ts __tests__/components/ContasReceberAgrupar.test.tsx`

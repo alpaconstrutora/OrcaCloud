@@ -38,7 +38,7 @@ const GARDEN = {
 const PLANTA_OK: TerrenoDaPlanta = {
   ok: true,
   plantaNome: 'Garden',
-  medidas: { areaM2: 1229, frenteM: 18, fundosM: 12, lateralDireitaM: 70, lateralEsquerdaM: 72, profundidadeM: 71 },
+  medidas: { areaM2: 1229, frenteM: 18, fundosM: 12, lateralDireitaM: 70, lateralEsquerdaM: 72, profundidadeM: 71, tipo: 'Irregular (Geometria complexa)' },
 };
 
 const montar = (emp = GARDEN) =>
@@ -55,6 +55,8 @@ describe('Torres & Unidades › Terreno × Planta vinculada', () => {
     montar();
     await waitFor(() => expect(screen.getByTestId('terreno-da-planta')).toHaveTextContent('Planta vinculada: Garden'));
     expect(screen.getByTestId('planta-terreno_area')).toHaveTextContent('Planta: 1.229,00 m²');
+    // Tipo deduzido do desenho (22/10/2026): igual ao da ficha.
+    expect(screen.getByTestId('planta-terreno_tipo')).toHaveTextContent('Planta: Irregular (Geometria complexa)');
     expect(screen.getByTestId('planta-terreno_fundos')).toHaveTextContent('Planta: 12,00 m · diferente');
     // Fundos tem valor na ficha: não é trocado sozinho.
     expect(campo('Fundos (m)').value).toBe('11');

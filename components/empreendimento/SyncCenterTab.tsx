@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendimentoSync';
 import { massaEmpreendimentoSync } from '../../services/massaEmpreendimentoSync';
+import { terrenoEmpreendimentoSync, type TerrenoSyncReport } from '../../services/terrenoEmpreendimentoSync';
 import { previewWriteBackImovib, applyWriteBackImovib, WriteBackItem, WriteBackResult } from '../../services/sync/writeBackImovib';
 import { empreendimentoAuditService } from '../../services/empreendimentoAuditService';
 import { Empreendimento, ArquiteturaSyncReport } from '../../types';
@@ -93,6 +94,12 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
   const [loteamentoError, setLoteamentoError] = React.useState<string | null>(null);
   const [loteamentoSyncing, setLoteamentoSyncing] = React.useState(false);
 
+  // TERRENO da planta (22/10/2026): campos do próprio empreendimento — vazio preenche, diferente
+  // vai à Curadoria. Existe tanto em estudo de massa quanto de loteamento.
+  const [terrenoReport, setTerrenoReport] = React.useState<TerrenoSyncReport | null>(null);
+  const [terrenoError, setTerrenoError] = React.useState<string | null>(null);
+  const [terrenoSyncing, setTerrenoSyncing] = React.useState(false);
+
   // Data do último envio de cada ligação, lida do Histórico (um evento por envio).
   // `last_synced_at` NÃO serve: só o sync da Planta o carimba, e ele aparecia no card da
   // Viabilidade (o Garden Cambuhy mostrava 17/07/2026, do sync Imovib→Emp já removido).
@@ -136,9 +143,15 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
           .then(r => setMassaReport(r))
           .catch(err => { setMassaError(err.message); setMassaReport(null); })
       );
+      tasks.push(
+        terrenoEmpreendimentoSync.previewSync(e.id)
+          .then(r => { setTerrenoError(null); setTerrenoReport(r); })
+          .catch(err => { setTerrenoError(err.message); setTerrenoReport(null); })
+      );
     } else {
       setLoteamentoReport(null);
       setMassaReport(null);
+      setTerrenoReport(null);
     }
 
     // Data é informação de apoio: falhar aqui não pode derrubar a aba.
@@ -221,6 +234,38 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
     }
   };
 
+  /** TERRENO: vazio entra na ficha; diferente vira proposta na Curadoria (nada é sobrescrito aqui). */
+  const terrenoTotal = (terrenoReport?.fills.length ?? 0) + (terrenoReport?.conflicts.length ?? 0);
+  const handleTerrenoSync = async () => {
+    if (!terrenoReport || terrenoTotal === 0) return;
+    const ok = await confirm({
+      title: 'Trazer o terreno da planta?',
+      message:
+        `${terrenoReport.fills.length} campo(s) vazio(s) da ficha serão preenchidos com o terreno da versão PUBLICADA da planta.` +
+        (terrenoReport.conflicts.length > 0
+          ? `\n\n${terrenoReport.conflicts.length} campo(s) com valor diferente NÃO são trocados: viram propostas na aba Curadoria, para você aprovar ou rejeitar um a um.`
+          : ''),
+      confirmLabel: 'Trazer',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setTerrenoSyncing(true);
+    try {
+      const r = await terrenoEmpreendimentoSync.syncToEmpreendimento(e.id);
+      const partes: string[] = [];
+      if (r.fills.length) partes.push(`${plural(r.fills.length, 'campo preenchido', 'campos preenchidos')} na ficha`);
+      if (r.conflicts.length) partes.push(`${plural(r.conflicts.length, 'conflito enviado', 'conflitos enviados')} à Curadoria`);
+      notify(partes.length ? `Terreno: ${partes.join(' · ')}` : 'Nada mudou: a ficha já tinha o terreno da planta.');
+      await load();
+      onChanged?.();
+    } catch (err: any) {
+      setTerrenoError(err.message);
+      notify(`Erro ao trazer o terreno: ${err.message}`, 'error');
+    } finally {
+      setTerrenoSyncing(false);
+    }
+  };
+
   const handleMassaSync = async () => {
     if (!massaReport || totalDe(massaReport) === 0) return;
     const ok = await confirm({
@@ -285,6 +330,13 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
       : loteamentoTotal === 0
         ? 'Nada a trazer: o empreendimento já reflete o loteamento publicado'
         : null;
+  const motivoTerreno = terrenoError
+    ? 'Não foi possível verificar o terreno — veja o erro no card abaixo'
+    : terrenoReport?.motivo
+      ? terrenoReport.motivo
+      : terrenoTotal === 0
+        ? 'Nada a trazer: a ficha já tem o terreno da versão publicada'
+        : null;
 
   if (loading) return (
     <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
@@ -326,10 +378,10 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
             subtitle="Planta Inteligente"
             linked={!!e.blueprint_study_id}
             unlinkedLabel="Nenhum estudo vinculado"
-            error={massaError || loteamentoError}
-            divergences={massaTotal + loteamentoTotal}
+            error={massaError || loteamentoError || terrenoError}
+            divergences={massaTotal + loteamentoTotal + terrenoTotal}
             vazio={semPublicacao ? 'Nada publicado no estudo' : null}
-            naCuradoria={naCuradoriaDe(massaReport) + naCuradoriaDe(loteamentoReport)}
+            naCuradoria={naCuradoriaDe(massaReport) + naCuradoriaDe(loteamentoReport) + (terrenoReport?.naCuradoria?.length ?? 0)}
             footer={
               temMassa
                 ? `${massaReport!.scenarioUnits} unidade(s) na massa publicada`
@@ -365,6 +417,13 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
                 title: motivoLote ?? 'Criar/atualizar quadras e lotes a partir da versão publicada',
                 testId: 'trazer-o-loteamento',
               }] : []),
+              {
+                label: 'Trazer o terreno', icon: Download, direction: 'in' as const,
+                onClick: handleTerrenoSync,
+                disabled: motivoTerreno !== null, busy: terrenoSyncing,
+                title: motivoTerreno ?? 'Preenche os campos vazios da ficha com o terreno da versão publicada; as diferenças vão para a Curadoria',
+                testId: 'trazer-o-terreno',
+              },
               {
                 // Navegação, não sincronização: ícone de link, não de envio.
                 label: 'Abrir na planta', icon: ExternalLink, direction: 'out' as const,
@@ -504,6 +563,36 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
                 {loteamentoReport.warnings.map((w, i) => <WarningLine key={i} text={w} />)}
                 <HelpText>
                   Só a geometria vem do desenho: quadra, número, área, testada e confrontantes. Preço e status de venda são do empreendimento, e só nascem com o lote.
+                </HelpText>
+              </>
+            ) : null}
+          </RelationCard>
+        )}
+
+        {/* TERRENO → EMPREENDIMENTO (22/10/2026): área, testada, fundos, profundidade, laterais e tipo
+            medidos no lote da versão publicada. Mesmas regras de toda a sincronização: vazio
+            preenche, diferente vai à Curadoria. Card próprio porque o de Loteamento some em
+            estudo de massa, e o terreno existe nos dois. A ação fica no diagrama, como as outras. */}
+        {e.blueprint_study_id && (
+          <RelationCard title="Terreno → Empreendimento" icon={Ruler} tint="emerald">
+            {terrenoError ? (
+              <ErrorLine text={terrenoError} />
+            ) : terrenoReport?.motivo ? (
+              <EmptyHint icon={Link2Off} text={terrenoReport.motivo} />
+            ) : terrenoReport ? (
+              <>
+                <p className="text-xs font-medium text-gray-500 pt-1">Da versão publicada para a ficha (Torres & Unidades › Terreno)</p>
+                <DiffRow label="Campos vazios a preencher" value={terrenoReport.fills.length} />
+                <DiffRow label="Diferentes (vão à Curadoria)" value={terrenoReport.conflicts.length} warn={terrenoReport.conflicts.length > 0} />
+                {(terrenoReport.naCuradoria?.length ?? 0) > 0 && <DiffRow label="Aguardando decisão na Curadoria" value={terrenoReport.naCuradoria!.length} warn />}
+                {(terrenoReport.rejeitados?.length ?? 0) > 0 && <DiffRow label="Mantidos por decisão na Curadoria" value={terrenoReport.rejeitados!.length} muted />}
+                {[...terrenoReport.fills, ...terrenoReport.conflicts].map(c => (
+                  <p key={c.field} className="text-xs text-gray-600 leading-relaxed" data-testid={`terreno-sync-${c.field}`}>
+                    {c.label}: {c.from == null || c.from === '' ? '—' : String(c.from)} → {String(c.to)}
+                  </p>
+                ))}
+                <HelpText>
+                  Medidas do desenho; profundidade é a média das laterais. O que a ficha já tem nunca é trocado aqui — só pela Curadoria.
                 </HelpText>
               </>
             ) : null}

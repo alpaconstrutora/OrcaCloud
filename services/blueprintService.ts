@@ -607,6 +607,8 @@ export async function vincularEmpreendimento(studyId: string, empreendimentoId: 
       .update({ blueprint_study_id: studyId })
       .eq('id', empreendimentoId)
       .select('id');
+    // Índice único (22/10/2026): outro empreendimento ganhou esta planta entre a leitura e a gravação.
+    if (ligaError?.code === '23505') throw new Error('Esta planta acabou de ser vinculada a outro empreendimento — recarregue e confira.');
     if (ligaError) fail('vincularEmpreendimento', ligaError);
     if (!ligado?.length) throw new Error('Sem permissão para editar este empreendimento.');
   }

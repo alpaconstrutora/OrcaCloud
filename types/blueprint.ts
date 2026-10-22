@@ -503,6 +503,12 @@ export interface BlueprintUrbanContext {
   /** Por campo: veio da lei ou foi digitado por cima. */
   origem_valores: Record<string, 'ZONA' | 'MANUAL'>;
   aplicado_em: string | null;
+  /**
+   * Quando a pessoa desligou a zona (22/10/2026). Com valor, a zona única do empreendimento não é
+   * aplicada sozinha na abertura — antes o desligar apagava a linha e a zona voltava.
+   * Opcional: linha anterior à migration `aplicar_20271022100000` não tem a coluna.
+   */
+  zona_desligada_em?: string | null;
   created_at: string;
   updated_at: string;
 }

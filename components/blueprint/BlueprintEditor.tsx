@@ -527,7 +527,7 @@ import PainelGerarParedes from './PainelGerarParedes';
 import PainelTerreno from './PainelTerreno';
 import PainelZonaUrbanistica from './PainelZonaUrbanistica';
 import { dadosDoEmpreendimentoParaPlanta } from '../../utils/blueprintDadosDoEmpreendimento';
-import { compararComFicha, medidasDaPlantaParaFicha, patchDaPlantaParaFicha, ROTULO_DA_COLUNA } from '../../utils/blueprintTerrenoDaFicha';
+import { comandosDaEscrituraPelaFicha, compararComFicha, medidasDaPlantaParaFicha, patchDaPlantaParaFicha, ROTULO_DA_COLUNA } from '../../utils/blueprintTerrenoDaFicha';
 import type { FichaNoPainel } from './FichaDoTerrenoNaPlanta';
 import PainelTopografia from './PainelTopografia';
 import QuadroDeDivisas from './QuadroDeDivisas';
@@ -3177,11 +3177,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * ao recarregar. O que É do desenho — qual lado é a frente — segue no modelo,
    * em `Boundary.papel`.
    */
+  // A cidade da ficha do empreendimento sugerido, para "Buscar por cidade" da zona (22/10/2026).
+  const cidadeDaFicha = useMemo(
+    () => dadosDoEmpreendimentoParaPlanta(empreendimentos.find((e) => e.id === empreendimentoSugerido) ?? null).cidade,
+    [empreendimentos, empreendimentoSugerido],
+  );
   const zona = useBlueprintZonaUrbanistica(
     study.id,
     study.organization_id,
     empreendimentoSugerido,
     orgId,
+    cidadeDaFicha,
   );
   /**
    * A FICHA do empreendimento ligado (vinculado → o da zona → o da obra): frente × profundidade
@@ -5013,6 +5019,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   const medidasDaPlanta = useMemo(() => medidasDaPlantaParaFicha(terreno, limitesDoNivel), [terreno, limitesDoNivel]);
   const [avisoFichaAutomatica, setAvisoFichaAutomatica] = useState<string | null>(null);
+  const [avisoEscrituraAutomatica, setAvisoEscrituraAutomatica] = useState<string | null>(null);
   /** Empreendimentos cuja ficha já foi avaliada para o preenchimento automático nesta abertura. */
   const fichaAvaliada = useRef<Set<string>>(new Set());
   // Ao ABRIR a planta com o lote já fechado: o que a ficha do vinculado tem vazio entra sozinho.
@@ -5020,20 +5027,38 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // disso o caminho é "Levar à ficha", com confirmação. Nunca troca valor existente.
   useEffect(() => {
     const alvo = empreendimentoVinculado;
-    if (!alvo || editor.loading || !levelId || fichaAvaliada.current.has(alvo.id)) return;
+    // Com pavimentos, espera o pavimento atual (o lote é medido nele); planta vazia avalia já.
+    if (!alvo || editor.loading || (!levelId && editor.model.levels.length > 0) || fichaAvaliada.current.has(alvo.id)) return;
     fichaAvaliada.current.add(alvo.id);
+
+    // ESCRITURA ← FICHA (22/10/2026): primeiro, com a ficha COMO ESTAVA — se viesse depois do
+    // preenchimento abaixo, a escritura copiaria o desenho e deixaria de ser conferência.
+    const escritura = comandosDaEscrituraPelaFicha(editor.model.areaEscrituraMm2, limitesDoNivel, alvo);
+    if (escritura.length > 0) {
+      editor.runBatch(escritura); // um comando só: Ctrl+Z desfaz tudo de uma vez
+      const lados = escritura.length - (escritura[0].type === 'SetAreaEscritura' ? 1 : 0);
+      setAvisoEscrituraAutomatica(
+        `Escritura preenchida pela ficha (estava vazia): ${[
+          escritura[0].type === 'SetAreaEscritura' ? 'área' : null,
+          lados > 0 ? `${lados} lado(s)` : null,
+        ]
+          .filter(Boolean)
+          .join(' e ')} — confira no Quadro de divisas.`,
+      );
+    }
+
     if (!terreno?.fechado) return;
     const patch = patchDaPlantaParaFicha(medidasDaPlanta, alvo, 'SO_VAZIOS');
     const campos = Object.keys(patch) as (keyof typeof patch)[];
     if (campos.length === 0) return;
     empreendimentoService
-      .update(alvo.id, patch)
+      .update(alvo.id, patch as Partial<Empreendimento>)
       .then((salvo) => {
         setEmpreendimentos((lista) => lista.map((e) => (e.id === salvo.id ? salvo : e)));
         setAvisoFichaAutomatica(`Preenchido automaticamente na ficha (estava vazio): ${campos.map((c) => ROTULO_DA_COLUNA[c]).join(', ')}.`);
       })
       .catch((e) => console.warn('[terreno] não deu para preencher a ficha do empreendimento:', e));
-  }, [empreendimentoVinculado, editor.loading, levelId, terreno, medidasDaPlanta]);
+  }, [empreendimentoVinculado, editor.loading, levelId, terreno, medidasDaPlanta]); // eslint-disable-line react-hooks/exhaustive-deps
   const fichaNoPainel = useMemo<FichaNoPainel | null>(() => {
     if (!empreendimentoDoTerreno) return null;
     const diferencas = patchDaPlantaParaFicha(medidasDaPlanta, empreendimentoDoTerreno, 'TUDO');
@@ -5046,9 +5071,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         : Object.keys(diferencas).length === 0
           ? 'A ficha já tem os números do desenho.'
           : null,
-      avisoAutomatico: empreendimentoDoTerreno.id === empreendimentoVinculado?.id ? avisoFichaAutomatica : null,
+      avisoAutomatico:
+        empreendimentoDoTerreno.id === empreendimentoVinculado?.id
+          ? [avisoEscrituraAutomatica, avisoFichaAutomatica].filter(Boolean).join(' ') || null
+          : null,
     };
-  }, [empreendimentoDoTerreno, empreendimentoVinculado, medidasDaPlanta, terreno, avisoFichaAutomatica]);
+  }, [empreendimentoDoTerreno, empreendimentoVinculado, medidasDaPlanta, terreno, avisoFichaAutomatica, avisoEscrituraAutomatica]);
   const prismasDoEntornoDoEstudo = useMemo(() => {
     return prismasDoEntorno(entornoDoEstudo.vizinhos, limitesDoNivel, terreno?.anel ?? null);
   }, [limitesDoNivel, terreno, entornoDoEstudo.vizinhos]);
@@ -8230,13 +8258,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     if (!alvo) return;
 
     const patch = patchDaPlantaParaFicha(medidasDaPlanta, alvo, 'TUDO');
-    const fmt = (v: number) => v.toFixed(2).replace('.', ',');
+    // Tipo de terreno é texto (22/10/2026); o resto é medida com duas casas e unidade.
+    const fmt = (campo: string, v: unknown) =>
+      campo === 'terreno_tipo' ? String(v) : `${Number(v).toFixed(2).replace('.', ',')} ${campo === 'terreno_area' ? 'm²' : 'm'}`;
     const linhasDaConfirmacao = (Object.keys(patch) as (keyof typeof patch)[]).map((campo) => {
-      const unidade = campo === 'terreno_area' ? 'm²' : 'm';
       const antes = alvo[campo] ?? null;
-      return antes === null
-        ? `${ROTULO_DA_COLUNA[campo]}: ${fmt(patch[campo]!)} ${unidade} (hoje sem registro)`
-        : `${ROTULO_DA_COLUNA[campo]}: ${fmt(Number(antes))} → ${fmt(patch[campo]!)} ${unidade}`;
+      return antes === null || antes === ''
+        ? `${ROTULO_DA_COLUNA[campo]}: ${fmt(campo, patch[campo])} (hoje sem registro)`
+        : `${ROTULO_DA_COLUNA[campo]}: ${fmt(campo, antes)} → ${fmt(campo, patch[campo])}`;
     });
     if (linhasDaConfirmacao.length === 0) return;
     const atual = alvo.terreno_area ?? null;
@@ -8258,7 +8287,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     setGravandoArea(true);
     setErroArea(null);
     try {
-      const salvo = await empreendimentoService.update(empreendimentoId, patch);
+      const salvo = await empreendimentoService.update(empreendimentoId, patch as Partial<Empreendimento>);
       // §22 do guia: atualiza o array local, sem recarregar a lista inteira.
       setEmpreendimentos((lista) => lista.map((e) => (e.id === salvo.id ? salvo : e)));
     } catch (e) {
@@ -10325,6 +10354,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           zonaAplicadaAutomaticamente={zona.zonaAplicadaAutomaticamente}
           cidade={zona.cidade}
           onCidade={zona.setCidade}
+          avisoDaCidade={zona.cidadeAutomatica ? 'Cidade preenchida automaticamente pela ficha do empreendimento.' : null}
           mapas={zona.mapas}
           mapaId={zona.mapaId}
           onMapa={zona.setMapaId}

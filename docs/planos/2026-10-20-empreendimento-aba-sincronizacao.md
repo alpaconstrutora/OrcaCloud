@@ -65,6 +65,22 @@ proposta), então ganhou contagem própria em campos: `conflitosNovos` (este env
       Script `c:/tmp/pwtest/sincronizacao-aba-conferir.cjs`; prints `c:/tmp/pwtest/sincronizacao-0*.png`.
       **14/14 portões**, 0 escritas tentadas, 0 erros de JS/console/HTTP.
 
+### Merge com o PR #90 (22/10/2026) — "Trazer o terreno"
+Enquanto este PR esperava, o #90 (outra sessão) trouxe à aba um terceiro envio, o **terreno** da Planta
+(`services/terrenoEmpreendimentoSync.ts`, campos do próprio empreendimento), com card e botão próprios. Ele
+repetia os itens 1, 2 e 4: conflito contado mesmo já na Curadoria, nenhum retorno, botão fora do diagrama.
+Resolvido no merge, com as mesmas regras dos outros dois:
+| Decisão | Por quê |
+|---|---|
+| `terrenoEmpreendimentoSync.previewSync` classifica os conflitos (`conflicts` = só os novos; `naCuradoria`, `rejeitados` à parte) | item 1 |
+| "Trazer o terreno" no diagrama, ao lado de massa e loteamento; o card fica com os números e a lista de campos | item 4 |
+| Sem versão publicada, o botão **aparece desligado com o motivo** (o teste do #90 dizia "não oferece trazer") | item 5 — mesma regra de massa/loteamento; o teste foi ajustado e diz por quê |
+| Mensagem do resultado + `onChanged` | item 2 |
+Testes: 11 arquivos tocados pelos dois PRs, **93/93** (reporter JSON, conta fecha); `tsc` rc=0; UI 0. Tela real:
+**17/17 portões** (+3 do terreno: no diagrama desligado com o motivo, um botão só, card presente).
+Não há teste de serviço para a classificação no terreno — é a mesma chamada de `classificarConflitos` da massa e do
+loteamento, coberta em `sincronizacaoCuradoria.test.ts`; o teste de tela cobre a exibição.
+
 ### Achado na conferência real (22/10/2026) — corrigido no mesmo PR
 O Garden Cambuhy ganhou em 21/10 um estudo da Planta ("Garden") com **0 versões publicadas**. A Arquitetura
 dizia **"Alinhado"** — não há com o que estar alinhado. Os adaptadores passam a marcar `semVersaoPublicada`

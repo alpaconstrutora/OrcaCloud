@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type Command, type BoundaryPapel } from '../utils/blueprintKernel';
 import { divisasDoLote, medirTerreno } from '../utils/blueprintTerreno';
-import { compararComFicha, medidasDaPlantaParaFicha, patchDaPlantaParaFicha } from '../utils/blueprintTerrenoDaFicha';
+import { comandosDaEscrituraPelaFicha, compararComFicha, medidasDaPlantaParaFicha, patchDaPlantaParaFicha } from '../utils/blueprintTerrenoDaFicha';
 
 type Canto = { x: number; y: number };
 
@@ -43,6 +43,7 @@ describe('medidasDaPlantaParaFicha', () => {
       lateralDireitaM: 30,
       lateralEsquerdaM: 30,
       profundidadeM: 30,
+      tipo: 'Regular (Retangular)',
     });
   });
 
@@ -56,6 +57,7 @@ describe('medidasDaPlantaParaFicha', () => {
     expect(m.lateralDireitaM).toBeCloseTo(30.81, 2);
     expect(m.profundidadeM).toBeCloseTo((30 + 30.81) / 2, 2);
     expect(m.areaM2).toBe(435);
+    expect(m.tipo).toBe('Irregular (Geometria complexa)');
   });
 
   it('lado sem papel fica fora; uma lateral só vira a profundidade', () => {
@@ -68,14 +70,14 @@ describe('medidasDaPlantaParaFicha', () => {
 
   it('contorno aberto ou sem lote: nada (estimativa não vira número da ficha)', () => {
     const aberto = lote([{ x: 0, y: 0 }, { x: 12_000, y: 0 }, { x: 12_000, y: 30_000 }, { x: 0, y: 30_000 }], QUATRO, false);
-    const vazio = { areaM2: null, frenteM: null, fundosM: null, lateralDireitaM: null, lateralEsquerdaM: null, profundidadeM: null };
+    const vazio = { areaM2: null, frenteM: null, fundosM: null, lateralDireitaM: null, lateralEsquerdaM: null, profundidadeM: null, tipo: null };
     expect(medidasDaPlantaParaFicha(aberto.terreno, aberto.limites)).toEqual(vazio);
     expect(medidasDaPlantaParaFicha(null, [])).toEqual(vazio);
   });
 });
 
 describe('compararComFicha', () => {
-  const planta = { areaM2: 360, frenteM: 12, fundosM: 12, lateralDireitaM: 30, lateralEsquerdaM: 30, profundidadeM: 30 };
+  const planta = { areaM2: 360, frenteM: 12, fundosM: 12, lateralDireitaM: 30, lateralEsquerdaM: 30, profundidadeM: 30, tipo: 'Regular (Retangular)' };
 
   it('as cinco situações, na ordem da ficha', () => {
     const linhas = compararComFicha(
@@ -83,6 +85,7 @@ describe('compararComFicha', () => {
       { terreno_area: 360.004, terreno_frente: 18, terreno_fundos: 11, terreno_profundidade: null },
     );
     expect(linhas.map((l) => [l.campo, l.situacao])).toEqual([
+      ['terreno_tipo', 'SO_PLANTA'],
       ['terreno_area', 'IGUAL'],
       ['terreno_frente', 'DIFERENTE'],
       ['terreno_fundos', 'SO_FICHA'],
@@ -93,17 +96,58 @@ describe('compararComFicha', () => {
 });
 
 describe('patchDaPlantaParaFicha', () => {
-  const planta = { areaM2: 360, frenteM: 12, fundosM: 12, lateralDireitaM: 30, lateralEsquerdaM: 30, profundidadeM: 30 };
+  const planta = { areaM2: 360, frenteM: 12, fundosM: 12, lateralDireitaM: 30, lateralEsquerdaM: 30, profundidadeM: 30, tipo: 'Regular (Retangular)' };
 
   it('SO_VAZIOS: só o que a ficha não tem — nunca troca valor existente', () => {
     expect(
       patchDaPlantaParaFicha(planta, { terreno_area: 1229, terreno_frente: null, terreno_fundos: 11, terreno_profundidade: null, terreno_lateral_direita: null, terreno_lateral_esquerda: 30 }, 'SO_VAZIOS'),
-    ).toEqual({ terreno_frente: 12, terreno_profundidade: 30, terreno_lateral_direita: 30 });
+    ).toEqual({ terreno_tipo: 'Regular (Retangular)', terreno_frente: 12, terreno_profundidade: 30, terreno_lateral_direita: 30 });
   });
 
   it('TUDO: leva o que difere; o que a Planta não mede não entra (não vai zero nem null)', () => {
     expect(
-      patchDaPlantaParaFicha({ ...planta, fundosM: null }, { terreno_area: 360, terreno_frente: 18, terreno_fundos: 11, terreno_profundidade: 71 }, 'TUDO'),
+      patchDaPlantaParaFicha({ ...planta, fundosM: null }, { terreno_tipo: 'Regular (Retangular)', terreno_area: 360, terreno_frente: 18, terreno_fundos: 11, terreno_profundidade: 71 }, 'TUDO'),
     ).toEqual({ terreno_frente: 12, terreno_profundidade: 30, terreno_lateral_direita: 30, terreno_lateral_esquerda: 30 });
+  });
+});
+
+describe('tipoDoTerreno (22/10/2026)', () => {
+  it('quadrado torto 0,3° ainda é Regular; 2° fora do esquadro é Irregular; 5 lados é Irregular', () => {
+    const quase = lote([{ x: 0, y: 0 }, { x: 12_000, y: 0 }, { x: 12_000 + 157, y: 30_000 }, { x: 157, y: 30_000 }], QUATRO);
+    expect(medidasDaPlantaParaFicha(quase.terreno, quase.limites).tipo).toBe('Regular (Retangular)');
+    const torto = lote([{ x: 0, y: 0 }, { x: 12_000, y: 0 }, { x: 12_000 + 1_048, y: 30_000 }, { x: 1_048, y: 30_000 }], QUATRO);
+    expect(medidasDaPlantaParaFicha(torto.terreno, torto.limites).tipo).toBe('Irregular (Geometria complexa)');
+    const cinco = lote([{ x: 0, y: 0 }, { x: 12_000, y: 0 }, { x: 12_000, y: 30_000 }, { x: 6_000, y: 33_000 }, { x: 0, y: 30_000 }], ['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'FUNDOS', 'LATERAL_ESQUERDA']);
+    expect(medidasDaPlantaParaFicha(cinco.terreno, cinco.limites).tipo).toBe('Irregular (Geometria complexa)');
+  });
+});
+
+describe('comandosDaEscrituraPelaFicha (22/10/2026)', () => {
+  const ret = () => lote([{ x: 0, y: 0 }, { x: 18_000, y: 0 }, { x: 11_000, y: 71_000 }, { x: 0, y: 71_000 }], QUATRO);
+  const GARDEN = { terreno_area: 1229, terreno_frente: 18, terreno_fundos: 11, terreno_profundidade: 71 };
+
+  it('escritura vazia: área e os lados de papel único vêm da ficha (profundidade não é lado)', () => {
+    const { limites } = ret();
+    const cmds = comandosDaEscrituraPelaFicha(null, limites, GARDEN);
+    expect(cmds[0]).toEqual({ type: 'SetAreaEscritura', areaMm2: 1_229_000_000 });
+    const lados = cmds.slice(1) as { boundaryId: string; medidaMm: number }[];
+    const papelDe = (id: string) => limites.find((b) => b.id === id)!.papel;
+    expect(lados.map((c) => [papelDe(c.boundaryId), c.medidaMm])).toEqual([['FRENTE', 18_000], ['FUNDOS', 11_000]]);
+  });
+
+  it('o que a escritura já tem não é trocado; ficha vazia não gera nada', () => {
+    const { limites } = ret();
+    const comFrente = limites.map((b) => (b.papel === 'FRENTE' ? { ...b, medidaEscrituraMm: 17_500 } : b));
+    const cmds = comandosDaEscrituraPelaFicha(1_000_000_000, comFrente, GARDEN);
+    expect(cmds.map((c) => c.type)).toEqual(['SetBoundaryEscritura']);
+    expect(comandosDaEscrituraPelaFicha(null, limites, {})).toEqual([]);
+    expect(comandosDaEscrituraPelaFicha(null, limites, null)).toEqual([]);
+  });
+
+  it('dois lados com o mesmo papel: a ficha não diz como dividir — o papel fica de fora', () => {
+    const cinco = lote([{ x: 0, y: 0 }, { x: 12_000, y: 0 }, { x: 12_000, y: 30_000 }, { x: 6_000, y: 33_000 }, { x: 0, y: 30_000 }], ['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'FUNDOS', 'LATERAL_ESQUERDA']);
+    const cmds = comandosDaEscrituraPelaFicha(1, cinco.limites, { terreno_fundos: 13, terreno_frente: 12 });
+    expect(cmds).toHaveLength(1);
+    expect(cinco.limites.find((b) => b.id === (cmds[0] as { boundaryId: string }).boundaryId)!.papel).toBe('FRENTE');
   });
 });

@@ -59,7 +59,8 @@ const terrenoDe = (e?: Empreendimento) => ({
   terreno_profundidade: e?.terreno_profundidade?.toString() ?? '',
 });
 type TerrenoForm = ReturnType<typeof terrenoDe>;
-type CampoDoTerreno = Exclude<keyof TerrenoForm, 'terreno_tipo'>;
+// Inclui o tipo desde 22/10/2026: a Planta deduz Regular/Irregular do desenho.
+type CampoDoTerreno = keyof TerrenoForm;
 
 /** Cor da linha "Planta: …" sob cada campo (§8: texto colorido, sem pílula). */
 const COR_DA_SITUACAO: Record<SituacaoDoCampo, string> = {
@@ -69,7 +70,7 @@ const COR_DA_SITUACAO: Record<SituacaoDoCampo, string> = {
   SO_FICHA: 'text-gray-500',
   NENHUM: 'text-gray-500',
 };
-const metros = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const metros = (v: number | string) => (typeof v === 'string' ? v : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const emptyTorreForm = () => ({ name: '', floors_count: '', units_per_floor: '' });
 
 export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId, empreendimento, onTerrenoSaved, somenteLeitura }) => {
@@ -130,7 +131,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
   // quando a ficha gravada (ou a planta) muda — nunca um campo que a pessoa acabou de apagar.
   const comparacao = React.useMemo(
     () => (daPlanta?.ok ? compararComFicha(daPlanta.medidas, empreendimento ?? null) : null),
-    [daPlanta, empreendimento?.terreno_area, empreendimento?.terreno_frente, empreendimento?.terreno_fundos, empreendimento?.terreno_profundidade], // eslint-disable-line react-hooks/exhaustive-deps
+    [daPlanta, empreendimento?.terreno_tipo, empreendimento?.terreno_area, empreendimento?.terreno_frente, empreendimento?.terreno_fundos, empreendimento?.terreno_profundidade], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const valorDaPlanta = (key: CampoDoTerreno) => comparacao?.find(l => l.campo === key)?.planta ?? null;
   /** Campos que entraram no formulário vindos da Planta (estavam vazios na ficha). */
@@ -154,6 +155,20 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
       for (const l of comparacao ?? []) if (l.planta !== null) next[l.campo as CampoDoTerreno] = String(l.planta);
       return next;
     });
+  };
+  /** A linha sob o campo: "Planta: …" (âmbar se difere) ou, se veio dela, "Da Planta — confira e salve". */
+  const dicaDaPlanta = (key: CampoDoTerreno) => {
+    const linha = comparacao?.find(l => l.campo === key) ?? null;
+    if (!linha || linha.planta === null) return null;
+    const unidade = key === 'terreno_tipo' ? '' : key === 'terreno_area' ? ' m²' : ' m';
+    const daPlantaNoCampo = veioDaPlanta.has(key) && terrenoForm[key] === String(linha.planta);
+    return (
+      <p className={`text-xs ${daPlantaNoCampo ? 'text-blue-700' : COR_DA_SITUACAO[linha.situacao]}`} data-testid={`planta-${key}`}>
+        {daPlantaNoCampo
+          ? 'Da Planta — confira e salve'
+          : `Planta: ${metros(linha.planta)}${unidade}${linha.situacao === 'DIFERENTE' ? ' · diferente' : ''}`}
+      </p>
+    );
   };
   const [savingTerreno, setSavingTerreno] = React.useState(false);
 
@@ -310,23 +325,15 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                   <option value="">—</option>
                   {TERRENO_TIPO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
+                {dicaDaPlanta('terreno_tipo')}
               </div>
               {terrenoCampos.map(({ key, label }) => {
-                const linha = comparacao?.find(l => l.campo === key) ?? null;
-                const unidade = key === 'terreno_area' ? 'm²' : 'm';
-                const daPlantaNoCampo = veioDaPlanta.has(key) && linha?.planta !== null && terrenoForm[key] === String(linha?.planta);
                 return (
                   <div key={key} className="space-y-1.5">
                     <label htmlFor={`terreno-${key}`} className={rotuloCls}>{label}</label>
                     <input id={`terreno-${key}`} className={inputCls} type="number" step="0.01" min="0" value={terrenoForm[key]}
                       onChange={e => setTerrenoForm(p => ({ ...p, [key]: e.target.value }))} />
-                    {linha && linha.planta !== null && (
-                      <p className={`text-xs ${daPlantaNoCampo ? 'text-blue-700' : COR_DA_SITUACAO[linha.situacao]}`} data-testid={`planta-${key}`}>
-                        {daPlantaNoCampo
-                          ? 'Da Planta — confira e salve'
-                          : `Planta: ${metros(linha.planta)} ${unidade}${linha.situacao === 'DIFERENTE' ? ' · diferente' : ''}`}
-                      </p>
-                    )}
+                    {dicaDaPlanta(key)}
                   </div>
                 );
               })}

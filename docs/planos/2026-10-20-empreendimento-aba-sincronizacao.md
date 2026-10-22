@@ -88,4 +88,4 @@ dizia **"Alinhado"** — não há com o que estar alinhado. Os adaptadores passa
 estudo", com os dois "Trazer" desligados pelo motivo "O estudo ainda não tem versão publicada". Testes: +1 na tela
 (5b), +1 no relatório — área 28/28; `tsc` rc=0 (2ª tentativa; 1ª segfault do Node 24); `check-ui-standard.sh` 0.
 - [x] PR rascunho + CI verde — PR #89; `ci` (typecheck + suíte + build, 23m33s), Vercel e Vercel Preview Comments verdes
-- [ ] publicação (pelo usuário) + `conferir-producao.sh`
+- [x] publicação — PR #89 mesclado por squash (3a214876) em 22/10/2026; conferir-producao.sh provou o domínio servindo cad7359 (contém 3a214876) com os 3 textos; frente fechada

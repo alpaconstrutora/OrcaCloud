@@ -63,23 +63,82 @@ function tela(extra: Partial<React.ComponentProps<typeof TelaCasaAutomatica>> = 
     onUnidade: vi.fn(),
     ...extra,
   };
-  render(<TelaCasaAutomatica {...props} />);
-  return props;
+  const r = render(<TelaCasaAutomatica {...props} />);
+  return Object.assign(props, { rerender: (extra2: Partial<React.ComponentProps<typeof TelaCasaAutomatica>>) => r.rerender(<TelaCasaAutomatica {...props} {...extra2} />) });
 }
 
+/** Abre uma aba pelo rótulo (o contador vem colado: "Relatório3"). */
+const aba = (rotulo: string) => fireEvent.click(screen.getByRole('tab', { name: new RegExp(`^${rotulo}`) }));
+const nomesDasAbas = () => screen.getAllByRole('tab').map((t) => t.textContent);
+
 describe('TelaCasaAutomatica (F10)', () => {
+  it('abas (22/10/2026): sem prévia só Programa e Hipóteses; com ela, Resultado e Relatório (o contador fica vermelho com verificação em falta); Furos e Terraplenagem só quando há', () => {
+    tela();
+    expect(nomesDasAbas()).toEqual(['Programa', 'Hipóteses']);
+    expect(screen.getByTestId('programa-da-casa')).toBeTruthy();
+    expect(screen.queryByTestId('hipoteses-da-casa')).toBeNull();
+    aba('Hipóteses');
+    expect(screen.getByTestId('hipoteses-da-casa')).toBeTruthy();
+    expect(screen.queryByTestId('programa-da-casa')).toBeNull();
+    cleanup();
+    // Com a prévia, a tela abre no resultado.
+    tela({ casa: casa({ plano }) });
+    expect(nomesDasAbas()).toEqual(['Programa', 'Hipóteses', 'Resultado', 'Relatório3']);
+    expect(screen.getByTestId('previa-da-casa')).toBeTruthy();
+    const contador = within(screen.getByRole('tab', { name: /^Relatório/ })).getByText('3');
+    expect(contador.className).toContain('text-red-600');
+    expect(contador.getAttribute('title')).toBe('3 item(ns), 1 verificação(ões) em falta');
+    cleanup();
+    tela({ casa: casa({ plano: { ...plano, pendencias: plano.pendencias.filter((x) => x.grupo !== 'VERIFICACAO') } as PlanoDaCasa }) });
+    expect(within(screen.getByRole('tab', { name: /^Relatório/ })).getByText('2').className).not.toContain('text-red-600');
+  });
+
+  it('abas: Gerar, Criar alternativa e Lançar ficam na barra, em qualquer aba; com a prévia, Lançar é o único azul e Gerar vira "Gerar de novo"', () => {
+    tela({ casa: casa({ plano }) });
+    for (const nome of ['Programa', 'Hipóteses', 'Resultado', 'Relatório']) {
+      aba(nome);
+      expect(screen.getByTestId('gerar-casa').textContent).toContain('Gerar de novo');
+      expect(screen.getByTestId('lancar-casa')).toBeTruthy();
+      expect(screen.getByTestId('criar-alternativa-casa')).toBeTruthy();
+    }
+    expect(screen.getByTestId('lancar-casa').className).toContain('bg-blue-600');
+    expect(screen.getByTestId('gerar-casa').className).not.toContain('bg-blue-600');
+    cleanup();
+    tela();
+    expect(screen.getByTestId('gerar-casa').className).toContain('bg-blue-600');
+  });
+
+  it('abas: ao terminar de gerar, vai para o Resultado — mas quem está lendo o Relatório continua nele', () => {
+    const t = tela({ casa: casa({ rodando: true, progresso: { indice: 3, total: 24, rotulo: 'Pilares' } }) });
+    aba('Hipóteses');
+    // O progresso aparece em qualquer aba, abaixo da barra.
+    expect(screen.getByTestId('progresso-casa').textContent).toBe('Etapa 3 de 24: Pilares');
+    t.rerender({ casa: casa({ plano }) });
+    expect(screen.getByTestId('previa-da-casa')).toBeTruthy();
+    expect(screen.queryByTestId('hipoteses-da-casa')).toBeNull();
+    // Gerar de novo a partir do Relatório: ao terminar, o Relatório continua aberto.
+    aba('Relatório');
+    t.rerender({ casa: casa({ plano, rodando: true }) });
+    t.rerender({ casa: casa({ plano }) });
+    expect(screen.getByTestId('pendencias-da-casa')).toBeTruthy();
+  });
+
   it('F28: a chuva de projeto na tela — sem cidade nem intensidade, diz que acima de 100 m² o pluvial não roda; a cidade e a intensidade mexem nas hipóteses do estudo', () => {
     const props = tela({ chuva: { ...HIPOTESES_PLUVIAIS_PADRAO, cidade: null, intensidadeMmH: null }, onChuva: vi.fn() });
+    aba('Hipóteses');
     expect(screen.getByTestId('chuva-da-casa').textContent).toMatch(/acima disso o pluvial não roda/);
     const cidade = Object.keys(INTENSIDADE_POR_CIDADE)[0];
     fireEvent.change(screen.getByTestId('chuva-cidade'), { target: { value: cidade } });
     expect(props.onChuva).toHaveBeenCalledWith(expect.objectContaining({ cidade }));
     cleanup();
     tela({ chuva: { ...HIPOTESES_PLUVIAIS_PADRAO, intensidadeMmH: 150 }, onChuva: vi.fn() });
+    aba('Hipóteses');
     expect(screen.getByTestId('chuva-da-casa').textContent).toMatch(/150 mm\/h, informada no estudo/);
     cleanup();
     // Sem as hipóteses pluviais (a tela fora do editor), a seção não aparece.
     tela();
+    aba('Hipóteses');
+    expect(screen.getByTestId('hipoteses-da-casa')).toBeTruthy();
     expect(screen.queryByTestId('chuva-da-casa')).toBeNull();
   });
 
@@ -119,14 +178,21 @@ describe('TelaCasaAutomatica (F10)', () => {
       'Águas pluviais (calhas, condutores, saída)não rodousem intensidade de chuva',
       'Climatizaçãodesligadadesligada nas hipóteses da casa',
     ]);
-    // A premissa que faltou, em destaque.
-    expect(screen.getByTestId('casa-parou').textContent).toContain('informe a cidade');
-    // As faltas abertas; os outros grupos recolhidos até o clique.
+    // A premissa que faltou, à vista em uma linha (a lista mora no Relatório).
+    expect(screen.getByTestId('casa-parou').textContent).toContain('Faltam 1 premissa(s): 1 etapa(s) não rodaram.');
+    expect(screen.getByTestId('casa-parou').textContent).not.toContain('informe a cidade');
+    // O relatório na aba dele: as faltas abertas; os outros grupos recolhidos até o clique.
+    aba('Relatório');
     const rel = screen.getByTestId('pendencias-da-casa');
     expect(rel.textContent).toContain('3 trecho(s) passando por porta ou janela');
     expect(rel.textContent).not.toContain('confira o padrão da concessionária');
     fireEvent.click(within(rel).getByRole('button', { name: /CONFERIR NA NORMA/ }));
     expect(rel.textContent).toContain('confira o padrão da concessionária');
+    // "Ver no relatório" abre o Relatório no grupo das premissas.
+    aba('Resultado');
+    fireEvent.click(screen.getByTestId('ver-premissas-faltando'));
+    expect(screen.getByTestId('pendencias-da-casa').textContent).toContain('informe a cidade');
+    expect(screen.getByTestId('pendencias-da-casa').textContent).not.toContain('3 trecho(s) passando por porta ou janela');
   });
 
   it('lançar: desligado com o motivo da trava; ligado, chama o lançamento; criar alternativa também', async () => {
@@ -147,6 +213,7 @@ describe('TelaCasaAutomatica (F10)', () => {
 
   it('o número é livre enquanto se digita: o "5" de "5500" não vira 2000; sai do campo, volta para a faixa', () => {
     const p = tela();
+    aba('Hipóteses');
     const chuveiro = screen.getByLabelText('Chuveiro elétrico (W)') as HTMLInputElement;
     fireEvent.change(chuveiro, { target: { value: '5' } });
     expect(p.onPremissas).not.toHaveBeenCalled();
@@ -187,22 +254,27 @@ describe('TelaCasaAutomatica (F10)', () => {
     const onPremissas = vi.fn();
     // Na térrea escolhida, as hipóteses do sobrado somem; no Automático (o padrão, F22) e no sobrado, aparecem.
     tela({ onPremissas, premissas: { ...PREMISSAS_DA_CASA_PADRAO, pavimentos: 1 } });
+    aba('Hipóteses');
+    expect(screen.getByTestId('hipoteses-da-casa')).toBeTruthy();
     expect(screen.queryByLabelText('Laje entre os pavimentos (cm)')).toBeNull();
+    aba('Programa');
     fireEvent.change(screen.getByLabelText('Pavimentos'), { target: { value: '2' } });
     expect(onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ pavimentos: 2 }));
     fireEvent.change(screen.getByLabelText('Pavimentos'), { target: { value: 'AUTOMATICO' } });
     expect(onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ pavimentos: 'AUTOMATICO' }));
     cleanup();
     tela({});
+    aba('Hipóteses');
     expect(screen.getByLabelText('Laje entre os pavimentos (cm)')).toBeTruthy();
     cleanup();
 
     const doSobrado = { ...plano, sobrado: { nivelSuperiorId: 'lvl_0002', nucleo: { lado: 'DIREITA' }, escada: { degraus: 17, espelhoMm: 171, pisoMm: 306, blondelMm: 647 }, portas: { terreo: 'Sala', superior: 'Circulação' } } } as unknown as PlanoDaCasa;
     tela({ premissas: { ...PREMISSAS_DA_CASA_PADRAO, pavimentos: 2 }, casa: casa({ plano: doSobrado }) });
-    expect((screen.getByLabelText('Laje entre os pavimentos (cm)') as HTMLInputElement).value).toBe('10');
-    expect((screen.getByLabelText('Shaft das instalações (cm)') as HTMLInputElement).value).toBe('40');
     expect(screen.getByTestId('sobrado-da-casa').textContent).toMatch(/17 degraus de 171 × 306 mm/);
     expect(screen.getByTestId('lancar-casa').textContent).toBe('Lançar os dois pavimentos');
+    aba('Hipóteses');
+    expect((screen.getByLabelText('Laje entre os pavimentos (cm)') as HTMLInputElement).value).toBe('10');
+    expect((screen.getByLabelText('Shaft das instalações (cm)') as HTMLInputElement).value).toBe('40');
   });
 
   it('F27-D4: 3 pavimentos — o seletor grava 3; o resumo diz as duas escadas e o terraço; o botão, os três pavimentos', () => {
@@ -216,14 +288,16 @@ describe('TelaCasaAutomatica (F10)', () => {
       sobrado: { nivelSuperiorId: 'lvl_0002', nucleo: { lado: 'DIREITA' }, escada: { degraus: 17, espelhoMm: 171, pisoMm: 306, blondelMm: 647 }, portas: { terreo: 'Sala', superior: 'Circulação' }, segundo: { nivelId: 'lvl_0003', retangulo: { x0: 0, y0: 0, x1: 5400, y1: 6000 }, porta: 'Circulação', terracoM2: 64.08 } },
     } as unknown as PlanoDaCasa;
     tela({ premissas: { ...PREMISSAS_DA_CASA_PADRAO, pavimentos: 3 }, casa: casa({ plano: deTres }) });
-    expect((screen.getByLabelText('Pavimentos') as HTMLSelectElement).value).toBe('3');
     expect(screen.getByTestId('sobrado-da-casa').textContent).toMatch(/duas escadas em U.*terraço de 64,1 m²/s);
     expect(screen.getByTestId('lancar-casa').textContent).toBe('Lançar os três pavimentos');
+    aba('Programa');
+    expect((screen.getByLabelText('Pavimentos') as HTMLSelectElement).value).toBe('3');
   });
 
   it('F14b: o forro — ligado mostra o pé-direito livre de cada uso e o piso; desligar muda a premissa e esconde os campos', () => {
     const onPremissas = vi.fn();
     tela({ onPremissas });
+    aba('Hipóteses');
     expect((screen.getByTestId('forro-da-casa') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Pé-direito livre: sala, dormitório, cozinha (m)') as HTMLInputElement).value).toBe('2.5');
     expect((screen.getByLabelText('Pé-direito livre: banheiro, serviço, circulação (m)') as HTMLInputElement).value).toBe('2.3');
@@ -232,6 +306,8 @@ describe('TelaCasaAutomatica (F10)', () => {
     expect(onPremissas).toHaveBeenLastCalledWith(expect.objectContaining({ forro: expect.objectContaining({ lancar: false }) }));
     cleanup();
     tela({ premissas: { ...PREMISSAS_DA_CASA_PADRAO, forro: { ...PREMISSAS_DA_CASA_PADRAO.forro, lancar: false } } });
+    aba('Hipóteses');
+    expect(screen.getByTestId('forro-da-casa')).toBeTruthy();
     expect(screen.queryByLabelText('Piso acabado (cm)')).toBeNull();
   });
 
@@ -248,8 +324,12 @@ describe('TelaCasaAutomatica (F10)', () => {
     ];
     const comFuros = { ...plano, resultado, resumo: { ...plano.resumo, furos: { emViga: 2, dispensa: 1, verificar: 1, emBaldrame: 0, emLaje: 1, lista } } } as unknown as PlanoDaCasa;
     tela({ casa: casa({ plano: comFuros }) });
+    expect(screen.queryByTestId('furos-da-casa')).toBeNull();
+    expect(nomesDasAbas()).toContain('Furos3');
+    aba('Furos');
     const sec = screen.getByTestId('furos-da-casa');
-    expect(sec.textContent).toContain('Furos previstos para o calculista (3)');
+    expect(sec.textContent).toContain('Furos previstos para o calculista');
+    expect(sec.textContent).toContain('3 furo(s)');
     expect(sec.textContent).toContain('1 dispensam a verificação');
     expect(sec.textContent).toContain('1 a verificar com o calculista');
     expect(sec.textContent).toContain('dispensa a verificação');
@@ -258,9 +338,10 @@ describe('TelaCasaAutomatica (F10)', () => {
     expect(sec.textContent).toContain('passagem na laje');
     expect(sec.textContent).toContain('Térreo');
     expect(sec.textContent).toContain('5,2');
-    // Sem furos, a seção não aparece.
+    // Sem furos, nem a aba nem a seção.
     cleanup();
     tela({ casa: casa({ plano }) });
+    expect(screen.queryByRole('tab', { name: /^Furos/ })).toBeNull();
     expect(screen.queryByTestId('furos-da-casa')).toBeNull();
   });
   it('F25: o platô no terreno inclinado — a cota, os volumes, os muros e a entrada; e os campos das premissas', () => {
@@ -270,6 +351,7 @@ describe('TelaCasaAutomatica (F10)', () => {
       entrada: { tipo: 'ESCADA', desnivelMm: 1092, comprimentoMm: 1960, degraus: 7, espelhoMm: 156, cabe: true }, parametros: {},
     };
     tela({ casa: casa({ plano: { ...plano, resumo: { ...plano.resumo, terraplenagem } } as unknown as PlanoDaCasa }) });
+    aba('Terraplenagem');
     const sec = screen.getByTestId('terraplenagem-do-plano');
     expect(sec.textContent).toContain('Platô a 100,942 m');
     expect(sec.textContent).toContain('corte 59,1 m³');
@@ -277,10 +359,14 @@ describe('TelaCasaAutomatica (F10)', () => {
     expect(sec.textContent).toContain('muros de arrimo 38,1 m');
     expect(sec.textContent).toContain('escada de 7 degrau(s) de 156 mm');
     // as premissas: ligada mostra os campos; desligada, esconde
+    aba('Hipóteses');
     expect(screen.getByLabelText('Talude até (m de altura; acima, muro)')).toBeTruthy();
     cleanup();
     tela({ casa: casa({ plano }), premissas: { ...PREMISSAS_DA_CASA_PADRAO, terraplenagem: { ...PREMISSAS_DA_CASA_PADRAO.terraplenagem, lancar: false } } });
+    expect(screen.queryByRole('tab', { name: /^Terraplenagem/ })).toBeNull();
     expect(screen.queryByTestId('terraplenagem-do-plano')).toBeNull();
+    aba('Hipóteses');
+    expect(screen.getByTestId('terraplenagem-da-casa')).toBeTruthy();
     expect(screen.queryByLabelText('Talude até (m de altura; acima, muro)')).toBeNull();
   });
 });

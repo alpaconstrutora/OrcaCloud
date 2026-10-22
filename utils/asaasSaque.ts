@@ -70,10 +70,39 @@ export function idDoPedido(p: PedidoDeSaque): { coluna: 'asaas_transfer_id' | 'a
     return null;
 }
 
-/** Mesmo CPF/CNPJ (só dígitos, 11 ou 14). Vazio em qualquer lado = não confere. */
+/** Mínimo de dígitos visíveis para aceitar um CPF/CNPJ mascarado pela Asaas. */
+const MIN_VISIVEIS = 6;
+
+/** Documento só com dígitos e '*' (a máscara), sem pontuação. */
+const comMascara = (s: string | null | undefined) => (s ?? '').replace(/[^\d*]/g, '');
+
+type Conferencia = 'confere' | 'difere' | 'mascarado_demais';
+
+/**
+ * CPF/CNPJ informado pela Asaas × o do cadastro (11 ou 14 dígitos).
+ *
+ * 22/10/2026: a Asaas manda o CPF do titular de chave de pessoa física MASCARADO
+ * (`***.533.946-**`); CNPJ vem inteiro. Mascarado, confere posição por posição:
+ * cada dígito visível tem de ser o do cadastro na MESMA posição, com pelo menos
+ * MIN_VISIVEIS visíveis — menos que isso não dá para conferir (falha fechada).
+ */
+function conferirDocumento(informado: string | null | undefined, cadastro: string | null | undefined): Conferencia {
+    const c = so(cadastro);
+    const i = comMascara(informado);
+    if ((c.length !== 11 && c.length !== 14) || i.length !== c.length) return 'difere';
+    if (!i.includes('*')) return i === c ? 'confere' : 'difere';
+    let visiveis = 0;
+    for (let k = 0; k < i.length; k++) {
+        if (i[k] === '*') continue;
+        if (i[k] !== c[k]) return 'difere';
+        visiveis++;
+    }
+    return visiveis >= MIN_VISIVEIS ? 'confere' : 'mascarado_demais';
+}
+
+/** Mesmo CPF/CNPJ: `a` o informado pela Asaas (pode vir mascarado), `b` o do cadastro. Vazio = não confere. */
 export function mesmoDocumento(a: string | null | undefined, b: string | null | undefined): boolean {
-    const da = so(a), db = so(b);
-    return (da.length === 11 || da.length === 14) && da === db;
+    return conferirDocumento(a, b) === 'confere';
 }
 
 /**
@@ -123,13 +152,19 @@ export function decidirSaque(p: PedidoDeSaque, registro: PagamentoRegistrado | n
         // ser o da entidade, salvo conta marcada por gestor como titular diferente autorizado.
         if (!registro.titular_diferente_autorizado) {
             const esperado = so(registro.favorecido_documento_esperado);
-            const titular = so(p.transfer?.bankAccount?.cpfCnpj);
+            const informado = (p.transfer?.bankAccount?.cpfCnpj ?? '').trim();
             if (esperado.length !== 11 && esperado.length !== 14) {
                 return recusa('Favorecido sem CPF/CNPJ registrado no OrçaCloud para conferir o titular da chave.');
             }
-            if (!titular) return recusa('A Asaas não informou o titular da chave — sem como conferir.');
-            if (titular !== esperado) {
-                return recusa(`O titular da chave (CPF/CNPJ terminado em ${titular.slice(-4)}) não é o favorecido cadastrado.`);
+            if (!comMascara(informado)) return recusa('A Asaas não informou o titular da chave — sem como conferir.');
+            const conferencia = conferirDocumento(informado, esperado);
+            if (conferencia === 'mascarado_demais') {
+                return recusa(`A Asaas informou o CPF/CNPJ do titular mascarado demais para conferir (${informado}).`);
+            }
+            if (conferencia === 'difere') {
+                return recusa(informado.includes('*')
+                    ? `O titular da chave (CPF/CNPJ ${informado}) não é o favorecido cadastrado.`
+                    : `O titular da chave (CPF/CNPJ terminado em ${so(informado).slice(-4)}) não é o favorecido cadastrado.`);
             }
         }
         return { status: 'APPROVED' };

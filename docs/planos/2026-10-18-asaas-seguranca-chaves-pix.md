@@ -61,3 +61,20 @@ Os 6 itens recomendados (análise conferida no banco, no código e nos segredos,
 | 4 | `admin@admin.com`: 14 políticas restantes em 10 tabelas (portal do corretor, unidades de negociação, CRM, storage) sem o OU do e-mail — `aplicar_20271018480000`, gerada da definição do banco, trava final; usuário apagado (nunca entrou, e-mail não confirmado; 1 identidade e 2 tokens de uso único pendentes, cascata do auth; nenhuma referência de negócio). Cópia do registro no rascunho da sessão | 0 políticas com o e-mail; usuário, identidade e tokens = 0 | ✅ |
 | 5 | Webhook vira GATILHO: `_shared/asaasConfirmar.ts` busca o objeto na Asaas com a chave da conta do registro e processa o status real (`eventoDoStatus`, ganhou chargeback); o corpo do aviso só fornece o id. Falha transitória → 503 (reenvio); permanente → 200 (não pausar a fila). Chave global e reserva removidas do código (`asaasConta.ts`) e os segredos `ASAAS_API_KEY`/`ASAAS_ENV` apagados do servidor. Usuário: "sim" ao item 5 | 5 Edges republicadas (401 sem credencial). Prova sem dinheiro com o token real: PIX forjado e boleto forjado → ignorados; aviso do PIX real repetido → conferido na Asaas (`confirmado: TRANSFER_DONE`), nada regravado; repetido de novo após apagar os segredos → igual | ✅ |
 | 6 | Painel da Asaas (do usuário): 2FA de todos, acesso mínimo, troca de chave na saída de alguém | — | ⏳ (usuário) |
+| 7 | **CPF mascarado** (ver abaixo, 22/10/2026): `utils/asaasSaque.conferirDocumento` confere CPF/CNPJ mascarado pela Asaas posição a posição (mín. 6 dígitos visíveis; menos = recusa), em `decidirSaque` e `escolherReserva`; `asaas-payment` não grava mais o miolo mascarado em `beneficiary_document` | 6 testes novos de mascarado; testes Asaas verdes; tsc; as 2 Edges republicadas (401 sem credencial); PIX real reenviado aprovado | ⏳ |
+
+## 22/10/2026 — 1º PIX para chave de pessoa física recusado pela nossa validação
+
+Pedido (sessão de 22/10, ~18 h): *"fiz um pix com desenvolvedor@alpaconstrutora.com.br e a
+transferência Pix não foi concluída (Autorização externa foi recusada). verifique por que"* → depois
+da causa e da proposta: *"sim"*.
+
+Medido: `asaas_saque_decisoes` 22/10 17:58 REFUSED "O titular da chave (CPF/CNPJ terminado em 3946)
+não é o favorecido cadastrado". A Asaas mandou `cpfCnpj: "***.533.946-**"` (titular Altair Pereira
+da Rosa, o próprio favorecido); o item 2 tirava só os dígitos (`533946`) e comparava com o CPF inteiro
+do cadastro — todo PIX para chave de CPF seria recusado. CNPJ vem inteiro (18/10: `60897254000186`),
+por isso não apareceu antes. O exemplo da doc oficial que o item 2 seguiu não mostrava a máscara.
+
+Decisão (usuário aceitou a recomendação): conferir só os dígitos visíveis, na mesma posição. Seis de
+onze dígitos coincidirem por acaso com outra pessoa é ~1 em 1 milhão; conferir também o nome foi
+descartado por recusar cadastro com nome abreviado.

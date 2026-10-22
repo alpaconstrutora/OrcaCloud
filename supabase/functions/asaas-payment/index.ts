@@ -332,7 +332,10 @@ serve(async (req: Request) => {
         // Titular resolvido pela Asaas vale mais que o do cadastro (que pode estar
         // vazio — 1º PIX real, 18/10/2026, saiu "PIX enviado para .").
         const titularAsaas = t.bankAccount?.ownerName?.trim() || null;
-        const docAsaas = (t.bankAccount?.cpfCnpj ?? '').replace(/\D/g, '') || null;
+        // CPF vem MASCARADO (`***.533.946-**`, 22/10/2026): sobrar só o miolo apagaria
+        // o documento do cadastro — mascarado, fica o do cadastro.
+        const docAsaasBruto = t.bankAccount?.cpfCnpj ?? '';
+        const docAsaas = docAsaasBruto.includes('*') ? null : (docAsaasBruto.replace(/\D/g, '') || null);
         const favorecidoFinal = titularAsaas ?? nome;
 
         // Fica em andamento; a conclusão (título PAGO + taxa) é do processador

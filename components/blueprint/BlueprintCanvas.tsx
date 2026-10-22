@@ -564,8 +564,9 @@ function fatorDeAnotacao(escalaPxPorMm: number): number {
 const COR_DA_CHAMADA = '#94a3b8';
 /**
  * Abaixo disto (1 m = 2 cm de tela — o lote inteiro na tela) não há papel para centenas de textos: as
- * chamadas viravam uma estrela de linhas por cima do desenho (visto no harness com a planta Garden,
- * 22/10/2026). Ali o texto fica colado ao símbolo, no melhor lugar que houver, sem chamada.
+ * chamadas viravam uma estrela de linhas por cima do desenho e, sem elas, os textos se amontoavam
+ * (visto no harness com a planta Garden, 22/10/2026). Decisão do usuário: nesse zoom os textos
+ * ELÉTRICOS não se escrevem — voltam ao aproximar. Os símbolos continuam.
  */
 const ESCALA_MINIMA_DA_CHAMADA_PX_MM = 0.02;
 /**
@@ -6425,8 +6426,11 @@ export default function BlueprintCanvas({
       preferidas?: (w: number, h: number) => PontoNaTela[];
       centrar?: boolean;
       atenuada: boolean;
+      /** A sigla das peças tipadas (hidráulica, climatização): não some no zoom do lote. */
+      naoEletrica?: boolean;
     }) => {
       if (longeDemais && a.prioridade >= PRIORIDADE_DA_ANOTACAO.DETALHE) return;
+      if (vista.escala < ESCALA_MINIMA_DA_CHAMADA_PX_MM && !a.naoEletrica) return;
       const linhas = a.linhas.map((l) => {
         const fonte = `${l.peso ? `${l.peso} ` : ''}${Math.round(l.px)}px ui-sans-serif, system-ui, sans-serif`;
         ctx.font = fonte;
@@ -7589,6 +7593,7 @@ export default function BlueprintCanvas({
             prioridade: PRIORIDADE_DA_ANOTACAO.IDENTIFICACAO,
             linhas: [{ texto: sigla, px: 11 * fz, peso: 'bold', cor: COR_DA_DISCIPLINA[t.disciplina] }],
             atenuada: atenuados.has(t.id),
+            naoEletrica: true,
           });
         }
         ctx.restore();

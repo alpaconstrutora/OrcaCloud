@@ -79,8 +79,20 @@ rascunho da planta Garden (`blueprint_branches.draft_payload`, 96 pontos elétri
 e 309 eletrodutos), canvas de `origin/main` × novo, em quatro zooms. Prints em `C:/tmp/rotulos-garden/`.
 - Apartamento (~0,04 px/mm, o print 1) e trabalho (~0,085): sem texto sobre texto; blocos da tomada
   ("-20- / 600 VA / Posicione sobre a bancada da pia") legíveis; luz como "C3".
-- Lote inteiro (~0,007): os textos não cabem fisicamente — amontoam (sem chamada). DECISÃO PENDENTE do
-  usuário: esconder os textos elétricos nesse zoom?
+- Lote inteiro (~0,007): os textos não cabem fisicamente — amontoavam (sem chamada).
+
+## Decisões posteriores (22/10/2026, mesma sessão)
+> 1. Zoom do lote inteiro: … Resposta: Esconde
+> 3. Publicar: … resposta/: sim
+> melhoria: nao precisa de texto Luz de teto. Pelo simbolo o usuário sabe do que se trata
+
+- Abaixo de 0,02 px/mm os textos ELÉTRICOS não se escrevem (os símbolos ficam; a sigla das peças
+  hidráulicas/climatização continua); voltam ao aproximar. Teste em
+  `BlueprintCanvasAnotacoesEletricas.test.tsx`.
+- "Luz teto" já tinha saído (luminária = "C3"), na tela e na prancha.
+- ⚠️ Achado ao testar: a prop `escala` do `BlueprintCanvas` NÃO muda a vista (ela é do canvas e começa em
+  0,05 px/mm), e em jsdom o canvas mede 0 × 0 e ignora a navegação. Os testes de zoom agora medem 800 × 600 e
+  mudam o zoom pela `navegacao` (centralizar / zoom −), conferindo pelos centros dos símbolos.
 - Ruído que sobra: a seção "2,5" em quase todo trecho, "N cond." e os números dos trechos cheios (que vêm
   de troncos com 30–109 condutores — ver Fora do escopo).
 

@@ -42,9 +42,14 @@ describe('BlueprintCanvas · os textos elétricos sem colisão', () => {
   type Chamada = { metodo: string; args: unknown[]; base?: unknown; fonte?: unknown };
   let chamadas: Chamada[] = [];
   const original = HTMLCanvasElement.prototype.getContext;
+  const medidas = ['clientWidth', 'clientHeight'] as const;
+  const medidasOriginais = medidas.map((k) => Object.getOwnPropertyDescriptor(HTMLElement.prototype, k));
 
   beforeEach(() => {
     chamadas = [];
+    // jsdom mede tudo 0 × 0, e o canvas com 0 × 0 ignora a navegação (o zoom): 800 × 600, como no app.
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 800 });
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 600 });
     (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
       observe() {}
       unobserve() {}
@@ -72,12 +77,17 @@ describe('BlueprintCanvas · os textos elétricos sem colisão', () => {
   });
   afterEach(() => {
     HTMLCanvasElement.prototype.getContext = original;
+    medidas.forEach((k, i) => {
+      const d = medidasOriginais[i];
+      if (d) Object.defineProperty(HTMLElement.prototype, k, d);
+      else delete (HTMLElement.prototype as unknown as Record<string, unknown>)[k];
+    });
   });
 
   /** Os textos do ÚLTIMO quadro (depois do último `clearRect`), com a caixa de cada um. */
   function textosDoUltimoQuadro(escala: number) {
     const m = cena();
-    render(
+    const canvas = (navegacao: React.ComponentProps<typeof BlueprintCanvas>['navegacao']) => (
       <BlueprintCanvas
         model={m}
         tool="selecionar"
@@ -90,11 +100,16 @@ describe('BlueprintCanvas · os textos elétricos sem colisão', () => {
         larguraAberturaMm={900}
         espessuraMm={150}
         passoGradeMm={200}
-        escala={escala}
+        escala={0.05}
         dx={0}
         dy={0}
-      />,
+        navegacao={navegacao}
+      />
     );
+    // ⚠️ A vista é do PRÓPRIO canvas (começa em 0,05 px/mm; a prop `escala` não a muda): o zoom vem
+    // pela navegação, como na barra — centralizar com escala mínima para aproximar, "zoom −" para afastar.
+    const { rerender } = render(canvas(escala >= 0.05 ? { seq: 1, acao: 'CENTRALIZAR', em: point(1500, 300), escalaMinima: escala } : null));
+    for (let e = 0.05, seq = 1; e > escala; e /= 1.25) rerender(canvas({ seq: seq++, acao: 'ZOOM_MENOS' }));
     const inicio = chamadas.map((c) => c.metodo).lastIndexOf('clearRect');
     return chamadas
       .slice(inicio)
@@ -121,6 +136,25 @@ describe('BlueprintCanvas · os textos elétricos sem colisão', () => {
       expect(nossos.map((t) => t.texto)).toEqual(expect.arrayContaining(['C1', 'Int · C1', '-2-', '600 VA', '100 VA', INSTRUCAO, 'a']));
     });
   }
+
+  it('⚠️ 22/10/2026 (decisão do usuário): no zoom do lote inteiro (< 0,02 px/mm) os textos elétricos não se escrevem; ao aproximar, voltam', () => {
+    const longe = textosDoUltimoQuadro(0.01).map((t) => t.texto);
+    for (const x of ['C1', 'Int · C1', '-2-', '600 VA', INSTRUCAO]) expect(longe).not.toContain(x);
+    chamadas = [];
+    const perto = textosDoUltimoQuadro(0.08).map((t) => t.texto);
+    for (const x of ['C1', 'Int · C1', '-2-', '600 VA', INSTRUCAO]) expect(perto).toContain(x);
+    // E o zoom MUDOU de verdade: os símbolos (interruptor a 1250 mm, tomada a 1750 mm) se afastam na
+    // tela na proporção do zoom. Mede-se pelos centros dos `arc` do último quadro, não pelos textos —
+    // esses o motor afasta justamente quando falta lugar.
+    const espalhamento = (escala: number) => {
+      chamadas = [];
+      textosDoUltimoQuadro(escala);
+      const inicio = chamadas.map((c) => c.metodo).lastIndexOf('clearRect');
+      const xs = chamadas.slice(inicio).filter((c) => c.metodo === 'arc').map((c) => Number(c.args[0]));
+      return Math.max(...xs) - Math.min(...xs);
+    };
+    expect(espalhamento(0.4)).toBeGreaterThan(espalhamento(0.08) * 2);
+  });
 
   it('a luminária escreve só o circuito ("C1"), não "Luz teto · C1"', () => {
     const textos = textosDoUltimoQuadro(0.2).map((t) => t.texto);

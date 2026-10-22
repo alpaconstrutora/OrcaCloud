@@ -203,6 +203,10 @@ Consequências:
 
 ## Estado
 
+**Plano encerrado em 22/10/2026:** Fases 1, 3 e 4 publicadas e verificadas em produção; Fase 2 cancelada
+(o vínculo já existia). Achado fora do escopo, não tratado aqui: `check-rls-postura.sh` (verificação 5)
+acusa 3 credenciais placeholder no Vault da captura de boletos por e-mail (`email_capture*`).
+
 - [x] Diagnóstico — 21/10/2026
 - [x] Decisões de negócio com o usuário — 21/10/2026
 - [x] Fase 1 — 5 de 5 **APLICADOS em 21/10/2026** (usuário rodou o arquivo; verificado de fora):
@@ -210,7 +214,19 @@ Consequências:
   sonda anon nas 6 RPCs = 401 "permission denied for function"; números no JWT do usuário iguais
   ao ensaio (Bella Vista R$ 300 mil; 2 alertas HIGH; saldo de partida −R$ 31.996,72, 90d −R$ 11.120,84).
 - [x] ~~Fase 2~~ — CANCELADA em 21/10: o vínculo já existe em Empreendimento › Vinculações
-- [ ] Fase 3 — escrita e ensaiada em 21/10/2026; e-mail de teste para alpaconstrutora@gmail.com
+- [x] Fase 3 — **CONCLUÍDA e publicada em 22/10/2026** (PR #86, squash `d5b0918c`; domínio servindo
+  `84d02ac`, que o contém; conteúdo da frente provado idêntico ao da main). Verificado em produção:
+  Edge v6 `verify_jwt=false` recusa sem cabeçalho / chave pública / token falso (401 ×3); as 8 RPCs
+  recusam a chave pública ("permission denied for function"); chamada do cron = 200; cron
+  `financial-report-hourly` (job 61) rodando de hora em hora com sucesso; "Enviar agora" num
+  agendamento pausado = 200, 1 e-mail para alpaconstrutora@gmail.com; usuário de outra organização = 403
+  mesmo com o corpo mentindo a org; id inexistente = 404. Tela conferida nos 3 contextos (0 falhas);
+  a conferência achou a tabela de Agendamentos larga demais com a 1ª linha real (1.320 → 1.220 px).
+  CI: PR #86 verde em `1cfb76f6`; main `d5b0918c` verde.
+  Ficaram cadastrados, PAUSADOS, dois agendamentos de teste — "Teste — Inteligência Financeira
+  (Claude)" (Alpa) e "Teste 403 — Inteligência Financeira (Claude)" (ALPA Empreendimentos); excluir pela
+  tela (exclusão definitiva é do usuário).
+- (histórico) Fase 3 — escrita e ensaiada em 21/10/2026; e-mail de teste para alpaconstrutora@gmail.com
   (endereço dado pelo usuário). Pedido: *"voce sobre precisa de um endereco de email? alpaconstrutora@gmail.com"*.
   - DB `aplicar_20271021950000_…_envio_por_email`: `fn_fi_targets` aceita service_role COM org;
     `fn_fi_saldo_bancario` (fórmula do dashboard — o dashboard recusa service_role). Ensaio: saldo
@@ -228,7 +244,7 @@ Consequências:
   voltou a `|| null`), resposta fora de ordem na projeção, scorecard largo demais (1.340 → 1.210 px),
   área do saldo enchendo até o zero fora do gráfico (virou linha), botão Editar duplicando o clique na
   linha (§9.1), rótulo da barra quebrando ("R$ / 9 / mil"). Prints: `c:/tmp/pwtest/fi_*.png`.
-  Publicação: PR #83 (rascunho) → push em main.
+  Publicação: PR #83 → push em main `9baebe94` em 21/10 (domínio servindo; CI da main verde).
 - (histórico) Fase 4 — 4 de 4 escritos; faltava a conferência na tela (o critério 4.x pede "conferido na tela").
   Feito: tela refeita no guia (h1 por aba, TabsBar, KPIs por aba, StandardTable, gráficos §28, Sheet no
   agendamento); aba "Locação e sem obra"; vencidos e saldo de partida na Projeção; gráfico por semana/mês

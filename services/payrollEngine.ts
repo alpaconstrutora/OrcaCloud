@@ -75,6 +75,25 @@ export interface PayrollContext {
     linkedRubricCodes: string[];
 }
 
+/**
+ * O colaborador entra na folha do período que começa em `startDate`?
+ *
+ * Decide pela DATA de desligamento, não só pelo status de hoje: o mês da
+ * rescisão ainda é devido (desligado em 31/05 entra na folha de 05), e um
+ * desligamento lançado com atraso tem de tirá-lo dos meses seguintes mesmo
+ * que o cadastro ainda diga ATIVO. Caso real (22/10/2026): Clovis, desligado
+ * em 31/05/2026, seguia nas folhas de 06, 07 e 09/2026.
+ *
+ * A admissão (`hire_date`) NÃO entra no critério: no cadastro ela não é
+ * confiável (há colaborador com folha meses antes da admissão gravada).
+ */
+export function participaDaFolha(emp: Employee, startDate: string): boolean {
+    const desligamento = emp.termination_date?.split('T')[0];
+    if (desligamento && desligamento < startDate.split('T')[0]) return false;
+    if (emp.status === 'ATIVO') return true;
+    return emp.status === 'DESLIGADO' && !!desligamento;
+}
+
 export const payrollEngine = {
     /**
      * Executa a folha em lote para todas as organizações com funcionários ativos
@@ -174,9 +193,9 @@ export const payrollEngine = {
         // (`employee_org_shares`); regra de produto (11/10/2026): a folha é
         // gerada na organização DO COLABORADOR, não na de quem recebeu o
         // compartilhamento. Incluí-los aqui punha o mesmo colaborador na folha
-        // das duas orgs no mesmo mês.
+        // das duas orgs no mesmo mês. Quem está no período: `participaDaFolha`.
         const employees = await laborService.listEmployees(orgId);
-        const activeEmployees = employees.filter(e => e.status === 'ATIVO' && e.org_id === orgId);
+        const activeEmployees = employees.filter(e => e.org_id === orgId && participaDaFolha(e, startDate));
 
         // 3. Processar em paralelo — allSettled para não abortar a folha se um colaborador falhar
         const results = await Promise.allSettled(

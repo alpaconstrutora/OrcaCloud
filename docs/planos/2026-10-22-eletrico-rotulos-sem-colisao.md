@@ -33,7 +33,7 @@ Decisões do usuário na mesma sessão (perguntas do plan mode):
 - **Pronto quando:** `__tests__/blueprintAnotacaoSemColisao.test.ts` verde (vizinhos não se
   sobrepõem; prioridade escolhe primeiro; chamada só quando afastou; determinístico; caso denso
   sem interseção) e `__tests__/blueprintRotulosSemColisao.test.ts` continua verde.
-- [ ] feito
+- [x] feito — `81e260b4`; `posicionarRotulos` passou a delegar ao motor (só posições coladas).
 
 ### F2 — Canvas usa o motor
 - **Muda:** `BlueprintCanvas.tsx` empilha os textos elétricos (ponto, tomada em bloco, comando,
@@ -41,28 +41,51 @@ Decisões do usuário na mesma sessão (perguntas do plan mode):
   escreve `C{n}`.
 - **Pronto quando:** teste de componente com luz + interruptor + tomadas sugeridas coladas não
   acha interseção entre caixas de texto elétricas; prints antes/depois no app.
-- [ ] feito
+- [x] feito — `bb5a0e6a`. `__tests__/components/BlueprintCanvasAnotacoesEletricas.test.tsx` falha no canvas
+  antigo com `"Luz teto · C1" × "600 VA"` (o defeito do print) e passa no novo. O texto das marcas de
+  verificação entrou como obstáculo; `BlueprintCanvasMarcasTexto.test.tsx` passou a medir pela base do texto.
 
 ### F3 — Um número por tronco
 - **Muda:** `trechosNumerados` agrupa trechos encadeados com a mesma composição num só rótulo;
   o círculo sai uma vez (no trecho mais longo do grupo); a tabela da folha tem uma linha por grupo.
 - **Pronto quando:** teste em `fiacao` com tronco cortado em 3 pedaços iguais → 1 rótulo, 1 linha.
-- [ ] feito
+- [x] feito — `8a0f88fb` (`TrechoNumerado.principal`; bundle da planta-api regerado, `plantaApi.test` verde).
 
 ### F4 — Prancha usa o motor
 - **Muda:** `blueprintPranchaEletrica.ts` posiciona os textos da planta pelo mesmo motor (mm), com
   chamada por `d.linha`; luminária `C{n}`.
 - **Pronto quando:** teste com `DesenhistaDeProva` sem interseção entre textos da planta.
-- [ ] feito
+- [x] feito — `1da702bd`. O teste falha na prancha antiga (`"Luz teto · C1" × "a"`) e passa na nova; a
+  categoria de cada texto (camada do DXF) vai junto dele. `PRIORIDADE_DA_ANOTACAO` mora no motor.
 
 ### F5 — Afastado demais
 - **Muda:** abaixo de `ESCALA_DE_ANOTACAO_PX_MM` os textos de prioridade baixa (Ø, "N cond.",
   seção) não entram no motor; circuito, pendência, potência, instrução e nº do trecho continuam.
 - **Pronto quando:** teste/inspeção no zoom de conjunto.
-- [ ] feito
+- [x] feito — dentro do `anotar` da F2 (`longeDemais`).
+
+### F6 — O Ø predominante vai para a legenda (achado na prova por imagem)
+- **Por quê:** com os textos sem colisão, cada "Ø 25" dos 309 pedaços de eletroduto do Garden ganhou lugar
+  próprio e virou o novo ruído (antes se empilhavam em borrões).
+- **Muda:** `utils/blueprintDiametroDosEletrodutos.ts` — o Ø de maior comprimento somado não se escreve
+  (legenda da prancha: "ELETRODUTO SEM INDICAÇÃO — Ø25"); o diferente, uma vez por trecho contínuo, no
+  pedaço mais longo. Abaixo de 0,02 px/mm (o lote inteiro na tela) o canvas não puxa chamada.
+- **Pronto quando:** `__tests__/blueprintDiametroDosEletrodutos.test.ts` verde; prints.
+- [x] feito — `d9ccfc5f`.
+
+## Prova por imagem (22/10/2026)
+Harness LOCAL (não versionado, sem login nem escrita no banco): o `BlueprintCanvas` com uma cópia do
+rascunho da planta Garden (`blueprint_branches.draft_payload`, 96 pontos elétricos — todos sugeridos —
+e 309 eletrodutos), canvas de `origin/main` × novo, em quatro zooms. Prints em `C:/tmp/rotulos-garden/`.
+- Apartamento (~0,04 px/mm, o print 1) e trabalho (~0,085): sem texto sobre texto; blocos da tomada
+  ("-20- / 600 VA / Posicione sobre a bancada da pia") legíveis; luz como "C3".
+- Lote inteiro (~0,007): os textos não cabem fisicamente — amontoam (sem chamada). DECISÃO PENDENTE do
+  usuário: esconder os textos elétricos nesse zoom?
+- Ruído que sobra: a seção "2,5" em quase todo trecho, "N cond." e os números dos trechos cheios (que vêm
+  de troncos com 30–109 condutores — ver Fora do escopo).
 
 ## Fora do escopo
-- Trechos com 30–34 condutores num tronco: é o roteamento automático concentrando circuitos num
+- Trechos com 30–109 condutores num tronco ("109 cond." no Garden): é o roteamento automático concentrando circuitos num
   caminho só (desenho não resolve). Diagnóstico separado.
 
 ## Estado

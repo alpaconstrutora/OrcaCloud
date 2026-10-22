@@ -78,3 +78,12 @@ A lista apresentada (resumo fiel):
   Testes no hook (2) e na função (1).
 - Item 7 não feito (motivo no topo).
 - Verificação: 143 testes dos arquivos afetados verdes em dois grupos; `check-ui-standard.sh` limpo em 6 .tsx.
+- Item 8 feito (22/10, `c:/tmp/pwtest/conferencia-pendencias-planta.cjs`, dev server da frente, usuário de
+  leitura): planta descartável 12 × 30 publicada e vinculada ao 004 - Alcino Salomon. Torres & Unidades ›
+  Terreno: "Planta vinculada: ZZ TESTE Pendências", vazios no FORM com 360 / 12 / 12 / 30 e tipo "Regular
+  (Retangular)", "Da Planta — confira e salve", Salvar ligado e NÃO clicado. Sincronização: card "Terreno →
+  Empreendimento" com 7 campos a preencher, 0 para a Curadoria, "Trazer o terreno" ligado e NÃO clicado.
+  Editor da planta não aberto (gravaria na ficha). Zero erro. Banco depois: ficha do Alcino toda NULL, sem
+  vínculo, `last_synced_at` NULL, 0 propostas; planta ARQUIVADO. Único rastro: `updated_at` do Alcino
+  (gatilho do vínculo/desvínculo). Um portão do roteiro acusou "FALHA" por contar as gravações do PRÓPRIO
+  vínculo de teste (só `blueprint_study_id`) — defeito do portão, não da tela.

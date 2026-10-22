@@ -5,6 +5,7 @@ import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import { laborService, ProductivityLog, Employee, LaborTeam } from '../services/laborService';
+import { chavePorNome } from '../utils/agruparLinhas';
 
 // Colunas da tabela padrão (§6.10)
 const LOG_COLUMNS: StandardTableColumn[] = [
@@ -16,6 +17,28 @@ const LOG_COLUMNS: StandardTableColumn[] = [
     { key: 'hunid', label: 'H/unid', sortable: true, width: 120 },
     { key: 'produtividade', label: 'Produtividade', sortable: true, width: 150 },
 ];
+
+// "Agrupar" (guia de UI §6.12). Chave = o MESMO texto que a célula mostra (equipe, ou o
+// colaborador quando não há equipe). Sem `valor`: não há dinheiro — só a contagem.
+// Constante de módulo: o StandardTable memoiza os grupos pela identidade deste objeto.
+const SEM_GRUPO_PRODUTIVIDADE: Record<string, string> = { quem: 'Sem equipe / colaborador', obra: 'Sem obra', fase: 'Sem fase' };
+const AGRUPAR_PRODUTIVIDADE = {
+    opcoes: [
+        { value: 'quem', label: 'Equipe / colaborador' },
+        { value: 'obra', label: 'Obra' },
+        { value: 'fase', label: 'Fase' },
+    ],
+    chave: (campo: string, l: ProductivityLog) => {
+        switch (campo) {
+            case 'quem': return chavePorNome(l.team_name || l.employee_name);
+            case 'obra': return chavePorNome(l.project_name);
+            case 'fase': return chavePorNome(l.phase);
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_PRODUTIVIDADE[campo] ?? 'Sem valor',
+    title: 'Agrupar os registros de produtividade',
+};
 
 interface LaborProductivityProps {
     employees: Employee[];
@@ -254,6 +277,7 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                 loading={loading}
                 searchText={l => `${l.activity_description} ${l.phase ?? ''} ${l.project_name ?? ''} ${l.team_name ?? ''} ${l.employee_name ?? ''}`}
                 searchPlaceholder="Buscar atividade, obra ou equipe..."
+                agrupamento={AGRUPAR_PRODUTIVIDADE}
                 sortValue={(key, l) => {
                     switch (key) {
                         case 'data': return l.date;

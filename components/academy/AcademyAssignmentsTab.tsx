@@ -13,6 +13,9 @@ import type {
     AcademyAssignment, AcademyAssignmentAlvo, TrainingCourse,
 } from '../../types/academy';
 import type { Employee } from '../../services/laborService';
+import { agruparLinhas, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../../utils/agruparLinhas';
+import { useAgrupamento } from '../../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from '../ui/Agrupamento';
 
 /**
  * Atribuições — quem deve fazer o quê, com que prazo.
@@ -37,6 +40,29 @@ const ALVO_LABEL: Record<AcademyAssignmentAlvo, string> = {
     COLABORADOR: 'Colaborador', CARGO: 'Cargo', FUNCAO: 'Função',
     EQUIPE: 'Equipe', OBRA: 'Obra', TODOS: 'Toda a organização',
 };
+
+// "Agrupar" das atribuições (guia de UI §6.12) — só contagem. Chave = o MESMO texto
+// que a célula mostra (tipo de alvo = a 2ª linha de "Atribuído a").
+type CampoAgruparAtribuicao = 'curso' | 'alvo_tipo' | 'status' | 'obrigatorio';
+const OPCOES_AGRUPAR_ATRIBUICAO: { value: CampoAgruparAtribuicao; label: string }[] = [
+    { value: 'curso', label: 'Treinamento' },
+    { value: 'alvo_tipo', label: 'Tipo de alvo' },
+    { value: 'status', label: 'Status' },
+    { value: 'obrigatorio', label: 'Obrigatório' },
+];
+const SEM_GRUPO_ATRIBUICAO: Record<CampoAgruparAtribuicao, string> = {
+    curso: 'Sem treinamento', alvo_tipo: 'Sem tipo de alvo', status: 'Sem status', obrigatorio: 'Sem definição',
+};
+const STATUS_ATRIBUICAO_LABEL: Record<string, string> = { ATIVA: 'Ativa', INATIVA: 'Inativa' };
+function chaveDaAtribuicao(campo: CampoAgruparAtribuicao, a: AcademyAssignment): ChaveDeGrupo {
+    switch (campo) {
+        case 'curso': return chavePorNome(a.course_nome);
+        case 'alvo_tipo': return chavePorRotulo(a.alvo_tipo, ALVO_LABEL);
+        // A célula mostra "Inativa" para tudo que não é ATIVA.
+        case 'status': return chavePorRotulo(a.status === 'ATIVA' ? 'ATIVA' : 'INATIVA', STATUS_ATRIBUICAO_LABEL);
+        case 'obrigatorio': return chavePorNome(a.obrigatorio ? 'Sim' : 'Não');
+    }
+}
 
 const TH_CLASS = 'px-6 py-2 border-r border-gray-100';
 const TD_CLASS = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
@@ -118,6 +144,7 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('academyAssignments:search', '');
     const colunas = useTableColumns(COLUMNS, 'academyAssignmentsColumns');
+    const agrupamento = useAgrupamento<CampoAgruparAtribuicao>('academyAssignments:groupBy');
     // §6.1 — larguras iniciais; arrastar a borda e o autofit ajustam a partir daqui.
     const cols = useResizableColumns({ curso: 240, alvo: 200, prazo: 110, obrigatorio: 110, reciclagem: 120, matriculas: 110, status: 120, actions: 110 }, 'academyAssignmentsColWidths');
     // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout: fixed.
@@ -270,6 +297,24 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
         });
     }, [assignments, search, colunas.sortColumn, colunas.sortDirection, nomeDoAlvo]);
 
+    const groupBy = agrupamento.campo;
+    const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filtradas, {
+        chave: a => chaveDaAtribuicao(groupBy, a),
+        semRotulo: SEM_GRUPO_ATRIBUICAO[groupBy],
+        // Status Ativa → Inativa; o resto A→Z.
+        ordem: groupBy === 'status' ? Object.keys(STATUS_ATRIBUICAO_LABEL) : undefined,
+        direcao: agrupamento.direcao,
+    })), [filtradas, groupBy, agrupamento.direcao]);
+    const entradas: EntradaDaTela<AcademyAssignment>[] = useMemo(
+        () => (agrupamento.agrupando
+            ? entradasDaPagina(grupos, agrupamento.recolhidos)
+            : filtradas.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupamento.agrupando, grupos, agrupamento.recolhidos, filtradas],
+    );
+    // dados + espaçador + Ações (sem checkbox).
+    const colunasDaLinha = colunas.orderedVisibleColumns.filter(key => key !== 'actions').length + 1
+        + (colunas.visibleColumns.includes('actions') ? 1 : 0);
+
     // A atribuição sem conteúdo publicado é criada normalmente e nunca gera
     // matrícula — o RH atribui, acha que resolveu, e ninguém recebe nada.
     const bloqueadas = assignments.filter(a => a.status === 'ATIVA' && a.sem_conteudo_publicado);
@@ -305,6 +350,18 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                             className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                         />
                     </div>
+                    {/* Agrupar — guia de UI §6.12 */}
+                    <AgruparControles
+                        opcoes={OPCOES_AGRUPAR_ATRIBUICAO}
+                        campo={groupBy}
+                        onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
+                        chavesDosGrupos={grupos.map(g => g.key)}
+                        algumRecolhido={agrupamento.recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar as atribuições"
+                    />
 
                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                         <ColumnConfigButton
@@ -399,7 +456,13 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {filtradas.map(a => (
+                            {entradas.map(e => {
+                                if (e.tipo === 'grupo') return (
+                                    <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                        colSpan={colunasDaLinha} onAlternar={agrupamento.alternar} semTotal />
+                                );
+                                const a = e.item;
+                                return (
                                 <tr key={a.id} className="hover:bg-blue-50/50 transition-colors">
                                     {colunas.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                         <td key={key} className={TD_CLASS}>
@@ -426,7 +489,8 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                                         </td>
                                     )}
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

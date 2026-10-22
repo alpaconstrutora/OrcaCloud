@@ -19,6 +19,7 @@ import { usePersistedState } from './ui/TableUtils';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 
 // Colunas da tabela padrão (§6.10)
 const MEAS_COLUMNS: StandardTableColumn[] = [
@@ -54,6 +55,32 @@ const STATUS_MEAS: Record<string, { bg: string; text: string }> = {
     APROVADO:   { bg: 'bg-blue-100',    text: 'text-blue-700' },
     PAGO:       { bg: 'bg-emerald-100', text: 'text-emerald-700' },
     CONTESTADO: { bg: 'bg-rose-100',    text: 'text-rose-700' },
+};
+
+// "Agrupar" das medições (guia de UI §6.12). Chave = o MESMO texto que a célula mostra
+// (o status aparece cru: PENDENTE). Constante de módulo: o StandardTable memoiza os
+// grupos pela identidade deste objeto.
+const SEM_GRUPO_MEDICAO: Record<string, string> = { empreiteiro: 'Sem empreiteiro', obra: 'Sem obra', status: 'Sem status' };
+const AGRUPAR_MEDICOES = {
+    opcoes: [
+        { value: 'empreiteiro', label: 'Empreiteiro' },
+        { value: 'obra', label: 'Obra' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, m: ContractorMeasurement) => {
+        switch (campo) {
+            case 'empreiteiro': return chavePorNome(m.contractor_name);
+            case 'obra': return chavePorNome(m.project_name);
+            case 'status': return chavePorRotulo(m.status, {});
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_MEDICAO[campo] ?? 'Sem valor',
+    // Status na ordem do fluxo (Pendente → Aprovado → Pago → Contestado); nomes A→Z.
+    ordem: (campo: string) => (campo === 'status' ? Object.keys(STATUS_MEAS) : undefined),
+    valor: (m: ContractorMeasurement) => m.valor_liquido,
+    title: 'Agrupar as medições',
+    tituloTotal: 'Soma do valor líquido das medições do grupo',
 };
 
 // ── Formulário de Empreiteiro ─────────────────────────────────────────────────
@@ -519,6 +546,7 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                     loading={loadingM}
                     searchText={m => `${m.contractor_name ?? ''} ${m.project_name ?? ''} ${m.numero_medicao} ${m.nota_fiscal ?? ''} ${m.status}`}
                     searchPlaceholder="Buscar empreiteiro, obra ou NF..."
+                    agrupamento={AGRUPAR_MEDICOES}
                     sortValue={(key, m) => {
                         switch (key) {
                             case 'empreiteiro': return m.contractor_name ?? '';

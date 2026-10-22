@@ -20,6 +20,7 @@ import { useConfirm } from './ui/confirm';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 
 // ── Colunas das tabelas padrão (§6.10) ────────────────────────────────────────
 
@@ -84,6 +85,10 @@ const TIPO_CONFIG: Record<TurnoverTipo, { label: string; color: string; bg: stri
     PROMOCAO:             { label: 'Promoção',      color: 'text-violet-700',  bg: 'bg-violet-100',  icon: TrendingUp },
     REBAIXAMENTO:         { label: 'Rebaixamento',  color: 'text-slate-600',   bg: 'bg-slate-100',   icon: TrendingDown },
 };
+
+// "Agrupar" das movimentações (guia de UI §6.12) — rótulo do Tipo = o da célula.
+const ROTULO_TIPO_MOV: Record<string, string> = Object.fromEntries(Object.entries(TIPO_CONFIG).map(([k, v]) => [k, v.label]));
+const SEM_GRUPO_MOV: Record<string, string> = { org: 'Sem organização', colaborador: 'Sem colaborador', tipo: 'Sem tipo' };
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-300 transition-all';
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -480,6 +485,28 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
     // Em "Todas as organizações" cada tabela ganha a coluna Organização na frente.
     const withOrg = (base: StandardTableColumn[]) => (isAllOrgs ? [ORG_COLUMN, ...base] : base);
 
+    // "Agrupar" das movimentações (§6.12): Organização só quando a coluna existe
+    // (mesma regra do withOrg). Memoizado: o StandardTable memoiza os grupos pela
+    // identidade deste objeto.
+    const agruparMovimentacoes = useMemo(() => ({
+        opcoes: [
+            ...(isAllOrgs ? [{ value: 'org', label: 'Organização' }] : []),
+            { value: 'colaborador', label: 'Colaborador' },
+            { value: 'tipo', label: 'Tipo' },
+        ],
+        chave: (campo: string, ev: TurnoverEvent) => {
+            switch (campo) {
+                case 'org': return chavePorNome(organizations.find(o => o.id === ev.org_id)?.name);
+                case 'colaborador': return chavePorNome(ev.employee_nome);
+                case 'tipo': return chavePorRotulo(ev.tipo, ROTULO_TIPO_MOV);
+                default: return null;
+            }
+        },
+        semRotulo: (campo: string) => SEM_GRUPO_MOV[campo] ?? 'Sem valor',
+        ordem: (campo: string) => (campo === 'tipo' ? Object.keys(TIPO_CONFIG) : undefined),
+        title: 'Agrupar as movimentações',
+    }), [isAllOrgs, organizations]);
+
     // KPIs do mês mais recente. Em "Todas as organizações" há uma linha por
     // organização no mesmo mês: headcount/admissões/demissões são contagens e
     // somam; turnover, absenteísmo e custo médio são TAXAS/MÉDIAS e não somam —
@@ -852,6 +879,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                         loading={loadEvents}
                         searchText={ev => `${nomeOrg(ev.org_id)} ${ev.employee_nome ?? ''} ${TIPO_CONFIG[ev.tipo].label} ${ev.motivo ?? ''} ${ev.cargo_saida ?? ''} ${ev.cargo_entrada ?? ''}`}
                         searchPlaceholder="Buscar colaborador, tipo ou motivo..."
+                        agrupamento={agruparMovimentacoes}
                         sortValue={(key, ev) => {
                             switch (key) {
                                 case 'org': return nomeOrg(ev.org_id);

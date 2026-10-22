@@ -12,6 +12,7 @@ import { laborKeys } from '../../lib/queryKeys';
 import { STALE } from '../../lib/queryClient';
 import type { AcademyPortalUser, AcademyPortalUserTipo } from '../../types/academy';
 import MobilePreviewFrame from '../MobilePreviewFrame';
+import { chavePorRotulo } from '../../utils/agruparLinhas';
 
 // Casca do celular do portal (só carrega quando alguém pede a prévia).
 const TrainingPortalMobile = React.lazy(() => import('../training/TrainingPortalMobile'));
@@ -53,6 +54,27 @@ const COLUMNS: StandardTableColumn[] = [
 ];
 
 const TIPO_LABEL: Record<AcademyPortalUserTipo, string> = { COLABORADOR: 'Colaborador', TERCEIRO: 'Terceirizado' };
+
+// "Agrupar" dos acessos (guia de UI §6.12). Chave = o MESMO texto que a célula mostra.
+// Constante de módulo: o StandardTable memoiza os grupos pela identidade deste objeto.
+const ROTULO_STATUS_ACESSO: Record<string, string> = { ativo: 'Ativo', inativo: 'Inativo' };
+const SEM_GRUPO_ACESSO: Record<string, string> = { tipo: 'Sem tipo', status: 'Sem status' };
+const AGRUPAR_ACESSOS = {
+    opcoes: [
+        { value: 'tipo', label: 'Tipo' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, u: AcademyPortalUser) => {
+        switch (campo) {
+            case 'tipo': return chavePorRotulo(u.tipo, TIPO_LABEL);
+            case 'status': return chavePorRotulo(u.is_active ? 'ativo' : 'inativo', ROTULO_STATUS_ACESSO);
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_ACESSO[campo] ?? 'Sem valor',
+    ordem: (campo: string) => (campo === 'tipo' ? Object.keys(TIPO_LABEL) : campo === 'status' ? Object.keys(ROTULO_STATUS_ACESSO) : undefined),
+    title: 'Agrupar os acessos',
+};
 
 const fmtDataHora = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : null;
@@ -133,6 +155,7 @@ const AcademyPortalAccessTab: React.FC<Props> = ({ orgId, employees, podeEditar,
                 loading={isLoading}
                 searchText={u => `${u.name} ${u.email} ${u.employee_name ?? ''} ${u.empresa_terceira ?? ''}`}
                 searchPlaceholder="Buscar por nome, e-mail ou empresa..."
+                agrupamento={AGRUPAR_ACESSOS}
                 sortValue={(k, u) => {
                     switch (k) {
                         case 'tipo': return TIPO_LABEL[u.tipo];

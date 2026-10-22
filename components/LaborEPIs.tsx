@@ -14,6 +14,7 @@ import { useConfirm } from './ui/confirm';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 
 // Colunas das tabelas padrão (§6.10)
 const CATALOG_COLUMNS: StandardTableColumn[] = [
@@ -44,6 +45,48 @@ const EPI_CATEGORIA_LABELS: Record<EpiCategoria, string> = {
     PROTECAO_MEMBROS_INFERIORES: 'Proteção Membros Inferiores',
     PROTECAO_QUEDAS: 'Proteção contra Quedas',
     OUTROS: 'Outros',
+};
+
+// "Agrupar" (guia de UI §6.12). Chave = o MESMO texto que a célula mostra. Sem `valor`:
+// o custo unitário é taxa, não soma — o cabeçalho mostra só a contagem. Constantes de
+// módulo: o StandardTable memoiza os grupos pela identidade do objeto.
+const SEM_GRUPO_CATALOGO: Record<string, string> = { categoria: 'Sem categoria', status: 'Sem status' };
+const AGRUPAR_CATALOGO = {
+    opcoes: [
+        { value: 'categoria', label: 'Categoria' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, item: EpiCatalogItem) => {
+        switch (campo) {
+            case 'categoria': return chavePorRotulo(item.categoria, EPI_CATEGORIA_LABELS);
+            // A célula mostra o status cru (ATIVO).
+            case 'status': return chavePorRotulo(item.status, {});
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_CATALOGO[campo] ?? 'Sem valor',
+    ordem: (campo: string) => (campo === 'categoria' ? Object.keys(EPI_CATEGORIA_LABELS) : campo === 'status' ? ['ATIVO', 'INATIVO'] : undefined),
+    title: 'Agrupar os EPIs',
+};
+const ROTULO_ENTREGA: Record<string, string> = { em_uso: 'Em uso', devolvido: 'Devolvido' };
+const SEM_GRUPO_ENTREGA: Record<string, string> = { colaborador: 'Sem colaborador', epi: 'Sem EPI', status: 'Sem status' };
+const AGRUPAR_ENTREGAS = {
+    opcoes: [
+        { value: 'colaborador', label: 'Colaborador' },
+        { value: 'epi', label: 'EPI' },
+        { value: 'status', label: 'Status' },
+    ],
+    chave: (campo: string, d: EpiDelivery) => {
+        switch (campo) {
+            case 'colaborador': return chavePorNome(d.employee_name);
+            case 'epi': return chavePorNome(d.epi_nome);
+            case 'status': return chavePorRotulo(d.is_returned ? 'devolvido' : 'em_uso', ROTULO_ENTREGA);
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_ENTREGA[campo] ?? 'Sem valor',
+    ordem: (campo: string) => (campo === 'status' ? Object.keys(ROTULO_ENTREGA) : undefined),
+    title: 'Agrupar as entregas',
 };
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
@@ -447,6 +490,7 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
                     loading={loadingCatalog}
                     searchText={item => `${item.nome} ${item.ca ?? ''} ${item.descricao ?? ''} ${EPI_CATEGORIA_LABELS[item.categoria]}`}
                     searchPlaceholder="Buscar EPI ou CA..."
+                    agrupamento={AGRUPAR_CATALOGO}
                     sortValue={(key, item) => {
                         switch (key) {
                             case 'epi': return item.nome;
@@ -509,6 +553,7 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
                     loading={loadingDeliveries}
                     searchText={d => `${d.employee_name ?? ''} ${d.epi_nome ?? ''} ${d.motivo ?? ''}`}
                     searchPlaceholder="Buscar colaborador ou EPI..."
+                    agrupamento={AGRUPAR_ENTREGAS}
                     filters={
                         <>
                             <select

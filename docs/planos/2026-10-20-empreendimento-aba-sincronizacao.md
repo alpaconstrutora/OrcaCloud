@@ -61,5 +61,5 @@ proposta), então ganhou contagem própria em campos: `conflitosNovos` (este env
 - [x] testes da área: 4 arquivos, 26/26 (`sincronizacaoCuradoria` 5 novos, `writeBackImovib` 8 com 2 novos,
       `syncPlantaInteligenteTravas` 3, `SyncCenterTabArquitetura` 10 com 6 novos)
 - [ ] conferência na tela real (Garden Cambuhy, só leitura) — depende da senha do usuário de leitura
-- [ ] PR rascunho + CI verde
+- [x] PR rascunho + CI verde — PR #89; `ci` (typecheck + suíte + build, 23m33s), Vercel e Vercel Preview Comments verdes
 - [ ] publicação (pelo usuário) + `conferir-producao.sh`

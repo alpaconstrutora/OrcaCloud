@@ -9,6 +9,7 @@ import { numerarParcelas, descricaoTributo } from '../utils/tributoDescricao';
 import { irrfDoAluguel } from '../utils/retencaoIrrfLocacao';
 import { fiscalService, type IRRFBracket } from './fiscalService';
 import { exigirAlcadaLiberada } from './alcadaDaBaixa';
+import { origemDoTributo, ORIGEM_TRIBUTO_LABEL } from '../utils/tributoOrigem';
 import {
     categoriaDoTributo, resolverCategoriaPorNomes,
     CATEGORIA_IMPOSTO_SOBRE_RECEITA, CATEGORIA_IMPOSTO_SOBRE_RESULTADO,
@@ -340,6 +341,7 @@ export const taxPayableService = {
                 (r.party_name ?? '').toLowerCase().includes(s) ||
                 (r.description ?? '').toLowerCase().includes(s) ||
                 (r.category ?? '').toLowerCase().includes(s) ||
+                ORIGEM_TRIBUTO_LABEL[origemDoTributo(r)].toLowerCase().includes(s) ||
                 (r.client_name ?? '').toLowerCase().includes(s) ||
                 (r.empreendimento_name ?? '').toLowerCase().includes(s) ||
                 (r.reference_id ?? '').toLowerCase().includes(s),

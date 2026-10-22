@@ -145,6 +145,24 @@ describe('gerador de massa', () => {
     expect(semPreco.avisos.join(' ')).toMatch(/sem preço/);
   });
 
+  // 22/10/2026, o caso real: uma tipologia só, com mix 0 %. Ela não entra na distribuição, todo bloco sai
+  // sem unidades, e o gerador varria 420 combinações para culpar o tamanho ("nenhuma unidade cabe").
+  it('produto sem tipologia aproveitável (mix 0 % ou área 0): para antes da varredura e diz a causa', () => {
+    const t0 = { ...REGUA.produto.tipologias[0], nome: 'Tipologia 1', proporcaoPct: 0, areaPrivativaM2: 60 };
+    const so = (tipologias: (typeof t0)[]) => gerarMassa(entrada(LOTE, { regua: { ...REGUA, produto: { ...REGUA.produto, tipologias } } }), 1);
+    const mix0 = so([t0]);
+    expect(mix0.avaliados).toBe(0);
+    expect(mix0.melhores).toHaveLength(0);
+    const aviso = mix0.avisos.join(' ');
+    expect(aviso).toMatch(/Nenhuma tipologia do produto entra no estudo: "Tipologia 1" \(mix 0 %\)/);
+    expect(aviso).toMatch(/Terreno › Massa › Produto/);
+    expect(aviso).not.toMatch(/nenhuma unidade cabe/);
+
+    const area0 = so([{ ...t0, proporcaoPct: 100, areaPrivativaM2: 0 }]);
+    expect(area0.avaliados).toBe(0);
+    expect(area0.avisos.join(' ')).toMatch(/"Tipologia 1" \(área privativa 0 m²\)/);
+  });
+
   it('valor do objetivo: minimizar custo sem meta é por m² vendável; ponderado fica entre 0 e 100', () => {
     const c = r.melhores[0].cenario;
     expect(valorDoObjetivo(c, 'MENOR_CUSTO', { metaDeUnidades: null })).toBeCloseTo(-c.custoTotal! / c.areaVendavelM2, 6);

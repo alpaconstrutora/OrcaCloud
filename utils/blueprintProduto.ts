@@ -266,15 +266,39 @@ export function produtoDaColuna(raw: unknown): Produto {
 }
 
 /** Problemas que a tela ACUSA (não trava): mix que não fecha, uso sem tipologia… */
+const BLOCOS_DO_USO: Record<UsoDaTipologia, string> = { RESIDENCIAL: 'residenciais', COMERCIAL: 'comerciais' };
+
+/** A régua da distribuição: só reparte o pavimento a tipologia com participação no mix e área. */
+const entraNoEstudo = (x: TipologiaDoProduto) => x.proporcaoPct > 0 && x.areaPrivativaM2 > 0;
+
+/**
+ * As tipologias que a distribuição IGNORA, e por quê. 22/10/2026: "Nova tipologia" nascia com mix 0 %,
+ * ficava fora do estudo calada, e o Gerar massa culpava o tamanho do bloco ("nenhuma unidade cabe").
+ */
+export function tipologiasForaDoEstudo(p: Produto): { tipologia: TipologiaDoProduto; motivo: string }[] {
+  return p.tipologias
+    .filter((x) => !entraNoEstudo(x))
+    .map((x) => ({ tipologia: x, motivo: [x.proporcaoPct > 0 ? null : 'mix 0 %', x.areaPrivativaM2 > 0 ? null : 'área privativa 0 m²'].filter(Boolean).join(' e ') }));
+}
+
+/** A linha de "Nova tipologia": a primeira residencial que conta nasce com o mix inteiro — em 0 % ela não entraria no estudo. */
+export function tipologiaNova(p: Produto): TipologiaDoProduto {
+  let n = p.tipologias.length + 1;
+  while (p.tipologias.some((x) => x.id === `t${n}`)) n++;
+  const jaHaResidencial = p.tipologias.some((x) => x.uso === 'RESIDENCIAL' && entraNoEstudo(x));
+  return { id: `t${n}`, nome: `Tipologia ${n}`, uso: 'RESIDENCIAL', dormitorios: 2, areaPrivativaM2: 60, vagasPorUnidade: 1, proporcaoPct: jaHaResidencial ? 0 : 100, precoM2: 0 };
+}
+
 export function problemasDoProduto(p: Produto): string[] {
   const out: string[] = [];
   for (const uso of USOS_DA_TIPOLOGIA) {
     const doUso = p.tipologias.filter((x) => x.uso === uso);
     if (doUso.length === 0) continue;
     const soma = doUso.reduce((s, x) => s + x.proporcaoPct, 0);
-    if (soma === 0) out.push(`${ROTULO_DO_USO_DA_TIPOLOGIA[uso]}: nenhuma tipologia com participação no mix.`);
+    if (soma === 0) out.push(`${ROTULO_DO_USO_DA_TIPOLOGIA[uso]}: nenhuma tipologia com participação no mix — os blocos ${BLOCOS_DO_USO[uso]} ficam sem unidades.`);
     else if (Math.abs(soma - 100) > 0.5) out.push(`${ROTULO_DO_USO_DA_TIPOLOGIA[uso]}: o mix soma ${soma.toLocaleString('pt-BR')} % — as participações são normalizadas para 100 %.`);
   }
+  for (const { tipologia, motivo } of tipologiasForaDoEstudo(p)) out.push(`"${tipologia.nome}": ${motivo} — fica fora do estudo (não recebe unidades).`);
   if (p.hipoteses.pavimentosParaSegundoElevador < p.hipoteses.pavimentosParaElevador) out.push('O 2º elevador está pedido antes do 1º — confira as hipóteses do núcleo.');
   return out;
 }
@@ -487,7 +511,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 /** Tipologias que um bloco deste uso recebe. */
 function tipologiasDoUso(uso: UsoDoBloco, p: Produto): TipologiaDoProduto[] {
   const quer: UsoDaTipologia[] = uso === 'RESIDENCIAL' ? ['RESIDENCIAL'] : uso === 'COMERCIAL' ? ['COMERCIAL'] : uso === 'MISTO' ? ['RESIDENCIAL', 'COMERCIAL'] : [];
-  return p.tipologias.filter((x) => quer.includes(x.uso) && x.proporcaoPct > 0 && x.areaPrivativaM2 > 0);
+  return p.tipologias.filter((x) => quer.includes(x.uso) && entraNoEstudo(x));
 }
 
 /**

@@ -5075,8 +5075,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         empreendimentoDoTerreno.id === empreendimentoVinculado?.id
           ? [avisoEscrituraAutomatica, avisoFichaAutomatica].filter(Boolean).join(' ') || null
           : null,
+      // "Criar lote pela ficha" (22/10/2026): só enquanto não há lote; desligado diz o que falta na ficha.
+      criarLote: (editor.model.boundaries ?? []).some((b) => b.kind === 'TERRENO')
+        ? null
+        : {
+            motivo: dadosDaFicha.lote
+              ? null
+              : !empreendimentoDoTerreno.terreno_frente
+                ? 'A ficha não tem a testada/frente — preencha em Torres & Unidades › Terreno.'
+                : 'A ficha não tem profundidade nem área total — preencha uma das duas em Torres & Unidades › Terreno.',
+          },
     };
-  }, [empreendimentoDoTerreno, empreendimentoVinculado, medidasDaPlanta, terreno, avisoFichaAutomatica, avisoEscrituraAutomatica]);
+  }, [empreendimentoDoTerreno, empreendimentoVinculado, medidasDaPlanta, terreno, avisoFichaAutomatica, avisoEscrituraAutomatica, dadosDaFicha.lote, editor.model.boundaries]);
   const prismasDoEntornoDoEstudo = useMemo(() => {
     return prismasDoEntorno(entornoDoEstudo.vizinhos, limitesDoNivel, terreno?.anel ?? null);
   }, [limitesDoNivel, terreno, entornoDoEstudo.vizinhos]);
@@ -10196,6 +10206,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       onEmpreendimento={zona.setEmpreendimentoId}
       onGravarArea={(id) => void gravarAreaNoEmpreendimento(id)}
       ficha={fichaNoPainel}
+      onCriarLotePelaFicha={() => abrirLoteDigitado('RETANGULO')}
       onLevarAFicha={() => empreendimentoDoTerreno && void gravarAreaNoEmpreendimento(empreendimentoDoTerreno.id)}
       gravando={gravandoArea}
       erro={erroArea}

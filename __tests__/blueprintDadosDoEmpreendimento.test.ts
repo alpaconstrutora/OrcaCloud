@@ -19,7 +19,8 @@ describe('dadosDoEmpreendimentoParaPlanta', () => {
       endereco_street: 'Av. Divulgação',
       endereco_city: 'Pouso Alegre',
     });
-    expect(d.lote).toEqual({ frenteMm: 18000, profundidadeMm: 71000, origem: '011 - Garden Cambuhy' });
+    // Sem fundos nem área neste caso: retângulo, e nada a conferir pela área.
+    expect(d.lote).toEqual({ frenteMm: 18000, fundosMm: null, profundidadeMm: 71000, profundidadePelaAreaMm: null, areaM2: null, origem: '011 - Garden Cambuhy' });
     expect(d.endereco).toEqual({ texto: 'Rua A, 10, Centro, Cambuí - MG', origem: '011 - Garden Cambuhy' });
     expect(d.uf).toBe('MG');
     expect(d.cidade).toEqual({ nome: 'Cambuí', uf: 'MG' });
@@ -54,5 +55,17 @@ describe('cidade da ficha (22/10/2026)', () => {
   it('terreno sem cidade usa a de divulgação, com a UF DELA', () => {
     expect(dadosDoEmpreendimentoParaPlanta({ name: 'X', terreno_state: 'SP', endereco_city: 'Cambuí', endereco_state: 'mg' }).cidade).toEqual({ nome: 'Cambuí', uf: 'MG' });
     expect(dadosDoEmpreendimentoParaPlanta({ name: 'X' }).cidade).toBeNull();
+  });
+});
+
+describe('lote pela ficha com fundos e área (22/10/2026)', () => {
+  it('Garden: frente 18, fundos 21, 71 m e 1.229 m² — a profundidade que fecha a área é 63,03 m', () => {
+    const l = dadosDoEmpreendimentoParaPlanta({ name: 'G', terreno_frente: 18, terreno_fundos: 21, terreno_profundidade: 71, terreno_area: 1229 }).lote!;
+    expect(l).toMatchObject({ frenteMm: 18000, fundosMm: 21000, profundidadeMm: 71000, profundidadePelaAreaMm: 63030, areaM2: 1229 });
+  });
+
+  it('sem profundidade, mas com frente e área: a profundidade vem só da área', () => {
+    const l = dadosDoEmpreendimentoParaPlanta({ name: 'G', terreno_frente: 10, terreno_area: 200 }).lote!;
+    expect(l).toMatchObject({ profundidadeMm: null, profundidadePelaAreaMm: 20000 });
   });
 });

@@ -228,6 +228,18 @@ function montar(caminho: Point[], lados: LadoDigitado[], vertices: (string | nul
 export function loteRetangular(entrada: {
   frenteMm: number;
   profundidadeMm: number;
+  /**
+   * Fundos diferente da frente (22/10/2026, "criar lote pela ficha"): o lote vira TRAPÉZIO
+   * CENTRALIZADO — os fundos centrados sobre a frente, as duas laterais inclinadas por igual
+   * (decisão do usuário). Ausente ou igual à frente = retângulo, como sempre. As laterais do
+   * trapézio são CALCULADAS: não levam medida de escritura (a matrícula não as deu).
+   */
+  fundosMm?: number | null;
+  /**
+   * A profundidade NÃO veio da matrícula (foi ajustada para fechar a área da ficha): as laterais
+   * não levam medida de escritura nem no retângulo.
+   */
+  lateraisCalculadas?: boolean;
   frenteVoltadaPara?: number | null;
   rotacaoNorteDeg?: number | null;
   confrontantes?: Partial<Record<BoundaryPapel, string | null>>;
@@ -246,13 +258,18 @@ export function loteRetangular(entrada: {
   }
   const direita: Point = { x: n.y, y: -n.x };
   const o = entrada.origem ?? { x: 0, y: 0 };
+  const b = entrada.fundosMm != null && entrada.fundosMm > 0 ? entrada.fundosMm : f;
+  const trapezio = Math.abs(b - f) > 0.5;
+  // Recuo de cada ponta dos fundos em relação à frente (negativo = fundos mais largo que a frente).
+  const recuo = (f - b) / 2;
   const anel: Point[] = [
     { x: o.x, y: o.y },
     { x: o.x + direita.x * f, y: o.y + direita.y * f },
-    { x: o.x + direita.x * f + n.x * p, y: o.y + direita.y * f + n.y * p },
-    { x: o.x + n.x * p, y: o.y + n.y * p },
+    { x: o.x + direita.x * (f - recuo) + n.x * p, y: o.y + direita.y * (f - recuo) + n.y * p },
+    { x: o.x + direita.x * recuo + n.x * p, y: o.y + direita.y * recuo + n.y * p },
   ];
-  const medidas = [f, p, f, p];
+  const lateral = trapezio || entrada.lateraisCalculadas ? null : p;
+  const medidas = [f, lateral, b, lateral];
   const lados = PAPEIS_DO_RETANGULO.map((papel, i) => ({ papel, medidaMm: medidas[i], confrontante: entrada.confrontantes?.[papel]?.trim() || null }));
   return montar([...anel, { ...anel[0] }], lados, [null, null, null, null]);
 }

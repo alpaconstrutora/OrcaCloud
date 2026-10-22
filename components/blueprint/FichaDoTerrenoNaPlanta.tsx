@@ -9,7 +9,7 @@
  * com as medidas da ficha. Plano: docs/planos/2026-10-21-terreno-ficha-planta.md.
  */
 import React from 'react';
-import { Save } from 'lucide-react';
+import { Keyboard, Save } from 'lucide-react';
 import type { LinhaDaComparacao, SituacaoDoCampo } from '../../utils/blueprintTerrenoDaFicha';
 
 export interface FichaNoPainel {
@@ -22,6 +22,11 @@ export interface FichaNoPainel {
   motivoSemLevar: string | null;
   /** O que foi preenchido sozinho na ficha nesta abertura (só campos que estavam vazios). */
   avisoAutomatico: string | null;
+  /**
+   * "Criar lote pela ficha" (22/10/2026): presente só enquanto a planta não tem lote; `motivo` diz
+   * o que falta na ficha (botão desligado). Ausente/`null` = já há lote, o botão não aparece.
+   */
+  criarLote?: { motivo: string | null } | null;
 }
 
 const SITUACAO: Record<SituacaoDoCampo, { texto: string; cor: string }> = {
@@ -45,11 +50,13 @@ const TD = 'px-3 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-no
 export default function FichaDoTerrenoNaPlanta({
   ficha,
   onLevar,
+  onCriarLote,
   gravando = false,
   erro = null,
 }: {
   ficha: FichaNoPainel;
   onLevar: () => void;
+  onCriarLote?: () => void;
   gravando?: boolean;
   erro?: string | null;
 }) {
@@ -64,6 +71,19 @@ export default function FichaDoTerrenoNaPlanta({
           </span>
           {!ficha.vinculado && <span className="font-normal text-slate-500"> (escolhido na zona urbanística)</span>}
         </p>
+        <div className="flex shrink-0 items-center gap-1.5">
+        {ficha.criarLote && onCriarLote && (
+          <button
+            type="button"
+            disabled={!!ficha.criarLote.motivo}
+            title={ficha.criarLote.motivo ?? 'Abre "Criar o lote digitando" com frente, fundos e profundidade da ficha — você confere antes de lançar'}
+            onClick={onCriarLote}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Keyboard className="h-3.5 w-3.5" />
+            Criar lote pela ficha
+          </button>
+        )}
         <button
           type="button"
           disabled={!!motivo}
@@ -74,6 +94,7 @@ export default function FichaDoTerrenoNaPlanta({
           <Save className="h-3.5 w-3.5" />
           {gravando ? 'Gravando…' : 'Levar à ficha'}
         </button>
+        </div>
       </div>
 
       <div className="mt-1.5 overflow-x-auto rounded-[10px] border border-gray-100">

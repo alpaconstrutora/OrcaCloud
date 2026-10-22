@@ -25,6 +25,8 @@ import {
   problemasDoProduto,
   produtoDaColuna,
   produtoSemente,
+  tipologiaNova,
+  tipologiasForaDoEstudo,
   unidadesNoPiso,
   vagasQueCabem,
 } from '../utils/blueprintProduto';
@@ -154,6 +156,45 @@ describe('produto · coluna e problemas', () => {
     expect(problemasDoProduto(p)).toEqual(['Residencial: o mix soma 120 % — as participações são normalizadas para 100 %.']);
     expect(produtoDaColuna(null).tipologias).toEqual([]);
     expect(problemasDoProduto(produtoSemente('MISTO'))).toEqual([]);
+  });
+
+  // 22/10/2026: o caso real — "Nova tipologia" nascia com mix 0 %, a tipologia ficava fora do estudo
+  // e o Gerar massa culpava o tamanho do bloco ("nenhuma unidade cabe" em 420 combinações).
+  it('diz, por tipologia, que mix 0 % ou área 0 a deixa fora do estudo', () => {
+    const base = produtoSemente('RESIDENCIAL_MEDIO');
+    const t = (id: string, proporcaoPct: number, areaPrivativaM2 = 60) => ({ ...base.tipologias[0], id, nome: `T ${id}`, proporcaoPct, areaPrivativaM2 });
+
+    const so = { ...base, tipologias: [t('1', 0)] };
+    expect(tipologiasForaDoEstudo(so).map((x) => [x.tipologia.id, x.motivo])).toEqual([['1', 'mix 0 %']]);
+    expect(problemasDoProduto(so)).toEqual([
+      'Residencial: nenhuma tipologia com participação no mix — os blocos residenciais ficam sem unidades.',
+      '"T 1": mix 0 % — fica fora do estudo (não recebe unidades).',
+    ]);
+
+    // Ao lado de outra com mix, a de 0 % sumia calada: o mix do uso fechava em 100 %.
+    const aoLado = { ...base, tipologias: [t('a', 100), t('b', 0)] };
+    expect(problemasDoProduto(aoLado)).toEqual(['"T b": mix 0 % — fica fora do estudo (não recebe unidades).']);
+
+    const semArea = { ...base, tipologias: [t('a', 100), t('c', 0, 0)] };
+    expect(tipologiasForaDoEstudo(semArea).map((x) => x.motivo)).toEqual(['mix 0 % e área privativa 0 m²']);
+    expect(tipologiasForaDoEstudo(base)).toEqual([]);
+  });
+
+  it('a tipologia nova nasce no estudo quando é a primeira residencial com mix', () => {
+    const vazio = produtoDaColuna(null);
+    const primeira = tipologiaNova(vazio);
+    expect(primeira).toMatchObject({ id: 't1', uso: 'RESIDENCIAL', proporcaoPct: 100 });
+    expect(tipologiasForaDoEstudo({ ...vazio, tipologias: [primeira] })).toEqual([]);
+
+    // Já há residencial com mix: a nova entra em 0 % (não desfaz o mix digitado) e o aviso aponta.
+    const com = { ...vazio, tipologias: [primeira] };
+    const segunda = tipologiaNova(com);
+    expect(segunda).toMatchObject({ id: 't2', proporcaoPct: 0 });
+    expect(problemasDoProduto({ ...com, tipologias: [primeira, segunda] })).toEqual([`"${segunda.nome}": mix 0 % — fica fora do estudo (não recebe unidades).`]);
+
+    // Só há residencial FORA do estudo: a nova é, de novo, a primeira que conta.
+    const soZero = { ...vazio, tipologias: [{ ...primeira, proporcaoPct: 0 }] };
+    expect(tipologiaNova(soZero)).toMatchObject({ id: 't2', proporcaoPct: 100 });
   });
 });
 

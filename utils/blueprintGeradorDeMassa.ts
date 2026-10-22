@@ -42,6 +42,7 @@ import { recuosEfetivos } from './blueprintZonaUrbanistica';
 import { maiorRetanguloInscrito, prng, type Retangulo } from './blueprintGerador';
 import { centroDoAnel } from './blueprintMassa';
 import { medirCenarioDeMassa, type CenarioDeMassa, type CenarioMedido, type ReguaDoComparador } from './blueprintComparadorDeMassa';
+import { tipologiasForaDoEstudo } from './blueprintProduto';
 
 // ─── Vocabulário ─────────────────────────────────────────────────────────────
 
@@ -676,6 +677,12 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
 
   const q = quadroDoLote(terreno, model.boundaries);
   const produto = regua.produto;
+  // Com tipologias e nenhuma que a distribuição use, todo bloco sai sem unidades: varrer daria "nenhuma unidade
+  // cabe" em cada combinação, culpando o tamanho quando a causa é o produto (22/10/2026, mix 0 % da "Nova tipologia").
+  const fora = tipologiasForaDoEstudo(produto);
+  if (produto.tipologias.length > 0 && fora.length === produto.tipologias.length) {
+    return vazio(`Nenhuma tipologia do produto entra no estudo: ${fora.map((x) => `"${x.tipologia.nome}" (${x.motivo})`).join(', ')}. Tipologia sem mix ou sem área não recebe unidade — ajuste em Terreno › Massa › Produto.`);
+  }
   const temUso = (u: string) => produto.tipologias.some((t) => t.uso === u && t.proporcaoPct > 0 && t.areaPrivativaM2 > 0);
   const z = regua.zona;
   const loteMm2 = terreno.areaMm2;

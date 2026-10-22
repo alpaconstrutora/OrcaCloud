@@ -30,6 +30,7 @@ import {
   USOS_DA_TIPOLOGIA,
   problemasDoProduto,
   produtoSemente,
+  tipologiaNova,
   type HipotesesDoProduto,
   type HipotesesFinanceiras,
   type PadraoDoProduto,
@@ -102,11 +103,7 @@ export default function TelaProduto({ produto: p, onProduto, persistenciaIndispo
   }
 
   function novaTipologia() {
-    onProduto((atual) => {
-      let n = atual.tipologias.length + 1;
-      while (atual.tipologias.some((x) => x.id === `t${n}`)) n++;
-      return { ...atual, tipologias: [...atual.tipologias, { id: `t${n}`, nome: `Tipologia ${n}`, uso: 'RESIDENCIAL', dormitorios: 2, areaPrivativaM2: 60, vagasPorUnidade: 1, proporcaoPct: 0, precoM2: 0 }] };
-    });
+    onProduto((atual) => ({ ...atual, tipologias: [...atual.tipologias, tipologiaNova(atual)] }));
   }
 
   return (

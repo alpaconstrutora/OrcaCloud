@@ -29,6 +29,7 @@ import {
   tipologiasForaDoEstudo,
   unidadesNoPiso,
   vagasQueCabem,
+  vagasQueNaoCabem,
 } from '../utils/blueprintProduto';
 
 const ret = (x0: number, y0: number, x1: number, y1: number): Point[] => [point(x0, y0), point(x1, y0), point(x1, y1), point(x0, y1)];
@@ -125,6 +126,22 @@ describe('produto · distribuição na massa', () => {
   it('a garagem de 20 × 15 m comporta 7 vagas — o mesmo número do lançador da E2.5', () => {
     expect(vagasQueCabem(ret(0, 0, 20000, 15000), 'PERPENDICULAR')).toBe(7);
     expect(vagasQueCabem([], 'PERPENDICULAR')).toBe(0);
+  });
+
+  // 22/10/2026, o caso real: o subsolo de um lote de 10 m de frente (9,8 × 29,8 m) não comporta a fileira de ré
+  // com circulação. O gerador dizia só "faltam vagas"; agora diz a largura útil e o que a fileira pede.
+  it('garagem estreita demais: diz a largura útil e o que a fileira pede; null quando cabe alguma vaga', () => {
+    const sub = ret(0, 0, 9800, 29800);
+    const folgas = { recuoDasVagasMm: 200, folgaDaFilaMm: 1000 };
+    expect(vagasQueCabem(sub, 'PERPENDICULAR', folgas)).toBe(0);
+    const re = vagasQueNaoCabem(sub, 'PERPENDICULAR', folgas)!;
+    expect(re.fileiraPedeMm).toBe(10000);
+    expect(re.larguraUtilMm).toBeLessThan(re.fileiraPedeMm);
+    expect(re.larguraUtilMm).toBeGreaterThan(9000);
+    expect(vagasQueNaoCabem(sub, 'ESPINHA_45', folgas)!.fileiraPedeMm).toBeGreaterThan(10000);
+    expect(vagasQueCabem(sub, 'PARALELA', folgas)).toBe(4);
+    expect(vagasQueNaoCabem(sub, 'PARALELA', folgas)).toBeNull();
+    expect(vagasQueNaoCabem(ret(0, 0, 20000, 15000), 'PERPENDICULAR')).toBeNull();
   });
 
   it('bloco comercial só recebe tipologia comercial; misto recebe as duas; sem tipologia do uso, avisa', () => {

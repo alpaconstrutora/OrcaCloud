@@ -42,7 +42,8 @@ import { recuosEfetivos } from './blueprintZonaUrbanistica';
 import { maiorRetanguloInscrito, prng, type Retangulo } from './blueprintGerador';
 import { centroDoAnel } from './blueprintMassa';
 import { medirCenarioDeMassa, type CenarioDeMassa, type CenarioMedido, type ReguaDoComparador } from './blueprintComparadorDeMassa';
-import { tipologiasForaDoEstudo } from './blueprintProduto';
+import { tipologiasForaDoEstudo, vagasQueCabem, vagasQueNaoCabem } from './blueprintProduto';
+import { ROTULO_DO_ARRANJO, type ArranjoDasVagas } from './blueprintVagasAutomaticas';
 
 // ─── Vocabulário ─────────────────────────────────────────────────────────────
 
@@ -383,8 +384,17 @@ function paraBloco(ctx: Contexto, nome: string, local: Point[], cotaBaseMm: numb
   };
 }
 
+/**
+ * As medidas EFETIVAS do bloco de unidades, mm — o parâmetro recortado para caber no retângulo. 22/10/2026: o rótulo
+ * escrevia o parâmetro da varredura e saía "19 × 18 m" num lote de 10 m de largura.
+ */
+interface Medidas {
+  comprimentoMm: number;
+  profundidadeMm: number;
+}
+
 /** Os contornos (no quadro local) dos blocos de unidades de um tipo; null = a forma não cabe no retângulo. */
-function contornos(tipo: TipoDeImplantacao, r: Retangulo, p: ParametrosDoCandidato, g: number): { nome: string; anel: Point[] }[] | null {
+function contornos(tipo: TipoDeImplantacao, r: Retangulo, p: ParametrosDoCandidato, g: number): { formas: { nome: string; anel: Point[] }[]; medidas: Medidas } | null {
   const eixo = eixoDo(r);
   const { comprimento: len, largura: larg } = eixo;
   // Variante: bit 0 espelha ao longo do comprimento, bit 1 através — o L troca de canto, o U abre do outro lado.
@@ -397,58 +407,71 @@ function contornos(tipo: TipoDeImplantacao, r: Retangulo, p: ParametrosDoCandida
       if (a < LADO_MIN_MM) return null;
       const a0 = ((len - a) * (p.du + 1)) / 2;
       const b0 = ((larg - prof) * (p.dv + 1)) / 2;
-      return [{ nome: 'Torre', anel: retEmAB(pt, a0, b0, a0 + a, b0 + prof) }];
+      return { formas: [{ nome: 'Torre', anel: retEmAB(pt, a0, b0, a0 + a, b0 + prof) }], medidas: { comprimentoMm: a, profundidadeMm: prof } };
     }
     case 'DUAS_TORRES': {
       const a = Math.min(p.comprimentoMm, (len - g) / 2);
       if (a < LADO_MIN_MM) return null;
       const ini = (len - (2 * a + g)) / 2;
       const b0 = (larg - prof) / 2;
-      return [
-        { nome: 'Torre A', anel: retEmAB(pt, ini, b0, ini + a, b0 + prof) },
-        { nome: 'Torre B', anel: retEmAB(pt, ini + a + g, b0, ini + 2 * a + g, b0 + prof) },
-      ];
+      return {
+        formas: [
+          { nome: 'Torre A', anel: retEmAB(pt, ini, b0, ini + a, b0 + prof) },
+          { nome: 'Torre B', anel: retEmAB(pt, ini + a + g, b0, ini + 2 * a + g, b0 + prof) },
+        ],
+        medidas: { comprimentoMm: a, profundidadeMm: prof },
+      };
     }
     case 'LAMINA': {
       const b0 = ((larg - prof) * (p.dv + 1)) / 2;
-      return [{ nome: 'Lâmina', anel: retEmAB(pt, 0, b0, len, b0 + prof) }];
+      return { formas: [{ nome: 'Lâmina', anel: retEmAB(pt, 0, b0, len, b0 + prof) }], medidas: { comprimentoMm: len, profundidadeMm: prof } };
     }
     case 'BLOCOS_PARALELOS': {
       const k = Math.floor((larg + g) / (prof + g) + 1e-9);
       if (k < 2) return null;
       const ini = (larg - (k * prof + (k - 1) * g)) / 2;
-      return Array.from({ length: k }, (_, i) => ({ nome: `Bloco ${String.fromCharCode(65 + i)}`, anel: retEmAB(pt, 0, ini + i * (prof + g), len, ini + i * (prof + g) + prof) }));
+      return {
+        formas: Array.from({ length: k }, (_, i) => ({ nome: `Bloco ${String.fromCharCode(65 + i)}`, anel: retEmAB(pt, 0, ini + i * (prof + g), len, ini + i * (prof + g) + prof) })),
+        medidas: { comprimentoMm: len, profundidadeMm: prof },
+      };
     }
     case 'EM_L': {
       if (len < 2 * prof || larg < 2 * prof) return null;
-      return [{ nome: 'Bloco em L', anel: [pt(0, 0), pt(len, 0), pt(len, prof), pt(prof, prof), pt(prof, larg), pt(0, larg)] }];
+      return { formas: [{ nome: 'Bloco em L', anel: [pt(0, 0), pt(len, 0), pt(len, prof), pt(prof, prof), pt(prof, larg), pt(0, larg)] }], medidas: { comprimentoMm: len, profundidadeMm: prof } };
     }
     case 'EM_U': {
       if (len - 2 * prof < g || larg - prof < g) return null;
-      return [{ nome: 'Bloco em U', anel: [pt(0, 0), pt(len, 0), pt(len, larg), pt(len - prof, larg), pt(len - prof, prof), pt(prof, prof), pt(prof, larg), pt(0, larg)] }];
+      return {
+        formas: [{ nome: 'Bloco em U', anel: [pt(0, 0), pt(len, 0), pt(len, larg), pt(len - prof, larg), pt(len - prof, prof), pt(prof, prof), pt(prof, larg), pt(0, larg)] }],
+        medidas: { comprimentoMm: len, profundidadeMm: prof },
+      };
     }
     case 'EM_H': {
       const m0 = (larg - prof) / 2;
       const m1 = (larg + prof) / 2;
       if (len - 2 * prof < g || m0 < g) return null;
-      return [
-        {
-          nome: 'Bloco em H',
-          anel: [pt(0, 0), pt(prof, 0), pt(prof, m0), pt(len - prof, m0), pt(len - prof, 0), pt(len, 0), pt(len, larg), pt(len - prof, larg), pt(len - prof, m1), pt(prof, m1), pt(prof, larg), pt(0, larg)],
-        },
-      ];
+      return {
+        formas: [
+          {
+            nome: 'Bloco em H',
+            anel: [pt(0, 0), pt(prof, 0), pt(prof, m0), pt(len - prof, m0), pt(len - prof, 0), pt(len, 0), pt(len, larg), pt(len - prof, larg), pt(len - prof, m1), pt(prof, m1), pt(prof, larg), pt(0, larg)],
+          },
+        ],
+        medidas: { comprimentoMm: len, profundidadeMm: prof },
+      };
     }
     case 'EMBASAMENTO_E_TORRE':
       return null; // montado à parte: dois retângulos em alturas diferentes
   }
 }
 
-/** Os blocos do cenário (unidades + garagem), ou null quando a forma não cabe. */
-function montar(ctx: Contexto, p: ParametrosDoCandidato): BlocoProposto[] | null {
+/** Os blocos do cenário (unidades + garagem) e as medidas do bloco de unidades, ou null quando a forma não cabe. */
+function montar(ctx: Contexto, p: ParametrosDoCandidato): { blocos: BlocoProposto[]; medidas: Medidas } | null {
   const { hip } = ctx;
   const pd = hip.peDireitoMm;
   const g = hip.afastamentoEntreBlocosM * 1000;
   const blocos: BlocoProposto[] = [];
+  let medidas: Medidas;
 
   if (p.tipo === 'EMBASAMENTO_E_TORRE') {
     if (p.garagem === 'PILOTIS') return null;
@@ -482,13 +505,15 @@ function montar(ctx: Contexto, p: ParametrosDoCandidato): BlocoProposto[] | null
     const anelT = [{ x: tx0, y: ty0 }, { x: tx0 + tw, y: ty0 }, { x: tx0 + tw, y: ty0 + td }, { x: tx0, y: ty0 + td }];
     blocos.push(paraBloco(ctx, 'Embasamento', anelE, 0, nE, pd, ctx.usoDoEmbasamento));
     blocos.push(paraBloco(ctx, 'Torre', anelT, nE * pd, p.pavimentos, pd, ctx.usoDasUnidades));
+    medidas = { comprimentoMm: a, profundidadeMm: b };
   } else {
     const extra = p.garagem === 'PILOTIS' ? 1 : 0;
     const r = retanguloNaAltura(ctx, (p.pavimentos + extra) * pd, p.pavimentos + extra);
     if (!r) return null;
-    const formas = contornos(p.tipo, r, p, g);
-    if (!formas) return null;
-    for (const f of formas) {
+    const c = contornos(p.tipo, r, p, g);
+    if (!c) return null;
+    medidas = c.medidas;
+    for (const f of c.formas) {
       if (extra) blocos.push(paraBloco(ctx, `${f.nome} · pilotis`, f.anel, 0, 1, pd, 'GARAGEM'));
       blocos.push(paraBloco(ctx, f.nome, f.anel, extra * pd, p.pavimentos, pd, ctx.usoDasUnidades));
     }
@@ -501,7 +526,7 @@ function montar(ctx: Contexto, p: ParametrosDoCandidato): BlocoProposto[] | null
     const anel = [{ x: r.x0, y: r.y0 }, { x: r.x1, y: r.y0 }, { x: r.x1, y: r.y1 }, { x: r.x0, y: r.y1 }];
     blocos.push(paraBloco(ctx, 'Subsolo', anel, -k * hip.peDireitoDoSubsoloMm, k, hip.peDireitoDoSubsoloMm, 'GARAGEM'));
   }
-  return blocos;
+  return { blocos, medidas };
 }
 
 /** O modelo do cenário sem passar pelo kernel (o mesmo que o `AddBloco` gravaria). */
@@ -624,12 +649,12 @@ const VARIANTES: Partial<Record<TipoDeImplantacao, number[]>> = { EM_L: [0, 1, 2
 const ROTULO_DA_VARIANTE: Record<number, string> = { 1: 'espelhado', 2: 'invertido', 3: 'espelhado e invertido' };
 const f1 = (v: number) => (Math.round(v * 10) / 10).toLocaleString('pt-BR');
 
-function rotuloDe(p: ParametrosDoCandidato, hip: HipotesesDoGeradorDeMassa): string {
+function rotuloDe(p: ParametrosDoCandidato, hip: HipotesesDoGeradorDeMassa, m: Medidas): string {
   const partes = [ROTULO_DA_IMPLANTACAO[p.tipo]];
   if (p.tipo === 'TORRE') partes[0] += Math.abs(p.du) < 0.34 && Math.abs(p.dv) < 0.34 ? ' central' : ' deslocada';
   if (p.variante && ROTULO_DA_VARIANTE[p.variante]) partes[0] += ` (${ROTULO_DA_VARIANTE[p.variante]})`;
   partes.push(p.tipo === 'EMBASAMENTO_E_TORRE' ? `${hip.pavimentosDoEmbasamento} + ${p.pavimentos} pav` : `${p.pavimentos} pav`);
-  partes.push(USA_COMPRIMENTO.has(p.tipo) ? `${f1(p.comprimentoMm / 1000)} × ${f1(p.profundidadeMm / 1000)} m` : `lâmina ${f1(p.profundidadeMm / 1000)} m`);
+  partes.push(USA_COMPRIMENTO.has(p.tipo) ? `${f1(m.comprimentoMm / 1000)} × ${f1(m.profundidadeMm / 1000)} m` : `lâmina ${f1(m.profundidadeMm / 1000)} m`);
   if (p.garagem !== 'SEM_GARAGEM') partes.push(ROTULO_DO_ESTACIONAMENTO[p.garagem].replace(/ \(.*\)$/, ''));
   return partes.join(' · ');
 }
@@ -724,11 +749,12 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   const avaliar = (p: ParametrosDoCandidato): { c: CandidatoDeMassa; medido: CenarioMedido } | null => {
     const chave = chaveDe(p);
     if (memo.has(chave)) return memo.get(chave)!;
-    const blocos = montar(ctx, p);
-    if (!blocos) {
+    const montado = montar(ctx, p);
+    if (!montado) {
       memo.set(chave, null);
       return null;
     }
+    const { blocos, medidas } = montado;
     const medido = medirCenarioDeMassa(modeloCom(base, levelId, blocos), reguaComCache);
     if (!medido) {
       memo.set(chave, null);
@@ -748,7 +774,7 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
     if (restricoes.atenderVagas && distribuicao && distribuicao.vagasFaltando > 0) motivos.push('faltam vagas');
     if (metaDeUnidades != null && c.unidades < metaDeUnidades) motivos.push('abaixo da meta de unidades');
     for (const m of motivos) contar(descartes, m);
-    const cand: CandidatoDeMassa = { chave, parametros: p, rotulo: rotuloDe(p, hip), blocos, cenario: c, valor: null, viavel: motivos.length === 0, motivos };
+    const cand: CandidatoDeMassa = { chave, parametros: p, rotulo: rotuloDe(p, hip, medidas), blocos, cenario: c, valor: null, viavel: motivos.length === 0, motivos };
     const r = { c: cand, medido };
     memo.set(chave, r);
     return r;
@@ -913,6 +939,25 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   if (viaveis.length === 0 && avaliados > 0) {
     const top = [...descartes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
     avisos.push(`Nenhuma combinação atende às restrições. Os motivos mais comuns: ${top.map(([m, n]) => `${m} (${n})`).join(', ')}.`);
+    // "Faltam vagas" não diz quando cabe ZERO (22/10/2026, lote de 10 m de frente com vagas de ré). O subsolo do lote
+    // inteiro é a maior garagem que o gerador monta: sem vaga nele, não há vaga em pilotis nem em subsolo nenhum.
+    const ret = ctx.retanguloDoLote;
+    const h = produto.hipoteses;
+    if (restricoes.atenderVagas && descartes.has('faltam vagas') && ret) {
+      const subsolo = paraBloco(ctx, 'Subsolo', [{ x: ret.x0, y: ret.y0 }, { x: ret.x1, y: ret.y0 }, { x: ret.x1, y: ret.y1 }, { x: ret.x0, y: ret.y1 }], 0, 1, hip.peDireitoDoSubsoloMm, 'GARAGEM').pontos;
+      const folgas = { recuoDasVagasMm: h.recuoDasVagasMm, folgaDaFilaMm: h.folgaDaFilaMm };
+      const falta = vagasQueNaoCabem(subsolo, h.arranjoDasVagas, folgas);
+      if (falta) {
+        const outros = (Object.keys(ROTULO_DO_ARRANJO) as ArranjoDasVagas[])
+          .filter((a) => a !== h.arranjoDasVagas)
+          .map((a) => ({ a, n: vagasQueCabem(subsolo, a, folgas) }))
+          .filter((x) => x.n > 0)
+          .map((x) => `${ROTULO_DO_ARRANJO[x.a].replace(/ \(.*\)$/, '').toLowerCase()} cabem ${x.n} vagas por subsolo`);
+        avisos.push(
+          `Nenhuma vaga cabe na garagem: a largura útil é ${f1(falta.larguraUtilMm / 1000)} m e a fileira ${ROTULO_DO_ARRANJO[h.arranjoDasVagas].toLowerCase()} com a circulação pede ${(falta.fileiraPedeMm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m${outros.length ? ` (${outros.join('; ')})` : ''}. Troque o arranjo das vagas em Terreno › Massa › Produto › Hipóteses, ou desmarque "Atender às vagas exigidas".`,
+        );
+      }
+    }
   }
   if (objetivo === 'MENOR_GARAGEM' && !restricoes.atenderVagas) avisos.push('Minimizar o estacionamento sem exigir as vagas leva a cenários sem garagem.');
 

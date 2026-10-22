@@ -13,7 +13,7 @@ export interface OpuraDocument {
   descricao?: string;
   autor?: string;
   categoria: OpuraDocumentCategoria;
-  tipo_documento: string;
+  tipo_documento: string | null;
   // Número do documento gerado pelo próprio fornecedor (texto livre — não é o
   // [NUMERO] sequencial da máscara de nomenclatura, que é interno do GED).
   numero_documento_fornecedor?: string;

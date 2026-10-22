@@ -339,7 +339,7 @@ export function BatchUploadSheet({
       descricao: undefined,
       autor: undefined,
       categoria,
-      tipo_documento: item.overrides.tipo_documento ?? defaultTipo,
+      tipo_documento: item.overrides.tipo_documento ?? (defaultTipo || null),
       discipline_code: item.overrides.discipline_code ?? defaultDiscipline ?? undefined,
       status: 'ativo',
       data_emissao: item.overrides.data_emissao ?? defaultEmissao ?? undefined,
@@ -399,10 +399,6 @@ export function BatchUploadSheet({
   const handleSend = async () => {
     if (!targetOrgId) {
       notify('Selecione uma organização para o lote.', 'error');
-      return;
-    }
-    if (!defaultTipo) {
-      notify('Selecione o tipo de documento padrão do lote.', 'error');
       return;
     }
     const queue = items.filter((i) => i.status === 'pronto' && !bloqueado(i));
@@ -561,14 +557,13 @@ export function BatchUploadSheet({
               </>
             )}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-500">Tipo de documento</label>
+              <label className="text-xs font-semibold text-slate-500">Tipo de documento (Opcional)</label>
               <select
-                required
                 value={defaultTipo}
                 onChange={(e) => setDefaultTipo(e.target.value)}
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
               >
-                <option value="">Selecione um tipo...</option>
+                <option value="">Nenhum</option>
                 {documentTypes.map((type) => (
                   <option key={type.id} value={type.name}>{type.name}</option>
                 ))}

@@ -9,6 +9,7 @@ import {
     type EncargosConfig, type EmpresaRegime, type ColaboradorDaFolha, type ItemDaFolha, type OpcoesDaFolha,
     type TerceiroTax,
 } from '../utils/folhaFinanceiro';
+import type { DadosDaFolhaDoMes } from '../utils/relacoesDaFolha';
 
 // Alíquotas patronais (CPP, RAT×FAP, terceiros) moram em payroll_encargos_config
 // desde 21/10/2026 — antes os terceiros ficavam no localStorage de quem clicava.
@@ -1322,6 +1323,76 @@ export const payrollService = {
                 .order('id') as unknown as RangeableQuery<ItemDaFolhaComColaborador>);
         if (error) throw error;
         return data;
+    },
+
+    /**
+     * Folhas FECHADAS de uma organização na competência, no formato de
+     * `utils/relacoesDaFolha.ts` (RH › Encargos Sociais › Encargos de INSS e
+     * Relação por Empregado). A competência é o mês de `start_date` — a mesma
+     * que `syncPayrollToFinance` usa para os títulos. Toda consulta que falha
+     * vira exceção: a coluna inexistente `employees.registration_number`
+     * passou meses engolida, e a relação saía com o UUID no lugar do nome.
+     */
+    async carregarFolhasFechadasDoMes(orgId: string, period: string): Promise<{
+        org: { id: string; name: string; cnpj: string | null };
+        dados: DadosDaFolhaDoMes;
+    }> {
+        const [y, m] = period.split('-').map(Number);
+        const primeiroDia = `${period}-01`;
+        const ultimoDia = `${period}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+
+        const [orgRes, runsRes, rubRes, cfg] = await Promise.all([
+            supabase.from('organizations').select('id, name, cnpj').eq('id', orgId).single(),
+            supabase.from('payroll_runs').select('id, type')
+                .eq('org_id', orgId).eq('status', 'FECHADO')
+                .gte('start_date', primeiroDia).lte('start_date', ultimoDia),
+            supabase.from('rubrics').select('code, name, organization_id'),
+            this.getEncargosConfig(orgId),
+        ]);
+        if (orgRes.error) throw orgRes.error;
+        if (runsRes.error) throw runsRes.error;
+        if (rubRes.error) throw rubRes.error;
+
+        const folhas = (runsRes.data || []) as { id: string; type: string }[];
+        const runIds = folhas.map(f => f.id);
+        type Resultado = DadosDaFolhaDoMes['resultados'][number];
+        type Item = DadosDaFolhaDoMes['itens'][number];
+        const [resultados, itens] = runIds.length
+            ? await Promise.all([
+                fetchAllPages<Resultado>(() => supabase.from('payroll_results')
+                    .select('payroll_run_id, employee_id, gross, net, base_inss')
+                    .in('payroll_run_id', runIds)
+                    .order('id') as unknown as RangeableQuery<Resultado>),
+                fetchAllPages<Item>(() => supabase.from('payroll_items')
+                    .select('payroll_run_id, employee_id, code, type, amount')
+                    .in('payroll_run_id', runIds)
+                    .order('id') as unknown as RangeableQuery<Item>),
+            ])
+            : [{ data: [] as Resultado[], error: null }, { data: [] as Item[], error: null }];
+        if (resultados.error) throw resultados.error;
+        if (itens.error) throw itens.error;
+
+        const empIds = [...new Set(resultados.data.map(r => r.employee_id).filter(Boolean))];
+        let colaboradores: DadosDaFolhaDoMes['colaboradores'] = [];
+        if (empIds.length) {
+            const { data, error } = await supabase.from('employees').select('id, name, matricula').in('id', empIds);
+            if (error) throw error;
+            colaboradores = (data || []) as DadosDaFolhaDoMes['colaboradores'];
+        }
+
+        const org = orgRes.data as { id: string; name: string; cnpj: string | null };
+        return {
+            org,
+            dados: {
+                orgId,
+                folhas,
+                resultados: resultados.data,
+                itens: itens.data,
+                colaboradores,
+                rubricas: (rubRes.data || []) as DadosDaFolhaDoMes['rubricas'],
+                cfg,
+            },
+        };
     },
 
     /**

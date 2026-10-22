@@ -284,7 +284,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
             lines.push('');
             lines.push('Totais da folha (os tributos ficam em Financeiro › Tributos a Pagar):');
             for (const [nome, valor] of Object.entries(result.totais)) lines.push(`  ${nome}: ${brl(valor)}`);
-            if (!result.rubricasIndividualizadas.length) {
+            if (result.count > 0 && !result.rubricasIndividualizadas.length) {
                 lines.push('');
                 lines.push('⚠️ Nenhuma rubrica com "Lançamento Individualizado" encontrada.');
                 lines.push('Vá em Gestão de Rubricas e ative o campo na rubrica ADIANTAMENTO.');
@@ -317,7 +317,9 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
                 console.error('[LaborPayroll] Erro na sincronização financeira:', syncErr);
                 notify(`A folha foi fechada, mas o financeiro não foi gerado: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}. Use "Re-sincronizar financeiro".`, 'error');
             });
-            notify('Folha fechada! Os lançamentos financeiros serão sincronizados em instantes.');
+            notify(selectedRun.type === 'adiantamento'
+                ? 'Folha de adiantamento fechada. Ela não gera lançamento no financeiro: o adiantamento sai da folha mensal.'
+                : 'Folha fechada! Os lançamentos financeiros serão sincronizados em instantes.');
         } catch (err) {
             console.error(err);
             notify('Erro ao fechar folha.', 'error');

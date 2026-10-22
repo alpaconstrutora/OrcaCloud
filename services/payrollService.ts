@@ -1496,6 +1496,20 @@ export const payrollService = {
      */
     async syncPayrollToFinance(runId: string): Promise<ResultadoSyncFolha> {
         const { run, period, colabs, cfg, rubricas, opcoes } = await this.carregarFolhaParaFinanceiro(runId);
+
+        // Folha de ADIANTAMENTO não gera financeiro. O pagamento do adiantamento sai da
+        // folha MENSAL (rubrica ADIANTAMENTO com lançamento individualizado), e ela não tem
+        // tributo próprio: a base e o INSS estão na mensal. Gerar aqui duplicaria o título do
+        // adiantamento e, numa folha calculada antes do processAdvance (as de 05/2026), ainda
+        // INSS, CPP, RAT, terceiros e FGTS. Plano: docs/planos/2026-10-22-adiantamento-sem-financeiro.md
+        if (run.type === 'adiantamento') {
+            return {
+                success: true, count: 0, removidos: 0, preservados: 0,
+                avisos: ['Folha de adiantamento não gera lançamento no financeiro: o adiantamento é lançado pela folha mensal (rubrica ADIANTAMENTO), e os tributos saem dela.'],
+                totais: {}, encargos: cfg, rubricasIndividualizadas: [],
+            };
+        }
+
         const [year, month] = period.split('-');
         const formattedPeriod = `${month}/${year}`;
         const venc20 = vencimentoDia20(period);

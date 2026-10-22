@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 type Resposta = { data: unknown; error: unknown };
 const ops: { op: string; tabela: string; rows?: Record<string, unknown>[]; ids?: string[] }[] = [];
 let falharUpsert = false;
+let tipoDaFolha: string | undefined;
 
 const RUN = '11111111-1111-1111-1111-111111111111';
 const EMP = '22222222-2222-2222-2222-222222222222';
@@ -29,7 +30,7 @@ const EXISTENTES = [
 
 function dados(tabela: string, filtros: Record<string, unknown[]>): unknown {
     switch (tabela) {
-        case 'payroll_runs': return { id: RUN, org_id: 'org', start_date: '2026-06-01', end_date: '2026-06-30', cost_center_id: 'cc', plano_de_contas_id: null };
+        case 'payroll_runs': return { id: RUN, type: tipoDaFolha, org_id: 'org', start_date: '2026-06-01', end_date: '2026-06-30', cost_center_id: 'cc', plano_de_contas_id: null };
         case 'payroll_results': return [{ employee_id: EMP, net: 3492.22, gross: 5667, employer_cost: 6120.36, base_inss: 5667, employee: { name: 'Fulano' } }];
         case 'employees': return [{ id: EMP, name: 'Fulano', cost_center_id: null, plano_de_contas_id: null }];
         case 'employee_cost_splits': return [];
@@ -83,7 +84,7 @@ const gravados = () => ops.filter(o => o.op === 'upsert').flatMap(o => o.rows ??
 const porRef = (sufixo: string) => gravados().find(r => r.reference_id === `${P}${sufixo}`);
 
 describe('syncPayrollToFinance — preserva e separa os tributos', () => {
-    beforeEach(() => { ops.length = 0; falharUpsert = false; });
+    beforeEach(() => { ops.length = 0; falharUpsert = false; tipoDaFolha = undefined; });
 
     it('não apaga nem regrava o conciliado e o do DARF', async () => {
         const r = await payrollService.syncPayrollToFinance(RUN);
@@ -126,5 +127,16 @@ describe('syncPayrollToFinance — preserva e separa os tributos', () => {
         falharUpsert = true;
         await expect(payrollService.syncPayrollToFinance(RUN)).rejects.toThrow(/Período 06\/2026 fechado/);
         expect(ops.some(o => o.op === 'delete')).toBe(false);
+    });
+
+    it('folha de ADIANTAMENTO não gera financeiro: o adiantamento já sai da mensal (rubrica individualizada)', async () => {
+        // 22/10/2026: as duas folhas de adiantamento de 05/2026 foram calculadas antes do
+        // processAdvance existir e carregam INSS/FGTS. Fechá-las gravaria INSS, CPP, RAT,
+        // terceiros e FGTS em dobro com a mensal — e o próprio adiantamento, duas vezes.
+        tipoDaFolha = 'adiantamento';
+        const r = await payrollService.syncPayrollToFinance(RUN);
+        expect(ops.filter(o => o.op === 'upsert' || o.op === 'delete')).toEqual([]);
+        expect(r.count).toBe(0);
+        expect(r.avisos.join(' ')).toMatch(/adiantamento/i);
     });
 });

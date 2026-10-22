@@ -142,6 +142,7 @@ import {
 } from '../../utils/blueprintCotas';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
 import { composicaoDaRede, trechosNumerados } from '../../utils/blueprintFiacao';
+import { diametrosAnotados } from '../../utils/blueprintDiametroDosEletrodutos';
 import { pegadaDaPecaPrevista, type PecaPrevista } from '../../utils/blueprintPilaresAutomaticos';
 import { bolhasDosEixos, crescerFaixa, faixaVazia, type BolhasDoEixo } from '../../utils/blueprintEixosAutomaticos';
 import { idsDoGrupo } from '../../utils/blueprintGrupoDeFundacao';
@@ -197,7 +198,15 @@ import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 // Climatização E3.4 (04/10/2026): o símbolo e o número (EV-1, CD-1) das peças de climatização.
 import { proporcaoDoSimbolo, simboloDeClimatizacao, temSimboloDeClimatizacao } from '../../utils/blueprintSimbolosClimatizacao';
 import { numeracaoDeClimatizacao } from '../../utils/blueprintNumeracaoClimatizacao';
-import { posicionarRotulos, type CaixaNaTela } from '../../utils/blueprintRotulosSemColisao';
+import {
+  PRIORIDADE_DA_ANOTACAO,
+  posicionarAnotacoes,
+  type AnotacaoAPosicionar,
+  type CaixaNaTela,
+  type ObstaculoNaTela,
+  type PontoNaTela,
+  type SegmentoNaTela,
+} from '../../utils/blueprintAnotacaoSemColisao';
 import {
   ROTULO_DO_ENCAIXE,
   TIPOS_DE_ENCAIXE,
@@ -551,6 +560,15 @@ const ESCALA_DE_ANOTACAO_PX_MM = 0.08;
 function fatorDeAnotacao(escalaPxPorMm: number): number {
   return Math.min(3, Math.max(1, escalaPxPorMm / ESCALA_DE_ANOTACAO_PX_MM));
 }
+/** A linha de chamada do texto que saiu de perto do símbolo: fina e cinza, para não competir com o traço. */
+const COR_DA_CHAMADA = '#94a3b8';
+/**
+ * Abaixo disto (1 m = 2 cm de tela — o lote inteiro na tela) não há papel para centenas de textos: as
+ * chamadas viravam uma estrela de linhas por cima do desenho e, sem elas, os textos se amontoavam
+ * (visto no harness com a planta Garden, 22/10/2026). Decisão do usuário: nesse zoom os textos
+ * ELÉTRICOS não se escrevem — voltam ao aproximar. Os símbolos continuam.
+ */
+const ESCALA_MINIMA_DA_CHAMADA_PX_MM = 0.02;
 /**
  * O símbolo da tomada (triângulo NBR 5444) é desenhado 1,5× a peça/piso de
  * 10 px — pedido de 14/09/2026. Só desenho: acerto e encaixe usam a peça.
@@ -2055,6 +2073,8 @@ export default function BlueprintCanvas({
   const fiacaoDaRede = useMemo(() => composicaoDaRede(model), [model]);
   // E2.4: eletrodutos com mais condutores do que se lê em traços levam um número (tabela na folha).
   const trechosNumeradosDaRede = useMemo(() => trechosNumerados(model, fiacaoDaRede), [model, fiacaoDaRede]);
+  // O Ø predominante não se escreve; o diferente, uma vez por trecho contínuo (ver `diametrosAnotados`).
+  const diametrosDaRede = useMemo(() => diametrosAnotados(model.trechos ?? []), [model.trechos]);
 
   /** Seção declarada por circuito — é ela que vira o `#2,5` ao lado do traço. */
   const secaoPorCircuito = useMemo(
@@ -6379,6 +6399,67 @@ export default function BlueprintCanvas({
     // prancha é o arco leve nos repetidos, cada um para um lado. É desenho:
     // o trecho continua reto no modelo, no 3D e no acerto do clique — o arco
     // passa a 4 px do traço reto por nível, dentro do alcance de 8 px.
+    // ── OS TEXTOS DA PLANTA, SEM COLISÃO (22/10/2026) ────────────────────────
+    //
+    // Pedido com dois prints da planta Garden, elétrica ligada: *"Veja a total confusão de
+    // sobreposicões de testos e componentes."* Cada texto saía a uma distância FIXA do próprio
+    // símbolo — "Luz teto · C3", o "-20-" e o "600 VA" da tomada, o "N cond." do trecho cheio, o
+    // Ø — sem olhar o vizinho. Agora os laços dos trechos e dos pontos só DESENHAM os símbolos e
+    // ANOTAM os textos aqui; um passe único, depois dos pontos, posiciona todos juntos
+    // (`posicionarAnotacoes`: prioridade, colado quando há lugar, linha de chamada quando não há —
+    // decisão do usuário) e escreve.
+    //
+    // Afastado (abaixo do zoom de trabalho) o texto não encolhe e a planta encolhe: não há papel
+    // para o Ø, o "N cond." e a seção, que se leem de perto. Eles saem; o circuito, a pendência, a
+    // potência, a instrução e o número do trecho ficam.
+    const longeDemais = vista.escala < ESCALA_DE_ANOTACAO_PX_MM;
+    const anotacoesDaPlanta: (AnotacaoAPosicionar & { linhas: { texto: string; fonte: string; px: number; cor: string; largura: number; altura: number }[]; centrar: boolean; atenuada: boolean })[] = [];
+    const obstaculosDasAnotacoes: ObstaculoNaTela[] = [];
+    const segmentosDasAnotacoes: SegmentoNaTela[] = [];
+    const anotar = (a: {
+      id: string;
+      donoId: string;
+      ancora: CaixaNaTela;
+      prioridade: number;
+      linhas: { texto: string; px: number; peso?: string; cor: string; altura?: number }[];
+      /** Os cantos superiores esquerdos preferidos, dada a largura e a altura do bloco medido. */
+      preferidas?: (w: number, h: number) => PontoNaTela[];
+      centrar?: boolean;
+      atenuada: boolean;
+      /** A sigla das peças tipadas (hidráulica, climatização): não some no zoom do lote. */
+      naoEletrica?: boolean;
+    }) => {
+      if (longeDemais && a.prioridade >= PRIORIDADE_DA_ANOTACAO.DETALHE) return;
+      if (vista.escala < ESCALA_MINIMA_DA_CHAMADA_PX_MM && !a.naoEletrica) return;
+      const linhas = a.linhas.map((l) => {
+        const fonte = `${l.peso ? `${l.peso} ` : ''}${Math.round(l.px)}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.font = fonte;
+        return { texto: l.texto, fonte, px: Math.round(l.px), cor: l.cor, largura: ctx.measureText(l.texto).width, altura: l.altura ?? Math.round(l.px) };
+      });
+      const largura = Math.max(...linhas.map((l) => l.largura));
+      const altura = linhas.reduce((s, l) => s + l.altura, 0);
+      anotacoesDaPlanta.push({
+        id: a.id,
+        donoId: a.donoId,
+        largura,
+        altura,
+        ancora: a.ancora,
+        prioridade: a.prioridade,
+        preferidas: a.preferidas?.(largura, altura),
+        linhas,
+        centrar: a.centrar ?? false,
+        atenuada: a.atenuada,
+      });
+    };
+    /** A caixa de um conjunto de pontos de tela. */
+    const caixaDosPontos = (pts: { x: number; y: number }[], folga = 0): CaixaNaTela => ({
+      x0: Math.min(...pts.map((p) => p.x)) - folga,
+      y0: Math.min(...pts.map((p) => p.y)) - folga,
+      x1: Math.max(...pts.map((p) => p.x)) + folga,
+      y1: Math.max(...pts.map((p) => p.y)) + folga,
+    });
+    const caixaDoCirculo = (c: { x: number; y: number }, r: number): CaixaNaTela => ({ x0: c.x - r, y0: c.y - r, x1: c.x + r, y1: c.y + r });
+
     const { desvios, entradas } = desenhoDosTrechos;
     for (const t of trechosDoNivel) {
       meioTom(atenuados.has(t.id));
@@ -6387,6 +6468,8 @@ export default function BlueprintCanvas({
       const p = paraTela(entrada?.a ?? t.a);
       const q = paraTela(entrada?.b ?? t.b);
       const curva = curvaDoTrecho(p, q, desvios.get(t.id) ?? 0);
+      // O traço é obstáculo dos textos: eles preferem não cruzá-lo (ver `anotar`).
+      if (p.x !== q.x || p.y !== q.y) segmentosDasAnotacoes.push({ id: t.id, a: p, b: q });
       // ── O TUBO DETALHADO (27/09/2026, "detalhado também no 2d") ──────────
       //
       // Água e esgoto com zoom para isso viram a FAIXA do tubo — duas bordas
@@ -6553,9 +6636,15 @@ export default function BlueprintCanvas({
         if (prumada || comp <= 24) {
           // Prumada (círculo) ou trecho curtíssimo: só o Ø, ao lado.
           const c = prumada ? p : curva.meio;
-          ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-          ctx.textAlign = 'start';
-          ctx.fillText(`Ø ${t.bitolaMm}`, c.x + 8 * fz, c.y - 6 * fz);
+          if (diametrosDaRede.escrever.has(t.id)) anotar({
+            id: `diametro:${t.id}`,
+            donoId: t.id,
+            ancora: caixaDoCirculo(c, Math.max(emTela(t.bitolaMm / 2), 3)),
+            prioridade: PRIORIDADE_DA_ANOTACAO.DIAMETRO,
+            linhas: [{ texto: `Ø ${t.bitolaMm}`, px: 9 * fz, cor: '#334155' }],
+            preferidas: (_w, h) => [{ x: c.x + 8 * fz, y: c.y - 6 * fz - h }],
+            atenuada: atenuados.has(t.id),
+          });
         } else {
           const meio = curva.meio;
           const ux = (q.x - p.x) / comp;
@@ -6580,7 +6669,8 @@ export default function BlueprintCanvas({
           // círculo no lugar dos traços; a composição está na tabela da folha e
           // no painel do trecho. Nenhum grupo se desenha.
           const numerado = trechosNumeradosDaRede.get(t.id) ?? null;
-          if (numerado) {
+          // Um círculo por TRONCO: os outros pedaços do mesmo tronco ficam só com o traço.
+          if (numerado?.principal) {
             const r = 7 * fz;
             ctx.setLineDash([]);
             ctx.lineWidth = 1.25;
@@ -6594,8 +6684,20 @@ export default function BlueprintCanvas({
             ctx.textAlign = 'center';
             ctx.font = `bold ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
             ctx.fillText(numerado.rotulo, meio.x, meio.y + 3 * fz);
-            ctx.font = `${Math.round(8 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-            ctx.fillText(`${numerado.condutores} cond.`, meio.x + nx * (r + 6 * fz), meio.y + ny * (r + 6 * fz) + 3 * fz);
+            // O círculo é símbolo (fica no traço); o "N cond." é texto e procura lugar.
+            const circulo = caixaDoCirculo(meio, r + 1);
+            obstaculosDasAnotacoes.push({ id: `numero:${t.id}`, caixa: circulo });
+            const ox = meio.x + nx * (r + 6 * fz);
+            const oy = meio.y + ny * (r + 6 * fz);
+            anotar({
+              id: `condutores:${t.id}`,
+              donoId: `numero:${t.id}`,
+              ancora: circulo,
+              prioridade: PRIORIDADE_DA_ANOTACAO.DETALHE,
+              linhas: [{ texto: `${numerado.condutores} cond.`, px: 8 * fz, cor: '#334155' }],
+              preferidas: (w, h) => [{ x: ox - w / 2, y: oy - h / 2 }],
+              atenuada: atenuados.has(t.id),
+            });
           }
           // Grupos consecutivos por circuito (retornos sem dono viram grupo próprio).
           const grupos: { circuitoId: string | null; tipos: TipoDeCondutor[] }[] = [];
@@ -6637,7 +6739,17 @@ export default function BlueprintCanvas({
           ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
           ctx.textAlign = 'center';
           let cursor = -total / 2;
-          for (const g of grupos) {
+          /** A caixa dos traços entre `de` e `ate` ao longo do trecho (meia altura do traço para cada lado). */
+          const caixaDosTracos = (de: number, ate: number) =>
+            caixaDosPontos(
+              [de - MEIA * 0.5, ate + MEIA * 0.5].flatMap((d) => [-1, 1].map((sn) => ({ x: meio.x + ux * d + nx * sn * MEIA, y: meio.y + uy * d + ny * sn * MEIA }))),
+              1,
+            );
+          // O texto "em cima" (−n) e "embaixo" (+n) do conjunto, pelo CENTRO do texto.
+          const acima = (x: number, y: number) => ({ x: x - nx * (MEIA + 4 * fz), y: y - ny * (MEIA + 4 * fz) });
+          const abaixo = (x: number, y: number) => ({ x: x + nx * (MEIA + 4 * fz), y: y + ny * (MEIA + 4 * fz) });
+          const peloCentro = (c: { x: number; y: number }, w: number, h: number) => ({ x: c.x - w / 2, y: c.y - h / 2 });
+          for (const [gi, g] of grupos.entries()) {
             const larg = (g.tipos.length - 1) * passo;
             g.tipos.forEach((tipo, k) => {
               const d = cursor + k * passo;
@@ -6655,35 +6767,64 @@ export default function BlueprintCanvas({
             const centro = cursor + larg / 2;
             const gx = meio.x + ux * centro;
             const gy = meio.y + uy * centro;
+            // Os traços do grupo são símbolo: nenhum texto os cobre.
+            const idDoGrupo = `grupo:${t.id}:${gi}`;
+            const caixaDoGrupo = caixaDosTracos(cursor, cursor + larg);
+            obstaculosDasAnotacoes.push({ id: idDoGrupo, caixa: caixaDoGrupo });
             if (cabeTexto) {
-              // O número do circuito em cima do SEU grupo…
-              ctx.fillStyle = '#334155';
-              ctx.font = `bold ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+              // O número do circuito em cima do SEU grupo (embaixo, se em cima não couber)…
               const numero = g.circuitoId ? numeroDoCircuito(circuitosPorId.get(g.circuitoId)) : 'r';
-              ctx.fillText(numero, gx - nx * (MEIA + 4 * fz), gy - ny * (MEIA + 4 * fz) + 3 * fz);
+              anotar({
+                id: `circuito:${t.id}:${gi}`,
+                donoId: idDoGrupo,
+                ancora: caixaDoGrupo,
+                prioridade: PRIORIDADE_DA_ANOTACAO.IDENTIFICACAO,
+                linhas: [{ texto: numero, px: 9 * fz, peso: 'bold', cor: '#334155' }],
+                preferidas: (w, h) => [peloCentro(acima(gx, gy), w, h), peloCentro(abaixo(gx, gy), w, h)],
+                atenuada: atenuados.has(t.id),
+              });
               // …e a seção dele embaixo, só quando os circuitos do trecho diferem.
               const secao = g.circuitoId ? secaoPorCircuito.get(g.circuitoId) : null;
               if (secao != null && secaoUnica == null) {
-                ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-                ctx.fillText(String(secao).replace('.', ','), gx + nx * (MEIA + 4 * fz), gy + ny * (MEIA + 4 * fz) + 3 * fz);
+                anotar({
+                  id: `secao:${t.id}:${gi}`,
+                  donoId: idDoGrupo,
+                  ancora: caixaDoGrupo,
+                  prioridade: PRIORIDADE_DA_ANOTACAO.DETALHE,
+                  linhas: [{ texto: String(secao).replace('.', ','), px: 9 * fz, cor: '#334155' }],
+                  preferidas: (w, h) => [peloCentro(abaixo(gx, gy), w, h), peloCentro(acima(gx, gy), w, h)],
+                  atenuada: atenuados.has(t.id),
+                });
               }
             }
             cursor += larg + vao;
           }
+          const caixaDoConjunto = caixaDosTracos(-total / 2, total / 2);
           if (cabeTexto && secaoUnica != null) {
             // A seção comum a todos, uma vez, embaixo do conjunto.
-            ctx.fillStyle = '#334155';
-            ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-            ctx.fillText(String(secaoUnica).replace('.', ','), meio.x + nx * (MEIA + 4 * fz), meio.y + ny * (MEIA + 4 * fz) + 3 * fz);
+            anotar({
+              id: `secao:${t.id}`,
+              donoId: `conjunto:${t.id}`,
+              ancora: caixaDoConjunto,
+              prioridade: PRIORIDADE_DA_ANOTACAO.DETALHE,
+              linhas: [{ texto: String(secaoUnica).replace('.', ','), px: 9 * fz, cor: '#334155' }],
+              preferidas: (w, h) => [peloCentro(abaixo(meio.x, meio.y), w, h), peloCentro(acima(meio.x, meio.y), w, h)],
+              atenuada: atenuados.has(t.id),
+            });
           }
-          if (cabeDiametro) {
+          if (cabeDiametro && diametrosDaRede.escrever.has(t.id)) {
             // O Ø à esquerda do conjunto, abaixo da linha — fora do caminho dos números.
-            ctx.fillStyle = '#334155';
-            ctx.font = `${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-            ctx.textAlign = 'end';
             const ox = meio.x - ux * (total / 2 + 6 * fz) + nx * (MEIA + 4 * fz);
-            const oy = meio.y - uy * (total / 2 + 6 * fz) + ny * (MEIA + 4 * fz) + 3 * fz;
-            ctx.fillText(`Ø ${t.bitolaMm}`, ox, oy);
+            const oy = meio.y - uy * (total / 2 + 6 * fz) + ny * (MEIA + 4 * fz);
+            anotar({
+              id: `diametro:${t.id}`,
+              donoId: `conjunto:${t.id}`,
+              ancora: caixaDoConjunto,
+              prioridade: PRIORIDADE_DA_ANOTACAO.DIAMETRO,
+              linhas: [{ texto: `Ø ${t.bitolaMm}`, px: 9 * fz, cor: '#334155' }],
+              preferidas: (w, h) => [{ x: ox - w, y: oy - h / 2 }],
+              atenuada: atenuados.has(t.id),
+            });
           }
           ctx.textAlign = 'start';
         }
@@ -6852,7 +6993,6 @@ export default function BlueprintCanvas({
     // passe próprio, depois do laço, FORA da caixa da peça e sem cobrir outro rótulo nem outra peça
     // (`posicionarRotulos`). Antes ia a meio "raio" do centro — a menor medida —, e na peça
     // comprida caía em cima dela; dois vizinhos se encostavam.
-    const rotulosDasPecas: { id: string; texto: string; cor: string; largura: number; altura: number; caixa: CaixaNaTela; atenuada: boolean }[] = [];
     const caixaDaPecaNaTela = (t: Terminal): CaixaNaTela => {
       const k = cantosDaPeca(t.at, medidasDoTerminal(t), giroDaPeca(t)).map(paraTela);
       const c = paraTela(t.at);
@@ -6889,6 +7029,8 @@ export default function BlueprintCanvas({
         : t.at;
       // `c` é o CENTRO DO SÍMBOLO: na tomada, adiante do ponto; nos demais, o ponto.
       const c = paraTela(centroDoSimbolo);
+      // A peça é obstáculo de todo texto que não é dela (ver `anotar`).
+      obstaculosDasAnotacoes.push({ id: t.id, caixa: caixaDaPecaNaTela(t) });
 
       // ── A SUGERIDA: um anel TRACEJADO em volta, na cor de prévia ─────────
       //
@@ -6985,6 +7127,14 @@ export default function BlueprintCanvas({
         }
         ctx.restore();
 
+        // O símbolo inteiro — triângulo, haste e o anel da sugerida — é a âncora dos textos dela.
+        const anelDaSugerida = t.sugerida ? emTela(tamanhoMm) * 0.72 + 6 : 0;
+        const caixaDaTomada = caixaDosPontos(
+          [b1, b2, apice, { x: hx, y: hy }, ...(t.sugerida ? [{ x: c.x - anelDaSugerida, y: c.y - anelDaSugerida }, { x: c.x + anelDaSugerida, y: c.y + anelDaSugerida }] : [])],
+          1,
+        );
+        obstaculosDasAnotacoes.push({ id: t.id, caixa: caixaDaTomada });
+
         if (mostrarCircuitos) {
           const circuito = circuitosPorId.get(t.circuitoId ?? '');
           const alturaDoTriangulo = Math.hypot(apice.x - meioDaBase.x, apice.y - meioDaBase.y);
@@ -7005,47 +7155,45 @@ export default function BlueprintCanvas({
           // centrado; com o ápice para um lado, o bloco fica desse lado,
           // alinhado pela borda que encosta no símbolo, centrado na altura.
           const vertical = Math.abs(dy) >= Math.abs(dx);
-          const linhas = t.potenciaW != null ? (t.sugerida && t.rotulo ? 3 : 2) : t.sugerida && t.rotulo ? 2 : 1;
-          const linha = (k: number) =>
-            vertical
-              ? { x: c.x, y: c.y + Math.sign(dy || 1) * (folga + passoTexto * k + passoTexto / 2) }
-              : { x: c.x + Math.sign(dx) * folga, y: c.y - ((linhas - 1) * passoTexto) / 2 + passoTexto * k };
-          ctx.font = `bold ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-          ctx.textAlign = vertical ? 'center' : dx > 0 ? 'start' : 'end';
-          ctx.textBaseline = 'middle';
-          // Circuito entre traços, como na norma; "?" quando falta.
-          const p0 = linha(0);
-          ctx.fillStyle = circuito ? '#334155' : COR_ALERTA;
-          ctx.fillText(`-${circuito ? numeroDoCircuito(circuito) : '?'}-`, p0.x, p0.y);
-          // Potência na linha seguinte — só quando declarada: "0 W" numa tomada
-          // seria afirmar carga zero onde ninguém informou nada.
-          if (t.potenciaW != null) {
-            const p1 = linha(1);
-            ctx.fillStyle = '#334155';
-            ctx.fillText(`${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, p1.x, p1.y);
-          }
-          ctx.textBaseline = 'alphabetic';
-          // A instrução da sugerida ("Posicione sobre a bancada da pia"): é o
-          // que o ponto pede a quem olha, e some junto com a marca ao mover.
-          if (t.sugerida && t.rotulo) {
-            const p2 = linha(t.potenciaW != null ? 2 : 1);
-            ctx.textBaseline = 'middle';
-            ctx.fillStyle = COR_PREVIA;
-            ctx.font = `italic ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-            ctx.fillText(t.rotulo, p2.x, p2.y);
-            ctx.textBaseline = 'alphabetic';
-          }
+          // O BLOCO (22/10/2026): circuito, potência e instrução andam juntos — o motor move o
+          // bloco inteiro, nunca separa a potência do circuito dela. O lugar preferido é o de
+          // sempre: do lado do ápice, centrado (ápice para cima/baixo) ou encostado (para o lado).
+          anotar({
+            id: `tomada:${t.id}`,
+            donoId: t.id,
+            ancora: caixaDaTomada,
+            prioridade: circuito ? PRIORIDADE_DA_ANOTACAO.CIRCUITO : PRIORIDADE_DA_ANOTACAO.PENDENCIA,
+            linhas: [
+              // Circuito entre traços, como na norma; "?" quando falta.
+              { texto: `-${circuito ? numeroDoCircuito(circuito) : '?'}-`, px: 10 * fz, peso: 'bold', cor: circuito ? '#334155' : COR_ALERTA, altura: passoTexto },
+              // Potência na linha seguinte — só quando declarada: "0 W" numa tomada
+              // seria afirmar carga zero onde ninguém informou nada.
+              ...(t.potenciaW != null ? [{ texto: `${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, px: 10 * fz, peso: 'bold', cor: '#334155', altura: passoTexto }] : []),
+              // A instrução da sugerida ("Posicione sobre a bancada da pia"): é o
+              // que o ponto pede a quem olha, e some junto com a marca ao mover.
+              ...(t.sugerida && t.rotulo ? [{ texto: t.rotulo, px: 10 * fz, peso: 'italic', cor: COR_PREVIA, altura: passoTexto }] : []),
+            ],
+            centrar: true,
+            preferidas: (w, h) => [
+              vertical
+                ? { x: c.x - w / 2, y: (dy || 1) > 0 ? c.y + folga : c.y - folga - h }
+                : { x: dx > 0 ? c.x + folga : c.x - folga - w, y: c.y - h / 2 },
+            ],
+            atenuada: atenuados.has(t.id),
+          });
           if (t.comando) {
             // A letra do comando do outro lado do bloco de texto.
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
-            ctx.font = `italic bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
             const pc = vertical ? { x: c.x + folga + 6 * fz, y: c.y } : { x: c.x, y: c.y - Math.sign(dy || 1) * (folga + 6 * fz) };
-            ctx.fillText(t.comando, pc.x, pc.y);
-            ctx.textBaseline = 'alphabetic';
+            anotar({
+              id: `comando:${t.id}`,
+              donoId: t.id,
+              ancora: caixaDaTomada,
+              prioridade: PRIORIDADE_DA_ANOTACAO.IDENTIFICACAO,
+              linhas: [{ texto: t.comando, px: 11 * fz, peso: 'italic bold', cor: COR_DA_DISCIPLINA.ELETRICA }],
+              preferidas: (w, h) => [{ x: pc.x - w / 2, y: pc.y - h / 2 }],
+              atenuada: atenuados.has(t.id),
+            });
           }
-          ctx.textAlign = 'start';
         }
         continue;
       }
@@ -7437,15 +7585,15 @@ export default function BlueprintCanvas({
           ctx.textBaseline = 'middle';
           ctx.fillText(t.tipoHidraulico === 'RESERVATORIO' && t.volumeL != null ? `${sigla} ${t.volumeL} L` : sigla, c.x, c.y);
         } else {
-          // Posicionado e desenhado depois do laço (ver `rotulosDasPecas`).
-          rotulosDasPecas.push({
-            id: t.id,
-            texto: sigla,
-            cor: COR_DA_DISCIPLINA[t.disciplina],
-            largura: ctx.measureText(sigla).width,
-            altura: Math.round(11 * fz),
-            caixa: caixaDaPecaNaTela(t),
+          // Posicionado e desenhado depois do laço, junto com os textos elétricos (ver `anotar`).
+          anotar({
+            id: `sigla:${t.id}`,
+            donoId: t.id,
+            ancora: caixaDaPecaNaTela(t),
+            prioridade: PRIORIDADE_DA_ANOTACAO.IDENTIFICACAO,
+            linhas: [{ texto: sigla, px: 11 * fz, peso: 'bold', cor: COR_DA_DISCIPLINA[t.disciplina] }],
             atenuada: atenuados.has(t.id),
+            naoEletrica: true,
           });
         }
         ctx.restore();
@@ -7490,16 +7638,35 @@ export default function BlueprintCanvas({
         // circuito por natureza — "CP · ?" dizia "falta circuito" onde não falta
         // nada, e a caixa automática aparece em toda rede longa.
         const infra = !!t.tipoEletrico && TIPOS_DE_INFRAESTRUTURA_ELETRICA.has(t.tipoEletrico);
-        const texto = infra && !circuito ? `${sigla ?? '?'}` : `${sigla ?? '?'} · ${circuito ? `C${numeroDoCircuito(circuito)}` : '?'}`;
-        ctx.font = `bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-        ctx.fillStyle = sigla && (circuito || infra) ? '#334155' : COR_ALERTA;
-        if (ehInterruptor) {
-          // Embaixo e à direita: em cima estão as letras das seções.
-          const rInt = Math.max(raio, 7);
-          ctx.fillText(texto, c.x + rInt + 3, c.y + rInt + (secoesDoInterruptor(t) === 3 ? 26 : 10));
-        } else {
-          ctx.fillText(texto, c.x + raio + 3, c.y - raio - 2);
-        }
+        // 22/10/2026 (decisão do usuário): na LUMINÁRIA só "C3" — o círculo com a potência dentro
+        // já diz que é luz; "Luz teto · C3" era a metade do ruído do print do Garden.
+        const luminaria = t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
+        const numeroDoPonto = circuito ? `C${numeroDoCircuito(circuito)}` : '?';
+        const texto = luminaria ? numeroDoPonto : infra && !circuito ? `${sigla ?? '?'}` : `${sigla ?? '?'} · ${numeroDoPonto}`;
+        const alerta = !(sigla && (circuito || infra));
+        // A âncora dos textos é o SÍMBOLO desenhado: o círculo da luz (2×), a caixa da LD, o
+        // interruptor com as letras das seções em cima (e a 3ª embaixo), e o anel da sugerida.
+        const rInt = Math.max(raio, 7);
+        const caixaDoSimbolo = ehInterruptor
+          ? { x0: c.x - rInt - 8 * fz, y0: c.y - rInt - 12 * fz, x1: c.x + rInt + 8 * fz, y1: c.y + rInt + (secoesDoInterruptor(t) === 3 ? 14 * fz : 1) }
+          : ehLigacaoDireta
+            ? caixaDoCirculo(c, Math.max(emTela(md.larguraMm), 10) / 2 + 1)
+            : caixaDoCirculo(c, Math.max(raio, 4) + 1);
+        const anelDaSugerida = t.sugerida ? Math.max(raio, 5) + 6 : 0;
+        const ancora = t.sugerida
+          ? caixaDosPontos([{ x: caixaDoSimbolo.x0, y: caixaDoSimbolo.y0 }, { x: caixaDoSimbolo.x1, y: caixaDoSimbolo.y1 }, { x: c.x - anelDaSugerida, y: c.y - anelDaSugerida }, { x: c.x + anelDaSugerida, y: c.y + anelDaSugerida }])
+          : caixaDoSimbolo;
+        obstaculosDasAnotacoes.push({ id: t.id, caixa: ancora });
+        anotar({
+          id: `ponto:${t.id}`,
+          donoId: t.id,
+          ancora,
+          prioridade: alerta ? PRIORIDADE_DA_ANOTACAO.PENDENCIA : PRIORIDADE_DA_ANOTACAO.CIRCUITO,
+          linhas: [{ texto, px: 11 * fz, peso: 'bold', cor: alerta ? COR_ALERTA : '#334155' }],
+          // O interruptor: embaixo e à direita — em cima estão as letras das seções.
+          preferidas: ehInterruptor ? (_w, h) => [{ x: c.x + rInt + 3, y: c.y + rInt + (secoesDoInterruptor(t) === 3 ? 26 : 10) - h }] : undefined,
+          atenuada: atenuados.has(t.id),
+        });
 
         // ── A POTÊNCIA DENTRO DO CÍRCULO, na convenção da prancha ──────────
         //
@@ -7515,13 +7682,16 @@ export default function BlueprintCanvas({
         // cima como na tomada, porque em cima já está "LD · C1" à direita e o
         // print do harness mostrou os dois textos um sobre o outro.
         if (ehLigacaoDireta && t.potenciaW != null) {
-          ctx.fillStyle = '#334155';
-          ctx.font = `bold ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.fillText(`${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, c.x, c.y + raio + 12);
-          ctx.textAlign = 'start';
+          anotar({
+            id: `potencia:${t.id}`,
+            donoId: t.id,
+            ancora,
+            prioridade: PRIORIDADE_DA_ANOTACAO.VALOR,
+            linhas: [{ texto: `${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, px: 10 * fz, peso: 'bold', cor: '#334155' }],
+            preferidas: (w) => [{ x: c.x - w / 2, y: ancora.y1 + 2 }],
+            atenuada: atenuados.has(t.id),
+          });
         }
-        const luminaria = t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
         if (luminaria && t.potenciaW != null && raio >= 9) {
           ctx.fillStyle = '#ffffff';
           ctx.font = `bold ${Math.min(Math.round(11 * fz), raio)}px ui-sans-serif, system-ui, sans-serif`;
@@ -7538,31 +7708,55 @@ export default function BlueprintCanvas({
         // outro lado do símbolo, para não disputar espaço com o par
         // tipo · circuito — os dois são lidos ao mesmo tempo.
         if (t.comando && !ehInterruptor) {
-          ctx.fillStyle = COR_DA_DISCIPLINA.ELETRICA;
-          ctx.font = `italic bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-          ctx.fillText(t.comando, c.x + raio + 3, c.y + raio + 10);
+          anotar({
+            id: `comando:${t.id}`,
+            donoId: t.id,
+            ancora,
+            prioridade: PRIORIDADE_DA_ANOTACAO.IDENTIFICACAO,
+            linhas: [{ texto: t.comando, px: 11 * fz, peso: 'italic bold', cor: COR_DA_DISCIPLINA.ELETRICA }],
+            preferidas: (_w, h) => [{ x: c.x + raio + 3, y: c.y + raio + 10 - h }],
+            atenuada: atenuados.has(t.id),
+          });
         }
       }
     }
     meioTom(false);
 
-    // Os rótulos das peças tipadas, fora delas e sem colisão (ver `rotulosDasPecas`, acima).
+    // Os textos da planta — os elétricos e as siglas das peças tipadas —, posicionados JUNTOS e
+    // sem colisão (ver `anotar`, acima): a chamada primeiro (por baixo), o fundo branco e o texto.
     {
-      const postos = new Map(posicionarRotulos(rotulosDasPecas, terminaisDoNivel.map((t) => ({ id: t.id, caixa: caixaDaPecaNaTela(t) }))).map((p) => [p.id, p]));
-      for (const r of rotulosDasPecas) {
-        const p = postos.get(r.id);
-        if (!p) continue;
-        meioTom(r.atenuada);
+      // O texto das marcas da verificação (escrito logo depois, por cima) também é obstáculo.
+      const marcas = textosDasMarcas.map((tm, i) => ({ id: `marca:${i}`, caixa: { x0: tm.x - 3, y0: tm.y - 9 * fz, x1: tm.x + tm.largura + 3, y1: tm.y + 3 * fz } }));
+      const postos = posicionarAnotacoes(anotacoesDaPlanta, [...obstaculosDasAnotacoes, ...marcas], {
+        segmentos: segmentosDasAnotacoes,
+        ...(vista.escala < ESCALA_MINIMA_DA_CHAMADA_PX_MM ? { raioMaximo: 0 } : {}),
+      });
+      anotacoesDaPlanta.forEach((a, i) => {
+        const p = postos[i];
+        meioTom(a.atenuada);
         ctx.save();
-        ctx.font = `bold ${r.altura}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.setLineDash([]);
+        if (p.chamada) {
+          ctx.strokeStyle = COR_DA_CHAMADA;
+          ctx.lineWidth = 0.75;
+          ctx.beginPath();
+          ctx.moveTo(p.chamada.de.x, p.chamada.de.y);
+          ctx.lineTo(p.chamada.ate.x, p.chamada.ate.y);
+          ctx.stroke();
+        }
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.fillRect(p.x - 1, p.y, r.largura + 2, r.altura);
-        ctx.fillStyle = r.cor;
+        ctx.fillRect(p.x - 1, p.y, a.largura + 2, a.altura);
         ctx.textAlign = 'start';
         ctx.textBaseline = 'top';
-        ctx.fillText(r.texto, p.x, p.y);
+        let y = p.y;
+        for (const l of a.linhas) {
+          ctx.font = l.fonte;
+          ctx.fillStyle = l.cor;
+          ctx.fillText(l.texto, a.centrar ? p.x + (a.largura - l.largura) / 2 : p.x, y + (l.altura - l.px) / 2);
+          y += l.altura;
+        }
         ctx.restore();
-      }
+      });
       meioTom(false);
     }
 

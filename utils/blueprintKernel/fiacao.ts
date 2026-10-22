@@ -283,12 +283,24 @@ export interface TrechoNumerado {
   rotulo: string;
   condutores: number;
   lista: CondutorDerivado[];
+  /**
+   * O pedaço que DESENHA o número: o mais longo do tronco (22/10/2026). Os outros pedaços do mesmo
+   * tronco levam o mesmo rótulo, mas não repetem o círculo.
+   */
+  principal: boolean;
 }
 
 /**
  * Os eletrodutos com MAIS condutores que o limite, cada um com o seu rótulo.
  * O rótulo do projetista (`Trecho.rotulo`) vence; sem ele, "1", "2", … por
  * pavimento, na ordem dos ids — estável enquanto não se cria trecho cheio novo.
+ *
+ * UM NÚMERO POR TRONCO (22/10/2026, print da planta Garden com os círculos "56", "118", "141"…
+ * colados uns nos outros): o tronco que corre ao longo de uma parede é cortado em pedaços a cada
+ * derivação, e cada pedaço cheio ganhava o seu círculo e o seu "N cond.". Pedaços ENCADEADOS (uma
+ * ponta em comum, no mesmo pavimento) com a MESMA composição — os mesmos condutores dos mesmos
+ * circuitos — são o mesmo tronco para quem lê: um rótulo só, desenhado no pedaço mais longo
+ * (`principal`), e uma linha só na tabela da folha. Rótulos do projetista DIFERENTES não se juntam.
  */
 export function trechosNumerados(model: BlueprintModel, fiacao: ComposicaoDaRede = composicaoDaRede(model), limite = LIMITE_DE_CONDUTORES_DESENHADOS): Map<ObjectId, TrechoNumerado> {
   const saida = new Map<ObjectId, TrechoNumerado>();
@@ -296,16 +308,50 @@ export function trechosNumerados(model: BlueprintModel, fiacao: ComposicaoDaRede
   const cheios = (model.trechos ?? [])
     .filter((t) => t.disciplina === 'ELETRICA' && (fiacao.get(t.id)?.lista.length ?? 0) > limite)
     .sort((a, b) => ordem.indexOf(a.levelId) - ordem.indexOf(b.levelId) || a.id.localeCompare(b.id, undefined, { numeric: true }));
+
+  // Os troncos: união dos pedaços que se tocam com a mesma composição (e o mesmo rótulo declarado).
+  const pai = cheios.map((_, i) => i);
+  const raiz = (i: number): number => (pai[i] === i ? i : (pai[i] = raiz(pai[i])));
+  const composicao = (t: Trecho) =>
+    (fiacao.get(t.id)?.lista ?? [])
+      .map((c) => `${c.circuitoId ?? ''}:${c.tipo}`)
+      .sort()
+      .join('|');
+  const chaves = cheios.map((t) => `${composicao(t)}#${t.rotulo?.trim() ?? ''}`);
+  const porPonta = new Map<string, number[]>();
+  cheios.forEach((t, i) => {
+    for (const p of [t.a, t.b]) {
+      const k = `${t.levelId}|${Math.round(p.x)}|${Math.round(p.y)}`;
+      const lista = porPonta.get(k) ?? [];
+      for (const j of lista) if (chaves[j] === chaves[i]) pai[raiz(j)] = raiz(i);
+      if (!lista.includes(i)) lista.push(i);
+      porPonta.set(k, lista);
+    }
+  });
+  const troncos = new Map<number, number[]>();
+  cheios.forEach((_, i) => {
+    const r = raiz(i);
+    troncos.set(r, [...(troncos.get(r) ?? []), i]);
+  });
+
   const contador = new Map<ObjectId, number>();
-  for (const t of cheios) {
-    const lista = fiacao.get(t.id)?.lista ?? [];
-    let rotulo = t.rotulo?.trim() || '';
+  // Na ordem do primeiro pedaço de cada tronco: a numeração continua estável por pavimento e id.
+  const emOrdem = [...troncos.values()].sort((x, y) => Math.min(...x) - Math.min(...y));
+  for (const membros of emOrdem) {
+    const primeiro = cheios[Math.min(...membros)];
+    let rotulo = primeiro.rotulo?.trim() || '';
     if (!rotulo) {
-      const n = (contador.get(t.levelId) ?? 0) + 1;
-      contador.set(t.levelId, n);
+      const n = (contador.get(primeiro.levelId) ?? 0) + 1;
+      contador.set(primeiro.levelId, n);
       rotulo = String(n);
     }
-    saida.set(t.id, { trechoId: t.id, levelId: t.levelId, rotulo, condutores: lista.length, lista });
+    const comprimento = (t: Trecho) => Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+    const principal = membros.reduce((m, i) => (comprimento(cheios[i]) > comprimento(cheios[m]) ? i : m), Math.min(...membros));
+    for (const i of membros) {
+      const t = cheios[i];
+      const lista = fiacao.get(t.id)?.lista ?? [];
+      saida.set(t.id, { trechoId: t.id, levelId: t.levelId, rotulo, condutores: lista.length, lista, principal: i === principal });
+    }
   }
   return saida;
 }
@@ -334,11 +380,11 @@ export function resumoComSecoes(lista: readonly CondutorDerivado[], circuitoPorI
     .join(' · ');
 }
 
-/** As linhas da tabela "Fiação dos trechos numerados" da folha, uma por trecho. */
+/** As linhas da tabela "Fiação dos trechos numerados" da folha, uma por TRONCO (o pedaço principal). */
 export function linhasDosTrechosNumerados(model: BlueprintModel, fiacao: ComposicaoDaRede = composicaoDaRede(model), limite = LIMITE_DE_CONDUTORES_DESENHADOS): { rotulo: string; pavimento: string; condutores: number; descricao: string }[] {
   const circuitoPorId = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
   const nomeDoNivel = new Map(model.levels.map((l) => [l.id, l.name]));
-  return [...trechosNumerados(model, fiacao, limite).values()].map((n) => ({
+  return [...trechosNumerados(model, fiacao, limite).values()].filter((n) => n.principal).map((n) => ({
     rotulo: n.rotulo,
     pavimento: nomeDoNivel.get(n.levelId) ?? '?',
     condutores: n.condutores,

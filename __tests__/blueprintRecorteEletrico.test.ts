@@ -108,7 +108,8 @@ describe('a planta com recorte', () => {
     expect(forca).not.toContain('a');
     for (const t of [luz, forca]) {
       expect(t).toContain('QDC');
-      expect(t.filter((x) => x === 'Ø25').length).toBeGreaterThan(0);
+      // Desde 22/10/2026 o Ø predominante (25) não se escreve: está na legenda ("sem indicação").
+      expect(t).not.toContain('Ø25');
     }
     // Na unificada, os números de C1, C2 (tronco e ramais) e C3 (o eletroduto do AC); no recorte, os do outro tipo somem.
     const numeros = (t: string[]) => t.filter((x) => /^[123]$/.test(x));
@@ -148,7 +149,8 @@ describe('no conjunto, no DXF e na vista', () => {
     const dxf = gerarDxf(m, { titulo: 'Casa', revisao: 1, hash: 'p'.repeat(64), eletrica: true, hipotesesEletricas: HIPOTESES_PADRAO });
     for (const c of ['PLANTA-ELETRICA-ILUMINACAO', 'PLANTA-ELETRICA-ILUMINACAO-TEXTO', 'PLANTA-ELETRICA-FORCA', 'PLANTA-ELETRICA-FORCA-TEXTO']) expect(dxf).toMatch(new RegExp(`LAYER[\\s\\S]*\\n${c}\\n`));
     expect(dxf).toMatch(/\n8\nPLANTA-ELETRICA-FORCA-TEXTO\n[\s\S]{0,200}?\n1\nTUG · C2\n/);
-    expect(dxf).toMatch(/\n8\nPLANTA-ELETRICA-ILUMINACAO-TEXTO\n[\s\S]{0,200}?\n1\nLuz teto · C1\n/);
+    // Desde 22/10/2026 a luminária escreve só o circuito ("C1"): o círculo já diz que é luz.
+    expect(dxf).toMatch(/\n8\nPLANTA-ELETRICA-ILUMINACAO-TEXTO\n[\s\S]{0,200}?\n1\nC1\n/);
     expect(dxf).toMatch(/\n8\nPLANTA-ELETRICA-TEXTO\n[\s\S]{0,200}?\n1\nQDC\n/);
   });
 

@@ -25,7 +25,7 @@ function cena(): { m: BlueprintModel; marca: MarcaDeVerificacao } {
 }
 
 describe('BlueprintCanvas · o texto da marca por cima das peças', () => {
-  type Chamada = { metodo: string; args: unknown[] };
+  type Chamada = { metodo: string; args: unknown[]; base?: unknown };
   let chamadas: Chamada[] = [];
   const original = HTMLCanvasElement.prototype.getContext;
 
@@ -45,7 +45,7 @@ describe('BlueprintCanvas · o texto da marca por cima das peças', () => {
         if (prop === 'getLineDash') return () => [];
         if (prop === 'getTransform') return () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
         return (...args: unknown[]) => {
-          chamadas.push({ metodo: String(prop), args });
+          chamadas.push({ metodo: String(prop), args, base: alvo.textBaseline });
           return { addColorStop() {}, setTransform() {} };
         };
       },
@@ -89,11 +89,13 @@ describe('BlueprintCanvas · o texto da marca por cima das peças', () => {
     // A ordem, no ÚLTIMO quadro desenhado (o canvas pinta mais de uma vez): o texto da marca
     // vem depois do texto da peça — fica por cima.
     expect(Math.max(...daMarca.map((x) => x.i))).toBeGreaterThan(Math.max(...daPotencia.map((x) => x.i)));
-    // E abaixo dele: o y do texto da marca é maior que o do "2345 VA".
-    expect(Math.min(...daMarca.map((x) => Number(x.c.args[2])))).toBeGreaterThan(Math.max(...daPotencia.map((x) => Number(x.c.args[2]))));
+    // E abaixo dele: o y do texto da marca é maior que o PÉ do "2345 VA". Desde 22/10/2026 a potência
+    // sai pelo passe dos textos sem colisão, com a linha de base 'top' (10 px de fonte): o pé é y + 10.
+    const peDaPotencia = Math.max(...daPotencia.map((x) => Number(x.c.args[2]) + (x.c.base === 'top' ? 10 : 0)));
+    expect(Math.min(...daMarca.map((x) => Number(x.c.args[2])))).toBeGreaterThan(peDaPotencia);
     // E PERTO: uma linha abaixo do "2345 VA", sem encostar (12 a 22 px). Na meia diagonal da peça
     // (a primeira versão) eram 28 px — "excessivamente afastado", no teste do usuário.
-    const folga = Math.max(...daMarca.map((x) => Number(x.c.args[2]))) - Math.max(...daPotencia.map((x) => Number(x.c.args[2])));
+    const folga = Math.max(...daMarca.map((x) => Number(x.c.args[2]))) - peDaPotencia;
     expect(folga).toBeGreaterThanOrEqual(12);
     expect(folga).toBeLessThanOrEqual(22);
   });

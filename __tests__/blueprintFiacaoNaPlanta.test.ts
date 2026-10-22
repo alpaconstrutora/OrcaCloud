@@ -56,6 +56,27 @@ describe('trechos numerados', () => {
     expect(trechosNumerados(comRotulo).get(comRotulo.trechos[0].id)!.rotulo).toBe('T-A');
   });
 
+  it('⚠️ 22/10/2026: um tronco cortado em pedaços iguais é UM número — desenhado no pedaço mais longo, uma linha na tabela', () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: TETO }).model;
+    const l = m.levels[0].id;
+    m = applyCommand(m, { type: 'AddQuadro', levelId: l, nome: 'QDC', at: point(0, 0), cotaMm: 1500, tensaoV: 127, ligacao: 'FN' }).model;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', tensaoV: 127, ligacao: 'FN', secaoMm2: 2.5 }).model;
+    const c1 = m.circuitos[0].id;
+    const trecho = (x0: number, x1: number, condutores: number): Command => ({
+      type: 'AddTrecho', levelId: l, disciplina: 'ELETRICA', a: point(x0, 0), b: point(x1, 0), cotaAMm: TETO, cotaBMm: TETO, bitolaMm: 25, circuitoIds: [c1], condutores,
+    });
+    // O tronco: 0→1000→3500→4000, três pedaços de 8 condutores; o do meio é o mais longo.
+    // Encostado nele, em 4000→5000, um pedaço com OUTRA composição (9); e solto, longe, outro de 8.
+    m = applyBatch(m, [trecho(0, 1000, 8), trecho(1000, 3500, 8), trecho(3500, 4000, 8), trecho(4000, 5000, 9), trecho(8000, 9000, 8)]).model;
+    const [a, b, c, outra, solto] = m.trechos;
+    const n = trechosNumerados(m);
+    expect([a, b, c].map((t) => n.get(t.id)!.rotulo)).toEqual(['1', '1', '1']);
+    expect([a, b, c].map((t) => n.get(t.id)!.principal)).toEqual([false, true, false]);
+    expect(n.get(outra.id)!.rotulo).toBe('2');
+    expect(n.get(solto.id)!.rotulo).toBe('3');
+    expect(linhasDosTrechosNumerados(m).map((x) => `${x.rotulo}|${x.condutores}`)).toEqual(['1|8', '2|9', '3|8']);
+  });
+
   it('a tabela da folha: nº, pavimento, contagem e a composição por circuito com a seção', () => {
     const m = casa();
     const linhas = linhasDosTrechosNumerados(m);

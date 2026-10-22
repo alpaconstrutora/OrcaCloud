@@ -69,7 +69,7 @@ describe('a planta elétrica no papel', () => {
     expect(textos).not.toMatch(/TUG|QDC|Ø25|VA/);
   });
 
-  it('com `eletrica`: QDC, "TUG · C1", "Luz teto · C1", a letra do comando, o Ø, o número do circuito e a seção no eletroduto, e a potência', () => {
+  it('com `eletrica`: QDC, "TUG · C1", "C1" na luz, a letra do comando, o Ø, o número do circuito e a seção no eletroduto, e a potência', () => {
     const m = casa();
     const d = new DesenhistaDeProva();
     const antes = new DesenhistaDeProva();
@@ -78,11 +78,15 @@ describe('a planta elétrica no papel', () => {
     const textos = d.textos();
     expect(textos).toContain('QDC');
     expect(textos.filter((t) => t === 'TUG · C1')).toHaveLength(2);
-    expect(textos).toContain('Luz teto · C1');
+    // Desde 22/10/2026 a luminária escreve só o circuito: o círculo com a potência já diz que é luz.
+    expect(textos).toContain('C1');
+    expect(textos).not.toContain('Luz teto · C1');
     expect(textos).toContain('a');
     // 15/09/2026 (NBR 5444): o Ø sozinho; o número do circuito em cima do
     // grupo de condutores e a seção embaixo, como na prancha de referência.
-    expect(textos).toContain('Ø25');
+    // Desde 22/10/2026 o Ø PREDOMINANTE não se escreve na planta: a legenda diz "sem indicação = Ø25".
+    expect(textos).not.toContain('Ø25');
+    expect(linhasDaLegenda(m).some((l) => /^ELETRODUTO SEM INDICAÇÃO — Ø25/.test(l))).toBe(true);
     expect(textos).toContain('1');
     expect(textos).toContain('2,5');
     expect(textos.filter((t) => t === '600 VA')).toHaveLength(2);
@@ -144,5 +148,50 @@ describe('a elétrica no DXF', () => {
     // 3 pontos de CARGA (o interruptor não conta), 600 + 600 + 160 = 1.360 VA, IB 10,7 A.
     expect(L.some((l) => /^C1 \| FN 127 \| 3 \| 1360 \| 10,7 \| 2,5 \/ 2,5 \| 16 \/ 16/.test(l)), L.join('\n')).toBe(true);
     expect(L.some((l) => /^Hipoteses: cobre\/PVC, metodo B1/.test(l))).toBe(true);
+  });
+});
+
+/**
+ * 22/10/2026 — pedido com os prints da planta Garden: *"Veja a total confusão de sobreposicões de
+ * testos e componentes."* A prancha escrevia cada texto a uma distância fixa do símbolo; agora passa
+ * pelo mesmo motor da tela. A cena: um canto de cozinha a 1:50 — luz, interruptor e três tomadas
+ * coladas na mesma parede (no papel, 3 mm entre elas).
+ */
+describe('a planta elétrica no papel, sem texto sobre texto', () => {
+  it('⚠️ PRONTO QUANDO: nenhum texto dos pontos cruza outro', async () => {
+    const { desenharEletrica } = await import('../utils/blueprintPranchaEletrica');
+    const { larguraEstimadaDoTexto } = await import('../utils/blueprintCotas');
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m.levels[0].id;
+    m = applyCommand(m, { type: 'AddWall', levelId: l, a: point(0, 0), b: point(4000, 0), thicknessMm: 150, heightMm: 2800 }).model;
+    m = applyCommand(m, { type: 'AddQuadro', levelId: l, nome: 'QDC', at: point(-2000, 1500), cotaMm: 1600 }).model;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', tensaoV: 127 }).model;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C2', tensaoV: 127 }).model;
+    const [c1, c2] = m.circuitos.map((c) => c.id);
+    const pontos: [Command, string][] = [
+      [{ type: 'AddTerminal', levelId: l, disciplina: 'ELETRICA', tipo: 'Luz', tipoEletrico: 'ILUMINACAO_TETO', at: point(1500, 400), cotaMm: 2800, potenciaW: 100, comando: 'a' } as Command, c1],
+      [{ type: 'AddTerminal', levelId: l, disciplina: 'ELETRICA', tipo: 'Int', tipoEletrico: 'INTERRUPTOR', interruptor: 'UMA_SECAO', comando: 'a', at: point(1300, 75), cotaMm: 1100 } as Command, c1],
+      [{ type: 'AddTerminal', levelId: l, disciplina: 'ELETRICA', tipo: 'TUG', tipoEletrico: 'TUG', at: point(1450, 75), cotaMm: 1100, potenciaW: 600 } as Command, c2],
+      [{ type: 'AddTerminal', levelId: l, disciplina: 'ELETRICA', tipo: 'TUG', tipoEletrico: 'TUG', at: point(1600, 75), cotaMm: 300, potenciaW: 100 } as Command, c2],
+      [{ type: 'AddTerminal', levelId: l, disciplina: 'ELETRICA', tipo: 'TUG', tipoEletrico: 'TUG', at: point(1750, 75), cotaMm: 1100, potenciaW: 600 } as Command, c2],
+    ];
+    for (const [cmd, cid] of pontos) {
+      m = applyCommand(m, cmd).model;
+      m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais![m.terminais!.length - 1].id, circuitoId: cid }).model;
+    }
+    const d = new DesenhistaDeProva();
+    desenharEletrica(d, m, { px: (x: number) => x / 50, py: (y: number) => -y / 50 });
+    const daLuz = String(m.terminais![0].potenciaW);
+    // Os textos posicionados (a potência DENTRO da luz é símbolo e fica de fora).
+    const caixas = d.chamadas
+      .filter((c) => c.tipo === 'texto' && c.args[2] !== daLuz)
+      .map((c) => {
+        const [x, y, texto, h] = c.args as [number, number, string, number];
+        return { texto, x0: x, y0: y - 0.85 * h, x1: x + larguraEstimadaDoTexto(texto, h), y1: y + 0.15 * h };
+      });
+    const cruza = (a: (typeof caixas)[number], b: (typeof caixas)[number]) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+    for (let i = 0; i < caixas.length; i++)
+      for (let j = i + 1; j < caixas.length; j++) expect(cruza(caixas[i], caixas[j]), `"${caixas[i].texto}" × "${caixas[j].texto}"`).toBe(false);
+    expect(caixas.map((c) => c.texto)).toEqual(expect.arrayContaining(['C1', 'TUG · C2', '600 VA', '100 VA', 'QDC']));
   });
 });

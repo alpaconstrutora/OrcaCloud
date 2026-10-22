@@ -2064,7 +2064,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             norma_situacao: newDocNormaSituacao,
             norma_substituida_por: newDocNormaSituacao === 'substituida' ? (newDocNormaSubstituidaPor.trim() || undefined) : undefined,
           } : {}),
-          tipo_documento: newDocType,
+          tipo_documento: newDocType || null,
           discipline_code: newDocDiscipline || undefined,
           status: 'ativo',
           data_emissao: newDocEmissao || undefined,
@@ -3393,14 +3393,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500">Tipo de Documento</label>
+                  <label className="text-xs font-semibold text-slate-500">Tipo de Documento (Opcional)</label>
                   <select
-                      required
                       value={newDocType}
                       onChange={(e) => setNewDocType(e.target.value)}
                       className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
-                      <option value="">Selecione um tipo...</option>
+                      <option value="">Nenhum</option>
                       {documentTypes.map((type) => (
                         <option key={type.id} value={type.name}>
                           {type.name}

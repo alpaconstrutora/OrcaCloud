@@ -31,14 +31,16 @@
 --   Esta migration NÃO cria função (nem SECURITY DEFINER, nem RPC): só tabela, índices e
 --   policies, usando as funções que já existem (is_org_member, is_org_manager). Nada a
 --   revogar de função. O GRANT da TABELA é só a `authenticated`; `anon` e PUBLIC não
---   recebem nada (REVOKE explícito abaixo), e a RLS vale por cima.
+--   recebem nada (REVOKE explícito abaixo), e a RLS vale por cima. `authenticated` fica só com
+--   SELECT/INSERT/UPDATE/DELETE: TRUNCATE (ignora RLS), REFERENCES e TRIGGER são revogados
+--   (tabela nova herda GRANT ALL por default privileges no Supabase).
 -- ============================================================================
 
 -- ── 1. Tabela ───────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.preferencias (
   id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   escopo          text        NOT NULL,
-  user_id         uuid        DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id         uuid        REFERENCES auth.users(id) ON DELETE CASCADE,
   organization_id uuid        REFERENCES public.organizations(id) ON DELETE CASCADE,
   study_id        uuid        REFERENCES public.blueprint_studies(id) ON DELETE CASCADE,
   chave           text        NOT NULL,
@@ -58,13 +60,17 @@ CREATE TABLE IF NOT EXISTS public.preferencias (
 COMMENT ON TABLE public.preferencias IS
   'Preferências por escopo: USUARIO (tela), ORGANIZACAO (padrão da prancha), ESTUDO (prancha de uma planta). Uma linha por (dono, chave).';
 COMMENT ON COLUMN public.preferencias.user_id IS
-  'Dono do escopo USUARIO (nulo nos demais). Default auth.uid().';
+  'Dono do escopo USUARIO (nulo nos demais). SEM default: o serviço envia o id (um default quebraria o CHECK nas linhas ORGANIZACAO/ESTUDO).';
 COMMENT ON COLUMN public.preferencias.organization_id IS
   'Dono do escopo ORGANIZACAO (nulo nos demais).';
 COMMENT ON COLUMN public.preferencias.study_id IS
   'Dono do escopo ESTUDO (nulo nos demais). Apagar o estudo apaga as linhas (ON DELETE CASCADE).';
 COMMENT ON COLUMN public.preferencias.chave IS
   'Chave do catálogo (utils/preferencias/catalogo.ts). Chave desconhecida é ignorada na leitura.';
+
+-- Banco de teste que já tenha criado a tabela com `DEFAULT auth.uid()` em user_id: o default
+-- preencheria user_id nas linhas ORGANIZACAO/ESTUDO e quebraria o CHECK do dono. Inofensivo sem default.
+ALTER TABLE public.preferencias ALTER COLUMN user_id DROP DEFAULT;
 
 -- ── 2. Um valor por dono e chave ────────────────────────────────────────────
 -- Índices únicos NÃO parciais, de propósito: o `onConflict` do supabase-js/PostgREST não usa
@@ -143,3 +149,6 @@ CREATE POLICY "preferencias_delete" ON public.preferencias
 -- ── 4. Privilégios da tabela: só authenticated ──────────────────────────────
 REVOKE ALL ON public.preferencias FROM PUBLIC, anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.preferencias TO authenticated;
+-- Tabela nova herda GRANT ALL no Supabase (default privileges): sem isto, authenticated ficaria com
+-- TRUNCATE (que ignora RLS), REFERENCES e TRIGGER. Só os quatro privilégios de linha ficam.
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON public.preferencias FROM authenticated;

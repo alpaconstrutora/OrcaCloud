@@ -18,6 +18,10 @@ const m = vi.hoisted(() => ({
     gravar: vi.fn(),
     apagarDoEstudo: vi.fn(),
     showToast: vi.fn(),
+    userId: 'u1' as string | null,
+}));
+vi.mock('../../store/useStore', () => ({
+    useStore: (sel: (s: unknown) => unknown) => sel({ session: m.userId ? { user: { id: m.userId } } : null }),
 }));
 vi.mock('../../services/preferenciasService', () => ({
     preferenciasService: {
@@ -49,6 +53,7 @@ const linhaOrg = (item: Parameters<typeof chaveDoItem>[1], valor: boolean): Linh
 describe('usePreferenciasEletricas', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        m.userId = 'u1';
         m.listarDoUsuario.mockResolvedValue([]);
         m.listarDaPrancha.mockResolvedValue([]);
         m.gravar.mockResolvedValue(undefined);
@@ -198,5 +203,61 @@ describe('usePreferenciasEletricas', () => {
         rerender({ organizationId: 'org2' });
         await waitFor(() => expect(m.listarDaPrancha).toHaveBeenCalledWith('org2', undefined));
         await waitFor(() => expect(result.current.prancha.bitola).toBe(false));
+    });
+    it('trocar de usuário refaz a leitura da tela (a chave leva o id) e não mostra o cache do anterior', async () => {
+        m.listarDoUsuario.mockImplementation(async () => (m.userId === 'u2' ? [linhaTela('potencia', false)] : []));
+        const { result, rerender } = montar({ organizationId: 'org1' });
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalledTimes(1));
+        expect(result.current.tela.potencia).toBe(true);
+
+        m.userId = 'u2';
+        rerender({ organizationId: 'org1' });
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(result.current.tela.potencia).toBe(false));
+
+        m.userId = 'u1';
+        rerender({ organizationId: 'org1' });
+        await waitFor(() => expect(result.current.tela.potencia).toBe(true));
+    });
+
+    it('sem sessão a query da tela não é desligada: devolve vazio, não chama o serviço e usa o padrão', async () => {
+        m.userId = null;
+        const { result } = montar({ organizationId: 'org1' });
+        await waitFor(() => expect(result.current.carregando).toBe(false));
+        expect(m.listarDoUsuario).not.toHaveBeenCalled();
+        expect(result.current.tela).toEqual(EXIBICAO_ELETRICA_PADRAO);
+        expect(result.current.erro).toBeNull();
+    });
+
+    it('dois consumidores com a leitura rejeitada: o aviso sai UMA vez', async () => {
+        m.listarDoUsuario.mockRejectedValue(new Error('queda unica'));
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const wrapper = ({ children }: { children: React.ReactNode }) => (
+            <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        );
+        const { result } = renderHook(
+            () => [usePreferenciasEletricas({ organizationId: 'org1' }), usePreferenciasEletricas({ organizationId: 'org1' })],
+            { wrapper },
+        );
+        await waitFor(() => expect(result.current[0].erro).toContain('queda unica'));
+        await waitFor(() => expect(result.current[1].erro).toContain('queda unica'));
+        expect(m.showToast.mock.calls.filter(([msg]) => String(msg).includes('queda unica'))).toHaveLength(1);
+    });
+
+    it('depois de a leitura voltar a dar certo, uma nova falha com a mesma frase avisa de novo', async () => {
+        m.listarDoUsuario.mockRejectedValueOnce(new Error('oscila'));
+        const a = montar({ organizationId: 'org1' });
+        await waitFor(() => expect(m.showToast).toHaveBeenCalledTimes(1));
+        a.unmount();
+
+        m.listarDoUsuario.mockResolvedValue([]);
+        const b = montar({ organizationId: 'org1' });
+        await waitFor(() => expect(b.result.current.carregando).toBe(false));
+        await waitFor(() => expect(b.result.current.erro).toBeNull());
+        b.unmount();
+
+        m.listarDoUsuario.mockRejectedValue(new Error('oscila'));
+        montar({ organizationId: 'org1' });
+        await waitFor(() => expect(m.showToast).toHaveBeenCalledTimes(2));
     });
 });

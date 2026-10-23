@@ -134,8 +134,12 @@ export const academyKeys = {
 
 export const preferenciasKeys = {
     all: ['preferencias'] as const,
-    /** Escolhas do próprio usuário para a TELA (independe de organização). */
-    usuario: () => ['preferencias', 'usuario'] as const,
+    /**
+     * Escolhas do próprio usuário para a TELA (independe de organização). Leva o id do usuário:
+     * o logout não limpa o cache do React Query, então outra conta na mesma aba não pode ver o
+     * cache da anterior.
+     */
+    usuario: (userId: string | null) => ['preferencias', 'usuario', userId ?? 'sem-sessao'] as const,
     /** Padrão da PRANCHA: linhas da organização + (se houver) do estudo. */
     prancha: (organizationId: string | null, studyId?: string | null) =>
         ['preferencias', 'prancha', organizationId ?? 'nenhuma', studyId ?? 'sem-estudo'] as const,

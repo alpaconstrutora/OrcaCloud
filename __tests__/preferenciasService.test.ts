@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 type Resultado = { data: unknown; error: { message: string } | null };
 
 const m = vi.hoisted(() => ({
-    getUser: vi.fn(),
+    getSession: vi.fn(),
     fila: [] as Array<{ data: unknown; error: { message: string } | null }>,
     consultas: [] as Array<{ tabela: string; chamadas: Array<[string, unknown[]]> }>,
 }));
@@ -29,7 +29,7 @@ vi.mock('../lib/supabase', () => {
         });
         return proxy;
     };
-    return { supabase: { from, auth: { getUser: m.getUser } } };
+    return { supabase: { from, auth: { getSession: m.getSession } } };
 });
 
 import { preferenciasService } from '../services/preferenciasService';
@@ -42,8 +42,8 @@ describe('preferenciasService', () => {
     beforeEach(() => {
         m.fila.length = 0;
         m.consultas.length = 0;
-        m.getUser.mockReset();
-        m.getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
+        m.getSession.mockReset();
+        m.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } }, error: null });
     });
 
     describe('listarDoUsuario', () => {
@@ -61,7 +61,7 @@ describe('preferenciasService', () => {
         });
 
         it('sem usuário na sessão lança erro claro', async () => {
-            m.getUser.mockResolvedValue({ data: { user: null }, error: null });
+            m.getSession.mockResolvedValue({ data: { session: null }, error: null });
             await expect(preferenciasService.listarDoUsuario()).rejects.toThrow(/sess[aã]o/i);
             expect(m.consultas).toHaveLength(0);
         });
@@ -156,7 +156,7 @@ describe('preferenciasService', () => {
         });
 
         it('USUARIO sem usuário na sessão lança erro claro e não grava', async () => {
-            m.getUser.mockResolvedValue({ data: { user: null }, error: null });
+            m.getSession.mockResolvedValue({ data: { session: null }, error: null });
             await expect(preferenciasService.gravar('USUARIO', {}, 'k', true)).rejects.toThrow(/sess[aã]o/i);
             expect(m.consultas).toHaveLength(0);
         });

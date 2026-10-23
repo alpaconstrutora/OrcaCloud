@@ -35,8 +35,9 @@ function falhou(contexto: string, error: { message: string }): never {
 
 /** Id do usuário da sessão; sem sessão, erro claro (não adianta falar com o banco). */
 async function usuarioDaSessao(): Promise<string> {
-  const { data, error } = await supabase.auth.getUser();
-  const id = data?.user?.id;
+  // getSession lê a sessão local (sem ida ao servidor); a RLS confere o auth.uid() de qualquer jeito.
+  const { data, error } = await supabase.auth.getSession();
+  const id = data?.session?.user?.id;
   if (error || !id) throw new Error('Sem usuário na sessão — entre de novo para salvar suas preferências.');
   return id;
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { preferenciasKeys } from '../lib/queryKeys';
+import { useStore } from '../store/useStore';
 import { preferenciasService } from '../services/preferenciasService';
 import { useToast } from './useToast';
 import {
@@ -28,6 +29,13 @@ import {
  *  - `alterar` é otimista: o desenho muda na hora; na falha só ESSA linha volta ao que era (outras
  *    escolhas feitas no meio-tempo ficam) e um aviso diz o motivo.
  */
+
+/**
+ * Última mensagem de falha de leitura já avisada. O hook é montado por vários consumidores ao mesmo
+ * tempo (canvas, PDF, gaveta): cada instância dispararia o mesmo aviso. Avisa UMA vez por mensagem;
+ * zera quando a leitura volta a dar certo (uma falha nova avisa de novo).
+ */
+let ultimoAvisoDeLeitura: string | null = null;
 
 const SEM_LINHAS: readonly LinhaDePreferencia[] = Object.freeze([]);
 
@@ -69,12 +77,14 @@ export function usePreferenciasEletricas({
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
-  const chaveDaTela = preferenciasKeys.usuario();
+  const userId = useStore((s) => s.session?.user?.id) ?? null;
+  const chaveDaTela = preferenciasKeys.usuario(userId);
   const chaveDaPrancha = preferenciasKeys.prancha(organizationId, studyId);
 
   const daTela = useQuery({
     queryKey: chaveDaTela,
-    queryFn: () => preferenciasService.listarDoUsuario(),
+    // Sem sessão não há "usuário" a ler: devolve vazio em vez de desligar a query (REGRA #5).
+    queryFn: () => (userId ? preferenciasService.listarDoUsuario() : Promise.resolve([])),
   });
   const daPrancha = useQuery({
     queryKey: chaveDaPrancha,
@@ -90,10 +100,16 @@ export function usePreferenciasEletricas({
 
   const erro = daTela.error ? mensagemDe(daTela.error) : daPrancha.error ? mensagemDe(daPrancha.error) : null;
   useEffect(() => {
-    if (erro) {
-      showToast(`Não foi possível carregar as preferências da planta: ${erro}. O desenho usa os padrões.`, 'error');
-    }
+    if (!erro) return;
+    if (ultimoAvisoDeLeitura === erro) return;
+    ultimoAvisoDeLeitura = erro;
+    showToast(`Não foi possível carregar as preferências da planta: ${erro}. O desenho usa os padrões.`, 'error');
   }, [erro, showToast]);
+  // Leitura voltou a dar certo (as duas consultas sem erro e já com dados): a próxima falha avisa de novo.
+  const leituraOk = daTela.isSuccess && (daPrancha.isSuccess || !organizationId);
+  useEffect(() => {
+    if (leituraOk) ultimoAvisoDeLeitura = null;
+  }, [leituraOk]);
 
   const alterar = useCallback(
     async (

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { X, AlertTriangle, CheckCircle2, Loader2, Users } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
-import type { Boleto } from '../types';
+import type { Boleto, BoletoStatus } from '../types';
+import { STATUS_LABELS, STATUS_TEXT_COLORS, STATUS_DO_LOTE, resumoDeStatusEmLote } from '../utils/boletoStatus';
 import { formatBRL } from './BoletoFormModal';
 import CostCenterSelect, { CostCenterOption } from './CostCenterSelect';
 import PlanoContasSelect, { PlanoContasOption } from './PlanoContasSelect';
@@ -30,7 +31,14 @@ interface BoletoEdicaoEmLoteModalProps {
     onSaved: () => void;
 }
 
-type ActionResult = { ok: string[]; errors: Array<{ id: string; error: string }> } | null;
+/** `ficaram`: a regra não deixou mudar (status) — não é erro, é "ficou como estava". */
+type ActionResult = {
+    ok: string[];
+    errors: Array<{ id: string; error: string }>;
+    ficaram?: Array<{ id: string; motivo: string }>;
+    acao?: 'aprovar' | 'status';
+    para?: BoletoStatus;
+} | null;
 
 const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     boletos, organizationId, suppliers, projects, costCenters, userEmail, onClose, onSaved,
@@ -57,6 +65,9 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     }, [organizationId]);
     const [saving, setSaving] = useState(false);
     const [result, setResult] = useState<ActionResult>(null);
+    /* Mudar status em lote (23/10/2026): mesma regra do campo Status da página. */
+    const [novoStatus, setNovoStatus] = useState<BoletoStatus | ''>('');
+    const [motivoStatus, setMotivoStatus] = useState('');
 
     const totalValor = boletos.reduce((s, b) => s + (b.valor ?? 0), 0);
 
@@ -119,8 +130,28 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
             setSaving(false);
         }
         // Mostrar resultado ANTES de chamar onSaved (que recarrega os dados no pai)
-        setResult({ ok: allOk, errors: allErrors });
+        setResult({ ok: allOk, errors: allErrors, acao: 'aprovar' });
         if (allOk.length > 0) onSaved();
+    }
+
+    async function handleAplicarStatus() {
+        if (!novoStatus) return;
+        setSaving(true);
+        const r: NonNullable<ActionResult> = { ok: [], errors: [], ficaram: [], acao: 'status', para: novoStatus };
+        try {
+            for (const [oid, ids] of Object.entries(groupByOrg())) {
+                const res = await boletoService.mudarStatusEmLote(ids, oid, novoStatus, { motivo: motivoStatus, userEmail });
+                r.ok.push(...res.ok);
+                r.errors.push(...res.errors);
+                r.ficaram!.push(...res.ficaram);
+            }
+        } catch (err: unknown) {
+            r.errors.push({ id: '', error: err instanceof Error ? err.message : String(err) });
+        } finally {
+            setSaving(false);
+        }
+        setResult(r);
+        if (r.ok.length > 0) onSaved();
     }
 
     const allDone = result !== null && result.errors.length === 0;
@@ -139,6 +170,12 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
         ?? `Lança ${resumo.prontos} de ${boletos.length} em Contas a Pagar e os envia para a alçada.`
             + (resumo.pendencias.length === 1 ? ' O outro fica como está.'
                 : resumo.pendencias.length > 1 ? ` Os outros ${resumo.pendencias.length} ficam como estão.` : '');
+    const resumoStatus = novoStatus ? resumoDeStatusEmLote(boletos, novoStatus) : null;
+    const faltaMotivoStatus = novoStatus === 'cancelado' && !motivoStatus.trim();
+    const motivoParaNaoAplicarStatus: string | null = !resumoStatus ? null
+        : resumoStatus.mudam === 0 ? 'Nenhum dos boletos selecionados pode ir para este status — veja o motivo de cada um na lista.'
+        : faltaMotivoStatus ? 'Escreva o motivo do cancelamento.'
+        : null;
     const numeroDoBoleto = (id: string) => {
         const n = boletos.find(b => b.id === id)?.numero;
         return n != null ? `#${String(n).padStart(4, '0')}` : `${id.slice(0, 8)}…`;
@@ -190,16 +227,22 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                     <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-100 max-h-48 overflow-y-auto">
                         {boletos.map(b => {
                             const avaliacao = resumo.porId.get(b.id);
+                            const planoStatus = resumoStatus?.porId.get(b.id);
                             return (
                                 <div key={b.id} className="flex items-start justify-between px-4 py-2 text-xs">
                                     <span className="min-w-0 max-w-[70%]">
                                         <span className="block text-gray-700 font-medium truncate" title={nomeDoBeneficiario(b, nomesFornecedor)}>
                                             {nomeDoBeneficiario(b, nomesFornecedor)}
+                                            {' · '}<span className={`font-normal ${STATUS_TEXT_COLORS[b.status]}`}>{STATUS_LABELS[b.status]}</span>
                                         </span>
-                                        {!result && avaliacao && !avaliacao.pronto && (
+                                        {/* Com um status escolhido, a linha diz o que acontece com ESTE boleto. */}
+                                        {!result && planoStatus && (planoStatus.muda
+                                            ? <span className="block text-gray-500">→ {STATUS_LABELS[planoStatus.transicao.para]}</span>
+                                            : <span className="block text-amber-700">{planoStatus.motivo}</span>)}
+                                        {!result && !planoStatus && avaliacao && !avaliacao.pronto && (
                                             <span className="block text-amber-700">{avaliacao.motivo}</span>
                                         )}
-                                        {!result && avaliacao?.pronto && avaliacao.usaSugestao && (
+                                        {!result && !planoStatus && avaliacao?.pronto && avaliacao.usaSugestao && (
                                             <span className="block text-gray-500">
                                                 Fornecedor sugerido: {nomesFornecedor[avaliacao.fornecedor] ?? 'cadastrado'}
                                             </span>
@@ -217,7 +260,12 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             {result.ok.length > 0 && (
                                 <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs">
                                     <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                                    <span>{result.ok.length} boleto{result.ok.length !== 1 ? 's' : ''} aprovado{result.ok.length !== 1 ? 's' : ''} com sucesso.</span>
+                                    <span>
+                                        {result.ok.length} boleto{result.ok.length !== 1 ? 's' : ''}{' '}
+                                        {result.acao === 'status' && result.para
+                                            ? `passa${result.ok.length !== 1 ? 'ram' : 'ou'} para "${STATUS_LABELS[result.para]}".`
+                                            : `aprovado${result.ok.length !== 1 ? 's' : ''} com sucesso.`}
+                                    </span>
                                 </div>
                             )}
                             {result.errors.map((e, i) => (
@@ -226,6 +274,71 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                     <span>{e.id ? `Boleto ${numeroDoBoleto(e.id)}: ` : ''}{e.error}</span>
                                 </div>
                             ))}
+                            {result.ficaram?.map(f => (
+                                <div key={f.id} className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                    <span>Boleto {numeroDoBoleto(f.id)} ficou como estava: {f.motivo}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Mudar status (23/10/2026) — mesma regra do campo Status da página do
+                        boleto (utils/boletoStatus.ts): cada boleto muda só se o caminho existe,
+                        com o efeito de sempre no financeiro; ação própria, separada dos campos. */}
+                    {!allDone && (
+                        <div className="space-y-3">
+                            <div>
+                                <label htmlFor="lote-status" className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Mudar status</label>
+                                <select
+                                    id="lote-status"
+                                    value={novoStatus}
+                                    onChange={e => { setNovoStatus(e.target.value as BoletoStatus | ''); setMotivoStatus(''); setResult(null); }}
+                                    disabled={saving}
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 outline-none focus:border-blue-400 disabled:opacity-50"
+                                >
+                                    <option value="">— Não alterar —</option>
+                                    {STATUS_DO_LOTE.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">Para aprovar, use "Aprovar e Lançar".</p>
+                            </div>
+                            {resumoStatus && (
+                                <div role="region" aria-label="Mudança de status em lote" className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2 text-xs text-gray-900">
+                                    <p>
+                                        <span className="font-semibold">{resumoStatus.mudam} de {boletos.length}</span> passa{resumoStatus.mudam !== 1 ? 'm' : ''} para "{STATUS_LABELS[novoStatus as BoletoStatus]}"
+                                        {resumoStatus.ficam > 0 && <> · {resumoStatus.ficam} fica{resumoStatus.ficam !== 1 ? 'm' : ''} como {resumoStatus.ficam !== 1 ? 'estão' : 'está'}</>}
+                                    </p>
+                                    {resumoStatus.efeitos.map(e => (
+                                        <p key={`${e.de}-${e.descricao}`}>
+                                            <span className="font-semibold">{STATUS_LABELS[e.de]} ({e.quantos}):</span> {e.descricao}
+                                        </p>
+                                    ))}
+                                    {novoStatus === 'cancelado' && resumoStatus.mudam > 0 && (
+                                        <textarea
+                                            rows={2}
+                                            value={motivoStatus}
+                                            onChange={e => setMotivoStatus(e.target.value)}
+                                            disabled={saving}
+                                            aria-label="Motivo do cancelamento"
+                                            placeholder="Motivo do cancelamento (vale para todos)"
+                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 outline-none focus:border-blue-400"
+                                        />
+                                    )}
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={handleAplicarStatus}
+                                            disabled={saving || !!motivoParaNaoAplicarStatus}
+                                            title={motivoParaNaoAplicarStatus ?? `Aplica o status em ${resumoStatus.mudam} boleto${resumoStatus.mudam !== 1 ? 's' : ''}.`}
+                                            /* Mesma escala dos botões do rodapé desta janela (ainda na escala antiga, §16 — não misturar). */
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white font-bold text-button uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${resumoStatus.mexeNoFinanceiro ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                        >
+                                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                                            Aplicar status
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -324,7 +437,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             {noneChanged && (
-                                <p className="text-xs text-gray-400 text-center">Selecione ao menos um campo para habilitar as ações.</p>
+                                <p className="text-xs text-gray-500 text-center">Altere ao menos um campo para salvar o rascunho.</p>
                             )}
                         </div>
                     )}

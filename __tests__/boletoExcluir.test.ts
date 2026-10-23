@@ -368,3 +368,57 @@ describe('excluir aprovado', () => {
         expect(db.boletos.map(b => b.id)).toEqual(['b2']);
     });
 });
+
+describe('Edição em Lote › mudar status (23/10/2026)', () => {
+    function lote() {
+        db.boletos = [
+            { id: 'b1', organization_id: ORG, status: 'aprovado', invoice_id: 'inv-1', documento_path: 'org/b1.pdf' },
+            { id: 'b2', organization_id: ORG, status: 'revisao', invoice_id: null, documento_path: 'org/b2.pdf' },
+            { id: 'b3', organization_id: ORG, status: 'pago', invoice_id: 'inv-3', documento_path: 'org/b3.pdf' },
+            { id: 'b4', organization_id: 'outra-org', status: 'rascunho', invoice_id: null, documento_path: 'x/b4.pdf' },
+        ];
+        db.invoices = [{ id: 'inv-1', status: 'approved' }, { id: 'inv-3', status: 'paid' }];
+        db.internal_transactions = [
+            { id: 'tx-1', organization_id: ORG, source_system: 'BOLETO', reference_id: 'b1', status: 'PENDING' },
+            { id: 'tx-3', organization_id: ORG, source_system: 'BOLETO', reference_id: 'b3', status: 'CONCILIATED' },
+        ];
+        db.reconciliation_matches = [];
+        db.condominio_rateio_itens = [];
+        db.supplier_payments = [];
+    }
+
+    it('cancelar em lote: quem pode cancela (título junto), quem não pode fica com o motivo', async () => {
+        lote();
+        const r = await boletoService.mudarStatusEmLote(['b1', 'b2', 'b3', 'b4'], ORG, 'cancelado', { motivo: 'Lote de teste' });
+        expect(r.ok).toEqual(['b1', 'b2']);
+        expect(r.ficaram).toEqual([{ id: 'b3', motivo: 'De "Pago" não vai para "Cancelado".' }]);
+        expect(r.errors).toEqual([{ id: 'b4', error: 'Boleto não encontrado nesta organização.' }]);
+        expect(db.boletos.map(b => b.status)).toEqual(['cancelado', 'cancelado', 'pago', 'rascunho']);
+        expect(db.internal_transactions[0].status).toBe('CANCELLED');
+        expect(db.internal_transactions[1].status).toBe('CONCILIATED');
+    });
+
+    it('voltar a rascunho em lote: estorna o aprovado e o pago, troca a revisão direto', async () => {
+        lote();
+        const r = await boletoService.mudarStatusEmLote(['b1', 'b2', 'b3'], ORG, 'rascunho');
+        expect(r.ok).toEqual(['b1', 'b2', 'b3']);
+        expect(db.boletos.slice(0, 3).map(b => b.status)).toEqual(['rascunho', 'rascunho', 'rascunho']);
+        expect(db.internal_transactions).toHaveLength(0);
+        expect(db.invoices).toHaveLength(0);
+    });
+
+    it('trava de vínculo vira erro daquele boleto, sem parar o lote', async () => {
+        lote();
+        db.reconciliation_matches = [{ id: 'm1', internal_transaction_id: 'tx-1' }];
+        const r = await boletoService.mudarStatusEmLote(['b1', 'b2'], ORG, 'rascunho');
+        expect(r.ok).toEqual(['b2']);
+        expect(r.errors[0]).toMatchObject({ id: 'b1', error: expect.stringMatching(/desfaça a conciliação/i) });
+        expect(db.boletos[0].status).toBe('aprovado');
+    });
+
+    it('cancelar sem motivo é recusado antes de mexer em qualquer boleto', async () => {
+        lote();
+        await expect(boletoService.mudarStatusEmLote(['b1'], ORG, 'cancelado', { motivo: '  ' })).rejects.toThrow(/motivo/i);
+        expect(db.boletos[0].status).toBe('aprovado');
+    });
+});

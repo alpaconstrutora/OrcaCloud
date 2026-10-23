@@ -82,6 +82,64 @@ export function motivoSemTransicao(status: BoletoStatus): string | null {
     return status === 'programado' ? MOTIVO_STATUS_PROGRAMADO : null;
 }
 
+/** O boleto tem título/nota em Contas a Pagar (aprovado, pago, ou cancelado depois de aprovado). */
+export function temLancamento(b: { status: BoletoStatus; invoice_id?: string | null }): boolean {
+    return !!b.invoice_id || b.status === 'aprovado' || b.status === 'pago';
+}
+
+/* ─── Edição em Lote › mudar o status (23/10/2026) ──────────────────────────
+   A MESMA tabela, boleto a boleto: quem pode muda com o efeito de sempre; quem
+   não pode fica como está, com o motivo. Aprovado fica fora — o lote já tem
+   "Aprovar e Lançar", com regra própria (utils/boletoAprovacaoLote.ts).
+   Plano: docs/planos/2026-10-23-boleto-lote-status.md */
+export const STATUS_DO_LOTE: BoletoStatus[] = ['revisao', 'rascunho', 'pago', 'cancelado'];
+
+export type PlanoDoStatus =
+    | { muda: true; transicao: TransicaoDeStatus }
+    | { muda: false; motivo: string };
+
+export function planoDeStatusDoBoleto(b: { status: BoletoStatus; invoice_id?: string | null }, para: BoletoStatus): PlanoDoStatus {
+    if (b.status === para) return { muda: false, motivo: `Já está em "${STATUS_LABELS[para]}".` };
+    const bloqueio = motivoSemTransicao(b.status);
+    if (bloqueio) return { muda: false, motivo: bloqueio };
+    const t = transicoesDoBoleto(b.status, temLancamento(b)).find(x => x.para === para);
+    if (t) return { muda: true, transicao: t };
+    const dica = para === 'pago' && (b.status === 'rascunho' || b.status === 'revisao') ? ' — aprove e lance antes' : '';
+    return { muda: false, motivo: `De "${STATUS_LABELS[b.status]}" não vai para "${STATUS_LABELS[para]}"${dica}.` };
+}
+
+export interface ResumoDeStatusEmLote {
+    mudam: number;
+    ficam: number;
+    porId: Map<string, PlanoDoStatus>;
+    /** Um grupo por status de origem que muda: a frase do que acontece com eles. */
+    efeitos: Array<{ de: BoletoStatus; quantos: number; efeito: EfeitoDaTransicao; descricao: string }>;
+    /** Algum grupo mexe no financeiro (estorno, baixa, cancelamento) — pede confirmação. */
+    mexeNoFinanceiro: boolean;
+}
+
+export function resumoDeStatusEmLote(
+    boletos: Array<{ id: string; status: BoletoStatus; invoice_id?: string | null }>,
+    para: BoletoStatus,
+): ResumoDeStatusEmLote {
+    const porId = new Map<string, PlanoDoStatus>();
+    const grupos = new Map<string, { de: BoletoStatus; quantos: number; efeito: EfeitoDaTransicao; descricao: string }>();
+    let mudam = 0;
+    for (const b of boletos) {
+        const p = planoDeStatusDoBoleto(b, para);
+        porId.set(b.id, p);
+        if (!p.muda) continue;
+        mudam++;
+        // A frase muda com "tem lançamento" (cancelar com ou sem título): agrupa pelos dois.
+        const chave = `${b.status}|${p.transicao.descricao}`;
+        const g = grupos.get(chave);
+        if (g) g.quantos++;
+        else grupos.set(chave, { de: b.status, quantos: 1, efeito: p.transicao.efeito, descricao: p.transicao.descricao });
+    }
+    const efeitos = [...grupos.values()];
+    return { mudam, ficam: boletos.length - mudam, porId, efeitos, mexeNoFinanceiro: efeitos.some(e => e.efeito !== 'rotulo') };
+}
+
 // Padrão guia seção 8 — texto simples, sem pílula
 export const STATUS_TEXT_COLORS: Record<BoletoStatus, string> = {
     rascunho: 'text-gray-700',

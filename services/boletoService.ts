@@ -12,7 +12,7 @@ import { financialApprovalService } from './financialApprovalService';
 import { processService } from './processService';
 import { MOTIVO_ALCADA_PENDENTE } from './alcadaDaBaixa';
 import { validateCpfCnpj } from '../lib/validators';
-import { MOTIVO_STATUS_PROGRAMADO } from '../utils/boletoStatus';
+import { MOTIVO_STATUS_PROGRAMADO, planoDeStatusDoBoleto } from '../utils/boletoStatus';
 import { avaliarAprovacaoEmLote, MOTIVO_SEM_VENCIMENTO, MOTIVO_SEM_FORNECEDOR } from '../utils/boletoAprovacaoLote';
 import type {
     Boleto,
@@ -1193,6 +1193,45 @@ export const boletoService = {
             }
         }
         return { ok, errors };
+    },
+
+    /**
+     * Edição em Lote › mudar o status (23/10/2026). Boleto a boleto, a MESMA regra
+     * do campo Status da página (`planoDeStatusDoBoleto`): quem pode muda pelo
+     * caminho de sempre — com as travas de cada um —, quem não pode vai para
+     * `ficaram` com o motivo, sem gravar nada. Aprovado não passa por aqui: é o
+     * `aprovarEmLote`. Plano: docs/planos/2026-10-23-boleto-lote-status.md
+     */
+    async mudarStatusEmLote(
+        ids: string[],
+        organizationId: string,
+        para: BoletoStatus,
+        opts: { motivo?: string; userEmail?: string } = {},
+    ): Promise<{ ok: string[]; errors: Array<{ id: string; error: string }>; ficaram: Array<{ id: string; motivo: string }> }> {
+        const ok: string[] = [];
+        const errors: Array<{ id: string; error: string }> = [];
+        const ficaram: Array<{ id: string; motivo: string }> = [];
+        if (para === 'cancelado' && !opts.motivo?.trim()) {
+            throw new Error('Escreva o motivo do cancelamento.');
+        }
+        for (const id of ids) {
+            try {
+                const b = await this.getById(id);
+                if (!b || b.organization_id !== organizationId) throw new Error('Boleto não encontrado nesta organização.');
+                const plano = planoDeStatusDoBoleto(b, para);
+                if (!plano.muda) { ficaram.push({ id, motivo: plano.motivo }); continue; }
+                const { efeito } = plano.transicao;
+                if (efeito === 'rotulo') await this.marcarRevisao(id, organizationId, para as 'rascunho' | 'revisao', opts.userEmail);
+                else if (efeito === 'pagar') await this.marcarPago(id, organizationId, opts.userEmail);
+                else if (efeito === 'estornar') await this.reverterParaRascunho(id, organizationId, opts.userEmail);
+                else if (efeito === 'cancelar') await this.cancelar(id, organizationId, opts.motivo!.trim(), opts.userEmail);
+                else throw new Error('Para aprovar, use "Aprovar e Lançar".');
+                ok.push(id);
+            } catch (err: unknown) {
+                errors.push({ id, error: err instanceof Error ? err.message : String(err) });
+            }
+        }
+        return { ok, errors, ficaram };
     },
 
     /**

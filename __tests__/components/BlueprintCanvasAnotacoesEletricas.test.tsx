@@ -109,7 +109,7 @@ describe('BlueprintCanvas · os textos elétricos sem colisão', () => {
   });
 
   /** Os textos do ÚLTIMO quadro (depois do último `clearRect`), com a caixa de cada um. */
-  function textosDoUltimoQuadro(escala: number, extra: { modelo?: BlueprintModel; exibicao?: ExibicaoEletrica; mostrarCircuitos?: boolean } = {}) {
+  function textosDoUltimoQuadro(escala: number, extra: { modelo?: BlueprintModel; exibicao?: ExibicaoEletrica; mostrarCircuitos?: boolean; ocultos?: ReadonlySet<string> } = {}) {
     cleanup();
     chamadas = [];
     const m = extra.modelo ?? cena();
@@ -132,6 +132,7 @@ describe('BlueprintCanvas · os textos elétricos sem colisão', () => {
         navegacao={navegacao}
         {...(extra.exibicao ? { exibicaoEletrica: extra.exibicao } : {})}
         {...(extra.mostrarCircuitos != null ? { mostrarCircuitos: extra.mostrarCircuitos } : {})}
+        {...(extra.ocultos ? { ocultos: extra.ocultos } : {})}
       />
     );
     // ⚠️ A vista é do PRÓPRIO canvas (começa em 0,05 px/mm; a prop `escala` não a muda): o zoom vem
@@ -295,5 +296,47 @@ describe('BlueprintCanvas · os textos elétricos sem colisão', () => {
     expect(assinatura()).toEqual(semProp);
     // E igual ao que o desenho produzia ANTES desta tarefa (o registro foi tirado do código sem a prop).
     expect({ textos: textosSemProp, ...semProp }).toMatchSnapshot();
+  });
+
+  /** Os triângulos (3 vértices, fechados) do último quadro maiores que uma ponta de seta — os das tomadas. */
+  function triangulosDoUltimoQuadro() {
+    const inicio = chamadas.map((c) => c.metodo).lastIndexOf('clearRect');
+    const saida: { x: number; y: number }[][] = [];
+    let atual: { x: number; y: number }[] = [];
+    for (const c of chamadas.slice(inicio)) {
+      if (c.metodo === 'moveTo') atual = [{ x: Number(c.args[0]), y: Number(c.args[1]) }];
+      else if (c.metodo === 'lineTo') atual.push({ x: Number(c.args[0]), y: Number(c.args[1]) });
+      else if (c.metodo === 'closePath') {
+        if (atual.length === 3) {
+          const lado = Math.max(...atual.map((p) => Math.hypot(p.x - atual[0].x, p.y - atual[0].y)));
+          if (lado > 8) saida.push(atual);
+        }
+        atual = [];
+      }
+    }
+    return saida;
+  }
+
+  it('⚠️ 23/10/2026 — com a ARQUITETURA OCULTA (Camadas), a tomada continua a 90° da parede', () => {
+    // Pedido com print: *"Os símbolos de tomadas devem estar sempre alinhados a 90 graus em relação a parede"*.
+    // Com as paredes ocultas (no print, só vigas e pilares à vista) a orientação procurava parede só entre as
+    // VISÍVEIS, não achava nenhuma e caía no padrão +X: todo triângulo apontava para a direita, paralelo à parede.
+    const m = cena();
+    textosDoUltimoQuadro(0.2, { modelo: m });
+    const visiveis = triangulosDoUltimoQuadro();
+    textosDoUltimoQuadro(0.2, { modelo: m, ocultos: new Set(m.walls.map((w) => w.id)) });
+    const ocultas = triangulosDoUltimoQuadro();
+    // As três tomadas da cena e a METADE preenchida das duas de altura média (cota 1.100).
+    expect(visiveis.length).toBe(5);
+    expect(ocultas).toEqual(visiveis);
+    // E a direção: parede horizontal, ambiente acima → o ápice sai para CIMA na tela (y menor), na vertical —
+    // nunca para o lado. Só os triângulos inteiros (base com a largura toda).
+    const inteiros = ocultas.filter(([b1, b2]) => Math.hypot(b2.x - b1.x, b2.y - b1.y) > 20);
+    expect(inteiros.length).toBe(3);
+    for (const [b1, b2, apice] of inteiros) {
+      const base = { x: (b1.x + b2.x) / 2, y: (b1.y + b2.y) / 2 };
+      expect(apice.y).toBeLessThan(base.y);
+      expect(Math.abs(apice.y - base.y)).toBeGreaterThan(Math.abs(apice.x - base.x) * 10);
+    }
   });
 });

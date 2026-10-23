@@ -242,9 +242,91 @@ describe('pago: o fluxo é reverter e só então excluir', () => {
         expect(db.invoices).toHaveLength(0);
     });
 
-    it('reverter não vale para rascunho nem cancelado', async () => {
+    // 23/10/2026 (campo Status): aprovado e cancelado também voltam por estorno.
+    it('reverter não vale para rascunho, revisão nem programado', async () => {
+        for (const status of ['rascunho', 'revisao']) {
+            cenario(status);
+            await expect(boletoService.reverterParaRascunho('b1', ORG)).rejects.toThrow(/troque o status direto/i);
+        }
+        cenario('programado');
+        await expect(boletoService.reverterParaRascunho('b1', ORG)).rejects.toThrow(/Asaas/);
+        expect(db.internal_transactions).toHaveLength(1);
+    });
+});
+
+describe('campo Status (23/10/2026): voltas e cancelamento seguem o fluxo', () => {
+    it('aprovado volta a rascunho estornando título e nota', async () => {
+        cenario('aprovado', 'PENDING');
+        const atualizado = await boletoService.reverterParaRascunho('b1', ORG);
+        expect(atualizado.status).toBe('rascunho');
+        expect(db.internal_transactions).toHaveLength(0);
+        expect(db.invoices).toHaveLength(0);
+        expect(db.boletos[0].invoice_id).toBeNull();
+    });
+
+    it('cancelado reabre como rascunho e apaga o título cancelado e a nota', async () => {
+        cenario('cancelado', 'CANCELLED');
+        const atualizado = await boletoService.reverterParaRascunho('b1', ORG);
+        expect(atualizado.status).toBe('rascunho');
+        expect(db.internal_transactions).toHaveLength(0);
+        expect(db.invoices).toHaveLength(0);
+    });
+
+    it('cancelar um aprovado cancela o título e a nota, e acrescenta o motivo às observações', async () => {
+        cenario('aprovado', 'PENDING');
+        db.invoices[0].status = 'approved';
+        db.boletos[0].observacoes = 'Conferir com o síndico';
+        const atualizado = await boletoService.cancelar('b1', ORG, 'Capturado em dobro');
+        expect(atualizado.status).toBe('cancelado');
+        expect(db.internal_transactions[0].status).toBe('CANCELLED');
+        expect(db.invoices[0].status).toBe('rejected');
+        expect(db.boletos[0].observacoes).toBe('Conferir com o síndico\nCancelado: Capturado em dobro');
+        // nada é apagado: o boleto guarda a nota para o histórico
+        expect(db.boletos[0].invoice_id).toBe('inv-1');
+    });
+
+    it('cancelar tira o título da fila de aprovação (alçada PENDENTE vira REJEITADO)', async () => {
+        cenario('aprovado', 'PENDING');
+        db.internal_transactions[0].approval_status = 'PENDENTE';
+        await boletoService.cancelar('b1', ORG, 'x');
+        expect(db.internal_transactions[0]).toMatchObject({ status: 'CANCELLED', approval_status: 'REJEITADO' });
+    });
+
+    it('cancelar recusa título conciliado, sem mexer em nada', async () => {
+        cenario('aprovado', 'PENDING');
+        db.reconciliation_matches = [{ id: 'm1', internal_transaction_id: 'tx-1' }];
+        await expect(boletoService.cancelar('b1', ORG, 'x')).rejects.toThrow(/desfaça a conciliação/i);
+        expect(db.boletos[0].status).toBe('aprovado');
+        expect(db.internal_transactions[0].status).toBe('PENDING');
+    });
+
+    it('cancelar recusa título já baixado, pago, programado e o já cancelado', async () => {
+        cenario('aprovado', 'CONCILIATED');
+        await expect(boletoService.cancelar('b1', ORG, 'x')).rejects.toThrow(/já foi baixado/i);
+        cenario('pago', 'CONCILIATED');
+        await expect(boletoService.cancelar('b1', ORG, 'x')).rejects.toThrow(/pago não se cancela/i);
+        cenario('programado');
+        await expect(boletoService.cancelar('b1', ORG, 'x')).rejects.toThrow(/Asaas/);
         cenario('cancelado');
-        await expect(boletoService.reverterParaRascunho('b1', ORG)).rejects.toThrow(/só boleto pago/i);
+        await expect(boletoService.cancelar('b1', ORG, 'x')).rejects.toThrow(/já está cancelado/i);
+        expect(db.internal_transactions[0].status).toBe('PENDING');
+    });
+
+    it('cancelar rascunho sem lançamento só muda o boleto', async () => {
+        cenario('rascunho', null);
+        db.boletos[0].invoice_id = null;
+        const atualizado = await boletoService.cancelar('b1', ORG, 'PDF não era boleto');
+        expect(atualizado.status).toBe('cancelado');
+        expect(db.boletos[0].observacoes).toBe('Cancelado: PDF não era boleto');
+    });
+
+    it('rascunho ↔ revisão troca direto; de outro status, recusa', async () => {
+        cenario('rascunho', null);
+        expect((await boletoService.marcarRevisao('b1', ORG, 'revisao')).status).toBe('revisao');
+        expect((await boletoService.marcarRevisao('b1', ORG, 'rascunho')).status).toBe('rascunho');
+        cenario('aprovado');
+        await expect(boletoService.marcarRevisao('b1', ORG, 'revisao')).rejects.toThrow(/só rascunho e revisão/i);
+        expect(db.boletos[0].status).toBe('aprovado');
     });
 });
 

@@ -12,6 +12,7 @@ import { financialApprovalService } from './financialApprovalService';
 import { processService } from './processService';
 import { MOTIVO_ALCADA_PENDENTE } from './alcadaDaBaixa';
 import { validateCpfCnpj } from '../lib/validators';
+import { MOTIVO_STATUS_PROGRAMADO } from '../utils/boletoStatus';
 import { avaliarAprovacaoEmLote, MOTIVO_SEM_VENCIMENTO, MOTIVO_SEM_FORNECEDOR } from '../utils/boletoAprovacaoLote';
 import type {
     Boleto,
@@ -472,6 +473,20 @@ export const boletoService = {
         }
 
         return mapRowToBoleto(data);
+    },
+
+    /**
+     * Rascunho ↔ revisão pelo campo Status (23/10/2026): só entre os dois, que não
+     * têm título nem nota — qualquer outra origem tem o seu próprio caminho.
+     */
+    async marcarRevisao(boletoId: string, organizationId: string, para: 'rascunho' | 'revisao', userEmail?: string): Promise<Boleto> {
+        const boleto = await this.getById(boletoId);
+        if (!boleto) throw new Error('Boleto não encontrado.');
+        if (boleto.status !== 'rascunho' && boleto.status !== 'revisao') {
+            throw new Error('Só rascunho e revisão trocam entre si sem mexer no financeiro.');
+        }
+        if (boleto.status === para) return boleto;
+        return this.transitar(boletoId, organizationId, para, userEmail);
     },
 
     /**
@@ -1184,12 +1199,52 @@ export const boletoService = {
      * Cancela o boleto (não exclui — preserva histórico).
      */
     async cancelar(boletoId: string, organizationId: string, motivo: string, userEmail?: string): Promise<Boleto> {
+        const boleto = await this.getById(boletoId);
+        if (!boleto) throw new Error('Boleto não encontrado.');
+        if (boleto.status === 'cancelado') throw new Error('Este boleto já está cancelado.');
+        if (boleto.status === 'pago') throw new Error('Boleto pago não se cancela: volte-o a rascunho (o estorno apaga título e nota) e então cancele ou exclua.');
+        if (boleto.status === 'programado') throw new Error(MOTIVO_STATUS_PROGRAMADO);
+
+        /* Até 23/10/2026 cancelar só mudava o boleto, e o título ficava em aberto em
+           Contas a Pagar (decisão do usuário: "Cancelar estorna o título"). Segue o
+           princípio da limpeza de duplicados (aplicar_20270919000018): nada é apagado —
+           título PENDING vira CANCELLED, nota vira `rejected` (a nota não tem
+           "cancelado"), e o boleto guarda o `invoice_id` para o histórico. */
+        const { data: tx, error: txErr } = await supabase
+            .from('internal_transactions')
+            .select('id, status, approval_status')
+            .eq('organization_id', organizationId)
+            .eq('source_system', 'BOLETO')
+            .eq('reference_id', boletoId)
+            .maybeSingle();
+        if (txErr) throw txErr;
+        if (tx) {
+            const trava = await this.motivoQueTravaOTitulo(tx.id);
+            if (trava) throw new Error(trava);
+            if (tx.status !== 'PENDING' && tx.status !== 'CANCELLED') {
+                throw new Error('O título deste boleto já foi baixado em Contas a Pagar — não dá para cancelá-lo. Desfaça a baixa antes.');
+            }
+            if (tx.status === 'PENDING') {
+                // A fila de aprovação lê só `approval_status = 'PENDENTE'` (não olha o status do
+                // título): sem isto, o título cancelado continuaria pedindo aprovação.
+                const patch: Record<string, string> = { status: 'CANCELLED' };
+                if (tx.approval_status === 'PENDENTE') patch.approval_status = 'REJEITADO';
+                const { error: upTxErr } = await supabase.from('internal_transactions')
+                    .update(patch).eq('id', tx.id).eq('status', 'PENDING');
+                if (upTxErr) throw upTxErr;
+            }
+        }
+        if (boleto.invoice_id) {
+            const { error: invErr } = await supabase.from('invoices')
+                .update({ status: 'rejected' }).eq('id', boleto.invoice_id).neq('status', 'paid');
+            if (invErr) throw invErr;
+        }
+
+        // O motivo vai ACRESCENTADO: antes ele era gravado por cima das observações.
+        const observacoes = [boleto.observacoes?.trim(), `Cancelado: ${motivo.trim()}`].filter(Boolean).join('\n');
         const { data, error } = await supabase
             .from(TABLE)
-            .update({
-                status: 'cancelado',
-                observacoes: motivo,
-            })
+            .update({ status: 'cancelado', observacoes })
             .eq('id', boletoId)
             .select()
             .single();
@@ -1199,7 +1254,9 @@ export const boletoService = {
         await registrarAuditoria(boletoId, organizationId, 'cancelamento', {
             metodo: 'usuario',
             usuario_email: userEmail,
-            valor_depois: { motivo },
+            campo: 'status',
+            valor_antes: boleto.status,
+            valor_depois: { motivo, titulo_cancelado: tx?.status === 'PENDING' ? tx.id : null },
         });
 
         return mapRowToBoleto(data);
@@ -1282,7 +1339,9 @@ export const boletoService = {
     motivoParaNaoExcluir(status: BoletoStatus): string | null {
         if (this.podeExcluir(status)) return null;
         if (status === 'pago') return 'Reverta para rascunho antes de excluir';
-        return 'Boleto com pagamento programado: cancele — não há como excluir direto';
+        // 23/10/2026: o Cancelar do boleto passou a cancelar o título também, e recusa
+        // programado — o caminho é cancelar o pagamento agendado (o boleto volta a Aprovado).
+        return 'Boleto com pagamento programado: cancele o pagamento em Contas a Pagar › Parcelas — não há como excluir direto';
     },
 
     /**
@@ -1408,8 +1467,13 @@ export const boletoService = {
     async reverterParaRascunho(boletoId: string, organizationId: string, userEmail?: string): Promise<Boleto> {
         const boleto = await this.getById(boletoId);
         if (!boleto) throw new Error('Boleto não encontrado.');
-        if (boleto.status !== 'pago') {
-            throw new Error('Só boleto pago é revertido para rascunho. Aprovado pode ser excluído direto.');
+        /* 23/10/2026 (campo Status, decisão do usuário): aprovado e cancelado também
+           voltam a rascunho pelo mesmo estorno. Rascunho ↔ revisão é `marcarRevisao`
+           (sem efeito no financeiro); programado é da Asaas. */
+        if (!['pago', 'aprovado', 'cancelado'].includes(boleto.status)) {
+            throw new Error(boleto.status === 'programado'
+                ? MOTIVO_STATUS_PROGRAMADO
+                : 'Só boleto aprovado, pago ou cancelado volta a rascunho por estorno — em rascunho ou revisão, troque o status direto.');
         }
 
         await this.desfazerLancamento(boletoId, organizationId, boleto.invoice_id ?? null);
@@ -1447,6 +1511,45 @@ export const boletoService = {
      * própria `internal_transactions` (ver `approvalService.submit`), então
      * apagar o título já leva a solicitação junto.
      */
+    /**
+     * Vínculo de OUTRO módulo que impede mexer no título do boleto (apagar no
+     * estorno/exclusão, ou cancelar), ou null. Os três sumiriam ou mudariam
+     * calados: conciliação bancária (FK RESTRICT), rateio de condomínio
+     * (ON DELETE SET NULL — a despesa sairia do rateio) e pagamento a fornecedor.
+     *
+     * 23/10/2026: as frases diziam "use Cancelar" — deixou de ser saída, porque
+     * Cancelar passou a cancelar o título também. Agora apontam o vínculo a desfazer.
+     */
+    async motivoQueTravaOTitulo(transactionId: string): Promise<string | null> {
+        const { count: conciliacoes, error: mErr } = await supabase
+            .from('reconciliation_matches')
+            .select('id', { count: 'exact', head: true })
+            .eq('internal_transaction_id', transactionId);
+        if (mErr) throw mErr;
+        if (conciliacoes) {
+            return 'O título deste boleto já está conciliado com uma linha do extrato bancário. Desfaça a conciliação em Financeiro › Conciliação antes.';
+        }
+
+        const { count: rateios, error: rErr } = await supabase
+            .from('condominio_rateio_itens')
+            .select('id', { count: 'exact', head: true })
+            .eq('transaction_id', transactionId);
+        if (rErr) throw rErr;
+        if (rateios) {
+            return 'O título deste boleto entra no rateio de um condomínio. Retire-o do rateio antes, para não alterar o rateio sem aviso.';
+        }
+
+        const { count: pagamentos, error: pErr } = await supabase
+            .from('supplier_payments')
+            .select('id', { count: 'exact', head: true })
+            .eq('transaction_id', transactionId);
+        if (pErr) throw pErr;
+        if (pagamentos) {
+            return 'Existe pagamento a fornecedor lançado sobre este boleto. Estorne o pagamento antes.';
+        }
+        return null;
+    },
+
     async desfazerLancamento(boletoId: string, organizationId: string, invoiceId: string | null): Promise<void> {
         const { data: tx, error: txErr } = await supabase
             .from('internal_transactions')
@@ -1465,32 +1568,8 @@ export const boletoService = {
                Barrar por status recusaria 510 exclusões legítimas e ainda assim
                não protegeria nada — quem protege são os três vínculos abaixo,
                que são dado de OUTRO módulo e sumiriam em silêncio. */
-            const { count: conciliacoes, error: mErr } = await supabase
-                .from('reconciliation_matches')
-                .select('id', { count: 'exact', head: true })
-                .eq('internal_transaction_id', tx.id);
-            if (mErr) throw mErr;
-            if (conciliacoes) {
-                throw new Error('O título deste boleto já está conciliado com uma linha do extrato bancário. Desfaça a conciliação em Financeiro › Conciliação antes de excluir, ou use Cancelar.');
-            }
-
-            const { count: rateios, error: rErr } = await supabase
-                .from('condominio_rateio_itens')
-                .select('id', { count: 'exact', head: true })
-                .eq('transaction_id', tx.id);
-            if (rErr) throw rErr;
-            if (rateios) {
-                throw new Error('O título deste boleto entra no rateio de um condomínio. Use Cancelar para não alterar o rateio.');
-            }
-
-            const { count: pagamentos, error: pErr } = await supabase
-                .from('supplier_payments')
-                .select('id', { count: 'exact', head: true })
-                .eq('transaction_id', tx.id);
-            if (pErr) throw pErr;
-            if (pagamentos) {
-                throw new Error('Existe pagamento a fornecedor lançado sobre este boleto. Use Cancelar.');
-            }
+            const trava = await this.motivoQueTravaOTitulo(tx.id);
+            if (trava) throw new Error(trava);
 
             const { error: delTxErr } = await supabase.from('internal_transactions').delete().eq('id', tx.id);
             if (delTxErr) throw delTxErr;

@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { payrollService } from './payrollService';
 import { fiscalService, INSSBracket, IRRFBracket } from './fiscalService';
 import { calculateINSS, calculateIRRF } from '../lib/payrollCalc';
+import { salarioBaseDoResultado } from '../lib/payrollSalarioCompetencia';
 
 export interface ValidationDifference {
     employee_id: string;
@@ -79,7 +80,7 @@ export const payrollValidationService = {
             const overtimeHours = heItem ? Number(heItem.base_amount) : 0;
 
             const reference = this.calculatePayrollReference({
-                salary: res.employee?.base_salary || 0,
+                salary: salarioBaseDoResultado(res),
                 overtime50: overtimeHours,
                 bonus,
                 inssBrackets,

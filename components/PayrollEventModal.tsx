@@ -10,6 +10,7 @@ import {
 } from '../lib/payrollUIHelpers';
 import { formatMoney } from './ui/Format';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { salarioBaseDoResultado } from '../lib/payrollSalarioCompetencia';
 
 interface PayrollEventModalProps {
     run: PayrollRun;
@@ -63,7 +64,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
     useEffect(() => {
         if (eventUnit === 'fixed') return;
         const empResult = results.find(r => r.employee_id === employeeId);
-        const baseSalary = empResult?.employee?.base_salary ?? 0;
+        const baseSalary = empResult ? salarioBaseDoResultado(empResult) : 0;
         const rubric = rubrics.find(r => r.code === selectedRubricCode);
         if (!rubric || baseSalary <= 0) return;
         setEventAmount(computeEventAmount(eventUnit, eventQuantity, baseSalary, rubric.code, rubric.name));

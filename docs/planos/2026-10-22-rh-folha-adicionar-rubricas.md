@@ -46,8 +46,8 @@ várias de uma vez) e **Remover** por linha. **Nada muda no banco nem no service
 
 ### 3. Verificação mecânica
 - [x] `check-ui-standard.sh` nos 2 `.tsx`: 0 violações
-- [ ] `npm run ci` verde
+- [x] `npm run ci` verde — a suíte local caiu no `blueprintCasaAutomatica` (V8/Node 24, `(vizinhos.get ?? []) is not iterable`, arquivo não tocado); o portão foi a CI do PR #112, `ci` 16m54s verde
 
 ### 4. PR e publicação
-- [ ] PR + CI
-- [ ] publicação (só com autorização do usuário)
+- [x] PR + CI — PR #112, `ci` 16m54s, Vercel e Vercel Preview Comments verdes
+- [x] publicação — mesclado por squash em 23/10/2026 (`910467e2`); `conferir-producao.sh "Adicionar rubricas recorrentes" "Remover da folha deste colaborador"` provou o domínio servindo 910467e

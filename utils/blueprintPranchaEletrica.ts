@@ -52,6 +52,7 @@ import { fatorDeDiversidade } from './blueprintEletricaDimensionamento';
 import { rotuloDaFase } from './blueprintFasesEletricas';
 import { PRIORIDADE_DA_ANOTACAO, posicionarAnotacoes, type AnotacaoAPosicionar, type CaixaNaTela, type ObstaculoNaTela, type PontoNaTela, type SegmentoNaTela } from './blueprintAnotacaoSemColisao';
 import { larguraEstimadaDoTexto } from './blueprintCotas';
+import { EXIBICAO_ELETRICA_PADRAO, comDependenciasAplicadas, type ExibicaoEletrica } from './preferencias/resolver';
 import { diametrosAnotados } from './blueprintDiametroDosEletrodutos';
 import { ROTULO_DO_RECORTE, categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos, entraNoRecorte, type CategoriaEletrica, type RecorteEletrico } from './blueprintRecorteEletrico';
 import {
@@ -235,10 +236,15 @@ export function desenharEletrica(
    * circuitos do recorte). `aoMudarCategoria` avisa, antes de cada elemento,
    * a categoria dele — é por ele que o DXF troca de camada. Sem os dois, a
    * saída é a de sempre, chamada por chamada.
+   *
+   * `exibicao` (preferências da planta elétrica, 23/10/2026): quais textos a prancha escreve — cada
+   * item corta só o seu; a pendência ("?") nunca some. Ausente = tudo ligado, como sempre. A
+   * instrução da tomada sugerida e o "N cond." do trecho cheio a prancha nunca escreveu.
    */
-  opcoes: { recorte?: RecorteEletrico | null; aoMudarCategoria?: (c: CategoriaEletrica) => void } = {},
+  opcoes: { recorte?: RecorteEletrico | null; aoMudarCategoria?: (c: CategoriaEletrica) => void; exibicao?: ExibicaoEletrica } = {},
 ): void {
   const { px, py } = proj;
+  const exibe = comDependenciasAplicadas(opcoes.exibicao ?? EXIBICAO_ELETRICA_PADRAO);
   const recorte = opcoes.recorte ?? null;
   // A categoria em vigor vai junto de cada texto: ele é escrito no fim (ver `anotar`), e o DXF
   // troca de camada pela categoria de quem escreve.
@@ -345,7 +351,7 @@ export function desenharEletrica(
     // E5.1: num eletroduto COMUM visto num recorte, só os condutores dos circuitos daquele recorte.
     const lista = recorte && catDoTrecho === 'COMUM' ? listaInteira.filter((c) => entraNoRecorte(c.circuitoId ? categoriaDoCircuito.get(c.circuitoId) ?? 'COMUM' : 'COMUM', recorte)) : listaInteira;
     const numerado = numerados.get(t.id) ?? null;
-    if (numerado?.principal) {
+    if (numerado?.principal && exibe.fios) {
       // Círculo branco com o rótulo no meio do trecho, no lugar dos traços — um por TRONCO.
       circulo(d, meio, 2.2 * k, { traco: FINA, cheio: '#ffffff' });
       obstaculos.push({ id: `numero:${t.id}`, caixa: caixaEm(meio, 2.2 * k) });
@@ -382,7 +388,7 @@ export function desenharEletrica(
     };
     for (const [gi, g] of grupos.entries()) {
       const larg = (g.tipos.length - 1) * passo;
-      g.tipos.forEach((tipo, i) => {
+      if (exibe.fios) g.tipos.forEach((tipo, i) => {
         const off = cursor + i * passo;
         const cx = meio.x + ux * off;
         const cy = meio.y + uy * off;
@@ -398,10 +404,10 @@ export function desenharEletrica(
       const circuito = g.circuitoId ? circuitosPorId.get(g.circuitoId) : null;
       const idDoGrupo = `grupo:${t.id}:${gi}`;
       const caixaDoGrupo = caixaDosTracos(cursor, cursor + larg);
-      obstaculos.push({ id: idDoGrupo, caixa: caixaDoGrupo });
+      if (exibe.fios) obstaculos.push({ id: idDoGrupo, caixa: caixaDoGrupo });
       const acima = topo(gx - nx * 2.4 * k - 0.8 * k, gy - ny * 2.4 * k + 0.6 * k, TEXTO_MM * 0.9);
       const abaixo = topo(gx + nx * 2.4 * k - 0.8 * k, gy + ny * 2.4 * k + 1.4 * k, TEXTO_MM * 0.9);
-      anotar({
+      if (exibe.circuitoNosFios) anotar({
         id: `circuito:${t.id}:${gi}`,
         donoId: idDoGrupo,
         ancora: caixaDoGrupo,
@@ -409,7 +415,7 @@ export function desenharEletrica(
         linhas: [{ texto: circuito ? numeroDoCircuito(circuito.nome) : 'r', altura: TEXTO_MM * 0.9 }],
         preferidas: () => [acima, abaixo],
       });
-      if (circuito?.secaoMm2 != null) {
+      if (circuito?.secaoMm2 != null && exibe.bitola) {
         anotar({
           id: `secao:${t.id}:${gi}`,
           donoId: idDoGrupo,
@@ -421,7 +427,7 @@ export function desenharEletrica(
       }
       cursor += larg + vao;
     }
-    if (diametros.escrever.has(t.id)) anotar({
+    if (diametros.escrever.has(t.id) && exibe.diametro) anotar({
       id: `diametro:${t.id}`,
       donoId: `conjunto:${t.id}`,
       ancora: grupos.length > 0 ? caixaDosTracos(-total / 2, total / 2) : caixaEm(meio, 2.2 * k),
@@ -495,12 +501,12 @@ export function desenharEletrica(
       // Interruptor: as letras das seções em cima; o rótulo embaixo.
       const letras = (t.comando ?? '').split('');
       const n = secoesDoInterruptor(t);
-      letras.slice(0, n).forEach((l, i) => {
+      if (exibe.comando) letras.slice(0, n).forEach((l, i) => {
         const x = n === 1 ? c.x + INT_R_MM : n === 2 ? c.x + (i === 0 ? -INT_R_MM - 1.4 * k : INT_R_MM) : i === 2 ? c.x - 0.6 * k : c.x + (i === 0 ? -INT_R_MM - 1.4 * k : INT_R_MM);
         const y = n === 3 && i === 2 ? c.y + INT_R_MM + 1.9 * k : c.y - INT_R_MM - 0.4 * k;
         d.texto(x, y, l, TEXTO_MM * 0.9);
       });
-      if (circuito) {
+      if (circuito && exibe.circuitoNoPonto) {
         anotar({
           id: `ponto:${t.id}`,
           donoId: t.id,
@@ -514,7 +520,7 @@ export function desenharEletrica(
     }
     const ehTomada = t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE';
     // Potência em cima; sigla · circuito embaixo — como na prancha.
-    if (t.potenciaW != null && !luminaria) {
+    if (t.potenciaW != null && !luminaria && exibe.potencia) {
       anotar({
         id: `potencia:${t.id}`,
         donoId: t.id,
@@ -525,10 +531,11 @@ export function desenharEletrica(
       });
     }
     // A potência DENTRO do círculo da luminária é parte do símbolo: fica no lugar.
-    if (t.potenciaW != null && luminaria) d.texto(c.x - 1.4 * k, c.y + 0.6 * k, String(t.potenciaW), TEXTO_MM * 0.7);
+    if (t.potenciaW != null && luminaria && exibe.potencia) d.texto(c.x - 1.4 * k, c.y + 0.6 * k, String(t.potenciaW), TEXTO_MM * 0.7);
     // 22/10/2026 (decisão do usuário): na luminária só "C3" — o círculo já diz que é luz.
     const alerta = !(circuito && t.tipoEletrico);
-    anotar({
+    // Circuito no ponto desligado: some o rótulo, MENOS a pendência (sem circuito ou sem tipo).
+    if (exibe.circuitoNoPonto || alerta) anotar({
       id: `ponto:${t.id}`,
       donoId: t.id,
       ancora: caixaDoSimbolo,
@@ -536,7 +543,7 @@ export function desenharEletrica(
       linhas: [{ texto: luminaria ? (circuito ? `C${numeroDoCircuito(circuito)}` : '?') : `${sigla}${circuito ? ` · ${circuito}` : ' · ?'}`, altura: TEXTO_MM * 0.8, cor: alerta ? '#b45309' : COR_FRACA }],
       preferidas: () => [topo(c.x - 2 * k, c.y + (ehTomada ? TOMADA_MM : LUZ_R_MM) + 2.2 * k, TEXTO_MM * 0.8)],
     });
-    if (t.comando) {
+    if (t.comando && exibe.comando) {
       anotar({
         id: `comando:${t.id}`,
         donoId: t.id,

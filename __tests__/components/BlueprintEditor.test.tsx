@@ -19,6 +19,10 @@ import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
 import { ConfirmProvider } from '../../components/ui/confirm';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// O painel de versões lê o cliente do provedor (`useQueryClient`) — como no app, que o monta no `index.tsx`.
+const clienteDeConsulta = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 // ⚠️ TETO DE TEMPO MAIOR, e o motivo medido em 07/09/2026.
 //
@@ -240,6 +244,23 @@ const colabEstado: EstadoColab = { participantes: [], travas: new Map(), conecta
 const colabDifundir = vi.fn();
 const colabAtualizarPresenca = vi.fn();
 let colabAoReceber: ((msg: unknown) => { ok: boolean; erro: string | null; divergiu: boolean }) | null = null;
+// As preferências da planta elétrica leem do banco (TanStack Query); aqui o desenho é o padrão.
+vi.mock('../../hooks/usePreferenciasEletricas', async () => {
+  const { EXIBICAO_ELETRICA_PADRAO } = await import('../../utils/preferencias/resolver');
+  // Contrato COMPLETO do hook (um mock parcial deixou `linhasDaPrancha` indefinido e o PainelVersoes lançou).
+  return {
+    usePreferenciasEletricas: () => ({
+      tela: EXIBICAO_ELETRICA_PADRAO,
+      prancha: EXIBICAO_ELETRICA_PADRAO,
+      linhasDaTela: [],
+      linhasDaPrancha: [],
+      carregando: false,
+      erro: null,
+      alterar: async () => {},
+    }),
+  };
+});
+
 vi.mock('../../hooks/useBlueprintColaboracao', () => ({
   useBlueprintColaboracao: (opcoes: { aoReceber: (msg: unknown) => { ok: boolean; erro: string | null; divergiu: boolean } }) => {
     colabAoReceber = opcoes.aoReceber;
@@ -407,9 +428,11 @@ async function montar() {
   // é montar uma árvore que não existe em produção. O painel do Terreno usa
   // `useConfirm` antes de substituir a área do empreendimento na ficha.
   render(
+    <QueryClientProvider client={clienteDeConsulta}>
     <ConfirmProvider>
       <BlueprintEditor study={study} branchId="brc_1" onBack={() => {}} onTrocarRamo={onTrocarRamo} />
-    </ConfirmProvider>,
+    </ConfirmProvider>
+    </QueryClientProvider>,
   );
   // O nível "Térreo" é criado num efeito depois do carregamento.
   await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
@@ -5884,9 +5907,11 @@ describe('BlueprintEditor · planta → compras (E10.3)', () => {
     vi.mocked(listSnapshots).mockResolvedValue([{ id: 'snap_1', revision: 2 }] as never);
     const { default: BlueprintEditor } = await import('../../components/blueprint/BlueprintEditor');
     render(
+      <QueryClientProvider client={clienteDeConsulta}>
       <ConfirmProvider>
         <BlueprintEditor study={{ ...study, project_id: 'prj_1' }} branchId="brc_1" onBack={() => {}} onTrocarRamo={onTrocarRamo} />
-      </ConfirmProvider>,
+      </ConfirmProvider>
+      </QueryClientProvider>,
     );
     await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
     const user = userEvent.setup();

@@ -582,6 +582,7 @@ function entidadesDeAgua(r: Agua): string {
 import type { Desenhista } from './blueprintExport';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 import { desenharEletrica, linhasDoQuadroDeCargas } from './blueprintPranchaEletrica';
+import type { ExibicaoEletrica } from './preferencias/resolver';
 import { bolhasDosEixos, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
 import { caixaDoDesenho } from './blueprintExport';
 import { desenharUnifilar, desenharUnifilarEmArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from './blueprintUnifilar';
@@ -609,6 +610,8 @@ export interface OpcoesDxf {
   /** F8: símbolos elétricos em PLANTA-ELETRICA e o quadro de cargas em texto, abaixo da planta. */
   eletrica?: boolean;
   hipotesesEletricas?: HipotesesEletricas;
+  /** Preferências da planta elétrica: quais textos a prancha escreve. Ausente = tudo. */
+  exibicaoEletrica?: ExibicaoEletrica;
   /** E2.1: as redes hidrossanitárias a desenhar, cada uma nas suas camadas `PLANTA-AGUA*` / `PLANTA-ESGOTO*`. */
   redes?: RedeDaPrancha[];
   /** E8.1: o incêndio inteiro (rede, hidrantes, sprinklers, preventivo) em `PLANTA-INCENDIO*`. */
@@ -1087,7 +1090,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   dxf += entidadesDeMarcaDeCorte(model);
   dxf += entidadesDeEscada(model);
   dxf += entidadesDeMuro(model);
-  if (o.eletrica) dxf += entidadesDeEletrica(model, o.hipotesesEletricas);
+  if (o.eletrica) dxf += entidadesDeEletrica(model, o.hipotesesEletricas, o.exibicaoEletrica);
   for (const rede of o.redes ?? []) dxf += entidadesDaRedeHidro(model, rede);
   if (o.incendio) dxf += entidadesDeIncendio(model);
   if (o.climatizacao) dxf += entidadesDeClimatizacao(model);
@@ -1140,7 +1143,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
  * multiplicados por 50 — a prancha elétrica residencial se plota a 1:50 — e
  * a cobertura diz isso.
  */
-function entidadesDeEletrica(model: BlueprintModel, hip?: HipotesesEletricas): string {
+function entidadesDeEletrica(model: BlueprintModel, hip?: HipotesesEletricas, exibicao?: ExibicaoEletrica): string {
   let saida = '';
   const FATOR = 50;
   // E5.1: a camada do elemento que está sendo desenhado — `desenharEletrica` avisa a categoria.
@@ -1166,6 +1169,7 @@ function entidadesDeEletrica(model: BlueprintModel, hip?: HipotesesEletricas): s
     },
   };
   desenharEletrica(d, model, { px: (x) => x, py: (y) => -y }, FATOR, {
+    ...(exibicao ? { exibicao } : {}),
     aoMudarCategoria: (c) => {
       traco = c === 'ILUMINACAO' ? CAMADAS.ELETRICA_ILUMINACAO : c === 'FORCA' ? CAMADAS.ELETRICA_FORCA : CAMADAS.ELETRICA;
       rotulo = c === 'ILUMINACAO' ? CAMADAS.ELETRICA_ILUMINACAO_TEXTO : c === 'FORCA' ? CAMADAS.ELETRICA_FORCA_TEXTO : CAMADAS.ELETRICA_TEXTO;

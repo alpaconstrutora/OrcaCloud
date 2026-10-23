@@ -216,6 +216,7 @@ import {
   type SegmentoParaEncaixe,
 } from '../../utils/blueprintEncaixe';
 import { ESPESSURA_DO_GUARDA_CORPO_MM } from '../../utils/blueprintGuardaCorpoEncosto';
+import { EXIBICAO_ELETRICA_PADRAO, comDependenciasAplicadas, type ExibicaoEletrica } from '../../utils/preferencias/resolver';
 
 /**
  * Canvas do editor de plantas (épico E3).
@@ -1248,6 +1249,13 @@ interface Props {
    */
   mostrarCircuitos?: boolean;
   /**
+   * QUAIS textos elétricos se escrevem (preferências da planta elétrica, 23/10/2026): cada item
+   * corta só o seu texto. `mostrarCircuitos` continua a chave GERAL — desligada, nada elétrico se
+   * escreve. Ausente = tudo ligado, o desenho de sempre. A pendência ("?", ponto sem circuito ou
+   * sem tipo) nunca se esconde.
+   */
+  exibicaoEletrica?: ExibicaoEletrica;
+  /**
    * Desenha as CADEIAS DE COTA por lado — total, parcial e por ambiente.
    *
    * Separado de `mostrarMedidasParedes` de propósito: a cadeia cota os LADOS da
@@ -1758,6 +1766,7 @@ export default function BlueprintCanvas({
   onVistaMudou,
   encaixesAtivos: encaixesAtivosProp,
   mostrarCircuitos = true,
+  exibicaoEletrica: exibicaoEletricaProp = EXIBICAO_ELETRICA_PADRAO,
   regiaoArmada = false,
   regiao = null,
   recorteDaVista = null,
@@ -2075,6 +2084,9 @@ export default function BlueprintCanvas({
   const trechosNumeradosDaRede = useMemo(() => trechosNumerados(model, fiacaoDaRede), [model, fiacaoDaRede]);
   // O Ø predominante não se escreve; o diferente, uma vez por trecho contínuo (ver `diametrosAnotados`).
   const diametrosDaRede = useMemo(() => diametrosAnotados(model.trechos ?? []), [model.trechos]);
+
+  /** Os itens elétricos ligados, já com a dependência dos fios aplicada (vale também para um objeto "cru"). */
+  const exibicaoEletrica = useMemo(() => comDependenciasAplicadas(exibicaoEletricaProp), [exibicaoEletricaProp]);
 
   /** Seção declarada por circuito — é ela que vira o `#2,5` ao lado do traço. */
   const secaoPorCircuito = useMemo(
@@ -6636,7 +6648,7 @@ export default function BlueprintCanvas({
         if (prumada || comp <= 24) {
           // Prumada (círculo) ou trecho curtíssimo: só o Ø, ao lado.
           const c = prumada ? p : curva.meio;
-          if (diametrosDaRede.escrever.has(t.id)) anotar({
+          if (diametrosDaRede.escrever.has(t.id) && exibicaoEletrica.diametro) anotar({
             id: `diametro:${t.id}`,
             donoId: t.id,
             ancora: caixaDoCirculo(c, Math.max(emTela(t.bitolaMm / 2), 3)),
@@ -6670,7 +6682,7 @@ export default function BlueprintCanvas({
           // no painel do trecho. Nenhum grupo se desenha.
           const numerado = trechosNumeradosDaRede.get(t.id) ?? null;
           // Um círculo por TRONCO: os outros pedaços do mesmo tronco ficam só com o traço.
-          if (numerado?.principal) {
+          if (numerado?.principal && exibicaoEletrica.fios) {
             const r = 7 * fz;
             ctx.setLineDash([]);
             ctx.lineWidth = 1.25;
@@ -6689,7 +6701,7 @@ export default function BlueprintCanvas({
             obstaculosDasAnotacoes.push({ id: `numero:${t.id}`, caixa: circulo });
             const ox = meio.x + nx * (r + 6 * fz);
             const oy = meio.y + ny * (r + 6 * fz);
-            anotar({
+            if (exibicaoEletrica.condutoresDoTrecho) anotar({
               id: `condutores:${t.id}`,
               donoId: `numero:${t.id}`,
               ancora: circulo,
@@ -6751,7 +6763,8 @@ export default function BlueprintCanvas({
           const peloCentro = (c: { x: number; y: number }, w: number, h: number) => ({ x: c.x - w / 2, y: c.y - h / 2 });
           for (const [gi, g] of grupos.entries()) {
             const larg = (g.tipos.length - 1) * passo;
-            g.tipos.forEach((tipo, k) => {
+            // Fios desligados: nenhum traço (nem o obstáculo deles) — a geometria segue a mesma.
+            if (exibicaoEletrica.fios) g.tipos.forEach((tipo, k) => {
               const d = cursor + k * passo;
               const cx = meio.x + ux * d;
               const cy = meio.y + uy * d;
@@ -6770,11 +6783,11 @@ export default function BlueprintCanvas({
             // Os traços do grupo são símbolo: nenhum texto os cobre.
             const idDoGrupo = `grupo:${t.id}:${gi}`;
             const caixaDoGrupo = caixaDosTracos(cursor, cursor + larg);
-            obstaculosDasAnotacoes.push({ id: idDoGrupo, caixa: caixaDoGrupo });
+            if (exibicaoEletrica.fios) obstaculosDasAnotacoes.push({ id: idDoGrupo, caixa: caixaDoGrupo });
             if (cabeTexto) {
               // O número do circuito em cima do SEU grupo (embaixo, se em cima não couber)…
               const numero = g.circuitoId ? numeroDoCircuito(circuitosPorId.get(g.circuitoId)) : 'r';
-              anotar({
+              if (exibicaoEletrica.circuitoNosFios) anotar({
                 id: `circuito:${t.id}:${gi}`,
                 donoId: idDoGrupo,
                 ancora: caixaDoGrupo,
@@ -6785,7 +6798,7 @@ export default function BlueprintCanvas({
               });
               // …e a seção dele embaixo, só quando os circuitos do trecho diferem.
               const secao = g.circuitoId ? secaoPorCircuito.get(g.circuitoId) : null;
-              if (secao != null && secaoUnica == null) {
+              if (secao != null && secaoUnica == null && exibicaoEletrica.bitola) {
                 anotar({
                   id: `secao:${t.id}:${gi}`,
                   donoId: idDoGrupo,
@@ -6800,7 +6813,7 @@ export default function BlueprintCanvas({
             cursor += larg + vao;
           }
           const caixaDoConjunto = caixaDosTracos(-total / 2, total / 2);
-          if (cabeTexto && secaoUnica != null) {
+          if (cabeTexto && secaoUnica != null && exibicaoEletrica.bitola) {
             // A seção comum a todos, uma vez, embaixo do conjunto.
             anotar({
               id: `secao:${t.id}`,
@@ -6812,7 +6825,7 @@ export default function BlueprintCanvas({
               atenuada: atenuados.has(t.id),
             });
           }
-          if (cabeDiametro && diametrosDaRede.escrever.has(t.id)) {
+          if (cabeDiametro && diametrosDaRede.escrever.has(t.id) && exibicaoEletrica.diametro) {
             // O Ø à esquerda do conjunto, abaixo da linha — fora do caminho dos números.
             const ox = meio.x - ux * (total / 2 + 6 * fz) + nx * (MEIA + 4 * fz);
             const oy = meio.y - uy * (total / 2 + 6 * fz) + ny * (MEIA + 4 * fz);
@@ -7158,21 +7171,26 @@ export default function BlueprintCanvas({
           // O BLOCO (22/10/2026): circuito, potência e instrução andam juntos — o motor move o
           // bloco inteiro, nunca separa a potência do circuito dela. O lugar preferido é o de
           // sempre: do lado do ápice, centrado (ápice para cima/baixo) ou encostado (para o lado).
-          anotar({
+          // Preferências: o bloco monta só com as linhas LIGADAS; sem nenhuma, não se anota. A
+          // pendência ("-?-", tomada sem circuito) nunca se esconde, nem com o circuito desligado.
+          const linhasDaTomada = [
+            // Circuito entre traços, como na norma; "?" quando falta.
+            ...(exibicaoEletrica.circuitoNoPonto || !circuito
+              ? [{ texto: `-${circuito ? numeroDoCircuito(circuito) : '?'}-`, px: 10 * fz, peso: 'bold' as const, cor: circuito ? '#334155' : COR_ALERTA, altura: passoTexto }]
+              : []),
+            // Potência na linha seguinte — só quando declarada: "0 W" numa tomada
+            // seria afirmar carga zero onde ninguém informou nada.
+            ...(t.potenciaW != null && exibicaoEletrica.potencia ? [{ texto: `${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, px: 10 * fz, peso: 'bold' as const, cor: '#334155', altura: passoTexto }] : []),
+            // A instrução da sugerida ("Posicione sobre a bancada da pia"): é o
+            // que o ponto pede a quem olha, e some junto com a marca ao mover.
+            ...(t.sugerida && t.rotulo && exibicaoEletrica.instrucaoSugerida ? [{ texto: t.rotulo, px: 10 * fz, peso: 'italic' as const, cor: COR_PREVIA, altura: passoTexto }] : []),
+          ];
+          if (linhasDaTomada.length > 0) anotar({
             id: `tomada:${t.id}`,
             donoId: t.id,
             ancora: caixaDaTomada,
             prioridade: circuito ? PRIORIDADE_DA_ANOTACAO.CIRCUITO : PRIORIDADE_DA_ANOTACAO.PENDENCIA,
-            linhas: [
-              // Circuito entre traços, como na norma; "?" quando falta.
-              { texto: `-${circuito ? numeroDoCircuito(circuito) : '?'}-`, px: 10 * fz, peso: 'bold', cor: circuito ? '#334155' : COR_ALERTA, altura: passoTexto },
-              // Potência na linha seguinte — só quando declarada: "0 W" numa tomada
-              // seria afirmar carga zero onde ninguém informou nada.
-              ...(t.potenciaW != null ? [{ texto: `${t.potenciaW} ${UNIDADE_DE_POTENCIA}`, px: 10 * fz, peso: 'bold', cor: '#334155', altura: passoTexto }] : []),
-              // A instrução da sugerida ("Posicione sobre a bancada da pia"): é o
-              // que o ponto pede a quem olha, e some junto com a marca ao mover.
-              ...(t.sugerida && t.rotulo ? [{ texto: t.rotulo, px: 10 * fz, peso: 'italic', cor: COR_PREVIA, altura: passoTexto }] : []),
-            ],
+            linhas: linhasDaTomada,
             centrar: true,
             preferidas: (w, h) => [
               vertical
@@ -7181,7 +7199,7 @@ export default function BlueprintCanvas({
             ],
             atenuada: atenuados.has(t.id),
           });
-          if (t.comando) {
+          if (t.comando && exibicaoEletrica.comando) {
             // A letra do comando do outro lado do bloco de texto.
             const pc = vertical ? { x: c.x + folga + 6 * fz, y: c.y } : { x: c.x, y: c.y - Math.sign(dy || 1) * (folga + 6 * fz) };
             anotar({
@@ -7362,7 +7380,7 @@ export default function BlueprintCanvas({
                 ];
         posicoes.forEach(([x, y, align], i) => {
           const letra = letras[i];
-          if (!letra) return;
+          if (!letra || !exibicaoEletrica.comando) return;
           ctx.textAlign = align;
           ctx.fillText(letra, x, y);
         });
@@ -7657,7 +7675,8 @@ export default function BlueprintCanvas({
           ? caixaDosPontos([{ x: caixaDoSimbolo.x0, y: caixaDoSimbolo.y0 }, { x: caixaDoSimbolo.x1, y: caixaDoSimbolo.y1 }, { x: c.x - anelDaSugerida, y: c.y - anelDaSugerida }, { x: c.x + anelDaSugerida, y: c.y + anelDaSugerida }])
           : caixaDoSimbolo;
         obstaculosDasAnotacoes.push({ id: t.id, caixa: ancora });
-        anotar({
+        // Circuito no ponto desligado: some o rótulo, MENOS a pendência (ponto sem circuito / sem tipo).
+        if (exibicaoEletrica.circuitoNoPonto || alerta) anotar({
           id: `ponto:${t.id}`,
           donoId: t.id,
           ancora,
@@ -7681,7 +7700,7 @@ export default function BlueprintCanvas({
         // 5.500 VA — o número que decide o circuito dele. Embaixo, e não em
         // cima como na tomada, porque em cima já está "LD · C1" à direita e o
         // print do harness mostrou os dois textos um sobre o outro.
-        if (ehLigacaoDireta && t.potenciaW != null) {
+        if (ehLigacaoDireta && t.potenciaW != null && exibicaoEletrica.potencia) {
           anotar({
             id: `potencia:${t.id}`,
             donoId: t.id,
@@ -7692,7 +7711,7 @@ export default function BlueprintCanvas({
             atenuada: atenuados.has(t.id),
           });
         }
-        if (luminaria && t.potenciaW != null && raio >= 9) {
+        if (luminaria && t.potenciaW != null && raio >= 9 && exibicaoEletrica.potencia) {
           ctx.fillStyle = '#ffffff';
           ctx.font = `bold ${Math.min(Math.round(11 * fz), raio)}px ui-sans-serif, system-ui, sans-serif`;
           ctx.textAlign = 'center';
@@ -7707,7 +7726,7 @@ export default function BlueprintCanvas({
         // "a", "b", "c": o interruptor `a` comanda a luminária `a`. Vai do
         // outro lado do símbolo, para não disputar espaço com o par
         // tipo · circuito — os dois são lidos ao mesmo tempo.
-        if (t.comando && !ehInterruptor) {
+        if (t.comando && !ehInterruptor && exibicaoEletrica.comando) {
           anotar({
             id: `comando:${t.id}`,
             donoId: t.id,
@@ -10147,6 +10166,8 @@ export default function BlueprintCanvas({
     paredesDoNivel,
     ambientesDoNivel,
     ambienteRealcado,
+    exibicaoEletrica,
+    mostrarCircuitos,
   ]);
 
   // ── Interação ─────────────────────────────────────────────────────────────

@@ -22,13 +22,25 @@ const TableSwitch: React.FC<{
     onColor?: string;
     title?: string;
     disabled?: boolean;
-}> = ({ checked, onChange, onLabel, offLabel, onColor = 'peer-checked:bg-blue-600', title, disabled }) => (
+    /** Nome acessível do interruptor quando não há `onLabel`/`offLabel` (ex.: lista de preferências). */
+    ariaLabel?: string;
+    /** `id` do texto que explica o estado (ex.: o motivo de estar travado). */
+    ariaDescribedBy?: string;
+}> = ({ checked, onChange, onLabel, offLabel, onColor = 'peer-checked:bg-blue-600', title, disabled, ariaLabel, ariaDescribedBy }) => (
     <label
         className={`inline-flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
         title={title}
         onClick={(e) => e.stopPropagation()}
     >
-        <input type="checkbox" className="sr-only peer" checked={checked} onChange={onChange} disabled={disabled} />
+        <input
+            type="checkbox"
+            className="sr-only peer"
+            checked={checked}
+            onChange={onChange}
+            disabled={disabled}
+            aria-label={ariaLabel}
+            aria-describedby={ariaDescribedBy}
+        />
         <div className={`w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all relative ${onColor}`}></div>
         {(onLabel || offLabel) && (
             <span className={`text-sm font-normal ${checked ? 'text-gray-700' : 'text-gray-400'}`}>

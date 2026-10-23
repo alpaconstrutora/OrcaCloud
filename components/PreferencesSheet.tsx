@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sun, Moon, MoonStar, SunMoon } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
+import SecaoPlantaEletrica from './preferencias/SecaoPlantaEletrica';
 
 export type ThemeMode = 'light' | 'dark' | 'midnight' | 'auto';
 
@@ -104,7 +105,7 @@ export default function PreferencesSheet({
     <Sheet open={open} onClose={onClose} size="lg">
       <SheetHeader onClose={onClose}>
         <SheetTitle>Preferências</SheetTitle>
-        <SheetDescription>Personalize a aparência do Opura neste dispositivo.</SheetDescription>
+        <SheetDescription>O tema vale neste dispositivo; as escolhas da Planta acompanham o seu usuário em qualquer computador.</SheetDescription>
       </SheetHeader>
       <SheetPanel className="px-6 py-6">
         <div className="space-y-8">
@@ -151,6 +152,13 @@ export default function PreferencesSheet({
             </button>
           </section>
           <p className="-mt-4 text-xs text-slate-400">Alto contraste para maior acessibilidade</p>
+
+          {/* Só monta aberta: o Sheet renderiza os filhos mesmo fechado, e a seção lê do banco. */}
+          {open && (
+            <div className="border-t border-slate-100 pt-6">
+              <SecaoPlantaEletrica />
+            </div>
+          )}
         </div>
       </SheetPanel>
     </Sheet>

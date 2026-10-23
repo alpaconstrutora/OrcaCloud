@@ -997,6 +997,7 @@ export function montarDxf(
     envelopes: envelopesParaExportacao(model, o.zona),
     eletrica: o.eletrica,
     hipotesesEletricas: o.hipotesesEletricas,
+    exibicaoEletrica: o.exibicaoEletrica,
     redes: o.redesNoDxf,
     incendio: o.incendioNoDxf,
     climatizacao: o.climatizacaoNoDxf,

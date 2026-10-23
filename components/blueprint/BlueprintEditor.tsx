@@ -174,6 +174,7 @@ import PainelSigef from './PainelSigef';
 import PainelCar from './PainelCar';
 import PainelReurb from './PainelReurb';
 import { useBlueprintReurb } from '../../hooks/useBlueprintReurb';
+import { usePreferenciasEletricas } from '../../hooks/usePreferenciasEletricas';
 import { useAreasNbr12721PodeEditar } from '../../hooks/useAreasNbr12721Edicao';
 import { useBlueprintRegularizacao } from '../../hooks/useBlueprintRegularizacao';
 import { zipDeTextos } from '../../services/blueprintReurbService';
@@ -1799,6 +1800,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * amarra o hash delas, então têm de ser do estudo.
    */
   const eletricaDoEstudo = useBlueprintEletrica(study.id, study.organization_id);
+  // Preferências da planta elétrica (23/10/2026): quais textos elétricos o canvas escreve. A organização é a
+  // DO ESTUDO aberto (REGRA #5), nunca `organizations[0]`; a TELA é do usuário, a prancha vive no painel de versões.
+  const preferenciasEletricas = usePreferenciasEletricas({ organizationId: study.organization_id, studyId: study.id });
   // F2 (incêndio pós-roadmap): os kits de inserção da organização DO ESTUDO (REGRA #5 — a planta é
   // dela). Falha ao carregar = sem kit da organização (o kit padrão continua); o painel mostra o erro.
   const [kitsDaOrg, setKitsDaOrg] = useState<KitDeInsercao[]>([]);
@@ -15862,6 +15866,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   marcasDoCalculo={[...(coberturaDeIncendio ? [...marcasDoCalculoIncendio, ...marcasDaCobertura(coberturaDeIncendio)] : marcasDoCalculoIncendio), ...marcasDaClima]}
                   encaixesAtivos={encaixesAtivos}
                   mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos && eletricaAVista}
+                  exibicaoEletrica={preferenciasEletricas.tela}
                   model={editor.model}
                   tool={vistaDePlanta ? 'selecionar' : editor.tool}
                   levelId={nivelDaVistaDePlanta ? nivelDaVistaDePlanta.id : levelId}

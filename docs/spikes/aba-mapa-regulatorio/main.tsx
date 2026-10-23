@@ -10,6 +10,7 @@
 import '../../../index.css';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import BlueprintModule from '../../../components/blueprint/BlueprintModule';
 import RegulatoryZoneTable from '../../../components/RegulatoryZoneTable';
 import { ConfirmProvider } from '../../../components/ui/confirm';
@@ -23,7 +24,11 @@ const ZONAS = [
   { id: 'z2', macroarea: 'Qualificação Urbana', zona: 'ZC', uso_permitido: 'Misto', ca_basico: '2,5', ca_maximo: '6', recuo_frente: '4', lei_referencia: 'LC 208/2018' },
 ];
 
+// O editor (BlueprintModule) lê as preferências da planta pelo TanStack Query: precisa do provedor.
+const queryClient = new QueryClient();
+
 createRoot(document.getElementById('raiz')!).render(
+  <QueryClientProvider client={queryClient}>
   <ConfirmProvider>
     <div className="flex h-screen">
       <aside className="w-64 shrink-0 bg-white border-r border-gray-200" />
@@ -40,5 +45,6 @@ createRoot(document.getElementById('raiz')!).render(
         )}
       </main>
     </div>
-  </ConfirmProvider>,
+  </ConfirmProvider>
+  </QueryClientProvider>,
 );

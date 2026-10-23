@@ -10,7 +10,11 @@
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '../../lib/queryClient';
+import { preferenciasKeys } from '../../lib/queryKeys';
+import { exibicaoEletricaDaPrancha, type LinhaDePreferencia } from '../../utils/preferencias/resolver';
 import type { BlueprintStudy } from '../../types/blueprint';
 import {
   applyBatch,
@@ -35,6 +39,20 @@ const exportarConjuntoPdf = vi.fn();
 const listSheetTemplates = vi.fn();
 const createSheetTemplate = vi.fn();
 const removeSheetTemplate = vi.fn();
+
+// As preferências da planta elétrica: o painel pede a PRANCHA da organização e do estudo abertos (REGRA #5)
+// e a leva nas opções de exportação.
+const PRANCHA_DA_EMPRESA = { fios: true, circuitoNosFios: true, bitola: false, diametro: true, circuitoNoPonto: true, potencia: false, comando: true, instrucaoSugerida: false, condutoresDoTrecho: true };
+const usePreferenciasEletricas = vi.fn();
+vi.mock('../../hooks/usePreferenciasEletricas', () => ({
+  usePreferenciasEletricas: (...a: unknown[]) => usePreferenciasEletricas(...a),
+}));
+// "Padrão da prancha: da empresa" apaga as linhas ESTUDO — o serviço é a única camada que fala com o banco.
+const apagarDoEstudo = vi.fn();
+vi.mock('../../services/preferenciasService', () => ({
+  preferenciasService: { apagarDoEstudo: (...a: unknown[]) => apagarDoEstudo(...a) },
+}));
+const alterarPreferencia = vi.fn();
 
 vi.mock('../../services/blueprintSheetTemplateService', () => ({
   blueprintSheetTemplateService: {
@@ -132,6 +150,14 @@ beforeEach(() => {
   // compartilhar, e um mock sem retorno derruba casos que não falam de cliente.
   listClients.mockResolvedValue([]);
   listSheetTemplates.mockResolvedValue([]);
+  usePreferenciasEletricas.mockReturnValue({
+    tela: PRANCHA_DA_EMPRESA,
+    prancha: PRANCHA_DA_EMPRESA,
+    linhasDaPrancha: [],
+    alterar: alterarPreferencia,
+  });
+  alterarPreferencia.mockResolvedValue(undefined);
+  apagarDoEstudo.mockResolvedValue(undefined);
   getSnapshot.mockImplementation(async (id: string) =>
     id === 'snap_1' ? snap('snap_1', 1) : snap('snap_2', 2),
   );
@@ -141,7 +167,12 @@ async function montar() {
   const { default: PainelVersoes } = await import('../../components/blueprint/PainelVersoes');
   // O `ClientSelect` (compartilhar com o cliente) abre um `Sheet`, que usa `useConfirm`.
   const { ConfirmProvider } = await import('../../components/ui/confirm');
-  render(<ConfirmProvider><PainelVersoes study={study} /></ConfirmProvider>);
+  // O painel lê o cliente do PROVEDOR (`useQueryClient`); o teste usa o singleton do app para espiá-lo.
+  render(
+    <QueryClientProvider client={queryClient}>
+      <ConfirmProvider><PainelVersoes study={study} /></ConfirmProvider>
+    </QueryClientProvider>,
+  );
   // ⚠️ Esperar a LISTA CHEGAR, não só a chamada sair. `toHaveBeenCalled()`
   // satisfaz-se antes de a promessa resolver e de o painel sair de
   // "Carregando…" — e os testes seguem com `getByLabelText(/escala/i)`
@@ -187,6 +218,21 @@ describe('PainelVersoes · histórico', () => {
 });
 
 describe('PainelVersoes · exportação', () => {
+  it('⚠️ as preferências da prancha (da organização e do estudo abertos) chegam às opções de exportação', async () => {
+    await montar();
+    const user = userEvent.setup();
+    expect(usePreferenciasEletricas).toHaveBeenCalledWith({ organizationId: 'org_1', studyId: 'std_1' });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+
+    expect(exportarPranchasPdf).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ exibicaoEletrica: PRANCHA_DA_EMPRESA }),
+      expect.anything(),
+    );
+  });
+
   it('exporta na escala escolhida, e a escala chega ao serviço', async () => {
     await montar();
     const user = userEvent.setup();
@@ -601,5 +647,194 @@ describe('PainelVersoes · conjunto de pranchas (E8.3)', () => {
     } finally {
       useStore.setState({ organizations: orgsAntes });
     }
+  });
+});
+
+describe('PainelVersoes · padrão da prancha elétrica por planta', () => {
+  const PREFIXO = 'planta.eletrica.prancha.';
+  /** A empresa mostra a bitola (true); ESTE estudo a esconde (false). */
+  const PRANCHA_DO_ESTUDO = { ...PRANCHA_DA_EMPRESA, bitola: false };
+  const LINHAS_DO_ESTUDO = [
+    { escopo: 'ORGANIZACAO', chave: 'planta.eletrica.prancha.bitola', valor: true },
+    { escopo: 'ESTUDO', chave: 'planta.eletrica.prancha.bitola', valor: false },
+  ];
+
+  function comEstudoPersonalizado() {
+    usePreferenciasEletricas.mockReturnValue({
+      tela: PRANCHA_DA_EMPRESA,
+      prancha: PRANCHA_DO_ESTUDO,
+      linhasDaTela: [],
+      linhasDaPrancha: LINHAS_DO_ESTUDO,
+      carregando: false,
+      erro: null,
+      alterar: alterarPreferencia,
+    });
+  }
+
+  async function abrirComEletrica() {
+    await montar();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('checkbox', { name: 'Elétrica' }));
+    return user;
+  }
+
+  it('só aparece com a prancha Elétrica marcada', async () => {
+    await montar();
+    expect(screen.queryByLabelText('Padrão da prancha elétrica')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Elétrica' }));
+    expect(screen.getByLabelText('Padrão da prancha elétrica')).toBeInTheDocument();
+  });
+
+  it('sem linhas ESTUDO: "da empresa" escolhido e a lista fechada', async () => {
+    await abrirComEletrica();
+    expect(screen.getByLabelText('Padrão da prancha elétrica')).toHaveValue('empresa');
+    expect(screen.queryByRole('heading', { name: 'Prancha' })).not.toBeInTheDocument();
+  });
+
+  it('com linhas ESTUDO: "personalizado" escolhido, lista só com a coluna Prancha', async () => {
+    comEstudoPersonalizado();
+    await abrirComEletrica();
+    expect(screen.getByLabelText('Padrão da prancha elétrica')).toHaveValue('estudo');
+    expect(screen.getByRole('heading', { name: 'Prancha' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Tela' })).not.toBeInTheDocument();
+  });
+
+  it('⚠️ estudo personalizado vence a empresa: as opções levam a prancha do estudo (bitola desligada)', async () => {
+    comEstudoPersonalizado();
+    const user = await abrirComEletrica();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+    const opcoes = exportarPranchasPdf.mock.calls[0][1] as { exibicaoEletrica: { bitola: boolean } };
+    expect(opcoes.exibicaoEletrica.bitola).toBe(false);
+  });
+
+  it('escolher "personalizado" sem linhas só abre a lista — nada é gravado nem apagado', async () => {
+    const user = await abrirComEletrica();
+    await user.selectOptions(screen.getByLabelText('Padrão da prancha elétrica'), 'estudo');
+    expect(screen.getByRole('heading', { name: 'Prancha' })).toBeInTheDocument();
+    expect(apagarDoEstudo).not.toHaveBeenCalled();
+    expect(alterarPreferencia).not.toHaveBeenCalled();
+  });
+
+  it('mexer numa chave da lista grava no escopo ESTUDO', async () => {
+    const user = await abrirComEletrica();
+    await user.selectOptions(screen.getByLabelText('Padrão da prancha elétrica'), 'estudo');
+    await user.click(screen.getByRole('checkbox', { name: 'Diâmetro do eletroduto · Prancha' }));
+    expect(alterarPreferencia).toHaveBeenCalledWith('prancha', 'diametro', false, 'ESTUDO');
+  });
+
+  it('⚠️ escolher "da empresa" apaga as linhas ESTUDO desta planta e refaz a leitura da prancha', async () => {
+    comEstudoPersonalizado();
+    const invalidar = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
+    try {
+      const user = await abrirComEletrica();
+      await user.selectOptions(screen.getByLabelText('Padrão da prancha elétrica'), 'empresa');
+      expect(apagarDoEstudo).toHaveBeenCalledWith('std_1', PREFIXO);
+      await waitFor(() =>
+        expect(invalidar).toHaveBeenCalledWith({ queryKey: ['preferencias', 'prancha', 'org_1', 'std_1'] }),
+      );
+      expect(screen.getByLabelText('Padrão da prancha elétrica')).toHaveValue('empresa');
+      expect(screen.queryByRole('heading', { name: 'Prancha' })).not.toBeInTheDocument();
+    } finally {
+      invalidar.mockRestore();
+    }
+  });
+
+  it('"Voltar ao padrão" da lista faz o mesmo que "da empresa"', async () => {
+    comEstudoPersonalizado();
+    const user = await abrirComEletrica();
+    await user.click(screen.getByRole('button', { name: 'Voltar ao padrão da empresa' }));
+    expect(apagarDoEstudo).toHaveBeenCalledWith('std_1', PREFIXO);
+  });
+
+  it('⚠️ falha ao apagar: avisa o motivo e o seletor continua em "personalizado"', async () => {
+    comEstudoPersonalizado();
+    apagarDoEstudo.mockRejectedValue(new Error('sem rede'));
+    const user = await abrirComEletrica();
+    await user.selectOptions(screen.getByLabelText('Padrão da prancha elétrica'), 'empresa');
+    expect(await screen.findByText(/sem rede/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Padrão da prancha elétrica')).toHaveValue('estudo');
+    expect(screen.getByRole('heading', { name: 'Prancha' })).toBeInTheDocument();
+  });
+
+  it('⚠️ linha lixo do estudo (chave desconhecida / valor não booleano) não deixa o seletor em "personalizado"', async () => {
+    usePreferenciasEletricas.mockReturnValue({
+      tela: PRANCHA_DA_EMPRESA,
+      prancha: PRANCHA_DA_EMPRESA,
+      linhasDaPrancha: [
+        { escopo: 'ESTUDO', chave: 'planta.eletrica.prancha.xyz', valor: true },
+        { escopo: 'ESTUDO', chave: 'planta.eletrica.prancha.bitola', valor: 'sim' },
+      ],
+      linhasDaTela: [],
+      carregando: false,
+      erro: null,
+      alterar: alterarPreferencia,
+    });
+    await abrirComEletrica();
+    expect(screen.getByLabelText('Padrão da prancha elétrica')).toHaveValue('empresa');
+    expect(screen.queryByRole('heading', { name: 'Prancha' })).not.toBeInTheDocument();
+  });
+
+  describe('durante e logo depois da troca para "da empresa"', () => {
+    afterEach(() => queryClient.clear());
+
+    const SEM_LINHAS: LinhaDePreferencia[] = [];
+    /** Hook que lê o MESMO cache do painel (sem refetch): o que o painel tira do cache é o que o desenho enxerga. */
+    function hookSobreOCache(linhas: unknown[]) {
+      const chave = preferenciasKeys.prancha('org_1', 'std_1');
+      queryClient.setQueryData(chave, linhas);
+      usePreferenciasEletricas.mockImplementation(() => {
+        const atual = React.useSyncExternalStore(
+          (cb) => queryClient.getQueryCache().subscribe(cb),
+          () => queryClient.getQueryData<LinhaDePreferencia[]>(chave) ?? SEM_LINHAS,
+        );
+        return {
+          tela: PRANCHA_DA_EMPRESA,
+          prancha: exibicaoEletricaDaPrancha(atual),
+          linhasDaTela: [],
+          linhasDaPrancha: atual,
+          carregando: false,
+          erro: null,
+          alterar: alterarPreferencia,
+        };
+      });
+    }
+
+    it('⚠️ exportar logo após "da empresa" já sai com a prancha da empresa, mesmo sem refetch', async () => {
+      hookSobreOCache([
+        { escopo: 'ORGANIZACAO', chave: 'planta.eletrica.prancha.bitola', valor: true },
+        { escopo: 'ESTUDO', chave: 'planta.eletrica.prancha.bitola', valor: false },
+      ]);
+      // Sem observador ativo não há refetch: o cache só muda se o PAINEL o limpar.
+      const user = await abrirComEletrica();
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      expect((exportarPranchasPdf.mock.calls[0][1] as { exibicaoEletrica: { bitola: boolean } }).exibicaoEletrica.bitola).toBe(false);
+
+      await user.selectOptions(screen.getByLabelText('Padrão da prancha elétrica'), 'empresa');
+      await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeEnabled());
+      await user.click(screen.getByRole('button', { name: 'PDF' }));
+      expect((exportarPranchasPdf.mock.calls[1][1] as { exibicaoEletrica: { bitola: boolean } }).exibicaoEletrica.bitola).toBe(true);
+    });
+
+    it('⚠️ durante a troca: exportações desligadas com o motivo escrito e a lista travada (clique não grava)', async () => {
+      comEstudoPersonalizado();
+      let terminar: () => void = () => undefined;
+      apagarDoEstudo.mockReturnValue(new Promise<void>((r) => { terminar = r; }));
+      const user = await abrirComEletrica();
+      await user.selectOptions(screen.getByLabelText('Padrão da prancha elétrica'), 'empresa');
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeDisabled());
+      expect(screen.getByRole('button', { name: 'PNG' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'DXF' })).toBeDisabled();
+      expect(screen.getAllByText(/Voltando ao padrão da empresa/).length).toBeGreaterThan(0);
+
+      const chave = screen.getByRole('checkbox', { name: 'Diâmetro do eletroduto · Prancha' });
+      expect(chave).toBeDisabled();
+      await user.click(chave);
+      expect(alterarPreferencia).not.toHaveBeenCalled();
+
+      terminar();
+      await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeEnabled());
+    });
   });
 });

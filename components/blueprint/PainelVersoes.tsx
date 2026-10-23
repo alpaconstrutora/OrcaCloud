@@ -1,12 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { listParameterDefinitions } from '../../services/blueprintParameterDefinitionService';
 import { usePreferenciasEletricas } from '../../hooks/usePreferenciasEletricas';
+import { useToast } from '../../hooks/useToast';
+import { queryClient } from '../../lib/queryClient';
+import { preferenciasKeys } from '../../lib/queryKeys';
+import { preferenciasService } from '../../services/preferenciasService';
+import ListaDePreferenciasEletricas from '../preferencias/ListaDePreferenciasEletricas';
+import type { ItemEletrico } from '../../utils/preferencias/catalogo';
 import { forEachTargetOrg, useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
 import PainelConjuntoDePranchas from './PainelConjuntoDePranchas';
 import { blueprintSheetTemplateService } from '../../services/blueprintSheetTemplateService';
 import { TEMPLATES_DE_PRANCHA_DE_FABRICA, type TemplateDePrancha, type TemplateDePranchaSalvo } from '../../utils/blueprintPranchas';
 import { exportarConjuntoPdf } from '../../services/blueprintExportService';
-import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes, Share2, Table, UploadCloud } from 'lucide-react';
+import { AlertCircle, Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes, Share2, Table, UploadCloud } from 'lucide-react';
 import type { BlueprintStudy, BlueprintSnapshotSummary } from '../../types/blueprint';
 import {
   blueprintApprovalService,
@@ -60,6 +66,9 @@ import {
  */
 import type { HipotesesEletricas } from '../../utils/blueprintEletricaDimensionamento';
 import type { HipotesesDeArmadura } from '../../utils/blueprintArmadura';
+
+/** Prefixo das chaves da prancha elétrica em `preferencias` (ver `chaveDoItem`). */
+const PREFIXO_DA_PRANCHA_ELETRICA = 'planta.eletrica.prancha.';
 
 export default function PainelVersoes({
   study,
@@ -399,7 +408,45 @@ export default function PainelVersoes({
 
   // Preferências da planta elétrica: o padrão da PRANCHA do estudo (estudo > empresa > padrão) — a organização é a
   // DO ESTUDO (REGRA #5). Falha de leitura = padrão (a prancha nunca sai em branco).
-  const { prancha: exibicaoEletrica } = usePreferenciasEletricas({ organizationId: study.organization_id, studyId: study.id });
+  const { prancha: exibicaoEletrica, linhasDaPrancha, alterar: alterarPreferencia } = usePreferenciasEletricas({
+    organizationId: study.organization_id,
+    studyId: study.id,
+  });
+  const { localToast, showToast } = useToast();
+
+  // "Padrão da prancha: da empresa | personalizado para esta planta". Personalizado = há alguma linha ESTUDO da
+  // prancha elétrica neste estudo. `escolhaDoPadrao` é o que a pessoa acabou de escolher (abrir a lista sem ter
+  // gravado nada ainda); sem escolha, vale o que o banco tem.
+  const temAjusteDoEstudo = linhasDaPrancha.some(
+    (l) => l.escopo === 'ESTUDO' && l.chave.startsWith(PREFIXO_DA_PRANCHA_ELETRICA),
+  );
+  const [escolhaDoPadrao, setEscolhaDoPadrao] = useState<'empresa' | 'estudo' | null>(null);
+  const [trocandoPadrao, setTrocandoPadrao] = useState(false);
+  useEffect(() => setEscolhaDoPadrao(null), [study.id]);
+  const padraoDaPrancha: 'empresa' | 'estudo' = escolhaDoPadrao ?? (temAjusteDoEstudo ? 'estudo' : 'empresa');
+
+  /** "Da empresa": apaga as linhas ESTUDO desta planta e refaz a leitura da prancha (a empresa volta a valer). */
+  async function voltarAoPadraoDaEmpresa() {
+    setTrocandoPadrao(true);
+    try {
+      await preferenciasService.apagarDoEstudo(study.id, PREFIXO_DA_PRANCHA_ELETRICA);
+      setEscolhaDoPadrao('empresa');
+      await queryClient.invalidateQueries({ queryKey: preferenciasKeys.prancha(study.organization_id, study.id) });
+    } catch (e) {
+      // Falhou: o banco ainda tem os ajustes da planta — o seletor continua em "personalizado".
+      showToast(
+        `Não foi possível voltar ao padrão da empresa: ${e instanceof Error ? e.message : String(e)}`,
+        'error',
+      );
+    } finally {
+      setTrocandoPadrao(false);
+    }
+  }
+
+  function escolherPadraoDaPrancha(valor: 'empresa' | 'estudo') {
+    if (valor === 'empresa') void voltarAoPadraoDaEmpresa();
+    else setEscolhaDoPadrao('estudo');
+  }
 
   function opcoes(): OpcoesExportacao {
     return {
@@ -777,6 +824,51 @@ export default function PainelVersoes({
                 <p className="mt-1 text-[11px] text-amber-700">Marque ao menos uma prancha.</p>
               )}
             </div>
+
+            {/* PADRÃO DA PRANCHA ELÉTRICA — o que a prancha escreve (fios, bitola…). Da empresa, ou personalizado
+                só para esta planta (grava no escopo ESTUDO). */}
+            {comEletrica && (
+              <div className="mt-2">
+                <label className="block text-[11px] text-slate-600">
+                  Padrão da prancha elétrica
+                  <select
+                    value={padraoDaPrancha}
+                    onChange={(e) => escolherPadraoDaPrancha(e.target.value as 'empresa' | 'estudo')}
+                    disabled={trocandoPadrao}
+                    aria-label="Padrão da prancha elétrica"
+                    className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  >
+                    <option value="empresa">Padrão da empresa</option>
+                    <option value="estudo">Personalizado para esta planta</option>
+                  </select>
+                </label>
+                {padraoDaPrancha === 'estudo' && (
+                  <div className="mt-2">
+                    <ListaDePreferenciasEletricas
+                      colunas={['prancha']}
+                      tela={exibicaoEletrica}
+                      prancha={exibicaoEletrica}
+                      travaDaPrancha={null}
+                      aoAlterar={(_alvo, item: ItemEletrico, valor) =>
+                        void alterarPreferencia('prancha', item, valor, 'ESTUDO')
+                      }
+                      aoVoltarAoPadrao={() => void voltarAoPadraoDaEmpresa()}
+                      voltarDesligado={
+                        trocandoPadrao
+                          ? { prancha: 'Voltando ao padrão da empresa…' }
+                          : temAjusteDoEstudo
+                            ? undefined
+                            : { prancha: 'Esta planta ainda não tem ajustes próprios — já usa o padrão da empresa.' }
+                      }
+                      descricaoDaColuna={{
+                        prancha: 'Vale só para esta planta. O que você não mexer segue o padrão da empresa.',
+                      }}
+                      rotuloDoVoltar="Voltar ao padrão da empresa"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* SEM GEOMETRIA não é problema de escala, e mandar a pessoa mexer
                 na escala seria mandá-la resolver a coisa errada. Medição
@@ -1157,6 +1249,18 @@ export default function PainelVersoes({
       )}
 
       {erro && <p className="px-4 pb-3 text-xs text-red-600">{erro}</p>}
+
+      {localToast && (
+        <div
+          role="status"
+          className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 rounded-2xl px-5 py-4 text-sm font-medium shadow-xl ${
+            localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+          }`}
+        >
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {localToast.message}
+        </div>
+      )}
     </div>
   );
 }

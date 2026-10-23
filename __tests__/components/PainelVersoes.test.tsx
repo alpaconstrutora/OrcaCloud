@@ -43,6 +43,12 @@ const usePreferenciasEletricas = vi.fn();
 vi.mock('../../hooks/usePreferenciasEletricas', () => ({
   usePreferenciasEletricas: (...a: unknown[]) => usePreferenciasEletricas(...a),
 }));
+// "Padrão da prancha: da empresa" apaga as linhas ESTUDO — o serviço é a única camada que fala com o banco.
+const apagarDoEstudo = vi.fn();
+vi.mock('../../services/preferenciasService', () => ({
+  preferenciasService: { apagarDoEstudo: (...a: unknown[]) => apagarDoEstudo(...a) },
+}));
+const alterarPreferencia = vi.fn();
 
 vi.mock('../../services/blueprintSheetTemplateService', () => ({
   blueprintSheetTemplateService: {
@@ -140,7 +146,14 @@ beforeEach(() => {
   // compartilhar, e um mock sem retorno derruba casos que não falam de cliente.
   listClients.mockResolvedValue([]);
   listSheetTemplates.mockResolvedValue([]);
-  usePreferenciasEletricas.mockReturnValue({ tela: PRANCHA_DA_EMPRESA, prancha: PRANCHA_DA_EMPRESA });
+  usePreferenciasEletricas.mockReturnValue({
+    tela: PRANCHA_DA_EMPRESA,
+    prancha: PRANCHA_DA_EMPRESA,
+    linhasDaPrancha: [],
+    alterar: alterarPreferencia,
+  });
+  alterarPreferencia.mockResolvedValue(undefined);
+  apagarDoEstudo.mockResolvedValue(undefined);
   getSnapshot.mockImplementation(async (id: string) =>
     id === 'snap_1' ? snap('snap_1', 1) : snap('snap_2', 2),
   );
@@ -625,5 +638,111 @@ describe('PainelVersoes · conjunto de pranchas (E8.3)', () => {
     } finally {
       useStore.setState({ organizations: orgsAntes });
     }
+  });
+});
+
+describe('PainelVersoes · padrão da prancha elétrica por planta', () => {
+  const PREFIXO = 'planta.eletrica.prancha.';
+  /** A empresa mostra a bitola (true); ESTE estudo a esconde (false). */
+  const PRANCHA_DO_ESTUDO = { ...PRANCHA_DA_EMPRESA, bitola: false };
+  const LINHAS_DO_ESTUDO = [
+    { escopo: 'ORGANIZACAO', chave: 'planta.eletrica.prancha.bitola', valor: true },
+    { escopo: 'ESTUDO', chave: 'planta.eletrica.prancha.bitola', valor: false },
+  ];
+
+  function comEstudoPersonalizado() {
+    usePreferenciasEletricas.mockReturnValue({
+      tela: PRANCHA_DA_EMPRESA,
+      prancha: PRANCHA_DO_ESTUDO,
+      linhasDaPrancha: LINHAS_DO_ESTUDO,
+      alterar: alterarPreferencia,
+    });
+  }
+
+  async function abrirComEletrica() {
+    await montar();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('checkbox', { name: 'Elétrica' }));
+    return user;
+  }
+
+  it('só aparece com a prancha Elétrica marcada', async () => {
+    await montar();
+    expect(screen.queryByLabelText('Padrão da prancha elétrica')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Elétrica' }));
+    expect(screen.getByLabelText('Padrão da prancha elétrica')).toBeInTheDocument();
+  });
+
+  it('sem linhas ESTUDO: "da empresa" escolhido e a lista fechada', async () => {
+    await abrirComEletrica();
+    expect(screen.getByLabelText('Padrão da prancha elétrica')).toHaveValue('empresa');
+    expect(screen.queryByRole('heading', { name: 'Prancha' })).not.toBeInTheDocument();
+  });
+
+  it('com linhas ESTUDO: "personalizado" escolhido, lista só com a coluna Prancha', async () => {
+    comEstudoPersonalizado();
+    await abrirComEletrica();
+    expect(screen.getByLabelText('Padrão da prancha elétrica')).toHaveValue('estudo');
+    expect(screen.getByRole('heading', { name: 'Prancha' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Tela' })).not.toBeInTheDocument();
+  });
+
+  it('⚠️ estudo personalizado vence a empresa: as opções levam a prancha do estudo (bitola desligada)', async () => {
+    comEstudoPersonalizado();
+    const user = await abrirComEletrica();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+    const opcoes = exportarPranchasPdf.mock.calls[0][1] as { exibicaoEletrica: { bitola: boolean } };
+    expect(opcoes.exibicaoEletrica.bitola).toBe(false);
+  });
+
+  it('escolher "personalizado" sem linhas só abre a lista — nada é gravado nem apagado', async () => {
+    const user = await abrirComEletrica();
+    await user.selectOptions(screen.getByLabelText('Padrão da prancha elétrica'), 'estudo');
+    expect(screen.getByRole('heading', { name: 'Prancha' })).toBeInTheDocument();
+    expect(apagarDoEstudo).not.toHaveBeenCalled();
+    expect(alterarPreferencia).not.toHaveBeenCalled();
+  });
+
+  it('mexer numa chave da lista grava no escopo ESTUDO', async () => {
+    const user = await abrirComEletrica();
+    await user.selectOptions(screen.getByLabelText('Padrão da prancha elétrica'), 'estudo');
+    await user.click(screen.getByRole('checkbox', { name: 'Diâmetro do eletroduto · Prancha' }));
+    expect(alterarPreferencia).toHaveBeenCalledWith('prancha', 'diametro', false, 'ESTUDO');
+  });
+
+  it('⚠️ escolher "da empresa" apaga as linhas ESTUDO desta planta e refaz a leitura da prancha', async () => {
+    comEstudoPersonalizado();
+    const { queryClient } = await import('../../lib/queryClient');
+    const invalidar = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
+    try {
+      const user = await abrirComEletrica();
+      await user.selectOptions(screen.getByLabelText('Padrão da prancha elétrica'), 'empresa');
+      expect(apagarDoEstudo).toHaveBeenCalledWith('std_1', PREFIXO);
+      await waitFor(() =>
+        expect(invalidar).toHaveBeenCalledWith({ queryKey: ['preferencias', 'prancha', 'org_1', 'std_1'] }),
+      );
+      expect(screen.getByLabelText('Padrão da prancha elétrica')).toHaveValue('empresa');
+      expect(screen.queryByRole('heading', { name: 'Prancha' })).not.toBeInTheDocument();
+    } finally {
+      invalidar.mockRestore();
+    }
+  });
+
+  it('"Voltar ao padrão" da lista faz o mesmo que "da empresa"', async () => {
+    comEstudoPersonalizado();
+    const user = await abrirComEletrica();
+    await user.click(screen.getByRole('button', { name: 'Voltar ao padrão da empresa' }));
+    expect(apagarDoEstudo).toHaveBeenCalledWith('std_1', PREFIXO);
+  });
+
+  it('⚠️ falha ao apagar: avisa o motivo e o seletor continua em "personalizado"', async () => {
+    comEstudoPersonalizado();
+    apagarDoEstudo.mockRejectedValue(new Error('sem rede'));
+    const user = await abrirComEletrica();
+    await user.selectOptions(screen.getByLabelText('Padrão da prancha elétrica'), 'empresa');
+    expect(await screen.findByText(/sem rede/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Padrão da prancha elétrica')).toHaveValue('estudo');
+    expect(screen.getByRole('heading', { name: 'Prancha' })).toBeInTheDocument();
   });
 });

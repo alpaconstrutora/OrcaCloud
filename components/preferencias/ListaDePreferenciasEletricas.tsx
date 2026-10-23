@@ -44,6 +44,8 @@ export interface ListaDePreferenciasEletricasProps {
   voltarDesligado?: Partial<Record<AlvoDaPreferencia, string>>;
   /** Por coluna: texto de apoio sob o título (o padrão fala de "Tela" e "Prancha" da empresa). */
   descricaoDaColuna?: Partial<Record<AlvoDaPreferencia, string>>;
+  /** Texto do botão de voltar ao padrão (o padrão é "Voltar ao padrão do sistema"). */
+  rotuloDoVoltar?: string;
 }
 
 function motivoDaCelula(alvo: AlvoDaPreferencia, def: ItemDoCatalogo, exibicao: ExibicaoEletrica): string | null {
@@ -52,8 +54,6 @@ function motivoDaCelula(alvo: AlvoDaPreferencia, def: ItemDoCatalogo, exibicao: 
   return null;
 }
 
-const idDoMotivoDaColuna = (alvo: AlvoDaPreferencia) => `pref-eletrica-${alvo}-trava`;
-const idDoMotivoDaCelula = (alvo: AlvoDaPreferencia, item: ItemEletrico) => `pref-eletrica-${alvo}-${item}-motivo`;
 
 const Motivo: React.FC<{ id?: string; children: React.ReactNode }> = ({ id, children }) => (
   <p id={id} className="flex items-start gap-1 text-xs text-gray-600">
@@ -71,7 +71,13 @@ export default function ListaDePreferenciasEletricas({
   aoVoltarAoPadrao,
   voltarDesligado,
   descricaoDaColuna,
+  rotuloDoVoltar = 'Voltar ao padrão do sistema',
 }: ListaDePreferenciasEletricasProps) {
+  // Ids derivados de `useId`: a lista pode montar em dois lugares ao mesmo tempo (gaveta de Preferências
+  // e painel de exportação da planta) e `aria-describedby` não pode apontar para o motivo do outro.
+  const base = React.useId();
+  const idDoMotivoDaColuna = (alvo: AlvoDaPreferencia) => `${base}-${alvo}-trava`;
+  const idDoMotivoDaCelula = (alvo: AlvoDaPreferencia, item: ItemEletrico) => `${base}-${alvo}-${item}-motivo`;
   const exibicaoDe = (alvo: AlvoDaPreferencia) => (alvo === 'tela' ? tela : prancha);
   const grade = colunas.length > 1 ? 'grid-cols-2' : 'grid-cols-1';
 
@@ -97,7 +103,7 @@ export default function ListaDePreferenciasEletricas({
                 title={desligado ?? undefined}
                 className="h-8 rounded-[6px] border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 transition-all hover:bg-gray-50 disabled:cursor-not-allowed"
               >
-                Voltar ao padrão do sistema
+                {rotuloDoVoltar}
               </button>
               {!trava && desligado && <Motivo>{desligado}</Motivo>}
             </div>

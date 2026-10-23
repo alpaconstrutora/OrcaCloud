@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Info } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import Button from './ui/Button';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import type { PayrollRubric, CalculationType } from '../services/payrollService';
+import { motivoBloqueioRecorrente } from '../lib/payrollRubricaRecorrente';
 
 /**
- * Colaborador › Folha de Pagamento › "Adicionar": drawer com as rubricas
- * automáticas que ainda não entram na folha deste colaborador — busca +
- * checkbox, várias de uma vez. Devolve só os códigos; quem grava é o "Salvar"
- * do formulário (`recurringRubrics`), como antes.
+ * Colaborador › Folha de Pagamento › "Adicionar": drawer com TODAS as rubricas
+ * ativas que ainda não entram na folha deste colaborador — busca + checkbox,
+ * várias de uma vez. As que a folha já calcula (INSS, IRRF, FGTS, salário…)
+ * aparecem travadas, com o motivo (`lib/payrollRubricaRecorrente`). Devolve só
+ * os códigos: o valor do colaborador se informa na aba, e quem grava é o
+ * "Salvar" do formulário.
  *
  * As colunas e as células moram aqui e são reaproveitadas pela tabela da aba
  * (`LaborEmployeeForm`), para as duas lerem igual.
@@ -76,16 +79,14 @@ export const renderRubricCell = (key: string, r: PayrollRubric): React.ReactNode
 
 interface Props {
     open: boolean;
-    /** Rubricas que ainda NÃO entram na folha deste colaborador. */
+    /** Rubricas ativas que ainda NÃO entram na folha deste colaborador (inclusive as travadas). */
     rubrics: PayrollRubric[];
-    /** Há alguma rubrica automática (não-CLT) cadastrada? Decide o texto do vazio. */
-    hasAutomaticRubrics: boolean;
     loading?: boolean;
     onClose: () => void;
     onAdd: (codes: string[]) => void;
 }
 
-const LaborEmployeeRubricPicker: React.FC<Props> = ({ open, rubrics, hasAutomaticRubrics, loading, onClose, onAdd }) => {
+const LaborEmployeeRubricPicker: React.FC<Props> = ({ open, rubrics, loading, onClose, onAdd }) => {
     // O formulário de criação é um overlay `z-50`: o drawer sai por portal em
     // `document.body` e monta só ao abrir, para entrar por último no DOM (mesmo
     // arranjo do `ClientSelect`). `shown` vira true um frame depois, para a
@@ -121,7 +122,7 @@ const LaborEmployeeRubricPicker: React.FC<Props> = ({ open, rubrics, hasAutomati
         <Sheet open={shown} onClose={onClose} size="4xl" zIndex={10000}>
             <SheetHeader onClose={onClose}>
                 <SheetTitle>Adicionar rubricas recorrentes</SheetTitle>
-                <SheetDescription>Marque as rubricas que devem entrar automaticamente em todas as folhas deste colaborador.</SheetDescription>
+                <SheetDescription>Marque as rubricas que devem entrar em todas as folhas deste colaborador. O valor (R$ ou % do salário) você informa na aba, depois de adicionar.</SheetDescription>
             </SheetHeader>
             <SheetPanel className="p-6">
                 <StandardTable<PayrollRubric>
@@ -135,17 +136,19 @@ const LaborEmployeeRubricPicker: React.FC<Props> = ({ open, rubrics, hasAutomati
                     onSearchChange={setBusca}
                     searchText={rubricSearchText}
                     searchPlaceholder="Buscar rubrica por código, nome ou categoria..."
-                    selection={{ selected, onChange: setSelected }}
+                    selection={{ selected, onChange: setSelected, canSelect: r => !motivoBloqueioRecorrente(r) }}
                     sortValue={rubricSortValue}
-                    renderCell={renderRubricCell}
-                    empty={hasAutomaticRubrics ? {
+                    renderCell={(key, r) => {
+                        const motivo = key === 'nome' ? motivoBloqueioRecorrente(r) : null;
+                        // Travada: o checkbox some (canSelect) e o motivo fica ao lado do nome (§8, texto).
+                        return motivo
+                            ? <span className="block truncate text-sm font-normal text-gray-700" title={`${r.name} — ${motivo}`}>{r.name} <span className="text-gray-500">· {motivo}</span></span>
+                            : renderRubricCell(key, r);
+                    }}
+                    empty={{
                         icon: <Check className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
-                        title: 'Todas as rubricas automáticas já foram adicionadas',
-                        subtitle: 'Para ter outra opção aqui, cadastre-a em Rubricas como "Automática".',
-                    } : {
-                        icon: <Info className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
-                        title: 'Nenhuma rubrica automática disponível',
-                        subtitle: 'Em Rubricas, marque como "Automática" (e não como "Padrão CLT") as que podem entrar por colaborador.',
+                        title: 'Todas as rubricas já foram adicionadas',
+                        subtitle: 'Cadastre uma rubrica nova em RH › Rubricas para ter outra opção aqui.',
                     }}
                 />
             </SheetPanel>

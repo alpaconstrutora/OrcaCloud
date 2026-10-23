@@ -157,21 +157,17 @@ export function usePreferenciasEletricas({
           );
         }
         showToast(`Não foi possível salvar a preferência: ${mensagemDe(e)}`, 'error');
-        return;
       }
 
-      if (!antes) {
-        await queryClient.invalidateQueries({ queryKey: chaveDoCache });
-      } else if (escopo === 'ORGANIZACAO') {
-        // O padrão da empresa vale para a prancha de qualquer estudo dela: marca as outras como
-        // velhas (sem refazer agora); recarregam quando alguém usar.
-        const estudoAtual = studyId ?? 'sem-estudo';
-        await queryClient.invalidateQueries({
-          queryKey: ['preferencias', 'prancha', organizationId as string],
-          predicate: (q) => q.queryKey[3] !== estudoAtual,
-          refetchType: 'none',
-        });
-      }
+      // Ao fim de TODA gravação (sucesso ou falha) a chave alterada é relida: dois cliques rápidos na mesma
+      // chave não deixam a tela diferente do banco (o último a terminar manda, e o banco é a verdade).
+      // O padrão da EMPRESA vale para a prancha de qualquer estudo dela: a invalidação por prefixo cobre a
+      // chave atual E as de outros estudos que estejam abertas (ex.: gaveta em (org, sem estudo) + painel em
+      // (org, estudo)), e as que estão em uso refazem a leitura na hora.
+      await queryClient.invalidateQueries({
+        queryKey:
+          escopo === 'ORGANIZACAO' ? preferenciasKeys.pranchaDaOrganizacao(organizationId as string) : chaveDoCache,
+      });
     },
     [queryClient, showToast, organizationId, studyId, chaveDaTela, chaveDaPrancha],
   );

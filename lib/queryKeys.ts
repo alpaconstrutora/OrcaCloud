@@ -143,6 +143,8 @@ export const preferenciasKeys = {
     /** Padrão da PRANCHA: linhas da organização + (se houver) do estudo. */
     prancha: (organizationId: string | null, studyId?: string | null) =>
         ['preferencias', 'prancha', organizationId ?? 'nenhuma', studyId ?? 'sem-estudo'] as const,
+    /** Prefixo de TODAS as pranchas de uma organização (qualquer estudo) — para invalidar o padrão da empresa. */
+    pranchaDaOrganizacao: (organizationId: string) => ['preferencias', 'prancha', organizationId] as const,
 } as const;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

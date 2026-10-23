@@ -49,6 +49,12 @@ CREATE TABLE IF NOT EXISTS public.preferencias (
   updated_by      uuid        DEFAULT auth.uid(),
   CONSTRAINT preferencias_escopo_valido
     CHECK (escopo IN ('USUARIO', 'ORGANIZACAO', 'ESTUDO')),
+  -- Sanidade: a chave é do catálogo (prefixo `planta.`, curta) e o valor é um sim/não pequeno. Barra lixo
+  -- (ou abuso) gravado por quem tem permissão de escrita, sem depender do cliente.
+  CONSTRAINT preferencias_chave_sanidade
+    CHECK (chave LIKE 'planta.%' AND length(chave) <= 100),
+  CONSTRAINT preferencias_valor_sanidade
+    CHECK (pg_column_size(valor) <= 1024),
   -- Exatamente o dono do escopo preenchido; os outros dois, nulos.
   CONSTRAINT preferencias_dono_do_escopo CHECK (
     (escopo = 'USUARIO'     AND user_id IS NOT NULL AND organization_id IS NULL     AND study_id IS NULL) OR
@@ -65,6 +71,8 @@ COMMENT ON COLUMN public.preferencias.organization_id IS
   'Dono do escopo ORGANIZACAO (nulo nos demais).';
 COMMENT ON COLUMN public.preferencias.study_id IS
   'Dono do escopo ESTUDO (nulo nos demais). Apagar o estudo apaga as linhas (ON DELETE CASCADE).';
+COMMENT ON COLUMN public.preferencias.updated_by IS
+  'Preenchida pelo CLIENTE (default auth.uid(), mas o upsert pode mandar outro valor). Informativa: NÃO serve de auditoria.';
 COMMENT ON COLUMN public.preferencias.chave IS
   'Chave do catálogo (utils/preferencias/catalogo.ts). Chave desconhecida é ignorada na leitura.';
 
@@ -75,13 +83,15 @@ ALTER TABLE public.preferencias ALTER COLUMN user_id DROP DEFAULT;
 -- ── 2. Um valor por dono e chave ────────────────────────────────────────────
 -- Índices únicos NÃO parciais, de propósito: o `onConflict` do supabase-js/PostgREST não usa
 -- índice parcial. Como o CHECK deixa NULL as colunas dos outros escopos, e NULL nunca colide
--- em índice único, cada índice só vale de fato no escopo do seu dono.
+-- em índice único, cada índice só vale de fato no escopo do seu dono. O DONO vem na frente da chave:
+-- é por ele que a leitura filtra (`user_id = ...`, `organization_id = ...`, `study_id = ...`), então
+-- o mesmo índice serve de busca. A ordem não importa ao `onConflict` do PostgREST.
 CREATE UNIQUE INDEX IF NOT EXISTS preferencias_unica_usuario
-  ON public.preferencias (escopo, user_id, chave);
+  ON public.preferencias (user_id, escopo, chave);
 CREATE UNIQUE INDEX IF NOT EXISTS preferencias_unica_organizacao
-  ON public.preferencias (escopo, organization_id, chave);
+  ON public.preferencias (organization_id, escopo, chave);
 CREATE UNIQUE INDEX IF NOT EXISTS preferencias_unica_estudo
-  ON public.preferencias (escopo, study_id, chave);
+  ON public.preferencias (study_id, escopo, chave);
 
 -- ── 3. RLS ──────────────────────────────────────────────────────────────────
 ALTER TABLE public.preferencias ENABLE ROW LEVEL SECURITY;

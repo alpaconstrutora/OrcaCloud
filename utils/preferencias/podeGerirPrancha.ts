@@ -2,7 +2,7 @@
  * Quem pode mudar o padrão da PRANCHA da empresa na tela de Preferências (23/10/2026).
  *
  * Regra só de TELA: o botão diz o motivo antes de a pessoa tentar. A trava final é o banco
- * (RLS de `user_preferences` aceita `ORGANIZACAO` só de quem é owner/admin da organização).
+ * (RLS de `preferencias` aceita `ORGANIZACAO` só de quem é owner/admin da organização).
  *
  *  - Topo em "Todas as organizações": o padrão da prancha é de UMA empresa — não há onde gravar.
  *    (Exceção da REGRA #5 item 4: escolha de uma organização só, por natureza.)

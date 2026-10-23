@@ -18,6 +18,10 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
 import { ConfirmProvider } from '../../components/ui/confirm';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// O painel de versões lê o cliente do provedor (`useQueryClient`) — como no app, que o monta no `index.tsx`.
+const clienteDeConsulta = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 // ⚠️ TETO DE TEMPO MAIOR, e o motivo medido em 07/09/2026.
 //
@@ -65,7 +69,18 @@ vi.mock('../../services/blueprintService', () => ({
 // As preferências da planta elétrica leem do banco (TanStack Query); aqui o desenho é o padrão.
 vi.mock('../../hooks/usePreferenciasEletricas', async () => {
   const { EXIBICAO_ELETRICA_PADRAO } = await import('../../utils/preferencias/resolver');
-  return { usePreferenciasEletricas: () => ({ tela: EXIBICAO_ELETRICA_PADRAO, prancha: EXIBICAO_ELETRICA_PADRAO }) };
+  // Contrato COMPLETO do hook (um mock parcial deixou `linhasDaPrancha` indefinido e o PainelVersoes lançou).
+  return {
+    usePreferenciasEletricas: () => ({
+      tela: EXIBICAO_ELETRICA_PADRAO,
+      prancha: EXIBICAO_ELETRICA_PADRAO,
+      linhasDaTela: [],
+      linhasDaPrancha: [],
+      carregando: false,
+      erro: null,
+      alterar: async () => {},
+    }),
+  };
 });
 
 vi.mock('../../services/blueprintKitService', () => ({
@@ -150,9 +165,11 @@ beforeEach(() => {
 async function montar() {
   const { default: BlueprintEditor } = await import('../../components/blueprint/BlueprintEditor');
   render(
+    <QueryClientProvider client={clienteDeConsulta}>
     <ConfirmProvider>
       <BlueprintEditor study={study} branchId="brc_1" onBack={() => {}} />
-    </ConfirmProvider>,
+    </ConfirmProvider>
+    </QueryClientProvider>,
   );
   await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
   // O modelo chega por promessa: espera o primeiro grupo existir antes de abrir.

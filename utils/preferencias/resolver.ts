@@ -52,6 +52,8 @@ function valorValido(
   chave: string,
 ): boolean | undefined {
   let achado: boolean | undefined;
+  // "Nunca lança": um não-array (undefined, null, objeto) vindo de um mock/cache estranho vale como lista vazia.
+  if (!Array.isArray(linhas)) return achado;
   for (const l of linhas) {
     if (l && l.escopo === escopo && l.chave === chave && typeof l.valor === 'boolean') {
       achado = l.valor;

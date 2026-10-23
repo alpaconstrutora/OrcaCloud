@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { listParameterDefinitions } from '../../services/blueprintParameterDefinitionService';
 import { usePreferenciasEletricas } from '../../hooks/usePreferenciasEletricas';
 import { useToast } from '../../hooks/useToast';
-import { queryClient } from '../../lib/queryClient';
+import { useQueryClient } from '@tanstack/react-query';
 import { preferenciasKeys } from '../../lib/queryKeys';
 import { preferenciasService } from '../../services/preferenciasService';
 import ListaDePreferenciasEletricas from '../preferencias/ListaDePreferenciasEletricas';
@@ -414,6 +414,7 @@ export default function PainelVersoes({
     organizationId: study.organization_id,
     studyId: study.id,
   });
+  const queryClient = useQueryClient();
   const { localToast, showToast } = useToast();
 
   // "Padrão da prancha: da empresa | personalizado para esta planta". Personalizado = há alguma linha ESTUDO da

@@ -105,7 +105,7 @@ export default function PreferencesSheet({
     <Sheet open={open} onClose={onClose} size="lg">
       <SheetHeader onClose={onClose}>
         <SheetTitle>Preferências</SheetTitle>
-        <SheetDescription>Personalize a aparência do Opura e o que a planta elétrica escreve no desenho.</SheetDescription>
+        <SheetDescription>O tema vale neste dispositivo; as escolhas da Planta acompanham o seu usuário em qualquer computador.</SheetDescription>
       </SheetHeader>
       <SheetPanel className="px-6 py-6">
         <div className="space-y-8">

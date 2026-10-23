@@ -11,6 +11,7 @@ import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../../lib/queryClient';
 import { preferenciasKeys } from '../../lib/queryKeys';
 import { exibicaoEletricaDaPrancha, type LinhaDePreferencia } from '../../utils/preferencias/resolver';
@@ -166,7 +167,12 @@ async function montar() {
   const { default: PainelVersoes } = await import('../../components/blueprint/PainelVersoes');
   // O `ClientSelect` (compartilhar com o cliente) abre um `Sheet`, que usa `useConfirm`.
   const { ConfirmProvider } = await import('../../components/ui/confirm');
-  render(<ConfirmProvider><PainelVersoes study={study} /></ConfirmProvider>);
+  // O painel lê o cliente do PROVEDOR (`useQueryClient`); o teste usa o singleton do app para espiá-lo.
+  render(
+    <QueryClientProvider client={queryClient}>
+      <ConfirmProvider><PainelVersoes study={study} /></ConfirmProvider>
+    </QueryClientProvider>,
+  );
   // ⚠️ Esperar a LISTA CHEGAR, não só a chamada sair. `toHaveBeenCalled()`
   // satisfaz-se antes de a promessa resolver e de o painel sair de
   // "Carregando…" — e os testes seguem com `getByLabelText(/escala/i)`
@@ -657,7 +663,10 @@ describe('PainelVersoes · padrão da prancha elétrica por planta', () => {
     usePreferenciasEletricas.mockReturnValue({
       tela: PRANCHA_DA_EMPRESA,
       prancha: PRANCHA_DO_ESTUDO,
+      linhasDaTela: [],
       linhasDaPrancha: LINHAS_DO_ESTUDO,
+      carregando: false,
+      erro: null,
       alterar: alterarPreferencia,
     });
   }
@@ -756,6 +765,9 @@ describe('PainelVersoes · padrão da prancha elétrica por planta', () => {
         { escopo: 'ESTUDO', chave: 'planta.eletrica.prancha.xyz', valor: true },
         { escopo: 'ESTUDO', chave: 'planta.eletrica.prancha.bitola', valor: 'sim' },
       ],
+      linhasDaTela: [],
+      carregando: false,
+      erro: null,
       alterar: alterarPreferencia,
     });
     await abrirComEletrica();
@@ -779,7 +791,10 @@ describe('PainelVersoes · padrão da prancha elétrica por planta', () => {
         return {
           tela: PRANCHA_DA_EMPRESA,
           prancha: exibicaoEletricaDaPrancha(atual),
+          linhasDaTela: [],
           linhasDaPrancha: atual,
+          carregando: false,
+          erro: null,
           alterar: alterarPreferencia,
         };
       });

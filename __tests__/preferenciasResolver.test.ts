@@ -156,6 +156,18 @@ describe('origemDoValor', () => {
     ];
     expect(origemDoValor(linhas, 'prancha', 'bitola')).toBe('PADRAO');
   });
+
+  it('⚠️ nunca lança: lista que não é array (undefined, null, objeto) vale como vazia', () => {
+    for (const ruim of [undefined, null, {}, 'x', 42]) {
+      const linhas = ruim as unknown as LinhaDePreferencia[];
+      expect(() => exibicaoEletricaDaTela(linhas)).not.toThrow();
+      expect(() => exibicaoEletricaDaPrancha(linhas)).not.toThrow();
+      expect(() => origemDoValor(linhas, 'prancha', 'bitola')).not.toThrow();
+      expect(exibicaoEletricaDaTela(linhas)).toEqual(EXIBICAO_ELETRICA_PADRAO);
+      expect(exibicaoEletricaDaPrancha(linhas)).toEqual(exibicaoEletricaDaPrancha([]));
+      expect(origemDoValor(linhas, 'tela', 'fios')).toBe('PADRAO');
+    }
+  });
 });
 
 describe('comDependenciasAplicadas (objeto "cru" no desenho)', () => {

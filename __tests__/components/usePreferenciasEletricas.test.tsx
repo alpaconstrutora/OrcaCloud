@@ -50,13 +50,28 @@ const linhaTela = (item: Parameters<typeof chaveDoItem>[1], valor: boolean): Lin
 const linhaOrg = (item: Parameters<typeof chaveDoItem>[1], valor: boolean): LinhaDePreferencia =>
     ({ escopo: 'ORGANIZACAO', chave: chaveDoItem('prancha', item), valor });
 
+/**
+ * "Banco" falso: depois de cada gravação o hook RELÊ a chave alterada (invalidateQueries), então a leitura
+ * simulada precisa devolver o que foi gravado — como o banco de verdade devolveria.
+ */
+let banco: LinhaDePreferencia[] = [];
+function gravarNoBanco(escopo: LinhaDePreferencia['escopo'], chave: string, valor: boolean | null) {
+    banco = banco.filter((l) => !(l.escopo === escopo && l.chave === chave));
+    if (valor !== null) banco.push({ escopo, chave, valor });
+}
+/** Linhas do banco de um conjunto de escopos. */
+const doBanco = (...escopos: LinhaDePreferencia['escopo'][]) => banco.filter((l) => escopos.includes(l.escopo));
+
 describe('usePreferenciasEletricas', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        banco = [];
         m.userId = 'u1';
-        m.listarDoUsuario.mockResolvedValue([]);
-        m.listarDaPrancha.mockResolvedValue([]);
-        m.gravar.mockResolvedValue(undefined);
+        m.listarDoUsuario.mockImplementation(async () => doBanco('USUARIO'));
+        m.listarDaPrancha.mockImplementation(async () => doBanco('ORGANIZACAO', 'ESTUDO'));
+        m.gravar.mockImplementation(async (escopo: LinhaDePreferencia['escopo'], _dono: unknown, chave: string, valor: boolean | null) => {
+            gravarNoBanco(escopo, chave, valor);
+        });
     });
 
     it('sem nada gravado devolve o padrão (tudo ligado) e termina de carregar', async () => {
@@ -88,7 +103,9 @@ describe('usePreferenciasEletricas', () => {
 
     it('alterar muda a tela NA HORA, antes de o serviço responder, e depois grava', async () => {
         let terminar!: () => void;
-        m.gravar.mockImplementation(() => new Promise<void>((ok) => { terminar = ok; }));
+        m.gravar.mockImplementation((_e: unknown, _d: unknown, chave: string, valor: boolean | null) => new Promise<void>((ok) => {
+            terminar = () => { gravarNoBanco('USUARIO', chave, valor); ok(); };
+        }));
         const { result } = montar({ organizationId: 'org1' });
         await waitFor(() => expect(result.current.carregando).toBe(false));
         expect(result.current.tela.potencia).toBe(true);
@@ -104,7 +121,7 @@ describe('usePreferenciasEletricas', () => {
     });
 
     it('serviço rejeitando: a tela muda na hora, depois volta ao valor anterior e avisa com o motivo', async () => {
-        m.listarDoUsuario.mockResolvedValue([linhaTela('comando', false)]);
+        banco = [linhaTela('comando', false)];
         let recusar!: (e: Error) => void;
         m.gravar.mockImplementation(() => new Promise<void>((_ok, ko) => { recusar = ko; }));
         const { result } = montar({ organizationId: 'org1' });
@@ -135,7 +152,7 @@ describe('usePreferenciasEletricas', () => {
     });
 
     it('voltar ao padrão (valor null) remove a linha e manda null ao serviço', async () => {
-        m.listarDoUsuario.mockResolvedValue([linhaTela('diametro', false)]);
+        banco = [linhaTela('diametro', false)];
         const { result } = montar({ organizationId: 'org1' });
         await waitFor(() => expect(result.current.tela.diametro).toBe(false));
 
@@ -165,6 +182,66 @@ describe('usePreferenciasEletricas', () => {
         await waitFor(() => expect(result.current.linhasDaPrancha).toEqual([
             { escopo: 'ESTUDO', chave: chaveDoItem('prancha', 'bitola'), valor: false },
         ]));
+    });
+
+    it('⚠️ gravação que falha relê a chave e a tela fica igual ao banco', async () => {
+        banco = [linhaTela('comando', false)];
+        m.gravar.mockRejectedValue(new Error('sem rede'));
+        const { result } = montar({ organizationId: 'org1' });
+        await waitFor(() => expect(result.current.tela.comando).toBe(false));
+        const leituras = m.listarDoUsuario.mock.calls.length;
+
+        await act(async () => { await result.current.alterar('tela', 'comando', true, 'USUARIO'); });
+
+        await waitFor(() => expect(m.listarDoUsuario.mock.calls.length).toBeGreaterThan(leituras));
+        expect(result.current.tela.comando).toBe(false);
+    });
+
+    it('⚠️ dois cliques rápidos na MESMA chave: a tela termina igual ao banco (o último vale)', async () => {
+        const { result } = montar({ organizationId: 'org1' });
+        await waitFor(() => expect(result.current.carregando).toBe(false));
+        // Cada gravação demora um pouco e a primeira demora mais que a segunda.
+        let n = 0;
+        m.gravar.mockImplementation((_e: unknown, _d: unknown, chave: string, valor: boolean | null) => {
+            const espera = n++ === 0 ? 40 : 5;
+            return new Promise<void>((ok) => setTimeout(() => { gravarNoBanco('USUARIO', chave, valor); ok(); }, espera));
+        });
+
+        await act(async () => {
+            const a = result.current.alterar('tela', 'bitola', false, 'USUARIO');
+            const b = result.current.alterar('tela', 'bitola', true, 'USUARIO');
+            await Promise.all([a, b]);
+        });
+
+        // O banco acabou com a primeira gravação (terminou por último): a tela precisa mostrar ISSO.
+        const noBanco = banco.find((l) => l.chave === chaveDoItem('tela', 'bitola'))?.valor;
+        await waitFor(() => expect(result.current.tela.bitola).toBe(noBanco));
+    });
+
+    it('⚠️ padrão da EMPRESA gravado na gaveta (sem estudo) chega ao painel da planta aberta (org + estudo)', async () => {
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const wrapper = ({ children }: { children: React.ReactNode }) => (
+            <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        );
+        const { result } = renderHook(
+            () => ({
+                gaveta: usePreferenciasEletricas({ organizationId: 'org1', studyId: null }),
+                painel: usePreferenciasEletricas({ organizationId: 'org1', studyId: 'estudo-1' }),
+            }),
+            { wrapper },
+        );
+        await waitFor(() => expect(result.current.gaveta.carregando).toBe(false));
+        await waitFor(() => expect(result.current.painel.carregando).toBe(false));
+        expect(result.current.painel.prancha.bitola).toBe(true);
+        expect(m.listarDaPrancha).toHaveBeenCalledWith('org1', null);
+        expect(m.listarDaPrancha).toHaveBeenCalledWith('org1', 'estudo-1');
+        const leiturasDoPainel = m.listarDaPrancha.mock.calls.filter(([, e]) => e === 'estudo-1').length;
+
+        await act(async () => { await result.current.gaveta.alterar('prancha', 'bitola', false, 'ORGANIZACAO'); });
+
+        await waitFor(() => expect(result.current.painel.prancha.bitola).toBe(false));
+        expect(m.listarDaPrancha.mock.calls.filter(([, e]) => e === 'estudo-1').length).toBeGreaterThan(leiturasDoPainel);
+        expect(result.current.gaveta.prancha.bitola).toBe(false);
     });
 
     it('alterar na prancha sem a organização/estudo necessário avisa e não chama o serviço', async () => {

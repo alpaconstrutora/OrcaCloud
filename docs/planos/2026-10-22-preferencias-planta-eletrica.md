@@ -21,8 +21,8 @@ Respostas do usuário no desenho (mesma sessão):
   sai na prancha elétrica (PDF/PNG/DXF) de todos; um estudo pode ter o seu padrão de prancha.
 - **Pronto quando (critérios do usuário):**
   1. Desligo "Potência" na Tela, abro a planta em outro computador → continua desligada.
-  2. O administrador desliga "Instrução da sugerida" na Prancha → todo PDF elétrico da empresa sai sem ela; a tela de
-     cada um não muda.
+  2. O administrador desliga "Potência" na Prancha → todo PDF elétrico da empresa sai sem ela; a tela de
+     cada um não muda. (trocado em 23/10/2026: a prancha não escreve a instrução — decisão do plano.)
 - **Sem surpresa:** o padrão de cada item reproduz o comportamento atual (PR #110) — ninguém vê mudança até escolher.
 
 ## Os itens (catálogo inicial)

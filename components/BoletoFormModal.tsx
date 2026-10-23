@@ -2,13 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     Upload, Loader2, ArrowLeft, FileText, AlertCircle, CheckCircle2,
     Building2, Calendar, DollarSign, Hash, Eye, Save,
-    ThumbsUp, Ban, Trash2, UserPlus, Undo2, Receipt, Tag, StickyNote, Pencil, History, Mail, ScanLine,
+    ThumbsUp, Ban, Trash2, UserPlus, Undo2, Receipt, Tag, StickyNote, Pencil, History, Mail, ScanLine, Flag,
 } from 'lucide-react';
 import PlanoContasSelect from './PlanoContasSelect';
 import HierarchicalSelect from './HierarchicalSelect';
 import SupplierSelect from './SupplierSelect';
 import CostCenterSelect from './CostCenterSelect';
-import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
+import { STATUS_LABELS, STATUS_TEXT_COLORS, transicoesDoBoleto, motivoSemTransicao, type TransicaoDeStatus } from '../utils/boletoStatus';
 import { boletoService, MOTIVO_SEM_VENCIMENTO } from '../services/boletoService';
 import { MOTIVO_ALCADA_PENDENTE } from '../services/alcadaDaBaixa';
 import { supplierService } from '../services/supplierService';
@@ -94,7 +94,8 @@ const ROTULO_AUDITORIA: Record<string, string> = {
     associacao_lote: 'Alterado em lote',
     aprovacao: 'Aprovado e lançado em contas a pagar',
     status_pago: 'Marcado como pago',
-    status_rascunho: 'Revertido para rascunho',
+    status_rascunho: 'Voltou a rascunho',
+    status_revisao: 'Marcado para revisão',
     cancelamento: 'Cancelado',
     mudanca_organizacao: 'Movido de organização',
     pagamento_asaas_disparado: 'Pagamento via Asaas disparado',
@@ -164,6 +165,11 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             .catch(() => { if (vivo) setAlcadaPendente(false); });
         return () => { vivo = false; };
     }, [boleto?.id, boleto?.status]);
+    /* Campo Status (23/10/2026): a mudança escolhida que mexe no financeiro espera
+       confirmação logo abaixo do campo — com o motivo, no caso do cancelamento. */
+    const [transicaoPendente, setTransicaoPendente] = useState<TransicaoDeStatus | null>(null);
+    const [motivoCancelamento, setMotivoCancelamento] = useState('');
+    useEffect(() => { setTransicaoPendente(null); setMotivoCancelamento(''); }, [boleto?.status]);
     const [uploading, setUploading] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -676,6 +682,58 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             ? MOTIVO_SEM_VENCIMENTO
             : null;
 
+    /* ─── Campo Status (23/10/2026, decisão do usuário: guiado pelo fluxo) ───
+       Só as mudanças válidas a partir do status atual; cada uma faz o mesmo que o
+       botão correspondente. Rascunho ↔ revisão aplica na hora; o resto espera o
+       Confirmar do painel. Plano: docs/planos/2026-10-23-boleto-status-editavel.md */
+    const temLancamento = !!boleto?.invoice_id || boleto?.status === 'aprovado' || boleto?.status === 'pago';
+    const transicoes = boleto ? transicoesDoBoleto(boleto.status, temLancamento) : [];
+    /** Por que a mudança está desligada agora — o painel mostra (botão mudo é defeito). */
+    function motivoDaTransicao(t: TransicaoDeStatus): string | null {
+        if (t.efeito === 'aprovar') return motivoParaNaoAprovar;
+        if (t.efeito === 'pagar' && alcadaPendente) return MOTIVO_ALCADA_PENDENTE;
+        return null;
+    }
+
+    async function handleMarcarRevisao(para: 'rascunho' | 'revisao') {
+        if (!boleto) return;
+        setBusy(true);
+        setError(null);
+        try {
+            const updated = await boletoService.marcarRevisao(boleto.id, organizationId, para, userEmail);
+            setBoleto(updated);
+            onSaved(updated);
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            setError(error.message || 'Falha ao mudar o status');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    function escolherStatus(para: string) {
+        if (!boleto || para === boleto.status) { setTransicaoPendente(null); return; }
+        const t = transicoes.find(x => x.para === para);
+        if (!t) return;
+        if (!t.confirmar) { void handleMarcarRevisao(t.para as 'rascunho' | 'revisao'); return; }
+        setMotivoCancelamento('');
+        setTransicaoPendente(t);
+    }
+
+    /** Abre o painel de uma mudança — também pelos botões do topo (Cancelar, Reverter). */
+    function abrirTransicao(para: Boleto['status']) {
+        const t = transicoes.find(x => x.para === para);
+        if (t) { setMotivoCancelamento(''); setTransicaoPendente(t); }
+    }
+
+    async function confirmarTransicao() {
+        if (!transicaoPendente) return;
+        if (transicaoPendente.efeito === 'aprovar') return handleAprovar();
+        if (transicaoPendente.efeito === 'pagar') return handleMarcarPago();
+        if (transicaoPendente.efeito === 'estornar') return handleEstornarParaRascunho();
+        if (transicaoPendente.efeito === 'cancelar') return handleCancelar();
+    }
+
     async function handleAprovar() {
         if (!boleto) return;
         if (motivoParaNaoAprovar) {
@@ -742,11 +800,14 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         }
     }
 
+    /* O motivo vem do painel do campo Status (23/10/2026) — era um `window.prompt`
+       nativo (guia §14). Cancelar agora cancela também o título e a nota. */
     async function handleCancelar() {
         if (!boleto) return;
-        const motivo = window.prompt('Motivo do cancelamento:');
+        const motivo = motivoCancelamento.trim();
         if (!motivo) return;
         setBusy(true);
+        setError(null);
         try {
             const updated = await boletoService.cancelar(boleto.id, organizationId, motivo, userEmail);
             setBoleto(updated);
@@ -759,20 +820,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         }
     }
 
-    /* Primeiro passo do fluxo de exclusão do pago (decisão do usuário,
-       24/09/2026): reverter estorna título e nota e devolve o boleto a rascunho;
-       só aí o Excluir aparece. A confirmação diz o que o estorno mexe no
-       financeiro, porque é isso que ninguém deveria descobrir depois. */
-    async function handleReverterParaRascunho() {
+    /* Volta a rascunho estornando título e nota (pago desde 24/09/2026; aprovado e
+       cancelado desde 23/10/2026). A confirmação é o painel do campo Status, que diz
+       o que o estorno mexe no financeiro — é isso que ninguém deveria descobrir depois. */
+    async function handleEstornarParaRascunho() {
         if (!boleto) return;
-        const ok = await confirm({
-            title: 'Reverter para rascunho?',
-            message: 'O título deste boleto no financeiro e a nota serão estornados, e o valor sai do realizado. O boleto volta a rascunho e poderá ser editado, aprovado de novo ou excluído.',
-            variant: 'danger',
-            confirmLabel: 'Reverter',
-        });
-        if (!ok) return;
         setBusy(true);
+        setError(null);
         try {
             const atualizado = await boletoService.reverterParaRascunho(boleto.id, organizationId, userEmail);
             setBoleto(atualizado);
@@ -860,7 +914,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                         <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                         {boleto.status === 'pago' && (
                             <button
-                                onClick={handleReverterParaRascunho}
+                                onClick={() => abrirTransicao('rascunho')}
                                 disabled={busy}
                                 className="px-4 py-2 text-amber-700 hover:bg-amber-50 rounded-[6px] text-sm font-medium flex items-center gap-2"
                             >
@@ -878,9 +932,10 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                             </button>
                         )}
 
-                        {boleto.status !== 'pago' && boleto.status !== 'cancelado' && (
+                        {/* Programado não cancela daqui (a Asaas ainda pode pagar) — ver MOTIVO_STATUS_PROGRAMADO. */}
+                        {boleto.status !== 'pago' && boleto.status !== 'cancelado' && boleto.status !== 'programado' && (
                             <button
-                                onClick={handleCancelar}
+                                onClick={() => abrirTransicao('cancelado')}
                                 disabled={busy}
                                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-[6px] text-sm font-medium flex items-center gap-2"
                             >
@@ -1230,6 +1285,72 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 "Cobrança"; o que o usuário DECIDE fica em "Classificação"
                                 — é essa a fronteira que a tela não mostrava. */}
                             <div className="space-y-6">
+                                {/* Status (23/10/2026): editável, guiado pelo fluxo — `transicoesDoBoleto`.
+                                    O que mexe no financeiro abre o painel logo abaixo, com a frase do que
+                                    acontece e Confirmar/Manter como está (Cancelado pede o motivo ali). */}
+                                <Secao titulo="Status" icone={Flag}>
+                                    <FormField label="Status do boleto" hint={motivoSemTransicao(boleto.status)}>
+                                        <select
+                                            aria-label="Status do boleto"
+                                            value={transicaoPendente?.para ?? boleto.status}
+                                            onChange={(e) => escolherStatus(e.target.value)}
+                                            disabled={busy || transicoes.length === 0}
+                                            title={motivoSemTransicao(boleto.status) ?? undefined}
+                                            className={CAMPO}
+                                        >
+                                            <option value={boleto.status}>{STATUS_LABELS[boleto.status]} (atual)</option>
+                                            {transicoes.map(t => (
+                                                <option key={t.para} value={t.para}>{STATUS_LABELS[t.para]}</option>
+                                            ))}
+                                        </select>
+                                    </FormField>
+                                    {transicaoPendente && (() => {
+                                        const impedimento = motivoDaTransicao(transicaoPendente);
+                                        const faltaMotivo = transicaoPendente.efeito === 'cancelar' && !motivoCancelamento.trim();
+                                        const destrutiva = transicaoPendente.efeito === 'estornar' || transicaoPendente.efeito === 'cancelar';
+                                        return (
+                                            <div role="region" aria-label="Confirmar mudança de status" className="rounded-[6px] border border-amber-200 bg-amber-50 p-4 space-y-3">
+                                                <p className="text-sm text-gray-900">
+                                                    <span className="font-semibold">{STATUS_LABELS[boleto.status]} → {STATUS_LABELS[transicaoPendente.para]}.</span>{' '}
+                                                    {transicaoPendente.descricao}
+                                                </p>
+                                                {impedimento && <p className="text-sm text-amber-800">{impedimento}</p>}
+                                                {transicaoPendente.efeito === 'cancelar' && (
+                                                    <FormField label="Motivo do cancelamento">
+                                                        <textarea
+                                                            rows={2}
+                                                            value={motivoCancelamento}
+                                                            onChange={(e) => setMotivoCancelamento(e.target.value)}
+                                                            placeholder="Ex.: capturado em dobro"
+                                                            className={CAMPO_AREA}
+                                                        />
+                                                    </FormField>
+                                                )}
+                                                <div className="flex justify-end gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setTransicaoPendente(null)}
+                                                        disabled={busy}
+                                                        className="h-9 px-3.5 text-sm font-medium text-gray-700 hover:bg-white rounded-[6px] disabled:opacity-50"
+                                                    >
+                                                        Manter como está
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={confirmarTransicao}
+                                                        disabled={busy || !!impedimento || faltaMotivo}
+                                                        title={impedimento ?? (faltaMotivo ? 'Escreva o motivo do cancelamento.' : undefined)}
+                                                        className={`flex items-center gap-1.5 h-9 px-3.5 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${destrutiva ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                                    >
+                                                        {busy ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <CheckCircle2 className="w-[15px] h-[15px]" />}
+                                                        Confirmar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </Secao>
+
                                 {/* Nome do documento conforme a Nomenclatura de Boletos (13-14/10/2026). */}
                                 <Secao titulo="Documento" icone={FileText}>
                                     <ReadOnlyField icon={FileText} label="Nome atual" value={boleto.documento_nome || '—'} />

@@ -91,6 +91,24 @@ describe('SecaoPlantaEletrica', () => {
     expect(m.usePreferencias).toHaveBeenCalledWith({ organizationId: 'org-a' });
   });
 
+  it('⚠️ 23/10/2026 — dentro da Planta: usa a organização e o estudo ABERTOS, não o topo (mesmo com o topo em "Todas")', () => {
+    m.org = { orgId: null, isAllOrgs: true };
+    m.store = { session: { user: { email: 'Eu@Empresa.com' } }, organizations: [orgComMembros('org-estudo', [membro('admin')])] };
+    render(<SecaoPlantaEletrica organizationId="org-estudo" studyId="est-1" />);
+    expect(m.usePreferencias).toHaveBeenCalledWith({ organizationId: 'org-estudo', studyId: 'est-1' });
+    expect(chave('Bitola dos fios · Prancha').disabled).toBe(false);
+    expect(screen.queryByText(MOTIVO_PRANCHA_TODAS)).toBeNull();
+    fireEvent.click(chave('Bitola dos fios · Prancha'));
+    expect(m.alterar).toHaveBeenCalledWith('prancha', 'bitola', false, 'ORGANIZACAO');
+  });
+
+  it('dentro da Planta, quem não administra a organização DO ESTUDO vê a Prancha travada', () => {
+    m.store = { session: { user: { email: 'Eu@Empresa.com' } }, organizations: [orgComMembros('org-estudo', [membro('member')])] };
+    render(<SecaoPlantaEletrica organizationId="org-estudo" studyId="est-1" />);
+    expect(chave('Bitola dos fios · Prancha').disabled).toBe(true);
+    expect(screen.getAllByText(MOTIVO_PRANCHA_SO_GESTOR).length).toBeGreaterThan(0);
+  });
+
   it('topo em "Todas": o hook recebe organizationId null (a tela segue funcionando)', () => {
     m.org = { orgId: null, isAllOrgs: true };
     render(<SecaoPlantaEletrica />);
@@ -304,7 +322,7 @@ describe('SecaoPlantaEletrica', () => {
 
   it('cabeçalho de cada coluna existe (Tela e Prancha)', () => {
     render(<SecaoPlantaEletrica />);
-    const regiao = screen.getByRole('region', { name: /Planta › Elétrica/ });
+    const regiao = screen.getByRole('region', { name: /Elétrica/ });
     expect(within(regiao).getByRole('heading', { name: 'Tela' })).toBeTruthy();
     expect(within(regiao).getByRole('heading', { name: 'Prancha' })).toBeTruthy();
   });

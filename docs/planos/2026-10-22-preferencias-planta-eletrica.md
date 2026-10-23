@@ -125,21 +125,21 @@ Tabela `public.preferencias` (migration aplicada com `npx supabase db query --li
 
 ## Fases (cada uma com o seu critério)
 
-- [ ] **F1 — Migration + RLS.** Pronto quando: `segurancaMigrations.test` verde; no banco, com o usuário de leitura
+- [x] **F1 — Migration + RLS.** Pronto quando: `segurancaMigrations.test` verde; no banco, com o usuário de leitura
       (membro comum), gravar `ORGANIZACAO` é recusado, a linha `USUARIO` de outro não aparece; `check-rls-postura.sh`.
-- [ ] **F2 — Catálogo + resolver.** Pronto quando: testes puros — usuário > padrão; estudo > empresa > padrão; valor
+- [x] **F2 — Catálogo + resolver.** Pronto quando: testes puros — usuário > padrão; estudo > empresa > padrão; valor
       inválido = padrão; catálogo sem chave repetida; todos os padrões = comportamento do PR #110; convivência (`fios`
       desligado leva os dependentes).
-- [ ] **F3 — Serviço + hook.** Pronto quando: testes do serviço (filtra pelo dono certo; upsert por escopo) e do hook
+- [x] **F3 — Serviço + hook.** Pronto quando: testes do serviço (filtra pelo dono certo; upsert por escopo) e do hook
       (otimista; reverte na falha).
-- [ ] **F4 — Canvas e prancha consomem `ExibicaoEletrica`.** Pronto quando: para cada um dos 9 itens, desligar tira
+- [x] **F4 — Canvas e prancha consomem `ExibicaoEletrica`.** Pronto quando: para cada um dos 9 itens, desligar tira
       só o texto dele (testes no molde de `BlueprintCanvasAnotacoesEletricas.test.tsx` e
       `blueprintPranchaEletrica.test.ts`); pendência "?" continua com `circuitoNoPonto` desligado; tudo no padrão = desenho
       idêntico ao de hoje.
-- [ ] **F5 — Seção "Planta › Elétrica" na gaveta Preferências.** Pronto quando: teste de componente (grava; falha
+- [x] **F5 — Seção "Planta › Elétrica" na gaveta Preferências.** Pronto quando: teste de componente (grava; falha
       reverte e avisa; colunas travadas dizem o motivo; dependentes de `fios` esmaecidos com motivo);
       `check-ui-standard.sh` no `.tsx` tocado; guia de UI lido antes (REGRA #1).
-- [ ] **F6 — Personalizar a prancha por estudo.** Pronto quando: estudo personalizado vence a empresa no PDF; "da
+- [x] **F6 — Personalizar a prancha por estudo.** Pronto quando: estudo personalizado vence a empresa no PDF; "da
       empresa" apaga as linhas `ESTUDO`.
 - [ ] **F7 — Prova no app real.** Os dois critérios do usuário, com o usuário de leitura (senha pedida na hora) e
       prints; conferir no banco que nenhuma linha de teste ficou.
@@ -153,7 +153,17 @@ Tabela `public.preferencias` (migration aplicada com `npx supabase db query --li
 ## Estado
 - [x] desenho aprovado em 3 partes (22/10/2026)
 - [x] revisão desta especificação pelo usuário ("Ok", 23/10/2026)
-- [ ] plano de implementação (escrito abaixo; aguarda revisão e escolha do modo de execução)
+- [x] plano de implementação (abaixo); execução por subagentes ("Subagentes", 23/10/2026): 6 tarefas, cada uma com
+      revisão independente; revisão final do branch "com correções" → corrigido e re-revisado (0 crítico/importante)
+- [x] migration aplicada (23/10/2026, autorização: "publicar") e conferida no banco: 4 policies só `authenticated`;
+      `anon` sem SELECT; `authenticated` sem TRUNCATE; RLS ligada; FKs `ON DELETE CASCADE`; CHECKs de dono e de
+      sanidade. Prova de COMPORTAMENTO numa transação desfeita (RAISE no fim; 0 linhas gravadas), com usuários reais:
+      membro grava a própria tela (ok); linha de outro usuário recusada (42501); membro comum NÃO grava o padrão da
+      empresa (42501); upsert da própria linha (1 linha); chave fora do padrão recusada (23514); admin grava o padrão
+      da empresa (ok); admin não vê a tela de outros (0); membro lê o padrão da empresa (1); de fora vê 0.
+      `check-rls-postura.sh`: postura limpa nas 9 verificações.
+- [ ] F7 — prova no APP REAL com login (os 2 critérios): NÃO feita — o usuário mandou "publicar" sem a senha do
+      usuário de leitura. Conferir em produção.
 - [ ] PR + CI
 - [ ] publicação
 

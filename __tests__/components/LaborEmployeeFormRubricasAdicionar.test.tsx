@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 /**
- * Colaborador › Folha de Pagamento (22/10/2026): em vez de listar todas as
+ * Colaborador › Folha de Pagamento. 22/10/2026: em vez de listar todas as
  * rubricas com um switch, a aba mostra só as incluídas e o "Adicionar" abre um
- * drawer com as que faltam — busca + checkbox, várias de uma vez. Quem grava
- * continua sendo o "Salvar" (`updateEmployeeRecurringRubrics`).
+ * drawer com as que faltam — busca + checkbox, várias de uma vez.
+ * 23/10/2026: o drawer escondia as não-"Automáticas" (11 de 33). Agora lista
+ * todas; trava só as que a folha já calcula, e cada vínculo leva o valor do
+ * colaborador (R$ ou % do salário). Quem grava continua sendo o "Salvar".
  */
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -13,7 +15,7 @@ Element.prototype.scrollIntoView = vi.fn();
 
 const rubrica = (code: string, name: string, extra: Record<string, unknown> = {}) => ({
     code, name, type: 'provento', incidence_inss: true, incidence_fgts: true, incidence_irrf: true,
-    is_automatic: true, is_clt_mandatory: false, calculation_type: 'fixed', category: 'benefit', active: true, ...extra,
+    is_automatic: true, is_clt_mandatory: false, calculation_type: 'fixed', calculation_config: { amount: 150 }, category: 'benefit', active: true, ...extra,
 });
 
 const payroll = vi.hoisted(() => ({
@@ -52,73 +54,97 @@ import { ConfirmProvider } from '../../components/ui/confirm';
 const ANA = { id: 'ana', org_id: 'org-a', name: 'Ana', role: 'Engenheiro', status: 'ATIVO', contract_type: 'CLT', base_salary: 3000 } as unknown as Employee;
 
 const abrirAba = async () => {
+    payroll.updateEmployeeRecurringRubrics.mockClear();
     payroll.listRubrics.mockResolvedValue([
         rubrica('VT_EXTRA', 'Vale transporte extra'),
         rubrica('AUX_CRECHE', 'Auxílio creche'),
-        rubrica('AJUDA_CUSTO', 'Ajuda de custo'),
-        rubrica('INSS', 'INSS', { is_clt_mandatory: true }),
+        rubrica('GRATIFICACAO', 'Gratificação', { is_automatic: false, calculation_type: 'manual', calculation_config: null, category: null }),
+        rubrica('INSS', 'Desconto INSS', { type: 'desconto', is_clt_mandatory: true, calculation_type: 'manual', category: 'tax' }),
         rubrica('BONUS_ANTIGO', 'Bônus antigo', { active: false }),
     ]);
-    payroll.getEmployeeRecurringRubrics.mockResolvedValue(['VT_EXTRA', 'BONUS_ANTIGO']);
+    payroll.getEmployeeRecurringRubrics.mockResolvedValue([
+        { code: 'VT_EXTRA', valor_tipo: null, valor: null },
+        { code: 'BONUS_ANTIGO', valor_tipo: null, valor: null },
+    ]);
     render(<ConfirmProvider><LaborEmployeeForm employee={ANA} orgId="org-a" organizations={[{ id: 'org-a', name: 'A' }]} onClose={vi.fn()} onSaved={vi.fn()} /></ConfirmProvider>);
     fireEvent.click(screen.getByRole('tab', { name: 'Folha de Pagamento' }));
     await screen.findByText('Vale transporte extra');
 };
 
 const drawer = () => screen.getByText('Adicionar rubricas recorrentes').closest('[role="dialog"]') as HTMLElement;
-const marcar = (onde: HTMLElement, nome: string) =>
-    fireEvent.click(within(within(onde).getByText(nome).closest('tr') as HTMLElement).getByRole('checkbox'));
+const linha = (onde: HTMLElement, nome: string) => within(onde).getByText(nome).closest('tr') as HTMLElement;
+const marcar = (onde: HTMLElement, nome: string) => fireEvent.click(within(linha(onde, nome)).getByRole('checkbox'));
+const adicionar = async (...nomes: string[]) => {
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
+    const d = await waitFor(drawer);
+    nomes.forEach(n => marcar(d, n));
+    fireEvent.click(within(d).getByRole('button', { name: /^Adicionar \d+ rubricas?$/ }));
+};
+const salvar = () => fireEvent.click(screen.getByRole('button', { name: /Salvar Alterações/ }));
 
 describe('LaborEmployeeForm › Folha de Pagamento — Adicionar rubricas', () => {
-    it('a aba mostra só as incluídas, inclusive a inativa, e nenhuma não incluída', async () => {
+    it('a aba mostra só as incluídas, inclusive a inativa, com o cálculo da rubrica no campo vazio', async () => {
         await abrirAba();
         expect(screen.getByText('2 rubricas incluídas')).toBeTruthy();
-        expect(screen.getByText('Bônus antigo')).toBeTruthy();
         expect(screen.getByText('(inativa)')).toBeTruthy();
         expect(screen.queryByText('Auxílio creche')).toBeNull();
-        expect(screen.queryByText('Ajuda de custo')).toBeNull();
+        expect(screen.getByLabelText('Valor de Vale transporte extra').getAttribute('placeholder')).toBe('R$ 150,00 (da rubrica)');
     });
 
-    it('o seletor lista só as automáticas que faltam, busca filtra, e Adicionar inclui as marcadas', async () => {
+    it('o drawer lista também as não-automáticas, trava o INSS com o motivo e adiciona as marcadas', async () => {
         await abrirAba();
         fireEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
         const d = await waitFor(drawer);
 
-        // Já incluída, Padrão CLT e inativa não aparecem para adicionar.
+        expect(within(d).getByText('Gratificação')).toBeTruthy();
         expect(within(d).getByText('Auxílio creche')).toBeTruthy();
-        expect(within(d).getByText('Ajuda de custo')).toBeTruthy();
-        expect(within(d).queryByText('Vale transporte extra')).toBeNull();
-        expect(within(d).queryByText('INSS', { selector: 'td span' })).toBeNull();
-        expect(within(d).queryByText('Bônus antigo')).toBeNull();
+        expect(within(d).queryByText('Vale transporte extra')).toBeNull();   // já incluída
+        expect(within(d).queryByText('Bônus antigo')).toBeNull();            // inativa
+        const inss = within(d).getByText(/Calculada pela própria folha/).closest('tr') as HTMLElement;
+        expect(within(inss).queryByRole('checkbox')).toBeNull();
 
-        const confirmar = within(d).getByRole('button', { name: 'Adicionar rubricas' }) as HTMLButtonElement;
-        expect(confirmar.disabled).toBe(true);
-
-        fireEvent.change(within(d).getByPlaceholderText(/Buscar rubrica/), { target: { value: 'creche' } });
-        await waitFor(() => expect(within(d).queryByText('Ajuda de custo')).toBeNull());
-        marcar(d, 'Auxílio creche');
+        expect((within(d).getByRole('button', { name: 'Adicionar rubricas' }) as HTMLButtonElement).disabled).toBe(true);
+        fireEvent.change(within(d).getByPlaceholderText(/Buscar rubrica/), { target: { value: 'grati' } });
+        await waitFor(() => expect(within(d).queryByText('Auxílio creche')).toBeNull());
+        marcar(d, 'Gratificação');
         fireEvent.change(within(d).getByPlaceholderText(/Buscar rubrica/), { target: { value: '' } });
-        await within(d).findByText('Ajuda de custo');
-        marcar(d, 'Ajuda de custo');
-
+        await within(d).findByText('Auxílio creche');
+        marcar(d, 'Auxílio creche');
         fireEvent.click(within(d).getByRole('button', { name: 'Adicionar 2 rubricas' }));
-        await waitFor(() => expect(screen.getByText('4 rubricas incluídas')).toBeTruthy());
+        await screen.findByText('4 rubricas incluídas');
     });
 
-    it('remover tira da tabela, e o Salvar grava a lista final', async () => {
+    it('rubrica manual sem valor impede o Salvar e diz qual é', async () => {
         await abrirAba();
-        fireEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
-        const d = await waitFor(drawer);
-        marcar(d, 'Auxílio creche');
-        fireEvent.click(within(d).getByRole('button', { name: 'Adicionar 1 rubrica' }));
+        await adicionar('Gratificação');
+        await screen.findByText('3 rubricas incluídas');
+        expect(screen.getByLabelText('Valor de Gratificação').getAttribute('placeholder')).toBe('Informe o valor');
+
+        salvar();
+        await screen.findByText('Informe o valor de: Gratificação.');
+        expect(payroll.updateEmployeeRecurringRubrics).not.toHaveBeenCalled();
+    });
+
+    it('R$ 500 na Gratificação, % na outra, remover uma: o Salvar manda a lista com os valores', async () => {
+        await abrirAba();
+        await adicionar('Gratificação', 'Auxílio creche');
+        await screen.findByText('4 rubricas incluídas');
+
+        fireEvent.change(screen.getByLabelText('Valor de Gratificação'), { target: { value: '50000' } });
+        const creche = linha(document.body, 'Auxílio creche');
+        fireEvent.change(within(creche).getByRole('combobox'), { target: { value: 'percentual' } });
+        fireEvent.change(screen.getByLabelText('Valor de Auxílio creche'), { target: { value: '1000' } });
+
+        fireEvent.click(within(linha(document.body, 'Vale transporte extra')).getByTitle('Remover da folha deste colaborador'));
         await screen.findByText('3 rubricas incluídas');
 
-        const linhaVT = screen.getAllByText('Vale transporte extra').map(el => el.closest('tr')).find(Boolean) as HTMLElement;
-        fireEvent.click(within(linhaVT).getByTitle('Remover da folha deste colaborador'));
-        await screen.findByText('2 rubricas incluídas');
-
-        fireEvent.click(screen.getByRole('button', { name: /Salvar Alterações/ }));
+        salvar();
         await waitFor(() => expect(payroll.updateEmployeeRecurringRubrics).toHaveBeenCalled());
-        expect(payroll.updateEmployeeRecurringRubrics.mock.calls.at(-1)?.[1]).toEqual(['BONUS_ANTIGO', 'AUX_CRECHE']);
+        expect(payroll.updateEmployeeRecurringRubrics.mock.calls.at(-1)?.[1]).toEqual([
+            { code: 'BONUS_ANTIGO', valor_tipo: null, valor: null },
+            // na ordem da lista do drawer, não na ordem dos cliques
+            { code: 'AUX_CRECHE', valor_tipo: 'percentual', valor: 10 },
+            { code: 'GRATIFICACAO', valor_tipo: 'fixo', valor: 500 },
+        ]);
     });
 });

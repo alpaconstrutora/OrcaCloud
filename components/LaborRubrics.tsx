@@ -901,7 +901,7 @@ const LaborRubrics: React.FC = () => {
                                                 <div>
                                                     <h4 className="text-sm font-black text-slate-700 tracking-tight">Lançamento Comercial/Manual</h4>
                                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                                        O valor desta rubrica não é calculado automaticamente. Ele deve ser informado mensalmente via tela de Lançamentos ou Eventos de Folha.
+                                                        O valor desta rubrica não é calculado automaticamente. Ele deve ser informado mensalmente via tela de Lançamentos ou Eventos de Folha, ou fixado por colaborador em Colaborador › Folha de Pagamento.
                                                     </p>
                                                 </div>
                                             </div>

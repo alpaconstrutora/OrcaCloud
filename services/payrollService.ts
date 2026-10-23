@@ -10,6 +10,12 @@ import {
     type TerceiroTax,
 } from '../utils/folhaFinanceiro';
 import type { DadosDaFolhaDoMes } from '../utils/relacoesDaFolha';
+import type { ValorRecorrente } from '../lib/payrollRubricaRecorrente';
+
+/** Vínculo colaborador↔rubrica recorrente (`employee_automatic_rubrics`), com o valor dele. */
+export interface EmployeeRecurringRubric extends ValorRecorrente {
+    code: string;
+}
 
 // Alíquotas patronais (CPP, RAT×FAP, terceiros) moram em payroll_encargos_config
 // desde 21/10/2026 — antes os terceiros ficavam no localStorage de quem clicava.
@@ -711,24 +717,36 @@ export const payrollService = {
         return data as PayrollRubric;
     },
 
-    async getEmployeeRecurringRubrics(employeeId: string): Promise<string[]> {
+    /** Rubricas recorrentes do colaborador, com o valor dele (null = cálculo da rubrica). */
+    async getEmployeeRecurringRubrics(employeeId: string): Promise<EmployeeRecurringRubric[]> {
         const { data, error } = await supabase
             .from('employee_automatic_rubrics')
-            .select('rubric_code')
-            .eq('employee_id', employeeId);
-        
+            .select('rubric_code, valor_tipo, valor, created_at')
+            .eq('employee_id', employeeId)
+            .order('created_at');
+
         if (error) throw error;
-        return (data || []).map(r => r.rubric_code);
+        return ((data || []) as { rubric_code: string; valor_tipo: string | null; valor: number | string | null }[]).map(r => ({
+            code: r.rubric_code,
+            valor_tipo: r.valor_tipo === 'fixo' || r.valor_tipo === 'percentual' ? r.valor_tipo : null,
+            valor: r.valor == null ? null : Number(r.valor),
+        }));
     },
 
-    async updateEmployeeRecurringRubrics(employeeId: string, rubricCodes: string[], orgId: string): Promise<void> {
+    async updateEmployeeRecurringRubrics(employeeId: string, rubricas: EmployeeRecurringRubric[], orgId: string): Promise<void> {
         if (!employeeId) throw new Error('ID do colaborador é obrigatório para vincular rubricas.');
 
-        // RPC atômica: DELETE + INSERT em uma transação — evita colaborador sem rubricas
-        const { error } = await supabase.rpc('update_employee_rubrics', {
+        // RPC atômica: DELETE + INSERT em uma transação — evita colaborador sem rubricas.
+        // (migration aplicar_20271023600000; a `update_employee_rubrics` só de códigos
+        // fica para o bundle antigo em cache.)
+        const { error } = await supabase.rpc('salvar_rubricas_recorrentes_colaborador', {
             p_employee_id: employeeId,
-            p_rubric_codes: rubricCodes,
             p_org_id: orgId,
+            p_rubricas: rubricas.map(r => ({
+                code: r.code,
+                valor_tipo: r.valor == null ? null : r.valor_tipo,
+                valor: r.valor_tipo == null ? null : r.valor,
+            })),
         });
 
         if (error) throw error;

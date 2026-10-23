@@ -4,6 +4,7 @@ import { payrollValidationService } from './payrollValidationService';
 import { fiscalService, INSSBracket, IRRFBracket, FGTSConfig } from './fiscalService';
 import { calculateINSS as calcINSS, calculateIRRF as calcIRRF, aplicarRedutorIRRF2026, calcularIrrfMensal } from '../lib/payrollCalc';
 import { salarioNaData, salarioDoPeriodo, type SalarioLancamento } from '../lib/payrollSalarioCompetencia';
+import { motivoBloqueioRecorrente, valorRecorrente, type ValorRecorrente } from '../lib/payrollRubricaRecorrente';
 
 /**
  * Parser aritmético seguro — substitui new Function() / eval().
@@ -74,6 +75,9 @@ export interface PayrollContext {
     events: PayrollEvent[];
     allocations: EmployeeAllocation[];
     linkedRubricCodes: string[];
+    /** Valor do colaborador por código recorrente (R$ ou % do salário). Ausente =
+     *  cálculo da própria rubrica, como era antes de 23/10/2026. */
+    linkedRubricValues?: Record<string, ValorRecorrente>;
     /** Histórico Salarial do colaborador — o salário da folha sai daqui pela
      *  competência, não de `employee.base_salary` (que é o de hoje). Ausente
      *  ou vazio: vale o cadastro. */
@@ -290,15 +294,18 @@ export const payrollEngine = {
 
         // 2. Identify Automatic Rubrics based on Hybrid Architecture
         // - Global: is_clt_mandatory = true AND employee is CLT
-        // - Individual: is_automatic = true AND code is in linkedRubricCodes
+        // - Individual: code is in linkedRubricCodes (Colaborador › Folha de Pagamento).
+        //   Desde 23/10/2026 qualquer rubrica pode ser recorrente, com o valor do
+        //   colaborador; só não as que a folha já calcula (lib/payrollRubricaRecorrente).
+        const valorDoColaborador = ctx.linkedRubricValues ?? {};
         const automaticRubrics = rubrics.filter(r => {
             if (!r.active) return false;
-            
+
             // Nível 1: Global (Mandatário CLT)
             if (r.is_clt_mandatory && employee.contract_type === 'CLT') return true;
 
             // Nível 2: Individual (Vinculado via Ficha do Colaborador)
-            if (r.is_automatic && ctx.linkedRubricCodes.includes(r.code)) return true;
+            if (ctx.linkedRubricCodes.includes(r.code) && !motivoBloqueioRecorrente(r)) return true;
 
             return false;
         });
@@ -307,13 +314,22 @@ export const payrollEngine = {
         // Filter out automatic rubrics if a manual event for the same code exists
         const manualCodes = new Set(events.map(e => e.rubric_code || e.code));
 
+        // Percentual (da rubrica ou do colaborador) no 2º passe, sobre as bases já somadas.
+        const percentual = (r: PayrollRubric) => {
+            const v = valorDoColaborador[r.code];
+            return v?.valor_tipo != null ? v.valor_tipo === 'percentual' : r.calculation_type === 'percentage';
+        };
         const sortedRubrics = [
-            ...automaticRubrics.filter(r => r.calculation_type !== 'percentage' && !manualCodes.has(r.code)),
-            ...automaticRubrics.filter(r => r.calculation_type === 'percentage' && !manualCodes.has(r.code))
+            ...automaticRubrics.filter(r => !percentual(r) && !manualCodes.has(r.code)),
+            ...automaticRubrics.filter(r => percentual(r) && !manualCodes.has(r.code))
         ];
 
         sortedRubrics.forEach(rubric => {
-            const result = this.calculateRubricValue(rubric, baseValues, hourly_rate, timeEntries);
+            // O valor do colaborador manda; sem ele, o cálculo da rubrica (manual = nada).
+            const doColaborador = ctx.linkedRubricCodes.includes(rubric.code) && !motivoBloqueioRecorrente(rubric)
+                ? valorRecorrente(valorDoColaborador[rubric.code], baseValues['SALARIO'] || 0)
+                : null;
+            const result = doColaborador ?? this.calculateRubricValue(rubric, baseValues, hourly_rate, timeEntries);
             if (result && result.amount > 0) {
                 items.push({
                     code: rubric.code,
@@ -666,7 +682,7 @@ export const payrollEngine = {
         const run = await payrollService.getRun(runId);
         const refDate = run.start_date; // Data de competência para buscar faixas fiscais
 
-        const [employee, inssBrackets, irrfBrackets, fgtsConfig, rubrics, timeEntries, allocations, linkedRubricCodes, salaryHistory] = await Promise.all([
+        const [employee, inssBrackets, irrfBrackets, fgtsConfig, rubrics, timeEntries, allocations, linkedRubrics, salaryHistory] = await Promise.all([
             laborService.getEmployeeById(employeeId),
             fiscalService.getINSSBrackets(refDate),
             fiscalService.getIRRFBrackets(refDate),
@@ -726,7 +742,8 @@ export const payrollEngine = {
             timeEntries,
             events: finalEvents,
             allocations,
-            linkedRubricCodes,
+            linkedRubricCodes: linkedRubrics.map(l => l.code),
+            linkedRubricValues: Object.fromEntries(linkedRubrics.map(l => [l.code, { valor_tipo: l.valor_tipo, valor: l.valor }])),
             salaryHistory,
         };
     },

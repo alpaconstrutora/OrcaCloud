@@ -164,8 +164,8 @@ Tabela `public.preferencias` (migration aplicada com `npx supabase db query --li
       `check-rls-postura.sh`: postura limpa nas 9 verificações.
 - [ ] F7 — prova no APP REAL com login (os 2 critérios): NÃO feita — o usuário mandou "publicar" sem a senha do
       usuário de leitura. Conferir em produção.
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #113: `ci` (30 min), Vercel e Vercel Preview Comments verdes.
+- [x] publicação — mesclado por squash em 23/10/2026 (`53c58728`); `conferir-producao.sh "Padrão da prancha" "acompanham o seu usuário"` provou o domínio servindo 53c5872; frente fechada e branch apagada. (Marcado junto do PR do campo Status do boleto, como combinado.)
 
 ---
 

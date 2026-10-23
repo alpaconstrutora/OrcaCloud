@@ -510,12 +510,15 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         if (isEditing) editRootRef.current?.scrollIntoView({ block: 'start' });
     }, [isEditing]);
 
-    const renderFooter = () => (
+    // Em edição os botões moram no cabeçalho da tela (à direita do título); em
+    // criação, no rodapé do modal. `statusClassName` é o que muda entre os dois:
+    // no rodapé o mr-auto empurra os botões pra direita, no cabeçalho o
+    // indicador só precisa de um respiro antes deles.
+    const renderFooter = (statusClassName = 'mr-auto') => (
         <>
             {/* §25 do guia: em edição, Salvar não fecha — o indicador substitui o
-                fechamento como prova de que a gravação aconteceu. mr-auto empurra
-                os botões pra direita mesmo com o container em justify-end. */}
-            {isEditing && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
+                fechamento como prova de que a gravação aconteceu. */}
+            {isEditing && <SaveStatus dirty={dirty} savedAt={savedAt} className={statusClassName} />}
             <button
                 onClick={isEditing ? handleBack : onClose}
                 className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all"
@@ -1243,17 +1246,23 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             <div ref={editRootRef} className="pb-6">
                 {/* Cabeçalho de tela §20 — sem padding horizontal próprio */}
                 <div className="pb-5 border-b border-gray-100">
-                    <div className="flex items-center gap-4">
-                        <button
-                            type="button"
-                            onClick={handleBack}
-                            className="p-3 bg-white border border-gray-100 rounded-[6px] text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm active:scale-95 group shrink-0"
-                        >
-                            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-                        </button>
-                        <div>
-                            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Editar Colaborador</h1>
-                            <p className="text-gray-400 text-sm mt-1.5 font-medium">{TAB_SUBTITLES[activeTab]}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+                        <div className="flex items-center gap-4 min-w-0">
+                            <button
+                                type="button"
+                                onClick={handleBack}
+                                className="p-3 bg-white border border-gray-100 rounded-[6px] text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm active:scale-95 group shrink-0"
+                            >
+                                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                            </button>
+                            <div>
+                                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Editar Colaborador</h1>
+                                <p className="text-gray-400 text-sm mt-1.5 font-medium">{TAB_SUBTITLES[activeTab]}</p>
+                            </div>
+                        </div>
+                        {/* Voltar / Salvar Alterações na linha do título, à direita (§25) */}
+                        <div className="flex items-center gap-2 shrink-0 ml-auto">
+                            {renderFooter('mr-2')}
                         </div>
                     </div>
                 </div>
@@ -1267,11 +1276,6 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                 {/* Card do formulário — p-6 e seções a 32px (§30) */}
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6 space-y-8">
                     {renderTabContent()}
-                </div>
-
-                {/* Rodapé solto abaixo do card (§30), SaveStatus à esquerda (§25) */}
-                <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4 mt-6">
-                    {renderFooter()}
                 </div>
 
                 {renderToast()}

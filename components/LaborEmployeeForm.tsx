@@ -4,7 +4,7 @@ import PlanoContasSelect from './PlanoContasSelect';
 import { X, ArrowLeft, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, Info, CreditCard, Briefcase, AlertCircle, Plus } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import { payrollService, PayrollRubric, type EmployeeRecurringRubric } from '../services/payrollService';
-import { motivoBloqueioRecorrente, valorObrigatorio, valorDaRubrica, type ValorTipoRecorrente } from '../lib/payrollRubricaRecorrente';
+import { motivoBloqueioRecorrente, ficaEmAbertoSemValor, valorDaRubrica, type ValorTipoRecorrente } from '../lib/payrollRubricaRecorrente';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
 import LaborEmployeeRubricPicker, { RUBRIC_COLUMNS, renderRubricCell, rubricSearchText, rubricSortValue } from './LaborEmployeeRubricPicker';
@@ -142,13 +142,14 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         markDirty();
     };
     // Célula "Valor" (§7.1: mesma tipografia do TD). Vazio = cálculo da rubrica,
-    // descrito no placeholder; rubrica manual vazia fica em vermelho.
+    // descrito no placeholder; rubrica manual vazia fica "Em aberto" (valor variável,
+    // lançado no mês).
     const renderValorRecorrente = (r: PayrollRubric) => {
         const motivo = motivoBloqueioRecorrente(r);
         if (motivo) return <span className="block truncate text-sm font-normal text-gray-500" title={`${motivo}: este vínculo não muda a folha`}>{motivo} · sem efeito aqui</span>;
         const l = incluido(r.code);
         const tipo: ValorTipoRecorrente = l?.valor_tipo ?? 'fixo';
-        const falta = valorObrigatorio(r) && l?.valor == null;
+        const emAberto = ficaEmAbertoSemValor(r) && l?.valor == null;
         return (
             <div className="flex items-center gap-1.5">
                 <select
@@ -165,9 +166,9 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     onChange={v => setValorRecorrente(r.code, { valor: v === '' ? null : Number(v) })}
                     onFocus={e => e.target.select()}
                     aria-label={`Valor de ${r.name}`}
-                    title={falta ? 'Rubrica de valor manual: sem valor, não entra na folha' : undefined}
-                    placeholder={falta ? 'Informe o valor' : (valorDaRubrica(r) || 'Informe o valor')}
-                    className={`h-8 w-full min-w-0 px-2 text-sm font-normal text-gray-900 bg-white border rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${falta ? 'border-red-300 placeholder:text-red-500' : 'border-gray-200 placeholder:text-gray-400'}`}
+                    title={emAberto ? 'Valor variável: lance o valor de cada mês em Eventos de Folha. Para um valor fixo todo mês, preencha aqui.' : undefined}
+                    placeholder={emAberto ? 'Em aberto (lançar no mês)' : (valorDaRubrica(r) || 'Em aberto (lançar no mês)')}
+                    className="h-8 w-full min-w-0 px-2 text-sm font-normal text-gray-900 bg-white border border-gray-200 rounded-[6px] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
             </div>
         );
@@ -436,14 +437,6 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             return;
         }
         if (!(isEditing ? form.org_id : form.org_id || orgId)) { notify('Selecione a organização.'); return; }
-        // Rubrica manual sem valor não entra na folha — sem aviso, o colaborador
-        // ficaria sem a verba achando que estava recorrente.
-        const semValor = includedRubrics.filter(r => valorObrigatorio(r) && incluido(r.code)?.valor == null);
-        if (semValor.length) {
-            setActiveTab('folha');
-            notify(`Informe o valor de: ${semValor.map(r => r.name).join(', ')}.`);
-            return;
-        }
         const acimaDe100 = includedRubrics.filter(r => { const l = incluido(r.code); return l?.valor_tipo === 'percentual' && (l.valor ?? 0) > 100; });
         if (acimaDe100.length) {
             setActiveTab('folha');
@@ -960,7 +953,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                             </div>
                             <p className="text-sm text-gray-500">
                                 Adicione as rubricas que entram em todas as folhas deste colaborador, com o valor dele em R$ ou % do salário.
-                                Sem valor, vale o cálculo da própria rubrica; rubrica de valor manual precisa do valor.
+                                Sem valor, vale o cálculo da própria rubrica; a de valor variável fica em aberto e o valor do mês é lançado em Eventos de Folha.
                                 INSS, IRRF, FGTS e salário a própria folha calcula.
                             </p>
 

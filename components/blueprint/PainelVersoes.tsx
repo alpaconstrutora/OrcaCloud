@@ -6,7 +6,8 @@ import { queryClient } from '../../lib/queryClient';
 import { preferenciasKeys } from '../../lib/queryKeys';
 import { preferenciasService } from '../../services/preferenciasService';
 import ListaDePreferenciasEletricas from '../preferencias/ListaDePreferenciasEletricas';
-import type { ItemEletrico } from '../../utils/preferencias/catalogo';
+import { ITENS_ELETRICOS, type ItemEletrico } from '../../utils/preferencias/catalogo';
+import { origemDoValor, type LinhaDePreferencia } from '../../utils/preferencias/resolver';
 import { forEachTargetOrg, useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
 import PainelConjuntoDePranchas from './PainelConjuntoDePranchas';
 import { blueprintSheetTemplateService } from '../../services/blueprintSheetTemplateService';
@@ -69,6 +70,7 @@ import type { HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 
 /** Prefixo das chaves da prancha elétrica em `preferencias` (ver `chaveDoItem`). */
 const PREFIXO_DA_PRANCHA_ELETRICA = 'planta.eletrica.prancha.';
+const MOTIVO_TROCANDO_PADRAO = 'Voltando ao padrão da empresa… aguarde terminar.';
 
 export default function PainelVersoes({
   study,
@@ -417,8 +419,10 @@ export default function PainelVersoes({
   // "Padrão da prancha: da empresa | personalizado para esta planta". Personalizado = há alguma linha ESTUDO da
   // prancha elétrica neste estudo. `escolhaDoPadrao` é o que a pessoa acabou de escolher (abrir a lista sem ter
   // gravado nada ainda); sem escolha, vale o que o banco tem.
-  const temAjusteDoEstudo = linhasDaPrancha.some(
-    (l) => l.escopo === 'ESTUDO' && l.chave.startsWith(PREFIXO_DA_PRANCHA_ELETRICA),
+  // Pelo RESOLVEDOR (não pelo prefixo): linha lixo — chave desconhecida ou valor não booleano — o resolvedor ignora,
+  // então não pode deixar o seletor em "personalizado" com a prancha saindo com o padrão da empresa.
+  const temAjusteDoEstudo = ITENS_ELETRICOS.some(
+    (def) => origemDoValor(linhasDaPrancha, 'prancha', def.item) === 'ESTUDO',
   );
   const [escolhaDoPadrao, setEscolhaDoPadrao] = useState<'empresa' | 'estudo' | null>(null);
   const [trocandoPadrao, setTrocandoPadrao] = useState(false);
@@ -431,7 +435,13 @@ export default function PainelVersoes({
     try {
       await preferenciasService.apagarDoEstudo(study.id, PREFIXO_DA_PRANCHA_ELETRICA);
       setEscolhaDoPadrao('empresa');
-      await queryClient.invalidateQueries({ queryKey: preferenciasKeys.prancha(study.organization_id, study.id) });
+      // O banco já não tem as linhas ESTUDO: tira-as do cache NA HORA. Esperar só o refetch deixaria o PDF/DXF
+      // saírem com o estudo antigo (e, se o refetch falhasse, ficaria assim sem aviso).
+      const chaveDaPrancha = preferenciasKeys.prancha(study.organization_id, study.id);
+      queryClient.setQueryData<LinhaDePreferencia[]>(chaveDaPrancha, (atual) =>
+        (atual ?? []).filter((l) => !(l.escopo === 'ESTUDO' && l.chave.startsWith(PREFIXO_DA_PRANCHA_ELETRICA))),
+      );
+      await queryClient.invalidateQueries({ queryKey: chaveDaPrancha });
     } catch (e) {
       // Falhou: o banco ainda tem os ajustes da planta — o seletor continua em "personalizado".
       showToast(
@@ -510,7 +520,7 @@ export default function PainelVersoes({
    * publicação existe para resolver.
    */
   async function publicar(formato: FormatoParaGed) {
-    if (!modelo || !snapshot) return;
+    if (!modelo || !snapshot || trocandoPadrao) return;
     setPublicando(formato);
     setErroGed(null);
     setPublicado(null);
@@ -543,7 +553,7 @@ export default function PainelVersoes({
   }
 
   function exportar(fn: (m: BlueprintModel, o: OpcoesExportacao) => void) {
-    if (!modelo) return;
+    if (!modelo || trocandoPadrao) return;
     setErro(null);
     try {
       fn(modelo, opcoes());
@@ -848,17 +858,17 @@ export default function PainelVersoes({
                       colunas={['prancha']}
                       tela={exibicaoEletrica}
                       prancha={exibicaoEletrica}
-                      travaDaPrancha={null}
-                      aoAlterar={(_alvo, item: ItemEletrico, valor) =>
-                        void alterarPreferencia('prancha', item, valor, 'ESTUDO')
-                      }
+                      // Durante a troca a lista fica travada: um clique agora gravaria ESTUDO DEPOIS do delete.
+                      travaDaPrancha={trocandoPadrao ? MOTIVO_TROCANDO_PADRAO : null}
+                      aoAlterar={(_alvo, item: ItemEletrico, valor) => {
+                        if (trocandoPadrao) return;
+                        void alterarPreferencia('prancha', item, valor, 'ESTUDO');
+                      }}
                       aoVoltarAoPadrao={() => void voltarAoPadraoDaEmpresa()}
                       voltarDesligado={
-                        trocandoPadrao
-                          ? { prancha: 'Voltando ao padrão da empresa…' }
-                          : temAjusteDoEstudo
-                            ? undefined
-                            : { prancha: 'Esta planta ainda não tem ajustes próprios — já usa o padrão da empresa.' }
+                        temAjusteDoEstudo
+                          ? undefined
+                          : { prancha: 'Esta planta ainda não tem ajustes próprios — já usa o padrão da empresa.' }
                       }
                       descricaoDaColuna={{
                         prancha: 'Vale só para esta planta. O que você não mexer segue o padrão da empresa.',
@@ -868,6 +878,15 @@ export default function PainelVersoes({
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Exportar durante a troca sairia com os ajustes antigos da planta: os botões ficam desligados e o
+                motivo fica escrito (fora do bloco acima, que some se a prancha Elétrica for desmarcada). */}
+            {trocandoPadrao && (
+              <p className="mt-2 text-[11px] text-slate-600" role="status">
+                Voltando ao padrão da empresa… as exportações ficam desligadas até terminar, para o arquivo não sair
+                com os ajustes antigos desta planta.
+              </p>
             )}
 
             {/* SEM GEOMETRIA não é problema de escala, e mandar a pessoa mexer
@@ -923,19 +942,19 @@ export default function PainelVersoes({
                 icone={FileText}
                 rotulo="PDF"
                 onClick={() => exportar((m, o) => exportarPranchasPdf(m, o, pranchas))}
-                disabled={!modelo || pranchas.length === 0 || ((comPlanta || comEletrica) && !enq?.cabe)}
+                disabled={!modelo || trocandoPadrao || pranchas.length === 0 || ((comPlanta || comEletrica) && !enq?.cabe)}
               />
               <BotaoExportar
                 icone={Image}
                 rotulo="PNG"
                 onClick={() => exportar((m, o) => exportarPranchasPng(m, o, pranchas))}
-                disabled={!modelo || pranchas.length === 0 || ((comPlanta || comEletrica) && !enq?.cabe)}
+                disabled={!modelo || trocandoPadrao || pranchas.length === 0 || ((comPlanta || comEletrica) && !enq?.cabe)}
               />
               <BotaoExportar
                 icone={Download}
                 rotulo="Manifesto"
                 onClick={() => exportar(exportarManifesto)}
-                disabled={!modelo}
+                disabled={!modelo || trocandoPadrao}
               />
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
@@ -956,7 +975,7 @@ export default function PainelVersoes({
                 if (t) setTemplateDePrancha(t.template);
               }}
               gerando={gerandoConjunto}
-              desabilitado={!modelo}
+              desabilitado={!modelo || trocandoPadrao}
               onGerar={() => {
                 if (!modelo) return;
                 setGerandoConjunto(true);
@@ -997,7 +1016,7 @@ export default function PainelVersoes({
                 icone={Table}
                 rotulo="Planilha"
                 onClick={() => exportar(exportarQuantitativoXlsx)}
-                disabled={!modelo}
+                disabled={!modelo || trocandoPadrao}
               />
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
@@ -1019,13 +1038,13 @@ export default function PainelVersoes({
                 onClick={() =>
                   exportar((m, o) => exportarDxf(m, o, elevacoesSelecionadas, undefined, topografia))
                 }
-                disabled={!modelo}
+                disabled={!modelo || trocandoPadrao}
               />
               <BotaoExportar
                 icone={Boxes}
                 rotulo="IFC"
                 onClick={() => exportar(exportarIfc)}
-                disabled={!modelo}
+                disabled={!modelo || trocandoPadrao}
               />
               {/* SKETCHUP (backlog P2): COLLADA .dae — o que o SketchUp importa
                   nativamente. Não é .skp (formato fechado); a cobertura diz. */}
@@ -1034,7 +1053,7 @@ export default function PainelVersoes({
                 rotulo="SketchUp (.dae)"
                 nomeAcessivel="Exportar COLLADA para SketchUp"
                 onClick={() => exportar(exportarCollada)}
-                disabled={!modelo}
+                disabled={!modelo || trocandoPadrao}
               />
             </div>
 
@@ -1100,7 +1119,7 @@ export default function PainelVersoes({
                   rotulo={f.toUpperCase()}
                   nomeAcessivel={`Publicar ${f.toUpperCase()} no GED`}
                   onClick={() => publicar(f)}
-                  disabled={!modelo || !snapshot || publicando !== null}
+                  disabled={!modelo || !snapshot || publicando !== null || trocandoPadrao}
                 />
               ))}
             </div>

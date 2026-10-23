@@ -76,8 +76,8 @@ Regras que decorrem (minhas, coerentes com a decisão):
 - [x] 4 — aplicada no remoto em 22/10/2026: 49 resultados, 35 preenchidos pelo backfill (14 sem verba de salário ficam NULL)
 - [x] 5 — tipo + upsert; `tsc --noEmit` rc=0
 - [x] 6 — check-ui-standard: PayrollRunDetail e PaystubModal limpos; PayrollEventModal acusa §8 (l. 313) e §14 (l. 370) que já existem iguais em origin/main — a mudança ali é só a conta do valor, sem UI
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #111: `ci` 29m33s, Vercel e Vercel Preview Comments verdes
+- [x] publicação — mesclado por squash em 22/10/2026 (`011f4292`); `conferir-producao.sh` provou o domínio servindo 011f429; frente fechada (`--sem-publicar`) e branch apagada
 - [ ] folhas abertas reprocessadas pelo usuário (o código não recalcula
       folha sozinho)
 

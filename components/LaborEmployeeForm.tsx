@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import CostCenterSelect from './CostCenterSelect';
 import PlanoContasSelect from './PlanoContasSelect';
-import { X, ArrowLeft, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, Check, Info, CreditCard, Briefcase, AlertCircle } from 'lucide-react';
+import { X, ArrowLeft, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, Info, CreditCard, Briefcase, AlertCircle, Plus } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
-import { payrollService, PayrollRubric, CalculationType } from '../services/payrollService';
-import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
-import TableSwitch from './ui/TableSwitch';
+import { payrollService, PayrollRubric } from '../services/payrollService';
+import StandardTable from './ui/StandardTable';
+import ActionIconButton from './ui/ActionIconButton';
+import LaborEmployeeRubricPicker, { RUBRIC_COLUMNS, renderRubricCell, rubricSearchText, rubricSortValue } from './LaborEmployeeRubricPicker';
 import { TabsBar } from './ui/TabsBar';
 import LaborEmployeePhoto from './LaborEmployeePhoto';
 import LaborEmployeeBankAccounts, { EmployeeBankAccountDraft, toDraft } from './LaborEmployeeBankAccounts';
@@ -78,32 +79,6 @@ const TAB_SUBTITLES: Record<EmployeeTabId, string> = {
     checklist: 'Checklist de admissão e observações extras.',
 };
 
-// Aba Folha de Pagamento — tabela de rubricas recorrentes (§6.10). "Incluir"
-// primeiro: é a única coluna editável e a razão de a aba existir.
-const RUBRIC_COLUMNS: StandardTableColumn[] = [
-    { key: 'incluir', label: 'Incluir', sortable: true, width: 90 },
-    { key: 'codigo', label: 'Código', sortable: true, width: 190 },
-    { key: 'nome', label: 'Rubrica', sortable: true, width: 260 },
-    { key: 'tipo', label: 'Tipo', sortable: true, width: 120 },
-    { key: 'inss', label: 'INSS', sortable: true, width: 80 },
-    { key: 'fgts', label: 'FGTS', sortable: true, width: 80 },
-    { key: 'irrf', label: 'IRRF', sortable: true, width: 80 },
-    { key: 'calculo', label: 'Cálculo', sortable: true, width: 120 },
-    { key: 'categoria', label: 'Categoria', sortable: true, width: 160 },
-];
-
-// Mesmos rótulos/cores de Rubricas (LaborRubrics.tsx) — status em texto
-// colorido, sem pílula (§8).
-const RUBRIC_TYPE_LABELS: Record<string, string> = { provento: 'Provento', desconto: 'Desconto', encargo: 'Encargo', informativa: 'Informativa' };
-const RUBRIC_TYPE_COLORS: Record<string, string> = { provento: 'text-emerald-700', desconto: 'text-rose-700', encargo: 'text-amber-700', informativa: 'text-slate-500' };
-const CALC_TYPE_LABELS: Record<CalculationType, string> = { manual: 'Manual', fixed: 'Valor fixo', percentage: 'Percentual', formula: 'Fórmula' };
-// `rubrics.category` é gravada em inglês (motor da folha); valor fora da lista aparece cru.
-const RUBRIC_CATEGORY_LABELS: Record<string, string> = {
-    base: 'Salário base', overtime: 'Horas extras', tax: 'Tributo', benefit: 'Benefício',
-    vacation: 'Férias', thirteenth: '13º salário', variable: 'Variável', termination: 'Rescisão',
-};
-const categoriaDaRubrica = (c?: string | null) => (c ? RUBRIC_CATEGORY_LABELS[c] ?? c : '');
-
 /** Membro da organização que já aceitou o convite (tem usuário em auth.users). */
 interface OrgMemberOption {
     user_id: string;
@@ -136,9 +111,21 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     // saída. Ver docs/planos/2026-08-27-salvar-sem-fechar-formularios-multiaba.md.
     const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
     const [savedAt, setSavedAt] = useState<number | null>(null);
+    // `rubricCatalog` = todas as rubricas, para dar nome/tipo a cada código
+    // incluído; `allRubrics` = só as que podem ser adicionadas (automáticas, não-CLT).
+    const [rubricCatalog, setRubricCatalog] = useState<PayrollRubric[]>([]);
     const [allRubrics, setAllRubrics] = useState<PayrollRubric[]>([]);
     const [recurringRubrics, setRecurringRubrics] = useState<string[]>([]);
     const [loadingRubrics, setLoadingRubrics] = useState(false);
+    const [rubricPickerOpen, setRubricPickerOpen] = useState(false);
+    // Aba Folha: a tabela mostra só o que entra na folha; o seletor, só o que falta.
+    // Código sem cadastro (rubrica apagada) continua na tabela, para poder sair.
+    const includedRubrics: PayrollRubric[] = recurringRubrics.map(code =>
+        rubricCatalog.find(r => r.code === code) ?? {
+            code, name: 'Não encontrada em Rubricas', type: '' as PayrollRubric['type'],
+            incidence_inss: false, incidence_fgts: false, incidence_irrf: false, is_automatic: false, active: false,
+        });
+    const addableRubrics = allRubrics.filter(r => !recurringRubrics.includes(r.code));
     // Contas bancárias — lista da tela, gravada no "Salvar" (RPC atômica).
     const [bankAccounts, setBankAccounts] = useState<EmployeeBankAccountDraft[]>([]);
     const [loadingBankAccounts, setLoadingBankAccounts] = useState(false);
@@ -225,8 +212,11 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             setLoadingRubrics(true);
             try {
                 // 1. Carregar todas as rubricas automáticas que não são mandatórias CLT (pois as mandatórias já entram sempre)
-                const rubrics = await payrollService.listRubrics();
-                const available = rubrics.filter(r => r.is_automatic && !r.is_clt_mandatory);
+                // Com as inativas: um código já incluído pode ser de rubrica
+                // desativada depois, e precisa aparecer na aba para poder sair.
+                const rubrics = await payrollService.listRubrics(true);
+                const available = rubrics.filter(r => r.active && r.is_automatic && !r.is_clt_mandatory);
+                setRubricCatalog(rubrics);
                 setAllRubrics(available);
 
                 // 2. Se estiver editando, carregar vínculos atuais
@@ -905,72 +895,71 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 <Wallet className="w-4 h-4 text-blue-600" />
                                 <h3 className="text-sm font-semibold text-gray-900">Rubricas recorrentes individuais</h3>
                                 <span className="text-xs text-gray-400">
-                                    {recurringRubrics.length} de {allRubrics.length} incluída{allRubrics.length === 1 ? '' : 's'}
+                                    {recurringRubrics.length} {recurringRubrics.length === 1 ? 'rubrica incluída' : 'rubricas incluídas'}
                                 </span>
                             </div>
                             <p className="text-sm text-gray-500">
-                                Ligue as rubricas extras que entram automaticamente em todas as folhas deste colaborador.
+                                Adicione as rubricas extras que entram automaticamente em todas as folhas deste colaborador.
                                 As marcadas como "Padrão CLT" não aparecem aqui: já entram para todo contrato CLT.
                             </p>
 
                             {/* §6.10 — StandardTable traz busca persistida, engrenagem de
                                 colunas e autofit (§5.1/§6.1.2). Na criação o form é um
-                                modal estreito: `dense` (§6.9). */}
+                                modal estreito: `dense` (§6.9). Só as incluídas; o
+                                "Adicionar" (§17, em `toolbarRight`) abre o seletor. */}
                             <StandardTable<PayrollRubric>
                                 storageKey="rh:colaborador:folha:rubricas"
                                 columns={RUBRIC_COLUMNS}
-                                rows={allRubrics}
+                                rows={includedRubrics}
                                 rowKey={r => r.code}
                                 dense={!isEditing}
                                 maxHeight="60vh"
                                 loading={loadingRubrics}
-                                searchText={r => `${r.code} ${r.name} ${categoriaDaRubrica(r.category)} ${RUBRIC_TYPE_LABELS[r.type] ?? r.type}`}
+                                searchText={rubricSearchText}
                                 searchPlaceholder="Buscar rubrica por código, nome ou categoria..."
-                                sortValue={(key, r) => {
-                                    switch (key) {
-                                        case 'incluir': return recurringRubrics.includes(r.code) ? 1 : 0;
-                                        case 'tipo': return RUBRIC_TYPE_LABELS[r.type] ?? r.type;
-                                        case 'inss': return r.incidence_inss ? 1 : 0;
-                                        case 'fgts': return r.incidence_fgts ? 1 : 0;
-                                        case 'irrf': return r.incidence_irrf ? 1 : 0;
-                                        case 'calculo': return CALC_TYPE_LABELS[r.calculation_type ?? 'manual'];
-                                        case 'categoria': return categoriaDaRubrica(r.category);
-                                        case 'codigo': return r.code;
-                                        default: return r.name;
-                                    }
-                                }}
-                                renderCell={(key, r) => {
-                                    const incluida = recurringRubrics.includes(r.code);
-                                    switch (key) {
-                                        case 'incluir':
-                                            return (
-                                                <TableSwitch
-                                                    checked={incluida}
-                                                    title={incluida ? 'Incluída em todas as folhas' : 'Não incluída'}
-                                                    onChange={() => {
-                                                        setRecurringRubrics(prev => incluida ? prev.filter(c => c !== r.code) : [...prev, r.code]);
-                                                        markDirty();
-                                                    }}
-                                                />
-                                            );
-                                        case 'codigo': return <span className="block truncate text-sm font-normal text-gray-600" title={r.code}>{r.code}</span>;
-                                        case 'tipo':
-                                            return <span className={`text-sm font-normal ${RUBRIC_TYPE_COLORS[r.type] ?? 'text-gray-600'}`}>{RUBRIC_TYPE_LABELS[r.type] ?? r.type}</span>;
-                                        case 'inss': case 'fgts': case 'irrf': {
-                                            const on = key === 'inss' ? r.incidence_inss : key === 'fgts' ? r.incidence_fgts : r.incidence_irrf;
-                                            return on
-                                                ? <Check className="w-4 h-4 text-emerald-600" aria-label="Incide" />
-                                                : <span className="text-sm font-normal text-gray-400" aria-label="Não incide">—</span>;
-                                        }
-                                        case 'calculo': return <span className="text-sm font-normal text-gray-600">{CALC_TYPE_LABELS[r.calculation_type ?? 'manual']}</span>;
-                                        case 'categoria': return <span className="block truncate text-sm font-normal text-gray-600" title={categoriaDaRubrica(r.category)}>{categoriaDaRubrica(r.category) || '—'}</span>;
-                                        default: return <span className="block truncate text-sm font-normal text-gray-700" title={r.name}>{r.name}</span>;
-                                    }
+                                sortValue={rubricSortValue}
+                                renderCell={(key, r) => key === 'nome' && !r.active && r.type
+                                    ? <span className="block truncate text-sm font-normal text-gray-700" title={`${r.name} — inativa em Rubricas`}>{r.name} <span className="text-amber-700">(inativa)</span></span>
+                                    : renderRubricCell(key, r)}
+                                toolbarRight={
+                                    <button
+                                        type="button"
+                                        onClick={() => setRubricPickerOpen(true)}
+                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                                    >
+                                        <Plus className="w-[15px] h-[15px]" />
+                                        Adicionar
+                                    </button>
+                                }
+                                actions={{
+                                    width: 80,
+                                    render: r => (
+                                        <ActionIconButton
+                                            kind="delete"
+                                            title="Remover da folha deste colaborador"
+                                            onClick={() => {
+                                                setRecurringRubrics(prev => prev.filter(c => c !== r.code));
+                                                markDirty();
+                                            }}
+                                        />
+                                    ),
                                 }}
                                 empty={{
                                     icon: <Info className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
-                                    title: 'Nenhuma rubrica automática disponível',
-                                    subtitle: 'Em Rubricas, marque como "Automática" (e não como "Padrão CLT") as que podem entrar por colaborador.',
+                                    title: 'Nenhuma rubrica recorrente',
+                                    subtitle: 'Clique em Adicionar para incluir rubricas que entram em todas as folhas deste colaborador.',
+                                }}
+                            />
+                            <LaborEmployeeRubricPicker
+                                open={rubricPickerOpen}
+                                rubrics={addableRubrics}
+                                hasAutomaticRubrics={allRubrics.length > 0}
+                                loading={loadingRubrics}
+                                onClose={() => setRubricPickerOpen(false)}
+                                onAdd={codes => {
+                                    if (codes.length === 0) return;
+                                    setRecurringRubrics(prev => [...prev, ...codes.filter(c => !prev.includes(c))]);
+                                    markDirty();
                                 }}
                             />
                         </div>

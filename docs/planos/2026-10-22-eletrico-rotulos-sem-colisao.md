@@ -101,5 +101,5 @@ e 309 eletrodutos), canvas de `origin/main` × novo, em quatro zooms. Prints em 
   caminho só (desenho não resolve). Diagnóstico separado.
 
 ## Estado
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #110: `ci`, Vercel e Vercel Preview Comments verdes
+- [x] publicação — mesclado por squash em 22/10/2026 (`055d5ac4`); `conferir-producao.sh "ELETRODUTO SEM INDICA"` provou o domínio servindo 055d5ac; `planta-api` publicada à mão (`functions deploy planta-api --no-verify-jwt`), `GET /v1/estudos` sem token = 401; frente fechada e branch apagada

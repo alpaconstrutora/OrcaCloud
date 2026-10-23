@@ -39,4 +39,4 @@ Decisão pedida ao usuário na mesma sessão — *"No desligamento JÁ CONCLUÍD
 - [x] 1
 - [x] 2 (aplicada no banco em 22/10/2026)
 - [x] 3 — 52 de 52 em 8 arquivos (com vizinhos e guardas de migration)
-- [ ] PR + CI + publicação
+- [x] PR + CI + publicação — PR #109 mesclado (`67ed8821`), CI da `main` verde e `conferir-producao.sh` ✅; conferência visual aprovada pelo usuário em 22/10/2026

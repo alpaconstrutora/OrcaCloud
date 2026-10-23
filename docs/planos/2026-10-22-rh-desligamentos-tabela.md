@@ -46,4 +46,4 @@ sem abas, sem `ColumnConfigButton`, sem autofit. KPIs via `kpiColorFromClass`.
   inteiro cai nesta máquina com crash do V8 — a prova completa é a CI do PR).
 - [x] 2 — 6 testes verdes; com os vizinhos (Agrupar RH/StandardTable, guardas de org, cabeçalho e valor de
   campo): 42/42 em 6 arquivos, conta fechando.
-- [ ] 3
+- [x] 3 — conferência visual aprovada pelo usuário em 22/10/2026. PR #108 mesclado (`d42f19b8`), CI da `main` verde e `conferir-producao.sh` ✅

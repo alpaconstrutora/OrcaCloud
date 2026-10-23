@@ -41,8 +41,13 @@ export function motivoBloqueioRecorrente(r: RubricaParaRecorrente): string | nul
     return null;
 }
 
-/** Manual sem valor não lança nada: a tela exige o valor antes de salvar. */
-export function valorObrigatorio(r: RubricaParaRecorrente): boolean {
+/**
+ * Manual sem valor fica EM ABERTO: é recorrente no cadastro, mas o valor varia e
+ * é lançado no mês (Eventos de Folha); sem lançamento, o motor não gera nada.
+ * Decisão do usuário (23/10/2026): "rubrica com R$ pode ser variável, então
+ * permita que deixe sem ser preenchido (em aberto)" — a tela não exige mais o valor.
+ */
+export function ficaEmAbertoSemValor(r: RubricaParaRecorrente): boolean {
     if (motivoBloqueioRecorrente(r)) return false;
     return !r.calculation_type || r.calculation_type === 'manual';
 }

@@ -114,15 +114,19 @@ describe('LaborEmployeeForm › Folha de Pagamento — Adicionar rubricas', () =
         await screen.findByText('4 rubricas incluídas');
     });
 
-    it('rubrica manual sem valor impede o Salvar e diz qual é', async () => {
+    // 23/10/2026 (usuário): "rubrica com R$ pode ser variável, então permita que
+    // deixe sem ser preenchido (em aberto)". Antes, o Salvar recusava.
+    it('rubrica manual sem valor fica em aberto e o Salvar grava sem valor', async () => {
         await abrirAba();
         await adicionar('Gratificação');
         await screen.findByText('3 rubricas incluídas');
-        expect(screen.getByLabelText('Valor de Gratificação').getAttribute('placeholder')).toBe('Informe o valor');
+        expect(screen.getByLabelText('Valor de Gratificação').getAttribute('placeholder')).toBe('Em aberto (lançar no mês)');
 
         salvar();
-        await screen.findByText('Informe o valor de: Gratificação.');
-        expect(payroll.updateEmployeeRecurringRubrics).not.toHaveBeenCalled();
+        await waitFor(() => expect(payroll.updateEmployeeRecurringRubrics).toHaveBeenCalled());
+        expect(payroll.updateEmployeeRecurringRubrics.mock.calls.at(-1)?.[1]).toContainEqual(
+            { code: 'GRATIFICACAO', valor_tipo: 'fixo', valor: null },
+        );
     });
 
     it('R$ 500 na Gratificação, % na outra, remover uma: o Salvar manda a lista com os valores', async () => {

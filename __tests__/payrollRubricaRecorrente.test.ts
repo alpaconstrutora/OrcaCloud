@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     motivoBloqueioRecorrente,
-    valorObrigatorio,
+    ficaEmAbertoSemValor,
     valorDaRubrica,
     valorRecorrente,
 } from '../lib/payrollRubricaRecorrente';
@@ -26,12 +26,12 @@ describe('rubrica recorrente do colaborador — o que pode, o que trava', () => 
         expect(motivoBloqueioRecorrente(r({ code: 'FALTA', calculation_type: 'formula' }))).toBeNull();
     });
 
-    it('valor é obrigatório só na manual liberada: sem ele, nada entra na folha', () => {
-        expect(valorObrigatorio(r({ code: 'GRATIFICACAO' }))).toBe(true);
-        expect(valorObrigatorio(r({ code: 'SEM_TIPO', calculation_type: undefined }))).toBe(true);
-        expect(valorObrigatorio(r({ code: 'ADIANTAMENTO', calculation_type: 'percentage' }))).toBe(false);
-        expect(valorObrigatorio(r({ code: 'FIXA', calculation_type: 'fixed' }))).toBe(false);
-        expect(valorObrigatorio(r({ code: 'IRRF', category: 'tax' }))).toBe(false);
+    it('só a manual liberada fica em aberto sem valor (valor variável, lançado no mês)', () => {
+        expect(ficaEmAbertoSemValor(r({ code: 'GRATIFICACAO' }))).toBe(true);
+        expect(ficaEmAbertoSemValor(r({ code: 'SEM_TIPO', calculation_type: undefined }))).toBe(true);
+        expect(ficaEmAbertoSemValor(r({ code: 'ADIANTAMENTO', calculation_type: 'percentage' }))).toBe(false);
+        expect(ficaEmAbertoSemValor(r({ code: 'FIXA', calculation_type: 'fixed' }))).toBe(false);
+        expect(ficaEmAbertoSemValor(r({ code: 'IRRF', category: 'tax' }))).toBe(false);
     });
 
     it('descreve o cálculo próprio da rubrica (placeholder do campo)', () => {

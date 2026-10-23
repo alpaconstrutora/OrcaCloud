@@ -90,5 +90,28 @@ Decisões do usuário: **"Permitir adicionar qualquer uma, com valor"** e o valo
 6. [x] `components/LaborEmployeeForm.tsx` — coluna Valor (R$ / % do salário), placeholder com o cálculo da rubrica,
    manual vazia em vermelho e Salvar bloqueado com os nomes; `LaborRubrics.tsx` texto da rubrica manual
 7. [x] `__tests__/components/LaborEmployeeFormRubricasAdicionar.test.tsx` — 4 verdes
-8. [ ] portões (tsc rc=0 ✅, check-ui-standard 0 violações ✅, suíte) + PR + CI + publicação
+8. [x] portões + PR + CI + publicação — tsc rc=0, check-ui-standard 0 violações; suíte local 1092/1100
+   (BlueprintEditor/PainelVersoes isolados 281/281, queda do worker do Node 24). PR #114: `ci` 30m37s (2ª
+   rodada, após rebase sobre 2cae50b1), Vercel e Preview Comments verdes; mesclado por squash em 23/10/2026
+   (`8848dbb1`); `conferir-producao.sh "Informe o valor de: " "Calculada pela própria folha"` provou o domínio
+   servindo 8848dbb; CI do main verde; frente fechada e branch apagada
 9. [ ] conferência na tela real
+
+---
+
+## Pedido posterior (23/10/2026, 2º)
+
+> ruplica com R$ pode ser variável, então permita que deixe em ser preenchido (em aberto)
+
+Muda a decisão do item 6 acima ("manual vazia em vermelho e Salvar bloqueado"): rubrica de valor manual pode
+ficar **em aberto**: recorrente no cadastro, sem valor, com o valor de cada mês lançado em Eventos de Folha.
+O motor não muda: manual sem valor já não lançava nada (teste "manual sem valor não lança nada"), e o evento
+manual do mês já substitui o recorrente.
+
+1. [x] `lib/payrollRubricaRecorrente.ts` — `valorObrigatorio` → `ficaEmAbertoSemValor` (mesma regra; o nome
+   antigo passaria a mentir) + teste
+2. [x] `components/LaborEmployeeForm.tsx` — Salvar não recusa mais; campo vazio "Em aberto (lançar no mês)",
+   sem vermelho, `title` explicando onde lançar; texto da aba
+3. [x] `__tests__/components/LaborEmployeeFormRubricasAdicionar.test.tsx` — "fica em aberto e o Salvar grava sem
+   valor" (`{code:'GRATIFICACAO', valor_tipo:'fixo', valor:null}`)
+4. [ ] PR + CI + publicação

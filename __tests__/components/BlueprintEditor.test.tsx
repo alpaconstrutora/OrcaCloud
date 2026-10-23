@@ -549,6 +549,20 @@ describe('BlueprintEditor · ações oferecidas', () => {
     expect(screen.getByRole('region', { name: /^ambientes$/i })).toBeInTheDocument();
   });
 
+  it('⚠️ 23/10/2026 — aba "Preferências" da Planta: "O que exibir" abre a gaveta com a Elétrica (Tela | Prancha)', async () => {
+    // Pedido: *"Esse menu de preferencia diz respeito a planta inteligente. Mova para planta inteligente"*
+    // e *"criar nova aba Preferências"*.
+    await montar();
+    await abrirAba(/^Preferências$/);
+    await userEvent.setup().click(botao(/^O que exibir$/));
+    // A gaveta do app (Sheet) não tem nome acessível: acha-se pelo título.
+    const gaveta = screen.getByText('Preferências da Planta').closest('[role="dialog"]') as HTMLElement;
+    expect(gaveta).toBeTruthy();
+    expect(within(gaveta).getByRole('region', { name: /Elétrica/ })).toBeInTheDocument();
+    expect(within(gaveta).getByLabelText('Potência do ponto · Tela')).toBeInTheDocument();
+    expect(within(gaveta).getByLabelText('Potência do ponto · Prancha')).toBeInTheDocument();
+  });
+
   it('o menu reúne alvenaria e esquadria; estrutura e fundação estão na aba Estrutural (08/10/2026)', async () => {
     await montar();
     const user = userEvent.setup();
@@ -3668,12 +3682,13 @@ describe('BlueprintEditor · menu Exibir', () => {
 describe('BlueprintEditor · ribbon', () => {
   beforeEach(() => localStorage.clear());
 
-  it('nasce em Arquitetura, com as onze abas da planta baixa (uma por disciplina MEP) e o seletor de vista fora delas', async () => {
+  it('nasce em Arquitetura, com as doze abas da planta baixa (uma por disciplina MEP, e Preferências) e o seletor de vista fora delas', async () => {
     await montar();
     const abas = screen.getAllByRole('tab').map((t) => t.textContent);
     // 17/09/2026: "Instalações" virou Elétrica + Hidráulica; 20/09/2026 (E11.1): Mecânica entrou com a disciplina no kernel;
     // 30/09/2026 (incêndio E0): Incêndio entrou com a classificação e as exigências; 08/10/2026: a aba Estrutural.
-    expect(abas).toEqual(['Arquitetura', 'Estrutural', 'Terreno', 'Elétrica', 'Hidráulica', 'Mecânica', 'Incêndio', 'Inserir', 'Analisar', 'Colaborar', 'Vista']);
+    // 23/10/2026: a aba Preferências (o que a planta escreve; tela e prancha).
+    expect(abas).toEqual(['Arquitetura', 'Estrutural', 'Terreno', 'Elétrica', 'Hidráulica', 'Mecânica', 'Incêndio', 'Inserir', 'Analisar', 'Colaborar', 'Vista', 'Preferências']);
     expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
     // O seletor de vista continua dentro da barra, mas não é aba: usa-se o tempo todo.
     expect(within(screen.getByRole('toolbar')).getByRole('button', { name: /^planta$/i })).toBeInTheDocument();
@@ -4281,6 +4296,7 @@ describe('BlueprintEditor · ribbon', () => {
       'Analisar',
       'Colaborar',
       'Vista',
+      'Preferências',
     ]);
     expect(screen.getByRole('tab', { name: 'Vista' })).toHaveAttribute('aria-selected', 'true');
     expect(botao(/exibir/i)).toBeInTheDocument();

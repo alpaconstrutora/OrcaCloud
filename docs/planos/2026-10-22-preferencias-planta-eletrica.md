@@ -167,6 +167,25 @@ Tabela `public.preferencias` (migration aplicada com `npx supabase db query --li
 - [x] PR + CI — PR #113: `ci` (30 min), Vercel e Vercel Preview Comments verdes.
 - [x] publicação — mesclado por squash em 23/10/2026 (`53c58728`); `conferir-producao.sh "Padrão da prancha" "acompanham o seu usuário"` provou o domínio servindo 53c5872; frente fechada e branch apagada. (Marcado junto do PR do campo Status do boleto, como combinado.)
 
+## Pedido posterior — a seção vai para a Planta (23/10/2026, mesma sessão)
+
+> aonde esta o menu preferencias?
+> completamente errado isto!
+> Esse menu de preferencia diz respeito a planta inteligente. Mova para planta inteligente
+
+À pergunta "onde fica o botão" a resposta foi: **"criar nova aba Preferências."**
+
+- [x] Aba nova **Preferências** no ribbon da Planta (depois de Vista; aparece também no 3D), grupo **Elétrica**,
+      botão **"O que exibir"** → gaveta **"Preferências da Planta"** com a seção Elétrica (Tela | Prancha).
+- [x] Dentro da Planta a coluna Prancha usa a organização DO ESTUDO aberto (`SecaoPlantaEletrica` recebe
+      `organizationId`/`studyId`) — mesma chave de cache do canvas e da exportação.
+- [x] A gaveta Preferências do PERFIL voltou a ser só a aparência (texto original "neste dispositivo").
+- [x] Testes: `BlueprintEditor.test.tsx` 256/256 (caso novo da aba + contagem das abas), `SecaoPlantaEletrica`
+      (organização do estudo, não o topo), `PreferencesSheetSemPlanta` (perfil sem a seção); tsc 0;
+      `check-ui-standard.sh` 0 violações nos 3 `.tsx`.
+- [ ] PR + CI
+- [ ] publicação
+
 ---
 
 # Plano de implementação

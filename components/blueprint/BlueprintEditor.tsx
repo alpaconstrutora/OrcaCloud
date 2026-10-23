@@ -130,6 +130,7 @@ import {
   GitFork,
   Thermometer,
   ScanSearch,
+  SlidersHorizontal,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -424,6 +425,7 @@ import { COR_DO_STATUS, situacaoPorElemento } from '../../utils/blueprint4d';
 import ReguaDoTempo from './ReguaDoTempo';
 import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
+import SecaoPlantaEletrica from '../preferencias/SecaoPlantaEletrica';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, MenuDoRibbon, abaEfetiva } from './Ribbon';
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
@@ -1176,6 +1178,10 @@ const ABAS_DO_RIBBON = [
   { id: 'analisar', rotulo: 'Analisar', naVista: true },
   { id: 'colaborar', rotulo: 'Colaborar', naVista: true },
   { id: 'vista', rotulo: 'Vista', naVista: true },
+  // PREFERÊNCIAS (23/10/2026, pedido: *"Esse menu de preferencia diz respeito a planta inteligente. Mova para
+  // planta inteligente"* + *"criar nova aba Preferências"*): o que a planta escreve (Tela, de quem está
+  // logado) e o padrão da prancha (Prancha, da empresa). Começa pela Elétrica; outras disciplinas entram aqui.
+  { id: 'preferencias', rotulo: 'Preferências', naVista: true },
   // A CONTEXTUAL (a "Modificar" do Revit): só existe com algo selecionado na
   // planta, por último e em verde. Nunca é persistida — ver `emModificar`.
   { id: 'modificar', rotulo: 'Modificar', naVista: false, contextual: true },
@@ -2026,6 +2032,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   const [tarefa, setTarefa] = useState<TarefaDoPainel | null>(null);
   const [relatorio, setRelatorio] = useState<RelatorioDoDock | null>(null);
+  /** A gaveta "Preferências da Planta" (aba Preferências › O que exibir). */
+  const [preferenciasAbertas, setPreferenciasAbertas] = useState(false);
   /**
    * TELAS PRÓPRIAS (15/09/2026, pedido: *"quadro de cargas e unifilar em drawer
    * ficou muito ruim visualização. vamos criar uma tela nova para cada um"*).
@@ -14391,6 +14399,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           </>
         )}
 
+        {aba === 'preferencias' && (
+          <GrupoDoRibbon rotulo="Elétrica">
+            <BotaoDoRibbon
+              icone={SlidersHorizontal}
+              rotulo="O que exibir"
+              ativo={preferenciasAbertas}
+              onClick={() => setPreferenciasAbertas((v) => !v)}
+              ajuda="O que a planta elétrica escreve: na Tela (só para você) e na Prancha (padrão da empresa)"
+            />
+          </GrupoDoRibbon>
+        )}
         {aba === 'vista' && emVista && (
           <>
             {vistaEhProjecao && <GrupoDoRibbon rotulo="Medir">{botaoMedirNaVista}</GrupoDoRibbon>}
@@ -20308,6 +20327,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           </SheetHeader>
           <SheetPanel className="p-0">
             <div data-testid="propriedades-sheet">{paineisDaSelecao}</div>
+          </SheetPanel>
+        </Sheet>
+      )}
+      {preferenciasAbertas && (
+        <Sheet open onClose={() => setPreferenciasAbertas(false)} size="lg">
+          <SheetHeader onClose={() => setPreferenciasAbertas(false)}>
+            <SheetTitle>Preferências da Planta</SheetTitle>
+            <SheetDescription>As escolhas da Tela acompanham o seu usuário em qualquer computador; a Prancha é o padrão da empresa dona desta planta.</SheetDescription>
+          </SheetHeader>
+          <SheetPanel className="px-6 py-6">
+            <SecaoPlantaEletrica organizationId={study.organization_id ?? null} studyId={study.id} />
           </SheetPanel>
         </Sheet>
       )}

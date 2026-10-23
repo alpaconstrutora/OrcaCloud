@@ -36,6 +36,14 @@ const listSheetTemplates = vi.fn();
 const createSheetTemplate = vi.fn();
 const removeSheetTemplate = vi.fn();
 
+// As preferências da planta elétrica: o painel pede a PRANCHA da organização e do estudo abertos (REGRA #5)
+// e a leva nas opções de exportação.
+const PRANCHA_DA_EMPRESA = { fios: true, circuitoNosFios: true, bitola: false, diametro: true, circuitoNoPonto: true, potencia: false, comando: true, instrucaoSugerida: false, condutoresDoTrecho: true };
+const usePreferenciasEletricas = vi.fn();
+vi.mock('../../hooks/usePreferenciasEletricas', () => ({
+  usePreferenciasEletricas: (...a: unknown[]) => usePreferenciasEletricas(...a),
+}));
+
 vi.mock('../../services/blueprintSheetTemplateService', () => ({
   blueprintSheetTemplateService: {
     list: (...a: unknown[]) => listSheetTemplates(...a),
@@ -132,6 +140,7 @@ beforeEach(() => {
   // compartilhar, e um mock sem retorno derruba casos que não falam de cliente.
   listClients.mockResolvedValue([]);
   listSheetTemplates.mockResolvedValue([]);
+  usePreferenciasEletricas.mockReturnValue({ tela: PRANCHA_DA_EMPRESA, prancha: PRANCHA_DA_EMPRESA });
   getSnapshot.mockImplementation(async (id: string) =>
     id === 'snap_1' ? snap('snap_1', 1) : snap('snap_2', 2),
   );
@@ -187,6 +196,21 @@ describe('PainelVersoes · histórico', () => {
 });
 
 describe('PainelVersoes · exportação', () => {
+  it('⚠️ as preferências da prancha (da organização e do estudo abertos) chegam às opções de exportação', async () => {
+    await montar();
+    const user = userEvent.setup();
+    expect(usePreferenciasEletricas).toHaveBeenCalledWith({ organizationId: 'org_1', studyId: 'std_1' });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'PDF' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+
+    expect(exportarPranchasPdf).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ exibicaoEletrica: PRANCHA_DA_EMPRESA }),
+      expect.anything(),
+    );
+  });
+
   it('exporta na escala escolhida, e a escala chega ao serviço', async () => {
     await montar();
     const user = userEvent.setup();

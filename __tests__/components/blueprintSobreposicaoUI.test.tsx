@@ -62,6 +62,12 @@ vi.mock('../../services/blueprintService', () => ({
   setStudyProject: vi.fn(async () => ({})),
 }));
 
+// As preferências da planta elétrica leem do banco (TanStack Query); aqui o desenho é o padrão.
+vi.mock('../../hooks/usePreferenciasEletricas', async () => {
+  const { EXIBICAO_ELETRICA_PADRAO } = await import('../../utils/preferencias/resolver');
+  return { usePreferenciasEletricas: () => ({ tela: EXIBICAO_ELETRICA_PADRAO, prancha: EXIBICAO_ELETRICA_PADRAO }) };
+});
+
 vi.mock('../../services/blueprintKitService', () => ({
   listarKits: vi.fn(async () => []),
   salvarKit: vi.fn(),

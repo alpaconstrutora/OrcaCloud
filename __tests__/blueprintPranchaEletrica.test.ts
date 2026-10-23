@@ -8,6 +8,7 @@
  * ⚠️ E a planta arquitetônica continua a mesma: sem `eletrica`, nenhum texto
  * nem traço elétrico entra — é o que mantém os PDFs de sempre byte a byte.
  */
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import {
@@ -19,7 +20,8 @@ import {
   orientar,
   type OpcoesExportacao,
 } from '../utils/blueprintExport';
-import { familiasPresentes, linhasDaLegenda, linhasDoQuadroDeCargas } from '../utils/blueprintPranchaEletrica';
+import { desenharEletrica, familiasPresentes, linhasDaLegenda, linhasDoQuadroDeCargas } from '../utils/blueprintPranchaEletrica';
+import { EXIBICAO_ELETRICA_PADRAO, type ExibicaoEletrica, type ItemEletrico } from '../utils/preferencias/resolver';
 import { gerarDxf } from '../utils/blueprintDxf';
 import { HIPOTESES_PADRAO } from '../utils/blueprintEletricaDimensionamento';
 
@@ -193,5 +195,135 @@ describe('a planta elétrica no papel, sem texto sobre texto', () => {
     for (let i = 0; i < caixas.length; i++)
       for (let j = i + 1; j < caixas.length; j++) expect(cruza(caixas[i], caixas[j]), `"${caixas[i].texto}" × "${caixas[j].texto}"`).toBe(false);
     expect(caixas.map((c) => c.texto)).toEqual(expect.arrayContaining(['C1', 'TUG · C2', '600 VA', '100 VA', 'QDC']));
+  });
+});
+
+/**
+ * 23/10/2026 — PREFERÊNCIAS DA PLANTA ELÉTRICA: a prancha escreve só os textos que o padrão da
+ * empresa (ou do estudo) liga. Cada item corta só o SEU texto; a pendência ("?") nunca some; e com
+ * tudo no padrão a saída é a de antes (mesmas chamadas ao `Desenhista`).
+ */
+describe('a planta elétrica no papel obedece às preferências', () => {
+  /** A casa + a rede: 3 eletrodutos (2 circuitos de seções diferentes · cheio com 8 condutores · Ø32) + luz e tomada SEM circuito. */
+  function casaComRede(): BlueprintModel {
+    let m = casa();
+    const t = m.levels[0].id;
+    const quadroId = m.quadros[0].id;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C7', tensaoV: 127, ligacao: 'FN', secaoMm2: 2.5 }).model;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C9', tensaoV: 127, ligacao: 'FN', secaoMm2: 6 }).model;
+    const c7 = m.circuitos[m.circuitos.length - 2].id;
+    const c9 = m.circuitos[m.circuitos.length - 1].id;
+    const trecho = (y: number, x1: number, bitolaMm: number, circuitoIds: string[], condutores?: number): Command =>
+      ({ type: 'AddTrecho', levelId: t, disciplina: 'ELETRICA', a: point(500, y), b: point(x1, y), cotaAMm: 2800, cotaBMm: 2800, bitolaMm, circuitoIds, condutores }) as Command;
+    m = applyBatch(m, [trecho(2500, 4500, 25, [c7, c9]), trecho(2900, 4500, 25, [c7], 8), trecho(3400, 1500, 32, [c7])]).model;
+    m = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'Luz', tipoEletrico: 'ILUMINACAO_TETO', at: point(5000, 2000), cotaMm: 2800, potenciaW: 150 } as Command).model;
+    m = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', tipoEletrico: 'TUG', at: point(5000, 75), cotaMm: 1100, potenciaW: 200 } as Command).model;
+    return m;
+  }
+  const proj = { px: (x: number) => x / 50, py: (y: number) => -y / 50 };
+  const desenho = (m: BlueprintModel, exibicao?: ExibicaoEletrica) => {
+    const d = new DesenhistaDeProva();
+    desenharEletrica(d, m, proj, 1, exibicao ? { exibicao } : {});
+    return d;
+  };
+  const contagem = (textos: string[]) => {
+    const mapa = new Map<string, number>();
+    for (const t of textos) mapa.set(t, (mapa.get(t) ?? 0) + 1);
+    return mapa;
+  };
+  const sumiu = (antes: Map<string, number>, depois: Map<string, number>) => {
+    const fora: string[] = [];
+    for (const [t, n] of antes) for (let i = 0; i < n - (depois.get(t) ?? 0); i++) fora.push(t);
+    return fora.sort();
+  };
+  const sem = (item: ItemEletrico): ExibicaoEletrica => ({ ...EXIBICAO_ELETRICA_PADRAO, [item]: false });
+
+  // Os 7 itens que a prancha escreve ("instrucaoSugerida" e "condutoresDoTrecho" ela não escreve).
+  const SOME_COM: Partial<Record<ItemEletrico, string[]>> = {
+    // o número no círculo do trecho cheio ("1") + os dependentes: circuito nos fios e bitola
+    fios: ['1', '1', '2,5', '2,5', '2,5', '6', '7', '7', '9'],
+    circuitoNosFios: ['1', '7', '7', '9'],
+    bitola: ['2,5', '2,5', '2,5', '6'],
+    diametro: ['Ø32'],
+    circuitoNoPonto: ['C1', 'C1', 'TUG · C1', 'TUG · C1'],
+    potencia: ['150', '160', '200 VA', '600 VA', '600 VA'],
+    comando: ['a', 'a'],
+  };
+
+  it('cena de partida: os textos da rede estão todos escritos (a tabela abaixo parte disto)', () => {
+    const base = contagem(desenho(casaComRede()).textos());
+    for (const x of ['1', '7', '9', '2,5', '6', 'Ø32', 'C1', 'TUG · C1', 'TUG · ?', '?', '200 VA', '150', 'a']) expect(base.has(x), x).toBe(true);
+  });
+
+  for (const item of Object.keys(SOME_COM) as ItemEletrico[]) {
+    it(`⚠️ "${item}" desligado: somem só os textos dele, nada aparece, a pendência fica`, () => {
+      const m = casaComRede();
+      const antes = contagem(desenho(m).textos());
+      const depois = contagem(desenho(m, sem(item)).textos());
+      expect(sumiu(antes, depois)).toEqual([...(SOME_COM[item] ?? [])].sort());
+      expect(sumiu(depois, antes)).toEqual([]);
+      expect(depois.get('TUG · ?')).toBe(antes.get('TUG · ?'));
+      expect(depois.get('?')).toBe(antes.get('?'));
+    });
+  }
+
+  it('"instrucaoSugerida" e "condutoresDoTrecho" não mudam nada na prancha (ela não os escreve)', () => {
+    const m = casaComRede();
+    const base = JSON.stringify(desenho(m).chamadas);
+    expect(JSON.stringify(desenho(m, sem('instrucaoSugerida')).chamadas)).toBe(base);
+    expect(JSON.stringify(desenho(m, sem('condutoresDoTrecho')).chamadas)).toBe(base);
+  });
+
+  it('"fios" desligado: nenhum traço de condutor nem o círculo do trecho cheio', () => {
+    const m = casaComRede();
+    const ligado = desenho(m);
+    const desligado = desenho(m, sem('fios'));
+    expect(desligado.chamadas.filter((c) => c.tipo === 'linha').length).toBeLessThan(ligado.chamadas.filter((c) => c.tipo === 'linha').length);
+    // O círculo branco do trecho cheio é um polígono preenchido (24 lados) a menos.
+    expect(desligado.chamadas.filter((c) => c.tipo === 'poligono').length).toBe(ligado.chamadas.filter((c) => c.tipo === 'poligono').length - 1);
+  });
+
+  it('o objeto CRU também vale: "fios" desligado com "circuito nos fios" e "bitola" ligados não escreve nenhum dos dois', () => {
+    const depois = contagem(desenho(casaComRede(), { ...EXIBICAO_ELETRICA_PADRAO, fios: false, circuitoNosFios: true, bitola: true }).textos());
+    for (const x of ['7', '9', '2,5', '6']) expect(depois.has(x), x).toBe(false);
+  });
+
+  it('⚠️ pendência nunca some: com "circuito no ponto" desligado, a luz sem circuito segue com "?" e a tomada com "TUG · ?"', () => {
+    const textos = contagem(desenho(casaComRede(), sem('circuitoNoPonto')).textos());
+    expect(textos.get('?')).toBe(1);
+    expect(textos.get('TUG · ?')).toBe(1);
+    expect(textos.has('C1')).toBe(false);
+  });
+
+  it('⚠️ tudo no padrão: a saída é IDÊNTICA à de antes das preferências (mesmas chamadas ao desenhista)', () => {
+    const m = casaComRede();
+    const semOpcao = JSON.stringify(desenho(m).chamadas);
+    expect(JSON.stringify(desenho(m, EXIBICAO_ELETRICA_PADRAO).chamadas)).toBe(semOpcao);
+    // E igual ao que a prancha produzia ANTES desta tarefa (o registro foi tirado do código sem a opção).
+    const chamadas = desenho(m).chamadas;
+    expect({ n: chamadas.length, sha: createHash('sha1').update(semOpcao).digest('hex'), textos: desenho(m).textos() }).toMatchSnapshot();
+  });
+
+  it('a exportação repassa as preferências: `desenharPlanta` escreve sem "TUG · C1" quando "circuito no ponto" está desligado', () => {
+    const m = casaComRede();
+    const textos = (extra: Partial<OpcoesExportacao>) => {
+      const d = new DesenhistaDeProva();
+      desenharPlanta(d, m, opcoes({ eletrica: true, ...extra }), enquadrar(m, 50, papel, false));
+      return d.textos();
+    };
+    expect(textos({}).filter((t) => t === 'TUG · C1')).toHaveLength(2);
+    expect(textos({ exibicaoEletrica: EXIBICAO_ELETRICA_PADRAO }).filter((t) => t === 'TUG · C1')).toHaveLength(2);
+    const sem1 = textos({ exibicaoEletrica: sem('circuitoNoPonto') });
+    expect(sem1.filter((t) => t === 'TUG · C1')).toHaveLength(0);
+    expect(sem1).toContain('TUG · ?');
+  });
+
+  it('o DXF repassa as preferências: o texto "TUG · C1" sai da camada de texto elétrico', () => {
+    const m = casaComRede();
+    const o = { titulo: 'Casa', revisao: 1, hash: 'p'.repeat(64), eletrica: true, hipotesesEletricas: HIPOTESES_PADRAO };
+    const quantos = (dxf: string) => dxf.split('TUG · C1').length - 1;
+    expect(quantos(gerarDxf(m, o))).toBe(2);
+    expect(quantos(gerarDxf(m, { ...o, exibicaoEletrica: EXIBICAO_ELETRICA_PADRAO }))).toBe(2);
+    expect(quantos(gerarDxf(m, { ...o, exibicaoEletrica: sem('circuitoNoPonto') }))).toBe(0);
   });
 });

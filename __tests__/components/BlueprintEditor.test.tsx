@@ -240,6 +240,12 @@ const colabEstado: EstadoColab = { participantes: [], travas: new Map(), conecta
 const colabDifundir = vi.fn();
 const colabAtualizarPresenca = vi.fn();
 let colabAoReceber: ((msg: unknown) => { ok: boolean; erro: string | null; divergiu: boolean }) | null = null;
+// As preferências da planta elétrica leem do banco (TanStack Query); aqui o desenho é o padrão.
+vi.mock('../../hooks/usePreferenciasEletricas', async () => {
+  const { EXIBICAO_ELETRICA_PADRAO } = await import('../../utils/preferencias/resolver');
+  return { usePreferenciasEletricas: () => ({ tela: EXIBICAO_ELETRICA_PADRAO, prancha: EXIBICAO_ELETRICA_PADRAO }) };
+});
+
 vi.mock('../../hooks/useBlueprintColaboracao', () => ({
   useBlueprintColaboracao: (opcoes: { aoReceber: (msg: unknown) => { ok: boolean; erro: string | null; divergiu: boolean } }) => {
     colabAoReceber = opcoes.aoReceber;

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { listParameterDefinitions } from '../../services/blueprintParameterDefinitionService';
+import { usePreferenciasEletricas } from '../../hooks/usePreferenciasEletricas';
 import { forEachTargetOrg, useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
 import PainelConjuntoDePranchas from './PainelConjuntoDePranchas';
 import { blueprintSheetTemplateService } from '../../services/blueprintSheetTemplateService';
@@ -396,8 +397,13 @@ export default function PainelVersoes({
     };
   }, [orgIdDasDefinicoes]);
 
+  // Preferências da planta elétrica: o padrão da PRANCHA do estudo (estudo > empresa > padrão) — a organização é a
+  // DO ESTUDO (REGRA #5). Falha de leitura = padrão (a prancha nunca sai em branco).
+  const { prancha: exibicaoEletrica } = usePreferenciasEletricas({ organizationId: study.organization_id, studyId: study.id });
+
   function opcoes(): OpcoesExportacao {
     return {
+      exibicaoEletrica,
       // As definições com fórmula (E1.5): o IFC e a planilha levam os calculados.
       definicoesDeParametro: definicoesComFormula.length ? definicoesComFormula : undefined,
       denominador,

@@ -421,6 +421,11 @@ export interface OpcoesExportacao {
    */
   eletrica?: boolean;
   /**
+   * Preferências da planta elétrica (23/10/2026): QUAIS textos a prancha escreve — o padrão da
+   * empresa ou do estudo (`prancha` de `usePreferenciasEletricas`). Ausente = tudo, como sempre.
+   */
+  exibicaoEletrica?: ExibicaoEletrica;
+  /**
    * E5.1: com `eletrica`, só a planta de ILUMINAÇÃO ou só a de TOMADAS E FORÇA.
    * Ausente = a planta elétrica unificada, como sempre foi.
    */
@@ -502,6 +507,7 @@ import { desenharListaDeMateriaisEletrica } from './blueprintListaDeMateriaisEle
 import { desenharUnifilar, desenharUnifilarEmArvore, layoutDaArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from './blueprintUnifilar';
 import { desenharEsquemaVerticalEletrico } from './blueprintEsquemaVerticalEletrico';
 import type { RecorteEletrico } from './blueprintRecorteEletrico';
+import type { ExibicaoEletrica } from './preferencias/resolver';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 
 const COR_TRACO = '#000000';
@@ -771,7 +777,7 @@ export function desenharPlanta(
 
   // A camada elétrica vem DEPOIS da arquitetura e ANTES das cotas: símbolo
   // por cima da parede, cota por cima de tudo — a ordem da prancha.
-  if (opcoes.eletrica) desenharEletrica(d, model, { px, py }, 1, opcoes.recorteEletrico ? { recorte: opcoes.recorteEletrico } : {});
+  if (opcoes.eletrica) desenharEletrica(d, model, { px, py }, 1, { ...(opcoes.recorteEletrico ? { recorte: opcoes.recorteEletrico } : {}), ...(opcoes.exibicaoEletrica ? { exibicao: opcoes.exibicaoEletrica } : {}) });
   // E5.2: a LEGENDA DESENHADA na folha da planta elétrica — na faixa livre à
   // direita do desenho; senão embaixo; senão uma nota remete à folha do quadro
   // de cargas (que sempre a traz). Nunca por cima do desenho.

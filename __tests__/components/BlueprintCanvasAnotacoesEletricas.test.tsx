@@ -8,10 +8,12 @@
  * `BlueprintCanvasRotulosDasPecas.test.tsx`).
  */
 import React from 'react';
-import { render } from '@testing-library/react';
+import { createHash } from 'node:crypto';
+import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import BlueprintCanvas from '../../components/blueprint/BlueprintCanvas';
-import { applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../../utils/blueprintKernel';
+import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../../utils/blueprintKernel';
+import { EXIBICAO_ELETRICA_PADRAO, type ExibicaoEletrica, type ItemEletrico } from '../../utils/preferencias/resolver';
 
 const INSTRUCAO = 'Posicione sobre a bancada da pia';
 
@@ -35,6 +37,28 @@ function cena(): BlueprintModel {
     m = applyCommand(m, cmd).model;
     m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais![m.terminais!.length - 1].id, circuitoId }).model;
   }
+  return m;
+}
+
+/**
+ * A cena da cozinha + a REDE: três eletrodutos com circuitos (um com dois circuitos de seções
+ * diferentes → seção por grupo; um CHEIO, com 8 condutores → círculo numerado e "8 cond."; um de
+ * Ø 32, o diferente do predominante → o Ø escrito), uma luz e uma tomada SEM circuito (a pendência).
+ */
+function cenaComRede(): BlueprintModel {
+  let m = cena();
+  const levelId = m.levels[0].id;
+  const quadroId = m.quadros[0].id;
+  m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C7', tensaoV: 127, ligacao: 'FN', secaoMm2: 2.5 }).model;
+  m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C9', tensaoV: 127, ligacao: 'FN', secaoMm2: 6 }).model;
+  const c7 = m.circuitos[m.circuitos.length - 2].id;
+  const c9 = m.circuitos[m.circuitos.length - 1].id;
+  const trecho = (y: number, x1: number, bitolaMm: number, circuitoIds: string[], condutores?: number): Command =>
+    ({ type: 'AddTrecho', levelId, disciplina: 'ELETRICA', a: point(200, y), b: point(x1, y), cotaAMm: 2800, cotaBMm: 2800, bitolaMm, circuitoIds, condutores }) as Command;
+  m = applyBatch(m, [trecho(1000, 3000, 25, [c7, c9]), trecho(1300, 3000, 25, [c7], 8), trecho(1600, 1700, 32, [c7])]).model;
+  // Sem circuito: uma luz (rótulo "?") e uma tomada (bloco "-?-" + "200 VA").
+  m = applyCommand(m, { type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'Luz', tipoEletrico: 'ILUMINACAO_TETO', at: point(2800, 500), cotaMm: 2800, potenciaW: 150 } as Command).model;
+  m = applyCommand(m, { type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'TUG', tipoEletrico: 'TUG', at: point(2500, 75), cotaMm: 1100, potenciaW: 200 } as Command).model;
   return m;
 }
 
@@ -85,8 +109,10 @@ describe('BlueprintCanvas · os textos elétricos sem colisão', () => {
   });
 
   /** Os textos do ÚLTIMO quadro (depois do último `clearRect`), com a caixa de cada um. */
-  function textosDoUltimoQuadro(escala: number) {
-    const m = cena();
+  function textosDoUltimoQuadro(escala: number, extra: { modelo?: BlueprintModel; exibicao?: ExibicaoEletrica; mostrarCircuitos?: boolean } = {}) {
+    cleanup();
+    chamadas = [];
+    const m = extra.modelo ?? cena();
     const canvas = (navegacao: React.ComponentProps<typeof BlueprintCanvas>['navegacao']) => (
       <BlueprintCanvas
         model={m}
@@ -104,6 +130,8 @@ describe('BlueprintCanvas · os textos elétricos sem colisão', () => {
         dx={0}
         dy={0}
         navegacao={navegacao}
+        {...(extra.exibicao ? { exibicaoEletrica: extra.exibicao } : {})}
+        {...(extra.mostrarCircuitos != null ? { mostrarCircuitos: extra.mostrarCircuitos } : {})}
       />
     );
     // ⚠️ A vista é do PRÓPRIO canvas (começa em 0,05 px/mm; a prop `escala` não a muda): o zoom vem
@@ -165,5 +193,107 @@ describe('BlueprintCanvas · os textos elétricos sem colisão', () => {
   it('a sugerida mantém a instrução, uma por tomada', () => {
     const textos = textosDoUltimoQuadro(0.2).map((t) => t.texto);
     expect(textos.filter((t) => t === INSTRUCAO)).toHaveLength(2);
+  });
+
+  // ── As preferências da planta elétrica (23/10/2026): cada item corta só o SEU texto ──────────────
+
+  /** Os textos do último quadro, contados (um mesmo texto pode sair mais de uma vez). */
+  function contagem(textos: { texto: string }[]): Map<string, number> {
+    const mapa = new Map<string, number>();
+    for (const t of textos) mapa.set(t.texto, (mapa.get(t.texto) ?? 0) + 1);
+    return mapa;
+  }
+  /** O que SUMIU entre dois quadros, ordenado (um texto repetido tantas vezes quantas sumiu). */
+  function sumiu(antes: Map<string, number>, depois: Map<string, number>): string[] {
+    const fora: string[] = [];
+    for (const [t, n] of antes) for (let i = 0; i < n - (depois.get(t) ?? 0); i++) fora.push(t);
+    return fora.sort();
+  }
+
+  const sem = (item: ItemEletrico): ExibicaoEletrica => ({ ...EXIBICAO_ELETRICA_PADRAO, [item]: false });
+
+  /**
+   * Tabela: item desligado → exatamente os textos que somem na `cenaComRede` (zoom 0,2). "?" e "-?-"
+   * nunca estão aqui: a pendência não some.
+   */
+  const SOME_COM: Record<ItemEletrico, string[]> = {
+    // o número no círculo do trecho cheio ("1") + os dependentes: circuito nos fios, bitola, "8 cond."
+    fios: ['1', '2,5', '2,5', '6', '7', '7', '9', '8 cond.'],
+    circuitoNosFios: ['7', '7', '9'],
+    bitola: ['2,5', '2,5', '6'],
+    diametro: ['Ø 32'],
+    circuitoNoPonto: ['-2-', '-2-', '-2-', 'C1', 'Int · C1'],
+    potencia: ['100', '100 VA', '150', '200 VA', '600 VA', '600 VA'],
+    comando: ['a', 'a'],
+    instrucaoSugerida: [INSTRUCAO, INSTRUCAO],
+    condutoresDoTrecho: ['8 cond.'],
+  };
+
+  it('cena de partida: os textos da rede estão todos escritos (a tabela abaixo parte disto)', () => {
+    const base = contagem(textosDoUltimoQuadro(0.2, { modelo: cenaComRede() }));
+    for (const x of ['7', '9', '2,5', '6', '1', '8 cond.', 'Ø 32', '-?-', '?', '200 VA', '150', 'a', INSTRUCAO]) expect(base.has(x), x).toBe(true);
+  });
+
+  for (const item of Object.keys(SOME_COM) as ItemEletrico[]) {
+    it(`⚠️ "${item}" desligado: somem só os textos dele, nada aparece, a pendência fica`, () => {
+      const modelo = cenaComRede();
+      const antes = contagem(textosDoUltimoQuadro(0.2, { modelo }));
+      const depois = contagem(textosDoUltimoQuadro(0.2, { modelo, exibicao: sem(item) }));
+      expect(sumiu(antes, depois)).toEqual([...SOME_COM[item]].sort());
+      expect(sumiu(depois, antes)).toEqual([]);
+      expect(depois.get('-?-')).toBe(antes.get('-?-'));
+      expect(depois.get('?')).toBe(antes.get('?'));
+    });
+  }
+
+  it('"fios" desligado: os traços e o círculo do trecho cheio não se desenham', () => {
+    const modelo = cenaComRede();
+    const contar = (exibicao?: ExibicaoEletrica) => {
+      textosDoUltimoQuadro(0.2, { modelo, exibicao });
+      const q = chamadas.slice(chamadas.map((c) => c.metodo).lastIndexOf('clearRect'));
+      return { linhas: q.filter((c) => c.metodo === 'lineTo').length, arcos: q.filter((c) => c.metodo === 'arc').length };
+    };
+    const ligado = contar();
+    const desligado = contar(sem('fios'));
+    expect(desligado.linhas).toBeLessThan(ligado.linhas);
+    expect(desligado.arcos).toBe(ligado.arcos - 1);
+  });
+
+  it('o objeto CRU também vale: "fios" desligado com "circuito nos fios" e "bitola" ligados não escreve nenhum dos dois', () => {
+    const modelo = cenaComRede();
+    const depois = contagem(textosDoUltimoQuadro(0.2, { modelo, exibicao: { ...EXIBICAO_ELETRICA_PADRAO, fios: false, circuitoNosFios: true, bitola: true } }));
+    for (const x of ['7', '9', '2,5', '6', '8 cond.']) expect(depois.has(x), x).toBe(false);
+  });
+
+  it('a chave geral "Circuito nos pontos" manda: desligada, nada elétrico se escreve, mesmo com tudo ligado nas preferências', () => {
+    const textos = textosDoUltimoQuadro(0.2, { modelo: cenaComRede(), exibicao: EXIBICAO_ELETRICA_PADRAO, mostrarCircuitos: false }).map((t) => t.texto);
+    for (const x of ['7', '2,5', '8 cond.', 'Ø 32', '-?-', '?', 'C1', '600 VA', '200 VA', INSTRUCAO]) expect(textos).not.toContain(x);
+  });
+
+  it('⚠️ pendência nunca some: com "circuito no ponto" desligado, a luz sem circuito segue escrevendo "?" e a tomada, "-?-"', () => {
+    const textos = contagem(textosDoUltimoQuadro(0.2, { modelo: cenaComRede(), exibicao: sem('circuitoNoPonto') }));
+    expect(textos.get('?')).toBe(1);
+    expect(textos.get('-?-')).toBe(1);
+    expect(textos.has('C1')).toBe(false);
+  });
+
+  it('bloco da tomada sem nenhuma linha ligada não se anota (sem circuito, potência nem instrução)', () => {
+    const exibicao = { ...EXIBICAO_ELETRICA_PADRAO, circuitoNoPonto: false, potencia: false, instrucaoSugerida: false };
+    const textos = textosDoUltimoQuadro(0.2, { exibicao }).map((t) => t.texto);
+    for (const x of ['-2-', '600 VA', '100 VA', INSTRUCAO]) expect(textos).not.toContain(x);
+  });
+
+  it('⚠️ tudo no padrão: o desenho é IDÊNTICO ao de antes das preferências (mesmas chamadas ao canvas)', () => {
+    const modelo = cenaComRede();
+    const assinatura = () => {
+      const q = chamadas.slice(chamadas.map((c) => c.metodo).lastIndexOf('clearRect'));
+      return { n: q.length, sha: createHash('sha1').update(JSON.stringify(q.map((c) => [c.metodo, c.args]))).digest('hex') };
+    };
+    const textosSemProp = textosDoUltimoQuadro(0.2, { modelo }).map((t) => t.texto);
+    const semProp = assinatura();
+    textosDoUltimoQuadro(0.2, { modelo, exibicao: EXIBICAO_ELETRICA_PADRAO });
+    expect(assinatura()).toEqual(semProp);
+    // E igual ao que o desenho produzia ANTES desta tarefa (o registro foi tirado do código sem a prop).
+    expect({ textos: textosSemProp, ...semProp }).toMatchSnapshot();
   });
 });

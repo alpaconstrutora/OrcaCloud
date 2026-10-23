@@ -6,6 +6,7 @@ import {
 } from '../utils/preferencias/catalogo';
 import {
   EXIBICAO_ELETRICA_PADRAO,
+  comDependenciasAplicadas,
   exibicaoEletricaDaTela,
   exibicaoEletricaDaPrancha,
   origemDoValor,
@@ -154,5 +155,19 @@ describe('origemDoValor', () => {
       linha('ESTUDO', 'tela', 'bitola', true),
     ];
     expect(origemDoValor(linhas, 'prancha', 'bitola')).toBe('PADRAO');
+  });
+});
+
+describe('comDependenciasAplicadas (objeto "cru" no desenho)', () => {
+  it('fios desligado leva circuito nos fios, bitola e condutores do trecho; o resto fica', () => {
+    const cru = { ...EXIBICAO_ELETRICA_PADRAO, fios: false };
+    const efetivo = comDependenciasAplicadas(cru);
+    expect(efetivo).toMatchObject({ fios: false, circuitoNosFios: false, bitola: false, condutoresDoTrecho: false });
+    expect(efetivo).toMatchObject({ diametro: true, circuitoNoPonto: true, potencia: true, comando: true, instrucaoSugerida: true });
+  });
+  it('já coerente (padrão ou vindo do resolvedor): devolve o MESMO objeto', () => {
+    expect(comDependenciasAplicadas(EXIBICAO_ELETRICA_PADRAO)).toBe(EXIBICAO_ELETRICA_PADRAO);
+    const doResolvedor = exibicaoEletricaDaTela([linha('USUARIO', 'tela', 'fios', false)]);
+    expect(comDependenciasAplicadas(doResolvedor)).toBe(doResolvedor);
   });
 });

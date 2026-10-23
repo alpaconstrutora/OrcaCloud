@@ -104,3 +104,16 @@ export function exibicaoEletricaDaTela(linhas: readonly LinhaDePreferencia[]): E
 export function exibicaoEletricaDaPrancha(linhas: readonly LinhaDePreferencia[]): ExibicaoEletrica {
   return exibicaoDoAlvo(linhas, 'prancha');
 }
+
+/**
+ * O desenho funciona também com um objeto "cru" (montado à mão, sem passar pelo resolvedor):
+ * item que depende de outro desligado chega desligado. Quem vem do resolvedor já está assim, e
+ * então devolve-se o MESMO objeto.
+ */
+export function comDependenciasAplicadas(exibicao: ExibicaoEletrica): ExibicaoEletrica {
+  const precisa = ITENS_ELETRICOS.some((def) => def.dependeDe && exibicao[def.item] && !exibicao[def.dependeDe]);
+  if (!precisa) return exibicao;
+  const efetivo = { ...exibicao } as Record<ItemEletrico, boolean>;
+  for (const def of ITENS_ELETRICOS) if (def.dependeDe && !exibicao[def.dependeDe]) efetivo[def.item] = false;
+  return Object.freeze(efetivo);
+}

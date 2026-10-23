@@ -2412,6 +2412,22 @@ export default function BlueprintCanvas({
   }, [paredesReais, destinosDoArraste]);
 
   /**
+   * As paredes que ORIENTAM a tomada (23/10/2026) — todas as do pavimento, VISÍVEIS OU NÃO.
+   *
+   * Pedido com print: *"Os símbolos de tomadas devem estar sempre alinhados a 90 graus em relação a
+   * parede"*. Com a Arquitetura oculta nas Camadas (no print, só vigas e pilares à vista), `paredesDoNivel`
+   * vinha vazia, `apoioDaTomada` não achava parede e caía no padrão +X: todo triângulo apontava para a
+   * direita, paralelo à parede. Ocultar é DESENHO — a parede continua lá e a tomada continua nela.
+   */
+  const paredesParaApoio = useMemo(() => {
+    if (!destinosDoArraste) return paredesTodasDoNivel;
+    return paredesTodasDoNivel.map((w) => {
+      const destino = destinosDoArraste.get(w.id);
+      return destino ? { ...w, a: destino.a, b: destino.b } : w;
+    });
+  }, [paredesTodasDoNivel, destinosDoArraste]);
+
+  /**
    * As estruturas como aparecem AGORA — deslocadas durante o arraste.
    *
    * Fora de `pontasDeslocadas` de propósito, e é a mesma regra do comando
@@ -3476,14 +3492,14 @@ export default function BlueprintCanvas({
     const extras: typeof terminaisDoNivel = [];
     for (const t of terminaisDoNivel) {
       if (t.disciplina !== 'ELETRICA' || (t.tipoEletrico !== 'TUG' && t.tipoEletrico !== 'TUE')) continue;
-      const apoio = apoioDaTomada(t, paredesDoNivel);
+      const apoio = apoioDaTomada(t, paredesParaApoio);
       const tamanhoMm = Math.max(medidasDoTerminal(t).larguraMm, 10 / vista.escala) * FATOR_DO_SIMBOLO_DE_TOMADA;
       const rad = (apoio.graus * Math.PI) / 180;
       const d = apoio.recuoMm + tamanhoMm / 2;
       extras.push({ ...t, at: { x: t.at.x + Math.cos(rad) * d, y: t.at.y + Math.sin(rad) * d }, larguraMm: tamanhoMm });
     }
     return [...terminaisDoNivel, ...extras];
-  }, [terminaisDoNivel, paredesDoNivel, vista.escala]);
+  }, [terminaisDoNivel, paredesParaApoio, vista.escala]);
 
   /** Qual TERMINAL está sob o cursor — em pixels, pela razão do quadro. */
   const terminalSob = useCallback(
@@ -7032,7 +7048,7 @@ export default function BlueprintCanvas({
       // (`at`) continua onde está — na face, que é onde a peça é instalada —,
       // só o desenho anda: `recuoMm` leva a base do ponto à face (zero quando
       // ele já está nela) e o centro do símbolo fica meio tamanho adiante.
-      const apoio = ehTomada ? apoioDaTomada(t, paredesDoNivel) : null;
+      const apoio = ehTomada ? apoioDaTomada(t, paredesParaApoio) : null;
       const tamanhoMm = ehTomada ? Math.max(md.larguraMm, 10 / vista.escala) * FATOR_DO_SIMBOLO_DE_TOMADA : 0;
       const rad = apoio ? (apoio.graus * Math.PI) / 180 : 0;
       const u = { x: Math.cos(rad), y: Math.sin(rad) };
@@ -10164,6 +10180,7 @@ export default function BlueprintCanvas({
     cotaAltoContraste,
     paraTela,
     paredesDoNivel,
+    paredesParaApoio,
     ambientesDoNivel,
     ambienteRealcado,
     exibicaoEletrica,

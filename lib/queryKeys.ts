@@ -130,6 +130,17 @@ export const academyKeys = {
                       ['portal', 'academy', 'content', token, enrollmentId] as const,
 } as const;
 
+// ── Preferências (planta elétrica) ───────────────────────────────────────────
+
+export const preferenciasKeys = {
+    all: ['preferencias'] as const,
+    /** Escolhas do próprio usuário para a TELA (independe de organização). */
+    usuario: () => ['preferencias', 'usuario'] as const,
+    /** Padrão da PRANCHA: linhas da organização + (se houver) do estudo. */
+    prancha: (organizationId: string | null, studyId?: string | null) =>
+        ['preferencias', 'prancha', organizationId ?? 'nenhuma', studyId ?? 'sem-estudo'] as const,
+} as const;
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**

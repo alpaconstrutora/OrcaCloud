@@ -17,8 +17,8 @@ import {
     SINDICO_FINANCEIRO_SUBABA_IDS, SINDICO_FINANCEIRO_SUBABA_LABELS, resolverSubAbaDoFinanceiro,
 } from '../../utils/sindicoPortalTabs';
 import {
-    MOTIVO_PREVIA, MOTIVO_SEM_LOGIN, inicioDaCompetencia, motivoNaoOpera, resumoDoMes, situacaoDoTitulo,
-    type TituloDoCondominio,
+    MOTIVO_PREVIA, MOTIVO_SEM_LOGIN, condominioDoFinanceiro, doCondominio, inicioDaCompetencia, motivoNaoOpera,
+    resumoDoMes, situacaoDoTitulo, type TituloDoCondominio,
 } from '../../utils/financeiroDoSindico';
 import { rotuloDeDespesa } from '../../utils/despesaCondominio';
 import { hojeEmBrasilia } from '../../utils/mandatoSindico';
@@ -38,6 +38,9 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
  * pelo link e na prévia do admin os botões ficam desligados dizendo o motivo, e
  * o banco recusa do mesmo jeito. Condomínio sem organização própria (007) só
  * consulta.
+ *
+ * Síndico de mais de um prédio vê UM condomínio por vez (seletor ao lado do
+ * mês): somados, os KPIs e a lista do 007 traziam as contas do 010.
  */
 
 interface Props {
@@ -54,6 +57,8 @@ interface Props {
 
 const mesAtual = () => hojeEmBrasilia().slice(0, 7);
 
+const CAMPO_DO_TOPO = 'h-9 px-3 bg-white border border-[#ECECEF] rounded-[8px] text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#E1553C]/20 focus:border-[#E1553C]';
+
 function rotuloDoMes(mes: string): string {
     const [a, m] = mes.split('-').map(Number);
     if (!a || !m) return mes;
@@ -68,6 +73,9 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
     const subAba = resolverSubAbaDoFinanceiro(subAbaSalva);
     const [mes, setMes] = usePersistedState<string>('sindicoPortal:financeiro:mes', mesAtual());
     const competencia = /^\d{4}-\d{2}$/.test(mes) ? mes : mesAtual();
+    const [condominioSalvo, setCondominio] = usePersistedState<string>('sindicoPortal:financeiro:condominio', '');
+    const condominioId = condominioDoFinanceiro(condominioSalvo, dados.condominios);
+    const variosPredios = dados.condominios.length > 1;
 
     const [fin, setFin] = React.useState<FinanceiroDoSindico | null>(null);
     const [carregando, setCarregando] = React.useState(true);
@@ -102,20 +110,22 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
     }, [identidade, competencia, subAba, versao]);
 
     const hoje = fin?.hoje ?? hojeEmBrasilia();
-    const titulos = fin?.titulos ?? [];
+    const titulos = React.useMemo(() => doCondominio(fin?.titulos ?? [], condominioId), [fin, condominioId]);
     const pagar = React.useMemo(() => titulos.filter(t => t.direcao === 'DEBIT'), [titulos]);
     const receber = React.useMemo(() => titulos.filter(t => t.direcao === 'CREDIT'), [titulos]);
-    const nomeDoCondominio = React.useMemo(() => new Map((fin?.condominios ?? []).map(c => [c.id, c.nome])), [fin]);
-    const operaveis = React.useMemo(() => (fin?.condominios ?? []).filter(c => c.podeOperar), [fin]);
+    const condominiosDaTela = React.useMemo(() => (fin?.condominios ?? []).filter(c => c.id === condominioId), [fin, condominioId]);
+    const nomeDoCondominio = React.useMemo(() => new Map(condominiosDaTela.map(c => [c.id, c.nome])), [condominiosDaTela]);
+    const operaveis = React.useMemo(() => condominiosDaTela.filter(c => c.podeOperar), [condominiosDaTela]);
+    const rateios = React.useMemo(() => doCondominio(dados.rateios, condominioId), [dados.rateios, condominioId]);
 
-    const motivoDoCondominio = React.useCallback((condominioId: string) => motivoNaoOpera({
+    const motivoDoCondominio = React.useCallback((id: string) => motivoNaoOpera({
         somenteLeitura, logado,
-        motivoDoCondominio: fin?.condominios.find(c => c.id === condominioId)?.motivoNaoOpera ?? null,
+        motivoDoCondominio: fin?.condominios.find(c => c.id === id)?.motivoNaoOpera ?? null,
     }), [somenteLeitura, logado, fin]);
 
     const motivoLancar = somenteLeitura ? MOTIVO_PREVIA
         : !logado ? MOTIVO_SEM_LOGIN
-            : operaveis.length === 0 ? (fin?.condominios[0]?.motivoNaoOpera ?? 'Nenhum condomínio disponível para lançar.')
+            : operaveis.length === 0 ? (condominiosDaTela[0]?.motivoNaoOpera ?? 'Nenhum condomínio disponível para lançar.')
                 : null;
 
     const depoisDeGravar = (mensagem: string) => {
@@ -163,29 +173,44 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                             onChange={setSubAba}
                         />
                     </div>
-                    {subAba !== 'prestacao' && (
-                        <label className="flex items-center gap-2 px-4 py-3 md:px-0 md:py-2 text-[13px] text-[#8A8F9A]">
-                            Mês
-                            <input
-                                type="month"
-                                value={competencia}
-                                onChange={e => e.target.value && setMes(e.target.value)}
-                                className="h-9 px-3 bg-white border border-[#ECECEF] rounded-[8px] text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#E1553C]/20 focus:border-[#E1553C]"
-                            />
-                        </label>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 md:px-0 md:py-2">
+                        {variosPredios && (
+                            <label className="flex items-center gap-2 text-[13px] text-[#8A8F9A] min-w-0">
+                                Condomínio
+                                <select
+                                    value={condominioId ?? ''}
+                                    onChange={e => setCondominio(e.target.value)}
+                                    className={`${CAMPO_DO_TOPO} min-w-0 max-w-[16rem]`}
+                                >
+                                    {dados.condominios.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                                </select>
+                            </label>
+                        )}
+                        {subAba !== 'prestacao' && (
+                            <label className="flex items-center gap-2 text-[13px] text-[#8A8F9A]">
+                                Mês
+                                <input
+                                    type="month"
+                                    value={competencia}
+                                    onChange={e => e.target.value && setMes(e.target.value)}
+                                    className={CAMPO_DO_TOPO}
+                                />
+                            </label>
+                        )}
+                    </div>
                 </div>
             </PortalCard>
 
             {subAba === 'prestacao' ? (
                 <>
                     {/* Decidir exige LOGIN: `logado` só é verdadeiro na entrada por e-mail e senha. */}
-                    <PainelAprovacaoDoSindico identidade={identidade} rateios={dados.rateios} condominios={dados.condominios}
+                    <PainelAprovacaoDoSindico identidade={identidade} rateios={rateios}
+                        condominios={dados.condominios.filter(c => c.id === condominioId)}
                         podeDecidir={logado} somenteLeitura={somenteLeitura} onAlterado={onAlteradoPortal} notify={notify} />
                     <PortalCard className="p-4 md:p-6">
                         <PainelFinanceiro
-                            rateios={dados.rateios as unknown as PortalCondominio['rateios']}
-                            multi={dados.condominios.length > 1}
+                            rateios={rateios as unknown as PortalCondominio['rateios']}
+                            multi={false}
                             onResolverComprovantes={resolverComprovantes}
                             visaoDoSindico
                         />
@@ -200,9 +225,9 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                 </PortalCard>
             ) : (
                 <>
-                    {fin && fin.condominios.some(c => !c.podeOperar) && !somenteLeitura && (
+                    {condominiosDaTela.some(c => !c.podeOperar) && !somenteLeitura && (
                         <PortalCard className="px-5 py-3 text-[13px] text-[#4A505C]">
-                            {fin.condominios.filter(c => !c.podeOperar).map(c => (
+                            {condominiosDaTela.filter(c => !c.podeOperar).map(c => (
                                 <p key={c.id}><strong className="font-semibold text-[#1F2430]">{c.nome}:</strong> {c.motivoNaoOpera}</p>
                             ))}
                         </PortalCard>
@@ -240,8 +265,7 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                     <LancarContaSheet
                         open={lancando || !!editando}
                         identidade={identidade}
-                        condominios={editando ? fin.condominios.filter(c => c.id === editando.condominioId) : operaveis}
-                        titulo={editando}
+                        condominios={editando ? fin.condominios.filter(c => c.id === editando.condominioId) : operaveis}                        titulo={editando}
                         onClose={() => { setLancando(false); setEditando(null); }}
                         onSalvo={depoisDeGravar}
                     />

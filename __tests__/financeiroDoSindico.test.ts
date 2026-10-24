@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    MOTIVO_PREVIA, MOTIVO_SEM_LOGIN, motivoNaoAltera, motivoNaoBaixa, motivoNaoOpera, resumoDoMes, situacaoDoTitulo,
+    MOTIVO_PREVIA, MOTIVO_SEM_LOGIN, condominioDoFinanceiro, doCondominio, motivoNaoAltera, motivoNaoBaixa, motivoNaoOpera, resumoDoMes, situacaoDoTitulo,
     type TituloDoCondominio,
 } from '../utils/financeiroDoSindico';
 
@@ -88,5 +88,24 @@ describe('o que o síndico pode fazer (espelho das RPCs)', () => {
         expect(motivoNaoBaixa(titulo({ businessStatus: 'CANCELADO' }))).toMatch(/cancelado/);
         expect(motivoNaoBaixa(titulo({ direcao: 'CREDIT' }))).toMatch(/a pagar/);
         expect(motivoNaoBaixa(titulo({ travaAsaas: 'pago pela Asaas' }))).toBe('pago pela Asaas');
+    });
+});
+
+describe('um condomínio por vez (print de 24/10: o 007 mostrava as faturas do 010)', () => {
+    const lista = [{ id: 'c007' }, { id: 'c010' }];
+    it('vale o escolhido enquanto ele estiver na lista do síndico', () => {
+        expect(condominioDoFinanceiro('c010', lista)).toBe('c010');
+    });
+    it('sem escolha, ou escolha que saiu do mandato: o primeiro da lista', () => {
+        expect(condominioDoFinanceiro('', lista)).toBe('c007');
+        expect(condominioDoFinanceiro('c999', lista)).toBe('c007');
+        expect(condominioDoFinanceiro('c999', [])).toBeNull();
+    });
+    it('títulos e KPIs só do condomínio escolhido — nunca a soma dos prédios', () => {
+        const t007 = titulo({ id: 'a', condominioId: 'c007', vencimento: '2017-04-30' });
+        const t010 = titulo({ id: 'b', condominioId: 'c010', vencimento: '2021-08-10', valor: 600 });
+        expect(doCondominio([t007, t010], 'c007').map(t => t.id)).toEqual(['a']);
+        expect(resumoDoMes(doCondominio([t007, t010], 'c007'), '2026-10-01', HOJE).vencidoAPagar).toBe(100);
+        expect(doCondominio([t007, t010], null)).toEqual([]);
     });
 });

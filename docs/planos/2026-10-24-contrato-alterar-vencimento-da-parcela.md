@@ -66,7 +66,7 @@ uma **marca na parcela** que os syncs do contrato respeitam, em vez de mexer no 
      - a célula mostra "20/11/2026 · Alterado manualmente", e o hover mostra quem, quando e o
        vencimento gerado pelo contrato (10/11/2026);
      - nenhum erro de página.
-6. [ ] PR + CI + publicação.
+6. [x] PR + CI + publicação — PR #136, `ci` 17min58s verde; squash `1868f28c` em 24/10/2026; `conferir-producao.sh "Alterar vencimento da parcela"` ✅
 
 ## Fora do escopo
 

@@ -13,7 +13,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ITENS_DE_EXIBICAO } from '../../utils/preferencias/catalogoExibir';
 
-// O serviço simulado GUARDA o que foi gravado (valor `null` apaga a linha, como o real) e o devolve na
+// O serviço simulado GUARDA o que foi gravado (valor `null` apaga a linha, como o real; o "Automático" do
+// terreno 3D chega como o texto 'AUTOMATICO') e o devolve na
 // próxima leitura — sem isso a releitura que o hook faz depois de gravar desfaria a escolha.
 const m = vi.hoisted(() => ({
   banco: [] as { escopo: string; chave: string; valor: unknown }[],
@@ -100,7 +101,8 @@ describe('SecaoExibicaoDaPlanta', () => {
     fireEvent.click(chave('Grade'));
     await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarGrade', false));
     expect(chave('Grade')).not.toBeChecked();
-    expect(JSON.parse(localStorage.getItem('blueprint:mostrarGrade')!)).toBe(false);
+    // Com sessão a fonte é o banco: o navegador não recebe espelho (outro usuário não herda a escolha).
+    expect(localStorage.getItem('blueprint:mostrarGrade')).toBeNull();
   });
 
   it('o valor já gravado no banco aparece nas chaves', async () => {
@@ -143,7 +145,17 @@ describe('SecaoExibicaoDaPlanta', () => {
     fireEvent.change(seletor('Terreno'), { target: { value: 'desligado' } });
     await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.vista3dTerreno', false));
     fireEvent.change(seletor('Terreno'), { target: { value: 'automatico' } });
-    await waitFor(() => expect(m.gravar).toHaveBeenLastCalledWith('USUARIO', {}, 'planta.exibir.vista3dTerreno', null));
+    // "Automático" é um valor EXPLÍCITO no banco (a coluna é NOT NULL): o texto 'AUTOMATICO', não null.
+    await waitFor(() => expect(m.gravar).toHaveBeenLastCalledWith('USUARIO', {}, 'planta.exibir.vista3dTerreno', 'AUTOMATICO'));
+    await waitFor(() => expect(seletor('Terreno').value).toBe('automatico'));
+  });
+
+  it('Terreno 3D com a linha "AUTOMATICO" no banco mostra Automático', async () => {
+    m.banco = [{ escopo: 'USUARIO', chave: 'planta.exibir.vista3dTerreno', valor: 'AUTOMATICO' }];
+    localStorage.setItem('blueprint:vista3dTerreno:v2', 'true');
+    montar();
+    await waitFor(() => expect(m.listar).toHaveBeenCalled());
+    await waitFor(() => expect(seletor('Terreno').value).toBe('automatico'));
   });
 
   it('escolher "Humanizada" com o preenchimento desligado grava também mostrarPreenchimento=true', async () => {
@@ -175,6 +187,32 @@ describe('SecaoExibicaoDaPlanta', () => {
     fireEvent.change(seletor('Cor dos ambientes'), { target: { value: 'AMBIENTE' } });
     await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.modoDeCor', 'AMBIENTE'));
     expect(m.gravar.mock.calls.map((c) => c[2]).sort()).toEqual(['planta.exibir.estiloPlanta', 'planta.exibir.modoDeCor']);
+  });
+
+  it('ligar Declividade com o Hipsométrico ligado DESLIGA o Hipsométrico (e vice-versa), como o menu Exibir', async () => {
+    m.banco = [{ escopo: 'USUARIO', chave: 'planta.exibir.mostrarHipsometria', valor: true }];
+    montar();
+    await waitFor(() => expect(chave('Hipsométrico')).toBeChecked());
+    fireEvent.click(chave('Declividade'));
+    await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarDeclividade', true));
+    await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarHipsometria', false));
+    await waitFor(() => expect(chave('Hipsométrico')).not.toBeChecked());
+    expect(chave('Declividade')).toBeChecked();
+
+    fireEvent.click(chave('Hipsométrico'));
+    await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarHipsometria', true));
+    await waitFor(() => expect(m.gravar).toHaveBeenLastCalledWith('USUARIO', {}, 'planta.exibir.mostrarDeclividade', false));
+    await waitFor(() => expect(chave('Declividade')).not.toBeChecked());
+    expect(chave('Hipsométrico')).toBeChecked();
+  });
+
+  it('ligar Declividade com o Hipsométrico desligado não grava nada a mais; desligar também não', async () => {
+    montar();
+    fireEvent.click(chave('Declividade'));
+    await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarDeclividade', true));
+    fireEvent.click(chave('Declividade'));
+    await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarDeclividade', false));
+    expect(m.gravar.mock.calls.map((c) => c[2])).toEqual(['planta.exibir.mostrarDeclividade', 'planta.exibir.mostrarDeclividade']);
   });
 
   it('sem sessão a escolha vale na tela e no navegador, sem chamar o serviço', () => {

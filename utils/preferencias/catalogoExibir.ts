@@ -28,6 +28,9 @@ export type GrupoDeExibicao = 'PLANTA' | 'VISTAS' | '3D' | 'ESTILOS';
 
 export type ValorDeExibicao = boolean | string | null;
 
+/** Como o "automático" (null no editor) é guardado no banco. */
+export const AUTOMATICO_NO_BANCO = 'AUTOMATICO';
+
 export interface OpcaoDeExibicao {
   valor: string;
   rotulo: string;
@@ -41,7 +44,10 @@ export interface ItemDeExibicao {
   /** O mesmo rótulo do menu Exibir. */
   rotulo: string;
   grupo: GrupoDeExibicao;
-  /** 'automatico' = boolean | null (terreno 3D: null liga sozinho quando há curvas). */
+  /**
+   * 'automatico' = boolean | null no editor (terreno 3D: null liga sozinho quando há curvas). No BANCO
+   * o "automático" é o texto 'AUTOMATICO' (a coluna é jsonb NOT NULL: null não se guarda).
+   */
   tipo: 'booleano' | 'opcao' | 'automatico';
   /** Só em 'opcao'. */
   opcoes?: readonly OpcaoDeExibicao[];
@@ -160,13 +166,13 @@ export function chaveDeExibicao(item: string): string {
   return `planta.exibir.${item}`;
 }
 
-/** O valor cabe no tipo (e nas opções) do item? `null` só vale no 'automatico'. */
+/** O valor cabe no tipo (e nas opções) do item? No 'automatico' vale também o texto 'AUTOMATICO' (o do banco). */
 function valorValido(def: ItemDeExibicao, valor: unknown): valor is ValorDeExibicao {
   switch (def.tipo) {
     case 'booleano':
       return typeof valor === 'boolean';
     case 'automatico':
-      return typeof valor === 'boolean' || valor === null;
+      return typeof valor === 'boolean' || valor === AUTOMATICO_NO_BANCO;
     case 'opcao':
       return typeof valor === 'string' && (def.opcoes ?? []).some((o) => o.valor === valor);
   }
@@ -184,9 +190,10 @@ function valorDoUsuario(linhas: readonly LinhaDePreferencia[], def: ItemDeExibic
 }
 
 /**
- * O que o usuário escolheu para o item. `undefined` = sem escolha válida (sem linha, valor de
- * outro tipo, opção fora de `opcoes`, item que não existe) → quem chama usa o padrão.
- * `null` só no item 'automatico' com `null` gravado (= automático, escolha explícita).
+ * O que o usuário escolheu para o item, COMO ESTÁ NO BANCO. `undefined` = sem escolha válida (sem linha,
+ * valor de outro tipo, opção fora de `opcoes`, item que não existe) → quem chama usa o padrão.
+ * No item 'automatico' o "automático" volta como o texto 'AUTOMATICO' (escolha explícita); quem
+ * entrega o valor ao editor troca por `null` (ver `AUTOMATICO_NO_BANCO`).
  */
 export function valorDeExibicao(linhas: readonly LinhaDePreferencia[], item: string): ValorDeExibicao | undefined {
   const def = POR_ITEM.get(item);
@@ -197,9 +204,9 @@ export function valorDeExibicao(linhas: readonly LinhaDePreferencia[], item: str
  * Migração única do navegador: para cada item SEM escolha válida no banco e COM valor válido no
  * navegador, uma linha para gravar. `lerDoNavegador` recebe a chave antiga e devolve o JSON já
  * parseado (ou `undefined`). Não devolve nada para o que já está no banco (a escolha do banco
- * nunca é sobrescrita), nem para `null` (ausente e "automático" se confundem na leitura, e
- * automático já é o padrão), nem para item 'automatico' (a ausência da linha já é a escolha), nem para valor IGUAL ao
- * padrão do item (não é escolha — ver abaixo).
+ * nunca é sobrescrita), nem para `null` (no terreno 3D é o automático, que já é o padrão), nem para
+ * valor IGUAL ao padrão do item (não é escolha — ver abaixo). O terreno 3D migra quando o navegador
+ * tem `true`/`false` explícito.
  * Leitura do navegador que lança vale como "sem valor".
  */
 export function linhasParaMigrar(
@@ -209,9 +216,6 @@ export function linhasParaMigrar(
   const saida: { chave: string; valor: boolean | string }[] = [];
   for (const def of ITENS_DE_EXIBICAO) {
     if (valorDoUsuario(linhasDoUsuario, def) !== undefined) continue;
-    // 'automatico' (terreno 3D): "automático" é a AUSÊNCIA de linha — migrar o `true`/`false` antigo de
-    // um navegador desfaria o "Automático" escolhido em outro aparelho.
-    if (def.tipo === 'automatico') continue;
     let doNavegador: unknown;
     try {
       doNavegador = lerDoNavegador(def.chaveAntiga);
@@ -219,6 +223,8 @@ export function linhasParaMigrar(
       continue;
     }
     if (doNavegador === null || !valorValido(def, doNavegador)) continue;
+    // O navegador nunca guarda o texto 'AUTOMATICO' (é do banco): no terreno 3D só vale true/false.
+    if (def.tipo === 'automatico' && typeof doNavegador !== 'boolean') continue;
     // Igual ao padrão: o `usePersistedState` grava o padrão no navegador ao montar, então isso não é
     // uma escolha — migrar congelaria o padrão como se fosse (e mudar o padrão um dia não valeria).
     if (Object.is(doNavegador, def.padrao)) continue;
@@ -227,14 +233,36 @@ export function linhasParaMigrar(
   return saida;
 }
 
+/** Uma mudança que a escolha de um item exige em OUTRO item. */
+export interface ConsequenciaDaEscolha {
+  item: string;
+  valor: boolean;
+}
+
 /**
- * Escolher uma cor para os ambientes (modo de cor != 'NENHUM') ou o estilo 'HUMANIZADA' sem o
- * "Preenchimento dos ambientes" ligado não mostra piso nenhum: o menu Vista liga o preenchimento junto.
- * Regra ÚNICA, usada pelo menu Vista e pela aba Preferências. `true` = é preciso ligar o preenchimento.
+ * Regra ÚNICA das consequências de escolher um item — usada pelo menu Vista e pela aba Preferências.
+ * `estado(item)` devolve o valor ATUAL de um item; só voltam as mudanças que de fato mudam algo.
+ *
+ *  - Cor dos ambientes (`modoDeCor` ≠ 'NENHUM') ou estilo 'HUMANIZADA' sem o "Preenchimento dos
+ *    ambientes" ligado não mostra piso nenhum: liga o preenchimento junto;
+ *  - Declividade e Hipsométrico pintam a mesma grade ("as duas pinturas juntas não se leem"): ligar um
+ *    desliga o outro.
  */
-export function preenchimentoPrecisaLigar(item: string, valor: unknown, preenchimentoAtual: boolean): boolean {
-  if (preenchimentoAtual) return false;
-  if (item === 'modoDeCor') return typeof valor === 'string' && valor !== 'NENHUM';
-  if (item === 'estiloPlanta') return valor === 'HUMANIZADA';
-  return false;
+export function consequenciasDaEscolha(
+  item: string,
+  valor: unknown,
+  estado: (item: string) => unknown,
+): ConsequenciaDaEscolha[] {
+  const saida: ConsequenciaDaEscolha[] = [];
+  const ligaPreenchimento =
+    (item === 'modoDeCor' && typeof valor === 'string' && valor !== 'NENHUM') ||
+    (item === 'estiloPlanta' && valor === 'HUMANIZADA');
+  if (ligaPreenchimento && estado('mostrarPreenchimento') !== true) {
+    saida.push({ item: 'mostrarPreenchimento', valor: true });
+  }
+  if (valor === true) {
+    const outra = item === 'mostrarDeclividade' ? 'mostrarHipsometria' : item === 'mostrarHipsometria' ? 'mostrarDeclividade' : null;
+    if (outra && estado(outra) === true) saida.push({ item: outra, valor: false });
+  }
+  return saida;
 }

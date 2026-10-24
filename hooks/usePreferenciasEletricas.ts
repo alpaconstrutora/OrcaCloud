@@ -5,6 +5,13 @@ import { useStore } from '../store/useStore';
 import { preferenciasService } from '../services/preferenciasService';
 import { useToast } from './useToast';
 import {
+  iniciarGravacao,
+  limparAvisoDeLeitura,
+  mensagemDeFalhaDeLeitura,
+  registrarAvisoDeLeitura,
+  terminarGravacao,
+} from '../lib/preferenciasCompartilhado';
+import {
   chaveDoItem,
   type AlvoDaPreferencia,
   type ItemEletrico,
@@ -29,13 +36,6 @@ import {
  *  - `alterar` é otimista: o desenho muda na hora; na falha só ESSA linha volta ao que era (outras
  *    escolhas feitas no meio-tempo ficam) e um aviso diz o motivo.
  */
-
-/**
- * Última mensagem de falha de leitura já avisada. O hook é montado por vários consumidores ao mesmo
- * tempo (canvas, PDF, gaveta): cada instância dispararia o mesmo aviso. Avisa UMA vez por mensagem;
- * zera quando a leitura volta a dar certo (uma falha nova avisa de novo).
- */
-let ultimoAvisoDeLeitura: string | null = null;
 
 const SEM_LINHAS: readonly LinhaDePreferencia[] = Object.freeze([]);
 
@@ -101,14 +101,14 @@ export function usePreferenciasEletricas({
   const erro = daTela.error ? mensagemDe(daTela.error) : daPrancha.error ? mensagemDe(daPrancha.error) : null;
   useEffect(() => {
     if (!erro) return;
-    if (ultimoAvisoDeLeitura === erro) return;
-    ultimoAvisoDeLeitura = erro;
-    showToast(`Não foi possível carregar as preferências da planta: ${erro}. O desenho usa os padrões.`, 'error');
+    // Aviso ÚNICO, compartilhado com usePreferenciaDaPlanta (a leitura da tela é a mesma query).
+    if (!registrarAvisoDeLeitura(erro)) return;
+    showToast(mensagemDeFalhaDeLeitura(erro), 'error');
   }, [erro, showToast]);
   // Leitura voltou a dar certo (as duas consultas sem erro e já com dados): a próxima falha avisa de novo.
   const leituraOk = daTela.isSuccess && (daPrancha.isSuccess || !organizationId);
   useEffect(() => {
-    if (leituraOk) ultimoAvisoDeLeitura = null;
+    if (leituraOk) limparAvisoDeLeitura();
   }, [leituraOk]);
 
   const alterar = useCallback(
@@ -148,6 +148,9 @@ export function usePreferenciasEletricas({
         );
       }
 
+      // Conta como gravação em voo da chave: a chave do usuário é a MESMA do menu Exibir da planta, e a
+      // releitura só pode acontecer quando a última gravação (de qualquer um dos dois) termina.
+      iniciarGravacao(queryClient, chaveDoCache);
       try {
         await preferenciasService.gravar(escopo, dono, chave, valor);
       } catch (e) {
@@ -158,6 +161,7 @@ export function usePreferenciasEletricas({
         }
         showToast(`Não foi possível salvar a preferência: ${mensagemDe(e)}`, 'error');
       }
+      if (!terminarGravacao(queryClient, chaveDoCache)) return;
 
       // Ao fim de TODA gravação (sucesso ou falha) a chave alterada é relida: dois cliques rápidos na mesma
       // chave não deixam a tela diferente do banco (o último a terminar manda, e o banco é a verdade).

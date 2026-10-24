@@ -4,7 +4,9 @@
  * passa a ser preferência do USUÁRIO no banco. Serviço, sessão e aviso simulados; o "banco falso"
  * devolve na leitura o que foi gravado (o hook relê a chave ao fim de cada gravação).
  * Foco: banco vence navegador; leitura que falha cai no navegador/padrão; clique rápido termina igual
- * ao banco; sem sessão só muda local; a migração do navegador roda UMA vez e só leva o que difere do padrão.
+ * ao banco; rajada de gravações = UMA releitura no fim; sem sessão só muda local (e só ele espelha no
+ * navegador); terreno 3D "Automático" = texto 'AUTOMATICO' no banco; a migração do navegador roda UMA
+ * vez por usuário (marcador no navegador) e só leva o que difere do padrão.
  */
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
@@ -14,6 +16,7 @@ import type { LinhaDePreferencia } from '../../utils/preferencias/resolver';
 
 const m = vi.hoisted(() => ({
     listarDoUsuario: vi.fn(),
+    listarDaPrancha: vi.fn(),
     gravar: vi.fn(),
     gravarVarios: vi.fn(),
     showToast: vi.fn(),
@@ -25,13 +28,19 @@ vi.mock('../../store/useStore', () => ({
 vi.mock('../../services/preferenciasService', () => ({
     preferenciasService: {
         listarDoUsuario: m.listarDoUsuario,
+        listarDaPrancha: m.listarDaPrancha,
         gravar: m.gravar,
         gravarVarios: m.gravarVarios,
     },
 }));
 vi.mock('../../hooks/useToast', () => ({ useToast: () => ({ showToast: m.showToast }) }));
 
-import { usePreferenciaDaPlanta, useMigracaoDaExibicaoDaPlanta } from '../../hooks/usePreferenciaDaPlanta';
+import {
+    usePreferenciaDaPlanta,
+    useMigracaoDaExibicaoDaPlanta,
+    chaveDoMarcadorDeMigracao,
+} from '../../hooks/usePreferenciaDaPlanta';
+import { usePreferenciasEletricas } from '../../hooks/usePreferenciasEletricas';
 
 const CHAVE_GRADE = 'planta.exibir.mostrarGrade';
 
@@ -62,6 +71,7 @@ describe('usePreferenciaDaPlanta', () => {
         banco = [];
         m.userId = 'u1';
         m.listarDoUsuario.mockImplementation(async () => [...banco]);
+        m.listarDaPrancha.mockResolvedValue([]);
         m.gravar.mockImplementation(async (_e: unknown, _d: unknown, chave: string, valor: boolean | string | null) => {
             gravarNoBanco(chave, valor); // null apaga a linha, como o serviço
         });
@@ -96,12 +106,20 @@ describe('usePreferenciaDaPlanta', () => {
         expect(result.current.estilo[0]).toBe('HUMANIZADA');
     });
 
-    it('⚠️ terreno 3D (automático): leitura OK e SEM linha → vale o padrão (null), não o navegador de outro aparelho', async () => {
+    it('terreno 3D: SEM linha no banco vale o navegador (true/false explícito), como os demais itens', async () => {
+        noNavegador('blueprint:vista3dTerreno:v2', true);
+        const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
+        await new Promise((r) => setTimeout(r, 20));
+        expect(result.current[0]).toBe(true);
+    });
+
+    it('⚠️ terreno 3D: linha "AUTOMATICO" no banco → o editor vê null, mesmo com true no navegador', async () => {
+        banco = [linha('planta.exibir.vista3dTerreno', 'AUTOMATICO')];
         noNavegador('blueprint:vista3dTerreno:v2', true);
         const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
         expect(result.current[0]).toBe(true); // leitura ainda não chegou: segue o navegador
         await waitFor(() => expect(result.current[0]).toBeNull());
-        await waitFor(() => expect(doNavegador('blueprint:vista3dTerreno:v2')).toBeNull());
     });
 
     it('terreno 3D: leitura FALHOU → segue o navegador', async () => {
@@ -117,6 +135,16 @@ describe('usePreferenciaDaPlanta', () => {
         noNavegador('blueprint:vista3dTerreno:v2', true);
         const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
         await waitFor(() => expect(result.current[0]).toBe(false));
+    });
+
+    it('terreno 3D: o texto "AUTOMATICO" não é aceito pelo setter (o editor entrega null)', async () => {
+        const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
+        const aviso = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        act(() => result.current[1]('AUTOMATICO' as never));
+        aviso.mockRestore();
+        expect(m.gravar).not.toHaveBeenCalled();
+        expect(result.current[0]).toBeNull();
     });
 
     it('terreno 3D sem sessão: continua valendo o local (não há leitura do banco)', async () => {
@@ -167,18 +195,41 @@ describe('usePreferenciaDaPlanta', () => {
         expect(result.current.grade[0]).toBe(true);
     });
 
-    it('espelha o valor no navegador (chave antiga, JSON) — a escolha vale sem sessão/offline', async () => {
+    it('SEM sessão espelha o valor no navegador (chave antiga, JSON) — a escolha vale deslogado/offline', async () => {
+        m.userId = null;
         const { result } = montar(() => usePreferenciaDaPlanta<boolean>('mostrarGrade'));
-        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
         act(() => result.current[1](false));
         expect(doNavegador('blueprint:mostrarGrade')).toBe(false);
     });
 
-    it('espelho do terreno 3D usa a chave antiga com :v2', async () => {
+    it('espelho do terreno 3D (sem sessão) usa a chave antiga com :v2', async () => {
+        m.userId = null;
         const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
-        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
         act(() => result.current[1](true));
         expect(doNavegador('blueprint:vista3dTerreno:v2')).toBe(true);
+    });
+
+    it('⚠️ COM sessão o espelho NÃO escreve no navegador: a fonte é o banco (outro usuário não herda a escolha)', async () => {
+        banco = [linha(CHAVE_GRADE, false), linha('planta.exibir.estiloPlanta', 'HUMANIZADA')];
+        const { result } = montar(() => ({
+            grade: usePreferenciaDaPlanta<boolean>('mostrarGrade'),
+            estilo: usePreferenciaDaPlanta<string>('estiloPlanta'),
+            eixos: usePreferenciaDaPlanta<boolean>('mostrarEixos'),
+        }));
+        await waitFor(() => expect(result.current.grade[0]).toBe(false)); // veio do banco
+        await act(async () => { result.current.eixos[1](false); }); // escolha local, com gravação
+        await waitFor(() => expect(m.gravar).toHaveBeenCalled());
+        expect(result.current.estilo[0]).toBe('HUMANIZADA');
+        expect(localStorage.length).toBe(0);
+    });
+
+    it('setter ESTÁVEL entre renders (a chave da query é memorizada)', async () => {
+        const { result, rerender } = montar(() => usePreferenciaDaPlanta<boolean>('mostrarGrade'));
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
+        const antes = result.current[1];
+        rerender();
+        rerender();
+        expect(result.current[1]).toBe(antes);
     });
 
     it('o setter muda NA HORA, antes de o serviço responder, e grava planta.exibir.<item>', async () => {
@@ -234,10 +285,10 @@ describe('usePreferenciaDaPlanta', () => {
         expect(m.gravar).not.toHaveBeenCalled();
     });
 
-    it('⚠️ terreno 3D: o cache otimista REMOVE a linha (não põe { valor: null }) antes de o serviço responder', async () => {
+    it('⚠️ terreno 3D: "Automático" (null) é gravado como o texto "AUTOMATICO" e o cache otimista ganha essa linha', async () => {
         banco = [linha('planta.exibir.vista3dTerreno', true)];
         let terminar!: () => void;
-        m.gravar.mockImplementation((_e: unknown, _d: unknown, chave: string, valor: null) => new Promise<void>((ok) => {
+        m.gravar.mockImplementation((_e: unknown, _d: unknown, chave: string, valor: string) => new Promise<void>((ok) => {
             terminar = () => { gravarNoBanco(chave, valor); ok(); };
         }));
         const { result, client } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
@@ -247,11 +298,11 @@ describe('usePreferenciaDaPlanta', () => {
 
         await waitFor(() => expect(result.current[0]).toBeNull());
         const noCache = client.getQueryData<LinhaDePreferencia[]>(['preferencias', 'usuario', 'u1']);
-        expect(noCache?.some((l) => l.chave === 'planta.exibir.vista3dTerreno')).toBe(false);
+        expect(noCache?.find((l) => l.chave === 'planta.exibir.vista3dTerreno')?.valor).toBe('AUTOMATICO');
         await act(async () => { terminar(); });
     });
 
-    it('terreno 3D: "Automático" (null) APAGA a linha — gravar(..., null) sem 5º argumento; a linha sai do cache e a tela mostra null', async () => {
+    it('terreno 3D: "Automático" (null) GRAVA o texto "AUTOMATICO" (nunca null); a tela mostra null', async () => {
         banco = [linha('planta.exibir.vista3dTerreno', true)];
         const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
         await waitFor(() => expect(result.current[0]).toBe(true));
@@ -259,10 +310,18 @@ describe('usePreferenciaDaPlanta', () => {
         await act(async () => { result.current[1](null); });
 
         expect(m.gravar).toHaveBeenCalledTimes(1);
-        expect(m.gravar.mock.calls[0]).toEqual(['USUARIO', {}, 'planta.exibir.vista3dTerreno', null]);
+        expect(m.gravar.mock.calls[0]).toEqual(['USUARIO', {}, 'planta.exibir.vista3dTerreno', 'AUTOMATICO']);
         await waitFor(() => expect(result.current[0]).toBeNull());
-        expect(banco).toEqual([]);
-        expect(doNavegador('blueprint:vista3dTerreno:v2')).toBeNull();
+        expect(banco).toEqual([linha('planta.exibir.vista3dTerreno', 'AUTOMATICO')]);
+    });
+
+    it('terreno 3D: de "Automático" para Ligado grava true', async () => {
+        banco = [linha('planta.exibir.vista3dTerreno', 'AUTOMATICO')];
+        const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
+        await waitFor(() => expect(result.current[0]).toBeNull());
+        await act(async () => { result.current[1](true); });
+        expect(m.gravar.mock.calls[0]).toEqual(['USUARIO', {}, 'planta.exibir.vista3dTerreno', true]);
+        await waitFor(() => expect(result.current[0]).toBe(true));
     });
 
     it('serviço rejeitando: muda na hora, depois volta ao valor anterior e avisa com o motivo', async () => {
@@ -278,7 +337,6 @@ describe('usePreferenciaDaPlanta', () => {
         await act(async () => { recusar(new Error('sem permissão')); });
         await waitFor(() => expect(result.current[0]).toBe(false));
         expect(m.showToast).toHaveBeenCalledWith('Não foi possível salvar a preferência: sem permissão', 'error');
-        expect(doNavegador('blueprint:mostrarGrade')).toBe(false);
     });
 
     it('falha ao gravar uma escolha NOVA (sem linha antes) volta ao que valia', async () => {
@@ -316,13 +374,24 @@ describe('usePreferenciaDaPlanta', () => {
         expect(m.showToast).toHaveBeenCalledWith(expect.stringContaining('rede caiu'), 'error');
     });
 
-    it('mesmo com a leitura falhando o setter continua mudando (e espelhando no navegador)', async () => {
+    it('mesmo com a leitura falhando o setter continua mudando', async () => {
         m.listarDoUsuario.mockRejectedValue(new Error('outra queda'));
         const { result } = montar(() => usePreferenciaDaPlanta<boolean>('mostrarGrade'));
         await waitFor(() => expect(m.showToast).toHaveBeenCalled());
         await act(async () => { result.current[1](false); });
         expect(result.current[0]).toBe(false);
-        expect(doNavegador('blueprint:mostrarGrade')).toBe(false);
+    });
+
+    it('⚠️ o aviso de falha de leitura é ÚNICO entre usePreferenciasEletricas e usePreferenciaDaPlanta (mesma query)', async () => {
+        m.listarDoUsuario.mockRejectedValue(new Error('queda compartilhada'));
+        montar(() => ({
+            eletrica: usePreferenciasEletricas({ organizationId: null }),
+            grade: usePreferenciaDaPlanta<boolean>('mostrarGrade'),
+            eixos: usePreferenciaDaPlanta<boolean>('mostrarEixos'),
+        }));
+        await waitFor(() => expect(m.showToast).toHaveBeenCalled());
+        await new Promise((r) => setTimeout(r, 30));
+        expect(m.showToast.mock.calls.filter(([msg]) => String(msg).includes('queda compartilhada'))).toHaveLength(1);
     });
 
     it('⚠️ dois cliques rápidos na MESMA chave: termina igual ao banco (o último a gravar vale)', async () => {
@@ -343,7 +412,72 @@ describe('usePreferenciaDaPlanta', () => {
         await waitFor(() => expect(valorNoBanco()).toBe(false));
         await waitFor(() => expect(result.current[0]).toBe(false));
         expect(m.gravar).toHaveBeenCalledTimes(2);
-        await waitFor(() => expect(doNavegador('blueprint:mostrarGrade')).toBe(false));
+    });
+
+    it('⚠️ RAJADA (template de vista): 5 setters com latências diferentes → UMA releitura no fim e nenhum item volta ao valor antigo no meio', async () => {
+        const itens = [
+            ['mostrarGrade', false, 50],
+            ['mostrarMedidas', true, 10],
+            ['mostrarEixos', false, 30],
+            ['mostrarCircuitos', false, 5],
+            ['mostrarRotulos', true, 20],
+        ] as const;
+        const { result } = montar(() => itens.map(([item]) => usePreferenciaDaPlanta<boolean>(item)));
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(result.current[0][0]).toBe(true)); // lista no cache (o otimista só age com ela)
+
+        const instantaneos: boolean[][] = [];
+        m.gravar.mockImplementation((_e: unknown, _d: unknown, chave: string, valor: boolean) => {
+            const espera = itens.find(([item]) => `planta.exibir.${item}` === chave)![2];
+            return new Promise<void>((ok) => setTimeout(() => {
+                gravarNoBanco(chave, valor);
+                // No momento em que ESTA gravação termina, o que a tela mostra ainda é tudo o que foi escolhido.
+                instantaneos.push(result.current.map(([v]) => v));
+                ok();
+            }, espera));
+        });
+        const leiturasAntes = m.listarDoUsuario.mock.calls.length;
+
+        act(() => { itens.forEach(([, novo], i) => result.current[i][1](novo)); });
+
+        const escolhido = itens.map(([, novo]) => novo);
+        expect(result.current.map(([v]) => v)).toEqual(escolhido);
+        await waitFor(() => expect(m.gravar).toHaveBeenCalledTimes(5));
+        // Enquanto há gravação em voo, nenhuma releitura (ela traria o valor antigo dos itens ainda pendentes).
+        await new Promise((r) => setTimeout(r, 25));
+        expect(m.listarDoUsuario.mock.calls.length).toBe(leiturasAntes);
+        expect(result.current.map(([v]) => v)).toEqual(escolhido);
+
+        await waitFor(() => expect(m.listarDoUsuario.mock.calls.length).toBe(leiturasAntes + 1));
+        await new Promise((r) => setTimeout(r, 60));
+        expect(m.listarDoUsuario.mock.calls.length).toBe(leiturasAntes + 1); // UMA releitura só
+        expect(instantaneos).toHaveLength(5);
+        for (const foto of instantaneos) expect(foto).toEqual(escolhido);
+        expect(result.current.map(([v]) => v)).toEqual(escolhido);
+        expect(m.showToast).not.toHaveBeenCalled();
+    });
+
+    it('rajada com uma gravação que FALHA: só ela volta ao valor anterior, avisa, e ainda há UMA releitura no fim', async () => {
+        const { result } = montar(() => [
+            usePreferenciaDaPlanta<boolean>('mostrarGrade'),
+            usePreferenciaDaPlanta<boolean>('mostrarEixos'),
+        ] as const);
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(result.current[0][0]).toBe(true));
+        m.gravar.mockImplementation((_e: unknown, _d: unknown, chave: string, valor: boolean) =>
+            new Promise<void>((ok, ko) => setTimeout(() => {
+                if (chave === CHAVE_GRADE) ko(new Error('negado'));
+                else { gravarNoBanco(chave, valor); ok(); }
+            }, chave === CHAVE_GRADE ? 10 : 30)));
+
+        act(() => { result.current[0][1](false); result.current[1][1](false); });
+
+        await waitFor(() => expect(m.listarDoUsuario.mock.calls.length).toBe(2));
+        await new Promise((r) => setTimeout(r, 40));
+        expect(m.listarDoUsuario.mock.calls.length).toBe(2);
+        expect(result.current[0][0]).toBe(true); // falhou: voltou
+        expect(result.current[1][0]).toBe(false); // gravou
+        expect(m.showToast).toHaveBeenCalledWith('Não foi possível salvar a preferência: negado', 'error');
     });
 
     it('⚠️ sem sessão: muda local (estado + navegador) e NÃO chama o serviço', async () => {
@@ -354,7 +488,7 @@ describe('usePreferenciaDaPlanta', () => {
         await act(async () => { result.current[1](false); });
 
         expect(result.current[0]).toBe(false);
-        expect(doNavegador('blueprint:mostrarGrade')).toBe(false);
+        expect(doNavegador('blueprint:mostrarGrade')).toBe(false); // sem sessão o navegador é a fonte
         expect(m.listarDoUsuario).not.toHaveBeenCalled();
         expect(m.gravar).not.toHaveBeenCalled();
         expect(m.showToast).not.toHaveBeenCalled();
@@ -398,7 +532,7 @@ describe('useMigracaoDaExibicaoDaPlanta', () => {
         vi.clearAllMocks();
         localStorage.clear();
         banco = [];
-        // A guarda é do módulo ("uma vez por usuário por carga"): cada teste usa um usuário novo.
+        // A guarda em módulo é "uma vez por usuário por carga": cada teste usa um usuário novo.
         m.userId = `u-mig-${++seq}`;
         m.listarDoUsuario.mockImplementation(async () => [...banco]);
         m.gravar.mockResolvedValue(undefined);
@@ -425,13 +559,21 @@ describe('useMigracaoDaExibicaoDaPlanta', () => {
         ]);
     });
 
-    it('⚠️ terreno 3D (automático) fica FORA da migração, mesmo com true no navegador', async () => {
+    it('terreno 3D (automatico) migra quando o navegador tem true/false EXPLÍCITO; null não migra', async () => {
         noNavegador('blueprint:vista3dTerreno:v2', true);
         noNavegador('blueprint:mostrarEixos', false);
         montar(() => useMigracaoDaExibicaoDaPlanta());
         await waitFor(() => expect(m.gravarVarios).toHaveBeenCalledTimes(1));
         const [linhas] = m.gravarVarios.mock.calls[0] as [{ chave: string }[]];
-        expect(linhas.map((l) => l.chave)).toEqual(['planta.exibir.mostrarEixos']);
+        expect(linhas.map((l) => l.chave).sort()).toEqual(['planta.exibir.mostrarEixos', 'planta.exibir.vista3dTerreno']);
+    });
+
+    it('terreno 3D com null (automático) no navegador não migra', async () => {
+        noNavegador('blueprint:vista3dTerreno:v2', null);
+        montar(() => useMigracaoDaExibicaoDaPlanta());
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
+        await new Promise((r) => setTimeout(r, 30));
+        expect(m.gravarVarios).not.toHaveBeenCalled();
     });
 
     it('depois de migrar relê a chave do usuário (a planta passa a ler do banco)', async () => {
@@ -457,12 +599,67 @@ describe('useMigracaoDaExibicaoDaPlanta', () => {
         expect(m.gravarVarios).toHaveBeenCalledTimes(1);
     });
 
-    it('navegador sem nada diferente do padrão: não grava nada', async () => {
+    it('navegador sem nada diferente do padrão: não grava nada, mas deixa o marcador do usuário', async () => {
         noNavegador('blueprint:mostrarGrade', true);
+        montar(() => useMigracaoDaExibicaoDaPlanta());
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
+        await waitFor(() => expect(localStorage.getItem(chaveDoMarcadorDeMigracao(m.userId!))).toBe('1'));
+        expect(m.gravarVarios).not.toHaveBeenCalled();
+    });
+
+    it('⚠️ marcador POR USUÁRIO: gravado só depois do gravarVarios bem-sucedido', async () => {
+        let concluir!: () => void;
+        m.gravarVarios.mockImplementation(() => new Promise<void>((ok) => { concluir = ok; }));
+        noNavegador('blueprint:mostrarEixos', false);
+        montar(() => useMigracaoDaExibicaoDaPlanta());
+        await waitFor(() => expect(m.gravarVarios).toHaveBeenCalledTimes(1));
+        expect(localStorage.getItem(chaveDoMarcadorDeMigracao(m.userId!))).toBeNull(); // ainda em voo
+        await act(async () => { concluir(); });
+        await waitFor(() => expect(localStorage.getItem(chaveDoMarcadorDeMigracao(m.userId!))).toBe('1'));
+    });
+
+    it('⚠️ com o marcador presente (carga seguinte) NÃO migra, mesmo havendo o que migrar', async () => {
+        localStorage.setItem(chaveDoMarcadorDeMigracao(m.userId!), '1');
+        noNavegador('blueprint:mostrarEixos', false);
         montar(() => useMigracaoDaExibicaoDaPlanta());
         await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
         await new Promise((r) => setTimeout(r, 30));
         expect(m.gravarVarios).not.toHaveBeenCalled();
+    });
+
+    it('o marcador de OUTRO usuário no mesmo navegador não vale para este', async () => {
+        localStorage.setItem(chaveDoMarcadorDeMigracao('outro-usuario'), '1');
+        noNavegador('blueprint:mostrarEixos', false);
+        montar(() => useMigracaoDaExibicaoDaPlanta());
+        await waitFor(() => expect(m.gravarVarios).toHaveBeenCalledTimes(1));
+    });
+
+    it('⚠️ usuário logado não deixa o espelho no navegador: o 2º usuário do mesmo navegador não herda as escolhas do 1º', async () => {
+        // 1º usuário: escolhas vêm do banco e uma é feita agora.
+        banco = [linha(CHAVE_GRADE, false)];
+        m.userId = 'primeiro-usuario';
+        const a = montar(() => ({
+            grade: usePreferenciaDaPlanta<boolean>('mostrarGrade'),
+            eixos: usePreferenciaDaPlanta<boolean>('mostrarEixos'),
+            migracao: useMigracaoDaExibicaoDaPlanta(),
+        }));
+        await waitFor(() => expect(a.result.current.grade[0]).toBe(false));
+        await act(async () => { a.result.current.eixos[1](false); });
+        await waitFor(() => expect(m.gravar).toHaveBeenCalled());
+        a.unmount();
+        // 2º usuário no mesmo navegador, sem nada no banco: nada a migrar.
+        banco = [];
+        m.userId = 'segundo-usuario';
+        m.gravarVarios.mockClear();
+        const b = montar(() => ({
+            grade: usePreferenciaDaPlanta<boolean>('mostrarGrade'),
+            eixos: usePreferenciaDaPlanta<boolean>('mostrarEixos'),
+            migracao: useMigracaoDaExibicaoDaPlanta(),
+        }));
+        await waitFor(() => expect(localStorage.getItem(chaveDoMarcadorDeMigracao('segundo-usuario'))).toBe('1'));
+        expect(m.gravarVarios).not.toHaveBeenCalled();
+        expect(b.result.current.grade[0]).toBe(true); // padrão
+        expect(b.result.current.eixos[0]).toBe(true); // padrão
     });
 
     it('⚠️ leitura que falha: não migra (não dá para saber o que já está no banco)', async () => {
@@ -490,6 +687,7 @@ describe('useMigracaoDaExibicaoDaPlanta', () => {
         await waitFor(() => expect(m.gravarVarios).toHaveBeenCalledTimes(1));
         await waitFor(() => expect(aviso).toHaveBeenCalled());
         expect(doNavegador('blueprint:mostrarEixos')).toBe(false);
+        expect(localStorage.getItem(chaveDoMarcadorDeMigracao(m.userId!))).toBeNull(); // falhou: a próxima carga tenta de novo
         aviso.mockRestore();
     });
 });

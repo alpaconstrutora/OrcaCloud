@@ -3728,9 +3728,10 @@ describe('BlueprintEditor · menu Exibir', () => {
       expect(item(/^grade$/i)).toHaveAttribute('aria-checked', 'true');
       await userEvent.click(item(/^grade$/i));
       await waitFor(() => expect(prefGravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarGrade', false));
-      // Na tela e no navegador a escolha vale na hora.
+      // Na tela a escolha vale na hora. Com sessão a fonte é o banco: o navegador NÃO recebe espelho
+      // (outro usuário do mesmo navegador não herda a escolha).
       expect(item(/^grade$/i)).toHaveAttribute('aria-checked', 'false');
-      expect(JSON.parse(localStorage.getItem('blueprint:mostrarGrade')!)).toBe(false);
+      expect(localStorage.getItem('blueprint:mostrarGrade')).toBeNull();
     });
 
     it('sem sessão a escolha vale na tela e no navegador, e o serviço não é chamado', async () => {
@@ -8538,6 +8539,38 @@ describe('BlueprintEditor · terreno e curvas no Exibir do 3D', () => {
       listar.mockRestore();
     }
   });
+
+  it('⚠️ Declividade e Hipsométrico: ligar uma DESLIGA a outra (mesma regra da aba Preferências); desligar não liga a outra', async () => {
+    localStorage.clear();
+    loadBranchModel.mockResolvedValue(await comLote());
+    const svc = await import('../../services/blueprintTopografiaService');
+    const listar = vi.spyOn(svc.blueprintTopografiaService, 'listar').mockResolvedValue([VERSAO] as never);
+    try {
+      await montar();
+      const user = userEvent.setup();
+      await abrirAba(/^vista$/i);
+      await user.click(botao(/exibir/i));
+      const decl = () => screen.getByRole('menuitemcheckbox', { name: /^declividade$/i });
+      const hipso = () => screen.getByRole('menuitemcheckbox', { name: /^hipsométrico$/i });
+      await waitFor(() => expect(decl()).toBeEnabled());
+      expect(decl()).toHaveAttribute('aria-checked', 'false');
+      expect(hipso()).toHaveAttribute('aria-checked', 'false');
+
+      await user.click(decl());
+      expect(decl()).toHaveAttribute('aria-checked', 'true');
+      expect(hipso()).toHaveAttribute('aria-checked', 'false');
+
+      await user.click(hipso());
+      expect(hipso()).toHaveAttribute('aria-checked', 'true');
+      expect(decl()).toHaveAttribute('aria-checked', 'false');
+
+      await user.click(hipso());
+      expect(hipso()).toHaveAttribute('aria-checked', 'false');
+      expect(decl()).toHaveAttribute('aria-checked', 'false');
+    } finally {
+      listar.mockRestore();
+    }
+  }, 60000);
 
   it('a chave v1 (`blueprint:vista3dTerreno`) é ignorada desde 24/10/2026: sem escolha e sem curvas, o Terreno fica no automático (desligado)', async () => {
     // A migração da v1 (`true` = ligado) saiu junto com `terreno3dDaChaveAntiga`: a escolha agora é a

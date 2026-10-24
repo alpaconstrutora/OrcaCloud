@@ -5,7 +5,7 @@ import SecaoTitulo from '../ui/SecaoTitulo';
 import { usePreferenciaDaPlanta } from '../../hooks/usePreferenciaDaPlanta';
 import {
   ITENS_DE_EXIBICAO,
-  preenchimentoPrecisaLigar,
+  consequenciasDaEscolha,
   type GrupoDeExibicao,
   type ItemDeExibicao,
   type ValorDeExibicao,
@@ -23,7 +23,8 @@ import {
  *  - uma linha por item do catálogo, na ordem dele; cada linha é um componente (um hook por item);
  *  - `booleano` → interruptor do repositório (`TableSwitch`), com o estado escrito ao lado;
  *  - `opcao` → `<select>` (o mesmo controle que o menu Vista usa para estilo e cor);
- *  - `automatico` (terreno 3D) → o mesmo `<select>` com Automático | Ligado | Desligado.
+ *  - `automatico` (terreno 3D) → o mesmo `<select>` com Automático | Ligado | Desligado
+ *    (Automático é gravado como o texto 'AUTOMATICO'; o hook troca por `null` para a tela).
  */
 
 const GRUPOS: { grupo: GrupoDeExibicao; titulo: string; icone: LucideIcon }[] = [
@@ -52,14 +53,15 @@ function valorDoAutomatico(valor: ValorDeExibicao): string {
 }
 
 /**
- * Itens cuja escolha pode exigir ligar o "Preenchimento dos ambientes" (cor e Humanizada): a regra é a
- * MESMA do menu Vista (`preenchimentoPrecisaLigar`). Ficam em componente próprio para o hook do
- * preenchimento não ser chamado nas demais linhas.
+ * Itens cuja escolha tem CONSEQUÊNCIAS em outros itens (cor/Humanizada ligam o preenchimento; Declividade
+ * e Hipsométrico se desligam entre si): a regra é a MESMA do menu Vista (`consequenciasDaEscolha`). Ficam
+ * em componente próprio, que lê os itens envolvidos SEMPRE (os mesmos hooks em toda renderização), para
+ * as demais linhas não carregarem hooks que não usam.
  */
-const ITENS_QUE_LIGAM_O_PREENCHIMENTO = new Set(['modoDeCor', 'estiloPlanta']);
+const ITENS_COM_CONSEQUENCIAS = new Set(['modoDeCor', 'estiloPlanta', 'mostrarDeclividade', 'mostrarHipsometria']);
 
 function LinhaDeExibicao({ def }: { def: ItemDeExibicao }) {
-  return ITENS_QUE_LIGAM_O_PREENCHIMENTO.has(def.item) ? <LinhaQueLigaOPreenchimento def={def} /> : <LinhaComum def={def} />;
+  return ITENS_COM_CONSEQUENCIAS.has(def.item) ? <LinhaComConsequencias def={def} /> : <LinhaComum def={def} />;
 }
 
 function LinhaComum({ def }: { def: ItemDeExibicao }) {
@@ -67,13 +69,29 @@ function LinhaComum({ def }: { def: ItemDeExibicao }) {
   return <LinhaDoItem def={def} valor={valor} setValor={setValor} />;
 }
 
-function LinhaQueLigaOPreenchimento({ def }: { def: ItemDeExibicao }) {
+function LinhaComConsequencias({ def }: { def: ItemDeExibicao }) {
+  // Os quatro hooks rodam sempre, nesta ordem (sem hook condicional). Quando um deles é o do próprio item,
+  // é o mesmo valor: dois consumidores da mesma chave andam juntos.
   const [valor, setValor] = usePreferenciaDaPlanta<ValorDeExibicao>(def.item);
   const [preenchimento, setPreenchimento] = usePreferenciaDaPlanta<boolean>('mostrarPreenchimento');
+  const [declividade, setDeclividade] = usePreferenciaDaPlanta<boolean>('mostrarDeclividade');
+  const [hipsometria, setHipsometria] = usePreferenciaDaPlanta<boolean>('mostrarHipsometria');
+
   const escolher = (proximo: ValorDeExibicao) => {
     setValor(proximo);
-    // Só quando a escolha MUDA de fato (o hook ignora o igual) e o preenchimento está desligado.
-    if (!Object.is(proximo, valor) && preenchimentoPrecisaLigar(def.item, proximo, preenchimento)) setPreenchimento(true);
+    // Só quando a escolha MUDA de fato (o hook ignora o igual).
+    if (Object.is(proximo, valor)) return;
+    const atuais: Record<string, unknown> = {
+      mostrarPreenchimento: preenchimento,
+      mostrarDeclividade: declividade,
+      mostrarHipsometria: hipsometria,
+    };
+    const setters: Record<string, (v: boolean) => void> = {
+      mostrarPreenchimento: setPreenchimento,
+      mostrarDeclividade: setDeclividade,
+      mostrarHipsometria: setHipsometria,
+    };
+    for (const c of consequenciasDaEscolha(def.item, proximo, (item) => atuais[item])) setters[c.item]?.(c.valor);
   };
   return <LinhaDoItem def={def} valor={valor} setValor={escolher} />;
 }

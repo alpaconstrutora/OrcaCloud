@@ -149,10 +149,12 @@ describe('preferenciasService', () => {
             expect(linha).toMatchObject({ chave: 'planta.exibir.estiloPlanta', valor: 'HUMANIZADA' });
         });
 
-        it('valor null no terreno 3D ("Automático") APAGA a linha: a coluna é NOT NULL, nunca vai upsert com null', async () => {
-            await preferenciasService.gravar('USUARIO', {}, 'planta.exibir.vista3dTerreno', null);
-            expect(nomes(0)).toContain('delete');
-            expect(nomes(0)).not.toContain('upsert');
+        it('terreno 3D "Automático" é um valor EXPLÍCITO: o texto "AUTOMATICO" vai em upsert (nunca null, a coluna é NOT NULL)', async () => {
+            await preferenciasService.gravar('USUARIO', {}, 'planta.exibir.vista3dTerreno', 'AUTOMATICO');
+            expect(nomes(0)).toContain('upsert');
+            expect(nomes(0)).not.toContain('delete');
+            const [linha] = chamada(0, 'upsert') as [Record<string, unknown>];
+            expect(linha).toMatchObject({ escopo: 'USUARIO', user_id: 'u1', chave: 'planta.exibir.vista3dTerreno', valor: 'AUTOMATICO' });
         });
 
         it('erro do banco rejeita com a frase do banco', async () => {

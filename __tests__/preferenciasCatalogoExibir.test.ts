@@ -4,8 +4,8 @@ import { resolve } from 'node:path';
 import {
   ITENS_DE_EXIBICAO,
   chaveDeExibicao,
+  consequenciasDaEscolha,
   linhasParaMigrar,
-  preenchimentoPrecisaLigar,
   valorDeExibicao,
 } from '../utils/preferencias/catalogoExibir';
 import type { LinhaDePreferencia } from '../utils/preferencias/resolver';
@@ -123,8 +123,10 @@ describe('valorDeExibicao', () => {
     expect(valorDeExibicao([linha('estiloPlanta', true)], 'estiloPlanta')).toBeUndefined();
   });
 
-  it('automático: booleano ou null gravado', () => {
-    expect(valorDeExibicao([linha('vista3dTerreno', null)], 'vista3dTerreno')).toBeNull();
+  it('automático: booleano ou o texto "AUTOMATICO" gravado (null não existe no banco: coluna NOT NULL)', () => {
+    expect(valorDeExibicao([linha('vista3dTerreno', 'AUTOMATICO')], 'vista3dTerreno')).toBe('AUTOMATICO');
+    expect(valorDeExibicao([linha('vista3dTerreno', null)], 'vista3dTerreno')).toBeUndefined();
+    expect(valorDeExibicao([linha('mostrarGrade', 'AUTOMATICO')], 'mostrarGrade')).toBeUndefined();
     expect(valorDeExibicao([linha('vista3dTerreno', true)], 'vista3dTerreno')).toBe(true);
     expect(valorDeExibicao([linha('vista3dTerreno', false)], 'vista3dTerreno')).toBe(false);
     expect(valorDeExibicao([linha('vista3dTerreno', 'auto')], 'vista3dTerreno')).toBeUndefined();
@@ -146,21 +148,34 @@ describe('linhasParaMigrar', () => {
         'blueprint:mostrarGrade': false, // já no banco → não migra
         'blueprint:mostrarEixos': false, // migra
         'blueprint:estiloPlanta': 'HUMANIZADA', // migra
-        'blueprint:vista3dTerreno:v2': true, // 'automatico' → fora da migração
+        'blueprint:vista3dTerreno:v2': true, // 'automatico' com true explícito → migra
       }),
     );
     expect(r).toEqual(
       expect.arrayContaining([
         { chave: 'planta.exibir.mostrarEixos', valor: false },
         { chave: 'planta.exibir.estiloPlanta', valor: 'HUMANIZADA' },
+        { chave: 'planta.exibir.vista3dTerreno', valor: true },
       ]),
     );
-    expect(r).toHaveLength(2);
+    expect(r).toHaveLength(3);
   });
 
-  it('⚠️ item "automatico" (terreno 3D) fica FORA da migração, com true ou false no navegador', () => {
-    expect(linhasParaMigrar([], navegador({ 'blueprint:vista3dTerreno:v2': true }))).toEqual([]);
-    expect(linhasParaMigrar([], navegador({ 'blueprint:vista3dTerreno:v2': false }))).toEqual([]);
+  it('terreno 3D (automatico): true/false EXPLÍCITO no navegador migra; null (é o padrão) e o texto "AUTOMATICO" não', () => {
+    expect(linhasParaMigrar([], navegador({ 'blueprint:vista3dTerreno:v2': true }))).toEqual([
+      { chave: 'planta.exibir.vista3dTerreno', valor: true },
+    ]);
+    expect(linhasParaMigrar([], navegador({ 'blueprint:vista3dTerreno:v2': false }))).toEqual([
+      { chave: 'planta.exibir.vista3dTerreno', valor: false },
+    ]);
+    expect(linhasParaMigrar([], navegador({ 'blueprint:vista3dTerreno:v2': null }))).toEqual([]);
+    expect(linhasParaMigrar([], navegador({ 'blueprint:vista3dTerreno:v2': 'AUTOMATICO' }))).toEqual([]);
+  });
+
+  it('terreno 3D com linha "AUTOMATICO" no banco: a escolha do banco não é sobrescrita pelo navegador', () => {
+    expect(
+      linhasParaMigrar([linha('vista3dTerreno', 'AUTOMATICO')], navegador({ 'blueprint:vista3dTerreno:v2': true })),
+    ).toEqual([]);
   });
 
   it('não migra o que é IGUAL ao padrão (o usePersistedState grava o padrão ao montar; migrar congelaria o padrão)', () => {
@@ -195,7 +210,7 @@ describe('linhasParaMigrar', () => {
   });
 
   it('não devolve nada quando tudo já está no banco', () => {
-    const linhas = ITENS_DE_EXIBICAO.map((i) => linha(i.item, i.padrao));
+    const linhas = ITENS_DE_EXIBICAO.map((i) => linha(i.item, i.padrao === null ? 'AUTOMATICO' : i.padrao)); // o automático no banco é o texto
     const r = linhasParaMigrar(linhas, () => false);
     expect(r).toEqual([]);
   });
@@ -225,31 +240,51 @@ describe('teste-trava: o editor não guarda mais estas escolhas só no navegador
   });
 });
 
-describe('preenchimentoPrecisaLigar (regra única do menu Vista e da aba Preferências)', () => {
-  it('cor diferente de "Sem cor" com o preenchimento desligado precisa ligar', () => {
+describe('consequenciasDaEscolha (regra única do menu Vista e da aba Preferências)', () => {
+  const estado = (mapa: Record<string, unknown>) => (item: string) => mapa[item];
+  const LIGAR_PREENCHIMENTO = [{ item: 'mostrarPreenchimento', valor: true }];
+
+  it('cor diferente de "Sem cor" com o preenchimento desligado liga o preenchimento', () => {
     for (const modo of ['AMBIENTE', 'TIPO_DE_AMBIENTE', 'UNIDADE', 'USO', 'PAVIMENTO', 'DEPARTAMENTO']) {
-      expect(preenchimentoPrecisaLigar('modoDeCor', modo, false), modo).toBe(true);
+      expect(consequenciasDaEscolha('modoDeCor', modo, estado({ mostrarPreenchimento: false })), modo).toEqual(LIGAR_PREENCHIMENTO);
     }
   });
 
   it('"Sem cor" não liga nada', () => {
-    expect(preenchimentoPrecisaLigar('modoDeCor', 'NENHUM', false)).toBe(false);
+    expect(consequenciasDaEscolha('modoDeCor', 'NENHUM', estado({ mostrarPreenchimento: false }))).toEqual([]);
   });
 
-  it('Humanizada com o preenchimento desligado precisa ligar; Técnica não', () => {
-    expect(preenchimentoPrecisaLigar('estiloPlanta', 'HUMANIZADA', false)).toBe(true);
-    expect(preenchimentoPrecisaLigar('estiloPlanta', 'TECNICA', false)).toBe(false);
+  it('Humanizada com o preenchimento desligado liga o preenchimento; Técnica não', () => {
+    expect(consequenciasDaEscolha('estiloPlanta', 'HUMANIZADA', estado({ mostrarPreenchimento: false }))).toEqual(LIGAR_PREENCHIMENTO);
+    expect(consequenciasDaEscolha('estiloPlanta', 'TECNICA', estado({ mostrarPreenchimento: false }))).toEqual([]);
   });
 
-  it('com o preenchimento já ligado nunca precisa', () => {
-    expect(preenchimentoPrecisaLigar('modoDeCor', 'AMBIENTE', true)).toBe(false);
-    expect(preenchimentoPrecisaLigar('estiloPlanta', 'HUMANIZADA', true)).toBe(false);
+  it('com o preenchimento já ligado não há consequência', () => {
+    expect(consequenciasDaEscolha('modoDeCor', 'AMBIENTE', estado({ mostrarPreenchimento: true }))).toEqual([]);
+    expect(consequenciasDaEscolha('estiloPlanta', 'HUMANIZADA', estado({ mostrarPreenchimento: true }))).toEqual([]);
   });
 
-  it('outros itens e valores estranhos nunca ligam', () => {
-    expect(preenchimentoPrecisaLigar('mostrarGrade', true, false)).toBe(false);
-    expect(preenchimentoPrecisaLigar('vista3dEstilo', 'TRANSPARENTE', false)).toBe(false);
-    expect(preenchimentoPrecisaLigar('modoDeCor', 3, false)).toBe(false);
-    expect(preenchimentoPrecisaLigar('modoDeCor', null, false)).toBe(false);
+  it('ligar Declividade desliga o Hipsométrico (e vice-versa) — só quando o outro está ligado', () => {
+    expect(consequenciasDaEscolha('mostrarDeclividade', true, estado({ mostrarHipsometria: true }))).toEqual([
+      { item: 'mostrarHipsometria', valor: false },
+    ]);
+    expect(consequenciasDaEscolha('mostrarHipsometria', true, estado({ mostrarDeclividade: true }))).toEqual([
+      { item: 'mostrarDeclividade', valor: false },
+    ]);
+    expect(consequenciasDaEscolha('mostrarDeclividade', true, estado({ mostrarHipsometria: false }))).toEqual([]);
+    expect(consequenciasDaEscolha('mostrarHipsometria', true, estado({}))).toEqual([]);
+  });
+
+  it('desligar Declividade/Hipsométrico não liga o outro', () => {
+    expect(consequenciasDaEscolha('mostrarDeclividade', false, estado({ mostrarHipsometria: true }))).toEqual([]);
+    expect(consequenciasDaEscolha('mostrarHipsometria', false, estado({ mostrarDeclividade: true }))).toEqual([]);
+  });
+
+  it('outros itens e valores estranhos nunca têm consequência', () => {
+    const tudoDesligado = estado({ mostrarPreenchimento: false, mostrarDeclividade: true, mostrarHipsometria: true });
+    expect(consequenciasDaEscolha('mostrarGrade', true, tudoDesligado)).toEqual([]);
+    expect(consequenciasDaEscolha('vista3dEstilo', 'TRANSPARENTE', tudoDesligado)).toEqual([]);
+    expect(consequenciasDaEscolha('modoDeCor', 3, tudoDesligado)).toEqual([]);
+    expect(consequenciasDaEscolha('modoDeCor', null, tudoDesligado)).toEqual([]);
   });
 });

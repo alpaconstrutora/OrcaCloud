@@ -180,3 +180,9 @@ e o caso da aba em `BlueprintEditor.test.tsx`.
 - [ ] tarefas 1–5
 - [ ] PR + CI
 - [ ] publicação
+
+## Correções da revisão final (decisões que superam o texto acima)
+- **Terreno 3D "Automático" é valor EXPLÍCITO**: grava-se o texto `'AUTOMATICO'` (a coluna é `jsonb NOT NULL`); o hook troca `'AUTOMATICO'` <-> `null` na fronteira, o editor segue vendo `boolean | null`. Não há mais "apagar a linha" nem caso especial de leitura; o terreno entra na migração com `true`/`false` explícitos do navegador.
+- **Rajada de gravações** (aplicar template de vista): contador de gravações em voo por chave de query (`lib/preferenciasCompartilhado.ts`); a releitura só acontece quando a última termina. Os hooks da planta elétrica e da exibição compartilham o contador e o aviso de falha de leitura (mesma query, um aviso).
+- **Regra única de consequências** (`consequenciasDaEscolha`, no catálogo): cor/Humanizada ligam o preenchimento; ligar Declividade desliga Hipsométrico e vice-versa. Menu Exibir e aba usam a mesma função.
+- **Migração "uma vez" de verdade**: marcador por usuário no navegador (`blueprint:exibir:migrado:<userId>`), gravado após o `gravarVarios` bem-sucedido ou quando não há nada a migrar. O espelho no `blueprint:*` só escreve SEM sessão: com sessão a fonte é o banco (outro usuário do mesmo navegador não herda as escolhas).

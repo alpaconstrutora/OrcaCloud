@@ -90,9 +90,10 @@ export const preferenciasService = {
 
   /**
    * Grava (upsert pelo índice do escopo) ou, com `valor === null`, apaga a linha ("voltar ao padrão").
-   * `valor` também pode ser texto (estilo da planta, modo de cor). Não há como guardar `null`:
-   * a coluna é `jsonb NOT NULL` e o PostgREST converte `null` JSON em SQL NULL — por isso `null`
-   * sempre apaga (o terreno 3D "automático" = sem linha).
+   * `valor` também pode ser texto (estilo da planta, modo de cor, e o 'AUTOMATICO' do terreno 3D).
+   * Não há como guardar `null`: a coluna é `jsonb NOT NULL` e o PostgREST converte `null` JSON em
+   * SQL NULL — por isso `null` sempre apaga. Quem precisa de um "automático" EXPLÍCITO (terreno 3D)
+   * grava o texto 'AUTOMATICO'; a conversão `null` <-> 'AUTOMATICO' é do hook da planta.
    */
   async gravar(
     escopo: EscopoDaPreferencia,

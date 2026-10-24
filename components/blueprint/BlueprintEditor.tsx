@@ -427,7 +427,7 @@ import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
 import SecaoPlantaEletrica from '../preferencias/SecaoPlantaEletrica';
 import SecaoExibicaoDaPlanta from '../preferencias/SecaoExibicaoDaPlanta';
-import { preenchimentoPrecisaLigar } from '../../utils/preferencias/catalogoExibir';
+import { consequenciasDaEscolha } from '../../utils/preferencias/catalogoExibir';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, MenuDoRibbon, abaEfetiva } from './Ribbon';
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
@@ -1873,8 +1873,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * tem curvas geradas. Era um booleano desligado por padrão, e quem gerava
    * relevo abria o 3D e via só o envelope, chato (*"o terreno 3 com as curvas
    * nao foi gerado"*). Clicar no menu vira escolha explícita, respeitada.
-   * Chave nova (v2): na antiga, `false` era quase sempre o padrão, não uma
-   * escolha; quem tinha LIGADO lá continua ligado.
+   * Hoje é preferência do usuário (`planta.exibir.vista3dTerreno`): "Automático"
+   * é gravado como o texto 'AUTOMATICO' e o hook devolve `null` aqui. A chave
+   * `blueprint:vista3dTerreno:v2` é só o espelho do navegador (sem sessão) e a
+   * origem da migração: na chave antiga (sem v2) `false` era quase sempre o
+   * padrão, não uma escolha, e por isso ela não é lida; `true`/`false` explícitos
+   * da v2 migram para o banco, `null` (automático) é o padrão e não migra.
    */
   const [terreno3dEscolhido, setTerreno3dEscolhido] = usePreferenciaDaPlanta<boolean | null>('vista3dTerreno');
   /**
@@ -3900,6 +3904,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       ajuda="Clique dois pontos do desenho: a distância horizontal, a vertical, a inclinada e a inclinação (%) — e as cotas, no corte com terreno. Encaixa em cantos, no platô e no terreno. Esc limpa; Esc de novo sai."
     />
   );
+  /**
+   * Consequências de uma escolha de exibição em OUTROS itens (regra única, a mesma da aba Preferências):
+   * cor/Humanizada ligam o preenchimento; Declividade e Hipsométrico se desligam entre si.
+   */
+  const aplicarConsequenciasDaEscolha = (item: string, valor: unknown) => {
+    const atuais: Record<string, unknown> = {
+      mostrarPreenchimento,
+      mostrarDeclividade,
+      mostrarHipsometria,
+    };
+    for (const c of consequenciasDaEscolha(item, valor, (i) => atuais[i])) {
+      if (c.item === 'mostrarPreenchimento') setMostrarPreenchimento(c.valor);
+      else if (c.item === 'mostrarDeclividade') setMostrarDeclividade(c.valor);
+      else if (c.item === 'mostrarHipsometria') setMostrarHipsometria(c.valor);
+    }
+  };
   const menuVista = (
     <MenuVista
       em3d={em3d}
@@ -3910,13 +3930,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       legenda={coresDoDesenho.legenda}
       onModoDeCor={(m) => {
         setModoDeCor(m);
-        if (preenchimentoPrecisaLigar('modoDeCor', m, mostrarPreenchimento)) setMostrarPreenchimento(true);
+        aplicarConsequenciasDaEscolha('modoDeCor', m);
       }}
       onEstilo3d={setEstilo3d}
       onEstiloPlanta={(e) => {
         setEstiloPlanta(e);
         // Humanizada sem preenchimento não mostra piso nenhum: ligar junto, como o "Colorir por" faz.
-        if (preenchimentoPrecisaLigar('estiloPlanta', e, mostrarPreenchimento)) setMostrarPreenchimento(true);
+        aplicarConsequenciasDaEscolha('estiloPlanta', e);
       }}
       resumoDosPisos={resumoDosPisos}
       onFase={setFiltroDeFase}
@@ -14772,8 +14792,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       icone: TrendingUp,
                       ligado: mostrarDeclividade,
                       alternar: () => {
-                        setMostrarDeclividade((v) => !v);
-                        setMostrarHipsometria(false);
+                        const ligar = !mostrarDeclividade;
+                        setMostrarDeclividade(ligar);
+                        // Ligar uma pintura desliga a outra (mesma regra da aba Preferências).
+                        aplicarConsequenciasDaEscolha('mostrarDeclividade', ligar);
                       },
                       desabilitado: !topografia.selecionada,
                       ajuda: topografia.selecionada
@@ -14786,8 +14808,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       icone: Palette,
                       ligado: mostrarHipsometria,
                       alternar: () => {
-                        setMostrarHipsometria((v) => !v);
-                        setMostrarDeclividade(false);
+                        const ligar = !mostrarHipsometria;
+                        setMostrarHipsometria(ligar);
+                        aplicarConsequenciasDaEscolha('mostrarHipsometria', ligar);
                       },
                       desabilitado: !topografia.selecionada,
                       ajuda: topografia.selecionada

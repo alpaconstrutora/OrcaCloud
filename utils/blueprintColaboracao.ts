@@ -94,8 +94,13 @@ export function travasDe(participantes: readonly Participante[]): Map<string, Pa
  * menos `levelId` (o pavimento não é elemento editável — quem desenha uma
  * parede nova num pavimento em que outra pessoa está não conflita com ela).
  * Comandos de criação (`AddWall`, `AddLevel`…) não tocam em nada existente.
+ *
+ * O REGISTRO DO LANÇAMENTO (kernel 0.105.0) também não toca: o `alvoId` dele diz DE QUAL quadro/pavimento é o
+ * registro, não edita o quadro. Sem esta exceção, o lote "lançar eletrodutos" seria recusado só porque outra pessoa
+ * está com o quadro selecionado — as peças que o lote cria/apaga continuam conferidas pelos outros comandos dele.
  */
 export function idsTocadosPeloComando(cmd: Command): string[] {
+  if (cmd.type === 'RegistrarLancamento' || cmd.type === 'ApagarRegistroDeLancamento') return [];
   const ids: string[] = [];
   for (const [k, v] of Object.entries(cmd as unknown as Record<string, unknown>)) {
     if (k === 'levelId' || k === 'type') continue;

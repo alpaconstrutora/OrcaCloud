@@ -75,7 +75,9 @@ import {
   type Muro,
   type PortaoDoMuro,
   type TipoDeMuro,
-  MOTORES_DE_LANCAMENTO,
+  ehMotorDeLancamento,
+  problemaDasEscolhas,
+  semRegistrosDosAlvos,
   type MotorDeLancamento,
   type RegistroDeLancamento,
   type ValorDeEscolha,
@@ -4340,6 +4342,8 @@ function aplicarSemHash(
       next.quadros = next.quadros.map((q) => (q.quadroPaiId === quadro.id ? { ...q, quadroPaiId: null } : q));
       // E4.3: entrada/medidor ligados a ele ficam soltos (a conferência avisa).
       next.terminais = (next.terminais ?? []).map((t) => (t.quadroId === quadro.id ? { ...t, quadroId: null } : t));
+      // 0.105.0: o registro do lançamento deste quadro vai junto — não há mais rede dele a relançar.
+      semRegistrosDosAlvos(next, new Set([quadro.id]));
       diff.deleted.push(quadro.id, ...filhos.map((c) => c.id));
       break;
     }
@@ -4454,20 +4458,11 @@ function aplicarSemHash(
     case 'RegistrarLancamento': {
       const { motor, alvoId } = command;
       assertMotorDeLancamento(next, motor, alvoId);
+      const problema = problemaDasEscolhas(command.escolhas ?? {});
+      if (problema) throw new KernelError('BAD_REGISTRO', `Registro do lançamento recusado: ${problema}`);
       const escolhas: Record<string, ValorDeEscolha> = {};
-      for (const [chave, valor] of Object.entries(command.escolhas ?? {})) {
-        // `undefined` = a escolha não existe (estado opcional da tela): fica de fora, como no JSON.
-        if (valor === undefined) continue;
-        // NaN e infinito não sobrevivem ao JSON (viram `null`): o registro relido diria outra coisa do que foi gravado,
-        // e o aviso "as escolhas mudaram" acenderia sozinho depois de recarregar.
-        if (typeof valor === 'number' && !Number.isFinite(valor)) {
-          throw new KernelError('BAD_REGISTRO', `Escolha "${chave}" do lançamento não é um número finito`);
-        }
-        if (valor !== null && typeof valor !== 'string' && typeof valor !== 'number' && typeof valor !== 'boolean') {
-          throw new KernelError('BAD_REGISTRO', `Escolha "${chave}" do lançamento não é texto, número, sim/não ou nulo`);
-        }
-        escolhas[chave] = valor;
-      }
+      // `undefined` = a escolha não existe (estado opcional da tela): fica de fora, como no JSON.
+      for (const [chave, valor] of Object.entries(command.escolhas ?? {})) if (valor !== undefined) escolhas[chave] = valor;
       const registro: RegistroDeLancamento = { motor, alvoId, escolhas };
       const lista = next.registrosDeLancamento ?? [];
       const i = lista.findIndex((r) => r.motor === motor && r.alvoId === alvoId);
@@ -4478,7 +4473,7 @@ function aplicarSemHash(
 
     case 'ApagarRegistroDeLancamento': {
       const { motor, alvoId } = command;
-      if (!(MOTORES_DE_LANCAMENTO as readonly string[]).includes(motor)) {
+      if (!ehMotorDeLancamento(motor)) {
         throw new KernelError('BAD_REGISTRO', `Motor de lançamento desconhecido: ${String(motor)}`);
       }
       next.registrosDeLancamento = (next.registrosDeLancamento ?? []).filter((r) => !(r.motor === motor && r.alvoId === alvoId));
@@ -5637,6 +5632,8 @@ function aplicarSemHash(
       const circuitosOrfaos = (next.circuitos ?? []).filter((c) => idsQuadro.has(c.quadroId));
       const idsCircuito = new Set(circuitosOrfaos.map((c) => c.id));
       next.quadros = (next.quadros ?? []).filter((q) => !idsQuadro.has(q.id));
+      // 0.105.0: os registros do lançamento do pavimento E dos quadros dele vão junto.
+      semRegistrosDosAlvos(next, new Set([level.id, ...idsQuadro]));
       next.circuitos = (next.circuitos ?? []).filter((c) => !idsCircuito.has(c.id));
       next.terminais = (next.terminais ?? []).map((t) =>
         t.circuitoId && idsCircuito.has(t.circuitoId) ? { ...t, circuitoId: null } : t,
@@ -6515,7 +6512,7 @@ export class ModelHistory {
  * gravaria um registro que some na primeira releitura — e o aviso de escolhas mudadas nunca acenderia, calado.
  */
 function assertMotorDeLancamento(model: BlueprintModel, motor: MotorDeLancamento, alvoId: ObjectId | null): void {
-  if (!(MOTORES_DE_LANCAMENTO as readonly string[]).includes(motor)) {
+  if (!ehMotorDeLancamento(motor)) {
     throw new KernelError('BAD_REGISTRO', `Motor de lançamento desconhecido: ${String(motor)}`);
   }
   if (alvoId === null) return;

@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import AvisoDeEscolhasMudaram from '../../components/blueprint/AvisoDeEscolhasMudaram';
 import type { DiferencaDeEscolha } from '../../utils/blueprintRegistroDeLancamento';
 
-const CAIXAS: DiferencaDeEscolha = { item: 'caixasDePassagem', rotulo: 'Caixas de passagem', antes: 'com caixas de passagem', agora: 'sem caixas de passagem' };
+const CAIXAS: DiferencaDeEscolha = { item: 'caixasDePassagem', rotulo: 'Caixas de passagem', antes: 'com caixas', agora: 'sem caixas' };
 
 describe('AvisoDeEscolhasMudaram', () => {
   it('sem diferença não renderiza nada', () => {
@@ -20,7 +20,8 @@ describe('AvisoDeEscolhasMudaram', () => {
   it('com diferença mostra o texto e o botão (rótulo padrão), e o clique relança', () => {
     const onRelancar = vi.fn();
     render(<AvisoDeEscolhasMudaram diferencas={[CAIXAS]} onRelancar={onRelancar} />);
-    expect(screen.getByText('Lançado com: com caixas de passagem · agora: sem caixas de passagem')).toBeTruthy();
+    expect(screen.getByText('Caixas de passagem — lançado com: com caixas · agora: sem caixas')).toBeTruthy();
+    expect(screen.queryByTestId('aviso-escolhas-mudaram-motivo')).toBeNull();
     const botao = screen.getByRole('button', { name: 'Relançar com as escolhas atuais' });
     expect((botao as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(botao);
@@ -39,6 +40,8 @@ describe('AvisoDeEscolhasMudaram', () => {
     expect(botao.disabled).toBe(true);
     expect(botao.title).toBe('Planta somente leitura: peça a edição para relançar');
     expect((botao.parentElement as HTMLElement).title).toBe('Planta somente leitura: peça a edição para relançar');
+    // E no TEXTO do aviso, não só no title (acessibilidade: leitor de tela e toque não veem title).
+    expect(screen.getByTestId('aviso-escolhas-mudaram-motivo').textContent).toBe('Planta somente leitura: peça a edição para relançar');
     fireEvent.click(botao);
     expect(onRelancar).not.toHaveBeenCalled();
   });

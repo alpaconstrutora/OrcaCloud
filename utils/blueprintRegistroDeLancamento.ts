@@ -11,7 +11,7 @@
  * módulo é o lado de LEITURA comum a todos os motores (eletrodutos, água, esgoto, pluvial, circuitos automáticos):
  * - `registroDe`: o registro de um motor num alvo, ou `null`;
  * - `diferencasDasEscolhas`: o que difere entre o gravado e o atual, na ordem que o motor declarou;
- * - `textoDasDiferencas`: a frase do aviso âmbar ("Lançado com: … · agora: …");
+ * - `textoDasDiferencas`: a frase do aviso âmbar ("Caixas de passagem — lançado com: … · agora: …");
  * - `comandoDeRegistro`: o comando que o motor põe NO MESMO LOTE do lançamento (o Ctrl+Z volta os dois).
  *
  * Puro: sem React, sem banco. As escolhas vêm de onde a tela as tem (preferência do usuário, estado do navegador,
@@ -29,15 +29,15 @@ import type {
 /** As escolhas de um lançamento, achatadas. */
 export type EscolhasDoLancamento = Record<string, ValorDeEscolha>;
 
-/** Uma escolha que mudou entre o lançamento e agora. `antes`/`agora` são frases que se leem sozinhas. */
+/** Uma escolha que mudou entre o lançamento e agora. `antes`/`agora` são só o VALOR em texto (o rótulo vai à parte). */
 export interface DiferencaDeEscolha {
   /** A chave da escolha (`caixasDePassagem`). */
   item: string;
   /** Como o usuário a chama (`Caixas de passagem`). */
   rotulo: string;
-  /** Com o que a rede foi lançada (`com caixas de passagem`). */
+  /** Com o que a rede foi lançada (`com caixas`); `—` = não informado. */
   antes: string;
-  /** O que está escolhido agora (`sem caixas de passagem`). */
+  /** O que está escolhido agora (`sem caixas`); `—` = não informado. */
   agora: string;
 }
 
@@ -49,8 +49,9 @@ export interface OpcoesDaComparacao {
    */
   rotulos: Record<string, string>;
   /**
-   * Como dizer o valor de uma escolha, quando o padrão (`Rótulo: valor`) não serve — ex.: `true` → "com caixas de
-   * passagem". O texto devolvido deve se ler sozinho.
+   * Como dizer o VALOR de uma escolha, quando o padrão (sim/não, número com vírgula, texto cru) não serve — ex.: `true`
+   * → "com caixas". Vale para os DOIS lados; só não é chamado para o lado não informado (sai `—`). Devolve só o valor:
+   * o rótulo já abre a frase ("Caixas de passagem — lançado com: com caixas · agora: sem caixas").
    */
   valores?: Record<string, (v: ValorDeEscolha) => string>;
   /**
@@ -95,10 +96,12 @@ export function comandoDeRegistro(
 const AUSENTE = Symbol('ausente');
 type Lado = ValorDeEscolha | typeof AUSENTE;
 
-const tem = (o: Record<string, unknown>, k: string) => Object.prototype.hasOwnProperty.call(o, k) && o[k] !== undefined;
+/** Presente = tem a chave com valor INFORMADO. `null` conta como ausente: "não informado" é o mesmo que não ter. */
+const tem = (o: Record<string, unknown>, k: string) => Object.prototype.hasOwnProperty.call(o, k) && o[k] !== undefined && o[k] !== null;
 
-function valorPadraoEmTexto(v: ValorDeEscolha): string {
-  if (v === null) return '—';
+const NAO_INFORMADO = '—';
+
+function valorPadraoEmTexto(v: Exclude<ValorDeEscolha, null>): string {
   if (typeof v === 'boolean') return v ? 'sim' : 'não';
   if (typeof v === 'number') return String(v).replace('.', ',');
   return v;
@@ -109,7 +112,10 @@ function valorPadraoEmTexto(v: ValorDeEscolha): string {
  *
  * - `gravadas` nulo (rede sem registro: lançada antes de existir o registro) → `[]`: não se sabe com que foi lançada,
  *   então a regra B (o aviso) não acende; fica só a regra A (o botão de relançar disponível).
- * - Chave ausente de um lado vale o padrão (`opcoes.padroes`); sem padrão declarado, ausente ≠ qualquer valor.
+ * - Chave ausente (ou `null`) de um lado vale o padrão (`opcoes.padroes`); sem padrão declarado, ausente ≠ qualquer
+ *   valor informado, e ausente = ausente.
+ * - Rede de segurança: diferença cujos dois textos saem iguais (dois valores que o formatador diz do mesmo jeito) é
+ *   descartada — um aviso "— · agora: —" pediria relançar sem nada a mudar.
  */
 export function diferencasDasEscolhas(
   gravadas: Record<string, ValorDeEscolha | undefined> | null,
@@ -120,21 +126,28 @@ export function diferencasDasEscolhas(
   const padroes = opcoes.padroes ?? {};
   const lado = (o: Record<string, ValorDeEscolha | undefined>, k: string): Lado =>
     tem(o, k) ? (o[k] as ValorDeEscolha) : tem(padroes, k) ? padroes[k] : AUSENTE;
-  const texto = (k: string, rotulo: string, v: Lado): string => {
-    if (v !== AUSENTE && opcoes.valores?.[k]) return opcoes.valores[k](v);
-    return `${rotulo}: ${v === AUSENTE ? '—' : valorPadraoEmTexto(v)}`;
+  const texto = (k: string, v: Lado): string => {
+    if (v === AUSENTE || v === null) return NAO_INFORMADO;
+    const formatar = opcoes.valores?.[k];
+    return formatar ? formatar(v) : valorPadraoEmTexto(v);
   };
   const out: DiferencaDeEscolha[] = [];
   for (const [item, rotulo] of Object.entries(opcoes.rotulos)) {
     const antes = lado(gravadas, item);
     const agora = lado(atuais, item);
     if (antes === agora) continue;
-    out.push({ item, rotulo, antes: texto(item, rotulo, antes), agora: texto(item, rotulo, agora) });
+    const d = { item, rotulo, antes: texto(item, antes), agora: texto(item, agora) };
+    if (d.antes === d.agora) continue;
+    out.push(d);
   }
   return out;
 }
 
-/** A frase do aviso: "Lançado com: com caixas de passagem · agora: sem caixas de passagem"; várias, por "; ". */
+/**
+ * A frase do aviso — UM formato, para uma ou várias diferenças: `<Rótulo> — lançado com: <antes> · agora: <agora>`,
+ * várias separadas por "; ". Ex.: "Caixas de passagem — lançado com: com caixas · agora: sem caixas; Bitola — lançado
+ * com: 20 mm · agora: 25 mm".
+ */
 export function textoDasDiferencas(diferencas: DiferencaDeEscolha[]): string {
-  return diferencas.map((d) => `Lançado com: ${d.antes} · agora: ${d.agora}`).join('; ');
+  return diferencas.map((d) => `${d.rotulo} — lançado com: ${d.antes} · agora: ${d.agora}`).join('; ');
 }

@@ -20,7 +20,7 @@ export { TIPOS_DE_MURO, ROTULO_DO_TIPO_DE_MURO, TIPOS_DE_PORTAO, ROTULO_DO_TIPO_
 export { trechosDoMuro, vaosDosPortoes, areasDoMuro, noPercursoDoMuro, type TrechoDoMuro, type VaoDoPortao } from './muro';
 // REGISTRO DO LANÇAMENTO (0.105.0): com que escolhas cada motor de lançamento lançou a rede.
 export type { MotorDeLancamento, RegistroDeLancamento, ValorDeEscolha } from './model';
-export { MOTORES_DE_LANCAMENTO } from './model';
+export { MOTORES_DE_LANCAMENTO, ehMotorDeLancamento, problemaDasEscolhas } from './model';
 
 export { paredeEhExterna } from './exterior';
 export { perfilDeCobertura, aguasDaExtrusao, aguasDaMesmaExtrusao, TIPOS_DE_PERFIL_DE_COBERTURA, ROTULO_DO_PERFIL_DE_COBERTURA, MENSAGEM_DO_ERRO_DE_PERFIL, type PontoDoPerfil, type TipoDePerfilDeCobertura, type ParametrosDoPerfil, type AguaExtrudada, type ErroDoPerfil } from './coberturaExtrusao';

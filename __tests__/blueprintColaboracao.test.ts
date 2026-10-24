@@ -49,6 +49,18 @@ describe('colaboração (E10.1)', () => {
     expect(travaDoComando([{ type: 'AddWall', levelId: t, a: point(0, 0), b: point(1, 0), thicknessMm: 150, heightMm: 2800 }, { type: 'SetThickness', wallId: 'wal_0001', thicknessMm: 200 } as Command], travas)).toMatchObject({ id: 'wal_0001', por: { nome: 'Zeca' } });
   });
 
+  it('o registro do lançamento não é edição do alvo: RegistrarLancamento/ApagarRegistroDeLancamento não tocam o quadro selecionado por outro', () => {
+    const zeca: Participante = { userId: 'u2', email: 'z@x', nome: 'Zeca', cor: '#000', levelId: null, selecionados: ['qdr_0001'], conexoes: 1 };
+    const travas = travasDe([zeca]);
+    const registrar: Command = { type: 'RegistrarLancamento', motor: 'ELETRODUTOS', alvoId: 'qdr_0001', escolhas: { caixasDePassagem: false } };
+    const apagar: Command = { type: 'ApagarRegistroDeLancamento', motor: 'ELETRODUTOS', alvoId: 'qdr_0001' };
+    expect(idsTocadosPeloComando(registrar)).toEqual([]);
+    expect(idsTocadosPeloComando(apagar)).toEqual([]);
+    expect(travaDoComando([registrar, apagar], travas)).toBeNull();
+    // controle: editar o quadro de fato esbarra na trava
+    expect(travaDoComando([{ type: 'DeleteQuadro', quadroId: 'qdr_0001' }], travas)).toMatchObject({ id: 'qdr_0001' });
+  });
+
   it('dois históricos convergem pelo comando difundido: mesmo hash; a mesma mensagem duas vezes não aplica duas vezes; comando que o kernel recusa e divergência são acusados', () => {
     const { m, t } = sala();
     const A = new ModelHistory(m);

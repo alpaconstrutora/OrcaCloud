@@ -93,6 +93,8 @@ import {
   type MotorDeLancamento,
   type RegistroDeLancamento,
   type ValorDeEscolha,
+  ehMotorDeLancamento,
+  problemaDasEscolhas,
   type TipoDeAnotacao,
   type VistaDaAnotacao,
   type TracoDaAnotacao,
@@ -2950,9 +2952,12 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     });
   });
 
-  // REGISTROS DO LANÇAMENTO (0.105.0): depois de pavimentos e quadros, que o alvo referencia por índice. Índice que
-  // não existe (payload adulterado) descarta o registro — sem registro o motor só não sabe com que se lançou.
-  for (const r of payload.registrosDeLancamento ?? []) {
+  // REGISTROS DO LANÇAMENTO (0.105.0): depois de pavimentos e quadros, que o alvo referencia por índice. A MESMA
+  // validação do comando (`ehMotorDeLancamento`, `problemaDasEscolhas`), mas aqui o inválido é DESCARTADO em vez de
+  // recusado: payload adulterado não pode impedir a planta de abrir, e sem registro o motor só não sabe com que se
+  // lançou (fica a regra A, o botão de relançar). Índice que não existe descarta; (motor, alvo) repetido fica o primeiro.
+  for (const r of Array.isArray(payload.registrosDeLancamento) ? payload.registrosDeLancamento : []) {
+    if (!r || !ehMotorDeLancamento(r.motor) || problemaDasEscolhas(r.escolhas) !== null) continue;
     let alvoId: string | null = null;
     if (typeof r.quadro === 'number') {
       if (!idsDeQuadro[r.quadro]) continue;
@@ -2961,7 +2966,10 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       if (!levelIds[r.level]) continue;
       alvoId = levelIds[r.level];
     }
-    (model.registrosDeLancamento ??= []).push({ motor: r.motor, alvoId, escolhas: { ...(r.escolhas ?? {}) } });
+    if ((model.registrosDeLancamento ?? []).some((x) => x.motor === r.motor && x.alvoId === alvoId)) continue;
+    const escolhas: Record<string, ValorDeEscolha> = {};
+    for (const [k, v] of Object.entries(r.escolhas)) if (v !== undefined) escolhas[k] = v;
+    (model.registrosDeLancamento ??= []).push({ motor: r.motor, alvoId, escolhas });
   }
 
   // `spaces` é derivado: recalculado pelo arranjo planar, nunca lido do payload.

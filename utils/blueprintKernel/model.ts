@@ -4307,6 +4307,40 @@ export interface RegistroDeLancamento {
   escolhas: Record<string, ValorDeEscolha>;
 }
 
+/** O motor é um dos `MOTORES_DE_LANCAMENTO`. Uma regra para o comando e para a leitura do payload. */
+export function ehMotorDeLancamento(m: unknown): m is MotorDeLancamento {
+  return typeof m === 'string' && (MOTORES_DE_LANCAMENTO as readonly string[]).includes(m);
+}
+
+/**
+ * O que há de errado com as escolhas de um registro, ou `null`. Válido: objeto simples cujos valores são texto, número
+ * FINITO (NaN/infinito não sobrevivem ao JSON — o registro relido diria outra coisa), sim/não ou `null`; valor
+ * `undefined` é escolha que não existe e não conta. Uma regra para o comando (que recusa) e para a leitura do payload
+ * (que descarta o registro).
+ */
+export function problemaDasEscolhas(escolhas: unknown): string | null {
+  if (escolhas === null || typeof escolhas !== 'object' || Array.isArray(escolhas)) return 'as escolhas não são um objeto';
+  for (const [chave, valor] of Object.entries(escolhas as Record<string, unknown>)) {
+    if (valor === undefined || valor === null || typeof valor === 'string' || typeof valor === 'boolean') continue;
+    if (typeof valor === 'number') {
+      if (Number.isFinite(valor)) continue;
+      return `a escolha "${chave}" não é um número finito`;
+    }
+    return `a escolha "${chave}" não é texto, número, sim/não ou nulo`;
+  }
+  return null;
+}
+
+/**
+ * Tira os registros cujo alvo sumiu (quadro ou pavimento apagado): sem o alvo não há rede dele a relançar, e o registro
+ * órfão só ficaria no modelo em memória (o payload já não o grava). Chamado DENTRO do comando que apaga o alvo — o
+ * Ctrl+Z, por snapshot, volta os dois juntos.
+ */
+export function semRegistrosDosAlvos(model: BlueprintModel, alvos: ReadonlySet<ObjectId>): void {
+  if (!model.registrosDeLancamento) return;
+  model.registrosDeLancamento = model.registrosDeLancamento.filter((r) => r.alvoId === null || !alvos.has(r.alvoId));
+}
+
 export interface BlueprintModel {
   levels: Level[];
   walls: Wall[];

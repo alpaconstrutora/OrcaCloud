@@ -875,6 +875,22 @@ function cadeiaDeQuadros(model, quadroId) {
   return saida;
 }
 var FASES_DO_CIRCUITO = ["R", "S", "T"];
+var MOTORES_DE_LANCAMENTO = ["ELETRODUTOS", "AGUA", "ESGOTO", "PLUVIAL", "CIRCUITOS"];
+function ehMotorDeLancamento(m) {
+  return typeof m === "string" && MOTORES_DE_LANCAMENTO.includes(m);
+}
+function problemaDasEscolhas(escolhas) {
+  if (escolhas === null || typeof escolhas !== "object" || Array.isArray(escolhas)) return "as escolhas n\xE3o s\xE3o um objeto";
+  for (const [chave, valor] of Object.entries(escolhas)) {
+    if (valor === void 0 || valor === null || typeof valor === "string" || typeof valor === "boolean") continue;
+    if (typeof valor === "number") {
+      if (Number.isFinite(valor)) continue;
+      return `a escolha "${chave}" n\xE3o \xE9 um n\xFAmero finito`;
+    }
+    return `a escolha "${chave}" n\xE3o \xE9 texto, n\xFAmero, sim/n\xE3o ou nulo`;
+  }
+  return null;
+}
 function emptyModel() {
   return {
     levels: [],
@@ -3600,7 +3616,8 @@ function modelFromCanonicalPayload(payload) {
       }))
     });
   });
-  for (const r of payload.registrosDeLancamento ?? []) {
+  for (const r of Array.isArray(payload.registrosDeLancamento) ? payload.registrosDeLancamento : []) {
+    if (!r || !ehMotorDeLancamento(r.motor) || problemaDasEscolhas(r.escolhas) !== null) continue;
     let alvoId = null;
     if (typeof r.quadro === "number") {
       if (!idsDeQuadro[r.quadro]) continue;
@@ -3609,7 +3626,10 @@ function modelFromCanonicalPayload(payload) {
       if (!levelIds[r.level]) continue;
       alvoId = levelIds[r.level];
     }
-    (model.registrosDeLancamento ??= []).push({ motor: r.motor, alvoId, escolhas: { ...r.escolhas ?? {} } });
+    if ((model.registrosDeLancamento ?? []).some((x) => x.motor === r.motor && x.alvoId === alvoId)) continue;
+    const escolhas = {};
+    for (const [k2, v] of Object.entries(r.escolhas)) if (v !== void 0) escolhas[k2] = v;
+    (model.registrosDeLancamento ??= []).push({ motor: r.motor, alvoId, escolhas });
   }
   return recomputeSpaces(model);
 }

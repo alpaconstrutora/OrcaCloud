@@ -12,7 +12,8 @@
  *
  * Visual: o mesmo aviso âmbar dos planos dos motores (`rounded-md border-amber-200 bg-amber-50 text-xs text-amber-800`,
  * ex.: avisos do esgoto no `BlueprintEditor`), com o botão âmbar sólido do aviso de colaboração. Botão desligado
- * SEMPRE diz o motivo — no `title` do botão e do invólucro (nem todo navegador mostra dica em botão desabilitado).
+ * SEMPRE diz o motivo — numa linha menor do próprio aviso (leitor de tela, toque) e no `title` do botão e do
+ * invólucro (nem todo navegador mostra dica em botão desabilitado).
  */
 import React from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
@@ -43,7 +44,15 @@ export default function AvisoDeEscolhasMudaram({
       className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800"
     >
       <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      <span className="flex-1">{textoDasDiferencas(diferencas)}</span>
+      <span className="flex-1">
+        {textoDasDiferencas(diferencas)}
+        {/* O motivo também no TEXTO: leitor de tela e toque não mostram `title`. */}
+        {motivo && (
+          <span className="mt-0.5 block text-[11px] text-amber-700" data-testid="aviso-escolhas-mudaram-motivo">
+            {motivo}
+          </span>
+        )}
+      </span>
       <span className="inline-flex shrink-0" title={motivo}>
         <button
           type="button"

@@ -14,8 +14,8 @@ import {
 
 const ROTULOS = { caixasDePassagem: 'Caixas de passagem', bitolaMm: 'Bitola', encaminhamento: 'Encaminhamento' };
 const VALORES = {
-  caixasDePassagem: (v: unknown) => (v ? 'com caixas de passagem' : 'sem caixas de passagem'),
-  bitolaMm: (v: unknown) => `bitola ${v} mm`,
+  caixasDePassagem: (v: unknown) => (v ? 'com caixas' : 'sem caixas'),
+  bitolaMm: (v: unknown) => `${v} mm`,
 };
 
 function comQuadro(): { model: BlueprintModel; q: string } {
@@ -57,7 +57,7 @@ describe('diferencasDasEscolhas', () => {
 
   it('diferente → item, rótulo, antes e agora formatados', () => {
     const d = diferencasDasEscolhas({ caixasDePassagem: true, bitolaMm: 25 }, { caixasDePassagem: false, bitolaMm: 25 }, { rotulos: ROTULOS, valores: VALORES });
-    expect(d).toEqual([{ item: 'caixasDePassagem', rotulo: 'Caixas de passagem', antes: 'com caixas de passagem', agora: 'sem caixas de passagem' }]);
+    expect(d).toEqual([{ item: 'caixasDePassagem', rotulo: 'Caixas de passagem', antes: 'com caixas', agora: 'sem caixas' }]);
   });
 
   it('registro ausente → [] (sem registro não se sabe com que se lançou)', () => {
@@ -76,7 +76,29 @@ describe('diferencasDasEscolhas', () => {
 
   it('chave de um lado só, SEM padrão declarado → diferença, com "—" do lado ausente', () => {
     const d = diferencasDasEscolhas({}, { encaminhamento: 'TETO' }, { rotulos: ROTULOS });
-    expect(d).toEqual([{ item: 'encaminhamento', rotulo: 'Encaminhamento', antes: 'Encaminhamento: —', agora: 'Encaminhamento: TETO' }]);
+    expect(d).toEqual([{ item: 'encaminhamento', rotulo: 'Encaminhamento', antes: '—', agora: 'TETO' }]);
+  });
+
+  it('null é o mesmo que ausente: não gera "— · agora: —"', () => {
+    const rotulos = { secao: 'Seção' };
+    expect(diferencasDasEscolhas({ secao: null }, { secao: undefined }, { rotulos })).toEqual([]);
+    expect(diferencasDasEscolhas({ secao: null }, {}, { rotulos })).toEqual([]);
+    expect(diferencasDasEscolhas({}, { secao: null }, { rotulos })).toEqual([]);
+    // null com padrão declarado vale o padrão
+    expect(diferencasDasEscolhas({ secao: null }, { secao: 4 }, { rotulos, padroes: { secao: 4 } })).toEqual([]);
+    expect(diferencasDasEscolhas({ secao: null }, { secao: 6 }, { rotulos })).toEqual([{ item: 'secao', rotulo: 'Seção', antes: '—', agora: '6' }]);
+  });
+
+  it('rede de segurança: dois valores que o formatador diz igual não são diferença', () => {
+    const d = diferencasDasEscolhas({ modo: 'A' }, { modo: 'a' }, { rotulos: { modo: 'Modo' }, valores: { modo: (v) => String(v).toUpperCase() } });
+    expect(d).toEqual([]);
+  });
+
+  it('o formatador do motor vale para os DOIS lados; o lado ausente usa o padrão, ou sai "—"', () => {
+    const comPadrao = diferencasDasEscolhas({}, { caixasDePassagem: true }, { rotulos: ROTULOS, valores: VALORES, padroes: { caixasDePassagem: false } });
+    expect(comPadrao).toEqual([{ item: 'caixasDePassagem', rotulo: 'Caixas de passagem', antes: 'sem caixas', agora: 'com caixas' }]);
+    const semPadrao = diferencasDasEscolhas({}, { caixasDePassagem: true }, { rotulos: ROTULOS, valores: VALORES });
+    expect(semPadrao).toEqual([{ item: 'caixasDePassagem', rotulo: 'Caixas de passagem', antes: '—', agora: 'com caixas' }]);
   });
 
   it('chave sem rótulo não é escolha declarada pelo motor — não entra', () => {
@@ -92,13 +114,13 @@ describe('diferencasDasEscolhas', () => {
     expect(d.map((x) => x.item)).toEqual(['caixasDePassagem', 'bitolaMm', 'encaminhamento']);
   });
 
-  it('formatação padrão: sim/não, número em pt-BR, nulo como "—"', () => {
+  it('formatação padrão (só o valor): sim/não, número em pt-BR, nulo como "—"', () => {
     const rotulos = { a: 'Pela parede', b: 'Rota máxima', c: 'Seção' };
     const d = diferencasDasEscolhas({ a: true, b: 1.5, c: null }, { a: false, b: 2.25, c: 4 }, { rotulos });
     expect(d.map((x) => [x.antes, x.agora])).toEqual([
-      ['Pela parede: sim', 'Pela parede: não'],
-      ['Rota máxima: 1,5', 'Rota máxima: 2,25'],
-      ['Seção: —', 'Seção: 4'],
+      ['sim', 'não'],
+      ['1,5', '2,25'],
+      ['—', '4'],
     ]);
   });
 });
@@ -106,12 +128,17 @@ describe('diferencasDasEscolhas', () => {
 describe('textoDasDiferencas', () => {
   it('uma diferença', () => {
     const d = diferencasDasEscolhas({ caixasDePassagem: true }, { caixasDePassagem: false }, { rotulos: ROTULOS, valores: VALORES });
-    expect(textoDasDiferencas(d)).toBe('Lançado com: com caixas de passagem · agora: sem caixas de passagem');
+    expect(textoDasDiferencas(d)).toBe('Caixas de passagem — lançado com: com caixas · agora: sem caixas');
+  });
+
+  it('formato padrão sem rótulo dobrado', () => {
+    const d = diferencasDasEscolhas({ bitolaMm: 20 }, { bitolaMm: 25 }, { rotulos: { bitolaMm: 'Bitola (mm)' } });
+    expect(textoDasDiferencas(d)).toBe('Bitola (mm) — lançado com: 20 · agora: 25');
   });
 
   it('várias, separadas por "; "', () => {
     const d = diferencasDasEscolhas({ caixasDePassagem: true, bitolaMm: 20 }, { caixasDePassagem: false, bitolaMm: 25 }, { rotulos: ROTULOS, valores: VALORES });
-    expect(textoDasDiferencas(d)).toBe('Lançado com: com caixas de passagem · agora: sem caixas de passagem; Lançado com: bitola 20 mm · agora: bitola 25 mm');
+    expect(textoDasDiferencas(d)).toBe('Caixas de passagem — lançado com: com caixas · agora: sem caixas; Bitola — lançado com: 20 mm · agora: 25 mm');
   });
 
   it('nenhuma → texto vazio', () => {

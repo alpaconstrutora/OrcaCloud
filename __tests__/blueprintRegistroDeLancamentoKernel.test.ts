@@ -90,6 +90,47 @@ describe('registro do lançamento · o comando', () => {
   });
 });
 
+describe('registro do lançamento · alvo apagado leva o registro', () => {
+  it('DeleteQuadro tira o registro do quadro (os outros ficam); Ctrl+Z volta os dois', () => {
+    const { model, t, q } = comQuadro();
+    const h = new ModelHistory(model);
+    h.applyMany([
+      { type: 'RegistrarLancamento', motor: 'ELETRODUTOS', alvoId: q, escolhas: { a: true } },
+      { type: 'RegistrarLancamento', motor: 'AGUA', alvoId: t, escolhas: { b: 1 } },
+      { type: 'RegistrarLancamento', motor: 'CIRCUITOS', alvoId: null, escolhas: {} },
+    ]);
+    h.applyMany([{ type: 'DeleteQuadro', quadroId: q }]);
+    expect(h.current.registrosDeLancamento!.map((r) => r.motor)).toEqual(['AGUA', 'CIRCUITOS']);
+    h.undo();
+    expect(h.current.quadros).toHaveLength(1);
+    expect(h.current.registrosDeLancamento!.map((r) => r.motor)).toEqual(['ELETRODUTOS', 'AGUA', 'CIRCUITOS']);
+  });
+
+  it('RemoveLevel tira os registros do pavimento E dos quadros dele; o global e os do outro pavimento ficam', () => {
+    const { model, t, q } = comQuadro();
+    let m = applyCommand(model, { type: 'AddLevel', name: 'Superior', elevationMm: 3000, defaultHeightMm: 2800 }).model;
+    const s = m.levels.find((l) => l.id !== t)!.id;
+    m = applyCommand(m, { type: 'AddQuadro', levelId: s, nome: 'QD2', at: point(0, 0) }).model;
+    const q2 = m.quadros.find((x) => x.id !== q)!.id;
+    m = applyBatch(m, [
+      { type: 'RegistrarLancamento', motor: 'ELETRODUTOS', alvoId: q, escolhas: { a: 1 } },
+      { type: 'RegistrarLancamento', motor: 'ELETRODUTOS', alvoId: q2, escolhas: { a: 2 } },
+      { type: 'RegistrarLancamento', motor: 'AGUA', alvoId: t, escolhas: { b: 1 } },
+      { type: 'RegistrarLancamento', motor: 'AGUA', alvoId: s, escolhas: { b: 2 } },
+      { type: 'RegistrarLancamento', motor: 'CIRCUITOS', alvoId: null, escolhas: {} },
+    ]).model;
+    const h = new ModelHistory(m);
+    h.applyMany([{ type: 'RemoveLevel', levelId: t }]);
+    expect(h.current.registrosDeLancamento).toEqual([
+      { motor: 'ELETRODUTOS', alvoId: q2, escolhas: { a: 2 } },
+      { motor: 'AGUA', alvoId: s, escolhas: { b: 2 } },
+      { motor: 'CIRCUITOS', alvoId: null, escolhas: {} },
+    ]);
+    h.undo();
+    expect(h.current.registrosDeLancamento).toHaveLength(5);
+  });
+});
+
 describe('registro do lançamento · o desfazer (Ctrl+Z)', () => {
   it('o lote que registra volta inteiro: ausente → registro → ausente; e a atualização volta à anterior', () => {
     const { model, q } = comQuadro();
@@ -149,6 +190,25 @@ describe('registro do lançamento · o canônico', () => {
       { type: 'RegistrarLancamento', motor: 'ELETRODUTOS', alvoId: q, escolhas: { y: 'b', x: 1 } },
     ]).model;
     expect(payloadDoHash(a)).toBe(payloadDoHash(b));
+  });
+
+  it('leitura de payload adulterado: motor desconhecido, escolha não primitiva e (motor, alvo) repetido são DESCARTADOS, sem quebrar', () => {
+    const { model, q } = comQuadro();
+    const m = applyCommand(model, { type: 'RegistrarLancamento', motor: 'ELETRODUTOS', alvoId: q, escolhas: { a: 1 } }).model;
+    const p = parseCanonicalPayload(canonicalPayload(m));
+    p.registrosDeLancamento = [
+      { motor: 'ELETRODUTOS', quadro: 0, escolhas: { a: 1 } },
+      { motor: 'ELETRODUTOS', quadro: 0, escolhas: { a: 2 } }, // repetido: fica o primeiro
+      { motor: 'XPTO' as never, escolhas: {} },
+      { motor: 'AGUA', escolhas: { obj: { x: 1 } as never } },
+      { motor: 'ESGOTO', escolhas: [1, 2] as never },
+      { motor: 'PLUVIAL', level: 0, escolhas: { ok: true, nada: null } },
+    ];
+    const lido = modelFromCanonicalPayload(p);
+    expect(lido.registrosDeLancamento).toEqual([
+      { motor: 'ELETRODUTOS', alvoId: lido.quadros[0].id, escolhas: { a: 1 } },
+      { motor: 'PLUVIAL', alvoId: lido.levels[0].id, escolhas: { ok: true, nada: null } },
+    ]);
   });
 
   it('registro de quadro apagado não vai para o payload (órfão)', () => {

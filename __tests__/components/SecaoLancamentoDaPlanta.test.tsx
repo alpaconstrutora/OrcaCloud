@@ -31,7 +31,7 @@ vi.mock('../../services/preferenciasService', () => ({
 import SecaoLancamentoDaPlanta from '../../components/preferencias/SecaoLancamentoDaPlanta';
 import { useStore } from '../../store/useStore';
 
-const PELA_LUZ = 'Preferir o encaminhamento pela luz do teto (sem caixas de passagem)';
+const PELA_LUZ = 'Sem caixas de passagem — a caixa da luz do teto, a das tomadas e o quadro fazem a passagem (como em obra residencial)';
 const CAIXAS = 'Usar caixas de passagem (NBR 5410: a cada 15 m ou 270° de curvas)';
 
 let cliente: QueryClient;
@@ -73,6 +73,12 @@ describe('SecaoLancamentoDaPlanta', () => {
     expect(screen.getAllByRole('radio').map((r) => (r as HTMLInputElement).value)).toEqual(['PELA_LUZ', 'CAIXAS']);
     expect(opcao(PELA_LUZ)).toBeInTheDocument();
     expect(opcao(CAIXAS)).toBeInTheDocument();
+    // A preferência só liga/desliga as caixas: o CAMINHO é o "Encaminhamento" do painel dos eletrodutos.
+    expect(
+      screen.getByText(
+        "O caminho do eletroduto (quadro → luz do ambiente → tomadas, ou árvore no teto) é o 'Encaminhamento' do painel dos eletrodutos.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it('sem escolha: "pela luz do teto" vem marcado (padrão)', async () => {

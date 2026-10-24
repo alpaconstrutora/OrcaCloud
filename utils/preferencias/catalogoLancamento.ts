@@ -33,12 +33,16 @@ import {
   type ValorDeExibicao,
 } from './catalogoExibir';
 
-/** `PELA_LUZ` = encaminhamento pela luz do teto, sem caixas de passagem (padrão); `CAIXAS` = caixas pela NBR 5410. */
+/**
+ * `PELA_LUZ` = sem caixas de passagem: a caixa da luz do teto, a das tomadas e o quadro fazem a passagem (padrão);
+ * `CAIXAS` = caixas pela NBR 5410. A preferência só liga/desliga as caixas — o CAMINHO do eletroduto é o
+ * "Encaminhamento" do painel dos eletrodutos (que já é "pela luz do ambiente" por padrão).
+ */
 export type CaixasDePassagem = 'PELA_LUZ' | 'CAIXAS';
 
 /** As duas opções, com os rótulos do plano (a aba Preferências mostra estes textos). */
 export const OPCOES_CAIXAS_DE_PASSAGEM: readonly (OpcaoDeExibicao & { valor: CaixasDePassagem })[] = [
-  { valor: 'PELA_LUZ', rotulo: 'Preferir o encaminhamento pela luz do teto (sem caixas de passagem)' },
+  { valor: 'PELA_LUZ', rotulo: 'Sem caixas de passagem — a caixa da luz do teto, a das tomadas e o quadro fazem a passagem (como em obra residencial)' },
   { valor: 'CAIXAS', rotulo: 'Usar caixas de passagem (NBR 5410: a cada 15 m ou 270° de curvas)' },
 ];
 
@@ -68,6 +72,7 @@ export function valorDeLancamento(linhas: readonly LinhaDePreferencia[], item: s
 
 /** O catálogo do lançamento para o hook `usePreferenciaDaPlanta`. */
 export const CATALOGO_DE_LANCAMENTO: CatalogoDePreferenciasDaPlanta = {
+  nome: 'lançamento',
   definicaoDe: (item) => POR_ITEM.get(item),
   chaveDe: chaveDeLancamento,
 };

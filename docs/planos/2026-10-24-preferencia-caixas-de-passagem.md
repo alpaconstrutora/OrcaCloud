@@ -52,8 +52,20 @@ não se põe CP.
 - teste-trava: nenhum `usePersistedState('blueprint:eletrodutosCaixas'` no editor;
 - check-ui sem piorar; tsc 0; CI verde.
 
+## Limitações conhecidas (registradas na revisão, 24/10/2026)
+- A preferência só liga/desliga as caixas; o CAMINHO é o "Encaminhamento" do painel dos eletrodutos (já "pela luz do
+  ambiente" por padrão). Os textos da aba e do painel dizem isso.
+- O aviso "Sem caixas de passagem, N lugar(es)…" some depois de Lançar — o plano fica vazio, como os outros avisos do plano.
+- Já vinha de antes (fora do escopo): `caixaEm` não reconhece a luz ACIMA do nó da rede (rede sob a viga) e, com a regra
+  ligada, põe uma CP 60 cm abaixo da luz; e a descida é contada duas vezes no trecho vertical (inofensivo até ~6 m de
+  pé-direito).
+- A Casa Automática segue com as caixas ligadas (`HIPOTESES_ELETRODUTO_PADRAO`).
+- No cômodo COM luz de teto (6×6, luz no centro, 4 tomadas, quadro no cômodo) não sai aviso nem entra CP: luz→tomada
+  ≈ 8,4 m, quadro→luz ≈ 7,7 m. O aviso aparece onde a tomada vai pela rede (ambiente sem luz de teto) e a NBR pede a caixa.
+
 ## Estado
 - [x] implementação + testes
+- [x] correção 1 da revisão (aviso diz onde, textos, teste do cômodo com luz)
 - [ ] revisão
 - [ ] PR + CI
 - [ ] publicação

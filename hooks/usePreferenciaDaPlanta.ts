@@ -85,10 +85,7 @@ function mensagemDe(e: unknown): string {
 
 function definicaoDe(catalogo: CatalogoDePreferenciasDaPlanta, item: string): DefinicaoDePreferencia {
   const def = catalogo.definicaoDe(item);
-  if (!def) {
-    const qual = catalogo === CATALOGO_DE_EXIBICAO ? 'ITENS_DE_EXIBICAO' : `o catálogo de "${catalogo.chaveDe('')}"`;
-    throw new Error(`Item de preferência da planta desconhecido: "${item}" (não está em ${qual}).`);
-  }
+  if (!def) throw new Error(`Item de preferência da planta desconhecido: "${item}" (não está no catálogo de ${catalogo.nome}).`);
   return def;
 }
 

@@ -909,6 +909,8 @@ export function planejarEletrodutos(
   // regra pediria caixa (comprimento ou curvas; a derivação não é "15 m ou 270°") e avisa UMA vez. Nada é escondido.
   const inserirCaixas = hip.caixas != null;
   let semCaixaPelaRegra = 0;
+  const ambientesSemCaixa: string[] = []; // onde a regra pediria caixa, sem repetir, na ordem em que aparecem
+  // Bloco só de escopo: sempre mede; insere caixas só com a regra (`hip.caixas`).
   {
     const regra = hip.caixas ?? REGRA_DE_CAIXAS_PADRAO;
     const distDoQuadro = distanciasDesde(noDoQuadro, arestas);
@@ -941,8 +943,14 @@ export function planejarEletrodutos(
       // Mede do quadro para as pontas: a distância pela rede até ele ordena as fronteiras.
       const r = caixasDaRede(segs, caixaEm, regra, (p) => distDoQuadro.get(chave(levelId, p.x, p.y, p.z)) ?? Infinity);
       if (!inserirCaixas) {
-        // Só medir: a contagem fica, os comandos (e os avisos de "sem lugar para a caixa") não.
-        semCaixaPelaRegra += r.caixas.filter((c) => c.motivo !== 'DERIVACAO').length;
+        // Só medir: a contagem e o ambiente de cada posição ficam; os comandos (e os avisos de "sem lugar para a
+        // caixa") não. Posição fora de qualquer ambiente conta no total, sem nome.
+        for (const c of r.caixas) {
+          if (c.motivo === 'DERIVACAO') continue;
+          semCaixaPelaRegra++;
+          const nome = ambienteDoPonto(model, { levelId, at: { x: c.at.x, y: c.at.y } as Point })?.nome;
+          if (nome && !ambientesSemCaixa.includes(nome)) ambientesSemCaixa.push(nome);
+        }
         continue;
       }
       const nomeDoNivel = model.levels.find((l) => l.id === levelId)?.name ?? '';
@@ -964,7 +972,10 @@ export function planejarEletrodutos(
     }
   }
   if (!inserirCaixas && semCaixaPelaRegra > 0) {
-    avisos.push(`${semCaixaPelaRegra} ponto(s) da rede passam de 15 m ou 270° de curvas sem caixa (NBR 5410 6.2.11.1.7) — ligue as caixas de passagem nas Preferências ou confira`);
+    const onde = ambientesSemCaixa.length ? `: ${ambientesSemCaixa.join(', ')}` : '';
+    avisos.push(
+      `Sem caixas de passagem, ${semCaixaPelaRegra} lugar(es) passam do limite da NBR 5410 6.2.11.1.7 (15 m, −3 m por curva, até 270°)${onde} — ligue "Caixas de passagem" (aqui ou em Preferências › Lançamento) ou confira.`,
+    );
   }
   // O trecho com caixa no meio vira dois (ou mais) — mesmos circuitos e bitola.
   const novosFinais: Command[] = [];

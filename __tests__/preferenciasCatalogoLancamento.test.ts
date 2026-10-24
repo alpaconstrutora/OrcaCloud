@@ -35,7 +35,7 @@ describe('catálogo do lançamento — caixas de passagem', () => {
 
   it('as duas opções, com os rótulos do plano', () => {
     expect(OPCOES_CAIXAS_DE_PASSAGEM).toEqual([
-      { valor: 'PELA_LUZ', rotulo: 'Preferir o encaminhamento pela luz do teto (sem caixas de passagem)' },
+      { valor: 'PELA_LUZ', rotulo: 'Sem caixas de passagem — a caixa da luz do teto, a das tomadas e o quadro fazem a passagem (como em obra residencial)' },
       { valor: 'CAIXAS', rotulo: 'Usar caixas de passagem (NBR 5410: a cada 15 m ou 270° de curvas)' },
     ]);
   });
@@ -56,6 +56,8 @@ describe('catálogo do lançamento — caixas de passagem', () => {
     expect(CATALOGO_DE_LANCAMENTO.definicaoDe('mostrarGrade')).toBeUndefined();
     expect(CATALOGO_DE_EXIBICAO.definicaoDe('caixasDePassagem')).toBeUndefined();
     expect(CATALOGO_DE_EXIBICAO.chaveDe('mostrarGrade')).toBe('planta.exibir.mostrarGrade');
+    expect(CATALOGO_DE_LANCAMENTO.nome).toBe('lançamento');
+    expect(CATALOGO_DE_EXIBICAO.nome).toBe('exibição');
   });
 });
 

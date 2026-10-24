@@ -65,6 +65,8 @@ export type DefinicaoDePreferencia = Omit<ItemDeExibicao, 'grupo'>;
  * Os catálogos são constantes de módulo (o hook os usa como dependência estável).
  */
 export interface CatalogoDePreferenciasDaPlanta {
+  /** Para mensagens: "exibição", "lançamento". */
+  nome: string;
   definicaoDe(item: string): DefinicaoDePreferencia | undefined;
   chaveDe(item: string): string;
 }
@@ -217,6 +219,7 @@ function valorDoUsuario(linhas: readonly LinhaDePreferencia[], def: ItemDeExibic
 
 /** O catálogo de EXIBIÇÃO para o hook (o padrão de `usePreferenciaDaPlanta`). */
 export const CATALOGO_DE_EXIBICAO: CatalogoDePreferenciasDaPlanta = {
+  nome: 'exibição',
   definicaoDe: (item) => POR_ITEM.get(item),
   chaveDe: chaveDeExibicao,
 };

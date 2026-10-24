@@ -665,7 +665,7 @@ describe('BlueprintEditor · ações oferecidas', () => {
       await user.click(botao(/^Lançamento$/));
       const gaveta = screen.getByText('Preferências da Planta').closest('[role="dialog"]') as HTMLElement;
       expect(within(gaveta).getByRole('region', { name: 'Lançamento' })).toBeInTheDocument();
-      const pelaLuz = within(gaveta).getByRole('radio', { name: 'Preferir o encaminhamento pela luz do teto (sem caixas de passagem)' });
+      const pelaLuz = within(gaveta).getByRole('radio', { name: 'Sem caixas de passagem — a caixa da luz do teto, a das tomadas e o quadro fazem a passagem (como em obra residencial)' });
       const comCaixas = within(gaveta).getByRole('radio', { name: 'Usar caixas de passagem (NBR 5410: a cada 15 m ou 270° de curvas)' });
       expect(pelaLuz).toBeChecked();
       await user.click(comCaixas);

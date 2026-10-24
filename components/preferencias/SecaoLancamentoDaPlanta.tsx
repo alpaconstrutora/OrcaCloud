@@ -19,6 +19,8 @@ import {
  * lançamento): a caixa de seleção do painel dos eletrodutos lê e grava a MESMA escolha (mesmo cache), então mudar
  * aqui muda lá e vice-versa. Vale para quem está logado, em qualquer organização (REGRA #5: não depende de org).
  *
+ * A preferência só liga/desliga as caixas; o CAMINHO é o "Encaminhamento" do painel dos eletrodutos (linha de ajuda).
+ *
  * Duas opções de texto longo → grupo de rádio (escolha única, os dois textos à vista), não `<select>`.
  */
 export default function SecaoLancamentoDaPlanta() {
@@ -54,8 +56,11 @@ export default function SecaoLancamentoDaPlanta() {
           ))}
         </div>
         <p className="text-xs text-gray-500">
-          Pela luz do teto, a caixa da luz, a da tomada e o quadro já são as caixas do trecho; se algum trecho passar do
-          que a NBR 5410 pede, o lançamento avisa.
+          Sem caixas de passagem, se algum trecho passar do que a NBR 5410 pede, o lançamento avisa onde.
+        </p>
+        <p className="text-xs text-gray-500">
+          O caminho do eletroduto (quadro → luz do ambiente → tomadas, ou árvore no teto) é o &apos;Encaminhamento&apos; do
+          painel dos eletrodutos.
         </p>
       </div>
     </section>

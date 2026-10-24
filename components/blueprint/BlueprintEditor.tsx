@@ -14385,7 +14385,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 rotulo="Lançamento"
                 ativo={secaoDasPreferencias === 'lancamento'}
                 onClick={() => setSecaoDasPreferencias((s) => (s === 'lancamento' ? null : 'lancamento'))}
-                ajuda="Como a planta lança os eletrodutos: preferir o encaminhamento pela luz do teto (sem caixas de passagem) ou usar caixas de passagem (NBR 5410). Vale para você em qualquer computador"
+                ajuda="Caixas de passagem no lançamento dos eletrodutos: ligada, insere pela NBR 5410 (15 m, −3 m por curva, até 270°); desligada, não insere caixas e avisa onde a NBR pediria. Vale para você em qualquer computador"
               />
             </GrupoDoRibbon>
           </>
@@ -18766,7 +18766,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     aria-label="Caixas de passagem automáticas"
                     className="h-3.5 w-3.5 rounded border-slate-300"
                   />
-                  Caixas de passagem automáticas (15 m, −3 m por curva, até 270° de curvas) — a mesma escolha de Preferências › Lançamento; desligada, o lançamento prefere a luz do teto e avisa o que a NBR pediria
+                  Caixas de passagem automáticas (15 m, −3 m por curva, até 270° de curvas) — a mesma escolha de Preferências › Lançamento; desligada, não insere caixas e avisa onde a NBR pediria
                 </label>
               </div>
 

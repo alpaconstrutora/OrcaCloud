@@ -807,6 +807,6 @@ describe('usePreferenciaDaPlanta — catálogo do lançamento (caixas de passage
     });
 
     it('item que não existe no catálogo do lançamento lança erro claro (o de exibição não vale aqui)', () => {
-        expect(() => montar(() => usePreferenciaDaPlanta<boolean>('mostrarGrade', CATALOGO_DE_LANCAMENTO))).toThrow(/mostrarGrade/);
+        expect(() => montar(() => usePreferenciaDaPlanta<boolean>('mostrarGrade', CATALOGO_DE_LANCAMENTO))).toThrow('Item de preferência da planta desconhecido: "mostrarGrade" (não está no catálogo de lançamento).');
     });
 });

@@ -178,7 +178,7 @@ ensaio em bloco desfeito primeiro; anexos pelo script.
   faz parte da construtora, e nao vai entrar no app. ele vai ter acesso ao que ele precisa para
   gerenciar o condominio apartir do portal do sindico"*. O síndico NÃO vira membro da org do
   condomínio. A gestão vai para o portal: `docs/planos/2026-10-24-portal-sindico-gestao-completa.md`.
-- [x] F3 — 007 (24/10/2026): `aplicar_20271024900000_condominio_007_executa.sql`. Ensaio: 0
+- [x] F3 — 007 (24/10/2026): `aplicar_20271024905000_condominio_007_executa.sql` (renomeado de …900000 em 24/10: colidiu com `acesso_total_superadmins`, #147). Ensaio: 0
   bloqueios. **Achado na prova:** `fn_condominio_migrar` desliga os gatilhos (`fn_cm_gatilhos`) e
   a FK composta de Marcas e Modelos (`opura_assets (brand_id, organization_id)`, 13/10, depois da
   função) recusou levar 3 equipamentos com marca da Alpa (23503). Resolvido no roteiro: marca a

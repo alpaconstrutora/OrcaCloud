@@ -4,6 +4,8 @@ import type {
     PortalOcupante, PortalOrdemCondominio, PortalRateioCondominio, PortalUnidadeCondominio,
 } from './clientPortalService';
 import type { EstadoDoSindico } from '../utils/acessoDoSindico';
+import type { TituloDoCondominio } from '../utils/financeiroDoSindico';
+import type { LinhaPagamentoAvulso } from '../utils/pagamentoAvulso';
 
 /**
  * Portal do Síndico — leitura e gestão do acesso.
@@ -134,7 +136,60 @@ export interface PortalSindico extends Omit<PortalCondominio, 'unidades' | 'avis
     chamados: ChamadoParaSindico[];
 }
 
+// ── Financeiro do condomínio (24/10/2026) ───────────────────────────────────
+// Plano: docs/planos/2026-10-24-portal-sindico-financeiro.md
+
+/** Cadastros que o formulário de lançamento usa, por condomínio (a org de cada um). */
+export interface CondominioDoFinanceiro {
+    id: string;
+    nome: string;
+    codigo: string | null;
+    /** Só condomínio com organização própria grava pelo portal. */
+    podeOperar: boolean;
+    motivoNaoOpera: string | null;
+    centros: { id: string; code: string; name: string; parentId: string | null }[];
+    categorias: { id: string; name: string; parentId: string | null; nature: string | null }[];
+    planos: { id: string; code: string | null; name: string }[];
+    contas: { id: string; name: string; bank: string | null }[];
+    fornecedores: { id: string; name: string; nickname: string | null; document: string | null; category: string | null }[];
+}
+
+export interface FinanceiroDoSindico {
+    /** 'YYYY-MM-01' */
+    competencia: string;
+    /** 'YYYY-MM-DD' em Brasília, do banco. */
+    hoje: string;
+    condominios: CondominioDoFinanceiro[];
+    titulos: TituloDoCondominio[];
+}
+
+/** Código e nome do arquivo de origem de um título (o caminho fica no servidor). */
+export interface DocumentoDoTitulo { codigo: string | null; nome: string | null }
+
+/** Campos de UMA linha de título que o síndico informa (o resto o banco força). */
+export type LinhaDoSindico = Pick<LinhaPagamentoAvulso,
+    'description' | 'amount' | 'due_date' | 'competencia_date' | 'supplier_id' | 'party_name'
+    | 'cost_center_id' | 'plano_de_contas_id' | 'category_id' | 'payment_type' | 'payment_account_id' | 'installment_type'>;
+
+export interface AnexoEnviado { path: string; nome: string }
+
+export interface FornecedorNovo {
+    name: string;
+    document?: string;
+    email?: string;
+    phone?: string;
+    contact_name?: string;
+    category?: string;
+    pix_key?: string;
+    pix_key_type?: 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
+    bank_name?: string;
+    agency?: string;
+    account?: string;
+}
+
 const params = (id: IdentidadeDoSindico) => ({ p_token: id.token ?? null, p_client_id: id.clientId ?? null });
+
+const FN_FINANCEIRO = 'sindico-portal-financeiro';
 
 /** RPC de escrita: `{ok:false, motivo}` vira erro com o motivo do banco. */
 async function escrever(rpc: string, args: Record<string, unknown>, padrao: string): Promise<Record<string, unknown>> {
@@ -207,6 +262,92 @@ export const sindicoPortalService = {
         await escrever('sindico_portal_decidir_rateio', {
             ...params(id), p_rateio_id: rateioId, p_decisao: decisao, p_observacao: observacao,
         }, 'Não foi possível registrar a decisão.');
+    },
+
+    // ── Financeiro do condomínio (24/10/2026) ───────────────────────────────
+    //    Leitura no modo 'ler' (link, login e prévia); escrita no modo 'sessao'
+    //    (só o síndico logado) — o banco recusa o resto com o motivo.
+
+    async getFinanceiro(id: IdentidadeDoSindico, competencia: string): Promise<FinanceiroDoSindico> {
+        const { data, error } = await supabase.rpc('sindico_portal_financeiro', { ...params(id), p_competencia: competencia });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as FinanceiroDoSindico & { ok?: boolean; motivo?: string };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível carregar o financeiro.');
+        return { competencia: r.competencia, hoje: r.hoje, condominios: r.condominios ?? [], titulos: r.titulos ?? [] };
+    },
+
+    /** Código e nome do documento de cada título — a lista não traz caminho de arquivo. */
+    async documentosDosTitulos(id: IdentidadeDoSindico, ids: string[]): Promise<Record<string, DocumentoDoTitulo>> {
+        if (ids.length === 0) return {};
+        const { data, error } = await supabase.functions.invoke(FN_FINANCEIRO, { body: { acao: 'documentos', ...id, ids } });
+        if (error) throw new Error(await motivoDaFunction(error, 'Não foi possível ler os documentos.'));
+        return (data?.documentos ?? {}) as Record<string, DocumentoDoTitulo>;
+    },
+
+    async abrirDocumentoDoTitulo(id: IdentidadeDoSindico, tituloId: string): Promise<string> {
+        const { data, error } = await supabase.functions.invoke(FN_FINANCEIRO, { body: { acao: 'abrir', ...id, tituloId } });
+        if (error) throw new Error(await motivoDaFunction(error, 'Não foi possível abrir o documento.'));
+        if (!data?.url) throw new Error(data?.error || 'Não foi possível abrir o documento.');
+        return data.url as string;
+    },
+
+    /** Sobe o anexo para a pasta do síndico na org do condomínio (só com login). */
+    async enviarAnexo(id: IdentidadeDoSindico, condominioId: string, arquivo: File): Promise<AnexoEnviado> {
+        const form = new FormData();
+        if (id.token) form.append('token', id.token);
+        if (id.clientId) form.append('clientId', id.clientId);
+        form.append('empreendimentoId', condominioId);
+        form.append('file', arquivo);
+        const { data, error } = await supabase.functions.invoke(FN_FINANCEIRO, { body: form });
+        if (error) throw new Error(await motivoDaFunction(error, 'Não foi possível enviar o anexo.'));
+        if (!data?.path) throw new Error(data?.error || 'Não foi possível enviar o anexo.');
+        return { path: data.path as string, nome: (data.nome as string) || arquivo.name };
+    },
+
+    /** Apaga um anexo enviado cujo lançamento foi recusado. Best-effort. */
+    async descartarAnexo(id: IdentidadeDoSindico, condominioId: string, path: string): Promise<void> {
+        await supabase.functions.invoke(FN_FINANCEIRO, { body: { acao: 'descartar', ...id, empreendimentoId: condominioId, path } })
+            .catch(() => undefined);
+    },
+
+    async lancarPagar(id: IdentidadeDoSindico, condominioId: string, parcelas: LinhaDoSindico[], opcoes: {
+        documento?: AnexoEnviado | null; jaPago?: boolean; dataPagamento?: string | null;
+    } = {}): Promise<string[]> {
+        const r = await escrever('sindico_portal_lancar_pagar', {
+            ...params(id), p_empreendimento_id: condominioId, p_parcelas: parcelas,
+            p_documento: opcoes.documento ?? null, p_ja_pago: !!opcoes.jaPago, p_data_pagamento: opcoes.dataPagamento || null,
+        }, 'Não foi possível lançar a conta.');
+        return (r.ids as string[]) ?? [];
+    },
+
+    async editarTitulo(id: IdentidadeDoSindico, tituloId: string, dados: LinhaDoSindico, anexo: {
+        novo?: AnexoEnviado | null; remover?: boolean;
+    } = {}): Promise<void> {
+        await escrever('sindico_portal_editar_titulo', {
+            ...params(id), p_titulo_id: tituloId, p_dados: dados,
+            p_documento: anexo.novo ?? null, p_remover_documento: !!anexo.remover,
+        }, 'Não foi possível salvar o título.');
+    },
+
+    async cancelarTitulo(id: IdentidadeDoSindico, tituloId: string, motivo: string): Promise<void> {
+        await escrever('sindico_portal_cancelar_titulo', { ...params(id), p_titulo_id: tituloId, p_motivo: motivo },
+            'Não foi possível cancelar o título.');
+    },
+
+    async baixarTitulo(id: IdentidadeDoSindico, tituloId: string, pagamento: {
+        data: string; forma: string | null; contaId: string | null;
+    }): Promise<void> {
+        await escrever('sindico_portal_baixar_titulo', {
+            ...params(id), p_titulo_id: tituloId, p_data: pagamento.data, p_forma: pagamento.forma, p_conta: pagamento.contaId,
+        }, 'Não foi possível dar baixa.');
+    },
+
+    /** `existente` = CPF/CNPJ já cadastrado (passa a valer neste condomínio, sem duplicar). */
+    async salvarFornecedor(id: IdentidadeDoSindico, condominioId: string, dados: FornecedorNovo): Promise<{ id: string; nome: string; existente: boolean }> {
+        const r = await escrever('sindico_portal_salvar_fornecedor', {
+            ...params(id), p_empreendimento_id: condominioId, p_dados: dados,
+        }, 'Não foi possível cadastrar o fornecedor.');
+        return { id: r.id as string, nome: r.nome as string, existente: !!r.existente };
     },
 
     // ── Admin (Portais › Portal do Condomínio) ──────────────────────────────

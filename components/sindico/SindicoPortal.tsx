@@ -7,16 +7,15 @@ import {
     KpiStrip, PortalCard, CardHeader, DetailField, fmtBRLCents, fmtDate, type KpiItem,
 } from '../portal/PortalKit';
 import {
-    PainelDocumentos, PainelEquipamentos, PainelFinanceiro, PainelManutencao, competencia,
+    PainelDocumentos, PainelEquipamentos, PainelManutencao, competencia,
 } from '../client/CondominioTab';
 import { usePersistedState } from '../ui/TableUtils';
 import PainelUnidadesDoPredio from './PainelUnidadesDoPredio';
 import PainelAvisosDoSindico from './PainelAvisosDoSindico';
 import PainelChamadosDoSindico from './PainelChamadosDoSindico';
-import PainelAprovacaoDoSindico from './PainelAprovacaoDoSindico';
+import PainelFinanceiroDoSindico from './PainelFinanceiroDoSindico';
 import { useSindicoPortal } from './useSindicoPortal';
 import { sindicoPortalService, type IdentidadeDoSindico, type PortalSindico } from '../../services/sindicoPortalService';
-import type { PortalCondominio } from '../../services/clientPortalService';
 import {
     SINDICO_PORTAL_TAB_IDS, SINDICO_PORTAL_TAB_LABELS, resolverAbaDoSindico, type SindicoPortalTabId,
 } from '../../utils/sindicoPortalTabs';
@@ -39,6 +38,10 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
  * Os painéis de Avisos, Documentos, Prestação de contas, Manutenção e
  * Equipamentos são os MESMOS da aba Condomínio do Portal do Cliente (o payload
  * tem o mesmo formato); o que só o síndico vê entra por prop opcional.
+ *
+ * Financeiro (24/10/2026, docs/planos/2026-10-24-portal-sindico-financeiro.md):
+ * o caixa do condomínio — resumo do mês, contas a pagar (lançar, pagar, editar,
+ * cancelar, com login), contas a receber e a prestação de contas de antes.
  * Identidade: sky (o cartão do LoginGateway); conteúdo no PortalKit (§24).
  */
 
@@ -204,20 +207,13 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, somenteLeitura = fals
                                     somenteLeitura={somenteLeitura} onAlterado={recarregar} notify={notify} />
                             )}
                             {aba === 'financeiro' && (
-                                // Decidir exige LOGIN: `onLogout` só existe na entrada por e-mail e senha.
-                                <PainelAprovacaoDoSindico identidade={identidade} rateios={dados.rateios} condominios={dados.condominios}
-                                    podeDecidir={!!onLogout} somenteLeitura={somenteLeitura} onAlterado={recarregar} notify={notify} />
+                                // Operar e decidir exigem LOGIN: `onLogout` só existe na entrada por e-mail e senha.
+                                <PainelFinanceiroDoSindico identidade={identidade} dados={dados} somenteLeitura={somenteLeitura}
+                                    logado={!!onLogout} notify={notify} onAlteradoPortal={recarregar}
+                                    resolverComprovantes={resolverComprovantes} />
                             )}
-                            {(aba === 'financeiro' || aba === 'documentos' || aba === 'manutencao' || aba === 'equipamentos') && (
+                            {(aba === 'documentos' || aba === 'manutencao' || aba === 'equipamentos') && (
                                 <PortalCard className="p-4 md:p-6">
-                                    {aba === 'financeiro' && (
-                                        <PainelFinanceiro
-                                            rateios={dados.rateios as unknown as PortalCondominio['rateios']}
-                                            multi={multi}
-                                            onResolverComprovantes={resolverComprovantes}
-                                            visaoDoSindico
-                                        />
-                                    )}
                                     {aba === 'documentos' && (
                                         <PainelDocumentos documentos={dados.documentos} multi={multi} onResolverDocumento={resolverDocumento} marcarInternos />
                                     )}
@@ -257,7 +253,9 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, somenteLeitura = fals
             )}
 
             {toast && (
-                <div className={`fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+                // No TOPO: embaixo ele cobria o botão principal do painel lateral
+                // aberto em seguida (Financeiro, 24/10/2026).
+                <div className={`fixed top-20 right-4 md:right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
                     toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
                     {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}

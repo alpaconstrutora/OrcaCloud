@@ -508,7 +508,10 @@ const TabelaLancamentos: React.FC<{
                                 sozinho — origem fora do mapa vira "Asset
                                 Maintenance" em vez de ASSET_MAINTENANCE. */}
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                                <span className="block truncate" title={origemLabel(l.origem)}>{origemLabel(l.origem)}</span>
+                                {/* "· Síndico" = lançada pelo síndico no portal dele (24/10/2026). */}
+                                <span className="block truncate" title={`${origemLabel(l.origem)}${l.lancadoPeloSindico ? ' · lançada pelo síndico no portal' : ''}`}>
+                                    {origemLabel(l.origem)}{l.lancadoPeloSindico ? ' · Síndico' : ''}
+                                </span>
                             </td>
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
                                 <span className="block truncate" title={l.costCenterLabel}>{l.costCenterLabel}</span>

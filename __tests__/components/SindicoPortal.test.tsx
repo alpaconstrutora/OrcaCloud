@@ -11,16 +11,21 @@
  *  4. acesso recusado mostra o motivo do banco (ex.: mandato não vigente).
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const getDados = vi.fn();
+const getFinanceiro = vi.fn();
+const baixarTitulo = vi.fn();
 vi.mock('../../services/sindicoPortalService', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../../services/sindicoPortalService')>()),
     sindicoPortalService: {
         getDados: (...a: unknown[]) => getDados(...a),
         abrirDocumento: vi.fn(),
         comprovantesDoRateio: vi.fn(),
+        getFinanceiro: (...a: unknown[]) => getFinanceiro(...a),
+        documentosDosTitulos: vi.fn().mockResolvedValue({}),
+        baixarTitulo: (...a: unknown[]) => baixarTitulo(...a),
     },
 }));
 
@@ -47,8 +52,43 @@ const payload = {
     }],
 };
 
+// Financeiro do condomínio (24/10/2026, docs/planos/2026-10-24-portal-sindico-financeiro.md).
+const condominioFin = {
+    id: 'c1', nome: '010 - Galeria Altavista', codigo: '010', podeOperar: true, motivoNaoOpera: null,
+    centros: [{ id: 'cc1', code: '010', name: 'Galeria Altavista', parentId: null }],
+    categorias: [{ id: 'cat1', name: 'Manutenção predial', parentId: null, nature: 'EXPENSE' }],
+    planos: [], contas: [], fornecedores: [],
+};
+const tituloBase = {
+    condominioId: 'c1', direcao: 'DEBIT', supplierId: null, competencia: '2026-10-01', status: 'PENDING',
+    businessStatus: 'PREVISTO', approvalStatus: 'APROVADO', pagoEm: null, formaPagamento: null, contaId: null,
+    centroId: 'cc1', categoriaId: 'cat1', categoria: 'Manutenção predial', planoId: null, lancadoPeloSindico: false, travaAsaas: null,
+};
+const financeiro = {
+    competencia: '2026-10-01', hoje: '2026-10-24', condominios: [condominioFin],
+    titulos: [
+        { ...tituloBase, id: 'm1', origem: 'MANUAL', descricao: 'Limpeza da caixa d\'água', credor: 'Hidro Ltda', vencimento: '2026-10-30', valor: 350 },
+        { ...tituloBase, id: 'k1', origem: 'CONTRACT_RECURRING', descricao: 'Portaria terceirizada', credor: 'Vigia SA', vencimento: '2026-10-10', valor: 1200 },
+    ],
+};
+
+// O Sheet fechado continua montado (por portal, no fim do body): os botões do
+// rodapé dos painéis existem no DOM. As buscas olham só a tabela e o 1º "Lançar".
+const naTabela = () => within(screen.getByRole('table'));
+const lancarConta = () => screen.getAllByRole('button', { name: /Lançar conta/ })[0];
+
+const irParaContasAPagar = async () => {
+    await screen.findAllByText('010 - Galeria Altavista');
+    fireEvent.click(screen.getAllByRole('button', { name: /^Financeiro$/ })[0]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contas a pagar' }));
+    await screen.findByText('Portaria terceirizada');
+};
+
 describe('SindicoPortal', () => {
-    beforeEach(() => { getDados.mockReset(); localStorage.clear(); });
+    beforeEach(() => {
+        getDados.mockReset(); getFinanceiro.mockReset(); baixarTitulo.mockReset(); localStorage.clear();
+        getFinanceiro.mockResolvedValue(financeiro);
+    });
 
     it('1–2. prévia por clientId: carrega o prédio e avisa que é somente leitura', async () => {
         getDados.mockResolvedValue(payload);
@@ -92,7 +132,9 @@ describe('SindicoPortal', () => {
         getDados.mockResolvedValue(comRascunho);
         const { unmount } = render(<ConfirmProvider><SindicoPortal token="tok" /></ConfirmProvider>);
         await screen.findAllByText('010 - Galeria Altavista');
-        fireEvent.click(screen.getAllByRole('button', { name: /Prestação de contas/ })[0]);
+        // Desde 24/10/2026 a prestação de contas é sub-aba do Financeiro.
+        fireEvent.click(screen.getAllByRole('button', { name: /^Financeiro$/ })[0]);
+        fireEvent.click(await screen.findByRole('button', { name: 'Prestação de contas' }));
         const aprovarLink = await screen.findByRole('button', { name: /Aprovar/ });
         expect((aprovarLink as HTMLButtonElement).disabled).toBe(true);
         expect(aprovarLink.getAttribute('title')).toMatch(/e-mail e senha/);
@@ -102,6 +144,61 @@ describe('SindicoPortal', () => {
         await screen.findAllByText('010 - Galeria Altavista');
         const aprovarLogin = await screen.findByRole('button', { name: /Aprovar/ });
         expect((aprovarLogin as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it('7. Financeiro pelo LINK: lê o caixa, mas lançar e pagar pedem login', async () => {
+        getDados.mockResolvedValue(payload);
+        render(<ConfirmProvider><SindicoPortal token="tok" /></ConfirmProvider>);
+        await irParaContasAPagar();
+        expect(getFinanceiro).toHaveBeenCalledWith({ token: 'tok' }, expect.stringMatching(/^\d{4}-\d{2}-01$/));
+        const lancar = lancarConta();
+        expect((lancar as HTMLButtonElement).disabled).toBe(true);
+        expect(lancar.parentElement?.getAttribute('title')).toMatch(/e-mail e senha/);
+        const pagar = naTabela().getAllByRole('button', { name: 'Pagar' });
+        expect(pagar.every(b => (b as HTMLButtonElement).disabled)).toBe(true);
+    });
+
+    it('8. Financeiro com LOGIN: paga qualquer origem; edita só o manual, e o contrato diz por quê', async () => {
+        getDados.mockResolvedValue(payload);
+        baixarTitulo.mockResolvedValue(undefined);
+        render(<ConfirmProvider><SindicoPortal token="tok" onLogout={() => undefined} /></ConfirmProvider>);
+        await irParaContasAPagar();
+        expect((lancarConta() as HTMLButtonElement).disabled).toBe(false);
+        const pagar = naTabela().getAllByRole('button', { name: 'Pagar' }) as HTMLButtonElement[];
+        expect(pagar.every(b => !b.disabled)).toBe(true);
+        const editar = naTabela().getAllByRole('button', { name: 'Editar' }) as HTMLButtonElement[];
+        // Ordem por vencimento: o contrato (10/10) vem antes do manual (30/10).
+        expect(editar[0].disabled).toBe(true);
+        expect(editar[0].parentElement?.getAttribute('title')).toMatch(/contrato/);
+        expect(editar[1].disabled).toBe(false);
+
+        fireEvent.click(pagar[1]);
+        fireEvent.click(await screen.findByRole('button', { name: /Confirmar pagamento/ }));
+        await waitFor(() => expect(baixarTitulo).toHaveBeenCalledWith({ token: 'tok' }, 'm1', expect.objectContaining({ data: expect.any(String) })));
+        // Depois de gravar, relê o financeiro.
+        await waitFor(() => expect(getFinanceiro).toHaveBeenCalledTimes(2));
+    });
+
+    it('9. prévia do admin: Financeiro lê pelo clientId e nada fica ligado', async () => {
+        getDados.mockResolvedValue(payload);
+        render(<ConfirmProvider><SindicoPortal clientId="s1" somenteLeitura embutido /></ConfirmProvider>);
+        await irParaContasAPagar();
+        expect(getFinanceiro).toHaveBeenCalledWith({ clientId: 's1' }, expect.any(String));
+        expect(lancarConta().parentElement?.getAttribute('title')).toBe('Prévia somente leitura.');
+        expect((naTabela().getAllByRole('button', { name: 'Cancelar' }) as HTMLButtonElement[]).every(b => b.disabled)).toBe(true);
+    });
+
+    it('10. condomínio ainda na org da construtora: só consulta, com o motivo', async () => {
+        getDados.mockResolvedValue(payload);
+        getFinanceiro.mockResolvedValue({
+            ...financeiro,
+            condominios: [{ ...condominioFin, podeOperar: false, motivoNaoOpera: 'Este condomínio ainda opera na organização da construtora.' }],
+        });
+        render(<ConfirmProvider><SindicoPortal token="tok" onLogout={() => undefined} /></ConfirmProvider>);
+        await irParaContasAPagar();
+        expect(screen.getAllByText(/ainda opera na organização da construtora/).length).toBeGreaterThan(0);
+        expect((lancarConta() as HTMLButtonElement).disabled).toBe(true);
+        expect((naTabela().getAllByRole('button', { name: 'Pagar' }) as HTMLButtonElement[]).every(b => b.disabled)).toBe(true);
     });
 
     it('4. acesso recusado mostra o motivo do banco', async () => {

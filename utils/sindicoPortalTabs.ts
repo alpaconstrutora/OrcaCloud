@@ -12,7 +12,9 @@ export const SINDICO_PORTAL_TAB_LABELS: Record<SindicoPortalTabId, string> = {
     visao: 'Visão geral',
     unidades: 'Unidades',
     chamados: 'Chamados',
-    financeiro: 'Prestação de contas',
+    // Era "Prestação de contas" (só os rateios); virou o Financeiro do
+    // condomínio em 24/10/2026, e a prestação de contas é uma sub-aba dele.
+    financeiro: 'Financeiro',
     avisos: 'Avisos',
     documentos: 'Documentos',
     manutencao: 'Manutenção',
@@ -24,4 +26,24 @@ export function resolverAbaDoSindico(valor: string | null | undefined): SindicoP
     return (SINDICO_PORTAL_TAB_IDS as readonly string[]).includes(valor ?? '')
         ? (valor as SindicoPortalTabId)
         : 'visao';
+}
+
+/**
+ * Sub-abas do Financeiro (plano docs/planos/2026-10-24-portal-sindico-financeiro.md).
+ * "Prestação de contas" é a antiga aba inteira: os rateios, com aprovar/devolver.
+ */
+export const SINDICO_FINANCEIRO_SUBABA_IDS = ['resumo', 'pagar', 'receber', 'prestacao'] as const;
+export type SindicoFinanceiroSubAbaId = typeof SINDICO_FINANCEIRO_SUBABA_IDS[number];
+
+export const SINDICO_FINANCEIRO_SUBABA_LABELS: Record<SindicoFinanceiroSubAbaId, string> = {
+    resumo: 'Resumo do mês',
+    pagar: 'Contas a pagar',
+    receber: 'Contas a receber',
+    prestacao: 'Prestação de contas',
+};
+
+export function resolverSubAbaDoFinanceiro(valor: string | null | undefined): SindicoFinanceiroSubAbaId {
+    return (SINDICO_FINANCEIRO_SUBABA_IDS as readonly string[]).includes(valor ?? '')
+        ? (valor as SindicoFinanceiroSubAbaId)
+        : 'resumo';
 }

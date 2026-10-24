@@ -36,7 +36,7 @@ interface InputRowProps {
 }
 
 /**
- * Linha "rótulo + campo %" de Receitas & Capital. Fica no nível do MÓDULO de
+ * Linha "rótulo + campo %" de Receitas e Capital. Fica no nível do MÓDULO de
  * propósito (item 5.3 do plano 2026-10-12): declarada dentro do render, cada
  * tecla criava um componente novo, o React desmontava o <input> e o foco caía.
  *
@@ -119,7 +119,7 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
     };
 
     return (
-        <div className="space-y-6 pb-10 max-w-5xl mx-auto">
+        <div className="space-y-6">
 
             {/* ── ESPELHO DE VENDAS ── */}
             <ImovibSalesMapTab study={study} onDataChanged={onDataChanged} />

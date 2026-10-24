@@ -29,9 +29,9 @@ const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'executive_summary', label: 'Resumo Executivo', icon: <FileBarChart className="w-4 h-4" /> },
     { id: 'premises', label: 'Premissas', icon: <Building2 className="w-4 h-4" /> },
     { id: 'capex', label: 'Orçamento (CAPEX)', icon: <Calculator className="w-4 h-4" /> },
-    { id: 'funding', label: 'Receitas & Capital', icon: <Landmark className="w-4 h-4" /> },
-    { id: 'risk_scenarios', label: 'Sensibilidade & Risco', icon: <AlertCircle className="w-4 h-4" /> },
-    { id: 'esg_report', label: 'ESG & Parecer', icon: <Award className="w-4 h-4" /> },
+    { id: 'funding', label: 'Receitas e Capital', icon: <Landmark className="w-4 h-4" /> },
+    { id: 'risk_scenarios', label: 'Sensibilidade e Risco', icon: <AlertCircle className="w-4 h-4" /> },
+    { id: 'esg_report', label: 'ESG e Parecer', icon: <Award className="w-4 h-4" /> },
     { id: 'viability_static', label: 'Estática', icon: <Calculator className="w-4 h-4" /> },
     { id: 'viability_dynamic', label: 'Dinâmica', icon: <LineChart className="w-4 h-4" /> },
 ];

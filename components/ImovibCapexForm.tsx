@@ -63,7 +63,7 @@ const DEFAULT_CAPEX_TEMPLATE = [
     { category: '7. Impostos', name: 'PIS/COFINS/IRPJ/CSLL (Normal)', value_type: 'percent', value: 6.73 },
 
     // 8. Despesas Financeiras. Sem rubrica de juros: os juros vêm do
-    // financiamento (Receitas & Capital) e contariam duas vezes.
+    // financiamento (Receitas e Capital) e contariam duas vezes.
     { category: '8. Financeiras', name: 'Taxas de Estruturação (Plano Empresário)', value_type: 'percent', value: 1.5 },
 
     // 9. Contingência

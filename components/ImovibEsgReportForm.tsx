@@ -65,7 +65,7 @@ const fmtPct = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits:
 /**
  * Nota de 1 a 5 (E, S e G). Componente de MÓDULO: declarado dentro do render, o
  * React o tratava como componente novo a cada renderização e remontava os
- * botões (mesmo defeito do InputRow de Receitas & Capital, item 5.3).
+ * botões (mesmo defeito do InputRow de Receitas e Capital, item 5.3).
  */
 const NotaEsg: React.FC<{
     rotulo: string;
@@ -189,13 +189,13 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
     };
 
     return (
-        <div className="space-y-6 pb-20 max-w-6xl mx-auto">
+        <div className="space-y-6">
 
             <div className="flex items-center justify-between gap-6 mb-4">
                 <div>
                     <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                         <Award className="w-5 h-5 text-emerald-500" />
-                        Parecer do Comitê & ESG
+                        Parecer do Comitê e ESG
                     </h2>
                     <p className="text-slate-500 text-sm mt-1 max-w-2xl">
                         Avaliação qualitativa institucional do projeto. O rating abaixo é gerado dinamicamente mesclando o prêmio de risco (TIR projetada) e as conformidades de impacto socioambiental (ESG).

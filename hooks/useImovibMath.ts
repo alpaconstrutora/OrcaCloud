@@ -454,7 +454,7 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         let somaInflacaoVendas = 0; // Σ fator de inflação nos meses de venda
 
         // Fallback to old financingPercent if Sprint 8 fields not used, but prefer debt
-        // "Financ. à Produção" (Receitas & Capital) é o campo único desde a Fase 5:
+        // "Financ. à Produção" (Receitas e Capital) é o campo único desde a Fase 5:
         // preenchido — inclusive com 0 — ele vale. O "% Financiado" antigo da
         // Dinâmica só entra quando ele está VAZIO (estudo anterior ao campo novo).
         // Antes, 0 caía no legado e o financiamento não chegava a zero.

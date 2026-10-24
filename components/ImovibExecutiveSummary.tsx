@@ -349,7 +349,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                     </div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">Simulação Completa</h3>
                     <p className="text-sm text-gray-500 max-w-md">
-                        Os indicadores acima vêm do mesmo cálculo da Estática, do Espelho de vendas e da listagem: blocos e espelho (VGV), Orçamento (CAPEX), Receitas &amp; Capital e Premissas Dinâmicas.
+                        Os indicadores acima vêm do mesmo cálculo da Estática, do Espelho de vendas e da listagem: blocos e espelho (VGV), Orçamento (CAPEX), Receitas e Capital e Premissas Dinâmicas.
                         Utilize este resumo para validação de comitê de investimento.
                     </p>
                 </div>
@@ -408,7 +408,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                     <div className="mt-6 space-y-8 pb-10">
                         {/* Section: ESG & Committee Notes */}
                         <div className="page-break-inside-avoid">
-                            <h2 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-4">Parecer Institucional & ESG</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-4">Parecer Institucional e ESG</h2>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="bg-white p-6 rounded-[10px] border border-gray-100">
                                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Diretrizes ESG</h3>

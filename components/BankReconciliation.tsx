@@ -430,12 +430,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const sortedBankTransactions = useMemo(() => {
         let filtered = [...bankTransactions];
         if (bankSearch) {
-            const search = bankSearch.toLowerCase();
-            filtered = filtered.filter(tx =>
-                (tx.description_normalized || tx.description_raw || '').toLowerCase().includes(search) ||
-                (tx.category || '').toLowerCase().includes(search) ||
-                (tx.counterparty_name || '').toLowerCase().includes(search)
-            );
+            // Várias palavras em qualquer ordem (ver utils/buscaPendentes.ts).
+            filtered = filtered.filter(tx => combinaComBusca(bankSearch, [
+                tx.description_normalized, tx.description_raw, tx.category, tx.counterparty_name,
+            ]));
         }
         if (bankCategoryFilter.includes('__none__') && bankCategoryFilter.length === 1) {
             filtered = filtered.filter(tx => !tx.category);

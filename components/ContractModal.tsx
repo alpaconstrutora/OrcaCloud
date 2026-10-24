@@ -153,6 +153,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const organizationId = organizationIdProp || pickedOrgId || initialData?.organization_id || defaultOrgId || undefined;
     const needsOrgPicker = !organizationIdProp && !initialData?.id && !defaultOrgId;
     const activeOrgName = storeOrganizations.find(o => o.id === organizationId)?.name;
+    /** O contrato pertence a UMA organização (REGRA #5 do CLAUDE.md), então centro de custo,
+     *  plano de contas e empreendimento só listam os dela. Sem dizer qual, "só aparece um
+     *  centro de custo" parecia bug (24/10/2026, CTS-010-036-0002 do Condomínio Galeria
+     *  Altavista, que tem 2 centros de custo cadastrados). */
+    const avisoOrganizacao = (oQue: string) => organizationId && activeOrgName ? (
+        <p className="text-xs text-gray-400 ml-1">
+            Mostrando {oQue} de: <span className="font-semibold text-gray-500">{activeOrgName}</span>
+        </p>
+    ) : null;
     const [formData, setFormData] = React.useState<Partial<Contract>>({
         number: '',
         title: '',
@@ -1787,6 +1796,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         size="sm"
                                         triggerClassName={SELETOR_H9}
                                     />
+                                    {avisoOrganizacao('centros de custo')}
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">Conta Financeira</label>
@@ -1817,6 +1827,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         size="sm"
                                         triggerClassName={SELETOR_H9}
                                     />
+                                    {avisoOrganizacao('o plano de contas')}
                                 </div>
                                 {/* Vínculo DIRETO, independente da obra: contrato sem obra
                                     (despesa administrativa) também pode ter empreendimento. */}
@@ -1835,15 +1846,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             ))}
                                         </select>
                                     </div>
-                                    {/* O contrato pertence a UMA organização (REGRA #5 do CLAUDE.md), então
-                                        a lista só traz empreendimentos dela — sem isso o usuário via "só 3
-                                        empreendimentos" e achava que era bug, quando os outros pertencem a
-                                        outra organização do grupo e o campo não dizia qual estava filtrando. */}
-                                    {organizationId && activeOrgName && (
-                                        <p className="text-xs text-gray-400 ml-1">
-                                            Mostrando empreendimentos de: <span className="font-semibold text-gray-500">{activeOrgName}</span>
-                                        </p>
-                                    )}
+                                    {/* Primeiro caso do aviso: o usuário via "só 3 empreendimentos" e achava
+                                        que era bug, quando os outros pertencem a outra organização do grupo. */}
+                                    {avisoOrganizacao('empreendimentos')}
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">Obra Relacionada (Opcional)</label>

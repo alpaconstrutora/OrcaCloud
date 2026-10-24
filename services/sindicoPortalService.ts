@@ -6,6 +6,9 @@ import type {
 import type { EstadoDoSindico } from '../utils/acessoDoSindico';
 import type { TituloDoCondominio } from '../utils/financeiroDoSindico';
 import type { LinhaPagamentoAvulso } from '../utils/pagamentoAvulso';
+import type {
+    CotaParaGerar, CriterioDoRateio, PagadorDaCota, PreviaDoRateio, TipoDoRateio,
+} from '../utils/rateioDoSindico';
 
 /**
  * Portal do Síndico — leitura e gestão do acesso.
@@ -348,6 +351,68 @@ export const sindicoPortalService = {
             ...params(id), p_empreendimento_id: condominioId, p_dados: dados,
         }, 'Não foi possível cadastrar o fornecedor.');
         return { id: r.id as string, nome: r.nome as string, existente: !!r.existente };
+    },
+
+    // ── Rateio pelo síndico (G1, 24/10/2026) ────────────────────────────────
+    //    O banco recalcula tudo (`fn_rateio_calcular`); daqui só vão os
+    //    parâmetros e o texto podado das despesas.
+    //    Plano: docs/planos/2026-10-24-portal-sindico-gestao-completa.md
+
+    async rateioPrevia(id: IdentidadeDoSindico, condominioId: string, p: {
+        competencia: string; criterio: CriterioDoRateio; pagador: PagadorDaCota; grupo: string[]; valorFixo: number | null;
+    }): Promise<PreviaDoRateio> {
+        const { data, error } = await supabase.rpc('sindico_portal_rateio_previa', {
+            ...params(id), p_empreendimento_id: condominioId, p_competencia: p.competencia, p_criterio: p.criterio,
+            p_pagador: p.pagador, p_grupo: p.grupo, p_valor_fixo: p.valorFixo,
+        });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as PreviaDoRateio & { ok?: boolean; motivo?: string };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível calcular a prévia.');
+        return r;
+    },
+
+    async rateioSalvar(id: IdentidadeDoSindico, condominioId: string, p: {
+        competencia: string; tipo: TipoDoRateio; criterio: CriterioDoRateio; pagador: PagadorDaCota;
+        grupo: string[]; valorFixo: number | null; descricoes: Record<string, string>; observacoes: string;
+    }): Promise<string> {
+        const r = await escrever('sindico_portal_rateio_salvar', {
+            ...params(id), p_empreendimento_id: condominioId, p_competencia: p.competencia, p_tipo: p.tipo,
+            p_criterio: p.criterio, p_pagador: p.pagador, p_grupo: p.grupo, p_valor_fixo: p.valorFixo,
+            p_descricoes: p.descricoes, p_observacoes: p.observacoes || null,
+        }, 'Não foi possível salvar o rateio.');
+        return r.id as string;
+    },
+
+    async rateioFechar(id: IdentidadeDoSindico, rateioId: string): Promise<string> {
+        const r = await escrever('sindico_portal_rateio_fechar', { ...params(id), p_rateio_id: rateioId, p_descricoes: {} },
+            'Não foi possível fechar o rateio.');
+        return r.numero as string;
+    },
+
+    async rateioCancelar(id: IdentidadeDoSindico, rateioId: string, motivo: string): Promise<void> {
+        await escrever('sindico_portal_rateio_cancelar', { ...params(id), p_rateio_id: rateioId, p_motivo: motivo },
+            'Não foi possível cancelar o rateio.');
+    },
+
+    async rateioCotas(id: IdentidadeDoSindico, rateioId: string, pagador: PagadorDaCota): Promise<CotaParaGerar[]> {
+        const { data, error } = await supabase.rpc('sindico_portal_rateio_cotas', { ...params(id), p_rateio_id: rateioId, p_pagador: pagador });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string; cotas?: CotaParaGerar[] };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível carregar as cotas.');
+        return r.cotas ?? [];
+    },
+
+    async rateioGerarCotas(id: IdentidadeDoSindico, rateioId: string, vencimento: string, pagador: PagadorDaCota): Promise<{
+        criados: number; pulados: number; falhas: { unitLabel: string; motivo: string }[];
+    }> {
+        const r = await escrever('sindico_portal_rateio_gerar_cotas', {
+            ...params(id), p_rateio_id: rateioId, p_vencimento: vencimento, p_pagador: pagador,
+        }, 'Não foi possível gerar as cotas.');
+        return {
+            criados: Number(r.criados) || 0,
+            pulados: Number(r.pulados) || 0,
+            falhas: (r.falhas as { unitLabel: string; motivo: string }[]) ?? [],
+        };
     },
 
     // ── Admin (Portais › Portal do Condomínio) ──────────────────────────────

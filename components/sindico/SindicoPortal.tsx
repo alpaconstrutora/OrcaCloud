@@ -228,9 +228,11 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, somenteLeitura = fals
                 </main>
             </div>
 
-            {/* Barra inferior no celular. */}
+            {/* Barra inferior no celular. `z-40`, ABAIXO dos painéis laterais
+                (Sheet = z-50): no mesmo z-50 ela vinha depois no DOM e cobria o
+                rodapé do painel — "Salvar" sumia no celular (print de 24/10). */}
             {!embutido && (
-                <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] overflow-x-auto">
+                <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] overflow-x-auto">
                     <div className="flex min-w-max">
                         {SINDICO_PORTAL_TAB_IDS.map(id => {
                             const Icon = TAB_ICONS[id];

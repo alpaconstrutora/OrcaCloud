@@ -127,7 +127,8 @@ describe('SindicoPortal', () => {
         expect(screen.getByRole('button', { name: 'Ver' })).toBeTruthy();
     });
 
-    it('6. aprovar o rateio: só com login (pelo link o botão diz o caminho)', async () => {
+    it('6. rateio: o síndico monta e fecha (fechar = a aprovação dele) — só com login', async () => {
+        // G1 (24/10/2026): "Aprovar" virou "Fechar" — quem fecha é o síndico.
         const comRascunho = { ...payload, rateios: [{ ...payload.rateios[0], status: 'RASCUNHO', aprovacao: { status: null, em: null, porNome: null, observacao: null, desatualizada: false } }] };
         getDados.mockResolvedValue(comRascunho);
         const { unmount } = render(<ConfirmProvider><SindicoPortal token="tok" /></ConfirmProvider>);
@@ -135,15 +136,44 @@ describe('SindicoPortal', () => {
         // Desde 24/10/2026 a prestação de contas é sub-aba do Financeiro.
         fireEvent.click(screen.getAllByRole('button', { name: /^Financeiro$/ })[0]);
         fireEvent.click(await screen.findByRole('button', { name: 'Prestação de contas' }));
-        const aprovarLink = await screen.findByRole('button', { name: /Aprovar/ });
-        expect((aprovarLink as HTMLButtonElement).disabled).toBe(true);
-        expect(aprovarLink.getAttribute('title')).toMatch(/e-mail e senha/);
+        const fecharLink = await screen.findByRole('button', { name: /^Fechar$/ });
+        expect((fecharLink as HTMLButtonElement).disabled).toBe(true);
+        expect(fecharLink.parentElement?.getAttribute('title')).toMatch(/e-mail e senha/);
+        const novoLink = screen.getByRole('button', { name: /Novo rateio/ });
+        expect((novoLink as HTMLButtonElement).disabled).toBe(true);
         unmount();
 
         render(<ConfirmProvider><SindicoPortal token="tok" onLogout={() => undefined} /></ConfirmProvider>);
         await screen.findAllByText('010 - Galeria Altavista');
-        const aprovarLogin = await screen.findByRole('button', { name: /Aprovar/ });
-        expect((aprovarLogin as HTMLButtonElement).disabled).toBe(false);
+        await waitFor(async () => {
+            const fecharLogin = await screen.findByRole('button', { name: /^Fechar$/ });
+            expect((fecharLogin as HTMLButtonElement).disabled).toBe(false);
+        });
+        expect((screen.getByRole('button', { name: /Novo rateio/ }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it('6b. rateio fechado: gerar cotas com login; cancelar diz por quê quando a cota já virou cobrança', async () => {
+        const cota = payload.rateios[0].cotas[0];
+        const fechado = {
+            ...payload,
+            rateios: [{ ...payload.rateios[0], status: 'FECHADO', cotas: [
+                { ...cota, tituloStatus: 'PENDING' },
+                { ...cota, id: 'i2', unitId: 'u2', unidade: 'Sala - 202', tituloStatus: null },
+            ] }],
+        };
+        getDados.mockResolvedValue(fechado);
+        render(<ConfirmProvider><SindicoPortal token="tok" onLogout={() => undefined} /></ConfirmProvider>);
+        await screen.findAllByText('010 - Galeria Altavista');
+        fireEvent.click(screen.getAllByRole('button', { name: /^Financeiro$/ })[0]);
+        fireEvent.click(await screen.findByRole('button', { name: 'Prestação de contas' }));
+        // Painéis fechados continuam montados (portal no fim do body): o 1º é o da lista.
+        await waitFor(() => {
+            const gerar = screen.getAllByRole('button', { name: /Gerar cotas/ })[0];
+            expect((gerar as HTMLButtonElement).disabled).toBe(false);
+        });
+        const cancelar = screen.getAllByRole('button', { name: /^Cancelar$/ })[0];
+        expect((cancelar as HTMLButtonElement).disabled).toBe(true);
+        expect(cancelar.parentElement?.getAttribute('title')).toMatch(/viraram cobrança/);
     });
 
     it('7. Financeiro pelo LINK: lê o caixa, mas lançar e pagar pedem login', async () => {

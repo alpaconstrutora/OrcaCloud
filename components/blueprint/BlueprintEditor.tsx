@@ -442,8 +442,10 @@ import {
 } from '../../utils/blueprintPotenciaPadrao';
 import {
   BITOLAS_DE_ELETRODUTO_MM,
+  ENCAMINHAMENTOS_DO_ELETRODUTO,
   HIPOTESES_ELETRODUTO_PADRAO,
   ROTAS_MAXIMAS,
+  type EncaminhamentoDoEletroduto,
   eletrodutosSugeridos,
   planejarEletrodutosDoModelo,
   refazerEletrodutos,
@@ -8705,9 +8707,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // E6.3: rota pela parede e caixas de passagem automáticas — preferências de trabalho, persistidas.
   const [rotaPelaParede, setRotaPelaParede] = usePersistedState<boolean>('blueprint:eletrodutosPelaParede', HIPOTESES_ELETRODUTO_PADRAO.rotaPelaParede);
   const [caixasAutomaticas, setCaixasAutomaticas] = usePersistedState<boolean>('blueprint:eletrodutosCaixas', HIPOTESES_ELETRODUTO_PADRAO.caixas != null);
+  // 24/10/2026: o encaminhamento (quadro → luz do ambiente → tomadas, como na obra; ou a árvore única de antes) — preferência de trabalho, persistida.
+  const [encaminhamentoDoEletroduto, setEncaminhamentoDoEletroduto] = usePersistedState<EncaminhamentoDoEletroduto>(
+    'blueprint:eletrodutosEncaminhamento',
+    HIPOTESES_ELETRODUTO_PADRAO.encaminhamento ?? 'PELA_LUZ_DO_AMBIENTE',
+  );
   const hipotesesDeEletroduto = useMemo(
-    () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto, rotaMaximaVezes: rotaMaxima, rotaPelaParede, caixas: caixasAutomaticas ? REGRA_DE_CAIXAS_PADRAO : null }),
-    [bitolaDeEletroduto, rotaMaxima, rotaPelaParede, caixasAutomaticas],
+    () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto, rotaMaximaVezes: rotaMaxima, rotaPelaParede, caixas: caixasAutomaticas ? REGRA_DE_CAIXAS_PADRAO : null, encaminhamento: encaminhamentoDoEletroduto }),
+    [bitolaDeEletroduto, rotaMaxima, rotaPelaParede, caixasAutomaticas, encaminhamentoDoEletroduto],
   );
   // POR QUADRO, todos os pavimentos (15/09/2026): a rede é uma por quadro,
   // compartilhada entre os circuitos, e atravessa a laje na posição do quadro.
@@ -18707,6 +18714,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     {ROTAS_MAXIMAS.map((r) => (
                       <option key={r.rotulo} value={r.valor == null ? 'sem' : String(r.valor)}>
                         {r.rotulo}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="mt-1.5 flex items-center gap-2">
+                  Encaminhamento
+                  <select
+                    value={encaminhamentoDoEletroduto}
+                    onChange={(e) => setEncaminhamentoDoEletroduto(e.target.value as EncaminhamentoDoEletroduto)}
+                    aria-label="Encaminhamento do eletroduto"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    {ENCAMINHAMENTOS_DO_ELETRODUTO.map((e) => (
+                      <option key={e.valor} value={e.valor}>
+                        {e.rotulo}
                       </option>
                     ))}
                   </select>

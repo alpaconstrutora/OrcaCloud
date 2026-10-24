@@ -14,6 +14,7 @@ import {
   Lock,
   Unlock,
   Mail,
+  CalendarClock,
 } from 'lucide-react';
 
 export type ActionKind =
@@ -30,7 +31,8 @@ export type ActionKind =
   | 'annotate'
   | 'lock'
   | 'unlock'
-  | 'mail';
+  | 'mail'
+  | 'reschedule';
 
 type Tone = 'neutral' | 'attention' | 'danger';
 type Size = 'md' | 'sm';
@@ -54,6 +56,9 @@ const KIND_DEFAULTS: Record<ActionKind, { Icon: React.ComponentType<{ className?
   unlock:    { Icon: Unlock,           title: 'Desbloquear',   tone: 'neutral' },
   // Enviar/reenviar e-mail (convite do Portal do Parceiro, 03/10/2026).
   mail:      { Icon: Mail,             title: 'Enviar e-mail', tone: 'attention' },
+  // Alterar a data de vencimento (Contrato › Financeiro › Parcelas, 24/10/2026) —
+  // ao lado do lápis de "Alterar valor", que precisa de ícone próprio.
+  reschedule: { Icon: CalendarClock,   title: 'Alterar vencimento', tone: 'neutral' },
 };
 
 const TONE_CLASSES: Record<Tone, string> = {

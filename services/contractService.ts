@@ -10,7 +10,7 @@ import { INITIAL_PROJECT_SETTINGS } from '../constants';
 import { BudgetEntry } from '../types/budget';
 import { resolverCategoriaDoContrato } from './financialCategoryResolver';
 import {
-    planejarSyncParcelas, parcelaBaixada, marcaDeValorManual, COLUNAS_PARCELA_EXISTENTE, type ParcelaExistente,
+    planejarSyncParcelas, parcelaBaixada, marcaDeValorManual, marcaDeVencimentoManual, COLUNAS_PARCELA_EXISTENTE, type ParcelaExistente,
 } from '../utils/contratoParcelaVariavel';
 import {
     Contract,
@@ -1104,7 +1104,7 @@ export async function generateRecurringInstallmentsForPeriod(
     // ── Contrato org-level: internal_transactions
     const { data: jaExistem } = await supabase
         .from('internal_transactions')
-        .select('id, due_date, status, reference_id, valor_manual')
+        .select('id, due_date, status, reference_id, valor_manual, vencimento_manual')
         .eq('organization_id', contract.organization_id)
         .eq('source_system', 'CONTRACT_RECURRING')
         .like('reference_id', `${contract.id}%`)
@@ -1117,13 +1117,14 @@ export async function generateRecurringInstallmentsForPeriod(
     // com o valor antigo, produzindo uma série com dois valores misturados.
     // Parcela já paga/conciliada NUNCA é tocada: o dinheiro já entrou, refazer
     // a cobrança seria falsear o histórico. Ela é preservada e reportada.
-    // Parcela com valor alterado à mão (valor_manual) também fica: o usuário
-    // escolheu aquele valor na aba Financeiro do contrato.
+    // Parcela com valor ou vencimento alterado à mão (valor_manual /
+    // vencimento_manual) também fica: o usuário escolheu aquele valor ou aquela
+    // data na aba Financeiro do contrato.
     let removed = 0;
     let existing: Set<string>;
     if (replaceExisting) {
-        const pagas = (jaExistem || []).filter(r => r.status !== 'PENDING' || r.valor_manual);
-        const previstas = (jaExistem || []).filter(r => r.status === 'PENDING' && !r.valor_manual);
+        const pagas = (jaExistem || []).filter(r => r.status !== 'PENDING' || r.valor_manual || r.vencimento_manual);
+        const previstas = (jaExistem || []).filter(r => r.status === 'PENDING' && !r.valor_manual && !r.vencimento_manual);
         if (previstas.length > 0) {
             const { error: delErr } = await supabase
                 .from('internal_transactions')
@@ -2392,7 +2393,25 @@ export const contractService = {
             throw new Error('Parcela já paga ou conciliada — estorne no financeiro antes de editar.');
         }
         const payload: Record<string, unknown> = {};
-        if (patch.due_date) { payload.due_date = patch.due_date; payload.transaction_date = patch.due_date; }
+        if (patch.due_date) {
+            payload.due_date = patch.due_date; payload.transaction_date = patch.due_date;
+            // Vencimento alterado à mão: os syncs do contrato mantêm esta data
+            // (planejarSyncParcelas) e a aba Financeiro identifica a parcela — mesma
+            // regra do valor (abaixo). Data igual à atual não marca.
+            const { data: atualData } = await supabase
+                .from('internal_transactions')
+                .select('due_date, transaction_date, vencimento_manual, vencimento_manual_anterior')
+                .eq('id', entryId)
+                .maybeSingle();
+            const dataAtual = ((atualData?.due_date || atualData?.transaction_date) as string | null | undefined)?.slice(0, 10);
+            if (patch.due_date.slice(0, 10) !== dataAtual) {
+                const { data: { user } } = await supabase.auth.getUser();
+                Object.assign(payload, marcaDeVencimentoManual(
+                    (atualData ?? {}) as Parameters<typeof marcaDeVencimentoManual>[0],
+                    user?.id ?? null,
+                ));
+            }
+        }
         if (patch.description != null) payload.description = patch.description;
         if (patch.installment_type !== undefined) payload.installment_type = patch.installment_type || null;
         if (patch.payment_type !== undefined) payload.payment_type = patch.payment_type || null;
@@ -2483,6 +2502,10 @@ export const contractService = {
         valor_manual_em?: string | null; valor_manual_por?: string | null;
         /** Nome de quem alterou o valor (organization_members; e-mail se não houver nome). */
         valor_manual_por_nome?: string | null;
+        /** Vencimento alterado à mão (aba Financeiro do contrato) — o sync não o regrava. */
+        vencimento_manual?: boolean | null; vencimento_manual_anterior?: string | null;
+        vencimento_manual_em?: string | null; vencimento_manual_por?: string | null;
+        vencimento_manual_por_nome?: string | null;
     }[]> => {
         if (!contract.organization_id) return [];
 
@@ -2495,7 +2518,7 @@ export const contractService = {
         const measurementSources = ['CONTRACT_AVISTA', 'CONTRACT_PARCELADO', 'CONTRACT_RECURRING', 'CONTRACT_MEASUREMENT'];
         const { data: byContract, error: e1 } = await supabase
             .from('internal_transactions')
-            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, business_status, original_amount, discount_type, discount_amount, installment_type, payment_type, cost_center_id, plano_de_contas_id, valor_manual, valor_manual_anterior, valor_manual_em, valor_manual_por')
+            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, business_status, original_amount, discount_type, discount_amount, installment_type, payment_type, cost_center_id, plano_de_contas_id, valor_manual, valor_manual_anterior, valor_manual_em, valor_manual_por, vencimento_manual, vencimento_manual_anterior, vencimento_manual_em, vencimento_manual_por')
             .eq('organization_id', contract.organization_id)
             .in('source_system', measurementSources)
             .like('reference_id', `${contract.id}%`);
@@ -2507,10 +2530,10 @@ export const contractService = {
         const linhas = (byContract ?? [])
             .sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime());
 
-        // Quem alterou o valor à mão — a aba Financeiro identifica a parcela com o
+        // Quem alterou o valor/vencimento à mão — a aba Financeiro identifica a parcela com o
         // nome. Lido de organization_members (a RLS já limita aos colegas); falha
         // aqui não segura a lista: sem nome, a tela diz "usuário".
-        const autores = [...new Set(linhas.map(l => l.valor_manual_por).filter((id): id is string => !!id))];
+        const autores = [...new Set(linhas.flatMap(l => [l.valor_manual_por, l.vencimento_manual_por]).filter((id): id is string => !!id))];
         const nomes = new Map<string, string>();
         if (autores.length) {
             const { data: membros } = await supabase
@@ -2522,7 +2545,11 @@ export const contractService = {
                 if (nome && !nomes.has(m.user_id)) nomes.set(m.user_id, nome);
             }
         }
-        return linhas.map(l => ({ ...l, valor_manual_por_nome: l.valor_manual_por ? nomes.get(l.valor_manual_por) ?? null : null }));
+        return linhas.map(l => ({
+            ...l,
+            valor_manual_por_nome: l.valor_manual_por ? nomes.get(l.valor_manual_por) ?? null : null,
+            vencimento_manual_por_nome: l.vencimento_manual_por ? nomes.get(l.vencimento_manual_por) ?? null : null,
+        }));
     },
 
     // Medições (Measurements)

@@ -50,6 +50,8 @@ export function semParcelasBaixadas<T extends { reference_id: string }>(
  * Parcela já existente, como o sync a lê do banco antes de refazer a série.
  * `valor_manual*`: migration aplicar_20271019610000 — plano
  * docs/planos/2026-10-19-contrato-alterar-valor-da-parcela.md.
+ * `vencimento_manual*`: migration aplicar_20271024850000 — plano
+ * docs/planos/2026-10-24-contrato-alterar-vencimento-da-parcela.md.
  */
 export interface ParcelaExistente {
     id?: string | null;
@@ -64,28 +66,48 @@ export interface ParcelaExistente {
     valor_manual_anterior?: number | null;
     valor_manual_em?: string | null;
     valor_manual_por?: string | null;
+    due_date?: string | null;
+    transaction_date?: string | null;
+    vencimento_manual?: boolean | null;
+    vencimento_manual_anterior?: string | null;
+    vencimento_manual_em?: string | null;
+    vencimento_manual_por?: string | null;
 }
 
 /** Colunas que o sync precisa ler para decidir (select de `internal_transactions`). */
 export const COLUNAS_PARCELA_EXISTENTE =
     'id, reference_id, status, business_status, amount, original_amount, discount_type, discount_amount, '
-    + 'valor_manual, valor_manual_anterior, valor_manual_em, valor_manual_por';
+    + 'valor_manual, valor_manual_anterior, valor_manual_em, valor_manual_por, '
+    + 'due_date, transaction_date, vencimento_manual, vencimento_manual_anterior, vencimento_manual_em, vencimento_manual_por';
 
-/** Campos de valor que a parcela alterada à mão leva intactos para o sync. */
+/**
+ * Campos que a parcela alterada à mão leva para o sync. Vão TODOS em toda linha do
+ * lote `manuais` (o upsert de um lote grava a união das chaves — chave faltando vira
+ * NULL): o que não foi alterado à mão segue o contrato ou fica como está na linha.
+ */
 export interface CamposValorManual {
     amount: number;
     original_amount: number | null;
     discount_type: string | null;
     discount_amount: number | null;
-    valor_manual: true;
+    valor_manual: boolean;
     valor_manual_anterior: number | null;
     valor_manual_em: string | null;
     valor_manual_por: string | null;
+    vencimento_manual: boolean;
+    vencimento_manual_anterior: string | null;
+    vencimento_manual_em: string | null;
+    vencimento_manual_por: string | null;
 }
 
 /** Parcela ainda em aberto cujo valor o usuário alterou à mão. */
 export function parcelaComValorManual(t: ParcelaExistente): boolean {
     return !!t.valor_manual && !parcelaBaixada(t);
+}
+
+/** Parcela ainda em aberto cujo valor OU vencimento o usuário alterou à mão. */
+export function parcelaComAlteracaoManual(t: ParcelaExistente): boolean {
+    return (!!t.valor_manual || !!t.vencimento_manual) && !parcelaBaixada(t);
 }
 
 /**
@@ -98,22 +120,25 @@ export function parcelaComValorManual(t: ParcelaExistente): boolean {
  * ao do contrato no próximo "Salvar" dos Dados Gerais.
  *
  * - `normais`: parcelas do lote que seguem o contrato (gravar como vieram);
- * - `manuais`: parcelas do lote cuja linha existente tem valor alterado à mão — vão com
- *   o valor e o desconto DA LINHA (data, descrição e classificação seguem o contrato).
+ * - `manuais`: parcelas do lote cuja linha existente tem valor e/ou vencimento alterado
+ *   à mão — vão com o valor e o desconto DA LINHA (se o valor é manual) e com a data DA
+ *   LINHA (se o vencimento é manual); descrição e classificação seguem o contrato.
  *   Gravar num upsert separado: as chaves diferem das `normais`;
  * - `idsApagar`: linhas existentes que o sync pode remover — nunca baixada, e nunca
  *   a manual que continua no lote (ela é atualizada, não recriada).
  *
  * Parcela baixada fica fora das três listas: nada a regrava nem a apaga.
  */
-export function planejarSyncParcelas<T extends { reference_id: string; amount: number }>(
+export function planejarSyncParcelas<T extends {
+    reference_id: string; amount: number; due_date?: string | null; transaction_date?: string | null;
+}>(
     lote: T[],
     existentes: ParcelaExistente[],
 ): { normais: T[]; manuais: Array<T & CamposValorManual>; idsApagar: string[] } {
     const semBaixadas = semParcelasBaixadas(lote, existentes);
     const manualPorRef = new Map<string, ParcelaExistente>();
     for (const e of existentes) {
-        if (e.reference_id && parcelaComValorManual(e)) manualPorRef.set(e.reference_id, e);
+        if (e.reference_id && parcelaComAlteracaoManual(e)) manualPorRef.set(e.reference_id, e);
     }
 
     const normais: T[] = [];
@@ -121,23 +146,30 @@ export function planejarSyncParcelas<T extends { reference_id: string; amount: n
     for (const l of semBaixadas) {
         const m = manualPorRef.get(l.reference_id);
         if (!m) { normais.push(l); continue; }
+        const valor = !!m.valor_manual;
+        const dataDaLinha = m.vencimento_manual ? (m.due_date || m.transaction_date)?.slice(0, 10) ?? null : null;
         manuais.push({
             ...l,
-            amount: Number(m.amount ?? l.amount),
+            amount: valor ? Number(m.amount ?? l.amount) : l.amount,
             original_amount: m.original_amount ?? null,
             discount_type: m.discount_type ?? null,
             discount_amount: m.discount_amount ?? null,
-            valor_manual: true,
+            valor_manual: valor,
             valor_manual_anterior: m.valor_manual_anterior ?? null,
             valor_manual_em: m.valor_manual_em ?? null,
             valor_manual_por: m.valor_manual_por ?? null,
+            ...(dataDaLinha ? { due_date: dataDaLinha, transaction_date: dataDaLinha } : {}),
+            vencimento_manual: !!dataDaLinha,
+            vencimento_manual_anterior: m.vencimento_manual_anterior ?? null,
+            vencimento_manual_em: m.vencimento_manual_em ?? null,
+            vencimento_manual_por: m.vencimento_manual_por ?? null,
         });
     }
 
     const refsDoLote = new Set(lote.map(l => l.reference_id));
     const idsApagar = existentes
         .filter(e => !parcelaBaixada(e))
-        .filter(e => !(parcelaComValorManual(e) && e.reference_id && refsDoLote.has(e.reference_id)))
+        .filter(e => !(parcelaComAlteracaoManual(e) && e.reference_id && refsDoLote.has(e.reference_id)))
         .map(e => e.id)
         .filter((id): id is string => !!id);
 
@@ -161,6 +193,30 @@ export function marcaDeValorManual(
             : (atual.amount ?? null),
         valor_manual_em: agora.toISOString(),
         valor_manual_por: usuarioId,
+    };
+}
+
+/**
+ * Campos a gravar quando o usuário altera o VENCIMENTO da parcela à mão — mesma regra
+ * de `marcaDeValorManual`: `vencimento_manual_anterior` guarda a data que o CONTRATO
+ * gerou, preenchida só na primeira alteração.
+ */
+export function marcaDeVencimentoManual(
+    atual: {
+        due_date?: string | null; transaction_date?: string | null;
+        vencimento_manual?: boolean | null; vencimento_manual_anterior?: string | null;
+    },
+    usuarioId: string | null,
+    agora: Date = new Date(),
+): { vencimento_manual: true; vencimento_manual_anterior: string | null; vencimento_manual_em: string; vencimento_manual_por: string | null } {
+    const dataAtual = (atual.due_date || atual.transaction_date)?.slice(0, 10) ?? null;
+    return {
+        vencimento_manual: true,
+        vencimento_manual_anterior: atual.vencimento_manual
+            ? (atual.vencimento_manual_anterior ?? null)
+            : dataAtual,
+        vencimento_manual_em: agora.toISOString(),
+        vencimento_manual_por: usuarioId,
     };
 }
 

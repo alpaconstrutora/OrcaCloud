@@ -41,4 +41,5 @@ lançamentos que esse cronograma gera — as mesmas parcelas, duas vezes.
    os campos; divergência avisa e redistribui; gaveta com tabela. Pronto quando: 2 dos 3 vermelhos
    no código antigo e 3/3 verdes no novo — conferido.
 3. [x] `tsc --noEmit` rc=0; `check-ui-standard.sh components/ContractModal.tsx` 0 violações.
-4. [ ] PR + CI + publicação.
+4. [x] PR + CI + publicação — PR #131, `ci` 30m54s verde; squash `28fb2181` em 24/10/2026; CI do main verde no
+   28fb2181; `conferir-producao.sh "Soma das parcelas (R$ "` (texto que não existia antes) ✅ com o domínio em 97fea73.

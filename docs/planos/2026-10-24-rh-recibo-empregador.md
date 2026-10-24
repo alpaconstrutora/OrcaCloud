@@ -31,7 +31,10 @@ O PDF é um print desse mesmo HTML (`html2canvas`), então saía igual.
    `__tests__/components/PaystubModalEmpregador.test.tsx`: Garden → nome + CNPJ 60.897.254/0001-86, consulta com o
    `org_id` da folha (o topo era "all"), sem "Opura Pro" nem CNPJ zerado, sem linha de endereço.
 4. [x] `tsc --noEmit` rc=0; `check-ui-standard.sh components/PaystubModal.tsx` 0 violações.
-5. [ ] PR + CI + publicação + conferir o recibo na tela em produção.
+5. [x] PR + CI + publicação + conferir o recibo na tela em produção — PR #126, `ci` 30m39s verde; squash
+   `4c2b322b` em 24/10/2026; `conferir-producao.sh "getOrganizacaoDoHolerite"` provou o domínio (e5aa2cd, já com o
+   #126); na tela em produção, recibo 06/2026 do Rogério com "CONSTRUÇÃO DO EDIFÍCIO GARDEN CAMBUHY SPE" e
+   "CNPJ: 60.897.254/0001-86", sem linha de endereço.
 
 ## Observações
 

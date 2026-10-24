@@ -105,7 +105,8 @@ com a folha correspondente na Garden; títulos dessas folhas da Alpa: nenhum pag
 6. [x] **`components/LaborPayroll.tsx` + `components/ui/confirm.tsx`** — "Re-sincronizar financeiro" terminava com
    `alert()` nativo, que travou a aba do Chrome durante a correção: agora `confirm({ hideCancel: true })` (aviso na
    tela, só OK) e o erro vai para o toast. `__tests__/components/ConfirmAviso.test.tsx`.
-7. [ ] PR + CI + publicação.
+7. [x] PR + CI + publicação — PR #125, `ci` 29m58s verde; squash `0c6a53e0` em 24/10/2026;
+   `conferir-producao.sh "Financeiro re-sincronizado"` provou o domínio servindo 0c6a53e; CI do main verde.
 
 **Em aberto (usuário):** as rubricas recorrentes do Rogério hoje são Adiantamento, Auxílio Educação e VA (vieram do
 cadastro duplicado editado em 23/10); até 23/10 o cadastro dele tinha também a **Contribuição Assistencial** — se ela

@@ -55,7 +55,7 @@ O sindico sera o gestor do condomínio, entao no portal dele deve estar disponiv
 | Arquivo | O que muda | Como sei que terminou | Estado |
 |---|---|---|---|
 | `supabase/migrations/aplicar_20271024400000_portal_sindico_financeiro.sql` | Colunas de autoria, log com RLS só-leitura, 7 funções privadas, leitura `sindico_portal_financeiro` + `sindico_portal_titulos_autorizados` (modo `ler`), `sindico_portal_autorizar_upload` e 5 escritas (modo `sessao`) com `fn_period_is_closed` explícito e trava Asaas | Prova em bloco desfeito: 24 sondas; conferência de que nada ficou; aplicada; ACL sem PUBLIC | ✅ aplicada em 24/10 |
-| `supabase/functions/sindico-portal-financeiro/index.ts` | upload · descartar · documentos · abrir | `curl` sem header → 401; token falso → 403 | ⏳ código pronto; **deploy barrado pelo classificador** — aguarda o usuário |
+| `supabase/functions/sindico-portal-financeiro/index.ts` | upload · descartar · documentos · abrir | `curl` sem header → 401; token falso → 403 | ✅ publicada em 24/10 (autorizada pelo usuário) |
 | `utils/sindicoPortalTabs.ts` + teste | "Prestação de contas" → "Financeiro"; sub-abas | teste verde | ✅ |
 | `utils/financeiroDoSindico.ts` + `__tests__/financeiroDoSindico.test.ts` | situação, resumo do mês, motivos (espelho das RPCs) | teste verde | ✅ |
 | `utils/origemLabel.ts` | rótulo de origem extraído de `ContasPagarParcelas` (reexportado lá) para o portal não carregar a tela inteira | tsc 0 | ✅ |
@@ -109,13 +109,18 @@ na abertura do portal; o número está no Resumo do mês do Financeiro.
   seguinte (foi para o topo); no celular, sub-aba ativa fora da tela (abas e mês empilhados).
 - [x] `check-ui-standard.sh` limpo nos 8 arquivos tocados; `check-system-projects` limpo;
   `check-project-classification` acusa só `utils/diaryPlanningLink.ts` (já em `main`, não é desta frente).
-- [ ] Deploy da Edge + sondas `curl` — **barrado pelo classificador de permissões**; sem ela,
-  a coluna Documento fica "—" e anexar arquivo ao lançar falha com mensagem (o resto funciona).
+- [x] Deploy da Edge (24/10, autorizado pelo usuário depois de o classificador barrar a 1ª
+  tentativa). Sondas de fora: sem header → 401; anon + token falso → 403 "Link inválido";
+  upload pelo link SEM login → 403; link real → código e nome de 3 boletos do 010 (200);
+  "abrir" com o link real → URL assinada que baixa o PDF (200, application/pdf, 570 KB);
+  "abrir" um título da Alpa com o mesmo link → 403 "Título não disponível para este acesso".
 - [ ] Prévia do admin no app real (Portais › Portal do Condomínio › Ver como o síndico) — exige
   login de membro; coberta pelo teste de componente 9.
 
 **Achado de DADO (não de código), para o usuário:** o Resumo mostra R$ 14.952,45 "em atraso" —
 são títulos de 2017–2022 (boletos e contrato recorrente do 010/007) em aberto, sem baixa. O
 síndico vai vê-los como contas vencidas; o mesmo aparece em Contas a Pagar do admin.
-- [ ] Suíte inteira com a conta fechando; PR; CI; merge; `conferir-producao.sh`.
+- [x] Suíte inteira: 11.139 = 11.095 + 10 (worker do V8 caiu; `blueprintCasaDeBombas` sozinho
+  11/11) + 34 pulados, 0 falha. PR #129: CI verde, squash `5f8fff0`, CI de main verde;
+  `conferir-producao.sh`: o domínio serve 5f8fff0 com "Lançar conta a pagar".
 - [ ] Escrita real com o síndico do 010 — combinar com o usuário.

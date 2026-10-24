@@ -715,7 +715,7 @@ const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizatio
                 <div className="space-y-6">
                     {/* 1. Título */}
                     <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal Colaborador</h1>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal do Colaborador</h1>
                         <p className="text-gray-400 text-sm mt-1.5 font-medium">Link self-service: ponto, férias, documentos e holerite pelo celular.</p>
                     </div>
 

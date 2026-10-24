@@ -31,4 +31,27 @@ describe('combinaComBusca (Pendentes › Lançamentos)', () => {
         expect(combinaComBusca('   ', [null, undefined])).toBe(true);
         expect(combinaComBusca('x', [null, undefined])).toBe(false);
     });
+
+    describe('várias palavras', () => {
+        // Boleto da Energisa: o fornecedor vem do título resolvido, o código do "Nº" de origem.
+        const energisa = ['BOLETO 83640000001 LINHA DIGITAVEL', 'Energia', 'Energisa', 'Energisa', 'Energisa', '153', 'Boleto'];
+
+        it('fornecedor + código: cada palavra pode estar em um campo diferente', () => {
+            expect(combinaComBusca('energisa 153', energisa)).toBe(true);
+        });
+
+        it('a ordem das palavras não importa', () => {
+            expect(combinaComBusca('153 energisa', energisa)).toBe(true);
+        });
+
+        it('todas as palavras precisam aparecer: uma ausente reprova a linha', () => {
+            expect(combinaComBusca('energisa 999', energisa)).toBe(false);
+            expect(combinaComBusca('cemig 153', energisa)).toBe(false);
+        });
+
+        it('separador qualquer (vários espaços, tabulação) e frase contínua continuam valendo', () => {
+            expect(combinaComBusca('energisa    153', energisa)).toBe(true);
+            expect(combinaComBusca('linha digitavel', energisa)).toBe(true);
+        });
+    });
 });

@@ -1,13 +1,16 @@
 /**
- * Busca da aba Pendentes › Lançamentos. A coluna Descrição não mostra só `description`:
- * mostra o título resolvido (nome do fornecedor no boleto), o "Nº" de origem e o rótulo
- * do módulo de origem ("Contrato Parcelado", "Gestão Comercial"). A busca comparava só o
- * texto cru e dava 0 linhas para o que o usuário estava lendo na tela.
+ * Busca da aba Pendentes (Extrato e Lançamentos).
  *
- * Regra: a busca acha o que a linha MOSTRA (todos os textos abaixo) e também o texto cru.
+ * 1. A busca acha o que a linha MOSTRA, não só o texto cru. Na tabela de Lançamentos a coluna
+ *    Descrição mostra o título resolvido (nome do fornecedor no boleto), o "Nº" de origem e o
+ *    rótulo do módulo ("Contrato Parcelado", "Gestão Comercial"); comparar só `description`
+ *    dava 0 linhas para o que o usuário estava lendo.
+ * 2. Várias palavras, em qualquer ordem: "energisa 153" = fornecedor E código. Cada palavra
+ *    precisa aparecer em ALGUM dos textos da linha (não precisa ser o mesmo campo).
  */
 export function combinaComBusca(termo: string, textos: Array<string | null | undefined>): boolean {
-    const t = termo.trim().toLowerCase();
-    if (!t) return true;
-    return textos.some(x => !!x && x.toLowerCase().includes(t));
+    const palavras = termo.toLowerCase().split(/\s+/).filter(Boolean);
+    if (palavras.length === 0) return true;
+    const minusculos = textos.filter((x): x is string => !!x).map(x => x.toLowerCase());
+    return palavras.every(p => minusculos.some(x => x.includes(p)));
 }

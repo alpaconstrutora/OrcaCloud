@@ -117,7 +117,8 @@ export function LinhaDeGrupo<T>({ grupo, recolhido, continua, colSpan, onAlterna
                     <span className="text-slate-400 flex-shrink-0">
                         {recolhido ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     </span>
-                    <span className="font-semibold text-sm text-slate-800">{grupo.label}</span>
+                    {/* Nome muito longo (contraparte do extrato) empurrava contagem e total para fora da tela. */}
+                    <span className="font-semibold text-sm text-slate-800 truncate max-w-[22rem]" title={grupo.label}>{grupo.label}</span>
                     {continua && <span className="text-xs font-normal text-slate-500">(continua)</span>}
                     <span className="text-xs font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">{grupo.itens.length}</span>
                     {/* Total logo após a contagem: no fim da linha ele caía fora da tela (tabela larga). */}

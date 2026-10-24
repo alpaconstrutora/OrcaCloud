@@ -1326,6 +1326,11 @@ sem outra categoria (Saldo de Férias, Banco de Horas, Encargos INSS, Relação 
 com poucas linhas. No `StandardTable`, campo guardado que deixou de ser opção (ex.: "Organização", que só existe em
 "Todas") vale como sem agrupamento.
 
+Em 24/10/2026 para Financeiro › Conciliação Bancária › **Pendentes** (Extrato e Lançamentos, só no modo lista;
+`docs/planos/2026-10-24-conciliacao-pendentes-agrupar.md`). As duas tabelas ficam lado a lado, então o `AgruparControles`
+vai numa **linha própria** entre a toolbar e a tabela (a toolbar da meia-tela não comporta três controles a mais); o total
+do grupo é o **saldo** (créditos − débitos), porque as listas misturam entrada e saída (`utils/pendentesGrupos.ts`).
+
 Em 24/10/2026 para Minha Organização › Centro de custo (`CostCenterModule.tsx`, `docs/planos/2026-10-24-centro-de-custo-agrupar.md`).
 A tela é uma **árvore** (grupo → centro de custo): agrupar a **achata** nos centros de custo e os divide por
 Centro de custo (grupo), Organização (só em "Todas"), Empreendimento ou Obra; grupo-pai sem filho não aparece

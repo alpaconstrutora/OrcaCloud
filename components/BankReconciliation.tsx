@@ -44,6 +44,13 @@ import SmartReconciliationCenter from './SmartReconciliationCenter';
 import ProlaboreReconciliationPanel from './ProlaboreReconciliationPanel';
 import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import { RodapePaginacao, usePaginacaoEmMemoria } from './ui/RodapePaginacao';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { entradasDaPagina, linhasDaTela, type EntradaDaTela } from '../utils/agruparLinhas';
+import {
+    agruparExtrato, agruparLancamentos, OPCOES_AGRUPAR_EXTRATO, OPCOES_AGRUPAR_LANCAMENTO, TITULO_SALDO_DO_GRUPO,
+    type CampoAgruparExtrato, type CampoAgruparLancamento,
+} from '../utils/pendentesGrupos';
 import AjustarDiferencaSheet from './reconciliation/AjustarDiferencaSheet';
 import { resumoDaSelecao, type ModoConciliacaoGrupo } from '../utils/reconciliationSelection';
 import { extratoForaDaConciliacao, valorParaConciliar, COLUNA_VALOR_ESPERADO, COLUNA_VALOR_VARIAVEL, FILTRO_SEM_TRIBUTO_RETIDO } from '../utils/reconciliationRules';
@@ -113,6 +120,7 @@ import {
     renderPendingInternalCell,
     renderStatementCell,
     ValorParaConciliar,
+    ROTULO_OUTRA_ORG,
 } from './reconciliation/tabelasDaConciliacao';
 
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId, defaultView }) => {
@@ -807,13 +815,65 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     // que estivesse em voo estourava o corte de 20 s. "Selecionar todos" vira da página.
     // Dock, lote e totais seguem sobre a seleção inteira (os ids, não a página).
     const recortePendentes = [selectedAccountId, competencia, startDate, endDate, flowFilter];
+    // "Agrupar" (guia §6.12) nas duas tabelas da Pendentes — só no modo lista: a grade de
+    // cards não tem cabeçalho de grupo, então lá a escolha fica guardada mas não vale.
+    const agrupExtrato = useAgrupamento<CampoAgruparExtrato>('conciliacaoPendentes:extrato:groupBy');
+    const agrupLanc = useAgrupamento<CampoAgruparLancamento>('conciliacaoPendentes:lancamentos:groupBy');
+    const agrupandoExtrato = pendentesViewMode === 'list' && agrupExtrato.agrupando;
+    const agrupandoLanc = pendentesViewMode === 'list' && agrupLanc.agrupando;
+    const gruposExtrato = useMemo(
+        () => (agrupandoExtrato && agrupExtrato.campo !== 'none'
+            ? agruparExtrato(sortedBankTransactions, agrupExtrato.campo, {
+                obra: tx => projectName(tx.project_id) || (tx.project_id ? ROTULO_OUTRA_ORG : null),
+                centroCusto: tx => costCenterName(tx.cost_center_id) || (tx.cost_center_id ? ROTULO_OUTRA_ORG : null),
+            }, agrupExtrato.direcao)
+            : []),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [agrupandoExtrato, agrupExtrato.campo, agrupExtrato.direcao, sortedBankTransactions, projectNameById, costCenterNameById],
+    );
+    const gruposLanc = useMemo(
+        () => (agrupandoLanc && agrupLanc.campo !== 'none'
+            ? agruparLancamentos(sortedInternalTransactions, agrupLanc.campo, {
+                // o MESMO texto das colunas Cliente/Credor (displayPartyName, depois o rótulo da origem)
+                parte: tx => displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || null,
+                obra: tx => projectName(tx.project_id),
+                centroCusto: tx => costCenterName(tx.cost_center_id),
+                data: tx => displayDate(tx),
+            }, tx => valorParaConciliar(tx), agrupLanc.direcao)
+            : []),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [agrupandoLanc, agrupLanc.campo, agrupLanc.direcao, sortedInternalTransactions, originPartyNames, supplierNameById, projectNameById, costCenterNameById],
+    );
+    // A paginação conta linhas de dado, na ordem da tela, sem as dos grupos recolhidos.
+    const linhasExtrato = useMemo(
+        () => (agrupandoExtrato ? linhasDaTela(gruposExtrato, agrupExtrato.recolhidos) : sortedBankTransactions),
+        [agrupandoExtrato, gruposExtrato, agrupExtrato.recolhidos, sortedBankTransactions],
+    );
+    const linhasLanc = useMemo(
+        () => (agrupandoLanc ? linhasDaTela(gruposLanc, agrupLanc.recolhidos) : sortedInternalTransactions),
+        [agrupandoLanc, gruposLanc, agrupLanc.recolhidos, sortedInternalTransactions],
+    );
+    // Trocar o campo/sentido volta para a página 1; recolher/expandir não (guia §6.12).
     const pendBank = usePaginacaoEmMemoria(
-        sortedBankTransactions, 'conciliacaoPendentes:extrato:pageSize',
-        [...recortePendentes, bankSearch, bankCategoryFilter, bankCounterpartyFilter, bankSortField, bankSortOrder],
+        linhasExtrato, 'conciliacaoPendentes:extrato:pageSize',
+        [...recortePendentes, bankSearch, bankCategoryFilter, bankCounterpartyFilter, bankSortField, bankSortOrder, agrupExtrato.campo, agrupExtrato.direcao],
     );
     const pendInternal = usePaginacaoEmMemoria(
-        sortedInternalTransactions, 'conciliacaoPendentes:lancamentos:pageSize',
-        [...recortePendentes, internalSearch, internalCategoryFilter, internalEntityFilter, internalSortField, internalSortOrder],
+        linhasLanc, 'conciliacaoPendentes:lancamentos:pageSize',
+        [...recortePendentes, internalSearch, internalCategoryFilter, internalEntityFilter, internalSortField, internalSortOrder, agrupLanc.campo, agrupLanc.direcao],
+    );
+    /** O que desenhar no <tbody>: cabeçalhos de grupo intercalados com as linhas da página (ou só as linhas). */
+    const entradasExtrato = useMemo<EntradaDaTela<BankTransaction>[]>(
+        () => (agrupandoExtrato
+            ? entradasDaPagina(gruposExtrato, agrupExtrato.recolhidos, pendBank.pageStart, pendBank.pageStart + pendBank.pageSize)
+            : pendBank.pageRows.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupandoExtrato, gruposExtrato, agrupExtrato.recolhidos, pendBank.pageStart, pendBank.pageSize, pendBank.pageRows],
+    );
+    const entradasLanc = useMemo<EntradaDaTela<InternalTransaction>[]>(
+        () => (agrupandoLanc
+            ? entradasDaPagina(gruposLanc, agrupLanc.recolhidos, pendInternal.pageStart, pendInternal.pageStart + pendInternal.pageSize)
+            : pendInternal.pageRows.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [agrupandoLanc, gruposLanc, agrupLanc.recolhidos, pendInternal.pageStart, pendInternal.pageSize, pendInternal.pageRows],
     );
     const [selectedBankTxId, setSelectedBankTxId] = useState<string | null>(null);
 
@@ -3627,6 +3687,24 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             </div>
                         </div>
 
+                        {/* Agrupar (§6.12) — numa linha própria: a toolbar de cima já ocupa a meia-tela
+                            da Pendentes e três controles a mais estourariam a largura. */}
+                        {activeView === 'pending' && pendentesViewMode === 'list' && (
+                            <div className="flex items-center gap-2 px-2 py-2 border-b border-gray-100 bg-white">
+                                <AgruparControles
+                                    opcoes={OPCOES_AGRUPAR_EXTRATO}
+                                    campo={agrupExtrato.campo}
+                                    onCampo={agrupExtrato.setCampo}
+                                    direcao={agrupExtrato.direcao}
+                                    onDirecao={agrupExtrato.setDirecao}
+                                    chavesDosGrupos={gruposExtrato.map(g => g.key)}
+                                    algumRecolhido={agrupExtrato.recolhidos.size > 0}
+                                    onAlternarTodos={agrupExtrato.alternarTodos}
+                                    title="Agrupar os extratos"
+                                />
+                            </div>
+                        )}
+
                         <div className={activeView === 'statement' ? '' : `min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : 'bg-transparent'}`}>
                             {activeView === 'statement' ? (
                                 isLoading && bankTransactions.length === 0 ? (
@@ -4014,12 +4092,23 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
-                                                {pendBank.pageRows.map(tx => {
+                                                {entradasExtrato.map(entrada => {
+                                                    // +2: checkbox + espaçador (não estão em visibleColumns)
+                                                    const visibleColCount = 2 + PENDING_BANK_COLUMNS.filter(c => pendingBankColumns.visibleColumns.includes(c.key)).length;
+                                                    if (entrada.tipo === 'grupo') {
+                                                        return (
+                                                            <LinhaDeGrupo
+                                                                key={`grupo:${entrada.grupo.key}`}
+                                                                grupo={entrada.grupo} recolhido={entrada.recolhido} continua={entrada.continua}
+                                                                colSpan={visibleColCount} onAlternar={agrupExtrato.alternar}
+                                                                tituloTotal={TITULO_SALDO_DO_GRUPO}
+                                                            />
+                                                        );
+                                                    }
+                                                    const tx = entrada.item;
                                                     const suggestion = topSuggestionByBankTxId.get(tx.id);
                                                     const cand = suggestion?.candidate_internal_transaction;
                                                     const cellPad = pendentesCompact ? 'py-1' : 'py-2.5';
-                                                    // +2: checkbox + espaçador (não estão em visibleColumns)
-                                                    const visibleColCount = 2 + PENDING_BANK_COLUMNS.filter(c => pendingBankColumns.visibleColumns.includes(c.key)).length;
                                                     const pendingBankCtx: PendingBankRowCtx = {
                                                         categoryOptions, projectOptions,
                                                         clienteRegistros, credorRegistros,
@@ -4303,6 +4392,22 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             </div>
                         </div>
 
+                        {pendentesViewMode === 'list' && (
+                            <div className="flex items-center gap-2 px-2 py-2 border-b border-gray-100 bg-white">
+                                <AgruparControles
+                                    opcoes={OPCOES_AGRUPAR_LANCAMENTO}
+                                    campo={agrupLanc.campo}
+                                    onCampo={agrupLanc.setCampo}
+                                    direcao={agrupLanc.direcao}
+                                    onDirecao={agrupLanc.setDirecao}
+                                    chavesDosGrupos={gruposLanc.map(g => g.key)}
+                                    algumRecolhido={agrupLanc.recolhidos.size > 0}
+                                    onAlternarTodos={agrupLanc.alternarTodos}
+                                    title="Agrupar os lançamentos"
+                                />
+                            </div>
+                        )}
+
                         <div className={`min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : 'bg-transparent'}`}>
                             {internalTransactions.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center p-12 text-center py-32 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
@@ -4494,7 +4599,20 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
-                                                {pendInternal.pageRows.map(tx => {
+                                                {entradasLanc.map(entrada => {
+                                                    if (entrada.tipo === 'grupo') {
+                                                        return (
+                                                            <LinhaDeGrupo
+                                                                key={`grupo:${entrada.grupo.key}`}
+                                                                grupo={entrada.grupo} recolhido={entrada.recolhido} continua={entrada.continua}
+                                                                // +2: checkbox + espaçador (não estão em visibleColumns)
+                                                                colSpan={2 + PENDING_INTERNAL_COLUMNS.filter(c => pendingInternalColumns.visibleColumns.includes(c.key)).length}
+                                                                onAlternar={agrupLanc.alternar}
+                                                                tituloTotal={TITULO_SALDO_DO_GRUPO}
+                                                            />
+                                                        );
+                                                    }
+                                                    const tx = entrada.item;
                                                     const cellPad = pendentesCompact ? 'py-1' : 'py-2.5';
                                                     const pendingInternalCtx: PendingInternalRowCtx = {
                                                         getSourceMeta, getOriginLink, goToOrigin, txCode, displayTitle, displayPartyName, displayDate,

@@ -146,3 +146,19 @@ export function motivoNaoBaixa(t: TituloDoCondominio): string | null {
 export function inicioDaCompetencia(mes: string): string {
     return `${mes.slice(0, 7)}-01`;
 }
+
+// ── Um condomínio por vez ───────────────────────────────────────────────────
+// `sindico_portal_financeiro` devolve os títulos de TODOS os prédios do
+// mandato. Somar dois condomínios num KPI não descreve nenhum deles (print de
+// 24/10: o "007 - Bella Vista" exibia as faturas do "010 - Galeria Altavista"
+// como contas em atraso). A tela mostra sempre UM, escolhido no topo.
+
+/** O escolhido, se ainda estiver na lista do síndico; senão o primeiro; sem prédio, null. */
+export function condominioDoFinanceiro(salvo: string, condominios: { id: string }[]): string | null {
+    if (condominios.some(c => c.id === salvo)) return salvo;
+    return condominios[0]?.id ?? null;
+}
+
+export function doCondominio<T extends { condominioId: string }>(itens: T[], condominioId: string | null): T[] {
+    return condominioId ? itens.filter(i => i.condominioId === condominioId) : [];
+}

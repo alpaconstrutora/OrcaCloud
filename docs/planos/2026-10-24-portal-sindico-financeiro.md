@@ -124,3 +124,34 @@ síndico vai vê-los como contas vencidas; o mesmo aparece em Contas a Pagar do 
   11/11) + 34 pulados, 0 falha. PR #129: CI verde, squash `5f8fff0`, CI de main verde;
   `conferir-producao.sh`: o domínio serve 5f8fff0 com "Lançar conta a pagar".
 - [ ] Escrita real com o síndico do 010 — combinar com o usuário.
+
+## Pedido de 24/10/2026 (tarde) — lançamentos de outro condomínio
+
+> "veja print que no portal do condominio > portal do sindico > aba financeiro esta trazendo
+> lancamentos que nao são do centro de custo do condominio"
+
+**Causa (conferida no banco):** o recorte da RPC está certo — cada título vem de um centro de
+custo com `empreendimento_id` de um prédio do síndico. Mas o ALTAIR é síndico do **007 - Bella
+Vista** (centro 011) **e** do **010 - Galeria Altavista** (centros 010 e 029), e a tela somava os
+dois: o banner falava do 007, enquanto o Resumo listava as "Fatura Contrato CTS-010-036-0001" (centro
+029, do 010) e os KPIs davam R$ 14.952,45 em atraso (= 3.393,07 do 007 + 11.559,38 do 010). O
+Resumo nem tinha a coluna Condomínio que as tabelas tinham.
+
+**Decisão:** um condomínio por vez. Somar dois condomínios num KPI não descreve nenhum deles
+(caixa, inadimplência e prestação de contas são de cada condomínio).
+
+- [x] `condominioDoFinanceiro` + `doCondominio` em `utils/financeiroDoSindico.ts`, com teste
+  (escolhido vale enquanto estiver no mandato; senão o primeiro; KPIs só do escolhido).
+- [x] Seletor "Condomínio" ao lado do "Mês" (só com 2+ prédios, persistido), aplicado às 4
+  sub-abas: Resumo, Pagar, Receber, Prestação (rateios e aprovação), banner e "Lançar conta".
+- [x] Prova com o link REAL do ALTAIR (Playwright, servidor da frente; a leitura só atualiza
+  o `last_used_at` do token): 007 → 14 contas, R$ 3.393,07, nenhuma fatura CTS-010; 010 → 20
+  contas, R$ 11.559,38; Prestação do 007 = rateio 07/2026, do 010 = rateio 08/2026; celular
+  390px empilha sem rolagem lateral; 0 erro de JS.
+- [x] `tsc --noEmit` exit 0; `check-ui-standard.sh` limpo.
+- [ ] PR + CI + publicação.
+
+**Achado de DADO, para o usuário:** no 007 continua "NEW GRAN ROCHAS-ALPA CONSTRUTORA
+2311-02-20170309.pdf" (R$ 896,56, venc. 30/04/2017, boleto capturado em 10/09/2026,
+AGUARDANDO_APROVACAO) no centro 011 do condomínio — pelo nome, despesa da construtora
+classificada no centro do condomínio. Não alterado.

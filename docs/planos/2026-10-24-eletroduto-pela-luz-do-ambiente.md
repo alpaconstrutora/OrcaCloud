@@ -215,5 +215,5 @@ do ramo inteiro e uma correção final. Commits: `d92e7b12`, `6774e7b2` (T1) · 
       `blueprintCasaAutomatica` que derrubam o worker local ficam para a CI
 - [x] prova por imagem no harness local (planta Garden, rede refeita nos dois modos, canvas de main × novo) — sem
       erro de página; a prancha exportada não foi vista em imagem (coberta pelo teste da prancha)
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #137, `ci` 17min53s verde
+- [x] publicação — squash `6c3a06f7` em 24/10/2026; `conferir-producao.sh "como na obra"` ✅ (domínio serve origin/main `6c3a06f`)

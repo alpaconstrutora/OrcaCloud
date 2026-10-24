@@ -80,6 +80,26 @@ function travessia(t: Trecho, peca: Structural): { ponto: Point; cotaMm: number 
 }
 
 /**
+ * A distância, ao longo do eixo da viga, de `ponto` à FACE do apoio mais perto (mm, antes de descontar o raio do furo).
+ * O apoio é o da NBR 6118 13.2.5.1 como esta lista o lê: as PONTAS da peça (onde ela se apoia — em pilar ou em outra
+ * viga) e os pilares sobre o eixo dela (centro a até a largura da viga). É a régua única: `paredesDoForro` a usa para pôr
+ * a travessia fora da zona de 2h (correção 1, 24/10/2026) — antes ela via só os pilares, e o furo "previsto" caía junto
+ * da ponta da viga e saía "verificar".
+ */
+export function distanciaAoApoioDaViga(peca: Pick<Structural, 'kind' | 'levelId' | 'pontos' | 'larguraMm'>, ponto: { x: number; y: number }, pilares: readonly Pick<Structural, 'levelId' | 'pontos' | 'larguraMm' | 'profundidadeMm'>[]): number {
+  const [a, b] = [peca.pontos[0], peca.pontos[peca.pontos.length - 1]];
+  const pr = projecao(ponto, a, b);
+  let d = Math.min(pr.t, pr.L - pr.t);
+  for (const p of pilares) {
+    if (p.levelId !== peca.levelId && peca.kind !== 'VIGA_FUNDACAO') continue;
+    const pp = projecao(p.pontos[0], a, b);
+    if (pp.d > peca.larguraMm) continue;
+    d = Math.min(d, Math.abs(pp.t - pr.t) - Math.max(p.larguraMm, p.profundidadeMm) / 2);
+  }
+  return d;
+}
+
+/**
  * Os furos previstos do modelo — um por (trecho, peça) que se encontram — com a avaliação dos critérios na viga.
  * Ordenados por peça e posição ao longo dela.
  */
@@ -104,13 +124,7 @@ export function furosPrevistos(model: BlueprintModel, hip: HipotesesDosFuros = H
       const pr = projecao(ponto, a, b);
       aoLongoMm = Math.round(pr.t);
       // O apoio: os pilares sobre o eixo da viga (face) e as pontas dela.
-      let d = Math.min(pr.t, pr.L - pr.t);
-      for (const p of pilares) {
-        if (p.levelId !== peca.levelId && peca.kind !== 'VIGA_FUNDACAO') continue;
-        const pp = projecao(p.pontos[0], a, b);
-        if (pp.d > peca.larguraMm) continue;
-        d = Math.min(d, Math.abs(pp.t - pr.t) - Math.max(p.larguraMm, p.profundidadeMm) / 2);
-      }
+      const d = distanciaAoApoioDaViga(peca, ponto, pilares);
       distanciaAoApoioMm = Math.round(Math.max(0, d - diametroMm / 2));
     }
     saida.push({

@@ -609,8 +609,8 @@ export function planejarEletrodutos(
     let paredesDoForroDoNivel: ReturnType<typeof paredesDoForro> | null = null;
     const paredesDaRota = (): readonly Wall[] => (hip.noForro ? (paredesDoForroDoNivel ??= paredesDoForro(model, nivel.id, hip.noForro.faixa.afastamentoDaFaceMm)) : paredesDoNivel);
     /** A árvore pelas paredes (ou pelos anéis do forro) do quadro até `ats` — as opções de sempre. */
-    const arvoreDasParedes = (ats: readonly { x: number; y: number }[]) =>
-      arvorePelasParedes({ paredes: paredesDaRota(), raiz: quadro.at, ...(hip.noForro ? { contornoDoPilarMm: CONTORNO_DO_PILAR_MM, penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}), pendentes: ats, raioDeEncaixeMm: RAIO_DE_ENCAIXE_ELETRICO_MM, encaixarEm: encaixaNoAnel, obstaculos: hip.noForro ? [...pegadas(nivel.id), ...prumadasQueCruzam(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2), ...ramaisDaLajeDeCima(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(nivel.id) });
+    const arvoreDasParedes = (ats: readonly { x: number; y: number }[], jaNaRede?: readonly { x: number; y: number }[]) =>
+      arvorePelasParedes({ paredes: paredesDaRota(), raiz: quadro.at, ...(jaNaRede ? { alcancados: jaNaRede } : {}), ...(hip.noForro ? { contornoDoPilarMm: CONTORNO_DO_PILAR_MM, penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}), pendentes: ats, raioDeEncaixeMm: RAIO_DE_ENCAIXE_ELETRICO_MM, encaixarEm: encaixaNoAnel, obstaculos: hip.noForro ? [...pegadas(nivel.id), ...prumadasQueCruzam(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2), ...ramaisDaLajeDeCima(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(nivel.id) });
     /**
      * F14b: do nó `q` na faixa do forro, junto da viga, entra na parede abaixo dela e desce no rasgo da caixa (na face —
      * no eixo da parede corre o dreno do ar, e a descida o cruzava).
@@ -646,10 +646,15 @@ export function planejarEletrodutos(
       // F14b: no forro, a luz de teto (na face do forro, abaixo da rede) sobe reta como antes; os de parede andam
       // pelos anéis do forro dos cômodos.
       const deParede = lista.filter((p) => p.cotaMm < teto && !(hip.noForro && p.tipoEletrico === 'ILUMINACAO_TETO'));
-      const pelas = (pelaParede || !!hip.noForro) && paredesDaRota().length > 0 && deParede.length > 0 ? arvoreDasParedes(deParede.map((p) => p.at)) : null;
+      // Correção 1 (24/10/2026): no forro, modo pela luz, a árvore dos anéis cresce também do que a árvore das luzes já
+      // alcançou (a ponta da travessia que a luz usou) — nascendo só do quadro, chegava de novo à mesma travessia: anel e
+      // trecho sem circuito. E o quadro só vai à raiz dos anéis se alguma aresta sair dela.
+      const comAlcancados = pelaLuzDoAmbiente && !!hip.noForro;
+      const pelas = (pelaParede || !!hip.noForro) && paredesDaRota().length > 0 && deParede.length > 0 ? arvoreDasParedes(deParede.map((p) => p.at), comAlcancados ? [...alcancados.values()] : undefined) : null;
       const naParede = new Set<ObjectId>();
       if (pelas?.raiz) {
-        if (chaveP(pelas.raiz) !== chaveP(quadro.at)) ligarNaRede(nivel.id, quadro.at, pelas.raiz, teto);
+        const raizUsada = !comAlcancados || pelas.arestas.some((a) => chaveP(a.de) === chaveP(pelas.raiz!) || chaveP(a.para) === chaveP(pelas.raiz!)) || [...pelas.encaixe.values()].some((q) => chaveP(q) === chaveP(pelas.raiz!));
+        if (raizUsada && chaveP(pelas.raiz) !== chaveP(quadro.at)) ligarNaRede(nivel.id, quadro.at, pelas.raiz, teto);
         for (const a of pelas.arestas) addTrecho(nivel.id, a.de, teto, a.para, teto);
         for (const p of deParede) {
           const q = pelas.encaixe.get(chaveP(p.at));

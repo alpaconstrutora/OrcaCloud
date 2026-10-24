@@ -8,6 +8,14 @@ já previstas junto às paredes?"* — resposta do usuário:
 
 > *"Decisão sua: quer que, no forro, a ligação entre luzes de cômodos diferentes use as passagens já previstas junto às paredes? sim"*
 
+### Correção 1 (24/10/2026, revisão do coordenador da sessão)
+
+Depois da 1ª rodada (commit 3115f82a), antes de qualquer PR: resolver (A) o anel e o trecho sem circuito — a árvore dos
+REDE pelos anéis do forro parte também do que já está alcançado, sem duplicar aresta, só no modo pela luz com forro,
+`ARVORE_NO_TETO` idêntico; nas 5 casas, anéis = 0 e nenhum trecho sem circuito — e (B) as duas réguas do apoio:
+`apoiosAoLongo` de `paredesDoForro` com a MESMA definição de apoio de `furosPrevistos` (função comum, não cópia); se a
+parede não tiver posição livre, fica a do meio, como antes; medir os furos de TODAS as disciplinas antes e depois.
+
 ## Contexto
 
 Com o PR #137, no forro da Casa Automática a árvore das luzes liga luz a luz (e quadro a luz) em RETA, mesmo entre
@@ -60,6 +68,8 @@ uma função pura num arquivo novo (ex. `utils/blueprintForroEntreComodos.ts`) c
 
 ## Números (24/10/2026)
 
+### 1ª rodada (commit 3115f82a)
+
 Antes = HEAD 0f3a20d8 (PR #137); depois = esta mudança. Casa Automática gerada inteira; contagem só da rede ELÉTRICA.
 "Viga atravessada" = conflito ESTRUTURA × VIGA com comprimento dentro > 0; furos = `furosPrevistos` (dispensa/verificar);
 pilar = eixo dentro / de raspão; elétrica × água/ar = conflitos REDE; anéis = arestas − (nós − componentes).
@@ -86,11 +96,52 @@ Leitura:
   mudança (`paredesDoForro` não muda);
 - anéis novos (3 pav.: +2; R1-A: +1; sobrado 10 × 30: um trocado): todos fecham numa ponta de travessia com um trecho SEM
   circuito — a árvore dos REDE pelos anéis (que nasce do quadro, sem ver os alcançados) chega à mesma travessia que a luz
-  já usou. Trecho sem circuito é eletroduto ocioso; o REDE não muda nesta tarefa.
+  já usou. Trecho sem circuito é eletroduto ocioso; o REDE não muda nesta tarefa. → resolvido na correção 1.
+
+### Correção 1
+
+O que mudou:
+- (A) `arvorePelasParedes` ganhou `alcancados` (opcional): a árvore também cresce dos pontos que já estão na rede e são
+  nó do grafo (a ponta da travessia que a luz usou), e não os emenda. O planejador passa os alcançados só no modo pela
+  luz com forro, e só liga o quadro à raiz dos anéis se alguma aresta sair dela. `ARVORE_NO_TETO`: hash idêntico ao do
+  HEAD com a régua antiga do apoio (medido nas 5 casas antes de (B)).
+- (B) `distanciaAoApoioDaViga` (nova, em `blueprintFurosPrevistos.ts`) é a régua única do apoio: as PONTAS da peça de
+  viga e os pilares sobre o eixo dela. `furosPrevistos` e `paredesDoForro` a usam. A travessia fica a 2h + meio furo
+  máximo (Ø 12 cm / 2) da face do apoio e a 2h + um furo máximo da vizinha — a régua mede da face do furo. Sem posição
+  livre, a do meio, como antes. Como `paredesDoForro` é do forro todo, (B) muda também a água, o ar e o `ARVORE_NO_TETO`
+  com forro (as travessias andam).
+
+Antes = HEAD 0f3a20d8; 1ª = commit 3115f82a; depois = correção 1. Furos = dispensa / verificar.
+
+| Casa | Viga atravessada (elétrica) | Furos elétrica | Furos todas as disciplinas | Anéis | Trechos sem circuito | Metros |
+|---|---|---|---|---|---|---|
+| 12 × 30 térrea com ar | 15 → 13 → 14 | 5/10 → 6/7 → 7/7 | 6/34 → 7/31 → 10/30 | 0 → 0 → 0 | 0 → 0 → 0 | 266,5 → 268,3 → 267,3 |
+| 12 × 30 sobrado com ar | 50 → 50 → 47 | 6/44 → 2/48 → 8/39 | 7/89 → 4/92 → 9/83 | 1 → 1 → 0 | 1 → 1 → 0 | 327,0 → 328,0 → 325,1 |
+| 10 × 30 sobrado 4 dorm. | 71 → 68 → 55 | 4/71 → 5/68 → 9/50 | 7/124 → 8/121 → 11/104 | 2 → 2 → 0 | 5 → 7 → 0 | 325,9 → 321,9 → 312,5 |
+| 10 × 30 3 pav. 4 dorm. | 94 → 93 → 87 | 8/91 → 8/89 → 13/78 | 12/126 → 11/125 → 16/114 | 0 → 2 → 0 | 0 → 10 → 0 | 367,1 → 369,6 → 365,5 |
+| 12 × 30 3 pav. R1-A | 68 → 67 → 69 | 4/71 → 7/68 → 14/63 | 8/124 → 11/121 → 17/118 | 2 → 3 → 0 | 2 → 6 → 0 | 418,0 → 420,0 → 420,5 |
+
+Pilar com eixo dentro: 0 em todas; elétrica × água/ar: 0 em todas. Por disciplina (antes → depois): água quente
+térrea 0/6 → 2/5, sobrado 10 × 30 1/15 → 0/16, 3 pav. 1/16 → 0/17; água fria R1-A 1/11 → 0/13, sobrado com ar 0/15 → 0/14;
+esgoto igual nas 5.
+
+Leitura (correção 1):
+- anéis e trechos sem circuito zerados nas 5 casas (inclusive os que já existiam no HEAD);
+- o furo da travessia passou a ser o furo bom: dos furos elétricos em travessia, dispensa / verificar = 7/4, 8/2, 9/5,
+  9/5, 10/4 (no sobrado com ar eram 2/10 na 1ª rodada). O que sobra a verificar nelas é furo de outra disciplina a
+  menos de 2h (a mesma posição serve a todas);
+- o grosso do "verificar" elétrico que resta NÃO está em travessia: trecho horizontal que cruza viga fora delas (viga de
+  transição sob cômodo sem parede embaixo, onde não há travessia prevista) e "outro furo elétrico a menos de 2h". Fica
+  para outra tarefa;
+- água fria R1-A piorou 1 dispensa (1/11 → 0/13): a travessia andou e o ramal mudou; o resto da água igual ou melhor.
+
+Testes da correção 1: `blueprintRotaPeloForro`, `blueprintAguaAutomatica`, `blueprintEsgotoAutomatico`, `blueprintFurosPrevistos`, `blueprintRotaPelasParedes` e os do elétrico (175) verdes; mais 15 arquivos de água, esgoto, pluvial e elétrico (203) verdes; `blueprintCasaAutomatica` por describe: os 30 blocos verdes de primeira; `tsc` rc=0.
 
 ## Estado
 - [x] implementação + testes
 - [x] números das 5 casas
+- [x] correção 1 (A) anel / trecho sem circuito — anéis = 0 e sem circuito = 0 nas 5 casas
+- [x] correção 1 (B) a régua do apoio comum (`distanciaAoApoioDaViga`)
 - [ ] revisão
 - [ ] PR + CI
 - [ ] publicação

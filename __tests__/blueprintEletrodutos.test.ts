@@ -949,12 +949,12 @@ describe('24/10/2026 — pela luz do ambiente (padrão): quadro → luz do ambie
 
 /** Dois cômodos 3 × 4 (Sala x < 3000, Cozinha), vigas de 15 × 40 sobre todas as paredes; QDC em (75, 1000) a 1,60 m. */
 const EIXOS_DO_FORRO: [number, number, number, number][] = [[0, 0, 6000, 0], [6000, 0, 6000, 4000], [6000, 4000, 0, 4000], [0, 4000, 0, 0], [3000, 0, 3000, 4000]];
-function comForro(pontos: PontoDoComodo[], eixos = EIXOS_DO_FORRO) {
+function comForro(pontos: PontoDoComodo[], eixos = EIXOS_DO_FORRO, nomear = (ring: XY[]) => (ring.some((p) => p.x === 0) ? 'Sala' : 'Cozinha')) {
   const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   const t = base.levels[0].id;
   let m = applyBatch(base, eixos.map(([ax, ay, bx, by]) => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }) as Command)).model;
   m = applyBatch(m, eixos.map(([ax, ay, bx, by]) => ({ type: 'AddStructural', levelId: t, kind: 'VIGA', pontos: [{ x: ax, y: ay }, { x: bx, y: by }], larguraMm: 150, alturaMm: 400, baseMm: 2400 }) as unknown as Command)).model;
-  for (const s of [...m.spaces]) m = applyCommand(m, { type: 'NameSpace', spaceId: s.id, name: s.ring.some((p) => p.x === 0) ? 'Sala' : 'Cozinha' }).model;
+  for (const s of [...m.spaces]) m = applyCommand(m, { type: 'NameSpace', spaceId: s.id, name: nomear(s.ring) }).model;
   m = applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: point(75, 1000), cotaMm: 1600 }).model;
   m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', ligacao: 'FN' }).model;
   m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C2', ligacao: 'FN' }).model;
@@ -1143,6 +1143,21 @@ describe('24/10/2026 (Task 3) — pela luz do ambiente NO FORRO', () => {
     expect(semAnel(plano.comandos)).toBe(true);
     const depois = applyBatch(m, plano.comandos).model;
     expect(planejarEletrodutos(depois, quadroDe(depois), FORRO)).toMatchObject({ aLigar: 0, comandos: [], motivo: 'todos os pontos já têm eletroduto' });
+  });
+
+  it('Correção 1: cômodo SEM luz (Área) depois do que tem luz (Cozinha) — os anéis partem do que a luz já alcançou: sem anel, todo trecho novo com circuito', () => {
+    // Sala | Cozinha | Área, 3 × 4 cada; a tomada da Área (sem luz) vai pelos anéis, pela travessia que a luz da Cozinha já usou.
+    const eixos: [number, number, number, number][] = [[0, 0, 9000, 0], [9000, 0, 9000, 4000], [9000, 4000, 0, 4000], [0, 4000, 0, 0], [3000, 0, 3000, 4000], [6000, 0, 6000, 4000]];
+    const nomear = (ring: XY[]) => (ring.some((p) => p.x === 0) ? 'Sala' : ring.some((p) => p.x === 9000) ? 'Área' : 'Cozinha');
+    const TA = { x: 8925, y: 2000 };
+    const { m } = comForro([{ ...LS, tipo: 'ILUMINACAO_TETO' }, { ...LC, tipo: 'ILUMINACAO_TETO' }, { ...TA, tipo: 'TUG' }], eixos, nomear);
+    const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
+    expect(plano.motivo).toBeNull();
+    expect(chegaEm(plano.comandos, TA, 300)).toBe(true);
+    expect(semAnel(plano.comandos)).toBe(true);
+    expect(adds(plano.comandos).filter((c) => (c.circuitoIds ?? []).length === 0)).toEqual([]);
+    // A Sala/Cozinha é cruzada uma vez só (a travessia que a luz usou serve aos dois).
+    expect(naFaixa(plano.comandos).filter(cruzaADivisoria)).toHaveLength(1);
   });
 
   it('ARVORE_NO_TETO com forro: os comandos de antes da mudança, idênticos (hash medido no HEAD 0f3a20d8)', () => {

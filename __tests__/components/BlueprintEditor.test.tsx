@@ -576,6 +576,76 @@ describe('BlueprintEditor · ações oferecidas', () => {
     expect(within(gaveta).getByRole('region', { name: /Elétrica/ })).toBeInTheDocument();
     expect(within(gaveta).getByLabelText('Potência do ponto · Tela')).toBeInTheDocument();
     expect(within(gaveta).getByLabelText('Potência do ponto · Prancha')).toBeInTheDocument();
+    // A gaveta abre na seção pedida: a de exibição não está lá.
+    expect(within(gaveta).queryByRole('region', { name: /Planta, vistas e 3D/ })).not.toBeInTheDocument();
+  });
+
+  it('⚠️ 24/10/2026 — aba "Preferências": "Planta, vistas e 3D" abre a gaveta na seção de exibição; "Grade" ali é a MESMA escolha do menu Exibir', async () => {
+    localStorage.clear();
+    const { useStore } = await import('../../store/useStore');
+    useStore.setState({ session: { user: { id: 'usr_1' } } as never });
+    // O banco simulado GUARDA o que foi gravado: a gaveta e o menu Exibir são duas instâncias do hook e só
+    // se encontram pelo banco (cache), como em produção.
+    const banco: { escopo: string; chave: string; valor: unknown }[] = [];
+    prefListarDoUsuario.mockImplementation(async () => [...banco]);
+    prefGravar.mockImplementation(async (...a: unknown[]) => {
+      const [escopo, , chave, valor] = a as [string, unknown, string, unknown];
+      const resto = banco.filter((l) => !(l.escopo === escopo && l.chave === chave));
+      banco.length = 0;
+      banco.push(...resto, ...(valor === null ? [] : [{ escopo, chave, valor }]));
+    });
+    prefGravar.mockClear();
+    try {
+      await montar();
+      const user = userEvent.setup();
+      await abrirAba(/^Preferências$/);
+      // O grupo "Exibição" traz o botão novo ao lado do "O que exibir" da Elétrica.
+      await user.click(botao(/^Planta, vistas e 3D$/));
+      const gaveta = screen.getByText('Preferências da Planta').closest('[role="dialog"]') as HTMLElement;
+      expect(gaveta).toBeTruthy();
+      expect(within(gaveta).getByRole('region', { name: /Planta, vistas e 3D/ })).toBeInTheDocument();
+      for (const titulo of ['Planta baixa', 'Vistas', '3D', 'Estilos']) {
+        expect(within(gaveta).getByRole('group', { name: titulo })).toBeInTheDocument();
+      }
+      // A seção elétrica NÃO abre junto.
+      expect(within(gaveta).queryByLabelText('Potência do ponto · Tela')).not.toBeInTheDocument();
+
+      // Desligar "Grade" na gaveta grava a preferência do usuário...
+      const grade = within(gaveta).getByLabelText('Grade') as HTMLInputElement;
+      expect(grade).toBeChecked();
+      await user.click(grade);
+      await waitFor(() => expect(prefGravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarGrade', false));
+      expect(within(gaveta).getByLabelText('Grade')).not.toBeChecked();
+
+      // ...e o menu Vista › Exibir já mostra "Grade" desligada.
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByText('Preferências da Planta')).not.toBeInTheDocument());
+      await abrirAba(/^vista$/i);
+      await user.click(botao(/exibir/i));
+      expect(screen.getByRole('menuitemcheckbox', { name: /^grade$/i })).toHaveAttribute('aria-checked', 'false');
+    } finally {
+      prefListarDoUsuario.mockImplementation(async () => []);
+      prefGravar.mockImplementation(async () => {});
+      useStore.setState({ session: null as never });
+      clienteDeConsulta.clear();
+    }
+  });
+
+  it('⚠️ 24/10/2026 — a gaveta de Preferências troca de seção sem abrir duas, e clicar na seção aberta fecha', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^Preferências$/);
+    await user.click(botao(/^Planta, vistas e 3D$/));
+    expect(screen.getAllByText('Preferências da Planta')).toHaveLength(1);
+    expect(screen.getByRole('region', { name: /Planta, vistas e 3D/ })).toBeInTheDocument();
+
+    await user.click(botao(/^O que exibir$/));
+    expect(screen.getAllByText('Preferências da Planta')).toHaveLength(1);
+    expect(screen.getByRole('region', { name: /Elétrica/ })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /Planta, vistas e 3D/ })).not.toBeInTheDocument();
+
+    await user.click(botao(/^O que exibir$/));
+    expect(screen.queryByText('Preferências da Planta')).not.toBeInTheDocument();
   });
 
   it('o menu reúne alvenaria e esquadria; estrutura e fundação estão na aba Estrutural (08/10/2026)', async () => {

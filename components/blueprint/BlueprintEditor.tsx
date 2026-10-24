@@ -426,6 +426,7 @@ import ReguaDoTempo from './ReguaDoTempo';
 import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
 import SecaoPlantaEletrica from '../preferencias/SecaoPlantaEletrica';
+import SecaoExibicaoDaPlanta from '../preferencias/SecaoExibicaoDaPlanta';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, MenuDoRibbon, abaEfetiva } from './Ribbon';
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
@@ -2003,8 +2004,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   const [tarefa, setTarefa] = useState<TarefaDoPainel | null>(null);
   const [relatorio, setRelatorio] = useState<RelatorioDoDock | null>(null);
-  /** A gaveta "Preferências da Planta" (aba Preferências › O que exibir). */
-  const [preferenciasAbertas, setPreferenciasAbertas] = useState(false);
+  /**
+   * A gaveta "Preferências da Planta" e a seção que ela mostra (aba Preferências): `'eletrica'` = "O que
+   * exibir" (Elétrica), `'exibicao'` = "Planta, vistas e 3D"; `null` = fechada. Uma gaveta só, nunca duas.
+   */
+  const [secaoDasPreferencias, setSecaoDasPreferencias] = useState<'eletrica' | 'exibicao' | null>(null);
   /**
    * TELAS PRÓPRIAS (15/09/2026, pedido: *"quadro de cargas e unifilar em drawer
    * ficou muito ruim visualização. vamos criar uma tela nova para cada um"*).
@@ -14322,15 +14326,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         )}
 
         {aba === 'preferencias' && (
-          <GrupoDoRibbon rotulo="Elétrica">
-            <BotaoDoRibbon
-              icone={SlidersHorizontal}
-              rotulo="O que exibir"
-              ativo={preferenciasAbertas}
-              onClick={() => setPreferenciasAbertas((v) => !v)}
-              ajuda="O que a planta elétrica escreve: na Tela (só para você) e na Prancha (padrão da empresa)"
-            />
-          </GrupoDoRibbon>
+          <>
+            <GrupoDoRibbon rotulo="Exibição">
+              <BotaoDoRibbon
+                icone={Eye}
+                rotulo="Planta, vistas e 3D"
+                ativo={secaoDasPreferencias === 'exibicao'}
+                onClick={() => setSecaoDasPreferencias((s) => (s === 'exibicao' ? null : 'exibicao'))}
+                ajuda="O que a planta mostra na planta baixa, nas vistas e no 3D, e os estilos. É a mesma escolha do menu Vista › Exibir e vale para você em qualquer computador"
+              />
+            </GrupoDoRibbon>
+            <GrupoDoRibbon rotulo="Elétrica">
+              <BotaoDoRibbon
+                icone={SlidersHorizontal}
+                rotulo="O que exibir"
+                ativo={secaoDasPreferencias === 'eletrica'}
+                onClick={() => setSecaoDasPreferencias((s) => (s === 'eletrica' ? null : 'eletrica'))}
+                ajuda="O que a planta elétrica escreve: na Tela (só para você) e na Prancha (padrão da empresa)"
+              />
+            </GrupoDoRibbon>
+          </>
         )}
         {aba === 'vista' && emVista && (
           <>
@@ -20251,14 +20266,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           </SheetPanel>
         </Sheet>
       )}
-      {preferenciasAbertas && (
-        <Sheet open onClose={() => setPreferenciasAbertas(false)} size="lg">
-          <SheetHeader onClose={() => setPreferenciasAbertas(false)}>
+      {secaoDasPreferencias && (
+        <Sheet open onClose={() => setSecaoDasPreferencias(null)} size="lg">
+          <SheetHeader onClose={() => setSecaoDasPreferencias(null)}>
             <SheetTitle>Preferências da Planta</SheetTitle>
-            <SheetDescription>As escolhas da Tela acompanham o seu usuário em qualquer computador; a Prancha é o padrão da empresa dona desta planta.</SheetDescription>
+            <SheetDescription>As suas escolhas acompanham o seu usuário em qualquer computador; na Elétrica, a Prancha é o padrão da empresa dona desta planta.</SheetDescription>
           </SheetHeader>
           <SheetPanel className="px-6 py-6">
-            <SecaoPlantaEletrica organizationId={study.organization_id ?? null} studyId={study.id} />
+            {secaoDasPreferencias === 'exibicao' ? (
+              <SecaoExibicaoDaPlanta />
+            ) : (
+              <SecaoPlantaEletrica organizationId={study.organization_id ?? null} studyId={study.id} />
+            )}
           </SheetPanel>
         </Sheet>
       )}

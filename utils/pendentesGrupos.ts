@@ -13,7 +13,7 @@ import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, type ChaveDeG
  */
 
 /** 'plano_contas' e 'status' só existem na aba Extrato (a Pendentes não tem essas colunas). */
-export type CampoAgruparExtrato = 'contraparte' | 'categoria' | 'obra' | 'centro_custo' | 'data' | 'plano_contas' | 'status';
+export type CampoAgruparExtrato = 'contraparte' | 'categoria' | 'obra' | 'centro_custo' | 'data' | 'plano_contas' | 'status' | 'organizacao';
 export type CampoAgruparLancamento = 'parte' | 'categoria' | 'obra' | 'centro_custo' | 'data';
 
 export const OPCOES_AGRUPAR_EXTRATO: { value: CampoAgruparExtrato; label: string }[] = [
@@ -28,6 +28,7 @@ export const OPCOES_AGRUPAR_EXTRATO: { value: CampoAgruparExtrato; label: string
 export const OPCOES_AGRUPAR_EXTRATO_ABA: { value: CampoAgruparExtrato; label: string }[] = [
     ...OPCOES_AGRUPAR_EXTRATO.slice(0, 4),
     { value: 'plano_contas', label: 'Plano de Contas' },
+    { value: 'organizacao', label: 'Organização' },
     { value: 'data', label: 'Data (mês)' },
     { value: 'status', label: 'Status' },
 ];
@@ -49,6 +50,7 @@ const SEM = {
     data: 'Sem data',
   plano_contas: 'Sem plano de contas',
   status: 'Sem status',
+  organizacao: 'Sem organização',
 } as const;
 
 /** Texto que as células mostram — a tela resolve (o id vira nome; obra de outra org vira o rótulo dela). */
@@ -57,6 +59,8 @@ export interface NomesDoExtrato {
     centroCusto: (tx: BankTransaction) => string | null;
     /** Só na aba Extrato. */
     planoContas?: (tx: BankTransaction) => string | null;
+    /** Só na aba Extrato. */
+    organizacao?: (tx: BankTransaction) => string | null;
     /** Só na aba Extrato: rótulos de status da tela — define também a ordem dos grupos (a do fluxo). */
     rotulosStatus?: Record<string, string>;
 }
@@ -87,6 +91,7 @@ export function agruparExtrato(
             case 'data': return chavePorMes(tx.transaction_date);
             case 'plano_contas': return chavePorNome(nomes.planoContas?.(tx));
             case 'status': return chavePorRotulo(tx.status, nomes.rotulosStatus ?? {});
+            case 'organizacao': return chavePorNome(nomes.organizacao?.(tx));
         }
     };
     return agruparLinhas(linhas, {

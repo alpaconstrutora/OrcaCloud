@@ -127,6 +127,7 @@ export const STATEMENT_COLUMNS: ColumnConfig[] = [
     { key: 'project',      label: 'Obra',               sortable: true },
     { key: 'costCenter',   label: 'Centro de Custo',    sortable: true },
     { key: 'planoContas',  label: 'Plano de Contas',    sortable: true },
+    { key: 'organization', label: 'Organização',        sortable: true },
     { key: 'date',         label: 'Data',               sortable: true },
     { key: 'amount',       label: 'Valor',              sortable: true },
     // Status mistura dado (situação da conciliação) com ação inline (Aceitar/Rejeitar
@@ -138,7 +139,7 @@ export const STATEMENT_COLUMNS: ColumnConfig[] = [
 // Campo de bankSortField que cada coluna ordena (state próprio da toolbar, não o
 // sortColumn genérico de useTableColumns — ver bankSortField/bankSortOrder no
 // componente). Ausente = não ordenável (ex: status mistura dado com ação inline).
-export type BankSortField = 'date' | 'amount' | 'description' | 'category' | 'counterparty' | 'project' | 'costCenter' | 'planoContas';
+export type BankSortField = 'date' | 'amount' | 'description' | 'category' | 'counterparty' | 'project' | 'costCenter' | 'planoContas' | 'organization';
 export type InternalSortField = 'date' | 'amount' | 'description' | 'category' | 'entity';
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -153,6 +154,7 @@ export const STATEMENT_COLUMN_HEADERS: Record<string, { label: string; className
     project:     { label: 'Obra',            sortField: 'project',      className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     costCenter:  { label: 'Centro de Custo', sortField: 'costCenter',   className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     planoContas: { label: 'Plano de Contas', sortField: 'planoContas',  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    organization: { label: 'Organização',    sortField: 'organization', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     date:        { label: 'Data',            sortField: 'date',         className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     amount:      { label: 'Valor',           sortField: 'amount',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
     status:      { label: 'Status',                                     className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
@@ -169,6 +171,7 @@ export const STATEMENT_TD_CLASS: Record<string, string> = {
     project:     'text-sm font-normal text-gray-700 overflow-hidden',
     costCenter:  'text-sm font-normal text-gray-700 overflow-hidden',
     planoContas: 'text-sm font-normal text-gray-700 overflow-hidden',
+    organization: 'text-sm font-normal text-gray-700 overflow-hidden',
     date:        'text-sm font-normal text-gray-600 text-center whitespace-nowrap',
     amount:      'text-sm font-medium text-right whitespace-nowrap',
     status:      'text-center',
@@ -220,10 +223,12 @@ export interface StatementFilterLists {
     centrosCusto: string[];
     /** Já no rótulo da célula ("código · nome"), igual ao resolvedor planoContasName. */
     planoContas: string[];
+    /** Nomes das organizações do usuário — a coluna Organização guarda só o id na linha. */
+    organizacoes: string[];
 }
 
 // Cliente/Credor/Categoria não passam pelos resolvedores — só existe para reusar o getValue.
-const SEM_RESOLVEDORES: BankTxFilterResolvers = { projectName: () => null, costCenterName: () => null, planoContasName: () => null };
+const SEM_RESOLVEDORES: BankTxFilterResolvers = { projectName: () => null, costCenterName: () => null, planoContasName: () => null, organizationName: () => null };
 
 const opcoesDe = (valores: string[]) => distinctOptions(valores, v => v);
 const comLinhas = (cadastro: string[], linhas: BankTransaction[], key: string) =>
@@ -238,6 +243,7 @@ export function buildStatementFilterFields(l: StatementFilterLists): FilterField
         { key: 'project',      label: 'Obra',               type: 'text', options: opcoesDe(l.obras) },
         { key: 'costCenter',   label: 'Centro de Custo',    type: 'text', options: opcoesDe(l.centrosCusto) },
         { key: 'planoContas',  label: 'Plano de Contas',    type: 'text', options: opcoesDe(l.planoContas) },
+        { key: 'organization', label: 'Organização',        type: 'text', options: opcoesDe(l.organizacoes) },
         { key: 'date',         label: 'Data',               type: 'date'   },
         { key: 'amount',       label: 'Valor',              type: 'number' },
         { key: 'status',       label: 'Status', type: 'select', options:
@@ -265,6 +271,7 @@ export interface BankTxFilterResolvers {
     projectName: (id?: string | null) => string | null;
     costCenterName: (id?: string | null) => string | null;
     planoContasName: (id?: string | null) => string | null;
+    organizationName: (id?: string | null) => string | null;
 }
 
 export function getBankTxFilterValue(tx: BankTransaction, key: string, r: BankTxFilterResolvers): unknown {
@@ -276,6 +283,7 @@ export function getBankTxFilterValue(tx: BankTransaction, key: string, r: BankTx
         case 'project':      return r.projectName(tx.project_id) ?? '';
         case 'costCenter':   return r.costCenterName(tx.cost_center_id) ?? '';
         case 'planoContas':  return r.planoContasName(tx.plano_de_contas_id) ?? '';
+        case 'organization': return r.organizationName(tx.organization_id) ?? '';
         // transaction_date é 'YYYY-MM-DD' — compara como string com o <input type="date"> (FilterUtils).
         case 'date':         return tx.transaction_date ?? '';
         case 'amount':       return tx.amount ?? 0;
@@ -397,6 +405,7 @@ export const DEFAULT_STATEMENT_COL_WIDTHS: Record<string, number> = {
     project: 160,
     costCenter: 179,
     planoContas: 179,
+    organization: 160,
     date: 110,
     amount: 130,
     status: 150,
@@ -421,6 +430,7 @@ export interface StatementRowCtx {
     projectName: (id?: string | null) => string | null;
     costCenterName: (id?: string | null) => string | null;
     planoContasName: (id?: string | null) => string | null;
+    organizationName: (id?: string | null) => string | null;
     onUpdateCounterparty: (id: string, v: string) => void;
     onUpdateCategory: (id: string, v: string) => void;
     onUpdateProject: (id: string, v: string) => void;
@@ -515,6 +525,10 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
                     <CelulaPlanoContas tx={tx} registros={ctx.planoContasRegistros} nome={ctx.planoContasName(tx.plano_de_contas_id)} onChange={v => ctx.onUpdatePlanoContas(tx.id, v)} />
                 </div>
             );
+        case 'organization': {
+            const nome = ctx.organizationName(tx.organization_id);
+            return nome ? <span className="block truncate" title={nome}>{nome}</span> : <span className="text-gray-300">—</span>;
+        }
         case 'date':
             return formatDateBR(tx.transaction_date);
         case 'amount':

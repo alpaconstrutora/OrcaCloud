@@ -93,6 +93,14 @@ describe('agruparExtrato — campos só da aba Extrato', () => {
         expect(g.map(x => x.label)).toEqual(['1.1.1 · PIS', '2.1 · Salários', 'Sem plano de contas']);
     });
 
+    it('organização: A→Z pelo nome que a coluna mostra e "Sem organização" no fim', () => {
+        const ORGS: Record<string, string> = { o1: 'Zênite Engenharia', o2: 'Alpa Construtora' };
+        const g = agruparExtrato([
+            banco('a', { organization_id: 'o1' }), banco('b', { organization_id: 'o2' }), banco('c', { organization_id: 'x' }),
+        ], 'organizacao', { ...nomes, organizacao: tx => ORGS[tx.organization_id] ?? null });
+        expect(g.map(x => x.label)).toEqual(['Alpa Construtora', 'Zênite Engenharia', 'Sem organização']);
+    });
+
     it('status: na ordem do fluxo (não alfabética) e inverte em Decrescente', () => {
         const linhas = [
             banco('a', { status: 'MATCHED' }), banco('b', { status: 'IMPORTED' }), banco('c', { status: 'IGNORED' }), banco('d', { status: 'NORMALIZED' }),

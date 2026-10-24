@@ -147,7 +147,8 @@ import { pegadaDaPecaPrevista, type PecaPrevista } from '../../utils/blueprintPi
 import { bolhasDosEixos, crescerFaixa, faixaVazia, type BolhasDoEixo } from '../../utils/blueprintEixosAutomaticos';
 import { idsDoGrupo } from '../../utils/blueprintGrupoDeFundacao';
 import {
-  curvaDoTrecho,
+  PASSO_DA_CURVA_PX,
+  arcoDoTrecho,
   desviosDeSobreposicao,
   entradasNoQuadro,
   geometriaDesenhada,
@@ -6493,11 +6494,26 @@ export default function BlueprintCanvas({
       meioTom(atenuados.has(t.id));
       const selecionado = selecao.has(t.id);
       const entrada = entradas.get(t.id);
-      const p = paraTela(entrada?.a ?? t.a);
-      const q = paraTela(entrada?.b ?? t.b);
-      const curva = curvaDoTrecho(p, q, desvios.get(t.id) ?? 0);
-      // O traço é obstáculo dos textos: eles preferem não cruzá-lo (ver `anotar`).
-      if (p.x !== q.x || p.y !== q.y) segmentosDasAnotacoes.push({ id: t.id, a: p, b: q });
+      const aMundo = entrada?.a ?? t.a;
+      const bMundo = entrada?.b ?? t.b;
+      const p = paraTela(aMundo);
+      const q = paraTela(bMundo);
+      // O ARCO (24/10/2026, "Curvas, como no seu print"): o trecho elétrico é desenhado em arco, e os
+      // sobrepostos somam o deslocamento ao arco base. A MESMA conta do acerto do clique
+      // (`geometriaDesenhada`): o que se vê é o que se pega. A curva é afim — levar o controle e o
+      // meio à tela dá a mesma curva que levar a polilinha.
+      const arco = arcoDoTrecho(aMundo, bMundo, {
+        eletrico: t.disciplina === 'ELETRICA',
+        nivel: desvios.get(t.id) ?? 0,
+        passoMm: PASSO_DA_CURVA_PX / vista.escala,
+      });
+      const curva = { controle: paraTela(arco.controle), meio: paraTela(arco.meio) };
+      // O traço é obstáculo dos textos: eles preferem não cruzá-lo (ver `anotar`). O obstáculo é o ARCO
+      // (a polilinha), não a corda — senão o texto fugiria de uma reta que não está desenhada.
+      if (p.x !== q.x || p.y !== q.y) {
+        const noArco = arco.pontos.map(paraTela);
+        for (let k = 0; k + 1 < noArco.length; k++) segmentosDasAnotacoes.push({ id: t.id, a: noArco[k], b: noArco[k + 1] });
+      }
       // ── O TUBO DETALHADO (27/09/2026, "detalhado também no 2d") ──────────
       //
       // Água e esgoto com zoom para isso viram a FAIXA do tubo — duas bordas

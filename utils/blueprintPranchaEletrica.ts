@@ -54,6 +54,7 @@ import { PRIORIDADE_DA_ANOTACAO, posicionarAnotacoes, type AnotacaoAPosicionar, 
 import { larguraEstimadaDoTexto } from './blueprintCotas';
 import { EXIBICAO_ELETRICA_PADRAO, comDependenciasAplicadas, type ExibicaoEletrica } from './preferencias/resolver';
 import { diametrosAnotados } from './blueprintDiametroDosEletrodutos';
+import { arcoDoTrecho } from './blueprintEletrodutoSobreposto';
 import { ROTULO_DO_RECORTE, categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos, entraNoRecorte, type CategoriaEletrica, type RecorteEletrico } from './blueprintRecorteEletrico';
 import {
   HIPOTESES_PADRAO,
@@ -112,6 +113,34 @@ function tracejada(d: Desenhista, a: P, b: P, espessuraMm: number, passo: number
     const de = i * passo;
     const ate = Math.min(comp, (i + 1) * passo);
     d.linha(a.x + ux * de, a.y + uy * de, a.x + ux * ate, a.y + uy * ate, { espessuraMm, cor: COR });
+  }
+}
+
+/**
+ * Linha tracejada ao longo de uma POLILINHA (o eletroduto no piso em arco): o mesmo compasso de
+ * `tracejada` — traço, vão, traço… de `passo` —, medido pelo comprimento percorrido, e não
+ * recomeçado a cada segmento. Com dois pontos, é exatamente `tracejada`.
+ */
+function tracejadaPolilinha(d: Desenhista, pts: P[], espessuraMm: number, passo: number): void {
+  const acumulado = [0];
+  for (let i = 1; i < pts.length; i++) acumulado.push(acumulado[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  const comp = acumulado[acumulado.length - 1];
+  if (comp === 0) return;
+  /** O ponto a `s` mm do começo, andando pela polilinha. */
+  const em = (s: number): P => {
+    let i = 1;
+    while (i < pts.length - 1 && acumulado[i] < s) i++;
+    const seg = acumulado[i] - acumulado[i - 1];
+    const u = seg === 0 ? 0 : (s - acumulado[i - 1]) / seg;
+    return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * u, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * u };
+  };
+  const n = Math.max(1, Math.floor(comp / passo));
+  for (let i = 0; i < n; i += 2) {
+    const de = i * passo;
+    const ate = Math.min(comp, (i + 1) * passo);
+    // Do começo do traço, pelos vértices que ficam dentro dele, até o fim.
+    const caminho = [em(de), ...pts.filter((_, k) => acumulado[k] > de && acumulado[k] < ate), em(ate)];
+    for (let k = 0; k + 1 < caminho.length; k++) d.linha(caminho[k].x, caminho[k].y, caminho[k + 1].x, caminho[k + 1].y, { espessuraMm, cor: COR });
   }
 }
 
@@ -321,6 +350,11 @@ export function desenharEletrica(
     categoria(catDoTrecho);
     const a = { x: px(t.a.x), y: py(t.a.y) };
     const b = { x: px(t.b.x), y: py(t.b.y) };
+    // O ARCO (24/10/2026, "Curvas, como no seu print"): o eletroduto elétrico é desenhado em arco, na
+    // MESMA conta da tela (`arcoDoTrecho`, em mm do modelo — a flecha escala com o desenho, como no
+    // papel), levada ao papel ponto a ponto. É desenho: o modelo segue reto.
+    const arco = arcoDoTrecho(t.a, t.b, { eletrico: true });
+    const noPapel = arco.pontos.map((p) => ({ x: px(p.x), y: py(p.y) }));
     const prumada = Math.hypot(b.x - a.x, b.y - a.y) < 0.2 * k;
     if (prumada) {
       // Prumada: um círculo pequeno com a seta de sobe/desce como texto.
@@ -329,10 +363,12 @@ export function desenharEletrica(
       d.texto(a.x + 1.4 * k, a.y + 0.7 * k, t.cotaBMm > t.cotaAMm ? '↑' : '↓', TEXTO_MM, COR_FRACA);
       continue;
     }
-    if (embutidoNoPiso(t)) tracejada(d, a, b, MEDIA, 1.5 * k);
-    else d.linha(a.x, a.y, b.x, b.y, { espessuraMm: MEDIA, cor: COR });
-    segmentos.push({ id: t.id, a, b });
-    const meio = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    if (embutidoNoPiso(t)) tracejadaPolilinha(d, noPapel, MEDIA, 1.5 * k);
+    else for (let i = 0; i + 1 < noPapel.length; i++) d.linha(noPapel[i].x, noPapel[i].y, noPapel[i + 1].x, noPapel[i + 1].y, { espessuraMm: MEDIA, cor: COR });
+    // O obstáculo dos textos é o ARCO (a polilinha), não a corda: o texto não foge de uma reta que não está desenhada.
+    for (let i = 0; i + 1 < noPapel.length; i++) segmentos.push({ id: t.id, a: noPapel[i], b: noPapel[i + 1] });
+    // Os rótulos e as marcas de condutor ficam no MEIO DO ARCO (a direção é a da corda, paralela ali).
+    const meio = { x: px(arco.meio.x), y: py(arco.meio.y) };
     const comp = Math.hypot(b.x - a.x, b.y - a.y);
     const nx = -(b.y - a.y) / comp;
     const ny = (b.x - a.x) / comp;

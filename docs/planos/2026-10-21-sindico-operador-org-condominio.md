@@ -169,11 +169,25 @@ ensaio em bloco desfeito primeiro; anexos pelo script.
     condomínio pela org da operação, `listParaCondominios`, Ficha pela RPC (campos do síndico
     travados para quem não é da org dona, com o motivo), nota do boleto na org do boleto.
     Tipos 0 erros (227 arquivos), 144 testes verdes, UI limpa.
-  - [ ] `aplicar_20271021500300_condominio_010_executa.sql` — escrita BLOQUEADA pelo
-    classificador de permissões em 21/10 (é a que cria a org e move os dados reais). Aguarda
-    o usuário. Equipe decidida: owners altair.rosa@ e desenvolvedor@; membros bruna.pereira@
+  - [x] `aplicar_20271021500300_condominio_010_executa.sql` — bloqueada pelo classificador em
+    21/10; executada depois (lote `CONDO-010`, 599 registros; org "Condomínio Galeria Altavista",
+    código 005 — conferido no banco em 24/10). Equipe decidida: owners altair.rosa@ e desenvolvedor@; membros bruna.pereira@
     e agente-leitura@.
   - [ ] Anexos (script de mover arquivos dos buckets).
-- [ ] F2 — síndico operador + menu
-- [ ] F3 — 007
+- [ ] ~~F2 — síndico operador + menu~~ **DESCARTADA em 24/10/2026** pelo usuário: *"o sindico nao
+  faz parte da construtora, e nao vai entrar no app. ele vai ter acesso ao que ele precisa para
+  gerenciar o condominio apartir do portal do sindico"*. O síndico NÃO vira membro da org do
+  condomínio. A gestão vai para o portal: `docs/planos/2026-10-24-portal-sindico-gestao-completa.md`.
+- [x] F3 — 007 (24/10/2026): `aplicar_20271024900000_condominio_007_executa.sql`. Ensaio: 0
+  bloqueios. **Achado na prova:** `fn_condominio_migrar` desliga os gatilhos (`fn_cm_gatilhos`) e
+  a FK composta de Marcas e Modelos (`opura_assets (brand_id, organization_id)`, 13/10, depois da
+  função) recusou levar 3 equipamentos com marca da Alpa (23503). Resolvido no roteiro: marca a
+  NULL antes (lote `CONDO-007-MARCAS-A`), cópia das 2 marcas para a org nova e religação depois
+  (`CONDO-007-MARCAS-B`). ⚠️ Vale para o 016 e os próximos (ou corrigir a função). Prova em bloco
+  desfeito: migrar → 138 títulos = R$ 56.472,95, 187 boletos, 167 notas, nada do CC 011 na Alpa →
+  reverter B, CONDO-007, A → contagens/somas da Alpa e equipamentos idênticos; nada ficou.
+  Execução real: org "Condomínio Bella Vista" (código 006, `ba88199a…`), lotes CONDO-007 (3.323),
+  MARCAS-A (3), MARCAS-B (5); `sindico_portal_financeiro` devolve o 007 com `podeOperar = true`.
+  Desfazer: reverter `CONDO-007-MARCAS-B`, `CONDO-007`, `CONDO-007-MARCAS-A`, apagar a org.
+  Anexos dos buckets não movidos (como no 010 — o resolvedor abre pelo caminho antigo).
 - [ ] F4 — conta própria, Asaas, folha, captura, tela para os próximos

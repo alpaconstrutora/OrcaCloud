@@ -54,15 +54,59 @@ importação.
 6. [x] **`components/LaborCosts.tsx`** — sai o card "Colaboradores Legados"; "Adicionar Colaborador" passa a abrir o
    formulário de novo colaborador (`onNewEmployee`), em vez da importação.
    `__tests__/components/LaborCostsAdicionarColaborador.test.tsx` (verde; vermelho no código antigo).
-7. [ ] PR + CI + publicação.
+7. [x] PR + CI + publicação — PR #121, `ci` 29m36s, Vercel e Preview Comments verdes; mesclado por squash em
+   24/10/2026 (`33e29320`); `conferir-producao.sh` provou o domínio servindo 33e2932; CI do main verde; frente
+   fechada e branch apagada.
 
 **Não feito, de propósito:** limpar `resources.workers` da Alpa (9 nomes) — é a biblioteca de Trabalhadores do
 Planejamento, não sobra de migração (eu tinha proposto limpar, com a premissa errada; corrigido antes de executar).
 A biblioteca da Garden, esvaziada pela importação em 22/10, não foi restaurada (não há cópia do conteúdo).
 
-## Em aberto — decisão do usuário (folhas)
+## Folhas na organização correta (24/10/2026, mesma sessão)
 
-O Rogério trabalha pela Garden desde 15/08/2025, mas as folhas dele de 11/2025 a 09/2026 saíram pela **Alpa**
-(04, 05 e 06/2026 FECHADAS). Hoje ele está em DUAS folhas de 06/2026 (Alpa FECHADA e Garden PROCESSANDO) e em duas
-de 09/2026 (Alpa PROCESSANDO e Garden PROCESSANDO). Fechar as da Garden pagaria junho e setembro de novo.
-Nada foi mexido nas folhas.
+Pedidos (literais, nesta ordem):
+
+> Se o Rogerio faz parte da organizacao garden. Por que ele aparece no ALPA>
+
+> Deve funcionar assim: a folha é gerada apenas em uma organização. Apenas na organizacao que ele é registrado. O que nao significa que ele nao possa ter os custos alocados (aba alocacoes ) em outra organizacao
+
+> corrigir todas as folhas! Se for necesssario relanço manualmente novamente! Importante é corrigir as folhas nas organizacoes corretas
+
+E depois: "Reabro e reprocesso assim mesmo? **sim**" (Garden 05/2026 fechada) · "**reprocesse agora**" (Alpa 06/2026) ·
+fechar Alpa 06 e Garden 05 de novo: "1. **sim** 2. **sim**" · corrigir o Reprocessar e o aviso nativo: "**sim**".
+
+**Por que ele aparecia na Alpa:** compartilhamentos do Rogério com Alpa Construtora e ALPA Empreendimentos (criados
+em lote em 17/06/2026, sem autor) + até 11/10/2026 a folha incluía os compartilhados; as folhas da Alpa de 04 e
+05/2026 são anteriores aos compartilhamentos, então nessa época ele estava REGISTRADO na Alpa (sem histórico em
+`employees` para provar as trocas). Depois de 11/10 a geração já respeitava a regra, mas o **Reprocessar** só tirava
+desligado/não admitido — quem era de outra org ficava.
+
+**Auditoria:** só o Rogério tinha resultado em folha de org ≠ a dele: 11 folhas da Alpa (11/2025 a 09/2026), todas
+com a folha correspondente na Garden; títulos dessas folhas da Alpa: nenhum pago.
+
+1. [x] **Dados** — `docs/planos/2026-10-24-folhas-rogerio-alpa-para-garden.sql` (transação + portão): backup
+   `_bkp_folha_rogerio_alpa_20261024_results` (11) / `_items` (53) / `_events` (20) — **NÃO apagar**; 19 eventos
+   manuais levados para a folha da Garden do mesmo mês/tipo; o Auxílio Educação de 06/2026 da Alpa ficou só no
+   backup (a Garden já tinha o dela); itens e resultados dele tirados da Alpa. Depois: 0 resultados fora da org.
+2. [x] **Reprocessadas pelo Chrome do usuário** (Garden, em processamento): 11/2025 R$ 1.621,00 · 01 R$ 1.621,00 ·
+   02 e 03 R$ 1.976,50 · 04 R$ 2.215,00 · 05 adiantamento R$ 648,40 · 06 R$ 2.176,50 · 07 R$ 1.621,00 · 08 R$ 1.757,27
+   (dissídio proporcional) · 09 R$ 1.967,00 (proventos do Rogério). Efeito da regra de datas (confirmada em 22/10):
+   o Clovis (admissão 17/04/2026) saiu da Garden de 11/2025 a 03/2026; 04 e adiantamento 05 dele sem mudança.
+3. [x] **Garden 05/2026** (estava FECHADA): reaberta, reprocessada — Rogério R$ 2.195,75, Clovis sem mudança, Iago
+   (admissão 01/11/2026) saiu — e fechada de novo: 7 títulos pendentes R$ 6.188,11 + 1 conciliado R$ 648,40
+   (adiantamento de maio do Rogério, já pago pela Garden).
+4. [x] **Alpa** — 04 e 05/2026 (FECHADAS): "Re-sincronizar financeiro" → 04: 14 → 8 títulos, R$ 8.417,52 →
+   R$ 5.534,93; 05: R$ 7.742,79 → R$ 5.534,93 (1 cancelado preservado). 06/2026 (estava reaberta): reprocessada e
+   fechada; 38 títulos R$ 8.860,56 = soma dos totais que a re-sincronização devolveu (os R$ 7.752,46 de antes eram
+   de um cálculo de 22/10, anterior ao último recálculo).
+5. [x] **`services/payrollEngine.ts`** — ao reprocessar, sai também quem tem resultado na folha mas é registrado em
+   outra org (`listResultsByRun` × colaboradores da org); afastado da própria org continua.
+   `__tests__/payrollEngine.desligado.test.ts`: caso novo (vermelho antes, verde depois) + os 13 existentes.
+6. [x] **`components/LaborPayroll.tsx` + `components/ui/confirm.tsx`** — "Re-sincronizar financeiro" terminava com
+   `alert()` nativo, que travou a aba do Chrome durante a correção: agora `confirm({ hideCancel: true })` (aviso na
+   tela, só OK) e o erro vai para o toast. `__tests__/components/ConfirmAviso.test.tsx`.
+7. [ ] PR + CI + publicação.
+
+**Em aberto (usuário):** as rubricas recorrentes do Rogério hoje são Adiantamento, Auxílio Educação e VA (vieram do
+cadastro duplicado editado em 23/10); até 23/10 o cadastro dele tinha também a **Contribuição Assistencial** — se ela
+vale, recolocar e reprocessar. Os compartilhamentos com as duas Alpas continuam (não afetam mais a folha).

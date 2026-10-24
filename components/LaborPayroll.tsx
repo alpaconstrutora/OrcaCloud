@@ -279,7 +279,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
             const result = await payrollService.syncPayrollToFinance(selectedRun.id);
             window.dispatchEvent(new CustomEvent('payroll-synced'));
             const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            const lines: string[] = ['✅ Financeiro re-sincronizado!', ''];
+            const lines: string[] = [];
             lines.push(`${result.count} título(s) gravado(s), ${result.removidos} de cálculo antigo removido(s), ${result.preservados} preservado(s) (pagos, conciliados, cancelados ou em DARF).`);
             lines.push('');
             lines.push('Totais da folha (os tributos ficam em Financeiro › Tributos a Pagar):');
@@ -294,11 +294,13 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
                 lines.push('Atenção:');
                 result.avisos.forEach(a => lines.push(`  • ${a}`));
             }
-            alert(lines.join('\n'));
+            // Na tela, não `alert()`: o alert nativo trava o navegador (e a automação)
+            // até alguém clicar OK — travou a conferência das folhas em 24/10/2026.
+            void confirm({ title: 'Financeiro re-sincronizado', message: lines.join('\n'), confirmLabel: 'OK', hideCancel: true });
         } catch (err: unknown) {
             console.error(err);
             const error = err instanceof Error ? err : new Error(String(err));
-            alert(`Erro ao re-sincronizar financeiro:\n${error.message}`);
+            notify(`Erro ao re-sincronizar financeiro: ${error.message}`, 'error');
         } finally {
             setExecuting(false);
         }

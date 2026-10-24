@@ -224,7 +224,17 @@ export const payrollEngine = {
 
         if (existingRunId) {
             const saem = employees.filter(e => e.org_id === orgId && saiDaFolha(e, startDate, endDate)).map(e => e.id);
-            if (saem.length > 0) await payrollService.removeEmployeesFromRun(run.id, saem);
+            // Também sai quem tem resultado nesta folha mas é REGISTRADO em outra
+            // organização (compartilhado com esta, ou que mudou de org). Regra do
+            // usuário (24/10/2026): a folha é gerada só na org em que o colaborador
+            // é registrado; o custo vai para outra pela aba Alocações. Caso real:
+            // o Rogério, da Garden, seguia em 11 folhas da Alpa geradas quando a
+            // folha ainda incluía compartilhados — reprocessar não o tirava.
+            const daOrg = new Set(employees.filter(e => e.org_id === orgId).map(e => e.id));
+            const comResultado = await payrollService.listResultsByRun(run.id);
+            const deOutraOrg = [...new Set(comResultado.map(r => r.employee_id))].filter(id => !daOrg.has(id));
+            const tirar = [...saem, ...deOutraOrg];
+            if (tirar.length > 0) await payrollService.removeEmployeesFromRun(run.id, tirar);
         }
 
         // 3. Processar em paralelo — allSettled para não abortar a folha se um colaborador falhar

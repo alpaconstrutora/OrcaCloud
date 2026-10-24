@@ -14,8 +14,8 @@ import { payrollValidationService } from '../services/payrollValidationService';
 
 const ORG = 'org-garden';
 
-const emp = (id: string, status: string, termination_date?: string, hire_date?: string) =>
-    ({ id, org_id: ORG, status, termination_date, hire_date } as unknown as Employee);
+const emp = (id: string, status: string, termination_date?: string, hire_date?: string, org_id: string = ORG) =>
+    ({ id, org_id, status, termination_date, hire_date } as unknown as Employee);
 
 const JUN = ['2026-06-01', '2026-06-30'] as const;
 
@@ -73,8 +73,10 @@ describe('saiDaFolha', () => {
 });
 
 describe('runPayroll — desligados, inativos e não admitidos', () => {
-    const preparar = (lista: Employee[]) => {
+    const preparar = (lista: Employee[], comResultado: string[] = []) => {
         vi.spyOn(payrollService, 'createRun').mockResolvedValue({ id: 'run-1', org_id: ORG } as PayrollRun);
+        vi.spyOn(payrollService, 'listResultsByRun').mockResolvedValue(
+            comResultado.map(employee_id => ({ employee_id })) as never);
         vi.spyOn(payrollService, 'getRun').mockResolvedValue({ id: 'run-existente', org_id: ORG } as PayrollRun);
         vi.spyOn(payrollService, 'updateRunStatus').mockResolvedValue(undefined as never);
         vi.spyOn(laborService, 'listEmployees').mockResolvedValue(lista);
@@ -107,6 +109,30 @@ describe('runPayroll — desligados, inativos e não admitidos', () => {
 
         expect(calc.mock.calls.map(c => c[0])).toEqual(['ativo']);
         expect(remover).toHaveBeenCalledWith('run-existente', ['inativo', 'nao-admitido']);
+    });
+
+    // Caso real (24/10/2026): o Rogério é registrado na Garden, mas tinha resultado em 11 folhas da
+    // Alpa (geradas quando a folha ainda incluía compartilhados). Reprocessar a Alpa não o tirava: a
+    // limpeza só olhava quem é DA org. Regra do usuário: "a folha é gerada apenas em uma organização.
+    // Apenas na organizacao que ele é registrado" — o custo vai para outra pela aba Alocações.
+    it('ao reprocessar, tira quem tem resultado na folha mas é registrado em outra organização', async () => {
+        const { remover, calc } = preparar(
+            [
+                emp('ativo', 'ATIVO'),
+                emp('afastado', 'AFASTADO'),
+                // compartilhado com esta org (vem no listEmployees), mas registrado em outra
+                emp('compartilhado', 'ATIVO', undefined, undefined, 'org-alpa'),
+            ],
+            // 'rogerio' nem vem no listEmployees: foi para outra org e não é compartilhado
+            ['ativo', 'afastado', 'compartilhado', 'rogerio'],
+        );
+
+        await payrollEngine.runPayroll(ORG, ...JUN, 'mensal', undefined, 'run-existente');
+
+        expect(calc.mock.calls.map(c => c[0])).toEqual(['ativo']);
+        expect(remover).toHaveBeenCalledTimes(1);
+        expect(remover.mock.calls[0][0]).toBe('run-existente');
+        expect([...remover.mock.calls[0][1]].sort()).toEqual(['compartilhado', 'rogerio']);
     });
 
     it('folha nova não chama a limpeza', async () => {

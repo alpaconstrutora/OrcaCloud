@@ -8,7 +8,7 @@ import {
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown,
     Package, Pencil, Settings, Search,
-    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal, PencilLine
+    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal, PencilLine, CalendarClock
 } from 'lucide-react';
 import { ContractModal, ContractFormSection } from './ContractModal';
 import {
@@ -22,6 +22,7 @@ import {
 } from '../types';
 import { contractService, type ParcelaDoContrato } from '../services/contractService';
 import AlterarValorParcelaSheet, { descreverAlteracaoManual } from './contracts/AlterarValorParcelaSheet';
+import AlterarVencimentoParcelaSheet, { descreverVencimentoManual } from './contracts/AlterarVencimentoParcelaSheet';
 import { parcelaBaixada } from '../utils/contratoParcelaVariavel';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
 import { contractGuaranteeService } from '../services/contractGuaranteeService';
@@ -82,15 +83,15 @@ const FINANCE_COLUMNS: ColumnConfig[] = [
     { key: 'source', label: 'Origem', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'amount', label: 'Valor', sortable: true },
-    // Alterar valor da parcela (19/10/2026) — estrutural, não ordena (§2/§6.3).
+    // Alterar valor (19/10/2026) e vencimento (24/10/2026) da parcela — estrutural, não ordena (§2/§6.3).
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 const FINANCE_DATA_COLUMNS = FINANCE_COLUMNS.filter(c => c.key !== 'actions');
 // Larguras iniciais da tabela de Parcelas (Financeiro › Parcelas). Descrição é o
-// texto livre — o resto é vocabulário curto. Valor leva a 2ª linha "Alterado
-// manualmente" quando a parcela foi editada à mão.
+// texto livre — o resto é vocabulário curto. Data e Valor levam a 2ª linha "Alterado
+// manualmente" quando a parcela foi editada à mão; Ações tem dois botões.
 const FINANCE_COL_WIDTHS: Record<string, number> = {
-    date: 130, description: 460, source: 150, status: 140, amount: 190, actions: 90,
+    date: 190, description: 440, source: 150, status: 140, amount: 190, actions: 110,
 };
 
 // Só as modalidades de OBRA/suprimentos. As de locação (seguro-fiança, cessão
@@ -306,6 +307,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [loadingFinancialEntries, setLoadingFinancialEntries] = React.useState(false);
     // Parcela aberta no painel "Alterar valor da parcela".
     const [parcelaEmEdicao, setParcelaEmEdicao] = React.useState<ParcelaDoContrato | null>(null);
+    const [vencimentoEmEdicao, setVencimentoEmEdicao] = React.useState<ParcelaDoContrato | null>(null);
     const financeColumns = useTableColumns(FINANCE_COLUMNS, 'contractFinanceEntriesColumns');
     // §6.1 — largura arrastável pelo divisor do cabeçalho + auto-ajuste sob comando.
     const financeWidths = useResizableColumns(FINANCE_COL_WIDTHS, 'contractFinanceEntriesColWidths');
@@ -1151,6 +1153,19 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             console.error('Erro ao recarregar lançamentos financeiros:', err);
             return financialEntries;
         }
+    };
+
+    /**
+     * Financeiro › Parcelas › Alterar vencimento (24/10/2026). Grava a data (a parcela
+     * fica marcada — os syncs do contrato mantêm esta data) e recarrega a lista. Não
+     * mexe no cronograma dos Dados Gerais: o vencimento não muda o valor acordado.
+     * Plano: docs/planos/2026-10-24-contrato-alterar-vencimento-da-parcela.md.
+     */
+    const handleSalvarVencimentoParcela = async (parcela: ParcelaDoContrato, novaData: string) => {
+        if (!contract) return;
+        await contractService.updateFinancialEntry(parcela.id, { due_date: novaData });
+        await recarregarParcelas(contract);
+        notify('Vencimento da parcela alterado.', 'success');
     };
 
     /**
@@ -3214,18 +3229,29 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <tbody className="divide-y divide-gray-200">
                                             {sortedEntries.map((e) => {
                                                 const alteracao = descreverAlteracaoManual(e);
+                                                const alteracaoVencimento = descreverVencimentoManual(e);
                                                 // Botão desligado sempre diz o motivo (span: o ActionIconButton
                                                 // desligado tem pointer-events-none e esconderia o title).
-                                                const motivoTravado = parcelaBaixada(e)
-                                                    ? 'Parcela já paga ou conciliada — estorne no financeiro antes de alterar o valor.'
+                                                const motivoTravado = (oQue: 'o valor' | 'o vencimento') => parcelaBaixada(e)
+                                                    ? `Parcela já paga ou conciliada — estorne no financeiro antes de alterar ${oQue}.`
                                                     : e.status !== 'PENDING'
-                                                        ? 'Parcela cancelada — não há valor a alterar.'
+                                                        ? `Parcela cancelada — não há ${oQue === 'o valor' ? 'valor' : 'vencimento'} a alterar.`
                                                         : null;
+                                                const travadoValor = motivoTravado('o valor');
+                                                const travadoVencimento = motivoTravado('o vencimento');
                                                 return (
                                                 <tr key={e.id} className="hover:bg-blue-50/50 transition-colors group">
                                                     {visibleFinCols.includes('date') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                             {new Date(e.transaction_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                            {/* Identificação do vencimento alterado à mão (24/10/2026):
+                                                                quem, quando e a data que o contrato tinha gerado, no hover. */}
+                                                            {alteracaoVencimento && (
+                                                                <span className="flex items-center gap-1 text-xs font-normal text-amber-700 mt-0.5" title={alteracaoVencimento}>
+                                                                    <CalendarClock className="w-3 h-3 shrink-0" />
+                                                                    Alterado manualmente
+                                                                </span>
+                                                            )}
                                                         </td>
                                                     )}
                                                     {visibleFinCols.includes('description') && (
@@ -3259,9 +3285,16 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                     <td className="px-6 py-2.5 text-right">
                                                         <div className="flex items-center justify-end gap-1.5">
-                                                            {motivoTravado ? (
-                                                                <span className="inline-flex" title={motivoTravado}>
-                                                                    <ActionIconButton kind="edit" title={motivoTravado} disabled />
+                                                            {travadoVencimento ? (
+                                                                <span className="inline-flex" title={travadoVencimento}>
+                                                                    <ActionIconButton kind="reschedule" title={travadoVencimento} disabled />
+                                                                </span>
+                                                            ) : (
+                                                                <ActionIconButton kind="reschedule" title="Alterar vencimento" onClick={() => setVencimentoEmEdicao(e)} />
+                                                            )}
+                                                            {travadoValor ? (
+                                                                <span className="inline-flex" title={travadoValor}>
+                                                                    <ActionIconButton kind="edit" title={travadoValor} disabled />
                                                                 </span>
                                                             ) : (
                                                                 <ActionIconButton kind="edit" title="Alterar valor" onClick={() => setParcelaEmEdicao(e)} />
@@ -3615,6 +3648,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 parcela={parcelaEmEdicao}
                 onClose={() => setParcelaEmEdicao(null)}
                 onSalvar={handleSalvarValorParcela}
+            />
+
+            {/* Financeiro › Parcelas › Alterar vencimento (24/10/2026). */}
+            <AlterarVencimentoParcelaSheet
+                parcela={vencimentoEmEdicao}
+                onClose={() => setVencimentoEmEdicao(null)}
+                onSalvar={handleSalvarVencimentoParcela}
             />
 
             {contract && (

@@ -2724,8 +2724,12 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         etapa('DR_DPS', ROTULO_DA_ETAPA_DA_CASA.DR_DPS, 'LANCOU', aplicar([...drs, ...dps, ...ligacao]), `${drs.length} DR(s) de 30 mA${dps.length ? '; DPS no quadro' : ''}${notaDaEntrada}`);
       });
       tentarEletrica('ELETRODUTOS', () => {
-        // F14b: no forro, na faixa do eletroduto, pelos anéis dos cômodos.
-        const hipEletrodutos = forroLigado ? { ...HIPOTESES_ELETRODUTO_PADRAO, noForro: { faixa: hip.forro.eletrica, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } } : HIPOTESES_ELETRODUTO_PADRAO;
+        // F14b: no forro, na faixa do eletroduto. Task 3 (24/10/2026, "a regra vale também no forro"): quadro → luz do
+        // ambiente → tomadas, como na obra — a luz → ponto reta pela faixa até a vertical dele no anel, e a descida do
+        // forro; os anéis dos cômodos ficam para o ambiente sem luz. O que cruzar outra rede, o detector de conflitos avisa.
+        const hipEletrodutos = forroLigado
+          ? { ...HIPOTESES_ELETRODUTO_PADRAO, encaminhamento: 'PELA_LUZ_DO_AMBIENTE' as const, noForro: { faixa: hip.forro.eletrica, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } }
+          : HIPOTESES_ELETRODUTO_PADRAO;
         const planos = planejarEletrodutosDoModelo(m, hipEletrodutos, hipEletricas);
         const lote = planos.flatMap((p) => p.comandos);
         for (const a of new Set(planos.flatMap((p) => p.avisos))) pendencias.push({ grupo: 'CONFERIR', texto: `Eletrodutos: ${a}` });

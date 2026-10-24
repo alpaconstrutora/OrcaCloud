@@ -25,8 +25,8 @@
 ## Estado
 - [x] implementação (item 1 e 2)
 - [x] teste de tela (`CentroDeCustoAgrupar`)
-- [ ] typecheck + suíte de Agrupar existentes + `check-ui-standard.sh`
-- [ ] conferência na tela real
+- [x] typecheck (exit 0, 0 erros) + suítes de Agrupar existentes e `orgContextGuard` verdes + `check-ui-standard.sh` 0 violações
+- [x] conferência na tela real (login de leitura, `c:/tmp/pwtest/cc-agrupar.js`): 4 campos (Grupo, Organização, Empreendimento, Obra) com Crescente A→Z, Decrescente = inverso, "Sem …" no fim, recolher/expandir todos, árvore volta igual, toolbar sem estouro, 0 escritas, 0 erros de página
 - [ ] PR + CI
 - [ ] publicação
 

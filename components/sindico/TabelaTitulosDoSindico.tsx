@@ -7,7 +7,7 @@ import { usePersistedState } from '../ui/TableUtils';
 import { origemLabel } from '../../utils/origemLabel';
 import { rotuloDeDespesa, rotuloDeFornecedor } from '../../utils/despesaCondominio';
 import {
-    ROTULO_SITUACAO, motivoNaoAltera, motivoNaoBaixa, situacaoDoTitulo,
+    ROTULO_SITUACAO, motivoNaoAltera, motivoNaoBaixa, motivoNaoDesfazBaixa, motivoNaoRecebe, situacaoDoTitulo,
     type SituacaoDoTitulo, type TituloDoCondominio,
 } from '../../utils/financeiroDoSindico';
 import type { DocumentoDoTitulo } from '../../services/sindicoPortalService';
@@ -37,9 +37,13 @@ type FiltroId = typeof FILTROS[number]['id'];
 export interface AcoesDaTabela {
     /** Motivo de nada poder ser gravado neste condomínio (prévia, link sem login, sem org própria). */
     motivoDoCondominio: (condominioId: string) => string | null;
+    /** Pagar (a pagar) ou receber (a receber) — o painel decide pelo sentido do título. */
     onBaixar: (t: TituloDoCondominio) => void;
-    onEditar: (t: TituloDoCondominio) => void;
-    onCancelar: (t: TituloDoCondominio) => void;
+    /** Desfazer a baixa (G2a). */
+    onDesfazer: (t: TituloDoCondominio) => void;
+    /** Só a pagar (lançamento manual). */
+    onEditar?: (t: TituloDoCondominio) => void;
+    onCancelar?: (t: TituloDoCondominio) => void;
 }
 
 interface Props {
@@ -175,9 +179,14 @@ const TabelaTitulosDoSindico: React.FC<Props> = ({
                                     {acoes && (
                                         <Td className="whitespace-nowrap">
                                             <span className="inline-flex items-center gap-3">
-                                                <Acao motivo={geral ?? motivoNaoBaixa(t)} onClick={() => acoes.onBaixar(t)}>Pagar</Acao>
-                                                <Acao motivo={geral ?? motivoNaoAltera(t)} onClick={() => acoes.onEditar(t)}>Editar</Acao>
-                                                <Acao motivo={geral ?? motivoNaoAltera(t)} onClick={() => acoes.onCancelar(t)}>Cancelar</Acao>
+                                                {/* Com baixa, o lugar de "Pagar/Receber" vira "Desfazer" (G2a). */}
+                                                {situacao === 'PAGO'
+                                                    ? <Acao motivo={geral ?? motivoNaoDesfazBaixa(t)} onClick={() => acoes.onDesfazer(t)}>Desfazer</Acao>
+                                                    : <Acao motivo={geral ?? (tipo === 'receber' ? motivoNaoRecebe(t) : motivoNaoBaixa(t))} onClick={() => acoes.onBaixar(t)}>
+                                                        {tipo === 'receber' ? 'Receber' : 'Pagar'}
+                                                    </Acao>}
+                                                {acoes.onEditar && <Acao motivo={geral ?? motivoNaoAltera(t)} onClick={() => acoes.onEditar?.(t)}>Editar</Acao>}
+                                                {acoes.onCancelar && <Acao motivo={geral ?? motivoNaoAltera(t)} onClick={() => acoes.onCancelar?.(t)}>Cancelar</Acao>}
                                             </span>
                                         </Td>
                                     )}

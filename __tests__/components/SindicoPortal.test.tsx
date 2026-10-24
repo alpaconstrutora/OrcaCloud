@@ -17,6 +17,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const getDados = vi.fn();
 const getFinanceiro = vi.fn();
 const baixarTitulo = vi.fn();
+const receberTitulo = vi.fn();
+const getContas = vi.fn();
 vi.mock('../../services/sindicoPortalService', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../../services/sindicoPortalService')>()),
     sindicoPortalService: {
@@ -26,6 +28,8 @@ vi.mock('../../services/sindicoPortalService', async (importOriginal) => ({
         getFinanceiro: (...a: unknown[]) => getFinanceiro(...a),
         documentosDosTitulos: vi.fn().mockResolvedValue({}),
         baixarTitulo: (...a: unknown[]) => baixarTitulo(...a),
+        receberTitulo: (...a: unknown[]) => receberTitulo(...a),
+        getContas: (...a: unknown[]) => getContas(...a),
     },
 }));
 
@@ -86,7 +90,7 @@ const irParaContasAPagar = async () => {
 
 describe('SindicoPortal', () => {
     beforeEach(() => {
-        getDados.mockReset(); getFinanceiro.mockReset(); baixarTitulo.mockReset(); localStorage.clear();
+        getDados.mockReset(); getFinanceiro.mockReset(); baixarTitulo.mockReset(); receberTitulo.mockReset(); getContas.mockReset(); localStorage.clear();
         getFinanceiro.mockResolvedValue(financeiro);
     });
 
@@ -207,6 +211,49 @@ describe('SindicoPortal', () => {
         await waitFor(() => expect(baixarTitulo).toHaveBeenCalledWith({ token: 'tok' }, 'm1', expect.objectContaining({ data: expect.any(String) })));
         // Depois de gravar, relê o financeiro.
         await waitFor(() => expect(getFinanceiro).toHaveBeenCalledTimes(2));
+    });
+
+    it('8b. G2a — receber com login; baixa já casada com o extrato não se desfaz, e diz por quê', async () => {
+        getDados.mockResolvedValue(payload);
+        receberTitulo.mockResolvedValue(undefined);
+        getFinanceiro.mockResolvedValue({ ...financeiro, titulos: [
+            { ...tituloBase, id: 'r1', direcao: 'CREDIT', origem: 'MANUAL', descricao: 'Aluguel do salão', credor: 'João', vencimento: '2026-10-20', valor: 200 },
+            { ...tituloBase, id: 'r2', direcao: 'CREDIT', origem: 'MANUAL', descricao: 'Multa', credor: 'Ana', vencimento: '2026-10-05', valor: 80,
+              status: 'CONCILIATED', businessStatus: 'RECEBIDO', pagoEm: '2026-10-06', conciliadoExtrato: true },
+        ] });
+        render(<ConfirmProvider><SindicoPortal token="tok" onLogout={() => undefined} /></ConfirmProvider>);
+        await screen.findAllByText('010 - Galeria Altavista');
+        fireEvent.click(screen.getAllByRole('button', { name: /^Financeiro$/ })[0]);
+        fireEvent.click(await screen.findByRole('button', { name: 'Contas a receber' }));
+        await screen.findByText('Aluguel do salão');
+        const desfazer = naTabela().getByRole('button', { name: 'Desfazer' });
+        expect((desfazer as HTMLButtonElement).disabled).toBe(true);
+        expect(desfazer.parentElement?.getAttribute('title')).toMatch(/extrato/);
+        expect((screen.getAllByRole('button', { name: /Lançar receita/ })[0] as HTMLButtonElement).disabled).toBe(false);
+        fireEvent.click(naTabela().getByRole('button', { name: 'Receber' }));
+        fireEvent.click(await screen.findByRole('button', { name: /Confirmar recebimento/ }));
+        await waitFor(() => expect(receberTitulo).toHaveBeenCalledWith({ token: 'tok' }, 'r1', expect.objectContaining({ data: expect.any(String) })));
+    });
+
+    it('8c. G2a — Contas bancárias: lista a conta do condomínio; a do Asaas não se edita por aqui', async () => {
+        getDados.mockResolvedValue(payload);
+        getContas.mockResolvedValue([
+            { id: 'a1', codigo: '001', nome: 'Sicredi Condomínio', tipo: 'banco', banco: '748', agencia: '0812', numero: '1', descricao: null,
+              saldoInicial: 100, saldoInicialEm: '2026-10-01', ativa: true, emUso: false },
+            { id: 'a2', codigo: '002', nome: 'Asaas', tipo: 'gateway', banco: null, agencia: null, numero: null, descricao: null,
+              saldoInicial: 0, saldoInicialEm: null, ativa: true, emUso: true },
+        ]);
+        render(<ConfirmProvider><SindicoPortal token="tok" onLogout={() => undefined} /></ConfirmProvider>);
+        await screen.findAllByText('010 - Galeria Altavista');
+        fireEvent.click(screen.getAllByRole('button', { name: /^Financeiro$/ })[0]);
+        fireEvent.click(await screen.findByRole('button', { name: 'Contas bancárias' }));
+        expect(await screen.findByText('Sicredi Condomínio')).toBeTruthy();
+        expect(getContas).toHaveBeenCalledWith({ token: 'tok' }, 'c1');
+        const editar = within(screen.getByRole('table')).getAllByRole('button', { name: 'Editar' }) as HTMLButtonElement[];
+        expect(editar[0].disabled).toBe(false);
+        expect(editar[1].disabled).toBe(true);
+        expect(editar[1].parentElement?.getAttribute('title')).toMatch(/Asaas/);
+        await waitFor(() => expect((screen.getAllByRole('button', { name: /Nova conta/ })[0] as HTMLButtonElement).disabled).toBe(false));
     });
 
     it('9. prévia do admin: Financeiro lê pelo clientId e nada fica ligado', async () => {

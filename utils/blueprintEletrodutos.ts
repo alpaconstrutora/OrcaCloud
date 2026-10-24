@@ -1101,11 +1101,44 @@ export function relancarEletrodutos(
   return { ...plano, sugeridos: 0, comandos: [...remocoes, ...plano.comandos], motivo: null };
 }
 
+/** A REDE do quadro: todo trecho que carrega algum circuito dele (sugerido ou confirmado) — o que "Refazer" apaga. */
+export function redeDoQuadro(model: BlueprintModel, quadro: Pick<Quadro, 'id'>): Trecho[] {
+  const ids = new Set((model.circuitos ?? []).filter((c) => c.quadroId === quadro.id).map((c) => c.id));
+  return (model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).some((cid) => ids.has(cid)));
+}
+
+/**
+ * F2 do plano 2026-10-24-relancar-quando-escolha-muda.md (24/10/2026): as CAIXAS DE PASSAGEM da rede do quadro —
+ * sugeridas E aceitas — num nó dos trechos dela. Refazer apaga junto: antes só saíam as sugeridas, e trocar para "sem
+ * caixas" deixava as aceitas órfãs, sem rede passando por elas. Fica a caixa que ainda serve a OUTRA rede (num nó de
+ * trecho elétrico que não é deste quadro) e a posta à mão longe da rede (em nó nenhum).
+ */
+export function caixasDaRedeDoQuadro(model: BlueprintModel, quadro: Pick<Quadro, 'id'>, rede: readonly Trecho[] = redeDoQuadro(model, quadro)): Terminal[] {
+  const no = (levelId: string, x: number, y: number, z: number) => `${levelId}|${x},${y},${z}`;
+  const nosDe = (trechos: readonly Trecho[]) => {
+    const s = new Set<string>();
+    for (const t of trechos) {
+      s.add(no(t.levelId, t.a.x, t.a.y, t.cotaAMm));
+      s.add(no(t.levelId, t.b.x, t.b.y, t.cotaBMm));
+    }
+    return s;
+  };
+  const daRede = new Set(rede.map((t) => t.id));
+  const nos = nosDe(rede);
+  const outras = nosDe((model.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && !daRede.has(t.id)));
+  return (model.terminais ?? []).filter((x) => {
+    if (x.tipoEletrico !== 'CAIXA_PASSAGEM') return false;
+    const k = no(x.levelId, x.at.x, x.at.y, x.cotaMm);
+    return nos.has(k) && !outras.has(k);
+  });
+}
+
 /**
  * REFAZER: apaga TODOS os eletrodutos da rede do quadro — sugeridos e
  * confirmados — e lança de novo com o critério atual. É o que aplica um
  * critério novo (a rota máxima, por exemplo) a uma rede que já foi aceita;
  * por isso quem chama pede confirmação antes. Um Ctrl+Z desfaz.
+ * F2 (24/10/2026): as caixas de passagem da rede saem junto, inclusive as aceitas (`caixasDaRedeDoQuadro`).
  */
 export function refazerEletrodutos(
   model: BlueprintModel,
@@ -1113,11 +1146,10 @@ export function refazerEletrodutos(
   hip: HipotesesDeEletroduto = HIPOTESES_ELETRODUTO_PADRAO,
   hipEletricas: HipotesesEletricas = HIPOTESES_PADRAO,
 ): PlanoDeEletrodutos {
-  const ids = new Set((model.circuitos ?? []).filter((c) => c.quadroId === quadro.id).map((c) => c.id));
-  const daRede = (model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).some((cid) => ids.has(cid)));
+  const daRede = redeDoQuadro(model, quadro);
   if (daRede.length === 0) return planejarEletrodutos(model, quadro, hip, hipEletricas);
   const apagados = new Set(daRede.map((t) => t.id));
-  const caixas = caixasSugeridasDaRede(model, daRede);
+  const caixas = caixasDaRedeDoQuadro(model, quadro, daRede);
   const caixasApagadas = new Set(caixas.map((c) => c.id));
   const semRede: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !apagados.has(t.id)), terminais: (model.terminais ?? []).filter((x) => !caixasApagadas.has(x.id)) };
   const plano = planejarEletrodutos(semRede, quadro, hip, hipEletricas);

@@ -1198,3 +1198,43 @@ describe('24/10/2026 (Task 3) — pela luz do ambiente NO FORRO', () => {
     expect(fnv(JSON.stringify(arvore.comandos))).toBe('cd0bef12');
   });
 });
+
+// ─── 24/10/2026 (plano 2026-10-24-relancar-quando-escolha-muda.md, F2): REFAZER leva as caixas da rede ───
+// Pedido: *"alterar o tipo de lançamento de eletroduto para Sem caixas de passagem, o motor de lançar Eletrodutos por
+// circuito deve ficar disponivel para relançar e incluir essa nova preferencia"*. Antes, refazer só apagava as caixas
+// SUGERIDAS: trocar para "sem caixas" deixava as aceitas órfãs, sem rede nenhuma passando por elas.
+describe('refazerEletrodutos — as caixas de passagem da rede saem junto, inclusive as aceitas (F2, 24/10/2026)', () => {
+  const comCaixasAceitas = () => {
+    const { m, t } = sala(24000, [{ x: 23925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    const lancado = applyBatch(m, planejarEletrodutos(m, quadroDe(m), { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: REGRA_DE_CAIXAS_PADRAO }).comandos).model;
+    const aceito = applyBatch(lancado, [
+      ...lancado.trechos!.map((x) => ({ type: 'SetTrechoProps' as const, trechoId: x.id, sugerido: false })),
+      ...lancado.terminais!.filter((x) => x.tipoEletrico === 'CAIXA_PASSAGEM').map((x) => ({ type: 'SetTerminalProps' as const, terminalId: x.id, sugerida: false })),
+    ]).model;
+    return { m: aceito, t };
+  };
+  const cps = (m: BlueprintModel) => (m.terminais ?? []).filter((x) => x.tipoEletrico === 'CAIXA_PASSAGEM');
+
+  it('⚠️ com caixas ACEITAS nos nós da rede, refazer "sem caixas" apaga as duas e não deixa nenhuma órfã', () => {
+    const { m } = comCaixasAceitas();
+    expect(cps(m)).toHaveLength(2);
+    expect(cps(m).every((x) => !x.sugerida)).toBe(true);
+    const re = refazerEletrodutos(m, quadroDe(m), semCaixas);
+    const apagadas = re.comandos.filter((c) => c.type === 'DeleteTerminal').map((c) => (c as { terminalId: string }).terminalId).sort();
+    expect(apagadas).toEqual(cps(m).map((x) => x.id).sort());
+    expect(caixasDoPlano(re.comandos)).toEqual([]);
+    const final = applyBatch(m, re.comandos).model;
+    expect(cps(final)).toEqual([]);
+    expect(final.trechos!.length).toBeGreaterThan(0);
+  });
+
+  it('a caixa posta à mão LONGE da rede fica (não é da rede do quadro)', () => {
+    const { m, t } = comCaixasAceitas();
+    const solta = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'Caixa de passagem', tipoEletrico: 'CAIXA_PASSAGEM', at: point(12000, 3000), cotaMm: 2800 }).model;
+    const id = solta.terminais![solta.terminais!.length - 1].id;
+    const re = refazerEletrodutos(solta, quadroDe(solta), semCaixas);
+    expect(re.comandos.some((c) => c.type === 'DeleteTerminal' && c.terminalId === id)).toBe(false);
+    const final = applyBatch(solta, re.comandos).model;
+    expect(cps(final).map((x) => x.id)).toEqual([id]);
+  });
+});

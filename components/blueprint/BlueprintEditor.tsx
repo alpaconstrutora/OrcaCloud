@@ -450,11 +450,19 @@ import {
   type EncaminhamentoDoEletroduto,
   eletrodutosSugeridos,
   planejarEletrodutosDoModelo,
-  refazerEletrodutos,
-  relancarEletrodutos,
   pontosSemCircuito,
   type PlanoDeEletrodutos,
 } from '../../utils/blueprintEletrodutos';
+import {
+  botaoDeLancarEletrodutos,
+  comandosDeLancarEletrodutos,
+  comandosDeRefazerEletrodutos,
+  diferencasDoEletroduto,
+  escolhasDoEletroduto,
+  redesARefazer,
+  textoDaConfirmacaoDeRefazer,
+} from '../../utils/blueprintEscolhasDoEletroduto';
+import AvisoDeEscolhasMudaram from './AvisoDeEscolhasMudaram';
 import {
   CRITERIOS_DE_CIRCUITO,
   HIPOTESES_CIRCUITOS_PADRAO,
@@ -8733,42 +8741,68 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const pontosALigar = planosDeEletrodutos.reduce((n, p) => n + p.aLigar, 0);
   const pontosEletricosSemCircuito = levelId ? pontosSemCircuito(editor.model, levelId) : [];
   const eletrodutosSugeridosNoNivel = eletrodutosSugeridos(editor.model, levelId);
-  /** Aplica UM plano (ou todos) num lote só — Ctrl+Z desfaz o lote; os trechos nascem selecionados. */
+  // F2 do plano 2026-10-24-relancar-quando-escolha-muda.md (24/10/2026): as escolhas com que a rede seria lançada AGORA —
+  // o registro de cada lote e a comparação do aviso (regra B) usam estas. Ver `blueprintEscolhasDoEletroduto.ts`.
+  const escolhasDoEletrodutoAtuais = useMemo(() => escolhasDoEletroduto(hipotesesDeEletroduto, hipotesesEletricas), [hipotesesDeEletroduto, hipotesesEletricas]);
+  /**
+   * Aplica um lote dos eletrodutos e diz se PASSOU. `runBatch` devolve `[]` tanto quando o kernel (ou a trava de
+   * colaboração) recusa quanto quando o lote não cria nada — então o sinal é o mesmo lote simulado no modelo de agora:
+   * o que o kernel tem de criar tem de voltar criado. Recusa na simulação: `runBatch` mesmo assim, para a tela mostrar o
+   * erro do kernel (`lastError`). Os trechos criados nascem selecionados.
+   */
+  const aplicarLoteDeEletrodutos = (comandos: Command[]): boolean => {
+    if (comandos.length === 0) return false;
+    let esperados: string[];
+    try {
+      esperados = applyBatch(editor.model, comandos).diff.created;
+    } catch {
+      editor.runBatch(comandos);
+      return false;
+    }
+    const criados = editor.runBatch(comandos);
+    if (criados.length !== esperados.length) return false;
+    if (criados.length > 0) selecionar(criados);
+    return true;
+  };
   /**
    * Lança (ou RELANÇA) os quadros pedidos num lote só. Quadro com plano novo
    * recebe o plano; quadro sem nada a ligar mas com trechos SUGERIDOS tem os
    * sugeridos apagados e a rede refeita — é o que devolve o botão depois de
    * mover um ponto ou o quadro (15/09/2026). Confirmados nunca são tocados.
+   * F2 (24/10/2026): cada quadro lançado leva o registro das escolhas, no mesmo lote.
    */
   const lancarEletrodutos = (planos: PlanoDeEletrodutos[]) => {
-    const comandos = planos.flatMap((p) => {
-      if (p.comandos.length > 0) return p.comandos;
-      if (p.sugeridos === 0) return [];
-      const quadro = (editor.model.quadros ?? []).find((q) => q.id === p.quadroId);
-      return quadro ? relancarEletrodutos(editor.model, quadro, hipotesesDeEletroduto, hipotesesEletricas).comandos : [];
-    });
-    if (comandos.length === 0) return;
-    const criados = editor.runBatch(comandos);
-    if (criados.length > 0) selecionar(criados);
+    aplicarLoteDeEletrodutos(comandosDeLancarEletrodutos(editor.model, planos, hipotesesDeEletroduto, hipotesesEletricas));
   };
-  /** REFAZER a rede de um quadro: apaga tudo (confirmados também) e lança de novo — com confirmação. */
-  const refazerRedeDoQuadro = async (plano: PlanoDeEletrodutos) => {
-    const quadro = (editor.model.quadros ?? []).find((q) => q.id === plano.quadroId);
-    if (!quadro) return;
-    const ok = await confirmar({
-      title: `Refazer os eletrodutos de ${quadro.nome}?`,
-      message: `Apaga os ${plano.trechosDoQuadro} eletroduto(s) deste quadro — inclusive os que você já confirmou — e lança de novo com as hipóteses atuais (bitola mínima, rota máxima, encaminhamento). Ctrl+Z desfaz.`,
-      confirmLabel: 'Refazer',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    const re = refazerEletrodutos(editor.model, quadro, hipotesesDeEletroduto, hipotesesEletricas);
-    if (re.comandos.length === 0) return;
-    const criados = editor.runBatch(re.comandos);
-    if (criados.length > 0) selecionar(criados);
+  /**
+   * REFAZER a rede dos quadros pedidos com as escolhas atuais: apaga tudo (trechos confirmados e caixas aceitas também)
+   * e lança de novo, num lote só (Ctrl+Z volta tudo, registro inclusive). Decisão do usuário (24/10/2026): havendo algo
+   * CONFIRMADO, pede confirmação dizendo, por quadro, quantos trechos e caixas serão refeitos; só sugeridos, refaz direto.
+   */
+  const refazerEletrodutosDosQuadros = async (quadroIds: string[]) => {
+    const redes = redesARefazer(editor.model, quadroIds);
+    const lista = textoDaConfirmacaoDeRefazer(redes);
+    if (lista) {
+      const um = redes.length === 1 ? redes[0].nome : null;
+      const ok = await confirmar({
+        title: um ? `Refazer os eletrodutos de ${um}?` : `Refazer os eletrodutos de ${redes.length} quadros?`,
+        message: `Apaga e lança de novo com as escolhas atuais — inclusive o que você já confirmou. ${lista} Ctrl+Z desfaz.`,
+        confirmLabel: 'Refazer',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    }
+    let comandos: Command[];
+    try {
+      comandos = comandosDeRefazerEletrodutos(editor.model, quadroIds, hipotesesDeEletroduto, hipotesesEletricas);
+    } catch (e) {
+      setAvisoColar(`Os eletrodutos não foram refeitos: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+    aplicarLoteDeEletrodutos(comandos);
   };
-  /** Há o que lançar ou relançar em algum quadro? */
-  const haOQueLancar = planosDeEletrodutos.some((p) => p.comandos.length > 0 || p.sugeridos > 0);
+  /** Regra A: o botão do rodapé — "Lançar em todos (N)", ou "Relançar com as escolhas atuais" com rede e nada a lançar. */
+  const botaoDosEletrodutos = botaoDeLancarEletrodutos(editor.model, planosDeEletrodutos);
   // E6.3: as CAIXAS DE PASSAGEM sugeridas do pavimento são aceitas junto — nasceram com a rede.
   const caixasSugeridasNoNivel = (editor.model.terminais ?? []).filter((x) => x.sugerida && x.tipoEletrico === 'CAIXA_PASSAGEM' && (!levelId || x.levelId === levelId));
   const aceitarEletrodutos = () =>
@@ -8892,6 +8926,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         hidro: hidro.pluvial.cidade || !cidade ? hidro : { ...hidro, pluvial: { ...hidro.pluvial, cidade } },
         circuitos: hipotesesDeCircuitos,
         eletricas: hipotesesEletricas,
+        // F2 (24/10/2026): a preferência do usuário de caixas de passagem — a mesma do painel dos eletrodutos.
+        caixasDePassagem,
         climatizacao: climatizacaoDoEstudo.hipoteses,
         modelosDeClimatizacao,
         cargaDaClimatizacao: { materiais: biblioteca.materiais, cidadeDoContexto: cidade },
@@ -8899,7 +8935,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       terreno: v ? { grade: v.grade, cotaZeroM: cotaZeroDoTerrenoM } : null,
       hip: hipotesesDasPremissas(p),
     });
-  }, [levelId, casaDoEstudo.premissas, zona, hidroDoEstudo.hipoteses, topografia.selecionada, casa, editor.model, terreno, limitesDoNivel, norteDoDesenho, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, hipotesesDeCircuitos, hipotesesEletricas, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, cotaZeroDoTerrenoM]);
+  }, [levelId, casaDoEstudo.premissas, zona, hidroDoEstudo.hipoteses, topografia.selecionada, casa, editor.model, terreno, limitesDoNivel, norteDoDesenho, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, hipotesesDeCircuitos, hipotesesEletricas, caixasDePassagem, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, cotaZeroDoTerrenoM]);
   /** A trava, só com a tela aberta: o lote recria os mesmos ids no desenho de agora? */
   const provaDaCasa = useMemo(() => (telaAberta === 'casa' && casa.plano ? conferirPlanoDaCasa(editor.model, casa.plano) : null), [telaAberta, casa.plano, editor.model]);
   // O CUB do padrão escolhido, na UF do produto (ou da cidade da zona) — o custo da prévia.
@@ -18788,8 +18824,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   <tbody className="divide-y divide-slate-100">
                     {planosDeEletrodutos.map((plano) => {
                       const temComandos = plano.comandos.length > 0;
+                      // Regra B (F2, 24/10/2026): a rede deste quadro foi lançada com outras escolhas — diz quais, com o
+                      // botão de refazer. Rede antiga (sem registro) não avisa; o botão do rodapé (regra A) vale.
+                      const mudou = plano.trechosDoQuadro > 0 ? diferencasDoEletroduto(editor.model, plano.quadroId, escolhasDoEletrodutoAtuais) : [];
                       return (
-                        <tr key={plano.quadroId}>
+                        <React.Fragment key={plano.quadroId}>
+                        <tr>
                           <td className="truncate py-1.5 pr-2 font-medium text-slate-700">{plano.nome}</td>
                           <td className="py-1.5 pr-2 text-slate-600">
                             {plano.pavimentos.length === 0 ? (
@@ -18823,7 +18863,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                               type="button"
                               onClick={() =>
                                 !temComandos && plano.sugeridos === 0 && plano.trechosDoQuadro > 0
-                                  ? void refazerRedeDoQuadro(plano)
+                                  ? void refazerEletrodutosDosQuadros([plano.quadroId])
                                   : lancarEletrodutos([plano])
                               }
                               disabled={!temComandos && plano.sugeridos === 0 && plano.trechosDoQuadro === 0}
@@ -18832,7 +18872,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                                   ? `Apaga os ${plano.sugeridos} trecho(s) sugerido(s) deste quadro e refaz a rede — os confirmados ficam`
                                   : !temComandos && plano.trechosDoQuadro > 0
                                     ? `Apaga os ${plano.trechosDoQuadro} eletroduto(s) deste quadro, inclusive os confirmados, e lança de novo com as hipóteses atuais — pede confirmação`
-                                    : undefined
+                                    : !temComandos
+                                      ? `Nada a lançar: ${plano.motivo ?? 'nenhum ponto a ligar'}`
+                                      : undefined
                               }
                               className="inline-flex items-center gap-1 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
@@ -18849,6 +18891,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                             </button>
                           </td>
                         </tr>
+                        {mudou.length > 0 && (
+                          <tr>
+                            <td colSpan={4} className="pb-1.5">
+                              <AvisoDeEscolhasMudaram
+                                diferencas={mudou}
+                                onRelancar={() => void refazerEletrodutosDosQuadros([plano.quadroId])}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
@@ -20110,15 +20163,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   ? 'Nenhum pendente.'
                   : `${eletrodutosSugeridosNoNivel.length} pendente(s).`}
               </span>
+              {/* Regra A (F2, 24/10/2026): com rede e nada a lançar, o botão relança com as escolhas atuais (refaz cada
+                  quadro com rede; confirma se houver algo confirmado) — nunca desligado sem dizer por quê. O motivo vai também
+                  no invólucro: nem todo navegador mostra a dica de um botão desabilitado. */}
+              <span className="inline-flex shrink-0" title={botaoDosEletrodutos.motivo ?? undefined}>
               <button
                 type="button"
-                onClick={() => lancarEletrodutos(planosDeEletrodutos)}
-                disabled={!haOQueLancar}
+                onClick={() =>
+                  botaoDosEletrodutos.modo === 'RELANCAR'
+                    ? void refazerEletrodutosDosQuadros(planosDeEletrodutos.filter((p) => p.trechosDoQuadro > 0).map((p) => p.quadroId))
+                    : lancarEletrodutos(planosDeEletrodutos)
+                }
+                disabled={!!botaoDosEletrodutos.motivo}
+                title={
+                  botaoDosEletrodutos.motivo ??
+                  (botaoDosEletrodutos.modo === 'RELANCAR'
+                    ? 'Apaga a rede de cada quadro e lança de novo com as escolhas atuais — pede confirmação se houver eletroduto confirmado ou caixa aceita; Ctrl+Z desfaz'
+                    : undefined)
+                }
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Cable className="h-4 w-4" />
-                Lançar em todos ({pontosALigar})
+                {botaoDosEletrodutos.rotulo}
               </button>
+              </span>
               <button
                 type="button"
                 onClick={aceitarEletrodutos}

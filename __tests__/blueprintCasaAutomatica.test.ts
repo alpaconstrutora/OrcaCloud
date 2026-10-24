@@ -24,6 +24,7 @@ import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
 import { pontosElegiveis } from '../utils/blueprintCircuitosAutomaticos';
 import { HIPOTESES_DO_MURO_DA_CASA_PADRAO } from '../utils/blueprintMuroDaCasa';
 import { furosPrevistos } from '../utils/blueprintFurosPrevistos';
+import { registroDe } from '../utils/blueprintRegistroDeLancamento';
 
 // Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
 // ~0,5–0,8 s nesta máquina, e a CI, disputando CPU com a suíte toda, chegou a passar dos 5 s do padrão
@@ -560,6 +561,24 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
       expect((r.quadros ?? [])[0].drs?.some((dr) => (dr.circuitoIds ?? []).includes(d.circuitoId!))).toBe(true);
     }
     expect(p.resumo.eletrica.conferencia.faltas).toBe(0);
+  });
+
+  // F2 do plano 2026-10-24-relancar-quando-escolha-muda.md (24/10/2026): a casa usa a preferência do usuário de caixas
+  // de passagem (padrão "pela luz do teto", sem caixas) — antes forçava a hipótese do planejador, com caixas — e o lote
+  // registra com que escolhas os eletrodutos foram lançados (o painel avisa quando as de lá diferem).
+  it('⚠️ F2: com a preferência padrão a casa não insere caixa de passagem e registra o lançamento; com "CAIXAS", registra CAIXAS', () => {
+    const m = lote();
+    const p = planejarCasa(m, comAr(m));
+    const r = p.resultado;
+    expect(p.etapas.find((e) => e.id === 'ELETRODUTOS')?.situacao).toBe('LANCOU');
+    expect((r.terminais ?? []).filter((t) => t.tipoEletrico === 'CAIXA_PASSAGEM')).toEqual([]);
+    const qdc = (r.quadros ?? [])[0];
+    expect(p.comandos.filter((c) => c.type === 'RegistrarLancamento')).toHaveLength(1);
+    expect(registroDe(r, 'ELETRODUTOS', qdc.id)?.escolhas).toMatchObject({ caixasDePassagem: 'PELA_LUZ', encaminhamento: 'PELA_LUZ_DO_AMBIENTE' });
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+
+    const comCaixas = planejarCasa(m, comAr(m, { caixasDePassagem: 'CAIXAS' }));
+    expect(registroDe(comCaixas.resultado, 'ELETRODUTOS', (comCaixas.resultado.quadros ?? [])[0].id)?.escolhas.caixasDePassagem).toBe('CAIXAS');
   });
 
   it('elétrica desligada: as seis etapas NAO_EXIGIDA e nenhum ponto elétrico', () => {

@@ -74,7 +74,7 @@ Decisões do usuário (mesma sessão):
 ## Estado
 - [x] desenho aprovado (24/10/2026)
 - [x] Task 1 — F1 núcleo (registro no modelo) — kernel 0.105.0 (`registrosDeLancamento`, `RegistrarLancamento`/`ApagarRegistroDeLancamento`), `utils/blueprintRegistroDeLancamento.ts`, `AvisoDeEscolhasMudaram.tsx`; bundle da planta-api regerado (a function ainda precisa de deploy)
-- [ ] Task 2 — F2 eletrodutos
+- [x] Task 2 — F2 eletrodutos — `utils/blueprintEscolhasDoEletroduto.ts` (escolhas por quadro, rótulos e padrões, lotes de lançar/refazer com o registro, botão da regra A, confirmação por quadro); `refazerEletrodutos` apaga as CP da rede inclusive aceitas (`caixasDaRedeDoQuadro`); aviso B na tabela por quadro; Casa Automática com a preferência de caixas e o registro no lote
 - [ ] Task 3 — F3 água e pluvial
 - [ ] Task 4 — F4 esgoto
 - [ ] Task 5 — F5 circuitos automáticos

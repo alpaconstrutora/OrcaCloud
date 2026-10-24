@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes, Smartphone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -474,11 +474,14 @@ const Layout: React.FC<LayoutProps> = ({
   };
   const t = resolvedThemeMode === 'light' ? sidebarLight : resolvedThemeMode === 'midnight' ? sidebarMidnight : sidebarDark;
   const [isCollapsed, setIsCollapsed] = React.useState(false);
+  // `labor-portal` (Portal do Colaborador) mora em Portais desde 24/10/2026, mas o id
+  // segue com prefixo `labor-` (rota e permissão do RH) — por isso o RH o exclui abaixo.
+  const portaisViews = ['client-properties','investor-portal','supplier-area','partner-workspaces-admin','broker-area','condomino-portal','treinamentos','labor-portal'];
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   // Abre sozinho quando a tela ativa é um dos portais (ex.: chegar ao Portal de
   // Treinamentos pelo endereço antigo `labor-trainings` ou pela busca).
   React.useEffect(() => {
-    if (['client-properties','investor-portal','supplier-area','partner-workspaces-admin','broker-area','condomino-portal','treinamentos'].includes(activeView)) setIsPortalsOpen(true);
+    if (portaisViews.includes(activeView)) setIsPortalsOpen(true);
   }, [activeView]);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
   const [isDesenvolvimentoImobOpen, setIsDesenvolvimentoImobOpen] = React.useState(false);
@@ -507,8 +510,9 @@ const Layout: React.FC<LayoutProps> = ({
   const systemConfigViews = ['settings','master-data'];
   const [isSystemConfigOpen, setIsSystemConfigOpen] = React.useState(() => systemConfigViews.includes(activeView));
   React.useEffect(() => { if (systemConfigViews.includes(activeView)) setIsSystemConfigOpen(true); }, [activeView]);
-  const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
-  React.useEffect(() => { if (activeView.startsWith('labor-')) setIsLaborOpen(true); }, [activeView]);
+  const isLaborView = (v: string) => v.startsWith('labor-') && v !== 'labor-portal';
+  const [isLaborOpen, setIsLaborOpen] = React.useState(() => isLaborView(activeView));
+  React.useEffect(() => { if (isLaborView(activeView)) setIsLaborOpen(true); }, [activeView]);
 
   // Preserva o scroll do sidebar entre re-renders E remounts (via sessionStorage)
   const navRef = React.useRef<HTMLElement>(null);
@@ -528,6 +532,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'tarefas', label: 'Minhas tarefas', group: 'Geral', icon: CheckSquare, shortcut: 'N' },
       { id: 'meus-treinamentos', label: 'Meus treinamentos', group: 'Geral', icon: GraduationCap },
       { id: 'treinamentos', label: 'Portal de Treinamentos', group: 'Portais', icon: GraduationCap },
+      { id: 'labor-portal', label: 'Portal do Colaborador', group: 'Portais', icon: Smartphone },
       { id: 'notifications-center', label: 'Notificações', group: 'Geral', icon: Bell },
       { id: 'eng-obras', label: 'Obras', group: 'Engenharia', icon: Building2 },
       { id: 'eng-orcamentos', label: 'Orcamentos', group: 'Engenharia', icon: FolderOpen },
@@ -1008,7 +1013,7 @@ const Layout: React.FC<LayoutProps> = ({
                     if (isCollapsed) { onChangeView('labor-dashboard'); }
                     else { setIsLaborOpen(o => !o); }
                   }}
-                  hasActiveChild={activeView.startsWith('labor-')}
+                  hasActiveChild={isLaborView(activeView)}
                 >
                   <DropdownGroupLabel label="Visão Geral" />
                   <DropdownItem id="labor-dashboard" label="Dashboard" icon={BarChart3} />
@@ -1046,7 +1051,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="labor-evaluation" label="Avaliação 360°" icon={Trophy} />
                   <DropdownItem id="labor-bi-analytics" label="BI Analytics RH" icon={BarChart3} />
                   <DropdownItem id="labor-comunicacao" label="Comunicação" icon={MessageSquare} />
-                  <DropdownItem id="labor-portal" label="Portal Colaborador" icon={Layers} />
+                  {/* "Portal Colaborador" saiu daqui para Portais › Portal do Colaborador (24/10/2026). */}
 
                   <DropdownGroupLabel label="Configurações" />
                   <DropdownItem id="labor-fiscal" label="Config. Fiscais" icon={Settings} />
@@ -1196,7 +1201,7 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={Shield}
                     isOpen={isPortalsOpen}
                     onToggle={() => setIsPortalsOpen(o => !o)}
-                    hasActiveChild={['client-properties','investor-portal','supplier-area','partner-workspaces-admin','broker-area','condomino-portal','treinamentos'].includes(activeView)}
+                    hasActiveChild={portaisViews.includes(activeView)}
                   >
                     <DropdownItem id="client-properties" label="Portal do Cliente" icon={Building2} />
                     <DropdownItem id="investor-portal" label="Portal do Investidor" icon={TrendingUp} />
@@ -1216,16 +1221,24 @@ const Layout: React.FC<LayoutProps> = ({
                     {(mod.treinamentos || isDev) && (
                       <DropdownItem id="treinamentos" label="Portal de Treinamentos" icon={GraduationCap} />
                     )}
+                    {/* Saiu de Recursos Humanos em 24/10/2026, a pedido do usuário. A
+                        permissão continua a do RH (AppRouter: `labor-` → canViewLabor). */}
+                    {(mod.rh || isDev) && (
+                      <DropdownItem id="labor-portal" label="Portal do Colaborador" icon={Smartphone} />
+                    )}
                   </NavDropdown>
                 </>
               ) : (
                 <>
                   <NavItem id="client-area" icon={User} label="Visão do Cliente" />
                   {/* Portais só aparece para quem administra a organização; quem gerencia
-                      treinamento sem ser administrador (segurança do trabalho, engenharia)
-                      não pode perder o acesso — fica o item solto. */}
+                      treinamento ou RH sem ser administrador (segurança do trabalho,
+                      engenharia, RH) não pode perder o acesso — fica o item solto. */}
                   {mod.treinamentos && (
                     <NavItem id="treinamentos" icon={GraduationCap} label="Portal de Treinamentos" />
+                  )}
+                  {mod.rh && (
+                    <NavItem id="labor-portal" icon={Smartphone} label="Portal do Colaborador" />
                   )}
                 </>
               )}
@@ -1370,12 +1383,18 @@ const Layout: React.FC<LayoutProps> = ({
                   {(mod.treinamentos || isDev) && (
                     <NavItem id="treinamentos" icon={GraduationCap} label="Portal de Treinamentos" forceFull />
                   )}
+                  {(mod.rh || isDev) && (
+                    <NavItem id="labor-portal" icon={Smartphone} label="Portal do Colaborador" forceFull />
+                  )}
                 </div>
               ) : (
                 <>
                   <NavItem id="client-area" icon={User} label="Área do Cliente" forceFull />
                   {mod.treinamentos && (
                     <NavItem id="treinamentos" icon={GraduationCap} label="Portal de Treinamentos" forceFull />
+                  )}
+                  {mod.rh && (
+                    <NavItem id="labor-portal" icon={Smartphone} label="Portal do Colaborador" forceFull />
                   )}
                 </>
               )}

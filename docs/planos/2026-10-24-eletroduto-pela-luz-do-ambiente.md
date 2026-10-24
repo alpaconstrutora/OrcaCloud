@@ -1,5 +1,19 @@
 # Planta › Elétrico — eletroduto como na obra: quadro → luz do ambiente → tomadas
 
+## Pedido original
+
+Sessão `9e26b316`, 24/10/2026 (manhã, logo após a publicação do PR #128), com um print de um projeto elétrico de
+referência (apartamentos 201/202, eletrodutos em arco saindo das luzes):
+
+> *"Pergunta: esses conduites passando proximo a parede nao são executado assim na obra.
+> O encaminhamento geralmente parte do quadro de distribuição, vai ate o ponto de iluminacao no teto do ambiente e de la desce para as tomadas daquel ambiente. Se tiver mais de um ponto de iluminacao no teto no mesmo ambiente pode se interligar um ao outro. Pode-se tambe'm interligar uma tomada a outra na mesma parede, porem percorrendo dentro da parece."*
+
+Respostas às 4 perguntas (mesma sessão, antes do plano):
+1. Tomada × tomada: *"Quando a vizinha está mais perto (Recomendado)"*.
+2. Ambiente sem luz: *"Da rede do teto mais próxima (Recomendado)"*.
+3. Forro da Casa Automática: *"Sim, também no forro"*.
+4. Desenho: *"Curvas, como no seu print (Recomendado)"*.
+
 ## Contexto
 
 Pedido (24/10/2026, com print de um projeto elétrico de referência, apartamentos 201/202):
@@ -133,11 +147,73 @@ Reaproveitar `utils/blueprintEletrodutoSobreposto.ts`. Ele já curva o traço no
 - Eletroduto pelo **piso** (tomadas baixas pelo contrapiso, tracejado na convenção): não pedido.
 - Plantas já lançadas não mudam sozinhas: o usuário clica Relançar (os confirmados ficam) ou Refazer.
 
+## Execução (24/10/2026) — o que foi feito e decidido
+
+Execução por subagentes, uma tarefa por vez, cada uma com revisão independente e rodadas de correção; no fim, revisão
+do ramo inteiro e uma correção final. Commits: `d92e7b12`, `6774e7b2` (T1) · `b2bb3708`, `ccb16bc6` (T2) ·
+`f6b622b8`, `b0dca28a`, `23141a27` (T3) · `23046912`, `fb39ee47` (T4) · `bfce6fd0` (revisão final).
+
+**Decisões tomadas na execução (além das 4 do usuário):**
+- **Infraestrutura** (caixa de passagem, medidor…) fica fora da regra e não serve de vizinha.
+- **Interruptor** desce da luz que comanda; se o ambiente dele não tem luz (hall), desce da luz comandada noutro
+  ambiente antes de cair na rede.
+- **Tomada só pendura em luz do MESMO quadro**; luz de outro quadro não serve (a caixa dela não está na rede).
+- **Vizinha bloqueada** por porta/janela da mesma parede cuja faixa de altura contém a cota da tomada, e por pilar
+  entre as duas caixas — na face E no eixo da parede (pilar de 14 cm em parede de 15 cm não escapa).
+- **Pilar no modo pela luz:** as pegadas entram no desvio infladas por raio do tubo + 50 mm (a conferência
+  `fracaoDentro` amostra a cada 50 mm e deixava passar corte de canto de até 39 mm); perto de uma ponta o anel
+  encolhe pela conta do anel em esquadro; sem contorno, tenta a pegada real (nunca pior que antes). `desvioDoPilar`
+  e `fracaoDentro` (água, esgoto, pluvial) NÃO mudaram.
+- **Forro:** o `q` de chegada no anel só vale no cômodo do ponto ou da luz; fora disso, saída pela parede ou rede.
+- **Arco:** trecho DENTRO DA PAREDE (cotas iguais ±50 mm, entre 0 e 2,10 m) fica RETO — *"percorrendo dentro da
+  parede"*; teto, forro e piso em arco. Sobrepostos de um grupo usam a flecha do mais longo (tela e prancha).
+- **Hipótese `encaminhamento`** (padrão "Quadro → luz do ambiente → tomadas (como na obra)"; "Árvore única no teto
+  (antigo)" disponível), select no painel dos eletrodutos, guardado no navegador como o checkbox vizinho. A Casa
+  Automática usa sempre o modo novo.
+
+**Números medidos:**
+- Pavimento de teste com 340 pontos e 20 cômodos (sem forro): antigo 1008,7 m de eletroduto em 183 ms; novo
+  716,9 m em 28 ms, sem anel. Relançar uma planta lançada no modo antigo dá o mesmo resultado do lançamento do zero.
+- **Planta Garden** (rascunho do usuário, 1 quadro, 96 pontos; rede refeita nos dois modos, harness local): antigo
+  124 trechos e 144,5 m; novo 124 trechos e **193,9 m (+34 %)** — cada tomada ganha a própria descida da luz do
+  cômodo em vez de encadear com a vizinha pelo teto. Os troncos rente às paredes (73, 103, 114 condutores) somem;
+  os prints antes × depois mostram os arcos saindo das luzes, como no print de referência.
+- Casa Automática com forro, antes da T3 → depois (5 casas):
+
+| Casa | elétrica × água/ar | pilar, eixo dentro | pilar, raspão | viga atravessada | furos dispensa / verificar | metros |
+|---|---|---|---|---|---|---|
+| 12 × 30 térrea com ar | 0 → 0 | 0 → 0 | 0 → 0 | 33 → 15 | 6/27 → 5/10 | 219,0 → 266,5 |
+| 12 × 30 sobrado com ar | 0 → 0 | 0 → 0 | 5 → 11 | 44 → 49 | 6/38 → 6/43 | 262,9 → 323,2 |
+| 10 × 30 sobrado 4 dorm. | 0 → 0 | 0 → 0 | 1 → 1 | 61 → 70 | 4/63 → 4/70 | 268,3 → 321,9 |
+| 10 × 30 3 pav. 4 dorm. | 0 → 0 | 0 → 0 | 13 → 19 | 79 → 94 | 6/78 → 8/91 | 297,8 → 367,1 |
+| 12 × 30 3 pav. R1-A | 0 → 0 | 0 → 0 | 0 → 0 | 63 → 68 | 9/59 → 4/71 | 346,1 → 418,0 |
+
+  No forro, entre cômodos o eletroduto vai de luz a luz em reta e fura a viga onde a reta cai (antes usava as
+  travessias planejadas junto às paredes): mais viga e mais metros. Mantido pela decisão 3; o detector avisa.
+  Raspão novo = trechos que saem do quadro encostado (5 mm) num pilar — sem espaço para afastar.
+
+**Limitações conhecidas / próximos (anotados, não feitos):**
+- Sobreposição PARCIAL com o curto curvando por cima do longo ainda cruza (geometricamente inevitável sem mudar a
+  regra de lados dos sobrepostos); raro no traçado novo, em leque.
+- Laço de seleção e encaixe (osnap) seguem a corda; só o clique segue o arco. Legenda da prancha mostra o
+  eletroduto reto. No DXF cada eletroduto sai em 12 segmentos.
+- O arco também curva trechos que seguem parede/anel (REDE "pela parede", anéis do forro em ambiente sem luz) e
+  cada pedaço de um desvio de pilar.
+- Na prancha não há o deslocamento por nível dos sobrepostos nem a entrada espalhada no quadro (nunca houve).
+- No forro, a ligação luz × luz de cômodos diferentes poderia usar as travessias planejadas (menos furo de viga) —
+  depende de decisão do usuário.
+- Ponto em furo do `Space` cai em rede; recurso à pegada real do pilar não gera aviso.
+
 ## Estado
 - [x] desenho aprovado (24/10/2026, plano aprovado após as 4 decisões)
-- [ ] Task 1 — F1 regra pura
-- [ ] Task 2 — F2 planejador
-- [ ] Task 3 — F3 forro
-- [ ] Task 4 — F4 curvas
+- [x] Task 1 — F1 regra pura — revisada; correção 1 conferida
+- [x] Task 2 — F2 planejador — revisada; correção 1 re-revisada limpa
+- [x] Task 3 — F3 forro — revisada; correções 1 e 2 re-revisadas limpas
+- [x] Task 4 — F4 curvas — revisada; correção 1 aceita (cruzamento parcial documentado)
+- [x] revisão final do ramo — "Sim, com correções"; correção final `bfce6fd0` re-revisada limpa
+- [x] tsc 0 erros; suíte inteira (antes da correção final) 11.268 ok, 0 falhas, 34 pulados; os 25 testes do
+      `blueprintCasaAutomatica` que derrubam o worker local ficam para a CI
+- [x] prova por imagem no harness local (planta Garden, rede refeita nos dois modos, canvas de main × novo) — sem
+      erro de página; a prancha exportada não foi vista em imagem (coberta pelo teste da prancha)
 - [ ] PR + CI
 - [ ] publicação

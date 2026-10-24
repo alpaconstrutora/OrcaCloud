@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     User, Clock, Umbrella, BookOpen, FileText, DollarSign,
-    LogOut, Loader2, AlertTriangle, CheckCircle2, ChevronRight,
+    LogOut, Loader2, AlertTriangle, AlertCircle, CheckCircle2, ChevronRight,
     Calendar, Shield, QrCode, Copy, X, Plus, RefreshCw,
-    Smartphone, Key, Search, ChevronDown
+    Smartphone, Key, ChevronDown
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,7 +15,8 @@ import PaystubModal from './PaystubModal';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
-import { usePersistedState } from './ui/TableUtils';
+import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
+import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
 import TabsBar from './ui/TabsBar';
 import AcademyPlayerView from './academy/AcademyPlayerView';
 import { createPortalChannel } from './academy/academyChannel';
@@ -526,6 +527,45 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
 
 // ── View: Gestão de Tokens (para o gestor de RH) ──────────────────────────────
 
+type SituacaoAcesso = 'ativo' | 'expirado' | 'sem_acesso';
+const SITUACAO_LABEL: Record<SituacaoAcesso, string> = { ativo: 'Ativo', expirado: 'Expirado', sem_acesso: 'Sem acesso' };
+const SITUACAO_COR: Record<SituacaoAcesso, string> = { ativo: 'text-emerald-700', expirado: 'text-amber-700', sem_acesso: 'text-gray-500' };
+
+/** Uma linha por colaborador ativo; `tok` é o link dele, se já gerou algum. */
+interface LinhaAcesso { emp: Employee; tok?: PortalToken; situacao: SituacaoAcesso }
+
+const ACESSOS_COLUMNS: StandardTableColumn[] = [
+    { key: 'name',         label: 'Colaborador',   sortable: true, width: 240 },
+    { key: 'role',         label: 'Cargo',         sortable: true, width: 200 },
+    { key: 'situacao',     label: 'Situação',      sortable: true, width: 150 },
+    { key: 'expires_at',   label: 'Expira em',     sortable: true, width: 160 },
+    { key: 'last_used_at', label: 'Último acesso', sortable: true, width: 180 },
+];
+
+// "Agrupar" dos acessos (guia de UI §6.12). Chave = o MESMO texto que a célula mostra.
+// Constante de módulo: o StandardTable memoiza os grupos pela identidade deste objeto.
+const SEM_GRUPO_ACESSO: Record<string, string> = { situacao: 'Sem situação', role: 'Sem cargo' };
+const AGRUPAR_ACESSOS = {
+    opcoes: [
+        { value: 'situacao', label: 'Situação' },
+        { value: 'role', label: 'Cargo' },
+    ],
+    chave: (campo: string, l: LinhaAcesso) => {
+        switch (campo) {
+            case 'situacao': return chavePorRotulo(l.situacao, SITUACAO_LABEL);
+            case 'role': return chavePorNome(l.emp.role);
+            default: return null;
+        }
+    },
+    semRotulo: (campo: string) => SEM_GRUPO_ACESSO[campo] ?? 'Sem valor',
+    // Situação na ordem do fluxo (ativo → expirado → sem acesso); cargo, alfabética.
+    ordem: (campo: string): 'rotulo' | string[] => (campo === 'situacao' ? Object.keys(SITUACAO_LABEL) : 'rotulo'),
+    title: 'Agrupar os colaboradores',
+};
+
+const fmtDataHora = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : null;
+
 interface PortalManagementProps {
     orgId: string | null;
     employees: Employee[];
@@ -540,7 +580,12 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
     // (`enabled: !!portalToken`) e a prévia mostraria a seção vazia, dando a
     // impressão de que o colaborador não tem treinamento nenhum.
     const [previewEmployee, setPreviewEmployee] = useState<{ id: string; token: string } | null>(null);
-    const [search, setSearch] = usePersistedState<string>('laborPortal:search', '');
+    // Toast §13
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
 
     const tokensKey = ['portal', 'tokens', orgId];
 
@@ -554,12 +599,13 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
 
     const revokeMutation = useMutation({
         mutationFn: (id: string) => atsService.revokePortalToken(id),
-        onSuccess: invalidate,
+        onSuccess: () => { invalidate(); notify('Acesso revogado.'); },
+        onError: (e: Error) => notify(e.message || 'Não foi possível revogar o acesso.', 'error'),
     });
 
     const handleGenerate = async (emp: Employee) => {
         if (!orgId) {
-            alert('Selecione uma organização antes de gerar o acesso.');
+            notify('Selecione uma organização no topo antes de gerar o acesso.', 'error');
             return;
         }
         setGeneratingId(emp.id);
@@ -570,7 +616,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
             setTimeout(() => setCopiedToken(null), 3000);
             invalidate();
         } catch (err: any) {
-            alert('Erro: ' + err.message);
+            notify(err?.message || 'Não foi possível gerar o acesso.', 'error');
         } finally { setGeneratingId(null); }
     };
 
@@ -581,26 +627,22 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
         setTimeout(() => setCopiedToken(null), 3000);
     };
 
-    const tokenByEmployee = new Map(tokens.map(t => [t.employee_id, t]));
-    const activeEmployees = employees.filter(e =>
-        e.status === 'ATIVO' &&
-        (!search || e.name.toLowerCase().includes(search.toLowerCase()))
-    );
+    // `useMemo`: o StandardTable zera a página/agrupamento pela identidade de `rows`.
+    const linhas = useMemo<LinhaAcesso[]>(() => {
+        const tokenByEmployee = new Map(tokens.map(t => [t.employee_id, t]));
+        const agora = new Date().toISOString();
+        return employees.filter(e => e.status === 'ATIVO').map(emp => {
+            const tok = tokenByEmployee.get(emp.id);
+            const expirado = !!tok && tok.expires_at < agora;
+            const situacao: SituacaoAcesso = tok && tok.is_active && !expirado ? 'ativo' : expirado ? 'expirado' : 'sem_acesso';
+            return { emp, tok, situacao };
+        });
+    }, [employees, tokens]);
+
+    const semOrg = !orgId;
 
     return (
-        <div className="space-y-6">
-            {/* Info */}
-            <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-3">
-                <Smartphone className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-                <div>
-                    <p className="text-xs font-black text-indigo-900">Portal do Colaborador</p>
-                    <p className="text-xs text-indigo-700 mt-1">
-                        Gere um link seguro para cada colaborador acessar seu portal via celular.
-                        O link expira em 30 dias. Não é necessário criar conta — basta o link.
-                    </p>
-                </div>
-            </div>
-
+        <>
             {/* Preview do Portal */}
             {previewEmployee && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -615,76 +657,95 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                 </div>
             )}
 
-            {/* Controls */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 justify-between">
-                <p className="text-sm font-black text-slate-700">{activeEmployees.length} colaboradores ativos</p>
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-44" />
-                </div>
-            </div>
-
-            {/* Lista */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                {isLoading ? <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-indigo-500 animate-spin" /></div>
-                : activeEmployees.length === 0 ? (
-                    <div className="text-center py-16">
-                        <User className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                        <p className="text-sm font-black text-slate-400">Nenhum colaborador ativo</p>
-                    </div>
-                ) : (
-                    <div className="divide-y divide-slate-50">
-                        {activeEmployees.map(emp => {
-                            const tok = tokenByEmployee.get(emp.id);
-                            const isExpired = tok && tok.expires_at < new Date().toISOString();
-                            const copied = copiedToken === tok?.id || copiedToken === emp.id;
-                            const generating = generatingId === emp.id;
-
+            <StandardTable<LinhaAcesso>
+                storageKey="rh:portal-colaborador:acessos"
+                columns={ACESSOS_COLUMNS}
+                rows={linhas}
+                rowKey={l => l.emp.id}
+                loading={isLoading}
+                searchText={l => `${l.emp.name} ${l.emp.role ?? ''}`}
+                searchPlaceholder="Buscar por colaborador ou cargo..."
+                agrupamento={AGRUPAR_ACESSOS}
+                sortValue={(k, l) => {
+                    switch (k) {
+                        case 'name': return l.emp.name;
+                        case 'role': return l.emp.role ?? '';
+                        case 'situacao': return SITUACAO_LABEL[l.situacao];
+                        case 'expires_at': return l.tok?.expires_at ?? '';
+                        case 'last_used_at': return l.tok?.last_used_at ?? '';
+                        default: return '';
+                    }
+                }}
+                renderCell={(k, l) => {
+                    switch (k) {
+                        case 'name': return <span className="block truncate text-sm font-normal text-gray-700" title={l.emp.name}>{l.emp.name}</span>;
+                        case 'role': return <span className="block truncate text-sm font-normal text-gray-600" title={l.emp.role}>{l.emp.role || '—'}</span>;
+                        case 'situacao': return <span className={`text-sm font-normal ${SITUACAO_COR[l.situacao]}`}>{SITUACAO_LABEL[l.situacao]}</span>;
+                        case 'expires_at': return <span className="text-sm font-normal text-gray-600">{l.tok ? fmtDataHora(l.tok.expires_at) : '—'}</span>;
+                        case 'last_used_at': return <span className="text-sm font-normal text-gray-600">{fmtDataHora(l.tok?.last_used_at) ?? (l.tok ? <span className="text-gray-400">Nunca</span> : '—')}</span>;
+                        default: return null;
+                    }
+                }}
+                actions={{
+                    width: 260,
+                    render: ({ emp, tok, situacao }) => {
+                        const generating = generatingId === emp.id;
+                        if (tok && situacao === 'ativo') {
+                            const copied = copiedToken === tok.id || copiedToken === emp.id;
                             return (
-                                <div key={emp.id} className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50/50">
-                                    <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-sm font-black text-indigo-600 shrink-0">
-                                        {emp.name.charAt(0)}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-slate-900">{emp.name}</p>
-                                        <p className="text-xs text-slate-400">{emp.role}</p>
-                                    </div>
-                                    {tok && tok.is_active && !isExpired ? (
-                                        <div className="flex items-center gap-2 shrink-0">
-                                            <div className="flex items-center gap-1 text-xs font-bold text-emerald-700">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                                Ativo
-                                                {tok.last_used_at && <span className="text-slate-400 ml-1">· Último acesso {tok.last_used_at.split('T')[0]}</span>}
-                                            </div>
-                                            <button onClick={() => setPreviewEmployee({ id: emp.id, token: tok.token })} className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-400 hover:text-indigo-600 transition-colors" title="Prévia do portal">
-                                                <Smartphone className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button onClick={() => handleCopy(tok)} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-black transition-all ${copied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                                                {copied ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                                                {copied ? 'Copiado!' : 'Copiar link'}
-                                            </button>
-                                            <button onClick={() => handleGenerate(emp)} disabled={generating} className="p-1.5 hover:bg-amber-50 rounded-lg text-slate-300 hover:text-amber-500 transition-colors" title="Regenerar token">
-                                                {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                                            </button>
-                                            <ActionIconButton kind="delete" size="sm" title="Revogar acesso ao portal" onClick={async () => { const ok = await confirm({ title: 'Revogar acesso ao portal?', message: 'O colaborador perderá o acesso até que um novo link seja gerado.', variant: 'danger', confirmLabel: 'Revogar' }); if (ok) revokeMutation.mutate(tok.id); }} />
-                                        </div>
-                                    ) : (
-                                        <button
-                                            onClick={() => handleGenerate(emp)}
-                                            disabled={generating}
-                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${generating ? 'bg-slate-100 text-slate-400' : 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700'}`}
-                                        >
-                                            {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
-                                            {generating ? 'Gerando...' : (isExpired ? 'Renovar' : 'Gerar acesso')}
-                                        </button>
-                                    )}
+                                <div className="flex items-center justify-end gap-1.5">
+                                    <ActionIconButton kind="view" icon={<Smartphone className="w-4 h-4" />} title="Prévia do portal — ver como este colaborador"
+                                        onClick={() => setPreviewEmployee({ id: emp.id, token: tok.token })} />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCopy(tok)}
+                                        className="flex items-center gap-1 h-8 px-2 rounded-[6px] text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-all"
+                                    >
+                                        {copied ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                        {copied ? 'Copiado!' : 'Copiar link'}
+                                    </button>
+                                    <ActionIconButton kind="edit" icon={generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                        title={semOrg ? 'Selecione uma organização no topo para regenerar o link' : 'Regenerar link — o anterior deixa de valer'}
+                                        disabled={generating || semOrg} onClick={() => handleGenerate(emp)} />
+                                    <ActionIconButton kind="delete" title="Revogar acesso ao portal" onClick={async () => {
+                                        const ok = await confirm({ title: 'Revogar acesso ao portal?', message: 'O colaborador perderá o acesso até que um novo link seja gerado.', variant: 'danger', confirmLabel: 'Revogar' });
+                                        if (ok) revokeMutation.mutate(tok.id);
+                                    }} />
                                 </div>
                             );
-                        })}
-                    </div>
-                )}
-            </div>
-        </div>
+                        }
+                        return (
+                            <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => handleGenerate(emp)}
+                                    disabled={generating || semOrg}
+                                    title={semOrg ? 'Selecione uma organização no topo para gerar o acesso' : undefined}
+                                    className="flex items-center gap-1.5 h-8 px-2 rounded-[6px] text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                >
+                                    {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+                                    {generating ? 'Gerando...' : (situacao === 'expirado' ? 'Renovar' : 'Gerar acesso')}
+                                </button>
+                            </div>
+                        );
+                    },
+                }}
+                empty={{
+                    icon: <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                    title: 'Nenhum colaborador ativo',
+                    subtitle: 'Cadastre colaboradores em Recursos Humanos para gerar o acesso ao portal.',
+                }}
+            />
+
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
+            )}
+        </>
     );
 };
 
@@ -697,11 +758,25 @@ interface LaborPortalProps {
     onRefresh?: () => void;
 }
 
+// Título e subtítulo acompanham a aba ativa (§19.1/§20) — aba que troca o conteúdo
+// inteiro sem trocar o <h1> deixa o título mentindo.
+type LaborPortalView = 'management' | 'portal';
+const VIEW_HEADERS: Record<LaborPortalView, { title: string; subtitle: string }> = {
+    management: {
+        title: 'Portal do Colaborador',
+        subtitle: 'Link self-service para ponto, férias, documentos e holerite pelo celular. O link expira em 30 dias e não exige conta.',
+    },
+    portal: {
+        title: 'Prévia do portal',
+        subtitle: 'Veja o portal como um colaborador o vê no celular.',
+    },
+};
+
 const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizations = [], onRefresh }) => {
     const initialTokenParam = new URLSearchParams(window.location.search).get('portal_token');
     const [tokenParam] = useState(initialTokenParam);
     const [portalSession, setPortalSession] = useState<{ employeeId: string; orgId: string | null } | null>(null);
-    const [view, setView] = useState<'management' | 'portal'>('management');
+    const [view, setView] = useState<LaborPortalView>('management');
 
     return (
         <div className="h-full">
@@ -715,8 +790,8 @@ const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizatio
                 <div className="space-y-6">
                     {/* 1. Título */}
                     <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal do Colaborador</h1>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">Link self-service: ponto, férias, documentos e holerite pelo celular.</p>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">{VIEW_HEADERS[view].title}</h1>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[view].subtitle}</p>
                     </div>
 
                     {/* Toolbar de abas (§19.1) */}
@@ -735,11 +810,11 @@ const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizatio
 
                     {view === 'portal' && (
                         <div className="flex flex-col items-center justify-center py-12 gap-4">
-                            <div className="p-4 bg-slate-50 rounded-3xl border border-slate-200 w-full max-w-sm">
-                                <p className="text-sm font-black text-slate-700 mb-3 text-center">Simular Portal como Colaborador</p>
+                            <div className="p-4 bg-white rounded-[10px] border border-gray-100 shadow-sm w-full max-w-sm space-y-1.5">
+                                <label className="text-xs font-semibold text-gray-500">Simular portal como colaborador</label>
                                 <select
                                     onChange={e => e.target.value && setPortalSession({ employeeId: e.target.value, orgId })}
-                                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100"
+                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 >
                                     <option value="">Selecione um colaborador...</option>
                                     {employees.filter(e => e.status === 'ATIVO').map(e => (

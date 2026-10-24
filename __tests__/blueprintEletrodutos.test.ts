@@ -38,6 +38,7 @@ import { POLITICA_PADRAO, computeQuantities } from '../utils/blueprintKernel';
 import { medidasDoTerminal } from '../utils/blueprintRede';
 import { itensDaLegendaEletrica } from '../utils/blueprintPranchaEletrica';
 import { materiaisEletricos } from '../utils/blueprintListaDeMateriaisEletrica';
+import { paredesDoForro } from '../utils/blueprintRotaPeloForro';
 
 /** Sala 6 × 4; QDC a 1.600; C1 = luz de teto (a 2.800 = teto) + interruptor; C2 (FFF) = duas TUG; um ponto solto. */
 function casa() {
@@ -653,6 +654,21 @@ const trechoEntre = (cmds: Command[], a: XY, b: XY, cota: number) =>
   horizontais(cmds).find((c) => c.cotaAMm === cota && c.cotaBMm === cota && ((mesmo(c.a, a) && mesmo(c.b, b)) || (mesmo(c.a, b) && mesmo(c.b, a))));
 const descidaEm = (cmds: Command[], p: XY, de: number, ate: number) =>
   prumadas(cmds).find((c) => mesmo(c.a, p) && ((c.cotaAMm === de && c.cotaBMm === ate) || (c.cotaAMm === ate && c.cotaBMm === de)));
+/** O grafo dos trechos novos não tem ANEL: arestas = nós − componentes. */
+const semAnel = (cmds: Command[]) => {
+  const no = (p: XY, z: number) => `${p.x},${p.y},${z}`;
+  const pai = new Map<string, string>();
+  const raiz = (k: string): string => {
+    let r = k;
+    while (pai.get(r) !== r) r = pai.get(r)!;
+    return r;
+  };
+  const ts = adds(cmds);
+  for (const c of ts) for (const k of [no(c.a, c.cotaAMm), no(c.b, c.cotaBMm)]) if (!pai.has(k)) pai.set(k, k);
+  for (const c of ts) pai.set(raiz(no(c.a, c.cotaAMm)), raiz(no(c.b, c.cotaBMm)));
+  const componentes = new Set([...pai.keys()].map(raiz)).size;
+  return ts.length === pai.size - componentes;
+};
 
 describe('24/10/2026 — pela luz do ambiente (padrão): quadro → luz do ambiente → tomadas', () => {
   const LUZ = { x: 3000, y: 2000 };
@@ -738,21 +754,6 @@ describe('24/10/2026 — pela luz do ambiente (padrão): quadro → luz do ambie
   // ─── Correção 1 (24/10/2026) ───
   const Q = { x: 75, y: 1000 };
   const tetoHz = (cmds: Command[]) => horizontais(cmds).filter((c) => c.cotaAMm === 2800 && c.cotaBMm === 2800);
-  /** O grafo dos trechos novos não tem ANEL: arestas = nós − componentes. */
-  const semAnel = (cmds: Command[]) => {
-    const no = (p: XY, z: number) => `${p.x},${p.y},${z}`;
-    const pai = new Map<string, string>();
-    const raiz = (k: string): string => {
-      let r = k;
-      while (pai.get(r) !== r) r = pai.get(r)!;
-      return r;
-    };
-    const ts = adds(cmds);
-    for (const c of ts) for (const k of [no(c.a, c.cotaAMm), no(c.b, c.cotaBMm)]) if (!pai.has(k)) pai.set(k, k);
-    for (const c of ts) pai.set(raiz(no(c.a, c.cotaAMm)), raiz(no(c.b, c.cotaBMm)));
-    const componentes = new Set([...pai.keys()].map(raiz)).size;
-    return ts.length === pai.size - componentes;
-  };
 
   it('PORTA entre duas tomadas da mesma parede: nenhum trecho na cota da tomada cruza o vão (as duas descem da luz)', () => {
     // Parede leste (6000, 0)→(6000, 4000): porta de 1100 a 1500, entre T1 (y = 1000) e T2 (y = 1600).
@@ -947,10 +948,10 @@ describe('24/10/2026 — pela luz do ambiente (padrão): quadro → luz do ambie
 // cômodo, recuada da face) e de lá a descida do forro. O ambiente sem luz segue pelos anéis, como antes.
 
 /** Dois cômodos 3 × 4 (Sala x < 3000, Cozinha), vigas de 15 × 40 sobre todas as paredes; QDC em (75, 1000) a 1,60 m. */
-function comForro(pontos: PontoDoComodo[]) {
+const EIXOS_DO_FORRO: [number, number, number, number][] = [[0, 0, 6000, 0], [6000, 0, 6000, 4000], [6000, 4000, 0, 4000], [0, 4000, 0, 0], [3000, 0, 3000, 4000]];
+function comForro(pontos: PontoDoComodo[], eixos = EIXOS_DO_FORRO) {
   const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   const t = base.levels[0].id;
-  const eixos: [number, number, number, number][] = [[0, 0, 6000, 0], [6000, 0, 6000, 4000], [6000, 4000, 0, 4000], [0, 4000, 0, 0], [3000, 0, 3000, 4000]];
   let m = applyBatch(base, eixos.map(([ax, ay, bx, by]) => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }) as Command)).model;
   m = applyBatch(m, eixos.map(([ax, ay, bx, by]) => ({ type: 'AddStructural', levelId: t, kind: 'VIGA', pontos: [{ x: ax, y: ay }, { x: bx, y: by }], larguraMm: 150, alturaMm: 400, baseMm: 2400 }) as unknown as Command)).model;
   for (const s of [...m.spaces]) m = applyCommand(m, { type: 'NameSpace', spaceId: s.id, name: s.ring.some((p) => p.x === 0) ? 'Sala' : 'Cozinha' }).model;
@@ -1062,5 +1063,93 @@ describe('24/10/2026 (Task 3) — pela luz do ambiente NO FORRO', () => {
     expect(tocam(plano.comandos, qA)).toHaveLength(1);
     expect(chega.a.y === 125 && chega.b.y === 125).toBe(false);
     expect(desceDaFaixaEm(plano.comandos, qA)).toBeDefined();
+  });
+
+  // ─── 24/10/2026: luz × luz de cômodos diferentes pelas TRAVESSIAS previstas (`docs/planos/2026-10-24-forro-luz-pelas-travessias.md`) ───
+  // *"quer que, no forro, a ligação entre luzes de cômodos diferentes use as passagens já previstas junto às paredes?"* — *"sim"*.
+  const LS = { x: 1500, y: 1000 }; // luz da Sala
+  const LC = { x: 4500, y: 1000 }; // luz da Cozinha: a reta LS → LC cruzaria a viga da divisória em y = 1000, fora das travessias
+  const doisComodosComLuz = () => comForro([{ ...LS, tipo: 'ILUMINACAO_TETO' }, { ...LC, tipo: 'ILUMINACAO_TETO' }]);
+  const travessiasDe = (m: BlueprintModel, t: string) => paredesDoForro(m, t, NO_FORRO.faixa.afastamentoDaFaceMm).filter((w) => w.id.startsWith('forro:travessia:'));
+  /** O trecho da faixa corta o eixo da divisória (x = 3000)? */
+  const cruzaADivisoria = (c: { a: XY; b: XY }) => Math.min(c.a.x, c.b.x) < 3000 && Math.max(c.a.x, c.b.x) > 3000;
+  /** Hash curto (FNV-1a) — para provar que um plano não mudou. */
+  const fnv = (s: string) => {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0;
+    return h.toString(16);
+  };
+
+  it('⚠️ PRONTO QUANDO: luz da Sala → luz da Cozinha pelas pontas de UMA travessia (luz → ponta na Sala → ponta na Cozinha → luz); nenhum trecho da faixa cruza a divisória fora dela', () => {
+    const { m, t } = doisComodosComLuz();
+    const travessias = travessiasDe(m, t);
+    expect(travessias.length).toBeGreaterThan(0);
+    const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
+    expect(plano.motivo).toBeNull();
+    // A reta de antes (luz → luz, pela viga) não existe mais.
+    expect(trechoEntre(plano.comandos, LS, LC, FAIXA)).toBeUndefined();
+    // Todo trecho da faixa que cruza a divisória É uma travessia prevista — e há exatamente um.
+    const cruzam = naFaixa(plano.comandos).filter(cruzaADivisoria);
+    expect(cruzam).toHaveLength(1);
+    const usada = travessias.find((w) => trechoEntre(plano.comandos, w.a, w.b, FAIXA))!;
+    expect(usada).toBeDefined();
+    const [naSala, naCozinha] = usada.a.x < 3000 ? [usada.a, usada.b] : [usada.b, usada.a];
+    expect(trechoEntre(plano.comandos, LS, naSala, FAIXA)).toBeDefined();
+    expect(trechoEntre(plano.comandos, naCozinha, LC, FAIXA)).toBeDefined();
+    // A luz da Cozinha leva o circuito pela travessia até o quadro.
+    expect(trechoEntre(plano.comandos, usada.a, usada.b, FAIXA)!.circuitoIds!.length).toBeGreaterThan(0);
+  });
+
+  it('travessia com a ponta dentro de um obstáculo da faixa (a prumada da fria): não é usada — a luz vai por outra', () => {
+    const { m: m0, t } = doisComodosComLuz();
+    const usadaAntes = travessiasDe(m0, t).find((w) => trechoEntre(planejarEletrodutos(m0, quadroDe(m0), FORRO).comandos, w.a, w.b, FAIXA))!;
+    const ponta = usadaAntes.a.x < 3000 ? usadaAntes.a : usadaAntes.b;
+    const m = applyCommand(m0, { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(ponta.x, ponta.y), b: point(ponta.x, ponta.y), cotaAMm: 0, cotaBMm: 2800, bitolaMm: 25 } as Command).model;
+    const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
+    for (const p of [usadaAntes.a, usadaAntes.b]) expect(tocam(plano.comandos, p)).toEqual([]);
+    const cruzam = naFaixa(plano.comandos).filter(cruzaADivisoria);
+    expect(cruzam).toHaveLength(1);
+    expect(travessiasDe(m, t).some((w) => w.id !== usadaAntes.id && trechoEntre(plano.comandos, w.a, w.b, FAIXA))).toBe(true);
+    expect(plano.avisos.filter((a) => /sem contorno/.test(a))).toEqual([]);
+  });
+
+  it('mesmo cômodo, duas luzes: continua a reta luz → luz (nenhuma travessia usada)', () => {
+    const L2 = { x: 2000, y: 3000 };
+    const { m, t } = comForro([{ ...LS, tipo: 'ILUMINACAO_TETO' }, { ...L2, tipo: 'ILUMINACAO_TETO' }]);
+    const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
+    expect(trechoEntre(plano.comandos, LS, L2, FAIXA)).toBeDefined();
+    for (const w of travessiasDe(m, t)) expect(tocam(plano.comandos, w.a).length + tocam(plano.comandos, w.b).length).toBe(0);
+  });
+
+  it('cômodos SEM travessia (a parede comum tem só 30 cm): a luz é ligada mesmo assim, pela reta, como antes', () => {
+    // Sala 3 × 4; Cozinha 3 × 4 deslocada para cima — as duas dividem só y 3700…4000 da parede x = 3000.
+    const eixos: [number, number, number, number][] = [[0, 0, 3000, 0], [3000, 0, 3000, 7700], [3000, 4000, 0, 4000], [0, 4000, 0, 0], [3000, 3700, 6000, 3700], [6000, 3700, 6000, 7700], [6000, 7700, 3000, 7700]];
+    const LS2 = { x: 1500, y: 2000 };
+    const LC2 = { x: 4500, y: 5500 };
+    const { m, t } = comForro([{ ...LS2, tipo: 'ILUMINACAO_TETO' }, { ...LC2, tipo: 'ILUMINACAO_TETO' }], eixos);
+    expect(travessiasDe(m, t)).toEqual([]);
+    const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
+    expect(plano.motivo).toBeNull();
+    expect(trechoEntre(plano.comandos, LS2, LC2, FAIXA)).toBeDefined();
+    expect(descidaEm(plano.comandos, LC2, FAIXA, 2500)).toBeDefined();
+  });
+
+  it('sem anel (arestas = nós − componentes) e idempotente: aplicado, nada mais a lançar', () => {
+    const TS = { x: 1600, y: 75 }; // tomada da Sala: desce da luz da Sala
+    const TC = { x: 5925, y: 2000 }; // tomada da Cozinha: desce da luz da Cozinha
+    const { m } = comForro([{ ...LS, tipo: 'ILUMINACAO_TETO' }, { ...LC, tipo: 'ILUMINACAO_TETO' }, { ...TS, tipo: 'TUG' }, { ...TC, tipo: 'TUG' }]);
+    const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
+    expect(naFaixa(plano.comandos).filter(cruzaADivisoria)).toHaveLength(1);
+    expect(semAnel(plano.comandos)).toBe(true);
+    const depois = applyBatch(m, plano.comandos).model;
+    expect(planejarEletrodutos(depois, quadroDe(depois), FORRO)).toMatchObject({ aLigar: 0, comandos: [], motivo: 'todos os pontos já têm eletroduto' });
+  });
+
+  it('ARVORE_NO_TETO com forro: os comandos de antes da mudança, idênticos (hash medido no HEAD 0f3a20d8)', () => {
+    const { m } = doisComodosComLuz();
+    const arvore = planejarEletrodutos(m, quadroDe(m), { ...FORRO, encaminhamento: 'ARVORE_NO_TETO' });
+    // A árvore de antes liga luz → luz em reta, pela viga.
+    expect(trechoEntre(arvore.comandos, LS, LC, FAIXA)).toBeDefined();
+    expect(fnv(JSON.stringify(arvore.comandos))).toBe('cd0bef12');
   });
 });

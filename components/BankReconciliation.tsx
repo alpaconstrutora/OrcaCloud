@@ -47,6 +47,7 @@ import { RodapePaginacao, usePaginacaoEmMemoria } from './ui/RodapePaginacao';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { entradasDaPagina, linhasDaTela, type EntradaDaTela } from '../utils/agruparLinhas';
+import { combinaComBusca } from '../utils/buscaPendentes';
 import {
     agruparExtrato, agruparLancamentos, OPCOES_AGRUPAR_EXTRATO, OPCOES_AGRUPAR_LANCAMENTO, TITULO_SALDO_DO_GRUPO,
     type CampoAgruparExtrato, type CampoAgruparLancamento,
@@ -430,7 +431,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         let filtered = [...bankTransactions];
         if (bankSearch) {
             const search = bankSearch.toLowerCase();
-            filtered = filtered.filter(tx => 
+            filtered = filtered.filter(tx =>
                 (tx.description_normalized || tx.description_raw || '').toLowerCase().includes(search) ||
                 (tx.category || '').toLowerCase().includes(search) ||
                 (tx.counterparty_name || '').toLowerCase().includes(search)
@@ -511,16 +512,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         [sortedBankTransactions, statementPageStart, statementPageSize]
     );
 
-    const sortedInternalTransactions = useMemo(() => {
+    // Filtros e ordem dos lançamentos SEM a busca de texto: ela precisa de displayTitle/txCode/…,
+    // declarados mais abaixo (ver `sortedInternalTransactions`).
+    const internalSemBusca = useMemo(() => {
         let filtered = [...internalTransactions];
-        if (internalSearch) {
-            const search = internalSearch.toLowerCase();
-            filtered = filtered.filter(tx => 
-                (tx.description || '').toLowerCase().includes(search) ||
-                (tx.category || '').toLowerCase().includes(search) ||
-                (tx.entity_name || '').toLowerCase().includes(search)
-            );
-        }
         if (internalCategoryFilter.includes('__none__') && internalCategoryFilter.length === 1) {
             filtered = filtered.filter(tx => !tx.category);
         } else if (internalCategoryFilter.includes('__none__')) {
@@ -563,7 +558,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (valA > valB) return internalSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [internalTransactions, internalSortOrder, internalSortField, internalSearch, internalCategoryFilter, internalEntityFilter, flowFilter]);
+    }, [internalTransactions, internalSortOrder, internalSortField, internalCategoryFilter, internalEntityFilter, flowFilter]);
 
 
     const sortedMatches = useMemo(() => {
@@ -672,6 +667,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         const due = (tx as { due_date?: string | null }).due_date;
         return due || tx.transaction_date;
     };
+
+    // Busca dos Lançamentos: acha o que a coluna Descrição MOSTRA (título resolvido, "Nº" de origem,
+    // rótulo do módulo) e também o texto cru, categoria e cliente/credor. Mantém a ordem de `internalSemBusca`.
+    const sortedInternalTransactions = useMemo(
+        () => (internalSearch
+            ? internalSemBusca.filter(tx => combinaComBusca(internalSearch, [
+                tx.description, tx.category, tx.entity_name,
+                displayTitle(tx), displayPartyName(tx), txCode(tx), getSourceMeta(tx.source_system)?.label,
+            ]))
+            : internalSemBusca),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [internalSemBusca, internalSearch, originPartyNames, supplierNameById, originCodes],
+    );
 
     // Maps/Sets O(1) — evitam .find()/.some() lineares repetidos no render de cada card
     const projectNameById = useMemo(

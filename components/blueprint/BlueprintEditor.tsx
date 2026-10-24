@@ -426,6 +426,8 @@ import ReguaDoTempo from './ReguaDoTempo';
 import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
 import SecaoPlantaEletrica from '../preferencias/SecaoPlantaEletrica';
+import SecaoExibicaoDaPlanta from '../preferencias/SecaoExibicaoDaPlanta';
+import { consequenciasDaEscolha } from '../../utils/preferencias/catalogoExibir';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, MenuDoRibbon, abaEfetiva } from './Ribbon';
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
@@ -536,6 +538,7 @@ import PainelTopografia from './PainelTopografia';
 import QuadroDeDivisas from './QuadroDeDivisas';
 import { useConfirm } from '../ui/confirm';
 import { usePersistedState } from '../ui/TableUtils';
+import { useMigracaoDaExibicaoDaPlanta, usePreferenciaDaPlanta } from '../../hooks/usePreferenciaDaPlanta';
 import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../../hooks/useOrgContext';
 import { useBlueprintMateriais } from '../../hooks/useBlueprintMateriais';
 import TelaMateriais from './TelaMateriais';
@@ -950,20 +953,6 @@ type PontaSolta = { p: Point; wallId: string; end: 'a' | 'b'; oposta: Point };
  * deslocados alguns centímetros um do outro (as faces do PDF não são exatas), e
  * recusar isso mataria vãos legítimos.
  */
-/**
- * Migração do Terreno do 3D (12/10/2026): a chave antiga `blueprint:vista3dTerreno`
- * guardava um booleano desligado por padrão. `true` lá foi escolha de quem ligou
- * — continua ligado; `false` ou ausente vira AUTOMÁTICO (`null`). Só vale
- * enquanto a chave nova não existe (é o padrão do `usePersistedState`).
- */
-function terreno3dDaChaveAntiga(): boolean | null {
-  try {
-    return typeof window !== 'undefined' && JSON.parse(localStorage.getItem('blueprint:vista3dTerreno') ?? 'null') === true ? true : null;
-  } catch {
-    return null;
-  }
-}
-
 const DESALINHO_MAX_MM = 150;
 
 /**
@@ -1761,24 +1750,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   }, []);
   /** A prancha que "Exportar a vista atual" deixa marcada ao abrir Versões. */
   const [pranchaParaExportar, setPranchaParaExportar] = useState<PranchaExport[] | undefined>(undefined);
-  const [mostrarCotasAltura, setMostrarCotasAltura] = usePersistedState(
-    'blueprint:vistaCotasAltura',
-    true,
-  );
+  const [mostrarCotasAltura, setMostrarCotasAltura] = usePreferenciaDaPlanta<boolean>('vistaCotasAltura');
   // MEDIDAS NO CORTE DO TERRENO (13/10/2026): níveis + corte/aterro, e os comprimentos.
-  const [mostrarCotasDoTerrenoNoCorte, setMostrarCotasDoTerrenoNoCorte] = usePersistedState('blueprint:corteCotasDoTerreno', true);
-  const [mostrarComprimentosNoCorte, setMostrarComprimentosNoCorte] = usePersistedState('blueprint:corteComprimentos', true);
-  const [mostrarReguaNaVista, setMostrarReguaNaVista] = usePersistedState('blueprint:vistaRegua', true);
+  const [mostrarCotasDoTerrenoNoCorte, setMostrarCotasDoTerrenoNoCorte] = usePreferenciaDaPlanta<boolean>('corteCotasDoTerreno');
+  const [mostrarComprimentosNoCorte, setMostrarComprimentosNoCorte] = usePreferenciaDaPlanta<boolean>('corteComprimentos');
+  const [mostrarReguaNaVista, setMostrarReguaNaVista] = usePreferenciaDaPlanta<boolean>('vistaRegua');
   /** MEDIR NA VISTA (13/10/2026): o modo de medir do corte/elevação — não persiste, é um gesto. */
   const [medindoNaVista, setMedindoNaVista] = useState(false);
-  const [mostrarRotulosEsquadria, setMostrarRotulosEsquadria] = usePersistedState(
-    'blueprint:vistaRotulosEsquadria',
-    true,
-  );
-  const [mostrarParedesInternas, setMostrarParedesInternas] = usePersistedState(
-    'blueprint:vistaParedesInternas',
-    false,
-  );
+  const [mostrarRotulosEsquadria, setMostrarRotulosEsquadria] = usePreferenciaDaPlanta<boolean>('vistaRotulosEsquadria');
+  const [mostrarParedesInternas, setMostrarParedesInternas] = usePreferenciaDaPlanta<boolean>('vistaParedesInternas');
   /**
    * LIGADO por padrão, ao contrário das paredes internas.
    *
@@ -1787,10 +1767,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * vê-lo, e uma elevação que esconde por padrão o que acabou de ser desenhado
    * parece defeito, não preferência.
    */
-  const [mostrarEstruturaVista, setMostrarEstruturaVista] = usePersistedState(
-    'blueprint:vistaEstrutura',
-    true,
-  );
+  const [mostrarEstruturaVista, setMostrarEstruturaVista] = usePreferenciaDaPlanta<boolean>('vistaEstrutura');
   /**
    * PISOS E LAJES no 3D (27/09/2026): um botão só para a laje fina do piso E a
    * laje ESTRUTURAL — antes ele só mexia na fina, e a L1 ficava na tela ("botão
@@ -1798,7 +1775,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * LIGADO: a antiga guardava `false` (o padrão dela), e herdá-la sumiria com as
    * lajes estruturais de quem nunca tocou no botão.
    */
-  const [mostrarLaje3d, setMostrarLaje3d] = usePersistedState('blueprint:vista3dPisosELajes', true);
+  const [mostrarLaje3d, setMostrarLaje3d] = usePreferenciaDaPlanta<boolean>('vista3dPisosELajes');
   /**
    * Hipóteses do pré-dimensionamento elétrico — do ESTUDO, em
    * `blueprint_study_eletrica` (F7, 13/09/2026). Moravam no navegador, e duas
@@ -1809,6 +1786,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // Preferências da planta elétrica (23/10/2026): quais textos elétricos o canvas escreve. A organização é a
   // DO ESTUDO aberto (REGRA #5), nunca `organizations[0]`; a TELA é do usuário, a prancha vive no painel de versões.
   const preferenciasEletricas = usePreferenciasEletricas({ organizationId: study.organization_id, studyId: study.id });
+  // Migra UMA vez as escolhas de exibição guardadas neste navegador para as preferências do usuário.
+  useMigracaoDaExibicaoDaPlanta();
   // F2 (incêndio pós-roadmap): os kits de inserção da organização DO ESTUDO (REGRA #5 — a planta é
   // dela). Falha ao carregar = sem kit da organização (o kit padrão continua); o painel mostra o erro.
   const [kitsDaOrg, setKitsDaOrg] = useState<KitDeInsercao[]>([]);
@@ -1837,13 +1816,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const entornoDoEstudo = useBlueprintEntorno(study.id, study.organization_id);
   const hipotesesDeArmadura = armaduraDoEstudo.hipoteses;
   /** ARMADURA no 3D (16/09/2026): as barras do esquema, com o concreto translúcido. Nasce desligada. */
-  const [mostrarArmadura3d, setMostrarArmadura3d] = usePersistedState<boolean>('blueprint:vista3dArmadura', false);
-  const [mostrarArestas3d, setMostrarArestas3d] = usePersistedState(
-    'blueprint:vista3dArestas',
-    true,
-  );
+  const [mostrarArmadura3d, setMostrarArmadura3d] = usePreferenciaDaPlanta<boolean>('vista3dArmadura');
+  const [mostrarArestas3d, setMostrarArestas3d] = usePreferenciaDaPlanta<boolean>('vista3dArestas');
   /** RÓTULOS ø das redes no 3D (27/09/2026, isométrico sanitário). Nasce ligado. */
-  const [mostrarRotulosDeRede3d, setMostrarRotulosDeRede3d] = usePersistedState<boolean>('blueprint:vista3dRotulosDeRede', true);
+  const [mostrarRotulosDeRede3d, setMostrarRotulosDeRede3d] = usePreferenciaDaPlanta<boolean>('vista3dRotulosDeRede');
   /**
    * PLANTA + 3D LADO A LADO (E10.3, 08/10/2026). Só na planta (e nas vistas
    * dependentes, que SÃO a planta): o 3D ao lado é a mesma cena da aba 3D, com
@@ -1897,13 +1873,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * tem curvas geradas. Era um booleano desligado por padrão, e quem gerava
    * relevo abria o 3D e via só o envelope, chato (*"o terreno 3 com as curvas
    * nao foi gerado"*). Clicar no menu vira escolha explícita, respeitada.
-   * Chave nova (v2): na antiga, `false` era quase sempre o padrão, não uma
-   * escolha; quem tinha LIGADO lá continua ligado.
+   * Hoje é preferência do usuário (`planta.exibir.vista3dTerreno`): "Automático"
+   * é gravado como o texto 'AUTOMATICO' e o hook devolve `null` aqui. A chave
+   * `blueprint:vista3dTerreno:v2` é só o espelho do navegador (sem sessão) e a
+   * origem da migração: na chave antiga (sem v2) `false` era quase sempre o
+   * padrão, não uma escolha, e por isso ela não é lida; `true`/`false` explícitos
+   * da v2 migram para o banco, `null` (automático) é o padrão e não migra.
    */
-  const [terreno3dEscolhido, setTerreno3dEscolhido] = usePersistedState<boolean | null>(
-    'blueprint:vista3dTerreno:v2',
-    terreno3dDaChaveAntiga(),
-  );
+  const [terreno3dEscolhido, setTerreno3dEscolhido] = usePreferenciaDaPlanta<boolean | null>('vista3dTerreno');
   /**
    * Espelho de "há curvas geradas", declarado AQUI porque o hook da topografia
    * vem bem depois no arquivo, e `mostrarTerreno3d` é lido antes dele (o memo
@@ -1913,7 +1890,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [haCurvasGeradas, setHaCurvasGeradas] = useState(false);
   const mostrarTerreno3d = terreno3dEscolhido ?? haCurvasGeradas;
   /** ENVELOPE 3D (E3.3): os prismas edificáveis por pavimento, translúcidos. */
-  const [mostrarEnvelope3d, setMostrarEnvelope3d] = usePersistedState('blueprint:vista3dEnvelope', true);
+  const [mostrarEnvelope3d, setMostrarEnvelope3d] = usePreferenciaDaPlanta<boolean>('vista3dEnvelope');
 
   /**
    * VISTA DEPENDENTE (P2.17): o recorte nomeado que está aberto. É a planta
@@ -2032,8 +2009,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   const [tarefa, setTarefa] = useState<TarefaDoPainel | null>(null);
   const [relatorio, setRelatorio] = useState<RelatorioDoDock | null>(null);
-  /** A gaveta "Preferências da Planta" (aba Preferências › O que exibir). */
-  const [preferenciasAbertas, setPreferenciasAbertas] = useState(false);
+  /**
+   * A gaveta "Preferências da Planta" e a seção que ela mostra (aba Preferências): `'eletrica'` = "O que
+   * exibir" (Elétrica), `'exibicao'` = "Planta, vistas e 3D"; `null` = fechada. Uma gaveta só, nunca duas.
+   */
+  const [secaoDasPreferencias, setSecaoDasPreferencias] = useState<'eletrica' | 'exibicao' | null>(null);
   /**
    * TELAS PRÓPRIAS (15/09/2026, pedido: *"quadro de cargas e unifilar em drawer
    * ficou muito ruim visualização. vamos criar uma tela nova para cada um"*).
@@ -2302,32 +2282,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * LIGADO por padrão: é informação de projeto, e a ausência dela é que era o
    * defeito. Quem desenha só arquitetura desliga uma vez e a escolha fica.
    */
-  const [mostrarCircuitos, setMostrarCircuitos] = usePersistedState(
-    'blueprint:mostrarCircuitos',
-    true,
-  );
+  const [mostrarCircuitos, setMostrarCircuitos] = usePreferenciaDaPlanta<boolean>('mostrarCircuitos');
 
   /** Mostra o comprimento de cada parede no desenho, como uma cota de planta. */
-  const [mostrarMedidas, setMostrarMedidas] = usePersistedState(
-    'blueprint:mostrarMedidas',
-    false,
-  );
+  const [mostrarMedidas, setMostrarMedidas] = usePreferenciaDaPlanta<boolean>('mostrarMedidas');
   /**
    * MEDIDAS DO LOTE E DA MASSA (04/10/2026): *"o desenho gerado através do menu terreno Lote e massa não tem
    * medidas"*; e, no mesmo dia, *"as medidas devem estar nas laterais externas da planta e não dentro da planta"*:
    * cadeias de cota por fora da divisa (lado repartido pela massa + total). Poucas linhas, então nasce LIGADO.
    */
-  const [mostrarMedidasLoteMassa, setMostrarMedidasLoteMassa] = usePersistedState(
-    'blueprint:mostrarMedidasLoteMassa',
-    true,
-  );
+  const [mostrarMedidasLoteMassa, setMostrarMedidasLoteMassa] = usePreferenciaDaPlanta<boolean>('mostrarMedidasLoteMassa');
   /**
    * EIXOS (07/10/2026): *"opção de exibir ou não eixos"*. Oculto, o eixo não é desenhado nem dá encaixe; continua no
    * modelo (e nos Pilares automáticos). Nasce LIGADO — eixo é referência que quem desenhou quer ver.
    */
-  const [mostrarEixos, setMostrarEixos] = usePersistedState('blueprint:mostrarEixos', true);
+  const [mostrarEixos, setMostrarEixos] = usePreferenciaDaPlanta<boolean>('mostrarEixos');
   /** COTAS DAS SUB-REGIÕES (10/10/2026): as sub-regiões também repartem as cotas do lote. Nasce desligado. */
-  const [cotasSubRegioes, setCotasSubRegioes] = usePersistedState('blueprint:cotasSubRegioes', false);
+  const [cotasSubRegioes, setCotasSubRegioes] = usePreferenciaDaPlanta<boolean>('cotasSubRegioes');
   /**
    * Pinta as faixas de material dentro da espessura de cada parede.
    *
@@ -2335,12 +2306,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * listra e come a leitura do partido. Quem está detalhando a parede liga, e a
    * escolha sobrevive à navegação como as demais desta família.
    */
-  const [mostrarCamadas, setMostrarCamadas] = usePersistedState(
-    'blueprint:mostrarCamadas',
-    false,
-  );
+  const [mostrarCamadas, setMostrarCamadas] = usePreferenciaDaPlanta<boolean>('mostrarCamadas');
   /** Cadeias de cota por lado — total/parcial/interna, a convenção de prancha. */
-  const [mostrarCotas, setMostrarCotas] = usePersistedState('blueprint:mostrarCotas', false);
+  const [mostrarCotas, setMostrarCotas] = usePreferenciaDaPlanta<boolean>('mostrarCotas');
   /**
    * Só a cadeia INTERNA — cada ambiente de face a face.
    *
@@ -2349,15 +2317,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * Também é o que desfaz a confusão com o `livre` do botão Medidas, que mede a
    * PAREDE inteira e ignora as divisórias que a cortam.
    */
-  const [mostrarCotaInterna, setMostrarCotaInterna] = usePersistedState(
-    'blueprint:mostrarCotaInterna',
-    false,
-  );
+  const [mostrarCotaInterna, setMostrarCotaInterna] = usePreferenciaDaPlanta<boolean>('mostrarCotaInterna');
   /** Nome, área e perímetro escritos dentro de cada ambiente. */
-  const [mostrarRotulos, setMostrarRotulos] = usePersistedState(
-    'blueprint:mostrarRotulos',
-    false,
-  );
+  const [mostrarRotulos, setMostrarRotulos] = usePreferenciaDaPlanta<boolean>('mostrarRotulos');
   /**
    * A grade.
    *
@@ -2365,12 +2327,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * quer conferir o traçado contra a planta de fundo sem o quadriculado por
    * cima — não quer desenhar fora de medida.
    */
-  const [mostrarGrade, setMostrarGrade] = usePersistedState('blueprint:mostrarGrade', true);
+  const [mostrarGrade, setMostrarGrade] = usePreferenciaDaPlanta<boolean>('mostrarGrade');
   /** O azul claro por dentro dos ambientes derivados. */
-  const [mostrarPreenchimento, setMostrarPreenchimento] = usePersistedState(
-    'blueprint:mostrarPreenchimento',
-    true,
-  );
+  const [mostrarPreenchimento, setMostrarPreenchimento] = usePreferenciaDaPlanta<boolean>('mostrarPreenchimento');
   /**
    * O verde fraco por dentro do anel do LOTE.
    *
@@ -2379,36 +2338,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * contra o levantamento topográfico. Um toggle só para os dois obrigaria a
    * perder a cor dos cômodos junto.
    */
-  const [mostrarPreenchimentoTerreno, setMostrarPreenchimentoTerreno] = usePersistedState(
-    'blueprint:mostrarPreenchimentoTerreno',
-    true,
-  );
+  const [mostrarPreenchimentoTerreno, setMostrarPreenchimentoTerreno] = usePreferenciaDaPlanta<boolean>('mostrarPreenchimentoTerreno');
   /**
    * As curvas de nível da versão de topografia exibida (e os pontos cotados em
    * edição). Chave própria: quem confere o traçado contra a planta de fundo
    * apaga o lote e quer as curvas; quem cota a alvenaria quer o contrário.
    */
-  const [mostrarCurvasDeNivel, setMostrarCurvasDeNivel] = usePersistedState(
-    'blueprint:mostrarCurvasDeNivel',
-    true,
-  );
+  const [mostrarCurvasDeNivel, setMostrarCurvasDeNivel] = usePreferenciaDaPlanta<boolean>('mostrarCurvasDeNivel');
   /** A2: as feições do levantamento (cerca, muro, poste…) pelos códigos dos pontos. */
-  const [mostrarFeicoes, setMostrarFeicoes] = usePersistedState('blueprint:mostrarFeicoesDoLevantamento', true);
+  const [mostrarFeicoes, setMostrarFeicoes] = usePreferenciaDaPlanta<boolean>('mostrarFeicoesDoLevantamento');
   /** Faixas de declividade pintadas sob as curvas. Nasce desligado: é leitura, não desenho. */
-  const [mostrarDeclividade, setMostrarDeclividade] = usePersistedState(
-    'blueprint:mostrarDeclividade',
-    false,
-  );
+  const [mostrarDeclividade, setMostrarDeclividade] = usePreferenciaDaPlanta<boolean>('mostrarDeclividade');
   /** Hachura de corte/aterro do platô, na planta e no corte. */
-  const [mostrarTerraplenagem, setMostrarTerraplenagem] = usePersistedState(
-    'blueprint:mostrarTerraplenagem',
-    true,
-  );
+  const [mostrarTerraplenagem, setMostrarTerraplenagem] = usePreferenciaDaPlanta<boolean>('mostrarTerraplenagem');
   /** Mapa hipsométrico (fase 3). Exclusivo com a declividade: duas pinturas não se leem. */
-  const [mostrarHipsometria, setMostrarHipsometria] = usePersistedState(
-    'blueprint:mostrarHipsometria',
-    false,
-  );
+  const [mostrarHipsometria, setMostrarHipsometria] = usePreferenciaDaPlanta<boolean>('mostrarHipsometria');
   /** Fase 4: classes hipsométricas iguais (8) ou em cotas redondas por equidistância. */
   const [hipsometriaModo, setHipsometriaModo] = usePersistedState<'IGUAIS' | 'EQUIDISTANCIA' | 'CONTINUO'>(
     'blueprint:hipsometriaModo',
@@ -2416,7 +2360,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   /** Fase 12 (Contour Map Creator): curvas coloridas pela cota, nós da grade, casas da legenda. */
   const [curvasPelaCota, setCurvasPelaCota] = usePersistedState<boolean>('blueprint:curvasPelaCota', false);
-  const [mostrarNosDaGrade, setMostrarNosDaGrade] = usePersistedState<boolean>('blueprint:nosDaGrade', false);
+  const [mostrarNosDaGrade, setMostrarNosDaGrade] = usePreferenciaDaPlanta<boolean>('nosDaGrade');
   const [casasDaLegenda, setCasasDaLegenda] = usePersistedState<number>('blueprint:casasDaLegenda', 2);
   /** Intervalo do modo por equidistância; `null` = a equidistância da versão. */
   const [hipsometriaIntervaloM, setHipsometriaIntervaloM] = usePersistedState<number | null>(
@@ -2441,21 +2385,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * porque não tinha item nenhum no menu — a hachura ficava desenhada por
    * cima mesmo com tudo desligado.
    */
-  const [mostrarEnvelope, setMostrarEnvelope] = usePersistedState(
-    'blueprint:mostrarEnvelope',
-    true,
-  );
-  /** Uma cor por ambiente em vez do azul único — separa cômodos vizinhos. (Legado: hoje é o modo AMBIENTE de `modoDeCor`.) */
-  const [coresPorAmbiente, setCoresPorAmbiente] = usePersistedState(
-    'blueprint:coresPorAmbiente',
-    false,
-  );
-  /** COLORIR POR (E8.2): a paleta dos ambientes. Nasce do legado: quem tinha "uma cor por ambiente" ligado segue em AMBIENTE. */
-  const [modoDeCor, setModoDeCor] = usePersistedState<ModoDeCor>('blueprint:modoDeCor', coresPorAmbiente ? 'AMBIENTE' : 'NENHUM');
+  const [mostrarEnvelope, setMostrarEnvelope] = usePreferenciaDaPlanta<boolean>('mostrarEnvelope');
+  /** COLORIR POR (E8.2): a paleta dos ambientes ("Uma cor por ambiente" = modo AMBIENTE). Preferência do usuário. */
+  const [modoDeCor, setModoDeCor] = usePreferenciaDaPlanta<ModoDeCor>('modoDeCor');
   /** ESTILO DO 3D (E8.2): sombreado, linha oculta ou transparente. */
-  const [estilo3d, setEstilo3d] = usePersistedState<Estilo3d>('blueprint:vista3dEstilo', 'SOMBREADO');
+  const [estilo3d, setEstilo3d] = usePreferenciaDaPlanta<Estilo3d>('vista3dEstilo');
   /** ESTILO DA PLANTA (E8.4): técnica ou humanizada (pisos por material, sombra, mobiliário colorido, vegetação). */
-  const [estiloPlanta, setEstiloPlanta] = usePersistedState<EstiloDaPlanta>('blueprint:estiloPlanta', 'TECNICA');
+  const [estiloPlanta, setEstiloPlanta] = usePreferenciaDaPlanta<EstiloDaPlanta>('estiloPlanta');
   /** FASES DE REFORMA (E10.2): o filtro da vista (tudo / antes / depois / só demolição). */
   const [filtroDeFase, setFiltroDeFase] = usePersistedState<FiltroDeFase>('blueprint:filtroDeFase', 'TUDO');
   /** TEMPLATES DE VISTA da organização (E8.2), além dos de fábrica. */
@@ -2463,10 +2399,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [templatesIndisponiveis, setTemplatesIndisponiveis] = useState<string | null>(null);
   const [templatesCarregando, setTemplatesCarregando] = useState(false);
   /** Cota em preto sobre fundo opaco, para planta de fundo escaneada carregada. */
-  const [cotaAltoContraste, setCotaAltoContraste] = usePersistedState(
-    'blueprint:cotaAltoContraste',
-    false,
-  );
+  const [cotaAltoContraste, setCotaAltoContraste] = usePreferenciaDaPlanta<boolean>('cotaAltoContraste');
   /**
    * Passo do MOVER. `'grade'` = segue o seletor de Grade (que em automático
    * segue o zoom); qualquer número fixa o passo em mm, independente do zoom.
@@ -3930,7 +3863,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       setCotasSubRegioes(c.planta.cotasSubRegioes);
       setCamadasSalvas(c.disciplinas);
       setModoDeCor(c.modoDeCor);
-      setCoresPorAmbiente(c.modoDeCor === 'AMBIENTE');
       setMostrarLaje3d(c.vista3d.laje);
       setMostrarArestas3d(c.vista3d.arestas);
       setMostrarArmadura3d(c.vista3d.armadura);
@@ -3972,6 +3904,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       ajuda="Clique dois pontos do desenho: a distância horizontal, a vertical, a inclinada e a inclinação (%) — e as cotas, no corte com terreno. Encaixa em cantos, no platô e no terreno. Esc limpa; Esc de novo sai."
     />
   );
+  /**
+   * Consequências de uma escolha de exibição em OUTROS itens (regra única, a mesma da aba Preferências):
+   * cor/Humanizada ligam o preenchimento; Declividade e Hipsométrico se desligam entre si.
+   */
+  const aplicarConsequenciasDaEscolha = (item: string, valor: unknown) => {
+    const atuais: Record<string, unknown> = {
+      mostrarPreenchimento,
+      mostrarDeclividade,
+      mostrarHipsometria,
+    };
+    for (const c of consequenciasDaEscolha(item, valor, (i) => atuais[i])) {
+      if (c.item === 'mostrarPreenchimento') setMostrarPreenchimento(c.valor);
+      else if (c.item === 'mostrarDeclividade') setMostrarDeclividade(c.valor);
+      else if (c.item === 'mostrarHipsometria') setMostrarHipsometria(c.valor);
+    }
+  };
   const menuVista = (
     <MenuVista
       em3d={em3d}
@@ -3982,14 +3930,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       legenda={coresDoDesenho.legenda}
       onModoDeCor={(m) => {
         setModoDeCor(m);
-        setCoresPorAmbiente(m === 'AMBIENTE');
-        if (m !== 'NENHUM' && !mostrarPreenchimento) setMostrarPreenchimento(true);
+        aplicarConsequenciasDaEscolha('modoDeCor', m);
       }}
       onEstilo3d={setEstilo3d}
       onEstiloPlanta={(e) => {
         setEstiloPlanta(e);
         // Humanizada sem preenchimento não mostra piso nenhum: ligar junto, como o "Colorir por" faz.
-        if (e === 'HUMANIZADA' && !mostrarPreenchimento) setMostrarPreenchimento(true);
+        aplicarConsequenciasDaEscolha('estiloPlanta', e);
       }}
       resumoDosPisos={resumoDosPisos}
       onFase={setFiltroDeFase}
@@ -5479,7 +5426,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       }),
     [massa, editor.model.blocos],
   );
-  const [mostrarMassa3d, setMostrarMassa3d] = usePersistedState('blueprint:vista3dMassa', true);
+  const [mostrarMassa3d, setMostrarMassa3d] = usePreferenciaDaPlanta<boolean>('vista3dMassa');
   /**
    * PRODUTO NA MASSA (M2): unidades por pavimento depois de núcleo, paredes e
    * corredor; eficiências; vagas pedidas pelo produto/zona × as que cabem.
@@ -14400,15 +14347,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         )}
 
         {aba === 'preferencias' && (
-          <GrupoDoRibbon rotulo="Elétrica">
-            <BotaoDoRibbon
-              icone={SlidersHorizontal}
-              rotulo="O que exibir"
-              ativo={preferenciasAbertas}
-              onClick={() => setPreferenciasAbertas((v) => !v)}
-              ajuda="O que a planta elétrica escreve: na Tela (só para você) e na Prancha (padrão da empresa)"
-            />
-          </GrupoDoRibbon>
+          <>
+            <GrupoDoRibbon rotulo="Exibição">
+              <BotaoDoRibbon
+                icone={Eye}
+                rotulo="Planta, vistas e 3D"
+                ativo={secaoDasPreferencias === 'exibicao'}
+                onClick={() => setSecaoDasPreferencias((s) => (s === 'exibicao' ? null : 'exibicao'))}
+                ajuda="O que a planta mostra na planta baixa, nas vistas e no 3D, e os estilos. É a mesma escolha do menu Vista › Exibir e vale para você em qualquer computador"
+              />
+            </GrupoDoRibbon>
+            <GrupoDoRibbon rotulo="Elétrica">
+              <BotaoDoRibbon
+                icone={SlidersHorizontal}
+                rotulo="O que exibir"
+                ativo={secaoDasPreferencias === 'eletrica'}
+                onClick={() => setSecaoDasPreferencias((s) => (s === 'eletrica' ? null : 'eletrica'))}
+                ajuda="O que a planta elétrica escreve: na Tela (só para você) e na Prancha (padrão da empresa)"
+              />
+            </GrupoDoRibbon>
+          </>
         )}
         {aba === 'vista' && emVista && (
           <>
@@ -14834,8 +14792,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       icone: TrendingUp,
                       ligado: mostrarDeclividade,
                       alternar: () => {
-                        setMostrarDeclividade((v) => !v);
-                        setMostrarHipsometria(false);
+                        const ligar = !mostrarDeclividade;
+                        setMostrarDeclividade(ligar);
+                        // Ligar uma pintura desliga a outra (mesma regra da aba Preferências).
+                        aplicarConsequenciasDaEscolha('mostrarDeclividade', ligar);
                       },
                       desabilitado: !topografia.selecionada,
                       ajuda: topografia.selecionada
@@ -14848,8 +14808,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       icone: Palette,
                       ligado: mostrarHipsometria,
                       alternar: () => {
-                        setMostrarHipsometria((v) => !v);
-                        setMostrarDeclividade(false);
+                        const ligar = !mostrarHipsometria;
+                        setMostrarHipsometria(ligar);
+                        aplicarConsequenciasDaEscolha('mostrarHipsometria', ligar);
                       },
                       desabilitado: !topografia.selecionada,
                       ajuda: topografia.selecionada
@@ -14905,7 +14866,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       ligado: modoDeCor === 'AMBIENTE',
                       // Atalho para o modo AMBIENTE do menu Vista; outras paletas ficam lá.
                       alternar: () => {
-                        setCoresPorAmbiente(modoDeCor !== 'AMBIENTE');
                         setModoDeCor(modoDeCor === 'AMBIENTE' ? 'NENHUM' : 'AMBIENTE');
                       },
                       desabilitado: !mostrarPreenchimento,
@@ -20330,14 +20290,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           </SheetPanel>
         </Sheet>
       )}
-      {preferenciasAbertas && (
-        <Sheet open onClose={() => setPreferenciasAbertas(false)} size="lg">
-          <SheetHeader onClose={() => setPreferenciasAbertas(false)}>
+      {secaoDasPreferencias && (
+        <Sheet open onClose={() => setSecaoDasPreferencias(null)} size="lg">
+          <SheetHeader onClose={() => setSecaoDasPreferencias(null)}>
             <SheetTitle>Preferências da Planta</SheetTitle>
-            <SheetDescription>As escolhas da Tela acompanham o seu usuário em qualquer computador; a Prancha é o padrão da empresa dona desta planta.</SheetDescription>
+            <SheetDescription>As suas escolhas acompanham o seu usuário em qualquer computador; na Elétrica, a Prancha é o padrão da empresa dona desta planta.</SheetDescription>
           </SheetHeader>
           <SheetPanel className="px-6 py-6">
-            <SecaoPlantaEletrica organizationId={study.organization_id ?? null} studyId={study.id} />
+            {secaoDasPreferencias === 'exibicao' ? (
+              <SecaoExibicaoDaPlanta />
+            ) : (
+              <SecaoPlantaEletrica organizationId={study.organization_id ?? null} studyId={study.id} />
+            )}
           </SheetPanel>
         </Sheet>
       )}

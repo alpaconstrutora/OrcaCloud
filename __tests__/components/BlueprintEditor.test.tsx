@@ -16,7 +16,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
 import { ConfirmProvider } from '../../components/ui/confirm';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -260,6 +260,21 @@ vi.mock('../../hooks/usePreferenciasEletricas', async () => {
     }),
   };
 });
+
+// O que a planta EXIBE (Vista › Exibir) é preferência do usuário no banco: aqui o serviço é um dublê —
+// sem rede e sem aviso de erro. `listarDoUsuario` devolve vazio (vale o navegador/padrão) e `gravar` é espiado.
+const prefListarDoUsuario = vi.fn(async () => [] as unknown[]);
+const prefGravar = vi.fn(async (..._a: unknown[]) => {});
+const prefGravarVarios = vi.fn(async (..._a: unknown[]) => {});
+vi.mock('../../services/preferenciasService', () => ({
+  preferenciasService: {
+    listarDoUsuario: (...a: unknown[]) => prefListarDoUsuario(...(a as [])),
+    listarDaPrancha: vi.fn(async () => []),
+    gravar: (...a: unknown[]) => prefGravar(...a),
+    gravarVarios: (...a: unknown[]) => prefGravarVarios(...a),
+    apagarDoEstudo: vi.fn(async () => {}),
+  },
+}));
 
 vi.mock('../../hooks/useBlueprintColaboracao', () => ({
   useBlueprintColaboracao: (opcoes: { aoReceber: (msg: unknown) => { ok: boolean; erro: string | null; divergiu: boolean } }) => {
@@ -561,6 +576,76 @@ describe('BlueprintEditor · ações oferecidas', () => {
     expect(within(gaveta).getByRole('region', { name: /Elétrica/ })).toBeInTheDocument();
     expect(within(gaveta).getByLabelText('Potência do ponto · Tela')).toBeInTheDocument();
     expect(within(gaveta).getByLabelText('Potência do ponto · Prancha')).toBeInTheDocument();
+    // A gaveta abre na seção pedida: a de exibição não está lá.
+    expect(within(gaveta).queryByRole('region', { name: /Planta, vistas e 3D/ })).not.toBeInTheDocument();
+  });
+
+  it('⚠️ 24/10/2026 — aba "Preferências": "Planta, vistas e 3D" abre a gaveta na seção de exibição; "Grade" ali é a MESMA escolha do menu Exibir', async () => {
+    localStorage.clear();
+    const { useStore } = await import('../../store/useStore');
+    useStore.setState({ session: { user: { id: 'usr_1' } } as never });
+    // O banco simulado GUARDA o que foi gravado: a gaveta e o menu Exibir são duas instâncias do hook e só
+    // se encontram pelo banco (cache), como em produção.
+    const banco: { escopo: string; chave: string; valor: unknown }[] = [];
+    prefListarDoUsuario.mockImplementation(async () => [...banco]);
+    prefGravar.mockImplementation(async (...a: unknown[]) => {
+      const [escopo, , chave, valor] = a as [string, unknown, string, unknown];
+      const resto = banco.filter((l) => !(l.escopo === escopo && l.chave === chave));
+      banco.length = 0;
+      banco.push(...resto, ...(valor === null ? [] : [{ escopo, chave, valor }]));
+    });
+    prefGravar.mockClear();
+    try {
+      await montar();
+      const user = userEvent.setup();
+      await abrirAba(/^Preferências$/);
+      // O grupo "Exibição" traz o botão novo ao lado do "O que exibir" da Elétrica.
+      await user.click(botao(/^Planta, vistas e 3D$/));
+      const gaveta = screen.getByText('Preferências da Planta').closest('[role="dialog"]') as HTMLElement;
+      expect(gaveta).toBeTruthy();
+      expect(within(gaveta).getByRole('region', { name: /Planta, vistas e 3D/ })).toBeInTheDocument();
+      for (const titulo of ['Planta baixa', 'Vistas', '3D', 'Estilos']) {
+        expect(within(gaveta).getByRole('group', { name: titulo })).toBeInTheDocument();
+      }
+      // A seção elétrica NÃO abre junto.
+      expect(within(gaveta).queryByLabelText('Potência do ponto · Tela')).not.toBeInTheDocument();
+
+      // Desligar "Grade" na gaveta grava a preferência do usuário...
+      const grade = within(gaveta).getByLabelText('Grade') as HTMLInputElement;
+      expect(grade).toBeChecked();
+      await user.click(grade);
+      await waitFor(() => expect(prefGravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarGrade', false));
+      expect(within(gaveta).getByLabelText('Grade')).not.toBeChecked();
+
+      // ...e o menu Vista › Exibir já mostra "Grade" desligada.
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByText('Preferências da Planta')).not.toBeInTheDocument());
+      await abrirAba(/^vista$/i);
+      await user.click(botao(/exibir/i));
+      expect(screen.getByRole('menuitemcheckbox', { name: /^grade$/i })).toHaveAttribute('aria-checked', 'false');
+    } finally {
+      prefListarDoUsuario.mockImplementation(async () => []);
+      prefGravar.mockImplementation(async () => {});
+      useStore.setState({ session: null as never });
+      clienteDeConsulta.clear();
+    }
+  });
+
+  it('⚠️ 24/10/2026 — a gaveta de Preferências troca de seção sem abrir duas, e clicar na seção aberta fecha', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^Preferências$/);
+    await user.click(botao(/^Planta, vistas e 3D$/));
+    expect(screen.getAllByText('Preferências da Planta')).toHaveLength(1);
+    expect(screen.getByRole('region', { name: /Planta, vistas e 3D/ })).toBeInTheDocument();
+
+    await user.click(botao(/^O que exibir$/));
+    expect(screen.getAllByText('Preferências da Planta')).toHaveLength(1);
+    expect(screen.getByRole('region', { name: /Elétrica/ })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /Planta, vistas e 3D/ })).not.toBeInTheDocument();
+
+    await user.click(botao(/^O que exibir$/));
+    expect(screen.queryByText('Preferências da Planta')).not.toBeInTheDocument();
   });
 
   it('o menu reúne alvenaria e esquadria; estrutura e fundação estão na aba Estrutural (08/10/2026)', async () => {
@@ -3620,6 +3705,73 @@ describe('BlueprintEditor · menu Exibir', () => {
     await montar();
     await abrirMenu();
     expect(item(/medidas das paredes/i)).toHaveAttribute('aria-checked', 'false');
+  });
+
+  describe('preferências do usuário (24/10/2026)', () => {
+    afterEach(async () => {
+      const { useStore } = await import('../../store/useStore');
+      useStore.setState({ session: null as never });
+      clienteDeConsulta.clear();
+    });
+
+    async function entrarComoUsuario() {
+      const { useStore } = await import('../../store/useStore');
+      useStore.setState({ session: { user: { id: 'usr_1' } } as never });
+      prefGravar.mockClear();
+      prefListarDoUsuario.mockClear();
+    }
+
+    it('alternar "Grade" grava planta.exibir.mostrarGrade no banco (escopo USUARIO)', async () => {
+      await entrarComoUsuario();
+      await montar();
+      await abrirMenu();
+      expect(item(/^grade$/i)).toHaveAttribute('aria-checked', 'true');
+      await userEvent.click(item(/^grade$/i));
+      await waitFor(() => expect(prefGravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarGrade', false));
+      // Na tela a escolha vale na hora. Com sessão a fonte é o banco: o navegador NÃO recebe espelho
+      // (outro usuário do mesmo navegador não herda a escolha).
+      expect(item(/^grade$/i)).toHaveAttribute('aria-checked', 'false');
+      expect(localStorage.getItem('blueprint:mostrarGrade')).toBeNull();
+    });
+
+    it('sem sessão a escolha vale na tela e no navegador, e o serviço não é chamado', async () => {
+      prefGravar.mockClear();
+      await montar();
+      await abrirMenu();
+      await userEvent.click(item(/^grade$/i));
+      expect(item(/^grade$/i)).toHaveAttribute('aria-checked', 'false');
+      expect(JSON.parse(localStorage.getItem('blueprint:mostrarGrade')!)).toBe(false);
+      expect(prefGravar).not.toHaveBeenCalled();
+    });
+
+    it('"Eixos" no menu da planta e no da vista (Situação) são a MESMA escolha', async () => {
+      const k = await import('../../utils/blueprintKernel');
+      const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+      loadBranchModel.mockResolvedValue(
+        k.applyBatch(nivel.model, [{ type: 'AddEixo', a: k.point(-500, 0), b: k.point(6500, 0) }]).model,
+      );
+      await entrarComoUsuario();
+      await montar();
+      const user = userEvent.setup();
+      const barra = () => within(screen.getByRole('toolbar'));
+      await abrirMenu();
+      await waitFor(() => expect(item(/^eixos$/i)).toBeEnabled());
+      expect(item(/^eixos$/i)).toHaveAttribute('aria-checked', 'true');
+      await user.click(item(/^eixos$/i));
+      await waitFor(() => expect(prefGravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarEixos', false));
+
+      // Na vista Situação (planta read-only), o "Eixos" do menu dela já nasce desligado: é a mesma chave.
+      await user.click(barra().getByRole('button', { name: 'Vista: Situação' }));
+      await abrirMenu();
+      expect(item(/^eixos$/i)).toHaveAttribute('aria-checked', 'false');
+      await user.click(item(/^eixos$/i));
+      await waitFor(() => expect(prefGravar).toHaveBeenLastCalledWith('USUARIO', {}, 'planta.exibir.mostrarEixos', true));
+
+      // E de volta à planta, o menu da planta mostra o que o da vista escolheu.
+      await user.click(barra().getByRole('button', { name: 'Vista: Planta' }));
+      await abrirMenu();
+      expect(item(/^eixos$/i)).toHaveAttribute('aria-checked', 'true');
+    });
   });
 
   it('o item alterna', async () => {
@@ -8388,11 +8540,45 @@ describe('BlueprintEditor · terreno e curvas no Exibir do 3D', () => {
     }
   });
 
-  it('quem tinha LIGADO o Terreno na chave antiga continua ligado (mesmo sem curvas)', async () => {
+  it('⚠️ Declividade e Hipsométrico: ligar uma DESLIGA a outra (mesma regra da aba Preferências); desligar não liga a outra', async () => {
+    localStorage.clear();
+    loadBranchModel.mockResolvedValue(await comLote());
+    const svc = await import('../../services/blueprintTopografiaService');
+    const listar = vi.spyOn(svc.blueprintTopografiaService, 'listar').mockResolvedValue([VERSAO] as never);
+    try {
+      await montar();
+      const user = userEvent.setup();
+      await abrirAba(/^vista$/i);
+      await user.click(botao(/exibir/i));
+      const decl = () => screen.getByRole('menuitemcheckbox', { name: /^declividade$/i });
+      const hipso = () => screen.getByRole('menuitemcheckbox', { name: /^hipsométrico$/i });
+      await waitFor(() => expect(decl()).toBeEnabled());
+      expect(decl()).toHaveAttribute('aria-checked', 'false');
+      expect(hipso()).toHaveAttribute('aria-checked', 'false');
+
+      await user.click(decl());
+      expect(decl()).toHaveAttribute('aria-checked', 'true');
+      expect(hipso()).toHaveAttribute('aria-checked', 'false');
+
+      await user.click(hipso());
+      expect(hipso()).toHaveAttribute('aria-checked', 'true');
+      expect(decl()).toHaveAttribute('aria-checked', 'false');
+
+      await user.click(hipso());
+      expect(hipso()).toHaveAttribute('aria-checked', 'false');
+      expect(decl()).toHaveAttribute('aria-checked', 'false');
+    } finally {
+      listar.mockRestore();
+    }
+  }, 60000);
+
+  it('a chave v1 (`blueprint:vista3dTerreno`) é ignorada desde 24/10/2026: sem escolha e sem curvas, o Terreno fica no automático (desligado)', async () => {
+    // A migração da v1 (`true` = ligado) saiu junto com `terreno3dDaChaveAntiga`: a escolha agora é a
+    // preferência `planta.exibir.vista3dTerreno` (a v2 do navegador ainda vale como cópia local).
     localStorage.clear();
     localStorage.setItem('blueprint:vista3dTerreno', 'true');
     loadBranchModel.mockResolvedValue(await comLote());
     await abrirExibirDo3d();
-    expect(screen.getByRole('menuitemcheckbox', { name: /^terreno$/i })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('menuitemcheckbox', { name: /^terreno$/i })).toHaveAttribute('aria-checked', 'false');
   });
 });

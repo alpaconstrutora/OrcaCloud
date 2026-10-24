@@ -19,6 +19,9 @@ import { empreendimentoAuditService } from '../services/empreendimentoAuditServi
 import { onlyObras } from '../utils/projectClassification';
 import { EmpreendimentoCell, type EmpreendimentoCellValue } from './empreendimento/EmpreendimentoCell';
 import { CostCenterV2 } from '../types/financial';
+import { agruparLinhas, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'code',           label: 'Código',                 sortable: true },
@@ -41,6 +44,25 @@ const COLUMNS: ColumnConfig[] = [
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     code: 100, organization: 170, group: 210, name: 190, empreendimento: 170, obra: 150, description: 220, actions: 150,
 };
+
+// "Agrupar" — guia de UI §6.12. A tela é uma árvore (grupo → centro de custo); agrupar
+// ACHATA a lista nos centros de custo e os divide por UM destes campos. Chave = o MESMO
+// texto que a coluna mostra. Grupo (pai) sem filho não aparece agrupado — não tem o que
+// agrupar; a árvore normal (sem "Agrupar") continua mostrando todos.
+type CampoAgrupar = 'grupo' | 'organizacao' | 'empreendimento' | 'obra';
+const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
+    { value: 'grupo',          label: 'Centro de custo (grupo)' },
+    { value: 'organizacao',    label: 'Organização' },
+    { value: 'empreendimento', label: 'Empreendimento' },
+    { value: 'obra',           label: 'Obra' },
+];
+const SEM_GRUPO: Record<CampoAgrupar, string> = {
+    grupo: 'Sem grupo', organizacao: 'Sem organização', empreendimento: 'Sem empreendimento', obra: 'Sem obra',
+};
+
+/** Linha da tabela: grupo/centro de custo da árvore, ou um centro de custo dentro de um grupo do "Agrupar". */
+interface VisibleRow { item: CostCenterV2; hasChildren: boolean; isGroup: boolean; }
+type EntradaCC = EntradaDaTela<CostCenterV2>;
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta). 'actions' é
@@ -166,6 +188,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
     const [searchTerm, setSearchTerm] = usePersistedState('costCenterModule:search', '');
     const tableColumns = useTableColumns(COLUMNS, 'costCenterModuleColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'costCenterModuleColWidths');
+    const agrupamento = useAgrupamento<CampoAgrupar>('costCenterModule:groupBy');
     // table-layout:fixed + largura 100% faz o navegador redistribuir o espaço
     // sobrando entre as colunas de <col> fixo (arrastar uma borda "puxava" as
     // vizinhas). Fixar a largura total na soma exata das colunas elimina esse
@@ -310,8 +333,6 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
 
     const isFiltering = searchTerm.trim() !== '';
 
-    interface VisibleRow { item: CostCenterV2; hasChildren: boolean; isGroup: boolean; }
-
     const visibleRows = useMemo<VisibleRow[]>(() => {
         if (isFiltering) {
             return items.filter(matchesSearch).sort(compareItems).map(item => ({
@@ -328,6 +349,54 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
         });
         return rows;
     }, [isFiltering, items, matchesSearch, compareItems, groups, childrenByParent, expandedIds]);
+
+    // "Organização" só existe como opção em "Todas as organizações" (com uma org no topo seria
+    // um grupo só). Campo guardado que deixou de ser opção vale como sem agrupamento.
+    const opcoesAgrupar = useMemo(
+        () => OPCOES_AGRUPAR.filter(o => o.value !== 'organizacao' || !organizationId),
+        [organizationId],
+    );
+    const campoAgrupar: CampoAgrupar | 'none' = opcoesAgrupar.some(o => o.value === agrupamento.campo) ? agrupamento.campo : 'none';
+    const agrupando = campoAgrupar !== 'none';
+
+    const chaveDoGrupo = useCallback((item: CostCenterV2): ChaveDeGrupo => {
+        switch (campoAgrupar) {
+            case 'grupo': return chavePorNome(groupNameFor(item));
+            case 'organizacao': {
+                const nome = orgNameById.get(item.organization_id);
+                return nome ? { key: item.organization_id, label: nome } : null;
+            }
+            case 'empreendimento': {
+                const emp = empreendimentoOf(item);
+                return emp ? { key: emp.id, label: emp.name } : null;
+            }
+            case 'obra': {
+                const nome = item.project_id ? obraNameById[item.project_id] : undefined;
+                return item.project_id && nome ? { key: item.project_id, label: nome } : null;
+            }
+            default: return null;
+        }
+    }, [campoAgrupar, groupNameFor, orgNameById, empreendimentoOf, obraNameById]);
+
+    // Lista já filtrada (busca) e ordenada (cabeçalho): as linhas DENTRO do grupo seguem a coluna ordenada.
+    const centrosDeCusto = useMemo(
+        () => (agrupando ? items.filter(i => i.parent_id && matchesSearch(i)).sort(compareItems) : []),
+        [agrupando, items, matchesSearch, compareItems],
+    );
+    const gruposAgrupados = useMemo(
+        () => (agrupando
+            ? agruparLinhas(centrosDeCusto, { chave: chaveDoGrupo, semRotulo: SEM_GRUPO[campoAgrupar], direcao: agrupamento.direcao })
+            : []),
+        [agrupando, centrosDeCusto, chaveDoGrupo, campoAgrupar, agrupamento.direcao],
+    );
+    const entradas = useMemo<EntradaCC[]>(
+        () => (agrupando
+            ? entradasDaPagina(gruposAgrupados, agrupamento.recolhidos)
+            : visibleRows.map((row, indice) => ({ tipo: 'linha' as const, item: row.item, indice }))),
+        [agrupando, gruposAgrupados, agrupamento.recolhidos, visibleRows],
+    );
+    const rowInfo = useMemo(() => new Map(visibleRows.map(r => [r.item.id, r])), [visibleRows]);
+    const totalLinhas = agrupando ? centrosDeCusto.length : visibleRows.length;
 
     const parentIds = useMemo(() => groups.filter(g => (childrenByParent.get(g.id)?.length ?? 0) > 0).map(g => g.id), [groups, childrenByParent]);
     const allExpanded = parentIds.length > 0 && parentIds.every(id => expandedIds[id]);
@@ -621,6 +690,19 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                         />
                     </div>
 
+                    {/* Agrupar — guia de UI §6.12 */}
+                    <AgruparControles
+                        opcoes={opcoesAgrupar}
+                        campo={campoAgrupar}
+                        onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
+                        chavesDosGrupos={gruposAgrupados.map(g => g.key)}
+                        algumRecolhido={agrupamento.recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar os centros de custo"
+                    />
+
                     <div className="flex items-center gap-1.5">
                         <button
                             onClick={() => exportService.downloadCostCenterV2Template()}
@@ -652,7 +734,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                         )}
                     </div>
 
-                    {parentIds.length > 0 && !isFiltering && (
+                    {parentIds.length > 0 && !isFiltering && !agrupando && (
                         <button
                             onClick={toggleExpandAll}
                             title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}
@@ -707,12 +789,12 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                         <p className="mt-2 text-gray-500">Carregando...</p>
                     </div>
-                ) : visibleRows.length === 0 ? (
+                ) : totalLinhas === 0 ? (
                     <div className="text-center py-12">
                         <AlertCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum registro encontrado</h3>
                         <p className="text-sm text-gray-500">
-                            {isFiltering ? 'Tente ajustar sua busca.' : 'Cadastre o primeiro grupo de centro de custo.'}
+                            {isFiltering ? 'Tente ajustar sua busca.' : agrupando ? 'Cadastre um centro de custo para poder agrupar.' : 'Cadastre o primeiro grupo de centro de custo.'}
                         </p>
                     </div>
                 ) : (
@@ -752,7 +834,15 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 bg-white">
-                                {visibleRows.map(({ item, hasChildren, isGroup }) => {
+                                {entradas.map(e => {
+                                    if (e.tipo === 'grupo') return (
+                                        <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                            colSpan={tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').length + 2}
+                                            onAlternar={agrupamento.alternar} semTotal />
+                                    );
+                                    const item = e.item;
+                                    // Agrupado: só centros de custo (nunca grupo-pai, sem expandir); na árvore, o que a tela montou.
+                                    const { hasChildren, isGroup } = agrupando ? { hasChildren: false, isGroup: false } : (rowInfo.get(item.id) ?? { hasChildren: false, isGroup: !item.parent_id });
                                     const expanded = !!expandedIds[item.id];
                                     return (
                                         <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors ${isGroup ? 'bg-gray-50/60' : ''}`}>

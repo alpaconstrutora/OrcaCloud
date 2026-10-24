@@ -1326,6 +1326,11 @@ sem outra categoria (Saldo de Férias, Banco de Horas, Encargos INSS, Relação 
 com poucas linhas. No `StandardTable`, campo guardado que deixou de ser opção (ex.: "Organização", que só existe em
 "Todas") vale como sem agrupamento.
 
+Em 24/10/2026 para Minha Organização › Centro de custo (`CostCenterModule.tsx`, `docs/planos/2026-10-24-centro-de-custo-agrupar.md`).
+A tela é uma **árvore** (grupo → centro de custo): agrupar a **achata** nos centros de custo e os divide por
+Centro de custo (grupo), Organização (só em "Todas"), Empreendimento ou Obra; grupo-pai sem filho não aparece
+agrupado, e o expandir/recolher da árvore sai de cena (o do Agrupar faz o papel).
+
 **Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
 clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com
 `semTotal`; no `StandardTable`, basta não passar `agrupamento.valor`. "R$ 0,00" num

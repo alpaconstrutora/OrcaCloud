@@ -83,6 +83,17 @@ vi.mock('../../hooks/usePreferenciasEletricas', async () => {
   };
 });
 
+// O que a planta EXIBE (Vista › Exibir) é preferência do usuário no banco: serviço de dublê, sem rede nem aviso.
+vi.mock('../../services/preferenciasService', () => ({
+  preferenciasService: {
+    listarDoUsuario: vi.fn(async () => []),
+    listarDaPrancha: vi.fn(async () => []),
+    gravar: vi.fn(async () => {}),
+    gravarVarios: vi.fn(async () => {}),
+    apagarDoEstudo: vi.fn(async () => {}),
+  },
+}));
+
 vi.mock('../../services/blueprintKitService', () => ({
   listarKits: vi.fn(async () => []),
   salvarKit: vi.fn(),

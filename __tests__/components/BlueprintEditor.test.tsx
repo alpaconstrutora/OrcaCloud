@@ -16,7 +16,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
 import { ConfirmProvider } from '../../components/ui/confirm';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -260,6 +260,21 @@ vi.mock('../../hooks/usePreferenciasEletricas', async () => {
     }),
   };
 });
+
+// O que a planta EXIBE (Vista › Exibir) é preferência do usuário no banco: aqui o serviço é um dublê —
+// sem rede e sem aviso de erro. `listarDoUsuario` devolve vazio (vale o navegador/padrão) e `gravar` é espiado.
+const prefListarDoUsuario = vi.fn(async () => [] as unknown[]);
+const prefGravar = vi.fn(async (..._a: unknown[]) => {});
+const prefGravarVarios = vi.fn(async (..._a: unknown[]) => {});
+vi.mock('../../services/preferenciasService', () => ({
+  preferenciasService: {
+    listarDoUsuario: (...a: unknown[]) => prefListarDoUsuario(...(a as [])),
+    listarDaPrancha: vi.fn(async () => []),
+    gravar: (...a: unknown[]) => prefGravar(...a),
+    gravarVarios: (...a: unknown[]) => prefGravarVarios(...a),
+    apagarDoEstudo: vi.fn(async () => {}),
+  },
+}));
 
 vi.mock('../../hooks/useBlueprintColaboracao', () => ({
   useBlueprintColaboracao: (opcoes: { aoReceber: (msg: unknown) => { ok: boolean; erro: string | null; divergiu: boolean } }) => {
@@ -3620,6 +3635,72 @@ describe('BlueprintEditor · menu Exibir', () => {
     await montar();
     await abrirMenu();
     expect(item(/medidas das paredes/i)).toHaveAttribute('aria-checked', 'false');
+  });
+
+  describe('preferências do usuário (24/10/2026)', () => {
+    afterEach(async () => {
+      const { useStore } = await import('../../store/useStore');
+      useStore.setState({ session: null as never });
+      clienteDeConsulta.clear();
+    });
+
+    async function entrarComoUsuario() {
+      const { useStore } = await import('../../store/useStore');
+      useStore.setState({ session: { user: { id: 'usr_1' } } as never });
+      prefGravar.mockClear();
+      prefListarDoUsuario.mockClear();
+    }
+
+    it('alternar "Grade" grava planta.exibir.mostrarGrade no banco (escopo USUARIO)', async () => {
+      await entrarComoUsuario();
+      await montar();
+      await abrirMenu();
+      expect(item(/^grade$/i)).toHaveAttribute('aria-checked', 'true');
+      await userEvent.click(item(/^grade$/i));
+      await waitFor(() => expect(prefGravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarGrade', false));
+      // Na tela e no navegador a escolha vale na hora.
+      expect(item(/^grade$/i)).toHaveAttribute('aria-checked', 'false');
+      expect(JSON.parse(localStorage.getItem('blueprint:mostrarGrade')!)).toBe(false);
+    });
+
+    it('sem sessão a escolha vale na tela e no navegador, e o serviço não é chamado', async () => {
+      prefGravar.mockClear();
+      await montar();
+      await abrirMenu();
+      await userEvent.click(item(/^grade$/i));
+      expect(item(/^grade$/i)).toHaveAttribute('aria-checked', 'false');
+      expect(JSON.parse(localStorage.getItem('blueprint:mostrarGrade')!)).toBe(false);
+      expect(prefGravar).not.toHaveBeenCalled();
+    });
+
+    it('"Eixos" no menu da planta e no da vista (Situação) são a MESMA escolha', async () => {
+      const k = await import('../../utils/blueprintKernel');
+      const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+      loadBranchModel.mockResolvedValue(
+        k.applyBatch(nivel.model, [{ type: 'AddEixo', a: k.point(-500, 0), b: k.point(6500, 0) }]).model,
+      );
+      await entrarComoUsuario();
+      await montar();
+      const user = userEvent.setup();
+      const barra = () => within(screen.getByRole('toolbar'));
+      await abrirMenu();
+      await waitFor(() => expect(item(/^eixos$/i)).toBeEnabled());
+      expect(item(/^eixos$/i)).toHaveAttribute('aria-checked', 'true');
+      await user.click(item(/^eixos$/i));
+      await waitFor(() => expect(prefGravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarEixos', false));
+
+      // Na vista Situação (planta read-only), o "Eixos" do menu dela já nasce desligado: é a mesma chave.
+      await user.click(barra().getByRole('button', { name: 'Vista: Situação' }));
+      await abrirMenu();
+      expect(item(/^eixos$/i)).toHaveAttribute('aria-checked', 'false');
+      await user.click(item(/^eixos$/i));
+      await waitFor(() => expect(prefGravar).toHaveBeenLastCalledWith('USUARIO', {}, 'planta.exibir.mostrarEixos', true));
+
+      // E de volta à planta, o menu da planta mostra o que o da vista escolheu.
+      await user.click(barra().getByRole('button', { name: 'Vista: Planta' }));
+      await abrirMenu();
+      expect(item(/^eixos$/i)).toHaveAttribute('aria-checked', 'true');
+    });
   });
 
   it('o item alterna', async () => {
@@ -8388,11 +8469,13 @@ describe('BlueprintEditor · terreno e curvas no Exibir do 3D', () => {
     }
   });
 
-  it('quem tinha LIGADO o Terreno na chave antiga continua ligado (mesmo sem curvas)', async () => {
+  it('a chave v1 (`blueprint:vista3dTerreno`) é ignorada desde 24/10/2026: sem escolha e sem curvas, o Terreno fica no automático (desligado)', async () => {
+    // A migração da v1 (`true` = ligado) saiu junto com `terreno3dDaChaveAntiga`: a escolha agora é a
+    // preferência `planta.exibir.vista3dTerreno` (a v2 do navegador ainda vale como cópia local).
     localStorage.clear();
     localStorage.setItem('blueprint:vista3dTerreno', 'true');
     loadBranchModel.mockResolvedValue(await comLote());
     await abrirExibirDo3d();
-    expect(screen.getByRole('menuitemcheckbox', { name: /^terreno$/i })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('menuitemcheckbox', { name: /^terreno$/i })).toHaveAttribute('aria-checked', 'false');
   });
 });

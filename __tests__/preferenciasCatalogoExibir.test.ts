@@ -214,8 +214,7 @@ describe('linhasParaMigrar', () => {
 });
 
 describe('teste-trava: o editor não guarda mais estas escolhas só no navegador', () => {
-  // ativado na tarefa 3 (quando o editor trocar usePersistedState por usePreferenciaDaPlanta)
-  it.skip('nenhuma chaveAntiga do catálogo aparece num usePersistedState( do editor', () => {
+  it('nenhuma chaveAntiga do catálogo aparece num usePersistedState( do editor', () => {
     const fonte = readFileSync(resolve(__dirname, '../components/blueprint/BlueprintEditor.tsx'), 'utf8');
     const ainda = ITENS_DE_EXIBICAO.filter((i) => {
       const re = new RegExp(`usePersistedState(<[^(]*>)?\\(\\s*['"\`]${i.chaveAntiga.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"\`]`);

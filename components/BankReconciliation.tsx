@@ -131,6 +131,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const navigateToFocus = useStore(s => s.navigateToFocus);
     // Organizações do usuário — "Atende também: todas" da conta resolve para elas (nunca NULL).
     const userOrganizations = useStore(s => s.organizations);
+    const orgNameById = useMemo(() => new Map(userOrganizations.map(o => [o.id, o.name])), [userOrganizations]);
     const categoriesLoadedForOrg = useRef<string | null>(null);
     // Contador de chamadas de loadTransactions: a resposta de uma chamada ANTIGA (conta
     // trocada no meio do carregamento) não grava estado. Antes, a conta anterior chegava
@@ -376,7 +377,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         obras: masterProjects.map(p => p.name),
         centrosCusto: masterCostCenters.map(c => c.name),
         planoContas: masterPlanoContas.map(rotuloPlanoContas),
-    }), [bankTransactions, masterClients, masterSuppliers, masterEmployees, managedCategories, masterProjects, masterCostCenters, masterPlanoContas]);
+        organizacoes: userOrganizations.map(o => o.name),
+    }), [bankTransactions, masterClients, masterSuppliers, masterEmployees, managedCategories, masterProjects, masterCostCenters, masterPlanoContas, userOrganizations]);
     const statementAdvancedFilters = useAdvancedFilters(statementFilterFields, 'extratoBancario:advancedFilters');
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [stats, setStats] = useState({
@@ -464,6 +466,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             projectName: id => (id ? projectById.get(id) ?? null : null),
             costCenterName: id => (id ? costCenterById.get(id) ?? null : null),
             planoContasName: planoContasLabel,
+            organizationName: id => (id ? orgNameById.get(id) ?? null : null),
         };
         filtered = applyFilterRules(filtered, statementAdvancedFilters.rules, statementFilterFields, (tx, key) => getBankTxFilterValue(tx, key, resolvers));
         return filtered.sort((a, b) => {
@@ -493,12 +496,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             } else if (bankSortField === 'planoContas') {
                 valA = (planoContasLabel(a.plano_de_contas_id) || '').toLowerCase();
                 valB = (planoContasLabel(b.plano_de_contas_id) || '').toLowerCase();
+            } else if (bankSortField === 'organization') {
+                valA = (orgNameById.get(a.organization_id) || '').toLowerCase();
+                valB = (orgNameById.get(b.organization_id) || '').toLowerCase();
             }
             if (valA < valB) return bankSortOrder === 'asc' ? -1 : 1;
             if (valA > valB) return bankSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, statementAdvancedFilters.rules, statementFilterFields]);
+    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, orgNameById, statementAdvancedFilters.rules, statementFilterFields]);
 
     // Filtros e ordem dos lançamentos SEM a busca de texto: ela precisa de displayTitle/txCode/…,
     // declarados mais abaixo (ver `sortedInternalTransactions`).
@@ -823,11 +829,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 obra: tx => projectName(tx.project_id) || (tx.project_id ? ROTULO_OUTRA_ORG : null),
                 centroCusto: tx => costCenterName(tx.cost_center_id) || (tx.cost_center_id ? ROTULO_OUTRA_ORG : null),
                 planoContas: tx => planoContasName(tx.plano_de_contas_id) || (tx.plano_de_contas_id ? ROTULO_OUTRA_ORG : null),
+                organizacao: tx => orgNameById.get(tx.organization_id) ?? null,
                 rotulosStatus: STATEMENT_STATUS_LABELS as Record<string, string>,
             }, agrupAba.direcao)
             : []),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [agrupAba.campo, agrupAba.direcao, sortedBankTransactions, projectNameById, costCenterNameById, planoContasNameById],
+        [agrupAba.campo, agrupAba.direcao, sortedBankTransactions, projectNameById, costCenterNameById, planoContasNameById, orgNameById],
     );
     // As linhas NA ORDEM DA TELA, sem as dos grupos recolhidos: base da paginação, do
     // "selecionar todos" e do Shift+clique.
@@ -939,7 +946,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         return [...new Set([effectiveOrgId, ...atendidas])];
     }, [effectiveOrgId, selectedAccountId, accounts, userOrganizations]);
     const orgsDaContaKey = orgsDaConta.join(',');
-    const orgNameById = useMemo(() => new Map(userOrganizations.map(o => [o.id, o.name])), [userOrganizations]);
     // Rótulo de grupo nos selects da tabela: só quando a lista junta mais de uma org.
     const grupoDaOrg = (orgId?: string | null) => (orgsDaConta.length > 1 ? (orgNameById.get(orgId ?? '') ?? 'Organização') : undefined);
 
@@ -3859,6 +3865,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         clienteRegistros, credorRegistros,
                                                         costCenterRegistros: masterCostCenters, planoContasRegistros: masterPlanoContas,
                                                         projectName, costCenterName, planoContasName,
+                                                        organizationName: (id) => (id ? orgNameById.get(id) ?? null : null),
                                                         onUpdateCounterparty: handleUpdateBankCounterparty,
                                                         onUpdateCategory: handleUpdateBankCategory,
                                                         onUpdateProject: handleUpdateBankProject,

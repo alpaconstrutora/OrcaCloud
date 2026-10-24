@@ -179,8 +179,9 @@ e o caso da aba em `BlueprintEditor.test.tsx`.
 - [x] desenho aprovado ("aprovado", 24/10/2026)
 - [x] tarefas 1–4 (catálogo, hook + migração, editor, aba) — cada uma com revisão; revisão final do ramo: 3 importantes corrigidos (e0809570) e re-revisados limpos
 - [x] tarefa 5 (fecho) — no código final: tsc 0 erros; suíte 11.197 ok, 0 falhas, 34 pulados; o `blueprintCasaAutomatica` (não tocado) derruba o worker local no Node 24, como no #112 — portão dele = CI do PR
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #128, `ci` 30min12s verde
+- [x] publicação — squash `e5aa2cdf` em 24/10/2026; `conferir-producao.sh "Planta, vistas e 3D"` (24/10, com o
+  domínio já em 5f8fff0, posterior ao #128): ✅ texto encontrado no bundle servido
 
 ## Correções da revisão final (decisões que superam o texto acima)
 - **Terreno 3D "Automático" é valor EXPLÍCITO**: grava-se o texto `'AUTOMATICO'` (a coluna é `jsonb NOT NULL`); o hook troca `'AUTOMATICO'` <-> `null` na fronteira, o editor segue vendo `boolean | null`. Não há mais "apagar a linha" nem caso especial de leitura; o terreno entra na migração com `true`/`false` explícitos do navegador.

@@ -184,8 +184,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
      * O usuário informa o que pensa — entrada, quantas parcelas, de quanto em
      * quanto tempo, a partir de quando (`gerador`) — e `gerarCronogramaContrato`
      * expande em linhas (`installmentSchedule`), que é o que vai para
-     * `payment_schedule` e daí para Contas a Receber/Pagar. As linhas continuam
-     * editáveis uma a uma: os campos são o ponto de partida, a lista é a verdade.
+     * `payment_schedule` e daí para Contas a Receber/Pagar. Na gaveta as linhas
+     * continuam editáveis uma a uma: os campos são o ponto de partida, a lista é a
+     * verdade. Embutido (Financeiro › Dados Gerais) a lista não aparece — mora só
+     * na sub-aba Parcelas (24/10/2026).
      * Ao reabrir um contrato, os campos são lidos de volta do cronograma salvo
      * (`lerParametrosDoCronograma`), sem coluna nova no banco.
      *
@@ -1571,7 +1573,25 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             {gerador.entrada >= total && total > 0 ? ' — a entrada cobre o valor todo; as parcelas ficaram zeradas.' : ''}
                                         </p>
 
-                                        {installmentSchedule.length > 0 && (
+                                        {/* Embutido (Financeiro › Dados Gerais): a lista das parcelas mora
+                                            só na sub-aba Parcelas (pedido de 24/10/2026 — aparecia nos dois
+                                            lugares). Aqui ficam os campos que montam o plano; o aviso de soma
+                                            divergente continua, senão mudar o Valor Original deixaria o
+                                            cronograma antigo em silêncio (ele não se regera sozinho). */}
+                                        {inline && installmentSchedule.length > 0 && divergente && (
+                                            <p className="text-xs text-red-500 ml-1">
+                                                Soma das parcelas (R$ {fmt(soma)}) difere do valor do contrato (R$ {fmt(total)}).{' '}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => regerarCronograma(gerador)}
+                                                    className="text-blue-600 hover:text-blue-800 font-medium"
+                                                >
+                                                    Redistribuir igualmente
+                                                </button>
+                                            </p>
+                                        )}
+
+                                        {!inline && installmentSchedule.length > 0 && (
                                             <div className="space-y-1.5">
                                                 <div className="flex items-center justify-between">
                                                     <label className="text-xs font-semibold text-slate-500 ml-1">Cronograma de Parcelas</label>

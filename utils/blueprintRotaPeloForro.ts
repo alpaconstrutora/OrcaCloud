@@ -288,7 +288,8 @@ export function paredesDoForro(model: BlueprintModel, levelId: ObjectId, afastam
     }
   }
   // F14c: a altura da viga de teto sobre o eixo que passa por `m` na direção `u` (0 = sem viga) e os APOIOS dela ao
-  // longo desse eixo (o centro de cada pilar sobre ele, menos a meia seção — a face —, medido de `m`).
+  // longo desse eixo, medidos de `m` — desde a correção 1 (24/10/2026), as faces dos pilares sobre ele E as pontas de
+  // cada peça de viga (a mesma régua de `furosPrevistos`, abaixo).
   const vigas = vigasDeTeto(model, levelId);
   const pilares = (model.structures ?? []).filter((x) => x.kind === 'PILAR' && x.levelId === levelId);
   // As vigas de teto sobre o eixo que passa por `m` na direção `u`.
@@ -321,7 +322,9 @@ export function paredesDoForro(model: BlueprintModel, levelId: ObjectId, afastam
       const b = v.pontos[v.pontos.length - 1];
       const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
       const t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / L;
-      if (t <= 0 || t >= L) return true; // o ponto não está nesta peça
+      // O ponto não está nesta peça. Correção 2: com tolerância — exatamente na junta de duas peças, ele está nas duas
+      // (e a junta é apoio: distância 0), não em nenhuma.
+      if (t < -1 || t > L + 1) return true;
       return distanciaAoApoioDaViga(v, p, pilares) >= v.alturaMm * DISTANCIA_DO_APOIO_EM_ALTURAS + MEIO_FURO_MAXIMO_MM;
     });
   // O ponto do meio projetado no lado recuado `k` do anel (dentro dele), ou `null`.
@@ -363,7 +366,9 @@ export function paredesDoForro(model: BlueprintModel, levelId: ObjectId, afastam
         // No meio do trecho em comum e, com folga, perto de cada ponta: com uma travessia só (no meio), a rede que
         // atravessa vários cômodos ia ao meio de cada parede — a água quente do sobrado andava 17 m num térreo de 5 m.
         // F14c: cada travessia é um FURO na viga — fora da zona de 2h junto do apoio (NBR 6118, 13.2.5.1) quando a parede
-        // comporta, e a 2h entre si; sem posição boa, fica a do meio (os cômodos não se desligam; a lista a marca).
+        // comporta, e a 2h entre si (correção 1: 2h + meio furo máximo da face do apoio, e 2h + 120 mm entre travessias —
+        // a régua de `furosPrevistos` mede da face do furo); sem posição boa, fica a do meio (os cômodos não se desligam;
+        // a lista a marca).
         const meia = c.comum / 2;
         const ate = meia - folga - TRAVESSIA_MINIMA_MM / 2;
         const h = alturaDaVigaSobre(c.m, c.u);

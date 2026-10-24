@@ -24,6 +24,9 @@
  *
  * Num cômodo só, a escolha é a mesma de `arvoreComRotaLimitada` com `limite: null` (o teste confere): mesmas
  * distâncias, o mesmo desempate (pendente por x, y; alcançado na ordem de chegada).
+ *
+ * Correção 2 (24/10/2026): só é FONTE o alcançado com rota finita — ligado ao quadro. A ponta de uma rede existente
+ * órfã (fragmento que não chega ao quadro) fica de fora: pendurar a luz nela a deixaria sem caminho até o quadro.
  */
 import type { No, Ponto2 } from './blueprintGrafoDeRede';
 
@@ -71,13 +74,15 @@ export function arvorePelasTravessias(opts: {
     outroLado.set(kb, [...(outroLado.get(kb) ?? []), { no: ka, mm }]);
   }
   const restantes = [...opts.pendentes.entries()].sort(([, p], [, q]) => p.x - q.x || p.y - q.y);
+  /** Alcançado E ligado ao quadro (rota finita). */
+  const ligado = (k: No) => alcancados.has(k) && Number.isFinite(rota.get(k) ?? Infinity);
 
   while (restantes.length > 0) {
     const pendente = new Map(restantes);
     const posDe = (k: No): Ponto2 => alcancados.get(k) ?? pendente.get(k) ?? pontas.get(k)!;
     // Os nós ainda não alcançados (pontas livres e pendentes), por região — os vizinhos em reta.
     const porRegiao = new Map<string, No[]>();
-    const livres = [...[...pontas.keys()].filter((k) => !alcancados.has(k) && !pendente.has(k)), ...pendente.keys()];
+    const livres = [...[...pontas.keys()].filter((k) => !ligado(k) && !pendente.has(k)), ...pendente.keys()];
     for (const k of livres) {
       const r = regiao(k, posDe(k));
       if (r != null) porRegiao.set(r, [...(porRegiao.get(r) ?? []), k]);
@@ -88,6 +93,7 @@ export function arvorePelasTravessias(opts: {
     const anterior = new Map<No, No>();
     const abertos = new Set<No>();
     for (const k of alcancados.keys()) {
+      if (!ligado(k)) continue;
       d.set(k, 0);
       abertos.add(k);
     }
@@ -101,7 +107,7 @@ export function arvorePelasTravessias(opts: {
       const r = regiao(u!, pu);
       const vizinhos = [
         ...(r != null ? (porRegiao.get(r) ?? []) : []).map((v) => ({ no: v, mm: dist(pu, posDe(v)) })),
-        ...(outroLado.get(u!) ?? []).filter((v) => !alcancados.has(v.no)),
+        ...(outroLado.get(u!) ?? []).filter((v) => !ligado(v.no)),
       ];
       for (const v of vizinhos) {
         if (v.no === u) continue;
@@ -122,6 +128,7 @@ export function arvorePelasTravessias(opts: {
       let reta: No | null = null;
       if (!Number.isFinite(custo)) {
         for (const [ka, a] of alcancados) {
+          if (!ligado(ka)) continue;
           const mm = dist(a, p);
           if (mm < custo) {
             custo = mm;
@@ -135,7 +142,7 @@ export function arvorePelasTravessias(opts: {
     const [[k]] = restantes.splice(melhor.i, 1);
     const caminho: No[] = [k];
     if (melhor.reta != null) caminho.unshift(melhor.reta);
-    else while (!alcancados.has(caminho[0])) caminho.unshift(anterior.get(caminho[0])!);
+    else while (!ligado(caminho[0])) caminho.unshift(anterior.get(caminho[0])!);
     for (let j = 1; j < caminho.length; j++) {
       const de = { no: caminho[j - 1], pos: posDe(caminho[j - 1]) };
       const para = { no: caminho[j], pos: posDe(caminho[j]) };

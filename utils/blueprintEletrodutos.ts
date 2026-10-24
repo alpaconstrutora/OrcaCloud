@@ -122,9 +122,12 @@
  *      (`saidaDoRebaixoPelaParede`, item 6 da casa), como antes — a faixa até a
  *      saída vem da luz;
  *   4. a `VIZINHA` liga por dentro da parede, como fora do forro;
- *   5. o `REDE` segue pelos anéis dos cômodos (`paredesDoForro`), como antes.
+ *   5. o `REDE` segue pelos anéis dos cômodos (`paredesDoForro`) — desde a correção 1
+ *      das travessias (abaixo), a árvore dos anéis cresce também do que já está
+ *      ligado ao quadro, não só do quadro.
  *
- * `ARVORE_NO_TETO` com forro é o caminho de antes, inteiro.
+ * `ARVORE_NO_TETO` com forro é o caminho de antes, inteiro (o algoritmo; as travessias de
+ * `paredesDoForro` que ele usa andaram na correção 1, abaixo).
  *
  * LUZ × LUZ DE CÔMODOS DIFERENTES, NO FORRO, PELAS TRAVESSIAS (24/10/2026 — pergunta do relatório do PR #137, *"quer
  * que, no forro, a ligação entre luzes de cômodos diferentes use as passagens já previstas junto às paredes?"*; resposta
@@ -134,8 +137,13 @@
  * menor caminho pelas TRAVESSIAS de `paredesDoForro` — o furo previsto, fora da zona de 2h junto do apoio (NBR 6118,
  * 13.2.5.1, F14c). Ligar é percorrer o caminho, cada trecho reto por `ligarNaRede` (desvia de pilar); as pontas de
  * travessia percorridas viram nós alcançados, e a luz seguinte do outro cômodo reaproveita a mesma travessia. Sem
- * caminho (cômodo sem travessia), a reta, como antes — nunca deixa luz sem ligar. Luz → ponto, VIZINHA, REDE e
- * `ARVORE_NO_TETO` não mudam.
+ * caminho (cômodo sem travessia), a reta, como antes — nunca deixa luz sem ligar. Luz → ponto e VIZINHA não mudam.
+ *
+ * Correções da revisão (24/10/2026): (1) a árvore dos REDE pelos anéis parte também do que já está alcançado e ligado ao
+ * quadro (a ponta da travessia que a luz usou) — nascendo só do quadro, chegava de novo à mesma travessia: anel e trecho
+ * sem circuito; e a travessia foge também da ponta da viga (a régua de apoio de `furosPrevistos`), o que move as
+ * travessias de todo o forro — inclusive as do `ARVORE_NO_TETO` com forro e as da água; (2) só conta como alcançado o nó
+ * com rota FINITA: a ponta de rede existente órfã não é fonte nem das luzes nem dos anéis.
  */
 import type {
   BlueprintModel,
@@ -648,9 +656,10 @@ export function planejarEletrodutos(
       const deParede = lista.filter((p) => p.cotaMm < teto && !(hip.noForro && p.tipoEletrico === 'ILUMINACAO_TETO'));
       // Correção 1 (24/10/2026): no forro, modo pela luz, a árvore dos anéis cresce também do que a árvore das luzes já
       // alcançou (a ponta da travessia que a luz usou) — nascendo só do quadro, chegava de novo à mesma travessia: anel e
-      // trecho sem circuito. E o quadro só vai à raiz dos anéis se alguma aresta sair dela.
+      // trecho sem circuito. E o quadro só vai à raiz dos anéis se alguma aresta sair dela. Correção 2: só o alcançado
+      // LIGADO ao quadro (rota finita) — a ponta de rede existente órfã deixava a tomada pendurada num fragmento.
       const comAlcancados = pelaLuzDoAmbiente && !!hip.noForro;
-      const pelas = (pelaParede || !!hip.noForro) && paredesDaRota().length > 0 && deParede.length > 0 ? arvoreDasParedes(deParede.map((p) => p.at), comAlcancados ? [...alcancados.values()] : undefined) : null;
+      const pelas = (pelaParede || !!hip.noForro) && paredesDaRota().length > 0 && deParede.length > 0 ? arvoreDasParedes(deParede.map((p) => p.at), comAlcancados ? [...alcancados].filter(([k]) => Number.isFinite(rota.get(k) ?? Infinity)).map(([, v]) => v) : undefined) : null;
       const naParede = new Set<ObjectId>();
       if (pelas?.raiz) {
         const raizUsada = !comAlcancados || pelas.arestas.some((a) => chaveP(a.de) === chaveP(pelas.raiz!) || chaveP(a.para) === chaveP(pelas.raiz!)) || [...pelas.encaixe.values()].some((q) => chaveP(q) === chaveP(pelas.raiz!));

@@ -78,6 +78,20 @@ describe('arvorePelasTravessias', () => {
     ]);
   });
 
+  it('Correção 2: alcançado ÓRFÃO (rota infinita — rede existente sem caminho ao quadro) não é fonte, nem para a reta', () => {
+    const orfa = { x: 1400, y: 1100 };
+    const alcancados = new Map<No, XY>([[k(Q), Q], [k(orfa), orfa]]);
+    const rota = new Map<No, number>([[k(Q), 0], [k(orfa), Infinity]]);
+    const ligados: [XY, XY][] = [];
+    arvorePelasTravessias({ alcancados, rota, pendentes: new Map([[k(LA), LA]]), travessias: [T], regiao: doisComodos, chave: k, ligar: (de, para) => ligados.push([de.pos, para.pos]) });
+    expect(ligados).toEqual([[Q, LA]]);
+    // Sem caminho pelo grafo (região null), a reta também parte de quem está ligado.
+    const ligados2: [XY, XY][] = [];
+    const fora = { x: 3000, y: 1100 };
+    arvorePelasTravessias({ alcancados: new Map([[k(Q), Q], [k(orfa), orfa]]), rota: new Map([[k(Q), 0], [k(orfa), Infinity]]), pendentes: new Map([[k(fora), fora]]), travessias: [], regiao: doisComodos, chave: k, ligar: (de, para) => ligados2.push([de.pos, para.pos]) });
+    expect(ligados2).toEqual([[Q, fora]]);
+  });
+
   it('num cômodo só: as mesmas ligações de arvoreComRotaLimitada com limite null (mesma ordem, mesmo desempate)', () => {
     const luzes = [{ x: 500, y: 500 }, { x: 2500, y: 500 }, { x: 1500, y: 2500 }, { x: 500, y: 2500 }, { x: 2500, y: 2500 }, { x: 1500, y: 1500 }];
     const antigo: [XY, XY][] = [];

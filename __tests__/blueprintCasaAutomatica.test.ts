@@ -23,6 +23,7 @@ import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
 import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
 import { pontosElegiveis } from '../utils/blueprintCircuitosAutomaticos';
 import { HIPOTESES_DO_MURO_DA_CASA_PADRAO } from '../utils/blueprintMuroDaCasa';
+import { furosPrevistos } from '../utils/blueprintFurosPrevistos';
 
 // Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
 // ~0,5–0,8 s nesta máquina, e a CI, disputando CPU com a suíte toda, chegou a passar dos 5 s do padrão
@@ -1245,6 +1246,32 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     const evaporadoras = (r.terminais ?? []).filter((t) => (t.tipoHidraulico ?? '').startsWith('EVAPORADORA'));
     const saiPelaParede = evaporadoras.length > 0 && evaporadoras.every((e) => (r.trechos ?? []).some((t) => t.disciplina === 'FRIGORIGENA' && t.cotaAMm === e.cotaMm && t.cotaBMm === e.cotaMm && [t.a, t.b].some((q) => q.x === e.at.x && q.y === e.at.y)));
     for (const d of REDES_DO_FORRO) expect(temNaFaixa(d) || (d === 'FRIGORIGENA' && saiPelaParede), d).toBe(true);
+  });
+
+  // Forro, luz × luz pelas travessias (24/10/2026, correções 1 e 2 — `docs/planos/2026-10-24-forro-luz-pelas-travessias.md`):
+  // a elétrica sem anel, todo trecho com circuito, e os furos elétricos "verificar" no máximo os medidos depois da régua
+  // única do apoio (térrea 7, sobrado 39; antes, 10 e 44).
+  it.each([[1, 7], [2, 39]] as const)('%i pavimento(s): eletroduto sem anel, todo trecho com circuito, e no máximo %i furos elétricos a verificar', (pavimentos, maxVerificar) => {
+    const r = casa(pavimentos).resultado;
+    const el = (r.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA');
+    expect(el.filter((t) => (t.circuitoIds ?? []).length === 0).map((t) => t.id)).toEqual([]);
+    const no = (t: (typeof el)[number], q: Point, z: number) => `${t.levelId}|${q.x},${q.y},${z}`;
+    const pai = new Map<string, string>();
+    const raiz = (k: string): string => {
+      let x = k;
+      while (pai.get(x) !== x) x = pai.get(x)!;
+      return x;
+    };
+    let aneis = 0;
+    for (const t of el) {
+      const [ka, kb] = [no(t, t.a, t.cotaAMm), no(t, t.b, t.cotaBMm)];
+      for (const k of [ka, kb]) if (!pai.has(k)) pai.set(k, k);
+      if (raiz(ka) === raiz(kb)) aneis++;
+      else pai.set(raiz(ka), raiz(kb));
+    }
+    expect(aneis).toBe(0);
+    const verificar = furosPrevistos(r).filter((f) => f.disciplina === 'ELETRICA' && f.dispensa === false).length;
+    expect(verificar).toBeLessThanOrEqual(maxVerificar);
   });
 
   it('térrea: nenhuma dessas redes em vão de porta ou janela (o aquecedor ao lado da janela; o dreno do ar é a F14d)', () => {

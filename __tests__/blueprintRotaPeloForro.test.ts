@@ -42,6 +42,26 @@ describe('rede pelo forro (F14b) — as paredes do forro', () => {
     ]);
   });
 
+  it('Correção 2: viga da divisória partida em 0–1000 / 1000–1860 / 1860–4000 — a junta é apoio das duas peças: nenhuma travessia nela, e cada uma fora da zona da peça em que está', () => {
+    let c = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const L2 = c.levels[0].id;
+    const eixos: [number, number, number, number][] = [[0, 0, 6000, 0], [6000, 0, 6000, 4000], [6000, 4000, 0, 4000], [0, 4000, 0, 0], [3000, 0, 3000, 4000]];
+    const vigas: [number, number, number, number][] = [[0, 0, 6000, 0], [6000, 0, 6000, 4000], [6000, 4000, 0, 4000], [0, 4000, 0, 0], [3000, 0, 3000, 1000], [3000, 1000, 3000, 1860], [3000, 1860, 3000, 4000]];
+    c = applyBatch(c, eixos.map(([ax, ay, bx, by]) => ({ type: 'AddWall', levelId: L2, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }) as Command)).model;
+    c = applyBatch(c, vigas.map(([ax, ay, bx, by]) => ({ type: 'AddStructural', levelId: L2, kind: 'VIGA', pontos: [{ x: ax, y: ay }, { x: bx, y: by }], larguraMm: 150, alturaMm: 400, baseMm: 2400 }) as Command)).model;
+    for (const sp of [...c.spaces]) c = applyCommand(c, { type: 'NameSpace', spaceId: sp.id, name: sp.ring.some((q) => q.x === 0) ? 'Sala' : 'Cozinha' }).model;
+    const pecas = c.structures.filter((x) => x.kind === 'VIGA' && x.pontos[0].x === 3000 && x.pontos[1].x === 3000);
+    const travessias = paredesDoForro(c, L2, 50).filter((w) => w.id.includes('travessia'));
+    expect(travessias.length).toBeGreaterThan(0);
+    for (const t of travessias) {
+      const y = t.a.y;
+      expect([1000, 1860]).not.toContain(y);
+      for (const v of pecas.filter((p) => y >= Math.min(p.pontos[0].y, p.pontos[1].y) - 1 && y <= Math.max(p.pontos[0].y, p.pontos[1].y) + 1)) {
+        expect(distanciaAoApoioDaViga(v, { x: 3000, y }, [])).toBeGreaterThanOrEqual(2 * 400 + 60);
+      }
+    }
+  });
+
   it('Correção 1: a travessia fica fora da zona do apoio pela MESMA régua de furosPrevistos (ponta da viga e pilar); sem posição livre, a do meio', () => {
     const { m, L } = casinha();
     const viga = m.structures.find((x) => x.kind === 'VIGA' && x.pontos[0].x === 3000 && x.pontos[1].x === 3000)!;

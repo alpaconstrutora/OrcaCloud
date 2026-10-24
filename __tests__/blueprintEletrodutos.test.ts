@@ -39,6 +39,7 @@ import { medidasDoTerminal } from '../utils/blueprintRede';
 import { itensDaLegendaEletrica } from '../utils/blueprintPranchaEletrica';
 import { materiaisEletricos } from '../utils/blueprintListaDeMateriaisEletrica';
 import { paredesDoForro } from '../utils/blueprintRotaPeloForro';
+import { furosPrevistos } from '../utils/blueprintFurosPrevistos';
 
 /** Sala 6 × 4; QDC a 1.600; C1 = luz de teto (a 2.800 = teto) + interruptor; C2 (FFF) = duas TUG; um ponto solto. */
 function casa() {
@@ -1160,7 +1161,36 @@ describe('24/10/2026 (Task 3) — pela luz do ambiente NO FORRO', () => {
     expect(naFaixa(plano.comandos).filter(cruzaADivisoria)).toHaveLength(1);
   });
 
+  it('Correção 2: rede existente ÓRFÃ (um trecho do C2 no anel da Área, sem ligação ao quadro) — a tomada da Área não pendura nela: chega ao quadro, todo trecho novo com circuito', () => {
+    const eixos: [number, number, number, number][] = [[0, 0, 9000, 0], [9000, 0, 9000, 4000], [9000, 4000, 0, 4000], [0, 4000, 0, 0], [3000, 0, 3000, 4000], [6000, 0, 6000, 4000]];
+    const nomear = (ring: XY[]) => (ring.some((p) => p.x === 0) ? 'Sala' : ring.some((p) => p.x === 9000) ? 'Área' : 'Cozinha');
+    const TA = { x: 8925, y: 2000 };
+    const { m: m0, t, c2 } = comForro([{ ...LS, tipo: 'ILUMINACAO_TETO' }, { ...TA, tipo: 'TUG' }], eixos, nomear);
+    const naArea = paredesDoForro(m0, t, NO_FORRO.faixa.afastamentoDaFaceMm).find((w) => !w.id.startsWith('forro:travessia:') && w.a.x > 6000 && w.b.x > 6000)!;
+    const m = applyCommand(m0, { type: 'AddTrecho', levelId: t, disciplina: 'ELETRICA', a: point(naArea.a.x, naArea.a.y), b: point(naArea.b.x, naArea.b.y), cotaAMm: FAIXA, cotaBMm: FAIXA, bitolaMm: 25, circuitoIds: [c2] } as Command).model;
+    const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
+    expect(plano.motivo).toBeNull();
+    expect(adds(plano.comandos).filter((c) => (c.circuitoIds ?? []).length === 0)).toEqual([]);
+    // O trecho que chega à tomada leva o circuito dela: o caminho até o quadro existe.
+    const chega = adds(plano.comandos).filter((c) => (mesmo(c.a, TA) && c.cotaAMm === 300) || (mesmo(c.b, TA) && c.cotaBMm === 300));
+    expect(chega.length).toBeGreaterThan(0);
+    for (const c of chega) expect(c.circuitoIds).toContain(c2);
+  });
+
+  it('Correção 2 (I3): planejar → aplicar → furosPrevistos — com as luzes perto de y = 300 (onde a régua antiga punha a travessia a 225 mm da ponta da viga), o furo elétrico da travessia sai DISPENSADO', () => {
+    const L1 = { x: 1500, y: 300 };
+    const L2 = { x: 4500, y: 300 };
+    const { m } = comForro([{ ...L1, tipo: 'ILUMINACAO_TETO' }, { ...L2, tipo: 'ILUMINACAO_TETO' }]);
+    const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
+    const depois = applyBatch(m, plano.comandos).model;
+    const naDivisoria = furosPrevistos(depois).filter((f) => f.disciplina === 'ELETRICA' && f.direcao === 'HORIZONTAL' && f.ponto.x === 3000);
+    expect(naDivisoria).toHaveLength(1);
+    expect(naDivisoria[0].dispensa).toBe(true);
+  });
+
   it('ARVORE_NO_TETO com forro: os comandos de antes da mudança, idênticos (hash medido no HEAD 0f3a20d8)', () => {
+    // Correção 2: este caso só tem luzes, que no `ARVORE_NO_TETO` não usam travessia — é guarda de regressão do caso SEM
+    // travessia. Com rede pelos anéis, o `ARVORE_NO_TETO` com forro muda desde a correção 1 (as travessias andaram).
     const { m } = doisComodosComLuz();
     const arvore = planejarEletrodutos(m, quadroDe(m), { ...FORRO, encaminhamento: 'ARVORE_NO_TETO' });
     // A árvore de antes liga luz → luz em reta, pela viga.

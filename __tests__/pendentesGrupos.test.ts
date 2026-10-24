@@ -78,6 +78,30 @@ describe('agruparExtrato', () => {
     });
 });
 
+describe('agruparExtrato — campos só da aba Extrato', () => {
+    const PLANOS: Record<string, string> = { pc1: '1.1.1 · PIS', pc2: '2.1 · Salários' };
+    const nomes: NomesDoExtrato = {
+        obra: () => null, centroCusto: () => null,
+        planoContas: tx => (tx.plano_de_contas_id ? PLANOS[tx.plano_de_contas_id] ?? null : null),
+        rotulosStatus: { IMPORTED: 'Importado', NORMALIZED: 'Normalizado', MATCHED: 'Conciliado', IGNORED: 'Ignorado' },
+    };
+
+    it('plano de contas: A→Z pelo rótulo da célula e "Sem plano de contas" no fim', () => {
+        const g = agruparExtrato([
+            banco('a', { plano_de_contas_id: 'pc2' }), banco('b', {}), banco('c', { plano_de_contas_id: 'pc1' }),
+        ], 'plano_contas', nomes);
+        expect(g.map(x => x.label)).toEqual(['1.1.1 · PIS', '2.1 · Salários', 'Sem plano de contas']);
+    });
+
+    it('status: na ordem do fluxo (não alfabética) e inverte em Decrescente', () => {
+        const linhas = [
+            banco('a', { status: 'MATCHED' }), banco('b', { status: 'IMPORTED' }), banco('c', { status: 'IGNORED' }), banco('d', { status: 'NORMALIZED' }),
+        ];
+        expect(agruparExtrato(linhas, 'status', nomes).map(x => x.label)).toEqual(['Importado', 'Normalizado', 'Conciliado', 'Ignorado']);
+        expect(agruparExtrato(linhas, 'status', nomes, 'desc').map(x => x.label)).toEqual(['Ignorado', 'Conciliado', 'Normalizado', 'Importado']);
+    });
+});
+
 describe('agruparLancamentos', () => {
     const linhas = [
         lanc('l1', { entity_name: 'Beta', category: 'Aluguel', amount: 500, direction: 'CREDIT', transaction_date: '2026-08-01', ...({ due_date: '2026-10-05' } as object) }),

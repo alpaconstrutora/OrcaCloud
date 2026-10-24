@@ -1,5 +1,5 @@
 import type { BankTransaction, InternalTransaction } from '../types';
-import { agruparLinhas, chavePorMes, chavePorNome, type ChaveDeGrupo, type DirecaoGrupos, type Grupo } from './agruparLinhas';
+import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, type ChaveDeGrupo, type DirecaoGrupos, type Grupo } from './agruparLinhas';
 
 /**
  * "Agrupar" da aba Pendentes da Conciliação Bancária — as duas tabelas (Extrato e
@@ -12,7 +12,8 @@ import { agruparLinhas, chavePorMes, chavePorNome, type ChaveDeGrupo, type Direc
  * créditos e débitos, e somar tudo em módulo daria um número sem sentido.
  */
 
-export type CampoAgruparExtrato = 'contraparte' | 'categoria' | 'obra' | 'centro_custo' | 'data';
+/** 'plano_contas' e 'status' só existem na aba Extrato (a Pendentes não tem essas colunas). */
+export type CampoAgruparExtrato = 'contraparte' | 'categoria' | 'obra' | 'centro_custo' | 'data' | 'plano_contas' | 'status';
 export type CampoAgruparLancamento = 'parte' | 'categoria' | 'obra' | 'centro_custo' | 'data';
 
 export const OPCOES_AGRUPAR_EXTRATO: { value: CampoAgruparExtrato; label: string }[] = [
@@ -21,6 +22,14 @@ export const OPCOES_AGRUPAR_EXTRATO: { value: CampoAgruparExtrato; label: string
     { value: 'obra', label: 'Obra' },
     { value: 'centro_custo', label: 'Centro de Custo' },
     { value: 'data', label: 'Data (mês)' },
+];
+
+/** Aba Extrato: as colunas da tabela (Descrição não agrupa — um texto livre por linha). */
+export const OPCOES_AGRUPAR_EXTRATO_ABA: { value: CampoAgruparExtrato; label: string }[] = [
+    ...OPCOES_AGRUPAR_EXTRATO.slice(0, 4),
+    { value: 'plano_contas', label: 'Plano de Contas' },
+    { value: 'data', label: 'Data (mês)' },
+    { value: 'status', label: 'Status' },
 ];
 
 export const OPCOES_AGRUPAR_LANCAMENTO: { value: CampoAgruparLancamento; label: string }[] = [
@@ -38,12 +47,18 @@ const SEM = {
     obra: 'Sem obra',
     centro_custo: 'Sem centro de custo',
     data: 'Sem data',
+  plano_contas: 'Sem plano de contas',
+  status: 'Sem status',
 } as const;
 
 /** Texto que as células mostram — a tela resolve (o id vira nome; obra de outra org vira o rótulo dela). */
 export interface NomesDoExtrato {
     obra: (tx: BankTransaction) => string | null;
     centroCusto: (tx: BankTransaction) => string | null;
+    /** Só na aba Extrato. */
+    planoContas?: (tx: BankTransaction) => string | null;
+    /** Só na aba Extrato: rótulos de status da tela — define também a ordem dos grupos (a do fluxo). */
+    rotulosStatus?: Record<string, string>;
 }
 
 export interface NomesDoLancamento {
@@ -70,13 +85,15 @@ export function agruparExtrato(
             case 'obra': return chavePorNome(nomes.obra(tx));
             case 'centro_custo': return chavePorNome(nomes.centroCusto(tx));
             case 'data': return chavePorMes(tx.transaction_date);
+            case 'plano_contas': return chavePorNome(nomes.planoContas?.(tx));
+            case 'status': return chavePorRotulo(tx.status, nomes.rotulosStatus ?? {});
         }
     };
     return agruparLinhas(linhas, {
         chave,
         semRotulo: SEM[campo],
         valor: tx => saldo(tx.direction, tx.amount),
-        ordem: campo === 'data' ? 'chave' : 'rotulo',
+        ordem: campo === 'data' ? 'chave' : campo === 'status' && nomes.rotulosStatus ? Object.keys(nomes.rotulosStatus) : 'rotulo',
         direcao,
     });
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
     Upload, Search, CheckCircle2, AlertCircle,
     ArrowRightLeft, FileText, Download, Trash2, Check,
@@ -49,7 +49,7 @@ import { useAgrupamento } from '../hooks/useAgrupamento';
 import { entradasDaPagina, linhasDaTela, type EntradaDaTela } from '../utils/agruparLinhas';
 import { combinaComBusca } from '../utils/buscaPendentes';
 import {
-    agruparExtrato, agruparLancamentos, OPCOES_AGRUPAR_EXTRATO, OPCOES_AGRUPAR_LANCAMENTO, TITULO_SALDO_DO_GRUPO,
+    agruparExtrato, agruparLancamentos, OPCOES_AGRUPAR_EXTRATO, OPCOES_AGRUPAR_EXTRATO_ABA, OPCOES_AGRUPAR_LANCAMENTO, TITULO_SALDO_DO_GRUPO,
     type CampoAgruparExtrato, type CampoAgruparLancamento,
 } from '../utils/pendentesGrupos';
 import AjustarDiferencaSheet from './reconciliation/AjustarDiferencaSheet';
@@ -143,7 +143,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const handleStatementRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean) => {
         if (shiftKey && lastCheckedStatementIndex !== null) {
             const [start, end] = lastCheckedStatementIndex < index ? [lastCheckedStatementIndex, index] : [index, lastCheckedStatementIndex];
-            const rangeIds = sortedBankTransactions.slice(start, end + 1).map(tx => tx.id);
+            const rangeIds = linhasAba.slice(start, end + 1).map(tx => tx.id);
             setSelectedBankTxIds(prev => new Set([...prev, ...rangeIds]));
         } else {
             setSelectedBankTxIds(prev => {
@@ -500,16 +500,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         });
     }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, statementAdvancedFilters.rules, statementFilterFields]);
 
-    const statementTotalPages = Math.max(1, Math.ceil(sortedBankTransactions.length / statementPageSize));
-    // Se o recorte encolheu e a página atual não existe mais, cai na última válida
-    // (evita tabela vazia com "página 7 de 3").
-    const statementCurrentPage = Math.min(statementPage, statementTotalPages);
-    const statementPageStart = (statementCurrentPage - 1) * statementPageSize;
-    const pagedBankTransactions = useMemo(
-        () => sortedBankTransactions.slice(statementPageStart, statementPageStart + statementPageSize),
-        [sortedBankTransactions, statementPageStart, statementPageSize]
-    );
-
     // Filtros e ordem dos lançamentos SEM a busca de texto: ela precisa de displayTitle/txCode/…,
     // declarados mais abaixo (ver `sortedInternalTransactions`).
     const internalSemBusca = useMemo(() => {
@@ -821,6 +811,46 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     // que estivesse em voo estourava o corte de 20 s. "Selecionar todos" vira da página.
     // Dock, lote e totais seguem sobre a seleção inteira (os ids, não a página).
     const recortePendentes = [selectedAccountId, competencia, startDate, endDate, flowFilter];
+
+    // ── Aba Extrato: "Agrupar" (guia §6.12) + paginação própria sobre os grupos ─────────────────
+    // A âncora do Shift+clique guarda um ÍNDICE; trocar campo/sentido ou recolher muda as linhas
+    // de lugar, então ela é zerada (senão o intervalo marcaria linhas fora do trecho clicado).
+    const zerarAncoraExtrato = useCallback(() => setLastCheckedStatementIndex(null), []);
+    const agrupAba = useAgrupamento<CampoAgruparExtrato>('extratoBancario:groupBy', zerarAncoraExtrato);
+    const gruposAba = useMemo(
+        () => (agrupAba.campo !== 'none'
+            ? agruparExtrato(sortedBankTransactions, agrupAba.campo, {
+                obra: tx => projectName(tx.project_id) || (tx.project_id ? ROTULO_OUTRA_ORG : null),
+                centroCusto: tx => costCenterName(tx.cost_center_id) || (tx.cost_center_id ? ROTULO_OUTRA_ORG : null),
+                planoContas: tx => planoContasName(tx.plano_de_contas_id) || (tx.plano_de_contas_id ? ROTULO_OUTRA_ORG : null),
+                rotulosStatus: STATEMENT_STATUS_LABELS as Record<string, string>,
+            }, agrupAba.direcao)
+            : []),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [agrupAba.campo, agrupAba.direcao, sortedBankTransactions, projectNameById, costCenterNameById, planoContasNameById],
+    );
+    // As linhas NA ORDEM DA TELA, sem as dos grupos recolhidos: base da paginação, do
+    // "selecionar todos" e do Shift+clique.
+    const linhasAba = useMemo(
+        () => (agrupAba.agrupando ? linhasDaTela(gruposAba, agrupAba.recolhidos) : sortedBankTransactions),
+        [agrupAba.agrupando, gruposAba, agrupAba.recolhidos, sortedBankTransactions],
+    );
+    const statementTotalPages = Math.max(1, Math.ceil(linhasAba.length / statementPageSize));
+    // Se o recorte encolheu e a página atual não existe mais, cai na última válida
+    // (evita tabela vazia com "página 7 de 3").
+    const statementCurrentPage = Math.min(statementPage, statementTotalPages);
+    const statementPageStart = (statementCurrentPage - 1) * statementPageSize;
+    const pagedBankTransactions = useMemo(
+        () => linhasAba.slice(statementPageStart, statementPageStart + statementPageSize),
+        [linhasAba, statementPageStart, statementPageSize]
+    );
+    /** O que desenhar no <tbody>: cabeçalhos de grupo intercalados com as linhas da página. `indice` é global (Shift+clique). */
+    const entradasAba = useMemo<EntradaDaTela<BankTransaction>[]>(
+        () => (agrupAba.agrupando
+            ? entradasDaPagina(gruposAba, agrupAba.recolhidos, statementPageStart, statementPageStart + statementPageSize)
+            : pagedBankTransactions.map((item, i) => ({ tipo: 'linha' as const, item, indice: statementPageStart + i }))),
+        [agrupAba.agrupando, gruposAba, agrupAba.recolhidos, statementPageStart, statementPageSize, pagedBankTransactions],
+    );
     // "Agrupar" (guia §6.12) nas duas tabelas da Pendentes — só no modo lista: a grade de
     // cards não tem cabeçalho de grupo, então lá a escolha fica guardada mas não vale.
     const agrupExtrato = useAgrupamento<CampoAgruparExtrato>('conciliacaoPendentes:extrato:groupBy');
@@ -946,7 +976,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     // Qualquer mudança de recorte volta o Extrato para a primeira página.
     useEffect(() => {
         setStatementPage(1);
-    }, [bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, statementAdvancedFilters.rules, selectedAccountId, competencia, startDate, endDate]);
+    }, [bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, statementAdvancedFilters.rules, selectedAccountId, competencia, startDate, endDate, agrupAba.campo, agrupAba.direcao]);
 
     useEffect(() => {
         localStorage.setItem('reconciliation_bank_cat_filter', JSON.stringify(bankCategoryFilter));
@@ -3596,6 +3626,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     </div>
                                 )}
                                 {activeView === 'statement' && (
+                                    <AgruparControles
+                                        opcoes={OPCOES_AGRUPAR_EXTRATO_ABA}
+                                        campo={agrupAba.campo}
+                                        onCampo={agrupAba.setCampo}
+                                        direcao={agrupAba.direcao}
+                                        onDirecao={agrupAba.setDirecao}
+                                        chavesDosGrupos={gruposAba.map(g => g.key)}
+                                        algumRecolhido={agrupAba.recolhidos.size > 0}
+                                        onAlternarTodos={agrupAba.alternarTodos}
+                                        title="Agrupar o extrato"
+                                    />
+                                )}
+                                {activeView === 'statement' && (
                                     <button
                                         onClick={loadTransactions}
                                         className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0"
@@ -3791,10 +3834,23 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-200">
-                                                {pagedBankTransactions.map((tx, pageRowIndex) => {
-                                                    // Índice global — o Shift+clique (§10.1) recorta
-                                                    // sobre a lista inteira, não sobre a página.
-                                                    const rowIndex = statementPageStart + pageRowIndex;
+                                                {entradasAba.map(entrada => {
+                                                    if (entrada.tipo === 'grupo') {
+                                                        return (
+                                                            <LinhaDeGrupo
+                                                                key={`grupo:${entrada.grupo.key}`}
+                                                                grupo={entrada.grupo} recolhido={entrada.recolhido} continua={entrada.continua}
+                                                                // checkbox + colunas de dado visíveis + espaçador (+ Ações, se visível)
+                                                                colSpan={2 + tableColumns.orderedVisibleColumns.filter(key => key !== 'actions' && isStatementColumnVisibleForFlow(key, flowFilter)).length + (tableColumns.visibleColumns.includes('actions') ? 1 : 0)}
+                                                                onAlternar={agrupAba.alternar}
+                                                                tituloTotal={TITULO_SALDO_DO_GRUPO}
+                                                            />
+                                                        );
+                                                    }
+                                                    const tx = entrada.item;
+                                                    // Índice global na ordem da TELA — o Shift+clique (§10.1) recorta
+                                                    // sobre a lista inteira (sem os grupos recolhidos), não sobre a página.
+                                                    const rowIndex = entrada.indice;
                                                     const cpKey = (tx.counterparty_name || '').trim().toLowerCase();
                                                     const cpRegistered = tx.direction === 'DEBIT' ? masterSuppliersLower.has(cpKey) : masterClientsLower.has(cpKey);
                                                     const statementCtx: StatementRowCtx = {
@@ -3858,7 +3914,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 <span>
                                                     {sortedBankTransactions.length === 0
                                                         ? 'Nenhum lançamento'
-                                                        : `${statementPageStart + 1}–${Math.min(statementPageStart + statementPageSize, sortedBankTransactions.length)} de ${sortedBankTransactions.length}`}
+                                                        : linhasAba.length === 0
+                                                            ? `Todos os grupos recolhidos (${sortedBankTransactions.length} lançamentos)`
+                                                            : `${statementPageStart + 1}–${Math.min(statementPageStart + statementPageSize, linhasAba.length)} de ${linhasAba.length}`}
                                                 </span>
                                                 <select
                                                     value={statementPageSize}

@@ -134,6 +134,12 @@ export function arvorePelasParedes(opts: {
    * penalidade cheia, a água quente do sobrado dava 7 m de volta pelo outro lado do cômodo.
    */
   penalidadeDoAnelMm?: number;
+  /**
+   * 24/10/2026 (forro, luz × luz pelas travessias): pontos que JÁ estão na rede — a árvore também cresce a partir deles
+   * (os que são nó do grafo, como a ponta de uma travessia que a luz já usou) e não os emenda. Sem isto, a árvore
+   * nascia só da raiz e chegava de novo à mesma travessia: anel, e um trecho sem circuito. Ausente = só a raiz.
+   */
+  alcancados?: readonly P2[];
 }): ArvorePelasParedes {
   const { paredes, raioDeEncaixeMm } = opts;
   const obstaculos = opts.obstaculos ?? [];
@@ -239,6 +245,8 @@ export function arvorePelasParedes(opts: {
 
   // ── Steiner por caminhos mínimos ─────────────────────────────────────────
   const naArvore = new Set<string>([chaveP(raiz)]);
+  const jaNaRede = (opts.alcancados ?? []).map(chaveP).filter((k) => vizinhos.has(k));
+  for (const k of jaNaRede) naArvore.add(k);
   const arestasK: { de: string; para: string }[] = [];
   const alvos = [...new Set([...encaixe.values()].map(chaveP))].filter((k) => k !== chaveP(raiz)).sort();
   const restantes = new Set(alvos);
@@ -295,7 +303,7 @@ export function arvorePelasParedes(opts: {
   }
 
   // ── Emendas: nó de passagem colinear, grau 2, que não é ponto ────────────
-  const protegidos = new Set<string>([chaveP(raiz), ...[...encaixe.values()].map(chaveP)]);
+  const protegidos = new Set<string>([chaveP(raiz), ...[...encaixe.values()].map(chaveP), ...jaNaRede]);
   let mudou = true;
   while (mudou) {
     mudou = false;

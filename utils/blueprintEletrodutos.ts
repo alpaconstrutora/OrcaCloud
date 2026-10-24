@@ -112,7 +112,8 @@
  *   1. a árvore das luzes corre na cota da FAIXA do eletroduto; a luz (na face
  *      do forro) sobe reta até ela, e o Prim liga as luzes entre si e ao quadro
  *      sem limite de rota (a luz pendura no nó mais perto), contornando pilar,
- *      prumada, ramal da laje de cima e laje rebaixada (`ligarNaRede`);
+ *      prumada, ramal da laje de cima e laje rebaixada (`ligarNaRede`) — entre
+ *      cômodos, pelas travessias (24/10/2026, abaixo);
  *   2. o ponto `LUZ` vai reto pela faixa, da luz até `q` — a vertical dele no
  *      anel do cômodo, recuada `afastamentoDaFaceMm` da face: o MESMO encaixe da
  *      árvore pelos anéis de antes —, com os mesmos desvios, e de `q` a descida
@@ -121,9 +122,28 @@
  *      (`saidaDoRebaixoPelaParede`, item 6 da casa), como antes — a faixa até a
  *      saída vem da luz;
  *   4. a `VIZINHA` liga por dentro da parede, como fora do forro;
- *   5. o `REDE` segue pelos anéis dos cômodos (`paredesDoForro`), como antes.
+ *   5. o `REDE` segue pelos anéis dos cômodos (`paredesDoForro`) — desde a correção 1
+ *      das travessias (abaixo), a árvore dos anéis cresce também do que já está
+ *      ligado ao quadro, não só do quadro.
  *
- * `ARVORE_NO_TETO` com forro é o caminho de antes, inteiro.
+ * `ARVORE_NO_TETO` com forro é o caminho de antes, inteiro (o algoritmo; as travessias de
+ * `paredesDoForro` que ele usa andaram na correção 1, abaixo).
+ *
+ * LUZ × LUZ DE CÔMODOS DIFERENTES, NO FORRO, PELAS TRAVESSIAS (24/10/2026 — pergunta do relatório do PR #137, *"quer
+ * que, no forro, a ligação entre luzes de cômodos diferentes use as passagens já previstas junto às paredes?"*; resposta
+ * do usuário: *"sim"*). Com o item 1 acima, a árvore das luzes ia em reta de um cômodo a outro e furava a viga onde a
+ * reta caísse. Agora (só no modo pela luz com forro) o Prim mede pelo grafo do forro (`blueprintForroEntreComodos.ts`):
+ * no mesmo cômodo (`comodoDoPonto`; o quadro na face da parede, o cômodo mais perto), a reta de sempre; entre cômodos, o
+ * menor caminho pelas TRAVESSIAS de `paredesDoForro` — o furo previsto, fora da zona de 2h junto do apoio (NBR 6118,
+ * 13.2.5.1, F14c). Ligar é percorrer o caminho, cada trecho reto por `ligarNaRede` (desvia de pilar); as pontas de
+ * travessia percorridas viram nós alcançados, e a luz seguinte do outro cômodo reaproveita a mesma travessia. Sem
+ * caminho (cômodo sem travessia), a reta, como antes — nunca deixa luz sem ligar. Luz → ponto e VIZINHA não mudam.
+ *
+ * Correções da revisão (24/10/2026): (1) a árvore dos REDE pelos anéis parte também do que já está alcançado e ligado ao
+ * quadro (a ponta da travessia que a luz usou) — nascendo só do quadro, chegava de novo à mesma travessia: anel e trecho
+ * sem circuito; e a travessia foge também da ponta da viga (a régua de apoio de `furosPrevistos`), o que move as
+ * travessias de todo o forro — inclusive as do `ARVORE_NO_TETO` com forro e as da água; (2) só conta como alcançado o nó
+ * com rota FINITA: a ponta de rede existente órfã não é fonte nem das luzes nem dos anéis.
  */
 import type {
   BlueprintModel,
@@ -139,9 +159,10 @@ import type {
 } from './blueprintKernel';
 import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, composicaoDaRede, pointInPolygon, type Point } from './blueprintKernel';
 import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, type FaixaDoForro } from './blueprintRotaPeloForro';
-import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
-import { encaminhamentoPorAmbiente } from './blueprintEncaminhamentoPorAmbiente';
+import { comodoDoPonto, encaminhamentoPorAmbiente } from './blueprintEncaminhamentoPorAmbiente';
+import { arvorePelasTravessias } from './blueprintForroEntreComodos';
 import { ambienteDoPonto } from './blueprintAgrupamentoDePontos';
 import { REGRA_DE_CAIXAS_PADRAO, caixasDaRede, type RegraDeCaixas, type SegmentoDaRede } from './blueprintCaixasDePassagem';
 import {
@@ -491,10 +512,14 @@ export function planejarEletrodutos(
   const pelaLuzDoAmbiente = (hip.encaminhamento ?? 'PELA_LUZ_DO_AMBIENTE') === 'PELA_LUZ_DO_AMBIENTE';
   const pilaresDaReta = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }) =>
     pelaLuzDoAmbiente ? pilaresInflados(pegadas(levelId), a, b, hip.bitolaMm / 2 + FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM) : pegadas(levelId);
+  /**
+   * F14b: no forro, a reta desvia também das prumadas das outras redes (a coluna da fria cruzando a faixa).
+   * F27 item 5: e dos ramais que correm na laje do pavimento de cima, colados na faixa pela cota real.
+   */
+  const outrasNaFaixa = (levelId: ObjectId, cota: number): Point[][] =>
+    hip.noForro ? [...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : [];
   const ligarNaRede = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): void => {
-    // F14b: no forro, a reta desvia também das prumadas das outras redes (a coluna da fria cruzando a faixa).
-    // F27 item 5: e dos ramais que correm na laje do pavimento de cima, colados na faixa pela cota real.
-    const outras = hip.noForro ? [...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : [];
+    const outras = outrasNaFaixa(levelId, cota);
     // Task 3, correção 2: sem contorno com os pilares inflados, a pegada real (o de antes, nunca pior).
     const desvio = desvioDoPilar(a, b, [...pilaresDaReta(levelId, a, b), ...outras]) ?? (pelaLuzDoAmbiente ? desvioDoPilar(a, b, [...pegadas(levelId), ...outras]) : null);
     if (desvio == null) {
@@ -592,8 +617,8 @@ export function planejarEletrodutos(
     let paredesDoForroDoNivel: ReturnType<typeof paredesDoForro> | null = null;
     const paredesDaRota = (): readonly Wall[] => (hip.noForro ? (paredesDoForroDoNivel ??= paredesDoForro(model, nivel.id, hip.noForro.faixa.afastamentoDaFaceMm)) : paredesDoNivel);
     /** A árvore pelas paredes (ou pelos anéis do forro) do quadro até `ats` — as opções de sempre. */
-    const arvoreDasParedes = (ats: readonly { x: number; y: number }[]) =>
-      arvorePelasParedes({ paredes: paredesDaRota(), raiz: quadro.at, ...(hip.noForro ? { contornoDoPilarMm: CONTORNO_DO_PILAR_MM, penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}), pendentes: ats, raioDeEncaixeMm: RAIO_DE_ENCAIXE_ELETRICO_MM, encaixarEm: encaixaNoAnel, obstaculos: hip.noForro ? [...pegadas(nivel.id), ...prumadasQueCruzam(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2), ...ramaisDaLajeDeCima(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(nivel.id) });
+    const arvoreDasParedes = (ats: readonly { x: number; y: number }[], jaNaRede?: readonly { x: number; y: number }[]) =>
+      arvorePelasParedes({ paredes: paredesDaRota(), raiz: quadro.at, ...(jaNaRede ? { alcancados: jaNaRede } : {}), ...(hip.noForro ? { contornoDoPilarMm: CONTORNO_DO_PILAR_MM, penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}), pendentes: ats, raioDeEncaixeMm: RAIO_DE_ENCAIXE_ELETRICO_MM, encaixarEm: encaixaNoAnel, obstaculos: hip.noForro ? [...pegadas(nivel.id), ...prumadasQueCruzam(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2), ...ramaisDaLajeDeCima(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(nivel.id) });
     /**
      * F14b: do nó `q` na faixa do forro, junto da viga, entra na parede abaixo dela e desce no rasgo da caixa (na face —
      * no eixo da parede corre o dreno do ar, e a descida o cruzava).
@@ -618,9 +643,10 @@ export function planejarEletrodutos(
     /**
      * Liga `lista` pela rede no teto, como sempre se fez: (pela parede, se `pelaParede`) cada um sobe na própria
      * posição e entra no Prim com rota limitada. MUTA `alcancados` e `rota` — chamada duas vezes (pela luz), a
-     * segunda já vê a árvore da primeira e as descidas dos pontos.
+     * segunda já vê a árvore da primeira e as descidas dos pontos. `pelasTravessias` (24/10/2026, só as luzes no forro,
+     * modo pela luz): o Prim mede pelo grafo do forro e passa de um cômodo a outro só pelas travessias previstas.
      */
-    const ligarPeloTeto = (lista: readonly Terminal[], pelaParede: boolean): void => {
+    const ligarPeloTeto = (lista: readonly Terminal[], pelaParede: boolean, pelasTravessias = false): void => {
       if (lista.length === 0) return;
       // E6.3 — PELA PAREDE: os pontos de parede (abaixo da rede) ligam-se pelo eixo
       // das paredes; a árvore desvia de pilar. A luz de teto e quem não tem parede
@@ -628,10 +654,16 @@ export function planejarEletrodutos(
       // F14b: no forro, a luz de teto (na face do forro, abaixo da rede) sobe reta como antes; os de parede andam
       // pelos anéis do forro dos cômodos.
       const deParede = lista.filter((p) => p.cotaMm < teto && !(hip.noForro && p.tipoEletrico === 'ILUMINACAO_TETO'));
-      const pelas = (pelaParede || !!hip.noForro) && paredesDaRota().length > 0 && deParede.length > 0 ? arvoreDasParedes(deParede.map((p) => p.at)) : null;
+      // Correção 1 (24/10/2026): no forro, modo pela luz, a árvore dos anéis cresce também do que a árvore das luzes já
+      // alcançou (a ponta da travessia que a luz usou) — nascendo só do quadro, chegava de novo à mesma travessia: anel e
+      // trecho sem circuito. E o quadro só vai à raiz dos anéis se alguma aresta sair dela. Correção 2: só o alcançado
+      // LIGADO ao quadro (rota finita) — a ponta de rede existente órfã deixava a tomada pendurada num fragmento.
+      const comAlcancados = pelaLuzDoAmbiente && !!hip.noForro;
+      const pelas = (pelaParede || !!hip.noForro) && paredesDaRota().length > 0 && deParede.length > 0 ? arvoreDasParedes(deParede.map((p) => p.at), comAlcancados ? [...alcancados].filter(([k]) => Number.isFinite(rota.get(k) ?? Infinity)).map(([, v]) => v) : undefined) : null;
       const naParede = new Set<ObjectId>();
       if (pelas?.raiz) {
-        if (chaveP(pelas.raiz) !== chaveP(quadro.at)) ligarNaRede(nivel.id, quadro.at, pelas.raiz, teto);
+        const raizUsada = !comAlcancados || pelas.arestas.some((a) => chaveP(a.de) === chaveP(pelas.raiz!) || chaveP(a.para) === chaveP(pelas.raiz!)) || [...pelas.encaixe.values()].some((q) => chaveP(q) === chaveP(pelas.raiz!));
+        if (raizUsada && chaveP(pelas.raiz) !== chaveP(quadro.at)) ligarNaRede(nivel.id, quadro.at, pelas.raiz, teto);
         for (const a of pelas.arestas) addTrecho(nivel.id, a.de, teto, a.para, teto);
         for (const p of deParede) {
           const q = pelas.encaixe.get(chaveP(p.at));
@@ -679,6 +711,26 @@ export function planejarEletrodutos(
       // reta do pendente ao quadro. Se nenhum nó cabe (não acontece: a raiz
       // sempre cabe quando a rota dela é conhecida), vale o mais próximo.
       // Desempate determinístico (distância, x, y).
+      if (pelasTravessias && hip.noForro) {
+        // 24/10/2026 ("sim" — luz × luz de cômodos diferentes pelas travessias): no mesmo cômodo, a reta de sempre; entre
+        // cômodos, o menor caminho pelas travessias de `paredesDoForro` (o furo da viga fora da zona de 2h do apoio), cada
+        // trecho reto por `ligarNaRede`. Sem caminho, a reta, como antes. Ver `blueprintForroEntreComodos.ts`.
+        // Só a travessia por onde a faixa passa: nem ela nem as pontas dentro dos obstáculos de `ligarNaRede` (pilar,
+        // prumada, ramal da laje de cima) — a ponta dentro de um deles não tem contorno (sobrado 10 × 30: a travessia
+        // sob o ramal do banheiro de cima; o anel das tomadas também não a usa).
+        const obstaculos = [...pegadas(nivel.id), ...outrasNaFaixa(nivel.id, teto)];
+        const livre = (w: Wall) => fracaoDentro(w.a, w.b, obstaculos) === 0 && !obstaculos.some((g) => pointInPolygon(g, w.a) || pointInPolygon(g, w.b));
+        arvorePelasTravessias({
+          alcancados,
+          rota,
+          pendentes: pendentesNoTeto,
+          travessias: paredesDaRota().filter((w) => !encaixaNoAnel(w) && livre(w)),
+          regiao: (p) => comodoDoPonto(model, nivel.id, p as Point),
+          chave: (p) => chave(nivel.id, p.x, p.y, teto),
+          ligar: (de, para) => ligarNaRede(nivel.id, de.pos, para.pos, teto),
+        });
+        return;
+      }
       arvoreComRotaLimitada({
         alcancados,
         rota,
@@ -706,8 +758,8 @@ export function planejarEletrodutos(
     const pendura = encaminhamentoPorAmbiente(model, nivel.id, doNivel);
     const ehLuzDeTeto = (p: Terminal) => p.tipoEletrico === 'ILUMINACAO_TETO';
     // 1) No teto, a árvore SÓ com o quadro (ou a prumada) e as luzes: as do ambiente e as de ambientes vizinhos
-    //    se interligam pelo menor eletroduto dentro do limite de rota.
-    ligarPeloTeto(pendentes.filter(ehLuzDeTeto), false);
+    //    se interligam pelo menor eletroduto dentro do limite de rota. No forro, entre cômodos, pelas travessias.
+    ligarPeloTeto(pendentes.filter(ehLuzDeTeto), false, true);
     // 2) Cada ponto de parede desce da luz do ambiente (LUZ) ou liga na vizinha por dentro da parede (VIZINHA). A
     //    vizinha resolve-se antes de quem depende dela; se ela cair na rede, a cadeia cai junto.
     const doNivelPorId = new Map(doNivel.map((p) => [p.id, p]));

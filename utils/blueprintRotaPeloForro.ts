@@ -23,6 +23,7 @@ import { anelRecuado, distanciaEntreEixos3D, envelopeDoTrecho, envelopeValido, p
 import { semEspiculas } from './blueprintDistribuicao';
 import { anelDoPilar, fracaoDentro, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { encaixarNaParede } from './blueprintRotaPelasParedes';
+import { HIPOTESES_DOS_FUROS_PADRAO, distanciaAoApoioDaViga } from './blueprintFurosPrevistos';
 import { TOLERANCIA_DO_LADO_MM, paredeContemLado, paredeDoLado } from './blueprintLadoDaParede';
 
 type P2 = { x: number; y: number };
@@ -51,7 +52,13 @@ const VIGA_DE_TETO_MM = 200;
 /** A travessia só entra onde os dois cômodos dividem ao menos isto de parede, além dos afastamentos. */
 const TRAVESSIA_MINIMA_MM = 200;
 /** F14c: a travessia (furo na viga) a pelo menos isto × a altura da viga da face do apoio — NBR 6118, 13.2.5.1. */
-const DISTANCIA_DO_APOIO_EM_ALTURAS = 2;
+const DISTANCIA_DO_APOIO_EM_ALTURAS = HIPOTESES_DOS_FUROS_PADRAO.distanciaDoApoioEmAlturas;
+/**
+ * Correção 1 (24/10/2026): a régua de `furosPrevistos` mede da FACE do furo — desconta o raio dele. A travessia serve a
+ * toda disciplina; com a metade do maior furo que ainda dispensa a verificação (Ø 12 cm), a face de qualquer furo
+ * dispensável fica fora da zona do apoio (e a 2h do furo vizinho).
+ */
+const MEIO_FURO_MAXIMO_MM = HIPOTESES_DOS_FUROS_PADRAO.diametroMaximoMm / 2;
 /** A descida que cairia num vão desce a esta folga do batente. */
 const FOLGA_DO_VAO_MM = 50;
 
@@ -281,29 +288,45 @@ export function paredesDoForro(model: BlueprintModel, levelId: ObjectId, afastam
     }
   }
   // F14c: a altura da viga de teto sobre o eixo que passa por `m` na direção `u` (0 = sem viga) e os APOIOS dela ao
-  // longo desse eixo (o centro de cada pilar sobre ele, menos a meia seção — a face —, medido de `m`).
+  // longo desse eixo, medidos de `m` — desde a correção 1 (24/10/2026), as faces dos pilares sobre ele E as pontas de
+  // cada peça de viga (a mesma régua de `furosPrevistos`, abaixo).
   const vigas = vigasDeTeto(model, levelId);
   const pilares = (model.structures ?? []).filter((x) => x.kind === 'PILAR' && x.levelId === levelId);
-  const alturaDaVigaSobre = (m: P2, u: P2): number => {
-    let h = 0;
-    for (const v of vigas) {
+  // As vigas de teto sobre o eixo que passa por `m` na direção `u`.
+  const vigasSobre = (m: P2, u: P2) =>
+    vigas.filter((v) => {
       const a = v.pontos[0];
       const b = v.pontos[v.pontos.length - 1];
       const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
       const paralela = Math.abs(((b.x - a.x) / L) * u.y - ((b.y - a.y) / L) * u.x) < 0.02;
       const d = Math.abs((m.x - a.x) * (b.y - a.y) - (m.y - a.y) * (b.x - a.x)) / L;
-      if (paralela && d <= v.larguraMm / 2 + 5) h = Math.max(h, v.alturaMm);
-    }
-    return h;
-  };
-  const apoiosAoLongo = (m: P2, u: P2): number[] =>
-    pilares
+      return paralela && d <= v.larguraMm / 2 + 5;
+    });
+  const alturaDaVigaSobre = (m: P2, u: P2): number => vigasSobre(m, u).reduce((h, v) => Math.max(h, v.alturaMm), 0);
+  // Correção 1 (24/10/2026): os apoios são os de `furosPrevistos` — os pilares sobre o eixo (as faces) e as PONTAS de
+  // cada peça de viga sobre ele (onde ela se apoia, em pilar ou em outra viga). Antes, só os pilares.
+  const apoiosAoLongo = (m: P2, u: P2): number[] => [
+    ...pilares
       .filter((p) => Math.abs((p.pontos[0].x - m.x) * u.y - (p.pontos[0].y - m.y) * u.x) <= Math.max(p.larguraMm, p.profundidadeMm))
       .flatMap((p) => {
         const t = (p.pontos[0].x - m.x) * u.x + (p.pontos[0].y - m.y) * u.y;
         const meia = Math.max(p.larguraMm, p.profundidadeMm) / 2;
         return [t - meia, t + meia];
-      });
+      }),
+    ...vigasSobre(m, u).flatMap((v) => [v.pontos[0], v.pontos[v.pontos.length - 1]].map((q) => (q.x - m.x) * u.x + (q.y - m.y) * u.y)),
+  ];
+  /** O ponto `p` do eixo está fora da zona de 2h (+ meio furo) do apoio em toda peça de viga que passa por ele? */
+  const foraDaZonaDoApoio = (m: P2, u: P2, p: P2): boolean =>
+    vigasSobre(m, u).every((v) => {
+      const a = v.pontos[0];
+      const b = v.pontos[v.pontos.length - 1];
+      const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / L;
+      // O ponto não está nesta peça. Correção 2: com tolerância — exatamente na junta de duas peças, ele está nas duas
+      // (e a junta é apoio: distância 0), não em nenhuma.
+      if (t < -1 || t > L + 1) return true;
+      return distanciaAoApoioDaViga(v, p, pilares) >= v.alturaMm * DISTANCIA_DO_APOIO_EM_ALTURAS + MEIO_FURO_MAXIMO_MM;
+    });
   // O ponto do meio projetado no lado recuado `k` do anel (dentro dele), ou `null`.
   const pe = (an: AnelDoForro, k: number, m: P2): P2 | null => {
     const r0 = an.recuado[k];
@@ -343,17 +366,22 @@ export function paredesDoForro(model: BlueprintModel, levelId: ObjectId, afastam
         // No meio do trecho em comum e, com folga, perto de cada ponta: com uma travessia só (no meio), a rede que
         // atravessa vários cômodos ia ao meio de cada parede — a água quente do sobrado andava 17 m num térreo de 5 m.
         // F14c: cada travessia é um FURO na viga — fora da zona de 2h junto do apoio (NBR 6118, 13.2.5.1) quando a parede
-        // comporta, e a 2h entre si; sem posição boa, fica a do meio (os cômodos não se desligam; a lista a marca).
+        // comporta, e a 2h entre si (correção 1: 2h + meio furo máximo da face do apoio, e 2h + 120 mm entre travessias —
+        // a régua de `furosPrevistos` mede da face do furo); sem posição boa, fica a do meio (os cômodos não se desligam;
+        // a lista a marca).
         const meia = c.comum / 2;
         const ate = meia - folga - TRAVESSIA_MINIMA_MM / 2;
         const h = alturaDaVigaSobre(c.m, c.u);
         const apoios = apoiosAoLongo(c.m, c.u);
         const zona = h * DISTANCIA_DO_APOIO_EM_ALTURAS;
-        const candidatas = ate >= TRAVESSIA_MINIMA_MM ? [0, -ate, ate, ...apoios.flatMap((t) => [t - zona, t + zona])].filter((d) => Math.abs(d) <= ate + 1) : [0];
-        const livre = (d: number) => !h || apoios.every((t) => Math.abs(d - t) >= zona);
+        // Correção 1: a candidata a 2h + meio furo da face do apoio (a face do furo a 2h), e a 2h + um furo da vizinha.
+        const zonaDoFuro = zona + MEIO_FURO_MAXIMO_MM;
+        const entreFuros = h * HIPOTESES_DOS_FUROS_PADRAO.distanciaEntreFurosEmAlturas + 2 * MEIO_FURO_MAXIMO_MM;
+        const candidatas = ate >= TRAVESSIA_MINIMA_MM ? [0, -ate, ate, ...apoios.flatMap((t) => [t - zonaDoFuro, t + zonaDoFuro])].filter((d) => Math.abs(d) <= ate + 1) : [0];
+        const livre = (d: number) => !h || foraDaZonaDoApoio(c.m, c.u, aoLongo(c.m, c.u, d));
         const escolhidas: number[] = [];
         for (const d of [...new Set(candidatas.map((x) => Math.round(x)))].sort((x, y) => Math.abs(x) - Math.abs(y))) {
-          if (!livre(d) || escolhidas.some((e) => Math.abs(e - d) < Math.max(zona, TRAVESSIA_MINIMA_MM))) continue;
+          if (!livre(d) || escolhidas.some((e) => Math.abs(e - d) < Math.max(h ? entreFuros : 0, TRAVESSIA_MINIMA_MM))) continue;
           if (escolhidas.length < 3) escolhidas.push(d);
         }
         const desvios = escolhidas.length ? escolhidas : [0];

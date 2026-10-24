@@ -4,6 +4,7 @@ import { cotaDaFaixa, descidaDoForro, fundoDaVigaSobre, paredesDoForro, ramaisDa
 import { pointInPolygon, type Point } from '../utils/blueprintKernel';
 import { arvorePelasParedes } from '../utils/blueprintRotaPelasParedes';
 import { HIPOTESES_ELETRODUTO_PADRAO, planejarEletrodutos } from '../utils/blueprintEletrodutos';
+import { distanciaAoApoioDaViga } from '../utils/blueprintFurosPrevistos';
 
 /** Dois cômodos de 3 × 4 m lado a lado (paredes de 15 cm), vigas de 40 cm sobre todas as paredes; janela opcional na do meio. */
 function casinha(opts: { janelaNoMeio?: boolean; estreito?: boolean } = {}): { m: BlueprintModel; L: string; meio: string } {
@@ -31,12 +32,53 @@ describe('rede pelo forro (F14b) — as paredes do forro', () => {
     const ys = new Set(aneis.flatMap((w) => [w.a.y, w.b.y]));
     expect([...xs].sort((a, b) => a - b)).toEqual([175, 2825, 3175, 5825]);
     expect([...ys].sort((a, b) => a - b)).toEqual([175, 3825]);
-    // 4 m em comum: no meio (y = 2 m) e a meia parede + afastamento + 10 cm de cada ponta (y = 0,275 e 3,725 m).
+    // 4 m em comum: no meio (y = 2 m) e perto de cada ponta. Correção 1 (24/10/2026): a ponta da viga (y = 0 e 4 m) é
+    // apoio, como em `furosPrevistos` — a travessia fica a 2h (800) + meio furo máximo (60) dela: y = 0,86 e 3,14 m.
+    // Antes, só os pilares contavam, e ela ficava a meia parede + afastamento + 10 cm da ponta (y = 0,275 e 3,725 m).
     expect(travessias.map((t) => [Math.min(t.a.x, t.b.x), Math.max(t.a.x, t.b.x), t.a.y, t.b.y]).sort((a, b) => a[2] - b[2])).toEqual([
-      [2825, 3175, 275, 275],
+      [2825, 3175, 860, 860],
       [2825, 3175, 2000, 2000],
-      [2825, 3175, 3725, 3725],
+      [2825, 3175, 3140, 3140],
     ]);
+  });
+
+  it('Correção 2: viga da divisória partida em 0–1000 / 1000–1860 / 1860–4000 — a junta é apoio das duas peças: nenhuma travessia nela, e cada uma fora da zona da peça em que está', () => {
+    let c = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const L2 = c.levels[0].id;
+    const eixos: [number, number, number, number][] = [[0, 0, 6000, 0], [6000, 0, 6000, 4000], [6000, 4000, 0, 4000], [0, 4000, 0, 0], [3000, 0, 3000, 4000]];
+    const vigas: [number, number, number, number][] = [[0, 0, 6000, 0], [6000, 0, 6000, 4000], [6000, 4000, 0, 4000], [0, 4000, 0, 0], [3000, 0, 3000, 1000], [3000, 1000, 3000, 1860], [3000, 1860, 3000, 4000]];
+    c = applyBatch(c, eixos.map(([ax, ay, bx, by]) => ({ type: 'AddWall', levelId: L2, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }) as Command)).model;
+    c = applyBatch(c, vigas.map(([ax, ay, bx, by]) => ({ type: 'AddStructural', levelId: L2, kind: 'VIGA', pontos: [{ x: ax, y: ay }, { x: bx, y: by }], larguraMm: 150, alturaMm: 400, baseMm: 2400 }) as Command)).model;
+    for (const sp of [...c.spaces]) c = applyCommand(c, { type: 'NameSpace', spaceId: sp.id, name: sp.ring.some((q) => q.x === 0) ? 'Sala' : 'Cozinha' }).model;
+    const pecas = c.structures.filter((x) => x.kind === 'VIGA' && x.pontos[0].x === 3000 && x.pontos[1].x === 3000);
+    const travessias = paredesDoForro(c, L2, 50).filter((w) => w.id.includes('travessia'));
+    expect(travessias.length).toBeGreaterThan(0);
+    for (const t of travessias) {
+      const y = t.a.y;
+      expect([1000, 1860]).not.toContain(y);
+      for (const v of pecas.filter((p) => y >= Math.min(p.pontos[0].y, p.pontos[1].y) - 1 && y <= Math.max(p.pontos[0].y, p.pontos[1].y) + 1)) {
+        expect(distanciaAoApoioDaViga(v, { x: 3000, y }, [])).toBeGreaterThanOrEqual(2 * 400 + 60);
+      }
+    }
+  });
+
+  it('Correção 1: a travessia fica fora da zona do apoio pela MESMA régua de furosPrevistos (ponta da viga e pilar); sem posição livre, a do meio', () => {
+    const { m, L } = casinha();
+    const viga = m.structures.find((x) => x.kind === 'VIGA' && x.pontos[0].x === 3000 && x.pontos[1].x === 3000)!;
+    const pilares = m.structures.filter((x) => x.kind === 'PILAR');
+    for (const t of paredesDoForro(m, L, 100).filter((w) => w.id.includes('travessia'))) {
+      const noEixo = { x: 3000, y: t.a.y };
+      expect(distanciaAoApoioDaViga(viga, noEixo, pilares)).toBeGreaterThanOrEqual(2 * viga.alturaMm + 60);
+    }
+    // Parede comum de 1,6 m: a 0,8 m de cada ponta da viga, nenhuma posição sai da zona — fica uma, no meio (como antes).
+    let c = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const L2 = c.levels[0].id;
+    const eixos: [number, number, number, number][] = [[0, 0, 6000, 0], [6000, 0, 6000, 1600], [6000, 1600, 0, 1600], [0, 1600, 0, 0], [3000, 0, 3000, 1600]];
+    c = applyBatch(c, eixos.map(([ax, ay, bx, by]) => ({ type: 'AddWall', levelId: L2, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }) as Command)).model;
+    c = applyBatch(c, eixos.map(([ax, ay, bx, by]) => ({ type: 'AddStructural', levelId: L2, kind: 'VIGA', pontos: [{ x: ax, y: ay }, { x: bx, y: by }], larguraMm: 150, alturaMm: 400, baseMm: 2400 }) as Command)).model;
+    for (const sp of [...c.spaces]) c = applyCommand(c, { type: 'NameSpace', spaceId: sp.id, name: sp.ring.some((q) => q.x === 0) ? 'Sala' : 'Cozinha' }).model;
+    const curtas = paredesDoForro(c, L2, 100).filter((w) => w.id.includes('travessia'));
+    expect(curtas.map((t) => [t.a.y, t.b.y])).toEqual([[800, 800]]);
   });
 
   it('a árvore de um cômodo ao outro passa pela travessia — não corre pelo eixo da parede (dentro da viga)', () => {
@@ -404,7 +446,9 @@ describe('saidaDoRebaixoPelaParede (item 6): o ponto de parede sob a laje rebaix
       const chaves = new Set(ts.map((c) => JSON.stringify(c)));
       const tocaLuz = (c: (typeof ts)[number]) => [c.a, c.b].some((p) => p.x === LUZ.x && p.y === LUZ.y);
       expect(antigo.filter((c) => !tocaLuz(c)).every((c) => chaves.has(JSON.stringify(c)))).toBe(true);
-      expect(tem(ts, { x: 3125, y: 225 }, 2755, qVizinho, 2755)).toBe(true);
+      // O ponto chega ao anel da cozinha (q do vizinho) pela rede dos anéis. Correção 1 (24/10/2026): a travessia junto
+      // da ponta da parede saiu de y = 225 (dentro da zona de 2h da ponta da viga) — vale a que `paredesDoForro` der.
+      expect(ts.some((t) => t.cotaAMm === 2755 && t.cotaBMm === 2755 && [t.a, t.b].some((q) => q.x === qVizinho.x && q.y === qVizinho.y))).toBe(true);
     }
   });
 });

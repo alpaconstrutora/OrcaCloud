@@ -96,6 +96,24 @@ function ladoDoEixo(p: Point, w: Wall): -1 | 0 | 1 {
   return Math.abs(d) < 1 ? 0 : d > 0 ? 1 : -1;
 }
 
+/**
+ * O id do cômodo do ponto: o que o contém ou, na FACE da parede (fora de todo contorno de eixo), o cômodo mais perto até
+ * `RAIO_DO_ENCAMINHAMENTO_MM`; `null` fora de todos. É a regra do AMBIENTE acima — e, desde 24/10/2026, a região de cada
+ * nó da árvore das luzes no forro (`blueprintForroEntreComodos.ts`), o quadro na face da parede inclusive.
+ */
+export function comodoDoPonto(model: BlueprintModel, levelId: ObjectId, at: Point): ObjectId | null {
+  const dentro = ambienteDoPonto(model, { levelId, at });
+  if (dentro) return dentro.space.id;
+  let melhor: { id: string; d: number } | null = null;
+  for (const s of model.spaces) {
+    if (s.levelId !== levelId) continue;
+    if (s.holes.some((h) => pointInPolygon(h, at))) continue; // dentro de um furo: não é deste cômodo
+    const d = distanciaAoAnel(at, s.ring);
+    if (d <= RAIO_DO_ENCAMINHAMENTO_MM && (!melhor || d < melhor.d || (d === melhor.d && s.id < melhor.id))) melhor = { id: s.id, d };
+  }
+  return melhor ? melhor.id : null;
+}
+
 export function encaminhamentoPorAmbiente(
   model: BlueprintModel,
   levelId: ObjectId,
@@ -107,7 +125,6 @@ export function encaminhamentoPorAmbiente(
   const deParede = doNivel.filter((t) => !ehLuzDeTeto(t) && !(t.tipoEletrico && TIPOS_DE_INFRAESTRUTURA_ELETRICA.has(t.tipoEletrico)));
   if (deParede.length === 0) return saida;
 
-  const espacos = model.spaces.filter((s) => s.levelId === levelId);
   const paredes = model.walls.filter((w) => w.levelId === levelId);
   const pilares = pegadasDePilares(model, levelId);
 
@@ -131,17 +148,7 @@ export function encaminhamentoPorAmbiente(
   };
 
   /** O id do ambiente do ponto: o que o contém ou, na face da parede, o cômodo mais perto (até o raio). */
-  const ambienteDe = (t: Terminal): string | null => {
-    const dentro = ambienteDoPonto(model, t);
-    if (dentro) return dentro.space.id;
-    let melhor: { id: string; d: number } | null = null;
-    for (const s of espacos) {
-      if (s.holes.some((h) => pointInPolygon(h, t.at))) continue; // dentro de um furo: não é deste cômodo
-      const d = distanciaAoAnel(t.at, s.ring);
-      if (d <= RAIO_DO_ENCAMINHAMENTO_MM && (!melhor || d < melhor.d || (d === melhor.d && s.id < melhor.id))) melhor = { id: s.id, d };
-    }
-    return melhor ? melhor.id : null;
-  };
+  const ambienteDe = (t: Terminal): string | null => comodoDoPonto(model, levelId, t.at);
 
   const ambienteDoId = new Map<ObjectId, string | null>();
   for (const t of [...luzes, ...deParede]) ambienteDoId.set(t.id, ambienteDe(t));

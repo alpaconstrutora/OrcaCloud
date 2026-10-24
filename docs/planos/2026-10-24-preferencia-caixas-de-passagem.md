@@ -67,5 +67,5 @@ não se põe CP.
 - [x] implementação + testes
 - [x] correção 1 da revisão (aviso diz onde, textos, teste do cômodo com luz)
 - [x] revisão — "Sim, com correções" (aviso da NBR investigado: correto, só sai sem luz de teto); correção `87476d6e` conferida
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #140, `ci` 29min01s verde
+- [x] publicação — mesclado por squash em 24/10/2026 (`2ae9fc5e`); `conferir-producao.sh "Sem caixas de passagem"` provou o domínio servindo 2ae9fc5; frente fechada e branch apagada (pela API). (Marcado junto do PR do forro pelas travessias.)

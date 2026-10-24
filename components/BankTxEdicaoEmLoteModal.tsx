@@ -24,16 +24,19 @@ interface BankTxEdicaoEmLoteModalProps {
     /** Plano de Contas (plano_de_contas) — dimensão distinta de Centro de Custo e de Categoria.
      *  `name` cru (o drawer já mostra o código ao lado). */
     planoContas: Array<ItemOption & { code?: string | null }>;
+    /** Opcional: aba Extrato. Organizações para onde os lançamentos podem ir (as que a conta
+     *  atende e o usuário grava). Sem a prop, o campo não aparece (Pendentes). */
+    organizacoes?: ItemOption[];
     onClose: () => void;
     /** "Ignorar lançamentos": marca os selecionados como IGNORED (saem do saldo e das
      *  pendências, ficam no Extrato como "Ignorado"; reversível). O pai confirma com
      *  useConfirm e grava; devolve true se ignorou — aí o modal fecha. */
     onIgnore?: () => Promise<boolean>;
-    onSave: (fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id'>>) => Promise<void>;
+    onSave: (fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id' | 'organization_id'>>) => Promise<void>;
 }
 
 const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
-    transactions, categories, clienteRegistros, credorRegistros, projects, costCenters, planoContas, onClose, onIgnore, onSave,
+    transactions, categories, clienteRegistros, credorRegistros, projects, costCenters, planoContas, organizacoes, onClose, onIgnore, onSave,
 }) => {
     const [ignoring, setIgnoring] = useState(false);
     async function handleIgnorar() {
@@ -54,6 +57,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
     const [projectId, setProjectId] = useState('');
     const [costCenterId, setCostCenterId] = useState('');
     const [planoContasId, setPlanoContasId] = useState('');
+    const [organizationId, setOrganizationId] = useState('');
     const [saving, setSaving] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -63,18 +67,19 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
     const mixedContraparte = contrapartes.length > 1;
 
     const entityName = clientName || supplierName;
-    const noneChanged = !category && !entityName && !projectId && !costCenterId && !planoContasId;
+    const noneChanged = !category && !entityName && !projectId && !costCenterId && !planoContasId && !organizationId;
 
     async function handleSalvar() {
         setSaving(true);
         setErrorMsg(null);
         try {
-            const fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id'>> = {};
+            const fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id' | 'organization_id'>> = {};
             if (category) fields.category = category;
             if (entityName) fields.counterparty_name = entityName;
             if (projectId) fields.project_id = projectId;
             if (costCenterId) fields.cost_center_id = costCenterId;
             if (planoContasId) fields.plano_de_contas_id = planoContasId;
+            if (organizationId) fields.organization_id = organizationId;
             await onSave(fields);
             onClose();
         } catch (err: unknown) {
@@ -145,6 +150,27 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                             <Tag className="w-3.5 h-3.5" />
                             Alterar campos — deixe vazio para não alterar
                         </div>
+
+                        {organizacoes && (
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Organização</label>
+                                <select
+                                    value={organizationId}
+                                    onChange={e => setOrganizationId(e.target.value)}
+                                    disabled={saving || organizacoes.length < 2}
+                                    title={organizacoes.length < 2 ? 'A conta só atende a organização dona. Para lançar em outra, marque "Atende também" na conta (Minha Organização › Contas).' : undefined}
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                                >
+                                    <option value="">— Não alterar —</option>
+                                    {organizacoes.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                </select>
+                                {organizationId && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Obra, Centro de Custo e Plano de Contas de outra organização são limpos. Lançamento conciliado não muda.
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         <div>
                             <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Categoria</label>

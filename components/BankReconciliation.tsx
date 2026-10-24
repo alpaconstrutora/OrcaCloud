@@ -30,7 +30,8 @@ import { financialSyncService } from '../services/financialSyncService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { useStore } from '../store/useStore';
-import { useOrgWriteTarget, errorMessage } from '../hooks/useOrgContext';
+import { useOrgWriteTarget, useWritableOrganizations, errorMessage } from '../hooks/useOrgContext';
+import { motivoParaNaoMudarOrganizacao, planoDaMudanca, type OrgDasDimensoes } from '../utils/extratoMudarOrganizacao';
 import { useConfirm } from './ui/confirm';
 import { KpiCardCompact } from './ui/KpiCardCompact';
 import { formatMoney, formatDateBR } from './ui/Format';
@@ -946,6 +947,29 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         return [...new Set([effectiveOrgId, ...atendidas])];
     }, [effectiveOrgId, selectedAccountId, accounts, userOrganizations]);
     const orgsDaContaKey = orgsDaConta.join(',');
+    // Para onde um lançamento do extrato pode MUDAR de organização: a dona da conta + as que
+    // ela atende, dentre as que o usuário grava (RLS de bank_transactions = is_org_member).
+    // Da CONTA, não de `effectiveOrgId` (que segue o topo quando ele aponta uma org).
+    const writableOrganizations = useWritableOrganizations();
+    const destinosDaConta = useMemo<string[]>(() => {
+        const acc = accounts.find(a => a.id === selectedAccountId);
+        if (!acc?.organization_id) return [];
+        const gravaveis = new Set(writableOrganizations.map(o => o.id));
+        const atendidas = financialRegistryService.servedOrganizationIds(acc, userOrganizations.map(o => o.id));
+        return [...new Set([acc.organization_id, ...atendidas])].filter(id => gravaveis.has(id));
+    }, [accounts, selectedAccountId, userOrganizations, writableOrganizations]);
+    const organizationOptions = useMemo<LazyOption[]>(
+        () => destinosDaConta.map(id => ({ value: id, label: orgNameById.get(id) ?? id })),
+        [destinosDaConta, orgNameById],
+    );
+    const motivoOrganizacaoTravada = (tx: BankTransaction) => motivoParaNaoMudarOrganizacao(tx, destinosDaConta);
+    // De que org é cada dimensão — o que decide o que se limpa ao mudar a organização.
+    const orgDasDimensoes = useMemo<OrgDasDimensoes>(() => {
+        const obra = new Map(masterProjects.map(p => [p.id, p.organization_id ?? null]));
+        const cc = new Map(masterCostCenters.map(c => [c.id, c.organization_id ?? null]));
+        const plano = new Map(masterPlanoContas.map(pc => [pc.id, pc.organization_id ?? null]));
+        return { obra: id => obra.get(id), centroCusto: id => cc.get(id), planoContas: id => plano.get(id) };
+    }, [masterProjects, masterCostCenters, masterPlanoContas]);
     // Rótulo de grupo nos selects da tabela: só quando a lista junta mais de uma org.
     const grupoDaOrg = (orgId?: string | null) => (orgsDaConta.length > 1 ? (orgNameById.get(orgId ?? '') ?? 'Organização') : undefined);
 
@@ -2053,10 +2077,74 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     };
 
     const handleBulkUpdateBankFields = async (
-        fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id'>>
+        fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id' | 'plano_de_contas_id' | 'organization_id'>>
     ) => {
         const ids = Array.from(selectedBankTxIds);
         if (ids.length === 0) return;
+
+        // Organização no lote: valida TUDO antes de gravar qualquer coisa (o modal mostra o erro).
+        if (fields.organization_id) {
+            const destino = fields.organization_id;
+            if (!destinosDaConta.includes(destino)) throw new Error('A conta não atende essa organização.');
+            const linhas = bankTransactions.filter(t => selectedBankTxIds.has(t.id));
+            const travadas = linhas.filter(t => motivoParaNaoMudarOrganizacao(t, destinosDaConta));
+            if (travadas.length > 0) {
+                throw new Error(`${travadas.length} lançamento${travadas.length > 1 ? 's estão conciliados' : ' está conciliado'}: desfaça a conciliação ou desmarque ${travadas.length > 1 ? 'esses lançamentos' : 'esse lançamento'} para mudar a organização.`);
+            }
+            // Dimensão escolhida no próprio lote precisa ser da org de destino.
+            const escolhidas: Array<[string, string | undefined, (id: string) => string | null | undefined]> = [
+                ['Obra', fields.project_id, orgDasDimensoes.obra],
+                ['Centro de Custo', fields.cost_center_id, orgDasDimensoes.centroCusto],
+                ['Plano de Contas', fields.plano_de_contas_id, orgDasDimensoes.planoContas],
+            ];
+            const deOutraOrg = escolhidas.filter(([, id, orgDe]) => id && orgDe(id) !== destino).map(([nome]) => nome);
+            if (deOutraOrg.length > 0) {
+                throw new Error(`${deOutraOrg.join(', ')} escolhido${deOutraOrg.length > 1 ? 's' : ''} não ${deOutraOrg.length > 1 ? 'são' : 'é'} da organização de destino (${orgNameById.get(destino) ?? destino}).`);
+            }
+            const outros = { ...fields };
+            delete outros.organization_id;
+            const planos = linhas.filter(t => t.organization_id !== destino).map(t => ({ t, ...planoDaMudanca(t, destino, orgDasDimensoes) }));
+            const comLimpeza = planos.filter(p => p.limpos.length > 0 && !p.limpos.every(n =>
+                (n === 'Obra' && outros.project_id) || (n === 'Centro de Custo' && outros.cost_center_id) || (n === 'Plano de Contas' && outros.plano_de_contas_id)));
+            if (comLimpeza.length > 0 && !await confirm({
+                title: 'Mudar a organização?',
+                message: `Em ${comLimpeza.length} de ${linhas.length} lançamentos, Obra/Centro de Custo/Plano de Contas de outra organização serão limpos.`,
+                variant: 'warning',
+                confirmLabel: 'Mudar',
+            })) throw new Error('Cancelado — nada foi alterado.');
+            // Uma gravação por combinação de campos (as linhas limpam dimensões diferentes).
+            const porPatch = new Map<string, { patch: Record<string, unknown>; ids: string[] }>();
+            for (const p of planos) {
+                const patch: Record<string, unknown> = { ...p.campos, ...outros };
+                const chave = JSON.stringify(Object.keys(patch).sort().map(k => [k, patch[k]]));
+                const g = porPatch.get(chave) ?? { patch, ids: [] };
+                g.ids.push(p.t.id);
+                porPatch.set(chave, g);
+            }
+            for (const { patch, ids: grupo } of porPatch.values()) {
+                for (let i = 0; i < grupo.length; i += 100) {
+                    const { error } = await supabase.from('bank_transactions').update(patch).in('id', grupo.slice(i, i + 100));
+                    if (error) throw new Error('Não foi possível mudar a organização: ' + errorMessage(error, 'erro desconhecido'));
+                }
+                setBankTransactions(prev => prev.map(tx => {
+                    if (!grupo.includes(tx.id)) return tx;
+                    const novo = { ...tx, ...patch } as BankTransaction;
+                    if (patch.project_id === null) novo.project_id = undefined;
+                    if (patch.cost_center_id === null) novo.cost_center_id = undefined;
+                    if (patch.plano_de_contas_id === null) novo.plano_de_contas_id = undefined;
+                    return novo;
+                }));
+            }
+            // Linhas que já estavam no destino recebem só os demais campos (segue abaixo).
+            const jaNoDestino = linhas.filter(t => t.organization_id === destino).map(t => t.id);
+            if (Object.keys(outros).length === 0 || jaNoDestino.length === 0) {
+                setSelectedBankTxIds(new Set());
+                setActionFeedback({ message: `${planos.length} lançamento${planos.length !== 1 ? 's' : ''} movido${planos.length !== 1 ? 's' : ''} para ${orgNameById.get(destino) ?? 'a organização escolhida'}.`, type: 'success' });
+                return;
+            }
+            fields = outros;
+            ids.splice(0, ids.length, ...jaNoDestino);
+        }
 
         const updatePayload: Record<string, unknown> = { ...fields };
         if (fields.category !== undefined) {
@@ -2434,6 +2522,36 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         } finally {
             setSavingEntity(false);
         }
+    };
+
+    /** Muda a organização de UM lançamento (célula da aba Extrato). Regras em utils/extratoMudarOrganizacao. */
+    const handleUpdateBankOrganization = async (txId: string, orgId: string) => {
+        const tx = bankTransactions.find(t => t.id === txId);
+        if (!tx || tx.organization_id === orgId) return;
+        const motivo = motivoParaNaoMudarOrganizacao(tx, destinosDaConta);
+        if (motivo || !destinosDaConta.includes(orgId)) {
+            setActionFeedback({ message: motivo ?? 'A conta não atende essa organização.', type: 'error' });
+            setTimeout(() => setActionFeedback(null), 5000);
+            return;
+        }
+        const { campos, limpos } = planoDaMudanca(tx, orgId, orgDasDimensoes);
+        if (limpos.length > 0 && !await confirm({
+            title: 'Mudar a organização?',
+            message: `${limpos.join(', ')} ${limpos.length > 1 ? 'são' : 'é'} de outra organização e ${limpos.length > 1 ? 'serão limpos' : 'será limpo'} neste lançamento.`,
+            variant: 'warning',
+            confirmLabel: 'Mudar',
+        })) return;
+        const { error } = await supabase.from('bank_transactions').update(campos).eq('id', txId);
+        if (error) {
+            // Ex.: período fechado na org de origem ou de destino (trg_block_period_bank_tx).
+            setActionFeedback({ message: 'Não foi possível mudar a organização: ' + errorMessage(error, 'erro desconhecido'), type: 'error' });
+            setTimeout(() => setActionFeedback(null), 6000);
+            return;
+        }
+        const local = { ...campos, project_id: campos.project_id === null ? undefined : tx.project_id, cost_center_id: campos.cost_center_id === null ? undefined : tx.cost_center_id, plano_de_contas_id: campos.plano_de_contas_id === null ? undefined : tx.plano_de_contas_id };
+        setBankTransactions(prev => prev.map(t => (t.id === txId ? { ...t, ...local } : t)));
+        setActionFeedback({ message: `Organização alterada para ${orgNameById.get(orgId) ?? 'a escolhida'}${limpos.length ? ` (${limpos.join(', ')} limpo${limpos.length > 1 ? 's' : ''})` : ''}.`, type: 'success' });
+        setTimeout(() => setActionFeedback(null), 4000);
     };
 
     const handleUpdateBankProject = async (txId: string, projectId: string) => {
@@ -3215,6 +3333,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     projects={masterProjects}
                     costCenters={masterCostCenters}
                     planoContas={masterPlanoContas}
+                    organizacoes={destinosDaConta.map(id => ({ id, name: orgNameById.get(id) ?? id }))}
                     onIgnore={() => handleDeleteBankTransactions(Array.from(selectedBankTxIds))}
                     onClose={() => setIsLoteEditOpen(false)}
                     onSave={handleBulkUpdateBankFields}
@@ -3866,6 +3985,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         costCenterRegistros: masterCostCenters, planoContasRegistros: masterPlanoContas,
                                                         projectName, costCenterName, planoContasName,
                                                         organizationName: (id) => (id ? orgNameById.get(id) ?? null : null),
+                                                        organizationOptions, motivoOrganizacaoTravada,
+                                                        onUpdateOrganization: handleUpdateBankOrganization,
                                                         onUpdateCounterparty: handleUpdateBankCounterparty,
                                                         onUpdateCategory: handleUpdateBankCategory,
                                                         onUpdateProject: handleUpdateBankProject,

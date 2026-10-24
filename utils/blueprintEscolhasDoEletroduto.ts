@@ -197,23 +197,40 @@ export const MOTIVO_REDE_NO_FORRO_SEM_REGISTRO = 'Rede no forro lançada antes d
 
 /**
  * Rede no FORRO lançada antes do registro (a Casa Automática de antes): sem registro, não há como saber a faixa, e
- * relançar com as hipóteses do painel desceria a rede para a cota do teto/sob a viga. Reconhecida pela COTA: algum
- * trecho horizontal elétrico da rede perto do teto (até 60 cm abaixo dele), fora da cota em que o painel a lança
- * (`cotaDaRede`). Com registro, o forro vem dele (`hipotesesDoQuadro`).
+ * relançar com as hipóteses do painel desceria a rede para a cota do teto/sob a viga. Com registro, o forro vem dele
+ * (`hipotesesDoQuadro`).
+ *
+ * Correção 2 (revisão final, 24/10/2026): só com sinal de forro DE VERDADE. Antes, qualquer horizontal perto do teto
+ * contava — e a "rota pela parede" cria um horizontal na cota do ponto (eixo da parede → face), comum a 2,2 m (TUE do ar,
+ * luz de emergência): a planta antiga travava com um motivo falso. Agora conta o trecho horizontal elétrico da rede que:
+ * - está num pavimento COM forro (algum ambiente com `acabamentos.forro` com rebaixo) e ACIMA da face mais baixa dele;
+ * - fica a menos de 60 cm do teto (estrito) e fora da cota em que o painel lança (`cotaDaRede`);
+ * - não termina num terminal na mesma cota (a saída até a face da caixa do ponto).
  */
 export function redeNoForroSemRegistro(model: BlueprintModel, quadroId: ObjectId): boolean {
   if (registroDe(model, 'ELETRODUTOS', quadroId)) return false;
-  const cotas = new Map<string, { teto: number; rede: number }>();
+  const porNivel = new Map<string, { teto: number; rede: number; face: number } | null>();
+  const doNivel = (levelId: string) => {
+    if (porNivel.has(levelId)) return porNivel.get(levelId)!;
+    const nivel = model.levels.find((l) => l.id === levelId);
+    let c: { teto: number; rede: number; face: number } | null = null;
+    if (nivel) {
+      const faces = (model.labels ?? [])
+        .filter((l) => l.levelId === levelId && l.acabamentos?.forro && l.acabamentos.forro.rebaixoMm > 0)
+        .map((l) => nivel.defaultHeightMm - l.acabamentos!.forro!.rebaixoMm - l.acabamentos!.forro!.camadas.reduce((n, x) => n + x.espessuraMm, 0));
+      if (faces.length) c = { teto: nivel.defaultHeightMm, rede: cotaDaRede(model, nivel).cotaMm, face: Math.min(...faces) };
+    }
+    porNivel.set(levelId, c);
+    return c;
+  };
+  const terminais = new Set((model.terminais ?? []).map((x) => `${x.levelId}|${x.at.x},${x.at.y},${x.cotaMm}`));
   for (const t of redeDoQuadro(model, { id: quadroId })) {
     if (t.disciplina !== 'ELETRICA' || t.cotaAMm !== t.cotaBMm || (t.a.x === t.b.x && t.a.y === t.b.y)) continue;
-    let c = cotas.get(t.levelId);
-    if (!c) {
-      const nivel = model.levels.find((l) => l.id === t.levelId);
-      if (!nivel) continue;
-      c = { teto: nivel.defaultHeightMm, rede: cotaDaRede(model, nivel).cotaMm };
-      cotas.set(t.levelId, c);
-    }
-    if (t.cotaAMm !== c.rede && t.cotaAMm < c.teto && t.cotaAMm >= c.teto - 600) return true;
+    const c = doNivel(t.levelId);
+    if (!c) continue;
+    const z = t.cotaAMm;
+    if (terminais.has(`${t.levelId}|${t.a.x},${t.a.y},${z}`) || terminais.has(`${t.levelId}|${t.b.x},${t.b.y},${z}`)) continue;
+    if (z !== c.rede && z > c.face && z < c.teto && z > c.teto - 600) return true;
   }
   return false;
 }

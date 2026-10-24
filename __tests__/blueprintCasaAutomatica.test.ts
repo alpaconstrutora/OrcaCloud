@@ -25,7 +25,7 @@ import { pontosElegiveis } from '../utils/blueprintCircuitosAutomaticos';
 import { HIPOTESES_DO_MURO_DA_CASA_PADRAO } from '../utils/blueprintMuroDaCasa';
 import { furosPrevistos } from '../utils/blueprintFurosPrevistos';
 import { registroDe } from '../utils/blueprintRegistroDeLancamento';
-import { MOTIVO_REDE_NO_FORRO_SEM_REGISTRO, comandosDeRefazerEletrodutos, motivoParaNaoRelancar } from '../utils/blueprintEscolhasDoEletroduto';
+import { MOTIVO_REDE_NO_FORRO_SEM_REGISTRO, comandosDeRefazerEletrodutos, diferencasDoEletroduto, motivoParaNaoRelancar } from '../utils/blueprintEscolhasDoEletroduto';
 import { HIPOTESES_ELETRODUTO_PADRAO } from '../utils/blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO } from '../utils/blueprintEletricaDimensionamento';
@@ -579,6 +579,10 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
     const qdc = (r.quadros ?? [])[0];
     expect(p.comandos.filter((c) => c.type === 'RegistrarLancamento')).toHaveLength(1);
     expect(registroDe(r, 'ELETRODUTOS', qdc.id)?.escolhas).toMatchObject({ caixasDePassagem: 'PELA_LUZ', encaminhamento: 'PELA_LUZ_DO_AMBIENTE' });
+    // Correção 2: com o painel dos eletrodutos no PADRÃO (o do editor: sem caixas), a casa recém-gerada não acende o aviso.
+    // Painel fora do padrão (outra bitola, rota pela parede…) acende — diferença real.
+    expect(diferencasDoEletroduto(r, qdc.id, { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: null }, HIPOTESES_ELETRICAS_PADRAO)).toEqual([]);
+    expect(diferencasDoEletroduto(r, qdc.id, { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: null, bitolaMm: 32 }, HIPOTESES_ELETRICAS_PADRAO).map((d) => d.item)).toEqual(['bitolaMm']);
     expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
 
     const comCaixas = planejarCasa(m, comAr(m, { caixasDePassagem: 'CAIXAS' }));

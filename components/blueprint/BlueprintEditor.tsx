@@ -8742,7 +8742,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     () => planejarEletrodutosPorQuadro(editor.model, hipotesesDeEletroduto, hipotesesEletricas),
     [editor.model, hipotesesDeEletroduto, hipotesesEletricas],
   );
-  const pontosALigar = planosDeEletrodutos.reduce((n, p) => n + p.aLigar, 0);
+  // Correção 2: a contagem do ribbon é a mesma do rodapé — sem os quadros que não lançam por aqui (rede no forro sem registro).
+  const pontosALigar = useMemo(
+    () => planosDeEletrodutos.filter((p) => !motivoParaNaoRelancar(editor.model, p.quadroId)).reduce((n, p) => n + p.aLigar, 0),
+    [planosDeEletrodutos, editor.model],
+  );
   const pontosEletricosSemCircuito = levelId ? pontosSemCircuito(editor.model, levelId) : [];
   const eletrodutosSugeridosNoNivel = eletrodutosSugeridos(editor.model, levelId);
   // F2 (24/10/2026): o modelo de AGORA — depois do `await` da confirmação, o da closure pode ser velho (outra edição,
@@ -8763,7 +8767,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * F2 (24/10/2026): cada quadro lançado leva o registro das escolhas, no mesmo lote.
    */
   const lancarEletrodutos = (planos: PlanoDeEletrodutos[]) => {
-    aplicarLoteDeEletrodutos(comandosDeLancarEletrodutos(editor.model, planos, hipotesesDeEletroduto, hipotesesEletricas));
+    // Os lotes são simulados em sequência (`applyBatch`): recusa do kernel vira aviso, não exceção no clique.
+    let comandos: Command[];
+    try {
+      comandos = comandosDeLancarEletrodutos(editor.model, planos, hipotesesDeEletroduto, hipotesesEletricas);
+    } catch (e) {
+      setAvisoColar(`Os eletrodutos não foram lançados: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+    aplicarLoteDeEletrodutos(comandos);
   };
   /**
    * REFAZER a rede dos quadros pedidos com as escolhas atuais: apaga tudo (trechos confirmados e caixas aceitas também)
@@ -8793,7 +8805,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     aplicarLoteDeEletrodutos(comandos);
   };
   /** Regra A: o botão do rodapé — "Lançar em todos (N)", ou "Relançar com as escolhas atuais" com rede e nada a lançar. */
-  const botaoDosEletrodutos = botaoDeLancarEletrodutos(editor.model, planosDeEletrodutos);
+  const botaoDosEletrodutos = useMemo(() => botaoDeLancarEletrodutos(editor.model, planosDeEletrodutos), [editor.model, planosDeEletrodutos]);
   // E6.3: as CAIXAS DE PASSAGEM sugeridas do pavimento são aceitas junto — nasceram com a rede.
   const caixasSugeridasNoNivel = (editor.model.terminais ?? []).filter((x) => x.sugerida && x.tipoEletrico === 'CAIXA_PASSAGEM' && (!levelId || x.levelId === levelId));
   const aceitarEletrodutos = () =>

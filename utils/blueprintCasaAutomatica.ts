@@ -2737,7 +2737,10 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         // F14b: no forro, na faixa do eletroduto. Task 3 (24/10/2026, "a regra vale também no forro"): quadro → luz do
         // ambiente → tomadas, como na obra — a luz → ponto reta pela faixa até a vertical dele no anel, e a descida do
         // forro; os anéis dos cômodos ficam para o ambiente sem luz. O que cruzar outra rede, o detector de conflitos avisa.
-        // F2 (24/10/2026): as caixas de passagem são a preferência do usuário (padrão "pela luz do teto", sem caixas).
+        // F2 (24/10/2026): as caixas de passagem são a preferência do usuário (padrão "pela luz do teto", sem caixas). As
+        // outras escolhas (bitola, rota pela parede, encaminhamento) são as do planejador: com o painel dos eletrodutos no
+        // padrão, o registro bate e não há aviso; com o painel fora do padrão, o aviso acende — e é diferença real (relançar
+        // pelo painel usaria as escolhas de lá).
         const caixas = entrada.caixasDePassagem === 'CAIXAS' ? REGRA_DE_CAIXAS_PADRAO : null;
         const hipEletrodutos: HipotesesDeEletroduto = forroLigado
           ? { ...HIPOTESES_ELETRODUTO_PADRAO, caixas, encaminhamento: 'PELA_LUZ_DO_AMBIENTE' as const, noForro: { faixa: hip.forro.eletrica, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } }

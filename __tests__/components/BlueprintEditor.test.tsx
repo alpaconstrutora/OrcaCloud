@@ -4645,6 +4645,15 @@ describe('BlueprintEditor · ribbon', () => {
       const t = base.levels[0].id;
       const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
       let m = k.applyBatch(base, [w(0, 0, 24000, 0), w(24000, 0, 24000, 4000), w(24000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+      // Correção 2: o forro DE VERDADE no ambiente (gesso, rebaixo 30 cm) — sem ele, a cota sozinha não diz "forro".
+      if (noForro) {
+        m = k.applyCommand(m, {
+          type: 'NameSpace',
+          spaceId: m.spaces[0].id,
+          name: 'Sala',
+          acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }], rebaixoMm: 300 } },
+        }).model;
+      }
       m = k.applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: k.point(75, 1000), cotaMm: 1600 }).model;
       m = k.applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', ligacao: 'FN' }).model;
       m = k.applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', at: k.point(23925, 1000), cotaMm: 300, tipoEletrico: 'TUG' }).model;

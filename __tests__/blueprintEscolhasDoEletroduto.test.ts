@@ -226,6 +226,14 @@ describe('correção 1 — lançamento parcial não apaga o aviso (I1)', () => {
 describe('correção 1 — a rede no FORRO continua no forro (C1)', () => {
   const FORRO = { faixa: { abaixoDoTetoMm: 45, afastamentoDaFaceMm: 50, degrauNaParedeMm: 0 }, folgaSobAVigaMm: 20 };
   const NO_FORRO: HipotesesDeEletroduto = { ...SEM_CAIXAS, noForro: FORRO };
+  /** O ambiente com FORRO de gesso (rebaixo 30 cm, face a 2,486 m) — o sinal de forro de verdade (correção 2). */
+  const comForro = (m: BlueprintModel) =>
+    applyCommand(m, {
+      type: 'NameSpace',
+      spaceId: m.spaces[0].id,
+      name: 'Sala',
+      acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }, { espessuraMm: 1, itemCode: '', descricao: 'Pintura', funcao: 'ACABAMENTO' }], rebaixoMm: 300 } },
+    }).model;
   const horizontaisEletricas = (m: BlueprintModel) => (m.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && t.cotaAMm === t.cotaBMm && !(t.a.x === t.b.x && t.a.y === t.b.y));
 
   it('o registro guarda a faixa (sem rótulo) e não guarda a rota máxima; `hipotesesDoQuadro` a devolve', () => {
@@ -254,10 +262,12 @@ describe('correção 1 — a rede no FORRO continua no forro (C1)', () => {
   });
 
   it('⚠️ rede no forro SEM registro (antiga): não relança por aqui — botões desligados com o motivo, lotes vazios', () => {
-    const m = sala();
+    const m = comForro(sala());
     const q = m.quadros[0].id;
     const antiga = aceitarTudo(applyBatch(m, planejarEletrodutosDoModelo(m, NO_FORRO)[0].comandos).model);
     expect(redeNoForroSemRegistro(antiga, q)).toBe(true);
+    // Sem o forro no ambiente, a mesma cota não basta: não há sinal de forro (correção 2).
+    expect(redeNoForroSemRegistro(aceitarTudo(applyBatch(sala(), planejarEletrodutosDoModelo(sala(), NO_FORRO)[0].comandos).model), q)).toBe(false);
     expect(motivoParaNaoRelancar(antiga, q)).toBe(MOTIVO_REDE_NO_FORRO_SEM_REGISTRO);
     const planos = planejarEletrodutosPorQuadro(antiga, SEM_CAIXAS, HIPOTESES_PADRAO);
     expect(botaoDeLancarEletrodutos(antiga, planos)).toMatchObject({ motivo: MOTIVO_REDE_NO_FORRO_SEM_REGISTRO, quadros: [] });
@@ -282,5 +292,30 @@ describe('correção 1 — menores', () => {
     const m = aceitarTudo(lancadaComCaixas());
     const texto = textoDaConfirmacaoDeRefazer(redesARefazer(m, undefined, { hip: SEM_CAIXAS, hipEletricas: HIPOTESES_PADRAO }));
     expect(texto).toMatch(/aceita\(s\)\)\. O que mudou: Caixas de passagem — lançado com: com caixas de passagem · agora: sem caixas \(pela luz do teto\)\.$/);
+  });
+});
+
+// ─── Correção 2 (revisão final, 24/10/2026): só forro de verdade ────────────────────────────────────────────────
+describe('correção 2 — "rota pela parede" com ponto alto não é forro', () => {
+  /** Sala 6 × 4, QDC, uma TUE na face da parede de cima na cota dada; rota pela parede; planta antiga (sem registro). */
+  const comTue = (cota: number) => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = base.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    let m = applyBatch(base, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    m = applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: point(75, 1000), cotaMm: 1600 }).model;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', ligacao: 'FN' }).model;
+    m = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUE', at: point(3000, 3925), cotaMm: cota, tipoEletrico: 'TUE' }).model;
+    m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: m.circuitos[0].id }).model;
+    const hip = { ...SEM_CAIXAS, rotaPelaParede: true };
+    return { m: applyBatch(m, planejarEletrodutosDoModelo(m, hip)[0].comandos).model, hip };
+  };
+
+  it.each([2200, 2300])('⚠️ TUE a %i mm, rota pela parede, sem forro: o horizontal na cota do ponto não bloqueia — o quadro relança', (cota) => {
+    const { m, hip } = comTue(cota);
+    const q = m.quadros[0].id;
+    expect((m.trechos ?? []).some((t) => t.cotaAMm === cota && t.cotaBMm === cota && !(t.a.x === t.b.x && t.a.y === t.b.y))).toBe(true);
+    expect(motivoParaNaoRelancar(m, q)).toBeNull();
+    expect(botaoDeLancarEletrodutos(m, planejarEletrodutosPorQuadro(m, hip, HIPOTESES_PADRAO))).toMatchObject({ modo: 'RELANCAR', motivo: null, quadros: [q] });
   });
 });

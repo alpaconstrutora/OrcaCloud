@@ -24,5 +24,5 @@ Conferido pelos dados: as 32 tomadas do Garden não têm giro gravado e estão t
       Pronto quando: teste `BlueprintCanvasAnotacoesEletricas` "com a ARQUITETURA OCULTA…" — falha no código
       antigo (triângulos diferentes com as paredes ocultas) e passa no novo (iguais, ápice na vertical).
 - [x] Prancha: já usava `model.walls` (todas) — sem mudança.
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — `ci`, Vercel e Vercel Preview Comments verdes
+- [x] publicação — mesclado por squash em 23/10/2026 (`bbe96156`); `conferir-producao.sh` provou o domínio servindo bbe9615; frente fechada e branch apagada (pela API)

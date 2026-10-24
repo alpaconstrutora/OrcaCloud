@@ -1467,23 +1467,6 @@ export const laborService = {
 
     // ── MIGRATION ──────────────────────────────────────────
 
-    async getLegacyWorkersCount(orgId?: string | null): Promise<number> {
-        let query = supabase.from('organizations').select('resources');
-        if (orgId) {
-            query = query.eq('id', orgId);
-        }
-        
-        const { data, error } = await query;
-        if (error) return 0;
-        
-        let total = 0;
-        (data as Array<{ resources?: { workers?: unknown[] } }>).forEach(org => {
-            const workers = org.resources?.workers || [];
-            total += workers.length;
-        });
-        return total;
-    },
-
     // ── QR CODES (Sprint 7) ────────────────────────────────
 
     async listQrCodes(orgId: string | null): Promise<QrCodeObra[]> {
@@ -2289,74 +2272,6 @@ export const laborService = {
         const { data, error } = await q;
         if (error) throw error;
         return data || [];
-    },
-
-    // ── MIGRATION ──────────────────────────────────────────
-
-    async migrateLegacyWorkers(orgId?: string): Promise<{ imported: number, skipped: number }> {
-        let query = supabase.from('organizations').select('id, resources');
-        if (orgId) {
-            query = query.eq('id', orgId);
-        }
-        
-        const { data: orgs, error: orgError } = await query;
-        if (orgError || !orgs) throw orgError || new Error('Organização não encontrada');
-        
-        let totalImported = 0;
-        let totalSkipped = 0;
-
-        for (const org of orgs) {
-            const legacyWorkers = org.resources?.workers || [];
-            if (legacyWorkers.length === 0) continue;
-
-            const currentOrgId = org.id;
-
-            // Buscar funcionários existentes para evitar duplicados por nome
-            const { data: existing } = await supabase
-                .from('employees')
-                .select('name')
-                .eq('org_id', currentOrgId);
-            
-            const existingNames = new Set((existing || []).map(e => e.name.toLowerCase()));
-            
-            let imported = 0;
-            let skipped = 0;
-
-            for (const worker of legacyWorkers) {
-                if (existingNames.has(worker.name.toLowerCase())) {
-                    skipped++;
-                    continue;
-                }
-
-                const newEmployee = {
-                    org_id: currentOrgId,
-                    name: worker.name,
-                    role: worker.roleName || worker.roleId || 'Colaborador',
-                    contract_type: 'CLT' as const, // Default
-                    status: 'ATIVO' as const,
-                    daily_cost: worker.baseSalary || 0, // Using daily_cost as mapped from baseSalary
-                    notes: `Migrado do sistema legatário em ${new Date().toLocaleDateString('pt-BR')}.`,
-                };
-
-                const { error: insError } = await supabase.from('employees').insert(newEmployee);
-                if (!insError) imported++;
-                else console.error('Error migrating worker:', worker.name, insError);
-            }
-
-            // Limpar os recursos legatários após migração bem-sucedida
-            if (imported > 0 || skipped > 0) {
-                const updatedResources = { ...org.resources, workers: [] };
-                await supabase
-                    .from('organizations')
-                    .update({ resources: updatedResources })
-                    .eq('id', currentOrgId);
-            }
-
-            totalImported += imported;
-            totalSkipped += skipped;
-        }
-
-        return { imported: totalImported, skipped: totalSkipped };
     },
 
     // ── EMPLOYEE ORG SHARING ───────────────────────────────

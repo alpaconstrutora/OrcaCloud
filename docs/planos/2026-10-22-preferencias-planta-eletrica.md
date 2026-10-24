@@ -183,8 +183,8 @@ Tabela `public.preferencias` (migration aplicada com `npx supabase db query --li
 - [x] Testes: `BlueprintEditor.test.tsx` 256/256 (caso novo da aba + contagem das abas), `SecaoPlantaEletrica`
       (organização do estudo, não o topo), `PreferencesSheetSemPlanta` (perfil sem a seção); tsc 0;
       `check-ui-standard.sh` 0 violações nos 3 `.tsx`.
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — `ci` verde no commit rebaseado 5d3b6f37 (o 1º merge esbarrou num conflito só no plano, com a marcação do #113 feita por outra sessão)
+- [x] publicação — mesclado por squash em 23/10/2026 (`7d9898e8`); `conferir-producao.sh "Preferências da Planta" "O que exibir"` provou o domínio servindo 7d9898e; frente fechada e branch apagada (pela API)
 
 ---
 

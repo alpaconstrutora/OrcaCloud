@@ -70,14 +70,6 @@ export function useDocumentAlerts(orgId?: string | null) {
     });
 }
 
-export function useLegacyWorkersCount(orgId?: string | null) {
-    return useQuery({
-        queryKey: ['labor', 'legacyCount', orgId ?? 'all'] as const,
-        queryFn: () => laborService.getLegacyWorkersCount(orgId),
-        staleTime: STALE.slow,
-    });
-}
-
 // ── Documentos ───────────────────────────────────────────────────────────────
 
 export function useLaborDocuments(orgId?: string | null) {
@@ -177,10 +169,9 @@ export function useLaborModuleData(orgId?: string | null) {
     const productivityLogs= useProductivityLogs(orgId);
     const costSummary     = useCostSummary(orgId);
     const docAlerts       = useDocumentAlerts(orgId);
-    const legacyCount     = useLegacyWorkersCount(orgId);
     const organizations   = useOrganizations();
 
-    const queries = [employees, teams, timeEntries, productivityLogs, costSummary, docAlerts, legacyCount, organizations];
+    const queries = [employees, teams, timeEntries, productivityLogs, costSummary, docAlerts, organizations];
 
     const isLoading = queries.some(q => q.isLoading);
     const failedLabels = [
@@ -190,7 +181,6 @@ export function useLaborModuleData(orgId?: string | null) {
         productivityLogs.error&& 'produtividade',
         costSummary.error     && 'resumo de custos',
         docAlerts.error       && 'alertas de documentos',
-        legacyCount.error     && 'contagem legado',
         organizations.error   && 'organizações',
     ].filter(Boolean) as string[];
 
@@ -203,7 +193,6 @@ export function useLaborModuleData(orgId?: string | null) {
         productivityLogs:productivityLogs.data?? [],
         costSummary:     costSummary.data     ?? null,
         docAlerts:       docAlerts.data       ?? [],
-        legacyCount:     legacyCount.data     ?? 0,
         organizations:   organizations.data   ?? [],
         isLoading,
         failedLabels,

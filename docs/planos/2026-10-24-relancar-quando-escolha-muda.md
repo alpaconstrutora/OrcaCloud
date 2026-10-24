@@ -103,6 +103,6 @@ Desfazer volta); prova por imagem no navegador NÃO feita.
 - [ ] Task 4 — F4 esgoto
 - [ ] Task 5 — F5 circuitos automáticos
 - [x] revisão final do ramo (Tasks 1+2) — "Sim, com correções"; correção 2 `65779b7e` (falso forro, portão de camadas, menores)
-- [ ] PR 1 (Tasks 1+2) + CI
-- [ ] publicação do PR 1 (merge + deploy da function `planta-api`)
+- [x] PR 1 (Tasks 1+2) + CI — PR #149, `ci` 22min21s verde; suíte local 11.459 ok, 0 falhas
+- [x] publicação do PR 1 — squash `a28bd09e` em 24/10/2026; `conferir-producao.sh "Relançar com as escolhas atuais"` provou o domínio servindo a28bd09; `supabase functions deploy planta-api` (autorizado: "pode") com o bundle 0.105.0, função respondendo 200
 - [ ] PR 2 (Tasks 3–5)

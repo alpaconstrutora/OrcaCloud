@@ -5,7 +5,7 @@ import type { ImovibMathResult } from '../hooks/useImovibMath';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import type { ImovibCapexBase } from '../types';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
-import { Activity, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Leaf, Banknote } from 'lucide-react';
+import { Activity, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Banknote } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import { CABECALHO_TABELA } from './ui/cabecalhoDeTabela';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Legend } from 'recharts';
@@ -60,7 +60,7 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
 
     const indicadores: Linha[] = [
         ['Indicador', 'Valor', 'Unidade', 'Observação'],
-        ['VGV bruto', m.vgvTotal, 'R$', 'Inclui o prêmio ESG, se houver'],
+        ['VGV bruto', m.vgvTotal, 'R$', null],
         ['VGV líquido', m.netVgvTotal, 'R$', 'Depois de permutas, inadimplência e distratos'],
         ['Custo de obra', m.constCostTotal, 'R$', null],
         ['Terreno', m.landCost, 'R$', null],
@@ -94,7 +94,7 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Financiamento', 'Capital próprio (equity)', premissa(study.funding_equity_percent, D.funding_equity_percent), '%', null],
         // Mesma regra do motor (actualFinPct): campo novo preenchido vale; vazio → "% Financiado" legado.
         ['Financiamento', 'Financiamento à produção / dívida', study.funding_debt_percent != null ? study.funding_debt_percent : premissa(study.financing_percent, D.financing_percent), '%', study.funding_debt_percent == null && (study.financing_percent ?? 0) > 0 ? 'valor legado (% Financiado)' : null],
-        ['Financiamento', 'Taxa do financiamento', premissa(study.financing_rate_annual, D.financing_rate_annual), '% a.a.', m.esgFundingDiscount > 0 ? `Antes do desconto ESG de ${Number((m.esgFundingDiscount * 100).toFixed(2)).toLocaleString('pt-BR')} p.p.` : null],
+        ['Financiamento', 'Taxa do financiamento', premissa(study.financing_rate_annual, D.financing_rate_annual), '% a.a.', null],
         ['Financiamento', 'Permuta financeira', premissa(study.swap_financial_percent, D.swap_financial_percent), '%', null],
         ['Financiamento', 'Permuta física', premissa(study.swap_physical_percent, D.swap_physical_percent), '%', null],
     ];
@@ -227,8 +227,12 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
 
             <ImovibAvisosBanner avisos={cashFlowData.avisos} onIrPara={onIrPara} />
 
-            {/* Printable Container — capturado pelo html2canvas no PDF: nada de backdrop-filter aqui. */}
-            <div ref={printRef} className="bg-slate-50 p-6 rounded-[10px] space-y-6 max-w-5xl mx-auto">
+            {/* Printable Container — capturado pelo html2canvas no PDF: nada de backdrop-filter aqui.
+                Na tela é só uma coluna (sem fundo nem padding): ocupa a largura toda e os KPIs alinham com
+                o card do topo e o banner, como nas outras abas. Fundo, padding e o teto max-w-5xl valem
+                só durante a exportação — o PDF encaixa a captura em 190 mm, então sem o teto o texto dele
+                dependeria da largura da janela de quem exporta. */}
+            <div ref={printRef} className={isExporting ? 'bg-slate-50 p-6 rounded-[10px] space-y-6 max-w-5xl mx-auto' : 'space-y-6'}>
                 {/* Visual Header for PDF */}
                 {isExporting && (
                     <div className="pb-6 border-b border-gray-200">
@@ -237,18 +241,6 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                                 {/* Título do relatório = h1 do guia §20. */}
                                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">{study.name}</h1>
                                 <p className="text-gray-500 text-sm mt-1.5">Relatório Executivo de Viabilidade Financeira</p>
-                            </div>
-                            <div className="text-right">
-                                {/* §8: status é texto colorido simples — sem pílula, fundo ou caixa alta. */}
-                                <span className="text-sm text-slate-500">Status: </span>
-                                <span className={`text-sm font-normal ${study.committee_decision === 'approved' ? 'text-emerald-700' :
-                                    study.committee_decision === 'rejected' ? 'text-rose-700' :
-                                        study.committee_decision === 'in_review' ? 'text-blue-700' : 'text-slate-600'
-                                    }`}>
-                                    {study.committee_decision === 'approved' ? 'Aprovado' :
-                                        study.committee_decision === 'rejected' ? 'Reprovado' :
-                                            study.committee_decision === 'in_review' ? 'Em análise' : 'Rascunho'}
-                                </span>
                             </div>
                         </div>
                     </div>
@@ -310,38 +302,6 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                         color="orange"
                     />
                 </div>
-
-                {/* Impacto ESG */}
-                {(cashFlowData.esgVgvPremiumValue > 0 || cashFlowData.esgCostTotal > 0) && (
-                    <div className="bg-emerald-50 border border-emerald-100 rounded-[10px] p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-white rounded-[10px] border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                                <Leaf className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-semibold text-gray-900">Impacto Financeiro ESG (Premium Verde)</h3>
-                                <p className="text-sm text-emerald-700 mt-1 max-w-lg">
-                                    Métricas exclusivas geradas pelas iniciativas viáveis aprovadas no Parecer Técnico do Comitê.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-6 md:gap-8 shrink-0">
-                            <div className="text-right">
-                                <div className="text-xs font-semibold text-slate-500 mb-1">Custo Provisionado (CAPEX)</div>
-                                <div className="text-lg font-semibold text-gray-900">
-                                    {formatCurrency(cashFlowData.esgCostTotal)}
-                                </div>
-                            </div>
-                            <div className="w-px h-12 bg-emerald-200 hidden md:block"></div>
-                            <div className="text-right">
-                                <div className="text-xs font-semibold text-slate-500 mb-1">Valorização do Produto (VGV)</div>
-                                <div className="text-lg font-semibold text-emerald-700">
-                                    +{formatCurrency(cashFlowData.esgVgvPremiumValue)}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 <div className="bg-white border border-gray-100 rounded-[10px] p-6 flex flex-col items-center justify-center text-center">
                     <div className="w-12 h-12 bg-slate-50 rounded-[10px] border border-gray-100 flex items-center justify-center mb-3 text-slate-400">
@@ -406,58 +366,6 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                 {/* Extended Sections for PDF Export */}
                 {isExporting && (
                     <div className="mt-6 space-y-8 pb-10">
-                        {/* Section: ESG & Committee Notes */}
-                        <div className="page-break-inside-avoid">
-                            <h2 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-4">Parecer Institucional e ESG</h2>
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="bg-white p-6 rounded-[10px] border border-gray-100">
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Diretrizes ESG</h3>
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-600">Environmental Score:</span>
-                                            <span className="font-medium text-emerald-700">{study.esg_environmental_score || 3}/5</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-600">Social Score:</span>
-                                            <span className="font-medium text-blue-700">{study.esg_social_score || 3}/5</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-600">Governance Score:</span>
-                                            <span className="font-medium text-indigo-700">{study.esg_governance_score || 3}/5</span>
-                                        </div>
-                                        {study.esg_certifications && study.esg_certifications.length > 0 && (
-                                            <div className="mt-4 pt-4 border-t border-gray-100 text-sm">
-                                                <span className="block text-xs font-semibold text-slate-500 mb-2">Selos Meta:</span>
-                                                <div className="flex gap-2 flex-wrap">
-                                                    {study.esg_certifications.map(c => (
-                                                        <span key={c} className="bg-emerald-50 text-emerald-800 px-2 py-1 rounded-[6px] text-xs font-medium">{c}</span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                        {study.esg_notes && (
-                                            <div className="mt-4 pt-4 border-t border-gray-100 text-sm italic text-gray-600">
-                                                "{study.esg_notes}"
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="bg-white p-6 rounded-[10px] border border-gray-100">
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Considerações do Comitê</h3>
-                                    <div className="text-sm text-gray-700 whitespace-pre-wrap">
-                                        {study.committee_notes || "Sem notas adicionais cadastradas para o comitê."}
-                                    </div>
-                                    <div className="mt-8 pt-4 border-t border-gray-100 flex justify-end gap-12">
-                                        <div className="text-center">
-                                            <div className="w-40 h-px bg-slate-400 mb-2"></div>
-                                            <span className="text-xs font-semibold text-slate-500">Ass. Diretor / Sponsor</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                         {/* Section: CAPEX Master — tabela no padrão do guia §6/§6.11/§7 (só aparece no PDF:
                             sem SortableHeader, porque não há interação na captura). */}
                         <div className="page-break-inside-avoid">

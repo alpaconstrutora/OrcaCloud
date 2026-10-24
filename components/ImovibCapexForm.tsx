@@ -2,7 +2,7 @@ import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useState, useEffect, useMemo } from 'react';
 import { ImovibStudy, ImovibBlock, ImovibCapexItem, ImovibCapexItemInsert } from '../types';
 import { imovibService } from '../services/imovibService';
-import { Calculator, ChevronRight, Activity, Leaf, Plus, LayoutList, Zap } from 'lucide-react';
+import { Calculator, ChevronRight, Activity, Plus, LayoutList, Zap } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
 import { useImovibMath, baseDaRubrica } from '../hooks/useImovibMath';
@@ -521,23 +521,6 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 {/* ── DETAILED MODE ── */}
                 {capexMode === 'detailed' && (
                     <>
-                        {math.esgCostTotal > 0 && (
-                            <div className="mb-6 p-4 bg-emerald-50 rounded-[10px] border border-emerald-100 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-emerald-100 text-emerald-600 rounded-[6px]">
-                                        <Leaf className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-emerald-900">Custo Provisionado: Medidas ESG</h4>
-                                        <p className="text-xs text-emerald-700">Calculado automaticamente com base nas Iniciativas Sustentáveis (Aba Parecer).</p>
-                                    </div>
-                                </div>
-                                <span className="text-lg font-semibold text-emerald-700">
-                                    + {fmt(math.esgCostTotal)}
-                                </span>
-                            </div>
-                        )}
-
                         {/* O que as rubricas somam no cálculo de VPL/TIR (item 2.4) */}
                         <div className="mb-6 p-4 bg-white rounded-[10px] border border-slate-200">
                             <div className="flex flex-wrap items-baseline justify-between gap-2">

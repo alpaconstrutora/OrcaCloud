@@ -844,20 +844,6 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                             </div>
                                         )}
 
-                                        {/* ESG e Sustentabilidade */}
-                                        {(study?.esg_environmental_score || study?.esg_social_score || study?.esg_governance_score) && (
-                                            <div className="bg-emerald-50/30 rounded-3xl border border-emerald-100 p-6 space-y-4">
-                                                <div className="flex items-center gap-2">
-                                                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                                                    <h4 className="text-base font-black text-emerald-900">Iniciativas ESG e Sustentabilidade</h4>
-                                                </div>
-                                                <p className="text-sm text-emerald-800 leading-relaxed font-medium">
-                                                    Este empreendimento possui um compromisso com diretrizes ambientais, sociais e de governança.
-                                                    O estudo de viabilidade contempla premissas sustentáveis que geram desconto no funding e garantem maior atratividade de mercado.
-                                                </p>
-                                            </div>
-                                        )}
-
                                         {/* Sensibilidade Fallback */}
                                         <div>
                                             <div className="flex items-center gap-2 mb-4">

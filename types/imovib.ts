@@ -501,14 +501,6 @@ export interface ImovibStudy {
     funding_debt_percent?: number;
     swap_financial_percent?: number;
     swap_physical_percent?: number;
-    esg_environmental_score?: number;
-    esg_social_score?: number;
-    esg_governance_score?: number;
-    esg_certifications?: string[];
-    esg_initiatives?: { id: string, name: string, category: 'E' | 'S' | 'G', cost: number, vgv_premium: number, funding_discount: number, active: boolean }[];
-    esg_notes?: string;
-    committee_decision?: string;
-    committee_notes?: string;
     capex_mode?: 'simplified' | 'detailed';
     capex_simplified_cost_sqm?: number;
     capex_simplified_area_sqm?: number;

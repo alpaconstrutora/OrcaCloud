@@ -31,7 +31,7 @@ const pctDoVgv = (valor: number, vgv: number) =>
 const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, onIrPara }) => {
     const math = useImovibMath(study);
 
-    // VGV com prêmio ESG — o mesmo número do Resumo, do Espelho e da listagem.
+    // O mesmo VGV do Resumo, do Espelho e da listagem.
     const vgv = math.vgvTotal;
     const landCost = math.landCost;
     const constructionCost = math.constCostTotal;
@@ -49,9 +49,6 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, on
             : blocosPeloEspelho === 0
                 ? 'Área privativa vendável × preço/m²'
                 : `Espelho em ${blocosPeloEspelho} de ${blocos.length} blocos; demais por área × preço/m²`;
-    const origemVgvCompleta = math.esgVgvPremiumValue > 0
-        ? `${origemVgv} · inclui prêmio ESG de ${formatCurrency(math.esgVgvPremiumValue)}`
-        : origemVgv;
 
     const linhas: { rotulo: string; valor: number; detalhe?: string }[] = [
         { rotulo: '(−) Aquisição do terreno', valor: -landCost },
@@ -70,8 +67,8 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, on
                 <KpiCard
                     label="VGV Potencial (Receita)"
                     value={formatCurrency(vgv)}
-                    sub={origemVgvCompleta}
-                    title={origemVgvCompleta}
+                    sub={origemVgv}
+                    title={origemVgv}
                     icon={<TrendingUp className="w-4 h-4" />}
                     color="blue"
                 />
@@ -104,7 +101,7 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, on
                         <tr>
                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                 Valor Geral de Vendas (VGV)
-                                <span className="block text-xs text-gray-500">{origemVgvCompleta}</span>
+                                <span className="block text-xs text-gray-500">{origemVgv}</span>
                             </td>
                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">{formatCurrency(vgv)}</td>
                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600 w-32">{vgv > 0 ? '100,00%' : '—'}</td>

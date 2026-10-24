@@ -189,3 +189,10 @@ no banco é idêntica ao arquivo `aplicar_20271012000020` (diff vazio do
 
 O pedido seguinte — o síndico como OPERADOR do sistema (organização própria por
 condomínio) — está em `docs/planos/2026-10-21-sindico-operador-org-condominio.md`.
+
+## Continuação (24/10/2026)
+
+O Financeiro do condomínio dentro do portal (a aba "Prestação de contas" virou
+"Financeiro", com resumo, contas a pagar operáveis com login, contas a receber e a
+prestação de contas como sub-aba) está em
+`docs/planos/2026-10-24-portal-sindico-financeiro.md`.

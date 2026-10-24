@@ -203,6 +203,8 @@ export interface LancamentoDoCondominio {
      * rateada" e o usuário não teria como saber em qual mês.
      */
     rateioCompetencia: string | null;
+    /** Lançada pelo síndico no Portal do Síndico (24/10/2026). */
+    lancadoPeloSindico: boolean;
 }
 
 /** Uma cota já gravada, com os rótulos que a tela precisa. */
@@ -765,7 +767,7 @@ export const condominioRateioService = {
 
         const { data, error } = await supabase
             .from('internal_transactions')
-            .select('id, description, amount, transaction_date, cost_center_id, party_name, entity_name, source_system, reference_id, supplier_id')
+            .select('id, description, amount, transaction_date, cost_center_id, party_name, entity_name, source_system, reference_id, supplier_id, lancado_por_sindico_client_id')
             .in('cost_center_id', params.costCenterIds)
             .eq('direction', 'DEBIT')
             .gte('transaction_date', inicio)
@@ -827,6 +829,7 @@ export const condominioRateioService = {
                 costCenterLabel: ccs.get(l.cost_center_id) ?? '—',
                 rateada: comp !== null,
                 rateioCompetencia: comp,
+                lancadoPeloSindico: !!l.lancado_por_sindico_client_id,
             };
         });
     },

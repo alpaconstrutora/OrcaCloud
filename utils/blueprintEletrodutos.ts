@@ -137,9 +137,9 @@ import type {
   Trecho,
   Wall,
 } from './blueprintKernel';
-import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, composicaoDaRede } from './blueprintKernel';
+import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, composicaoDaRede, pointInPolygon, type Point } from './blueprintKernel';
 import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, type FaixaDoForro } from './blueprintRotaPeloForro';
-import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
 import { encaminhamentoPorAmbiente } from './blueprintEncaminhamentoPorAmbiente';
 import { REGRA_DE_CAIXAS_PADRAO, caixasDaRede, type RegraDeCaixas, type SegmentoDaRede } from './blueprintCaixasDePassagem';
@@ -215,6 +215,45 @@ export const ENCAMINHAMENTOS_DO_ELETRODUTO: readonly { valor: EncaminhamentoDoEl
 export const COTA_MINIMA_DA_REDE_MM = 2100;
 /** E6.3: até onde um ponto de parede procura a parede para a rota pela parede, mm. */
 export const RAIO_DE_ENCAIXE_ELETRICO_MM = 600;
+
+/**
+ * Task 3, correção 1 (24/10/2026): no modo pela luz, o pilar que o eletroduto contorna é a pegada inflada pelo RAIO do
+ * tubo mais esta folga, mm. `desvioDoPilar` só vê o pilar pelas amostras de `fracaoDentro`, uma a cada ~50 mm: a reta
+ * que cortava só o canto do pilar real (de 0,3 a 39 mm do eixo dentro, nas casas com forro) passava entre duas
+ * amostras e seguia reta. Inflado por raio + 50, um segmento que toca o canto real atravessa no anel inflado uma corda
+ * de pelo menos 2 × 50 = 100 mm — maior que o passo, então alguma amostra cai dentro. `desvioDoPilar` e
+ * `fracaoDentro` não mudam: são os mesmos da água, do esgoto e do pluvial.
+ */
+export const FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM = 50;
+
+/** A menor distância de `p` à pegada `g` (0 se dentro). */
+function distanciaAPegada(p: { x: number; y: number }, g: readonly Point[]): number {
+  if (pointInPolygon(g as Point[], p as Point)) return 0;
+  let d = Infinity;
+  for (let i = 0; i < g.length; i++) {
+    const a = g[i];
+    const b = g[(i + 1) % g.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const L2 = dx * dx + dy * dy;
+    const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2));
+    d = Math.min(d, Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)));
+  }
+  return d;
+}
+
+/**
+ * Task 3, correção 1: as pegadas dos pilares infladas por `inflarMm` (`anelDoPilar`) para a reta a→b. A ponta que fica
+ * a menos disso de um pilar (o quadro encostado nele) ficaria DENTRO do anel e `desvioDoPilar` não acharia contorno:
+ * para esse pilar o anel encolhe até 1 mm aquém da ponta — a reta quase paralela à face, que é o caso, ainda atravessa
+ * nele uma corda longa. Ponta dentro do pilar real: a pegada real, como antes.
+ */
+export function pilaresInflados(pegadas: readonly Point[][], a: { x: number; y: number }, b: { x: number; y: number }, inflarMm: number): Point[][] {
+  return pegadas.map((g) => {
+    const f = Math.min(inflarMm, distanciaAPegada(a, g) - 1, distanciaAPegada(b, g) - 1);
+    return f > 0 ? (anelDoPilar(g, f) as Point[]) : (g as Point[]);
+  });
+}
 
 /** As rotas máximas oferecidas na hipótese. */
 export const ROTAS_MAXIMAS = [
@@ -424,10 +463,18 @@ export function planejarEletrodutos(
   let semContorno = 0;
   /** E6.3: nós da rede sobre a caixa de um ponto de parede (pela parede: o encaixe no eixo) → a descida até ele. */
   const sobrePonto = new Map<string, number>();
+  /**
+   * Task 3, correção 1 (24/10/2026): no modo pela luz, os pilares que `desvioDoPilar` vê são os INFLADOS (ver
+   * `pilaresInflados`); `ARVORE_NO_TETO` segue com a pegada real, como sempre.
+   */
+  const pelaLuzDoAmbiente = (hip.encaminhamento ?? 'PELA_LUZ_DO_AMBIENTE') === 'PELA_LUZ_DO_AMBIENTE';
+  const pilaresDaReta = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }) =>
+    pelaLuzDoAmbiente ? pilaresInflados(pegadas(levelId), a, b, hip.bitolaMm / 2 + FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM) : pegadas(levelId);
   const ligarNaRede = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): void => {
     // F14b: no forro, a reta desvia também das prumadas das outras redes (a coluna da fria cruzando a faixa).
     // F27 item 5: e dos ramais que correm na laje do pavimento de cima, colados na faixa pela cota real.
-    const desvio = desvioDoPilar(a, b, hip.noForro ? [...pegadas(levelId), ...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(levelId));
+    const pilares = pilaresDaReta(levelId, a, b);
+    const desvio = desvioDoPilar(a, b, hip.noForro ? [...pilares, ...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : pilares);
     if (desvio == null) {
       semContorno++;
       addTrecho(levelId, a, cota, b, cota);

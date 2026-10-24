@@ -16,6 +16,7 @@ import {
   emptyModel,
   modelFromCanonicalPayload,
   point,
+  pointInPolygon,
   type BlueprintModel,
   type Command,
 } from '../utils/blueprintKernel';
@@ -406,7 +407,9 @@ describe('E6.3 — o eletroduto desvia da estrutura', () => {
     const pegadas = pegadasDePilares(comPilar.m, comPilar.t);
     // A reta de antes atravessaria o pilar:
     expect(fracaoDentro({ x: 75, y: 1000 }, { x: 5925, y: 1000 }, pegadas)).toBeGreaterThan(0);
-    const plano = planejarEletrodutos(comPilar.m, quadroDe(comPilar.m), semCaixas);
+    // Task 3, correção 1: o canto a 10 cm da pegada REAL é o do modo antigo — no modo pela luz o pilar é inflado
+    // (raio + 50 mm, `FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM`) e o canto se afasta mais; ver o teste "SÓ O CANTO".
+    const plano = planejarEletrodutos(comPilar.m, quadroDe(comPilar.m), { ...semCaixas, encaminhamento: 'ARVORE_NO_TETO' });
     const hz = horizontais(plano.comandos);
     expect(hz.length).toBe(2); // por um canto do pilar
     for (const c of hz) expect(fracaoDentro(c.a, c.b, pegadas)).toBe(0);
@@ -688,6 +691,32 @@ describe('24/10/2026 — pela luz do ambiente (padrão): quadro → luz do ambie
     expect(trechoEntre(plano.comandos, LUZ, T3, 2800)).toBeDefined();
     expect(descidaEm(plano.comandos, T3, 2800, 300)).toBeDefined();
     expect(tetoHz(plano.comandos)).toHaveLength(1); // só luz → tomada
+  });
+
+  it('Task 3, correção 1: o trecho luz→ponto que corta SÓ O CANTO do pilar (29 mm, entre duas amostras de 50 mm) também desvia', () => {
+    // Pilar 300 × 300 em (2140, 898): o canto de cima à esquerda entra 15 mm além da reta luz (3000, 2000) → (1000, 75).
+    const P = { x: 1000, y: 75 };
+    const { m } = comodos(false, [{ ...LUZ, tipo: 'ILUMINACAO_TETO' }, { ...P, tipo: 'TUG' }], (_mm, t) => [{ ...(PILAR(2140, 898) as object), levelId: t } as Command]);
+    const pegadas = pegadasDePilares(m, m.levels[0].id);
+    // A amostragem não vê o corte (é o que deixava o canto passar), mas a reta entra no pilar.
+    expect(fracaoDentro(LUZ, P, pegadas)).toBe(0);
+    /** Milímetros do eixo dentro do pilar, medidos de 1 em 1 mm. */
+    const mmDentro = (a: XY, b: XY) => {
+      const L = Math.hypot(b.x - a.x, b.y - a.y);
+      let n = 0;
+      for (let i = 0; i < L; i++) if (pegadas.some((g) => pointInPolygon(g, { x: a.x + ((b.x - a.x) * (i + 0.5)) / L, y: a.y + ((b.y - a.y) * (i + 0.5)) / L } as never))) n++;
+      return n;
+    };
+    expect(mmDentro(LUZ, P)).toBeGreaterThanOrEqual(5);
+    expect(mmDentro(LUZ, P)).toBeLessThanOrEqual(40);
+    const plano = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    expect(trechoEntre(plano.comandos, LUZ, P, 2800)).toBeUndefined();
+    for (const c of tetoHz(plano.comandos)) expect(mmDentro(c.a, c.b), `${c.a.x},${c.a.y} → ${c.b.x},${c.b.y}`).toBe(0);
+    expect(tetoHz(plano.comandos).some((c) => mesmo(c.a, P) || mesmo(c.b, P))).toBe(true);
+    expect(descidaEm(plano.comandos, P, 2800, 300)).toBeDefined();
+    // ARVORE_NO_TETO não muda (a correção é só do modo pela luz).
+    const antigo = planejarEletrodutos(m, quadroDe(m), { ...semCaixas, encaminhamento: 'ARVORE_NO_TETO' });
+    expect(tetoHz(antigo.comandos).some((c) => mmDentro(c.a, c.b) > 0)).toBe(true);
   });
 
   it('PILAR entre a luz e a tomada: o trecho luz→ponto desvia por um canto dele', () => {

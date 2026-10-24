@@ -88,7 +88,7 @@ describe('LaborEmployeeForm › Folha de Pagamento — Adicionar rubricas', () =
         expect(screen.getByText('2 rubricas incluídas')).toBeTruthy();
         expect(screen.getByText('(inativa)')).toBeTruthy();
         expect(screen.queryByText('Auxílio creche')).toBeNull();
-        expect(screen.getByLabelText('Valor de Vale transporte extra').getAttribute('placeholder')).toBe('R$ 150,00 (da rubrica)');
+        expect(screen.getByLabelText('Valor de Vale transporte extra').getAttribute('placeholder')).toBe('R$ 150,00');
     });
 
     it('o drawer lista também as não-automáticas, trava o INSS com o motivo e adiciona as marcadas', async () => {
@@ -100,7 +100,7 @@ describe('LaborEmployeeForm › Folha de Pagamento — Adicionar rubricas', () =
         expect(within(d).getByText('Auxílio creche')).toBeTruthy();
         expect(within(d).queryByText('Vale transporte extra')).toBeNull();   // já incluída
         expect(within(d).queryByText('Bônus antigo')).toBeNull();            // inativa
-        const inss = within(d).getByText(/Calculada pela própria folha/).closest('tr') as HTMLElement;
+        const inss = within(d).getByText(/Calculada pela folha/).closest('tr') as HTMLElement;
         expect(within(inss).queryByRole('checkbox')).toBeNull();
 
         expect((within(d).getByRole('button', { name: 'Adicionar rubricas' }) as HTMLButtonElement).disabled).toBe(true);
@@ -120,7 +120,7 @@ describe('LaborEmployeeForm › Folha de Pagamento — Adicionar rubricas', () =
         await abrirAba();
         await adicionar('Gratificação');
         await screen.findByText('3 rubricas incluídas');
-        expect(screen.getByLabelText('Valor de Gratificação').getAttribute('placeholder')).toBe('Em aberto (lançar no mês)');
+        expect(screen.getByLabelText('Valor de Gratificação').getAttribute('placeholder')).toBe('Em aberto');
 
         salvar();
         await waitFor(() => expect(payroll.updateEmployeeRecurringRubrics).toHaveBeenCalled());

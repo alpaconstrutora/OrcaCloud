@@ -5,7 +5,7 @@ import {
 } from '../portal/PortalKit';
 import { PainelFinanceiro } from '../client/CondominioTab';
 import { usePersistedState } from '../ui/TableUtils';
-import PainelAprovacaoDoSindico from './PainelAprovacaoDoSindico';
+import PainelRateiosDoSindico from './PainelRateiosDoSindico';
 import TabelaTitulosDoSindico from './TabelaTitulosDoSindico';
 import LancarContaSheet from './LancarContaSheet';
 import { BaixaDoTituloSheet, CancelarTituloSheet } from './BaixaDoTituloSheet';
@@ -30,8 +30,8 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
  * Plano: docs/planos/2026-10-24-portal-sindico-financeiro.md
  *
  * Quatro sub-abas: Resumo do mês · Contas a pagar · Contas a receber ·
- * Prestação de contas (a antiga aba inteira — rateios com aprovar/devolver,
- * sem mudança). Os títulos são os dos CENTROS DE CUSTO do condomínio
+ * Prestação de contas (o síndico monta, fecha e gera as cotas do rateio — G1,
+ * `PainelRateiosDoSindico`). Os títulos são os dos CENTROS DE CUSTO do condomínio
  * (`sindico_portal_financeiro`), o mesmo recorte da aba Despesas do admin.
  *
  * Operar (lançar, pagar, editar, cancelar, cadastrar fornecedor) exige LOGIN:
@@ -89,8 +89,9 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
     const [baixando, setBaixando] = React.useState<TituloDoCondominio | null>(null);
     const [cancelando, setCancelando] = React.useState<TituloDoCondominio | null>(null);
 
+    // Também na Prestação: é daqui que vem se o condomínio pode gravar pelo
+    // portal (organização própria), e o rateio (G1) grava.
     React.useEffect(() => {
-        if (subAba === 'prestacao') return;
         let vivo = true;
         setCarregando(true);
         setErro(null);
@@ -107,7 +108,7 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
             .catch(e => { if (vivo) { setErro(e instanceof Error ? e.message : 'Não foi possível carregar o financeiro.'); setFin(null); } })
             .finally(() => { if (vivo) setCarregando(false); });
         return () => { vivo = false; };
-    }, [identidade, competencia, subAba, versao]);
+    }, [identidade, competencia, versao]);
 
     const hoje = fin?.hoje ?? hojeEmBrasilia();
     const titulos = React.useMemo(() => doCondominio(fin?.titulos ?? [], condominioId), [fin, condominioId]);
@@ -203,10 +204,21 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
 
             {subAba === 'prestacao' ? (
                 <>
-                    {/* Decidir exige LOGIN: `logado` só é verdadeiro na entrada por e-mail e senha. */}
-                    <PainelAprovacaoDoSindico identidade={identidade} rateios={rateios}
-                        condominios={dados.condominios.filter(c => c.id === condominioId)}
-                        podeDecidir={logado} somenteLeitura={somenteLeitura} onAlterado={onAlteradoPortal} notify={notify} />
+                    {/* Gravar exige LOGIN: `logado` só é verdadeiro na entrada por e-mail e senha. */}
+                    <PainelRateiosDoSindico
+                        identidade={identidade}
+                        rateios={rateios}
+                        condominio={dados.condominios.find(c => c.id === condominioId) ?? null}
+                        unidades={dados.unidades}
+                        motivoBase={condominioId
+                            ? motivoNaoOpera({
+                                somenteLeitura, logado,
+                                motivoDoCondominio: fin ? (condominiosDaTela[0]?.motivoNaoOpera ?? null) : 'Carregando o condomínio…',
+                            })
+                            : 'Nenhum condomínio no seu mandato.'}
+                        onAlterado={onAlteradoPortal}
+                        notify={notify}
+                    />
                     <PortalCard className="p-4 md:p-6">
                         <PainelFinanceiro
                             rateios={rateios as unknown as PortalCondominio['rateios']}

@@ -89,9 +89,71 @@ Cada fase: migration com RPCs (+ prova em bloco desfeito), service, tela, testes
 (`condominio_salvar_ficha`: CNPJ, razão social, multa/juros)
 - Pronto quando: multa/juros alterados pelo síndico entram na próxima cobrança.
 
+## G1 — desenho (24/10)
+
+Decisão do usuário: começar pela G1. A lógica do admin roda no NAVEGADOR
+(`condominioRateioService.previa/salvar/fechar`, `condominioCobrancaService.previa/gerarRecebiveis`,
+gravando direto com a RLS de membro). O síndico não é membro → tudo vira função no banco, com o
+servidor RECALCULANDO (nunca grava valor vindo do navegador).
+
+Migration `aplicar_20271024910000_portal_sindico_rateio.sql`:
+1. `fn_rateio_calcular(emp, competencia, criterio, pagador, grupo, valor_fixo)` — porta fiel de
+   `previa`: despesas DEBIT dos CCs do condomínio por `transaction_date` na competência, fora as já
+   em rateio vivo; unidades na ordem do admin (torre `sort_order, created_at`; unidade `floor,
+   sort_order`); peso por critério; "maior resto" em centavos; avisos iguais aos do admin.
+   Interna (sem EXECUTE para ninguém). **Pronto quando:** recalculada para os rateios já salvos do
+   007 (07/2026) e do 010 (08/2026), dá os mesmos valores por unidade.
+2. `sindico_portal_rateio_previa` (ler) · `…_salvar` (rascunho; recalcula; descrição podada que o
+   portal mostra, só para ids da própria prévia) · `…_fechar` (congela descrições, numera pela
+   `fn_generate_document_number` com EMPREENDIMENTO/CENTRO_CUSTO/ORGANIZACAO como o admin; quem
+   fecha é o síndico, então a aprovação exigida é dele mesmo — grava APROVADO + assinatura +
+   `condominio_rateio_decisoes` antes de mudar o status) · `…_cancelar` (rascunho, ou fechado SEM
+   cota gerada; motivo obrigatório) · `…_gerar_cotas` (porta de `gerarRecebiveis`: mesmos bloqueios,
+   `reference_id` `{item}-p{venc}`, trava de mês fechado à mão). Escrita: `fn_sindico_operar` +
+   mandato + `fn_sindico_motivo_nao_opera`. REVOKE PUBLIC/anon; GRANT authenticated (prévia também anon,
+   como a leitura do portal).
+3. `condominio_rateios.criado_por_sindico_client_id`; `sindico_financeiro_eventos.rateio_id` e as
+   ações RATEIO_* no CHECK.
+   **Pronto quando:** prova em bloco desfeito com o síndico do 010 (JWT simulado): salvar → fechar →
+   gerar cotas → contagens/valores conferidos → nada fica.
+
+Portal (`components/sindico/`): Prestação de contas ganha "Novo rateio" (painel lateral: competência,
+tipo, critério, de quem cobrar, grupo/valor fixo, prévia de despesas e cotas) e, em cada rateio,
+Fechar · Cancelar · Gerar cotas (vencimento), com motivo no botão desligado. Regras puras em
+`utils/rateioDoSindico.ts` com teste. **Pronto quando:** Playwright logado (harness temporário,
+escrita interceptada) faz o ciclo no 010; celular sem rolagem lateral; tsc 0; UI limpa.
+
+Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
+
 ## Estado
 
 - [x] 007 com organização própria (24/10) — ver plano de 21/10, F3.
 - [x] PR #138: Financeiro um condomínio por vez.
-- [ ] Usuário decidir o que entra e a ordem das fases G1–G7.
-- [ ] G1 · [ ] G2 · [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7
+- [x] Ordem: começar pela G1 (usuário, 24/10).
+- [ ] G1 — 3 de 4:
+  - [x] Cálculo no banco (`fn_rateio_calcular`). Paridade com os 7 rateios gravados: 5 batem
+    centavo a centavo; os 2 do 010 cancelados diferem SÓ porque 9 despesas deles foram apagadas
+    depois (R$ 488,84 = a diferença exata); a distribuição por área privativa do banco é idêntica
+    à `distribuir` do admin com os mesmos pesos e total (teste temporário, apagado).
+  - [x] RPCs + migration `aplicar_20271024910000` APLICADA (24/10). Achado na prova:
+    `fn_next_document_seq` exige MEMBRO da org → o síndico não numera; criada
+    `fn_sindico_numero_documento` (mesma conta, sem a checagem; interna). Prova em bloco desfeito
+    com o login do síndico simulado (010, 09/2026): pelo link prévia ok e salvar recusado; logado
+    salva (12 cotas = R$ 987,96, org do condomínio, autoria), recusa duplicado/cancelar sem
+    motivo/fechar 2×, fecha com a aprovação dele e número CTC-010-0002 (série do admin), gera 10
+    recebíveis (R$ 823,30; 2 bloqueados com o motivo), não duplica, recusa cancelar com cota
+    gerada; FIXO por proprietário e cancelar rascunho ok; nada ficou. ACL: internas sem EXECUTE;
+    escrita só `authenticated`; prévia/cotas também `anon` (como a leitura do portal).
+  - [x] Tela: `PainelRateiosDoSindico` (substitui `PainelAprovacaoDoSindico`, apagado — "Aprovar"
+    virou "Fechar", que grava a aprovação; "Devolver" fica quando o condomínio exige aprovação),
+    `NovoRateioSheet`, regras em `utils/rateioDoSindico.ts` (7 testes), `SindicoPortal.test` 10/10.
+    Playwright logado (harness temporário, apagado; leituras reais do 010, escritas interceptadas):
+    desktop e celular 390px, prévia 12 cotas = R$ 987,96, salvar e fechar chegam às RPCs certas,
+    0 erro, sem rolagem lateral. **Os prints acharam 2 defeitos, corrigidos:** coluna "Cota"
+    cortada no painel (tabela → lista); no celular a barra inferior do portal (z-50) cobria o
+    rodapé de TODO painel lateral — "Salvar" sumia (barra → z-40). tsc 0; UI limpa.
+  - [ ] PR + CI + publicação.
+- ⚠️ **O síndico do 010/007 (altair.rosa@gmail.com) NÃO tem login** (nenhum usuário com esse e-mail
+  em 24/10): pelo link ele só lê. Tudo que grava (lançar, pagar, rateio) exige entrar com e-mail e
+  senha — falta ele criar o acesso.
+- [ ] G2 · [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7

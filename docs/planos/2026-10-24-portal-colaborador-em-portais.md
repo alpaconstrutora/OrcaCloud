@@ -24,6 +24,6 @@ Sessão `6863b925-c5a1-45aa-a7fc-d3bd12b7048a` · 24/10/2026:
 
 ## Estado
 
-- [ ] 1 · 2 — typecheck e `check-ui-standard`
-- [ ] Verificação no navegador
+- [x] 1 · 2 — `tsc --noEmit` 0 erros; `check-ui-standard` sem violação nos 2 arquivos
+- [x] Verificação no navegador (24/10/2026, `c:/tmp/pwtest/portal-colab-menu.cjs`, servidor da frente, conta agente-leitura, nada salvo): na Garden (admin) `#/labor-portal` abre com título "Portal do Colaborador", Portais aberto sozinho com o item, RH fechado; aberto o RH, "Portal Colaborador" não está mais lá; Dashboard → Portais › Portal do Colaborador leva à tela. Sem erro de console nem 4xx/5xx. O item solto (quem tem RH sem ver Portais) não foi visto: a conta enxerga Portais nos dois contextos testados.
 - [ ] Publicação

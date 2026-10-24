@@ -149,8 +149,10 @@ import { idsDoGrupo } from '../../utils/blueprintGrupoDeFundacao';
 import {
   PASSO_DA_CURVA_PX,
   arcoDoTrecho,
+  desenhaEmArco,
   desviosDeSobreposicao,
   entradasNoQuadro,
+  flechasBaseDosGrupos,
   geometriaDesenhada,
 } from '../../utils/blueprintEletrodutoSobreposto';
 import {
@@ -2343,11 +2345,12 @@ export default function BlueprintCanvas({
    */
   const desenhoDosTrechos = useMemo(() => {
     const desvios = desviosDeSobreposicao(trechosDoNivel);
+    const flechas = flechasBaseDosGrupos(trechosDoNivel);
     const entradas = entradasNoQuadro(
       trechosDoNivel,
       quadrosDoNivel.map((q) => ({ id: q.id, at: q.at, larguraMm: medidasDoQuadro(q).larguraMm, rotacaoGraus: giroDaPeca(q) })),
     );
-    return { desvios, entradas };
+    return { desvios, entradas, flechas };
   }, [trechosDoNivel, quadrosDoNivel]);
 
   /**
@@ -3519,7 +3522,7 @@ export default function BlueprintCanvas({
       // demais são medidos contra a geometria DESENHADA — curva e entrada no
       // quadro —, senão o clique no arco cairia no vazio.
       const alcance = HIT_PX / vista.escala;
-      const geometria = geometriaDesenhada(trechosDoNivel, desenhoDosTrechos.desvios, desenhoDosTrechos.entradas, vista.escala);
+      const geometria = geometriaDesenhada(trechosDoNivel, desenhoDosTrechos.desvios, desenhoDosTrechos.entradas, vista.escala, undefined, desenhoDosTrechos.flechas);
       for (let i = geometria.length - 1; i >= 0; i--) {
         const g = geometria[i];
         const t = trechosDoNivel[i];
@@ -6426,8 +6429,12 @@ export default function BlueprintCanvas({
     // Dois eletrodutos pela mesma reta viravam um traço só, e a contagem de
     // condutores de um cobria a do outro (relato com print). A convenção da
     // prancha é o arco leve nos repetidos, cada um para um lado. É desenho:
-    // o trecho continua reto no modelo, no 3D e no acerto do clique — o arco
-    // passa a 4 px do traço reto por nível, dentro do alcance de 8 px.
+    // o trecho continua reto no modelo e no 3D, e o ACERTO DO CLIQUE segue o
+    // traço desenhado (`geometriaDesenhada`). Desde 24/10/2026 ("Curvas, como
+    // no seu print") todo eletroduto elétrico fora da parede tem o arco base
+    // (flecha de 12 % do comprimento, teto de 300 mm) e o nível dos sobrepostos
+    // soma-se a ele (7 px no meio por nível, em tela) — o do mesmo grupo usa a
+    // flecha do mais longo, para não se cruzarem.
     // ── OS TEXTOS DA PLANTA, SEM COLISÃO (22/10/2026) ────────────────────────
     //
     // Pedido com dois prints da planta Garden, elétrica ligada: *"Veja a total confusão de
@@ -6489,7 +6496,7 @@ export default function BlueprintCanvas({
     });
     const caixaDoCirculo = (c: { x: number; y: number }, r: number): CaixaNaTela => ({ x0: c.x - r, y0: c.y - r, x1: c.x + r, y1: c.y + r });
 
-    const { desvios, entradas } = desenhoDosTrechos;
+    const { desvios, entradas, flechas } = desenhoDosTrechos;
     for (const t of trechosDoNivel) {
       meioTom(atenuados.has(t.id));
       const selecionado = selecao.has(t.id);
@@ -6503,9 +6510,10 @@ export default function BlueprintCanvas({
       // (`geometriaDesenhada`): o que se vê é o que se pega. A curva é afim — levar o controle e o
       // meio à tela dá a mesma curva que levar a polilinha.
       const arco = arcoDoTrecho(aMundo, bMundo, {
-        eletrico: t.disciplina === 'ELETRICA',
+        eletrico: desenhaEmArco(t),
         nivel: desvios.get(t.id) ?? 0,
-        passoMm: PASSO_DA_CURVA_PX / vista.escala,
+        passoMm: vista.escala > 0 ? PASSO_DA_CURVA_PX / vista.escala : 0,
+        flechaBaseMm: flechas.get(t.id),
       });
       const curva = { controle: paraTela(arco.controle), meio: paraTela(arco.meio) };
       // O traço é obstáculo dos textos: eles preferem não cruzá-lo (ver `anotar`). O obstáculo é o ARCO

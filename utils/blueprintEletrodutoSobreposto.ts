@@ -49,6 +49,8 @@
  * canvas (traço, rótulos, obstáculo dos textos e acerto do clique) e a prancha
  * leem dela, para o que se vê ser o que se pega e o que se imprime.
  */
+import { COTA_MINIMA_DA_REDE_MM } from './blueprintEletrodutos';
+
 export interface Ponto2D {
   x: number;
   y: number;
@@ -157,6 +159,25 @@ export function desviosDeSobreposicao<T extends { id: string; a: Ponto2D; b: Pon
   trechos: readonly T[],
   tolMm = TOLERANCIA_DE_SOBREPOSICAO_MM,
 ): Map<string, number> {
+  const desvios = new Map<string, number>();
+  for (const g of gruposConfundiveis(trechos, tolMm)) {
+    if (g.length < 2) continue;
+    const ordenados = [...g].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+    ordenados.forEach((t, k) => {
+      if (k === 0) return;
+      const nivel = Math.ceil(k / 2) * (k % 2 === 1 ? 1 : -1);
+      const invertido = t.b.x < t.a.x || (t.b.x === t.a.x && t.b.y < t.a.y);
+      desvios.set(t.id, invertido ? -nivel : nivel);
+    });
+  }
+  return desvios;
+}
+
+/**
+ * Os grupos de trechos confundíveis (componentes conexas de "sobrepostos ou do
+ * mesmo leque"). Inclui os grupos de um só — quem filtra é o chamador.
+ */
+function gruposConfundiveis<T extends { id: string; a: Ponto2D; b: Ponto2D }>(trechos: readonly T[], tolMm: number): T[][] {
   const n = trechos.length;
   const pai = Array.from({ length: n }, (_, i) => i);
   const raiz = (i: number): number => (pai[i] === i ? i : (pai[i] = raiz(pai[i])));
@@ -177,18 +198,27 @@ export function desviosDeSobreposicao<T extends { id: string; a: Ponto2D; b: Pon
     g.push(trechos[i]);
     grupos.set(r, g);
   }
-  const desvios = new Map<string, number>();
-  for (const g of grupos.values()) {
+  return [...grupos.values()];
+}
+
+/**
+ * A FLECHA BASE de cada trecho que se curva num grupo de sobrepostos (24/10/2026): TODOS os do grupo usam a
+ * flecha do mais LONGO — senão cada um curvaria pelo próprio comprimento e dois sobrepostos de tamanhos
+ * diferentes (0–4000 × 1000–3000) se cruzariam. O deslocamento do nível soma-se a ela, em `arcoDoTrecho`.
+ * Só entram os que `desenhaEmArco`; trecho sem par fica fora do mapa (usa a própria flecha).
+ */
+export function flechasBaseDosGrupos<T extends { id: string; a: Ponto2D; b: Ponto2D } & TrechoParaArco>(
+  trechos: readonly T[],
+  tolMm = TOLERANCIA_DE_SOBREPOSICAO_MM,
+): Map<string, number> {
+  const flechas = new Map<string, number>();
+  for (const g of gruposConfundiveis(trechos, tolMm)) {
     if (g.length < 2) continue;
-    const ordenados = [...g].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
-    ordenados.forEach((t, k) => {
-      if (k === 0) return;
-      const nivel = Math.ceil(k / 2) * (k % 2 === 1 ? 1 : -1);
-      const invertido = t.b.x < t.a.x || (t.b.x === t.a.x && t.b.y < t.a.y);
-      desvios.set(t.id, invertido ? -nivel : nivel);
-    });
+    const curvos = g.filter(desenhaEmArco);
+    const maxima = Math.max(0, ...curvos.map((t) => flechaDoArcoMm(Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y))));
+    for (const t of curvos) flechas.set(t.id, maxima);
   }
-  return desvios;
+  return flechas;
 }
 
 /**
@@ -278,6 +308,27 @@ export function curvaDoTrecho(
   };
 }
 
+/** O que o predicado `desenhaEmArco` lê do trecho. */
+export interface TrechoParaArco {
+  disciplina?: string;
+  cotaAMm?: number;
+  cotaBMm?: number;
+}
+
+/**
+ * O trecho é desenhado em ARCO? Só o ELÉTRICO — e não o que corre DENTRO DA PAREDE: o pedido era *"interligar uma
+ * tomada a outra na mesma parede, porém percorrendo dentro da parede"*, e um arco saindo da parede para dentro do
+ * cômodo diz o contrário na planta. Dentro da parede = as duas cotas iguais e estritamente entre 0 (piso) e
+ * `COTA_MINIMA_DA_REDE_MM` (onde a rede passa a ser de teto). O piso (cota 0) e o teto/forro seguem em arco.
+ * É o MESMO predicado na tela, no clique e na prancha.
+ */
+export function desenhaEmArco(t: TrechoParaArco): boolean {
+  if (t.disciplina !== 'ELETRICA') return false;
+  const { cotaAMm: a, cotaBMm: b } = t;
+  const naParede = a != null && b != null && a === b && a > 0 && a < COTA_MINIMA_DA_REDE_MM;
+  return !naParede;
+}
+
 /** Comprimento da flecha do arco base de um trecho de `compMm` em planta. */
 export function flechaDoArcoMm(compMm: number): number {
   if (!(compMm > 0)) return 0;
@@ -297,8 +348,9 @@ export interface ArcoDoTrecho {
 /**
  * O arco de um trecho entre `a` e `b` (modelo, mm) — a conta ÚNICA da curva.
  *
- *   - `eletrico`: ganha o arco base (flecha de 12 %, teto de 300 mm). Os demais
- *     só curvam pelo deslocamento dos sobrepostos, como antes;
+ *   - `eletrico`: ganha o arco base (flecha de 12 %, teto de 300 mm — ou `flechaBaseMm`, a do grupo de
+ *     sobrepostos). Os demais só curvam pelo deslocamento dos sobrepostos, como antes. Quem decide é
+ *     `desenhaEmArco` (elétrico e fora da parede);
  *   - `nivel` × `passoMm`: o deslocamento dos sobrepostos, MESMO sinal de
  *     `desviosDeSobreposicao` (aplicado à normal de a→b do próprio trecho),
  *     somado ao arco base. `passoMm` = `PASSO_DA_CURVA_PX / escala`;
@@ -310,7 +362,7 @@ export interface ArcoDoTrecho {
 export function arcoDoTrecho(
   a: Ponto2D,
   b: Ponto2D,
-  opcoes: { eletrico: boolean; nivel?: number; passoMm?: number; segmentos?: number } = { eletrico: false },
+  opcoes: { eletrico: boolean; nivel?: number; passoMm?: number; segmentos?: number; flechaBaseMm?: number } = { eletrico: false },
 ): ArcoDoTrecho {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -324,7 +376,8 @@ export function arcoDoTrecho(
   const sinal = invertido ? -1 : 1;
   const nx = (-dy / comp) * sinal;
   const ny = (dx / comp) * sinal;
-  const flecha = opcoes.eletrico ? flechaDoArcoMm(comp) : 0;
+  // `flechaBaseMm`: a flecha do GRUPO de sobrepostos (a do mais longo), no lugar da própria.
+  const flecha = opcoes.eletrico ? (opcoes.flechaBaseMm ?? flechaDoArcoMm(comp)) : 0;
   const deslocamento = (opcoes.nivel ?? 0) * (opcoes.passoMm ?? 0) * sinal;
   const afastamento = 2 * flecha + deslocamento;
   if (afastamento === 0) return { controle: meioReto, meio: meioReto, pontos: [a, b] };
@@ -349,21 +402,23 @@ export function arcoDoTrecho(
  * acerto do clique mede, para o que se vê ser o que se pega. `escala` (px por
  * mm) converte o passo da curva dos sobrepostos, que é em px de tela.
  */
-export function geometriaDesenhada<T extends { id: string; a: Ponto2D; b: Ponto2D; disciplina?: string }>(
+export function geometriaDesenhada<T extends { id: string; a: Ponto2D; b: Ponto2D } & TrechoParaArco>(
   trechos: readonly T[],
   desvios: Map<string, number>,
   entradas: Map<string, { a?: Ponto2D; b?: Ponto2D }>,
   escala: number,
   passoPx = PASSO_DA_CURVA_PX,
+  flechasDosGrupos: Map<string, number> = new Map(),
 ): { id: string; pontos: Ponto2D[] }[] {
   return trechos.map((t) => {
     const e = entradas.get(t.id);
     const a = e?.a ?? t.a;
     const b = e?.b ?? t.b;
     const { pontos } = arcoDoTrecho(a, b, {
-      eletrico: t.disciplina === 'ELETRICA',
+      eletrico: desenhaEmArco(t),
       nivel: desvios.get(t.id) ?? 0,
       passoMm: escala > 0 ? passoPx / escala : 0,
+      flechaBaseMm: flechasDosGrupos.get(t.id),
     });
     return { id: t.id, pontos };
   });

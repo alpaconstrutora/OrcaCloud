@@ -54,7 +54,7 @@ import { PRIORIDADE_DA_ANOTACAO, posicionarAnotacoes, type AnotacaoAPosicionar, 
 import { larguraEstimadaDoTexto } from './blueprintCotas';
 import { EXIBICAO_ELETRICA_PADRAO, comDependenciasAplicadas, type ExibicaoEletrica } from './preferencias/resolver';
 import { diametrosAnotados } from './blueprintDiametroDosEletrodutos';
-import { arcoDoTrecho } from './blueprintEletrodutoSobreposto';
+import { arcoDoTrecho, desenhaEmArco } from './blueprintEletrodutoSobreposto';
 import { ROTULO_DO_RECORTE, categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos, entraNoRecorte, type CategoriaEletrica, type RecorteEletrico } from './blueprintRecorteEletrico';
 import {
   HIPOTESES_PADRAO,
@@ -350,11 +350,6 @@ export function desenharEletrica(
     categoria(catDoTrecho);
     const a = { x: px(t.a.x), y: py(t.a.y) };
     const b = { x: px(t.b.x), y: py(t.b.y) };
-    // O ARCO (24/10/2026, "Curvas, como no seu print"): o eletroduto elétrico é desenhado em arco, na
-    // MESMA conta da tela (`arcoDoTrecho`, em mm do modelo — a flecha escala com o desenho, como no
-    // papel), levada ao papel ponto a ponto. É desenho: o modelo segue reto.
-    const arco = arcoDoTrecho(t.a, t.b, { eletrico: true });
-    const noPapel = arco.pontos.map((p) => ({ x: px(p.x), y: py(p.y) }));
     const prumada = Math.hypot(b.x - a.x, b.y - a.y) < 0.2 * k;
     if (prumada) {
       // Prumada: um círculo pequeno com a seta de sobe/desce como texto.
@@ -363,6 +358,12 @@ export function desenharEletrica(
       d.texto(a.x + 1.4 * k, a.y + 0.7 * k, t.cotaBMm > t.cotaAMm ? '↑' : '↓', TEXTO_MM, COR_FRACA);
       continue;
     }
+    // O ARCO (24/10/2026, "Curvas, como no seu print"): o eletroduto elétrico é desenhado em arco, na
+    // MESMA conta da tela (`arcoDoTrecho`, em mm do modelo — a flecha escala com o desenho, como no
+    // papel), levada ao papel ponto a ponto. É desenho: o modelo segue reto. O trecho DENTRO DA PAREDE
+    // (`desenhaEmArco` falso) fica reto, como na tela.
+    const arco = arcoDoTrecho(t.a, t.b, { eletrico: desenhaEmArco(t) });
+    const noPapel = arco.pontos.map((p) => ({ x: px(p.x), y: py(p.y) }));
     if (embutidoNoPiso(t)) tracejadaPolilinha(d, noPapel, MEDIA, 1.5 * k);
     else for (let i = 0; i + 1 < noPapel.length; i++) d.linha(noPapel[i].x, noPapel[i].y, noPapel[i + 1].x, noPapel[i + 1].y, { espessuraMm: MEDIA, cor: COR });
     // O obstáculo dos textos é o ARCO (a polilinha), não a corda: o texto não foge de uma reta que não está desenhada.

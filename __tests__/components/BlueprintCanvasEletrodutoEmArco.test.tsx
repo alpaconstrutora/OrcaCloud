@@ -118,6 +118,19 @@ describe('BlueprintCanvas · o eletroduto elétrico em arco', () => {
     expect(curvas).toHaveLength(2);
   });
 
+  it('I2 (correção 1): o trecho elétrico DENTRO DA PAREDE (cota 300, a da VIZINHA) é desenhado reto, e o clique no meio dele o pega', () => {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const m = applyCommand(base, { type: 'AddTrecho', levelId: base.levels[0].id, disciplina: 'ELETRICA', a: point(0, 0), b: point(4000, 0), cotaAMm: 300, cotaBMm: 300, bitolaMm: 25, circuitoIds: [] } as Command).model;
+    const onSelecionar = vi.fn();
+    const c = montar(m, onSelecionar);
+    const inicio = chamadas.map((x) => x.metodo).lastIndexOf('clearRect');
+    const curvas = chamadas.slice(inicio).filter((x) => x.metodo === 'quadraticCurveTo').map((x) => x.args as number[]);
+    expect(curvas).toHaveLength(1);
+    expect(curvas[0][1]).toBeCloseTo(curvas[0][3], 6); // controle na corda: reto
+    clicar(c, { x: 2000, y: 0 });
+    expect(onSelecionar).toHaveBeenCalledWith([m.trechos![0].id]);
+  });
+
   it('o clique no MEIO DA CURVA seleciona o trecho; no meio da reta (a corda), não', () => {
     const m = cena();
     const eletrico = m.trechos!.find((t) => t.disciplina === 'ELETRICA')!;

@@ -390,6 +390,18 @@ describe('o eletroduto elétrico em ARCO na prancha (24/10/2026) — "Curvas, co
     expect(traco(agua)).toHaveLength(0);
   });
 
+  it('I2 (correção 1): o trecho DENTRO DA PAREDE (cota 300, a da VIZINHA) sai RETO; o do teto e o do piso, em arco', () => {
+    const parede = new DesenhistaDeProva();
+    desenharEletrica(parede, soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 300), proj);
+    expect(traco(parede)).toEqual([[0, -0, 40, -0, { espessuraMm: MEDIA, cor: '#000000' }]]);
+    const teto = new DesenhistaDeProva();
+    desenharEletrica(teto, soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 2800), proj);
+    expect(traco(teto)).toHaveLength(12);
+    const piso = new DesenhistaDeProva();
+    desenharEletrica(piso, soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 0), proj);
+    expect(Math.max(...traco(piso).flatMap((l) => [Math.abs(l[1]), Math.abs(l[3])]))).toBeGreaterThan(4.2);
+  });
+
   it('eletroduto no PISO: o tracejado acompanha o arco, não a corda', () => {
     const m = soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 0);
     const d = new DesenhistaDeProva();

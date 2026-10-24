@@ -18,6 +18,9 @@ export { FASES_DE_REFORMA, ROTULO_DA_FASE, faseDe, PARAMETRO_COTA_DA_REDE, DISCI
 export type { Muro, PortaoDoMuro, TipoDeMuro, TipoDePortao } from './model';
 export { TIPOS_DE_MURO, ROTULO_DO_TIPO_DE_MURO, TIPOS_DE_PORTAO, ROTULO_DO_TIPO_DE_PORTAO, ALTURA_PADRAO_DO_MURO_MM, ESPESSURA_PADRAO_DO_MURO_MM, ALTURA_PADRAO_DA_MURETA_MM, LARGURA_PADRAO_DO_PORTAO_MM, MAX_ROTULO_DE_MURO, comprimentoDoMuro, assertMuro, findMuro } from './model';
 export { trechosDoMuro, vaosDosPortoes, areasDoMuro, noPercursoDoMuro, type TrechoDoMuro, type VaoDoPortao } from './muro';
+// REGISTRO DO LANÇAMENTO (0.105.0): com que escolhas cada motor de lançamento lançou a rede.
+export type { MotorDeLancamento, RegistroDeLancamento, ValorDeEscolha } from './model';
+export { MOTORES_DE_LANCAMENTO, ehMotorDeLancamento, problemaDasEscolhas } from './model';
 
 export { paredeEhExterna } from './exterior';
 export { perfilDeCobertura, aguasDaExtrusao, aguasDaMesmaExtrusao, TIPOS_DE_PERFIL_DE_COBERTURA, ROTULO_DO_PERFIL_DE_COBERTURA, MENSAGEM_DO_ERRO_DE_PERFIL, type PontoDoPerfil, type TipoDePerfilDeCobertura, type ParametrosDoPerfil, type AguaExtrudada, type ErroDoPerfil } from './coberturaExtrusao';

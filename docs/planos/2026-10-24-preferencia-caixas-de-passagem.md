@@ -59,7 +59,9 @@ não se põe CP.
 - Já vinha de antes (fora do escopo): `caixaEm` não reconhece a luz ACIMA do nó da rede (rede sob a viga) e, com a regra
   ligada, põe uma CP 60 cm abaixo da luz; e a descida é contada duas vezes no trecho vertical (inofensivo até ~6 m de
   pé-direito).
-- A Casa Automática segue com as caixas ligadas (`HIPOTESES_ELETRODUTO_PADRAO`).
+- ~~A Casa Automática segue com as caixas ligadas (`HIPOTESES_ELETRODUTO_PADRAO`).~~ **Resolvida em 24/10/2026** pela F2 do
+  plano `2026-10-24-relancar-quando-escolha-muda.md`: a casa recebe a preferência do usuário (`EntradaDaCasa.caixasDePassagem`,
+  padrão `PELA_LUZ`, sem caixas) e o lote registra com que escolhas os eletrodutos foram lançados.
 - No cômodo COM luz de teto (6×6, luz no centro, 4 tomadas, quadro no cômodo) não sai aviso nem entra CP: luz→tomada
   ≈ 8,4 m, quadro→luz ≈ 7,7 m. O aviso aparece onde a tomada vai pela rede (ambiente sem luz de teto) e a NBR pede a caixa.
 

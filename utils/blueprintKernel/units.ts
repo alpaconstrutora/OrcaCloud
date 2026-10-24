@@ -728,8 +728,19 @@
  * geometria derivada em `muro.ts` (`trechosDoMuro`, `vaosDosPortoes`, `areasDoMuro`). E `Escada.veicular?` — a rampa
  * da garagem, só em `RAMPA`, sem o aviso da NBR 9050 (a inclinação é a do código de obras). Os dois omitidos do
  * canônico quando ausentes: desenho antigo só muda pela string.
+ *
+ * ─── 0.104.0 → 0.105.0 (24/10/2026) — O REGISTRO DO LANÇAMENTO ────────────
+ *
+ * Plano `2026-10-24-relancar-quando-escolha-muda.md` (F1): `registrosDeLancamento?: RegistroDeLancamento[]` — COM QUE
+ * ESCOLHAS cada motor de lançamento (eletrodutos, água, esgoto, pluvial, circuitos automáticos) lançou a rede de um
+ * alvo (`null` = a planta inteira, um quadro ou um pavimento). Os motores só olhavam a geometria; trocar a preferência
+ * ("sem caixas de passagem") não acendia nada. `RegistrarLancamento` (upsert por motor+alvo, substitui as escolhas
+ * inteiras) entra no MESMO lote do lançamento — o Ctrl+Z volta os dois; `ApagarRegistroDeLancamento` tira. Não é peça
+ * (sem id, sem diff). No canônico o alvo vai por índice e a ordem é por motor e alvo; registro de alvo apagado não vai.
+ * Omitido quando não há: desenho antigo só muda pela string. Provado antes do bump: com a string em 0.104.0 e tudo no
+ * lugar, 1.652 testes dos 125 arquivos de kernel/payload/hash/versão passaram.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.104.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.105.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -98,7 +98,11 @@ import { centroDeCargas, comandosParaOCentro } from './blueprintCentroDeCargas';
 import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos, type HipotesesDeCircuitos } from './blueprintCircuitosAutomaticos';
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO, sugerirDPS, type HipotesesEletricas } from './blueprintEletricaDimensionamento';
 import { comandosDasSugestoesDeDR, conferirNbr5410, sugerirDRs } from './blueprintNbr5410';
-import { HIPOTESES_ELETRODUTO_PADRAO, comandosDeBitolaPelaOcupacao, planejarEletrodutosDoModelo } from './blueprintEletrodutos';
+import { HIPOTESES_ELETRODUTO_PADRAO, comandosDeBitolaPelaOcupacao, planejarEletrodutosDoModelo, type HipotesesDeEletroduto } from './blueprintEletrodutos';
+import { REGRA_DE_CAIXAS_PADRAO } from './blueprintCaixasDePassagem';
+import { escolhasDoEletroduto } from './blueprintEscolhasDoEletroduto';
+import { comandoDeRegistro } from './blueprintRegistroDeLancamento';
+import type { CaixasDePassagem } from './preferencias/catalogoLancamento';
 import { gerarClimatizacao, type ContextoDoGeradorDeClimatizacao } from './blueprintGeradorClimatizacao';
 import { HIPOTESES_CLIMATIZACAO_PADRAO, type HipotesesClimatizacao } from './blueprintClimatizacao';
 import type { ModeloDoCatalogo } from './blueprintSelecaoClimatizacao';
@@ -784,6 +788,12 @@ export interface EntradaDaCasa {
   circuitos?: HipotesesDeCircuitos | null;
   /** F9: as hipóteses elétricas do estudo (`blueprint_study_eletrica`). Ausente = o padrão. */
   eletricas?: HipotesesEletricas | null;
+  /**
+   * 24/10/2026 (plano 2026-10-24-relancar-quando-escolha-muda.md, F2): a preferência do USUÁRIO de caixas de passagem
+   * (`planta.lancamento.caixasDePassagem`) — a mesma do painel dos eletrodutos. Ausente = o padrão dela, `PELA_LUZ`
+   * (sem caixas). Antes a casa forçava `HIPOTESES_ELETRODUTO_PADRAO`, que tem caixas.
+   */
+  caixasDePassagem?: CaixasDePassagem | null;
   /** F9: as premissas de climatização do estudo — o clima (TBS/TBU externas) e as condições internas. */
   climatizacao?: HipotesesClimatizacao | null;
   /** F9: o catálogo de evaporadoras (`modelosDoCatalogo`). Vazio ou ausente = a climatização não roda, e diz. */
@@ -2727,11 +2737,19 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         // F14b: no forro, na faixa do eletroduto. Task 3 (24/10/2026, "a regra vale também no forro"): quadro → luz do
         // ambiente → tomadas, como na obra — a luz → ponto reta pela faixa até a vertical dele no anel, e a descida do
         // forro; os anéis dos cômodos ficam para o ambiente sem luz. O que cruzar outra rede, o detector de conflitos avisa.
-        const hipEletrodutos = forroLigado
-          ? { ...HIPOTESES_ELETRODUTO_PADRAO, encaminhamento: 'PELA_LUZ_DO_AMBIENTE' as const, noForro: { faixa: hip.forro.eletrica, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } }
-          : HIPOTESES_ELETRODUTO_PADRAO;
+        // F2 (24/10/2026): as caixas de passagem são a preferência do usuário (padrão "pela luz do teto", sem caixas). As
+        // outras escolhas (bitola, rota pela parede, encaminhamento) são as do planejador: com o painel dos eletrodutos no
+        // padrão, o registro bate e não há aviso; com o painel fora do padrão, o aviso acende — e é diferença real (relançar
+        // pelo painel usaria as escolhas de lá).
+        const caixas = entrada.caixasDePassagem === 'CAIXAS' ? REGRA_DE_CAIXAS_PADRAO : null;
+        const hipEletrodutos: HipotesesDeEletroduto = forroLigado
+          ? { ...HIPOTESES_ELETRODUTO_PADRAO, caixas, encaminhamento: 'PELA_LUZ_DO_AMBIENTE' as const, noForro: { faixa: hip.forro.eletrica, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } }
+          : { ...HIPOTESES_ELETRODUTO_PADRAO, caixas };
         const planos = planejarEletrodutosDoModelo(m, hipEletrodutos, hipEletricas);
-        const lote = planos.flatMap((p) => p.comandos);
+        // O REGISTRO do lançamento (com que escolhas), por quadro, no mesmo lote — o painel dos eletrodutos avisa quando
+        // as escolhas de lá diferem e oferece refazer.
+        const escolhas = escolhasDoEletroduto(hipEletrodutos, hipEletricas);
+        const lote = planos.flatMap((p) => (p.comandos.length ? [...p.comandos, comandoDeRegistro('ELETRODUTOS', p.quadroId, escolhas)] : []));
         for (const a of new Set(planos.flatMap((p) => p.avisos))) pendencias.push({ grupo: 'CONFERIR', texto: `Eletrodutos: ${a}` });
         eletrica.eletrodutos = lote.filter((c) => c.type === 'AddTrecho').length;
         const motivo = planos.find((p) => p.motivo)?.motivo ?? null;

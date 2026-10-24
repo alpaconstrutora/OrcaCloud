@@ -4630,6 +4630,128 @@ describe('BlueprintEditor · ribbon', () => {
     for (const b of within(drawer).getAllByRole('button', { name: /lançar em todos|aceitar sugeridos/i })) expect(b).toBeDisabled();
   });
 
+  // F2 do plano 2026-10-24-relancar-quando-escolha-muda.md (24/10/2026). Pedido: *"quando o usuário faz uma allteracao
+  // em preferencias, porem exemplo alterar o tipo de lançamento de eletroduto para Sem caixas de passagem, o motor de
+  // lançar Eletrodutos por circuito deve ficar disponivel para relançar e incluir essa nova preferencia"*.
+  describe('eletrodutos relançam quando uma escolha muda (F2, 24/10/2026)', () => {
+    /** Sala de 24 m com QDC e uma TUG na ponta, a rede lançada COM caixas (o lote leva o registro); `aceitar` confirma tudo. */
+    async function redeComCaixas(aceitar: boolean, registrar = true, noForro = false) {
+      const k = await import('../../utils/blueprintKernel');
+      const el = await import('../../utils/blueprintEletrodutos');
+      const { REGRA_DE_CAIXAS_PADRAO } = await import('../../utils/blueprintCaixasDePassagem');
+      const { HIPOTESES_PADRAO } = await import('../../utils/blueprintEletricaDimensionamento');
+      const { comandosDeLancarEletrodutos } = await import('../../utils/blueprintEscolhasDoEletroduto');
+      const base = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+      const t = base.levels[0].id;
+      const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+      let m = k.applyBatch(base, [w(0, 0, 24000, 0), w(24000, 0, 24000, 4000), w(24000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+      // Correção 2: o forro DE VERDADE no ambiente (gesso, rebaixo 30 cm) — sem ele, a cota sozinha não diz "forro".
+      if (noForro) {
+        m = k.applyCommand(m, {
+          type: 'NameSpace',
+          spaceId: m.spaces[0].id,
+          name: 'Sala',
+          acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }], rebaixoMm: 300 } },
+        }).model;
+      }
+      m = k.applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: k.point(75, 1000), cotaMm: 1600 }).model;
+      m = k.applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', ligacao: 'FN' }).model;
+      m = k.applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', at: k.point(23925, 1000), cotaMm: 300, tipoEletrico: 'TUG' }).model;
+      m = k.applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: m.circuitos[0].id }).model;
+      const hip = {
+        ...el.HIPOTESES_ELETRODUTO_PADRAO,
+        caixas: REGRA_DE_CAIXAS_PADRAO,
+        // A rede no forro, como a Casa Automática lança (correção 1).
+        ...(noForro ? { noForro: { faixa: { abaixoDoTetoMm: 45, afastamentoDaFaceMm: 50, degrauNaParedeMm: 0 }, folgaSobAVigaMm: 20 } } : {}),
+      };
+      const planos = el.planejarEletrodutosDoModelo(m, hip, HIPOTESES_PADRAO);
+      m = k.applyBatch(m, registrar ? comandosDeLancarEletrodutos(m, planos, hip, HIPOTESES_PADRAO) : planos[0].comandos).model;
+      const cps = (m.terminais ?? []).filter((x) => x.tipoEletrico === 'CAIXA_PASSAGEM');
+      if (!noForro) expect(cps).toHaveLength(2);
+      if (aceitar) {
+        m = k.applyBatch(m, [
+          ...(m.trechos ?? []).map((x) => ({ type: 'SetTrechoProps' as const, trechoId: x.id, sugerido: false })),
+          ...cps.map((x) => ({ type: 'SetTerminalProps' as const, terminalId: x.id, sugerida: false })),
+        ]).model;
+      }
+      return m;
+    }
+    const AVISO = 'Caixas de passagem — lançado com: com caixas de passagem · agora: sem caixas (pela luz do teto)';
+    /** O "Relançar com as escolhas atuais" do RODAPÉ — o nome acessível diz os quadros (o do aviso, o quadro dele). */
+    const relancarDoRodape = () => screen.getByRole('button', { name: /^relançar com as escolhas atuais — todos os quadros com rede \(QDC\)$/i });
+    async function abrirEletrodutos() {
+      await abrirAba(/^elétrica$/i);
+      await userEvent.setup().click(botao(/^lançar eletrodutos/i));
+      return screen.findByRole('dialog');
+    }
+
+    it('⚠️ rede ACEITA com caixas, preferência agora "sem caixas": aviso com a diferença; "Relançar com as escolhas atuais" pede confirmação listando o que será refeito; refeito, o aviso some; um Desfazer o traz de volta', async () => {
+      const m = await redeComCaixas(true);
+      const trechos = m.trechos!.length;
+      loadBranchModel.mockResolvedValue(m);
+      await montar();
+      const drawer = await abrirEletrodutos();
+      const tabela = within(drawer).getByRole('table', { name: /eletrodutos por quadro/i });
+      expect(await within(tabela).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+      // Regra A: rede toda ligada e nada a lançar → o botão do rodapé RELANÇA, ligado.
+      const relancar = relancarDoRodape();
+      expect(relancar).toBeEnabled();
+      expect(screen.queryByRole('button', { name: /^lançar em todos/i })).not.toBeInTheDocument();
+
+      await userEvent.setup().click(relancar);
+      const titulo = await screen.findByText('Refazer os eletrodutos de QDC?');
+      const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
+      expect(confirmacao).toHaveTextContent(`QDC: ${trechos} eletroduto(s) (${trechos} confirmado(s)) e 2 caixa(s) de passagem (2 aceita(s)).`);
+      // Correção 1 (M2): e o que mudou.
+      expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
+      await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
+
+      // Refeito com "sem caixas": a rede nova nasce sugerida, sem caixas, e o registro é o de agora → sem aviso.
+      await waitFor(() => expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+      expect(screen.getByText(/\d+ pendente\(s\)\./)).toBeInTheDocument();
+
+      // UM desfazer volta rede, caixas e registro: o aviso reaparece.
+      await userEvent.setup().click(botao(/^desfazer/i));
+      expect(await within(drawer).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+    });
+
+    it('rede só com SUGERIDOS: o botão do aviso refaz direto, sem confirmação', async () => {
+      loadBranchModel.mockResolvedValue(await redeComCaixas(false));
+      await montar();
+      const drawer = await abrirEletrodutos();
+      const aviso = await within(drawer).findByTestId('aviso-escolhas-mudaram');
+      await userEvent.setup().click(within(aviso).getByRole('button', { name: 'Relançar com as escolhas atuais — QDC' }));
+      await waitFor(() => expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+      expect(screen.queryByText(/^Refazer os eletrodutos de/)).not.toBeInTheDocument();
+    });
+
+    it('rede ANTIGA, sem registro: nenhum aviso, mas o botão do rodapé relança (regra A)', async () => {
+      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false));
+      await montar();
+      const drawer = await abrirEletrodutos();
+      await within(drawer).findByRole('table', { name: /eletrodutos por quadro/i });
+      expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      expect(relancarDoRodape()).toBeEnabled();
+    });
+
+    it('⚠️ correção 1 (C1): rede no FORRO lançada antes do registro — o botão da linha e o do rodapé desligados, com o motivo', async () => {
+      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, true));
+      await montar();
+      const drawer = await abrirEletrodutos();
+      const tabela = await within(drawer).findByRole('table', { name: /eletrodutos por quadro/i });
+      const MOTIVO = 'Rede no forro lançada antes do registro — relançar aqui a tiraria do forro.';
+      expect(tabela).toHaveTextContent(MOTIVO);
+      // O único botão da tabela (sem registro, sem aviso): o da linha do quadro — qualquer que seja o rótulo.
+      const daLinha = within(tabela).getByRole('button');
+      expect(daLinha).toBeDisabled();
+      expect(daLinha).toHaveAttribute('title', MOTIVO);
+      expect(daLinha.parentElement).toHaveAttribute('title', MOTIVO);
+      const doRodape = screen.getByRole('button', { name: /^lançar em todos/i });
+      expect(doRodape).toBeDisabled();
+      expect(doRodape).toHaveAccessibleDescription(MOTIVO);
+    });
+  });
+
   it('"Circuitos automáticos" (aba Instalações) sem quadro: o drawer pede o quadro e "Criar" fica apagado', async () => {
     await montar();
     await abrirAba(/^elétrica$/i);

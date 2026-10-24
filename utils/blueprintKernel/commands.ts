@@ -75,6 +75,12 @@ import {
   type Muro,
   type PortaoDoMuro,
   type TipoDeMuro,
+  ehMotorDeLancamento,
+  problemaDasEscolhas,
+  semRegistrosDosAlvos,
+  type MotorDeLancamento,
+  type RegistroDeLancamento,
+  type ValorDeEscolha,
   ALTURA_DO_OLHO_PADRAO_MM,
   FOCAL_PADRAO_MM,
   MAX_NOME_DE_CAMERA,
@@ -1154,6 +1160,17 @@ export type Command =
       type: 'SetGeorreferencia';
       georreferencia: Georreferencia | null;
     }
+  /**
+   * REGISTRO DO LANÇAMENTO (0.105.0): grava COM QUE ESCOLHAS um motor lançou a rede de um alvo (`null` = a planta
+   * inteira; senão um quadro ou um pavimento). Upsert por (motor, alvo): as escolhas são SUBSTITUÍDAS inteiras. Vai
+   * no MESMO lote do lançamento — o Ctrl+Z volta a rede e o registro juntos. Ver `RegistroDeLancamento`.
+   */
+  | { type: 'RegistrarLancamento'; motor: MotorDeLancamento; alvoId: ObjectId | null; escolhas: Record<string, ValorDeEscolha> }
+  /**
+   * Tira o registro de (motor, alvo) — o motor refez e não sobrou rede a lançar. Registro ausente não é erro: o
+   * motor manda o comando sem precisar saber se havia registro (rede antiga não tem).
+   */
+  | { type: 'ApagarRegistroDeLancamento'; motor: MotorDeLancamento; alvoId: ObjectId | null }
   /**
    * ⚠️ RECUSADO numa parede que tem camadas (`THICKNESS_FROM_LAYERS`): lá a
    * espessura é a SOMA da composição, e usar este comando obrigaria a escolher
@@ -4325,6 +4342,8 @@ function aplicarSemHash(
       next.quadros = next.quadros.map((q) => (q.quadroPaiId === quadro.id ? { ...q, quadroPaiId: null } : q));
       // E4.3: entrada/medidor ligados a ele ficam soltos (a conferência avisa).
       next.terminais = (next.terminais ?? []).map((t) => (t.quadroId === quadro.id ? { ...t, quadroId: null } : t));
+      // 0.105.0: o registro do lançamento deste quadro vai junto — não há mais rede dele a relançar.
+      semRegistrosDosAlvos(next, new Set([quadro.id]));
       diff.deleted.push(quadro.id, ...filhos.map((c) => c.id));
       break;
     }
@@ -4433,6 +4452,31 @@ function aplicarSemHash(
         : null;
       // Sem `diff.updated`: é do DESENHO, não de um objeto com id — a mesma
       // razão de `SetAreaEscritura`.
+      break;
+    }
+
+    case 'RegistrarLancamento': {
+      const { motor, alvoId } = command;
+      assertMotorDeLancamento(next, motor, alvoId);
+      const problema = problemaDasEscolhas(command.escolhas ?? {});
+      if (problema) throw new KernelError('BAD_REGISTRO', `Registro do lançamento recusado: ${problema}`);
+      const escolhas: Record<string, ValorDeEscolha> = {};
+      // `undefined` = a escolha não existe (estado opcional da tela): fica de fora, como no JSON.
+      for (const [chave, valor] of Object.entries(command.escolhas ?? {})) if (valor !== undefined) escolhas[chave] = valor;
+      const registro: RegistroDeLancamento = { motor, alvoId, escolhas };
+      const lista = next.registrosDeLancamento ?? [];
+      const i = lista.findIndex((r) => r.motor === motor && r.alvoId === alvoId);
+      next.registrosDeLancamento = i >= 0 ? lista.map((r, j) => (j === i ? registro : r)) : [...lista, registro];
+      // Sem `diff`: o registro não é peça com id — a razão de `SetGeorreferencia`.
+      break;
+    }
+
+    case 'ApagarRegistroDeLancamento': {
+      const { motor, alvoId } = command;
+      if (!ehMotorDeLancamento(motor)) {
+        throw new KernelError('BAD_REGISTRO', `Motor de lançamento desconhecido: ${String(motor)}`);
+      }
+      next.registrosDeLancamento = (next.registrosDeLancamento ?? []).filter((r) => !(r.motor === motor && r.alvoId === alvoId));
       break;
     }
 
@@ -5588,6 +5632,8 @@ function aplicarSemHash(
       const circuitosOrfaos = (next.circuitos ?? []).filter((c) => idsQuadro.has(c.quadroId));
       const idsCircuito = new Set(circuitosOrfaos.map((c) => c.id));
       next.quadros = (next.quadros ?? []).filter((q) => !idsQuadro.has(q.id));
+      // 0.105.0: os registros do lançamento do pavimento E dos quadros dele vão junto.
+      semRegistrosDosAlvos(next, new Set([level.id, ...idsQuadro]));
       next.circuitos = (next.circuitos ?? []).filter((c) => !idsCircuito.has(c.id));
       next.terminais = (next.terminais ?? []).map((t) =>
         t.circuitoId && idsCircuito.has(t.circuitoId) ? { ...t, circuitoId: null } : t,
@@ -6458,6 +6504,20 @@ export class ModelHistory {
     this.cursor += 1;
     return this.current;
   }
+}
+
+/**
+ * O registro do lançamento (0.105.0) só aceita um motor conhecido e um alvo que o payload canônico sabe gravar por
+ * índice: `null` (a planta inteira), um QUADRO ou um PAVIMENTO existentes. Id de outra família, ou que não existe,
+ * gravaria um registro que some na primeira releitura — e o aviso de escolhas mudadas nunca acenderia, calado.
+ */
+function assertMotorDeLancamento(model: BlueprintModel, motor: MotorDeLancamento, alvoId: ObjectId | null): void {
+  if (!ehMotorDeLancamento(motor)) {
+    throw new KernelError('BAD_REGISTRO', `Motor de lançamento desconhecido: ${String(motor)}`);
+  }
+  if (alvoId === null) return;
+  if ((model.quadros ?? []).some((q) => q.id === alvoId) || model.levels.some((l) => l.id === alvoId)) return;
+  throw new KernelError('BAD_REGISTRO', `Alvo do lançamento não é quadro nem pavimento existente: ${alvoId}`);
 }
 
 /** Aplica um lote na ordem dada, abortando inteiro no primeiro erro. */

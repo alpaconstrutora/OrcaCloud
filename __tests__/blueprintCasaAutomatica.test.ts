@@ -24,6 +24,11 @@ import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
 import { pontosElegiveis } from '../utils/blueprintCircuitosAutomaticos';
 import { HIPOTESES_DO_MURO_DA_CASA_PADRAO } from '../utils/blueprintMuroDaCasa';
 import { furosPrevistos } from '../utils/blueprintFurosPrevistos';
+import { registroDe } from '../utils/blueprintRegistroDeLancamento';
+import { MOTIVO_REDE_NO_FORRO_SEM_REGISTRO, comandosDeRefazerEletrodutos, diferencasDoEletroduto, motivoParaNaoRelancar } from '../utils/blueprintEscolhasDoEletroduto';
+import { HIPOTESES_ELETRODUTO_PADRAO } from '../utils/blueprintEletrodutos';
+import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
+import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO } from '../utils/blueprintEletricaDimensionamento';
 
 // Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
 // ~0,5–0,8 s nesta máquina, e a CI, disputando CPU com a suíte toda, chegou a passar dos 5 s do padrão
@@ -560,6 +565,28 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
       expect((r.quadros ?? [])[0].drs?.some((dr) => (dr.circuitoIds ?? []).includes(d.circuitoId!))).toBe(true);
     }
     expect(p.resumo.eletrica.conferencia.faltas).toBe(0);
+  });
+
+  // F2 do plano 2026-10-24-relancar-quando-escolha-muda.md (24/10/2026): a casa usa a preferência do usuário de caixas
+  // de passagem (padrão "pela luz do teto", sem caixas) — antes forçava a hipótese do planejador, com caixas — e o lote
+  // registra com que escolhas os eletrodutos foram lançados (o painel avisa quando as de lá diferem).
+  it('⚠️ F2: com a preferência padrão a casa não insere caixa de passagem e registra o lançamento; com "CAIXAS", registra CAIXAS', () => {
+    const m = lote();
+    const p = planejarCasa(m, comAr(m));
+    const r = p.resultado;
+    expect(p.etapas.find((e) => e.id === 'ELETRODUTOS')?.situacao).toBe('LANCOU');
+    expect((r.terminais ?? []).filter((t) => t.tipoEletrico === 'CAIXA_PASSAGEM')).toEqual([]);
+    const qdc = (r.quadros ?? [])[0];
+    expect(p.comandos.filter((c) => c.type === 'RegistrarLancamento')).toHaveLength(1);
+    expect(registroDe(r, 'ELETRODUTOS', qdc.id)?.escolhas).toMatchObject({ caixasDePassagem: 'PELA_LUZ', encaminhamento: 'PELA_LUZ_DO_AMBIENTE' });
+    // Correção 2: com o painel dos eletrodutos no PADRÃO (o do editor: sem caixas), a casa recém-gerada não acende o aviso.
+    // Painel fora do padrão (outra bitola, rota pela parede…) acende — diferença real.
+    expect(diferencasDoEletroduto(r, qdc.id, { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: null }, HIPOTESES_ELETRICAS_PADRAO)).toEqual([]);
+    expect(diferencasDoEletroduto(r, qdc.id, { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: null, bitolaMm: 32 }, HIPOTESES_ELETRICAS_PADRAO).map((d) => d.item)).toEqual(['bitolaMm']);
+    expect(conferirPlanoDaCasa(m, p)).toEqual({ ok: true });
+
+    const comCaixas = planejarCasa(m, comAr(m, { caixasDePassagem: 'CAIXAS' }));
+    expect(registroDe(comCaixas.resultado, 'ELETRODUTOS', (comCaixas.resultado.quadros ?? [])[0].id)?.escolhas.caixasDePassagem).toBe('CAIXAS');
   });
 
   it('elétrica desligada: as seis etapas NAO_EXIGIDA e nenhum ponto elétrico', () => {
@@ -1272,6 +1299,42 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     expect(aneis).toBe(0);
     const verificar = furosPrevistos(r).filter((f) => f.disciplina === 'ELETRICA' && f.dispensa === false).length;
     expect(verificar).toBeLessThanOrEqual(maxVerificar);
+  });
+
+  // F2, correção 1 (24/10/2026): relançar os eletrodutos pelo painel (que não conhece o forro) refazia a rede da casa
+  // na cota do teto/sob a viga — abaixo da face do forro. A faixa vem agora do registro do lançamento.
+  it('⚠️ F2 correção 1: trocar as caixas e refazer pelo painel mantém a elétrica NA FAIXA do forro, sem conflito novo; sem registro, não relança', () => {
+    const r = casa(1).resultado;
+    const q = (r.quadros ?? [])[0].id;
+    expect(registroDe(r, 'ELETRODUTOS', q)?.escolhas).toMatchObject({ forroAbaixoDoTetoMm: F.eletrica.abaixoDoTetoMm });
+    const horizontais = (m: BlueprintModel) =>
+      (m.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && t.cotaAMm === t.cotaBMm && !(t.a.x === t.b.x && t.a.y === t.b.y));
+    const conflitosDaEletrica = (m: BlueprintModel) => {
+      const porId = new Map((m.trechos ?? []).map((t) => [t.id, t]));
+      return conflitosDoModelo(m)
+        .filter((c) => c.classe === 'REDE')
+        .map((c) => [porId.get(c.trechoId)!.disciplina, porId.get(c.outroId)!.disciplina].sort().join('×'))
+        .filter((par) => par.includes('ELETRICA') && /AGUA|FRIGORIGENA/.test(par));
+    };
+    // O usuário liga as caixas; o painel não tem `noForro`.
+    const painel = { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: REGRA_DE_CAIXAS_PADRAO };
+    const lote = comandosDeRefazerEletrodutos(r, [q], painel, HIPOTESES_ELETRICAS_PADRAO);
+    expect(lote.some((c) => c.type === 'AddTrecho')).toBe(true);
+    const depois = applyBatch(r, lote).model;
+    expect(registroDe(depois, 'ELETRODUTOS', q)?.escolhas).toMatchObject({ caixasDePassagem: 'CAIXAS', forroAbaixoDoTetoMm: F.eletrica.abaixoDoTetoMm });
+    const faixa = 2800 - F.eletrica.abaixoDoTetoMm;
+    const cotasAntes = new Set(horizontais(r).map((t) => t.cotaAMm));
+    expect(horizontais(depois).filter((t) => t.cotaAMm === faixa).length).toBeGreaterThan(0);
+    // Nenhum horizontal elétrico numa cota que a rede da casa não tinha (a do painel: o teto, ou sob a viga).
+    expect([...new Set(horizontais(depois).map((t) => t.cotaAMm))].filter((c) => !cotasAntes.has(c))).toEqual([]);
+    const faceDoForro = 2800 - rebaixoDoForroMm(F) - 14;
+    expect(horizontais(depois).filter((t) => t.cotaAMm > faceDoForro && t.cotaAMm < 2800 && t.cotaAMm !== faixa).map((t) => t.cotaAMm)).toEqual([]);
+    expect(conflitosDaEletrica(depois)).toEqual(conflitosDaEletrica(r));
+
+    // A rede no forro SEM registro (a casa de antes): não relança pelo painel.
+    const antiga = applyCommand(r, { type: 'ApagarRegistroDeLancamento', motor: 'ELETRODUTOS', alvoId: q }).model;
+    expect(motivoParaNaoRelancar(antiga, q)).toBe(MOTIVO_REDE_NO_FORRO_SEM_REGISTRO);
+    expect(comandosDeRefazerEletrodutos(antiga, [q], painel, HIPOTESES_ELETRICAS_PADRAO)).toEqual([]);
   });
 
   it('térrea: nenhuma dessas redes em vão de porta ou janela (o aquecedor ao lado da janela; o dreno do ar é a F14d)', () => {

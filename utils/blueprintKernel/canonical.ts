@@ -90,6 +90,11 @@ import {
   type MaterialDeGuardaCorpo,
   type TipoDeMuro,
   type TipoDePortao,
+  type MotorDeLancamento,
+  type RegistroDeLancamento,
+  type ValorDeEscolha,
+  ehMotorDeLancamento,
+  problemaDasEscolhas,
   type TipoDeAnotacao,
   type VistaDaAnotacao,
   type TracoDaAnotacao,
@@ -168,6 +173,20 @@ export { sha256 } from './hash';
 
 function cmpStr(x: string, y: string): number {
   return x < y ? -1 : x > y ? 1 : 0;
+}
+
+/** REGISTRO DO LANÇAMENTO (0.105.0): global antes de pavimento antes de quadro; dentro de cada um, por índice. */
+function ordemDoAlvo(r: { quadro?: number; level?: number }): number {
+  if (r.quadro !== undefined) return 2_000_000 + r.quadro;
+  if (r.level !== undefined) return 1_000_000 + r.level;
+  return 0;
+}
+
+/** As escolhas de um registro do lançamento, sem chave `undefined` (o `stableStringify` já a tiraria; a volta também). */
+function escolhasCanonicas(r: RegistroDeLancamento): Record<string, ValorDeEscolha> {
+  const out: Record<string, ValorDeEscolha> = {};
+  for (const [k, v] of Object.entries(r.escolhas ?? {})) if (v !== undefined) out[k] = v;
+  return out;
 }
 
 /**
@@ -923,6 +942,24 @@ function projetar(model: BlueprintModel): {
     }
   }
 
+  // REGISTROS DO LANÇAMENTO (0.105.0): com que escolhas cada motor lançou. O alvo vai por ÍNDICE (`quadro` ou
+  // `level`), como toda referência do payload; sem nenhum dos dois = a planta inteira. Registro cujo alvo sumiu (quadro
+  // ou pavimento apagado) NÃO vai: não há mais rede dele a relançar, e um índice inventado apontaria para outro alvo.
+  // Ordem estável por motor e depois alvo (global, pavimento, quadro; por índice) — a ordem em que os motores rodaram
+  // não muda o hash. Omitidos quando não há: planta sem registro não ganha chave (o hash dela só muda pela versão).
+  type RegistroCanonico = NonNullable<CanonicalPayload['registrosDeLancamento']>[number];
+  const registrosDeLancamento = (model.registrosDeLancamento ?? [])
+    .flatMap((r): RegistroCanonico[] => {
+      const escolhas = escolhasCanonicas(r);
+      if (r.alvoId === null) return [{ motor: r.motor, escolhas }];
+      const q = indiceDoQuadro.get(r.alvoId);
+      if (q !== undefined) return [{ motor: r.motor, quadro: q, escolhas }];
+      const l = levelIndex.get(r.alvoId);
+      if (l !== undefined) return [{ motor: r.motor, level: l, escolhas }];
+      return [];
+    })
+    .sort((x, y) => cmpStr(x.motor, y.motor) || ordemDoAlvo(x) - ordemDoAlvo(y) || cmpStr(stableStringify(x), stableStringify(y)));
+
   const circuitos = ordenar(
     model.circuitos ?? [],
     (c) => ({
@@ -1315,6 +1352,7 @@ function projetar(model: BlueprintModel): {
     blocos: blocos.length ? blocos.map((b) => b.geom) : undefined,
     cameras: cameras.length ? cameras.map((c) => c.geom) : undefined,
     muros: muros.length ? muros.map((m) => m.geom) : undefined,
+    registrosDeLancamento: registrosDeLancamento.length ? registrosDeLancamento : undefined,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
@@ -1732,6 +1770,11 @@ export interface CanonicalPayload {
   blocos?: { level: number; nome: string; pontos: { x: number; y: number }[]; cotaBaseMm: number; pavimentos: number; peDireitoMm: number; uso: UsoDoBloco; parametros?: Parametros }[];
   /** CÂMERAS. Ausente sob kernel < 0.99.0 e em desenho sem câmera. */
   cameras?: { level: number; posicao: { x: number; y: number }; alvo: { x: number; y: number }; alturaOlhoMm: number; focalMm: number; nome: string }[];
+  /**
+   * REGISTROS DO LANÇAMENTO (com que escolhas cada motor lançou). Ausente sob kernel < 0.105.0 e em planta sem nenhum.
+   * O alvo por índice: `quadro` OU `level`; nenhum dos dois = a planta inteira.
+   */
+  registrosDeLancamento?: { motor: MotorDeLancamento; quadro?: number; level?: number; escolhas: Record<string, ValorDeEscolha> }[];
   /** MUROS. Ausente sob kernel < 0.104.0 e em desenho sem muro. */
   muros?: {
     level: number;
@@ -2908,6 +2951,26 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       })),
     });
   });
+
+  // REGISTROS DO LANÇAMENTO (0.105.0): depois de pavimentos e quadros, que o alvo referencia por índice. A MESMA
+  // validação do comando (`ehMotorDeLancamento`, `problemaDasEscolhas`), mas aqui o inválido é DESCARTADO em vez de
+  // recusado: payload adulterado não pode impedir a planta de abrir, e sem registro o motor só não sabe com que se
+  // lançou (fica a regra A, o botão de relançar). Índice que não existe descarta; (motor, alvo) repetido fica o primeiro.
+  for (const r of Array.isArray(payload.registrosDeLancamento) ? payload.registrosDeLancamento : []) {
+    if (!r || !ehMotorDeLancamento(r.motor) || problemaDasEscolhas(r.escolhas) !== null) continue;
+    let alvoId: string | null = null;
+    if (typeof r.quadro === 'number') {
+      if (!idsDeQuadro[r.quadro]) continue;
+      alvoId = idsDeQuadro[r.quadro];
+    } else if (typeof r.level === 'number') {
+      if (!levelIds[r.level]) continue;
+      alvoId = levelIds[r.level];
+    }
+    if ((model.registrosDeLancamento ?? []).some((x) => x.motor === r.motor && x.alvoId === alvoId)) continue;
+    const escolhas: Record<string, ValorDeEscolha> = {};
+    for (const [k, v] of Object.entries(r.escolhas)) if (v !== undefined) escolhas[k] = v;
+    (model.registrosDeLancamento ??= []).push({ motor: r.motor, alvoId, escolhas });
+  }
 
   // `spaces` é derivado: recalculado pelo arranjo planar, nunca lido do payload.
   // O payload guarda os ambientes para consulta e auditoria do snapshot, não para

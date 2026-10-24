@@ -139,4 +139,5 @@ A conferência em produção (item 9 acima) achou dois problemas; o usuário res
    motivo; padrão da coluna 290 → 320px. A largura fica salva por navegador (`${storageKey}:widths`), por isso a
    correção é a célula caber em ~230px, e não só a largura padrão
 3. [x] testes: lib (+4 casos 13º/férias) e tela atualizados — 17/17
-4. [ ] PR + CI + publicação + conferir na tela em produção
+4. [x] PR + CI + publicação — PR #120, `ci` 29m41s, Vercel e Preview Comments verdes; mesclado por squash em
+   24/10/2026 (`df9ddaed`); `conferir-producao.sh "Só na folha de 13º" "Calculada pela folha"` provou o domínio servindo df9ddae (CI do main em df9ddae em andamento ao registrar). Conferência na tela em produção pendente: o pedido seguinte (Rogério duplicado) passou na frente

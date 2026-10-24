@@ -20,8 +20,8 @@ interface LaborCostsProps {
     teams: LaborTeam[];
     projects: any[];
     orgId: string | null;
-    legacyCount?: number;
-    onMigrate?: () => Promise<void>;
+    /** Abre o formulário de novo colaborador (tela vazia). */
+    onNewEmployee?: () => void;
     organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
 }
@@ -40,7 +40,7 @@ const getWorkingDays = (start: string, end: string): number => {
     return Math.max(count, 1);
 };
 
-const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, onMigrate, organizations, onRefresh }) => {
+const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, onNewEmployee, organizations, onRefresh }) => {
     const [summary, setSummary] = useState<LaborCostSummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState<'employees' | 'projects' | 'teams'>('employees');
@@ -237,23 +237,10 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                         <p className="text-sm text-slate-500 mt-2 mb-8">
                             Cadastre seus colaboradores com custo diário ou salário para começar a acompanhar os custos de mão de obra.
                         </p>
-                        <button onClick={() => onMigrate?.()}
+                        <button onClick={() => onNewEmployee?.()}
                             className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
                             Adicionar Colaborador
                         </button>
-                        {Number(legacyCount) > 0 && onMigrate && (
-                            <div className="mt-8 p-6 bg-indigo-50 rounded-3xl border border-indigo-100">
-                                <Users className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
-                                <h4 className="text-sm font-black text-slate-900 uppercase">Colaboradores Legados</h4>
-                                <p className="text-xs text-slate-500 mt-2 mb-4">
-                                    Encontramos {legacyCount} colaboradores no sistema antigo. Importe-os agora!
-                                </p>
-                                <button onClick={onMigrate}
-                                    className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200">
-                                    Importar {legacyCount} Colaboradores
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </div>
             )}

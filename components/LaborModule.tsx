@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import {
     Users, Clock, TrendingUp, DollarSign, BarChart3,
     UserPlus, Loader2, AlertCircle, Building2,
-    Shield, Calendar, Target, Check, FileText, Calculator, Settings, ChevronRight, Percent, HardHat, Umbrella, BookOpen, LayoutDashboard, UserMinus, ShieldAlert, Truck, ClipboardList, UserSearch, Smartphone, Award, MessageSquare, UtensilsCrossed, Gift, Briefcase, Banknote
+    Shield, Calendar, Target, FileText, Calculator, Settings, ChevronRight, Percent, HardHat, Umbrella, BookOpen, LayoutDashboard, UserMinus, ShieldAlert, Truck, ClipboardList, UserSearch, Smartphone, Award, MessageSquare, UtensilsCrossed, Gift, Briefcase, Banknote
 } from 'lucide-react';
 import { KpiCard as KpiCardBase, type KpiColor } from './ui/KpiCard';
-import { laborService, Employee, LaborTeam, TimeEntry, ProductivityLog, LaborCostSummary } from '../services/laborService';
+import { Employee, LaborTeam, TimeEntry, ProductivityLog, LaborCostSummary } from '../services/laborService';
 import LaborEmployeeList from './LaborEmployeeList';
 import LaborEmployeeForm from './LaborEmployeeForm';
 import LaborTimeTracking from './LaborTimeTracking';
@@ -246,8 +246,6 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
     const queryClient = useQueryClient();
     const [editingEmployee, setEditingEmployee]= useState<Employee | null>(null);
     const [isEmployeeFormOpen, setIsEmployeeFormOpen] = useState(false);
-    const [isMigrating, setIsMigrating]       = useState(false);
-    const [showConfirmMigrate, setShowConfirmMigrate] = useState(false);
 
     // Org vem do seletor global do topo — sem seletor próprio no módulo.
     // `useOrgContext` é a fonte única (REGRA #5): resolve a herança empresa→org e
@@ -279,25 +277,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
     // ── React Query: dados do módulo ──────────────────────────
     const {
         employees, teams, timeEntries, productivityLogs,
-        costSummary, docAlerts, legacyCount, organizations,
+        costSummary, docAlerts, organizations,
         isLoading, failedLabels, refetchAll,
     } = useLaborModuleData(currentOrgId);
-
-    const handleMigrate = async () => {
-        // Migração grava colaboradores: exige org específica (REGRA #5, exceção 4).
-        if (!orgId) { alert('Selecione uma organização específica para migrar os colaboradores.'); return; }
-        setIsMigrating(true);
-        try {
-            const res = await laborService.migrateLegacyWorkers(orgId);
-            alert(`Sucesso! ${res.imported} novos colaboradores importados.`);
-            refetchAll();
-        } catch (err) {
-            console.error(err);
-            alert('Erro ao migrar colaboradores.');
-        } finally {
-            setIsMigrating(false);
-        }
-    };
 
     const pendingEntries = timeEntries.filter((e: any) => e.status === 'PENDENTE');
 
@@ -305,7 +287,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
     // Governa se a faixa de banners existe de verdade — precisa disso (e não só
     // renderizar a div vazia) para o `space-y-6` do pai não empurrar o conteúdo
     // 24px extra quando não há banner nenhum (ver comentário do `return` abaixo).
-    const hasBanners = failedLabels.length > 0 || (!isAllOrgsMode && legacyCount > 0);
+    const hasBanners = failedLabels.length > 0;
 
     if (isLoading && employees.length === 0) {
         return (
@@ -351,64 +333,6 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
                 </div>
             )}
 
-            {/* Migration Banner */}
-            {!isAllOrgsMode && legacyCount > 0 && (
-                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white rounded-lg shadow-sm text-indigo-600">
-                            <Users className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">Migração de Dados Disponível</h4>
-                            <p className="text-xs text-slate-500">Encontramos {legacyCount} colaboradores no sistema legatário. Deseja importá-los para o novo módulo?</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        {!showConfirmMigrate ? (
-                            <button
-                                onClick={() => setShowConfirmMigrate(true)}
-                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-button font-bold hover:bg-indigo-700 transition-all shadow-md"
-                            >
-                                Importar Agora
-                            </button>
-                        ) : (
-                            <div className="flex items-center gap-2 bg-white/50 p-1.5 rounded-xl border border-indigo-200">
-                                <span className="text-xs font-bold text-indigo-900 mx-2">Confirmar?</span>
-                                <button
-                                    onClick={async () => {
-                                        setIsMigrating(true);
-                                        setShowConfirmMigrate(false);
-                                        try {
-                                            // O banner só aparece fora de "Todas", mas a migração
-                                            // grava colaboradores: exige org explícita (REGRA #5, exceção 4).
-                                            if (!orgId) { alert('Selecione uma organização específica para migrar.'); return; }
-                                            const res = await laborService.migrateLegacyWorkers(orgId);
-                                            alert(`Sucesso! ${res.imported} colaboradores importados. ${res.skipped} já existiam.`);
-                                            refetchAll();
-                                        } catch (err) {
-                                            alert('Erro na migração.');
-                                        } finally {
-                                            setIsMigrating(false);
-                                        }
-                                    }}
-                                    disabled={isMigrating}
-                                    className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-emerald-700 transition-all flex items-center gap-1"
-                                >
-                                    {isMigrating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                                    Sim
-                                </button>
-                                <button
-                                    onClick={() => setShowConfirmMigrate(false)}
-                                    className="bg-white text-slate-500 px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-slate-100 transition-all border border-slate-200"
-                                >
-                                    Não
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
             </div>
             )}{/* /Banners */}
 
@@ -428,8 +352,6 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
                     {activeTab === 'cost_dashboard' && (
                         <LaborCostDashboard
                             orgId={orgId}
-                            legacyCount={legacyCount}
-                            onMigrate={handleMigrate}
                             organizations={organizations}
                             onRefresh={refetchAll}
                         />
@@ -480,8 +402,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
                             teams={teams}
                             orgId={orgId}
                             projects={projects}
-                            legacyCount={legacyCount}
-                            onMigrate={handleMigrate}
+                            onNewEmployee={() => { setEditingEmployee(null); setIsEmployeeFormOpen(true); }}
                             organizations={organizations}
                             onRefresh={refetchAll}
                         />

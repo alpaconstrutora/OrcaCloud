@@ -18,13 +18,11 @@ const WORKSITE_COLUMNS: StandardTableColumn[] = [
 
 interface LaborCostDashboardProps {
     orgId: string | null;
-    legacyCount?: number;
-    onMigrate?: () => Promise<void>;
     organizations: Array<{ id: string; name: string }>;
     onRefresh: () => void;
 }
 
-const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCount, onMigrate, organizations, onRefresh }) => {
+const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organizations, onRefresh }) => {
     const [runs, setRuns] = useState<PayrollRun[]>([]);
     const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
     const [summary, setSummary] = useState<any>(null);
@@ -82,22 +80,6 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
             <p className="text-sm text-slate-400 max-w-xs mx-auto mt-2 mb-8">
                 Feche o primeiro ciclo de folha para visualizar o dashboard de custos por obra.
             </p>
-
-            {legacyCount && legacyCount > 0 && onMigrate && (
-                <div className="max-w-md mx-auto p-6 bg-amber-50 rounded-2xl border border-amber-100">
-                    <Users className="w-8 h-8 text-amber-600 mx-auto mb-3" />
-                    <h4 className="text-sm font-black text-slate-900 uppercase">Migração Recomendada</h4>
-                    <p className="text-xs text-slate-500 mt-2 mb-4">
-                        Temos {legacyCount} colaboradores no sistema legado que ainda não foram importados para o novo módulo de folha de pagamento.
-                    </p>
-                    <button 
-                        onClick={onMigrate}
-                        className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-button uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg"
-                    >
-                        Importar Colaboradores
-                    </button>
-                </div>
-            )}
         </div>
     );
 

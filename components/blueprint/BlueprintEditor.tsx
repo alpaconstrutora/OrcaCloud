@@ -427,6 +427,7 @@ import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
 import SecaoPlantaEletrica from '../preferencias/SecaoPlantaEletrica';
 import SecaoExibicaoDaPlanta from '../preferencias/SecaoExibicaoDaPlanta';
+import { preenchimentoPrecisaLigar } from '../../utils/preferencias/catalogoExibir';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, MenuDoRibbon, abaEfetiva } from './Ribbon';
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
@@ -3909,13 +3910,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       legenda={coresDoDesenho.legenda}
       onModoDeCor={(m) => {
         setModoDeCor(m);
-        if (m !== 'NENHUM' && !mostrarPreenchimento) setMostrarPreenchimento(true);
+        if (preenchimentoPrecisaLigar('modoDeCor', m, mostrarPreenchimento)) setMostrarPreenchimento(true);
       }}
       onEstilo3d={setEstilo3d}
       onEstiloPlanta={(e) => {
         setEstiloPlanta(e);
         // Humanizada sem preenchimento não mostra piso nenhum: ligar junto, como o "Colorir por" faz.
-        if (e === 'HUMANIZADA' && !mostrarPreenchimento) setMostrarPreenchimento(true);
+        if (preenchimentoPrecisaLigar('estiloPlanta', e, mostrarPreenchimento)) setMostrarPreenchimento(true);
       }}
       resumoDosPisos={resumoDosPisos}
       onFase={setFiltroDeFase}

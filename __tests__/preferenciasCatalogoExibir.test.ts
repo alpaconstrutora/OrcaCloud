@@ -5,6 +5,7 @@ import {
   ITENS_DE_EXIBICAO,
   chaveDeExibicao,
   linhasParaMigrar,
+  preenchimentoPrecisaLigar,
   valorDeExibicao,
 } from '../utils/preferencias/catalogoExibir';
 import type { LinhaDePreferencia } from '../utils/preferencias/resolver';
@@ -221,5 +222,34 @@ describe('teste-trava: o editor não guarda mais estas escolhas só no navegador
       return re.test(fonte);
     }).map((i) => i.chaveAntiga);
     expect(ainda).toEqual([]);
+  });
+});
+
+describe('preenchimentoPrecisaLigar (regra única do menu Vista e da aba Preferências)', () => {
+  it('cor diferente de "Sem cor" com o preenchimento desligado precisa ligar', () => {
+    for (const modo of ['AMBIENTE', 'TIPO_DE_AMBIENTE', 'UNIDADE', 'USO', 'PAVIMENTO', 'DEPARTAMENTO']) {
+      expect(preenchimentoPrecisaLigar('modoDeCor', modo, false), modo).toBe(true);
+    }
+  });
+
+  it('"Sem cor" não liga nada', () => {
+    expect(preenchimentoPrecisaLigar('modoDeCor', 'NENHUM', false)).toBe(false);
+  });
+
+  it('Humanizada com o preenchimento desligado precisa ligar; Técnica não', () => {
+    expect(preenchimentoPrecisaLigar('estiloPlanta', 'HUMANIZADA', false)).toBe(true);
+    expect(preenchimentoPrecisaLigar('estiloPlanta', 'TECNICA', false)).toBe(false);
+  });
+
+  it('com o preenchimento já ligado nunca precisa', () => {
+    expect(preenchimentoPrecisaLigar('modoDeCor', 'AMBIENTE', true)).toBe(false);
+    expect(preenchimentoPrecisaLigar('estiloPlanta', 'HUMANIZADA', true)).toBe(false);
+  });
+
+  it('outros itens e valores estranhos nunca ligam', () => {
+    expect(preenchimentoPrecisaLigar('mostrarGrade', true, false)).toBe(false);
+    expect(preenchimentoPrecisaLigar('vista3dEstilo', 'TRANSPARENTE', false)).toBe(false);
+    expect(preenchimentoPrecisaLigar('modoDeCor', 3, false)).toBe(false);
+    expect(preenchimentoPrecisaLigar('modoDeCor', null, false)).toBe(false);
   });
 });

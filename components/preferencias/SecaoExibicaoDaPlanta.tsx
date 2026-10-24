@@ -5,6 +5,7 @@ import SecaoTitulo from '../ui/SecaoTitulo';
 import { usePreferenciaDaPlanta } from '../../hooks/usePreferenciaDaPlanta';
 import {
   ITENS_DE_EXIBICAO,
+  preenchimentoPrecisaLigar,
   type GrupoDeExibicao,
   type ItemDeExibicao,
   type ValorDeExibicao,
@@ -44,14 +45,48 @@ const OPCOES_DO_AUTOMATICO = [
 ] as const;
 
 const CAMPO =
-  'h-9 min-w-[11rem] max-w-full rounded-[6px] border border-gray-200 bg-white px-3 text-sm text-gray-900 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer';
+  'h-9 min-w-[11rem] max-w-full rounded-[6px] border border-gray-200 bg-white pl-3 pr-8 text-sm text-gray-900 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer';
 
 function valorDoAutomatico(valor: ValorDeExibicao): string {
   return valor === null ? 'automatico' : valor ? 'ligado' : 'desligado';
 }
 
+/**
+ * Itens cuja escolha pode exigir ligar o "Preenchimento dos ambientes" (cor e Humanizada): a regra é a
+ * MESMA do menu Vista (`preenchimentoPrecisaLigar`). Ficam em componente próprio para o hook do
+ * preenchimento não ser chamado nas demais linhas.
+ */
+const ITENS_QUE_LIGAM_O_PREENCHIMENTO = new Set(['modoDeCor', 'estiloPlanta']);
+
 function LinhaDeExibicao({ def }: { def: ItemDeExibicao }) {
+  return ITENS_QUE_LIGAM_O_PREENCHIMENTO.has(def.item) ? <LinhaQueLigaOPreenchimento def={def} /> : <LinhaComum def={def} />;
+}
+
+function LinhaComum({ def }: { def: ItemDeExibicao }) {
   const [valor, setValor] = usePreferenciaDaPlanta<ValorDeExibicao>(def.item);
+  return <LinhaDoItem def={def} valor={valor} setValor={setValor} />;
+}
+
+function LinhaQueLigaOPreenchimento({ def }: { def: ItemDeExibicao }) {
+  const [valor, setValor] = usePreferenciaDaPlanta<ValorDeExibicao>(def.item);
+  const [preenchimento, setPreenchimento] = usePreferenciaDaPlanta<boolean>('mostrarPreenchimento');
+  const escolher = (proximo: ValorDeExibicao) => {
+    setValor(proximo);
+    // Só quando a escolha MUDA de fato (o hook ignora o igual) e o preenchimento está desligado.
+    if (!Object.is(proximo, valor) && preenchimentoPrecisaLigar(def.item, proximo, preenchimento)) setPreenchimento(true);
+  };
+  return <LinhaDoItem def={def} valor={valor} setValor={escolher} />;
+}
+
+function LinhaDoItem({
+  def,
+  valor,
+  setValor,
+}: {
+  def: ItemDeExibicao;
+  valor: ValorDeExibicao;
+  setValor: (v: ValorDeExibicao) => void;
+}) {
   const id = React.useId();
   const rotulo = ROTULO_NA_ABA[def.item] ?? def.rotulo;
 

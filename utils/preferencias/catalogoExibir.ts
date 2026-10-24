@@ -226,3 +226,15 @@ export function linhasParaMigrar(
   }
   return saida;
 }
+
+/**
+ * Escolher uma cor para os ambientes (modo de cor != 'NENHUM') ou o estilo 'HUMANIZADA' sem o
+ * "Preenchimento dos ambientes" ligado não mostra piso nenhum: o menu Vista liga o preenchimento junto.
+ * Regra ÚNICA, usada pelo menu Vista e pela aba Preferências. `true` = é preciso ligar o preenchimento.
+ */
+export function preenchimentoPrecisaLigar(item: string, valor: unknown, preenchimentoAtual: boolean): boolean {
+  if (preenchimentoAtual) return false;
+  if (item === 'modoDeCor') return typeof valor === 'string' && valor !== 'NENHUM';
+  if (item === 'estiloPlanta') return valor === 'HUMANIZADA';
+  return false;
+}

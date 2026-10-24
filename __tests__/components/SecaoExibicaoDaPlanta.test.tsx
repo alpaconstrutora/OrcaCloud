@@ -146,6 +146,37 @@ describe('SecaoExibicaoDaPlanta', () => {
     await waitFor(() => expect(m.gravar).toHaveBeenLastCalledWith('USUARIO', {}, 'planta.exibir.vista3dTerreno', null));
   });
 
+  it('escolher "Humanizada" com o preenchimento desligado grava também mostrarPreenchimento=true', async () => {
+    m.banco = [{ escopo: 'USUARIO', chave: 'planta.exibir.mostrarPreenchimento', valor: false }];
+    montar();
+    await waitFor(() => expect(chave('Preenchimento dos ambientes')).not.toBeChecked());
+    fireEvent.change(seletor('Estilo da planta'), { target: { value: 'HUMANIZADA' } });
+    await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.estiloPlanta', 'HUMANIZADA'));
+    await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarPreenchimento', true));
+    await waitFor(() => expect(chave('Preenchimento dos ambientes')).toBeChecked());
+  });
+
+  it('escolher uma "Cor dos ambientes" diferente de "Sem cor" liga o preenchimento; "Sem cor" não', async () => {
+    m.banco = [{ escopo: 'USUARIO', chave: 'planta.exibir.mostrarPreenchimento', valor: false }];
+    montar();
+    await waitFor(() => expect(chave('Preenchimento dos ambientes')).not.toBeChecked());
+    fireEvent.change(seletor('Cor dos ambientes'), { target: { value: 'USO' } });
+    await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarPreenchimento', true));
+    m.gravar.mockClear();
+    fireEvent.change(seletor('Cor dos ambientes'), { target: { value: 'NENHUM' } });
+    await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.modoDeCor', 'NENHUM'));
+    expect(m.gravar).not.toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.mostrarPreenchimento', expect.anything());
+  });
+
+  it('com o preenchimento já ligado, Humanizada e cor NÃO gravam nada extra', async () => {
+    montar(); // padrão do preenchimento: ligado
+    expect(chave('Preenchimento dos ambientes')).toBeChecked();
+    fireEvent.change(seletor('Estilo da planta'), { target: { value: 'HUMANIZADA' } });
+    fireEvent.change(seletor('Cor dos ambientes'), { target: { value: 'AMBIENTE' } });
+    await waitFor(() => expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.modoDeCor', 'AMBIENTE'));
+    expect(m.gravar.mock.calls.map((c) => c[2]).sort()).toEqual(['planta.exibir.estiloPlanta', 'planta.exibir.modoDeCor']);
+  });
+
   it('sem sessão a escolha vale na tela e no navegador, sem chamar o serviço', () => {
     useStore.setState({ session: null as never });
     montar();

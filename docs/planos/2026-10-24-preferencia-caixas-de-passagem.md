@@ -66,6 +66,6 @@ não se põe CP.
 ## Estado
 - [x] implementação + testes
 - [x] correção 1 da revisão (aviso diz onde, textos, teste do cômodo com luz)
-- [ ] revisão
+- [x] revisão — "Sim, com correções" (aviso da NBR investigado: correto, só sai sem luz de teto); correção `87476d6e` conferida
 - [ ] PR + CI
 - [ ] publicação

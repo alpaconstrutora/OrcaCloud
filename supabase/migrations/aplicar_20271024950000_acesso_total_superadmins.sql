@@ -1,3 +1,8 @@
+-- ⚠️ JÁ APLICADA no banco remoto em 24/10/2026 com o nome antigo
+-- aplicar_20271024900000_acesso_total_superadmins.sql — renomeada só porque o
+-- prefixo colidiu com aplicar_20271024900000_condominio_007_executa (#145).
+-- Reexecutar é seguro (ON CONFLICT / CREATE OR REPLACE / DROP TRIGGER IF EXISTS).
+--
 -- Acesso total para as contas de `public.superadmins` (regra do usuário, 24/10/2026):
 -- "o login desenvolvedor@alpaconstrutora.com.br deve ter acesso a absolutamente
 -- tudo do app".

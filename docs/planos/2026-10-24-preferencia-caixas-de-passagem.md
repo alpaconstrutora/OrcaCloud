@@ -53,7 +53,7 @@ não se põe CP.
 - check-ui sem piorar; tsc 0; CI verde.
 
 ## Estado
-- [ ] implementação + testes
+- [x] implementação + testes
 - [ ] revisão
 - [ ] PR + CI
 - [ ] publicação

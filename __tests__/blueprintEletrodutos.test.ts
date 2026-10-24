@@ -33,6 +33,7 @@ import {
 import { HIPOTESES_PADRAO, agrupamentoDoCircuito, comprimentoDoCircuito } from '../utils/blueprintEletricaDimensionamento';
 import { desvioDoPilar, fracaoDentro, pegadasDePilares } from '../utils/blueprintObstaculosEstruturais';
 import { BITOLAS_DE_ELETRODUTO_MM, cotaDaRede } from '../utils/blueprintEletrodutos';
+import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
 import { POLITICA_PADRAO, computeQuantities } from '../utils/blueprintKernel';
 import { medidasDoTerminal } from '../utils/blueprintRede';
 import { itensDaLegendaEletrica } from '../utils/blueprintPranchaEletrica';
@@ -418,7 +419,9 @@ describe('E6.3 — o eletroduto desvia da estrutura', () => {
     expect([2750, 3250]).toContain(canto.x); // o canto do pilar (300 × 300 em 3000) afastado 10 cm
     expect([750, 1250]).toContain(canto.y);
     for (const c of hz) expect(c.circuitoIds).toEqual([comPilar.c1]);
-    expect(plano.avisos).toEqual([]);
+    // Nenhum aviso de PILAR. (24/10/2026: sem caixas, a sala de 6 m mede 1,2 + 5,85 + 2,5 m + duas curvas = 15,55 m
+    // equivalentes > 15 m — o plano avisa o que a NBR pediria; esse aviso é outro assunto.)
+    expect(plano.avisos.filter((a) => !a.includes('NBR 5410 6.2.11.1.7'))).toEqual([]);
   });
 
   it('Task 3, correção 2 — o mesmo pilar no modo PADRÃO (pela luz): contorna o pilar INFLADO (raio + 50 mm), o canto a ~16 cm da face', () => {
@@ -434,7 +437,9 @@ describe('E6.3 — o eletroduto desvia da estrutura', () => {
     expect([2688, 3312]).toContain(canto.x);
     expect([688, 1312]).toContain(canto.y);
     for (const c of hz) expect(c.circuitoIds).toEqual([comPilar.c1]);
-    expect(plano.avisos).toEqual([]);
+    // Nenhum aviso de PILAR. (24/10/2026: sem caixas, a sala de 6 m mede 1,2 + 5,85 + 2,5 m + duas curvas = 15,55 m
+    // equivalentes > 15 m — o plano avisa o que a NBR pediria; esse aviso é outro assunto.)
+    expect(plano.avisos.filter((a) => !a.includes('NBR 5410 6.2.11.1.7'))).toEqual([]);
   });
 
   it('⚠️ viga de teto: a rede corre 10 cm abaixo do fundo dela (e avisa); viga baixa demais → fica no teto e avisa do cruzamento', () => {
@@ -499,6 +504,34 @@ describe('E6.3 — caixas de passagem no plano', () => {
     const sem = planejarEletrodutos(m, quadroDe(m), semCaixas);
     expect(caixasDoPlano(sem.comandos)).toEqual([]);
     expect(horizontais(sem.comandos)).toHaveLength(1);
+  });
+
+  // 24/10/2026 — preferência "pela luz do teto" (plano 2026-10-24-preferencia-caixas-de-passagem.md): sem caixas,
+  // o planejador MEDE pela regra da NBR e avisa, mas não insere nada. Pedido: *"em instalacao residencial não se usa
+  // caixas de passagens como sugerido no projeto. Mas nao vamos deixar de oferecer como solucao ao usuário."*
+  it('⚠️ sem caixas (pela luz), rede reta de 20 m: nenhuma CAIXA_PASSAGEM, o trecho inteiro e UM aviso do que a NBR pediria', () => {
+    const { m } = sala(20000, [{ x: 19925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    const plano = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    expect(caixasDoPlano(plano.comandos)).toEqual([]);
+    expect(plano.comandos.some((c) => c.type === 'AddTerminal')).toBe(false);
+    expect(plano.caixas).toBe(0);
+    expect(horizontais(plano.comandos)).toHaveLength(1); // nada partido
+    const aviso = '1 ponto(s) da rede passam de 15 m ou 270° de curvas sem caixa (NBR 5410 6.2.11.1.7) — ligue as caixas de passagem nas Preferências ou confira';
+    expect(plano.avisos.filter((a) => a.includes('NBR 5410 6.2.11.1.7'))).toEqual([aviso]);
+  });
+
+  it('com a regra, a mesma rede de 20 m: as caixas como hoje (uma, a 10,8 m do teto) e sem o aviso de "sem caixa"', () => {
+    const { m } = sala(20000, [{ x: 19925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    const plano = planejarEletrodutos(m, quadroDe(m), { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: REGRA_DE_CAIXAS_PADRAO });
+    expect(caixasDoPlano(plano.comandos).map((c) => [c.at.x, c.at.y, c.cotaMm])).toEqual([[10875, 1000, 2800]]);
+    expect(plano.caixas).toBe(1);
+    expect(horizontais(plano.comandos).map((c) => [c.a.x, c.b.x])).toEqual([[75, 10875], [10875, 19925]]);
+    expect(plano.avisos.some((a) => a.includes('sem caixa (NBR 5410'))).toBe(false);
+  });
+
+  it('sem caixas e rede curta (sala de 4 m: 1,2 + 3,85 + 2,5 m e duas curvas = 13,55 m equivalentes): nada a avisar', () => {
+    const { m } = sala(4000, [{ x: 3925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    expect(planejarEletrodutos(m, quadroDe(m), semCaixas).avisos).toEqual([]);
   });
 
   it('a caixa não é "ponto sem circuito" (é infraestrutura)', () => {

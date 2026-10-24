@@ -427,7 +427,9 @@ import type { PreviaOrcamento } from '../../services/blueprintBudgetService';
 import PainelVersoes from './PainelVersoes';
 import SecaoPlantaEletrica from '../preferencias/SecaoPlantaEletrica';
 import SecaoExibicaoDaPlanta from '../preferencias/SecaoExibicaoDaPlanta';
+import SecaoLancamentoDaPlanta from '../preferencias/SecaoLancamentoDaPlanta';
 import { consequenciasDaEscolha } from '../../utils/preferencias/catalogoExibir';
+import { CATALOGO_DE_LANCAMENTO, type CaixasDePassagem } from '../../utils/preferencias/catalogoLancamento';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, MenuDoRibbon, abaEfetiva } from './Ribbon';
 import DockDeRelatorios, { useAlturaDoDock } from './DockDeRelatorios';
@@ -2013,9 +2015,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [relatorio, setRelatorio] = useState<RelatorioDoDock | null>(null);
   /**
    * A gaveta "Preferências da Planta" e a seção que ela mostra (aba Preferências): `'eletrica'` = "O que
-   * exibir" (Elétrica), `'exibicao'` = "Planta, vistas e 3D"; `null` = fechada. Uma gaveta só, nunca duas.
+   * exibir" (Elétrica), `'exibicao'` = "Planta, vistas e 3D", `'lancamento'` = "Lançamento" (Elétrica: caixas de
+   * passagem × pela luz do teto, 24/10/2026); `null` = fechada. Uma gaveta só, nunca duas.
    */
-  const [secaoDasPreferencias, setSecaoDasPreferencias] = useState<'eletrica' | 'exibicao' | null>(null);
+  const [secaoDasPreferencias, setSecaoDasPreferencias] = useState<'eletrica' | 'exibicao' | 'lancamento' | null>(null);
   /**
    * TELAS PRÓPRIAS (15/09/2026, pedido: *"quadro de cargas e unifilar em drawer
    * ficou muito ruim visualização. vamos criar uma tela nova para cada um"*).
@@ -8704,9 +8707,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     'blueprint:eletrodutosRotaMaxima',
     HIPOTESES_ELETRODUTO_PADRAO.rotaMaximaVezes,
   );
-  // E6.3: rota pela parede e caixas de passagem automáticas — preferências de trabalho, persistidas.
+  // E6.3: rota pela parede — preferência de trabalho, persistida.
   const [rotaPelaParede, setRotaPelaParede] = usePersistedState<boolean>('blueprint:eletrodutosPelaParede', HIPOTESES_ELETRODUTO_PADRAO.rotaPelaParede);
-  const [caixasAutomaticas, setCaixasAutomaticas] = usePersistedState<boolean>('blueprint:eletrodutosCaixas', HIPOTESES_ELETRODUTO_PADRAO.caixas != null);
+  // Caixas de passagem (24/10/2026, plano docs/planos/2026-10-24-preferencia-caixas-de-passagem.md): preferência do
+  // USUÁRIO `planta.lancamento.caixasDePassagem` — padrão "pela luz do teto, sem caixas" (decisão do usuário). Antes era
+  // só do navegador (chave `blueprint:eletrodutosCaixas`, ligada por padrão); o valor antigo NÃO é migrado. A aba
+  // Preferências › Lançamento e a caixa de seleção do painel dos eletrodutos mostram e gravam esta MESMA escolha.
+  const [caixasDePassagem, setCaixasDePassagem] = usePreferenciaDaPlanta<CaixasDePassagem>('caixasDePassagem', CATALOGO_DE_LANCAMENTO);
+  const caixasAutomaticas = caixasDePassagem === 'CAIXAS';
   // 24/10/2026: o encaminhamento (quadro → luz do ambiente → tomadas, como na obra; ou a árvore única de antes) — preferência de trabalho, persistida.
   const [encaminhamentoDoEletroduto, setEncaminhamentoDoEletroduto] = usePersistedState<EncaminhamentoDoEletroduto>(
     'blueprint:eletrodutosEncaminhamento',
@@ -14372,6 +14380,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 onClick={() => setSecaoDasPreferencias((s) => (s === 'eletrica' ? null : 'eletrica'))}
                 ajuda="O que a planta elétrica escreve: na Tela (só para você) e na Prancha (padrão da empresa)"
               />
+              <BotaoDoRibbon
+                icone={Cable}
+                rotulo="Lançamento"
+                ativo={secaoDasPreferencias === 'lancamento'}
+                onClick={() => setSecaoDasPreferencias((s) => (s === 'lancamento' ? null : 'lancamento'))}
+                ajuda="Como a planta lança os eletrodutos: preferir o encaminhamento pela luz do teto (sem caixas de passagem) ou usar caixas de passagem (NBR 5410). Vale para você em qualquer computador"
+              />
             </GrupoDoRibbon>
           </>
         )}
@@ -18747,11 +18762,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   <input
                     type="checkbox"
                     checked={caixasAutomaticas}
-                    onChange={(e) => setCaixasAutomaticas(e.target.checked)}
+                    onChange={(e) => setCaixasDePassagem(e.target.checked ? 'CAIXAS' : 'PELA_LUZ')}
                     aria-label="Caixas de passagem automáticas"
                     className="h-3.5 w-3.5 rounded border-slate-300"
                   />
-                  Caixas de passagem automáticas (15 m, −3 m por curva, até 270° de curvas)
+                  Caixas de passagem automáticas (15 m, −3 m por curva, até 270° de curvas) — a mesma escolha de Preferências › Lançamento; desligada, o lançamento prefere a luz do teto e avisa o que a NBR pediria
                 </label>
               </div>
 
@@ -20321,6 +20336,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           <SheetPanel className="px-6 py-6">
             {secaoDasPreferencias === 'exibicao' ? (
               <SecaoExibicaoDaPlanta />
+            ) : secaoDasPreferencias === 'lancamento' ? (
+              <SecaoLancamentoDaPlanta />
             ) : (
               <SecaoPlantaEletrica organizationId={study.organization_id ?? null} studyId={study.id} />
             )}

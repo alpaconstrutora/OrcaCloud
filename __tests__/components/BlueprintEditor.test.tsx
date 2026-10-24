@@ -631,6 +631,64 @@ describe('BlueprintEditor · ações oferecidas', () => {
     }
   });
 
+  it('⚠️ 24/10/2026 — Preferências › Elétrica › "Lançamento": caixas de passagem × pela luz do teto; o checkbox do painel dos eletrodutos é a MESMA escolha', async () => {
+    // Pedido: *"Incluir em preferencias se ele quer utilizar caixas de passagens ou utilizar prefertencialmente
+    // encaminhamentos via luz no teto. o usuário escolhe"* (plano 2026-10-24-preferencia-caixas-de-passagem.md).
+    localStorage.clear();
+    const { useStore } = await import('../../store/useStore');
+    useStore.setState({ session: { user: { id: 'usr_1' } } as never });
+    const banco: { escopo: string; chave: string; valor: unknown }[] = [];
+    prefListarDoUsuario.mockImplementation(async () => [...banco]);
+    prefGravar.mockImplementation(async (...a: unknown[]) => {
+      const [escopo, , chave, valor] = a as [string, unknown, string, unknown];
+      const resto = banco.filter((l) => !(l.escopo === escopo && l.chave === chave));
+      banco.length = 0;
+      banco.push(...resto, ...(valor === null ? [] : [{ escopo, chave, valor }]));
+    });
+    prefGravar.mockClear();
+    try {
+      await montar();
+      const user = userEvent.setup();
+      const caixaDoPainel = async () => {
+        await abrirAba(/^elétrica$/i);
+        await user.click(botao(/^lançar eletrodutos/i));
+        const drawer = await screen.findByRole('dialog');
+        return within(drawer).getByRole('checkbox', { name: /caixas de passagem automáticas/i }) as HTMLInputElement;
+      };
+
+      // Sem escolha: o padrão é "pela luz" — o checkbox do painel nasce DESMARCADO.
+      expect(await caixaDoPainel()).not.toBeChecked();
+      await user.keyboard('{Escape}');
+
+      // A aba Preferências traz "Lançamento" no grupo Elétrica, ao lado de "O que exibir".
+      await abrirAba(/^Preferências$/);
+      await user.click(botao(/^Lançamento$/));
+      const gaveta = screen.getByText('Preferências da Planta').closest('[role="dialog"]') as HTMLElement;
+      expect(within(gaveta).getByRole('region', { name: 'Lançamento' })).toBeInTheDocument();
+      const pelaLuz = within(gaveta).getByRole('radio', { name: 'Preferir o encaminhamento pela luz do teto (sem caixas de passagem)' });
+      const comCaixas = within(gaveta).getByRole('radio', { name: 'Usar caixas de passagem (NBR 5410: a cada 15 m ou 270° de curvas)' });
+      expect(pelaLuz).toBeChecked();
+      await user.click(comCaixas);
+      await waitFor(() => expect(prefGravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.lancamento.caixasDePassagem', 'CAIXAS'));
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByText('Preferências da Planta')).not.toBeInTheDocument());
+
+      // O painel dos eletrodutos mostra a MESMA escolha…
+      const marcada = await caixaDoPainel();
+      expect(marcada).toBeChecked();
+      // …e desmarcar ali grava a mesma preferência.
+      await user.click(marcada);
+      await waitFor(() => expect(prefGravar).toHaveBeenLastCalledWith('USUARIO', {}, 'planta.lancamento.caixasDePassagem', 'PELA_LUZ'));
+      // Nada vai para a chave antiga do navegador.
+      expect(localStorage.getItem('blueprint:eletrodutosCaixas')).toBeNull();
+    } finally {
+      prefListarDoUsuario.mockImplementation(async () => []);
+      prefGravar.mockImplementation(async () => {});
+      useStore.setState({ session: null as never });
+      clienteDeConsulta.clear();
+    }
+  });
+
   it('⚠️ 24/10/2026 — a gaveta de Preferências troca de seção sem abrir duas, e clicar na seção aberta fecha', async () => {
     await montar();
     const user = userEvent.setup();

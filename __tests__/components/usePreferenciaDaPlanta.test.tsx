@@ -41,6 +41,7 @@ import {
     chaveDoMarcadorDeMigracao,
 } from '../../hooks/usePreferenciaDaPlanta';
 import { usePreferenciasEletricas } from '../../hooks/usePreferenciasEletricas';
+import { CATALOGO_DE_LANCAMENTO } from '../../utils/preferencias/catalogoLancamento';
 
 const CHAVE_GRADE = 'planta.exibir.mostrarGrade';
 
@@ -689,5 +690,123 @@ describe('useMigracaoDaExibicaoDaPlanta', () => {
         expect(doNavegador('blueprint:mostrarEixos')).toBe(false);
         expect(localStorage.getItem(chaveDoMarcadorDeMigracao(m.userId!))).toBeNull(); // falhou: a próxima carga tenta de novo
         aviso.mockRestore();
+    });
+});
+
+/**
+ * 24/10/2026 — o MESMO hook, com o catálogo do LANÇAMENTO (plano 2026-10-24-preferencia-caixas-de-passagem.md):
+ * `planta.lancamento.caixasDePassagem`, escopo USUARIO, padrão `PELA_LUZ`. Mesma query, mesmo contador de
+ * gravações, mesmo aviso de leitura; sem sessão fica no navegador em `blueprint:lancamento:caixasDePassagem`.
+ */
+describe('usePreferenciaDaPlanta — catálogo do lançamento (caixas de passagem)', () => {
+    const CHAVE_CAIXAS = 'planta.lancamento.caixasDePassagem';
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        localStorage.clear();
+        banco = [];
+        m.userId = 'u1';
+        m.listarDoUsuario.mockImplementation(async () => [...banco]);
+        m.gravar.mockImplementation(async (_e: unknown, _d: unknown, chave: string, valor: boolean | string | null) => {
+            gravarNoBanco(chave, valor);
+        });
+    });
+
+    it('sem nada no banco nem no navegador o padrão é PELA_LUZ', async () => {
+        const { result } = montar(() => usePreferenciaDaPlanta<string>('caixasDePassagem', CATALOGO_DE_LANCAMENTO));
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
+        expect(result.current[0]).toBe('PELA_LUZ');
+    });
+
+    it('⚠️ NÃO migra o valor antigo do navegador (blueprint:eletrodutosCaixas = true): o padrão mudou por decisão do usuário', async () => {
+        noNavegador('blueprint:eletrodutosCaixas', true);
+        const { result } = montar(() => ({
+            caixas: usePreferenciaDaPlanta<string>('caixasDePassagem', CATALOGO_DE_LANCAMENTO),
+            migracao: useMigracaoDaExibicaoDaPlanta(),
+        }));
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
+        await new Promise((r) => setTimeout(r, 30));
+        expect(result.current.caixas[0]).toBe('PELA_LUZ');
+        expect(m.gravar).not.toHaveBeenCalled();
+        expect(m.gravarVarios).not.toHaveBeenCalled();
+    });
+
+    it('gravar CAIXAS chama o serviço com a chave e o valor certos, e a releitura mostra o valor', async () => {
+        const { result } = montar(() => usePreferenciaDaPlanta<string>('caixasDePassagem', CATALOGO_DE_LANCAMENTO));
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalledTimes(1));
+        await act(async () => { result.current[1]('CAIXAS'); });
+        expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, CHAVE_CAIXAS, 'CAIXAS');
+        // A gravação termina relendo a lista (o banco é a verdade).
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalledTimes(2));
+        expect(banco).toEqual([linha(CHAVE_CAIXAS, 'CAIXAS')]);
+        expect(result.current[0]).toBe('CAIXAS');
+    });
+
+    it('com linha no banco vale a linha; valor fora das opções é ignorado (não grava)', async () => {
+        banco = [linha(CHAVE_CAIXAS, 'CAIXAS')];
+        const { result } = montar(() => usePreferenciaDaPlanta<string>('caixasDePassagem', CATALOGO_DE_LANCAMENTO));
+        await waitFor(() => expect(result.current[0]).toBe('CAIXAS'));
+        const aviso = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        act(() => result.current[1]('TALVEZ'));
+        aviso.mockRestore();
+        expect(m.gravar).not.toHaveBeenCalled();
+        expect(result.current[0]).toBe('CAIXAS');
+    });
+
+    it('⚠️ UMA leitura só: exibição e lançamento leem a MESMA query do usuário', async () => {
+        banco = [linha(CHAVE_GRADE, false), linha(CHAVE_CAIXAS, 'CAIXAS')];
+        const { result } = montar(() => ({
+            grade: usePreferenciaDaPlanta<boolean>('mostrarGrade'),
+            caixas: usePreferenciaDaPlanta<string>('caixasDePassagem', CATALOGO_DE_LANCAMENTO),
+        }));
+        await waitFor(() => expect(result.current.caixas[0]).toBe('CAIXAS'));
+        expect(result.current.grade[0]).toBe(false);
+        expect(m.listarDoUsuario).toHaveBeenCalledTimes(1);
+    });
+
+    it('⚠️ o aviso de falha de leitura é o MESMO (um só) para exibição e lançamento', async () => {
+        m.listarDoUsuario.mockRejectedValue(new Error('queda do lançamento'));
+        const { result } = montar(() => ({
+            grade: usePreferenciaDaPlanta<boolean>('mostrarGrade'),
+            caixas: usePreferenciaDaPlanta<string>('caixasDePassagem', CATALOGO_DE_LANCAMENTO),
+        }));
+        await waitFor(() => expect(m.showToast).toHaveBeenCalled());
+        await new Promise((r) => setTimeout(r, 30));
+        expect(m.showToast.mock.calls.filter(([msg]) => String(msg).includes('queda do lançamento'))).toHaveLength(1);
+        expect(result.current.caixas[0]).toBe('PELA_LUZ'); // leitura falhou: vale o padrão
+    });
+
+    it('⚠️ rajada exibição + lançamento: UMA releitura no fim (mesmo contador de gravações da query)', async () => {
+        const { result } = montar(() => ({
+            grade: usePreferenciaDaPlanta<boolean>('mostrarGrade'),
+            caixas: usePreferenciaDaPlanta<string>('caixasDePassagem', CATALOGO_DE_LANCAMENTO),
+        }));
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalledTimes(1));
+        let n = 0;
+        m.gravar.mockImplementation((_e: unknown, _d: unknown, chave: string, valor: boolean | string) => {
+            const espera = n++ === 0 ? 40 : 5;
+            return new Promise<void>((ok) => setTimeout(() => { gravarNoBanco(chave, valor); ok(); }, espera));
+        });
+        act(() => { result.current.grade[1](false); });
+        act(() => { result.current.caixas[1]('CAIXAS'); });
+        await waitFor(() => expect(banco).toHaveLength(2));
+        await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalledTimes(2));
+        await new Promise((r) => setTimeout(r, 30));
+        expect(m.listarDoUsuario).toHaveBeenCalledTimes(2);
+        expect(result.current.grade[0]).toBe(false);
+        expect(result.current.caixas[0]).toBe('CAIXAS');
+    });
+
+    it('SEM sessão fica no navegador, em blueprint:lancamento:caixasDePassagem, e não chama o serviço', async () => {
+        m.userId = null;
+        const { result } = montar(() => usePreferenciaDaPlanta<string>('caixasDePassagem', CATALOGO_DE_LANCAMENTO));
+        act(() => result.current[1]('CAIXAS'));
+        expect(result.current[0]).toBe('CAIXAS');
+        expect(doNavegador('blueprint:lancamento:caixasDePassagem')).toBe('CAIXAS');
+        expect(m.gravar).not.toHaveBeenCalled();
+    });
+
+    it('item que não existe no catálogo do lançamento lança erro claro (o de exibição não vale aqui)', () => {
+        expect(() => montar(() => usePreferenciaDaPlanta<boolean>('mostrarGrade', CATALOGO_DE_LANCAMENTO))).toThrow(/mostrarGrade/);
     });
 });

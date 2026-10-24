@@ -1338,6 +1338,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <span className="text-xs font-medium text-blue-600">{contract.number}</span>
                             <span className="w-1 h-1 bg-gray-300 rounded-full" />
                             <span className="text-xs font-medium text-gray-400">{contract.contract_type}</span>
+                            {/* Dona do contrato — decide de onde vêm centro de custo, plano de
+                                contas e empreendimento; antes não aparecia em tela nenhuma. */}
+                            {organization?.name && organization.id === contract.organization_id && (
+                                <>
+                                    <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                                    <span className="text-xs font-medium text-gray-500" title="Organização do contrato">{organization.name}</span>
+                                </>
+                            )}
                         </div>
                         <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">{contract.title}</h1>
                         {contract.warranty_claim_id && (

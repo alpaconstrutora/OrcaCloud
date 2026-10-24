@@ -149,13 +149,10 @@ describe('preferenciasService', () => {
             expect(linha).toMatchObject({ chave: 'planta.exibir.estiloPlanta', valor: 'HUMANIZADA' });
         });
 
-        it('valor null com { apagarQuandoNull: false } faz UPSERT com valor null (não apaga)', async () => {
-            await preferenciasService.gravar('USUARIO', {}, 'planta.exibir.vista3dTerreno', null, { apagarQuandoNull: false });
-            expect(nomes(0)).toContain('upsert');
-            expect(nomes(0)).not.toContain('delete');
-            const [linha, opcoes] = chamada(0, 'upsert') as [Record<string, unknown>, { onConflict: string }];
-            expect(linha).toMatchObject({ escopo: 'USUARIO', user_id: 'u1', chave: 'planta.exibir.vista3dTerreno', valor: null });
-            expect(opcoes.onConflict).toBe('escopo,user_id,chave');
+        it('valor null no terreno 3D ("Automático") APAGA a linha: a coluna é NOT NULL, nunca vai upsert com null', async () => {
+            await preferenciasService.gravar('USUARIO', {}, 'planta.exibir.vista3dTerreno', null);
+            expect(nomes(0)).toContain('delete');
+            expect(nomes(0)).not.toContain('upsert');
         });
 
         it('erro do banco rejeita com a frase do banco', async () => {
@@ -182,7 +179,7 @@ describe('preferenciasService', () => {
             await preferenciasService.gravarVarios([
                 { chave: 'planta.exibir.mostrarGrade', valor: false },
                 { chave: 'planta.exibir.estiloPlanta', valor: 'HUMANIZADA' },
-                { chave: 'planta.exibir.vista3dTerreno', valor: true },
+                { chave: 'planta.exibir.mostrarEixos', valor: true },
             ]);
             expect(m.consultas).toHaveLength(1);
             expect(m.consultas[0].tabela).toBe('preferencias');
@@ -196,9 +193,15 @@ describe('preferenciasService', () => {
             expect(linhas.map((l) => [l.chave, l.valor])).toEqual([
                 ['planta.exibir.mostrarGrade', false],
                 ['planta.exibir.estiloPlanta', 'HUMANIZADA'],
-                ['planta.exibir.vista3dTerreno', true],
+                ['planta.exibir.mostrarEixos', true],
             ]);
             expect(opcoes.onConflict).toBe('escopo,user_id,chave');
+        });
+
+        it('⚠️ ignoreDuplicates: a migração NUNCA substitui uma linha que já existe', async () => {
+            await preferenciasService.gravarVarios([{ chave: 'planta.exibir.mostrarGrade', valor: false }]);
+            const [, opcoes] = chamada(0, 'upsert') as [unknown, { onConflict: string; ignoreDuplicates?: boolean }];
+            expect(opcoes.ignoreDuplicates).toBe(true);
         });
 
         it('lista vazia não fala com o banco', async () => {

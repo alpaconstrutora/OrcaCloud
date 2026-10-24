@@ -198,16 +198,20 @@ export function valorDeExibicao(linhas: readonly LinhaDePreferencia[], item: str
  * navegador, uma linha para gravar. `lerDoNavegador` recebe a chave antiga e devolve o JSON já
  * parseado (ou `undefined`). Não devolve nada para o que já está no banco (a escolha do banco
  * nunca é sobrescrita), nem para `null` (ausente e "automático" se confundem na leitura, e
- * automático já é o padrão), nem para valor IGUAL ao padrão do item (não é escolha — ver abaixo).
+ * automático já é o padrão), nem para item 'automatico' (a ausência da linha já é a escolha), nem para valor IGUAL ao
+ * padrão do item (não é escolha — ver abaixo).
  * Leitura do navegador que lança vale como "sem valor".
  */
 export function linhasParaMigrar(
   linhasDoUsuario: readonly LinhaDePreferencia[],
   lerDoNavegador: (chaveAntiga: string) => unknown,
-): { chave: string; valor: boolean | string | null }[] {
-  const saida: { chave: string; valor: boolean | string | null }[] = [];
+): { chave: string; valor: boolean | string }[] {
+  const saida: { chave: string; valor: boolean | string }[] = [];
   for (const def of ITENS_DE_EXIBICAO) {
     if (valorDoUsuario(linhasDoUsuario, def) !== undefined) continue;
+    // 'automatico' (terreno 3D): "automático" é a AUSÊNCIA de linha — migrar o `true`/`false` antigo de
+    // um navegador desfaria o "Automático" escolhido em outro aparelho.
+    if (def.tipo === 'automatico') continue;
     let doNavegador: unknown;
     try {
       doNavegador = lerDoNavegador(def.chaveAntiga);
@@ -218,7 +222,7 @@ export function linhasParaMigrar(
     // Igual ao padrão: o `usePersistedState` grava o padrão no navegador ao montar, então isso não é
     // uma escolha — migrar congelaria o padrão como se fosse (e mudar o padrão um dia não valeria).
     if (Object.is(doNavegador, def.padrao)) continue;
-    saida.push({ chave: chaveDeExibicao(def.item), valor: doNavegador });
+    saida.push({ chave: chaveDeExibicao(def.item), valor: doNavegador as boolean | string });
   }
   return saida;
 }

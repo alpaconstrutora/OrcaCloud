@@ -90,22 +90,21 @@ export const preferenciasService = {
 
   /**
    * Grava (upsert pelo índice do escopo) ou, com `valor === null`, apaga a linha ("voltar ao padrão").
-   * `valor` também pode ser texto (estilo da planta, modo de cor). Exceção: com
-   * `{ apagarQuandoNull: false }` o `null` é GRAVADO como valor (terreno 3D: "automático" é uma
-   * escolha explícita, diferente de "sem escolha").
+   * `valor` também pode ser texto (estilo da planta, modo de cor). Não há como guardar `null`:
+   * a coluna é `jsonb NOT NULL` e o PostgREST converte `null` JSON em SQL NULL — por isso `null`
+   * sempre apaga (o terreno 3D "automático" = sem linha).
    */
   async gravar(
     escopo: EscopoDaPreferencia,
     dono: DonoDaPreferencia,
     chave: string,
     valor: boolean | string | null,
-    opcoes?: { apagarQuandoNull?: boolean },
   ): Promise<void> {
     const userId = await usuarioDaSessao();
     const idDoDono = donoDoEscopo(escopo, dono, userId);
     const colunaDoDono = COLUNA_DO_DONO[escopo];
 
-    if (valor === null && opcoes?.apagarQuandoNull !== false) {
+    if (valor === null) {
       const { error } = await supabase
         .from(TABELA)
         .delete()
@@ -132,9 +131,11 @@ export const preferenciasService = {
 
   /**
    * Várias linhas USUARIO de uma vez (migração das escolhas do navegador): UM upsert em lote, pelo
-   * mesmo índice do escopo. Lista vazia não fala com o banco.
+   * mesmo índice do escopo, com `ignoreDuplicates` (ON CONFLICT DO NOTHING): a migração NUNCA
+   * substitui uma linha que já existe (o cache de quem migra pode estar velho). Lista vazia não
+   * fala com o banco.
    */
-  async gravarVarios(linhas: readonly { chave: string; valor: boolean | string | null }[]): Promise<void> {
+  async gravarVarios(linhas: readonly { chave: string; valor: boolean | string }[]): Promise<void> {
     if (linhas.length === 0) return;
     const userId = await usuarioDaSessao();
     const agora = new Date().toISOString();
@@ -148,7 +149,10 @@ export const preferenciasService = {
       updated_at: agora,
       updated_by: userId,
     }));
-    const { error } = await supabase.from(TABELA).upsert(registros, { onConflict: 'escopo,user_id,chave' });
+    const { error } = await supabase.from(TABELA).upsert(registros, {
+      onConflict: 'escopo,user_id,chave',
+      ignoreDuplicates: true,
+    });
     if (error) falhou('Erro ao gravar as preferências', error);
   },
 

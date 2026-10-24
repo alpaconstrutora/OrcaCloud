@@ -62,8 +62,8 @@ describe('usePreferenciaDaPlanta', () => {
         banco = [];
         m.userId = 'u1';
         m.listarDoUsuario.mockImplementation(async () => [...banco]);
-        m.gravar.mockImplementation(async (_e: unknown, _d: unknown, chave: string, valor: boolean | string | null, opcoes?: { apagarQuandoNull?: boolean }) => {
-            gravarNoBanco(chave, valor, opcoes?.apagarQuandoNull !== false);
+        m.gravar.mockImplementation(async (_e: unknown, _d: unknown, chave: string, valor: boolean | string | null) => {
+            gravarNoBanco(chave, valor); // null apaga a linha, como o serviço
         });
         m.gravarVarios.mockImplementation(async (linhas: { chave: string; valor: boolean | string | null }[]) => {
             for (const l of linhas) gravarNoBanco(l.chave, l.valor, false);
@@ -87,16 +87,45 @@ describe('usePreferenciaDaPlanta', () => {
     it('sem linha no banco vale o que está no navegador (chave antiga, JSON)', async () => {
         noNavegador('blueprint:mostrarGrade', false);
         noNavegador('blueprint:estiloPlanta', 'HUMANIZADA');
-        noNavegador('blueprint:vista3dTerreno:v2', true);
         const { result } = montar(() => ({
             grade: usePreferenciaDaPlanta<boolean>('mostrarGrade'),
             estilo: usePreferenciaDaPlanta<string>('estiloPlanta'),
-            terreno: usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'),
         }));
         await waitFor(() => expect(m.listarDoUsuario).toHaveBeenCalled());
         expect(result.current.grade[0]).toBe(false);
         expect(result.current.estilo[0]).toBe('HUMANIZADA');
-        expect(result.current.terreno[0]).toBe(true);
+    });
+
+    it('⚠️ terreno 3D (automático): leitura OK e SEM linha → vale o padrão (null), não o navegador de outro aparelho', async () => {
+        noNavegador('blueprint:vista3dTerreno:v2', true);
+        const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
+        expect(result.current[0]).toBe(true); // leitura ainda não chegou: segue o navegador
+        await waitFor(() => expect(result.current[0]).toBeNull());
+        await waitFor(() => expect(doNavegador('blueprint:vista3dTerreno:v2')).toBeNull());
+    });
+
+    it('terreno 3D: leitura FALHOU → segue o navegador', async () => {
+        m.listarDoUsuario.mockRejectedValue(new Error('terreno sem rede'));
+        noNavegador('blueprint:vista3dTerreno:v2', true);
+        const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
+        await waitFor(() => expect(m.showToast).toHaveBeenCalled());
+        expect(result.current[0]).toBe(true);
+    });
+
+    it('terreno 3D: com linha no banco, a linha vale', async () => {
+        banco = [linha('planta.exibir.vista3dTerreno', false)];
+        noNavegador('blueprint:vista3dTerreno:v2', true);
+        const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
+        await waitFor(() => expect(result.current[0]).toBe(false));
+    });
+
+    it('terreno 3D sem sessão: continua valendo o local (não há leitura do banco)', async () => {
+        m.userId = null;
+        noNavegador('blueprint:vista3dTerreno:v2', true);
+        const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
+        await waitFor(() => expect(result.current[0]).toBe(true));
+        await act(async () => { result.current[1](false); });
+        expect(result.current[0]).toBe(false);
     });
 
     it('navegador com lixo (não é JSON, tipo errado, opção que não existe) cai no padrão sem lançar', async () => {
@@ -205,15 +234,34 @@ describe('usePreferenciaDaPlanta', () => {
         expect(m.gravar).not.toHaveBeenCalled();
     });
 
-    it('terreno 3D: automático (null) é gravado DE VERDADE — gravar(..., null, { apagarQuandoNull: false })', async () => {
+    it('⚠️ terreno 3D: o cache otimista REMOVE a linha (não põe { valor: null }) antes de o serviço responder', async () => {
+        banco = [linha('planta.exibir.vista3dTerreno', true)];
+        let terminar!: () => void;
+        m.gravar.mockImplementation((_e: unknown, _d: unknown, chave: string, valor: null) => new Promise<void>((ok) => {
+            terminar = () => { gravarNoBanco(chave, valor); ok(); };
+        }));
+        const { result, client } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
+        await waitFor(() => expect(result.current[0]).toBe(true));
+
+        act(() => result.current[1](null));
+
+        await waitFor(() => expect(result.current[0]).toBeNull());
+        const noCache = client.getQueryData<LinhaDePreferencia[]>(['preferencias', 'usuario', 'u1']);
+        expect(noCache?.some((l) => l.chave === 'planta.exibir.vista3dTerreno')).toBe(false);
+        await act(async () => { terminar(); });
+    });
+
+    it('terreno 3D: "Automático" (null) APAGA a linha — gravar(..., null) sem 5º argumento; a linha sai do cache e a tela mostra null', async () => {
         banco = [linha('planta.exibir.vista3dTerreno', true)];
         const { result } = montar(() => usePreferenciaDaPlanta<boolean | null>('vista3dTerreno'));
         await waitFor(() => expect(result.current[0]).toBe(true));
 
         await act(async () => { result.current[1](null); });
 
-        expect(m.gravar).toHaveBeenCalledWith('USUARIO', {}, 'planta.exibir.vista3dTerreno', null, { apagarQuandoNull: false });
+        expect(m.gravar).toHaveBeenCalledTimes(1);
+        expect(m.gravar.mock.calls[0]).toEqual(['USUARIO', {}, 'planta.exibir.vista3dTerreno', null]);
         await waitFor(() => expect(result.current[0]).toBeNull());
+        expect(banco).toEqual([]);
         expect(doNavegador('blueprint:vista3dTerreno:v2')).toBeNull();
     });
 
@@ -375,6 +423,15 @@ describe('useMigracaoDaExibicaoDaPlanta', () => {
             { chave: 'planta.exibir.estiloPlanta', valor: 'HUMANIZADA' },
             { chave: 'planta.exibir.mostrarEixos', valor: false },
         ]);
+    });
+
+    it('⚠️ terreno 3D (automático) fica FORA da migração, mesmo com true no navegador', async () => {
+        noNavegador('blueprint:vista3dTerreno:v2', true);
+        noNavegador('blueprint:mostrarEixos', false);
+        montar(() => useMigracaoDaExibicaoDaPlanta());
+        await waitFor(() => expect(m.gravarVarios).toHaveBeenCalledTimes(1));
+        const [linhas] = m.gravarVarios.mock.calls[0] as [{ chave: string }[]];
+        expect(linhas.map((l) => l.chave)).toEqual(['planta.exibir.mostrarEixos']);
     });
 
     it('depois de migrar relê a chave do usuário (a planta passa a ler do banco)', async () => {

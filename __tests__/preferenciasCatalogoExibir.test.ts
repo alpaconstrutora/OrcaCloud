@@ -145,17 +145,21 @@ describe('linhasParaMigrar', () => {
         'blueprint:mostrarGrade': false, // já no banco → não migra
         'blueprint:mostrarEixos': false, // migra
         'blueprint:estiloPlanta': 'HUMANIZADA', // migra
-        'blueprint:vista3dTerreno:v2': true, // migra
+        'blueprint:vista3dTerreno:v2': true, // 'automatico' → fora da migração
       }),
     );
     expect(r).toEqual(
       expect.arrayContaining([
         { chave: 'planta.exibir.mostrarEixos', valor: false },
         { chave: 'planta.exibir.estiloPlanta', valor: 'HUMANIZADA' },
-        { chave: 'planta.exibir.vista3dTerreno', valor: true },
       ]),
     );
-    expect(r).toHaveLength(3);
+    expect(r).toHaveLength(2);
+  });
+
+  it('⚠️ item "automatico" (terreno 3D) fica FORA da migração, com true ou false no navegador', () => {
+    expect(linhasParaMigrar([], navegador({ 'blueprint:vista3dTerreno:v2': true }))).toEqual([]);
+    expect(linhasParaMigrar([], navegador({ 'blueprint:vista3dTerreno:v2': false }))).toEqual([]);
   });
 
   it('não migra o que é IGUAL ao padrão (o usePersistedState grava o padrão ao montar; migrar congelaria o padrão)', () => {

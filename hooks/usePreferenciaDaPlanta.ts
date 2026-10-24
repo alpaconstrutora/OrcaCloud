@@ -123,7 +123,12 @@ export function usePreferenciaDaPlanta<T extends boolean | string | null>(
 
   const linhas = (consulta.data ?? SEM_LINHAS) as LinhaDePreferencia[];
   const noBanco = useMemo(() => valorDeExibicao(linhas, item), [linhas, item]);
-  const valor = (noBanco !== undefined ? noBanco : local) as T;
+  // Item 'automatico' (terreno 3D): "Automático" = SEM linha. Com a leitura do banco bem-sucedida e sem
+  // linha, vale o padrão do catálogo, não o navegador (um `true` antigo daqui não desfaz o Automático
+  // escolhido noutro aparelho). Leitura ainda em voo/falha ou sem sessão: segue o navegador.
+  const automaticoSemLinha = def.tipo === 'automatico' && !!userId && consulta.isSuccess;
+  const semEscolhaNoBanco = automaticoSemLinha ? def.padrao : local;
+  const valor = (noBanco !== undefined ? noBanco : semEscolhaNoBanco) as T;
 
   // Valor mais recente, para o setter ler "o de agora" (função de atualização e cliques seguidos).
   const valorRef = useRef<ValorDeExibicao>(valor);
@@ -173,18 +178,19 @@ export function usePreferenciaDaPlanta<T extends boolean | string | null>(
         // NA MESMA hora — o cancelamento começa de forma síncrona, então a tela não pisca.
         void queryClient.cancelQueries({ queryKey: chaveDaQuery });
         queryClient.setQueryData<LinhaDePreferencia[]>(chaveDaQuery, (atual) =>
-          comLinha(atual ?? [], chave, { escopo: 'USUARIO', chave, valor: proximo } as LinhaDePreferencia),
+          // `null` (terreno 3D "Automático") = SEM linha: remove em vez de pôr `{ valor: null }`.
+          comLinha(
+            atual ?? [],
+            chave,
+            proximo === null ? null : ({ escopo: 'USUARIO', chave, valor: proximo } as LinhaDePreferencia),
+          ),
         );
       }
 
       void (async () => {
         try {
-          // O terreno 3D grava `null` DE VERDADE ("automático" é escolha); nos demais itens `null` nem existe.
-          if (proximo === null) {
-            await preferenciasService.gravar('USUARIO', {}, chave, null, { apagarQuandoNull: false });
-          } else {
-            await preferenciasService.gravar('USUARIO', {}, chave, proximo);
-          }
+          // `null` (só o terreno 3D, "Automático") APAGA a linha: a coluna é NOT NULL.
+          await preferenciasService.gravar('USUARIO', {}, chave, proximo);
         } catch (e) {
           if (antes) {
             queryClient.setQueryData<LinhaDePreferencia[]>(chaveDaQuery, (atual) =>

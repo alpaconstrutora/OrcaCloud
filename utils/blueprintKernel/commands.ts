@@ -75,6 +75,10 @@ import {
   type Muro,
   type PortaoDoMuro,
   type TipoDeMuro,
+  MOTORES_DE_LANCAMENTO,
+  type MotorDeLancamento,
+  type RegistroDeLancamento,
+  type ValorDeEscolha,
   ALTURA_DO_OLHO_PADRAO_MM,
   FOCAL_PADRAO_MM,
   MAX_NOME_DE_CAMERA,
@@ -1154,6 +1158,17 @@ export type Command =
       type: 'SetGeorreferencia';
       georreferencia: Georreferencia | null;
     }
+  /**
+   * REGISTRO DO LANÇAMENTO (0.105.0): grava COM QUE ESCOLHAS um motor lançou a rede de um alvo (`null` = a planta
+   * inteira; senão um quadro ou um pavimento). Upsert por (motor, alvo): as escolhas são SUBSTITUÍDAS inteiras. Vai
+   * no MESMO lote do lançamento — o Ctrl+Z volta a rede e o registro juntos. Ver `RegistroDeLancamento`.
+   */
+  | { type: 'RegistrarLancamento'; motor: MotorDeLancamento; alvoId: ObjectId | null; escolhas: Record<string, ValorDeEscolha> }
+  /**
+   * Tira o registro de (motor, alvo) — o motor refez e não sobrou rede a lançar. Registro ausente não é erro: o
+   * motor manda o comando sem precisar saber se havia registro (rede antiga não tem).
+   */
+  | { type: 'ApagarRegistroDeLancamento'; motor: MotorDeLancamento; alvoId: ObjectId | null }
   /**
    * ⚠️ RECUSADO numa parede que tem camadas (`THICKNESS_FROM_LAYERS`): lá a
    * espessura é a SOMA da composição, e usar este comando obrigaria a escolher
@@ -4436,6 +4451,40 @@ function aplicarSemHash(
       break;
     }
 
+    case 'RegistrarLancamento': {
+      const { motor, alvoId } = command;
+      assertMotorDeLancamento(next, motor, alvoId);
+      const escolhas: Record<string, ValorDeEscolha> = {};
+      for (const [chave, valor] of Object.entries(command.escolhas ?? {})) {
+        // `undefined` = a escolha não existe (estado opcional da tela): fica de fora, como no JSON.
+        if (valor === undefined) continue;
+        // NaN e infinito não sobrevivem ao JSON (viram `null`): o registro relido diria outra coisa do que foi gravado,
+        // e o aviso "as escolhas mudaram" acenderia sozinho depois de recarregar.
+        if (typeof valor === 'number' && !Number.isFinite(valor)) {
+          throw new KernelError('BAD_REGISTRO', `Escolha "${chave}" do lançamento não é um número finito`);
+        }
+        if (valor !== null && typeof valor !== 'string' && typeof valor !== 'number' && typeof valor !== 'boolean') {
+          throw new KernelError('BAD_REGISTRO', `Escolha "${chave}" do lançamento não é texto, número, sim/não ou nulo`);
+        }
+        escolhas[chave] = valor;
+      }
+      const registro: RegistroDeLancamento = { motor, alvoId, escolhas };
+      const lista = next.registrosDeLancamento ?? [];
+      const i = lista.findIndex((r) => r.motor === motor && r.alvoId === alvoId);
+      next.registrosDeLancamento = i >= 0 ? lista.map((r, j) => (j === i ? registro : r)) : [...lista, registro];
+      // Sem `diff`: o registro não é peça com id — a razão de `SetGeorreferencia`.
+      break;
+    }
+
+    case 'ApagarRegistroDeLancamento': {
+      const { motor, alvoId } = command;
+      if (!(MOTORES_DE_LANCAMENTO as readonly string[]).includes(motor)) {
+        throw new KernelError('BAD_REGISTRO', `Motor de lançamento desconhecido: ${String(motor)}`);
+      }
+      next.registrosDeLancamento = (next.registrosDeLancamento ?? []).filter((r) => !(r.motor === motor && r.alvoId === alvoId));
+      break;
+    }
+
     case 'SetAreaEscritura': {
       next.areaEscrituraMm2 = command.areaMm2;
       // Sem `diff.updated`: a área da escritura é do LOTE, não de um objeto com
@@ -6458,6 +6507,20 @@ export class ModelHistory {
     this.cursor += 1;
     return this.current;
   }
+}
+
+/**
+ * O registro do lançamento (0.105.0) só aceita um motor conhecido e um alvo que o payload canônico sabe gravar por
+ * índice: `null` (a planta inteira), um QUADRO ou um PAVIMENTO existentes. Id de outra família, ou que não existe,
+ * gravaria um registro que some na primeira releitura — e o aviso de escolhas mudadas nunca acenderia, calado.
+ */
+function assertMotorDeLancamento(model: BlueprintModel, motor: MotorDeLancamento, alvoId: ObjectId | null): void {
+  if (!(MOTORES_DE_LANCAMENTO as readonly string[]).includes(motor)) {
+    throw new KernelError('BAD_REGISTRO', `Motor de lançamento desconhecido: ${String(motor)}`);
+  }
+  if (alvoId === null) return;
+  if ((model.quadros ?? []).some((q) => q.id === alvoId) || model.levels.some((l) => l.id === alvoId)) return;
+  throw new KernelError('BAD_REGISTRO', `Alvo do lançamento não é quadro nem pavimento existente: ${alvoId}`);
 }
 
 /** Aplica um lote na ordem dada, abortando inteiro no primeiro erro. */

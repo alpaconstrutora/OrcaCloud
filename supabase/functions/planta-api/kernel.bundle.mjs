@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.104.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.105.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -907,6 +907,7 @@ function emptyModel() {
     blocos: [],
     cameras: [],
     muros: [],
+    registrosDeLancamento: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1893,6 +1894,16 @@ function camadaDoCanonico(c) {
 function cmpStr(x, y) {
   return x < y ? -1 : x > y ? 1 : 0;
 }
+function ordemDoAlvo(r) {
+  if (r.quadro !== void 0) return 2e6 + r.quadro;
+  if (r.level !== void 0) return 1e6 + r.level;
+  return 0;
+}
+function escolhasCanonicas(r) {
+  const out = {};
+  for (const [k, v] of Object.entries(r.escolhas ?? {})) if (v !== void 0) out[k] = v;
+  return out;
+}
 function ordenar(itens, projetar2, chave) {
   return itens.map((item) => {
     const geom = projetar2(item);
@@ -2448,6 +2459,15 @@ function projetar(model) {
       q.geom.pai = indiceDoQuadro.get(q.item.quadroPaiId);
     }
   }
+  const registrosDeLancamento = (model.registrosDeLancamento ?? []).flatMap((r) => {
+    const escolhas = escolhasCanonicas(r);
+    if (r.alvoId === null) return [{ motor: r.motor, escolhas }];
+    const q = indiceDoQuadro.get(r.alvoId);
+    if (q !== void 0) return [{ motor: r.motor, quadro: q, escolhas }];
+    const l = levelIndex.get(r.alvoId);
+    if (l !== void 0) return [{ motor: r.motor, level: l, escolhas }];
+    return [];
+  }).sort((x, y) => cmpStr(x.motor, y.motor) || ordemDoAlvo(x) - ordemDoAlvo(y) || cmpStr(stableStringify(x), stableStringify(y)));
   const circuitos = ordenar(
     model.circuitos ?? [],
     (c) => ({
@@ -2749,6 +2769,7 @@ function projetar(model) {
     blocos: blocos.length ? blocos.map((b) => b.geom) : void 0,
     cameras: cameras.length ? cameras.map((c) => c.geom) : void 0,
     muros: muros.length ? muros.map((m) => m.geom) : void 0,
+    registrosDeLancamento: registrosDeLancamento.length ? registrosDeLancamento : void 0,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : void 0,
     trechos: trechos.length ? trechos.map((t) => t.geom) : void 0,
     terminais: terminais.length ? terminais.map((t) => t.geom) : void 0,
@@ -3579,6 +3600,17 @@ function modelFromCanonicalPayload(payload) {
       }))
     });
   });
+  for (const r of payload.registrosDeLancamento ?? []) {
+    let alvoId = null;
+    if (typeof r.quadro === "number") {
+      if (!idsDeQuadro[r.quadro]) continue;
+      alvoId = idsDeQuadro[r.quadro];
+    } else if (typeof r.level === "number") {
+      if (!levelIds[r.level]) continue;
+      alvoId = levelIds[r.level];
+    }
+    (model.registrosDeLancamento ??= []).push({ motor: r.motor, alvoId, escolhas: { ...r.escolhas ?? {} } });
+  }
   return recomputeSpaces(model);
 }
 

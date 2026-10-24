@@ -4273,6 +4273,40 @@ export type LigacaoDoCircuito = (typeof LIGACOES_DO_CIRCUITO)[number];
 export const FASES_DO_CIRCUITO = ['R', 'S', 'T'] as const;
 export type FaseDoCircuito = (typeof FASES_DO_CIRCUITO)[number];
 
+/**
+ * Os MOTORES DE LANÇAMENTO que gravam com que escolhas lançaram (0.105.0) — ver `RegistroDeLancamento`.
+ */
+export const MOTORES_DE_LANCAMENTO = ['ELETRODUTOS', 'AGUA', 'ESGOTO', 'PLUVIAL', 'CIRCUITOS'] as const;
+export type MotorDeLancamento = (typeof MOTORES_DE_LANCAMENTO)[number];
+
+/** Um valor de escolha: o que cabe numa preferência ou hipótese (texto, número, sim/não, ou "não informado"). */
+export type ValorDeEscolha = string | number | boolean | null;
+
+/**
+ * REGISTRO DO LANÇAMENTO (0.105.0, plano `2026-10-24-relancar-quando-escolha-muda.md`, F1): COM QUE ESCOLHAS um
+ * motor de lançamento (eletrodutos, água, esgoto, pluvial, circuitos automáticos) lançou a rede de um alvo.
+ *
+ * Pedido (24/10/2026): *"quando o usuário faz uma allteracao em preferencias, porem exemplo alterar o tipo de
+ * lançamento de eletroduto para Sem caixas de passagem, o motor de lançar Eletrodutos por circuito deve ficar
+ * disponivel para relançar e incluir essa nova preferencia. Isto deve valer para qualquer alteracao de preferencia"*.
+ *
+ * Os motores só olhavam a GEOMETRIA ("falta ligar algum ponto?") — nada gravava com que escolhas a rede foi lançada,
+ * então trocar a preferência não acendia nada. O registro mora no MODELO (e não no navegador) porque entra no MESMO
+ * LOTE do lançamento: o Ctrl+Z volta a rede e o registro juntos, e a planta aberta em outra máquina sabe o mesmo.
+ *
+ * Não é peça: não tem id, não tem pavimento próprio, não aparece em diff. Um por (motor, alvo) — `RegistrarLancamento`
+ * faz upsert e SUBSTITUI as escolhas inteiras (o lançamento novo é a verdade inteira, não um remendo do anterior).
+ *
+ * `alvoId`: `null` = o motor lança a planta inteira; senão o id de um QUADRO (eletrodutos por quadro) ou de um
+ * PAVIMENTO (água/esgoto/pluvial por pavimento). O payload canônico grava o alvo por ÍNDICE, como toda referência;
+ * registro cujo alvo sumiu (quadro apagado) não vai para o payload — não há mais rede dele a relançar.
+ */
+export interface RegistroDeLancamento {
+  motor: MotorDeLancamento;
+  alvoId: ObjectId | null;
+  escolhas: Record<string, ValorDeEscolha>;
+}
+
 export interface BlueprintModel {
   levels: Level[];
   walls: Wall[];
@@ -4342,6 +4376,8 @@ export interface BlueprintModel {
   cameras?: Camera[];
   /** MUROS (0.104.0) — muro de divisa, grade, mureta com grade e os portões. Ver `Muro`. */
   muros?: Muro[];
+  /** REGISTROS DO LANÇAMENTO (0.105.0) — com que escolhas cada motor lançou. Ver `RegistroDeLancamento`. */
+  registrosDeLancamento?: RegistroDeLancamento[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -4473,6 +4509,7 @@ export function emptyModel(): BlueprintModel {
     blocos: [],
     cameras: [],
     muros: [],
+    registrosDeLancamento: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -4559,6 +4596,9 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     blocos: (model.blocos ?? []).map((b) => ({ ...b, pontos: b.pontos.map((p) => ({ ...p })), ...(b.parametros ? { parametros: { ...b.parametros } } : {}) })),
     cameras: (model.cameras ?? []).map((c) => ({ ...c, posicao: { ...c.posicao }, alvo: { ...c.alvo } })),
     muros: (model.muros ?? []).map((m) => ({ ...m, pontos: m.pontos.map((p) => ({ ...p })), portoes: m.portoes.map((g) => ({ ...g })), ...(m.cotasDaBaseMm ? { cotasDaBaseMm: [...m.cotasDaBaseMm] } : {}), ...(m.parametros ? { parametros: { ...m.parametros } } : {}) })),
+    // As escolhas copiadas a fundo pela razão de `structures.pontos`: compartilhadas, o upsert do lançamento seguinte
+    // reescreveria o registro que o desfazer guardou.
+    registrosDeLancamento: (model.registrosDeLancamento ?? []).map((r) => ({ ...r, escolhas: { ...r.escolhas } })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },

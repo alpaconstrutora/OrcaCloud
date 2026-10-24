@@ -71,6 +71,30 @@ Decisões do usuário (mesma sessão):
 - tsc, suíte inteira com a conta fechando; `blueprintCasaAutomatica` na CI.
 - **Prova no harness local** (planta Garden): lançar com caixas → aceitar → trocar a preferência para "sem caixas" → aparece "Lançado com: com caixas · agora: sem caixas" e o botão → confirmar → as CP somem e o aviso some. Prints antes/depois.
 
+## Divisão em dois PRs (24/10/2026, ~18h30)
+
+Pergunta minha: *"posso publicar as etapas 1 e 2 assim que a correção passar na revisão, e deixar água, esgoto e
+circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks 1 + 2** (núcleo + eletrodutos);
+**PR 2 = Tasks 3–5** (água/pluvial, esgoto, circuitos), a partir do `main` com o PR 1.
+
+## Decisões tomadas nas correções (Tasks 1 e 2)
+- O registro guarda as escolhas do eletroduto por quadro; com FORRO (Casa Automática), também a faixa do forro
+  (chaves sem rótulo, fora do aviso) e sem a rota máxima (que o forro ignora). `hipotesesDoQuadro` reconstrói o forro
+  do registro — relançar pelo editor mantém a rede no forro.
+- Rede antiga no forro SEM registro (pavimento com forro de verdade, trecho acima da face do forro): botões desligados
+  com o motivo "rede no forro lançada antes do registro — relançar aqui a tiraria do forro". Ponto alto com rota pela
+  parede (TUE a 2,2 m) sem forro NÃO bloqueia.
+- Lançamento parcial não regrava o registro enquanto sobrar rede lançada com a escolha antiga (o aviso continua certo).
+- `refazerEletrodutos` apaga as caixas de passagem que estão nos nós da rede, inclusive aceitas; caixa solta fica.
+- A Casa Automática usa a preferência de caixas do usuário; o resto do painel (bitola, rota…) segue o padrão — com o
+  painel fora do padrão, o aviso acende logo após gerar (diferença real).
+- `registrosDeLancamento` é REFERÊNCIA no portão das camadas (metadado, sem geometria).
+
+**Limitações conhecidas:** mover a climatização relança fora do forro quando a rede antiga do forro não tem registro
+(como antes); eletroduto desenhado à mão acima da face de um forro real, sem registro, também bloqueia (motivo à
+vista). Prova no app: o cenário inteiro está coberto pelo teste do editor (aviso → confirmação → CP saem → aviso some →
+Desfazer volta); prova por imagem no navegador NÃO feita.
+
 ## Estado
 - [x] desenho aprovado (24/10/2026)
 - [x] Task 1 — F1 núcleo (registro no modelo) — kernel 0.105.0 (`registrosDeLancamento`, `RegistrarLancamento`/`ApagarRegistroDeLancamento`), `utils/blueprintRegistroDeLancamento.ts`, `AvisoDeEscolhasMudaram.tsx`; bundle da planta-api regerado (a function ainda precisa de deploy)
@@ -78,5 +102,7 @@ Decisões do usuário (mesma sessão):
 - [ ] Task 3 — F3 água e pluvial
 - [ ] Task 4 — F4 esgoto
 - [ ] Task 5 — F5 circuitos automáticos
-- [ ] PR + CI
-- [ ] publicação
+- [x] revisão final do ramo (Tasks 1+2) — "Sim, com correções"; correção 2 `65779b7e` (falso forro, portão de camadas, menores)
+- [ ] PR 1 (Tasks 1+2) + CI
+- [ ] publicação do PR 1 (merge + deploy da function `planta-api`)
+- [ ] PR 2 (Tasks 3–5)

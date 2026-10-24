@@ -244,7 +244,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     const totalUnits = instances.length;
     const soldUnits = instances.filter(i => i.status === 'VENDIDO').length;
     // VGV do motor — o mesmo do Resumo, da Estática e da listagem (unidade sem
-    // preço vale área × preço/m² do bloco; permutada fica fora; com prêmio ESG).
+    // preço vale área × preço/m² do bloco; permutada fica fora).
     const vgvTotal = math.vgvTotal;
 
     if (loading) {

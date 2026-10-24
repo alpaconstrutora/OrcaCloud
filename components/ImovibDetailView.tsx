@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Award, Pencil, FileBarChart } from 'lucide-react';
+import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart } from 'lucide-react';
 import ImovibPremisesForm from './ImovibPremisesForm';
 import ImovibStaticViability from './ImovibStaticViability';
 import ImovibDynamicForm from './ImovibDynamicForm';
@@ -10,7 +10,6 @@ import ImovibExecutiveSummary from './ImovibExecutiveSummary';
 import ImovibCapexForm from './ImovibCapexForm';
 import ImovibFundingForm from './ImovibFundingForm';
 import ImovibSensitivityForm from './ImovibSensitivityForm';
-import ImovibEsgReportForm from './ImovibEsgReportForm';
 import ImovibForm from './ImovibForm';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useToast } from '../hooks/useToast';
@@ -23,7 +22,7 @@ interface ImovibDetailViewProps {
     onBack: () => void;
 }
 
-type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'funding' | 'risk_scenarios' | 'esg_report' | 'viability_static' | 'viability_dynamic';
+type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'funding' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic';
 
 const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'executive_summary', label: 'Resumo Executivo', icon: <FileBarChart className="w-4 h-4" /> },
@@ -31,7 +30,6 @@ const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'capex', label: 'Orçamento (CAPEX)', icon: <Calculator className="w-4 h-4" /> },
     { id: 'funding', label: 'Receitas e Capital', icon: <Landmark className="w-4 h-4" /> },
     { id: 'risk_scenarios', label: 'Sensibilidade e Risco', icon: <AlertCircle className="w-4 h-4" /> },
-    { id: 'esg_report', label: 'ESG e Parecer', icon: <Award className="w-4 h-4" /> },
     { id: 'viability_static', label: 'Estática', icon: <Calculator className="w-4 h-4" /> },
     { id: 'viability_dynamic', label: 'Dinâmica', icon: <LineChart className="w-4 h-4" /> },
 ];
@@ -192,11 +190,6 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     {activeTab === 'risk_scenarios' && (
                         <ErrorBoundary>
                             <ImovibSensitivityForm study={study} onDataChanged={loadStudyDetails} onIrPara={irPara} />
-                        </ErrorBoundary>
-                    )}
-                    {activeTab === 'esg_report' && (
-                        <ErrorBoundary>
-                            <ImovibEsgReportForm study={study} onDataChanged={loadStudyDetails} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'viability_static' && (

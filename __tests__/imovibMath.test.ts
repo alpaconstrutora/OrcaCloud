@@ -329,17 +329,7 @@ describe('5.2 — financiamento: um campo só', () => {
     });
 });
 
-describe('1.6 — ESG no modo simplificado e avisos de premissa', () => {
-    const esg = { esg_initiatives: [{ id: 'e1', name: 'Solar', category: 'E', cost: 1_000_000, vgv_premium: 0, funding_discount: 0, active: true }] };
-
-    it('custo ESG entra também no CAPEX simplificado', () => {
-        const simples = { capex_mode: 'simplified', capex_simplified_cost_sqm: 4_500 };
-        const sem = computeImovibMath(baseStudy(simples));
-        const com = computeImovibMath(baseStudy({ ...simples, ...esg }));
-        expect(com.constCostTotal).toBeCloseTo(sem.constCostTotal + 1_000_000);
-        expect(com.vpl).toBeLessThan(sem.vpl);
-    });
-
+describe('1.6 — avisos de premissa', () => {
     it('recebimento que não soma 100% gera aviso', () => {
         const r = computeImovibMath(baseStudy({ revenue_handover_percent: 20 }));
         const aviso = r.avisos.find(a => a.codigo === 'recebimento_nao_soma_100');

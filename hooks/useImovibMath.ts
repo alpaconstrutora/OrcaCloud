@@ -52,16 +52,13 @@ export interface ImovibMathResult {
     constCostTotal: number;
     duration: number;
     landCost: number;
-    esgCostTotal: number;
-    esgVgvPremiumValue: number;
-    esgFundingDiscount: number;
     /** Área construída (privativa + comum) × quantidade × pavimentos — a MESMA que a aba CAPEX exibe. */
     totalBlockArea: number;
     /** Parcelas de totalBlockArea (todas as tipologias, vendáveis ou não). */
     totalPrivateArea: number;
     totalCommonArea: number;
     /**
-     * VGV bruto dos blocos, antes de sensibilidade, prêmio ESG, permuta e
+     * VGV bruto dos blocos, antes de sensibilidade, permuta e
      * contingências — o número que Estática, Espelho e listagem exibem como "VGV".
      */
     vgvBase: number;
@@ -180,9 +177,6 @@ const EMPTY_RESULT: ImovibMathResult = {
     constCostTotal: 0,
     duration: 0,
     landCost: 0,
-    esgCostTotal: 0,
-    esgVgvPremiumValue: 0,
-    esgFundingDiscount: 0,
     totalBlockArea: 0,
     totalPrivateArea: 0,
     totalCommonArea: 0,
@@ -239,27 +233,11 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         const discount = val(study.discount_rate, D.discount_rate) / 100; // Expected Annual
         const monthlyDiscount = Math.pow(1 + discount, 1 / 12) - 1; // Convert annual to monthly
 
-        // Calculate ESG Impacts
-        let esgCostTotal = 0;
-        let esgVgvPremium = 0;
-        let esgFundingDiscount = 0;
-
-        study.esg_initiatives?.forEach(ini => {
-            if (ini.active) {
-                esgCostTotal += ini.cost || 0;
-                esgVgvPremium += (ini.vgv_premium || 0) / 100;
-                esgFundingDiscount += (ini.funding_discount || 0) / 100;
-            }
-        });
-
         // Advanced Finance
         const taxRate = val(study.tax_rate, D.tax_rate) / 100;
         const brokerageFee = val(study.brokerage_fee, D.brokerage_fee) / 100;
         const financingPercent = val(study.financing_percent, D.financing_percent) / 100;
-        let financingRateAnnual = val(study.financing_rate_annual, D.financing_rate_annual) / 100;
-
-        // Apply ESG Funding Discount
-        financingRateAnnual = Math.max(0, financingRateAnnual - esgFundingDiscount);
+        const financingRateAnnual = val(study.financing_rate_annual, D.financing_rate_annual) / 100;
 
         const monthlyFinancingRate = Math.pow(1 + financingRateAnnual, 1 / 12) - 1;
 
@@ -353,23 +331,21 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
             });
         }
 
-        // Apply Sensitivity Deltas & ESG Premiums
+        // Apply Sensitivity Deltas
         const vgvDeltaMultiplier = 1 + (options?.vgvDelta || 0) / 100;
         const costDeltaMultiplier = 1 + (options?.costDelta || 0) / 100;
 
-        const vgvTotal = baseVgvTotal * (vgvDeltaMultiplier + esgVgvPremium);
-        const esgVgvPremiumValue = baseVgvTotal * esgVgvPremium;
+        const vgvTotal = baseVgvTotal * vgvDeltaMultiplier;
 
         // CAPEX simplificado: área única × custo/m² substitui o custo dos blocos
         // E as rubricas do detalhado.
-        // O custo ESG soma nos DOIS modos (antes sumia no simplificado).
         const simplificadoAtivo = study.capex_mode === 'simplified' && !!study.capex_simplified_cost_sqm;
         let constCostTotal: number;
         if (simplificadoAtivo) {
             const effectiveArea = study.capex_simplified_area_sqm || totalBlockArea;
-            constCostTotal = (effectiveArea * (study.capex_simplified_cost_sqm || 0) + esgCostTotal) * costDeltaMultiplier;
+            constCostTotal = effectiveArea * (study.capex_simplified_cost_sqm || 0) * costDeltaMultiplier;
         } else {
-            constCostTotal = (baseConstCostTotal + esgCostTotal) * costDeltaMultiplier;
+            constCostTotal = baseConstCostTotal * costDeltaMultiplier;
         }
 
         // CAPEX detalhado (decisão de 2026-10-12: entra no cálculo). Cada rubrica
@@ -621,9 +597,6 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
             constCostTotal,
             duration,
             landCost,
-            esgCostTotal,
-            esgVgvPremiumValue,
-            esgFundingDiscount,
             totalBlockArea,
             totalPrivateArea,
             totalCommonArea,

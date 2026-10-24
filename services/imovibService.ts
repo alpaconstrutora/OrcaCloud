@@ -153,7 +153,7 @@ export const imovibService = {
         let query = supabase
             .from('imovib_studies')
             // metadados da listagem + todos os escalares lidos por computeImovibMath
-            .select('id, organization_id, name, cnpj, developer, developer_name, manager, version, segment, sub_classification, phase, development_modality, zoning, created_at, updated_at, land_cost, capex_mode, capex_simplified_cost_sqm, capex_simplified_area_sqm, construction_duration_months, sales_duration_months, construction_start_month, sales_start_month, inflation_rate, discount_rate, tax_rate, brokerage_fee, financing_percent, financing_rate_annual, funding_debt_percent, swap_physical_percent, swap_financial_percent, default_rate_percent, cancellation_rate_percent, revenue_downpayment_percent, revenue_construction_percent, revenue_handover_percent, esg_initiatives')
+            .select('id, organization_id, name, cnpj, developer, developer_name, manager, version, segment, sub_classification, phase, development_modality, zoning, created_at, updated_at, land_cost, capex_mode, capex_simplified_cost_sqm, capex_simplified_area_sqm, construction_duration_months, sales_duration_months, construction_start_month, sales_start_month, inflation_rate, discount_rate, tax_rate, brokerage_fee, financing_percent, financing_rate_annual, funding_debt_percent, swap_physical_percent, swap_financial_percent, default_rate_percent, cancellation_rate_percent, revenue_downpayment_percent, revenue_construction_percent, revenue_handover_percent')
             .order('created_at', { ascending: false });
 
         if (organizationId) {

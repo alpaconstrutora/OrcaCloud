@@ -9,7 +9,9 @@
  *   - `VIZINHA`  na tomada vizinha da mesma parede, por dentro dela — a cadeia
  *                de tomadas que na obra é uma só descida;
  *   - `REDE`     como hoje: o ponto liga na rede do quadro (ambiente sem luz,
- *                ou ponto que não se acha em ambiente nenhum).
+ *                ou ponto que não se acha em ambiente nenhum — inclusive o que
+ *                cai dentro de um FURO do `Space`, caso raro: ali o fallback
+ *                do cômodo mais perto também não o aceita).
  *
  * Quem consome é o planejador de eletrodutos (`planejarEletrodutos`); ele
  * entrega os pontos DO MESMO QUADRO naquele pavimento — por isso as luzes
@@ -21,10 +23,17 @@
  *    na FACE da parede, fora de todo contorno de eixo, vale o cômodo mais perto
  *    até o raio de encaixe — a tomada na face de uma parede de 15 cm está a
  *    7,5 cm do eixo, fora do polígono, e nem por isso deixa de ser do cômodo.
+ *  - INFRAESTRUTURA (`TIPOS_DE_INFRAESTRUTURA_ELETRICA`: caixa de passagem,
+ *    aterramento, entrada de serviço, medidor) não é ponto de carga: fica FORA
+ *    do mapa e não serve de vizinha, como a luz.
  *  - INTERRUPTOR: desce da luz que ele COMANDA (a relação derivada das letras,
  *    `comandosDoModelo`), se ela estiver no ambiente; senão, da luz mais perto
  *    do ambiente. É a convenção do retorno: a fiação já deriva o retorno pelo
  *    caminho interruptor → luz. Interruptor nunca encadeia em vizinha.
+ *    Exceção do HALL → SALA: se o ambiente do interruptor NÃO tem luz de teto
+ *    mas ele comanda uma luz da lista (de outro ambiente), desce dessa — o
+ *    retorno atravessa a parede. Sem comando, REDE. Se o ambiente TEM luz e a
+ *    comandada é de outro, vale a luz mais perto do próprio ambiente.
  *  - TOMADA × VIZINHA: vizinha = ponto da MESMA parede (o encaixe), da mesma
  *    FACE (mesmo lado do eixo), do mesmo ambiente e da MESMA COTA (±50 mm — a
  *    tomada baixa não se pendura na média). A tomada liga na vizinha quando a
@@ -36,7 +45,7 @@
  *
  * Puro: não grava, não lê nada além do modelo.
  */
-import { comandosDoModelo, type BlueprintModel, type ObjectId, type Point, type Terminal, type Wall } from './blueprintKernel';
+import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, comandosDoModelo, pointInPolygon, type BlueprintModel, type ObjectId, type Point, type Terminal, type Wall } from './blueprintKernel';
 import { ambienteDoPonto } from './blueprintAgrupamentoDePontos';
 import { encaixarNaParede } from './blueprintRotaPelasParedes';
 
@@ -90,7 +99,7 @@ export function encaminhamentoPorAmbiente(
   const saida = new Map<ObjectId, Pendura>();
   const doNivel = pontos.filter((t) => t.levelId === levelId).sort(porId);
   const luzes = doNivel.filter(ehLuzDeTeto);
-  const deParede = doNivel.filter((t) => !ehLuzDeTeto(t));
+  const deParede = doNivel.filter((t) => !ehLuzDeTeto(t) && !(t.tipoEletrico && TIPOS_DE_INFRAESTRUTURA_ELETRICA.has(t.tipoEletrico)));
   if (deParede.length === 0) return saida;
 
   const espacos = model.spaces.filter((s) => s.levelId === levelId);
@@ -102,6 +111,7 @@ export function encaminhamentoPorAmbiente(
     if (dentro) return dentro.space.id;
     let melhor: { id: string; d: number } | null = null;
     for (const s of espacos) {
+      if (s.holes.some((h) => pointInPolygon(h, t.at))) continue; // dentro de um furo: não é deste cômodo
       const d = distanciaAoAnel(t.at, s.ring);
       if (d <= RAIO_DO_ENCAMINHAMENTO_MM && (!melhor || d < melhor.d || (d === melhor.d && s.id < melhor.id))) melhor = { id: s.id, d };
     }
@@ -135,11 +145,15 @@ export function encaminhamentoPorAmbiente(
   const luzDoPonto = new Map<ObjectId, Terminal>();
   for (const t of deParede) {
     const amb = ambienteDoId.get(t.id);
-    const doAmbiente = amb ? luzes.filter((l) => ambienteDoId.get(l.id) === amb) : [];
-    if (doAmbiente.length === 0) { saida.set(t.id, { tipo: 'REDE' }); continue; }
+    if (!amb) { saida.set(t.id, { tipo: 'REDE' }); continue; }
+    const doAmbiente = luzes.filter((l) => ambienteDoId.get(l.id) === amb);
     const que = t.tipoEletrico === 'INTERRUPTOR' ? comandadas.get(t.id) : undefined;
     const comandando = que ? doAmbiente.filter((l) => que.has(l.id)) : [];
-    const luz = maisPerto(t, comandando.length > 0 ? comandando : doAmbiente);
+    // Hall → sala: sem luz no próprio ambiente, o interruptor desce da luz (da lista) que ele comanda.
+    const deFora = doAmbiente.length === 0 && que ? luzes.filter((l) => que.has(l.id)) : [];
+    const candidatas = comandando.length > 0 ? comandando : doAmbiente.length > 0 ? doAmbiente : deFora;
+    if (candidatas.length === 0) { saida.set(t.id, { tipo: 'REDE' }); continue; }
+    const luz = maisPerto(t, candidatas);
     if (luz) luzDoPonto.set(t.id, luz);
   }
 

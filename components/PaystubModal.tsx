@@ -7,6 +7,7 @@ import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
 import { salarioBaseDoResultado } from '../lib/payrollSalarioCompetencia';
 import { jsPDF } from 'jspdf';
 import { payrollService, PayrollItem, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
+import { empregadorDoHolerite, type EmpregadorDoHolerite } from '../utils/empregadorDoHolerite';
 
 interface PaystubModalProps {
     orgId: string | null;
@@ -45,6 +46,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [run, setRun] = useState<PayrollRun | null>(null);
+    const [empregador, setEmpregador] = useState<EmpregadorDoHolerite | null>(null);
     const [exporting, setExporting] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
@@ -67,6 +69,9 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                 .catch(e => { throw Object.assign(new Error(`listRubrics: ${e?.message ?? e}`), { cause: e }); });
             const eventsData = await payrollService.listEvents('all', runId)
                 .catch(e => { throw Object.assign(new Error(`listEvents: ${e?.message ?? e}`), { cause: e }); });
+            // Empregador = organização DA FOLHA (não a do topo, que pode ser "Todas").
+            const orgData = await payrollService.getOrganizacaoDoHolerite(runData.org_id)
+                .catch(e => { throw Object.assign(new Error(`getOrganizacaoDoHolerite: ${e?.message ?? e}`), { cause: e }); });
 
             if (!resData) {
                 setError('Nenhum dado financeiro encontrado para este colaborador.');
@@ -74,6 +79,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
             }
 
             setRun(runData);
+            setEmpregador(empregadorDoHolerite(orgData));
             setResult(resData);
             setRubrics(rubricsData);
             setEvents(eventsData.filter((e) => e.employee_id === employeeId));
@@ -201,9 +207,11 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         {/* Company Header */}
                         <div className="p-6 border-b border-slate-200 flex justify-between items-start bg-slate-50/50">
                             <div className="space-y-1">
-                                <h4 className="text-sm font-black text-slate-900 uppercase">Opura Pro</h4>
-                                <p className="text-xs font-bold text-slate-400 uppercase">CNPJ: 00.000.000/0001-00</p>
-                                <p className="text-xs font-bold text-slate-400 uppercase">Endereço: Unidade Operacional - Obra Garden</p>
+                                <h4 className="text-sm font-black text-slate-900 uppercase">{empregador?.nome}</h4>
+                                <p className="text-xs font-bold text-slate-400 uppercase">{empregador?.documentoRotulo ?? 'CNPJ'}: {empregador?.documento || '—'}</p>
+                                {empregador?.endereco && (
+                                    <p className="text-xs font-bold text-slate-400 uppercase">Endereço: {empregador.endereco}</p>
+                                )}
                             </div>
                             <div className="text-right">
                                 <span className="px-3 py-1 bg-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest">

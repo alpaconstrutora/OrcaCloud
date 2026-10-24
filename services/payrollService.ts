@@ -11,6 +11,7 @@ import {
 } from '../utils/folhaFinanceiro';
 import type { DadosDaFolhaDoMes } from '../utils/relacoesDaFolha';
 import type { ValorRecorrente } from '../lib/payrollRubricaRecorrente';
+import type { OrganizacaoParaHolerite } from '../utils/empregadorDoHolerite';
 
 /** Vínculo colaborador↔rubrica recorrente (`employee_automatic_rubrics`), com o valor dele. */
 export interface EmployeeRecurringRubric extends ValorRecorrente {
@@ -818,6 +819,21 @@ export const payrollService = {
     },
 
     // --- Resultados e Itens ---
+    /**
+     * Empregador do recibo de pagamento: a organização DA FOLHA (`run.org_id`).
+     * Quem vê a folha é membro dessa org (`payroll_runs_v2_access`), e é a mesma
+     * regra de leitura de `organizations` — inclusive no Portal do Colaborador.
+     */
+    async getOrganizacaoDoHolerite(orgId: string): Promise<OrganizacaoParaHolerite> {
+        const { data, error } = await supabase
+            .from('organizations')
+            .select('name, cnpj, address, settings')
+            .eq('id', orgId)
+            .single();
+        if (error) throw error;
+        return data as OrganizacaoParaHolerite;
+    },
+
     async listResultsByRun(runId: string) {
         const { data, error } = await supabase
             .from('payroll_results')

@@ -2,7 +2,7 @@
  * Valores padrão das premissas dos Estudos de Viabilidade (Imovib).
  *
  * Fonte ÚNICA: o motor (`hooks/useImovibMath.ts`) e as telas que EXIBEM o
- * padrão (Dinâmica, Receitas & Capital) leem daqui. Antes cada um tinha o seu:
+ * padrão (Dinâmica, Receitas e Capital) leem daqui. Antes cada um tinha o seu:
  * a Dinâmica mostrava inflação 0,4% e TMA 12% e Receitas mostrava inadimplência
  * 3% e distrato 5%, enquanto o motor calculava com 0 — o número exibido não era
  * o número calculado até o usuário sair de algum campo (o que gravava).

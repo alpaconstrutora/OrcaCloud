@@ -37,14 +37,14 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
     const [taxRate, setTaxRate] = useState(initial(study.tax_rate, D.tax_rate));
     const [brokerageFee, setBrokerageFee] = useState(initial(study.brokerage_fee, D.brokerage_fee));
     // "% Financiado" saiu daqui (item 5.2): duplicava "Financ. à Produção" de
-    // Receitas & Capital. Mesma regra do motor (useImovibMath, `actualFinPct`):
+    // Receitas e Capital. Mesma regra do motor (useImovibMath, `actualFinPct`):
     // funding_debt_percent preenchido (inclusive 0) vale; vazio → financing_percent
     // legado. A tela mostra esse mesmo valor efetivo, só leitura.
     const usaLegado = study.funding_debt_percent == null;
     const financiadoEfetivo = usaLegado ? (study.financing_percent ?? D.financing_percent) : study.funding_debt_percent!;
     const financiadoOrigem = usaLegado && (study.financing_percent ?? 0) > 0
-        ? 'valor legado deste estudo — passe a defini-lo em Receitas & Capital'
-        : 'definido em Receitas & Capital';
+        ? 'valor legado deste estudo — passe a defini-lo em Receitas e Capital'
+        : 'definido em Receitas e Capital';
     const [financingRateAnnual, setFinancingRateAnnual] = useState(initial(study.financing_rate_annual, D.financing_rate_annual));
 
     const handleSave = async () => {

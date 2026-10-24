@@ -96,7 +96,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
     };
 
     return (
-        <div className="space-y-6 pb-10 max-w-7xl mx-auto">
+        <div className="space-y-6">
             <ImovibAvisosBanner avisos={baseMath.avisos} onIrPara={onIrPara} />
 
             <div className="flex items-center justify-between gap-6">

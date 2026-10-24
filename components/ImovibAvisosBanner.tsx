@@ -13,7 +13,7 @@ import type { ImovibAba, ImovibAviso } from '../hooks/useImovibMath';
 const ROTULO_ABA: Record<ImovibAba, string> = {
     premises: 'Premissas',
     capex: 'Orçamento (CAPEX)',
-    funding: 'Receitas & Capital',
+    funding: 'Receitas e Capital',
     viability_dynamic: 'Dinâmica',
 };
 

@@ -54,6 +54,23 @@ export interface ItemDeExibicao {
   padrao: ValorDeExibicao;
 }
 
+/**
+ * O que o hook `usePreferenciaDaPlanta` precisa de um item, venha ele de que catálogo vier (exibir, lançamento —
+ * 24/10/2026): tudo do item de exibição menos o grupo do menu Exibir.
+ */
+export type DefinicaoDePreferencia = Omit<ItemDeExibicao, 'grupo'>;
+
+/**
+ * Um catálogo de preferências da Planta para o hook: acha a definição do item e diz a chave gravada no banco.
+ * Os catálogos são constantes de módulo (o hook os usa como dependência estável).
+ */
+export interface CatalogoDePreferenciasDaPlanta {
+  /** Para mensagens: "exibição", "lançamento". */
+  nome: string;
+  definicaoDe(item: string): DefinicaoDePreferencia | undefined;
+  chaveDe(item: string): string;
+}
+
 function bool(item: string, rotulo: string, grupo: GrupoDeExibicao, padrao: boolean): ItemDeExibicao {
   return { item, chaveAntiga: `blueprint:${item}`, rotulo, grupo, tipo: 'booleano', padrao };
 }
@@ -167,7 +184,7 @@ export function chaveDeExibicao(item: string): string {
 }
 
 /** O valor cabe no tipo (e nas opções) do item? No 'automatico' vale também o texto 'AUTOMATICO' (o do banco). */
-function valorValido(def: ItemDeExibicao, valor: unknown): valor is ValorDeExibicao {
+export function valorValido(def: DefinicaoDePreferencia, valor: unknown): valor is ValorDeExibicao {
   switch (def.tipo) {
     case 'booleano':
       return typeof valor === 'boolean';
@@ -178,16 +195,34 @@ function valorValido(def: ItemDeExibicao, valor: unknown): valor is ValorDeExibi
   }
 }
 
-/** Linha válida do USUARIO para o item; havendo repetida, vale a última. */
-function valorDoUsuario(linhas: readonly LinhaDePreferencia[], def: ItemDeExibicao): ValorDeExibicao | undefined {
+/**
+ * Linha válida do USUARIO na `chave` dada, para o item `def`; havendo repetida, vale a última. Genérica: serve a
+ * qualquer catálogo (o de lançamento passa `planta.lancamento.<item>`).
+ */
+export function valorNaChave(
+  linhas: readonly LinhaDePreferencia[],
+  def: DefinicaoDePreferencia,
+  chave: string,
+): ValorDeExibicao | undefined {
   if (!Array.isArray(linhas)) return undefined;
-  const chave = chaveDeExibicao(def.item);
   let achado: ValorDeExibicao | undefined;
   for (const l of linhas) {
     if (l && l.escopo === 'USUARIO' && l.chave === chave && valorValido(def, l.valor)) achado = l.valor;
   }
   return achado;
 }
+
+/** Linha válida do USUARIO para o item; havendo repetida, vale a última. */
+function valorDoUsuario(linhas: readonly LinhaDePreferencia[], def: ItemDeExibicao): ValorDeExibicao | undefined {
+  return valorNaChave(linhas, def, chaveDeExibicao(def.item));
+}
+
+/** O catálogo de EXIBIÇÃO para o hook (o padrão de `usePreferenciaDaPlanta`). */
+export const CATALOGO_DE_EXIBICAO: CatalogoDePreferenciasDaPlanta = {
+  nome: 'exibição',
+  definicaoDe: (item) => POR_ITEM.get(item),
+  chaveDe: chaveDeExibicao,
+};
 
 /**
  * O que o usuário escolheu para o item, COMO ESTÁ NO BANCO. `undefined` = sem escolha válida (sem linha,

@@ -14,11 +14,12 @@ import {
 } from '../lib/preferenciasCompartilhado';
 import {
   AUTOMATICO_NO_BANCO,
-  chaveDeExibicao,
-  ITENS_DE_EXIBICAO,
+  CATALOGO_DE_EXIBICAO,
   linhasParaMigrar,
-  valorDeExibicao,
-  type ItemDeExibicao,
+  valorNaChave,
+  valorValido,
+  type CatalogoDePreferenciasDaPlanta,
+  type DefinicaoDePreferencia,
   type ValorDeExibicao,
 } from '../utils/preferencias/catalogoExibir';
 import type { LinhaDePreferencia } from '../utils/preferencias/resolver';
@@ -46,6 +47,12 @@ import type { LinhaDePreferencia } from '../utils/preferencias/resolver';
  * A leitura usa a MESMA chave e o MESMO `queryFn` de `usePreferenciasEletricas` (uma leitura só, e um
  * aviso de falha só — ver `lib/preferenciasCompartilhado`). Não depende de organização (escopo
  * USUARIO) — REGRA #5.
+ *
+ * CATÁLOGO (24/10/2026, plano docs/planos/2026-10-24-preferencia-caixas-de-passagem.md): o 2º parâmetro diz de que
+ * catálogo é o item — o de exibição (`planta.exibir.<item>`, o padrão) ou o de lançamento
+ * (`CATALOGO_DE_LANCAMENTO`, `planta.lancamento.<item>`, ex.: caixas de passagem × pela luz do teto). Tudo o mais é
+ * igual: a mesma query, o mesmo contador de gravações, o mesmo aviso de leitura, otimista com releitura e, sem
+ * sessão, o navegador (`chaveAntiga` do item). A migração do navegador continua só da exibição.
  */
 
 /** Usuários cuja migração do navegador já rodou (ou está em voo) nesta carga da página. */
@@ -76,9 +83,9 @@ function mensagemDe(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-function definicaoDe(item: string): ItemDeExibicao {
-  const def = ITENS_DE_EXIBICAO.find((i) => i.item === item);
-  if (!def) throw new Error(`Item de exibição da planta desconhecido: "${item}" (não está em ITENS_DE_EXIBICAO).`);
+function definicaoDe(catalogo: CatalogoDePreferenciasDaPlanta, item: string): DefinicaoDePreferencia {
+  const def = catalogo.definicaoDe(item);
+  if (!def) throw new Error(`Item de preferência da planta desconhecido: "${item}" (não está no catálogo de ${catalogo.nome}).`);
   return def;
 }
 
@@ -93,14 +100,11 @@ function doBanco(valor: ValorDeExibicao): ValorDeExibicao {
 }
 
 /** O valor (do EDITOR) cabe no tipo/opções do item? (reusa a validação do catálogo.) */
-function ehValido(item: string, valor: unknown): valor is ValorDeExibicao {
-  const def = definicaoDe(item);
+function ehValido(def: DefinicaoDePreferencia, valor: unknown): valor is ValorDeExibicao {
   if (valor === null) return def.tipo === 'automatico';
   // O texto 'AUTOMATICO' é do banco: o editor entrega `null`.
   if (def.tipo === 'automatico' && typeof valor !== 'boolean') return false;
-  return (
-    valorDeExibicao([{ escopo: 'USUARIO', chave: chaveDeExibicao(item), valor } as LinhaDePreferencia], item) !== undefined
-  );
+  return valorValido(def, valor);
 }
 
 /** Lê e interpreta (JSON) a chave antiga do navegador; `undefined` = sem valor / ilegível. */
@@ -115,9 +119,9 @@ function lerDoNavegador(chaveAntiga: string): unknown {
 }
 
 /** Navegador (se válido) ou padrão. */
-function valorLocalDe(def: ItemDeExibicao): ValorDeExibicao {
+function valorLocalDe(def: DefinicaoDePreferencia): ValorDeExibicao {
   const doNavegador = lerDoNavegador(def.chaveAntiga);
-  return doNavegador !== undefined && ehValido(def.item, doNavegador) ? doNavegador : def.padrao;
+  return doNavegador !== undefined && ehValido(def, doNavegador) ? doNavegador : def.padrao;
 }
 
 function espelharNoNavegador(chaveAntiga: string, valor: ValorDeExibicao): void {
@@ -153,23 +157,25 @@ function useLinhasDoUsuario() {
 
 export function usePreferenciaDaPlanta<T extends boolean | string | null>(
   item: string,
+  /** De que catálogo é o item; constante de módulo (`CATALOGO_DE_EXIBICAO` por padrão, ou `CATALOGO_DE_LANCAMENTO`). */
+  catalogo: CatalogoDePreferenciasDaPlanta = CATALOGO_DE_EXIBICAO,
 ): [T, Dispatch<SetStateAction<T>>] {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { userId, chave: chaveDaQuery, consulta } = useLinhasDoUsuario();
 
   // O item é fixo por chamada do hook (como a `key` do usePersistedState).
-  const def = useMemo(() => definicaoDe(item), [item]);
-  const chave = chaveDeExibicao(item);
+  const def = useMemo(() => definicaoDe(catalogo, item), [catalogo, item]);
+  const chave = catalogo.chaveDe(item);
 
   // O que vale quando o banco não tem escolha: o navegador (ou o padrão). Espelha a última escolha local.
   const [local, setLocal] = useState<ValorDeExibicao>(() => valorLocalDe(def));
 
   const linhas = (consulta.data ?? SEM_LINHAS) as LinhaDePreferencia[];
   const noBanco = useMemo(() => {
-    const lido = valorDeExibicao(linhas, item);
+    const lido = valorNaChave(linhas, def, chave);
     return lido === undefined ? undefined : doBanco(lido);
-  }, [linhas, item]);
+  }, [linhas, def, chave]);
   const valor = (noBanco !== undefined ? noBanco : local) as T;
 
   // Valor mais recente, para o setter ler "o de agora" (função de atualização e cliques seguidos).
@@ -198,7 +204,7 @@ export function usePreferenciaDaPlanta<T extends boolean | string | null>(
     (acao) => {
       const anterior = valorRef.current as T;
       const proximo = typeof acao === 'function' ? (acao as (atual: T) => T)(anterior) : acao;
-      if (!ehValido(item, proximo)) {
+      if (!ehValido(def, proximo)) {
         console.warn(`[usePreferenciaDaPlanta] valor ignorado para "${item}":`, proximo);
         return;
       }
@@ -249,7 +255,7 @@ export function usePreferenciaDaPlanta<T extends boolean | string | null>(
         }
       })();
     },
-    [item, chave, userId, queryClient, chaveDaQuery, showToast],
+    [item, def, chave, userId, queryClient, chaveDaQuery, showToast],
   );
 
   return [valor, setValor];

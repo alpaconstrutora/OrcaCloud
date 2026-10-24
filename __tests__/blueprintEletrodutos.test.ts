@@ -33,6 +33,7 @@ import {
 import { HIPOTESES_PADRAO, agrupamentoDoCircuito, comprimentoDoCircuito } from '../utils/blueprintEletricaDimensionamento';
 import { desvioDoPilar, fracaoDentro, pegadasDePilares } from '../utils/blueprintObstaculosEstruturais';
 import { BITOLAS_DE_ELETRODUTO_MM, cotaDaRede } from '../utils/blueprintEletrodutos';
+import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
 import { POLITICA_PADRAO, computeQuantities } from '../utils/blueprintKernel';
 import { medidasDoTerminal } from '../utils/blueprintRede';
 import { itensDaLegendaEletrica } from '../utils/blueprintPranchaEletrica';
@@ -418,7 +419,10 @@ describe('E6.3 — o eletroduto desvia da estrutura', () => {
     expect([2750, 3250]).toContain(canto.x); // o canto do pilar (300 × 300 em 3000) afastado 10 cm
     expect([750, 1250]).toContain(canto.y);
     for (const c of hz) expect(c.circuitoIds).toEqual([comPilar.c1]);
-    expect(plano.avisos).toEqual([]);
+    // Nenhum aviso de PILAR. (24/10/2026: esta sala NÃO tem luz de teto, então a tomada vai pela rede: quadro sobe 1,2 m,
+    // teto 5,85 m, desce 2,5 m, com duas curvas = 15,55 m equivalentes > 15 m — a NBR pede mesmo a caixa e, sem
+    // caixas, o plano avisa. Esse aviso é outro assunto; no cômodo COM luz de teto não sai — ver "padrão pela luz".)
+    expect(plano.avisos.filter((a) => !a.includes('NBR 5410 6.2.11.1.7'))).toEqual([]);
   });
 
   it('Task 3, correção 2 — o mesmo pilar no modo PADRÃO (pela luz): contorna o pilar INFLADO (raio + 50 mm), o canto a ~16 cm da face', () => {
@@ -434,7 +438,10 @@ describe('E6.3 — o eletroduto desvia da estrutura', () => {
     expect([2688, 3312]).toContain(canto.x);
     expect([688, 1312]).toContain(canto.y);
     for (const c of hz) expect(c.circuitoIds).toEqual([comPilar.c1]);
-    expect(plano.avisos).toEqual([]);
+    // Nenhum aviso de PILAR. (24/10/2026: esta sala NÃO tem luz de teto, então a tomada vai pela rede: quadro sobe 1,2 m,
+    // teto 5,85 m, desce 2,5 m, com duas curvas = 15,55 m equivalentes > 15 m — a NBR pede mesmo a caixa e, sem
+    // caixas, o plano avisa. Esse aviso é outro assunto; no cômodo COM luz de teto não sai — ver "padrão pela luz".)
+    expect(plano.avisos.filter((a) => !a.includes('NBR 5410 6.2.11.1.7'))).toEqual([]);
   });
 
   it('⚠️ viga de teto: a rede corre 10 cm abaixo do fundo dela (e avisa); viga baixa demais → fica no teto e avisa do cruzamento', () => {
@@ -499,6 +506,70 @@ describe('E6.3 — caixas de passagem no plano', () => {
     const sem = planejarEletrodutos(m, quadroDe(m), semCaixas);
     expect(caixasDoPlano(sem.comandos)).toEqual([]);
     expect(horizontais(sem.comandos)).toHaveLength(1);
+  });
+
+  // 24/10/2026 — preferência "pela luz do teto" (plano 2026-10-24-preferencia-caixas-de-passagem.md): sem caixas,
+  // o planejador MEDE pela regra da NBR e avisa, mas não insere nada. Pedido: *"em instalacao residencial não se usa
+  // caixas de passagens como sugerido no projeto. Mas nao vamos deixar de oferecer como solucao ao usuário."*
+  it('⚠️ sem caixas, rede reta de 20 m (sala SEM luz de teto): nenhuma CAIXA_PASSAGEM, o trecho inteiro e UM aviso que diz ONDE', () => {
+    const base = sala(20000, [{ x: 19925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    const m = applyCommand(base.m, { type: 'NameSpace', spaceId: base.m.spaces[0].id, name: 'Garagem' }).model;
+    const plano = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    expect(caixasDoPlano(plano.comandos)).toEqual([]);
+    expect(plano.comandos.some((c) => c.type === 'AddTerminal')).toBe(false);
+    expect(plano.caixas).toBe(0);
+    expect(horizontais(plano.comandos)).toHaveLength(1); // nada partido
+    const aviso =
+      'Sem caixas de passagem, 1 lugar(es) passam do limite da NBR 5410 6.2.11.1.7 (15 m, −3 m por curva, até 270°): Garagem — ligue "Caixas de passagem" (aqui ou em Preferências › Lançamento) ou confira.';
+    expect(plano.avisos.filter((a) => a.includes('NBR 5410 6.2.11.1.7'))).toEqual([aviso]);
+  });
+
+  it('com a regra, a mesma rede de 20 m: as caixas como hoje (uma, a 10,8 m do teto) e sem o aviso de "sem caixa"', () => {
+    const { m } = sala(20000, [{ x: 19925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    const plano = planejarEletrodutos(m, quadroDe(m), { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: REGRA_DE_CAIXAS_PADRAO });
+    expect(caixasDoPlano(plano.comandos).map((c) => [c.at.x, c.at.y, c.cotaMm])).toEqual([[10875, 1000, 2800]]);
+    expect(plano.caixas).toBe(1);
+    expect(horizontais(plano.comandos).map((c) => [c.a.x, c.b.x])).toEqual([[75, 10875], [10875, 19925]]);
+    expect(plano.avisos.some((a) => a.includes('NBR 5410 6.2.11.1.7'))).toBe(false);
+  });
+
+  it('sem caixas e rede curta (sala de 4 m SEM luz de teto: 1,2 + 3,85 + 2,5 m e duas curvas = 13,55 m equivalentes): nada a avisar', () => {
+    const { m } = sala(4000, [{ x: 3925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    expect(planejarEletrodutos(m, quadroDe(m), semCaixas).avisos).toEqual([]);
+  });
+
+  it('⚠️ padrão pela luz: cômodo 6×6 com luz no centro e 4 tomadas → nenhum aviso NBR e nenhuma CP (com a regra ligada também nenhuma CP)', () => {
+    // O cenário do pedido (obra residencial): quadro no cômodo → luz do teto → tomadas. Luz→tomada ≈ 8,4 m e
+    // quadro→luz ≈ 7,7 m equivalentes: a caixa da luz, a das tomadas e o quadro bastam.
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = base.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    let m = applyBatch(base, [w(0, 0, 6000, 0), w(6000, 0, 6000, 6000), w(6000, 6000, 0, 6000), w(0, 6000, 0, 0)]).model;
+    m = applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: point(75, 1000), cotaMm: 1600 }).model;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', ligacao: 'FN' }).model;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C2', ligacao: 'FN' }).model;
+    const [c1, c2] = m.circuitos.map((c) => c.id);
+    const pontos: { x: number; y: number; cota: number; tipo: 'TUG' | 'ILUMINACAO_TETO' }[] = [
+      { x: 3000, y: 3000, cota: 2800, tipo: 'ILUMINACAO_TETO' },
+      { x: 3000, y: 75, cota: 300, tipo: 'TUG' },
+      { x: 5925, y: 3000, cota: 300, tipo: 'TUG' },
+      { x: 3000, y: 5925, cota: 300, tipo: 'TUG' },
+      { x: 75, y: 4500, cota: 300, tipo: 'TUG' },
+    ];
+    for (const q of pontos) {
+      m = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: q.tipo, at: point(q.x, q.y), cotaMm: q.cota, tipoEletrico: q.tipo }).model;
+      m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: q.tipo === 'TUG' ? c2 : c1 }).model;
+    }
+    expect(HIPOTESES_ELETRODUTO_PADRAO.encaminhamento).toBe('PELA_LUZ_DO_AMBIENTE');
+
+    const sem = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    expect(adds(sem.comandos).length).toBeGreaterThan(0); // lançou de fato
+    expect(caixasDoPlano(sem.comandos)).toEqual([]);
+    expect(sem.avisos.filter((a) => a.includes('NBR 5410 6.2.11.1.7'))).toEqual([]);
+
+    const com = planejarEletrodutos(m, quadroDe(m), { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: REGRA_DE_CAIXAS_PADRAO });
+    expect(caixasDoPlano(com.comandos)).toEqual([]);
+    expect(com.caixas).toBe(0);
   });
 
   it('a caixa não é "ponto sem circuito" (é infraestrutura)', () => {

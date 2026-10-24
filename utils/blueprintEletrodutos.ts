@@ -181,7 +181,11 @@ export interface HipotesesDeEletroduto {
   rotaMaximaVezes: number | null;
   /** E6.3: os pontos de PAREDE ligam-se pelo eixo das paredes (a luz de teto segue reta, na laje). */
   rotaPelaParede: boolean;
-  /** E6.3: caixas de passagem automáticas pela regra (NBR 5410 6.2.11.1.7); `null` = não lança. */
+  /**
+   * E6.3: caixas de passagem automáticas pela regra (NBR 5410 6.2.11.1.7); `null` = não lança — mede pela regra
+   * padrão e AVISA quantos pontos pediriam caixa (24/10/2026, preferência "pela luz do teto", a do editor vem de
+   * `planta.lancamento.caixasDePassagem`).
+   */
   caixas: RegraDeCaixas | null;
   /**
    * F14b da casa automática (16/10/2026, "forro com faixas" + "manter 2,80 m, furar vigas"): a rede NO FORRO — na cota
@@ -900,8 +904,15 @@ export function planejarEletrodutos(
   // ── E6.3: CAIXAS DE PASSAGEM, por pavimento, nos trechos novos ───────────
   const caixasCmds: Command[] = [];
   const partes = new Map<number, { x: number; y: number }[]>(); // índice do novo → pontos de corte
-  if (hip.caixas) {
-    const regra = hip.caixas;
+  // 24/10/2026 (preferência "pela luz do teto", plano 2026-10-24-preferencia-caixas-de-passagem.md): sem a hipótese
+  // (`caixas == null`) o plano MEDE a rede pela regra padrão da NBR, mas não insere nada — só conta os pontos onde a
+  // regra pediria caixa (comprimento ou curvas; a derivação não é "15 m ou 270°") e avisa UMA vez. Nada é escondido.
+  const inserirCaixas = hip.caixas != null;
+  let semCaixaPelaRegra = 0;
+  const ambientesSemCaixa: string[] = []; // onde a regra pediria caixa, sem repetir, na ordem em que aparecem
+  // Bloco só de escopo: sempre mede; insere caixas só com a regra (`hip.caixas`).
+  {
+    const regra = hip.caixas ?? REGRA_DE_CAIXAS_PADRAO;
     const distDoQuadro = distanciasDesde(noDoQuadro, arestas);
     const niveisDosNovos = [...new Set(novos.map((n) => n.levelId))];
     for (const levelId of niveisDosNovos) {
@@ -931,6 +942,17 @@ export function planejarEletrodutos(
       };
       // Mede do quadro para as pontas: a distância pela rede até ele ordena as fronteiras.
       const r = caixasDaRede(segs, caixaEm, regra, (p) => distDoQuadro.get(chave(levelId, p.x, p.y, p.z)) ?? Infinity);
+      if (!inserirCaixas) {
+        // Só medir: a contagem e o ambiente de cada posição ficam; os comandos (e os avisos de "sem lugar para a
+        // caixa") não. Posição fora de qualquer ambiente conta no total, sem nome.
+        for (const c of r.caixas) {
+          if (c.motivo === 'DERIVACAO') continue;
+          semCaixaPelaRegra++;
+          const nome = ambienteDoPonto(model, { levelId, at: { x: c.at.x, y: c.at.y } as Point })?.nome;
+          if (nome && !ambientesSemCaixa.includes(nome)) ambientesSemCaixa.push(nome);
+        }
+        continue;
+      }
       const nomeDoNivel = model.levels.find((l) => l.id === levelId)?.name ?? '';
       for (const a of r.avisos) avisos.push(`${nomeDoNivel}: ${a}`);
       for (const c of r.caixas) {
@@ -948,6 +970,12 @@ export function planejarEletrodutos(
         if (c.segmento != null && c.segmento < novos.length) partes.set(c.segmento, [...(partes.get(c.segmento) ?? []), { x: c.at.x, y: c.at.y }]);
       }
     }
+  }
+  if (!inserirCaixas && semCaixaPelaRegra > 0) {
+    const onde = ambientesSemCaixa.length ? `: ${ambientesSemCaixa.join(', ')}` : '';
+    avisos.push(
+      `Sem caixas de passagem, ${semCaixaPelaRegra} lugar(es) passam do limite da NBR 5410 6.2.11.1.7 (15 m, −3 m por curva, até 270°)${onde} — ligue "Caixas de passagem" (aqui ou em Preferências › Lançamento) ou confira.`,
+    );
   }
   // O trecho com caixa no meio vira dois (ou mais) — mesmos circuitos e bitola.
   const novosFinais: Command[] = [];

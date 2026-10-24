@@ -14,6 +14,7 @@
 
 import React, { createContext, useContext, useMemo } from 'react';
 import { useStore } from '../store/useStore';
+import { temAcessoTotal } from '../lib/acessoTotal';
 
 export interface ImovibEdicao {
     pode: boolean;
@@ -54,9 +55,6 @@ export function avaliarEdicaoImovib(args: {
     return pode ? { pode: true } : { pode: false, motivo: MOTIVO_SEM_PERMISSAO };
 }
 
-// Mesmo e-mail de desenvolvedor do guard de rota (AppRouter.tsx, isDevEmail).
-const EMAIL_DESENVOLVEDOR = 'altair.rosa@alpaconstrutora.com.br';
-
 /**
  * Devolve uma função org → permissão. Para listas (uma linha por estudo, cada
  * uma da sua org), onde chamar o hook por linha violaria as regras dos Hooks.
@@ -68,7 +66,7 @@ export function useImovibPermissaoPorOrg(): (orgDoEstudo: string | null | undefi
     return useMemo(() => {
         const emailLower = (email || '').toLowerCase();
         // Pelo valor, como o guard de rota (AppRouter compara com 'DESENVOLVEDOR').
-        const desenvolvedor = String(group) === 'DESENVOLVEDOR' || emailLower === EMAIL_DESENVOLVEDOR;
+        const desenvolvedor = String(group) === 'DESENVOLVEDOR' || temAcessoTotal(emailLower);
         return (orgDoEstudo) => {
             const org = orgDoEstudo ? organizations.find(o => o.id === orgDoEstudo) : undefined;
             const membro = org?.members?.find(m => (m.email || '').toLowerCase() === emailLower) || null;

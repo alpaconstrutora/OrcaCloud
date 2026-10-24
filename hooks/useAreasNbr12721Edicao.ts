@@ -16,6 +16,7 @@
 
 import { useMemo } from 'react';
 import { useStore } from '../store/useStore';
+import { temAcessoTotal } from '../lib/acessoTotal';
 
 export interface AreasNbr12721Edicao {
   pode: boolean;
@@ -51,9 +52,6 @@ export function avaliarEdicaoAreasNbr12721(args: { desenvolvedor: boolean; orgCa
   return pode ? { pode: true } : { pode: false, motivo: MOTIVO_SEM_PERMISSAO_AREAS };
 }
 
-// Mesmo e-mail de desenvolvedor do guard de rota (AppRouter.tsx, isDevEmail) e do useImovibEdicao.
-const EMAIL_DESENVOLVEDOR = 'altair.rosa@alpaconstrutora.com.br';
-
 /** Avalia a permissão para o estudo da organização `orgDoEstudo`. */
 export function useAreasNbr12721PodeEditar(orgDoEstudo: string | null | undefined): AreasNbr12721Edicao {
   const group = useStore((s) => s.currentProfile.group);
@@ -61,7 +59,7 @@ export function useAreasNbr12721PodeEditar(orgDoEstudo: string | null | undefine
   const organizations = useStore((s) => s.organizations);
   return useMemo(() => {
     const emailLower = (email || '').toLowerCase();
-    const desenvolvedor = String(group) === 'DESENVOLVEDOR' || emailLower === EMAIL_DESENVOLVEDOR;
+    const desenvolvedor = String(group) === 'DESENVOLVEDOR' || temAcessoTotal(emailLower);
     const org = orgDoEstudo ? organizations.find((o) => o.id === orgDoEstudo) : undefined;
     const membro = org?.members?.find((m) => (m.email || '').toLowerCase() === emailLower) || null;
     return avaliarEdicaoAreasNbr12721({ desenvolvedor, orgCarregada: !!org?.members, membro: membro as MembroLido | null });

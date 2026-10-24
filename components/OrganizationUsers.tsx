@@ -9,6 +9,7 @@ import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { useDepartamentosDaOrg } from '../hooks/useDepartamentosDaOrg';
+import { temAcessoTotal } from '../lib/acessoTotal';
 
 // §6.3: toda coluna de valor único é ordenável. "Função / Cargo" é composta
 // (papel + nome do cargo customizado opcional na mesma célula) — exceção
@@ -462,7 +463,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const currentOrg = organizations.find(o => o.id === organizationId);
     
     const userEmail = session?.user?.email?.toLowerCase() || '';
-    const isDevEmail = userEmail === 'altair.rosa@alpaconstrutora.com.br';
+    const isDevEmail = temAcessoTotal(userEmail);
     
     // O usuário é desenvolvedor?
     const isDeveloper = currentProfile?.group === 'DESENVOLVEDOR' || isDevEmail;

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { cotaDaFaixa, descidaDoForro, fundoDaVigaSobre, paredesDoForro, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, semDedosEstreitos } from '../utils/blueprintRotaPeloForro';
-import { pointInPolygon } from '../utils/blueprintKernel';
+import { pointInPolygon, type Point } from '../utils/blueprintKernel';
 import { arvorePelasParedes } from '../utils/blueprintRotaPelasParedes';
+import { HIPOTESES_ELETRODUTO_PADRAO, planejarEletrodutos } from '../utils/blueprintEletrodutos';
 
 /** Dois cômodos de 3 × 4 m lado a lado (paredes de 15 cm), vigas de 40 cm sobre todas as paredes; janela opcional na do meio. */
 function casinha(opts: { janelaNoMeio?: boolean; estreito?: boolean } = {}): { m: BlueprintModel; L: string; meio: string } {
@@ -298,5 +299,112 @@ describe('saidaDoRebaixoPelaParede (item 6): o ponto de parede sob a laje rebaix
     const offset = cima.a.x > cima.b.x ? cima.a.x - 1500 : 500 - cima.a.x;
     const comJanela = applyCommand(m, { type: 'AddOpening', wallId: cima.id, kind: 'window', offsetMm: offset, widthMm: 1000, heightMm: 1400, sillMm: 1000 }).model;
     expect(saidaDoRebaixoPelaParede(comJanela, L, { x: 1000, y: 3925 }, 1100, 12.5, 50)).toBeNull();
+  });
+
+  // ─── Task 3 (24/10/2026): pela luz do ambiente no forro — o ponto sob o rebaixo ───
+  type XY = { x: number; y: number };
+  /** Quadro, um circuito, a luz (na face do forro) e o interruptor que a comanda; o plano no forro, modo pela luz (padrão). */
+  const planoComLuz = (m0: BlueprintModel, L: string, quadroEm: XY, luz: XY, ponto: XY, afastamentoDaFaceMm: number, encaminhamento?: 'ARVORE_NO_TETO') => {
+    let m = applyCommand(m0, { type: 'AddQuadro', levelId: L, nome: 'QDC', at: point(quadroEm.x, quadroEm.y), cotaMm: 1600 }).model;
+    m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', ligacao: 'FN' }).model;
+    const c1 = m.circuitos[0].id;
+    for (const [at, tipo, cotaMm] of [[luz, 'ILUMINACAO_TETO', 2400], [ponto, 'INTERRUPTOR', 1100]] as const) {
+      m = applyCommand(m, { type: 'AddTerminal', levelId: L, disciplina: 'ELETRICA', tipo, at: point(at.x, at.y), cotaMm, tipoEletrico: tipo, comando: 'a' }).model;
+      m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: c1 }).model;
+    }
+    const hip = { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: null, noForro: { faixa: { abaixoDoTetoMm: 45, afastamentoDaFaceMm }, folgaSobAVigaMm: 50 }, ...(encaminhamento ? { encaminhamento } : {}) };
+    return planejarEletrodutos(m, m.quadros[0], hip).comandos.filter((c): c is Extract<Command, { type: 'AddTrecho' }> => c.type === 'AddTrecho');
+  };
+  const tem = (ts: Extract<Command, { type: 'AddTrecho' }>[], a: XY, za: number, b: XY, zb: number) =>
+    ts.some((t) => (t.a.x === a.x && t.a.y === a.y && t.cotaAMm === za && t.b.x === b.x && t.b.y === b.y && t.cotaBMm === zb) || (t.b.x === a.x && t.b.y === a.y && t.cotaBMm === za && t.a.x === b.x && t.a.y === b.y && t.cotaAMm === zb));
+  const naFaixa = (ts: Extract<Command, { type: 'AddTrecho' }>[]) => ts.filter((t) => t.cotaAMm === 2755 && t.cotaBMm === 2755 && !(t.a.x === t.b.x && t.a.y === t.b.y));
+  /** Da vertical `de` pela faixa, enquanto o caminho não se ramifica (e até `ate`): onde ele termina. */
+  const fimDaCadeia = (ts: Extract<Command, { type: 'AddTrecho' }>[], de: XY, ate: XY): XY => {
+    const k = (p: XY) => `${p.x},${p.y}`;
+    const faixa = naFaixa(ts);
+    let atual = de;
+    const vistos = new Set([k(de)]);
+    for (let passo = 0; passo < 10 && k(atual) !== k(ate); passo++) {
+      const saem = faixa.filter((t) => k(t.a) === k(atual) || k(t.b) === k(atual));
+      const proximos = saem.map((t) => (k(t.a) === k(atual) ? t.b : t.a)).filter((p) => !vistos.has(k(p)));
+      if (saem.length > 2 || proximos.length !== 1) break;
+      atual = { x: proximos[0].x, y: proximos[0].y };
+      vistos.add(k(atual));
+    }
+    return atual;
+  };
+  const sobreORebaixo = (ts: Extract<Command, { type: 'AddTrecho' }>[], rebaixo: Point[]) =>
+    naFaixa(ts).filter((t) => [0.25, 0.5, 0.75].some((f) => pointInPolygon(rebaixo, { x: t.a.x + (t.b.x - t.a.x) * f, y: t.a.y + (t.b.y - t.a.y) * f } as Point)));
+
+  it('Task 3: pela luz no forro, o interruptor sob o rebaixo desce do MESMO q de hoje (o anel, escorregado para fora do rebaixo) — a faixa vem da luz, contornando o rebaixo', () => {
+    const { m, L } = comRebaixo();
+    const LUZ = { x: 1500, y: 1500 };
+    const I = { x: 1000, y: 3925 };
+    const ts = planoComLuz(m, L, { x: 75, y: 1000 }, LUZ, I, 50);
+    // O q no anel da sala, fora do rebaixo (a borda em x = 2000), e a descida de hoje até o interruptor.
+    const q = { x: 2091, y: 3875 };
+    expect(tem(ts, q, 2755, q, 2338)).toBe(true);
+    expect(tem(ts, { x: 1000, y: 3925 }, 2338, I, 1100)).toBe(true);
+    expect(sobreORebaixo(ts, [{ x: 0, y: 3000 }, { x: 2000, y: 3000 }, { x: 2000, y: 4000 }, { x: 0, y: 4000 }] as Point[])).toEqual([]);
+    expect(fimDaCadeia(ts, q, LUZ)).toEqual(LUZ);
+    // No caminho de antes, o q pendura no anel (que vem do quadro), não na luz.
+    expect(fimDaCadeia(planoComLuz(m, L, { x: 75, y: 1000 }, LUZ, I, 50, 'ARVORE_NO_TETO'), q, LUZ)).not.toEqual(LUZ);
+  });
+
+  it('Task 3: sem lugar no anel (cômodo estreito), o ponto sob o rebaixo chega pela SAÍDA da parede (item 6), como hoje — e a faixa até a saída vem da luz', () => {
+    // Cômodo de 0,60 m: com 25 cm de afastamento ele fica sem anel, e o anel do vizinho passa do raio de encaixe.
+    const { m: m0, L } = casinha({ estreito: true });
+    const rebaixo = [{ x: 0, y: 1500 }, { x: 600, y: 1500 }, { x: 600, y: 2500 }, { x: 0, y: 2500 }] as Point[];
+    const m = applyCommand(m0, { type: 'AddStructural', levelId: L, kind: 'LAJE', pontos: rebaixo, alturaMm: 100, baseMm: 2500, rotulo: 'L1' } as Command).model;
+    const LUZ = { x: 300, y: 3500 };
+    const I = { x: 75, y: 2000 };
+    const saida = saidaDoRebaixoPelaParede(m, L, I, 1100, 12.5, 50)!;
+    expect(saida).toEqual({ s: { x: 75, y: 1450 }, cotaMm: 2337 });
+    const ts = planoComLuz(m, L, { x: 2000, y: 75 }, LUZ, I, 250);
+    expect(tem(ts, saida.s, 2755, saida.s, 2337)).toBe(true);
+    expect(tem(ts, saida.s, 2337, I, 2337)).toBe(true);
+    expect(tem(ts, I, 2337, I, 1100)).toBe(true);
+    expect(sobreORebaixo(ts, rebaixo)).toEqual([]);
+    expect(fimDaCadeia(ts, saida.s, LUZ)).toEqual(LUZ);
+    // No caminho de antes, a saída pendura na árvore do quadro.
+    expect(fimDaCadeia(planoComLuz(m, L, { x: 2000, y: 75 }, LUZ, I, 250, 'ARVORE_NO_TETO'), saida.s, LUZ)).not.toEqual(LUZ);
+  });
+  it('Task 3, correção 2: o q que o escorregão pôs no anel do cômodo VIZINHO não serve — a saída pela parede, se houver; senão REDE (pelos anéis, como antes)', () => {
+    const LUZ = { x: 1000, y: 2000 };
+    const I = { x: 2925, y: 2000 }; // na face da sala da parede do meio
+    const qVizinho = { x: 3125, y: 2000 }; // o anel da cozinha, do outro lado da parede
+    const comLaje = (y0: number, y1: number) => {
+      const { m, L } = casinha();
+      // O lado do anel da sala junto da parede do meio (x = 2875, y 125–3875) inteiro sob a laje rebaixada.
+      const laje = { type: 'AddStructural', levelId: L, kind: 'LAJE', pontos: [{ x: 2000, y: y0 }, { x: 2990, y: y0 }, { x: 2990, y: y1 }, { x: 2000, y: y1 }], alturaMm: 100, baseMm: 2500, rotulo: 'L1' } as Command;
+      return { m: applyCommand(m, laje).model, L };
+    };
+    // Com saída: a laje deixa a ponta da parede livre (y < 100 e y > 3900).
+    {
+      const { m, L } = comLaje(100, 3900);
+      const saida = saidaDoRebaixoPelaParede(m, L, I, 1100, 12.5, 50)!;
+      expect(saida).not.toBeNull();
+      const ts = planoComLuz(m, L, { x: 75, y: 1000 }, LUZ, I, 50);
+      expect(ts.some((t) => [t.a, t.b].some((p) => p.x === qVizinho.x && p.y === qVizinho.y))).toBe(false);
+      expect(tem(ts, saida.s, 2755, saida.s, saida.cotaMm)).toBe(true);
+      expect(tem(ts, I, saida.cotaMm, I, 1100)).toBe(true);
+      expect(fimDaCadeia(ts, saida.s, LUZ)).toEqual(LUZ);
+      // O caminho de antes descia do anel da cozinha.
+      expect(planoComLuz(m, L, { x: 75, y: 1000 }, LUZ, I, 50, 'ARVORE_NO_TETO').some((t) => t.a.x === qVizinho.x && t.a.y === qVizinho.y)).toBe(true);
+    }
+    // Sem saída (a laje toma a parede inteira): REDE — o caminho de antes, pelos anéis; nenhuma reta da luz até o vizinho.
+    {
+      const { m, L } = comLaje(0, 4000);
+      expect(saidaDoRebaixoPelaParede(m, L, I, 1100, 12.5, 50)).toBeNull();
+      const ts = planoComLuz(m, L, { x: 75, y: 1000 }, LUZ, I, 50);
+      const antigo = planoComLuz(m, L, { x: 75, y: 1000 }, LUZ, I, 50, 'ARVORE_NO_TETO');
+      expect(tem(ts, LUZ, 2755, qVizinho, 2755)).toBe(false);
+      // Os trechos do quadro até o ponto são os de antes, pelos anéis; só a luz pendura em outro nó (no modo novo, as luzes
+      // entram primeiro, sozinhas com o quadro).
+      const chaves = new Set(ts.map((c) => JSON.stringify(c)));
+      const tocaLuz = (c: (typeof ts)[number]) => [c.a, c.b].some((p) => p.x === LUZ.x && p.y === LUZ.y);
+      expect(antigo.filter((c) => !tocaLuz(c)).every((c) => chaves.has(JSON.stringify(c)))).toBe(true);
+      expect(tem(ts, { x: 3125, y: 225 }, 2755, qVizinho, 2755)).toBe(true);
+    }
   });
 });

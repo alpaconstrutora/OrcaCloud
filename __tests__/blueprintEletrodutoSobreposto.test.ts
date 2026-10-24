@@ -5,13 +5,24 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  FLECHA_DO_ARCO_FRACAO,
+  FLECHA_MAXIMA_DO_ARCO_MM,
+  SEGMENTOS_DO_ARCO,
+  arcoDoTrecho,
   curvaDoTrecho,
+  desenhaEmArco,
+  desenhoDosGrupos,
   desviosDeSobreposicao,
   entradasNoQuadro,
+  flechaDoArcoMm,
+  flechasBaseDosGrupos,
   geometriaDesenhada,
   mesmoLeque,
   sobrepostos,
 } from '../utils/blueprintEletrodutoSobreposto';
+import { COTA_MINIMA_DA_REDE_MM } from '../utils/blueprintEletrodutos';
+import { MESMA_COTA_MM } from '../utils/blueprintEncaminhamentoPorAmbiente';
+import { sentidoDoEletroduto } from '../utils/blueprintRede';
 
 const seg = (id: string, ax: number, ay: number, bx: number, by: number) => ({ id, a: { x: ax, y: ay }, b: { x: bx, y: by } });
 
@@ -145,15 +156,235 @@ describe('o leque do quadro (15/09/2026) — "ainda estão próximos, principalm
     expect(pa.y).not.toBe(pb.y);
   });
 
-  it('geometriaDesenhada: reto vira 2 pontos; curvo vira 9 pontos que passam pelo meio da curva; a entrada substitui a ponta', () => {
+  it('geometriaDesenhada: reto vira 2 pontos; curvo vira 13 pontos que passam pelo meio da curva; a entrada substitui a ponta', () => {
     const trechos = [{ id: 'a', a: { x: 0, y: 0 }, b: { x: 1000, y: 0 } }];
     const reto = geometriaDesenhada(trechos, new Map(), new Map(), 0.1);
     expect(reto[0].pontos).toEqual([{ x: 0, y: 0 }, { x: 1000, y: 0 }]);
     // escala 0,1 px/mm: passo de 14 px = 140 mm no controle → 70 mm no meio.
     const curvo = geometriaDesenhada(trechos, new Map([['a', 1]]), new Map([['a', { a: { x: 100, y: 0 } }]]), 0.1);
-    expect(curvo[0].pontos).toHaveLength(9);
+    expect(curvo[0].pontos).toHaveLength(13);
     expect(curvo[0].pontos[0]).toEqual({ x: 100, y: 0 });
-    expect(curvo[0].pontos[8]).toEqual({ x: 1000, y: 0 });
-    expect(curvo[0].pontos[4].y).toBeCloseTo(70, 6);
+    expect(curvo[0].pontos[12]).toEqual({ x: 1000, y: 0 });
+    expect(curvo[0].pontos[6].y).toBeCloseTo(70, 6);
+  });
+});
+
+describe('arco base do eletroduto elétrico (24/10/2026) — "Curvas, como no seu print"', () => {
+  const dist = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.abs((p.x - a.x) * (b.y - a.y) - (p.y - a.y) * (b.x - a.x)) / Math.hypot(b.x - a.x, b.y - a.y);
+  const a = { x: 0, y: 0 };
+  const b = { x: 3000, y: 0 };
+
+  it('as constantes do pedido: 12 % do comprimento, teto de 300 mm, 12 segmentos', () => {
+    expect(FLECHA_DO_ARCO_FRACAO).toBe(0.12);
+    expect(FLECHA_MAXIMA_DO_ARCO_MM).toBe(300);
+    expect(SEGMENTOS_DO_ARCO).toBe(12);
+  });
+
+  it('flecha = 12 % do comprimento em planta, até o teto de 300 mm', () => {
+    expect(flechaDoArcoMm(1000)).toBeCloseTo(120, 9);
+    expect(flechaDoArcoMm(2000)).toBeCloseTo(240, 9);
+    expect(flechaDoArcoMm(2500)).toBe(300);
+    expect(flechaDoArcoMm(20000)).toBe(300);
+    expect(flechaDoArcoMm(0)).toBe(0);
+    // Na polilinha: o ponto do meio (13 pontos, índice 6) fica a `flecha` da corda.
+    const curto = arcoDoTrecho({ x: 0, y: 0 }, { x: 1000, y: 0 }, { eletrico: true });
+    expect(curto.pontos).toHaveLength(SEGMENTOS_DO_ARCO + 1);
+    expect(dist(curto.pontos[6], { x: 0, y: 0 }, { x: 1000, y: 0 })).toBeCloseTo(120, 6);
+    const longo = arcoDoTrecho(a, { x: 10000, y: 0 }, { eletrico: true });
+    expect(dist(longo.pontos[6], a, { x: 10000, y: 0 })).toBeCloseTo(300, 6);
+    // O meio devolvido é esse mesmo ponto; as pontas ficam exatamente onde estão.
+    expect(curto.meio.y).toBeCloseTo(curto.pontos[6].y, 9);
+    expect(curto.pontos[0]).toEqual({ x: 0, y: 0 });
+    expect(curto.pontos[12]).toEqual({ x: 1000, y: 0 });
+  });
+
+  it('determinístico: o mesmo trecho com a e b trocados dá a mesma polilinha, invertida', () => {
+    for (const [p, q] of [
+      [a, b],
+      [{ x: 100, y: 200 }, { x: 900, y: 1700 }],
+      [{ x: 500, y: 500 }, { x: 500, y: 3500 }], // vertical
+      [{ x: -800, y: 300 }, { x: 600, y: -2000 }],
+    ] as const) {
+      const direto = arcoDoTrecho(p, q, { eletrico: true }).pontos;
+      const invertido = arcoDoTrecho(q, p, { eletrico: true }).pontos.slice().reverse();
+      expect(invertido).toHaveLength(direto.length);
+      direto.forEach((ponto, i) => {
+        expect(invertido[i].x).toBeCloseTo(ponto.x, 6);
+        expect(invertido[i].y).toBeCloseTo(ponto.y, 6);
+      });
+    }
+  });
+
+  it('o arco fica sempre à ESQUERDA de min→max (menor x; empate, menor y)', () => {
+    // De (0,0) a (3000,0) a esquerda é +y; de (500,500) a (500,3500) (vertical, o de baixo vem primeiro) é −x.
+    expect(arcoDoTrecho(a, b, { eletrico: true }).meio.y).toBeGreaterThan(0);
+    expect(arcoDoTrecho(b, a, { eletrico: true }).meio.y).toBeGreaterThan(0);
+    expect(arcoDoTrecho({ x: 500, y: 500 }, { x: 500, y: 3500 }, { eletrico: true }).meio.x).toBeLessThan(500);
+    expect(arcoDoTrecho({ x: 500, y: 3500 }, { x: 500, y: 500 }, { eletrico: true }).meio.x).toBeLessThan(500);
+  });
+
+  it('prumada (a = b em planta) e trecho que não é elétrico: sem arco', () => {
+    const prumada = arcoDoTrecho({ x: 100, y: 100 }, { x: 100, y: 100 }, { eletrico: true });
+    expect(prumada.pontos).toEqual([{ x: 100, y: 100 }, { x: 100, y: 100 }]);
+    const hidraulico = arcoDoTrecho(a, b, { eletrico: false });
+    expect(hidraulico.pontos).toEqual([a, b]);
+    expect(hidraulico.meio).toEqual({ x: 1500, y: 0 });
+    // geometriaDesenhada: só o trecho de disciplina ELETRICA ganha o arco base.
+    const g = geometriaDesenhada(
+      [
+        { id: 'e', disciplina: 'ELETRICA', a, b },
+        { id: 'h', disciplina: 'AGUA_FRIA', a, b },
+        { id: 'p', disciplina: 'ELETRICA', a: { x: 5, y: 5 }, b: { x: 5, y: 5 } },
+      ],
+      new Map(),
+      new Map(),
+      0.1,
+    );
+    expect(g[0].pontos).toHaveLength(13);
+    expect(g[1].pontos).toEqual([a, b]);
+    expect(g[2].pontos).toHaveLength(2);
+  });
+
+  it('o ponto de controle da curva fica a 2 × flecha do meio da corda (o meio da curva, a 1 × flecha)', () => {
+    const arco = arcoDoTrecho(a, b, { eletrico: true });
+    expect(arco.controle.x).toBeCloseTo(1500, 9);
+    expect(arco.controle.y).toBeCloseTo(2 * 300, 9);
+    expect(arco.meio.y).toBeCloseTo(300, 9);
+  });
+
+  it('dois sobrepostos continuam separados: o deslocamento do nível SOMA-SE ao arco base', () => {
+    const trechos = [
+      { id: 't1', disciplina: 'ELETRICA', a, b },
+      { id: 't2', disciplina: 'ELETRICA', a, b },
+    ];
+    const desvios = desviosDeSobreposicao(trechos);
+    expect(desvios.get('t2')).toBe(1);
+    // 0,1 px/mm: passo de 14 px = 140 mm no controle, 70 mm no meio.
+    const g = geometriaDesenhada(trechos, desvios, new Map(), 0.1);
+    const [p1, p2] = [g[0].pontos, g[1].pontos];
+    expect(p1[6].y).toBeCloseTo(300, 6);
+    expect(p2[6].y).toBeCloseTo(300 + 70, 6);
+    // A menor distância entre as duas polilinhas, no miolo (excluídas as pontas, onde se encontram), é > 0.
+    const distanciaMinima = (xs: { x: number; y: number }[], ys: { x: number; y: number }[]) => {
+      let min = Infinity;
+      for (const p of xs) for (const q of ys) min = Math.min(min, Math.hypot(p.x - q.x, p.y - q.y));
+      return min;
+    };
+    expect(distanciaMinima(p1.slice(2, 11), p2.slice(2, 11))).toBeGreaterThan(10);
+    expect(Math.abs(p2[6].y - p1[6].y)).toBeGreaterThan(50);
+    // Sentido invertido de um deles: continua do outro lado do primeiro, não em cima.
+    const g2 = geometriaDesenhada(
+      [trechos[0], { id: 't2', disciplina: 'ELETRICA', a: b, b: a }],
+      desviosDeSobreposicao([trechos[0], { id: 't2', a: b, b: a }]),
+      new Map(),
+      0.1,
+    );
+    expect(Math.abs(g2[1].pontos[6].y - g2[0].pontos[6].y)).toBeGreaterThan(50);
+  });
+
+  it('a entrada espalhada no quadro continua valendo: o arco parte do ponto de entrada', () => {
+    const t = { id: 't', disciplina: 'ELETRICA', a, b };
+    const g = geometriaDesenhada([t], new Map(), new Map([['t', { a: { x: 100, y: 40 } }]]), 0.1);
+    expect(g[0].pontos[0]).toEqual({ x: 100, y: 40 });
+    expect(g[0].pontos[12]).toEqual(b);
+  });
+});
+
+describe('correção 1 (24/10/2026) — sobrepostos de comprimentos diferentes e o trecho dentro da parede', () => {
+  const cruzamentos = (xs: { x: number; y: number }[], ys: { x: number; y: number }[]) => {
+    const o = (p: { x: number; y: number }, q: { x: number; y: number }, r: { x: number; y: number }) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+    let n = 0;
+    for (let i = 0; i + 1 < xs.length; i++)
+      for (let j = 0; j + 1 < ys.length; j++) {
+        const [p1, p2, p3, p4] = [xs[i], xs[i + 1], ys[j], ys[j + 1]];
+        if (o(p1, p2, p3) * o(p1, p2, p4) < 0 && o(p3, p4, p1) * o(p3, p4, p2) < 0) n++;
+      }
+    return n;
+  };
+  const longo = { id: 't1', disciplina: 'ELETRICA', cotaAMm: 2800, cotaBMm: 2800, a: { x: 0, y: 0 }, b: { x: 4000, y: 0 } };
+  const curto = { id: 't2', disciplina: 'ELETRICA', cotaAMm: 2800, cotaBMm: 2800, a: { x: 1000, y: 0 }, b: { x: 3000, y: 0 } };
+
+  it('I1 — o grupo usa a flecha do trecho MAIS LONGO (teto 300 mm); trecho sem par e trecho na parede ficam fora do mapa', () => {
+    const parede = { id: 't3', disciplina: 'ELETRICA', cotaAMm: 300, cotaBMm: 300, a: { x: 0, y: 5 }, b: { x: 4000, y: 5 } };
+    const sozinho = { id: 't4', disciplina: 'ELETRICA', a: { x: 0, y: 9000 }, b: { x: 1000, y: 9000 } };
+    const f = flechasBaseDosGrupos([longo, curto, parede, sozinho]);
+    expect(f.get('t1')).toBe(300);
+    expect(f.get('t2')).toBe(300); // 2000 mm daria 240; o grupo usa a do mais longo
+    expect(f.has('t3')).toBe(false);
+    expect(f.has('t4')).toBe(false);
+    // Curtos: sem teto, a flecha do grupo é 12 % do mais longo.
+    const g = flechasBaseDosGrupos([
+      { id: 'a', disciplina: 'ELETRICA', a: { x: 0, y: 0 }, b: { x: 1500, y: 0 } },
+      { id: 'b', disciplina: 'ELETRICA', a: { x: 200, y: 0 }, b: { x: 700, y: 0 } },
+    ]);
+    expect(g.get('a')).toBeCloseTo(180, 9);
+    expect(g.get('b')).toBeCloseTo(180, 9);
+  });
+
+  it('revisão final — desenhoDosGrupos devolve os MESMOS dois mapas das funções separadas, de um só agrupamento', () => {
+    const trechos = [longo, curto, { id: 'p', disciplina: 'ELETRICA', cotaAMm: 300, cotaBMm: 300, a: { x: 0, y: 5000 }, b: { x: 2000, y: 5000 } }];
+    const { desvios, flechas } = desenhoDosGrupos(trechos);
+    expect([...desvios.entries()]).toEqual([...desviosDeSobreposicao(trechos).entries()]);
+    expect([...flechas.entries()]).toEqual([...flechasBaseDosGrupos(trechos).entries()]);
+    expect(flechas.size).toBeGreaterThan(0);
+  });
+
+  it('I1 — 0–4000 × 1000–3000 com nível −1: as polilinhas não se cruzam e ficam separadas no miolo', () => {
+    const flechas = flechasBaseDosGrupos([longo, curto]);
+    const g = geometriaDesenhada([longo, curto], new Map([['t2', -1]]), new Map(), 0.1, undefined, flechas);
+    expect(cruzamentos(g[0].pontos, g[1].pontos)).toBe(0);
+    expect(Math.abs(g[0].pontos[6].y - g[1].pontos[6].y)).toBeGreaterThan(50);
+  });
+
+  it('I1 — com nível +1 o miolo do curto fica 70 mm acima do longo (mesma flecha do grupo + nível)', () => {
+    const flechas = flechasBaseDosGrupos([longo, curto]);
+    const g = geometriaDesenhada([longo, curto], new Map([['t2', 1]]), new Map(), 0.1, undefined, flechas);
+    expect(g[0].pontos[6].y).toBeCloseTo(300, 6);
+    expect(g[1].pontos[6].y).toBeCloseTo(370, 6);
+    // ⚠️ Limite geométrico: o curto nasce NA corda (y = 0) enquanto o longo já subiu (225 mm em x = 1000); por cima
+    // dele no miolo, ele o atravessa — vale para qualquer flecha. Só o nível −1 (para dentro) evita.
+  });
+
+  it('I2 — desenhaEmArco: elétrico no piso (0) e no teto/forro em arco; dentro da parede (iguais, entre 0 e 2100) reto', () => {
+    const t = (cotaAMm: number | undefined, cotaBMm: number | undefined, disciplina = 'ELETRICA') => ({ disciplina, cotaAMm, cotaBMm });
+    expect(desenhaEmArco(t(0, 0))).toBe(true); // piso
+    expect(desenhaEmArco(t(2800, 2800))).toBe(true); // teto
+    expect(desenhaEmArco(t(2100, 2100))).toBe(true); // a cota mínima da rede já é teto
+    expect(desenhaEmArco(t(300, 300))).toBe(false); // VIZINHA: dentro da parede
+    expect(desenhaEmArco(t(1300, 1300))).toBe(false);
+    expect(desenhaEmArco(t(300, 1300))).toBe(true); // cotas diferentes: não é o trecho horizontal da parede
+    expect(desenhaEmArco(t(undefined, undefined))).toBe(true);
+    expect(desenhaEmArco(t(2800, 2800, 'AGUA_FRIA'))).toBe(false);
+    expect(COTA_MINIMA_DA_REDE_MM).toBe(2100);
+  });
+
+  it('revisão final — desenhaEmArco aceita a MESMA tolerância de cota da regra (±MESMA_COTA_MM): VIZINHA de 300 para 330 sai reta', () => {
+    const t = (cotaAMm: number, cotaBMm: number) => ({ disciplina: 'ELETRICA', cotaAMm, cotaBMm });
+    expect(desenhaEmArco(t(300, 330))).toBe(false);
+    expect(desenhaEmArco(t(330, 300))).toBe(false);
+    expect(desenhaEmArco(t(300, 300 + MESMA_COTA_MM))).toBe(false); // no limite, ainda é a mesma cota
+    expect(desenhaEmArco(t(300, 300 + MESMA_COTA_MM + 1))).toBe(true); // passou: já é desnível
+    expect(desenhaEmArco(t(0, 30))).toBe(true); // o piso (0) segue em arco
+    expect(desenhaEmArco(t(2090, 2110))).toBe(true); // 2110 já é teto
+  });
+
+  it('revisão final — o trecho da VIZINHA de 300 para 330 sai reto (geometria) e sem a seta de SOBE/DESCE', () => {
+    const vizinha = { id: 'v', disciplina: 'ELETRICA', cotaAMm: 300, cotaBMm: 330, a: { x: 0, y: 0 }, b: { x: 1500, y: 0 } };
+    const g = geometriaDesenhada([vizinha], new Map(), new Map(), 0.1);
+    expect(g[0].pontos).toEqual([vizinha.a, vizinha.b]);
+    expect(sentidoDoEletroduto(vizinha, MESMA_COTA_MM)).toBeNull();
+    expect(sentidoDoEletroduto({ cotaAMm: 300, cotaBMm: 2800 }, MESMA_COTA_MM)).toBe('SOBE'); // a prumada de verdade segue com a seta
+    expect(sentidoDoEletroduto({ cotaAMm: 2800, cotaBMm: 300 }, MESMA_COTA_MM)).toBe('DESCE');
+  });
+
+  it('I2 — geometriaDesenhada: o trecho da VIZINHA (cota 300) sai reto; o do teto e o do piso, em arco', () => {
+    const vizinha = { id: 'v', disciplina: 'ELETRICA', cotaAMm: 300, cotaBMm: 300, a: { x: 0, y: 0 }, b: { x: 1500, y: 0 } };
+    const teto = { ...vizinha, id: 'c', cotaAMm: 2800, cotaBMm: 2800 };
+    const piso = { ...vizinha, id: 'p', cotaAMm: 0, cotaBMm: 0 };
+    const g = geometriaDesenhada([vizinha, teto, piso], new Map(), new Map(), 0.1);
+    expect(g[0].pontos).toEqual([vizinha.a, vizinha.b]);
+    expect(g[1].pontos).toHaveLength(13);
+    expect(g[2].pontos).toHaveLength(13);
   });
 });

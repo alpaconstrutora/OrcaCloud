@@ -71,6 +71,59 @@
  *    contínuo acima de 15 m (−3 m por curva de 90°) ou com mais de 270° de
  *    curvas ganha caixa; derivação sem ponto embaixo também. Nascem
  *    `sugerida`, como os trechos — ver `blueprintCaixasDePassagem.ts`.
+ *
+ * ─── 24/10/2026: PELA LUZ DO AMBIENTE (como na obra) ─────────────────────────
+ *
+ * O usuário (engenheiro) reprovou a árvore única no teto: cada tomada subia na
+ * própria posição e o Prim a pendurava no nó mais perto — quase sempre a subida
+ * da tomada vizinha —, e o eletroduto corria de tomada em tomada pelo teto, rente
+ * à parede. A regra de obra, nas palavras dele:
+ *
+ *   *"O encaminhamento geralmente parte do quadro de distribuição, vai até o
+ *   ponto de iluminação no teto do ambiente e de lá desce para as tomadas daquele
+ *   ambiente. Se tiver mais de um ponto de iluminação no teto no mesmo ambiente
+ *   pode se interligar um ao outro. Pode-se também interligar uma tomada a outra
+ *   na mesma parede, porém percorrendo dentro da parede."*
+ *
+ * Hipótese `encaminhamento` (padrão `PELA_LUZ_DO_AMBIENTE`; `ARVORE_NO_TETO` é o
+ * de antes, intacto). Em cada pavimento, com a regra pura de
+ * `blueprintEncaminhamentoPorAmbiente.ts` (onde cada ponto se pendura):
+ *
+ *   1. no teto, a árvore com rota limitada SÓ com o quadro (ou a prumada) e as
+ *      luzes de teto — as do mesmo ambiente e as de ambientes diferentes se
+ *      interligam pelo menor eletroduto dentro do limite;
+ *   2. o ponto `LUZ` ganha um trecho no teto da luz até a vertical dele e desce
+ *      ali, dentro da parede, até a caixa — sem limite de rota: é a regra de obra;
+ *   3. o ponto `VIZINHA` liga na tomada vizinha por dentro da parede, na cota
+ *      das caixas, sem subir ao teto — só quando ela está MAIS PERTO que a luz,
+ *      na mesma parede, na mesma face e na mesma cota;
+ *   4. o ponto `REDE` — ambiente sem luz, infraestrutura, ou quem não achou a luz
+ *      ligada — entra depois, como antes: sobe na posição e pendura na rede mais
+ *      próxima (já com as luzes e as descidas alcançadas). `rotaPelaParede` vale
+ *      só para ele;
+ *   5. o interruptor desce da luz que ele comanda.
+ *
+ * Os circuitos por trecho não mudam: o caminho do ponto até o quadro passa agora
+ * pela caixa da luz do ambiente, como na obra.
+ *
+ * NO FORRO (24/10/2026, Task 3 — decisão do usuário: "a regra vale também no
+ * forro"; o detector de conflitos avisa se o traçado cruzar algo):
+ *
+ *   1. a árvore das luzes corre na cota da FAIXA do eletroduto; a luz (na face
+ *      do forro) sobe reta até ela, e o Prim liga as luzes entre si e ao quadro
+ *      sem limite de rota (a luz pendura no nó mais perto), contornando pilar,
+ *      prumada, ramal da laje de cima e laje rebaixada (`ligarNaRede`);
+ *   2. o ponto `LUZ` vai reto pela faixa, da luz até `q` — a vertical dele no
+ *      anel do cômodo, recuada `afastamentoDaFaceMm` da face: o MESMO encaixe da
+ *      árvore pelos anéis de antes —, com os mesmos desvios, e de `q` a descida
+ *      do forro (`descidaDoForro`), como antes;
+ *   3. sem `q` no anel, o ponto sob laje rebaixada chega pela saída da parede
+ *      (`saidaDoRebaixoPelaParede`, item 6 da casa), como antes — a faixa até a
+ *      saída vem da luz;
+ *   4. a `VIZINHA` liga por dentro da parede, como fora do forro;
+ *   5. o `REDE` segue pelos anéis dos cômodos (`paredesDoForro`), como antes.
+ *
+ * `ARVORE_NO_TETO` com forro é o caminho de antes, inteiro.
  */
 import type {
   BlueprintModel,
@@ -82,11 +135,14 @@ import type {
   Quadro,
   Terminal,
   Trecho,
+  Wall,
 } from './blueprintKernel';
-import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, composicaoDaRede } from './blueprintKernel';
+import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, composicaoDaRede, pointInPolygon, type Point } from './blueprintKernel';
 import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, type FaixaDoForro } from './blueprintRotaPeloForro';
-import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
+import { encaminhamentoPorAmbiente } from './blueprintEncaminhamentoPorAmbiente';
+import { ambienteDoPonto } from './blueprintAgrupamentoDePontos';
 import { REGRA_DE_CAIXAS_PADRAO, caixasDaRede, type RegraDeCaixas, type SegmentoDaRede } from './blueprintCaixasDePassagem';
 import {
   HIPOTESES_PADRAO,
@@ -104,6 +160,12 @@ import {
   type Aresta,
   type No,
 } from './blueprintGrafoDeRede';
+
+/**
+ * 24/10/2026: como os pontos de parede chegam à rede. `PELA_LUZ_DO_AMBIENTE` = quadro → luz do ambiente → tomadas
+ * (como na obra); `ARVORE_NO_TETO` = a árvore única no teto, com todos os pontos subindo na própria posição (antes).
+ */
+export type EncaminhamentoDoEletroduto = 'PELA_LUZ_DO_AMBIENTE' | 'ARVORE_NO_TETO';
 
 export interface HipotesesDeEletroduto {
   /** Diâmetro nominal MÍNIMO do eletroduto lançado, em mm — a ocupação pode pedir mais. */
@@ -128,6 +190,11 @@ export interface HipotesesDeEletroduto {
    * 10 cm sob a viga mais baixa).
    */
   noForro?: { faixa: FaixaDoForro; folgaSobAVigaMm: number } | null;
+  /**
+   * 24/10/2026: o encaminhamento dos pontos de parede — ver o cabeçalho. Ausente (hipótese gravada antes) vale como
+   * `PELA_LUZ_DO_AMBIENTE`. Vale também com `noForro` (Task 3, 24/10/2026).
+   */
+  encaminhamento?: EncaminhamentoDoEletroduto;
 }
 
 export const HIPOTESES_ELETRODUTO_PADRAO: HipotesesDeEletroduto = {
@@ -136,12 +203,74 @@ export const HIPOTESES_ELETRODUTO_PADRAO: HipotesesDeEletroduto = {
   rotaMaximaVezes: 1.5,
   rotaPelaParede: false,
   caixas: REGRA_DE_CAIXAS_PADRAO,
+  encaminhamento: 'PELA_LUZ_DO_AMBIENTE',
 };
+
+/** Os encaminhamentos oferecidos na hipótese. */
+export const ENCAMINHAMENTOS_DO_ELETRODUTO: readonly { valor: EncaminhamentoDoEletroduto; rotulo: string }[] = [
+  { valor: 'PELA_LUZ_DO_AMBIENTE', rotulo: 'Quadro → luz do ambiente → tomadas (como na obra)' },
+  { valor: 'ARVORE_NO_TETO', rotulo: 'Árvore única no teto (antigo)' },
+];
 
 /** E6.3: a rede sob a viga só desce até aqui (cota do piso, mm); abaixo disso fica no teto e o plano avisa. */
 export const COTA_MINIMA_DA_REDE_MM = 2100;
 /** E6.3: até onde um ponto de parede procura a parede para a rota pela parede, mm. */
 export const RAIO_DE_ENCAIXE_ELETRICO_MM = 600;
+
+/**
+ * Task 3, correção 1 (24/10/2026): no modo pela luz, o pilar que o eletroduto contorna é a pegada inflada pelo RAIO do
+ * tubo mais esta folga, mm. `desvioDoPilar` só vê o pilar pelas amostras de `fracaoDentro`, uma a cada ~50 mm: a reta
+ * que cortava só o canto do pilar real (de 0,3 a 39 mm do eixo dentro, nas casas com forro) passava entre duas
+ * amostras e seguia reta. Inflado por raio + 50, um segmento que toca o canto real atravessa no anel inflado uma corda
+ * de pelo menos 2 × 50 = 100 mm — maior que o passo, então alguma amostra cai dentro. `desvioDoPilar` e
+ * `fracaoDentro` não mudam: são os mesmos da água, do esgoto e do pluvial.
+ */
+export const FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM = 50;
+
+/**
+ * Task 3, correção 2: a maior folga com que o anel EM ESQUADRO de `g` (`anelDoPilar`, lados afastados em paralelo e
+ * cantos em ponta) ainda deixa `p` de fora — `max_i nᵢ·(p − vᵢ)`, com nᵢ a normal externa do lado i (pegada convexa:
+ * o anel é a interseção dos semiplanos nᵢ·(x − vᵢ) ≤ f). A distância euclidiana ao pilar não serve: na diagonal de um
+ * canto o anel avança f·√2, e a ponta a 3–88 mm dali caía DENTRO dele. ≤ 0 = `p` dentro (ou na face) do pilar real.
+ */
+function folgaQueDeixaDeFora(p: { x: number; y: number }, g: readonly Point[]): number {
+  const n = g.length;
+  if (n < 3) return 0;
+  const cx = g.reduce((s, v) => s + v.x, 0) / n;
+  const cy = g.reduce((s, v) => s + v.y, 0) / n;
+  let max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const a = g[i];
+    const b = g[(i + 1) % n];
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    let nx = (b.y - a.y) / L;
+    let ny = -(b.x - a.x) / L;
+    if (nx * ((a.x + b.x) / 2 - cx) + ny * ((a.y + b.y) / 2 - cy) < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    max = Math.max(max, nx * (p.x - a.x) + ny * (p.y - a.y));
+  }
+  return max;
+}
+
+/**
+ * Task 3, correção 1/2: as pegadas dos pilares infladas por `inflarMm` (`anelDoPilar`) para a reta a→b. A ponta que
+ * fica a menos disso do anel em esquadro (o quadro encostado no pilar, ou na diagonal de um canto) ficaria DENTRO dele e
+ * `desvioDoPilar` não acharia contorno: para esse pilar o anel encolhe até a folga que ainda deixa as duas pontas de
+ * fora (`folgaQueDeixaDeFora` − 1, conferido no anel arredondado). Ponta dentro do pilar real: a pegada real, como antes.
+ * Perto da ponta a corda de 100 mm não é garantida — quem chama tenta a pegada real se o anel não der contorno.
+ */
+export function pilaresInflados(pegadas: readonly Point[][], a: { x: number; y: number }, b: { x: number; y: number }, inflarMm: number): Point[][] {
+  return pegadas.map((g) => {
+    let f = Math.floor(Math.min(inflarMm, folgaQueDeixaDeFora(a, g) - 1, folgaQueDeixaDeFora(b, g) - 1));
+    for (; f > 0; f--) {
+      const anel = anelDoPilar(g, f) as Point[];
+      if (!pointInPolygon(anel, a as Point) && !pointInPolygon(anel, b as Point)) return anel;
+    }
+    return g as Point[];
+  });
+}
 
 /** As rotas máximas oferecidas na hipótese. */
 export const ROTAS_MAXIMAS = [
@@ -351,10 +480,19 @@ export function planejarEletrodutos(
   let semContorno = 0;
   /** E6.3: nós da rede sobre a caixa de um ponto de parede (pela parede: o encaixe no eixo) → a descida até ele. */
   const sobrePonto = new Map<string, number>();
+  /**
+   * Task 3, correção 1 (24/10/2026): no modo pela luz, os pilares que `desvioDoPilar` vê são os INFLADOS (ver
+   * `pilaresInflados`); `ARVORE_NO_TETO` segue com a pegada real, como sempre.
+   */
+  const pelaLuzDoAmbiente = (hip.encaminhamento ?? 'PELA_LUZ_DO_AMBIENTE') === 'PELA_LUZ_DO_AMBIENTE';
+  const pilaresDaReta = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }) =>
+    pelaLuzDoAmbiente ? pilaresInflados(pegadas(levelId), a, b, hip.bitolaMm / 2 + FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM) : pegadas(levelId);
   const ligarNaRede = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): void => {
     // F14b: no forro, a reta desvia também das prumadas das outras redes (a coluna da fria cruzando a faixa).
     // F27 item 5: e dos ramais que correm na laje do pavimento de cima, colados na faixa pela cota real.
-    const desvio = desvioDoPilar(a, b, hip.noForro ? [...pegadas(levelId), ...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(levelId));
+    const outras = hip.noForro ? [...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : [];
+    // Task 3, correção 2: sem contorno com os pilares inflados, a pegada real (o de antes, nunca pior).
+    const desvio = desvioDoPilar(a, b, [...pilaresDaReta(levelId, a, b), ...outras]) ?? (pelaLuzDoAmbiente ? desvioDoPilar(a, b, [...pegadas(levelId), ...outras]) : null);
     if (desvio == null) {
       semContorno++;
       addTrecho(levelId, a, cota, b, cota);
@@ -445,85 +583,246 @@ export function planejarEletrodutos(
     for (const k of alcancados.keys()) rota.set(k, rotaAteOQuadro.get(k) ?? Infinity);
     rota.set(raizDoNivel, 0);
     const retaAteOQuadro = (p: { x: number; y: number }) => Math.hypot(p.x - quadro.at.x, p.y - quadro.at.y);
-    // E6.3 — PELA PAREDE: os pontos de parede (abaixo da rede) ligam-se pelo eixo
-    // das paredes; a árvore desvia de pilar. A luz de teto e quem não tem parede
-    // perto seguem retos, pendurados na árvore como antes.
     const paredesDoNivel = model.walls.filter((w) => w.levelId === nivel.id);
-    // F14b: no forro, a luz de teto (na face do forro, abaixo da rede) sobe reta como antes; os de parede andam
-    // pelos anéis do forro dos cômodos.
-    const deParede = pendentes.filter((p) => p.cotaMm < teto && !(hip.noForro && p.tipoEletrico === 'ILUMINACAO_TETO'));
-    const paredesDaRota = hip.noForro ? paredesDoForro(model, nivel.id, hip.noForro.faixa.afastamentoDaFaceMm) : paredesDoNivel;
-    const pelas = (hip.rotaPelaParede || !!hip.noForro) && paredesDaRota.length > 0 && deParede.length > 0
-      ? arvorePelasParedes({ paredes: paredesDaRota, raiz: quadro.at, ...(hip.noForro ? { contornoDoPilarMm: CONTORNO_DO_PILAR_MM, penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}), pendentes: deParede.map((p) => p.at), raioDeEncaixeMm: RAIO_DE_ENCAIXE_ELETRICO_MM, encaixarEm: encaixaNoAnel, obstaculos: hip.noForro ? [...pegadas(nivel.id), ...prumadasQueCruzam(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2), ...ramaisDaLajeDeCima(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(nivel.id) })
-      : null;
-    const naParede = new Set<ObjectId>();
-    if (pelas?.raiz) {
-      if (chaveP(pelas.raiz) !== chaveP(quadro.at)) ligarNaRede(nivel.id, quadro.at, pelas.raiz, teto);
-      for (const a of pelas.arestas) addTrecho(nivel.id, a.de, teto, a.para, teto);
-      for (const p of deParede) {
-        const q = pelas.encaixe.get(chaveP(p.at));
-        if (!q) continue;
-        naParede.add(p.id);
-        if (hip.noForro) {
-          // F14b: do anel no forro, junto da viga, entra na parede abaixo dela e desce no rasgo da caixa (na face — no
-          // eixo da parede corre o dreno do ar, e a descida o cruzava).
-          const naFace = encaixarNaParede(p.at, paredesDoNivel, RAIO_DE_ENCAIXE_ELETRICO_MM) ? p.at : null;
-          const pedacos = descidaDoForro(model, nivel.id, { q, cotaDaFaixaMm: teto, alvo: p.at, cotaDoAlvoMm: p.cotaMm, naParede: naFace, raioMm: hip.bitolaMm / 2, folgaSobAVigaMm: hip.noForro.folgaSobAVigaMm + (hip.noForro.faixa.degrauNaParedeMm ?? 0), disciplina: 'ELETRICA' });
-          sobrePonto.set(`${nivel.id}|${q.x},${q.y},${teto}`, pedacos.reduce((mm, x) => mm + comprimentoMm(x), 0));
-          for (const x of pedacos) addTrecho(nivel.id, x.a, x.cotaAMm, x.b, x.cotaBMm);
+    // F14b: no forro, a árvore anda pelos anéis dos cômodos (as "paredes" do forro); fora dele, pelo eixo das paredes.
+    let paredesDoForroDoNivel: ReturnType<typeof paredesDoForro> | null = null;
+    const paredesDaRota = (): readonly Wall[] => (hip.noForro ? (paredesDoForroDoNivel ??= paredesDoForro(model, nivel.id, hip.noForro.faixa.afastamentoDaFaceMm)) : paredesDoNivel);
+    /** A árvore pelas paredes (ou pelos anéis do forro) do quadro até `ats` — as opções de sempre. */
+    const arvoreDasParedes = (ats: readonly { x: number; y: number }[]) =>
+      arvorePelasParedes({ paredes: paredesDaRota(), raiz: quadro.at, ...(hip.noForro ? { contornoDoPilarMm: CONTORNO_DO_PILAR_MM, penalidadeDoAnelMm: PENALIDADE_DO_CONTORNO_NO_FORRO_MM } : {}), pendentes: ats, raioDeEncaixeMm: RAIO_DE_ENCAIXE_ELETRICO_MM, encaixarEm: encaixaNoAnel, obstaculos: hip.noForro ? [...pegadas(nivel.id), ...prumadasQueCruzam(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2), ...ramaisDaLajeDeCima(model, nivel.id, teto, 'ELETRICA', hip.bitolaMm / 2)] : pegadas(nivel.id) });
+    /**
+     * F14b: do nó `q` na faixa do forro, junto da viga, entra na parede abaixo dela e desce no rasgo da caixa (na face —
+     * no eixo da parede corre o dreno do ar, e a descida o cruzava).
+     */
+    const descerDoForro = (p: Terminal, q: { x: number; y: number }, noForro: NonNullable<HipotesesDeEletroduto['noForro']>): void => {
+      const naFace = encaixarNaParede(p.at, paredesDoNivel, RAIO_DE_ENCAIXE_ELETRICO_MM) ? p.at : null;
+      const pedacos = descidaDoForro(model, nivel.id, { q, cotaDaFaixaMm: teto, alvo: p.at, cotaDoAlvoMm: p.cotaMm, naParede: naFace, raioMm: hip.bitolaMm / 2, folgaSobAVigaMm: noForro.folgaSobAVigaMm + (noForro.faixa.degrauNaParedeMm ?? 0), disciplina: 'ELETRICA' });
+      sobrePonto.set(`${nivel.id}|${q.x},${q.y},${teto}`, pedacos.reduce((mm, x) => mm + comprimentoMm(x), 0));
+      for (const x of pedacos) addTrecho(nivel.id, x.a, x.cotaAMm, x.b, x.cotaBMm);
+    };
+    /**
+     * Item 6 da casa automática: o ponto de parede SOB a laje rebaixada, sem lugar no anel, chega pela parede, de fora do
+     * rebaixo — de `s` (na faixa) desce até a cota da corrida, corre na parede até o ponto e desce. `null` = não é o caso.
+     */
+    const saidaDoRebaixo = (p: Terminal) =>
+      hip.noForro && p.cotaMm < teto && p.tipoEletrico !== 'ILUMINACAO_TETO' ? saidaDoRebaixoPelaParede(model, nivel.id, p.at, p.cotaMm, hip.bitolaMm / 2, hip.noForro.folgaSobAVigaMm) : null;
+    const descerPelaSaida = (p: Terminal, saida: { s: { x: number; y: number }; cotaMm: number }): void => {
+      addTrecho(nivel.id, saida.s, teto, saida.s, saida.cotaMm);
+      addTrecho(nivel.id, saida.s, saida.cotaMm, p.at, saida.cotaMm);
+      addTrecho(nivel.id, p.at, saida.cotaMm, p.at, p.cotaMm);
+    };
+    /**
+     * Liga `lista` pela rede no teto, como sempre se fez: (pela parede, se `pelaParede`) cada um sobe na própria
+     * posição e entra no Prim com rota limitada. MUTA `alcancados` e `rota` — chamada duas vezes (pela luz), a
+     * segunda já vê a árvore da primeira e as descidas dos pontos.
+     */
+    const ligarPeloTeto = (lista: readonly Terminal[], pelaParede: boolean): void => {
+      if (lista.length === 0) return;
+      // E6.3 — PELA PAREDE: os pontos de parede (abaixo da rede) ligam-se pelo eixo
+      // das paredes; a árvore desvia de pilar. A luz de teto e quem não tem parede
+      // perto seguem retos, pendurados na árvore como antes.
+      // F14b: no forro, a luz de teto (na face do forro, abaixo da rede) sobe reta como antes; os de parede andam
+      // pelos anéis do forro dos cômodos.
+      const deParede = lista.filter((p) => p.cotaMm < teto && !(hip.noForro && p.tipoEletrico === 'ILUMINACAO_TETO'));
+      const pelas = (pelaParede || !!hip.noForro) && paredesDaRota().length > 0 && deParede.length > 0 ? arvoreDasParedes(deParede.map((p) => p.at)) : null;
+      const naParede = new Set<ObjectId>();
+      if (pelas?.raiz) {
+        if (chaveP(pelas.raiz) !== chaveP(quadro.at)) ligarNaRede(nivel.id, quadro.at, pelas.raiz, teto);
+        for (const a of pelas.arestas) addTrecho(nivel.id, a.de, teto, a.para, teto);
+        for (const p of deParede) {
+          const q = pelas.encaixe.get(chaveP(p.at));
+          if (!q) continue;
+          naParede.add(p.id);
+          if (hip.noForro) {
+            descerDoForro(p, q, hip.noForro);
+            continue;
+          }
+          sobrePonto.set(`${nivel.id}|${q.x},${q.y},${teto}`, teto - p.cotaMm + Math.hypot(p.at.x - q.x, p.at.y - q.y));
+          // Desce DENTRO da parede, no eixo, até a cota do ponto; e sai para a caixa na face.
+          addTrecho(nivel.id, q, teto, q, p.cotaMm);
+          if (chaveP(q) !== chaveP(p.at)) addTrecho(nivel.id, q, p.cotaMm, p.at, p.cotaMm);
+        }
+        // Os nós da árvore das paredes passam a ser alcançados — a rota deles é a medida pela rede.
+        const distParede = distanciasDesde(raizDoNivel, arestas);
+        for (const a of pelas.arestas) {
+          for (const v of [a.de, a.para]) {
+            const k = chave(nivel.id, v.x, v.y, teto);
+            alcancados.set(k, v);
+            rota.set(k, distParede.get(k) ?? Infinity);
+          }
+        }
+      }
+      // Cada pendente sobe (ou desce) ao teto na própria posição.
+      const pendentesNoTeto = new Map<No, { x: number; y: number }>();
+      for (const p of lista) {
+        if (naParede.has(p.id)) continue;
+        // Item 6 da casa automática: o ponto de parede SOB a laje rebaixada chega pela parede, de fora do rebaixo — a faixa
+        // não passa sobre ele (o ramal do banheiro de cima corre ali).
+        const saida = saidaDoRebaixo(p);
+        if (saida) {
+          descerPelaSaida(p, saida);
+          const k = chave(nivel.id, saida.s.x, saida.s.y, teto);
+          if (!alcancados.has(k)) pendentesNoTeto.set(k, { x: saida.s.x, y: saida.s.y });
           continue;
         }
-        sobrePonto.set(`${nivel.id}|${q.x},${q.y},${teto}`, teto - p.cotaMm + Math.hypot(p.at.x - q.x, p.at.y - q.y));
-        // Desce DENTRO da parede, no eixo, até a cota do ponto; e sai para a caixa na face.
-        addTrecho(nivel.id, q, teto, q, p.cotaMm);
-        if (chaveP(q) !== chaveP(p.at)) addTrecho(nivel.id, q, p.cotaMm, p.at, p.cotaMm);
+        if (p.cotaMm !== teto) addTrecho(nivel.id, p.at, p.cotaMm, p.at, teto);
+        const k = chave(nivel.id, p.at.x, p.at.y, teto);
+        if (!alcancados.has(k)) pendentesNoTeto.set(k, { x: p.at.x, y: p.at.y });
       }
-      // Os nós da árvore das paredes passam a ser alcançados — a rota deles é a medida pela rede.
-      const distParede = distanciasDesde(raizDoNivel, arestas);
-      for (const a of pelas.arestas) {
-        for (const v of [a.de, a.para]) {
-          const k = chave(nivel.id, v.x, v.y, teto);
-          alcancados.set(k, v);
-          rota.set(k, distParede.get(k) ?? Infinity);
+      // Prim COM ROTA LIMITADA: a cada passo entra o pendente que exige o menor
+      // eletroduto novo — mas só se pendurando num nó cujo caminho até o quadro
+      // (rota do nó + trecho novo) fique dentro de `rotaMaximaVezes` × a linha
+      // reta do pendente ao quadro. Se nenhum nó cabe (não acontece: a raiz
+      // sempre cabe quando a rota dela é conhecida), vale o mais próximo.
+      // Desempate determinístico (distância, x, y).
+      arvoreComRotaLimitada({
+        alcancados,
+        rota,
+        pendentes: pendentesNoTeto,
+        retaAteRaiz: retaAteOQuadro,
+        // F14b: no forro, a luz pendura no nó mais perto (o anel do próprio cômodo) — com o limite de rota, ia reta até o
+        // quadro, a 2 m, cruzando cômodos e colunas.
+        limite: hip.noForro ? null : hip.rotaMaximaVezes,
+        // E6.3: reto pelo teto, mas contornando pilar.
+        ligar: (de, para) => ligarNaRede(nivel.id, de.pos, para.pos, teto),
+      });
+    };
+
+    // Task 3 (F3, 24/10/2026): a regra pela luz vale também no forro — "a regra vale também no forro" (decisão do
+    // usuário). `ARVORE_NO_TETO` é o caminho de antes, inteiro, com e sem forro.
+    const pelaLuz = (hip.encaminhamento ?? 'PELA_LUZ_DO_AMBIENTE') === 'PELA_LUZ_DO_AMBIENTE';
+    if (!pelaLuz) {
+      ligarPeloTeto(pendentes, hip.rotaPelaParede);
+      continue;
+    }
+
+    // ── 24/10/2026: PELA LUZ DO AMBIENTE (ver o cabeçalho) ──
+    // Onde cada ponto de parede se pendura. A lista é a do quadro no pavimento, ligados inclusive: a luz candidata
+    // não precisa estar pendente, e a tomada nova desce da luz que já tinha eletroduto.
+    const pendura = encaminhamentoPorAmbiente(model, nivel.id, doNivel);
+    const ehLuzDeTeto = (p: Terminal) => p.tipoEletrico === 'ILUMINACAO_TETO';
+    // 1) No teto, a árvore SÓ com o quadro (ou a prumada) e as luzes: as do ambiente e as de ambientes vizinhos
+    //    se interligam pelo menor eletroduto dentro do limite de rota.
+    ligarPeloTeto(pendentes.filter(ehLuzDeTeto), false);
+    // 2) Cada ponto de parede desce da luz do ambiente (LUZ) ou liga na vizinha por dentro da parede (VIZINHA). A
+    //    vizinha resolve-se antes de quem depende dela; se ela cair na rede, a cadeia cai junto.
+    const doNivelPorId = new Map(doNivel.map((p) => [p.id, p]));
+    const idsLigados = new Set(ligados.map((p) => p.id));
+    const resolvido = new Map<ObjectId, boolean>();
+    const descidas: { x: number; y: number }[] = [];
+    /** Os nós do teto sobre as descidas desta passada — o ponto EMPILHADO na mesma vertical só desce. */
+    const topos = new Set<No>();
+    const temNo = (k: No) => arestas.some((a) => a.de === k || a.para === k);
+    /** A luz em que a cadeia de `id` termina (segue as VIZINHAs até a LUZ). */
+    const luzDaCadeia = (id: ObjectId): ObjectId | null => {
+      let pd = pendura.get(id);
+      for (let guarda = 0; pd?.tipo === 'VIZINHA' && guarda < doNivel.length; guarda++) pd = pendura.get(pd.terminalId);
+      return pd?.tipo === 'LUZ' ? pd.luzId : null;
+    };
+    /**
+     * Task 3: no forro, o `q` de cada ponto de parede — o MESMO encaixe no anel do cômodo da árvore pelos anéis de hoje
+     * (recuado `afastamentoDaFaceMm` da face; escorrega para fora de pilar, prumada e laje rebaixada; sem caminho pelo
+     * forro até o quadro, sem `q`). Só o encaixe é usado: os anéis ficam para os REDE.
+     */
+    let encaixeNoForro: Map<string, { x: number; y: number }> | null = null;
+    const qNoForro = (p: Terminal): { x: number; y: number } | null => {
+      if (!encaixeNoForro) {
+        const deParede = pendentes.filter((x) => !ehLuzDeTeto(x) && x.cotaMm < teto);
+        const arv = deParede.length > 0 && paredesDaRota().length > 0 ? arvoreDasParedes(deParede.map((x) => x.at)) : null;
+        encaixeNoForro = arv?.raiz ? arv.encaixe : new Map();
+      }
+      return encaixeNoForro.get(chaveP(p.at)) ?? null;
+    };
+    /** Correção 2: `q` cai no cômodo de algum de `refs` (pelo `ambienteDoPonto`)? Sem cômodo nenhum nas referências, vale. */
+    const noComodo = (q: { x: number; y: number }, refs: readonly { x: number; y: number }[]): boolean => {
+      const ids = refs.map((r) => ambienteDoPonto(model, { levelId: nivel.id, at: r as Point })?.space.id).filter((x): x is ObjectId => x != null);
+      if (ids.length === 0) return true;
+      const doQ = ambienteDoPonto(model, { levelId: nivel.id, at: q as Point })?.space.id;
+      return doQ != null && ids.includes(doQ);
+    };
+    /**
+     * Task 3: no forro, o ponto desce da luz pela faixa — reto (contornando pilar, prumada, ramal da laje de cima e laje
+     * rebaixada, como a árvore) da luz até `q`, e dali a descida do forro (junto da viga, na parede, até a caixa). Sem
+     * `q` no anel, o ponto sob laje rebaixada chega pela saída da parede (item 6), como hoje. Sem nenhum dos dois, REDE.
+     */
+    const descerDaLuzNoForro = (p: Terminal, luz: Terminal, noForro: NonNullable<HipotesesDeEletroduto['noForro']>): boolean => {
+      // Correção 2: o `q` que o escorregão da F14c pôs no anel do cômodo VIZINHO (o lado do próprio anel todo dentro de
+      // um obstáculo) não serve — a reta da luz iria até o outro cômodo. Vale o `q` no cômodo do ponto ou no da luz (o
+      // interruptor do hall que desce da luz da sala); fora deles, a saída pela parede, ou REDE.
+      const qDoAnel = qNoForro(p);
+      const q = qDoAnel && noComodo(qDoAnel, [p.at, luz.at]) ? qDoAnel : null;
+      const saida = q ? null : saidaDoRebaixo(p);
+      const alto = q ?? saida?.s ?? null;
+      if (!alto) return false;
+      const topo = chave(nivel.id, alto.x, alto.y, teto);
+      // Empilhados no mesmo `q` (ou rede existente ali): só a descida — um segundo caminho até a luz fecharia um anel.
+      if (!alcancados.has(topo) && !topos.has(topo) && chaveP(luz.at) !== chaveP(alto)) ligarNaRede(nivel.id, luz.at, alto, teto);
+      if (q) descerDoForro(p, q, noForro);
+      else descerPelaSaida(p, saida!);
+      topos.add(topo);
+      descidas.push(alto);
+      return true;
+    };
+    /** O ponto desce da luz: trecho no teto da luz até a vertical dele, e a descida. Falso se a luz não está na rede. */
+    const descerDaLuz = (p: Terminal, luzId: ObjectId): boolean => {
+      const luz = doNivelPorId.get(luzId);
+      // A luz precisa estar na rede do teto; não estando, o ponto vira REDE.
+      if (!luz || !alcancados.has(chave(nivel.id, luz.at.x, luz.at.y, teto))) return false;
+      if (hip.noForro) return descerDaLuzNoForro(p, luz, hip.noForro);
+      const topo = chave(nivel.id, p.at.x, p.at.y, teto);
+      // Da luz até a vertical do ponto, pelo teto (contornando pilar) — sem limite de rota: é a regra de obra. Correção 1:
+      // se a vertical já está na rede (outro ponto empilhado ali já desceu, ou a rede existente passa ali), só a
+      // descida — um segundo caminho até a luz fecharia um anel.
+      if (!alcancados.has(topo) && !topos.has(topo) && chaveP(luz.at) !== chaveP(p.at)) ligarNaRede(nivel.id, luz.at, p.at, teto);
+      // E desce, dentro da parede, até a caixa.
+      if (p.cotaMm !== teto) addTrecho(nivel.id, p.at, teto, p.at, p.cotaMm);
+      topos.add(topo);
+      descidas.push(p.at);
+      return true;
+    };
+    const pelaLuzOuVizinha = (p: Terminal): boolean => {
+      const memo = resolvido.get(p.id);
+      if (memo != null) return memo;
+      // Já tem eletroduto: está na rede (e serve de vizinha).
+      if (idsLigados.has(p.id)) {
+        resolvido.set(p.id, true);
+        return true;
+      }
+      resolvido.set(p.id, false); // contra ciclo: a regra não gera, mas a recursão não depende disso
+      const pd = pendura.get(p.id);
+      let ok = false;
+      if (pd?.tipo === 'LUZ') {
+        ok = descerDaLuz(p, pd.luzId);
+      } else if (pd?.tipo === 'VIZINHA') {
+        const v = doNivelPorId.get(pd.terminalId);
+        if (v && idsLigados.has(v.id) && !temNo(chave(nivel.id, v.at.x, v.at.y, v.cotaMm))) {
+          // Correção 1: a vizinha tem eletroduto, mas nenhum nó na cota da caixa dela — o trecho pela parede ficaria
+          // solto. O ponto desce da luz da cadeia.
+          const luzId = luzDaCadeia(v.id);
+          ok = luzId != null && descerDaLuz(p, luzId);
+        } else if (v && pelaLuzOuVizinha(v)) {
+          // Por dentro da parede, na cota das caixas, sem subir ao teto. Cada ponta na cota da própria caixa (a regra
+          // admite ±50 mm): o trecho encosta no nó de cada uma, e o caminho até o quadro passa por ele.
+          addTrecho(nivel.id, v.at, v.cotaMm, p.at, p.cotaMm);
+          ok = true;
         }
       }
-    }
-    // Cada pendente sobe (ou desce) ao teto na própria posição.
-    const pendentesNoTeto = new Map<No, { x: number; y: number }>();
-    for (const p of pendentes) {
-      if (naParede.has(p.id)) continue;
-      // Item 6 da casa automática: o ponto de parede SOB a laje rebaixada chega pela parede, de fora do rebaixo — a faixa
-      // não passa sobre ele (o ramal do banheiro de cima corre ali).
-      const saida = hip.noForro && p.cotaMm < teto && p.tipoEletrico !== 'ILUMINACAO_TETO' ? saidaDoRebaixoPelaParede(model, nivel.id, p.at, p.cotaMm, hip.bitolaMm / 2, hip.noForro.folgaSobAVigaMm) : null;
-      if (saida) {
-        addTrecho(nivel.id, saida.s, teto, saida.s, saida.cotaMm);
-        addTrecho(nivel.id, saida.s, saida.cotaMm, p.at, saida.cotaMm);
-        addTrecho(nivel.id, p.at, saida.cotaMm, p.at, p.cotaMm);
-        const k = chave(nivel.id, saida.s.x, saida.s.y, teto);
-        if (!alcancados.has(k)) pendentesNoTeto.set(k, { x: saida.s.x, y: saida.s.y });
-        continue;
+      resolvido.set(p.id, ok);
+      return ok;
+    };
+    // REDE: ambiente sem luz, infraestrutura (fora do mapa), ou quem não achou a luz na rede.
+    const naRede = pendentes.filter((p) => !ehLuzDeTeto(p) && !pelaLuzOuVizinha(p));
+    // 3) Os nós do teto sobre as descidas passam a ser alcançados, com a rota medida pela rede.
+    if (descidas.length > 0) {
+      const distDescidas = distanciasDesde(raizDoNivel, arestas);
+      for (const d of descidas) {
+        const k = chave(nivel.id, d.x, d.y, teto);
+        alcancados.set(k, { x: d.x, y: d.y });
+        rota.set(k, distDescidas.get(k) ?? Infinity);
       }
-      if (p.cotaMm !== teto) addTrecho(nivel.id, p.at, p.cotaMm, p.at, teto);
-      const k = chave(nivel.id, p.at.x, p.at.y, teto);
-      if (!alcancados.has(k)) pendentesNoTeto.set(k, { x: p.at.x, y: p.at.y });
     }
-    // Prim COM ROTA LIMITADA: a cada passo entra o pendente que exige o menor
-    // eletroduto novo — mas só se pendurando num nó cujo caminho até o quadro
-    // (rota do nó + trecho novo) fique dentro de `rotaMaximaVezes` × a linha
-    // reta do pendente ao quadro. Se nenhum nó cabe (não acontece: a raiz
-    // sempre cabe quando a rota dela é conhecida), vale o mais próximo.
-    // Desempate determinístico (distância, x, y).
-    arvoreComRotaLimitada({
-      alcancados,
-      rota,
-      pendentes: pendentesNoTeto,
-      retaAteRaiz: retaAteOQuadro,
-      // F14b: no forro, a luz pendura no nó mais perto (o anel do próprio cômodo) — com o limite de rota, ia reta até o
-      // quadro, a 2 m, cruzando cômodos e colunas.
-      limite: hip.noForro ? null : hip.rotaMaximaVezes,
-      // E6.3: reto pelo teto, mas contornando pilar.
-      ligar: (de, para) => ligarNaRede(nivel.id, de.pos, para.pos, teto),
-    });
+    // 4) Os REDE entram depois, como antes — a rota pela parede vale só para eles.
+    ligarPeloTeto(naRede, hip.rotaPelaParede);
   }
 
   const aLigar = pavimentos.reduce((n, p) => n + p.aLigar, 0);

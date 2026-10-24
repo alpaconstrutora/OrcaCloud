@@ -327,3 +327,103 @@ describe('a planta elétrica no papel obedece às preferências', () => {
     expect(quantos(gerarDxf(m, { ...o, exibicaoEletrica: sem('circuitoNoPonto') }))).toBe(0);
   });
 });
+
+describe('o eletroduto elétrico em ARCO na prancha (24/10/2026) — "Curvas, como no seu print"', () => {
+  /** Modelo mínimo: só um trecho elétrico (cotas em `cotaMm`), sem quadro nem pontos. */
+  function soUmTrecho(a: { x: number; y: number }, b: { x: number; y: number }, cotaMm: number, disciplina: 'ELETRICA' | 'AGUA_FRIA' = 'ELETRICA', cotaBMm = cotaMm): BlueprintModel {
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    return applyCommand(base, { type: 'AddTrecho', levelId: base.levels[0].id, disciplina, a: point(a.x, a.y), b: point(b.x, b.y), cotaAMm: cotaMm, cotaBMm, bitolaMm: 25 }).model;
+  }
+  // 1 mm do papel a cada 50 mm do modelo; y do papel desce (como em `desenharPlanta`).
+  const proj = { px: (x: number) => x / 50, py: (y: number) => -y / 50 };
+  const MEDIA = 0.35;
+  const traco = (d: DesenhistaDeProva) =>
+    d.chamadas.filter((c) => c.tipo === 'linha' && (c.args[4] as { espessuraMm: number }).espessuraMm === MEDIA).map((c) => c.args as number[]);
+  const distancia = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.abs((p.x - a.x) * (b.y - a.y) - (p.y - a.y) * (b.x - a.x)) / Math.hypot(b.x - a.x, b.y - a.y);
+
+  it('trecho no teto: uma POLILINHA de 12 segmentos de ponta a ponta, com a flecha de 12 % (teto 300 mm) e do lado de min→max', () => {
+    const m = soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 2800);
+    const d = new DesenhistaDeProva();
+    desenharEletrica(d, m, proj);
+    const linhas = traco(d);
+    expect(linhas).toHaveLength(12);
+    // Encadeado: o fim de cada segmento é o começo do seguinte; as pontas são as do trecho.
+    linhas.slice(1).forEach((l, i) => {
+      expect(l[0]).toBeCloseTo(linhas[i][2], 9);
+      expect(l[1]).toBeCloseTo(linhas[i][3], 9);
+    });
+    expect([linhas[0][0], linhas[0][1]]).toEqual([0, -0]);
+    expect(linhas[11][2]).toBeCloseTo(2000 / 50, 9);
+    expect(linhas[11][3]).toBeCloseTo(0, 9);
+    // O meio: 12 % de 2000 mm = 240 mm → 4,8 mm de papel; à esquerda de min→max = +y do modelo = papel para CIMA (y < 0).
+    const meio = { x: linhas[5][2], y: linhas[5][3] };
+    expect(meio.y).toBeCloseTo(-4.8, 6);
+    expect(distancia(meio, { x: 0, y: 0 }, { x: 40, y: 0 })).toBeCloseTo(4.8, 6);
+    // Trecho comprido: a flecha para no teto de 300 mm (6 mm de papel).
+    const longo = new DesenhistaDeProva();
+    desenharEletrica(longo, soUmTrecho({ x: 0, y: 0 }, { x: 10000, y: 0 }, 2800), proj);
+    expect(Math.abs(traco(longo)[5][3])).toBeCloseTo(6, 6);
+  });
+
+  it('o mesmo trecho com a e b trocados dá o mesmo arco (lado determinístico)', () => {
+    const ida = new DesenhistaDeProva();
+    const volta = new DesenhistaDeProva();
+    desenharEletrica(ida, soUmTrecho({ x: 100, y: 200 }, { x: 2100, y: 1500 }, 2800), proj);
+    desenharEletrica(volta, soUmTrecho({ x: 2100, y: 1500 }, { x: 100, y: 200 }, 2800), proj);
+    const pontos = (ls: number[][]) => [ls[0].slice(0, 2), ...ls.map((l) => l.slice(2, 4))];
+    const a = pontos(traco(ida));
+    const b = pontos(traco(volta)).reverse();
+    expect(b).toHaveLength(a.length);
+    a.forEach((p, i) => {
+      expect(b[i][0]).toBeCloseTo(p[0], 6);
+      expect(b[i][1]).toBeCloseTo(p[1], 6);
+    });
+  });
+
+  it('prumada fica sem arco (continua o círculo); trecho que não é elétrico não é desenhado por esta camada', () => {
+    const prumada = new DesenhistaDeProva();
+    desenharEletrica(prumada, soUmTrecho({ x: 500, y: 500 }, { x: 500, y: 500 }, 0, 'ELETRICA', 2800), proj);
+    expect(traco(prumada).every((l) => Math.hypot(l[2] - l[0], l[3] - l[1]) < 1.5)).toBe(true); // só os 24 lados do círculo
+    const agua = new DesenhistaDeProva();
+    desenharEletrica(agua, soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 2800, 'AGUA_FRIA'), proj);
+    expect(traco(agua)).toHaveLength(0);
+  });
+
+  it('I2 (correção 1): o trecho DENTRO DA PAREDE (cota 300, a da VIZINHA) sai RETO; o do teto e o do piso, em arco', () => {
+    const parede = new DesenhistaDeProva();
+    desenharEletrica(parede, soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 300), proj);
+    expect(traco(parede)).toEqual([[0, -0, 40, -0, { espessuraMm: MEDIA, cor: '#000000' }]]);
+    const teto = new DesenhistaDeProva();
+    desenharEletrica(teto, soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 2800), proj);
+    expect(traco(teto)).toHaveLength(12);
+    const piso = new DesenhistaDeProva();
+    desenharEletrica(piso, soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 0), proj);
+    expect(Math.max(...traco(piso).flatMap((l) => [Math.abs(l[1]), Math.abs(l[3])]))).toBeGreaterThan(4.2);
+  });
+
+  it('revisão final: dois SOBREPOSTOS de comprimentos diferentes (0–4000 e 1000–3000) usam a MESMA flecha base, a do mais longo', () => {
+    const base = soUmTrecho({ x: 0, y: 0 }, { x: 4000, y: 0 }, 2800);
+    const m = applyCommand(base, { type: 'AddTrecho', levelId: base.levels[0].id, disciplina: 'ELETRICA', a: point(1000, 0), b: point(3000, 0), cotaAMm: 2800, cotaBMm: 2800, bitolaMm: 25 }).model;
+    expect(m.trechos).toHaveLength(2);
+    const d = new DesenhistaDeProva();
+    desenharEletrica(d, m, proj);
+    const linhas = traco(d);
+    expect(linhas).toHaveLength(24);
+    const flecha = (ls: number[][]) => Math.max(...ls.flatMap((l) => [Math.abs(l[1]), Math.abs(l[3])]));
+    // A flecha do mais longo: 12 % de 4000 = 480, limitada a 300 mm → 6 mm de papel. O curto, sozinho, daria 4,8 mm.
+    expect(flecha(linhas.slice(0, 12))).toBeCloseTo(6, 6);
+    expect(flecha(linhas.slice(12))).toBeCloseTo(6, 6);
+  });
+
+  it('eletroduto no PISO: o tracejado acompanha o arco, não a corda', () => {
+    const m = soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 0);
+    const d = new DesenhistaDeProva();
+    desenharEletrica(d, m, proj);
+    const tracos = traco(d);
+    expect(tracos.length).toBeGreaterThan(4);
+    const maisLonge = Math.max(...tracos.flatMap((l) => [Math.abs(l[1]), Math.abs(l[3])]));
+    expect(maisLonge).toBeGreaterThan(4.2); // a flecha é 4,8 mm; um traço cai perto do meio do arco
+    expect(maisLonge).toBeLessThanOrEqual(4.8 + 1e-9);
+  });
+});

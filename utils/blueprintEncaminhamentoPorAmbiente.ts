@@ -113,7 +113,7 @@ export function encaminhamentoPorAmbiente(
 
   /**
    * Correção 1: entre as caixas `q1` e `q2` (encaixadas em `parede`, na cota `cotaMm`) há vão da parede na altura
-   * delas, ou pilar cruzando o segmento `a`→`b` entre os pontos? Então o eletroduto não passa por dentro da parede.
+   * delas, ou pilar cruzando o eixo `q1`→`q2` ou o segmento `a`→`b` entre os pontos? Então o eletroduto não passa por dentro da parede.
    */
   const bloqueadoEntre = (parede: Wall, q1: Point, q2: Point, a: Point, b: Point, cotaMm: number): boolean => {
     const L = Math.hypot(parede.b.x - parede.a.x, parede.b.y - parede.a.y) || 1;
@@ -125,7 +125,9 @@ export function encaminhamentoPorAmbiente(
       const naAltura = cotaMm >= o.sillMm && cotaMm <= o.sillMm + o.heightMm;
       if (sobrepoe && naAltura) return true;
     }
-    return fracaoDentro(a, b, pilares) > 0;
+    // O pilar vale no EIXO da parede (por onde o eletroduto corre: `q1`→`q2`) e na linha entre as caixas (a face):
+    // o pilar mais fino que a parede, centrado no eixo, não toca a linha da face e passaria despercebido.
+    return fracaoDentro(q1, q2, pilares) > 0 || fracaoDentro(a, b, pilares) > 0;
   };
 
   /** O id do ambiente do ponto: o que o contém ou, na face da parede, o cômodo mais perto (até o raio). */

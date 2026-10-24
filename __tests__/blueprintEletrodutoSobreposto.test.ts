@@ -11,6 +11,7 @@ import {
   arcoDoTrecho,
   curvaDoTrecho,
   desenhaEmArco,
+  desenhoDosGrupos,
   desviosDeSobreposicao,
   entradasNoQuadro,
   flechaDoArcoMm,
@@ -20,6 +21,8 @@ import {
   sobrepostos,
 } from '../utils/blueprintEletrodutoSobreposto';
 import { COTA_MINIMA_DA_REDE_MM } from '../utils/blueprintEletrodutos';
+import { MESMA_COTA_MM } from '../utils/blueprintEncaminhamentoPorAmbiente';
+import { sentidoDoEletroduto } from '../utils/blueprintRede';
 
 const seg = (id: string, ax: number, ay: number, bx: number, by: number) => ({ id, a: { x: ax, y: ay }, b: { x: bx, y: by } });
 
@@ -319,6 +322,14 @@ describe('correção 1 (24/10/2026) — sobrepostos de comprimentos diferentes e
     expect(g.get('b')).toBeCloseTo(180, 9);
   });
 
+  it('revisão final — desenhoDosGrupos devolve os MESMOS dois mapas das funções separadas, de um só agrupamento', () => {
+    const trechos = [longo, curto, { id: 'p', disciplina: 'ELETRICA', cotaAMm: 300, cotaBMm: 300, a: { x: 0, y: 5000 }, b: { x: 2000, y: 5000 } }];
+    const { desvios, flechas } = desenhoDosGrupos(trechos);
+    expect([...desvios.entries()]).toEqual([...desviosDeSobreposicao(trechos).entries()]);
+    expect([...flechas.entries()]).toEqual([...flechasBaseDosGrupos(trechos).entries()]);
+    expect(flechas.size).toBeGreaterThan(0);
+  });
+
   it('I1 — 0–4000 × 1000–3000 com nível −1: as polilinhas não se cruzam e ficam separadas no miolo', () => {
     const flechas = flechasBaseDosGrupos([longo, curto]);
     const g = geometriaDesenhada([longo, curto], new Map([['t2', -1]]), new Map(), 0.1, undefined, flechas);
@@ -346,6 +357,25 @@ describe('correção 1 (24/10/2026) — sobrepostos de comprimentos diferentes e
     expect(desenhaEmArco(t(undefined, undefined))).toBe(true);
     expect(desenhaEmArco(t(2800, 2800, 'AGUA_FRIA'))).toBe(false);
     expect(COTA_MINIMA_DA_REDE_MM).toBe(2100);
+  });
+
+  it('revisão final — desenhaEmArco aceita a MESMA tolerância de cota da regra (±MESMA_COTA_MM): VIZINHA de 300 para 330 sai reta', () => {
+    const t = (cotaAMm: number, cotaBMm: number) => ({ disciplina: 'ELETRICA', cotaAMm, cotaBMm });
+    expect(desenhaEmArco(t(300, 330))).toBe(false);
+    expect(desenhaEmArco(t(330, 300))).toBe(false);
+    expect(desenhaEmArco(t(300, 300 + MESMA_COTA_MM))).toBe(false); // no limite, ainda é a mesma cota
+    expect(desenhaEmArco(t(300, 300 + MESMA_COTA_MM + 1))).toBe(true); // passou: já é desnível
+    expect(desenhaEmArco(t(0, 30))).toBe(true); // o piso (0) segue em arco
+    expect(desenhaEmArco(t(2090, 2110))).toBe(true); // 2110 já é teto
+  });
+
+  it('revisão final — o trecho da VIZINHA de 300 para 330 sai reto (geometria) e sem a seta de SOBE/DESCE', () => {
+    const vizinha = { id: 'v', disciplina: 'ELETRICA', cotaAMm: 300, cotaBMm: 330, a: { x: 0, y: 0 }, b: { x: 1500, y: 0 } };
+    const g = geometriaDesenhada([vizinha], new Map(), new Map(), 0.1);
+    expect(g[0].pontos).toEqual([vizinha.a, vizinha.b]);
+    expect(sentidoDoEletroduto(vizinha, MESMA_COTA_MM)).toBeNull();
+    expect(sentidoDoEletroduto({ cotaAMm: 300, cotaBMm: 2800 }, MESMA_COTA_MM)).toBe('SOBE'); // a prumada de verdade segue com a seta
+    expect(sentidoDoEletroduto({ cotaAMm: 2800, cotaBMm: 300 }, MESMA_COTA_MM)).toBe('DESCE');
   });
 
   it('I2 — geometriaDesenhada: o trecho da VIZINHA (cota 300) sai reto; o do teto e o do piso, em arco', () => {

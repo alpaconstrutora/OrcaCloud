@@ -54,7 +54,7 @@ import { PRIORIDADE_DA_ANOTACAO, posicionarAnotacoes, type AnotacaoAPosicionar, 
 import { larguraEstimadaDoTexto } from './blueprintCotas';
 import { EXIBICAO_ELETRICA_PADRAO, comDependenciasAplicadas, type ExibicaoEletrica } from './preferencias/resolver';
 import { diametrosAnotados } from './blueprintDiametroDosEletrodutos';
-import { arcoDoTrecho, desenhaEmArco } from './blueprintEletrodutoSobreposto';
+import { arcoDoTrecho, desenhaEmArco, desenhoDosGrupos } from './blueprintEletrodutoSobreposto';
 import { ROTULO_DO_RECORTE, categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos, entraNoRecorte, type CategoriaEletrica, type RecorteEletrico } from './blueprintRecorteEletrico';
 import {
   HIPOTESES_PADRAO,
@@ -342,6 +342,9 @@ export function desenharEletrica(
   const numerados = trechosNumerados(model, fiacao);
   // O Ø predominante não se escreve (a legenda diz); o diferente, uma vez por trecho contínuo.
   const diametros = diametrosAnotados(model.trechos ?? []);
+  // A flecha base de cada grupo de sobrepostos (a do mais longo), a MESMA conta da tela: sem ela, dois sobrepostos de
+  // comprimentos diferentes curvariam cada um pela própria flecha e se cruzariam no papel.
+  const { flechas: flechasDosGrupos } = desenhoDosGrupos(model.trechos ?? []);
   // Eletrodutos primeiro: ficam por baixo dos símbolos.
   for (const t of model.trechos ?? []) {
     if (t.disciplina !== 'ELETRICA') continue;
@@ -358,11 +361,13 @@ export function desenharEletrica(
       d.texto(a.x + 1.4 * k, a.y + 0.7 * k, t.cotaBMm > t.cotaAMm ? '↑' : '↓', TEXTO_MM, COR_FRACA);
       continue;
     }
-    // O ARCO (24/10/2026, "Curvas, como no seu print"): o eletroduto elétrico é desenhado em arco, na
-    // MESMA conta da tela (`arcoDoTrecho`, em mm do modelo — a flecha escala com o desenho, como no
-    // papel), levada ao papel ponto a ponto. É desenho: o modelo segue reto. O trecho DENTRO DA PAREDE
-    // (`desenhaEmArco` falso) fica reto, como na tela.
-    const arco = arcoDoTrecho(t.a, t.b, { eletrico: desenhaEmArco(t) });
+    // O ARCO (24/10/2026, "Curvas, como no seu print"): o eletroduto elétrico é desenhado em arco por
+    // `arcoDoTrecho` (em mm do modelo — a flecha escala com o desenho, como no papel), levada ao papel
+    // ponto a ponto. É desenho: o modelo segue reto. O trecho DENTRO DA PAREDE (`desenhaEmArco` falso) fica
+    // reto, como na tela. IGUAL À TELA: o predicado e a flecha base do grupo de sobrepostos (`flechasDosGrupos`).
+    // DIFERENTE DA TELA: aqui NÃO há o deslocamento por nível dos sobrepostos nem a entrada espalhada no quadro —
+    // o papel mostra o arco base de cada um, sem o leque.
+    const arco = arcoDoTrecho(t.a, t.b, { eletrico: desenhaEmArco(t), flechaBaseMm: flechasDosGrupos.get(t.id) });
     const noPapel = arco.pontos.map((p) => ({ x: px(p.x), y: py(p.y) }));
     if (embutidoNoPiso(t)) tracejadaPolilinha(d, noPapel, MEDIA, 1.5 * k);
     else for (let i = 0; i + 1 < noPapel.length; i++) d.linha(noPapel[i].x, noPapel[i].y, noPapel[i + 1].x, noPapel[i + 1].y, { espessuraMm: MEDIA, cor: COR });

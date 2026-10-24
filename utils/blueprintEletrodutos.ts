@@ -733,11 +733,6 @@ export function planejarEletrodutos(
       }
       return encaixeNoForro.get(chaveP(p.at)) ?? null;
     };
-    /**
-     * Task 3: no forro, o ponto desce da luz pela faixa — reto (contornando pilar, prumada, ramal da laje de cima e laje
-     * rebaixada, como a árvore) da luz até `q`, e dali a descida do forro (junto da viga, na parede, até a caixa). Sem
-     * `q` no anel, o ponto sob laje rebaixada chega pela saída da parede (item 6), como hoje. Sem nenhum dos dois, REDE.
-     */
     /** Correção 2: `q` cai no cômodo de algum de `refs` (pelo `ambienteDoPonto`)? Sem cômodo nenhum nas referências, vale. */
     const noComodo = (q: { x: number; y: number }, refs: readonly { x: number; y: number }[]): boolean => {
       const ids = refs.map((r) => ambienteDoPonto(model, { levelId: nivel.id, at: r as Point })?.space.id).filter((x): x is ObjectId => x != null);
@@ -745,6 +740,11 @@ export function planejarEletrodutos(
       const doQ = ambienteDoPonto(model, { levelId: nivel.id, at: q as Point })?.space.id;
       return doQ != null && ids.includes(doQ);
     };
+    /**
+     * Task 3: no forro, o ponto desce da luz pela faixa — reto (contornando pilar, prumada, ramal da laje de cima e laje
+     * rebaixada, como a árvore) da luz até `q`, e dali a descida do forro (junto da viga, na parede, até a caixa). Sem
+     * `q` no anel, o ponto sob laje rebaixada chega pela saída da parede (item 6), como hoje. Sem nenhum dos dois, REDE.
+     */
     const descerDaLuzNoForro = (p: Terminal, luz: Terminal, noForro: NonNullable<HipotesesDeEletroduto['noForro']>): boolean => {
       // Correção 2: o `q` que o escorregão da F14c pôs no anel do cômodo VIZINHO (o lado do próprio anel todo dentro de
       // um obstáculo) não serve — a reta da luz iria até o outro cômodo. Vale o `q` no cômodo do ponto ou no da luz (o

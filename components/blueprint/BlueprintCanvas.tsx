@@ -150,9 +150,8 @@ import {
   PASSO_DA_CURVA_PX,
   arcoDoTrecho,
   desenhaEmArco,
-  desviosDeSobreposicao,
+  desenhoDosGrupos,
   entradasNoQuadro,
-  flechasBaseDosGrupos,
   geometriaDesenhada,
 } from '../../utils/blueprintEletrodutoSobreposto';
 import {
@@ -179,6 +178,7 @@ import {
   parDaLinhaEmPlanta,
 } from '../../utils/blueprintRede';
 import { TIPOS_DE_EQUIPAMENTO_ELETRICO } from '../../utils/blueprintRede';
+import { MESMA_COTA_MM } from '../../utils/blueprintEncaminhamentoPorAmbiente';
 import {
   COR_DO_CONTORNO_DA_PECA,
   LARGURA_MINIMA_DO_DETALHE_PX,
@@ -2344,8 +2344,7 @@ export default function BlueprintCanvas({
    * `blueprintEletrodutoSobreposto.ts`.
    */
   const desenhoDosTrechos = useMemo(() => {
-    const desvios = desviosDeSobreposicao(trechosDoNivel);
-    const flechas = flechasBaseDosGrupos(trechosDoNivel);
+    const { desvios, flechas } = desenhoDosGrupos(trechosDoNivel); // UM agrupamento para os dois mapas
     const entradas = entradasNoQuadro(
       trechosDoNivel,
       quadrosDoNivel.map((q) => ({ id: q.id, at: q.at, larguraMm: medidasDoQuadro(q).larguraMm, rotacaoGraus: giroDaPeca(q) })),
@@ -6629,7 +6628,7 @@ export default function BlueprintCanvas({
       // Círculo na base com seta saindo a 45° = eletroduto que SOBE; seta
       // chegando ao círculo = que DESCE. Vale para o eletroduto com desnível:
       // a prumada, e o "L" na ponta em que ele sobe pela parede.
-      const sentido = t.disciplina === 'ELETRICA' ? sentidoDoEletroduto(t) : null;
+      const sentido = t.disciplina === 'ELETRICA' ? sentidoDoEletroduto(t, MESMA_COTA_MM) : null;
       if (sentido) {
         // Onde está a vertical do "L"? Na ponta oposta à horizontal — a mesma
         // regra do 3D, para a seta ficar onde o cilindro sobe.

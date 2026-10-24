@@ -323,5 +323,15 @@ describe('encaminhamentoPorAmbiente — onde cada ponto de parede se pendura', (
       expect((m.structures ?? []).filter((s) => s.kind === 'PILAR')).toHaveLength(1);
       expect(encaminhamentoPorAmbiente(m, levelId, todos(m)).get(b)).toEqual({ tipo: 'LUZ', luzId: luz });
     });
+
+    // Revisão final: a vizinha corre pelo EIXO da parede (o encaixe), não pela linha da face em que a caixa está.
+    // Um pilar mais fino que a parede, centrado no eixo, não toca a linha da face e passava despercebido.
+    it.each([140, 120, 150])('PILAR 300×%i mm centrado no EIXO da parede de 150 → não encadeia', (profundidade) => {
+      const { m, levelId, luz, a, b } = duasTomadas((mm) => ({ type: 'AddStructural', levelId: mm.levels[0].id, kind: 'PILAR', pontos: [{ x: 2300, y: 0 }], larguraMm: 300, profundidadeMm: profundidade, alturaMm: 2800 }) as unknown as Command);
+      expect((m.structures ?? []).filter((s) => s.kind === 'PILAR')).toHaveLength(1);
+      const r = encaminhamentoPorAmbiente(m, levelId, todos(m));
+      expect(r.get(a)).toEqual({ tipo: 'LUZ', luzId: luz });
+      expect(r.get(b)).toEqual({ tipo: 'LUZ', luzId: luz });
+    });
   });
 });

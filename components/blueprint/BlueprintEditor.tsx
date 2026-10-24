@@ -8749,7 +8749,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     if (!quadro) return;
     const ok = await confirmar({
       title: `Refazer os eletrodutos de ${quadro.nome}?`,
-      message: `Apaga os ${plano.trechosDoQuadro} eletroduto(s) deste quadro — inclusive os que você já confirmou — e lança de novo com as hipóteses atuais (bitola mínima, rota máxima). Ctrl+Z desfaz.`,
+      message: `Apaga os ${plano.trechosDoQuadro} eletroduto(s) deste quadro — inclusive os que você já confirmou — e lança de novo com as hipóteses atuais (bitola mínima, rota máxima, encaminhamento). Ctrl+Z desfaz.`,
       confirmLabel: 'Refazer',
       variant: 'warning',
     });

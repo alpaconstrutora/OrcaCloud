@@ -402,6 +402,20 @@ describe('o eletroduto elétrico em ARCO na prancha (24/10/2026) — "Curvas, co
     expect(Math.max(...traco(piso).flatMap((l) => [Math.abs(l[1]), Math.abs(l[3])]))).toBeGreaterThan(4.2);
   });
 
+  it('revisão final: dois SOBREPOSTOS de comprimentos diferentes (0–4000 e 1000–3000) usam a MESMA flecha base, a do mais longo', () => {
+    const base = soUmTrecho({ x: 0, y: 0 }, { x: 4000, y: 0 }, 2800);
+    const m = applyCommand(base, { type: 'AddTrecho', levelId: base.levels[0].id, disciplina: 'ELETRICA', a: point(1000, 0), b: point(3000, 0), cotaAMm: 2800, cotaBMm: 2800, bitolaMm: 25 }).model;
+    expect(m.trechos).toHaveLength(2);
+    const d = new DesenhistaDeProva();
+    desenharEletrica(d, m, proj);
+    const linhas = traco(d);
+    expect(linhas).toHaveLength(24);
+    const flecha = (ls: number[][]) => Math.max(...ls.flatMap((l) => [Math.abs(l[1]), Math.abs(l[3])]));
+    // A flecha do mais longo: 12 % de 4000 = 480, limitada a 300 mm → 6 mm de papel. O curto, sozinho, daria 4,8 mm.
+    expect(flecha(linhas.slice(0, 12))).toBeCloseTo(6, 6);
+    expect(flecha(linhas.slice(12))).toBeCloseTo(6, 6);
+  });
+
   it('eletroduto no PISO: o tracejado acompanha o arco, não a corda', () => {
     const m = soUmTrecho({ x: 0, y: 0 }, { x: 2000, y: 0 }, 0);
     const d = new DesenhistaDeProva();

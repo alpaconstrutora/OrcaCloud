@@ -1148,9 +1148,10 @@ export function comprimentoDoEletroduto(
  *   desce ... seta chegando ao círculo
  *
  * Só faz sentido na prumada e no "L" — no horizontal não há o que subir.
+ * `toleranciaMm`: o desnível que ainda conta como a mesma cota (quem desenha passa `MESMA_COTA_MM`).
  */
-export function sentidoDoEletroduto(t: { cotaAMm: number; cotaBMm: number }): 'SOBE' | 'DESCE' | null {
-  if (t.cotaBMm > t.cotaAMm) return 'SOBE';
-  if (t.cotaBMm < t.cotaAMm) return 'DESCE';
-  return null;
+export function sentidoDoEletroduto(t: { cotaAMm: number; cotaBMm: number }, toleranciaMm = 0): 'SOBE' | 'DESCE' | null {
+  const desnivel = t.cotaBMm - t.cotaAMm;
+  if (Math.abs(desnivel) <= toleranciaMm) return null; // dentro da tolerância é a mesma cota (a VIZINHA de 300 para 330)
+  return desnivel > 0 ? 'SOBE' : 'DESCE';
 }

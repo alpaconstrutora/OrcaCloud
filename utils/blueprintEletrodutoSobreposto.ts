@@ -50,6 +50,7 @@
  * leem dela, para o que se vê ser o que se pega e o que se imprime.
  */
 import { COTA_MINIMA_DA_REDE_MM } from './blueprintEletrodutos';
+import { MESMA_COTA_MM } from './blueprintEncaminhamentoPorAmbiente';
 
 export interface Ponto2D {
   x: number;
@@ -159,8 +160,13 @@ export function desviosDeSobreposicao<T extends { id: string; a: Ponto2D; b: Pon
   trechos: readonly T[],
   tolMm = TOLERANCIA_DE_SOBREPOSICAO_MM,
 ): Map<string, number> {
+  return desviosDosGrupos(gruposConfundiveis(trechos, tolMm));
+}
+
+/** Os desvios (níveis de curva) de grupos JÁ calculados — ver `desviosDeSobreposicao`. */
+function desviosDosGrupos<T extends { id: string; a: Ponto2D; b: Ponto2D }>(grupos: readonly T[][]): Map<string, number> {
   const desvios = new Map<string, number>();
-  for (const g of gruposConfundiveis(trechos, tolMm)) {
+  for (const g of grupos) {
     if (g.length < 2) continue;
     const ordenados = [...g].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
     ordenados.forEach((t, k) => {
@@ -211,14 +217,32 @@ export function flechasBaseDosGrupos<T extends { id: string; a: Ponto2D; b: Pont
   trechos: readonly T[],
   tolMm = TOLERANCIA_DE_SOBREPOSICAO_MM,
 ): Map<string, number> {
+  return flechasDosGrupos(gruposConfundiveis(trechos, tolMm));
+}
+
+/** As flechas base de grupos JÁ calculados — ver `flechasBaseDosGrupos`. */
+function flechasDosGrupos<T extends { id: string; a: Ponto2D; b: Ponto2D } & TrechoParaArco>(grupos: readonly T[][]): Map<string, number> {
   const flechas = new Map<string, number>();
-  for (const g of gruposConfundiveis(trechos, tolMm)) {
+  for (const g of grupos) {
     if (g.length < 2) continue;
     const curvos = g.filter(desenhaEmArco);
     const maxima = Math.max(0, ...curvos.map((t) => flechaDoArcoMm(Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y))));
     for (const t of curvos) flechas.set(t.id, maxima);
   }
   return flechas;
+}
+
+/**
+ * Os DOIS mapas do desenho dos sobrepostos — o desvio (nível de curva) e a flecha base do grupo — a partir de UM
+ * agrupamento: `gruposConfundiveis` é O(n²), e a tela e a prancha precisam dos dois. É a função que quem desenha
+ * chama; `desviosDeSobreposicao` e `flechasBaseDosGrupos` seguem para quem quer só um deles.
+ */
+export function desenhoDosGrupos<T extends { id: string; a: Ponto2D; b: Ponto2D } & TrechoParaArco>(
+  trechos: readonly T[],
+  tolMm = TOLERANCIA_DE_SOBREPOSICAO_MM,
+): { desvios: Map<string, number>; flechas: Map<string, number> } {
+  const grupos = gruposConfundiveis(trechos, tolMm);
+  return { desvios: desviosDosGrupos(grupos), flechas: flechasDosGrupos(grupos) };
 }
 
 /**
@@ -318,14 +342,14 @@ export interface TrechoParaArco {
 /**
  * O trecho é desenhado em ARCO? Só o ELÉTRICO — e não o que corre DENTRO DA PAREDE: o pedido era *"interligar uma
  * tomada a outra na mesma parede, porém percorrendo dentro da parede"*, e um arco saindo da parede para dentro do
- * cômodo diz o contrário na planta. Dentro da parede = as duas cotas iguais e estritamente entre 0 (piso) e
+ * cômodo diz o contrário na planta. Dentro da parede = as duas cotas iguais (±`MESMA_COTA_MM`, a tolerância da regra da VIZINHA) e estritamente entre 0 (piso) e
  * `COTA_MINIMA_DA_REDE_MM` (onde a rede passa a ser de teto). O piso (cota 0) e o teto/forro seguem em arco.
  * É o MESMO predicado na tela, no clique e na prancha.
  */
 export function desenhaEmArco(t: TrechoParaArco): boolean {
   if (t.disciplina !== 'ELETRICA') return false;
   const { cotaAMm: a, cotaBMm: b } = t;
-  const naParede = a != null && b != null && a === b && a > 0 && a < COTA_MINIMA_DA_REDE_MM;
+  const naParede = a != null && b != null && Math.abs(a - b) <= MESMA_COTA_MM && a > 0 && a < COTA_MINIMA_DA_REDE_MM && b > 0 && b < COTA_MINIMA_DA_REDE_MM;
   return !naParede;
 }
 

@@ -429,10 +429,10 @@ describe('E6.3 — o eletroduto desvia da estrutura', () => {
     expect(hz.length).toBe(2); // por um canto do pilar
     for (const c of hz) expect(fracaoDentro(c.a, c.b, pegadas)).toBe(0);
     // A face em 2850/3150 e 850/1150; o anel a 62,5 mm (2787,5 → 2788 no arredondamento do anel) e o canto 10 cm além:
-    // 162 mm da face de um lado, 163 do outro.
+    // 162 mm da face dos dois lados (2850 − 162 = 2688; 3150 + 162 = 3312).
     const canto = hz[0].b;
-    expect([2688, 3313]).toContain(canto.x);
-    expect([688, 1313]).toContain(canto.y);
+    expect([2688, 3312]).toContain(canto.x);
+    expect([688, 1312]).toContain(canto.y);
     for (const c of hz) expect(c.circuitoIds).toEqual([comPilar.c1]);
     expect(plano.avisos).toEqual([]);
   });

@@ -38,7 +38,11 @@
  *    FACE (mesmo lado do eixo), do mesmo ambiente e da MESMA COTA (±50 mm — a
  *    tomada baixa não se pendura na média). A tomada liga na vizinha quando a
  *    distância AO LONGO da parede é MENOR que a distância em planta até a luz
- *    escolhida para ela.
+ *    escolhida para ela. Correção 1 (24/10/2026): a vizinha corre DENTRO da
+ *    parede, então NÃO vale quando entre as duas caixas há um VÃO da mesma
+ *    parede na altura delas (porta; a janela com peitoril acima da tomada
+ *    deixa passar por baixo) ou um PILAR cruzando o segmento entre elas. Sem
+ *    vizinha válida, o ponto desce da luz.
  *  - A cadeia TERMINA NUMA LUZ: os pontos são processados do mais perto da luz
  *    para o mais longe (desempate por id) e só se pendura em quem já foi
  *    resolvido. Sem ciclo e sem cadeia solta, na ordem que a lista chegar.
@@ -48,6 +52,7 @@
 import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, comandosDoModelo, pointInPolygon, type BlueprintModel, type ObjectId, type Point, type Terminal, type Wall } from './blueprintKernel';
 import { ambienteDoPonto } from './blueprintAgrupamentoDePontos';
 import { encaixarNaParede } from './blueprintRotaPelasParedes';
+import { fracaoDentro, pegadasDePilares } from './blueprintObstaculosEstruturais';
 
 /**
  * O raio de encaixe do ponto na parede e do "cômodo mais perto", em mm — o MESMO de
@@ -104,6 +109,24 @@ export function encaminhamentoPorAmbiente(
 
   const espacos = model.spaces.filter((s) => s.levelId === levelId);
   const paredes = model.walls.filter((w) => w.levelId === levelId);
+  const pilares = pegadasDePilares(model, levelId);
+
+  /**
+   * Correção 1: entre as caixas `q1` e `q2` (encaixadas em `parede`, na cota `cotaMm`) há vão da parede na altura
+   * delas, ou pilar cruzando o segmento `a`→`b` entre os pontos? Então o eletroduto não passa por dentro da parede.
+   */
+  const bloqueadoEntre = (parede: Wall, q1: Point, q2: Point, a: Point, b: Point, cotaMm: number): boolean => {
+    const L = Math.hypot(parede.b.x - parede.a.x, parede.b.y - parede.a.y) || 1;
+    const ao = (q: Point) => ((q.x - parede.a.x) * (parede.b.x - parede.a.x) + (q.y - parede.a.y) * (parede.b.y - parede.a.y)) / L;
+    const [s0, s1] = [Math.min(ao(q1), ao(q2)), Math.max(ao(q1), ao(q2))];
+    for (const o of model.openings) {
+      if (o.wallId !== parede.id) continue;
+      const sobrepoe = o.offsetMm < s1 && o.offsetMm + o.widthMm > s0;
+      const naAltura = cotaMm >= o.sillMm && cotaMm <= o.sillMm + o.heightMm;
+      if (sobrepoe && naAltura) return true;
+    }
+    return fracaoDentro(a, b, pilares) > 0;
+  };
 
   /** O id do ambiente do ponto: o que o contém ou, na face da parede, o cômodo mais perto (até o raio). */
   const ambienteDe = (t: Terminal): string | null => {
@@ -186,6 +209,7 @@ export function encaminhamentoPorAmbiente(
         if (!dele || dele.parede.id !== meu.parede.id || dele.lado !== meu.lado) continue;
         const aoLongo = distancia(meu.q, dele.q);
         if (aoLongo >= d) continue;
+        if (bloqueadoEntre(meu.parede, meu.q, dele.q, t.at, n.at, t.cotaMm)) continue;
         if (!vizinha || aoLongo < vizinha.aoLongoMm || (aoLongo === vizinha.aoLongoMm && n.id < vizinha.t.id)) vizinha = { t: n, aoLongoMm: aoLongo };
       }
     }

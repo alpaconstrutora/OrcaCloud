@@ -18741,7 +18741,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     aria-label="Rota pela parede"
                     className="h-3.5 w-3.5 rounded border-slate-300"
                   />
-                  Pontos de parede pelo eixo das paredes (a luz de teto segue reta, na laje)
+                  Pontos de parede pelo eixo das paredes (a luz de teto segue reta, na laje){encaminhamentoDoEletroduto === 'PELA_LUZ_DO_AMBIENTE' ? ' — no modo pela luz: só os pontos de ambiente sem luz de teto' : ''}
                 </label>
                 <label className="mt-1.5 flex items-center gap-2">
                   <input

@@ -280,4 +280,48 @@ describe('encaminhamentoPorAmbiente — onde cada ponto de parede se pendura', (
       expect([...encaminhamentoPorAmbiente(m, c.levelId, perm).entries()].sort()).toEqual([...base.entries()].sort());
     }
   });
+
+  // Correção 1 (24/10/2026): a vizinha corre DENTRO da parede — não atravessa vão de porta nem pilar.
+  describe('a vizinha não atravessa vão nem pilar', () => {
+    /** Luz a 2 m da parede sul; duas tomadas baixas na face dela, a 0,6 m uma da outra; mais o que vier entre elas. */
+    const duasTomadas = (entre: (m: BlueprintModel) => Command | null) => {
+      const c = modeloBase();
+      const luz = c.ponto(2000, 2075, 'ILUMINACAO_TETO');
+      const a = c.ponto(2000, 75, 'TUG');
+      const b = c.ponto(2600, 75, 'TUG');
+      let m = c.modelo();
+      const cmd = entre(m);
+      if (cmd) m = applyCommand(m, cmd).model;
+      return { m, levelId: c.levelId, luz, a, b };
+    };
+    const sul = (m: BlueprintModel) => m.walls.find((w) => w.a.y === 0 && w.b.y === 0)!;
+    const vao = (kind: 'door' | 'window', sillMm: number, heightMm: number) => (m: BlueprintModel): Command => ({
+      type: 'AddOpening', wallId: sul(m).id, kind, offsetMm: 2100, widthMm: 400, heightMm, sillMm,
+    }) as Command;
+
+    it('sem nada entre elas, encadeia (o controle)', () => {
+      const { m, levelId, a, b } = duasTomadas(() => null);
+      expect(encaminhamentoPorAmbiente(m, levelId, todos(m)).get(b)).toEqual({ tipo: 'VIZINHA', terminalId: a });
+    });
+
+    it('PORTA entre as duas tomadas → nenhuma vira VIZINHA (as duas descem da luz)', () => {
+      const { m, levelId, luz, a, b } = duasTomadas(vao('door', 0, 2100));
+      expect(m.openings).toHaveLength(1);
+      const r = encaminhamentoPorAmbiente(m, levelId, todos(m));
+      expect(r.get(a)).toEqual({ tipo: 'LUZ', luzId: luz });
+      expect(r.get(b)).toEqual({ tipo: 'LUZ', luzId: luz });
+    });
+
+    it('JANELA com peitoril de 1,10 m entre tomadas a 30 cm → encadeia (o eletroduto passa por baixo dela)', () => {
+      const { m, levelId, a, b } = duasTomadas(vao('window', 1100, 1000));
+      expect(m.openings).toHaveLength(1);
+      expect(encaminhamentoPorAmbiente(m, levelId, todos(m)).get(b)).toEqual({ tipo: 'VIZINHA', terminalId: a });
+    });
+
+    it('PILAR entre as duas tomadas → não encadeia', () => {
+      const { m, levelId, luz, b } = duasTomadas((mm) => ({ type: 'AddStructural', levelId: mm.levels[0].id, kind: 'PILAR', pontos: [{ x: 2300, y: 200 }], larguraMm: 300, profundidadeMm: 300, alturaMm: 2800 }) as unknown as Command);
+      expect((m.structures ?? []).filter((s) => s.kind === 'PILAR')).toHaveLength(1);
+      expect(encaminhamentoPorAmbiente(m, levelId, todos(m)).get(b)).toEqual({ tipo: 'LUZ', luzId: luz });
+    });
+  });
 });

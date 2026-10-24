@@ -608,6 +608,31 @@ export function planejarEletrodutos(
     const idsLigados = new Set(ligados.map((p) => p.id));
     const resolvido = new Map<ObjectId, boolean>();
     const descidas: { x: number; y: number }[] = [];
+    /** Os nós do teto sobre as descidas desta passada — o ponto EMPILHADO na mesma vertical só desce. */
+    const topos = new Set<No>();
+    const temNo = (k: No) => arestas.some((a) => a.de === k || a.para === k);
+    /** A luz em que a cadeia de `id` termina (segue as VIZINHAs até a LUZ). */
+    const luzDaCadeia = (id: ObjectId): ObjectId | null => {
+      let pd = pendura.get(id);
+      for (let guarda = 0; pd?.tipo === 'VIZINHA' && guarda < doNivel.length; guarda++) pd = pendura.get(pd.terminalId);
+      return pd?.tipo === 'LUZ' ? pd.luzId : null;
+    };
+    /** O ponto desce da luz: trecho no teto da luz até a vertical dele, e a descida. Falso se a luz não está na rede. */
+    const descerDaLuz = (p: Terminal, luzId: ObjectId): boolean => {
+      const luz = doNivelPorId.get(luzId);
+      // A luz precisa estar na rede do teto; não estando, o ponto vira REDE.
+      if (!luz || !alcancados.has(chave(nivel.id, luz.at.x, luz.at.y, teto))) return false;
+      const topo = chave(nivel.id, p.at.x, p.at.y, teto);
+      // Da luz até a vertical do ponto, pelo teto (contornando pilar) — sem limite de rota: é a regra de obra. Correção 1:
+      // se a vertical já está na rede (outro ponto empilhado ali já desceu, ou a rede existente passa ali), só a
+      // descida — um segundo caminho até a luz fecharia um anel.
+      if (!alcancados.has(topo) && !topos.has(topo) && chaveP(luz.at) !== chaveP(p.at)) ligarNaRede(nivel.id, luz.at, p.at, teto);
+      // E desce, dentro da parede, até a caixa.
+      if (p.cotaMm !== teto) addTrecho(nivel.id, p.at, teto, p.at, p.cotaMm);
+      topos.add(topo);
+      descidas.push(p.at);
+      return true;
+    };
     const pelaLuzOuVizinha = (p: Terminal): boolean => {
       const memo = resolvido.get(p.id);
       if (memo != null) return memo;
@@ -620,19 +645,15 @@ export function planejarEletrodutos(
       const pd = pendura.get(p.id);
       let ok = false;
       if (pd?.tipo === 'LUZ') {
-        const luz = doNivelPorId.get(pd.luzId);
-        // A luz precisa estar na rede do teto; não estando, o ponto vira REDE.
-        if (luz && alcancados.has(chave(nivel.id, luz.at.x, luz.at.y, teto))) {
-          // Da luz até a vertical do ponto, pelo teto (contornando pilar) — sem limite de rota: é a regra de obra.
-          if (chaveP(luz.at) !== chaveP(p.at)) ligarNaRede(nivel.id, luz.at, p.at, teto);
-          // E desce, dentro da parede, até a caixa.
-          if (p.cotaMm !== teto) addTrecho(nivel.id, p.at, teto, p.at, p.cotaMm);
-          descidas.push(p.at);
-          ok = true;
-        }
+        ok = descerDaLuz(p, pd.luzId);
       } else if (pd?.tipo === 'VIZINHA') {
         const v = doNivelPorId.get(pd.terminalId);
-        if (v && pelaLuzOuVizinha(v)) {
+        if (v && idsLigados.has(v.id) && !temNo(chave(nivel.id, v.at.x, v.at.y, v.cotaMm))) {
+          // Correção 1: a vizinha tem eletroduto, mas nenhum nó na cota da caixa dela — o trecho pela parede ficaria
+          // solto. O ponto desce da luz da cadeia.
+          const luzId = luzDaCadeia(v.id);
+          ok = luzId != null && descerDaLuz(p, luzId);
+        } else if (v && pelaLuzOuVizinha(v)) {
           // Por dentro da parede, na cota das caixas, sem subir ao teto. Cada ponta na cota da própria caixa (a regra
           // admite ±50 mm): o trecho encosta no nó de cada uma, e o caminho até o quadro passa por ele.
           addTrecho(nivel.id, v.at, v.cotaMm, p.at, p.cotaMm);

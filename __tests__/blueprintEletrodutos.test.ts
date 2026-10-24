@@ -531,22 +531,27 @@ describe('E6.3 — pela parede (hipótese) e Ø comerciais até 85', () => {
 // *"O encaminhamento geralmente parte do quadro de distribuição, vai até o ponto de iluminação no teto do ambiente e de
 // lá desce para as tomadas daquele ambiente."*
 
-/** Pavimento 6 × 4 (com divisória em x = 3000, se pedida); QDC em (75, 1000) a 1,60 m; C1 = luzes, C2 = tomadas. */
-function comodos(divisoria: boolean, pontos: { x: number; y: number; tipo: 'TUG' | 'ILUMINACAO_TETO' }[]) {
+type PontoDoComodo = { x: number; y: number; tipo: 'TUG' | 'ILUMINACAO_TETO' | 'INTERRUPTOR'; cota?: number; comando?: string };
+/**
+ * Pavimento 6 × 4 (com divisória em x = 3000, se pedida); QDC em (75, 1000) a 1,60 m; C1 = luzes e interruptores,
+ * C2 = tomadas. `extra` acrescenta, depois das paredes, o que precisar delas (porta, pilar).
+ */
+function comodos(divisoria: boolean, pontos: PontoDoComodo[], extra?: (m: BlueprintModel, levelId: string) => Command[]) {
   const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   const t = base.levels[0].id;
   const p = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
   const paredes = [p(0, 0, 6000, 0), p(6000, 0, 6000, 4000), p(6000, 4000, 0, 4000), p(0, 4000, 0, 0)];
   if (divisoria) paredes.push(p(3000, 0, 3000, 4000));
   let m = applyBatch(base, paredes).model;
+  if (extra) m = applyBatch(m, extra(m, t)).model;
   m = applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: point(75, 1000), cotaMm: 1600 }).model;
   m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', ligacao: 'FN' }).model;
   m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C2', ligacao: 'FN' }).model;
   const [c1, c2] = m.circuitos.map((c) => c.id);
   for (const q of pontos) {
-    const cota = q.tipo === 'ILUMINACAO_TETO' ? 2800 : 300;
-    m = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: q.tipo, at: point(q.x, q.y), cotaMm: cota, tipoEletrico: q.tipo }).model;
-    m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: q.tipo === 'ILUMINACAO_TETO' ? c1 : c2 }).model;
+    const cota = q.cota ?? (q.tipo === 'ILUMINACAO_TETO' ? 2800 : q.tipo === 'INTERRUPTOR' ? 1100 : 300);
+    m = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: q.tipo, at: point(q.x, q.y), cotaMm: cota, tipoEletrico: q.tipo, ...(q.comando ? { comando: q.comando } : {}) }).model;
+    m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: q.tipo === 'TUG' ? c2 : c1 }).model;
   }
   return { m, t, c1, c2 };
 }
@@ -637,5 +642,163 @@ describe('24/10/2026 — pela luz do ambiente (padrão): quadro → luz do ambie
     // Os mesmos trechos (a ordem dos comandos muda: no modo novo a luz entra antes da subida da tomada).
     const ordenados = (cmds: Command[]) => cmds.map((c) => JSON.stringify(c)).sort();
     expect(ordenados(novo.comandos)).toEqual(ordenados(antigo.comandos));
+  });
+
+  // ─── Correção 1 (24/10/2026) ───
+  const Q = { x: 75, y: 1000 };
+  const tetoHz = (cmds: Command[]) => horizontais(cmds).filter((c) => c.cotaAMm === 2800 && c.cotaBMm === 2800);
+  /** O grafo dos trechos novos não tem ANEL: arestas = nós − componentes. */
+  const semAnel = (cmds: Command[]) => {
+    const no = (p: XY, z: number) => `${p.x},${p.y},${z}`;
+    const pai = new Map<string, string>();
+    const raiz = (k: string): string => {
+      let r = k;
+      while (pai.get(r) !== r) r = pai.get(r)!;
+      return r;
+    };
+    const ts = adds(cmds);
+    for (const c of ts) for (const k of [no(c.a, c.cotaAMm), no(c.b, c.cotaBMm)]) if (!pai.has(k)) pai.set(k, k);
+    for (const c of ts) pai.set(raiz(no(c.a, c.cotaAMm)), raiz(no(c.b, c.cotaBMm)));
+    const componentes = new Set([...pai.keys()].map(raiz)).size;
+    return ts.length === pai.size - componentes;
+  };
+
+  it('PORTA entre duas tomadas da mesma parede: nenhum trecho na cota da tomada cruza o vão (as duas descem da luz)', () => {
+    // Parede leste (6000, 0)→(6000, 4000): porta de 1100 a 1500, entre T1 (y = 1000) e T2 (y = 1600).
+    const { m } = comodos(false, [{ ...LUZ, tipo: 'ILUMINACAO_TETO' }, { ...T1, tipo: 'TUG' }, { ...T2, tipo: 'TUG' }], (mm) => [
+      { type: 'AddOpening', wallId: mm.walls.find((w) => w.a.x === 6000 && w.b.x === 6000)!.id, kind: 'door', offsetMm: 1100, widthMm: 400, heightMm: 2100, sillMm: 0 } as Command,
+    ]);
+    expect(m.openings).toHaveLength(1);
+    const plano = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    const naCota = horizontais(plano.comandos).filter((c) => c.cotaAMm === 300 && c.cotaBMm === 300);
+    for (const c of naCota) expect(Math.min(c.a.y, c.b.y) < 1500 && Math.max(c.a.y, c.b.y) > 1100).toBe(false);
+    for (const x of [T1, T2]) {
+      expect(trechoEntre(plano.comandos, LUZ, x, 2800)).toBeDefined();
+      expect(descidaEm(plano.comandos, x, 2800, 300)).toBeDefined();
+    }
+  });
+
+  it('luz JÁ ligada (rede existente) e tomada nova: a tomada pendura na luz', () => {
+    const { m, t, c2 } = comodos(false, [{ ...LUZ, tipo: 'ILUMINACAO_TETO' }]);
+    const lancado = applyBatch(m, planejarEletrodutos(m, quadroDe(m), semCaixas).comandos).model;
+    let novo = applyCommand(lancado, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', at: point(T3.x, T3.y), cotaMm: 300, tipoEletrico: 'TUG' }).model;
+    novo = applyCommand(novo, { type: 'SetTerminalProps', terminalId: novo.terminais[novo.terminais.length - 1].id, circuitoId: c2 }).model;
+    const plano = planejarEletrodutos(novo, quadroDe(novo), semCaixas);
+    expect(plano).toMatchObject({ ligados: 1, aLigar: 1 });
+    expect(trechoEntre(plano.comandos, LUZ, T3, 2800)).toBeDefined();
+    expect(descidaEm(plano.comandos, T3, 2800, 300)).toBeDefined();
+    expect(tetoHz(plano.comandos)).toHaveLength(1); // só luz → tomada
+  });
+
+  it('PILAR entre a luz e a tomada: o trecho luz→ponto desvia por um canto dele', () => {
+    const { m, c2 } = comodos(false, [{ ...LUZ, tipo: 'ILUMINACAO_TETO' }, { ...T3, tipo: 'TUG' }], (_mm, t) => [{ ...(PILAR(2500, 1040) as object), levelId: t } as Command]);
+    const pegadas = pegadasDePilares(m, m.levels[0].id);
+    expect(fracaoDentro(LUZ, T3, pegadas)).toBeGreaterThan(0); // a reta atravessaria o pilar
+    const plano = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    expect(trechoEntre(plano.comandos, LUZ, T3, 2800)).toBeUndefined();
+    for (const c of tetoHz(plano.comandos)) expect(fracaoDentro(c.a, c.b, pegadas)).toBe(0);
+    // Da luz sai um trecho que NÃO volta ao quadro (o desvio), e um trecho de teto chega à vertical da tomada.
+    const daLuz = tetoHz(plano.comandos).filter((c) => (mesmo(c.a, LUZ) || mesmo(c.b, LUZ)) && !(mesmo(c.a, Q) || mesmo(c.b, Q)));
+    expect(daLuz).toHaveLength(1);
+    expect(daLuz[0].circuitoIds).toEqual([c2]);
+    expect(tetoHz(plano.comandos).some((c) => mesmo(c.a, T3) || mesmo(c.b, T3))).toBe(true);
+    expect(descidaEm(plano.comandos, T3, 2800, 300)).toBeDefined();
+  });
+
+  it('o INTERRUPTOR desce da luz que ele comanda (não da mais perto)', () => {
+    const LA = { x: 1500, y: 2000 };
+    const LB = { x: 4500, y: 2000 };
+    const I = { x: 1000, y: 75 }; // bem mais perto de A, mas comanda B
+    const { m } = comodos(false, [
+      { ...LA, tipo: 'ILUMINACAO_TETO', comando: 'a' },
+      { ...LB, tipo: 'ILUMINACAO_TETO', comando: 'b' },
+      { ...I, tipo: 'INTERRUPTOR', comando: 'b' },
+    ]);
+    const plano = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    expect(trechoEntre(plano.comandos, LB, I, 2800)).toBeDefined();
+    expect(trechoEntre(plano.comandos, LA, I, 2800)).toBeUndefined();
+    expect(descidaEm(plano.comandos, I, 2800, 1100)).toBeDefined();
+  });
+
+  it('rotaPelaParede no modo novo afeta SÓ os pontos REDE: a tomada do cômodo com luz desce da luz; a do cômodo sem luz vai pelo eixo da parede', () => {
+    const LA = { x: 1500, y: 2000 };
+    const TA = { x: 2000, y: 75 };
+    const TB = { x: 5925, y: 3000 };
+    const { m } = comodos(true, [{ ...LA, tipo: 'ILUMINACAO_TETO' }, { ...TA, tipo: 'TUG' }, { ...TB, tipo: 'TUG' }]);
+    const plano = planejarEletrodutos(m, quadroDe(m), { ...semCaixas, rotaPelaParede: true });
+    expect(trechoEntre(plano.comandos, LA, TA, 2800)).toBeDefined();
+    expect(descidaEm(plano.comandos, TA, 2800, 300)).toBeDefined();
+    expect(descidaEm(plano.comandos, { x: 2000, y: 0 }, 2800, 300)).toBeUndefined(); // TA não vai pelo eixo
+    // TB (sem luz no cômodo): desce no eixo da parede x = 6000 e sai para a caixa na face.
+    expect(descidaEm(plano.comandos, { x: 6000, y: 3000 }, 2800, 300)).toBeDefined();
+    expect(trechoEntre(plano.comandos, { x: 6000, y: 3000 }, TB, 300)).toBeDefined();
+    expect(descidaEm(plano.comandos, TB, 2800, 300)).toBeUndefined();
+  });
+
+  it('DOIS pavimentos com prumada: a luz de outro pavimento nunca é usada', () => {
+    const { m, c2 } = comodos(false, [{ ...LUZ, tipo: 'ILUMINACAO_TETO' }]);
+    let m2 = applyCommand(m, { type: 'AddLevel', name: '1º', elevationMm: 2800, defaultHeightMm: 2800 }).model;
+    const t1 = m2.levels[1].id;
+    const p = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t1, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    m2 = applyBatch(m2, [p(0, 0, 6000, 0), p(6000, 0, 6000, 4000), p(6000, 4000, 0, 4000), p(0, 4000, 0, 0)]).model;
+    m2 = applyCommand(m2, { type: 'AddTerminal', levelId: t1, disciplina: 'ELETRICA', tipo: 'TUG', at: point(T3.x, T3.y), cotaMm: 300, tipoEletrico: 'TUG' }).model;
+    m2 = applyCommand(m2, { type: 'SetTerminalProps', terminalId: m2.terminais[m2.terminais.length - 1].id, circuitoId: c2 }).model;
+    const plano = planejarEletrodutos(m2, quadroDe(m2), semCaixas);
+    expect(plano.prumadasEntrePavimentos).toBe(1);
+    const doAndar = adds(plano.comandos).filter((c) => c.levelId === t1);
+    // Nada no 1º passa pela vertical da luz do térreo; a tomada liga na rede do 1º (prumada do quadro) e desce na posição.
+    expect(doAndar.some((c) => mesmo(c.a, LUZ) || mesmo(c.b, LUZ))).toBe(false);
+    expect(doAndar.some((c) => c.cotaAMm === 2800 && c.cotaBMm === 2800 && ((mesmo(c.a, Q) && mesmo(c.b, T3)) || (mesmo(c.a, T3) && mesmo(c.b, Q))))).toBe(true);
+    // E no térreo nada vai à vertical da tomada do 1º.
+    expect(adds(plano.comandos).filter((c) => c.levelId !== t1).some((c) => mesmo(c.a, T3) || mesmo(c.b, T3))).toBe(false);
+  });
+
+  it('pontos EMPILHADOS na mesma vertical (tomada baixa + tomada alta): nenhum anel — arestas = nós − componentes', () => {
+    const { m } = comodos(false, [
+      { ...LUZ, tipo: 'ILUMINACAO_TETO' },
+      { ...T3, tipo: 'TUG' },
+      { ...T3, tipo: 'TUG', cota: 1100 },
+      { x: 1400, y: 75, tipo: 'TUG' }, // vizinha da baixa (mais longe da luz que ela)
+    ], (_mm, t) => [{ ...(PILAR(2500, 1040) as object), levelId: t } as Command]);
+    const plano = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    expect(semAnel(plano.comandos)).toBe(true);
+    expect(descidaEm(plano.comandos, T3, 2800, 300)).toBeDefined();
+    expect(descidaEm(plano.comandos, T3, 2800, 1100)).toBeDefined();
+    expect(trechoEntre(plano.comandos, T3, { x: 1400, y: 75 }, 300)).toBeDefined();
+    const depois = applyBatch(m, plano.comandos).model;
+    expect(planejarEletrodutos(depois, quadroDe(depois), semCaixas).comandos).toEqual([]);
+  });
+
+  it('EMPILHADOS que descem de luzes DIFERENTES (tomada → luz A, interruptor em cima → luz B que ele comanda): um caminho só até o teto, sem anel', () => {
+    const LA = { x: 1500, y: 2000 };
+    const LB = { x: 4500, y: 2000 };
+    const P = { x: 1000, y: 75 };
+    const { m } = comodos(false, [
+      { ...LA, tipo: 'ILUMINACAO_TETO', comando: 'a' },
+      { ...LB, tipo: 'ILUMINACAO_TETO', comando: 'b' },
+      { ...P, tipo: 'TUG' },
+      { ...P, tipo: 'INTERRUPTOR', comando: 'b' },
+    ]);
+    const plano = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    expect(semAnel(plano.comandos)).toBe(true);
+    // A vertical recebe UM trecho de teto (o da primeira luz); o segundo ponto só desce.
+    expect(tetoHz(plano.comandos).filter((c) => mesmo(c.a, P) || mesmo(c.b, P))).toHaveLength(1);
+    expect(descidaEm(plano.comandos, P, 2800, 300)).toBeDefined();
+    expect(descidaEm(plano.comandos, P, 2800, 1100)).toBeDefined();
+    const depois = applyBatch(m, plano.comandos).model;
+    expect(planejarEletrodutos(depois, quadroDe(depois), semCaixas).comandos).toEqual([]);
+  });
+
+  it('vizinha JÁ ligada mas sem nó na cota da caixa dela: o ponto desce da luz (não fica um trecho solto na parede)', () => {
+    const { m, t, c2 } = comodos(false, [{ ...LUZ, tipo: 'ILUMINACAO_TETO' }, { ...T2, tipo: 'TUG' }]);
+    // A rede de T2 desenhada à mão chega à vertical dele só no teto (não desce à caixa).
+    const trecho = (a: XY, b: XY, za: number, zb: number) => ({ type: 'AddTrecho', levelId: t, disciplina: 'ELETRICA', a: point(a.x, a.y), b: point(b.x, b.y), cotaAMm: za, cotaBMm: zb, bitolaMm: 25, circuitoId: c2, condutores: 3 }) as Command;
+    const comRede = applyBatch(m, [trecho(Q, Q, 1600, 2800), trecho(Q, LUZ, 2800, 2800), trecho(LUZ, T2, 2800, 2800)]).model;
+    let novo = applyCommand(comRede, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', at: point(T1.x, T1.y), cotaMm: 300, tipoEletrico: 'TUG' }).model;
+    novo = applyCommand(novo, { type: 'SetTerminalProps', terminalId: novo.terminais[novo.terminais.length - 1].id, circuitoId: c2 }).model;
+    const plano = planejarEletrodutos(novo, quadroDe(novo), semCaixas);
+    expect(trechoEntre(plano.comandos, T2, T1, 300)).toBeUndefined();
+    expect(trechoEntre(plano.comandos, LUZ, T1, 2800)).toBeDefined();
+    expect(descidaEm(plano.comandos, T1, 2800, 300)).toBeDefined();
   });
 });

@@ -25,12 +25,13 @@ import {
   eletrodutosSugeridos,
   planejarEletrodutos,
   planejarEletrodutosDoModelo,
+  pilaresInflados,
   pontosSemCircuito,
   refazerEletrodutos,
   relancarEletrodutos,
 } from '../utils/blueprintEletrodutos';
 import { HIPOTESES_PADRAO, agrupamentoDoCircuito, comprimentoDoCircuito } from '../utils/blueprintEletricaDimensionamento';
-import { fracaoDentro, pegadasDePilares } from '../utils/blueprintObstaculosEstruturais';
+import { desvioDoPilar, fracaoDentro, pegadasDePilares } from '../utils/blueprintObstaculosEstruturais';
 import { BITOLAS_DE_ELETRODUTO_MM, cotaDaRede } from '../utils/blueprintEletrodutos';
 import { POLITICA_PADRAO, computeQuantities } from '../utils/blueprintKernel';
 import { medidasDoTerminal } from '../utils/blueprintRede';
@@ -420,6 +421,22 @@ describe('E6.3 — o eletroduto desvia da estrutura', () => {
     expect(plano.avisos).toEqual([]);
   });
 
+  it('Task 3, correção 2 — o mesmo pilar no modo PADRÃO (pela luz): contorna o pilar INFLADO (raio + 50 mm), o canto a ~16 cm da face', () => {
+    const comPilar = sala(6000, [{ x: 5925, y: 1000, cota: 300, tipo: 'TUG' }], [PILAR(3000, 1000)]);
+    const pegadas = pegadasDePilares(comPilar.m, comPilar.t);
+    const plano = planejarEletrodutos(comPilar.m, quadroDe(comPilar.m), semCaixas);
+    const hz = horizontais(plano.comandos);
+    expect(hz.length).toBe(2); // por um canto do pilar
+    for (const c of hz) expect(fracaoDentro(c.a, c.b, pegadas)).toBe(0);
+    // A face em 2850/3150 e 850/1150; o anel a 62,5 mm (2787,5 → 2788 no arredondamento do anel) e o canto 10 cm além:
+    // 162 mm da face de um lado, 163 do outro.
+    const canto = hz[0].b;
+    expect([2688, 3313]).toContain(canto.x);
+    expect([688, 1313]).toContain(canto.y);
+    for (const c of hz) expect(c.circuitoIds).toEqual([comPilar.c1]);
+    expect(plano.avisos).toEqual([]);
+  });
+
   it('⚠️ viga de teto: a rede corre 10 cm abaixo do fundo dela (e avisa); viga baixa demais → fica no teto e avisa do cruzamento', () => {
     const { m } = sala(6000, [{ x: 5925, y: 3000, cota: 300, tipo: 'TUG' }], [VIGA(2300)]);
     expect(cotaDaRede(m, m.levels[0]).cotaMm).toBe(2200);
@@ -691,6 +708,28 @@ describe('24/10/2026 — pela luz do ambiente (padrão): quadro → luz do ambie
     expect(trechoEntre(plano.comandos, LUZ, T3, 2800)).toBeDefined();
     expect(descidaEm(plano.comandos, T3, 2800, 300)).toBeDefined();
     expect(tetoHz(plano.comandos)).toHaveLength(1); // só luz → tomada
+  });
+
+  it('Task 3, correção 2: a ponta na DIAGONAL do canto não cai dentro do anel em esquadro — o desvio existe e não entra no pilar real', () => {
+    // O caso da revisão: pilar 300 × 300 em [0, 300]²; com o anel encolhido pela distância euclidiana, a ponta ficava
+    // dentro dele (o canto do anel avança f·√2), o desvio dava null e a reta atravessava o pilar.
+    const g = [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 300, y: 300 }, { x: 0, y: 300 }] as never as Parameters<typeof pilaresInflados>[0][number];
+    const b = { x: 600, y: 100 };
+    const mmDentro = (p: XY, q: XY) => {
+      const L = Math.hypot(q.x - p.x, q.y - p.y);
+      let n = 0;
+      for (let i = 0; i < L; i++) if (pointInPolygon(g, { x: p.x + ((q.x - p.x) * (i + 0.5)) / L, y: p.y + ((q.y - p.y) * (i + 0.5)) / L } as never)) n++;
+      return n;
+    };
+    for (const a of [{ x: -40, y: -40 }, { x: -50, y: -50 }, { x: -60, y: -20 }]) {
+      expect(fracaoDentro(a, b, [g])).toBeGreaterThan(0);
+      const aneis = pilaresInflados([g], a, b, 12.5 + 50);
+      expect(pointInPolygon(aneis[0], a as never), `${a.x},${a.y} fora do anel`).toBe(false);
+      const desvio = desvioDoPilar(a, b, aneis);
+      expect(desvio, `${a.x},${a.y}`).not.toBeNull();
+      const caminho = [a, ...desvio!, b];
+      for (let i = 1; i < caminho.length; i++) expect(mmDentro(caminho[i - 1], caminho[i]), `${a.x},${a.y}: ${JSON.stringify(caminho)}`).toBe(0);
+    }
   });
 
   it('Task 3, correção 1: o trecho luz→ponto que corta SÓ O CANTO do pilar (29 mm, entre duas amostras de 50 mm) também desvia', () => {

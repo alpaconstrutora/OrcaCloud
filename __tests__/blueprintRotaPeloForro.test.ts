@@ -369,4 +369,42 @@ describe('saidaDoRebaixoPelaParede (item 6): o ponto de parede sob a laje rebaix
     // No caminho de antes, a saída pendura na árvore do quadro.
     expect(fimDaCadeia(planoComLuz(m, L, { x: 2000, y: 75 }, LUZ, I, 250, 'ARVORE_NO_TETO'), saida.s, LUZ)).not.toEqual(LUZ);
   });
+  it('Task 3, correção 2: o q que o escorregão pôs no anel do cômodo VIZINHO não serve — a saída pela parede, se houver; senão REDE (pelos anéis, como antes)', () => {
+    const LUZ = { x: 1000, y: 2000 };
+    const I = { x: 2925, y: 2000 }; // na face da sala da parede do meio
+    const qVizinho = { x: 3125, y: 2000 }; // o anel da cozinha, do outro lado da parede
+    const comLaje = (y0: number, y1: number) => {
+      const { m, L } = casinha();
+      // O lado do anel da sala junto da parede do meio (x = 2875, y 125–3875) inteiro sob a laje rebaixada.
+      const laje = { type: 'AddStructural', levelId: L, kind: 'LAJE', pontos: [{ x: 2000, y: y0 }, { x: 2990, y: y0 }, { x: 2990, y: y1 }, { x: 2000, y: y1 }], alturaMm: 100, baseMm: 2500, rotulo: 'L1' } as Command;
+      return { m: applyCommand(m, laje).model, L };
+    };
+    // Com saída: a laje deixa a ponta da parede livre (y < 100 e y > 3900).
+    {
+      const { m, L } = comLaje(100, 3900);
+      const saida = saidaDoRebaixoPelaParede(m, L, I, 1100, 12.5, 50)!;
+      expect(saida).not.toBeNull();
+      const ts = planoComLuz(m, L, { x: 75, y: 1000 }, LUZ, I, 50);
+      expect(ts.some((t) => [t.a, t.b].some((p) => p.x === qVizinho.x && p.y === qVizinho.y))).toBe(false);
+      expect(tem(ts, saida.s, 2755, saida.s, saida.cotaMm)).toBe(true);
+      expect(tem(ts, I, saida.cotaMm, I, 1100)).toBe(true);
+      expect(fimDaCadeia(ts, saida.s, LUZ)).toEqual(LUZ);
+      // O caminho de antes descia do anel da cozinha.
+      expect(planoComLuz(m, L, { x: 75, y: 1000 }, LUZ, I, 50, 'ARVORE_NO_TETO').some((t) => t.a.x === qVizinho.x && t.a.y === qVizinho.y)).toBe(true);
+    }
+    // Sem saída (a laje toma a parede inteira): REDE — o caminho de antes, pelos anéis; nenhuma reta da luz até o vizinho.
+    {
+      const { m, L } = comLaje(0, 4000);
+      expect(saidaDoRebaixoPelaParede(m, L, I, 1100, 12.5, 50)).toBeNull();
+      const ts = planoComLuz(m, L, { x: 75, y: 1000 }, LUZ, I, 50);
+      const antigo = planoComLuz(m, L, { x: 75, y: 1000 }, LUZ, I, 50, 'ARVORE_NO_TETO');
+      expect(tem(ts, LUZ, 2755, qVizinho, 2755)).toBe(false);
+      // Os trechos do quadro até o ponto são os de antes, pelos anéis; só a luz pendura em outro nó (no modo novo, as luzes
+      // entram primeiro, sozinhas com o quadro).
+      const chaves = new Set(ts.map((c) => JSON.stringify(c)));
+      const tocaLuz = (c: (typeof ts)[number]) => [c.a, c.b].some((p) => p.x === LUZ.x && p.y === LUZ.y);
+      expect(antigo.filter((c) => !tocaLuz(c)).every((c) => chaves.has(JSON.stringify(c)))).toBe(true);
+      expect(tem(ts, { x: 3125, y: 225 }, 2755, qVizinho, 2755)).toBe(true);
+    }
+  });
 });

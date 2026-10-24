@@ -142,6 +142,7 @@ import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaix
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
 import { encaminhamentoPorAmbiente } from './blueprintEncaminhamentoPorAmbiente';
+import { ambienteDoPonto } from './blueprintAgrupamentoDePontos';
 import { REGRA_DE_CAIXAS_PADRAO, caixasDaRede, type RegraDeCaixas, type SegmentoDaRede } from './blueprintCaixasDePassagem';
 import {
   HIPOTESES_PADRAO,
@@ -226,32 +227,48 @@ export const RAIO_DE_ENCAIXE_ELETRICO_MM = 600;
  */
 export const FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM = 50;
 
-/** A menor distância de `p` à pegada `g` (0 se dentro). */
-function distanciaAPegada(p: { x: number; y: number }, g: readonly Point[]): number {
-  if (pointInPolygon(g as Point[], p as Point)) return 0;
-  let d = Infinity;
-  for (let i = 0; i < g.length; i++) {
+/**
+ * Task 3, correção 2: a maior folga com que o anel EM ESQUADRO de `g` (`anelDoPilar`, lados afastados em paralelo e
+ * cantos em ponta) ainda deixa `p` de fora — `max_i nᵢ·(p − vᵢ)`, com nᵢ a normal externa do lado i (pegada convexa:
+ * o anel é a interseção dos semiplanos nᵢ·(x − vᵢ) ≤ f). A distância euclidiana ao pilar não serve: na diagonal de um
+ * canto o anel avança f·√2, e a ponta a 3–88 mm dali caía DENTRO dele. ≤ 0 = `p` dentro (ou na face) do pilar real.
+ */
+function folgaQueDeixaDeFora(p: { x: number; y: number }, g: readonly Point[]): number {
+  const n = g.length;
+  if (n < 3) return 0;
+  const cx = g.reduce((s, v) => s + v.x, 0) / n;
+  const cy = g.reduce((s, v) => s + v.y, 0) / n;
+  let max = -Infinity;
+  for (let i = 0; i < n; i++) {
     const a = g[i];
-    const b = g[(i + 1) % g.length];
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const L2 = dx * dx + dy * dy;
-    const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2));
-    d = Math.min(d, Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)));
+    const b = g[(i + 1) % n];
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    let nx = (b.y - a.y) / L;
+    let ny = -(b.x - a.x) / L;
+    if (nx * ((a.x + b.x) / 2 - cx) + ny * ((a.y + b.y) / 2 - cy) < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    max = Math.max(max, nx * (p.x - a.x) + ny * (p.y - a.y));
   }
-  return d;
+  return max;
 }
 
 /**
- * Task 3, correção 1: as pegadas dos pilares infladas por `inflarMm` (`anelDoPilar`) para a reta a→b. A ponta que fica
- * a menos disso de um pilar (o quadro encostado nele) ficaria DENTRO do anel e `desvioDoPilar` não acharia contorno:
- * para esse pilar o anel encolhe até 1 mm aquém da ponta — a reta quase paralela à face, que é o caso, ainda atravessa
- * nele uma corda longa. Ponta dentro do pilar real: a pegada real, como antes.
+ * Task 3, correção 1/2: as pegadas dos pilares infladas por `inflarMm` (`anelDoPilar`) para a reta a→b. A ponta que
+ * fica a menos disso do anel em esquadro (o quadro encostado no pilar, ou na diagonal de um canto) ficaria DENTRO dele e
+ * `desvioDoPilar` não acharia contorno: para esse pilar o anel encolhe até a folga que ainda deixa as duas pontas de
+ * fora (`folgaQueDeixaDeFora` − 1, conferido no anel arredondado). Ponta dentro do pilar real: a pegada real, como antes.
+ * Perto da ponta a corda de 100 mm não é garantida — quem chama tenta a pegada real se o anel não der contorno.
  */
 export function pilaresInflados(pegadas: readonly Point[][], a: { x: number; y: number }, b: { x: number; y: number }, inflarMm: number): Point[][] {
   return pegadas.map((g) => {
-    const f = Math.min(inflarMm, distanciaAPegada(a, g) - 1, distanciaAPegada(b, g) - 1);
-    return f > 0 ? (anelDoPilar(g, f) as Point[]) : (g as Point[]);
+    let f = Math.floor(Math.min(inflarMm, folgaQueDeixaDeFora(a, g) - 1, folgaQueDeixaDeFora(b, g) - 1));
+    for (; f > 0; f--) {
+      const anel = anelDoPilar(g, f) as Point[];
+      if (!pointInPolygon(anel, a as Point) && !pointInPolygon(anel, b as Point)) return anel;
+    }
+    return g as Point[];
   });
 }
 
@@ -473,8 +490,9 @@ export function planejarEletrodutos(
   const ligarNaRede = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): void => {
     // F14b: no forro, a reta desvia também das prumadas das outras redes (a coluna da fria cruzando a faixa).
     // F27 item 5: e dos ramais que correm na laje do pavimento de cima, colados na faixa pela cota real.
-    const pilares = pilaresDaReta(levelId, a, b);
-    const desvio = desvioDoPilar(a, b, hip.noForro ? [...pilares, ...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : pilares);
+    const outras = hip.noForro ? [...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : [];
+    // Task 3, correção 2: sem contorno com os pilares inflados, a pegada real (o de antes, nunca pior).
+    const desvio = desvioDoPilar(a, b, [...pilaresDaReta(levelId, a, b), ...outras]) ?? (pelaLuzDoAmbiente ? desvioDoPilar(a, b, [...pegadas(levelId), ...outras]) : null);
     if (desvio == null) {
       semContorno++;
       addTrecho(levelId, a, cota, b, cota);
@@ -720,8 +738,19 @@ export function planejarEletrodutos(
      * rebaixada, como a árvore) da luz até `q`, e dali a descida do forro (junto da viga, na parede, até a caixa). Sem
      * `q` no anel, o ponto sob laje rebaixada chega pela saída da parede (item 6), como hoje. Sem nenhum dos dois, REDE.
      */
+    /** Correção 2: `q` cai no cômodo de algum de `refs` (pelo `ambienteDoPonto`)? Sem cômodo nenhum nas referências, vale. */
+    const noComodo = (q: { x: number; y: number }, refs: readonly { x: number; y: number }[]): boolean => {
+      const ids = refs.map((r) => ambienteDoPonto(model, { levelId: nivel.id, at: r as Point })?.space.id).filter((x): x is ObjectId => x != null);
+      if (ids.length === 0) return true;
+      const doQ = ambienteDoPonto(model, { levelId: nivel.id, at: q as Point })?.space.id;
+      return doQ != null && ids.includes(doQ);
+    };
     const descerDaLuzNoForro = (p: Terminal, luz: Terminal, noForro: NonNullable<HipotesesDeEletroduto['noForro']>): boolean => {
-      const q = qNoForro(p);
+      // Correção 2: o `q` que o escorregão da F14c pôs no anel do cômodo VIZINHO (o lado do próprio anel todo dentro de
+      // um obstáculo) não serve — a reta da luz iria até o outro cômodo. Vale o `q` no cômodo do ponto ou no da luz (o
+      // interruptor do hall que desce da luz da sala); fora deles, a saída pela parede, ou REDE.
+      const qDoAnel = qNoForro(p);
+      const q = qDoAnel && noComodo(qDoAnel, [p.at, luz.at]) ? qDoAnel : null;
       const saida = q ? null : saidaDoRebaixo(p);
       const alto = q ?? saida?.s ?? null;
       if (!alto) return false;

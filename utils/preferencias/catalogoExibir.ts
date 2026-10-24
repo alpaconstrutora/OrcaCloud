@@ -197,8 +197,9 @@ export function valorDeExibicao(linhas: readonly LinhaDePreferencia[], item: str
  * Migração única do navegador: para cada item SEM escolha válida no banco e COM valor válido no
  * navegador, uma linha para gravar. `lerDoNavegador` recebe a chave antiga e devolve o JSON já
  * parseado (ou `undefined`). Não devolve nada para o que já está no banco (a escolha do banco
- * nunca é sobrescrita) nem para `null` (ausente e "automático" se confundem na leitura, e
- * automático já é o padrão). Leitura do navegador que lança vale como "sem valor".
+ * nunca é sobrescrita), nem para `null` (ausente e "automático" se confundem na leitura, e
+ * automático já é o padrão), nem para valor IGUAL ao padrão do item (não é escolha — ver abaixo).
+ * Leitura do navegador que lança vale como "sem valor".
  */
 export function linhasParaMigrar(
   linhasDoUsuario: readonly LinhaDePreferencia[],
@@ -214,6 +215,9 @@ export function linhasParaMigrar(
       continue;
     }
     if (doNavegador === null || !valorValido(def, doNavegador)) continue;
+    // Igual ao padrão: o `usePersistedState` grava o padrão no navegador ao montar, então isso não é
+    // uma escolha — migrar congelaria o padrão como se fosse (e mudar o padrão um dia não valeria).
+    if (Object.is(doNavegador, def.padrao)) continue;
     saida.push({ chave: chaveDeExibicao(def.item), valor: doNavegador });
   }
   return saida;

@@ -88,18 +88,24 @@ export const preferenciasService = {
     return [...((org.data ?? []) as LinhaDePreferencia[]), ...((est?.data ?? []) as LinhaDePreferencia[])];
   },
 
-  /** Grava (upsert pelo índice do escopo) ou, com `valor === null`, apaga a linha ("voltar ao padrão"). */
+  /**
+   * Grava (upsert pelo índice do escopo) ou, com `valor === null`, apaga a linha ("voltar ao padrão").
+   * `valor` também pode ser texto (estilo da planta, modo de cor). Exceção: com
+   * `{ apagarQuandoNull: false }` o `null` é GRAVADO como valor (terreno 3D: "automático" é uma
+   * escolha explícita, diferente de "sem escolha").
+   */
   async gravar(
     escopo: EscopoDaPreferencia,
     dono: DonoDaPreferencia,
     chave: string,
-    valor: boolean | null,
+    valor: boolean | string | null,
+    opcoes?: { apagarQuandoNull?: boolean },
   ): Promise<void> {
     const userId = await usuarioDaSessao();
     const idDoDono = donoDoEscopo(escopo, dono, userId);
     const colunaDoDono = COLUNA_DO_DONO[escopo];
 
-    if (valor === null) {
+    if (valor === null && opcoes?.apagarQuandoNull !== false) {
       const { error } = await supabase
         .from(TABELA)
         .delete()
@@ -122,6 +128,28 @@ export const preferenciasService = {
     };
     const { error } = await supabase.from(TABELA).upsert(linha, { onConflict: `escopo,${colunaDoDono},chave` });
     if (error) falhou('Erro ao gravar a preferência', error);
+  },
+
+  /**
+   * Várias linhas USUARIO de uma vez (migração das escolhas do navegador): UM upsert em lote, pelo
+   * mesmo índice do escopo. Lista vazia não fala com o banco.
+   */
+  async gravarVarios(linhas: readonly { chave: string; valor: boolean | string | null }[]): Promise<void> {
+    if (linhas.length === 0) return;
+    const userId = await usuarioDaSessao();
+    const agora = new Date().toISOString();
+    const registros = linhas.map(({ chave, valor }) => ({
+      escopo: 'USUARIO' as const,
+      user_id: userId,
+      organization_id: null,
+      study_id: null,
+      chave,
+      valor,
+      updated_at: agora,
+      updated_by: userId,
+    }));
+    const { error } = await supabase.from(TABELA).upsert(registros, { onConflict: 'escopo,user_id,chave' });
+    if (error) falhou('Erro ao gravar as preferências', error);
   },
 
   /** "Padrão da prancha: da empresa" — apaga as linhas ESTUDO do estudo cuja chave começa por `prefixo`. */

@@ -158,6 +158,23 @@ describe('linhasParaMigrar', () => {
     expect(r).toHaveLength(3);
   });
 
+  it('não migra o que é IGUAL ao padrão (o usePersistedState grava o padrão ao montar; migrar congelaria o padrão)', () => {
+    const r = linhasParaMigrar(
+      [],
+      navegador({
+        'blueprint:mostrarGrade': true, // padrão true → não migra
+        'blueprint:mostrarMedidas': false, // padrão false → não migra
+        'blueprint:estiloPlanta': 'TECNICA', // padrão → não migra
+        'blueprint:modoDeCor': 'AMBIENTE', // difere → migra
+        'blueprint:mostrarEixos': false, // difere → migra
+      }),
+    );
+    expect(r).toEqual([
+      { chave: 'planta.exibir.mostrarEixos', valor: false },
+      { chave: 'planta.exibir.modoDeCor', valor: 'AMBIENTE' },
+    ]);
+  });
+
   it('ignora valor inválido, ausente ou de outro tipo no navegador', () => {
     const r = linhasParaMigrar(
       [],

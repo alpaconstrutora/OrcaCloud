@@ -143,6 +143,21 @@ describe('preferenciasService', () => {
             expect(todas(0, 'eq')).toEqual(expect.arrayContaining([['escopo', 'USUARIO'], ['user_id', 'u1'], ['chave', 'k']]));
         });
 
+        it('valor em TEXTO (estilo, modo de cor) vai como está', async () => {
+            await preferenciasService.gravar('USUARIO', {}, 'planta.exibir.estiloPlanta', 'HUMANIZADA');
+            const [linha] = chamada(0, 'upsert') as [Record<string, unknown>];
+            expect(linha).toMatchObject({ chave: 'planta.exibir.estiloPlanta', valor: 'HUMANIZADA' });
+        });
+
+        it('valor null com { apagarQuandoNull: false } faz UPSERT com valor null (não apaga)', async () => {
+            await preferenciasService.gravar('USUARIO', {}, 'planta.exibir.vista3dTerreno', null, { apagarQuandoNull: false });
+            expect(nomes(0)).toContain('upsert');
+            expect(nomes(0)).not.toContain('delete');
+            const [linha, opcoes] = chamada(0, 'upsert') as [Record<string, unknown>, { onConflict: string }];
+            expect(linha).toMatchObject({ escopo: 'USUARIO', user_id: 'u1', chave: 'planta.exibir.vista3dTerreno', valor: null });
+            expect(opcoes.onConflict).toBe('escopo,user_id,chave');
+        });
+
         it('erro do banco rejeita com a frase do banco', async () => {
             m.fila.push({ data: null, error: { message: 'new row violates row-level security policy' } });
             await expect(preferenciasService.gravar('ORGANIZACAO', { organizationId: 'org1' }, 'k', true))
@@ -158,6 +173,50 @@ describe('preferenciasService', () => {
         it('USUARIO sem usuário na sessão lança erro claro e não grava', async () => {
             m.getSession.mockResolvedValue({ data: { session: null }, error: null });
             await expect(preferenciasService.gravar('USUARIO', {}, 'k', true)).rejects.toThrow(/sess[aã]o/i);
+            expect(m.consultas).toHaveLength(0);
+        });
+    });
+
+    describe('gravarVarios', () => {
+        it('faz UM upsert com N linhas USUARIO do usuário da sessão', async () => {
+            await preferenciasService.gravarVarios([
+                { chave: 'planta.exibir.mostrarGrade', valor: false },
+                { chave: 'planta.exibir.estiloPlanta', valor: 'HUMANIZADA' },
+                { chave: 'planta.exibir.vista3dTerreno', valor: true },
+            ]);
+            expect(m.consultas).toHaveLength(1);
+            expect(m.consultas[0].tabela).toBe('preferencias');
+            expect(todas(0, 'upsert')).toHaveLength(1);
+            const [linhas, opcoes] = chamada(0, 'upsert') as [Array<Record<string, unknown>>, { onConflict: string }];
+            expect(linhas).toHaveLength(3);
+            for (const l of linhas) {
+                expect(l).toMatchObject({ escopo: 'USUARIO', user_id: 'u1', organization_id: null, study_id: null, updated_by: 'u1' });
+                expect(typeof l.updated_at).toBe('string');
+            }
+            expect(linhas.map((l) => [l.chave, l.valor])).toEqual([
+                ['planta.exibir.mostrarGrade', false],
+                ['planta.exibir.estiloPlanta', 'HUMANIZADA'],
+                ['planta.exibir.vista3dTerreno', true],
+            ]);
+            expect(opcoes.onConflict).toBe('escopo,user_id,chave');
+        });
+
+        it('lista vazia não fala com o banco', async () => {
+            await preferenciasService.gravarVarios([]);
+            expect(m.consultas).toHaveLength(0);
+            expect(m.getSession).not.toHaveBeenCalled();
+        });
+
+        it('erro do banco rejeita com a frase do banco', async () => {
+            m.fila.push({ data: null, error: { message: 'negado' } });
+            await expect(preferenciasService.gravarVarios([{ chave: 'planta.exibir.mostrarGrade', valor: true }]))
+                .rejects.toThrow('negado');
+        });
+
+        it('sem usuário na sessão lança erro claro e não grava', async () => {
+            m.getSession.mockResolvedValue({ data: { session: null }, error: null });
+            await expect(preferenciasService.gravarVarios([{ chave: 'planta.exibir.mostrarGrade', valor: true }]))
+                .rejects.toThrow(/sess[aã]o/i);
             expect(m.consultas).toHaveLength(0);
         });
     });

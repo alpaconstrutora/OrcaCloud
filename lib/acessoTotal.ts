@@ -4,7 +4,7 @@
  *
  * Esta lista é só o atalho de INTERFACE (menu, guard de rota, gates de edição).
  * Quem libera os DADOS é o banco: as mesmas contas estão em `public.superadmins`,
- * e a migration aplicar_20271024900000 as põe como `owner` em toda organização e
+ * e a migration aplicar_20271024950000 as põe como `owner` em toda organização e
  * em todo espaço de tarefas — inclusive os criados depois. Conta nova aqui precisa
  * entrar lá também, senão vê o menu inteiro e as telas vazias.
  */

@@ -165,6 +165,6 @@ Só alcançado com rota finita é fonte (luzes e anéis); junta de peças de vig
 - [x] correção 1 (B) a régua do apoio comum (`distanciaAoApoioDaViga`)
 - [x] correção 2 — I1 (só alcançado ligado ao quadro), I2 (leitura da água + pendência), I3 (testes dos ganhos), menores
 - [ ] pendência: elétrica × água na mesma travessia (ver Leitura da correção 1)
-- [ ] revisão
+- [x] revisão — "Sim, com correções" (rede órfã, leitura da água, testes dos ganhos); correção 2 `204f117a` conferida
 - [ ] PR + CI
 - [ ] publicação

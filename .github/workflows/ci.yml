@@ -3,8 +3,9 @@
 #
 # A publicação é a integração nativa do Vercel com o GitHub: um webhook do lado
 # do Vercel, que não aparece em `.github/` nenhum. Push em `main` dispara build
-# de PRODUÇÃO; push em qualquer outra branch dispara PREVIEW. Não há comando de
-# deploy no fluxo normal.
+# de PRODUÇÃO; push em qualquer outra branch não dispara build nenhum
+# (`git.deploymentEnabled` no vercel.json). Não há comando de deploy no fluxo
+# normal.
 #
 # Isto está escrito aqui porque foi aqui que alguém procurou: em 06/09/2026 uma
 # sessão viu só este arquivo, concluiu "chegar na main não publica nada", parou

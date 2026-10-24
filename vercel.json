@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run verificar:build && vite build",
+  "git": { "deploymentEnabled": { "main": true, "**": false } },
   "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }]
 }

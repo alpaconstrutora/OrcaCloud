@@ -3,8 +3,9 @@
 ## Em uma linha
 
 **Deploy é `git push origin HEAD:main`.** Não existe comando de deploy no fluxo
-normal. O Vercel está ligado ao GitHub: push em `main` publica, push em qualquer
-outra branch vira preview.
+normal. O Vercel está ligado ao GitHub: push em `main` publica; push em qualquer
+outra branch não gera build (`git.deploymentEnabled` no `vercel.json` — motivo na
+REGRA #8 do `CLAUDE.md`).
 
 E **cada frente trabalha na própria pasta**, nunca na mesma:
 

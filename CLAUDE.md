@@ -476,8 +476,15 @@ bash scripts/fechar-frente.sh <nome>   # ao terminar
 nele.** Esse diretório é o checkout de integração.
 
 **Não existe comando de deploy no fluxo normal.** O Vercel está ligado ao GitHub:
-push em `main` publica, push em qualquer outra branch vira preview. O portão é o
+push em `main` publica; push em qualquer outra branch **não gera build nenhum**
+(`git.deploymentEnabled` no `vercel.json`, desde 24/10/2026). O portão é o
 `buildCommand` do `vercel.json` — build que falha não troca o domínio.
+
+Por que sem preview: cada PR gerava dois builds (preview da branch + produção do
+merge), e o painel parecia mostrar publicação duplicada. Ninguém usava a URL de
+preview — a conferência é no app local e o merge espera o CI do GitHub — e os
+builds entram numa fila única: produção do merge esperava atrás de preview. Se
+um dia precisar de preview de uma branch, `vercel deploy` (sem `--prod`) da frente.
 
 Para conferir o que foi publicado: `bash scripts/publicar-producao.sh`. Ele espera
 o build do push e prova o resultado baixando o que o domínio entrega e procurando

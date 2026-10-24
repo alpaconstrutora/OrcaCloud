@@ -27,6 +27,16 @@ export interface AvisoDeEscolhasMudaramProps {
   onRelancar: () => void;
   /** O MOTIVO de o botão estar desligado (`null`/ausente = ligado). */
   desabilitado?: string | null;
+  /**
+   * O nome acessível do botão, quando o texto não basta (ex.: "Relançar com as escolhas atuais — QDC", com vários avisos
+   * na mesma tela). Ausente = o próprio texto.
+   */
+  rotuloAcessivel?: string;
+  /**
+   * `role="status"` (o leitor de tela anuncia o aviso). Padrão: sim. Numa tabela com um aviso por linha, `false` — várias
+   * regiões de status anunciariam todas de uma vez.
+   */
+  anunciar?: boolean;
 }
 
 export default function AvisoDeEscolhasMudaram({
@@ -34,12 +44,14 @@ export default function AvisoDeEscolhasMudaram({
   rotuloDoBotao = 'Relançar com as escolhas atuais',
   onRelancar,
   desabilitado = null,
+  rotuloAcessivel,
+  anunciar = true,
 }: AvisoDeEscolhasMudaramProps) {
   if (diferencas.length === 0) return null;
   const motivo = desabilitado || undefined;
   return (
     <div
-      role="status"
+      role={anunciar ? 'status' : undefined}
       data-testid="aviso-escolhas-mudaram"
       className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800"
     >
@@ -59,6 +71,7 @@ export default function AvisoDeEscolhasMudaram({
           onClick={onRelancar}
           disabled={!!motivo}
           title={motivo}
+          aria-label={rotuloAcessivel}
           className="inline-flex items-center gap-1 whitespace-nowrap rounded-[6px] bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <RefreshCw className="h-3.5 w-3.5" />

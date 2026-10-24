@@ -4635,7 +4635,7 @@ describe('BlueprintEditor · ribbon', () => {
   // lançar Eletrodutos por circuito deve ficar disponivel para relançar e incluir essa nova preferencia"*.
   describe('eletrodutos relançam quando uma escolha muda (F2, 24/10/2026)', () => {
     /** Sala de 24 m com QDC e uma TUG na ponta, a rede lançada COM caixas (o lote leva o registro); `aceitar` confirma tudo. */
-    async function redeComCaixas(aceitar: boolean, registrar = true) {
+    async function redeComCaixas(aceitar: boolean, registrar = true, noForro = false) {
       const k = await import('../../utils/blueprintKernel');
       const el = await import('../../utils/blueprintEletrodutos');
       const { REGRA_DE_CAIXAS_PADRAO } = await import('../../utils/blueprintCaixasDePassagem');
@@ -4649,11 +4649,16 @@ describe('BlueprintEditor · ribbon', () => {
       m = k.applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', ligacao: 'FN' }).model;
       m = k.applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', at: k.point(23925, 1000), cotaMm: 300, tipoEletrico: 'TUG' }).model;
       m = k.applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: m.circuitos[0].id }).model;
-      const hip = { ...el.HIPOTESES_ELETRODUTO_PADRAO, caixas: REGRA_DE_CAIXAS_PADRAO };
+      const hip = {
+        ...el.HIPOTESES_ELETRODUTO_PADRAO,
+        caixas: REGRA_DE_CAIXAS_PADRAO,
+        // A rede no forro, como a Casa Automática lança (correção 1).
+        ...(noForro ? { noForro: { faixa: { abaixoDoTetoMm: 45, afastamentoDaFaceMm: 50, degrauNaParedeMm: 0 }, folgaSobAVigaMm: 20 } } : {}),
+      };
       const planos = el.planejarEletrodutosDoModelo(m, hip, HIPOTESES_PADRAO);
       m = k.applyBatch(m, registrar ? comandosDeLancarEletrodutos(m, planos, hip, HIPOTESES_PADRAO) : planos[0].comandos).model;
       const cps = (m.terminais ?? []).filter((x) => x.tipoEletrico === 'CAIXA_PASSAGEM');
-      expect(cps).toHaveLength(2);
+      if (!noForro) expect(cps).toHaveLength(2);
       if (aceitar) {
         m = k.applyBatch(m, [
           ...(m.trechos ?? []).map((x) => ({ type: 'SetTrechoProps' as const, trechoId: x.id, sugerido: false })),
@@ -4663,9 +4668,8 @@ describe('BlueprintEditor · ribbon', () => {
       return m;
     }
     const AVISO = 'Caixas de passagem — lançado com: com caixas de passagem · agora: sem caixas (pela luz do teto)';
-    /** O "Relançar com as escolhas atuais" do RODAPÉ (o do aviso tem o mesmo nome). */
-    const relancarDoRodape = () =>
-      screen.getAllByRole('button', { name: /^relançar com as escolhas atuais$/i }).find((b) => !b.closest('[data-testid="aviso-escolhas-mudaram"]'))!;
+    /** O "Relançar com as escolhas atuais" do RODAPÉ — o nome acessível diz os quadros (o do aviso, o quadro dele). */
+    const relancarDoRodape = () => screen.getByRole('button', { name: /^relançar com as escolhas atuais — todos os quadros com rede \(QDC\)$/i });
     async function abrirEletrodutos() {
       await abrirAba(/^elétrica$/i);
       await userEvent.setup().click(botao(/^lançar eletrodutos/i));
@@ -4689,6 +4693,8 @@ describe('BlueprintEditor · ribbon', () => {
       const titulo = await screen.findByText('Refazer os eletrodutos de QDC?');
       const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
       expect(confirmacao).toHaveTextContent(`QDC: ${trechos} eletroduto(s) (${trechos} confirmado(s)) e 2 caixa(s) de passagem (2 aceita(s)).`);
+      // Correção 1 (M2): e o que mudou.
+      expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
       await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
 
       // Refeito com "sem caixas": a rede nova nasce sugerida, sem caixas, e o registro é o de agora → sem aviso.
@@ -4705,7 +4711,7 @@ describe('BlueprintEditor · ribbon', () => {
       await montar();
       const drawer = await abrirEletrodutos();
       const aviso = await within(drawer).findByTestId('aviso-escolhas-mudaram');
-      await userEvent.setup().click(within(aviso).getByRole('button', { name: /^relançar com as escolhas atuais$/i }));
+      await userEvent.setup().click(within(aviso).getByRole('button', { name: 'Relançar com as escolhas atuais — QDC' }));
       await waitFor(() => expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
       expect(screen.queryByText(/^Refazer os eletrodutos de/)).not.toBeInTheDocument();
     });
@@ -4717,6 +4723,23 @@ describe('BlueprintEditor · ribbon', () => {
       await within(drawer).findByRole('table', { name: /eletrodutos por quadro/i });
       expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
       expect(relancarDoRodape()).toBeEnabled();
+    });
+
+    it('⚠️ correção 1 (C1): rede no FORRO lançada antes do registro — o botão da linha e o do rodapé desligados, com o motivo', async () => {
+      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, true));
+      await montar();
+      const drawer = await abrirEletrodutos();
+      const tabela = await within(drawer).findByRole('table', { name: /eletrodutos por quadro/i });
+      const MOTIVO = 'Rede no forro lançada antes do registro — relançar aqui a tiraria do forro.';
+      expect(tabela).toHaveTextContent(MOTIVO);
+      // O único botão da tabela (sem registro, sem aviso): o da linha do quadro — qualquer que seja o rótulo.
+      const daLinha = within(tabela).getByRole('button');
+      expect(daLinha).toBeDisabled();
+      expect(daLinha).toHaveAttribute('title', MOTIVO);
+      expect(daLinha.parentElement).toHaveAttribute('title', MOTIVO);
+      const doRodape = screen.getByRole('button', { name: /^lançar em todos/i });
+      expect(doRodape).toBeDisabled();
+      expect(doRodape).toHaveAccessibleDescription(MOTIVO);
     });
   });
 

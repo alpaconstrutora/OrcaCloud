@@ -17,11 +17,16 @@ import { HIPOTESES_PADRAO } from '../utils/blueprintEletricaDimensionamento';
 import { registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
 import {
   ESCOLHAS_DO_ELETRODUTO,
+  MOTIVO_REDE_NO_FORRO_SEM_REGISTRO,
   botaoDeLancarEletrodutos,
   comandosDeLancarEletrodutos,
   comandosDeRefazerEletrodutos,
   diferencasDoEletroduto,
   escolhasDoEletroduto,
+  hipotesesDoQuadro,
+  motivoParaNaoRelancar,
+  planejarEletrodutosPorQuadro,
+  redeNoForroSemRegistro,
   redesARefazer,
   textoDaConfirmacaoDeRefazer,
 } from '../utils/blueprintEscolhasDoEletroduto';
@@ -87,28 +92,28 @@ describe('diferencasDoEletroduto — a regra B (o aviso por quadro)', () => {
     const m = lancadaComCaixas();
     const q = m.quadros[0].id;
     expect(registroDe(m, 'ELETRODUTOS', q)?.escolhas.caixasDePassagem).toBe('CAIXAS');
-    expect(diferencasDoEletroduto(m, q, escolhasDoEletroduto(COM_CAIXAS, HIPOTESES_PADRAO))).toEqual([]);
-    const d = diferencasDoEletroduto(m, q, escolhasDoEletroduto(SEM_CAIXAS, HIPOTESES_PADRAO));
+    expect(diferencasDoEletroduto(m, q, COM_CAIXAS, HIPOTESES_PADRAO)).toEqual([]);
+    const d = diferencasDoEletroduto(m, q, SEM_CAIXAS, HIPOTESES_PADRAO);
     expect(textoDasDiferencas(d)).toBe('Caixas de passagem — lançado com: com caixas de passagem · agora: sem caixas (pela luz do teto)');
   });
 
   it('a temperatura do estudo mudou → diz qual e quanto', () => {
     const m = lancadaComCaixas();
-    const d = diferencasDoEletroduto(m, m.quadros[0].id, escolhasDoEletroduto(COM_CAIXAS, { ...HIPOTESES_PADRAO, temperaturaAmbienteC: 40 }));
+    const d = diferencasDoEletroduto(m, m.quadros[0].id, COM_CAIXAS, { ...HIPOTESES_PADRAO, temperaturaAmbienteC: 40 });
     expect(textoDasDiferencas(d)).toBe('Temperatura ambiente (hipóteses elétricas do estudo) — lançado com: 30 °C · agora: 40 °C');
   });
 
   it('rede antiga, sem registro → nenhum aviso (não se sabe com que foi lançada)', () => {
     const m = sala();
     const semRegistro = applyBatch(m, planejarEletrodutosDoModelo(m, COM_CAIXAS)[0].comandos).model;
-    expect(diferencasDoEletroduto(semRegistro, m.quadros[0].id, escolhasDoEletroduto(SEM_CAIXAS, HIPOTESES_PADRAO))).toEqual([]);
+    expect(diferencasDoEletroduto(semRegistro, m.quadros[0].id, SEM_CAIXAS, HIPOTESES_PADRAO)).toEqual([]);
   });
 });
 
 describe('botaoDeLancarEletrodutos — a regra A (o botão nunca fica sem ação quando há rede)', () => {
   it('nada desenhado → desligado, com o motivo', () => {
     const vazio = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
-    expect(botaoDeLancarEletrodutos(vazio, planejarEletrodutosDoModelo(vazio, SEM_CAIXAS))).toEqual({ modo: 'LANCAR', rotulo: 'Lançar em todos (0)', motivo: expect.stringMatching(/nenhum quadro/i) });
+    expect(botaoDeLancarEletrodutos(vazio, planejarEletrodutosDoModelo(vazio, SEM_CAIXAS))).toEqual({ modo: 'LANCAR', rotulo: 'Lançar em todos (0)', motivo: expect.stringMatching(/nenhum quadro/i), quadros: [] });
   });
 
   it('quadro sem ponto com circuito → desligado: "nenhum ponto com circuito"', () => {
@@ -119,7 +124,7 @@ describe('botaoDeLancarEletrodutos — a regra A (o botão nunca fica sem ação
 
   it('pontos a ligar → "Lançar em todos (N)", ligado', () => {
     const m = sala();
-    expect(botaoDeLancarEletrodutos(m, planejarEletrodutosDoModelo(m, SEM_CAIXAS))).toEqual({ modo: 'LANCAR', rotulo: 'Lançar em todos (1)', motivo: null });
+    expect(botaoDeLancarEletrodutos(m, planejarEletrodutosDoModelo(m, SEM_CAIXAS))).toEqual({ modo: 'LANCAR', rotulo: 'Lançar em todos (1)', motivo: null, quadros: [m.quadros[0].id] });
   });
 
   it('⚠️ rede toda ligada e SEM registro (rede antiga) → "Relançar com as escolhas atuais", ligado — e sem aviso', () => {
@@ -127,8 +132,8 @@ describe('botaoDeLancarEletrodutos — a regra A (o botão nunca fica sem ação
     const antiga = aceitarTudo(applyBatch(m, planejarEletrodutosDoModelo(m, COM_CAIXAS)[0].comandos).model);
     const planos = planejarEletrodutosDoModelo(antiga, SEM_CAIXAS);
     expect(planos[0].comandos).toEqual([]);
-    expect(botaoDeLancarEletrodutos(antiga, planos)).toEqual({ modo: 'RELANCAR', rotulo: 'Relançar com as escolhas atuais', motivo: null });
-    expect(diferencasDoEletroduto(antiga, antiga.quadros[0].id, escolhasDoEletroduto(SEM_CAIXAS, HIPOTESES_PADRAO))).toEqual([]);
+    expect(botaoDeLancarEletrodutos(antiga, planos)).toEqual({ modo: 'RELANCAR', rotulo: 'Relançar com as escolhas atuais', motivo: null, quadros: [antiga.quadros[0].id] });
+    expect(diferencasDoEletroduto(antiga, antiga.quadros[0].id, SEM_CAIXAS, HIPOTESES_PADRAO)).toEqual([]);
   });
 });
 
@@ -136,7 +141,7 @@ describe('redesARefazer + textoDaConfirmacaoDeRefazer — confirmação só com 
   it('só sugeridos → refaz direto (sem confirmação)', () => {
     const m = lancadaComCaixas();
     const redes = redesARefazer(m);
-    expect(redes).toEqual([{ quadroId: m.quadros[0].id, nome: 'QDC', trechos: m.trechos!.length, trechosConfirmados: 0, caixas: 2, caixasAceitas: 0 }]);
+    expect(redes).toEqual([{ quadroId: m.quadros[0].id, nome: 'QDC', trechos: m.trechos!.length, trechosConfirmados: 0, caixas: 2, caixasAceitas: 0, mudou: null }]);
     expect(textoDaConfirmacaoDeRefazer(redes)).toBeNull();
   });
 
@@ -169,7 +174,7 @@ describe('os lotes levam o registro — e um Ctrl+Z volta tudo', () => {
     const depois = h.current;
     expect(cps(depois)).toEqual([]);
     expect(registroDe(depois, 'ELETRODUTOS', q)?.escolhas.caixasDePassagem).toBe('PELA_LUZ');
-    expect(diferencasDoEletroduto(depois, q, escolhasDoEletroduto(SEM_CAIXAS, HIPOTESES_PADRAO))).toEqual([]);
+    expect(diferencasDoEletroduto(depois, q, SEM_CAIXAS, HIPOTESES_PADRAO)).toEqual([]);
     expect((depois.trechos ?? []).length).toBeGreaterThan(0);
     h.undo();
     expect(h.current).toEqual(m);
@@ -187,5 +192,95 @@ describe('os lotes levam o registro — e um Ctrl+Z volta tudo', () => {
     const depois = applyBatch(semPonto, lote).model;
     expect(depois.trechos ?? []).toEqual([]);
     expect(registroDe(depois, 'ELETRODUTOS', q)).toBeNull();
+  });
+});
+
+// ─── Correção 1 (revisão da F2, 24/10/2026) ───────────────────────────────────────────────────────────────────────
+describe('correção 1 — lançamento parcial não apaga o aviso (I1)', () => {
+  it('⚠️ rede ACEITA com caixas → preferência "sem caixas" → um ponto novo → Lançar: o registro antigo fica e o aviso continua', () => {
+    const m0 = aceitarTudo(lancadaComCaixas());
+    const q = m0.quadros[0].id;
+    const t = m0.levels[0].id;
+    let m = applyCommand(m0, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', at: point(12000, 3925), cotaMm: 300, tipoEletrico: 'TUG' }).model;
+    m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: m.circuitos[0].id }).model;
+    const planos = planejarEletrodutosDoModelo(m, SEM_CAIXAS);
+    expect(planos[0].aLigar).toBe(1);
+    const lote = comandosDeLancarEletrodutos(m, planos, SEM_CAIXAS, HIPOTESES_PADRAO);
+    expect(lote.some((c) => c.type === 'AddTrecho')).toBe(true);
+    expect(lote.some((c) => c.type === 'RegistrarLancamento')).toBe(false);
+    const depois = applyBatch(m, lote).model;
+    expect(registroDe(depois, 'ELETRODUTOS', q)?.escolhas.caixasDePassagem).toBe('CAIXAS');
+    expect(textoDasDiferencas(diferencasDoEletroduto(depois, q, SEM_CAIXAS, HIPOTESES_PADRAO))).toMatch(/^Caixas de passagem — lançado com: com caixas/);
+  });
+
+  it('com as MESMAS escolhas do registro, o ponto novo regrava o registro (nada mudou)', () => {
+    const m0 = aceitarTudo(lancadaComCaixas());
+    const t = m0.levels[0].id;
+    let m = applyCommand(m0, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', at: point(12000, 3925), cotaMm: 300, tipoEletrico: 'TUG' }).model;
+    m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: m.circuitos[0].id }).model;
+    const lote = comandosDeLancarEletrodutos(m, planejarEletrodutosDoModelo(m, COM_CAIXAS), COM_CAIXAS, HIPOTESES_PADRAO);
+    expect(lote.filter((c) => c.type === 'RegistrarLancamento')).toHaveLength(1);
+  });
+});
+
+describe('correção 1 — a rede no FORRO continua no forro (C1)', () => {
+  const FORRO = { faixa: { abaixoDoTetoMm: 45, afastamentoDaFaceMm: 50, degrauNaParedeMm: 0 }, folgaSobAVigaMm: 20 };
+  const NO_FORRO: HipotesesDeEletroduto = { ...SEM_CAIXAS, noForro: FORRO };
+  const horizontaisEletricas = (m: BlueprintModel) => (m.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && t.cotaAMm === t.cotaBMm && !(t.a.x === t.b.x && t.a.y === t.b.y));
+
+  it('o registro guarda a faixa (sem rótulo) e não guarda a rota máxima; `hipotesesDoQuadro` a devolve', () => {
+    const e = escolhasDoEletroduto(NO_FORRO, HIPOTESES_PADRAO);
+    expect(e).toMatchObject({ forroAbaixoDoTetoMm: 45, forroAfastamentoDaFaceMm: 50, forroDegrauNaParedeMm: 0, forroFolgaSobAVigaMm: 20 });
+    expect('rotaMaximaVezes' in e).toBe(false);
+    for (const k of Object.keys(e).filter((x) => x.startsWith('forro'))) expect(ESCOLHAS_DO_ELETRODUTO.rotulos[k]).toBeUndefined();
+    const m = sala();
+    const q = m.quadros[0].id;
+    const comRegistro = applyBatch(m, comandosDeLancarEletrodutos(m, planejarEletrodutosDoModelo(m, NO_FORRO), NO_FORRO, HIPOTESES_PADRAO)).model;
+    expect(hipotesesDoQuadro(comRegistro, q, SEM_CAIXAS).noForro).toEqual(FORRO);
+    // A rota máxima do painel não acende o aviso numa rede no forro.
+    expect(diferencasDoEletroduto(comRegistro, q, { ...SEM_CAIXAS, rotaMaximaVezes: 2 }, HIPOTESES_PADRAO)).toEqual([]);
+  });
+
+  it('⚠️ rede no forro, preferência trocada: refazer pelo painel (sem `noForro` no painel) mantém todo horizontal na faixa', () => {
+    const m = sala();
+    const q = m.quadros[0].id;
+    const lancada = aceitarTudo(applyBatch(m, comandosDeLancarEletrodutos(m, planejarEletrodutosDoModelo(m, NO_FORRO), NO_FORRO, HIPOTESES_PADRAO)).model);
+    expect(horizontaisEletricas(lancada).length).toBeGreaterThan(0);
+    expect(horizontaisEletricas(lancada).every((t) => t.cotaAMm === 2800 - 45)).toBe(true);
+    const depois = applyBatch(lancada, comandosDeRefazerEletrodutos(lancada, [q], COM_CAIXAS, HIPOTESES_PADRAO)).model;
+    expect(horizontaisEletricas(depois).length).toBeGreaterThan(0);
+    expect(horizontaisEletricas(depois).map((t) => t.cotaAMm).filter((c) => c !== 2800 - 45)).toEqual([]);
+    expect(registroDe(depois, 'ELETRODUTOS', q)?.escolhas).toMatchObject({ caixasDePassagem: 'CAIXAS', forroAbaixoDoTetoMm: 45 });
+  });
+
+  it('⚠️ rede no forro SEM registro (antiga): não relança por aqui — botões desligados com o motivo, lotes vazios', () => {
+    const m = sala();
+    const q = m.quadros[0].id;
+    const antiga = aceitarTudo(applyBatch(m, planejarEletrodutosDoModelo(m, NO_FORRO)[0].comandos).model);
+    expect(redeNoForroSemRegistro(antiga, q)).toBe(true);
+    expect(motivoParaNaoRelancar(antiga, q)).toBe(MOTIVO_REDE_NO_FORRO_SEM_REGISTRO);
+    const planos = planejarEletrodutosPorQuadro(antiga, SEM_CAIXAS, HIPOTESES_PADRAO);
+    expect(botaoDeLancarEletrodutos(antiga, planos)).toMatchObject({ motivo: MOTIVO_REDE_NO_FORRO_SEM_REGISTRO, quadros: [] });
+    expect(comandosDeRefazerEletrodutos(antiga, [q], SEM_CAIXAS, HIPOTESES_PADRAO)).toEqual([]);
+    expect(comandosDeLancarEletrodutos(antiga, planos, SEM_CAIXAS, HIPOTESES_PADRAO)).toEqual([]);
+    expect(redesARefazer(antiga)).toEqual([]);
+    // Controle: a rede na cota do painel, sem registro, relança.
+    const doPainel = aceitarTudo(applyBatch(m, planejarEletrodutosDoModelo(m, SEM_CAIXAS)[0].comandos).model);
+    expect(motivoParaNaoRelancar(doPainel, q)).toBeNull();
+  });
+});
+
+describe('correção 1 — menores', () => {
+  it('M6: tabelas iguais às do sistema gravam "PADRAO" ("padrão do sistema"); personalizadas, "personalizadas no estudo"', () => {
+    expect(escolhasDoEletroduto(SEM_CAIXAS, HIPOTESES_PADRAO).tabelasEletricas).toBe('PADRAO');
+    const m = lancadaComCaixas();
+    const d = diferencasDoEletroduto(m, m.quadros[0].id, COM_CAIXAS, { ...HIPOTESES_PADRAO, catalogoDeDisjuntoresA: [10, 20, 32] });
+    expect(d).toEqual([expect.objectContaining({ item: 'tabelasEletricas', antes: 'padrão do sistema', agora: expect.stringMatching(/^personalizadas no estudo/) })]);
+  });
+
+  it('M2: com as hipóteses atuais, a confirmação diz também o que mudou', () => {
+    const m = aceitarTudo(lancadaComCaixas());
+    const texto = textoDaConfirmacaoDeRefazer(redesARefazer(m, undefined, { hip: SEM_CAIXAS, hipEletricas: HIPOTESES_PADRAO }));
+    expect(texto).toMatch(/aceita\(s\)\)\. O que mudou: Caixas de passagem — lançado com: com caixas de passagem · agora: sem caixas \(pela luz do teto\)\.$/);
   });
 });

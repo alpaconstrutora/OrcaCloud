@@ -28,6 +28,14 @@ describe('AvisoDeEscolhasMudaram', () => {
     expect(onRelancar).toHaveBeenCalledTimes(1);
   });
 
+  it('correção 1 (M4): nome acessível com o quadro e, numa tabela, sem `role="status"` (`anunciar={false}`)', () => {
+    const { container, rerender } = render(<AvisoDeEscolhasMudaram diferencas={[CAIXAS]} onRelancar={() => {}} />);
+    expect(container.querySelector('[role="status"]')).toBeTruthy();
+    rerender(<AvisoDeEscolhasMudaram diferencas={[CAIXAS]} onRelancar={() => {}} anunciar={false} rotuloAcessivel="Relançar com as escolhas atuais — QDC" />);
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Relançar com as escolhas atuais — QDC' })).toBeTruthy();
+  });
+
   it('aceita outro rótulo no botão', () => {
     render(<AvisoDeEscolhasMudaram diferencas={[CAIXAS]} rotuloDoBotao="Refazer tudo" onRelancar={() => {}} />);
     expect(screen.getByRole('button', { name: 'Refazer tudo' })).toBeTruthy();

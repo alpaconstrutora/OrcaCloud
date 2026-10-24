@@ -177,7 +177,8 @@ e o caso da aba em `BlueprintEditor.test.tsx`.
 
 ## Estado
 - [x] desenho aprovado ("aprovado", 24/10/2026)
-- [ ] tarefas 1–5
+- [x] tarefas 1–4 (catálogo, hook + migração, editor, aba) — cada uma com revisão; revisão final do ramo: 3 importantes corrigidos (e0809570) e re-revisados limpos
+- [x] tarefa 5 (fecho) — no código final: tsc 0 erros; suíte 11.197 ok, 0 falhas, 34 pulados; o `blueprintCasaAutomatica` (não tocado) derruba o worker local no Node 24, como no #112 — portão dele = CI do PR
 - [ ] PR + CI
 - [ ] publicação
 

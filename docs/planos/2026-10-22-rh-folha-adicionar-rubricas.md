@@ -95,7 +95,11 @@ Decisões do usuário: **"Permitir adicionar qualquer uma, com valor"** e o valo
    rodada, após rebase sobre 2cae50b1), Vercel e Preview Comments verdes; mesclado por squash em 23/10/2026
    (`8848dbb1`); `conferir-producao.sh "Informe o valor de: " "Calculada pela própria folha"` provou o domínio
    servindo 8848dbb; CI do main verde; frente fechada e branch apagada
-9. [ ] conferência na tela real
+9. [x] conferência na tela real — 24/10/2026, produção, Chrome do usuário (logado), Claudinei › Folha de
+   Pagamento: coluna Valor com o cálculo da rubrica (Adiantamento 40%, Contribuição 1,5%) e IRRF/FGTS travados;
+   drawer com 29 linhas = 33 − 4 incluídas, 25 marcáveis e 4 travadas com o motivo; Gratificação adicionada em
+   aberto → "Alterações não salvas"; saí descartando; banco conferido sem gravação. Achados: textos cortados na
+   coluna Valor e 13º/Férias marcáveis → Pedido posterior (3º)
 
 ---
 
@@ -114,4 +118,25 @@ manual do mês já substitui o recorrente.
    sem vermelho, `title` explicando onde lançar; texto da aba
 3. [x] `__tests__/components/LaborEmployeeFormRubricasAdicionar.test.tsx` — "fica em aberto e o Salvar grava sem
    valor" (`{code:'GRATIFICACAO', valor_tipo:'fixo', valor:null}`)
-4. [ ] PR + CI + publicação
+4. [x] PR + CI + publicação — PR #118, `ci` 30m03s, Vercel e Preview Comments verdes; mesclado por squash em
+   24/10/2026 (`2b6e5238`); `conferir-producao.sh "Em aberto (lançar no mês)"` provou o domínio servindo
+   2b6e523; CI do main verde; frente fechada e branch apagada
+
+---
+
+## Pedido posterior (24/10/2026, 3º)
+
+A conferência em produção (item 9 acima) achou dois problemas; o usuário respondeu **"sim"** às duas correções:
+
+> 1. Texto cortado na coluna Valor … alargar a coluna e encurtar os textos, com o texto completo ao passar o mouse.
+> 2. 13º e Férias aparecem como marcáveis … Sugiro travar essas também, com o motivo "Só entra na folha de 13º/férias"
+
+1. [x] `lib/payrollRubricaRecorrente.ts` — trava `category = 'thirteenth'` (DECIMO, DESC_ADIANT_13) e `'vacation'`
+   (FERIAS, FERIAS_TERCO): recorrente com valor entraria em TODA folha mensal. Nenhum colaborador tinha essas
+   vinculadas. Motivos e `valorDaRubrica` em texto curto ("Calculada pela folha", "40% do salário"); a frase
+   inteira vai no `title`
+2. [x] `components/LaborEmployeeForm.tsx` — seletor `R$`/`%` com 60px, placeholder "Em aberto", travada mostra só o
+   motivo; padrão da coluna 290 → 320px. A largura fica salva por navegador (`${storageKey}:widths`), por isso a
+   correção é a célula caber em ~230px, e não só a largura padrão
+3. [x] testes: lib (+4 casos 13º/férias) e tela atualizados — 17/17
+4. [ ] PR + CI + publicação + conferir na tela em produção

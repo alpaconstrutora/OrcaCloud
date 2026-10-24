@@ -12,12 +12,17 @@ const r = (extra: Record<string, unknown> = {}) => ({
 
 describe('rubrica recorrente do colaborador — o que pode, o que trava', () => {
     it('trava o que a própria folha calcula, o Padrão CLT e a rescisão', () => {
-        expect(motivoBloqueioRecorrente(r({ code: 'INSS', category: 'tax', is_clt_mandatory: true }))).toBe('Calculada pela própria folha');
-        expect(motivoBloqueioRecorrente(r({ code: 'IRRF', category: 'tax' }))).toBe('Calculada pela própria folha');
-        expect(motivoBloqueioRecorrente(r({ code: 'FGTS', category: 'tax' }))).toBe('Calculada pela própria folha');
-        expect(motivoBloqueioRecorrente(r({ code: 'SALARIO', category: 'base', is_clt_mandatory: true }))).toBe('Padrão CLT: já entra para todo CLT');
-        expect(motivoBloqueioRecorrente(r({ code: 'OUTRA_CLT', is_clt_mandatory: true }))).toBe('Padrão CLT: já entra para todo CLT');
-        expect(motivoBloqueioRecorrente(r({ code: 'FGTS_MULTA', category: 'termination' }))).toBe('Só entra na rescisão');
+        expect(motivoBloqueioRecorrente(r({ code: 'INSS', category: 'tax', is_clt_mandatory: true }))).toBe('Calculada pela folha');
+        expect(motivoBloqueioRecorrente(r({ code: 'IRRF', category: 'tax' }))).toBe('Calculada pela folha');
+        expect(motivoBloqueioRecorrente(r({ code: 'FGTS', category: 'tax' }))).toBe('Calculada pela folha');
+        expect(motivoBloqueioRecorrente(r({ code: 'SALARIO', category: 'base', is_clt_mandatory: true }))).toBe('Já entra para todo CLT');
+        expect(motivoBloqueioRecorrente(r({ code: 'OUTRA_CLT', is_clt_mandatory: true }))).toBe('Já entra para todo CLT');
+        expect(motivoBloqueioRecorrente(r({ code: 'FGTS_MULTA', category: 'termination' }))).toBe('Só na rescisão');
+        // 13º e férias têm folha própria: recorrente entraria em TODA folha mensal (24/10/2026)
+        expect(motivoBloqueioRecorrente(r({ code: 'DECIMO', category: 'thirteenth' }))).toBe('Só na folha de 13º');
+        expect(motivoBloqueioRecorrente(r({ code: 'DESC_ADIANT_13', category: 'thirteenth' }))).toBe('Só na folha de 13º');
+        expect(motivoBloqueioRecorrente(r({ code: 'FERIAS', category: 'vacation' }))).toBe('Só na folha de férias');
+        expect(motivoBloqueioRecorrente(r({ code: 'FERIAS_TERCO', category: 'vacation' }))).toBe('Só na folha de férias');
     });
 
     it('libera as manuais e as de cálculo próprio', () => {
@@ -35,10 +40,10 @@ describe('rubrica recorrente do colaborador — o que pode, o que trava', () => 
     });
 
     it('descreve o cálculo próprio da rubrica (placeholder do campo)', () => {
-        expect(valorDaRubrica(r({ calculation_type: 'percentage', calculation_config: { percentage: 0.4 } }))).toBe('40% do salário (da rubrica)');
-        expect(valorDaRubrica(r({ calculation_type: 'percentage', calculation_config: { percentage: 0.015 } }))).toBe('1,5% do salário (da rubrica)');
-        expect(valorDaRubrica(r({ calculation_type: 'fixed', calculation_config: { amount: 150 } }))).toBe('R$ 150,00 (da rubrica)');
-        expect(valorDaRubrica(r({ calculation_type: 'formula' }))).toBe('Fórmula da rubrica');
+        expect(valorDaRubrica(r({ calculation_type: 'percentage', calculation_config: { percentage: 0.4 } }))).toBe('40% do salário');
+        expect(valorDaRubrica(r({ calculation_type: 'percentage', calculation_config: { percentage: 0.015 } }))).toBe('1,5% do salário');
+        expect(valorDaRubrica(r({ calculation_type: 'fixed', calculation_config: { amount: 150 } }))).toBe('R$ 150,00');
+        expect(valorDaRubrica(r({ calculation_type: 'formula' }))).toBe('Fórmula');
         expect(valorDaRubrica(r())).toBe('');
     });
 

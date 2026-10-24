@@ -83,7 +83,7 @@ const TAB_SUBTITLES: Record<EmployeeTabId, string> = {
 // Aba Folha: as colunas do seletor + "Valor" (o do colaborador) logo depois do nome.
 const FOLHA_COLUMNS: StandardTableColumn[] = [
     ...RUBRIC_COLUMNS.slice(0, 2),
-    { key: 'valor', label: 'Valor', sortable: true, width: 290 },
+    { key: 'valor', label: 'Valor', sortable: true, width: 320 },
     ...RUBRIC_COLUMNS.slice(2),
 ];
 
@@ -146,28 +146,34 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     // lançado no mês).
     const renderValorRecorrente = (r: PayrollRubric) => {
         const motivo = motivoBloqueioRecorrente(r);
-        if (motivo) return <span className="block truncate text-sm font-normal text-gray-500" title={`${motivo}: este vínculo não muda a folha`}>{motivo} · sem efeito aqui</span>;
+        if (motivo) return <span className="block truncate text-sm font-normal text-gray-500" title={`${motivo}: este vínculo não muda a folha mensal`}>{motivo}</span>;
         const l = incluido(r.code);
         const tipo: ValorTipoRecorrente = l?.valor_tipo ?? 'fixo';
         const emAberto = ficaEmAbertoSemValor(r) && l?.valor == null;
+        const daRubrica = valorDaRubrica(r);
+        // Célula estreita (a largura fica salva por navegador): seletor curto e
+        // textos curtos; a frase inteira vai no `title`.
         return (
             <div className="flex items-center gap-1.5">
                 <select
                     value={tipo}
                     onChange={e => setValorRecorrente(r.code, { valor_tipo: e.target.value as ValorTipoRecorrente })}
-                    title="Valor em reais por mês, ou percentual do salário da competência"
-                    className="h-8 shrink-0 px-2 text-sm font-normal text-gray-900 bg-gray-50 border border-gray-200 rounded-[6px] cursor-pointer outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    title={tipo === 'percentual' ? 'Percentual do salário da competência' : 'Valor em reais por mês'}
+                    aria-label={`Tipo do valor de ${r.name}`}
+                    className="h-8 w-[60px] shrink-0 px-2 text-sm font-normal text-gray-900 bg-gray-50 border border-gray-200 rounded-[6px] cursor-pointer outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 >
                     <option value="fixo">R$</option>
-                    <option value="percentual">% do salário</option>
+                    <option value="percentual">%</option>
                 </select>
                 <MoneyCentsInput
                     value={l?.valor ?? ''}
                     onChange={v => setValorRecorrente(r.code, { valor: v === '' ? null : Number(v) })}
                     onFocus={e => e.target.select()}
                     aria-label={`Valor de ${r.name}`}
-                    title={emAberto ? 'Valor variável: lance o valor de cada mês em Eventos de Folha. Para um valor fixo todo mês, preencha aqui.' : undefined}
-                    placeholder={emAberto ? 'Em aberto (lançar no mês)' : (valorDaRubrica(r) || 'Em aberto (lançar no mês)')}
+                    title={emAberto || !daRubrica
+                        ? 'Em aberto: valor variável, lançado a cada mês em Eventos de Folha. Para um valor fixo todo mês, preencha aqui.'
+                        : `Cálculo da rubrica: ${daRubrica}. Preencha para usar outro valor para este colaborador.`}
+                    placeholder={emAberto || !daRubrica ? 'Em aberto' : daRubrica}
                     className="h-8 w-full min-w-0 px-2 text-sm font-normal text-gray-900 bg-white border border-gray-200 rounded-[6px] outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
             </div>

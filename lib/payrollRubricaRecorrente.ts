@@ -33,11 +33,16 @@ export interface RubricaParaRecorrente {
  * Por que esta rubrica NÃO pode ser recorrente por colaborador — ou `null` se pode.
  * INSS/IRRF/FGTS (`category = 'tax'`) o motor calcula sozinho; vínculo deles
  * duplicaria ou seria ignorado. Salário e Padrão CLT já entram para todo CLT.
+ * 13º e férias têm folha própria: recorrente com valor entraria em TODA folha
+ * mensal (achado na conferência em produção, 24/10/2026).
+ * Textos curtos: cabem na célula da aba (~230px); o `title` diz o resto.
  */
 export function motivoBloqueioRecorrente(r: RubricaParaRecorrente): string | null {
-    if (r.category === 'tax') return 'Calculada pela própria folha';
-    if (r.is_clt_mandatory || r.category === 'base') return 'Padrão CLT: já entra para todo CLT';
-    if (r.category === 'termination') return 'Só entra na rescisão';
+    if (r.category === 'tax') return 'Calculada pela folha';
+    if (r.is_clt_mandatory || r.category === 'base') return 'Já entra para todo CLT';
+    if (r.category === 'termination') return 'Só na rescisão';
+    if (r.category === 'thirteenth') return 'Só na folha de 13º';
+    if (r.category === 'vacation') return 'Só na folha de férias';
     return null;
 }
 
@@ -57,13 +62,16 @@ const pct = (fracao: number) =>
 const brl = (v: number) =>
     v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/ /g, ' ');
 
-/** O cálculo próprio da rubrica, em texto — o que vale quando o colaborador não tem valor. */
+/**
+ * O cálculo próprio da rubrica, em texto curto (placeholder do campo) — o que vale
+ * quando o colaborador não tem valor. A tela põe "Cálculo da rubrica: …" no `title`.
+ */
 export function valorDaRubrica(r: RubricaParaRecorrente): string {
     const cfg = r.calculation_config ?? {};
     switch (r.calculation_type) {
-        case 'percentage': return `${pct(cfg.percentage ?? 0)} do salário (da rubrica)`;
-        case 'fixed': return `${brl(cfg.amount ?? 0)} (da rubrica)`;
-        case 'formula': return 'Fórmula da rubrica';
+        case 'percentage': return `${pct(cfg.percentage ?? 0)} do salário`;
+        case 'fixed': return brl(cfg.amount ?? 0);
+        case 'formula': return 'Fórmula';
         default: return '';
     }
 }

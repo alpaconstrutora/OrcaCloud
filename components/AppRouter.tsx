@@ -74,6 +74,7 @@ import { VIEW_TO_CONTROLADORIA_TAB } from '../constants/controladoríaTabs';
 import type { SupplierPortalTab } from './SupplierDashboard';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
 import { podeEditarTreinamentos } from '../utils/permissaoTreinamentos';
+import { temAcessoTotal } from '../lib/acessoTotal';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const AppraisalModule = React.lazy(() => import('./AppraisalModule'));
@@ -257,7 +258,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     return activeOrg.members.find(m => m.email.toLowerCase() === session?.user?.email?.toLowerCase()) || null;
   }, [activeOrg, session?.user?.email]);
 
-  const isDevEmail = session?.user?.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br';
+  const isDevEmail = temAcessoTotal(session?.user?.email);
 
   // Fora do guard de rota porque também decide o que aparece DENTRO de uma tela:
   // a aba Mapa Regulatório da Planta Inteligente leva a mesma trava que a rota

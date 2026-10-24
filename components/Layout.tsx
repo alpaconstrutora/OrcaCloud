@@ -12,6 +12,7 @@ import { academyService } from '../services/academyService';
 import { viewUrl } from '../lib/tabRouter';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
 import { podeVerTreinamentos } from '../utils/permissaoTreinamentos';
+import { temAcessoTotal } from '../lib/acessoTotal';
 
 const ThemeModeIcon = ({ mode, className }: { mode: ThemeMode; className?: string }) => {
   if (mode === 'light') return <Sun className={className} />;
@@ -190,8 +191,7 @@ const Layout: React.FC<LayoutProps> = ({
       .replace(/\b\w/g, char => char.toUpperCase());
   }, [profile.email]);
   const userInitial = (profile.email?.[0] ?? userName[0] ?? 'U').toUpperCase();
-  const DEV_EMAIL = 'altair.rosa@alpaconstrutora.com.br';
-  const isDevEmail = profile.email?.toLowerCase() === DEV_EMAIL;
+  const isDevEmail = temAcessoTotal(profile.email);
   // projectName cai no placeholder 'Residencial Horizonte' (INITIAL_PROJECT_SETTINGS,
   // constants.ts) sempre que não há projeto carregado — só é um nome real quando
   // projectId existe de fato (mesmo sinal usado pelo botão "sair da obra" abaixo).

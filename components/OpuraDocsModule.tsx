@@ -88,6 +88,7 @@ import { useStore } from '../store/useStore';
 import { creditRoomService } from '../services/creditRoomService';
 import { useOrgWriteTarget, forEachTargetOrg, targetOrgIds, partialFailureNote } from '../hooks/useOrgContext';
 import { isObra } from '../utils/projectClassification';
+import { temAcessoTotal } from '../lib/acessoTotal';
 
 // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
 type CampoAgruparDocs = 'tipo' | 'disciplina' | 'obra' | 'autor' | 'extensao' | 'status' | 'emissao' | 'norma_orgao' | 'norma_situacao';
@@ -499,7 +500,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // colaborador que não fosse o dev. A fonte de verdade é a membership na
   // organização ativa: organization_members.role ('owner' | 'admin' | 'member')
   // mais o JSONB de permissões, que é de onde sai a separação por disciplina.
-  const isDev = currentProfile?.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br' || currentProfile?.group === 'DESENVOLVEDOR';
+  const isDev = temAcessoTotal(currentProfile?.email) || currentProfile?.group === 'DESENVOLVEDOR';
   const [memberships, setMemberships] = React.useState<
     { organization_id: string; role: string; permissions: Partial<UserPermissions> }[]
   >([]);

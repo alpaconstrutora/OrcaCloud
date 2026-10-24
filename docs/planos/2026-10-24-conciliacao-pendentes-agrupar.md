@@ -28,7 +28,7 @@
 - [x] `BankReconciliation.tsx`
 - [x] typecheck — `tsc --noEmit` rc=0, 0 erros (lido por grep)
 - [x] `check-ui-standard.sh components/BankReconciliation.tsx`: 0 violações
-- [ ] conferência na tela real (precisa do login de leitura — não feita)
+- [x] conferência na tela real (login de leitura, conta Sicredi 55883-5, 0 escritas REST, 0 erros de página): Extrato e Lançamentos × Categoria/Contraparte-Parte/Data — Crescente A→Z, Decrescente invertido, mês cronológico, "Sem …" no fim, recolher/expandir todos, recarregar mantém. Achado: nome longo empurrava contagem/total para fora da meia-tela → rótulo do `LinhaDeGrupo` com `truncate max-w-[22rem]`. Script `c:/tmp/pwtest/pendentes-agrupar.js`
 - [x] guia §6.12
 - [ ] PR + CI
 

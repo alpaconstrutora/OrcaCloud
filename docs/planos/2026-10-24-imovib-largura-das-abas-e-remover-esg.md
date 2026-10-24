@@ -46,9 +46,12 @@ E, no meio do trabalho no Resumo:
 
 ## Decisões
 
-- **Colunas do banco ficam.** `esg_*` e `committee_*` em `imovib_studies` NÃO foram apagadas: é irreversível, o usuário só pediu a aba, e os dados já estão nos padrões. Apagar é uma migration à parte, se ele quiser.
+- **Colunas do banco: apagadas depois, a pedido.** Na entrega do PR #130 elas ficaram (apagar é irreversível e só se pedira a aba); o usuário respondeu "apagar". Migration `aplicar_20271024500000_imovib_remover_colunas_esg.sql`: DROP de `esg_environmental_score`, `esg_social_score`, `esg_governance_score`, `esg_certifications`, `esg_initiatives`, `esg_notes`, `committee_decision` e `committee_notes`, **sem cópia** (eram os padrões: 3/3/3, "rascunho", sem texto, e a lista padrão de 5 iniciativas inativas no Bruninho).
 - **Premissas, CAPEX e Estática** mantêm o `pb-10` interno; fora do pedido.
 
 ## Andamento
 
 - 2026-10-24: PR #127 publicado (largura das 3 abas e "&" → "e"). Item 1 e 2 implementados na frente `imovib-resumo-largura`.
+- 2026-10-24 (tarde): PR #130 publicado (`ee73430c`) e conferido na produção: 7 abas, sem ESG, Resumo e Receitas e Capital em largura total.
+- 2026-10-24: colunas `esg_*` e `committee_*` apagadas de `imovib_studies`. Antes: nenhuma view, função, gatilho, CHECK, policy ou índice dependia delas; `main` não as lia. Ensaio com ROLLBACK (0 restantes e as 8 voltaram), aplicação, 0 colunas. Na API publicada: listagem e `select *` do detalhe respondem 200; pedir `esg_initiatives` dá 42703 (contraprova).
+  - Quem estiver com a página aberta desde antes do deploy do #130 (código antigo) verá erro na listagem até recarregar.

@@ -70,6 +70,6 @@ forro; os cantos de 90° dos eletrodutos):
   cada um segue o de mesmos circuitos). Harness local: a Garden gravada no viewer de `origin/main` × refeita pelo motor
   novo no viewer novo — do QDC sobem DOIS eletrodutos lado a lado, cada um curva para o seu lado; os cantos viraram
   curvas; as emendas entre trechos sem fio de luz (cada ponta avança 4 mm por dentro da vizinha, mesma cor)
-- [ ] tsc + suíte
+- [x] tsc + suíte — tsc 0 erros; suíte local (sem `blueprintCasaAutomatica`, que roda na CI): 11.517 ok + 3 testes de tela que caíram por tempo sob carga e passaram sozinhos (`PainelVersoes`, `TelaWebhooks`: 43/43) = 11.520 ok, 0 falhas, 34 pulados, total 11.554. Bundle da planta-api inalterado
 - [ ] PR + CI
 - [ ] publicação

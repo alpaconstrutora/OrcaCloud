@@ -30,5 +30,5 @@ só com o filtro de pavimento, e o memo nem dependia de `chaveOcultos`. O 2D já
   `Blueprint3DViewer` de `origin/main` e no novo, com tudo que não é elétrico oculto: antes, conexões azul-escuras,
   vermelhas, cinza e verde-azuladas soltas; depois, só os eletrodutos e as caixas
 - [x] tsc + suíte — tsc 0 erros; suíte local (sem `blueprintCasaAutomatica`, que roda na CI): 11.470 ok + 7 testes de tela que caíram por tempo sob carga e passaram sozinhos (`BlueprintEditor`, `blueprintSobreposicaoUI`, `PainelVersoes`: 329/329) = 11.477 ok, 0 falhas, 34 pulados, total 11.511.
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #166, `ci` do PR verde (30min2s); squash `d8bac032` (25/10/2026)
+- [x] publicação — `conferir-producao.sh`: o domínio serve `d8bac03` (25/10/2026). Sem deploy de função.

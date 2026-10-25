@@ -24,12 +24,13 @@
  * ─── O QUE É "A REDE DO SISTEMA" (o que o Refazer apaga) ─────────────────────
  * - ÁGUA: os tubos de água fria/quente ligados a uma origem (`redeDaOrigem` de cada caixa e aquecedor) e os tubos com
  *   rótulo próprio do sistema (alimentador, extravasor, limpeza, sucção, recalque — `FORA_DA_DISTRIBUICAO`), confirmados
- *   inclusive; e o registro de gaveta que as peças da caixa põem NA limpeza (senão a limpeza relançada traria outro).
+ *   inclusive; e as peças EM LINHA sobre esses tubos (registros, válvulas, conexões — o registro da limpeza, ou os
+ *   postos à mão: sem o tubo ficariam soltos).
  *   NÃO entram: os pontos de consumo e os aparelhos (entrada do motor), a caixa, o aquecedor, o hidrômetro, a bomba e a
  *   torneira de boia (o motor os reaproveita onde estão), e tubo de água solto, sem ligação com uma origem.
- * - PLUVIAL: todo tubo da disciplina PLUVIAL (calhas e condutores — o planejador dos condutores já trata todo tubo
- *   pluvial que não é calha como condutor) e os BOCAIS (ralo pluvial com rótulo "Bocal", que a calha cria). NÃO entram:
- *   os ralos pluviais postos à mão (as fontes dos condutores), a caixa de areia e a saída pluvial.
+ * - PLUVIAL: os tubos que o motor cria (rótulos Calha, Condutor vertical e Condutor horizontal) e os BOCAIS (ralo
+ *   pluvial com rótulo "Bocal", que a calha cria). NÃO entram: o tubo pluvial desenhado à mão, os ralos pluviais postos à
+ *   mão (as fontes dos condutores), a caixa de areia e a saída pluvial.
  *
  * ─── A CASA AUTOMÁTICA (forro, faixas e ajustes) ─────────────────────────────
  * A casa lança a água com hipóteses que o painel não conhece: os ramais NO FORRO (`agua.noForro`), a faixa da água
@@ -49,8 +50,9 @@ import { applyBatch, type BlueprintModel, type Command, type ObjectId, type Term
 import { FORA_DA_DISTRIBUICAO, HIPOTESES_AGUA_PADRAO, origensDeAgua, redeDaOrigem } from './blueprintAguaAutomatica';
 import { planejarAguaCompleta, type HipotesesDaAguaCompleta, type PlanoDaAguaCompleta } from './blueprintAguaCompleta';
 import { HIPOTESES_ALIMENTACAO_PADRAO } from './blueprintAlimentador';
-import { RUGOSIDADE_DA_CALHA, ROTULO_DO_BOCAL } from './blueprintCalhas';
-import { ROTULO_DA_LIMPEZA } from './blueprintPecasDaCaixa';
+import { RUGOSIDADE_DA_CALHA, ROTULO_DA_CALHA, ROTULO_DO_BOCAL } from './blueprintCalhas';
+import { ROTULO_DO_CONDUTOR_HORIZONTAL, ROTULO_DO_CONDUTOR_VERTICAL } from './blueprintCondutoresPluviais';
+import { horizontaisNoForro, temAssinaturaDaCasa } from './blueprintAssinaturaDaCasa';
 import { HIPOTESES_PLUVIAIS_PADRAO, INTENSIDADE_POR_CIDADE, type HipotesesPluviais } from './blueprintPluvial';
 import { planejarPluvialCompleta, type PlanoDaPluvialCompleta } from './blueprintPluvialCompleto';
 import { HIPOTESES_PRESSAO_PADRAO } from './blueprintPressaoDaRede';
@@ -90,7 +92,19 @@ export type ForroDaAgua = NonNullable<HipotesesDaAguaCompleta['agua']['noForro']
  * As premissas da água com que se lança: as do estudo e, opcional, o FORRO DA CASA (correção 1) — o forro com que a Casa
  * Automática lançaria a água, das premissas da casa do estudo. Só é usado para a água no forro lançada antes do registro.
  */
-export type HipotesesDaAguaDoLancamento = HipotesesDaAguaCompleta & { forroDaCasa?: ForroDaAgua | null };
+export type HipotesesDaAguaDoLancamento = HipotesesDaAguaCompleta & { forroDaCasa?: ForroDaAguaDaCasa | null };
+
+/**
+ * O forro da água da casa, como o editor o monta das premissas do estudo (`forroDaAguaDaCasa`): as faixas, o REBAIXO
+ * (correção 2: parte da assinatura da casa) e a FAIXA DA QUENTE no mundo (`faixaDaAguaQuenteDaCasa`, correção 2: sem ela
+ * a quente refeita corria no eixo das paredes, cruzando a fria e a estrutura).
+ */
+export type ForroDaAguaDaCasa = ForroDaAgua & {
+  rebaixoMm?: number;
+  faixaDaAguaQuente?: { x: number; y: number } | null;
+  /** Correção 2 (I4): onde o alimentador da casa sobe quando o estudo não diz (`SUBIDA_DO_ALIMENTADOR_DA_CASA`). */
+  subidaDoAlimentador?: 'FACHADA' | 'SOB_A_CAIXA' | null;
+};
 
 /** O que a casa ajustou DEPOIS de lançar e que não é premissa do estudo (F18: o alimentador por cima do esgoto). */
 export interface AjustesDaAgua {
@@ -111,7 +125,9 @@ export function escolhasDaAgua(h: HipotesesDaAguaCompleta, ajustes: AjustesDaAgu
     velocidadeMaxMs: a.velocidadeMaxMs,
     dnMinimoAguaFriaMm: a.dnMinimoAguaFriaMm,
     dnMinimoAguaQuenteMm: a.dnMinimoAguaQuenteMm,
-    cotaRamalMm: a.cotaRamalMm,
+    // Correção 2 (I3): com o forro ativo, o planejador ignora a cota do ramal (o ramal corre na faixa) — compará-la
+    // acenderia um aviso que relançar não resolve. Como a rota máxima dos eletrodutos no forro.
+    ...(forro && a.pelasParedes !== false ? {} : { cotaRamalMm: a.cotaRamalMm }),
     raioDaColunaMm: a.raioDaColunaMm,
     raioDoShaftMm: a.raioDoShaftMm ?? 3000,
     rotaMaximaVezes: a.rotaMaximaVezes ?? SEM_LIMITE,
@@ -239,9 +255,17 @@ export const ESCOLHAS_DA_AGUA: OpcoesDaComparacao = {
 export function lancamentoDaAgua<H extends HipotesesDaAguaDoLancamento>(model: BlueprintModel, h: H): { hip: H; escolhas: EscolhasDoLancamento } {
   const e = registroDe(model, 'AGUA', null)?.escolhas;
   if (!e) {
-    // Correção 1: sem registro, a água que já está no forro relança no forro da casa (se o editor o deu).
-    if (h.forroDaCasa && !h.agua.noForro && aguaNoForroSemRegistro(model, h.agua.cotaRamalMm)) {
-      const comForro = { ...h, agua: { ...h.agua, noForro: h.forroDaCasa } } as H;
+    // Correção 1: sem registro, a água que já está no forro relança no forro da casa (se o editor o deu) — correção 2:
+    // só se a rede antiga tiver a ASSINATURA da casa (`forroDaCasaQueValeNaAgua`); a faixa da quente vai junto.
+    const daCasa = h.agua.noForro ? null : forroDaCasaQueValeNaAgua(model, h);
+    if (daCasa) {
+      // Com o forro, o que mais a casa decidiu e o estudo não diz: a faixa da quente e a subida do alimentador. Medido na
+      // casa da revisão (I4): sem os dois, a água refeita tinha +3 conflitos com a estrutura e +1 de rede.
+      const comForro = {
+        ...h,
+        agua: { ...h.agua, noForro: daCasa.noForro, ...(!h.agua.faixaDaAguaQuente && daCasa.faixaDaAguaQuente ? { faixaDaAguaQuente: daCasa.faixaDaAguaQuente } : {}) },
+        alimentacao: !h.alimentacao.subida && daCasa.subidaDoAlimentador ? { ...h.alimentacao, subida: daCasa.subidaDoAlimentador } : h.alimentacao,
+      } as H;
       return { hip: comForro, escolhas: escolhasDaAgua(comForro) };
     }
     return { hip: h, escolhas: escolhasDaAgua(h) };
@@ -294,21 +318,26 @@ export function redeDaAguaDoSistema(model: BlueprintModel): { trechos: Trecho[];
   const trechos = (model.trechos ?? []).filter(
     (t) => (t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE') && (ligados.has(t.id) || FORA_DA_DISTRIBUICAO.has(t.rotulo ?? '')),
   );
-  // O registro de gaveta das peças da caixa fica NO MEIO da limpeza: apagada a limpeza, ele sai junto (a limpeza
-  // relançada traz o dela).
-  const limpezas = trechos.filter((t) => t.rotulo === ROTULO_DA_LIMPEZA);
-  const naLimpeza = (x: Terminal) =>
-    limpezas.some((t) => t.levelId === x.levelId && distAoSegmento(x.at, t.a, t.b) <= 1 && Math.abs(x.cotaMm - t.cotaAMm) <= 1);
-  const pecas = (model.terminais ?? []).filter((x) => x.tipoHidraulico === 'REGISTRO_GAVETA' && x.disciplina === 'AGUA_FRIA' && naLimpeza(x));
+  // As PEÇAS EM LINHA sobre um tubo que sai (registros, válvulas, conexões — a do motor, como o registro da limpeza, ou
+  // as postas à mão): sem o tubo ficariam soltas, e a rede relançada traz as dela (correção 2, menor 8).
+  const pecas = (model.terminais ?? []).filter(
+    (x) => (x.disciplina === 'AGUA_FRIA' || x.disciplina === 'AGUA_QUENTE') && PECAS_EM_LINHA.has(x.tipoHidraulico ?? '') && trechos.some((t) => sobreOTubo(x, t)),
+  );
   return { trechos, pecas };
 }
 
-function distAoSegmento(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }): number {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const L2 = dx * dx + dy * dy;
-  const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2));
-  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+/** As peças que só existem em cima de um tubo (o hidrômetro não: é a âncora do alimentador e fica). */
+const PECAS_EM_LINHA = new Set(['REGISTRO_GAVETA', 'REGISTRO_PRESSAO', 'REGISTRO_ESFERA', 'VALVULA_RETENCAO', 'VRP', 'CONEXAO_TE', 'CONEXAO_LUVA', 'CONEXAO_REDUCAO']);
+
+/** A peça está sobre o tubo (no mesmo pavimento, a até 1 mm do eixo, em 3D)? */
+function sobreOTubo(x: Terminal, t: Trecho): boolean {
+  if (x.levelId !== t.levelId) return false;
+  const a = [t.a.x, t.a.y, t.cotaAMm];
+  const d = [t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm];
+  const p = [x.at.x - a[0], x.at.y - a[1], x.cotaMm - a[2]];
+  const L2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+  const k = L2 === 0 ? 0 : Math.max(0, Math.min(1, (p[0] * d[0] + p[1] * d[1] + p[2] * d[2]) / L2));
+  return Math.hypot(p[0] - k * d[0], p[1] - k * d[1], p[2] - k * d[2]) <= 1;
 }
 
 /** O motivo de a água não relançar por aqui (rede antiga da casa no forro, sem registro). */
@@ -322,37 +351,37 @@ export const MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO = 'Água no forro lançada antes 
  * do forro não cai aqui: corre no teto (cota = teto), sobre a laje ou abaixo da viga.
  */
 export function aguaNoForroSemRegistro(model: BlueprintModel, cotaRamalMm: number = HIPOTESES_AGUA_PADRAO.cotaRamalMm): boolean {
-  if (registroDe(model, 'AGUA', null)) return false;
-  const porNivel = new Map<string, { teto: number; face: number } | null>();
-  const doNivel = (levelId: string) => {
-    if (porNivel.has(levelId)) return porNivel.get(levelId)!;
-    const nivel = model.levels.find((l) => l.id === levelId);
-    let c: { teto: number; face: number } | null = null;
-    if (nivel) {
-      const faces = (model.labels ?? [])
-        .filter((l) => l.levelId === levelId && l.acabamentos?.forro && l.acabamentos.forro.rebaixoMm > 0)
-        .map((l) => nivel.defaultHeightMm - l.acabamentos!.forro!.rebaixoMm - l.acabamentos!.forro!.camadas.reduce((s, x) => s + x.espessuraMm, 0));
-      if (faces.length) c = { teto: nivel.defaultHeightMm, face: Math.min(...faces) };
-    }
-    porNivel.set(levelId, c);
-    return c;
-  };
-  const terminais = new Set((model.terminais ?? []).map((x) => `${x.levelId}|${x.at.x},${x.at.y},${x.cotaMm}`));
-  for (const t of redeDaAguaDoSistema(model).trechos) {
-    if (FORA_DA_DISTRIBUICAO.has(t.rotulo ?? '') || t.cotaAMm !== t.cotaBMm || (t.a.x === t.b.x && t.a.y === t.b.y)) continue;
-    const c = doNivel(t.levelId);
-    if (!c) continue;
-    const z = t.cotaAMm;
-    if (terminais.has(`${t.levelId}|${t.a.x},${t.a.y},${z}`) || terminais.has(`${t.levelId}|${t.b.x},${t.b.y},${z}`)) continue;
-    if (z !== Math.min(cotaRamalMm, c.teto) && z > c.face && z < c.teto && z > c.teto - 600) return true;
-  }
-  return false;
+  return horizontaisDaAguaNoForro(model, cotaRamalMm).length > 0;
 }
 
-/** Por que a água não relança por aqui (`null` = relança). Correção 1: com o forro da casa, relança (no forro dela). */
+/** Os horizontais da distribuição que correm no forro, sem registro (a detecção comum com os eletrodutos). */
+export function horizontaisDaAguaNoForro(model: BlueprintModel, cotaRamalMm: number = HIPOTESES_AGUA_PADRAO.cotaRamalMm): Trecho[] {
+  if (registroDe(model, 'AGUA', null)) return [];
+  const distribuicao = redeDaAguaDoSistema(model).trechos.filter((t) => !FORA_DA_DISTRIBUICAO.has(t.rotulo ?? ''));
+  return horizontaisNoForro(model, distribuicao, (_l, teto) => Math.min(cotaRamalMm, teto));
+}
+
+/**
+ * Correção 2 (24/10/2026, revisão): o forro da casa SÓ vale para a água antiga com a ASSINATURA da casa — todo horizontal
+ * no forro numa faixa da fria ou da quente dela, e os ambientes com o rebaixo do forro dela (`temAssinaturaDaCasa`, a
+ * MESMA decisão dos eletrodutos). Sem a assinatura (planta sem casa, ramal à mão acima da face do forro): `null`.
+ */
+export function forroDaCasaQueValeNaAgua(
+  model: BlueprintModel,
+  h: Pick<HipotesesDaAguaDoLancamento, 'agua' | 'forroDaCasa'>,
+): { noForro: ForroDaAgua; faixaDaAguaQuente: { x: number; y: number } | null; subidaDoAlimentador: 'FACHADA' | 'SOB_A_CAIXA' | null } | null {
+  const f = h.forroDaCasa;
+  if (!f || f.rebaixoMm == null) return null;
+  const horizontais = horizontaisDaAguaNoForro(model, h.agua.cotaRamalMm);
+  if (!temAssinaturaDaCasa(model, horizontais, { faixas: [f.aguaFria, f.aguaQuente], rebaixoMm: f.rebaixoMm })) return null;
+  return { noForro: { aguaFria: f.aguaFria, aguaQuente: f.aguaQuente, folgaSobAVigaMm: f.folgaSobAVigaMm }, faixaDaAguaQuente: f.faixaDaAguaQuente ?? null, subidaDoAlimentador: f.subidaDoAlimentador ?? null };
+}
+
+/** Por que a água não relança por aqui (`null` = relança). Com o forro da casa E a assinatura dela, relança no forro. */
 export function motivoParaNaoRelancarAgua(model: BlueprintModel, h?: Pick<HipotesesDaAguaDoLancamento, 'agua' | 'forroDaCasa'>): string | null {
-  if (h?.forroDaCasa) return null;
-  return aguaNoForroSemRegistro(model, h?.agua.cotaRamalMm) ? MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO : null;
+  const cota = h?.agua.cotaRamalMm;
+  if (!aguaNoForroSemRegistro(model, cota)) return null;
+  return h && forroDaCasaQueValeNaAgua(model, h) ? null : MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO;
 }
 
 /**
@@ -398,9 +427,18 @@ export interface RedeHidraulicaARefazer {
   tubosConfirmados: number;
   pecas: number;
   pecasAceitas: number;
+  /** As partes com nome que serão refeitas, com a contagem de tubos ("alimentador (5)"). Correção 2, menor 5. */
+  partes: string[];
   /** O que mudou desde o lançamento (`textoDasDiferencas`); `null` = sem registro ou nada mudou. */
   mudou: string | null;
 }
+
+const PARTES_DA_AGUA: [string, readonly string[]][] = [
+  ['alimentador', ['Alimentador']],
+  ['recalque', ['Sucção', 'Recalque']],
+  ['extravasor', ['Extravasor']],
+  ['limpeza', ['Limpeza']],
+];
 
 export function aguaARefazer(model: BlueprintModel, h: HipotesesDaAguaDoLancamento): RedeHidraulicaARefazer {
   const rede = redeDaAguaDoSistema(model);
@@ -410,6 +448,10 @@ export function aguaARefazer(model: BlueprintModel, h: HipotesesDaAguaDoLancamen
     tubosConfirmados: rede.trechos.filter((t) => !t.sugerido).length,
     pecas: rede.pecas.length,
     pecasAceitas: rede.pecas.filter((x) => !x.sugerida).length,
+    partes: PARTES_DA_AGUA.flatMap(([nome, rotulos]) => {
+      const n = rede.trechos.filter((t) => rotulos.includes(t.rotulo ?? '')).length;
+      return n ? [`${nome} (${n})`] : [];
+    }),
     mudou: d.length ? textoDasDiferencas(d) : null,
   };
 }
@@ -421,7 +463,7 @@ export function aguaARefazer(model: BlueprintModel, h: HipotesesDaAguaDoLancamen
  */
 export function textoDaConfirmacaoDoSistema(sistema: string, r: RedeHidraulicaARefazer): string | null {
   if (r.tubosConfirmados === 0 && r.pecasAceitas === 0) return null;
-  const tubos = `${r.tubos} tubo(s)${r.tubosConfirmados ? ` (${r.tubosConfirmados} confirmado(s))` : ''}`;
+  const tubos = `${r.tubos} tubo(s)${r.tubosConfirmados ? ` (${r.tubosConfirmados} confirmado(s))` : ''}${r.partes.length ? `, inclusive ${r.partes.join(', ')}` : ''}`;
   const pecas = r.pecas ? ` e ${r.pecas} peça(s)${r.pecasAceitas ? ` (${r.pecasAceitas} aceita(s))` : ''}` : '';
   return `${sistema}: ${tubos}${pecas}.${r.mudou ? ` O que mudou: ${r.mudou}.` : ''}`;
 }
@@ -529,10 +571,13 @@ export function diferencasDoPluvial(model: BlueprintModel, h: HipotesesPluviais)
   return diferencasDasEscolhas(registroDe(model, 'PLUVIAL', null)?.escolhas ?? null, lancamentoDoPluvial(model, h).escolhas, ESCOLHAS_DO_PLUVIAL);
 }
 
+const ROTULOS_DO_PLUVIAL = new Set([ROTULO_DA_CALHA, ROTULO_DO_CONDUTOR_VERTICAL, ROTULO_DO_CONDUTOR_HORIZONTAL]);
+
 /** A rede pluvial do sistema — o que o Refazer apaga (ver o critério no cabeçalho). */
 export function redePluvialDoSistema(model: BlueprintModel): { trechos: Trecho[]; pecas: Terminal[] } {
   return {
-    trechos: (model.trechos ?? []).filter((t) => t.disciplina === 'PLUVIAL'),
+    // Correção 2 (menor 9): só os tubos que o MOTOR cria (calha e condutores) — o tubo pluvial desenhado à mão fica.
+    trechos: (model.trechos ?? []).filter((t) => t.disciplina === 'PLUVIAL' && ROTULOS_DO_PLUVIAL.has(t.rotulo ?? '')),
     pecas: (model.terminais ?? []).filter((x) => x.tipoHidraulico === 'RALO_PLUVIAL' && x.rotulo === ROTULO_DO_BOCAL),
   };
 }
@@ -572,6 +617,7 @@ export function pluvialARefazer(model: BlueprintModel, h: HipotesesPluviais): Re
     tubosConfirmados: rede.trechos.filter((t) => !t.sugerido).length,
     pecas: rede.pecas.length,
     pecasAceitas: rede.pecas.filter((x) => !x.sugerida).length,
+    partes: [],
     mudou: d.length ? textoDasDiferencas(d) : null,
   };
 }

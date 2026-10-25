@@ -74,6 +74,16 @@ const deleteBranch = vi.fn(async () => {});
 const renameBranch = vi.fn(async () => {});
 const onTrocarRamo = vi.fn();
 
+// Correção 2 da F3 (24/10/2026): as premissas da casa do estudo, controláveis. Padrão: a leitura FALHA (como antes, sem
+// a tabela no ambiente de teste) — o editor não usa o forro da casa (erro de leitura não vira padrão). Os testes do forro
+// da casa respondem `null` (linha ausente de fato: vale o padrão).
+const lerPremissasDaCasa = vi.fn(async (): Promise<unknown> => {
+  throw new Error('sem a tabela no teste');
+});
+vi.mock('../../services/blueprintCasaService', () => ({
+  blueprintCasaService: { get: (...a: unknown[]) => lerPremissasDaCasa(...(a as [])), save: async () => undefined },
+}));
+
 vi.mock('../../services/blueprintService', () => ({
   listBranches: (...a: unknown[]) => listBranches(...(a as [])),
   createAlternative: (...a: unknown[]) => createAlternative(...(a as [])),
@@ -404,6 +414,7 @@ beforeEach(() => {
   localStorage.clear();
 
   loadBranchModel.mockResolvedValue(null);
+  lerPremissasDaCasa.mockRejectedValue(new Error('sem a tabela no teste'));
   getSnapshotIdentity.mockResolvedValue(null);
   getBranch.mockResolvedValue(RAMO_LIMPO);
   getPrograma.mockResolvedValue(null);
@@ -4635,7 +4646,8 @@ describe('BlueprintEditor · ribbon', () => {
   // lançar Eletrodutos por circuito deve ficar disponivel para relançar e incluir essa nova preferencia"*.
   describe('eletrodutos relançam quando uma escolha muda (F2, 24/10/2026)', () => {
     /** Sala de 24 m com QDC e uma TUG na ponta, a rede lançada COM caixas (o lote leva o registro); `aceitar` confirma tudo. */
-    async function redeComCaixas(aceitar: boolean, registrar = true, noForro = false) {
+    /** `noForro`: o REBAIXO do forro do ambiente (233 = o da casa padrão; outro = forro que não é da casa), ou `false`. */
+    async function redeComCaixas(aceitar: boolean, registrar = true, noForro: false | number = false) {
       const k = await import('../../utils/blueprintKernel');
       const el = await import('../../utils/blueprintEletrodutos');
       const { REGRA_DE_CAIXAS_PADRAO } = await import('../../utils/blueprintCaixasDePassagem');
@@ -4651,7 +4663,7 @@ describe('BlueprintEditor · ribbon', () => {
           type: 'NameSpace',
           spaceId: m.spaces[0].id,
           name: 'Sala',
-          acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }], rebaixoMm: 300 } },
+          acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }], rebaixoMm: noForro } },
         }).model;
       }
       m = k.applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: k.point(75, 1000), cotaMm: 1600 }).model;
@@ -4734,17 +4746,46 @@ describe('BlueprintEditor · ribbon', () => {
       expect(relancarDoRodape()).toBeEnabled();
     });
 
-    // Conciliação F3 × #154 (24/10/2026): a regra das premissas é uma só — sem linha gravada (aqui o serviço falha: sem
-    // persistência), vale o PADRÃO, com o forro ligado; a rede antiga no forro relança no forro da casa. O bloqueio sem
-    // as premissas (forro desligado) está nos testes do módulo e da casa.
-    it('⚠️ rede no FORRO lançada antes do registro, com as premissas da casa (o padrão): relançar disponível, sem o motivo', async () => {
-      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, true));
+    const MOTIVO_FORRO = 'Rede no forro lançada antes do registro — relançar aqui a tiraria do forro.';
+    /** Os botões desligados, com o motivo no texto, no `title` (botão e invólucro) e na descrição acessível. */
+    async function bloqueadoComMotivo() {
+      const drawer = await abrirEletrodutos();
+      const tabela = await within(drawer).findByRole('table', { name: /eletrodutos por quadro/i });
+      expect(tabela).toHaveTextContent(MOTIVO_FORRO);
+      const daLinha = within(tabela).getByRole('button');
+      expect(daLinha).toBeDisabled();
+      expect(daLinha).toHaveAttribute('title', MOTIVO_FORRO);
+      expect(daLinha.parentElement).toHaveAttribute('title', MOTIVO_FORRO);
+      const doRodape = screen.getByRole('button', { name: /^lançar em todos/i });
+      expect(doRodape).toBeDisabled();
+      expect(doRodape).toHaveAccessibleDescription(MOTIVO_FORRO);
+    }
+
+    // Conciliação F3 × #154 + correção 2 (24/10/2026): sem linha gravada (`get` → null), vale o PADRÃO da casa; a rede
+    // antiga no forro com a ASSINATURA da casa (faixa elétrica a 2755, rebaixo 233) relança no forro da casa.
+    it('⚠️ rede da CASA no forro, antes do registro, sem premissas gravadas (o padrão): relançar disponível, sem o motivo', async () => {
+      lerPremissasDaCasa.mockResolvedValue(null);
+      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, 233));
       await montar();
       const drawer = await abrirEletrodutos();
       const tabela = await within(drawer).findByRole('table', { name: /eletrodutos por quadro/i });
-      const MOTIVO = 'Rede no forro lançada antes do registro — relançar aqui a tiraria do forro.';
-      await waitFor(() => expect(tabela).not.toHaveTextContent(MOTIVO));
+      await waitFor(() => expect(tabela).not.toHaveTextContent(MOTIVO_FORRO));
       expect(relancarDoRodape()).toBeEnabled();
+    });
+
+    // Correção 2 (I1): planta SEM casa — forro de verdade com outro rebaixo (300): não há a assinatura, continua bloqueada.
+    it('⚠️ correção 2: rede no forro SEM a assinatura da casa (outro rebaixo) — bloqueada com o motivo, mesmo com as premissas', async () => {
+      lerPremissasDaCasa.mockResolvedValue(null);
+      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, 300));
+      await montar();
+      await bloqueadoComMotivo();
+    });
+
+    // Correção 2 (I2): ERRO de leitura das premissas (timeout, RLS) não vira padrão — bloqueada com o motivo.
+    it('⚠️ correção 2: erro ao ler as premissas da casa — a rede da casa no forro fica bloqueada com o motivo', async () => {
+      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, 233));
+      await montar();
+      await bloqueadoComMotivo();
     });
   });
 
@@ -4785,8 +4826,9 @@ describe('BlueprintEditor · ribbon', () => {
       await montar();
       const { gaveta, dialog } = await abrirAgua();
       expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
-      const relancar = doRodape(dialog, gaveta, /^relançar com as escolhas atuais$/i);
+      const relancar = doRodape(dialog, gaveta, /^relançar a água com as escolhas atuais$/i);
       expect(relancar).toBeEnabled();
+      expect(relancar).toHaveTextContent('Relançar com as escolhas atuais');
       expect(within(dialog).queryByRole('button', { name: /^lançar tudo$/i })).not.toBeInTheDocument();
     });
 
@@ -4797,13 +4839,15 @@ describe('BlueprintEditor · ribbon', () => {
       await montar();
       const { gaveta, dialog } = await abrirAgua();
       expect(await within(gaveta).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
-      const relancar = doRodape(dialog, gaveta, /^relançar com as escolhas atuais$/i);
+      // Correção 2 (menor 6): o nome acessível diz o sistema — no aviso e no rodapé.
+      expect(within(within(gaveta).getByTestId('aviso-escolhas-mudaram')).getByRole('button', { name: 'Relançar a água com as escolhas atuais' })).toBeEnabled();
+      const relancar = doRodape(dialog, gaveta, /^relançar a água com as escolhas atuais$/i);
       expect(relancar).toBeEnabled();
 
       await userEvent.setup().click(relancar);
       const titulo = await screen.findByText('Refazer a água?');
       const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
-      expect(confirmacao).toHaveTextContent(`Água: ${tubos} tubo(s) (${tubos} confirmado(s)) e 1 peça(s) (1 aceita(s)).`);
+      expect(confirmacao).toHaveTextContent(`Água: ${tubos} tubo(s) (${tubos} confirmado(s)), inclusive extravasor (1), limpeza (1) e 1 peça(s) (1 aceita(s)).`);
       expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
       await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
       await waitFor(() => expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
@@ -4812,9 +4856,8 @@ describe('BlueprintEditor · ribbon', () => {
       expect(await within(gaveta).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
     });
 
-    // Correção 1 (24/10/2026, relato na planta "Garden"): o estudo tem as premissas da casa (aqui, as do padrão, forro
-    // ligado) — a água antiga no forro relança pelo forro da casa; sem ele, o módulo mantém o bloqueio (testes do módulo).
-    it('⚠️ correção 1: água no FORRO lançada antes do registro, com as premissas da casa no estudo — relançar DISPONÍVEL, sem motivo', async () => {
+    /** Sala com forro de gesso de `rebaixo` e a água fria descendo da caixa a `cota` (2598 = a faixa da fria da casa). */
+    async function aguaNoForro(rebaixo: number, cota = 2598) {
       const k = await import('../../utils/blueprintKernel');
       let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
       const t = m.levels[0].id;
@@ -4824,14 +4867,21 @@ describe('BlueprintEditor · ribbon', () => {
         type: 'NameSpace',
         spaceId: m.spaces[0].id,
         name: 'Sala',
-        acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }], rebaixoMm: 300 } },
+        acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }], rebaixoMm: rebaixo } },
       }).model;
-      m = k.applyBatch(m, [
+      return k.applyBatch(m, [
         { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: k.point(1000, 1000), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 500 },
-        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(1000, 1000), cotaAMm: 2800, cotaBMm: 2598, bitolaMm: 25, sugerido: true },
-        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(4000, 1000), cotaAMm: 2598, cotaBMm: 2598, bitolaMm: 25, sugerido: true },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(1000, 1000), cotaAMm: 2800, cotaBMm: cota, bitolaMm: 25, sugerido: true },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(4000, 1000), cotaAMm: cota, cotaBMm: cota, bitolaMm: 25, sugerido: true },
       ]).model;
-      loadBranchModel.mockResolvedValue(m);
+    }
+    const MOTIVO_AGUA = 'Água no forro lançada antes do registro — relançar aqui a tiraria do forro.';
+
+    // Correção 1 + correção 2: a água da CASA no forro (a faixa da fria, 2598; o rebaixo da casa, 233), sem registro e sem
+    // premissas gravadas (`get` → null: vale o padrão) — relança pelo forro da casa.
+    it('⚠️ correção 1: água da CASA no forro, antes do registro, com as premissas da casa — relançar DISPONÍVEL, sem motivo', async () => {
+      lerPremissasDaCasa.mockResolvedValue(null);
+      loadBranchModel.mockResolvedValue(await aguaNoForro(233));
       await montar();
       const { gaveta, dialog } = await abrirAgua();
       await waitFor(() => expect(within(gaveta).queryByTestId('agua-motivo')).not.toBeInTheDocument());
@@ -4839,6 +4889,25 @@ describe('BlueprintEditor · ribbon', () => {
       expect(principal).toBeEnabled();
       expect(principal).not.toHaveAttribute('aria-describedby');
       expect(within(dialog).getByRole('button', { name: /^refazer tudo$/i })).toBeEnabled();
+    });
+
+    // Correção 2 (I1 e I2): sem a assinatura (ramal à mão a 2,70 m, ou outro rebaixo) ou com erro ao ler as premissas — bloqueada.
+    it.each([
+      ['ramal à mão fora da faixa da casa', 233, 2700, true],
+      ['forro com outro rebaixo (não é a casa)', 300, 2598, true],
+      ['erro ao ler as premissas da casa', 233, 2598, false],
+    ] as const)('⚠️ correção 2: água no forro — %s: botão do rodapé desligado, com o motivo', async (_caso, rebaixo, cota, lerOk) => {
+      if (lerOk) lerPremissasDaCasa.mockResolvedValue(null);
+      loadBranchModel.mockResolvedValue(await aguaNoForro(rebaixo, cota));
+      await montar();
+      const { gaveta, dialog } = await abrirAgua();
+      expect(await within(gaveta).findByTestId('agua-motivo')).toHaveTextContent(MOTIVO_AGUA);
+      const principal = within(dialog).getByRole('button', { name: /^(lançar|relançar) tudo$/i });
+      expect(principal).toBeDisabled();
+      expect(principal).toHaveAttribute('title', MOTIVO_AGUA);
+      expect(principal.parentElement).toHaveAttribute('title', MOTIVO_AGUA);
+      expect(principal).toHaveAccessibleDescription(MOTIVO_AGUA);
+      expect(within(dialog).queryByRole('button', { name: /^refazer tudo$/i })).not.toBeInTheDocument();
     });
 
     it('pluvial só com SUGERIDOS e outra escolha: o botão do aviso refaz direto, sem confirmação', async () => {
@@ -4863,7 +4932,7 @@ describe('BlueprintEditor · ribbon', () => {
       const gaveta = await screen.findByTestId('tarefa-pluvial');
       const aviso = await within(gaveta).findByTestId('aviso-escolhas-mudaram');
       expect(aviso).toHaveTextContent('Seção da calha — lançado com: retangular · agora: meia-cana');
-      await userEvent.setup().click(within(aviso).getByRole('button', { name: /^relançar com as escolhas atuais$/i }));
+      await userEvent.setup().click(within(aviso).getByRole('button', { name: 'Relançar a rede pluvial com as escolhas atuais' }));
       await waitFor(() => expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
       expect(screen.queryByText('Refazer a rede pluvial?')).not.toBeInTheDocument();
     });

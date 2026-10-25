@@ -35,7 +35,8 @@
  *
  * Puro: sem React, sem banco. O alvo do registro é o QUADRO (a rede é uma por quadro).
  */
-import { applyBatch, type BlueprintModel, type Command, type ObjectId, type ValorDeEscolha } from './blueprintKernel';
+import { applyBatch, type BlueprintModel, type Command, type ObjectId, type Trecho, type ValorDeEscolha } from './blueprintKernel';
+import { horizontaisNoForro, temAssinaturaDaCasa } from './blueprintAssinaturaDaCasa';
 import {
   HIPOTESES_ELETRODUTO_PADRAO,
   caixasDaRedeDoQuadro,
@@ -63,7 +64,10 @@ import {
  * Correção 3: o forro elétrico das premissas da Casa Automática do estudo (`forroEletricoDaCasa`) — a faixa e a folga com
  * que a casa lança a rede no forro. `null`/ausente = o estudo não tem casa, ou o forro está desligado nas premissas.
  */
-export type ForroDaCasa = NonNullable<HipotesesDeEletroduto['noForro']>;
+export type ForroDaCasa = NonNullable<HipotesesDeEletroduto['noForro']> & {
+  /** Correção 2 da F3: o rebaixo do forro da casa — sem ele não há como conferir a assinatura (`temAssinaturaDaCasa`). */
+  rebaixoMm?: number;
+};
 
 /**
  * As tabelas de catálogo das hipóteses elétricas que mudam a bitola (disjuntores → seção calculada; diâmetros do
@@ -138,7 +142,8 @@ export function hipotesesDoQuadro(model: BlueprintModel, quadroId: ObjectId, hip
   const afastamento = n('forroAfastamentoDaFaceMm');
   const folga = n('forroFolgaSobAVigaMm');
   if (abaixo == null || afastamento == null || folga == null) {
-    return forroDaCasa && redeNoForroSemRegistro(model, quadroId) ? { ...hip, noForro: forroDaCasa } : hip;
+    const daCasa = forroDaCasaQueVale(model, quadroId, forroDaCasa);
+    return daCasa ? { ...hip, noForro: daCasa } : hip;
   }
   return {
     ...hip,
@@ -245,31 +250,37 @@ export const MOTIVO_REDE_NO_FORRO_SEM_REGISTRO = 'Rede no forro lançada antes d
  * - não termina num terminal na mesma cota (a saída até a face da caixa do ponto).
  */
 export function redeNoForroSemRegistro(model: BlueprintModel, quadroId: ObjectId): boolean {
-  if (registroDe(model, 'ELETRODUTOS', quadroId)) return false;
-  const porNivel = new Map<string, { teto: number; rede: number; face: number } | null>();
-  const doNivel = (levelId: string) => {
-    if (porNivel.has(levelId)) return porNivel.get(levelId)!;
-    const nivel = model.levels.find((l) => l.id === levelId);
-    let c: { teto: number; rede: number; face: number } | null = null;
-    if (nivel) {
-      const faces = (model.labels ?? [])
-        .filter((l) => l.levelId === levelId && l.acabamentos?.forro && l.acabamentos.forro.rebaixoMm > 0)
-        .map((l) => nivel.defaultHeightMm - l.acabamentos!.forro!.rebaixoMm - l.acabamentos!.forro!.camadas.reduce((n, x) => n + x.espessuraMm, 0));
-      if (faces.length) c = { teto: nivel.defaultHeightMm, rede: cotaDaRede(model, nivel).cotaMm, face: Math.min(...faces) };
+  return horizontaisDaRedeNoForro(model, quadroId).length > 0;
+}
+
+/**
+ * Os horizontais elétricos da rede do quadro que correm no forro, sem registro (o critério acima — desde a correção 2
+ * da F3, na detecção comum com a água, `horizontaisNoForro`). Com registro: nenhum (o forro vem dele).
+ */
+export function horizontaisDaRedeNoForro(model: BlueprintModel, quadroId: ObjectId): Trecho[] {
+  if (registroDe(model, 'ELETRODUTOS', quadroId)) return [];
+  const rede = new Map<string, number>();
+  const cotaForaDoForro = (levelId: ObjectId) => {
+    if (!rede.has(levelId)) {
+      const nivel = model.levels.find((l) => l.id === levelId);
+      rede.set(levelId, nivel ? cotaDaRede(model, nivel).cotaMm : NaN);
     }
-    porNivel.set(levelId, c);
-    return c;
+    return rede.get(levelId)!;
   };
-  const terminais = new Set((model.terminais ?? []).map((x) => `${x.levelId}|${x.at.x},${x.at.y},${x.cotaMm}`));
-  for (const t of redeDoQuadro(model, { id: quadroId })) {
-    if (t.disciplina !== 'ELETRICA' || t.cotaAMm !== t.cotaBMm || (t.a.x === t.b.x && t.a.y === t.b.y)) continue;
-    const c = doNivel(t.levelId);
-    if (!c) continue;
-    const z = t.cotaAMm;
-    if (terminais.has(`${t.levelId}|${t.a.x},${t.a.y},${z}`) || terminais.has(`${t.levelId}|${t.b.x},${t.b.y},${z}`)) continue;
-    if (z !== c.rede && z > c.face && z < c.teto && z > c.teto - 600) return true;
-  }
-  return false;
+  return horizontaisNoForro(model, redeDoQuadro(model, { id: quadroId }).filter((t) => t.disciplina === 'ELETRICA'), cotaForaDoForro);
+}
+
+/**
+ * Correção 2 da F3 (24/10/2026, revisão): o forro da casa SÓ vale para a rede antiga que tem a ASSINATURA da casa —
+ * todo horizontal no forro na cota da faixa elétrica dela e os ambientes com o rebaixo do forro dela
+ * (`temAssinaturaDaCasa`). Sem a assinatura (uma planta sem casa, com um eletroduto à mão acima da face do forro),
+ * `null`: a rede continua bloqueada com o motivo, em vez de ir para o forro da casa e o registro perpetuar isso.
+ */
+export function forroDaCasaQueVale(model: BlueprintModel, quadroId: ObjectId, forroDaCasa?: ForroDaCasa | null): NonNullable<HipotesesDeEletroduto['noForro']> | null {
+  if (!forroDaCasa || forroDaCasa.rebaixoMm == null) return null;
+  const horizontais = horizontaisDaRedeNoForro(model, quadroId);
+  if (!temAssinaturaDaCasa(model, horizontais, { faixas: [forroDaCasa.faixa], rebaixoMm: forroDaCasa.rebaixoMm })) return null;
+  return { faixa: forroDaCasa.faixa, folgaSobAVigaMm: forroDaCasa.folgaSobAVigaMm };
 }
 
 /**
@@ -279,7 +290,8 @@ export function redeNoForroSemRegistro(model: BlueprintModel, quadroId: ObjectId
  * bloqueia SÓ a rede no forro sem registro E sem as premissas da casa (`forroDaCasa`). Com elas, relança no forro.
  */
 export function motivoParaNaoRelancar(model: BlueprintModel, quadroId: ObjectId, forroDaCasa?: ForroDaCasa | null): string | null {
-  return !forroDaCasa && redeNoForroSemRegistro(model, quadroId) ? MOTIVO_REDE_NO_FORRO_SEM_REGISTRO : null;
+  // Correção 2 da F3: o forro da casa só livra a rede antiga com a assinatura da casa (`forroDaCasaQueVale`).
+  return redeNoForroSemRegistro(model, quadroId) && !forroDaCasaQueVale(model, quadroId, forroDaCasa) ? MOTIVO_REDE_NO_FORRO_SEM_REGISTRO : null;
 }
 
 /**

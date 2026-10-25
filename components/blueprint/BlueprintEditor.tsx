@@ -604,7 +604,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { useCasaAutomatica } from '../../hooks/useCasaAutomatica';
-import { conferirPlanoDaCasa, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
+import { SUBIDA_DO_ALIMENTADOR_DA_CASA, conferirPlanoDaCasa, faixaDaAguaQuenteDaCasa, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
 import type { EmpreendimentoUnit, EmpreendimentoWithChildren } from '../../types/empreendimento';
@@ -8756,15 +8756,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // sobre `hipotesesDasPremissas`); com o forro desligado nas premissas, `null` e o bloqueio continua com o motivo.
   //
   // A REGRA DAS PREMISSAS, uma só para eletrodutos e água (conciliação F3 × #154, 24/10/2026): as premissas GRAVADAS do
-  // estudo; sem linha gravada (`vazio`) ou sem a tabela (`persistenciaIndisponivel`), o PADRÃO — que é exatamente o que
-  // `gerarCasa` usa nesses casos (`casaDoEstudo.premissas` começa no padrão e só `setPremissas`, isto é, o usuário
-  // editando a tela da casa, grava a linha; gerar a casa NÃO grava). Exigir premissas gravadas deixava bloqueada a casa
-  // gerada com o padrão — o caso comum. "O estudo tem casa" é decidido pelo DESENHO, não por aqui: o forro da casa só
-  // entra quando o motor acha rede no forro sem registro, num pavimento com forro de verdade (`redeNoForroSemRegistro`,
-  // `aguaNoForroSemRegistro`). Só esperamos a leitura terminar (`carregando`), para não relançar com o padrão por cima
-  // de premissas gravadas que ainda não chegaram.
+  // estudo; sem linha gravada (`vazio`), o PADRÃO — que é exatamente o que `gerarCasa` usa nesse caso
+  // (`casaDoEstudo.premissas` começa no padrão e só `setPremissas`, isto é, o usuário editando a tela da casa, grava a
+  // linha; gerar a casa NÃO grava). Correção 2 da F3 (I2): ERRO de leitura (`persistenciaIndisponivel` — timeout, RLS,
+  // tabela ausente) NÃO vira padrão: `null`, e a rede antiga fica bloqueada com o motivo (não se sabe com que premissas
+  // a casa foi gerada). Esperamos a leitura terminar (`carregando`). "O estudo tem casa" é decidido pelo DESENHO: o forro
+  // da casa só entra quando a rede antiga no forro tem a ASSINATURA da casa (`temAssinaturaDaCasa`: as cotas das faixas
+  // e o rebaixo do forro dela).
   const casaDoEstudo = useBlueprintCasa(study.id, study.organization_id);
-  const hipotesesDaCasaDoEstudo = useMemo(() => (casaDoEstudo.carregando ? null : hipotesesDasPremissas(casaDoEstudo.premissas)), [casaDoEstudo.carregando, casaDoEstudo.premissas]);
+  const hipotesesDaCasaDoEstudo = useMemo(
+    () => (casaDoEstudo.carregando || casaDoEstudo.persistenciaIndisponivel ? null : hipotesesDasPremissas(casaDoEstudo.premissas)),
+    [casaDoEstudo.carregando, casaDoEstudo.persistenciaIndisponivel, casaDoEstudo.premissas],
+  );
   const forroDaCasa = useMemo(() => (hipotesesDaCasaDoEstudo ? forroEletricoDaCasa(hipotesesDaCasaDoEstudo) : null), [hipotesesDaCasaDoEstudo]);
   const hipotesesDeEletroduto = useMemo(
     () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto, rotaMaximaVezes: rotaMaxima, rotaPelaParede, caixas: caixasAutomaticas ? REGRA_DE_CAIXAS_PADRAO : null, encaminhamento: encaminhamentoDoEletroduto }),
@@ -9230,7 +9233,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * FORRO DA CASA da água — mesma regra de premissas do forro elétrico (ver `hipotesesDaCasaDoEstudo`). A água antiga no
    * forro, lançada antes do registro, relança nele (sem ele, o botão desliga).
    */
-  const forroDaCasaDaAgua = useMemo(() => (hipotesesDaCasaDoEstudo ? forroDaAguaDaCasa(hipotesesDaCasaDoEstudo) : null), [hipotesesDaCasaDoEstudo]);
+  const forroDaCasaDaAgua = useMemo(() => {
+    const f = hipotesesDaCasaDoEstudo ? forroDaAguaDaCasa(hipotesesDaCasaDoEstudo) : null;
+    // Correção 2 (I4): e a faixa da quente da casa — o quadro da frente do lote, como a etapa ÁGUA da casa a calcula.
+    return f && hipotesesDaCasaDoEstudo
+      ? { ...f, faixaDaAguaQuente: faixaDaAguaQuenteDaCasa(hipotesesDaCasaDoEstudo, limitesDoNivel, terreno?.anel ?? []), subidaDoAlimentador: SUBIDA_DO_ALIMENTADOR_DA_CASA }
+      : null;
+  }, [hipotesesDaCasaDoEstudo, limitesDoNivel, terreno]);
   /** As premissas da água do estudo com o forro da casa — o que toda chamada da água recebe. */
   const hidroDaAgua = useMemo(() => ({ ...hidroDoEstudo.hipoteses, forroDaCasa: forroDaCasaDaAgua }), [hidroDoEstudo.hipoteses, forroDaCasaDaAgua]);
   const hipDaAguaQueLanca = useMemo(() => lancamentoDaAgua(editor.model, hidroDaAgua).hip, [editor.model, hidroDaAgua]);
@@ -9287,10 +9296,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const m = modeloDaHidraulicaRef.current;
     const atual = (m.terminais ?? []).find((t) => t.id === origem.id);
     if (!atual) return;
-    aplicarLoteHidraulico(
-      () => comRegistroDaAgua(m, comAjusteDePressao(m, refazerAgua(m, atual, hipDaAguaQueLanca.agua), hipDaAguaQueLanca.pressao).comandos, hidroDaAgua),
-      'A rede não foi refeita',
-    );
+    aplicarLoteHidraulico(() => {
+      // Correção 2 (menor 10): as hipóteses do modelo de AGORA (o registro pode ter mudado durante a confirmação).
+      const hip = lancamentoDaAgua(m, hidroDaAgua).hip;
+      return comRegistroDaAgua(m, comAjusteDePressao(m, refazerAgua(m, atual, hip.agua), hip.pressao).comandos, hidroDaAgua);
+    }, 'A rede não foi refeita');
   };
 
   /** ─── ESGOTO AUTOMÁTICO (18/09/2026, F5) ─────────────────────────────────── */
@@ -9447,7 +9457,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // CALHAS (29/09/2026, E6.2): o lançamento por beiral e a conferência de toda calha do desenho.
   const planoDeCalhas = useMemo(
     () => (tarefaAberta === 'pluvial' ? planejarCalhas(editor.model, hipDoPluvialQueLanca) : null),
-    [tarefaAberta, editor.model, hipotesesHidro.pluvial],
+    [tarefaAberta, editor.model, hipDoPluvialQueLanca],
   );
   const calhasDoDesenho = useMemo(
     () => (tarefaAberta === 'pluvial' ? verificarCalhas(editor.model, hipotesesHidro.pluvial) : []),
@@ -9456,7 +9466,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // CONDUTORES (29/09/2026, E6.3): do bocal à caixa de areia e à saída pluvial.
   const planoDeCondutores = useMemo(
     () => (tarefaAberta === 'pluvial' ? planejarCondutores(editor.model, hipDoPluvialQueLanca, terrenoParaCorte) : null),
-    [tarefaAberta, editor.model, hipotesesHidro.pluvial, terrenoParaCorte],
+    [tarefaAberta, editor.model, hipDoPluvialQueLanca, terrenoParaCorte],
   );
   const condutoresDoDesenho = useMemo(
     () => (tarefaAberta === 'pluvial' ? verificarCondutores(editor.model, hipotesesHidro.pluvial) : []),
@@ -18123,7 +18133,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               {/* F3 do relançar (24/10/2026), regra B. */}
               {diferencasNoPluvial.length > 0 && (
                 <div className="mb-4">
-                  <AvisoDeEscolhasMudaram diferencas={diferencasNoPluvial} onRelancar={() => void refazerSistema('pluvial')} />
+                  <AvisoDeEscolhasMudaram diferencas={diferencasNoPluvial} onRelancar={() => void refazerSistema('pluvial')} rotuloAcessivel="Relançar a rede pluvial com as escolhas atuais" />
                 </div>
               )}
               <PainelPluvial
@@ -18501,7 +18511,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 <AvisoDoLancamento presumido={resumoDoLancamento.presumido} pendencias={resumoDoLancamento.pendencias} testId="agua-presumido" />
               )}
               {/* F3 do relançar (24/10/2026), regra B: a rede foi lançada com outras escolhas → o aviso e o refazer. */}
-              <AvisoDeEscolhasMudaram diferencas={diferencasNaAgua} onRelancar={() => void refazerSistema('agua')} desabilitado={motivoDaAgua} />
+              <AvisoDeEscolhasMudaram diferencas={diferencasNaAgua} onRelancar={() => void refazerSistema('agua')} desabilitado={motivoDaAgua} rotuloAcessivel="Relançar a água com as escolhas atuais" />
               {motivoDaAgua && (
                 <p className="text-xs text-amber-700" data-testid="agua-motivo">
                   {motivoDaAgua}
@@ -20257,6 +20267,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   onClick={() => (botaoDaAgua.modo === 'RELANCAR' ? void refazerSistema('agua') : lancarAguaCompleta())}
                   disabled={!!botaoDaAgua.motivo}
                   aria-describedby={botaoDaAgua.motivo ? 'motivo-lancar-agua' : undefined}
+                  aria-label={botaoDaAgua.modo === 'RELANCAR' ? 'Relançar a água com as escolhas atuais' : undefined}
                   title={
                     botaoDaAgua.motivo ??
                     (botaoDaAgua.modo === 'RELANCAR'
@@ -20299,6 +20310,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 onClick={() => (botaoDoPluvial.modo === 'RELANCAR' ? void refazerSistema('pluvial') : lancarPluvialCompleta())}
                 disabled={!!botaoDoPluvial.motivo}
                 aria-describedby={botaoDoPluvial.motivo ? 'motivo-lancar-pluvial' : undefined}
+                aria-label={botaoDoPluvial.modo === 'RELANCAR' ? 'Relançar a rede pluvial com as escolhas atuais' : undefined}
                 title={
                   botaoDoPluvial.motivo ??
                   (botaoDoPluvial.modo === 'RELANCAR'

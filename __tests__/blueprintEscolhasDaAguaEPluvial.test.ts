@@ -169,8 +169,35 @@ describe('água — Refazer', () => {
     expect(r.tubos).toBe(tubosDeAgua(aceita).length);
     expect(r.tubosConfirmados).toBe(r.tubos);
     expect(textoDaConfirmacaoDoSistema('Água', r)).toBe(
-      `Água: ${r.tubos} tubo(s) (${r.tubos} confirmado(s)) e 1 peça(s) (1 aceita(s)). O que mudou: DN mínimo da água fria — lançado com: DN 20 · agora: DN 25.`,
+      `Água: ${r.tubos} tubo(s) (${r.tubos} confirmado(s)), inclusive ${r.partes.join(', ')} e 1 peça(s) (1 aceita(s)). O que mudou: DN mínimo da água fria — lançado com: DN 20 · agora: DN 25.`,
     );
+    // Correção 2 (menor 5): nomeia o alimentador, o extravasor e a limpeza que serão refeitos, com a contagem.
+    const n = (rot: string) => tubosDeAgua(aceita).filter((t) => t.rotulo === rot).length;
+    expect(r.partes).toEqual([`alimentador (${n('Alimentador')})`, 'extravasor (1)', 'limpeza (1)']);
+  });
+
+  it('correção 2 (menor 8): a peça EM LINHA posta à mão sobre um tubo que sai (registro de pressão) sai junto e entra na contagem', () => {
+    const aceita = aceitar(aguaLancada());
+    const tubo = tubosDeAgua(aceita).find((t) => !t.rotulo && t.cotaAMm === t.cotaBMm && (t.a.x !== t.b.x || t.a.y !== t.b.y))!;
+    const meio = point(Math.round((tubo.a.x + tubo.b.x) / 2), Math.round((tubo.a.y + tubo.b.y) / 2));
+    const noTubo = (tubo.a.x === tubo.b.x || tubo.a.y === tubo.b.y) ? meio : point(tubo.a.x, tubo.a.y);
+    const m = applyCommand(aceita, { type: 'AddTerminal', levelId: tubo.levelId, disciplina: 'AGUA_FRIA', tipo: 'Registro de pressão', at: noTubo, cotaMm: tubo.cotaAMm, tipoHidraulico: 'REGISTRO_PRESSAO' }).model;
+    const registro = m.terminais!.at(-1)!.id;
+    const r = aguaARefazer(m, H);
+    expect(r.pecas).toBe(2);
+    const { comandos } = comandosDeRefazerAgua(m, H, null);
+    expect(comandos).toContainEqual({ type: 'DeleteTerminal', terminalId: registro });
+  });
+
+  it('correção 2 (menor 12): o Refazer da água deixa intacto o tubo de ESGOTO, de INCÊNDIO e o MECÂNICO encostados na caixa', () => {
+    const m0 = aceitar(aguaLancada());
+    const caixa = m0.terminais!.find((x) => x.tipoHidraulico === 'RESERVATORIO')!;
+    const outro = (disciplina: 'ESGOTO' | 'INCENDIO' | 'MECANICA'): Command => ({ type: 'AddTrecho', levelId: caixa.levelId, disciplina, a: point(caixa.at.x, caixa.at.y), b: point(caixa.at.x + 2000, caixa.at.y), cotaAMm: caixa.cotaMm, cotaBMm: caixa.cotaMm, bitolaMm: 50 });
+    const m = applyBatch(m0, [outro('ESGOTO'), outro('INCENDIO'), outro('MECANICA')]).model;
+    const alheios = (m.trechos ?? []).filter((t) => ['ESGOTO', 'INCENDIO', 'MECANICA'].includes(t.disciplina)).map((t) => t.id);
+    expect(alheios).toHaveLength(3);
+    const depois = applyBatch(m, comandosDeRefazerAgua(m, H, null).comandos).model;
+    expect(alheios.every((id) => depois.trechos!.some((t) => t.id === id))).toBe(true);
   });
 });
 
@@ -212,8 +239,11 @@ describe('água — forro (Casa Automática)', () => {
     expect(diferencasDaAgua(m, outra).map((d) => d.item)).toEqual(['cotaEnterradaMm']);
   });
 
-  /** Sala 6 × 4 com forro de gesso (rebaixo 30 cm) e a água fria descendo da caixa à faixa do forro (2,598 m, acima da face). */
-  function noForroSemRegistro(comForro = true): BlueprintModel {
+  /**
+   * Sala 6 × 4 com forro de gesso (rebaixo 30 cm) e a água fria descendo da caixa a `cota` — por padrão a faixa da fria do
+   * forro da casa (2,598 m, acima da face).
+   */
+  function noForroSemRegistro(comForro = true, cota = 2598): BlueprintModel {
     let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
     const t = m.levels[0].id;
     const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
@@ -228,8 +258,8 @@ describe('água — forro (Casa Automática)', () => {
     }
     return applyBatch(m, [
       { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: point(1000, 1000), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 500 },
-      { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(1000, 1000), b: point(1000, 1000), cotaAMm: 2800, cotaBMm: 2598, bitolaMm: 25, sugerido: true },
-      { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(1000, 1000), b: point(4000, 1000), cotaAMm: 2598, cotaBMm: 2598, bitolaMm: 25, sugerido: true },
+      { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(1000, 1000), b: point(1000, 1000), cotaAMm: 2800, cotaBMm: cota, bitolaMm: 25, sugerido: true },
+      { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: point(1000, 1000), b: point(4000, 1000), cotaAMm: cota, cotaBMm: cota, bitolaMm: 25, sugerido: true },
     ]).model;
   }
 
@@ -245,16 +275,40 @@ describe('água — forro (Casa Automática)', () => {
 
   it('⚠️ correção 1: sem registro mas COM o forro da casa — relança, no forro da casa, e o registro grava o forro; sem a água no forro, o forro da casa não entra', () => {
     const antiga = noForroSemRegistro();
-    const comCasa = { ...H, forroDaCasa: FORRO };
+    // Correção 2: o forro da casa leva o rebaixo (a assinatura: o do ambiente, 300) e a faixa da quente.
+    const comCasa = { ...H, forroDaCasa: { ...FORRO, rebaixoMm: 300, faixaDaAguaQuente: { x: 45, y: 45 } } };
     expect(motivoParaNaoRelancarAgua(antiga, comCasa)).toBeNull();
     expect(botaoDeLancarAgua(antiga, { comandos: [], pendencias: [] }, comCasa)).toEqual({ modo: 'RELANCAR', motivo: null });
     const { hip, escolhas } = lancamentoDaAgua(antiga, comCasa);
     expect(hip.agua.noForro).toEqual(FORRO);
+    expect(hip.agua.faixaDaAguaQuente).toEqual({ x: 45, y: 45 });
     expect(escolhas).toMatchObject({ forroFriaAbaixoDoTetoMm: 202, forroQuenteAbaixoDoTetoMm: 170 });
     const { comandos } = comandosDeRefazerAgua(antiga, comCasa, null);
     expect(comandos.at(-1)).toMatchObject({ type: 'RegistrarLancamento', escolhas: { forroFriaAbaixoDoTetoMm: 202 } });
     // Água fora do forro (sem forro de verdade no ambiente): o forro da casa NÃO é aplicado.
     expect(lancamentoDaAgua(noForroSemRegistro(false), comCasa).hip.agua.noForro).toBeUndefined();
+  });
+
+  // Correção 2 (24/10/2026, revisão — I1): planta SEM casa, forro de verdade, ramal à mão acima da face (2,70 m) — o
+  // usuário troca a cota do ramal e relança: antes ia para o forro da casa (2598/2630) e o registro perpetuava isso.
+  it('⚠️ correção 2: sem a ASSINATURA da casa (ramal à mão fora da faixa, ou outro rebaixo) — continua BLOQUEADO com o motivo', () => {
+    const aMao = noForroSemRegistro(true, 2700);
+    const comCasa = { ...comAgua({ cotaRamalMm: 2200 }), forroDaCasa: { ...FORRO, rebaixoMm: 300 } };
+    expect(motivoParaNaoRelancarAgua(aMao, comCasa)).toBe(MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO);
+    expect(lancamentoDaAgua(aMao, comCasa).hip.agua.noForro).toBeUndefined();
+    expect(comandosDeRefazerAgua(aMao, comCasa, null).comandos).toEqual([]);
+    // Na faixa, mas com outro rebaixo do forro: também não é a casa. Sem o rebaixo no forro da casa: não dá para conferir.
+    expect(motivoParaNaoRelancarAgua(noForroSemRegistro(), { ...H, forroDaCasa: { ...FORRO, rebaixoMm: 233 } })).toBe(MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO);
+    expect(motivoParaNaoRelancarAgua(noForroSemRegistro(), { ...H, forroDaCasa: FORRO })).toBe(MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO);
+  });
+
+  it('correção 2 (I3): com o forro ativo, a cota do ramal sai das escolhas — trocá-la não acende aviso que relançar não resolve', () => {
+    expect(escolhasDaAgua(comAgua({ noForro: FORRO }))).not.toHaveProperty('cotaRamalMm');
+    expect(escolhasDaAgua(H)).toHaveProperty('cotaRamalMm', 2200);
+    // Traçado reto: o planejador NÃO usa o forro (`pelasParedes !== false && noForro`) — a cota volta a valer.
+    expect(escolhasDaAgua(comAgua({ noForro: FORRO, pelasParedes: false }))).toHaveProperty('cotaRamalMm', 2200);
+    const m = applyCommand(planta(), { type: 'RegistrarLancamento', motor: 'AGUA', alvoId: null, escolhas: escolhasDaAgua(comAgua({ noForro: FORRO })) }).model;
+    expect(diferencasDaAgua(m, comAgua({ cotaRamalMm: 2400 }))).toEqual([]);
   });
 });
 
@@ -298,6 +352,15 @@ describe('pluvial', () => {
     expect(diferencasDoPluvial(depois, retangular)).toEqual([]);
     h.undo();
     expect(h.current).toEqual(m);
+  });
+
+  it('correção 2 (menor 9): o Refazer do pluvial deixa o tubo pluvial desenhado à mão (sem o rótulo do motor)', () => {
+    const m0 = pluvialLancado();
+    const m = applyCommand(m0, { type: 'AddTrecho', levelId: m0.levels[0].id, disciplina: 'PLUVIAL', a: point(9000, 9000), b: point(11000, 9000), cotaAMm: -300, cotaBMm: -320, bitolaMm: 100 }).model;
+    const aMao = m.trechos!.at(-1)!.id;
+    const depois = applyBatch(m, comandosDeRefazerPluvial(m, COM_CHUVA, null).comandos).model;
+    expect(depois.trechos!.some((t) => t.id === aMao)).toBe(true);
+    expect(pluvialARefazer(m, COM_CHUVA).tubos).toBe(pluviais(m0).length);
   });
 
   it('lote parcial (só as calhas) com outra escolha e condutor confirmado: não regrava; regra A', () => {

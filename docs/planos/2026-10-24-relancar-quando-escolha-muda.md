@@ -107,10 +107,17 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
   padrão (o mesmo que gerar a casa usa — gerar NÃO grava a linha). "Tem casa" é decidido pelo desenho (rede no forro de
   verdade, sem registro). Bloqueio só com o forro desligado nas premissas.
 
-**Limitações conhecidas:** mover a climatização relança fora do forro quando a rede antiga do forro não tem registro
-(como antes); eletroduto desenhado à mão acima da face de um forro real, sem registro, também bloqueia (motivo à
-vista). Prova no app: o cenário inteiro está coberto pelo teste do editor (aviso → confirmação → CP saem → aviso some →
-Desfazer volta); prova por imagem no navegador NÃO feita.
+**Limitações conhecidas** (atualizadas na correção 2 da F3, 24/10/2026 — depois da conciliação com o #154):
+- Rede antiga no forro, SEM registro: relança no forro da casa só com a ASSINATURA da casa (`temAssinaturaDaCasa`:
+  todo horizontal no forro numa cota de faixa da casa ±2 mm e os ambientes com o rebaixo do forro da casa) e com as
+  premissas da casa lidas (gravadas, ou o padrão quando não há linha). Sem a assinatura (planta sem casa, eletroduto ou
+  ramal à mão acima da face de um forro real), ou com ERRO ao ler as premissas, continua bloqueada, com o motivo à vista.
+- Casa gerada com premissas de forro que depois mudaram (outra faixa ou outro rebaixo) e sem registro: a assinatura não
+  bate e a rede fica bloqueada — relançar exige o registro (gerar de novo) ou voltar as premissas.
+- Água antiga sem registro relança com a faixa da quente e a subida do alimentador da casa, mas não recupera a cota
+  enterrada ajustada pelo F18 (que dependia do esgoto daquele momento): o alimentador volta à cota do estudo.
+- Prova no app: os cenários estão cobertos pelos testes do editor; prova por imagem no navegador NÃO feita. A planta
+  "Garden" real (dados exportados) passa: eletrodutos a 2755 e água a 2598/2630 com a assinatura — relançar disponível.
 
 ## Estado
 - [x] desenho aprovado (24/10/2026)

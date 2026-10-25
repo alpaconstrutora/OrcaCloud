@@ -8,7 +8,7 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { forroDaAguaDaCasa, forroEletricoDaCasa, conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { SUBIDA_DO_ALIMENTADOR_DA_CASA, faixaDaAguaQuenteDaCasa, forroDaAguaDaCasa, forroEletricoDaCasa, conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { amostradorDaGrade, type GradeDeElevacao } from '../utils/blueprintTopografia';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
@@ -39,7 +39,7 @@ import { PREMISSAS_DA_CASA_PADRAO, hipotesesDasPremissas } from '../utils/bluepr
 import { HIPOTESES_ELETRODUTO_PADRAO } from '../utils/blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO } from '../utils/blueprintEletricaDimensionamento';
-import { MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO, comandosDeRefazerAgua, diferencasDaAgua, diferencasDoPluvial, motivoParaNaoRelancarAgua } from '../utils/blueprintEscolhasDaAguaEPluvial';
+import { MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO, comandosDeRefazerAgua, diferencasDaAgua, diferencasDoPluvial, lancamentoDaAgua, motivoParaNaoRelancarAgua } from '../utils/blueprintEscolhasDaAguaEPluvial';
 import { planejarAguaCompleta } from '../utils/blueprintAguaCompleta';
 
 // Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
@@ -1360,7 +1360,8 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     const horizontais = (m: BlueprintModel) =>
       (m.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && t.cotaAMm === t.cotaBMm && !(t.a.x === t.b.x && t.a.y === t.b.y));
     const forroDaCasa = forroEletricoDaCasa(hipotesesDasPremissas(PREMISSAS_DA_CASA_PADRAO));
-    expect(forroDaCasa).toEqual({ faixa: F.eletrica, folgaSobAVigaMm: F.folgaSobAVigaMm });
+    // Correção 2 da F3: com o rebaixo do forro da casa (a assinatura).
+    expect(forroDaCasa).toEqual({ faixa: F.eletrica, folgaSobAVigaMm: F.folgaSobAVigaMm, rebaixoMm: rebaixoDoForroMm(F) });
     // Forro desligado nas premissas: nada a usar.
     expect(forroEletricoDaCasa(hipotesesDasPremissas({ ...PREMISSAS_DA_CASA_PADRAO, forro: { ...PREMISSAS_DA_CASA_PADRAO.forro, lancar: false } }))).toBeNull();
     const painel = { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: REGRA_DE_CAIXAS_PADRAO };
@@ -1371,7 +1372,7 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
 
     // Com as premissas: relança, ligado e sem motivo.
     expect(motivoParaNaoRelancar(antiga, q, forroDaCasa)).toBeNull();
-    expect(hipotesesDoQuadro(antiga, q, painel, forroDaCasa).noForro).toEqual(forroDaCasa);
+    expect(hipotesesDoQuadro(antiga, q, painel, forroDaCasa).noForro).toEqual({ faixa: F.eletrica, folgaSobAVigaMm: F.folgaSobAVigaMm });
     const planos = planejarEletrodutosPorQuadro(antiga, painel, HIPOTESES_ELETRICAS_PADRAO, forroDaCasa);
     const botao = botaoDeLancarEletrodutos(antiga, planos, forroDaCasa);
     expect(botao).toMatchObject({ modo: 'RELANCAR', motivo: null, quadros: [q] });
@@ -1396,7 +1397,7 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
       forroFolgaSobAVigaMm: F.folgaSobAVigaMm,
     });
     expect(motivoParaNaoRelancar(depois, q)).toBeNull();
-    expect(hipotesesDoQuadro(depois, q, painel).noForro).toEqual(forroDaCasa);
+    expect(hipotesesDoQuadro(depois, q, painel).noForro).toEqual({ faixa: F.eletrica, folgaSobAVigaMm: F.folgaSobAVigaMm });
   });
 
   // F3 do relançar (24/10/2026): a água da casa corre no forro (`agua.noForro`), que a gaveta da água não conhece. O
@@ -1441,7 +1442,7 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     // — e a água refeita volta à faixa do forro, com o forro no registro.
     // A MESMA conta do forro elétrico (#154): as premissas do estudo, completadas pelo padrão da casa.
     const forroDaCasa = forroDaAguaDaCasa(hipotesesDasPremissas(PREMISSAS_DA_CASA_PADRAO));
-    expect(forroDaCasa).toEqual({ aguaFria: F.aguaFria, aguaQuente: F.aguaQuente, folgaSobAVigaMm: F.folgaSobAVigaMm });
+    expect(forroDaCasa).toEqual({ aguaFria: F.aguaFria, aguaQuente: F.aguaQuente, folgaSobAVigaMm: F.folgaSobAVigaMm, rebaixoMm: rebaixoDoForroMm(F) });
     expect(forroDaAguaDaCasa(hipotesesDasPremissas({ ...PREMISSAS_DA_CASA_PADRAO, forro: { ...PREMISSAS_DA_CASA_PADRAO.forro, lancar: false } }))).toBeNull();
     const comCasa = { ...outra, forroDaCasa };
     expect(motivoParaNaoRelancarAgua(antiga, comCasa)).toBeNull();
@@ -1449,6 +1450,26 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     expect(registroDe(refeita, 'AGUA', null)?.escolhas).toMatchObject({ velocidadeMaxMs: 2.5, forroFriaAbaixoDoTetoMm: F.aguaFria.abaixoDoTetoMm });
     expect(horizontaisNoForro(refeita).filter(naFaixa).length).toBeGreaterThan(0);
     expect(horizontaisNoForro(refeita).filter((t) => !naFaixa(t)).map((t) => `${t.disciplina}@${t.cotaAMm}`)).toEqual([]);
+
+    // Correção 2 (I4): a FAIXA DA QUENTE da casa (o quadro da frente do lote) e a SUBIDA do alimentador pela fachada vão
+    // junto. Sem elas, a revisão mediu +3 conflitos com a estrutura e +1 de rede (a fria a 1 mm). Medido aqui: original
+    // {ESTRUTURA: 15}; sem as duas {ESTRUTURA: 18, REDE: 1}; com as duas {ESTRUTURA: 15} — por classe, nunca acima da casa.
+    const faixa = faixaDaAguaQuenteDaCasa(hipotesesDasPremissas(PREMISSAS_DA_CASA_PADRAO), r.boundaries, medirTerreno(r.boundaries).anel);
+    expect(faixa).not.toBeNull();
+    const daCasa = { ...outra, forroDaCasa: { ...forroDaCasa!, faixaDaAguaQuente: faixa, subidaDoAlimentador: SUBIDA_DO_ALIMENTADOR_DA_CASA } };
+    const comFaixa = applyBatch(antiga, comandosDeRefazerAgua(antiga, daCasa, null).comandos).model;
+    expect(lancamentoDaAgua(antiga, daCasa).hip.agua.faixaDaAguaQuente).toEqual(faixa);
+    expect(lancamentoDaAgua(antiga, daCasa).hip.alimentacao.subida).toBe('FACHADA');
+    const conflitosDaAgua = (m: BlueprintModel) => {
+      const ids = new Set((m.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE').map((t) => t.id));
+      return conflitosDoModelo(m).filter((c) => ids.has(c.trechoId)).reduce((o: Record<string, number>, c) => ((o[c.classe] = (o[c.classe] ?? 0) + 1), o), {});
+    };
+    const original = conflitosDaAgua(r);
+    const semFaixa = conflitosDaAgua(refeita);
+    const medidos = conflitosDaAgua(comFaixa);
+    // Sensibilidade: sem a faixa e a subida, mais conflitos que a casa (o que a revisão mediu).
+    expect((semFaixa.ESTRUTURA ?? 0) + (semFaixa.REDE ?? 0)).toBeGreaterThan((original.ESTRUTURA ?? 0) + (original.REDE ?? 0));
+    for (const [classe, n] of Object.entries(medidos)) expect(n, classe).toBeLessThanOrEqual(original[classe] ?? 0);
   });
 
   it('térrea: nenhuma dessas redes em vão de porta ou janela (o aquecedor ao lado da janela; o dreno do ar é a F14d)', () => {

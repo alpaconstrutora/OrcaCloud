@@ -928,9 +928,10 @@ function forroDaEletrica(f: HipotesesDoForroDaCasa): { faixa: FaixaDoForro; folg
  * (`hipotesesDasPremissas`). `null` com o forro desligado. O editor passa isto ao painel dos eletrodutos para relançar
  * NO FORRO a rede antiga (sem registro do lançamento).
  */
-export function forroEletricoDaCasa(hipParcial: Partial<HipotesesDaCasa>): { faixa: FaixaDoForro; folgaSobAVigaMm: number } | null {
+export function forroEletricoDaCasa(hipParcial: Partial<HipotesesDaCasa>): { faixa: FaixaDoForro; folgaSobAVigaMm: number; rebaixoMm: number } | null {
   const f = hipotesesDoForroDaCasa(hipParcial.forro ?? {});
-  return f.lancar ? forroDaEletrica(f) : null;
+  // Correção 2 da F3: o REBAIXO vai junto — é parte da assinatura da casa (`temAssinaturaDaCasa`).
+  return f.lancar ? { ...forroDaEletrica(f), rebaixoMm: rebaixoDoForroMm(f) } : null;
 }
 
 /**
@@ -938,9 +939,29 @@ export function forroEletricoDaCasa(hipParcial: Partial<HipotesesDaCasa>): { fai
  * viga) —, ou `null` com o forro desligado. O irmão de `forroEletricoDaCasa` (F3 do relançar, 24/10/2026): a casa lança
  * com ele, e o editor monta com ele, das premissas do estudo, o forro da água antiga lançada antes do registro.
  */
-export function forroDaAguaDaCasa(hipParcial: Partial<HipotesesDaCasa>): NonNullable<HipotesesDeAgua['noForro']> | null {
+export function forroDaAguaDaCasa(hipParcial: Partial<HipotesesDaCasa>): (NonNullable<HipotesesDeAgua['noForro']> & { rebaixoMm: number }) | null {
   const f = hipotesesDoForroDaCasa(hipParcial.forro ?? {});
-  return f.lancar ? { aguaFria: f.aguaFria, aguaQuente: f.aguaQuente, folgaSobAVigaMm: f.folgaSobAVigaMm } : null;
+  // Correção 2 da F3: o REBAIXO vai junto — é parte da assinatura da casa (`temAssinaturaDaCasa`).
+  return f.lancar ? { aguaFria: f.aguaFria, aguaQuente: f.aguaQuente, folgaSobAVigaMm: f.folgaSobAVigaMm, rebaixoMm: rebaixoDoForroMm(f) } : null;
+}
+
+/**
+ * F17 (decisão do usuário, "sobe pela fachada"): onde o alimentador da casa sobe quando o estudo não diz. Exportado na
+ * correção 2 da F3: a água antiga relançada sem registro usa o mesmo (sob a caixa, cruzava o baldrame — +3 conflitos).
+ */
+export const SUBIDA_DO_ALIMENTADOR_DA_CASA = 'FACHADA' as const;
+
+/**
+ * A FAIXA DA ÁGUA QUENTE da casa no mundo (F14a: o deslocamento (d, d) no quadro da frente do lote — o mesmo
+ * `faixaNoMundo` da etapa ÁGUA), ou `null` sem a frente marcada. Correção 2 da F3 (24/10/2026): a água antiga relançada
+ * sem registro refaz a quente na faixa dela — pelo eixo das paredes, cruzava a fria e a estrutura.
+ */
+export function faixaDaAguaQuenteDaCasa(hipParcial: Partial<HipotesesDaCasa>, limites: readonly Boundary[], anelDoLote: readonly Point[]): Point | null {
+  const q = quadroDaFrente(limites, anelDoLote);
+  if (!q) return null;
+  const d = { ...HIPOTESES_DA_CASA_PADRAO.faixas, ...(hipParcial.faixas ?? {}) }.aguaQuenteMm;
+  const v = paraMundo(q, { x: d, y: d });
+  return { x: Math.round(v.x), y: Math.round(v.y) };
 }
 
 /** O rebaixo do forro (da laje à face de cima dele): a faixa mais baixa, o raio do tubo e a folga. */
@@ -2284,7 +2305,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       },
       // F17 (decisão do usuário, "sobe pela fachada"): o alimentador enterrado só até a parede da frente — sobe nela e
       // corre sobre a laje até a caixa; sob o piso ele cruzava o esgoto enterrado. A premissa do estudo, se houver, vale.
-      alimentacao: { ...hidroDoEstudo.alimentacao, subida: hidroDoEstudo.alimentacao.subida ?? 'FACHADA' },
+      alimentacao: { ...hidroDoEstudo.alimentacao, subida: hidroDoEstudo.alimentacao.subida ?? SUBIDA_DO_ALIMENTADOR_DA_CASA },
       // F14c: no sobrado, um tubo de queda por banheiro de cima (cada um no shaft dele).
       esgoto: { ...hidroDoEstudo.esgoto, faixa: faixaNoMundo(hip.faixas.esgotoMm), ...(niveis.length > 1 ? { tuboDeQuedaPorGrupoMm: hip.sobrado.grupoDoTuboDeQuedaMm, raioDoShaftMm: hip.sobrado.tuboDeQuedaAteOShaftMm } : {}) },
     };

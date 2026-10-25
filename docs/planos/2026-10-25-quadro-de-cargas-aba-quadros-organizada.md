@@ -48,5 +48,6 @@ em coluna. O resultado do cálculo (instalada, demanda, IB, seção, geral, qued
 - [x] tsc + suíte — tsc 0 erros; suíte (sem `blueprintCasaAutomatica`, que vai na CI): 11.464 ok + 5 testes de tela que
   caíram por tempo sob carga e passaram sozinhos (`BlueprintEditor`, `PainelVersoes`, `TelaWebhooks`: 327/327) = 11.469 ok,
   0 falhas, 34 pulados, total 11.503
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #163, `ci` 30min2s verde
+- [x] publicação — squash `90f0769b` em 25/10/2026; `conferir-producao.sh "Carga e alimentador"` provou o domínio
+  servindo 90f0769 (sem deploy de função)

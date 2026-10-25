@@ -54,6 +54,18 @@ describe('pecasDasConexoes3D', () => {
     expect(peca.corpo!.centro[1]).toBeCloseTo(3.3);
     expect(pecasDasConexoes3D(mm, new Set([dois.levels[0].id]))).toEqual([]);
   });
+
+  it('⚠️ 25/10/2026: a conexão segue os TUBOS ocultos (camada desligada) — a mesma regra do 2D', () => {
+    // *"veja que com somente a eletrica visivel aparecem essas conexões, acho que fazem parte da hidraulica"*:
+    // o 3D escondia o tubo pela camada, mas desenhava os joelhos e tês dele soltos no ar.
+    const { m, t } = terreo();
+    const mm = applyBatch(m, [esgoto(t, 0, 0, 2000, 0, 100, -150, -150), esgoto(t, 0, 0, 0, 0, 100, 0, -150)]).model;
+    const [h, v] = mm.trechos!.map((x) => x.id);
+    expect(pecasDasConexoes3D(mm, undefined, new Set([h, v]))).toEqual([]);
+    // Um dos dois à vista: a conexão continua (é a ponta dele).
+    expect(pecasDasConexoes3D(mm, undefined, new Set([h]))).toHaveLength(1);
+    expect(pecasDasConexoes3D(mm, undefined, new Set())).toHaveLength(1);
+  });
 });
 
 describe('corpoDaCaixa3D', () => {

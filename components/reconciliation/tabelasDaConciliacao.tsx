@@ -431,6 +431,11 @@ export interface StatementRowCtx {
     costCenterName: (id?: string | null) => string | null;
     planoContasName: (id?: string | null) => string | null;
     organizationName: (id?: string | null) => string | null;
+    /** Organizações para onde o lançamento pode ir (as que a conta atende e o usuário grava). */
+    organizationOptions: LazyOption[];
+    /** Por que a organização desta linha não pode mudar; `null` = pode. */
+    motivoOrganizacaoTravada: (tx: BankTransaction) => string | null;
+    onUpdateOrganization: (id: string, orgId: string) => void;
     onUpdateCounterparty: (id: string, v: string) => void;
     onUpdateCategory: (id: string, v: string) => void;
     onUpdateProject: (id: string, v: string) => void;
@@ -527,7 +532,19 @@ export function renderStatementCell(key: string, tx: BankTransaction, ctx: State
             );
         case 'organization': {
             const nome = ctx.organizationName(tx.organization_id);
-            return nome ? <span className="block truncate" title={nome}>{nome}</span> : <span className="text-gray-300">—</span>;
+            const motivo = ctx.motivoOrganizacaoTravada(tx);
+            // Travada: o valor continua legível (nunca cinza-claro) e o `title` diz o porquê.
+            if (motivo) return <span className="block truncate text-gray-700" title={`${nome ?? ''}${nome ? ' — ' : ''}${motivo}`}>{nome ?? '—'}</span>;
+            return (
+                <LazySelect
+                    value={tx.organization_id || ''}
+                    currentLabel={nome || ''}
+                    onChange={(v) => { if (v && v !== tx.organization_id) ctx.onUpdateOrganization(tx.id, v); }}
+                    options={ctx.organizationOptions}
+                    placeholder="Organização"
+                    className="text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer text-gray-900 bg-blue-50 border-blue-100"
+                />
+            );
         }
         case 'date':
             return formatDateBR(tx.transaction_date);

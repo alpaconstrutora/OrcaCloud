@@ -37,6 +37,8 @@ export interface TituloDoCondominio {
     lancadoPeloSindico: boolean;
     /** Motivo da trava de pagamento Asaas (em curso ou feito), ou null. */
     travaAsaas: string | null;
+    /** Baixa já casada com o extrato do banco (G2a) — não se desfaz pelo portal. */
+    conciliadoExtrato?: boolean;
 }
 
 export type SituacaoDoTitulo = 'PAGO' | 'VENCIDO' | 'EM_ABERTO' | 'CANCELADO';
@@ -140,6 +142,47 @@ export function motivoNaoBaixa(t: TituloDoCondominio): string | null {
     if (tituloEstaPago(t.status, t.businessStatus)) return 'Este título já está pago.';
     if (t.approvalStatus === 'PENDENTE') return 'Este título aguarda aprovação na alçada e só pode ser pago depois dela.';
     return t.travaAsaas;
+}
+
+/** Espelho das recusas de `sindico_portal_receber_titulo` (G2a). */
+export function motivoNaoRecebe(t: TituloDoCondominio): string | null {
+    if (t.direcao !== 'CREDIT') return 'Só títulos a receber são recebidos por aqui.';
+    if (estaCancelado(t)) return 'Este título está cancelado.';
+    if (tituloEstaPago(t.status, t.businessStatus)) return 'Este título já está recebido.';
+    return t.travaAsaas;
+}
+
+/** Espelho das recusas de `sindico_portal_desfazer_baixa` (G2a). */
+export function motivoNaoDesfazBaixa(t: TituloDoCondominio): string | null {
+    if (!tituloEstaPago(t.status, t.businessStatus)) return 'Este título não tem baixa para desfazer.';
+    if (t.conciliadoExtrato) {
+        return 'Esta baixa já foi casada com o extrato do banco. Desfaça a conciliação antes (fale com a administradora).';
+    }
+    return t.travaAsaas;
+}
+
+/** Conta bancária (ou caixa) do condomínio, como `sindico_portal_contas` devolve. */
+export interface ContaDoCondominio {
+    id: string;
+    codigo: string | null;
+    nome: string;
+    tipo: 'banco' | 'caixa' | 'gateway';
+    banco: string | null;
+    agencia: string | null;
+    numero: string | null;
+    descricao: string | null;
+    saldoInicial: number;
+    saldoInicialEm: string | null;
+    ativa: boolean;
+    /** Já tem título baixado nela — desativar, sim; apagar, nunca. */
+    emUso: boolean;
+}
+
+/** Espelho das recusas de `sindico_portal_salvar_conta` (G2a). */
+export function motivoNaoSalvaConta(c: { nome: string; saldoInicial: number | null; saldoInicialEm: string | null }): string | null {
+    if (!c.nome.trim()) return 'Dê um nome à conta.';
+    if (Number(c.saldoInicial) !== 0 && !c.saldoInicialEm) return 'Informe a data do saldo inicial.';
+    return null;
 }
 
 /** "2026-10" → "2026-10-01" (o `p_competencia` da leitura). */

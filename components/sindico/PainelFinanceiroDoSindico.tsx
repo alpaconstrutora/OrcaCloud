@@ -8,7 +8,9 @@ import { usePersistedState } from '../ui/TableUtils';
 import PainelRateiosDoSindico from './PainelRateiosDoSindico';
 import TabelaTitulosDoSindico from './TabelaTitulosDoSindico';
 import LancarContaSheet from './LancarContaSheet';
-import { BaixaDoTituloSheet, CancelarTituloSheet } from './BaixaDoTituloSheet';
+import { BaixaDoTituloSheet, CancelarTituloSheet, DesfazerBaixaSheet } from './BaixaDoTituloSheet';
+import LancarReceitaSheet from './LancarReceitaSheet';
+import PainelContasDoSindico from './PainelContasDoSindico';
 import {
     sindicoPortalService, type DocumentoDoTitulo, type FinanceiroDoSindico, type IdentidadeDoSindico, type PortalSindico,
 } from '../../services/sindicoPortalService';
@@ -29,9 +31,10 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
  * disponivel o Financeiro relativo ao condomínio".
  * Plano: docs/planos/2026-10-24-portal-sindico-financeiro.md
  *
- * Quatro sub-abas: Resumo do mês · Contas a pagar · Contas a receber ·
- * Prestação de contas (o síndico monta, fecha e gera as cotas do rateio — G1,
- * `PainelRateiosDoSindico`). Os títulos são os dos CENTROS DE CUSTO do condomínio
+ * Cinco sub-abas: Resumo do mês · Contas a pagar · Contas a receber (receber,
+ * desfazer a baixa, lançar receita — G2a) · Prestação de contas (o síndico
+ * monta, fecha e gera as cotas do rateio — G1, `PainelRateiosDoSindico`) ·
+ * Contas bancárias (G2a, `PainelContasDoSindico`). Os títulos são os dos CENTROS DE CUSTO do condomínio
  * (`sindico_portal_financeiro`), o mesmo recorte da aba Despesas do admin.
  *
  * Operar (lançar, pagar, editar, cancelar, cadastrar fornecedor) exige LOGIN:
@@ -88,6 +91,8 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
     const [editando, setEditando] = React.useState<TituloDoCondominio | null>(null);
     const [baixando, setBaixando] = React.useState<TituloDoCondominio | null>(null);
     const [cancelando, setCancelando] = React.useState<TituloDoCondominio | null>(null);
+    const [desfazendo, setDesfazendo] = React.useState<TituloDoCondominio | null>(null);
+    const [lancandoReceita, setLancandoReceita] = React.useState(false);
 
     // Também na Prestação: é daqui que vem se o condomínio pode gravar pelo
     // portal (organização própria), e o rateio (G1) grava.
@@ -130,7 +135,7 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                 : null;
 
     const depoisDeGravar = (mensagem: string) => {
-        setLancando(false); setEditando(null); setBaixando(null); setCancelando(null);
+        setLancando(false); setEditando(null); setBaixando(null); setCancelando(null); setDesfazendo(null); setLancandoReceita(false);
         notify(mensagem);
         setVersao(v => v + 1);
     };
@@ -152,6 +157,22 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
             setAbrindoDoc(null);
         }
     };
+
+    /** Motivo de não gravar no condomínio escolhido (rateio, contas). */
+    const motivoBase = condominioId
+        ? motivoNaoOpera({
+            somenteLeitura, logado,
+            motivoDoCondominio: fin ? (condominiosDaTela[0]?.motivoNaoOpera ?? null) : 'Carregando o condomínio…',
+        })
+        : 'Nenhum condomínio no seu mandato.';
+
+    const botaoReceita = (
+        <span title={motivoLancar ?? undefined}>
+            <PrimaryButton onClick={() => setLancandoReceita(true)} disabled={!!motivoLancar} className={motivoLancar ? 'pointer-events-none' : ''}>
+                <Plus className="w-4 h-4" /> Lançar receita
+            </PrimaryButton>
+        </span>
+    );
 
     const botaoLancar = (
         <span title={motivoLancar ?? undefined}>
@@ -187,7 +208,7 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                                 </select>
                             </label>
                         )}
-                        {subAba !== 'prestacao' && (
+                        {subAba !== 'prestacao' && subAba !== 'contas' && (
                             <label className="flex items-center gap-2 text-[13px] text-[#8A8F9A]">
                                 Mês
                                 <input
@@ -210,12 +231,7 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                         rateios={rateios}
                         condominio={dados.condominios.find(c => c.id === condominioId) ?? null}
                         unidades={dados.unidades}
-                        motivoBase={condominioId
-                            ? motivoNaoOpera({
-                                somenteLeitura, logado,
-                                motivoDoCondominio: fin ? (condominiosDaTela[0]?.motivoNaoOpera ?? null) : 'Carregando o condomínio…',
-                            })
-                            : 'Nenhum condomínio no seu mandato.'}
+                        motivoBase={motivoBase}
                         onAlterado={onAlteradoPortal}
                         notify={notify}
                     />
@@ -228,6 +244,15 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                         />
                     </PortalCard>
                 </>
+            ) : subAba === 'contas' ? (
+                <PainelContasDoSindico
+                    identidade={identidade}
+                    condominioId={condominioId}
+                    condominioNome={dados.condominios.find(c => c.id === condominioId)?.nome ?? ''}
+                    motivoBase={motivoBase}
+                    notify={notify}
+                    onAlterado={() => setVersao(v => v + 1)}
+                />
             ) : carregando && !fin ? (
                 <PortalCard><PortalLoading label="Carregando o financeiro..." /></PortalCard>
             ) : erro ? (
@@ -257,6 +282,7 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                             acoes={{
                                 motivoDoCondominio,
                                 onBaixar: setBaixando,
+                                onDesfazer: setDesfazendo,
                                 onEditar: setEditando,
                                 onCancelar: setCancelando,
                             }}
@@ -267,6 +293,8 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                             tipo="receber" titulos={receber} hoje={hoje} competenciaRotulo={rotuloDoMes(competencia).toLowerCase()}
                             documentos={documentos} nomeDoCondominio={nomeDoCondominio}
                             abrindoDocumento={abrindoDoc} onAbrirDocumento={abrirDocumento}
+                            direita={botaoReceita}
+                            acoes={{ motivoDoCondominio, onBaixar: setBaixando, onDesfazer: setDesfazendo }}
                         />
                     )}
                 </>
@@ -277,7 +305,8 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                     <LancarContaSheet
                         open={lancando || !!editando}
                         identidade={identidade}
-                        condominios={editando ? fin.condominios.filter(c => c.id === editando.condominioId) : operaveis}                        titulo={editando}
+                        condominios={editando ? fin.condominios.filter(c => c.id === editando.condominioId) : operaveis}
+                        titulo={editando}
                         onClose={() => { setLancando(false); setEditando(null); }}
                         onSalvo={depoisDeGravar}
                     />
@@ -292,6 +321,20 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                         titulo={cancelando}
                         identidade={identidade}
                         onClose={() => setCancelando(null)}
+                        onSalvo={depoisDeGravar}
+                    />
+                    <DesfazerBaixaSheet
+                        titulo={desfazendo}
+                        identidade={identidade}
+                        onClose={() => setDesfazendo(null)}
+                        onSalvo={depoisDeGravar}
+                    />
+                    <LancarReceitaSheet
+                        open={lancandoReceita}
+                        identidade={identidade}
+                        condominio={operaveis[0] ?? null}
+                        unidades={dados.unidades}
+                        onClose={() => setLancandoReceita(false)}
                         onSalvo={depoisDeGravar}
                     />
                 </>

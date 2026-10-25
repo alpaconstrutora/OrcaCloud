@@ -4,7 +4,7 @@ import type {
     PortalOcupante, PortalOrdemCondominio, PortalRateioCondominio, PortalUnidadeCondominio,
 } from './clientPortalService';
 import type { EstadoDoSindico } from '../utils/acessoDoSindico';
-import type { TituloDoCondominio } from '../utils/financeiroDoSindico';
+import type { ContaDoCondominio, TituloDoCondominio } from '../utils/financeiroDoSindico';
 import type { LinhaPagamentoAvulso } from '../utils/pagamentoAvulso';
 import type {
     CotaParaGerar, CriterioDoRateio, PagadorDaCota, PreviaDoRateio, TipoDoRateio,
@@ -351,6 +351,52 @@ export const sindicoPortalService = {
             ...params(id), p_empreendimento_id: condominioId, p_dados: dados,
         }, 'Não foi possível cadastrar o fornecedor.');
         return { id: r.id as string, nome: r.nome as string, existente: !!r.existente };
+    },
+
+    // ── Conta bancária e recebimentos (G2a, 24/10/2026) ─────────────────────
+
+    async getContas(id: IdentidadeDoSindico, condominioId: string): Promise<ContaDoCondominio[]> {
+        const { data, error } = await supabase.rpc('sindico_portal_contas', { ...params(id), p_empreendimento_id: condominioId });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string; contas?: ContaDoCondominio[] };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível carregar as contas.');
+        return r.contas ?? [];
+    },
+
+    /** `contaId` vazio = conta nova. */
+    async salvarConta(id: IdentidadeDoSindico, condominioId: string, contaId: string | null, dados: {
+        nome: string; tipo: 'banco' | 'caixa'; banco: string; agencia: string; numero: string; descricao: string;
+        saldoInicial: number; saldoInicialEm: string | null; ativa: boolean;
+    }): Promise<string> {
+        const r = await escrever('sindico_portal_salvar_conta', {
+            ...params(id), p_empreendimento_id: condominioId, p_conta_id: contaId, p_dados: dados,
+        }, 'Não foi possível salvar a conta.');
+        return r.id as string;
+    },
+
+    async receberTitulo(id: IdentidadeDoSindico, tituloId: string, recebimento: {
+        data: string; forma: string | null; contaId: string | null;
+    }): Promise<void> {
+        await escrever('sindico_portal_receber_titulo', {
+            ...params(id), p_titulo_id: tituloId, p_data: recebimento.data, p_forma: recebimento.forma, p_conta: recebimento.contaId,
+        }, 'Não foi possível registrar o recebimento.');
+    },
+
+    async desfazerBaixa(id: IdentidadeDoSindico, tituloId: string, motivo: string): Promise<void> {
+        await escrever('sindico_portal_desfazer_baixa', { ...params(id), p_titulo_id: tituloId, p_motivo: motivo },
+            'Não foi possível desfazer a baixa.');
+    },
+
+    async lancarReceber(id: IdentidadeDoSindico, condominioId: string, linha: {
+        description: string; amount: number; due_date: string; competencia_date: string | null;
+        cost_center_id: string; category_id: string; plano_de_contas_id: string | null;
+        client_id: string | null; party_name: string | null; payment_type: string | null; payment_account_id: string | null;
+    }, opcoes: { jaRecebido: boolean; dataRecebimento: string | null }): Promise<string> {
+        const r = await escrever('sindico_portal_lancar_receber', {
+            ...params(id), p_empreendimento_id: condominioId, p_linha: linha,
+            p_ja_recebido: opcoes.jaRecebido, p_data_recebimento: opcoes.dataRecebimento,
+        }, 'Não foi possível lançar a receita.');
+        return r.id as string;
     },
 
     // ── Rateio pelo síndico (G1, 24/10/2026) ────────────────────────────────

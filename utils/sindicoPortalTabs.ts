@@ -32,7 +32,7 @@ export function resolverAbaDoSindico(valor: string | null | undefined): SindicoP
  * Sub-abas do Financeiro (plano docs/planos/2026-10-24-portal-sindico-financeiro.md).
  * "Prestação de contas" é a antiga aba inteira: os rateios, com aprovar/devolver.
  */
-export const SINDICO_FINANCEIRO_SUBABA_IDS = ['resumo', 'pagar', 'receber', 'prestacao'] as const;
+export const SINDICO_FINANCEIRO_SUBABA_IDS = ['resumo', 'pagar', 'receber', 'prestacao', 'contas'] as const;
 export type SindicoFinanceiroSubAbaId = typeof SINDICO_FINANCEIRO_SUBABA_IDS[number];
 
 export const SINDICO_FINANCEIRO_SUBABA_LABELS: Record<SindicoFinanceiroSubAbaId, string> = {
@@ -40,6 +40,7 @@ export const SINDICO_FINANCEIRO_SUBABA_LABELS: Record<SindicoFinanceiroSubAbaId,
     pagar: 'Contas a pagar',
     receber: 'Contas a receber',
     prestacao: 'Prestação de contas',
+    contas: 'Contas bancárias',
 };
 
 export function resolverSubAbaDoFinanceiro(valor: string | null | undefined): SindicoFinanceiroSubAbaId {

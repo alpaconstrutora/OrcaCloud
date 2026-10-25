@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-    MOTIVO_PREVIA, MOTIVO_SEM_LOGIN, condominioDoFinanceiro, doCondominio, motivoNaoAltera, motivoNaoBaixa, motivoNaoOpera, resumoDoMes, situacaoDoTitulo,
+    MOTIVO_PREVIA, MOTIVO_SEM_LOGIN, condominioDoFinanceiro, doCondominio, motivoNaoAltera, motivoNaoDesfazBaixa,
+    motivoNaoRecebe, motivoNaoSalvaConta, motivoNaoBaixa, motivoNaoOpera, resumoDoMes, situacaoDoTitulo,
     type TituloDoCondominio,
 } from '../utils/financeiroDoSindico';
 
@@ -107,5 +108,28 @@ describe('um condomínio por vez (print de 24/10: o 007 mostrava as faturas do 0
         expect(doCondominio([t007, t010], 'c007').map(t => t.id)).toEqual(['a']);
         expect(resumoDoMes(doCondominio([t007, t010], 'c007'), '2026-10-01', HOJE).vencidoAPagar).toBe(100);
         expect(doCondominio([t007, t010], null)).toEqual([]);
+    });
+});
+
+describe('G2a: receber, desfazer a baixa e a conta do condomínio', () => {
+    it('receber: só a receber, em aberto, fora do Asaas', () => {
+        expect(motivoNaoRecebe(titulo({ direcao: 'CREDIT' }))).toBeNull();
+        expect(motivoNaoRecebe(titulo())).toMatch(/a receber/);
+        expect(motivoNaoRecebe(titulo({ direcao: 'CREDIT', businessStatus: 'RECEBIDO' }))).toMatch(/recebido/);
+        expect(motivoNaoRecebe(titulo({ direcao: 'CREDIT', status: 'CANCELLED' }))).toMatch(/cancelado/);
+        expect(motivoNaoRecebe(titulo({ direcao: 'CREDIT', travaAsaas: 'Cobrança no Asaas' }))).toBe('Cobrança no Asaas');
+    });
+    it('desfazer: só com baixa, e nunca a já casada com o extrato', () => {
+        expect(motivoNaoDesfazBaixa(titulo({ status: 'CONCILIATED', businessStatus: 'PAGO' }))).toBeNull();
+        expect(motivoNaoDesfazBaixa(titulo({ direcao: 'CREDIT', status: 'CONCILIATED', businessStatus: 'RECEBIDO' }))).toBeNull();
+        expect(motivoNaoDesfazBaixa(titulo())).toMatch(/não tem baixa/);
+        expect(motivoNaoDesfazBaixa(titulo({ status: 'CONCILIATED', businessStatus: 'PAGO', conciliadoExtrato: true }))).toMatch(/extrato/);
+        expect(motivoNaoDesfazBaixa(titulo({ status: 'CONCILIATED', businessStatus: 'PAGO', travaAsaas: 'Asaas' }))).toBe('Asaas');
+    });
+    it('conta: nome obrigatório; saldo inicial pede a data', () => {
+        expect(motivoNaoSalvaConta({ nome: 'Sicredi', saldoInicial: 0, saldoInicialEm: '' })).toBeNull();
+        expect(motivoNaoSalvaConta({ nome: '  ', saldoInicial: 0, saldoInicialEm: '' })).toMatch(/nome/);
+        expect(motivoNaoSalvaConta({ nome: 'Sicredi', saldoInicial: 100, saldoInicialEm: '' })).toMatch(/data do saldo/);
+        expect(motivoNaoSalvaConta({ nome: 'Sicredi', saldoInicial: 100, saldoInicialEm: '2026-10-01' })).toBeNull();
     });
 });

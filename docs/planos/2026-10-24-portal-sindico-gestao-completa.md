@@ -130,7 +130,7 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
 - [x] 007 com organização própria (24/10) — ver plano de 21/10, F3.
 - [x] PR #138: Financeiro um condomínio por vez.
 - [x] Ordem: começar pela G1 (usuário, 24/10).
-- [ ] G1 — 3 de 4:
+- [x] G1 — 4 de 4:
   - [x] Cálculo no banco (`fn_rateio_calcular`). Paridade com os 7 rateios gravados: 5 batem
     centavo a centavo; os 2 do 010 cancelados diferem SÓ porque 9 despesas deles foram apagadas
     depois (R$ 488,84 = a diferença exata); a distribuição por área privativa do banco é idêntica
@@ -152,8 +152,39 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     0 erro, sem rolagem lateral. **Os prints acharam 2 defeitos, corrigidos:** coluna "Cota"
     cortada no painel (tabela → lista); no celular a barra inferior do portal (z-50) cobria o
     rodapé de TODO painel lateral — "Salvar" sumia (barra → z-40). tsc 0; UI limpa.
-  - [ ] PR + CI + publicação.
+  - [x] PR + CI + publicação — PR #148, `ci` verde; squash `8574c4e` (24/10/2026); `conferir-producao.sh "Rateios do condomínio"` ✅.
+    ⚠️ A CI de `main` em `8574c4e` ficou vermelha por colisão de prefixo com #147 (outra sessão) — corrigida no #151.
 - ⚠️ **O síndico do 010/007 (altair.rosa@gmail.com) NÃO tem login** (nenhum usuário com esse e-mail
   em 24/10): pelo link ele só lê. Tudo que grava (lançar, pagar, rateio) exige entrar com e-mail e
   senha — falta ele criar o acesso.
-- [ ] G2 · [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7
+- [ ] G2 — dividida em três (24/10, ao começar): **G2a** conta + recebimentos · **G2b** conciliação do extrato ·
+  **G2c** boleto/PIX pelo Asaas (precisa da chave da conta no CNPJ do condomínio, a fornecer pelo usuário).
+  - [ ] G2a — 3 de 4:
+    - [x] Migration `aplicar_20271024920000_portal_sindico_contas_recebimentos` APLICADA (24/10):
+      `sindico_portal_contas` (ler) · `…_salvar_conta` (banco/caixa; gateway recusado; nunca apaga, desativa) ·
+      `…_receber_titulo` · `…_desfazer_baixa` (pagar ou receber; motivo obrigatório; recusa a casada com o extrato
+      em `reconciliation_matches` e a do Asaas; mês fechado à mão) · `…_lancar_receber` (receita avulsa; pagador =
+      ocupante do condomínio ou nome livre) · `sindico_portal_financeiro` + `conciliadoExtrato` por título.
+      **Defeito do #129 achado na prova e corrigido:** `fn_orgs_atendidas_pela_conta` devolve VAZIO para quem não é
+      membro (o síndico nunca é) → a lista de contas do formulário vinha vazia e toda baixa COM conta era recusada.
+      Novo `fn_sindico_conta_atende` (interno) em `sindico_portal_financeiro`, `fn_sindico_validar_linha`,
+      `sindico_portal_baixar_titulo` e o receber (corpos copiados do banco, uma troca cada).
+      Prova em bloco desfeito com o login do síndico simulado (010): pelo link lê e não grava; conta criada na org do
+      condomínio (cód 001, matriz), editada, a da Alpa recusada; receita p/ não ocupante e sem pagador recusadas;
+      receita lançada; receber COM a conta nova ok, 2× recusado, título a pagar recusado; **pagar com a conta nova ok**
+      e ela aparece na lista do formulário; desfazer sem motivo/em aberto recusados, desfazer ok, conciliado com
+      extrato recusado com o motivo; 34 títulos com o campo novo; nada ficou. ACL: escrita só `authenticated`;
+      leitura de contas também `anon`; internas sem EXECUTE.
+    - [x] Tela: sub-aba **Contas bancárias** (`PainelContasDoSindico`: nova, editar, desativar/reativar; a do Asaas
+      diz por que não edita) · Contas a receber com **Receber** / **Desfazer** e **Lançar receita**
+      (`LancarReceitaSheet`, conta financeira só de RECEITA) · Contas a pagar com **Desfazer** no lugar de "Pagar"
+      quando já pago · `BaixaDoTituloSheet` pelo sentido do título + `DesfazerBaixaSheet`. Regras em
+      `utils/financeiroDoSindico.ts` (`motivoNaoRecebe`, `motivoNaoDesfazBaixa`, `motivoNaoSalvaConta`, 14 testes);
+      `SindicoPortal.test` 12/12 (8b receber/desfazer, 8c contas). tsc 0; UI limpa nos 5 arquivos.
+    - [x] Playwright logado (harness temporário, apagado; leituras reais do 010, escritas interceptadas), desktop e
+      390px: conta cadastrada chega à RPC com os campos; "Quem paga" lista os 8 ocupantes com as unidades; botão
+      desligado diz o que falta; 0 erro; sem rolagem lateral. O print achou "Quem paga" cortado (meia largura) →
+      largura toda.
+    - [ ] PR + CI + publicação.
+  - [ ] G2b · [ ] G2c
+- [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7

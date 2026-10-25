@@ -11,6 +11,7 @@ import LancarContaSheet from './LancarContaSheet';
 import { BaixaDoTituloSheet, CancelarTituloSheet, DesfazerBaixaSheet } from './BaixaDoTituloSheet';
 import LancarReceitaSheet from './LancarReceitaSheet';
 import PainelContasDoSindico from './PainelContasDoSindico';
+import PainelExtratoDoSindico from './PainelExtratoDoSindico';
 import {
     sindicoPortalService, type DocumentoDoTitulo, type FinanceiroDoSindico, type IdentidadeDoSindico, type PortalSindico,
 } from '../../services/sindicoPortalService';
@@ -31,10 +32,11 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
  * disponivel o Financeiro relativo ao condomínio".
  * Plano: docs/planos/2026-10-24-portal-sindico-financeiro.md
  *
- * Cinco sub-abas: Resumo do mês · Contas a pagar · Contas a receber (receber,
+ * Seis sub-abas: Resumo do mês · Contas a pagar · Contas a receber (receber,
  * desfazer a baixa, lançar receita — G2a) · Prestação de contas (o síndico
  * monta, fecha e gera as cotas do rateio — G1, `PainelRateiosDoSindico`) ·
- * Contas bancárias (G2a, `PainelContasDoSindico`). Os títulos são os dos CENTROS DE CUSTO do condomínio
+ * Contas bancárias (G2a, `PainelContasDoSindico`) · Extrato e conciliação (G2b,
+ * `PainelExtratoDoSindico`). Os títulos são os dos CENTROS DE CUSTO do condomínio
  * (`sindico_portal_financeiro`), o mesmo recorte da aba Despesas do admin.
  *
  * Operar (lançar, pagar, editar, cancelar, cadastrar fornecedor) exige LOGIN:
@@ -185,9 +187,10 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
     return (
         <>
             <PortalCard className="overflow-hidden">
-                {/* No celular, abas e mês EMPILHADOS: na mesma linha a aba ativa
-                    ficava fora da tela (print de 24/10). */}
-                <div className="flex flex-col md:flex-row md:items-end md:justify-between md:gap-3 md:pr-4">
+                {/* Abas e seletores EMPILHADOS até 2xl: no celular a aba ativa ficava
+                    fora da tela (print de 24/10); com 6 sub-abas (G2b) "Resumo" e
+                    "Contas a pagar" sumiam também no desktop (print de 25/10). */}
+                <div className="flex flex-col 2xl:flex-row 2xl:items-end 2xl:justify-between 2xl:gap-3 2xl:pr-4">
                     <div className="flex-1 min-w-0">
                         <PortalTabs
                             tabs={SINDICO_FINANCEIRO_SUBABA_IDS.map(id => ({ id, label: SINDICO_FINANCEIRO_SUBABA_LABELS[id] }))}
@@ -195,7 +198,7 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                             onChange={setSubAba}
                         />
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 md:px-0 md:py-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 2xl:px-0 2xl:py-2">
                         {variosPredios && (
                             <label className="flex items-center gap-2 text-[13px] text-[#8A8F9A] min-w-0">
                                 Condomínio
@@ -252,6 +255,17 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                     motivoBase={motivoBase}
                     notify={notify}
                     onAlterado={() => setVersao(v => v + 1)}
+                />
+            ) : subAba === 'extrato' ? (
+                <PainelExtratoDoSindico
+                    identidade={identidade}
+                    condominioId={condominioId}
+                    condominio={condominiosDaTela[0] ?? null}
+                    competencia={competencia}
+                    motivoBase={motivoBase}
+                    notify={notify}
+                    onAlterado={() => setVersao(v => v + 1)}
+                    onIrParaContas={() => setSubAba('contas')}
                 />
             ) : carregando && !fin ? (
                 <PortalCard><PortalLoading label="Carregando o financeiro..." /></PortalCard>

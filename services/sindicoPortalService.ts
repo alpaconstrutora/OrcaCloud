@@ -9,6 +9,7 @@ import type { LinhaPagamentoAvulso } from '../utils/pagamentoAvulso';
 import type {
     CotaParaGerar, CriterioDoRateio, PagadorDaCota, PreviaDoRateio, TipoDoRateio,
 } from '../utils/rateioDoSindico';
+import { linhasParaImportar, type CandidatoDoMovimento, type MovimentoDoExtrato } from '../utils/extratoDoSindico';
 
 /**
  * Portal do Síndico — leitura e gestão do acesso.
@@ -397,6 +398,87 @@ export const sindicoPortalService = {
             p_ja_recebido: opcoes.jaRecebido, p_data_recebimento: opcoes.dataRecebimento,
         }, 'Não foi possível lançar a receita.');
         return r.id as string;
+    },
+
+    // ── Extrato e conciliação (G2b, 25/10/2026) ─────────────────────────────
+
+    async getExtrato(id: IdentidadeDoSindico, contaId: string, inicio: string, fim: string): Promise<{
+        movimentos: MovimentoDoExtrato[];
+        importacoes: { arquivo: string; formato: string; em: string; lidas: number; inseridas: number; repetidas: number;
+            inicio: string | null; fim: string | null; saldoBanco: number | null; saldoEm: string | null }[];
+        temMovimento: boolean;
+    }> {
+        const { data, error } = await supabase.rpc('sindico_portal_extrato', {
+            ...params(id), p_conta_id: contaId, p_inicio: inicio, p_fim: fim,
+        });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string; linhas?: MovimentoDoExtrato[]; importacoes?: []; temMovimento?: boolean };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível carregar o extrato.');
+        return { movimentos: r.linhas ?? [], importacoes: r.importacoes ?? [], temMovimento: !!r.temMovimento };
+    },
+
+    /**
+     * Lê o arquivo NO NAVEGADOR (o mesmo `parseStatementFile` do admin) e manda
+     * as linhas; o banco recalcula assinatura e duplicidade. Recusa antes, com o
+     * motivo, o arquivo de OUTRA conta (número do OFX × número cadastrado).
+     */
+    async importarExtrato(id: IdentidadeDoSindico, conta: { id: string; numero: string | null; nome: string }, arquivo: File): Promise<{
+        inseridas: number; jaExistiam: number; outroFormato: number; lidas: number; descartadas: number;
+    }> {
+        const { parseStatementFile, accountMatches } = await import('./bankStatementParsers');
+        const lido = await parseStatementFile(arquivo);
+        if (accountMatches(lido.header.acctId, conta.numero) === false) {
+            throw new Error(`O arquivo é da conta ${lido.header.acctId}, mas a conta escolhida é "${conta.nome}" (${conta.numero}). Nada foi importado.`);
+        }
+        if (lido.transactions.length === 0) {
+            throw new Error(lido.avisos.length > 0 ? lido.avisos.join(' ') : 'O arquivo não tem movimentos.');
+        }
+        const r = await escrever('sindico_portal_extrato_importar', {
+            ...params(id), p_conta_id: conta.id,
+            p_arquivo: {
+                nome: arquivo.name, formato: lido.format, acctId: lido.header.acctId ?? null,
+                saldo: lido.header.ledgerBalance ?? null, saldoEm: lido.header.ledgerBalanceDate ?? null,
+                inicio: lido.header.dtStart ?? null, fim: lido.header.dtEnd ?? null, descartadas: lido.skipped,
+            },
+            p_linhas: linhasParaImportar(lido.transactions),
+        }, 'Não foi possível importar o extrato.');
+        return {
+            inseridas: Number(r.inseridas) || 0, jaExistiam: Number(r.jaExistiam) || 0, outroFormato: Number(r.outroFormato) || 0,
+            lidas: Number(r.lidas) || 0, descartadas: lido.skipped,
+        };
+    },
+
+    async candidatosDoMovimento(id: IdentidadeDoSindico, movimentoId: string): Promise<CandidatoDoMovimento[]> {
+        const { data, error } = await supabase.rpc('sindico_portal_extrato_candidatos', { ...params(id), p_bank_id: movimentoId });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string; candidatos?: CandidatoDoMovimento[] };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível buscar os títulos.');
+        return r.candidatos ?? [];
+    },
+
+    async conciliarMovimento(id: IdentidadeDoSindico, movimentoId: string, tituloId: string, categoriaAjuste: string | null): Promise<void> {
+        await escrever('sindico_portal_extrato_conciliar', {
+            ...params(id), p_bank_id: movimentoId, p_titulo_id: tituloId, p_categoria_ajuste: categoriaAjuste,
+        }, 'Não foi possível conciliar.');
+    },
+
+    async desfazerVinculo(id: IdentidadeDoSindico, matchId: string): Promise<void> {
+        await escrever('sindico_portal_extrato_desfazer', { ...params(id), p_match_id: matchId }, 'Não foi possível desfazer o vínculo.');
+    },
+
+    async ignorarMovimento(id: IdentidadeDoSindico, movimentoId: string, motivo: string | null, restaurar: boolean): Promise<void> {
+        await escrever('sindico_portal_extrato_ignorar', {
+            ...params(id), p_bank_id: movimentoId, p_motivo: motivo, p_restaurar: restaurar,
+        }, restaurar ? 'Não foi possível restaurar o movimento.' : 'Não foi possível ignorar o movimento.');
+    },
+
+    /** Cria o título a partir do movimento (valor, data e sentido vêm do extrato) e concilia. */
+    async lancarDoMovimento(id: IdentidadeDoSindico, movimentoId: string, linha: {
+        description: string; cost_center_id: string; category_id: string; plano_de_contas_id: string | null;
+        supplier_id: string | null; party_name: string | null;
+    }): Promise<void> {
+        await escrever('sindico_portal_extrato_lancar', { ...params(id), p_bank_id: movimentoId, p_linha: linha },
+            'Não foi possível lançar e conciliar.');
     },
 
     // ── Rateio pelo síndico (G1, 24/10/2026) ────────────────────────────────

@@ -159,7 +159,7 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
   senha — falta ele criar o acesso.
 - [ ] G2 — dividida em três (24/10, ao começar): **G2a** conta + recebimentos · **G2b** conciliação do extrato ·
   **G2c** boleto/PIX pelo Asaas (precisa da chave da conta no CNPJ do condomínio, a fornecer pelo usuário).
-  - [ ] G2a — 3 de 4:
+  - [x] G2a — 4 de 4:
     - [x] Migration `aplicar_20271024920000_portal_sindico_contas_recebimentos` APLICADA (24/10):
       `sindico_portal_contas` (ler) · `…_salvar_conta` (banco/caixa; gateway recusado; nunca apaga, desativa) ·
       `…_receber_titulo` · `…_desfazer_baixa` (pagar ou receber; motivo obrigatório; recusa a casada com o extrato
@@ -185,6 +185,46 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
       390px: conta cadastrada chega à RPC com os campos; "Quem paga" lista os 8 ocupantes com as unidades; botão
       desligado diz o que falta; 0 erro; sem rolagem lateral. O print achou "Quem paga" cortado (meia largura) →
       largura toda.
+    - [x] PR + CI + publicação — PR #153, `ci` verde; squash `c6a211a`; CI de `main` no squash verde;
+      `conferir-producao.sh "Contas bancárias"` ✅ (domínio em `baaadb1`, que contém `c6a211a`).
+  - [ ] G2b — conciliação do extrato pelo portal (usuário: "sim", 25/10). Desenho:
+    - O admin lê o arquivo, tira duplicados e casa NO NAVEGADOR, com a RLS de membro. As funções de casar /
+      desfazer / ignorar (`fn_reconcile_match/_unmatch/_ignore/_unignore`) são SECURITY INVOKER sem checagem
+      própria → o portal as chama POR DENTRO de RPCs `sindico_portal_extrato_*` que autorizam o síndico (login +
+      mandato + org própria) e conferem que extrato e título são da org do condomínio. Mesma lógica do admin
+      (título conciliado com a conta real, boleto pago, auditoria), sem duplicar.
+    - Importar: o arquivo é lido no navegador do síndico (`parseStatementFile`, o mesmo do admin, puro); o banco
+      RECALCULA sentido, valor, ordinal e `fingerprint` (sha256 do mesmo texto canônico) e a duplicidade entre
+      formatos (`separarGemeasDeOutroFormato`, um arquivo por vez); trava de mês fechado À MÃO (o gatilho
+      `trg_block_period_bank_tx` não vale em SECURITY DEFINER); exige saldo inicial na 1ª importação (regra do
+      admin); registra em `bank_statement_imports`.
+    - Sugestões: candidatos do condomínio no mesmo sentido, sem vínculo, por diferença de valor e de data — não o
+      motor inteiro do admin (o condomínio tem pouco volume e nenhuma regra).
+    - Valor diferente (juros/multa): só com a categoria do ajuste (o `p_adjustment_category` do admin cria o título
+      da diferença já conciliado). Linha sem título (tarifa): "Lançar e conciliar".
+    **Pronto quando:** prova em bloco desfeito com o login simulado importa, recusa a reimportação, casa, desfaz,
+    ignora/restaura e lança-e-concilia na conta do 010; Playwright logado faz o ciclo; tsc 0; UI limpa.
+    - [x] Migration `aplicar_20271025100000_portal_sindico_extrato` APLICADA (25/10): `sindico_portal_extrato` (ler) ·
+      `_importar` · `_candidatos` (ler) · `_conciliar` · `_desfazer` · `_ignorar` (e restaurar) · `_lancar`; internas
+      `fn_sindico_condominio_da_conta`, `fn_sindico_titulo_conciliavel`, `fn_sindico_movimento` sem EXECUTE.
+      Prova em bloco desfeito (login simulado, conta criada no 010): importar sem saldo inicial e pelo link recusados;
+      3 inseridas; reimportar = 0 (3 já existiam); a mesma tarifa em outro formato = 0 (1 "outro formato");
+      fingerprint de 64 hex, status NORMALIZED, org do condomínio; candidatos: o título certo em 1º, exato;
+      conciliar com sentido diferente / valor diferente sem ajuste / 2× recusados; conciliar ok (título CONCILIATED com
+      a data e a conta do banco; movimento MATCHED); desfazer ok; ignorar sem motivo recusado, ignorar/restaurar ok;
+      lançar a tarifa = título PAGO já conciliado com valor/data DO EXTRATO (o `amount` mandado foi ignorado);
+      auditoria do admin MATCH/UNMATCH/IGNORE/UNIGNORE/MATCH; nada ficou. Achado: a tabela temporária da importação
+      sobrevivia a duas chamadas na mesma transação → `DROP TABLE IF EXISTS` antes.
+    - [x] Tela: sub-aba **Extrato e conciliação** (`PainelExtratoDoSindico`): conta, importar (arquivo lido no
+      navegador pelo `parseStatementFile` do admin; recusa OFX de outra conta), faixa entradas/saídas/conciliados/a
+      conciliar, tabela com Conciliar / Desfazer / Ignorar / Restaurar; painel Conciliar (candidatos com o exato
+      pré-marcado, busca, ajuste da diferença pela conta financeira) e "Lançar e conciliar". Regras em
+      `utils/extratoDoSindico.ts` (6 testes; o teste pegou o resumo tirando o ignorado da soma de saídas — a soma tem
+      de bater com o banco); `SindicoPortal.test` 13/13 (8d). tsc 0; UI limpa.
+    - [x] Playwright logado (harness temporário, apagado; conta/extrato/candidatos de EXEMPLO pela interceptação, porque o
+      condomínio ainda não tem conta; escritas capturadas), desktop e 390px: OFX lido no navegador chega à RPC com
+      conta/saldo/período/linhas; exato pré-marcado; conciliar chega com os ids; 0 erro; sem rolagem lateral.
+      **O print achou:** com 6 sub-abas, "Resumo" e "Contas a pagar" sumiam no desktop → abas e seletores empilhados até 2xl.
     - [ ] PR + CI + publicação.
-  - [ ] G2b · [ ] G2c
+  - [ ] G2c
 - [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7

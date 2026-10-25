@@ -102,6 +102,7 @@ import { HIPOTESES_ELETRODUTO_PADRAO, comandosDeBitolaPelaOcupacao, planejarElet
 import { REGRA_DE_CAIXAS_PADRAO } from './blueprintCaixasDePassagem';
 import { escolhasDoEletroduto } from './blueprintEscolhasDoEletroduto';
 import { comandoDeRegistro, registroDe } from './blueprintRegistroDeLancamento';
+import { comandoDeRegistroDosCircuitosCriados } from './blueprintEscolhasDosCircuitos';
 import { escolhasDaAgua, escolhasDoPluvial } from './blueprintEscolhasDaAguaEPluvial';
 import { escolhasDoEsgoto } from './blueprintEscolhasDoEsgoto';
 import type { HipotesesDeAgua } from './blueprintAguaAutomatica';
@@ -2867,6 +2868,17 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const notaDaEntrada = eletrica.entrada ? `; entrada ${eletrica.entrada.categoria} (${eletrica.entrada.ligacao}, ${eletrica.entrada.demandaKva.toLocaleString('pt-BR')} kVA)` : '';
         etapa('DR_DPS', ROTULO_DA_ETAPA_DA_CASA.DR_DPS, 'LANCOU', aplicar([...drs, ...dps, ...ligacao]), `${drs.length} DR(s) de 30 mA${dps.length ? '; DPS no quadro' : ''}${notaDaEntrada}`);
       });
+      // F5 do relançar (24/10/2026): o REGISTRO dos circuitos automáticos, por pavimento, no lote da casa — com que
+      // escolhas e QUAIS circuitos a casa criou (pelo motor: os do pavimento e os do ar-condicionado, mesmas escolhas).
+      // O painel dos circuitos avisa quando as escolhas de lá diferem e o "Relançar" refaz só estes; o circuito que o
+      // usuário alterar depois fica. Depois do DR (que não muda o circuito) e antes dos eletrodutos (idem).
+      {
+        const daCasa = new Set((m.circuitos ?? []).map((c) => c.id).filter((id) => !(original.circuitos ?? []).some((c) => c.id === id)));
+        for (const L of niveis) {
+          const registro = comandoDeRegistroDosCircuitosCriados(m, L, daCasa, hipCircuitos, hipEletricas);
+          if (registro) aplicar([registro]);
+        }
+      }
       tentarEletrica('ELETRODUTOS', () => {
         // F14b: no forro, na faixa do eletroduto. Task 3 (24/10/2026, "a regra vale também no forro"): quadro → luz do
         // ambiente → tomadas, como na obra — a luz → ponto reta pela faixa até a vertical dele no anel, e a descida do

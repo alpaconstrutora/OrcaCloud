@@ -21,7 +21,7 @@ import { HIPOTESES_PLUVIAIS_PADRAO } from '../utils/blueprintPluvial';
 import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
 import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
 import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
-import { pontosElegiveis } from '../utils/blueprintCircuitosAutomaticos';
+import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos, pontosElegiveis } from '../utils/blueprintCircuitosAutomaticos';
 import { HIPOTESES_DO_MURO_DA_CASA_PADRAO } from '../utils/blueprintMuroDaCasa';
 import { furosPrevistos } from '../utils/blueprintFurosPrevistos';
 import { registroDe } from '../utils/blueprintRegistroDeLancamento';
@@ -36,12 +36,13 @@ import {
   redesARefazer,
 } from '../utils/blueprintEscolhasDoEletroduto';
 import { PREMISSAS_DA_CASA_PADRAO, hipotesesDasPremissas } from '../utils/blueprintPremissasDaCasa';
-import { HIPOTESES_ELETRODUTO_PADRAO } from '../utils/blueprintEletrodutos';
+import { HIPOTESES_ELETRODUTO_PADRAO, planejarEletrodutos } from '../utils/blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO } from '../utils/blueprintEletricaDimensionamento';
 import { comandosDeRefazerEsgoto, diferencasDoEsgoto, lancamentoDoEsgoto } from '../utils/blueprintEscolhasDoEsgoto';
 import { MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO, comandosDeRefazerAgua, diferencasDaAgua, diferencasDoPluvial, lancamentoDaAgua, motivoParaNaoRelancarAgua } from '../utils/blueprintEscolhasDaAguaEPluvial';
 import { planejarAguaCompleta } from '../utils/blueprintAguaCompleta';
+import { circuitosDoPavimento, comandosDeRefazerCircuitos, diferencasDosCircuitos, escolhasDosCircuitos } from '../utils/blueprintEscolhasDosCircuitos';
 
 // Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
 // ~0,5–0,8 s nesta máquina, e a CI, disputando CPU com a suíte toda, chegou a passar dos 5 s do padrão
@@ -590,8 +591,9 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
     expect(p.etapas.find((e) => e.id === 'ELETRODUTOS')?.situacao).toBe('LANCOU');
     expect((r.terminais ?? []).filter((t) => t.tipoEletrico === 'CAIXA_PASSAGEM')).toEqual([]);
     const qdc = (r.quadros ?? [])[0];
-    // F3 (24/10/2026): a água e o pluvial também registram — um registro por motor; F4: o esgoto também.
-    expect(p.comandos.flatMap((c) => (c.type === 'RegistrarLancamento' ? [c.motor] : [])).sort()).toEqual(['AGUA', 'ELETRODUTOS', 'ESGOTO', 'PLUVIAL']);
+    // F3 (24/10/2026): a água e o pluvial também registram — um registro por motor; F4: o esgoto também; F5: os circuitos
+    // (um por pavimento — a térrea tem um).
+    expect(p.comandos.flatMap((c) => (c.type === 'RegistrarLancamento' ? [c.motor] : [])).sort()).toEqual(['AGUA', 'CIRCUITOS', 'ELETRODUTOS', 'ESGOTO', 'PLUVIAL']);
     expect(registroDe(r, 'ELETRODUTOS', qdc.id)?.escolhas).toMatchObject({ caixasDePassagem: 'PELA_LUZ', encaminhamento: 'PELA_LUZ_DO_AMBIENTE' });
     // Correção 2: com o painel dos eletrodutos no PADRÃO (o do editor: sem caixas), a casa recém-gerada não acende o aviso.
     // Painel fora do padrão (outra bitola, rota pela parede…) acende — diferença real.
@@ -601,6 +603,30 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
 
     const comCaixas = planejarCasa(m, comAr(m, { caixasDePassagem: 'CAIXAS' }));
     expect(registroDe(comCaixas.resultado, 'ELETRODUTOS', (comCaixas.resultado.quadros ?? [])[0].id)?.escolhas.caixasDePassagem).toBe('CAIXAS');
+  });
+
+  // F5 do plano 2026-10-24-relancar-quando-escolha-muda.md (24/10/2026): a casa registra os circuitos automáticos que
+  // criou (os do pavimento e os do ar), e o registro sobrevive à REEXECUÇÃO do lote pelo editor (outros uids) — o painel
+  // dos circuitos reconhece os circuitos da casa como do motor, e o "Relançar" refaz só eles.
+  it('⚠️ F5: os circuitos da casa são do motor (inclusive reexecutado o lote); sem aviso com o padrão; refazer não deixa eletroduto órfão', () => {
+    const m = lote();
+    const p = planejarCasa(m, comAr(m));
+    const L = p.resultado.levels.find((l) => (p.resultado.terminais ?? []).some((t) => t.levelId === l.id && t.circuitoId))!.id;
+    // Reexecutar o lote (como o editor faz no "Lançar"): os uids mudam, a identificação não.
+    const r = applyBatch(m, p.comandos).model;
+    const cls = circuitosDoPavimento(r, L);
+    expect(cls.doMotor).toHaveLength((r.circuitos ?? []).length);
+    expect(cls.outros).toEqual([]);
+    expect(diferencasDosCircuitos(r, L, escolhasDosCircuitos(HIPOTESES_CIRCUITOS_PADRAO, HIPOTESES_ELETRICAS_PADRAO))).toEqual([]);
+    const porFuncao = { ...HIPOTESES_CIRCUITOS_PADRAO, criterio: 'funcao' as const };
+    expect(diferencasDosCircuitos(r, L, escolhasDosCircuitos(porFuncao, HIPOTESES_ELETRICAS_PADRAO)).map((d) => d.item)).toEqual(['criterio']);
+    // Refazer "um por função": nenhum ponto de carga solto, nenhum eletroduto órfão, e o plano dos eletrodutos mostra o que ligar.
+    const q = (r.quadros ?? [])[0];
+    const depois = applyBatch(r, comandosDeRefazerCircuitos(r, L, q.id, porFuncao, HIPOTESES_ELETRICAS_PADRAO).comandos).model;
+    expect(planejarCircuitos(depois, L, q.id, porFuncao, HIPOTESES_ELETRICAS_PADRAO).circuitos).toEqual([]);
+    expect((depois.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && !(t.circuitoIds ?? []).length)).toEqual([]);
+    expect(planejarEletrodutos(depois, (depois.quadros ?? [])[0], HIPOTESES_ELETRODUTO_PADRAO, HIPOTESES_ELETRICAS_PADRAO).aLigar).toBeGreaterThan(0);
+    expect(diferencasDosCircuitos(depois, L, escolhasDosCircuitos(porFuncao, HIPOTESES_ELETRICAS_PADRAO))).toEqual([]);
   });
 
   it('elétrica desligada: as seis etapas NAO_EXIGIDA e nenhum ponto elétrico', () => {

@@ -5164,6 +5164,102 @@ describe('BlueprintEditor · ribbon', () => {
     expect(within(drawer).getByRole('spinbutton', { name: /carga máxima por circuito/i })).toBeDisabled();
   });
 
+  describe('circuitos relançam quando uma escolha muda (F5, 24/10/2026)', () => {
+    /**
+     * Sala 6 × 4 com QDC 127 V: luz + interruptor + 2 TUG + 1 TUE, os circuitos criados "por ambiente" (com o registro,
+     * ou sem — os antigos) e os eletrodutos lançados. `soltos`: pontos a mais, ainda sem circuito.
+     */
+    async function circuitosCriados(registrar: boolean, soltos = 0) {
+      const k = await import('../../utils/blueprintKernel');
+      const { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos } = await import('../../utils/blueprintCircuitosAutomaticos');
+      const { HIPOTESES_PADRAO } = await import('../../utils/blueprintEletricaDimensionamento');
+      const { comandosDeCriarCircuitos } = await import('../../utils/blueprintEscolhasDosCircuitos');
+      const el = await import('../../utils/blueprintEletrodutos');
+      const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+      const t = nivel.model.levels[0].id;
+      const w = (ax: number, ay: number, bx: number, by: number) =>
+        ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+      let m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+      m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' }).model;
+      m = k.applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: k.point(300, 300), cotaMm: 1500, tensaoV: 127, ligacao: 'FN' }).model;
+      const ponto = (x: number, y: number, tipoEletrico: 'ILUMINACAO_TETO' | 'INTERRUPTOR' | 'TUG' | 'TUE', potenciaW?: number) =>
+        ({ type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: tipoEletrico, at: k.point(x, y), cotaMm: 300, tipoEletrico, ...(potenciaW != null ? { potenciaW } : {}) }) as const;
+      m = k.applyBatch(m, [ponto(3000, 2000, 'ILUMINACAO_TETO', 160), ponto(200, 1200, 'INTERRUPTOR'), ponto(1000, 200, 'TUG', 100), ponto(2000, 200, 'TUG', 100), ponto(5000, 200, 'TUE', 1200)]).model;
+      const q = m.quadros![0].id;
+      m = k.applyBatch(
+        m,
+        registrar
+          ? comandosDeCriarCircuitos(m, t, q, HIPOTESES_CIRCUITOS_PADRAO, HIPOTESES_PADRAO).comandos
+          : planejarCircuitos(m, t, q, HIPOTESES_CIRCUITOS_PADRAO, HIPOTESES_PADRAO).comandos,
+      ).model;
+      m = k.applyBatch(m, el.planejarEletrodutos(m, m.quadros![0], el.HIPOTESES_ELETRODUTO_PADRAO, HIPOTESES_PADRAO).comandos).model;
+      for (let i = 0; i < soltos; i++) m = k.applyCommand(m, ponto(1500 + i * 500, 3800, 'TUG', 100)).model;
+      return m;
+    }
+    const AVISO = 'Dividir luz e TUG — lançado com: por ambiente · agora: por carga máxima';
+    async function abrirCircuitos() {
+      await abrirAba(/^elétrica$/i);
+      await userEvent.setup().click(botao(/^circuitos automáticos/i));
+      return screen.findByRole('dialog');
+    }
+
+    it('⚠️ escolha trocada depois de criar: aviso com a diferença; "Criar 0" vira "Relançar com as escolhas atuais"; a confirmação diz o impacto nos eletrodutos; refeito, o aviso some; um Desfazer o traz de volta', async () => {
+      loadBranchModel.mockResolvedValue(await circuitosCriados(true));
+      localStorage.setItem('blueprint:circuitosAutomaticos', JSON.stringify({ criterio: 'carga', cargaMaximaVA: null }));
+      await montar();
+      const drawer = await abrirCircuitos();
+      expect(await within(drawer).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+      // Regra A: nada a criar e circuitos do motor → o botão do rodapé RELANÇA, ligado; o "Criar 0" sumiu.
+      expect(screen.queryByRole('button', { name: /^criar 0 circuito/i })).not.toBeInTheDocument();
+      // O do aviso e o do rodapé fazem o mesmo; o nome acessível os distingue.
+      expect(within(within(drawer).getByTestId('aviso-escolhas-mudaram')).getByRole('button', { name: 'Relançar os circuitos com as escolhas atuais' })).toBeEnabled();
+      const relancar = screen.getByRole('button', { name: 'Relançar com as escolhas atuais — circuitos do motor de Térreo' });
+      expect(relancar).toHaveTextContent('Relançar com as escolhas atuais');
+      expect(relancar).toBeEnabled();
+
+      await userEvent.setup().click(relancar);
+      const titulo = await screen.findByText('Refazer os circuitos automáticos?');
+      const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
+      expect(confirmacao).toHaveTextContent('Térreo: saem 3 circuito(s) do motor (C1 — Iluminação Sala, C2 — TUG Sala, C3 — TUE Sala) e os 5 ponto(s) deles');
+      expect(confirmacao).toHaveTextContent('circuito(s) novo(s) no quadro QDC');
+      expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
+      expect(confirmacao).toHaveTextContent(/Os eletrodutos e a fiação desses circuitos precisam ser relançados: \d+ eletroduto\(s\) que só os levavam saem/);
+      expect(confirmacao).toHaveTextContent('relance os eletrodutos — o painel dos eletrodutos mostra os pontos a ligar');
+      await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
+
+      await waitFor(() => expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+      expect(drawer).toHaveTextContent(/circuitos refeitos com as escolhas atuais/i);
+
+      // UM desfazer volta circuitos, eletrodutos e registro: o aviso reaparece.
+      await userEvent.setup().click(botao(/^desfazer/i));
+      expect(await within(drawer).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+    });
+
+    it('circuitos de antes do registro, nada a criar: sem aviso; o botão desliga e diz por quê (texto, title, invólucro, descrição)', async () => {
+      const { MOTIVO_CIRCUITOS_SEM_REGISTRO } = await import('../../utils/blueprintEscolhasDosCircuitos');
+      loadBranchModel.mockResolvedValue(await circuitosCriados(false));
+      localStorage.setItem('blueprint:circuitosAutomaticos', JSON.stringify({ criterio: 'carga', cargaMaximaVA: null }));
+      await montar();
+      const drawer = await abrirCircuitos();
+      expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      const criar = screen.getByRole('button', { name: /^criar 0 circuito/i });
+      expect(criar).toBeDisabled();
+      expect(criar).toHaveAttribute('title', MOTIVO_CIRCUITOS_SEM_REGISTRO);
+      expect(criar.parentElement).toHaveAttribute('title', MOTIVO_CIRCUITOS_SEM_REGISTRO);
+      expect(criar).toHaveAccessibleDescription(MOTIVO_CIRCUITOS_SEM_REGISTRO);
+    });
+
+    it('com pontos novos e circuitos do motor: "Criar 1" e, ao lado, "Refazer circuitos automáticos" (com confirmação)', async () => {
+      loadBranchModel.mockResolvedValue(await circuitosCriados(true, 1));
+      await montar();
+      const drawer = await abrirCircuitos();
+      expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^criar 1 circuito/i })).toBeEnabled();
+      await userEvent.setup().click(screen.getByRole('button', { name: /^refazer circuitos automáticos$/i }));
+      expect(await screen.findByText('Refazer os circuitos automáticos?')).toBeInTheDocument();
+    });
+  });
+
   // ── Pilares automáticos (15/09/2026) ─────────────────────────────────────
   it('"Pilares automáticos" (aba Estrutural) sem parede: hipóteses, o que não faz, e "Lançar 0" apagado', async () => {
     await montar();

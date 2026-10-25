@@ -165,13 +165,57 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
   (`esgotoDaCasaNoModelo`); sem as premissas (erro de leitura), sem a assinatura ou com o forro desligado nelas, os
   botões desligam com o motivo. Sem água no forro (não é casa), relança pelo estudo.
 
+## Decisões tomadas na Task 5 (circuitos automáticos)
+- Alvo = o PAVIMENTO (`alvoId` = `levelId`): o motor cria os circuitos dos pontos soltos de um pavimento, num quadro que
+  pode ser de outro pavimento. Módulo `utils/blueprintEscolhasDosCircuitos.ts`. O painel trabalha no pavimento em que o
+  usuário está, como o "Criar" sempre trabalhou; as funções recebem o pavimento explicitamente.
+- Escolhas = critério ("Dividir luz e TUG"), carga máxima (declarada ou `'PADRAO'` = 10 A × tensão do quadro) e a seção
+  mínima de TUE das hipóteses elétricas do estudo (a única que o motor lê). Com "um por função" de qualquer lado, a carga
+  sai da comparação (não divide nada; o painel desliga o campo).
+- **Quais circuitos são do motor:** o kernel não mudou. O registro guarda, numa chave sem rótulo (`circuitosDoMotor`), uma
+  ASSINATURA por circuito criado: FNV-1a do nome + FNV-1a do resto das propriedades (tipo, tensão, disjuntor, seções,
+  ligação, DR, curva, reserva). Não id (o kernel reatribui por posição ao ler o payload) nem uid (aleatório, nasce dentro
+  do lote; a Casa Automática simula o lote e o editor o reexecuta com outros uids). Circuito do motor com o nome trocado
+  ou com disjuntor/seção/curva/DR declarados depois deixa de bater e FICA (só o resto mudou → "do motor, alterado" na
+  confirmação). A `fase` fica fora (balanceamento do quadro; a confirmação avisa que os novos nascem sem fase). Os pontos
+  ficam fora (apagar ou mover ponto não é editar o circuito). Circuito com ponto em outro pavimento nunca é do motor deste.
+- Circuitos de antes do registro: nenhum é identificável — sem aviso; com nada a criar, o botão desliga com o motivo
+  "Circuitos criados antes do registro — o motor não sabe quais são dele; refaça-os à mão ou apague os circuitos (Quadro
+  de cargas) para relançar." O padrão de nome foi descartado: confundiria o circuito que o usuário batizou igual.
+- **Refazer** (sempre com confirmação — circuito não tem "sugerido"): num lote, apaga os circuitos do motor (o
+  `DeleteCircuito` solta os pontos e os tira dos eletrodutos e dos DRs), apaga os ELETRODUTOS que só levavam esses
+  circuitos e as caixas de passagem dos nós deles, recria os circuitos dos pontos soltos do pavimento no quadro do painel
+  (que abre no quadro dos circuitos do motor) e grava o registro. Medido (sonda): sem apagar os eletrodutos, 11 trechos
+  ficavam órfãos (sem circuito) e o "Lançar" dos eletrodutos criava 11 trechos novos, 10 deles exatamente por cima dos
+  órfãos. Com o Refazer, nenhum órfão; o eletroduto que leva também outro circuito fica (sem os refeitos), e o plano dos
+  eletrodutos mostra os pontos a ligar ("Lançar em todos (N)"). O aviso B dos eletrodutos NÃO acende (as escolhas dos
+  eletrodutos não mudaram) — é o plano que mostra o que atualizar, e a confirmação manda relançar.
+- Confirmação: o que sai e volta (circuitos, pontos — inclusive ponto posto à mão num deles —, quantos novos e em que
+  quadro), o que mudou, os eletrodutos e a fiação a relançar (quantos saem, quantos confirmados, caixas, quantos ficam),
+  DR e fase que se perdem, e o que fica (alterados e à mão, por nome) — "a escolha nova não se aplica a eles".
+- Lote parcial ("Criar" com circuitos do motor de outra escolha sobrando): o registro mantém as escolhas antigas e só
+  acrescenta as assinaturas dos novos.
+- Casa Automática: grava o registro CIRCUITOS por pavimento com os circuitos que o lote dela criou (os do pavimento e os
+  do ar-condicionado, mesmas escolhas), depois do DR e antes dos eletrodutos.
+- Limitações (F5):
+  - "Renumerar circuitos" (Quadro de cargas) troca o nome: os circuitos renumerados deixam de ser reconhecidos como do motor
+    e ficam no Refazer (a confirmação os lista como "renomeados"). Trocar disjuntor/seção também (de propósito).
+  - Os circuitos do ar-condicionado criados pelo gerador de Climatização avulso (fora da casa) não entram no registro:
+    ficam no Refazer, como os criados à mão.
+  - Um circuito criado à mão com exatamente as mesmas propriedades (nome inclusive) de um do motor, no mesmo pavimento,
+    seria tomado como do motor. A confirmação lista por nome o que sai; Ctrl+Z desfaz.
+  - DR e fase dos circuitos refeitos se perdem (os novos nascem sem): a confirmação diz; o quadro volta a sugerir o DR.
+  - O aviso é do pavimento em que o usuário está: trocar a escolha e refazer o térreo não refaz o andar de cima — o aviso
+    aparece lá quando o painel for aberto naquele pavimento.
+  - Prova no app: coberta pelos testes do editor; prova por imagem no navegador NÃO feita.
+
 ## Estado
 - [x] desenho aprovado (24/10/2026)
 - [x] Task 1 — F1 núcleo (registro no modelo) — kernel 0.105.0 (`registrosDeLancamento`, `RegistrarLancamento`/`ApagarRegistroDeLancamento`), `utils/blueprintRegistroDeLancamento.ts`, `AvisoDeEscolhasMudaram.tsx`; bundle da planta-api regerado (a function ainda precisa de deploy)
 - [x] Task 2 — F2 eletrodutos — `utils/blueprintEscolhasDoEletroduto.ts` (escolhas por quadro, rótulos e padrões, lotes de lançar/refazer com o registro, botão da regra A, confirmação por quadro); `refazerEletrodutos` apaga as CP da rede inclusive aceitas (`caixasDaRedeDoQuadro`); aviso B na tabela por quadro; Casa Automática com a preferência de caixas e o registro no lote
 - [x] Task 3 — F3 água e pluvial — `utils/blueprintEscolhasDaAguaEPluvial.ts` (escolhas, rótulos e padrões dos dois sistemas, alvo global; lotes com o registro e a regra do lote parcial; Refazer novo que apaga a rede do sistema, confirmados inclusive, e nunca aparelhos/pontos; botão da regra A; confirmação com o que mudou); aviso B nos dois painéis; "Refazer tudo" e "Relançar com as escolhas atuais" nos rodapés; Casa Automática grava os registros AGUA e PLUVIAL (com o forro, a faixa da quente, a subida e os ajustes F18 sem rótulo)
 - [x] Task 4 — F4 esgoto — `utils/blueprintEscolhasDoEsgoto.ts` (escolhas, rótulos e padrões, alvo global; o destino como escolha; lotes com o registro e a regra do lote parcial; Refazer que apaga a rede do motor — confirmados e o outro destino inclusive, nunca aparelhos/ralos/caixa confirmada — e relança o esgoto inteiro; botão da regra A; confirmação com o que mudou e as peças por nome); aviso B na gaveta; "Relançar com as escolhas atuais" no rodapé; Casa Automática grava o registro ESGOTO (faixa, tubo de queda por grupo e raio do shaft sem rótulo); esgoto antigo de casa relança pelas premissas da casa (assinatura da água) ou bloqueia com o motivo
-- [ ] Task 5 — F5 circuitos automáticos
+- [x] Task 5 — F5 circuitos automáticos — `utils/blueprintEscolhasDosCircuitos.ts` (escolhas, rótulos e padrões; alvo = pavimento; assinatura dos circuitos do motor no registro; lote de criar com o registro e a regra do lote parcial; Refazer que tira só os do motor e os eletrodutos que só os levavam e recria; confirmação honesta; botão da regra A com motivo); aviso B no painel dos circuitos; "Criar 0" vira "Relançar com as escolhas atuais"; "Refazer circuitos automáticos" ao lado do "Criar"; Casa Automática grava o registro CIRCUITOS por pavimento
 - [x] revisão final do ramo (Tasks 1+2) — "Sim, com correções"; correção 2 `65779b7e` (falso forro, portão de camadas, menores)
 - [x] PR 1 (Tasks 1+2) + CI — PR #149, `ci` 22min21s verde; suíte local 11.459 ok, 0 falhas
 - [x] publicação do PR 1 — squash `a28bd09e` em 24/10/2026; `conferir-producao.sh "Relançar com as escolhas atuais"` provou o domínio servindo a28bd09; `supabase functions deploy planta-api` (autorizado: "pode") com o bundle 0.105.0, função respondendo 200

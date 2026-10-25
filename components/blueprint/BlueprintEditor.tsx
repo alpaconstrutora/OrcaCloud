@@ -486,7 +486,6 @@ import {
   HIPOTESES_CIRCUITOS_PADRAO,
   ROTULO_DA_FUNCAO,
   ROTULO_DO_CRITERIO_DE_CIRCUITO,
-  conferirPlano,
   planejarCircuitos,
   pontosElegiveis,
   quadrosDoNivel,
@@ -494,6 +493,16 @@ import {
   renumerarCircuitos,
   type HipotesesDeCircuitos,
 } from '../../utils/blueprintCircuitosAutomaticos';
+import {
+  botaoDosCircuitos,
+  circuitosARefazer,
+  comandosDeCriarCircuitos,
+  comandosDeRefazerCircuitos,
+  diferencasDosCircuitos,
+  escolhasDosCircuitos,
+  quadroDosCircuitosDoMotor,
+  textoDaConfirmacaoDosCircuitos,
+} from '../../utils/blueprintEscolhasDosCircuitos';
 import { composicaoDaRede, resumoDaComposicao } from '../../utils/blueprintFiacao';
 import { centroDeCargas, centroNaPlanta as centroDaMarca, type MarcaDoCentro } from '../../utils/blueprintCentroDeCargas';
 import { FONTE_DA_REGRA_DE_CAIXAS, REGRA_DE_CAIXAS_PADRAO } from '../../utils/blueprintCaixasDePassagem';
@@ -8893,7 +8902,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   const quadrosDoNivelAtivo = useMemo(() => (levelId ? quadrosDoNivel(editor.model, levelId) : []), [editor.model, levelId]);
   const [quadroParaCircuitos, setQuadroParaCircuitos] = useState<string | null>(null);
-  const quadroDosCircuitos = quadrosDoNivelAtivo.find((q) => q.id === quadroParaCircuitos) ?? quadrosDoNivelAtivo[0] ?? null;
+  // F5 do relançar (24/10/2026): sem escolha explícita, o seletor abre no quadro dos circuitos do motor deste pavimento
+  // (o "Relançar" refaz onde eles estão); sem eles, o primeiro do pavimento, como antes.
+  const quadroDoMotorNoNivel = useMemo(() => (levelId ? quadroDosCircuitosDoMotor(editor.model, levelId) : null), [editor.model, levelId]);
+  const quadroDosCircuitos =
+    quadrosDoNivelAtivo.find((q) => q.id === quadroParaCircuitos) ??
+    quadrosDoNivelAtivo.find((q) => q.id === quadroDoMotorNoNivel) ??
+    quadrosDoNivelAtivo[0] ??
+    null;
   const planoDeCircuitos = useMemo(
     () =>
       levelId
@@ -8902,6 +8918,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     [editor.model, levelId, quadroDosCircuitos?.id, hipotesesDeCircuitos, hipotesesEletricas],
   );
   const pontosParaCircuitos = levelId ? pontosElegiveis(editor.model, levelId).length : 0;
+  /**
+   * F5 do relançar (24/10/2026, plano `2026-10-24-relancar-quando-escolha-muda.md`) — os circuitos automáticos relançam
+   * quando uma escolha muda. O registro é por PAVIMENTO (o motor cria os circuitos dos pontos soltos de um pavimento);
+   * o painel trabalha no pavimento em que o usuário está, como o "Criar" sempre trabalhou. Ver
+   * `blueprintEscolhasDosCircuitos.ts` (quais circuitos são do motor, o Refazer, a confirmação, a regra A).
+   */
+  const escolhasDosCircuitosAtuais = useMemo(() => escolhasDosCircuitos(hipotesesDeCircuitos, hipotesesEletricas), [hipotesesDeCircuitos, hipotesesEletricas]);
+  const diferencasNosCircuitos = useMemo(
+    () => (levelId ? diferencasDosCircuitos(editor.model, levelId, escolhasDosCircuitosAtuais) : []),
+    [editor.model, levelId, escolhasDosCircuitosAtuais],
+  );
+  const botaoDeCircuitos = useMemo(
+    () => (levelId && planoDeCircuitos ? botaoDosCircuitos(editor.model, levelId, planoDeCircuitos) : null),
+    [editor.model, levelId, planoDeCircuitos],
+  );
+  const modeloDosCircuitosRef = useRef(editor.model);
+  modeloDosCircuitosRef.current = editor.model;
 
   /**
    * ─── PONTOS HIDRÁULICOS POR AMBIENTE (18/09/2026, F3) ─────────────────────
@@ -9794,18 +9827,64 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   /** O que aconteceu no último "Criar": sucesso (para o drawer dizer) ou a recusa da conferência. */
   const [resultadoDeCircuitos, setResultadoDeCircuitos] = useState<{ ok: boolean; texto: string } | null>(null);
   const criarCircuitos = () => {
-    if (!planoDeCircuitos || planoDeCircuitos.comandos.length === 0) return;
-    // A trava: simula o lote e confere que os ids previstos batem. Se não
-    // batem, nada é gravado — melhor recusar do que ligar ponto no circuito errado.
-    const prova = conferirPlano(editor.model, planoDeCircuitos);
-    if (!prova.ok) {
-      setResultadoDeCircuitos({ ok: false, texto: `Nada foi criado: ${prova.motivo}` });
+    if (!levelId || !planoDeCircuitos || planoDeCircuitos.comandos.length === 0) return;
+    // A trava: simula o lote e confere que os ids previstos batem (`conferirPlano`, dentro de `comandosDeCriarCircuitos`).
+    // Se não batem, nada é gravado — melhor recusar do que ligar ponto no circuito errado. F5: o registro (com que
+    // escolhas, e quais circuitos são do motor) vai no mesmo lote.
+    let lote: ReturnType<typeof comandosDeCriarCircuitos>;
+    try {
+      lote = comandosDeCriarCircuitos(editor.model, levelId, quadroDosCircuitos?.id ?? null, hipotesesDeCircuitos, hipotesesEletricas);
+    } catch (e) {
+      setResultadoDeCircuitos({ ok: false, texto: `Nada foi criado: ${e instanceof Error ? e.message : String(e)}` });
       return;
     }
-    const n = planoDeCircuitos.circuitos.length;
-    const m = planoDeCircuitos.circuitos.reduce((s, c) => s + c.terminalIds.length, 0);
-    editor.runBatch(planoDeCircuitos.comandos);
+    if (lote.comandos.length === 0) return;
+    const n = lote.plano.circuitos.length;
+    const m = lote.plano.circuitos.reduce((s, c) => s + c.terminalIds.length, 0);
+    editor.runBatch(lote.comandos);
     setResultadoDeCircuitos({ ok: true, texto: `${n} circuito(s) criado(s) para ${m} ponto(s) — Ctrl+Z desfaz.` });
+  };
+  /**
+   * F5: REFAZER os circuitos do motor do pavimento com as escolhas atuais — SEMPRE com confirmação (circuito não tem
+   * "sugerido": todo circuito existe e já foi aceito). A confirmação diz o que sai e volta, que os eletrodutos e a fiação
+   * desses circuitos precisam ser relançados, o que perde (DR, fase) e o que fica. Um lote só: Ctrl+Z desfaz tudo.
+   */
+  const refazerCircuitos = async () => {
+    if (!levelId) return;
+    const nivel = levelId;
+    const quadro = quadroDosCircuitos;
+    let previa: ReturnType<typeof comandosDeRefazerCircuitos>;
+    try {
+      previa = comandosDeRefazerCircuitos(editor.model, nivel, quadro?.id ?? null, hipotesesDeCircuitos, hipotesesEletricas);
+    } catch (e) {
+      setResultadoDeCircuitos({ ok: false, texto: `Nada foi refeito: ${e instanceof Error ? e.message : String(e)}` });
+      return;
+    }
+    const alvo = circuitosARefazer(editor.model, nivel);
+    const texto = textoDaConfirmacaoDosCircuitos(alvo, { novos: previa.plano?.circuitos.length ?? 0, quadro: quadro?.nome ?? null, diferencas: diferencasNosCircuitos });
+    if (!texto) return;
+    const ok = await confirmar({
+      title: 'Refazer os circuitos automáticos?',
+      message: `${texto} Ctrl+Z desfaz.`,
+      confirmLabel: 'Refazer',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    // Depois do `await`: o lote sobre o modelo de AGORA (o usuário pode ter mexido enquanto a confirmação estava aberta).
+    let lote: ReturnType<typeof comandosDeRefazerCircuitos>;
+    try {
+      lote = comandosDeRefazerCircuitos(modeloDosCircuitosRef.current, nivel, quadro?.id ?? null, hipotesesDeCircuitos, hipotesesEletricas);
+    } catch (e) {
+      setResultadoDeCircuitos({ ok: false, texto: `Nada foi refeito: ${e instanceof Error ? e.message : String(e)}` });
+      return;
+    }
+    if (lote.comandos.length === 0) return;
+    editor.runBatch(lote.comandos);
+    const n = lote.plano?.circuitos.length ?? 0;
+    setResultadoDeCircuitos({
+      ok: true,
+      texto: `Circuitos refeitos com as escolhas atuais: ${n} circuito(s). Relance os eletrodutos deste quadro — Ctrl+Z desfaz.`,
+    });
   };
 
   /**
@@ -19946,6 +20025,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
 
           {tarefaAberta === 'circuitos' && planoDeCircuitos && (
             <div className="space-y-4">
+              {/* F5 do relançar (24/10/2026) — REGRA B: os circuitos do motor deste pavimento foram criados com outras
+                  escolhas; o botão refaz (com confirmação). Sem registro (circuitos antigos): nada aqui. */}
+              <AvisoDeEscolhasMudaram
+                diferencas={diferencasNosCircuitos}
+                onRelancar={() => void refazerCircuitos()}
+                rotuloAcessivel="Relançar os circuitos com as escolhas atuais"
+              />
               {/* As HIPÓTESES, escritas — o que é norma e o que é escolha, separados. */}
               <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <p className="font-semibold text-slate-700">Hipóteses da criação</p>
@@ -20700,22 +20786,55 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               </button>
             </>
           )}
-          {tarefaAberta === 'circuitos' && planoDeCircuitos && (
+          {tarefaAberta === 'circuitos' && planoDeCircuitos && botaoDeCircuitos && (
             <>
               <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
                 {planoDeCircuitos.circuitos.length === 0
                   ? 'Nada a criar.'
                   : `${planoDeCircuitos.circuitos.length} circuito(s) para ${planoDeCircuitos.circuitos.reduce((s, c) => s + c.terminalIds.length, 0)} ponto(s).`}
               </span>
-              <button
-                type="button"
-                onClick={criarCircuitos}
-                disabled={!quadroDosCircuitos || planoDeCircuitos.circuitos.length === 0}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <CircuitBoard className="h-4 w-4" />
-                Criar {planoDeCircuitos.circuitos.length} circuito(s)
-              </button>
+              {/* F5 do relançar (24/10/2026): "Refazer circuitos automáticos" ao lado do "Criar" quando há circuitos do
+                  motor neste pavimento; sem nada a criar, o próprio botão principal vira "Relançar com as escolhas atuais"
+                  (regra A) — nunca desligado sem dizer por quê (motivo no invólucro, no `title` e, para o leitor de tela,
+                  num texto ligado por `aria-describedby`). */}
+              {botaoDeCircuitos.modo === 'CRIAR' && botaoDeCircuitos.podeRefazer && (
+                <button
+                  type="button"
+                  onClick={() => void refazerCircuitos()}
+                  title="Apaga os circuitos que o motor criou neste pavimento (os criados à mão ou alterados ficam) e cria de novo com as escolhas atuais, junto com os pontos soltos — pede confirmação; Ctrl+Z desfaz."
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  Refazer circuitos automáticos
+                </button>
+              )}
+              {botaoDeCircuitos.motivo && (
+                <span id="motivo-criar-circuitos" className="sr-only">
+                  {botaoDeCircuitos.motivo}
+                </span>
+              )}
+              <span className="inline-flex shrink-0" title={botaoDeCircuitos.motivo ?? undefined}>
+                <button
+                  type="button"
+                  onClick={() => (botaoDeCircuitos.modo === 'RELANCAR' ? void refazerCircuitos() : criarCircuitos())}
+                  disabled={!!botaoDeCircuitos.motivo}
+                  aria-describedby={botaoDeCircuitos.motivo ? 'motivo-criar-circuitos' : undefined}
+                  aria-label={
+                    botaoDeCircuitos.modo === 'RELANCAR'
+                      ? `Relançar com as escolhas atuais — circuitos do motor de ${editor.model.levels.find((l) => l.id === levelId)?.name ?? 'este pavimento'}`
+                      : undefined
+                  }
+                  title={
+                    botaoDeCircuitos.motivo ??
+                    (botaoDeCircuitos.modo === 'RELANCAR'
+                      ? 'Apaga os circuitos que o motor criou neste pavimento e cria de novo com as escolhas atuais — pede confirmação; Ctrl+Z desfaz'
+                      : undefined)
+                  }
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <CircuitBoard className="h-4 w-4" />
+                  {botaoDeCircuitos.rotulo}
+                </button>
+              </span>
             </>
           )}
           {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && tarefaAberta !== 'circuitos' && tarefaAberta !== 'pilares' && tarefaAberta !== 'eixos' && tarefaAberta !== 'vigas' && tarefaAberta !== 'lajes' && tarefaAberta !== 'fundacoes' && rotuloDaSelecao && (

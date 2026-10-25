@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Loader2, Check } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { payrollService, PayrollRun, PayrollRubric, PayrollEvent, PayrollItem, PayrollAuditLog, PayrollResultWithEmployee } from '../services/payrollService';
+import { payrollService, PayrollRun, PayrollRubric, PayrollEvent, PayrollItem, PayrollAuditLog, PayrollResultWithEmployee, EmployeeRecurringRubric } from '../services/payrollService';
 import { payrollEngine } from '../services/payrollEngine';
 import {
     suggestEventUnit,
@@ -11,6 +11,7 @@ import {
 import { formatMoney } from './ui/Format';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import { salarioBaseDoResultado } from '../lib/payrollSalarioCompetencia';
+import { rubricasEmAbertoSemLancamento } from '../lib/payrollRubricaRecorrente';
 
 interface PayrollEventModalProps {
     run: PayrollRun;
@@ -35,6 +36,9 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
     const [showEventHistory, setShowEventHistory] = useState(false);
     const [editingEvent, setEditingEvent]       = useState<string | null>(null);
     const [localExecuting, setLocalExecuting]   = useState(false);
+    // Recorrentes do colaborador (Colaborador › Folha de Pagamento): as manuais sem
+    // valor ficam "em aberto" e o valor do mês é lançado aqui.
+    const [recorrentes, setRecorrentes]         = useState<EmployeeRecurringRubric[]>([]);
 
     // Form state
     const [selectedRubricCode, setSelectedRubricCode] = useState('');
@@ -49,6 +53,9 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
     useEffect(() => {
         loadRunItems();
         resetForm();
+        payrollService.getEmployeeRecurringRubrics(employeeId)
+            .then(setRecorrentes)
+            .catch(err => console.error('[PayrollEventModal] recorrentes:', err));
     }, [employeeId]);
 
     // Auto-sugere unidade e descrição ao selecionar rubrica
@@ -176,6 +183,12 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
     };
 
     const myEvents = runEvents.filter(e => e.employee_id === employeeId);
+    const emAberto = rubricasEmAbertoSemLancamento(recorrentes, rubrics, myEvents);
+    const preencher = (code: string) => {
+        resetForm();
+        setSelectedRubricCode(code);
+        requestAnimationFrame(() => document.getElementById('payroll-event-valor')?.focus());
+    };
     const autoItems = runItems.filter(i => {
         const isManualByOrigin = ['manual', 'recorrente'].includes(i.origin || '');
         const isManualByCode = myEvents.some(e => e.rubric_code === i.code || e.code === i.code);
@@ -263,6 +276,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor (R$)</label>
                             <div className="flex gap-2">
                                 <MoneyCentsInput
+                                    id="payroll-event-valor"
                                     placeholder="0,00"
                                     value={eventAmount}
                                     onChange={v => setEventAmount(v === '' ? 0 : Number(v))}
@@ -338,6 +352,31 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                 </div>
                             ))}
                         </div>
+
+                        {/* Recorrentes em aberto: o valor do mês ainda não foi lançado */}
+                        {emAberto.length > 0 && run.status !== 'FECHADO' && (
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2">Recorrentes em aberto (falta o valor do mês)</h4>
+                                {emAberto.map(r => (
+                                    <div key={r.code} className="flex items-center justify-between p-3 bg-amber-50/60 rounded-2xl border border-amber-100">
+                                        <div>
+                                            <p className="text-xs font-black text-slate-700 uppercase">{r.code} - {r.name}</p>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                                                {r.type === 'provento' ? 'Provento' : r.type === 'desconto' ? 'Desconto' : 'Informativa'} • recorrente do colaborador, sem valor fixo
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => preencher(r.code)}
+                                            disabled={isExecuting}
+                                            title={isExecuting ? 'Aguarde o cálculo em andamento' : `Escolher ${r.name} no lançamento acima e informar o valor deste mês`}
+                                            className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest bg-white border border-amber-200 text-amber-700 hover:border-amber-400 disabled:opacity-50"
+                                        >
+                                            Preencher valor
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
 
                         {/* Lançamentos Manuais */}
                         <div className="space-y-2">

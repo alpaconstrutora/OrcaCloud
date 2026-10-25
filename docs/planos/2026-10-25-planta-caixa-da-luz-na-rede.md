@@ -62,7 +62,9 @@ ficaria sem caminho. Conexões e conferência de pontas abertas não cobrem a el
 
 - [x] item 1 + testes — `blueprintCaixaDaLuzNaRede.test.ts` (4/4; o da fiação falha com a regra desligada)
 - [x] item 2 + testes — `blueprintEletrodutos.test.ts` 62/62
-- [ ] item 3 + print
+- [x] item 3 + print — harness local: a Garden como está (viewer de `origin/main`) × relançada pelo motor novo com as
+  escolhas gravadas no registro (viewer novo). Na luz (4150, 8900): antes 9 trechos (8 na rede + a descida 2553→2755) e
+  os eletrodutos se encontrando acima da caixa; depois 8 trechos a 2755 entrando na caixa, sem descida
 - [x] item 4: bundle regerado (só acrescenta `ligacaoDaPeca` e a chamada na fiação)
 - [ ] item 4: deploy da planta-api (aguarda autorização)
 - [ ] tsc + suíte

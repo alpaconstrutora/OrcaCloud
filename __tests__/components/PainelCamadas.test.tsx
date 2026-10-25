@@ -20,7 +20,8 @@ import {
 
 const CONTAGEM: ContagemDasCamadas = {
   ...(Object.fromEntries(CAMADAS.map((c) => [c, 0])) as Record<(typeof CAMADAS)[number], number>),
-  ARQUITETURA: 40,
+  CONSTRUCAO: 34,
+  MOBILIARIO: 6,
   ESTRUTURA: 12,
   ESGOTO: 7,
   AGUA_FRIA: 5,
@@ -88,9 +89,20 @@ describe('PainelCamadas', () => {
   it('meio-tom liga e desliga', async () => {
     render(<Controlado />);
     await userEvent.click(within(linha('ARQUITETURA')).getByRole('button', { name: /Arquitetura em meio-tom/ }));
-    expect(ultimo.ARQUITETURA).toBe('ATENUADA');
+    expect([ultimo.CONSTRUCAO, ultimo.MOBILIARIO]).toEqual(['ATENUADA', 'ATENUADA']);
     await userEvent.click(within(linha('ARQUITETURA')).getByRole('button', { name: /Tirar Arquitetura do meio-tom/ }));
-    expect(ultimo.ARQUITETURA).toBe('VISIVEL');
+    expect([ultimo.CONSTRUCAO, ultimo.MOBILIARIO]).toEqual(['VISIVEL', 'VISIVEL']);
+  });
+
+  it('25/10/2026: a Arquitetura tem Construção e Mobiliário; ocultar o Mobiliário deixa as paredes', async () => {
+    render(<Controlado />);
+    expect(linha('MOBILIARIO')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Expandir Arquitetura' }));
+    expect(within(linha('CONSTRUCAO')).getByText('34')).toBeTruthy();
+    expect(within(linha('MOBILIARIO')).getByText('6')).toBeTruthy();
+    await userEvent.click(within(linha('MOBILIARIO')).getByRole('button', { name: 'Ocultar Mobiliário' }));
+    expect([ultimo.CONSTRUCAO, ultimo.MOBILIARIO]).toEqual(['VISIVEL', 'OCULTA']);
+    expect(linha('ARQUITETURA').dataset.estado).toBe('MISTO');
   });
 
   it('expandir a Hidráulica mostra as subcamadas; ocultar uma deixa o grupo parcial', async () => {
@@ -111,7 +123,7 @@ describe('PainelCamadas', () => {
     render(<Controlado inicial={inicial} />);
     await userEvent.click(within(linha('INCENDIO')).getByRole('button', { name: /Isolar Incêndio/ }));
     expect(CAMADAS.filter((c) => ultimo[c] === 'VISIVEL')).toEqual(['INCENDIO']);
-    expect(ultimo.ARQUITETURA).toBe('ATENUADA');
+    expect(linha('ARQUITETURA').dataset.estado).toBe('ATENUADA');
     const reexibir = within(linha('INCENDIO')).getByRole('button', { name: /Reexibir/ });
     await userEvent.click(reexibir);
     expect(ultimo).toEqual(inicial);
@@ -121,7 +133,7 @@ describe('PainelCamadas', () => {
     render(<Controlado />);
     await userEvent.click(screen.getByRole('checkbox', { name: /arquitetura em meio-tom/ }));
     await userEvent.click(within(linha('MECANICA')).getByRole('button', { name: /Isolar Mecânica/ }));
-    expect(ultimo.ARQUITETURA).toBe('OCULTA');
+    expect([ultimo.CONSTRUCAO, ultimo.MOBILIARIO]).toEqual(['OCULTA', 'OCULTA']);
   });
 
   it('mostrar/ocultar todas; o botão sem efeito fica desligado dizendo por quê', async () => {

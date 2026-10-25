@@ -33,7 +33,9 @@ Esclarecimento do item 2 (mesma sessão, com print de uma planta elétrica feita
 
 - **O que muda:** `pontasPresasAsPecas` passa a devolver, além das pontas presas, as pontas que andam porque o NÓ do
   outro lado do eletroduto preso só serve àquela peça: só eletroduto (`ELETRICA`), no mesmo pavimento, nó sem peça
-  elétrica nem quadro, e com exatamente UM outro eletroduto chegando nele. A regra é a do `manterJuncoes` das paredes:
+  elétrica nem quadro, e com exatamente UM outro eletroduto chegando nele (o trecho VERTICAL no próprio nó — na Garden,
+  a descida do forro de 2755 a 2438 — é parte do nó e anda inteiro com ele; a primeira versão o contava como derivação e
+  a prova na Garden pegou). A regra é a do `manterJuncoes` das paredes:
   o toco muda de comprimento, nunca de direção — a componente do deslocamento PARALELA ao toco só o estica; a
   PERPENDICULAR leva o nó (e a ponta do eletroduto da luz que chega nele). Nó compartilhado (derivação) não anda. A
   função passa a devolver o deslocamento de cada ponta (não mais `true`), e o canvas (prévia do arraste) usa a MESMA
@@ -54,20 +56,26 @@ Esclarecimento do item 2 (mesma sessão, com print de uma planta elétrica feita
 
 ### 3. Subcamada Mobiliário — `utils/blueprintCamadasPorDisciplina.ts`, `components/blueprint/BlueprintEditor.tsx`
 
-- **O que muda:** a Arquitetura vira grupo com duas subcamadas, **Construção** (o que era a camada) e **Mobiliário**
+- **O que muda:** a Arquitetura vira grupo com duas subcamadas, **Construção** (o que era a camada; id `CONSTRUCAO` —
+  com o id `ARQUITETURA` igual ao do grupo, o olho da subcamada mexeria no grupo inteiro) e **Mobiliário**
   (componentes de família `MOBILIARIO`, `ARMARIO` e `EQUIPAMENTO` — móveis, armários e eletrodomésticos). Louças e
   bancadas ficam na Construção: são fixas e ligadas aos pontos de água. O mobiliário de estudo do ambiente (sobreposição
-  do "Mobiliar") segue a subcamada Mobiliário; cotas, rótulos e preenchimento seguem a Construção. Estado antigo
-  guardado sem a chave nova abre com o Mobiliário visível (`sanearEstados`).
+  do "Mobiliar") segue a subcamada Mobiliário; cotas, rótulos e preenchimento seguem a Construção. Estado gravado antes
+  (navegador, template de vista) com a chave `ARQUITETURA` vale para as duas subcamadas (`sanearEstados`). Isolar com
+  "arquitetura em meio-tom" atenua o grupo inteiro, como antes. O template de fábrica "Instalações" passa a ocultar o
+  Mobiliário (construção em meio-tom).
 - **Pronto quando:** testes: cama/armário/geladeira → `MOBILIARIO`; vaso/bancada → `ARQUITETURA`; climatização →
-  `MECANICA`; isolar uma rede com base atenuada deixa a Construção em meio-tom e o Mobiliário oculto; o painel mostra
+  `MECANICA`; isolar uma rede com base atenuada deixa as duas subcamadas em meio-tom; o painel mostra
   "Arquitetura" com a seta e as duas linhas. `check-ui-standard.sh` nos `.tsx` tocados.
 
 ## Estado
 
-- [ ] item 1 + testes
-- [ ] item 2 + testes
-- [ ] item 3 + testes
+- [x] item 1 + testes — `__tests__/blueprintNoDeChegadaAcompanha.test.ts` (7); prova no rascunho da Garden: interruptor
+  `8594,12875` movido 550 mm → nó, descida do forro e toco de 50 mm em `9144`, luz até o nó novo
+- [x] item 2 + testes — `blueprintTomadaSimbolo.test.ts`; retratos do desenho da prancha e do canvas atualizados (mesmos
+  textos, geometria nova da tomada)
+- [x] item 3 + testes — `blueprintCamadasPorDisciplina.test.ts`, `PainelCamadas.test.tsx`, `PainelConflitosCamadas.test.tsx`
+- [ ] prova no navegador (os três itens)
 - [ ] tsc, suíte, bundle da planta-api regerado (o kernel mudou de comportamento)
 - [ ] PR + CI
 - [ ] publicação (+ deploy da `planta-api` só com autorização do usuário)

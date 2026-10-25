@@ -3396,7 +3396,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   /** Overlays que não são peça (curvas, armadura, marcas da rede) desligam com o grupo oculto. */
   const terrenoAVista = estadoDoOverlay('TERRENO', camadas) !== 'OCULTA';
-  const arquiteturaAVista = estadoDoOverlay('ARQUITETURA', camadas) !== 'OCULTA';
+  // Cotas, rótulos e preenchimento dos ambientes são da CONSTRUÇÃO; o mobiliário de
+  // estudo (Mobiliar) segue a subcamada Mobiliário (25/10/2026).
+  const arquiteturaAVista = camadas.CONSTRUCAO !== 'OCULTA';
+  const mobiliarioAVista = camadas.MOBILIARIO !== 'OCULTA';
   const estruturaAVista = estadoDoOverlay('ESTRUTURA', camadas) !== 'OCULTA';
   const eletricaAVista = estadoDoOverlay('ELETRICA', camadas) !== 'OCULTA';
   const mobiliarioDoNivel = useMemo(() => (levelId ? mobiliarNivel(editor.model, levelId, hipotesesDeMobiliario) : []), [editor.model, levelId, hipotesesDeMobiliario]);
@@ -16303,7 +16306,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   ambientesComForro={plantaDeForro?.comForro}
                   etiquetasDeAbertura={etiquetasDeAbertura}
                   paredesGeminadas={quadroDeUnidadesDoModelo.paredesGeminadas}
-                  mobiliario={arquiteturaAVista ? mobiliarioParaOCanvas : undefined}
+                  mobiliario={mobiliarioAVista ? mobiliarioParaOCanvas : undefined}
                   mostrarGrade={ajusteDaVista ? false : mostrarGrade}
                   mostrarPreenchimentoAmbientes={ajusteDaVista ? vistaDePlanta === 'departamentos' : (mostrarPreenchimento && arquiteturaAVista)}
                   mostrarPreenchimentoTerreno={(mostrarPreenchimentoTerreno && terrenoAVista)}

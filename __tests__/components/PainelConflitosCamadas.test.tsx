@@ -69,7 +69,7 @@ describe('PainelConflitos · recorte pelas camadas', () => {
   });
 
   it('isolar a hidráulica com a arquitetura em meio-tom: fica só o tubo × porta', () => {
-    const estados: EstadosDasCamadas = { ...ESTADOS_PADRAO, ESTRUTURA: 'OCULTA', ELETRICA_FORCA: 'OCULTA', ELETRICA_ILUMINACAO: 'OCULTA', ARQUITETURA: 'ATENUADA' };
+    const estados: EstadosDasCamadas = { ...ESTADOS_PADRAO, ESTRUTURA: 'OCULTA', ELETRICA_FORCA: 'OCULTA', ELETRICA_ILUMINACAO: 'OCULTA', CONSTRUCAO: 'ATENUADA' };
     render(<Recortado m={cena()} estados={estados} />);
     const linhas = screen.getAllByTestId('conflito-aberto');
     expect(linhas).toHaveLength(1);

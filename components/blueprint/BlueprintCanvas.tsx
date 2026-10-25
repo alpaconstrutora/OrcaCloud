@@ -63,7 +63,7 @@ import {
   type Escada,
   pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
-  pontasPresasAsPecas,
+  deslocamentoDasPontasPresas,
   discretizarArco,
   anguloEmTorno,
   acabamentosDoAmbiente,
@@ -162,6 +162,7 @@ import {
   embutidoNoPiso,
   encaixarEmPecaEletrica,
   apoioDaTomada,
+  simboloDaTomada,
   trianguloDaTomada,
   segmentosDoEletroduto,
   sentidoDoEletroduto,
@@ -2270,7 +2271,8 @@ export default function BlueprintCanvas({
     // comando usa. Sem isto a prévia mostraria o eletroduto parado enquanto a
     // tomada anda, e ao soltar a ponta pularia para a peça: o gesto pareceria
     // errado durante e certo depois, que é o pior dos dois mundos.
-    const presas = pontasPresasAsPecas(model, idsDeTerminaisSelecionados, idsDeQuadrosSelecionados);
+    // 25/10/2026: e o nó de chegada que só serve à peça anda com ela.
+    const presas = deslocamentoDasPontasPresas(model, idsDeTerminaisSelecionados, idsDeQuadrosSelecionados, d);
     if (movidos.size === 0 && presas.size === 0) return trechosReais;
     return trechosReais.map((t) => {
       if (movidos.has(t.id)) {
@@ -2280,8 +2282,8 @@ export default function BlueprintCanvas({
       if (!lados) return t;
       return {
         ...t,
-        a: lados.a ? { x: t.a.x + d.x, y: t.a.y + d.y } : t.a,
-        b: lados.b ? { x: t.b.x + d.x, y: t.b.y + d.y } : t.b,
+        a: lados.a ? { x: t.a.x + lados.a.x, y: t.a.y + lados.a.y } : t.a,
+        b: lados.b ? { x: t.b.x + lados.b.x, y: t.b.y + lados.b.y } : t.b,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3487,8 +3489,8 @@ export default function BlueprintCanvas({
 
   /**
    * Onde o SÍMBOLO da tomada está, para o clique: o triângulo é desenhado
-   * adiante do ponto (base na face da parede, meio tamanho para dentro do
-   * ambiente — ver o laço de desenho), e clicar nele tem de pegar a tomada.
+   * adiante do ponto (a barra encosta na face e o triângulo vem depois dela,
+   * no ambiente — ver o laço de desenho), e clicar nele tem de pegar a tomada.
    * Cada tomada entra duas vezes no acerto: no ponto e no centro do símbolo.
    */
   const terminaisParaAcerto = useMemo(() => {
@@ -3497,9 +3499,7 @@ export default function BlueprintCanvas({
       if (t.disciplina !== 'ELETRICA' || (t.tipoEletrico !== 'TUG' && t.tipoEletrico !== 'TUE')) continue;
       const apoio = apoioDaTomada(t, paredesParaApoio);
       const tamanhoMm = Math.max(medidasDoTerminal(t).larguraMm, 10 / vista.escala) * FATOR_DO_SIMBOLO_DE_TOMADA;
-      const rad = (apoio.graus * Math.PI) / 180;
-      const d = apoio.recuoMm + tamanhoMm / 2;
-      extras.push({ ...t, at: { x: t.at.x + Math.cos(rad) * d, y: t.at.y + Math.sin(rad) * d }, larguraMm: tamanhoMm });
+      extras.push({ ...t, at: simboloDaTomada(t.at, apoio, tamanhoMm).centro, larguraMm: tamanhoMm });
     }
     return [...terminaisDoNivel, ...extras];
   }, [terminaisDoNivel, paredesParaApoio, vista.escala]);
@@ -7064,21 +7064,17 @@ export default function BlueprintCanvas({
       // espessura da parede ao lado — o ponto parecia um respingo de tinta.
       const md = medidasDoTerminal(t);
       const ehTomada = t.disciplina === 'ELETRICA' && (t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE');
-      // ── ONDE O SÍMBOLO DA TOMADA FICA (15/09/2026) ────────────────────────
+      // ── ONDE O SÍMBOLO DA TOMADA FICA (15/09 e 25/10/2026) ─────────────────
       //
-      // A BASE do triângulo encosta na FACE interna da parede e o símbolo
-      // inteiro fica no ambiente; a haste entra na parede até o eixo. O ponto
-      // (`at`) continua onde está — na face, que é onde a peça é instalada —,
-      // só o desenho anda: `recuoMm` leva a base do ponto à face (zero quando
-      // ele já está nela) e o centro do símbolo fica meio tamanho adiante.
+      // A PONTA DA BARRA encosta na FACE interna da parede; a barra sai da base
+      // do triângulo e o símbolo inteiro fica no ambiente (*"o que deve estar
+      // gravada na face da parede é a barra que sai da seta"*). O ponto (`at`)
+      // continua onde está — na face, que é onde a peça é instalada —, só o
+      // desenho anda (`simboloDaTomada`).
       const apoio = ehTomada ? apoioDaTomada(t, paredesParaApoio) : null;
       const tamanhoMm = ehTomada ? Math.max(md.larguraMm, 10 / vista.escala) * FATOR_DO_SIMBOLO_DE_TOMADA : 0;
-      const rad = apoio ? (apoio.graus * Math.PI) / 180 : 0;
-      const u = { x: Math.cos(rad), y: Math.sin(rad) };
-      const baseDaTomada = apoio ? { x: t.at.x + u.x * apoio.recuoMm, y: t.at.y + u.y * apoio.recuoMm } : t.at;
-      const centroDoSimbolo = apoio
-        ? { x: baseDaTomada.x + (u.x * tamanhoMm) / 2, y: baseDaTomada.y + (u.y * tamanhoMm) / 2 }
-        : t.at;
+      const simbolo = apoio ? simboloDaTomada(t.at, apoio, tamanhoMm) : null;
+      const centroDoSimbolo = simbolo ? simbolo.centro : t.at;
       // `c` é o CENTRO DO SÍMBOLO: na tomada, adiante do ponto; nos demais, o ponto.
       const c = paraTela(centroDoSimbolo);
       // A peça é obstáculo de todo texto que não é dela (ver `anotar`).
@@ -7137,15 +7133,11 @@ export default function BlueprintCanvas({
         ctx.fillStyle = cor;
         ctx.lineWidth = selecionado ? 2 : 1.5;
 
-        // A HASTE, da base para trás — entra na parede até o EIXO (é a haste
-        // da prancha de referência); sem parede por perto, meio símbolo.
-        const alturaPx = Math.hypot(apice.x - meioDaBase.x, apice.y - meioDaBase.y);
-        const haste = apoio.aoEixoMm > 0 ? Math.max(emTela(apoio.aoEixoMm), 3) : alturaPx * 0.5;
-        const hx = meioDaBase.x - ((apice.x - meioDaBase.x) / alturaPx) * haste;
-        const hy = meioDaBase.y - ((apice.y - meioDaBase.y) / alturaPx) * haste;
+        // A BARRA, da base para trás até a FACE (a ponta é o que encosta na parede).
+        const ponta = paraTela(simbolo!.pontaDaHaste);
         ctx.beginPath();
         ctx.moveTo(meioDaBase.x, meioDaBase.y);
-        ctx.lineTo(hx, hy);
+        ctx.lineTo(ponta.x, ponta.y);
         ctx.stroke();
 
         // O triângulo, branco por dentro para não sumir sobre a parede.
@@ -7182,7 +7174,7 @@ export default function BlueprintCanvas({
         // O símbolo inteiro — triângulo, haste e o anel da sugerida — é a âncora dos textos dela.
         const anelDaSugerida = t.sugerida ? emTela(tamanhoMm) * 0.72 + 6 : 0;
         const caixaDaTomada = caixaDosPontos(
-          [b1, b2, apice, { x: hx, y: hy }, ...(t.sugerida ? [{ x: c.x - anelDaSugerida, y: c.y - anelDaSugerida }, { x: c.x + anelDaSugerida, y: c.y + anelDaSugerida }] : [])],
+          [b1, b2, apice, ponta, ...(t.sugerida ? [{ x: c.x - anelDaSugerida, y: c.y - anelDaSugerida }, { x: c.x + anelDaSugerida, y: c.y + anelDaSugerida }] : [])],
           1,
         );
         obstaculosDasAnotacoes.push({ id: t.id, caixa: caixaDaTomada });

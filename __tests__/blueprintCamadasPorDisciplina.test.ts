@@ -32,7 +32,14 @@ function modelo(): BlueprintModel {
   const um = (k: string, extra: Record<string, unknown> = {}) => m[k].push({ id: k, levelId: 'L1', ...extra });
   for (const k of ['walls', 'spaces', 'labels', 'roofs', 'stairs', 'guardaCorpos', 'muros', 'rodapes', 'vagas', 'structures', 'boundaries', 'quadras', 'lotes', 'vias', 'areasPublicas', 'blocos', 'subRegioes', 'areasDeOperacao']) um(k);
   m.openings.push({ id: 'openings', wallId: 'walls' });
-  m.componentes.push({ id: 'cama', levelId: 'L1', familia: 'MOBILIARIO' }, { id: 'condensadora', levelId: 'L1', familia: 'CLIMATIZACAO' });
+  m.componentes.push(
+    { id: 'cama', levelId: 'L1', familia: 'MOBILIARIO' },
+    { id: 'armario', levelId: 'L1', familia: 'ARMARIO' },
+    { id: 'geladeira', levelId: 'L1', familia: 'EQUIPAMENTO' },
+    { id: 'vaso', levelId: 'L1', familia: 'LOUCA' },
+    { id: 'bancada', levelId: 'L1', familia: 'BANCADA' },
+    { id: 'condensadora', levelId: 'L1', familia: 'CLIMATIZACAO' },
+  );
   m.nucleos.push(
     { id: 'elevador', levelId: 'L1', tipo: 'ELEVADOR' },
     { id: 'shaftGeral', levelId: 'L1', tipo: 'SHAFT', disciplina: null },
@@ -71,19 +78,23 @@ function modelo(): BlueprintModel {
 describe('classificação peça → camada', () => {
   const c = classificarPecas(modelo());
   const casos: [string, Pertenca][] = [
-    ['walls', 'ARQUITETURA'],
-    ['openings', 'ARQUITETURA'],
-    ['spaces', 'ARQUITETURA'],
-    ['labels', 'ARQUITETURA'],
-    ['roofs', 'ARQUITETURA'],
-    ['stairs', 'ARQUITETURA'],
-    ['guardaCorpos', 'ARQUITETURA'],
-    ['muros', 'ARQUITETURA'],
-    ['rodapes', 'ARQUITETURA'],
-    ['vagas', 'ARQUITETURA'],
-    ['cama', 'ARQUITETURA'],
-    ['elevador', 'ARQUITETURA'],
-    ['shaftGeral', 'ARQUITETURA'],
+    ['walls', 'CONSTRUCAO'],
+    ['openings', 'CONSTRUCAO'],
+    ['spaces', 'CONSTRUCAO'],
+    ['labels', 'CONSTRUCAO'],
+    ['roofs', 'CONSTRUCAO'],
+    ['stairs', 'CONSTRUCAO'],
+    ['guardaCorpos', 'CONSTRUCAO'],
+    ['muros', 'CONSTRUCAO'],
+    ['rodapes', 'CONSTRUCAO'],
+    ['vagas', 'CONSTRUCAO'],
+    ['cama', 'MOBILIARIO'],
+    ['armario', 'MOBILIARIO'],
+    ['geladeira', 'MOBILIARIO'],
+    ['vaso', 'CONSTRUCAO'],
+    ['bancada', 'CONSTRUCAO'],
+    ['elevador', 'CONSTRUCAO'],
+    ['shaftGeral', 'CONSTRUCAO'],
     ['structures', 'ESTRUTURA'],
     ['boundaries', 'TERRENO'],
     ['quadras', 'TERRENO'],
@@ -174,7 +185,7 @@ describe('olho e meio-tom', () => {
     const misto = { ...ESTADOS_PADRAO, ESGOTO: 'OCULTA' as const };
     const oculto = alternarVisibilidade(misto, 'HIDRAULICA');
     expect(estadoDoGrupo('HIDRAULICA', oculto)).toBe('OCULTA');
-    expect(oculto.ARQUITETURA).toBe('VISIVEL');
+    expect(oculto.CONSTRUCAO).toBe('VISIVEL');
     expect(estadoDoGrupo('HIDRAULICA', alternarVisibilidade(oculto, 'HIDRAULICA'))).toBe('VISIVEL');
   });
 
@@ -197,12 +208,30 @@ describe('isolar', () => {
   it('só o alvo; com base atenuada a arquitetura fica em meio-tom', () => {
     const e = isolar('ESGOTO', { baseAtenuada: true });
     expect(CAMADAS.filter((c) => e[c] === 'VISIVEL')).toEqual(['ESGOTO']);
-    expect(e.ARQUITETURA).toBe('ATENUADA');
-    expect(isolar('ESGOTO', { baseAtenuada: false }).ARQUITETURA).toBe('OCULTA');
+    // A base é o grupo inteiro, como antes do Mobiliário existir.
+    expect([e.CONSTRUCAO, e.MOBILIARIO]).toEqual(['ATENUADA', 'ATENUADA']);
+    expect(isolar('ESGOTO', { baseAtenuada: false }).CONSTRUCAO).toBe('OCULTA');
   });
 
-  it('isolar a própria arquitetura a deixa visível', () => {
-    expect(isolar('ARQUITETURA', { baseAtenuada: true }).ARQUITETURA).toBe('VISIVEL');
+  it('isolar a própria arquitetura a deixa visível — as duas subcamadas', () => {
+    const e = isolar('ARQUITETURA', { baseAtenuada: true });
+    expect([e.CONSTRUCAO, e.MOBILIARIO]).toEqual(['VISIVEL', 'VISIVEL']);
+  });
+
+  it('isolar o Mobiliário: ele visível e a construção em meio-tom (base); o alvo é reconhecido', () => {
+    const op = { baseAtenuada: true };
+    const e = isolar('MOBILIARIO', op);
+    expect(CAMADAS.filter((c) => e[c] === 'VISIVEL')).toEqual(['MOBILIARIO']);
+    expect(e.CONSTRUCAO).toBe('ATENUADA');
+    expect(alvoIsolado(e, op)).toBe('MOBILIARIO');
+    expect(alvoIsolado(isolar('CONSTRUCAO', op), op)).toBe('CONSTRUCAO');
+  });
+
+  it('o olho da subcamada só mexe nela; o do grupo, nas duas', () => {
+    const soMoveis = alternarVisibilidade(ESTADOS_PADRAO, 'MOBILIARIO');
+    expect([soMoveis.CONSTRUCAO, soMoveis.MOBILIARIO]).toEqual(['VISIVEL', 'OCULTA']);
+    const grupo = alternarVisibilidade(ESTADOS_PADRAO, 'ARQUITETURA');
+    expect([grupo.CONSTRUCAO, grupo.MOBILIARIO]).toEqual(['OCULTA', 'OCULTA']);
   });
 
   it('isolar um grupo mostra todas as subcamadas dele', () => {
@@ -228,7 +257,9 @@ describe('contagem', () => {
     expect(l1.ESGOTO).toBe(1); // ralo (o tubo é do L2)
     expect(l1.ELETRICA_FORCA).toBe(0); // tug e soTug no L2
     expect(l1.ELETRICA_COMUM).toBe(5); // cp + tronco + qdc + 2 circuitos (sem pavimento)
-    expect(l1.ARQUITETURA).toBe(13); // + o muro (0.104.0)
+    expect(l1.CONSTRUCAO).toBe(14); // + o muro (0.104.0); louça e bancada (a cama foi para o mobiliário)
+    expect(l1.MOBILIARIO).toBe(3);
+    expect(contagemDoGrupo('ARQUITETURA', l1)).toBe(17);
     const tudo = contagemPorCamada(m, c, null);
     expect(tudo.ESGOTO).toBe(2);
     expect(contagemDoGrupo('ELETRICA', tudo)).toBe(9);
@@ -244,6 +275,14 @@ describe('persistência', () => {
     expect(e.ESGOTO).toBe('OCULTA');
     expect(e.ESTRUTURA).toBe('VISIVEL');
     expect('GAS' in e).toBe(false);
+  });
+
+  it('⚠️ estado gravado antes do Mobiliário (chave ARQUITETURA) vale para as duas subcamadas', () => {
+    const e = sanearEstados({ ARQUITETURA: 'OCULTA', ESGOTO: 'ATENUADA' });
+    expect([e.CONSTRUCAO, e.MOBILIARIO, e.ESGOTO]).toEqual(['OCULTA', 'OCULTA', 'ATENUADA']);
+    expect('ARQUITETURA' in e).toBe(false);
+    // Sem a chave antiga, o Mobiliário que falta abre visível.
+    expect(sanearEstados({ CONSTRUCAO: 'ATENUADA' }).MOBILIARIO).toBe('VISIVEL');
   });
 
   it('as três chaves antigas do Exibir viram o estado inicial', () => {

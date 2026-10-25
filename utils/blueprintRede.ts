@@ -1042,27 +1042,29 @@ export function orientacaoDaTomada(
 }
 
 /**
- * Onde o símbolo da tomada se APOIA (15/09/2026).
+ * Onde o símbolo da tomada se APOIA.
  *
- * Pedido, com prints: *"o símbolo da tomada deve ser alinhado com a face de
- * dentro da parede"*. O triângulo era centrado no ponto — e o ponto fica na
- * face, então metade do símbolo caía dentro da parede. Na prancha de
- * referência a BASE do triângulo encosta na face interna, o símbolo inteiro
- * fica no ambiente e a haste entra na parede até o eixo.
+ * 15/09/2026, pedido com prints: *"o símbolo da tomada deve ser alinhado com a face de
+ * dentro da parede"* — o triângulo, que era centrado no ponto, passou a ter a BASE na face
+ * e uma haste entrando na parede até o eixo.
  *
- * Devolve, além da direção (`graus`, a mesma de `orientacaoDaTomada`):
- *   - `recuoMm`: quanto a base tem de andar do ponto até a face — zero quando
- *     o ponto já está na face ou além dela; meia espessura quando o ponto
- *     está no eixo (inserção sem encaixe);
- *   - `aoEixoMm`: da base até o eixo da parede — o comprimento da haste;
- *     zero sem parede por perto.
- * Com giro DECLARADO a direção é a declarada, mas o apoio continua sendo o da
- * parede mais próxima — girar o símbolo não o tira da parede.
+ * 25/10/2026, com o print de uma planta elétrica feita à mão: *"o que deve estar gravada na
+ * face da parede é a barra que sai da seta"*. A haste sai da BASE do triângulo para TRÁS, e
+ * a PONTA dela é que encosta na face; o triângulo fica no ambiente, adiante da barra. Nada
+ * do símbolo entra na parede. O comprimento da barra é `HASTE_DA_TOMADA` × o tamanho do
+ * símbolo — a proporção que a prancha já usava — e `simboloDaTomada` faz a conta para o
+ * canvas, o acerto do clique e a prancha.
+ *
+ * Devolve, além da direção (`graus`, a mesma de `orientacaoDaTomada`), `recuoMm`: quanto a
+ * ponta da barra anda do ponto até a face — zero quando o ponto já está na face ou além
+ * dela; meia espessura quando o ponto está no eixo (inserção sem encaixe). Com giro
+ * DECLARADO a direção é a declarada, mas o apoio continua sendo o da parede mais próxima —
+ * girar o símbolo não o tira da parede.
  */
 export function apoioDaTomada(
   t: { at: Point; rotacaoGraus?: number | null },
   paredes: readonly { a: Point; b: Point; thicknessMm: number }[],
-): { graus: number; recuoMm: number; aoEixoMm: number } {
+): { graus: number; recuoMm: number } {
   let melhor: { normal: number; d: number; meia: number } | null = null;
   for (const w of paredes) {
     const dx = w.b.x - w.a.x;
@@ -1084,9 +1086,33 @@ export function apoioDaTomada(
   }
   const grausDaParede = melhor ? (((melhor.normal * 180) / Math.PI) % 360 + 360) % 360 : 0;
   const graus = t.rotacaoGraus != null ? t.rotacaoGraus : grausDaParede;
-  if (!melhor) return { graus, recuoMm: 0, aoEixoMm: 0 };
-  const recuoMm = Math.max(0, melhor.meia - melhor.d);
-  return { graus, recuoMm, aoEixoMm: Math.max(melhor.d, melhor.meia) };
+  if (!melhor) return { graus, recuoMm: 0 };
+  return { graus, recuoMm: Math.max(0, melhor.meia - melhor.d) };
+}
+
+/** A barra da tomada, da face à base do triângulo, em fração do tamanho do símbolo. */
+export const HASTE_DA_TOMADA = 0.5;
+
+/**
+ * As peças do símbolo da tomada no MODELO: a ponta da barra (na face), o meio da base
+ * do triângulo e o centro do triângulo — para `trianguloDaTomada(centro, graus, tamanhoMm)`.
+ * `tamanhoMm` é o tamanho do símbolo na escala em que se desenha (no canvas ele não é
+ * a peça: cresce com o zoom).
+ */
+export function simboloDaTomada(
+  at: Point,
+  apoio: { graus: number; recuoMm: number },
+  tamanhoMm: number,
+): { pontaDaHaste: Point; baseDoTriangulo: Point; centro: Point } {
+  const rad = (apoio.graus * Math.PI) / 180;
+  const u = { x: Math.cos(rad), y: Math.sin(rad) };
+  const adiante = (d: number) => ({ x: at.x + u.x * d, y: at.y + u.y * d });
+  const haste = HASTE_DA_TOMADA * tamanhoMm;
+  return {
+    pontaDaHaste: adiante(apoio.recuoMm),
+    baseDoTriangulo: adiante(apoio.recuoMm + haste),
+    centro: adiante(apoio.recuoMm + haste + tamanhoMm / 2),
+  };
 }
 
 /**

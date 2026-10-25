@@ -17,11 +17,12 @@
  * guardado por NOME de camada (persistir é seguro), ao contrário dos ids de
  * peça de `ocultosNoDesenho`, que não sobrevivem a troca de versão.
  */
-import type { BlueprintModel, DisciplinaDeRede, ObjectId } from './blueprintKernel';
+import type { BlueprintModel, DisciplinaDeRede, FamiliaDeComponente, ObjectId } from './blueprintKernel';
 import { categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos } from './blueprintRecorteEletrico';
 
 export type Camada =
-  | 'ARQUITETURA'
+  | 'CONSTRUCAO'
+  | 'MOBILIARIO'
   | 'ESTRUTURA'
   | 'TERRENO'
   | 'ELETRICA_ILUMINACAO'
@@ -53,7 +54,8 @@ export interface DefinicaoDoGrupo {
  * instalações na ordem das abas do ribbon.
  */
 export const GRUPOS_DE_CAMADAS: readonly DefinicaoDoGrupo[] = [
-  { id: 'ARQUITETURA', rotulo: 'Arquitetura', camadas: ['ARQUITETURA'], cor: '#475569' },
+  // 25/10/2026: *"crie uma subcamada em arquitetura para mobiliario"*.
+  { id: 'ARQUITETURA', rotulo: 'Arquitetura', camadas: ['CONSTRUCAO', 'MOBILIARIO'], cor: '#475569' },
   { id: 'ESTRUTURA', rotulo: 'Estrutura', camadas: ['ESTRUTURA'], cor: '#78716c' },
   { id: 'TERRENO', rotulo: 'Terreno', camadas: ['TERRENO'], cor: '#65a30d' },
   { id: 'ELETRICA', rotulo: 'Elétrica', camadas: ['ELETRICA_ILUMINACAO', 'ELETRICA_FORCA'], cor: '#d97706' },
@@ -65,7 +67,8 @@ export const GRUPOS_DE_CAMADAS: readonly DefinicaoDoGrupo[] = [
 export const CAMADAS: readonly Camada[] = GRUPOS_DE_CAMADAS.flatMap((g) => g.camadas);
 
 export const ROTULO_DA_CAMADA: Record<Camada, string> = {
-  ARQUITETURA: 'Arquitetura',
+  CONSTRUCAO: 'Construção',
+  MOBILIARIO: 'Mobiliário',
   ESTRUTURA: 'Estrutura',
   TERRENO: 'Terreno',
   ELETRICA_ILUMINACAO: 'Iluminação',
@@ -80,7 +83,8 @@ export const ROTULO_DA_CAMADA: Record<Camada, string> = {
 
 /** O que cada camada abrange — o `title` da linha no painel. */
 export const AJUDA_DA_CAMADA: Record<Camada, string> = {
-  ARQUITETURA: 'Paredes, esquadrias, ambientes, cobertura, escadas, guarda-corpos, rodapés, vagas, mobiliário e louças, elevador e shaft geral.',
+  CONSTRUCAO: 'Paredes, esquadrias, ambientes, cobertura, escadas, guarda-corpos, rodapés, vagas, louças e bancadas, elevador e shaft geral.',
+  MOBILIARIO: 'Móveis, armários e eletrodomésticos (geladeira, fogão, máquina de lavar) — e o mobiliário de estudo do ambiente.',
   ESTRUTURA: 'Pilares, vigas, lajes e fundações (estacas, blocos, vigas baldrame) — e a armadura no 3D.',
   TERRENO: 'Lote e divisas, loteamento (quadras, lotes, vias, áreas públicas), massa, pisos externos, curvas de nível, terraplenagem e envelope.',
   ELETRICA_ILUMINACAO: 'Luminárias, interruptores e os eletrodutos que só os servem.',
@@ -111,6 +115,15 @@ const CAMADA_DA_DISCIPLINA: Record<Exclude<DisciplinaDeRede, 'ELETRICA'>, Camada
   DRENO_AC: 'MECANICA',
 };
 
+const CAMADA_DA_FAMILIA: Record<FamiliaDeComponente, Camada> = {
+  MOBILIARIO: 'MOBILIARIO',
+  ARMARIO: 'MOBILIARIO',
+  EQUIPAMENTO: 'MOBILIARIO',
+  LOUCA: 'CONSTRUCAO',
+  BANCADA: 'CONSTRUCAO',
+  CLIMATIZACAO: 'MECANICA',
+};
+
 const pertencaEletrica = (c: 'COMUM' | 'ILUMINACAO' | 'FORCA'): Pertenca =>
   c === 'ILUMINACAO' ? 'ELETRICA_ILUMINACAO' : c === 'FORCA' ? 'ELETRICA_FORCA' : 'ELETRICA_COMUM';
 
@@ -127,23 +140,25 @@ export function classificarPecas(model: BlueprintModel): Map<ObjectId, Pertenca>
   };
 
   // ARQUITETURA — o que se constrói e não é estrutura.
-  por(model.walls, 'ARQUITETURA');
-  por(model.openings, 'ARQUITETURA');
-  por(model.spaces, 'ARQUITETURA');
-  por(model.labels, 'ARQUITETURA');
-  por(model.roofs, 'ARQUITETURA');
-  por(model.stairs, 'ARQUITETURA');
-  por(model.guardaCorpos, 'ARQUITETURA');
-  por(model.muros, 'ARQUITETURA');
-  por(model.rodapes, 'ARQUITETURA');
-  por(model.vagas, 'ARQUITETURA');
+  por(model.walls, 'CONSTRUCAO');
+  por(model.openings, 'CONSTRUCAO');
+  por(model.spaces, 'CONSTRUCAO');
+  por(model.labels, 'CONSTRUCAO');
+  por(model.roofs, 'CONSTRUCAO');
+  por(model.stairs, 'CONSTRUCAO');
+  por(model.guardaCorpos, 'CONSTRUCAO');
+  por(model.muros, 'CONSTRUCAO');
+  por(model.rodapes, 'CONSTRUCAO');
+  por(model.vagas, 'CONSTRUCAO');
   // A reserva de climatização é o LUGAR do equipamento mecânico (E11.1) — o
-  // mesmo critério de `ehReservaDeEquipamento`.
-  for (const c of model.componentes ?? []) m.set(c.id, c.familia === 'CLIMATIZACAO' ? 'MECANICA' : 'ARQUITETURA');
+  // mesmo critério de `ehReservaDeEquipamento`. Móvel, armário e eletrodoméstico
+  // são MOBILIÁRIO (25/10/2026); louça e bancada ficam na construção: são fixas e
+  // ligadas aos pontos de água.
+  for (const c of model.componentes ?? []) m.set(c.id, CAMADA_DA_FAMILIA[c.familia]);
   // Shaft com disciplina vai para ela; sem disciplina (geral) e elevador são arquitetura.
   for (const n of model.nucleos ?? []) {
     const d = n.tipo === 'SHAFT' ? n.disciplina : null;
-    m.set(n.id, d && d !== 'ELETRICA' ? CAMADA_DA_DISCIPLINA[d] : 'ARQUITETURA');
+    m.set(n.id, d && d !== 'ELETRICA' ? CAMADA_DA_DISCIPLINA[d] : 'CONSTRUCAO');
   }
 
   por(model.structures, 'ESTRUTURA');
@@ -302,11 +317,12 @@ export function definirTodas(e: EstadoDaCamada): EstadosDasCamadas {
 /**
  * ISOLAR: só o alvo visível. Com `baseAtenuada`, a arquitetura fica em
  * meio-tom como referência (não se lê uma rede de esgoto sem as paredes) —
- * a menos que o alvo seja a própria arquitetura.
+ * a menos que o alvo seja a própria arquitetura. A base é o GRUPO inteiro
+ * (construção e mobiliário), como era quando os móveis moravam na arquitetura.
  */
 export function isolar(alvo: AlvoDeCamada, opcoes: { baseAtenuada: boolean }): EstadosDasCamadas {
   const saida = comEstado(definirTodas('OCULTA'), camadasDoAlvo(alvo), 'VISIVEL');
-  if (opcoes.baseAtenuada && saida.ARQUITETURA === 'OCULTA') saida.ARQUITETURA = 'ATENUADA';
+  if (opcoes.baseAtenuada) for (const c of definicaoDoGrupo('ARQUITETURA').camadas) if (saida[c] === 'OCULTA') saida[c] = 'ATENUADA';
   return saida;
 }
 
@@ -326,7 +342,12 @@ export function alvoIsolado(estados: EstadosDasCamadas, opcoes: { baseAtenuada: 
 
 /** Saneia o que vem do navegador ou do JSONB do template: chave desconhecida cai, ausente/inválida vira o padrão. */
 export function sanearEstados(raw: unknown, padrao: EstadosDasCamadas = ESTADOS_PADRAO): EstadosDasCamadas {
-  const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const cru = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  // 25/10/2026: a camada ARQUITETURA virou o grupo Construção + Mobiliário. O estado
+  // gravado antes (navegador, template de vista) vale para as duas — quem tinha
+  // ocultado a arquitetura continua sem os móveis, que moravam nela.
+  const antiga = cru.ARQUITETURA;
+  const o = antiga === undefined ? cru : { CONSTRUCAO: antiga, MOBILIARIO: antiga, ...cru };
   return Object.fromEntries(
     CAMADAS.map((c) => [c, ESTADOS_DA_CAMADA.includes(o[c] as EstadoDaCamada) ? (o[c] as EstadoDaCamada) : padrao[c]]),
   ) as EstadosDasCamadas;

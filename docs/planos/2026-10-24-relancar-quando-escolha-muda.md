@@ -250,5 +250,5 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
 - [x] PR 1b — #154 (rede antiga no forro relança pelas premissas da casa), depois do relato *"alterei e não ficou disponível para relançamento"* (Garden); publicado `baaadb1`
 - [x] revisão final do PR 2 (Tasks 3–5) — "Sim, com correções" (Garden sem registro de circuitos não relançava; DRs vazios; renumerar); correção `24cadaf8`
 - [x] suíte local do PR 2 antes da correção final: tsc 0; 11.555 ok, 0 falhas, 34 pulados
-- [ ] PR 2 (Tasks 3–5) + CI
-- [ ] publicação do PR 2
+- [x] PR 2 (Tasks 3–5) + CI — PR #155, `ci` 17min31s verde
+- [x] publicação do PR 2 — squash `e0ece86f` em 25/10/2026; `conferir-producao.sh "Refazer todos os circuitos deste pavimento"` provou o domínio servindo e0ece86 (kernel inalterado, sem deploy de função)

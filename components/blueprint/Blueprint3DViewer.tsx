@@ -41,12 +41,12 @@ import {
   cilindroDoTrecho,
   cilindrosDoTrecho,
   giroDaPeca,
-  segmentosDoEletroduto,
   medidasDoQuadro,
   medidasDoTerminal,
   rotacaoY3D,
 } from '../../utils/blueprintRede';
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
+import { embutimentoEletrico } from '../../utils/blueprintEletricaEmbutida';
 import { apoioDaCaixaDagua, centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
@@ -1342,6 +1342,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
    * num andar errado — é plausível demais para alguém notar. Lá o compilador
    * olha e o teste alcança.
    */
+  // A elétrica EMBUTIDA (25/10/2026, "Conduites descem embutidos na parede. as caixas de tomadas e interrrptores
+  // tambem"): a caixa com a frente na face e a descida na face dentro da parede — `blueprintEletricaEmbutida`.
+  const embutido = useMemo(() => embutimentoEletrico(model), [model]);
   const redes = useMemo(
     () =>
       (model.trechos ?? [])
@@ -1355,7 +1358,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         .flatMap((t) => {
           const nivel = model.levels.find((l) => l.id === t.levelId);
           // C11 (10/10/2026): a linha frigorígena em par vira DOIS cilindros (líquido e sucção) — `cilindrosDoTrecho`.
-          return segmentosDoEletroduto(t, nivel?.defaultHeightMm ?? 2800).flatMap((seg, k) =>
+          return embutido.segmentos(t).flatMap((seg, k) =>
             cilindrosDoTrecho({ ...t, ...seg }, nivel?.elevationMm ?? 0).map((c, j) => ({ t, k: `${k}-${j}`, c })),
           );
         })
@@ -1416,11 +1419,13 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         .map((t) => {
           const nivel = model.levels.find((l) => l.id === t.levelId);
           const md = medidasDoTerminal(t);
-          const c = caixaDaPeca(t.at, t.cotaMm, nivel?.elevationMm ?? 0, md);
+          // O ponto elétrico de parede: a caixa embutida (frente rente à face), e não centrada na face.
+          const at = embutido.caixa(t) ?? t.at;
+          const c = caixaDaPeca(at, t.cotaMm, nivel?.elevationMm ?? 0, md);
           // A CAIXA D'ÁGUA apoia na cota (o fundo, pela ficha), sobre a laje —
           // com a cota no centro ela nascia meio enfiada na parede (print de 27/09/2026).
           const centro = centroDoTerminal3D(
-            t,
+            { ...t, at },
             nivel?.elevationMm ?? 0,
             md.alturaMm,
             t.tipoHidraulico === 'RESERVATORIO' ? apoioDaCaixaDagua(model, t) : undefined,

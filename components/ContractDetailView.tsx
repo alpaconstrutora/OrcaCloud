@@ -1392,7 +1392,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* §19.1 — trilho cinza DENTRO de card branco, flex-wrap (nunca
                 overflow-x-auto), abas h-7. Aba ativa é ESTADO DE NAVEGAÇÃO
                 (bg-white text-blue-600 shadow-sm), não o azul sólido de ação. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 sticky top-4 z-40">
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {/* Recorrente e não-recorrente têm as MESMAS abas (pedido de
                         2026-09-28); o recorrente só acrescenta "Faturas de

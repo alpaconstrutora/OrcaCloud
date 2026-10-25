@@ -8,7 +8,7 @@ import {
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown,
     Package, Pencil, Settings, Search,
-    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal, PencilLine, CalendarClock, ArrowRightLeft
+    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal, PencilLine, CalendarClock
 } from 'lucide-react';
 import { ContractModal, ContractFormSection } from './ContractModal';
 import {
@@ -1355,26 +1355,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <span className="text-xs font-medium text-blue-600">{contract.number}</span>
                             <span className="w-1 h-1 bg-gray-300 rounded-full" />
                             <span className="text-xs font-medium text-gray-400">{contract.contract_type}</span>
-                            {/* Dona do contrato — decide de onde vêm centro de custo, plano de
-                                contas e empreendimento. Com rótulo e o "Mover" ao lado: só o
-                                nome solto não respondia "de qual organização é este contrato?"
-                                (25/10/2026, plano docs/planos/2026-10-25-contrato-mover-organizacao.md). */}
-                            {organization?.name && organization.id === contract.organization_id && (
-                                <>
-                                    <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                                    <span className="text-xs font-medium text-gray-500">
-                                        Organização: <span className="text-gray-700">{organization.name}</span>
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={() => setMoverOrgAberto(true)}
-                                        className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
-                                        title="Mover este contrato, com títulos e documentos, para outra organização"
-                                    >
-                                        <ArrowRightLeft className="w-3 h-3" /> Mover
-                                    </button>
-                                </>
-                            )}
                         </div>
                         <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">{contract.title}</h1>
                         {contract.warranty_claim_id && (
@@ -1719,6 +1699,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     domain={(contract as any).domain}
                                     onClose={() => { /* embutido: não há o que fechar */ }}
                                     onToast={notify}
+                                    onMoverOrganizacao={() => setMoverOrgAberto(true)}
                                     onSubmit={async (data) => {
                                         const updated = await contractService.updateContract(contract.id, data);
                                         setContract(updated);

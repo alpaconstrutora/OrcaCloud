@@ -63,7 +63,7 @@ import {
   type Escada,
   pontosDeConexaoEstrutural,
   nomeDoTipoEstrutural,
-  pontasPresasAsPecas,
+  deslocamentoDasPontasPresas,
   discretizarArco,
   anguloEmTorno,
   acabamentosDoAmbiente,
@@ -2270,7 +2270,8 @@ export default function BlueprintCanvas({
     // comando usa. Sem isto a prévia mostraria o eletroduto parado enquanto a
     // tomada anda, e ao soltar a ponta pularia para a peça: o gesto pareceria
     // errado durante e certo depois, que é o pior dos dois mundos.
-    const presas = pontasPresasAsPecas(model, idsDeTerminaisSelecionados, idsDeQuadrosSelecionados);
+    // 25/10/2026: e o nó de chegada que só serve à peça anda com ela.
+    const presas = deslocamentoDasPontasPresas(model, idsDeTerminaisSelecionados, idsDeQuadrosSelecionados, d);
     if (movidos.size === 0 && presas.size === 0) return trechosReais;
     return trechosReais.map((t) => {
       if (movidos.has(t.id)) {
@@ -2280,8 +2281,8 @@ export default function BlueprintCanvas({
       if (!lados) return t;
       return {
         ...t,
-        a: lados.a ? { x: t.a.x + d.x, y: t.a.y + d.y } : t.a,
-        b: lados.b ? { x: t.b.x + d.x, y: t.b.y + d.y } : t.b,
+        a: lados.a ? { x: t.a.x + lados.a.x, y: t.a.y + lados.a.y } : t.a,
+        b: lados.b ? { x: t.b.x + lados.b.x, y: t.b.y + lados.b.y } : t.b,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

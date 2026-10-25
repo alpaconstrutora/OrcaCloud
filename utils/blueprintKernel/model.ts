@@ -5850,6 +5850,86 @@ export function pontasPresasAsPecas(
 }
 
 /**
+ * Quanto anda CADA PONTA de trecho quando as peças dadas andam `delta` — as presas
+ * (`pontasPresasAsPecas`) e, no eletroduto, o NÓ DE CHEGADA que só serve à peça.
+ * `null` = a ponta fica. O `TranslateEntities` e a prévia do arraste no canvas leem
+ * esta função, e só ela: a prévia é o que o comando grava.
+ *
+ * ─── O PEDIDO (25/10/2026, print da planta Garden) ───────────────────────────
+ *
+ * *"Ao mover o interruptor o ponto nao veio junto, pois neste caso o ponto atende
+ * somente ao interruptor entao deveria vir junto."*
+ *
+ * O motor dos eletrodutos chega a cada ponto por um toco curto no forro — do nó
+ * onde a rede da luz chega até o alto da descida — e desce na parede. Arrastar o
+ * interruptor ao longo da parede levava a descida (presa) e esticava o toco do nó,
+ * que ficava, até o lugar novo: um eletroduto de meio metro em diagonal no forro.
+ *
+ * ─── A REGRA ────────────────────────────────────────────────────────────────
+ *
+ * O nó do outro lado do eletroduto preso anda quando SÓ SERVE à peça: nenhuma peça
+ * elétrica nem quadro nele, e exatamente UM outro eletroduto chegando (o da luz). O
+ * trecho vertical no próprio nó (no forro rebaixado, a descida da cota da rede até a
+ * do toco) é parte do nó e anda inteiro com ele.
+ * Derivação (dois ou mais) serve a outros pontos e fica — o toco estica, como antes.
+ * E anda só a componente do deslocamento PERPENDICULAR ao toco, a regra do
+ * `manterJuncoes` das paredes: o toco muda de comprimento, nunca de direção.
+ * Arrastar ao longo do próprio toco só o encurta ou alonga; arrastar de lado leva
+ * o nó, e o eletroduto da luz termina no nó novo.
+ *
+ * Só eletroduto: o nó de chegada é desenho do motor elétrico. O nó entre duas
+ * peças que andam juntas (o outro eletroduto também preso) fica como estava.
+ */
+export function deslocamentoDasPontasPresas(
+  model: BlueprintModel,
+  terminalIds: readonly ObjectId[],
+  quadroIds: readonly ObjectId[],
+  delta: Point,
+): Map<ObjectId, { a: Point | null; b: Point | null }> {
+  const presas = pontasPresasAsPecas(model, terminalIds, quadroIds);
+  const saida = new Map<ObjectId, { a: Point | null; b: Point | null }>();
+  for (const [id, l] of presas) saida.set(id, { a: l.a ? { ...delta } : null, b: l.b ? { ...delta } : null });
+  if (presas.size === 0 || (delta.x === 0 && delta.y === 0)) return saida;
+
+  const chave = (levelId: ObjectId, p: Point) => `${levelId}|${p.x},${p.y}`;
+  const porNo = new Map<string, Trecho[]>();
+  const trechos = new Map<ObjectId, Trecho>();
+  for (const t of model.trechos ?? []) {
+    if (t.disciplina !== 'ELETRICA') continue;
+    trechos.set(t.id, t);
+    for (const k of new Set([chave(t.levelId, t.a), chave(t.levelId, t.b)])) porNo.set(k, [...(porNo.get(k) ?? []), t]);
+  }
+  const pecas = new Set([
+    ...(model.terminais ?? []).filter((t) => t.disciplina === 'ELETRICA').map((t) => chave(t.levelId, t.at)),
+    ...(model.quadros ?? []).map((q) => chave(q.levelId, q.at)),
+  ]);
+
+  for (const [id, l] of presas) {
+    const t = trechos.get(id);
+    if (!t || l.a === l.b) continue;
+    const lado: 'a' | 'b' = l.a ? 'b' : 'a';
+    const no = t[lado];
+    const naPeca = lado === 'a' ? t.b : t.a;
+    const comp = Math.hypot(naPeca.x - no.x, naPeca.y - no.y);
+    if (comp === 0 || pecas.has(chave(t.levelId, no))) continue;
+    // O trecho VERTICAL no próprio nó (a descida do forro até a cota do toco) é parte
+    // do nó, não um segundo caminho: anda inteiro com ele.
+    const noNo = (porNo.get(chave(t.levelId, no)) ?? []).filter((x) => x.id !== t.id);
+    const vertical = (x: Trecho) => x.a.x === x.b.x && x.a.y === x.b.y;
+    const outros = noNo.filter((x) => !vertical(x));
+    if (outros.length !== 1 || noNo.some((x) => presas.has(x.id))) continue;
+    const ux = (naPeca.x - no.x) / comp;
+    const uy = (naPeca.y - no.y) / comp;
+    const paralela = delta.x * ux + delta.y * uy;
+    const perp = { x: Math.round(delta.x - ux * paralela), y: Math.round(delta.y - uy * paralela) };
+    if (perp.x === 0 && perp.y === 0) continue;
+    saida.get(id)![lado] = perp;
+    for (const u of noNo) saida.set(u.id, { a: u.a.x === no.x && u.a.y === no.y ? perp : null, b: u.b.x === no.x && u.b.y === no.y ? perp : null });
+  }
+  return saida;
+}
+
+/**
  * As medidas declaradas de uma peça de instalação.
  *
  * ⚠️ ZERO é recusado, e não só o negativo: uma caixa de largura zero não some

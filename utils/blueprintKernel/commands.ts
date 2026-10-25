@@ -150,7 +150,7 @@ import {
   reservaDeAberturas,
   pontasNoVerticeMovido,
   wallLength,
-  pontasPresasAsPecas,
+  deslocamentoDasPontasPresas,
   assertParametros,
   findEixo,
   findRestricao,
@@ -4720,7 +4720,8 @@ function aplicarSemHash(
       // ⚠️ As PONTAS PRESAS às peças que vão andar, calculadas ANTES de mover
       // qualquer coisa — depois, a peça já não está onde a ponta está, e a
       // igualdade que define a conexão deixaria de valer.
-      const presas = pontasPresasAsPecas(next, terminalIds, quadroIds);
+      // 25/10/2026: e o NÓ DE CHEGADA que só serve à peça (`deslocamentoDasPontasPresas`).
+      const presas = deslocamentoDasPontasPresas(next, terminalIds, quadroIds, { x: dx, y: dy });
       const rigidos = new Set(trechoIds);
 
       for (const id of trechoIds) {
@@ -4747,8 +4748,8 @@ function aplicarSemHash(
         if (rigidos.has(id)) continue;
         const t = (next.trechos ?? []).find((x) => x.id === id);
         if (!t) continue;
-        if (lados.a) t.a = { x: inteiro(t.a.x + dx), y: inteiro(t.a.y + dy) };
-        if (lados.b) t.b = { x: inteiro(t.b.x + dx), y: inteiro(t.b.y + dy) };
+        if (lados.a) t.a = { x: inteiro(t.a.x + lados.a.x), y: inteiro(t.a.y + lados.a.y) };
+        if (lados.b) t.b = { x: inteiro(t.b.x + lados.b.x), y: inteiro(t.b.y + lados.b.y) };
         diff.updated.push(t.id);
       }
       for (const id of terminalIds) {

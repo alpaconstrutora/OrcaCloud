@@ -31,7 +31,7 @@ em coluna. O resultado do cálculo (instalada, demanda, IB, seção, geral, qued
      sugestões da 5.1.3.2.2 abaixo.
   4. **Proteção contra surtos (DPS)** — Classe · In · Up · Disjuntor de desconexão em grade; "DPS sugerido"/"Remover" no
      título; a exposição a descargas no resumo.
-  5. **Centro de cargas** — com título próprio; os botões ficam onde estão.
+  5. **Centro de cargas** — com título próprio; o texto à esquerda e os dois botões juntos à direita.
 - Nenhum dado, comando ou `aria-label` muda (os testes e leitores de tela acham os mesmos campos).
 - **Pronto quando:** testes do painel ajustados aos textos novos e passando (`PainelEletricaQuadroEExecutivo`,
   `PainelBalanceamento`, `PainelCentroDeCargas` e os de DR/DPS); `check-ui-standard.sh` nos `.tsx` tocados; print da Garden

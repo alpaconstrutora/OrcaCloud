@@ -23,6 +23,14 @@ Opções: só sem títulos (recomendada) · sem títulos pagos · sempre, levand
 
 > **Sempre, levando tudo**
 
+Depois de publicado (#164): o campo nasceu no cabeçalho do contrato (linha
+"Organização: X · Mover" ao lado do número). Print da aba Resumo, card
+"Identificação do Contrato", com o campo pedido ao lado de "Número do
+Contrato" e "Título / Objeto":
+
+> nao é o local adequado. [...] mover para dentro do card Identificação do
+> Contrato
+
 ## Decisões
 
 1. **Mover é uma RPC no banco, tudo ou nada** (`mover_contrato_organizacao`).
@@ -68,10 +76,16 @@ Opções: só sem títulos (recomendada) · sem títulos pagos · sempre, levand
    - número de contrato já existente no destino (UNIQUE por organização e direção).
 9. **Auditoria:** cada movimento grava uma linha em `contract_organization_moves`
    (origem, destino, quem, quando, contagens).
-10. **Onde aparece:** cabeçalho do detalhe do contrato mostra "Organização: X" e o
-    botão "Mover de organização"; o diálogo mostra antes de confirmar o que vai
-    junto (prévia por RPC `previa_mover_contrato_organizacao`), com aviso
-    explícito quando há títulos conciliados.
+10. **Onde aparece:** no card "Identificação do Contrato" (aba Resumo), ao lado de
+    Número do Contrato e Título/Objeto — não no cabeçalho da tela (revisto depois
+    do #164: o usuário apontou que o cabeçalho não era o lugar certo). O campo
+    "Organização" e o botão "Mover" moram dentro do `ContractModal` (seção
+    `identificacao`, condicionados a `onMoverOrganizacao`, prop só ligada pelo
+    `ContractDetailView` na instância do Resumo — os outros chamadores do
+    `ContractModal`, como o drawer de criação/edição e Garantia, não ganham o
+    campo). O diálogo mostra antes de confirmar o que vai junto (prévia por RPC
+    `previa_mover_contrato_organizacao`), com aviso explícito quando há títulos
+    conciliados.
 
 ## Itens
 
@@ -81,7 +95,7 @@ Opções: só sem títulos (recomendada) · sem títulos pagos · sempre, levand
 | 2 | Teste da RPC no banco numa transação desfeita: contrato de teste com título, documento e fornecedor de outra org | Contagens antes/depois batem; fornecedor compartilhado; títulos com CC/plano novos; ROLLBACK |
 | 3 | `contractService.previaMoverOrganizacao` / `moverParaOrganizacao` | Teste unitário do service (chama a RPC com os parâmetros certos, propaga a mensagem de erro) |
 | 4 | Diálogo `MoverContratoOrganizacaoDialog` (destino, centro de custo e plano de contas do destino, prévia, confirmar) | Teste de componente: sem destino o botão fica desligado com o motivo; com conciliados, mostra o aviso |
-| 5 | Cabeçalho do `ContractDetailView`: "Organização: X" + botão; após mover, recarrega e remonta os formulários embutidos | Verificado na tela de verdade (navegador) com um contrato de teste |
+| 5 | Campo "Organização" + botão "Mover" no card Identificação (`ContractModal`, ligado só pelo Resumo do `ContractDetailView`); após mover, recarrega e remonta os formulários embutidos | `tsc`/testes verdes; pendente conferência na tela de verdade (navegador) |
 | 6 | `check-ui-standard.sh` nos .tsx alterados; `orgContextGuard` | Ambos verdes |
 
 ## Andamento
@@ -102,3 +116,13 @@ Opções: só sem títulos (recomendada) · sem títulos pagos · sempre, levand
 - Item 5 — código pronto (cabeçalho "Organização: X · Mover"; formulários embutidos
   remontam por `key` da organização). Falta a conferência na tela de verdade.
 - Item 6 ✅ — `check-ui-standard.sh` sem violação nos dois .tsx; `orgContextGuard` verde.
+- 25/10/2026, depois do #164 — pedido: tirar o campo do cabeçalho e colocá-lo dentro
+  do card "Identificação do Contrato". Movido: `ContractModal` ganhou a prop
+  `onMoverOrganizacao?` e, com ela, um campo "Organização" (nome + Mover) na seção
+  `identificacao`, ao lado de Número do Contrato; o `ContractDetailView` só liga a
+  prop na instância do Resumo e não monta mais nada no cabeçalho. `tsc` e as 27
+  suítes relacionadas (`ContractModalOrganizacao`, `contratoMoverOrganizacao`,
+  `MoverContratoOrganizacaoModal`, `orgContextGuard`) verdes; `check-ui-standard.sh`
+  sem violação nos dois arquivos. Não consegui logar no app local para conferir
+  visualmente (sem credencial) — ficou pendente para o usuário confirmar depois do
+  deploy.

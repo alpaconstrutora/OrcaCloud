@@ -5,7 +5,7 @@ import SupplierSelect from './SupplierSelect';
 import ClientSelect, { type ClientOption } from './ClientSelect';
 import { onlyObras, onlyOrcamentos } from '../utils/projectClassification';
 import Button from './ui/Button';
-import { X, FileText, Calendar, Building2, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
+import { X, FileText, Calendar, Building2, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users, ArrowRightLeft } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
 import PlanoContasSelect from './PlanoContasSelect';
 import CostCenterSelect from './CostCenterSelect';
@@ -88,6 +88,13 @@ interface ContractModalProps {
     // alterações" é desenhado nela, à esquerda, e submete o formulário pelo
     // atributo `form` — o estado (salvando, desabilitado) continua daqui.
     barraDeAcoes?: HTMLElement | null;
+    // Abre o diálogo "Mover contrato de organização" (ContractDetailView). Só
+    // quando fornecida a seção `identificacao` ganha o campo "Organização", ao
+    // lado de Número do Contrato — dono do contrato já existente, não o
+    // seletor de criação (`needsOrgPicker`, abaixo). Omitida nos outros
+    // chamadores do ContractModal (drawer de criação/edição, Vendas,
+    // Garantia): lá o campo continua fora, como antes.
+    onMoverOrganizacao?: () => void;
 }
 
 // Gatilho dos seletores hierárquicos (Centro de Custo, Conta Financeira, Plano de
@@ -111,6 +118,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     sections,
     cardPorSecao = false,
     barraDeAcoes,
+    onMoverOrganizacao,
 }) => {
     const inline = variant === 'inline';
     const cardsSeparados = inline && cardPorSecao;
@@ -852,6 +860,30 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         <p className="text-xs text-amber-600 ml-1">
                                             "Todas as Organizações" está selecionado — escolha em qual organização este contrato deve ser criado.
                                         </p>
+                                    </div>
+                                )}
+                                {/* Dona do contrato — decide de onde vêm centro de custo, plano de
+                                    contas e empreendimento (avisoOrganizacao, abaixo). Só no contrato
+                                    JÁ existente (o seletor acima cobre a criação) e só onde o chamador
+                                    liga o "Mover" (25/10/2026 — antes ficava solto no cabeçalho da tela,
+                                    fora do card de identificação). */}
+                                {!needsOrgPicker && initialData?.id && activeOrgName && onMoverOrganizacao && (
+                                    <div className="col-span-2 space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Organização</label>
+                                        <div className="flex items-center justify-between gap-3 px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px]">
+                                            <span className="flex items-center gap-2 text-sm font-semibold text-gray-900 truncate">
+                                                <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                                                {activeOrgName}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={onMoverOrganizacao}
+                                                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline shrink-0"
+                                                title="Mover este contrato, com títulos e documentos, para outra organização"
+                                            >
+                                                <ArrowRightLeft className="w-3 h-3" /> Mover
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                                 <div className="space-y-1.5">

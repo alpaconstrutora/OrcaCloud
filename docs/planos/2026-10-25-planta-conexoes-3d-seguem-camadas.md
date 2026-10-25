@@ -29,6 +29,6 @@ só com o filtro de pavimento, e o memo nem dependia de `chaveOcultos`. O 2D já
 - [x] item 1 + teste — `blueprintIsometrico.test.ts` (17/17); harness local com o rascunho da Garden (11:40) no
   `Blueprint3DViewer` de `origin/main` e no novo, com tudo que não é elétrico oculto: antes, conexões azul-escuras,
   vermelhas, cinza e verde-azuladas soltas; depois, só os eletrodutos e as caixas
-- [ ] tsc + suíte
+- [x] tsc + suíte — tsc 0 erros; suíte local (sem `blueprintCasaAutomatica`, que roda na CI): 11.470 ok + 7 testes de tela que caíram por tempo sob carga e passaram sozinhos (`BlueprintEditor`, `blueprintSobreposicaoUI`, `PainelVersoes`: 329/329) = 11.477 ok, 0 falhas, 34 pulados, total 11.511.
 - [ ] PR + CI
 - [ ] publicação

@@ -303,7 +303,10 @@ describe('correção 1 — a rede no FORRO continua no forro (C1)', () => {
     expect(redeNoForroSemRegistro(antiga, q)).toBe(true);
     const DA_CASA = { ...FORRO, rebaixoMm: 300 };
     expect(forroDaCasaQueVale(antiga, q, DA_CASA)).toBeNull();
-    expect(motivoParaNaoRelancar(antiga, q, DA_CASA)).toBe(MOTIVO_REDE_NO_FORRO_SEM_REGISTRO);
+    // Correção 3: o motivo diz por quê (a cota fora da faixa) e o que fazer; sem as premissas, o motivo de sempre.
+    expect(motivoParaNaoRelancar(antiga, q, DA_CASA)).toBe(`${MOTIVO_REDE_NO_FORRO_SEM_REGISTRO} Há trecho no forro fora das faixas da Casa Automática (ex.: 2700 mm) — apague-o ou relance pela Casa Automática.`);
+    expect(motivoParaNaoRelancar(antiga, q)).toBe(MOTIVO_REDE_NO_FORRO_SEM_REGISTRO);
+    expect(botaoDeLancarEletrodutos(antiga, planejarEletrodutosPorQuadro(antiga, SEM_CAIXAS, HIPOTESES_PADRAO, DA_CASA), DA_CASA).motivo).toBe(motivoParaNaoRelancar(antiga, q, DA_CASA));
     expect(hipotesesDoQuadro(antiga, q, SEM_CAIXAS, DA_CASA).noForro).toBeUndefined();
     expect(comandosDeRefazerEletrodutos(antiga, [q], SEM_CAIXAS, HIPOTESES_PADRAO, DA_CASA)).toEqual([]);
     // Na faixa da casa, mas com outro rebaixo do forro: também não é a casa.

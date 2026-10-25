@@ -604,7 +604,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { useCasaAutomatica } from '../../hooks/useCasaAutomatica';
-import { SUBIDA_DO_ALIMENTADOR_DA_CASA, conferirPlanoDaCasa, faixaDaAguaQuenteDaCasa, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
+import { SUBIDA_DO_ALIMENTADOR_DA_CASA, conferirPlanoDaCasa, faixaDaAguaQuenteDaCasaNoModelo, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
 import type { EmpreendimentoUnit, EmpreendimentoWithChildren } from '../../types/empreendimento';
@@ -9237,9 +9237,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const f = hipotesesDaCasaDoEstudo ? forroDaAguaDaCasa(hipotesesDaCasaDoEstudo) : null;
     // Correção 2 (I4): e a faixa da quente da casa — o quadro da frente do lote, como a etapa ÁGUA da casa a calcula.
     return f && hipotesesDaCasaDoEstudo
-      ? { ...f, faixaDaAguaQuente: faixaDaAguaQuenteDaCasa(hipotesesDaCasaDoEstudo, limitesDoNivel, terreno?.anel ?? []), subidaDoAlimentador: SUBIDA_DO_ALIMENTADOR_DA_CASA }
+      ? { ...f, faixaDaAguaQuente: faixaDaAguaQuenteDaCasaNoModelo(hipotesesDaCasaDoEstudo, editor.model), subidaDoAlimentador: SUBIDA_DO_ALIMENTADOR_DA_CASA }
       : null;
-  }, [hipotesesDaCasaDoEstudo, limitesDoNivel, terreno]);
+    // Correção 3: o lote do MODELO (o pavimento da frente), não o do pavimento ativo.
+  }, [hipotesesDaCasaDoEstudo, editor.model]);
   /** As premissas da água do estudo com o forro da casa — o que toda chamada da água recebe. */
   const hidroDaAgua = useMemo(() => ({ ...hidroDoEstudo.hipoteses, forroDaCasa: forroDaCasaDaAgua }), [hidroDoEstudo.hipoteses, forroDaCasaDaAgua]);
   const hipDaAguaQueLanca = useMemo(() => lancamentoDaAgua(editor.model, hidroDaAgua).hip, [editor.model, hidroDaAgua]);

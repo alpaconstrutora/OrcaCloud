@@ -18,7 +18,7 @@
  *
  * Puro: sem React, sem banco.
  */
-import type { BlueprintModel, ObjectId, Trecho } from './blueprintKernel';
+import type { BlueprintModel, DisciplinaDeRede, ObjectId, Trecho } from './blueprintKernel';
 import type { FaixaDoForro } from './blueprintRotaPeloForro';
 
 /** A folga da assinatura: a casa lança em milímetro inteiro; 2 mm cobre o arredondamento do caminho. */
@@ -27,6 +27,11 @@ export const TOLERANCIA_DA_ASSINATURA_MM = 2;
 /** O que o forro da casa deixa de assinatura na rede: as faixas de cota (das redes do motor) e o rebaixo do forro. */
 export interface AssinaturaDoForroDaCasa {
   faixas: readonly FaixaDoForro[];
+  /**
+   * Correção 3: a faixa de CADA disciplina, quando o motor tem mais de uma (a água: o horizontal da fria confere com a faixa
+   * da fria, o da quente com a da quente). Ausente para a disciplina = `faixas`.
+   */
+  faixasPorDisciplina?: Partial<Record<DisciplinaDeRede, readonly FaixaDoForro[]>>;
   rebaixoMm: number;
 }
 
@@ -68,15 +73,29 @@ export function horizontaisNoForro(
 
 /** (b) + (c): a rede antiga detectada no forro (`horizontais`, de `horizontaisNoForro`) é da casa? */
 export function temAssinaturaDaCasa(model: BlueprintModel, horizontais: readonly Trecho[], assinatura: AssinaturaDoForroDaCasa): boolean {
-  if (horizontais.length === 0 || assinatura.faixas.length === 0) return false;
+  return horizontais.length > 0 && motivoSemAssinaturaDaCasa(model, horizontais, assinatura) === null;
+}
+
+/**
+ * Correção 3 (24/10/2026, re-revisão): POR QUE a rede antiga não tem a assinatura da casa — o primeiro critério que falhou,
+ * dito com o valor e o que fazer —, ou `null` quando tem. Vai no motivo do botão desligado.
+ */
+export function motivoSemAssinaturaDaCasa(model: BlueprintModel, horizontais: readonly Trecho[], assinatura: AssinaturaDoForroDaCasa): string | null {
   const tol = TOLERANCIA_DA_ASSINATURA_MM;
+  const tetoDe = new Map(model.levels.map((l) => [l.id, l.defaultHeightMm]));
+  // (b) as faixas de cota.
+  const fora = horizontais.find((t) => {
+    const teto = tetoDe.get(t.levelId)!;
+    const faixas = assinatura.faixasPorDisciplina?.[t.disciplina] ?? assinatura.faixas;
+    return !faixas.some((f) => [teto - f.abaixoDoTetoMm, teto - f.abaixoDoTetoMm - (f.degrauNaParedeMm ?? 0)].some((z) => Math.abs(t.cotaAMm - z) <= tol));
+  });
+  if (fora) return `Há trecho no forro fora das faixas da Casa Automática (ex.: ${fora.cotaAMm} mm) — apague-o ou relance pela Casa Automática.`;
+  // (c) o rebaixo do forro dos ambientes.
   for (const levelId of new Set(horizontais.map((t) => t.levelId))) {
     const c = forroDoNivel(model, levelId);
-    if (!c || c.rebaixos.some((r) => Math.abs(r - assinatura.rebaixoMm) > tol)) return false;
+    const outro = c?.rebaixos.find((r) => Math.abs(r - assinatura.rebaixoMm) > tol);
+    if (!c) return 'O pavimento da rede não tem forro nos ambientes — relance pela Casa Automática.';
+    if (outro != null) return `O forro dos ambientes (rebaixo ${outro} mm) difere das premissas da casa (rebaixo ${assinatura.rebaixoMm} mm) — ajuste um dos dois ou relance pela Casa Automática.`;
   }
-  const tetoDe = new Map(model.levels.map((l) => [l.id, l.defaultHeightMm]));
-  return horizontais.every((t) => {
-    const teto = tetoDe.get(t.levelId)!;
-    return assinatura.faixas.some((f) => [teto - f.abaixoDoTetoMm, teto - f.abaixoDoTetoMm - (f.degrauNaParedeMm ?? 0)].some((z) => Math.abs(t.cotaAMm - z) <= tol));
-  });
+  return null;
 }

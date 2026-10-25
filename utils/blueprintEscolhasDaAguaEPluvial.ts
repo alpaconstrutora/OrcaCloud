@@ -52,7 +52,7 @@ import { planejarAguaCompleta, type HipotesesDaAguaCompleta, type PlanoDaAguaCom
 import { HIPOTESES_ALIMENTACAO_PADRAO } from './blueprintAlimentador';
 import { RUGOSIDADE_DA_CALHA, ROTULO_DA_CALHA, ROTULO_DO_BOCAL } from './blueprintCalhas';
 import { ROTULO_DO_CONDUTOR_HORIZONTAL, ROTULO_DO_CONDUTOR_VERTICAL } from './blueprintCondutoresPluviais';
-import { horizontaisNoForro, temAssinaturaDaCasa } from './blueprintAssinaturaDaCasa';
+import { horizontaisNoForro, motivoSemAssinaturaDaCasa, temAssinaturaDaCasa } from './blueprintAssinaturaDaCasa';
 import { HIPOTESES_PLUVIAIS_PADRAO, INTENSIDADE_POR_CIDADE, type HipotesesPluviais } from './blueprintPluvial';
 import { planejarPluvialCompleta, type PlanoDaPluvialCompleta } from './blueprintPluvialCompleto';
 import { HIPOTESES_PRESSAO_PADRAO } from './blueprintPressaoDaRede';
@@ -373,15 +373,27 @@ export function forroDaCasaQueValeNaAgua(
   const f = h.forroDaCasa;
   if (!f || f.rebaixoMm == null) return null;
   const horizontais = horizontaisDaAguaNoForro(model, h.agua.cotaRamalMm);
-  if (!temAssinaturaDaCasa(model, horizontais, { faixas: [f.aguaFria, f.aguaQuente], rebaixoMm: f.rebaixoMm })) return null;
+  if (!temAssinaturaDaCasa(model, horizontais, assinaturaDaAgua(f, f.rebaixoMm))) return null;
   return { noForro: { aguaFria: f.aguaFria, aguaQuente: f.aguaQuente, folgaSobAVigaMm: f.folgaSobAVigaMm }, faixaDaAguaQuente: f.faixaDaAguaQuente ?? null, subidaDoAlimentador: f.subidaDoAlimentador ?? null };
+}
+
+/**
+ * A assinatura da água (correção 3): o horizontal da FRIA confere com a faixa da fria, o da QUENTE com a da quente — antes
+ * qualquer um valia com qualquer das duas.
+ */
+function assinaturaDaAgua(f: ForroDaAgua, rebaixoMm: number) {
+  return { faixas: [f.aguaFria, f.aguaQuente], faixasPorDisciplina: { AGUA_FRIA: [f.aguaFria], AGUA_QUENTE: [f.aguaQuente] }, rebaixoMm };
 }
 
 /** Por que a água não relança por aqui (`null` = relança). Com o forro da casa E a assinatura dela, relança no forro. */
 export function motivoParaNaoRelancarAgua(model: BlueprintModel, h?: Pick<HipotesesDaAguaDoLancamento, 'agua' | 'forroDaCasa'>): string | null {
   const cota = h?.agua.cotaRamalMm;
   if (!aguaNoForroSemRegistro(model, cota)) return null;
-  return h && forroDaCasaQueValeNaAgua(model, h) ? null : MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO;
+  if (h && forroDaCasaQueValeNaAgua(model, h)) return null;
+  // Correção 3: com as premissas da casa, diz POR QUE a água não é da casa (e o que fazer).
+  const f = h?.forroDaCasa;
+  const porque = f && f.rebaixoMm != null ? motivoSemAssinaturaDaCasa(model, horizontaisDaAguaNoForro(model, cota), assinaturaDaAgua(f, f.rebaixoMm)) : null;
+  return porque ? `${MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO} ${porque}` : MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO;
 }
 
 /**
@@ -429,9 +441,23 @@ export interface RedeHidraulicaARefazer {
   pecasAceitas: number;
   /** As partes com nome que serão refeitas, com a contagem de tubos ("alimentador (5)"). Correção 2, menor 5. */
   partes: string[];
+  /** As peças que saem, por nome e quantidade ("2 registro(s) de gaveta"); a VRP com o alerta. Correção 3. */
+  pecasPorNome: string[];
   /** O que mudou desde o lançamento (`textoDasDiferencas`); `null` = sem registro ou nada mudou. */
   mudou: string | null;
 }
+
+/** O nome de cada peça em linha na confirmação. A VRP leva o alerta: muda a pressão e o motor não a repõe. */
+const NOME_DA_PECA: Record<string, string> = {
+  REGISTRO_GAVETA: 'registro(s) de gaveta',
+  REGISTRO_PRESSAO: 'registro(s) de pressão',
+  REGISTRO_ESFERA: 'registro(s) de esfera',
+  VALVULA_RETENCAO: 'válvula(s) de retenção',
+  VRP: 'VRP (muda a pressão calculada; o motor não a repõe)',
+  CONEXAO_TE: 'tê(s)',
+  CONEXAO_LUVA: 'luva(s)',
+  CONEXAO_REDUCAO: 'redução(ões)',
+};
 
 const PARTES_DA_AGUA: [string, readonly string[]][] = [
   ['alimentador', ['Alimentador']],
@@ -448,6 +474,10 @@ export function aguaARefazer(model: BlueprintModel, h: HipotesesDaAguaDoLancamen
     tubosConfirmados: rede.trechos.filter((t) => !t.sugerido).length,
     pecas: rede.pecas.length,
     pecasAceitas: rede.pecas.filter((x) => !x.sugerida).length,
+    pecasPorNome: Object.entries(NOME_DA_PECA).flatMap(([tipo, nome]) => {
+      const n = rede.pecas.filter((x) => x.tipoHidraulico === tipo).length;
+      return n ? [`${n} ${nome}`] : [];
+    }),
     partes: PARTES_DA_AGUA.flatMap(([nome, rotulos]) => {
       const n = rede.trechos.filter((t) => rotulos.includes(t.rotulo ?? '')).length;
       return n ? [`${nome} (${n})`] : [];
@@ -464,7 +494,7 @@ export function aguaARefazer(model: BlueprintModel, h: HipotesesDaAguaDoLancamen
 export function textoDaConfirmacaoDoSistema(sistema: string, r: RedeHidraulicaARefazer): string | null {
   if (r.tubosConfirmados === 0 && r.pecasAceitas === 0) return null;
   const tubos = `${r.tubos} tubo(s)${r.tubosConfirmados ? ` (${r.tubosConfirmados} confirmado(s))` : ''}${r.partes.length ? `, inclusive ${r.partes.join(', ')}` : ''}`;
-  const pecas = r.pecas ? ` e ${r.pecas} peça(s)${r.pecasAceitas ? ` (${r.pecasAceitas} aceita(s))` : ''}` : '';
+  const pecas = r.pecas ? ` e ${r.pecas} peça(s)${r.pecasAceitas ? ` (${r.pecasAceitas} aceita(s))` : ''}${r.pecasPorNome.length ? `: ${r.pecasPorNome.join(', ')}` : ''}` : '';
   return `${sistema}: ${tubos}${pecas}.${r.mudou ? ` O que mudou: ${r.mudou}.` : ''}`;
 }
 
@@ -618,6 +648,7 @@ export function pluvialARefazer(model: BlueprintModel, h: HipotesesPluviais): Re
     pecas: rede.pecas.length,
     pecasAceitas: rede.pecas.filter((x) => !x.sugerida).length,
     partes: [],
+    pecasPorNome: [],
     mudou: d.length ? textoDasDiferencas(d) : null,
   };
 }

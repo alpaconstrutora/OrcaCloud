@@ -964,6 +964,20 @@ export function faixaDaAguaQuenteDaCasa(hipParcial: Partial<HipotesesDaCasa>, li
   return { x: Math.round(v.x), y: Math.round(v.y) };
 }
 
+/**
+ * Correção 3 da F3 (24/10/2026, re-revisão): a faixa da quente pelo LOTE do modelo — os limites do pavimento que tem a
+ * divisa da FRENTE (a casa se implanta por ela), nunca os do pavimento ativo no editor. No sobrado o lote só existe no
+ * térreo: com o pavimento de cima ativo, a faixa saía `null`, a quente refeita cruzava a fria (+18 conflitos de rede) e o
+ * registro perpetuava isso.
+ */
+export function faixaDaAguaQuenteDaCasaNoModelo(hipParcial: Partial<HipotesesDaCasa>, model: Pick<BlueprintModel, 'boundaries'>): Point | null {
+  const frente = model.boundaries.find((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
+  if (!frente) return null;
+  const limites = model.boundaries.filter((b) => b.levelId === frente.levelId);
+  const terreno = medirTerreno(limites);
+  return terreno ? faixaDaAguaQuenteDaCasa(hipParcial, limites, terreno.anel) : null;
+}
+
 /** O rebaixo do forro (da laje à face de cima dele): a faixa mais baixa, o raio do tubo e a folga. */
 export function rebaixoDoForroMm(f: HipotesesDoForroDaCasa): number {
   return Math.max(...FAIXAS_DO_FORRO.map((k) => f[k].abaixoDoTetoMm)) + RAIO_NO_PLENUM_MM + f.folgaSobAFaixaMm;

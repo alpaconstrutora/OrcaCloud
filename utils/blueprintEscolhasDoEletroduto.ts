@@ -36,7 +36,7 @@
  * Puro: sem React, sem banco. O alvo do registro é o QUADRO (a rede é uma por quadro).
  */
 import { applyBatch, type BlueprintModel, type Command, type ObjectId, type Trecho, type ValorDeEscolha } from './blueprintKernel';
-import { horizontaisNoForro, temAssinaturaDaCasa } from './blueprintAssinaturaDaCasa';
+import { horizontaisNoForro, motivoSemAssinaturaDaCasa, temAssinaturaDaCasa } from './blueprintAssinaturaDaCasa';
 import {
   HIPOTESES_ELETRODUTO_PADRAO,
   caixasDaRedeDoQuadro,
@@ -291,7 +291,10 @@ export function forroDaCasaQueVale(model: BlueprintModel, quadroId: ObjectId, fo
  */
 export function motivoParaNaoRelancar(model: BlueprintModel, quadroId: ObjectId, forroDaCasa?: ForroDaCasa | null): string | null {
   // Correção 2 da F3: o forro da casa só livra a rede antiga com a assinatura da casa (`forroDaCasaQueVale`).
-  return redeNoForroSemRegistro(model, quadroId) && !forroDaCasaQueVale(model, quadroId, forroDaCasa) ? MOTIVO_REDE_NO_FORRO_SEM_REGISTRO : null;
+  if (!redeNoForroSemRegistro(model, quadroId) || forroDaCasaQueVale(model, quadroId, forroDaCasa)) return null;
+  // Correção 3 da F3: com as premissas da casa, diz POR QUE a rede não é da casa (e o que fazer).
+  const porque = forroDaCasa?.rebaixoMm != null ? motivoSemAssinaturaDaCasa(model, horizontaisDaRedeNoForro(model, quadroId), { faixas: [forroDaCasa.faixa], rebaixoMm: forroDaCasa.rebaixoMm }) : null;
+  return porque ? `${MOTIVO_REDE_NO_FORRO_SEM_REGISTRO} ${porque}` : MOTIVO_REDE_NO_FORRO_SEM_REGISTRO;
 }
 
 /**
@@ -467,7 +470,7 @@ export function botaoDeLancarEletrodutos(model: BlueprintModel, planos: readonly
   if (comRede.length) return { modo: 'RELANCAR', rotulo: 'Relançar com as escolhas atuais', motivo: null, quadros: comRede.map((p) => p.quadroId) };
   const desligado = (motivo: string): BotaoDeLancarEletrodutos => ({ modo: 'LANCAR', rotulo: lancar, motivo, quadros: [] });
   if (planos.length === 0) return desligado('Nenhum quadro no desenho — coloque um quadro de distribuição (Instalações › Componentes).');
-  if (livres.length < planos.length) return desligado(MOTIVO_REDE_NO_FORRO_SEM_REGISTRO);
+  if (livres.length < planos.length) return desligado(motivoParaNaoRelancar(model, planos.find((p) => !livres.includes(p))!.quadroId, forroDaCasa) ?? MOTIVO_REDE_NO_FORRO_SEM_REGISTRO);
   if (planos.every((p) => p.pontos === 0)) return desligado('Nenhum ponto com circuito — crie os circuitos (Circuitos automáticos ou Quadro de cargas).');
   const motivo = planos.find((p) => p.motivo)?.motivo;
   return desligado(`Nada a lançar${motivo ? `: ${motivo}` : ''}.`);

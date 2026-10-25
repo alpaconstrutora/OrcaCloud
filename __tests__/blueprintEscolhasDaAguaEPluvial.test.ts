@@ -169,7 +169,7 @@ describe('água — Refazer', () => {
     expect(r.tubos).toBe(tubosDeAgua(aceita).length);
     expect(r.tubosConfirmados).toBe(r.tubos);
     expect(textoDaConfirmacaoDoSistema('Água', r)).toBe(
-      `Água: ${r.tubos} tubo(s) (${r.tubos} confirmado(s)), inclusive ${r.partes.join(', ')} e 1 peça(s) (1 aceita(s)). O que mudou: DN mínimo da água fria — lançado com: DN 20 · agora: DN 25.`,
+      `Água: ${r.tubos} tubo(s) (${r.tubos} confirmado(s)), inclusive ${r.partes.join(', ')} e 1 peça(s) (1 aceita(s)): 1 registro(s) de gaveta. O que mudou: DN mínimo da água fria — lançado com: DN 20 · agora: DN 25.`,
     );
     // Correção 2 (menor 5): nomeia o alimentador, o extravasor e a limpeza que serão refeitos, com a contagem.
     const n = (rot: string) => tubosDeAgua(aceita).filter((t) => t.rotulo === rot).length;
@@ -187,6 +187,11 @@ describe('água — Refazer', () => {
     expect(r.pecas).toBe(2);
     const { comandos } = comandosDeRefazerAgua(m, H, null);
     expect(comandos).toContainEqual({ type: 'DeleteTerminal', terminalId: registro });
+    // Correção 3 (menor 2): a confirmação diz as peças POR NOME e quantidade; a VRP com o alerta.
+    const comVrp = applyCommand(m, { type: 'AddTerminal', levelId: tubo.levelId, disciplina: 'AGUA_FRIA', tipo: 'VRP', at: point(tubo.a.x, tubo.a.y), cotaMm: tubo.cotaAMm, tipoHidraulico: 'VRP' }).model;
+    const rv = aguaARefazer(comVrp, H);
+    expect(rv.pecasPorNome).toEqual(['1 registro(s) de gaveta', '1 registro(s) de pressão', '1 VRP (muda a pressão calculada; o motor não a repõe)']);
+    expect(textoDaConfirmacaoDoSistema('Água', rv)).toContain('e 3 peça(s) (3 aceita(s)): 1 registro(s) de gaveta, 1 registro(s) de pressão, 1 VRP (muda a pressão calculada; o motor não a repõe).');
   });
 
   it('correção 2 (menor 12): o Refazer da água deixa intacto o tubo de ESGOTO, de INCÊNDIO e o MECÂNICO encostados na caixa', () => {
@@ -294,11 +299,18 @@ describe('água — forro (Casa Automática)', () => {
   it('⚠️ correção 2: sem a ASSINATURA da casa (ramal à mão fora da faixa, ou outro rebaixo) — continua BLOQUEADO com o motivo', () => {
     const aMao = noForroSemRegistro(true, 2700);
     const comCasa = { ...comAgua({ cotaRamalMm: 2200 }), forroDaCasa: { ...FORRO, rebaixoMm: 300 } };
-    expect(motivoParaNaoRelancarAgua(aMao, comCasa)).toBe(MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO);
+    // Correção 3: o motivo diz POR QUE (o primeiro critério que falhou) e o que fazer.
+    expect(motivoParaNaoRelancarAgua(aMao, comCasa)).toBe(
+      `${MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO} Há trecho no forro fora das faixas da Casa Automática (ex.: 2700 mm) — apague-o ou relance pela Casa Automática.`,
+    );
     expect(lancamentoDaAgua(aMao, comCasa).hip.agua.noForro).toBeUndefined();
     expect(comandosDeRefazerAgua(aMao, comCasa, null).comandos).toEqual([]);
     // Na faixa, mas com outro rebaixo do forro: também não é a casa. Sem o rebaixo no forro da casa: não dá para conferir.
-    expect(motivoParaNaoRelancarAgua(noForroSemRegistro(), { ...H, forroDaCasa: { ...FORRO, rebaixoMm: 233 } })).toBe(MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO);
+    expect(motivoParaNaoRelancarAgua(noForroSemRegistro(), { ...H, forroDaCasa: { ...FORRO, rebaixoMm: 233 } })).toBe(
+      `${MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO} O forro dos ambientes (rebaixo 300 mm) difere das premissas da casa (rebaixo 233 mm) — ajuste um dos dois ou relance pela Casa Automática.`,
+    );
+    // Correção 3 (menor 3): a FRIA na faixa da QUENTE (2630) não é a casa — cada disciplina na faixa dela.
+    expect(motivoParaNaoRelancarAgua(noForroSemRegistro(true, 2630), { ...H, forroDaCasa: { ...FORRO, rebaixoMm: 300 } })).toMatch(/fora das faixas da Casa Automática \(ex\.: 2630 mm\)/);
     expect(motivoParaNaoRelancarAgua(noForroSemRegistro(), { ...H, forroDaCasa: FORRO })).toBe(MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO);
   });
 

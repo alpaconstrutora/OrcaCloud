@@ -8,7 +8,7 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { SUBIDA_DO_ALIMENTADOR_DA_CASA, faixaDaAguaQuenteDaCasa, forroDaAguaDaCasa, forroEletricoDaCasa, conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { SUBIDA_DO_ALIMENTADOR_DA_CASA, faixaDaAguaQuenteDaCasa, faixaDaAguaQuenteDaCasaNoModelo, forroDaAguaDaCasa, forroEletricoDaCasa, conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { amostradorDaGrade, type GradeDeElevacao } from '../utils/blueprintTopografia';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
@@ -1470,6 +1470,35 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     // Sensibilidade: sem a faixa e a subida, mais conflitos que a casa (o que a revisão mediu).
     expect((semFaixa.ESTRUTURA ?? 0) + (semFaixa.REDE ?? 0)).toBeGreaterThan((original.ESTRUTURA ?? 0) + (original.REDE ?? 0));
     for (const [classe, n] of Object.entries(medidos)) expect(n, classe).toBeLessThanOrEqual(original[classe] ?? 0);
+  });
+
+  // Correção 3 (24/10/2026, re-revisão): a faixa da quente vem do LOTE do modelo (o pavimento da frente), nunca do
+  // pavimento ativo no editor. No sobrado o lote só existe no térreo: pelos limites do pavimento de cima a faixa saía
+  // `null` e a quente refeita cruzava a fria (medido pela revisão: ESTRUTURA 53 e REDE 18, contra 55/0).
+  it('⚠️ correção 3: sobrado, água antiga sem registro — a faixa da quente pelo lote inteiro; refeita, os conflitos da água não passam dos da casa', () => {
+    const r = casa(2).resultado;
+    const estudo = { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } };
+    const antiga = applyCommand(r, { type: 'ApagarRegistroDeLancamento', motor: 'AGUA', alvoId: null }).model;
+    const hipCasa = hipotesesDasPremissas(PREMISSAS_DA_CASA_PADRAO);
+    const doLote = faixaDaAguaQuenteDaCasaNoModelo(hipCasa, antiga);
+    expect(doLote).not.toBeNull();
+    expect(doLote).toEqual({ x: registroDe(r, 'AGUA', null)!.escolhas.faixaDaAguaQuenteX, y: registroDe(r, 'AGUA', null)!.escolhas.faixaDaAguaQuenteY });
+    // O que o editor fazia com o pavimento de cima ativo: os limites DELE — nenhum —, e a faixa sumia.
+    const superior = [...antiga.levels].sort((a, b) => b.elevationMm - a.elevationMm)[0];
+    const limitesDeCima = antiga.boundaries.filter((b) => b.levelId === superior.id);
+    expect(limitesDeCima).toHaveLength(0);
+    const daCasa = { ...estudo, forroDaCasa: { ...forroDaAguaDaCasa(hipCasa)!, faixaDaAguaQuente: doLote, subidaDoAlimentador: SUBIDA_DO_ALIMENTADOR_DA_CASA } };
+    expect(motivoParaNaoRelancarAgua(antiga, daCasa)).toBeNull();
+    const refeita = applyBatch(antiga, comandosDeRefazerAgua(antiga, daCasa, null).comandos).model;
+    expect(registroDe(refeita, 'AGUA', null)?.escolhas).toMatchObject({ faixaDaAguaQuenteX: doLote!.x, faixaDaAguaQuenteY: doLote!.y });
+    const conflitosDaAgua = (m: BlueprintModel) => {
+      const ids = new Set((m.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE').map((t) => t.id));
+      return conflitosDoModelo(m).filter((c) => ids.has(c.trechoId)).reduce((o: Record<string, number>, c) => ((o[c.classe] = (o[c.classe] ?? 0) + 1), o), {});
+    };
+    const original = conflitosDaAgua(r);
+    const medidos = conflitosDaAgua(refeita);
+    for (const [classe, n] of Object.entries(medidos)) expect(n, classe).toBeLessThanOrEqual(original[classe] ?? 0);
+    expect(medidos.REDE ?? 0).toBe(original.REDE ?? 0);
   });
 
   it('térrea: nenhuma dessas redes em vão de porta ou janela (o aquecedor ao lado da janela; o dreno do ar é a F14d)', () => {

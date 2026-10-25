@@ -4748,17 +4748,17 @@ describe('BlueprintEditor · ribbon', () => {
 
     const MOTIVO_FORRO = 'Rede no forro lançada antes do registro — relançar aqui a tiraria do forro.';
     /** Os botões desligados, com o motivo no texto, no `title` (botão e invólucro) e na descrição acessível. */
-    async function bloqueadoComMotivo() {
+    async function bloqueadoComMotivo(motivo = MOTIVO_FORRO) {
       const drawer = await abrirEletrodutos();
       const tabela = await within(drawer).findByRole('table', { name: /eletrodutos por quadro/i });
-      expect(tabela).toHaveTextContent(MOTIVO_FORRO);
+      expect(tabela).toHaveTextContent(motivo);
       const daLinha = within(tabela).getByRole('button');
       expect(daLinha).toBeDisabled();
-      expect(daLinha).toHaveAttribute('title', MOTIVO_FORRO);
-      expect(daLinha.parentElement).toHaveAttribute('title', MOTIVO_FORRO);
+      expect(daLinha).toHaveAttribute('title', motivo);
+      expect(daLinha.parentElement).toHaveAttribute('title', motivo);
       const doRodape = screen.getByRole('button', { name: /^lançar em todos/i });
       expect(doRodape).toBeDisabled();
-      expect(doRodape).toHaveAccessibleDescription(MOTIVO_FORRO);
+      expect(doRodape).toHaveAccessibleDescription(motivo);
     }
 
     // Conciliação F3 × #154 + correção 2 (24/10/2026): sem linha gravada (`get` → null), vale o PADRÃO da casa; a rede
@@ -4778,7 +4778,8 @@ describe('BlueprintEditor · ribbon', () => {
       lerPremissasDaCasa.mockResolvedValue(null);
       loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, 300));
       await montar();
-      await bloqueadoComMotivo();
+      // Correção 3: o motivo diz por quê e o que fazer.
+      await bloqueadoComMotivo(`${MOTIVO_FORRO} O forro dos ambientes (rebaixo 300 mm) difere das premissas da casa (rebaixo 233 mm) — ajuste um dos dois ou relance pela Casa Automática.`);
     });
 
     // Correção 2 (I2): ERRO de leitura das premissas (timeout, RLS) não vira padrão — bloqueada com o motivo.
@@ -4847,7 +4848,7 @@ describe('BlueprintEditor · ribbon', () => {
       await userEvent.setup().click(relancar);
       const titulo = await screen.findByText('Refazer a água?');
       const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
-      expect(confirmacao).toHaveTextContent(`Água: ${tubos} tubo(s) (${tubos} confirmado(s)), inclusive extravasor (1), limpeza (1) e 1 peça(s) (1 aceita(s)).`);
+      expect(confirmacao).toHaveTextContent(`Água: ${tubos} tubo(s) (${tubos} confirmado(s)), inclusive extravasor (1), limpeza (1) e 1 peça(s) (1 aceita(s)): 1 registro(s) de gaveta.`);
       expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
       await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
       await waitFor(() => expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
@@ -4892,21 +4893,23 @@ describe('BlueprintEditor · ribbon', () => {
     });
 
     // Correção 2 (I1 e I2): sem a assinatura (ramal à mão a 2,70 m, ou outro rebaixo) ou com erro ao ler as premissas — bloqueada.
+    // Correção 3: com as premissas lidas, o motivo diz por quê (o primeiro critério que falhou) e o que fazer.
     it.each([
-      ['ramal à mão fora da faixa da casa', 233, 2700, true],
-      ['forro com outro rebaixo (não é a casa)', 300, 2598, true],
-      ['erro ao ler as premissas da casa', 233, 2598, false],
-    ] as const)('⚠️ correção 2: água no forro — %s: botão do rodapé desligado, com o motivo', async (_caso, rebaixo, cota, lerOk) => {
+      ['ramal à mão fora da faixa da casa', 233, 2700, true, ' Há trecho no forro fora das faixas da Casa Automática (ex.: 2700 mm) — apague-o ou relance pela Casa Automática.'],
+      ['forro com outro rebaixo (não é a casa)', 300, 2598, true, ' O forro dos ambientes (rebaixo 300 mm) difere das premissas da casa (rebaixo 233 mm) — ajuste um dos dois ou relance pela Casa Automática.'],
+      ['erro ao ler as premissas da casa', 233, 2598, false, ''],
+    ] as const)('⚠️ correção 2: água no forro — %s: botão do rodapé desligado, com o motivo', async (_caso, rebaixo, cota, lerOk, porque) => {
       if (lerOk) lerPremissasDaCasa.mockResolvedValue(null);
       loadBranchModel.mockResolvedValue(await aguaNoForro(rebaixo, cota));
       await montar();
       const { gaveta, dialog } = await abrirAgua();
-      expect(await within(gaveta).findByTestId('agua-motivo')).toHaveTextContent(MOTIVO_AGUA);
+      const motivo = MOTIVO_AGUA + porque;
+      expect(await within(gaveta).findByTestId('agua-motivo')).toHaveTextContent(motivo);
       const principal = within(dialog).getByRole('button', { name: /^(lançar|relançar) tudo$/i });
       expect(principal).toBeDisabled();
-      expect(principal).toHaveAttribute('title', MOTIVO_AGUA);
-      expect(principal.parentElement).toHaveAttribute('title', MOTIVO_AGUA);
-      expect(principal).toHaveAccessibleDescription(MOTIVO_AGUA);
+      expect(principal).toHaveAttribute('title', motivo);
+      expect(principal.parentElement).toHaveAttribute('title', motivo);
+      expect(principal).toHaveAccessibleDescription(motivo);
       expect(within(dialog).queryByRole('button', { name: /^refazer tudo$/i })).not.toBeInTheDocument();
     });
 

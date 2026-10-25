@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import { ModelHistory, PARAMETRO_COTA_DA_REDE, applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { planejarEsgotoCompleto } from '../utils/blueprintEsgotoCompleto';
+import { trechosDeEsgotoSemDestino } from '../utils/blueprintEsgotoAutomatico';
+import { redeDaOrigem } from '../utils/blueprintAguaAutomatica';
 import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from '../utils/blueprintMemorialHidro';
 import { registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
 import {
@@ -283,6 +285,34 @@ describe('esgoto — o Refazer', () => {
     const depois = applyBatch(m, re.comandos).model;
     expect(unidades(depois)).toEqual(antes);
     expect(registroDe(depois, 'ESGOTO', null)?.escolhas).toMatchObject({ destino: 'TRATAMENTO', caimentoPctAte75: 3 });
+  });
+
+  it('⚠️ ajuste da correção 1: caixa de inspeção SUGERIDA, tratamento CONFIRMADO, afastamento novo — a caixa fica (o motor não liga caixa nova a unidade mantida), a rede continua ligada até o sumidouro e a confirmação diz', () => {
+    let m = aceitar(esgotoLancado(TRATAMENTO));
+    const ci = (m.terminais ?? []).find((x) => x.tipoHidraulico === 'CAIXA_INSPECAO')!;
+    m = applyCommand(m, { type: 'SetTerminalProps', terminalId: ci.id, sugerida: true }).model;
+    const longe = premissas({ destino: 'TRATAMENTO', afastamentoDaCiMm: 2500, caimentoPctAte75: 3 });
+    // Sem o tratamento confirmado, a mesma caixa SERIA refeita no afastamento novo (a sensibilidade do caso).
+    expect(redeDoEsgotoDoSistema(m, 'TRATAMENTO').pecas.some((x) => x.id === ci.id)).toBe(true);
+    expect(redeDoEsgotoDoSistema(m, 'TRATAMENTO', true).pecas.some((x) => x.id === ci.id)).toBe(false);
+    const texto = textoDaConfirmacaoDoEsgoto(esgotoARefazer(m, longe))!;
+    expect(texto).toContain('a caixa de inspeção de onde sai o tratamento que você confirmou — fica como está; o afastamento novo da caixa não se aplica a ela');
+    expect(texto).toContain('o tanque, o filtro e o sumidouro que você confirmou — ficam onde estão');
+    expect(diferencasDoEsgoto(m, longe).map((d) => d.item)).toEqual(['caimentoPctAte75']);
+    const depois = applyBatch(m, comandosDeRefazerEsgoto(m, longe, null).comandos).model;
+    const ci2 = (depois.terminais ?? []).find((x) => x.id === ci.id)!;
+    expect(ci2.at).toEqual(ci.at);
+    // Ligada: da caixa, a rede alcança todos os tubos do tratamento e chega ao sumidouro; nenhum tubo sem destino.
+    const daCaixa = new Set(redeDaOrigem(depois, ci2, 'ESGOTO').map((t) => t.id));
+    const tratamento = (depois.trechos ?? []).filter((t) => t.rotulo === 'Tratamento');
+    expect(tratamento.length).toBeGreaterThan(0);
+    expect(tratamento.every((t) => daCaixa.has(t.id))).toBe(true);
+    const sumidouro = (depois.terminais ?? []).find((x) => x.tipoHidraulico === 'SUMIDOURO')!;
+    expect(tratamento.some((t) => (t.b.x === sumidouro.at.x && t.b.y === sumidouro.at.y) || (t.a.x === sumidouro.at.x && t.a.y === sumidouro.at.y))).toBe(true);
+    expect(trechosDeEsgotoSemDestino(depois)).toEqual([]);
+    // Os ramais chegam à caixa que ficou; o registro guarda o afastamento ANTERIOR (o novo não se aplicou).
+    expect((depois.trechos ?? []).some((t) => t.disciplina === 'ESGOTO' && t.rotulo !== 'Tratamento' && ((t.a.x === ci.at.x && t.a.y === ci.at.y) || (t.b.x === ci.at.x && t.b.y === ci.at.y)))).toBe(true);
+    expect(registroDe(depois, 'ESGOTO', null)?.escolhas).toMatchObject({ afastamentoDaCiMm: 1000, caimentoPctAte75: 3 });
   });
 
   it('⚠️ correção 1 (I1): mudou uma premissa do TRATAMENTO — as unidades são refeitas nas medidas e na posição do motor, e a confirmação diz', () => {

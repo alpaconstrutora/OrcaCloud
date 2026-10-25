@@ -321,24 +321,43 @@ function ligacoesMantidas(model: BlueprintModel): Terminal[] {
 }
 
 /** A caixa de inspeção que o Refazer mantém: a principal (não a do coletor), confirmada. */
-function caixasMantidas(model: BlueprintModel): Terminal[] {
+function caixasConfirmadas(model: BlueprintModel): Terminal[] {
   return (model.terminais ?? []).filter((x) => x.disciplina === 'ESGOTO' && x.tipoHidraulico === 'CAIXA_INSPECAO' && !x.sugerida && x.rotulo !== ROTULO_DA_CI_DO_COLETOR);
 }
 
+/**
+ * Ajuste da correção 1 (24/10/2026): a caixa de inspeção SUGERIDA de onde sai o tratamento MANTIDO (a ponta de um tubo
+ * "Tratamento" está nela). O motor do tratamento não sabe ligar uma caixa nova a unidades que ficam (recusa relançar com
+ * unidade confirmada) — refeita noutro lugar (afastamento novo), a caixa deixaria o tratamento solto. Então ela também
+ * fica: a rede continua ligada da caixa ao sumidouro, e a confirmação diz que o afastamento novo não se aplica.
+ */
+function caixasDoTratamentoMantido(model: BlueprintModel): Terminal[] {
+  const pontas = (model.trechos ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.rotulo === ROTULO_DO_TRATAMENTO).flatMap((t) => [`${t.levelId}|${t.a.x},${t.a.y}`, `${t.levelId}|${t.b.x},${t.b.y}`]);
+  const naPonta = new Set(pontas);
+  return (model.terminais ?? []).filter(
+    (x) => x.disciplina === 'ESGOTO' && x.tipoHidraulico === 'CAIXA_INSPECAO' && !!x.sugerida && x.rotulo !== ROTULO_DA_CI_DO_COLETOR && naPonta.has(`${x.levelId}|${x.at.x},${x.at.y}`),
+  );
+}
+
 /** As escolhas fixadas pelo desenho, com o que as fixa (para a confirmação dizer o que fica e por quê). */
-function fixadasPeloDesenho(model: BlueprintModel, destino: DestinoDoEsgoto): Map<string, string> {
+function fixadasPeloDesenho(model: BlueprintModel, destino: DestinoDoEsgoto, preservarTratamento = false): Map<string, string> {
   const m = new Map<string, string>();
   if (destino === 'REDE_PUBLICA' && ligacoesMantidas(model).length) m.set('profundidadeDaRedeMm', 'a ligação à rede pública com a cota confirmada');
-  if (caixasMantidas(model).length) {
-    m.set('afastamentoDaCiMm', 'a caixa de inspeção que você confirmou');
-    m.set('afastamentoDaCiAAguaMm', 'a caixa de inspeção que você confirmou');
+  const caixa = caixasConfirmadas(model).length
+    ? 'a caixa de inspeção que você confirmou'
+    : preservarTratamento && caixasDoTratamentoMantido(model).length
+      ? 'a caixa de inspeção de onde sai o tratamento que você confirmou'
+      : null;
+  if (caixa) {
+    m.set('afastamentoDaCiMm', caixa);
+    m.set('afastamentoDaCiAAguaMm', caixa);
   }
   return m;
 }
 
 /** As escolhas a registrar: as fixadas pelo desenho levam o valor do registro anterior (ou nenhum). */
-function semAsFixadas(model: BlueprintModel, escolhas: EscolhasDoLancamento, anterior: EscolhasDoLancamento | undefined): EscolhasDoLancamento {
-  const fixadas = fixadasPeloDesenho(model, escolhas.destino === 'TRATAMENTO' ? 'TRATAMENTO' : 'REDE_PUBLICA');
+function semAsFixadas(model: BlueprintModel, escolhas: EscolhasDoLancamento, anterior: EscolhasDoLancamento | undefined, preservarTratamento = false): EscolhasDoLancamento {
+  const fixadas = fixadasPeloDesenho(model, escolhas.destino === 'TRATAMENTO' ? 'TRATAMENTO' : 'REDE_PUBLICA', preservarTratamento);
   if (!fixadas.size) return escolhas;
   const out = { ...escolhas };
   for (const k of fixadas.keys()) {
@@ -370,7 +389,7 @@ export function lancamentoDoEsgoto(
     ...(x.tuboDeQuedaPorGrupoMm != null && h.tuboDeQuedaPorGrupoMm == null ? { tuboDeQuedaPorGrupoMm: x.tuboDeQuedaPorGrupoMm } : {}),
     ...(x.raioDoShaftMm != null ? { raioDoShaftMm: x.raioDoShaftMm } : {}),
   });
-  const escolhas = (x: ExtrasDoEsgotoDaCasa = {}) => semAsFixadas(model, escolhasDoEsgoto(p, x), e);
+  const escolhas = (x: ExtrasDoEsgotoDaCasa = {}) => semAsFixadas(model, escolhasDoEsgoto(p, x), e, tratamentoPreservado(model, p));
   if (e) {
     const n = (k: string) => numeroDe(e, k);
     const fx = n('faixaX');
@@ -412,7 +431,7 @@ export function diferencasDoEsgoto(model: BlueprintModel, p: PremissasDoEsgoto):
   const fora = new Set<string>([
     ...(destinos.every((d) => d === 'REDE_PUBLICA') ? [] : SO_DA_REDE_PUBLICA),
     ...(destinos.every((d) => d === 'TRATAMENTO') ? [] : SO_DO_TRATAMENTO),
-    ...fixadasPeloDesenho(model, atuais.destino === 'TRATAMENTO' ? 'TRATAMENTO' : 'REDE_PUBLICA').keys(),
+    ...fixadasPeloDesenho(model, atuais.destino === 'TRATAMENTO' ? 'TRATAMENTO' : 'REDE_PUBLICA', tratamentoPreservado(model, p)).keys(),
   ]);
   const rotulos = Object.fromEntries(Object.entries(ESCOLHAS_DO_ESGOTO.rotulos).filter(([k]) => !fora.has(k)));
   return diferencasDasEscolhas(gravadas, atuais, { ...ESCOLHAS_DO_ESGOTO, rotulos });
@@ -455,8 +474,10 @@ export function redeDoEsgotoDoSistema(
   const trechos = (model.trechos ?? []).filter(
     (t) => t.disciplina === 'ESGOTO' && (ligados.has(t.id) || ROTULOS_DO_MOTOR.has(t.rotulo ?? '')) && !(preservarTratamento && t.rotulo === ROTULO_DO_TRATAMENTO),
   );
+  const caixaDoTratamento = new Set(preservarTratamento ? caixasDoTratamentoMantido(model).map((x) => x.id) : []);
   const pecas = (model.terminais ?? []).filter((x) => {
     if (x.disciplina !== 'ESGOTO') return false;
+    if (caixaDoTratamento.has(x.id)) return false;
     if (x.tipoHidraulico === 'CAIXA_INSPECAO') return !!x.sugerida || x.rotulo === ROTULO_DA_CI_DO_COLETOR;
     if (x.tipoHidraulico === 'LIGACAO_ESGOTO') return !!x.sugerida || destino === 'TRATAMENTO' || cotaDaRedeEstimada(x);
     if (ehUnidade(x)) return !preservarTratamento;
@@ -586,7 +607,7 @@ export function esgotoARefazer(model: BlueprintModel, p: PremissasDoEsgoto): Esg
   const atuais = escolhasDoEsgoto(p);
   const padroes = ESCOLHAS_DO_ESGOTO.padroes ?? {};
   const mudouAChave = (k: string) => !!gravadas && (gravadas[k] ?? padroes[k]) !== (atuais[k] ?? padroes[k]);
-  const fixadas = fixadasPeloDesenho(model, destino);
+  const fixadas = fixadasPeloDesenho(model, destino, preservar);
   const porPeca = new Map<string, string[]>();
   for (const [k, peca] of fixadas) if (mudouAChave(k)) porPeca.set(peca, [...(porPeca.get(peca) ?? []), NOME_CURTO_DA_FIXADA[k]]);
   const ficam: string[] = ['os aparelhos, os ralos e as caixas sifonadas'];

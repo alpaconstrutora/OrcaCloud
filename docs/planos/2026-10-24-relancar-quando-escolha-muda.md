@@ -126,8 +126,9 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
   ligação aceita com a cota ESTIMADA é refeita na profundidade nova.
 - Esgoto (F4, correção 1): o tratamento CONFIRMADO fica onde o usuário o pôs quando o destino continua o tratamento e
   nenhuma premissa dele mudou (sem registro, também). Mudou uma premissa do tratamento: as unidades voltam à posição e às
-  medidas do motor (a confirmação diz). Com a caixa de inspeção SUGERIDA e o tratamento confirmado, a caixa refeita em
-  outro lugar (afastamento novo) deixa o tratamento onde estava.
+  medidas do motor (a confirmação diz). Com a caixa de inspeção SUGERIDA e o tratamento confirmado, a caixa de onde sai
+  o tratamento também fica (o motor não liga caixa nova a unidade mantida): a rede segue ligada da caixa ao sumidouro, o
+  afastamento novo não se aplica (fora do aviso, registro com o anterior) e a confirmação diz "fica como está".
 - Esgoto (F4, correção 1): esgoto antigo bloqueado (a água no forro como a da casa, sem as premissas ou sem a
   assinatura): o "Lançar (n)" de pontos NOVOS segue ligado, como antes da F4; o relançar e o "Refazer tudo" ficam
   desligados, à vista, com o motivo.

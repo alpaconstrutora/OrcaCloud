@@ -121,15 +121,14 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
 
     return (
         <div className="space-y-6">
-            <button
-                onClick={onBack}
-                className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all"
-            >
-                <ArrowLeft className="w-4 h-4" /> Voltar à lista
-            </button>
-
             {/* 1. Título */}
             <div>
+                <button
+                    onClick={onBack}
+                    className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-2"
+                >
+                    <ArrowLeft className="w-4 h-4" /> Voltar à lista
+                </button>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Detalhes da Folha</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">
                     Período: {formatDate(run.start_date)} a {formatDate(run.end_date)}

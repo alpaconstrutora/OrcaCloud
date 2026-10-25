@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { point } from '../utils/blueprintKernel';
-import { alturaDaTomada, apoioDaTomada, orientacaoDaTomada, trianguloDaTomada } from '../utils/blueprintRede';
+import { HASTE_DA_TOMADA, alturaDaTomada, apoioDaTomada, orientacaoDaTomada, simboloDaTomada, trianguloDaTomada } from '../utils/blueprintRede';
 
 describe('tomada · a classe de altura pela COTA', () => {
   it('as três alturas nominais da norma caem nas classes certas', () => {
@@ -92,26 +92,36 @@ describe('tomada · o triângulo', () => {
   });
 });
 
-describe('tomada · onde o símbolo se APOIA (15/09/2026: "alinhado com a face de dentro da parede")', () => {
+describe('tomada · onde o símbolo se APOIA (25/10/2026: "o que deve estar gravada na face da parede é a barra que sai da seta")', () => {
   const parede = { a: point(0, 0), b: point(5000, 0), thicknessMm: 150 };
 
-  it('ponto NA FACE: base fica no ponto (recuo 0) e a haste vai até o eixo (meia espessura)', () => {
-    expect(apoioDaTomada({ at: point(2000, 75) }, [parede])).toEqual({ graus: 90, recuoMm: 0, aoEixoMm: 75 });
+  it('ponto NA FACE: a ponta da barra fica no ponto (recuo 0)', () => {
+    expect(apoioDaTomada({ at: point(2000, 75) }, [parede])).toEqual({ graus: 90, recuoMm: 0 });
   });
 
-  it('ponto a 30 mm do eixo (inserido sem encaixe): a base anda 45 mm até a face; haste 75', () => {
-    expect(apoioDaTomada({ at: point(2000, 30) }, [parede])).toEqual({ graus: 90, recuoMm: 45, aoEixoMm: 75 });
+  it('ponto a 30 mm do eixo (inserido sem encaixe): a ponta da barra anda 45 mm até a face', () => {
+    expect(apoioDaTomada({ at: point(2000, 30) }, [parede])).toEqual({ graus: 90, recuoMm: 45 });
   });
 
-  it('ponto ALÉM da face (a 120 mm do eixo): base fica no ponto e a haste alcança o eixo (120)', () => {
-    expect(apoioDaTomada({ at: point(2000, 120) }, [parede])).toEqual({ graus: 90, recuoMm: 0, aoEixoMm: 120 });
+  it('ponto ALÉM da face (a 120 mm do eixo): a ponta da barra fica no ponto', () => {
+    expect(apoioDaTomada({ at: point(2000, 120) }, [parede])).toEqual({ graus: 90, recuoMm: 0 });
   });
 
   it('giro declarado: a direção é a declarada, o apoio continua sendo o da parede', () => {
-    expect(apoioDaTomada({ at: point(2000, 30), rotacaoGraus: 45 }, [parede])).toEqual({ graus: 45, recuoMm: 45, aoEixoMm: 75 });
+    expect(apoioDaTomada({ at: point(2000, 30), rotacaoGraus: 45 }, [parede])).toEqual({ graus: 45, recuoMm: 45 });
   });
 
-  it('longe de parede: sem recuo e sem haste ao eixo', () => {
-    expect(apoioDaTomada({ at: point(2000, 3000) }, [parede])).toEqual({ graus: 0, recuoMm: 0, aoEixoMm: 0 });
+  it('longe de parede: sem recuo', () => {
+    expect(apoioDaTomada({ at: point(2000, 3000) }, [parede])).toEqual({ graus: 0, recuoMm: 0 });
+  });
+
+  it('⚠️ a barra encosta na FACE e o triângulo inteiro fica no ambiente — nada entra na parede', () => {
+    const at = point(2000, 30);
+    const s = simboloDaTomada(at, apoioDaTomada({ at }, [parede]), 200);
+    expect(s.pontaDaHaste.x).toBeCloseTo(2000, 6);
+    expect(s.pontaDaHaste.y).toBeCloseTo(75, 6); // a face
+    expect(s.baseDoTriangulo.y).toBeCloseTo(75 + HASTE_DA_TOMADA * 200, 6);
+    expect(s.centro.y).toBeCloseTo(75 + HASTE_DA_TOMADA * 200 + 100, 6);
+    for (const v of trianguloDaTomada(s.centro, 90, 200)) expect(v.y).toBeGreaterThanOrEqual(75 + HASTE_DA_TOMADA * 200 - 1e-6);
   });
 });

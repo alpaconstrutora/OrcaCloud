@@ -40,6 +40,7 @@ import {
   giroDaPeca,
   medidasDaPeca,
   apoioDaTomada,
+  HASTE_DA_TOMADA,
   secoesDoInterruptor,
   trianguloDaTomada,
 } from './blueprintRede';
@@ -182,8 +183,8 @@ function simboloDoPonto(d: Desenhista, t: Pick<Terminal, 'tipoEletrico' | 'cotaM
     if (altura === 'ALTA') d.poligono(tri, COR);
     else if (altura === 'MEDIA') d.poligono([meioDaBase, tri[1], tri[2]], COR);
     contorno(d, tri, MEDIA);
-    // Haste para a parede.
-    d.linha(meioDaBase.x, meioDaBase.y, meioDaBase.x - (tri[2].x - meioDaBase.x) * 0.5, meioDaBase.y - (tri[2].y - meioDaBase.y) * 0.5, { espessuraMm: MEDIA, cor: COR });
+    // A barra, da base para trás até a face da parede (`simboloDaTomada`).
+    d.linha(meioDaBase.x, meioDaBase.y, meioDaBase.x - (tri[2].x - meioDaBase.x) * HASTE_DA_TOMADA, meioDaBase.y - (tri[2].y - meioDaBase.y) * HASTE_DA_TOMADA, { espessuraMm: MEDIA, cor: COR });
     if (altura === 'PISO') {
       const l = TOMADA_MM * 1.6;
       d.retangulo(c.x - l / 2, c.y - l / 2, l, l, { espessuraMm: FINA, cor: COR });
@@ -508,9 +509,9 @@ export function desenharEletrica(
     const catDoPonto = categoriaDoPonto(t.tipoEletrico);
     if (!entraNoRecorte(catDoPonto, recorte)) continue;
     categoria(catDoPonto);
-    // A TOMADA se apoia na FACE (15/09/2026): a base do triângulo vai do
-    // ponto à face (`recuoMm`, no modelo) e o centro do símbolo fica meio
-    // tamanho adiante, já no papel — a mesma regra do canvas. O papel tem Y
+    // A TOMADA se apoia na FACE (15/09 e 25/10/2026): a PONTA DA BARRA vai do
+    // ponto à face (`recuoMm`, no modelo); a barra e o triângulo vêm adiante,
+    // já no papel — a mesma regra do canvas (`simboloDaTomada`). O papel tem Y
     // para baixo: a direção espelha em y.
     const apoio = apoioDaTomada(t, paredes);
     const graus = apoio.graus;
@@ -520,7 +521,7 @@ export function desenharEletrica(
       ? { x: t.at.x + Math.cos(rad) * apoio.recuoMm, y: t.at.y + Math.sin(rad) * apoio.recuoMm }
       : t.at;
     const c = ehTomadaAqui
-      ? { x: px(base.x) + (Math.cos(rad) * TOMADA_MM) / 2, y: py(base.y) - (Math.sin(rad) * TOMADA_MM) / 2 }
+      ? { x: px(base.x) + Math.cos(rad) * TOMADA_MM * (HASTE_DA_TOMADA + 0.5), y: py(base.y) - Math.sin(rad) * TOMADA_MM * (HASTE_DA_TOMADA + 0.5) }
       : { x: px(t.at.x), y: py(t.at.y) };
     simboloDoPonto(d, t, c, graus, { TOMADA_MM, LUZ_R_MM, INT_R_MM, LD_MM, FINA, MEDIA });
     const circuito = t.circuitoId ? circuitosPorId.get(t.circuitoId)?.nome : null;

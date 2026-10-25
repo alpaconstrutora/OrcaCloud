@@ -4711,8 +4711,8 @@ function aplicarSemHash(
         diff.updated.push(agua.id);
       }
 
-      // INSTALAÇÕES andam rígidas, como a estrutura e a água: elas não têm
-      // junção com nada e nada as estica.
+      // INSTALAÇÕES: a peça (terminal, quadro) anda rígida; o trecho anda pelas
+      // PONTAS, para a rede continuar ligada (25/10/2026).
       //
       // ⚠️ E as COTAS não mudam. Arrastar em planta desloca em x e y; a altura
       // do trecho é outra dimensão, e mexer nela por causa de um arraste
@@ -4720,37 +4720,32 @@ function aplicarSemHash(
       // ⚠️ As PONTAS PRESAS às peças que vão andar, calculadas ANTES de mover
       // qualquer coisa — depois, a peça já não está onde a ponta está, e a
       // igualdade que define a conexão deixaria de valer.
-      // 25/10/2026: e o NÓ DE CHEGADA que só serve à peça (`deslocamentoDasPontasPresas`).
-      const presas = deslocamentoDasPontasPresas(next, terminalIds, quadroIds, { x: dx, y: dy });
-      const rigidos = new Set(trechoIds);
-
+      // 25/10/2026: o NÓ DE CHEGADA que só serve à peça vai junto, e o trecho
+      // SELECIONADO não se solta — ver `deslocamentoDasPontasPresas`.
       for (const id of trechoIds) {
-        const t = (next.trechos ?? []).find((x) => x.id === id);
-        if (!t) throw new KernelError('RUN_NOT_FOUND', `Trecho não encontrado: ${id}`);
-        t.a = { x: inteiro(t.a.x + dx), y: inteiro(t.a.y + dy) };
-        t.b = { x: inteiro(t.b.x + dx), y: inteiro(t.b.y + dy) };
-        // MOVER É DECIDIR, como na tomada sugerida: o caminho que a pessoa
-        // arrastou deixou de ser proposta do sistema.
-        if (t.sugerido) t.sugerido = null;
-        diff.updated.push(t.id);
+        if (!(next.trechos ?? []).some((x) => x.id === id)) throw new KernelError('RUN_NOT_FOUND', `Trecho não encontrado: ${id}`);
       }
+      const pontas = deslocamentoDasPontasPresas(next, terminalIds, quadroIds, { x: dx, y: dy }, trechoIds);
 
       // ─── A CONEXÃO SE MANTÉM (10/09/2026) ────────────────────────────────
       //
       // A ponta do trecho que está NA peça anda com ela. Sem isto, mover uma
       // tomada deixava o eletroduto apontando para onde ela ESTAVA — a ponta no
-      // ar, a 30 cm da peça, e nada na tela dizendo.
-      //
-      // ⚠️ Só as pontas presas, e só dos trechos que NÃO andaram rígidos: o
-      // trecho selecionado já foi inteiro, e somar o delta de novo numa ponta
-      // dele o esticaria pelo dobro. E só x e y — a cota é outra dimensão.
-      for (const [id, lados] of presas) {
-        if (rigidos.has(id)) continue;
+      // ar, a 30 cm da peça, e nada na tela dizendo. Só x e y — a cota é outra
+      // dimensão.
+      for (const [id, lados] of pontas) {
         const t = (next.trechos ?? []).find((x) => x.id === id);
         if (!t) continue;
         if (lados.a) t.a = { x: inteiro(t.a.x + lados.a.x), y: inteiro(t.a.y + lados.a.y) };
         if (lados.b) t.b = { x: inteiro(t.b.x + lados.b.x), y: inteiro(t.b.y + lados.b.y) };
         diff.updated.push(t.id);
+      }
+      // MOVER É DECIDIR, como na tomada sugerida: o caminho que a pessoa
+      // arrastou deixou de ser proposta do sistema.
+      for (const id of trechoIds) {
+        const t = (next.trechos ?? []).find((x) => x.id === id)!;
+        if (t.sugerido) t.sugerido = null;
+        if (!pontas.has(id)) diff.updated.push(t.id);
       }
       for (const id of terminalIds) {
         const t = (next.terminais ?? []).find((x) => x.id === id);

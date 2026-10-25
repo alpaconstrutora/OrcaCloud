@@ -50,11 +50,11 @@ describe('nó de chegada · acompanha a peça', () => {
     expect(interruptor(m).at).toEqual({ x: 2550, y: 3 });
     expect(descida.a).toEqual({ x: 2550, y: 3 });
     expect(descida.b).toEqual({ x: 2550, y: 3 });
-    // Só a componente perpendicular ao toco leva o nó; os 3 mm ao longo dele o encurtam.
-    expect(toco.a).toEqual({ x: 2550, y: 50 });
+    // O nó anda o deslocamento inteiro: o toco segue com 50 mm.
+    expect(toco.a).toEqual({ x: 2550, y: 53 });
     expect(toco.b).toEqual({ x: 2550, y: 3 });
     expect(luz.a).toEqual({ x: 0, y: 3000 });
-    expect(luz.b).toEqual({ x: 2550, y: 50 });
+    expect(luz.b).toEqual({ x: 2550, y: 53 });
   });
 
   it('⚠️ forro rebaixado (Garden): a descida vertical do forro no nó anda inteira com ele', () => {
@@ -77,12 +77,15 @@ describe('nó de chegada · acompanha a peça', () => {
     expect(toco.b).toEqual({ x: 2550, y: 0 });
   });
 
-  it('arrastar AO LONGO do toco só o encurta ou alonga — o nó fica', () => {
-    const m = mover(cena(), 0, -200);
+  it('⚠️ trocar de parede (movimento AO LONGO do toco) leva o nó: a luz vai direto ao lugar novo', () => {
+    // Usuário, 25/10/2026: *"movi o interruptor para ao lado da porta … o trecho de eletroduto faz um caminho
+    // mais longo … Isso aconteceu quando mudei o interruptor de uma parede para outra"*. A 1ª versão levava só a
+    // componente perpendicular ao toco, e o nó ficava no canto antigo.
+    const m = mover(cena(), 0, -1500);
     const [luz, toco] = m.trechos!;
-    expect(toco.a).toEqual(N);
-    expect(toco.b).toEqual({ x: 2000, y: -200 });
-    expect(luz.b).toEqual(N);
+    expect(toco.a).toEqual({ x: 2000, y: -1450 });
+    expect(toco.b).toEqual({ x: 2000, y: -1500 });
+    expect(luz.b).toEqual({ x: 2000, y: -1450 });
   });
 
   it('⚠️ nó de DERIVAÇÃO (serve a outro ponto) fica — o toco estica, como antes', () => {
@@ -112,8 +115,8 @@ describe('nó de chegada · acompanha a peça', () => {
     const [luz, toco, descida] = m.trechos!;
     const d = deslocamentoDasPontasPresas(m, [interruptor(m).id], [], point(550, 3));
     expect(d.get(descida.id)).toEqual({ a: { x: 550, y: 3 }, b: { x: 550, y: 3 } });
-    expect(d.get(toco.id)).toEqual({ a: { x: 550, y: 0 }, b: { x: 550, y: 3 } });
-    expect(d.get(luz.id)).toEqual({ a: null, b: { x: 550, y: 0 } });
+    expect(d.get(toco.id)).toEqual({ a: { x: 550, y: 3 }, b: { x: 550, y: 3 } });
+    expect(d.get(luz.id)).toEqual({ a: null, b: { x: 550, y: 3 } });
   });
 
   it('hidráulica não muda: o tubo preso ao ponto só estica', () => {
@@ -128,5 +131,60 @@ describe('nó de chegada · acompanha a peça', () => {
     const d = deslocamentoDasPontasPresas(m, [m.terminais![0].id], [], point(550, 0));
     expect(d.get(m.trechos![1].id)).toEqual({ a: null, b: { x: 550, y: 0 } });
     expect(d.has(m.trechos![0].id)).toBe(false);
+  });
+});
+
+describe('trecho selecionado · não se solta', () => {
+  // Usuário, 25/10/2026, com print: *"é possivel arrastar um trecho do eletroduto e desconecta-lo"*.
+  const moverTrecho = (m: BlueprintModel, ids: string[], dx: number, dy: number, terminalIds: string[] = []) =>
+    applyCommand(m, { type: 'TranslateEntities', wallIds: [], boundaryIds: [], structuralIds: [], trechoIds: ids, terminalIds, delta: point(dx, dy), manterJuncoes: false }).model;
+
+  it('⚠️ eletroduto entre a luz e o nó: a ponta na luz fica; a do nó anda e leva o toco junto', () => {
+    const m0 = cena();
+    const m = moverTrecho(m0, [m0.trechos![0].id], 300, -400);
+    const [luz, toco] = m.trechos!;
+    expect(luz.a).toEqual({ x: 0, y: 3000 });
+    expect(luz.b).toEqual({ x: 2300, y: -350 });
+    expect(toco.a).toEqual({ x: 2300, y: -350 });
+    expect(toco.b).toEqual(S); // o toco termina no interruptor, que não andou
+  });
+
+  it('⚠️ preso a peças paradas nas DUAS pontas (luz → tomada, o print): não sai do lugar', () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = m.levels[0].id;
+    for (const c of [
+      { type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'Luz', at: point(0, 0), cotaMm: 2800, tipoEletrico: 'ILUMINACAO_TETO' },
+      { type: 'AddTerminal', levelId, disciplina: 'ELETRICA', tipo: 'TUG', at: point(3000, 0), cotaMm: 300, tipoEletrico: 'TUG' },
+      { type: 'AddTrecho', levelId, disciplina: 'ELETRICA', a: point(0, 0), b: point(3000, 0), cotaAMm: 2800, cotaBMm: 300, bitolaMm: 20 },
+    ] as Command[])
+      m = applyCommand(m, c).model;
+    const depois = moverTrecho(m, [m.trechos![0].id], -800, -1200);
+    expect(depois.trechos![0].a).toEqual({ x: 0, y: 0 });
+    expect(depois.trechos![0].b).toEqual({ x: 3000, y: 0 });
+  });
+
+  it('com a peça junto na seleção, o trecho anda inteiro', () => {
+    const m0 = cena();
+    const descida = m0.trechos![2];
+    const m = moverTrecho(m0, [descida.id], 500, 0, [interruptor(m0).id]);
+    expect(m.trechos![2].a).toEqual({ x: 2500, y: 0 });
+    expect(m.trechos![2].b).toEqual({ x: 2500, y: 0 });
+  });
+
+  it('ponta solta (sem peça e sem vizinho) anda; água segue a mesma regra', () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const levelId = m.levels[0].id;
+    for (const c of [
+      { type: 'AddTerminal', levelId, disciplina: 'AGUA_FRIA', tipo: 'Lavatório', at: point(0, 0), cotaMm: 600 },
+      { type: 'AddTrecho', levelId, disciplina: 'AGUA_FRIA', a: point(0, 0), b: point(2000, 0), cotaAMm: 600, cotaBMm: 600, bitolaMm: 25 },
+      { type: 'AddTrecho', levelId, disciplina: 'AGUA_FRIA', a: point(2000, 0), b: point(2000, 2000), cotaAMm: 600, cotaBMm: 600, bitolaMm: 25 },
+    ] as Command[])
+      m = applyCommand(m, c).model;
+    const depois = moverTrecho(m, [m.trechos![1].id], 400, 0);
+    const [ramal, coluna] = depois.trechos!;
+    expect(ramal.a).toEqual({ x: 0, y: 0 });
+    expect(ramal.b).toEqual({ x: 2400, y: 0 });
+    expect(coluna.a).toEqual({ x: 2400, y: 0 });
+    expect(coluna.b).toEqual({ x: 2400, y: 2000 });
   });
 });

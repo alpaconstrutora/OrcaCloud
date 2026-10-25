@@ -33,7 +33,7 @@ import { pecasDoSistemaParaRefazer, planejarLinhasFrigorigenas, sistemasDoNivel 
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import type { HipotesesDaLinha } from './blueprintClimatizacao';
 import { relancarEletrodutos, type HipotesesDeEletroduto } from './blueprintEletrodutos';
-import { hipotesesDoQuadro, type ForroDaCasa } from './blueprintEscolhasDoEletroduto';
+import { hipotesesDoQuadro, type ForroDaCasaOuEstado } from './blueprintEscolhasDoEletroduto';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 
 /**
@@ -79,7 +79,7 @@ export function comandosAoMoverClimatizacao(
   depois: BlueprintModel,
   movidos: { terminalIds: readonly ObjectId[]; trechoIds: readonly ObjectId[] },
   hip: HipotesesDaLinha,
-  eletrica?: { eletroduto: HipotesesDeEletroduto; eletricas: HipotesesEletricas; forroDaCasa?: ForroDaCasa | null } | null,
+  eletrica?: { eletroduto: HipotesesDeEletroduto; eletricas: HipotesesEletricas; forroDaCasa?: ForroDaCasaOuEstado } | null,
 ): Command[] {
   const lote: Command[] = [];
   let m = depois;

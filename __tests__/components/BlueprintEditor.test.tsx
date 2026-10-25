@@ -74,6 +74,16 @@ const deleteBranch = vi.fn(async () => {});
 const renameBranch = vi.fn(async () => {});
 const onTrocarRamo = vi.fn();
 
+// Correção 2 da F3 (24/10/2026): as premissas da casa do estudo, controláveis. Padrão: a leitura FALHA (como antes, sem
+// a tabela no ambiente de teste) — o editor não usa o forro da casa (erro de leitura não vira padrão). Os testes do forro
+// da casa respondem `null` (linha ausente de fato: vale o padrão).
+const lerPremissasDaCasa = vi.fn(async (): Promise<unknown> => {
+  throw new Error('sem a tabela no teste');
+});
+vi.mock('../../services/blueprintCasaService', () => ({
+  blueprintCasaService: { get: (...a: unknown[]) => lerPremissasDaCasa(...(a as [])), save: async () => undefined },
+}));
+
 vi.mock('../../services/blueprintService', () => ({
   listBranches: (...a: unknown[]) => listBranches(...(a as [])),
   createAlternative: (...a: unknown[]) => createAlternative(...(a as [])),
@@ -404,6 +414,7 @@ beforeEach(() => {
   localStorage.clear();
 
   loadBranchModel.mockResolvedValue(null);
+  lerPremissasDaCasa.mockRejectedValue(new Error('sem a tabela no teste'));
   getSnapshotIdentity.mockResolvedValue(null);
   getBranch.mockResolvedValue(RAMO_LIMPO);
   getPrograma.mockResolvedValue(null);
@@ -4635,7 +4646,8 @@ describe('BlueprintEditor · ribbon', () => {
   // lançar Eletrodutos por circuito deve ficar disponivel para relançar e incluir essa nova preferencia"*.
   describe('eletrodutos relançam quando uma escolha muda (F2, 24/10/2026)', () => {
     /** Sala de 24 m com QDC e uma TUG na ponta, a rede lançada COM caixas (o lote leva o registro); `aceitar` confirma tudo. */
-    async function redeComCaixas(aceitar: boolean, registrar = true, noForro = false) {
+    /** `noForro`: o REBAIXO do forro do ambiente (233 = o da casa padrão; outro = forro que não é da casa), ou `false`. */
+    async function redeComCaixas(aceitar: boolean, registrar = true, noForro: false | number = false) {
       const k = await import('../../utils/blueprintKernel');
       const el = await import('../../utils/blueprintEletrodutos');
       const { REGRA_DE_CAIXAS_PADRAO } = await import('../../utils/blueprintCaixasDePassagem');
@@ -4651,7 +4663,7 @@ describe('BlueprintEditor · ribbon', () => {
           type: 'NameSpace',
           spaceId: m.spaces[0].id,
           name: 'Sala',
-          acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }], rebaixoMm: 300 } },
+          acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }], rebaixoMm: noForro } },
         }).model;
       }
       m = k.applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: k.point(75, 1000), cotaMm: 1600 }).model;
@@ -4734,21 +4746,348 @@ describe('BlueprintEditor · ribbon', () => {
       expect(relancarDoRodape()).toBeEnabled();
     });
 
-    it('⚠️ correção 1 (C1): rede no FORRO lançada antes do registro — o botão da linha e o do rodapé desligados, com o motivo', async () => {
-      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, true));
+    const MOTIVO_FORRO = 'Rede no forro lançada antes do registro — relançar aqui a tiraria do forro.';
+    /** Os botões desligados, com o motivo no texto, no `title` (botão e invólucro) e na descrição acessível. */
+    async function bloqueadoComMotivo(motivo = MOTIVO_FORRO) {
+      const drawer = await abrirEletrodutos();
+      const tabela = await within(drawer).findByRole('table', { name: /eletrodutos por quadro/i });
+      expect(tabela).toHaveTextContent(motivo);
+      const daLinha = within(tabela).getByRole('button');
+      expect(daLinha).toBeDisabled();
+      expect(daLinha).toHaveAttribute('title', motivo);
+      expect(daLinha.parentElement).toHaveAttribute('title', motivo);
+      const doRodape = screen.getByRole('button', { name: /^lançar em todos/i });
+      expect(doRodape).toBeDisabled();
+      expect(doRodape).toHaveAccessibleDescription(motivo);
+    }
+
+    // Conciliação F3 × #154 + correção 2 (24/10/2026): sem linha gravada (`get` → null), vale o PADRÃO da casa; a rede
+    // antiga no forro com a ASSINATURA da casa (faixa elétrica a 2755, rebaixo 233) relança no forro da casa.
+    it('⚠️ rede da CASA no forro, antes do registro, sem premissas gravadas (o padrão): relançar disponível, sem o motivo', async () => {
+      lerPremissasDaCasa.mockResolvedValue(null);
+      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, 233));
       await montar();
       const drawer = await abrirEletrodutos();
       const tabela = await within(drawer).findByRole('table', { name: /eletrodutos por quadro/i });
-      const MOTIVO = 'Rede no forro lançada antes do registro — relançar aqui a tiraria do forro.';
-      expect(tabela).toHaveTextContent(MOTIVO);
-      // O único botão da tabela (sem registro, sem aviso): o da linha do quadro — qualquer que seja o rótulo.
-      const daLinha = within(tabela).getByRole('button');
-      expect(daLinha).toBeDisabled();
-      expect(daLinha).toHaveAttribute('title', MOTIVO);
-      expect(daLinha.parentElement).toHaveAttribute('title', MOTIVO);
-      const doRodape = screen.getByRole('button', { name: /^lançar em todos/i });
-      expect(doRodape).toBeDisabled();
-      expect(doRodape).toHaveAccessibleDescription(MOTIVO);
+      await waitFor(() => expect(tabela).not.toHaveTextContent(MOTIVO_FORRO));
+      expect(relancarDoRodape()).toBeEnabled();
+    });
+
+    // Correção 2 (I1): planta SEM casa — forro de verdade com outro rebaixo (300): não há a assinatura, continua bloqueada.
+    it('⚠️ correção 2: rede no forro SEM a assinatura da casa (outro rebaixo) — bloqueada com o motivo, mesmo com as premissas', async () => {
+      lerPremissasDaCasa.mockResolvedValue(null);
+      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, 300));
+      await montar();
+      // Correção 3: o motivo diz por quê e o que fazer.
+      await bloqueadoComMotivo(`${MOTIVO_FORRO} O forro dos ambientes (rebaixo 300 mm) difere das premissas da casa (rebaixo 233 mm) — ajuste um dos dois ou relance pela Casa Automática.`);
+    });
+
+    // Correção 2 (I2): ERRO de leitura das premissas (timeout, RLS) não vira padrão — bloqueada com o motivo.
+    it('⚠️ correção 2: erro ao ler as premissas da casa — a rede da casa no forro fica bloqueada com o motivo', async () => {
+      loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, 233));
+      await montar();
+      // Correção 1 da F5 (M6): o motivo diz qual — o mesmo texto do esgoto.
+      await bloqueadoComMotivo(`${MOTIVO_FORRO} Não foi possível ler as premissas da casa.`);
+    });
+  });
+
+  describe('água e pluvial relançam quando uma escolha muda (F3, 24/10/2026)', () => {
+    /** Caixa d'água, chuveiro e lavatório (sem frente: sem hidrômetro); a água lançada (peças da caixa e rede) e ACEITA. */
+    async function aguaAceita(registrarCom: 'nada' | 'padrao' | 'velocidade') {
+      const k = await import('../../utils/blueprintKernel');
+      const { planejarAguaCompleta } = await import('../../utils/blueprintAguaCompleta');
+      const { HIPOTESES_HIDRO_PADRAO } = await import('../../utils/blueprintMemorialHidro');
+      const { comRegistroDaAgua } = await import('../../utils/blueprintEscolhasDaAguaEPluvial');
+      let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+      const t = m.levels[0].id;
+      m = k.applyBatch(m, [
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: k.point(500, 500), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 1000 },
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Chuveiro', at: k.point(1000, 2500), cotaMm: 2100, tipoHidraulico: 'CHUVEIRO' },
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Lavatório', at: k.point(1600, 2500), cotaMm: 600, tipoHidraulico: 'LAVATORIO' },
+      ]).model;
+      const h = registrarCom === 'velocidade' ? { ...HIPOTESES_HIDRO_PADRAO, agua: { ...HIPOTESES_HIDRO_PADRAO.agua, velocidadeMaxMs: 2.5 } } : HIPOTESES_HIDRO_PADRAO;
+      const p = planejarAguaCompleta(m, h, null);
+      m = k.applyBatch(m, registrarCom === 'nada' ? p.comandos : comRegistroDaAgua(m, p.comandos, h)).model;
+      return k.applyBatch(m, [
+        ...(m.trechos ?? []).map((x) => ({ type: 'SetTrechoProps' as const, trechoId: x.id, sugerido: false })),
+        ...(m.terminais ?? []).filter((x) => x.sugerida).map((x) => ({ type: 'SetTerminalProps' as const, terminalId: x.id, sugerida: false })),
+      ]).model;
+    }
+    async function abrirAgua() {
+      await abrirAba(/^hidráulica$/i);
+      await userEvent.setup().click(botao(/^água automática/i));
+      const gaveta = await screen.findByTestId('tarefa-agua');
+      return { gaveta, dialog: gaveta.closest('[role="dialog"]') as HTMLElement };
+    }
+    /** O botão principal do RODAPÉ (o do aviso tem o mesmo texto, mas mora no painel). */
+    const doRodape = (dialog: HTMLElement, gaveta: HTMLElement, nome: RegExp) => within(dialog).getAllByRole('button', { name: nome }).find((b) => !gaveta.contains(b))!;
+    const AVISO = 'Velocidade máxima na rede — lançado com: 2,5 m/s · agora: 2 m/s';
+
+    it('água completa SEM registro (lançada antes): nenhum aviso, e o botão do rodapé fica "Relançar com as escolhas atuais", ligado', async () => {
+      loadBranchModel.mockResolvedValue(await aguaAceita('nada'));
+      await montar();
+      const { gaveta, dialog } = await abrirAgua();
+      expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      const relancar = doRodape(dialog, gaveta, /^relançar a água com as escolhas atuais$/i);
+      expect(relancar).toBeEnabled();
+      expect(relancar).toHaveTextContent('Relançar com as escolhas atuais');
+      expect(within(dialog).queryByRole('button', { name: /^lançar tudo$/i })).not.toBeInTheDocument();
+    });
+
+    it('⚠️ registro com outra escolha: aviso com a diferença; com confirmados, refazer pede confirmação dizendo quanto e o que mudou; refeito, o aviso some; um Desfazer o traz de volta', async () => {
+      const m = await aguaAceita('velocidade');
+      const tubos = (m.trechos ?? []).length;
+      loadBranchModel.mockResolvedValue(m);
+      await montar();
+      const { gaveta, dialog } = await abrirAgua();
+      expect(await within(gaveta).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+      // Correção 2 (menor 6): o nome acessível diz o sistema — no aviso e no rodapé.
+      expect(within(within(gaveta).getByTestId('aviso-escolhas-mudaram')).getByRole('button', { name: 'Relançar a água com as escolhas atuais' })).toBeEnabled();
+      const relancar = doRodape(dialog, gaveta, /^relançar a água com as escolhas atuais$/i);
+      expect(relancar).toBeEnabled();
+
+      await userEvent.setup().click(relancar);
+      const titulo = await screen.findByText('Refazer a água?');
+      const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
+      expect(confirmacao).toHaveTextContent(`Água: ${tubos} tubo(s) (${tubos} confirmado(s)), inclusive extravasor (1), limpeza (1) e 1 peça(s) (1 aceita(s)): 1 registro(s) de gaveta.`);
+      expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
+      await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
+      await waitFor(() => expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+
+      await userEvent.setup().click(botao(/^desfazer/i));
+      expect(await within(gaveta).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+    });
+
+    /** Sala com forro de gesso de `rebaixo` e a água fria descendo da caixa a `cota` (2598 = a faixa da fria da casa). */
+    async function aguaNoForro(rebaixo: number, cota = 2598) {
+      const k = await import('../../utils/blueprintKernel');
+      let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+      const t = m.levels[0].id;
+      const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+      m = k.applyBatch(m, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+      m = k.applyCommand(m, {
+        type: 'NameSpace',
+        spaceId: m.spaces[0].id,
+        name: 'Sala',
+        acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }], rebaixoMm: rebaixo } },
+      }).model;
+      return k.applyBatch(m, [
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: k.point(1000, 1000), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 500 },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(1000, 1000), cotaAMm: 2800, cotaBMm: cota, bitolaMm: 25, sugerido: true },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(4000, 1000), cotaAMm: cota, cotaBMm: cota, bitolaMm: 25, sugerido: true },
+      ]).model;
+    }
+    const MOTIVO_AGUA = 'Água no forro lançada antes do registro — relançar aqui a tiraria do forro.';
+
+    // Correção 1 + correção 2: a água da CASA no forro (a faixa da fria, 2598; o rebaixo da casa, 233), sem registro e sem
+    // premissas gravadas (`get` → null: vale o padrão) — relança pelo forro da casa.
+    it('⚠️ correção 1: água da CASA no forro, antes do registro, com as premissas da casa — relançar DISPONÍVEL, sem motivo', async () => {
+      lerPremissasDaCasa.mockResolvedValue(null);
+      loadBranchModel.mockResolvedValue(await aguaNoForro(233));
+      await montar();
+      const { gaveta, dialog } = await abrirAgua();
+      await waitFor(() => expect(within(gaveta).queryByTestId('agua-motivo')).not.toBeInTheDocument());
+      const principal = within(dialog).getByRole('button', { name: /^(lançar|relançar) tudo$/i });
+      expect(principal).toBeEnabled();
+      expect(principal).not.toHaveAttribute('aria-describedby');
+      expect(within(dialog).getByRole('button', { name: /^refazer tudo$/i })).toBeEnabled();
+    });
+
+    // Correção 2 (I1 e I2): sem a assinatura (ramal à mão a 2,70 m, ou outro rebaixo) ou com erro ao ler as premissas — bloqueada.
+    // Correção 3: com as premissas lidas, o motivo diz por quê (o primeiro critério que falhou) e o que fazer.
+    it.each([
+      ['ramal à mão fora da faixa da casa', 233, 2700, true, ' Há trecho no forro fora das faixas da Casa Automática (ex.: 2700 mm) — apague-o ou relance pela Casa Automática.'],
+      ['forro com outro rebaixo (não é a casa)', 300, 2598, true, ' O forro dos ambientes (rebaixo 300 mm) difere das premissas da casa (rebaixo 233 mm) — ajuste um dos dois ou relance pela Casa Automática.'],
+      ['erro ao ler as premissas da casa', 233, 2598, false, ' Não foi possível ler as premissas da casa.'],
+    ] as const)('⚠️ correção 2: água no forro — %s: botão do rodapé desligado, com o motivo', async (_caso, rebaixo, cota, lerOk, porque) => {
+      if (lerOk) lerPremissasDaCasa.mockResolvedValue(null);
+      loadBranchModel.mockResolvedValue(await aguaNoForro(rebaixo, cota));
+      await montar();
+      const { gaveta, dialog } = await abrirAgua();
+      const motivo = MOTIVO_AGUA + porque;
+      expect(await within(gaveta).findByTestId('agua-motivo')).toHaveTextContent(motivo);
+      const principal = within(dialog).getByRole('button', { name: /^(lançar|relançar) tudo$/i });
+      expect(principal).toBeDisabled();
+      expect(principal).toHaveAttribute('title', motivo);
+      expect(principal.parentElement).toHaveAttribute('title', motivo);
+      expect(principal).toHaveAccessibleDescription(motivo);
+      expect(within(dialog).queryByRole('button', { name: /^refazer tudo$/i })).not.toBeInTheDocument();
+    });
+
+    it('pluvial só com SUGERIDOS e outra escolha: o botão do aviso refaz direto, sem confirmação', async () => {
+      const k = await import('../../utils/blueprintKernel');
+      const { planejarPluvialCompleta } = await import('../../utils/blueprintPluvialCompleto');
+      const { HIPOTESES_PLUVIAIS_PADRAO } = await import('../../utils/blueprintPluvial');
+      const { comRegistroDoPluvial } = await import('../../utils/blueprintEscolhasDaAguaEPluvial');
+      let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+      const t = m.levels[0].id;
+      m = k.applyBatch(m, [
+        { type: 'AddAgua', levelId: t, pontos: [k.point(0, 0), k.point(8000, 0), k.point(8000, 4000), k.point(0, 4000)], beiralIndex: 0, inclinacaoPct: 30, baseMm: 2800, espessuraMm: 100 },
+        { type: 'AddTerminal', levelId: t, disciplina: 'PLUVIAL', tipo: 'Saída pluvial', at: k.point(4000, -3000), cotaMm: -300, tipoHidraulico: 'LIGACAO_PLUVIAL' },
+      ] as never).model;
+      // Lançado com a retangular; o estudo está na meia-cana (padrão) — sem cidade, 150 mm/h até 100 m².
+      const retangular = { ...HIPOTESES_PLUVIAIS_PADRAO, secaoDaCalha: 'RETANGULAR' as const };
+      const p = planejarPluvialCompleta(m, retangular, null);
+      expect(p.comandos.length).toBeGreaterThan(0);
+      loadBranchModel.mockResolvedValue(k.applyBatch(m, comRegistroDoPluvial(m, p.comandos, retangular)).model);
+      await montar();
+      await abrirAba(/^hidráulica$/i);
+      await userEvent.setup().click(botao(/^águas pluviais/i));
+      const gaveta = await screen.findByTestId('tarefa-pluvial');
+      const aviso = await within(gaveta).findByTestId('aviso-escolhas-mudaram');
+      expect(aviso).toHaveTextContent('Seção da calha — lançado com: retangular · agora: meia-cana');
+      await userEvent.setup().click(within(aviso).getByRole('button', { name: 'Relançar a rede pluvial com as escolhas atuais' }));
+      await waitFor(() => expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+      expect(screen.queryByText('Refazer a rede pluvial?')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('esgoto relança quando uma escolha muda (F4, 24/10/2026)', () => {
+    /** Banheiro 2 × 3 m (lavatório, caixa sifonada, vaso) no lote com frente; o esgoto lançado (rede pública) e ACEITO. */
+    async function esgotoAceito(registrarCom: 'nada' | 'padrao' | 'caimento') {
+      const k = await import('../../utils/blueprintKernel');
+      const { planejarEsgotoCompleto } = await import('../../utils/blueprintEsgotoCompleto');
+      const { HIPOTESES_HIDRO_PADRAO } = await import('../../utils/blueprintMemorialHidro');
+      const { comRegistroDoEsgoto, opcoesDoEsgoto } = await import('../../utils/blueprintEscolhasDoEsgoto');
+      let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+      const t = m.levels[0].id;
+      const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+      const divisa = (ax: number, ay: number, bx: number, by: number, frente = false) =>
+        ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', ...(frente ? { papel: 'FRENTE' as const } : {}) }) as const;
+      m = k.applyBatch(m, [
+        w(0, 0, 2000, 0), w(2000, 0, 2000, 3000), w(2000, 3000, 0, 3000), w(0, 3000, 0, 0),
+        { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Lavatório', at: k.point(600, 2500), cotaMm: 500, tipoHidraulico: 'LAVATORIO' },
+        { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Caixa sifonada', at: k.point(1200, 2100), cotaMm: 0, tipoHidraulico: 'CAIXA_SIFONADA' },
+        { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Vaso', at: k.point(600, 800), cotaMm: 0, tipoHidraulico: 'VASO_SANITARIO' },
+        divisa(-3000, -8000, 7500, -8000, true), divisa(7500, -8000, 7500, 6000), divisa(7500, 6000, -3000, 6000), divisa(-3000, 6000, -3000, -8000),
+      ]).model;
+      const h = HIPOTESES_HIDRO_PADRAO;
+      const esgoto = registrarCom === 'caimento' ? { ...h.esgoto, caimentoPctAte75: 3 } : h.esgoto;
+      const p = { esgoto, tratamento: h.tratamento, reservatorio: h.reservatorio };
+      const plano = planejarEsgotoCompleto(m, esgoto, null, opcoesDoEsgoto(m, p));
+      m = k.applyBatch(m, registrarCom === 'nada' ? plano.comandos : comRegistroDoEsgoto(m, plano.comandos, p)).model;
+      return k.applyBatch(m, [
+        ...(m.trechos ?? []).map((x) => ({ type: 'SetTrechoProps' as const, trechoId: x.id, sugerido: false })),
+        ...(m.terminais ?? []).filter((x) => x.sugerida).map((x) => ({ type: 'SetTerminalProps' as const, terminalId: x.id, sugerida: false })),
+      ]).model;
+    }
+    async function abrirEsgoto() {
+      await abrirAba(/^hidráulica$/i);
+      await userEvent.setup().click(botao(/^esgoto automático/i));
+      const gaveta = await screen.findByTestId('tarefa-esgoto');
+      return { gaveta, dialog: gaveta.closest('[role="dialog"]') as HTMLElement };
+    }
+    /** O botão principal do RODAPÉ (o do aviso tem o mesmo nome acessível, mas mora no painel). */
+    const doRodape = (dialog: HTMLElement, gaveta: HTMLElement, nome: RegExp) => within(dialog).getAllByRole('button', { name: nome }).find((b) => !gaveta.contains(b))!;
+    const AVISO = 'Caimento até DN 75 — lançado com: 3 % · agora: 2 %';
+
+    it('esgoto completo SEM registro (lançado antes): nenhum aviso, e o botão do rodapé fica "Relançar com as escolhas atuais", ligado', async () => {
+      loadBranchModel.mockResolvedValue(await esgotoAceito('nada'));
+      await montar();
+      const { gaveta, dialog } = await abrirEsgoto();
+      expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      const relancar = doRodape(dialog, gaveta, /^relançar o esgoto com as escolhas atuais$/i);
+      expect(relancar).toBeEnabled();
+      expect(relancar).toHaveTextContent('Relançar com as escolhas atuais');
+      expect(within(dialog).queryByRole('button', { name: /^lançar/i })).not.toBeInTheDocument();
+      // Correção 1 (menor 4), intencional: no modo RELANCAR o botão principal JÁ é o refazer — sem "Refazer tudo" repetido.
+      expect(within(dialog).queryByRole('button', { name: /^refazer tudo$/i })).not.toBeInTheDocument();
+    });
+
+    it('⚠️ registro com outra escolha: aviso com a diferença; com confirmados, refazer pede confirmação dizendo quanto, o quê e o que mudou; refeito, o aviso some; um Desfazer o traz de volta', async () => {
+      const m = await esgotoAceito('caimento');
+      loadBranchModel.mockResolvedValue(m);
+      await montar();
+      const { gaveta, dialog } = await abrirEsgoto();
+      const aviso = await within(gaveta).findByTestId('aviso-escolhas-mudaram');
+      expect(aviso).toHaveTextContent(AVISO);
+      expect(within(aviso).getByRole('button', { name: 'Relançar o esgoto com as escolhas atuais' })).toBeEnabled();
+      const relancar = doRodape(dialog, gaveta, /^relançar o esgoto com as escolhas atuais$/i);
+      expect(relancar).toBeEnabled();
+
+      await userEvent.setup().click(relancar);
+      const titulo = await screen.findByText('Refazer o esgoto?');
+      const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
+      expect(confirmacao).toHaveTextContent(/Esgoto: (\d+) tubo\(s\) \(\1 confirmado\(s\)\), inclusive .*coletor \(\d+\)/);
+      // Correção 1 (I1): o que volta e o que fica, item por item (a caixa de inspeção confirmada fica).
+      expect(confirmacao).toHaveTextContent(/Voltam: .*tubo\(s\) confirmado\(s\) — voltam ao traçado do motor/);
+      expect(confirmacao).toHaveTextContent(/Ficam: os aparelhos, os ralos e as caixas sifonadas; a caixa de inspeção que você confirmou — fica como está/);
+      expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
+      await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
+      await waitFor(() => expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+
+      await userEvent.setup().click(botao(/^desfazer/i));
+      expect(await within(gaveta).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+    });
+
+    it('⚠️ DESTINO trocado com a ligação CONFIRMADA e registro: UM aviso só (o rodapé não repete), e a confirmação do relançar é a autorização — nomeia a ligação e lança o tratamento', async () => {
+      loadBranchModel.mockResolvedValue(await esgotoAceito('padrao'));
+      await montar();
+      const user = userEvent.setup();
+      const { gaveta, dialog } = await abrirEsgoto();
+      expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      await user.click(within(gaveta).getByRole('button', { name: /hipóteses do lançamento/i }));
+      await user.selectOptions(within(gaveta).getByLabelText('Destino do esgoto'), 'TRATAMENTO');
+      const aviso = await within(screen.getByTestId('tarefa-esgoto')).findByTestId('aviso-escolhas-mudaram');
+      expect(aviso).toHaveTextContent('Destino do esgoto — lançado com: rede pública · agora: tratamento individual');
+      expect(within(dialog).getAllByTestId('aviso-escolhas-mudaram')).toHaveLength(1);
+      expect(dialog).not.toHaveTextContent(/há peças confirmadas do outro destino/);
+      // Correção 1 (menor 3): o painel do tratamento não contradiz o aviso ("a ligação … não se aplica").
+      expect(within(gaveta).getByTestId('tratamento-motivo')).toHaveTextContent('A ligação à rede pública sai ao relançar com as escolhas atuais');
+      expect(gaveta).not.toHaveTextContent(/o tratamento individual não se aplica/);
+      const relancar = doRodape(dialog, gaveta, /^relançar o esgoto com as escolhas atuais$/i);
+      await user.click(relancar);
+      const confirmacao = (await screen.findByText('Refazer o esgoto?')).closest('[role="dialog"]') as HTMLElement;
+      expect(confirmacao).toHaveTextContent('1 ligação(ões) à rede pública');
+      expect(confirmacao).toHaveTextContent('O que mudou: Destino do esgoto — lançado com: rede pública · agora: tratamento individual.');
+      await user.click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
+      await waitFor(() => expect(screen.getByTestId('tratamento-verificacao')).toHaveTextContent(/Sumidouro/));
+      await waitFor(() => expect(within(screen.getByTestId('tarefa-esgoto')).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+    });
+
+    it('⚠️ esgoto antigo (sem registro) numa casa com a água no forro e sem as premissas da casa (erro de leitura): botão desligado, com o motivo', async () => {
+      const k = await import('../../utils/blueprintKernel');
+      let m = await esgotoAceito('nada');
+      const t = m.levels[0].id;
+      m = k.applyCommand(m, {
+        type: 'NameSpace',
+        spaceId: m.spaces[0].id,
+        name: 'Banheiro',
+        acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de PVC', funcao: 'ACABAMENTO' }], rebaixoMm: 233 } },
+      }).model;
+      m = k.applyBatch(m, [
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: k.point(1000, 1000), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 500 },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(1000, 1000), cotaAMm: 2800, cotaBMm: 2598, bitolaMm: 25, sugerido: true },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(1800, 1000), cotaAMm: 2598, cotaBMm: 2598, bitolaMm: 25, sugerido: true },
+      ]).model;
+      loadBranchModel.mockResolvedValue(m);
+      await montar();
+      const { gaveta, dialog } = await abrirEsgoto();
+      const { MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO } = await import('../../utils/blueprintEscolhasDoEsgoto');
+      const motivo = `${MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO} Não foi possível ler as premissas da casa.`;
+      expect(await within(gaveta).findByTestId('esgoto-motivo')).toHaveTextContent(motivo);
+      const principal = within(dialog).getAllByRole('button').find((b) => !gaveta.contains(b) && /^(lançar|relançar)/i.test(b.textContent ?? ''))!;
+      expect(principal).toBeDisabled();
+      expect(principal).toHaveAttribute('title', motivo);
+      expect(principal.parentElement).toHaveAttribute('title', motivo);
+      expect(principal).toHaveAccessibleDescription(motivo);
+      expect(within(dialog).queryByRole('button', { name: /^refazer tudo$/i })).not.toBeInTheDocument();
+
+      // Correção 1 (menor 1): um ponto NOVO — o "Lançar (1)" volta a ligar (como antes da F4); o "Refazer tudo" fica à vista,
+      // desligado, com o motivo.
+      cleanup();
+      const comNovo = k.applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Chuveiro', at: k.point(1500, 2600), cotaMm: 0, tipoHidraulico: 'CHUVEIRO' }).model;
+      loadBranchModel.mockResolvedValue(comNovo);
+      await montar();
+      const novo = await abrirEsgoto();
+      expect(await within(novo.gaveta).findByTestId('esgoto-motivo')).toHaveTextContent(motivo);
+      const lancar = within(novo.dialog).getByRole('button', { name: /^lançar \(1\)$/i });
+      expect(lancar).toBeEnabled();
+      const refazer = within(novo.dialog).getByRole('button', { name: /^refazer tudo$/i });
+      expect(refazer).toBeDisabled();
+      expect(refazer).toHaveAttribute('title', motivo);
+      expect(refazer.parentElement).toHaveAttribute('title', motivo);
+      expect(refazer).toHaveAccessibleDescription(motivo);
     });
   });
 
@@ -4824,6 +5163,122 @@ describe('BlueprintEditor · ribbon', () => {
     await userEvent.selectOptions(within(drawer).getByRole('combobox', { name: /critério de divisão/i }), 'funcao');
     expect(JSON.parse(localStorage.getItem('blueprint:circuitosAutomaticos')!).criterio).toBe('funcao');
     expect(within(drawer).getByRole('spinbutton', { name: /carga máxima por circuito/i })).toBeDisabled();
+  });
+
+  describe('circuitos relançam quando uma escolha muda (F5, 24/10/2026)', () => {
+    /**
+     * Sala 6 × 4 com QDC 127 V: luz + interruptor + 2 TUG + 1 TUE, os circuitos criados "por ambiente" (com o registro,
+     * ou sem — os antigos) e os eletrodutos lançados. `soltos`: pontos a mais, ainda sem circuito.
+     */
+    async function circuitosCriados(registrar: boolean, soltos = 0) {
+      const k = await import('../../utils/blueprintKernel');
+      const { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos } = await import('../../utils/blueprintCircuitosAutomaticos');
+      const { HIPOTESES_PADRAO } = await import('../../utils/blueprintEletricaDimensionamento');
+      const { comandosDeCriarCircuitos } = await import('../../utils/blueprintEscolhasDosCircuitos');
+      const el = await import('../../utils/blueprintEletrodutos');
+      const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+      const t = nivel.model.levels[0].id;
+      const w = (ax: number, ay: number, bx: number, by: number) =>
+        ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+      let m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+      m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' }).model;
+      m = k.applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: k.point(300, 300), cotaMm: 1500, tensaoV: 127, ligacao: 'FN' }).model;
+      const ponto = (x: number, y: number, tipoEletrico: 'ILUMINACAO_TETO' | 'INTERRUPTOR' | 'TUG' | 'TUE', potenciaW?: number) =>
+        ({ type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: tipoEletrico, at: k.point(x, y), cotaMm: 300, tipoEletrico, ...(potenciaW != null ? { potenciaW } : {}) }) as const;
+      m = k.applyBatch(m, [ponto(3000, 2000, 'ILUMINACAO_TETO', 160), ponto(200, 1200, 'INTERRUPTOR'), ponto(1000, 200, 'TUG', 100), ponto(2000, 200, 'TUG', 100), ponto(5000, 200, 'TUE', 1200)]).model;
+      const q = m.quadros![0].id;
+      m = k.applyBatch(
+        m,
+        registrar
+          ? comandosDeCriarCircuitos(m, t, q, HIPOTESES_CIRCUITOS_PADRAO, HIPOTESES_PADRAO).comandos
+          : planejarCircuitos(m, t, q, HIPOTESES_CIRCUITOS_PADRAO, HIPOTESES_PADRAO).comandos,
+      ).model;
+      m = k.applyBatch(m, el.planejarEletrodutos(m, m.quadros![0], el.HIPOTESES_ELETRODUTO_PADRAO, HIPOTESES_PADRAO).comandos).model;
+      for (let i = 0; i < soltos; i++) m = k.applyCommand(m, ponto(1500 + i * 500, 3800, 'TUG', 100)).model;
+      return m;
+    }
+    const AVISO = 'Dividir luz e TUG — lançado com: por ambiente · agora: por carga máxima';
+    async function abrirCircuitos() {
+      await abrirAba(/^elétrica$/i);
+      await userEvent.setup().click(botao(/^circuitos automáticos/i));
+      return screen.findByRole('dialog');
+    }
+
+    it('⚠️ escolha trocada depois de criar: aviso com o pavimento e a diferença; "Criar 0" vira "Relançar com as escolhas atuais"; a confirmação diz o impacto nos eletrodutos; refeito, o aviso some; um Desfazer o traz de volta', async () => {
+      loadBranchModel.mockResolvedValue(await circuitosCriados(true));
+      localStorage.setItem('blueprint:circuitosAutomaticos', JSON.stringify({ criterio: 'carga', cargaMaximaVA: null }));
+      await montar();
+      const drawer = await abrirCircuitos();
+      // Correção 1 (M2): o aviso diz ONDE.
+      expect(await within(drawer).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(`Térreo — ${AVISO}`);
+      // Regra A: nada a criar e circuitos do motor → o botão do rodapé RELANÇA, ligado; o "Criar 0" sumiu.
+      expect(screen.queryByRole('button', { name: /^criar 0 circuito/i })).not.toBeInTheDocument();
+      // O do aviso e o do rodapé fazem o mesmo; o nome acessível diz o pavimento.
+      expect(within(within(drawer).getByTestId('aviso-escolhas-mudaram')).getByRole('button', { name: 'Relançar os circuitos do Térreo com as escolhas atuais' })).toBeEnabled();
+      const relancar = screen.getByRole('button', { name: 'Relançar com as escolhas atuais — circuitos do Térreo' });
+      expect(relancar).toHaveTextContent('Relançar com as escolhas atuais');
+      expect(relancar).toBeEnabled();
+
+      await userEvent.setup().click(relancar);
+      const titulo = await screen.findByText('Refazer os circuitos automáticos?');
+      const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
+      expect(confirmacao).toHaveTextContent('Térreo: saem 3 circuito(s) do motor (C1 — Iluminação Sala, C2 — TUG Sala, C3 — TUE Sala) e os 5 ponto(s) deles');
+      expect(confirmacao).toHaveTextContent('circuito(s) novo(s) no quadro QDC');
+      expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
+      expect(confirmacao).toHaveTextContent(/Os eletrodutos e a fiação desses circuitos precisarão ser relançados: \d+ eletroduto\(s\) que só os levavam são apagados/);
+      expect(confirmacao).toHaveTextContent('relance os eletrodutos — o painel dos eletrodutos mostra os pontos a ligar');
+      await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
+
+      await waitFor(() => expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+      expect(drawer).toHaveTextContent(/circuitos refeitos com as escolhas atuais/i);
+
+      // UM desfazer volta circuitos, eletrodutos e registro: o aviso reaparece.
+      await userEvent.setup().click(botao(/^desfazer/i));
+      expect(await within(drawer).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+    });
+
+    it('⚠️ correção 1 (I1): circuitos de antes do registro — sem aviso; "Refazer todos os circuitos deste pavimento" com a confirmação FORTE', async () => {
+      loadBranchModel.mockResolvedValue(await circuitosCriados(false));
+      await montar();
+      const drawer = await abrirCircuitos();
+      expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      expect(within(drawer).queryByTestId('circuitos-motivo')).not.toBeInTheDocument();
+      const refazer = screen.getByRole('button', { name: 'Refazer todos os circuitos deste pavimento — circuitos do Térreo' });
+      expect(refazer).toBeEnabled();
+      await userEvent.setup().click(refazer);
+      const titulo = await screen.findByText('Refazer os circuitos automáticos?');
+      const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
+      expect(confirmacao).toHaveTextContent('Térreo: saem TODOS os 3 circuito(s) deste pavimento — foram criados antes do registro, e não há como saber quais o motor criou: C1 — Iluminação Sala, C2 — TUG Sala, C3 — TUE Sala.');
+      expect(confirmacao).toHaveTextContent('Nenhum deles tem disjuntor, seção, DR ou fase editados à mão.');
+      expect(confirmacao).toHaveTextContent(/\d+ eletroduto\(s\) que só os levavam são apagados/);
+    });
+
+    it('correção 1 (M3/M4): nada a criar e só circuitos alterados — o motivo em texto no painel; "Refazer tudo" à vista, desligado, dizendo por quê', async () => {
+      const k = await import('../../utils/blueprintKernel');
+      const base = await circuitosCriados(true);
+      loadBranchModel.mockResolvedValue(k.applyBatch(base, (base.circuitos ?? []).map((c) => ({ type: 'SetCircuitoProps' as const, circuitoId: c.id, disjuntorA: 16 }))).model);
+      await montar();
+      const drawer = await abrirCircuitos();
+      const motivo = await within(drawer).findByTestId('circuitos-motivo');
+      expect(motivo).toHaveTextContent(/^Nada a criar: os circuitos do motor neste pavimento foram alterados/);
+      expect(motivo).not.toHaveTextContent(/apague/i);
+      expect(screen.getByRole('button', { name: /^criar 0 circuito/i })).toBeDisabled();
+      const refazer = screen.getByRole('button', { name: 'Refazer tudo — circuitos do Térreo' });
+      expect(refazer).toBeDisabled();
+      expect(refazer).toHaveAttribute('title', expect.stringMatching(/^Nada a refazer/));
+      expect(refazer.parentElement).toHaveAttribute('title', expect.stringMatching(/^Nada a refazer/));
+      expect(refazer).toHaveAccessibleDescription(/^Nada a refazer/);
+    });
+
+    it('com pontos novos e circuitos do motor: "Criar 1" e, ao lado, "Refazer tudo" (com confirmação)', async () => {
+      loadBranchModel.mockResolvedValue(await circuitosCriados(true, 1));
+      await montar();
+      const drawer = await abrirCircuitos();
+      expect(within(drawer).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^criar 1 circuito/i })).toBeEnabled();
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Refazer tudo — circuitos do Térreo' }));
+      expect(await screen.findByText('Refazer os circuitos automáticos?')).toBeInTheDocument();
+    });
   });
 
   // ── Pilares automáticos (15/09/2026) ─────────────────────────────────────

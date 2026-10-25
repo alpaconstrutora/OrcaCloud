@@ -14,7 +14,7 @@ import { ModelHistory, applyBatch, applyCommand, emptyModel, point, type Bluepri
 import { HIPOTESES_ELETRODUTO_PADRAO, planejarEletrodutosDoModelo, type HipotesesDeEletroduto } from '../utils/blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
 import { HIPOTESES_PADRAO } from '../utils/blueprintEletricaDimensionamento';
-import { registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
+import { TEXTO_NADA_MUDOU, registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
 import {
   ESCOLHAS_DO_ELETRODUTO,
   MOTIVO_REDE_NO_FORRO_SEM_REGISTRO,
@@ -23,6 +23,7 @@ import {
   comandosDeRefazerEletrodutos,
   diferencasDoEletroduto,
   escolhasDoEletroduto,
+  forroDaCasaQueVale,
   hipotesesDoQuadro,
   motivoParaNaoRelancar,
   planejarEletrodutosPorQuadro,
@@ -138,10 +139,18 @@ describe('botaoDeLancarEletrodutos — a regra A (o botão nunca fica sem ação
 });
 
 describe('redesARefazer + textoDaConfirmacaoDeRefazer — confirmação só com o que foi confirmado', () => {
+  it('correção 1 da F5 (M5): com registro e nenhuma escolha mudada, a confirmação diz que o resultado será o mesmo', () => {
+    const lancada = lancadaComCaixas();
+    const m = applyBatch(lancada, (lancada.trechos ?? []).map((t): Command => ({ type: 'SetTrechoProps', trechoId: t.id, sugerido: false }))).model;
+    const redes = redesARefazer(m, undefined, { hip: COM_CAIXAS, hipEletricas: HIPOTESES_PADRAO });
+    expect(redes[0]).toMatchObject({ mudou: null, nadaMudou: true });
+    expect(textoDaConfirmacaoDeRefazer(redes)).toContain(TEXTO_NADA_MUDOU);
+  });
+
   it('só sugeridos → refaz direto (sem confirmação)', () => {
     const m = lancadaComCaixas();
     const redes = redesARefazer(m);
-    expect(redes).toEqual([{ quadroId: m.quadros[0].id, nome: 'QDC', trechos: m.trechos!.length, trechosConfirmados: 0, caixas: 2, caixasAceitas: 0, mudou: null }]);
+    expect(redes).toEqual([{ quadroId: m.quadros[0].id, nome: 'QDC', trechos: m.trechos!.length, trechosConfirmados: 0, caixas: 2, caixasAceitas: 0, mudou: null, nadaMudou: false }]);
     expect(textoDaConfirmacaoDeRefazer(redes)).toBeNull();
   });
 
@@ -275,18 +284,45 @@ describe('correção 1 — a rede no FORRO continua no forro (C1)', () => {
     expect(comandosDeLancarEletrodutos(antiga, planos, SEM_CAIXAS, HIPOTESES_PADRAO)).toEqual([]);
     expect(redesARefazer(antiga)).toEqual([]);
     // Correção 3 (24/10/2026): com o forro das premissas da casa (`forroDaCasa`), relança — e continua no forro.
-    expect(motivoParaNaoRelancar(antiga, q, FORRO)).toBeNull();
-    const planosComCasa = planejarEletrodutosPorQuadro(antiga, SEM_CAIXAS, HIPOTESES_PADRAO, FORRO);
-    expect(botaoDeLancarEletrodutos(antiga, planosComCasa, FORRO)).toMatchObject({ modo: 'RELANCAR', motivo: null, quadros: [q] });
-    const refeita = applyBatch(antiga, comandosDeRefazerEletrodutos(antiga, [q], SEM_CAIXAS, HIPOTESES_PADRAO, FORRO)).model;
+    // Correção 2 da F3: o forro da casa leva o REBAIXO (a assinatura: aqui, o do ambiente, 300).
+    const DA_CASA = { ...FORRO, rebaixoMm: 300 };
+    expect(motivoParaNaoRelancar(antiga, q, DA_CASA)).toBeNull();
+    const planosComCasa = planejarEletrodutosPorQuadro(antiga, SEM_CAIXAS, HIPOTESES_PADRAO, DA_CASA);
+    expect(botaoDeLancarEletrodutos(antiga, planosComCasa, DA_CASA)).toMatchObject({ modo: 'RELANCAR', motivo: null, quadros: [q] });
+    const refeita = applyBatch(antiga, comandosDeRefazerEletrodutos(antiga, [q], SEM_CAIXAS, HIPOTESES_PADRAO, DA_CASA)).model;
     expect(horizontaisEletricas(refeita).length).toBeGreaterThan(0);
     expect(horizontaisEletricas(refeita).map((t) => t.cotaAMm).filter((c) => c !== 2800 - 45)).toEqual([]);
     expect(registroDe(refeita, 'ELETRODUTOS', q)?.escolhas).toMatchObject({ forroAbaixoDoTetoMm: 45, forroFolgaSobAVigaMm: 20 });
     // O registro do forro tem prioridade sobre o da casa: outra faixa nas premissas não muda a rede já registrada.
-    expect(hipotesesDoQuadro(refeita, q, SEM_CAIXAS, { ...FORRO, folgaSobAVigaMm: 99 }).noForro).toEqual(FORRO);
+    expect(hipotesesDoQuadro(refeita, q, SEM_CAIXAS, { ...DA_CASA, folgaSobAVigaMm: 99 }).noForro).toEqual(FORRO);
     // Controle: a rede na cota do painel, sem registro, relança.
     const doPainel = aceitarTudo(applyBatch(m, planejarEletrodutosDoModelo(m, SEM_CAIXAS)[0].comandos).model);
     expect(motivoParaNaoRelancar(doPainel, q)).toBeNull();
+  });
+
+  // Correção 2 da F3 (24/10/2026, revisão — I1): planta SEM casa, com forro de verdade e eletroduto acima da face numa cota
+  // que não é a da faixa da casa — o forro da casa NÃO entra (relançar desceria/levaria a rede ao forro da casa e o
+  // registro perpetuaria isso). Também não entra com o rebaixo do forro diferente do da casa.
+  it('⚠️ correção 2: sem a ASSINATURA da casa (cota fora da faixa, ou outro rebaixo) — continua bloqueado com o motivo', () => {
+    const m = comForro(sala());
+    const q = m.quadros[0].id;
+    const aMao = { ...SEM_CAIXAS, noForro: { ...FORRO, faixa: { ...FORRO.faixa, abaixoDoTetoMm: 100 } } };
+    const antiga = aceitarTudo(applyBatch(m, planejarEletrodutosDoModelo(m, aMao)[0].comandos).model);
+    expect(redeNoForroSemRegistro(antiga, q)).toBe(true);
+    const DA_CASA = { ...FORRO, rebaixoMm: 300 };
+    expect(forroDaCasaQueVale(antiga, q, DA_CASA)).toBeNull();
+    // Correção 3: o motivo diz por quê (a cota fora da faixa) e o que fazer; sem as premissas, o motivo de sempre.
+    expect(motivoParaNaoRelancar(antiga, q, DA_CASA)).toBe(`${MOTIVO_REDE_NO_FORRO_SEM_REGISTRO} Há trecho no forro fora das faixas da Casa Automática (ex.: 2700 mm) — apague-o ou relance pela Casa Automática.`);
+    expect(motivoParaNaoRelancar(antiga, q)).toBe(MOTIVO_REDE_NO_FORRO_SEM_REGISTRO);
+    expect(botaoDeLancarEletrodutos(antiga, planejarEletrodutosPorQuadro(antiga, SEM_CAIXAS, HIPOTESES_PADRAO, DA_CASA), DA_CASA).motivo).toBe(motivoParaNaoRelancar(antiga, q, DA_CASA));
+    expect(hipotesesDoQuadro(antiga, q, SEM_CAIXAS, DA_CASA).noForro).toBeUndefined();
+    expect(comandosDeRefazerEletrodutos(antiga, [q], SEM_CAIXAS, HIPOTESES_PADRAO, DA_CASA)).toEqual([]);
+    // Na faixa da casa, mas com outro rebaixo do forro: também não é a casa.
+    const naFaixa = aceitarTudo(applyBatch(m, planejarEletrodutosDoModelo(m, NO_FORRO)[0].comandos).model);
+    expect(forroDaCasaQueVale(naFaixa, q, { ...FORRO, rebaixoMm: 233 })).toBeNull();
+    expect(forroDaCasaQueVale(naFaixa, q, DA_CASA)).toEqual(FORRO);
+    // Sem o rebaixo no forro da casa (não dá para conferir): não entra.
+    expect(forroDaCasaQueVale(naFaixa, q, FORRO)).toBeNull();
   });
 });
 

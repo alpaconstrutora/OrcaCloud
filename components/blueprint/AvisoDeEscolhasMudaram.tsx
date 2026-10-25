@@ -37,6 +37,13 @@ export interface AvisoDeEscolhasMudaramProps {
    * regiões de status anunciariam todas de uma vez.
    */
   anunciar?: boolean;
+  /**
+   * Correção 1 da F5 (M2): ONDE — o alvo do aviso, antes das diferenças ("Térreo — Dividir luz e TUG — lançado com: …"),
+   * quando o painel mostra só um alvo de vários (o pavimento dos circuitos).
+   */
+  prefixo?: string;
+  /** Correção 1 da F5 (M2): uma linha a mais, menor (ex.: "Também no Superior: …"). */
+  complemento?: string | null;
 }
 
 export default function AvisoDeEscolhasMudaram({
@@ -46,6 +53,8 @@ export default function AvisoDeEscolhasMudaram({
   desabilitado = null,
   rotuloAcessivel,
   anunciar = true,
+  prefixo,
+  complemento = null,
 }: AvisoDeEscolhasMudaramProps) {
   if (diferencas.length === 0) return null;
   const motivo = desabilitado || undefined;
@@ -57,7 +66,13 @@ export default function AvisoDeEscolhasMudaram({
     >
       <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span className="flex-1">
+        {prefixo ? `${prefixo} — ` : ''}
         {textoDasDiferencas(diferencas)}
+        {complemento && (
+          <span className="mt-0.5 block text-[11px] text-amber-700" data-testid="aviso-escolhas-mudaram-complemento">
+            {complemento}
+          </span>
+        )}
         {/* O motivo também no TEXTO: leitor de tela e toque não mostram `title`. */}
         {motivo && (
           <span className="mt-0.5 block text-[11px] text-amber-700" data-testid="aviso-escolhas-mudaram-motivo">

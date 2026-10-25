@@ -101,7 +101,11 @@ import { comandosDasSugestoesDeDR, conferirNbr5410, sugerirDRs } from './bluepri
 import { HIPOTESES_ELETRODUTO_PADRAO, comandosDeBitolaPelaOcupacao, planejarEletrodutosDoModelo, type HipotesesDeEletroduto } from './blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from './blueprintCaixasDePassagem';
 import { escolhasDoEletroduto } from './blueprintEscolhasDoEletroduto';
-import { comandoDeRegistro } from './blueprintRegistroDeLancamento';
+import { comandoDeRegistro, registroDe } from './blueprintRegistroDeLancamento';
+import { comandoDeRegistroDosCircuitosCriados } from './blueprintEscolhasDosCircuitos';
+import { escolhasDaAgua, escolhasDoPluvial } from './blueprintEscolhasDaAguaEPluvial';
+import { escolhasDoEsgoto } from './blueprintEscolhasDoEsgoto';
+import type { HipotesesDeAgua } from './blueprintAguaAutomatica';
 import type { CaixasDePassagem } from './preferencias/catalogoLancamento';
 import { gerarClimatizacao, type ContextoDoGeradorDeClimatizacao } from './blueprintGeradorClimatizacao';
 import { HIPOTESES_CLIMATIZACAO_PADRAO, type HipotesesClimatizacao } from './blueprintClimatizacao';
@@ -899,6 +903,7 @@ export const HIPOTESES_DO_FORRO_DA_CASA_PADRAO: HipotesesDoForroDaCasa = {
 };
 
 const FAIXAS_DO_FORRO = ['eletrica', 'frigorigena', 'aguaQuente', 'aguaFria'] as const;
+
 /** O raio do tubo da faixa mais baixa (a água fria) na conta do rebaixo — DN 32 de PVC, o maior ramal da casa. */
 const RAIO_NO_PLENUM_MM = 16;
 
@@ -925,9 +930,86 @@ function forroDaEletrica(f: HipotesesDoForroDaCasa): { faixa: FaixaDoForro; folg
  * (`hipotesesDasPremissas`). `null` com o forro desligado. O editor passa isto ao painel dos eletrodutos para relançar
  * NO FORRO a rede antiga (sem registro do lançamento).
  */
-export function forroEletricoDaCasa(hipParcial: Partial<HipotesesDaCasa>): { faixa: FaixaDoForro; folgaSobAVigaMm: number } | null {
+export function forroEletricoDaCasa(hipParcial: Partial<HipotesesDaCasa>): { faixa: FaixaDoForro; folgaSobAVigaMm: number; rebaixoMm: number } | null {
   const f = hipotesesDoForroDaCasa(hipParcial.forro ?? {});
-  return f.lancar ? forroDaEletrica(f) : null;
+  // Correção 2 da F3: o REBAIXO vai junto — é parte da assinatura da casa (`temAssinaturaDaCasa`).
+  return f.lancar ? { ...forroDaEletrica(f), rebaixoMm: rebaixoDoForroMm(f) } : null;
+}
+
+/**
+ * O forro da ÁGUA da casa — o `agua.noForro` com que a etapa ÁGUA lança (as faixas da fria e da quente e a folga sob a
+ * viga) —, ou `null` com o forro desligado. O irmão de `forroEletricoDaCasa` (F3 do relançar, 24/10/2026): a casa lança
+ * com ele, e o editor monta com ele, das premissas do estudo, o forro da água antiga lançada antes do registro.
+ */
+export function forroDaAguaDaCasa(hipParcial: Partial<HipotesesDaCasa>): (NonNullable<HipotesesDeAgua['noForro']> & { rebaixoMm: number }) | null {
+  const f = hipotesesDoForroDaCasa(hipParcial.forro ?? {});
+  // Correção 2 da F3: o REBAIXO vai junto — é parte da assinatura da casa (`temAssinaturaDaCasa`).
+  return f.lancar ? { aguaFria: f.aguaFria, aguaQuente: f.aguaQuente, folgaSobAVigaMm: f.folgaSobAVigaMm, rebaixoMm: rebaixoDoForroMm(f) } : null;
+}
+
+/**
+ * F17 (decisão do usuário, "sobe pela fachada"): onde o alimentador da casa sobe quando o estudo não diz. Exportado na
+ * correção 2 da F3: a água antiga relançada sem registro usa o mesmo (sob a caixa, cruzava o baldrame — +3 conflitos).
+ */
+export const SUBIDA_DO_ALIMENTADOR_DA_CASA = 'FACHADA' as const;
+
+/**
+ * A FAIXA DA ÁGUA QUENTE da casa no mundo (F14a: o deslocamento (d, d) no quadro da frente do lote — o mesmo
+ * `faixaNoMundo` da etapa ÁGUA), ou `null` sem a frente marcada. Correção 2 da F3 (24/10/2026): a água antiga relançada
+ * sem registro refaz a quente na faixa dela — pelo eixo das paredes, cruzava a fria e a estrutura.
+ */
+export function faixaDaAguaQuenteDaCasa(hipParcial: Partial<HipotesesDaCasa>, limites: readonly Boundary[], anelDoLote: readonly Point[]): Point | null {
+  return faixaDaCasa({ ...HIPOTESES_DA_CASA_PADRAO.faixas, ...(hipParcial.faixas ?? {}) }.aguaQuenteMm, limites, anelDoLote);
+}
+
+/** A faixa (d, d) do quadro da frente do lote levada ao mundo — a conta do `faixaNoMundo` da casa. */
+function faixaDaCasa(d: number, limites: readonly Boundary[], anelDoLote: readonly Point[]): Point | null {
+  const q = quadroDaFrente(limites, anelDoLote);
+  if (!q) return null;
+  const v = paraMundo(q, { x: d, y: d });
+  return { x: Math.round(v.x), y: Math.round(v.y) };
+}
+
+/**
+ * Correção 3 da F3 (24/10/2026, re-revisão): a faixa da quente pelo LOTE do modelo — os limites do pavimento que tem a
+ * divisa da FRENTE (a casa se implanta por ela), nunca os do pavimento ativo no editor. No sobrado o lote só existe no
+ * térreo: com o pavimento de cima ativo, a faixa saía `null`, a quente refeita cruzava a fria (+18 conflitos de rede) e o
+ * registro perpetuava isso.
+ */
+export function faixaDaAguaQuenteDaCasaNoModelo(hipParcial: Partial<HipotesesDaCasa>, model: Pick<BlueprintModel, 'boundaries'>): Point | null {
+  return faixaDaCasaNoModelo({ ...HIPOTESES_DA_CASA_PADRAO.faixas, ...(hipParcial.faixas ?? {}) }.aguaQuenteMm, model);
+}
+
+/** A faixa (d, d) pelo LOTE do modelo (o pavimento da divisa da frente), nunca o pavimento ativo. */
+function faixaDaCasaNoModelo(d: number, model: Pick<BlueprintModel, 'boundaries'>): Point | null {
+  const frente = model.boundaries.find((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
+  if (!frente) return null;
+  const limites = model.boundaries.filter((b) => b.levelId === frente.levelId);
+  const terreno = medirTerreno(limites);
+  return terreno ? faixaDaCasa(d, limites, terreno.anel) : null;
+}
+
+/**
+ * F4 do relançar (24/10/2026): o que a casa decide no ESGOTO e o estudo não tem — a FAIXA do esgoto no mundo (F14a: o
+ * mesmo quadro da frente do lote, com `faixas.esgotoMm`) e, no sobrado (mais de um pavimento no modelo), um tubo de
+ * queda por GRUPO de peças e o raio do shaft da casa (F14c). A etapa ESGOTO lança com isto; o editor o passa ao esgoto
+ * antigo (sem registro) de uma casa, para relançar sem tirar o tubo de queda e a ventilação do lugar.
+ */
+export function esgotoDaCasaNoModelo(
+  hipParcial: Partial<HipotesesDaCasa>,
+  model: Pick<BlueprintModel, 'boundaries' | 'terminais'>,
+): { faixa: Point | null; tuboDeQuedaPorGrupoMm: number | null; raioDoShaftMm: number | null } {
+  const sobrado = { ...HIPOTESES_DO_SOBRADO_PADRAO, ...(hipParcial.sobrado ?? {}) };
+  // Correção 1 da F4 (menor 2): o critério da casa (`niveis.length > 1` — os pavimentos DELA, não os do estudo): as
+  // premissas de pavimentos quando dizem quantos; no "Automático", os pavimentos com peça de esgoto (a casa lança as
+  // louças em cada pavimento dela — um pavimento do estudo sem casa não conta).
+  const pav = hipParcial.pavimentos;
+  const varios = typeof pav === 'number' ? pav > 1 : new Set((model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO').map((t) => t.levelId)).size > 1;
+  return {
+    faixa: faixaDaCasaNoModelo({ ...HIPOTESES_DA_CASA_PADRAO.faixas, ...(hipParcial.faixas ?? {}) }.esgotoMm, model),
+    tuboDeQuedaPorGrupoMm: varios ? sobrado.grupoDoTuboDeQuedaMm : null,
+    raioDoShaftMm: varios ? sobrado.tuboDeQuedaAteOShaftMm : null,
+  };
 }
 
 /** O rebaixo do forro (da laje à face de cima dele): a faixa mais baixa, o raio do tubo e a folga. */
@@ -2267,18 +2349,25 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       agua: {
         ...hidroDoEstudo.agua,
         faixaDaAguaQuente: faixaNoMundo(hip.faixas.aguaQuenteMm),
-        noForro: forroLigado ? { aguaFria: hip.forro.aguaFria, aguaQuente: hip.forro.aguaQuente, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } : null,
+        noForro: forroDaAguaDaCasa(hip),
       },
       // F17 (decisão do usuário, "sobe pela fachada"): o alimentador enterrado só até a parede da frente — sobe nela e
       // corre sobre a laje até a caixa; sob o piso ele cruzava o esgoto enterrado. A premissa do estudo, se houver, vale.
-      alimentacao: { ...hidroDoEstudo.alimentacao, subida: hidroDoEstudo.alimentacao.subida ?? 'FACHADA' },
+      alimentacao: { ...hidroDoEstudo.alimentacao, subida: hidroDoEstudo.alimentacao.subida ?? SUBIDA_DO_ALIMENTADOR_DA_CASA },
       // F14c: no sobrado, um tubo de queda por banheiro de cima (cada um no shaft dele).
       esgoto: { ...hidroDoEstudo.esgoto, faixa: faixaNoMundo(hip.faixas.esgotoMm), ...(niveis.length > 1 ? { tuboDeQuedaPorGrupoMm: hip.sobrado.grupoDoTuboDeQuedaMm, raioDoShaftMm: hip.sobrado.tuboDeQuedaAteOShaftMm } : {}) },
     };
     const terrenoHidro = entrada.leitorDoTerreno ?? null;
     const hidraulica = HIDRAULICA_ZERADA();
     const contar = (lote: Command[]) => ({ pecas: lote.filter((c) => c.type === 'AddTerminal').length, tubos: lote.filter((c) => c.type === 'AddTrecho').length });
-    const etapaDeRede = (id: 'AGUA' | 'ESGOTO' | 'PLUVIAL', planejar: () => { comandos: Command[]; presumido: string[]; pendencias: string[] }, nota: (n: { pecas: number; tubos: number }) => string): { pecas: number; tubos: number } => {
+    // F3 do relançar (24/10/2026): `registro` — o REGISTRO do lançamento (com que escolhas), no mesmo lote da casa, logo
+    // depois da rede (não entra na contagem da etapa). O painel do sistema avisa quando as premissas de lá diferem.
+    const etapaDeRede = (
+      id: 'AGUA' | 'ESGOTO' | 'PLUVIAL',
+      planejar: () => { comandos: Command[]; presumido: string[]; pendencias: string[] },
+      nota: (n: { pecas: number; tubos: number }) => string,
+      registro?: () => Command,
+    ): { pecas: number; tubos: number } => {
       if (!hip.hidraulica.lancar) {
         etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
         return { pecas: 0, tubos: 0 };
@@ -2298,6 +2387,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const sugeridos = new Set(m.terminais.filter((t) => t.sugerida).map((t) => t.id));
         let n = aplicar(plano.comandos);
         n += aplicar(m.terminais.filter((t) => sugeridos.has(t.id) && !t.sugerida).map((t): Command => ({ type: 'SetTerminalProps', terminalId: t.id, sugerida: true })));
+        if (registro) aplicar([registro()]);
         etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'LANCOU', n, nota(c) + (plano.pendencias.length ? ` — ${plano.pendencias.length} pendência(s)` : ''));
         return c;
       } catch (e) {
@@ -2327,6 +2417,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
               : '';
         return `${c.tubos} tubo(s) e ${c.pecas} peça(s)${sol}`;
       },
+      // Com o forro, a faixa da quente e a subida pela fachada (sem rótulo): o relançar pelo editor os mantém.
+      () => comandoDeRegistro('AGUA', null, escolhasDaAgua(hidro)),
     );
     {
       const d = pressao as DecisaoDaPressao | null;
@@ -2347,10 +2439,26 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           return planejarEsgotoCompleto(m, hidro.esgoto, terrenoHidro, { tratamento: { comFiltro: hidro.tratamento.comFiltro, medidas } });
         },
         (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s) — destino: ${destino === 'TRATAMENTO' ? 'tratamento individual (tanque, filtro, sumidouro)' : 'rede pública'}`,
+        // F4 do relançar (24/10/2026): as escolhas do ESTUDO com rótulo, e o que só a casa decide — a faixa do esgoto e,
+        // no sobrado, o tubo de queda por grupo e o raio do shaft — sem rótulo: o relançar pelo editor os mantém.
+        () =>
+          comandoDeRegistro(
+            'ESGOTO',
+            null,
+            escolhasDoEsgoto(
+              { esgoto: hidroDoEstudo.esgoto, tratamento: hidro.tratamento, reservatorio: hidro.reservatorio },
+              { faixa: hidro.esgoto.faixa ?? null, tuboDeQuedaPorGrupoMm: hidro.esgoto.tuboDeQuedaPorGrupoMm ?? null, raioDoShaftMm: niveis.length > 1 ? (hidro.esgoto.raioDoShaftMm ?? null) : null },
+            ),
+          ),
       ),
       destino,
     };
-    hidraulica.pluvial = etapaDeRede('PLUVIAL', () => planejarPluvialCompleta(m, hidro.pluvial, terrenoHidro), (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s)`);
+    hidraulica.pluvial = etapaDeRede(
+      'PLUVIAL',
+      () => planejarPluvialCompleta(m, hidro.pluvial, terrenoHidro),
+      (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s)`,
+      () => comandoDeRegistro('PLUVIAL', null, escolhasDoPluvial(hidro.pluvial)),
+    );
     // F18: o condutor pluvial horizontal (enterrado, para a saída na frente do lote) é traçado depois do esgoto e o
     // cruzava rente (15 × 25: a ligação de esgoto, com 6 cm entre os eixos). Ele passa POR CIMA — a saída fica na
     // sarjeta —: o início sobe (`profundidadeDoCondutorMm`) até livrar todo cruzamento, sem passar do recobrimento.
@@ -2376,7 +2484,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       }
       if (melhor) {
         prof = melhor.prof;
-        aplicar(melhor.comandos);
+        // O registro guarda a profundidade AJUSTADA (sem rótulo): relançar pelo editor não volta o condutor rente ao esgoto.
+        aplicar([...melhor.comandos, comandoDeRegistro('PLUVIAL', null, escolhasDoPluvial(hidro.pluvial, { profundidadeAjustadaDoCondutorMm: melhor.prof }))]);
       }
       if (pluvialRenteAoEsgoto(m) > 0) pendencias.push({ grupo: 'VERIFICACAO', texto: `Águas pluviais: o condutor horizontal passa rente ao esgoto mesmo começando a ${f2(-prof / 1000)} m — confira o cruzamento (ou mude a saída).` });
       else pendencias.push({ grupo: 'CONFERIR', texto: `Águas pluviais: o condutor horizontal começa a ${f2(-prof / 1000)} m para passar por cima do esgoto.` });
@@ -2389,7 +2498,9 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       if (ajuste.cruzamentos > 0 && ajuste.cotaMm !== hidro.alimentacao.cotaEnterradaMm) {
         const alim = planejarAlimentador(m, { ...hidro.alimentacao, cotaEnterradaMm: ajuste.cotaMm }, hidro.reservatorio, hidro.pressao.qMaxDoHidrometroM3h, terrenoHidro);
         if (!alim.motivo && alim.comandos.length) {
-          aplicar(alim.comandos);
+          // O registro guarda a cota AJUSTADA (sem rótulo): relançar pelo editor não volta o alimentador a cruzar o esgoto.
+          const registro = registroDe(m, 'AGUA', null) ? [comandoDeRegistro('AGUA', null, escolhasDaAgua(hidro, { cotaEnterradaAjustadaMm: ajuste.cotaMm }))] : [];
+          aplicar([...alim.comandos, ...registro]);
           const cota = f2(ajuste.cotaMm / 1000);
           pendencias.push(
             ajuste.sob
@@ -2757,6 +2868,17 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const notaDaEntrada = eletrica.entrada ? `; entrada ${eletrica.entrada.categoria} (${eletrica.entrada.ligacao}, ${eletrica.entrada.demandaKva.toLocaleString('pt-BR')} kVA)` : '';
         etapa('DR_DPS', ROTULO_DA_ETAPA_DA_CASA.DR_DPS, 'LANCOU', aplicar([...drs, ...dps, ...ligacao]), `${drs.length} DR(s) de 30 mA${dps.length ? '; DPS no quadro' : ''}${notaDaEntrada}`);
       });
+      // F5 do relançar (24/10/2026): o REGISTRO dos circuitos automáticos, por pavimento, no lote da casa — com que
+      // escolhas e QUAIS circuitos a casa criou (pelo motor: os do pavimento e os do ar-condicionado, mesmas escolhas).
+      // O painel dos circuitos avisa quando as escolhas de lá diferem e o "Relançar" refaz só estes; o circuito que o
+      // usuário alterar depois fica. Depois do DR (que não muda o circuito) e antes dos eletrodutos (idem).
+      {
+        const daCasa = new Set((m.circuitos ?? []).map((c) => c.id).filter((id) => !(original.circuitos ?? []).some((c) => c.id === id)));
+        for (const L of niveis) {
+          const registro = comandoDeRegistroDosCircuitosCriados(m, L, daCasa, hipCircuitos, hipEletricas);
+          if (registro) aplicar([registro]);
+        }
+      }
       tentarEletrica('ELETRODUTOS', () => {
         // F14b: no forro, na faixa do eletroduto. Task 3 (24/10/2026, "a regra vale também no forro"): quadro → luz do
         // ambiente → tomadas, como na obra — a luz → ponto reta pela faixa até a vertical dele no anel, e a descida do

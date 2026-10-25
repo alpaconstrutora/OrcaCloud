@@ -1,0 +1,117 @@
+/**
+ * A REDE ANTIGA NO FORRO É DA CASA AUTOMÁTICA? — uma decisão só para os eletrodutos e para a água (correção 2 da F3 do
+ * plano `docs/planos/2026-10-24-relancar-quando-escolha-muda.md`, 24/10/2026).
+ *
+ * Contexto: rede lançada no forro ANTES de existir o registro do lançamento não diz com que faixa foi lançada. O editor
+ * relança essa rede no forro da casa (as premissas da Casa Automática do estudo, `forroDaCasa`) — pedido do usuário na
+ * planta "Garden": *"alterei e não ficou disponível para relançamento"*. Mas a revisão achou o furo: uma planta SEM casa,
+ * com forro de verdade e um ramal desenhado à mão acima da face, também "tem rede no forro sem registro" — e relançava no
+ * forro da casa, perpetuado depois pelo registro.
+ *
+ * Por isso o forro da casa só entra quando a rede antiga tem a ASSINATURA da casa:
+ *   (b) todo horizontal detectado no forro está EXATAMENTE (±2 mm) numa cota de faixa do forro da casa — `teto −
+ *       abaixoDoTetoMm`, ou o degrau dela na parede (`teto − abaixoDoTetoMm − degrauNaParedeMm`);
+ *   (c) todo ambiente com forro nos pavimentos dessa rede tem o REBAIXO do forro da casa (`rebaixoDoForroMm`).
+ * Sem a assinatura, a rede antiga continua bloqueada, com o motivo.
+ *
+ * A detecção (o trecho que conta como "no forro") também mora aqui, com o critério que os dois motores já usavam.
+ *
+ * Puro: sem React, sem banco.
+ */
+import type { BlueprintModel, DisciplinaDeRede, ObjectId, Trecho } from './blueprintKernel';
+import type { FaixaDoForro } from './blueprintRotaPeloForro';
+
+/**
+ * Correção 1 da F5 (M6, 25/10/2026): POR QUE as premissas da casa não servem — os mesmos três casos e os mesmos textos nos
+ * três motores (eletrodutos, água, esgoto). `'CARREGANDO'` = ainda chegando (some sozinho); `'ERRO'` = a leitura falhou
+ * (timeout, RLS, tabela ausente — não vira padrão); `'DESLIGADO'` = o forro está desligado nas premissas.
+ */
+export type PremissasDaCasaIndisponiveis = 'CARREGANDO' | 'ERRO' | 'DESLIGADO';
+export const MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA = 'Carregando as premissas da Casa Automática…';
+export const MOTIVO_PREMISSAS_DA_CASA_ILEGIVEIS = 'Não foi possível ler as premissas da casa.';
+export const MOTIVO_FORRO_DESLIGADO_NAS_PREMISSAS = 'O forro está desligado nas premissas da casa.';
+
+/** O motivo do bloqueio por premissas: carregando → só isso; erro ou forro desligado → o motivo do motor + o porquê. */
+export function motivoDasPremissasDaCasa(base: string, estado: PremissasDaCasaIndisponiveis): string {
+  if (estado === 'CARREGANDO') return MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA;
+  return `${base} ${estado === 'ERRO' ? MOTIVO_PREMISSAS_DA_CASA_ILEGIVEIS : MOTIVO_FORRO_DESLIGADO_NAS_PREMISSAS}`;
+}
+
+/** A folga da assinatura: a casa lança em milímetro inteiro; 2 mm cobre o arredondamento do caminho. */
+export const TOLERANCIA_DA_ASSINATURA_MM = 2;
+
+/** O que o forro da casa deixa de assinatura na rede: as faixas de cota (das redes do motor) e o rebaixo do forro. */
+export interface AssinaturaDoForroDaCasa {
+  faixas: readonly FaixaDoForro[];
+  /**
+   * Correção 3: a faixa de CADA disciplina, quando o motor tem mais de uma (a água: o horizontal da fria confere com a faixa
+   * da fria, o da quente com a da quente). Ausente para a disciplina = `faixas`.
+   */
+  faixasPorDisciplina?: Partial<Record<DisciplinaDeRede, readonly FaixaDoForro[]>>;
+  rebaixoMm: number;
+}
+
+/** O teto, a face mais baixa do forro e o rebaixo de cada ambiente com forro, por pavimento (`null` = sem forro). */
+function forroDoNivel(model: BlueprintModel, levelId: ObjectId): { teto: number; face: number; rebaixos: number[] } | null {
+  const nivel = model.levels.find((l) => l.id === levelId);
+  if (!nivel) return null;
+  const forros = (model.labels ?? []).filter((l) => l.levelId === levelId && l.acabamentos?.forro && l.acabamentos.forro.rebaixoMm > 0).map((l) => l.acabamentos!.forro!);
+  if (!forros.length) return null;
+  const faces = forros.map((f) => nivel.defaultHeightMm - f.rebaixoMm - f.camadas.reduce((n, x) => n + x.espessuraMm, 0));
+  return { teto: nivel.defaultHeightMm, face: Math.min(...faces), rebaixos: forros.map((f) => f.rebaixoMm) };
+}
+
+/**
+ * Os trechos HORIZONTAIS de `trechos` que correm no forro: num pavimento com forro de verdade (ambiente com rebaixo),
+ * acima da face mais baixa dele, a menos de 60 cm do teto (estrito), fora da cota em que o próprio motor lança sem forro
+ * (`cotaForaDoForro`) e sem terminar num terminal na mesma cota (a saída até a face da peça).
+ */
+export function horizontaisNoForro(
+  model: BlueprintModel,
+  trechos: readonly Trecho[],
+  cotaForaDoForro: (levelId: ObjectId, tetoMm: number) => number | null,
+): Trecho[] {
+  const porNivel = new Map<ObjectId, ReturnType<typeof forroDoNivel>>();
+  const doNivel = (id: ObjectId) => {
+    if (!porNivel.has(id)) porNivel.set(id, forroDoNivel(model, id));
+    return porNivel.get(id)!;
+  };
+  const terminais = new Set((model.terminais ?? []).map((x) => `${x.levelId}|${x.at.x},${x.at.y},${x.cotaMm}`));
+  return trechos.filter((t) => {
+    if (t.cotaAMm !== t.cotaBMm || (t.a.x === t.b.x && t.a.y === t.b.y)) return false;
+    const c = doNivel(t.levelId);
+    if (!c) return false;
+    const z = t.cotaAMm;
+    if (terminais.has(`${t.levelId}|${t.a.x},${t.a.y},${z}`) || terminais.has(`${t.levelId}|${t.b.x},${t.b.y},${z}`)) return false;
+    return z !== cotaForaDoForro(t.levelId, c.teto) && z > c.face && z < c.teto && z > c.teto - 600;
+  });
+}
+
+/** (b) + (c): a rede antiga detectada no forro (`horizontais`, de `horizontaisNoForro`) é da casa? */
+export function temAssinaturaDaCasa(model: BlueprintModel, horizontais: readonly Trecho[], assinatura: AssinaturaDoForroDaCasa): boolean {
+  return horizontais.length > 0 && motivoSemAssinaturaDaCasa(model, horizontais, assinatura) === null;
+}
+
+/**
+ * Correção 3 (24/10/2026, re-revisão): POR QUE a rede antiga não tem a assinatura da casa — o primeiro critério que falhou,
+ * dito com o valor e o que fazer —, ou `null` quando tem. Vai no motivo do botão desligado.
+ */
+export function motivoSemAssinaturaDaCasa(model: BlueprintModel, horizontais: readonly Trecho[], assinatura: AssinaturaDoForroDaCasa): string | null {
+  const tol = TOLERANCIA_DA_ASSINATURA_MM;
+  const tetoDe = new Map(model.levels.map((l) => [l.id, l.defaultHeightMm]));
+  // (b) as faixas de cota.
+  const fora = horizontais.find((t) => {
+    const teto = tetoDe.get(t.levelId)!;
+    const faixas = assinatura.faixasPorDisciplina?.[t.disciplina] ?? assinatura.faixas;
+    return !faixas.some((f) => [teto - f.abaixoDoTetoMm, teto - f.abaixoDoTetoMm - (f.degrauNaParedeMm ?? 0)].some((z) => Math.abs(t.cotaAMm - z) <= tol));
+  });
+  if (fora) return `Há trecho no forro fora das faixas da Casa Automática (ex.: ${fora.cotaAMm} mm) — apague-o ou relance pela Casa Automática.`;
+  // (c) o rebaixo do forro dos ambientes.
+  for (const levelId of new Set(horizontais.map((t) => t.levelId))) {
+    const c = forroDoNivel(model, levelId);
+    const outro = c?.rebaixos.find((r) => Math.abs(r - assinatura.rebaixoMm) > tol);
+    if (!c) return 'O pavimento da rede não tem forro nos ambientes — relance pela Casa Automática.';
+    if (outro != null) return `O forro dos ambientes (rebaixo ${outro} mm) difere das premissas da casa (rebaixo ${assinatura.rebaixoMm} mm) — ajuste um dos dois ou relance pela Casa Automática.`;
+  }
+  return null;
+}

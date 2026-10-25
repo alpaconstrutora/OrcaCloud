@@ -11,7 +11,7 @@ import {
     sindicoPortalService, type CondominioDoSindico, type IdentidadeDoSindico, type RateioParaSindico, type UnidadeParaSindico,
 } from '../../services/sindicoPortalService';
 import {
-    CRITERIOS_DO_RATEIO, ROTULO_SITUACAO_DO_RATEIO, motivoNaoCancelaRateio, motivoNaoFechaRateio, motivoNaoGeraCotas,
+    CRITERIOS_DO_RATEIO, MOTIVO_SO_O_SINDICO_DEVOLVE, ROTULO_SITUACAO_DO_RATEIO, motivoNaoCancelaRateio, motivoNaoFechaRateio, motivoNaoGeraCotas,
     situacaoDoRateio, type CotaParaGerar, type PagadorDaCota, type SituacaoDoRateio,
 } from '../../utils/rateioDoSindico';
 import { situacaoDaAprovacao, ROTULO_DA_APROVACAO } from '../../utils/aprovacaoRateio';
@@ -28,8 +28,10 @@ import { situacaoDaAprovacao, ROTULO_DA_APROVACAO } from '../../utils/aprovacaoR
  * aprovação do síndico (F3 de 20/10). O detalhe (despesas, cotas, PDF) segue no
  * painel de baixo, o mesmo do Portal do Cliente.
  *
- * Gravar exige LOGIN: pelo link e na prévia do admin os botões ficam
- * desligados dizendo o motivo, e o banco recusa do mesmo jeito.
+ * Gravar exige LOGIN do síndico, ou a administradora abrindo o portal pelo app
+ * (25/10/2026). Pelo link os botões ficam desligados dizendo o motivo, e o
+ * banco recusa do mesmo jeito. Pela administradora, Devolver fica com o
+ * síndico e Fechar não carimba a aprovação dele (`sindico_portal_rateio_fechar`).
  */
 
 const TOM: Record<SituacaoDoRateio, PillTone> = {
@@ -47,8 +49,10 @@ interface Props {
     rateios: RateioParaSindico[];
     condominio: CondominioDoSindico | null;
     unidades: UnidadeParaSindico[];
-    /** Motivo de não poder gravar (link sem senha, prévia, condomínio sem org própria). */
+    /** Motivo de não poder gravar (link sem senha, condomínio sem org própria). */
     motivoBase: string | null;
+    /** Portal aberto pelo app: aprovar/devolver é só do síndico. */
+    comoAdministradora?: boolean;
     onAlterado: () => void;
     notify: (m: string, t?: 'success' | 'error') => void;
 }
@@ -58,7 +62,7 @@ const ComMotivo: React.FC<React.PropsWithChildren<{ motivo: string | null; dica?
     <span title={motivo ?? dica} className={motivo ? '[&>button]:pointer-events-none' : ''}>{children}</span>
 );
 
-const PainelRateiosDoSindico: React.FC<Props> = ({ identidade, rateios, condominio, unidades, motivoBase, onAlterado, notify }) => {
+const PainelRateiosDoSindico: React.FC<Props> = ({ identidade, rateios, condominio, unidades, motivoBase, comoAdministradora = false, onAlterado, notify }) => {
     const confirm = useConfirm();
     const [novo, setNovo] = React.useState(false);
     const [ocupado, setOcupado] = React.useState<string | null>(null);
@@ -111,7 +115,8 @@ const PainelRateiosDoSindico: React.FC<Props> = ({ identidade, rateios, condomin
                         {lista.map(r => {
                             const sit = situacaoDoRateio(r);
                             const aprov = situacaoDaAprovacao({ status: r.aprovacao?.status ?? null, desatualizada: !!r.aprovacao?.desatualizada });
-                            const mFechar = motivoNaoFechaRateio(r, motivoBase);
+                            const mFechar = motivoNaoFechaRateio(r, motivoBase, { comoAdministradora, exigeAprovacao });
+                            const mDevolver = motivoBase ?? (comoAdministradora ? MOTIVO_SO_O_SINDICO_DEVOLVE : null);
                             const mCotas = motivoNaoGeraCotas(r, motivoBase);
                             const mCancelar = motivoNaoCancelaRateio(r, motivoBase);
                             const geradas = r.cotas.filter(c => !!c.tituloStatus).length;
@@ -143,8 +148,8 @@ const PainelRateiosDoSindico: React.FC<Props> = ({ identidade, rateios, condomin
                                             </GhostButton>
                                         </ComMotivo>
                                         {r.status === 'RASCUNHO' && exigeAprovacao && (
-                                            <ComMotivo motivo={motivoBase} dica="Devolver à administração com o que precisa ser revisto">
-                                                <SoftButton onClick={() => setDevolvendo(r)} disabled={!!motivoBase || ocupado === r.id}>
+                                            <ComMotivo motivo={mDevolver} dica="Devolver à administração com o que precisa ser revisto">
+                                                <SoftButton onClick={() => setDevolvendo(r)} disabled={!!mDevolver || ocupado === r.id}>
                                                     <Undo2 className="w-4 h-4" /> Devolver
                                                 </SoftButton>
                                             </ComMotivo>

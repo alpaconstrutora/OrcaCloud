@@ -39,6 +39,7 @@ export interface CotaParaGerar {
 export interface RateioDoPortal {
     status: 'RASCUNHO' | 'FECHADO';
     cotas: { tituloStatus: string | null }[];
+    aprovacao?: { status: 'APROVADO' | 'DEVOLVIDO' | null; desatualizada: boolean };
 }
 
 export type SituacaoDoRateio = 'RASCUNHO' | 'FECHADO' | 'COTAS_PARCIAIS' | 'COTAS_GERADAS';
@@ -66,9 +67,24 @@ export function situacaoDoRateio(r: RateioDoPortal): SituacaoDoRateio {
 }
 
 /** `base` = o motivo de não operar (link sem senha, prévia, condomínio sem org própria). */
-export function motivoNaoFechaRateio(r: RateioDoPortal, base: string | null): string | null {
+/** Pela administradora (portal aberto no app): aprovar e devolver são do síndico. */
+export const MOTIVO_SO_O_SINDICO_DEVOLVE = 'Só o síndico devolve o rateio: é a decisão dele sobre o que a administração preparou.';
+/** Mesma frase de `sindico_portal_rateio_fechar` para a administradora. */
+export const MOTIVO_FECHAR_ESPERA_O_SINDICO = 'Este condomínio exige a aprovação do síndico: o rateio fecha quando ele aprovar, no portal dele.';
+
+/** Fechar pelo síndico É a aprovação dele; pela administradora, não — onde o
+ *  condomínio exige a aprovação, ela só fecha o rateio que ele já aprovou. */
+export function motivoNaoFechaRateio(
+    r: RateioDoPortal, base: string | null,
+    ctx: { comoAdministradora?: boolean; exigeAprovacao?: boolean } = {},
+): string | null {
     if (base) return base;
-    return r.status === 'RASCUNHO' ? null : 'Só rateio em rascunho pode ser fechado.';
+    if (r.status !== 'RASCUNHO') return 'Só rateio em rascunho pode ser fechado.';
+    if (ctx.comoAdministradora && ctx.exigeAprovacao
+        && !(r.aprovacao?.status === 'APROVADO' && !r.aprovacao?.desatualizada)) {
+        return MOTIVO_FECHAR_ESPERA_O_SINDICO;
+    }
+    return null;
 }
 
 export function motivoNaoGeraCotas(r: RateioDoPortal, base: string | null): string | null {

@@ -225,6 +225,34 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
       condomínio ainda não tem conta; escritas capturadas), desktop e 390px: OFX lido no navegador chega à RPC com
       conta/saldo/período/linhas; exato pré-marcado; conciliar chega com os ids; 0 erro; sem rolagem lateral.
       **O print achou:** com 6 sub-abas, "Resumo" e "Contas a pagar" sumiam no desktop → abas e seletores empilhados até 2xl.
-    - [ ] PR + CI + publicação.
+    - [x] PR + CI + publicação — PR #156, `ci` verde; squash `a4ca532`; CI de `main` no squash verde;
+      `conferir-producao.sh "Extrato e conciliação"` ✅.
   - [ ] G2c
+- [ ] **Administradora opera pelo portal** (fora da ordem, pedido de 25/10/2026, transcrito literalmente):
+  ```
+  nao faz o menor sentido bloquear o portal do condominio na visão do app. Deve ter a mesma funcionalidade da visão do sindico.
+  ```
+  Antes, Portais › Portal do Condomínio › "Ver como o síndico" era prévia SÓ DE LEITURA (o resolver aceitava membro só
+  no modo 'ler'). Desenho:
+  - Banco: modo novo `'operar'` em `fn_sindico_resolver` (o de `fn_sindico_operar`): síndico logado OU, sem token,
+    membro da org de um dos prédios dele; `'escrever'` (avisos/chamados) idem; `'sessao'` (aprovar/devolver rateio)
+    continua só do síndico. Recorte POR CONDOMÍNIO em `fn_sindico_motivo_nao_opera` (toda RPC de escrita já chama) via
+    `fn_sindico_recusa_operador`. Autoria: `como` + `nome` = "Fulano (administradora)" no histórico, coluna
+    `sindico_financeiro_eventos.operado_por_user_id`, e as marcas "lançado pelo síndico" só quando é ele (gatilho).
+    "Fechar" pela administradora NÃO carimba a aprovação do síndico; onde o condomínio exige, só fecha o já aprovado.
+  - Tela: `SindicoPortal comoAdministradora` (faixa dizendo que ela opera e que aprovar/devolver é do síndico); avisos e
+    chamados sem modo só-leitura; Devolver e Fechar dizem o motivo; a entrada virou "Abrir o portal do síndico".
+  **Pronto quando:** prova em bloco desfeito com os 4 perfis; Playwright no modo administradora; tsc 0.
+  - [x] Migration `aplicar_20271025300000_portal_sindico_administradora_opera` APLICADA (25/10). Prova em bloco desfeito:
+    administradora (desenvolvedor@) lança receita (histórico "Dev (administradora)" + `operado_por_user_id`; sem a marca
+    "lançado pelo síndico"), publica e encerra aviso ("Administradora — Dev"); decidir rateio e fechar o rascunho do
+    007 (exige aprovação) recusados com o motivo; logado de fora recusado; membro SÓ da org do 010 recusado no 007
+    ("Você não faz parte da administradora deste condomínio") e aceito no 010; síndico logado pelo token lança com a
+    marca dele; link sem login segue sem gravar financeiro. Funções novas sem EXECUTE para PUBLIC/anon/authenticated.
+  - [x] Tela + testes: `SindicoPortal.test` 1–2, 5, 9, 9b reescritos (opera; devolver/fechar com motivo);
+    `financeiroDoSindico.test` sem a prévia. tsc 0. Playwright (harness temporário, apagado; leituras reais, escritas
+    bloqueadas), desktop e 390px: faixa, Publicar aviso, Lançar conta e Novo rateio ligados; no 007 Devolver e Fechar
+    desligados com o motivo; 0 escrita, 0 erro, sem rolagem lateral. **O print achou:** embutida no app, no celular
+    não havia barra de abas (só a Visão geral) → a barra vai no pé do quadro.
+  - [ ] PR + CI + publicação.
 - [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7

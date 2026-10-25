@@ -20,7 +20,7 @@ import {
     SINDICO_FINANCEIRO_SUBABA_IDS, SINDICO_FINANCEIRO_SUBABA_LABELS, resolverSubAbaDoFinanceiro,
 } from '../../utils/sindicoPortalTabs';
 import {
-    MOTIVO_PREVIA, MOTIVO_SEM_LOGIN, condominioDoFinanceiro, doCondominio, inicioDaCompetencia, motivoNaoOpera,
+    MOTIVO_SEM_LOGIN, condominioDoFinanceiro, doCondominio, inicioDaCompetencia, motivoNaoOpera,
     resumoDoMes, situacaoDoTitulo, type TituloDoCondominio,
 } from '../../utils/financeiroDoSindico';
 import { rotuloDeDespesa } from '../../utils/despesaCondominio';
@@ -39,10 +39,11 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
  * `PainelExtratoDoSindico`). Os títulos são os dos CENTROS DE CUSTO do condomínio
  * (`sindico_portal_financeiro`), o mesmo recorte da aba Despesas do admin.
  *
- * Operar (lançar, pagar, editar, cancelar, cadastrar fornecedor) exige LOGIN:
- * pelo link e na prévia do admin os botões ficam desligados dizendo o motivo, e
- * o banco recusa do mesmo jeito. Condomínio sem organização própria (007) só
- * consulta.
+ * Operar (lançar, pagar, editar, cancelar, cadastrar fornecedor) exige LOGIN do
+ * síndico — ou a administradora abrindo o portal pelo app (25/10/2026: "nao faz
+ * o menor sentido bloquear o portal do condominio na visão do app"). Pelo link
+ * os botões ficam desligados dizendo o motivo, e o banco recusa do mesmo jeito.
+ * Condomínio sem organização própria só consulta.
  *
  * Síndico de mais de um prédio vê UM condomínio por vez (seletor ao lado do
  * mês): somados, os KPIs e a lista do 007 traziam as contas do 010.
@@ -51,8 +52,9 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
 interface Props {
     identidade: IdentidadeDoSindico;
     dados: PortalSindico;
-    somenteLeitura: boolean;
-    /** Entrou com e-mail e senha (só aí `onLogout` existe). */
+    /** A administradora pelo app: grava, mas aprovar/devolver rateio é só do síndico. */
+    comoAdministradora: boolean;
+    /** Pode gravar: síndico com e-mail e senha, ou a administradora pelo app. */
     logado: boolean;
     notify: (m: string, t?: 'success' | 'error') => void;
     /** Recarrega o payload do portal (a prestação de contas mora nele). */
@@ -72,7 +74,7 @@ function rotuloDoMes(mes: string): string {
 }
 
 const PainelFinanceiroDoSindico: React.FC<Props> = ({
-    identidade, dados, somenteLeitura, logado, notify, onAlteradoPortal, resolverComprovantes,
+    identidade, dados, comoAdministradora, logado, notify, onAlteradoPortal, resolverComprovantes,
 }) => {
     const [subAbaSalva, setSubAba] = usePersistedState<string>('sindicoPortal:financeiro:subaba', 'resumo');
     const subAba = resolverSubAbaDoFinanceiro(subAbaSalva);
@@ -127,12 +129,11 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
     const rateios = React.useMemo(() => doCondominio(dados.rateios, condominioId), [dados.rateios, condominioId]);
 
     const motivoDoCondominio = React.useCallback((id: string) => motivoNaoOpera({
-        somenteLeitura, logado,
+        logado,
         motivoDoCondominio: fin?.condominios.find(c => c.id === id)?.motivoNaoOpera ?? null,
-    }), [somenteLeitura, logado, fin]);
+    }), [logado, fin]);
 
-    const motivoLancar = somenteLeitura ? MOTIVO_PREVIA
-        : !logado ? MOTIVO_SEM_LOGIN
+    const motivoLancar = !logado ? MOTIVO_SEM_LOGIN
             : operaveis.length === 0 ? (condominiosDaTela[0]?.motivoNaoOpera ?? 'Nenhum condomínio disponível para lançar.')
                 : null;
 
@@ -163,7 +164,7 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
     /** Motivo de não gravar no condomínio escolhido (rateio, contas). */
     const motivoBase = condominioId
         ? motivoNaoOpera({
-            somenteLeitura, logado,
+            logado,
             motivoDoCondominio: fin ? (condominiosDaTela[0]?.motivoNaoOpera ?? null) : 'Carregando o condomínio…',
         })
         : 'Nenhum condomínio no seu mandato.';
@@ -228,13 +229,14 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
 
             {subAba === 'prestacao' ? (
                 <>
-                    {/* Gravar exige LOGIN: `logado` só é verdadeiro na entrada por e-mail e senha. */}
+                    {/* Gravar exige LOGIN (ou a administradora pelo app); aprovar/devolver é só do síndico. */}
                     <PainelRateiosDoSindico
                         identidade={identidade}
                         rateios={rateios}
                         condominio={dados.condominios.find(c => c.id === condominioId) ?? null}
                         unidades={dados.unidades}
                         motivoBase={motivoBase}
+                        comoAdministradora={comoAdministradora}
                         onAlterado={onAlteradoPortal}
                         notify={notify}
                     />
@@ -276,7 +278,7 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                 </PortalCard>
             ) : (
                 <>
-                    {condominiosDaTela.some(c => !c.podeOperar) && !somenteLeitura && (
+                    {condominiosDaTela.some(c => !c.podeOperar) && (
                         <PortalCard className="px-5 py-3 text-[13px] text-[#4A505C]">
                             {condominiosDaTela.filter(c => !c.podeOperar).map(c => (
                                 <p key={c.id}><strong className="font-semibold text-[#1F2430]">{c.nome}:</strong> {c.motivoNaoOpera}</p>

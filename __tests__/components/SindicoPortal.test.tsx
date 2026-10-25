@@ -4,8 +4,9 @@
  *
  * O que fica travado:
  *  1. a casca carrega pela identidade certa (token no link/login, clientId na
- *     prévia do admin) e mostra o prédio;
- *  2. a prévia diz que é somente leitura;
+ *     administradora pelo app) e mostra o prédio;
+ *  2. pelo app a faixa diz que a administradora opera (25/10/2026: "nao faz o
+ *     menor sentido bloquear o portal do condominio na visão do app");
  *  3. a aba Unidades mostra o contato dos ocupantes e a situação da cota —
  *     inclusive "Não cobrada" para cota sem título (nunca "em aberto");
  *  4. acesso recusado mostra o motivo do banco (ex.: mandato não vigente).
@@ -96,10 +97,10 @@ describe('SindicoPortal', () => {
         getFinanceiro.mockResolvedValue(financeiro);
     });
 
-    it('1–2. prévia por clientId: carrega o prédio e avisa que é somente leitura', async () => {
+    it('1–2. administradora por clientId: carrega o prédio e avisa que ela opera', async () => {
         getDados.mockResolvedValue(payload);
-        render(<ConfirmProvider><SindicoPortal clientId="s1" somenteLeitura embutido /></ConfirmProvider>);
-        expect(await screen.findByText(/somente leitura, nada é gravado/)).toBeTruthy();
+        render(<ConfirmProvider><SindicoPortal clientId="s1" comoAdministradora embutido /></ConfirmProvider>);
+        expect(await screen.findByText(/como administradora: o que gravar aqui vale/)).toBeTruthy();
         expect(getDados).toHaveBeenCalledWith({ clientId: 's1' });
         expect((await screen.findAllByText('010 - Galeria Altavista')).length).toBeGreaterThan(0);
     });
@@ -116,21 +117,22 @@ describe('SindicoPortal', () => {
         expect(screen.queryByText('Em aberto')).toBeNull();
     });
 
-    it('5. prévia do admin não oferece ação (publicar, responder)', async () => {
+    it('5. administradora pelo app publica aviso e responde chamado', async () => {
         getDados.mockResolvedValue({ ...payload, chamados: [{
             id: 'ch1', titulo: 'Vazamento', descricao: null, categoria: 'Hidráulica', prioridade: 'Alta', status: 'Aberto',
             abertoEm: '2026-10-01', resolvidoEm: null, notaDaEquipe: null, unitId: 'u1', unidade: 'Sala - 201', torre: null,
             morador: 'João Inquilino', moradorEmail: null, moradorTelefone: null, condominioId: 'c1', condominioNome: '010', eventos: [],
         }] });
-        render(<ConfirmProvider><SindicoPortal clientId="s1" somenteLeitura embutido /></ConfirmProvider>);
+        render(<ConfirmProvider><SindicoPortal clientId="s1" comoAdministradora embutido /></ConfirmProvider>);
         await screen.findAllByText('010 - Galeria Altavista');
         fireEvent.click(screen.getAllByRole('button', { name: /Avisos/ })[0]);
         await screen.findByText('Avisos do condomínio');
-        expect(screen.queryByRole('button', { name: /Publicar aviso/ })).toBeNull();
+        expect(screen.getByRole('button', { name: /Publicar aviso/ })).toBeTruthy();
         fireEvent.click(screen.getAllByRole('button', { name: /Chamados/ })[0]);
         expect(await screen.findByText('Vazamento')).toBeTruthy();
-        expect(screen.queryByRole('button', { name: 'Responder' })).toBeNull();
-        expect(screen.getByRole('button', { name: 'Ver' })).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Responder' }));
+        expect(await screen.findByLabelText('Resposta ao morador')).toBeTruthy();
+        expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(0);
     });
 
     it('6. rateio: o síndico monta e fecha (fechar = a aprovação dele) — só com login', async () => {
@@ -280,13 +282,30 @@ describe('SindicoPortal', () => {
         await waitFor(() => expect((screen.getAllByRole('button', { name: /Importar extrato/ })[0] as HTMLButtonElement).disabled).toBe(false));
     });
 
-    it('9. prévia do admin: Financeiro lê pelo clientId e nada fica ligado', async () => {
+    it('9. administradora pelo app: Financeiro lê pelo clientId e opera como o síndico logado', async () => {
         getDados.mockResolvedValue(payload);
-        render(<ConfirmProvider><SindicoPortal clientId="s1" somenteLeitura embutido /></ConfirmProvider>);
+        render(<ConfirmProvider><SindicoPortal clientId="s1" comoAdministradora embutido /></ConfirmProvider>);
         await irParaContasAPagar();
         expect(getFinanceiro).toHaveBeenCalledWith({ clientId: 's1' }, expect.any(String));
-        expect(lancarConta().parentElement?.getAttribute('title')).toBe('Prévia somente leitura.');
-        expect((naTabela().getAllByRole('button', { name: 'Cancelar' }) as HTMLButtonElement[]).every(b => b.disabled)).toBe(true);
+        await waitFor(() => expect((lancarConta() as HTMLButtonElement).disabled).toBe(false));
+        expect((naTabela().getAllByRole('button', { name: 'Cancelar' }) as HTMLButtonElement[]).some(b => !b.disabled)).toBe(true);
+    });
+
+    it('9b. administradora pelo app: aprovar/devolver rateio fica com o síndico', async () => {
+        const rascunho = { ...payload.rateios[0], status: 'RASCUNHO', aprovacao: { status: null, em: null, porNome: null, observacao: null, desatualizada: false } };
+        getDados.mockResolvedValue({ ...payload, condominios: [{ ...payload.condominios[0], exigeAprovacao: true }], rateios: [rascunho] });
+        render(<ConfirmProvider><SindicoPortal clientId="s1" comoAdministradora embutido /></ConfirmProvider>);
+        await screen.findAllByText('010 - Galeria Altavista');
+        fireEvent.click(screen.getAllByRole('button', { name: /^Financeiro$/ })[0]);
+        fireEvent.click(await screen.findByRole('button', { name: 'Prestação de contas' }));
+        await waitFor(() => expect((screen.getByRole('button', { name: /Novo rateio/ }) as HTMLButtonElement).disabled).toBe(false));
+        // O painel lateral de devolver fica montado fechado: o 1º é o da lista.
+        const devolver = screen.getAllByRole('button', { name: /Devolver/ })[0];
+        expect((devolver as HTMLButtonElement).disabled).toBe(true);
+        expect(devolver.parentElement?.getAttribute('title')).toMatch(/Só o síndico devolve/);
+        const fechar = screen.getByRole('button', { name: /^Fechar$/ });
+        expect((fechar as HTMLButtonElement).disabled).toBe(true);
+        expect(fechar.parentElement?.getAttribute('title')).toMatch(/exige a aprovação do síndico/);
     });
 
     it('10. condomínio ainda na org da construtora: só consulta, com o motivo', async () => {

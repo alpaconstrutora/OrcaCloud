@@ -90,6 +90,18 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
   painel fora do padrão, o aviso acende logo após gerar (diferença real).
 - `registrosDeLancamento` é REFERÊNCIA no portão das camadas (metadado, sem geometria).
 
+## Decisões tomadas na Task 3 (água e pluvial)
+- Alvo `null` (planta inteira) nos dois: os "Lançar tudo" lançam todas as origens / todas as águas do telhado num lote.
+- Escolhas = só o que muda a rede: água (gaveta + pressão + alimentador + reservação + recalque); pluvial (intensidade
+  que vale — informada, senão a da tabela —, calha, condutor). Pressão da rede pública, estática máxima, dias de reserva,
+  fração do inferior e rendimento da bomba ficam fora (só aviso/volume).
+- "Rede do sistema" (o que o Refazer apaga): água = tubos ligados a uma origem + alimentador, extravasor, limpeza, sucção
+  e recalque (confirmados inclusive) + o registro de gaveta na limpeza; pluvial = todo tubo PLUVIAL + os bocais. Nunca:
+  pontos de consumo, aparelhos, caixa, aquecedor, hidrômetro, bomba, boia, ralo posto à mão, caixa de areia, saída.
+- Forro da casa: o registro AGUA guarda o forro, a faixa da quente, a subida do alimentador e a cota enterrada ajustada
+  (F18) sem rótulo; o PLUVIAL, a profundidade ajustada do condutor (F18). O editor planeja com elas (relançar mantém a
+  água no forro). Água antiga no forro sem registro → botões desligados com o motivo.
+
 **Limitações conhecidas:** mover a climatização relança fora do forro quando a rede antiga do forro não tem registro
 (como antes); eletroduto desenhado à mão acima da face de um forro real, sem registro, também bloqueia (motivo à
 vista). Prova no app: o cenário inteiro está coberto pelo teste do editor (aviso → confirmação → CP saem → aviso some →
@@ -99,7 +111,7 @@ Desfazer volta); prova por imagem no navegador NÃO feita.
 - [x] desenho aprovado (24/10/2026)
 - [x] Task 1 — F1 núcleo (registro no modelo) — kernel 0.105.0 (`registrosDeLancamento`, `RegistrarLancamento`/`ApagarRegistroDeLancamento`), `utils/blueprintRegistroDeLancamento.ts`, `AvisoDeEscolhasMudaram.tsx`; bundle da planta-api regerado (a function ainda precisa de deploy)
 - [x] Task 2 — F2 eletrodutos — `utils/blueprintEscolhasDoEletroduto.ts` (escolhas por quadro, rótulos e padrões, lotes de lançar/refazer com o registro, botão da regra A, confirmação por quadro); `refazerEletrodutos` apaga as CP da rede inclusive aceitas (`caixasDaRedeDoQuadro`); aviso B na tabela por quadro; Casa Automática com a preferência de caixas e o registro no lote
-- [ ] Task 3 — F3 água e pluvial
+- [x] Task 3 — F3 água e pluvial — `utils/blueprintEscolhasDaAguaEPluvial.ts` (escolhas, rótulos e padrões dos dois sistemas, alvo global; lotes com o registro e a regra do lote parcial; Refazer novo que apaga a rede do sistema, confirmados inclusive, e nunca aparelhos/pontos; botão da regra A; confirmação com o que mudou); aviso B nos dois painéis; "Refazer tudo" e "Relançar com as escolhas atuais" nos rodapés; Casa Automática grava os registros AGUA e PLUVIAL (com o forro, a faixa da quente, a subida e os ajustes F18 sem rótulo)
 - [ ] Task 4 — F4 esgoto
 - [ ] Task 5 — F5 circuitos automáticos
 - [x] revisão final do ramo (Tasks 1+2) — "Sim, com correções"; correção 2 `65779b7e` (falso forro, portão de camadas, menores)

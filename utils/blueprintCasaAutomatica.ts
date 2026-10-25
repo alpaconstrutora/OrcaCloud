@@ -101,7 +101,8 @@ import { comandosDasSugestoesDeDR, conferirNbr5410, sugerirDRs } from './bluepri
 import { HIPOTESES_ELETRODUTO_PADRAO, comandosDeBitolaPelaOcupacao, planejarEletrodutosDoModelo, type HipotesesDeEletroduto } from './blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from './blueprintCaixasDePassagem';
 import { escolhasDoEletroduto } from './blueprintEscolhasDoEletroduto';
-import { comandoDeRegistro } from './blueprintRegistroDeLancamento';
+import { comandoDeRegistro, registroDe } from './blueprintRegistroDeLancamento';
+import { escolhasDaAgua, escolhasDoPluvial } from './blueprintEscolhasDaAguaEPluvial';
 import type { CaixasDePassagem } from './preferencias/catalogoLancamento';
 import { gerarClimatizacao, type ContextoDoGeradorDeClimatizacao } from './blueprintGeradorClimatizacao';
 import { HIPOTESES_CLIMATIZACAO_PADRAO, type HipotesesClimatizacao } from './blueprintClimatizacao';
@@ -2278,7 +2279,14 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     const terrenoHidro = entrada.leitorDoTerreno ?? null;
     const hidraulica = HIDRAULICA_ZERADA();
     const contar = (lote: Command[]) => ({ pecas: lote.filter((c) => c.type === 'AddTerminal').length, tubos: lote.filter((c) => c.type === 'AddTrecho').length });
-    const etapaDeRede = (id: 'AGUA' | 'ESGOTO' | 'PLUVIAL', planejar: () => { comandos: Command[]; presumido: string[]; pendencias: string[] }, nota: (n: { pecas: number; tubos: number }) => string): { pecas: number; tubos: number } => {
+    // F3 do relançar (24/10/2026): `registro` — o REGISTRO do lançamento (com que escolhas), no mesmo lote da casa, logo
+    // depois da rede (não entra na contagem da etapa). O painel do sistema avisa quando as premissas de lá diferem.
+    const etapaDeRede = (
+      id: 'AGUA' | 'ESGOTO' | 'PLUVIAL',
+      planejar: () => { comandos: Command[]; presumido: string[]; pendencias: string[] },
+      nota: (n: { pecas: number; tubos: number }) => string,
+      registro?: () => Command,
+    ): { pecas: number; tubos: number } => {
       if (!hip.hidraulica.lancar) {
         etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
         return { pecas: 0, tubos: 0 };
@@ -2298,6 +2306,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const sugeridos = new Set(m.terminais.filter((t) => t.sugerida).map((t) => t.id));
         let n = aplicar(plano.comandos);
         n += aplicar(m.terminais.filter((t) => sugeridos.has(t.id) && !t.sugerida).map((t): Command => ({ type: 'SetTerminalProps', terminalId: t.id, sugerida: true })));
+        if (registro) aplicar([registro()]);
         etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'LANCOU', n, nota(c) + (plano.pendencias.length ? ` — ${plano.pendencias.length} pendência(s)` : ''));
         return c;
       } catch (e) {
@@ -2327,6 +2336,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
               : '';
         return `${c.tubos} tubo(s) e ${c.pecas} peça(s)${sol}`;
       },
+      // Com o forro, a faixa da quente e a subida pela fachada (sem rótulo): o relançar pelo editor os mantém.
+      () => comandoDeRegistro('AGUA', null, escolhasDaAgua(hidro)),
     );
     {
       const d = pressao as DecisaoDaPressao | null;
@@ -2350,7 +2361,12 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       ),
       destino,
     };
-    hidraulica.pluvial = etapaDeRede('PLUVIAL', () => planejarPluvialCompleta(m, hidro.pluvial, terrenoHidro), (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s)`);
+    hidraulica.pluvial = etapaDeRede(
+      'PLUVIAL',
+      () => planejarPluvialCompleta(m, hidro.pluvial, terrenoHidro),
+      (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s)`,
+      () => comandoDeRegistro('PLUVIAL', null, escolhasDoPluvial(hidro.pluvial)),
+    );
     // F18: o condutor pluvial horizontal (enterrado, para a saída na frente do lote) é traçado depois do esgoto e o
     // cruzava rente (15 × 25: a ligação de esgoto, com 6 cm entre os eixos). Ele passa POR CIMA — a saída fica na
     // sarjeta —: o início sobe (`profundidadeDoCondutorMm`) até livrar todo cruzamento, sem passar do recobrimento.
@@ -2376,7 +2392,8 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       }
       if (melhor) {
         prof = melhor.prof;
-        aplicar(melhor.comandos);
+        // O registro guarda a profundidade AJUSTADA (sem rótulo): relançar pelo editor não volta o condutor rente ao esgoto.
+        aplicar([...melhor.comandos, comandoDeRegistro('PLUVIAL', null, escolhasDoPluvial(hidro.pluvial, { profundidadeAjustadaDoCondutorMm: melhor.prof }))]);
       }
       if (pluvialRenteAoEsgoto(m) > 0) pendencias.push({ grupo: 'VERIFICACAO', texto: `Águas pluviais: o condutor horizontal passa rente ao esgoto mesmo começando a ${f2(-prof / 1000)} m — confira o cruzamento (ou mude a saída).` });
       else pendencias.push({ grupo: 'CONFERIR', texto: `Águas pluviais: o condutor horizontal começa a ${f2(-prof / 1000)} m para passar por cima do esgoto.` });
@@ -2389,7 +2406,9 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       if (ajuste.cruzamentos > 0 && ajuste.cotaMm !== hidro.alimentacao.cotaEnterradaMm) {
         const alim = planejarAlimentador(m, { ...hidro.alimentacao, cotaEnterradaMm: ajuste.cotaMm }, hidro.reservatorio, hidro.pressao.qMaxDoHidrometroM3h, terrenoHidro);
         if (!alim.motivo && alim.comandos.length) {
-          aplicar(alim.comandos);
+          // O registro guarda a cota AJUSTADA (sem rótulo): relançar pelo editor não volta o alimentador a cruzar o esgoto.
+          const registro = registroDe(m, 'AGUA', null) ? [comandoDeRegistro('AGUA', null, escolhasDaAgua(hidro, { cotaEnterradaAjustadaMm: ajuste.cotaMm }))] : [];
+          aplicar([...alim.comandos, ...registro]);
           const cota = f2(ajuste.cotaMm / 1000);
           pendencias.push(
             ajuste.sob

@@ -462,6 +462,24 @@ import {
   redesARefazer,
   textoDaConfirmacaoDeRefazer,
 } from '../../utils/blueprintEscolhasDoEletroduto';
+import {
+  aguaARefazer,
+  botaoDeLancarAgua,
+  botaoDeLancarPluvial,
+  comRegistroDaAgua,
+  comRegistroDoPluvial,
+  comandosDeRefazerAgua,
+  comandosDeRefazerPluvial,
+  diferencasDaAgua,
+  diferencasDoPluvial,
+  lancamentoDaAgua,
+  lancamentoDoPluvial,
+  motivoParaNaoRelancarAgua,
+  pluvialARefazer,
+  redeDaAguaDoSistema,
+  redePluvialDoSistema,
+  textoDaConfirmacaoDoSistema,
+} from '../../utils/blueprintEscolhasDaAguaEPluvial';
 import AvisoDeEscolhasMudaram from './AvisoDeEscolhasMudaram';
 import {
   CRITERIOS_DE_CIRCUITO,
@@ -9194,25 +9212,54 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     [dimensionandoAgua, editor.model, hidroDoEstudo.hipoteses.reservatorio],
   );
   const setHipPressao = (pressao: HipotesesDePressao) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pressao });
+  /**
+   * F3 do relançar (24/10/2026, `docs/planos/2026-10-24-relancar-quando-escolha-muda.md`): as hipóteses com que a água
+   * se LANÇA — as do estudo mais o que a Casa Automática decidiu e o registro do lançamento guardou (o forro, a faixa da
+   * quente, a subida do alimentador, a cota enterrada ajustada). Sem registro: as do estudo. Todo plano que LANÇA usa
+   * estas (a rede da casa no forro continua no forro); os painéis de premissas mostram e gravam as do estudo.
+   */
+  const hipDaAguaQueLanca = useMemo(() => lancamentoDaAgua(editor.model, hidroDoEstudo.hipoteses).hip, [editor.model, hidroDoEstudo.hipoteses]);
+  const hipDoPluvialQueLanca = useMemo(() => lancamentoDoPluvial(editor.model, hidroDoEstudo.hipoteses.pluvial).hip, [editor.model, hidroDoEstudo.hipoteses.pluvial]);
+  /** F3: água no forro lançada antes do registro — os botões que relançam desligam, com este motivo. */
+  const motivoDaAgua = useMemo(() => motivoParaNaoRelancarAgua(editor.model, hidroDoEstudo.hipoteses), [editor.model, hidroDoEstudo.hipoteses]);
+  // F3: o modelo de AGORA — depois do `await` da confirmação, o da closure pode ser velho.
+  const modeloDaHidraulicaRef = useRef(editor.model);
+  modeloDaHidraulicaRef.current = editor.model;
   // E1.4: cada plano sai já com o DN ajustado para a pressão mínima (NBR 5626).
   const planosDeAgua = useMemo(
-    () => planejarAguaDoModelo(editor.model, hipotesesDeAgua).map((p) => comAjusteDePressao(editor.model, p, hipPressao)),
-    [editor.model, hipotesesDeAgua, hipPressao],
+    () => planejarAguaDoModelo(editor.model, hipDaAguaQueLanca.agua).map((p) => comAjusteDePressao(editor.model, p, hipDaAguaQueLanca.pressao)),
+    [editor.model, hipDaAguaQueLanca],
   );
   const pontosDeAguaALigar = planosDeAgua.reduce((n, p) => n + p.aLigar, 0);
   const origemDoPlano = (p: PlanoDeAgua) => (editor.model.terminais ?? []).find((t) => t.id === p.origemId) ?? null;
-  const lancarAgua = (planos: PlanoDeAgua[]) => {
-    const comandos = planos.flatMap((p) => {
-      if (p.comandos.length > 0) return p.comandos;
-      if (p.sugeridos === 0) return [];
-      const origem = origemDoPlano(p);
-      return origem ? comAjusteDePressao(editor.model, relancarAgua(editor.model, origem, hipotesesDeAgua), hipPressao).comandos : [];
-    });
+  /** F3: aplica um lote da água ou do pluvial (Ctrl+Z desfaz o lote); recusa do kernel vira aviso, não exceção no clique. */
+  const aplicarLoteHidraulico = (montar: () => Command[], oque: string) => {
+    let comandos: Command[];
+    try {
+      comandos = montar();
+    } catch (e) {
+      setAvisoColar(`${oque}: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
     if (comandos.length === 0) return;
     const criados = editor.runBatch(comandos);
     if (criados.length > 0) selecionar(criados);
   };
+  const lancarAgua = (planos: PlanoDeAgua[]) => {
+    if (motivoDaAgua) return;
+    aplicarLoteHidraulico(() => {
+      const comandos = planos.flatMap((p) => {
+        if (p.comandos.length > 0) return p.comandos;
+        if (p.sugeridos === 0) return [];
+        const origem = origemDoPlano(p);
+        return origem ? comAjusteDePressao(editor.model, relancarAgua(editor.model, origem, hipDaAguaQueLanca.agua), hipDaAguaQueLanca.pressao).comandos : [];
+      });
+      // F3: o registro vai junto, salvo se sobrar rede lançada com outras escolhas (lote parcial).
+      return comRegistroDaAgua(editor.model, comandos, hidroDoEstudo.hipoteses);
+    }, 'A água não foi lançada');
+  };
   const refazerRedeDeAgua = async (plano: PlanoDeAgua) => {
+    if (motivoDaAgua) return;
     const origem = origemDoPlano(plano);
     if (!origem) return;
     const ok = await confirmar({
@@ -9222,10 +9269,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       variant: 'warning',
     });
     if (!ok) return;
-    const re = comAjusteDePressao(editor.model, refazerAgua(editor.model, origem, hipotesesDeAgua), hipPressao);
-    if (re.comandos.length === 0) return;
-    const criados = editor.runBatch(re.comandos);
-    if (criados.length > 0) selecionar(criados);
+    const m = modeloDaHidraulicaRef.current;
+    const atual = (m.terminais ?? []).find((t) => t.id === origem.id);
+    if (!atual) return;
+    aplicarLoteHidraulico(
+      () => comRegistroDaAgua(m, comAjusteDePressao(m, refazerAgua(m, atual, hipDaAguaQueLanca.agua), hipDaAguaQueLanca.pressao).comandos, hidroDoEstudo.hipoteses),
+      'A rede não foi refeita',
+    );
   };
 
   /** ─── ESGOTO AUTOMÁTICO (18/09/2026, F5) ─────────────────────────────────── */
@@ -9268,24 +9318,78 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   /** A ÁGUA e a CHUVA inteiras num clique (13/10/2026, item 5.3): o irmão do esgoto. */
   const planoDaAguaCompleta = useMemo(
-    () => (tarefaAberta === 'agua' ? planejarAguaCompleta(editor.model, hidroDoEstudo.hipoteses, terrenoParaCorte) : null),
-    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses, terrenoParaCorte],
+    () => (tarefaAberta === 'agua' ? planejarAguaCompleta(editor.model, hipDaAguaQueLanca, terrenoParaCorte) : null),
+    [tarefaAberta, editor.model, hipDaAguaQueLanca, terrenoParaCorte],
   );
   const planoDaPluvialCompleta = useMemo(
-    () => (tarefaAberta === 'pluvial' ? planejarPluvialCompleta(editor.model, hidroDoEstudo.hipoteses.pluvial, terrenoParaCorte) : null),
-    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses.pluvial, terrenoParaCorte],
+    () => (tarefaAberta === 'pluvial' ? planejarPluvialCompleta(editor.model, hipDoPluvialQueLanca, terrenoParaCorte) : null),
+    [tarefaAberta, editor.model, hipDoPluvialQueLanca, terrenoParaCorte],
   );
   /** O que o último "Lançar" de uma gaveta presumiu (e o que ficou de fora), até a gaveta fechar ou trocar. */
   const [resumoDoLancamento, setResumoDoLancamento] = useState<{ tarefa: string; presumido: string[]; pendencias: string[] } | null>(null);
   useEffect(() => {
     setResumoDoLancamento(null);
   }, [tarefaAberta]);
-  const lancarTudo = (tarefa: string, p: { comandos: Command[]; presumido: string[]; pendencias: string[] } | null) => {
+  // F3 do relançar: `lote` — os comandos a gravar, quando não são os do plano (o plano + o registro do lançamento).
+  const lancarTudo = (tarefa: string, p: { comandos: Command[]; presumido: string[]; pendencias: string[] } | null, lote?: Command[]) => {
     if (!p || p.comandos.length === 0) return;
-    const criados = editor.runBatch(p.comandos);
+    const criados = editor.runBatch(lote ?? p.comandos);
     if (criados.length > 0) selecionar(criados);
     setResumoDoLancamento(p.presumido.length > 0 || p.pendencias.length > 0 ? { tarefa, presumido: p.presumido, pendencias: p.pendencias } : null);
   };
+  /** F3: o "Lançar tudo" da água e do pluvial, com o registro do lançamento no mesmo lote (salvo o lote parcial). */
+  const lancarAguaCompleta = () => {
+    if (!planoDaAguaCompleta || motivoDaAgua) return;
+    lancarTudo('agua', planoDaAguaCompleta, comRegistroDaAgua(editor.model, planoDaAguaCompleta.comandos, hidroDoEstudo.hipoteses));
+  };
+  const lancarPluvialCompleta = () => {
+    if (!planoDaPluvialCompleta) return;
+    lancarTudo('pluvial', planoDaPluvialCompleta, comRegistroDoPluvial(editor.model, planoDaPluvialCompleta.comandos, hidroDoEstudo.hipoteses.pluvial));
+  };
+  /**
+   * F3: REFAZER a água / o pluvial com as escolhas atuais — apaga a rede do sistema (confirmados inclusive; nunca os
+   * aparelhos e os pontos) e lança de novo, num lote só (Ctrl+Z volta tudo, registro inclusive). Decisão do usuário
+   * (24/10/2026): havendo algo CONFIRMADO, pede confirmação dizendo quanto será refeito e o que mudou; só sugeridos,
+   * refaz direto.
+   */
+  const refazerSistema = async (sistema: 'agua' | 'pluvial') => {
+    const agua = sistema === 'agua';
+    if (agua && motivoDaAgua) return;
+    const r = agua ? aguaARefazer(editor.model, hidroDoEstudo.hipoteses) : pluvialARefazer(editor.model, hidroDoEstudo.hipoteses.pluvial);
+    const lista = textoDaConfirmacaoDoSistema(agua ? 'Água' : 'Pluvial', r);
+    if (lista) {
+      const ok = await confirmar({
+        title: agua ? 'Refazer a água?' : 'Refazer a rede pluvial?',
+        message: `Apaga e lança de novo com as escolhas atuais — inclusive o que você já confirmou. ${lista} Ctrl+Z desfaz.`,
+        confirmLabel: 'Refazer',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    }
+    const m = modeloDaHidraulicaRef.current;
+    let re: { comandos: Command[]; plano: { presumido: string[]; pendencias: string[] } | null };
+    try {
+      re = agua ? comandosDeRefazerAgua(m, hidroDoEstudo.hipoteses, terrenoParaCorte) : comandosDeRefazerPluvial(m, hidroDoEstudo.hipoteses.pluvial, terrenoParaCorte);
+    } catch (e) {
+      setAvisoColar(`${agua ? 'A água' : 'A rede pluvial'} não foi refeita: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+    if (re.comandos.length === 0) return;
+    const criados = editor.runBatch(re.comandos);
+    if (criados.length > 0) selecionar(criados);
+    const pl = re.plano;
+    setResumoDoLancamento(pl && (pl.presumido.length > 0 || pl.pendencias.length > 0) ? { tarefa: sistema, presumido: pl.presumido, pendencias: pl.pendencias } : null);
+  };
+  /** F3, regra A: o botão principal de cada rodapé; regra B: o que mudou desde o lançamento. */
+  const botaoDaAgua = useMemo(() => botaoDeLancarAgua(editor.model, planoDaAguaCompleta, hidroDoEstudo.hipoteses), [editor.model, planoDaAguaCompleta, hidroDoEstudo.hipoteses]);
+  const botaoDoPluvial = useMemo(() => botaoDeLancarPluvial(editor.model, planoDaPluvialCompleta), [editor.model, planoDaPluvialCompleta]);
+  const diferencasNaAgua = useMemo(() => (tarefaAberta === 'agua' ? diferencasDaAgua(editor.model, hidroDoEstudo.hipoteses) : []), [tarefaAberta, editor.model, hidroDoEstudo.hipoteses]);
+  const diferencasNoPluvial = useMemo(
+    () => (tarefaAberta === 'pluvial' ? diferencasDoPluvial(editor.model, hidroDoEstudo.hipoteses.pluvial) : []),
+    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses.pluvial],
+  );
+  const temRedeDeAgua = useMemo(() => tarefaAberta === 'agua' && redeDaAguaDoSistema(editor.model).trechos.length > 0, [tarefaAberta, editor.model]);
+  const temRedePluvial = useMemo(() => tarefaAberta === 'pluvial' && redePluvialDoSistema(editor.model).trechos.length > 0, [tarefaAberta, editor.model]);
   /** TRATAMENTO INDIVIDUAL (29/09/2026, E7): sem rede pública, tanque → filtro → sumidouro. */
   const hipDeTratamento = hidroDoEstudo.hipoteses.tratamento;
   // E7.2: o dimensionamento pela população da reservação; o lançamento já cria as peças nesse tamanho.
@@ -9327,7 +9431,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   // CALHAS (29/09/2026, E6.2): o lançamento por beiral e a conferência de toda calha do desenho.
   const planoDeCalhas = useMemo(
-    () => (tarefaAberta === 'pluvial' ? planejarCalhas(editor.model, hipotesesHidro.pluvial) : null),
+    () => (tarefaAberta === 'pluvial' ? planejarCalhas(editor.model, hipDoPluvialQueLanca) : null),
     [tarefaAberta, editor.model, hipotesesHidro.pluvial],
   );
   const calhasDoDesenho = useMemo(
@@ -9336,7 +9440,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   // CONDUTORES (29/09/2026, E6.3): do bocal à caixa de areia e à saída pluvial.
   const planoDeCondutores = useMemo(
-    () => (tarefaAberta === 'pluvial' ? planejarCondutores(editor.model, hipotesesHidro.pluvial, terrenoParaCorte) : null),
+    () => (tarefaAberta === 'pluvial' ? planejarCondutores(editor.model, hipDoPluvialQueLanca, terrenoParaCorte) : null),
     [tarefaAberta, editor.model, hipotesesHidro.pluvial, terrenoParaCorte],
   );
   const condutoresDoDesenho = useMemo(
@@ -18001,6 +18105,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   <AvisoDoLancamento presumido={resumoDoLancamento.presumido} pendencias={resumoDoLancamento.pendencias} testId="pluvial-presumido" />
                 </div>
               )}
+              {/* F3 do relançar (24/10/2026), regra B. */}
+              {diferencasNoPluvial.length > 0 && (
+                <div className="mb-4">
+                  <AvisoDeEscolhasMudaram diferencas={diferencasNoPluvial} onRelancar={() => void refazerSistema('pluvial')} />
+                </div>
+              )}
               <PainelPluvial
                 c={contribuicaoDaChuva}
                 hip={hipotesesHidro.pluvial}
@@ -18014,9 +18124,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     calhas={calhasDoDesenho}
                     hip={hipotesesHidro.pluvial}
                     onHip={(pluvial) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pluvial })}
-                    onLancar={() => {
-                      if (planoDeCalhas.comandos.length) editor.runBatch(planoDeCalhas.comandos);
-                    }}
+                    onLancar={() => aplicarLoteHidraulico(() => comRegistroDoPluvial(editor.model, planoDeCalhas.comandos, hidroDoEstudo.hipoteses.pluvial), 'As calhas não foram lançadas')}
                     onSelecionar={selecionar}
                   />
                 </div>
@@ -18028,9 +18136,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     condutores={condutoresDoDesenho}
                     hip={hipotesesHidro.pluvial}
                     onHip={(pluvial) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pluvial })}
-                    onLancar={() => {
-                      if (planoDeCondutores.comandos.length) editor.runBatch(planoDeCondutores.comandos);
-                    }}
+                    onLancar={() => aplicarLoteHidraulico(() => comRegistroDoPluvial(editor.model, planoDeCondutores.comandos, hidroDoEstudo.hipoteses.pluvial), 'Os condutores não foram lançados')}
                     onSelecionar={selecionar}
                   />
                 </div>
@@ -18379,6 +18485,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               {resumoDoLancamento?.tarefa === 'agua' && (
                 <AvisoDoLancamento presumido={resumoDoLancamento.presumido} pendencias={resumoDoLancamento.pendencias} testId="agua-presumido" />
               )}
+              {/* F3 do relançar (24/10/2026), regra B: a rede foi lançada com outras escolhas → o aviso e o refazer. */}
+              <AvisoDeEscolhasMudaram diferencas={diferencasNaAgua} onRelancar={() => void refazerSistema('agua')} desabilitado={motivoDaAgua} />
+              {motivoDaAgua && (
+                <p className="text-xs text-amber-700" data-testid="agua-motivo">
+                  {motivoDaAgua}
+                </p>
+              )}
               {/* 14/10/2026: o RESULTADO vem primeiro; as hipóteses ficam recolhidas abaixo (como no esgoto). */}
               {planosDeAgua.length === 0 ? (
                 <p className="text-sm text-slate-500">
@@ -18421,30 +18534,38 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                           </td>
                           <td className="px-3 py-2.5 text-right">
                             <span className="inline-flex flex-wrap justify-end gap-1">
+                              {/* F3: água no forro sem registro — desligados, com o motivo (no invólucro também: nem todo
+                                  navegador mostra a dica de um botão desabilitado). */}
+                              <span className="inline-flex" title={motivoDaAgua ?? undefined}>
                               <button
                                 type="button"
                                 onClick={() => lancarAgua([p])}
-                                disabled={p.comandos.length === 0 && p.sugeridos === 0}
+                                disabled={!!motivoDaAgua || (p.comandos.length === 0 && p.sugeridos === 0)}
                                 title={
-                                  p.comandos.length > 0
+                                  motivoDaAgua ??
+                                  (p.comandos.length > 0
                                     ? `Lança a rede até os ${p.aLigar} ponto(s) desta origem que faltam`
                                     : p.sugeridos > 0
                                       ? `Apaga os ${p.sugeridos} trecho(s) ainda sugerido(s) desta origem e lança de novo com as hipóteses atuais; o que você confirmou fica`
-                                      : 'Nada a lançar: todos os pontos desta origem já estão ligados'
+                                      : 'Nada a lançar: todos os pontos desta origem já estão ligados')
                                 }
                                 className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 {p.comandos.length > 0 ? `Lançar ${p.aLigar || ''}`.trim() : p.sugeridos > 0 ? 'Relançar' : 'Ligado'}
                               </button>
+                              </span>
                               {p.trechosDaRede > 0 && (
+                                <span className="inline-flex" title={motivoDaAgua ?? undefined}>
                                 <button
                                   type="button"
                                   onClick={() => void refazerRedeDeAgua(p)}
-                                  title="Apaga a rede desta origem, inclusive o confirmado, e lança de novo"
-                                  className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                  disabled={!!motivoDaAgua}
+                                  title={motivoDaAgua ?? 'Apaga a rede desta origem, inclusive o confirmado, e lança de novo'}
+                                  className="rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
                                   Refazer
                                 </button>
+                                </span>
                               )}
                             </span>
                           </td>
@@ -20092,48 +20213,89 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 : null,
               planoDoRecalque && planoDoRecalque.inferiorId && !planoDoRecalque.motivo && planoDoRecalque.comandos.length > 0 ? 'recalque' : null,
             ].filter(Boolean);
-            const temLancamento = !!planoDaAguaCompleta && planoDaAguaCompleta.comandos.length > 0;
             return (
               <>
                 <span className="mr-auto text-xs text-slate-500" data-testid="agua-rodape">
                   {planosDeAgua.length === 0 ? 'Sem origem de água no desenho.' : partes.length > 0 ? `${partes.join(' · ')}.` : 'Nada a lançar.'}
                 </span>
+                {/* F3 do relançar (24/10/2026): "Refazer tudo" (apaga a água do sistema, confirmados inclusive, e lança
+                    de novo) — ao lado do "Lançar tudo" quando há o que lançar; sem nada a lançar, o próprio botão principal
+                    vira "Relançar com as escolhas atuais" (regra A). */}
+                {temRedeDeAgua && botaoDaAgua.modo === 'LANCAR' && !botaoDaAgua.motivo && (
+                  <button
+                    type="button"
+                    onClick={() => void refazerSistema('agua')}
+                    title="Apaga a água do sistema — tubos da rede, alimentador, recalque, extravasor e limpeza, inclusive o que você já confirmou (não os aparelhos e os pontos) — e lança de novo com as escolhas atuais. Ctrl+Z desfaz."
+                    className="inline-flex h-9 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                  >
+                    Refazer tudo
+                  </button>
+                )}
+                {botaoDaAgua.motivo && (
+                  <span id="motivo-lancar-agua" className="sr-only">
+                    {botaoDaAgua.motivo}
+                  </span>
+                )}
+                <span className="inline-flex shrink-0" title={botaoDaAgua.motivo ?? undefined}>
                 <button
                   type="button"
-                  onClick={() => lancarTudo('agua', planoDaAguaCompleta)}
-                  disabled={!temLancamento}
+                  onClick={() => (botaoDaAgua.modo === 'RELANCAR' ? void refazerSistema('agua') : lancarAguaCompleta())}
+                  disabled={!!botaoDaAgua.motivo}
+                  aria-describedby={botaoDaAgua.motivo ? 'motivo-lancar-agua' : undefined}
                   title={
-                    !temLancamento
-                      ? (planoDaAguaCompleta?.pendencias[0] ?? 'Nada a lançar: a água já está completa')
+                    botaoDaAgua.motivo ??
+                    (botaoDaAgua.modo === 'RELANCAR'
+                      ? 'Apaga a água do sistema e lança de novo com as escolhas atuais — pede confirmação se houver algo confirmado; Ctrl+Z desfaz'
                       : soRelanca
                         ? `Apaga os ${sugeridosDaRede} trecho(s) ainda sugerido(s) e lança de novo com as hipóteses atuais (o que você confirmou fica), junto com o que faltar de caixa, alimentador e recalque. Ctrl+Z desfaz tudo.`
-                        : 'Peças da caixa, rede de todas as origens, hidrômetro e alimentador, e o recalque — num passo só (Ctrl+Z desfaz tudo)'
+                        : 'Peças da caixa, rede de todas as origens, hidrômetro e alimentador, e o recalque — num passo só (Ctrl+Z desfaz tudo)')
                   }
-                  className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   <Droplets className="h-4 w-4" />
-                  {soRelanca ? 'Relançar tudo' : 'Lançar tudo'}
+                  {botaoDaAgua.modo === 'RELANCAR' ? 'Relançar com as escolhas atuais' : soRelanca ? 'Relançar tudo' : 'Lançar tudo'}
                 </button>
+                </span>
               </>
             );
           })()}
           {tarefaAberta === 'pluvial' && (
             <>
               <span className="mr-auto text-xs text-slate-500">Calhas, bocais, condutores e a saída pluvial.</span>
+              {/* F3 do relançar (24/10/2026): "Refazer tudo" e a regra A, como na água. */}
+              {temRedePluvial && botaoDoPluvial.modo === 'LANCAR' && !botaoDoPluvial.motivo && (
+                <button
+                  type="button"
+                  onClick={() => void refazerSistema('pluvial')}
+                  title="Apaga calhas, bocais e condutores — inclusive o que você já confirmou (não os ralos postos à mão) — e lança de novo com as escolhas atuais. Ctrl+Z desfaz."
+                  className="inline-flex h-9 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  Refazer tudo
+                </button>
+              )}
+              {botaoDoPluvial.motivo && (
+                <span id="motivo-lancar-pluvial" className="sr-only">
+                  {botaoDoPluvial.motivo}
+                </span>
+              )}
+              <span className="inline-flex shrink-0" title={botaoDoPluvial.motivo ?? undefined}>
               <button
                 type="button"
-                onClick={() => lancarTudo('pluvial', planoDaPluvialCompleta)}
-                disabled={!planoDaPluvialCompleta || planoDaPluvialCompleta.comandos.length === 0}
+                onClick={() => (botaoDoPluvial.modo === 'RELANCAR' ? void refazerSistema('pluvial') : lancarPluvialCompleta())}
+                disabled={!!botaoDoPluvial.motivo}
+                aria-describedby={botaoDoPluvial.motivo ? 'motivo-lancar-pluvial' : undefined}
                 title={
-                  planoDaPluvialCompleta && planoDaPluvialCompleta.comandos.length > 0
-                    ? 'Calhas, bocais, condutores e a saída pluvial — num passo só (Ctrl+Z desfaz tudo)'
-                    : (planoDaPluvialCompleta?.pendencias[0] ?? 'Nada a lançar: a rede pluvial já está completa')
+                  botaoDoPluvial.motivo ??
+                  (botaoDoPluvial.modo === 'RELANCAR'
+                    ? 'Apaga calhas, bocais e condutores e lança de novo com as escolhas atuais — pede confirmação se houver algo confirmado; Ctrl+Z desfaz'
+                    : 'Calhas, bocais, condutores e a saída pluvial — num passo só (Ctrl+Z desfaz tudo)')
                 }
-                className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 <CloudRain className="h-4 w-4" />
-                Lançar tudo
+                {botaoDoPluvial.modo === 'RELANCAR' ? 'Relançar com as escolhas atuais' : 'Lançar tudo'}
               </button>
+              </span>
             </>
           )}
           {tarefaAberta === 'pontosHidraulicos' && (

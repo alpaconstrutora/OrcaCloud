@@ -4752,6 +4752,128 @@ describe('BlueprintEditor · ribbon', () => {
     });
   });
 
+  describe('água e pluvial relançam quando uma escolha muda (F3, 24/10/2026)', () => {
+    /** Caixa d'água, chuveiro e lavatório (sem frente: sem hidrômetro); a água lançada (peças da caixa e rede) e ACEITA. */
+    async function aguaAceita(registrarCom: 'nada' | 'padrao' | 'velocidade') {
+      const k = await import('../../utils/blueprintKernel');
+      const { planejarAguaCompleta } = await import('../../utils/blueprintAguaCompleta');
+      const { HIPOTESES_HIDRO_PADRAO } = await import('../../utils/blueprintMemorialHidro');
+      const { comRegistroDaAgua } = await import('../../utils/blueprintEscolhasDaAguaEPluvial');
+      let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+      const t = m.levels[0].id;
+      m = k.applyBatch(m, [
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: k.point(500, 500), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 1000 },
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Chuveiro', at: k.point(1000, 2500), cotaMm: 2100, tipoHidraulico: 'CHUVEIRO' },
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Lavatório', at: k.point(1600, 2500), cotaMm: 600, tipoHidraulico: 'LAVATORIO' },
+      ]).model;
+      const h = registrarCom === 'velocidade' ? { ...HIPOTESES_HIDRO_PADRAO, agua: { ...HIPOTESES_HIDRO_PADRAO.agua, velocidadeMaxMs: 2.5 } } : HIPOTESES_HIDRO_PADRAO;
+      const p = planejarAguaCompleta(m, h, null);
+      m = k.applyBatch(m, registrarCom === 'nada' ? p.comandos : comRegistroDaAgua(m, p.comandos, h)).model;
+      return k.applyBatch(m, [
+        ...(m.trechos ?? []).map((x) => ({ type: 'SetTrechoProps' as const, trechoId: x.id, sugerido: false })),
+        ...(m.terminais ?? []).filter((x) => x.sugerida).map((x) => ({ type: 'SetTerminalProps' as const, terminalId: x.id, sugerida: false })),
+      ]).model;
+    }
+    async function abrirAgua() {
+      await abrirAba(/^hidráulica$/i);
+      await userEvent.setup().click(botao(/^água automática/i));
+      const gaveta = await screen.findByTestId('tarefa-agua');
+      return { gaveta, dialog: gaveta.closest('[role="dialog"]') as HTMLElement };
+    }
+    /** O botão principal do RODAPÉ (o do aviso tem o mesmo texto, mas mora no painel). */
+    const doRodape = (dialog: HTMLElement, gaveta: HTMLElement, nome: RegExp) => within(dialog).getAllByRole('button', { name: nome }).find((b) => !gaveta.contains(b))!;
+    const AVISO = 'Velocidade máxima na rede — lançado com: 2,5 m/s · agora: 2 m/s';
+
+    it('água completa SEM registro (lançada antes): nenhum aviso, e o botão do rodapé fica "Relançar com as escolhas atuais", ligado', async () => {
+      loadBranchModel.mockResolvedValue(await aguaAceita('nada'));
+      await montar();
+      const { gaveta, dialog } = await abrirAgua();
+      expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      const relancar = doRodape(dialog, gaveta, /^relançar com as escolhas atuais$/i);
+      expect(relancar).toBeEnabled();
+      expect(within(dialog).queryByRole('button', { name: /^lançar tudo$/i })).not.toBeInTheDocument();
+    });
+
+    it('⚠️ registro com outra escolha: aviso com a diferença; com confirmados, refazer pede confirmação dizendo quanto e o que mudou; refeito, o aviso some; um Desfazer o traz de volta', async () => {
+      const m = await aguaAceita('velocidade');
+      const tubos = (m.trechos ?? []).length;
+      loadBranchModel.mockResolvedValue(m);
+      await montar();
+      const { gaveta, dialog } = await abrirAgua();
+      expect(await within(gaveta).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+      const relancar = doRodape(dialog, gaveta, /^relançar com as escolhas atuais$/i);
+      expect(relancar).toBeEnabled();
+
+      await userEvent.setup().click(relancar);
+      const titulo = await screen.findByText('Refazer a água?');
+      const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
+      expect(confirmacao).toHaveTextContent(`Água: ${tubos} tubo(s) (${tubos} confirmado(s)) e 1 peça(s) (1 aceita(s)).`);
+      expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
+      await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
+      await waitFor(() => expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+
+      await userEvent.setup().click(botao(/^desfazer/i));
+      expect(await within(gaveta).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+    });
+
+    it('⚠️ água no FORRO lançada antes do registro: o botão do rodapé desligado, com o motivo (texto, dica e descrição acessível)', async () => {
+      const k = await import('../../utils/blueprintKernel');
+      let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+      const t = m.levels[0].id;
+      const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+      m = k.applyBatch(m, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+      m = k.applyCommand(m, {
+        type: 'NameSpace',
+        spaceId: m.spaces[0].id,
+        name: 'Sala',
+        acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de gesso acartonado', funcao: 'ACABAMENTO' }], rebaixoMm: 300 } },
+      }).model;
+      m = k.applyBatch(m, [
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: k.point(1000, 1000), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 500 },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(1000, 1000), cotaAMm: 2800, cotaBMm: 2598, bitolaMm: 25, sugerido: true },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(4000, 1000), cotaAMm: 2598, cotaBMm: 2598, bitolaMm: 25, sugerido: true },
+      ]).model;
+      loadBranchModel.mockResolvedValue(m);
+      await montar();
+      const { gaveta, dialog } = await abrirAgua();
+      const MOTIVO = 'Água no forro lançada antes do registro — relançar aqui a tiraria do forro.';
+      expect(within(gaveta).getByTestId('agua-motivo')).toHaveTextContent(MOTIVO);
+      const principal = within(dialog).getByRole('button', { name: /^(lançar|relançar) tudo$/i });
+      expect(principal).toBeDisabled();
+      expect(principal).toHaveAttribute('title', MOTIVO);
+      expect(principal.parentElement).toHaveAttribute('title', MOTIVO);
+      expect(principal).toHaveAccessibleDescription(MOTIVO);
+      expect(within(dialog).queryByRole('button', { name: /^refazer tudo$/i })).not.toBeInTheDocument();
+    });
+
+    it('pluvial só com SUGERIDOS e outra escolha: o botão do aviso refaz direto, sem confirmação', async () => {
+      const k = await import('../../utils/blueprintKernel');
+      const { planejarPluvialCompleta } = await import('../../utils/blueprintPluvialCompleto');
+      const { HIPOTESES_PLUVIAIS_PADRAO } = await import('../../utils/blueprintPluvial');
+      const { comRegistroDoPluvial } = await import('../../utils/blueprintEscolhasDaAguaEPluvial');
+      let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+      const t = m.levels[0].id;
+      m = k.applyBatch(m, [
+        { type: 'AddAgua', levelId: t, pontos: [k.point(0, 0), k.point(8000, 0), k.point(8000, 4000), k.point(0, 4000)], beiralIndex: 0, inclinacaoPct: 30, baseMm: 2800, espessuraMm: 100 },
+        { type: 'AddTerminal', levelId: t, disciplina: 'PLUVIAL', tipo: 'Saída pluvial', at: k.point(4000, -3000), cotaMm: -300, tipoHidraulico: 'LIGACAO_PLUVIAL' },
+      ] as never).model;
+      // Lançado com a retangular; o estudo está na meia-cana (padrão) — sem cidade, 150 mm/h até 100 m².
+      const retangular = { ...HIPOTESES_PLUVIAIS_PADRAO, secaoDaCalha: 'RETANGULAR' as const };
+      const p = planejarPluvialCompleta(m, retangular, null);
+      expect(p.comandos.length).toBeGreaterThan(0);
+      loadBranchModel.mockResolvedValue(k.applyBatch(m, comRegistroDoPluvial(m, p.comandos, retangular)).model);
+      await montar();
+      await abrirAba(/^hidráulica$/i);
+      await userEvent.setup().click(botao(/^águas pluviais/i));
+      const gaveta = await screen.findByTestId('tarefa-pluvial');
+      const aviso = await within(gaveta).findByTestId('aviso-escolhas-mudaram');
+      expect(aviso).toHaveTextContent('Seção da calha — lançado com: retangular · agora: meia-cana');
+      await userEvent.setup().click(within(aviso).getByRole('button', { name: /^relançar com as escolhas atuais$/i }));
+      await waitFor(() => expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+      expect(screen.queryByText('Refazer a rede pluvial?')).not.toBeInTheDocument();
+    });
+  });
+
   it('"Circuitos automáticos" (aba Instalações) sem quadro: o drawer pede o quadro e "Criar" fica apagado', async () => {
     await montar();
     await abrirAba(/^elétrica$/i);

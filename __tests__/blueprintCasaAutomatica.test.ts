@@ -39,6 +39,8 @@ import { PREMISSAS_DA_CASA_PADRAO, hipotesesDasPremissas } from '../utils/bluepr
 import { HIPOTESES_ELETRODUTO_PADRAO } from '../utils/blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO } from '../utils/blueprintEletricaDimensionamento';
+import { MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO, comandosDeRefazerAgua, diferencasDaAgua, diferencasDoPluvial, motivoParaNaoRelancarAgua } from '../utils/blueprintEscolhasDaAguaEPluvial';
+import { planejarAguaCompleta } from '../utils/blueprintAguaCompleta';
 
 // Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
 // ~0,5–0,8 s nesta máquina, e a CI, disputando CPU com a suíte toda, chegou a passar dos 5 s do padrão
@@ -587,7 +589,8 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
     expect(p.etapas.find((e) => e.id === 'ELETRODUTOS')?.situacao).toBe('LANCOU');
     expect((r.terminais ?? []).filter((t) => t.tipoEletrico === 'CAIXA_PASSAGEM')).toEqual([]);
     const qdc = (r.quadros ?? [])[0];
-    expect(p.comandos.filter((c) => c.type === 'RegistrarLancamento')).toHaveLength(1);
+    // F3 (24/10/2026): a água e o pluvial também registram — um registro por motor.
+    expect(p.comandos.flatMap((c) => (c.type === 'RegistrarLancamento' ? [c.motor] : [])).sort()).toEqual(['AGUA', 'ELETRODUTOS', 'PLUVIAL']);
     expect(registroDe(r, 'ELETRODUTOS', qdc.id)?.escolhas).toMatchObject({ caixasDePassagem: 'PELA_LUZ', encaminhamento: 'PELA_LUZ_DO_AMBIENTE' });
     // Correção 2: com o painel dos eletrodutos no PADRÃO (o do editor: sem caixas), a casa recém-gerada não acende o aviso.
     // Painel fora do padrão (outra bitola, rota pela parede…) acende — diferença real.
@@ -1394,6 +1397,45 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     });
     expect(motivoParaNaoRelancar(depois, q)).toBeNull();
     expect(hipotesesDoQuadro(depois, q, painel).noForro).toEqual(forroDaCasa);
+  });
+
+  // F3 do relançar (24/10/2026): a água da casa corre no forro (`agua.noForro`), que a gaveta da água não conhece. O
+  // registro guarda as faixas (sem rótulo) e o Refazer pelo editor as devolve — a água continua no forro.
+  it('⚠️ F3: trocar uma premissa da água e refazer pelo editor mantém a água NA FAIXA do forro; sem registro, não relança', () => {
+    const r = casa(1).resultado;
+    const estudo = { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } };
+    expect(registroDe(r, 'AGUA', null)?.escolhas).toMatchObject({ forroFriaAbaixoDoTetoMm: F.aguaFria.abaixoDoTetoMm, forroQuenteAbaixoDoTetoMm: F.aguaQuente.abaixoDoTetoMm, subidaDoAlimentador: 'FACHADA' });
+    expect(registroDe(r, 'PLUVIAL', null)).not.toBeNull();
+    // Com o estudo de sempre, nada mudou: sem aviso em nenhum dos dois.
+    expect(diferencasDaAgua(r, estudo)).toEqual([]);
+    expect(diferencasDoPluvial(r, estudo.pluvial)).toEqual([]);
+
+    const faceDoForro = 2800 - rebaixoDoForroMm(F) - 14;
+    const horizontaisNoForro = (m: BlueprintModel) =>
+      (m.trechos ?? []).filter(
+        (t) => (t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE') && t.cotaAMm === t.cotaBMm && !(t.a.x === t.b.x && t.a.y === t.b.y) && t.cotaAMm > faceDoForro && t.cotaAMm < 2800,
+      );
+    const naFaixa = (t: { disciplina: string; cotaAMm: number }) => t.cotaAMm === 2800 - FAIXA[t.disciplina];
+    expect(horizontaisNoForro(r).length).toBeGreaterThan(0);
+
+    // O usuário muda a velocidade no estudo e refaz pela gaveta.
+    const outra = { ...estudo, agua: { ...estudo.agua, velocidadeMaxMs: 2.5 } };
+    const { comandos } = comandosDeRefazerAgua(r, outra, null);
+    expect(comandos.some((c) => c.type === 'AddTrecho')).toBe(true);
+    const depois = applyBatch(r, comandos).model;
+    expect(registroDe(depois, 'AGUA', null)?.escolhas).toMatchObject({ velocidadeMaxMs: 2.5, forroFriaAbaixoDoTetoMm: F.aguaFria.abaixoDoTetoMm });
+    expect(diferencasDaAgua(depois, outra)).toEqual([]);
+    expect(horizontaisNoForro(depois).filter(naFaixa).length).toBeGreaterThan(0);
+    expect(horizontaisNoForro(depois).filter((t) => !naFaixa(t)).map((t) => `${t.disciplina}@${t.cotaAMm}`)).toEqual([]);
+    // Prova de sensibilidade: com as premissas do estudo PURAS (sem o forro do registro), a água sairia da faixa.
+    const apagar = comandos.filter((c) => c.type === 'DeleteTrecho' || c.type === 'DeleteTerminal');
+    const semForro = applyBatch(applyBatch(r, apagar).model, planejarAguaCompleta(applyBatch(r, apagar).model, outra, null).comandos).model;
+    expect(horizontaisNoForro(semForro).filter(naFaixa).length).toBe(0);
+
+    // A água no forro SEM registro (a casa de antes): não relança pela gaveta.
+    const antiga = applyCommand(r, { type: 'ApagarRegistroDeLancamento', motor: 'AGUA', alvoId: null }).model;
+    expect(motivoParaNaoRelancarAgua(antiga, outra)).toBe(MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO);
+    expect(comandosDeRefazerAgua(antiga, outra, null).comandos).toEqual([]);
   });
 
   it('térrea: nenhuma dessas redes em vão de porta ou janela (o aquecedor ao lado da janela; o dreno do ar é a F14d)', () => {

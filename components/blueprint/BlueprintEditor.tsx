@@ -604,7 +604,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { useCasaAutomatica } from '../../hooks/useCasaAutomatica';
-import { SUBIDA_DO_ALIMENTADOR_DA_CASA, conferirPlanoDaCasa, faixaDaAguaQuenteDaCasaNoModelo, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
+import { SUBIDA_DO_ALIMENTADOR_DA_CASA, conferirPlanoDaCasa, esgotoDaCasaNoModelo, faixaDaAguaQuenteDaCasaNoModelo, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
 import type { EmpreendimentoUnit, EmpreendimentoWithChildren } from '../../types/empreendimento';
@@ -871,9 +871,20 @@ import {
 import {
   destinoDoEsgoto,
   planejarEsgoto,
-  refazerEsgoto,
   type HipotesesDeEsgoto,
 } from '../../utils/blueprintEsgotoAutomatico';
+import {
+  botaoDeLancarEsgoto,
+  comRegistroDoEsgoto,
+  comandosDeRefazerEsgoto,
+  diferencasDoEsgoto,
+  esgotoARefazer,
+  lancamentoDoEsgoto,
+  opcoesDoEsgoto,
+  redeDoEsgotoDoSistema,
+  textoDaConfirmacaoDoEsgoto,
+  type PremissasDoEsgoto,
+} from '../../utils/blueprintEscolhasDoEsgoto';
 import {
   ROTULO_DO_TIPO_DE_AMBIENTE,
   AREAS_POR_LUMINARIA_M2,
@@ -9307,11 +9318,38 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   /** ─── ESGOTO AUTOMÁTICO (18/09/2026, F5) ─────────────────────────────────── */
   const hipotesesDeEsgoto = hidroDoEstudo.hipoteses.esgoto;
   const setHipDeEsgotoSalvas = (esgoto: HipotesesDeEsgoto) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, esgoto });
-  const planoDeEsgoto = useMemo(() => planejarEsgoto(editor.model, hipotesesDeEsgoto), [editor.model, hipotesesDeEsgoto]);
+  /**
+   * F4 do relançar (24/10/2026): o que a casa decide no esgoto e o estudo não tem (a faixa; no sobrado, o tubo de queda
+   * por grupo e o raio do shaft) — das premissas da casa do estudo, pela mesma regra dos eletrodutos e da água
+   * (`hipotesesDaCasaDoEstudo`: `null` com erro de leitura). Só vale para o esgoto antigo (sem registro) de uma casa.
+   */
+  const esgotoDaCasa = useMemo(
+    () => (hipotesesDaCasaDoEstudo ? { ...esgotoDaCasaNoModelo(hipotesesDaCasaDoEstudo, editor.model), forroDaAgua: forroDaCasaDaAgua } : null),
+    [hipotesesDaCasaDoEstudo, editor.model, forroDaCasaDaAgua],
+  );
+  /**
+   * F4: tudo com que o esgoto se lança. A casa só é procurada com a gaveta aberta (a procura lê a água no forro); fora
+   * dela, o estudo e o registro bastam para a contagem do ribbon.
+   */
+  const premissasDoEsgoto = useMemo<PremissasDoEsgoto>(
+    () => ({
+      esgoto: hipotesesDeEsgoto,
+      tratamento: hidroDoEstudo.hipoteses.tratamento,
+      reservatorio: hidroDoEstudo.hipoteses.reservatorio,
+      agua: hidroDoEstudo.hipoteses.agua,
+      ...(tarefaAberta === 'esgoto' ? { esgotoDaCasa } : {}),
+    }),
+    [hipotesesDeEsgoto, hidroDoEstudo.hipoteses.tratamento, hidroDoEstudo.hipoteses.reservatorio, hidroDoEstudo.hipoteses.agua, tarefaAberta, esgotoDaCasa],
+  );
+  /** F4: as hipóteses com que o esgoto LANÇA (as do estudo + a faixa da casa do registro) e, bloqueado, o motivo. */
+  const lancamentoDoEsgotoAtual = useMemo(() => lancamentoDoEsgoto(editor.model, premissasDoEsgoto), [editor.model, premissasDoEsgoto]);
+  const hipDoEsgotoQueLanca = lancamentoDoEsgotoAtual.hip;
+  const motivoDoEsgoto = lancamentoDoEsgotoAtual.motivo;
+  const planoDeEsgoto = useMemo(() => planejarEsgoto(editor.model, hipDoEsgotoQueLanca), [editor.model, hipDoEsgotoQueLanca]);
   /** VENTILAÇÃO (29/09/2026, E5.4): colunas ao alcance de cada desconector, DN da tabela, acima da cobertura. */
   const planoDaVentilacao = useMemo(
-    () => (tarefaAberta === 'esgoto' ? planejarVentilacao(editor.model, hipotesesDeEsgoto) : null),
-    [tarefaAberta, editor.model, hipotesesDeEsgoto],
+    () => (tarefaAberta === 'esgoto' ? planejarVentilacao(editor.model, hipDoEsgotoQueLanca) : null),
+    [tarefaAberta, editor.model, hipDoEsgotoQueLanca],
   );
   /**
    * COLETOR PREDIAL (29/09/2026, E5.3): da CI à ligação na rede pública. Sem
@@ -9319,8 +9357,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * do terreno ali — a topografia exibida, a mesma do corte.
    */
   const planoDoColetor = useMemo(
-    () => (tarefaAberta === 'esgoto' ? planejarColetorPredial(editor.model, hipotesesDeEsgoto, terrenoParaCorte) : null),
-    [tarefaAberta, editor.model, hipotesesDeEsgoto, terrenoParaCorte],
+    () => (tarefaAberta === 'esgoto' ? planejarColetorPredial(editor.model, hipDoEsgotoQueLanca, terrenoParaCorte) : null),
+    [tarefaAberta, editor.model, hipDoEsgotoQueLanca, terrenoParaCorte],
   );
   /**
    * O ESGOTO INTEIRO NUM CLIQUE (13/10/2026, docs/planos/2026-10-13-hidro-ancoras-automaticas.md):
@@ -9333,14 +9371,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * já nas medidas dimensionadas pelas premissas do estudo. `apagar` = o usuário autorizou apagar o que
    * está CONFIRMADO do outro destino (pedido: "o sistema avisa e pede autorizacao para apagar sozinho").
    */
-  const opcoesDoEsgotoCompleto = (apagar = false) => {
-    const trat = hidroDoEstudo.hipoteses.tratamento;
-    const medidas = destinoDoEsgoto(hipotesesDeEsgoto) === 'TRATAMENTO' ? medidasDimensionadas(dimensionarTratamento(editor.model, trat, hidroDoEstudo.hipoteses.reservatorio)) : undefined;
-    return { tratamento: { comFiltro: trat.comFiltro, medidas }, apagarConfirmadosDoOutroDestino: apagar };
-  };
+  // F4: as opções num lugar só (`opcoesDoEsgoto`), as mesmas do Refazer.
+  const opcoesDoEsgotoCompleto = (apagar = false, m: BlueprintModel = editor.model) => opcoesDoEsgoto(m, premissasDoEsgoto, apagar);
   const planoDoEsgotoCompleto = useMemo(
-    () => (tarefaAberta === 'esgoto' ? planejarEsgotoCompleto(editor.model, hipotesesDeEsgoto, terrenoParaCorte, opcoesDoEsgotoCompleto()) : null),
-    [tarefaAberta, editor.model, hipotesesDeEsgoto, terrenoParaCorte, hidroDoEstudo.hipoteses.tratamento, hidroDoEstudo.hipoteses.reservatorio],
+    () => (tarefaAberta === 'esgoto' ? planejarEsgotoCompleto(editor.model, hipDoEsgotoQueLanca, terrenoParaCorte, opcoesDoEsgotoCompleto()) : null),
+    [tarefaAberta, editor.model, hipDoEsgotoQueLanca, terrenoParaCorte, premissasDoEsgoto],
   );
   /** A ÁGUA e a CHUVA inteiras num clique (13/10/2026, item 5.3): o irmão do esgoto. */
   const planoDaAguaCompleta = useMemo(
@@ -9667,10 +9702,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     },
     [analisesDoMemorialDeIncendio, editor.model, hipotesesDeIncendioDoEstudo, study.name],
   );
+  /** F4: monta o lote do esgoto; recusa do kernel vira aviso, não exceção no clique. */
+  const montarLoteDoEsgoto = <T,>(montar: () => T, oque: string): T | null => {
+    try {
+      return montar();
+    } catch (e) {
+      setAvisoColar(`${oque}: ${e instanceof Error ? e.message : String(e)}`);
+      return null;
+    }
+  };
   const lancarEsgoto = async () => {
-    if (!planoDoEsgotoCompleto) return;
+    if (!planoDoEsgotoCompleto || motivoDoEsgoto) return;
     const confirmados = planoDoEsgotoCompleto.confirmadosDoOutroDestino.length;
-    if (confirmados === 0) return lancarTudo('esgoto', planoDoEsgotoCompleto);
+    // F4: o registro do lançamento no mesmo lote (salvo o lote parcial — `comRegistroDoEsgoto`).
+    if (confirmados === 0) {
+      const lote = montarLoteDoEsgoto(() => comRegistroDoEsgoto(editor.model, planoDoEsgotoCompleto.comandos, premissasDoEsgoto), 'O esgoto não foi lançado');
+      if (lote) lancarTudo('esgoto', planoDoEsgotoCompleto, lote);
+      return;
+    }
     const paraTratamento = planoDoEsgotoCompleto.destino === 'TRATAMENTO';
     const ok = await confirmar({
       title: paraTratamento ? 'Apagar a ligação à rede pública?' : 'Apagar o tratamento individual?',
@@ -9681,21 +9730,53 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       variant: 'warning',
     });
     if (!ok) return;
-    lancarTudo('esgoto', planejarEsgotoCompleto(editor.model, hipotesesDeEsgoto, terrenoParaCorte, opcoesDoEsgotoCompleto(true)));
+    // F3: o modelo de AGORA (depois do `await`) e as hipóteses dele.
+    const m = modeloDaHidraulicaRef.current;
+    const montado = montarLoteDoEsgoto(() => {
+      const plano = planejarEsgotoCompleto(m, lancamentoDoEsgoto(m, premissasDoEsgoto).hip, terrenoParaCorte, opcoesDoEsgotoCompleto(true, m));
+      return { plano, lote: comRegistroDoEsgoto(m, plano.comandos, premissasDoEsgoto) };
+    }, 'O esgoto não foi lançado');
+    if (montado) lancarTudo('esgoto', montado.plano, montado.lote);
   };
+  /**
+   * F4 do relançar (24/10/2026): REFAZER o esgoto com as escolhas atuais — apaga a rede do motor (ramais, tubos de queda,
+   * ventilação, coletor ou tratamento, as caixas sugeridas e o outro destino; confirmados inclusive; nunca os aparelhos,
+   * os ralos e as caixas que o usuário confirmou) e lança de novo, num lote só (Ctrl+Z volta tudo, registro inclusive).
+   * Decisão do usuário: havendo algo CONFIRMADO, pede confirmação dizendo quanto, o quê (por nome) e o que mudou — com o
+   * destino trocado, é a autorização para apagar o outro destino; só sugeridos, refaz direto.
+   */
   const refazerRedeDeEsgoto = async () => {
-    const ok = await confirmar({
-      title: 'Refazer a rede de esgoto?',
-      message: `Apaga os ${planoDeEsgoto.trechosDaRede} trecho(s) ligados à caixa de inspeção — inclusive os que você já confirmou — e lança de novo com as hipóteses atuais. Ctrl+Z desfaz.`,
-      confirmLabel: 'Refazer',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    const re = refazerEsgoto(editor.model, hipotesesDeEsgoto);
-    if (re.comandos.length === 0) return;
+    if (motivoDoEsgoto) return;
+    const lista = textoDaConfirmacaoDoEsgoto(esgotoARefazer(editor.model, premissasDoEsgoto));
+    if (lista) {
+      const ok = await confirmar({
+        title: 'Refazer o esgoto?',
+        message: `Apaga e lança de novo com as escolhas atuais — inclusive o que você já confirmou; os aparelhos, os ralos e as caixas que você confirmou ficam. ${lista} Ctrl+Z desfaz.`,
+        confirmLabel: 'Refazer',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    }
+    const m = modeloDaHidraulicaRef.current;
+    const re = montarLoteDoEsgoto(() => comandosDeRefazerEsgoto(m, premissasDoEsgoto, terrenoParaCorte), 'O esgoto não foi refeito');
+    if (!re || re.comandos.length === 0) return;
     const criados = editor.runBatch(re.comandos);
     if (criados.length > 0) selecionar(criados);
+    const pl = re.plano;
+    setResumoDoLancamento(pl && (pl.presumido.length > 0 || pl.pendencias.length > 0) ? { tarefa: 'esgoto', presumido: pl.presumido, pendencias: pl.pendencias } : null);
   };
+  /** F4, regra B: o que mudou desde o lançamento; regra A: o botão principal do rodapé. */
+  const diferencasNoEsgoto = useMemo(() => (tarefaAberta === 'esgoto' ? diferencasDoEsgoto(editor.model, premissasDoEsgoto) : []), [tarefaAberta, editor.model, premissasDoEsgoto]);
+  const botaoDoEsgoto = useMemo(
+    () => botaoDeLancarEsgoto(editor.model, planoDoEsgotoCompleto, diferencasNoEsgoto, motivoDoEsgoto),
+    [editor.model, planoDoEsgotoCompleto, diferencasNoEsgoto, motivoDoEsgoto],
+  );
+  const temRedeDeEsgoto = useMemo(
+    () => tarefaAberta === 'esgoto' && redeDoEsgotoDoSistema(editor.model, destinoDoEsgoto(hipDoEsgotoQueLanca)).trechos.length > 0,
+    [tarefaAberta, editor.model, hipDoEsgotoQueLanca],
+  );
+  /** F4: a troca de DESTINO já está no aviso — o rodapé não a repete ("há peças confirmadas do outro destino"). */
+  const destinoNoAviso = diferencasNoEsgoto.some((d) => d.item === 'destino');
   const lancarPontos = (planos: typeof planosDePontos) => {
     const lote = planos.flatMap((p) => p.comandos);
     if (lote.length === 0) return;
@@ -18275,6 +18356,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               {resumoDoLancamento?.tarefa === 'esgoto' && (
                 <AvisoDoLancamento presumido={resumoDoLancamento.presumido} pendencias={resumoDoLancamento.pendencias} testId="esgoto-presumido" />
               )}
+              {/* F4 do relançar (24/10/2026), regra B: a rede foi lançada com outras escolhas (o DESTINO inclusive) → o aviso e
+                  o Refazer, cuja confirmação é a autorização para apagar o outro destino. */}
+              <AvisoDeEscolhasMudaram diferencas={diferencasNoEsgoto} onRelancar={() => void refazerRedeDeEsgoto()} desabilitado={motivoDoEsgoto} rotuloAcessivel="Relançar o esgoto com as escolhas atuais" />
+              {motivoDoEsgoto && (
+                <p className="text-xs text-amber-700" data-testid="esgoto-motivo">
+                  {motivoDoEsgoto}
+                </p>
+              )}
 
               {/* 14/10/2026: o RESULTADO vem primeiro (o que vai ser lançado); as hipóteses ficam recolhidas abaixo,
                   com os valores em vigor na linha do título. */}
@@ -20192,39 +20281,58 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                         : `${planoDeEsgoto.aLigar} ponto(s) a ligar`,
                   planoDoEsgotoCompleto?.lancaColetor && planoDoEsgotoCompleto.coletor?.ligacaoProposta ? 'a ligação à rede vai na frente do lote' : null,
                   planoDoEsgotoCompleto?.destino === 'TRATAMENTO' ? 'o esgoto vai para o tratamento individual' : null,
-                  planoDoEsgotoCompleto && planoDoEsgotoCompleto.confirmadosDoOutroDestino.length > 0 ? 'há peças confirmadas do outro destino' : null,
+                  // F4: com a troca de destino no aviso, o rodapé não a repete (um aviso só para a mesma coisa).
+                  planoDoEsgotoCompleto && planoDoEsgotoCompleto.confirmadosDoOutroDestino.length > 0 && !destinoNoAviso ? 'há peças confirmadas do outro destino' : null,
                 ].filter(Boolean).join(' · ')}.
               </span>
-              {planoDeEsgoto.trechosDaRede > 0 && (
+              {/* F4 do relançar (24/10/2026): "Refazer tudo" ao lado do "Lançar" quando há o que lançar; sem nada a lançar, o
+                  próprio botão principal vira "Relançar com as escolhas atuais" (regra A). */}
+              {temRedeDeEsgoto && botaoDoEsgoto.modo === 'LANCAR' && !botaoDoEsgoto.motivo && (
                 <button
                   type="button"
                   onClick={() => void refazerRedeDeEsgoto()}
-                  title={`Apaga os ${planoDeEsgoto.trechosDaRede} trecho(s) da rede — inclusive os que você já confirmou — e lança de novo com as hipóteses atuais`}
+                  title="Apaga a rede de esgoto do motor — ramais, tubos de queda, ventilação, coletor ou tratamento e as caixas sugeridas, inclusive o que você já confirmou (não os aparelhos, os ralos e as caixas que você confirmou) — e lança de novo com as escolhas atuais. Ctrl+Z desfaz."
                   className="inline-flex h-9 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   Refazer tudo
                 </button>
               )}
+              {botaoDoEsgoto.motivo && (
+                <span id="motivo-lancar-esgoto" className="sr-only">
+                  {botaoDoEsgoto.motivo}
+                </span>
+              )}
+              <span className="inline-flex shrink-0" title={botaoDoEsgoto.motivo ?? undefined}>
               <button
                 type="button"
-                onClick={() => void lancarEsgoto()}
-                disabled={!planoDoEsgotoCompleto || (planoDoEsgotoCompleto.comandos.length === 0 && planoDoEsgotoCompleto.confirmadosDoOutroDestino.length === 0)}
+                onClick={() => void (botaoDoEsgoto.modo === 'RELANCAR' ? refazerRedeDeEsgoto() : lancarEsgoto())}
+                disabled={!!botaoDoEsgoto.motivo}
+                aria-describedby={botaoDoEsgoto.motivo ? 'motivo-lancar-esgoto' : undefined}
+                aria-label={botaoDoEsgoto.modo === 'RELANCAR' ? 'Relançar o esgoto com as escolhas atuais' : undefined}
                 title={
-                  planoDoEsgotoCompleto && planoDoEsgotoCompleto.confirmadosDoOutroDestino.length > 0
-                    ? `${planoDoEsgotoCompleto.pendencias[0] ?? 'Há peças confirmadas do outro destino'} — pede a sua autorização antes de apagar.`
-                    : !planoDoEsgotoCompleto || planoDoEsgotoCompleto.comandos.length === 0
-                    ? (planoDoEsgotoCompleto?.pendencias[0] ?? 'Nada a lançar: a rede de esgoto já está completa')
-                    : planoDeEsgoto.comandos.length === 0 && planoDeEsgoto.sugeridos > 0
-                      ? `Apaga os ${planoDeEsgoto.sugeridos} trecho(s) ainda sugerido(s) e lança de novo com as hipóteses atuais; o que você confirmou fica. Ctrl+Z desfaz.`
-                      : planoDoEsgotoCompleto.destino === 'TRATAMENTO'
-                        ? 'Caixa, ramais, tanque séptico, filtro, sumidouro e ventilação, num passo só (Ctrl+Z desfaz tudo)'
-                        : 'Caixa, ramais, ligação à rede, coletor e ventilação, num passo só (Ctrl+Z desfaz tudo)'
+                  botaoDoEsgoto.motivo ??
+                  (botaoDoEsgoto.modo === 'RELANCAR'
+                    ? 'Apaga a rede de esgoto do motor e lança de novo com as escolhas atuais — pede confirmação se houver algo confirmado; Ctrl+Z desfaz'
+                    : planoDoEsgotoCompleto && planoDoEsgotoCompleto.confirmadosDoOutroDestino.length > 0
+                      ? `${planoDoEsgotoCompleto.pendencias[0] ?? 'Há peças confirmadas do outro destino'} — pede a sua autorização antes de apagar.`
+                      : planoDeEsgoto.comandos.length === 0 && planoDeEsgoto.sugeridos > 0
+                        ? `Apaga os ${planoDeEsgoto.sugeridos} trecho(s) ainda sugerido(s) e lança de novo com as hipóteses atuais; o que você confirmou fica. Ctrl+Z desfaz.`
+                        : planoDoEsgotoCompleto?.destino === 'TRATAMENTO'
+                          ? 'Caixa, ramais, tanque séptico, filtro, sumidouro e ventilação, num passo só (Ctrl+Z desfaz tudo)'
+                          : 'Caixa, ramais, ligação à rede, coletor e ventilação, num passo só (Ctrl+Z desfaz tudo)')
                 }
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 <Waves className="h-4 w-4" />
-                {planoDeEsgoto.comandos.length > 0 ? `Lançar (${planoDeEsgoto.aLigar})` : planoDeEsgoto.sugeridos > 0 ? 'Relançar sugeridos' : 'Lançar'}
+                {botaoDoEsgoto.modo === 'RELANCAR'
+                  ? 'Relançar com as escolhas atuais'
+                  : planoDeEsgoto.comandos.length > 0
+                    ? `Lançar (${planoDeEsgoto.aLigar})`
+                    : planoDeEsgoto.sugeridos > 0
+                      ? 'Relançar sugeridos'
+                      : 'Lançar'}
               </button>
+              </span>
             </>
           )}
           {tarefaAberta === 'agua' && (() => {

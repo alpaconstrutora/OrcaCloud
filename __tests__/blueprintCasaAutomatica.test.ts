@@ -8,7 +8,7 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { SUBIDA_DO_ALIMENTADOR_DA_CASA, faixaDaAguaQuenteDaCasa, faixaDaAguaQuenteDaCasaNoModelo, forroDaAguaDaCasa, forroEletricoDaCasa, conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { SUBIDA_DO_ALIMENTADOR_DA_CASA, esgotoDaCasaNoModelo, faixaDaAguaQuenteDaCasa, faixaDaAguaQuenteDaCasaNoModelo, forroDaAguaDaCasa, forroEletricoDaCasa, conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { amostradorDaGrade, type GradeDeElevacao } from '../utils/blueprintTopografia';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
@@ -39,6 +39,7 @@ import { PREMISSAS_DA_CASA_PADRAO, hipotesesDasPremissas } from '../utils/bluepr
 import { HIPOTESES_ELETRODUTO_PADRAO } from '../utils/blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO } from '../utils/blueprintEletricaDimensionamento';
+import { comandosDeRefazerEsgoto, diferencasDoEsgoto, lancamentoDoEsgoto } from '../utils/blueprintEscolhasDoEsgoto';
 import { MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO, comandosDeRefazerAgua, diferencasDaAgua, diferencasDoPluvial, lancamentoDaAgua, motivoParaNaoRelancarAgua } from '../utils/blueprintEscolhasDaAguaEPluvial';
 import { planejarAguaCompleta } from '../utils/blueprintAguaCompleta';
 
@@ -589,8 +590,8 @@ describe('planejarCasa — F9: elétrica e climatização', () => {
     expect(p.etapas.find((e) => e.id === 'ELETRODUTOS')?.situacao).toBe('LANCOU');
     expect((r.terminais ?? []).filter((t) => t.tipoEletrico === 'CAIXA_PASSAGEM')).toEqual([]);
     const qdc = (r.quadros ?? [])[0];
-    // F3 (24/10/2026): a água e o pluvial também registram — um registro por motor.
-    expect(p.comandos.flatMap((c) => (c.type === 'RegistrarLancamento' ? [c.motor] : [])).sort()).toEqual(['AGUA', 'ELETRODUTOS', 'PLUVIAL']);
+    // F3 (24/10/2026): a água e o pluvial também registram — um registro por motor; F4: o esgoto também.
+    expect(p.comandos.flatMap((c) => (c.type === 'RegistrarLancamento' ? [c.motor] : [])).sort()).toEqual(['AGUA', 'ELETRODUTOS', 'ESGOTO', 'PLUVIAL']);
     expect(registroDe(r, 'ELETRODUTOS', qdc.id)?.escolhas).toMatchObject({ caixasDePassagem: 'PELA_LUZ', encaminhamento: 'PELA_LUZ_DO_AMBIENTE' });
     // Correção 2: com o painel dos eletrodutos no PADRÃO (o do editor: sem caixas), a casa recém-gerada não acende o aviso.
     // Painel fora do padrão (outra bitola, rota pela parede…) acende — diferença real.
@@ -1499,6 +1500,59 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     const medidos = conflitosDaAgua(refeita);
     for (const [classe, n] of Object.entries(medidos)) expect(n, classe).toBeLessThanOrEqual(original[classe] ?? 0);
     expect(medidos.REDE ?? 0).toBe(original.REDE ?? 0);
+  });
+
+  // F4 do relançar (24/10/2026): a casa lança o esgoto com a FAIXA dele e, no sobrado, um tubo de queda por banheiro no
+  // shaft perto (raio da casa). Medido (sonda da F4): na térrea a faixa não muda nada; no sobrado, relançar SEM esses
+  // extras deixava só 3 das 15 colunas (TQ e ventilação) no lugar e somava 18 conflitos de rede (ESTRUTURA 47 contra 32).
+  it.each([1, 2] as const)('⚠️ F4: %i pavimento(s) — refazer o esgoto pelo editor (registro, ou premissas da casa sem registro) mantém o tubo de queda e a ventilação no lugar; sem eles, não', (pav) => {
+    const r = casa(pav).resultado;
+    const estudo = { ...HIPOTESES_HIDRO_PADRAO, pluvial: { ...HIPOTESES_HIDRO_PADRAO.pluvial, intensidadeMmH: 150 } };
+    const P = { esgoto: estudo.esgoto, tratamento: estudo.tratamento, reservatorio: estudo.reservatorio, agua: estudo.agua };
+    const reg = registroDe(r, 'ESGOTO', null);
+    expect(reg?.escolhas).toMatchObject({ destino: 'REDE_PUBLICA', faixaX: -60, faixaY: -60, raioDoShaftMm: 3000 });
+    if (pav === 2) expect(reg?.escolhas).toMatchObject({ tuboDeQuedaPorGrupoMm: expect.any(Number), raioDoShaftDaCasaMm: expect.any(Number) });
+    // Com o estudo de sempre, nada mudou: sem aviso.
+    expect(diferencasDoEsgoto(r, P)).toEqual([]);
+    const colunas = (m: BlueprintModel) =>
+      (m.trechos ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.a.x === t.b.x && t.a.y === t.b.y && (t.rotulo === 'TQ' || t.rotulo === 'Ventilação')).map((t) => `${t.levelId}:${t.a.x},${t.a.y}:${t.rotulo}`).sort();
+    const conflitosDoEsgoto = (m: BlueprintModel) => {
+      const ids = new Set((m.trechos ?? []).filter((t) => t.disciplina === 'ESGOTO').map((t) => t.id));
+      return conflitosDoModelo(m).filter((c) => ids.has(c.trechoId) || ids.has(c.outroId)).reduce((o: Record<string, number>, c) => ((o[c.classe] = (o[c.classe] ?? 0) + 1), o), {});
+    };
+    const original = { colunas: colunas(r), conflitos: conflitosDoEsgoto(r) };
+    expect(original.colunas.length).toBeGreaterThan(0);
+
+    // Com o registro: refeito com as mesmas escolhas, igual à casa; o usuário troca o caimento e refaz — as colunas no
+    // mesmo lugar e nenhum conflito de rede a mais (o ramal mais fundo pode tocar outra peça da estrutura: é a premissa).
+    const igual = applyBatch(r, comandosDeRefazerEsgoto(r, P, null).comandos).model;
+    expect(colunas(igual)).toEqual(original.colunas);
+    expect(conflitosDoEsgoto(igual)).toEqual(original.conflitos);
+    const outro = { ...P, esgoto: { ...P.esgoto, caimentoPctAte75: 3 } };
+    const refeita = applyBatch(r, comandosDeRefazerEsgoto(r, outro, null).comandos).model;
+    expect(registroDe(refeita, 'ESGOTO', null)?.escolhas).toMatchObject({ caimentoPctAte75: 3, faixaX: -60 });
+    expect(colunas(refeita)).toEqual(original.colunas);
+    expect(conflitosDoEsgoto(refeita).REDE ?? 0).toBe(original.conflitos.REDE ?? 0);
+
+    // Sem registro (a casa de antes): com as premissas da casa (a água tem a assinatura dela), relança com a faixa.
+    const antiga = applyCommand(r, { type: 'ApagarRegistroDeLancamento', motor: 'ESGOTO', alvoId: null }).model;
+    const hipCasa = hipotesesDasPremissas(PREMISSAS_DA_CASA_PADRAO);
+    const esgotoDaCasa = { ...esgotoDaCasaNoModelo(hipCasa, antiga), forroDaAgua: forroDaAguaDaCasa(hipCasa) };
+    expect(esgotoDaCasa.faixa).toEqual({ x: reg!.escolhas.faixaX, y: reg!.escolhas.faixaY });
+    if (pav === 2) expect(esgotoDaCasa).toMatchObject({ tuboDeQuedaPorGrupoMm: reg!.escolhas.tuboDeQuedaPorGrupoMm, raioDoShaftMm: reg!.escolhas.raioDoShaftDaCasaMm });
+    const comCasa = applyBatch(antiga, comandosDeRefazerEsgoto(antiga, { ...P, esgotoDaCasa }, null).comandos).model;
+    expect(colunas(comCasa)).toEqual(original.colunas);
+    expect(conflitosDoEsgoto(comCasa)).toEqual(original.conflitos);
+    expect(registroDe(comCasa, 'ESGOTO', null)?.escolhas).toMatchObject({ faixaX: -60, faixaY: -60 });
+    // Sem as premissas da casa (erro de leitura): bloqueado, com o motivo.
+    expect(lancamentoDoEsgoto(antiga, { ...P, esgotoDaCasa: null }).motivo).toMatch(/^Esgoto lançado antes do registro numa casa/);
+
+    // Sensibilidade: só com o estudo (sem os extras), o sobrado tira as colunas do lugar e cruza as redes.
+    if (pav === 2) {
+      const semExtras = applyBatch(antiga, comandosDeRefazerEsgoto(antiga, P, null).comandos).model;
+      expect(colunas(semExtras).filter((c) => original.colunas.includes(c)).length).toBeLessThan(original.colunas.length);
+      expect(conflitosDoEsgoto(semExtras).REDE ?? 0).toBeGreaterThan(original.conflitos.REDE ?? 0);
+    }
   });
 
   it('térrea: nenhuma dessas redes em vão de porta ou janela (o aquecedor ao lado da janela; o dreno do ar é a F14d)', () => {

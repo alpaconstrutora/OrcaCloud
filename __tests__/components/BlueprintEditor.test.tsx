@@ -4941,6 +4941,132 @@ describe('BlueprintEditor · ribbon', () => {
     });
   });
 
+  describe('esgoto relança quando uma escolha muda (F4, 24/10/2026)', () => {
+    /** Banheiro 2 × 3 m (lavatório, caixa sifonada, vaso) no lote com frente; o esgoto lançado (rede pública) e ACEITO. */
+    async function esgotoAceito(registrarCom: 'nada' | 'padrao' | 'caimento') {
+      const k = await import('../../utils/blueprintKernel');
+      const { planejarEsgotoCompleto } = await import('../../utils/blueprintEsgotoCompleto');
+      const { HIPOTESES_HIDRO_PADRAO } = await import('../../utils/blueprintMemorialHidro');
+      const { comRegistroDoEsgoto, opcoesDoEsgoto } = await import('../../utils/blueprintEscolhasDoEsgoto');
+      let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+      const t = m.levels[0].id;
+      const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+      const divisa = (ax: number, ay: number, bx: number, by: number, frente = false) =>
+        ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', ...(frente ? { papel: 'FRENTE' as const } : {}) }) as const;
+      m = k.applyBatch(m, [
+        w(0, 0, 2000, 0), w(2000, 0, 2000, 3000), w(2000, 3000, 0, 3000), w(0, 3000, 0, 0),
+        { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Lavatório', at: k.point(600, 2500), cotaMm: 500, tipoHidraulico: 'LAVATORIO' },
+        { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Caixa sifonada', at: k.point(1200, 2100), cotaMm: 0, tipoHidraulico: 'CAIXA_SIFONADA' },
+        { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Vaso', at: k.point(600, 800), cotaMm: 0, tipoHidraulico: 'VASO_SANITARIO' },
+        divisa(-3000, -8000, 7500, -8000, true), divisa(7500, -8000, 7500, 6000), divisa(7500, 6000, -3000, 6000), divisa(-3000, 6000, -3000, -8000),
+      ]).model;
+      const h = HIPOTESES_HIDRO_PADRAO;
+      const esgoto = registrarCom === 'caimento' ? { ...h.esgoto, caimentoPctAte75: 3 } : h.esgoto;
+      const p = { esgoto, tratamento: h.tratamento, reservatorio: h.reservatorio };
+      const plano = planejarEsgotoCompleto(m, esgoto, null, opcoesDoEsgoto(m, p));
+      m = k.applyBatch(m, registrarCom === 'nada' ? plano.comandos : comRegistroDoEsgoto(m, plano.comandos, p)).model;
+      return k.applyBatch(m, [
+        ...(m.trechos ?? []).map((x) => ({ type: 'SetTrechoProps' as const, trechoId: x.id, sugerido: false })),
+        ...(m.terminais ?? []).filter((x) => x.sugerida).map((x) => ({ type: 'SetTerminalProps' as const, terminalId: x.id, sugerida: false })),
+      ]).model;
+    }
+    async function abrirEsgoto() {
+      await abrirAba(/^hidráulica$/i);
+      await userEvent.setup().click(botao(/^esgoto automático/i));
+      const gaveta = await screen.findByTestId('tarefa-esgoto');
+      return { gaveta, dialog: gaveta.closest('[role="dialog"]') as HTMLElement };
+    }
+    /** O botão principal do RODAPÉ (o do aviso tem o mesmo nome acessível, mas mora no painel). */
+    const doRodape = (dialog: HTMLElement, gaveta: HTMLElement, nome: RegExp) => within(dialog).getAllByRole('button', { name: nome }).find((b) => !gaveta.contains(b))!;
+    const AVISO = 'Caimento até DN 75 — lançado com: 3 % · agora: 2 %';
+
+    it('esgoto completo SEM registro (lançado antes): nenhum aviso, e o botão do rodapé fica "Relançar com as escolhas atuais", ligado', async () => {
+      loadBranchModel.mockResolvedValue(await esgotoAceito('nada'));
+      await montar();
+      const { gaveta, dialog } = await abrirEsgoto();
+      expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      const relancar = doRodape(dialog, gaveta, /^relançar o esgoto com as escolhas atuais$/i);
+      expect(relancar).toBeEnabled();
+      expect(relancar).toHaveTextContent('Relançar com as escolhas atuais');
+      expect(within(dialog).queryByRole('button', { name: /^lançar/i })).not.toBeInTheDocument();
+    });
+
+    it('⚠️ registro com outra escolha: aviso com a diferença; com confirmados, refazer pede confirmação dizendo quanto, o quê e o que mudou; refeito, o aviso some; um Desfazer o traz de volta', async () => {
+      const m = await esgotoAceito('caimento');
+      loadBranchModel.mockResolvedValue(m);
+      await montar();
+      const { gaveta, dialog } = await abrirEsgoto();
+      const aviso = await within(gaveta).findByTestId('aviso-escolhas-mudaram');
+      expect(aviso).toHaveTextContent(AVISO);
+      expect(within(aviso).getByRole('button', { name: 'Relançar o esgoto com as escolhas atuais' })).toBeEnabled();
+      const relancar = doRodape(dialog, gaveta, /^relançar o esgoto com as escolhas atuais$/i);
+      expect(relancar).toBeEnabled();
+
+      await userEvent.setup().click(relancar);
+      const titulo = await screen.findByText('Refazer o esgoto?');
+      const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
+      expect(confirmacao).toHaveTextContent(/Esgoto: (\d+) tubo\(s\) \(\1 confirmado\(s\)\), inclusive .*coletor \(\d+\)/);
+      expect(confirmacao).toHaveTextContent(/os aparelhos, os ralos e as caixas que você confirmou ficam/);
+      expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
+      await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
+      await waitFor(() => expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+
+      await userEvent.setup().click(botao(/^desfazer/i));
+      expect(await within(gaveta).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
+    });
+
+    it('⚠️ DESTINO trocado com a ligação CONFIRMADA e registro: UM aviso só (o rodapé não repete), e a confirmação do relançar é a autorização — nomeia a ligação e lança o tratamento', async () => {
+      loadBranchModel.mockResolvedValue(await esgotoAceito('padrao'));
+      await montar();
+      const user = userEvent.setup();
+      const { gaveta, dialog } = await abrirEsgoto();
+      expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument();
+      await user.click(within(gaveta).getByRole('button', { name: /hipóteses do lançamento/i }));
+      await user.selectOptions(within(gaveta).getByLabelText('Destino do esgoto'), 'TRATAMENTO');
+      const aviso = await within(screen.getByTestId('tarefa-esgoto')).findByTestId('aviso-escolhas-mudaram');
+      expect(aviso).toHaveTextContent('Destino do esgoto — lançado com: rede pública · agora: tratamento individual');
+      expect(within(dialog).getAllByTestId('aviso-escolhas-mudaram')).toHaveLength(1);
+      expect(dialog).not.toHaveTextContent(/há peças confirmadas do outro destino/);
+      const relancar = doRodape(dialog, gaveta, /^relançar o esgoto com as escolhas atuais$/i);
+      await user.click(relancar);
+      const confirmacao = (await screen.findByText('Refazer o esgoto?')).closest('[role="dialog"]') as HTMLElement;
+      expect(confirmacao).toHaveTextContent('1 ligação(ões) à rede pública');
+      expect(confirmacao).toHaveTextContent('O que mudou: Destino do esgoto — lançado com: rede pública · agora: tratamento individual.');
+      await user.click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
+      await waitFor(() => expect(screen.getByTestId('tratamento-verificacao')).toHaveTextContent(/Sumidouro/));
+      await waitFor(() => expect(within(screen.getByTestId('tarefa-esgoto')).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
+    });
+
+    it('⚠️ esgoto antigo (sem registro) numa casa com a água no forro e sem as premissas da casa (erro de leitura): botão desligado, com o motivo', async () => {
+      const k = await import('../../utils/blueprintKernel');
+      let m = await esgotoAceito('nada');
+      const t = m.levels[0].id;
+      m = k.applyCommand(m, {
+        type: 'NameSpace',
+        spaceId: m.spaces[0].id,
+        name: 'Banheiro',
+        acabamentos: { forro: { camadas: [{ espessuraMm: 13, itemCode: '', descricao: 'Placa de PVC', funcao: 'ACABAMENTO' }], rebaixoMm: 233 } },
+      }).model;
+      m = k.applyBatch(m, [
+        { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: k.point(1000, 1000), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 500 },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(1000, 1000), cotaAMm: 2800, cotaBMm: 2598, bitolaMm: 25, sugerido: true },
+        { type: 'AddTrecho', levelId: t, disciplina: 'AGUA_FRIA', a: k.point(1000, 1000), b: k.point(1800, 1000), cotaAMm: 2598, cotaBMm: 2598, bitolaMm: 25, sugerido: true },
+      ]).model;
+      loadBranchModel.mockResolvedValue(m);
+      await montar();
+      const { gaveta, dialog } = await abrirEsgoto();
+      const { MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO } = await import('../../utils/blueprintEscolhasDoEsgoto');
+      const motivo = `${MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO} Não foi possível ler as premissas da casa.`;
+      expect(await within(gaveta).findByTestId('esgoto-motivo')).toHaveTextContent(motivo);
+      const principal = within(dialog).getAllByRole('button').find((b) => !gaveta.contains(b) && /^(lançar|relançar)/i.test(b.textContent ?? ''))!;
+      expect(principal).toBeDisabled();
+      expect(principal).toHaveAttribute('title', motivo);
+      expect(principal.parentElement).toHaveAttribute('title', motivo);
+      expect(principal).toHaveAccessibleDescription(motivo);
+      expect(within(dialog).queryByRole('button', { name: /^refazer tudo$/i })).not.toBeInTheDocument();
+    });
+  });
+
   it('"Circuitos automáticos" (aba Instalações) sem quadro: o drawer pede o quadro e "Criar" fica apagado', async () => {
     await montar();
     await abrirAba(/^elétrica$/i);

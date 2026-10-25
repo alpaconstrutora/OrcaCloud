@@ -329,8 +329,8 @@ export function redeDaAguaDoSistema(model: BlueprintModel): { trechos: Trecho[];
 /** As peças que só existem em cima de um tubo (o hidrômetro não: é a âncora do alimentador e fica). */
 const PECAS_EM_LINHA = new Set(['REGISTRO_GAVETA', 'REGISTRO_PRESSAO', 'REGISTRO_ESFERA', 'VALVULA_RETENCAO', 'VRP', 'CONEXAO_TE', 'CONEXAO_LUVA', 'CONEXAO_REDUCAO']);
 
-/** A peça está sobre o tubo (no mesmo pavimento, a até 1 mm do eixo, em 3D)? */
-function sobreOTubo(x: Terminal, t: Trecho): boolean {
+/** A peça está sobre o tubo (no mesmo pavimento, a até 1 mm do eixo, em 3D)? Exportada para o esgoto (F4). */
+export function sobreOTubo(x: Terminal, t: Trecho): boolean {
   if (x.levelId !== t.levelId) return false;
   const a = [t.a.x, t.a.y, t.cotaAMm];
   const d = [t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm];
@@ -357,8 +357,27 @@ export function aguaNoForroSemRegistro(model: BlueprintModel, cotaRamalMm: numbe
 /** Os horizontais da distribuição que correm no forro, sem registro (a detecção comum com os eletrodutos). */
 export function horizontaisDaAguaNoForro(model: BlueprintModel, cotaRamalMm: number = HIPOTESES_AGUA_PADRAO.cotaRamalMm): Trecho[] {
   if (registroDe(model, 'AGUA', null)) return [];
+  return horizontaisDaDistribuicaoNoForro(model, cotaRamalMm);
+}
+
+/** Os horizontais da distribuição no forro, COM ou sem registro da água (a mesma detecção). */
+function horizontaisDaDistribuicaoNoForro(model: BlueprintModel, cotaRamalMm: number): Trecho[] {
   const distribuicao = redeDaAguaDoSistema(model).trechos.filter((t) => !FORA_DA_DISTRIBUICAO.has(t.rotulo ?? ''));
   return horizontaisNoForro(model, distribuicao, (_l, teto) => Math.min(cotaRamalMm, teto));
+}
+
+/**
+ * F4 (esgoto, 24/10/2026): a planta é uma casa da Casa Automática? O sinal é a ÁGUA no forro da casa — com o registro da
+ * água ou sem ele (a água relançada pelo editor continua nas faixas da casa). `noForro` = há água no forro de verdade;
+ * `daCasa` = e ela tem a ASSINATURA da casa (`temAssinaturaDaCasa`, a mesma decisão da água e dos eletrodutos); `porque`
+ * = por que não tem (o primeiro critério que falhou), ou `null`. Sem o forro da casa (`forro` nulo): `daCasa` falso.
+ */
+export function aguaNoForroDaCasa(model: BlueprintModel, forro: ForroDaAguaDaCasa | null | undefined, cotaRamalMm: number = HIPOTESES_AGUA_PADRAO.cotaRamalMm): { noForro: boolean; daCasa: boolean; porque: string | null } {
+  const horizontais = horizontaisDaDistribuicaoNoForro(model, cotaRamalMm);
+  if (!horizontais.length) return { noForro: false, daCasa: false, porque: null };
+  if (!forro || forro.rebaixoMm == null) return { noForro: true, daCasa: false, porque: null };
+  const porque = motivoSemAssinaturaDaCasa(model, horizontais, assinaturaDaAgua(forro, forro.rebaixoMm));
+  return { noForro: true, daCasa: porque === null, porque };
 }
 
 /**

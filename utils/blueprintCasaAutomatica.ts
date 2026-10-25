@@ -103,6 +103,7 @@ import { REGRA_DE_CAIXAS_PADRAO } from './blueprintCaixasDePassagem';
 import { escolhasDoEletroduto } from './blueprintEscolhasDoEletroduto';
 import { comandoDeRegistro, registroDe } from './blueprintRegistroDeLancamento';
 import { escolhasDaAgua, escolhasDoPluvial } from './blueprintEscolhasDaAguaEPluvial';
+import { escolhasDoEsgoto } from './blueprintEscolhasDoEsgoto';
 import type { HipotesesDeAgua } from './blueprintAguaAutomatica';
 import type { CaixasDePassagem } from './preferencias/catalogoLancamento';
 import { gerarClimatizacao, type ContextoDoGeradorDeClimatizacao } from './blueprintGeradorClimatizacao';
@@ -957,9 +958,13 @@ export const SUBIDA_DO_ALIMENTADOR_DA_CASA = 'FACHADA' as const;
  * sem registro refaz a quente na faixa dela — pelo eixo das paredes, cruzava a fria e a estrutura.
  */
 export function faixaDaAguaQuenteDaCasa(hipParcial: Partial<HipotesesDaCasa>, limites: readonly Boundary[], anelDoLote: readonly Point[]): Point | null {
+  return faixaDaCasa({ ...HIPOTESES_DA_CASA_PADRAO.faixas, ...(hipParcial.faixas ?? {}) }.aguaQuenteMm, limites, anelDoLote);
+}
+
+/** A faixa (d, d) do quadro da frente do lote levada ao mundo — a conta do `faixaNoMundo` da casa. */
+function faixaDaCasa(d: number, limites: readonly Boundary[], anelDoLote: readonly Point[]): Point | null {
   const q = quadroDaFrente(limites, anelDoLote);
   if (!q) return null;
-  const d = { ...HIPOTESES_DA_CASA_PADRAO.faixas, ...(hipParcial.faixas ?? {}) }.aguaQuenteMm;
   const v = paraMundo(q, { x: d, y: d });
   return { x: Math.round(v.x), y: Math.round(v.y) };
 }
@@ -971,11 +976,35 @@ export function faixaDaAguaQuenteDaCasa(hipParcial: Partial<HipotesesDaCasa>, li
  * registro perpetuava isso.
  */
 export function faixaDaAguaQuenteDaCasaNoModelo(hipParcial: Partial<HipotesesDaCasa>, model: Pick<BlueprintModel, 'boundaries'>): Point | null {
+  return faixaDaCasaNoModelo({ ...HIPOTESES_DA_CASA_PADRAO.faixas, ...(hipParcial.faixas ?? {}) }.aguaQuenteMm, model);
+}
+
+/** A faixa (d, d) pelo LOTE do modelo (o pavimento da divisa da frente), nunca o pavimento ativo. */
+function faixaDaCasaNoModelo(d: number, model: Pick<BlueprintModel, 'boundaries'>): Point | null {
   const frente = model.boundaries.find((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
   if (!frente) return null;
   const limites = model.boundaries.filter((b) => b.levelId === frente.levelId);
   const terreno = medirTerreno(limites);
-  return terreno ? faixaDaAguaQuenteDaCasa(hipParcial, limites, terreno.anel) : null;
+  return terreno ? faixaDaCasa(d, limites, terreno.anel) : null;
+}
+
+/**
+ * F4 do relançar (24/10/2026): o que a casa decide no ESGOTO e o estudo não tem — a FAIXA do esgoto no mundo (F14a: o
+ * mesmo quadro da frente do lote, com `faixas.esgotoMm`) e, no sobrado (mais de um pavimento no modelo), um tubo de
+ * queda por GRUPO de peças e o raio do shaft da casa (F14c). A etapa ESGOTO lança com isto; o editor o passa ao esgoto
+ * antigo (sem registro) de uma casa, para relançar sem tirar o tubo de queda e a ventilação do lugar.
+ */
+export function esgotoDaCasaNoModelo(
+  hipParcial: Partial<HipotesesDaCasa>,
+  model: Pick<BlueprintModel, 'boundaries' | 'levels'>,
+): { faixa: Point | null; tuboDeQuedaPorGrupoMm: number | null; raioDoShaftMm: number | null } {
+  const sobrado = { ...HIPOTESES_DO_SOBRADO_PADRAO, ...(hipParcial.sobrado ?? {}) };
+  const varios = model.levels.length > 1;
+  return {
+    faixa: faixaDaCasaNoModelo({ ...HIPOTESES_DA_CASA_PADRAO.faixas, ...(hipParcial.faixas ?? {}) }.esgotoMm, model),
+    tuboDeQuedaPorGrupoMm: varios ? sobrado.grupoDoTuboDeQuedaMm : null,
+    raioDoShaftMm: varios ? sobrado.tuboDeQuedaAteOShaftMm : null,
+  };
 }
 
 /** O rebaixo do forro (da laje à face de cima dele): a faixa mais baixa, o raio do tubo e a folga. */
@@ -2405,6 +2434,17 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           return planejarEsgotoCompleto(m, hidro.esgoto, terrenoHidro, { tratamento: { comFiltro: hidro.tratamento.comFiltro, medidas } });
         },
         (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s) — destino: ${destino === 'TRATAMENTO' ? 'tratamento individual (tanque, filtro, sumidouro)' : 'rede pública'}`,
+        // F4 do relançar (24/10/2026): as escolhas do ESTUDO com rótulo, e o que só a casa decide — a faixa do esgoto e,
+        // no sobrado, o tubo de queda por grupo e o raio do shaft — sem rótulo: o relançar pelo editor os mantém.
+        () =>
+          comandoDeRegistro(
+            'ESGOTO',
+            null,
+            escolhasDoEsgoto(
+              { esgoto: hidroDoEstudo.esgoto, tratamento: hidro.tratamento, reservatorio: hidro.reservatorio },
+              { faixa: hidro.esgoto.faixa ?? null, tuboDeQuedaPorGrupoMm: hidro.esgoto.tuboDeQuedaPorGrupoMm ?? null, raioDoShaftMm: niveis.length > 1 ? (hidro.esgoto.raioDoShaftMm ?? null) : null },
+            ),
+          ),
       ),
       destino,
     };

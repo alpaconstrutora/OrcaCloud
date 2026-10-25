@@ -116,15 +116,50 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
   bate e a rede fica bloqueada — relançar exige o registro (gerar de novo) ou voltar as premissas.
 - Água antiga sem registro relança com a faixa da quente e a subida do alimentador da casa, mas não recupera a cota
   enterrada ajustada pelo F18 (que dependia do esgoto daquele momento): o alimentador volta à cota do estudo.
+- Esgoto (F4): casa gerada com as premissas da casa mudadas depois (outra faixa do esgoto) e sem registro: a água ainda
+  tem a assinatura (o forro), e o esgoto relança com a faixa das premissas ATUAIS — não com a da geração. Casa gerada com
+  o forro desligado: não há sinal de casa, e o esgoto antigo relança pelo estudo (no sobrado, tira as colunas do lugar).
+- Esgoto (F4): a caixa de inspeção ACEITA fica onde está — trocar o afastamento da caixa e relançar não a move (o
+  registro passa a dizer o afastamento novo e o aviso apaga).
 - Prova no app: os cenários estão cobertos pelos testes do editor; prova por imagem no navegador NÃO feita. A planta
   "Garden" real (dados exportados) passa: eletrodutos a 2755 e água a 2598/2630 com a assinatura — relançar disponível.
+
+## Decisões tomadas na Task 4 (esgoto)
+- Alvo `null` (planta inteira): o "Lançar" do esgoto lança caixa, ramais, destino e ventilação de todos os pavimentos num
+  lote. Módulo `utils/blueprintEscolhasDoEsgoto.ts`.
+- Escolhas = as premissas do esgoto que mudam a rede (destino, caimentos, cota do ramal, DN do TQ e da ventilação, rota,
+  raio do shaft, ventilação até a parede, válvula de admissão de ar — e a altura dela só com ela ligada —, afastamentos da
+  caixa); as da rede pública (profundidade, distâncias das caixas do coletor) só com a rede pública; as do tratamento
+  (filtro, padrão, temperatura, limpeza, infiltração, diâmetro do sumidouro) e a população da reservação só com o
+  tratamento. Na comparação, as de um destino só entram com os DOIS lados nesse destino.
+- **Destino = saída (a): uma das escolhas do registro.** Com registro, a troca de destino aparece no aviso como qualquer
+  escolha, o botão principal vira "Relançar com as escolhas atuais" e a confirmação do Refazer — que nomeia a ligação, o
+  coletor ou o tratamento a apagar — é a autorização; o rodapé deixa de dizer "há peças confirmadas do outro destino"
+  (um aviso só). Sem registro (rede antiga), o caminho de antes: o "Lançar" pede a autorização.
+- "Rede do sistema" (o que o Refazer apaga): os tubos de esgoto ligados à rede (`redeDaOrigem` das caixas de inspeção, da
+  ligação e das unidades de tratamento — o critério do "Refazer tudo" de antes) e os com rótulo do motor (TQ, Ventilação,
+  Coletor predial, Tratamento), confirmados inclusive; a caixa de inspeção SUGERIDA e as do coletor; a ligação SUGERIDA
+  (com o destino tratamento, qualquer ligação); as unidades de tratamento; as válvulas de admissão de ar e as conexões
+  (joelho, tê, luva, redução) sobre os tubos apagados — nomeadas na confirmação. Nunca: aparelhos, ralos, caixas
+  sifonadas, a caixa de gordura (âncora da casa, não do esgoto), a caixa de inspeção confirmada e a ligação confirmada com
+  a rede pública, nem tubo de outra disciplina.
+- O "Refazer tudo" do esgoto agora refaz o esgoto INTEIRO (antes: só os ramais até a caixa — o coletor e a ventilação
+  apagados só voltavam no "Lançar") e pede confirmação só se houver algo confirmado (antes: sempre).
+- Casa Automática: grava o registro ESGOTO no lote dela, com a FAIXA do esgoto e, no sobrado, o tubo de queda por grupo e
+  o raio do shaft da casa em chaves sem rótulo. Medido no sobrado da casa: relançar sem esses extras deixava 3 das 15
+  colunas (TQ e ventilação) no lugar e somava 18 conflitos de rede; com o registro, ou com as premissas da casa, igual à
+  casa (15/15, sem conflito novo). Na térrea a faixa não muda nada.
+- Esgoto antigo SEM registro numa casa (sinal: a água no forro, com ou sem registro da água): com as premissas da casa e a
+  ASSINATURA da casa na água (`aguaNoForroDaCasa`, sobre `blueprintAssinaturaDaCasa`), relança com os extras da casa
+  (`esgotoDaCasaNoModelo`); sem as premissas (erro de leitura), sem a assinatura ou com o forro desligado nelas, os
+  botões desligam com o motivo. Sem água no forro (não é casa), relança pelo estudo.
 
 ## Estado
 - [x] desenho aprovado (24/10/2026)
 - [x] Task 1 — F1 núcleo (registro no modelo) — kernel 0.105.0 (`registrosDeLancamento`, `RegistrarLancamento`/`ApagarRegistroDeLancamento`), `utils/blueprintRegistroDeLancamento.ts`, `AvisoDeEscolhasMudaram.tsx`; bundle da planta-api regerado (a function ainda precisa de deploy)
 - [x] Task 2 — F2 eletrodutos — `utils/blueprintEscolhasDoEletroduto.ts` (escolhas por quadro, rótulos e padrões, lotes de lançar/refazer com o registro, botão da regra A, confirmação por quadro); `refazerEletrodutos` apaga as CP da rede inclusive aceitas (`caixasDaRedeDoQuadro`); aviso B na tabela por quadro; Casa Automática com a preferência de caixas e o registro no lote
 - [x] Task 3 — F3 água e pluvial — `utils/blueprintEscolhasDaAguaEPluvial.ts` (escolhas, rótulos e padrões dos dois sistemas, alvo global; lotes com o registro e a regra do lote parcial; Refazer novo que apaga a rede do sistema, confirmados inclusive, e nunca aparelhos/pontos; botão da regra A; confirmação com o que mudou); aviso B nos dois painéis; "Refazer tudo" e "Relançar com as escolhas atuais" nos rodapés; Casa Automática grava os registros AGUA e PLUVIAL (com o forro, a faixa da quente, a subida e os ajustes F18 sem rótulo)
-- [ ] Task 4 — F4 esgoto
+- [x] Task 4 — F4 esgoto — `utils/blueprintEscolhasDoEsgoto.ts` (escolhas, rótulos e padrões, alvo global; o destino como escolha; lotes com o registro e a regra do lote parcial; Refazer que apaga a rede do motor — confirmados e o outro destino inclusive, nunca aparelhos/ralos/caixa confirmada — e relança o esgoto inteiro; botão da regra A; confirmação com o que mudou e as peças por nome); aviso B na gaveta; "Relançar com as escolhas atuais" no rodapé; Casa Automática grava o registro ESGOTO (faixa, tubo de queda por grupo e raio do shaft sem rótulo); esgoto antigo de casa relança pelas premissas da casa (assinatura da água) ou bloqueia com o motivo
 - [ ] Task 5 — F5 circuitos automáticos
 - [x] revisão final do ramo (Tasks 1+2) — "Sim, com correções"; correção 2 `65779b7e` (falso forro, portão de camadas, menores)
 - [x] PR 1 (Tasks 1+2) + CI — PR #149, `ci` 22min21s verde; suíte local 11.459 ok, 0 falhas

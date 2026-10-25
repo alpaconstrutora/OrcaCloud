@@ -586,7 +586,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { useCasaAutomatica } from '../../hooks/useCasaAutomatica';
-import { conferirPlanoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
 import type { EmpreendimentoUnit, EmpreendimentoWithChildren } from '../../types/empreendimento';
@@ -8194,6 +8194,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         const junto = comandosAoMoverClimatizacao(editor.model, depois, { terminalIds, trechoIds: rede?.trechoIds ?? [] }, climatizacaoDoEstudo.hipoteses.linha, {
           eletroduto: hipotesesDeEletroduto,
           eletricas: hipotesesEletricas,
+          forroDaCasa,
         });
         if (junto.length) {
           editor.runBatch([mover, ...junto]);
@@ -8730,6 +8731,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     'blueprint:eletrodutosEncaminhamento',
     HIPOTESES_ELETRODUTO_PADRAO.encaminhamento ?? 'PELA_LUZ_DO_AMBIENTE',
   );
+  // Correção 3 (24/10/2026, plano docs/planos/2026-10-24-relancar-forro-pelas-premissas.md; pedido literal: "então
+  // verifique pois alterei e não ficou disponível para relançamento"): as premissas da Casa Automática do estudo — lidas
+  // aqui (e não só na tela da casa) para o painel dos eletrodutos relançar NO FORRO a rede antiga da casa (sem registro
+  // do lançamento). O forro elétrico sai da MESMA conta da casa (`forroEletricoDaCasa` sobre `hipotesesDasPremissas`),
+  // só quando o estudo tem casa gravada e o forro está ligado nelas; sem isso, `null` e o bloqueio continua com o motivo.
+  const casaDoEstudo = useBlueprintCasa(study.id, study.organization_id);
+  const forroDaCasa = useMemo(
+    () => (casaDoEstudo.carregando || casaDoEstudo.vazio || casaDoEstudo.persistenciaIndisponivel ? null : forroEletricoDaCasa(hipotesesDasPremissas(casaDoEstudo.premissas))),
+    [casaDoEstudo.carregando, casaDoEstudo.vazio, casaDoEstudo.persistenciaIndisponivel, casaDoEstudo.premissas],
+  );
   const hipotesesDeEletroduto = useMemo(
     () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto, rotaMaximaVezes: rotaMaxima, rotaPelaParede, caixas: caixasAutomaticas ? REGRA_DE_CAIXAS_PADRAO : null, encaminhamento: encaminhamentoDoEletroduto }),
     [bitolaDeEletroduto, rotaMaxima, rotaPelaParede, caixasAutomaticas, encaminhamentoDoEletroduto],
@@ -8739,13 +8750,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // Correção 1 da F2 (24/10/2026): cada quadro com as hipóteses DELE — a rede que a Casa Automática pôs no forro é
   // planejada no forro (a faixa vem do registro do lançamento), não na cota do painel.
   const planosDeEletrodutos = useMemo(
-    () => planejarEletrodutosPorQuadro(editor.model, hipotesesDeEletroduto, hipotesesEletricas),
-    [editor.model, hipotesesDeEletroduto, hipotesesEletricas],
+    () => planejarEletrodutosPorQuadro(editor.model, hipotesesDeEletroduto, hipotesesEletricas, forroDaCasa),
+    [editor.model, hipotesesDeEletroduto, hipotesesEletricas, forroDaCasa],
   );
   // Correção 2: a contagem do ribbon é a mesma do rodapé — sem os quadros que não lançam por aqui (rede no forro sem registro).
   const pontosALigar = useMemo(
-    () => planosDeEletrodutos.filter((p) => !motivoParaNaoRelancar(editor.model, p.quadroId)).reduce((n, p) => n + p.aLigar, 0),
-    [planosDeEletrodutos, editor.model],
+    () => planosDeEletrodutos.filter((p) => !motivoParaNaoRelancar(editor.model, p.quadroId, forroDaCasa)).reduce((n, p) => n + p.aLigar, 0),
+    [planosDeEletrodutos, editor.model, forroDaCasa],
   );
   const pontosEletricosSemCircuito = levelId ? pontosSemCircuito(editor.model, levelId) : [];
   const eletrodutosSugeridosNoNivel = eletrodutosSugeridos(editor.model, levelId);
@@ -8770,7 +8781,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     // Os lotes são simulados em sequência (`applyBatch`): recusa do kernel vira aviso, não exceção no clique.
     let comandos: Command[];
     try {
-      comandos = comandosDeLancarEletrodutos(editor.model, planos, hipotesesDeEletroduto, hipotesesEletricas);
+      comandos = comandosDeLancarEletrodutos(editor.model, planos, hipotesesDeEletroduto, hipotesesEletricas, forroDaCasa);
     } catch (e) {
       setAvisoColar(`Os eletrodutos não foram lançados: ${e instanceof Error ? e.message : String(e)}`);
       return;
@@ -8783,7 +8794,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * CONFIRMADO, pede confirmação dizendo, por quadro, quantos trechos e caixas serão refeitos; só sugeridos, refaz direto.
    */
   const refazerEletrodutosDosQuadros = async (quadroIds: string[]) => {
-    const redes = redesARefazer(editor.model, quadroIds, { hip: hipotesesDeEletroduto, hipEletricas: hipotesesEletricas });
+    const redes = redesARefazer(editor.model, quadroIds, { hip: hipotesesDeEletroduto, hipEletricas: hipotesesEletricas, forroDaCasa });
     const lista = textoDaConfirmacaoDeRefazer(redes);
     if (lista) {
       const um = redes.length === 1 ? redes[0].nome : null;
@@ -8797,7 +8808,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     }
     let comandos: Command[];
     try {
-      comandos = comandosDeRefazerEletrodutos(modeloDosEletrodutosRef.current, quadroIds, hipotesesDeEletroduto, hipotesesEletricas);
+      comandos = comandosDeRefazerEletrodutos(modeloDosEletrodutosRef.current, quadroIds, hipotesesDeEletroduto, hipotesesEletricas, forroDaCasa);
     } catch (e) {
       setAvisoColar(`Os eletrodutos não foram refeitos: ${e instanceof Error ? e.message : String(e)}`);
       return;
@@ -8805,7 +8816,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     aplicarLoteDeEletrodutos(comandos);
   };
   /** Regra A: o botão do rodapé — "Lançar em todos (N)", ou "Relançar com as escolhas atuais" com rede e nada a lançar. */
-  const botaoDosEletrodutos = useMemo(() => botaoDeLancarEletrodutos(editor.model, planosDeEletrodutos), [editor.model, planosDeEletrodutos]);
+  const botaoDosEletrodutos = useMemo(() => botaoDeLancarEletrodutos(editor.model, planosDeEletrodutos, forroDaCasa), [editor.model, planosDeEletrodutos, forroDaCasa]);
   // E6.3: as CAIXAS DE PASSAGEM sugeridas do pavimento são aceitas junto — nasceram com a rede.
   const caixasSugeridasNoNivel = (editor.model.terminais ?? []).filter((x) => x.sugerida && x.tipoEletrico === 'CAIXA_PASSAGEM' && (!levelId || x.levelId === levelId));
   const aceitarEletrodutos = () =>
@@ -8890,7 +8901,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // saídas: lançar no pavimento (um lote, a trava antes) e criar alternativa. A ENTRADA é a mesma que o editor já
   // dá a cada disciplina: o terreno e a zona do estudo de massa, as premissas hidro, elétricas, de circuitos e de
   // climatização do estudo, o catálogo de evaporadoras e a grade da topografia (o leitor é remontado no worker).
-  const casaDoEstudo = useBlueprintCasa(study.id, study.organization_id);
+  // As premissas (`casaDoEstudo`) são lidas mais acima, junto do painel dos eletrodutos (correção 3, 24/10/2026).
   const casa = useCasaAutomatica();
   const [lancadoCasa, setLancadoCasa] = useState<string | null>(null);
   const motivoParaNaoGerarCasa = useMemo(() => (levelId ? motivoParaNaoGerarACasa(editor.model, levelId) : 'Abra um pavimento.'), [editor.model, levelId]);
@@ -18829,9 +18840,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       const temComandos = plano.comandos.length > 0;
                       // Regra B (F2, 24/10/2026): a rede deste quadro foi lançada com outras escolhas — diz quais, com o
                       // botão de refazer. Rede antiga (sem registro) não avisa; o botão do rodapé (regra A) vale.
-                      const mudou = plano.trechosDoQuadro > 0 ? diferencasDoEletroduto(editor.model, plano.quadroId, hipotesesDeEletroduto, hipotesesEletricas) : [];
+                      const mudou = plano.trechosDoQuadro > 0 ? diferencasDoEletroduto(editor.model, plano.quadroId, hipotesesDeEletroduto, hipotesesEletricas, forroDaCasa) : [];
                       // Correção 1: rede no forro lançada antes do registro — relançar daqui a tiraria do forro.
-                      const bloqueio = motivoParaNaoRelancar(editor.model, plano.quadroId);
+                      const bloqueio = motivoParaNaoRelancar(editor.model, plano.quadroId, forroDaCasa);
                       // Botão desligado SEMPRE com o motivo (no `title` dele e do invólucro).
                       const desligadoPor =
                         bloqueio ?? (!temComandos && plano.sugeridos === 0 && plano.trechosDoQuadro === 0 ? `Nada a lançar: ${plano.motivo ?? 'nenhum ponto a ligar'}` : null);

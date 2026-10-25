@@ -8,7 +8,7 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, forroEletricoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { amostradorDaGrade, type GradeDeElevacao } from '../utils/blueprintTopografia';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
@@ -25,7 +25,17 @@ import { pontosElegiveis } from '../utils/blueprintCircuitosAutomaticos';
 import { HIPOTESES_DO_MURO_DA_CASA_PADRAO } from '../utils/blueprintMuroDaCasa';
 import { furosPrevistos } from '../utils/blueprintFurosPrevistos';
 import { registroDe } from '../utils/blueprintRegistroDeLancamento';
-import { MOTIVO_REDE_NO_FORRO_SEM_REGISTRO, comandosDeRefazerEletrodutos, diferencasDoEletroduto, motivoParaNaoRelancar } from '../utils/blueprintEscolhasDoEletroduto';
+import {
+  MOTIVO_REDE_NO_FORRO_SEM_REGISTRO,
+  botaoDeLancarEletrodutos,
+  comandosDeRefazerEletrodutos,
+  diferencasDoEletroduto,
+  hipotesesDoQuadro,
+  motivoParaNaoRelancar,
+  planejarEletrodutosPorQuadro,
+  redesARefazer,
+} from '../utils/blueprintEscolhasDoEletroduto';
+import { PREMISSAS_DA_CASA_PADRAO, hipotesesDasPremissas } from '../utils/blueprintPremissasDaCasa';
 import { HIPOTESES_ELETRODUTO_PADRAO } from '../utils/blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO } from '../utils/blueprintEletricaDimensionamento';
@@ -1335,6 +1345,55 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     const antiga = applyCommand(r, { type: 'ApagarRegistroDeLancamento', motor: 'ELETRODUTOS', alvoId: q }).model;
     expect(motivoParaNaoRelancar(antiga, q)).toBe(MOTIVO_REDE_NO_FORRO_SEM_REGISTRO);
     expect(comandosDeRefazerEletrodutos(antiga, [q], painel, HIPOTESES_ELETRICAS_PADRAO)).toEqual([]);
+  });
+
+  // Correção 3 (24/10/2026, pedido literal: "então verifique pois alterei e não ficou disponível para relançamento"):
+  // a rede antiga no forro (sem registro) relança pelas PREMISSAS da casa do estudo — o forro elétrico vem de
+  // `forroEletricoDaCasa`, a mesma conta com que a casa lança. Sem as premissas, o bloqueio continua, com o motivo.
+  it('⚠️ correção 3: rede antiga no forro (registro apagado) relança pelas premissas da casa — botão ligado, horizontais na faixa, registro com o forro', () => {
+    const r = casa(1).resultado;
+    const q = (r.quadros ?? [])[0].id;
+    const antiga = applyCommand(r, { type: 'ApagarRegistroDeLancamento', motor: 'ELETRODUTOS', alvoId: q }).model;
+    const horizontais = (m: BlueprintModel) =>
+      (m.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && t.cotaAMm === t.cotaBMm && !(t.a.x === t.b.x && t.a.y === t.b.y));
+    const forroDaCasa = forroEletricoDaCasa(hipotesesDasPremissas(PREMISSAS_DA_CASA_PADRAO));
+    expect(forroDaCasa).toEqual({ faixa: F.eletrica, folgaSobAVigaMm: F.folgaSobAVigaMm });
+    // Forro desligado nas premissas: nada a usar.
+    expect(forroEletricoDaCasa(hipotesesDasPremissas({ ...PREMISSAS_DA_CASA_PADRAO, forro: { ...PREMISSAS_DA_CASA_PADRAO.forro, lancar: false } }))).toBeNull();
+    const painel = { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: REGRA_DE_CAIXAS_PADRAO };
+
+    // Sem as premissas: bloqueado como antes.
+    const planosSem = planejarEletrodutosPorQuadro(antiga, painel, HIPOTESES_ELETRICAS_PADRAO);
+    expect(botaoDeLancarEletrodutos(antiga, planosSem)).toMatchObject({ motivo: MOTIVO_REDE_NO_FORRO_SEM_REGISTRO, quadros: [] });
+
+    // Com as premissas: relança, ligado e sem motivo.
+    expect(motivoParaNaoRelancar(antiga, q, forroDaCasa)).toBeNull();
+    expect(hipotesesDoQuadro(antiga, q, painel, forroDaCasa).noForro).toEqual(forroDaCasa);
+    const planos = planejarEletrodutosPorQuadro(antiga, painel, HIPOTESES_ELETRICAS_PADRAO, forroDaCasa);
+    const botao = botaoDeLancarEletrodutos(antiga, planos, forroDaCasa);
+    expect(botao).toMatchObject({ modo: 'RELANCAR', motivo: null, quadros: [q] });
+    expect(redesARefazer(antiga, [q], { hip: painel, hipEletricas: HIPOTESES_ELETRICAS_PADRAO, forroDaCasa }).map((x) => x.quadroId)).toEqual([q]);
+
+    const lote = comandosDeRefazerEletrodutos(antiga, botao.quadros, painel, HIPOTESES_ELETRICAS_PADRAO, forroDaCasa);
+    expect(lote.some((c) => c.type === 'AddTrecho')).toBe(true);
+    const depois = applyBatch(antiga, lote).model;
+    const faixa = 2800 - F.eletrica.abaixoDoTetoMm;
+    expect(horizontais(depois).filter((t) => t.cotaAMm === faixa).length).toBeGreaterThan(0);
+    // Todo horizontal elétrico no PLENO (acima da face do forro) fica na faixa — nenhum desce para a cota do painel. Os
+    // que correm na parede abaixo do forro (até o ponto, `saidaDoRebaixoPelaParede`) são os mesmos da casa de origem.
+    const faceDoForro = 2800 - rebaixoDoForroMm(F) - 14;
+    expect(horizontais(depois).filter((t) => t.cotaAMm > faceDoForro && t.cotaAMm !== faixa).map((t) => t.cotaAMm)).toEqual([]);
+    const cotasDaCasa = new Set(horizontais(r).map((t) => t.cotaAMm));
+    expect([...new Set(horizontais(depois).map((t) => t.cotaAMm))].filter((c) => !cotasDaCasa.has(c))).toEqual([]);
+    // O lote grava o registro COM o forro — a partir daí vale o registro, sem precisar das premissas.
+    expect(registroDe(depois, 'ELETRODUTOS', q)?.escolhas).toMatchObject({
+      caixasDePassagem: 'CAIXAS',
+      forroAbaixoDoTetoMm: F.eletrica.abaixoDoTetoMm,
+      forroAfastamentoDaFaceMm: F.eletrica.afastamentoDaFaceMm,
+      forroFolgaSobAVigaMm: F.folgaSobAVigaMm,
+    });
+    expect(motivoParaNaoRelancar(depois, q)).toBeNull();
+    expect(hipotesesDoQuadro(depois, q, painel).noForro).toEqual(forroDaCasa);
   });
 
   it('térrea: nenhuma dessas redes em vão de porta ou janela (o aquecedor ao lado da janela; o dreno do ar é a F14d)', () => {

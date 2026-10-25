@@ -1321,7 +1321,52 @@ async function syncAVistaToFinance(contract: Contract) {
     }
 }
 
+/** O que vai junto ao mover o contrato de organização — RPC
+ *  `previa_mover_contrato_organizacao`. `impedimentos` vazio = pode mover. */
+export interface PreviaMoverContratoOrganizacao {
+    numero: string;
+    organizacao_atual: string;
+    titulos: number;
+    titulos_pagos: number;
+    titulos_conciliados: number;
+    /** Recibos já emitidos não vão: o número é único por organização e o
+     *  documento saiu em nome da organização antiga. */
+    recibos_ficam: number;
+    processos: number;
+    documentos: number;
+    impedimentos: string[];
+}
+
 export const contractService = {
+    // Mover de organização (plano docs/planos/2026-10-25-contrato-mover-organizacao.md).
+    // Tudo no banco, numa transação: contrato, títulos (inclusive pagos e
+    // conciliados), processos e tabelas filhas. Obra, empresa, empreendimento e
+    // orçamento da org antiga saem; centro de custo e plano de contas do destino
+    // entram no contrato e em todos os títulos.
+    previaMoverOrganizacao: async (contractId: string, orgDestinoId: string): Promise<PreviaMoverContratoOrganizacao> => {
+        const { data, error } = await supabase.rpc('previa_mover_contrato_organizacao', {
+            p_contract_id: contractId,
+            p_org_destino: orgDestinoId,
+        });
+        if (error) throw new Error(error.message);
+        return data as PreviaMoverContratoOrganizacao;
+    },
+
+    moverParaOrganizacao: async (
+        contractId: string,
+        orgDestinoId: string,
+        costCenterId: string | null,
+        planoDeContasId: string | null,
+    ): Promise<void> => {
+        const { error } = await supabase.rpc('mover_contrato_organizacao', {
+            p_contract_id: contractId,
+            p_org_destino: orgDestinoId,
+            p_cost_center_id: costCenterId || null,
+            p_plano_de_contas_id: planoDeContasId || null,
+        });
+        if (error) throw new Error(error.message);
+    },
+
     // Contracts
     listContracts: async (
         projectId?: string,

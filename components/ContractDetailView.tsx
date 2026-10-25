@@ -8,7 +8,7 @@ import {
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown,
     Package, Pencil, Settings, Search,
-    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal, PencilLine, CalendarClock
+    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal, PencilLine, CalendarClock, ArrowRightLeft
 } from 'lucide-react';
 import { ContractModal, ContractFormSection } from './ContractModal';
 import {
@@ -45,6 +45,7 @@ import ContractEvaluationModal from './ContractEvaluationModal';
 import ContractSupplyMatrixModal from './ContractSupplyMatrixModal';
 import ContractInterfaceModal from './ContractInterfaceModal';
 import { useConfirm } from './ui/confirm';
+import MoverContratoOrganizacaoModal from './MoverContratoOrganizacaoModal';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 
@@ -280,6 +281,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [isUtilityBillModalOpen, setIsUtilityBillModalOpen] = React.useState(false);
     const [editingUtilityBill, setEditingUtilityBill] = React.useState<ContractUtilityBill | null>(null);
     const [organization, setOrganization] = React.useState<Organization | null>(null);
+    const [moverOrgAberto, setMoverOrgAberto] = React.useState(false);
     const [projectSettings, setProjectSettings] = React.useState<ProjectSettings | null>(null);
     const [exporting, setExporting] = React.useState(false);
     const [syncingFinance, setSyncingFinance] = React.useState(false);
@@ -1354,11 +1356,23 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <span className="w-1 h-1 bg-gray-300 rounded-full" />
                             <span className="text-xs font-medium text-gray-400">{contract.contract_type}</span>
                             {/* Dona do contrato — decide de onde vêm centro de custo, plano de
-                                contas e empreendimento; antes não aparecia em tela nenhuma. */}
+                                contas e empreendimento. Com rótulo e o "Mover" ao lado: só o
+                                nome solto não respondia "de qual organização é este contrato?"
+                                (25/10/2026, plano docs/planos/2026-10-25-contrato-mover-organizacao.md). */}
                             {organization?.name && organization.id === contract.organization_id && (
                                 <>
                                     <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                                    <span className="text-xs font-medium text-gray-500" title="Organização do contrato">{organization.name}</span>
+                                    <span className="text-xs font-medium text-gray-500">
+                                        Organização: <span className="text-gray-700">{organization.name}</span>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setMoverOrgAberto(true)}
+                                        className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                                        title="Mover este contrato, com títulos e documentos, para outra organização"
+                                    >
+                                        <ArrowRightLeft className="w-3 h-3" /> Mover
+                                    </button>
                                 </>
                             )}
                         </div>
@@ -1382,6 +1396,18 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     </p>
                 </div>
             </div>
+
+            <MoverContratoOrganizacaoModal
+                open={moverOrgAberto}
+                onClose={() => setMoverOrgAberto(false)}
+                contrato={contract}
+                nomeOrgAtual={organization?.name}
+                onMovido={async (_destino, nomeDestino) => {
+                    setMoverOrgAberto(false);
+                    notify(`Contrato movido para ${nomeDestino}.`, 'success');
+                    await loadContractData();
+                }}
+            />
 
             {/* §19.1 — trilho cinza DENTRO de card branco, flex-wrap (nunca
                 overflow-x-auto), abas h-7. Aba ativa é ESTADO DE NAVEGAÇÃO
@@ -1680,6 +1706,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             de custo) vivem na aba Financeiro — ver RESUMO_FORM_SECTIONS. */}
                         {showOv('resumo') && (
                                 <ContractModal
+                                    key={`resumo-${contract.organization_id}`}
                                     isOpen
                                     variant="inline"
                                     sections={RESUMO_FORM_SECTIONS}
@@ -2238,6 +2265,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         documento é versionado, emitido e enviado para
                         assinatura, então é aqui que se muda o status. */}
                     <ContractModal
+                        key={`emissao-${contract.organization_id}`}
                         isOpen
                         variant="inline"
                         sections={EMISSAO_FORM_SECTIONS}
@@ -3030,6 +3058,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             no Resumo. */}
                         {financeSubTab === 'dados' && (
                         <ContractModal
+                            key={`financeiro-${contract.organization_id}`}
                             isOpen
                             variant="inline"
                             sections={FINANCEIRO_FORM_SECTIONS}

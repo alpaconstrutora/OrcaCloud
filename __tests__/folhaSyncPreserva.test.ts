@@ -27,6 +27,8 @@ const EXISTENTES = [
     { id: 'conc', reference_id: `${P}indiv-ADIANTAMENTO-${EMP}`, description: 'Adiantamento', amount: 1618.40, status: 'PENDING', business_status: 'PREVISTO', darf_id: null },
     { id: 'darf', reference_id: `${P}unallocated-fgts`, description: 'FGTS', amount: 400, status: 'PENDING', business_status: 'PREVISTO', darf_id: 'd1' },
 ];
+/** Títulos a mais por teste (o agregado de terceiros de antes de 25/10/2026). */
+let extras: typeof EXISTENTES = [];
 
 function dados(tabela: string, filtros: Record<string, unknown[]>): unknown {
     switch (tabela) {
@@ -48,7 +50,7 @@ function dados(tabela: string, filtros: Record<string, unknown[]>): unknown {
         ];
         case 'payroll_encargos_config': return null;
         case 'companies': return { regime_tributario: 'lucro_presumido', simples_anexo_iv: false, cprb: false };
-        case 'internal_transactions': return EXISTENTES;
+        case 'internal_transactions': return [...EXISTENTES, ...extras];
         case 'reconciliation_matches': return (filtros.in?.[1] as string[]).includes('conc') ? [{ internal_transaction_id: 'conc' }] : [];
         case 'supplier_payments': return [];
         default: return [];
@@ -84,7 +86,7 @@ const gravados = () => ops.filter(o => o.op === 'upsert').flatMap(o => o.rows ??
 const porRef = (sufixo: string) => gravados().find(r => r.reference_id === `${P}${sufixo}`);
 
 describe('syncPayrollToFinance — preserva e separa os tributos', () => {
-    beforeEach(() => { ops.length = 0; falharUpsert = false; tipoDaFolha = undefined; });
+    beforeEach(() => { ops.length = 0; falharUpsert = false; tipoDaFolha = undefined; extras = []; });
 
     it('não apaga nem regrava o conciliado e o do DARF', async () => {
         const r = await payrollService.syncPayrollToFinance(RUN);
@@ -115,7 +117,11 @@ describe('syncPayrollToFinance — preserva e separa os tributos', () => {
         expect(inss).toMatchObject({ party_type: 'TAX', party_name: 'INSS (segurados)', amount: 495.69, due_date: '2026-07-20', business_status: 'PREVISTO' });
         expect(porRef('unallocated-cpp')).toMatchObject({ party_type: 'TAX', amount: 1133.4 });
         expect(porRef('unallocated-rat')).toMatchObject({ party_type: 'TAX', amount: 170.01 });
-        expect(porRef('unallocated-terceiros')).toMatchObject({ party_type: 'TAX', amount: 328.69 });
+        // terceiros por entidade (FPAS 507 — o padrão da matriz em Lucro Presumido), credor = entidade
+        expect(porRef('unallocated-terceiros')).toBeUndefined();
+        expect(porRef('unallocated-ter-0001')).toMatchObject({ party_type: 'TAX', party_name: 'Salário-Educação', category: 'Contribuições de Terceiros', amount: 141.68, due_date: '2026-07-20' });
+        expect(porRef('unallocated-ter-0004')).toMatchObject({ party_name: 'SENAI', amount: 56.67 });
+        expect(porRef('unallocated-ter-0064')).toMatchObject({ party_name: 'SEBRAE', amount: 34 });
         const rep = gravados().find(r => String(r.reference_id).includes('rep-CONTRIBUICAO_ASSISTENCIAL'))!;
         expect(rep).toMatchObject({ party_type: 'GOVERNMENT', amount: 60.69, due_date: '2026-07-05' });
         // todas as linhas do upsert têm as mesmas chaves (o PostgREST usa a união)
@@ -138,5 +144,21 @@ describe('syncPayrollToFinance — preserva e separa os tributos', () => {
         expect(ops.filter(o => o.op === 'upsert' || o.op === 'delete')).toEqual([]);
         expect(r.count).toBe(0);
         expect(r.avisos.join(' ')).toMatch(/adiantamento/i);
+    });
+
+    it('terceiros agregado antigo EM ABERTO: some depois de gravar as 5 entidades', async () => {
+        extras = [{ id: 'old-ter', reference_id: `${P}unallocated-terceiros`, description: 'Contribuições de terceiros', amount: 328.69, status: 'PENDING', business_status: 'PREVISTO', darf_id: null }];
+        await payrollService.syncPayrollToFinance(RUN);
+        const apagados = ops.filter(o => o.op === 'delete').flatMap(o => o.ids ?? []);
+        expect(apagados).toContain('old-ter');
+        expect(gravados().filter(r => String(r.reference_id).includes('-ter-')).length).toBe(5);
+    });
+
+    it('terceiros agregado antigo PAGO/EM DARF: as entidades daquela fatia NÃO são geradas (somariam em dobro)', async () => {
+        extras = [{ id: 'old-ter', reference_id: `${P}unallocated-terceiros`, description: 'Contribuições de terceiros', amount: 328.69, status: 'PENDING', business_status: 'PREVISTO', darf_id: 'd2' }];
+        const r = await payrollService.syncPayrollToFinance(RUN);
+        expect(gravados().filter(x => String(x.reference_id).includes('-ter-'))).toEqual([]);
+        expect(ops.filter(o => o.op === 'delete').flatMap(o => o.ids ?? [])).not.toContain('old-ter');
+        expect(r.avisos.join(' ')).toMatch(/terceiros.*por entidade/i);
     });
 });

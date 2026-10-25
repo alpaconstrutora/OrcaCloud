@@ -15,7 +15,9 @@
 //   fgts       rubricas FGTS* (encargo)              → Tributos a Pagar
 //   cpp        base INSS × CPP                       → Tributos a Pagar
 //   rat        base INSS × RAT × FAP                 → Tributos a Pagar
-//   terceiros  base INSS × Σ entidades               → Tributos a Pagar
+//   ter-COD    base INSS × alíquota da entidade COD  → Tributos a Pagar (um título por
+//              entidade: Salário-Educação, INCRA, SENAI, SESI, SEBRAE — até 25/10/2026 era
+//              um só "Terceiros (outras entidades)" com a soma)
 //   rep-COD    desconto repassado a terceiro (rubrics.repasse_terceiros)
 //   enc-COD    outro encargo de rubrica
 //
@@ -106,7 +108,14 @@ export function vencimentoDia20(competencia: string): string {
 
 // ── Linhas da folha ─────────────────────────────────────────────────────────
 
-export type TipoLinhaFolha = string; // 'salario' | 'inss' | 'irrf' | 'fgts' | 'cpp' | 'rat' | 'terceiros' | `rep-${string}` | `enc-${string}`
+export type TipoLinhaFolha = string; // 'salario' | 'inss' | 'irrf' | 'fgts' | 'cpp' | 'rat' | `ter-${string}` | `rep-${string}` | `enc-${string}`
+
+/** Tipo do título de UMA entidade de terceiros (código da entidade em `cfg.terceiros`). */
+export const tipoDeTerceiro = (codigo: string): TipoLinhaFolha => `ter-${codigo}`;
+export const ehTipoDeTerceiro = (tipo: TipoLinhaFolha) => tipo.startsWith('ter-');
+/** Nomes das entidades por tipo, para `formaDoTitulo`. */
+export const nomesDosTerceiros = (cfg: EncargosConfig): Record<string, string> =>
+    Object.fromEntries(cfg.terceiros.map(t => [tipoDeTerceiro(t.code), t.name]));
 
 /** Uma fatia do custo de um colaborador: destino (obra ou não alocado) × chave contábil. */
 export interface FatiaDaFolha {
@@ -217,7 +226,7 @@ function componentes(c: ColaboradorDaFolha, cfg: EncargosConfig, op: OpcoesDaFol
     const base = c.baseInss || 0;
     add('cpp', base * cfg.cppRate);
     add('rat', base * cfg.ratRate * cfg.fap);
-    add('terceiros', base * cfg.terceiros.reduce((s, t) => s + t.rate, 0));
+    for (const t of cfg.terceiros) add(tipoDeTerceiro(t.code), base * t.rate);
     return out;
 }
 
@@ -320,7 +329,10 @@ export function formaDoTitulo(tipo: TipoLinhaFolha, nomes: Record<string, string
         case 'fgts':      return { party_name: 'FGTS', party_type: 'TAX', category: 'Encargos Patronais', rotulo: 'FGTS', vencimento: 'dia20' };
         case 'cpp':       return { party_name: 'INSS patronal (CPP)', party_type: 'TAX', category: 'Encargos Patronais', rotulo: 'INSS patronal (CPP)', vencimento: 'dia20' };
         case 'rat':       return { party_name: 'RAT/GILRAT', party_type: 'TAX', category: 'Encargos Patronais', rotulo: 'RAT/GILRAT', vencimento: 'dia20' };
-        case 'terceiros': return { party_name: 'Terceiros (outras entidades)', party_type: 'TAX', category: 'Contribuições de Terceiros', rotulo: 'Contribuições de terceiros', vencimento: 'dia20' };
+    }
+    if (ehTipoDeTerceiro(tipo)) {
+        const entidade = nomes[tipo] || `Terceiros (${tipo.slice(4)})`;
+        return { party_name: entidade, party_type: 'TAX', category: 'Contribuições de Terceiros', rotulo: `Contribuição de terceiros: ${entidade}`, vencimento: 'dia20' };
     }
     const codigo = tipo.slice(4);
     const nome = nomes[codigo] || codigo;

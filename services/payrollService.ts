@@ -5,7 +5,7 @@ import type { ProjectSettings } from '../types';
 import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
 import {
     encargosPadrao, montarLinhasDaFolha, fatiasDoColaborador, custoPorDestino, formaDoTitulo,
-    tituloDaFolhaPreservado, chaveContabil, vencimentoDia20, diaDoMesSeguinte, distribuirCentavos,
+    tituloDaFolhaPreservado, chaveContabil, vencimentoDia20, diaDoMesSeguinte, distribuirCentavos, nomesDosTerceiros,
     type EncargosConfig, type EmpresaRegime, type ColaboradorDaFolha, type ItemDaFolha, type OpcoesDaFolha,
     type TerceiroTax,
 } from '../utils/folhaFinanceiro';
@@ -1578,6 +1578,7 @@ export const payrollService = {
         //    `-cls-` só aparece quando o destino tem mais de uma chave — quem não
         //    rateia mantém o reference_id de sempre.
         const linhas = montarLinhasDaFolha(colabs, cfg, opcoes);
+        const nomes = { ...opcoes.nomes, ...nomesDosTerceiros(cfg) };
         const chavesPorDestino = new Map<string, Set<string>>();
         for (const l of linhas) {
             const d = l.destino ?? 'unallocated';
@@ -1587,7 +1588,7 @@ export const payrollService = {
         for (const l of linhas) {
             const d = l.destino ?? 'unallocated';
             const sufixo = chavesPorDestino.get(d)!.size > 1 ? `-cls-${chaveContabil(l)}` : '';
-            const forma = formaDoTitulo(l.tipo, opcoes.nomes);
+            const forma = formaDoTitulo(l.tipo, nomes);
             const onde = l.destino ? l.destinoNome : 'Custo Administrativo (Não Alocado)';
             guardar({
                 organization_id: run.org_id,
@@ -1688,6 +1689,20 @@ export const payrollService = {
 
         const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         const avisos: string[] = [];
+
+        // Terceiros por entidade (25/10/2026): até então era UM título "-terceiros" por fatia
+        // com a soma das entidades. Se esse agregado já está pago, conciliado ou em DARF, as
+        // entidades da mesma fatia somariam em dobro — não são geradas.
+        // Plano: docs/planos/2026-10-25-folha-terceiros-por-entidade.md
+        for (const [ref, p] of preservados) {
+            const m = ref.match(/^(.*)-terceiros(-cls-.*)?$/);
+            if (!m || p.status === 'CANCELLED') continue;
+            const [, inicio, sufixo = ''] = m;
+            const daFatia = [...desejados.keys()].filter(k => k.startsWith(`${inicio}-ter-`) && (sufixo ? k.endsWith(sufixo) : !k.includes('-cls-')));
+            if (daFatia.length === 0) continue;
+            daFatia.forEach(k => desejados.delete(k));
+            avisos.push(`${p.description ?? 'Contribuições de terceiros'} (${brl(p.amount)}) já está pago, conciliado ou em DARF no formato antigo, agregado: os títulos de terceiros por entidade dessa parte não foram gerados, para não somar em dobro.`);
+        }
         for (const [ref, tx] of desejados) {
             const p = preservados.get(ref);
             if (p && p.status !== 'CANCELLED' && Math.abs((p.amount || 0) - tx.amount) >= 0.01) {

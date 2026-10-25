@@ -40,5 +40,5 @@ fora da face (85 do eixo numa parede de 150).
   Antes, tubo descendo na frente da parede e caixa saindo dela; depois, só o espelho na face. O conjunto, com paredes
   transparentes, mostra as descidas dentro delas.
 - [x] tsc + suíte — tsc 0 erros; suíte local (sem `blueprintCasaAutomatica`, que roda na CI): 11.498 ok + 2 testes de tela que caíram por tempo sob carga e passaram sozinhos (`PainelVersoes`, 39/39) = 11.500 ok, 0 falhas, 34 pulados, total 11.534.
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #168, ci 30min24s verde (2ª rodada, após rebase sobre o #167)
+- [x] publicação — mesclado por squash (120b90ca) em 25/10/2026; `conferir-producao.sh` provou o domínio servindo 1eceed0 (contém 120b90ca)

@@ -604,7 +604,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { useCasaAutomatica } from '../../hooks/useCasaAutomatica';
-import { conferirPlanoDaCasa, forroDaAguaDaCasa, forroDaCasaCompleto, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
 import type { EmpreendimentoUnit, EmpreendimentoWithChildren } from '../../types/empreendimento';
@@ -8751,14 +8751,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   // Correção 3 (24/10/2026, plano docs/planos/2026-10-24-relancar-forro-pelas-premissas.md; pedido literal: "então
   // verifique pois alterei e não ficou disponível para relançamento"): as premissas da Casa Automática do estudo — lidas
-  // aqui (e não só na tela da casa) para o painel dos eletrodutos relançar NO FORRO a rede antiga da casa (sem registro
-  // do lançamento). O forro elétrico sai da MESMA conta da casa (`forroEletricoDaCasa` sobre `hipotesesDasPremissas`),
-  // só quando o estudo tem casa gravada e o forro está ligado nelas; sem isso, `null` e o bloqueio continua com o motivo.
+  // aqui (e não só na tela da casa) para o painel dos eletrodutos e a gaveta da água relançarem NO FORRO a rede antiga da
+  // casa (sem registro do lançamento). O forro sai da MESMA conta da casa (`forroEletricoDaCasa` / `forroDaAguaDaCasa`
+  // sobre `hipotesesDasPremissas`); com o forro desligado nas premissas, `null` e o bloqueio continua com o motivo.
+  //
+  // A REGRA DAS PREMISSAS, uma só para eletrodutos e água (conciliação F3 × #154, 24/10/2026): as premissas GRAVADAS do
+  // estudo; sem linha gravada (`vazio`) ou sem a tabela (`persistenciaIndisponivel`), o PADRÃO — que é exatamente o que
+  // `gerarCasa` usa nesses casos (`casaDoEstudo.premissas` começa no padrão e só `setPremissas`, isto é, o usuário
+  // editando a tela da casa, grava a linha; gerar a casa NÃO grava). Exigir premissas gravadas deixava bloqueada a casa
+  // gerada com o padrão — o caso comum. "O estudo tem casa" é decidido pelo DESENHO, não por aqui: o forro da casa só
+  // entra quando o motor acha rede no forro sem registro, num pavimento com forro de verdade (`redeNoForroSemRegistro`,
+  // `aguaNoForroSemRegistro`). Só esperamos a leitura terminar (`carregando`), para não relançar com o padrão por cima
+  // de premissas gravadas que ainda não chegaram.
   const casaDoEstudo = useBlueprintCasa(study.id, study.organization_id);
-  const forroDaCasa = useMemo(
-    () => (casaDoEstudo.carregando || casaDoEstudo.vazio || casaDoEstudo.persistenciaIndisponivel ? null : forroEletricoDaCasa(hipotesesDasPremissas(casaDoEstudo.premissas))),
-    [casaDoEstudo.carregando, casaDoEstudo.vazio, casaDoEstudo.persistenciaIndisponivel, casaDoEstudo.premissas],
-  );
+  const hipotesesDaCasaDoEstudo = useMemo(() => (casaDoEstudo.carregando ? null : hipotesesDasPremissas(casaDoEstudo.premissas)), [casaDoEstudo.carregando, casaDoEstudo.premissas]);
+  const forroDaCasa = useMemo(() => (hipotesesDaCasaDoEstudo ? forroEletricoDaCasa(hipotesesDaCasaDoEstudo) : null), [hipotesesDaCasaDoEstudo]);
   const hipotesesDeEletroduto = useMemo(
     () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto, rotaMaximaVezes: rotaMaxima, rotaPelaParede, caixas: caixasAutomaticas ? REGRA_DE_CAIXAS_PADRAO : null, encaminhamento: encaminhamentoDoEletroduto }),
     [bitolaDeEletroduto, rotaMaxima, rotaPelaParede, caixasAutomaticas, encaminhamentoDoEletroduto],
@@ -9220,14 +9227,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   /**
    * Correção 1 da F3 (24/10/2026, relato na planta "Garden": *"alterei e não ficou disponível para relançamento"*): o
-   * FORRO DA CASA — o forro com que a Casa Automática lança a água, montado pela MESMA função dela a partir das premissas
-   * da casa do estudo. A água antiga no forro, lançada antes do registro, relança nele (sem ele, o botão desliga). Não
-   * depende de o estudo ter GRAVADO as premissas: a casa gerada com as do padrão nunca as grava.
+   * FORRO DA CASA da água — mesma regra de premissas do forro elétrico (ver `hipotesesDaCasaDoEstudo`). A água antiga no
+   * forro, lançada antes do registro, relança nele (sem ele, o botão desliga).
    */
-  const forroDaCasaDaAgua = useMemo(() => {
-    if (casaDoEstudo.carregando || !casaDoEstudo.premissas.disciplinas.hidraulica) return null;
-    return forroDaAguaDaCasa(forroDaCasaCompleto(hipotesesDasPremissas(casaDoEstudo.premissas).forro));
-  }, [casaDoEstudo.carregando, casaDoEstudo.premissas]);
+  const forroDaCasaDaAgua = useMemo(() => (hipotesesDaCasaDoEstudo ? forroDaAguaDaCasa(hipotesesDaCasaDoEstudo) : null), [hipotesesDaCasaDoEstudo]);
   /** As premissas da água do estudo com o forro da casa — o que toda chamada da água recebe. */
   const hidroDaAgua = useMemo(() => ({ ...hidroDoEstudo.hipoteses, forroDaCasa: forroDaCasaDaAgua }), [hidroDoEstudo.hipoteses, forroDaCasaDaAgua]);
   const hipDaAguaQueLanca = useMemo(() => lancamentoDaAgua(editor.model, hidroDaAgua).hip, [editor.model, hidroDaAgua]);

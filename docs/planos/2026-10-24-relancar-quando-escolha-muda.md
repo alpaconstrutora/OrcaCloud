@@ -101,6 +101,11 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
 - Forro da casa: o registro AGUA guarda o forro, a faixa da quente, a subida do alimentador e a cota enterrada ajustada
   (F18) sem rótulo; o PLUVIAL, a profundidade ajustada do condutor (F18). O editor planeja com elas (relançar mantém a
   água no forro). Água antiga no forro sem registro → botões desligados com o motivo.
+- Correção 1 + conciliação com o #154 (24/10/2026): água antiga no forro sem registro relança pelo forro da casa
+  (`forroDaAguaDaCasa`, irmão de `forroEletricoDaCasa`, os dois sobre `hipotesesDoForroDaCasa`). A regra das premissas é
+  UMA para eletrodutos e água (`hipotesesDaCasaDoEstudo` no editor): as gravadas; sem linha gravada ou sem a tabela, o
+  padrão (o mesmo que gerar a casa usa — gerar NÃO grava a linha). "Tem casa" é decidido pelo desenho (rede no forro de
+  verdade, sem registro). Bloqueio só com o forro desligado nas premissas.
 
 **Limitações conhecidas:** mover a climatização relança fora do forro quando a rede antiga do forro não tem registro
 (como antes); eletroduto desenhado à mão acima da face de um forro real, sem registro, também bloqueia (motivo à

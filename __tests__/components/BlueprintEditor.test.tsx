@@ -4734,21 +4734,17 @@ describe('BlueprintEditor · ribbon', () => {
       expect(relancarDoRodape()).toBeEnabled();
     });
 
-    it('⚠️ correção 1 (C1): rede no FORRO lançada antes do registro — o botão da linha e o do rodapé desligados, com o motivo', async () => {
+    // Conciliação F3 × #154 (24/10/2026): a regra das premissas é uma só — sem linha gravada (aqui o serviço falha: sem
+    // persistência), vale o PADRÃO, com o forro ligado; a rede antiga no forro relança no forro da casa. O bloqueio sem
+    // as premissas (forro desligado) está nos testes do módulo e da casa.
+    it('⚠️ rede no FORRO lançada antes do registro, com as premissas da casa (o padrão): relançar disponível, sem o motivo', async () => {
       loadBranchModel.mockResolvedValue(await redeComCaixas(true, false, true));
       await montar();
       const drawer = await abrirEletrodutos();
       const tabela = await within(drawer).findByRole('table', { name: /eletrodutos por quadro/i });
       const MOTIVO = 'Rede no forro lançada antes do registro — relançar aqui a tiraria do forro.';
-      expect(tabela).toHaveTextContent(MOTIVO);
-      // O único botão da tabela (sem registro, sem aviso): o da linha do quadro — qualquer que seja o rótulo.
-      const daLinha = within(tabela).getByRole('button');
-      expect(daLinha).toBeDisabled();
-      expect(daLinha).toHaveAttribute('title', MOTIVO);
-      expect(daLinha.parentElement).toHaveAttribute('title', MOTIVO);
-      const doRodape = screen.getByRole('button', { name: /^lançar em todos/i });
-      expect(doRodape).toBeDisabled();
-      expect(doRodape).toHaveAccessibleDescription(MOTIVO);
+      await waitFor(() => expect(tabela).not.toHaveTextContent(MOTIVO));
+      expect(relancarDoRodape()).toBeEnabled();
     });
   });
 

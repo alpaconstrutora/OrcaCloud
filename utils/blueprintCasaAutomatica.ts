@@ -902,23 +902,6 @@ export const HIPOTESES_DO_FORRO_DA_CASA_PADRAO: HipotesesDoForroDaCasa = {
 
 const FAIXAS_DO_FORRO = ['eletrica', 'frigorigena', 'aguaQuente', 'aguaFria'] as const;
 
-/** As hipóteses do forro da casa, completas: o padrão, as premissas por cima e cada faixa completada pela do padrão. */
-export function forroDaCasaCompleto(parcial: Partial<HipotesesDoForroDaCasa> = {}): HipotesesDoForroDaCasa {
-  return {
-    ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO,
-    ...parcial,
-    ...(Object.fromEntries(FAIXAS_DO_FORRO.map((k) => [k, { ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO[k], ...(parcial[k] ?? {}) }])) as Pick<HipotesesDoForroDaCasa, (typeof FAIXAS_DO_FORRO)[number]>),
-  };
-}
-
-/**
- * O forro da ÁGUA da casa — o `agua.noForro` com que a etapa ÁGUA lança (as faixas da fria e da quente e a folga sob a
- * viga) —, ou `null` com o forro desligado. Correção 1 da F3 (24/10/2026): o editor monta com esta MESMA função, a partir
- * das premissas da casa do estudo, o forro da água antiga lançada antes do registro.
- */
-export function forroDaAguaDaCasa(forro: HipotesesDoForroDaCasa): NonNullable<HipotesesDeAgua['noForro']> | null {
-  return forro.lancar ? { aguaFria: forro.aguaFria, aguaQuente: forro.aguaQuente, folgaSobAVigaMm: forro.folgaSobAVigaMm } : null;
-}
 /** O raio do tubo da faixa mais baixa (a água fria) na conta do rebaixo — DN 32 de PVC, o maior ramal da casa. */
 const RAIO_NO_PLENUM_MM = 16;
 
@@ -948,6 +931,16 @@ function forroDaEletrica(f: HipotesesDoForroDaCasa): { faixa: FaixaDoForro; folg
 export function forroEletricoDaCasa(hipParcial: Partial<HipotesesDaCasa>): { faixa: FaixaDoForro; folgaSobAVigaMm: number } | null {
   const f = hipotesesDoForroDaCasa(hipParcial.forro ?? {});
   return f.lancar ? forroDaEletrica(f) : null;
+}
+
+/**
+ * O forro da ÁGUA da casa — o `agua.noForro` com que a etapa ÁGUA lança (as faixas da fria e da quente e a folga sob a
+ * viga) —, ou `null` com o forro desligado. O irmão de `forroEletricoDaCasa` (F3 do relançar, 24/10/2026): a casa lança
+ * com ele, e o editor monta com ele, das premissas do estudo, o forro da água antiga lançada antes do registro.
+ */
+export function forroDaAguaDaCasa(hipParcial: Partial<HipotesesDaCasa>): NonNullable<HipotesesDeAgua['noForro']> | null {
+  const f = hipotesesDoForroDaCasa(hipParcial.forro ?? {});
+  return f.lancar ? { aguaFria: f.aguaFria, aguaQuente: f.aguaQuente, folgaSobAVigaMm: f.folgaSobAVigaMm } : null;
 }
 
 /** O rebaixo do forro (da laje à face de cima dele): a faixa mais baixa, o raio do tubo e a folga. */
@@ -2287,7 +2280,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       agua: {
         ...hidroDoEstudo.agua,
         faixaDaAguaQuente: faixaNoMundo(hip.faixas.aguaQuenteMm),
-        noForro: forroDaAguaDaCasa(hip.forro),
+        noForro: forroDaAguaDaCasa(hip),
       },
       // F17 (decisão do usuário, "sobe pela fachada"): o alimentador enterrado só até a parede da frente — sobe nela e
       // corre sobre a laje até a caixa; sob o piso ele cruzava o esgoto enterrado. A premissa do estudo, se houver, vale.

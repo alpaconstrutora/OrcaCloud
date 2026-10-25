@@ -5850,81 +5850,106 @@ export function pontasPresasAsPecas(
 }
 
 /**
- * Quanto anda CADA PONTA de trecho quando as peças dadas andam `delta` — as presas
- * (`pontasPresasAsPecas`) e, no eletroduto, o NÓ DE CHEGADA que só serve à peça.
- * `null` = a ponta fica. O `TranslateEntities` e a prévia do arraste no canvas leem
- * esta função, e só ela: a prévia é o que o comando grava.
+ * Quanto anda CADA PONTA de trecho quando a seleção anda `delta` — peças (terminais,
+ * quadros) e trechos selecionados. `null` = a ponta fica. O `TranslateEntities` e a
+ * prévia do arraste no canvas leem esta função, e só ela: a prévia é o que o comando
+ * grava. Três regras, todas para a rede CONTINUAR LIGADA:
  *
- * ─── O PEDIDO (25/10/2026, print da planta Garden) ───────────────────────────
+ * ─── 1. A PONTA PRESA À PEÇA QUE ANDA vai junto (10/09/2026) ────────────────
+ *
+ * `pontasPresasAsPecas`.
+ *
+ * ─── 2. O NÓ DE CHEGADA que só serve à peça vai junto (25/10/2026) ──────────
  *
  * *"Ao mover o interruptor o ponto nao veio junto, pois neste caso o ponto atende
- * somente ao interruptor entao deveria vir junto."*
+ * somente ao interruptor entao deveria vir junto."* O motor chega a cada ponto por um
+ * toco curto no forro (do nó onde a rede da luz chega até o alto da descida). O nó do
+ * outro lado do eletroduto preso anda quando SÓ SERVE à peça: nenhuma peça elétrica
+ * nem quadro nele e exatamente UM outro eletroduto chegando (o da luz); o trecho
+ * vertical no próprio nó (no forro rebaixado, a descida da cota da rede até a do toco)
+ * anda inteiro com ele. Derivação fica — o toco estica.
  *
- * O motor dos eletrodutos chega a cada ponto por um toco curto no forro — do nó
- * onde a rede da luz chega até o alto da descida — e desce na parede. Arrastar o
- * interruptor ao longo da parede levava a descida (presa) e esticava o toco do nó,
- * que ficava, até o lugar novo: um eletroduto de meio metro em diagonal no forro.
+ * Anda o deslocamento INTEIRO. A primeira versão (PR #157) levava só a componente
+ * perpendicular ao toco, e o usuário pegou no mesmo dia: *"movi o interruptor para ao
+ * lado da porta … o trecho de eletroduto faz um caminho mais longo, sendo que sair
+ * direto do ponto de luz no teto e ir diretamente para ele seria o melhor caminho.
+ * Isso aconteceu quando mudei o interruptor de uma parede para outra"* — de uma parede
+ * para a outra o movimento é AO LONGO do toco, e o nó ficava no canto antigo. Com o nó
+ * junto, o eletroduto da luz vai direto ao lugar novo.
  *
- * ─── A REGRA ────────────────────────────────────────────────────────────────
+ * ─── 3. O TRECHO SELECIONADO não se solta (25/10/2026) ───────────────────────
  *
- * O nó do outro lado do eletroduto preso anda quando SÓ SERVE à peça: nenhuma peça
- * elétrica nem quadro nele, e exatamente UM outro eletroduto chegando (o da luz). O
- * trecho vertical no próprio nó (no forro rebaixado, a descida da cota da rede até a
- * do toco) é parte do nó e anda inteiro com ele.
- * Derivação (dois ou mais) serve a outros pontos e fica — o toco estica, como antes.
- * E anda só a componente do deslocamento PERPENDICULAR ao toco, a regra do
- * `manterJuncoes` das paredes: o toco muda de comprimento, nunca de direção.
- * Arrastar ao longo do próprio toco só o encurta ou alonga; arrastar de lado leva
- * o nó, e o eletroduto da luz termina no nó novo.
- *
- * Só eletroduto: o nó de chegada é desenho do motor elétrico. O nó entre duas
- * peças que andam juntas (o outro eletroduto também preso) fica como estava.
+ * *"é possivel arrastar um trecho do eletroduto e desconecta-lo"*. A ponta que está
+ * numa peça (terminal ou quadro da mesma disciplina) fica na peça — anda só se a peça
+ * anda junto; a ponta num nó de outros trechos anda e LEVA as pontas deles naquele nó
+ * (o vizinho estica). Trecho preso a peças paradas nas duas pontas não sai do lugar.
  */
 export function deslocamentoDasPontasPresas(
   model: BlueprintModel,
   terminalIds: readonly ObjectId[],
   quadroIds: readonly ObjectId[],
   delta: Point,
+  trechoIds: readonly ObjectId[] = [],
 ): Map<ObjectId, { a: Point | null; b: Point | null }> {
   const presas = pontasPresasAsPecas(model, terminalIds, quadroIds);
   const saida = new Map<ObjectId, { a: Point | null; b: Point | null }>();
+  const mover = (t: Trecho, lado: 'a' | 'b') => {
+    const atual = saida.get(t.id) ?? { a: null, b: null };
+    saida.set(t.id, { ...atual, [lado]: { ...delta } });
+  };
   for (const [id, l] of presas) saida.set(id, { a: l.a ? { ...delta } : null, b: l.b ? { ...delta } : null });
-  if (presas.size === 0 || (delta.x === 0 && delta.y === 0)) return saida;
+  if (delta.x === 0 && delta.y === 0) return saida;
 
   const chave = (levelId: ObjectId, p: Point) => `${levelId}|${p.x},${p.y}`;
+  const comDisciplina = (levelId: ObjectId, p: Point, d: DisciplinaDeRede) => `${chave(levelId, p)}|${d}`;
   const porNo = new Map<string, Trecho[]>();
   const trechos = new Map<ObjectId, Trecho>();
   for (const t of model.trechos ?? []) {
-    if (t.disciplina !== 'ELETRICA') continue;
     trechos.set(t.id, t);
-    for (const k of new Set([chave(t.levelId, t.a), chave(t.levelId, t.b)])) porNo.set(k, [...(porNo.get(k) ?? []), t]);
+    for (const k of new Set([comDisciplina(t.levelId, t.a, t.disciplina), comDisciplina(t.levelId, t.b, t.disciplina)])) porNo.set(k, [...(porNo.get(k) ?? []), t]);
   }
-  const pecas = new Set([
-    ...(model.terminais ?? []).filter((t) => t.disciplina === 'ELETRICA').map((t) => chave(t.levelId, t.at)),
-    ...(model.quadros ?? []).map((q) => chave(q.levelId, q.at)),
-  ]);
+  // Onde há peça de cada disciplina (a evaporadora prende também o dreno; o quadro, eletroduto).
+  const pecas = new Set<string>();
+  for (const t of model.terminais ?? []) {
+    pecas.add(comDisciplina(t.levelId, t.at, t.disciplina));
+    if (t.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(t.tipoHidraulico)) pecas.add(comDisciplina(t.levelId, t.at, 'DRENO_AC'));
+  }
+  for (const q of model.quadros ?? []) pecas.add(comDisciplina(q.levelId, q.at, 'ELETRICA'));
 
+  // 2. O nó de chegada.
   for (const [id, l] of presas) {
     const t = trechos.get(id);
-    if (!t || l.a === l.b) continue;
+    if (!t || t.disciplina !== 'ELETRICA' || l.a === l.b) continue;
     const lado: 'a' | 'b' = l.a ? 'b' : 'a';
     const no = t[lado];
     const naPeca = lado === 'a' ? t.b : t.a;
-    const comp = Math.hypot(naPeca.x - no.x, naPeca.y - no.y);
-    if (comp === 0 || pecas.has(chave(t.levelId, no))) continue;
-    // O trecho VERTICAL no próprio nó (a descida do forro até a cota do toco) é parte
-    // do nó, não um segundo caminho: anda inteiro com ele.
-    const noNo = (porNo.get(chave(t.levelId, no)) ?? []).filter((x) => x.id !== t.id);
+    if ((naPeca.x === no.x && naPeca.y === no.y) || pecas.has(comDisciplina(t.levelId, no, 'ELETRICA'))) continue;
+    const noNo = (porNo.get(comDisciplina(t.levelId, no, 'ELETRICA')) ?? []).filter((x) => x.id !== t.id);
     const vertical = (x: Trecho) => x.a.x === x.b.x && x.a.y === x.b.y;
-    const outros = noNo.filter((x) => !vertical(x));
-    if (outros.length !== 1 || noNo.some((x) => presas.has(x.id))) continue;
-    const ux = (naPeca.x - no.x) / comp;
-    const uy = (naPeca.y - no.y) / comp;
-    const paralela = delta.x * ux + delta.y * uy;
-    const perp = { x: Math.round(delta.x - ux * paralela), y: Math.round(delta.y - uy * paralela) };
-    if (perp.x === 0 && perp.y === 0) continue;
-    saida.get(id)![lado] = perp;
-    for (const u of noNo) saida.set(u.id, { a: u.a.x === no.x && u.a.y === no.y ? perp : null, b: u.b.x === no.x && u.b.y === no.y ? perp : null });
+    if (noNo.filter((x) => !vertical(x)).length !== 1 || noNo.some((x) => presas.has(x.id))) continue;
+    mover(t, lado);
+    for (const u of noNo) {
+      if (u.a.x === no.x && u.a.y === no.y) mover(u, 'a');
+      if (u.b.x === no.x && u.b.y === no.y) mover(u, 'b');
+    }
+  }
+
+  // 3. O trecho selecionado: a ponta na peça parada fica; a ponta num nó leva os vizinhos.
+  const selecionados = new Set(trechoIds);
+  for (const id of trechoIds) {
+    const t = trechos.get(id);
+    if (!t) continue;
+    for (const lado of ['a', 'b'] as const) {
+      const p = t[lado];
+      const k = comDisciplina(t.levelId, p, t.disciplina);
+      if (pecas.has(k)) continue; // na peça: anda só se ela anda (regra 1)
+      mover(t, lado);
+      for (const u of porNo.get(k) ?? []) {
+        if (selecionados.has(u.id)) continue;
+        if (u.a.x === p.x && u.a.y === p.y) mover(u, 'a');
+        if (u.b.x === p.x && u.b.y === p.y) mover(u, 'b');
+      }
+    }
   }
   return saida;
 }

@@ -148,7 +148,9 @@ describe('conexão mantida · ao mover', () => {
       0,
     );
     expect(depois.trechos[0].b).toEqual({ x: 3500, y: 0 });
-    expect(depois.trechos[0].a).toEqual({ x: 500, y: 0 });
+    // 25/10/2026 (*"é possivel arrastar um trecho do eletroduto e desconecta-lo"*): a ponta no QUADRO,
+    // que ficou parado, não se solta mais dele — antes ela ia junto para (500, 0).
+    expect(depois.trechos[0].a).toEqual({ x: 0, y: 0 });
   });
 
   it('mover as DUAS peças leva o trecho inteiro', () => {

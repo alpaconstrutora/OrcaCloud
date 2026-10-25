@@ -14,6 +14,12 @@ Esclarecimento do item 2 (mesma sessão, com print de uma planta elétrica feita
 
 > *"Veja print. o que deve estar gravada na face da parede é a barra que sai da seta"*
 
+Pedido seguinte (mesma sessão, tarde, depois do PR #157 no ar, com dois prints do Dormitório 2 da Garden):
+
+> *"bugs:
+> 1. veja print que é possivel arrastar um trecho do eletroduto e desconecta-lo
+> 2. veja print onde movi o interruptor para ao lado da porta e veja que o trecho de eletroduto faz um caminho mais longo, sendo que sair direto do ponto de luz no teto e ir diretamente para ele seria o melhor caminho. Isso aconteceu quando mudei o interruptor de uma parede para outra"*
+
 ## Diagnóstico (lido em `origin/main` e no rascunho da Garden, salvo 25/10 09:59)
 
 1. **Interruptor.** O motor lança, para cada ponto, a descida vertical no ponto e um toco de ~50 mm no forro que liga a
@@ -68,6 +74,23 @@ Esclarecimento do item 2 (mesma sessão, com print de uma planta elétrica feita
   `MECANICA`; isolar uma rede com base atenuada deixa as duas subcamadas em meio-tom; o painel mostra
   "Arquitetura" com a seta e as duas linhas. `check-ui-standard.sh` nos `.tsx` tocados.
 
+### 4. Os dois bugs depois do #157 — `utils/blueprintKernel/model.ts`, `commands.ts`, `components/blueprint/BlueprintCanvas.tsx`
+
+- **Diagnóstico do bug 2 (rascunho da Garden, 25/10 11:40):** o interruptor C3 estava em `3975,13885` (parede da direita),
+  o toco de N `3925,13885` apontava em +x; o usuário o levou para `2569,13885` (parede de baixo, ao lado da porta) — o
+  movimento foi todo AO LONGO do toco, a componente perpendicular era zero e o nó ficou no canto antigo (toco de 1.356 mm
+  rente à parede). A regra do item 1 levava só a componente perpendicular.
+- **O que muda:** (a) o nó de chegada que só serve à peça anda o deslocamento INTEIRO; (b) o trecho SELECIONADO arrastado
+  não se solta: a ponta numa peça (terminal ou quadro da mesma disciplina) fica — anda só se a peça anda junto —, a ponta
+  num nó anda e leva as pontas dos vizinhos naquele nó; preso a peças paradas nas duas pontas, não sai do lugar e a
+  barra do canvas diz por quê. Uma função só (`deslocamentoDasPontasPresas`, agora com `trechoIds`) para o comando e a
+  prévia. Vale para toda disciplina (água também não se solta mais).
+- **Pronto quando:** `blueprintNoDeChegadaAcompanha.test.ts` (troca de parede leva o nó; trecho luz→nó arrastado leva o
+  toco e fica na luz; preso nas duas pontas não anda; com a peça junto anda inteiro; ponta solta e água);
+  `BlueprintCanvasTrechoPreso.test.tsx` (a dica); `blueprintRedeConexaoMantida` ajustado (a ponta no quadro parado não
+  sai mais dele). Prova no rascunho real: o mesmo gesto do usuário (−1.406 mm em x) leva o nó para `2519,13885`, a luz
+  vai direto (2.084 mm) e o toco fica com 50 mm.
+
 ## Estado
 
 - [x] item 1 + testes — `__tests__/blueprintNoDeChegadaAcompanha.test.ts` (7); prova no rascunho da Garden: interruptor
@@ -81,5 +104,9 @@ Esclarecimento do item 2 (mesma sessão, com print de uma planta elétrica feita
 - [x] tsc 0 erros; suíte (sem `blueprintCasaAutomatica`, que vai na CI): 11.437 ok + 7 que caíram por tempo sob carga e
   passaram sozinhos (329/329) = 11.444 ok, 0 falhas, 34 pulados, total 11.478; bundle da planta-api regerado SEM diferença
   (ele não empacota os comandos de edição — não há função para publicar)
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #157, `ci` 29min40s verde
+- [x] publicação — squash `157c0fe5` em 25/10/2026; `conferir-producao.sh "Mobiliário"` provou o domínio servindo 157c0fe
+  (sem deploy de função)
+- [x] item 4 + testes
+- [ ] item 4: PR + CI
+- [ ] item 4: publicação

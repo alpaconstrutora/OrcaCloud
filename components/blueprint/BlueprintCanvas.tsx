@@ -2242,6 +2242,15 @@ export default function BlueprintCanvas({
     .map((s) => s.id);
   const idsDeAguasSelecionadas = aguasDoNivel.filter((r) => selecao.has(r.id)).map((r) => r.id);
   const idsDeTrechosSelecionados = trechosReais.filter((t) => selecao.has(t.id)).map((t) => t.id);
+  /**
+   * Um trecho só selecionado, preso a peças nas DUAS pontas: arrastar não o move
+   * (a rede não se solta — `deslocamentoDasPontasPresas`), e a barra diz por quê.
+   */
+  const trechoPresoNasDuasPontas = useMemo(
+    () => selectedIds.length === 1 && idsDeTrechosSelecionados.length === 1 && !deslocamentoDasPontasPresas(model, [], [], { x: 1, y: 0 }, idsDeTrechosSelecionados).has(idsDeTrechosSelecionados[0]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, selectedIds],
+  );
   const idsDeTerminaisSelecionados = terminaisReais
     .filter((t) => selecao.has(t.id))
     .map((t) => t.id);
@@ -2266,18 +2275,14 @@ export default function BlueprintCanvas({
   const trechosDoNivel = useMemo(() => {
     const d = movendoSelecao?.delta;
     if (!d || (d.x === 0 && d.y === 0)) return trechosReais;
-    const movidos = new Set(idsDeTrechosSelecionados);
-    // ⚠️ E as PONTAS PRESAS às peças que estão andando — a MESMA função que o
-    // comando usa. Sem isto a prévia mostraria o eletroduto parado enquanto a
-    // tomada anda, e ao soltar a ponta pularia para a peça: o gesto pareceria
-    // errado durante e certo depois, que é o pior dos dois mundos.
-    // 25/10/2026: e o nó de chegada que só serve à peça anda com ela.
-    const presas = deslocamentoDasPontasPresas(model, idsDeTerminaisSelecionados, idsDeQuadrosSelecionados, d);
-    if (movidos.size === 0 && presas.size === 0) return trechosReais;
+    // ⚠️ As PONTAS que andam — a MESMA função que o comando usa: as presas às
+    // peças, o nó de chegada que só serve à peça e o trecho selecionado, que não
+    // se solta (25/10/2026). Sem isto a prévia mostraria o eletroduto parado
+    // enquanto a tomada anda, e ao soltar a ponta pularia para a peça: o gesto
+    // pareceria errado durante e certo depois, que é o pior dos dois mundos.
+    const presas = deslocamentoDasPontasPresas(model, idsDeTerminaisSelecionados, idsDeQuadrosSelecionados, d, idsDeTrechosSelecionados);
+    if (presas.size === 0) return trechosReais;
     return trechosReais.map((t) => {
-      if (movidos.has(t.id)) {
-        return { ...t, a: { x: t.a.x + d.x, y: t.a.y + d.y }, b: { x: t.b.x + d.x, y: t.b.y + d.y } };
-      }
       const lados = presas.get(t.id);
       if (!lados) return t;
       return {
@@ -12169,7 +12174,9 @@ export default function BlueprintCanvas({
                 : 'Clique para fechar o trecho · Esc cancela'
               : 'Clique para iniciar a parede'
             : tool === 'selecionar'
-              ? selectedIds.length > 1
+              ? trechoPresoNasDuasPontas
+                ? 'Este trecho está ligado a peças nas duas pontas e não se solta delas · para mudar o caminho, mova o ponto ou o quadro'
+                : selectedIds.length > 1
                 ? `${selectedIds.length} selecionados · arraste para mover · setas ajustam · Delete remove`
                 : 'Clique para selecionar · arraste no vazio para laçar (← pega o que tocar) · Ctrl+A tudo'
               : tool === 'mover'

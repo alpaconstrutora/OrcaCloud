@@ -19,6 +19,7 @@ const getFinanceiro = vi.fn();
 const baixarTitulo = vi.fn();
 const receberTitulo = vi.fn();
 const getContas = vi.fn();
+const getExtrato = vi.fn();
 vi.mock('../../services/sindicoPortalService', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../../services/sindicoPortalService')>()),
     sindicoPortalService: {
@@ -30,6 +31,7 @@ vi.mock('../../services/sindicoPortalService', async (importOriginal) => ({
         baixarTitulo: (...a: unknown[]) => baixarTitulo(...a),
         receberTitulo: (...a: unknown[]) => receberTitulo(...a),
         getContas: (...a: unknown[]) => getContas(...a),
+        getExtrato: (...a: unknown[]) => getExtrato(...a),
     },
 }));
 
@@ -90,7 +92,7 @@ const irParaContasAPagar = async () => {
 
 describe('SindicoPortal', () => {
     beforeEach(() => {
-        getDados.mockReset(); getFinanceiro.mockReset(); baixarTitulo.mockReset(); receberTitulo.mockReset(); getContas.mockReset(); localStorage.clear();
+        getDados.mockReset(); getFinanceiro.mockReset(); baixarTitulo.mockReset(); receberTitulo.mockReset(); getContas.mockReset(); getExtrato.mockReset(); localStorage.clear();
         getFinanceiro.mockResolvedValue(financeiro);
     });
 
@@ -254,6 +256,28 @@ describe('SindicoPortal', () => {
         expect(editar[1].disabled).toBe(true);
         expect(editar[1].parentElement?.getAttribute('title')).toMatch(/Asaas/);
         await waitFor(() => expect((screen.getAllByRole('button', { name: /Nova conta/ })[0] as HTMLButtonElement).disabled).toBe(false));
+    });
+
+    it('8d. G2b — extrato: importar e conciliar com login; conciliado só desfaz', async () => {
+        getDados.mockResolvedValue(payload);
+        getContas.mockResolvedValue([{ id: 'a1', codigo: '001', nome: 'Sicredi Condomínio', tipo: 'banco', banco: null, agencia: null,
+            numero: '12345-6', descricao: null, saldoInicial: 100, saldoInicialEm: '2026-10-01', ativa: true, emUso: true }]);
+        getExtrato.mockResolvedValue({ temMovimento: true, importacoes: [], movimentos: [
+            { id: 'b1', data: '2026-10-10', valor: 1200, direcao: 'DEBIT', descricao: 'PAGTO VIGIA SA', status: 'MATCHED', candidatosExatos: 0,
+              vinculos: [{ matchId: 'm1', tituloId: 'k1', descricao: 'Portaria terceirizada', valor: 1200, vencimento: '2026-10-10', credor: 'Vigia SA' }] },
+            { id: 'b2', data: '2026-10-12', valor: 12.9, direcao: 'DEBIT', descricao: 'TARIFA PACOTE', status: 'NORMALIZED', candidatosExatos: 0, vinculos: [] },
+        ] });
+        render(<ConfirmProvider><SindicoPortal token="tok" onLogout={() => undefined} /></ConfirmProvider>);
+        await screen.findAllByText('010 - Galeria Altavista');
+        fireEvent.click(screen.getAllByRole('button', { name: /^Financeiro$/ })[0]);
+        fireEvent.click(await screen.findByRole('button', { name: 'Extrato e conciliação' }));
+        expect(await screen.findByText('TARIFA PACOTE')).toBeTruthy();
+        expect(getExtrato).toHaveBeenCalledWith({ token: 'tok' }, 'a1', expect.stringMatching(/-01$/), expect.any(String));
+        const tabela = within(screen.getByRole('table'));
+        expect((tabela.getByRole('button', { name: 'Desfazer' }) as HTMLButtonElement).disabled).toBe(false);
+        expect((tabela.getByRole('button', { name: 'Conciliar' }) as HTMLButtonElement).disabled).toBe(false);
+        expect(tabela.getByText('Portaria terceirizada', { exact: false })).toBeTruthy();
+        await waitFor(() => expect((screen.getAllByRole('button', { name: /Importar extrato/ })[0] as HTMLButtonElement).disabled).toBe(false));
     });
 
     it('9. prévia do admin: Financeiro lê pelo clientId e nada fica ligado', async () => {

@@ -249,3 +249,11 @@ export function caminhosDosEletrodutos(
   });
   return saida;
 }
+
+/**
+ * A CAIXA OCTOGONAL da luz de teto no 3D (25/10/2026, com a referência isométrica do usuário — "esse é o design para os
+ * eletrodutos flexiveis (conduites) e para as caixas de iluminacao no teto" — e a foto da laje com as caixas 4×4): o
+ * prisma de 8 lados, baixo, onde os eletrodutos entram pelas laterais, e a ABA embaixo, voltada para o ambiente. Era um
+ * cubo de 100 mm. Medidas da caixa 4×4 comercial; só desenho.
+ */
+export const CAIXA_OCTOGONAL_MM = { larguraMm: 100, alturaMm: 50, abaMm: 120, espessuraDaAbaMm: 6 } as const;

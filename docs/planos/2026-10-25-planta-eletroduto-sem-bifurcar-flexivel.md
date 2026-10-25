@@ -50,6 +50,27 @@ forro; os cantos de 90° dos eletrodutos):
 - **Pronto quando:** testes do módulo (canto em "L" vira arco tangente às duas retas; emenda entre trechos no mesmo
   ponto; paralelos afastados); print do 3D da Garden antes × depois.
 
+Pedido seguinte (mesma sessão, noite, com uma referência isométrica — eletrodutos azuis em curva contínua, caixas da luz
+de teto redondas/octogonais com aba — e a foto de uma laje com os conduítes laranjas e as caixas octogonais):
+
+> *"veja esse print. Esse esse desegin para os eletrodutos flexiveis (conduites) e para as caixas de iluminacao no teto. também estou te passando uma foto real de um conduite para seu conhecimento"*
+
+### 4. A caixa OCTOGONAL da luz de teto — `utils/blueprintEletrodutoFlexivel3D.ts` (`CAIXA_OCTOGONAL_MM`), `components/blueprint/Blueprint3DViewer.tsx`
+
+- **O que muda:** a luz de teto no 3D deixa de ser o cubo de 100 mm e vira a caixa 4×4 octogonal: prisma de 8 lados,
+  100 × 50 mm, cinza claro, com a ABA de 120 mm embaixo (para o ambiente). Os eletrodutos (o curso contínuo do item 3)
+  entram pelas laterais dela — como na referência e na foto.
+- **Pronto quando:** print do 3D da Garden refeita.
+
+### 5. Um furo por feixe — `utils/blueprintFurosPrevistos.ts`
+
+- **O que muda (achado na CI):** com os eletrodutos repetidos, cada um que atravessava uma viga no mesmo lugar contava
+  um furo, e cada furo tinha o outro "a menos de 2h" — todos "verificar" (casa automática: térrea 8 > 7, sobrado 69 > 39).
+  Os que atravessam a mesma peça no mesmo ponto passam por UM furo, do tamanho do feixe (os tubos lado a lado, 10 mm de
+  vão, mais a folga); o furo diz os trechos (`trechoIds`).
+- **Pronto quando:** `blueprintCasaAutomatica` "eletroduto sem anel… no máximo 7/39 furos" passa (a conta de anel ajustada
+  como em `blueprintEletrodutos`: os que correm juntos são um caminho só); os testes de furos passam.
+
 **Para a Garden mudar:** relançar (refazer) os eletrodutos depois da publicação.
 
 ## Estado
@@ -71,5 +92,8 @@ forro; os cantos de 90° dos eletrodutos):
   novo no viewer novo — do QDC sobem DOIS eletrodutos lado a lado, cada um curva para o seu lado; os cantos viraram
   curvas; as emendas entre trechos sem fio de luz (cada ponta avança 4 mm por dentro da vizinha, mesma cor)
 - [x] tsc + suíte — tsc 0 erros; suíte local (sem `blueprintCasaAutomatica`, que roda na CI): 11.517 ok + 3 testes de tela que caíram por tempo sob carga e passaram sozinhos (`PainelVersoes`, `TelaWebhooks`: 43/43) = 11.520 ok, 0 falhas, 34 pulados, total 11.554. Bundle da planta-api inalterado
+- [x] item 4 + print — harness: a luz (4150, 8900) da Garden refeita, octógono com a aba, os eletrodutos entrando
+  pelas laterais
+- [x] item 5 + testes — `blueprintCasaAutomatica -t "eletroduto sem anel"` 2/2 (local, filtrado); testes de furos 4/4
 - [ ] PR + CI
 - [ ] publicação

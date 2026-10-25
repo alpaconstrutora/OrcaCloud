@@ -71,7 +71,7 @@ class CurvaDoEletroduto extends THREE.Curve {
 }
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { embutimentoEletrico } from '../../utils/blueprintEletricaEmbutida';
-import { caminhosDosEletrodutos } from '../../utils/blueprintEletrodutoFlexivel3D';
+import { CAIXA_OCTOGONAL_MM, caminhosDosEletrodutos } from '../../utils/blueprintEletrodutoFlexivel3D';
 import { apoioDaCaixaDagua, centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
@@ -1513,6 +1513,8 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             tamanho: c.tamanho,
             // E4.2: a caixa d'água cilíndrica sai cilindro (diâmetro = largura).
             cilindro: t.tipoHidraulico === 'RESERVATORIO' && t.formaReservatorio === 'CILINDRO',
+            // 25/10/2026: a luz de teto é a CAIXA OCTOGONAL (os eletrodutos entram pelas laterais; a aba para o ambiente).
+            octogonal: t.disciplina === 'ELETRICA' && t.tipoEletrico === 'ILUMINACAO_TETO',
             // ⚠️ O sinal do giro vem de `rotacaoY3D`, no módulo puro: aqui é
             // `@ts-nocheck` e um sinal trocado passaria sem acusação, com o
             // sintoma de uma peça virada para o lado errado — plausível demais.
@@ -2087,6 +2089,17 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
                 <boxGeometry args={t.corpo.tampa.tamanho} />
               )}
               <meshStandardMaterial color="#374151" roughness={0.6} metalness={0.2} />
+            </mesh>
+          </group>
+        ) : t.octogonal ? (
+          <group key={`terminal-${t.id}`} position={t.position} rotation={[0, t.giroY, 0]} {...cliqueDe(t.id, true)}>
+            <mesh castShadow>
+              <cylinderGeometry args={[(CAIXA_OCTOGONAL_MM.larguraMm / 2) * ESCALA_3D, (CAIXA_OCTOGONAL_MM.larguraMm / 2) * ESCALA_3D, CAIXA_OCTOGONAL_MM.alturaMm * ESCALA_3D, 8]} />
+              <meshStandardMaterial color={selecionados?.has(t.id) ? COR_SELECIONADA : (coresPorUid?.get(t.uid) ?? '#e5e7eb')} roughness={0.6} />
+            </mesh>
+            <mesh position={[0, (-(CAIXA_OCTOGONAL_MM.alturaMm + CAIXA_OCTOGONAL_MM.espessuraDaAbaMm) / 2) * ESCALA_3D, 0]} castShadow>
+              <cylinderGeometry args={[(CAIXA_OCTOGONAL_MM.abaMm / 2) * ESCALA_3D, (CAIXA_OCTOGONAL_MM.abaMm / 2) * ESCALA_3D, CAIXA_OCTOGONAL_MM.espessuraDaAbaMm * ESCALA_3D, 8]} />
+              <meshStandardMaterial color={selecionados?.has(t.id) ? COR_SELECIONADA : '#9ca3af'} roughness={0.6} />
             </mesh>
           </group>
         ) : (

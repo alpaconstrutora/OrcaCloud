@@ -4,6 +4,7 @@ import {
     ficaEmAbertoSemValor,
     valorDaRubrica,
     valorRecorrente,
+    valorParaGravar,
 } from '../lib/payrollRubricaRecorrente';
 
 const r = (extra: Record<string, unknown> = {}) => ({
@@ -54,5 +55,20 @@ describe('rubrica recorrente do colaborador — o que pode, o que trava', () => 
         expect(valorRecorrente({ valor_tipo: 'percentual', valor: 7.5 }, 1621)?.amount).toBe(121.58);
         expect(valorRecorrente({ valor_tipo: null, valor: null }, 3000)).toBeNull();
         expect(valorRecorrente(undefined, 3000)).toBeNull();
+    });
+});
+
+describe('rubrica recorrente do colaborador — o que vai para o banco', () => {
+    // 25/10/2026: vínculo antigo (ou salvo vazio) volta com valor_tipo NULL; a tela
+    // mostra "R$" mas o estado ficava NULL, e o valor digitado era jogado fora ao salvar
+    // (VA e Gratificação do Rogério nunca gravavam).
+    it('valor digitado em vínculo com tipo NULL grava como R$ — o que a tela mostra', () => {
+        expect(valorParaGravar({ valor_tipo: null, valor: 350 })).toEqual({ valor_tipo: 'fixo', valor: 350 });
+    });
+
+    it('mantém o tipo escolhido e zera os dois quando não há valor', () => {
+        expect(valorParaGravar({ valor_tipo: 'percentual', valor: 10 })).toEqual({ valor_tipo: 'percentual', valor: 10 });
+        expect(valorParaGravar({ valor_tipo: 'fixo', valor: null })).toEqual({ valor_tipo: null, valor: null });
+        expect(valorParaGravar({ valor_tipo: null, valor: null })).toEqual({ valor_tipo: null, valor: null });
     });
 });

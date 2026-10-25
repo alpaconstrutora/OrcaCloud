@@ -67,6 +67,7 @@ ficaria sem caminho. Conexões e conferência de pontas abertas não cobrem a el
   os eletrodutos se encontrando acima da caixa; depois 8 trechos a 2755 entrando na caixa, sem descida
 - [x] item 4: bundle regerado (só acrescenta `ligacaoDaPeca` e a chamada na fiação)
 - [ ] item 4: deploy da planta-api (aguarda autorização)
-- [ ] tsc + suíte
+- [x] tsc + suíte — tsc 0 erros; suíte local (sem `blueprintCasaAutomatica`, que roda na CI): 11.492 ok + 2 testes de
+  tela que caíram por tempo sob carga e passaram sozinhos (`PainelVersoes` 39/39) = 11.494 ok, 0 falhas, 34 pulados, total 11.528
 - [ ] PR + CI
 - [ ] publicação

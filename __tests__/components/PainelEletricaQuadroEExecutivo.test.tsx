@@ -54,9 +54,10 @@ describe('PainelEletrica · quadro e alimentador (F6)', () => {
     );
     await abrirAba(/^quadros/i);
     const bloco = screen.getByLabelText('Alimentador do quadro QDC');
-    expect(bloco.textContent).toMatch(/1200 VA instalados/);
-    expect(bloco.textContent).toMatch(/IB/);
-    expect(bloco.textContent).toMatch(/Fases: R 1200 · S 0 · T 0 VA/);
+    // 25/10/2026: em seções (Alimentação · Carga e alimentador · DR · DPS), os resultados como rótulo + valor.
+    expect(bloco.textContent).toMatch(/Instalada1\.200 VA/);
+    expect(bloco.textContent).toMatch(/IB do alimentador/);
+    expect(bloco.textContent).toMatch(/Fases: R 1\.200 VA · S 0 VA · T 0 VA/);
     // Campo controlado pelo modelo (o mock não regrava): uma tecla, uma chamada.
     await userEvent.clear(screen.getByLabelText('Comprimento do alimentador do quadro QDC, em metros'));
     expect(onQuadroProps).toHaveBeenLastCalledWith(expect.any(String), { alimentadorM: null });
